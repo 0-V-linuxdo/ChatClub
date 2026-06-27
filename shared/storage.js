@@ -1,0 +1,389 @@
+import {
+  API_PROFILE_ENDPOINT_DEFAULT,
+  API_PROFILE_MODEL_DEFAULT,
+  BUILTIN_CHAT_APPS,
+  DEFAULT_TAB_GROUP_BUTTON_ORDER,
+  DEFAULT_TAB_GROUP_BUTTON_PLACEMENT,
+  DEFAULT_OPTIONS,
+  STORAGE_KEYS,
+  TAB_GROUP_HEADER_BUTTONS
+} from "./constants.js";
+import { SUMMARY_SITE_CONFIGS } from "./summary-sites.js";
+import { normalizeShortcutConfig as normalizeShortcutShape } from "./shortcuts.js";
+import { normalizeTopbarLayout } from "./topbar.js";
+
+export function createId(prefix) {
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function text(value, fallback = "") {
+  return String(value ?? fallback).trim();
+}
+
+export function normalizePrimaryColor(value, fallback = DEFAULT_OPTIONS.primaryColor) {
+  const raw = text(value, fallback).replace(/^#?/, "#");
+  const short = raw.match(/^#([0-9a-f]{3})$/i);
+  if (short) return `#${short[1].split("").map((char) => `${char}${char}`).join("")}`.toLowerCase();
+  if (/^#[0-9a-f]{6}$/i.test(raw)) return raw.toLowerCase();
+  return fallback;
+}
+
+function normalizeStoredPrimaryColor(raw, fallback) {
+  const color = normalizePrimaryColor(raw.primaryColor, fallback);
+  const custom = raw.primaryColorCustom === true;
+  return {
+    primaryColor: !custom && color === "#1677ff" ? fallback : color,
+    primaryColorCustom: custom
+  };
+}
+
+export function normalizeTabGroupButtonsMode(value) {
+  return value === "hidden" ? "hidden" : "pinned";
+}
+
+export function normalizeTabGroupButtonPlacement(value = {}, legacyMode = "pinned") {
+  const legacyHidden = normalizeTabGroupButtonsMode(legacyMode) === "hidden";
+  const raw = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  return Object.fromEntries(TAB_GROUP_HEADER_BUTTONS.map((item) => {
+    if (item.requiredPinned) return [item.id, "pinned"];
+    const saved = raw[item.id];
+    const placement = saved === "menu" || saved === "pinned"
+      ? saved
+      : legacyHidden
+        ? "menu"
+        : DEFAULT_TAB_GROUP_BUTTON_PLACEMENT[item.id] || "pinned";
+    return [item.id, placement === "menu" ? "menu" : "pinned"];
+  }));
+}
+
+export function normalizeTabGroupButtonOrder(value = []) {
+  const configurableIds = TAB_GROUP_HEADER_BUTTONS
+    .filter((item) => !item.requiredPinned)
+    .map((item) => item.id);
+  const valid = new Set(configurableIds);
+  const ordered = [];
+  for (const id of Array.isArray(value) ? value : DEFAULT_TAB_GROUP_BUTTON_ORDER) {
+    if (valid.has(id) && !ordered.includes(id)) ordered.push(id);
+  }
+  for (const id of configurableIds) {
+    if (!ordered.includes(id)) ordered.push(id);
+  }
+  return ordered;
+}
+
+function inferCustomName(item, index) {
+  const rawName = text(item.name || item.displayName);
+  const provider = text(item.provider || item.company);
+  const url = text(item.url);
+  let host = "";
+  try {
+    host = new URL(url).hostname.replace(/^www\./, "");
+  } catch {}
+  const inferred = [
+    [/assistant\.kagi\.com$/, "Kagi Assistant"],
+    [/gk\.dairoot\.cn$/, "Grok Mirror"],
+    [/(^|\.)grok\.com$/, "Grok"],
+    [/(^|\.)chatgpt\.com$|chat\.openai\.com$/, "ChatGPT"],
+    [/(^|\.)claude\.ai$/, "Claude"],
+    [/gemini\.google\.com$/, "Gemini"],
+    [/(^|\.)deepseek\.com$/, "DeepSeek"],
+    [/app\.notion\.com|notion\.so$/, "Notion AI"],
+    [/(^|\.)lobehub\.com$/, "LobeHub"],
+    [/(^|\.)typingcloud\.com$/, "TypingMind"]
+  ].find(([pattern]) => pattern.test(host))?.[1];
+  if (!rawName || /^custom(?:\s+\d+)?$/i.test(rawName) || rawName === host) {
+    return inferred || (provider && !/^custom$/i.test(provider) ? provider : host || `Custom ${index + 1}`);
+  }
+  return rawName;
+}
+
+function normalizeProfile(profile, index) {
+  return {
+    id: text(profile?.id) || createId("api"),
+    name: text(profile?.name, `API Profile ${index + 1}`) || `API Profile ${index + 1}`,
+    endpoint: text(profile?.endpoint, API_PROFILE_ENDPOINT_DEFAULT) || API_PROFILE_ENDPOINT_DEFAULT,
+    apiKey: text(profile?.apiKey),
+    model: text(profile?.model, API_PROFILE_MODEL_DEFAULT) || API_PROFILE_MODEL_DEFAULT
+  };
+}
+
+function legacyProfile(raw, kind) {
+  const prefix = kind === "summary" ? "summary" : "optimize";
+  const endpoint = text(raw?.[`${prefix}Endpoint`]);
+  const apiKey = text(raw?.[`${prefix}ApiKey`]);
+  const model = text(raw?.[`${prefix}Model`]);
+  if (!endpoint && !apiKey && !model) return null;
+  return normalizeProfile({
+    id: `${prefix}-legacy`,
+    name: kind === "summary" ? "Summary API" : "Optimize Prompt",
+    endpoint: endpoint || API_PROFILE_ENDPOINT_DEFAULT,
+    apiKey,
+    model: model || API_PROFILE_MODEL_DEFAULT
+  }, 0);
+}
+
+function normalizeTemplate(template, fallback, prefix, index) {
+  return {
+    id: text(template?.id) || createId(prefix),
+    title: text(template?.title || template?.name, `${fallback.title} ${index + 1}`),
+    prompt: text(template?.prompt || template?.template || template?.content, fallback.prompt),
+    builtIn: Boolean(template?.builtIn)
+  };
+}
+
+function mergeBuiltInSummaryConfig(current, builtIn) {
+  const byId = new Map((current || []).filter(Boolean).map((item) => [item.id, item]));
+  const merged = [];
+  for (const item of builtIn || []) {
+    const existing = byId.get(item.id) || {};
+    merged.push({
+      ...item,
+      ...existing,
+      id: item.id,
+      name: existing.name || item.name,
+      builtIn: true,
+      userscript: existing.userscript || item.userscript,
+      enabled: existing.enabled !== false
+    });
+    byId.delete(item.id);
+  }
+  for (const item of byId.values()) {
+    if (!item || !item.id) continue;
+    merged.push({
+      enabled: true,
+      fallbackMode: "structuredOnly",
+      hosts: [],
+      pathPrefixes: [],
+      ...item,
+      builtIn: Boolean(item.builtIn)
+    });
+  }
+  return merged.filter((item) => item.id !== "chathub");
+}
+
+export function normalizeOptions(raw = {}) {
+  const base = clone(DEFAULT_OPTIONS);
+  const hadProfiles = Array.isArray(raw.apiProfiles);
+  let apiProfiles = hadProfiles ? raw.apiProfiles.filter(Boolean).map(normalizeProfile) : [];
+  if (!apiProfiles.length) {
+    const optimize = legacyProfile(raw, "optimize");
+    const summary = legacyProfile(raw, "summary");
+    apiProfiles = [optimize, summary].filter(Boolean);
+  }
+  if (!apiProfiles.length) apiProfiles = clone(base.apiProfiles);
+
+  const profileIds = new Set(apiProfiles.map((profile) => profile.id));
+  const optimizeFallback = apiProfiles[0]?.id || "";
+  const summaryFallback = apiProfiles[1]?.id || optimizeFallback;
+
+  const optimizeDefault = base.optimizePromptTemplates[0];
+  const summaryDefault = base.summaryPromptTemplates[0];
+  const optimizePromptTemplates = Array.isArray(raw.optimizePromptTemplates)
+    ? raw.optimizePromptTemplates.filter(Boolean).map((item, index) => normalizeTemplate(item, optimizeDefault, "optimize-template", index))
+    : [optimizeDefault];
+  const summaryPromptTemplates = Array.isArray(raw.summaryPromptTemplates)
+    ? raw.summaryPromptTemplates.filter(Boolean).map((item, index) => normalizeTemplate(item, summaryDefault, "summary-template", index))
+    : [summaryDefault];
+
+  const layoutPresets = Array.isArray(raw.layoutPresets) && raw.layoutPresets.length
+    ? raw.layoutPresets
+    : base.layoutPresets;
+  const activeLayoutPresetId = layoutPresets.some((preset) => preset.id === raw.activeLayoutPresetId)
+    ? raw.activeLayoutPresetId
+    : layoutPresets[0]?.id || "default";
+
+  const primaryColorState = normalizeStoredPrimaryColor(raw, base.primaryColor);
+
+  const tabGroupButtonsMode = normalizeTabGroupButtonsMode(raw.tabGroupButtonsMode);
+
+  return {
+    ...base,
+    ...raw,
+    layoutPresets,
+    activeLayoutPresetId,
+    tabGroupButtonsMode,
+    tabGroupButtonPlacement: normalizeTabGroupButtonPlacement(raw.tabGroupButtonPlacement, tabGroupButtonsMode),
+    tabGroupButtonOrder: normalizeTabGroupButtonOrder(raw.tabGroupButtonOrder),
+    topbarLayout: normalizeTopbarLayout(raw.topbarLayout),
+    ...primaryColorState,
+    apiProfiles,
+    optimizeApiProfileId: profileIds.has(raw.optimizeApiProfileId) ? raw.optimizeApiProfileId : optimizeFallback,
+    summaryApiProfileId: profileIds.has(raw.summaryApiProfileId) ? raw.summaryApiProfileId : summaryFallback,
+    optimizePromptTemplates,
+    optimizePromptTemplateId: optimizePromptTemplates.some((item) => item.id === raw.optimizePromptTemplateId)
+      ? raw.optimizePromptTemplateId
+      : optimizePromptTemplates[0]?.id || optimizeDefault.id,
+    summaryPromptTemplates,
+    summaryPromptTemplateId: summaryPromptTemplates.some((item) => item.id === raw.summaryPromptTemplateId)
+      ? raw.summaryPromptTemplateId
+      : summaryPromptTemplates[0]?.id || summaryDefault.id,
+    summarySiteConfigs: mergeBuiltInSummaryConfig(raw.summarySiteConfigs, SUMMARY_SITE_CONFIGS)
+  };
+}
+
+export function normalizeCustomConfig(raw = []) {
+  return (Array.isArray(raw) ? raw : []).filter(Boolean).map((item, index) => ({
+    id: text(item.id) || createId("custom-app"),
+    name: inferCustomName(item, index),
+    provider: text(item.provider || item.company, "Custom"),
+    url: text(item.url, "https://www.example.com/"),
+    inputSelector: text(item.inputSelector),
+    sendButtonSelector: text(item.sendButtonSelector),
+    hosts: Array.isArray(item.hosts) ? item.hosts : []
+  })).filter((item) => item.name && item.url);
+}
+
+export function normalizePromptLibrary(raw = []) {
+  return (Array.isArray(raw) ? raw : []).filter(Boolean).map((item, index) => ({
+    id: text(item.id) || createId("prompt"),
+    title: text(item.title || item.name, `Prompt ${index + 1}`),
+    prompt: String(item.prompt || item.content || "")
+  })).filter((item) => item.title && item.prompt);
+}
+
+export function normalizePromptSendHistory(raw = []) {
+  const seen = new Set();
+  return (Array.isArray(raw) ? raw : []).filter(Boolean).map((item) => {
+    const value = typeof item === "string" ? item : item?.text || item?.prompt || item?.content;
+    return {
+      id: text(item?.id) || createId("prompt-history"),
+      text: text(value),
+      createdAt: text(item?.createdAt) || new Date().toISOString()
+    };
+  }).filter((item) => {
+    if (!item.text || seen.has(item.text)) return false;
+    seen.add(item.text);
+    return true;
+  }).slice(0, 100);
+}
+
+export function normalizePocketHistory(raw = []) {
+  return (Array.isArray(raw) ? raw : []).filter(Boolean).map((item) => ({
+    id: text(item.id) || createId("pocket"),
+    chatUrl: text(item.chatUrl || item.url || item.href),
+    title: text(item.title || item.pageTitle),
+    appName: text(item.appName || item.siteName || item.name),
+    userMessage: text(item.userMessage || item.user),
+    assistantMessage: text(item.assistantMessage || item.assistant),
+    createdAt: text(item.createdAt) || new Date().toISOString()
+  })).filter((item) => item.chatUrl && item.userMessage && item.assistantMessage).slice(0, 300);
+}
+
+export function normalizeShortcutConfig(raw = {}) {
+  return normalizeShortcutShape(raw);
+}
+
+export function getAllChatApps(customConfig = []) {
+  const custom = normalizeCustomConfig(customConfig);
+  const ids = new Set();
+  return [...custom, ...BUILTIN_CHAT_APPS].filter((app) => {
+    if (!app.id || ids.has(app.id)) return false;
+    ids.add(app.id);
+    return true;
+  });
+}
+
+export async function storageGet(key) {
+  return (await chrome.storage.local.get(key))[key];
+}
+
+export async function storageSet(key, value) {
+  await chrome.storage.local.set({ [key]: value });
+}
+
+export async function loadOptions() {
+  const options = normalizeOptions(await storageGet(STORAGE_KEYS.options));
+  await storageSet(STORAGE_KEYS.options, options);
+  return options;
+}
+
+export async function saveOptions(options) {
+  const normalized = normalizeOptions(options);
+  await storageSet(STORAGE_KEYS.options, normalized);
+  return normalized;
+}
+
+export async function loadCustomConfig() {
+  const custom = normalizeCustomConfig(await storageGet(STORAGE_KEYS.customConfig));
+  await storageSet(STORAGE_KEYS.customConfig, custom);
+  return custom;
+}
+
+export async function saveCustomConfig(customConfig) {
+  const normalized = normalizeCustomConfig(customConfig);
+  await storageSet(STORAGE_KEYS.customConfig, normalized);
+  return normalized;
+}
+
+export async function loadPromptLibrary() {
+  const prompts = normalizePromptLibrary(await storageGet(STORAGE_KEYS.promptLibrary));
+  await storageSet(STORAGE_KEYS.promptLibrary, prompts);
+  return prompts;
+}
+
+export async function savePromptLibrary(promptLibrary) {
+  const normalized = normalizePromptLibrary(promptLibrary);
+  await storageSet(STORAGE_KEYS.promptLibrary, normalized);
+  return normalized;
+}
+
+export async function loadPromptSendHistory() {
+  const history = normalizePromptSendHistory(await storageGet(STORAGE_KEYS.promptSendHistory));
+  await storageSet(STORAGE_KEYS.promptSendHistory, history);
+  return history;
+}
+
+export async function savePromptSendHistory(promptSendHistory) {
+  const normalized = normalizePromptSendHistory(promptSendHistory);
+  await storageSet(STORAGE_KEYS.promptSendHistory, normalized);
+  return normalized;
+}
+
+export async function loadPocketHistory() {
+  const history = normalizePocketHistory(await storageGet(STORAGE_KEYS.pocketHistory));
+  await storageSet(STORAGE_KEYS.pocketHistory, history);
+  return history;
+}
+
+export async function savePocketHistory(pocketHistory) {
+  const normalized = normalizePocketHistory(pocketHistory);
+  await storageSet(STORAGE_KEYS.pocketHistory, normalized);
+  return normalized;
+}
+
+export async function loadShortcutConfig() {
+  const config = normalizeShortcutConfig(await storageGet(STORAGE_KEYS.shortcutConfig));
+  await storageSet(STORAGE_KEYS.shortcutConfig, config);
+  return config;
+}
+
+export async function saveShortcutConfig(shortcutConfig) {
+  const normalized = normalizeShortcutConfig(shortcutConfig);
+  await storageSet(STORAGE_KEYS.shortcutConfig, normalized);
+  return normalized;
+}
+
+export function exportConfigBundle({ options, customConfig, promptLibrary, shortcutConfig }) {
+  return {
+    schema: "chatclub.config.v1",
+    exportedAt: new Date().toISOString(),
+    options: normalizeOptions(options),
+    customConfig: normalizeCustomConfig(customConfig),
+    promptLibrary: normalizePromptLibrary(promptLibrary),
+    shortcutConfig: normalizeShortcutConfig(shortcutConfig)
+  };
+}
+
+export function migrateImportedConfig(raw) {
+  const bundle = raw && typeof raw === "object" ? raw : {};
+  return {
+    options: bundle.options ? normalizeOptions(bundle.options) : null,
+    customConfig: bundle.customConfig ? normalizeCustomConfig(bundle.customConfig) : null,
+    promptLibrary: bundle.promptLibrary ? normalizePromptLibrary(bundle.promptLibrary) : null,
+    shortcutConfig: bundle.shortcutConfig ? normalizeShortcutConfig(bundle.shortcutConfig) : null
+  };
+}

@@ -1,0 +1,67 @@
+<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .bg { fill: #F7F5F2; }
+    .line { stroke: #D4CFC7; }
+    .user { fill: #1A1A1A; }
+    .user-detail { fill: #FFFFFF; }
+    .user-path { stroke: #FFFFFF; }
+    .glow { opacity: 0.08; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #141414; }
+      .line { stroke: #3A3A3A; }
+      .user { fill: #E8E4E0; }
+      .user-detail { fill: #1A1A1A; }
+      .user-path { stroke: #1A1A1A; }
+      .glow { opacity: 0.12; }
+    }
+  </style>
+
+  <rect width="120" height="120" class="bg"/>
+
+  <!-- glow rings -->
+  <circle cx="30" cy="28" r="18" fill="#4A90D9" class="glow"/>
+  <circle cx="90" cy="28" r="18" fill="#E8562A" class="glow"/>
+  <circle cx="22" cy="70" r="18" fill="#50B87D" class="glow"/>
+  <circle cx="98" cy="70" r="18" fill="#9B6DD7" class="glow"/>
+  <circle cx="60" cy="100" r="18" fill="#E8A030" class="glow"/>
+
+  <!-- connecting lines -->
+  <line x1="60" y1="60" x2="30" y2="28" class="line" stroke-width="1.2" stroke-dasharray="2,2" opacity="0.7"/>
+  <line x1="60" y1="60" x2="90" y2="28" class="line" stroke-width="1.2" stroke-dasharray="2,2" opacity="0.7"/>
+  <line x1="60" y1="60" x2="22" y2="70" class="line" stroke-width="1.2" stroke-dasharray="2,2" opacity="0.7"/>
+  <line x1="60" y1="60" x2="98" y2="70" class="line" stroke-width="1.2" stroke-dasharray="2,2" opacity="0.7"/>
+  <line x1="60" y1="60" x2="60" y2="100" class="line" stroke-width="1.2" stroke-dasharray="2,2" opacity="0.7"/>
+
+  <!-- data flow dots -->
+  <circle r="2" fill="#4A90D9" opacity="0.6"><animateMotion dur="2s" repeatCount="indefinite" path="M60,60 L30,28"/></circle>
+  <circle r="2" fill="#E8562A" opacity="0.6"><animateMotion dur="2.2s" repeatCount="indefinite" path="M60,60 L90,28"/></circle>
+  <circle r="2" fill="#50B87D" opacity="0.6"><animateMotion dur="1.8s" repeatCount="indefinite" path="M60,60 L22,70"/></circle>
+  <circle r="2" fill="#9B6DD7" opacity="0.6"><animateMotion dur="2.4s" repeatCount="indefinite" path="M60,60 L98,70"/></circle>
+  <circle r="2" fill="#E8A030" opacity="0.6"><animateMotion dur="2.1s" repeatCount="indefinite" path="M60,60 L60,100"/></circle>
+
+  <!-- AI nodes with chat bubble -->
+  <circle cx="30" cy="28" r="12" fill="#4A90D9"/>
+  <rect x="23" y="22" width="14" height="9" rx="3" fill="white" opacity="0.25"/>
+  <polygon points="28,31 26,34 30,31" fill="white" opacity="0.25"/>
+
+  <circle cx="90" cy="28" r="12" fill="#E8562A"/>
+  <rect x="83" y="22" width="14" height="9" rx="3" fill="white" opacity="0.25"/>
+  <polygon points="88,31 86,34 90,31" fill="white" opacity="0.25"/>
+
+  <circle cx="22" cy="70" r="12" fill="#50B87D"/>
+  <rect x="15" y="64" width="14" height="9" rx="3" fill="white" opacity="0.25"/>
+  <polygon points="20,73 18,76 22,73" fill="white" opacity="0.25"/>
+
+  <circle cx="98" cy="70" r="12" fill="#9B6DD7"/>
+  <rect x="91" y="64" width="14" height="9" rx="3" fill="white" opacity="0.25"/>
+  <polygon points="96,73 94,76 98,73" fill="white" opacity="0.25"/>
+
+  <circle cx="60" cy="100" r="12" fill="#E8A030"/>
+  <rect x="53" y="94" width="14" height="9" rx="3" fill="white" opacity="0.25"/>
+  <polygon points="58,103 56,106 60,103" fill="white" opacity="0.25"/>
+
+  <!-- center user hub -->
+  <circle cx="60" cy="60" r="16" class="user"/>
+  <circle cx="60" cy="55" r="4.5" class="user-detail"/>
+  <path d="M51 67 Q60 62 69 67" class="user-path" stroke-width="2" fill="none" stroke-linecap="round"/>
+</svg>

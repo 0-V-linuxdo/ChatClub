@@ -1,0 +1,62 @@
+{
+  "manifest_version": 3,
+  "name": "ChatClub",
+  "short_name": "ChatClub",
+  "description": "__MSG_extension_description__",
+  "default_locale": "en",
+  "version": "2026.6.24",
+  "version_name": "2026.06.24",
+  "homepage_url": "https://chatclub.local/",
+  "action": {
+    "default_title": "ChatClub",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "background": {
+    "service_worker": "background/service-worker.js",
+    "type": "module"
+  },
+  "options_page": "chatClub.html",
+  "permissions": [
+    "storage",
+    "declarativeNetRequest",
+    "scripting",
+    "favicon",
+    "tabs",
+    "windows",
+    "clipboardRead",
+    "clipboardWrite"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "declarative_net_request": {
+    "rule_resources": []
+  },
+  "web_accessible_resources": [
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "resources": [
+        "content/preload.js",
+        "content/content.js",
+        "content/summary-userscripts.js",
+        "content/summary-userscripts-main.js",
+        "userscripts/*"
+      ],
+      "use_dynamic_url": false
+    }
+  ]
+}
