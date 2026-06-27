@@ -61,7 +61,7 @@ export const DEFAULT_OPTIONS = {
   activeLayoutPresetId: "default",
   colMaxCount: 0,
   themeMode: "system",
-  language: "system",
+  language: "zh_CN",
   primaryColor: "#1f7a5f",
   primaryColorCustom: false,
   tabGroupButtonsMode: "pinned",

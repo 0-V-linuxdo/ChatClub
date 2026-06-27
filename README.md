@@ -1,43 +1,41 @@
 # ChatClub
 
-ChatClub is a browser extension for working with multiple AI chat platforms in one workspace. It lets you send one prompt to several chat apps, compare answers, collect summaries, optimize prompts, and keep reusable prompt snippets close at hand.
+ChatClub 是一个多 AI 聊天工作台浏览器扩展。
 
-## Features
+一次输入，多平台发送；集中对比回答、总结内容、优化提示词。
 
-- Multi-AI workspace with configurable chat groups and tabs.
-- Shared prompt composer with send history and keyboard shortcuts.
-- Prompt optimization through configurable API profiles and templates.
-- Summary panel for collecting chat context and asking follow-up questions.
-- Prompt Library for saving, editing, ordering, and inserting reusable prompts.
-- Custom Config support for adding chat targets and selectors.
-- Import / Export for portable ChatClub settings backups.
-- Customizable top bar layout.
+## 功能
 
-## Installation
+- 多平台同屏聊天
+- 统一输入与发送
+- 提示词优化
+- 聊天内容总结
+- 提示词库
+- 自定义平台配置
+- 配置导入 / 导出
+- 顶部栏自定义
 
-1. Clone or download this repository.
-2. Open your browser extension management page.
-3. Enable developer mode.
-4. Load this folder as an unpacked extension.
-5. Open ChatClub from the extension action or the options page.
+## 安装
 
-## Project Structure
+1. 下载或克隆本仓库。
+2. 打开浏览器扩展管理页面。
+3. 启用开发者模式。
+4. 选择“加载已解压的扩展程序”。
+5. 选择本项目文件夹。
 
-- `app/` - Main options-page application controllers and UI flows.
-- `background/` - MV3 service worker and extension-level actions.
-- `content/` - Content scripts and page-world summary bridge code.
-- `shared/` - Shared storage, constants, i18n, shortcuts, and top bar helpers.
-- `styles/` - ChatClub application styles.
-- `ui/` - Small DOM, component, and tooltip helpers.
-- `userscripts/` - Built-in summary collectors for supported AI sites.
-- `_locales/` - Extension metadata translations.
+## 目录
 
-## Development
+- `app/`：主界面
+- `background/`：扩展后台
+- `content/`：内容脚本
+- `shared/`：共享逻辑
+- `styles/`：样式
+- `userscripts/`：内置总结脚本
 
-The app is implemented with plain JavaScript modules, CSS, and Chrome Extension Manifest V3 APIs. There is no build step required for local development.
+## 开发
 
-After editing files, reload the unpacked extension from the browser extension management page to test the latest changes.
+无需构建。修改后，在扩展管理页面重新加载即可。
 
-## Repository
+## 仓库
 
-GitHub: https://github.com/0-V-linuxdo/ChatClub
+https://github.com/0-V-linuxdo/ChatClub

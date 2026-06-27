@@ -836,7 +836,7 @@ const zh_CN = {
 
 export const TRANSLATIONS = { en, zh_CN };
 
-let activeLanguage = "en";
+let activeLanguage = "zh_CN";
 
 function normalizePreference(preference) {
   return preference === "en" || preference === "zh_CN" ? preference : "system";
