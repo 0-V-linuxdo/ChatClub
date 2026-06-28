@@ -6,6 +6,7 @@ export const SETTINGS_SECTIONS = [
   ["appearance", "settings.appearance.title", "settings.appearance.desc", "palette"],
   ["profiles", "settings.profiles.title", "settings.profiles.desc", "key"],
   ["apps", "settings.apps.title", "settings.apps.desc", "apps"],
+  ["models", "settings.models.title", "settings.models.desc", "model"],
   ["summary", "settings.summary.title", "settings.summary.desc", "summary"],
   ["optimize", "settings.optimize.title", "settings.optimize.desc", "sparkles"],
   ["prompts", "settings.prompts.title", "settings.prompts.desc", "library"],

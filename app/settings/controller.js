@@ -1,4 +1,4 @@
-import { DEFAULT_OPTIONS, TAB_GROUP_HEADER_BUTTONS } from "../../shared/constants.js";
+import { DEFAULT_OPTIONS, MODEL_PREFERENCE_TARGETS, TAB_GROUP_HEADER_BUTTONS } from "../../shared/constants.js";
 import { SUMMARY_SITE_CONFIGS } from "../../shared/summary-sites.js";
 import { t } from "../../shared/i18n.js";
 import {
@@ -45,6 +45,7 @@ export function createSettingsController(ctx) {
     syncTopbar = () => {},
     syncSummaryPanel = () => {},
     syncWorkspaceDom = () => {},
+    applyPreferredModels = () => {},
     applyTheme,
     syncI18nLanguage,
     hydrateGroups,
@@ -268,6 +269,7 @@ export function createSettingsController(ctx) {
       state.settingsTabGroupButtonPlacementDraft = null;
       state.settingsTabGroupButtonOrderDraft = null;
       state.settingsTabGroupButtonDragId = "";
+      state.modelPreferenceDraft = null;
       cleanupTabGroupButtonDrag();
       closeActiveSettingsDialog = null;
       dialog.remove();
@@ -321,6 +323,7 @@ export function createSettingsController(ctx) {
     if (active === "appearance") return appearancePane(redraw);
     if (active === "profiles") return profilesPane(redraw);
     if (active === "apps") return appsPane(redraw);
+    if (active === "models") return modelPreferencesPane(redraw);
     if (active === "summary") return summarySettingsPane(redraw, goToSection);
     if (active === "optimize") return optimizeSettingsPane(redraw, goToSection);
     if (active === "prompts") return promptLibraryPane(redraw);
@@ -586,11 +589,17 @@ export function createSettingsController(ctx) {
       el("span", { class: "settings-muted-cell" }, profile.model || t("profiles.noModel")),
       apiProfileUsageChips(profile),
       el("div", { class: "settings-row-action-group" },
+        profile.registerUrl ? settingsIconAction(t("profiles.openPromotionChannel"), "external", () => openApiPromotionChannel(profile)) : null,
         settingsIconAction(t("common.edit"), "edit", () => openApiProfileEditor(profile, redraw)),
         settingsIconAction(t("profiles.duplicate"), "copy", () => duplicateApiProfile(profile, redraw)),
         settingsIconAction(t("common.delete"), "trash", () => deleteApiProfile(profile, redraw), "danger", state.options.apiProfiles.length <= 1)
       )
     );
+  }
+
+  function openApiPromotionChannel(profile) {
+    if (!profile?.registerUrl) return;
+    window.open(profile.registerUrl, "_blank", "noopener,noreferrer");
   }
 
   function startApiProfileDrag(event, profile) {
@@ -845,6 +854,79 @@ export function createSettingsController(ctx) {
   async function deleteCustomApp(app, redraw) {
     if (!window.confirm(t("apps.deleteConfirm", { name: app.name || "this custom platform" }))) return;
     await saveCustomConfigList(state.customConfig.filter((item) => item.id !== app.id), redraw, t("toast.customPlatformDeleted"));
+  }
+
+  const MODEL_PREFERENCE_APP_LABELS = Object.freeze({
+    Gemini: "Gemini",
+    Grok: "Grok",
+    DeepSeek: "DeepSeek",
+    NotionAI: "Notion AI"
+  });
+
+  function modelPreferenceDraft() {
+    if (!state.modelPreferenceDraft) {
+      state.modelPreferenceDraft = { ...(state.options.modelPreferences || {}) };
+    }
+    return state.modelPreferenceDraft;
+  }
+
+  function modelPreferenceOptions(appId) {
+    return (MODEL_PREFERENCE_TARGETS[appId] || []).map((target) => ({
+      value: target.id,
+      label: target.id ? target.label : t("modelPreferences.none")
+    }));
+  }
+
+  function modelPreferenceRow(appId) {
+    const draft = modelPreferenceDraft();
+    const modelSelect = select(draft[appId] || "", modelPreferenceOptions(appId));
+    modelSelect.value = draft[appId] || "";
+    modelSelect.addEventListener("change", () => {
+      state.modelPreferenceDraft = {
+        ...modelPreferenceDraft(),
+        [appId]: modelSelect.value
+      };
+    });
+    return el("div", { class: "ui-list-row settings-list-row model-preference-row" },
+      el("strong", { class: "settings-main-cell" }, MODEL_PREFERENCE_APP_LABELS[appId] || appId),
+      modelSelect
+    );
+  }
+
+  function clearModelPreferenceDraft(redraw) {
+    state.modelPreferenceDraft = Object.fromEntries(
+      Object.keys(MODEL_PREFERENCE_TARGETS).map((appId) => [appId, ""])
+    );
+    redraw();
+  }
+
+  async function saveModelPreferenceDraft(redraw) {
+    state.options = await saveOptions({
+      ...state.options,
+      modelPreferences: modelPreferenceDraft()
+    });
+    state.modelPreferenceDraft = { ...(state.options.modelPreferences || {}) };
+    await notifyConfigReload();
+    await Promise.resolve(applyPreferredModels());
+    toast(t("toast.modelPreferencesSaved"), "success");
+    redraw();
+  }
+
+  function modelPreferencesPane(redraw) {
+    return el("div", { class: "settings-pane settings-manager-pane" },
+      settingsPaneToolbar(t("modelPreferences.manage")),
+      settingsBlock(t("modelPreferences.title"), t("modelPreferences.desc"),
+        settingsList(
+          [t("modelPreferences.platform"), t("modelPreferences.preferredModel")],
+          Object.keys(MODEL_PREFERENCE_TARGETS).map((appId) => modelPreferenceRow(appId)),
+          "settings-manager-list model-preference-list"
+        ),
+        settingsActions(
+          button(t("modelPreferences.clear"), () => clearModelPreferenceDraft(redraw)),
+          button(t("modelPreferences.save"), () => saveModelPreferenceDraft(redraw), "primary")
+        )
+      )
+    );
   }
 
   function profileOptions(selected) {

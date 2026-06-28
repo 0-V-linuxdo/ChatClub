@@ -87,6 +87,8 @@ const en = {
   "settings.profiles.desc": "Models, endpoints, and API keys.",
   "settings.apps.title": "Custom Config",
   "settings.apps.desc": "Custom chat targets and selectors.",
+  "settings.models.title": "Model Preferences",
+  "settings.models.desc": "Apply preferred chat models after pages load.",
   "settings.summary.title": "Summary",
   "settings.summary.desc": "Collection and summary prompts.",
   "settings.optimize.title": "Optimize",
@@ -145,6 +147,7 @@ const en = {
   "profiles.notAssigned": "Not assigned",
   "profiles.noModel": "No model",
   "profiles.noProfiles": "No API profiles yet.",
+  "profiles.openPromotionChannel": "Open promotion channel",
   "profiles.save": "Save Profile",
   "profiles.endpointModelRequired": "Endpoint and model are required",
   "profiles.deleteConfirm": "Delete {name}?",
@@ -166,6 +169,15 @@ const en = {
   "apps.nameUrlRequired": "Platform name and URL are required",
   "apps.invalidUrl": "Platform URL is invalid",
   "apps.deleteConfirm": "Delete {name}?",
+
+  "modelPreferences.title": "Preferred models",
+  "modelPreferences.desc": "Choose the model ChatClub should apply when a supported chat page finishes loading.",
+  "modelPreferences.manage": "Supported now: Gemini, Grok, DeepSeek, and Notion AI.",
+  "modelPreferences.platform": "Platform",
+  "modelPreferences.preferredModel": "Preferred model",
+  "modelPreferences.none": "No preference",
+  "modelPreferences.clear": "Clear",
+  "modelPreferences.save": "Save Preferences",
 
   "promptTemplates.title": "Prompt Templates",
   "promptTemplates.add": "Add Template",
@@ -384,6 +396,7 @@ const en = {
   "toast.sentToChats": "Sent to {count} active chat{plural}",
   "toast.customConfigOrderSaved": "Custom config order saved",
   "toast.customConfigSaved": "Custom config saved",
+  "toast.modelPreferencesSaved": "Model preferences saved",
   "toast.customPlatformUpdated": "Custom platform updated",
   "toast.customPlatformAdded": "Custom platform added",
   "toast.customPlatformDeleted": "Custom platform deleted",
@@ -504,6 +517,8 @@ const zh_CN = {
   "settings.profiles.desc": "模型、端点与 API 密钥。",
   "settings.apps.title": "自定义配置",
   "settings.apps.desc": "自定义聊天目标与选择器。",
+  "settings.models.title": "模型偏好",
+  "settings.models.desc": "页面加载后自动应用首选聊天模型。",
   "settings.summary.title": "总结",
   "settings.summary.desc": "采集与总结提示词。",
   "settings.optimize.title": "优化",
@@ -562,6 +577,7 @@ const zh_CN = {
   "profiles.notAssigned": "未分配",
   "profiles.noModel": "未设置模型",
   "profiles.noProfiles": "还没有 API 配置。",
+  "profiles.openPromotionChannel": "打开推广渠道",
   "profiles.save": "保存配置",
   "profiles.endpointModelRequired": "端点和模型不能为空",
   "profiles.deleteConfirm": "删除 {name}？",
@@ -583,6 +599,15 @@ const zh_CN = {
   "apps.nameUrlRequired": "平台名称和 URL 不能为空",
   "apps.invalidUrl": "平台 URL 无效",
   "apps.deleteConfirm": "删除 {name}？",
+
+  "modelPreferences.title": "首选模型",
+  "modelPreferences.desc": "选择 ChatClub 在受支持聊天页面加载完成后自动应用的模型。",
+  "modelPreferences.manage": "当前支持 Gemini、Grok、DeepSeek 和 Notion AI。",
+  "modelPreferences.platform": "平台",
+  "modelPreferences.preferredModel": "首选模型",
+  "modelPreferences.none": "不指定",
+  "modelPreferences.clear": "清空",
+  "modelPreferences.save": "保存偏好",
 
   "promptTemplates.title": "提示词模板",
   "promptTemplates.add": "添加模板",
@@ -801,6 +826,7 @@ const zh_CN = {
   "toast.sentToChats": "已发送到 {count} 个活动聊天",
   "toast.customConfigOrderSaved": "自定义配置顺序已保存",
   "toast.customConfigSaved": "自定义配置已保存",
+  "toast.modelPreferencesSaved": "模型偏好已保存",
   "toast.customPlatformUpdated": "自定义平台已更新",
   "toast.customPlatformAdded": "自定义平台已添加",
   "toast.customPlatformDeleted": "自定义平台已删除",
@@ -836,7 +862,15 @@ const zh_CN = {
 
 export const TRANSLATIONS = { en, zh_CN };
 
-let activeLanguage = "zh_CN";
+function defaultBrowserLanguage() {
+  try {
+    return globalThis.chrome?.i18n?.getUILanguage?.() || globalThis.navigator?.language || "en";
+  } catch {
+    return "en";
+  }
+}
+
+let activeLanguage = defaultBrowserLanguage().replace("_", "-").toLowerCase().startsWith("zh") ? "zh_CN" : "en";
 
 function normalizePreference(preference) {
   return preference === "en" || preference === "zh_CN" ? preference : "system";

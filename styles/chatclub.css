@@ -2490,13 +2490,32 @@ body.settings-tab-group-button-dragging iframe {
 
 .api-profile-list .settings-list-header,
 .api-profile-row {
-  grid-template-columns: 56px minmax(170px, 1fr) minmax(160px, .9fr) minmax(220px, 1fr) minmax(132px, auto);
+  grid-template-columns: 56px minmax(170px, 1fr) minmax(160px, .9fr) minmax(220px, 1fr) minmax(176px, auto);
 }
 
 .custom-config-list .settings-list-header,
 .custom-config-row {
   min-width: 640px;
   grid-template-columns: 44px minmax(118px, .88fr) minmax(178px, 1.16fr) minmax(104px, .72fr) minmax(114px, .76fr) 88px;
+}
+
+.model-preference-list .settings-list-header,
+.model-preference-row {
+  min-width: 0;
+  grid-template-columns: minmax(140px, 1fr) minmax(220px, 320px);
+}
+
+.model-preference-list {
+  overflow-x: hidden;
+}
+
+.model-preference-list .settings-list-header span:last-child {
+  text-align: left;
+}
+
+.model-preference-row > .select {
+  width: clamp(220px, 28vw, 320px);
+  justify-self: start;
 }
 
 .prompt-template-list .settings-list-header,
@@ -3265,7 +3284,7 @@ body.settings-tab-group-button-dragging iframe {
 
   .api-profile-list .settings-list-header,
   .api-profile-row {
-    grid-template-columns: 46px minmax(140px, 1fr) minmax(130px, .8fr) minmax(180px, 1fr) minmax(112px, auto);
+    grid-template-columns: 46px minmax(140px, 1fr) minmax(130px, .8fr) minmax(180px, 1fr) minmax(156px, auto);
   }
 
   .custom-config-list .settings-list-header,

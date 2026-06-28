@@ -150,8 +150,13 @@ async function registerContentScripts() {
   ]);
 }
 
-async function reloadRuntimeConfig() {
-  await Promise.all([updateDnrRules(), registerContentScripts()]);
+let runtimeConfigReloadChain = Promise.resolve();
+
+function reloadRuntimeConfig() {
+  runtimeConfigReloadChain = runtimeConfigReloadChain
+    .catch(() => {})
+    .then(() => Promise.all([updateDnrRules(), registerContentScripts()]));
+  return runtimeConfigReloadChain;
 }
 
 chrome.runtime.onInstalled.addListener(async () => {

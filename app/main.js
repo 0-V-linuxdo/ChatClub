@@ -1,4 +1,4 @@
-import { APP_NAME } from "../shared/constants.js";
+import { APP_NAME, MODEL_PREFERENCE_TARGETS } from "../shared/constants.js";
 import { sendToIframe } from "../shared/post-message.js";
 import { setLanguage, t } from "../shared/i18n.js";
 import {
@@ -74,6 +74,19 @@ let appShellNode = null;
 let topbarNode = null;
 let activeTopbarEditPointerDrag = null;
 let suppressTopbarPaletteClick = false;
+const MODEL_PREFERENCE_APP_ID_ALIASES = Object.freeze({
+  Gemini: "Gemini",
+  Grok: "Grok",
+  GrokMirror: "Grok",
+  "Grok Mirror": "Grok",
+  DeepSeek: "DeepSeek",
+  "DeepSeek AI": "DeepSeek",
+  NotionAI: "NotionAI",
+  "Notion AI": "NotionAI"
+});
+const MODEL_PREFERENCE_APPLY_RETRY_DELAYS = Object.freeze([0, 700, 1600, 3200, 5200, 8000, 12000]);
+const MODEL_PREFERENCE_READY_APPLY_RETRY_DELAYS = Object.freeze([1600, 3200, 5200, 8000, 12000, 16000]);
+const preferredModelApplyRuns = new WeakMap();
 const ICONS = {
   edit: [
     ["path", { d: "M12 20h9" }],
@@ -147,6 +160,17 @@ const ICONS = {
     ["rect", { x: "14", y: "4", width: "6", height: "6", rx: "1.4" }],
     ["rect", { x: "4", y: "14", width: "6", height: "6", rx: "1.4" }],
     ["rect", { x: "14", y: "14", width: "6", height: "6", rx: "1.4" }]
+  ],
+  model: [
+    ["circle", { cx: "12", cy: "12", r: "3" }],
+    ["circle", { cx: "6", cy: "6", r: "2" }],
+    ["circle", { cx: "18", cy: "6", r: "2" }],
+    ["circle", { cx: "6", cy: "18", r: "2" }],
+    ["circle", { cx: "18", cy: "18", r: "2" }],
+    ["path", { d: "M7.5 7.5 10 10" }],
+    ["path", { d: "M16.5 7.5 14 10" }],
+    ["path", { d: "M7.5 16.5 10 14" }],
+    ["path", { d: "M16.5 16.5 14 14" }]
   ],
   layout: [
     ["rect", { x: "3", y: "3", width: "18", height: "18", rx: "2" }],
@@ -300,6 +324,7 @@ const state = {
   settingsTabGroupButtonPlacementDraft: null,
   settingsTabGroupButtonOrderDraft: null,
   settingsTabGroupButtonDragId: "",
+  modelPreferenceDraft: null,
   topbarEditMode: false,
   topbarEditLayoutDraft: null,
   topbarEditDragId: ""
@@ -441,6 +466,7 @@ const settingsController = createSettingsController({
   syncTopbar,
   syncSummaryPanel,
   syncWorkspaceDom: workspaceController.syncWorkspaceDom,
+  applyPreferredModels: applyPreferredModelsToFrames,
   applyTheme,
   syncI18nLanguage,
   hydrateGroups: workspaceController.hydrateGroups,
@@ -723,6 +749,76 @@ async function sendPromptToFrames() {
   toast(t("toast.sentToChats", { count: frames.length, plural: frames.length === 1 ? "" : "s" }), "success");
 }
 
+function preferredModelAppId(app) {
+  return MODEL_PREFERENCE_APP_ID_ALIASES[String(app?.id || "")] || MODEL_PREFERENCE_APP_ID_ALIASES[String(app?.name || "")] || String(app?.id || "");
+}
+
+function preferredModelForApp(app) {
+  const appId = preferredModelAppId(app);
+  const modelId = String(state.options?.modelPreferences?.[appId] || "");
+  if (!modelId) return "";
+  return (MODEL_PREFERENCE_TARGETS[appId] || []).some((target) => target.id === modelId) ? modelId : "";
+}
+
+function preferredModelFrameKey(iframe) {
+  if (!iframe) return "";
+  const app = workspaceController.frameApp(iframe);
+  const appId = preferredModelAppId(app);
+  const modelId = preferredModelForApp(app);
+  return modelId ? `${appId}:${modelId}:${iframe.dataset.currentHref || iframe.src || ""}` : "";
+}
+
+async function applyPreferredModelToFrame(iframe, options = {}) {
+  if (!iframe) return null;
+  const app = workspaceController.frameApp(iframe);
+  const appId = preferredModelAppId(app);
+  const modelId = preferredModelForApp(app);
+  if (!modelId) return null;
+  try {
+    const result = await sendToIframe(iframe, "applyPreferredModel", {
+      appId,
+      modelId
+    }, 15000);
+    if (result?.ok === false && !options.quiet) {
+      console.warn("[ChatClub] Preferred model was not applied", appId, modelId, result.reason || result);
+    }
+    return result;
+  } catch (error) {
+    if (!options.quiet) console.warn("[ChatClub] Failed to apply preferred model", appId, modelId, error);
+    return { ok: false, appId, modelId, reason: error?.message || String(error || "message timeout") };
+  }
+}
+
+function schedulePreferredModelApplyToFrame(iframe, options = {}) {
+  const key = preferredModelFrameKey(iframe);
+  if (!key) return null;
+  const token = createId("model-apply");
+  const delays = options.immediate
+    ? MODEL_PREFERENCE_APPLY_RETRY_DELAYS
+    : MODEL_PREFERENCE_READY_APPLY_RETRY_DELAYS;
+  preferredModelApplyRuns.set(iframe, { token, key });
+  const run = async (attempt = 0) => {
+    const record = preferredModelApplyRuns.get(iframe);
+    if (!record || record.token !== token || record.key !== preferredModelFrameKey(iframe)) return;
+    const isLastAttempt = attempt >= delays.length - 1;
+    const result = await applyPreferredModelToFrame(iframe, { quiet: !isLastAttempt });
+    if (result?.ok || /unknown model/i.test(String(result?.reason || ""))) return;
+    if (attempt + 1 < delays.length) {
+      window.setTimeout(() => run(attempt + 1), delays[attempt + 1]);
+    }
+  };
+  window.setTimeout(() => run(0), delays[0]);
+  return { token, key };
+}
+
+async function applyPreferredModelsToFrames(frames = null, options = {}) {
+  const frameList = frames
+    ? Array.from(frames).filter(Boolean)
+    : Array.from(document.querySelectorAll(".chat-frame"));
+  const immediate = options.immediate !== false;
+  for (const iframe of frameList) schedulePreferredModelApplyToFrame(iframe, { immediate });
+}
+
 async function newChatOnFrames() {
   await Promise.allSettled(workspaceController.currentFrames().map(async (iframe) => {
     try {
@@ -991,18 +1087,34 @@ function ensureTopbarSettingsMenuItems(layout) {
   const normalized = normalizeTopbarLayout(layout);
   const existing = topbarLayoutItemIds(normalized);
   const settingsIds = topbarSettingsSectionItemIds();
-  if (settingsIds.some((id) => existing.has(id))) return normalized;
+  const missingSettingsIds = settingsIds.filter((id) => !existing.has(id));
+  if (!missingSettingsIds.length) return normalized;
   let menuIndex = topbarLayoutMenuIndex(normalized);
   const base = [...normalized];
   if (menuIndex < 0) {
     base.push({ type: "item", id: "settingsJumpMenu" });
     menuIndex = base.length - 1;
   }
-  const missingSettingsItems = settingsIds.map((id) => ({ type: "item", id }));
+  const settingsOrder = new Map(settingsIds.map((id, index) => [id, index]));
+  const missingSettings = new Set(missingSettingsIds);
+  const mergedFoldedItems = [];
+  const appendMissingBefore = (orderLimit) => {
+    for (const id of settingsIds) {
+      if (!missingSettings.has(id)) continue;
+      if (settingsOrder.get(id) >= orderLimit) continue;
+      mergedFoldedItems.push({ type: "item", id });
+      missingSettings.delete(id);
+    }
+  };
+  for (const item of base.slice(menuIndex + 1)) {
+    const order = item.type === "item" ? settingsOrder.get(item.id) : undefined;
+    if (typeof order === "number") appendMissingBefore(order);
+    mergedFoldedItems.push(item);
+  }
+  appendMissingBefore(Number.POSITIVE_INFINITY);
   return [
     ...base.slice(0, menuIndex + 1),
-    ...missingSettingsItems,
-    ...base.slice(menuIndex + 1)
+    ...mergedFoldedItems
   ];
 }
 
@@ -1801,8 +1913,8 @@ function openSettingsJumpMenu(anchor, options = {}) {
         })
       ];
   const layout = editing
-    ? activeTopbarEditLayout()
-    : normalizeTopbarLayout(state.options?.topbarLayout);
+    ? ensureTopbarSettingsMenuItems(activeTopbarEditLayout())
+    : ensureTopbarSettingsMenuItems(state.options?.topbarLayout);
   const foldedItems = foldedTopbarLayoutItems(layout)
     .filter((item) => item.type === "item" && item.id !== "settingsJumpMenu");
   const foldedSettingsItemIds = new Set(foldedItems
@@ -2007,7 +2119,16 @@ function installIframeEventBridge() {
       const href = workspaceController.openableTabUrl(message.data?.href);
       if (iframe && href) iframe.dataset.currentHref = href;
       workspaceController.syncFrameFavicon(event.source).catch((error) => console.warn("[ChatClub] Failed to sync frame favicon", error));
+      if (iframe) schedulePreferredModelApplyToFrame(iframe);
     }
+  }, true);
+}
+
+function installPreferredModelIframeLoadHandler() {
+  document.addEventListener("load", (event) => {
+    const iframe = event.target;
+    if (!(iframe instanceof HTMLIFrameElement) || !iframe.classList.contains("chat-frame")) return;
+    schedulePreferredModelApplyToFrame(iframe);
   }, true);
 }
 
@@ -2035,7 +2156,9 @@ async function init() {
   installExtensionTabTracker();
   installShortcuts();
   installIframeEventBridge();
+  installPreferredModelIframeLoadHandler();
   render();
+  requestAnimationFrame(() => applyPreferredModelsToFrames(null, { immediate: false }));
 }
 
 init().catch((error) => {

@@ -1,7 +1,7 @@
 import { DEFAULT_TOPBAR_LAYOUT } from "./topbar.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "2026.06.24";
+export const APP_VERSION = "「2026-06-28｜17:54:25」";
 export const BASELINE_MOD_VERSION = "2.4.0.14";
 export const HOMEPAGE_URL = "https://chatclub.local/";
 
@@ -17,7 +17,67 @@ export const STORAGE_KEYS = {
 
 export const API_PROFILE_ENDPOINT_DEFAULT = "https://api.openai.com/v1/chat/completions";
 export const API_PROFILE_MODEL_DEFAULT = "gpt-3.5-turbo";
+export const API_PROMOTION_CHANNELS_VERSION = 2;
+export const API_PROFILE_ZERO_ZERO_ENDPOINT = "https://api.0-0.pro/v1/chat/completions";
+export const API_PROFILE_ZERO_ZERO_MODEL = "gpt-5.5";
+export const API_PROFILE_ZERO_ZERO_REGISTER_URL = "https://0-0.pro/register?ref=CSLPRL76";
 export const SUMMARY_SITE_CONFIG_VERSION = 64;
+
+export const DEFAULT_PROMOTION_API_PROFILES = [
+  {
+    id: "default-zero-zero",
+    name: "0.0",
+    endpoint: API_PROFILE_ZERO_ZERO_ENDPOINT,
+    apiKey: "",
+    model: API_PROFILE_ZERO_ZERO_MODEL,
+    registerUrl: API_PROFILE_ZERO_ZERO_REGISTER_URL,
+    promotionChannel: true
+  }
+];
+
+export const MODEL_PREFERENCE_TARGETS = Object.freeze({
+  Gemini: Object.freeze([
+    Object.freeze({ id: "", label: "" }),
+    Object.freeze({ id: "pro", label: "Pro" }),
+    Object.freeze({ id: "thinking", label: "Thinking" }),
+    Object.freeze({ id: "extended", label: "Extended" }),
+    Object.freeze({ id: "fast", label: "Fast" })
+  ]),
+  Grok: Object.freeze([
+    Object.freeze({ id: "", label: "" }),
+    Object.freeze({ id: "auto", label: "Auto" }),
+    Object.freeze({ id: "fast", label: "Fast" }),
+    Object.freeze({ id: "expert", label: "Expert" }),
+    Object.freeze({ id: "grok43", label: "Grok 4.3 (beta)" }),
+    Object.freeze({ id: "heavy", label: "Heavy" })
+  ]),
+  DeepSeek: Object.freeze([
+    Object.freeze({ id: "", label: "" }),
+    Object.freeze({ id: "instant", label: "Instant" }),
+    Object.freeze({ id: "expert", label: "Expert" }),
+    Object.freeze({ id: "vision", label: "Vision" })
+  ]),
+  NotionAI: Object.freeze([
+    Object.freeze({ id: "", label: "" }),
+    Object.freeze({ id: "auto", label: "Auto" }),
+    Object.freeze({ id: "sonnet46", label: "Claude Sonnet 4.6" }),
+    Object.freeze({ id: "opus47", label: "Claude Opus 4.7" }),
+    Object.freeze({ id: "opus48", label: "Claude Opus 4.8" }),
+    Object.freeze({ id: "gemini31pro", label: "Gemini 3.1 Pro" }),
+    Object.freeze({ id: "gpt52", label: "GPT-5.2" }),
+    Object.freeze({ id: "gpt54", label: "GPT-5.4" }),
+    Object.freeze({ id: "gpt55", label: "GPT-5.5" }),
+    Object.freeze({ id: "grok43", label: "Grok 4.3" }),
+    Object.freeze({ id: "grokBuild01", label: "Grok Build 0.1" }),
+    Object.freeze({ id: "kimi26", label: "Kimi K2.6" }),
+    Object.freeze({ id: "deepseekV4Pro", label: "DeepSeek V4 Pro" }),
+    Object.freeze({ id: "glm52", label: "GLM 5.2" })
+  ])
+});
+
+export const DEFAULT_MODEL_PREFERENCES = Object.freeze(
+  Object.fromEntries(Object.keys(MODEL_PREFERENCE_TARGETS).map((appId) => [appId, ""]))
+);
 
 export const TAB_GROUP_HEADER_BUTTONS = [
   { id: "addApp", icon: "plus", section: "header", defaultPlacement: "pinned" },
@@ -61,7 +121,7 @@ export const DEFAULT_OPTIONS = {
   activeLayoutPresetId: "default",
   colMaxCount: 0,
   themeMode: "system",
-  language: "zh_CN",
+  language: "system",
   primaryColor: "#1f7a5f",
   primaryColorCustom: false,
   tabGroupButtonsMode: "pinned",
@@ -75,8 +135,10 @@ export const DEFAULT_OPTIONS = {
       endpoint: API_PROFILE_ENDPOINT_DEFAULT,
       apiKey: "",
       model: API_PROFILE_MODEL_DEFAULT
-    }
+    },
+    ...DEFAULT_PROMOTION_API_PROFILES
   ],
+  apiPromotionChannelsVersion: API_PROMOTION_CHANNELS_VERSION,
   optimizeApiProfileId: "default-openai",
   summaryApiProfileId: "default-openai",
   optimizePromptTemplateId: "optimize-default",
@@ -97,6 +159,7 @@ export const DEFAULT_OPTIONS = {
       builtIn: true
     }
   ],
+  modelPreferences: DEFAULT_MODEL_PREFERENCES,
   summarySiteConfigs: []
 };
 

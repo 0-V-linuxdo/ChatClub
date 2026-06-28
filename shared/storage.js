@@ -1,10 +1,14 @@
 import {
+  API_PROMOTION_CHANNELS_VERSION,
   API_PROFILE_ENDPOINT_DEFAULT,
   API_PROFILE_MODEL_DEFAULT,
   BUILTIN_CHAT_APPS,
+  DEFAULT_MODEL_PREFERENCES,
+  DEFAULT_PROMOTION_API_PROFILES,
   DEFAULT_TAB_GROUP_BUTTON_ORDER,
   DEFAULT_TAB_GROUP_BUTTON_PLACEMENT,
   DEFAULT_OPTIONS,
+  MODEL_PREFERENCE_TARGETS,
   STORAGE_KEYS,
   TAB_GROUP_HEADER_BUTTONS
 } from "./constants.js";
@@ -102,13 +106,104 @@ function inferCustomName(item, index) {
 }
 
 function normalizeProfile(profile, index) {
+  const registerUrl = text(profile?.registerUrl || profile?.signupUrl || profile?.url);
   return {
     id: text(profile?.id) || createId("api"),
     name: text(profile?.name, `API Profile ${index + 1}`) || `API Profile ${index + 1}`,
     endpoint: text(profile?.endpoint, API_PROFILE_ENDPOINT_DEFAULT) || API_PROFILE_ENDPOINT_DEFAULT,
     apiKey: text(profile?.apiKey),
-    model: text(profile?.model, API_PROFILE_MODEL_DEFAULT) || API_PROFILE_MODEL_DEFAULT
+    model: text(profile?.model, API_PROFILE_MODEL_DEFAULT) || API_PROFILE_MODEL_DEFAULT,
+    ...(registerUrl ? { registerUrl } : {}),
+    ...(profile?.promotionChannel === true ? { promotionChannel: true } : {})
   };
+}
+
+function sameApiHost(left, right) {
+  try {
+    return new URL(left).hostname === new URL(right).hostname;
+  } catch {
+    return false;
+  }
+}
+
+function isPromotionApiProfile(profile, promoted) {
+  if (!profile || !promoted) return false;
+  if (profile.id === promoted.id) return true;
+  if (text(profile.registerUrl) === promoted.registerUrl) return true;
+  return sameApiHost(profile.endpoint, promoted.endpoint);
+}
+
+function preferredPromotionProfileIndex(apiProfiles, promoted, selectedIds) {
+  const indexes = apiProfiles
+    .map((profile, index) => isPromotionApiProfile(profile, promoted) ? index : -1)
+    .filter((index) => index >= 0);
+  return indexes.find((index) => selectedIds.has(apiProfiles[index].id))
+    ?? indexes.find((index) => apiProfiles[index].id !== promoted.id && text(apiProfiles[index].apiKey))
+    ?? indexes.find((index) => apiProfiles[index].id !== promoted.id)
+    ?? indexes[0]
+    ?? -1;
+}
+
+function mergePromotionApiProfiles(apiProfiles, raw = {}, addMissing = false) {
+  const selectedIds = new Set([text(raw.optimizeApiProfileId), text(raw.summaryApiProfileId)].filter(Boolean));
+  let next = [...apiProfiles];
+  for (const promoted of DEFAULT_PROMOTION_API_PROFILES) {
+    const preferredIndex = preferredPromotionProfileIndex(next, promoted, selectedIds);
+    const hasPromotionDuplicate = preferredIndex >= 0
+      && next.some((profile, index) => index !== preferredIndex && isPromotionApiProfile(profile, promoted));
+    if (preferredIndex >= 0) {
+      const preferred = next[preferredIndex];
+      const removablePreferred = !addMissing
+        && preferred.id === promoted.id
+        && !preferred.promotionChannel
+        && !text(preferred.apiKey)
+        && !selectedIds.has(preferred.id)
+        && next.length > 1;
+      if (removablePreferred && !hasPromotionDuplicate) {
+        next = next.filter((_, index) => index !== preferredIndex);
+        continue;
+      }
+      next[preferredIndex] = normalizeProfile({
+        ...promoted,
+        ...preferred,
+        registerUrl: text(preferred.registerUrl) || promoted.registerUrl
+      }, preferredIndex);
+      next = next.filter((profile, index) => {
+        if (index === preferredIndex) return true;
+        const removableBlank = profile.id === promoted.id
+          && !text(profile.apiKey)
+          && !selectedIds.has(profile.id)
+          && next.length > 1;
+        return !(removableBlank && (hasPromotionDuplicate || profile.promotionChannel !== true));
+      });
+    }
+  }
+  if (!addMissing) return next;
+  for (const profile of DEFAULT_PROMOTION_API_PROFILES) {
+    const index = preferredPromotionProfileIndex(next, profile, selectedIds);
+    if (index >= 0) continue;
+    next.push(normalizeProfile(profile, next.length));
+  }
+  return next;
+}
+
+function hasStoredOptions(raw) {
+  return !!raw && typeof raw === "object" && !Array.isArray(raw) && Object.keys(raw).length > 0;
+}
+
+function withoutPromotionApiProfiles(apiProfiles) {
+  return apiProfiles.filter((profile) => !DEFAULT_PROMOTION_API_PROFILES.some((promoted) => profile.id === promoted.id));
+}
+
+export function normalizeModelPreferences(raw = {}) {
+  const source = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  const normalized = { ...DEFAULT_MODEL_PREFERENCES };
+  for (const [appId, targets] of Object.entries(MODEL_PREFERENCE_TARGETS)) {
+    const value = text(source[appId]);
+    const allowed = new Set((targets || []).map((target) => target.id));
+    normalized[appId] = allowed.has(value) ? value : "";
+  }
+  return normalized;
 }
 
 function legacyProfile(raw, kind) {
@@ -167,6 +262,7 @@ function mergeBuiltInSummaryConfig(current, builtIn) {
 
 export function normalizeOptions(raw = {}) {
   const base = clone(DEFAULT_OPTIONS);
+  const storedOptions = hasStoredOptions(raw);
   const hadProfiles = Array.isArray(raw.apiProfiles);
   let apiProfiles = hadProfiles ? raw.apiProfiles.filter(Boolean).map(normalizeProfile) : [];
   if (!apiProfiles.length) {
@@ -174,11 +270,19 @@ export function normalizeOptions(raw = {}) {
     const summary = legacyProfile(raw, "summary");
     apiProfiles = [optimize, summary].filter(Boolean);
   }
-  if (!apiProfiles.length) apiProfiles = clone(base.apiProfiles);
+  if (!apiProfiles.length) {
+    apiProfiles = storedOptions ? withoutPromotionApiProfiles(clone(base.apiProfiles)) : clone(base.apiProfiles);
+  }
+  const fallbackProfileIds = apiProfiles.map((profile) => profile.id);
+  apiProfiles = mergePromotionApiProfiles(apiProfiles, raw, !storedOptions);
 
   const profileIds = new Set(apiProfiles.map((profile) => profile.id));
-  const optimizeFallback = apiProfiles[0]?.id || "";
-  const summaryFallback = apiProfiles[1]?.id || optimizeFallback;
+  const optimizeFallback = profileIds.has(base.optimizeApiProfileId)
+    ? base.optimizeApiProfileId
+    : fallbackProfileIds[0] || apiProfiles[0]?.id || "";
+  const summaryFallback = profileIds.has(base.summaryApiProfileId)
+    ? base.summaryApiProfileId
+    : fallbackProfileIds[1] || fallbackProfileIds[0] || apiProfiles[1]?.id || optimizeFallback;
 
   const optimizeDefault = base.optimizePromptTemplates[0];
   const summaryDefault = base.summaryPromptTemplates[0];
@@ -211,6 +315,7 @@ export function normalizeOptions(raw = {}) {
     topbarLayout: normalizeTopbarLayout(raw.topbarLayout),
     ...primaryColorState,
     apiProfiles,
+    apiPromotionChannelsVersion: Math.max(Number(raw.apiPromotionChannelsVersion) || 0, API_PROMOTION_CHANNELS_VERSION),
     optimizeApiProfileId: profileIds.has(raw.optimizeApiProfileId) ? raw.optimizeApiProfileId : optimizeFallback,
     summaryApiProfileId: profileIds.has(raw.summaryApiProfileId) ? raw.summaryApiProfileId : summaryFallback,
     optimizePromptTemplates,
@@ -221,6 +326,7 @@ export function normalizeOptions(raw = {}) {
     summaryPromptTemplateId: summaryPromptTemplates.some((item) => item.id === raw.summaryPromptTemplateId)
       ? raw.summaryPromptTemplateId
       : summaryPromptTemplates[0]?.id || summaryDefault.id,
+    modelPreferences: normalizeModelPreferences(raw.modelPreferences),
     summarySiteConfigs: mergeBuiltInSummaryConfig(raw.summarySiteConfigs, SUMMARY_SITE_CONFIGS)
   };
 }
