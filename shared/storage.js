@@ -14,7 +14,8 @@ import {
   GEMINI_THINKING_LEVEL_TARGETS,
   MODEL_PREFERENCE_TARGETS,
   STORAGE_KEYS,
-  TAB_GROUP_HEADER_BUTTONS
+  TAB_GROUP_HEADER_BUTTONS,
+  TOOLTIP_TARGET_IDS
 } from "./constants.js";
 import { SUMMARY_SITE_CONFIGS } from "./summary-sites.js";
 import { normalizeShortcutConfig as normalizeShortcutShape } from "./shortcuts.js";
@@ -52,6 +53,17 @@ export function normalizePocketCardSize(value = {}) {
     width: boundedNumber(source.width, DEFAULT_POCKET_CARD_SIZE.width, 360, 760),
     height: boundedNumber(source.height, DEFAULT_POCKET_CARD_SIZE.height, 420, 820)
   };
+}
+
+export function normalizeTooltipDisabledIds(value = []) {
+  const validIds = new Set(TOOLTIP_TARGET_IDS);
+  const ordered = [];
+  for (const id of Array.isArray(value) ? value : []) {
+    const normalized = text(id);
+    if (!validIds.has(normalized) || ordered.includes(normalized)) continue;
+    ordered.push(normalized);
+  }
+  return ordered;
 }
 
 function normalizeStoredPrimaryColor(raw, fallback) {
@@ -335,6 +347,7 @@ export function normalizeOptions(raw = {}) {
     tabGroupButtonsMode,
     tabGroupButtonPlacement: normalizeTabGroupButtonPlacement(raw.tabGroupButtonPlacement, tabGroupButtonsMode),
     tabGroupButtonOrder: normalizeTabGroupButtonOrder(raw.tabGroupButtonOrder),
+    tooltipDisabledIds: normalizeTooltipDisabledIds(raw.tooltipDisabledIds),
     topbarLayout: normalizeTopbarLayout(raw.topbarLayout),
     pocketCardSize: normalizePocketCardSize(raw.pocketCardSize),
     ...primaryColorState,

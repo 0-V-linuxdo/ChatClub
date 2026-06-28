@@ -4,7 +4,8 @@ import {
   GEMINI_THINKING_LEVEL_PREFERENCE_KEY,
   GEMINI_THINKING_LEVEL_TARGETS,
   MODEL_PREFERENCE_TARGETS,
-  TAB_GROUP_HEADER_BUTTONS
+  TAB_GROUP_HEADER_BUTTONS,
+  TOOLTIP_TARGET_GROUPS
 } from "../../shared/constants.js";
 import { SUMMARY_SITE_CONFIGS } from "../../shared/summary-sites.js";
 import { t } from "../../shared/i18n.js";
@@ -340,7 +341,7 @@ export function createSettingsController(ctx) {
 
   function appearancePane(redraw = () => {}) {
     let primaryColorDraft = normalizePrimaryColor(state.options.primaryColor);
-    const appearanceTabIds = new Set(["workspace", "topbar", "tabGroup"]);
+    const appearanceTabIds = new Set(["workspace", "topbar", "tabGroup", "tooltips"]);
     if (!appearanceTabIds.has(state.settingsAppearanceTab)) state.settingsAppearanceTab = "workspace";
     if (!state.settingsTopbarLayoutDraft) {
       state.settingsTopbarLayoutDraft = normalizeTopbarLayout(state.options.topbarLayout);
@@ -455,6 +456,47 @@ export function createSettingsController(ctx) {
       redraw();
       toast(t("toast.appearanceSaved"), "success");
     };
+    const saveTooltipToggle = async (targetId, enabled, inputNode) => {
+      const current = new Set(state.options.tooltipDisabledIds || []);
+      if (enabled) current.delete(targetId);
+      else current.add(targetId);
+      state.options = await saveOptions({
+        ...state.options,
+        tooltipDisabledIds: [...current]
+      });
+      inputNode.checked = !(state.options.tooltipDisabledIds || []).includes(targetId);
+      document.dispatchEvent(new CustomEvent("chatclub:tooltips-updated"));
+    };
+    const tooltipToggleRow = (target) => {
+      const disabled = (state.options.tooltipDisabledIds || []).includes(target.id);
+      const checkbox = el("input", {
+        type: "checkbox",
+        role: "switch",
+        checked: !disabled,
+        "aria-label": `${t(target.labelKey)} ${disabled ? t("common.disabled") : t("common.enabled")}`,
+        onchange: async (event) => {
+          await saveTooltipToggle(target.id, event.target.checked, event.target);
+          redraw();
+        }
+      });
+      return el("label", { class: "tooltip-toggle-row" },
+        el("span", { class: "tooltip-toggle-copy" },
+          el("strong", {}, t(target.labelKey)),
+          el("small", {}, target.id)
+        ),
+        el("span", { class: "tooltip-toggle-switch" }, checkbox)
+      );
+    };
+    const tooltipBlock = () => settingsBlock(t("appearance.buttonTooltips"), t("appearance.buttonTooltipsDesc"),
+      el("div", { class: "tooltip-settings-list" },
+        TOOLTIP_TARGET_GROUPS.map((group) => el("section", { class: "tooltip-settings-group" },
+          el("h5", { class: "tooltip-settings-group-title" }, t(group.labelKey)),
+          el("div", { class: "tooltip-settings-rows" },
+            group.targets.map(tooltipToggleRow)
+          )
+        ))
+      )
+    );
     const workspaceBlock = () => settingsBlock(t("appearance.workspace"), t("appearance.workspaceDesc"),
         el("div", { class: "appearance-field-list" },
           appearanceRow(field(t("appearance.themeMode"), themeMode)),
@@ -527,12 +569,15 @@ export function createSettingsController(ctx) {
       ? topbarLayoutBlock(redraw, saveAppearance)
       : state.settingsAppearanceTab === "tabGroup"
         ? tabGroupBlock()
-        : workspaceBlock();
+        : state.settingsAppearanceTab === "tooltips"
+          ? tooltipBlock()
+          : workspaceBlock();
     return el("div", { class: "settings-pane appearance-settings-pane" },
       settingsInnerTabs([
         ["workspace", t("appearance.workspace"), t("appearance.workspaceTabDesc")],
         ["topbar", t("topbar.customize.title"), t("topbar.customize.tabDesc")],
-        ["tabGroup", t("appearance.tabGroup"), t("appearance.tabGroupTabDesc")]
+        ["tabGroup", t("appearance.tabGroup"), t("appearance.tabGroupTabDesc")],
+        ["tooltips", t("appearance.buttonTooltips"), t("appearance.buttonTooltipsTabDesc")]
       ], state.settingsAppearanceTab, (id) => {
         state.settingsAppearanceTab = id;
         redraw();
@@ -596,10 +641,10 @@ export function createSettingsController(ctx) {
       el("span", { class: "settings-muted-cell" }, profile.model || t("profiles.noModel")),
       apiProfileUsageChips(profile),
       el("div", { class: "settings-row-action-group" },
-        profile.registerUrl ? settingsIconAction(t("profiles.openPromotionChannel"), "external", () => openApiPromotionChannel(profile)) : null,
-        settingsIconAction(t("common.edit"), "edit", () => openApiProfileEditor(profile, redraw)),
-        settingsIconAction(t("profiles.duplicate"), "copy", () => duplicateApiProfile(profile, redraw)),
-        settingsIconAction(t("common.delete"), "trash", () => deleteApiProfile(profile, redraw), "danger", state.options.apiProfiles.length <= 1)
+        profile.registerUrl ? settingsIconAction(t("profiles.openPromotionChannel"), "external", () => openApiPromotionChannel(profile), "", false, "settings.profiles.promotion") : null,
+        settingsIconAction(t("common.edit"), "edit", () => openApiProfileEditor(profile, redraw), "", false, "settings.action.edit"),
+        settingsIconAction(t("profiles.duplicate"), "copy", () => duplicateApiProfile(profile, redraw), "", false, "settings.action.duplicate"),
+        settingsIconAction(t("common.delete"), "trash", () => deleteApiProfile(profile, redraw), "danger", state.options.apiProfiles.length <= 1, "settings.action.delete")
       )
     );
   }
@@ -751,8 +796,8 @@ export function createSettingsController(ctx) {
       el("code", { class: "settings-selector-cell" }, app.inputSelector || t("apps.default")),
       el("code", { class: "settings-selector-cell" }, app.sendButtonSelector || t("apps.default")),
       el("div", { class: "settings-row-action-group" },
-        settingsIconAction(t("common.edit"), "edit", () => openCustomAppEditor(app, redraw)),
-        settingsIconAction(t("common.delete"), "trash", () => deleteCustomApp(app, redraw), "danger")
+        settingsIconAction(t("common.edit"), "edit", () => openCustomAppEditor(app, redraw), "", false, "settings.action.edit"),
+        settingsIconAction(t("common.delete"), "trash", () => deleteCustomApp(app, redraw), "danger", false, "settings.action.delete")
       )
     );
   }
@@ -1174,10 +1219,10 @@ export function createSettingsController(ctx) {
       ),
       el("p", { class: "prompt-template-preview" }, promptTemplatePreview(template.prompt)),
       el("div", { class: "settings-row-action-group" },
-        settingsIconAction(t("promptTemplates.edit", { kind: t(meta.labelKey) }), "edit", () => openPromptTemplateEditor(kind, template, redraw)),
+        settingsIconAction(t("promptTemplates.edit", { kind: t(meta.labelKey) }), "edit", () => openPromptTemplateEditor(kind, template, redraw), "", false, "settings.action.edit"),
         builtInDefault
-          ? settingsIconAction(t("promptTemplates.reset"), "reload", () => resetPromptTemplate(kind, template, redraw), "settings-reset-icon")
-          : settingsIconAction(t("promptTemplates.delete"), "trash", () => deletePromptTemplate(kind, template, redraw), "danger")
+          ? settingsIconAction(t("promptTemplates.reset"), "reload", () => resetPromptTemplate(kind, template, redraw), "settings-reset-icon", false, "settings.action.reset")
+          : settingsIconAction(t("promptTemplates.delete"), "trash", () => deletePromptTemplate(kind, template, redraw), "danger", false, "settings.action.delete")
       )
     );
   }
@@ -1463,11 +1508,11 @@ export function createSettingsController(ctx) {
         settingsIconAction(expanded ? t("common.close") : t("common.edit"), "edit", (event) => {
           event.stopPropagation();
           openSummaryCollectorEditor(config, redraw);
-        }),
+        }, "", false, "settings.action.edit"),
         settingsIconAction(t("common.reset"), "reload", async (event) => {
           event.stopPropagation();
           await resetSummaryCollector(config, redraw);
-        }, "settings-reset-icon", !summaryBuiltInDefault(config))
+        }, "settings-reset-icon", !summaryBuiltInDefault(config), "settings.action.reset")
       )
     );
   }

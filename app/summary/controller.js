@@ -30,7 +30,7 @@ const SUMMARY_PANEL_SIZE_KEY = "chatclub.summaryPanelSize.v4";
  * @typedef {object} SummaryControllerContext
  * @property {any} state
  * @property {(name: string) => SVGElement} svgIcon
- * @property {(label: string, iconName: string, onClick: Function, extraClass?: string) => HTMLElement} compactIconButton
+ * @property {(label: string, iconName: string, onClick: Function, extraClass?: string, tooltipLabel?: string, tooltipPlacement?: string, tooltipId?: string) => HTMLElement} compactIconButton
  * @property {() => HTMLIFrameElement[]} currentFrames
  * @property {(iframe: HTMLIFrameElement) => any} frameApp
  * @property {(blocked: boolean, namespace?: string) => void} setFramePointerBlockedForOverlay
@@ -322,7 +322,7 @@ export function createSummaryController(ctx) {
     const retryButton = compactIconButton(refreshing ? t("summaryPanel.refreshing") : t("summaryPanel.refreshMessages"), "reload", (event) => {
       event.stopPropagation();
       collectSummarySource(item);
-    }, `summary-retry-button ${refreshing ? "summary-retry-button-loading" : ""}`);
+    }, `summary-retry-button ${refreshing ? "summary-retry-button-loading" : ""}`, refreshing ? t("summaryPanel.refreshing") : t("summaryPanel.refreshMessages"), "", "summary.source.refresh");
     retryButton.disabled = state.summaryBusy || refreshing;
     retryButton.addEventListener("pointerdown", (event) => event.stopPropagation());
     retryButton.addEventListener("keydown", (event) => event.stopPropagation());
@@ -426,13 +426,14 @@ export function createSummaryController(ctx) {
     );
   }
   
-  function summaryActionButton(label, onClick, variant = "secondary", disabled = false, iconName = "") {
+  function summaryActionButton(label, onClick, variant = "secondary", disabled = false, iconName = "", tooltipId = "") {
     const action = createActionButton({
       label,
       icon: iconName ? svgIcon(iconName) : null,
       onClick,
       variant,
-      className: "summary-action-button"
+      className: `summary-action-button ${iconName ? `summary-action-button-${iconName}` : ""}`.trim(),
+      tooltipId
     });
     action.disabled = disabled;
     return action;
@@ -540,11 +541,11 @@ export function createSummaryController(ctx) {
             el("strong", {}, t("summaryPanel.title"))
           ),
           el("div", { class: "summary-panel-window-actions" },
-            iconButton(summaryFullscreenLabel(), svgIcon(state.summaryMaximized ? "minimize" : "maximize"), toggleSummaryMaximized, "summary-window-button"),
+            iconButton(summaryFullscreenLabel(), svgIcon(state.summaryMaximized ? "minimize" : "maximize"), toggleSummaryMaximized, "summary-window-button", summaryFullscreenLabel(), "", "summary.window.fullscreen"),
             iconButton(t("common.close"), svgIcon("x"), () => {
               state.summaryOpen = false;
               syncSummaryPanel();
-            }, "summary-window-button")
+            }, "summary-window-button", t("common.close"), "", "summary.window.close")
           )
         ),
         el("div", { class: "summary-panel-query" },
@@ -564,10 +565,10 @@ export function createSummaryController(ctx) {
             }
           }),
           el("div", { class: "summary-panel-actions" },
-            summaryActionButton(t("summaryPanel.pocket"), saveSummaryPreviewToPocket, "secondary", state.summaryBusy || !pocketEntriesFromSummaryPreview().length, "pocket"),
-            summaryActionButton(t("summaryPanel.preview"), collectSummary, "secondary", state.summaryBusy, "preview"),
-            summaryActionButton(t("summaryPanel.summarize"), summarizeSummary, "secondary", state.summaryBusy, "summary"),
-            summaryActionButton(t("summaryPanel.ask"), askSummary, "primary", state.summaryBusy || !hasQuestion, "send")
+            summaryActionButton(t("summaryPanel.pocket"), saveSummaryPreviewToPocket, "secondary", state.summaryBusy || !pocketEntriesFromSummaryPreview().length, "pocket", "summary.action.pocket"),
+            summaryActionButton(t("summaryPanel.preview"), collectSummary, "secondary", state.summaryBusy, "preview", "summary.action.preview"),
+            summaryActionButton(t("summaryPanel.summarize"), summarizeSummary, "secondary", state.summaryBusy, "summary", "summary.action.summarize"),
+            summaryActionButton(t("summaryPanel.ask"), askSummary, "primary", state.summaryBusy || !hasQuestion, "send", "summary.action.ask")
           )
         ),
         renderSummaryTabs(),

@@ -1,11 +1,12 @@
 import { el, iconButton } from "./dom.js";
 
-export function createActionButton({ label, icon, onClick, variant = "secondary", className = "", tooltipLabel = label, tooltipPlacement = "" }) {
+export function createActionButton({ label, icon, onClick, variant = "secondary", className = "", tooltipLabel = label, tooltipPlacement = "", tooltipId = "" }) {
   return el("button", {
     class: `button button-${variant} action-button tooltip-trigger ${className}`.trim(),
     "aria-label": label,
     "data-tooltip": tooltipLabel,
     "data-tooltip-placement": tooltipPlacement || null,
+    "data-tooltip-id": tooltipId || null,
     onclick: onClick
   },
     icon,
@@ -13,15 +14,15 @@ export function createActionButton({ label, icon, onClick, variant = "secondary"
   );
 }
 
-export function createTopIconButton({ label, icon, onClick, className = "", tooltipLabel = label, tooltipPlacement = "" }) {
-  return iconButton(label, icon, onClick, `top-icon-action ${className}`.trim(), tooltipLabel, tooltipPlacement);
+export function createTopIconButton({ label, icon, onClick, className = "", tooltipLabel = label, tooltipPlacement = "", tooltipId = "" }) {
+  return iconButton(label, icon, onClick, `top-icon-action ${className}`.trim(), tooltipLabel, tooltipPlacement, tooltipId);
 }
 
-export function createCompactIconButton({ label, icon, onClick, className = "", tooltipLabel = label, tooltipPlacement = "" }) {
-  return iconButton(label, icon, onClick, `compact-icon ${className}`.trim(), tooltipLabel, tooltipPlacement);
+export function createCompactIconButton({ label, icon, onClick, className = "", tooltipLabel = label, tooltipPlacement = "", tooltipId = "" }) {
+  return iconButton(label, icon, onClick, `compact-icon ${className}`.trim(), tooltipLabel, tooltipPlacement, tooltipId);
 }
 
-export function createMenuButton({ label, icon, onClick, variant = "secondary", disabled = false, tooltipLabel = label, tooltipPlacement = "" }) {
+export function createMenuButton({ label, icon, onClick, variant = "secondary", disabled = false, tooltipLabel = label, tooltipPlacement = "", tooltipId = "" }) {
   let pointerHandled = false;
   const runCommand = (event) => {
     if (event.currentTarget?.disabled) return;
@@ -34,6 +35,7 @@ export function createMenuButton({ label, icon, onClick, variant = "secondary", 
     "aria-label": label,
     "data-tooltip": tooltipLabel,
     "data-tooltip-placement": tooltipPlacement || null,
+    "data-tooltip-id": tooltipId || null,
     disabled,
     onpointerdown: (event) => {
       if (event.button !== 0) return;
@@ -64,12 +66,13 @@ export function createSettingsList({ headers = [], rows = [], className = "" }) 
   );
 }
 
-export function createSettingsIconAction({ label, icon, onClick, className = "", disabled = false }) {
+export function createSettingsIconAction({ label, icon, onClick, className = "", disabled = false, tooltipId = "" }) {
   return el("button", {
     class: `ui-row-action settings-row-icon-action ${className}`.trim(),
     type: "button",
     "aria-label": label,
     "data-tooltip": label,
+    "data-tooltip-id": tooltipId || null,
     disabled,
     onclick: onClick
   }, icon);

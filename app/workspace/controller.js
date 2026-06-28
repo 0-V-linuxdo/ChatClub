@@ -83,8 +83,8 @@ const APP_PICKER_CHINESE_ID_SET = new Set(APP_PICKER_CHINESE_IDS);
  * @property {(message: string, type?: string) => void} toast
  * @property {() => void} render
  * @property {(name: string) => SVGElement} svgIcon
- * @property {(label: string, iconName: string, onClick: Function, extraClass?: string, tooltipLabel?: string, tooltipPlacement?: string) => HTMLElement} compactIconButton
- * @property {(label: string, iconName: string, onClick: Function, variant?: string, disabled?: boolean, tooltipLabel?: string, tooltipPlacement?: string) => HTMLElement} menuButton
+ * @property {(label: string, iconName: string, onClick: Function, extraClass?: string, tooltipLabel?: string, tooltipPlacement?: string, tooltipId?: string) => HTMLElement} compactIconButton
+ * @property {(label: string, iconName: string, onClick: Function, variant?: string, disabled?: boolean, tooltipLabel?: string, tooltipPlacement?: string, tooltipId?: string) => HTMLElement} menuButton
  * @property {(action: string, shortcut: any, slot?: string) => string} formatShortcut
  */
 
@@ -645,9 +645,9 @@ export function createWorkspaceController(ctx = {}) {
       if (!buttonNode) return;
       const shortcut = fullscreenShortcutLabel();
       const label = isActive ? t("chat.exitFullscreen") : `${t("chat.fullscreen")}${shortcut ? ` (${shortcut})` : ""}`;
-      buttonNode.title = label;
       buttonNode.setAttribute("aria-label", label);
       buttonNode.setAttribute("data-tooltip", label);
+      buttonNode.setAttribute("data-tooltip-id", "workspace.group.fullscreen");
       buttonNode.replaceChildren(svgIcon(isActive ? "minimize" : "maximize"));
     });
   }
@@ -1147,10 +1147,10 @@ export function createWorkspaceController(ctx = {}) {
       el("button", {
         class: "tab-close compact-icon tooltip-trigger",
         type: "button",
-        title: shortcutTooltip(`${t("common.close")} ${name}`, "closeChat"),
         "aria-label": `${t("common.close")} ${name}`,
         "data-tooltip": shortcutTooltip(`${t("common.close")} ${name}`, "closeChat"),
         "data-tooltip-placement": "left",
+        "data-tooltip-id": "workspace.tab.close",
         draggable: "false",
         onclick: async (event) => {
           event.preventDefault();
@@ -1184,22 +1184,22 @@ export function createWorkspaceController(ctx = {}) {
   }
 
   function renderTabAddButton(group) {
-    return compactIconButton(t("chat.addApp"), "plus", (event) => openAppPicker(event.currentTarget, { group }), "tab-add");
+    return compactIconButton(t("chat.addApp"), "plus", (event) => openAppPicker(event.currentTarget, { group }), "tab-add", t("chat.addApp"), "", "workspace.group.addApp");
   }
 
   function renderOpenInNewTabButton(group) {
-    return compactIconButton(t("common.openInNewTab"), "external", () => openChatInNewTab(group), "", t("common.openInNewTab"), "left");
+    return compactIconButton(t("common.openInNewTab"), "external", () => openChatInNewTab(group), "", t("common.openInNewTab"), "left", "workspace.group.openInNewTab");
   }
 
   function renderCopyLinkButton(group) {
-    return compactIconButton(t("common.copyLink"), "copy", () => copyActiveChatLink(group), "", t("common.copyLink"), "left");
+    return compactIconButton(t("common.copyLink"), "copy", () => copyActiveChatLink(group), "", t("common.copyLink"), "left", "workspace.group.copyLink");
   }
 
   function renderRemoveGroupButton(group) {
     const button = compactIconButton(t("chat.removeGroup"), "x", async () => {
       await removeChatGroup(group);
       closePopovers();
-    }, "danger-action", shortcutTooltip(t("chat.removeGroup"), "closeChat"), "left");
+    }, "danger-action", shortcutTooltip(t("chat.removeGroup"), "closeChat"), "left", "workspace.group.remove");
     button.disabled = state.groups.length <= 1;
     return button;
   }
@@ -1209,8 +1209,8 @@ export function createWorkspaceController(ctx = {}) {
     const buttonById = {
       openInNewTab: () => renderOpenInNewTabButton(group),
       copyLink: () => renderCopyLinkButton(group),
-      reload: () => compactIconButton(t("chat.reload"), "reload", () => reloadChat(activeChatForGroup(group)), "", shortcutTooltip(t("chat.reload"), "reloadChat"), "left"),
-      fullscreen: () => compactIconButton(fullscreenLabel, fullscreenIcon, () => toggleFullscreen(group.id), "fullscreen-action", fullscreenLabel, "left"),
+      reload: () => compactIconButton(t("chat.reload"), "reload", () => reloadChat(activeChatForGroup(group)), "", shortcutTooltip(t("chat.reload"), "reloadChat"), "left", "workspace.group.reload"),
+      fullscreen: () => compactIconButton(fullscreenLabel, fullscreenIcon, () => toggleFullscreen(group.id), "fullscreen-action", fullscreenLabel, "left", "workspace.group.fullscreen"),
       removeGroup: () => renderRemoveGroupButton(group)
     };
     return [
@@ -1218,7 +1218,7 @@ export function createWorkspaceController(ctx = {}) {
         .filter((item) => item.id !== "addApp" && tabGroupButtonIsPinned(item.id))
         .map((item) => buttonById[item.id]?.())
         .filter(Boolean),
-      compactIconButton(t("chat.more"), "more", (event) => openChatMenu(event.currentTarget, group), "", t("chat.more"), "left")
+      compactIconButton(t("chat.more"), "more", (event) => openChatMenu(event.currentTarget, group), "", t("chat.more"), "left", "workspace.group.more")
     ];
   }
 
@@ -1688,10 +1688,11 @@ export function createWorkspaceController(ctx = {}) {
       el("span", { class: "layout-preset-summary" }, layoutPresetSummary(preset)),
       shortcut ? el("span", { class: "layout-preset-shortcut" }, shortcut) : null,
       el("button", {
-        class: "icon-button layout-preset-delete compact-icon",
+        class: "icon-button layout-preset-delete compact-icon tooltip-trigger",
         type: "button",
-        title: t("layout.delete"),
         "aria-label": t("layout.delete"),
+        "data-tooltip": t("layout.delete"),
+        "data-tooltip-id": "workspace.layout.delete",
         disabled: state.options.layoutPresets.length <= 1,
         onclick: (event) => {
           event.preventDefault();
@@ -1740,7 +1741,7 @@ export function createWorkspaceController(ctx = {}) {
         addLayoutPreset().catch((error) => {
           console.warn("[ChatClub] Failed to add layout", error);
         });
-      })
+      }, "secondary", false, t("layout.add"), "", "workspace.layout.add")
     );
     document.body.append(backdrop, menu);
     requestAnimationFrame(() => {
@@ -1786,21 +1787,21 @@ export function createWorkspaceController(ctx = {}) {
     const rect = anchor.getBoundingClientRect();
     const { fullscreenLabel, icon: fullscreenIcon } = fullscreenButtonMeta(group);
     const menuButtonById = {
-      addApp: () => menuButton(t("chat.addApp"), "plus", () => openAppPicker(anchor, { group })),
-      openInNewTab: () => menuButton(t("common.openInNewTab"), "external", () => openChatInNewTab(group)),
-      copyLink: () => menuButton(t("common.copyLink"), "copy", () => copyActiveChatLink(group)),
+      addApp: () => menuButton(t("chat.addApp"), "plus", () => openAppPicker(anchor, { group }), "secondary", false, t("chat.addApp"), "", "workspace.group.addApp"),
+      openInNewTab: () => menuButton(t("common.openInNewTab"), "external", () => openChatInNewTab(group), "secondary", false, t("common.openInNewTab"), "", "workspace.group.openInNewTab"),
+      copyLink: () => menuButton(t("common.copyLink"), "copy", () => copyActiveChatLink(group), "secondary", false, t("common.copyLink"), "", "workspace.group.copyLink"),
       reload: () => menuButton(t("chat.reload"), "reload", () => {
         reloadChat(activeChatForGroup(group));
         closePopovers();
-      }, "", false, shortcutTooltip(t("chat.reload"), "reloadChat"), "left"),
+      }, "secondary", false, shortcutTooltip(t("chat.reload"), "reloadChat"), "left", "workspace.group.reload"),
       fullscreen: () => menuButton(fullscreenLabel, fullscreenIcon, () => {
         toggleFullscreen(group.id);
         closePopovers();
-      }, "", false, fullscreenLabel, "left"),
+      }, "secondary", false, fullscreenLabel, "left", "workspace.group.fullscreen"),
       removeGroup: () => menuButton(t("chat.removeGroup"), "x", async () => {
         await removeChatGroup(group);
         closePopovers();
-      }, "danger", state.groups.length <= 1, shortcutTooltip(t("chat.removeGroup"), "closeChat"), "left")
+      }, "danger", state.groups.length <= 1, shortcutTooltip(t("chat.removeGroup"), "closeChat"), "left", "workspace.group.remove")
     };
     const foldedMenuButtons = orderedTabGroupButtons()
       .filter((item) => tabGroupButtonIsFolded(item.id))

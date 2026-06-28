@@ -1,7 +1,7 @@
 import { DEFAULT_TOPBAR_LAYOUT } from "./topbar.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-06-29｜06:03:18」";
+export const APP_VERSION = "「2026-06-29｜06:51:30」";
 export const BASELINE_MOD_VERSION = "2.4.0.14";
 export const HOMEPAGE_URL = "https://chatclub.local/";
 
@@ -113,6 +113,101 @@ export const DEFAULT_POCKET_CARD_SIZE = Object.freeze({
   height: 560
 });
 
+export const TOOLTIP_TARGET_GROUPS = Object.freeze([
+  Object.freeze({
+    id: "topbar",
+    labelKey: "tooltip.group.topbar",
+    targets: Object.freeze([
+      Object.freeze({ id: "topbar.brand", labelKey: "topbar.settings" }),
+      Object.freeze({ id: "topbar.promptLibrary", labelKey: "topbar.promptLibrary" }),
+      Object.freeze({ id: "topbar.optimizePrompt", labelKey: "topbar.optimizePrompt" }),
+      Object.freeze({ id: "topbar.send", labelKey: "topbar.send" }),
+      Object.freeze({ id: "topbar.newChat", labelKey: "topbar.newChat" }),
+      Object.freeze({ id: "topbar.summary", labelKey: "topbar.summary" }),
+      Object.freeze({ id: "topbar.pocket", labelKey: "topbar.pocket" }),
+      Object.freeze({ id: "topbar.addGroup", labelKey: "topbar.addGroup" }),
+      Object.freeze({ id: "topbar.layout", labelKey: "topbar.switchLayout" }),
+      Object.freeze({ id: "topbar.settingsJumpMenu", labelKey: "topbar.settingsJumpMenu" }),
+      Object.freeze({ id: "topbar.settings.appearance", labelKey: "settings.appearance.title" }),
+      Object.freeze({ id: "topbar.settings.profiles", labelKey: "settings.profiles.title" }),
+      Object.freeze({ id: "topbar.settings.apps", labelKey: "settings.apps.title" }),
+      Object.freeze({ id: "topbar.settings.models", labelKey: "settings.models.title" }),
+      Object.freeze({ id: "topbar.settings.summary", labelKey: "settings.summary.title" }),
+      Object.freeze({ id: "topbar.settings.optimize", labelKey: "settings.optimize.title" }),
+      Object.freeze({ id: "topbar.settings.prompts", labelKey: "settings.prompts.title" }),
+      Object.freeze({ id: "topbar.settings.shortcuts", labelKey: "settings.shortcuts.title" }),
+      Object.freeze({ id: "topbar.settings.io", labelKey: "settings.io.title" }),
+      Object.freeze({ id: "topbar.customize.paletteItem", labelKey: "topbar.customize.item" }),
+      Object.freeze({ id: "topbar.customize.enter", labelKey: "topbar.customize.enter" }),
+      Object.freeze({ id: "topbar.customize.cancel", labelKey: "common.cancel" })
+    ])
+  }),
+  Object.freeze({
+    id: "workspace",
+    labelKey: "tooltip.group.workspace",
+    targets: Object.freeze([
+      Object.freeze({ id: "workspace.group.addApp", labelKey: "chat.addApp" }),
+      Object.freeze({ id: "workspace.group.openInNewTab", labelKey: "common.openInNewTab" }),
+      Object.freeze({ id: "workspace.group.copyLink", labelKey: "common.copyLink" }),
+      Object.freeze({ id: "workspace.group.reload", labelKey: "chat.reload" }),
+      Object.freeze({ id: "workspace.group.fullscreen", labelKey: "chat.fullscreen" }),
+      Object.freeze({ id: "workspace.group.remove", labelKey: "chat.removeGroup" }),
+      Object.freeze({ id: "workspace.group.more", labelKey: "chat.more" }),
+      Object.freeze({ id: "workspace.tab.close", labelKey: "common.close" }),
+      Object.freeze({ id: "workspace.layout.add", labelKey: "layout.add" }),
+      Object.freeze({ id: "workspace.layout.delete", labelKey: "layout.delete" })
+    ])
+  }),
+  Object.freeze({
+    id: "summary",
+    labelKey: "tooltip.group.summary",
+    targets: Object.freeze([
+      Object.freeze({ id: "summary.window.fullscreen", labelKey: "chat.fullscreen" }),
+      Object.freeze({ id: "summary.window.close", labelKey: "common.close" }),
+      Object.freeze({ id: "summary.source.refresh", labelKey: "summaryPanel.refreshMessages" }),
+      Object.freeze({ id: "summary.action.pocket", labelKey: "summaryPanel.pocket" }),
+      Object.freeze({ id: "summary.action.preview", labelKey: "summaryPanel.preview" }),
+      Object.freeze({ id: "summary.action.summarize", labelKey: "summaryPanel.summarize" }),
+      Object.freeze({ id: "summary.action.ask", labelKey: "summaryPanel.ask" })
+    ])
+  }),
+  Object.freeze({
+    id: "pocket",
+    labelKey: "tooltip.group.pocket",
+    targets: Object.freeze([
+      Object.freeze({ id: "pocket.fullscreen", labelKey: "chat.fullscreen" }),
+      Object.freeze({ id: "pocket.copyUserMessage", labelKey: "pocket.copyUserMessage" }),
+      Object.freeze({ id: "pocket.copyAssistantMessage", labelKey: "pocket.copyAssistantMessage" }),
+      Object.freeze({ id: "pocket.openChat", labelKey: "pocket.openChat" }),
+      Object.freeze({ id: "pocket.deleteItem", labelKey: "pocket.deleteItem" })
+    ])
+  }),
+  Object.freeze({
+    id: "optimize",
+    labelKey: "tooltip.group.optimize",
+    targets: Object.freeze([
+      Object.freeze({ id: "optimize.retry", labelKey: "optimize.retryOptimization" })
+    ])
+  }),
+  Object.freeze({
+    id: "settings",
+    labelKey: "tooltip.group.settings",
+    targets: Object.freeze([
+      Object.freeze({ id: "settings.modal.close", labelKey: "common.close" }),
+      Object.freeze({ id: "settings.profiles.promotion", labelKey: "profiles.openPromotionChannel" }),
+      Object.freeze({ id: "settings.action.edit", labelKey: "common.edit" }),
+      Object.freeze({ id: "settings.action.duplicate", labelKey: "profiles.duplicate" }),
+      Object.freeze({ id: "settings.action.delete", labelKey: "common.delete" }),
+      Object.freeze({ id: "settings.action.reset", labelKey: "common.reset" }),
+      Object.freeze({ id: "settings.shortcuts.record", labelKey: "shortcuts.record" })
+    ])
+  })
+]);
+
+export const TOOLTIP_TARGET_IDS = Object.freeze(
+  TOOLTIP_TARGET_GROUPS.flatMap((group) => group.targets.map((target) => target.id))
+);
+
 export const OPTIMIZE_PROMPT_TEMPLATE_DEFAULT = `You are an AI prompt expert, skilled at analyzing and optimizing user-provided prompts.
 
 Analyze the user prompt and rewrite it so it is clearer, more specific, and easier for an AI model to follow.
@@ -141,6 +236,7 @@ export const DEFAULT_OPTIONS = {
   primaryColor: "#1f7a5f",
   primaryColorCustom: false,
   pocketCardSize: DEFAULT_POCKET_CARD_SIZE,
+  tooltipDisabledIds: [],
   tabGroupButtonsMode: "pinned",
   tabGroupButtonPlacement: DEFAULT_TAB_GROUP_BUTTON_PLACEMENT,
   tabGroupButtonOrder: DEFAULT_TAB_GROUP_BUTTON_ORDER,
@@ -187,6 +283,7 @@ export const DEFAULT_SHORTCUT_CONFIG = {
     newChat: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyN" },
     optimizePrompt: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyO" },
     openSummaryPanel: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyS" },
+    openPocketPanel: { alt: false, shift: false, cmdOrCtrl: true, code: "KeyP" },
     closeChat: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyW" },
     reloadChat: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyR" },
     enterFullscreen: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyF" },

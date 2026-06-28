@@ -52,7 +52,7 @@ export function createOptimizeController(ctx) {
     }, loading ? t("optimize.streaming") : t("optimize.ready"));
     const errorMessage = el("p", { class: "optimize-compare-error", hidden: true });
     const applyButton = button(t("optimize.useOptimized"), apply, "primary");
-    const retryButton = iconButton(t("optimize.retryOptimization"), svgIcon("reload"), () => attrs.onRetry?.(), "optimize-compare-retry");
+    const retryButton = iconButton(t("optimize.retryOptimization"), svgIcon("reload"), () => attrs.onRetry?.(), "optimize-compare-retry", t("optimize.retryOptimization"), "", "optimize.retry");
     applyButton.disabled = !optimized.trim();
     retryButton.disabled = loading;
     const optimizedInput = textarea(optimized, {

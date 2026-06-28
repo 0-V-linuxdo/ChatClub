@@ -2,6 +2,7 @@ import { t } from "../../shared/i18n.js";
 import { normalizePocketCardSize } from "../../shared/storage.js";
 import { clear, el, modal, toast } from "../../ui/dom.js";
 import { requireControllerContext, requireControllerFunction } from "../controller-context.js";
+import { renderMarkdown } from "../summary/markdown.js";
 import {
   summaryPreviewPage,
   summaryPreviewStatus,
@@ -11,6 +12,7 @@ import {
 const POCKET_PANEL_SIZE_KEY = "chatclub.pocketPanelSize.v1";
 const POCKET_PANEL_MIN_WIDTH = 720;
 const POCKET_PANEL_MIN_HEIGHT = 420;
+const POCKET_PANEL_FULLSCREEN_CLASS = "pocket-history-modal-fullscreen";
 
 export function createPocketController(ctx) {
   const controllerName = "Pocket controller";
@@ -293,6 +295,7 @@ export function createPocketController(ctx) {
 
   function capturePocketPanelGeometry(panel) {
     if (!panel) return null;
+    if (pocketPanelIsFullscreen(panel)) return null;
     const rect = panel.getBoundingClientRect();
     if (!Number.isFinite(rect.width) || !Number.isFinite(rect.height) || rect.width <= 0 || rect.height <= 0) return null;
     return normalizePocketPanelSize({
@@ -323,6 +326,75 @@ export function createPocketController(ctx) {
     }
   }
 
+  function pocketPanelIsFullscreen(panel) {
+    return Boolean(panel?.classList?.contains(POCKET_PANEL_FULLSCREEN_CLASS));
+  }
+
+  function clearPocketPanelInlineGeometry(panel) {
+    if (!panel) return;
+    ["width", "height", "left", "top", "transform", "--pocket-panel-width", "--pocket-panel-height"].forEach((property) => {
+      panel.style.removeProperty(property);
+    });
+  }
+
+  function syncPocketFullscreenButton(button, panel) {
+    if (!button || !panel) return;
+    const fullscreen = pocketPanelIsFullscreen(panel);
+    const label = fullscreen ? t("chat.exitFullscreen") : t("chat.fullscreen");
+    button.setAttribute("aria-label", label);
+    button.setAttribute("data-tooltip", label);
+    button.replaceChildren(svgIcon(fullscreen ? "minimize" : "maximize"));
+  }
+
+  function togglePocketPanelFullscreen(panel, button) {
+    if (!panel) return;
+    if (pocketPanelIsFullscreen(panel)) {
+      panel.classList.remove(POCKET_PANEL_FULLSCREEN_CLASS);
+      applyPocketPanelSize(panel);
+    } else {
+      rememberPocketPanelGeometry(panel);
+      panel.classList.add(POCKET_PANEL_FULLSCREEN_CLASS);
+      clearPocketPanelInlineGeometry(panel);
+    }
+    syncPocketFullscreenButton(button, panel);
+  }
+
+  function toggleOpenPocketPanelFullscreen() {
+    const panel = document.querySelector(".modal.pocket-history-modal");
+    if (!panel) return false;
+    const button = panel.querySelector('[data-tooltip-id="pocket.fullscreen"]');
+    togglePocketPanelFullscreen(panel, button);
+    return true;
+  }
+
+  function pocketFullscreenButton(panel) {
+    const button = el("button", {
+      class: "icon-button tooltip-trigger pocket-window-button",
+      type: "button",
+      "aria-label": t("chat.fullscreen"),
+      "data-tooltip": t("chat.fullscreen"),
+      "data-tooltip-id": "pocket.fullscreen",
+      onclick: (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        togglePocketPanelFullscreen(panel, button);
+      }
+    }, svgIcon("maximize"));
+    return button;
+  }
+
+  function installPocketPanelHeaderActions(panel) {
+    const header = panel?.querySelector(".modal-header");
+    const closeButton = header?.querySelector(".icon-button");
+    if (!header || !closeButton) return;
+    closeButton.classList.add("pocket-window-button");
+    closeButton.replaceChildren(svgIcon("x"));
+    header.append(el("div", { class: "pocket-window-actions" },
+      pocketFullscreenButton(panel),
+      closeButton
+    ));
+  }
+
   function setPocketIframePointerBlocked(blocked) {
     setFramePointerBlockedForOverlay(blocked, "pocket");
   }
@@ -332,6 +404,7 @@ export function createPocketController(ctx) {
     const handles = panel.querySelectorAll(".pocket-panel-resize-handle");
     for (const handle of handles) {
       handle.addEventListener("pointerdown", (event) => {
+        if (pocketPanelIsFullscreen(panel)) return;
         event.preventDefault();
         event.stopPropagation();
         const rect = panel.getBoundingClientRect();
@@ -364,7 +437,7 @@ export function createPocketController(ctx) {
       resize = null;
     };
     panel.addEventListener("pointermove", (event) => {
-      if (!resize) return;
+      if (!resize || pocketPanelIsFullscreen(panel)) return;
       const minWidth = pocketPanelMinWidth();
       const minHeight = pocketPanelMinHeight();
       const dx = event.clientX - resize.x;
@@ -443,6 +516,16 @@ export function createPocketController(ctx) {
     return loaded;
   }
 
+  async function copyPocketMessage(text) {
+    try {
+      await navigator.clipboard.writeText(String(text || ""));
+      toast(t("toast.pocketCopied"), "success");
+    } catch (error) {
+      console.warn("[ChatClub] Failed to copy Pocket message", error);
+      toast(t("toast.copyFailed"), "error");
+    }
+  }
+
   async function restorePocketBatchEntries(entries = []) {
     try {
       const restored = await restorePocketBatch(entries);
@@ -479,6 +562,24 @@ export function createPocketController(ctx) {
     });
   }
 
+  function pocketMessageSection(role, text) {
+    const assistant = role === "assistant";
+    const label = assistant ? t("common.assistant") : t("common.user");
+    const copyLabel = assistant ? t("pocket.copyAssistantMessage") : t("pocket.copyUserMessage");
+    return el("section", { class: `pocket-message pocket-message-${role}` },
+      el("div", { class: "pocket-message-head" },
+        el("span", { class: "pocket-message-label" }, label),
+        compactIconButton(copyLabel, "copy", (event) => {
+          event.preventDefault();
+          copyPocketMessage(text);
+        }, "pocket-message-copy", copyLabel, "", assistant ? "pocket.copyAssistantMessage" : "pocket.copyUserMessage")
+      ),
+      assistant
+        ? el("div", { class: "pocket-message-body pocket-message-markdown summary-preview-text-markdown" }, renderMarkdown(text))
+        : el("p", { class: "pocket-message-body pocket-message-plain" }, text)
+    );
+  }
+
   function pocketEntryRow(entry, redraw) {
     return el("article", { class: "ui-card pocket-entry" },
       el("header", { class: "pocket-entry-header" },
@@ -499,27 +600,20 @@ export function createPocketController(ctx) {
         ),
         el("div", { class: "pocket-entry-meta" },
           entry.appName ? el("span", { class: "pocket-entry-source" }, entry.appName) : null,
-          entry.createdAt ? el("time", { datetime: entry.createdAt }, formatPocketTime(entry.createdAt)) : null,
           compactIconButton(t("pocket.openChat"), "insert", (event) => {
             event.preventDefault();
             loadPocketEntry(entry);
-          }, "pocket-entry-action"),
+          }, "pocket-entry-action", t("pocket.openChat"), "", "pocket.openChat"),
           compactIconButton(t("pocket.deleteItem"), "trash", async () => {
             state.pocketEntries = await savePocketHistory(state.pocketEntries.filter((item) => item.id !== entry.id));
             redraw();
             toast(t("toast.pocketDeleted"), "success");
-          }, "pocket-entry-action")
+          }, "pocket-entry-action", t("pocket.deleteItem"), "", "pocket.deleteItem")
         )
       ),
       el("div", { class: "pocket-message-grid" },
-        el("section", { class: "pocket-message pocket-message-user" },
-          el("span", { class: "pocket-message-label" }, t("common.user")),
-          el("p", {}, entry.userMessage)
-        ),
-        el("section", { class: "pocket-message pocket-message-assistant" },
-          el("span", { class: "pocket-message-label" }, t("common.assistant")),
-          el("p", {}, entry.assistantMessage)
-        )
+        pocketMessageSection("user", entry.userMessage),
+        pocketMessageSection("assistant", entry.assistantMessage)
       )
     );
   }
@@ -580,6 +674,7 @@ export function createPocketController(ctx) {
     const dialog = modal(t("pocket.title"), host, () => dialog.remove(), true, t("common.close"));
     const panel = dialog.querySelector(".modal");
     panel?.classList.add("pocket-history-modal");
+    installPocketPanelHeaderActions(panel);
     attachPocketPanelResize(panel);
     redraw();
   }
@@ -590,6 +685,7 @@ export function createPocketController(ctx) {
     openPocketPanel,
     pocketEntriesFromMessages,
     pocketEntriesFromSummaryPreview,
-    saveSummaryPreviewToPocket
+    saveSummaryPreviewToPocket,
+    toggleOpenPocketPanelFullscreen
   };
 }

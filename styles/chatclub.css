@@ -1131,9 +1131,8 @@ button { cursor: pointer; }
 }
 
 .topbar .topbar-item-pocket.action-button .svg-icon {
-  width: 26px;
-  height: 26px;
-  transform: translateY(-3px);
+  width: 20px;
+  height: 20px;
 }
 
 .topbar .topbar-item-pocket.action-button:hover {
@@ -2308,6 +2307,82 @@ body.settings-tab-group-button-dragging iframe {
   line-height: 1.45;
 }
 
+.tooltip-settings-list {
+  display: grid;
+  gap: 16px;
+}
+
+.tooltip-settings-group {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.tooltip-settings-group-title {
+  margin: 0;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 780;
+}
+
+.tooltip-settings-rows {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--settings-radius);
+  background: color-mix(in srgb, var(--panel) 86%, var(--panel-2));
+}
+
+.tooltip-toggle-row {
+  min-height: 44px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+  cursor: pointer;
+  user-select: none;
+}
+
+.tooltip-toggle-row:first-child {
+  border-top: 0;
+}
+
+.tooltip-toggle-row:hover {
+  background: color-mix(in srgb, var(--panel-2) 68%, transparent);
+}
+
+.tooltip-toggle-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.tooltip-toggle-copy strong,
+.tooltip-toggle-copy small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tooltip-toggle-copy strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 720;
+}
+
+.tooltip-toggle-copy small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.tooltip-toggle-switch input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary);
+}
+
 .prompt-library-row {
   min-height: 82px;
 }
@@ -2357,6 +2432,51 @@ body.settings-tab-group-button-dragging iframe {
   left: 50%;
   transform: translate(-50%, -50%);
   width: min(1040px, calc(100vw - 40px));
+}
+
+.modal.pocket-history-modal.pocket-history-modal-fullscreen {
+  inset: 12px;
+  width: auto;
+  height: auto;
+  max-height: none;
+  transform: none;
+}
+
+.pocket-history-modal .modal-header {
+  gap: 12px;
+}
+
+.pocket-history-modal .modal-header h2 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pocket-window-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.pocket-window-button {
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--text);
+}
+
+.pocket-window-button .svg-icon {
+  width: 17px;
+  height: 17px;
+}
+
+.pocket-window-button:hover {
+  background: var(--panel-2);
+  border-color: var(--line);
 }
 
 .modal.pocket-history-modal .modal-body {
@@ -2454,6 +2574,10 @@ body.settings-tab-group-button-dragging iframe {
   bottom: 0;
   height: 12px;
   cursor: ns-resize;
+}
+
+.pocket-history-modal-fullscreen .pocket-panel-resize-handle {
+  display: none;
 }
 
 .pocket-panel-resizing,
@@ -2614,7 +2738,7 @@ body.settings-tab-group-button-dragging iframe {
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(92px, .34fr) minmax(0, .66fr);
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 10px;
 }
 
@@ -2630,7 +2754,21 @@ body.settings-tab-group-button-dragging iframe {
   background: var(--bg);
 }
 
+.pocket-message-user {
+  align-self: start;
+  max-height: max(120px, calc(var(--pocket-card-height, 560px) * 0.36));
+}
+
+.pocket-message-head {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .pocket-message-label {
+  min-width: 0;
   color: var(--muted);
   font-size: 11px;
   font-weight: 750;
@@ -2638,16 +2776,46 @@ body.settings-tab-group-button-dragging iframe {
   text-transform: uppercase;
 }
 
-.pocket-message p {
+.pocket-message-copy.compact-icon {
+  width: 26px;
+  height: 26px;
+  min-height: 26px;
+  color: var(--muted);
+}
+
+.pocket-message-copy.compact-icon .svg-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.pocket-message-copy.compact-icon:hover,
+.pocket-message-copy.compact-icon:focus-visible {
+  color: var(--text);
+}
+
+.pocket-message-body {
   margin: 0;
   min-height: 0;
   color: var(--text);
   font-size: 13px;
   line-height: 1.5;
-  white-space: pre-wrap;
   overflow-wrap: anywhere;
   overflow: auto;
   scrollbar-width: thin;
+}
+
+.pocket-message-plain {
+  white-space: pre-wrap;
+}
+
+.pocket-message-markdown {
+  white-space: normal;
+}
+
+.pocket-message-markdown .summary-panel-markdown {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .pocket-empty {

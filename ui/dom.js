@@ -30,12 +30,13 @@ export function append(node, children) {
   return node;
 }
 
-export function iconButton(label, icon, onClick, extraClass = "", tooltipLabel = label, tooltipPlacement = "") {
+export function iconButton(label, icon, onClick, extraClass = "", tooltipLabel = label, tooltipPlacement = "", tooltipId = "") {
   return el("button", {
     class: `icon-button tooltip-trigger ${extraClass}`.trim(),
     "aria-label": label,
     "data-tooltip": tooltipLabel,
     "data-tooltip-placement": tooltipPlacement || null,
+    "data-tooltip-id": tooltipId || null,
     onclick: onClick
   }, icon);
 }
@@ -93,7 +94,7 @@ export function modal(title, content, onClose, wide = false, closeLabel = "Close
   const panel = el("section", { class: `modal ${wide ? "modal-wide" : ""}` },
     el("header", { class: "modal-header" },
       el("h2", {}, title),
-      iconButton(closeLabel, "×", onClose)
+      iconButton(closeLabel, "×", onClose, "", closeLabel, "", "settings.modal.close")
     ),
     el("div", { class: "modal-body" }, content)
   );

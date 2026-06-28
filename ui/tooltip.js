@@ -8,6 +8,7 @@ let tooltipHost = null;
 let tooltipLabel = null;
 let activeTrigger = null;
 let installed = false;
+let disabledIdsProvider = () => [];
 
 function ensureTooltipHost() {
   if (tooltipHost) return tooltipHost;
@@ -26,6 +27,19 @@ function tooltipText(trigger) {
 
 function isDisabledTrigger(trigger) {
   return trigger.disabled || trigger.getAttribute("aria-disabled") === "true";
+}
+
+function disabledTooltipIds() {
+  try {
+    return new Set((disabledIdsProvider?.() || []).map((id) => String(id || "").trim()).filter(Boolean));
+  } catch {
+    return new Set();
+  }
+}
+
+function isTooltipSuppressed(trigger) {
+  const id = String(trigger?.getAttribute("data-tooltip-id") || "").trim();
+  return Boolean(id && disabledTooltipIds().has(id));
 }
 
 function positionTooltip(trigger) {
@@ -59,7 +73,10 @@ function positionTooltip(trigger) {
 
 function showTooltip(trigger) {
   const text = tooltipText(trigger);
-  if (!text || isDisabledTrigger(trigger)) return;
+  if (!text || isDisabledTrigger(trigger) || isTooltipSuppressed(trigger)) {
+    if (activeTrigger === trigger) hideTooltip(trigger);
+    return;
+  }
   activeTrigger?.classList.remove("tooltip-open");
   activeTrigger = trigger;
   const host = ensureTooltipHost();
@@ -90,13 +107,26 @@ function syncTooltipPosition() {
     hideTooltip();
     return;
   }
+  if (isTooltipSuppressed(activeTrigger) || isDisabledTrigger(activeTrigger)) {
+    hideTooltip();
+    return;
+  }
   positionTooltip(activeTrigger);
 }
 
-export function installGlobalTooltips() {
+export function notifyTooltipPreferencesChanged() {
+  if (activeTrigger && isTooltipSuppressed(activeTrigger)) hideTooltip();
+}
+
+export function installGlobalTooltips(options = {}) {
+  if (typeof options.getDisabledTooltipIds === "function") {
+    disabledIdsProvider = options.getDisabledTooltipIds;
+  }
   if (installed) return;
   installed = true;
   document.documentElement.classList.add("tooltip-layer-enabled");
+
+  document.addEventListener("chatclub:tooltips-updated", notifyTooltipPreferencesChanged, true);
 
   document.addEventListener("pointerover", (event) => {
     const trigger = closestTrigger(event.target);

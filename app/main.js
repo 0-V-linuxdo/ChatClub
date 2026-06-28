@@ -184,12 +184,16 @@ const ICONS = {
     ["polyline", { points: "3 17 12 21.5 21 17", "stroke-width": "2.5" }]
   ],
   customizeTopbar: {
-    viewBox: "0 0 51.6 54",
+    viewBox: "0 0 117.6 154",
     children: [
-      ["rect", { width: "51.8", height: "54", fill: "#2F2E34", stroke: "none" }],
       ["path", {
-        d: "m34 22.9v-7.3-2c0-1.9-0.7-3.2-2.3-3.2h-17.8c-1.4 0-2.5 1.1-2.5 2.5l-0.1 10.1c-0.8 0.3-1.2 1.1-1.2 2v4.1c0.1 2.1 1.9 4.1 3.9 4.2h5.8v7.1c0 4.5 5.9 4.4 6 0v-7.1h5.7c1.9-0.1 3.7-2.1 3.7-4.2v-4.1c0-0.9-0.4-1.8-1.2-2.1zm-3 0.1h-16.7l0.1-8.6c0.6-0.2 1-0.8 1.7-0.9 2.1-0.2 2.3 2.5 4.9 2.4 1.2 0 1.2-1.3 2.3-1.3s1.3 1.8 3.6 1.8 2-1.8 3.7-1.9c0.4 0 0.4 0.4 0.4 0.8v7.7z",
-        fill: "#FFFFFF",
+        d: "m92.8 9.5h-67.9c-5.5 0-9.5 2.7-9.5 8.5v41.5c-2.5 0.5-5.2 3.4-5.2 6.6v19c0 8.6 5.1 16.4 14.7 16.4l22.5 0.1v30.9c0 4.6 4.6 11 11.4 11s12.2-6.1 12.2-9.5v-32.4h21.3c6.4 0 15.6-5.2 15.6-15.2v-19.6c0-3-2.9-6.4-5.2-7.3v-41.5c0.1-4.4-4.8-8.5-9.9-8.5zm-3.3 16.9c1 0 1.9 0.6 2.4 1.3v32.2h-64.1v-32.6c1.1-3.1 3.2-4.1 6.1-4.1 5.6-0.2 7.4 5.2 11 7.7 1.3 0.9 2.5 1.4 5.7 1.4 4.3 0.3 5.6-5.3 9.1-5.2h2.2c4.1-0.2 6.5 7.8 12.6 7.8h1.4c4.9 0 9.2-5.5 9.8-6.5 1.2-1.4 2.6-2 3.8-2z",
+        fill: "currentColor",
+        stroke: "none"
+      }],
+      ["path", {
+        d: "m94 9.4h-70c-4.1 0-8.8 2.5-8.8 7.2v42.8c-1.9 0.3-5.1 3.3-5.1 6.9v20.8c1.8 5.4 4.4 13.4 13.6 14l23.7 0.5v32.5c1.4 4.7 5.2 9.7 11.6 9.7 5 0.6 9.1-4.1 11.4-8l0.3-34.2 21 0.1c8.5 0 15.8-5.4 16.3-14.6v-20.8c-0.5-3.3-2.6-5.6-5.3-6.8l-0.1-42.9c-0.7-5.2-5.1-7.2-8.6-7.2zm-5.9 17.8h1.8c0.9 0 1.2 0.5 2 1v31.7h-64.3v-32.6c0.8-1.7 2.4-3.7 5.9-4 5.9-0.8 8.5 7.1 14 8.7 0.9 0.4 2.1 0.2 4.2 0.2 3.8 0 4.5-4.6 7.2-4.8h2.8c4.3-0.4 6.6 7.5 12.1 7.5 1.3 0.1 2.3 0 2.3 0 3.6 0.1 7-3.2 9-5.8 0.7-1 2-1.9 3-1.9z",
+        fill: "currentColor",
         stroke: "none"
       }]
     ]
@@ -201,7 +205,7 @@ const ICONS = {
     ["path", { d: "M8 10h6" }]
   ],
   pocket: {
-    viewBox: "0 0 110 150",
+    viewBox: "0 43.5 107 95.5",
     children: [
       ["title", { textContent: "Pocket Icon" }],
       ["path", {
@@ -404,16 +408,16 @@ function shortcutTooltip(label, action, digitLabel = "") {
   return `${label} (${shortcut})`;
 }
 
-function actionButton(label, iconName, onClick, variant = "secondary", tooltipLabel = label, tooltipPlacement = "", className = "") {
-  return createActionButton({ label, icon: svgIcon(iconName), onClick, variant, tooltipLabel, tooltipPlacement, className });
+function actionButton(label, iconName, onClick, variant = "secondary", tooltipLabel = label, tooltipPlacement = "", className = "", tooltipId = "") {
+  return createActionButton({ label, icon: svgIcon(iconName), onClick, variant, tooltipLabel, tooltipPlacement, className, tooltipId });
 }
 
-function topIconButton(label, iconName, onClick, tooltipLabel = label, tooltipPlacement = "") {
-  return createTopIconButton({ label, icon: svgIcon(iconName), onClick, tooltipLabel, tooltipPlacement });
+function topIconButton(label, iconName, onClick, tooltipLabel = label, tooltipPlacement = "", tooltipId = "") {
+  return createTopIconButton({ label, icon: svgIcon(iconName), onClick, tooltipLabel, tooltipPlacement, tooltipId });
 }
 
-function compactIconButton(label, iconName, onClick, extraClass = "", tooltipLabel = label, tooltipPlacement = "") {
-  return createCompactIconButton({ label, icon: svgIcon(iconName), onClick, className: extraClass, tooltipLabel, tooltipPlacement });
+function compactIconButton(label, iconName, onClick, extraClass = "", tooltipLabel = label, tooltipPlacement = "", tooltipId = "") {
+  return createCompactIconButton({ label, icon: svgIcon(iconName), onClick, className: extraClass, tooltipLabel, tooltipPlacement, tooltipId });
 }
 
 function topbarItemClass(id) {
@@ -517,8 +521,8 @@ function promptPlaceholder() {
   return t("topbar.promptPlaceholder");
 }
 
-function menuButton(label, iconName, onClick, variant = "secondary", disabled = false, tooltipLabel = label, tooltipPlacement = "") {
-  return createMenuButton({ label, icon: svgIcon(iconName), onClick, variant, disabled, tooltipLabel, tooltipPlacement });
+function menuButton(label, iconName, onClick, variant = "secondary", disabled = false, tooltipLabel = label, tooltipPlacement = "", tooltipId = "") {
+  return createMenuButton({ label, icon: svgIcon(iconName), onClick, variant, disabled, tooltipLabel, tooltipPlacement, tooltipId });
 }
 
 function allApps() {
@@ -1238,7 +1242,7 @@ function renderTopbarCustomizePalette() {
       )
     ),
     el("div", { class: "topbar-customize-controls" },
-      compactIconButton(t("common.cancel"), "x", exitTopbarEditMode, "topbar-edit-utility topbar-edit-cancel"),
+      compactIconButton(t("common.cancel"), "x", exitTopbarEditMode, "topbar-edit-utility topbar-edit-cancel", t("common.cancel"), "", "topbar.customize.cancel"),
       el("button", {
         class: "button button-primary topbar-edit-done",
         type: "button",
@@ -1264,10 +1268,11 @@ function topbarEditPaletteCandidateIds() {
 function renderTopbarPaletteItem(item, flexTemplate = false) {
   const label = t(topbarItemLabelKey(item));
   return el("button", {
-    class: `topbar-palette-item ${flexTemplate ? "topbar-palette-flex" : `topbar-palette-${item.id}`}`,
+    class: `topbar-palette-item tooltip-trigger ${flexTemplate ? "topbar-palette-flex" : `topbar-palette-${item.id}`}`,
     type: "button",
-    title: label,
     "aria-label": label,
+    "data-tooltip": label,
+    "data-tooltip-id": "topbar.customize.paletteItem",
     draggable: "false",
     dataset: { topbarItemId: item.id, topbarPalette: flexTemplate ? "flex" : "item" },
     onclick: (event) => {
@@ -1672,6 +1677,23 @@ function topbarEditDropPlacement(slot, clientX) {
   return clientX > rect.left + rect.width / 2 ? "after" : "before";
 }
 
+function topbarTooltipIdForItem(item) {
+  const id = item?.id || "";
+  const settingsSectionId = topbarSettingsSectionForItem(id);
+  if (settingsSectionId) return `topbar.settings.${settingsSectionId}`;
+  return ({
+    brand: "topbar.brand",
+    promptLibrary: "topbar.promptLibrary",
+    send: "topbar.send",
+    newChat: "topbar.newChat",
+    summary: "topbar.summary",
+    pocket: "topbar.pocket",
+    addGroup: "topbar.addGroup",
+    layout: "topbar.layout",
+    settingsJumpMenu: "topbar.settingsJumpMenu"
+  })[id] || "";
+}
+
 function renderTopbarItem(item, prompt, collapsedPreview) {
   if (item.type === "flex") {
     return el("div", {
@@ -1684,12 +1706,12 @@ function renderTopbarItem(item, prompt, collapsedPreview) {
   if (item.id === "brand") return renderTopbarBrand();
   if (item.id === "promptLibrary") return renderPromptLibraryButton();
   if (item.id === "composer") return renderTopbarComposer(prompt, collapsedPreview);
-  if (item.id === "send") return actionButton(t("topbar.send"), "send", sendPromptToFrames, "primary");
-  if (item.id === "newChat") return actionButton(t("topbar.newChat"), "edit", newChatOnFrames, "secondary", shortcutTooltip(t("topbar.newChat"), "newChat"));
-  if (item.id === "summary") return actionButton(t("topbar.summary"), "summary", openSummaryPanel, "secondary", shortcutTooltip(t("topbar.summary"), "openSummaryPanel"));
-  if (item.id === "pocket") return actionButton(t("topbar.pocket"), "pocket", openPocketPanel, "secondary", t("topbar.pocket"), "", topbarItemClass("pocket"));
-  if (item.id === "addGroup") return topIconButton(t("topbar.addGroup"), "plus", (event) => workspaceController.openAppPicker(event.currentTarget, { mode: "group" }), t("topbar.addGroup"), "left");
-  if (item.id === "layout") return topIconButton(t("topbar.switchLayout"), "layout", (event) => workspaceController.openLayoutMenu(event.currentTarget), shortcutTooltip(t("topbar.switchLayout"), "switchLayout"), "left");
+  if (item.id === "send") return actionButton(t("topbar.send"), "send", sendPromptToFrames, "primary", t("topbar.send"), "", "", "topbar.send");
+  if (item.id === "newChat") return actionButton(t("topbar.newChat"), "edit", newChatOnFrames, "secondary", shortcutTooltip(t("topbar.newChat"), "newChat"), "", "", "topbar.newChat");
+  if (item.id === "summary") return actionButton(t("topbar.summary"), "summary", openSummaryPanel, "secondary", shortcutTooltip(t("topbar.summary"), "openSummaryPanel"), "", "", "topbar.summary");
+  if (item.id === "pocket") return actionButton(t("topbar.pocket"), "pocket", openPocketPanel, "secondary", shortcutTooltip(t("topbar.pocket"), "openPocketPanel"), "", topbarItemClass("pocket"), "topbar.pocket");
+  if (item.id === "addGroup") return topIconButton(t("topbar.addGroup"), "plus", (event) => workspaceController.openAppPicker(event.currentTarget, { mode: "group" }), t("topbar.addGroup"), "left", "topbar.addGroup");
+  if (item.id === "layout") return topIconButton(t("topbar.switchLayout"), "layout", (event) => workspaceController.openLayoutMenu(event.currentTarget), shortcutTooltip(t("topbar.switchLayout"), "switchLayout"), "left", "topbar.layout");
   if (item.id === "settingsJumpMenu") return renderSettingsJumpMenuButton();
   const settingsSectionId = topbarSettingsSectionForItem(item.id);
   if (settingsSectionId) {
@@ -1698,7 +1720,7 @@ function renderTopbarItem(item, prompt, collapsedPreview) {
       event.preventDefault();
       event.stopPropagation();
       openSettings(settingsSectionId);
-    }, label, "left");
+    }, label, "left", `topbar.settings.${settingsSectionId}`);
   }
   return el("span", { class: "topbar-unknown-item", hidden: true });
 }
@@ -1724,7 +1746,7 @@ function renderSettingsJumpMenuButton() {
       return;
     }
     openFromEvent(event);
-  }, t("topbar.settingsJumpMenu"), "left");
+  }, t("topbar.settingsJumpMenu"), "left", "topbar.settingsJumpMenu");
   buttonNode.addEventListener("pointerdown", (event) => {
     if (state.topbarEditMode || event.button !== 0) return;
     pointerHandled = true;
@@ -1737,9 +1759,9 @@ function renderTopbarBrand() {
   return el("button", {
     class: `brand tooltip-trigger ${topbarItemClass("brand")}`,
     type: "button",
-    title: t("topbar.settings"),
     "aria-label": t("topbar.settings"),
     "data-tooltip": t("topbar.settings"),
+    "data-tooltip-id": "topbar.brand",
     onclick: (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -1757,6 +1779,7 @@ function renderPromptLibraryButton() {
     type: "button",
     "aria-label": t("topbar.promptLibrary"),
     "data-tooltip": t("topbar.promptLibrary"),
+    "data-tooltip-id": "topbar.promptLibrary",
     onclick: (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -1779,6 +1802,7 @@ function renderTopbarComposer(prompt, collapsedPreview) {
         type: "button",
         "aria-label": t("topbar.optimizePrompt"),
         "data-tooltip": shortcutTooltip(t("topbar.optimizePrompt"), "optimizePrompt"),
+        "data-tooltip-id": "topbar.optimizePrompt",
         onclick: (event) => {
           event.preventDefault();
           event.stopPropagation();
@@ -1811,6 +1835,7 @@ function closeSettingsJumpMenuOnKeydown(event) {
 function topbarSettingsMenuButton(label, iconName, onClick, variant = "secondary", disabled = false, dragItem = null, options = {}) {
   let pointerActivated = false;
   const extraClass = options.className ? ` ${options.className}` : "";
+  const tooltipId = options.tooltipId || "";
   const run = (event) => {
     if (disabled) return;
     event?.preventDefault?.();
@@ -1848,6 +1873,7 @@ function topbarSettingsMenuButton(label, iconName, onClick, variant = "secondary
     type: "button",
     "aria-label": label,
     "data-tooltip": label,
+    "data-tooltip-id": tooltipId || null,
     dataset: options.dataset || {},
     disabled,
     draggable: "false",
@@ -1931,7 +1957,8 @@ function renderTopbarFoldedMenuButton(item, editing) {
     ? { type: "item", id: item.id }
     : null;
   const button = topbarSettingsMenuButton(label, topbarItemIcon(item), (event) => runTopbarMenuItem(item, event), "secondary", false, dragItem, {
-    className: editing && item.type === "item" ? "topbar-settings-menu-button" : ""
+    className: editing && item.type === "item" ? "topbar-settings-menu-button" : "",
+    tooltipId: topbarTooltipIdForItem(item)
   });
   if (!editing || item.type !== "item") return button;
   return el("div", {
@@ -1970,7 +1997,7 @@ function openSettingsJumpMenu(anchor, options = {}) {
         topbarSettingsMenuButton(t("topbar.customize.enter"), "customizeTopbar", () => {
           closeSettingsJumpMenu();
           scheduleEnterTopbarEditMode();
-        })
+        }, "secondary", false, null, { tooltipId: "topbar.customize.enter" })
       ];
   const layout = editing
     ? ensureTopbarSettingsMenuItems(activeTopbarEditLayout())
@@ -1986,7 +2013,7 @@ function openSettingsJumpMenu(anchor, options = {}) {
     return topbarSettingsMenuButton(t(labelKey), icon, () => {
       closeSettingsJumpMenu();
       openSettings(id);
-    });
+    }, "secondary", false, null, { tooltipId: `topbar.settings.${id}` });
   });
   const menu = el("div", {
     class: `popover-menu topbar-settings-popover ${editing ? "is-editing" : ""}`,
@@ -2103,10 +2130,12 @@ async function handleShortcutAction(action, matchObj = null, sourceWindow = null
   else if (action === "newChat") await newChatOnFrames();
   else if (action === "optimizePrompt") await optimizeCurrentPrompt();
   else if (action === "openSummaryPanel" || action === "openSummary") openSummaryPanel();
+  else if (action === "openPocketPanel") openPocketPanel();
   else if (action === "closeChat" && group && chat) await workspaceController.closeTab(group, chat);
   else if (action === "reloadChat" && chat) workspaceController.reloadChat(chat);
   else if (action === "enterFullscreen") {
     if (state.summaryOpen) summaryController.toggleMaximized();
+    else if (pocketController.toggleOpenPocketPanelFullscreen()) {}
     else workspaceController.toggleFullscreen(group?.id || workspaceController.activeShortcutGroupId(sourceWindow));
   }
   else if (action === "insertPrompt" && digit > 0) insertPromptLibraryItem(digit - 1);
@@ -2212,7 +2241,9 @@ async function init() {
   state.options = normalizeOptions(state.options);
   syncI18nLanguage();
   workspaceController.hydrateGroups();
-  installGlobalTooltips();
+  installGlobalTooltips({
+    getDisabledTooltipIds: () => state.options?.tooltipDisabledIds || []
+  });
   installExtensionTabTracker();
   installShortcuts();
   installIframeEventBridge();

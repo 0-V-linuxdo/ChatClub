@@ -14,7 +14,7 @@ const SHORTCUT_SETTING_GROUPS = [
   {
     titleKey: "shortcuts.globalTitle",
     descriptionKey: "shortcuts.globalDesc",
-    actions: ["focusInput", "newChat", "optimizePrompt", "openSummaryPanel", "insertPrompt", "switchLayout", "switchPlatformTab"]
+    actions: ["focusInput", "newChat", "optimizePrompt", "openSummaryPanel", "openPocketPanel", "insertPrompt", "switchLayout", "switchPlatformTab"]
   },
   {
     titleKey: "shortcuts.chatTitle",
@@ -115,9 +115,11 @@ export function createShortcutSettings(ctx) {
         el("span", {}, shortcutActionDescription(action))
       ),
       el("button", {
-        class: `shortcut-record-button ${recording ? "recording" : ""}`.trim(),
+        class: `shortcut-record-button tooltip-trigger ${recording ? "recording" : ""}`.trim(),
         type: "button",
-        title: recording ? t("shortcuts.pressKey") : t("shortcuts.record"),
+        "aria-label": recording ? t("shortcuts.pressKey") : t("shortcuts.record"),
+        "data-tooltip": recording ? t("shortcuts.pressKey") : t("shortcuts.record"),
+        "data-tooltip-id": "settings.shortcuts.record",
         onkeydown: (event) => recordShortcutAction(event, action, redraw),
         onclick: () => setShortcutRecording(action, redraw)
       }, recording ? t("shortcuts.pressKey") : formatShortcutDisplay(action, shortcut)),
@@ -136,7 +138,7 @@ export function createShortcutSettings(ctx) {
         const defaults = defaultShortcutConfig();
         updateShortcutDraft(action, defaults.shortcuts[action]);
         redraw();
-      }, "shortcut-reset")
+      }, "shortcut-reset", false, "settings.action.reset")
     );
   }
 

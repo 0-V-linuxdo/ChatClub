@@ -57,8 +57,8 @@ export function createSettingsKit({ svgIcon }) {
     return createSettingsList({ headers, rows, className: extraClass });
   }
 
-  function settingsIconAction(label, iconName, onClick, extraClass = "", disabled = false) {
-    return createSettingsIconAction({ label, icon: svgIcon(iconName), onClick, className: `tooltip-trigger ${extraClass}`.trim(), disabled });
+  function settingsIconAction(label, iconName, onClick, extraClass = "", disabled = false, tooltipId = "") {
+    return createSettingsIconAction({ label, icon: svgIcon(iconName), onClick, className: `tooltip-trigger ${extraClass}`.trim(), disabled, tooltipId });
   }
 
   function settingsPaneToolbar(copy, ...actions) {
