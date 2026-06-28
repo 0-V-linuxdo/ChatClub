@@ -64,27 +64,33 @@
     return { ok: true, appId: frame.dataset.appId || appId, href };
   }
 
-  async function apply(appId, modelId) {
+  async function apply(appId, modelId, options = {}) {
     const frame = findFrame(appId);
     if (!frame) return { ok: false, appId, modelId, reason: "frame not found", frames: listFrames() };
     const normalizedAppId = appId === "GrokMirror" ? "Grok" : appId;
-    const result = await sendToFrame(frame, "applyPreferredModel", { appId: normalizedAppId, modelId }, 20000);
+    const payload = {
+      appId: normalizedAppId,
+      modelId,
+      ...(options && typeof options === "object" ? options : {})
+    };
+    const result = await sendToFrame(frame, "applyPreferredModel", payload, 20000);
     return { frame: frameInfo(frame, frames().indexOf(frame)), result };
   }
 
   async function run(plan = [
+    ["Gemini", "pro", { thinkingLevel: "extended" }],
     ["GrokMirror", "expert"],
     ["NotionAI", "gemini31pro"]
   ]) {
     const output = { frames: listFrames(), pings: {}, applies: [] };
-    for (const [appId, modelId] of plan) {
+    for (const [appId, modelId, options] of plan) {
       try {
         output.pings[appId] = await ping(appId);
       } catch (error) {
         output.pings[appId] = { ok: false, appId, reason: error.message || String(error) };
       }
       try {
-        output.applies.push(await apply(appId, modelId));
+        output.applies.push(await apply(appId, modelId, options));
       } catch (error) {
         output.applies.push({ appId, modelId, error: error.message || String(error) });
       }
@@ -94,5 +100,5 @@
   }
 
   window[API_NAME] = Object.freeze({ apply, frames: listFrames, ping, run, sendToFrame });
-  console.log(`${API_NAME} ready. Run: await ${API_NAME}.run()`);
+  console.log(`${API_NAME} ready. Run: await ${API_NAME}.apply("Gemini", "pro", { thinkingLevel: "extended" })`);
 })();

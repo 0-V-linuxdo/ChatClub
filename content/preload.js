@@ -1,5 +1,177 @@
 (() => {
   const COPY_SOURCE = "chatclub-native-copy";
+  const GEMINI_MODEL_PICKER_SOURCE = "chatclub-gemini-model-picker";
+
+  function installGeminiModelPickerBridge() {
+    if (window.__CHATCLUB_GEMINI_MODEL_PICKER_BRIDGE__) return;
+    const records = [];
+    const originalAddEventListener = EventTarget.prototype.addEventListener;
+
+    const visible = (el) => {
+      try {
+        const rect = el?.getBoundingClientRect?.();
+        if (!rect || rect.width <= 4 || rect.height <= 4) return false;
+        const style = getComputedStyle(el);
+        return style.display !== "none" && style.visibility !== "hidden" && Number(style.opacity) !== 0;
+      } catch {
+        return false;
+      }
+    };
+
+    const firstVisible = (selectors) => {
+      for (const selector of selectors) {
+        try {
+          for (const el of document.querySelectorAll(selector)) {
+            if (visible(el)) return el;
+          }
+        } catch {}
+      }
+      return null;
+    };
+
+    const looksLikeGeminiModeTarget = (target) => {
+      if (!target || target.nodeType !== 1) return false;
+      const tag = String(target.tagName || "").toLowerCase();
+      if (tag === "gem-button") return true;
+      try {
+        return Boolean(target.matches?.(
+          "[data-test-id='bard-mode-menu-button'], .gds-mode-switch-button, .gem-button, bard-mode-switcher button, button[aria-label^='Open mode picker' i]"
+        ));
+      } catch {
+        return false;
+      }
+    };
+
+    const recordListener = (target, listener) => {
+      if (!looksLikeGeminiModeTarget(target)) return;
+      if (typeof listener !== "function" && typeof listener?.handleEvent !== "function") return;
+      records.push({ target, listener });
+      while (records.length > 30) records.shift();
+    };
+
+    const wrappedAddEventListener = function (type, listener, options) {
+      try {
+        if (String(type || "").toLowerCase() === "click") recordListener(this, listener);
+      } catch {}
+      return originalAddEventListener.apply(this, arguments);
+    };
+    try {
+      wrappedAddEventListener.toString = () => originalAddEventListener.toString();
+      Object.defineProperty(EventTarget.prototype, "addEventListener", {
+        configurable: true,
+        writable: true,
+        value: wrappedAddEventListener
+      });
+    } catch {}
+
+    const triggerButton = () => firstVisible([
+      "button[aria-label='Open mode picker']",
+      "button[aria-label^='Open mode picker' i]",
+      "bard-mode-switcher button[aria-label='Open mode picker']",
+      "bard-mode-switcher button",
+      "button[aria-label*='mode picker' i]",
+      "button[aria-label*='model' i]"
+    ]);
+
+    const listenerRecordFor = (button) => {
+      const host = button?.closest?.("gem-button, [data-test-id='bard-mode-menu-button'], .gds-mode-switch-button") || button;
+      for (let index = records.length - 1; index >= 0; index -= 1) {
+        const record = records[index];
+        const target = record.target;
+        if (!target?.isConnected) continue;
+        if (target === host || target === button || target.contains?.(button) || host?.contains?.(target)) return record;
+      }
+      return records.slice().reverse().find((record) => record.target?.isConnected && looksLikeGeminiModeTarget(record.target)) || null;
+    };
+
+    const eventPathFor = (button, currentTarget) => {
+      const path = [];
+      const add = (node) => {
+        if (node && !path.includes(node)) path.push(node);
+      };
+      add(button);
+      for (let node = button; node; node = node.parentNode || node.host || null) add(node);
+      add(currentTarget);
+      add(document);
+      add(window);
+      return path;
+    };
+
+    const modelClickEvent = (button, currentTarget) => {
+      const rect = button?.getBoundingClientRect?.();
+      const clientX = rect ? rect.left + rect.width / 2 : 1;
+      const clientY = rect ? rect.top + rect.height / 2 : 1;
+      return {
+        type: "click",
+        target: button,
+        srcElement: button,
+        currentTarget,
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        button: 0,
+        buttons: 0,
+        detail: 1,
+        clientX,
+        clientY,
+        screenX: clientX,
+        screenY: clientY,
+        defaultPrevented: false,
+        preventDefault() { this.defaultPrevented = true; },
+        stopPropagation() {},
+        stopImmediatePropagation() {},
+        composedPath() { return eventPathFor(button, currentTarget); }
+      };
+    };
+
+    const menuOpen = () => firstVisible([
+      ".cdk-overlay-pane .gds-mode-switch-menu",
+      ".cdk-overlay-pane [role='menu']",
+      ".cdk-overlay-pane",
+      ".gds-mode-switch-menu",
+      "[role='menu']"
+    ]);
+
+    const open = () => {
+      const existing = menuOpen();
+      if (existing) return { ok: true, alreadyOpen: true, records: records.length };
+      const button = triggerButton();
+      if (!button) return { ok: false, reason: "trigger not found", records: records.length };
+      const record = listenerRecordFor(button);
+      if (!record) return { ok: false, reason: "trigger listener not captured", records: records.length };
+      try {
+        button.focus?.({ preventScroll: true });
+      } catch {
+        try { button.focus?.(); } catch {}
+      }
+      try {
+        const listener = record.listener;
+        const event = modelClickEvent(button, record.target || button);
+        if (typeof listener === "function") listener.call(record.target || button, event);
+        else listener.handleEvent.call(listener, event);
+        return { ok: true, records: records.length };
+      } catch (error) {
+        return { ok: false, reason: error?.message || String(error || "listener failed"), records: records.length };
+      }
+    };
+
+    window.__CHATCLUB_GEMINI_MODEL_PICKER_BRIDGE__ = { open, records };
+    window.addEventListener("message", (event) => {
+      const message = event.data;
+      if (message?.source !== GEMINI_MODEL_PICKER_SOURCE || message.type !== "request" || message.action !== "open") return;
+      const result = open();
+      try {
+        window.postMessage({
+          source: GEMINI_MODEL_PICKER_SOURCE,
+          type: "response",
+          id: message.id,
+          action: "open",
+          ...result
+        }, "*");
+      } catch {}
+    }, true);
+  }
+
   if (!window.__CHATCLUB_NATIVE_COPY_BRIDGE__) {
     window.__CHATCLUB_NATIVE_COPY_BRIDGE__ = true;
     const captures = new Map();
@@ -257,6 +429,10 @@
   const framed = (() => {
     try { return window.parent !== window; } catch { return true; }
   })();
+
+  if (host === "gemini.google.com" || host.endsWith(".gemini.google.com")) {
+    installGeminiModelPickerBridge();
+  }
 
   if (framed && (host === "claude.ai" || host.endsWith(".claude.ai"))) {
     try {

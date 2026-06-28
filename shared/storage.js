@@ -3,11 +3,14 @@ import {
   API_PROFILE_ENDPOINT_DEFAULT,
   API_PROFILE_MODEL_DEFAULT,
   BUILTIN_CHAT_APPS,
+  DEFAULT_GEMINI_THINKING_LEVEL,
   DEFAULT_MODEL_PREFERENCES,
   DEFAULT_PROMOTION_API_PROFILES,
   DEFAULT_TAB_GROUP_BUTTON_ORDER,
   DEFAULT_TAB_GROUP_BUTTON_PLACEMENT,
   DEFAULT_OPTIONS,
+  GEMINI_THINKING_LEVEL_PREFERENCE_KEY,
+  GEMINI_THINKING_LEVEL_TARGETS,
   MODEL_PREFERENCE_TARGETS,
   STORAGE_KEYS,
   TAB_GROUP_HEADER_BUTTONS
@@ -203,6 +206,11 @@ export function normalizeModelPreferences(raw = {}) {
     const allowed = new Set((targets || []).map((target) => target.id));
     normalized[appId] = allowed.has(value) ? value : "";
   }
+  const thinkingLevel = text(source[GEMINI_THINKING_LEVEL_PREFERENCE_KEY], DEFAULT_GEMINI_THINKING_LEVEL);
+  const allowedThinkingLevels = new Set(GEMINI_THINKING_LEVEL_TARGETS.map((target) => target.id));
+  normalized[GEMINI_THINKING_LEVEL_PREFERENCE_KEY] = allowedThinkingLevels.has(thinkingLevel)
+    ? thinkingLevel
+    : DEFAULT_GEMINI_THINKING_LEVEL;
   return normalized;
 }
 

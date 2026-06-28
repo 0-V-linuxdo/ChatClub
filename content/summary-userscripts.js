@@ -1089,11 +1089,19 @@ const looksMessageText = value => {
   if (/Summary Panel|Simple Chat Hub|pages checked/i.test(text)) return false;
   return /[A-Za-z0-9\u4e00-\u9fff]/.test(text);
 };
+const thoughtLabel = value => {
+  const match = normalize(value).match(/\bThought for\s+[^,。\n]{1,32}/i);
+  return match ? normalize(match[0]) : '';
+};
+const turnKey = (role, node, expected = '') => role + '\n' + compact(expected || textOf(node));
 const pushTurn = (turns, role, node, expected = '') => {
   if ((role !== 'user' && role !== 'assistant') || !node) return;
   const text = normalize(expected || textOf(node));
   if (!looksMessageText(text)) return;
-  if (turns.some(item => item.role === role && item.node === node)) return;
+  const key = turnKey(role, node, text);
+  if (!key.trim()) return;
+  if (turns.some(item => item.role === role && (item.node === node || item.node.contains && item.node.contains(node) || node.contains && node.contains(item.node)))) return;
+  if (turns.some(item => turnKey(item.role, item.node, item.expected || '') === key)) return;
   turns.push({ role, node, expected: text });
 };
 const previousTextBlock = (anchor, marker) => {
@@ -1138,14 +1146,32 @@ const findDeepSeekTurns = () => {
 };
 const findGrokTurns = () => {
   const turns = [];
-  const thoughtNodes = qsa('button,div,span,[role=button]', root)
-    .filter(node => visible(node) && /^\s*Thought for\b/i.test(normalize(node.innerText || node.textContent || '')))
-    .sort(order);
-  const markers = thoughtNodes.length ? thoughtNodes : qsa('article,section,div,[role]', root)
-    .filter(node => visible(node) && /\bThought for\b/i.test(textOf(node)))
-    .sort(order)
-    .slice(0, 3);
-  for (const marker of markers.slice(0, 3)) {
+  const uniqueMarkers = nodes => {
+    const out = [];
+    const seen = new Set();
+    for (const node of nodes.sort(order)) {
+      const label = thoughtLabel(textOf(node));
+      if (!/^Thought for\b/i.test(label)) continue;
+      const rect = rectOf(node);
+      const key = compact(label) + '|' + Math.round((rect && rect.top || 0) / 8);
+      if (!key.trim() || seen.has(key)) continue;
+      seen.add(key);
+      out.push(node);
+    }
+    return out;
+  };
+  let markers = uniqueMarkers(qsa('button,[role=button]', root)
+    .filter(node => visible(node) && textOf(node).length <= 120 && /^Thought for\b/i.test(thoughtLabel(textOf(node)))));
+  if (!markers.length) {
+    markers = uniqueMarkers(qsa('button,div,span,[role=button]', root)
+      .filter(node => visible(node) && /\bThought for\b/i.test(textOf(node))));
+  }
+  if (!markers.length) {
+    markers = uniqueMarkers(qsa('article,section,div,[role]', root)
+      .filter(node => visible(node) && /\bThought for\b/i.test(textOf(node))));
+  }
+  const assistantSeen = new Set();
+  for (const marker of markers.slice(0, 8)) {
     let assistantNode = marker;
     for (let node = marker; node && node !== root && node !== document.body; node = node.parentElement) {
       const text = textOf(node);
@@ -1154,6 +1180,9 @@ const findGrokTurns = () => {
         break;
       }
     }
+    const assistantKey = compact(textOf(assistantNode));
+    if (!assistantKey || assistantSeen.has(assistantKey)) continue;
+    assistantSeen.add(assistantKey);
     let userNode = null;
     for (let prev = assistantNode && assistantNode.previousElementSibling, count = 0; prev && count < 6; prev = prev.previousElementSibling, count += 1) {
       if (looksMessageText(textOf(prev)) && !/Thought for|Upgrade to SuperGrok|Ask anything/i.test(textOf(prev))) { userNode = prev; break; }
@@ -1505,11 +1534,19 @@ const looksMessageText = value => {
   if (/Summary Panel|Simple Chat Hub|pages checked/i.test(text)) return false;
   return /[A-Za-z0-9\u4e00-\u9fff]/.test(text);
 };
+const thoughtLabel = value => {
+  const match = normalize(value).match(/\bThought for\s+[^,。\n]{1,32}/i);
+  return match ? normalize(match[0]) : '';
+};
+const turnKey = (role, node, expected = '') => role + '\n' + compact(expected || textOf(node));
 const pushTurn = (turns, role, node, expected = '') => {
   if ((role !== 'user' && role !== 'assistant') || !node) return;
   const text = normalize(expected || textOf(node));
   if (!looksMessageText(text)) return;
-  if (turns.some(item => item.role === role && item.node === node)) return;
+  const key = turnKey(role, node, text);
+  if (!key.trim()) return;
+  if (turns.some(item => item.role === role && (item.node === node || item.node.contains && item.node.contains(node) || node.contains && node.contains(item.node)))) return;
+  if (turns.some(item => turnKey(item.role, item.node, item.expected || '') === key)) return;
   turns.push({ role, node, expected: text });
 };
 const previousTextBlock = (anchor, marker) => {
@@ -1554,14 +1591,32 @@ const findDeepSeekTurns = () => {
 };
 const findGrokTurns = () => {
   const turns = [];
-  const thoughtNodes = qsa('button,div,span,[role=button]', root)
-    .filter(node => visible(node) && /^\s*Thought for\b/i.test(normalize(node.innerText || node.textContent || '')))
-    .sort(order);
-  const markers = thoughtNodes.length ? thoughtNodes : qsa('article,section,div,[role]', root)
-    .filter(node => visible(node) && /\bThought for\b/i.test(textOf(node)))
-    .sort(order)
-    .slice(0, 3);
-  for (const marker of markers.slice(0, 3)) {
+  const uniqueMarkers = nodes => {
+    const out = [];
+    const seen = new Set();
+    for (const node of nodes.sort(order)) {
+      const label = thoughtLabel(textOf(node));
+      if (!/^Thought for\b/i.test(label)) continue;
+      const rect = rectOf(node);
+      const key = compact(label) + '|' + Math.round((rect && rect.top || 0) / 8);
+      if (!key.trim() || seen.has(key)) continue;
+      seen.add(key);
+      out.push(node);
+    }
+    return out;
+  };
+  let markers = uniqueMarkers(qsa('button,[role=button]', root)
+    .filter(node => visible(node) && textOf(node).length <= 120 && /^Thought for\b/i.test(thoughtLabel(textOf(node)))));
+  if (!markers.length) {
+    markers = uniqueMarkers(qsa('button,div,span,[role=button]', root)
+      .filter(node => visible(node) && /\bThought for\b/i.test(textOf(node))));
+  }
+  if (!markers.length) {
+    markers = uniqueMarkers(qsa('article,section,div,[role]', root)
+      .filter(node => visible(node) && /\bThought for\b/i.test(textOf(node))));
+  }
+  const assistantSeen = new Set();
+  for (const marker of markers.slice(0, 8)) {
     let assistantNode = marker;
     for (let node = marker; node && node !== root && node !== document.body; node = node.parentElement) {
       const text = textOf(node);
@@ -1570,6 +1625,9 @@ const findGrokTurns = () => {
         break;
       }
     }
+    const assistantKey = compact(textOf(assistantNode));
+    if (!assistantKey || assistantSeen.has(assistantKey)) continue;
+    assistantSeen.add(assistantKey);
     let userNode = null;
     for (let prev = assistantNode && assistantNode.previousElementSibling, count = 0; prev && count < 6; prev = prev.previousElementSibling, count += 1) {
       if (looksMessageText(textOf(prev)) && !/Thought for|Upgrade to SuperGrok|Ask anything/i.test(textOf(prev))) { userNode = prev; break; }
@@ -1638,27 +1696,76 @@ return merged.some(item => item.role === 'user') && merged.some(item => item.rol
   };
   scripts["grok-dairoot.js"] = scripts["grok-dairoot"];
   scripts["kagi"] = async function(api) {
-return await api.extractCopySequence({
-  "rootSelector": "main,[role=main],body",
-  "copyButtonSelector": "button,[role=button],[role=menuitem],div[tabindex],span[role=button]",
-  "copyButtonPattern": "copy|copied|clipboard|复制|已复制|拷贝",
-  "copyButtonExcludePattern": "copy\\s*(?:code|table|link|conversation|source|sources)|copy[-_ ]?(?:code|table|link|conversation|source|sources)|(?:link|share|history|source|sources|citation|citations|feedback|thumb|like|dislike|settings|export|docs|menu|more|notification|sidebar|regenerate|upload|voice|submit|model)|链接|分享|代码|表格|会话|历史|来源|引用|赞|踩|设置|导出|更多|菜单|通知|上传|语音|提交",
-  "copyTextExcludePattern": "^\\s*(?:References|Sources|Citations|引用|来源)\\b|^\\s*(?:(?:\\^?\\[?\\^?\\d+\\]?[:.)]?|\\[\\d+\\]|\\d+[.)])\\s*\\[[^\\n]+\\]\\([^\\n]+\\)\\s*(?:\\([^)]*%\\))?\\s*){2,}\\s*$",
-  "copyUserContextPattern": "you\\s+said|user\\s+said|human|prompt|question|用户|你说|提问",
-  "copyAssistantContextPattern": "assistant\\s+said|assistant|answer|response|回答|回复|助手",
-  "copyMenu": false,
-  "expanded": false,
-  "copyButtonIconFallback": true,
-  "roleFallbackSequence": "userFirst",
-  "maxButtons": 18,
-  "matchMode": "anyUseful",
-  "resetClipboardBeforeCopy": true,
-  "acceptUnchangedClipboard": false,
-  "copyTimeoutMs": 3600,
-  "copyPollMs": 50,
-  "copyCaptureGraceMs": 320,
-  "domTextFallback": false
-});
+const normalize = value => api.normalize(String(value || ""));
+const root = api.qs('main,[role="main"]') || document.body || document.documentElement;
+const qsa = (selector, scope = document) => {
+  try { return api.qsa(selector, scope || document, { all: true }); } catch (error) { return []; }
+};
+const visible = node => {
+  try {
+    if (api.visible && !api.visible(node)) return false;
+    const rect = node && node.getBoundingClientRect && node.getBoundingClientRect();
+    const style = getComputedStyle(node);
+    return !!(rect && rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden");
+  } catch (error) { return false; }
+};
+const order = (a, b) => {
+  try {
+    if (a === b) return 0;
+    return a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_PRECEDING ? 1 : -1;
+  } catch (error) { return 0; }
+};
+const meta = node => normalize([
+  node && node.tagName,
+  node && node.getAttribute && node.getAttribute("aria-label"),
+  node && node.getAttribute && node.getAttribute("title"),
+  node && node.getAttribute && node.getAttribute("data-testid"),
+  node && node.getAttribute && node.getAttribute("data-test-id"),
+  node && node.textContent,
+  node && node.innerText
+].filter(Boolean).join(" "));
+const messageCopyButton = button => /\bcopy\s+message\b|复制(?:消息|讯息)|拷贝(?:消息|讯息)/i.test(meta(button));
+const referenceCopyButton = button => /\bcopy\s+(?:references?|sources?|citations?)\b|引用|来源|参考|citation|source/i.test(meta(button));
+const internalTool = button => {
+  try { return !!api.closest(button, 'nav,aside,header,footer,form,input,textarea,select,[contenteditable=true],pre,code,table,kbd,samp,[data-language]'); } catch (error) { return false; }
+};
+const referenceOnly = value => {
+  const text = normalize(value);
+  if (/^\s*(?:References|Sources|Citations|引用|来源|参考)\b/i.test(text)) return true;
+  if (/^\s*\(?\d+\s+total\)?\s*$/i.test(text)) return true;
+  if (/^\s*(?:https?:\/\/|[\w.-]+\.[a-z]{2,})(?:\s+\d+%)?\s*$/i.test(text)) return true;
+  return false;
+};
+const useful = value => {
+  const text = normalize(value);
+  if (!text || text.length < 2 || text.length > 50000) return "";
+  if (/^(?:copy|copied|copy message|复制|已复制|拷贝)$/i.test(text)) return "";
+  if (referenceOnly(text)) return "";
+  return text;
+};
+const buttons = qsa("button,[role=button]", root)
+  .filter(button => visible(button) && !internalTool(button) && messageCopyButton(button) && !referenceCopyButton(button))
+  .sort(order);
+const out = [];
+const seen = new Set();
+for (const button of buttons.slice(0, 24)) {
+  const role = out.length % 2 === 0 ? "user" : "assistant";
+  const text = useful(await api.copy(button, {
+    resetClipboardBeforeCopy: true,
+    acceptUnchangedClipboard: false,
+    copyTimeoutMs: 3600,
+    copyPollMs: 50,
+    copyCaptureGraceMs: 320
+  }));
+  if (!text) continue;
+  const key = role + "\n" + text.toLowerCase().replace(/\s+/g, "");
+  if (seen.has(key)) continue;
+  seen.add(key);
+  out.push({ role, text });
+  await api.sleep(80);
+}
+const merged = api.merge(out);
+return merged.some(item => item.role === "user") && merged.some(item => item.role === "assistant") ? merged : [];
   };
   scripts["kagi.js"] = scripts["kagi"];
   scripts["notion"] = async function(api) {

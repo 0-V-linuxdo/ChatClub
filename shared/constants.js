@@ -1,7 +1,7 @@
 import { DEFAULT_TOPBAR_LAYOUT } from "./topbar.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-06-28｜17:54:25」";
+export const APP_VERSION = "「2026-06-29｜03:45:30」";
 export const BASELINE_MOD_VERSION = "2.4.0.14";
 export const HOMEPAGE_URL = "https://chatclub.local/";
 
@@ -21,7 +21,7 @@ export const API_PROMOTION_CHANNELS_VERSION = 2;
 export const API_PROFILE_ZERO_ZERO_ENDPOINT = "https://api.0-0.pro/v1/chat/completions";
 export const API_PROFILE_ZERO_ZERO_MODEL = "gpt-5.5";
 export const API_PROFILE_ZERO_ZERO_REGISTER_URL = "https://0-0.pro/register?ref=CSLPRL76";
-export const SUMMARY_SITE_CONFIG_VERSION = 64;
+export const SUMMARY_SITE_CONFIG_VERSION = 65;
 
 export const DEFAULT_PROMOTION_API_PROFILES = [
   {
@@ -35,13 +35,21 @@ export const DEFAULT_PROMOTION_API_PROFILES = [
   }
 ];
 
+export const GEMINI_THINKING_LEVEL_PREFERENCE_KEY = "GeminiThinkingLevel";
+
+export const GEMINI_THINKING_LEVEL_TARGETS = Object.freeze([
+  Object.freeze({ id: "standard", label: "Standard" }),
+  Object.freeze({ id: "extended", label: "Extended" })
+]);
+
+export const DEFAULT_GEMINI_THINKING_LEVEL = "standard";
+
 export const MODEL_PREFERENCE_TARGETS = Object.freeze({
   Gemini: Object.freeze([
     Object.freeze({ id: "", label: "" }),
-    Object.freeze({ id: "pro", label: "Pro" }),
-    Object.freeze({ id: "thinking", label: "Thinking" }),
-    Object.freeze({ id: "extended", label: "Extended" }),
-    Object.freeze({ id: "fast", label: "Fast" })
+    Object.freeze({ id: "pro", label: "3.1 Pro" }),
+    Object.freeze({ id: "fast", label: "3.1 Flash-Lite" }),
+    Object.freeze({ id: "flash35", label: "3.5 Flash" })
   ]),
   Grok: Object.freeze([
     Object.freeze({ id: "", label: "" }),
@@ -76,7 +84,10 @@ export const MODEL_PREFERENCE_TARGETS = Object.freeze({
 });
 
 export const DEFAULT_MODEL_PREFERENCES = Object.freeze(
-  Object.fromEntries(Object.keys(MODEL_PREFERENCE_TARGETS).map((appId) => [appId, ""]))
+  {
+    ...Object.fromEntries(Object.keys(MODEL_PREFERENCE_TARGETS).map((appId) => [appId, ""])),
+    [GEMINI_THINKING_LEVEL_PREFERENCE_KEY]: DEFAULT_GEMINI_THINKING_LEVEL
+  }
 );
 
 export const TAB_GROUP_HEADER_BUTTONS = [

@@ -1,5 +1,5 @@
 {
-  "summarySiteConfigVersion": 64,
+  "summarySiteConfigVersion": 65,
   "source": "dev/userscripts",
   "configs": [
     {
@@ -95,7 +95,7 @@
       "name": "Grok",
       "enabled": true,
       "builtIn": true,
-      "configVersion": 58,
+      "configVersion": 59,
       "hosts": [
         "grok.com",
         "*.grok.com",
@@ -114,14 +114,14 @@
       "copyTimeoutMs": 3600,
       "userscriptFallbackDelayMs": 1000,
       "userscriptFile": "grok.js",
-      "userscriptLength": 21523
+      "userscriptLength": 22824
     },
     {
       "id": "grok-dairoot",
       "name": "Grok Mirror",
       "enabled": true,
       "builtIn": true,
-      "configVersion": 64,
+      "configVersion": 65,
       "hosts": [
         "gk.dairoot.cn",
         "*.gk.dairoot.cn"
@@ -129,7 +129,7 @@
       "pathPrefixes": [],
       "fallbackMode": "structuredOnly",
       "userscriptFile": "grok-dairoot.js",
-      "userscriptLength": 21523,
+      "userscriptLength": 22824,
       "userscriptRunMode": "pageWorldFirst",
       "userscriptTimeoutMs": 36000,
       "domTextFallback": false,
@@ -145,7 +145,7 @@
       "name": "Kagi Assistant",
       "enabled": true,
       "builtIn": true,
-      "configVersion": 61,
+      "configVersion": 62,
       "hosts": [
         "assistant.kagi.com"
       ],
@@ -160,7 +160,7 @@
       "assistantTextSelector": "",
       "copyTimeoutMs": 3600,
       "userscriptFile": "kagi.js",
-      "userscriptLength": 1299
+      "userscriptLength": 3150
     },
     {
       "id": "notion",

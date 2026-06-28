@@ -1,6 +1,6 @@
 // Built-in Summary userscript: Grok Mirror (grok-dairoot)
 // Source: Mod/assets/chunk-7dbf4e81.js :: SUMMARY_SITE_CONFIG_DEFAULTS
-// Config version: 64; global config version: 64
+// Config version: 65; global config version: 65
 // Hosts: gk.dairoot.cn, *.gk.dairoot.cn
 // Path prefixes: (none)
 // Run mode: pageWorldFirst; timeout: 36000
@@ -289,11 +289,19 @@ const looksMessageText = value => {
   if (/Summary Panel|Simple Chat Hub|pages checked/i.test(text)) return false;
   return /[A-Za-z0-9\u4e00-\u9fff]/.test(text);
 };
+const thoughtLabel = value => {
+  const match = normalize(value).match(/\bThought for\s+[^,。\n]{1,32}/i);
+  return match ? normalize(match[0]) : '';
+};
+const turnKey = (role, node, expected = '') => role + '\n' + compact(expected || textOf(node));
 const pushTurn = (turns, role, node, expected = '') => {
   if ((role !== 'user' && role !== 'assistant') || !node) return;
   const text = normalize(expected || textOf(node));
   if (!looksMessageText(text)) return;
-  if (turns.some(item => item.role === role && item.node === node)) return;
+  const key = turnKey(role, node, text);
+  if (!key.trim()) return;
+  if (turns.some(item => item.role === role && (item.node === node || item.node.contains && item.node.contains(node) || node.contains && node.contains(item.node)))) return;
+  if (turns.some(item => turnKey(item.role, item.node, item.expected || '') === key)) return;
   turns.push({ role, node, expected: text });
 };
 const previousTextBlock = (anchor, marker) => {
@@ -338,14 +346,32 @@ const findDeepSeekTurns = () => {
 };
 const findGrokTurns = () => {
   const turns = [];
-  const thoughtNodes = qsa('button,div,span,[role=button]', root)
-    .filter(node => visible(node) && /^\s*Thought for\b/i.test(normalize(node.innerText || node.textContent || '')))
-    .sort(order);
-  const markers = thoughtNodes.length ? thoughtNodes : qsa('article,section,div,[role]', root)
-    .filter(node => visible(node) && /\bThought for\b/i.test(textOf(node)))
-    .sort(order)
-    .slice(0, 3);
-  for (const marker of markers.slice(0, 3)) {
+  const uniqueMarkers = nodes => {
+    const out = [];
+    const seen = new Set();
+    for (const node of nodes.sort(order)) {
+      const label = thoughtLabel(textOf(node));
+      if (!/^Thought for\b/i.test(label)) continue;
+      const rect = rectOf(node);
+      const key = compact(label) + '|' + Math.round((rect && rect.top || 0) / 8);
+      if (!key.trim() || seen.has(key)) continue;
+      seen.add(key);
+      out.push(node);
+    }
+    return out;
+  };
+  let markers = uniqueMarkers(qsa('button,[role=button]', root)
+    .filter(node => visible(node) && textOf(node).length <= 120 && /^Thought for\b/i.test(thoughtLabel(textOf(node)))));
+  if (!markers.length) {
+    markers = uniqueMarkers(qsa('button,div,span,[role=button]', root)
+      .filter(node => visible(node) && /\bThought for\b/i.test(textOf(node))));
+  }
+  if (!markers.length) {
+    markers = uniqueMarkers(qsa('article,section,div,[role]', root)
+      .filter(node => visible(node) && /\bThought for\b/i.test(textOf(node))));
+  }
+  const assistantSeen = new Set();
+  for (const marker of markers.slice(0, 8)) {
     let assistantNode = marker;
     for (let node = marker; node && node !== root && node !== document.body; node = node.parentElement) {
       const text = textOf(node);
@@ -354,6 +380,9 @@ const findGrokTurns = () => {
         break;
       }
     }
+    const assistantKey = compact(textOf(assistantNode));
+    if (!assistantKey || assistantSeen.has(assistantKey)) continue;
+    assistantSeen.add(assistantKey);
     let userNode = null;
     for (let prev = assistantNode && assistantNode.previousElementSibling, count = 0; prev && count < 6; prev = prev.previousElementSibling, count += 1) {
       if (looksMessageText(textOf(prev)) && !/Thought for|Upgrade to SuperGrok|Ask anything/i.test(textOf(prev))) { userNode = prev; break; }

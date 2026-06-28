@@ -36,6 +36,8 @@ export const TOPBAR_SETTINGS_ITEM_SECTIONS = Object.fromEntries(
   Object.entries(TOPBAR_SETTINGS_SECTION_ITEMS).map(([section, itemId]) => [itemId, section])
 );
 
+const TOPBAR_SETTINGS_SECTION_ITEM_IDS = Object.values(TOPBAR_SETTINGS_SECTION_ITEMS);
+
 export const TOPBAR_REQUIRED_ITEMS = ["composer", "settingsJumpMenu"];
 
 export const DEFAULT_TOPBAR_LAYOUT = [
@@ -127,6 +129,34 @@ export function normalizeTopbarLayout(raw = DEFAULT_TOPBAR_LAYOUT) {
 
   for (const id of TOPBAR_BUILTIN_ITEMS) {
     if (REQUIRED_SET.has(id) && !seenItems.has(id)) normalized.push({ type: "item", id });
+  }
+  const missingSettingsIds = TOPBAR_SETTINGS_SECTION_ITEM_IDS.filter((id) => !seenItems.has(id));
+  if (missingSettingsIds.length) {
+    let menuIndex = normalized.findIndex((entry) => entry.type === "item" && entry.id === "settingsJumpMenu");
+    if (menuIndex < 0) {
+      normalized.push({ type: "item", id: "settingsJumpMenu" });
+      seenItems.add("settingsJumpMenu");
+      menuIndex = normalized.length - 1;
+    }
+    const settingsOrder = new Map(TOPBAR_SETTINGS_SECTION_ITEM_IDS.map((id, index) => [id, index]));
+    const missing = new Set(missingSettingsIds);
+    const mergedFolded = [];
+    const appendMissingBefore = (orderLimit) => {
+      for (const id of TOPBAR_SETTINGS_SECTION_ITEM_IDS) {
+        if (!missing.has(id)) continue;
+        if (settingsOrder.get(id) >= orderLimit) continue;
+        mergedFolded.push({ type: "item", id });
+        missing.delete(id);
+        seenItems.add(id);
+      }
+    };
+    for (const item of normalized.slice(menuIndex + 1)) {
+      const order = item.type === "item" ? settingsOrder.get(item.id) : undefined;
+      if (typeof order === "number") appendMissingBefore(order);
+      mergedFolded.push(item);
+    }
+    appendMissingBefore(Number.POSITIVE_INFINITY);
+    normalized.splice(menuIndex + 1, normalized.length - menuIndex - 1, ...mergedFolded);
   }
   return normalized.length ? normalized : JSON.parse(JSON.stringify(DEFAULT_TOPBAR_LAYOUT));
 }

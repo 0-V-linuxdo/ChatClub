@@ -1,4 +1,10 @@
-import { APP_NAME, MODEL_PREFERENCE_TARGETS } from "../shared/constants.js";
+import {
+  APP_NAME,
+  DEFAULT_GEMINI_THINKING_LEVEL,
+  GEMINI_THINKING_LEVEL_PREFERENCE_KEY,
+  GEMINI_THINKING_LEVEL_TARGETS,
+  MODEL_PREFERENCE_TARGETS
+} from "../shared/constants.js";
 import { sendToIframe } from "../shared/post-message.js";
 import { setLanguage, t } from "../shared/i18n.js";
 import {
@@ -760,32 +766,52 @@ function preferredModelForApp(app) {
   return (MODEL_PREFERENCE_TARGETS[appId] || []).some((target) => target.id === modelId) ? modelId : "";
 }
 
+function preferredGeminiThinkingLevel() {
+  const value = String(state.options?.modelPreferences?.[GEMINI_THINKING_LEVEL_PREFERENCE_KEY] || DEFAULT_GEMINI_THINKING_LEVEL);
+  return GEMINI_THINKING_LEVEL_TARGETS.some((target) => target.id === value)
+    ? value
+    : DEFAULT_GEMINI_THINKING_LEVEL;
+}
+
+function preferredModelPayloadForApp(app) {
+  const appId = preferredModelAppId(app);
+  const modelId = preferredModelForApp(app);
+  if (!modelId) return null;
+  return {
+    appId,
+    modelId,
+    ...(appId === "Gemini" && modelId === "pro" ? { thinkingLevel: preferredGeminiThinkingLevel() } : {})
+  };
+}
+
 function preferredModelFrameKey(iframe) {
   if (!iframe) return "";
   const app = workspaceController.frameApp(iframe);
-  const appId = preferredModelAppId(app);
-  const modelId = preferredModelForApp(app);
-  return modelId ? `${appId}:${modelId}:${iframe.dataset.currentHref || iframe.src || ""}` : "";
+  const payload = preferredModelPayloadForApp(app);
+  if (!payload) return "";
+  const thinkingLevel = payload.thinkingLevel ? `:${payload.thinkingLevel}` : "";
+  return `${payload.appId}:${payload.modelId}${thinkingLevel}:${iframe.dataset.currentHref || iframe.src || ""}`;
 }
 
 async function applyPreferredModelToFrame(iframe, options = {}) {
   if (!iframe) return null;
   const app = workspaceController.frameApp(iframe);
-  const appId = preferredModelAppId(app);
-  const modelId = preferredModelForApp(app);
-  if (!modelId) return null;
+  const payload = preferredModelPayloadForApp(app);
+  if (!payload) return null;
   try {
-    const result = await sendToIframe(iframe, "applyPreferredModel", {
-      appId,
-      modelId
-    }, 15000);
+    const result = await sendToIframe(iframe, "applyPreferredModel", payload, 15000);
     if (result?.ok === false && !options.quiet) {
-      console.warn("[ChatClub] Preferred model was not applied", appId, modelId, result.reason || result);
+      console.warn("[ChatClub] Preferred model was not applied", payload.appId, payload.modelId, result.reason || result);
     }
     return result;
   } catch (error) {
-    if (!options.quiet) console.warn("[ChatClub] Failed to apply preferred model", appId, modelId, error);
-    return { ok: false, appId, modelId, reason: error?.message || String(error || "message timeout") };
+    if (!options.quiet) console.warn("[ChatClub] Failed to apply preferred model", payload.appId, payload.modelId, error);
+    return {
+      ok: false,
+      appId: payload.appId,
+      modelId: payload.modelId,
+      reason: error?.message || String(error || "message timeout")
+    };
   }
 }
 

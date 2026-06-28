@@ -2499,23 +2499,127 @@ body.settings-tab-group-button-dragging iframe {
   grid-template-columns: 44px minmax(118px, .88fr) minmax(178px, 1.16fr) minmax(104px, .72fr) minmax(114px, .76fr) 88px;
 }
 
+.model-preferences-pane {
+  align-content: start;
+}
+
 .model-preference-list .settings-list-header,
 .model-preference-row {
-  min-width: 0;
-  grid-template-columns: minmax(140px, 1fr) minmax(220px, 320px);
+  grid-template-columns: minmax(160px, .72fr) minmax(300px, 1.1fr) minmax(180px, .78fr);
 }
 
-.model-preference-list {
-  overflow-x: hidden;
+.settings-manager-list.model-preference-list .settings-list-header span:first-child {
+  padding: 0 var(--settings-cell-pad-x);
 }
 
-.model-preference-list .settings-list-header span:last-child {
+.settings-manager-list.model-preference-list .settings-list-header span:last-child {
   text-align: left;
 }
 
+.model-preference-row .settings-main-cell {
+  font-weight: 760;
+}
+
 .model-preference-row > .select {
-  width: clamp(220px, 28vw, 320px);
+  width: min(100%, 360px);
   justify-self: start;
+}
+
+.model-thinking-toggle {
+  min-width: 82px;
+  min-height: 32px;
+  padding: 4px 5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-self: start;
+  color: var(--text);
+  border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel) 76%, var(--panel-2));
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.model-thinking-toggle:hover {
+  border-color: color-mix(in srgb, var(--primary) 46%, var(--line));
+  background: color-mix(in srgb, var(--panel-2) 78%, var(--panel));
+}
+
+.model-thinking-toggle input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.model-thinking-toggle-track {
+  position: relative;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 18px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel-2) 74%, var(--bg));
+  transition: background 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.model-thinking-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--muted);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .22);
+  transition: transform 160ms ease, background 160ms ease;
+}
+
+.model-thinking-toggle input:checked + .model-thinking-toggle-track {
+  border-color: color-mix(in srgb, var(--primary) 78%, var(--line));
+  background: color-mix(in srgb, var(--primary) 32%, var(--panel));
+}
+
+.model-thinking-toggle input:checked + .model-thinking-toggle-track .model-thinking-toggle-thumb {
+  transform: translateX(14px);
+  background: var(--text);
+}
+
+.model-thinking-toggle input:focus-visible + .model-thinking-toggle-track {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 20%, transparent);
+}
+
+.model-thinking-toggle-copy {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.model-thinking-toggle-value {
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 760;
+}
+
+.model-thinking-toggle-placeholder {
+  width: 82px;
+  min-height: 32px;
+}
+
+@media (max-width: 700px) {
+  .model-preference-list .settings-list-header,
+  .model-preference-row {
+    grid-template-columns: minmax(86px, 104px) minmax(156px, 1fr) minmax(86px, auto);
+  }
+
+  .model-preference-row > .select {
+    width: min(100%, 208px);
+  }
 }
 
 .prompt-template-list .settings-list-header,

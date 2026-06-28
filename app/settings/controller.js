@@ -1,4 +1,11 @@
-import { DEFAULT_OPTIONS, MODEL_PREFERENCE_TARGETS, TAB_GROUP_HEADER_BUTTONS } from "../../shared/constants.js";
+import {
+  DEFAULT_GEMINI_THINKING_LEVEL,
+  DEFAULT_OPTIONS,
+  GEMINI_THINKING_LEVEL_PREFERENCE_KEY,
+  GEMINI_THINKING_LEVEL_TARGETS,
+  MODEL_PREFERENCE_TARGETS,
+  TAB_GROUP_HEADER_BUTTONS
+} from "../../shared/constants.js";
 import { SUMMARY_SITE_CONFIGS } from "../../shared/summary-sites.js";
 import { t } from "../../shared/i18n.js";
 import {
@@ -865,7 +872,10 @@ export function createSettingsController(ctx) {
 
   function modelPreferenceDraft() {
     if (!state.modelPreferenceDraft) {
-      state.modelPreferenceDraft = { ...(state.options.modelPreferences || {}) };
+      state.modelPreferenceDraft = {
+        ...DEFAULT_OPTIONS.modelPreferences,
+        ...(state.options.modelPreferences || {})
+      };
     }
     return state.modelPreferenceDraft;
   }
@@ -875,6 +885,46 @@ export function createSettingsController(ctx) {
       value: target.id,
       label: target.id ? target.label : t("modelPreferences.none")
     }));
+  }
+
+  function geminiThinkingLevelLabel(value) {
+    const normalized = GEMINI_THINKING_LEVEL_TARGETS.some((target) => target.id === value)
+      ? value
+      : DEFAULT_GEMINI_THINKING_LEVEL;
+    return normalized === "extended"
+      ? t("modelPreferences.thinkingExtended")
+      : t("modelPreferences.thinkingStandard");
+  }
+
+  function geminiThinkingLevelSwitch() {
+    const draft = modelPreferenceDraft();
+    const value = GEMINI_THINKING_LEVEL_TARGETS.some((target) => target.id === draft[GEMINI_THINKING_LEVEL_PREFERENCE_KEY])
+      ? draft[GEMINI_THINKING_LEVEL_PREFERENCE_KEY]
+      : DEFAULT_GEMINI_THINKING_LEVEL;
+    const checkbox = el("input", {
+      type: "checkbox",
+      role: "switch",
+      "aria-label": t("modelPreferences.thinkingLevel"),
+      checked: value === "extended"
+    });
+    const valueNode = el("span", { class: "model-thinking-toggle-value" }, geminiThinkingLevelLabel(value));
+    checkbox.addEventListener("change", () => {
+      const next = checkbox.checked ? "extended" : "standard";
+      valueNode.textContent = geminiThinkingLevelLabel(next);
+      state.modelPreferenceDraft = {
+        ...modelPreferenceDraft(),
+        [GEMINI_THINKING_LEVEL_PREFERENCE_KEY]: next
+      };
+    });
+    return el("label", { class: "model-thinking-toggle" },
+      checkbox,
+      el("span", { class: "model-thinking-toggle-track" },
+        el("span", { class: "model-thinking-toggle-thumb" })
+      ),
+      el("span", { class: "model-thinking-toggle-copy" },
+        valueNode
+      )
+    );
   }
 
   function modelPreferenceRow(appId) {
@@ -889,14 +939,15 @@ export function createSettingsController(ctx) {
     });
     return el("div", { class: "ui-list-row settings-list-row model-preference-row" },
       el("strong", { class: "settings-main-cell" }, MODEL_PREFERENCE_APP_LABELS[appId] || appId),
-      modelSelect
+      modelSelect,
+      appId === "Gemini"
+        ? geminiThinkingLevelSwitch()
+        : el("span", { class: "model-thinking-toggle-placeholder", "aria-hidden": "true" })
     );
   }
 
   function clearModelPreferenceDraft(redraw) {
-    state.modelPreferenceDraft = Object.fromEntries(
-      Object.keys(MODEL_PREFERENCE_TARGETS).map((appId) => [appId, ""])
-    );
+    state.modelPreferenceDraft = { ...DEFAULT_OPTIONS.modelPreferences };
     redraw();
   }
 
@@ -905,27 +956,32 @@ export function createSettingsController(ctx) {
       ...state.options,
       modelPreferences: modelPreferenceDraft()
     });
-    state.modelPreferenceDraft = { ...(state.options.modelPreferences || {}) };
+    state.modelPreferenceDraft = {
+      ...DEFAULT_OPTIONS.modelPreferences,
+      ...(state.options.modelPreferences || {})
+    };
     await notifyConfigReload();
-    await Promise.resolve(applyPreferredModels());
+    await Promise.resolve(applyPreferredModels(null, { immediate: true }));
     toast(t("toast.modelPreferencesSaved"), "success");
     redraw();
   }
 
   function modelPreferencesPane(redraw) {
-    return el("div", { class: "settings-pane settings-manager-pane" },
-      settingsPaneToolbar(t("modelPreferences.manage")),
-      settingsBlock(t("modelPreferences.title"), t("modelPreferences.desc"),
-        settingsList(
-          [t("modelPreferences.platform"), t("modelPreferences.preferredModel")],
-          Object.keys(MODEL_PREFERENCE_TARGETS).map((appId) => modelPreferenceRow(appId)),
-          "settings-manager-list model-preference-list"
-        ),
-        settingsActions(
-          button(t("modelPreferences.clear"), () => clearModelPreferenceDraft(redraw)),
-          button(t("modelPreferences.save"), () => saveModelPreferenceDraft(redraw), "primary")
-        )
+    const block = settingsBlock(t("modelPreferences.title"), t("modelPreferences.desc"),
+      settingsList(
+        [t("modelPreferences.platform"), t("modelPreferences.preferredModel"), t("modelPreferences.thinkingLevel")],
+        Object.keys(MODEL_PREFERENCE_TARGETS).map((appId) => modelPreferenceRow(appId)),
+        "settings-manager-list model-preference-list"
+      ),
+      settingsActions(
+        button(t("modelPreferences.clear"), () => clearModelPreferenceDraft(redraw)),
+        button(t("modelPreferences.save"), () => saveModelPreferenceDraft(redraw), "primary")
       )
+    );
+    block.classList.add("model-preference-block");
+    return el("div", { class: "settings-pane settings-manager-pane model-preferences-pane" },
+      settingsPaneToolbar(t("modelPreferences.manage")),
+      block
     );
   }
 

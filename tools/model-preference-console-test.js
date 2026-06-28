@@ -1,5 +1,6 @@
 (() => {
   const API_NAME = "ChatClubPreferredModelTest";
+  const GEMINI_MODEL_PICKER_SOURCE = "chatclub-gemini-model-picker";
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
   const normalize = (value) => String(value || "")
     .replace(/\u00a0/g, " ")
@@ -8,7 +9,7 @@
     .trim();
 
   const TARGETS = Object.freeze({
-    Gemini: Object.freeze(["pro", "thinking", "extended", "fast"]),
+    Gemini: Object.freeze(["pro", "fast", "flash35"]),
     Grok: Object.freeze(["auto", "fast", "expert", "grok43", "heavy"]),
     DeepSeek: Object.freeze(["instant", "expert", "vision"]),
     NotionAI: Object.freeze([
@@ -27,6 +28,7 @@
       "glm52"
     ])
   });
+  const GEMINI_THINKING_LEVELS = Object.freeze(["standard", "extended"]);
 
   const APP_ALIASES = Object.freeze({
     gemini: "Gemini",
@@ -219,6 +221,10 @@
     return closest(el, "button, a[href], [role='button'], [role='menuitem'], [role='menuitemradio'], [role='option'], [tabindex]:not([tabindex='-1'])");
   }
 
+  function customActivationAncestor(el) {
+    return closest(el, "gem-button, .gem-button, .gds-mode-switch-button");
+  }
+
   function activationTargets(el) {
     const targets = [];
     const seen = new Set();
@@ -230,10 +236,12 @@
     const point = centerPoint(el);
     const pointTarget = elementFromPoint(point, el);
     if (pointTarget && (pointTarget === el || el.contains?.(pointTarget) || pointTarget.contains?.(el))) {
+      add(customActivationAncestor(pointTarget));
       add(clickableAncestor(pointTarget));
       add(pointTarget);
     }
     add(el);
+    add(customActivationAncestor(el));
     add(clickableAncestor(el));
     return targets.filter((target) => visible(target) && !isDisabledElement(target));
   }
@@ -304,6 +312,68 @@
     return clicked;
   }
 
+  function directClickElement(el) {
+    if (!el || !visible(el) || isDisabledElement(el)) return false;
+    try { el.scrollIntoView?.({ block: "center", inline: "nearest" }); } catch {}
+    try { el.focus?.({ preventScroll: true }); } catch {
+      try { el.focus?.(); } catch {}
+    }
+    return dispatchPointerActivation(el, centerPoint(el)) || nativeClick(el);
+  }
+
+  function devtoolsListenerEvent(target, currentTarget) {
+    const point = centerPoint(target) || centerPoint(currentTarget) || { x: 1, y: 1 };
+    const path = [];
+    const add = (node) => {
+      if (node && !path.includes(node)) path.push(node);
+    };
+    add(target);
+    for (let node = target; node; node = node.parentNode || node.host || null) add(node);
+    add(currentTarget);
+    add(document);
+    add(window);
+    return {
+      type: "click",
+      target,
+      srcElement: target,
+      currentTarget,
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      button: 0,
+      buttons: 0,
+      detail: 1,
+      clientX: point.x,
+      clientY: point.y,
+      screenX: point.x,
+      screenY: point.y,
+      defaultPrevented: false,
+      preventDefault() { this.defaultPrevented = true; },
+      stopPropagation() {},
+      stopImmediatePropagation() {},
+      composedPath() { return path; }
+    };
+  }
+
+  async function openGeminiMenuWithDevtoolsListener(trigger) {
+    if (typeof getEventListeners !== "function" || !trigger) return false;
+    const target = customActivationAncestor(trigger) || trigger;
+    let listeners = [];
+    try { listeners = getEventListeners(target)?.click || []; } catch {}
+    for (const record of listeners) {
+      const listener = record?.listener;
+      if (typeof listener !== "function" && typeof listener?.handleEvent !== "function") continue;
+      try {
+        const event = devtoolsListenerEvent(trigger, target);
+        if (typeof listener === "function") listener.call(target, event);
+        else listener.handleEvent.call(listener, event);
+        await sleep(120);
+        if (geminiMenuRoot()) return true;
+      } catch {}
+    }
+    return false;
+  }
+
   async function waitFor(getter, timeoutMs = 2500, intervalMs = 120) {
     const deadline = Date.now() + Math.max(0, Number(timeoutMs) || 0);
     while (Date.now() <= deadline) {
@@ -314,51 +384,144 @@
     return getter();
   }
 
+  function requestGeminiMenuBridgeOpen(timeoutMs = 900) {
+    return new Promise((resolve) => {
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const timer = setTimeout(() => {
+        window.removeEventListener("message", onMessage, true);
+        resolve({ ok: false, reason: "bridge timeout" });
+      }, Math.max(300, Number(timeoutMs) || 900));
+      function onMessage(event) {
+        const message = event.data;
+        if (message?.source !== GEMINI_MODEL_PICKER_SOURCE || message.type !== "response" || message.id !== id) return;
+        clearTimeout(timer);
+        window.removeEventListener("message", onMessage, true);
+        resolve(message);
+      }
+      window.addEventListener("message", onMessage, true);
+      try {
+        window.postMessage({ source: GEMINI_MODEL_PICKER_SOURCE, type: "request", action: "open", id }, "*");
+      } catch (error) {
+        clearTimeout(timer);
+        window.removeEventListener("message", onMessage, true);
+        resolve({ ok: false, reason: error?.message || String(error || "bridge failed") });
+      }
+    });
+  }
+
   const GEMINI_MODEL_TARGETS = Object.freeze({
-    pro: Object.freeze({ id: "pro", textMatch: ["3.1 Pro", "Pro"] }),
-    thinking: Object.freeze({ id: "thinking", textMatch: ["Thinking level", "Thinking"] }),
-    extended: Object.freeze({ id: "extended", textMatch: ["Extended thinking", "Extended"] }),
-    fast: Object.freeze({ id: "fast", textMatch: ["3 Flash", "3.1 Flash-Lite", "Fast", "Flash"] })
+    pro: Object.freeze({ id: "pro", labels: ["3.1 Pro", "Advanced math and code"] }),
+    thinking: Object.freeze({ id: "thinking", labels: ["Standard", "Best for most questions"] }),
+    extended: Object.freeze({ id: "extended", labels: ["Extended", "Complex problem solving"] }),
+    fast: Object.freeze({ id: "fast", labels: ["3.1 Flash-Lite", "Flash-Lite", "Fastest answers"] }),
+    flash35: Object.freeze({ id: "flash35", labels: ["3.5 Flash", "All-around help"] })
   });
 
   const GEMINI_MODEL_BUTTON_SELECTORS = Object.freeze([
     "button[aria-label='Open mode picker']",
+    "button[aria-label^='Open mode picker' i]",
     "bard-mode-switcher button[aria-label='Open mode picker']",
     "bard-mode-switcher button",
     "button[aria-label*='mode picker' i]",
     "button[aria-label*='model' i]"
   ]);
   const GEMINI_MODEL_MENU_ROOT_SELECTORS = Object.freeze([
+    ".cdk-overlay-pane",
+    ".cdk-overlay-container .cdk-overlay-pane",
+    ".cdk-overlay-container [role='menu']",
+    ".cdk-overlay-container [role='listbox']",
+    ".cdk-overlay-container [role='dialog']",
     ".cdk-overlay-pane .gds-mode-switch-menu.mat-mdc-menu-panel",
+    ".cdk-overlay-pane .gds-mode-switch-menu",
     ".cdk-overlay-pane .mat-mdc-menu-panel[role='menu']",
+    ".cdk-overlay-pane .mat-mdc-menu-panel",
     ".cdk-overlay-pane .mat-menu-panel[role='menu']",
+    ".cdk-overlay-pane .mat-menu-panel",
     ".cdk-overlay-pane [role='menu']",
+    ".cdk-overlay-pane [role='listbox']",
+    ".gds-mode-switch-menu",
     ".mat-mdc-menu-panel[role='menu']",
-    ".mat-menu-panel[role='menu']"
+    ".mat-mdc-menu-panel",
+    ".mat-menu-panel[role='menu']",
+    ".mat-menu-panel",
+    "[role='menu']",
+    "[role='listbox']",
+    "[role='dialog']"
   ]);
   const GEMINI_MODEL_ITEM_SELECTORS = Object.freeze([
     "button.bard-mode-list-button[role='menuitemradio']",
+    ".bard-mode-list-button",
     "button[role='menuitemradio']",
     "button[role='menuitem']",
+    "button[role='option']",
+    "button[role='button']",
     "button[aria-haspopup='menu']",
     "button[mat-menu-item]",
     "button.mat-mdc-menu-item",
     "[role='menuitemradio']",
-    "[role='menuitem']"
+    "[role='menuitem']",
+    "[role='option']",
+    "[role='button']",
+    "mat-list-option",
+    "mat-selection-list mat-list-option",
+    "[tabindex]:not([tabindex='-1'])",
+    "button",
+    "div",
+    "span"
   ]);
+
+  function geminiModelKeysFromText(value) {
+    const token = compactText(value);
+    const keys = new Set();
+    if (!token) return keys;
+    const hasFlashLite = /(^|[^a-z0-9])flash\s*-?\s*lite([^a-z0-9]|$)/.test(token) ||
+      /(^|[^a-z0-9])3\s*\.?\s*1\s*flash\s*-?\s*lite([^a-z0-9]|$)/.test(token) ||
+      token.includes("fastest answers");
+    if (/(^|[^a-z0-9])extended([^a-z0-9]|$)/.test(token) || token.includes("complex problem solving")) keys.add("extended");
+    if (/(^|[^a-z0-9])standard([^a-z0-9]|$)/.test(token) || token.includes("best for most questions")) keys.add("thinking");
+    if (
+      /(^|[^a-z0-9])3\s*\.?\s*1\s*pro([^a-z0-9]|$)/.test(token) ||
+      /(^|[^a-z0-9])gemini\s+pro([^a-z0-9]|$)/.test(token) ||
+      /(^|[^a-z0-9])pro([^a-z0-9]|$)/.test(token) ||
+      token.includes("advanced math and code")
+    ) {
+      keys.add("pro");
+    }
+    if (hasFlashLite) {
+      keys.add("fast");
+    }
+    if (
+      /(^|[^a-z0-9])3\s*\.?\s*5\s*flash([^a-z0-9]|$)/.test(token) ||
+      token.includes("all-around help") ||
+      (!hasFlashLite && /(^|[^a-z0-9])flash([^a-z0-9]|$)/.test(token))
+    ) {
+      keys.add("flash35");
+    }
+    return keys;
+  }
+
+  function geminiModelKeyFromText(value) {
+    const keys = Array.from(geminiModelKeysFromText(value));
+    return keys.length === 1 ? keys[0] : "";
+  }
 
   function inferGeminiModelKey(value) {
     const token = compactText(value);
     if (!token) return "";
+    const key = geminiModelKeyFromText(value);
+    if (key) return key;
     if (/(^|[^a-z0-9])extended\s+thinking([^a-z0-9]|$)/.test(token)) return "extended";
     if (/(^|[^a-z0-9])extended([^a-z0-9]|$)/.test(token)) return "extended";
     if (/(^|[^a-z0-9])3\s*\.?\s*1\s*pro([^a-z0-9]|$)/.test(token)) return "pro";
+    if (/(^|[^a-z0-9])gemini\s+pro([^a-z0-9]|$)/.test(token)) return "pro";
     if (/(^|[^a-z0-9])thinking\s+level([^a-z0-9]|$)/.test(token)) return "thinking";
-    if (/(^|[^a-z0-9])3\s*flash([^a-z0-9]|$)/.test(token)) return "fast";
-    if (["pro", "thinking", "extended", "fast"].includes(token)) return token;
+    if (/(^|[^a-z0-9])3\s*\.?\s*5\s*flash([^a-z0-9]|$)/.test(token)) return "flash35";
+    if (/(^|[^a-z0-9])3\s*\.?\s*1\s*flash\s*-?\s*lite([^a-z0-9]|$)/.test(token)) return "fast";
+    if (["pro", "thinking", "extended", "fast", "flash35"].includes(token)) return token;
     if (/(^|[^a-z0-9])pro([^a-z0-9]|$)/.test(token)) return "pro";
     if (/(^|[^a-z0-9])thinking([^a-z0-9]|$)/.test(token)) return "thinking";
-    if (/(^|[^a-z0-9])fast([^a-z0-9]|$)/.test(token) || /(^|[^a-z0-9])flash([^a-z0-9]|$)/.test(token)) return "fast";
+    if (/(^|[^a-z0-9])fast([^a-z0-9]|$)/.test(token)) return "fast";
+    if (/(^|[^a-z0-9])flash([^a-z0-9]|$)/.test(token)) return "flash35";
     return "";
   }
 
@@ -366,8 +529,53 @@
     return inferGeminiModelKey(elementText(firstVisibleBySelectors(GEMINI_MODEL_BUTTON_SELECTORS)));
   }
 
+  function currentGeminiModelHasKey(modelId) {
+    if (!modelId) return false;
+    return geminiModelKeysFromText(elementText(firstVisibleBySelectors(GEMINI_MODEL_BUTTON_SELECTORS))).has(modelId);
+  }
+
+  function geminiThinkingLevelModelId(value) {
+    const token = String(value || "").trim().toLowerCase();
+    if (token === "extended") return "extended";
+    if (token === "standard" || token === "thinking") return "thinking";
+    return "";
+  }
+
+  function scoreGeminiMenuRoot(root) {
+    if (!root || !visible(root)) return 0;
+    const text = elementText(root);
+    const token = compactText(text);
+    if (!token) return 0;
+    const keys = geminiModelKeysFromText(text);
+    let score = keys.size * 80;
+    if (token.includes("thinking level")) score += 60;
+    if (token.includes("select a model") || token.includes("mode picker")) score += 40;
+    if (token.includes("gemini") || token.includes("flash")) score += 15;
+    if (matchesSelector(root, ".cdk-overlay-pane, .gds-mode-switch-menu, .mat-mdc-menu-panel, .mat-menu-panel, [role='menu'], [role='listbox']")) score += 25;
+    const rect = rectOf(root);
+    if (rect) {
+      if (rect.height >= 100 && rect.width >= 180) score += 20;
+      if (rect.height > window.innerHeight * 0.9 || rect.width > window.innerWidth * 0.9) score -= 120;
+    }
+    if (keys.size < 2 && !token.includes("thinking level")) score -= 120;
+    return score;
+  }
+
+  function geminiMenuRootCandidates() {
+    const candidates = visibleSelectorElements(GEMINI_MODEL_MENU_ROOT_SELECTORS)
+      .map((element, index) => ({ element, index, score: scoreGeminiMenuRoot(element), area: elementArea(element) }))
+      .filter((candidate) => candidate.score > 0);
+    candidates.sort((a, b) => b.score - a.score || b.area - a.area || b.index - a.index);
+    return candidates;
+  }
+
   function geminiMenuRoot() {
-    return firstVisibleBySelectors(GEMINI_MODEL_MENU_ROOT_SELECTORS, { last: true });
+    const candidates = geminiMenuRootCandidates();
+    return candidates[0]?.element || null;
+  }
+
+  function geminiMenuRoots() {
+    return geminiMenuRootCandidates().map((candidate) => candidate.element);
   }
 
   async function openGeminiMenu() {
@@ -375,19 +583,385 @@
     if (existing) return existing;
     const trigger = await waitFor(() => firstVisibleBySelectors(GEMINI_MODEL_BUTTON_SELECTORS), 10000, 150);
     if (!trigger) return null;
-    if (!clickElement(trigger)) return null;
-    await sleep(120);
-    return waitFor(geminiMenuRoot, 3000, 120);
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      if (!visible(trigger) || isDisabledElement(trigger)) await sleep(180);
+      clickElement(trigger);
+      let root = await waitFor(geminiMenuRoot, attempt === 0 ? 1400 : 900, 80);
+      if (root) return root;
+      await openGeminiMenuWithDevtoolsListener(trigger);
+      root = await waitFor(geminiMenuRoot, attempt === 0 ? 1400 : 900, 80);
+      if (root) return root;
+      await requestGeminiMenuBridgeOpen(attempt === 0 ? 1200 : 900);
+      root = await waitFor(geminiMenuRoot, attempt === 0 ? 1400 : 900, 80);
+      if (root) return root;
+      await sleep(180);
+    }
+    return null;
   }
 
   function geminiItems(root) {
-    return visibleSelectorElements(GEMINI_MODEL_ITEM_SELECTORS, root).filter((item) => !isDisabledElement(item));
+    if (!root) return [];
+    const rows = [];
+    const seen = new Set();
+    const rootArea = Math.max(1, elementArea(root));
+    const add = (element) => {
+      const row = geminiItemRow(element, root);
+      if (!row || seen.has(row) || !visible(row) || isDisabledElement(row)) return;
+      if (row === root || elementArea(row) > rootArea * 0.92) return;
+      const text = elementText(row);
+      if (!compactText(text)) return;
+      seen.add(row);
+      rows.push(row);
+    };
+    for (const element of visibleSelectorElements(GEMINI_MODEL_ITEM_SELECTORS, root)) add(element);
+    return rows;
   }
 
-  function findGeminiItem(root, target) {
-    for (const needle of target?.textMatch || []) {
-      const found = geminiItems(root).find((item) => textIncludes(elementText(item), needle));
-      if (found) return found;
+  function geminiCompactMenuRows(root) {
+    if (!root) return [];
+    const rows = [];
+    const seen = new Set();
+    const rootArea = Math.max(1, elementArea(root));
+    for (const element of qsa("*", root)) {
+      if (!visible(element)) continue;
+      let row = element;
+      for (let node = element; node && node !== root; node = node.parentElement) {
+        const rect = rectOf(node);
+        if (!rect) continue;
+        const area = rect.width * rect.height;
+        if (rect.width > 80 && rect.height >= 30 && rect.height <= 96 && area < rootArea * 0.85) {
+          row = node;
+          break;
+        }
+      }
+      if (!row || seen.has(row) || row === root || !visible(row) || isDisabledElement(row)) continue;
+      const text = elementText(row);
+      if (!compactText(text)) continue;
+      seen.add(row);
+      rows.push(row);
+    }
+    rows.sort((a, b) => elementArea(a) - elementArea(b));
+    return rows;
+  }
+
+  function geminiItemRow(element, root) {
+    if (!element || !root || element === root || !root.contains?.(element)) return null;
+    const direct = closest(element, [
+      "button",
+      "[role='menuitemradio']",
+      "[role='menuitem']",
+      "[role='option']",
+      "[role='button']",
+      "mat-list-option",
+      ".bard-mode-list-button",
+      ".mat-mdc-menu-item",
+      ".mat-menu-item",
+      "[tabindex]:not([tabindex='-1'])"
+    ].join(", "));
+    if (direct && root.contains(direct) && direct !== root) return direct;
+    let node = element;
+    for (let guard = 0; node && node !== root && guard < 6; guard += 1, node = node.parentElement) {
+      const rect = rectOf(node);
+      if (!rect || rect.height < 18 || rect.height > 140) continue;
+      if (elementArea(node) > elementArea(root) * 0.92) continue;
+      if (compactText(elementText(node))) return node;
+    }
+    return null;
+  }
+
+  function geminiTargetMatchesText(modelId, value) {
+    const token = compactText(value);
+    if (!token) return false;
+    if (modelId === "pro") return /(^|[^a-z0-9])3\s*\.?\s*1\s*pro([^a-z0-9]|$)/.test(token) || token.includes("advanced math and code");
+    if (modelId === "thinking") return /(^|[^a-z0-9])standard([^a-z0-9]|$)/.test(token) || token.includes("best for most questions");
+    if (modelId === "extended") return /(^|[^a-z0-9])extended([^a-z0-9]|$)/.test(token) || token.includes("complex problem solving");
+    if (modelId === "fast") {
+      return /(^|[^a-z0-9])flash\s*-?\s*lite([^a-z0-9]|$)/.test(token) ||
+        /(^|[^a-z0-9])3\s*\.?\s*1\s*flash\s*-?\s*lite([^a-z0-9]|$)/.test(token) ||
+        token.includes("fastest answers");
+    }
+    if (modelId === "flash35") {
+      const hasFlashLite = /(^|[^a-z0-9])flash\s*-?\s*lite([^a-z0-9]|$)/.test(token);
+      return /(^|[^a-z0-9])3\s*\.?\s*5\s*flash([^a-z0-9]|$)/.test(token) ||
+        token.includes("all-around help") ||
+        (!hasFlashLite && /(^|[^a-z0-9])flash([^a-z0-9]|$)/.test(token));
+    }
+    return false;
+  }
+
+  function scoreGeminiItem(item, modelId) {
+    const text = elementText(item);
+    if (!geminiTargetMatchesText(modelId, text)) return -1;
+    const token = compactText(text);
+    const keys = geminiModelKeysFromText(text);
+    const rect = rectOf(item);
+    let score = 100;
+    if (keys.size === 1 && keys.has(modelId)) score += 80;
+    if (keys.size > 1) score -= 120;
+    if (matchesSelector(item, "button, [role='menuitemradio'], [role='menuitem'], [role='option'], [role='button'], mat-list-option")) score += 35;
+    if (modelId === "thinking" && token.includes("thinking level")) score -= 220;
+    if (modelId === "extended" && token.includes("thinking level") && !/(^|[^a-z0-9])extended([^a-z0-9]|$)/.test(token)) score -= 160;
+    if (modelId === "thinking" && /(^|[^a-z0-9])standard([^a-z0-9]|$)/.test(token)) score += 70;
+    if (modelId === "extended" && /(^|[^a-z0-9])extended([^a-z0-9]|$)/.test(token)) score += 70;
+    if (modelId === "fast" && /flash\s*-?\s*lite/.test(token)) score += 70;
+    if (modelId === "flash35" && /(^|[^a-z0-9])3\s*\.?\s*5\s*flash([^a-z0-9]|$)/.test(token)) score += 70;
+    if (modelId === "pro" && /(^|[^a-z0-9])3\s*\.?\s*1\s*pro([^a-z0-9]|$)/.test(token)) score += 70;
+    if (rect) {
+      if (rect.height >= 26 && rect.height <= 96) score += 20;
+      if (rect.width < 80 || rect.height < 18) score -= 80;
+    }
+    return score;
+  }
+
+  function findGeminiItem(root, modelId) {
+    const candidates = geminiItems(root)
+      .map((item, index) => ({ item, index, score: scoreGeminiItem(item, modelId), area: elementArea(item) }))
+      .filter((candidate) => candidate.score >= 0);
+    candidates.sort((a, b) => b.score - a.score || a.area - b.area || a.index - b.index);
+    return candidates[0]?.item || null;
+  }
+
+  function findGeminiItemInMenus(modelId) {
+    for (const root of geminiMenuRoots()) {
+      const item = findGeminiItem(root, modelId);
+      if (item) return { root, item };
+    }
+    return { root: null, item: null };
+  }
+
+  function scoreGeminiThinkingLevelRow(row) {
+    const token = compactText(elementText(row));
+    if (!token || !token.includes("thinking level")) return -1;
+    const rect = rectOf(row);
+    let score = 100;
+    if (matchesSelector(row, "button, [role='menuitemradio'], [role='menuitem'], [role='button'], [aria-haspopup='menu'], [aria-haspopup='true'], [tabindex]:not([tabindex='-1'])")) score += 50;
+    if (token.includes("standard") || token.includes("extended")) score += 30;
+    if (rect) {
+      if (rect.width >= 120 && rect.height >= 30 && rect.height <= 96) score += 30;
+      if (rect.width < 80 || rect.height < 24) score -= 70;
+    }
+    return score;
+  }
+
+  function findGeminiThinkingLevelRows(root) {
+    if (!root) return [];
+    const seen = new Set();
+    const rows = [];
+    const add = (row) => {
+      if (!row || seen.has(row) || !visible(row) || isDisabledElement(row)) return;
+      const score = scoreGeminiThinkingLevelRow(row);
+      if (score < 0) return;
+      seen.add(row);
+      rows.push({ row, score, area: elementArea(row) });
+    };
+    for (const row of geminiCompactMenuRows(root)) add(row);
+    for (const item of geminiItems(root)) {
+      if (isGeminiThinkingSubmenuItem(item)) add(item);
+    }
+    rows.sort((a, b) => b.score - a.score || b.area - a.area);
+    return rows.map((entry) => entry.row);
+  }
+
+  function findGeminiThinkingLevelRow(root) {
+    return findGeminiThinkingLevelRows(root)[0] || null;
+  }
+
+  function findGeminiThinkingLevelOption(root, modelId) {
+    if (modelId !== "thinking" && modelId !== "extended") return null;
+    return geminiCompactMenuRows(root)
+      .filter((row) => {
+        const text = elementText(row);
+        const token = compactText(text);
+        if (!token || token.includes("thinking level")) return false;
+        const keys = geminiModelKeysFromText(text);
+        if (modelId === "thinking" && keys.has("extended")) return false;
+        if (modelId === "extended" && keys.has("thinking")) return false;
+        return geminiTargetMatchesText(modelId, text);
+      })
+      .sort((a, b) => elementArea(a) - elementArea(b))[0] || null;
+  }
+
+  function findGeminiThinkingLevelOptionInMenus(modelId) {
+    for (const root of geminiMenuRoots()) {
+      const item = findGeminiThinkingLevelOption(root, modelId);
+      if (item) return { root, item };
+    }
+    return { root: null, item: null };
+  }
+
+  function geminiThinkingClickTargets(row, root) {
+    const targets = [];
+    const seen = new Set();
+    const add = (element) => {
+      if (!element || seen.has(element) || !visible(element) || isDisabledElement(element)) return;
+      if (root && !root.contains?.(element)) return;
+      seen.add(element);
+      targets.push(element);
+    };
+    add(row);
+    add(closest(row, "button, [role='button'], [role='menuitem'], [role='menuitemradio'], [aria-haspopup='menu'], [aria-haspopup='true'], [tabindex]:not([tabindex='-1'])"));
+    for (const element of qsa("button, [role='button'], [role='menuitem'], [role='menuitemradio'], [aria-haspopup='menu'], [aria-haspopup='true'], [tabindex]:not([tabindex='-1'])", row || document).slice(0, 8)) {
+      add(element);
+    }
+    for (let node = row?.parentElement || null, guard = 0; node && node !== root && guard < 4; guard += 1, node = node.parentElement) {
+      const rect = rectOf(node);
+      if (rect && rect.width >= 80 && rect.height >= 26 && rect.height <= 110 && textIncludes(elementText(node), "Thinking level")) add(node);
+    }
+    return targets;
+  }
+
+  function geminiThinkingLevelActivationRow(row, root) {
+    if (!row) return null;
+    let best = row;
+    let bestScore = -1;
+    for (let node = row; node && node.nodeType === 1 && node !== root; node = node.parentElement) {
+      if (!visible(node) || isDisabledElement(node)) continue;
+      const text = elementText(node);
+      if (!textIncludes(text, "Thinking level")) continue;
+      const rect = rectOf(node);
+      if (!rect || rect.width < 80 || rect.height < 24 || rect.height > 126) continue;
+      let score = rect.width;
+      if (matchesSelector(node, "button, [role='button'], [role='menuitem'], [role='menuitemradio'], [aria-haspopup='menu'], [aria-haspopup='true'], [aria-expanded], [tabindex]:not([tabindex='-1'])")) score += 160;
+      if (textIncludes(text, "Standard") || textIncludes(text, "Extended")) score += 60;
+      if (score > bestScore) {
+        best = node;
+        bestScore = score;
+      }
+    }
+    return best;
+  }
+
+  function geminiThinkingLevelDropdownPoint(row) {
+    const rect = rectOf(row);
+    if (!rect || rect.width <= 0 || rect.height <= 0) return centerPoint(row);
+    const viewportWidth = Math.max(1, Number(window.innerWidth) || Number(document.documentElement?.clientWidth) || 1);
+    const viewportHeight = Math.max(1, Number(window.innerHeight) || Number(document.documentElement?.clientHeight) || 1);
+    const inset = Math.min(28, Math.max(10, rect.width * 0.16));
+    return {
+      x: Math.min(Math.max(rect.right - inset, 1), viewportWidth - 1),
+      y: Math.min(Math.max(rect.top + rect.height / 2, 1), viewportHeight - 1)
+    };
+  }
+
+  function scoreGeminiThinkingDropdownTarget(target, row, point) {
+    if (!target || !row || !visible(target) || isDisabledElement(target)) return -1;
+    const rect = rectOf(target);
+    let score = 0;
+    if (target === row) score += 30;
+    if (row.contains?.(target)) score += 30;
+    if (target.contains?.(row)) score += 10;
+    if (matchesSelector(target, "[aria-haspopup='menu'], [aria-haspopup='true'], [aria-expanded], [aria-controls]")) score += 140;
+    if (matchesSelector(target, "button, [role='button'], [role='menuitem'], [role='menuitemradio'], [tabindex]:not([tabindex='-1'])")) score += 90;
+    if (textIncludes(elementText(target), "Thinking level")) score += 45;
+    if (rect && point) {
+      const targetCenterX = rect.left + rect.width / 2;
+      score += Math.max(0, 70 - Math.abs(targetCenterX - point.x));
+      if (rect.width >= 18 && rect.height >= 18) score += 20;
+    }
+    return score;
+  }
+
+  function geminiThinkingDropdownTargets(row, root) {
+    const activationRow = geminiThinkingLevelActivationRow(row, root);
+    const point = geminiThinkingLevelDropdownPoint(activationRow || row);
+    const candidates = [];
+    const seen = new Set();
+    const add = (element) => {
+      if (!element || seen.has(element) || !visible(element) || isDisabledElement(element)) return;
+      if (root && !root.contains?.(element)) return;
+      seen.add(element);
+      candidates.push(element);
+    };
+    const pointTarget = elementFromPoint(point, activationRow || row);
+    add(pointTarget);
+    add(clickableAncestor(pointTarget));
+    add(customActivationAncestor(pointTarget));
+    for (const element of qsa("[aria-haspopup='menu'], [aria-haspopup='true'], [aria-expanded], [aria-controls], button, [role='button'], [role='menuitem'], [role='menuitemradio'], [tabindex]:not([tabindex='-1'])", activationRow || row).slice(0, 12)) {
+      add(element);
+    }
+    add(clickableAncestor(activationRow));
+    add(customActivationAncestor(activationRow));
+    add(activationRow);
+    candidates.sort((a, b) => scoreGeminiThinkingDropdownTarget(b, activationRow, point) - scoreGeminiThinkingDropdownTarget(a, activationRow, point));
+    return { targets: candidates, point };
+  }
+
+  function clickGeminiThinkingDropdown(row, root) {
+    const { targets, point } = geminiThinkingDropdownTargets(row, root);
+    let clicked = false;
+    for (const target of targets) {
+      try { target.scrollIntoView?.({ block: "center", inline: "nearest" }); } catch {}
+      try { target.focus?.({ preventScroll: true }); } catch {
+        try { target.focus?.(); } catch {}
+      }
+      clicked = dispatchPointerActivation(target, point || centerPoint(target)) || clicked;
+      clicked = nativeClick(target) || clicked;
+      if (clicked) return true;
+    }
+    return clicked;
+  }
+
+  function geminiThinkingLevelHeaderKey(root) {
+    const row = findGeminiThinkingLevelRow(root);
+    const token = compactText(elementText(row));
+    if (!token || !token.includes("thinking level")) return "";
+    const after = token.split("thinking level").slice(1).join("thinking level").trim();
+    if (/^extended([^a-z0-9]|$)/.test(after)) return "extended";
+    if (/^standard([^a-z0-9]|$)/.test(after)) return "thinking";
+    return "";
+  }
+
+  function geminiThinkingLevelOptionIsSelected(root, modelId) {
+    const option = findGeminiThinkingLevelOption(root, modelId);
+    if (option && (geminiElementHasSelectedState(option) || textIncludes(elementText(option), "Selected"))) return true;
+    return geminiThinkingLevelHeaderKey(root) === modelId;
+  }
+
+  function clickGeminiMenuItem(item) {
+    return directClickElement(item) || clickElement(item);
+  }
+
+  async function waitGeminiThinkingLevelOption(root, modelId) {
+    if (modelId !== "thinking" && modelId !== "extended") return root || null;
+    return await waitFor(() => {
+      const roots = geminiMenuRoots();
+      for (const nextRoot of roots) {
+        if (findGeminiThinkingLevelOption(nextRoot, modelId)) return nextRoot;
+      }
+      return root && findGeminiThinkingLevelOption(root, modelId) ? root : null;
+    }, 1500, 80);
+  }
+
+  async function expandGeminiThinkingLevel(root, modelId) {
+    const roots = [root, ...geminiMenuRoots()].filter(Boolean);
+    const rows = [];
+    const seenRows = new Set();
+    for (const menuRoot of roots) {
+      for (const row of findGeminiThinkingLevelRows(menuRoot)) {
+        if (!seenRows.has(row)) {
+          seenRows.add(row);
+          rows.push({ row, root: menuRoot });
+        }
+      }
+    }
+    const triedTargets = new Set();
+    for (const entry of rows) {
+      if (clickGeminiThinkingDropdown(entry.row, entry.root)) {
+        const dropdownRoot = await waitGeminiThinkingLevelOption(entry.root, modelId);
+        if (dropdownRoot) return dropdownRoot;
+      }
+      for (const target of geminiThinkingClickTargets(entry.row, entry.root)) {
+        if (triedTargets.has(target)) continue;
+        triedTargets.add(target);
+        if (directClickElement(target)) {
+          const directRoot = await waitGeminiThinkingLevelOption(entry.root, modelId);
+          if (directRoot) return directRoot;
+        }
+        if (clickElement(target)) {
+          const clickedRoot = await waitGeminiThinkingLevelOption(entry.root, modelId);
+          if (clickedRoot) return clickedRoot;
+        }
+      }
     }
     return null;
   }
@@ -402,39 +976,130 @@
     return textIncludes(elementText(item), "Thinking level");
   }
 
+  function geminiElementHasSelectedState(element) {
+    if (!element) return false;
+    const candidates = [element, ...qsa("*", element).slice(0, 20)];
+    for (const node of candidates) {
+      if (parseBooleanAttr(node.getAttribute?.("aria-checked")) === true) return true;
+      if (parseBooleanAttr(node.getAttribute?.("aria-selected")) === true) return true;
+      const dataState = String(node.getAttribute?.("data-state") || "").trim().toLowerCase();
+      if (["checked", "selected", "active"].includes(dataState)) return true;
+      const dataSelected = parseBooleanAttr(node.getAttribute?.("data-selected"));
+      if (dataSelected === true) return true;
+      const className = typeof node.className === "string" ? node.className : String(node.className?.baseVal || "");
+      if (/(^|\s)(selected|is-selected|checked|is-checked|active|mdc-list-item--selected|mat-mdc-menu-item-highlighted)(\s|$)/i.test(className)) return true;
+    }
+    return false;
+  }
+
+  function selectedGeminiModelKey(root) {
+    if (!root) return "";
+    const selected = geminiItems(root)
+      .filter(geminiElementHasSelectedState)
+      .map((item) => ({ item, key: geminiModelKeyFromText(elementText(item)), score: elementArea(item) }))
+      .filter((entry) => entry.key);
+    selected.sort((a, b) => a.score - b.score);
+    return selected[0]?.key || "";
+  }
+
+  function isGeminiTargetSelected(root, modelId) {
+    if (modelId === "thinking" || modelId === "extended") return geminiThinkingLevelOptionIsSelected(root, modelId);
+    const item = findGeminiItem(root, modelId);
+    return Boolean(item && geminiElementHasSelectedState(item));
+  }
+
+  async function closeGeminiMenu() {
+    return closeFloatingMenuAndWait(geminiMenuRoot, 700);
+  }
+
   async function waitGeminiSettled(modelId) {
     const deadline = Date.now() + 2200;
     while (Date.now() <= deadline) {
-      const current = currentGeminiModelKey();
+      const root = geminiMenuRoot();
+      if (root && isGeminiTargetSelected(root, modelId)) return true;
+      const current = root ? selectedGeminiModelKey(root) : currentGeminiModelKey();
       if (current && current === modelId) return true;
-      if (modelId === "extended" && !geminiMenuRoot()) return true;
-      if (!geminiMenuRoot() && !current) return true;
+      if (!root && (modelId === "pro" || modelId === "fast" || modelId === "flash35") && currentGeminiModelHasKey(modelId)) return true;
+      if (!root && modelId === "extended" && currentGeminiModelHasKey("extended")) return true;
+      if (!root && modelId === "thinking" && !currentGeminiModelHasKey("extended")) return true;
+      if (!root && !current) return true;
       await sleep(120);
     }
     const final = currentGeminiModelKey();
-    return modelId === "extended" && !geminiMenuRoot() ? true : (final ? final === modelId : !geminiMenuRoot());
+    if (modelId === "flash35") return currentGeminiModelHasKey("flash35");
+    if (modelId === "extended") return currentGeminiModelHasKey("extended");
+    if (modelId === "thinking") return !currentGeminiModelHasKey("extended");
+    return final ? final === modelId : !geminiMenuRoot();
   }
 
-  async function applyGemini(modelId) {
-    const target = GEMINI_MODEL_TARGETS[modelId];
-    if (!target) return result(false, "Gemini", modelId, "unknown model");
-    if (currentGeminiModelKey() === modelId) return result(true, "Gemini", modelId, "", { skipped: true });
+  async function applyGeminiTarget(modelId) {
     let root = await openGeminiMenu();
-    if (!root) return result(false, "Gemini", modelId, "model menu not found");
-    let item = findGeminiItem(root, target);
-    if (!item && modelId === "extended") {
-      const thinking = geminiItems(root).find(isGeminiThinkingSubmenuItem);
-      if (thinking && clickElement(thinking)) {
-        await sleep(160);
-        root = geminiMenuRoot() || root;
-        item = findGeminiItem(root, target);
-      }
+    if (!root) return { ok: false, reason: "model menu not found" };
+    const anyOption = modelId === "thinking" || modelId === "extended"
+      ? findGeminiThinkingLevelOptionInMenus(modelId)
+      : { root: null, item: null };
+    const anyModelItem = findGeminiItemInMenus(modelId);
+    let item = modelId === "thinking" || modelId === "extended"
+      ? anyOption.item || findGeminiThinkingLevelOption(root, modelId) || anyModelItem.item || findGeminiItem(root, modelId)
+      : anyModelItem.item || findGeminiItem(root, modelId);
+    if (anyOption.root || anyModelItem.root) root = anyOption.root || anyModelItem.root || root;
+    if (isGeminiTargetSelected(root, modelId)) return { ok: true, skipped: true };
+    if ((!item || textIncludes(elementText(item), "Thinking level")) && (modelId === "thinking" || modelId === "extended")) {
+      root = await expandGeminiThinkingLevel(root, modelId) || geminiMenuRoot() || root;
+      const expandedOption = findGeminiThinkingLevelOptionInMenus(modelId);
+      item = expandedOption.item || findGeminiThinkingLevelOption(root, modelId) || findGeminiItem(root, modelId);
+      if (expandedOption.root) root = expandedOption.root;
+      if (isGeminiTargetSelected(root, modelId)) return { ok: true, skipped: true };
     }
-    if (!item) return result(false, "Gemini", modelId, "target model item not found");
-    if (!clickElement(item)) return result(false, "Gemini", modelId, "target model item could not be clicked");
+    if (!item) {
+      await closeGeminiMenu();
+      return { ok: false, reason: "target model item not found" };
+    }
+    if (!clickGeminiMenuItem(item)) {
+      await closeGeminiMenu();
+      return { ok: false, reason: "target model item could not be clicked" };
+    }
     return (await waitGeminiSettled(modelId))
-      ? result(true, "Gemini", modelId)
-      : result(false, "Gemini", modelId, "selection did not settle");
+      ? { ok: true, skipped: false }
+      : { ok: false, reason: "selection did not settle" };
+  }
+
+  async function applyGemini(modelId, options = {}) {
+    if (!GEMINI_MODEL_TARGETS[modelId]) return result(false, "Gemini", modelId, "unknown model");
+    const thinkingModelId = modelId === "pro" ? geminiThinkingLevelModelId(options.thinkingLevel) : "";
+    if (modelId === "pro" && options.thinkingLevel && !thinkingModelId) return result(false, "Gemini", modelId, "unknown thinking level");
+    const baseAlreadyApplied = currentGeminiModelHasKey(modelId);
+    if (baseAlreadyApplied && !thinkingModelId) {
+      return result(true, "Gemini", modelId, "", {
+        skipped: true
+      });
+    }
+
+    let changed = false;
+    if (!baseAlreadyApplied) {
+      const baseApplied = await applyGeminiTarget(modelId);
+      if (!baseApplied.ok) {
+        await closeGeminiMenu();
+        return result(false, "Gemini", modelId, baseApplied.reason, { targetId: modelId, thinkingLevel: options.thinkingLevel || "" });
+      }
+      changed = changed || !baseApplied.skipped;
+      await closeGeminiMenu();
+    }
+
+    if (thinkingModelId) {
+      const thinkingApplied = await applyGeminiTarget(thinkingModelId);
+      if (!thinkingApplied.ok) {
+        await closeGeminiMenu();
+        return result(false, "Gemini", modelId, thinkingApplied.reason, { targetId: thinkingModelId, thinkingLevel: options.thinkingLevel || "" });
+      }
+      changed = changed || !thinkingApplied.skipped;
+      await closeGeminiMenu();
+    }
+
+    return result(true, "Gemini", modelId, "", {
+      ...(options.thinkingLevel ? { thinkingLevel: options.thinkingLevel } : {}),
+      ...(changed ? {} : { skipped: true })
+    });
   }
 
   const GROK_MODEL_TARGETS = Object.freeze({
@@ -605,6 +1270,87 @@
   function grokModelItemText(item) {
     const text = elementText(item);
     return text.split(/\n+/).map((part) => part.trim()).find(Boolean) || text;
+  }
+
+  function directText(el) {
+    try {
+      return normalize(Array.from(el?.childNodes || [])
+        .filter((node) => node.nodeType === Node.TEXT_NODE)
+        .map((node) => node.textContent || "")
+        .join(" "));
+    } catch {
+      return "";
+    }
+  }
+
+  function colorChannels(value) {
+    const match = String(value || "").match(/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+))?\s*\)/i);
+    if (!match) return null;
+    return {
+      r: Number(match[1]) || 0,
+      g: Number(match[2]) || 0,
+      b: Number(match[3]) || 0,
+      a: match[4] == null ? 1 : Number(match[4])
+    };
+  }
+
+  function effectiveOpacity(el, stop = null) {
+    let opacity = 1;
+    for (let node = el; node && node.nodeType === 1; node = node.parentElement) {
+      try {
+        opacity *= Math.max(0, Math.min(1, Number(getComputedStyle(node).opacity || 1)));
+      } catch {}
+      if (node === stop) break;
+    }
+    return opacity;
+  }
+
+  function grokLabelElements(item, target) {
+    if (!item || !target) return [];
+    const aliases = (target.aliases || []).map(alnumToken).filter(Boolean);
+    const elements = [item, ...qsa("*", item).slice(0, 80)];
+    return elements.filter((element) => {
+      const own = alnumToken(directText(element));
+      if (!own) return false;
+      return aliases.some((alias) => own === alias || own.startsWith(alias) || alias.startsWith(own));
+    });
+  }
+
+  function grokElementLooksMuted(element, item) {
+    if (!element) return false;
+    let style = null;
+    try { style = getComputedStyle(element); } catch {}
+    if (!style) return false;
+    const color = colorChannels(style.color);
+    const opacity = effectiveOpacity(element, item);
+    if (opacity > 0 && opacity < 0.66) return true;
+    if (!color) return false;
+    const alpha = Number.isFinite(color.a) ? color.a : 1;
+    const maxChannel = Math.max(color.r, color.g, color.b);
+    return alpha * opacity < 0.72 || maxChannel < 190;
+  }
+
+  function grokModelItemLooksUnavailable(item, modelId) {
+    const target = GROK_MODEL_TARGETS[modelId] || null;
+    if (!item || !target) return false;
+    if (isDisabledElement(item)) return true;
+    for (let node = item, depth = 0; node && node.nodeType === 1 && depth < 5; node = node.parentElement, depth += 1) {
+      if (isDisabledElement(node)) return true;
+      const ariaDisabled = String(node.getAttribute?.("aria-disabled") || "").trim().toLowerCase();
+      const dataDisabled = String(node.getAttribute?.("data-disabled") || "").trim().toLowerCase();
+      const dataState = String(node.getAttribute?.("data-state") || "").trim().toLowerCase();
+      const className = typeof node.className === "string" ? node.className : String(node.className?.baseVal || "");
+      if (ariaDisabled === "true" || dataDisabled === "true" || dataState === "disabled") return true;
+      if (/(^|\s)(disabled|is-disabled|unavailable|locked|is-locked|paywall|requires-upgrade|opacity-50|pointer-events-none)(\s|$)/i.test(className)) return true;
+      try {
+        const style = getComputedStyle(node);
+        if (style.pointerEvents === "none") return true;
+        if (Number(style.opacity || 1) > 0 && Number(style.opacity || 1) < 0.55) return true;
+      } catch {}
+      if (node.getAttribute?.("role") === "menu" || node.getAttribute?.("role") === "listbox") break;
+    }
+    const labels = grokLabelElements(item, target);
+    return labels.length > 0 && labels.every((element) => grokElementLooksMuted(element, item));
   }
 
   function grokTextStartsWithAlias(value, alias) {
@@ -890,11 +1636,12 @@
     return grokModelIdFromText(elementText(selected));
   }
 
-  function findGrokItem(root, modelId) {
+  function findGrokItem(root, modelId, options = {}) {
     const target = GROK_MODEL_TARGETS[modelId];
     if (!target) return null;
     const matchesTarget = (element) => grokTextLooksLikeTarget(elementText(element), target);
     for (const item of grokItems(root)) {
+      if (!options.includeUnavailable && grokModelItemLooksUnavailable(item, modelId)) continue;
       const itemText = grokModelItemText(item);
       if (grokModelIdFromText(itemText) === modelId) return item;
       if (matchesTarget(item)) return item;
@@ -922,7 +1669,12 @@
     if (currentGrokModelId() === modelId) return result(true, "Grok", modelId, "", { skipped: true });
     const root = await openGrokMenu();
     if (!root) return result(false, "Grok", modelId, "model menu not found");
-    const item = findGrokItem(root, modelId);
+    const maybeItem = findGrokItem(root, modelId, { includeUnavailable: true });
+    if (maybeItem && grokModelItemLooksUnavailable(maybeItem, modelId)) {
+      await closeFloatingMenuAndWait(() => grokMenuRoot(), 700);
+      return result(true, "Grok", modelId, "", { skipped: true, unavailable: true });
+    }
+    const item = maybeItem || findGrokItem(root, modelId);
     if (!item) return result(false, "Grok", modelId, "target model item not found");
     if (!clickElement(item)) return result(false, "Grok", modelId, "target model item could not be clicked");
     return (await waitGrokSettled(modelId))
@@ -1627,13 +2379,14 @@
       : result(false, "DeepSeek", modelId, "selection did not settle", { current: currentDeepSeekModeId() });
   }
 
-  async function apply(appIdOrModelId, maybeModelId) {
+  async function apply(appIdOrModelId, maybeModelId, maybeOptions = {}) {
     const inferredAppId = inferAppId();
     const appId = normalizeAppId(maybeModelId ? appIdOrModelId : inferredAppId);
     const modelId = String(maybeModelId || appIdOrModelId || "").trim();
+    const options = maybeOptions && typeof maybeOptions === "object" ? maybeOptions : {};
     if (!appId || !TARGETS[appId]) throw new Error(`Unknown app. Pass one of: ${Object.keys(TARGETS).join(", ")}`);
     if (!TARGETS[appId].includes(modelId)) throw new Error(`Unknown ${appId} model "${modelId}". Valid values: ${TARGETS[appId].join(", ")}`);
-    if (appId === "Gemini") return applyGemini(modelId);
+    if (appId === "Gemini") return applyGemini(modelId, options);
     if (appId === "Grok") return applyGrok(modelId);
     if (appId === "DeepSeek") return applyDeepSeek(modelId);
     if (appId === "NotionAI") return applyNotion(modelId);
@@ -1661,7 +2414,14 @@
         current: currentGrokModelId(),
         triggerText: elementText(trigger),
         menuOpen: Boolean(root),
-        menuItems: root ? grokItems(root).map((item) => elementText(item)).slice(0, 20) : []
+        menuItems: root ? grokItems(root).map((item) => {
+          const id = grokModelIdFromText(grokModelItemText(item));
+          return {
+            id,
+            text: elementText(item),
+            unavailable: Boolean(id && grokModelItemLooksUnavailable(item, id))
+          };
+        }).slice(0, 20) : []
       };
     }
     if (normalizedApp === "DeepSeek") {
@@ -1696,7 +2456,7 @@
       "ChatClubPreferredModelTest is ready. This is a standalone DOM adapter test; it does not call the ChatClub plugin.",
       "Examples:",
       "  await ChatClubPreferredModelTest.apply('pro')",
-      "  await ChatClubPreferredModelTest.apply('Gemini', 'extended')",
+      "  await ChatClubPreferredModelTest.apply('Gemini', 'pro', { thinkingLevel: 'extended' })",
       "  await ChatClubPreferredModelTest.apply('Grok', 'grok43')",
       "  await ChatClubPreferredModelTest.apply('DeepSeek', 'expert')",
       "  await ChatClubPreferredModelTest.apply('NotionAI', 'gpt55')",
