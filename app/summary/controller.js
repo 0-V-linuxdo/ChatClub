@@ -565,7 +565,7 @@ export function createSummaryController(ctx) {
           }),
           el("div", { class: "summary-panel-actions" },
             summaryActionButton(t("summaryPanel.pocket"), saveSummaryPreviewToPocket, "secondary", state.summaryBusy || !pocketEntriesFromSummaryPreview().length, "pocket"),
-            summaryActionButton(t("summaryPanel.preview"), collectSummary, "secondary", state.summaryBusy, "reload"),
+            summaryActionButton(t("summaryPanel.preview"), collectSummary, "secondary", state.summaryBusy, "preview"),
             summaryActionButton(t("summaryPanel.summarize"), summarizeSummary, "secondary", state.summaryBusy, "summary"),
             summaryActionButton(t("summaryPanel.ask"), askSummary, "primary", state.summaryBusy || !hasQuestion, "send")
           )

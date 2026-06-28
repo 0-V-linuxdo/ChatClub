@@ -1125,6 +1125,22 @@ button { cursor: pointer; }
   height: 19px;
 }
 
+.topbar .topbar-item-pocket.action-button {
+  border-color: transparent;
+  background: transparent;
+}
+
+.topbar .topbar-item-pocket.action-button .svg-icon {
+  width: 26px;
+  height: 26px;
+  transform: translateY(-3px);
+}
+
+.topbar .topbar-item-pocket.action-button:hover {
+  border-color: transparent;
+  background: var(--panel-2);
+}
+
 .topbar .top-icon-action:hover {
   border-color: var(--line);
   background: var(--panel-2);
@@ -2335,12 +2351,25 @@ body.settings-tab-group-button-dragging iframe {
   padding: 18px;
 }
 
-.pocket-history-modal {
+.modal.pocket-history-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   width: min(1040px, calc(100vw - 40px));
 }
 
-.pocket-history-dialog {
+.modal.pocket-history-modal .modal-body {
+  min-height: 0;
   display: grid;
+  overflow: hidden;
+}
+
+.pocket-history-dialog {
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 14px;
 }
 
@@ -2348,6 +2377,7 @@ body.settings-tab-group-button-dragging iframe {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
 }
 
@@ -2358,18 +2388,143 @@ body.settings-tab-group-button-dragging iframe {
   line-height: 1.5;
 }
 
-.pocket-entry-list {
+.pocket-size-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.pocket-size-control {
+  display: grid;
+  grid-template-columns: auto minmax(92px, 132px) 48px;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.pocket-size-label {
+  white-space: nowrap;
+}
+
+.pocket-size-slider {
+  width: 100%;
+  accent-color: var(--primary);
+}
+
+.pocket-size-value {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.pocket-entry-list,
+.pocket-batch-list {
+  min-height: 0;
   display: grid;
   gap: 12px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.pocket-panel-resize-handle {
+  position: absolute;
+  z-index: 2;
+  touch-action: none;
+  pointer-events: auto;
+  background: transparent;
+}
+
+.pocket-panel-resize-handle-left,
+.pocket-panel-resize-handle-right {
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  cursor: ew-resize;
+}
+
+.pocket-panel-resize-handle-left { left: 0; }
+.pocket-panel-resize-handle-right { right: 0; }
+
+.pocket-panel-resize-handle-bottom {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 12px;
+  cursor: ns-resize;
+}
+
+.pocket-panel-resizing,
+.pocket-panel-resizing * {
+  user-select: none !important;
+}
+
+.pocket-batch {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.pocket-batch-header {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pocket-batch-title {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+}
+
+.pocket-batch-title strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pocket-batch-restore {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.pocket-batch-restore .svg-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.pocket-batch-row {
+  min-width: 0;
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
 }
 
 .pocket-entry {
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 12px;
+  height: var(--pocket-card-height, 560px);
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: color-mix(in srgb, var(--panel) 90%, var(--bg));
+}
+
+.pocket-batch-row > .pocket-entry {
+  flex: 0 0 min(var(--pocket-card-width, 460px), calc(100vw - 96px));
 }
 
 .pocket-entry-header {
@@ -2393,6 +2548,18 @@ body.settings-tab-group-button-dragging iframe {
   color: var(--text);
 }
 
+.pocket-entry-favicon {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+
+.pocket-entry-favicon[hidden] {
+  display: none;
+}
+
 .pocket-entry-title strong {
   min-width: 0;
   overflow: hidden;
@@ -2401,11 +2568,24 @@ body.settings-tab-group-button-dragging iframe {
 }
 
 .pocket-entry-url {
+  appearance: none;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--link);
+  cursor: pointer;
+  font: inherit;
   font-size: 12px;
+  text-align: left;
+  text-decoration: underline;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.pocket-entry-url:hover {
+  color: color-mix(in srgb, var(--link) 80%, var(--text));
 }
 
 .pocket-entry-meta {
@@ -2431,14 +2611,18 @@ body.settings-tab-group-button-dragging iframe {
 }
 
 .pocket-message-grid {
+  min-height: 0;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(92px, .34fr) minmax(0, .66fr);
   gap: 10px;
 }
 
 .pocket-message {
   min-width: 0;
+  min-height: 0;
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 6px;
   padding: 10px;
   border: 1px solid var(--line);
@@ -2456,12 +2640,12 @@ body.settings-tab-group-button-dragging iframe {
 
 .pocket-message p {
   margin: 0;
+  min-height: 0;
   color: var(--text);
   font-size: 13px;
   line-height: 1.5;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  max-height: 170px;
   overflow: auto;
   scrollbar-width: thin;
 }
@@ -2486,6 +2670,40 @@ body.settings-tab-group-button-dragging iframe {
 
 .pocket-empty strong {
   color: var(--text);
+}
+
+@media (max-width: 620px) {
+  .pocket-size-controls,
+  .pocket-size-control {
+    width: 100%;
+  }
+
+  .pocket-size-control {
+    grid-template-columns: minmax(0, 1fr) minmax(92px, 1.4fr) 48px;
+  }
+
+  .pocket-batch-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .pocket-batch-restore {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .pocket-entry-header {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pocket-entry-meta {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .pocket-message-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .api-profile-list .settings-list-header,

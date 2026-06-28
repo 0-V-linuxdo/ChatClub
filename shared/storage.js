@@ -3,6 +3,7 @@ import {
   API_PROFILE_ENDPOINT_DEFAULT,
   API_PROFILE_MODEL_DEFAULT,
   BUILTIN_CHAT_APPS,
+  DEFAULT_POCKET_CARD_SIZE,
   DEFAULT_GEMINI_THINKING_LEVEL,
   DEFAULT_MODEL_PREFERENCES,
   DEFAULT_PROMOTION_API_PROFILES,
@@ -37,6 +38,20 @@ export function normalizePrimaryColor(value, fallback = DEFAULT_OPTIONS.primaryC
   if (short) return `#${short[1].split("").map((char) => `${char}${char}`).join("")}`.toLowerCase();
   if (/^#[0-9a-f]{6}$/i.test(raw)) return raw.toLowerCase();
   return fallback;
+}
+
+function boundedNumber(value, fallback, min, max) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(number)));
+}
+
+export function normalizePocketCardSize(value = {}) {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  return {
+    width: boundedNumber(source.width, DEFAULT_POCKET_CARD_SIZE.width, 360, 760),
+    height: boundedNumber(source.height, DEFAULT_POCKET_CARD_SIZE.height, 420, 820)
+  };
 }
 
 function normalizeStoredPrimaryColor(raw, fallback) {
@@ -321,6 +336,7 @@ export function normalizeOptions(raw = {}) {
     tabGroupButtonPlacement: normalizeTabGroupButtonPlacement(raw.tabGroupButtonPlacement, tabGroupButtonsMode),
     tabGroupButtonOrder: normalizeTabGroupButtonOrder(raw.tabGroupButtonOrder),
     topbarLayout: normalizeTopbarLayout(raw.topbarLayout),
+    pocketCardSize: normalizePocketCardSize(raw.pocketCardSize),
     ...primaryColorState,
     apiProfiles,
     apiPromotionChannelsVersion: Math.max(Number(raw.apiPromotionChannelsVersion) || 0, API_PROMOTION_CHANNELS_VERSION),
@@ -376,15 +392,37 @@ export function normalizePromptSendHistory(raw = []) {
 }
 
 export function normalizePocketHistory(raw = []) {
-  return (Array.isArray(raw) ? raw : []).filter(Boolean).map((item) => ({
-    id: text(item.id) || createId("pocket"),
-    chatUrl: text(item.chatUrl || item.url || item.href),
-    title: text(item.title || item.pageTitle),
-    appName: text(item.appName || item.siteName || item.name),
-    userMessage: text(item.userMessage || item.user),
-    assistantMessage: text(item.assistantMessage || item.assistant),
-    createdAt: text(item.createdAt) || new Date().toISOString()
-  })).filter((item) => item.chatUrl && item.userMessage && item.assistantMessage).slice(0, 300);
+  const wholeNumber = (value, fallback = 0) => {
+    const number = Number(value);
+    return Number.isFinite(number) ? Math.max(0, Math.round(number)) : fallback;
+  };
+  return (Array.isArray(raw) ? raw : []).filter(Boolean).map((item, index) => {
+    const chatUrl = text(item.chatUrl || item.url || item.href);
+    const appId = text(item.appId);
+    const appName = text(item.appName || item.siteName || item.name);
+    const instanceId = text(item.instanceId);
+    const batchId = text(item.batchId) || "legacy";
+    const createdAt = text(item.createdAt) || new Date().toISOString();
+    const batchCreatedAt = text(item.batchCreatedAt) || createdAt;
+    const sourceId = text(item.sourceId) || instanceId || [appId || appName, chatUrl].filter(Boolean).join("\n");
+    return {
+      id: text(item.id) || createId("pocket"),
+      batchId,
+      batchCreatedAt,
+      sourceId,
+      chatUrl,
+      title: text(item.title || item.pageTitle),
+      appName,
+      appId,
+      groupId: text(item.groupId),
+      instanceId,
+      groupIndex: wholeNumber(item.groupIndex, 0),
+      tabIndex: wholeNumber(item.tabIndex, index),
+      userMessage: text(item.userMessage || item.user),
+      assistantMessage: text(item.assistantMessage || item.assistant),
+      createdAt
+    };
+  }).filter((item) => item.chatUrl && item.userMessage && item.assistantMessage).slice(0, 300);
 }
 
 export function normalizeShortcutConfig(raw = {}) {

@@ -9,6 +9,9 @@
 ## Plugin Versioning
 
 - After every plugin update, update `shared/constants.js` `APP_VERSION`.
+- Keep `manifest.json` `version_name` exactly equal to `APP_VERSION`; this is the version shown on the browser extension details card.
+- Keep `package-info.json` `version`, `versionName`, and `label` equal to `APP_VERSION`, and update `packagedAt` to the matching UTC timestamp.
+- Keep `manifest.json` `version` as a valid numeric Chrome extension version, and bump it when `version_name` moves to a new date.
 - Version format must be exactly `「YYYY-MM-DD｜HH:MM:SS」`.
 - Use the local machine time when making the update.
 

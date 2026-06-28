@@ -1,7 +1,7 @@
 import { DEFAULT_TOPBAR_LAYOUT } from "./topbar.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-06-29｜03:45:30」";
+export const APP_VERSION = "「2026-06-29｜06:03:18」";
 export const BASELINE_MOD_VERSION = "2.4.0.14";
 export const HOMEPAGE_URL = "https://chatclub.local/";
 
@@ -108,6 +108,11 @@ export const DEFAULT_TAB_GROUP_BUTTON_ORDER = Object.freeze(
   TAB_GROUP_HEADER_BUTTONS.filter((item) => !item.requiredPinned).map((item) => item.id)
 );
 
+export const DEFAULT_POCKET_CARD_SIZE = Object.freeze({
+  width: 460,
+  height: 560
+});
+
 export const OPTIMIZE_PROMPT_TEMPLATE_DEFAULT = `You are an AI prompt expert, skilled at analyzing and optimizing user-provided prompts.
 
 Analyze the user prompt and rewrite it so it is clearer, more specific, and easier for an AI model to follow.
@@ -135,6 +140,7 @@ export const DEFAULT_OPTIONS = {
   language: "system",
   primaryColor: "#1f7a5f",
   primaryColorCustom: false,
+  pocketCardSize: DEFAULT_POCKET_CARD_SIZE,
   tabGroupButtonsMode: "pinned",
   tabGroupButtonPlacement: DEFAULT_TAB_GROUP_BUTTON_PLACEMENT,
   tabGroupButtonOrder: DEFAULT_TAB_GROUP_BUTTON_ORDER,

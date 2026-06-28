@@ -179,31 +179,39 @@ const ICONS = {
     ["path", { d: "M16.5 16.5 14 14" }]
   ],
   layout: [
-    ["rect", { x: "3", y: "3", width: "18", height: "18", rx: "2" }],
-    ["path", { d: "M9 3v18" }],
-    ["path", { d: "M9 10h12" }]
+    ["polygon", { points: "12 4 21 8.5 12 13 3 8.5", "stroke-width": "2.5" }],
+    ["polyline", { points: "3 13 12 17.5 21 13", "stroke-width": "2.5" }],
+    ["polyline", { points: "3 17 12 21.5 21 17", "stroke-width": "2.5" }]
   ],
+  customizeTopbar: {
+    viewBox: "0 0 51.6 54",
+    children: [
+      ["rect", { width: "51.8", height: "54", fill: "#2F2E34", stroke: "none" }],
+      ["path", {
+        d: "m34 22.9v-7.3-2c0-1.9-0.7-3.2-2.3-3.2h-17.8c-1.4 0-2.5 1.1-2.5 2.5l-0.1 10.1c-0.8 0.3-1.2 1.1-1.2 2v4.1c0.1 2.1 1.9 4.1 3.9 4.2h5.8v7.1c0 4.5 5.9 4.4 6 0v-7.1h5.7c1.9-0.1 3.7-2.1 3.7-4.2v-4.1c0-0.9-0.4-1.8-1.2-2.1zm-3 0.1h-16.7l0.1-8.6c0.6-0.2 1-0.8 1.7-0.9 2.1-0.2 2.3 2.5 4.9 2.4 1.2 0 1.2-1.3 2.3-1.3s1.3 1.8 3.6 1.8 2-1.8 3.7-1.9c0.4 0 0.4 0.4 0.4 0.8v7.7z",
+        fill: "#FFFFFF",
+        stroke: "none"
+      }]
+    ]
+  },
   library: [
     ["path", { d: "M4 19.5A2.5 2.5 0 0 1 6.5 17H20" }],
     ["path", { d: "M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" }],
     ["path", { d: "M8 6h8" }],
     ["path", { d: "M8 10h6" }]
   ],
-  pocket: [
-    ["path", {
-      d: "M4.3 5.5h15.4v6.2c0 4.2-3.4 7.8-7.7 7.8s-7.7-3.6-7.7-7.8Z",
-      fill: "#ef4056",
-      stroke: "#ef4056"
-    }],
-    ["path", {
-      d: "m8.2 10.1 3.8 3.5 3.8-3.5",
-      fill: "none",
-      stroke: "#fff",
-      "stroke-width": "2.35",
-      "stroke-linecap": "round",
-      "stroke-linejoin": "round"
-    }]
-  ],
+  pocket: {
+    viewBox: "0 0 110 150",
+    children: [
+      ["title", { textContent: "Pocket Icon" }],
+      ["path", {
+        d: "M84.06,83.31l-25.52,24a6.69,6.69,0,0,1-4.88,2.07,7.22,7.22,0,0,1-5.25-2.07l-25.14-24a7.59,7.59,0,0,1,0-10.51c2.81-2.63,7.5-3,10.32,0L53.66,92.13,74.11,72.8c2.63-3,7.32-2.63,10,0a8,8,0,0,1,0,10.51M97,43.53H10.32A10.1,10.1,0,0,0,0,53.47V85.56c0,29.08,24,53.29,53.66,53.29A53.5,53.5,0,0,0,107,85.56V53.47A9.89,9.89,0,0,0,97,43.53",
+        fill: "#ef4056",
+        "fill-rule": "evenodd",
+        stroke: "none"
+      }]
+    ]
+  },
   insert: [
     ["path", { d: "M9 10 4 15l5 5" }],
     ["path", { d: "M20 4v7a4 4 0 0 1-4 4H4" }]
@@ -231,6 +239,10 @@ const ICONS = {
     ["path", { d: "M4 12h16" }],
     ["path", { d: "M4 18h16" }]
   ],
+  moreTools: [
+    ["polyline", { points: "4.5,4.75 10.75,12 4.5,19.25", "stroke-width": "2.35" }],
+    ["polyline", { points: "13.25,4.75 19.5,12 13.25,19.25", "stroke-width": "2.35" }]
+  ],
   more: [
     ["circle", { cx: "5", cy: "12", r: "1" }],
     ["circle", { cx: "12", cy: "12", r: "1" }],
@@ -240,6 +252,21 @@ const ICONS = {
     ["path", { d: "M12 5v14" }],
     ["path", { d: "M5 12h14" }]
   ],
+  preview: {
+    viewBox: "0 0 16 16",
+    children: [
+      ["path", {
+        d: "M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8M1.173 8a13 13 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5s3.879 1.168 5.168 2.457A13 13 0 0 1 14.828 8q-.086.13-.195.288c-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5s-3.879-1.168-5.168-2.457A13 13 0 0 1 1.172 8z",
+        fill: "currentColor",
+        stroke: "none"
+      }],
+      ["path", {
+        d: "M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5M4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0",
+        fill: "currentColor",
+        stroke: "none"
+      }]
+    ]
+  },
   reload: [
     ["path", { d: "M21 12a9 9 0 1 1-2.6-6.4" }],
     ["path", { d: "M21 3v6h-6" }]
@@ -258,12 +285,11 @@ const ICONS = {
     ["path", { d: "m5 14 .8 1.7L7.5 16.5l-1.7.8L5 19l-.8-1.7-1.7-.8 1.7-.8Z" }]
   ],
   summary: [
-    ["path", { d: "M8 6h13" }],
-    ["path", { d: "M8 12h13" }],
-    ["path", { d: "M8 18h13" }],
-    ["path", { d: "m3 6 .8.8L5.5 5" }],
-    ["path", { d: "m3 12 .8.8L5.5 11" }],
-    ["path", { d: "m3 18 .8.8L5.5 17" }]
+    ["path", {
+      d: "M4 4.5h3v3H4v-3zm5 0h11v3H9v-3zm-5 6h3v3H4v-3zm5 0h11v3H9v-3zm-5 6h3v3H4v-3zm5 0h11v3H9v-3z",
+      fill: "currentColor",
+      stroke: "none"
+    }]
   ],
   maximize: [
     ["path", { d: "M8 3H5a2 2 0 0 0-2 2v3" }],
@@ -337,18 +363,23 @@ const state = {
 };
 
 function svgIcon(name) {
+  const iconSpec = ICONS[name];
+  const iconChildren = Array.isArray(iconSpec) ? iconSpec : iconSpec?.children || [];
   const svg = document.createElementNS(SVG_NS, "svg");
   svg.setAttribute("class", "svg-icon");
-  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("viewBox", Array.isArray(iconSpec) ? "0 0 24 24" : iconSpec?.viewBox || "0 0 24 24");
   svg.setAttribute("aria-hidden", "true");
   svg.setAttribute("fill", "none");
   svg.setAttribute("stroke", "currentColor");
   svg.setAttribute("stroke-width", "2");
   svg.setAttribute("stroke-linecap", "round");
   svg.setAttribute("stroke-linejoin", "round");
-  for (const [tag, attrs] of ICONS[name] || []) {
+  for (const [tag, attrs] of iconChildren) {
     const child = document.createElementNS(SVG_NS, tag);
-    for (const [key, value] of Object.entries(attrs)) child.setAttribute(key, value);
+    for (const [key, value] of Object.entries(attrs)) {
+      if (key === "textContent") child.textContent = value;
+      else child.setAttribute(key, value);
+    }
     svg.append(child);
   }
   return svg;
@@ -373,8 +404,8 @@ function shortcutTooltip(label, action, digitLabel = "") {
   return `${label} (${shortcut})`;
 }
 
-function actionButton(label, iconName, onClick, variant = "secondary", tooltipLabel = label, tooltipPlacement = "") {
-  return createActionButton({ label, icon: svgIcon(iconName), onClick, variant, tooltipLabel, tooltipPlacement });
+function actionButton(label, iconName, onClick, variant = "secondary", tooltipLabel = label, tooltipPlacement = "", className = "") {
+  return createActionButton({ label, icon: svgIcon(iconName), onClick, variant, tooltipLabel, tooltipPlacement, className });
 }
 
 function topIconButton(label, iconName, onClick, tooltipLabel = label, tooltipPlacement = "") {
@@ -437,8 +468,11 @@ const pocketController = createPocketController({
   createId,
   loadPocketHistory,
   savePocketHistory,
+  saveOptions,
   openableTabUrl: workspaceController.openableTabUrl,
-  openTabUrl: workspaceController.openTabUrl,
+  loadPocketEntryInFrame: workspaceController.loadPocketEntryInFrame,
+  restorePocketBatch: workspaceController.restorePocketBatch,
+  setFramePointerBlockedForOverlay: workspaceController.setFramePointerBlockedForOverlay,
   effectiveFaviconUrl,
   compactIconButton,
   svgIcon
@@ -1653,7 +1687,7 @@ function renderTopbarItem(item, prompt, collapsedPreview) {
   if (item.id === "send") return actionButton(t("topbar.send"), "send", sendPromptToFrames, "primary");
   if (item.id === "newChat") return actionButton(t("topbar.newChat"), "edit", newChatOnFrames, "secondary", shortcutTooltip(t("topbar.newChat"), "newChat"));
   if (item.id === "summary") return actionButton(t("topbar.summary"), "summary", openSummaryPanel, "secondary", shortcutTooltip(t("topbar.summary"), "openSummaryPanel"));
-  if (item.id === "pocket") return actionButton(t("topbar.pocket"), "pocket", openPocketPanel);
+  if (item.id === "pocket") return actionButton(t("topbar.pocket"), "pocket", openPocketPanel, "secondary", t("topbar.pocket"), "", topbarItemClass("pocket"));
   if (item.id === "addGroup") return topIconButton(t("topbar.addGroup"), "plus", (event) => workspaceController.openAppPicker(event.currentTarget, { mode: "group" }), t("topbar.addGroup"), "left");
   if (item.id === "layout") return topIconButton(t("topbar.switchLayout"), "layout", (event) => workspaceController.openLayoutMenu(event.currentTarget), shortcutTooltip(t("topbar.switchLayout"), "switchLayout"), "left");
   if (item.id === "settingsJumpMenu") return renderSettingsJumpMenuButton();
@@ -1677,7 +1711,7 @@ function renderSettingsJumpMenuButton() {
     event.stopPropagation();
     openSettingsJumpMenu(event.currentTarget);
   };
-  const buttonNode = topIconButton(t("topbar.settingsJumpMenu"), "menu", (event) => {
+  const buttonNode = topIconButton(t("topbar.settingsJumpMenu"), "moreTools", (event) => {
     if (state.topbarEditMode) {
       event.preventDefault();
       event.stopPropagation();
@@ -1933,7 +1967,7 @@ function openSettingsJumpMenu(anchor, options = {}) {
   const editControls = editing
     ? []
     : [
-        topbarSettingsMenuButton(t("topbar.customize.enter"), "layout", () => {
+        topbarSettingsMenuButton(t("topbar.customize.enter"), "customizeTopbar", () => {
           closeSettingsJumpMenu();
           scheduleEnterTopbarEditMode();
         })

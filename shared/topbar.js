@@ -73,7 +73,7 @@ export const TOPBAR_ITEM_META = {
   pocket: { labelKey: "topbar.pocket", icon: "pocket" },
   addGroup: { labelKey: "topbar.addGroup", icon: "plus" },
   layout: { labelKey: "topbar.switchLayout", icon: "layout" },
-  settingsJumpMenu: { labelKey: "topbar.settingsJumpMenu", icon: "menu" },
+  settingsJumpMenu: { labelKey: "topbar.settingsJumpMenu", icon: "moreTools" },
   settingsAppearance: { labelKey: "settings.appearance.title", icon: "palette" },
   settingsProfiles: { labelKey: "settings.profiles.title", icon: "key" },
   settingsApps: { labelKey: "settings.apps.title", icon: "apps" },

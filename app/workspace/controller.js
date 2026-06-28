@@ -295,7 +295,7 @@ export function createWorkspaceController(ctx = {}) {
   }
 
   function currentLayoutGroups() {
-    return layoutGroupsFromWorkspace(state.groups, validChatAppIds());
+    return layoutGroupsFromWorkspace((state.groups || []).filter((group) => !group.temporary), validChatAppIds());
   }
 
   function preferredLayoutGroupsForLocale() {
@@ -1272,6 +1272,97 @@ export function createWorkspaceController(ctx = {}) {
     return document.querySelector(`iframe[data-instance-id="${chat.instanceId}"]`);
   }
 
+  function pocketEntryHref(entry = {}) {
+    return openableTabUrl(entry.chatUrl || entry.url || entry.href || "");
+  }
+
+  function pocketNumber(value, fallback = 0) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : fallback;
+  }
+
+  function pocketHost(value) {
+    const href = openableTabUrl(value);
+    if (!href) return "";
+    try {
+      return normalizeAppPickerHost(new URL(href).hostname);
+    } catch {
+      return "";
+    }
+  }
+
+  function appMatchesPocketHost(app, host) {
+    if (!host) return false;
+    for (const key of appPickerHostKeys(app)) {
+      if (key === host || host.endsWith(`.${key}`)) return true;
+    }
+    return false;
+  }
+
+  function appForPocketEntry(entry = {}) {
+    const directId = String(entry.appId || "");
+    const direct = directId ? appById(directId) : null;
+    if (direct?.id === directId) return direct;
+    const host = pocketHost(pocketEntryHref(entry));
+    return allApps().find((app) => appMatchesPocketHost(app, host)) || null;
+  }
+
+  function chatLocationForInstance(instanceId) {
+    if (!instanceId) return null;
+    for (const group of state.groups || []) {
+      const tabIndex = (group.chatApps || []).findIndex((chat) => chat.instanceId === instanceId);
+      if (tabIndex >= 0) return { group, chat: group.chatApps[tabIndex], tabIndex };
+    }
+    return null;
+  }
+
+  function pocketFrameRecord(iframe) {
+    if (!iframe) return null;
+    const location = chatLocationForInstance(iframe.dataset.instanceId || "");
+    return { iframe, group: location?.group || null, chat: location?.chat || null };
+  }
+
+  function frameMatchesPocketHost(iframe, host) {
+    if (!host) return false;
+    const app = frameApp(iframe);
+    if (appMatchesPocketHost(app, host)) return true;
+    return [
+      iframe.dataset.currentHref,
+      iframe.src,
+      iframe.getAttribute("src")
+    ].some((value) => pocketHost(value) === host);
+  }
+
+  function findPocketFrame(entry = {}) {
+    const instanceId = String(entry.instanceId || "");
+    if (instanceId) {
+      const iframe = document.querySelector(`iframe[data-instance-id="${instanceId}"]`);
+      if (iframe) return pocketFrameRecord(iframe);
+    }
+    const app = appForPocketEntry(entry);
+    const frames = Array.from(document.querySelectorAll(".chat-frame"));
+    if (app?.id) {
+      const iframe = frames.find((frame) => frame.classList.contains("active") && frame.dataset.appId === app.id)
+        || frames.find((frame) => frame.dataset.appId === app.id);
+      if (iframe) return pocketFrameRecord(iframe);
+    }
+    const host = pocketHost(pocketEntryHref(entry));
+    const iframe = frames.find((frame) => frameMatchesPocketHost(frame, host));
+    return iframe ? pocketFrameRecord(iframe) : null;
+  }
+
+  function loadPocketEntryInFrame(entry = {}) {
+    const href = pocketEntryHref(entry);
+    if (!href) return false;
+    const record = findPocketFrame(entry);
+    if (!record?.iframe) return false;
+    const instanceId = record.iframe.dataset.instanceId || "";
+    if (record.group && instanceId) activateChatTab(record.group, instanceId);
+    record.iframe.dataset.currentHref = href;
+    record.iframe.src = href;
+    return true;
+  }
+
   function reloadChat(chat) {
     const iframe = activeIframe(chat);
     if (iframe) iframe.src = appById(chat.appId).url;
@@ -1321,6 +1412,133 @@ export function createWorkspaceController(ctx = {}) {
     await navigator.clipboard.writeText(await activeHref(chat));
     notify(t("chat.linkCopied"), "success");
     closePopovers();
+  }
+
+  function pocketRestoreSources(entries = []) {
+    const seen = new Set();
+    return (entries || []).map((entry, index) => {
+      const href = pocketEntryHref(entry);
+      const app = appForPocketEntry(entry);
+      if (!href || !app?.id) return null;
+      const sourceId = String(entry.sourceId || entry.instanceId || `${app.id}\n${href}`);
+      if (seen.has(sourceId)) return null;
+      seen.add(sourceId);
+      return {
+        entry,
+        href,
+        app,
+        sourceId,
+        groupId: String(entry.groupId || ""),
+        groupIndex: pocketNumber(entry.groupIndex, 0),
+        tabIndex: pocketNumber(entry.tabIndex, index),
+        index
+      };
+    }).filter(Boolean).sort((a, b) =>
+      a.groupIndex - b.groupIndex
+      || a.groupId.localeCompare(b.groupId)
+      || a.tabIndex - b.tabIndex
+      || a.index - b.index
+    );
+  }
+
+  function pocketRestoreGroups(entries = []) {
+    const groups = [];
+    const byKey = new Map();
+    for (const source of pocketRestoreSources(entries)) {
+      const key = `${source.groupIndex}:${source.groupId}`;
+      let group = byKey.get(key);
+      if (!group) {
+        group = { key, groupIndex: source.groupIndex, sources: [] };
+        byKey.set(key, group);
+        groups.push(group);
+      }
+      group.sources.push(source);
+    }
+    return groups.sort((a, b) => a.groupIndex - b.groupIndex);
+  }
+
+  function pocketRestoreAppGroups(restoreGroups = []) {
+    return (restoreGroups || []).map((group) => group.sources.map((source) => source.app.id));
+  }
+
+  function workspaceGroupsMatchPocketRestore(restoreGroups = []) {
+    const savedGroups = pocketRestoreAppGroups(restoreGroups);
+    const currentGroups = (state.groups || [])
+      .filter((group) => !group.temporary)
+      .map((group) => (group.chatApps || []).map((chat) => chat.appId));
+    return currentGroups.length === savedGroups.length
+      && savedGroups.every((savedGroup, groupIndex) => {
+        const currentGroup = currentGroups[groupIndex] || [];
+        return currentGroup.length === savedGroup.length
+          && savedGroup.every((appId, tabIndex) => currentGroup[tabIndex] === appId);
+      });
+  }
+
+  function loadPocketRestoreIntoExistingGroups(restoreGroups = []) {
+    const workspaceGroups = (state.groups || []).filter((group) => !group.temporary);
+    const loads = [];
+    restoreGroups.forEach((restoreGroup, groupIndex) => {
+      const group = workspaceGroups[groupIndex];
+      if (!group) return;
+      restoreGroup.sources.forEach((source, tabIndex) => {
+        const chat = group.chatApps[tabIndex]?.appId === source.app.id
+          ? group.chatApps[tabIndex]
+          : group.chatApps.find((item) => item.appId === source.app.id);
+        if (chat?.instanceId) loads.push({ group, instanceId: chat.instanceId, href: source.href });
+      });
+    });
+    for (const item of loads) {
+      const iframe = document.querySelector(`iframe[data-instance-id="${item.instanceId}"]`);
+      if (!iframe) continue;
+      iframe.dataset.currentHref = item.href;
+      iframe.src = item.href;
+      activateChatTab(item.group, item.instanceId);
+    }
+    return loads.length > 0;
+  }
+
+  function removePocketTemporaryGroups(batchId) {
+    if (!batchId) return;
+    const removeIds = new Set((state.groups || [])
+      .filter((group) => group.temporary && group.pocketBatchId === batchId)
+      .map((group) => group.id));
+    if (!removeIds.size) return;
+    state.groups = state.groups.filter((group) => !removeIds.has(group.id));
+    for (const groupId of removeIds) delete state.activeTabs[groupId];
+  }
+
+  function appendPocketTemporaryGroups(restoreGroups = [], batchId = "") {
+    removePocketTemporaryGroups(batchId);
+    const loads = [];
+    const groups = restoreGroups.map((restoreGroup) => {
+      const group = { id: createGroupId(), temporary: true, pocketBatchId: batchId, chatApps: [] };
+      for (const source of restoreGroup.sources) {
+        const instanceId = createFrameId();
+        group.chatApps.push({ appId: source.app.id, instanceId });
+        loads.push({ instanceId, href: source.href });
+      }
+      return group;
+    }).filter((group) => group.chatApps.length);
+    if (!groups.length) return false;
+    state.groups.push(...groups);
+    for (const group of groups) state.activeTabs[group.id] = group.chatApps[0]?.instanceId || "";
+    render();
+    for (const item of loads) {
+      const iframe = document.querySelector(`iframe[data-instance-id="${item.instanceId}"]`);
+      if (!iframe) continue;
+      iframe.dataset.currentHref = item.href;
+      iframe.src = item.href;
+    }
+    return true;
+  }
+
+  async function restorePocketBatch(entries = []) {
+    const restoreGroups = pocketRestoreGroups(entries);
+    if (!restoreGroups.length) return false;
+    state.fullscreenGroupId = null;
+    if (workspaceGroupsMatchPocketRestore(restoreGroups)) return loadPocketRestoreIntoExistingGroups(restoreGroups);
+    const batchId = String(entries[0]?.batchId || "");
+    return appendPocketTemporaryGroups(restoreGroups, batchId);
   }
 
   async function addAppToExistingGroup(group, appId) {
@@ -1643,6 +1861,8 @@ export function createWorkspaceController(ctx = {}) {
     activeChatForGroup,
     activateChatTab,
     reloadChat,
+    loadPocketEntryInFrame,
+    restorePocketBatch,
     iframeForWindow,
     groupIdForFrameWindow,
     syncFrameFavicon,

@@ -549,7 +549,7 @@ export function createSettingsController(ctx) {
     };
     return settingsBlock(t("topbar.customize.title"), t("topbar.customize.desc"),
       settingsPaneToolbar(t("topbar.customize.help"),
-        settingsPrimaryAction(t("topbar.customize.enter"), "layout", enterTopbarEditModeFromSettings)
+        settingsPrimaryAction(t("topbar.customize.enter"), "customizeTopbar", enterTopbarEditModeFromSettings)
       ),
       el("div", { class: "topbar-customizer topbar-customizer-launcher" },
         el("p", { class: "topbar-layout-hint" }, t("topbar.customize.dragHint"))
