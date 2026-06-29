@@ -323,6 +323,7 @@ const state = {
   shortcutConfig: null,
   groups: [],
   activeTabs: {},
+  temporaryLayoutPreset: null,
   fullscreenGroupId: null,
   promptText: "",
   promptSelection: { start: 0, end: 0, direction: "none" },

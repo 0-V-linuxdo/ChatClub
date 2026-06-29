@@ -282,8 +282,31 @@ export function createWorkspaceController(ctx = {}) {
   }
 
   function activePreset() {
-    const options = state.options;
-    return options.layoutPresets.find((preset) => preset.id === options.activeLayoutPresetId) || options.layoutPresets[0];
+    const temporary = activeTemporaryLayoutPreset();
+    if (temporary) return temporary;
+    const presets = persistentLayoutPresets();
+    return presets.find((preset) => preset.id === state.options.activeLayoutPresetId) || presets[0];
+  }
+
+  function activeTemporaryLayoutPreset() {
+    const preset = state.temporaryLayoutPreset;
+    return preset?.id && preset.temporary ? preset : null;
+  }
+
+  function temporaryLayoutIsActive() {
+    return Boolean(activeTemporaryLayoutPreset());
+  }
+
+  function persistentLayoutPresets(options = state.options) {
+    return (Array.isArray(options?.layoutPresets) ? options.layoutPresets : []).filter((preset) => !preset?.temporary);
+  }
+
+  function persistentLayoutOptions(options = state.options) {
+    const layoutPresets = persistentLayoutPresets(options);
+    const activeLayoutPresetId = layoutPresets.some((preset) => preset.id === options?.activeLayoutPresetId)
+      ? options.activeLayoutPresetId
+      : layoutPresets[0]?.id || "default";
+    return { ...options, layoutPresets, activeLayoutPresetId };
   }
 
   function validChatAppIds() {
@@ -294,8 +317,11 @@ export function createWorkspaceController(ctx = {}) {
     return normalizeWorkspaceLayoutGroups(groups, validChatAppIds());
   }
 
-  function currentLayoutGroups() {
-    return layoutGroupsFromWorkspace((state.groups || []).filter((group) => !group.temporary), validChatAppIds());
+  function currentLayoutGroups({ includeTemporary = false } = {}) {
+    const groups = includeTemporary
+      ? state.groups || []
+      : (state.groups || []).filter((group) => !group.temporary);
+    return layoutGroupsFromWorkspace(groups, validChatAppIds());
   }
 
   function preferredLayoutGroupsForLocale() {
@@ -339,20 +365,25 @@ export function createWorkspaceController(ctx = {}) {
   }
 
   async function saveLayoutOptions(nextOptions) {
-    state.options = await saveOptions(normalizeOptions(nextOptions));
+    state.options = await saveOptions(normalizeOptions(persistentLayoutOptions(nextOptions)));
   }
 
   async function switchLayoutPreset(presetId) {
-    const preset = state.options?.layoutPresets?.find((item) => item.id === presetId);
+    if (activeTemporaryLayoutPreset()?.id === presetId) {
+      closePopovers();
+      return;
+    }
+    const preset = persistentLayoutPresets().find((item) => item.id === presetId);
     if (!preset) {
       closePopovers();
       notify(t("toast.layoutNotFound"), "error");
       return;
     }
-    if (preset.id === state.options.activeLayoutPresetId) {
+    if (!temporaryLayoutIsActive() && preset.id === state.options.activeLayoutPresetId) {
       closePopovers();
       return;
     }
+    state.temporaryLayoutPreset = null;
     await saveLayoutOptions({ ...state.options, activeLayoutPresetId: preset.id });
     hydrateGroups();
     closePopovers();
@@ -366,12 +397,13 @@ export function createWorkspaceController(ctx = {}) {
       notify(t("layout.noApps"), "error");
       return;
     }
-    const layoutPresets = Array.isArray(state.options.layoutPresets) ? state.options.layoutPresets : [];
+    const layoutPresets = persistentLayoutPresets();
     const preset = {
       id: createLayoutId(),
       name: `Layout ${layoutPresets.length + 1}`,
       chatAppIdGroups
     };
+    state.temporaryLayoutPreset = null;
     await saveLayoutOptions({
       ...state.options,
       layoutPresets: [...layoutPresets, preset],
@@ -383,14 +415,21 @@ export function createWorkspaceController(ctx = {}) {
   }
 
   async function deleteLayoutPreset(presetId) {
-    const layoutPresets = Array.isArray(state.options.layoutPresets) ? state.options.layoutPresets : [];
+    if (activeTemporaryLayoutPreset()?.id === presetId) {
+      state.temporaryLayoutPreset = null;
+      hydrateGroups();
+      closePopovers();
+      render();
+      return;
+    }
+    const layoutPresets = persistentLayoutPresets();
     if (layoutPresets.length <= 1) return;
     const remaining = layoutPresets.filter((preset) => preset.id !== presetId);
     const wasActive = state.options.activeLayoutPresetId === presetId;
     const activeLayoutPresetId = wasActive ? remaining[0]?.id : state.options.activeLayoutPresetId;
     await saveLayoutOptions({ ...state.options, layoutPresets: remaining, activeLayoutPresetId });
     closePopovers();
-    if (wasActive) {
+    if (wasActive && !temporaryLayoutIsActive()) {
       hydrateGroups();
       render();
     }
@@ -406,17 +445,31 @@ export function createWorkspaceController(ctx = {}) {
       createFrameId,
       fallbackGroups: [["ChatGPT"], ["Gemini"], ["Grok"]]
     });
+    if (temporaryLayoutIsActive()) {
+      for (const group of workspace.groups) {
+        group.temporary = true;
+        group.pocketBatchId = preset.pocketBatchId || "";
+      }
+    }
     state.groups = workspace.groups;
     state.activeTabs = workspace.activeTabs;
   }
 
   async function persistLayout() {
+    const temporary = activeTemporaryLayoutPreset();
+    if (temporary) {
+      state.temporaryLayoutPreset = {
+        ...temporary,
+        chatAppIdGroups: currentLayoutGroups({ includeTemporary: true })
+      };
+      return;
+    }
     const preset = activePreset();
     if (!preset) return;
     const chatAppIdGroups = currentLayoutGroups();
     const next = {
       ...state.options,
-      layoutPresets: state.options.layoutPresets.map((item) => item.id === preset.id
+      layoutPresets: persistentLayoutPresets().map((item) => item.id === preset.id
         ? { ...item, chatAppIdGroups }
         : item)
     };
@@ -425,7 +478,12 @@ export function createWorkspaceController(ctx = {}) {
 
   async function addGroup(appId = allApps()[0]?.id) {
     if (!appId) return;
-    const group = { id: createGroupId(), chatApps: [{ appId, instanceId: createFrameId() }] };
+    const temporary = activeTemporaryLayoutPreset();
+    const group = {
+      id: createGroupId(),
+      ...(temporary ? { temporary: true, pocketBatchId: temporary.pocketBatchId || "" } : {}),
+      chatApps: [{ appId, instanceId: createFrameId() }]
+    };
     state.groups.push(group);
     state.activeTabs[group.id] = group.chatApps[0].instanceId;
     await persistLayout();
@@ -643,10 +701,11 @@ export function createWorkspaceController(ctx = {}) {
       card.classList.toggle("fullscreen-hidden", Boolean(fullscreenGroup && !isActive));
       const buttonNode = card.querySelector(".fullscreen-action");
       if (!buttonNode) return;
-      const shortcut = fullscreenShortcutLabel();
-      const label = isActive ? t("chat.exitFullscreen") : `${t("chat.fullscreen")}${shortcut ? ` (${shortcut})` : ""}`;
+      const cardGroup = state.groups.find((item) => item.id === card.dataset.groupId);
+      if (!cardGroup) return;
+      const { fullscreenLabel: label, fullscreenTooltipLabel } = fullscreenButtonMeta(cardGroup);
       buttonNode.setAttribute("aria-label", label);
-      buttonNode.setAttribute("data-tooltip", label);
+      buttonNode.setAttribute("data-tooltip", fullscreenTooltipLabel);
       buttonNode.setAttribute("data-tooltip-id", "workspace.group.fullscreen");
       buttonNode.replaceChildren(svgIcon(isActive ? "minimize" : "maximize"));
     });
@@ -1179,8 +1238,9 @@ export function createWorkspaceController(ctx = {}) {
   function fullscreenButtonMeta(group) {
     const isFullscreen = state.fullscreenGroupId === group.id;
     const shortcut = fullscreenShortcutLabel();
-    const fullscreenLabel = isFullscreen ? t("chat.exitFullscreen") : `${t("chat.fullscreen")}${shortcut ? ` (${shortcut})` : ""}`;
-    return { isFullscreen, fullscreenLabel, icon: isFullscreen ? "minimize" : "maximize" };
+    const fullscreenLabel = isFullscreen ? t("chat.exitFullscreen") : t("chat.fullscreen");
+    const fullscreenTooltipLabel = !isFullscreen && shortcut ? `${fullscreenLabel} (${shortcut})` : fullscreenLabel;
+    return { isFullscreen, fullscreenLabel, fullscreenTooltipLabel, icon: isFullscreen ? "minimize" : "maximize" };
   }
 
   function renderTabAddButton(group) {
@@ -1205,12 +1265,12 @@ export function createWorkspaceController(ctx = {}) {
   }
 
   function renderChatActionButtons(group) {
-    const { fullscreenLabel, icon: fullscreenIcon } = fullscreenButtonMeta(group);
+    const { fullscreenLabel, fullscreenTooltipLabel, icon: fullscreenIcon } = fullscreenButtonMeta(group);
     const buttonById = {
       openInNewTab: () => renderOpenInNewTabButton(group),
       copyLink: () => renderCopyLinkButton(group),
       reload: () => compactIconButton(t("chat.reload"), "reload", () => reloadChat(activeChatForGroup(group)), "", shortcutTooltip(t("chat.reload"), "reloadChat"), "left", "workspace.group.reload"),
-      fullscreen: () => compactIconButton(fullscreenLabel, fullscreenIcon, () => toggleFullscreen(group.id), "fullscreen-action", fullscreenLabel, "left", "workspace.group.fullscreen"),
+      fullscreen: () => compactIconButton(fullscreenLabel, fullscreenIcon, () => toggleFullscreen(group.id), "fullscreen-action", fullscreenTooltipLabel, "left", "workspace.group.fullscreen"),
       removeGroup: () => renderRemoveGroupButton(group)
     };
     return [
@@ -1457,59 +1517,9 @@ export function createWorkspaceController(ctx = {}) {
     return groups.sort((a, b) => a.groupIndex - b.groupIndex);
   }
 
-  function pocketRestoreAppGroups(restoreGroups = []) {
-    return (restoreGroups || []).map((group) => group.sources.map((source) => source.app.id));
-  }
-
-  function workspaceGroupsMatchPocketRestore(restoreGroups = []) {
-    const savedGroups = pocketRestoreAppGroups(restoreGroups);
-    const currentGroups = (state.groups || [])
-      .filter((group) => !group.temporary)
-      .map((group) => (group.chatApps || []).map((chat) => chat.appId));
-    return currentGroups.length === savedGroups.length
-      && savedGroups.every((savedGroup, groupIndex) => {
-        const currentGroup = currentGroups[groupIndex] || [];
-        return currentGroup.length === savedGroup.length
-          && savedGroup.every((appId, tabIndex) => currentGroup[tabIndex] === appId);
-      });
-  }
-
-  function loadPocketRestoreIntoExistingGroups(restoreGroups = []) {
-    const workspaceGroups = (state.groups || []).filter((group) => !group.temporary);
+  function activatePocketTemporaryLayout(restoreGroups = [], batchId = "") {
     const loads = [];
-    restoreGroups.forEach((restoreGroup, groupIndex) => {
-      const group = workspaceGroups[groupIndex];
-      if (!group) return;
-      restoreGroup.sources.forEach((source, tabIndex) => {
-        const chat = group.chatApps[tabIndex]?.appId === source.app.id
-          ? group.chatApps[tabIndex]
-          : group.chatApps.find((item) => item.appId === source.app.id);
-        if (chat?.instanceId) loads.push({ group, instanceId: chat.instanceId, href: source.href });
-      });
-    });
-    for (const item of loads) {
-      const iframe = document.querySelector(`iframe[data-instance-id="${item.instanceId}"]`);
-      if (!iframe) continue;
-      iframe.dataset.currentHref = item.href;
-      iframe.src = item.href;
-      activateChatTab(item.group, item.instanceId);
-    }
-    return loads.length > 0;
-  }
-
-  function removePocketTemporaryGroups(batchId) {
-    if (!batchId) return;
-    const removeIds = new Set((state.groups || [])
-      .filter((group) => group.temporary && group.pocketBatchId === batchId)
-      .map((group) => group.id));
-    if (!removeIds.size) return;
-    state.groups = state.groups.filter((group) => !removeIds.has(group.id));
-    for (const groupId of removeIds) delete state.activeTabs[groupId];
-  }
-
-  function appendPocketTemporaryGroups(restoreGroups = [], batchId = "") {
-    removePocketTemporaryGroups(batchId);
-    const loads = [];
+    const activeTabs = {};
     const groups = restoreGroups.map((restoreGroup) => {
       const group = { id: createGroupId(), temporary: true, pocketBatchId: batchId, chatApps: [] };
       for (const source of restoreGroup.sources) {
@@ -1520,8 +1530,17 @@ export function createWorkspaceController(ctx = {}) {
       return group;
     }).filter((group) => group.chatApps.length);
     if (!groups.length) return false;
-    state.groups.push(...groups);
-    for (const group of groups) state.activeTabs[group.id] = group.chatApps[0]?.instanceId || "";
+    for (const group of groups) activeTabs[group.id] = group.chatApps[0]?.instanceId || "";
+    state.temporaryLayoutPreset = {
+      id: createLayoutId(),
+      name: t("pocket.restoreBatch"),
+      temporary: true,
+      pocketBatchId: batchId,
+      chatAppIdGroups: layoutGroupsFromWorkspace(groups, validChatAppIds())
+    };
+    state.fullscreenGroupId = null;
+    state.groups = groups;
+    state.activeTabs = activeTabs;
     render();
     for (const item of loads) {
       const iframe = document.querySelector(`iframe[data-instance-id="${item.instanceId}"]`);
@@ -1535,10 +1554,8 @@ export function createWorkspaceController(ctx = {}) {
   async function restorePocketBatch(entries = []) {
     const restoreGroups = pocketRestoreGroups(entries);
     if (!restoreGroups.length) return false;
-    state.fullscreenGroupId = null;
-    if (workspaceGroupsMatchPocketRestore(restoreGroups)) return loadPocketRestoreIntoExistingGroups(restoreGroups);
     const batchId = String(entries[0]?.batchId || "");
-    return appendPocketTemporaryGroups(restoreGroups, batchId);
+    return activatePocketTemporaryLayout(restoreGroups, batchId);
   }
 
   async function addAppToExistingGroup(group, appId) {
@@ -1656,11 +1673,17 @@ export function createWorkspaceController(ctx = {}) {
     window.addEventListener("blur", closePopovers, true);
   }
 
+  function layoutPresetIsActive(preset) {
+    const temporary = activeTemporaryLayoutPreset();
+    return temporary ? preset?.id === temporary.id : preset?.id === state.options.activeLayoutPresetId;
+  }
+
   function renderLayoutPresetItem(preset, index) {
-    const active = preset.id === state.options.activeLayoutPresetId;
-    const shortcut = layoutShortcutLabel(index);
+    const temporary = Boolean(preset?.temporary);
+    const active = layoutPresetIsActive(preset);
+    const shortcut = temporary ? "" : layoutShortcutLabel(index);
     return el("div", {
-      class: `layout-preset-item ${active ? "active" : ""}`.trim(),
+      class: `layout-preset-item${active ? " active" : ""}${temporary ? " temporary" : ""}`.trim(),
       role: "menuitem",
       tabindex: "0",
       title: layoutPresetSummary(preset),
@@ -1668,6 +1691,10 @@ export function createWorkspaceController(ctx = {}) {
         if (event.button !== 0 || event.target?.closest?.(".layout-preset-delete")) return;
         event.preventDefault();
         event.stopPropagation();
+        if (temporary) {
+          closePopovers();
+          return;
+        }
         switchLayoutPreset(preset.id).catch((error) => {
           console.warn("[ChatClub] Failed to switch layout", error);
         });
@@ -1680,6 +1707,10 @@ export function createWorkspaceController(ctx = {}) {
       onkeydown: (event) => {
         if (event.key !== "Enter" && event.key !== " ") return;
         event.preventDefault();
+        if (temporary) {
+          closePopovers();
+          return;
+        }
         switchLayoutPreset(preset.id).catch((error) => {
           console.warn("[ChatClub] Failed to switch layout", error);
         });
@@ -1693,7 +1724,7 @@ export function createWorkspaceController(ctx = {}) {
         "aria-label": t("layout.delete"),
         "data-tooltip": t("layout.delete"),
         "data-tooltip-id": "workspace.layout.delete",
-        disabled: state.options.layoutPresets.length <= 1,
+        disabled: !temporary && persistentLayoutPresets().length <= 1,
         onclick: (event) => {
           event.preventDefault();
           event.stopPropagation();
@@ -1735,7 +1766,11 @@ export function createWorkspaceController(ctx = {}) {
       onpointerdown: (event) => event.stopPropagation(),
       onclick: (event) => event.stopPropagation()
     },
-      (state.options.layoutPresets || []).map((preset, index) => renderLayoutPresetItem(preset, index)),
+      activeTemporaryLayoutPreset() ? [
+        renderLayoutPresetItem(activeTemporaryLayoutPreset(), -1),
+        el("div", { class: "menu-separator" })
+      ] : null,
+      persistentLayoutPresets().map((preset, index) => renderLayoutPresetItem(preset, index)),
       el("div", { class: "menu-separator" }),
       menuButton(t("layout.add"), "plus", () => {
         addLayoutPreset().catch((error) => {
@@ -1785,7 +1820,7 @@ export function createWorkspaceController(ctx = {}) {
     closePopovers();
     anchor.classList.add("popover-anchor");
     const rect = anchor.getBoundingClientRect();
-    const { fullscreenLabel, icon: fullscreenIcon } = fullscreenButtonMeta(group);
+    const { fullscreenLabel, fullscreenTooltipLabel, icon: fullscreenIcon } = fullscreenButtonMeta(group);
     const menuButtonById = {
       addApp: () => menuButton(t("chat.addApp"), "plus", () => openAppPicker(anchor, { group }), "secondary", false, t("chat.addApp"), "", "workspace.group.addApp"),
       openInNewTab: () => menuButton(t("common.openInNewTab"), "external", () => openChatInNewTab(group), "secondary", false, t("common.openInNewTab"), "", "workspace.group.openInNewTab"),
@@ -1797,7 +1832,7 @@ export function createWorkspaceController(ctx = {}) {
       fullscreen: () => menuButton(fullscreenLabel, fullscreenIcon, () => {
         toggleFullscreen(group.id);
         closePopovers();
-      }, "secondary", false, fullscreenLabel, "left", "workspace.group.fullscreen"),
+      }, "secondary", false, fullscreenTooltipLabel, "left", "workspace.group.fullscreen"),
       removeGroup: () => menuButton(t("chat.removeGroup"), "x", async () => {
         await removeChatGroup(group);
         closePopovers();

@@ -2568,12 +2568,20 @@ body.settings-tab-group-button-dragging iframe {
 .pocket-panel-resize-handle-left { left: 0; }
 .pocket-panel-resize-handle-right { right: 0; }
 
+.pocket-panel-resize-handle-top,
 .pocket-panel-resize-handle-bottom {
   left: 0;
   right: 0;
-  bottom: 0;
   height: 12px;
   cursor: ns-resize;
+}
+
+.pocket-panel-resize-handle-top {
+  top: 0;
+}
+
+.pocket-panel-resize-handle-bottom {
+  bottom: 0;
 }
 
 .pocket-history-modal-fullscreen .pocket-panel-resize-handle {
@@ -2626,6 +2634,22 @@ body.settings-tab-group-button-dragging iframe {
   height: 16px;
 }
 
+.pocket-batch-clusters {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.pocket-entry-cluster {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.pocket-entry-cluster-merged {
+  align-content: start;
+}
+
 .pocket-batch-row {
   min-width: 0;
   display: flex;
@@ -2649,6 +2673,16 @@ body.settings-tab-group-button-dragging iframe {
 
 .pocket-batch-row > .pocket-entry {
   flex: 0 0 min(var(--pocket-card-width, 460px), calc(100vw - 96px));
+}
+
+.pocket-shared-user-message {
+  min-width: 0;
+  width: 100%;
+}
+
+.pocket-shared-user-message .pocket-message-user {
+  max-height: 180px;
+  background: color-mix(in srgb, var(--bg) 92%, var(--accent));
 }
 
 .pocket-entry-header {
@@ -2740,6 +2774,10 @@ body.settings-tab-group-button-dragging iframe {
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr);
   gap: 10px;
+}
+
+.pocket-entry-assistant-only .pocket-message-grid {
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .pocket-message {

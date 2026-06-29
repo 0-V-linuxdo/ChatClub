@@ -450,6 +450,11 @@ export function createPocketController(ctx) {
       } else if (resize.direction === "right") {
         const maxWidth = Math.min(pocketPanelMaxWidth(), Math.max(minWidth, window.innerWidth - resize.left - 8));
         panel.style.width = `${Math.min(maxWidth, Math.max(minWidth, resize.width + dx))}px`;
+      } else if (resize.direction === "top") {
+        const maxHeight = Math.min(pocketPanelMaxHeight(), Math.max(minHeight, resize.bottom - 8));
+        const height = Math.min(maxHeight, Math.max(minHeight, resize.height - dy));
+        panel.style.top = `${Math.max(8, resize.bottom - height)}px`;
+        panel.style.height = `${height}px`;
       } else if (resize.direction === "bottom") {
         const maxHeight = Math.min(pocketPanelMaxHeight(), Math.max(minHeight, window.innerHeight - resize.top - 8));
         panel.style.height = `${Math.min(maxHeight, Math.max(minHeight, resize.height + dy))}px`;
@@ -465,6 +470,7 @@ export function createPocketController(ctx) {
     panel.append(
       el("div", { class: "pocket-panel-resize-handle pocket-panel-resize-handle-left", dataset: { direction: "left" }, "aria-hidden": "true" }),
       el("div", { class: "pocket-panel-resize-handle pocket-panel-resize-handle-right", dataset: { direction: "right" }, "aria-hidden": "true" }),
+      el("div", { class: "pocket-panel-resize-handle pocket-panel-resize-handle-top", dataset: { direction: "top" }, "aria-hidden": "true" }),
       el("div", { class: "pocket-panel-resize-handle pocket-panel-resize-handle-bottom", dataset: { direction: "bottom" }, "aria-hidden": "true" })
     );
     makePocketResizable(panel);
@@ -508,6 +514,51 @@ export function createPocketController(ctx) {
     if (batch.id === "legacy") return t("pocket.legacyBatch");
     const savedAt = formatPocketTime(batch.createdAt);
     return savedAt ? `${t("pocket.batchSaved")} ${savedAt}` : t("pocket.batchSaved");
+  }
+
+  function pocketUserMessageKey(text = "") {
+    return String(text || "").replace(/\r\n?/g, "\n").trim();
+  }
+
+  function pocketEntryClusters(entries = []) {
+    const entriesByMessage = new Map();
+    for (const entry of entries || []) {
+      const messageKey = pocketUserMessageKey(entry.userMessage);
+      if (!messageKey) continue;
+      let messageEntries = entriesByMessage.get(messageKey);
+      if (!messageEntries) {
+        messageEntries = [];
+        entriesByMessage.set(messageKey, messageEntries);
+      }
+      messageEntries.push(entry);
+    }
+    const clusters = [];
+    const emittedMessages = new Set();
+    let looseEntries = [];
+    const flushLooseEntries = () => {
+      if (!looseEntries.length) return;
+      clusters.push({ merged: false, entries: looseEntries });
+      looseEntries = [];
+    };
+    for (const entry of entries || []) {
+      const messageKey = pocketUserMessageKey(entry.userMessage);
+      const messageEntries = messageKey ? entriesByMessage.get(messageKey) || [] : [];
+      if (messageKey && messageEntries.length > 1) {
+        if (emittedMessages.has(messageKey)) continue;
+        flushLooseEntries();
+        emittedMessages.add(messageKey);
+        clusters.push({
+          key: messageKey,
+          userMessage: messageEntries[0]?.userMessage || entry.userMessage,
+          entries: messageEntries,
+          merged: true
+        });
+        continue;
+      }
+      looseEntries.push(entry);
+    }
+    flushLooseEntries();
+    return clusters;
   }
 
   function loadPocketEntry(entry) {
@@ -580,8 +631,9 @@ export function createPocketController(ctx) {
     );
   }
 
-  function pocketEntryRow(entry, redraw) {
-    return el("article", { class: "ui-card pocket-entry" },
+  function pocketEntryRow(entry, redraw, options = {}) {
+    const assistantOnly = Boolean(options.assistantOnly);
+    return el("article", { class: `ui-card pocket-entry${assistantOnly ? " pocket-entry-assistant-only" : ""}` },
       el("header", { class: "pocket-entry-header" },
         el("div", { class: "pocket-entry-titleblock" },
           el("div", { class: "pocket-entry-title" },
@@ -612,8 +664,21 @@ export function createPocketController(ctx) {
         )
       ),
       el("div", { class: "pocket-message-grid" },
-        pocketMessageSection("user", entry.userMessage),
+        assistantOnly ? null : pocketMessageSection("user", entry.userMessage),
         pocketMessageSection("assistant", entry.assistantMessage)
+      )
+    );
+  }
+
+  function pocketEntryCluster(cluster, redraw) {
+    return el("section", {
+      class: `pocket-entry-cluster${cluster.merged ? " pocket-entry-cluster-merged" : ""}`
+    },
+      cluster.merged
+        ? el("div", { class: "pocket-shared-user-message" }, pocketMessageSection("user", cluster.userMessage))
+        : null,
+      el("div", { class: "pocket-batch-row" },
+        cluster.entries.map((entry) => pocketEntryRow(entry, redraw, { assistantOnly: cluster.merged }))
       )
     );
   }
@@ -638,8 +703,8 @@ export function createPocketController(ctx) {
         ),
         pocketBatchRestoreButton(batch)
       ),
-      el("div", { class: "pocket-batch-row" },
-        batch.entries.map((entry) => pocketEntryRow(entry, redraw))
+      el("div", { class: "pocket-batch-clusters" },
+        pocketEntryClusters(batch.entries).map((cluster) => pocketEntryCluster(cluster, redraw))
       )
     );
   }
