@@ -39,6 +39,7 @@
   --summary-panel-code-bg: var(--panel-2);
   --summary-panel-code-text: var(--text);
   --summary-frame-highlight: #facc15;
+  --settings-modal-app-icon: #000000;
   --toast-bg: rgba(255, 255, 255, 0.96);
   --toast-text: #17201c;
   --toast-border: rgba(23, 32, 28, 0.14);
@@ -72,6 +73,7 @@
   --summary-panel-link: var(--primary);
   --summary-panel-code-bg: var(--panel-2);
   --summary-panel-code-text: var(--text);
+  --settings-modal-app-icon: #ffffff;
   --toast-bg: rgba(17, 22, 20, 0.96);
   --toast-text: #e8efeb;
   --toast-border: rgba(255, 255, 255, 0.12);
@@ -105,6 +107,7 @@
     --summary-panel-link: var(--primary);
     --summary-panel-code-bg: var(--panel-2);
     --summary-panel-code-text: var(--text);
+    --settings-modal-app-icon: #ffffff;
     --toast-bg: rgba(17, 22, 20, 0.96);
     --toast-text: #e8efeb;
     --toast-border: rgba(255, 255, 255, 0.12);
@@ -476,8 +479,8 @@ button { cursor: pointer; }
   color: var(--text);
   appearance: none;
   padding: 3px 5px;
-  font-weight: 760;
   font: inherit;
+  font-weight: 800;
   letter-spacing: 0;
   flex: 0 1 clamp(126px, 12vw, 180px);
   width: clamp(126px, 12vw, 180px);
@@ -1762,7 +1765,7 @@ body.tab-gesture-active * {
   width: 28px;
   height: 28px;
   flex: 0 0 auto;
-  color: var(--primary);
+  color: var(--settings-modal-app-icon);
 }
 
 .settings-modal-section-title {
@@ -1777,9 +1780,9 @@ body.tab-gesture-active * {
 
 .settings-modal-section-title h3 {
   margin: 0 0 3px;
-  font-size: 22px;
-  line-height: 1.12;
-  font-weight: 780;
+  font-size: 18px;
+  line-height: 1.18;
+  font-weight: 760;
 }
 
 .settings-modal-section-title p {
@@ -4439,7 +4442,7 @@ body.settings-tab-group-button-dragging iframe {
   }
 
   .settings-modal-section-title h3 {
-    font-size: 19px;
+    font-size: 17px;
   }
 
   .settings-shell {

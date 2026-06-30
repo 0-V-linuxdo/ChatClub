@@ -18,9 +18,6 @@ import {
   saveOptions,
   savePromptLibrary
 } from "../../shared/storage.js";
-import {
-  normalizeTopbarLayout
-} from "../../shared/topbar.js";
 import { createPromptLibraryController } from "../prompt-library/controller.js";
 import {
   button,
@@ -75,6 +72,115 @@ export function createSettingsController(ctx) {
     settingsPrimaryAction
   } = settingsKit;
   let activeTabGroupButtonDrag = null;
+  let appearanceAutoSaveRunning = false;
+  let appearanceAutoSavePending = null;
+  let appearanceAutoSaveRedraw = null;
+  let appearanceColorSaveTimer = 0;
+  let modelPreferenceAutoSaveRunning = false;
+  let modelPreferenceAutoSavePending = null;
+  let modelPreferenceAutoSaveRedraw = null;
+
+  const queueAppearanceAutoSave = (patch, options = {}) => {
+    appearanceAutoSavePending = {
+      ...(appearanceAutoSavePending || {}),
+      ...patch
+    };
+    if (typeof options.redraw === "function") appearanceAutoSaveRedraw = options.redraw;
+    flushAppearanceAutoSave();
+  };
+
+  async function flushAppearanceAutoSave() {
+    if (appearanceAutoSaveRunning) return;
+    appearanceAutoSaveRunning = true;
+    try {
+      while (appearanceAutoSavePending) {
+        const patch = appearanceAutoSavePending;
+        const redraw = appearanceAutoSaveRedraw;
+        appearanceAutoSavePending = null;
+        appearanceAutoSaveRedraw = null;
+        state.options = await saveOptions({
+          ...state.options,
+          ...patch
+        });
+        syncI18nLanguage();
+        applyTheme();
+        syncTopbar();
+        syncWorkspaceDom();
+        syncSummaryPanel();
+        redraw?.();
+      }
+    } catch (error) {
+      console.warn("[ChatClub] Failed to auto-save appearance settings", error);
+      toast(t("toast.appearanceAutoSaveFailed"), "error");
+    } finally {
+      appearanceAutoSaveRunning = false;
+      if (appearanceAutoSavePending) flushAppearanceAutoSave();
+    }
+  }
+
+  function queueAppearanceColorSave(primaryColor) {
+    clearTimeout(appearanceColorSaveTimer);
+    appearanceColorSaveTimer = setTimeout(() => {
+      queueAppearanceAutoSave({
+        primaryColor,
+        primaryColorCustom: true
+      });
+    }, 250);
+  }
+
+  function tabGroupButtonsModeForPlacement(placement) {
+    return TAB_GROUP_HEADER_BUTTONS.some((item) => !item.requiredPinned && placement[item.id] === "menu") ? "hidden" : "pinned";
+  }
+
+  function modelPreferenceKey(config) {
+    return JSON.stringify({
+      ...DEFAULT_OPTIONS.modelPreferences,
+      ...(config || {})
+    });
+  }
+
+  function queueModelPreferenceAutoSave(config, options = {}) {
+    const next = {
+      ...DEFAULT_OPTIONS.modelPreferences,
+      ...(config || {})
+    };
+    state.modelPreferenceDraft = next;
+    modelPreferenceAutoSavePending = next;
+    if (typeof options.redraw === "function") modelPreferenceAutoSaveRedraw = options.redraw;
+    flushModelPreferenceAutoSave();
+  }
+
+  async function flushModelPreferenceAutoSave() {
+    if (modelPreferenceAutoSaveRunning) return;
+    modelPreferenceAutoSaveRunning = true;
+    try {
+      while (modelPreferenceAutoSavePending) {
+        const next = modelPreferenceAutoSavePending;
+        const redraw = modelPreferenceAutoSaveRedraw;
+        modelPreferenceAutoSavePending = null;
+        modelPreferenceAutoSaveRedraw = null;
+        state.options = await saveOptions({
+          ...state.options,
+          modelPreferences: next
+        });
+        await notifyConfigReload();
+        await Promise.resolve(applyPreferredModels(null, { immediate: true }));
+        if (!modelPreferenceAutoSavePending && modelPreferenceKey(state.modelPreferenceDraft) === modelPreferenceKey(next)) {
+          state.modelPreferenceDraft = {
+            ...DEFAULT_OPTIONS.modelPreferences,
+            ...(state.options.modelPreferences || {})
+          };
+          redraw?.();
+        }
+      }
+    } catch (error) {
+      console.warn("[ChatClub] Failed to auto-save model preferences", error);
+      toast(t("toast.modelPreferencesAutoSaveFailed"), "error");
+    } finally {
+      modelPreferenceAutoSaveRunning = false;
+      if (modelPreferenceAutoSavePending) flushModelPreferenceAutoSave();
+    }
+  }
 
   function preventTabGroupButtonNativeDrag(event) {
     if (!activeTabGroupButtonDrag) return;
@@ -198,6 +304,11 @@ export function createSettingsController(ctx) {
     ];
     state.settingsTabGroupButtonPlacementDraft = nextPlacement;
     state.settingsTabGroupButtonOrderDraft = normalizeTabGroupButtonOrder(nextOrder);
+    queueAppearanceAutoSave({
+      tabGroupButtonsMode: tabGroupButtonsModeForPlacement(nextPlacement),
+      tabGroupButtonPlacement: nextPlacement,
+      tabGroupButtonOrder: state.settingsTabGroupButtonOrderDraft
+    });
     const redraw = drag.redraw;
     cleanupTabGroupButtonDrag();
     redraw?.();
@@ -272,8 +383,6 @@ export function createSettingsController(ctx) {
       state.settingsProfileDragId = "";
       state.settingsCustomAppDragId = "";
       state.settingsAppearanceTab = "workspace";
-      state.settingsTopbarLayoutDraft = null;
-      state.settingsTopbarLayoutDragId = "";
       state.settingsTabGroupButtonPlacementDraft = null;
       state.settingsTabGroupButtonOrderDraft = null;
       state.settingsTabGroupButtonDragId = "";
@@ -343,33 +452,27 @@ export function createSettingsController(ctx) {
 
   function appearancePane(redraw = () => {}) {
     let primaryColorDraft = normalizePrimaryColor(state.options.primaryColor);
+    const colorHexPattern = /^#?[0-9a-f]{3}(?:[0-9a-f]{3})?$/i;
     const appearanceTabIds = new Set(["workspace", "topbar", "tabGroup", "tooltips"]);
     if (!appearanceTabIds.has(state.settingsAppearanceTab)) state.settingsAppearanceTab = "workspace";
-    if (!state.settingsTopbarLayoutDraft) {
-      state.settingsTopbarLayoutDraft = normalizeTopbarLayout(state.options.topbarLayout);
-    }
     const themeMode = select(state.options.themeMode || "system", [
       { value: "system", label: t("appearance.followSystem") },
       { value: "light", label: t("appearance.light") },
       { value: "dark", label: t("appearance.dark") }
-    ]);
+    ], {
+      onchange: () => {
+        const nextThemeMode = themeMode.value || "system";
+        queueAppearanceAutoSave({ themeMode: nextThemeMode });
+      }
+    });
     const language = select(state.options.language || "system", [
       { value: "system", label: t("appearance.followBrowser") },
       { value: "en", label: t("appearance.english") },
       { value: "zh_CN", label: t("appearance.simplifiedChinese") }
     ], {
-      onchange: async () => {
+      onchange: () => {
         const nextLanguage = language.value || "system";
-        if ((state.options.language || "system") === nextLanguage) return;
-        state.options = await saveOptions({
-          ...state.options,
-          language: nextLanguage
-        });
-        syncI18nLanguage();
-        syncTopbar();
-        syncWorkspaceDom();
-        syncSummaryPanel();
-        redraw();
+        queueAppearanceAutoSave({ language: nextLanguage }, { redraw });
       }
     });
     const columnCount = select(String(state.options.colMaxCount || 0), [
@@ -378,7 +481,12 @@ export function createSettingsController(ctx) {
       { value: "2", label: t("appearance.columns", { count: 2 }) },
       { value: "3", label: t("appearance.columns", { count: 3 }) },
       { value: "4", label: t("appearance.columns", { count: 4 }) }
-    ]);
+    ], {
+      onchange: () => {
+        const nextColumnCount = Number(columnCount.value) || 0;
+        queueAppearanceAutoSave({ colMaxCount: nextColumnCount });
+      }
+    });
     if (!state.settingsTabGroupButtonPlacementDraft) {
       state.settingsTabGroupButtonPlacementDraft = normalizeTabGroupButtonPlacement(
         state.options.tabGroupButtonPlacement,
@@ -412,17 +520,27 @@ export function createSettingsController(ctx) {
     const syncColorDraft = (value, fromPicker = false) => {
       const raw = String(value || "").trim();
       const normalized = normalizePrimaryColor(raw, primaryColorDraft);
-      if (fromPicker || /^#?[0-9a-f]{3}(?:[0-9a-f]{3})?$/i.test(raw)) {
+      if (fromPicker || colorHexPattern.test(raw)) {
         primaryColorDraft = normalized;
         colorPicker.value = normalized;
         colorText.value = normalized;
         colorPreview.style.setProperty("--appearance-color", normalized);
+        queueAppearanceColorSave(normalized);
       } else {
         colorText.value = raw;
       }
     };
+    const restoreColorDraft = () => {
+      colorPicker.value = primaryColorDraft;
+      colorText.value = primaryColorDraft;
+      colorPreview.style.setProperty("--appearance-color", primaryColorDraft);
+    };
     colorPicker.addEventListener("input", () => syncColorDraft(colorPicker.value, true));
+    colorPicker.addEventListener("change", () => syncColorDraft(colorPicker.value, true));
     colorText.addEventListener("input", () => syncColorDraft(colorText.value));
+    colorText.addEventListener("blur", () => {
+      if (!colorHexPattern.test(String(colorText.value || "").trim())) restoreColorDraft();
+    });
     const colorControl = el("div", { class: "appearance-color-control" },
       colorPicker,
       colorText,
@@ -430,34 +548,6 @@ export function createSettingsController(ctx) {
       el("small", { class: "appearance-color-help" }, t("appearance.primaryColorHelp"))
     );
     const appearanceRow = (node) => el("div", { class: "appearance-field-row" }, node);
-    const saveAppearance = async () => {
-      const nextTabGroupButtonPlacement = normalizeTabGroupButtonPlacement(
-        state.settingsTabGroupButtonPlacementDraft,
-        state.options.tabGroupButtonsMode
-      );
-      const nextTabGroupButtonOrder = normalizeTabGroupButtonOrder(state.settingsTabGroupButtonOrderDraft);
-      state.options = await saveOptions({
-        ...state.options,
-        themeMode: themeMode.value,
-        language: language.value,
-        primaryColor: normalizePrimaryColor(primaryColorDraft),
-        primaryColorCustom: true,
-        colMaxCount: Number(columnCount.value) || 0,
-        tabGroupButtonsMode: TAB_GROUP_HEADER_BUTTONS.some((item) => !item.requiredPinned && nextTabGroupButtonPlacement[item.id] === "menu") ? "hidden" : "pinned",
-        tabGroupButtonPlacement: nextTabGroupButtonPlacement,
-        tabGroupButtonOrder: nextTabGroupButtonOrder,
-        topbarLayout: normalizeTopbarLayout(state.settingsTopbarLayoutDraft)
-      });
-      state.settingsTabGroupButtonPlacementDraft = nextTabGroupButtonPlacement;
-      state.settingsTabGroupButtonOrderDraft = nextTabGroupButtonOrder;
-      syncI18nLanguage();
-      applyTheme();
-      syncTopbar();
-      syncWorkspaceDom();
-      syncSummaryPanel();
-      redraw();
-      toast(t("toast.appearanceSaved"), "success");
-    };
     const saveTooltipToggle = async (targetId, enabled, inputNode) => {
       const current = new Set(state.options.tooltipDisabledIds || []);
       if (enabled) current.delete(targetId);
@@ -593,8 +683,7 @@ export function createSettingsController(ctx) {
           appearanceRow(field(t("appearance.language"), language)),
           appearanceRow(field(t("appearance.maxColumns"), columnCount)),
           appearanceRow(field(t("appearance.primaryColor"), colorControl))
-        ),
-        settingsActions(button(t("appearance.save"), saveAppearance, "primary"))
+        )
       );
     const tabGroupButtonLabel = (id) => ({
       addApp: t("chat.addApp"),
@@ -652,11 +741,10 @@ export function createSettingsController(ctx) {
           tabGroupPlacementDivider(),
           tabGroupPlacementZone("menu", tabGroupButtonsForPlacement("menu"), t("appearance.tabGroupDropMenu"))
         )
-      ),
-      settingsActions(button(t("appearance.save"), saveAppearance, "primary"))
+      )
     );
     const activeAppearancePane = state.settingsAppearanceTab === "topbar"
-      ? topbarLayoutBlock(redraw, saveAppearance)
+      ? topbarLayoutBlock()
       : state.settingsAppearanceTab === "tabGroup"
         ? tabGroupBlock()
         : state.settingsAppearanceTab === "tooltips"
@@ -676,7 +764,7 @@ export function createSettingsController(ctx) {
     );
   }
 
-  function topbarLayoutBlock(redraw, saveAppearance = null) {
+  function topbarLayoutBlock() {
     const enterTopbarEditModeFromSettings = () => {
       const closeSettings = closeActiveSettingsDialog;
       closeSettings?.();
@@ -688,8 +776,7 @@ export function createSettingsController(ctx) {
       ),
       el("div", { class: "topbar-customizer topbar-customizer-launcher" },
         el("p", { class: "topbar-layout-hint" }, t("topbar.customize.dragHint"))
-      ),
-      saveAppearance ? settingsActions(button(t("appearance.save"), saveAppearance, "primary")) : null
+      )
     );
   }
 
@@ -1046,10 +1133,10 @@ export function createSettingsController(ctx) {
     checkbox.addEventListener("change", () => {
       const next = checkbox.checked ? "extended" : "standard";
       valueNode.textContent = geminiThinkingLevelLabel(next);
-      state.modelPreferenceDraft = {
+      queueModelPreferenceAutoSave({
         ...modelPreferenceDraft(),
         [GEMINI_THINKING_LEVEL_PREFERENCE_KEY]: next
-      };
+      });
     });
     return el("label", { class: "model-thinking-toggle" },
       checkbox,
@@ -1067,10 +1154,10 @@ export function createSettingsController(ctx) {
     const modelSelect = select(draft[appId] || "", modelPreferenceOptions(appId));
     modelSelect.value = draft[appId] || "";
     modelSelect.addEventListener("change", () => {
-      state.modelPreferenceDraft = {
+      queueModelPreferenceAutoSave({
         ...modelPreferenceDraft(),
         [appId]: modelSelect.value
-      };
+      });
     });
     return el("div", { class: "ui-list-row settings-list-row model-preference-row" },
       el("strong", { class: "settings-main-cell" }, MODEL_PREFERENCE_APP_LABELS[appId] || appId),
@@ -1083,21 +1170,7 @@ export function createSettingsController(ctx) {
 
   function clearModelPreferenceDraft(redraw) {
     state.modelPreferenceDraft = { ...DEFAULT_OPTIONS.modelPreferences };
-    redraw();
-  }
-
-  async function saveModelPreferenceDraft(redraw) {
-    state.options = await saveOptions({
-      ...state.options,
-      modelPreferences: modelPreferenceDraft()
-    });
-    state.modelPreferenceDraft = {
-      ...DEFAULT_OPTIONS.modelPreferences,
-      ...(state.options.modelPreferences || {})
-    };
-    await notifyConfigReload();
-    await Promise.resolve(applyPreferredModels(null, { immediate: true }));
-    toast(t("toast.modelPreferencesSaved"), "success");
+    queueModelPreferenceAutoSave(state.modelPreferenceDraft, { redraw });
     redraw();
   }
 
@@ -1109,8 +1182,7 @@ export function createSettingsController(ctx) {
         "settings-manager-list model-preference-list"
       ),
       settingsActions(
-        button(t("modelPreferences.clear"), () => clearModelPreferenceDraft(redraw)),
-        button(t("modelPreferences.save"), () => saveModelPreferenceDraft(redraw), "primary")
+        button(t("modelPreferences.clear"), () => clearModelPreferenceDraft(redraw))
       )
     );
     block.classList.add("model-preference-block");

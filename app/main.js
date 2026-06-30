@@ -377,8 +377,6 @@ const state = {
   settingsProfileDragId: "",
   settingsCustomAppDragId: "",
   settingsAppearanceTab: "workspace",
-  settingsTopbarLayoutDraft: null,
-  settingsTopbarLayoutDragId: "",
   settingsTabGroupButtonPlacementDraft: null,
   settingsTabGroupButtonOrderDraft: null,
   settingsTabGroupButtonDragId: "",

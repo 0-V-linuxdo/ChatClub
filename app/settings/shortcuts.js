@@ -32,6 +32,52 @@ export function createShortcutSettings(ctx) {
     settingsInnerTabs,
     settingsList
   } = settingsKit;
+  let shortcutAutoSaveRunning = false;
+  let shortcutAutoSavePending = null;
+  let shortcutAutoSaveRedraw = null;
+
+  function shortcutConfigKey(config) {
+    return JSON.stringify(normalizeShortcutConfig(config));
+  }
+
+  function queueShortcutAutoSave(config, redraw = null) {
+    const next = normalizeShortcutConfig(config);
+    state.shortcutDraftConfig = next;
+    const conflicts = shortcutConflictActions(next);
+    if (conflicts.size) {
+      toast(t("shortcuts.conflict"), "error");
+      redraw?.();
+      return;
+    }
+    shortcutAutoSavePending = next;
+    if (typeof redraw === "function") shortcutAutoSaveRedraw = redraw;
+    flushShortcutAutoSave();
+  }
+
+  async function flushShortcutAutoSave() {
+    if (shortcutAutoSaveRunning) return;
+    shortcutAutoSaveRunning = true;
+    try {
+      while (shortcutAutoSavePending) {
+        const next = shortcutAutoSavePending;
+        const redraw = shortcutAutoSaveRedraw;
+        shortcutAutoSavePending = null;
+        shortcutAutoSaveRedraw = null;
+        state.shortcutConfig = await saveShortcutConfig(next);
+        await notifyConfigReload();
+        if (!shortcutAutoSavePending && shortcutConfigKey(state.shortcutDraftConfig) === shortcutConfigKey(next)) {
+          state.shortcutDraftConfig = normalizeShortcutConfig(state.shortcutConfig);
+          redraw?.();
+        }
+      }
+    } catch (error) {
+      console.warn("[ChatClub] Failed to auto-save shortcuts", error);
+      toast(t("toast.shortcutsAutoSaveFailed"), "error");
+    } finally {
+      shortcutAutoSaveRunning = false;
+      if (shortcutAutoSavePending) flushShortcutAutoSave();
+    }
+  }
 
   function shortcutActionLabel(action) {
     return t(`shortcut.${action}.label`);
@@ -63,6 +109,7 @@ export function createShortcutSettings(ctx) {
         }
       }
     });
+    return state.shortcutDraftConfig;
   }
 
   function setShortcutRecording(action, redraw) {
@@ -83,8 +130,9 @@ export function createShortcutSettings(ctx) {
       return;
     }
     if (event.key === "Backspace" || event.key === "Delete") {
-      updateShortcutDraft(action, { disabled: true });
+      const next = updateShortcutDraft(action, { disabled: true });
       state.shortcutRecordingAction = "";
+      queueShortcutAutoSave(next, redraw);
       redraw();
       return;
     }
@@ -95,8 +143,9 @@ export function createShortcutSettings(ctx) {
         : t("shortcuts.pressNonModifierKey"), "error");
       return;
     }
-    updateShortcutDraft(action, shortcut);
+    const next = updateShortcutDraft(action, shortcut);
     state.shortcutRecordingAction = "";
+    queueShortcutAutoSave(next, redraw);
     redraw();
   }
 
@@ -129,14 +178,16 @@ export function createShortcutSettings(ctx) {
           "aria-label": `${shortcutActionLabel(action)} ${t("common.enabled")}`,
           checked: !disabled,
           onchange: (event) => {
-            updateShortcutDraft(action, { disabled: !event.target.checked });
+            const next = updateShortcutDraft(action, { disabled: !event.target.checked });
+            queueShortcutAutoSave(next, redraw);
             redraw();
           }
         })
       ),
       settingsIconAction(t("shortcuts.reset"), "reload", () => {
         const defaults = defaultShortcutConfig();
-        updateShortcutDraft(action, defaults.shortcuts[action]);
+        const next = updateShortcutDraft(action, defaults.shortcuts[action]);
+        queueShortcutAutoSave(next, redraw);
         redraw();
       }, "shortcut-reset", false, "settings.action.reset")
     );
@@ -154,29 +205,13 @@ export function createShortcutSettings(ctx) {
   function resetShortcutDraft(redraw) {
     state.shortcutDraftConfig = defaultShortcutConfig();
     state.shortcutRecordingAction = "";
-    redraw();
-  }
-
-  async function saveShortcutDraft(redraw) {
-    const next = normalizeShortcutConfig(shortcutDraft());
-    const nextConflicts = shortcutConflictActions(next);
-    if (nextConflicts.size) {
-      toast(t("shortcuts.conflict"), "error");
-      redraw();
-      return;
-    }
-    state.shortcutConfig = await saveShortcutConfig(next);
-    state.shortcutDraftConfig = normalizeShortcutConfig(state.shortcutConfig);
-    state.shortcutRecordingAction = "";
-    await notifyConfigReload();
-    toast(t("toast.shortcutsSaved"), "success");
+    queueShortcutAutoSave(state.shortcutDraftConfig, redraw);
     redraw();
   }
 
   function shortcutSettingsActions(redraw) {
     return settingsActions(
-      button(t("shortcuts.resetDefault"), () => resetShortcutDraft(redraw)),
-      button(t("shortcuts.save"), () => saveShortcutDraft(redraw), "primary")
+      button(t("shortcuts.resetDefault"), () => resetShortcutDraft(redraw))
     );
   }
 
@@ -188,7 +223,7 @@ export function createShortcutSettings(ctx) {
     ]);
     sendMode.value = draft.sendKeyMode || "enter";
     sendMode.addEventListener("change", () => {
-      state.shortcutDraftConfig = normalizeShortcutConfig({ ...shortcutDraft(), sendKeyMode: sendMode.value });
+      queueShortcutAutoSave({ ...shortcutDraft(), sendKeyMode: sendMode.value });
     });
     return settingsBlock(t("shortcuts.sendMessage"), t("shortcuts.sendMessageDesc"),
       field(t("shortcuts.sendKey"), sendMode)
