@@ -1,5 +1,6 @@
 import {
   APP_NAME,
+  REPOSITORY_URL,
   DEFAULT_GEMINI_THINKING_LEVEL,
   GEMINI_THINKING_LEVEL_PREFERENCE_KEY,
   GEMINI_THINKING_LEVEL_TARGETS,
@@ -151,6 +152,10 @@ const ICONS = {
     ["path", { d: "M11.25 8h.01" }],
     ["path", { d: "M14.75 8.75h.01" }],
     ["path", { d: "M16.95 12.05h.01" }]
+  ],
+  settings: [
+    ["path", { d: "M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" }],
+    ["circle", { cx: "12", cy: "12", r: "3" }]
   ],
   key: [
     ["circle", { cx: "7.5", cy: "12", r: "3.25" }],
@@ -506,6 +511,7 @@ const summaryController = createSummaryController({
   frameApp: workspaceController.frameApp,
   setFramePointerBlockedForOverlay: workspaceController.setFramePointerBlockedForOverlay,
   findFrameForSummarySource: workspaceController.findFrameForSummarySource,
+  highlightFrameForSummarySource: workspaceController.highlightFrameForSummarySource,
   inferAppName,
   effectiveFaviconUrl,
   discoverDeclaredFaviconUrl,
@@ -1721,6 +1727,7 @@ function renderTopbarItem(item, prompt, collapsedPreview) {
     });
   }
   if (item.id === "brand") return renderTopbarBrand();
+  if (item.id === "settings") return renderTopbarSettingsButton();
   if (item.id === "promptLibrary") return renderPromptLibraryButton();
   if (item.id === "composer") return renderTopbarComposer(prompt, collapsedPreview);
   if (item.id === "send") return actionButton(t("topbar.send"), "send", sendPromptToFrames, "primary", t("topbar.send"), "", "", "topbar.send");
@@ -1772,22 +1779,33 @@ function renderSettingsJumpMenuButton() {
   return buttonNode;
 }
 
+function openChatClubRepository(event) {
+  event?.preventDefault?.();
+  event?.stopPropagation?.();
+  workspaceController.openTabUrl(REPOSITORY_URL);
+}
+
 function renderTopbarBrand() {
+  const label = t("topbar.repository");
   return el("button", {
     class: `brand tooltip-trigger ${topbarItemClass("brand")}`,
     type: "button",
-    "aria-label": t("topbar.settings"),
-    "data-tooltip": t("topbar.settings"),
+    "aria-label": label,
+    "data-tooltip": label,
     "data-tooltip-id": "topbar.brand",
-    onclick: (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      openSettings();
-    }
+    onclick: openChatClubRepository
   },
     el("img", { class: "brand-logo", src: "icons/logo.svg", alt: "", draggable: "false" }),
     el("div", {}, APP_NAME)
   );
+}
+
+function renderTopbarSettingsButton() {
+  return topIconButton(t("topbar.settings"), "settings", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openSettings();
+  }, t("topbar.settings"), "left", "topbar.settings");
 }
 
 function renderPromptLibraryButton() {

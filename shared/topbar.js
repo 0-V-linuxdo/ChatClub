@@ -1,5 +1,6 @@
 export const TOPBAR_BUILTIN_ITEMS = [
   "brand",
+  "settings",
   "promptLibrary",
   "composer",
   "send",
@@ -38,10 +39,11 @@ export const TOPBAR_SETTINGS_ITEM_SECTIONS = Object.fromEntries(
 
 const TOPBAR_SETTINGS_SECTION_ITEM_IDS = Object.values(TOPBAR_SETTINGS_SECTION_ITEMS);
 
-export const TOPBAR_REQUIRED_ITEMS = ["composer", "settingsJumpMenu"];
+export const TOPBAR_REQUIRED_ITEMS = ["settings", "composer", "settingsJumpMenu"];
 
 export const DEFAULT_TOPBAR_LAYOUT = [
   { type: "item", id: "brand" },
+  { type: "item", id: "settings" },
   { type: "item", id: "promptLibrary" },
   { type: "item", id: "composer" },
   { type: "item", id: "send" },
@@ -65,6 +67,7 @@ export const DEFAULT_TOPBAR_LAYOUT = [
 
 export const TOPBAR_ITEM_META = {
   brand: { labelKey: "topbar.item.brand", icon: "palette" },
+  settings: { labelKey: "topbar.settings", icon: "settings" },
   promptLibrary: { labelKey: "topbar.promptLibrary", icon: "library" },
   composer: { labelKey: "topbar.item.composer", icon: "edit" },
   send: { labelKey: "topbar.send", icon: "send" },
@@ -126,6 +129,12 @@ export function normalizeTopbarLayout(raw = DEFAULT_TOPBAR_LAYOUT) {
     seenFlex.add(id);
     normalized.push({ ...item, id });
   });
+
+  if (!seenItems.has("settings")) {
+    const brandIndex = normalized.findIndex((entry) => entry.type === "item" && entry.id === "brand");
+    normalized.splice(brandIndex >= 0 ? brandIndex + 1 : 0, 0, { type: "item", id: "settings" });
+    seenItems.add("settings");
+  }
 
   for (const id of TOPBAR_BUILTIN_ITEMS) {
     if (REQUIRED_SET.has(id) && !seenItems.has(id)) normalized.push({ type: "item", id });

@@ -287,9 +287,11 @@ export function createSettingsController(ctx) {
     dialog.querySelector(".modal")?.classList.add("settings-modal");
     const modalTitle = dialog.querySelector(".modal-header h2");
     const modalSectionTitle = el("div", { class: "settings-modal-section-title" });
+    const modalAppIcon = svgIcon("settings");
+    modalAppIcon.classList.add("settings-modal-app-icon");
     modalTitle?.replaceWith(el("div", { class: "settings-modal-titlebar" },
       el("div", { class: "settings-modal-app-title" },
-        el("img", { class: "settings-modal-app-icon", src: "icons/logo.svg", alt: "", draggable: "false" }),
+        modalAppIcon,
         el("span", {}, t("settings.appTitle"))
       ),
       modalSectionTitle
@@ -467,6 +469,90 @@ export function createSettingsController(ctx) {
       inputNode.checked = !(state.options.tooltipDisabledIds || []).includes(targetId);
       document.dispatchEvent(new CustomEvent("chatclub:tooltips-updated"));
     };
+    const tooltipPreviewIcon = (targetId) => ({
+      "topbar.brand": "brand",
+      "topbar.settings": "settings",
+      "topbar.promptLibrary": "library",
+      "topbar.optimizePrompt": "sparkles",
+      "topbar.send": "send",
+      "topbar.newChat": "edit",
+      "topbar.summary": "summary",
+      "topbar.pocket": "pocket",
+      "topbar.addGroup": "plus",
+      "topbar.layout": "layout",
+      "topbar.settingsJumpMenu": "moreTools",
+      "topbar.settings.appearance": "palette",
+      "topbar.settings.profiles": "key",
+      "topbar.settings.apps": "apps",
+      "topbar.settings.models": "model",
+      "topbar.settings.summary": "summary",
+      "topbar.settings.optimize": "sparkles",
+      "topbar.settings.prompts": "library",
+      "topbar.settings.shortcuts": "keyboard",
+      "topbar.settings.io": "transfer",
+      "topbar.customize.paletteItem": "grip",
+      "topbar.customize.enter": "customizeTopbar",
+      "topbar.customize.cancel": "x",
+      "workspace.group.addApp": "plus",
+      "workspace.group.openInNewTab": "external",
+      "workspace.group.copyLink": "copy",
+      "workspace.group.reload": "reload",
+      "workspace.group.fullscreen": "maximize",
+      "workspace.group.remove": "x",
+      "workspace.group.more": "more",
+      "workspace.tab.close": "x",
+      "workspace.layout.add": "plus",
+      "workspace.layout.delete": "trash",
+      "summary.window.fullscreen": "maximize",
+      "summary.window.close": "x",
+      "summary.source.refresh": "reload",
+      "summary.action.pocket": "pocket",
+      "summary.action.preview": "preview",
+      "summary.action.summarize": "summary",
+      "summary.action.ask": "send",
+      "pocket.fullscreen": "maximize",
+      "pocket.copyUserMessage": "copy",
+      "pocket.copyAssistantMessage": "copy",
+      "pocket.openChat": "external",
+      "pocket.actions": "more",
+      "pocket.focusMode": "focusMode",
+      "pocket.exitFocusMode": "insert",
+      "pocket.collapseSidebar": "sidebarCollapse",
+      "pocket.expandSidebar": "sidebarExpand",
+      "pocket.deleteItem": "trash",
+      "optimize.retry": "reload",
+      "settings.modal.close": "x",
+      "settings.profiles.promotion": "external",
+      "settings.action.edit": "edit",
+      "settings.action.duplicate": "copy",
+      "settings.action.delete": "trash",
+      "settings.action.reset": "reload",
+      "settings.shortcuts.record": "keyboard"
+    })[targetId] || "settings";
+    const tooltipPreviewButton = (target, disabled) => {
+      const label = t(target.labelKey);
+      const iconName = tooltipPreviewIcon(target.id);
+      const sample = el("button", {
+        class: `tooltip-preview-button tooltip-trigger ${disabled ? "tooltip-preview-disabled" : ""} ${iconName === "brand" ? "tooltip-preview-brand" : ""}`.trim(),
+        type: "button",
+        "aria-label": `${t("appearance.tooltipPreview")}: ${label}`,
+        "data-tooltip": label,
+        "data-tooltip-id": target.id,
+        "data-tooltip-placement": "left",
+        onclick: (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      },
+        iconName === "brand"
+          ? [el("img", { class: "tooltip-preview-brand-logo", src: "icons/logo.svg", alt: "", draggable: "false" }), el("span", {}, "ChatClub")]
+          : svgIcon(iconName),
+        ["topbar.send", "topbar.newChat", "topbar.summary", "topbar.pocket", "summary.action.summarize", "summary.action.ask"].includes(target.id)
+          ? el("span", {}, label)
+          : null
+      );
+      return el("span", { class: "tooltip-preview-cell" }, sample);
+    };
     const tooltipToggleRow = (target) => {
       const disabled = (state.options.tooltipDisabledIds || []).includes(target.id);
       const checkbox = el("input", {
@@ -479,12 +565,16 @@ export function createSettingsController(ctx) {
           redraw();
         }
       });
-      return el("label", { class: "tooltip-toggle-row" },
+      return el("div", { class: "tooltip-toggle-row" },
         el("span", { class: "tooltip-toggle-copy" },
           el("strong", {}, t(target.labelKey)),
           el("small", {}, target.id)
         ),
-        el("span", { class: "tooltip-toggle-switch" }, checkbox)
+        tooltipPreviewButton(target, disabled),
+        el("label", { class: "tooltip-toggle-switch" },
+          checkbox,
+          el("span", {}, t(target.labelKey))
+        )
       );
     };
     const tooltipBlock = () => settingsBlock(t("appearance.buttonTooltips"), t("appearance.buttonTooltipsDesc"),

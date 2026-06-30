@@ -175,6 +175,7 @@ export function createWorkspaceController(ctx = {}) {
     currentFrames,
     findFrameForSummarySource,
     frameApp,
+    highlightFrameForSummarySource,
     setFramePointerBlockedForOverlay
   } = frameRegistry;
 
@@ -1912,6 +1913,7 @@ export function createWorkspaceController(ctx = {}) {
     frameApp,
     setFramePointerBlockedForOverlay,
     findFrameForSummarySource,
+    highlightFrameForSummarySource,
     refreshCurrentExtensionTabInfo
   });
 }

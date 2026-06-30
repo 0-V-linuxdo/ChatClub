@@ -5,7 +5,7 @@ import { storageGet, storageSet } from "../../shared/storage.js";
 import { findSummarySiteConfig } from "../../shared/url-match.js";
 import { createActionButton } from "../../ui/components.js";
 import { el, iconButton, textarea } from "../../ui/dom.js";
-import { optionalControllerObject, requireControllerContext, requireControllerFunction } from "../controller-context.js";
+import { optionalControllerFunction, optionalControllerObject, requireControllerContext, requireControllerFunction } from "../controller-context.js";
 import { renderMarkdown } from "./markdown.js";
 import {
   buildSummaryPreviewItem,
@@ -35,6 +35,7 @@ const SUMMARY_PANEL_SIZE_KEY = "chatclub.summaryPanelSize.v4";
  * @property {(iframe: HTMLIFrameElement) => any} frameApp
  * @property {(blocked: boolean, namespace?: string) => void} setFramePointerBlockedForOverlay
  * @property {(source: any) => HTMLIFrameElement | null} findFrameForSummarySource
+ * @property {(source: any) => boolean} [highlightFrameForSummarySource]
  * @property {(app: any) => string} inferAppName
  * @property {(href: string, declaredLogoUrl?: string) => string} effectiveFaviconUrl
  * @property {(href: string) => Promise<string>} discoverDeclaredFaviconUrl
@@ -59,6 +60,7 @@ export function createSummaryController(ctx) {
   const frameApp = requireControllerFunction(ctx, controllerName, "frameApp");
   const setFramePointerBlockedForOverlay = requireControllerFunction(ctx, controllerName, "setFramePointerBlockedForOverlay");
   const findFrameForSummarySource = requireControllerFunction(ctx, controllerName, "findFrameForSummarySource");
+  const highlightFrameForSummarySource = optionalControllerFunction(ctx, "highlightFrameForSummarySource", () => false);
   const inferAppName = requireControllerFunction(ctx, controllerName, "inferAppName");
   const effectiveFaviconUrl = requireControllerFunction(ctx, controllerName, "effectiveFaviconUrl");
   const discoverDeclaredFaviconUrl = requireControllerFunction(ctx, controllerName, "discoverDeclaredFaviconUrl");
@@ -358,7 +360,11 @@ export function createSummaryController(ctx) {
           href,
           target: "_blank",
           rel: "noopener noreferrer",
-          onclick: (event) => event.stopPropagation()
+          onclick: (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            highlightFrameForSummarySource(item);
+          }
         }, href) : null
       ),
       showBody ? renderSummaryExpandedDetail(item) : null

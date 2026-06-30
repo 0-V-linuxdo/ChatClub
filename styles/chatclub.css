@@ -38,6 +38,7 @@
   --summary-panel-link: var(--primary);
   --summary-panel-code-bg: var(--panel-2);
   --summary-panel-code-text: var(--text);
+  --summary-frame-highlight: #facc15;
   --toast-bg: rgba(255, 255, 255, 0.96);
   --toast-text: #17201c;
   --toast-border: rgba(23, 32, 28, 0.14);
@@ -1579,6 +1580,32 @@ body.tab-gesture-active * {
   background: #fff;
 }
 
+.chat-frame.chat-frame-summary-highlight {
+  outline: 3px solid var(--summary-frame-highlight);
+  outline-offset: -3px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--summary-frame-highlight) 44%, transparent), 0 0 28px color-mix(in srgb, var(--summary-frame-highlight) 38%, transparent);
+  animation: chat-frame-summary-highlight-pulse 1.8s ease-out;
+}
+
+@keyframes chat-frame-summary-highlight-pulse {
+  0% {
+    outline-color: var(--summary-frame-highlight);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--summary-frame-highlight) 60%, transparent), 0 0 0 color-mix(in srgb, var(--summary-frame-highlight) 0%, transparent);
+  }
+  24% {
+    outline-color: color-mix(in srgb, var(--summary-frame-highlight) 90%, #ffffff 10%);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--summary-frame-highlight) 48%, transparent), 0 0 32px color-mix(in srgb, var(--summary-frame-highlight) 44%, transparent);
+  }
+  72% {
+    outline-color: color-mix(in srgb, var(--summary-frame-highlight) 80%, #ffffff 20%);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--summary-frame-highlight) 34%, transparent), 0 0 22px color-mix(in srgb, var(--summary-frame-highlight) 30%, transparent);
+  }
+  100% {
+    outline-color: color-mix(in srgb, var(--summary-frame-highlight) 0%, transparent);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--summary-frame-highlight) 0%, transparent), 0 0 0 color-mix(in srgb, var(--summary-frame-highlight) 0%, transparent);
+  }
+}
+
 :root[data-theme="dark"] .chat-frame-wrap {
   background: #0f1412;
 }
@@ -1671,7 +1698,7 @@ body.tab-gesture-active * {
 
 .settings-modal .modal-header {
   padding: 0;
-  min-height: 76px;
+  min-height: 60px;
   background: color-mix(in srgb, var(--panel) 88%, var(--panel-2));
   align-items: stretch;
   gap: 0;
@@ -1680,7 +1707,7 @@ body.tab-gesture-active * {
 .settings-modal .modal-header .icon-button {
   flex: 0 0 auto;
   align-self: center;
-  margin: 13px 18px 13px 12px;
+  margin: 8px 16px 8px 10px;
 }
 
 .settings-modal .modal-body {
@@ -1734,8 +1761,8 @@ body.tab-gesture-active * {
 .settings-modal-app-icon {
   width: 28px;
   height: 28px;
-  border-radius: 7px;
   flex: 0 0 auto;
+  color: var(--primary);
 }
 
 .settings-modal-section-title {
@@ -2335,12 +2362,11 @@ body.settings-tab-group-button-dragging iframe {
 .tooltip-toggle-row {
   min-height: 44px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(180px, 1fr) minmax(170px, auto) auto;
   align-items: center;
   gap: 16px;
   padding: 8px 12px;
   border-top: 1px solid var(--line);
-  cursor: pointer;
   user-select: none;
 }
 
@@ -2377,10 +2403,91 @@ body.settings-tab-group-button-dragging iframe {
   font-size: 11px;
 }
 
+.tooltip-preview-cell {
+  display: flex;
+  justify-content: flex-start;
+  min-width: 0;
+}
+
+.tooltip-preview-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 38px;
+  max-width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  overflow: hidden;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 760;
+  line-height: 1;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  background: color-mix(in srgb, var(--panel) 84%, var(--panel-2));
+  border: 1px solid color-mix(in srgb, var(--line) 82%, var(--primary) 18%);
+  border-radius: var(--settings-radius);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 7%, transparent);
+  cursor: default;
+}
+
+.tooltip-preview-button:hover,
+.tooltip-preview-button:focus-visible,
+.tooltip-preview-button.tooltip-open {
+  color: var(--text);
+  background: color-mix(in srgb, var(--primary) 14%, var(--panel));
+  border-color: color-mix(in srgb, var(--primary) 44%, var(--line));
+  outline: 0;
+}
+
+.tooltip-preview-button.tooltip-preview-disabled {
+  color: var(--muted);
+  background: color-mix(in srgb, var(--panel-2) 42%, transparent);
+  border-color: color-mix(in srgb, var(--line) 64%, transparent);
+  box-shadow: none;
+  opacity: .58;
+}
+
+.tooltip-preview-button .svg-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.tooltip-preview-brand {
+  min-width: 118px;
+  justify-content: flex-start;
+}
+
+.tooltip-preview-brand-logo {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  border-radius: 5px;
+}
+
+.tooltip-preview-button > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tooltip-toggle-switch {
+  display: inline-grid;
+  place-items: center;
+  justify-self: end;
+  cursor: pointer;
+}
+
 .tooltip-toggle-switch input {
   width: 18px;
   height: 18px;
   accent-color: var(--primary);
+}
+
+.tooltip-toggle-switch span {
+  display: none;
 }
 
 .prompt-library-row {
@@ -4348,6 +4455,15 @@ body.settings-tab-group-button-dragging iframe {
     grid-template-columns: 1fr;
   }
 
+  .tooltip-toggle-row {
+    grid-template-columns: minmax(0, 1fr) minmax(118px, auto) auto;
+    gap: 10px;
+  }
+
+  .tooltip-preview-brand {
+    min-width: 0;
+  }
+
   .settings-inner-tabs {
     width: 100%;
     grid-auto-columns: 1fr;
@@ -4609,8 +4725,8 @@ body.settings-tab-group-button-dragging iframe {
   height: var(--summary-panel-height, min(860px, calc(100vh - 32px)));
   max-height: calc(100vh - 4px);
   transform: translateX(-50%);
-  background: color-mix(in srgb, var(--summary-panel-bg) 90%, var(--primary) 10%);
-  border: 1px solid color-mix(in srgb, var(--summary-panel-border) 72%, var(--primary) 28%);
+  background: var(--summary-panel-bg);
+  border: 1px solid var(--summary-panel-border);
   border-radius: 14px;
   box-shadow: var(--summary-panel-shadow);
   z-index: 70;
@@ -4638,9 +4754,7 @@ body.settings-tab-group-button-dragging iframe {
   grid-template-rows: auto auto auto minmax(0, 1fr);
   gap: 12px;
   padding: 10px 16px 16px;
-  background:
-    radial-gradient(circle at 14% 0%, color-mix(in srgb, var(--primary) 14%, transparent) 0 180px, transparent 300px),
-    color-mix(in srgb, var(--summary-panel-bg) 92%, var(--primary) 8%);
+  background: var(--summary-panel-bg);
 }
 
 .summary-panel-header {
@@ -4774,6 +4888,27 @@ body.settings-tab-group-button-dragging iframe {
   width: 15px;
   height: 15px;
   flex: 0 0 auto;
+}
+
+.summary-action-button-pocket,
+.summary-action-button-preview {
+  width: 46px;
+  flex: 0 0 46px;
+  justify-content: center;
+  padding: 0;
+}
+
+.summary-action-button-pocket span,
+.summary-action-button-preview span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .summary-action-button:not(:disabled):hover {

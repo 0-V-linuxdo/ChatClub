@@ -1,4 +1,6 @@
 export function createWorkspaceFrameRegistry({ appById, openableTabUrl }) {
+  const frameHighlightTimers = new WeakMap();
+
   function currentFrames() {
     return Array.from(document.querySelectorAll(".chat-frame.active"));
   }
@@ -40,10 +42,27 @@ export function createWorkspaceFrameRegistry({ appById, openableTabUrl }) {
     }) || null;
   }
 
+  function highlightFrameForSummarySource(source = {}) {
+    const frame = findFrameForSummarySource(source);
+    if (!frame) return false;
+    frame.closest(".chat-card")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    frame.classList.remove("chat-frame-summary-highlight");
+    void frame.offsetWidth;
+    frame.classList.add("chat-frame-summary-highlight");
+    const previousTimer = frameHighlightTimers.get(frame);
+    if (previousTimer) window.clearTimeout(previousTimer);
+    frameHighlightTimers.set(frame, window.setTimeout(() => {
+      frame.classList.remove("chat-frame-summary-highlight");
+      frameHighlightTimers.delete(frame);
+    }, 1800));
+    return true;
+  }
+
   return Object.freeze({
     currentFrames,
     findFrameForSummarySource,
     frameApp,
+    highlightFrameForSummarySource,
     setFramePointerBlockedForOverlay
   });
 }
