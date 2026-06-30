@@ -1,7 +1,7 @@
 import { DEFAULT_TOPBAR_LAYOUT } from "./topbar.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-06-29｜14:44:10」";
+export const APP_VERSION = "「2026-06-30｜12:58:46」";
 export const BASELINE_MOD_VERSION = "2.4.0.14";
 export const HOMEPAGE_URL = "https://chatclub.local/";
 
@@ -179,6 +179,11 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
       Object.freeze({ id: "pocket.copyUserMessage", labelKey: "pocket.copyUserMessage" }),
       Object.freeze({ id: "pocket.copyAssistantMessage", labelKey: "pocket.copyAssistantMessage" }),
       Object.freeze({ id: "pocket.openChat", labelKey: "pocket.openChat" }),
+      Object.freeze({ id: "pocket.actions", labelKey: "pocket.actions" }),
+      Object.freeze({ id: "pocket.focusMode", labelKey: "pocket.focusMode" }),
+      Object.freeze({ id: "pocket.exitFocusMode", labelKey: "pocket.exitFocusMode" }),
+      Object.freeze({ id: "pocket.collapseSidebar", labelKey: "pocket.collapseSidebar" }),
+      Object.freeze({ id: "pocket.expandSidebar", labelKey: "pocket.expandSidebar" }),
       Object.freeze({ id: "pocket.deleteItem", labelKey: "pocket.deleteItem" })
     ])
   }),

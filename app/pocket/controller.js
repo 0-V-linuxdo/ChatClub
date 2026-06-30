@@ -10,9 +10,12 @@ import {
 } from "../summary/model.js";
 
 const POCKET_PANEL_SIZE_KEY = "chatclub.pocketPanelSize.v1";
+const POCKET_ACTIVE_GROUP_KEY = "chatclub.pocketActiveGroupId.v1";
 const POCKET_PANEL_MIN_WIDTH = 720;
 const POCKET_PANEL_MIN_HEIGHT = 420;
 const POCKET_PANEL_FULLSCREEN_CLASS = "pocket-history-modal-fullscreen";
+const POCKET_PANEL_FOCUS_CLASS = "pocket-history-modal-focus";
+const POCKET_CARD_GAP = 12;
 
 export function createPocketController(ctx) {
   const controllerName = "Pocket controller";
@@ -29,6 +32,9 @@ export function createPocketController(ctx) {
   const compactIconButton = requireControllerFunction(ctx, controllerName, "compactIconButton");
   const svgIcon = requireControllerFunction(ctx, controllerName, "svgIcon");
   let pocketCardSizeSaveTimer = 0;
+  let pocketActionsExpanded = false;
+  let pocketSidebarCollapsed = false;
+  let pocketCurrentRedraw = null;
 
   const POCKET_CARD_SIZE_LIMITS = Object.freeze({
     width: Object.freeze({ min: 360, max: 760, step: 20 }),
@@ -173,9 +179,18 @@ export function createPocketController(ctx) {
     return normalizePocketCardSize(state.options?.pocketCardSize);
   }
 
+  function syncPocketClusterWidths(host, size = pocketCardSize()) {
+    host?.querySelectorAll?.(".pocket-entry-cluster[data-entry-count]").forEach((cluster) => {
+      const count = Math.max(1, Number(cluster.dataset.entryCount) || 1);
+      const width = (count * size.width) + ((count - 1) * POCKET_CARD_GAP);
+      cluster.style.setProperty("--pocket-cluster-row-width", `${Math.round(width)}px`);
+    });
+  }
+
   function applyPocketCardSize(host, size = pocketCardSize()) {
     host?.style?.setProperty("--pocket-card-width", `${size.width}px`);
     host?.style?.setProperty("--pocket-card-height", `${size.height}px`);
+    syncPocketClusterWidths(host, size);
     return size;
   }
 
@@ -237,9 +252,22 @@ export function createPocketController(ctx) {
 
   function pocketSizeControls(host, size) {
     return el("div", { class: "pocket-size-controls" },
-      pocketSizeControl(host, "width", t("pocket.cardWidth"), size.width),
-      pocketSizeControl(host, "height", t("pocket.cardHeight"), size.height)
+      pocketSizeControl(host, "width", t("pocket.cardWidth"), size.width)
     );
+  }
+
+  function readPocketActiveGroupId() {
+    try {
+      return String(localStorage.getItem(POCKET_ACTIVE_GROUP_KEY) || "");
+    } catch {}
+    return "";
+  }
+
+  function rememberPocketActiveGroupId(groupId = "") {
+    try {
+      if (groupId) localStorage.setItem(POCKET_ACTIVE_GROUP_KEY, groupId);
+      else localStorage.removeItem(POCKET_ACTIVE_GROUP_KEY);
+    } catch {}
   }
 
   function pocketPanelMaxWidth() {
@@ -330,6 +358,10 @@ export function createPocketController(ctx) {
     return Boolean(panel?.classList?.contains(POCKET_PANEL_FULLSCREEN_CLASS));
   }
 
+  function pocketPanelIsFocusMode(panel) {
+    return Boolean(panel?.classList?.contains(POCKET_PANEL_FOCUS_CLASS));
+  }
+
   function clearPocketPanelInlineGeometry(panel) {
     if (!panel) return;
     ["width", "height", "left", "top", "transform", "--pocket-panel-width", "--pocket-panel-height"].forEach((property) => {
@@ -349,14 +381,33 @@ export function createPocketController(ctx) {
   function togglePocketPanelFullscreen(panel, button) {
     if (!panel) return;
     if (pocketPanelIsFullscreen(panel)) {
+      panel.classList.remove(POCKET_PANEL_FOCUS_CLASS);
       panel.classList.remove(POCKET_PANEL_FULLSCREEN_CLASS);
       applyPocketPanelSize(panel);
     } else {
       rememberPocketPanelGeometry(panel);
       panel.classList.add(POCKET_PANEL_FULLSCREEN_CLASS);
+      panel.classList.remove(POCKET_PANEL_FOCUS_CLASS);
       clearPocketPanelInlineGeometry(panel);
     }
     syncPocketFullscreenButton(button, panel);
+    pocketCurrentRedraw?.();
+  }
+
+  function togglePocketPanelFocusMode(panel) {
+    if (!panel) return;
+    const fullscreenButton = panel.querySelector('[data-tooltip-id="pocket.fullscreen"]');
+    if (pocketPanelIsFocusMode(panel)) {
+      panel.classList.remove(POCKET_PANEL_FOCUS_CLASS);
+      panel.classList.remove(POCKET_PANEL_FULLSCREEN_CLASS);
+      applyPocketPanelSize(panel);
+    } else {
+      if (!pocketPanelIsFullscreen(panel)) rememberPocketPanelGeometry(panel);
+      panel.classList.add(POCKET_PANEL_FULLSCREEN_CLASS);
+      panel.classList.add(POCKET_PANEL_FOCUS_CLASS);
+      clearPocketPanelInlineGeometry(panel);
+    }
+    syncPocketFullscreenButton(fullscreenButton, panel);
   }
 
   function toggleOpenPocketPanelFullscreen() {
@@ -386,13 +437,22 @@ export function createPocketController(ctx) {
   function installPocketPanelHeaderActions(panel) {
     const header = panel?.querySelector(".modal-header");
     const closeButton = header?.querySelector(".icon-button");
-    if (!header || !closeButton) return;
+    const title = header?.querySelector("h2");
+    if (!header || !closeButton || !title) return;
+    title.before(el("div", { class: "pocket-focus-leftbar", hidden: true }));
+    title.before(el("div", { class: "pocket-header-sidebar" },
+      el("span", { class: "pocket-modal-title-icon", "aria-hidden": "true" }, svgIcon("pocket")),
+      el("div", { class: "pocket-sidebar-titlebar", hidden: true })
+    ));
     closeButton.classList.add("pocket-window-button");
     closeButton.replaceChildren(svgIcon("x"));
-    header.append(el("div", { class: "pocket-window-actions" },
-      pocketFullscreenButton(panel),
-      closeButton
-    ));
+    header.append(
+      el("div", { class: "pocket-focus-titlebar", hidden: true }),
+      el("div", { class: "pocket-window-actions" },
+        pocketFullscreenButton(panel),
+        closeButton
+      )
+    );
   }
 
   function setPocketIframePointerBlocked(blocked) {
@@ -514,6 +574,45 @@ export function createPocketController(ctx) {
     if (batch.id === "legacy") return t("pocket.legacyBatch");
     const savedAt = formatPocketTime(batch.createdAt);
     return savedAt ? `${t("pocket.batchSaved")} ${savedAt}` : t("pocket.batchSaved");
+  }
+
+  function resolvePocketActiveBatch(batches = []) {
+    if (!batches.length) {
+      rememberPocketActiveGroupId("");
+      return null;
+    }
+    const savedGroupId = readPocketActiveGroupId();
+    const activeBatch = batches.find((batch) => batch.id === savedGroupId) || batches[0];
+    if (activeBatch?.id && activeBatch.id !== savedGroupId) rememberPocketActiveGroupId(activeBatch.id);
+    return activeBatch;
+  }
+
+  function pocketCompactText(value = "", fallback = "") {
+    return String(value || "").replace(/\s+/g, " ").trim() || fallback;
+  }
+
+  function pocketBatchQuestion(batch = {}) {
+    const firstEntry = (batch.entries || []).find((entry) => pocketCompactText(entry.userMessage));
+    return pocketCompactText(firstEntry?.userMessage, pocketBatchTitle(batch));
+  }
+
+  function pocketBatchSourceSummary(batch = {}) {
+    const names = [];
+    for (const entry of batch.entries || []) {
+      const name = pocketCompactText(entry.appName || entry.title);
+      if (!name || names.includes(name)) continue;
+      names.push(name);
+    }
+    const visible = names.slice(0, 3);
+    const extra = names.length - visible.length;
+    return extra > 0 ? `${visible.join(", ")} +${extra}` : visible.join(", ");
+  }
+
+  function pocketBatchMeta(batch = {}) {
+    const count = (batch.entries || []).length;
+    const sources = pocketBatchSourceSummary(batch);
+    const vars = { count, plural: count === 1 ? "" : "s", sources };
+    return sources ? t("pocket.groupSources", vars) : t("pocket.groupCards", vars);
   }
 
   function pocketUserMessageKey(text = "") {
@@ -671,8 +770,10 @@ export function createPocketController(ctx) {
   }
 
   function pocketEntryCluster(cluster, redraw) {
+    const entryCount = Math.max(1, cluster.entries.length);
     return el("section", {
-      class: `pocket-entry-cluster${cluster.merged ? " pocket-entry-cluster-merged" : ""}`
+      class: `pocket-entry-cluster${cluster.merged ? " pocket-entry-cluster-merged" : ""}`,
+      dataset: { entryCount }
     },
       cluster.merged
         ? el("div", { class: "pocket-shared-user-message" }, pocketMessageSection("user", cluster.userMessage))
@@ -694,18 +795,238 @@ export function createPocketController(ctx) {
     );
   }
 
-  function pocketBatchSection(batch, redraw) {
-    return el("section", { class: "pocket-batch" },
-      el("header", { class: "pocket-batch-header" },
-        el("div", { class: "pocket-batch-title" },
-          svgIcon("pocket"),
-          el("strong", {}, pocketBatchTitle(batch))
-        ),
-        pocketBatchRestoreButton(batch)
-      ),
-      el("div", { class: "pocket-batch-clusters" },
-        pocketEntryClusters(batch.entries).map((cluster) => pocketEntryCluster(cluster, redraw))
+  function pocketActionsId(host) {
+    const actionsId = host?.dataset?.actionsId || createId("pocket-actions");
+    if (host?.dataset) host.dataset.actionsId = actionsId;
+    return actionsId;
+  }
+
+  function pocketGroupTitleBlock(batch, extraClass = "") {
+    return el("div", { class: `pocket-main-title ${extraClass}`.trim() },
+      el("strong", {}, pocketBatchQuestion(batch)),
+      el("span", {}, pocketBatchTitle(batch))
+    );
+  }
+
+  function pocketSidebarItem(batch, activeBatch, redraw) {
+    const active = batch.id === activeBatch?.id;
+    return el("button", {
+      class: `pocket-group-button${active ? " active" : ""}`,
+      type: "button",
+      "aria-current": active ? "true" : null,
+      onclick: () => {
+        if (active) return;
+        rememberPocketActiveGroupId(batch.id);
+        pocketActionsExpanded = false;
+        redraw();
+      }
+    },
+      el("span", { class: "pocket-group-question" }, pocketBatchQuestion(batch)),
+      el("span", { class: "pocket-group-time" }, pocketBatchTitle(batch)),
+      el("span", { class: "pocket-group-meta" }, pocketBatchMeta(batch))
+    );
+  }
+
+  function pocketFocusModeButton(host, redraw) {
+    const panel = host?.closest?.(".modal.pocket-history-modal");
+    const focusMode = pocketPanelIsFocusMode(panel);
+    const label = focusMode ? t("pocket.exitFocusMode") : t("pocket.focusMode");
+    const tooltipId = focusMode ? "pocket.exitFocusMode" : "pocket.focusMode";
+    return el("button", {
+      class: "icon-button tooltip-trigger pocket-focus-mode-button",
+      type: "button",
+      "aria-label": label,
+      "aria-pressed": focusMode ? "true" : "false",
+      "data-tooltip": label,
+      "data-tooltip-id": tooltipId,
+      onclick: (event) => {
+        event.preventDefault();
+        togglePocketPanelFocusMode(host?.closest?.(".modal.pocket-history-modal"));
+        redraw();
+      }
+    }, svgIcon("focusMode"));
+  }
+
+  function pocketExitFocusModeButton(host, redraw) {
+    const label = t("pocket.exitFocusMode");
+    return el("button", {
+      class: "icon-button tooltip-trigger pocket-exit-focus-button",
+      type: "button",
+      "aria-label": label,
+      "data-tooltip": label,
+      "data-tooltip-id": "pocket.exitFocusMode",
+      onclick: (event) => {
+        event.preventDefault();
+        togglePocketPanelFocusMode(host?.closest?.(".modal.pocket-history-modal"));
+        redraw();
+      }
+    }, svgIcon("insert"));
+  }
+
+  function pocketSidebarCollapseButton(redraw) {
+    const collapsed = pocketSidebarCollapsed;
+    const label = collapsed ? t("pocket.expandSidebar") : t("pocket.collapseSidebar");
+    return el("button", {
+      class: `icon-button tooltip-trigger pocket-sidebar-collapse-button ${collapsed ? "pocket-sidebar-collapse-button-expand" : "pocket-sidebar-collapse-button-collapse"}`,
+      type: "button",
+      "aria-label": label,
+      "aria-pressed": collapsed ? "true" : "false",
+      "data-tooltip": label,
+      "data-tooltip-id": collapsed ? "pocket.expandSidebar" : "pocket.collapseSidebar",
+      onclick: (event) => {
+        event.preventDefault();
+        pocketSidebarCollapsed = !pocketSidebarCollapsed;
+        redraw();
+      }
+    }, svgIcon(collapsed ? "sidebarExpand" : "sidebarCollapse"));
+  }
+
+  function pocketSidebar(batches, activeBatch, redraw, host) {
+    return el("aside", {
+      class: "pocket-sidebar",
+      "aria-label": t("pocket.groups")
+    },
+      batches.length
+        ? el("div", { class: "pocket-sidebar-list", role: "list" },
+          batches.map((batch) => el("div", { class: "pocket-sidebar-list-item", role: "listitem" },
+            pocketSidebarItem(batch, activeBatch, redraw)
+          ))
+        )
+        : el("div", { class: "pocket-sidebar-empty" }, t("pocket.emptyGroups"))
+    );
+  }
+
+  function pocketActionsToggle(actionsId, redraw) {
+    const label = pocketActionsExpanded ? t("pocket.hideActions") : t("pocket.showActions");
+    return el("button", {
+      class: "button button-secondary pocket-action-toggle tooltip-trigger",
+      type: "button",
+      "aria-label": label,
+      "aria-controls": actionsId,
+      "aria-expanded": pocketActionsExpanded ? "true" : "false",
+      "data-tooltip": label,
+      "data-tooltip-id": "pocket.actions",
+      onclick: (event) => {
+        event.preventDefault();
+        pocketActionsExpanded = !pocketActionsExpanded;
+        redraw();
+      }
+    },
+      svgIcon("menu"),
+      el("span", {}, t("pocket.actions"))
+    );
+  }
+
+  function pocketActionsPanel(host, size) {
+    const actionsId = pocketActionsId(host);
+    return el("div", {
+      id: actionsId,
+      class: "pocket-actions-panel",
+      hidden: !pocketActionsExpanded
+    },
+      pocketSizeControls(host, size)
+    );
+  }
+
+  function pocketActiveGroupHeader(host, batch, redraw, size, options = {}) {
+    if (!pocketActionsExpanded) return null;
+    return el("section", { class: `pocket-active-header${options.focusMode ? " pocket-active-header-focus" : ""}` },
+      pocketActionsPanel(host, size)
+    );
+  }
+
+  function syncPocketSidebarTitlebar(panel, host, redraw) {
+    const titlebar = panel?.querySelector(".pocket-sidebar-titlebar");
+    if (!titlebar) return;
+    clear(titlebar);
+    if (pocketPanelIsFocusMode(panel)) {
+      titlebar.hidden = true;
+      titlebar.setAttribute("hidden", "");
+      return;
+    }
+    titlebar.hidden = false;
+    titlebar.removeAttribute("hidden");
+    titlebar.append(
+      el("strong", {}, t("pocket.groups")),
+      el("div", { class: "pocket-sidebar-titlebar-actions" },
+        pocketSidebarCollapseButton(redraw),
+        pocketFocusModeButton(host, redraw)
       )
+    );
+  }
+
+  function syncPocketFocusLeftbar(panel, host, redraw) {
+    const titlebar = panel?.querySelector(".pocket-focus-leftbar");
+    if (!titlebar) return;
+    clear(titlebar);
+    if (!pocketPanelIsFocusMode(panel)) {
+      titlebar.hidden = true;
+      titlebar.setAttribute("hidden", "");
+      return;
+    }
+    titlebar.hidden = false;
+    titlebar.removeAttribute("hidden");
+    titlebar.append(
+      el("span", { class: "pocket-focus-pocket-icon", "aria-hidden": "true" }, svgIcon("pocket")),
+      pocketExitFocusModeButton(host, redraw)
+    );
+  }
+
+  function syncPocketFocusTitlebar(panel, host, activeBatch, redraw) {
+    const titlebar = panel?.querySelector(".pocket-focus-titlebar");
+    if (!titlebar) return;
+    clear(titlebar);
+    if (!activeBatch) {
+      titlebar.hidden = true;
+      titlebar.setAttribute("hidden", "");
+      return;
+    }
+    const actionsId = pocketActionsId(host);
+    const focusMode = pocketPanelIsFocusMode(panel);
+    titlebar.hidden = false;
+    titlebar.removeAttribute("hidden");
+    if (focusMode) {
+      titlebar.append(
+        pocketGroupTitleBlock(activeBatch, "pocket-focus-title"),
+        el("div", { class: "pocket-main-actions pocket-focus-actions" },
+          pocketBatchRestoreButton(activeBatch),
+          pocketActionsToggle(actionsId, redraw)
+        )
+      );
+      return;
+    }
+    titlebar.append(
+      pocketGroupTitleBlock(activeBatch, "pocket-header-title"),
+      el("div", { class: "pocket-main-actions pocket-header-actions" },
+        pocketBatchRestoreButton(activeBatch),
+        pocketActionsToggle(actionsId, redraw)
+      )
+    );
+  }
+
+  function pocketActiveGroupContent(batch, redraw) {
+    return el("div", { class: "pocket-active-content" },
+      el("section", { class: "pocket-batch pocket-active-batch" },
+        el("div", { class: "pocket-batch-clusters" },
+          pocketEntryClusters(batch.entries).map((cluster) => pocketEntryCluster(cluster, redraw))
+        )
+      )
+    );
+  }
+
+  function pocketMainPane(host, activeBatch, redraw, size, options = {}) {
+    if (!activeBatch) {
+      return el("main", { class: "pocket-main pocket-main-empty" },
+        el("div", { class: "ui-empty-state pocket-empty" },
+          svgIcon("pocket"),
+          el("strong", {}, t("pocket.emptyTitle")),
+          el("span", {}, t("pocket.emptyDesc"))
+        )
+      );
+    }
+    return el("main", { class: "pocket-main" },
+      pocketActiveGroupHeader(host, activeBatch, redraw, size, options),
+      pocketActiveGroupContent(activeBatch, redraw)
     );
   }
 
@@ -714,29 +1035,36 @@ export function createPocketController(ctx) {
     const entries = state.pocketEntries || [];
     const batches = pocketBatches(entries);
     const size = applyPocketCardSize(host);
+    const activeBatch = resolvePocketActiveBatch(batches);
+    const panel = host.closest?.(".modal.pocket-history-modal");
+    const focusMode = pocketPanelIsFocusMode(panel);
+    const sidebarCollapsed = !focusMode && pocketSidebarCollapsed;
+    panel?.classList?.toggle("pocket-history-modal-sidebar-collapsed", sidebarCollapsed);
+    syncPocketFocusLeftbar(panel, host, redraw);
+    syncPocketSidebarTitlebar(panel, host, redraw);
+    syncPocketFocusTitlebar(panel, host, activeBatch, redraw);
     host.append(
-      el("div", { class: "ui-toolbar pocket-history-toolbar" },
-        el("p", {}, t("pocket.savedInfo")),
-        pocketSizeControls(host, size)
-      ),
-      batches.length
-        ? el("div", { class: "pocket-batch-list" }, batches.map((batch) => pocketBatchSection(batch, redraw)))
-        : el("div", { class: "ui-empty-state pocket-empty" },
-          svgIcon("pocket"),
-          el("strong", {}, t("pocket.emptyTitle")),
-          el("span", {}, t("pocket.emptyDesc"))
-        )
+      el("div", { class: `pocket-shell${focusMode ? " pocket-shell-focus" : ""}${sidebarCollapsed ? " pocket-shell-sidebar-collapsed" : ""}` },
+        focusMode || sidebarCollapsed ? null : pocketSidebar(batches, activeBatch, redraw, host),
+        pocketMainPane(host, activeBatch, redraw, size, { focusMode, sidebarCollapsed })
+      )
     );
+    syncPocketClusterWidths(host, size);
   }
 
   function openPocketPanel() {
+    pocketActionsExpanded = false;
     const host = el("div", { class: "ui-dialog pocket-history-dialog" });
     const redraw = () => renderPocketHistory(host, redraw);
+    pocketCurrentRedraw = redraw;
     loadPocketHistory().then((history) => {
       state.pocketEntries = history;
       redraw();
     }).catch(() => redraw());
-    const dialog = modal(t("pocket.title"), host, () => dialog.remove(), true, t("common.close"));
+    const dialog = modal(t("pocket.title"), host, () => {
+      if (pocketCurrentRedraw === redraw) pocketCurrentRedraw = null;
+      dialog.remove();
+    }, true, t("common.close"));
     const panel = dialog.querySelector(".modal");
     panel?.classList.add("pocket-history-modal");
     installPocketPanelHeaderActions(panel);

@@ -183,6 +183,22 @@ const ICONS = {
     ["polyline", { points: "3 13 12 17.5 21 13", "stroke-width": "2.5" }],
     ["polyline", { points: "3 17 12 21.5 21 17", "stroke-width": "2.5" }]
   ],
+  sidebarCollapse: [
+    ["rect", { x: "5", y: "5", width: "14", height: "14", rx: "1.6" }],
+    ["path", { d: "M10 5v14" }]
+  ],
+  sidebarExpand: [
+    ["rect", { x: "5", y: "5", width: "14", height: "14", rx: "1.6" }],
+    ["path", { d: "M10 5v14" }]
+  ],
+  focusMode: [
+    ["path", { d: "M12 7v14" }],
+    ["path", { d: "M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3Z" }],
+    ["path", { d: "M6 8h2" }],
+    ["path", { d: "M6 12h2" }],
+    ["path", { d: "M16 8h2" }],
+    ["path", { d: "M16 12h2" }]
+  ],
   customizeTopbar: {
     viewBox: "0 0 117.6 154",
     children: [
