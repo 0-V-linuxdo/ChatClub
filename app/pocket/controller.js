@@ -408,6 +408,7 @@ export function createPocketController(ctx) {
       clearPocketPanelInlineGeometry(panel);
     }
     syncPocketFullscreenButton(fullscreenButton, panel);
+    pocketCurrentRedraw?.();
   }
 
   function toggleOpenPocketPanelFullscreen() {
@@ -573,7 +574,7 @@ export function createPocketController(ctx) {
   function pocketBatchTitle(batch) {
     if (batch.id === "legacy") return t("pocket.legacyBatch");
     const savedAt = formatPocketTime(batch.createdAt);
-    return savedAt ? `${t("pocket.batchSaved")} ${savedAt}` : t("pocket.batchSaved");
+    return savedAt;
   }
 
   function resolvePocketActiveBatch(batches = []) {

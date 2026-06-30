@@ -341,7 +341,7 @@ const en = {
 
   "pocket.title": "Pocket",
   "pocket.savedInfo": "Saved Preview conversations with valid user and assistant messages.",
-  "pocket.groups": "Pocket groups",
+  "pocket.groups": "Pocket",
   "pocket.emptyGroups": "No saved groups",
   "pocket.actions": "Actions",
   "pocket.showActions": "Show actions",
@@ -357,7 +357,6 @@ const en = {
   "pocket.openChat": "Open chat",
   "pocket.copyUserMessage": "Copy user message",
   "pocket.copyAssistantMessage": "Copy assistant message",
-  "pocket.batchSaved": "Saved",
   "pocket.legacyBatch": "Saved before grouping",
   "pocket.restoreBatch": "Restore group",
   "pocket.cardWidth": "Card width",
@@ -808,7 +807,7 @@ const zh_CN = {
 
   "pocket.title": "Pocket",
   "pocket.savedInfo": "保存包含有效用户和助手消息的 Preview 对话。",
-  "pocket.groups": "Pocket 分组",
+  "pocket.groups": "Pocket",
   "pocket.emptyGroups": "暂无保存分组",
   "pocket.actions": "操作",
   "pocket.showActions": "展开操作",
@@ -824,7 +823,6 @@ const zh_CN = {
   "pocket.openChat": "打开聊天",
   "pocket.copyUserMessage": "复制用户消息",
   "pocket.copyAssistantMessage": "复制助手消息",
-  "pocket.batchSaved": "保存于",
   "pocket.legacyBatch": "旧版保存内容",
   "pocket.restoreBatch": "一键恢复",
   "pocket.cardWidth": "卡片宽度",

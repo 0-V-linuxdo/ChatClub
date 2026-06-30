@@ -2436,10 +2436,13 @@ body.settings-tab-group-button-dragging iframe {
 
 .modal.pocket-history-modal.pocket-history-modal-fullscreen,
 .modal.pocket-history-modal.pocket-history-modal-focus {
-  inset: 12px;
+  inset: 0;
   width: auto;
   height: auto;
+  max-width: none;
   max-height: none;
+  border-radius: 0;
+  box-shadow: none;
   transform: none;
 }
 
@@ -2542,6 +2545,7 @@ body.settings-tab-group-button-dragging iframe {
   flex: 1 1 auto;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 10px;
 }
 
@@ -2550,6 +2554,7 @@ body.settings-tab-group-button-dragging iframe {
 }
 
 .pocket-sidebar-titlebar strong {
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   color: var(--text);
@@ -5618,8 +5623,8 @@ body.settings-tab-group-button-dragging iframe {
 }
 
 .popover-menu.layout-popover {
-  width: 242px;
-  max-width: min(242px, calc(100vw - 16px));
+  width: 282px;
+  max-width: min(282px, calc(100vw - 16px));
   gap: 3px;
   padding: 7px;
   border-radius: 10px;

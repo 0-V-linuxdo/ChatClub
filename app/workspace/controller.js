@@ -22,6 +22,7 @@ const DRAG_TAB_GROUP_MIME = "application/x-chatclub-tab-group";
 const DRAG_GROUP_MIME = "application/x-chatclub-group";
 const TAB_DRAG_START_DISTANCE = 6;
 const GROUP_DRAG_START_DISTANCE = 6;
+const LAYOUT_POPOVER_RIGHT_EXTENSION = 40;
 const APP_PICKER_INTERNATIONAL_IDS = [
   "ChatGPT",
   "Claude",
@@ -1746,7 +1747,7 @@ export function createWorkspaceController(ctx = {}) {
     closePopovers();
     anchor.classList.add("popover-anchor");
     const rect = anchor.getBoundingClientRect();
-    const right = Math.max(8, window.innerWidth - rect.right);
+    const right = Math.max(8, window.innerWidth - rect.right - LAYOUT_POPOVER_RIGHT_EXTENSION);
     const top = Math.min(rect.bottom + 7, window.innerHeight - 8);
     const backdrop = el("div", {
       class: "popover-backdrop layout-backdrop",
