@@ -1,7 +1,7 @@
 import { DEFAULT_TOPBAR_LAYOUT } from "./topbar.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-06-30｜15:11:24」";
+export const APP_VERSION = "「2026-07-02｜15:35:04」";
 export const BASELINE_MOD_VERSION = "2.4.0.14";
 export const HOMEPAGE_URL = "https://chatclub.local/";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
@@ -94,6 +94,7 @@ export const DEFAULT_MODEL_PREFERENCES = Object.freeze(
 export const TAB_GROUP_HEADER_BUTTONS = [
   { id: "addApp", icon: "plus", section: "header", defaultPlacement: "pinned" },
   { id: "reload", icon: "reload", section: "header", defaultPlacement: "pinned" },
+  { id: "deleteThread", icon: "trash", section: "header", defaultPlacement: "pinned", danger: true },
   { id: "fullscreen", icon: "maximize", section: "header", defaultPlacement: "pinned" },
   { id: "openInNewTab", icon: "external", section: "menu", defaultPlacement: "menu" },
   { id: "copyLink", icon: "copy", section: "menu", defaultPlacement: "menu" },
@@ -125,6 +126,7 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
       Object.freeze({ id: "topbar.optimizePrompt", labelKey: "topbar.optimizePrompt" }),
       Object.freeze({ id: "topbar.send", labelKey: "topbar.send" }),
       Object.freeze({ id: "topbar.newChat", labelKey: "topbar.newChat" }),
+      Object.freeze({ id: "topbar.deleteThread", labelKey: "topbar.deleteThread" }),
       Object.freeze({ id: "topbar.summary", labelKey: "topbar.summary" }),
       Object.freeze({ id: "topbar.pocket", labelKey: "topbar.pocket" }),
       Object.freeze({ id: "topbar.addGroup", labelKey: "topbar.addGroup" }),
@@ -152,6 +154,7 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
       Object.freeze({ id: "workspace.group.openInNewTab", labelKey: "common.openInNewTab" }),
       Object.freeze({ id: "workspace.group.copyLink", labelKey: "common.copyLink" }),
       Object.freeze({ id: "workspace.group.reload", labelKey: "chat.reload" }),
+      Object.freeze({ id: "workspace.group.deleteThread", labelKey: "chat.deleteThreadInGroup" }),
       Object.freeze({ id: "workspace.group.fullscreen", labelKey: "chat.fullscreen" }),
       Object.freeze({ id: "workspace.group.remove", labelKey: "chat.removeGroup" }),
       Object.freeze({ id: "workspace.group.more", labelKey: "chat.more" }),
@@ -248,6 +251,7 @@ export const DEFAULT_OPTIONS = {
   tabGroupButtonPlacement: DEFAULT_TAB_GROUP_BUTTON_PLACEMENT,
   tabGroupButtonOrder: DEFAULT_TAB_GROUP_BUTTON_ORDER,
   topbarLayout: DEFAULT_TOPBAR_LAYOUT,
+  topbarDeleteThreadMigrated: true,
   apiProfiles: [
     {
       id: "default-openai",
@@ -288,6 +292,7 @@ export const DEFAULT_SHORTCUT_CONFIG = {
   shortcuts: {
     focusInput: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyK" },
     newChat: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyN" },
+    deleteThread: { alt: false, shift: true, cmdOrCtrl: true, code: "Backspace" },
     optimizePrompt: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyO" },
     openSummaryPanel: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyS" },
     openPocketPanel: { alt: false, shift: false, cmdOrCtrl: true, code: "KeyP" },

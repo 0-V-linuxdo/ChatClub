@@ -14,7 +14,7 @@ const SHORTCUT_SETTING_GROUPS = [
   {
     titleKey: "shortcuts.globalTitle",
     descriptionKey: "shortcuts.globalDesc",
-    actions: ["focusInput", "newChat", "optimizePrompt", "openSummaryPanel", "openPocketPanel", "insertPrompt", "switchLayout", "switchPlatformTab"]
+    actions: ["focusInput", "newChat", "deleteThread", "optimizePrompt", "openSummaryPanel", "openPocketPanel", "insertPrompt", "switchLayout", "switchPlatformTab"]
   },
   {
     titleKey: "shortcuts.chatTitle",

@@ -4,8 +4,8 @@
   "short_name": "ChatClub",
   "description": "__MSG_extension_description__",
   "default_locale": "zh_CN",
-  "version": "2026.6.30",
-  "version_name": "「2026-06-30｜15:11:24」",
+  "version": "2026.7.2",
+  "version_name": "「2026-07-02｜15:35:04」",
   "homepage_url": "https://chatclub.local/",
   "action": {
     "default_title": "ChatClub",

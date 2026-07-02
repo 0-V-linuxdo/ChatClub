@@ -1,6 +1,7 @@
 (() => {
   const COPY_SOURCE = "chatclub-native-copy";
   const GEMINI_MODEL_PICKER_SOURCE = "chatclub-gemini-model-picker";
+  const DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread";
 
   function installGeminiModelPickerBridge() {
     if (window.__CHATCLUB_GEMINI_MODEL_PICKER_BRIDGE__) return;
@@ -166,6 +167,498 @@
           type: "response",
           id: message.id,
           action: "open",
+          ...result
+        }, "*");
+      } catch {}
+    }, true);
+  }
+
+  function installDeepSeekDeleteBridge() {
+    if (window.__CHATCLUB_DEEPSEEK_DELETE_BRIDGE__) return;
+
+    const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const normalize = (value) => String(value || "").replace(/\s+/g, " ").trim();
+    const compact = (value) => String(value || "").toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, "");
+    const all = (selector, root = document) => {
+      try { return Array.from(root.querySelectorAll(selector)); } catch { return []; }
+    };
+    const rectOf = (el) => {
+      try {
+        if (!el?.getBoundingClientRect) return null;
+        const rect = el.getBoundingClientRect();
+        if (!rect || rect.width < 2 || rect.height < 2) return null;
+        return rect;
+      } catch {
+        return null;
+      }
+    };
+    const visible = (el) => {
+      const rect = rectOf(el);
+      if (!rect) return false;
+      try {
+        const style = getComputedStyle(el);
+        return style.display !== "none" && style.visibility !== "hidden" && Number(style.opacity) !== 0;
+      } catch {
+        return true;
+      }
+    };
+    const textOf = (el) => normalize([
+      el?.getAttribute?.("aria-label"),
+      el?.getAttribute?.("title"),
+      el?.innerText || el?.textContent || ""
+    ].filter(Boolean).join(" "));
+    const centerOf = (el) => {
+      const rect = rectOf(el);
+      return rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : { x: 1, y: 1 };
+    };
+    const currentChatId = () => {
+      const match = String(location.href || "").match(/\/(?:a\/)?chat\/s\/([^/?#]+)/i);
+      return match?.[1] || "";
+    };
+    const chatIdFromLink = (link) => {
+      const href = String(link?.href || link?.getAttribute?.("href") || "");
+      const match = href.match(/\/(?:a\/)?chat\/s\/([^/?#]+)/i);
+      return match?.[1] || "";
+    };
+    const closestClickable = (el) => {
+      try {
+        return el?.closest?.("button,[role='button'],[role='menuitem'],a[href],[tabindex]:not([tabindex='-1']),[class*='button' i]") || el || null;
+      } catch {
+        return el || null;
+      }
+    };
+    const disabled = (el) => {
+      if (!el) return true;
+      try {
+        return el.disabled === true
+          || el.getAttribute?.("disabled") != null
+          || String(el.getAttribute?.("aria-disabled") || "").toLowerCase() === "true";
+      } catch {
+        return false;
+      }
+    };
+    const dispatchPointer = (el) => {
+      const point = centerOf(el);
+      const PointerEventCtor = typeof PointerEvent === "function" ? PointerEvent : null;
+      const MouseEventCtor = typeof MouseEvent === "function" ? MouseEvent : null;
+      const base = {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        view: window,
+        clientX: point.x,
+        clientY: point.y,
+        screenX: point.x,
+        screenY: point.y,
+        button: 0
+      };
+      let dispatched = false;
+      const plans = [
+        ["pointerover", PointerEventCtor, { buttons: 0, pointerId: 1, pointerType: "mouse", isPrimary: true }],
+        ["mouseover", MouseEventCtor, { buttons: 0, detail: 0 }],
+        ["pointermove", PointerEventCtor, { buttons: 0, pointerId: 1, pointerType: "mouse", isPrimary: true }],
+        ["mousemove", MouseEventCtor, { buttons: 0, detail: 0 }],
+        ["pointerdown", PointerEventCtor, { buttons: 1, pointerId: 1, pointerType: "mouse", isPrimary: true }],
+        ["mousedown", MouseEventCtor, { buttons: 1, detail: 1 }],
+        ["pointerup", PointerEventCtor, { buttons: 0, pointerId: 1, pointerType: "mouse", isPrimary: true }],
+        ["mouseup", MouseEventCtor, { buttons: 0, detail: 1 }],
+        ["click", MouseEventCtor, { buttons: 0, detail: 1 }]
+      ];
+      for (const [type, Ctor, extra] of plans) {
+        try {
+          if (typeof Ctor !== "function") continue;
+          el.dispatchEvent(new Ctor(type, { ...base, ...extra }));
+          dispatched = true;
+        } catch {}
+      }
+      try {
+        el.click?.();
+        dispatched = true;
+      } catch {}
+      return dispatched;
+    };
+    const eventPathFor = (target, currentTarget) => {
+      const path = [];
+      const add = (node) => {
+        if (node && !path.includes(node)) path.push(node);
+      };
+      add(target);
+      for (let node = target; node; node = node.parentNode || node.host || null) add(node);
+      add(currentTarget);
+      add(document);
+      add(window);
+      return path;
+    };
+    const fakeReactEvent = (target, currentTarget, type = "click") => {
+      const point = centerOf(target);
+      const event = {
+        type,
+        target,
+        srcElement: target,
+        currentTarget,
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        button: 0,
+        buttons: type === "mousedown" || type === "pointerdown" ? 1 : 0,
+        detail: 1,
+        clientX: point.x,
+        clientY: point.y,
+        screenX: point.x,
+        screenY: point.y,
+        defaultPrevented: false,
+        preventDefault() { this.defaultPrevented = true; },
+        stopPropagation() {},
+        stopImmediatePropagation() {},
+        isDefaultPrevented() { return this.defaultPrevented; },
+        isPropagationStopped() { return false; },
+        persist() {},
+        composedPath() { return eventPathFor(target, currentTarget); }
+      };
+      event.nativeEvent = event;
+      return event;
+    };
+    const reactPropBags = (node) => {
+      const bags = [];
+      const seen = new Set();
+      const addBag = (bag) => {
+        if (!bag || seen.has(bag)) return;
+        seen.add(bag);
+        bags.push(bag);
+      };
+      for (const current of [node, closestClickable(node), node?.parentElement].filter(Boolean)) {
+        try { addBag(current); } catch {}
+        let names = [];
+        try { names = Object.getOwnPropertyNames(current); } catch {}
+        for (const name of names) {
+          if (!/react|props|fiber/i.test(name)) continue;
+          let value = null;
+          try { value = current[name]; } catch {}
+          addBag(value);
+          addBag(value?.memoizedProps);
+          addBag(value?.pendingProps);
+          for (let fiber = value?.return, depth = 0; fiber && depth < 6; fiber = fiber.return, depth += 1) {
+            addBag(fiber.memoizedProps);
+            addBag(fiber.pendingProps);
+          }
+        }
+      }
+      return bags;
+    };
+    const invokeReact = (node, handlerNames = ["onClick", "onPointerUp", "onMouseUp", "onPointerDown", "onMouseDown"]) => {
+      if (!node || disabled(node)) return false;
+      const target = closestClickable(node) || node;
+      try { target.focus?.({ preventScroll: true }); } catch {
+        try { target.focus?.(); } catch {}
+      }
+      for (const bag of reactPropBags(target)) {
+        for (const handlerName of handlerNames) {
+          const handler = bag?.[handlerName];
+          if (typeof handler !== "function") continue;
+          try {
+            const eventType = handlerName.replace(/^on/, "").toLowerCase() || "click";
+            handler.call(target, fakeReactEvent(target, target, eventType));
+            return true;
+          } catch {}
+        }
+      }
+      return false;
+    };
+    const activate = (node, handlerNames) => {
+      const target = closestClickable(node);
+      if (!target || disabled(target)) return false;
+      try { target.scrollIntoView?.({ block: "center", inline: "nearest" }); } catch {}
+      return invokeReact(target, handlerNames) || dispatchPointer(target);
+    };
+    const waitFor = async (getter, timeoutMs = 3000, intervalMs = 90) => {
+      const deadline = Date.now() + Math.max(0, Number(timeoutMs) || 0);
+      while (Date.now() <= deadline) {
+        const value = getter();
+        if (value) return value;
+        await wait(Math.max(30, Number(intervalMs) || 30));
+      }
+      return getter();
+    };
+    const currentTopicLink = () => {
+      const links = all("a[href*='/chat/s/'],a[href*='/a/chat/s/']").filter(visible);
+      const id = currentChatId();
+      if (id) {
+        const exact = links.find((link) => chatIdFromLink(link) === id);
+        if (exact) return exact;
+      }
+      const selected = links.find((link) => {
+        const className = String(link.className || "");
+        const ariaCurrent = String(link.getAttribute?.("aria-current") || "").toLowerCase();
+        return /\b(active|selected|current)\b/i.test(className) || ariaCurrent === "page";
+      });
+      return selected || links[0] || null;
+    };
+    const hoverTopic = (link) => {
+      try { link.scrollIntoView?.({ block: "center", inline: "nearest" }); } catch {}
+      for (const target of [link, link?.parentElement, link?.parentElement?.parentElement].filter(Boolean)) {
+        const point = centerOf(target);
+        const PointerEventCtor = typeof PointerEvent === "function" ? PointerEvent : null;
+        const MouseEventCtor = typeof MouseEvent === "function" ? MouseEvent : null;
+        for (const type of ["pointerover", "mouseover", "mouseenter", "pointermove", "mousemove"]) {
+          try {
+            const Ctor = type.startsWith("pointer") ? PointerEventCtor : MouseEventCtor;
+            if (typeof Ctor !== "function") continue;
+            target.dispatchEvent(new Ctor(type, {
+              bubbles: type !== "mouseenter",
+              cancelable: true,
+              composed: true,
+              view: window,
+              clientX: point.x,
+              clientY: point.y,
+              screenX: point.x,
+              screenY: point.y,
+              pointerId: 1,
+              pointerType: "mouse",
+              isPrimary: true
+            }));
+          } catch {}
+        }
+      }
+    };
+    const findTopicMoreButton = (link) => {
+      if (!link) return null;
+      hoverTopic(link);
+      const linkRect = rectOf(link);
+      if (!linkRect) return null;
+      const candidates = [];
+      const seen = new Set();
+      const add = (node, extra = 0) => {
+        const target = closestClickable(node);
+        if (!target || seen.has(target) || target === link || disabled(target)) return;
+        const rect = rectOf(target);
+        if (!rect || rect.width > 80 || rect.height > 80) return;
+        const overlaps = rect.top < linkRect.bottom + 8 && rect.bottom > linkRect.top - 8;
+        const nearRight = rect.left >= linkRect.right - 120 && rect.left <= linkRect.right + 80;
+        if (!overlaps || !nearRight) return;
+        const value = compact(textOf(target));
+        if (value && !/more|menu|options|ellipsis|dots|更多|菜单|选项/.test(value)) return;
+        seen.add(target);
+        candidates.push({
+          element: target,
+          score: extra + (visible(target) ? 180 : 40) + (!value ? 180 : 0) + Math.max(0, 100 - Math.abs(rect.right - linkRect.right)),
+          right: rect.right
+        });
+      };
+      for (const node of all("button,[role='button'],[aria-haspopup],[tabindex]:not([tabindex='-1']),[class*='button' i]", link)) add(node, 260);
+      for (const offset of [8, 18, 30, 44, 64, 88]) {
+        try {
+          const pointTarget = document.elementFromPoint(Math.max(linkRect.left + 8, linkRect.right - offset), linkRect.top + linkRect.height / 2);
+          if (pointTarget) add(pointTarget, 180 - offset);
+        } catch {}
+      }
+      candidates.sort((a, b) => b.score - a.score || b.right - a.right);
+      return candidates[0]?.element || null;
+    };
+    const menuRoots = () => all([
+      "[role='menu']",
+      "[role='listbox']",
+      "[data-radix-popper-content-wrapper]",
+      "[data-floating-ui-portal]",
+      "[class*='dropdown' i]",
+      "[class*='popover' i]",
+      "[class*='menu' i]",
+      "body > div"
+    ].join(", ")).filter((root) => {
+      if (!visible(root)) return false;
+      const value = textOf(root);
+      const area = (() => {
+        const rect = rectOf(root);
+        return rect ? rect.width * rect.height : 0;
+      })();
+      return area < 450000 && /delete|rename|pin|share|删除|重命名|置顶|分享/i.test(value);
+    }).sort((a, b) => {
+      const ar = rectOf(a);
+      const br = rectOf(b);
+      return (br?.right || 0) - (ar?.right || 0) || (ar?.top || 0) - (br?.top || 0);
+    });
+    const isDeleteMenuText = (value) => {
+      const token = compact(value);
+      return token === "delete" || token === "删除";
+    };
+    const findDeleteMenuItem = () => {
+      const roots = menuRoots();
+      const candidates = [];
+      for (const root of roots) {
+        for (const node of all("button,[role='button'],[role='menuitem'],[tabindex]:not([tabindex='-1']),div", root)) {
+          if (!visible(node) || disabled(node)) continue;
+          const value = textOf(node);
+          if (!isDeleteMenuText(value)) continue;
+          const target = closestClickable(node);
+          const rect = rectOf(target);
+          candidates.push({
+            element: target,
+            area: rect ? rect.width * rect.height : 0,
+            top: rect?.top || 0
+          });
+        }
+      }
+      candidates.sort((a, b) => a.area - b.area || a.top - b.top);
+      return candidates[0]?.element || null;
+    };
+    const dialogTextMatches = (value) => {
+      const text = String(value || "").toLowerCase();
+      const token = compact(value);
+      return /are you sure|chat can(?:'|’)?t be recovered|chat cant be recovered|share links from it will be disabled|recover|recovered|confirm|cancel|cannot be undone|permanently|确定|确认|取消|恢复|不可恢复|无法恢复|不能恢复/.test(text)
+        || /areyousure|chatcantberecovered|sharelinksfromitwillbedisabled|recover|recovered|confirm|cancel|cannotbeundone|permanently|确定|确认|取消|恢复|不可恢复|无法恢复|不能恢复/.test(token);
+    };
+    const dialogConfirmContextMatches = (value) => {
+      const text = String(value || "").toLowerCase();
+      const token = compact(value);
+      return /are you sure|chat can(?:'|’)?t be recovered|chat cant be recovered|share links from it will be disabled|recover|recovered|confirm|cannot be undone|permanently|确定|确认|恢复|不可恢复|无法恢复|不能恢复/.test(text)
+        || /areyousure|chatcantberecovered|sharelinksfromitwillbedisabled|recover|recovered|confirm|cannotbeundone|permanently|确定|确认|恢复|不可恢复|无法恢复|不能恢复/.test(token);
+    };
+    const dialogHasCancel = (value) => {
+      const text = String(value || "").toLowerCase();
+      const token = compact(value);
+      return /cancel|取消/.test(text) || /cancel|取消/.test(token);
+    };
+    const dialogRoots = () => all([
+      "[role='alertdialog']",
+      "[role='dialog']",
+      "[data-radix-dialog-content]",
+      "[data-state='open']",
+      "[class*='modal' i]",
+      "body > div"
+    ].join(", ")).filter((root) => {
+      if (!visible(root)) return false;
+      const rect = rectOf(root);
+      const area = rect ? rect.width * rect.height : 0;
+      const semantic = (() => {
+        try {
+          return root.matches?.("[role='alertdialog'],[role='dialog'],[data-radix-dialog-content]") || false;
+        } catch {
+          return false;
+        }
+      })();
+      if (!semantic && (area < 1200 || area > 380000)) return false;
+      return dialogTextMatches(textOf(root));
+    })
+      .sort((a, b) => {
+        const ar = rectOf(a);
+        const br = rectOf(b);
+        return (ar ? ar.width * ar.height : 0) - (br ? br.width * br.height : 0);
+      });
+    const isConfirmText = (value) => {
+      const token = compact(value);
+      if (!token || /cancel|取消|keep|保留/.test(token)) return false;
+      return token === "deletechat"
+        || token === "delete"
+        || token === "confirm"
+        || token === "confirmdelete"
+        || token === "删除"
+        || token === "确认"
+        || token === "确认删除"
+        || token === "删除聊天";
+    };
+    const confirmDialogFor = (node) => {
+      for (let root = node, depth = 0; root && root !== document.body && depth < 8; root = root.parentElement, depth += 1) {
+        if (!visible(root)) continue;
+        const rootText = textOf(root);
+        if (dialogHasCancel(rootText) && dialogConfirmContextMatches(rootText)) return { element: root, text: rootText };
+      }
+      return null;
+    };
+    const findConfirmButtonFast = () => {
+      const candidates = [];
+      for (const node of all("button,[role='button'],[tabindex]:not([tabindex='-1']),[class*='button' i]")) {
+        if (!visible(node) || disabled(node)) continue;
+        const value = textOf(node);
+        if (!isConfirmText(value)) continue;
+        const dialog = confirmDialogFor(node);
+        if (!dialog) continue;
+        const target = closestClickable(node);
+        if (!target || disabled(target)) continue;
+        const rect = rectOf(target);
+        const token = compact(value);
+        candidates.push({
+          element: target,
+          score: token === "deletechat" || token === "删除聊天" ? 700 : 0,
+          area: rect ? rect.width * rect.height : 0,
+          right: rect?.right || 0,
+          dialogText: dialog.text
+        });
+      }
+      candidates.sort((a, b) => b.score - a.score || a.area - b.area || b.right - a.right);
+      return candidates[0]?.element || null;
+    };
+    const findConfirmButton = () => {
+      const fast = findConfirmButtonFast();
+      if (fast) return fast;
+      const candidates = [];
+      for (const root of dialogRoots()) {
+        const rootText = textOf(root);
+        if (!dialogTextMatches(rootText)) continue;
+        for (const node of all("button,[role='button'],[tabindex]:not([tabindex='-1']),[class*='button' i],div", root)) {
+          if (!visible(node) || disabled(node)) continue;
+          const value = textOf(node);
+          if (!isConfirmText(value)) continue;
+          const target = closestClickable(node);
+          const rect = rectOf(target);
+          candidates.push({
+            element: target,
+            score: compact(value) === "deletechat" || compact(value) === "删除聊天" ? 600 : 0,
+            area: rect ? rect.width * rect.height : 0,
+            right: rect?.right || 0
+          });
+        }
+      }
+      candidates.sort((a, b) => b.score - a.score || a.area - b.area || b.right - a.right);
+      return candidates[0]?.element || null;
+    };
+    const confirmGone = () => !findConfirmButton();
+    const clickExistingConfirm = async () => {
+      const button = findConfirmButton();
+      if (!button) return null;
+      if (!activate(button, ["onClick", "onPointerUp", "onMouseUp"])) return { ok: false, reason: "delete confirmation click failed" };
+      const closed = await waitFor(confirmGone, 5200, 140);
+      return closed ? { ok: true } : { ok: false, reason: "delete confirmation did not close" };
+    };
+    const deleteThread = async () => {
+      const existingConfirm = await clickExistingConfirm();
+      if (existingConfirm) return existingConfirm;
+      const link = currentTopicLink();
+      if (!link) return { ok: false, reason: "current topic row not found" };
+      const trigger = await waitFor(() => findTopicMoreButton(link), 1800, 80);
+      if (!trigger) return { ok: false, reason: "topic menu trigger not found" };
+      if (!activate(trigger, ["onClick", "onPointerUp", "onMouseUp", "onPointerDown", "onMouseDown"])) {
+        return { ok: false, reason: "topic menu trigger click failed" };
+      }
+      const deleteItem = await waitFor(findDeleteMenuItem, 3000, 90);
+      if (!deleteItem) return { ok: false, reason: "delete menu item not found" };
+      if (!activate(deleteItem, ["onClick", "onPointerUp", "onMouseUp"])) {
+        return { ok: false, reason: "delete menu item click failed" };
+      }
+      const confirmButton = await waitFor(findConfirmButton, 4200, 100);
+      if (!confirmButton) return { ok: false, reason: "delete confirmation button not found" };
+      if (!activate(confirmButton, ["onClick", "onPointerUp", "onMouseUp"])) {
+        return { ok: false, reason: "delete confirmation click failed" };
+      }
+      const closed = await waitFor(confirmGone, 6200, 140);
+      return closed ? { ok: true } : { ok: false, reason: "delete confirmation did not close" };
+    };
+
+    window.__CHATCLUB_DEEPSEEK_DELETE_BRIDGE__ = { deleteThread };
+    window.addEventListener("message", async (event) => {
+      const message = event.data;
+      if (message?.source !== DEEPSEEK_DELETE_SOURCE || message.type !== "request" || message.action !== "deleteThread") return;
+      let result;
+      try {
+        result = await deleteThread();
+      } catch (error) {
+        result = { ok: false, reason: error?.message || String(error || "delete bridge failed") };
+      }
+      try {
+        window.postMessage({
+          source: DEEPSEEK_DELETE_SOURCE,
+          type: "response",
+          id: message.id,
+          action: "deleteThread",
+          site: "deepseek",
           ...result
         }, "*");
       } catch {}
@@ -432,6 +925,10 @@
 
   if (host === "gemini.google.com" || host.endsWith(".gemini.google.com")) {
     installGeminiModelPickerBridge();
+  }
+
+  if (host === "chat.deepseek.com" || host === "deepseek.com" || host.endsWith(".deepseek.com")) {
+    installDeepSeekDeleteBridge();
   }
 
   if (framed && (host === "claude.ai" || host.endsWith(".claude.ai"))) {

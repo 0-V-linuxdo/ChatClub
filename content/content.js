@@ -2,6 +2,7 @@
   const SOURCE = "chatclub";
   const COPY_SOURCE = "chatclub-native-copy";
   const GEMINI_MODEL_PICKER_SOURCE = "chatclub-gemini-model-picker";
+  const DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread";
   const PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript";
 
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -20,6 +21,7 @@
     shortcuts: {
       focusInput: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyK" },
       newChat: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyN" },
+      deleteThread: { alt: false, shift: true, cmdOrCtrl: true, code: "Backspace" },
       optimizePrompt: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyO" },
       openSummaryPanel: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyS" },
       openPocketPanel: { alt: false, shift: false, cmdOrCtrl: true, code: "KeyP" },
@@ -34,6 +36,7 @@
   const SHORTCUT_ACTIONS = [
     "focusInput",
     "newChat",
+    "deleteThread",
     "optimizePrompt",
     "openSummaryPanel",
     "openPocketPanel",
@@ -1280,6 +1283,8 @@
     const plans = [
       typeof PointerEventCtor === "function" && { ctor: PointerEventCtor, type: "pointerover", opts: { ...common, buttons: 0, pointerId: 1, pointerType: "mouse", isPrimary: true } },
       typeof MouseEventCtor === "function" && { ctor: MouseEventCtor, type: "mouseover", opts: { ...common, buttons: 0, detail: 0 } },
+      typeof PointerEventCtor === "function" && { ctor: PointerEventCtor, type: "pointerenter", opts: { ...common, bubbles: false, buttons: 0, pointerId: 1, pointerType: "mouse", isPrimary: true } },
+      typeof MouseEventCtor === "function" && { ctor: MouseEventCtor, type: "mouseenter", opts: { ...common, bubbles: false, buttons: 0, detail: 0 } },
       typeof PointerEventCtor === "function" && { ctor: PointerEventCtor, type: "pointermove", opts: { ...common, buttons: 0, pointerId: 1, pointerType: "mouse", isPrimary: true } },
       typeof MouseEventCtor === "function" && { ctor: MouseEventCtor, type: "mousemove", opts: { ...common, buttons: 0, detail: 0 } },
       typeof PointerEventCtor === "function" && { ctor: PointerEventCtor, type: "pointerdown", opts: { ...common, buttons: 1, pointerId: 1, pointerType: "mouse", isPrimary: true } },
@@ -1337,6 +1342,859 @@
     return dispatchPointerActivation(el, modelCenterPoint(el)) || nativeModelClick(el);
   }
 
+  function deleteResult(ok, site, reason = "", extra = {}) {
+    if (!ok && reason) console.warn(`[ChatClub] ${site} delete thread: ${reason}`);
+    return { ok, site, ...(reason ? { reason } : {}), ...extra };
+  }
+
+  function deleteTextToken(value) {
+    return normalize(value).toLowerCase().replace(/\s+/g, " ").trim();
+  }
+
+  function deleteCompactToken(value) {
+    return String(value ?? "").toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, "");
+  }
+
+  function deleteElementText(el) {
+    if (!el) return "";
+    return normalize([
+      buttonText(el),
+      modelElementText(el),
+      el.getAttribute?.("aria-label"),
+      el.getAttribute?.("title"),
+      el.innerText || el.textContent || ""
+    ].filter(Boolean).join(" "));
+  }
+
+  function deleteLabelMatches(value, labels, { exact = false } = {}) {
+    const textValue = deleteTextToken(value);
+    const compactValue = deleteCompactToken(value);
+    if (!textValue && !compactValue) return false;
+    return (labels || []).some((label) => {
+      const textLabel = deleteTextToken(label);
+      const compactLabel = deleteCompactToken(label);
+      if (!textLabel && !compactLabel) return false;
+      if (exact) return textValue === textLabel || compactValue === compactLabel;
+      return textValue.includes(textLabel) || compactValue.includes(compactLabel);
+    });
+  }
+
+  function deleteLabelMatchesExactish(value, labels) {
+    const textValue = deleteTextToken(value);
+    const compactValue = deleteCompactToken(value);
+    return (labels || []).some((label) => {
+      const textLabel = deleteTextToken(label);
+      const compactLabel = deleteCompactToken(label);
+      if (!textLabel && !compactLabel) return false;
+      return textValue === textLabel
+        || compactValue === compactLabel
+        || textValue === `${textLabel} ${textLabel}`
+        || compactValue === `${compactLabel}${compactLabel}`;
+      });
+  }
+
+  const DELETE_CLICKABLE_SELECTOR = "button,[role='button'],[role='menuitem'],[role='option'],a[href],[tabindex]:not([tabindex='-1'])";
+  const DELETE_CONFIRM_CANDIDATE_SELECTOR = `${DELETE_CLICKABLE_SELECTOR},[class*='button' i],[class*='btn' i]`;
+
+  function visibleDeleteCandidates(root = document, selector = DELETE_CLICKABLE_SELECTOR) {
+    return qsa(selector, root, { all: true }).filter((element) => visible(element) && !isDisabledElement(element));
+  }
+
+  function layoutDeleteCandidates(root = document, selector = DELETE_CLICKABLE_SELECTOR) {
+    return qsa(selector, root, { all: true }).filter((element) => {
+      if (!element || !element.isConnected || isDisabledElement(element)) return false;
+      const rect = modelRect(element);
+      if (!rect || rect.width < 2 || rect.height < 2) return false;
+      try {
+        const style = getComputedStyle(element);
+        return style.display !== "none" && style.visibility !== "hidden";
+      } catch {
+        return true;
+      }
+    });
+  }
+
+  function deleteClickableElement(element) {
+    return closest(element, DELETE_CONFIRM_CANDIDATE_SELECTOR) || element;
+  }
+
+  function deleteClick(element) {
+    const target = deleteClickableElement(element);
+    return modelClick(target) || modelDirectClick(target);
+  }
+
+  function deleteLayoutActivationTargets(el) {
+    const targets = [];
+    const seen = new Set();
+    const add = (target) => {
+      if (!target || seen.has(target) || isDisabledElement(target)) return;
+      const rect = modelRect(target);
+      if (!rect || rect.width < 2 || rect.height < 2) return;
+      try {
+        const style = getComputedStyle(target);
+        if (style.display === "none" || style.visibility === "hidden") return;
+      } catch {}
+      seen.add(target);
+      targets.push(target);
+    };
+    const point = modelCenterPoint(el);
+    const pointTarget = modelElementFromPoint(point, el);
+    if (pointTarget) {
+      add(modelCustomActivationAncestor(pointTarget));
+      add(modelClickableAncestor(pointTarget));
+      add(pointTarget);
+    }
+    add(el);
+    add(modelCustomActivationAncestor(el));
+    add(modelClickableAncestor(el));
+    return targets;
+  }
+
+  function deleteClickLayout(element) {
+    const target = deleteClickableElement(element);
+    if (!target || !target.isConnected || isDisabledElement(target)) return false;
+    const rect = modelRect(target);
+    if (!rect || rect.width < 2 || rect.height < 2) return false;
+    try { target.scrollIntoView?.({ block: "center", inline: "nearest" }); } catch {}
+    let clicked = false;
+    for (const item of deleteLayoutActivationTargets(target)) {
+      try { item.focus?.({ preventScroll: true }); } catch {
+        try { item.focus?.(); } catch {}
+      }
+      clicked = dispatchPointerActivation(item, modelCenterPoint(item) || modelCenterPoint(target)) || clicked;
+      clicked = nativeModelClick(item) || clicked;
+      if (clicked) return true;
+    }
+    return clicked;
+  }
+
+  const DELETE_CONFIRM_LABELS = ["Delete chat", "Delete Chat", "Delete thread", "Delete", "Confirm", "Confirm delete", "确认", "确认删除", "删除聊天", "删除话题", "删除"];
+  const DELETE_CONFIRM_STRICT_LABELS = ["Delete chat", "Delete Chat", "Delete thread", "Confirm delete", "确认删除", "删除聊天", "删除话题"];
+  const DELETE_CONFIRM_GENERIC_LABELS = ["Delete", "Confirm", "确认", "删除"];
+  const DELETE_CANCEL_LABELS = ["Cancel", "取消", "Keep", "保留"];
+  const DELETE_CONFIRM_REJECT_LABEL_PATTERN = /\b(rename|more|options|menu|pin|share|settings|history)\b|重命名|更多|菜单|选项|置顶|分享|设置|历史/i;
+
+  function deleteConfirmRejectButtonMatches(element) {
+    const value = deleteElementText(element);
+    return DELETE_CONFIRM_REJECT_LABEL_PATTERN.test(deleteTextToken(value))
+      || DELETE_CONFIRM_REJECT_LABEL_PATTERN.test(deleteCompactToken(value));
+  }
+
+  function deleteConfirmButtonMatches(element, root = null) {
+    const value = deleteElementText(element);
+    if (!value || deleteLabelMatches(value, DELETE_CANCEL_LABELS)) return false;
+    if (deleteConfirmRejectButtonMatches(element)) return false;
+    if (deleteLabelMatchesExactish(value, DELETE_CONFIRM_STRICT_LABELS)) return true;
+    if (deleteLabelMatchesExactish(value, DELETE_CONFIRM_GENERIC_LABELS)) return true;
+    if (root && deleteConfirmRootTextMatches(deleteElementText(root))) return deleteLabelMatches(value, DELETE_CONFIRM_LABELS);
+    return deleteLabelMatches(value, DELETE_CONFIRM_STRICT_LABELS);
+  }
+
+  function deleteCancelButtonMatches(element) {
+    return deleteLabelMatches(deleteElementText(element), DELETE_CANCEL_LABELS);
+  }
+
+  function deleteDialogRoots() {
+    const roots = visibleSelectorElements([
+      "[role='alertdialog']",
+      "[role='dialog']",
+      "[data-radix-dialog-content]",
+      "[data-state='open']",
+      ".modal",
+      ".fixed"
+    ]).filter((root) => {
+      const value = deleteElementText(root);
+      return /delete|recover|remove|删除|撤销|恢复/i.test(value);
+    });
+    for (const root of deleteQuestionDialogRoots()) {
+      if (!roots.some((item) => item === root || item.contains?.(root) || root.contains?.(item))) roots.push(root);
+    }
+    for (const root of deleteButtonPairDialogRoots()) {
+      if (!roots.some((item) => item === root || item.contains?.(root) || root.contains?.(item))) roots.push(root);
+    }
+    roots.sort((a, b) => modelElementArea(a) - modelElementArea(b));
+    return roots;
+  }
+
+  function deleteConfirmQuestionMatches(value) {
+    return /are you sure you want to delete(?: this)? chat|are you sure.*delete|this chat can(?:'|’)?t be recovered|this chat cant be recovered|delete this chat|share links from it will be disabled|cannot be undone|can(?:'|’)?t be undone|permanently delete|permanent deletion|确定.*删除|确认.*删除|删除.*不可恢复|无法恢复|不能恢复/i.test(deleteTextToken(value));
+  }
+
+  function deleteConfirmRootTextMatches(value) {
+    const textValue = deleteTextToken(value);
+    const compactValue = deleteCompactToken(value);
+    if (deleteConfirmQuestionMatches(textValue)) return true;
+    const hasDelete = /delete|删除/.test(textValue) || /delete|删除/.test(compactValue);
+    const hasConfirm = /confirm|确认/.test(textValue) || /confirm|确认/.test(compactValue);
+    const hasCancel = /cancel|取消/.test(textValue) || /cancel|取消/.test(compactValue);
+    const hasRecoverWarning = /recover|recovered|不可恢复|无法恢复|不能恢复/.test(textValue) || /recover|recovered|不可恢复|无法恢复|不能恢复/.test(compactValue);
+    return hasCancel && (hasRecoverWarning || (hasDelete && hasConfirm));
+  }
+
+  function deleteQuestionDialogRoots() {
+    const roots = [];
+    const questions = qsa("div,section,[role='dialog'],[role='alertdialog']", document, { all: true })
+      .filter((element) => visible(element) && deleteConfirmQuestionMatches(deleteElementText(element)))
+      .sort((a, b) => modelElementArea(a) - modelElementArea(b))
+      .slice(0, 24);
+    for (const question of questions) {
+      let node = question;
+      for (let depth = 0; node && node !== document.body && depth < 8; depth += 1, node = node.parentElement) {
+        if (!visible(node)) continue;
+        const buttons = visibleDeleteCandidates(node, DELETE_CONFIRM_CANDIDATE_SELECTOR);
+        const hasConfirm = buttons.some((button) => deleteConfirmButtonMatches(button, node));
+        const hasCancel = buttons.some(deleteCancelButtonMatches);
+        if (!hasConfirm || !hasCancel) continue;
+        if (!roots.some((root) => root === node || root.contains?.(node) || node.contains?.(root))) roots.push(node);
+        break;
+      }
+    }
+    return roots.sort((a, b) => modelElementArea(a) - modelElementArea(b));
+  }
+
+  function deleteButtonPairDialogRoots() {
+    const roots = [];
+    const seedButtons = visibleDeleteCandidates(document, DELETE_CONFIRM_CANDIDATE_SELECTOR)
+      .filter((button) => deleteConfirmButtonMatches(button) || deleteCancelButtonMatches(button));
+    for (const button of seedButtons) {
+      let node = button;
+      for (let depth = 0; node && node !== document.body && depth < 9; depth += 1, node = node.parentElement) {
+        if (!visible(node)) continue;
+        const buttons = visibleDeleteCandidates(node, DELETE_CONFIRM_CANDIDATE_SELECTOR);
+        if (!buttons.some((candidate) => deleteConfirmButtonMatches(candidate, node)) || !buttons.some(deleteCancelButtonMatches)) continue;
+        if (!deleteConfirmRootTextMatches(deleteElementText(node))) continue;
+        if (!roots.some((root) => root === node || root.contains?.(node) || node.contains?.(root))) roots.push(node);
+        break;
+      }
+    }
+    return roots.sort((a, b) => modelElementArea(a) - modelElementArea(b));
+  }
+
+  function findDeleteConfirmButtonInfo() {
+    const candidates = [];
+    for (const root of deleteDialogRoots()) {
+      for (const element of visibleDeleteCandidates(root, DELETE_CONFIRM_CANDIDATE_SELECTOR)) {
+        const value = deleteElementText(element);
+        if (!deleteConfirmButtonMatches(element, root)) continue;
+        const rect = modelRect(element);
+        candidates.push({
+          element,
+          root,
+          score: deleteLabelMatchesExactish(value, ["Delete chat", "Delete Chat", "Confirm", "删除聊天", "确认"]) ? 400 : 0,
+          right: rect?.right || rect?.left || 0
+        });
+      }
+    }
+    candidates.sort((a, b) => b.score - a.score || b.right - a.right);
+    return candidates[0] || null;
+  }
+
+  function findDeleteConfirmButton() {
+    return findDeleteConfirmButtonInfo()?.element || null;
+  }
+
+  function deleteConfirmDialogClosed(root, button) {
+    if (button && (!button.isConnected || !visible(button))) return true;
+    if (root && (!root.isConnected || !visible(root))) return true;
+    if (!root) return !findDeleteConfirmButton();
+    return !deleteDialogRoots().some((candidate) => candidate === root || candidate.contains?.(root) || root.contains?.(candidate));
+  }
+
+  function dispatchDeleteConfirmKey(target, key = "Enter") {
+    if (!target) return false;
+    const KeyboardEventCtor = modelEventConstructor("KeyboardEvent", target);
+    if (typeof KeyboardEventCtor !== "function") return false;
+    const isSpace = key === " " || /^space(?:bar)?$/i.test(key);
+    const code = isSpace ? "Space" : "Enter";
+    const keyValue = isSpace ? " " : "Enter";
+    const keyCode = isSpace ? 32 : 13;
+    let dispatched = false;
+    const init = {
+      key: keyValue,
+      code,
+      keyCode,
+      which: keyCode,
+      bubbles: true,
+      cancelable: true,
+      composed: true
+    };
+    for (const type of ["keydown", "keypress", "keyup"]) {
+      try {
+        target.dispatchEvent(new KeyboardEventCtor(type, init));
+        dispatched = true;
+      } catch {}
+    }
+    return dispatched;
+  }
+
+  function dispatchDeleteConfirmEnter(target) {
+    return dispatchDeleteConfirmKey(target, "Enter") || dispatchDeleteConfirmKey(target, " ");
+  }
+
+  function clickDeleteConfirmButton(button) {
+    if (!button || !button.isConnected || isDisabledElement(button)) return false;
+    const target = deleteClickableElement(button);
+    const point = modelCenterPoint(target) || modelCenterPoint(button);
+    const pointTarget = modelElementFromPoint(point, target || button);
+    const targets = [];
+    const seen = new Set();
+    const add = (element) => {
+      if (!element || seen.has(element) || isDisabledElement(element)) return;
+      if (!visible(element) && !modelRect(element)) return;
+      seen.add(element);
+      targets.push(element);
+    };
+    add(modelClickableAncestor(pointTarget));
+    add(modelCustomActivationAncestor(pointTarget));
+    add(pointTarget);
+    add(target);
+    add(button);
+    for (let node = button?.parentElement, depth = 0; node && node !== document.body && depth < 3; node = node.parentElement, depth += 1) {
+      const rect = modelRect(node);
+      if (rect && rect.width <= 800 && rect.height <= 520) add(node);
+    }
+    let clicked = false;
+    for (const element of targets) {
+      try { element.scrollIntoView?.({ block: "center", inline: "nearest" }); } catch {}
+      try { element.focus?.({ preventScroll: true }); } catch {
+        try { element.focus?.(); } catch {}
+      }
+      clicked = dispatchPointerActivation(element, modelCenterPoint(element) || point) || clicked;
+      clicked = nativeModelClick(element) || clicked;
+      clicked = dispatchDeleteConfirmEnter(element) || clicked;
+    }
+    try {
+      activateElement(button);
+      clicked = true;
+    } catch {}
+    return clicked;
+  }
+
+  async function clickDeleteConfirmIfPresent(timeoutMs = 4200) {
+    const deadline = Date.now() + Math.max(0, Number(timeoutMs) || 0);
+    let clickedRoot = null;
+    let clickedButton = null;
+    let clickedAt = 0;
+    while (Date.now() <= deadline) {
+      if (clickedButton && deleteConfirmDialogClosed(clickedRoot, clickedButton)) return true;
+      const info = findDeleteConfirmButtonInfo();
+      const button = info?.element || null;
+      if (button && (button !== clickedButton || Date.now() - clickedAt > 900) && clickDeleteConfirmButton(button)) {
+        clickedRoot = info.root || null;
+        clickedButton = button;
+        clickedAt = Date.now();
+        await sleep(220);
+        if (deleteConfirmDialogClosed(clickedRoot, clickedButton)) return true;
+      }
+      await sleep(120);
+    }
+    if (clickedButton && deleteConfirmDialogClosed(clickedRoot, clickedButton)) return true;
+    return false;
+  }
+
+  let suppressShortcutBridgeUntil = 0;
+
+  function dispatchDeleteKeyboardShortcut() {
+    const mac = /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || "");
+    const init = {
+      key: "Backspace",
+      code: "Backspace",
+      keyCode: 8,
+      which: 8,
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      shiftKey: true,
+      metaKey: mac,
+      ctrlKey: !mac,
+      altKey: false
+    };
+    const targets = [document.activeElement, document.body, document.documentElement, document, window].filter(Boolean);
+    suppressShortcutBridgeUntil = Date.now() + 500;
+    let dispatched = false;
+    const seen = new Set();
+    for (const target of targets) {
+      if (!target || seen.has(target)) continue;
+      seen.add(target);
+      const KeyboardEventCtor = modelEventConstructor("KeyboardEvent", target);
+      if (typeof KeyboardEventCtor !== "function") continue;
+      for (const type of ["keydown", "keyup"]) {
+        try {
+          target.dispatchEvent(new KeyboardEventCtor(type, init));
+          dispatched = true;
+        } catch {}
+      }
+    }
+    return dispatched;
+  }
+
+  async function deleteKagiThread() {
+    if (!dispatchDeleteKeyboardShortcut()) return deleteResult(false, "kagi", "delete shortcut dispatch failed");
+    await sleep(240);
+    await clickDeleteConfirmIfPresent(1800);
+    return deleteResult(true, "kagi");
+  }
+
+  const DELETE_MENU_ROOT_SELECTORS = [
+    "[role='menu']",
+    "[role='listbox']",
+    "[role='dialog']",
+    "[data-radix-menu-content]",
+    "[data-radix-popper-content-wrapper]",
+    "[data-floating-ui-portal]",
+    "[data-slot='dropdown-menu-content']",
+    "[cmdk-root]",
+    "[class*='dropdown' i]",
+    "[class*='popover' i]",
+    "[class*='popper' i]",
+    "[class*='menu' i]"
+  ];
+
+  function menuRootsWithDelete(labels) {
+    const roots = visibleSelectorElements(DELETE_MENU_ROOT_SELECTORS)
+      .filter((root) => {
+        const value = deleteElementText(root);
+        return deleteLabelMatches(value, labels) || /rename|pin|share|重命名|置顶|分享/i.test(value);
+      })
+      .sort((a, b) => {
+        const ar = modelRect(a);
+        const br = modelRect(b);
+        return (br?.right || 0) - (ar?.right || 0) || (ar?.top || 0) - (br?.top || 0);
+      });
+    const pushRoot = (root) => {
+      if (!root || !visible(root)) return;
+      const rect = modelRect(root);
+      if (!rect || rect.width < 72 || rect.height < 28 || rect.width > 520 || rect.height > 620) return;
+      const value = deleteElementText(root);
+      if (!deleteLabelMatches(value, labels) && !/rename|pin|share|重命名|置顶|分享/i.test(value)) return;
+      if (!roots.some((item) => item === root || item.contains?.(root) || root.contains?.(item))) roots.push(root);
+    };
+    for (const item of visibleDeleteCandidates(document)) {
+      if (!deleteLabelMatches(deleteElementText(item), labels)) continue;
+      for (let node = item; node && node !== document.body; node = node.parentElement) {
+        pushRoot(node);
+        if (roots.some((root) => root === node)) break;
+      }
+    }
+    roots.sort((a, b) => {
+      const ar = modelRect(a);
+      const br = modelRect(b);
+      return (br?.right || 0) - (ar?.right || 0) || (ar?.top || 0) - (br?.top || 0) || modelElementArea(a) - modelElementArea(b);
+    });
+    return roots;
+  }
+
+  function findDeleteMenuItem(root, labels) {
+    const candidates = [];
+    const cancelLabels = ["Cancel", "取消"];
+    for (const element of visibleDeleteCandidates(root)) {
+      const value = deleteElementText(element);
+      if (!deleteLabelMatches(value, labels)) continue;
+      if (deleteLabelMatches(value, cancelLabels)) continue;
+      const target = deleteClickableElement(element);
+      if (!target || !visible(target) || isDisabledElement(target)) continue;
+      const rect = modelRect(target);
+      candidates.push({
+        element: target,
+        score: deleteLabelMatches(value, labels, { exact: true }) ? 500 : 0,
+        top: rect?.top || 0,
+        area: rect ? rect.width * rect.height : 0
+      });
+    }
+    candidates.sort((a, b) => b.score - a.score || a.top - b.top || a.area - b.area);
+    return candidates[0]?.element || null;
+  }
+
+  async function openTriggerAndClickDelete(trigger, labels, { timeoutMs = 3200, allowHiddenTrigger = false } = {}) {
+    if (!trigger || (!visible(trigger) && !allowHiddenTrigger)) return false;
+    const existingRoot = menuRootsWithDelete(labels)[0] || null;
+    if (!existingRoot && !(allowHiddenTrigger ? deleteClickLayout(trigger) : deleteClick(trigger))) return false;
+    await sleep(140);
+    const deadline = Date.now() + Math.max(0, Number(timeoutMs) || 0);
+    while (Date.now() <= deadline) {
+      const root = menuRootsWithDelete(labels)[0] || existingRoot;
+      const item = root ? findDeleteMenuItem(root, labels) : null;
+      if (item && deleteClick(item)) return true;
+      await sleep(120);
+    }
+    return false;
+  }
+
+  function topRightMenuTrigger({ labels = [], selectors = [] } = {}) {
+    const viewportWidth = Math.max(1, Number(window.innerWidth) || Number(document.documentElement?.clientWidth) || 1);
+    const candidates = [];
+    const seen = new Set();
+    const selector = [
+      ...selectors,
+      "button",
+      "[role='button']",
+      "[aria-haspopup='menu']",
+      "[aria-expanded]"
+    ].join(", ");
+    for (const element of qsa(selector, document, { all: true })) {
+      const target = deleteClickableElement(element);
+      if (!target || seen.has(target) || !visible(target) || isDisabledElement(target)) continue;
+      seen.add(target);
+      const rect = modelRect(target);
+      if (!rect || rect.top > 190 || rect.right < viewportWidth * 0.45) continue;
+      if (target.closest?.(DELETE_MENU_ROOT_SELECTORS.join(", "))) continue;
+      const value = deleteElementText(target);
+      const hasLabel = deleteLabelMatches(value, labels);
+      const popup = String(target.getAttribute?.("aria-haspopup") || "").toLowerCase();
+      const compact = deleteCompactToken(value);
+      const hasMore = /more|menu|options|ellipsis|delete|rename|更多|菜单|选项|删除|重命名/.test(compact);
+      const svg = svgSignature(target);
+      const hasEllipsisIcon = /ellipsis|more|dots|circle/.test(svg) || (qsa("circle", target).length >= 2);
+      if (!hasLabel && !hasMore && popup !== "menu" && !hasEllipsisIcon) continue;
+      candidates.push({
+        element: target,
+        score: (hasLabel ? 900 : 0)
+          + (hasMore ? 320 : 0)
+          + (popup === "menu" ? 160 : 0)
+          + (hasEllipsisIcon ? 140 : 0)
+          + (rect.right >= viewportWidth * 0.72 ? 80 : 0)
+          + (rect.width <= 64 ? 40 : 0),
+        right: rect.right,
+        top: rect.top
+      });
+    }
+    candidates.sort((a, b) => b.score - a.score || b.right - a.right || a.top - b.top);
+    return candidates[0]?.element || null;
+  }
+
+  async function deleteGrokThread() {
+    const labels = ["Delete Chat", "Delete chat", "Delete", "删除聊天", "删除"];
+    const trigger = topRightMenuTrigger({ labels: ["More", "More actions", "Menu", "Options", "更多", "菜单"] });
+    if (!trigger) return deleteResult(false, "grok", "conversation menu trigger not found");
+    if (!await openTriggerAndClickDelete(trigger, labels)) return deleteResult(false, "grok", "delete menu item not found");
+    await clickDeleteConfirmIfPresent(3600);
+    return deleteResult(true, "grok");
+  }
+
+  function findNotionDeleteMenuTrigger() {
+    const selectors = [
+      "button[aria-label*='Delete, rename, and more' i]",
+      "[role='button'][aria-label*='Delete, rename, and more' i]",
+      "button[aria-label*='delete, rename' i]",
+      "[role='button'][aria-label*='delete, rename' i]",
+      "button[aria-label*='删除'][aria-label*='重命名']",
+      "[role='button'][aria-label*='删除'][aria-label*='重命名']",
+      "button[aria-label*='more' i][aria-haspopup='menu']",
+      "[role='button'][aria-label*='more' i][aria-haspopup='menu']"
+    ];
+    return topRightMenuTrigger({ selectors, labels: ["Delete, rename, and more", "More", "更多", "删除", "重命名"] });
+  }
+
+  async function deleteNotionThread() {
+    if (findDeleteConfirmButton()) {
+      const confirmedExisting = await clickDeleteConfirmIfPresent(6500);
+      return confirmedExisting
+        ? deleteResult(true, "notion")
+        : deleteResult(false, "notion", "delete confirmation did not close");
+    }
+    const labels = ["Delete", "Delete topic", "删除", "删除话题"];
+    const trigger = findNotionDeleteMenuTrigger();
+    if (!trigger) return deleteResult(false, "notion", "conversation menu trigger not found");
+    if (!await openTriggerAndClickDelete(trigger, labels)) return deleteResult(false, "notion", "delete menu item not found");
+    const confirmed = await clickDeleteConfirmIfPresent(6500);
+    if (!confirmed && deleteDialogRoots().length) return deleteResult(false, "notion", "delete confirmation did not close");
+    return deleteResult(true, "notion");
+  }
+
+  function deepSeekChatLinks(root = document) {
+    return qsa("a[href*='/chat/s/'],a[href*='/a/chat/s/']", root, { all: true })
+      .filter((link) => visible(link) && modelRect(link));
+  }
+
+  function deepSeekSidebarRootFromLinks() {
+    const links = deepSeekChatLinks(document)
+      .filter((link) => {
+        const rect = modelRect(link);
+        return rect && rect.left <= 470 && rect.width >= 100 && rect.height >= 20 && rect.height <= 96;
+      });
+    if (!links.length) return null;
+    const currentId = deepSeekChatIdFromHref(location.href);
+    const current = currentId ? links.find((link) => deepSeekChatIdFromHref(link.href || link.getAttribute?.("href")).includes(currentId)) : null;
+    const seeds = current ? [current] : links.slice(0, 4);
+    const scoreRoot = (root) => {
+      if (!root || !root.isConnected) return null;
+      const rect = modelRect(root);
+      if (!rect || rect.left > 470 || rect.width < 120 || rect.width > 360 || rect.height < 40) return null;
+      const rootLinks = deepSeekChatLinks(root).length;
+      if (rootLinks < (current ? 1 : 2)) return null;
+      const value = deleteElementText(root);
+      const className = String(root.className || "");
+      const hasHistoryText = /today|yesterday|pinned|new chat|今天|昨天|新聊天|置顶/i.test(value);
+      const looksScrollable = /scroll|history|sidebar|sider/i.test(className);
+      if (!hasHistoryText && !looksScrollable && rootLinks < 3) return null;
+      return (looksScrollable ? 900 : 0) + Math.min(rootLinks, 12) * 80 + Math.min(rect.height, 900) * 0.02 - rect.left;
+    };
+    const candidates = [];
+    const seen = new Set();
+    for (const seed of seeds) {
+      for (let node = seed; node && node !== document.body; node = node.parentElement) {
+        if (seen.has(node)) continue;
+        seen.add(node);
+        const score = scoreRoot(node);
+        if (score == null) continue;
+        candidates.push({ element: node, score, area: modelElementArea(node) });
+      }
+    }
+    candidates.sort((a, b) => b.score - a.score || a.area - b.area);
+    return candidates[0]?.element || null;
+  }
+
+  function deepSeekSidebarRoot() {
+    const linkRoot = deepSeekSidebarRootFromLinks();
+    if (linkRoot) return linkRoot;
+    const roots = visibleSelectorElements([
+      "aside",
+      "nav",
+      "[class*='sidebar' i]",
+      "[class*='sider' i]",
+      "[class*='history' i]"
+    ]).filter((root) => {
+      const rect = modelRect(root);
+      if (!rect || rect.width < 120 || rect.left > 460) return false;
+      const value = deleteElementText(root);
+      return /today|yesterday|new chat|新聊天|昨天|今天|rename|pin|share|delete|删除/i.test(value);
+    });
+    roots.sort((a, b) => (modelRect(b)?.width || 0) - (modelRect(a)?.width || 0));
+    return roots[0] || null;
+  }
+
+  function findDeepSeekSidebarToggle() {
+    const direct = firstVisibleBySelectors([
+      "button[aria-label*='sidebar' i]",
+      "[role='button'][aria-label*='sidebar' i]",
+      "button[title*='sidebar' i]",
+      "[role='button'][title*='sidebar' i]",
+      "button:has(svg path[d*='M9.67269'])",
+      "[role='button']:has(svg path[d*='M9.67269'])"
+    ]);
+    if (direct) return direct;
+    const candidates = visibleSelectorElements("button,[role='button']")
+      .map((element) => ({ element, rect: modelRect(element), text: deleteElementText(element), svg: svgSignature(element) }))
+      .filter((item) => item.rect && item.rect.top <= 90 && item.rect.left <= 130 && item.rect.width >= 20 && item.rect.width <= 64 && item.rect.height >= 20 && item.rect.height <= 64)
+      .filter((item) => /sidebar|menu|panel|sider|侧边栏|菜单/i.test(item.text) || /sidebar|panel|menu|M9\.67269/i.test(item.svg));
+    candidates.sort((a, b) => a.rect.left - b.rect.left || a.rect.top - b.rect.top);
+    return candidates[0]?.element || findDeepSeekTopHeaderIconButton(0) || findDeepSeekTopHeaderIconButton(1) || null;
+  }
+
+  function findDeepSeekTopHeaderIconButton(indexFromLeft = 0) {
+    const buttons = visibleSelectorElements("button,a[href],[role='button'],[onclick],[tabindex]:not([tabindex='-1'])")
+      .map((element) => ({ element, rect: modelRect(element), text: deleteElementText(element) }))
+      .filter((item) => item.rect && item.rect.top >= 0 && item.rect.top < 90 && item.rect.left >= 0 && item.rect.left < 420)
+      .filter((item) => item.rect.width >= 16 && item.rect.width <= 56 && item.rect.height >= 16 && item.rect.height <= 56)
+      .filter((item) => !deleteCompactToken(item.text));
+    buttons.sort((a, b) => a.rect.left - b.rect.left || a.rect.top - b.rect.top);
+    return buttons[indexFromLeft]?.element || buttons[0]?.element || null;
+  }
+
+  async function clickDeepSeekSidebarToggleByPoint() {
+    const points = [
+      { x: 22, y: 28 },
+      { x: 22, y: 44 },
+      { x: 22, y: 60 },
+      { x: 46, y: 28 },
+      { x: 46, y: 44 },
+      { x: 46, y: 60 }
+    ];
+    for (const point of points) {
+      const target = modelElementFromPoint(point);
+      const button = deleteClickableElement(target);
+      const rect = modelRect(button);
+      if (!button || !rect || !visible(button) || isDisabledElement(button)) continue;
+      if (rect.top > 96 || rect.left > 110 || rect.width > 80 || rect.height > 80) continue;
+      if (!dispatchPointerActivation(button, point) && !nativeModelClick(button) && !modelDirectClick(button)) continue;
+      if (await waitForModel(deepSeekSidebarRoot, 1400, 100)) return true;
+    }
+    return false;
+  }
+
+  async function ensureDeepSeekSidebarOpen() {
+    if (deepSeekSidebarRoot()) return true;
+    const toggle = findDeepSeekSidebarToggle();
+    if (toggle && deleteClick(toggle) && await waitForModel(deepSeekSidebarRoot, 3200, 120)) return true;
+    return clickDeepSeekSidebarToggleByPoint();
+  }
+
+  function deepSeekTitleTokenFromValue(value) {
+    const raw = normalize(value || "")
+      .replace(/\s*[-|–]\s*DeepSeek.*$/i, "")
+      .replace(/\s*-\s*深度求索.*$/i, "");
+    const token = deleteCompactToken(raw);
+    return /^(deepseek|deepseekintotheunknown|intotheunknown|newchat|新聊天)$/.test(token) ? "" : token;
+  }
+
+  function deepSeekChatIdFromHref(value) {
+    const match = String(value || "").match(/\/(?:a\/)?chat\/s\/([^/?#]+)/i);
+    return match?.[1] || "";
+  }
+
+  function deepSeekDeleteHints(data = {}) {
+    const hrefs = [
+      location.href,
+      data.currentThreadHref,
+      data.currentHref,
+      data.cachedHref,
+      data.href,
+      data.url
+    ].filter(Boolean);
+    const ids = new Set(hrefs.map(deepSeekChatIdFromHref).filter(Boolean));
+    const titleTokens = new Set([
+      document.title,
+      data.currentTitle,
+      data.title
+    ].map(deepSeekTitleTokenFromValue).filter(Boolean));
+    return {
+      ids: Array.from(ids),
+      titleTokens: Array.from(titleTokens),
+      hasTarget: ids.size > 0 || titleTokens.size > 0
+    };
+  }
+
+  function deepSeekTopicRows(root, hints = deepSeekDeleteHints()) {
+    const candidates = [];
+    const seen = new Set();
+    for (const element of qsa("a,button,[role='button'],li,div", root || document, { all: true })) {
+      if (!element || seen.has(element) || !visible(element)) continue;
+      const rect = modelRect(element);
+      if (!rect || rect.left > 470 || rect.width < 120 || rect.height < 26 || rect.height > 96) continue;
+      const value = deleteElementText(element);
+      const compact = deleteCompactToken(value);
+      if (!compact || compact.length < 2 || compact.length > 120) continue;
+      if (/^(today|yesterday|newchat|threads|history|今天|昨天|新聊天|历史)$/.test(compact)) continue;
+      if (/rename|pin|share|delete|cancel|搜索|设置|删除|重命名|分享|置顶/i.test(value)) continue;
+      const target = deleteClickableElement(element);
+      if (!target || seen.has(target)) continue;
+      seen.add(target);
+      const href = String(element.href || element.getAttribute?.("href") || target.href || target.getAttribute?.("href") || "");
+      const hrefToken = deleteCompactToken(href);
+      const className = String(target.className || element.className || "");
+      const active = /\b(active|selected|current)\b/i.test(className) || String(target.getAttribute?.("aria-current") || "").toLowerCase() === "page";
+      const titleMatch = hints.titleTokens?.some((token) => compact.includes(token) || token.includes(compact));
+      const urlMatch = hints.ids?.some((id) => href.includes(id) || hrefToken.includes(deleteCompactToken(id)));
+      candidates.push({
+        element: target,
+        score: (urlMatch ? 1100 : 0) + (titleMatch ? 900 : 0) + (active ? 520 : 0) + (rect.top < 180 ? 120 : 0) - rect.top * 0.02,
+        rect
+      });
+    }
+    candidates.sort((a, b) => b.score - a.score || a.rect.top - b.rect.top);
+    return candidates.filter((item) => item.score >= 500).map((item) => item.element);
+  }
+
+  function hoverDeepSeekTopicRow(row) {
+    const rowRect = modelRect(row);
+    if (!rowRect) return;
+    const point = { clientX: Math.max(rowRect.left + 16, rowRect.right - 24), clientY: rowRect.top + rowRect.height / 2 };
+    const targets = [];
+    for (let node = row; node && node !== document.body && targets.length < 5; node = node.parentElement) targets.push(node);
+    for (const target of targets) {
+      for (const type of ["pointerover", "mouseover", "mouseenter", "mousemove", "pointermove"]) {
+        try {
+          const EventCtor = type.startsWith("pointer") ? modelEventConstructor("PointerEvent", target) : modelEventConstructor("MouseEvent", target);
+          target.dispatchEvent(new EventCtor(type, {
+            bubbles: true,
+            cancelable: true,
+            composed: true,
+            view: window,
+            pointerId: 1,
+            pointerType: "mouse",
+            isPrimary: true,
+            ...point
+          }));
+        } catch {}
+      }
+    }
+  }
+
+  function deepSeekTopicMoreButton(row) {
+    if (!row) return null;
+    reveal(row);
+    const rowRect = modelRect(row);
+    hoverDeepSeekTopicRow(row);
+    if (!rowRect) return null;
+    const candidates = [];
+    const seen = new Set();
+    const add = (button, source = "", extraScore = 0) => {
+      const target = deleteClickableElement(button);
+      if (!target || seen.has(target) || target === row || isDisabledElement(target)) return;
+      const rect = modelRect(target);
+      if (!rect || rect.width < 10 || rect.height < 10 || rect.width > 72 || rect.height > 72) return;
+      const overlaps = rect.top < rowRect.bottom + 10 && rect.bottom > rowRect.top - 10;
+      const nearRight = rect.left >= rowRect.right - 120 && rect.left <= rowRect.right + 80;
+      if (!overlaps || !nearRight) return;
+      const value = deleteElementText(target);
+      const compact = deleteCompactToken(value);
+      if (compact && !/more|options|menu|ellipsis|dots|更多|菜单|选项/.test(compact)) return;
+      if (String(target.href || target.getAttribute?.("href") || "").match(/\/(?:a\/)?chat\/s\//i)) return;
+      const signature = svgSignature(target);
+      const iconish = !compact || /more|options|menu|ellipsis|dots|circle/.test(signature) || qsa("circle", target).length >= 2 || rect.width <= 44;
+      if (!iconish) return;
+      seen.add(target);
+      candidates.push({
+        element: target,
+        score: extraScore
+          + (visible(target) ? 140 : 40)
+          + (!compact ? 180 : 0)
+          + (/more|options|menu|更多|菜单|选项/.test(compact) ? 220 : 0)
+          + (/ellipsis|more|dots|circle/.test(signature) ? 120 : 0)
+          + Math.max(0, 80 - Math.abs((rect.left + rect.right) / 2 - (rowRect.right - 28))),
+        right: rect.right,
+        source
+      });
+    };
+    const scopes = [];
+    for (let node = row; node && node !== document.body && scopes.length < 5; node = node.parentElement) scopes.push(node);
+    for (const scope of scopes) {
+      for (const button of layoutDeleteCandidates(scope, "button,[role='button'],[aria-haspopup],[tabindex]:not([tabindex='-1'])")) add(button, "scope", 80);
+    }
+    for (const offset of [8, 18, 32, 48, 64, 84]) {
+      const point = { x: Math.max(rowRect.left + 16, rowRect.right - offset), y: rowRect.top + rowRect.height / 2 };
+      const pointTarget = modelElementFromPoint(point, row);
+      if (pointTarget) add(pointTarget, "point", 160 - offset);
+      const pointButton = pointTarget && closest(pointTarget, "button,[role='button'],[aria-haspopup],[tabindex]:not([tabindex='-1'])");
+      if (pointButton) add(pointButton, "point-button", 180 - offset);
+    }
+    for (const button of qsa("button,[role='button'],[aria-haspopup],[tabindex]:not([tabindex='-1'])", document, { all: true })) add(button, "nearby", 0);
+    candidates.sort((a, b) => b.score - a.score || b.right - a.right);
+    return candidates[0]?.element || null;
+  }
+
+  async function deleteDeepSeekThread(data = {}) {
+    if (!await ensureDeepSeekSidebarOpen()) return deleteResult(false, "deepseek", "sidebar could not be opened");
+    const bridged = await requestDeepSeekDeleteBridge(10500);
+    if (bridged?.ok) return deleteResult(true, "deepseek");
+    const bridgeReason = bridged?.reason || "";
+    if (bridgeReason && !/bridge timeout|bridge failed/i.test(bridgeReason)) {
+      const confirmedAfterBridge = await clickDeleteConfirmIfPresent(1800);
+      if (confirmedAfterBridge) return deleteResult(true, "deepseek");
+    }
+    const root = deepSeekSidebarRoot();
+    const hints = deepSeekDeleteHints(data);
+    const row = deepSeekTopicRows(root, hints)[0] || null;
+    if (!row) return deleteResult(false, "deepseek", bridgeReason || "current topic row not found");
+    const moreButton = await waitForModel(() => deepSeekTopicMoreButton(row), 1600, 100);
+    if (!moreButton) return deleteResult(false, "deepseek", bridgeReason || "topic menu trigger not found");
+    const labels = ["Delete", "删除"];
+    if (!await openTriggerAndClickDelete(moreButton, labels, { timeoutMs: 2600, allowHiddenTrigger: true })) return deleteResult(false, "deepseek", bridgeReason || "delete menu item not found");
+    const confirmed = await clickDeleteConfirmIfPresent(6500);
+    if (!confirmed) return deleteResult(false, "deepseek", bridgeReason || "delete confirmation button not found");
+    return deleteResult(true, "deepseek");
+  }
+
+  async function deleteThread(data = {}) {
+    const appId = String(data.appId || data.appName || "").trim();
+    const host = String(location.hostname || "").toLowerCase();
+    if (/kagi/i.test(appId) || host === "assistant.kagi.com") return deleteKagiThread();
+    if (/grok/i.test(appId) || host === "gk.dairoot.cn" || host.endsWith(".gk.dairoot.cn") || host === "grok.com" || host.endsWith(".grok.com") || host === "grok.x.ai" || host.endsWith(".grok.x.ai")) return deleteGrokThread();
+    if (/notion/i.test(appId) || host === "app.notion.com" || host === "notion.so" || host === "www.notion.so" || host.endsWith(".notion.so")) return deleteNotionThread();
+    if (/deepseek/i.test(appId) || host === "chat.deepseek.com" || host === "deepseek.com" || host.endsWith(".deepseek.com")) return deleteDeepSeekThread(data);
+    return deleteResult(false, appId || host || "unknown", "unsupported site");
+  }
+
   async function waitForModel(getter, timeoutMs = 2500, intervalMs = 120) {
     const deadline = Date.now() + Math.max(0, Number(timeoutMs) || 0);
     while (Date.now() <= deadline) {
@@ -1364,6 +2222,31 @@
       window.addEventListener("message", onMessage, true);
       try {
         window.postMessage({ source: GEMINI_MODEL_PICKER_SOURCE, type: "request", action: "open", id }, "*");
+      } catch (error) {
+        clearTimeout(timer);
+        window.removeEventListener("message", onMessage, true);
+        resolve({ ok: false, reason: error?.message || String(error || "bridge failed") });
+      }
+    });
+  }
+
+  function requestDeepSeekDeleteBridge(timeoutMs = 9000) {
+    return new Promise((resolve) => {
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const timer = setTimeout(() => {
+        window.removeEventListener("message", onMessage, true);
+        resolve({ ok: false, reason: "bridge timeout" });
+      }, Math.max(500, Number(timeoutMs) || 9000));
+      function onMessage(event) {
+        const message = event.data;
+        if (message?.source !== DEEPSEEK_DELETE_SOURCE || message.type !== "response" || message.id !== id) return;
+        clearTimeout(timer);
+        window.removeEventListener("message", onMessage, true);
+        resolve(message);
+      }
+      window.addEventListener("message", onMessage, true);
+      try {
+        window.postMessage({ source: DEEPSEEK_DELETE_SOURCE, type: "request", action: "deleteThread", id }, "*");
       } catch (error) {
         clearTimeout(timer);
         window.removeEventListener("message", onMessage, true);
@@ -3464,6 +4347,7 @@
       else if (message.action === "getPageText") data = normalize(document.body?.innerText || "");
       else if (message.action === "sendText") data = await sendText(message.data || {});
       else if (message.action === "newChatPreprocess") data = { ok: true };
+      else if (message.action === "deleteThread") data = await deleteThread(message.data || {});
       else if (message.action === "applyPreferredModel") data = await applyPreferredModel(message.data || {});
       else if (message.action === "collectSummary") data = await collectSummary(message.data || {});
       else if (message.action === "getShortcutConfig") data = activeShortcutConfig;
@@ -3475,6 +4359,7 @@
   }, true);
 
   window.addEventListener("keydown", (event) => {
+    if (Date.now() < suppressShortcutBridgeUntil) return;
     const matched = matchShortcut(event);
     if (!matched) return;
     event.preventDefault();
@@ -3491,5 +4376,5 @@
     });
   } catch {}
 
-  window.parent.postMessage({ source: SOURCE, type: "request", action: "contentReady", id: `${Date.now()}`, data: { href: location.href } }, "*");
+  window.parent.postMessage({ source: SOURCE, type: "request", action: "contentReady", id: `${Date.now()}`, data: { href: location.href, title: normalize(document.title || "") } }, "*");
 })();

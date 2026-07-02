@@ -221,6 +221,23 @@ function hasStoredOptions(raw) {
   return !!raw && typeof raw === "object" && !Array.isArray(raw) && Object.keys(raw).length > 0;
 }
 
+function topbarLayoutHasItem(layout, id) {
+  return Array.isArray(layout) && layout.some((item) => item?.type === "item" && item.id === id);
+}
+
+function migrateDeleteThreadTopbarLayout(raw = {}) {
+  const normalized = normalizeTopbarLayout(raw.topbarLayout);
+  if (raw.topbarDeleteThreadMigrated === true || topbarLayoutHasItem(normalized, "deleteThread")) return normalized;
+  const newChatIndex = normalized.findIndex((item) => item.type === "item" && item.id === "newChat");
+  if (newChatIndex < 0) return normalized;
+  const insertIndex = newChatIndex + 1;
+  return [
+    ...normalized.slice(0, insertIndex),
+    { type: "item", id: "deleteThread" },
+    ...normalized.slice(insertIndex)
+  ];
+}
+
 function withoutPromotionApiProfiles(apiProfiles) {
   return apiProfiles.filter((profile) => !DEFAULT_PROMOTION_API_PROFILES.some((promoted) => profile.id === promoted.id));
 }
@@ -348,7 +365,8 @@ export function normalizeOptions(raw = {}) {
     tabGroupButtonPlacement: normalizeTabGroupButtonPlacement(raw.tabGroupButtonPlacement, tabGroupButtonsMode),
     tabGroupButtonOrder: normalizeTabGroupButtonOrder(raw.tabGroupButtonOrder),
     tooltipDisabledIds: normalizeTooltipDisabledIds(raw.tooltipDisabledIds),
-    topbarLayout: normalizeTopbarLayout(raw.topbarLayout),
+    topbarLayout: migrateDeleteThreadTopbarLayout(raw),
+    topbarDeleteThreadMigrated: true,
     pocketCardSize: normalizePocketCardSize(raw.pocketCardSize),
     ...primaryColorState,
     apiProfiles,

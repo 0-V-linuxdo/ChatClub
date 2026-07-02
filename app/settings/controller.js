@@ -566,6 +566,7 @@ export function createSettingsController(ctx) {
       "topbar.optimizePrompt": "sparkles",
       "topbar.send": "send",
       "topbar.newChat": "edit",
+      "topbar.deleteThread": "trash",
       "topbar.summary": "summary",
       "topbar.pocket": "pocket",
       "topbar.addGroup": "plus",
@@ -587,6 +588,7 @@ export function createSettingsController(ctx) {
       "workspace.group.openInNewTab": "external",
       "workspace.group.copyLink": "copy",
       "workspace.group.reload": "reload",
+      "workspace.group.deleteThread": "trash",
       "workspace.group.fullscreen": "maximize",
       "workspace.group.remove": "x",
       "workspace.group.more": "more",
@@ -688,6 +690,7 @@ export function createSettingsController(ctx) {
     const tabGroupButtonLabel = (id) => ({
       addApp: t("chat.addApp"),
       reload: t("chat.reload"),
+      deleteThread: t("chat.deleteThreadInGroup"),
       fullscreen: t("chat.fullscreen"),
       openInNewTab: t("common.openInNewTab"),
       copyLink: t("common.copyLink"),

@@ -179,6 +179,47 @@ export function createWorkspaceController(ctx = {}) {
     setFramePointerBlockedForOverlay
   } = frameRegistry;
 
+  function threadHrefFromLocation(value) {
+    const href = openableTabUrl(value);
+    if (!href) return "";
+    try {
+      const url = new URL(href);
+      const host = url.hostname.toLowerCase();
+      const path = url.pathname || "";
+      if (/\/(?:a\/)?chat\/s\/[^/?#]+/i.test(path)) return href;
+      if (host === "assistant.kagi.com" && /^\/chat\/[^/?#]+/i.test(path)) return href;
+      if ((host === "app.notion.com" || host.endsWith(".notion.com")) && path === "/chat" && url.searchParams.get("t")) return href;
+      if ((host === "grok.com" || host.endsWith(".grok.com") || host === "grok.x.ai" || host.endsWith(".grok.x.ai") || host === "gk.dairoot.cn" || host.endsWith(".gk.dairoot.cn")) && /^\/(?:c|chat)\//i.test(path)) return href;
+    } catch {}
+    return "";
+  }
+
+  function rememberFrameLocation(iframe, meta = {}) {
+    if (!(iframe instanceof HTMLIFrameElement)) return;
+    const href = openableTabUrl(meta.href || meta.url);
+    const title = String(meta.title || "").trim();
+    if (href) {
+      iframe.dataset.currentHref = href;
+      const threadHref = threadHrefFromLocation(href);
+      if (threadHref) iframe.dataset.currentThreadHref = threadHref;
+    }
+    if (title) iframe.dataset.currentTitle = title;
+  }
+
+  function frameDeleteThreadPayload(iframe, fallback = {}) {
+    const app = frameApp(iframe) || appById(fallback.appId);
+    const currentHref = openableTabUrl(iframe?.dataset?.currentHref)
+      || openableTabUrl(iframe?.src || iframe?.getAttribute?.("src"))
+      || openableTabUrl(app?.url);
+    return {
+      appId: app?.id || fallback.appId || iframe?.dataset?.appId || "",
+      appName: app ? inferAppName(app) : "",
+      currentHref,
+      currentThreadHref: openableTabUrl(iframe?.dataset?.currentThreadHref) || threadHrefFromLocation(currentHref),
+      currentTitle: iframe?.dataset?.currentTitle || iframe?.title || ""
+    };
+  }
+
   function customAppIds() {
     return new Set((state.customConfig || []).map((app) => app?.id).filter(Boolean));
   }
@@ -724,14 +765,14 @@ export function createWorkspaceController(ctx = {}) {
     try {
       const meta = await sendToIframe(iframe, "getPageMeta", {}, 1800);
       href = meta?.href || href;
+      rememberFrameLocation(iframe, { href, title: meta?.title });
       logoUrl = effectiveFaviconUrl(href, meta?.logoUrl) || meta?.logoUrl || "";
     } catch {
       logoUrl = effectiveFaviconUrl(href);
     }
     const discoveredLogoUrl = await discoverDeclaredFaviconUrl(href);
     if (discoveredLogoUrl) logoUrl = discoveredLogoUrl;
-    const currentHref = openableTabUrl(href);
-    if (currentHref) iframe.dataset.currentHref = currentHref;
+    rememberFrameLocation(iframe, { href });
     if (logoUrl) {
       rememberFaviconUrl(href, logoUrl);
       if (app.url && app.url !== href) rememberFaviconUrl(app.url, logoUrl);
@@ -1272,6 +1313,7 @@ export function createWorkspaceController(ctx = {}) {
       openInNewTab: () => renderOpenInNewTabButton(group),
       copyLink: () => renderCopyLinkButton(group),
       reload: () => compactIconButton(t("chat.reload"), "reload", () => reloadChat(activeChatForGroup(group)), "", shortcutTooltip(t("chat.reload"), "reloadChat"), "left", "workspace.group.reload"),
+      deleteThread: () => compactIconButton(t("chat.deleteThreadInGroup"), "trash", () => deleteActiveThreadForGroup(group), "danger-action", t("chat.deleteThreadInGroup"), "left", "workspace.group.deleteThread"),
       fullscreen: () => compactIconButton(fullscreenLabel, fullscreenIcon, () => toggleFullscreen(group.id), "fullscreen-action", fullscreenTooltipLabel, "left", "workspace.group.fullscreen"),
       removeGroup: () => renderRemoveGroupButton(group)
     };
@@ -1474,6 +1516,26 @@ export function createWorkspaceController(ctx = {}) {
     await navigator.clipboard.writeText(await activeHref(chat));
     notify(t("chat.linkCopied"), "success");
     closePopovers();
+  }
+
+  async function deleteActiveThreadForGroup(group) {
+    const chat = activeChatForGroup(group);
+    const iframe = activeIframe(chat);
+    if (!chat || !iframe) return;
+    if (!window.confirm(t("topbar.deleteThreadConfirm", { count: 1, plural: "" }))) return;
+    const app = frameApp(iframe) || appById(chat.appId);
+    try {
+      const result = await sendToIframe(iframe, "deleteThread", frameDeleteThreadPayload(iframe, {
+        appId: app?.id || chat.appId || ""
+      }), 15000);
+      if (!result?.ok) throw new Error(result?.reason || "Delete failed");
+      notify(t("toast.deleteThreadTriggered", { count: 1, plural: "" }), "success");
+    } catch (error) {
+      console.warn("[ChatClub] Delete thread failed", error);
+      notify(t("toast.deleteThreadFailed", { count: 1, plural: "" }), "error");
+    } finally {
+      closePopovers();
+    }
   }
 
   function pocketRestoreSources(entries = []) {
@@ -1831,6 +1893,9 @@ export function createWorkspaceController(ctx = {}) {
         reloadChat(activeChatForGroup(group));
         closePopovers();
       }, "secondary", false, shortcutTooltip(t("chat.reload"), "reloadChat"), "left", "workspace.group.reload"),
+      deleteThread: () => menuButton(t("chat.deleteThreadInGroup"), "trash", () => {
+        deleteActiveThreadForGroup(group);
+      }, "danger", false, t("chat.deleteThreadInGroup"), "left", "workspace.group.deleteThread"),
       fullscreen: () => menuButton(fullscreenLabel, fullscreenIcon, () => {
         toggleFullscreen(group.id);
         closePopovers();
@@ -1904,6 +1969,8 @@ export function createWorkspaceController(ctx = {}) {
     iframeForWindow,
     groupIdForFrameWindow,
     syncFrameFavicon,
+    rememberFrameLocation,
+    frameDeleteThreadPayload,
     openableTabUrl,
     openTabUrl,
     hydrateGroups,

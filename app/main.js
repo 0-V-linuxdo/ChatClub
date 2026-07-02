@@ -914,6 +914,27 @@ async function newChatOnFrames() {
   }));
 }
 
+async function deleteThreadOnFrames() {
+  const frames = workspaceController.currentFrames();
+  if (!frames.length) return;
+  const count = frames.length;
+  if (!window.confirm(t("topbar.deleteThreadConfirm", { count, plural: count === 1 ? "" : "s" }))) return;
+  const settled = await Promise.allSettled(frames.map(async (iframe) => {
+    const result = await sendToIframe(iframe, "deleteThread", workspaceController.frameDeleteThreadPayload(iframe), 15000);
+    if (!result?.ok) throw new Error(result?.reason || "Delete failed");
+    return result;
+  }));
+  const failures = settled.filter((item) => item.status === "rejected" || item.value?.ok === false);
+  const successCount = settled.length - failures.length;
+  if (successCount > 0) {
+    toast(t("toast.deleteThreadTriggered", { count: successCount, plural: successCount === 1 ? "" : "s" }), "success");
+  }
+  if (failures.length > 0) {
+    console.warn("[ChatClub] Delete thread failed", failures);
+    toast(t("toast.deleteThreadFailed", { count: failures.length, plural: failures.length === 1 ? "" : "s" }), "error");
+  }
+}
+
 async function optimizeCurrentPrompt() {
   return optimizeController.optimizeCurrentPrompt();
 }
@@ -1707,6 +1728,7 @@ function topbarTooltipIdForItem(item) {
     promptLibrary: "topbar.promptLibrary",
     send: "topbar.send",
     newChat: "topbar.newChat",
+    deleteThread: "topbar.deleteThread",
     summary: "topbar.summary",
     pocket: "topbar.pocket",
     addGroup: "topbar.addGroup",
@@ -1730,6 +1752,7 @@ function renderTopbarItem(item, prompt, collapsedPreview) {
   if (item.id === "composer") return renderTopbarComposer(prompt, collapsedPreview);
   if (item.id === "send") return actionButton(t("topbar.send"), "send", sendPromptToFrames, "primary", t("topbar.send"), "", "", "topbar.send");
   if (item.id === "newChat") return actionButton(t("topbar.newChat"), "edit", newChatOnFrames, "secondary", shortcutTooltip(t("topbar.newChat"), "newChat"), "", "", "topbar.newChat");
+  if (item.id === "deleteThread") return actionButton(t("topbar.deleteThread"), "trash", deleteThreadOnFrames, "danger", shortcutTooltip(t("topbar.deleteThread"), "deleteThread"), "", "", "topbar.deleteThread");
   if (item.id === "summary") return actionButton(t("topbar.summary"), "summary", openSummaryPanel, "secondary", shortcutTooltip(t("topbar.summary"), "openSummaryPanel"), "", "", "topbar.summary");
   if (item.id === "pocket") return actionButton(t("topbar.pocket"), "pocket", openPocketPanel, "secondary", shortcutTooltip(t("topbar.pocket"), "openPocketPanel"), "", topbarItemClass("pocket"), "topbar.pocket");
   if (item.id === "addGroup") return topIconButton(t("topbar.addGroup"), "plus", (event) => workspaceController.openAppPicker(event.currentTarget, { mode: "group" }), t("topbar.addGroup"), "left", "topbar.addGroup");
@@ -1965,6 +1988,11 @@ function runTopbarMenuItem(item, event) {
     newChatOnFrames();
     return;
   }
+  if (item.id === "deleteThread") {
+    closeSettingsJumpMenu();
+    deleteThreadOnFrames();
+    return;
+  }
   if (item.id === "summary") {
     closeSettingsJumpMenu();
     openSummaryPanel();
@@ -2161,6 +2189,7 @@ async function handleShortcutAction(action, matchObj = null, sourceWindow = null
   const digit = shortcutDigit(matchObj);
   if (action === "focusInput") focusPromptInput();
   else if (action === "newChat") await newChatOnFrames();
+  else if (action === "deleteThread") await deleteThreadOnFrames();
   else if (action === "optimizePrompt") await optimizeCurrentPrompt();
   else if (action === "openSummaryPanel" || action === "openSummary") openSummaryPanel();
   else if (action === "openPocketPanel") openPocketPanel();
@@ -2238,8 +2267,7 @@ function installIframeEventBridge() {
     if (message.action === "contentReady") {
       event.source?.postMessage({ source: "chatclub", type: "response", id: message.id, action: message.action, data: { ok: true } }, "*");
       const iframe = workspaceController.iframeForWindow(event.source);
-      const href = workspaceController.openableTabUrl(message.data?.href);
-      if (iframe && href) iframe.dataset.currentHref = href;
+      if (iframe) workspaceController.rememberFrameLocation(iframe, message.data || {});
       workspaceController.syncFrameFavicon(event.source).catch((error) => console.warn("[ChatClub] Failed to sync frame favicon", error));
       if (iframe) schedulePreferredModelApplyToFrame(iframe);
     }

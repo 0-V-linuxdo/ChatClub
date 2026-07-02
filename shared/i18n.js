@@ -27,6 +27,8 @@ const en = {
   "topbar.optimizePrompt": "Optimize prompt",
   "topbar.send": "Send",
   "topbar.newChat": "New Chat",
+  "topbar.deleteThread": "Delete All Topics",
+  "topbar.deleteThreadConfirm": "Delete all current topics in {count} active chat{plural}? This cannot be undone.",
   "topbar.summary": "Summary",
   "topbar.pocket": "Pocket",
   "topbar.addGroup": "Add group",
@@ -63,6 +65,7 @@ const en = {
 
   "chat.addApp": "Add app",
   "chat.reload": "Reload",
+  "chat.deleteThreadInGroup": "Delete Topic in This Group",
   "chat.more": "More",
   "chat.fullscreen": "Full Screen",
   "chat.exitFullscreen": "Exit Full Screen",
@@ -394,6 +397,8 @@ const en = {
   "shortcut.focusInput.desc": "Focus the top prompt input.",
   "shortcut.newChat.label": "New Chat",
   "shortcut.newChat.desc": "Start a new chat in active pages.",
+  "shortcut.deleteThread.label": "Delete All Topics",
+  "shortcut.deleteThread.desc": "Delete all current topics in active pages.",
   "shortcut.optimizePrompt.label": "Optimize Prompt",
   "shortcut.optimizePrompt.desc": "Optimize the current prompt.",
   "shortcut.openSummaryPanel.label": "Summary Panel",
@@ -463,7 +468,9 @@ const en = {
   "toast.shortcutsAutoSaveFailed": "Unable to auto-save shortcuts",
   "toast.configImported": "Config imported",
   "toast.importFailed": "Import failed",
-  "toast.promptOptimized": "Prompt optimized"
+  "toast.promptOptimized": "Prompt optimized",
+  "toast.deleteThreadTriggered": "Delete sent to {count} chat{plural}",
+  "toast.deleteThreadFailed": "Delete failed in {count} chat{plural}"
 };
 
 const zh_CN = {
@@ -493,6 +500,8 @@ const zh_CN = {
   "topbar.optimizePrompt": "优化提示词",
   "topbar.send": "发送",
   "topbar.newChat": "新对话",
+  "topbar.deleteThread": "删除话题",
+  "topbar.deleteThreadConfirm": "删除 {count} 个活动聊天中的当前话题？此操作不可撤销。",
   "topbar.summary": "总结",
   "topbar.pocket": "Pocket",
   "topbar.addGroup": "添加分组",
@@ -529,6 +538,7 @@ const zh_CN = {
 
   "chat.addApp": "添加应用",
   "chat.reload": "刷新",
+  "chat.deleteThreadInGroup": "删除此分组话题",
   "chat.more": "更多",
   "chat.fullscreen": "全屏",
   "chat.exitFullscreen": "退出全屏",
@@ -860,6 +870,8 @@ const zh_CN = {
   "shortcut.focusInput.desc": "聚焦顶部提示词输入框。",
   "shortcut.newChat.label": "新对话",
   "shortcut.newChat.desc": "在活动页面开始新对话。",
+  "shortcut.deleteThread.label": "删除话题",
+  "shortcut.deleteThread.desc": "删除活动页面中的当前话题。",
   "shortcut.optimizePrompt.label": "优化提示词",
   "shortcut.optimizePrompt.desc": "优化当前提示词。",
   "shortcut.openSummaryPanel.label": "Summary 面板",
@@ -929,7 +941,9 @@ const zh_CN = {
   "toast.shortcutsAutoSaveFailed": "无法自动保存快捷键",
   "toast.configImported": "配置已导入",
   "toast.importFailed": "导入失败",
-  "toast.promptOptimized": "提示词已优化"
+  "toast.promptOptimized": "提示词已优化",
+  "toast.deleteThreadTriggered": "已向 {count} 个聊天发送删除",
+  "toast.deleteThreadFailed": "{count} 个聊天删除失败"
 };
 
 export const TRANSLATIONS = { en, zh_CN };

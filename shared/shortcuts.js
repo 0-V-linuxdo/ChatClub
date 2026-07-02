@@ -3,6 +3,7 @@ import { DEFAULT_SHORTCUT_CONFIG } from "./constants.js";
 export const ALL_SHORTCUT_ACTIONS = [
   "focusInput",
   "newChat",
+  "deleteThread",
   "optimizePrompt",
   "openSummaryPanel",
   "openPocketPanel",
@@ -21,6 +22,7 @@ export const INTENT_SCOPED_ACTIONS = ["closeChat", "reloadChat", "enterFullscree
 export const SHORTCUT_ACTION_LABELS = {
   focusInput: "Focus Input",
   newChat: "New Chat",
+  deleteThread: "Delete All Topics",
   optimizePrompt: "Optimize Prompt",
   openSummaryPanel: "Summary Panel",
   openPocketPanel: "Pocket",
@@ -35,6 +37,7 @@ export const SHORTCUT_ACTION_LABELS = {
 export const SHORTCUT_ACTION_DESCRIPTIONS = {
   focusInput: "Focus the top prompt input.",
   newChat: "Start a new chat in active pages.",
+  deleteThread: "Delete all current topics in active pages.",
   optimizePrompt: "Optimize the current prompt.",
   openSummaryPanel: "Open Summary / Ask.",
   openPocketPanel: "Open Pocket.",
