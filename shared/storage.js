@@ -19,6 +19,7 @@ import {
 } from "./constants.js";
 import { SUMMARY_SITE_CONFIGS } from "./summary-sites.js";
 import { normalizeShortcutConfig as normalizeShortcutShape } from "./shortcuts.js";
+import { TOPIC_DELETE_SITE_CONFIGS, mergeBuiltInTopicDeleteConfig } from "./topic-delete-sites.js";
 import { normalizeTopbarLayout } from "./topbar.js";
 
 export function createId(prefix) {
@@ -282,32 +283,55 @@ function normalizeTemplate(template, fallback, prefix, index) {
   };
 }
 
+function normalizeSummarySiteConfig(item, fallback = {}, index = 0) {
+  const userscript = String(item?.userscript ?? fallback.userscript ?? "").trim();
+  const copyTimeoutMs = boundedNumber(item?.copyTimeoutMs, 0, 300, 10000);
+  const config = {
+    ...fallback,
+    ...item,
+    enabled: item?.enabled !== false,
+    fallbackMode: item?.fallbackMode === "allowPageText" ? "allowPageText" : "structuredOnly",
+    hosts: Array.isArray(item?.hosts) ? item.hosts.map((host) => text(host)).filter(Boolean) : [],
+    pathPrefixes: Array.isArray(item?.pathPrefixes) ? item.pathPrefixes.map((prefix) => text(prefix)).filter(Boolean) : [],
+    userscriptRunMode: item?.userscriptRunMode === "pageWorldFirst" ? "pageWorldFirst" : "serial",
+    userscriptTimeoutMs: boundedNumber(item?.userscriptTimeoutMs, fallback.userscriptTimeoutMs || 24000, 5000, 45000),
+    id: text(item?.id || fallback.id) || createId("summary-collector"),
+    name: text(item?.name || fallback.name, `Summary Collector ${index + 1}`),
+    builtIn: Boolean(fallback.builtIn || item?.builtIn),
+    userscript,
+    userscriptLength: userscript.length
+  };
+  if (copyTimeoutMs) config.copyTimeoutMs = copyTimeoutMs;
+  else delete config.copyTimeoutMs;
+  return config;
+}
+
 function mergeBuiltInSummaryConfig(current, builtIn) {
   const byId = new Map((current || []).filter(Boolean).map((item) => [item.id, item]));
   const merged = [];
   for (const item of builtIn || []) {
     const existing = byId.get(item.id) || {};
-    merged.push({
+    const userscript = String(existing.userscript || item.userscript || "").trim();
+    const normalized = normalizeSummarySiteConfig({
       ...item,
       ...existing,
       id: item.id,
       name: existing.name || item.name,
       builtIn: true,
-      userscript: existing.userscript || item.userscript,
-      enabled: existing.enabled !== false
-    });
+      enabled: existing.enabled !== false,
+      userscript,
+      userscriptOverride: Boolean(existing.userscript && existing.userscript !== item.userscript)
+    }, item);
+    merged.push(normalized);
     byId.delete(item.id);
   }
+  let customIndex = 0;
   for (const item of byId.values()) {
-    if (!item || !item.id) continue;
-    merged.push({
-      enabled: true,
-      fallbackMode: "structuredOnly",
-      hosts: [],
-      pathPrefixes: [],
+    if (!item) continue;
+    merged.push(normalizeSummarySiteConfig({
       ...item,
-      builtIn: Boolean(item.builtIn)
-    });
+      builtIn: false
+    }, {}, customIndex++));
   }
   return merged.filter((item) => item.id !== "chathub");
 }
@@ -382,7 +406,8 @@ export function normalizeOptions(raw = {}) {
       ? raw.summaryPromptTemplateId
       : summaryPromptTemplates[0]?.id || summaryDefault.id,
     modelPreferences: normalizeModelPreferences(raw.modelPreferences),
-    summarySiteConfigs: mergeBuiltInSummaryConfig(raw.summarySiteConfigs, SUMMARY_SITE_CONFIGS)
+    summarySiteConfigs: mergeBuiltInSummaryConfig(raw.summarySiteConfigs, SUMMARY_SITE_CONFIGS),
+    topicDeleteSiteConfigs: mergeBuiltInTopicDeleteConfig(raw.topicDeleteSiteConfigs, TOPIC_DELETE_SITE_CONFIGS)
   };
 }
 

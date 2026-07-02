@@ -2,6 +2,7 @@ import { t } from "../../shared/i18n.js";
 import { sendToIframe } from "../../shared/post-message.js";
 import { TAB_GROUP_HEADER_BUTTONS } from "../../shared/constants.js";
 import { normalizeTabGroupButtonOrder, normalizeTabGroupButtonPlacement } from "../../shared/storage.js";
+import { findTopicDeleteSiteConfig, topicDeleteTimeoutMs } from "../../shared/topic-delete-sites.js";
 import { el } from "../../ui/dom.js";
 import {
   hydrateWorkspaceGroups,
@@ -1522,17 +1523,27 @@ export function createWorkspaceController(ctx = {}) {
     const chat = activeChatForGroup(group);
     const iframe = activeIframe(chat);
     if (!chat || !iframe) return;
-    if (!window.confirm(t("topbar.deleteThreadConfirm", { count: 1, plural: "" }))) return;
     const app = frameApp(iframe) || appById(chat.appId);
+    const payload = frameDeleteThreadPayload(iframe, {
+      appId: app?.id || chat.appId || ""
+    });
+    const deleteSiteConfig = findTopicDeleteSiteConfig(state.options?.topicDeleteSiteConfigs, payload);
+    if (deleteSiteConfig?.enabled === false || (deleteSiteConfig?.builtIn === false && !String(deleteSiteConfig.userscript || "").trim())) {
+      notify(t("toast.deleteThreadSkipped", { count: 1, plural: "" }), "info");
+      closePopovers();
+      return;
+    }
+    if (!window.confirm(t("topbar.deleteThreadConfirm", { count: 1, plural: "" }))) return;
     try {
-      const result = await sendToIframe(iframe, "deleteThread", frameDeleteThreadPayload(iframe, {
-        appId: app?.id || chat.appId || ""
-      }), 15000);
+      const timeoutMs = topicDeleteTimeoutMs(deleteSiteConfig, payload);
+      const result = await sendToIframe(iframe, "deleteThread", { payload, ...(deleteSiteConfig ? { config: deleteSiteConfig } : {}) }, timeoutMs + 1000);
       if (!result?.ok) throw new Error(result?.reason || "Delete failed");
       notify(t("toast.deleteThreadTriggered", { count: 1, plural: "" }), "success");
     } catch (error) {
       console.warn("[ChatClub] Delete thread failed", error);
-      notify(t("toast.deleteThreadFailed", { count: 1, plural: "" }), "error");
+      const reason = String(error?.message || "").trim();
+      const message = t("toast.deleteThreadFailed", { count: 1, plural: "" });
+      notify(reason ? `${message}: ${reason}` : message, "error");
     } finally {
       closePopovers();
     }

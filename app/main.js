@@ -40,6 +40,7 @@ import {
   topbarSettingsItemForSection,
   topbarSettingsSectionForItem
 } from "../shared/topbar.js";
+import { findTopicDeleteSiteConfig, topicDeleteTimeoutMs } from "../shared/topic-delete-sites.js";
 import { createAppContext } from "./app-context.js";
 import { createOptimizeController } from "./optimize/controller.js";
 import { createPocketController } from "./pocket/controller.js";
@@ -914,13 +915,41 @@ async function newChatOnFrames() {
   }));
 }
 
+function deleteThreadFailureReason(item) {
+  if (!item) return "";
+  if (item.status === "rejected") return String(item.reason?.message || item.reason || "").trim();
+  return String(item.value?.reason || item.value?.error || "").trim();
+}
+
+function deleteThreadFailureSummary(failures = []) {
+  const reasons = [];
+  for (const item of failures) {
+    const reason = deleteThreadFailureReason(item);
+    if (reason && !reasons.includes(reason)) reasons.push(reason);
+  }
+  return reasons.slice(0, 2).join("; ");
+}
+
 async function deleteThreadOnFrames() {
   const frames = workspaceController.currentFrames();
   if (!frames.length) return;
-  const count = frames.length;
+  const targets = frames.map((iframe) => {
+    const payload = workspaceController.frameDeleteThreadPayload(iframe);
+    const config = findTopicDeleteSiteConfig(state.options?.topicDeleteSiteConfigs, payload);
+    const missingCustomScript = config && config.builtIn === false && !String(config.userscript || "").trim();
+    return { iframe, payload, config, skipped: config?.enabled === false || missingCustomScript };
+  });
+  const skippedCount = targets.filter((target) => target.skipped).length;
+  const activeTargets = targets.filter((target) => !target.skipped);
+  if (!activeTargets.length) {
+    if (skippedCount) toast(t("toast.deleteThreadSkipped", { count: skippedCount, plural: skippedCount === 1 ? "" : "s" }), "info");
+    return;
+  }
+  const count = activeTargets.length;
   if (!window.confirm(t("topbar.deleteThreadConfirm", { count, plural: count === 1 ? "" : "s" }))) return;
-  const settled = await Promise.allSettled(frames.map(async (iframe) => {
-    const result = await sendToIframe(iframe, "deleteThread", workspaceController.frameDeleteThreadPayload(iframe), 15000);
+  const settled = await Promise.allSettled(activeTargets.map(async ({ iframe, payload, config }) => {
+    const timeoutMs = topicDeleteTimeoutMs(config, payload);
+    const result = await sendToIframe(iframe, "deleteThread", { payload, ...(config ? { config } : {}) }, timeoutMs + 1000);
     if (!result?.ok) throw new Error(result?.reason || "Delete failed");
     return result;
   }));
@@ -931,7 +960,12 @@ async function deleteThreadOnFrames() {
   }
   if (failures.length > 0) {
     console.warn("[ChatClub] Delete thread failed", failures);
-    toast(t("toast.deleteThreadFailed", { count: failures.length, plural: failures.length === 1 ? "" : "s" }), "error");
+    const reason = deleteThreadFailureSummary(failures);
+    const message = t("toast.deleteThreadFailed", { count: failures.length, plural: failures.length === 1 ? "" : "s" });
+    toast(reason ? `${message}: ${reason}` : message, "error");
+  }
+  if (skippedCount > 0) {
+    toast(t("toast.deleteThreadSkipped", { count: skippedCount, plural: skippedCount === 1 ? "" : "s" }), "info");
   }
 }
 

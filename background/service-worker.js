@@ -93,6 +93,34 @@ async function currentChatApps() {
   return getAllChatApps(customConfig);
 }
 
+function summaryCollectorContentTargets(options = {}) {
+  return (options.summarySiteConfigs || [])
+    .filter((config) => config?.enabled !== false && Array.isArray(config.hosts) && config.hosts.length)
+    .map((config) => ({
+      id: `summary-${config.id || config.name || "collector"}`,
+      name: config.name || config.id || "Summary Collector",
+      url: "",
+      hosts: config.hosts
+    }));
+}
+
+function topicDeleteContentTargets(options = {}) {
+  return (options.topicDeleteSiteConfigs || [])
+    .filter((config) => config?.enabled !== false && Array.isArray(config.hosts) && config.hosts.length)
+    .map((config) => ({
+      id: `topic-delete-${config.id || config.name || "site"}`,
+      name: config.name || config.id || "Topic Delete Site",
+      url: "",
+      hosts: config.hosts
+    }));
+}
+
+async function currentContentScriptTargets() {
+  const customConfig = await loadCustomConfig();
+  const options = await loadOptions();
+  return [...getAllChatApps(customConfig), ...summaryCollectorContentTargets(options), ...topicDeleteContentTargets(options)];
+}
+
 async function updateDnrRules() {
   const chatApps = await currentChatApps();
   const extensionHost = new URL(chrome.runtime.getURL("")).hostname;
@@ -105,7 +133,7 @@ async function updateDnrRules() {
 }
 
 async function registerContentScripts() {
-  const matches = contentScriptMatches(await currentChatApps());
+  const matches = contentScriptMatches(await currentContentScriptTargets());
   try {
     const registered = await chrome.scripting.getRegisteredContentScripts();
     const ownIds = registered

@@ -60,6 +60,13 @@ const MODIFIER_CODES = new Set([
   "ShiftRight"
 ]);
 
+const LEGACY_KAGI_CONFLICT_DELETE_THREAD_SHORTCUT = Object.freeze({
+  alt: false,
+  shift: true,
+  cmdOrCtrl: true,
+  code: "Backspace"
+});
+
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
@@ -70,6 +77,15 @@ function bool(value, fallback = false) {
 
 function defaultShortcut(action) {
   return DEFAULT_SHORTCUT_CONFIG.shortcuts[action] || {};
+}
+
+function shortcutSameFixedShape(shortcut, expected) {
+  if (!shortcut || !expected) return false;
+  return Boolean(shortcut.disabled) === Boolean(expected.disabled)
+    && Boolean(shortcut.cmdOrCtrl) === Boolean(expected.cmdOrCtrl)
+    && Boolean(shortcut.alt) === Boolean(expected.alt)
+    && Boolean(shortcut.shift) === Boolean(expected.shift)
+    && String(shortcut.code || "") === String(expected.code || "");
 }
 
 function normalizeFixedShortcut(action, raw) {
@@ -102,6 +118,12 @@ export function normalizeShortcutConfig(raw = {}) {
   if (rawShortcuts.openSummary && !rawShortcuts.openSummaryPanel) {
     rawShortcuts.openSummaryPanel = rawShortcuts.openSummary;
   }
+  if (
+    source.deleteThreadShortcutMigrated !== true
+    && shortcutSameFixedShape(rawShortcuts.deleteThread, LEGACY_KAGI_CONFLICT_DELETE_THREAD_SHORTCUT)
+  ) {
+    rawShortcuts.deleteThread = defaultShortcut("deleteThread");
+  }
   const shortcuts = {};
   for (const action of ALL_SHORTCUT_ACTIONS) {
     shortcuts[action] = PATTERN_ACTIONS.includes(action)
@@ -111,6 +133,7 @@ export function normalizeShortcutConfig(raw = {}) {
   return {
     ...clone(DEFAULT_SHORTCUT_CONFIG),
     ...source,
+    deleteThreadShortcutMigrated: true,
     sendKeyMode: source.sendKeyMode === "mod-enter" ? "mod-enter" : "enter",
     shortcuts
   };

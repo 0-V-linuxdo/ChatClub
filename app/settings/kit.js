@@ -8,6 +8,7 @@ export const SETTINGS_SECTIONS = [
   ["apps", "settings.apps.title", "settings.apps.desc", "apps"],
   ["models", "settings.models.title", "settings.models.desc", "model"],
   ["summary", "settings.summary.title", "settings.summary.desc", "summary"],
+  ["topicDeletion", "settings.topicDeletion.title", "settings.topicDeletion.desc", "trash"],
   ["optimize", "settings.optimize.title", "settings.optimize.desc", "sparkles"],
   ["prompts", "settings.prompts.title", "settings.prompts.desc", "library"],
   ["shortcuts", "settings.shortcuts.title", "settings.shortcuts.desc", "keyboard"],

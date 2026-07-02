@@ -1,7 +1,7 @@
 import { DEFAULT_TOPBAR_LAYOUT } from "./topbar.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-07-02｜15:35:04」";
+export const APP_VERSION = "「2026-07-02｜20:28:53」";
 export const BASELINE_MOD_VERSION = "2.4.0.14";
 export const HOMEPAGE_URL = "https://chatclub.local/";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
@@ -137,6 +137,7 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
       Object.freeze({ id: "topbar.settings.apps", labelKey: "settings.apps.title" }),
       Object.freeze({ id: "topbar.settings.models", labelKey: "settings.models.title" }),
       Object.freeze({ id: "topbar.settings.summary", labelKey: "settings.summary.title" }),
+      Object.freeze({ id: "topbar.settings.topicDeletion", labelKey: "settings.topicDeletion.title" }),
       Object.freeze({ id: "topbar.settings.optimize", labelKey: "settings.optimize.title" }),
       Object.freeze({ id: "topbar.settings.prompts", labelKey: "settings.prompts.title" }),
       Object.freeze({ id: "topbar.settings.shortcuts", labelKey: "settings.shortcuts.title" }),
@@ -284,7 +285,8 @@ export const DEFAULT_OPTIONS = {
     }
   ],
   modelPreferences: DEFAULT_MODEL_PREFERENCES,
-  summarySiteConfigs: []
+  summarySiteConfigs: [],
+  topicDeleteSiteConfigs: []
 };
 
 export const DEFAULT_SHORTCUT_CONFIG = {
@@ -292,7 +294,7 @@ export const DEFAULT_SHORTCUT_CONFIG = {
   shortcuts: {
     focusInput: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyK" },
     newChat: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyN" },
-    deleteThread: { alt: false, shift: true, cmdOrCtrl: true, code: "Backspace" },
+    deleteThread: { alt: true, shift: true, cmdOrCtrl: false, code: "KeyD" },
     optimizePrompt: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyO" },
     openSummaryPanel: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyS" },
     openPocketPanel: { alt: false, shift: false, cmdOrCtrl: true, code: "KeyP" },
@@ -449,5 +451,6 @@ export const LEGACY_OPTION_KEYS = [
   "summaryModel",
   "apiProfiles",
   "summarySiteConfigs",
+  "topicDeleteSiteConfigs",
   "shortcutConfig"
 ];

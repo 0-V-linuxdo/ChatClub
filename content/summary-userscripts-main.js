@@ -3298,10 +3298,33 @@ const out=[];const seen=new Set;const norm=v=>api.normalize(String(v||''));const
     return { sent: true, method: "enter" };
   }
 
+  const inlineSummaryUserscriptCache = new Map();
+
+  function shouldUseInlineSummaryUserscript(config, runner) {
+    return Boolean(config?.userscript) && (!runner || config.builtIn === false || config.userscriptOverride === true);
+  }
+
+  function inlineSummaryUserscriptRunner(config = {}) {
+    const source = String(config.userscript || "").trim();
+    if (!source) return null;
+    const cacheKey = `${config.id || ""}\n${source}`;
+    const cached = inlineSummaryUserscriptCache.get(cacheKey);
+    if (cached) return cached;
+    try {
+      const AsyncFunction = Object.getPrototypeOf(async function() {}).constructor;
+      const runner = new AsyncFunction("api", source);
+      inlineSummaryUserscriptCache.set(cacheKey, runner);
+      return runner;
+    } catch (error) {
+      throw new Error(`Invalid Summary userscript: ${error?.message || String(error)}`);
+    }
+  }
+
   async function collectSummary(data) {
     const config = data?.config || {};
     const registry = window.__CHATCLUB_SUMMARY_SCRIPTS__ || {};
-    const runner = registry[config.id] || registry[config.userscriptFile];
+    let runner = registry[config.id] || registry[config.userscriptFile];
+    if (shouldUseInlineSummaryUserscript(config, runner)) runner = inlineSummaryUserscriptRunner(config);
     if (!runner) return { messages: [] };
     const api = {
       config,

@@ -21,7 +21,7 @@
     shortcuts: {
       focusInput: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyK" },
       newChat: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyN" },
-      deleteThread: { alt: false, shift: true, cmdOrCtrl: true, code: "Backspace" },
+      deleteThread: { alt: true, shift: true, cmdOrCtrl: false, code: "KeyD" },
       optimizePrompt: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyO" },
       openSummaryPanel: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyS" },
       openPocketPanel: { alt: false, shift: false, cmdOrCtrl: true, code: "KeyP" },
@@ -48,6 +48,12 @@
     "switchPlatformTab"
   ];
   const PATTERN_ACTIONS = new Set(["insertPrompt", "switchLayout", "switchPlatformTab"]);
+  const KAGI_NATIVE_DELETE_SHORTCUT = Object.freeze({
+    alt: false,
+    shift: true,
+    cmdOrCtrl: true,
+    code: "Backspace"
+  });
   let activeShortcutConfig = normalizeShortcutConfig(DEFAULT_SHORTCUT_CONFIG);
 
   function requestParent(action, data = {}, timeout = 1200) {
@@ -73,10 +79,25 @@
     return value == null ? fallback : Boolean(value);
   }
 
+  function shortcutSameFixedShape(shortcut, expected) {
+    if (!shortcut || !expected) return false;
+    return Boolean(shortcut.disabled) === Boolean(expected.disabled)
+      && Boolean(shortcut.cmdOrCtrl) === Boolean(expected.cmdOrCtrl)
+      && Boolean(shortcut.alt) === Boolean(expected.alt)
+      && Boolean(shortcut.shift) === Boolean(expected.shift)
+      && String(shortcut.code || "") === String(expected.code || "");
+  }
+
   function normalizeShortcutConfig(raw = {}) {
     const source = raw && typeof raw === "object" ? raw : {};
     const rawShortcuts = { ...(source.shortcuts || {}) };
     if (rawShortcuts.openSummary && !rawShortcuts.openSummaryPanel) rawShortcuts.openSummaryPanel = rawShortcuts.openSummary;
+    if (
+      source.deleteThreadShortcutMigrated !== true
+      && shortcutSameFixedShape(rawShortcuts.deleteThread, KAGI_NATIVE_DELETE_SHORTCUT)
+    ) {
+      rawShortcuts.deleteThread = DEFAULT_SHORTCUT_CONFIG.shortcuts.deleteThread;
+    }
     const shortcuts = {};
     for (const action of SHORTCUT_ACTIONS) {
       const base = DEFAULT_SHORTCUT_CONFIG.shortcuts[action];
@@ -90,7 +111,7 @@
       if (PATTERN_ACTIONS.has(action)) shortcuts[action].codePattern = "Digit";
       else shortcuts[action].code = String(item.code || base.code || "");
     }
-    return { ...DEFAULT_SHORTCUT_CONFIG, ...source, shortcuts };
+    return { ...DEFAULT_SHORTCUT_CONFIG, ...source, deleteThreadShortcutMigrated: true, shortcuts };
   }
 
   function digitMatch(code) {
@@ -116,6 +137,14 @@
     return null;
   }
 
+  function eventMatchesFixedShortcut(event, shortcut) {
+    const cmdOrCtrl = Boolean(event.metaKey || event.ctrlKey);
+    return Boolean(shortcut?.cmdOrCtrl) === cmdOrCtrl
+      && Boolean(shortcut?.alt) === Boolean(event.altKey)
+      && Boolean(shortcut?.shift) === Boolean(event.shiftKey)
+      && String(shortcut?.code || "") === String(event.code || "");
+  }
+
   async function loadShortcutConfig() {
     try {
       const parentConfig = await requestParent("getShortcutConfig", {}, 1400);
@@ -136,6 +165,15 @@
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       data: match
     }, "*");
+  }
+
+  function shouldBridgeShortcut(match, event) {
+    const action = String(match?.action || "");
+    const host = String(location.hostname || "").toLowerCase();
+    if (action === "deleteThread" && host === "assistant.kagi.com" && eventMatchesFixedShortcut(event, KAGI_NATIVE_DELETE_SHORTCUT)) {
+      return false;
+    }
+    return true;
   }
 
   function visible(el) {
@@ -1211,6 +1249,27 @@
     return rect ? rect.width * rect.height : Number.MAX_SAFE_INTEGER;
   }
 
+  function modelRectInViewport(rect, margin = 0) {
+    if (!rect || rect.width <= 0 || rect.height <= 0) return false;
+    const viewportWidth = Math.max(1, Number(window.innerWidth) || Number(document.documentElement?.clientWidth) || 1);
+    const viewportHeight = Math.max(1, Number(window.innerHeight) || Number(document.documentElement?.clientHeight) || 1);
+    return rect.bottom > margin
+      && rect.right > margin
+      && rect.top < viewportHeight - margin
+      && rect.left < viewportWidth - margin;
+  }
+
+  function visibleInViewport(el, { hitTest = false } = {}) {
+    if (!visible(el)) return false;
+    const rect = modelRect(el);
+    if (!modelRectInViewport(rect)) return false;
+    if (!hitTest) return true;
+    const point = modelCenterPoint(el);
+    const target = modelElementFromPoint(point, el);
+    if (!target) return false;
+    return target === el || el.contains?.(target) || target.contains?.(el) || closest(target, DELETE_CLICKABLE_SELECTOR) === el;
+  }
+
   function modelCenterPoint(el) {
     const rect = modelRect(el);
     if (!rect || rect.width <= 0 || rect.height <= 0) return null;
@@ -1692,6 +1751,25 @@
     return false;
   }
 
+  async function clickDeleteConfirmIfAppears(appearTimeoutMs = 900, closeTimeoutMs = 4200) {
+    const deadline = Date.now() + Math.max(0, Number(appearTimeoutMs) || 0);
+    while (Date.now() <= deadline) {
+      if (findDeleteConfirmButton()) {
+        const confirmed = await clickDeleteConfirmIfPresent(closeTimeoutMs);
+        return { appeared: true, confirmed };
+      }
+      await sleep(80);
+    }
+    return { appeared: false, confirmed: false };
+  }
+
+  async function confirmKagiDeleteAfterMenuClick() {
+    const result = await clickDeleteConfirmIfAppears(2600, 3200);
+    if (result.confirmed) return true;
+    if (result.appeared) return !deleteDialogRoots().length;
+    return false;
+  }
+
   let suppressShortcutBridgeUntil = 0;
 
   function dispatchDeleteKeyboardShortcut() {
@@ -1728,10 +1806,282 @@
     return dispatched;
   }
 
-  async function deleteKagiThread() {
-    if (!dispatchDeleteKeyboardShortcut()) return deleteResult(false, "kagi", "delete shortcut dispatch failed");
-    await sleep(240);
-    await clickDeleteConfirmIfPresent(1800);
+  function kagiChatIdFromHref(value) {
+    const match = String(value || "").match(/\/chat\/([^/?#]+)/i);
+    return match?.[1] || "";
+  }
+
+  function kagiCurrentThreadLink(data = {}) {
+    const ids = new Set([
+      location.href,
+      data.currentThreadHref,
+      data.currentHref,
+      data.href,
+      data.url
+    ].map(kagiChatIdFromHref).filter(Boolean));
+    const links = qsa("a[href*='/chat/']", document, { all: true })
+      .filter((link) => visibleInViewport(link));
+    if (!ids.size) return links[0] || null;
+    return links.find((link) => ids.has(kagiChatIdFromHref(link.href || link.getAttribute?.("href")))) || null;
+  }
+
+  function kagiCurrentTitleToken() {
+    const rawTitle = normalize((document.title || "").replace(/\s+-\s*Kagi Assistant\s*$/i, ""));
+    return deleteCompactToken(rawTitle);
+  }
+
+  function kagiTitleRenameButtons() {
+    const titleToken = kagiCurrentTitleToken();
+    return qsa("button,[role='button']", document, { all: true })
+      .filter((button) => {
+        if (!visibleInViewport(button)) return false;
+        const rect = modelRect(button);
+        if (!rect || rect.top > 120 || rect.width < 32 || rect.height < 12 || rect.height > 64) return false;
+        const value = deleteElementText(button);
+        const compact = deleteCompactToken(value);
+        return /clicktorename|rename|重命名/.test(compact)
+          || (titleToken.length >= 4 && compact.includes(titleToken));
+      })
+      .sort((a, b) => {
+        const ar = modelRect(a);
+        const br = modelRect(b);
+        return (ar?.top || 0) - (br?.top || 0) || (ar?.left || 0) - (br?.left || 0);
+      });
+  }
+
+  function kagiTopThreadMenuTrigger() {
+    const titleButtons = kagiTitleRenameButtons();
+    const candidates = [];
+    const seen = new Set();
+    const selector = [
+      "button",
+      "[role='button']",
+      "[aria-haspopup]",
+      "[aria-expanded]",
+      "[tabindex]:not([tabindex='-1'])"
+    ].join(", ");
+    const add = (element, titleButton, extraScore = 0) => {
+      const target = deleteClickableElement(element);
+      if (!target || seen.has(target) || target === titleButton || isDisabledElement(target)) return;
+      if (!visibleInViewport(target)) return;
+      const rect = modelRect(target);
+      const titleRect = modelRect(titleButton);
+      if (!rect || !titleRect || rect.top > 125 || rect.width < 8 || rect.height < 8 || rect.width > 90 || rect.height > 72) return;
+      const verticalOverlap = rect.top < titleRect.bottom + 12 && rect.bottom > titleRect.top - 12;
+      if (!verticalOverlap) return;
+      const value = deleteElementText(target);
+      const compact = deleteCompactToken(value);
+      if (/newthread|showsidebar|markaspermanent|permanent|kagiproducts|settings|searchthreads|folders|newfolder|copy|edit|regenerate|scroll|发送|设置|新建|搜索/.test(compact)) return;
+      const popup = String(target.getAttribute?.("aria-haspopup") || "").toLowerCase();
+      const expanded = target.hasAttribute?.("aria-expanded");
+      const signature = svgSignature(target);
+      const rightGap = Math.abs(rect.left - titleRect.right);
+      const immediateTitleNeighbor = rect.left >= titleRect.right - 8
+        && rect.left <= titleRect.right + 42
+        && rect.width <= 52
+        && rect.height <= 52;
+      const menuLike = popup === "menu"
+        || popup === "true"
+        || expanded
+        || /more|menu|options|ellipsis|dots|dropdown|chevron|caret|arrow|down|triangle|更多|菜单|选项/.test(compact)
+        || /more|ellipsis|dots|dropdown|chevron|caret|arrow|down|triangle/.test(signature)
+        || (!compact && rect.width <= 48)
+        || immediateTitleNeighbor;
+      if (!menuLike) return;
+      const closeToTitleRight = rect.left >= titleRect.left - 8 && rect.left <= titleRect.right + 110;
+      if (!closeToTitleRight) return;
+      seen.add(target);
+      candidates.push({
+        element: target,
+        score: extraScore
+          + (popup === "menu" || popup === "true" ? 360 : 0)
+          + (expanded ? 120 : 0)
+          + (/dropdown|chevron|caret|arrow|down|triangle/.test(signature) ? 260 : 0)
+          + (/more|menu|options|更多|菜单|选项/.test(compact) ? 180 : 0)
+          + (!compact && rect.width <= 48 ? 180 : 0)
+          + Math.max(0, 280 - rightGap * 4)
+          + Math.max(0, 90 - Math.abs((rect.top + rect.height / 2) - (titleRect.top + titleRect.height / 2))),
+        top: rect.top,
+        left: rect.left
+      });
+    };
+    for (const titleButton of titleButtons) {
+      for (let scope = titleButton.parentElement, depth = 0; scope && scope !== document.body && depth < 5; scope = scope.parentElement, depth += 1) {
+        for (const element of layoutDeleteCandidates(scope, selector)) add(element, titleButton, 180 - depth * 12);
+      }
+    }
+    candidates.sort((a, b) => b.score - a.score || a.top - b.top || a.left - b.left);
+    return candidates[0]?.element || null;
+  }
+
+  function kagiDeleteMenuItem(trigger = null, labels = ["Delete", "Delete thread", "Delete chat", "Remove", "删除"]) {
+    const triggerRect = modelRect(trigger);
+    const candidates = [];
+    const seen = new Set();
+    const add = (element, extraScore = 0) => {
+      if (!element || seen.has(element) || !visible(element) || isDisabledElement(element)) return;
+      const value = deleteElementText(element);
+      if (!deleteLabelMatchesExactish(value, labels)) return;
+      if (deleteLabelMatches(value, DELETE_CANCEL_LABELS)) return;
+      const target = deleteClickableElement(element);
+      if (!target || seen.has(target) || !visible(target) || isDisabledElement(target)) return;
+      const rect = modelRect(target);
+      if (!rect || rect.width < 24 || rect.height < 14 || rect.width > 360 || rect.height > 96) return;
+      if (triggerRect) {
+        const nearTrigger = rect.top >= triggerRect.top - 16
+          && rect.top <= triggerRect.top + 360
+          && rect.left >= triggerRect.left - 80
+          && rect.left <= triggerRect.left + 260;
+        if (!nearTrigger) return;
+      }
+      seen.add(element);
+      seen.add(target);
+      candidates.push({
+        element: target,
+        score: extraScore
+          + (matches(target, "[role='menuitem'],[role='option'],button,[role='button']") ? 220 : 0)
+          + (deleteLabelMatches(value, labels, { exact: true }) ? 300 : 0)
+          + (triggerRect ? Math.max(0, 160 - Math.abs(rect.left - triggerRect.left)) : 0),
+        top: rect.top,
+        right: rect.right,
+        area: rect.width * rect.height
+      });
+    };
+    const selector = "[role='menuitem'],[role='option'],button,[role='button'],a[href],[tabindex]:not([tabindex='-1']),li,div,span";
+    for (const root of visibleSelectorElements(DELETE_MENU_ROOT_SELECTORS)) {
+      const rect = modelRect(root);
+      if (triggerRect) {
+        const nearRoot = rect
+          && rect.top >= triggerRect.top - 24
+          && rect.top <= triggerRect.top + 330
+          && rect.left >= triggerRect.left - 120
+          && rect.left <= triggerRect.left + 260;
+        if (!nearRoot) continue;
+      }
+      for (const element of qsa(selector, root, { all: true })) add(element, 260);
+    }
+    if (!candidates.length) {
+      for (const element of qsa(selector, document, { all: true })) add(element, 0);
+    }
+    candidates.sort((a, b) => b.score - a.score || b.right - a.right || b.top - a.top || a.area - b.area);
+    return candidates[0]?.element || null;
+  }
+
+  async function openKagiTitleMenuAndClickDelete(trigger, labels) {
+    if (!trigger || !deleteClickLayout(trigger)) return false;
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      await sleep(attempt < 2 ? 45 : 75);
+      const item = kagiDeleteMenuItem(trigger, labels);
+      if (item && (deleteClick(item) || deleteClickLayout(item))) return true;
+    }
+    return false;
+  }
+
+  function hoverKagiThreadRow(row) {
+    const rowRect = modelRect(row);
+    if (!rowRect) return;
+    const point = { clientX: Math.max(rowRect.left + 16, rowRect.right - 28), clientY: rowRect.top + rowRect.height / 2 };
+    for (let target = row, depth = 0; target && target !== document.body && depth < 5; target = target.parentElement, depth += 1) {
+      for (const type of ["pointerover", "mouseover", "mouseenter", "mousemove", "pointermove"]) {
+        try {
+          const EventCtor = type.startsWith("pointer") ? modelEventConstructor("PointerEvent", target) : modelEventConstructor("MouseEvent", target);
+          target.dispatchEvent(new EventCtor(type, {
+            bubbles: true,
+            cancelable: true,
+            composed: true,
+            view: window,
+            pointerId: 1,
+            pointerType: "mouse",
+            isPrimary: true,
+            ...point
+          }));
+        } catch {}
+      }
+    }
+  }
+
+  function kagiThreadRowFromLink(link) {
+    if (!link) return null;
+    const linkRect = modelRect(link);
+    let best = link;
+    for (let node = link.parentElement, depth = 0; node && node !== document.body && depth < 6; node = node.parentElement, depth += 1) {
+      const rect = modelRect(node);
+      if (!rect || rect.width < 120 || rect.height < 20 || rect.height > 96) continue;
+      if (linkRect && (rect.top > linkRect.top + 8 || rect.bottom < linkRect.bottom - 8)) continue;
+      const hasMoreButton = qsa("button,[role='button'],[aria-haspopup]", node, { all: true })
+        .some((item) => item !== link && modelRect(item));
+      best = node;
+      if (hasMoreButton) break;
+    }
+    return best;
+  }
+
+  function kagiThreadMoreButton(link) {
+    const row = kagiThreadRowFromLink(link);
+    if (!row) return null;
+    reveal(row);
+    hoverKagiThreadRow(row);
+    const rowRect = modelRect(row);
+    if (!modelRectInViewport(rowRect)) return null;
+    const candidates = [];
+    const seen = new Set();
+    const add = (element, extraScore = 0) => {
+      const target = deleteClickableElement(element);
+      if (!target || seen.has(target) || target === link || isDisabledElement(target)) return;
+      const rect = modelRect(target);
+      if (!rect || rect.width < 8 || rect.height < 8 || rect.width > 84 || rect.height > 84) return;
+      if (!visibleInViewport(target)) return;
+      const overlaps = rect.top < rowRect.bottom + 10 && rect.bottom > rowRect.top - 10;
+      if (!overlaps) return;
+      const value = deleteElementText(target);
+      const compact = deleteCompactToken(value);
+      const popup = String(target.getAttribute?.("aria-haspopup") || "").toLowerCase();
+      const signature = svgSignature(target);
+      const moreLike = /more|options|menu|ellipsis|dots|更多|菜单|选项/.test(compact)
+        || /more|ellipsis|dots|circle/.test(signature)
+        || popup === "menu"
+        || qsa("circle", target).length >= 2
+        || (!compact && rect.width <= 48);
+      if (!moreLike) return;
+      seen.add(target);
+      candidates.push({
+        element: target,
+        score: extraScore
+          + (visibleInViewport(target) ? 160 : 40)
+          + (/moreoptions|more|options|menu|更多|菜单|选项/.test(compact) ? 260 : 0)
+          + (popup === "menu" ? 180 : 0)
+          + (/more|ellipsis|dots|circle/.test(signature) ? 120 : 0)
+          + Math.max(0, 90 - Math.abs(rect.right - rowRect.right)),
+        right: rect.right
+      });
+    };
+    for (let scope = row, depth = 0; scope && scope !== document.body && depth < 5; scope = scope.parentElement, depth += 1) {
+      for (const button of layoutDeleteCandidates(scope, "button,[role='button'],[aria-haspopup],[tabindex]:not([tabindex='-1'])")) add(button, 80 - depth * 8);
+    }
+    for (const offset of [10, 22, 36, 54]) {
+      const point = { x: Math.max(rowRect.left + 24, rowRect.right - offset), y: rowRect.top + rowRect.height / 2 };
+      const pointTarget = modelElementFromPoint(point, row);
+      if (pointTarget) add(pointTarget, 160 - offset);
+      const pointButton = pointTarget && closest(pointTarget, "button,[role='button'],[aria-haspopup],[tabindex]:not([tabindex='-1'])");
+      if (pointButton) add(pointButton, 180 - offset);
+    }
+    candidates.sort((a, b) => b.score - a.score || b.right - a.right);
+    return candidates[0]?.element || null;
+  }
+
+  async function deleteKagiThread(data = {}) {
+    if (findDeleteConfirmButton()) {
+      const confirmedExisting = await clickDeleteConfirmIfPresent(6200);
+      return confirmedExisting
+        ? deleteResult(true, "kagi")
+        : deleteResult(false, "kagi", "delete confirmation did not close");
+    }
+    const shortcutDispatched = dispatchDeleteKeyboardShortcut();
+    if (!shortcutDispatched) return deleteResult(false, "kagi", "delete shortcut dispatch failed");
+    const result = await clickDeleteConfirmIfAppears(2600, 3600);
+    if (!result.appeared) return deleteResult(false, "kagi", "delete shortcut did not open confirmation");
+    if (!result.confirmed && deleteDialogRoots().length) return deleteResult(false, "kagi", "delete confirmation did not close");
+    if (!result.confirmed) return deleteResult(false, "kagi", "delete confirmation button not found");
     return deleteResult(true, "kagi");
   }
 
@@ -1787,21 +2137,72 @@
   function findDeleteMenuItem(root, labels) {
     const candidates = [];
     const cancelLabels = ["Cancel", "取消"];
-    for (const element of visibleDeleteCandidates(root)) {
+    const seen = new Set();
+    const add = (element, { exactOnly = false, extraScore = 0 } = {}) => {
+      if (!element || seen.has(element)) return;
       const value = deleteElementText(element);
-      if (!deleteLabelMatches(value, labels)) continue;
-      if (deleteLabelMatches(value, cancelLabels)) continue;
+      if (!deleteLabelMatches(value, labels)) return;
+      if (exactOnly && !deleteLabelMatchesExactish(value, labels)) return;
+      if (deleteLabelMatches(value, cancelLabels)) return;
       const target = deleteClickableElement(element);
-      if (!target || !visible(target) || isDisabledElement(target)) continue;
+      if (!target || seen.has(target) || !visible(target) || isDisabledElement(target)) return;
       const rect = modelRect(target);
+      if (exactOnly && (!rect || rect.width < 12 || rect.height < 10 || rect.width > 360 || rect.height > 90)) return;
+      seen.add(element);
+      seen.add(target);
       candidates.push({
         element: target,
-        score: deleteLabelMatches(value, labels, { exact: true }) ? 500 : 0,
+        score: extraScore + (deleteLabelMatches(value, labels, { exact: true }) ? 500 : 0),
         top: rect?.top || 0,
         area: rect ? rect.width * rect.height : 0
       });
+    };
+    for (const element of visibleDeleteCandidates(root)) add(element);
+    if (!candidates.length) {
+      for (const element of qsa("[role='menuitem'],[role='option'],button,[role='button'],li,div,span", root, { all: true })) {
+        if (!visible(element) || isDisabledElement(element)) continue;
+        add(element, { exactOnly: true, extraScore: 180 });
+      }
     }
     candidates.sort((a, b) => b.score - a.score || a.top - b.top || a.area - b.area);
+    return candidates[0]?.element || null;
+  }
+
+  function findOpenDeleteMenuItem(labels) {
+    const candidates = [];
+    const seen = new Set();
+    const menuRoots = visibleSelectorElements(DELETE_MENU_ROOT_SELECTORS);
+    const add = (element, extraScore = 0) => {
+      if (!element || seen.has(element) || !visible(element) || isDisabledElement(element)) return;
+      const value = deleteElementText(element);
+      if (!deleteLabelMatchesExactish(value, labels)) return;
+      if (deleteLabelMatches(value, DELETE_CANCEL_LABELS)) return;
+      const target = deleteClickableElement(element);
+      if (!target || seen.has(target) || !visible(target) || isDisabledElement(target)) return;
+      const rect = modelRect(target);
+      if (!rect || rect.width < 8 || rect.height < 8 || rect.width > 420 || rect.height > 110) return;
+      const root = menuRoots.find((item) => item === target || item.contains?.(target));
+      seen.add(element);
+      seen.add(target);
+      candidates.push({
+        element: target,
+        score: extraScore + (root ? 320 : 0) + (matches(target, "[role='menuitem'],[role='option'],button,[role='button']") ? 160 : 0),
+        top: rect.top,
+        right: rect.right,
+        area: rect.width * rect.height
+      });
+    };
+    for (const root of menuRoots) {
+      for (const element of qsa("[role='menuitem'],[role='option'],button,[role='button'],a[href],[tabindex]:not([tabindex='-1']),li,div,span", root, { all: true })) {
+        add(element, 220);
+      }
+    }
+    if (!candidates.length) {
+      for (const element of qsa("[role='menuitem'],[role='option'],button,[role='button'],a[href],[tabindex]:not([tabindex='-1']),li,div,span", document, { all: true })) {
+        add(element, 0);
+      }
+    }
+    candidates.sort((a, b) => b.score - a.score || b.right - a.right || a.top - b.top || a.area - b.area);
     return candidates[0]?.element || null;
   }
 
@@ -1813,8 +2214,8 @@
     const deadline = Date.now() + Math.max(0, Number(timeoutMs) || 0);
     while (Date.now() <= deadline) {
       const root = menuRootsWithDelete(labels)[0] || existingRoot;
-      const item = root ? findDeleteMenuItem(root, labels) : null;
-      if (item && deleteClick(item)) return true;
+      const item = (root ? findDeleteMenuItem(root, labels) : null) || findOpenDeleteMenuItem(labels);
+      if (item && (deleteClick(item) || deleteClickLayout(item))) return true;
       await sleep(120);
     }
     return false;
@@ -2185,14 +2586,250 @@
     return deleteResult(true, "deepseek");
   }
 
-  async function deleteThread(data = {}) {
-    const appId = String(data.appId || data.appName || "").trim();
+  const TOPIC_DELETE_FALLBACK_CONFIGS = Object.freeze({
+    kagi: Object.freeze({
+      id: "kagi",
+      name: "Kagi Assistant",
+      builtIn: true,
+      enabled: true,
+      userscript: "return api.deleteKagiThread(data);",
+      userscriptTimeoutMs: 15000
+    }),
+    grok: Object.freeze({
+      id: "grok",
+      name: "Grok",
+      builtIn: true,
+      enabled: true,
+      userscript: "return api.deleteGrokThread(data);",
+      userscriptTimeoutMs: 15000
+    }),
+    grokMirror: Object.freeze({
+      id: "grokMirror",
+      name: "Grok Mirror",
+      builtIn: true,
+      enabled: true,
+      userscript: "return api.deleteGrokThread(data);",
+      userscriptTimeoutMs: 15000
+    }),
+    notion: Object.freeze({
+      id: "notion",
+      name: "Notion AI",
+      builtIn: true,
+      enabled: true,
+      userscript: "return api.deleteNotionThread(data);",
+      userscriptTimeoutMs: 15000
+    }),
+    deepseek: Object.freeze({
+      id: "deepseek",
+      name: "DeepSeek",
+      builtIn: true,
+      enabled: true,
+      userscript: "return api.deleteDeepSeekThread(data);",
+      userscriptTimeoutMs: 36000
+    })
+  });
+
+  function topicDeleteFallbackConfig(config = {}, payload = {}) {
+    const id = String(config?.id || "").trim().toLowerCase();
+    const app = `${payload?.appId || ""} ${payload?.appName || ""} ${config?.name || ""}`.toLowerCase();
     const host = String(location.hostname || "").toLowerCase();
-    if (/kagi/i.test(appId) || host === "assistant.kagi.com") return deleteKagiThread();
-    if (/grok/i.test(appId) || host === "gk.dairoot.cn" || host.endsWith(".gk.dairoot.cn") || host === "grok.com" || host.endsWith(".grok.com") || host === "grok.x.ai" || host.endsWith(".grok.x.ai")) return deleteGrokThread();
-    if (/notion/i.test(appId) || host === "app.notion.com" || host === "notion.so" || host === "www.notion.so" || host.endsWith(".notion.so")) return deleteNotionThread();
-    if (/deepseek/i.test(appId) || host === "chat.deepseek.com" || host === "deepseek.com" || host.endsWith(".deepseek.com")) return deleteDeepSeekThread(data);
-    return deleteResult(false, appId || host || "unknown", "unsupported site");
+    let fallback = null;
+    if (id === "kagi" || /kagi/.test(app) || host === "assistant.kagi.com") fallback = TOPIC_DELETE_FALLBACK_CONFIGS.kagi;
+    else if (id === "grokmirror" || /grokmirror|grok mirror/.test(app) || host === "gk.dairoot.cn" || host.endsWith(".gk.dairoot.cn")) fallback = TOPIC_DELETE_FALLBACK_CONFIGS.grokMirror;
+    else if (id === "grok" || /grok/.test(app) || host === "grok.com" || host.endsWith(".grok.com") || host === "grok.x.ai" || host.endsWith(".grok.x.ai")) fallback = TOPIC_DELETE_FALLBACK_CONFIGS.grok;
+    else if (id === "notion" || /notion/.test(app) || host === "app.notion.com" || host === "notion.so" || host === "www.notion.so" || host.endsWith(".notion.so")) fallback = TOPIC_DELETE_FALLBACK_CONFIGS.notion;
+    else if (id === "deepseek" || /deepseek/.test(app) || host === "chat.deepseek.com" || host === "deepseek.com" || host.endsWith(".deepseek.com")) fallback = TOPIC_DELETE_FALLBACK_CONFIGS.deepseek;
+    if (!fallback) return null;
+    const userscript = String(config?.userscript || fallback.userscript || "").trim();
+    return {
+      ...fallback,
+      ...config,
+      id: config?.id || fallback.id,
+      name: config?.name || fallback.name,
+      builtIn: config?.builtIn !== false,
+      enabled: config?.enabled !== false,
+      userscript,
+      userscriptLength: userscript.length,
+      userscriptTimeoutMs: Number(config?.userscriptTimeoutMs) || fallback.userscriptTimeoutMs || 15000
+    };
+  }
+
+  const topicDeleteUserscriptCache = new Map();
+
+  function topicDeleteSiteName(config = {}, payload = {}) {
+    return String(config.id || config.name || payload.appId || payload.appName || location.hostname || "topic-delete").trim() || "topic-delete";
+  }
+
+  function topicDeleteUserscriptRunner(config = {}) {
+    const source = String(config.userscript || "").trim();
+    if (!source) return null;
+    const cacheKey = `${config.id || ""}\n${source}`;
+    const cached = topicDeleteUserscriptCache.get(cacheKey);
+    if (cached) return cached;
+    try {
+      const AsyncFunction = Object.getPrototypeOf(async function() {}).constructor;
+      const runner = new AsyncFunction("api", "data", source);
+      topicDeleteUserscriptCache.set(cacheKey, runner);
+      return runner;
+    } catch (error) {
+      const message = error?.message || String(error);
+      if (/content security policy|unsafe-eval|evaluating a string as javascript/i.test(message)) {
+        throw new Error("Custom Topic Deletion userscripts cannot run here because the extension Content Security Policy blocks runtime eval. Reset built-in sites to use the bundled runner.");
+      }
+      throw new Error(`Invalid Topic Deletion userscript: ${message}`);
+    }
+  }
+
+  function topicDeleteNativeSiteId(config = {}, payload = {}) {
+    const id = String(config?.id || "").trim().toLowerCase();
+    const app = `${payload?.appId || ""} ${payload?.appName || ""} ${config?.name || ""}`.toLowerCase();
+    const host = String(location.hostname || "").toLowerCase();
+    if (id === "kagi" || /kagi/.test(app) || host === "assistant.kagi.com") return "kagi";
+    if (id === "grokmirror" || /grokmirror|grok mirror/.test(app) || host === "gk.dairoot.cn" || host.endsWith(".gk.dairoot.cn")) return "grokMirror";
+    if (id === "grok" || /grok/.test(app) || host === "grok.com" || host.endsWith(".grok.com") || host === "grok.x.ai" || host.endsWith(".grok.x.ai")) return "grok";
+    if (id === "notion" || /notion/.test(app) || host === "app.notion.com" || host === "notion.so" || host === "www.notion.so" || host.endsWith(".notion.so")) return "notion";
+    if (id === "deepseek" || /deepseek/.test(app) || host === "chat.deepseek.com" || host === "deepseek.com" || host.endsWith(".deepseek.com")) return "deepseek";
+    return "";
+  }
+
+  function topicDeleteNativeRunner(config = {}, payload = {}) {
+    if (config?.builtIn === false) return null;
+    const siteId = topicDeleteNativeSiteId(config, payload);
+    if (!siteId) return null;
+    return async () => {
+      if (siteId === "kagi") return deleteKagiThread(payload);
+      if (siteId === "grokMirror") {
+        const result = await deleteGrokThread(payload);
+        return { ...result, site: "grokMirror" };
+      }
+      if (siteId === "grok") return deleteGrokThread(payload);
+      if (siteId === "notion") return deleteNotionThread(payload);
+      if (siteId === "deepseek") return deleteDeepSeekThread(payload);
+      return deleteResult(false, siteId || "topic-delete", "unsupported site");
+    };
+  }
+
+  function createTopicDeleteApi(config = {}, payload = {}) {
+    const api = {
+      config,
+      data: payload,
+      window,
+      document,
+      location,
+      result: deleteResult,
+      deleteResult,
+      sleep,
+      waitFor: waitForModel,
+      waitForModel,
+      normalize,
+      text,
+      qsa,
+      qs,
+      closest,
+      visible,
+      reveal,
+      buttonText,
+      modelElementText,
+      modelRect,
+      modelCenterPoint,
+      modelElementFromPoint,
+      modelClick,
+      modelDirectClick,
+      nativeModelClick,
+      dispatchPointerActivation,
+      isDisabledElement,
+      activateElement,
+      deleteElementText,
+      deleteTextToken,
+      deleteCompactToken,
+      deleteLabelMatches,
+      deleteLabelMatchesExactish,
+      visibleDeleteCandidates,
+      layoutDeleteCandidates,
+      deleteClickableElement,
+      deleteClick,
+      deleteClickLayout,
+      deleteDialogRoots,
+      findDeleteConfirmButton,
+      clickDeleteConfirmIfPresent,
+      clickDeleteConfirmButton,
+      dispatchDeleteKeyboardShortcut,
+      menuRootsWithDelete,
+      findDeleteMenuItem,
+      openTriggerAndClickDelete,
+      topRightMenuTrigger,
+      findNotionDeleteMenuTrigger,
+      requestDeepSeekDeleteBridge,
+      ensureDeepSeekSidebarOpen,
+      deepSeekSidebarRoot,
+      deepSeekDeleteHints,
+      deepSeekTopicRows,
+      deepSeekTopicMoreButton,
+      deleteKagiThread,
+      deleteGrokThread,
+      deleteNotionThread,
+      deleteDeepSeekThread
+    };
+    return Object.freeze(api);
+  }
+
+  function normalizeTopicDeleteUserscriptResult(value, config = {}, payload = {}) {
+    const site = topicDeleteSiteName(config, payload);
+    if (value && typeof value === "object") {
+      const ok = Object.prototype.hasOwnProperty.call(value, "ok") ? Boolean(value.ok) : true;
+      return {
+        ...value,
+        ok,
+        site: String(value.site || site)
+      };
+    }
+    return deleteResult(Boolean(value), site, value ? "" : "userscript returned false");
+  }
+
+  async function runTopicDeleteUserscript(config = {}, payload = {}) {
+    const site = topicDeleteSiteName(config, payload);
+    let runner;
+    let nativeRunner = null;
+    try {
+      nativeRunner = topicDeleteNativeRunner(config, payload);
+      runner = nativeRunner || topicDeleteUserscriptRunner(config);
+    } catch (error) {
+      return deleteResult(false, site, error?.message || String(error));
+    }
+    if (!runner) return deleteResult(false, site, "userscript missing");
+    const nativeSiteId = nativeRunner ? topicDeleteNativeSiteId(config, payload) : "";
+    const requestedTimeoutMs = Math.max(5000, Math.min(45000, Number(config.userscriptTimeoutMs) || 15000));
+    const timeoutMs = nativeSiteId === "deepseek" ? Math.max(requestedTimeoutMs, 36000) : requestedTimeoutMs;
+    let timer = null;
+    try {
+      const timeoutResult = new Promise((resolve) => {
+        timer = setTimeout(() => resolve({ ok: false, site, reason: "userscript timed out" }), timeoutMs);
+      });
+      const value = await Promise.race([
+        nativeRunner ? runner() : runner(createTopicDeleteApi(config, payload), payload),
+        timeoutResult
+      ]);
+      return normalizeTopicDeleteUserscriptResult(value, config, payload);
+    } catch (error) {
+      return deleteResult(false, site, error?.message || String(error));
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  async function deleteThread(data = {}) {
+    const incomingConfig = data?.config && typeof data.config === "object" ? data.config : null;
+    const payload = data?.payload && typeof data.payload === "object" ? data.payload : data;
+    if (incomingConfig?.enabled === false) {
+      return deleteResult(false, topicDeleteSiteName(incomingConfig, payload), "site disabled");
+    }
+    const config = String(incomingConfig?.userscript || "").trim()
+      ? incomingConfig
+      : topicDeleteFallbackConfig(incomingConfig || {}, payload);
+    if (!String(config?.userscript || "").trim()) {
+      return deleteResult(false, topicDeleteSiteName(config || {}, payload), "unsupported site or userscript missing");
+    }
+    return runTopicDeleteUserscript(config, payload);
   }
 
   async function waitForModel(getter, timeoutMs = 2500, intervalMs = 120) {
@@ -4290,6 +4927,28 @@
     return modelResult(true, appId, modelId, "", { skipped: true, unsupported: true });
   }
 
+  const inlineSummaryUserscriptCache = new Map();
+
+  function shouldUseInlineSummaryUserscript(config, runner) {
+    return Boolean(config?.userscript) && (!runner || config.builtIn === false || config.userscriptOverride === true);
+  }
+
+  function inlineSummaryUserscriptRunner(config = {}) {
+    const source = String(config.userscript || "").trim();
+    if (!source) return null;
+    const cacheKey = `${config.id || ""}\n${source}`;
+    const cached = inlineSummaryUserscriptCache.get(cacheKey);
+    if (cached) return cached;
+    try {
+      const AsyncFunction = Object.getPrototypeOf(async function() {}).constructor;
+      const runner = new AsyncFunction("api", source);
+      inlineSummaryUserscriptCache.set(cacheKey, runner);
+      return runner;
+    } catch (error) {
+      throw new Error(`Invalid Summary userscript: ${error?.message || String(error)}`);
+    }
+  }
+
   async function collectSummary(data) {
     const config = data?.config || {};
     if (config.userscriptRunMode !== "serial") {
@@ -4305,7 +4964,8 @@
       }
     }
     const registry = window.__CHATCLUB_SUMMARY_SCRIPTS__ || {};
-    const runner = registry[config.id] || registry[config.userscriptFile];
+    let runner = registry[config.id] || registry[config.userscriptFile];
+    if (shouldUseInlineSummaryUserscript(config, runner)) runner = inlineSummaryUserscriptRunner(config);
     if (!runner) return { messages: [] };
     const api = {
       config,
@@ -4362,6 +5022,7 @@
     if (Date.now() < suppressShortcutBridgeUntil) return;
     const matched = matchShortcut(event);
     if (!matched) return;
+    if (!shouldBridgeShortcut(matched, event)) return;
     event.preventDefault();
     event.stopPropagation();
     postShortcutTriggered(matched);

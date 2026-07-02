@@ -3917,6 +3917,20 @@ body.settings-tab-group-button-dragging iframe {
   text-align: right;
 }
 
+.topic-delete-list .settings-list-header,
+.topic-delete-row {
+  grid-template-columns: minmax(190px, 1fr) minmax(220px, 1.1fr) 130px 130px;
+}
+
+.topic-delete-list .settings-list-header span:nth-child(3) {
+  text-align: center;
+}
+
+.topic-delete-list .settings-list-header span:last-child {
+  padding-right: 18px;
+  text-align: right;
+}
+
 .shortcut-list .settings-list-header,
 .shortcut-row {
   grid-template-columns: minmax(180px, 1fr) minmax(150px, 210px) 112px 42px;
@@ -4002,6 +4016,26 @@ body.settings-tab-group-button-dragging iframe {
   background: color-mix(in srgb, var(--primary-2) 48%, transparent);
 }
 
+.topic-delete-row {
+  cursor: pointer;
+  user-select: none;
+}
+
+.topic-delete-row > :nth-child(3) {
+  justify-self: center;
+  margin: 0;
+}
+
+.topic-delete-row > :last-child {
+  justify-self: stretch;
+  margin-right: 12px;
+}
+
+.topic-delete-row-active,
+.topic-delete-row-active:hover {
+  background: color-mix(in srgb, var(--primary-2) 48%, transparent);
+}
+
 .summary-collector-row.dragging {
   opacity: .48;
 }
@@ -4021,7 +4055,21 @@ body.settings-tab-group-button-dragging iframe {
   min-width: 0;
 }
 
+.topic-delete-name {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+}
+
 .summary-collector-name strong {
+  overflow: hidden;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topic-delete-name strong {
   overflow: hidden;
   font-size: 15px;
   text-overflow: ellipsis;
@@ -4055,11 +4103,34 @@ body.settings-tab-group-button-dragging iframe {
   border-radius: 999px;
 }
 
+.topic-delete-scope-badge {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 28px;
+  justify-self: start;
+  padding: 0 12px;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: color-mix(in srgb, var(--muted) 22%, var(--panel-2));
+  border-radius: 999px;
+}
+
 .summary-collector-details {
   min-width: 760px;
   padding: 14px 18px 16px 56px;
   background: color-mix(in srgb, var(--panel-2) 56%, var(--panel));
   border-top: 1px solid var(--line);
+}
+
+.topic-delete-details {
+  min-width: 680px;
+  padding-left: 18px;
 }
 
 .summary-collector-details-grid {
@@ -4475,6 +4546,12 @@ body.settings-tab-group-button-dragging iframe {
   .shortcut-list .settings-list-header,
   .shortcut-row {
     grid-template-columns: minmax(0, 1fr) minmax(120px, 180px) 94px 34px;
+  }
+
+  .topic-delete-list .settings-list-header,
+  .topic-delete-row {
+    min-width: 620px;
+    grid-template-columns: minmax(150px, .95fr) minmax(190px, 1.05fr) 96px 84px;
   }
 
   .api-profile-list .settings-list-header,
