@@ -5,6 +5,7 @@ import {
   saveCustomConfig,
   saveOptions,
   savePromptLibrary,
+  savePromptSendHistory,
   saveShortcutConfig
 } from "../../shared/storage.js";
 import { downloadText, el, readFileAsText, toast } from "../../ui/dom.js";
@@ -24,6 +25,7 @@ export function createImportExportSettings(ctx) {
     if (imported.options) state.options = await saveOptions(imported.options);
     if (imported.customConfig) state.customConfig = await saveCustomConfig(imported.customConfig);
     if (imported.promptLibrary) state.promptLibrary = await savePromptLibrary(imported.promptLibrary);
+    if (imported.promptSendHistory) state.promptSendHistory = await savePromptSendHistory(imported.promptSendHistory);
     if (imported.shortcutConfig) state.shortcutConfig = await saveShortcutConfig(imported.shortcutConfig);
     await notifyConfigReload();
     hydrateGroups();

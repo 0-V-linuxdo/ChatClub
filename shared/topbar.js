@@ -19,6 +19,7 @@ export const TOPBAR_BUILTIN_ITEMS = [
   "settingsTopicDeletion",
   "settingsOptimize",
   "settingsPrompts",
+  "settingsPromptHistory",
   "settingsShortcuts",
   "settingsIo"
 ];
@@ -32,6 +33,7 @@ export const TOPBAR_SETTINGS_SECTION_ITEMS = {
   topicDeletion: "settingsTopicDeletion",
   optimize: "settingsOptimize",
   prompts: "settingsPrompts",
+  promptHistory: "settingsPromptHistory",
   shortcuts: "settingsShortcuts",
   io: "settingsIo"
 };
@@ -66,6 +68,7 @@ export const DEFAULT_TOPBAR_LAYOUT = [
   { type: "item", id: "settingsTopicDeletion" },
   { type: "item", id: "settingsOptimize" },
   { type: "item", id: "settingsPrompts" },
+  { type: "item", id: "settingsPromptHistory" },
   { type: "item", id: "settingsShortcuts" },
   { type: "item", id: "settingsIo" }
 ];
@@ -91,6 +94,7 @@ export const TOPBAR_ITEM_META = {
   settingsTopicDeletion: { labelKey: "settings.topicDeletion.title", icon: "trash" },
   settingsOptimize: { labelKey: "settings.optimize.title", icon: "sparkles" },
   settingsPrompts: { labelKey: "settings.prompts.title", icon: "library" },
+  settingsPromptHistory: { labelKey: "settings.promptHistory.title", icon: "history" },
   settingsShortcuts: { labelKey: "settings.shortcuts.title", icon: "keyboard" },
   settingsIo: { labelKey: "settings.io.title", icon: "transfer" },
   flex: { labelKey: "topbar.flexSpace", icon: "grip" }

@@ -17,7 +17,8 @@ import {
   normalizePrimaryColor,
   saveCustomConfig,
   saveOptions,
-  savePromptLibrary
+  savePromptLibrary,
+  savePromptSendHistory
 } from "../../shared/storage.js";
 import { createPromptLibraryController } from "../prompt-library/controller.js";
 import {
@@ -448,6 +449,7 @@ export function createSettingsController(ctx) {
     if (active === "topicDeletion") return topicDeletionSettingsPane(redraw);
     if (active === "optimize") return optimizeSettingsPane(redraw, goToSection);
     if (active === "prompts") return promptLibraryPane(redraw);
+    if (active === "promptHistory") return promptHistoryPane(redraw);
     if (active === "shortcuts") return shortcutsPane(redraw);
     return importExportPane(redraw);
   }
@@ -1519,7 +1521,19 @@ export function createSettingsController(ctx) {
   }
 
   function summaryCollectorUserscript(config) {
-    return config.userscript || summaryBuiltInDefault(config)?.userscript || "";
+    return String(config?.customUserscript || config?.userscript || summaryBuiltInDefault(config)?.userscript || "").trim();
+  }
+
+  function summaryCollectorSourceMode(config) {
+    return config?.sourceMode === "custom" || Boolean(config?.customUserscript || config?.userscriptOverride)
+      ? "custom"
+      : "builtIn";
+  }
+
+  function summaryCollectorSourceLabel(config) {
+    return summaryCollectorSourceMode(config) === "custom"
+      ? t("summary.collector.customNoAutoUpdate")
+      : t("summary.collector.builtInAutoUpdate");
   }
 
   function summaryCollectorRunModeLabel(mode) {
@@ -1545,11 +1559,16 @@ export function createSettingsController(ctx) {
   function openSummaryCollectorEditor(config, redraw) {
     const editing = Boolean(config);
     const builtIn = config ? summaryBuiltInDefault(config) : null;
+    const builtInUserscript = String(builtIn?.userscript || "").trim();
+    let sourceMode = builtIn
+      ? summaryCollectorSourceMode(config || {})
+      : "custom";
     const draft = structuredClone({
       ...createSummaryCollectorDraft(),
       ...(config || {}),
       builtIn: Boolean(builtIn),
-      userscript: config ? summaryCollectorUserscript(config) : ""
+      sourceMode,
+      userscript: sourceMode === "custom" ? summaryCollectorUserscript(config || {}) : builtInUserscript
     });
     const nameInput = input(draft.name || "", { placeholder: t("summary.collector.namePlaceholder") });
     const enabledInput = el("input", { type: "checkbox", checked: draft.enabled !== false });
@@ -1566,6 +1585,7 @@ export function createSettingsController(ctx) {
     const timeoutInput = input(String(draft.userscriptTimeoutMs || 24000), { type: "number", min: "5000", max: "45000", step: "1000" });
     const copyTimeoutInput = input(draft.copyTimeoutMs ? String(draft.copyTimeoutMs) : "", { type: "number", min: "300", max: "10000", step: "100", placeholder: t("common.optional") });
     const userscriptInput = textarea(draft.userscript || "", { placeholder: "return api.extractTurns(...)" });
+    userscriptInput.readOnly = Boolean(builtIn && sourceMode !== "custom");
     userscriptInput.classList.add("settings-code-textarea");
     hostsInput.classList.add("settings-compact-textarea");
     pathInput.classList.add("settings-compact-textarea");
@@ -1576,7 +1596,7 @@ export function createSettingsController(ctx) {
       const userscript = userscriptInput.value.trim();
       if (!nameInput.value.trim()) return toast(t("summary.collector.nameRequired"), "error");
       if (!hosts.length) return toast(t("summary.collector.hostsRequired"), "error");
-      if (!userscript) return toast(t("summary.collector.userscriptRequired"), "error");
+      if (sourceMode === "custom" && !userscript) return toast(t("summary.collector.userscriptRequired"), "error");
       const timeout = Math.max(5000, Math.min(45000, Number(timeoutInput.value) || 24000));
       const copyTimeout = copyTimeoutInput.value.trim() ? Math.max(300, Math.min(10000, Number(copyTimeoutInput.value) || 0)) : undefined;
       const nextConfig = {
@@ -1589,10 +1609,13 @@ export function createSettingsController(ctx) {
         fallbackMode: messagePullSelect.value,
         userscriptRunMode: runModeSelect.value,
         userscriptTimeoutMs: timeout,
-        userscript,
-        userscriptLength: userscript.length,
-        userscriptOverride: Boolean(builtIn && userscript !== builtIn.userscript)
+        sourceMode,
+        userscript: sourceMode === "custom" ? userscript : builtInUserscript,
+        userscriptLength: (sourceMode === "custom" ? userscript : builtInUserscript).length,
+        userscriptOverride: Boolean(builtIn && sourceMode === "custom")
       };
+      if (sourceMode === "custom") nextConfig.customUserscript = userscript;
+      else delete nextConfig.customUserscript;
       if (copyTimeout) nextConfig.copyTimeoutMs = copyTimeout;
       else delete nextConfig.copyTimeoutMs;
       if (!builtIn) {
@@ -1634,11 +1657,17 @@ export function createSettingsController(ctx) {
           svgIcon("summary"),
           el("div", {},
             el("strong", {}, t("summary.collector.infoTitle")),
-            el("p", {}, t("summary.collector.infoBody"))
+            el("p", {}, t("summary.collector.infoBody")),
+            builtIn ? el("small", {}, summaryCollectorSourceLabel({ ...draft, sourceMode })) : null
           )
         ),
         field(t("summary.collector.userscript"), userscriptInput),
         el("div", { class: "settings-dialog-actions" },
+          builtIn ? button(t("summary.collector.editCopy"), () => {
+            sourceMode = "custom";
+            userscriptInput.readOnly = false;
+            userscriptInput.focus();
+          }) : null,
           builtIn ? button(t("summary.collector.resetBuiltIn"), async () => {
             await resetSummaryCollector(config, redraw);
             close();
@@ -1706,7 +1735,7 @@ export function createSettingsController(ctx) {
           ? settingsIconAction(t("common.reset"), "reload", async (event) => {
             event.stopPropagation();
             await resetSummaryCollector(config, redraw);
-          }, "settings-reset-icon", !summaryBuiltInDefault(config), "settings.action.reset")
+          }, "settings-reset-icon", !summaryBuiltInDefault(config) || summaryCollectorSourceMode(config) !== "custom", "settings.action.reset")
           : settingsIconAction(t("common.delete"), "trash", async (event) => {
             event.stopPropagation();
             await deleteSummaryCollector(config, redraw);
@@ -1736,6 +1765,7 @@ export function createSettingsController(ctx) {
         field(t("summary.collector.fallback"), fallback),
         field(t("summary.collector.userscript"), el("div", { class: "summary-script-meta" },
           el("strong", {}, config.userscriptFile || t("summary.collector.inlineRuntime")),
+          el("small", {}, summaryCollectorSourceLabel(config)),
           el("span", {}, summaryCollectorUserscript(config).length ? t("summary.collector.chars", { count: summaryCollectorUserscript(config).length }) : t("summary.collector.customCollector"))
         )),
         field(t("summary.collector.matcher"), el("div", { class: "summary-script-meta" },
@@ -1753,7 +1783,24 @@ export function createSettingsController(ctx) {
   async function resetSummaryCollector(config, redraw) {
     const defaults = summaryBuiltInDefault(config);
     if (!defaults) return;
-    const configs = state.options.summarySiteConfigs.map((item) => item.id === config.id ? { ...defaults, enabled: true } : item);
+    const configs = state.options.summarySiteConfigs.map((item) => {
+      if (item.id !== config.id) return item;
+      const next = {
+        ...item,
+        builtIn: true,
+        configVersion: defaults.configVersion,
+        userscriptFile: defaults.userscriptFile,
+        scriptType: "summary",
+        scriptId: defaults.scriptId || defaults.id,
+        scriptVersion: defaults.configVersion,
+        sourceMode: "builtIn",
+        userscript: defaults.userscript,
+        userscriptLength: String(defaults.userscript || "").trim().length,
+        userscriptOverride: false
+      };
+      delete next.customUserscript;
+      return next;
+    });
     state.summaryCollectorEditingId = "";
     await saveSummaryCollectors(configs, redraw);
     toast(t("toast.collectorReset"), "success");
@@ -1847,7 +1894,36 @@ export function createSettingsController(ctx) {
   }
 
   function topicDeleteUserscript(config) {
-    return String(config?.userscript || topicDeleteBuiltInDefault(config || {})?.userscript || "").trim();
+    return String(config?.customUserscript || config?.userscript || topicDeleteBuiltInDefault(config || {})?.userscript || "").trim();
+  }
+
+  function topicDeleteSourceMode(config) {
+    return config?.sourceMode === "custom" || Boolean(config?.customUserscript || config?.userscriptOverride)
+      ? "custom"
+      : "builtIn";
+  }
+
+  function topicDeleteSourceLabel(config) {
+    return topicDeleteSourceMode(config) === "custom"
+      ? t("topicDeletion.site.customNoAutoUpdate")
+      : t("topicDeletion.site.builtInAutoUpdate");
+  }
+
+  function topicDeleteUserscriptRuntimeLabel(config) {
+    const source = topicDeleteUserscript(config);
+    return /\/\/\s*==UserScript==[\s\S]*?\/\/\s*==\/UserScript==/.test(source)
+      ? t("topicDeletion.site.standaloneRuntime")
+      : t("topicDeletion.site.legacyRuntime");
+  }
+
+  async function copyTopicDeleteUserscript(source) {
+    try {
+      await navigator.clipboard.writeText(String(source || ""));
+      toast(t("toast.topicDeleteUserscriptCopied"), "success");
+    } catch (error) {
+      console.warn("[ChatClub] Failed to copy Delete Site userscript", error);
+      toast(t("toast.copyFailed"), "error");
+    }
   }
 
   function createTopicDeleteSiteDraft() {
@@ -1867,19 +1943,25 @@ export function createSettingsController(ctx) {
   function openTopicDeleteSiteEditor(config, redraw) {
     const editing = Boolean(config);
     const builtIn = config ? topicDeleteBuiltInDefault(config) : null;
+    const defaultUserscript = String(builtIn?.userscript || "").trim();
+    let sourceMode = builtIn
+      ? topicDeleteSourceMode(config || {})
+      : "custom";
     const draft = structuredClone({
       ...createTopicDeleteSiteDraft(),
       ...(config || {}),
-      builtIn: Boolean(builtIn)
+      builtIn: Boolean(builtIn),
+      sourceMode
     });
-    draft.userscript = config ? topicDeleteUserscript(config) : "";
+    draft.userscript = config ? (sourceMode === "custom" ? topicDeleteUserscript(config) : defaultUserscript) : "";
     const nameInput = input(draft.name || "", { placeholder: t("topicDeletion.site.namePlaceholder") });
     const enabledInput = el("input", { type: "checkbox", checked: draft.enabled !== false });
     const appIdsInput = textarea((draft.appIds || []).join("\n"), { placeholder: "Kagi\nGrok" });
     const hostsInput = textarea((draft.hosts || []).join("\n"), { placeholder: "example.com\n*.example.com" });
     const pathInput = textarea((draft.pathPrefixes || []).join("\n"), { placeholder: "/chat/" });
     const timeoutInput = input(String(draft.userscriptTimeoutMs || 15000), { type: "number", min: "5000", max: "45000", step: "1000" });
-    const userscriptInput = textarea(draft.userscript || "", { placeholder: "return api.result(true, \"custom\");" });
+    const userscriptInput = textarea(draft.userscript || "", { placeholder: "// ==UserScript==\n// @name Custom Delete Site\n// ==/UserScript==\n..." });
+    userscriptInput.readOnly = Boolean(builtIn && sourceMode !== "custom");
     appIdsInput.classList.add("settings-compact-textarea");
     hostsInput.classList.add("settings-compact-textarea");
     pathInput.classList.add("settings-compact-textarea");
@@ -1892,9 +1974,8 @@ export function createSettingsController(ctx) {
       const userscript = userscriptInput.value.trim();
       if (!nameInput.value.trim()) return toast(t("topicDeletion.site.nameRequired"), "error");
       if (!appIds.length && !hosts.length) return toast(t("topicDeletion.site.matcherRequired"), "error");
-      if (!userscript) return toast(t("topicDeletion.site.userscriptRequired"), "error");
+      if (sourceMode === "custom" && !userscript) return toast(t("topicDeletion.site.userscriptRequired"), "error");
       const timeout = Math.max(5000, Math.min(45000, Number(timeoutInput.value) || 15000));
-      const defaultUserscript = String(builtIn?.userscript || "").trim();
       const nextConfig = {
         ...draft,
         name: nameInput.value.trim(),
@@ -1904,13 +1985,17 @@ export function createSettingsController(ctx) {
         hosts,
         pathPrefixes: linesFromText(pathInput.value),
         userscriptTimeoutMs: timeout,
-        userscript,
-        userscriptLength: userscript.length,
-        userscriptOverride: Boolean(builtIn && userscript !== defaultUserscript)
+        sourceMode,
+        userscript: sourceMode === "custom" ? userscript : defaultUserscript,
+        userscriptLength: (sourceMode === "custom" ? userscript : defaultUserscript).length,
+        userscriptOverride: Boolean(builtIn && sourceMode === "custom")
       };
+      if (sourceMode === "custom") nextConfig.customUserscript = userscript;
+      else delete nextConfig.customUserscript;
       if (!builtIn) {
         nextConfig.builtIn = false;
         delete nextConfig.userscriptFile;
+        nextConfig.sourceMode = "custom";
         delete nextConfig.userscriptOverride;
       }
       const configs = editing
@@ -1947,11 +2032,18 @@ export function createSettingsController(ctx) {
           svgIcon("trash"),
           el("div", {},
             el("strong", {}, t("topicDeletion.site.infoTitle")),
-            el("p", {}, t("topicDeletion.site.infoBody"))
+            el("p", {}, t("topicDeletion.site.infoBody")),
+            builtIn ? el("small", {}, topicDeleteSourceLabel({ ...draft, sourceMode })) : null
           )
         ),
         field(t("topicDeletion.site.userscript"), userscriptInput),
         el("div", { class: "settings-dialog-actions" },
+          button(t("topicDeletion.site.copyUserscript"), () => copyTopicDeleteUserscript(userscriptInput.value)),
+          builtIn ? button(t("topicDeletion.site.editCopy"), () => {
+            sourceMode = "custom";
+            userscriptInput.readOnly = false;
+            userscriptInput.focus();
+          }) : null,
           builtIn ? button(t("topicDeletion.site.resetBuiltIn"), async () => {
             await resetTopicDeleteSite(config, redraw);
             close();
@@ -2030,16 +2122,7 @@ export function createSettingsController(ctx) {
   function topicDeleteCanReset(config) {
     const defaults = topicDeleteBuiltInDefault(config);
     if (!defaults) return false;
-    const userscript = String(config.userscript || "").trim();
-    const defaultUserscript = String(defaults.userscript || "").trim();
-    return config.enabled === false
-      || (config.name || "") !== (defaults.name || "")
-      || !topicDeleteListEqual(config.appIds, defaults.appIds)
-      || !topicDeleteListEqual(config.hosts, defaults.hosts)
-      || !topicDeleteListEqual(config.pathPrefixes, defaults.pathPrefixes)
-      || userscript !== defaultUserscript
-      || Number(config.userscriptTimeoutMs || 15000) !== Number(defaults.userscriptTimeoutMs || 15000)
-      || Boolean(config.userscriptOverride);
+    return topicDeleteSourceMode(config) === "custom";
   }
 
   function topicDeleteSiteDetails(config) {
@@ -2058,8 +2141,10 @@ export function createSettingsController(ctx) {
         field(t("topicDeletion.site.pathPrefixes"), chips(config.pathPrefixes, "topicDeletion.site.noPathPrefixes")),
         field(t("topicDeletion.site.userscript"), el("div", { class: "summary-script-meta" },
           el("strong", {}, config.userscriptFile || t("topicDeletion.site.inlineRuntime")),
+          el("small", {}, topicDeleteUserscriptRuntimeLabel(config)),
+          el("small", {}, topicDeleteSourceLabel(config)),
           el("span", {}, topicDeleteUserscript(config).length ? t("topicDeletion.site.chars", { count: topicDeleteUserscript(config).length }) : t("topicDeletion.site.noUserscript")),
-          config.userscriptOverride ? el("small", {}, t("topicDeletion.site.override")) : null
+          topicDeleteSourceMode(config) === "custom" ? el("small", {}, t("topicDeletion.site.override")) : null
         )),
         field(t("topicDeletion.site.timeout"), el("div", { class: "summary-script-meta" },
           el("span", {}, t("topicDeletion.site.timeoutMs", { count: config.userscriptTimeoutMs || 15000 }))
@@ -2078,18 +2163,20 @@ export function createSettingsController(ctx) {
     const configs = (state.options.topicDeleteSiteConfigs || []).map((item) => {
       if (item.id !== config.id) return item;
       const userscript = String(defaults.userscript || "").trim();
-      return {
-        ...defaults,
-        appIds: [...(defaults.appIds || [])],
-        hosts: [...(defaults.hosts || [])],
-        pathPrefixes: [...(defaults.pathPrefixes || [])],
+      const next = {
+        ...item,
+        userscriptFile: defaults.userscriptFile,
+        scriptType: defaults.scriptType,
+        scriptId: defaults.scriptId,
+        scriptVersion: defaults.scriptVersion,
         builtIn: true,
-        enabled: true,
+        sourceMode: "builtIn",
         userscript,
         userscriptLength: userscript.length,
-        userscriptTimeoutMs: defaults.userscriptTimeoutMs || 15000,
         userscriptOverride: false
       };
+      delete next.customUserscript;
+      return next;
     });
     state.topicDeleteSiteExpandedId = "";
     await saveTopicDeleteSites(configs, redraw);
@@ -2118,6 +2205,86 @@ export function createSettingsController(ctx) {
     return el("div", { class: "settings-pane" },
       settingsBlock(t("prompts.title"), t("prompts.desc"),
         promptLibraryManager(redraw)
+      )
+    );
+  }
+
+  function promptHistoryItems() {
+    return Array.isArray(state.promptSendHistory) ? state.promptSendHistory : [];
+  }
+
+  function promptHistoryPreview(text, limit = 180) {
+    const value = String(text || "").replace(/\s+/g, " ").trim();
+    return value.length > limit ? `${value.slice(0, Math.max(0, limit - 3))}...` : value;
+  }
+
+  function promptHistoryDateLabel(createdAt) {
+    const timestamp = Date.parse(createdAt);
+    if (!Number.isFinite(timestamp)) return t("promptHistory.unknownTime");
+    try {
+      return new Intl.DateTimeFormat(undefined, {
+        dateStyle: "medium",
+        timeStyle: "short"
+      }).format(new Date(timestamp));
+    } catch {
+      return new Date(timestamp).toLocaleString();
+    }
+  }
+
+  async function savePromptHistoryList(history, redraw, message) {
+    state.promptSendHistory = await savePromptSendHistory(history);
+    state.promptHistoryCursor = -1;
+    state.promptHistoryDraft = "";
+    redraw();
+    if (message) toast(message, "success");
+  }
+
+  function insertPromptHistoryItem(item) {
+    if (!item?.text) return;
+    insertTextIntoPrompt(item.text);
+    toast(t("toast.promptHistoryInserted"), "success");
+  }
+
+  async function deletePromptHistoryItem(item, redraw) {
+    const label = promptHistoryPreview(item?.text, 80) || t("promptHistory.thisPrompt");
+    if (!window.confirm(t("promptHistory.deleteConfirm", { prompt: label }))) return;
+    await savePromptHistoryList(
+      promptHistoryItems().filter((entry) => entry.id !== item.id),
+      redraw,
+      t("toast.promptHistoryDeleted")
+    );
+  }
+
+  async function clearPromptHistory(redraw) {
+    if (!promptHistoryItems().length) return;
+    if (!window.confirm(t("promptHistory.clearConfirm"))) return;
+    await savePromptHistoryList([], redraw, t("toast.promptHistoryCleared"));
+  }
+
+  function promptHistoryRow(item, redraw) {
+    const preview = promptHistoryPreview(item.text, 420);
+    return el("div", { class: "ui-list-row settings-list-row prompt-history-row" },
+      el("time", { class: "prompt-history-time", datetime: item.createdAt || "" }, promptHistoryDateLabel(item.createdAt)),
+      el("span", { class: "prompt-history-preview", title: item.text || "" }, preview || t("promptHistory.emptyPrompt")),
+      el("div", { class: "settings-row-action-group" },
+        settingsIconAction(t("promptHistory.insert"), "insert", () => insertPromptHistoryItem(item)),
+        settingsIconAction(t("common.delete"), "trash", () => deletePromptHistoryItem(item, redraw), "danger")
+      )
+    );
+  }
+
+  function promptHistoryPane(redraw) {
+    const history = promptHistoryItems();
+    const rows = history.length
+      ? history.map((item) => promptHistoryRow(item, redraw))
+      : settingsEmptyRow(t("promptHistory.noHistory"));
+    return el("div", { class: "settings-pane" },
+      settingsBlock(t("promptHistory.title"), t("promptHistory.desc"),
+        settingsPaneToolbar(
+          t("promptHistory.manage"),
+          ...(history.length ? [settingsPrimaryAction(t("promptHistory.clear"), "trash", () => clearPromptHistory(redraw))] : [])
+        ),
+        settingsList([t("promptHistory.time"), t("promptHistory.prompt"), t("profiles.actions")], rows, "prompt-history-list")
       )
     );
   }

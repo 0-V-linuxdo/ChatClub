@@ -1,4 +1,5 @@
 const SOURCE = "chatclub";
+export const DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.03.30";
 
 function requestId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
@@ -24,12 +25,13 @@ export function sendToParent(action, data, timeout = 3000) {
   });
 }
 
-export function sendToIframe(iframe, action, data, timeout = 5000) {
+export function sendToIframe(iframe, action, data, timeout = 5000, options = {}) {
   return new Promise((resolve, reject) => {
     if (!iframe?.contentWindow) {
       reject(new Error("[PostMessage] iframe contentWindow not available"));
       return;
     }
+    const source = String(options?.source || SOURCE);
     const id = requestId();
     const timer = setTimeout(() => {
       window.removeEventListener("message", onMessage);
@@ -38,14 +40,14 @@ export function sendToIframe(iframe, action, data, timeout = 5000) {
     const onMessage = (event) => {
       if (event.source !== iframe.contentWindow) return;
       const message = event.data;
-      if (message?.source === SOURCE && message.type === "response" && message.id === id) {
+      if (message?.source === source && message.type === "response" && message.id === id) {
         clearTimeout(timer);
         window.removeEventListener("message", onMessage);
         message.error ? reject(new Error(message.error)) : resolve(message.data);
       }
     };
     window.addEventListener("message", onMessage);
-    iframe.contentWindow.postMessage({ source: SOURCE, type: "request", action, id, data }, "*");
+    iframe.contentWindow.postMessage({ source, type: "request", action, id, data }, "*");
   });
 }
 

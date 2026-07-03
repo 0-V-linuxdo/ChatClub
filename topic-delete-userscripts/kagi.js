@@ -1,1 +1,0 @@
-return api.deleteKagiThread(data);

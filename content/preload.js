@@ -1,7 +1,8 @@
 (() => {
   const COPY_SOURCE = "chatclub-native-copy";
   const GEMINI_MODEL_PICKER_SOURCE = "chatclub-gemini-model-picker";
-  const DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread";
+  const DEEPSEEK_DELETE_BRIDGE_VERSION = "2026.07.03.30";
+  const DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.07.03.30";
 
   function installGeminiModelPickerBridge() {
     if (window.__CHATCLUB_GEMINI_MODEL_PICKER_BRIDGE__) return;
@@ -174,7 +175,7 @@
   }
 
   function installDeepSeekDeleteBridge() {
-    if (window.__CHATCLUB_DEEPSEEK_DELETE_BRIDGE__) return;
+    if (window.__CHATCLUB_DEEPSEEK_DELETE_BRIDGE__?.version === DEEPSEEK_DELETE_BRIDGE_VERSION) return;
 
     const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     const normalize = (value) => String(value || "").replace(/\s+/g, " ").trim();
@@ -207,6 +208,15 @@
       el?.getAttribute?.("title"),
       el?.innerText || el?.textContent || ""
     ].filter(Boolean).join(" "));
+    const svgTextOf = (el) => normalize(all("svg,use,path,circle", el).map((item) => [
+      item.tagName,
+      item.getAttribute("aria-label"),
+      item.getAttribute("data-testid"),
+      item.getAttribute("class"),
+      item.getAttribute("href"),
+      item.getAttribute("xlink:href"),
+      item.getAttribute("d")
+    ].filter(Boolean).join(" ")).join(" "));
     const centerOf = (el) => {
       const rect = rectOf(el);
       return rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : { x: 1, y: 1 };
@@ -222,7 +232,7 @@
     };
     const closestClickable = (el) => {
       try {
-        return el?.closest?.("button,[role='button'],[role='menuitem'],a[href],[tabindex]:not([tabindex='-1']),[class*='button' i]") || el || null;
+        return el?.closest?.("button,[role='button'],[role='menuitem'],[role='option'],a[href],[aria-haspopup],[tabindex]:not([tabindex='-1']),[class*='button' i],[class*='btn' i]") || el || null;
       } catch {
         return el || null;
       }
@@ -364,11 +374,45 @@
       }
       return false;
     };
+    const nativeClick = (node) => {
+      if (!node || typeof node.click !== "function") return false;
+      try {
+        node.click();
+        return true;
+      } catch {
+        return false;
+      }
+    };
     const activate = (node, handlerNames) => {
       const target = closestClickable(node);
       if (!target || disabled(target)) return false;
       try { target.scrollIntoView?.({ block: "center", inline: "nearest" }); } catch {}
-      return invokeReact(target, handlerNames) || dispatchPointer(target);
+      return dispatchPointer(target) || nativeClick(target) || invokeReact(target, handlerNames);
+    };
+    const activateUntil = async (node, getter, handlerNames, { settleMs = 180 } = {}) => {
+      const target = closestClickable(node);
+      if (!target || disabled(target)) return null;
+      try { target.scrollIntoView?.({ block: "center", inline: "nearest" }); } catch {}
+      try { target.focus?.({ preventScroll: true }); } catch {
+        try { target.focus?.(); } catch {}
+      }
+      const read = () => {
+        try { return typeof getter === "function" ? getter() : null; } catch { return null; }
+      };
+      const initial = read();
+      if (initial) return initial;
+      const attempts = [
+        () => dispatchPointer(target),
+        () => nativeClick(target),
+        () => invokeReact(target, handlerNames)
+      ];
+      for (const attempt of attempts) {
+        try { attempt(); } catch {}
+        await wait(Math.max(40, Number(settleMs) || 40));
+        const value = read();
+        if (value) return value;
+      }
+      return read();
     };
     const waitFor = async (getter, timeoutMs = 3000, intervalMs = 90) => {
       const deadline = Date.now() + Math.max(0, Number(timeoutMs) || 0);
@@ -392,6 +436,78 @@
         return /\b(active|selected|current)\b/i.test(className) || ariaCurrent === "page";
       });
       return selected || links[0] || null;
+    };
+    const titleTokenFromValue = (value) => {
+      const token = compact(normalize(value).replace(/\s*[-|–]\s*DeepSeek.*$/i, "").replace(/\s*-\s*深度求索.*$/i, ""));
+      return /^(deepseek|deepseekintotheunknown|intotheunknown|newchat|新聊天)$/.test(token) ? "" : token;
+    };
+    const currentTitleTokens = () => Array.from(new Set([
+      document.title,
+      textOf(currentTopicLink())
+    ].map(titleTokenFromValue).filter(Boolean)));
+    const closeTransientMenus = () => {
+      try {
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true, composed: true }));
+        window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true, composed: true }));
+      } catch {}
+    };
+    const findHeaderMoreButton = () => {
+      const titleTokens = currentTitleTokens();
+      if (!titleTokens.length) return null;
+      const titleNodes = [];
+      const seenTitles = new Set();
+      for (const node of all("h1,h2,h3,button,[role='button'],div,span")) {
+        if (!node || seenTitles.has(node) || !visible(node)) continue;
+        const rect = rectOf(node);
+        if (!rect || rect.top < 0 || rect.top > 190 || rect.left < 120 || rect.width < 20 || rect.height < 14 || rect.height > 92) continue;
+        if (String(node.href || node.getAttribute?.("href") || "").match(/\/(?:a\/)?chat\/s\//i)) continue;
+        const token = compact(textOf(node));
+        if (!token || !titleTokens.some((item) => token.includes(item) || item.includes(token))) continue;
+        seenTitles.add(node);
+        titleNodes.push({ node, rect });
+      }
+      const candidates = [];
+      const seenButtons = new Set();
+      const addButton = (button, titleRect, extraScore = 0) => {
+        const target = closestClickable(button);
+        if (!target || seenButtons.has(target) || disabled(target)) return;
+        const rect = rectOf(target);
+        if (!rect || rect.width < 10 || rect.height < 10 || rect.width > 76 || rect.height > 76) return;
+        if (rect.top > titleRect.bottom + 34 || rect.bottom < titleRect.top - 34) return;
+        if (rect.left < titleRect.left - 72 || rect.left > titleRect.right + 260) return;
+        if (String(target.href || target.getAttribute?.("href") || "").match(/\/(?:a\/)?chat\/s\//i)) return;
+        const token = compact(textOf(target));
+        if (/newchat|sidebar|back|close|search|send|deepthink|model|expert|share|copy|新聊天|侧边栏|返回|关闭|搜索|发送|分享|复制/.test(token)) return;
+        const signature = compact(svgTextOf(target));
+        const iconish = !token || /more|menu|options|ellipsis|dots|circle|kebab|更多|菜单|选项/.test(token + signature) || all("circle", target).length >= 2 || rect.width <= 44;
+        if (!iconish) return;
+        seenButtons.add(target);
+        candidates.push({
+          element: target,
+          score: extraScore
+            + (rect.left >= titleRect.right - 8 ? 520 : 0)
+            + (!token ? 180 : 0)
+            + (/more|menu|options|ellipsis|dots|更多|菜单|选项/.test(token + signature) ? 360 : 0)
+            + (/circle|dots|ellipsis|kebab/.test(signature) ? 180 : 0)
+            + Math.max(0, 160 - Math.abs(rect.left - titleRect.right)),
+          right: rect.right,
+          left: rect.left
+        });
+      };
+      for (const { node, rect: titleRect } of titleNodes.slice(0, 8)) {
+        for (let scope = node, depth = 0; scope && scope !== document.body && depth < 5; scope = scope.parentElement, depth += 1) {
+          const scopeRect = rectOf(scope);
+          if (!scopeRect || scopeRect.top > 210 || scopeRect.height > 180 || scopeRect.width > 900) continue;
+          for (const button of all("button,[role='button'],[aria-haspopup],[aria-expanded],[tabindex]:not([tabindex='-1']),[class*='button' i]", scope)) {
+            addButton(button, titleRect, 120 - depth * 12);
+          }
+        }
+        for (const button of all("button,[role='button'],[aria-haspopup],[aria-expanded],[tabindex]:not([tabindex='-1'])")) {
+          addButton(button, titleRect, 0);
+        }
+      }
+      candidates.sort((a, b) => b.score - a.score || b.right - a.right || b.left - a.left);
+      return candidates[0]?.element || null;
     };
     const hoverTopic = (link) => {
       try { link.scrollIntoView?.({ block: "center", inline: "nearest" }); } catch {}
@@ -420,10 +536,73 @@
         }
       }
     };
+    const visualTopicRow = (link) => {
+      const linkRect = rectOf(link);
+      if (!link || !linkRect) return link;
+      const linkToken = compact(textOf(link));
+      let best = { element: link, score: linkRect.width };
+      for (let node = link; node && node !== document.body; node = node.parentElement) {
+        const rect = rectOf(node);
+        if (!rect || rect.left > 560 || rect.width < 80 || rect.width > 620 || rect.height < 24 || rect.height > 118) continue;
+        if (rect.top > linkRect.top + 14 || rect.bottom < linkRect.bottom - 14) continue;
+        const token = compact(textOf(node));
+        if (linkToken && token && !token.includes(linkToken) && !linkToken.includes(token)) continue;
+        const className = String(node.className || "");
+        const active = /\b(active|selected|current)\b/i.test(className) || String(node.getAttribute?.("aria-current") || "").toLowerCase() === "page";
+        const score = rect.width + Math.max(0, rect.right - linkRect.right) * 2 + (active ? 500 : 0);
+        if (score > best.score) best = { element: node, score };
+      }
+      return best.element || link;
+    };
+    const sidebarRootForTopic = (link) => {
+      const roots = [];
+      const seen = new Set();
+      const add = (node, seedRect) => {
+        if (!node || seen.has(node)) return;
+        seen.add(node);
+        const rect = rectOf(node);
+        if (!rect || rect.left > 560 || rect.width < 120 || rect.width > 620 || rect.height < 36) return;
+        if (seedRect && (rect.top > seedRect.top + 12 || rect.bottom < seedRect.bottom - 12)) return;
+        const links = all("a[href*='/chat/s/'],a[href*='/a/chat/s/']", node).filter(visible).length;
+        const value = textOf(node);
+        const className = String(node.className || "");
+        const historyish = /today|yesterday|pinned|new chat|今天|昨天|新聊天|置顶/i.test(value)
+          || /scroll|history|sidebar|sider|conversation/i.test(className)
+          || links >= 2;
+        if (!historyish && links < 1) return;
+        roots.push({
+          element: node,
+          score: Math.min(links, 12) * 120 + rect.width + Math.min(rect.height, 900) * 0.04 - rect.left
+        });
+      };
+      const seedRect = rectOf(link);
+      for (const seed of [link, ...all("a[href*='/chat/s/'],a[href*='/a/chat/s/']").filter(visible).slice(0, 5)]) {
+        for (let node = seed; node && node !== document.body; node = node.parentElement) add(node, seed === link ? seedRect : null);
+      }
+      roots.sort((a, b) => b.score - a.score);
+      return roots[0]?.element || null;
+    };
+    const topicMenuRect = (link) => {
+      const base = rectOf(visualTopicRow(link)) || rectOf(link);
+      if (!base) return null;
+      const sidebarRect = rectOf(sidebarRootForTopic(link));
+      const right = sidebarRect && sidebarRect.left <= base.left + 36 && sidebarRect.right > base.right + 20
+        ? Math.min(sidebarRect.right - 10, Math.max(base.right, sidebarRect.right - 10))
+        : base.right;
+      return {
+        left: base.left,
+        top: base.top,
+        right,
+        bottom: base.bottom,
+        width: right - base.left,
+        height: base.height
+      };
+    };
     const findTopicMoreButton = (link) => {
       if (!link) return null;
       hoverTopic(link);
-      const linkRect = rectOf(link);
+      const visualRow = visualTopicRow(link);
+      const linkRect = topicMenuRect(link);
       if (!linkRect) return null;
       const candidates = [];
       const seen = new Set();
@@ -431,26 +610,36 @@
         const target = closestClickable(node);
         if (!target || seen.has(target) || target === link || disabled(target)) return;
         const rect = rectOf(target);
-        if (!rect || rect.width > 80 || rect.height > 80) return;
-        const overlaps = rect.top < linkRect.bottom + 8 && rect.bottom > linkRect.top - 8;
-        const nearRight = rect.left >= linkRect.right - 120 && rect.left <= linkRect.right + 80;
+        if (!rect || rect.width < 8 || rect.height < 8 || rect.width > 80 || rect.height > 80) return;
+        const overlaps = rect.top < linkRect.bottom + 10 && rect.bottom > linkRect.top - 10;
+        const nearRight = rect.left >= linkRect.right - 132 && rect.left <= linkRect.right + 84;
         if (!overlaps || !nearRight) return;
         const value = compact(textOf(target));
         if (value && !/more|menu|options|ellipsis|dots|更多|菜单|选项/.test(value)) return;
         seen.add(target);
         candidates.push({
           element: target,
-          score: extra + (visible(target) ? 180 : 40) + (!value ? 180 : 0) + Math.max(0, 100 - Math.abs(rect.right - linkRect.right)),
+          score: extra
+            + (visible(target) ? 180 : 40)
+            + (!value ? 180 : 0)
+            + Math.max(0, 100 - Math.abs((rect.left + rect.right) / 2 - (linkRect.right - 28))),
           right: rect.right
         });
       };
-      for (const node of all("button,[role='button'],[aria-haspopup],[tabindex]:not([tabindex='-1']),[class*='button' i]", link)) add(node, 260);
-      for (const offset of [8, 18, 30, 44, 64, 88]) {
+      const iconSelector = "button,[role='button'],[aria-haspopup],[aria-expanded],[tabindex]:not([tabindex='-1']),[class*='button' i],[class*='btn' i],svg,[class*='more' i],[class*='menu' i],[class*='option' i],[class*='action' i],[class*='ellipsis' i]";
+      for (const node of all(iconSelector, visualRow)) add(node, 320);
+      for (let scope = link, depth = 0; scope && scope !== document.body && depth < 5; scope = scope.parentElement, depth += 1) {
+        for (const node of all(iconSelector, scope)) {
+          add(node, 260 - depth * 18);
+        }
+      }
+      for (const offset of [18, 28, 38, 48, 60, 76, 96, 118, 142]) {
         try {
-          const pointTarget = document.elementFromPoint(Math.max(linkRect.left + 8, linkRect.right - offset), linkRect.top + linkRect.height / 2);
+          const pointTarget = document.elementFromPoint(Math.max(linkRect.left + 16, linkRect.right - offset), linkRect.top + linkRect.height / 2);
           if (pointTarget) add(pointTarget, 180 - offset);
         } catch {}
       }
+      for (const node of all(iconSelector)) add(node, 0);
       candidates.sort((a, b) => b.score - a.score || b.right - a.right);
       return candidates[0]?.element || null;
     };
@@ -499,6 +688,112 @@
       }
       candidates.sort((a, b) => a.area - b.area || a.top - b.top);
       return candidates[0]?.element || null;
+    };
+    const serializableRect = (rect) => rect ? {
+      left: Math.round(Number(rect.left || 0) * 100) / 100,
+      top: Math.round(Number(rect.top || 0) * 100) / 100,
+      right: Math.round(Number(rect.right || 0) * 100) / 100,
+      bottom: Math.round(Number(rect.bottom || 0) * 100) / 100,
+      width: Math.round(Number(rect.width || 0) * 100) / 100,
+      height: Math.round(Number(rect.height || 0) * 100) / 100
+    } : null;
+    const trustedMenuClickForTopicLink = (link, reason = "topic menu trigger requires trusted browser input") => {
+      const linkRect = topicMenuRect(link);
+      if (!linkRect) return null;
+      const y = linkRect.top + linkRect.height / 2;
+      const points = [18, 28, 38, 48, 60, 76, 96, 118, 142]
+        .map((offset) => ({ x: Math.max(linkRect.left + 16, linkRect.right - offset), y }));
+      const seen = new Set();
+      const framePoints = points
+        .map((point) => ({
+          x: Math.round(Number(point.x) * 100) / 100,
+          y: Math.round(Number(point.y) * 100) / 100
+        }))
+        .filter((point) => {
+          if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) return false;
+          const key = `${point.x},${point.y}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+      const framePoint = framePoints[0];
+      if (!framePoint) return null;
+      return {
+        kind: "topic-menu-trigger",
+        site: "deepseek",
+        reason,
+        framePoint,
+        framePoints,
+        frameRect: serializableRect(linkRect),
+        hoverSettleMs: 360
+      };
+    };
+    const trustedKeySequenceForTopicLink = (link, reason = "topic menu trigger requires keyboard focus") => {
+      const rowRect = topicMenuRect(link);
+      const visualRect = rectOf(visualTopicRow(link)) || rectOf(link) || rowRect;
+      if (!rowRect || !visualRect) return null;
+      const focusX = Math.min(
+        rowRect.right - 104,
+        Math.max(rowRect.left + 24, visualRect.left + Math.min(180, visualRect.width * 0.42))
+      );
+      return {
+        kind: "topic-menu-keyboard",
+        site: "deepseek",
+        reason,
+        framePoint: {
+          x: Math.round(focusX * 100) / 100,
+          y: Math.round((rowRect.top + rowRect.height / 2) * 100) / 100
+        },
+        frameRect: serializableRect(rowRect),
+        keys: [
+          { key: "Tab", settleMs: 140 },
+          { key: "Enter", settleMs: 260 }
+        ],
+        clickSettleMs: 160,
+        keySettleMs: 140,
+        settleMs: 460
+      };
+    };
+    const trustedHoverForTopicLink = (link, reason = "topic menu trigger requires trusted hover") => {
+      const linkRect = topicMenuRect(link);
+      if (!linkRect) return null;
+      return {
+        kind: "topic-menu-hover",
+        site: "deepseek",
+        reason,
+        framePoint: {
+          x: Math.round(Math.max(linkRect.left + 16, linkRect.right - 28) * 100) / 100,
+          y: Math.round((linkRect.top + linkRect.height / 2) * 100) / 100
+        },
+        frameRect: serializableRect(linkRect),
+        hoverSettleMs: 520
+      };
+    };
+    const resultWithTrustedHover = (reason, link) => {
+      const trustedHover = trustedHoverForTopicLink(link, reason);
+      return {
+        ok: false,
+        reason,
+        ...(trustedHover ? { needsTrustedHover: true, trustedHover } : {})
+      };
+    };
+    const resultWithTrustedMenuClick = (reason, link) => {
+      const trustedMenuClick = trustedMenuClickForTopicLink(link, reason);
+      return {
+        ok: false,
+        reason,
+        ...(trustedMenuClick ? { needsTrustedMenuClick: true, trustedMenuClick } : {})
+      };
+    };
+    const resultWithTrustedKeySequence = (reason, link) => {
+      const trustedKeySequence = trustedKeySequenceForTopicLink(link, reason);
+      const trustedMenuClick = trustedMenuClickForTopicLink(link, reason);
+      return {
+        ok: false,
+        reason,
+        ...(trustedKeySequence ? { needsTrustedKeySequence: true, trustedKeySequence } : {}),
+        ...(trustedMenuClick ? { needsTrustedMenuClick: true, trustedMenuClick } : {})
+      };
     };
     const dialogTextMatches = (value) => {
       const text = String(value || "").toLowerCase();
@@ -618,21 +913,57 @@
       const closed = await waitFor(confirmGone, 5200, 140);
       return closed ? { ok: true } : { ok: false, reason: "delete confirmation did not close" };
     };
-    const deleteThread = async () => {
+    const deleteThread = async (data = {}) => {
       const existingConfirm = await clickExistingConfirm();
       if (existingConfirm) return existingConfirm;
+      const existingDeleteItem = await waitFor(findDeleteMenuItem, (data?.trustedKeySequenceRetried || data?.trustedMenuClickRetried) ? 3400 : 300, 60);
+      if (existingDeleteItem && activate(existingDeleteItem, ["onClick", "onPointerUp", "onMouseUp"])) {
+        const existingMenuConfirm = await waitFor(findConfirmButton, 4200, 100);
+        if (!existingMenuConfirm) return { ok: false, reason: "delete confirmation button not found" };
+        if (!activate(existingMenuConfirm, ["onClick", "onPointerUp", "onMouseUp"])) {
+          return { ok: false, reason: "delete confirmation click failed" };
+        }
+        const closed = await waitFor(confirmGone, 6200, 140);
+        return closed ? { ok: true } : { ok: false, reason: "delete confirmation did not close" };
+      }
+      if (data?.trustedMenuClickRetried) return { ok: false, reason: "trusted topic menu click did not open" };
+      const headerTrigger = findHeaderMoreButton();
+      const openTriggerAndDelete = async (trigger, timeoutMs = 3000) => {
+        const deleteItem = await activateUntil(
+          trigger,
+          findDeleteMenuItem,
+          ["onClick", "onPointerUp", "onMouseUp", "onPointerDown", "onMouseDown"],
+          { settleMs: 220 }
+        ) || await waitFor(findDeleteMenuItem, timeoutMs, 90);
+        if (!deleteItem) return null;
+        return activate(deleteItem, ["onClick", "onPointerUp", "onMouseUp"]) ? deleteItem : null;
+      };
+      if (headerTrigger) {
+        if (await openTriggerAndDelete(headerTrigger, 2600)) {
+          const headerConfirm = await waitFor(findConfirmButton, 4200, 100);
+          if (!headerConfirm) return { ok: false, reason: "delete confirmation button not found" };
+          if (!activate(headerConfirm, ["onClick", "onPointerUp", "onMouseUp"])) {
+            return { ok: false, reason: "delete confirmation click failed" };
+          }
+          const closed = await waitFor(confirmGone, 6200, 140);
+          return closed ? { ok: true } : { ok: false, reason: "delete confirmation did not close" };
+        }
+        closeTransientMenus();
+      }
       const link = currentTopicLink();
       if (!link) return { ok: false, reason: "current topic row not found" };
       const trigger = await waitFor(() => findTopicMoreButton(link), 1800, 80);
-      if (!trigger) return { ok: false, reason: "topic menu trigger not found" };
-      if (!activate(trigger, ["onClick", "onPointerUp", "onMouseUp", "onPointerDown", "onMouseDown"])) {
-        return { ok: false, reason: "topic menu trigger click failed" };
-      }
-      const deleteItem = await waitFor(findDeleteMenuItem, 3000, 90);
-      if (!deleteItem) return { ok: false, reason: "delete menu item not found" };
-      if (!activate(deleteItem, ["onClick", "onPointerUp", "onMouseUp"])) {
-        return { ok: false, reason: "delete menu item click failed" };
-      }
+      if (!trigger) return data?.trustedMenuClickRetried
+        ? { ok: false, reason: "trusted topic menu click did not open" }
+        : data?.trustedKeySequenceRetried
+          ? resultWithTrustedMenuClick("keyboard topic menu did not open", link)
+        : resultWithTrustedKeySequence("topic menu trigger not found", link);
+      const deleteItem = await openTriggerAndDelete(trigger, 3000);
+      if (!deleteItem) return data?.trustedMenuClickRetried
+        ? { ok: false, reason: "trusted topic menu click did not open" }
+        : data?.trustedKeySequenceRetried
+          ? resultWithTrustedMenuClick("keyboard topic menu did not open", link)
+        : resultWithTrustedKeySequence("delete menu item not found", link);
       const confirmButton = await waitFor(findConfirmButton, 4200, 100);
       if (!confirmButton) return { ok: false, reason: "delete confirmation button not found" };
       if (!activate(confirmButton, ["onClick", "onPointerUp", "onMouseUp"])) {
@@ -642,13 +973,13 @@
       return closed ? { ok: true } : { ok: false, reason: "delete confirmation did not close" };
     };
 
-    window.__CHATCLUB_DEEPSEEK_DELETE_BRIDGE__ = { deleteThread };
+    window.__CHATCLUB_DEEPSEEK_DELETE_BRIDGE__ = { version: DEEPSEEK_DELETE_BRIDGE_VERSION, deleteThread };
     window.addEventListener("message", async (event) => {
       const message = event.data;
       if (message?.source !== DEEPSEEK_DELETE_SOURCE || message.type !== "request" || message.action !== "deleteThread") return;
       let result;
       try {
-        result = await deleteThread();
+        result = await deleteThread(message.data || {});
       } catch (error) {
         result = { ok: false, reason: error?.message || String(error || "delete bridge failed") };
       }
@@ -918,6 +1249,151 @@
     }, true);
   }
 
+  function installGrokStorageAccessBridge() {
+    if (window.__CHATCLUB_GROK_STORAGE_ACCESS_BRIDGE__) return;
+    window.__CHATCLUB_GROK_STORAGE_ACCESS_BRIDGE__ = true;
+
+    const RELOAD_KEY = "__chatclub_grok_storage_access_reloaded__";
+    const diag = {
+      version: "2026-07-02-storage-access",
+      href: String(location.href || ""),
+      host: String(location.hostname || ""),
+      framed: true,
+      referrer: "",
+      ancestorOrigins: [],
+      supported: {
+        hasStorageAccess: typeof document.hasStorageAccess === "function",
+        requestStorageAccess: typeof document.requestStorageAccess === "function",
+        permissionsQuery: !!navigator.permissions?.query
+      },
+      permissionState: "",
+      hasStorageAccess: null,
+      status: "starting",
+      requested: false,
+      requestResult: "",
+      requestError: "",
+      userGestureArmed: false,
+      reloadScheduled: false,
+      reloadReason: "",
+      updatedAt: new Date().toISOString()
+    };
+    window.__CHATCLUB_GROK_EMBED_DIAG__ = diag;
+
+    const update = (patch = {}) => {
+      Object.assign(diag, patch, {
+        href: String(location.href || ""),
+        updatedAt: new Date().toISOString()
+      });
+      try {
+        diag.referrer = String(document.referrer || "");
+      } catch {}
+      try {
+        diag.ancestorOrigins = Array.from(location.ancestorOrigins || []);
+      } catch {}
+      return diag;
+    };
+
+    const storageMarker = () => `${location.origin || "grok"}|${location.pathname || "/"}`;
+
+    const readHasStorageAccess = async () => {
+      if (typeof document.hasStorageAccess !== "function") {
+        update({ hasStorageAccess: null });
+        return null;
+      }
+      try {
+        const hasAccess = await document.hasStorageAccess();
+        update({ hasStorageAccess: Boolean(hasAccess) });
+        return Boolean(hasAccess);
+      } catch (error) {
+        update({ hasStorageAccess: null, hasStorageAccessError: error?.message || String(error || "hasStorageAccess failed") });
+        return null;
+      }
+    };
+
+    const readPermissionState = async () => {
+      if (!navigator.permissions?.query) return "";
+      try {
+        const permission = await navigator.permissions.query({ name: "storage-access" });
+        update({ permissionState: String(permission.state || "") });
+        permission.onchange = () => update({ permissionState: String(permission.state || "") });
+        return String(permission.state || "");
+      } catch (error) {
+        update({ permissionState: "", permissionError: error?.message || String(error || "permission query failed") });
+        return "";
+      }
+    };
+
+    const reloadOnce = (reason) => {
+      const marker = storageMarker();
+      try {
+        if (sessionStorage.getItem(RELOAD_KEY) === marker) {
+          update({ status: "reload-skipped", reloadReason: reason || "", reloadSkipped: "already reloaded for this page" });
+          return;
+        }
+        sessionStorage.setItem(RELOAD_KEY, marker);
+      } catch {}
+      update({ status: "reload-scheduled", reloadScheduled: true, reloadReason: reason || "" });
+      setTimeout(() => {
+        try { location.reload(); } catch {}
+      }, 80);
+    };
+
+    const requestAccess = async (reason) => {
+      if (typeof document.requestStorageAccess !== "function") {
+        update({ status: "unsupported", requestError: "document.requestStorageAccess is unavailable" });
+        return false;
+      }
+      update({ status: "requesting", requested: true, requestReason: reason || "" });
+      try {
+        await document.requestStorageAccess();
+        const hasAccess = await readHasStorageAccess();
+        update({ status: "granted", requestResult: "granted", requestError: "", hasStorageAccess: hasAccess });
+        reloadOnce(reason || "requestStorageAccess");
+        return true;
+      } catch (error) {
+        update({ status: "request-failed", requestResult: "failed", requestError: error?.message || String(error || "requestStorageAccess failed") });
+        return false;
+      }
+    };
+
+    const armUserGesture = (reason) => {
+      if (diag.userGestureArmed || typeof document.requestStorageAccess !== "function") return;
+      update({ status: "waiting-for-user-gesture", userGestureArmed: true, userGestureReason: reason || "" });
+      const cleanup = () => {
+        for (const type of ["click", "pointerup", "touchend", "keydown"]) {
+          window.removeEventListener(type, handler, true);
+        }
+      };
+      const handler = (event) => {
+        if (!event?.isTrusted) return;
+        if (event.type === "keydown" && !["Enter", " ", "Spacebar"].includes(event.key)) return;
+        cleanup();
+        update({ userGestureArmed: false, status: "user-gesture-received", userGestureType: event.type });
+        requestAccess("trusted-user-gesture");
+      };
+      for (const type of ["click", "pointerup", "touchend", "keydown"]) {
+        window.addEventListener(type, handler, true);
+      }
+    };
+
+    const run = async () => {
+      update({ status: "checking" });
+      const hasAccess = await readHasStorageAccess();
+      const permissionState = await readPermissionState();
+      if (hasAccess === true) {
+        await requestAccess("has-storage-access");
+        return;
+      }
+      if (permissionState === "granted") {
+        await requestAccess("permission-granted");
+        return;
+      }
+      armUserGesture(permissionState || "permission-unknown");
+    };
+
+    run().catch((error) => update({ status: "failed", requestError: error?.message || String(error || "storage access bridge failed") }));
+  }
+
   const host = String(location.hostname || "").toLowerCase();
   const framed = (() => {
     try { return window.parent !== window; } catch { return true; }
@@ -929,6 +1405,10 @@
 
   if (host === "chat.deepseek.com" || host === "deepseek.com" || host.endsWith(".deepseek.com")) {
     installDeepSeekDeleteBridge();
+  }
+
+  if (framed && (host === "grok.com" || host.endsWith(".grok.com") || host === "grok.x.ai" || host.endsWith(".grok.x.ai"))) {
+    installGrokStorageAccessBridge();
   }
 
   if (framed && (host === "claude.ai" || host.endsWith(".claude.ai"))) {

@@ -29,6 +29,28 @@
 - Recalculate `userscriptLength` after changing a userscript body.
 - Bump the per-site `configVersion` for each changed site, and bump `SUMMARY_SITE_CONFIG_VERSION` when shipped config changes.
 
+## Delete Sites Userscript Runtime
+
+- Delete Sites failures can be caused by stale stored built-in userscript source, not by the current packaged `.user.js` file. Do not rely only on the editor textarea or source file; verify whether storage normalization will migrate old generated built-ins to the packaged default.
+- Do not identify generated built-in Delete Site userscripts only by exact source length. Old generated copies may differ by metadata, `@match`, whitespace, or prior generated versions; use semantic markers such as ChatClub namespace, site `SITE_ID`, delete-site DOM event contract, debug hook, and site runner.
+- A Delete Sites userscript result of `{ ok: true }` is not sufficient proof that deletion finished. Some sites, especially Notion, may successfully open the confirmation modal but ignore synthetic clicks on the final Confirm button.
+- After a Delete Sites run, check whether a delete confirmation dialog is still visible. If it is still present, treat the operation as unfinished and use the trusted-click fallback path instead of showing a success toast.
+- For Notion, the common failure point is the final confirmation dialog, not the menu trigger: the Delete menu item can work while the Confirm button remains open. Debug the confirmation state separately from the menu-opening state.
+- For Kagi Delete Sites, do not fall back to clicking sidebar thread links or title/link menus after the native delete shortcut path fails. That can navigate to a thread instead of deleting; a safe failure is preferable to clicking a conversation link.
+- For DeepSeek Delete Sites, do not treat a generic `aside`, `nav`, history, or main-content container as the sidebar unless it contains visible `/chat/s/` or `/a/chat/s/` conversation links. A false sidebar root leads to `topic menu trigger not found`.
+- DeepSeek may show the current conversation link in the sidebar while keeping the row menu button out of the accessibility tree until real pointer hover. Synthetic `mouseover` is not enough for CSS `:hover`; use a trusted mouse-move/hover retry before concluding the topic menu is missing.
+- In ChatClub's embedded DeepSeek iframe, the current sidebar conversation can be exposed as a plain `a[href*="/chat/s/"]` with no row menu button at all, while the current chat title/header exposes small unlabeled buttons near the title. In that structure, use a current-title/header menu fallback and only click a resulting explicit `Delete`/`删除` menu item; do not keep retrying only the sidebar row menu.
+- In ChatClub's embedded DeepSeek iframe, the visible `...` menu may be absent from the accessibility tree even when the current `/chat/s/` link is exposed. Anchor the delete flow to the current `/chat/s/` or `/a/chat/s/` link first, then probe around that link's right edge.
+- In ChatClub's embedded DeepSeek iframe, the current `/chat/s/` link can be text-width only while the visible `...` sits at the right edge of the highlighted visual row. Promote the current link to its same-line visual row before applying right-edge hover/click probes.
+- DeepSeek can focus/select the sidebar `...` trigger while ignoring a single synthetic click. Do not treat "event dispatched" as success; after each pointer/native/framework activation attempt, verify that a `Delete`/`删除` menu item actually appeared before moving on.
+- The working `Template_shortcuts` DeepSeek delete shortcut uses an activate-until-menu pattern: full pointer/mouse sequence first, then native/framework fallbacks, checking for the menu after each attempt. Keep ChatClub's Delete Sites DeepSeek path aligned with that behavior.
+- A `[PostMessage] Timeout waiting for response: deleteThread` from a Delete Sites run means the target iframe did not answer through `content/content.js`; it is a frame runtime/injection/loaded-state problem, not proof that the site userscript logic ran and failed.
+- Before concluding a Delete Sites script failed, ping the iframe content bridge and, if needed, ask the background service worker to inject `content/preload.js` and `content/content.js` into the matching web subframe. The top-level app should report bridge injection failures separately from site deletion failures.
+- ChatClub-triggered Delete Sites requests must use a version-scoped request event/message, for example `chatclub:delete-site:request:<version>` and `request:<version>`. Otherwise stale already-injected listeners can receive the generic request and execute old behavior in parallel with the current textarea source.
+- Delete Thread iframe `postMessage` requests also need a versioned source. Existing iframes can keep old `content/content.js` and `content/preload.js` listeners alive after reinjection; a generic `source: "chatclub"` request lets stale listeners answer first.
+- For edited built-in or custom standalone Delete Sites userscripts, do not reuse an existing same-version debug registry entry before injection. Users often edit the body without changing `@version`, so the runtime must dispose stale same-site entries and inject the textarea source first.
+- Do not use broad semantic built-in detection to override a Delete Sites script when `userscriptOverride` is true. Exact current source, known generated lengths, and legacy fragments are safe; broad marker matching can erase real user edits.
+
 ## Kagi Message Extraction
 
 - Kagi Assistant places `Copy references to clipboard` inside the assistant response before the assistant `Copy message` button.

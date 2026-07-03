@@ -13,6 +13,7 @@ import {
   GEMINI_THINKING_LEVEL_PREFERENCE_KEY,
   GEMINI_THINKING_LEVEL_TARGETS,
   MODEL_PREFERENCE_TARGETS,
+  SCRIPT_CONFIG_SCHEMA_VERSION,
   STORAGE_KEYS,
   TAB_GROUP_HEADER_BUTTONS,
   TOOLTIP_TARGET_IDS
@@ -283,8 +284,46 @@ function normalizeTemplate(template, fallback, prefix, index) {
   };
 }
 
+function normalizeUserscriptSource(value) {
+  return String(value || "").trim().replace(/\r\n?/g, "\n");
+}
+
+function summaryScriptId(item = {}, fallback = {}) {
+  const file = text(item.userscriptFile || fallback.userscriptFile);
+  return text(item.scriptId || fallback.scriptId || (file ? file.replace(/\.js$/i, "") : "") || item.id || fallback.id);
+}
+
+function summarySourceLooksLikeBuiltIn(id, source, currentSource = "") {
+  const normalized = normalizeUserscriptSource(source);
+  if (!normalized) return false;
+  if (normalized === normalizeUserscriptSource(currentSource)) return true;
+  const markerSets = {
+    chatgpt: ["copy-turn-action-button", "data-message-author-role"],
+    claude: ["Claude responded", "Copy message"],
+    gemini: ["Gemini said", "copy prompt"],
+    deepseek: ['const site = "deepseek"', "findDeepSeekTurns"],
+    grok: ['const site = "grok"', "findGrokTurns"],
+    grokMirror: ['const site = "grokMirror"', "findGrokTurns"],
+    "grok-dairoot": ['const site = "grokMirror"', "findGrokTurns"],
+    kagi: ["messageCopyButton", "referenceCopyButton"],
+    notion: ["notion", "copy-message-button"],
+    lobeHub: ["lobe", "message"],
+    lobehub: ["lobe", "message"],
+    typingMind: ["TypingMind", "copy"],
+    typingmind: ["TypingMind", "copy"]
+  };
+  const markers = markerSets[id] || [];
+  return Boolean(markers.length && markers.every((marker) => normalized.includes(marker)));
+}
+
 function normalizeSummarySiteConfig(item, fallback = {}, index = 0) {
-  const userscript = String(item?.userscript ?? fallback.userscript ?? "").trim();
+  const builtIn = Boolean(fallback.builtIn || item?.builtIn);
+  const fallbackUserscript = String(fallback.userscript || "").trim();
+  const customUserscript = String(item?.customUserscript ?? item?.userscript ?? "").trim();
+  const sourceMode = item?.sourceMode === "custom" || (!builtIn && customUserscript)
+    ? "custom"
+    : "builtIn";
+  const userscript = sourceMode === "custom" ? customUserscript : fallbackUserscript;
   const copyTimeoutMs = boundedNumber(item?.copyTimeoutMs, 0, 300, 10000);
   const config = {
     ...fallback,
@@ -297,10 +336,19 @@ function normalizeSummarySiteConfig(item, fallback = {}, index = 0) {
     userscriptTimeoutMs: boundedNumber(item?.userscriptTimeoutMs, fallback.userscriptTimeoutMs || 24000, 5000, 45000),
     id: text(item?.id || fallback.id) || createId("summary-collector"),
     name: text(item?.name || fallback.name, `Summary Collector ${index + 1}`),
-    builtIn: Boolean(fallback.builtIn || item?.builtIn),
+    builtIn,
+    scriptType: text(item?.scriptType || fallback.scriptType, "summary"),
+    scriptId: summaryScriptId(item, fallback) || `summary-${index + 1}`,
+    scriptVersion: sourceMode === "custom"
+      ? text(item?.scriptVersion)
+      : text(fallback.configVersion ?? fallback.scriptVersion),
+    sourceMode,
     userscript,
-    userscriptLength: userscript.length
+    userscriptLength: userscript.length,
+    userscriptOverride: Boolean(builtIn && sourceMode === "custom")
   };
+  if (sourceMode === "custom") config.customUserscript = userscript;
+  else delete config.customUserscript;
   if (copyTimeoutMs) config.copyTimeoutMs = copyTimeoutMs;
   else delete config.copyTimeoutMs;
   return config;
@@ -311,16 +359,28 @@ function mergeBuiltInSummaryConfig(current, builtIn) {
   const merged = [];
   for (const item of builtIn || []) {
     const existing = byId.get(item.id) || {};
-    const userscript = String(existing.userscript || item.userscript || "").trim();
+    const existingUserscript = String(existing.customUserscript || existing.userscript || "").trim();
+    const knownBuiltInUserscript = summarySourceLooksLikeBuiltIn(item.id, existingUserscript, item.userscript);
+    const explicitCustom = existing.sourceMode === "custom" || Boolean(existing.customUserscript);
+    const sourceMode = explicitCustom || Boolean(existing.userscriptOverride && existingUserscript && !knownBuiltInUserscript)
+      ? "custom"
+      : "builtIn";
+    const userscript = sourceMode === "custom" ? existingUserscript : String(item.userscript || "").trim();
     const normalized = normalizeSummarySiteConfig({
       ...item,
       ...existing,
       id: item.id,
       name: existing.name || item.name,
       builtIn: true,
+      configVersion: item.configVersion,
       enabled: existing.enabled !== false,
+      scriptType: "summary",
+      scriptId: summaryScriptId(item),
+      scriptVersion: item.configVersion,
+      sourceMode,
       userscript,
-      userscriptOverride: Boolean(existing.userscript && existing.userscript !== item.userscript)
+      customUserscript: sourceMode === "custom" ? userscript : "",
+      userscriptOverride: sourceMode === "custom"
     }, item);
     merged.push(normalized);
     byId.delete(item.id);
@@ -383,6 +443,7 @@ export function normalizeOptions(raw = {}) {
   return {
     ...base,
     ...raw,
+    scriptConfigSchemaVersion: SCRIPT_CONFIG_SCHEMA_VERSION,
     layoutPresets,
     activeLayoutPresetId,
     tabGroupButtonsMode,
@@ -503,15 +564,59 @@ export async function storageSet(key, value) {
   await chrome.storage.local.set({ [key]: value });
 }
 
+function dehydrateSummarySiteConfig(config = {}) {
+  const sourceMode = config.sourceMode === "custom" || config.builtIn === false ? "custom" : "builtIn";
+  const out = { ...config, sourceMode };
+  out.scriptType = out.scriptType || "summary";
+  out.scriptId = summaryScriptId(out);
+  if (sourceMode === "custom") {
+    out.customUserscript = String(config.customUserscript || config.userscript || "").trim();
+    out.userscriptOverride = Boolean(out.builtIn);
+  } else {
+    delete out.customUserscript;
+    delete out.userscriptOverride;
+  }
+  delete out.userscript;
+  delete out.userscriptLength;
+  return out;
+}
+
+function dehydrateTopicDeleteSiteConfig(config = {}) {
+  const sourceMode = config.sourceMode === "custom" || config.builtIn === false ? "custom" : "builtIn";
+  const out = { ...config, sourceMode };
+  out.scriptType = out.scriptType || "topic-delete";
+  out.scriptId = text(out.scriptId || out.id);
+  if (sourceMode === "custom") {
+    out.customUserscript = String(config.customUserscript || config.userscript || "").trim();
+    out.userscriptOverride = Boolean(out.builtIn);
+  } else {
+    delete out.customUserscript;
+    delete out.userscriptOverride;
+  }
+  delete out.userscript;
+  delete out.userscriptLength;
+  return out;
+}
+
+export function dehydrateOptions(options = {}) {
+  const normalized = normalizeOptions(options);
+  return {
+    ...normalized,
+    scriptConfigSchemaVersion: SCRIPT_CONFIG_SCHEMA_VERSION,
+    summarySiteConfigs: (normalized.summarySiteConfigs || []).map(dehydrateSummarySiteConfig),
+    topicDeleteSiteConfigs: (normalized.topicDeleteSiteConfigs || []).map(dehydrateTopicDeleteSiteConfig)
+  };
+}
+
 export async function loadOptions() {
   const options = normalizeOptions(await storageGet(STORAGE_KEYS.options));
-  await storageSet(STORAGE_KEYS.options, options);
+  await storageSet(STORAGE_KEYS.options, dehydrateOptions(options));
   return options;
 }
 
 export async function saveOptions(options) {
   const normalized = normalizeOptions(options);
-  await storageSet(STORAGE_KEYS.options, normalized);
+  await storageSet(STORAGE_KEYS.options, dehydrateOptions(normalized));
   return normalized;
 }
 
@@ -575,13 +680,14 @@ export async function saveShortcutConfig(shortcutConfig) {
   return normalized;
 }
 
-export function exportConfigBundle({ options, customConfig, promptLibrary, shortcutConfig }) {
+export function exportConfigBundle({ options, customConfig, promptLibrary, promptSendHistory, shortcutConfig }) {
   return {
     schema: "chatclub.config.v1",
     exportedAt: new Date().toISOString(),
-    options: normalizeOptions(options),
+    options: dehydrateOptions(options),
     customConfig: normalizeCustomConfig(customConfig),
     promptLibrary: normalizePromptLibrary(promptLibrary),
+    promptSendHistory: normalizePromptSendHistory(promptSendHistory),
     shortcutConfig: normalizeShortcutConfig(shortcutConfig)
   };
 }
@@ -592,6 +698,7 @@ export function migrateImportedConfig(raw) {
     options: bundle.options ? normalizeOptions(bundle.options) : null,
     customConfig: bundle.customConfig ? normalizeCustomConfig(bundle.customConfig) : null,
     promptLibrary: bundle.promptLibrary ? normalizePromptLibrary(bundle.promptLibrary) : null,
+    promptSendHistory: bundle.promptSendHistory ? normalizePromptSendHistory(bundle.promptSendHistory) : null,
     shortcutConfig: bundle.shortcutConfig ? normalizeShortcutConfig(bundle.shortcutConfig) : null
   };
 }

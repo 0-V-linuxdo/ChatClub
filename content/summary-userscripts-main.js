@@ -3301,7 +3301,7 @@ const out=[];const seen=new Set;const norm=v=>api.normalize(String(v||''));const
   const inlineSummaryUserscriptCache = new Map();
 
   function shouldUseInlineSummaryUserscript(config, runner) {
-    return Boolean(config?.userscript) && (!runner || config.builtIn === false || config.userscriptOverride === true);
+    return Boolean(config?.userscript) && (!runner || config.builtIn === false || config.sourceMode === "custom" || config.userscriptOverride === true);
   }
 
   function inlineSummaryUserscriptRunner(config = {}) {

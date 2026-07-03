@@ -1,9 +1,27 @@
 import { configMatchesHref } from "./url-match.js";
+import {
+  DEEPSEEK_DELETE_USERSCRIPT,
+  GROK_DELETE_USERSCRIPT,
+  GROK_MIRROR_DELETE_USERSCRIPT,
+  KAGI_DELETE_USERSCRIPT,
+  NOTION_DELETE_USERSCRIPT
+} from "./topic-delete-userscript-sources.js";
 
-const KAGI_DELETE_USERSCRIPT = `return api.deleteKagiThread(data);
-`;
+const LEGACY_KAGI_SHORTCUT_USERSCRIPT = `if (!api.dispatchDeleteKeyboardShortcut()) {
+  return api.result(false, "kagi", "delete shortcut dispatch failed");
+}
+await api.sleep(240);
+await api.clickDeleteConfirmIfPresent(1800);
+return api.result(true, "kagi");`;
 
-const GROK_DELETE_USERSCRIPT = `const labels = ["Delete Chat", "Delete chat", "Delete", "删除聊天", "删除"];
+const LEGACY_TOPIC_DELETE_USERSCRIPTS = Object.freeze({
+  kagi: Object.freeze([
+    "return api.deleteKagiThread(data);",
+    LEGACY_KAGI_SHORTCUT_USERSCRIPT
+  ]),
+  grok: Object.freeze([
+    "return api.deleteGrokThread(data);",
+    `const labels = ["Delete Chat", "Delete chat", "Delete", "删除聊天", "删除"];
 const trigger = api.topRightMenuTrigger({
   labels: ["More", "More actions", "Menu", "Options", "更多", "菜单"]
 });
@@ -12,10 +30,11 @@ if (!await api.openTriggerAndClickDelete(trigger, labels)) {
   return api.result(false, "grok", "delete menu item not found");
 }
 await api.clickDeleteConfirmIfPresent(3600);
-return api.result(true, "grok");
-`;
-
-const GROK_MIRROR_DELETE_USERSCRIPT = `const labels = ["Delete Chat", "Delete chat", "Delete", "删除聊天", "删除"];
+return api.result(true, "grok");`
+  ]),
+  grokMirror: Object.freeze([
+    "return api.deleteGrokThread(data);",
+    `const labels = ["Delete Chat", "Delete chat", "Delete", "删除聊天", "删除"];
 const trigger = api.topRightMenuTrigger({
   labels: ["More", "More actions", "Menu", "Options", "更多", "菜单"]
 });
@@ -24,10 +43,11 @@ if (!await api.openTriggerAndClickDelete(trigger, labels)) {
   return api.result(false, "grokMirror", "delete menu item not found");
 }
 await api.clickDeleteConfirmIfPresent(3600);
-return api.result(true, "grokMirror");
-`;
-
-const NOTION_DELETE_USERSCRIPT = `if (api.findDeleteConfirmButton()) {
+return api.result(true, "grokMirror");`
+  ]),
+  notion: Object.freeze([
+    "return api.deleteNotionThread(data);",
+    `if (api.findDeleteConfirmButton()) {
   const confirmedExisting = await api.clickDeleteConfirmIfPresent(6500);
   return confirmedExisting
     ? api.result(true, "notion")
@@ -43,10 +63,11 @@ const confirmed = await api.clickDeleteConfirmIfPresent(6500);
 if (!confirmed && api.deleteDialogRoots().length) {
   return api.result(false, "notion", "delete confirmation did not close");
 }
-return api.result(true, "notion");
-`;
-
-const DEEPSEEK_DELETE_USERSCRIPT = `if (!await api.ensureDeepSeekSidebarOpen()) {
+return api.result(true, "notion");`
+  ]),
+  deepseek: Object.freeze([
+    "return api.deleteDeepSeekThread(data);",
+    `if (!await api.ensureDeepSeekSidebarOpen()) {
   return api.result(false, "deepseek", "sidebar could not be opened");
 }
 const bridged = await api.requestDeepSeekDeleteBridge(10500);
@@ -68,12 +89,23 @@ if (!await api.openTriggerAndClickDelete(moreButton, labels, { timeoutMs: 2600, 
 }
 const confirmed = await api.clickDeleteConfirmIfPresent(6500);
 if (!confirmed) return api.result(false, "deepseek", bridgeReason || "delete confirmation button not found");
-return api.result(true, "deepseek");
-`;
+return api.result(true, "deepseek");`
+  ])
+});
+
+function userscriptVersion(source) {
+  const match = String(source || "").match(/^\s*\/\/\s*@version\s+(.+?)\s*$/m);
+  return match ? String(match[1] || "").trim() : "";
+}
 
 function userscriptMeta(userscriptFile, userscript, userscriptTimeoutMs = 15000) {
   const source = String(userscript || "").trim();
   return {
+    builtIn: true,
+    scriptType: "topic-delete",
+    scriptId: userscriptFile.replace(/^topic-delete-userscripts\//, "").replace(/\.user\.js$/i, ""),
+    scriptVersion: userscriptVersion(source),
+    sourceMode: "builtIn",
     userscriptFile,
     userscript: source,
     userscriptLength: source.length,
@@ -87,8 +119,8 @@ export const TOPIC_DELETE_SITE_CONFIGS = Object.freeze([
     name: "Kagi Assistant",
     appIds: Object.freeze(["Kagi"]),
     hosts: Object.freeze(["assistant.kagi.com"]),
-    pathPrefixes: Object.freeze(["/chat/"]),
-    ...userscriptMeta("topic-delete-userscripts/kagi.js", KAGI_DELETE_USERSCRIPT, 15000)
+    pathPrefixes: Object.freeze([]),
+    ...userscriptMeta("topic-delete-userscripts/kagi.user.js", KAGI_DELETE_USERSCRIPT, 15000)
   }),
   Object.freeze({
     id: "grok",
@@ -96,7 +128,7 @@ export const TOPIC_DELETE_SITE_CONFIGS = Object.freeze([
     appIds: Object.freeze(["Grok"]),
     hosts: Object.freeze(["grok.com", "*.grok.com", "grok.x.ai", "*.grok.x.ai"]),
     pathPrefixes: Object.freeze(["/c/", "/chat/"]),
-    ...userscriptMeta("topic-delete-userscripts/grok.js", GROK_DELETE_USERSCRIPT, 15000)
+    ...userscriptMeta("topic-delete-userscripts/grok.user.js", GROK_DELETE_USERSCRIPT, 15000)
   }),
   Object.freeze({
     id: "grokMirror",
@@ -104,15 +136,15 @@ export const TOPIC_DELETE_SITE_CONFIGS = Object.freeze([
     appIds: Object.freeze(["GrokMirror"]),
     hosts: Object.freeze(["gk.dairoot.cn", "*.gk.dairoot.cn"]),
     pathPrefixes: Object.freeze(["/c/", "/chat/"]),
-    ...userscriptMeta("topic-delete-userscripts/grok-mirror.js", GROK_MIRROR_DELETE_USERSCRIPT, 15000)
+    ...userscriptMeta("topic-delete-userscripts/grok-mirror.user.js", GROK_MIRROR_DELETE_USERSCRIPT, 15000)
   }),
   Object.freeze({
     id: "notion",
     name: "Notion AI",
     appIds: Object.freeze(["NotionAI"]),
     hosts: Object.freeze(["app.notion.com", "notion.so", "www.notion.so", "*.notion.so"]),
-    pathPrefixes: Object.freeze(["/chat"]),
-    ...userscriptMeta("topic-delete-userscripts/notion.js", NOTION_DELETE_USERSCRIPT, 15000)
+    pathPrefixes: Object.freeze([]),
+    ...userscriptMeta("topic-delete-userscripts/notion.user.js", NOTION_DELETE_USERSCRIPT, 15000)
   }),
   Object.freeze({
     id: "deepseek",
@@ -120,7 +152,7 @@ export const TOPIC_DELETE_SITE_CONFIGS = Object.freeze([
     appIds: Object.freeze(["DeepSeek"]),
     hosts: Object.freeze(["deepseek.com", "*.deepseek.com"]),
     pathPrefixes: Object.freeze(["/a/chat", "/chat"]),
-    ...userscriptMeta("topic-delete-userscripts/deepseek.js", DEEPSEEK_DELETE_USERSCRIPT, 36000)
+    ...userscriptMeta("topic-delete-userscripts/deepseek.user.js", DEEPSEEK_DELETE_USERSCRIPT, 36000)
   })
 ]);
 
@@ -146,9 +178,72 @@ function boundedNumber(value, fallback, min, max) {
   return Math.max(min, Math.min(max, Math.round(number)));
 }
 
+function normalizeUserscriptSource(value) {
+  return String(value || "").trim().replace(/\r\n?/g, "\n");
+}
+
+function isKnownLegacyBuiltInUserscript(id, userscript) {
+  const source = normalizeUserscriptSource(userscript);
+  return Boolean(source && (LEGACY_TOPIC_DELETE_USERSCRIPTS[id] || []).some((item) => normalizeUserscriptSource(item) === source));
+}
+
+function isKnownStandaloneBuiltInUserscript(id, userscript, currentUserscript = "", options = {}) {
+  const source = normalizeUserscriptSource(userscript);
+  if (!source) return false;
+  if (source === normalizeUserscriptSource(currentUserscript)) return true;
+  if (!/\/\/\s*==UserScript==[\s\S]*?\/\/\s*==\/UserScript==/.test(source)) return false;
+  if (!/@namespace\s+https:\/\/chatclub\.local\/delete-sites/.test(source)) return false;
+  if (!/@name\s+ChatClub Delete Site\b/.test(source)) return false;
+  const sourceVersion = userscriptVersion(source);
+  const currentVersion = userscriptVersion(currentUserscript);
+  if (!/^\d{4}\.\d{2}\.\d{2}\.\d+$/.test(sourceVersion)) return false;
+  const escapedId = String(id).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (!new RegExp(`const\\s+SITE_ID\\s*=\\s*["']${escapedId}["']\\s*;`).test(source)) return false;
+  if (source === normalizeUserscriptSource(currentUserscript)) return true;
+  if (currentVersion && sourceVersion === currentVersion) return false;
+  if (options.allowSemantic === false) return false;
+  return looksLikeGeneratedStandaloneBuiltInUserscript(id, source);
+}
+
+function looksLikeGeneratedStandaloneBuiltInUserscript(id, source) {
+  const sharedMarkers = [
+    'const REQUEST_EVENT = "chatclub:delete-site:request";',
+    'const RESULT_EVENT = "chatclub:delete-site:result";',
+    'const PING_EVENT = "chatclub:delete-site:ping";',
+    'const READY_EVENT = "chatclub:delete-site:ready";',
+    'const GLOBAL_NAME = "ChatClubDeleteSites";',
+    'function dispatchReady',
+    'function handleRequest',
+    'function clickDeleteConfirmIfPresent',
+    'function resultWithTrustedDeleteConfirm',
+    'const runners = {',
+    'registry[SITE_ID]'
+  ];
+  if (!sharedMarkers.every((marker) => source.includes(marker))) return false;
+  const siteMarkers = {
+    kagi: ['kagi: deleteKagi', 'async function deleteKagi'],
+    grok: ['grok: deleteGrok', 'async function deleteGrok'],
+    grokMirror: ['grokMirror: deleteGrok', 'async function deleteGrok'],
+    notion: ['notion: deleteNotion', 'async function deleteNotion'],
+    deepseek: ['deepseek: deleteDeepSeek', 'async function deleteDeepSeek']
+  };
+  return (siteMarkers[id] || []).every((marker) => source.includes(marker));
+}
+
+export function topicDeleteUserscriptLooksLikeBuiltIn(id, userscript, currentUserscript = "", options = {}) {
+  return isKnownLegacyBuiltInUserscript(id, userscript)
+    || isKnownStandaloneBuiltInUserscript(id, userscript, currentUserscript, options);
+}
+
 function normalizeTopicDeleteSiteConfig(item = {}, fallback = {}, index = 0) {
-  const userscript = String(item.userscript ?? fallback.userscript ?? "").trim();
-  return {
+  const fallbackUserscript = String(fallback.userscript || "").trim();
+  const customUserscript = String(item.customUserscript ?? item.userscript ?? "").trim();
+  const builtIn = Boolean(fallback.builtIn || item.builtIn);
+  const sourceMode = item.sourceMode === "custom" || (!builtIn && customUserscript)
+    ? "custom"
+    : "builtIn";
+  const userscript = sourceMode === "custom" ? customUserscript : fallbackUserscript;
+  const config = {
     ...fallback,
     ...item,
     id: text(item.id || fallback.id, `topic-delete-${index + 1}`),
@@ -156,14 +251,23 @@ function normalizeTopicDeleteSiteConfig(item = {}, fallback = {}, index = 0) {
     appIds: uniqueStrings(item.appIds ?? fallback.appIds),
     hosts: uniqueStrings(item.hosts ?? fallback.hosts),
     pathPrefixes: uniqueStrings(item.pathPrefixes ?? fallback.pathPrefixes),
-    builtIn: Boolean(fallback.builtIn || item.builtIn),
+    builtIn,
     enabled: item.enabled !== false,
     userscriptFile: text(item.userscriptFile ?? fallback.userscriptFile),
+    scriptType: text(item.scriptType || fallback.scriptType, "topic-delete"),
+    scriptId: text(item.scriptId || fallback.scriptId || item.id || fallback.id, `topic-delete-${index + 1}`),
+    scriptVersion: sourceMode === "custom"
+      ? userscriptVersion(userscript)
+      : text(fallback.scriptVersion || userscriptVersion(fallbackUserscript)),
+    sourceMode,
     userscript,
     userscriptLength: userscript.length,
     userscriptTimeoutMs: boundedNumber(item.userscriptTimeoutMs, fallback.userscriptTimeoutMs || 15000, 5000, 45000),
-    userscriptOverride: Boolean(item.userscriptOverride)
+    userscriptOverride: Boolean(builtIn && sourceMode === "custom")
   };
+  if (sourceMode === "custom") config.customUserscript = userscript;
+  else delete config.customUserscript;
+  return config;
 }
 
 export function mergeBuiltInTopicDeleteConfig(current = [], builtIn = TOPIC_DELETE_SITE_CONFIGS) {
@@ -171,11 +275,19 @@ export function mergeBuiltInTopicDeleteConfig(current = [], builtIn = TOPIC_DELE
   const merged = [];
   for (const item of builtIn || []) {
     const existing = byId.get(item.id) || {};
-    const userscript = String(existing.userscript || item.userscript || "").trim();
-    const defaultUserscript = String(item.userscript || "").trim();
-    const userscriptOverride = Boolean(existing.userscript && userscript !== defaultUserscript);
+    const existingUserscript = String(existing.customUserscript || existing.userscript || "").trim();
+    const legacyBuiltInUserscript = isKnownLegacyBuiltInUserscript(item.id, existingUserscript);
+    const standaloneBuiltInUserscript = isKnownStandaloneBuiltInUserscript(item.id, existingUserscript, item.userscript, {
+      allowSemantic: true
+    });
+    const knownBuiltInUserscript = legacyBuiltInUserscript || standaloneBuiltInUserscript;
+    const explicitCustom = existing.sourceMode === "custom" || Boolean(existing.customUserscript);
+    const sourceMode = explicitCustom || Boolean(existing.userscriptOverride && existingUserscript && !knownBuiltInUserscript)
+      ? "custom"
+      : "builtIn";
+    const userscript = sourceMode === "custom" ? existingUserscript : String(item.userscript || "").trim();
     const existingTimeoutMs = Number(existing.userscriptTimeoutMs);
-    const userscriptTimeoutMs = !userscriptOverride && item.id === "deepseek" && existingTimeoutMs === 24000
+    const userscriptTimeoutMs = sourceMode !== "custom" && item.id === "deepseek" && existingTimeoutMs === 24000
       ? item.userscriptTimeoutMs
       : existing.userscriptTimeoutMs ?? item.userscriptTimeoutMs;
     merged.push(normalizeTopicDeleteSiteConfig({
@@ -183,11 +295,20 @@ export function mergeBuiltInTopicDeleteConfig(current = [], builtIn = TOPIC_DELE
       ...existing,
       id: item.id,
       name: existing.name || item.name,
+      appIds: existing.appIds ?? item.appIds,
+      hosts: existing.hosts ?? item.hosts,
+      pathPrefixes: existing.pathPrefixes ?? item.pathPrefixes,
+      userscriptFile: item.userscriptFile,
+      scriptType: item.scriptType,
+      scriptId: item.scriptId,
+      scriptVersion: item.scriptVersion,
       builtIn: true,
       enabled: existing.enabled !== false,
+      sourceMode,
       userscript,
+      customUserscript: sourceMode === "custom" ? userscript : "",
       userscriptTimeoutMs,
-      userscriptOverride
+      userscriptOverride: sourceMode === "custom"
     }, item));
     byId.delete(item.id);
   }
