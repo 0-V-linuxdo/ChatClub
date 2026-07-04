@@ -3661,15 +3661,24 @@ body.settings-tab-group-button-dragging iframe {
 
 .model-preference-list .settings-list-header,
 .model-preference-row {
-  grid-template-columns: minmax(160px, .72fr) minmax(300px, 1.1fr) minmax(180px, .78fr);
+  grid-template-columns: 52px minmax(160px, .72fr) minmax(300px, 1.1fr) minmax(180px, .78fr);
 }
 
 .settings-manager-list.model-preference-list .settings-list-header span:first-child {
-  padding: 0 var(--settings-cell-pad-x);
+  padding: 0;
 }
 
 .settings-manager-list.model-preference-list .settings-list-header span:last-child {
   text-align: left;
+}
+
+.model-preference-row {
+  user-select: none;
+}
+
+.model-preference-row > :first-child {
+  justify-self: center;
+  margin: 0;
 }
 
 .model-preference-row .settings-main-cell {
@@ -3770,7 +3779,7 @@ body.settings-tab-group-button-dragging iframe {
 @media (max-width: 700px) {
   .model-preference-list .settings-list-header,
   .model-preference-row {
-    grid-template-columns: minmax(86px, 104px) minmax(156px, 1fr) minmax(86px, auto);
+    grid-template-columns: 42px minmax(86px, 104px) minmax(156px, 1fr) minmax(86px, auto);
   }
 
   .model-preference-row > .select {
@@ -3993,10 +4002,14 @@ body.settings-tab-group-button-dragging iframe {
 
 .topic-delete-list .settings-list-header,
 .topic-delete-row {
-  grid-template-columns: minmax(190px, 1fr) minmax(220px, 1.1fr) 130px 130px;
+  grid-template-columns: 52px minmax(190px, 1fr) minmax(220px, 1.1fr) 130px 130px;
 }
 
-.topic-delete-list .settings-list-header span:nth-child(3) {
+.topic-delete-list .settings-list-header span:first-child {
+  padding: 0;
+}
+
+.topic-delete-list .settings-list-header span:nth-child(4) {
   text-align: center;
 }
 
@@ -4095,7 +4108,12 @@ body.settings-tab-group-button-dragging iframe {
   user-select: none;
 }
 
-.topic-delete-row > :nth-child(3) {
+.topic-delete-row > :first-child {
+  justify-self: center;
+  margin: 0;
+}
+
+.topic-delete-row > :nth-child(4) {
   justify-self: center;
   margin: 0;
 }
@@ -4114,11 +4132,26 @@ body.settings-tab-group-button-dragging iframe {
   opacity: .48;
 }
 
+.model-preference-row.dragging,
+.topic-delete-row.dragging {
+  opacity: .48;
+}
+
 .summary-collector-row.drop-before {
   box-shadow: inset 0 2px 0 var(--primary);
 }
 
+.model-preference-row.drop-before,
+.topic-delete-row.drop-before {
+  box-shadow: inset 0 2px 0 var(--primary);
+}
+
 .summary-collector-row.drop-after {
+  box-shadow: inset 0 -2px 0 var(--primary);
+}
+
+.model-preference-row.drop-after,
+.topic-delete-row.drop-after {
   box-shadow: inset 0 -2px 0 var(--primary);
 }
 
@@ -4203,8 +4236,8 @@ body.settings-tab-group-button-dragging iframe {
 }
 
 .topic-delete-details {
-  min-width: 680px;
-  padding-left: 18px;
+  min-width: 720px;
+  padding-left: 56px;
 }
 
 .summary-collector-details-grid {
@@ -4625,7 +4658,7 @@ body.settings-tab-group-button-dragging iframe {
   .topic-delete-list .settings-list-header,
   .topic-delete-row {
     min-width: 620px;
-    grid-template-columns: minmax(150px, .95fr) minmax(190px, 1.05fr) 96px 84px;
+    grid-template-columns: 42px minmax(150px, .95fr) minmax(190px, 1.05fr) 96px 84px;
   }
 
   .api-profile-list .settings-list-header,

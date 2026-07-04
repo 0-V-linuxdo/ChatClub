@@ -6,7 +6,7 @@ import {
   GEMINI_THINKING_LEVEL_TARGETS,
   MODEL_PREFERENCE_TARGETS
 } from "../shared/constants.js";
-import { DELETE_THREAD_POST_MESSAGE_SOURCE, sendToIframe } from "../shared/post-message.js";
+import { DELETE_THREAD_POST_MESSAGE_SOURCE, SEND_TEXT_POST_MESSAGE_SOURCE, sendToIframe } from "../shared/post-message.js";
 import { setLanguage, t } from "../shared/i18n.js";
 import {
   matchShortcut,
@@ -803,22 +803,116 @@ async function recordPromptSendHistory(text) {
   resetPromptHistoryNavigation();
 }
 
+function sendPromptAppIsNotion(app = {}) {
+  const id = String(app?.id || "").trim().toLowerCase();
+  const name = String(app?.name || "").trim().toLowerCase();
+  const url = String(app?.url || "");
+  let host = "";
+  try { host = new URL(url).hostname.toLowerCase(); } catch {}
+  return id === "notionai"
+    || /\bnotion\b/.test(name)
+    || host === "app.notion.com"
+    || host === "notion.so"
+    || host === "www.notion.so"
+    || host.endsWith(".notion.so");
+}
+
+function sendPromptFrameHrefHints(iframe, app = {}) {
+  const values = [
+    iframe?.dataset?.currentHref,
+    iframe?.dataset?.currentThreadHref,
+    iframe?.src,
+    iframe?.getAttribute?.("src"),
+    app?.url
+  ].map((item) => String(item || "").trim()).filter(Boolean);
+  return Array.from(new Set(values));
+}
+
+async function ensureSendTextContentBridge(iframe, app = {}) {
+  const tabId = await currentTabId();
+  if (!tabId) return null;
+  try {
+    return await runtimeMessage({
+      source: "chatclub",
+      action: "ensureContentBridge",
+      tabId,
+      hrefs: sendPromptFrameHrefHints(iframe, app)
+    });
+  } catch (error) {
+    console.warn("[ChatClub] Failed to ensure send text bridge", error);
+    return { error: error?.message || String(error) };
+  }
+}
+
+function sendTextTimeoutError(error) {
+  return String(error?.message || error || "").includes("[PostMessage] Timeout waiting for response: sendText");
+}
+
+async function sendTextToFrame(iframe, app = {}, text = "") {
+  const notion = sendPromptAppIsNotion(app);
+  const payload = {
+    text,
+    appId: app.id,
+    appName: app.name,
+    inputSelector: app.inputSelector,
+    sendButtonSelector: app.sendButtonSelector,
+    sendKeyMode: state.shortcutConfig?.sendKeyMode || "enter"
+  };
+  const options = notion ? { source: SEND_TEXT_POST_MESSAGE_SOURCE } : {};
+  if (notion) {
+    await ensureSendTextContentBridge(iframe, app);
+    await sleep(120);
+  }
+  const sendOnce = () => sendToIframe(iframe, "sendText", payload, notion ? 12000 : 10000, options);
+  let result;
+  try {
+    result = await sendOnce();
+  } catch (error) {
+    if (!notion || !sendTextTimeoutError(error)) throw error;
+    await ensureSendTextContentBridge(iframe, app);
+    await sleep(220);
+    result = await sendOnce();
+  }
+  if (notion && result?.sent === false && /bridge timed out/i.test(String(result?.reason || ""))) {
+    await ensureSendTextContentBridge(iframe, app);
+    await sleep(220);
+    result = await sendOnce();
+  }
+  if (!result || result.sent === false) throw new Error(result?.reason || "Send failed");
+  return result;
+}
+
 async function sendPromptToFrames() {
   const text = state.promptText.trim();
   if (!text) return;
   const frames = workspaceController.currentFrames();
   if (!frames.length) return;
   await recordPromptSendHistory(text);
-  await Promise.allSettled(frames.map((iframe) => {
-    const app = workspaceController.frameApp(iframe);
-    return sendToIframe(iframe, "sendText", {
-      text,
-      inputSelector: app.inputSelector,
-      sendButtonSelector: app.sendButtonSelector,
-      sendKeyMode: state.shortcutConfig?.sendKeyMode || "enter"
-    }, 10000);
-  }));
-  toast(t("toast.sentToChats", { count: frames.length, plural: frames.length === 1 ? "" : "s" }), "success");
+  const targets = frames.map((iframe) => ({ iframe, app: workspaceController.frameApp(iframe) || {} }));
+  const results = await Promise.allSettled(targets.map(({ iframe, app }) => sendTextToFrame(iframe, app, text)));
+  const failures = results
+    .map((result, index) => ({ result, app: targets[index].app }))
+    .filter((item) => item.result.status === "rejected");
+  const successCount = results.length - failures.length;
+  if (!failures.length) {
+    toast(t("toast.sentToChats", { count: successCount, plural: successCount === 1 ? "" : "s" }), "success");
+    return;
+  }
+  const failureNames = failures
+    .map((item) => inferAppName(item.app))
+    .filter(Boolean)
+    .slice(0, 4)
+    .join(", ");
+  const names = failureNames || t("common.failed");
+  if (successCount > 0) {
+    toast(t("toast.sentToSomeChats", {
+      sentCount: successCount,
+      sentPlural: successCount === 1 ? "" : "s",
+      names
+    }), "error");
+    return;
+  }
+  toast(t("toast.sendFailedToChats", { names }), "error");
 }
 
 function preferredModelAppId(app) {
@@ -980,8 +1074,18 @@ function topicDeleteTrustedKeySequence(result = {}) {
   if (!result?.needsTrustedKeySequence || !sequence) return null;
   const rawKeys = Array.isArray(sequence.keys) ? sequence.keys : [];
   const keys = rawKeys
-    .map((item) => typeof item === "string" ? { key: item } : { key: String(item?.key || ""), settleMs: item?.settleMs })
-    .filter((item) => /^(tab|enter|return|escape|esc| |space|spacebar)$/i.test(item.key));
+    .map((item) => typeof item === "string"
+      ? { key: item }
+      : {
+          key: String(item?.key || ""),
+          settleMs: item?.settleMs,
+          shiftKey: Boolean(item?.shiftKey),
+          ctrlKey: Boolean(item?.ctrlKey),
+          metaKey: Boolean(item?.metaKey),
+          altKey: Boolean(item?.altKey),
+          modifiers: Number.isFinite(Number(item?.modifiers)) ? Number(item.modifiers) : undefined
+        })
+    .filter((item) => /^(tab|enter|return|escape|esc|backspace|delete| |space|spacebar)$/i.test(item.key));
   if (!keys.length) return null;
   const point = sequence.framePoint || sequence.point;
   const x = Number(point?.x);

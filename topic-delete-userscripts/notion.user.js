@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name        ChatClub Delete Site - Notion AI
 // @namespace   https://chatclub.local/delete-sites
-// @version     2026.07.03.31
+// @version     2026.07.04.1
 // @description Delete the current Notion AI chat when ChatClub or the userscript menu requests it.
 // @match       https://app.notion.com/*
 // @match       https://notion.so/*
@@ -19,7 +19,7 @@
   const SITE_ID = "notion";
   const SITE_NAME = "Notion AI";
   const SITE_KEYS = ["notion","Notion AI","NotionAI"];
-  const VERSION = "2026.07.03.31";
+  const VERSION = "2026.07.04.1";
   const REQUEST_EVENT = "chatclub:delete-site:request";
   const VERSIONED_REQUEST_EVENT = REQUEST_EVENT + ":" + VERSION;
   const RESULT_EVENT = "chatclub:delete-site:result";
@@ -797,6 +797,34 @@
     return trustedClick ? { ...value, needsTrustedClick: true, trustedClick } : value;
   }
 
+  function trustedDeleteShortcut(reason = "delete shortcut requires trusted browser input") {
+    const mac = /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || "");
+    return {
+      kind: "delete-shortcut",
+      site: SITE_ID,
+      reason: String(reason || ""),
+      keys: [
+        {
+          key: "Backspace",
+          shiftKey: true,
+          metaKey: mac,
+          ctrlKey: !mac,
+          settleMs: 520
+        }
+      ],
+      keySettleMs: 180,
+      settleMs: 900
+    };
+  }
+
+  function resultWithTrustedDeleteShortcut(reason) {
+    return {
+      ...result(false, reason),
+      needsTrustedKeySequence: true,
+      trustedKeySequence: trustedDeleteShortcut(reason)
+    };
+  }
+
   function trustedHoverRightEdge(node, reason = "topic menu trigger requires trusted hover") {
     const box = rect(node);
     if (!node || !box) return null;
@@ -1134,6 +1162,26 @@
       return result(false, "delete shortcut opened confirmation but it did not close");
     }
     return result(false, "delete shortcut did not open confirmation");
+  }
+
+  async function deleteChatGpt(payload = {}) {
+    if (findDeleteConfirmButton()) {
+      const confirmedExisting = await clickDeleteConfirmIfPresent(6200);
+      return confirmedExisting ? result(true) : resultWithTrustedDeleteConfirm("delete confirmation did not close");
+    }
+    if (!dispatchDeleteKeyboardShortcut()) {
+      return payload?.trustedKeySequenceRetried
+        ? result(false, "delete shortcut dispatch failed")
+        : resultWithTrustedDeleteShortcut("delete shortcut dispatch failed");
+    }
+    const shortcutConfirm = await clickDeleteConfirmIfAppears(2600, 4200);
+    if (shortcutConfirm.confirmed) return result(true);
+    if (shortcutConfirm.appeared || deleteDialogRoots().length) {
+      return resultWithTrustedDeleteConfirm("delete shortcut opened confirmation but it did not close");
+    }
+    return payload?.trustedKeySequenceRetried
+      ? result(false, "delete shortcut did not open confirmation")
+      : resultWithTrustedDeleteShortcut("delete shortcut did not open confirmation");
   }
 
   async function deleteTopRight(site, deleteLabels, menuLabels, selectors = []) {
@@ -1566,6 +1614,7 @@
   }
 
   const runners = {
+    chatgpt: deleteChatGpt,
     kagi: deleteKagi,
     grok: () => deleteTopRight("grok", ["Delete Chat", "Delete chat", "Delete", "删除聊天", "删除"], ["More", "More actions", "Menu", "Options", "更多", "菜单"]),
     grokMirror: () => deleteTopRight("grokMirror", ["Delete Chat", "Delete chat", "Delete", "删除聊天", "删除"], ["More", "More actions", "Menu", "Options", "更多", "菜单"]),

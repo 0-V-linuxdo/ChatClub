@@ -1,4 +1,4 @@
-const DELETE_USERSCRIPT_VERSION = "2026.07.03.31";
+const DELETE_USERSCRIPT_VERSION = "2026.07.04.1";
 const DELETE_USERSCRIPT_NAMESPACE = "https://chatclub.local/delete-sites";
 
 const DELETE_USERSCRIPT_ENGINE = String.raw`
@@ -786,6 +786,34 @@ const DELETE_USERSCRIPT_ENGINE = String.raw`
     return trustedClick ? { ...value, needsTrustedClick: true, trustedClick } : value;
   }
 
+  function trustedDeleteShortcut(reason = "delete shortcut requires trusted browser input") {
+    const mac = /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || "");
+    return {
+      kind: "delete-shortcut",
+      site: SITE_ID,
+      reason: String(reason || ""),
+      keys: [
+        {
+          key: "Backspace",
+          shiftKey: true,
+          metaKey: mac,
+          ctrlKey: !mac,
+          settleMs: 520
+        }
+      ],
+      keySettleMs: 180,
+      settleMs: 900
+    };
+  }
+
+  function resultWithTrustedDeleteShortcut(reason) {
+    return {
+      ...result(false, reason),
+      needsTrustedKeySequence: true,
+      trustedKeySequence: trustedDeleteShortcut(reason)
+    };
+  }
+
   function trustedHoverRightEdge(node, reason = "topic menu trigger requires trusted hover") {
     const box = rect(node);
     if (!node || !box) return null;
@@ -1123,6 +1151,26 @@ const DELETE_USERSCRIPT_ENGINE = String.raw`
       return result(false, "delete shortcut opened confirmation but it did not close");
     }
     return result(false, "delete shortcut did not open confirmation");
+  }
+
+  async function deleteChatGpt(payload = {}) {
+    if (findDeleteConfirmButton()) {
+      const confirmedExisting = await clickDeleteConfirmIfPresent(6200);
+      return confirmedExisting ? result(true) : resultWithTrustedDeleteConfirm("delete confirmation did not close");
+    }
+    if (!dispatchDeleteKeyboardShortcut()) {
+      return payload?.trustedKeySequenceRetried
+        ? result(false, "delete shortcut dispatch failed")
+        : resultWithTrustedDeleteShortcut("delete shortcut dispatch failed");
+    }
+    const shortcutConfirm = await clickDeleteConfirmIfAppears(2600, 4200);
+    if (shortcutConfirm.confirmed) return result(true);
+    if (shortcutConfirm.appeared || deleteDialogRoots().length) {
+      return resultWithTrustedDeleteConfirm("delete shortcut opened confirmation but it did not close");
+    }
+    return payload?.trustedKeySequenceRetried
+      ? result(false, "delete shortcut did not open confirmation")
+      : resultWithTrustedDeleteShortcut("delete shortcut did not open confirmation");
   }
 
   async function deleteTopRight(site, deleteLabels, menuLabels, selectors = []) {
@@ -1555,6 +1603,7 @@ const DELETE_USERSCRIPT_ENGINE = String.raw`
   }
 
   const runners = {
+    chatgpt: deleteChatGpt,
     kagi: deleteKagi,
     grok: () => deleteTopRight("grok", ["Delete Chat", "Delete chat", "Delete", "删除聊天", "删除"], ["More", "More actions", "Menu", "Options", "更多", "菜单"]),
     grokMirror: () => deleteTopRight("grokMirror", ["Delete Chat", "Delete chat", "Delete", "删除聊天", "删除"], ["More", "More actions", "Menu", "Options", "更多", "菜单"]),
@@ -1696,7 +1745,7 @@ function standaloneDeleteUserscript({ id, name, description, matches, keys }) {
     .replace("__CHATCLUB_DELETE_SITE_NAME__", JSON.stringify(name))
     .replace("__CHATCLUB_DELETE_SITE_KEYS__", JSON.stringify([id, name, ...(keys || [])]))
     .replace("__CHATCLUB_DELETE_SITE_VERSION__", JSON.stringify(DELETE_USERSCRIPT_VERSION));
-  return `${header}\n\n${engine}\n`;
+  return `${header}\n\n${engine.trimEnd()}\n`;
 }
 
 export const KAGI_DELETE_USERSCRIPT = standaloneDeleteUserscript({
@@ -1705,6 +1754,14 @@ export const KAGI_DELETE_USERSCRIPT = standaloneDeleteUserscript({
   description: "Delete the current Kagi Assistant chat when ChatClub or the userscript menu requests it.",
   matches: ["https://assistant.kagi.com/*"],
   keys: ["Kagi"]
+});
+
+export const CHATGPT_DELETE_USERSCRIPT = standaloneDeleteUserscript({
+  id: "chatgpt",
+  name: "ChatGPT",
+  description: "Delete the current ChatGPT chat when ChatClub or the userscript menu requests it.",
+  matches: ["https://chatgpt.com/*", "https://*.chatgpt.com/*", "https://chat.openai.com/*", "https://*.chat.openai.com/*"],
+  keys: ["ChatGPT"]
 });
 
 export const GROK_DELETE_USERSCRIPT = standaloneDeleteUserscript({
@@ -1740,6 +1797,7 @@ export const DEEPSEEK_DELETE_USERSCRIPT = standaloneDeleteUserscript({
 });
 
 export const TOPIC_DELETE_USERSCRIPT_SOURCES = Object.freeze({
+  chatgpt: CHATGPT_DELETE_USERSCRIPT,
   kagi: KAGI_DELETE_USERSCRIPT,
   grok: GROK_DELETE_USERSCRIPT,
   grokMirror: GROK_MIRROR_DELETE_USERSCRIPT,

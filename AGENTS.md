@@ -15,6 +15,12 @@
 - Version format must be exactly `「YYYY-MM-DD｜HH:MM:SS」`.
 - Use the local machine time when making the update.
 
+## Settings List Drag Sorting
+
+- Any settings page list whose item order is persisted or user-visible must expose the same drag sorting affordance as the other settings lists: a leading drag handle, visible `drop-before` / `drop-after` feedback, and saved order after drop.
+- When adding or changing ordered settings lists, verify the order survives normalization, dehydration, redraw, settings reopen, and extension reload.
+- For built-in lists merged with stored user config, preserve the stored order first and append only newly introduced built-ins afterward; do not let normalization silently reset user ordering.
+
 ## Summary Userscript Fix Workflow
 
 - Before editing built-in userscripts, inspect the real page structure and validate the proposed selector/turn logic in DevTools Console.

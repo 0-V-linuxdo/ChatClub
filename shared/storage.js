@@ -5,6 +5,7 @@ import {
   BUILTIN_CHAT_APPS,
   DEFAULT_POCKET_CARD_SIZE,
   DEFAULT_GEMINI_THINKING_LEVEL,
+  DEFAULT_MODEL_PREFERENCE_ORDER,
   DEFAULT_MODEL_PREFERENCES,
   DEFAULT_PROMOTION_API_PROFILES,
   DEFAULT_TAB_GROUP_BUTTON_ORDER,
@@ -260,6 +261,19 @@ export function normalizeModelPreferences(raw = {}) {
   return normalized;
 }
 
+export function normalizeModelPreferenceOrder(raw = []) {
+  const validIds = new Set(Object.keys(MODEL_PREFERENCE_TARGETS));
+  const ordered = [];
+  for (const id of Array.isArray(raw) ? raw : DEFAULT_MODEL_PREFERENCE_ORDER) {
+    const normalized = text(id);
+    if (validIds.has(normalized) && !ordered.includes(normalized)) ordered.push(normalized);
+  }
+  for (const id of DEFAULT_MODEL_PREFERENCE_ORDER) {
+    if (!ordered.includes(id)) ordered.push(id);
+  }
+  return ordered;
+}
+
 function legacyProfile(raw, kind) {
   const prefix = kind === "summary" ? "summary" : "optimize";
   const endpoint = text(raw?.[`${prefix}Endpoint`]);
@@ -467,6 +481,7 @@ export function normalizeOptions(raw = {}) {
       ? raw.summaryPromptTemplateId
       : summaryPromptTemplates[0]?.id || summaryDefault.id,
     modelPreferences: normalizeModelPreferences(raw.modelPreferences),
+    modelPreferenceOrder: normalizeModelPreferenceOrder(raw.modelPreferenceOrder),
     summarySiteConfigs: mergeBuiltInSummaryConfig(raw.summarySiteConfigs, SUMMARY_SITE_CONFIGS),
     topicDeleteSiteConfigs: mergeBuiltInTopicDeleteConfig(raw.topicDeleteSiteConfigs, TOPIC_DELETE_SITE_CONFIGS)
   };

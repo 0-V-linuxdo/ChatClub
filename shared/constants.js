@@ -1,7 +1,7 @@
 import { DEFAULT_TOPBAR_LAYOUT } from "./topbar.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-07-03｜23:24:54」";
+export const APP_VERSION = "「2026-07-04｜13:49:36」";
 export const BASELINE_MOD_VERSION = "2.4.0.14";
 export const HOMEPAGE_URL = "https://chatclub.local/";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
@@ -91,6 +91,8 @@ export const DEFAULT_MODEL_PREFERENCES = Object.freeze(
     [GEMINI_THINKING_LEVEL_PREFERENCE_KEY]: DEFAULT_GEMINI_THINKING_LEVEL
   }
 );
+
+export const DEFAULT_MODEL_PREFERENCE_ORDER = Object.freeze(Object.keys(MODEL_PREFERENCE_TARGETS));
 
 export const TAB_GROUP_HEADER_BUTTONS = [
   { id: "addApp", icon: "plus", section: "header", defaultPlacement: "pinned" },
@@ -289,6 +291,7 @@ export const DEFAULT_OPTIONS = {
     }
   ],
   modelPreferences: DEFAULT_MODEL_PREFERENCES,
+  modelPreferenceOrder: DEFAULT_MODEL_PREFERENCE_ORDER,
   summarySiteConfigs: [],
   topicDeleteSiteConfigs: []
 };

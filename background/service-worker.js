@@ -263,13 +263,27 @@ async function dispatchTrustedMouseMove(message = {}, sender = {}) {
   }
 }
 
+function trustedKeyModifiers(value = {}) {
+  const explicit = Number(value?.modifiers);
+  if (Number.isFinite(explicit)) return explicit;
+  return (value?.altKey ? 1 : 0)
+    | (value?.ctrlKey ? 2 : 0)
+    | (value?.metaKey ? 4 : 0)
+    | (value?.shiftKey ? 8 : 0);
+}
+
 function trustedKeyDescriptor(value = {}) {
-  const key = typeof value === "string" ? value : String(value.key || "");
+  const source = typeof value === "string" ? { key: value } : (value || {});
+  const key = String(source.key || "");
   const normalized = key.toLowerCase();
-  if (normalized === "tab") return { key: "Tab", code: "Tab", windowsVirtualKeyCode: 9, nativeVirtualKeyCode: 48 };
-  if (normalized === "enter" || normalized === "return") return { key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 36 };
-  if (normalized === "escape" || normalized === "esc") return { key: "Escape", code: "Escape", windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 53 };
-  if (normalized === " " || normalized === "space" || normalized === "spacebar") return { key: " ", code: "Space", windowsVirtualKeyCode: 32, nativeVirtualKeyCode: 49, text: " ", unmodifiedText: " " };
+  const modifiers = trustedKeyModifiers(source);
+  const withModifiers = (descriptor) => modifiers ? { ...descriptor, modifiers } : descriptor;
+  if (normalized === "tab") return withModifiers({ key: "Tab", code: "Tab", windowsVirtualKeyCode: 9, nativeVirtualKeyCode: 48 });
+  if (normalized === "enter" || normalized === "return") return withModifiers({ key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 36 });
+  if (normalized === "escape" || normalized === "esc") return withModifiers({ key: "Escape", code: "Escape", windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 53 });
+  if (normalized === "backspace") return withModifiers({ key: "Backspace", code: "Backspace", windowsVirtualKeyCode: 8, nativeVirtualKeyCode: 51 });
+  if (normalized === "delete") return withModifiers({ key: "Delete", code: "Delete", windowsVirtualKeyCode: 46, nativeVirtualKeyCode: 117 });
+  if (normalized === " " || normalized === "space" || normalized === "spacebar") return withModifiers({ key: " ", code: "Space", windowsVirtualKeyCode: 32, nativeVirtualKeyCode: 49, text: " ", unmodifiedText: " " });
   return null;
 }
 
@@ -296,7 +310,8 @@ async function dispatchTrustedKeySequence(message = {}, sender = {}) {
     await chrome.debugger.attach(target, "1.3");
     attached = true;
     for (const item of keys) {
-      const event = { ...item.descriptor, modifiers: 0, autoRepeat: false, isKeypad: false };
+      const modifiers = Number.isFinite(Number(item.descriptor.modifiers)) ? Number(item.descriptor.modifiers) : 0;
+      const event = { ...item.descriptor, modifiers, autoRepeat: false, isKeypad: false };
       await chrome.debugger.sendCommand(target, "Input.dispatchKeyEvent", { ...event, type: "keyDown" });
       await trustedInputSleep(35);
       await chrome.debugger.sendCommand(target, "Input.dispatchKeyEvent", { ...event, type: "keyUp" });

@@ -1423,18 +1423,240 @@
   }
 
   if (framed && (host === "app.notion.com" || host.endsWith(".notion.so"))) {
-    if (window.__CHATCLUB_NOTION_SUBMIT_BRIDGE__) return;
+    const NOTION_SEND_BRIDGE_VERSION = "2026.07.04.1";
+    if (window.__CHATCLUB_NOTION_SEND_BRIDGE_VERSION__ === NOTION_SEND_BRIDGE_VERSION) return;
+    window.__CHATCLUB_NOTION_SEND_BRIDGE_VERSION__ = NOTION_SEND_BRIDGE_VERSION;
     window.__CHATCLUB_NOTION_SUBMIT_BRIDGE__ = true;
+    const NOTION_SEND_TEXT_SOURCE = "chatclub-notion-send-text";
     const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const normalize = (value) => String(value || "")
+      .replace(/\u00a0/g, " ")
+      .replace(/\r\n?/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+    const compact = (value) => normalize(value).toLowerCase().replace(/\s+/g, "");
     const visible = (el) => {
       if (!el?.getBoundingClientRect) return false;
       const rect = el.getBoundingClientRect();
       const style = getComputedStyle(el);
-      return rect.width > 4 && rect.height > 4 && style.display !== "none" && style.visibility !== "hidden";
+      return rect.width > 4 && rect.height > 4 && style.display !== "none" && style.visibility !== "hidden" && Number(style.opacity) !== 0;
+    };
+    const isDisabled = (el) => {
+      if (!el) return true;
+      if (el.disabled || el.hasAttribute?.("disabled") || el.hasAttribute?.("data-disabled")) return true;
+      const ariaDisabled = String(el.getAttribute?.("aria-disabled") || "").trim().toLowerCase();
+      if (ariaDisabled === "true") return true;
+      try {
+        if (typeof el.matches === "function" && el.matches(":disabled")) return true;
+      } catch {}
+      return false;
+    };
+    const labelOf = (el) => normalize([
+      el?.getAttribute?.("aria-label"),
+      el?.getAttribute?.("title"),
+      el?.getAttribute?.("data-testid"),
+      el?.getAttribute?.("data-test-id"),
+      el?.innerText,
+      el?.textContent
+    ].filter(Boolean).join(" "));
+    const editorText = (editor) => editor instanceof HTMLTextAreaElement || editor instanceof HTMLInputElement
+      ? normalize(editor.value)
+      : normalize(editor?.innerText || editor?.textContent || "");
+    const promptMatches = (actual, expected) => {
+      const a = normalize(actual);
+      const b = normalize(expected);
+      if (!a || !b) return false;
+      if (a === b) return true;
+      const compactActual = compact(a);
+      const compactExpected = compact(b);
+      return Boolean(compactActual && compactExpected && compactActual === compactExpected);
     };
     const findEditor = () => Array.from(document.querySelectorAll("div[contenteditable='true'][role='textbox'],div[contenteditable='true'],textarea"))
       .filter(visible)
       .sort((a, b) => b.getBoundingClientRect().bottom - a.getBoundingClientRect().bottom)[0] || null;
+    const waitFor = async (check, timeoutMs = 2000, intervalMs = 80) => {
+      const start = Date.now();
+      while (Date.now() - start < timeoutMs) {
+        const result = check();
+        if (result) return result;
+        await wait(intervalMs);
+      }
+      return check();
+    };
+    const selectEditorContents = (editor) => {
+      if (!editor || editor instanceof HTMLTextAreaElement || editor instanceof HTMLInputElement) return;
+      const selection = window.getSelection?.();
+      const range = document.createRange();
+      range.selectNodeContents(editor);
+      selection?.removeAllRanges?.();
+      selection?.addRange?.(range);
+    };
+    const dispatchInput = (editor, value, inputType = "insertText") => {
+      try {
+        editor.dispatchEvent(new InputEvent("beforeinput", {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          inputType,
+          data: value
+        }));
+      } catch {}
+      try {
+        editor.dispatchEvent(new InputEvent("input", {
+          bubbles: true,
+          cancelable: false,
+          composed: true,
+          inputType,
+          data: value
+        }));
+      } catch {
+        try { editor.dispatchEvent(new Event("input", { bubbles: true, composed: true })); } catch {}
+      }
+    };
+    const setNativeValue = (editor, value) => {
+      const prototype = Object.getPrototypeOf(editor);
+      const descriptor = prototype && Object.getOwnPropertyDescriptor(prototype, "value");
+      if (descriptor?.set) descriptor.set.call(editor, value);
+      else editor.value = value;
+    };
+    const escapeHtml = (value) => String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+    const setEditorText = async (editor, value) => {
+      editor?.scrollIntoView?.({ block: "center", inline: "nearest" });
+      editor?.focus?.();
+      await wait(30);
+      if (editor instanceof HTMLTextAreaElement || editor instanceof HTMLInputElement) {
+        setNativeValue(editor, value);
+        dispatchInput(editor, value);
+        return promptMatches(editorText(editor), value);
+      }
+      selectEditorContents(editor);
+      let inserted = false;
+      try { inserted = document.execCommand("insertText", false, value); } catch {}
+      dispatchInput(editor, value);
+      await wait(90);
+      if (promptMatches(editorText(editor), value)) return true;
+      selectEditorContents(editor);
+      try {
+        const html = escapeHtml(value).replace(/\n/g, "<br>");
+        inserted = document.execCommand("insertHTML", false, html) || inserted;
+      } catch {}
+      dispatchInput(editor, value);
+      await wait(120);
+      return promptMatches(editorText(editor), value) || inserted;
+    };
+    const countPromptOutsideEditor = (editor, value) => {
+      const needle = compact(value);
+      if (!needle) return 0;
+      let text = "";
+      try {
+        const walker = document.createTreeWalker(document.body || document.documentElement, NodeFilter.SHOW_TEXT);
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+          const parent = node.parentElement;
+          if (!parent || editor?.contains?.(parent)) continue;
+          if (!normalize(node.nodeValue)) continue;
+          text += `\n${node.nodeValue}`;
+        }
+      } catch {}
+      const haystack = compact(text);
+      if (!haystack || !haystack.includes(needle)) return 0;
+      return haystack.split(needle).length - 1;
+    };
+    const submitButtons = (editor) => {
+      const buttons = Array.from(document.querySelectorAll("button,[role='button']")).filter(visible);
+      const exact = buttons.filter((button) => /submit\s+ai\s+message/i.test(labelOf(button)));
+      const candidates = exact.length ? exact : buttons.filter((button) => /\b(send|submit)\b|发送|提交/i.test(labelOf(button)));
+      const editorRect = editor?.getBoundingClientRect?.();
+      return candidates.sort((a, b) => {
+        if (!editorRect) return 0;
+        const ar = a.getBoundingClientRect();
+        const br = b.getBoundingClientRect();
+        return Math.abs(ar.top - editorRect.top) - Math.abs(br.top - editorRect.top);
+      });
+    };
+    const findEnabledSubmit = (editor) => submitButtons(editor).find((button) => !isDisabled(button)) || null;
+    const clickElement = (el) => {
+      const rect = el?.getBoundingClientRect?.();
+      const base = {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        view: window,
+        button: 0,
+        buttons: 1,
+        clientX: rect ? rect.left + rect.width / 2 : 1,
+        clientY: rect ? rect.top + rect.height / 2 : 1
+      };
+      try {
+        if (window.PointerEvent) {
+          el.dispatchEvent(new PointerEvent("pointerover", { ...base, pointerId: 1, pointerType: "mouse", isPrimary: true }));
+          el.dispatchEvent(new PointerEvent("pointermove", { ...base, pointerId: 1, pointerType: "mouse", isPrimary: true }));
+          el.dispatchEvent(new PointerEvent("pointerdown", { ...base, pointerId: 1, pointerType: "mouse", isPrimary: true }));
+          el.dispatchEvent(new PointerEvent("pointerup", { ...base, pointerId: 1, pointerType: "mouse", isPrimary: true, buttons: 0 }));
+        }
+      } catch {}
+      try {
+        for (const type of ["mouseover", "mousemove", "mousedown", "mouseup", "click"]) {
+          el.dispatchEvent(new MouseEvent(type, { ...base, buttons: type === "mouseup" || type === "click" ? 0 : 1 }));
+        }
+      } catch {}
+      try { el.click?.(); } catch {}
+    };
+    const pressEnter = async (editor) => {
+      editor?.focus?.();
+      const init = { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true, composed: true };
+      for (const type of ["keydown", "keypress", "keyup"]) {
+        try { editor?.dispatchEvent(new KeyboardEvent(type, init)); } catch {}
+        await wait(45);
+      }
+    };
+    const submitted = (editor, value, beforeOutsideCount) => {
+      if (!promptMatches(editorText(editor), value)) return true;
+      return countPromptOutsideEditor(editor, value) > beforeOutsideCount;
+    };
+    const sendNotionText = async (value) => {
+      const text = String(value || "").trim();
+      if (!text) return { ok: false, sent: false, method: "notion-bridge", reason: "Prompt is empty" };
+      const editor = await waitFor(findEditor, 3000, 100);
+      if (!editor) return { ok: false, sent: false, method: "notion-bridge", reason: "Notion AI input element not found" };
+      const beforeOutsideCount = countPromptOutsideEditor(editor, text);
+      const writeStarted = await setEditorText(editor, text);
+      const written = writeStarted && await waitFor(() => promptMatches(editorText(editor), text), 2200, 80);
+      if (!written) {
+        return { ok: false, sent: false, method: "notion-bridge", reason: "Notion AI input did not receive the prompt" };
+      }
+      const submit = await waitFor(() => findEnabledSubmit(editor), 2600, 100);
+      if (!submit) {
+        return { ok: false, sent: false, method: "notion-bridge", reason: "Notion AI submit button stayed disabled" };
+      }
+      clickElement(submit);
+      if (await waitFor(() => submitted(editor, text, beforeOutsideCount), 2600, 100)) {
+        return { ok: true, sent: true, method: "notion-bridge-button", verified: true };
+      }
+      await pressEnter(editor);
+      if (await waitFor(() => submitted(editor, text, beforeOutsideCount), 2600, 100)) {
+        return { ok: true, sent: true, method: "notion-bridge-enter", verified: true };
+      }
+      return { ok: false, sent: false, method: "notion-bridge", reason: "Notion AI kept the prompt in the composer after submit" };
+    };
+    window.addEventListener("chatclub:notion-send-text", async (event) => {
+      const id = event.detail?.id || "";
+      let data;
+      try {
+        data = await sendNotionText(event.detail?.text || "");
+      } catch (error) {
+        data = {
+          ok: false,
+          sent: false,
+          method: "notion-bridge",
+          reason: error?.message || String(error || "Notion AI send failed")
+        };
+      }
+      window.postMessage({ source: NOTION_SEND_TEXT_SOURCE, type: "response", id, data }, "*");
+    }, true);
     window.addEventListener("chatclub:notion-submit", async (event) => {
       const id = event.detail?.id || "";
       const editor = findEditor();

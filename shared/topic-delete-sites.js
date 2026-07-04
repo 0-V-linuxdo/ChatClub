@@ -1,5 +1,6 @@
 import { configMatchesHref } from "./url-match.js";
 import {
+  CHATGPT_DELETE_USERSCRIPT,
   DEEPSEEK_DELETE_USERSCRIPT,
   GROK_DELETE_USERSCRIPT,
   GROK_MIRROR_DELETE_USERSCRIPT,
@@ -115,6 +116,14 @@ function userscriptMeta(userscriptFile, userscript, userscriptTimeoutMs = 15000)
 
 export const TOPIC_DELETE_SITE_CONFIGS = Object.freeze([
   Object.freeze({
+    id: "chatgpt",
+    name: "ChatGPT",
+    appIds: Object.freeze(["ChatGPT"]),
+    hosts: Object.freeze(["chatgpt.com", "*.chatgpt.com", "chat.openai.com", "*.chat.openai.com"]),
+    pathPrefixes: Object.freeze([]),
+    ...userscriptMeta("topic-delete-userscripts/chatgpt.user.js", CHATGPT_DELETE_USERSCRIPT, 15000)
+  }),
+  Object.freeze({
     id: "kagi",
     name: "Kagi Assistant",
     appIds: Object.freeze(["Kagi"]),
@@ -221,6 +230,7 @@ function looksLikeGeneratedStandaloneBuiltInUserscript(id, source) {
   ];
   if (!sharedMarkers.every((marker) => source.includes(marker))) return false;
   const siteMarkers = {
+    chatgpt: ['chatgpt: deleteChatGpt', 'async function deleteChatGpt'],
     kagi: ['kagi: deleteKagi', 'async function deleteKagi'],
     grok: ['grok: deleteGrok', 'async function deleteGrok'],
     grokMirror: ['grokMirror: deleteGrok', 'async function deleteGrok'],
@@ -271,10 +281,12 @@ function normalizeTopicDeleteSiteConfig(item = {}, fallback = {}, index = 0) {
 }
 
 export function mergeBuiltInTopicDeleteConfig(current = [], builtIn = TOPIC_DELETE_SITE_CONFIGS) {
-  const byId = new Map((Array.isArray(current) ? current : []).filter(Boolean).map((item, index) => [text(item.id, `topic-delete-${index + 1}`), item]));
+  const currentItems = (Array.isArray(current) ? current : []).filter(Boolean);
+  const builtInById = new Map((builtIn || []).filter(Boolean).map((item) => [item.id, item]));
+  const consumedBuiltIns = new Set();
   const merged = [];
-  for (const item of builtIn || []) {
-    const existing = byId.get(item.id) || {};
+
+  const mergeBuiltIn = (item, existing = {}) => {
     const existingUserscript = String(existing.customUserscript || existing.userscript || "").trim();
     const legacyBuiltInUserscript = isKnownLegacyBuiltInUserscript(item.id, existingUserscript);
     const standaloneBuiltInUserscript = isKnownStandaloneBuiltInUserscript(item.id, existingUserscript, item.userscript, {
@@ -290,7 +302,7 @@ export function mergeBuiltInTopicDeleteConfig(current = [], builtIn = TOPIC_DELE
     const userscriptTimeoutMs = sourceMode !== "custom" && item.id === "deepseek" && existingTimeoutMs === 24000
       ? item.userscriptTimeoutMs
       : existing.userscriptTimeoutMs ?? item.userscriptTimeoutMs;
-    merged.push(normalizeTopicDeleteSiteConfig({
+    return normalizeTopicDeleteSiteConfig({
       ...item,
       ...existing,
       id: item.id,
@@ -309,17 +321,29 @@ export function mergeBuiltInTopicDeleteConfig(current = [], builtIn = TOPIC_DELE
       customUserscript: sourceMode === "custom" ? userscript : "",
       userscriptTimeoutMs,
       userscriptOverride: sourceMode === "custom"
-    }, item));
-    byId.delete(item.id);
-  }
+    }, item);
+  };
+
   let customIndex = 0;
-  for (const item of byId.values()) {
-    if (!item) continue;
+  for (const item of currentItems) {
+    const existingId = text(item.id);
+    const builtInConfig = builtInById.get(existingId);
+    if (builtInConfig) {
+      merged.push(mergeBuiltIn(builtInConfig, item));
+      consumedBuiltIns.add(existingId);
+      continue;
+    }
     merged.push(normalizeTopicDeleteSiteConfig({
       ...item,
       builtIn: false
     }, {}, customIndex++));
   }
+
+  for (const item of builtIn || []) {
+    if (!item || consumedBuiltIns.has(item.id)) continue;
+    merged.push(mergeBuiltIn(item));
+  }
+
   return merged.filter((item) => item.id);
 }
 

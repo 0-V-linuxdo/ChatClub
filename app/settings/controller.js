@@ -1,5 +1,6 @@
 import {
   DEFAULT_GEMINI_THINKING_LEVEL,
+  DEFAULT_MODEL_PREFERENCE_ORDER,
   DEFAULT_OPTIONS,
   GEMINI_THINKING_LEVEL_PREFERENCE_KEY,
   GEMINI_THINKING_LEVEL_TARGETS,
@@ -14,6 +15,7 @@ import {
   createId,
   normalizeTabGroupButtonPlacement,
   normalizeTabGroupButtonOrder,
+  normalizeModelPreferenceOrder,
   normalizePrimaryColor,
   saveCustomConfig,
   saveOptions,
@@ -81,6 +83,8 @@ export function createSettingsController(ctx) {
   let modelPreferenceAutoSaveRunning = false;
   let modelPreferenceAutoSavePending = null;
   let modelPreferenceAutoSaveRedraw = null;
+  let modelPreferenceDragId = "";
+  let topicDeleteSiteDragId = "";
 
   const queueAppearanceAutoSave = (patch, options = {}) => {
     appearanceAutoSavePending = {
@@ -1117,6 +1121,43 @@ export function createSettingsController(ctx) {
     }));
   }
 
+  function modelPreferenceOrder() {
+    return normalizeModelPreferenceOrder(state.options.modelPreferenceOrder || DEFAULT_MODEL_PREFERENCE_ORDER);
+  }
+
+  function cleanupModelPreferenceDrag() {
+    modelPreferenceDragId = "";
+    cleanupSettingsDragRows(".model-preference-row");
+  }
+
+  function startModelPreferenceDrag(event, appId) {
+    modelPreferenceDragId = appId;
+    event.currentTarget.classList.add("dragging");
+    event.dataTransfer?.setData("application/x-chatclub-model-preference", appId);
+    event.dataTransfer?.setData("text/plain", appId);
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+  }
+
+  function previewModelPreferenceDrop(event, appId) {
+    const sourceId = modelPreferenceDragId || event.dataTransfer?.getData("application/x-chatclub-model-preference") || "";
+    if (!sourceId || sourceId === appId) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    event.currentTarget.classList.toggle("drop-after", settingsListDropPlacement(event) === "after");
+    event.currentTarget.classList.toggle("drop-before", settingsListDropPlacement(event) !== "after");
+  }
+
+  async function dropModelPreference(event, targetAppId, redraw) {
+    const sourceId = modelPreferenceDragId || event.dataTransfer?.getData("application/x-chatclub-model-preference") || event.dataTransfer?.getData("text/plain") || "";
+    if (!sourceId || sourceId === targetAppId) return;
+    event.preventDefault();
+    const modelPreferenceOrderItems = modelPreferenceOrder().map((id) => ({ id }));
+    const nextOrder = moveListItem(modelPreferenceOrderItems, sourceId, targetAppId, settingsListDropPlacement(event)).map((item) => item.id);
+    cleanupModelPreferenceDrag();
+    state.options = await saveOptions({ ...state.options, modelPreferenceOrder: nextOrder });
+    redraw();
+  }
+
   function geminiThinkingLevelLabel(value) {
     const normalized = GEMINI_THINKING_LEVEL_TARGETS.some((target) => target.id === value)
       ? value
@@ -1157,7 +1198,7 @@ export function createSettingsController(ctx) {
     );
   }
 
-  function modelPreferenceRow(appId) {
+  function modelPreferenceRow(appId, redraw) {
     const draft = modelPreferenceDraft();
     const modelSelect = select(draft[appId] || "", modelPreferenceOptions(appId));
     modelSelect.value = draft[appId] || "";
@@ -1167,7 +1208,17 @@ export function createSettingsController(ctx) {
         [appId]: modelSelect.value
       });
     });
-    return el("div", { class: "ui-list-row settings-list-row model-preference-row" },
+    return el("div", {
+      class: "ui-list-row settings-list-row model-preference-row",
+      draggable: "true",
+      dataset: { modelPreferenceAppId: appId },
+      ondragstart: (event) => startModelPreferenceDrag(event, appId),
+      ondragend: cleanupModelPreferenceDrag,
+      ondragover: (event) => previewModelPreferenceDrop(event, appId),
+      ondragleave: (event) => event.currentTarget.classList.remove("drop-before", "drop-after"),
+      ondrop: (event) => dropModelPreference(event, appId, redraw)
+    },
+      settingsDragHandle(t("modelPreferences.drag")),
       el("strong", { class: "settings-main-cell" }, MODEL_PREFERENCE_APP_LABELS[appId] || appId),
       modelSelect,
       appId === "Gemini"
@@ -1185,8 +1236,8 @@ export function createSettingsController(ctx) {
   function modelPreferencesPane(redraw) {
     const block = settingsBlock(t("modelPreferences.title"), t("modelPreferences.desc"),
       settingsList(
-        [t("modelPreferences.platform"), t("modelPreferences.preferredModel"), t("modelPreferences.thinkingLevel")],
-        Object.keys(MODEL_PREFERENCE_TARGETS).map((appId) => modelPreferenceRow(appId)),
+        ["", t("modelPreferences.platform"), t("modelPreferences.preferredModel"), t("modelPreferences.thinkingLevel")],
+        modelPreferenceOrder().map((appId) => modelPreferenceRow(appId, redraw)),
         "settings-manager-list model-preference-list"
       ),
       settingsActions(
@@ -1867,6 +1918,7 @@ export function createSettingsController(ctx) {
           settingsPrimaryAction(t("topicDeletion.site.add"), "plus", () => openTopicDeleteSiteEditor(null, redraw))
         ),
         settingsList([
+          "",
           t("topicDeletion.site.name"),
           t("topicDeletion.site.scope"),
           t("topicDeletion.site.enabled"),
@@ -1891,6 +1943,37 @@ export function createSettingsController(ctx) {
     state.options = await saveOptions({ ...state.options, topicDeleteSiteConfigs: configs });
     await notifyConfigReload();
     redraw();
+  }
+
+  function cleanupTopicDeleteSiteDrag() {
+    topicDeleteSiteDragId = "";
+    cleanupSettingsDragRows(".topic-delete-row");
+  }
+
+  function startTopicDeleteSiteDrag(event, config) {
+    topicDeleteSiteDragId = config.id;
+    event.currentTarget.classList.add("dragging");
+    event.dataTransfer?.setData("application/x-chatclub-topic-delete-site", config.id);
+    event.dataTransfer?.setData("text/plain", config.id);
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+  }
+
+  function previewTopicDeleteSiteDrop(event, config) {
+    const sourceId = topicDeleteSiteDragId || event.dataTransfer?.getData("application/x-chatclub-topic-delete-site") || "";
+    if (!sourceId || sourceId === config.id) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    event.currentTarget.classList.toggle("drop-after", settingsListDropPlacement(event) === "after");
+    event.currentTarget.classList.toggle("drop-before", settingsListDropPlacement(event) !== "after");
+  }
+
+  async function dropTopicDeleteSite(event, targetConfig, redraw) {
+    const sourceId = topicDeleteSiteDragId || event.dataTransfer?.getData("application/x-chatclub-topic-delete-site") || event.dataTransfer?.getData("text/plain") || "";
+    if (!sourceId || sourceId === targetConfig.id) return;
+    event.preventDefault();
+    const configs = moveListItem(state.options.topicDeleteSiteConfigs || [], sourceId, targetConfig.id, settingsListDropPlacement(event));
+    cleanupTopicDeleteSiteDrag();
+    await saveTopicDeleteSites(configs, redraw);
   }
 
   function topicDeleteUserscript(config) {
@@ -2072,13 +2155,20 @@ export function createSettingsController(ctx) {
     const builtIn = Boolean(topicDeleteBuiltInDefault(config));
     return el("div", {
       class: `ui-list-row settings-list-row topic-delete-row ${expanded ? "topic-delete-row-active" : ""}`.trim(),
+      draggable: "true",
       dataset: { topicDeleteSiteId: config.id },
       onclick: (event) => {
-        if (event.target instanceof Element && event.target.closest("button,input,select,a")) return;
+        if (event.target instanceof Element && event.target.closest("button,input,select,a,.settings-drag-handle")) return;
         state.topicDeleteSiteExpandedId = expanded ? "" : config.id;
         redraw();
-      }
+      },
+      ondragstart: (event) => startTopicDeleteSiteDrag(event, config),
+      ondragend: cleanupTopicDeleteSiteDrag,
+      ondragover: (event) => previewTopicDeleteSiteDrop(event, config),
+      ondragleave: (event) => event.currentTarget.classList.remove("drop-before", "drop-after"),
+      ondrop: (event) => dropTopicDeleteSite(event, config, redraw)
     },
+      settingsDragHandle(t("topicDeletion.site.drag")),
       el("div", { class: "topic-delete-name" },
         el("strong", {}, config.name || config.id),
         builtIn ? el("span", { class: "summary-collector-star", title: t("topicDeletion.site.builtIn"), "aria-label": t("topicDeletion.site.builtIn") }, "★") : null

@@ -1,5 +1,6 @@
 const SOURCE = "chatclub";
-export const DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.03.30";
+export const SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.04.1";
+export const DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.04.1";
 
 function requestId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;

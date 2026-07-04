@@ -1,10 +1,12 @@
 // ==UserScript==
-// @name        ChatClub Delete Site - Grok Mirror
+// @name        ChatClub Delete Site - ChatGPT
 // @namespace   https://chatclub.local/delete-sites
 // @version     2026.07.04.1
-// @description Delete the current Grok Mirror conversation when ChatClub or the userscript menu requests it.
-// @match       https://gk.dairoot.cn/*
-// @match       https://*.gk.dairoot.cn/*
+// @description Delete the current ChatGPT chat when ChatClub or the userscript menu requests it.
+// @match       https://chatgpt.com/*
+// @match       https://*.chatgpt.com/*
+// @match       https://chat.openai.com/*
+// @match       https://*.chat.openai.com/*
 // @run-at      document-idle
 // @grant       GM_registerMenuCommand
 // @grant       unsafeWindow
@@ -14,9 +16,9 @@
 (function () {
   "use strict";
 
-  const SITE_ID = "grokMirror";
-  const SITE_NAME = "Grok Mirror";
-  const SITE_KEYS = ["grokMirror","Grok Mirror","GrokMirror"];
+  const SITE_ID = "chatgpt";
+  const SITE_NAME = "ChatGPT";
+  const SITE_KEYS = ["chatgpt","ChatGPT","ChatGPT"];
   const VERSION = "2026.07.04.1";
   const REQUEST_EVENT = "chatclub:delete-site:request";
   const VERSIONED_REQUEST_EVENT = REQUEST_EVENT + ":" + VERSION;

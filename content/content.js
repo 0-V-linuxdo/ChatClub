@@ -2,8 +2,10 @@
   const SOURCE = "chatclub";
   const COPY_SOURCE = "chatclub-native-copy";
   const GEMINI_MODEL_PICKER_SOURCE = "chatclub-gemini-model-picker";
-  const CONTENT_BRIDGE_VERSION = "2026.07.03.30";
-  const DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.03.30";
+  const NOTION_SEND_TEXT_SOURCE = "chatclub-notion-send-text";
+  const CONTENT_BRIDGE_VERSION = "2026.07.04.2";
+  const SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.04.1";
+  const DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.04.1";
   const DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.07.03.30";
   const PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript";
   const hadContentBridge = Boolean(window.__CHATCLUB_CONTENT_BRIDGE_INSTALLED__);
@@ -1137,7 +1139,74 @@
     });
   }
 
+  function isNotionSendTarget(data = {}) {
+    const appId = String(data?.appId || "").trim().toLowerCase();
+    const appName = String(data?.appName || "").trim().toLowerCase();
+    const host = String(location.hostname || "").toLowerCase();
+    return appId === "notionai"
+      || /\bnotion\b/.test(appName)
+      || host === "app.notion.com"
+      || host === "notion.so"
+      || host === "www.notion.so"
+      || host.endsWith(".notion.so");
+  }
+
+  function requestNotionSendText(data = {}, timeoutMs = 9000) {
+    return new Promise((resolve) => {
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const timer = setTimeout(() => {
+        window.removeEventListener("message", onMessage, true);
+        resolve({ ok: false, sent: false, method: "notion-bridge", reason: "Notion AI send bridge timed out" });
+      }, timeoutMs);
+      function finish(result) {
+        clearTimeout(timer);
+        window.removeEventListener("message", onMessage, true);
+        resolve(result && typeof result === "object" ? result : { ok: false, sent: false, method: "notion-bridge" });
+      }
+      function onMessage(event) {
+        const message = event.data;
+        if (message?.source !== NOTION_SEND_TEXT_SOURCE || message.type !== "response" || message.id !== id) return;
+        finish(message.data || {});
+      }
+      window.addEventListener("message", onMessage, true);
+      try {
+        window.dispatchEvent(new CustomEvent("chatclub:notion-send-text", {
+          detail: {
+            id,
+            text: String(data?.text || ""),
+            sendKeyMode: data?.sendKeyMode || "enter"
+          }
+        }));
+      } catch (error) {
+        finish({
+          ok: false,
+          sent: false,
+          method: "notion-bridge",
+          reason: error?.message || String(error || "Notion AI send bridge failed")
+        });
+      }
+    });
+  }
+
+  async function sendNotionText(data = {}) {
+    const result = await requestNotionSendText(data);
+    if (result?.ok && result?.sent) {
+      return {
+        sent: true,
+        method: result.method || "notion-bridge",
+        verified: result.verified !== false
+      };
+    }
+    return {
+      sent: false,
+      method: result?.method || "notion-bridge",
+      verified: false,
+      reason: result?.reason || "Notion AI did not accept the prompt"
+    };
+  }
+
   async function sendText(data) {
+    if (isNotionSendTarget(data)) return sendNotionText(data);
     const input = inputCandidates(data?.inputSelector);
     if (!input) throw new Error("Input element not found");
     await setInputValue(input, data.text || "");
@@ -1145,12 +1214,12 @@
     const submit = submitCandidates(data?.sendButtonSelector, input)[0];
     if (submit) {
       submit.click?.();
-      return { sent: true, method: "button" };
+      return { sent: true, method: "button", verified: false };
     }
     const keyInit = { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true };
     input.dispatchEvent(new KeyboardEvent("keydown", keyInit));
     input.dispatchEvent(new KeyboardEvent("keyup", keyInit));
-    return { sent: true, method: "enter" };
+    return { sent: true, method: "enter", verified: false };
   }
 
   function modelResult(ok, appId, modelId, reason = "", extra = {}) {
@@ -1779,6 +1848,33 @@
     return deleteResult(false, site, reason, trustedClick ? { needsTrustedClick: true, trustedClick } : {});
   }
 
+  function trustedDeleteShortcut(site = "topic-delete", reason = "delete shortcut requires trusted browser input") {
+    const mac = /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || "");
+    return {
+      kind: "delete-shortcut",
+      site,
+      reason: String(reason || ""),
+      keys: [
+        {
+          key: "Backspace",
+          shiftKey: true,
+          metaKey: mac,
+          ctrlKey: !mac,
+          settleMs: 520
+        }
+      ],
+      keySettleMs: 180,
+      settleMs: 900
+    };
+  }
+
+  function deleteResultWithTrustedDeleteShortcut(site, reason) {
+    return deleteResult(false, site, reason, {
+      needsTrustedKeySequence: true,
+      trustedKeySequence: trustedDeleteShortcut(site, reason)
+    });
+  }
+
   function trustedHoverRightEdge(element, site = "topic-delete", reason = "topic menu trigger requires trusted hover") {
     const box = modelRect(element);
     if (!element || !box) return null;
@@ -2267,6 +2363,29 @@
     if (!result.confirmed && deleteDialogRoots().length) return deleteResult(false, "kagi", "delete confirmation did not close");
     if (!result.confirmed) return deleteResult(false, "kagi", "delete confirmation button not found");
     return deleteResult(true, "kagi");
+  }
+
+  async function deleteChatGptThread(data = {}) {
+    if (findDeleteConfirmButton()) {
+      const confirmedExisting = await clickDeleteConfirmIfPresent(6200);
+      return confirmedExisting
+        ? deleteResult(true, "chatgpt")
+        : deleteResultWithTrustedConfirm("chatgpt", "delete confirmation did not close");
+    }
+    const shortcutDispatched = dispatchDeleteKeyboardShortcut();
+    if (!shortcutDispatched) {
+      return data?.trustedKeySequenceRetried
+        ? deleteResult(false, "chatgpt", "delete shortcut dispatch failed")
+        : deleteResultWithTrustedDeleteShortcut("chatgpt", "delete shortcut dispatch failed");
+    }
+    const result = await clickDeleteConfirmIfAppears(2600, 4200);
+    if (result.confirmed) return deleteResult(true, "chatgpt");
+    if (result.appeared || deleteDialogRoots().length) {
+      return deleteResultWithTrustedConfirm("chatgpt", "delete shortcut opened confirmation but it did not close");
+    }
+    return data?.trustedKeySequenceRetried
+      ? deleteResult(false, "chatgpt", "delete shortcut did not open confirmation")
+      : deleteResultWithTrustedDeleteShortcut("chatgpt", "delete shortcut did not open confirmation");
   }
 
   const DELETE_MENU_ROOT_SELECTORS = [
@@ -3059,6 +3178,14 @@
   }
 
   const TOPIC_DELETE_FALLBACK_CONFIGS = Object.freeze({
+    chatgpt: Object.freeze({
+      id: "chatgpt",
+      name: "ChatGPT",
+      builtIn: true,
+      enabled: true,
+      userscript: "",
+      userscriptTimeoutMs: 15000
+    }),
     kagi: Object.freeze({
       id: "kagi",
       name: "Kagi Assistant",
@@ -3106,7 +3233,8 @@
     const app = `${payload?.appId || ""} ${payload?.appName || ""} ${config?.name || ""}`.toLowerCase();
     const host = String(location.hostname || "").toLowerCase();
     let fallback = null;
-    if (id === "kagi" || /kagi/.test(app) || host === "assistant.kagi.com") fallback = TOPIC_DELETE_FALLBACK_CONFIGS.kagi;
+    if (id === "chatgpt" || /chatgpt|chat gpt/.test(app) || host === "chatgpt.com" || host.endsWith(".chatgpt.com") || host === "chat.openai.com" || host.endsWith(".chat.openai.com")) fallback = TOPIC_DELETE_FALLBACK_CONFIGS.chatgpt;
+    else if (id === "kagi" || /kagi/.test(app) || host === "assistant.kagi.com") fallback = TOPIC_DELETE_FALLBACK_CONFIGS.kagi;
     else if (id === "grokmirror" || /grokmirror|grok mirror/.test(app) || host === "gk.dairoot.cn" || host.endsWith(".gk.dairoot.cn")) fallback = TOPIC_DELETE_FALLBACK_CONFIGS.grokMirror;
     else if (id === "grok" || /grok/.test(app) || host === "grok.com" || host.endsWith(".grok.com") || host === "grok.x.ai" || host.endsWith(".grok.x.ai")) fallback = TOPIC_DELETE_FALLBACK_CONFIGS.grok;
     else if (id === "notion" || /notion/.test(app) || host === "app.notion.com" || host === "notion.so" || host === "www.notion.so" || host.endsWith(".notion.so")) fallback = TOPIC_DELETE_FALLBACK_CONFIGS.notion;
@@ -3380,6 +3508,7 @@
     const id = String(config?.id || "").trim().toLowerCase();
     const app = `${payload?.appId || ""} ${payload?.appName || ""} ${config?.name || ""}`.toLowerCase();
     const host = String(location.hostname || "").toLowerCase();
+    if (id === "chatgpt" || /chatgpt|chat gpt/.test(app) || host === "chatgpt.com" || host.endsWith(".chatgpt.com") || host === "chat.openai.com" || host.endsWith(".chat.openai.com")) return "chatgpt";
     if (id === "kagi" || /kagi/.test(app) || host === "assistant.kagi.com") return "kagi";
     if (id === "grokmirror" || /grokmirror|grok mirror/.test(app) || host === "gk.dairoot.cn" || host.endsWith(".gk.dairoot.cn")) return "grokMirror";
     if (id === "grok" || /grok/.test(app) || host === "grok.com" || host.endsWith(".grok.com") || host === "grok.x.ai" || host.endsWith(".grok.x.ai")) return "grok";
@@ -3393,6 +3522,7 @@
     const siteId = topicDeleteNativeSiteId(config, payload);
     if (!siteId) return null;
     return async () => {
+      if (siteId === "chatgpt") return deleteChatGptThread(payload);
       if (siteId === "kagi") return deleteKagiThread(payload);
       if (siteId === "grokMirror") {
         const result = await deleteGrokThread(payload);
@@ -3461,6 +3591,7 @@
       deepSeekDeleteHints,
       deepSeekTopicRows,
       deepSeekTopicMoreButton,
+      deleteChatGptThread,
       deleteKagiThread,
       deleteGrokThread,
       deleteNotionThread,
@@ -5699,11 +5830,17 @@
   window.addEventListener("message", async (event) => {
     const message = event.data;
     const versionedDeleteRequest = message?.source === DELETE_THREAD_POST_MESSAGE_SOURCE;
+    const versionedSendTextRequest = message?.source === SEND_TEXT_POST_MESSAGE_SOURCE;
     const genericRequest = message?.source === SOURCE;
-    if ((!versionedDeleteRequest && !genericRequest) || message.type !== "request") return;
+    if ((!versionedDeleteRequest && !versionedSendTextRequest && !genericRequest) || message.type !== "request") return;
     if (genericRequest && hadContentBridge) return;
     if (versionedDeleteRequest && message.action !== "deleteThread" && message.action !== "getDeleteConfirmState") return;
-    const responseSource = versionedDeleteRequest ? DELETE_THREAD_POST_MESSAGE_SOURCE : SOURCE;
+    if (versionedSendTextRequest && message.action !== "sendText") return;
+    const responseSource = versionedDeleteRequest
+      ? DELETE_THREAD_POST_MESSAGE_SOURCE
+      : versionedSendTextRequest
+        ? SEND_TEXT_POST_MESSAGE_SOURCE
+        : SOURCE;
     try {
       let data;
       if (message.action === "getLocationHref") data = location.href;
