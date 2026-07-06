@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name        ChatClub Delete Site - ChatGPT
 // @namespace   https://chatclub.local/delete-sites
-// @version     2026.07.04.1
+// @version     2026.07.05.1
 // @description Delete the current ChatGPT chat when ChatClub or the userscript menu requests it.
 // @match       https://chatgpt.com/*
 // @match       https://*.chatgpt.com/*
@@ -19,9 +19,11 @@
   const SITE_ID = "chatgpt";
   const SITE_NAME = "ChatGPT";
   const SITE_KEYS = ["chatgpt","ChatGPT","ChatGPT"];
-  const VERSION = "2026.07.04.1";
+  const VERSION = "2026.07.05.1";
   const REQUEST_EVENT = "chatclub:delete-site:request";
   const VERSIONED_REQUEST_EVENT = REQUEST_EVENT + ":" + VERSION;
+  const MENU_COMMAND_EVENT = "chatclub:delete-site:menu-command";
+  const VERSIONED_MENU_COMMAND_EVENT = MENU_COMMAND_EVENT + ":" + VERSION;
   const RESULT_EVENT = "chatclub:delete-site:result";
   const PING_EVENT = "chatclub:delete-site:ping";
   const READY_EVENT = "chatclub:delete-site:ready";
@@ -1633,6 +1635,10 @@
     }
   }
 
+  async function menuCommand(payload = {}) {
+    return run(payload || {});
+  }
+
   function matchesRequestSite(value) {
     const incoming = compact(value);
     return !incoming || SITE_KEYS.some((item) => compact(item) === incoming);
@@ -1652,6 +1658,10 @@
     return type === "request" || type === "request:" + VERSION;
   }
 
+  function matchesMenuCommandMessageType(type) {
+    return type === "menu-command" || type === "menu-command:" + VERSION;
+  }
+
   function dispatchResult(id, value) {
     const detail = { id, ...(value && typeof value === "object" ? value : result(Boolean(value))) };
     window.dispatchEvent(new CustomEvent(RESULT_EVENT, { detail }));
@@ -1665,7 +1675,10 @@
       siteId: SITE_ID,
       scriptId: SITE_ID,
       name: SITE_NAME,
-      version: VERSION
+      version: VERSION,
+      menuCommand: true,
+      menuCommandEvent: MENU_COMMAND_EVENT,
+      versionedMenuCommandEvent: VERSIONED_MENU_COMMAND_EVENT
     };
     window.dispatchEvent(new CustomEvent(READY_EVENT, { detail }));
     window.postMessage({ source: BRIDGE_SOURCE, type: "ready", detail }, "*");
@@ -1695,14 +1708,31 @@
     dispatchResult(id, await run(detail.payload || detail.data || {}));
   }
 
+  async function handleMenuCommandDetail(detail = {}) {
+    if (!active) return;
+    if (!matchesRequestSite(detail.site || detail.siteId || detail.name)) return;
+    if (!matchesRequestScript(detail)) return;
+    if (!matchesRequestedVersion(detail)) return;
+    const id = detail.id || SITE_ID + "-" + Date.now();
+    if (handledRequestIds.has(id)) return;
+    handledRequestIds.add(id);
+    setTimeout(() => handledRequestIds.delete(id), 60000);
+    dispatchResult(id, await menuCommand(detail.payload || detail.data || {}));
+  }
+
   function onRequest(event) {
     handleRequestDetail(event && event.detail || {});
+  }
+
+  function onMenuCommand(event) {
+    handleMenuCommandDetail(event && event.detail || {});
   }
 
   function onMessage(event) {
     const message = event.data || {};
     if (message.source !== BRIDGE_SOURCE) return;
     if (message.type === "ping") handlePingDetail(message.detail || {});
+    else if (matchesMenuCommandMessageType(message.type)) handleMenuCommandDetail(message.detail || {});
     else if (matchesRequestMessageType(message.type)) handleRequestDetail(message.detail || {});
   }
 
@@ -1711,21 +1741,25 @@
     window.removeEventListener(PING_EVENT, onPing);
     window.removeEventListener(REQUEST_EVENT, onRequest);
     window.removeEventListener(VERSIONED_REQUEST_EVENT, onRequest);
+    window.removeEventListener(MENU_COMMAND_EVENT, onMenuCommand);
+    window.removeEventListener(VERSIONED_MENU_COMMAND_EVENT, onMenuCommand);
     window.removeEventListener("message", onMessage);
   }
 
   const registry = rootWindow[GLOBAL_NAME] || {};
   try { registry[SITE_ID] && typeof registry[SITE_ID].dispose === "function" && registry[SITE_ID].dispose(); } catch {}
-  registry[SITE_ID] = { run, dispose, id: SITE_ID, site: SITE_ID, siteId: SITE_ID, scriptId: SITE_ID, name: SITE_NAME, version: VERSION, pingEvent: PING_EVENT, readyEvent: READY_EVENT, requestEvent: REQUEST_EVENT, versionedRequestEvent: VERSIONED_REQUEST_EVENT, resultEvent: RESULT_EVENT };
+  registry[SITE_ID] = { run, menuCommand, dispose, id: SITE_ID, site: SITE_ID, siteId: SITE_ID, scriptId: SITE_ID, name: SITE_NAME, version: VERSION, menuCommandSupported: true, pingEvent: PING_EVENT, readyEvent: READY_EVENT, requestEvent: REQUEST_EVENT, versionedRequestEvent: VERSIONED_REQUEST_EVENT, menuCommandEvent: MENU_COMMAND_EVENT, versionedMenuCommandEvent: VERSIONED_MENU_COMMAND_EVENT, resultEvent: RESULT_EVENT };
   rootWindow[GLOBAL_NAME] = registry;
   window.addEventListener(PING_EVENT, onPing);
   window.addEventListener(REQUEST_EVENT, onRequest);
   window.addEventListener(VERSIONED_REQUEST_EVENT, onRequest);
+  window.addEventListener(MENU_COMMAND_EVENT, onMenuCommand);
+  window.addEventListener(VERSIONED_MENU_COMMAND_EVENT, onMenuCommand);
   window.addEventListener("message", onMessage);
 
   if (typeof GM_registerMenuCommand === "function") {
     GM_registerMenuCommand("ChatClub Delete: " + SITE_NAME, async () => {
-      const value = await run({});
+      const value = await menuCommand({});
       console.log("[ChatClub Delete] " + SITE_NAME, value);
     });
   }

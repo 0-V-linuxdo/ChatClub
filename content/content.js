@@ -3262,10 +3262,12 @@
   }
 
   const TOPIC_DELETE_REQUEST_EVENT = "chatclub:delete-site:request";
+  const TOPIC_DELETE_MENU_COMMAND_EVENT = "chatclub:delete-site:menu-command";
   const TOPIC_DELETE_RESULT_EVENT = "chatclub:delete-site:result";
   const TOPIC_DELETE_PING_EVENT = "chatclub:delete-site:ping";
   const TOPIC_DELETE_READY_EVENT = "chatclub:delete-site:ready";
   const TOPIC_DELETE_BRIDGE_SOURCE = "chatclub-delete-sites";
+  const TOPIC_DELETE_MENU_COMMAND_UNSUPPORTED_REASON = "userscript does not expose menu command trigger";
 
   function topicDeleteSiteName(config = {}, payload = {}) {
     return String(config.id || config.name || payload.appId || payload.appName || location.hostname || "topic-delete").trim() || "topic-delete";
@@ -3296,8 +3298,22 @@
     return source.includes("VERSIONED_REQUEST_EVENT") && /request:\s*"\s*\+\s*VERSION|request:\s*['"]/.test(source);
   }
 
+  function topicDeleteSupportsVersionedMenuCommand(config = {}) {
+    const source = String(config.userscript || "");
+    return source.includes("VERSIONED_MENU_COMMAND_EVENT") && /menu-command:\s*"\s*\+\s*VERSION|menu-command:\s*['"]/.test(source);
+  }
+
+  function topicDeleteSourceSupportsMenuCommand(config = {}) {
+    const source = String(config.userscript || "");
+    return source.includes("MENU_COMMAND_EVENT")
+      || source.includes("chatclub:delete-site:menu-command")
+      || /\bmenuCommand\b/.test(source);
+  }
+
   function topicDeleteReadyVersion(config = {}) {
-    return topicDeleteSupportsVersionedRequest(config) ? topicDeleteStandaloneVersion(config) : "";
+    return topicDeleteSupportsVersionedMenuCommand(config) || topicDeleteSupportsVersionedRequest(config)
+      ? topicDeleteStandaloneVersion(config)
+      : "";
   }
 
   function topicDeleteVersionMatches(version, expectedVersion = "") {
@@ -3331,7 +3347,7 @@
     const expectedVersion = topicDeleteStandaloneVersion(config);
     const acceptMatchingVersion = options.acceptMatchingVersion !== false;
     for (const [entryKey, entry] of Object.entries(registry)) {
-      if (!entry || typeof entry.run !== "function") continue;
+      if (!entry || (typeof entry.menuCommand !== "function" && typeof entry.run !== "function")) continue;
       const candidates = [entryKey, entry.scriptId, entry.site, entry.siteId, entry.name, entry.id]
         .map(deleteCompactToken)
         .filter(Boolean);
@@ -3445,12 +3461,21 @@
   async function runStandaloneTopicDeleteUserscript(config = {}, payload = {}, timeoutMs = 15000) {
     const site = topicDeleteSiteName(config, payload);
     const readyState = await ensureStandaloneTopicDeleteUserscript(config, payload, timeoutMs);
-    if (readyState?.api && typeof readyState.api.run === "function") {
+    if (readyState?.api) {
+      if (typeof readyState.api.menuCommand !== "function") {
+        return deleteResult(false, site, TOPIC_DELETE_MENU_COMMAND_UNSUPPORTED_REASON);
+      }
       try {
-        return await readyState.api.run(payload);
+        return await readyState.api.menuCommand(payload);
       } catch (error) {
         return deleteResult(false, site, error?.message || String(error));
       }
+    }
+    if (readyState?.ready && readyState.ready.menuCommand !== true) {
+      return deleteResult(false, site, TOPIC_DELETE_MENU_COMMAND_UNSUPPORTED_REASON);
+    }
+    if (!topicDeleteSourceSupportsMenuCommand(config)) {
+      return deleteResult(false, site, TOPIC_DELETE_MENU_COMMAND_UNSUPPORTED_REASON);
     }
     const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     return new Promise((resolve) => {
@@ -3477,13 +3502,13 @@
       window.addEventListener("message", onMessage);
       timer = setTimeout(() => {
         cleanup();
-        resolve(deleteResult(false, site, "userscript timed out"));
+        resolve(deleteResult(false, site, "userscript menu command timed out"));
       }, Math.max(5000, Math.min(45000, Number(timeoutMs) || 15000)));
       try {
         const expectedVersion = topicDeleteStandaloneVersion(config);
-        const useVersionedRequest = topicDeleteSupportsVersionedRequest(config) && expectedVersion;
-        const requestEvent = useVersionedRequest ? `${TOPIC_DELETE_REQUEST_EVENT}:${expectedVersion}` : TOPIC_DELETE_REQUEST_EVENT;
-        const requestType = useVersionedRequest ? `request:${expectedVersion}` : "request";
+        const useVersionedMenuCommand = topicDeleteSupportsVersionedMenuCommand(config) && expectedVersion;
+        const commandEvent = useVersionedMenuCommand ? `${TOPIC_DELETE_MENU_COMMAND_EVENT}:${expectedVersion}` : TOPIC_DELETE_MENU_COMMAND_EVENT;
+        const commandType = useVersionedMenuCommand ? `menu-command:${expectedVersion}` : "menu-command";
         const detail = {
           id,
           site: config.id || site,
@@ -3492,11 +3517,12 @@
           name: config.name || site,
           version: expectedVersion,
           expectedVersion,
+          menuCommand: true,
           payload,
           data: payload
         };
-        window.dispatchEvent(new CustomEvent(requestEvent, { detail }));
-        window.postMessage({ source: TOPIC_DELETE_BRIDGE_SOURCE, type: requestType, detail }, "*");
+        window.dispatchEvent(new CustomEvent(commandEvent, { detail }));
+        window.postMessage({ source: TOPIC_DELETE_BRIDGE_SOURCE, type: commandType, detail }, "*");
       } catch (error) {
         cleanup();
         resolve(deleteResult(false, site, error?.message || String(error)));
