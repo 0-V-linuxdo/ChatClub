@@ -1423,7 +1423,7 @@
   }
 
   if (framed && (host === "app.notion.com" || host.endsWith(".notion.so"))) {
-    const NOTION_SEND_BRIDGE_VERSION = "2026.07.04.1";
+    const NOTION_SEND_BRIDGE_VERSION = "2026.07.07.1";
     if (window.__CHATCLUB_NOTION_SEND_BRIDGE_VERSION__ === NOTION_SEND_BRIDGE_VERSION) return;
     window.__CHATCLUB_NOTION_SEND_BRIDGE_VERSION__ = NOTION_SEND_BRIDGE_VERSION;
     window.__CHATCLUB_NOTION_SUBMIT_BRIDGE__ = true;
@@ -1432,7 +1432,6 @@
     const normalize = (value) => String(value || "")
       .replace(/\u00a0/g, " ")
       .replace(/\r\n?/g, "\n")
-      .replace(/\n{3,}/g, "\n\n")
       .trim();
     const compact = (value) => normalize(value).toLowerCase().replace(/\s+/g, "");
     const visible = (el) => {
@@ -1465,11 +1464,25 @@
     const promptMatches = (actual, expected) => {
       const a = normalize(actual);
       const b = normalize(expected);
-      if (!a || !b) return false;
-      if (a === b) return true;
+      return Boolean(a && b && a === b);
+    };
+    const promptWhitespaceCollapsedMatches = (actual, expected) => {
+      const a = normalize(actual);
+      const b = normalize(expected);
+      if (!a || !b || a === b) return false;
       const compactActual = compact(a);
       const compactExpected = compact(b);
       return Boolean(compactActual && compactExpected && compactActual === compactExpected);
+    };
+    const promptReceiveFailureReason = (editor, value) => {
+      return promptWhitespaceCollapsedMatches(editorText(editor), value)
+        ? "Notion AI collapsed prompt whitespace/newlines before submit"
+        : "Notion AI input did not receive the prompt";
+    };
+    const promptSubmitFailureReason = (editor, value) => {
+      return promptWhitespaceCollapsedMatches(editorText(editor), value)
+        ? "Notion AI collapsed prompt whitespace/newlines before submit"
+        : "Notion AI kept the prompt in the composer after submit";
     };
     const findEditor = () => Array.from(document.querySelectorAll("div[contenteditable='true'][role='textbox'],div[contenteditable='true'],textarea"))
       .filter(visible)
@@ -1524,6 +1537,20 @@
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
+    const insertEditorHtml = async (editor, value) => {
+      selectEditorContents(editor);
+      try { document.execCommand("insertHTML", false, escapeHtml(value).replace(/\n/g, "<br>")); } catch {}
+      dispatchInput(editor, value, "insertFromPaste");
+      await wait(120);
+      return promptMatches(editorText(editor), value);
+    };
+    const insertEditorText = async (editor, value) => {
+      selectEditorContents(editor);
+      try { document.execCommand("insertText", false, value); } catch {}
+      dispatchInput(editor, value);
+      await wait(90);
+      return promptMatches(editorText(editor), value);
+    };
     const setEditorText = async (editor, value) => {
       editor?.scrollIntoView?.({ block: "center", inline: "nearest" });
       editor?.focus?.();
@@ -1533,20 +1560,10 @@
         dispatchInput(editor, value);
         return promptMatches(editorText(editor), value);
       }
-      selectEditorContents(editor);
-      let inserted = false;
-      try { inserted = document.execCommand("insertText", false, value); } catch {}
-      dispatchInput(editor, value);
-      await wait(90);
-      if (promptMatches(editorText(editor), value)) return true;
-      selectEditorContents(editor);
-      try {
-        const html = escapeHtml(value).replace(/\n/g, "<br>");
-        inserted = document.execCommand("insertHTML", false, html) || inserted;
-      } catch {}
-      dispatchInput(editor, value);
-      await wait(120);
-      return promptMatches(editorText(editor), value) || inserted;
+      if (/\n/.test(normalize(value)) && await insertEditorHtml(editor, value)) return true;
+      if (await insertEditorText(editor, value)) return true;
+      if (!/\n/.test(normalize(value)) && await insertEditorHtml(editor, value)) return true;
+      return false;
     };
     const countPromptOutsideEditor = (editor, value) => {
       const needle = compact(value);
@@ -1614,8 +1631,10 @@
       }
     };
     const submitted = (editor, value, beforeOutsideCount) => {
-      if (!promptMatches(editorText(editor), value)) return true;
-      return countPromptOutsideEditor(editor, value) > beforeOutsideCount;
+      const currentText = editorText(editor);
+      if (promptMatches(currentText, value)) return countPromptOutsideEditor(editor, value) > beforeOutsideCount;
+      if (promptWhitespaceCollapsedMatches(currentText, value)) return countPromptOutsideEditor(editor, value) > beforeOutsideCount;
+      return true;
     };
     const sendNotionText = async (value) => {
       const text = String(value || "").trim();
@@ -1626,7 +1645,7 @@
       const writeStarted = await setEditorText(editor, text);
       const written = writeStarted && await waitFor(() => promptMatches(editorText(editor), text), 2200, 80);
       if (!written) {
-        return { ok: false, sent: false, method: "notion-bridge", reason: "Notion AI input did not receive the prompt" };
+        return { ok: false, sent: false, method: "notion-bridge", reason: promptReceiveFailureReason(editor, text) };
       }
       const submit = await waitFor(() => findEnabledSubmit(editor), 2600, 100);
       if (!submit) {
@@ -1640,7 +1659,12 @@
       if (await waitFor(() => submitted(editor, text, beforeOutsideCount), 2600, 100)) {
         return { ok: true, sent: true, method: "notion-bridge-enter", verified: true };
       }
-      return { ok: false, sent: false, method: "notion-bridge", reason: "Notion AI kept the prompt in the composer after submit" };
+      return {
+        ok: false,
+        sent: false,
+        method: "notion-bridge",
+        reason: promptSubmitFailureReason(editor, text)
+      };
     };
     window.addEventListener("chatclub:notion-send-text", async (event) => {
       const id = event.detail?.id || "";

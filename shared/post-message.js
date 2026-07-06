@@ -1,5 +1,5 @@
 const SOURCE = "chatclub";
-export const SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.04.1";
+export const SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.07.1";
 export const DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.04.1";
 
 function requestId() {
