@@ -61,6 +61,20 @@ export const MESSAGE_NAVIGATOR_SITE_CONFIGS = Object.freeze([
     summaryMaxChars: 60
   }),
   Object.freeze({
+    id: "grok",
+    name: "Grok",
+    enabled: true,
+    builtIn: true,
+    configVersion: 1,
+    appIds: Object.freeze(["Grok"]),
+    hosts: Object.freeze(["grok.com", "*.grok.com", "grok.x.ai", "*.grok.x.ai", "x.com", "*.x.com"]),
+    pathPrefixes: Object.freeze([]),
+    adapter: "grok",
+    messageSelector: "article, section, [role='article'], [data-message-author-role], [data-testid*='message'], [data-testid*='conversation'], [class*='message' i], [class*='Message'], [class*='response' i], [class*='Response']",
+    textCleanupSelectors: Object.freeze(["button", "svg", "img", "header", "footer", "nav", "aside", "form", "textarea", "[contenteditable='true']", "[class*='source' i]", "[class*='citation' i]", "[class*='action' i]"]),
+    summaryMaxChars: 60
+  }),
+  Object.freeze({
     id: "grokMirror",
     name: "Grok Mirror",
     enabled: true,

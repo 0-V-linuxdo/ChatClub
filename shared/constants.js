@@ -1,7 +1,7 @@
 import { DEFAULT_TOPBAR_LAYOUT } from "./topbar.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-07-08｜01:11:09」";
+export const APP_VERSION = "「2026-07-08｜01:48:32」";
 export const BASELINE_MOD_VERSION = "2.4.0.14";
 export const HOMEPAGE_URL = "https://chatclub.local/";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";

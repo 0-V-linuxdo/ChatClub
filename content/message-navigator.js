@@ -4,7 +4,7 @@
    * Adapted from Notion-style-AI-Navigator-main by 0-V-linuxdo under the MIT License.
    */
   const GLOBAL_NAME = "__CHATCLUB_MESSAGE_NAVIGATOR__";
-  const VERSION = "2026.07.08.5";
+  const VERSION = "2026.07.08.11";
   if (window[GLOBAL_NAME]?.version === VERSION) return;
   try { window[GLOBAL_NAME]?.destroy?.(); } catch {}
 
@@ -345,11 +345,11 @@
     })));
   }
 
-  const notionChromeLinePattern = /^(?:Notion AI|\/|history|Delete, rename, and more…?|Give context|Settings|Gemini\s+\d|Do anything with AI\.{0,3}|Ask anything|Response copied to clipboard|Copied to clipboard|Loading\.?|Start voice recording|Submit AI message)$/i;
+  const notionChromeLinePattern = /^(?:Notion AI|\/|history|New agent|Share chat|Start new chat|Pin chat|Delete, rename, and more…?|Give context|Settings|Gemini\s+\d|Do anything with AI\.{0,3}|Ask anything|Response copied to clipboard|Copied to clipboard|Loading\.?|Start voice recording|Submit AI message|Thought(?:\s+for\s+.*)?|思考.*)$/i;
   const notionMetaLinePattern = /^(?:\d+\s*steps?|\d{1,2}:\d{2}\s*(?:AM|PM)?|Today|Yesterday|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+\d{1,2}(?:,\s*\d{4})?)$/i;
   const geminiChromeLinePattern = /^(?:Copy prompt|Copy|Copied|Edit|Good response|Bad response|Redo|Show more options|Share|Export|Open menu for conversation actions\.?|Ask Gemini|Microphone|Upload & tools|Send message|Flash(?:[-\s]?Lite)?|Flash|Pro|Experimental|Deep Research|Canvas|Search|Explain|Translate|翻译|搜索|复制|已复制|编辑|重新生成|更多|分享|导出|点赞|点踩)$/i;
   const geminiAnnouncementPattern = /(?:You said|You asked|You wrote|Gemini said|Gemini answered|你说|您说|Gemini\s*说|Gemini\s*回答)/i;
-  const grokUiLinePattern = /^(?:Copy|Copied|Copy message|Copy response|Create share link|Like|Dislike|Regenerate|More actions|More options|Share|Edit|Search|DeepThink|Ask anything|Upgrade to SuperGrok|New conversation - Grok|AI-generated, for reference only|This response is AI-generated, for reference only|Necessary cookies only|Accept all cookies|Cookie Settings|\d+ sources?|\d+ web pages|Thought for .*|思考了.*|复制|已复制|点赞|点踩|更多|分享|编辑|搜索)$/i;
+  const grokUiLinePattern = /^(?:Copy|Copied|Copy message|Copy response|Create share link|Like|Dislike|Regenerate|More actions|More options|Share|Edit|Search|DeepThink|Ask anything|Upgrade to SuperGrok|New conversation - Grok|AI-generated, for reference only|This response is AI-generated, for reference only|Necessary cookies only|Accept all cookies|Cookie Settings|\d+ sources?|\d+ web pages|Thought for .*|Worked for .*|思考了.*|工作了.*|复制|已复制|点赞|点踩|更多|分享|编辑|搜索)$/i;
   const kagiModeLinePattern = /^(?:Quick|Expert|Research|Fast|Deep|Creative|Balanced|Precise|Custom|快速|专家|研究)$/i;
   const kagiMetaLinePattern = /^(?:\d{1,2}:\d{2}\s*(?:AM|PM)?|Today|Yesterday)$/i;
   const kagiChromeLinePattern = /^(?:Kagi Assistant|Kagi products|Settings|Search threads|Thread navigation|Folders|Threads|Add folder|Start organizing your threads\.?|Ask anything\.{0,3}|Message|View message statistics|Copy message|Copied|Send)$/i;
@@ -418,8 +418,12 @@
   }
 
   function grokThoughtLabel(value) {
-    const match = normalize(value).match(/(?:\bThought for\s+[^,。\n]{1,32}|思考了\s*[^,。\n]{1,32})/i);
+    const match = normalize(value).match(/(?:\b(?:Thought|Worked)\s+for\s+[^,。\n]{1,32}|(?:思考|工作)了\s*[^,。\n]{1,32})/i);
     return match ? normalize(match[0]) : "";
+  }
+
+  function grokHasProgressMarker(value) {
+    return /(?:\b(?:Thought|Worked)\s+for\b|(?:思考|工作)了)/i.test(normalize(value));
   }
 
   function grokLooksMessageText(value) {
@@ -494,7 +498,7 @@
       if (!visible(node) || node === marker || node.contains?.(marker) || inChromeScope(node)) continue;
       if (elementOrder(node, marker) >= 0) continue;
       const text = grokTextOf(node, config);
-      if (!grokLooksMessageText(text) || /Thought for|思考了|Upgrade to SuperGrok|Ask anything/i.test(text)) continue;
+      if (!grokLooksMessageText(text) || /(?:Thought|Worked) for|(?:思考|工作)了|Upgrade to SuperGrok|Ask anything/i.test(text)) continue;
       const rect = (() => {
         try { return node.getBoundingClientRect(); } catch { return null; }
       })();
@@ -520,12 +524,155 @@
       if (inChromeScope(node)) continue;
       const raw = rawText(node);
       const text = grokTextOf(node, config);
-      if (text.length > 40 && /Thought for|思考了/i.test(raw) && !/Ask anything|Upgrade to SuperGrok|Home page|Notifications/i.test(raw)) {
+      if (text.length > 40 && grokHasProgressMarker(raw) && !/Ask anything|Upgrade to SuperGrok|Home page|Notifications/i.test(raw)) {
         best = node;
         if (text.length > 120) break;
       }
     }
     return best;
+  }
+
+  function grokFindProgressMarker(element) {
+    const candidates = [element, ...safeQsa("button,[role='button'],span,div", element)]
+      .filter((node) => node && visible(node) && !inChromeScope(node) && grokThoughtLabel(rawText(node)));
+    candidates.sort((a, b) => elementArea(a) - elementArea(b) || elementOrder(a, b));
+    return candidates[0] || null;
+  }
+
+  function grokSafeScrollBlock(node, root, config = {}) {
+    if (!node || !visible(node) || node === root || inChromeScope(node)) return false;
+    if (safeClosest(node, `#${ROOT_ID}`)) return false;
+    if (safeMatches(node, "html,body,main,[role='main'],nav,aside,header,footer,form,input,textarea,select,svg,img,canvas,video")) return false;
+    if (containsComposerChrome(node)) return false;
+    return Boolean(usefulTurnText(cloneText(node, config.textCleanupSelectors), 90000)
+      || safeQsa("pre,code,blockquote,ul,ol,table", node).find(visible));
+  }
+
+  function grokAssistantScrollTarget(root, marker, assistantNode, config = {}, previousUserNode = null) {
+    const markerNode = marker || grokFindProgressMarker(assistantNode);
+    const rootRect = effectRect(root);
+    const answerRect = effectRect(assistantNode);
+    let best = null;
+    for (let node = assistantNode; node && node !== document.documentElement; node = node.parentElement) {
+      if (safeMatches(node, "main,[role='main'],body")) break;
+      if (previousUserNode && node.contains?.(previousUserNode)) break;
+      if (!grokSafeScrollBlock(node, root, config)) {
+        if (best) break;
+        continue;
+      }
+      const rect = effectRect(node);
+      if (!rect) continue;
+      const hasAnswer = !assistantNode || node === assistantNode || node.contains?.(assistantNode);
+      if (!hasAnswer) continue;
+      if (markerNode && !node.contains?.(markerNode)) {
+        const markerRect = effectRect(markerNode);
+        if (!markerRect || rect.top > markerRect.top + 24) continue;
+      }
+      if (rootRect && rect.height > Math.max(rootRect.height * 2.4, (answerRect?.height || 0) + 640)) continue;
+      best = node;
+    }
+    return best || markerNode || assistantNode;
+  }
+
+  function grokSimilarText(value, expected) {
+    const key = grokCompactKey(value);
+    const expectedKey = grokCompactKey(expected);
+    if (!key || !expectedKey) return false;
+    return key === expectedKey || key.includes(expectedKey) || expectedKey.includes(key);
+  }
+
+  function grokPromoteUserBubble(seed, expectedText, config = {}, rootRect = null) {
+    let best = seed;
+    for (let node = seed?.parentElement; node && node !== document.documentElement; node = node.parentElement) {
+      if (safeMatches(node, "main,[role='main'],body") || inChromeScope(node) || containsComposerChrome(node)) break;
+      const text = grokTextOf(node, config);
+      if (!grokSimilarText(text, expectedText) || grokHasProgressMarker(text)) break;
+      const rect = effectRect(node);
+      const bestRect = effectRect(best);
+      if (!rect || !bestRect) break;
+      if (rootRect && rect.width > rootRect.width * 0.88 && bestRect.width < rootRect.width * 0.82) break;
+      if (rect.width - bestRect.width > Math.max(96, bestRect.width * 0.42)) break;
+      if (rect.height - bestRect.height > Math.max(80, bestRect.height * 1.4)) break;
+      if (elementArea(node) > elementArea(best) * 2.4) break;
+      best = node;
+    }
+    return best;
+  }
+
+  function grokUserBubbleTarget(element, config = {}) {
+    const expected = grokTextOf(element, config);
+    if (!expected) return null;
+    const root = pageRoot("main,[role='main']");
+    const rootRect = effectRect(root);
+    const selector = "article,section,div,p,span,[role='article'],[class*='message' i],[class*='Message'],[class*='bubble' i],[class*='query' i]";
+    const rawCandidates = [];
+    const seenCandidates = new Set();
+    for (const node of [element, ...safeQsa(selector, element)]) {
+      if (!node || seenCandidates.has(node)) continue;
+      seenCandidates.add(node);
+      rawCandidates.push(node);
+    }
+    const candidates = rawCandidates
+      .filter((node) => visible(node) && !inChromeScope(node) && !containsComposerChrome(node))
+      .map((node) => {
+        const text = grokTextOf(node, config);
+        if (!grokSimilarText(text, expected) || grokHasProgressMarker(text)) return null;
+        const promoted = grokPromoteUserBubble(node, expected, config, rootRect);
+        const rect = effectRect(promoted);
+        if (!rect) return null;
+        return {
+          element: promoted,
+          rect,
+          text,
+          area: elementArea(promoted),
+          widthPenalty: rootRect && rect.width > rootRect.width * 0.86 ? 1 : 0,
+          rightGap: rootRect ? Math.abs(rootRect.right - rect.right) : 0,
+          lengthDelta: Math.abs(grokCompactKey(text).length - grokCompactKey(expected).length)
+        };
+      })
+      .filter(Boolean);
+    const seen = new Set();
+    const bubbles = [];
+    for (const item of candidates) {
+      if (seen.has(item.element)) continue;
+      seen.add(item.element);
+      bubbles.push(item);
+    }
+    bubbles.sort((a, b) => {
+      return a.widthPenalty - b.widthPenalty
+        || a.lengthDelta - b.lengthDelta
+        || a.rightGap - b.rightGap
+        || a.area - b.area
+        || elementOrder(a.element, b.element);
+    });
+    return bubbles[0]?.element || null;
+  }
+
+  function grokUserScrollTarget(element, config = {}) {
+    const bubble = grokUserBubbleTarget(element, config);
+    if (bubble) return bubble;
+    const root = messageRootForEffect(element, element, config, { allowBroad: true, role: "user" });
+    if (root && !safeMatches(root, "main,[role='main'],body")) return root;
+    return effectMatches(element, USER_EFFECT_BODY_SELECTOR, config, { role: "user", prefer: "largest" }) || element;
+  }
+
+  function grokAssistantEffectTarget(element, config = {}) {
+    return effectMatches(element, ".markdown,[class*='message' i],[class*='response' i],article,[role='article']", config, { prefer: "largest", role: "assistant" })
+      || messageRootForEffect(element, element, config, { allowBroad: true, role: "assistant" })
+      || element;
+  }
+
+  function grokRole(element) {
+    const meta = metaText(element);
+    if (/user|human|prompt|query|question/.test(meta)) return "user";
+    if (/assistant|response|answer|bot|grok/.test(meta)) return "assistant";
+    return genericRole(element);
+  }
+
+  function grokScrollTarget(element, config = {}, role = "") {
+    if ((role || grokRole(element)) === "user") return grokUserScrollTarget(element, config);
+    const root = pageRoot("main,[role='main']");
+    return grokAssistantScrollTarget(root, grokFindProgressMarker(element), element, config);
   }
 
   function grokDomItems(config) {
@@ -558,16 +705,20 @@
       if (!assistantText || assistantSeen.has(assistantKey)) continue;
       assistantSeen.add(assistantKey);
       if (user?.node) {
+        const userTarget = grokUserScrollTarget(user.node, config);
         items.push({
           element: user.node,
-          target: user.node,
+          target: userTarget,
+          effectTarget: userTarget,
           role: "user",
           text: compactText(user.text, config.summaryMaxChars)
         });
       }
+      const assistantTarget = grokAssistantScrollTarget(root, marker, assistantNode, config, user?.node || null);
       items.push({
         element: assistantNode,
-        target: assistantNode,
+        target: assistantTarget,
+        effectTarget: grokAssistantEffectTarget(assistantNode, config),
         role: "assistant",
         text: compactText(assistantText, config.summaryMaxChars)
       });
@@ -576,7 +727,7 @@
   }
 
   function notionLikelyPrompt(line) {
-    return /[?？]$|^(?:介绍|搜索|请|帮|写|总结|解释|翻译|生成|分析|列出|查找|Tell|What|How|Why|Please|Search|Summarize|Explain|Write)\b/i.test(line);
+    return /[?？]$|^(?:任务|需求|要求|目标|提示|为我|帮我|介绍|搜索|请|帮|写|总结|解释|翻译|生成|分析|列出|查找)(?:[:：\s]|$)|^(?:Task|Request|Requirement|Requirements|Goal|Prompt|Draft|Compose|Create|Tell|What|How|Why|Please|Search|Summarize|Explain|Write)\b/i.test(line);
   }
 
   function trimNotionPromptMeta(line) {
@@ -595,6 +746,14 @@
       if (!lines.includes(line)) lines.push(line);
     }
     return lines;
+  }
+
+  function notionChromePollutedText(value) {
+    const text = normalize(value);
+    if (!text) return false;
+    const lines = text.split(/\n+/).map(cleanLine).filter(Boolean);
+    if (lines.some((line) => notionChromeLinePattern.test(line))) return true;
+    return /\b(?:New agent|Share chat|Start new chat|Pin chat|Delete, rename, and more)\b/i.test(text);
   }
 
   function notionPromptFromIndex(lines, index) {
@@ -732,8 +891,52 @@
     return prompt.text.length >= 2 && assistant.length >= 20 ? { user: prompt.text, userParts: prompt.parts, assistant } : null;
   }
 
+  function notionThoughtFallbackItems(config, root) {
+    const cleanupSelectors = Array.isArray(config.textCleanupSelectors) ? config.textCleanupSelectors : [];
+    const thought = safeQsa("button,[role='button']", root)
+      .filter((button) => visible(button) && /^Thought(?:\s+for\s+.*)?$|^思考/i.test(cleanLine(rawText(button))))
+      .sort(elementOrder)[0] || null;
+    if (!thought) return [];
+    const blocks = candidateTextBlocks(root, config, "article,section,div,p,[role='article'],[data-testid*='message'],[class*='message' i],[class*='response' i]", {
+      reject: (element) => element.contains?.(thought) || containsComposerChrome(element),
+      maxLength: 80000
+    });
+    const beforeThought = blocks.filter((item) => elementOrder(item.element, thought) < 0);
+    const afterThought = blocks.filter((item) => elementOrder(thought, item.element) < 0);
+    const userCandidates = beforeThought.filter((item) => {
+      const text = trimNotionPromptMeta(item.text);
+      if (notionChromePollutedText(text)) return false;
+      return text.length >= 8 && (notionLikelyPrompt(text) || /(?:任务|需求|要求|Task|Request|Requirement)/i.test(text));
+    }).sort((a, b) => {
+      const area = elementArea(a.element) - elementArea(b.element);
+      return area || a.text.length - b.text.length || elementOrder(b.element, a.element);
+    });
+    const user = userCandidates[0] || null;
+    const assistant = afterThought.find((item) => {
+      const text = usefulTurnText(cloneText(item.element, cleanupSelectors), 80000);
+      return text.length >= 20 && !notionChromeLinePattern.test(cleanLine(text));
+    });
+    if (!user || !assistant) return [];
+    return dedupeItems([
+      {
+        element: user.element,
+        target: user.element,
+        role: "user",
+        text: compactText(trimNotionPromptMeta(user.text), config.summaryMaxChars)
+      },
+      {
+        element: assistant.element,
+        target: assistant.element,
+        role: "assistant",
+        text: compactText(assistant.text, config.summaryMaxChars)
+      }
+    ]);
+  }
+
   function notionDomFallbackItems(config) {
     const root = pageRoot("#notion-app,main,[role='main']");
+    const thoughtFallback = notionThoughtFallbackItems(config, root);
+    if (conversationLooksUseful(thoughtFallback)) return thoughtFallback;
     const pair = notionPairFromLines(root);
     if (!pair) return [];
     const cleanupSelectors = Array.isArray(config.textCleanupSelectors) ? config.textCleanupSelectors : [];
@@ -753,9 +956,9 @@
       : candidates;
     const promptTarget = beforeStep.reverse().find((item) => {
       const text = trimNotionPromptMeta(item.text);
-      return text && (text.includes(pair.user) || pair.user.includes(text) || notionLikelyPrompt(text));
+      return text && !notionChromePollutedText(text) && (text.includes(pair.user) || pair.user.includes(text) || notionLikelyPrompt(text));
     })?.element || targetForText(root, config, [pair.user, ...(pair.userParts || [])], {
-      reject: (element) => stepButton && element.contains?.(stepButton)
+      reject: (element) => (stepButton && element.contains?.(stepButton)) || notionChromePollutedText(cloneText(element, cleanupSelectors))
     });
     const assistantTarget = afterStep.find((item) => {
       const text = cleanLine(item.text);
@@ -1106,6 +1309,41 @@
     return null;
   }
 
+  function promoteSafeMessageBlock(seed, config = {}, role = "assistant", options = {}) {
+    let best = null;
+    const minArea = Math.max(1, options.minArea || elementArea(seed));
+    for (let node = seed; node && node !== document.documentElement; node = node.parentElement) {
+      if (safeMatches(node, "main,body")) break;
+      if (node !== seed && safeMatches(node, options.stopSelector || "")) break;
+      if (!usableEffectTarget(node, config, { allowBroad: true, role })) {
+        if (best) break;
+        continue;
+      }
+      const area = elementArea(node);
+      if (area >= minArea) best = node;
+      const parent = node.parentElement;
+      if (!parent || blockedEffectBoundary(parent, role) || containsComposerChrome(parent)) break;
+      if (options.maxAreaRatio && elementArea(parent) > minArea * options.maxAreaRatio) break;
+    }
+    return best;
+  }
+
+  function chatGptAssistantEffectBlock(element, target, config = {}) {
+    const seed = target || element;
+    const block = promoteSafeMessageBlock(seed, config, "assistant", {
+      maxAreaRatio: 5,
+      stopSelector: "article[data-testid^='conversation-turn-'],article[data-testid*='conversation-turn'],article[data-turn-id],article[data-turn]"
+    });
+    if (!block || block === seed) return null;
+    const hasAnswer = safeQsa(".markdown.prose,.markdown, [data-message-author-role='assistant']", block).some(visible)
+      || (seed && block.contains?.(seed));
+    const hasAssistantChrome = Array.from(block.querySelectorAll("button,[role='button']")).some((button) => /thought|思考|推理/i.test(cleanLine(button.textContent || button.getAttribute?.("aria-label") || "")));
+    const text = usefulTurnText(cloneText(block, config.textCleanupSelectors), 80000);
+    return hasAnswer && text && (hasAssistantChrome || text.length > usefulTurnText(cloneText(seed, config.textCleanupSelectors), 80000).length + 12)
+      ? block
+      : null;
+  }
+
   function fallbackEffectTarget(element, target, config = {}, role = "assistant") {
     const selector = role === "user" ? USER_EFFECT_BODY_SELECTOR : ASSISTANT_EFFECT_BODY_SELECTOR;
     const prefer = role === "user" ? "" : "largest";
@@ -1272,7 +1510,9 @@
           "[class*='bubble-color' i]"
         ].join(","), config, { role: effectRole }) || root || context.target || element;
       }
-      return roleRoot
+      const assistantBlock = chatGptAssistantEffectBlock(element, context.target, config);
+      return assistantBlock
+        || roleRoot
         || closestEffectMatch(context.target || element, [
           "article[data-testid^='conversation-turn-']",
           "article[data-testid*='conversation-turn']",
@@ -1424,11 +1664,22 @@
       return safeQsa(".chat_bubble_content, .markdown, [class*='message' i], [role='article']", element).find(visible) || element;
     },
     effectTarget(element, config, context = {}) {
-      const root = messageRootForEffect(element, context.target, config, { allowBroad: true });
-      return effectMatches(root || element, ".chat_bubble_content,.markdown", config, { prefer: "largest" })
-        || closestEffectMatch(context.target || element, ".chat_bubble[role='article'],.chat_bubble,[role='article']", config, { allowBroad: true })
+      const effectRole = context.effectRole || (context.role === "user" ? "user" : "assistant");
+      const root = closestEffectMatch(
+        context.target || element,
+        ".chat_bubble[role='article'],.chat_bubble,[role='article']",
+        config,
+        { allowBroad: true, role: effectRole }
+      ) || messageRootForEffect(element, context.target, config, { allowBroad: true, role: effectRole });
+      if (effectRole === "user") {
+        return (usableEffectTarget(root, config, { allowBroad: true, role: effectRole }) ? root : null)
+          || effectMatches(root || element, ".chat_bubble_content,.markdown", config, { role: effectRole, prefer: "largest" })
+          || context.target
+          || element;
+      }
+      return (usableEffectTarget(root, config, { allowBroad: true, role: effectRole }) ? root : null)
+        || effectMatches(root || element, ".chat_bubble_content,.markdown", config, { prefer: "largest", role: effectRole })
         || context.target
-        || root
         || element;
     },
     collect(config) {
@@ -1461,24 +1712,22 @@
 
   ADAPTERS.grok = {
     role(element) {
-      const meta = metaText(element);
-      if (/user|human|prompt|query|question/.test(meta)) return "user";
-      if (/assistant|response|answer|bot|grok/.test(meta)) return "assistant";
-      return genericRole(element);
+      return grokRole(element);
     },
-    target(element) {
-      return safeQsa(".markdown, [class*='message' i], [class*='Message'], [class*='response' i], article, [role='article']", element).find(visible) || element;
+    target(element, config = {}) {
+      return grokScrollTarget(element, config, grokRole(element)) || element;
     },
     effectTarget(element, config, context = {}) {
       const root = messageRootForEffect(element, context.target, config, { allowBroad: true });
       if (context.role === "user") {
-        return effectMatches(root || element, USER_EFFECT_BODY_SELECTOR, config)
+        return grokUserScrollTarget(root || element, config)
+          || effectMatches(root || element, USER_EFFECT_BODY_SELECTOR, config)
           || root
           || context.target
           || element;
       }
-      return root
-        || effectMatches(element, ".markdown,[class*='message' i],[class*='response' i],article,[role='article']", config, { prefer: "largest" })
+      return grokAssistantEffectTarget(element, config)
+        || root
         || context.target
         || element;
     },
