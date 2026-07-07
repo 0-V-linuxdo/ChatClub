@@ -36,26 +36,25 @@ export function summarySourceMeta(source = {}, helpers = {}) {
   const effectiveFaviconUrl = helpers.effectiveFaviconUrl || ((href, logoUrl) => logoUrl || href || "");
   const id = summarySourceId(source);
   const labels = {
-    kagi: ["kagi", "K"],
-    grok: ["grok", "G"],
-    notion: ["NotionAI", "N"],
-    chatgpt: ["ChatGPT", "C"],
-    claude: ["Claude", "C"],
-    gemini: ["Gemini", "G"],
-    deepseek: ["DeepSeek", "D"],
-    lobehub: ["LobeHub", "L"],
-    typingmind: ["TypingMind", "T"],
-    generic: ["Source", "S"]
+    kagi: "kagi",
+    grok: "grok",
+    notion: "NotionAI",
+    chatgpt: "ChatGPT",
+    claude: "Claude",
+    gemini: "Gemini",
+    deepseek: "DeepSeek",
+    lobehub: "LobeHub",
+    typingmind: "TypingMind",
+    generic: "Source"
   };
-  const [brand, initial] = labels[id] || labels.generic;
+  const brand = labels[id] || labels.generic;
   const knownSource = id !== "generic";
   return {
     id,
     brand: knownSource ? brand : source.siteName || source.name || brand,
-    initial,
     title: source.pageTitle || source.title || source.href || brand,
     href: source.href || "",
-    logoUrl: effectiveFaviconUrl(source.href, source.logoUrl)
+    logoUrl: source.logoUrl || effectiveFaviconUrl(source.href, source.logoUrl)
   };
 }
 
@@ -93,7 +92,7 @@ export function buildSummaryPreviewItem(result = {}, fallback = {}, helpers = {}
     const fallbackPageName = translate("summaryPanel.pageLabel", { count: index + 1 });
     const title = context.pageTitle || context.title || fallback.title || href || fallbackPageName;
     const name = context.siteName || context.name || fallback.name || context.title || fallbackPageName;
-    const logoUrl = effectiveFaviconUrl(href, context.logoUrl || fallback.logoUrl);
+    const logoUrl = context.logoUrl || fallback.logoUrl || effectiveFaviconUrl(href, context.logoUrl || fallback.logoUrl);
     const page = {
       ...context,
       name,
@@ -125,7 +124,7 @@ export function buildSummaryPreviewItem(result = {}, fallback = {}, helpers = {}
   const fallbackPageName = translate("summaryPanel.pageLabel", { count: index + 1 });
   const title = diagnostic.pageTitle || diagnostic.title || fallback.title || href || fallbackPageName;
   const name = diagnostic.siteName || diagnostic.name || fallback.name || diagnostic.title || fallbackPageName;
-  const logoUrl = effectiveFaviconUrl(href, diagnostic.logoUrl || fallback.logoUrl);
+  const logoUrl = diagnostic.logoUrl || fallback.logoUrl || effectiveFaviconUrl(href, diagnostic.logoUrl || fallback.logoUrl);
   return {
     ...diagnostic,
     key: summaryPreviewKey(diagnostic, fallback),

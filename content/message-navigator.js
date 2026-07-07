@@ -4,7 +4,7 @@
    * Adapted from Notion-style-AI-Navigator-main by 0-V-linuxdo under the MIT License.
    */
   const GLOBAL_NAME = "__CHATCLUB_MESSAGE_NAVIGATOR__";
-  const VERSION = "2026.07.07.7";
+  const VERSION = "2026.07.07.9";
   if (window[GLOBAL_NAME]?.version === VERSION) return;
   try { window[GLOBAL_NAME]?.destroy?.(); } catch {}
 
@@ -430,6 +430,62 @@
     return /[A-Za-z0-9\u4e00-\u9fff]/.test(text);
   }
 
+  function grokCompactKey(value) {
+    return normalize(value).toLowerCase()
+      .replace(/\[[^\]]+\]\([^)]*\)/g, "$1")
+      .replace(/[^a-z0-9\u4e00-\u9fff]+/g, "");
+  }
+
+  function grokStripUserPromptPrefix(value, expected) {
+    const text = cleanGrokText(value);
+    const prompt = cleanGrokText(expected);
+    const promptKey = grokCompactKey(prompt);
+    if (!text || !promptKey) return text;
+    if (grokCompactKey(text) === promptKey) return "";
+    if (text.toLowerCase().startsWith(prompt.toLowerCase())) {
+      const stripped = cleanGrokText(text.slice(prompt.length));
+      if (stripped && grokCompactKey(stripped) !== promptKey) return stripped;
+    }
+    const lines = text.split("\n").map((line) => line.trim()).filter(Boolean);
+    let index = 0;
+    let consumed = "";
+    while (index < Math.min(lines.length, 4)) {
+      consumed = cleanGrokText([consumed, lines[index]].filter(Boolean).join("\n"));
+      const consumedKey = grokCompactKey(consumed);
+      if (consumedKey && (consumedKey === promptKey || promptKey.includes(consumedKey) || consumedKey.includes(promptKey))) {
+        index += 1;
+        if (consumedKey === promptKey || consumedKey.includes(promptKey)) break;
+        continue;
+      }
+      break;
+    }
+    if (index > 0) {
+      const stripped = cleanGrokText(lines.slice(index).join("\n"));
+      if (stripped && grokCompactKey(stripped) !== promptKey) return stripped;
+      if (!stripped) return "";
+    }
+    return text;
+  }
+
+  function grokLooksLeadingUserPrompt(line, expected = "") {
+    const text = normalize(line);
+    if (!text || text.length > 280) return false;
+    const textKey = grokCompactKey(text);
+    const promptKey = grokCompactKey(expected);
+    if (promptKey && textKey && (textKey === promptKey || promptKey.includes(textKey) || textKey.includes(promptKey))) return true;
+    if (/[?？]\s*$/.test(text)) return true;
+    return /^(?:请|帮|为什么|为何|怎么|如何|能否|可以|what|why|how|please|tell|explain|summari[sz]e|can you|could you)\b/i.test(text);
+  }
+
+  function grokStripLeadingUserPromptLine(value, expected = "") {
+    const text = cleanGrokText(value);
+    const lines = text.split("\n").map((line) => line.trim()).filter(Boolean);
+    if (lines.length < 2) return text;
+    const rest = cleanGrokText(lines.slice(1).join("\n"));
+    if (!rest || rest.length < 12 || !grokLooksLeadingUserPrompt(lines[0], expected)) return text;
+    return rest;
+  }
+
   function grokPreviousTextBlock(root, marker, config) {
     const markerRect = (() => {
       try { return marker?.getBoundingClientRect?.() || null; } catch { return null; }
@@ -497,11 +553,11 @@
     const assistantSeen = new Set();
     for (const marker of markers.slice(0, 10)) {
       const assistantNode = grokAssistantNodeForMarker(root, marker, config);
-      const assistantText = grokTextOf(assistantNode, config);
+      const user = grokPreviousTextBlock(root, assistantNode, config) || grokPreviousTextBlock(root, marker, config);
+      const assistantText = grokStripLeadingUserPromptLine(grokStripUserPromptPrefix(grokTextOf(assistantNode, config), user?.text || ""), user?.text || "");
       const assistantKey = assistantText.toLowerCase().replace(/\s+/g, " ").slice(0, 500);
       if (!assistantText || assistantSeen.has(assistantKey)) continue;
       assistantSeen.add(assistantKey);
-      const user = grokPreviousTextBlock(root, assistantNode, config) || grokPreviousTextBlock(root, marker, config);
       if (user?.node) {
         items.push({
           element: user.node,

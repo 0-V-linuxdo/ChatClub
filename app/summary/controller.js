@@ -40,7 +40,6 @@ const SUMMARY_PANEL_SIZE_KEY = "chatclub.summaryPanelSize.v4";
  * @property {(href: string, declaredLogoUrl?: string) => string} effectiveFaviconUrl
  * @property {(href: string) => Promise<string>} discoverDeclaredFaviconUrl
  * @property {(href: string, logoUrl: string) => void} rememberFaviconUrl
- * @property {(app: any) => string} fallbackFaviconUrl
  * @property {(href: string) => string} browserFaviconUrl
  * @property {(action: string, shortcut: any, digitLabel?: string) => string} [formatShortcut]
  * @property {{ save: () => Promise<void>, entries: () => any[] }} [pocketPort]
@@ -65,7 +64,6 @@ export function createSummaryController(ctx) {
   const effectiveFaviconUrl = requireControllerFunction(ctx, controllerName, "effectiveFaviconUrl");
   const discoverDeclaredFaviconUrl = requireControllerFunction(ctx, controllerName, "discoverDeclaredFaviconUrl");
   const rememberFaviconUrl = requireControllerFunction(ctx, controllerName, "rememberFaviconUrl");
-  const fallbackFaviconUrl = requireControllerFunction(ctx, controllerName, "fallbackFaviconUrl");
   const browserFaviconUrl = requireControllerFunction(ctx, controllerName, "browserFaviconUrl");
   const formatShortcutLabel = typeof ctx.formatShortcut === "function" ? ctx.formatShortcut : null;
   const pocketPort = optionalControllerObject(ctx, "pocketPort");
@@ -101,6 +99,20 @@ export function createSummaryController(ctx) {
   function summaryLogoUrl(href) {
     return effectiveFaviconUrl(href);
   }
+
+  function summaryTabFaviconUrl(instanceId) {
+    if (!instanceId) return "";
+    for (const image of document.querySelectorAll(".tab[data-instance-id] .tab-favicon")) {
+      const tab = image.closest(".tab[data-instance-id]");
+      if (tab?.dataset?.instanceId !== instanceId || image.hidden) continue;
+      return image.currentSrc || image.src || "";
+    }
+    return "";
+  }
+
+  function summaryFrameLogoUrl(instanceId, href, declaredLogoUrl = "") {
+    return summaryTabFaviconUrl(instanceId) || effectiveFaviconUrl(href, declaredLogoUrl) || declaredLogoUrl || "";
+  }
   
   function summaryKeySet(name) {
     return new Set(state[name] || []);
@@ -122,57 +134,6 @@ export function createSummaryController(ctx) {
     syncSummaryPanel();
   }
   
-  const SUMMARY_SOURCE_ICON_SPECS = {
-    kagi: [
-      ["rect", { x: "2", y: "2", width: "28", height: "28", rx: "7", fill: "#ffc52f" }],
-      ["circle", { cx: "16", cy: "16", r: "9.4", fill: "#f7f2ff", stroke: "#2f244d", "stroke-width": "2" }],
-      ["path", { d: "M7.8 15.6c4.2-4.6 12.2-4.6 16.4 0M7.8 16.4c4.2 4.6 12.2 4.6 16.4 0", fill: "none", stroke: "#6d5bd2", "stroke-width": "2", "stroke-linecap": "round" }],
-      ["circle", { cx: "16", cy: "16", r: "3.4", fill: "none", stroke: "#2f244d", "stroke-width": "1.8" }]
-    ],
-    grok: [
-      ["rect", { x: "2", y: "2", width: "28", height: "28", rx: "8", fill: "#050505" }],
-      ["path", { d: "M8 23.5C11.8 14.5 17.7 8.9 25 7", fill: "none", stroke: "#ffffff", "stroke-width": "3", "stroke-linecap": "round" }],
-      ["path", { d: "M8.2 8.6 23.4 23.8", fill: "none", stroke: "#ffffff", "stroke-width": "2.4", "stroke-linecap": "round", opacity: "0.86" }],
-      ["circle", { cx: "10.4", cy: "22.1", r: "2.1", fill: "#ffffff" }],
-      ["path", { d: "M21.5 7.5 24 5.8l1.4 2.8-2.8 1.4Z", fill: "#e7b94b" }]
-    ],
-    notion: [
-      ["rect", { x: "3.5", y: "3.5", width: "25", height: "25", rx: "4.5", fill: "#ffffff", stroke: "#111827", "stroke-width": "2" }],
-      ["text", { x: "16", y: "22", "text-anchor": "middle", "font-size": "17", "font-family": "Georgia, serif", "font-weight": "700", fill: "#111827", textContent: "N" }]
-    ],
-    chatgpt: [
-      ["rect", { x: "2", y: "2", width: "28", height: "28", rx: "8", fill: "#10a37f" }],
-      ["path", { d: "M16 7.2c3.8 0 6.8 2.9 6.8 6.5 0 5-4.8 8.8-10 10.8 1.6-2.8 1.6-5.2-.2-7.5-1.9-2.4-3.9-2.8-6.2-2.5C8.2 10.1 11.6 7.2 16 7.2Z", fill: "none", stroke: "#ffffff", "stroke-width": "2.1", "stroke-linejoin": "round" }],
-      ["path", { d: "M9.5 18.5c3.1 1.5 6.8.8 9.5-1.9M13.4 8.1c2.1 2 3.3 4.8 3 7.7M22.2 13.4c-2.3.3-4.7 1.7-6.2 4", fill: "none", stroke: "#ffffff", "stroke-width": "1.7", "stroke-linecap": "round" }]
-    ],
-    claude: [
-      ["rect", { x: "2", y: "2", width: "28", height: "28", rx: "8", fill: "#d97757" }],
-      ["path", { d: "M16 5.8 18.8 13.1 26.4 16 18.8 18.9 16 26.2 13.2 18.9 5.6 16 13.2 13.1Z", fill: "#fff4e8" }],
-      ["circle", { cx: "16", cy: "16", r: "3.2", fill: "#d97757" }]
-    ],
-    gemini: [
-      ["rect", { x: "2", y: "2", width: "28", height: "28", rx: "8", fill: "#1a73e8" }],
-      ["path", { d: "M16 5.8 18.6 13.4 26.2 16 18.6 18.6 16 26.2 13.4 18.6 5.8 16 13.4 13.4Z", fill: "#ffffff" }],
-      ["path", { d: "M16 5.8 18.6 13.4 26.2 16 18.6 18.6 16 26.2Z", fill: "#a7c7ff", opacity: "0.62" }]
-    ],
-    deepseek: [
-      ["rect", { x: "2", y: "2", width: "28", height: "28", rx: "8", fill: "#2563eb" }],
-      ["path", { d: "M7 18.6c3.6-7.8 11.4-9.8 17.9-5.4-2.1.1-3.6.8-4.7 2 2.3.8 3.9 2.7 4.8 5.8-4.9-1.7-8.9-1.2-12 1.7-2.2 2-5.1 1.3-6-4.1Z", fill: "#ffffff" }],
-      ["circle", { cx: "18.9", cy: "14.9", r: "1.3", fill: "#2563eb" }]
-    ],
-    lobehub: [
-      ["rect", { x: "2", y: "2", width: "28", height: "28", rx: "8", fill: "#111827" }],
-      ["circle", { cx: "16", cy: "16", r: "8.5", fill: "none", stroke: "#ffffff", "stroke-width": "2" }],
-      ["circle", { cx: "16", cy: "16", r: "3.3", fill: "#ffffff" }],
-      ["path", { d: "M7.5 16h17M16 7.5v17", stroke: "#ffffff", "stroke-width": "1.7", "stroke-linecap": "round", opacity: "0.72" }]
-    ],
-    typingmind: [
-      ["rect", { x: "2", y: "2", width: "28", height: "28", rx: "8", fill: "#7c3aed" }],
-      ["rect", { x: "7", y: "10", width: "18", height: "12", rx: "3", fill: "#ffffff" }],
-      ["path", { d: "M10 14h3M15 14h3M20 14h2M10 18h12", stroke: "#7c3aed", "stroke-width": "1.8", "stroke-linecap": "round" }]
-    ]
-  };
-  
   function summarySourceId(source = {}) {
     return summarySourceIdModel(source);
   }
@@ -180,13 +141,18 @@ export function createSummaryController(ctx) {
   function summarySourceMeta(source = {}) {
     return summarySourceMetaModel(source, { effectiveFaviconUrl });
   }
-  
-  function fallbackSummaryIconUrl(meta) {
-    return fallbackFaviconUrl({
-      id: meta.id || meta.brand,
-      name: meta.brand || meta.title || meta.initial,
-      url: meta.href || meta.logoUrl || ""
-    });
+
+  function googleFaviconUrl(href) {
+    try {
+      const pageUrl = new URL(String(href || ""), location.href);
+      if (pageUrl.protocol !== "http:" && pageUrl.protocol !== "https:") return "";
+      const iconUrl = new URL("https://www.google.com/s2/favicons");
+      iconUrl.searchParams.set("domain", pageUrl.hostname);
+      iconUrl.searchParams.set("sz", "64");
+      return iconUrl.href;
+    } catch {
+      return "";
+    }
   }
   
   function renderSummarySourceIcon(meta) {
@@ -195,11 +161,11 @@ export function createSummaryController(ctx) {
       title: `${meta.brand} icon`,
       "aria-label": `${meta.brand} icon`
     });
-    icon.append(el("span", { class: "summary-source-icon-fallback" }, meta.initial));
-    if (meta.logoUrl) {
+    const initialLogoUrl = meta.logoUrl || browserFaviconUrl(meta.href) || googleFaviconUrl(meta.href);
+    if (initialLogoUrl) {
       icon.append(el("img", {
         class: "summary-source-favicon",
-        src: meta.logoUrl,
+        src: initialLogoUrl,
         alt: "",
         loading: "lazy",
         decoding: "async",
@@ -214,12 +180,15 @@ export function createSummaryController(ctx) {
               return;
             }
           }
-          if (image.dataset.fallback === "1") {
-            image.hidden = true;
-            return;
+          if (image.dataset.googleFallback !== "1") {
+            const googleUrl = googleFaviconUrl(meta.href || meta.logoUrl);
+            image.dataset.googleFallback = "1";
+            if (googleUrl && image.src !== googleUrl) {
+              image.src = googleUrl;
+              return;
+            }
           }
-          image.dataset.fallback = "1";
-          image.src = fallbackSummaryIconUrl(meta);
+          image.hidden = true;
         }
       }));
     }
@@ -729,18 +698,18 @@ export function createSummaryController(ctx) {
     const instanceId = iframe.dataset.instanceId || "";
     let href = app.url;
     let pageTitle = "";
-    let logoUrl = summaryLogoUrl(href);
+    let logoUrl = summaryFrameLogoUrl(instanceId, href);
     try {
       const meta = await sendToIframe(iframe, "getPageMeta", {}, 1800);
       href = meta?.href || href;
       pageTitle = meta?.title || "";
-      logoUrl = effectiveFaviconUrl(href, meta?.logoUrl) || meta?.logoUrl || logoUrl;
+      logoUrl = summaryFrameLogoUrl(instanceId, href, meta?.logoUrl) || logoUrl;
     } catch {
       try { href = await sendToIframe(iframe, "getLocationHref", {}, 1200) || href; } catch {}
-      logoUrl = summaryLogoUrl(href) || logoUrl;
+      logoUrl = summaryFrameLogoUrl(instanceId, href) || logoUrl;
     }
     const discoveredLogoUrl = await discoverDeclaredFaviconUrl(href);
-    if (discoveredLogoUrl) logoUrl = discoveredLogoUrl;
+    logoUrl = summaryTabFaviconUrl(instanceId) || discoveredLogoUrl || logoUrl || summaryLogoUrl(href);
     if (logoUrl) {
       rememberFaviconUrl(href, logoUrl);
       if (app.url && app.url !== href) rememberFaviconUrl(app.url, logoUrl);
@@ -806,7 +775,7 @@ export function createSummaryController(ctx) {
         ...base,
         href,
         pageTitle: result?.title || base.pageTitle,
-        logoUrl: effectiveFaviconUrl(href, result?.logoUrl || base.logoUrl),
+        logoUrl: summaryFrameLogoUrl(base.instanceId, href, result?.logoUrl || base.logoUrl) || base.logoUrl,
         siteId: siteConfig.id,
         siteName: siteConfig.name
       };

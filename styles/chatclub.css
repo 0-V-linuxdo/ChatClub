@@ -5528,18 +5528,6 @@ body.settings-tab-group-button-dragging iframe {
   display: none;
 }
 
-.summary-source-logo {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
-.summary-source-icon-fallback {
-  font-size: 14px;
-  font-weight: 780;
-  line-height: 1;
-}
-
 .summary-source-main {
   min-width: 0;
   display: grid;
