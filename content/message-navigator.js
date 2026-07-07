@@ -4,7 +4,7 @@
    * Adapted from Notion-style-AI-Navigator-main by 0-V-linuxdo under the MIT License.
    */
   const GLOBAL_NAME = "__CHATCLUB_MESSAGE_NAVIGATOR__";
-  const VERSION = "2026.07.07.4";
+  const VERSION = "2026.07.07.7";
   if (window[GLOBAL_NAME]?.version === VERSION) return;
   try { window[GLOBAL_NAME]?.destroy?.(); } catch {}
 
@@ -348,9 +348,177 @@
 
   const notionChromeLinePattern = /^(?:Notion AI|\/|history|Delete, rename, and more…?|Give context|Settings|Gemini\s+\d|Do anything with AI\.{0,3}|Ask anything|Response copied to clipboard|Copied to clipboard|Loading\.?|Start voice recording|Submit AI message)$/i;
   const notionMetaLinePattern = /^(?:\d+\s*steps?|\d{1,2}:\d{2}\s*(?:AM|PM)?|Today|Yesterday|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+\d{1,2}(?:,\s*\d{4})?)$/i;
+  const geminiChromeLinePattern = /^(?:Copy prompt|Copy|Copied|Edit|Good response|Bad response|Redo|Show more options|Share|Export|Open menu for conversation actions\.?|Ask Gemini|Microphone|Upload & tools|Send message|Flash(?:[-\s]?Lite)?|Flash|Pro|Experimental|Deep Research|Canvas|Search|Explain|Translate|翻译|搜索|复制|已复制|编辑|重新生成|更多|分享|导出|点赞|点踩)$/i;
+  const geminiAnnouncementPattern = /(?:You said|You asked|You wrote|Gemini said|Gemini answered|你说|您说|Gemini\s*说|Gemini\s*回答)/i;
+  const grokUiLinePattern = /^(?:Copy|Copied|Copy message|Copy response|Create share link|Like|Dislike|Regenerate|More actions|More options|Share|Edit|Search|DeepThink|Ask anything|Upgrade to SuperGrok|New conversation - Grok|AI-generated, for reference only|This response is AI-generated, for reference only|Necessary cookies only|Accept all cookies|Cookie Settings|\d+ sources?|\d+ web pages|Thought for .*|思考了.*|复制|已复制|点赞|点踩|更多|分享|编辑|搜索)$/i;
   const kagiModeLinePattern = /^(?:Quick|Expert|Research|Fast|Deep|Creative|Balanced|Precise|Custom|快速|专家|研究)$/i;
   const kagiMetaLinePattern = /^(?:\d{1,2}:\d{2}\s*(?:AM|PM)?|Today|Yesterday)$/i;
   const kagiChromeLinePattern = /^(?:Kagi Assistant|Kagi products|Settings|Search threads|Thread navigation|Folders|Threads|Add folder|Start organizing your threads\.?|Ask anything\.{0,3}|Message|View message statistics|Copy message|Copied|Send)$/i;
+
+  function stripGeminiAnnouncements(value) {
+    return String(value || "")
+      .replace(new RegExp(`(^|\\n)\\s*(?:${geminiAnnouncementPattern.source})(?:\\s*[:：]\\s*|\\s+)(?=\\S)`, "gi"), "$1")
+      .replace(new RegExp(`(^|\\n)\\s*(?:${geminiAnnouncementPattern.source})\\s*(?=\\n|$)`, "gi"), "\n")
+      .replace(/(^|\n)\s*(?:Copy prompt|Copy|Copied|Edit|Good response|Bad response|Redo|Show more options)\s*(?=\n|$)/gi, "\n");
+  }
+
+  function cleanGeminiText(value) {
+    const text = normalize(stripGeminiAnnouncements(value))
+      .split(/\n+/)
+      .map((line) => line.trim().replace(new RegExp(`^(?:${geminiAnnouncementPattern.source})(?:\\s*[:：]\\s*|\\s+)`, "i"), "").trim())
+      .filter((line) => line && !geminiChromeLinePattern.test(line))
+      .join("\n");
+    return usefulTurnText(text);
+  }
+
+  function cleanGrokText(value) {
+    const lines = normalize(String(value || "").replace(/\r\n?/g, "\n").replace(/Show more\s*Show less/gi, ""))
+      .split(/\n+/)
+      .map((line) => line.trim())
+      .filter((line) => line && !grokUiLinePattern.test(line));
+    const text = trimGrokSourceLead(lines).join("\n");
+    return usefulTurnText(text);
+  }
+
+  function grokSourceCardLine(line) {
+    const text = cleanLine(line);
+    if (!text) return true;
+    if (/^(?:https?:\/\/)?(?:www\.)?[\w-]+(?:\.[\w-]+)+(?:\/\S*)?$/i.test(text)) return true;
+    if (/^(?:https?:\/\/)?(?:www\.)?[\w-]+(?:\.[\w-]+)+[^\u4e00-\u9fff]{0,160}$/i.test(text)) return true;
+    if (/^(?:How to|What is|What are|Why|Chrome|Google|Wikipedia|YouTube|GitHub|Stack Overflow)\b/i.test(text) && !/[\u4e00-\u9fff。！？]/.test(text) && text.length <= 160) return true;
+    if (/^(?:[\w.-]+\.)+[a-z]{2,}\S+/i.test(text) && !/[\u4e00-\u9fff]/.test(text)) return true;
+    return false;
+  }
+
+  function grokAnswerStartLine(line) {
+    const text = cleanLine(line);
+    if (!text) return false;
+    if (/^(?:你好|您好|当然|可以|这个|这里|这是|我(?:是|会|可以|来)|以下|简单来说|总之|结论|Sure\b|Here\b|Absolutely\b|In short\b|The short answer\b|To\b)/i.test(text)) return true;
+    if (/[\u4e00-\u9fff]/.test(text) && text.length >= 14 && /[。！？!?.，,]/.test(text)) return true;
+    return text.length >= 140 && /[.!?。！？]/.test(text);
+  }
+
+  function trimGrokEmbeddedSourcePrefix(line) {
+    return cleanLine(line).replace(/^(?:https?:\/\/)?(?:www\.)?[\w-]+(?:\.[\w-]+)+(?:[^\u4e00-\u9fff\n]{0,220}?)(?=(?:你好|您好|当然|可以|这个|这里|这是|我是|我会|以下|简单来说|总之|结论))/i, "");
+  }
+
+  function trimGrokSourceLead(lines = []) {
+    const normalizedLines = lines.map(trimGrokEmbeddedSourcePrefix).map(cleanLine).filter(Boolean);
+    const answerIndex = normalizedLines.findIndex(grokAnswerStartLine);
+    if (answerIndex > 0 && normalizedLines.slice(0, answerIndex).some(grokSourceCardLine)) {
+      return normalizedLines.slice(answerIndex);
+    }
+    let start = 0;
+    while (start < normalizedLines.length - 1 && grokSourceCardLine(normalizedLines[start])) start += 1;
+    return normalizedLines.slice(start);
+  }
+
+  function grokTextOf(element, config = {}) {
+    const cleanupSelectors = Array.isArray(config.textCleanupSelectors) ? config.textCleanupSelectors : [];
+    return cleanGrokText(cloneText(element, cleanupSelectors));
+  }
+
+  function grokThoughtLabel(value) {
+    const match = normalize(value).match(/(?:\bThought for\s+[^,。\n]{1,32}|思考了\s*[^,。\n]{1,32})/i);
+    return match ? normalize(match[0]) : "";
+  }
+
+  function grokLooksMessageText(value) {
+    const text = cleanGrokText(value);
+    if (!text || text.length < 2 || text.length > 45000) return false;
+    if (/Simple Chat Hub|Summary Panel|pages checked/i.test(text)) return false;
+    return /[A-Za-z0-9\u4e00-\u9fff]/.test(text);
+  }
+
+  function grokPreviousTextBlock(root, marker, config) {
+    const markerRect = (() => {
+      try { return marker?.getBoundingClientRect?.() || null; } catch { return null; }
+    })();
+    const candidates = [];
+    for (const node of safeQsa("article,section,div,[role]", root)) {
+      if (!visible(node) || node === marker || node.contains?.(marker) || inChromeScope(node)) continue;
+      if (elementOrder(node, marker) >= 0) continue;
+      const text = grokTextOf(node, config);
+      if (!grokLooksMessageText(text) || /Thought for|思考了|Upgrade to SuperGrok|Ask anything/i.test(text)) continue;
+      const rect = (() => {
+        try { return node.getBoundingClientRect(); } catch { return null; }
+      })();
+      if (markerRect && rect && rect.bottom > markerRect.top + 80) continue;
+      const tooBroad = safeQsa("article,section,div,[role]", node).some((child) => {
+        if (child === node || !visible(child)) return false;
+        const childText = grokTextOf(child, config);
+        return grokLooksMessageText(childText) && childText.length >= Math.min(text.length * 0.65, text.length - 8);
+      });
+      if (tooBroad && text.length > 300) continue;
+      candidates.push({ node, rect, text });
+    }
+    candidates.sort((a, b) => {
+      if (a.rect && b.rect && Math.abs(a.rect.bottom - b.rect.bottom) > 4) return b.rect.bottom - a.rect.bottom;
+      return elementArea(a.node) - elementArea(b.node) || elementOrder(a.node, b.node);
+    });
+    return candidates[0] || null;
+  }
+
+  function grokAssistantNodeForMarker(root, marker, config) {
+    let best = marker;
+    for (let node = marker; node && node !== root && node !== document.body; node = node.parentElement) {
+      if (inChromeScope(node)) continue;
+      const raw = rawText(node);
+      const text = grokTextOf(node, config);
+      if (text.length > 40 && /Thought for|思考了/i.test(raw) && !/Ask anything|Upgrade to SuperGrok|Home page|Notifications/i.test(raw)) {
+        best = node;
+        if (text.length > 120) break;
+      }
+    }
+    return best;
+  }
+
+  function grokDomItems(config) {
+    const root = pageRoot("main,[role='main']");
+    const markerSelectors = ["button,[role='button']", "button,div,span,[role='button']", "article,section,div,[role]"];
+    let markers = [];
+    for (const selector of markerSelectors) {
+      const seen = new Set();
+      markers = safeQsa(selector, root)
+        .filter((node) => visible(node) && !inChromeScope(node) && grokThoughtLabel(rawText(node)))
+        .sort(elementOrder)
+        .filter((node) => {
+          const rect = (() => {
+            try { return node.getBoundingClientRect(); } catch { return null; }
+          })();
+          const key = `${grokThoughtLabel(rawText(node)).toLowerCase()}|${Math.round((rect?.top || 0) / 8)}`;
+          if (!key.trim() || seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+      if (markers.length) break;
+    }
+    const items = [];
+    const assistantSeen = new Set();
+    for (const marker of markers.slice(0, 10)) {
+      const assistantNode = grokAssistantNodeForMarker(root, marker, config);
+      const assistantText = grokTextOf(assistantNode, config);
+      const assistantKey = assistantText.toLowerCase().replace(/\s+/g, " ").slice(0, 500);
+      if (!assistantText || assistantSeen.has(assistantKey)) continue;
+      assistantSeen.add(assistantKey);
+      const user = grokPreviousTextBlock(root, assistantNode, config) || grokPreviousTextBlock(root, marker, config);
+      if (user?.node) {
+        items.push({
+          element: user.node,
+          target: user.node,
+          role: "user",
+          text: compactText(user.text, config.summaryMaxChars)
+        });
+      }
+      items.push({
+        element: assistantNode,
+        target: assistantNode,
+        role: "assistant",
+        text: compactText(assistantText, config.summaryMaxChars)
+      });
+    }
+    return dedupeItems(items);
+  }
 
   function notionLikelyPrompt(line) {
     return /[?？]$|^(?:介绍|搜索|请|帮|写|总结|解释|翻译|生成|分析|列出|查找|Tell|What|How|Why|Please|Search|Summarize|Explain|Write)\b/i.test(line);
@@ -654,7 +822,7 @@
       const role = adapter.role?.(element, config) || genericRole(element, config) || "assistant";
       const target = adapter.target?.(element, config) || genericTarget(element);
       const textSource = adapter.summaryElement?.(element, config) || target || element;
-      const rawText = adapter.text?.(element, config) || cloneText(textSource, cleanupSelectors) || cloneText(element, cleanupSelectors);
+      const rawText = adapter.text?.(element, config, { role, target, textSource }) || cloneText(textSource, cleanupSelectors) || cloneText(element, cleanupSelectors);
       return {
         element,
         target,
@@ -736,6 +904,10 @@
     target(element) {
       return safeQsa(".model-response-text .markdown, message-content .markdown, .markdown, .query-text, .query-content, .user-query-bubble-with-background", element).find(visible) || element;
     },
+    text(element, config, context = {}) {
+      const cleanupSelectors = Array.isArray(config.textCleanupSelectors) ? config.textCleanupSelectors : [];
+      return cleanGeminiText(cloneText(context.textSource || context.target || element, cleanupSelectors) || cloneText(element, cleanupSelectors));
+    },
     collect(config) {
       return adapterBaseItems(config, this);
     }
@@ -794,6 +966,27 @@
         role: genericRole(item.element, config) || (index % 2 === 0 ? "user" : "assistant"),
         text: compactText(item.text, config.summaryMaxChars)
       })));
+    }
+  };
+
+  ADAPTERS.grok = {
+    role(element) {
+      const meta = metaText(element);
+      if (/user|human|prompt|query|question/.test(meta)) return "user";
+      if (/assistant|response|answer|bot|grok/.test(meta)) return "assistant";
+      return genericRole(element);
+    },
+    target(element) {
+      return safeQsa(".markdown, [class*='message' i], [class*='Message'], [class*='response' i], article, [role='article']", element).find(visible) || element;
+    },
+    text(element, config, context = {}) {
+      return grokTextOf(context.textSource || context.target || element, config) || grokTextOf(element, config);
+    },
+    collect(config) {
+      const fromDom = grokDomItems(config);
+      if (conversationLooksUseful(fromDom)) return fromDom;
+      const base = adapterBaseItems(config, this);
+      return conversationLooksUseful(base) ? base : fromDom;
     }
   };
 
