@@ -2053,6 +2053,43 @@ body.tab-gesture-active * {
   min-width: 0;
 }
 
+.appearance-workspace-layout {
+  display: grid;
+  grid-template-columns: minmax(360px, 1fr) minmax(360px, 440px);
+  gap: 24px;
+  align-items: start;
+}
+
+.appearance-workspace-main,
+.appearance-workspace-aside {
+  min-width: 0;
+}
+
+.appearance-workspace-aside {
+  padding-left: 24px;
+  border-left: 1px solid var(--line);
+}
+
+.appearance-workspace-aside .appearance-color-control {
+  grid-template-columns: var(--settings-control-height) minmax(0, 1fr) 32px;
+}
+
+.appearance-workspace-aside .appearance-color-text {
+  max-width: none;
+}
+
+.appearance-workspace-aside .appearance-color-help {
+  grid-column: 1 / -1;
+}
+
+.appearance-workspace-aside .appearance-range-control {
+  grid-template-columns: minmax(0, 1fr) 48px;
+}
+
+.appearance-workspace-aside .appearance-range-help {
+  grid-column: 1 / -1;
+}
+
 .settings-muted-help {
   margin: 0;
   color: var(--muted);
@@ -2286,6 +2323,20 @@ body.settings-tab-group-button-dragging iframe {
   line-height: 1.35;
 }
 
+@media (max-width: 900px) {
+  .appearance-workspace-layout {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .appearance-workspace-aside {
+    padding-top: 14px;
+    padding-left: 0;
+    border-top: 1px solid var(--line);
+    border-left: 0;
+  }
+}
+
 .settings-actions {
   display: flex;
   justify-content: flex-end;
@@ -2337,6 +2388,23 @@ body.settings-tab-group-button-dragging iframe {
   height: 19px;
 }
 
+.message-navigator-effect-layout {
+  display: grid;
+  grid-template-columns: minmax(360px, 1fr) minmax(360px, 440px);
+  gap: 24px;
+  align-items: start;
+}
+
+.message-navigator-effect-main,
+.message-navigator-effect-aside {
+  min-width: 0;
+}
+
+.message-navigator-effect-aside {
+  padding-left: 24px;
+  border-left: 1px solid var(--line);
+}
+
 .message-navigator-effect-preview {
   display: grid;
   gap: 10px;
@@ -2344,7 +2412,7 @@ body.settings-tab-group-button-dragging iframe {
 
 .message-navigator-effect-preview-stage {
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 42px;
   gap: 14px;
   align-items: center;
   min-height: 112px;
@@ -2422,6 +2490,20 @@ body.settings-tab-group-button-dragging iframe {
 .message-navigator-effect-preview-action .svg-icon {
   width: 16px;
   height: 16px;
+}
+
+@media (max-width: 900px) {
+  .message-navigator-effect-layout {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .message-navigator-effect-aside {
+    padding-top: 14px;
+    padding-left: 0;
+    border-top: 1px solid var(--line);
+    border-left: 0;
+  }
 }
 
 .message-navigator-effect-preview-target.chatclub-message-nav-effect-border {

@@ -3,10 +3,10 @@
   const COPY_SOURCE = "chatclub-native-copy";
   const GEMINI_MODEL_PICKER_SOURCE = "chatclub-gemini-model-picker";
   const NOTION_SEND_TEXT_SOURCE = "chatclub-notion-send-text";
-  const CONTENT_BRIDGE_VERSION = "2026.07.08.11";
+  const CONTENT_BRIDGE_VERSION = "2026.07.08.12";
   const SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.07.1";
   const DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.04.1";
-  const MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.08.11";
+  const MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.08.12";
   const DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.07.03.30";
   const PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript";
   const hadContentBridge = Boolean(window.__CHATCLUB_CONTENT_BRIDGE_INSTALLED__);
@@ -5895,6 +5895,11 @@
     return messageNavigatorRuntime().setEnabled(data);
   }
 
+  function hideMessageNavigatorMenu() {
+    const runtime = messageNavigatorRuntime();
+    return typeof runtime.closeMenu === "function" ? runtime.closeMenu() : runtime.state();
+  }
+
   function getMessageNavigatorState() {
     const runtime = window.__CHATCLUB_MESSAGE_NAVIGATOR__;
     return runtime && typeof runtime.state === "function"
@@ -5912,7 +5917,7 @@
     if (genericRequest && hadContentBridge) return;
     if (versionedDeleteRequest && message.action !== "deleteThread" && message.action !== "getDeleteConfirmState") return;
     if (versionedSendTextRequest && message.action !== "sendText") return;
-    if (versionedNavigatorRequest && message.action !== "setMessageNavigator" && message.action !== "getMessageNavigatorState") return;
+    if (versionedNavigatorRequest && !["setMessageNavigator", "hideMessageNavigatorMenu", "getMessageNavigatorState"].includes(message.action)) return;
     const responseSource = versionedDeleteRequest
       ? DELETE_THREAD_POST_MESSAGE_SOURCE
       : versionedSendTextRequest
@@ -5932,6 +5937,7 @@
       else if (message.action === "applyPreferredModel") data = await applyPreferredModel(message.data || {});
       else if (message.action === "collectSummary") data = await collectSummary(message.data || {});
       else if (message.action === "setMessageNavigator") data = setMessageNavigator(message.data || {});
+      else if (message.action === "hideMessageNavigatorMenu") data = hideMessageNavigatorMenu();
       else if (message.action === "getMessageNavigatorState") data = getMessageNavigatorState();
       else if (message.action === "getShortcutConfig") data = activeShortcutConfig;
       else throw new Error(`Unknown action: ${message.action}`);

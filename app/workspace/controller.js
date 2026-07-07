@@ -150,6 +150,7 @@ export function createWorkspaceController(ctx = {}) {
   const formatShortcut = requireFunction(ctx, "formatShortcut");
   let workspaceNode = null;
   let workspaceRenderSignature = "";
+  let messageNavigatorMenuIframe = null;
 
   function workspaceSignature() {
     return JSON.stringify({
@@ -1855,6 +1856,54 @@ export function createWorkspaceController(ctx = {}) {
     return iframe?.dataset.messageNavigatorEnabled === "1";
   }
 
+  function clearMessageNavigatorMenuOutsideClose() {
+    messageNavigatorMenuIframe = null;
+    document.removeEventListener("pointerdown", closeMessageNavigatorMenuOnParentPointerDown, true);
+    document.removeEventListener("keydown", closeMessageNavigatorMenuOnParentKeydown, true);
+  }
+
+  function messageNavigatorActionTarget(target) {
+    return target instanceof Element
+      ? target.closest("[data-tooltip-id='workspace.group.messageNavigator']")
+      : null;
+  }
+
+  function armMessageNavigatorMenuOutsideClose(iframe) {
+    clearMessageNavigatorMenuOutsideClose();
+    if (!iframe) return;
+    messageNavigatorMenuIframe = iframe;
+    requestAnimationFrame(() => {
+      if (messageNavigatorMenuIframe !== iframe) return;
+      document.addEventListener("pointerdown", closeMessageNavigatorMenuOnParentPointerDown, true);
+      document.addEventListener("keydown", closeMessageNavigatorMenuOnParentKeydown, true);
+    });
+  }
+
+  function hideMessageNavigatorMenuForFrame(iframe) {
+    if (!iframe?.contentWindow) return Promise.resolve(null);
+    return sendToIframe(iframe, "hideMessageNavigatorMenu", {}, 2000, {
+      source: MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE
+    }).catch((error) => {
+      console.warn("[ChatClub] Failed to hide message navigator menu", error);
+      return null;
+    });
+  }
+
+  function closeTrackedMessageNavigatorMenu() {
+    const iframe = messageNavigatorMenuIframe;
+    clearMessageNavigatorMenuOutsideClose();
+    if (iframe?.isConnected && messageNavigatorFrameEnabled(iframe)) hideMessageNavigatorMenuForFrame(iframe);
+  }
+
+  function closeMessageNavigatorMenuOnParentPointerDown(event) {
+    if (messageNavigatorActionTarget(event.target)) return;
+    closeTrackedMessageNavigatorMenu();
+  }
+
+  function closeMessageNavigatorMenuOnParentKeydown(event) {
+    if (event.key === "Escape") closeTrackedMessageNavigatorMenu();
+  }
+
   function messageNavigatorPayloadForFrame(iframe, href = "") {
     const appId = iframe?.dataset.appId || "";
     const app = appById(appId) || {};
@@ -1935,6 +1984,7 @@ export function createWorkspaceController(ctx = {}) {
       return;
     }
     if (messageNavigatorFrameEnabled(iframe)) {
+      clearMessageNavigatorMenuOutsideClose();
       iframe.dataset.messageNavigatorEnabled = "0";
       iframe.dataset.messageNavigatorSiteId = "";
       try { await setMessageNavigatorForFrame(iframe, false); } catch {}
@@ -1950,13 +2000,15 @@ export function createWorkspaceController(ctx = {}) {
       return;
     }
     try {
-      const result = await setMessageNavigatorForFrame(iframe, true, payload);
+      const result = await setMessageNavigatorForFrame(iframe, true, { ...payload, openMenu: true });
       iframe.dataset.messageNavigatorEnabled = "1";
       iframe.dataset.messageNavigatorSiteId = payload.config.id || "";
       syncWorkspaceDom();
       closePopovers();
+      armMessageNavigatorMenuOutsideClose(iframe);
       if (result?.messageCount === 0) notify(t("messageNavigator.noMessages"), "info");
     } catch (error) {
+      clearMessageNavigatorMenuOutsideClose();
       iframe.dataset.messageNavigatorEnabled = "0";
       iframe.dataset.messageNavigatorSiteId = "";
       syncWorkspaceDom();

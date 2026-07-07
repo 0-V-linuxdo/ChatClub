@@ -733,14 +733,18 @@ export function createSettingsController(ctx) {
       )
     );
     const workspaceBlock = () => settingsBlock(t("appearance.workspace"), t("appearance.workspaceDesc"),
-        el("div", { class: "appearance-field-list" },
+      el("div", { class: "appearance-workspace-layout" },
+        el("div", { class: "appearance-field-list appearance-workspace-main" },
           appearanceRow(field(t("appearance.themeMode"), themeMode)),
           appearanceRow(field(t("appearance.language"), language)),
-          appearanceRow(field(t("appearance.maxColumns"), columnCount)),
+          appearanceRow(field(t("appearance.maxColumns"), columnCount))
+        ),
+        el("div", { class: "appearance-field-list appearance-workspace-aside" },
           appearanceRow(field(t("appearance.primaryColor"), colorControl)),
           appearanceRow(field(t("appearance.loadingOverlay"), overlayOpacityControl))
         )
-      );
+      )
+    );
     const tabGroupButtonLabel = (id) => ({
       addApp: t("chat.addApp"),
       newChat: t("topbar.newChat"),
@@ -1977,17 +1981,23 @@ export function createSettingsController(ctx) {
 
   function messageNavigatorEffectsBlock(redraw) {
     return settingsBlock(t("messageNavigator.effects.title"), t("messageNavigator.effects.desc"),
-      field(t("messageNavigator.effectMode"), select(state.options.messageNavigatorEffectMode || "border", messageNavigatorEffectOptions(), {
-        onchange: async (event) => {
-          state.options = await saveOptions({
-            ...state.options,
-            messageNavigatorEffectMode: normalizeMessageNavigatorEffectMode(event.target.value)
-          });
-          toast(t("toast.messageNavigatorEffectSaved"), "success");
-          redraw();
-        }
-      })),
-      messageNavigatorEffectPreview()
+      el("div", { class: "message-navigator-effect-layout" },
+        el("div", { class: "message-navigator-effect-main" },
+          field(t("messageNavigator.effectMode"), select(state.options.messageNavigatorEffectMode || "border", messageNavigatorEffectOptions(), {
+            onchange: async (event) => {
+              state.options = await saveOptions({
+                ...state.options,
+                messageNavigatorEffectMode: normalizeMessageNavigatorEffectMode(event.target.value)
+              });
+              toast(t("toast.messageNavigatorEffectSaved"), "success");
+              redraw();
+            }
+          }))
+        ),
+        el("div", { class: "message-navigator-effect-aside" },
+          messageNavigatorEffectPreview()
+        )
+      )
     );
   }
 
@@ -2014,12 +2024,12 @@ export function createSettingsController(ctx) {
     );
     return el("div", { class: "message-navigator-effect-preview" },
       el("div", { class: "message-navigator-effect-preview-stage" },
+        target,
         el("div", { class: "message-navigator-effect-preview-lines", "aria-hidden": "true" },
           el("span", {}),
           el("span", { class: "active" }),
           el("span", {})
-        ),
-        target
+        )
       ),
       el("button", {
         class: "button button-secondary message-navigator-effect-preview-action",

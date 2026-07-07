@@ -4,7 +4,7 @@
    * Adapted from Notion-style-AI-Navigator-main by 0-V-linuxdo under the MIT License.
    */
   const GLOBAL_NAME = "__CHATCLUB_MESSAGE_NAVIGATOR__";
-  const VERSION = "2026.07.08.11";
+  const VERSION = "2026.07.08.12";
   if (window[GLOBAL_NAME]?.version === VERSION) return;
   try { window[GLOBAL_NAME]?.destroy?.(); } catch {}
 
@@ -1917,15 +1917,17 @@
       .chatclub-message-nav-item {
         width: 100%;
         display: grid;
-        grid-template-columns: 22px minmax(0, 1fr);
+        grid-template-columns: 26px minmax(0, 1fr);
         gap: 8px;
         align-items: center;
-        min-height: 30px;
-        padding: 6px 8px;
+        min-height: 38px;
+        padding: 8px 10px;
         border: 0;
         border-radius: 6px;
         background: transparent;
         color: inherit;
+        font-size: 15px;
+        line-height: 1.45;
         text-align: left;
         cursor: pointer;
       }
@@ -1936,12 +1938,12 @@
       .chatclub-message-nav-role {
         display: inline-grid;
         place-items: center;
-        width: 20px;
-        height: 20px;
+        width: 24px;
+        height: 24px;
         border-radius: 50%;
         background: color-mix(in srgb, CanvasText 8%, transparent);
         color: var(--cc-message-nav-muted);
-        font-size: 11px;
+        font-size: 13px;
         font-weight: 700;
       }
       .chatclub-message-nav-item.active .chatclub-message-nav-role {
@@ -2019,6 +2021,7 @@
       this.effectTimer = 0;
       this.menuCloseTimer = 0;
       this.menuFocusTimer = 0;
+      this.menuPinnedOpen = false;
       this.jumpToken = 0;
       this.activeId = "";
       this.effectTarget = null;
@@ -2026,6 +2029,10 @@
       this.boundResize = () => this.scheduleBuild(160);
       this.boundOpenMenu = () => this.openMenu();
       this.boundScheduleCloseMenu = () => this.scheduleCloseMenu();
+      this.boundDocumentPointerDown = (event) => this.onDocumentPointerDown(event);
+      this.boundDocumentKeydown = (event) => {
+        if (event.key === "Escape") this.closeMenu();
+      };
       this.boundRootFocusIn = () => this.openMenu();
       this.boundRootFocusOut = () => {
         clearTimeout(this.menuFocusTimer);
@@ -2042,10 +2049,10 @@
         this.destroy();
         return this.state();
       }
-      return this.enable(data.config || {}, data.options || {});
+      return this.enable(data.config || {}, data.options || {}, { openMenu: data.openMenu === true });
     }
 
-    enable(config = {}, options = {}) {
+    enable(config = {}, options = {}, ui = {}) {
       this.destroy();
       this.enabled = true;
       this.config = {
@@ -2065,6 +2072,7 @@
       this.observe();
       this.build();
       this.scheduleBuild(600);
+      if (ui.openMenu) this.openMenu({ pinned: true });
       return this.state();
     }
 
@@ -2100,17 +2108,41 @@
       this.root?.addEventListener?.("focusout", this.boundRootFocusOut);
     }
 
-    openMenu() {
+    openMenu(options = {}) {
       clearTimeout(this.menuCloseTimer);
+      if (options.pinned) this.menuPinnedOpen = true;
       this.root?.classList?.add("chatclub-message-nav-open");
     }
 
+    closeMenu() {
+      clearTimeout(this.menuCloseTimer);
+      this.menuPinnedOpen = false;
+      this.root?.classList?.remove("chatclub-message-nav-open");
+      return this.state();
+    }
+
     scheduleCloseMenu(delay = 180) {
+      if (this.menuPinnedOpen) return;
       clearTimeout(this.menuCloseTimer);
       this.menuCloseTimer = setTimeout(() => {
         if (this.root?.contains?.(document.activeElement)) return;
-        this.root?.classList?.remove("chatclub-message-nav-open");
+        this.closeMenu();
       }, delay);
+    }
+
+    eventInsideRoot(event) {
+      if (!this.root) return false;
+      try {
+        const path = event.composedPath?.() || [];
+        if (path.includes(this.root)) return true;
+      } catch {}
+      return Boolean(event.target && this.root.contains?.(event.target));
+    }
+
+    onDocumentPointerDown(event) {
+      if (!this.enabled || !this.root?.classList?.contains("chatclub-message-nav-open")) return;
+      if (this.eventInsideRoot(event)) return;
+      this.closeMenu();
     }
 
     observe() {
@@ -2118,6 +2150,8 @@
       try { this.observer.observe(document.body || document.documentElement, { childList: true, subtree: true }); } catch {}
       window.addEventListener("scroll", this.boundScroll, true);
       window.addEventListener("resize", this.boundResize, true);
+      document.addEventListener("pointerdown", this.boundDocumentPointerDown, true);
+      document.addEventListener("keydown", this.boundDocumentKeydown, true);
     }
 
     scheduleBuild(delay = 250) {
@@ -2311,6 +2345,7 @@
         adapter: this.config?.adapter || "",
         messageCount: this.messages.length,
         activeId: this.activeId,
+        menuOpen: Boolean(this.root?.classList?.contains("chatclub-message-nav-open")),
         version: VERSION
       };
     }
@@ -2326,13 +2361,15 @@
       this.observer = null;
       window.removeEventListener("scroll", this.boundScroll, true);
       window.removeEventListener("resize", this.boundResize, true);
+      document.removeEventListener("pointerdown", this.boundDocumentPointerDown, true);
+      document.removeEventListener("keydown", this.boundDocumentKeydown, true);
       this.indicator?.removeEventListener?.("pointerenter", this.boundOpenMenu);
       this.indicator?.removeEventListener?.("pointerleave", this.boundScheduleCloseMenu);
       this.menu?.removeEventListener?.("pointerenter", this.boundOpenMenu);
       this.menu?.removeEventListener?.("pointerleave", this.boundScheduleCloseMenu);
       this.root?.removeEventListener?.("focusin", this.boundRootFocusIn);
       this.root?.removeEventListener?.("focusout", this.boundRootFocusOut);
-      this.root?.classList?.remove("chatclub-message-nav-open");
+      this.closeMenu();
       this.root?.remove();
       this.root = null;
       this.indicator = null;
