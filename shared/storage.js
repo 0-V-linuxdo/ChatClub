@@ -545,6 +545,7 @@ export function normalizeOptions(raw = {}) {
     topbarLayout: migrateDeleteThreadTopbarLayout(raw),
     topbarDeleteThreadMigrated: true,
     pocketCardSize: normalizePocketCardSize(raw.pocketCardSize),
+    frameLoadingOverlayOpacity: boundedNumber(raw.frameLoadingOverlayOpacity, base.frameLoadingOverlayOpacity, 0, 100),
     ...primaryColorState,
     apiProfiles,
     apiPromotionChannelsVersion: Math.max(Number(raw.apiPromotionChannelsVersion) || 0, API_PROMOTION_CHANNELS_VERSION),

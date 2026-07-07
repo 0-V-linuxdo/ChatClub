@@ -391,6 +391,7 @@ export function createSettingsController(ctx) {
       state.summaryCollectorEditingId = "";
       state.summaryCollectorDragId = "";
       state.messageNavigatorSiteExpandedId = "";
+      state.messageNavigatorSettingsTab = "effects";
       messageNavigatorSiteDragId = "";
       state.settingsPromptTemplateDragId = "";
       state.settingsPromptLibraryDragId = "";
@@ -504,6 +505,30 @@ export function createSettingsController(ctx) {
         queueAppearanceAutoSave({ colMaxCount: nextColumnCount });
       }
     });
+    const normalizePercent = (value, fallback = DEFAULT_OPTIONS.frameLoadingOverlayOpacity) => {
+      const number = Number(value);
+      return Math.max(0, Math.min(100, Math.round(Number.isFinite(number) ? number : fallback)));
+    };
+    const overlayOpacityDraft = normalizePercent(state.options.frameLoadingOverlayOpacity);
+    const overlayOpacityValue = el("span", { class: "appearance-range-value" }, `${overlayOpacityDraft}%`);
+    const overlayOpacitySlider = el("input", {
+      class: "appearance-range-slider",
+      type: "range",
+      min: "0",
+      max: "100",
+      step: "1",
+      value: String(overlayOpacityDraft),
+      "aria-label": t("appearance.loadingOverlay")
+    });
+    const syncOverlayOpacity = () => {
+      const nextOpacity = normalizePercent(overlayOpacitySlider.value, overlayOpacityDraft);
+      overlayOpacitySlider.value = String(nextOpacity);
+      overlayOpacityValue.textContent = `${nextOpacity}%`;
+      document.documentElement.style.setProperty("--frame-loading-overlay-opacity", String(nextOpacity / 100));
+      queueAppearanceAutoSave({ frameLoadingOverlayOpacity: nextOpacity });
+    };
+    overlayOpacitySlider.addEventListener("input", syncOverlayOpacity);
+    overlayOpacitySlider.addEventListener("change", syncOverlayOpacity);
     if (!state.settingsTabGroupButtonPlacementDraft) {
       state.settingsTabGroupButtonPlacementDraft = normalizeTabGroupButtonPlacement(
         state.options.tabGroupButtonPlacement,
@@ -563,6 +588,11 @@ export function createSettingsController(ctx) {
       colorText,
       colorPreview,
       el("small", { class: "appearance-color-help" }, t("appearance.primaryColorHelp"))
+    );
+    const overlayOpacityControl = el("div", { class: "appearance-range-control" },
+      overlayOpacitySlider,
+      overlayOpacityValue,
+      el("small", { class: "appearance-range-help" }, t("appearance.loadingOverlayHelp"))
     );
     const appearanceRow = (node) => el("div", { class: "appearance-field-row" }, node);
     const saveTooltipToggle = async (targetId, enabled, inputNode) => {
@@ -707,7 +737,8 @@ export function createSettingsController(ctx) {
           appearanceRow(field(t("appearance.themeMode"), themeMode)),
           appearanceRow(field(t("appearance.language"), language)),
           appearanceRow(field(t("appearance.maxColumns"), columnCount)),
-          appearanceRow(field(t("appearance.primaryColor"), colorControl))
+          appearanceRow(field(t("appearance.primaryColor"), colorControl)),
+          appearanceRow(field(t("appearance.loadingOverlay"), overlayOpacityControl))
         )
       );
     const tabGroupButtonLabel = (id) => ({
@@ -1930,32 +1961,90 @@ export function createSettingsController(ctx) {
   }
 
   function messageNavigationSettingsPane(redraw) {
-    return el("div", { class: "settings-pane" },
-      settingsBlock(t("messageNavigator.effects.title"), t("messageNavigator.effects.desc"),
-        field(t("messageNavigator.effectMode"), select(state.options.messageNavigatorEffectMode || "border", messageNavigatorEffectOptions(), {
-          onchange: async (event) => {
-            state.options = await saveOptions({
-              ...state.options,
-              messageNavigatorEffectMode: normalizeMessageNavigatorEffectMode(event.target.value)
-            });
-            toast(t("toast.messageNavigatorEffectSaved"), "success");
-            redraw();
-          }
-        }))
+    const activeTab = state.messageNavigatorSettingsTab === "sites" ? "sites" : "effects";
+    state.messageNavigatorSettingsTab = activeTab;
+    return el("div", { class: "settings-pane message-navigator-settings-pane" },
+      settingsInnerTabs([
+        ["effects", t("messageNavigator.effects.title"), t("messageNavigator.effects.tabDesc")],
+        ["sites", t("messageNavigator.sites.title"), t("messageNavigator.sites.tabDesc")]
+      ], activeTab, (id) => {
+        state.messageNavigatorSettingsTab = id;
+        redraw();
+      }),
+      activeTab === "sites" ? messageNavigatorSitesBlock(redraw) : messageNavigatorEffectsBlock(redraw)
+    );
+  }
+
+  function messageNavigatorEffectsBlock(redraw) {
+    return settingsBlock(t("messageNavigator.effects.title"), t("messageNavigator.effects.desc"),
+      field(t("messageNavigator.effectMode"), select(state.options.messageNavigatorEffectMode || "border", messageNavigatorEffectOptions(), {
+        onchange: async (event) => {
+          state.options = await saveOptions({
+            ...state.options,
+            messageNavigatorEffectMode: normalizeMessageNavigatorEffectMode(event.target.value)
+          });
+          toast(t("toast.messageNavigatorEffectSaved"), "success");
+          redraw();
+        }
+      })),
+      messageNavigatorEffectPreview()
+    );
+  }
+
+  function messageNavigatorSitesBlock(redraw) {
+    return settingsBlock(t("messageNavigator.sites.title"), t("messageNavigator.sites.desc"),
+      settingsPaneToolbar(t("messageNavigator.sites.manage"),
+        settingsPrimaryAction(t("messageNavigator.site.add"), "plus", () => openMessageNavigatorSiteEditor(null, redraw))
       ),
-      settingsBlock(t("messageNavigator.sites.title"), t("messageNavigator.sites.desc"),
-        settingsPaneToolbar(t("messageNavigator.sites.manage"),
-          settingsPrimaryAction(t("messageNavigator.site.add"), "plus", () => openMessageNavigatorSiteEditor(null, redraw))
+      settingsList([
+        "",
+        t("messageNavigator.site.name"),
+        t("messageNavigator.site.scope"),
+        t("messageNavigator.site.enabled"),
+        t("messageNavigator.site.actions")
+      ], messageNavigatorSiteRows(redraw), "message-navigator-list")
+    );
+  }
+
+  function messageNavigatorEffectPreview() {
+    const mode = normalizeMessageNavigatorEffectMode(state.options.messageNavigatorEffectMode || "border");
+    const target = el("div", { class: "message-navigator-effect-preview-target", tabindex: "0" },
+      el("span", { class: "message-navigator-effect-preview-role" }, "A"),
+      el("span", { class: "message-navigator-effect-preview-text" }, t("messageNavigator.preview.message"))
+    );
+    return el("div", { class: "message-navigator-effect-preview" },
+      el("div", { class: "message-navigator-effect-preview-stage" },
+        el("div", { class: "message-navigator-effect-preview-lines", "aria-hidden": "true" },
+          el("span", {}),
+          el("span", { class: "active" }),
+          el("span", {})
         ),
-        settingsList([
-          "",
-          t("messageNavigator.site.name"),
-          t("messageNavigator.site.scope"),
-          t("messageNavigator.site.enabled"),
-          t("messageNavigator.site.actions")
-        ], messageNavigatorSiteRows(redraw), "message-navigator-list")
+        target
+      ),
+      el("button", {
+        class: "button button-secondary message-navigator-effect-preview-action",
+        type: "button",
+        onclick: () => playMessageNavigatorEffectPreview(target, mode)
+      },
+        svgIcon("preview"),
+        el("span", {}, t("messageNavigator.preview.play"))
       )
     );
+  }
+
+  function playMessageNavigatorEffectPreview(target, mode) {
+    if (!target) return;
+    const normalized = normalizeMessageNavigatorEffectMode(mode || state.options.messageNavigatorEffectMode || "border");
+    const classes = MESSAGE_NAVIGATOR_EFFECT_MODES.map((item) => `chatclub-message-nav-effect-${item}`);
+    clearTimeout(target.__chatclubMessageNavigatorPreviewTimer);
+    target.classList.remove(...classes);
+    if (normalized === "none") return;
+    const effectClass = `chatclub-message-nav-effect-${normalized}`;
+    try { void target.offsetWidth; } catch {}
+    target.classList.add(effectClass);
+    target.__chatclubMessageNavigatorPreviewTimer = setTimeout(() => {
+      target.classList.remove(effectClass);
+    }, normalized === "border" ? 1800 : 1500);
   }
 
   function messageNavigatorEffectOptions() {

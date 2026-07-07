@@ -327,9 +327,73 @@ export function createWorkspaceController(ctx = {}) {
     });
   }
 
+  function frameLoadingSet() {
+    return new Set(state.frameLoadingInstanceIds || []);
+  }
+
+  function setFrameLoading(iframeOrInstanceId, loading) {
+    const instanceId = typeof iframeOrInstanceId === "string"
+      ? iframeOrInstanceId
+      : String(iframeOrInstanceId?.dataset?.instanceId || "");
+    if (!instanceId) return;
+    const set = frameLoadingSet();
+    const had = set.has(instanceId);
+    if (loading) set.add(instanceId);
+    else set.delete(instanceId);
+    if (had === set.has(instanceId)) return;
+    state.frameLoadingInstanceIds = Array.from(set);
+    syncHeaderForFrameInstance(instanceId);
+  }
+
+  function frameIsLoading(instanceId) {
+    return frameLoadingSet().has(String(instanceId || ""));
+  }
+
+  function activeFrameIsLoading(group) {
+    return frameIsLoading(activeChatForGroup(group)?.instanceId);
+  }
+
+  function syncHeaderForFrameInstance(instanceId) {
+    const location = chatLocationForInstance(instanceId);
+    const group = location?.group;
+    if (!group) return;
+    const card = document.querySelector(`.chat-card[data-group-id="${group.id}"]`);
+    if (card) syncTabGroupHeaderControls(card, group);
+  }
+
+  function beginFrameLoading(iframe, pending = false) {
+    if (!(iframe instanceof HTMLIFrameElement)) return false;
+    if (pending) iframe.dataset.frameLoadPending = "1";
+    else delete iframe.dataset.frameLoadPending;
+    setFrameLoading(iframe, true);
+    return true;
+  }
+
+  function completeFrameLoading(iframe) {
+    if (!(iframe instanceof HTMLIFrameElement)) return;
+    if (iframe.dataset.frameLoadPending === "1") return;
+    setFrameLoading(iframe, false);
+  }
+
+  function assignFrameSrc(iframe, url) {
+    if (!(iframe instanceof HTMLIFrameElement) || !url) return false;
+    beginFrameLoading(iframe);
+    iframe.src = url;
+    return true;
+  }
+
   function setFrameSrcAfterPrepare(iframe, url, options = {}) {
+    beginFrameLoading(iframe, true);
+    let assigned = false;
     const assign = () => {
-      if (!iframe?.isConnected || (!options.replace && iframe.getAttribute("src"))) return;
+      if (assigned || !iframe?.isConnected) return;
+      if (!options.replace && iframe.getAttribute("src")) {
+        delete iframe.dataset.frameLoadPending;
+        completeFrameLoading(iframe);
+        return;
+      }
+      assigned = true;
+      delete iframe.dataset.frameLoadPending;
       iframe.setAttribute("src", url);
     };
     const fallback = setTimeout(assign, 1800);
@@ -719,6 +783,7 @@ export function createWorkspaceController(ctx = {}) {
   function syncTabGroupHeaderControls(card, group) {
     card.classList.add("tab-group-buttons-custom");
     card.classList.remove("tab-group-buttons-hidden", "tab-group-buttons-pinned");
+    card.classList.toggle("frame-loading", activeFrameIsLoading(group));
     for (const item of TAB_GROUP_HEADER_BUTTONS) {
       card.dataset[`button${item.id.charAt(0).toUpperCase()}${item.id.slice(1)}`] = tabGroupButtonPlacement()[item.id] || "pinned";
     }
@@ -1364,16 +1429,21 @@ export function createWorkspaceController(ctx = {}) {
 
   function renderChatFrame(group, chat) {
     const app = appById(chat.appId);
+    const initialHref = openableTabUrl(chat.initialHref || "");
+    if (initialHref) delete chat.initialHref;
+    const dataset = { instanceId: chat.instanceId, appId: app.id };
+    if (initialHref) dataset.currentHref = initialHref;
     const attrs = {
       class: `chat-frame ${chat.instanceId === (state.activeTabs[group.id] || group.chatApps[0]?.instanceId) ? "active" : ""}`,
-      dataset: { instanceId: chat.instanceId, appId: app.id },
+      dataset,
       allow: chatFrameAllow(),
       referrerpolicy: "no-referrer",
-      name: chatFrameName(app)
+      name: chatFrameName(app),
+      onload: (event) => completeFrameLoading(event.currentTarget)
     };
     if (chatFrameNeedsSandbox(app)) attrs.sandbox = chatFrameSandbox(app);
     const iframe = el("iframe", attrs);
-    setFrameSrcAfterPrepare(iframe, app.url);
+    setFrameSrcAfterPrepare(iframe, initialHref || app.url);
     return iframe;
   }
 
@@ -1405,8 +1475,26 @@ export function createWorkspaceController(ctx = {}) {
     return compactIconButton(t("topbar.newChat"), "edit", () => startNewChatInActiveTab(group), "", shortcutTooltip(t("topbar.newChat"), "newChat"), "left", "workspace.group.newChat");
   }
 
+  function applyRefreshPageLoadingState(button, loading) {
+    button.classList.toggle("refresh-page-loading", loading);
+    button.toggleAttribute("aria-busy", loading);
+    return button;
+  }
+
   function renderRefreshPageButton(group) {
-    return compactIconButton(t("chat.refreshPage"), "reload", () => refreshCurrentPage(activeChatForGroup(group)), "", shortcutTooltip(t("chat.refreshPage"), "refreshPage"), "left", "workspace.group.refreshPage");
+    const loading = activeFrameIsLoading(group);
+    return applyRefreshPageLoadingState(
+      compactIconButton(t("chat.refreshPage"), "reload", () => refreshCurrentPage(activeChatForGroup(group)), loading ? "refresh-page-loading" : "", shortcutTooltip(t("chat.refreshPage"), "refreshPage"), "left", "workspace.group.refreshPage"),
+      loading
+    );
+  }
+
+  function renderRefreshPageMenuButton(group) {
+    const button = menuButton(t("chat.refreshPage"), "reload", () => {
+      refreshCurrentPage(activeChatForGroup(group));
+      closePopovers();
+    }, "secondary", false, shortcutTooltip(t("chat.refreshPage"), "refreshPage"), "left", "workspace.group.refreshPage");
+    return applyRefreshPageLoadingState(button, activeFrameIsLoading(group));
   }
 
   function renderHomeButton(group) {
@@ -1455,8 +1543,10 @@ export function createWorkspaceController(ctx = {}) {
 
   function renderChatGroup(group, index) {
     const isFullscreen = state.fullscreenGroupId === group.id;
+    const frames = group.chatApps.map((chat) => renderChatFrame(group, chat));
+    const isFrameLoading = activeFrameIsLoading(group);
     return el("section", {
-      class: `chat-card tab-group-buttons-custom ${isFullscreen ? "fullscreen" : ""}`.trim(),
+      class: `chat-card tab-group-buttons-custom ${isFullscreen ? "fullscreen" : ""} ${isFrameLoading ? "frame-loading" : ""}`.trim(),
       dataset: { groupId: group.id },
       style: { order: String(index + 1) },
       ondragover: (event) => {
@@ -1493,7 +1583,7 @@ export function createWorkspaceController(ctx = {}) {
         el("div", { class: "chat-actions" }, renderChatActionButtons(group))
       ),
       el("div", { class: "chat-frame-wrap" },
-        group.chatApps.map((chat) => renderChatFrame(group, chat))
+        frames
       )
     );
   }
@@ -1590,8 +1680,7 @@ export function createWorkspaceController(ctx = {}) {
     const instanceId = record.iframe.dataset.instanceId || "";
     if (record.group && instanceId) activateChatTab(record.group, instanceId);
     record.iframe.dataset.currentHref = href;
-    record.iframe.src = href;
-    return true;
+    return assignFrameSrc(record.iframe, href);
   }
 
   function refreshCurrentPage(chat) {
@@ -1602,8 +1691,7 @@ export function createWorkspaceController(ctx = {}) {
       || openableTabUrl(appById(chat?.appId).url);
     if (!href) return false;
     iframe.dataset.currentHref = href;
-    iframe.src = href;
-    return true;
+    return assignFrameSrc(iframe, href);
   }
 
   function reloadChat(chat) {
@@ -1613,8 +1701,7 @@ export function createWorkspaceController(ctx = {}) {
     delete iframe.dataset.currentHref;
     delete iframe.dataset.currentThreadHref;
     delete iframe.dataset.currentTitle;
-    iframe.src = app.url;
-    return true;
+    return assignFrameSrc(iframe, app.url);
   }
 
   async function startNewChatInFrame(iframe, fallbackChat = null) {
@@ -1627,8 +1714,7 @@ export function createWorkspaceController(ctx = {}) {
     delete iframe.dataset.currentHref;
     delete iframe.dataset.currentThreadHref;
     delete iframe.dataset.currentTitle;
-    iframe.src = app.url;
-    return true;
+    return assignFrameSrc(iframe, app.url);
   }
 
   async function startNewChatInActiveTab(group) {
@@ -2379,14 +2465,12 @@ export function createWorkspaceController(ctx = {}) {
   }
 
   function activatePocketTemporaryLayout(restoreGroups = [], batchId = "") {
-    const loads = [];
     const activeTabs = {};
     const groups = restoreGroups.map((restoreGroup) => {
       const group = { id: createGroupId(), temporary: true, pocketBatchId: batchId, chatApps: [] };
       for (const source of restoreGroup.sources) {
         const instanceId = createFrameId();
-        group.chatApps.push({ appId: source.app.id, instanceId });
-        loads.push({ instanceId, href: source.href });
+        group.chatApps.push({ appId: source.app.id, instanceId, initialHref: source.href });
       }
       return group;
     }).filter((group) => group.chatApps.length);
@@ -2403,12 +2487,6 @@ export function createWorkspaceController(ctx = {}) {
     state.groups = groups;
     state.activeTabs = activeTabs;
     render();
-    for (const item of loads) {
-      const iframe = document.querySelector(`iframe[data-instance-id="${item.instanceId}"]`);
-      if (!iframe) continue;
-      iframe.dataset.currentHref = item.href;
-      iframe.src = item.href;
-    }
     return true;
   }
 
@@ -2691,10 +2769,7 @@ export function createWorkspaceController(ctx = {}) {
         await startNewChatInActiveTab(group);
         closePopovers();
       }, "secondary", false, shortcutTooltip(t("topbar.newChat"), "newChat"), "left", "workspace.group.newChat"),
-      refreshPage: () => menuButton(t("chat.refreshPage"), "reload", () => {
-        refreshCurrentPage(activeChatForGroup(group));
-        closePopovers();
-      }, "secondary", false, shortcutTooltip(t("chat.refreshPage"), "refreshPage"), "left", "workspace.group.refreshPage"),
+      refreshPage: () => renderRefreshPageMenuButton(group),
       reload: () => menuButton(t("chat.home"), "home", () => {
         reloadChat(activeChatForGroup(group));
         closePopovers();

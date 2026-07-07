@@ -1,7 +1,7 @@
 import { DEFAULT_TOPBAR_LAYOUT } from "./topbar.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-07-07｜23:26:19」";
+export const APP_VERSION = "「2026-07-08｜01:11:09」";
 export const BASELINE_MOD_VERSION = "2.4.0.14";
 export const HOMEPAGE_URL = "https://chatclub.local/";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
@@ -261,6 +261,7 @@ export const DEFAULT_OPTIONS = {
   language: "system",
   primaryColor: "#1f7a5f",
   primaryColorCustom: false,
+  frameLoadingOverlayOpacity: 82,
   pocketCardSize: DEFAULT_POCKET_CARD_SIZE,
   tooltipDisabledIds: [],
   tabGroupButtonsMode: "pinned",

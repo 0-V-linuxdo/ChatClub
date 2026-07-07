@@ -387,6 +387,7 @@ const state = {
   shortcutConfig: null,
   groups: [],
   activeTabs: {},
+  frameLoadingInstanceIds: [],
   temporaryLayoutPreset: null,
   fullscreenGroupId: null,
   promptText: "",
@@ -416,6 +417,7 @@ const state = {
   summaryCollectorEditingId: "",
   summaryCollectorDragId: "",
   messageNavigatorSiteExpandedId: "",
+  messageNavigatorSettingsTab: "effects",
   settingsPromptTemplateDragId: "",
   settingsPromptLibraryDragId: "",
   settingsProfileDragId: "",
@@ -811,9 +813,12 @@ function applyTheme() {
   else delete document.documentElement.dataset.theme;
   const primaryColor = normalizePrimaryColor(state.options?.primaryColor);
   const isDark = mode === "dark" || (mode === "system" && window.matchMedia?.("(prefers-color-scheme: dark)")?.matches);
+  const rawFrameLoadingOverlayOpacity = Number(state.options?.frameLoadingOverlayOpacity);
+  const frameLoadingOverlayOpacity = Math.max(0, Math.min(100, Math.round(Number.isFinite(rawFrameLoadingOverlayOpacity) ? rawFrameLoadingOverlayOpacity : 82))) / 100;
   document.documentElement.style.setProperty("--primary", primaryColor);
   document.documentElement.style.setProperty("--primary-2", `color-mix(in srgb, ${primaryColor} ${isDark ? "22%" : "14%"}, ${isDark ? "#020617" : "#ffffff"})`);
   document.documentElement.style.setProperty("--summary-panel-link", primaryColor);
+  document.documentElement.style.setProperty("--frame-loading-overlay-opacity", String(frameLoadingOverlayOpacity));
 }
 
 async function notifyConfigReload() {

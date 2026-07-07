@@ -4,7 +4,7 @@
    * Adapted from Notion-style-AI-Navigator-main by 0-V-linuxdo under the MIT License.
    */
   const GLOBAL_NAME = "__CHATCLUB_MESSAGE_NAVIGATOR__";
-  const VERSION = "2026.07.07.9";
+  const VERSION = "2026.07.08.5";
   if (window[GLOBAL_NAME]?.version === VERSION) return;
   try { window[GLOBAL_NAME]?.destroy?.(); } catch {}
 
@@ -13,7 +13,6 @@
   const EFFECT_MODES = new Set(["none", "border", "pulse", "fade", "jiggle"]);
   const ADAPTERS = Object.create(null);
 
-  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
   const normalize = (value) => String(value || "")
     .replace(/\u00a0/g, " ")
     .replace(/\r\n?/g, "\n")
@@ -804,6 +803,343 @@
     ].join(","), element).find(visible) || element;
   }
 
+  const STRICT_MESSAGE_ROOT_SELECTOR = [
+    "[data-nsan-owner='nsan']",
+    "[data-nsan-article='1']",
+    "article[data-testid^='conversation-turn-']",
+    "article[data-testid*='conversation-turn']",
+    "article[data-turn-id]",
+    "article[data-turn]",
+    "[data-message-author-role]",
+    "ms-chat-turn[id^='turn-']",
+    "ms-chat-turn",
+    "user-query",
+    "model-response",
+    ".user-query",
+    ".model-response",
+    ".chat_bubble[role='article']",
+    ".chat_bubble",
+    ".ds-message",
+    "[data-testid='user-message']",
+    "[data-testid='assistant-message']",
+    "[class*='ChatMessage_chatMessage']",
+    "[data-turn-role]",
+    ".chat-turn-container",
+    "[role='article']",
+    "[role='user']",
+    "[role='assistant']"
+  ].join(",");
+
+  const LOOSE_MESSAGE_ROOT_SELECTOR = [
+    STRICT_MESSAGE_ROOT_SELECTOR,
+    "[class*='message' i]",
+    "[class*='response' i]",
+    "[class*='turn' i]",
+    "[class*='bubble' i]"
+  ].join(",");
+
+  const USER_EFFECT_BODY_SELECTOR = [
+    ".user-message-bubble-color",
+    "[class*='user-message-bubble' i]",
+    "[class*='rightSideMessageBubble']",
+    "[class*='Message_rightSideMessageBubble']",
+    "[class*='bubble-color' i]",
+    ".user-query-bubble-with-background",
+    ".query-text",
+    ".query-content",
+    ".fbb737a4",
+    ".rounded-3xl",
+    ".chat_bubble_content",
+    "[data-testid='user-message']"
+  ].join(",");
+
+  const ASSISTANT_EFFECT_BODY_SELECTOR = [
+    "[data-message-part-type='answer'].markdown-container-style",
+    ".markdown-container-style",
+    ".font-claude-response",
+    ".font-claude-response-body",
+    ".model-response-text .markdown",
+    "message-content .markdown",
+    ".turn-content",
+    "[class*='turn-content']",
+    ".ds-markdown:not(.ds-think-content)",
+    ".chat_bubble_content",
+    "[class*='Message_messageTextContainer']",
+    "[class*='Message_leftSideMessageBubble']",
+    ".assistant-message-bubble-color",
+    ".markdown.prose",
+    ".markdown",
+    ".prose"
+  ].join(",");
+
+  const MESSAGE_ROLE_MARKER_SELECTOR = [
+    "[data-message-author-role]",
+    "[data-author]",
+    "[data-role]",
+    "[data-turn-role]",
+    "[data-testid='user-message']",
+    "[data-testid='assistant-message']",
+    "[role='user']",
+    "[role='assistant']",
+    "user-query",
+    "model-response",
+    ".user-query",
+    ".model-response",
+    ".user-message-bubble-color",
+    ".assistant-message-bubble-color",
+    "[class*='rightSideMessageBubble']",
+    "[class*='leftSideMessageBubble']",
+    ".fbb737a4",
+    ".ds-markdown"
+  ].join(",");
+
+  const COMPOSER_CHROME_SELECTOR = [
+    "form",
+    "textarea",
+    "input:not([type='hidden'])",
+    "[contenteditable='true']",
+    "[role='textbox']",
+    "[aria-label*='Chat with' i]",
+    "[aria-label*='Ask anything' i]",
+    "textarea[aria-label*='Message' i]",
+    "input[aria-label*='Message' i]",
+    "[contenteditable='true'][aria-label*='Message' i]",
+    "[role='textbox'][aria-label*='Message' i]",
+    "[placeholder*='Ask' i]",
+    "[placeholder*='Message' i]",
+    "[class*='composer' i]",
+    "[data-testid*='composer' i]"
+  ].join(",");
+
+  function normalizeRoleName(value) {
+    const text = String(value || "").toLowerCase();
+    if (/\b(user|human|you|query|prompt)\b/.test(text)) return "user";
+    if (/\b(assistant|bot|model|response|answer|tool)\b/.test(text)) return "assistant";
+    return "";
+  }
+
+  function directMessageRole(element) {
+    if (!element || element.nodeType !== 1) return "";
+    const attrs = [
+      "data-message-author-role",
+      "data-author",
+      "data-role",
+      "data-turn-role",
+      "data-testid",
+      "aria-label"
+    ];
+    for (const attr of attrs) {
+      const role = normalizeRoleName(element.getAttribute?.(attr));
+      if (role) return role;
+    }
+    const tag = String(element.tagName || "").toLowerCase();
+    if (tag === "user-query") return "user";
+    if (tag === "model-response") return "assistant";
+    const classText = String(element.className || "");
+    if (/(^|\s)(user-query|user-message-bubble-color|fbb737a4)(\s|$)|rightSideMessageBubble/i.test(classText)) return "user";
+    if (/(^|\s)(model-response|assistant-message-bubble-color|ds-markdown)(\s|$)|leftSideMessageBubble|font-claude-response/i.test(classText)) return "assistant";
+    return "";
+  }
+
+  function roleMarkersWithin(element) {
+    if (!element || element.nodeType !== 1) return [];
+    const markers = [];
+    if (safeMatches(element, MESSAGE_ROLE_MARKER_SELECTOR)) markers.push(element);
+    markers.push(...safeQsa(MESSAGE_ROLE_MARKER_SELECTOR, element));
+    return uniqueElements(markers).filter((node) => visible(node) && !safeClosest(node, `#${ROOT_ID}`));
+  }
+
+  function containsConflictingRole(element, role) {
+    const wanted = role === "user" ? "user" : role ? "assistant" : "";
+    if (!wanted) return false;
+    return roleMarkersWithin(element).some((node) => {
+      const markerRole = directMessageRole(node);
+      return markerRole && markerRole !== wanted;
+    });
+  }
+
+  function containsComposerChrome(element) {
+    if (!element || element.nodeType !== 1) return false;
+    const controls = safeQsa(COMPOSER_CHROME_SELECTOR, element)
+      .filter((node) => node !== element && visible(node) && !safeClosest(node, `#${ROOT_ID}`));
+    return controls.length > 0;
+  }
+
+  function effectRect(element) {
+    try {
+      const rect = element?.getBoundingClientRect?.();
+      return rect && rect.width > 0 && rect.height > 0 ? rect : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function invalidEffectTarget(element, config = {}) {
+    if (!element || element.nodeType !== 1 || !visible(element)) return true;
+    if (safeClosest(element, `#${ROOT_ID}`)) return true;
+    if (safeMatches(element, [
+      "html",
+      "body",
+      "main",
+      "nav",
+      "aside",
+      "header",
+      "footer",
+      "form",
+      "button",
+      "input",
+      "textarea",
+      "select",
+      "svg",
+      "img",
+      "canvas",
+      "video",
+      "menu",
+      "[role='toolbar']",
+      "[role='menu']",
+      "[aria-hidden='true']",
+      "[hidden]"
+    ].join(","))) return true;
+    if (safeClosest(element, [
+      "nav",
+      "aside",
+      "header",
+      "footer",
+      "form",
+      "[role='toolbar']",
+      "[role='menu']",
+      "[class*='toolbar' i]",
+      "[class*='action' i]",
+      "[class*='actions' i]",
+      "[class*='copy' i]",
+      "[data-testid*='action' i]"
+    ].join(","))) return true;
+    const cleanupSelectors = Array.isArray(config.textCleanupSelectors) ? config.textCleanupSelectors : [];
+    const hasText = usefulTurnText(cloneText(element, cleanupSelectors), 80000);
+    const hasMedia = Boolean(safeQsa("pre,code,blockquote,ul,ol,table,img,video,canvas,svg", element).find(visible));
+    return !hasText && !hasMedia;
+  }
+
+  function containsMultipleMessageRoots(element) {
+    const roots = safeQsa(STRICT_MESSAGE_ROOT_SELECTOR, element)
+      .filter((node) => node !== element && visible(node) && !safeClosest(node, `#${ROOT_ID}`));
+    const directRoots = uniqueElements(roots).filter((node) => !safeQsa(STRICT_MESSAGE_ROOT_SELECTOR, node)
+      .some((child) => child !== node && roots.includes(child)));
+    return directRoots.length > 1;
+  }
+
+  function blockedEffectBoundary(element, role = "") {
+    if (!element || element.nodeType !== 1) return true;
+    if (containsConflictingRole(element, role)) return true;
+    if (containsMultipleMessageRoots(element)) return true;
+    if (containsComposerChrome(element)) return true;
+    return false;
+  }
+
+  function effectTargetTooBroad(element) {
+    if (!element || safeMatches(element, STRICT_MESSAGE_ROOT_SELECTOR)) return false;
+    if (containsMultipleMessageRoots(element)) return true;
+    const rect = effectRect(element);
+    const root = pageRoot();
+    const rootRect = effectRect(root);
+    if (!rect || !rootRect) return false;
+    return rect.width >= rootRect.width * 0.92 && rect.height >= Math.max(500, rootRect.height * 0.72);
+  }
+
+  function usableEffectTarget(element, config = {}, options = {}) {
+    if (invalidEffectTarget(element, config)) return false;
+    if (!options.allowBoundaryCrossing && blockedEffectBoundary(element, options.role || "")) return false;
+    if (!options.allowBroad && effectTargetTooBroad(element)) return false;
+    return true;
+  }
+
+  function effectMatches(root, selector, config = {}, options = {}) {
+    const candidates = [];
+    if (safeMatches(root, selector)) candidates.push(root);
+    candidates.push(...safeQsa(selector, root));
+    const seen = new Set();
+    const filtered = [];
+    for (const element of candidates) {
+      if (!element || seen.has(element) || !usableEffectTarget(element, config, options)) continue;
+      seen.add(element);
+      filtered.push(element);
+    }
+    if (options.prefer === "last") return filtered[filtered.length - 1] || null;
+    filtered.sort((a, b) => {
+      const area = elementArea(a) - elementArea(b);
+      return options.prefer === "largest" ? -area || elementOrder(a, b) : area || elementOrder(a, b);
+    });
+    return filtered[0] || null;
+  }
+
+  function closestEffectMatch(seed, selector, config = {}, options = {}) {
+    for (let node = seed; node && node !== document.documentElement; node = node.parentElement) {
+      if (safeMatches(node, selector) && usableEffectTarget(node, config, options)) return node;
+      if (safeMatches(node, "main,body")) break;
+    }
+    return null;
+  }
+
+  function messageRootForEffect(element, target, config = {}, options = {}) {
+    const seeds = [target, element].filter(Boolean);
+    for (const seed of seeds) {
+      const strict = closestEffectMatch(seed, STRICT_MESSAGE_ROOT_SELECTOR, config, { ...options, allowBroad: true });
+      if (strict && !blockedEffectBoundary(strict, options.role || "")) return strict;
+    }
+    for (const seed of seeds) {
+      const loose = closestEffectMatch(seed, LOOSE_MESSAGE_ROOT_SELECTOR, config, options);
+      if (loose && !blockedEffectBoundary(loose, options.role || "")) return loose;
+    }
+    return seeds.find((seed) => usableEffectTarget(seed, config, options)) || element || target || null;
+  }
+
+  function roleRootForEffect(element, target, selector, config = {}, role = "") {
+    const options = { allowBroad: true, role };
+    for (const seed of [target, element].filter(Boolean)) {
+      const closest = closestEffectMatch(seed, selector, config, options);
+      if (closest) return closest;
+    }
+    for (const seed of [element, target].filter(Boolean)) {
+      const match = effectMatches(seed, selector, config, { ...options, prefer: "largest" });
+      if (match) return match;
+    }
+    return null;
+  }
+
+  function fallbackEffectTarget(element, target, config = {}, role = "assistant") {
+    const selector = role === "user" ? USER_EFFECT_BODY_SELECTOR : ASSISTANT_EFFECT_BODY_SELECTOR;
+    const prefer = role === "user" ? "" : "largest";
+    for (const seed of [target, element].filter(Boolean)) {
+      const match = effectMatches(seed, selector, config, { role, prefer });
+      if (match) return match;
+    }
+    return [target, element].filter(Boolean)
+      .find((seed) => usableEffectTarget(seed, config, { role, allowBroad: false })) || null;
+  }
+
+  function resolveEffectTarget(item = {}, config = {}, adapter = null) {
+    const role = item.role === "user" || item.role === "thinking" ? item.role : "assistant";
+    const effectRole = role === "user" ? "user" : "assistant";
+    const element = item.element || item.target;
+    const target = item.target || element;
+    const explicit = item.effectTarget
+      || adapter?.effectTarget?.(element, config, { ...item, role, target, effectRole })
+      || null;
+    if (usableEffectTarget(explicit, config, { allowBroad: true, role: effectRole })) return explicit;
+    const root = messageRootForEffect(element, target, config, { allowBroad: role !== "user", role: effectRole });
+    if (role === "user") {
+      return effectMatches(root || element || target, USER_EFFECT_BODY_SELECTOR, config, { role: effectRole })
+        || (usableEffectTarget(target, config, { role: effectRole }) ? target : null)
+        || (usableEffectTarget(root, config, { role: effectRole }) ? root : null)
+        || fallbackEffectTarget(element, target, config, effectRole);
+    }
+    const rootUsable = usableEffectTarget(root, config, { allowBroad: true, role: effectRole }) && !effectTargetTooBroad(root);
+    return (rootUsable ? root : null)
+      || effectMatches(root || element || target, ASSISTANT_EFFECT_BODY_SELECTOR, config, { prefer: "largest", role: effectRole })
+      || (usableEffectTarget(target, config, { allowBroad: true, role: effectRole }) ? target : null)
+      || fallbackEffectTarget(element, target, config, effectRole);
+  }
+
   function cleanKey(item) {
     return `${item.role}\n${normalize(item.text).toLowerCase().slice(0, 260)}`;
   }
@@ -879,9 +1215,11 @@
       const target = adapter.target?.(element, config) || genericTarget(element);
       const textSource = adapter.summaryElement?.(element, config) || target || element;
       const rawText = adapter.text?.(element, config, { role, target, textSource }) || cloneText(textSource, cleanupSelectors) || cloneText(element, cleanupSelectors);
+      const effectTarget = resolveEffectTarget({ element, target, role, textSource }, config, adapter);
       return {
         element,
         target,
+        effectTarget,
         role,
         text: compactText(rawText, config.summaryMaxChars)
       };
@@ -901,7 +1239,12 @@
       if (/assistant|tool/i.test(role)) return "assistant";
       return genericRole(element);
     },
-    target(element) {
+    target(element, config = {}) {
+      const role = this.role(element);
+      const roleRoot = role === "user" || role === "assistant"
+        ? roleRootForEffect(element, element, `[data-message-author-role='${role}']`, config, role)
+        : null;
+      const root = roleRoot || element;
       return safeQsa([
         ".user-message-bubble-color",
         ".assistant-message-bubble-color",
@@ -909,7 +1252,38 @@
         ".markdown.prose",
         ".markdown",
         "[data-message-author-role]"
-      ].join(","), element).find(visible) || element;
+      ].join(","), root).find(visible) || root || element;
+    },
+    effectTarget(element, config, context = {}) {
+      const effectRole = context.effectRole || (context.role === "user" ? "user" : "assistant");
+      const roleRoot = roleRootForEffect(
+        element,
+        context.target,
+        `[data-message-author-role='${effectRole}']`,
+        config,
+        effectRole
+      );
+      const root = roleRoot || messageRootForEffect(element, context.target, config, { allowBroad: true, role: effectRole });
+      if (effectRole === "user") {
+        return effectMatches(root || element, [
+          ".user-message-bubble-color",
+          "[class*='user-message-bubble' i]",
+          "[class*='message-bubble' i]",
+          "[class*='bubble-color' i]"
+        ].join(","), config, { role: effectRole }) || root || context.target || element;
+      }
+      return roleRoot
+        || closestEffectMatch(context.target || element, [
+          "article[data-testid^='conversation-turn-']",
+          "article[data-testid*='conversation-turn']",
+          "article[data-turn-id]",
+          "article[data-turn]",
+          "[data-message-author-role='assistant']"
+        ].join(","), config, { allowBroad: true, role: effectRole })
+        || root
+        || effectMatches(element, ".markdown.prose,.markdown", config, { prefer: "largest", role: effectRole })
+        || context.target
+        || element;
     },
     collect(config) {
       const base = adapterBaseItems(config, this).filter((item) => !safeClosest(item.element, "aside"));
@@ -927,6 +1301,18 @@
     target(element) {
       return safeQsa(".font-claude-response-body, .font-claude-response, [data-testid='user-message'], .standard-markdown", element).find(visible) || element;
     },
+    effectTarget(element, config, context = {}) {
+      if (context.role === "user") {
+        return closestEffectMatch(context.target || element, ".bg-bg-300,.group.relative.inline-flex,[data-testid='user-message']", config)
+          || effectMatches(element, "[data-testid='user-message']", config)
+          || context.target
+          || element;
+      }
+      return closestEffectMatch(context.target || element, ".font-claude-response,.font-claude-response-body,[data-testid='assistant-message']", config, { allowBroad: true })
+        || effectMatches(element, ".font-claude-response,.font-claude-response-body,.standard-markdown", config, { prefer: "largest" })
+        || context.target
+        || element;
+    },
     collect(config) {
       return adapterBaseItems(config, this);
     }
@@ -941,6 +1327,19 @@
     },
     target(element) {
       return safeQsa(".markdown, [class*='message' i], [role='article']", element).find(visible) || element;
+    },
+    effectTarget(element, config, context = {}) {
+      const root = messageRootForEffect(element, context.target, config, { allowBroad: true });
+      if (context.role === "user") {
+        return effectMatches(root || element, USER_EFFECT_BODY_SELECTOR, config)
+          || context.target
+          || root
+          || element;
+      }
+      return effectMatches(root || element, ".markdown,[class*='message' i],[role='article']", config, { prefer: "largest" })
+        || root
+        || context.target
+        || element;
     },
     collect(config) {
       const fallback = notionDomFallbackItems(config);
@@ -959,6 +1358,19 @@
     },
     target(element) {
       return safeQsa(".model-response-text .markdown, message-content .markdown, .markdown, .query-text, .query-content, .user-query-bubble-with-background", element).find(visible) || element;
+    },
+    effectTarget(element, config, context = {}) {
+      const root = messageRootForEffect(element, context.target, config, { allowBroad: true });
+      if (context.role === "user") {
+        return effectMatches(root || element, ".user-query-bubble-with-background,.query-text,.query-content,.user-query-container", config)
+          || context.target
+          || root
+          || element;
+      }
+      return effectMatches(root || element, ".model-response-text .markdown,message-content .markdown,.model-response-text,message-content,.response-container-content,.response-container,structured-content-container", config, { prefer: "largest" })
+        || root
+        || context.target
+        || element;
     },
     text(element, config, context = {}) {
       const cleanupSelectors = Array.isArray(config.textCleanupSelectors) ? config.textCleanupSelectors : [];
@@ -979,6 +1391,20 @@
     target(element) {
       return safeQsa(".ds-markdown:not(.ds-think-content), .fbb737a4, [class*='markdown']", element).find(visible) || element;
     },
+    effectTarget(element, config, context = {}) {
+      const root = messageRootForEffect(element, context.target, config, { allowBroad: true });
+      if (context.role === "user") {
+        return effectMatches(root || element, ".fbb737a4", config, { prefer: "largest" })
+          || context.target
+          || root
+          || element;
+      }
+      return effectMatches(root || element, ".ds-markdown:not(.ds-think-content)", config, { prefer: "last" })
+        || effectMatches(root || element, ".ds-markdown,[class*='markdown']", config, { prefer: "largest" })
+        || context.target
+        || root
+        || element;
+    },
     summaryElement(element) {
       return safeQsa(".ds-markdown:not(.ds-think-content), .fbb737a4", element).find(visible) || element;
     },
@@ -996,6 +1422,14 @@
     },
     target(element) {
       return safeQsa(".chat_bubble_content, .markdown, [class*='message' i], [role='article']", element).find(visible) || element;
+    },
+    effectTarget(element, config, context = {}) {
+      const root = messageRootForEffect(element, context.target, config, { allowBroad: true });
+      return effectMatches(root || element, ".chat_bubble_content,.markdown", config, { prefer: "largest" })
+        || closestEffectMatch(context.target || element, ".chat_bubble[role='article'],.chat_bubble,[role='article']", config, { allowBroad: true })
+        || context.target
+        || root
+        || element;
     },
     collect(config) {
       const fromDom = kagiDomFallbackItems(config);
@@ -1035,6 +1469,19 @@
     target(element) {
       return safeQsa(".markdown, [class*='message' i], [class*='Message'], [class*='response' i], article, [role='article']", element).find(visible) || element;
     },
+    effectTarget(element, config, context = {}) {
+      const root = messageRootForEffect(element, context.target, config, { allowBroad: true });
+      if (context.role === "user") {
+        return effectMatches(root || element, USER_EFFECT_BODY_SELECTOR, config)
+          || root
+          || context.target
+          || element;
+      }
+      return root
+        || effectMatches(element, ".markdown,[class*='message' i],[class*='response' i],article,[role='article']", config, { prefer: "largest" })
+        || context.target
+        || element;
+    },
     text(element, config, context = {}) {
       return grokTextOf(context.textSource || context.target || element, config) || grokTextOf(element, config);
     },
@@ -1056,6 +1503,19 @@
     target(element) {
       return safeQsa("[class*='Message_messageTextContainer'], [class*='Message_leftSideMessageBubble'], [class*='Message_rightSideMessageBubble'], [class*='messageText']", element).find(visible) || element;
     },
+    effectTarget(element, config, context = {}) {
+      const root = messageRootForEffect(element, context.target, config, { allowBroad: true });
+      if (context.role === "user") {
+        return effectMatches(root || element, "[class*='Message_rightSideMessageBubble'],[class*='rightSideMessageBubble'],[class*='messageText']", config)
+          || context.target
+          || root
+          || element;
+      }
+      return effectMatches(root || element, "[class*='Message_leftSideMessageBubble'],[class*='Message_messageTextContainer'],[class*='messageText']", config, { prefer: "largest" })
+        || root
+        || context.target
+        || element;
+    },
     collect(config) {
       return adapterBaseItems(config, this);
     }
@@ -1071,6 +1531,13 @@
     },
     target(element) {
       return safeQsa(".turn-content, [class*='turn-content'], .markdown, [class*='markdown']", element).find(visible) || element;
+    },
+    effectTarget(element, config, context = {}) {
+      const root = messageRootForEffect(element, context.target, config, { allowBroad: true });
+      return effectMatches(root || element, ".turn-content,[class*='turn-content'],.markdown,[class*='markdown']", config, { prefer: context.role === "user" ? "" : "largest" })
+        || root
+        || context.target
+        || element;
     },
     collect(config) {
       return adapterBaseItems(config, this);
@@ -1088,6 +1555,19 @@
     target(element) {
       return safeQsa("[data-message-part-type='answer'].markdown-container-style, .markdown-container-style, .rounded-3xl, .break-words", element).find(visible) || element;
     },
+    effectTarget(element, config, context = {}) {
+      const root = messageRootForEffect(element, context.target, config, { allowBroad: true });
+      if (context.role === "user") {
+        return effectMatches(root || element, ".rounded-3xl,.break-words", config)
+          || context.target
+          || root
+          || element;
+      }
+      return effectMatches(root || element, "[data-message-part-type='answer'].markdown-container-style,.markdown-container-style,.break-words", config, { prefer: "largest" })
+        || context.target
+        || root
+        || element;
+    },
     collect(config) {
       return adapterBaseItems(config, this);
     }
@@ -1095,6 +1575,9 @@
 
   function css(primaryColor = "#1f7a5f") {
     return `
+      :root {
+        --cc-message-nav-accent: ${primaryColor};
+      }
       #${ROOT_ID} {
         --cc-message-nav-accent: ${primaryColor};
         --cc-message-nav-bg: color-mix(in srgb, Canvas 92%, transparent);
@@ -1111,6 +1594,7 @@
         gap: 8px;
         font: 12px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         color: var(--cc-message-nav-text);
+        pointer-events: none;
       }
       #${ROOT_ID} * { box-sizing: border-box; }
       .chatclub-message-nav-indicator {
@@ -1119,23 +1603,42 @@
         align-items: flex-end;
         gap: 5px;
         padding: 8px 2px;
+        pointer-events: auto;
       }
       .chatclub-message-nav-line {
-        width: 18px;
-        height: 3px;
+        width: 38px;
+        height: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
         border: 0;
-        border-radius: 999px;
-        background: color-mix(in srgb, CanvasText 28%, transparent);
+        background: transparent;
         cursor: pointer;
-        transition: width 160ms ease, background 160ms ease, opacity 160ms ease;
+        transition: opacity 160ms ease;
         opacity: .72;
         padding: 0;
       }
-      .chatclub-message-nav-line:hover,
+      .chatclub-message-nav-line::before {
+        content: "";
+        width: 18px;
+        height: 3px;
+        border-radius: 999px;
+        background: color-mix(in srgb, CanvasText 28%, transparent);
+        transition: width 160ms ease, background 160ms ease, box-shadow 160ms ease;
+      }
+      .chatclub-message-nav-line:hover {
+        opacity: .92;
+      }
+      .chatclub-message-nav-line:hover::before {
+        background: color-mix(in srgb, CanvasText 42%, transparent);
+      }
       .chatclub-message-nav-line.active {
+        opacity: 1;
+      }
+      .chatclub-message-nav-line.active::before {
         width: 34px;
         background: var(--cc-message-nav-accent);
-        opacity: 1;
+        box-shadow: 0 0 0 1px color-mix(in srgb, var(--cc-message-nav-accent) 24%, transparent);
       }
       .chatclub-message-nav-menu {
         width: min(18rem, calc(100vw - 68px));
@@ -1148,16 +1651,19 @@
         color: var(--cc-message-nav-text);
         box-shadow: 0 18px 48px rgba(0, 0, 0, .18);
         backdrop-filter: blur(18px);
+        visibility: hidden;
         opacity: 0;
         transform: translateX(8px) scale(.98);
         pointer-events: none;
-        transition: opacity 140ms ease, transform 140ms ease;
+        transition: opacity 140ms ease, transform 140ms ease, visibility 0s linear 140ms;
       }
-      #${ROOT_ID}:hover .chatclub-message-nav-menu,
+      #${ROOT_ID}.chatclub-message-nav-open .chatclub-message-nav-menu,
       #${ROOT_ID}:focus-within .chatclub-message-nav-menu {
+        visibility: visible;
         opacity: 1;
         transform: translateX(0) scale(1);
         pointer-events: auto;
+        transition-delay: 0s;
       }
       .chatclub-message-nav-item {
         width: 100%;
@@ -1204,9 +1710,10 @@
         color: var(--cc-message-nav-muted);
       }
       .chatclub-message-nav-effect-border {
-        outline: 2px solid var(--cc-message-nav-accent) !important;
+        outline: 2px solid var(--cc-message-nav-accent, ${primaryColor}) !important;
         outline-offset: 4px !important;
         border-radius: 8px !important;
+        box-shadow: 0 0 0 4px color-mix(in srgb, var(--cc-message-nav-accent, ${primaryColor}) 16%, transparent) !important;
       }
       .chatclub-message-nav-effect-pulse {
         animation: chatclub-message-nav-pulse 1.35s ease-out 1;
@@ -1218,9 +1725,9 @@
         animation: chatclub-message-nav-jiggle .56s ease-in-out 1;
       }
       @keyframes chatclub-message-nav-pulse {
-        0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--cc-message-nav-accent) 42%, transparent); }
-        70% { box-shadow: 0 0 0 16px color-mix(in srgb, var(--cc-message-nav-accent) 0%, transparent); }
-        100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--cc-message-nav-accent) 0%, transparent); }
+        0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--cc-message-nav-accent, ${primaryColor}) 42%, transparent); }
+        70% { box-shadow: 0 0 0 16px color-mix(in srgb, var(--cc-message-nav-accent, ${primaryColor}) 0%, transparent); }
+        100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--cc-message-nav-accent, ${primaryColor}) 0%, transparent); }
       }
       @keyframes chatclub-message-nav-fade {
         0%, 100% { opacity: 1; }
@@ -1261,10 +1768,24 @@
       this.buildTimer = 0;
       this.scrollTimer = 0;
       this.effectTimer = 0;
+      this.menuCloseTimer = 0;
+      this.menuFocusTimer = 0;
+      this.jumpToken = 0;
       this.activeId = "";
       this.effectTarget = null;
       this.boundScroll = () => this.onScroll();
       this.boundResize = () => this.scheduleBuild(160);
+      this.boundOpenMenu = () => this.openMenu();
+      this.boundScheduleCloseMenu = () => this.scheduleCloseMenu();
+      this.boundRootFocusIn = () => this.openMenu();
+      this.boundRootFocusOut = () => {
+        clearTimeout(this.menuFocusTimer);
+        this.menuFocusTimer = setTimeout(() => {
+          if (!this.enabled) return;
+          if (this.root?.contains?.(document.activeElement)) return;
+          this.scheduleCloseMenu();
+        }, 0);
+      };
     }
 
     setEnabled(data = {}) {
@@ -1318,6 +1839,29 @@
       this.menu.setAttribute("role", "menu");
       this.root.append(this.menu, this.indicator);
       document.documentElement.append(this.root);
+      this.bindMenuHover();
+    }
+
+    bindMenuHover() {
+      this.indicator?.addEventListener?.("pointerenter", this.boundOpenMenu);
+      this.indicator?.addEventListener?.("pointerleave", this.boundScheduleCloseMenu);
+      this.menu?.addEventListener?.("pointerenter", this.boundOpenMenu);
+      this.menu?.addEventListener?.("pointerleave", this.boundScheduleCloseMenu);
+      this.root?.addEventListener?.("focusin", this.boundRootFocusIn);
+      this.root?.addEventListener?.("focusout", this.boundRootFocusOut);
+    }
+
+    openMenu() {
+      clearTimeout(this.menuCloseTimer);
+      this.root?.classList?.add("chatclub-message-nav-open");
+    }
+
+    scheduleCloseMenu(delay = 180) {
+      clearTimeout(this.menuCloseTimer);
+      this.menuCloseTimer = setTimeout(() => {
+        if (this.root?.contains?.(document.activeElement)) return;
+        this.root?.classList?.remove("chatclub-message-nav-open");
+      }, delay);
     }
 
     observe() {
@@ -1337,11 +1881,21 @@
       const adapter = ADAPTERS[this.config.adapter] || ADAPTERS.generic;
       const items = adapter.collect?.(this.config) || ADAPTERS.generic.collect(this.config);
       return dedupeItems(items)
+        .map((item) => {
+          const role = item.role === "user" || item.role === "thinking" ? item.role : "assistant";
+          const target = item.target || item.element;
+          return {
+            ...item,
+            target,
+            effectTarget: resolveEffectTarget({ ...item, target, role }, this.config, adapter),
+            role
+          };
+        })
         .filter((item) => item.text && visible(item.target || item.element))
         .map((item, index) => ({
           ...item,
           id: `message-${index + 1}`,
-          role: item.role === "user" || item.role === "thinking" ? item.role : "assistant"
+          role: item.role
         }));
     }
 
@@ -1368,6 +1922,7 @@
         line.className = "chatclub-message-nav-line";
         line.type = "button";
         line.title = `${rolePrefix(message.role)} ${message.text}`;
+        line.dataset.targetId = message.id;
         line.setAttribute("aria-label", message.text);
         line.addEventListener("click", () => this.jumpTo(message.id));
         this.indicator.append(line);
@@ -1375,6 +1930,7 @@
         const item = document.createElement("button");
         item.className = "chatclub-message-nav-item";
         item.type = "button";
+        item.dataset.targetId = message.id;
         item.setAttribute("role", "menuitem");
         item.addEventListener("click", () => this.jumpTo(message.id));
         const role = document.createElement("span");
@@ -1394,6 +1950,18 @@
       this.scrollTimer = setTimeout(() => this.updateActive(), 80);
     }
 
+    setActive(id) {
+      const targetId = this.idToMessage.has(id) ? id : "";
+      this.activeId = targetId;
+      const elements = [
+        ...Array.from(this.indicator?.querySelectorAll?.(".chatclub-message-nav-line") || []),
+        ...Array.from(this.menu?.querySelectorAll?.(".chatclub-message-nav-item") || [])
+      ];
+      for (const element of elements) {
+        element.classList.toggle("active", Boolean(targetId) && element.dataset.targetId === targetId);
+      }
+    }
+
     updateActive() {
       if (!this.messages.length) return;
       const viewportY = Math.max(80, Math.min(window.innerHeight - 80, window.innerHeight * 0.42));
@@ -1405,28 +1973,59 @@
           if (rect.top > viewportY) break;
         } catch {}
       }
-      this.activeId = active?.id || "";
-      const lines = Array.from(this.indicator.children);
-      const items = Array.from(this.menu.children).filter((node) => node.classList?.contains("chatclub-message-nav-item"));
-      this.messages.forEach((message, index) => {
-        lines[index]?.classList.toggle("active", message.id === this.activeId);
-        items[index]?.classList.toggle("active", message.id === this.activeId);
-      });
+      this.setActive(active?.id || "");
     }
 
     async jumpTo(id) {
       const message = this.idToMessage.get(id);
       const target = message?.target || message?.element;
       if (!target) return;
+      const effectRole = message.role === "user" ? "user" : "assistant";
+      const effectTarget = message.effectTarget
+        || fallbackEffectTarget(message.element, target, this.config, effectRole);
+      const token = this.jumpToken + 1;
+      this.jumpToken = token;
+      this.setActive(id);
       const scroller = scrollParent(target);
       const rect = target.getBoundingClientRect();
       const base = scrollerRect(scroller);
       const offset = Math.max(30, Math.min(140, Number(this.config.scrollOffsetPx) || 64));
       const top = scrollerTop(scroller) + rect.top - base.top - offset;
       scrollToTop(scroller, Math.max(0, top));
-      await sleep(420);
-      this.applyEffect(target);
+      await this.waitForScrollIdle(scroller, token);
+      if (this.jumpToken !== token) return;
+      if (effectTarget) this.applyEffect(effectTarget);
       this.updateActive();
+    }
+
+    waitForScrollIdle(scroller, token) {
+      return new Promise((resolve) => {
+        const eventTarget = (!scroller || scroller === document.scrollingElement || scroller === document.documentElement || scroller === document.body)
+          ? window
+          : scroller;
+        let done = false;
+        let idleTimer = 0;
+        let fallbackTimer = 0;
+        const cleanup = () => {
+          clearTimeout(idleTimer);
+          clearTimeout(fallbackTimer);
+          try { eventTarget?.removeEventListener?.("scroll", onScroll); } catch {}
+        };
+        const finish = () => {
+          if (done) return;
+          done = true;
+          cleanup();
+          resolve();
+        };
+        const onScroll = () => {
+          if (this.jumpToken !== token) return finish();
+          clearTimeout(idleTimer);
+          idleTimer = setTimeout(finish, 150);
+        };
+        try { eventTarget?.addEventListener?.("scroll", onScroll, { passive: true }); } catch {}
+        idleTimer = setTimeout(finish, 260);
+        fallbackTimer = setTimeout(finish, 900);
+      });
     }
 
     clearEffect() {
@@ -1438,15 +2037,20 @@
         "chatclub-message-nav-effect-fade",
         "chatclub-message-nav-effect-jiggle"
       );
+      this.effectTarget.style.removeProperty("--cc-message-nav-accent");
       this.effectTarget = null;
     }
 
     applyEffect(target) {
       this.clearEffect();
       const mode = EFFECT_MODES.has(this.options.effectMode) ? this.options.effectMode : "border";
-      if (mode === "none") return;
+      if (mode === "none" || !target?.classList) return;
       this.effectTarget = target;
-      target.classList.add(`chatclub-message-nav-effect-${mode}`);
+      const effectClass = `chatclub-message-nav-effect-${mode}`;
+      target.classList.remove(effectClass);
+      target.style.setProperty("--cc-message-nav-accent", this.options.primaryColor);
+      try { void target.offsetWidth; } catch {}
+      target.classList.add(effectClass);
       this.effectTimer = setTimeout(() => this.clearEffect(), mode === "border" ? 1800 : 1500);
     }
 
@@ -1466,16 +2070,26 @@
       this.enabled = false;
       clearTimeout(this.buildTimer);
       clearTimeout(this.scrollTimer);
+      clearTimeout(this.menuCloseTimer);
+      clearTimeout(this.menuFocusTimer);
       this.clearEffect();
       try { this.observer?.disconnect?.(); } catch {}
       this.observer = null;
       window.removeEventListener("scroll", this.boundScroll, true);
       window.removeEventListener("resize", this.boundResize, true);
+      this.indicator?.removeEventListener?.("pointerenter", this.boundOpenMenu);
+      this.indicator?.removeEventListener?.("pointerleave", this.boundScheduleCloseMenu);
+      this.menu?.removeEventListener?.("pointerenter", this.boundOpenMenu);
+      this.menu?.removeEventListener?.("pointerleave", this.boundScheduleCloseMenu);
+      this.root?.removeEventListener?.("focusin", this.boundRootFocusIn);
+      this.root?.removeEventListener?.("focusout", this.boundRootFocusOut);
+      this.root?.classList?.remove("chatclub-message-nav-open");
       this.root?.remove();
       this.root = null;
       this.indicator = null;
       this.menu = null;
       this.messages = [];
+      this.jumpToken += 1;
       this.idToMessage.clear();
       document.getElementById(STYLE_ID)?.remove();
     }
