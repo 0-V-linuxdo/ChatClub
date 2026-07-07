@@ -110,6 +110,10 @@ const ICONS = {
     ["rect", { x: "9", y: "9", width: "13", height: "13", rx: "2" }],
     ["path", { d: "M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" }]
   ],
+  link: [
+    ["path", { d: "M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" }],
+    ["path", { d: "M14 11a5 5 0 0 0-7.07 0l-3 3A5 5 0 0 0 11 21.07l1.71-1.71" }]
+  ],
   trash: [
     ["path", { d: "M3 6h18" }],
     ["path", { d: "M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" }],
@@ -2317,8 +2321,8 @@ function renderTopbarItem(item, prompt, collapsedPreview) {
   if (item.id === "settings") return renderTopbarSettingsButton();
   if (item.id === "promptLibrary") return renderPromptLibraryButton();
   if (item.id === "composer") return renderTopbarComposer(prompt, collapsedPreview);
-  if (item.id === "send") return actionButton(t("topbar.send"), "send", sendPromptToFrames, "primary", t("topbar.send"), "", "", "topbar.send");
-  if (item.id === "newChat") return actionButton(t("topbar.newChat"), "edit", newChatOnFrames, "secondary", shortcutTooltip(t("topbar.newChat"), "newChatAll"), "", "", "topbar.newChat");
+  if (item.id === "send") return actionButton(t("topbar.send"), "send", sendPromptToFrames, "primary", t("topbar.sendTooltip"), "", "", "topbar.send");
+  if (item.id === "newChat") return actionButton(t("topbar.newChat"), "edit", newChatOnFrames, "secondary", shortcutTooltip(t("topbar.newChatAllTooltip"), "newChatAll"), "", "", "topbar.newChat");
   if (item.id === "deleteThread") return actionButton(t("topbar.deleteThread"), "trash", deleteThreadOnFrames, "danger", shortcutTooltip(t("topbar.deleteThread"), "deleteThread"), "", "", "topbar.deleteThread");
   if (item.id === "summary") return actionButton(t("topbar.summary"), "summary", openSummaryPanel, "secondary", shortcutTooltip(t("topbar.summary"), "openSummaryPanel"), "", "", "topbar.summary");
   if (item.id === "pocket") return actionButton(t("topbar.pocket"), "pocket", openPocketPanel, "secondary", shortcutTooltip(t("topbar.pocket"), "openPocketPanel"), "", topbarItemClass("pocket"), "topbar.pocket");

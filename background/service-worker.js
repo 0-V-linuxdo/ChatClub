@@ -481,6 +481,26 @@ async function updateDnrRules() {
   const extensionHost = new URL(chrome.runtime.getURL("")).hostname;
   const rules = buildDynamicDnrRules(chatApps, extensionHost);
   const oldRules = await chrome.declarativeNetRequest.getDynamicRules();
+  if (chrome.declarativeNetRequest.updateSessionRules) {
+    try {
+      const oldSessionRules = chrome.declarativeNetRequest.getSessionRules
+        ? await chrome.declarativeNetRequest.getSessionRules()
+        : [];
+      await chrome.declarativeNetRequest.updateSessionRules({
+        removeRuleIds: oldSessionRules.map((rule) => rule.id),
+        addRules: rules
+      });
+      if (oldRules.length) {
+        await chrome.declarativeNetRequest.updateDynamicRules({
+          removeRuleIds: oldRules.map((rule) => rule.id),
+          addRules: []
+        });
+      }
+      return;
+    } catch (error) {
+      console.warn(`[${APP_NAME}] Failed to update session DNR rules; falling back to dynamic rules`, error);
+    }
+  }
   await chrome.declarativeNetRequest.updateDynamicRules({
     removeRuleIds: oldRules.map((rule) => rule.id),
     addRules: rules
@@ -568,6 +588,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   (async () => {
     if (message.action === "reloadConfigs") {
       await reloadRuntimeConfig();
+      sendResponse({ success: true });
+      return;
+    }
+    if (message.action === "prepareFrameLoad") {
+      await updateDnrRules();
       sendResponse({ success: true });
       return;
     }

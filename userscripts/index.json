@@ -1,5 +1,5 @@
 {
-  "summarySiteConfigVersion": 65,
+  "summarySiteConfigVersion": 68,
   "source": "dev/userscripts",
   "configs": [
     {
@@ -31,7 +31,7 @@
       "name": "Claude",
       "enabled": true,
       "builtIn": true,
-      "configVersion": 34,
+      "configVersion": 37,
       "hosts": [
         "claude.ai",
         "*.claude.ai"
@@ -42,7 +42,7 @@
       ],
       "fallbackMode": "structuredOnly",
       "userscriptFile": "claude.js",
-      "userscriptLength": 4211
+      "userscriptLength": 17802
     },
     {
       "id": "gemini",
@@ -88,7 +88,7 @@
       "copyTimeoutMs": 3600,
       "userscriptFallbackDelayMs": 1000,
       "userscriptFile": "deepseek.js",
-      "userscriptLength": 23180
+      "userscriptLength": 23179
     },
     {
       "id": "grok",
@@ -185,7 +185,7 @@
       "userTextSelector": "",
       "assistantTextSelector": "",
       "userscriptFile": "notion.js",
-      "userscriptLength": 3147
+      "userscriptLength": 6091
     },
     {
       "id": "lobehub",

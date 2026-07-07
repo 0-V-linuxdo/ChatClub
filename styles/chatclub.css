@@ -4806,6 +4806,10 @@ body.settings-tab-group-button-dragging iframe {
 
 .modal-wide { width: min(1120px, calc(100vw - 40px)); }
 
+.go-to-url-modal {
+  width: min(560px, calc(100vw - 40px));
+}
+
 .modal-header {
   display: flex;
   justify-content: space-between;

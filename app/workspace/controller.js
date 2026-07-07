@@ -4,7 +4,7 @@ import { TAB_GROUP_HEADER_BUTTONS } from "../../shared/constants.js";
 import { normalizeTabGroupButtonOrder, normalizeTabGroupButtonPlacement } from "../../shared/storage.js";
 import { findMessageNavigatorSiteConfig } from "../../shared/message-navigator-sites.js";
 import { findTopicDeleteSiteConfig, topicDeleteTimeoutMs } from "../../shared/topic-delete-sites.js";
-import { el } from "../../ui/dom.js";
+import { button, el, field, input, modal } from "../../ui/dom.js";
 import {
   hydrateWorkspaceGroups,
   layoutGroupsFromWorkspace,
@@ -26,6 +26,21 @@ const TAB_DRAG_START_DISTANCE = 6;
 const GROUP_DRAG_START_DISTANCE = 6;
 const LAYOUT_POPOVER_RIGHT_EXTENSION = 40;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+const CHAT_FRAME_ALLOW_FEATURES = Object.freeze([
+  "microphone",
+  "clipboard-write",
+  "clipboard-read",
+  "geolocation",
+  "display-capture",
+  "camera",
+  "unload",
+  "autoplay",
+  "fullscreen",
+  "shared-storage",
+  "picture-in-picture",
+  "storage-access",
+  "web-share"
+]);
 const APP_PICKER_INTERNATIONAL_IDS = [
   "ChatGPT",
   "Claude",
@@ -266,9 +281,64 @@ export function createWorkspaceController(ctx = {}) {
   }
 
   function chatFrameSandbox(app) {
-    const tokens = ["allow-scripts", "allow-same-origin", "allow-forms", "allow-popups", "allow-top-navigation", "allow-modals"];
-    if (isGrokEmbedHost(app)) tokens.push("allow-storage-access-by-user-activation");
+    const tokens = [
+      "allow-scripts",
+      "allow-same-origin",
+      "allow-forms",
+      "allow-popups",
+      "allow-popups-to-escape-sandbox",
+      "allow-top-navigation",
+      "allow-modals",
+      "allow-downloads",
+      "allow-presentation",
+      "allow-storage-access-by-user-activation"
+    ];
     return tokens.join(" ");
+  }
+
+  function chatFrameAllow() {
+    return CHAT_FRAME_ALLOW_FEATURES.map((feature) => `${feature} *`).join("; ");
+  }
+
+  function chatFrameName(app) {
+    const params = new URLSearchParams();
+    params.set("chatclub_webview", "");
+    params.set("ua", globalThis.navigator?.userAgent || "");
+    params.set("ssc", "1");
+    if (app?.id) params.set("app", app.id);
+    return params.toString();
+  }
+
+  function prepareFrameLoad(url) {
+    return new Promise((resolve) => {
+      try {
+        if (!globalThis.chrome?.runtime?.sendMessage) {
+          resolve({ success: false, error: "chrome.runtime.sendMessage unavailable" });
+          return;
+        }
+        chrome.runtime.sendMessage({ source: "chatclub", action: "prepareFrameLoad", url }, (response) => {
+          const error = chrome.runtime.lastError;
+          if (error) resolve({ success: false, error: error.message || String(error) });
+          else resolve(response || { success: true });
+        });
+      } catch (error) {
+        resolve({ success: false, error: error?.message || String(error || "prepareFrameLoad failed") });
+      }
+    });
+  }
+
+  function setFrameSrcAfterPrepare(iframe, url, options = {}) {
+    const assign = () => {
+      if (!iframe?.isConnected || (!options.replace && iframe.getAttribute("src"))) return;
+      iframe.setAttribute("src", url);
+    };
+    const fallback = setTimeout(assign, 1800);
+    prepareFrameLoad(url)
+      .catch(() => null)
+      .finally(() => {
+        clearTimeout(fallback);
+        assign();
+      });
   }
 
   function hasCustomAppEquivalent(app, customHostKeys) {
@@ -1296,13 +1366,15 @@ export function createWorkspaceController(ctx = {}) {
     const app = appById(chat.appId);
     const attrs = {
       class: `chat-frame ${chat.instanceId === (state.activeTabs[group.id] || group.chatApps[0]?.instanceId) ? "active" : ""}`,
-      src: app.url,
       dataset: { instanceId: chat.instanceId, appId: app.id },
-      allow: "clipboard-write; clipboard-read; microphone; camera; geolocation; autoplay; fullscreen; picture-in-picture; storage-access; web-share",
-      referrerpolicy: "no-referrer-when-downgrade"
+      allow: chatFrameAllow(),
+      referrerpolicy: "no-referrer",
+      name: chatFrameName(app)
     };
     if (chatFrameNeedsSandbox(app)) attrs.sandbox = chatFrameSandbox(app);
-    return el("iframe", attrs);
+    const iframe = el("iframe", attrs);
+    setFrameSrcAfterPrepare(iframe, app.url);
+    return iframe;
   }
 
   function fullscreenButtonMeta(group) {
@@ -1323,6 +1395,10 @@ export function createWorkspaceController(ctx = {}) {
 
   function renderCopyLinkButton(group) {
     return compactIconButton(t("common.copyLink"), "copy", () => copyActiveChatLink(group), "", t("common.copyLink"), "left", "workspace.group.copyLink");
+  }
+
+  function renderGoToUrlButton(group) {
+    return compactIconButton(t("chat.goToUrl"), "link", () => openGoToUrlDialog(group), "", t("chat.goToUrl"), "left", "workspace.group.goToUrl");
   }
 
   function renderNewChatButton(group) {
@@ -1359,6 +1435,7 @@ export function createWorkspaceController(ctx = {}) {
     const buttonById = {
       openInNewTab: () => renderOpenInNewTabButton(group),
       copyLink: () => renderCopyLinkButton(group),
+      goToUrl: () => renderGoToUrlButton(group),
       newChat: () => renderNewChatButton(group),
       refreshPage: () => renderRefreshPageButton(group),
       reload: () => renderHomeButton(group),
@@ -1559,6 +1636,103 @@ export function createWorkspaceController(ctx = {}) {
     const iframe = activeIframe(chat);
     if (!chat || !iframe) return false;
     return startNewChatInFrame(iframe, chat);
+  }
+
+  function normalizeUserNavigationUrl(raw) {
+    const value = String(raw || "").trim();
+    if (!value) return "";
+    let href = value;
+    const scheme = href.match(/^([a-zA-Z][a-zA-Z\d+.-]*):(.*)$/);
+    if (scheme) {
+      const protocol = scheme[1].toLowerCase();
+      const rest = scheme[2] || "";
+      if (protocol !== "http" && protocol !== "https") {
+        if (/^\d+(?:[/?#]|$)/.test(rest)) href = `https://${href}`;
+        else return "";
+      }
+    } else if (href.startsWith("//")) {
+      href = `https:${href}`;
+    } else {
+      href = `https://${href}`;
+    }
+    try {
+      const parsed = new URL(href);
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return "";
+      if (!parsed.hostname) return "";
+      return parsed.href;
+    } catch {
+      return "";
+    }
+  }
+
+  function navigateActiveChatToUrl(group, rawUrl) {
+    const chat = activeChatForGroup(group);
+    const iframe = activeIframe(chat);
+    const href = normalizeUserNavigationUrl(rawUrl);
+    if (!chat || !iframe || !href) return false;
+    iframe.dataset.currentHref = href;
+    delete iframe.dataset.currentThreadHref;
+    delete iframe.dataset.currentTitle;
+    setFrameSrcAfterPrepare(iframe, href, { replace: true });
+    return true;
+  }
+
+  function openGoToUrlDialog(group) {
+    closePopovers();
+    const currentHref = cachedGroupHref(group);
+    const urlInput = input(currentHref, {
+      type: "url",
+      inputmode: "url",
+      autocomplete: "url",
+      spellcheck: "false",
+      placeholder: t("chat.goToUrlPlaceholder")
+    });
+    let dialog;
+    const close = () => dialog?.remove();
+    const submit = (event) => {
+      event?.preventDefault?.();
+      const href = normalizeUserNavigationUrl(urlInput.value);
+      if (!href) {
+        urlInput.setAttribute("aria-invalid", "true");
+        notify(t("chat.goToUrlInvalid"), "error");
+        urlInput.focus({ preventScroll: true });
+        urlInput.select();
+        return;
+      }
+      if (!navigateActiveChatToUrl(group, href)) {
+        notify(t("chat.noActiveIframe"), "error");
+        return;
+      }
+      close();
+    };
+    urlInput.addEventListener("input", () => urlInput.removeAttribute("aria-invalid"));
+    const cancelButton = button(t("common.cancel"), (event) => {
+      event.preventDefault();
+      close();
+    });
+    cancelButton.type = "button";
+    const submitButton = button(t("chat.goToUrlSubmit"), null, "primary");
+    submitButton.type = "submit";
+    const form = el("form", {
+      class: "settings-editor-form go-to-url-form",
+      novalidate: true,
+      onsubmit: submit,
+      onkeydown: (event) => {
+        if (event.key !== "Escape") return;
+        event.preventDefault();
+        close();
+      }
+    },
+      field(t("chat.goToUrlField"), urlInput),
+      el("div", { class: "settings-dialog-actions" }, cancelButton, submitButton)
+    );
+    dialog = modal(t("chat.goToUrl"), form, close, false, t("common.close"));
+    dialog.querySelector(".modal")?.classList.add("go-to-url-modal");
+    requestAnimationFrame(() => {
+      urlInput.focus({ preventScroll: true });
+      urlInput.select();
+    });
+    return dialog;
   }
 
   async function startNewChatForShortcut(sourceWindow = null) {
@@ -2512,6 +2686,7 @@ export function createWorkspaceController(ctx = {}) {
       addApp: () => menuButton(t("chat.addApp"), "plus", () => openAppPicker(anchor, { group }), "secondary", false, t("chat.addApp"), "", "workspace.group.addApp"),
       openInNewTab: () => menuButton(t("common.openInNewTab"), "external", () => openChatInNewTab(group), "secondary", false, t("common.openInNewTab"), "", "workspace.group.openInNewTab"),
       copyLink: () => menuButton(t("common.copyLink"), "copy", () => copyActiveChatLink(group), "secondary", false, t("common.copyLink"), "", "workspace.group.copyLink"),
+      goToUrl: () => menuButton(t("chat.goToUrl"), "link", () => openGoToUrlDialog(group), "secondary", false, t("chat.goToUrl"), "", "workspace.group.goToUrl"),
       newChat: () => menuButton(t("topbar.newChat"), "edit", async () => {
         await startNewChatInActiveTab(group);
         closePopovers();

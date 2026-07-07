@@ -4,6 +4,59 @@
   const DEEPSEEK_DELETE_BRIDGE_VERSION = "2026.07.03.30";
   const DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.07.03.30";
 
+  function installChatClubWebviewShim() {
+    let params;
+    try {
+      params = new URLSearchParams(window.name || "");
+    } catch {
+      return;
+    }
+    if (!params.has("chatclub_webview")) return;
+    if (window.__CHATCLUB_WEBVIEW_SHIM__) return;
+    window.__CHATCLUB_WEBVIEW_SHIM__ = true;
+
+    const ua = params.get("ua") || "";
+    if (ua) {
+      try {
+        Object.defineProperty(navigator, "userAgent", {
+          configurable: true,
+          get: () => ua
+        });
+      } catch {}
+    }
+
+    if (params.get("ssc")) {
+      try {
+        const cookieGetter = document.__lookupGetter__?.("cookie");
+        const cookieSetter = document.__lookupSetter__?.("cookie");
+        if (typeof cookieGetter === "function" && typeof cookieSetter === "function") {
+          Object.defineProperty(document, "cookie", {
+            configurable: true,
+            get() {
+              return cookieGetter.call(document);
+            },
+            set(value) {
+              const parts = String(value || "").split(/;\s*/).filter(Boolean);
+              const filtered = parts.filter((part) => !/^(?:samesite|secure|partitioned)(?:=|$)/i.test(part));
+              filtered.push("SameSite=None", "Secure", "Partitioned");
+              cookieSetter.call(document, filtered.join("; "));
+            }
+          });
+        }
+      } catch {}
+    }
+
+    try {
+      const nativeClose = window.close;
+      window.close = function () {
+        try {
+          window.parent?.postMessage({ source: "chatclub", type: "request", action: "closeWebview", id: `${Date.now()}` }, "*");
+        } catch {}
+        try { return nativeClose.call(window); } catch {}
+      };
+    } catch {}
+  }
+
   function installGeminiModelPickerBridge() {
     if (window.__CHATCLUB_GEMINI_MODEL_PICKER_BRIDGE__) return;
     const records = [];
@@ -1399,6 +1452,8 @@
     try { return window.parent !== window; } catch { return true; }
   })();
 
+  installChatClubWebviewShim();
+
   if (host === "gemini.google.com" || host.endsWith(".gemini.google.com")) {
     installGeminiModelPickerBridge();
   }
@@ -1415,10 +1470,6 @@
     try {
       if (location.pathname === "/") location.replace(`/new${location.search}${location.hash}`);
       Object.defineProperty(document, "referrer", { get: () => "" });
-      const origins = location.ancestorOrigins;
-      if (origins && origins.length) {
-        Object.defineProperty(location, "ancestorOrigins", { get: () => ({ length: 0, item: () => null }) });
-      }
     } catch {}
   }
 

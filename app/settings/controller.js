@@ -607,6 +607,7 @@ export function createSettingsController(ctx) {
       "workspace.group.newChat": "edit",
       "workspace.group.openInNewTab": "external",
       "workspace.group.copyLink": "copy",
+      "workspace.group.goToUrl": "link",
       "workspace.group.refreshPage": "reload",
       "workspace.group.reload": "home",
       "workspace.group.messageNavigator": "navigator",
@@ -719,6 +720,7 @@ export function createSettingsController(ctx) {
       fullscreen: t("chat.fullscreen"),
       openInNewTab: t("common.openInNewTab"),
       copyLink: t("common.copyLink"),
+      goToUrl: t("chat.goToUrl"),
       removeGroup: t("chat.removeGroup"),
       more: t("chat.more")
     })[id] || id;

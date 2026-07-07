@@ -1,7 +1,7 @@
 import { DEFAULT_TOPBAR_LAYOUT } from "./topbar.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-07-07｜16:47:37」";
+export const APP_VERSION = "「2026-07-07｜21:47:04」";
 export const BASELINE_MOD_VERSION = "2.4.0.14";
 export const HOMEPAGE_URL = "https://chatclub.local/";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
@@ -22,7 +22,7 @@ export const API_PROMOTION_CHANNELS_VERSION = 2;
 export const API_PROFILE_ZERO_ZERO_ENDPOINT = "https://api.0-0.pro/v1/chat/completions";
 export const API_PROFILE_ZERO_ZERO_MODEL = "gpt-5.5";
 export const API_PROFILE_ZERO_ZERO_REGISTER_URL = "https://0-0.pro/register?ref=CSLPRL76";
-export const SUMMARY_SITE_CONFIG_VERSION = 65;
+export const SUMMARY_SITE_CONFIG_VERSION = 68;
 export const SCRIPT_CONFIG_SCHEMA_VERSION = 2;
 
 export const DEFAULT_PROMOTION_API_PROFILES = [
@@ -104,6 +104,7 @@ export const TAB_GROUP_HEADER_BUTTONS = [
   { id: "fullscreen", icon: "maximize", section: "header", defaultPlacement: "menu" },
   { id: "copyLink", icon: "copy", section: "menu", defaultPlacement: "menu" },
   { id: "openInNewTab", icon: "external", section: "menu", defaultPlacement: "menu" },
+  { id: "goToUrl", icon: "link", section: "menu", defaultPlacement: "menu" },
   { id: "removeGroup", icon: "x", section: "menu", defaultPlacement: "menu", danger: true },
   { id: "more", icon: "more", section: "anchor", requiredPinned: true, defaultPlacement: "pinned" }
 ];
@@ -131,8 +132,8 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
       Object.freeze({ id: "topbar.promptLibrary", labelKey: "topbar.promptLibrary" }),
       Object.freeze({ id: "topbar.clearPrompt", labelKey: "topbar.clearPrompt" }),
       Object.freeze({ id: "topbar.optimizePrompt", labelKey: "topbar.optimizePrompt" }),
-      Object.freeze({ id: "topbar.send", labelKey: "topbar.send" }),
-      Object.freeze({ id: "topbar.newChat", labelKey: "topbar.newChat" }),
+      Object.freeze({ id: "topbar.send", labelKey: "topbar.sendTooltip" }),
+      Object.freeze({ id: "topbar.newChat", labelKey: "topbar.newChatAllTooltip" }),
       Object.freeze({ id: "topbar.deleteThread", labelKey: "topbar.deleteThread" }),
       Object.freeze({ id: "topbar.summary", labelKey: "topbar.summary" }),
       Object.freeze({ id: "topbar.pocket", labelKey: "topbar.pocket" }),
@@ -164,6 +165,7 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
       Object.freeze({ id: "workspace.group.newChat", labelKey: "topbar.newChat" }),
       Object.freeze({ id: "workspace.group.openInNewTab", labelKey: "common.openInNewTab" }),
       Object.freeze({ id: "workspace.group.copyLink", labelKey: "common.copyLink" }),
+      Object.freeze({ id: "workspace.group.goToUrl", labelKey: "chat.goToUrl" }),
       Object.freeze({ id: "workspace.group.refreshPage", labelKey: "chat.refreshPage" }),
       Object.freeze({ id: "workspace.group.reload", labelKey: "chat.home" }),
       Object.freeze({ id: "workspace.group.messageNavigator", labelKey: "chat.messageNavigator" }),
@@ -343,8 +345,7 @@ export const BUILTIN_CHAT_APPS = [
     url: "https://claude.ai/new",
     hosts: ["claude.ai", "*.claude.ai"],
     inputSelector: "div[contenteditable='true'], textarea",
-    sendButtonSelector: "button[aria-label*='Send' i]",
-    noSandbox: true
+    sendButtonSelector: "button[aria-label*='Send' i]"
   },
   {
     id: "Gemini",

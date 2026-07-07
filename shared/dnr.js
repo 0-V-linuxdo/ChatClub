@@ -11,17 +11,29 @@ function requestDomainsFromApps(chatApps) {
   return Array.from(domains).filter(Boolean);
 }
 
+function currentUserAgent() {
+  return globalThis.navigator?.userAgent || "";
+}
+
+function extensionFrameRequestHeaders() {
+  const headers = [
+    { header: "Sec-Fetch-Dest", operation: "set", value: "document" },
+    { header: "Sec-Fetch-Site", operation: "set", value: "same-origin" },
+    { header: "If-None-Match", operation: "remove" }
+  ];
+  const userAgent = currentUserAgent();
+  if (userAgent) headers.unshift({ header: "User-Agent", operation: "set", value: userAgent });
+  return headers;
+}
+
 export function buildDynamicDnrRules(chatApps, extensionHost) {
   const responseHeaders = [
     { header: "X-Frame-Options", operation: "remove" },
     { header: "Content-Security-Policy", operation: "remove" },
     { header: "Content-Security-Policy-Report-Only", operation: "remove" }
   ];
-  const requestHeaders = [
-    { header: "Sec-Fetch-Dest", operation: "set", value: "document" },
-    { header: "Sec-Fetch-Site", operation: "set", value: "same-origin" }
-  ];
-  const action = { type: "modifyHeaders", requestHeaders, responseHeaders };
+  const frameLoadAction = { type: "modifyHeaders", requestHeaders: extensionFrameRequestHeaders(), responseHeaders };
+  const domainAction = { type: "modifyHeaders", responseHeaders };
   const resourceTypes = ["main_frame", "sub_frame"];
   const domains = requestDomainsFromApps(chatApps);
   const rules = [];
@@ -29,16 +41,16 @@ export function buildDynamicDnrRules(chatApps, extensionHost) {
   if (extensionHost) {
     rules.push({
       id: id++,
-      priority: 1,
-      action,
-      condition: { initiatorDomains: [extensionHost], resourceTypes }
+      priority: 2,
+      action: frameLoadAction,
+      condition: { initiatorDomains: [extensionHost] }
     });
   }
   if (domains.length) {
     rules.push({
       id: id++,
       priority: 1,
-      action,
+      action: domainAction,
       condition: { requestDomains: domains, resourceTypes }
     });
   }
