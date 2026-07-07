@@ -1583,6 +1583,14 @@ body.tab-gesture-active * {
   color: var(--text);
 }
 
+.compact-icon.message-navigator-active,
+.compact-icon.message-navigator-active:hover,
+.compact-icon[aria-pressed="true"] {
+  border-color: var(--primary-color);
+  background: var(--primary-color);
+  color: #fff;
+}
+
 .tab:hover .tab-close,
 .tab:focus-within .tab-close,
 .tab.active .tab-close {
@@ -4005,7 +4013,16 @@ body.settings-tab-group-button-dragging iframe {
   grid-template-columns: 52px minmax(190px, 1fr) minmax(220px, 1.1fr) 130px 130px;
 }
 
+.message-navigator-list .settings-list-header,
+.message-navigator-row {
+  grid-template-columns: 52px minmax(190px, 1fr) minmax(220px, 1.1fr) 130px 130px;
+}
+
 .topic-delete-list .settings-list-header span:first-child {
+  padding: 0;
+}
+
+.message-navigator-list .settings-list-header span:first-child {
   padding: 0;
 }
 
@@ -4013,7 +4030,16 @@ body.settings-tab-group-button-dragging iframe {
   text-align: center;
 }
 
+.message-navigator-list .settings-list-header span:nth-child(4) {
+  text-align: center;
+}
+
 .topic-delete-list .settings-list-header span:last-child {
+  padding-right: 18px;
+  text-align: right;
+}
+
+.message-navigator-list .settings-list-header span:last-child {
   padding-right: 18px;
   text-align: right;
 }
@@ -4108,7 +4134,17 @@ body.settings-tab-group-button-dragging iframe {
   user-select: none;
 }
 
+.message-navigator-row {
+  cursor: pointer;
+  user-select: none;
+}
+
 .topic-delete-row > :first-child {
+  justify-self: center;
+  margin: 0;
+}
+
+.message-navigator-row > :first-child {
   justify-self: center;
   margin: 0;
 }
@@ -4118,7 +4154,17 @@ body.settings-tab-group-button-dragging iframe {
   margin: 0;
 }
 
+.message-navigator-row > :nth-child(4) {
+  justify-self: center;
+  margin: 0;
+}
+
 .topic-delete-row > :last-child {
+  justify-self: stretch;
+  margin-right: 12px;
+}
+
+.message-navigator-row > :last-child {
   justify-self: stretch;
   margin-right: 12px;
 }
@@ -4128,11 +4174,17 @@ body.settings-tab-group-button-dragging iframe {
   background: color-mix(in srgb, var(--primary-2) 48%, transparent);
 }
 
+.message-navigator-row-active,
+.message-navigator-row-active:hover {
+  background: color-mix(in srgb, var(--primary-2) 48%, transparent);
+}
+
 .summary-collector-row.dragging {
   opacity: .48;
 }
 
 .model-preference-row.dragging,
+.message-navigator-row.dragging,
 .topic-delete-row.dragging {
   opacity: .48;
 }
@@ -4142,6 +4194,7 @@ body.settings-tab-group-button-dragging iframe {
 }
 
 .model-preference-row.drop-before,
+.message-navigator-row.drop-before,
 .topic-delete-row.drop-before {
   box-shadow: inset 0 2px 0 var(--primary);
 }
@@ -4151,6 +4204,7 @@ body.settings-tab-group-button-dragging iframe {
 }
 
 .model-preference-row.drop-after,
+.message-navigator-row.drop-after,
 .topic-delete-row.drop-after {
   box-shadow: inset 0 -2px 0 var(--primary);
 }
@@ -4169,6 +4223,13 @@ body.settings-tab-group-button-dragging iframe {
   min-width: 0;
 }
 
+.message-navigator-name {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+}
+
 .summary-collector-name strong {
   overflow: hidden;
   font-size: 15px;
@@ -4177,6 +4238,13 @@ body.settings-tab-group-button-dragging iframe {
 }
 
 .topic-delete-name strong {
+  overflow: hidden;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-navigator-name strong {
   overflow: hidden;
   font-size: 15px;
   text-overflow: ellipsis;
@@ -4228,6 +4296,24 @@ body.settings-tab-group-button-dragging iframe {
   border-radius: 999px;
 }
 
+.message-navigator-scope-badge {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 28px;
+  justify-self: start;
+  padding: 0 12px;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: color-mix(in srgb, var(--muted) 22%, var(--panel-2));
+  border-radius: 999px;
+}
+
 .summary-collector-details {
   min-width: 760px;
   padding: 14px 18px 16px 56px;
@@ -4236,6 +4322,11 @@ body.settings-tab-group-button-dragging iframe {
 }
 
 .topic-delete-details {
+  min-width: 720px;
+  padding-left: 56px;
+}
+
+.message-navigator-details {
   min-width: 720px;
   padding-left: 56px;
 }

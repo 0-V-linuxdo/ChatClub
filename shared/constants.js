@@ -1,7 +1,7 @@
 import { DEFAULT_TOPBAR_LAYOUT } from "./topbar.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-07-07｜03:19:54」";
+export const APP_VERSION = "「2026-07-07｜11:46:52」";
 export const BASELINE_MOD_VERSION = "2.4.0.14";
 export const HOMEPAGE_URL = "https://chatclub.local/";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
@@ -97,6 +97,7 @@ export const DEFAULT_MODEL_PREFERENCE_ORDER = Object.freeze(Object.keys(MODEL_PR
 export const TAB_GROUP_HEADER_BUTTONS = [
   { id: "addApp", icon: "plus", section: "header", defaultPlacement: "pinned" },
   { id: "reload", icon: "reload", section: "header", defaultPlacement: "pinned" },
+  { id: "messageNavigator", icon: "navigator", section: "header", defaultPlacement: "pinned" },
   { id: "deleteThread", icon: "trash", section: "header", defaultPlacement: "pinned", danger: true },
   { id: "fullscreen", icon: "maximize", section: "header", defaultPlacement: "pinned" },
   { id: "openInNewTab", icon: "external", section: "menu", defaultPlacement: "menu" },
@@ -141,6 +142,7 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
       Object.freeze({ id: "topbar.settings.apps", labelKey: "settings.apps.title" }),
       Object.freeze({ id: "topbar.settings.models", labelKey: "settings.models.title" }),
       Object.freeze({ id: "topbar.settings.summary", labelKey: "settings.summary.title" }),
+      Object.freeze({ id: "topbar.settings.messageNavigation", labelKey: "settings.messageNavigation.title" }),
       Object.freeze({ id: "topbar.settings.topicDeletion", labelKey: "settings.topicDeletion.title" }),
       Object.freeze({ id: "topbar.settings.optimize", labelKey: "settings.optimize.title" }),
       Object.freeze({ id: "topbar.settings.prompts", labelKey: "settings.prompts.title" }),
@@ -160,6 +162,7 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
       Object.freeze({ id: "workspace.group.openInNewTab", labelKey: "common.openInNewTab" }),
       Object.freeze({ id: "workspace.group.copyLink", labelKey: "common.copyLink" }),
       Object.freeze({ id: "workspace.group.reload", labelKey: "chat.reload" }),
+      Object.freeze({ id: "workspace.group.messageNavigator", labelKey: "chat.messageNavigator" }),
       Object.freeze({ id: "workspace.group.deleteThread", labelKey: "chat.deleteThreadInGroup" }),
       Object.freeze({ id: "workspace.group.fullscreen", labelKey: "chat.fullscreen" }),
       Object.freeze({ id: "workspace.group.remove", labelKey: "chat.removeGroup" }),
@@ -292,6 +295,8 @@ export const DEFAULT_OPTIONS = {
   ],
   modelPreferences: DEFAULT_MODEL_PREFERENCES,
   modelPreferenceOrder: DEFAULT_MODEL_PREFERENCE_ORDER,
+  messageNavigatorEffectMode: "border",
+  messageNavigatorSiteConfigs: [],
   summarySiteConfigs: [],
   topicDeleteSiteConfigs: []
 };
@@ -458,6 +463,8 @@ export const LEGACY_OPTION_KEYS = [
   "summaryApiKey",
   "summaryModel",
   "apiProfiles",
+  "messageNavigatorEffectMode",
+  "messageNavigatorSiteConfigs",
   "summarySiteConfigs",
   "topicDeleteSiteConfigs",
   "shortcutConfig"

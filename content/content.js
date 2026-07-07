@@ -3,9 +3,10 @@
   const COPY_SOURCE = "chatclub-native-copy";
   const GEMINI_MODEL_PICKER_SOURCE = "chatclub-gemini-model-picker";
   const NOTION_SEND_TEXT_SOURCE = "chatclub-notion-send-text";
-  const CONTENT_BRIDGE_VERSION = "2026.07.07.1";
+  const CONTENT_BRIDGE_VERSION = "2026.07.07.5";
   const SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.07.1";
   const DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.04.1";
+  const MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.07.4";
   const DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.07.03.30";
   const PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript";
   const hadContentBridge = Boolean(window.__CHATCLUB_CONTENT_BRIDGE_INSTALLED__);
@@ -5853,20 +5854,43 @@
     };
   }
 
+  function messageNavigatorRuntime() {
+    const runtime = window.__CHATCLUB_MESSAGE_NAVIGATOR__;
+    if (!runtime || typeof runtime.setEnabled !== "function") {
+      throw new Error("Message navigator runtime is unavailable");
+    }
+    return runtime;
+  }
+
+  function setMessageNavigator(data = {}) {
+    return messageNavigatorRuntime().setEnabled(data);
+  }
+
+  function getMessageNavigatorState() {
+    const runtime = window.__CHATCLUB_MESSAGE_NAVIGATOR__;
+    return runtime && typeof runtime.state === "function"
+      ? runtime.state()
+      : { ok: false, enabled: false, messageCount: 0, error: "Message navigator runtime is unavailable" };
+  }
+
   window.addEventListener("message", async (event) => {
     const message = event.data;
     const versionedDeleteRequest = message?.source === DELETE_THREAD_POST_MESSAGE_SOURCE;
     const versionedSendTextRequest = message?.source === SEND_TEXT_POST_MESSAGE_SOURCE;
+    const versionedNavigatorRequest = message?.source === MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE;
     const genericRequest = message?.source === SOURCE;
-    if ((!versionedDeleteRequest && !versionedSendTextRequest && !genericRequest) || message.type !== "request") return;
+    if ((!versionedDeleteRequest && !versionedSendTextRequest && !versionedNavigatorRequest && !genericRequest) || message.type !== "request") return;
     if (genericRequest && hadContentBridge) return;
     if (versionedDeleteRequest && message.action !== "deleteThread" && message.action !== "getDeleteConfirmState") return;
     if (versionedSendTextRequest && message.action !== "sendText") return;
+    if (versionedNavigatorRequest && message.action !== "setMessageNavigator" && message.action !== "getMessageNavigatorState") return;
     const responseSource = versionedDeleteRequest
       ? DELETE_THREAD_POST_MESSAGE_SOURCE
       : versionedSendTextRequest
         ? SEND_TEXT_POST_MESSAGE_SOURCE
-        : SOURCE;
+        : versionedNavigatorRequest
+          ? MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE
+          : SOURCE;
     try {
       let data;
       if (message.action === "getLocationHref") data = location.href;
@@ -5878,6 +5902,8 @@
       else if (message.action === "getDeleteConfirmState") data = topicDeleteConfirmState(message.data?.site || "topic-delete");
       else if (message.action === "applyPreferredModel") data = await applyPreferredModel(message.data || {});
       else if (message.action === "collectSummary") data = await collectSummary(message.data || {});
+      else if (message.action === "setMessageNavigator") data = setMessageNavigator(message.data || {});
+      else if (message.action === "getMessageNavigatorState") data = getMessageNavigatorState();
       else if (message.action === "getShortcutConfig") data = activeShortcutConfig;
       else throw new Error(`Unknown action: ${message.action}`);
       respond(event.source, message.id, message.action, data, null, responseSource);

@@ -6,10 +6,12 @@ import { TOPIC_DELETE_SITE_CONFIGS, topicDeleteUserscriptLooksLikeBuiltIn } from
 const PRELOAD_SCRIPT_ID = "chatclub-preload";
 const SUMMARY_PAGE_SCRIPT_ID = "chatclub-summary-userscripts-main";
 const SUMMARY_SCRIPT_ID = "chatclub-summary-userscripts";
+const MESSAGE_NAVIGATOR_SCRIPT_ID = "chatclub-message-navigator";
 const CONTENT_SCRIPT_ID = "chatclub-content";
 const TOPIC_DELETE_USERSCRIPT_FILE_PATTERN = /^topic-delete-userscripts\/[a-z0-9-]+\.user\.js$/i;
 const CONTENT_BRIDGE_FILES = Object.freeze([
   Object.freeze({ file: "content/preload.js", world: "MAIN" }),
+  Object.freeze({ file: "content/message-navigator.js", world: "ISOLATED" }),
   Object.freeze({ file: "content/content.js", world: "ISOLATED" })
 ]);
 
@@ -452,10 +454,26 @@ function topicDeleteContentTargets(options = {}) {
     }));
 }
 
+function messageNavigatorContentTargets(options = {}) {
+  return (options.messageNavigatorSiteConfigs || [])
+    .filter((config) => config?.enabled !== false && Array.isArray(config.hosts) && config.hosts.length)
+    .map((config) => ({
+      id: `message-navigator-${config.id || config.name || "site"}`,
+      name: config.name || config.id || "Message Navigator Site",
+      url: "",
+      hosts: config.hosts
+    }));
+}
+
 async function currentContentScriptTargets() {
   const customConfig = await loadCustomConfig();
   const options = await loadOptions();
-  return [...getAllChatApps(customConfig), ...summaryCollectorContentTargets(options), ...topicDeleteContentTargets(options)];
+  return [
+    ...getAllChatApps(customConfig),
+    ...summaryCollectorContentTargets(options),
+    ...topicDeleteContentTargets(options),
+    ...messageNavigatorContentTargets(options)
+  ];
 }
 
 async function updateDnrRules() {
@@ -475,7 +493,7 @@ async function registerContentScripts() {
     const registered = await chrome.scripting.getRegisteredContentScripts();
     const ownIds = registered
       .map((script) => script.id)
-      .filter((id) => id === PRELOAD_SCRIPT_ID || id === SUMMARY_PAGE_SCRIPT_ID || id === SUMMARY_SCRIPT_ID || id === CONTENT_SCRIPT_ID);
+      .filter((id) => id === PRELOAD_SCRIPT_ID || id === SUMMARY_PAGE_SCRIPT_ID || id === SUMMARY_SCRIPT_ID || id === MESSAGE_NAVIGATOR_SCRIPT_ID || id === CONTENT_SCRIPT_ID);
     if (ownIds.length) await chrome.scripting.unregisterContentScripts({ ids: ownIds });
   } catch (error) {
     console.warn(`[${APP_NAME}] Failed to unregister content scripts`, error);
@@ -502,6 +520,13 @@ async function registerContentScripts() {
       id: SUMMARY_SCRIPT_ID,
       matches,
       js: ["content/summary-userscripts.js"],
+      allFrames: true,
+      runAt: "document_idle"
+    },
+    {
+      id: MESSAGE_NAVIGATOR_SCRIPT_ID,
+      matches,
+      js: ["content/message-navigator.js"],
       allFrames: true,
       runAt: "document_idle"
     },

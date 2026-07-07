@@ -9,6 +9,11 @@ import {
   TOOLTIP_TARGET_GROUPS
 } from "../../shared/constants.js";
 import { SUMMARY_SITE_CONFIGS } from "../../shared/summary-sites.js";
+import {
+  MESSAGE_NAVIGATOR_EFFECT_MODES,
+  MESSAGE_NAVIGATOR_SITE_CONFIGS,
+  normalizeMessageNavigatorEffectMode
+} from "../../shared/message-navigator-sites.js";
 import { TOPIC_DELETE_SITE_CONFIGS } from "../../shared/topic-delete-sites.js";
 import { t } from "../../shared/i18n.js";
 import {
@@ -84,6 +89,7 @@ export function createSettingsController(ctx) {
   let modelPreferenceAutoSavePending = null;
   let modelPreferenceAutoSaveRedraw = null;
   let modelPreferenceDragId = "";
+  let messageNavigatorSiteDragId = "";
   let topicDeleteSiteDragId = "";
 
   const queueAppearanceAutoSave = (patch, options = {}) => {
@@ -384,6 +390,8 @@ export function createSettingsController(ctx) {
       state.shortcutRecordingAction = "";
       state.summaryCollectorEditingId = "";
       state.summaryCollectorDragId = "";
+      state.messageNavigatorSiteExpandedId = "";
+      messageNavigatorSiteDragId = "";
       state.settingsPromptTemplateDragId = "";
       state.settingsPromptLibraryDragId = "";
       state.settingsProfileDragId = "";
@@ -450,6 +458,7 @@ export function createSettingsController(ctx) {
     if (active === "apps") return appsPane(redraw);
     if (active === "models") return modelPreferencesPane(redraw);
     if (active === "summary") return summarySettingsPane(redraw, goToSection);
+    if (active === "messageNavigation") return messageNavigationSettingsPane(redraw);
     if (active === "topicDeletion") return topicDeletionSettingsPane(redraw);
     if (active === "optimize") return optimizeSettingsPane(redraw, goToSection);
     if (active === "prompts") return promptLibraryPane(redraw);
@@ -585,6 +594,7 @@ export function createSettingsController(ctx) {
       "topbar.settings.apps": "apps",
       "topbar.settings.models": "model",
       "topbar.settings.summary": "summary",
+      "topbar.settings.messageNavigation": "navigator",
       "topbar.settings.topicDeletion": "trash",
       "topbar.settings.optimize": "sparkles",
       "topbar.settings.prompts": "library",
@@ -597,6 +607,7 @@ export function createSettingsController(ctx) {
       "workspace.group.openInNewTab": "external",
       "workspace.group.copyLink": "copy",
       "workspace.group.reload": "reload",
+      "workspace.group.messageNavigator": "navigator",
       "workspace.group.deleteThread": "trash",
       "workspace.group.fullscreen": "maximize",
       "workspace.group.remove": "x",
@@ -1909,6 +1920,359 @@ export function createSettingsController(ctx) {
     const configs = [...withoutSource.slice(0, insertIndex), source, ...withoutSource.slice(insertIndex)];
     cleanupSummaryCollectorDrag();
     await saveSummaryCollectors(configs, redraw, { reloadRuntime: false });
+  }
+
+  function messageNavigationSettingsPane(redraw) {
+    return el("div", { class: "settings-pane" },
+      settingsBlock(t("messageNavigator.effects.title"), t("messageNavigator.effects.desc"),
+        field(t("messageNavigator.effectMode"), select(state.options.messageNavigatorEffectMode || "border", messageNavigatorEffectOptions(), {
+          onchange: async (event) => {
+            state.options = await saveOptions({
+              ...state.options,
+              messageNavigatorEffectMode: normalizeMessageNavigatorEffectMode(event.target.value)
+            });
+            toast(t("toast.messageNavigatorEffectSaved"), "success");
+            redraw();
+          }
+        }))
+      ),
+      settingsBlock(t("messageNavigator.sites.title"), t("messageNavigator.sites.desc"),
+        settingsPaneToolbar(t("messageNavigator.sites.manage"),
+          settingsPrimaryAction(t("messageNavigator.site.add"), "plus", () => openMessageNavigatorSiteEditor(null, redraw))
+        ),
+        settingsList([
+          "",
+          t("messageNavigator.site.name"),
+          t("messageNavigator.site.scope"),
+          t("messageNavigator.site.enabled"),
+          t("messageNavigator.site.actions")
+        ], messageNavigatorSiteRows(redraw), "message-navigator-list")
+      )
+    );
+  }
+
+  function messageNavigatorEffectOptions() {
+    return MESSAGE_NAVIGATOR_EFFECT_MODES.map((mode) => ({
+      value: mode,
+      label: t(`messageNavigator.effect.${mode}`)
+    }));
+  }
+
+  function messageNavigatorBuiltInDefault(config) {
+    return MESSAGE_NAVIGATOR_SITE_CONFIGS.find((item) => item.id === config.id) || null;
+  }
+
+  function messageNavigatorScopeText(config) {
+    const appIds = (config.appIds || []).filter(Boolean);
+    if (appIds.length) return appIds.join(", ");
+    const hosts = (config.hosts || []).filter(Boolean);
+    return hosts.length ? hosts.join(", ") : t("messageNavigator.site.noScope");
+  }
+
+  function messageNavigatorAdapterLabel(adapter) {
+    const id = String(adapter || "generic");
+    const key = `messageNavigator.adapter.${id}`;
+    const label = t(key);
+    return label === key ? id : label;
+  }
+
+  async function saveMessageNavigatorSites(configs, redraw) {
+    state.options = await saveOptions({ ...state.options, messageNavigatorSiteConfigs: configs });
+    await notifyConfigReload();
+    redraw();
+  }
+
+  function cleanupMessageNavigatorSiteDrag() {
+    messageNavigatorSiteDragId = "";
+    cleanupSettingsDragRows(".message-navigator-row");
+  }
+
+  function startMessageNavigatorSiteDrag(event, config) {
+    messageNavigatorSiteDragId = config.id;
+    event.currentTarget.classList.add("dragging");
+    event.dataTransfer?.setData("application/x-chatclub-message-navigator-site", config.id);
+    event.dataTransfer?.setData("text/plain", config.id);
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+  }
+
+  function previewMessageNavigatorSiteDrop(event, config) {
+    const sourceId = messageNavigatorSiteDragId || event.dataTransfer?.getData("application/x-chatclub-message-navigator-site") || "";
+    if (!sourceId || sourceId === config.id) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    event.currentTarget.classList.toggle("drop-after", settingsListDropPlacement(event) === "after");
+    event.currentTarget.classList.toggle("drop-before", settingsListDropPlacement(event) !== "after");
+  }
+
+  async function dropMessageNavigatorSite(event, targetConfig, redraw) {
+    const sourceId = messageNavigatorSiteDragId || event.dataTransfer?.getData("application/x-chatclub-message-navigator-site") || event.dataTransfer?.getData("text/plain") || "";
+    if (!sourceId || sourceId === targetConfig.id) return;
+    event.preventDefault();
+    const configs = moveListItem(state.options.messageNavigatorSiteConfigs || [], sourceId, targetConfig.id, settingsListDropPlacement(event));
+    cleanupMessageNavigatorSiteDrag();
+    await saveMessageNavigatorSites(configs, redraw);
+  }
+
+  function createMessageNavigatorSiteDraft() {
+    return {
+      id: createId("message-navigator"),
+      name: "",
+      enabled: true,
+      builtIn: false,
+      appIds: [],
+      hosts: [],
+      pathPrefixes: [],
+      adapter: "generic",
+      messageSelector: "",
+      userSelector: "",
+      assistantSelector: "",
+      textCleanupSelectors: [],
+      summaryMaxChars: 60
+    };
+  }
+
+  function openMessageNavigatorSiteEditor(config, redraw) {
+    const editing = Boolean(config);
+    const builtIn = config ? messageNavigatorBuiltInDefault(config) : null;
+    const draft = structuredClone({
+      ...createMessageNavigatorSiteDraft(),
+      ...(config || {}),
+      builtIn: Boolean(builtIn)
+    });
+    const nameInput = input(draft.name || "", { placeholder: t("messageNavigator.site.namePlaceholder") });
+    const enabledInput = el("input", { type: "checkbox", checked: draft.enabled !== false });
+    const appIdsInput = textarea((draft.appIds || []).join("\n"), { placeholder: "ChatGPT\nKagi" });
+    const hostsInput = textarea((draft.hosts || []).join("\n"), { placeholder: "example.com\n*.example.com" });
+    const pathInput = textarea((draft.pathPrefixes || []).join("\n"), { placeholder: "/chat/" });
+    const adapterSelect = select(draft.adapter || "generic", messageNavigatorAdapterOptions());
+    const selectorInput = textarea(draft.messageSelector || "", { placeholder: "article[data-message-author-role], .message" });
+    const userSelectorInput = textarea(draft.userSelector || "", { placeholder: t("common.optional") });
+    const assistantSelectorInput = textarea(draft.assistantSelector || "", { placeholder: t("common.optional") });
+    const cleanupInput = textarea((draft.textCleanupSelectors || []).join("\n"), { placeholder: "button\nsvg\n[role='toolbar']" });
+    const summaryMaxInput = input(String(draft.summaryMaxChars || 60), { type: "number", min: "20", max: "180", step: "5" });
+    for (const node of [appIdsInput, hostsInput, pathInput, userSelectorInput, assistantSelectorInput, cleanupInput]) {
+      node.classList.add("settings-compact-textarea");
+    }
+    selectorInput.classList.add("settings-code-textarea");
+    let dialog;
+    const close = () => dialog.remove();
+    const save = async () => {
+      const appIds = linesFromText(appIdsInput.value);
+      const hosts = linesFromText(hostsInput.value);
+      const messageSelector = selectorInput.value.trim();
+      if (!nameInput.value.trim()) return toast(t("messageNavigator.site.nameRequired"), "error");
+      if (!appIds.length && !hosts.length) return toast(t("messageNavigator.site.matcherRequired"), "error");
+      if (!messageSelector) return toast(t("messageNavigator.site.selectorRequired"), "error");
+      const nextConfig = {
+        ...draft,
+        name: nameInput.value.trim(),
+        enabled: enabledInput.checked,
+        builtIn: Boolean(builtIn),
+        appIds,
+        hosts,
+        pathPrefixes: linesFromText(pathInput.value),
+        adapter: adapterSelect.value || "generic",
+        messageSelector,
+        userSelector: userSelectorInput.value.trim(),
+        assistantSelector: assistantSelectorInput.value.trim(),
+        textCleanupSelectors: linesFromText(cleanupInput.value),
+        summaryMaxChars: Math.max(20, Math.min(180, Number(summaryMaxInput.value) || 60))
+      };
+      if (!builtIn) {
+        nextConfig.builtIn = false;
+        delete nextConfig.configVersion;
+      }
+      const configs = editing
+        ? (state.options.messageNavigatorSiteConfigs || []).map((item) => item.id === config.id ? nextConfig : item)
+        : [...(state.options.messageNavigatorSiteConfigs || []), nextConfig];
+      state.messageNavigatorSiteExpandedId = "";
+      await saveMessageNavigatorSites(configs, redraw);
+      toast(t(editing ? "toast.messageNavigatorSiteSaved" : "toast.messageNavigatorSiteAdded"), "success");
+      close();
+    };
+    dialog = modal(t(editing ? "messageNavigator.site.editTitle" : "messageNavigator.site.addTitle"),
+      el("div", { class: "settings-editor-form message-navigator-editor" },
+        el("div", { class: "settings-dialog-grid message-navigator-grid" },
+          field(t("messageNavigator.site.name"), nameInput),
+          el("label", { class: "settings-dialog-check" },
+            enabledInput,
+            el("span", {}, t("common.enabled"))
+          ),
+          field(t("messageNavigator.site.appIds"), el("div", { class: "settings-field-stack" },
+            appIdsInput,
+            el("small", {}, t("messageNavigator.site.appIdsHelp"))
+          )),
+          field(t("messageNavigator.site.hosts"), el("div", { class: "settings-field-stack" },
+            hostsInput,
+            el("small", {}, t("messageNavigator.site.hostHelp"))
+          )),
+          field(t("messageNavigator.site.pathPrefixes"), el("div", { class: "settings-field-stack" },
+            pathInput,
+            el("small", {}, t("messageNavigator.site.pathHelp"))
+          )),
+          field(t("messageNavigator.site.adapter"), adapterSelect),
+          field(t("messageNavigator.site.summaryMaxChars"), summaryMaxInput)
+        ),
+        el("div", { class: "settings-info-callout" },
+          svgIcon("navigator"),
+          el("div", {},
+            el("strong", {}, t("messageNavigator.site.infoTitle")),
+            el("p", {}, t("messageNavigator.site.infoBody")),
+            builtIn ? el("small", {}, t("messageNavigator.site.builtInAutoUpdate")) : null
+          )
+        ),
+        field(t("messageNavigator.site.messageSelector"), selectorInput),
+        el("div", { class: "settings-dialog-grid message-navigator-selector-grid" },
+          field(t("messageNavigator.site.userSelector"), userSelectorInput),
+          field(t("messageNavigator.site.assistantSelector"), assistantSelectorInput),
+          field(t("messageNavigator.site.cleanupSelectors"), cleanupInput)
+        ),
+        el("div", { class: "settings-dialog-actions" },
+          builtIn ? button(t("messageNavigator.site.resetBuiltIn"), async () => {
+            await resetMessageNavigatorSite(config, redraw);
+            close();
+          }) : null,
+          button(t("common.cancel"), close),
+          button(editing ? t("common.save") : t("common.add"), save, "primary")
+        )
+      ),
+      close,
+      true,
+      t("common.close")
+    );
+    dialog.querySelector(".modal")?.classList.add("settings-editor-modal");
+  }
+
+  function messageNavigatorAdapterOptions() {
+    const ids = ["generic", ...MESSAGE_NAVIGATOR_SITE_CONFIGS.map((item) => item.adapter)].filter(Boolean);
+    return Array.from(new Set(ids)).map((id) => ({ value: id, label: messageNavigatorAdapterLabel(id) }));
+  }
+
+  function messageNavigatorSiteRows(redraw) {
+    return (state.options.messageNavigatorSiteConfigs || []).flatMap((config) => {
+      const expanded = state.messageNavigatorSiteExpandedId === config.id;
+      const row = messageNavigatorSiteRow(config, expanded, redraw);
+      if (!expanded) return row;
+      return [row, messageNavigatorSiteDetails(config)];
+    });
+  }
+
+  function messageNavigatorSiteRow(config, expanded, redraw) {
+    const builtIn = Boolean(messageNavigatorBuiltInDefault(config));
+    return el("div", {
+      class: `ui-list-row settings-list-row message-navigator-row ${expanded ? "message-navigator-row-active" : ""}`.trim(),
+      draggable: "true",
+      dataset: { messageNavigatorSiteId: config.id },
+      onclick: (event) => {
+        if (event.target instanceof Element && event.target.closest("button,input,select,a,.settings-drag-handle")) return;
+        state.messageNavigatorSiteExpandedId = expanded ? "" : config.id;
+        redraw();
+      },
+      ondragstart: (event) => startMessageNavigatorSiteDrag(event, config),
+      ondragend: cleanupMessageNavigatorSiteDrag,
+      ondragover: (event) => previewMessageNavigatorSiteDrop(event, config),
+      ondragleave: (event) => event.currentTarget.classList.remove("drop-before", "drop-after"),
+      ondrop: (event) => dropMessageNavigatorSite(event, config, redraw)
+    },
+      settingsDragHandle(t("messageNavigator.site.drag")),
+      el("div", { class: "message-navigator-name" },
+        el("strong", {}, config.name || config.id),
+        builtIn ? el("span", { class: "summary-collector-star", title: t("messageNavigator.site.builtIn"), "aria-label": t("messageNavigator.site.builtIn") }, "★") : null
+      ),
+      el("span", { class: "message-navigator-scope-badge" }, messageNavigatorScopeText(config)),
+      el("label", { class: "settings-check", title: config.enabled === false ? t("common.disabled") : t("common.enabled") },
+        el("input", {
+          type: "checkbox",
+          "aria-label": `${config.name || config.id} ${t("messageNavigator.site.enabled")}`,
+          checked: config.enabled !== false,
+          onchange: async (event) => {
+            const configs = (state.options.messageNavigatorSiteConfigs || []).map((item) => item.id === config.id ? { ...item, enabled: event.target.checked } : item);
+            await saveMessageNavigatorSites(configs, redraw);
+            toast(event.target.checked ? t("toast.messageNavigatorSiteEnabled") : t("toast.messageNavigatorSiteDisabled"), "success");
+          }
+        })
+      ),
+      el("div", { class: "settings-row-actions" },
+        settingsIconAction(t("common.edit"), "edit", (event) => {
+          event.stopPropagation();
+          openMessageNavigatorSiteEditor(config, redraw);
+        }, "", false, "settings.action.edit"),
+        builtIn
+          ? settingsIconAction(t("common.reset"), "reload", async (event) => {
+            event.stopPropagation();
+            await resetMessageNavigatorSite(config, redraw);
+          }, "settings-reset-icon", !messageNavigatorCanReset(config), "settings.action.reset")
+          : settingsIconAction(t("common.delete"), "trash", async (event) => {
+            event.stopPropagation();
+            await deleteMessageNavigatorSite(config, redraw);
+          }, "danger", false, "settings.action.delete")
+      )
+    );
+  }
+
+  function messageNavigatorCanReset(config) {
+    const defaults = messageNavigatorBuiltInDefault(config);
+    if (!defaults) return false;
+    const keys = ["name", "adapter", "messageSelector", "userSelector", "assistantSelector", "summaryMaxChars"];
+    return keys.some((key) => JSON.stringify(config[key] ?? "") !== JSON.stringify(defaults[key] ?? ""))
+      || JSON.stringify(config.hosts || []) !== JSON.stringify(defaults.hosts || [])
+      || JSON.stringify(config.pathPrefixes || []) !== JSON.stringify(defaults.pathPrefixes || [])
+      || JSON.stringify(config.appIds || []) !== JSON.stringify(defaults.appIds || [])
+      || JSON.stringify(config.textCleanupSelectors || []) !== JSON.stringify(defaults.textCleanupSelectors || []);
+  }
+
+  function messageNavigatorSiteDetails(config) {
+    const chips = (items, emptyKey) => {
+      const values = (items || []).filter(Boolean);
+      return el("div", { class: "summary-host-chips" },
+        values.length
+          ? values.map((item) => el("code", {}, item))
+          : el("span", { class: "muted" }, t(emptyKey))
+      );
+    };
+    return el("div", { class: "message-navigator-details summary-collector-details" },
+      el("div", { class: "summary-collector-details-grid" },
+        field(t("messageNavigator.site.appIds"), chips(config.appIds, "messageNavigator.site.noAppIds")),
+        field(t("messageNavigator.site.hosts"), chips(config.hosts, "messageNavigator.site.noHosts")),
+        field(t("messageNavigator.site.pathPrefixes"), chips(config.pathPrefixes, "messageNavigator.site.noPathPrefixes")),
+        field(t("messageNavigator.site.adapter"), el("div", { class: "summary-script-meta" },
+          el("strong", {}, messageNavigatorAdapterLabel(config.adapter)),
+          el("small", {}, config.builtIn ? t("messageNavigator.site.builtInAutoUpdate") : t("messageNavigator.site.customConfig"))
+        )),
+        field(t("messageNavigator.site.messageSelector"), el("div", { class: "summary-script-meta" },
+          el("code", {}, config.messageSelector || t("messageNavigator.site.noSelector")),
+          el("small", {}, t("messageNavigator.site.summaryMaxCharsValue", { count: config.summaryMaxChars || 60 }))
+        )),
+        field(t("messageNavigator.site.status"), el("div", { class: "summary-script-meta" },
+          el("span", {}, config.enabled === false ? t("common.disabled") : t("common.enabled")),
+          el("small", {}, config.enabled === false ? t("messageNavigator.site.disabledHelp") : t("messageNavigator.site.enabledHelp"))
+        ))
+      )
+    );
+  }
+
+  async function resetMessageNavigatorSite(config, redraw) {
+    const defaults = messageNavigatorBuiltInDefault(config);
+    if (!defaults) return;
+    const configs = (state.options.messageNavigatorSiteConfigs || []).map((item) => {
+      if (item.id !== config.id) return item;
+      return {
+        ...structuredClone(defaults),
+        enabled: item.enabled !== false
+      };
+    });
+    state.messageNavigatorSiteExpandedId = "";
+    await saveMessageNavigatorSites(configs, redraw);
+    toast(t("toast.messageNavigatorSiteReset"), "success");
+  }
+
+  async function deleteMessageNavigatorSite(config, redraw) {
+    if (messageNavigatorBuiltInDefault(config)) return;
+    if (!window.confirm(t("messageNavigator.site.deleteConfirm", { name: config.name || config.id }))) return;
+    const configs = (state.options.messageNavigatorSiteConfigs || []).filter((item) => item.id !== config.id);
+    state.messageNavigatorSiteExpandedId = "";
+    await saveMessageNavigatorSites(configs, redraw);
+    toast(t("toast.messageNavigatorSiteDeleted"), "success");
   }
 
   function topicDeletionSettingsPane(redraw) {

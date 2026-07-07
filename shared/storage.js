@@ -20,6 +20,11 @@ import {
   TOOLTIP_TARGET_IDS
 } from "./constants.js";
 import { SUMMARY_SITE_CONFIGS } from "./summary-sites.js";
+import {
+  MESSAGE_NAVIGATOR_SITE_CONFIGS,
+  mergeBuiltInMessageNavigatorConfig,
+  normalizeMessageNavigatorEffectMode
+} from "./message-navigator-sites.js";
 import { normalizeShortcutConfig as normalizeShortcutShape } from "./shortcuts.js";
 import { TOPIC_DELETE_SITE_CONFIGS, mergeBuiltInTopicDeleteConfig } from "./topic-delete-sites.js";
 import { normalizeTopbarLayout } from "./topbar.js";
@@ -482,6 +487,8 @@ export function normalizeOptions(raw = {}) {
       : summaryPromptTemplates[0]?.id || summaryDefault.id,
     modelPreferences: normalizeModelPreferences(raw.modelPreferences),
     modelPreferenceOrder: normalizeModelPreferenceOrder(raw.modelPreferenceOrder),
+    messageNavigatorEffectMode: normalizeMessageNavigatorEffectMode(raw.messageNavigatorEffectMode),
+    messageNavigatorSiteConfigs: mergeBuiltInMessageNavigatorConfig(raw.messageNavigatorSiteConfigs, MESSAGE_NAVIGATOR_SITE_CONFIGS),
     summarySiteConfigs: mergeBuiltInSummaryConfig(raw.summarySiteConfigs, SUMMARY_SITE_CONFIGS),
     topicDeleteSiteConfigs: mergeBuiltInTopicDeleteConfig(raw.topicDeleteSiteConfigs, TOPIC_DELETE_SITE_CONFIGS)
   };
@@ -613,11 +620,19 @@ function dehydrateTopicDeleteSiteConfig(config = {}) {
   return out;
 }
 
+function dehydrateMessageNavigatorSiteConfig(config = {}) {
+  return {
+    ...config,
+    textCleanupSelectors: Array.isArray(config.textCleanupSelectors) ? config.textCleanupSelectors : []
+  };
+}
+
 export function dehydrateOptions(options = {}) {
   const normalized = normalizeOptions(options);
   return {
     ...normalized,
     scriptConfigSchemaVersion: SCRIPT_CONFIG_SCHEMA_VERSION,
+    messageNavigatorSiteConfigs: (normalized.messageNavigatorSiteConfigs || []).map(dehydrateMessageNavigatorSiteConfig),
     summarySiteConfigs: (normalized.summarySiteConfigs || []).map(dehydrateSummarySiteConfig),
     topicDeleteSiteConfigs: (normalized.topicDeleteSiteConfigs || []).map(dehydrateTopicDeleteSiteConfig)
   };

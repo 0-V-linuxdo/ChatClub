@@ -1,7 +1,8 @@
 import { t } from "../../shared/i18n.js";
-import { DELETE_THREAD_POST_MESSAGE_SOURCE, sendToIframe } from "../../shared/post-message.js";
+import { DELETE_THREAD_POST_MESSAGE_SOURCE, MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE, sendToIframe } from "../../shared/post-message.js";
 import { TAB_GROUP_HEADER_BUTTONS } from "../../shared/constants.js";
 import { normalizeTabGroupButtonOrder, normalizeTabGroupButtonPlacement } from "../../shared/storage.js";
+import { findMessageNavigatorSiteConfig } from "../../shared/message-navigator-sites.js";
 import { findTopicDeleteSiteConfig, topicDeleteTimeoutMs } from "../../shared/topic-delete-sites.js";
 import { el } from "../../ui/dom.js";
 import {
@@ -736,6 +737,7 @@ export function createWorkspaceController(ctx = {}) {
     card?.querySelectorAll(".chat-frame").forEach((frame) => {
       frame.classList.toggle("active", frame.dataset.instanceId === instanceId);
     });
+    if (card) syncTabGroupHeaderControls(card, group);
   }
 
   function syncGroupTabOrder(group) {
@@ -1332,12 +1334,21 @@ export function createWorkspaceController(ctx = {}) {
     return button;
   }
 
+  function renderMessageNavigatorButton(group) {
+    const iframe = activeIframe(activeChatForGroup(group));
+    const active = messageNavigatorFrameEnabled(iframe);
+    const button = compactIconButton(t("chat.messageNavigator"), "navigator", () => toggleMessageNavigator(group), active ? "message-navigator-active" : "", t("chat.messageNavigator"), "left", "workspace.group.messageNavigator");
+    button.setAttribute("aria-pressed", String(active));
+    return button;
+  }
+
   function renderChatActionButtons(group) {
     const { fullscreenLabel, fullscreenTooltipLabel, icon: fullscreenIcon } = fullscreenButtonMeta(group);
     const buttonById = {
       openInNewTab: () => renderOpenInNewTabButton(group),
       copyLink: () => renderCopyLinkButton(group),
       reload: () => compactIconButton(t("chat.reload"), "reload", () => reloadChat(activeChatForGroup(group)), "", shortcutTooltip(t("chat.reload"), "reloadChat"), "left", "workspace.group.reload"),
+      messageNavigator: () => renderMessageNavigatorButton(group),
       deleteThread: () => compactIconButton(t("chat.deleteThreadInGroup"), "trash", () => deleteActiveThreadForGroup(group), "danger-action", t("chat.deleteThreadInGroup"), "left", "workspace.group.deleteThread"),
       fullscreen: () => compactIconButton(fullscreenLabel, fullscreenIcon, () => toggleFullscreen(group.id), "fullscreen-action", fullscreenTooltipLabel, "left", "workspace.group.fullscreen"),
       removeGroup: () => renderRemoveGroupButton(group)
@@ -1518,6 +1529,139 @@ export function createWorkspaceController(ctx = {}) {
     return openableTabUrl(iframe?.dataset.currentHref)
       || openableTabUrl(iframe?.src || iframe?.getAttribute?.("src"))
       || cachedChatHref(chat);
+  }
+
+  function messageNavigatorFrameEnabled(iframe) {
+    return iframe?.dataset.messageNavigatorEnabled === "1";
+  }
+
+  function messageNavigatorPayloadForFrame(iframe, href = "") {
+    const appId = iframe?.dataset.appId || "";
+    const app = appById(appId) || {};
+    const currentHref = openableTabUrl(href)
+      || openableTabUrl(iframe?.dataset.currentHref)
+      || openableTabUrl(iframe?.src || iframe?.getAttribute?.("src"))
+      || openableTabUrl(app.url);
+    const config = findMessageNavigatorSiteConfig(state.options?.messageNavigatorSiteConfigs, {
+      appId,
+      appName: app.name || appId,
+      currentHref
+    });
+    if (!config || config.enabled === false) return null;
+    return {
+      enabled: true,
+      config,
+      options: {
+        effectMode: state.options?.messageNavigatorEffectMode || "border",
+        primaryColor: state.options?.primaryColor || "#1f7a5f"
+      }
+    };
+  }
+
+  function messageNavigatorTimeoutError(error) {
+    return String(error?.message || error || "").includes("[PostMessage] Timeout waiting for response: setMessageNavigator");
+  }
+
+  function messageNavigatorFrameHrefHints(iframe, payload = {}) {
+    const values = [
+      payload.currentHref,
+      payload.href,
+      iframe?.dataset?.currentHref,
+      iframe?.dataset?.currentThreadHref,
+      iframe?.src,
+      iframe?.getAttribute?.("src")
+    ].map((item) => String(item || "").trim()).filter(Boolean);
+    return Array.from(new Set(values));
+  }
+
+  async function ensureMessageNavigatorContentBridge(iframe, payload = {}) {
+    const tabId = await currentTabId();
+    if (!tabId) return null;
+    try {
+      return await runtimeMessage({
+        source: "chatclub",
+        action: "ensureContentBridge",
+        tabId,
+        hrefs: messageNavigatorFrameHrefHints(iframe, payload),
+        hosts: payload.config?.hosts || []
+      });
+    } catch (error) {
+      console.warn("[ChatClub] Failed to ensure message navigator bridge", error);
+      return { error: error?.message || String(error) };
+    }
+  }
+
+  async function setMessageNavigatorForFrame(iframe, enabled, payload = null) {
+    const data = enabled ? payload : { enabled: false };
+    try {
+      return await sendToIframe(iframe, "setMessageNavigator", data, 6000, {
+        source: MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE
+      });
+    } catch (error) {
+      if (!messageNavigatorTimeoutError(error)) throw error;
+      await ensureMessageNavigatorContentBridge(iframe, payload || {});
+      return sendToIframe(iframe, "setMessageNavigator", data, 6000, {
+        source: MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE
+      });
+    }
+  }
+
+  async function toggleMessageNavigator(group) {
+    const chat = activeChatForGroup(group);
+    const iframe = activeIframe(chat);
+    if (!iframe) {
+      notify(t("messageNavigator.noIframe"), "error");
+      closePopovers();
+      return;
+    }
+    if (messageNavigatorFrameEnabled(iframe)) {
+      iframe.dataset.messageNavigatorEnabled = "0";
+      iframe.dataset.messageNavigatorSiteId = "";
+      try { await setMessageNavigatorForFrame(iframe, false); } catch {}
+      syncWorkspaceDom();
+      closePopovers();
+      return;
+    }
+    const href = await activeHref(chat);
+    const payload = messageNavigatorPayloadForFrame(iframe, href);
+    if (!payload) {
+      notify(t("messageNavigator.unsupported"), "error");
+      closePopovers();
+      return;
+    }
+    try {
+      const result = await setMessageNavigatorForFrame(iframe, true, payload);
+      iframe.dataset.messageNavigatorEnabled = "1";
+      iframe.dataset.messageNavigatorSiteId = payload.config.id || "";
+      syncWorkspaceDom();
+      closePopovers();
+      if (result?.messageCount === 0) notify(t("messageNavigator.noMessages"), "info");
+    } catch (error) {
+      iframe.dataset.messageNavigatorEnabled = "0";
+      iframe.dataset.messageNavigatorSiteId = "";
+      syncWorkspaceDom();
+      closePopovers();
+      console.warn("[ChatClub] Message navigator failed", error);
+      notify(t("messageNavigator.failed"), "error");
+    }
+  }
+
+  async function reapplyMessageNavigatorForFrame(iframe) {
+    if (!messageNavigatorFrameEnabled(iframe)) return;
+    const payload = messageNavigatorPayloadForFrame(iframe);
+    if (!payload) {
+      iframe.dataset.messageNavigatorEnabled = "0";
+      iframe.dataset.messageNavigatorSiteId = "";
+      syncWorkspaceDom();
+      return;
+    }
+    try {
+      await setMessageNavigatorForFrame(iframe, true, payload);
+      iframe.dataset.messageNavigatorSiteId = payload.config.id || "";
+      syncWorkspaceDom();
+    } catch (error) {
+      console.warn("[ChatClub] Failed to reapply message navigator", error);
+    }
   }
 
   function openChatInNewTab(group) {
@@ -2302,6 +2446,9 @@ export function createWorkspaceController(ctx = {}) {
         reloadChat(activeChatForGroup(group));
         closePopovers();
       }, "secondary", false, shortcutTooltip(t("chat.reload"), "reloadChat"), "left", "workspace.group.reload"),
+      messageNavigator: () => menuButton(t("chat.messageNavigator"), "navigator", () => {
+        toggleMessageNavigator(group);
+      }, "secondary", false, t("chat.messageNavigator"), "left", "workspace.group.messageNavigator"),
       deleteThread: () => menuButton(t("chat.deleteThreadInGroup"), "trash", () => {
         deleteActiveThreadForGroup(group);
       }, "danger", false, t("chat.deleteThreadInGroup"), "left", "workspace.group.deleteThread"),
@@ -2368,6 +2515,7 @@ export function createWorkspaceController(ctx = {}) {
     openChatMenu,
     openAppPicker,
     openLayoutMenu,
+    reapplyMessageNavigatorForFrame,
     syncFullscreenLayout,
     activeShortcutGroupId,
     activeChatForGroup,

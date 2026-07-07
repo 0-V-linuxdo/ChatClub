@@ -1,0 +1,1236 @@
+(() => {
+  /*
+   * ChatClub Message Navigator.
+   * Adapted from Notion-style-AI-Navigator-main by 0-V-linuxdo under the MIT License.
+   */
+  const GLOBAL_NAME = "__CHATCLUB_MESSAGE_NAVIGATOR__";
+  const VERSION = "2026.07.07.4";
+  if (window[GLOBAL_NAME]?.version === VERSION) return;
+  try { window[GLOBAL_NAME]?.destroy?.(); } catch {}
+
+  const ROOT_ID = "chatclub-message-nav-root";
+  const STYLE_ID = "chatclub-message-nav-style";
+  const EFFECT_MODES = new Set(["none", "border", "pulse", "fade", "jiggle"]);
+  const ADAPTERS = Object.create(null);
+
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+  const normalize = (value) => String(value || "")
+    .replace(/\u00a0/g, " ")
+    .replace(/\r\n?/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+
+  function safeQsa(selector, root = document) {
+    try {
+      return selector ? Array.from((root || document).querySelectorAll(selector)) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function safeClosest(element, selector) {
+    try {
+      return element?.closest?.(selector) || null;
+    } catch {
+      return null;
+    }
+  }
+
+  function safeMatches(element, selector) {
+    try {
+      return Boolean(element?.matches?.(selector));
+    } catch {
+      return false;
+    }
+  }
+
+  function visible(element) {
+    if (!element || element.nodeType !== 1) return false;
+    try {
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return rect.width > 2 && rect.height > 2 && style.display !== "none" && style.visibility !== "hidden";
+    } catch {
+      return false;
+    }
+  }
+
+  function elementOrder(a, b) {
+    try {
+      if (a === b) return 0;
+      const pos = a.compareDocumentPosition(b);
+      return pos & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : pos & Node.DOCUMENT_POSITION_PRECEDING ? 1 : 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  function uniqueElements(elements) {
+    const out = [];
+    for (const element of elements || []) {
+      if (!element || out.includes(element)) continue;
+      if (out.some((other) => other !== element && other.contains?.(element))) continue;
+      for (let index = out.length - 1; index >= 0; index -= 1) {
+        if (element.contains?.(out[index])) out.splice(index, 1);
+      }
+      out.push(element);
+    }
+    return out.sort(elementOrder);
+  }
+
+  function cloneText(element, cleanupSelectors = []) {
+    if (!element) return "";
+    let clone;
+    try {
+      clone = element.cloneNode(true);
+    } catch {
+      return normalize(element.innerText || element.textContent || "");
+    }
+    const noisy = [
+      "button",
+      "svg",
+      "header",
+      "footer",
+      "nav",
+      "menu",
+      "form",
+      "input",
+      "textarea",
+      "select",
+      "[aria-hidden='true']",
+      "[hidden]",
+      "[role='toolbar']",
+      "[data-files]",
+      "[data-edit]",
+      ".sr-only",
+      ".visually-hidden",
+      ".selector",
+      ".code-buttons",
+      ...cleanupSelectors
+    ];
+    for (const selector of noisy) {
+      for (const node of safeQsa(selector, clone)) node.remove();
+    }
+    return normalize(clone.innerText || clone.textContent || "");
+  }
+
+  function compactText(value, limit = 60) {
+    const text = normalize(value).replace(/\s+/g, " ");
+    if (!text) return "";
+    const max = Math.max(20, Math.min(180, Number(limit) || 60));
+    return text.length > max ? `${text.slice(0, Math.max(0, max - 1)).trim()}...` : text;
+  }
+
+  function rawText(element) {
+    return normalize(element?.innerText || element?.textContent || "");
+  }
+
+  function metaText(element) {
+    return normalize([
+      element?.tagName,
+      element?.getAttribute?.("id"),
+      element?.getAttribute?.("role"),
+      element?.getAttribute?.("aria-label"),
+      element?.getAttribute?.("title"),
+      element?.getAttribute?.("data-testid"),
+      element?.getAttribute?.("data-test-id"),
+      element?.getAttribute?.("data-message-author-role"),
+      element?.getAttribute?.("data-author"),
+      element?.getAttribute?.("data-turn-role"),
+      element?.getAttribute?.("data-message-role"),
+      element?.getAttribute?.("class")
+    ].filter(Boolean).join(" ")).toLowerCase();
+  }
+
+  function fullMetaText(element) {
+    return normalize([
+      metaText(element),
+      element?.getAttribute?.("name"),
+      element?.getAttribute?.("value"),
+      element?.textContent,
+      element?.innerText
+    ].filter(Boolean).join(" "));
+  }
+
+  function pageRoot(selector = "main,[role='main']") {
+    return safeQsa(selector).filter(visible).find((element) => !safeClosest(element, "nav,aside,header,footer"))
+      || safeQsa("main,[role='main']").filter(visible).find((element) => !safeClosest(element, "nav,aside,header,footer"))
+      || document.body
+      || document.documentElement;
+  }
+
+  function inChromeScope(element) {
+    return Boolean(safeClosest(element, [
+      `#${ROOT_ID}`,
+      "nav",
+      "aside",
+      "header",
+      "footer",
+      "form",
+      "input",
+      "textarea",
+      "select",
+      "[contenteditable='true']"
+    ].join(",")));
+  }
+
+  function cleanLine(value) {
+    return normalize(value)
+      .replace(/^[-•]\s*/, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function referenceOnlyText(value) {
+    const text = normalize(value).replace(/\s+/g, " ");
+    if (!text) return true;
+    if (/^(?:References|Sources|Citations|引用|来源|参考)\b/i.test(text)) return true;
+    if (/^\(?\d+\s+total\)?$/i.test(text)) return true;
+    if (/^(?:https?:\/\/|[\w.-]+\.[a-z]{2,})(?:\s+\d+%)?$/i.test(text)) return true;
+    return false;
+  }
+
+  function controlOnlyText(value) {
+    const text = normalize(value).replace(/\s+/g, " ");
+    return /^(?:copy|copied|copy message|copy response|copy text|复制|已复制|拷贝|Quick|Default|Prompt|助手|其他|High|Send|Ask anything|Message)$/i.test(text);
+  }
+
+  function usefulTurnText(value, maxLength = 50000) {
+    const text = normalize(value);
+    if (!text || text.length < 2 || text.length > maxLength) return "";
+    if (!/[\w\u4e00-\u9fff]/.test(text)) return "";
+    if (controlOnlyText(text) || referenceOnlyText(text)) return "";
+    return text;
+  }
+
+  function conversationLooksUseful(items = []) {
+    const useful = items.filter((item) => item?.element && item?.text);
+    return useful.length >= 2 && useful.some((item) => item.role === "user") && useful.some((item) => item.role === "assistant");
+  }
+
+  function nearestTextAncestor(seed, cleanupSelectors = [], options = {}) {
+    const root = options.root || pageRoot();
+    const maxDepth = Math.max(3, Math.min(16, Number(options.maxDepth) || 10));
+    const maxLength = Math.max(500, Math.min(80000, Number(options.maxLength) || 50000));
+    let node = seed;
+    for (let depth = 0; node && node !== document.documentElement && depth < maxDepth; depth += 1, node = node.parentElement) {
+      if (!visible(node)) continue;
+      if (node !== seed && inChromeScope(node)) continue;
+      const text = usefulTurnText(cloneText(node, cleanupSelectors), maxLength);
+      if (text && node !== seed) return { element: node, text };
+      if (node === root || safeMatches(node, "main,[role='main'],body")) break;
+    }
+    return null;
+  }
+
+  function messageCopyButton(button) {
+    const meta = fullMetaText(button);
+    return /\bcopy\s+message\b|复制(?:消息|讯息)|拷贝(?:消息|讯息)/i.test(meta);
+  }
+
+  function referenceCopyButton(button) {
+    const meta = fullMetaText(button);
+    return /\bcopy\s+(?:references?|sources?|citations?)\b|引用|来源|参考|citation|source/i.test(meta);
+  }
+
+  function collectFromCopyButtons(config, options = {}) {
+    const cleanupSelectors = Array.isArray(config.textCleanupSelectors) ? config.textCleanupSelectors : [];
+    const root = pageRoot(options.rootSelector || "main,[role='main']");
+    const buttons = safeQsa("button,[role='button']", root)
+      .filter((button) => visible(button) && !inChromeScope(button) && messageCopyButton(button) && !referenceCopyButton(button))
+      .sort(elementOrder)
+      .slice(0, Math.max(4, Math.min(80, Number(options.limit) || 48)));
+    const items = [];
+    const seen = new Set();
+    for (const button of buttons) {
+      const ancestor = nearestTextAncestor(button, cleanupSelectors, { root, maxDepth: options.maxDepth || 10 });
+      if (!ancestor) continue;
+      const role = genericRole(ancestor.element, config) || (items.length % 2 === 0 ? "user" : "assistant");
+      const key = `${role}\n${ancestor.text.toLowerCase().replace(/\s+/g, " ").slice(0, 500)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      items.push({
+        element: ancestor.element,
+        target: ancestor.element,
+        role,
+        text: compactText(ancestor.text, config.summaryMaxChars)
+      });
+    }
+    return dedupeItems(items);
+  }
+
+  function candidateTextBlocks(root, config, selector, options = {}) {
+    const cleanupSelectors = Array.isArray(config.textCleanupSelectors) ? config.textCleanupSelectors : [];
+    const nodes = uniqueElements(safeQsa(selector, root)
+      .filter((element) => visible(element) && !inChromeScope(element))
+      .filter((element) => !options.reject?.(element)));
+    const items = [];
+    const seen = new Set();
+    for (const element of nodes) {
+      const text = usefulTurnText(cloneText(element, cleanupSelectors), options.maxLength || 50000);
+      if (!text) continue;
+      const key = text.toLowerCase().replace(/\s+/g, " ").slice(0, 500);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      items.push({ element, target: element, text });
+    }
+    return items.sort((a, b) => elementOrder(a.element, b.element));
+  }
+
+  function elementArea(element) {
+    try {
+      const rect = element.getBoundingClientRect();
+      return Math.max(1, rect.width * rect.height);
+    } catch {
+      return Number.MAX_SAFE_INTEGER;
+    }
+  }
+
+  function textMatchesNeedle(text, needle) {
+    const haystack = cleanLine(text).toLowerCase();
+    const rawNeedle = cleanLine(needle).toLowerCase();
+    if (!haystack || !rawNeedle) return false;
+    const compactNeedle = rawNeedle.length > 96 ? rawNeedle.slice(0, 96).trim() : rawNeedle;
+    return haystack.includes(compactNeedle)
+      || (haystack.length >= 12 && rawNeedle.includes(haystack));
+  }
+
+  function targetForText(root, config, needles, options = {}) {
+    const cleanupSelectors = Array.isArray(config.textCleanupSelectors) ? config.textCleanupSelectors : [];
+    const selector = options.selector || "article,section,div,p,[role='article'],[data-message-author-role],[data-testid*='message'],[class*='message' i],[class*='bubble' i],[class*='response' i]";
+    const wanted = (Array.isArray(needles) ? needles : [needles]).map(cleanLine).filter(Boolean);
+    if (!wanted.length) return root;
+    const candidates = safeQsa(selector, root)
+      .filter((element) => element !== root && visible(element) && !inChromeScope(element))
+      .filter((element) => !options.reject?.(element))
+      .map((element) => ({ element, text: cloneText(element, cleanupSelectors) }))
+      .filter((item) => usefulTurnText(item.text, options.maxLength || 60000))
+      .filter((item) => wanted.some((needle) => textMatchesNeedle(item.text, needle)));
+    candidates.sort((a, b) => {
+      const area = elementArea(a.element) - elementArea(b.element);
+      return area || a.text.length - b.text.length || elementOrder(a.element, b.element);
+    });
+    return candidates[0]?.element || root;
+  }
+
+  function chatgptFallbackItems(config) {
+    const root = pageRoot("main,[role='main']");
+    const roleNodes = safeQsa("[data-message-author-role='user'], [data-message-author-role='assistant']", root)
+      .filter((element) => visible(element) && !inChromeScope(element))
+      .sort(elementOrder);
+    const items = roleNodes.map((element) => {
+      const role = /user/i.test(element.getAttribute("data-message-author-role") || "") ? "user" : "assistant";
+      const target = safeQsa([
+        ".user-message-bubble-color",
+        ".assistant-message-bubble-color",
+        "[class*='message-bubble']",
+        ".markdown.prose",
+        ".markdown"
+      ].join(","), element).find(visible) || element;
+      const text = usefulTurnText(cloneText(target, config.textCleanupSelectors) || cloneText(element, config.textCleanupSelectors));
+      return { element, target, role, text: compactText(text, config.summaryMaxChars) };
+    });
+    if (conversationLooksUseful(items)) return dedupeItems(items);
+    const blocks = candidateTextBlocks(root, config, [
+      "article",
+      "[data-testid*='conversation-turn']",
+      "[class*='message' i]",
+      ".markdown",
+      ".prose"
+    ].join(","));
+    return dedupeItems(blocks.map((item, index) => ({
+      ...item,
+      role: genericRole(item.element, config) || (index % 2 === 0 ? "user" : "assistant"),
+      text: compactText(item.text, config.summaryMaxChars)
+    })));
+  }
+
+  const notionChromeLinePattern = /^(?:Notion AI|\/|history|Delete, rename, and more…?|Give context|Settings|Gemini\s+\d|Do anything with AI\.{0,3}|Ask anything|Response copied to clipboard|Copied to clipboard|Loading\.?|Start voice recording|Submit AI message)$/i;
+  const notionMetaLinePattern = /^(?:\d+\s*steps?|\d{1,2}:\d{2}\s*(?:AM|PM)?|Today|Yesterday|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+\d{1,2}(?:,\s*\d{4})?)$/i;
+  const kagiModeLinePattern = /^(?:Quick|Expert|Research|Fast|Deep|Creative|Balanced|Precise|Custom|快速|专家|研究)$/i;
+  const kagiMetaLinePattern = /^(?:\d{1,2}:\d{2}\s*(?:AM|PM)?|Today|Yesterday)$/i;
+  const kagiChromeLinePattern = /^(?:Kagi Assistant|Kagi products|Settings|Search threads|Thread navigation|Folders|Threads|Add folder|Start organizing your threads\.?|Ask anything\.{0,3}|Message|View message statistics|Copy message|Copied|Send)$/i;
+
+  function notionLikelyPrompt(line) {
+    return /[?？]$|^(?:介绍|搜索|请|帮|写|总结|解释|翻译|生成|分析|列出|查找|Tell|What|How|Why|Please|Search|Summarize|Explain|Write)\b/i.test(line);
+  }
+
+  function trimNotionPromptMeta(line) {
+    return cleanLine(line)
+      .replace(/\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+\d{1,2}(?:,\s*\d{4})?$/i, "")
+      .replace(/\s+(?:Today|Yesterday)$/i, "")
+      .trim();
+  }
+
+  function notionLines(root) {
+    const lines = [];
+    for (const rawLine of rawText(root).split(/\n+/)) {
+      const line = cleanLine(rawLine);
+      if (!line || line.length < 2) continue;
+      if (notionChromeLinePattern.test(line)) continue;
+      if (!lines.includes(line)) lines.push(line);
+    }
+    return lines;
+  }
+
+  function notionPromptFromIndex(lines, index) {
+    const seed = trimNotionPromptMeta(lines[index]);
+    if (!seed) return null;
+    const parts = [seed];
+    let startIndex = index;
+    for (let previous = index - 1; previous >= Math.max(0, index - 3); previous -= 1) {
+      const line = trimNotionPromptMeta(lines[previous]);
+      if (!line || notionMetaLinePattern.test(line) || notionChromeLinePattern.test(line)) break;
+      if (/^(?:搜索|Search)\s*[:：]/i.test(line)) {
+        parts.unshift(line);
+        startIndex = previous;
+        break;
+      }
+      if (line.length <= 48 && !/[。.!！?？]$/.test(line) && /[?？]$/.test(seed)) {
+        parts.unshift(line);
+        startIndex = previous;
+        continue;
+      }
+      break;
+    }
+    const text = usefulTurnText(parts.join("\n"));
+    return text ? { text, parts, startIndex, endIndex: index } : null;
+  }
+
+  function kagiLines(root) {
+    const lines = [];
+    for (const rawLine of rawText(root).split(/\n+/)) {
+      const line = cleanLine(rawLine);
+      if (!line || line.length < 2) continue;
+      if (kagiChromeLinePattern.test(line) || kagiMetaLinePattern.test(line)) continue;
+      if (referenceOnlyText(line)) continue;
+      if (!lines.includes(line)) lines.push(line);
+    }
+    return lines;
+  }
+
+  function kagiPromptFromLines(lines) {
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index];
+      if (!/^(?:搜索|Search)\s*[:：]/i.test(line)) continue;
+      const parts = [line];
+      let endIndex = index;
+      for (let next = index + 1; next < Math.min(lines.length, index + 5); next += 1) {
+        const nextLine = lines[next];
+        if (kagiModeLinePattern.test(nextLine) || kagiChromeLinePattern.test(nextLine)) break;
+        if (/^(?:Searched with Kagi|Using full content from|Gathered details on)\b/i.test(nextLine)) break;
+        parts.push(nextLine);
+        endIndex = next;
+        if (/[?？]$/.test(nextLine)) break;
+      }
+      const text = usefulTurnText(parts.join("\n"));
+      if (text) return { text, index, endIndex, parts };
+    }
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index];
+      if (!notionLikelyPrompt(line)) continue;
+      const previous = lines[index - 1];
+      const parts = previous && !kagiModeLinePattern.test(previous) && !kagiChromeLinePattern.test(previous) && previous.length < 80
+        ? [previous, line]
+        : [line];
+      const text = usefulTurnText(parts.join("\n"));
+      if (text) return { text, index: Math.max(0, index - (parts.length - 1)), endIndex: index, parts };
+    }
+    return null;
+  }
+
+  function kagiDomFallbackItems(config) {
+    const root = pageRoot("main,[role='main']");
+    const lines = kagiLines(root);
+    const prompt = kagiPromptFromLines(lines);
+    if (!prompt) return [];
+    let answerStart = prompt.endIndex + 1;
+    while (answerStart < lines.length && (kagiModeLinePattern.test(lines[answerStart]) || kagiChromeLinePattern.test(lines[answerStart]) || kagiMetaLinePattern.test(lines[answerStart]))) {
+      answerStart += 1;
+    }
+    const assistantLines = [];
+    for (let index = answerStart; index < lines.length; index += 1) {
+      const line = lines[index];
+      if (/^References\b/i.test(line) && assistantLines.length) break;
+      if (kagiChromeLinePattern.test(line) || kagiMetaLinePattern.test(line)) continue;
+      if (kagiModeLinePattern.test(line) && !assistantLines.length) continue;
+      if (line === prompt.text || prompt.parts.includes(line)) continue;
+      assistantLines.push(line);
+      if (assistantLines.length >= 120) break;
+    }
+    const assistant = usefulTurnText(assistantLines.join("\n"), 60000);
+    if (assistant.length < 20) return [];
+    const userTarget = targetForText(root, config, [prompt.text, ...prompt.parts], {
+      selector: "article,section,div,p,[class*='message' i],[class*='bubble' i],[class*='chat' i]"
+    });
+    const assistantTarget = targetForText(root, config, assistantLines.slice(0, 3), {
+      selector: "article,section,div,p,[role='article'],[class*='message' i],[class*='response' i],[class*='markdown' i]"
+    });
+    return dedupeItems([
+      {
+        element: userTarget,
+        target: userTarget,
+        role: "user",
+        text: compactText(prompt.text, config.summaryMaxChars)
+      },
+      {
+        element: assistantTarget,
+        target: assistantTarget,
+        role: "assistant",
+        text: compactText(assistant, config.summaryMaxChars)
+      }
+    ]);
+  }
+
+  function notionPairFromLines(root) {
+    const lines = notionLines(root);
+    const stepIndex = lines.findIndex((line) => /^\d+\s*steps?$/i.test(line));
+    let promptIndex = -1;
+    if (stepIndex > 0) {
+      for (let index = stepIndex - 1; index >= 0; index -= 1) {
+        if (!notionMetaLinePattern.test(lines[index]) && !notionChromeLinePattern.test(lines[index])) {
+          promptIndex = index;
+          break;
+        }
+      }
+    }
+    if (promptIndex < 0) {
+      promptIndex = lines.findIndex((line, index) => index < lines.length - 1 && notionLikelyPrompt(line));
+    }
+    if (promptIndex < 0 || promptIndex >= lines.length - 1) return null;
+    const prompt = notionPromptFromIndex(lines, promptIndex);
+    if (!prompt) return null;
+    let answerStart = stepIndex >= 0 ? stepIndex + 1 : promptIndex + 1;
+    while (answerStart < lines.length && (notionChromeLinePattern.test(lines[answerStart]) || notionMetaLinePattern.test(lines[answerStart]))) answerStart += 1;
+    const assistant = usefulTurnText(lines.slice(answerStart)
+      .filter((line) => line !== lines[promptIndex] && line !== prompt.text && !prompt.parts.includes(line) && !notionChromeLinePattern.test(line))
+      .join("\n"));
+    return prompt.text.length >= 2 && assistant.length >= 20 ? { user: prompt.text, userParts: prompt.parts, assistant } : null;
+  }
+
+  function notionDomFallbackItems(config) {
+    const root = pageRoot("#notion-app,main,[role='main']");
+    const pair = notionPairFromLines(root);
+    if (!pair) return [];
+    const cleanupSelectors = Array.isArray(config.textCleanupSelectors) ? config.textCleanupSelectors : [];
+    const steps = safeQsa("button,[role='button']", root)
+      .filter((button) => visible(button) && /^\d+\s*steps?$/i.test(cleanLine(rawText(button))))
+      .sort(elementOrder);
+    const stepButton = steps[0] || null;
+    const candidates = candidateTextBlocks(root, config, "article,section,div,p,[role='article'],[data-testid*='message']", {
+      reject: (element) => stepButton && element.contains?.(stepButton),
+      maxLength: 60000
+    });
+    const beforeStep = stepButton
+      ? candidates.filter((item) => elementOrder(item.element, stepButton) < 0)
+      : candidates;
+    const afterStep = stepButton
+      ? candidates.filter((item) => elementOrder(stepButton, item.element) < 0)
+      : candidates;
+    const promptTarget = beforeStep.reverse().find((item) => {
+      const text = trimNotionPromptMeta(item.text);
+      return text && (text.includes(pair.user) || pair.user.includes(text) || notionLikelyPrompt(text));
+    })?.element || targetForText(root, config, [pair.user, ...(pair.userParts || [])], {
+      reject: (element) => stepButton && element.contains?.(stepButton)
+    });
+    const assistantTarget = afterStep.find((item) => {
+      const text = cleanLine(item.text);
+      return text.length >= 20 && (pair.assistant.includes(text) || text.includes(pair.assistant.slice(0, 60)));
+    })?.element || targetForText(root, config, pair.assistant.slice(0, 120), {
+      reject: (element) => stepButton && element.contains?.(stepButton)
+    });
+    return dedupeItems([
+      {
+        element: promptTarget,
+        target: promptTarget,
+        role: "user",
+        text: compactText(pair.user, config.summaryMaxChars)
+      },
+      {
+        element: assistantTarget,
+        target: assistantTarget,
+        role: "assistant",
+        text: compactText(pair.assistant, config.summaryMaxChars)
+      }
+    ]);
+  }
+
+  function genericRole(element, config = {}) {
+    if (config.userSelector && (safeMatches(element, config.userSelector) || safeQsa(config.userSelector, element).length)) return "user";
+    if (config.assistantSelector && (safeMatches(element, config.assistantSelector) || safeQsa(config.assistantSelector, element).length)) return "assistant";
+    const meta = metaText(element);
+    if (/\b(user|human|query|prompt)\b|data-message-author-role=.user/.test(meta)) return "user";
+    if (/\b(assistant|bot|model|response|answer)\b|data-message-author-role=.assistant/.test(meta)) return "assistant";
+    const label = normalize(element?.innerText || element?.textContent || "").slice(0, 80);
+    if (/^(you|you said|你|你说|用户)[:：\s]/i.test(label)) return "user";
+    if (/^(assistant|claude|gemini|chatgpt|kagi|poe|助手)[:：\s]/i.test(label)) return "assistant";
+    return "";
+  }
+
+  function genericTarget(element) {
+    return safeQsa([
+      ".markdown",
+      ".prose",
+      "[class*='markdown' i]",
+      "[class*='message' i]",
+      "[class*='bubble' i]",
+      "[data-message-author-role]",
+      "[role='article']"
+    ].join(","), element).find(visible) || element;
+  }
+
+  function cleanKey(item) {
+    return `${item.role}\n${normalize(item.text).toLowerCase().slice(0, 260)}`;
+  }
+
+  function dedupeItems(items) {
+    const seen = new Set();
+    const out = [];
+    for (const item of items) {
+      if (!item?.element || !item.text) continue;
+      const key = cleanKey(item);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(item);
+    }
+    return out;
+  }
+
+  function scrollParent(element) {
+    for (let node = element?.parentElement; node && node !== document.body; node = node.parentElement) {
+      try {
+        const style = getComputedStyle(node);
+        if (/(auto|scroll|overlay)/i.test(`${style.overflowY} ${style.overflow}`) && node.scrollHeight > node.clientHeight + 24) return node;
+      } catch {}
+    }
+    return document.scrollingElement || document.documentElement;
+  }
+
+  function scrollerRect(scroller) {
+    if (!scroller || scroller === document.scrollingElement || scroller === document.documentElement || scroller === document.body) {
+      return { top: 0, height: window.innerHeight };
+    }
+    try {
+      const rect = scroller.getBoundingClientRect();
+      return { top: rect.top, height: rect.height };
+    } catch {
+      return { top: 0, height: window.innerHeight };
+    }
+  }
+
+  function scrollerTop(scroller) {
+    if (!scroller || scroller === document.scrollingElement || scroller === document.documentElement || scroller === document.body) {
+      return window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+    }
+    return scroller.scrollTop;
+  }
+
+  function scrollToTop(scroller, top) {
+    if (!scroller || scroller === document.scrollingElement || scroller === document.documentElement || scroller === document.body) {
+      window.scrollTo({ top, behavior: "smooth" });
+      return;
+    }
+    try {
+      scroller.scrollTo({ top, behavior: "smooth" });
+    } catch {
+      scroller.scrollTop = top;
+    }
+  }
+
+  function rolePrefix(role) {
+    if (role === "user") return "Q";
+    if (role === "thinking") return "T";
+    return "A";
+  }
+
+  function adapterBaseQuery(config) {
+    return uniqueElements(safeQsa(config.messageSelector).filter(visible));
+  }
+
+  function adapterBaseItems(config, adapter = {}) {
+    const cleanupSelectors = Array.isArray(config.textCleanupSelectors) ? config.textCleanupSelectors : [];
+    return dedupeItems(adapterBaseQuery(config).map((element) => {
+      const role = adapter.role?.(element, config) || genericRole(element, config) || "assistant";
+      const target = adapter.target?.(element, config) || genericTarget(element);
+      const textSource = adapter.summaryElement?.(element, config) || target || element;
+      const rawText = adapter.text?.(element, config) || cloneText(textSource, cleanupSelectors) || cloneText(element, cleanupSelectors);
+      return {
+        element,
+        target,
+        role,
+        text: compactText(rawText, config.summaryMaxChars)
+      };
+    }));
+  }
+
+  ADAPTERS.generic = {
+    collect: (config) => adapterBaseItems(config)
+  };
+
+  ADAPTERS.chatgpt = {
+    role(element) {
+      const role = element.getAttribute("data-message-author-role")
+        || safeQsa("[data-message-author-role]", element)[0]?.getAttribute("data-message-author-role")
+        || "";
+      if (/user/i.test(role)) return "user";
+      if (/assistant|tool/i.test(role)) return "assistant";
+      return genericRole(element);
+    },
+    target(element) {
+      return safeQsa([
+        ".user-message-bubble-color",
+        ".assistant-message-bubble-color",
+        "[class*='message-bubble']",
+        ".markdown.prose",
+        ".markdown",
+        "[data-message-author-role]"
+      ].join(","), element).find(visible) || element;
+    },
+    collect(config) {
+      const base = adapterBaseItems(config, this).filter((item) => !safeClosest(item.element, "aside"));
+      return conversationLooksUseful(base) ? base : chatgptFallbackItems(config);
+    }
+  };
+
+  ADAPTERS.claude = {
+    role(element) {
+      const meta = metaText(element);
+      if (/user-message|data-author=.user|human/.test(meta)) return "user";
+      if (/assistant|claude|response|font-claude-response/.test(meta)) return "assistant";
+      return genericRole(element);
+    },
+    target(element) {
+      return safeQsa(".font-claude-response-body, .font-claude-response, [data-testid='user-message'], .standard-markdown", element).find(visible) || element;
+    },
+    collect(config) {
+      return adapterBaseItems(config, this);
+    }
+  };
+
+  ADAPTERS.notion = {
+    role(element) {
+      const meta = metaText(element);
+      if (/\buser\b|human|prompt|query/.test(meta)) return "user";
+      if (/\bassistant\b|answer|response|notion-ai/.test(meta)) return "assistant";
+      return genericRole(element);
+    },
+    target(element) {
+      return safeQsa(".markdown, [class*='message' i], [role='article']", element).find(visible) || element;
+    },
+    collect(config) {
+      const fallback = notionDomFallbackItems(config);
+      if (conversationLooksUseful(fallback)) return fallback;
+      const base = adapterBaseItems(config, this);
+      return conversationLooksUseful(base) ? base : fallback;
+    }
+  };
+
+  ADAPTERS.gemini = {
+    role(element) {
+      const meta = metaText(element);
+      if (/user-query|query|user/.test(meta)) return "user";
+      if (/model-response|model|assistant|response/.test(meta)) return "assistant";
+      return genericRole(element);
+    },
+    target(element) {
+      return safeQsa(".model-response-text .markdown, message-content .markdown, .markdown, .query-text, .query-content, .user-query-bubble-with-background", element).find(visible) || element;
+    },
+    collect(config) {
+      return adapterBaseItems(config, this);
+    }
+  };
+
+  ADAPTERS.deepseek = {
+    role(element) {
+      const meta = metaText(element);
+      if (/\brole=.user\b|\buser\b|fbb737a4/.test(meta)) return "user";
+      if (/\brole=.assistant\b|\bassistant\b|ds-markdown/.test(meta)) return "assistant";
+      return genericRole(element);
+    },
+    target(element) {
+      return safeQsa(".ds-markdown:not(.ds-think-content), .fbb737a4, [class*='markdown']", element).find(visible) || element;
+    },
+    summaryElement(element) {
+      return safeQsa(".ds-markdown:not(.ds-think-content), .fbb737a4", element).find(visible) || element;
+    },
+    collect(config) {
+      return adapterBaseItems(config, this);
+    }
+  };
+
+  ADAPTERS.kagi = {
+    role(element) {
+      const meta = metaText(element);
+      if (/\buser\b|human|query/.test(meta)) return "user";
+      if (/\bassistant\b|bot|answer/.test(meta)) return "assistant";
+      return genericRole(element) || (safeQsa(".assistant, [data-role='assistant']", element).length ? "assistant" : "");
+    },
+    target(element) {
+      return safeQsa(".chat_bubble_content, .markdown, [class*='message' i], [role='article']", element).find(visible) || element;
+    },
+    collect(config) {
+      const fromDom = kagiDomFallbackItems(config);
+      if (conversationLooksUseful(fromDom)) return fromDom;
+      const fromCopies = collectFromCopyButtons(config, {
+        rootSelector: "main,[role='main']",
+        maxDepth: 12
+      });
+      if (conversationLooksUseful(fromCopies)) return fromCopies;
+      const base = adapterBaseItems(config, this);
+      if (conversationLooksUseful(base)) return base;
+      const root = pageRoot("main,[role='main']");
+      const blocks = candidateTextBlocks(root, config, [
+        ".chat_bubble",
+        "[role='article']",
+        "[data-message-author-role]",
+        "[data-testid*='message']",
+        "[class*='message' i]",
+        "[class*='response' i]",
+        ".markdown"
+      ].join(","), { maxLength: 60000 });
+      return dedupeItems(blocks.slice(0, 24).map((item, index) => ({
+        ...item,
+        role: genericRole(item.element, config) || (index % 2 === 0 ? "user" : "assistant"),
+        text: compactText(item.text, config.summaryMaxChars)
+      })));
+    }
+  };
+
+  ADAPTERS.poe = {
+    role(element) {
+      const meta = metaText(element);
+      if (/rightside|right-side|human|user/.test(meta)) return "user";
+      if (/leftside|left-side|assistant|bot|message/.test(meta)) return "assistant";
+      return genericRole(element);
+    },
+    target(element) {
+      return safeQsa("[class*='Message_messageTextContainer'], [class*='Message_leftSideMessageBubble'], [class*='Message_rightSideMessageBubble'], [class*='messageText']", element).find(visible) || element;
+    },
+    collect(config) {
+      return adapterBaseItems(config, this);
+    }
+  };
+
+  ADAPTERS.aiStudio = {
+    role(element) {
+      const role = element.getAttribute("data-turn-role") || element.getAttribute("role") || "";
+      if (/user/i.test(role)) return "user";
+      if (/assistant|model/i.test(role)) return "assistant";
+      if (safeQsa("ms-thought-chunk, [class*='thought' i]", element).length) return "thinking";
+      return genericRole(element);
+    },
+    target(element) {
+      return safeQsa(".turn-content, [class*='turn-content'], .markdown, [class*='markdown']", element).find(visible) || element;
+    },
+    collect(config) {
+      return adapterBaseItems(config, this);
+    }
+  };
+
+  ADAPTERS.lechat = {
+    role(element) {
+      const role = element.getAttribute("data-message-author-role") || "";
+      if (/user/i.test(role)) return "user";
+      if (/assistant/i.test(role)) return "assistant";
+      if (element.getAttribute("data-message-part-type") === "answer") return "assistant";
+      return genericRole(element);
+    },
+    target(element) {
+      return safeQsa("[data-message-part-type='answer'].markdown-container-style, .markdown-container-style, .rounded-3xl, .break-words", element).find(visible) || element;
+    },
+    collect(config) {
+      return adapterBaseItems(config, this);
+    }
+  };
+
+  function css(primaryColor = "#1f7a5f") {
+    return `
+      #${ROOT_ID} {
+        --cc-message-nav-accent: ${primaryColor};
+        --cc-message-nav-bg: color-mix(in srgb, Canvas 92%, transparent);
+        --cc-message-nav-text: CanvasText;
+        --cc-message-nav-muted: color-mix(in srgb, CanvasText 54%, transparent);
+        --cc-message-nav-border: color-mix(in srgb, CanvasText 16%, transparent);
+        position: fixed;
+        top: 50%;
+        right: 14px;
+        z-index: 2147483200;
+        transform: translateY(-50%);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font: 12px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: var(--cc-message-nav-text);
+      }
+      #${ROOT_ID} * { box-sizing: border-box; }
+      .chatclub-message-nav-indicator {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 5px;
+        padding: 8px 2px;
+      }
+      .chatclub-message-nav-line {
+        width: 18px;
+        height: 3px;
+        border: 0;
+        border-radius: 999px;
+        background: color-mix(in srgb, CanvasText 28%, transparent);
+        cursor: pointer;
+        transition: width 160ms ease, background 160ms ease, opacity 160ms ease;
+        opacity: .72;
+        padding: 0;
+      }
+      .chatclub-message-nav-line:hover,
+      .chatclub-message-nav-line.active {
+        width: 34px;
+        background: var(--cc-message-nav-accent);
+        opacity: 1;
+      }
+      .chatclub-message-nav-menu {
+        width: min(18rem, calc(100vw - 68px));
+        max-height: min(72vh, 34rem);
+        overflow: auto;
+        padding: 6px;
+        border: 1px solid var(--cc-message-nav-border);
+        border-radius: 8px;
+        background: var(--cc-message-nav-bg);
+        color: var(--cc-message-nav-text);
+        box-shadow: 0 18px 48px rgba(0, 0, 0, .18);
+        backdrop-filter: blur(18px);
+        opacity: 0;
+        transform: translateX(8px) scale(.98);
+        pointer-events: none;
+        transition: opacity 140ms ease, transform 140ms ease;
+      }
+      #${ROOT_ID}:hover .chatclub-message-nav-menu,
+      #${ROOT_ID}:focus-within .chatclub-message-nav-menu {
+        opacity: 1;
+        transform: translateX(0) scale(1);
+        pointer-events: auto;
+      }
+      .chatclub-message-nav-item {
+        width: 100%;
+        display: grid;
+        grid-template-columns: 22px minmax(0, 1fr);
+        gap: 8px;
+        align-items: center;
+        min-height: 30px;
+        padding: 6px 8px;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: inherit;
+        text-align: left;
+        cursor: pointer;
+      }
+      .chatclub-message-nav-item:hover,
+      .chatclub-message-nav-item.active {
+        background: color-mix(in srgb, var(--cc-message-nav-accent) 13%, transparent);
+      }
+      .chatclub-message-nav-role {
+        display: inline-grid;
+        place-items: center;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: color-mix(in srgb, CanvasText 8%, transparent);
+        color: var(--cc-message-nav-muted);
+        font-size: 11px;
+        font-weight: 700;
+      }
+      .chatclub-message-nav-item.active .chatclub-message-nav-role {
+        background: var(--cc-message-nav-accent);
+        color: white;
+      }
+      .chatclub-message-nav-text {
+        min-width: 0;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+      .chatclub-message-nav-empty {
+        padding: 10px 12px;
+        color: var(--cc-message-nav-muted);
+      }
+      .chatclub-message-nav-effect-border {
+        outline: 2px solid var(--cc-message-nav-accent) !important;
+        outline-offset: 4px !important;
+        border-radius: 8px !important;
+      }
+      .chatclub-message-nav-effect-pulse {
+        animation: chatclub-message-nav-pulse 1.35s ease-out 1;
+      }
+      .chatclub-message-nav-effect-fade {
+        animation: chatclub-message-nav-fade 1.35s ease-out 1;
+      }
+      .chatclub-message-nav-effect-jiggle {
+        animation: chatclub-message-nav-jiggle .56s ease-in-out 1;
+      }
+      @keyframes chatclub-message-nav-pulse {
+        0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--cc-message-nav-accent) 42%, transparent); }
+        70% { box-shadow: 0 0 0 16px color-mix(in srgb, var(--cc-message-nav-accent) 0%, transparent); }
+        100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--cc-message-nav-accent) 0%, transparent); }
+      }
+      @keyframes chatclub-message-nav-fade {
+        0%, 100% { opacity: 1; }
+        22% { opacity: .42; }
+        44% { opacity: 1; }
+        66% { opacity: .58; }
+      }
+      @keyframes chatclub-message-nav-jiggle {
+        0%, 100% { transform: translateX(0); }
+        20% { transform: translateX(-5px); }
+        40% { transform: translateX(5px); }
+        60% { transform: translateX(-3px); }
+        80% { transform: translateX(3px); }
+      }
+      @media (prefers-color-scheme: dark) {
+        #${ROOT_ID} {
+          --cc-message-nav-bg: color-mix(in srgb, #1b1d20 88%, transparent);
+          --cc-message-nav-text: #f2f4f5;
+          --cc-message-nav-muted: rgba(242, 244, 245, .62);
+          --cc-message-nav-border: rgba(255, 255, 255, .14);
+        }
+      }
+    `;
+  }
+
+  class MessageNavigator {
+    constructor() {
+      this.version = VERSION;
+      this.enabled = false;
+      this.config = null;
+      this.options = {};
+      this.messages = [];
+      this.idToMessage = new Map();
+      this.root = null;
+      this.indicator = null;
+      this.menu = null;
+      this.observer = null;
+      this.buildTimer = 0;
+      this.scrollTimer = 0;
+      this.effectTimer = 0;
+      this.activeId = "";
+      this.effectTarget = null;
+      this.boundScroll = () => this.onScroll();
+      this.boundResize = () => this.scheduleBuild(160);
+    }
+
+    setEnabled(data = {}) {
+      if (data.enabled === false) {
+        this.destroy();
+        return this.state();
+      }
+      return this.enable(data.config || {}, data.options || {});
+    }
+
+    enable(config = {}, options = {}) {
+      this.destroy();
+      this.enabled = true;
+      this.config = {
+        ...config,
+        adapter: String(config.adapter || "generic").trim() || "generic",
+        messageSelector: String(config.messageSelector || "").trim(),
+        textCleanupSelectors: Array.isArray(config.textCleanupSelectors) ? config.textCleanupSelectors : [],
+        summaryMaxChars: Math.max(20, Math.min(180, Number(config.summaryMaxChars) || 60))
+      };
+      this.options = {
+        effectMode: EFFECT_MODES.has(options.effectMode) ? options.effectMode : "border",
+        primaryColor: /^#[0-9a-f]{6}$/i.test(String(options.primaryColor || "")) ? options.primaryColor : "#1f7a5f"
+      };
+      if (!this.config.messageSelector) throw new Error("Message navigator selector is empty");
+      this.injectStyle();
+      this.createRoot();
+      this.observe();
+      this.build();
+      this.scheduleBuild(600);
+      return this.state();
+    }
+
+    injectStyle() {
+      document.getElementById(STYLE_ID)?.remove();
+      const style = document.createElement("style");
+      style.id = STYLE_ID;
+      style.textContent = css(this.options.primaryColor);
+      (document.head || document.documentElement).append(style);
+    }
+
+    createRoot() {
+      document.getElementById(ROOT_ID)?.remove();
+      this.root = document.createElement("aside");
+      this.root.id = ROOT_ID;
+      this.root.setAttribute("aria-label", "ChatClub message navigator");
+      this.indicator = document.createElement("div");
+      this.indicator.className = "chatclub-message-nav-indicator";
+      this.menu = document.createElement("div");
+      this.menu.className = "chatclub-message-nav-menu";
+      this.menu.setAttribute("role", "menu");
+      this.root.append(this.menu, this.indicator);
+      document.documentElement.append(this.root);
+    }
+
+    observe() {
+      this.observer = new MutationObserver(() => this.scheduleBuild(360));
+      try { this.observer.observe(document.body || document.documentElement, { childList: true, subtree: true }); } catch {}
+      window.addEventListener("scroll", this.boundScroll, true);
+      window.addEventListener("resize", this.boundResize, true);
+    }
+
+    scheduleBuild(delay = 250) {
+      if (!this.enabled) return;
+      clearTimeout(this.buildTimer);
+      this.buildTimer = setTimeout(() => this.build(), delay);
+    }
+
+    collect() {
+      const adapter = ADAPTERS[this.config.adapter] || ADAPTERS.generic;
+      const items = adapter.collect?.(this.config) || ADAPTERS.generic.collect(this.config);
+      return dedupeItems(items)
+        .filter((item) => item.text && visible(item.target || item.element))
+        .map((item, index) => ({
+          ...item,
+          id: `message-${index + 1}`,
+          role: item.role === "user" || item.role === "thinking" ? item.role : "assistant"
+        }));
+    }
+
+    build() {
+      if (!this.enabled || !this.root?.isConnected) return;
+      this.messages = this.collect();
+      this.idToMessage = new Map(this.messages.map((item) => [item.id, item]));
+      this.render();
+      this.updateActive();
+    }
+
+    render() {
+      this.indicator.replaceChildren();
+      this.menu.replaceChildren();
+      if (!this.messages.length) {
+        const empty = document.createElement("div");
+        empty.className = "chatclub-message-nav-empty";
+        empty.textContent = "No messages";
+        this.menu.append(empty);
+        return;
+      }
+      for (const message of this.messages) {
+        const line = document.createElement("button");
+        line.className = "chatclub-message-nav-line";
+        line.type = "button";
+        line.title = `${rolePrefix(message.role)} ${message.text}`;
+        line.setAttribute("aria-label", message.text);
+        line.addEventListener("click", () => this.jumpTo(message.id));
+        this.indicator.append(line);
+
+        const item = document.createElement("button");
+        item.className = "chatclub-message-nav-item";
+        item.type = "button";
+        item.setAttribute("role", "menuitem");
+        item.addEventListener("click", () => this.jumpTo(message.id));
+        const role = document.createElement("span");
+        role.className = "chatclub-message-nav-role";
+        role.textContent = rolePrefix(message.role);
+        const text = document.createElement("span");
+        text.className = "chatclub-message-nav-text";
+        text.textContent = message.text;
+        item.append(role, text);
+        this.menu.append(item);
+      }
+    }
+
+    onScroll() {
+      if (!this.enabled) return;
+      clearTimeout(this.scrollTimer);
+      this.scrollTimer = setTimeout(() => this.updateActive(), 80);
+    }
+
+    updateActive() {
+      if (!this.messages.length) return;
+      const viewportY = Math.max(80, Math.min(window.innerHeight - 80, window.innerHeight * 0.42));
+      let active = this.messages[0];
+      for (const message of this.messages) {
+        try {
+          const rect = (message.target || message.element).getBoundingClientRect();
+          if (rect.top <= viewportY) active = message;
+          if (rect.top > viewportY) break;
+        } catch {}
+      }
+      this.activeId = active?.id || "";
+      const lines = Array.from(this.indicator.children);
+      const items = Array.from(this.menu.children).filter((node) => node.classList?.contains("chatclub-message-nav-item"));
+      this.messages.forEach((message, index) => {
+        lines[index]?.classList.toggle("active", message.id === this.activeId);
+        items[index]?.classList.toggle("active", message.id === this.activeId);
+      });
+    }
+
+    async jumpTo(id) {
+      const message = this.idToMessage.get(id);
+      const target = message?.target || message?.element;
+      if (!target) return;
+      const scroller = scrollParent(target);
+      const rect = target.getBoundingClientRect();
+      const base = scrollerRect(scroller);
+      const offset = Math.max(30, Math.min(140, Number(this.config.scrollOffsetPx) || 64));
+      const top = scrollerTop(scroller) + rect.top - base.top - offset;
+      scrollToTop(scroller, Math.max(0, top));
+      await sleep(420);
+      this.applyEffect(target);
+      this.updateActive();
+    }
+
+    clearEffect() {
+      clearTimeout(this.effectTimer);
+      if (!this.effectTarget) return;
+      this.effectTarget.classList.remove(
+        "chatclub-message-nav-effect-border",
+        "chatclub-message-nav-effect-pulse",
+        "chatclub-message-nav-effect-fade",
+        "chatclub-message-nav-effect-jiggle"
+      );
+      this.effectTarget = null;
+    }
+
+    applyEffect(target) {
+      this.clearEffect();
+      const mode = EFFECT_MODES.has(this.options.effectMode) ? this.options.effectMode : "border";
+      if (mode === "none") return;
+      this.effectTarget = target;
+      target.classList.add(`chatclub-message-nav-effect-${mode}`);
+      this.effectTimer = setTimeout(() => this.clearEffect(), mode === "border" ? 1800 : 1500);
+    }
+
+    state() {
+      return {
+        ok: true,
+        enabled: this.enabled,
+        siteId: this.config?.id || "",
+        adapter: this.config?.adapter || "",
+        messageCount: this.messages.length,
+        activeId: this.activeId,
+        version: VERSION
+      };
+    }
+
+    destroy() {
+      this.enabled = false;
+      clearTimeout(this.buildTimer);
+      clearTimeout(this.scrollTimer);
+      this.clearEffect();
+      try { this.observer?.disconnect?.(); } catch {}
+      this.observer = null;
+      window.removeEventListener("scroll", this.boundScroll, true);
+      window.removeEventListener("resize", this.boundResize, true);
+      this.root?.remove();
+      this.root = null;
+      this.indicator = null;
+      this.menu = null;
+      this.messages = [];
+      this.idToMessage.clear();
+      document.getElementById(STYLE_ID)?.remove();
+    }
+  }
+
+  window[GLOBAL_NAME] = new MessageNavigator();
+})();
