@@ -19,7 +19,7 @@ const SHORTCUT_SETTING_GROUPS = [
   {
     titleKey: "shortcuts.chatTitle",
     descriptionKey: "shortcuts.chatDesc",
-    actions: ["closeChat", "reloadChat", "enterFullscreen"]
+    actions: ["toggleMessageNavigator", "closeChat", "reloadChat", "enterFullscreen"]
   }
 ];
 

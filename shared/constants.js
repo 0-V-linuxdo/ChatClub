@@ -1,7 +1,7 @@
 import { DEFAULT_TOPBAR_LAYOUT } from "./topbar.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-07-07｜11:46:52」";
+export const APP_VERSION = "「2026-07-07｜12:36:35」";
 export const BASELINE_MOD_VERSION = "2.4.0.14";
 export const HOMEPAGE_URL = "https://chatclub.local/";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
@@ -99,7 +99,7 @@ export const TAB_GROUP_HEADER_BUTTONS = [
   { id: "reload", icon: "reload", section: "header", defaultPlacement: "pinned" },
   { id: "messageNavigator", icon: "navigator", section: "header", defaultPlacement: "pinned" },
   { id: "deleteThread", icon: "trash", section: "header", defaultPlacement: "pinned", danger: true },
-  { id: "fullscreen", icon: "maximize", section: "header", defaultPlacement: "pinned" },
+  { id: "fullscreen", icon: "maximize", section: "header", defaultPlacement: "menu" },
   { id: "openInNewTab", icon: "external", section: "menu", defaultPlacement: "menu" },
   { id: "copyLink", icon: "copy", section: "menu", defaultPlacement: "menu" },
   { id: "removeGroup", icon: "x", section: "menu", defaultPlacement: "menu", danger: true },
@@ -310,6 +310,7 @@ export const DEFAULT_SHORTCUT_CONFIG = {
     optimizePrompt: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyO" },
     openSummaryPanel: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyS" },
     openPocketPanel: { alt: false, shift: false, cmdOrCtrl: true, code: "KeyP" },
+    toggleMessageNavigator: { alt: false, shift: false, cmdOrCtrl: true, code: "KeyM" },
     closeChat: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyW" },
     reloadChat: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyR" },
     enterFullscreen: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyF" },

@@ -7,6 +7,7 @@ export const ALL_SHORTCUT_ACTIONS = [
   "optimizePrompt",
   "openSummaryPanel",
   "openPocketPanel",
+  "toggleMessageNavigator",
   "closeChat",
   "reloadChat",
   "enterFullscreen",
@@ -17,7 +18,7 @@ export const ALL_SHORTCUT_ACTIONS = [
 
 export const PATTERN_ACTIONS = ["insertPrompt", "switchLayout", "switchPlatformTab"];
 export const FIXED_KEY_ACTIONS = ALL_SHORTCUT_ACTIONS.filter((action) => !PATTERN_ACTIONS.includes(action));
-export const INTENT_SCOPED_ACTIONS = ["closeChat", "reloadChat", "enterFullscreen"];
+export const INTENT_SCOPED_ACTIONS = ["toggleMessageNavigator", "closeChat", "reloadChat", "enterFullscreen"];
 
 export const SHORTCUT_ACTION_LABELS = {
   focusInput: "Focus Input",
@@ -26,6 +27,7 @@ export const SHORTCUT_ACTION_LABELS = {
   optimizePrompt: "Optimize Prompt",
   openSummaryPanel: "Summary Panel",
   openPocketPanel: "Pocket",
+  toggleMessageNavigator: "Message Navigator",
   closeChat: "Close Current Tab",
   reloadChat: "Reload Current App",
   enterFullscreen: "Full Screen",
@@ -41,6 +43,7 @@ export const SHORTCUT_ACTION_DESCRIPTIONS = {
   optimizePrompt: "Optimize the current prompt.",
   openSummaryPanel: "Open Summary / Ask.",
   openPocketPanel: "Open Pocket.",
+  toggleMessageNavigator: "Toggle the message navigator for the active chat.",
   closeChat: "Close the active tab or group.",
   reloadChat: "Reload the active chat app.",
   enterFullscreen: "Toggle the active group fullscreen.",

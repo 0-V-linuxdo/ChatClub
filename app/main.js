@@ -191,10 +191,9 @@ const ICONS = {
     ["polyline", { points: "3 17 12 21.5 21 17", "stroke-width": "2.5" }]
   ],
   navigator: [
-    ["path", { d: "M4 6h10" }],
-    ["path", { d: "M4 12h16" }],
-    ["path", { d: "M4 18h8" }],
-    ["path", { d: "m16 6 4 6-4 6" }]
+    ["path", { d: "M9 7h9", opacity: ".7", "stroke-width": "2.6" }],
+    ["path", { d: "M9 12h9", opacity: ".7", "stroke-width": "2.6" }],
+    ["path", { d: "M4 17h14", "stroke-width": "2.8" }]
   ],
   sidebarCollapse: [
     ["rect", { x: "5", y: "5", width: "14", height: "14", rx: "1.6" }],
@@ -2749,6 +2748,7 @@ async function handleShortcutAction(action, matchObj = null, sourceWindow = null
   else if (action === "optimizePrompt") await optimizeCurrentPrompt();
   else if (action === "openSummaryPanel" || action === "openSummary") openSummaryPanel();
   else if (action === "openPocketPanel") openPocketPanel();
+  else if (action === "toggleMessageNavigator") await workspaceController.toggleMessageNavigatorForShortcut(sourceWindow);
   else if (action === "closeChat" && group && chat) await workspaceController.closeTab(group, chat);
   else if (action === "reloadChat" && chat) workspaceController.reloadChat(chat);
   else if (action === "enterFullscreen") {

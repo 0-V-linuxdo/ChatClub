@@ -3,7 +3,7 @@
   const COPY_SOURCE = "chatclub-native-copy";
   const GEMINI_MODEL_PICKER_SOURCE = "chatclub-gemini-model-picker";
   const NOTION_SEND_TEXT_SOURCE = "chatclub-notion-send-text";
-  const CONTENT_BRIDGE_VERSION = "2026.07.07.5";
+  const CONTENT_BRIDGE_VERSION = "2026.07.07.6";
   const SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.07.1";
   const DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.04.1";
   const MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.07.4";
@@ -45,6 +45,7 @@
       optimizePrompt: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyO" },
       openSummaryPanel: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyS" },
       openPocketPanel: { alt: false, shift: false, cmdOrCtrl: true, code: "KeyP" },
+      toggleMessageNavigator: { alt: false, shift: false, cmdOrCtrl: true, code: "KeyM" },
       closeChat: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyW" },
       reloadChat: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyR" },
       enterFullscreen: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyF" },
@@ -60,6 +61,7 @@
     "optimizePrompt",
     "openSummaryPanel",
     "openPocketPanel",
+    "toggleMessageNavigator",
     "closeChat",
     "reloadChat",
     "enterFullscreen",

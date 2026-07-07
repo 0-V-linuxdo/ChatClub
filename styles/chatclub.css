@@ -1583,12 +1583,9 @@ body.tab-gesture-active * {
   color: var(--text);
 }
 
-.compact-icon.message-navigator-active,
-.compact-icon.message-navigator-active:hover,
-.compact-icon[aria-pressed="true"] {
-  border-color: var(--primary-color);
-  background: var(--primary-color);
-  color: #fff;
+.compact-icon.message-navigator-active .svg-icon > :last-child {
+  stroke: var(--primary);
+  opacity: 1;
 }
 
 .tab:hover .tab-close,

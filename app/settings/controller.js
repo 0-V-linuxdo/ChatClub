@@ -710,6 +710,7 @@ export function createSettingsController(ctx) {
     const tabGroupButtonLabel = (id) => ({
       addApp: t("chat.addApp"),
       reload: t("chat.reload"),
+      messageNavigator: t("chat.messageNavigator"),
       deleteThread: t("chat.deleteThreadInGroup"),
       fullscreen: t("chat.fullscreen"),
       openInNewTab: t("common.openInNewTab"),

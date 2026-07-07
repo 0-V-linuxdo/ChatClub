@@ -1337,7 +1337,7 @@ export function createWorkspaceController(ctx = {}) {
   function renderMessageNavigatorButton(group) {
     const iframe = activeIframe(activeChatForGroup(group));
     const active = messageNavigatorFrameEnabled(iframe);
-    const button = compactIconButton(t("chat.messageNavigator"), "navigator", () => toggleMessageNavigator(group), active ? "message-navigator-active" : "", t("chat.messageNavigator"), "left", "workspace.group.messageNavigator");
+    const button = compactIconButton(t("chat.messageNavigator"), "navigator", () => toggleMessageNavigator(group), active ? "message-navigator-active" : "", shortcutTooltip(t("chat.messageNavigator"), "toggleMessageNavigator"), "left", "workspace.group.messageNavigator");
     button.setAttribute("aria-pressed", String(active));
     return button;
   }
@@ -1644,6 +1644,16 @@ export function createWorkspaceController(ctx = {}) {
       console.warn("[ChatClub] Message navigator failed", error);
       notify(t("messageNavigator.failed"), "error");
     }
+  }
+
+  async function toggleMessageNavigatorForShortcut(sourceWindow = null) {
+    const groupId = activeShortcutGroupId(sourceWindow);
+    const group = state.groups.find((item) => item.id === groupId) || state.groups[0];
+    if (!group) {
+      notify(t("messageNavigator.noIframe"), "error");
+      return;
+    }
+    await toggleMessageNavigator(group);
   }
 
   async function reapplyMessageNavigatorForFrame(iframe) {
@@ -2448,7 +2458,7 @@ export function createWorkspaceController(ctx = {}) {
       }, "secondary", false, shortcutTooltip(t("chat.reload"), "reloadChat"), "left", "workspace.group.reload"),
       messageNavigator: () => menuButton(t("chat.messageNavigator"), "navigator", () => {
         toggleMessageNavigator(group);
-      }, "secondary", false, t("chat.messageNavigator"), "left", "workspace.group.messageNavigator"),
+      }, "secondary", false, shortcutTooltip(t("chat.messageNavigator"), "toggleMessageNavigator"), "left", "workspace.group.messageNavigator"),
       deleteThread: () => menuButton(t("chat.deleteThreadInGroup"), "trash", () => {
         deleteActiveThreadForGroup(group);
       }, "danger", false, t("chat.deleteThreadInGroup"), "left", "workspace.group.deleteThread"),
@@ -2512,6 +2522,7 @@ export function createWorkspaceController(ctx = {}) {
     addGroup,
     closeTab,
     toggleFullscreen,
+    toggleMessageNavigatorForShortcut,
     openChatMenu,
     openAppPicker,
     openLayoutMenu,

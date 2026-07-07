@@ -87,9 +87,32 @@ export function normalizeTabGroupButtonsMode(value) {
   return value === "hidden" ? "hidden" : "pinned";
 }
 
+const LEGACY_TAB_GROUP_BUTTON_PLACEMENT_FULLSCREEN_PINNED = Object.freeze({
+  addApp: "pinned",
+  reload: "pinned",
+  messageNavigator: "pinned",
+  deleteThread: "pinned",
+  fullscreen: "pinned",
+  openInNewTab: "menu",
+  copyLink: "menu",
+  removeGroup: "menu",
+  more: "pinned"
+});
+
+function tabGroupPlacementLooksLikeFullscreenPinnedDefault(raw = {}) {
+  const configurable = TAB_GROUP_HEADER_BUTTONS.filter((item) => !item.requiredPinned);
+  if (!configurable.every((item) => Object.prototype.hasOwnProperty.call(raw, item.id))) return false;
+  return TAB_GROUP_HEADER_BUTTONS.every((item) => {
+    const expected = LEGACY_TAB_GROUP_BUTTON_PLACEMENT_FULLSCREEN_PINNED[item.id] || "pinned";
+    const saved = raw[item.id];
+    return (saved === "menu" || saved === "pinned" ? saved : expected) === expected;
+  });
+}
+
 export function normalizeTabGroupButtonPlacement(value = {}, legacyMode = "pinned") {
   const legacyHidden = normalizeTabGroupButtonsMode(legacyMode) === "hidden";
   const raw = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const migrateFullscreenPinnedDefault = tabGroupPlacementLooksLikeFullscreenPinnedDefault(raw);
   return Object.fromEntries(TAB_GROUP_HEADER_BUTTONS.map((item) => {
     if (item.requiredPinned) return [item.id, "pinned"];
     const saved = raw[item.id];
@@ -98,6 +121,7 @@ export function normalizeTabGroupButtonPlacement(value = {}, legacyMode = "pinne
       : legacyHidden
         ? "menu"
         : DEFAULT_TAB_GROUP_BUTTON_PLACEMENT[item.id] || "pinned";
+    if (migrateFullscreenPinnedDefault && item.id === "fullscreen") return [item.id, "menu"];
     return [item.id, placement === "menu" ? "menu" : "pinned"];
   }));
 }
