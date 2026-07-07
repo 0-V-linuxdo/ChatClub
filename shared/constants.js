@@ -1,7 +1,7 @@
 import { DEFAULT_TOPBAR_LAYOUT } from "./topbar.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-07-07｜13:31:21」";
+export const APP_VERSION = "「2026-07-07｜16:47:37」";
 export const BASELINE_MOD_VERSION = "2.4.0.14";
 export const HOMEPAGE_URL = "https://chatclub.local/";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
@@ -96,12 +96,14 @@ export const DEFAULT_MODEL_PREFERENCE_ORDER = Object.freeze(Object.keys(MODEL_PR
 
 export const TAB_GROUP_HEADER_BUTTONS = [
   { id: "addApp", icon: "plus", section: "header", defaultPlacement: "pinned" },
-  { id: "reload", icon: "reload", section: "header", defaultPlacement: "pinned" },
+  { id: "refreshPage", icon: "reload", section: "header", defaultPlacement: "pinned" },
+  { id: "newChat", icon: "edit", section: "header", defaultPlacement: "pinned" },
   { id: "messageNavigator", icon: "navigator", section: "header", defaultPlacement: "pinned" },
   { id: "deleteThread", icon: "trash", section: "header", defaultPlacement: "pinned", danger: true },
+  { id: "reload", icon: "home", section: "header", defaultPlacement: "menu" },
   { id: "fullscreen", icon: "maximize", section: "header", defaultPlacement: "menu" },
-  { id: "openInNewTab", icon: "external", section: "menu", defaultPlacement: "menu" },
   { id: "copyLink", icon: "copy", section: "menu", defaultPlacement: "menu" },
+  { id: "openInNewTab", icon: "external", section: "menu", defaultPlacement: "menu" },
   { id: "removeGroup", icon: "x", section: "menu", defaultPlacement: "menu", danger: true },
   { id: "more", icon: "more", section: "anchor", requiredPinned: true, defaultPlacement: "pinned" }
 ];
@@ -159,9 +161,11 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
     labelKey: "tooltip.group.workspace",
     targets: Object.freeze([
       Object.freeze({ id: "workspace.group.addApp", labelKey: "chat.addApp" }),
+      Object.freeze({ id: "workspace.group.newChat", labelKey: "topbar.newChat" }),
       Object.freeze({ id: "workspace.group.openInNewTab", labelKey: "common.openInNewTab" }),
       Object.freeze({ id: "workspace.group.copyLink", labelKey: "common.copyLink" }),
-      Object.freeze({ id: "workspace.group.reload", labelKey: "chat.reload" }),
+      Object.freeze({ id: "workspace.group.refreshPage", labelKey: "chat.refreshPage" }),
+      Object.freeze({ id: "workspace.group.reload", labelKey: "chat.home" }),
       Object.freeze({ id: "workspace.group.messageNavigator", labelKey: "chat.messageNavigator" }),
       Object.freeze({ id: "workspace.group.deleteThread", labelKey: "chat.deleteThreadInGroup" }),
       Object.freeze({ id: "workspace.group.fullscreen", labelKey: "chat.fullscreen" }),
@@ -305,14 +309,16 @@ export const DEFAULT_SHORTCUT_CONFIG = {
   sendKeyMode: "enter",
   shortcuts: {
     focusInput: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyK" },
-    newChat: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyN" },
+    newChat: { alt: false, shift: false, cmdOrCtrl: true, code: "KeyN" },
+    newChatAll: { alt: false, shift: true, cmdOrCtrl: true, code: "KeyN" },
     deleteThread: { alt: true, shift: true, cmdOrCtrl: false, code: "KeyD" },
     optimizePrompt: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyO" },
     openSummaryPanel: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyS" },
     openPocketPanel: { alt: false, shift: false, cmdOrCtrl: true, code: "KeyP" },
     toggleMessageNavigator: { alt: false, shift: false, cmdOrCtrl: true, code: "KeyM" },
     closeChat: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyW" },
-    reloadChat: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyR" },
+    refreshPage: { alt: false, shift: false, cmdOrCtrl: true, code: "KeyR" },
+    reloadChat: { alt: false, shift: false, cmdOrCtrl: true, code: "KeyH" },
     enterFullscreen: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyF" },
     insertPrompt: { alt: true, shift: false, cmdOrCtrl: false, codePattern: "Digit" },
     switchLayout: { alt: false, shift: true, cmdOrCtrl: true, codePattern: "Digit" },

@@ -1325,6 +1325,18 @@ export function createWorkspaceController(ctx = {}) {
     return compactIconButton(t("common.copyLink"), "copy", () => copyActiveChatLink(group), "", t("common.copyLink"), "left", "workspace.group.copyLink");
   }
 
+  function renderNewChatButton(group) {
+    return compactIconButton(t("topbar.newChat"), "edit", () => startNewChatInActiveTab(group), "", shortcutTooltip(t("topbar.newChat"), "newChat"), "left", "workspace.group.newChat");
+  }
+
+  function renderRefreshPageButton(group) {
+    return compactIconButton(t("chat.refreshPage"), "reload", () => refreshCurrentPage(activeChatForGroup(group)), "", shortcutTooltip(t("chat.refreshPage"), "refreshPage"), "left", "workspace.group.refreshPage");
+  }
+
+  function renderHomeButton(group) {
+    return compactIconButton(t("chat.home"), "home", () => reloadChat(activeChatForGroup(group)), "", shortcutTooltip(t("chat.home"), "reloadChat"), "left", "workspace.group.reload");
+  }
+
   function renderRemoveGroupButton(group) {
     const button = compactIconButton(t("chat.removeGroup"), "x", async () => {
       await removeChatGroup(group);
@@ -1347,7 +1359,9 @@ export function createWorkspaceController(ctx = {}) {
     const buttonById = {
       openInNewTab: () => renderOpenInNewTabButton(group),
       copyLink: () => renderCopyLinkButton(group),
-      reload: () => compactIconButton(t("chat.reload"), "reload", () => reloadChat(activeChatForGroup(group)), "", shortcutTooltip(t("chat.reload"), "reloadChat"), "left", "workspace.group.reload"),
+      newChat: () => renderNewChatButton(group),
+      refreshPage: () => renderRefreshPageButton(group),
+      reload: () => renderHomeButton(group),
       messageNavigator: () => renderMessageNavigatorButton(group),
       deleteThread: () => compactIconButton(t("chat.deleteThreadInGroup"), "trash", () => deleteActiveThreadForGroup(group), "danger-action", t("chat.deleteThreadInGroup"), "left", "workspace.group.deleteThread"),
       fullscreen: () => compactIconButton(fullscreenLabel, fullscreenIcon, () => toggleFullscreen(group.id), "fullscreen-action", fullscreenTooltipLabel, "left", "workspace.group.fullscreen"),
@@ -1503,9 +1517,55 @@ export function createWorkspaceController(ctx = {}) {
     return true;
   }
 
+  function refreshCurrentPage(chat) {
+    const iframe = activeIframe(chat);
+    if (!iframe) return false;
+    const href = openableTabUrl(iframe.dataset.currentHref)
+      || openableTabUrl(iframe.src || iframe.getAttribute?.("src"))
+      || openableTabUrl(appById(chat?.appId).url);
+    if (!href) return false;
+    iframe.dataset.currentHref = href;
+    iframe.src = href;
+    return true;
+  }
+
   function reloadChat(chat) {
     const iframe = activeIframe(chat);
-    if (iframe) iframe.src = appById(chat.appId).url;
+    const app = appById(chat?.appId);
+    if (!iframe || !app?.url) return false;
+    delete iframe.dataset.currentHref;
+    delete iframe.dataset.currentThreadHref;
+    delete iframe.dataset.currentTitle;
+    iframe.src = app.url;
+    return true;
+  }
+
+  async function startNewChatInFrame(iframe, fallbackChat = null) {
+    if (!(iframe instanceof HTMLIFrameElement)) return false;
+    try {
+      await sendToIframe(iframe, "newChatPreprocess", {}, 1500);
+    } catch {}
+    const app = frameApp(iframe) || appById(fallbackChat?.appId || iframe.dataset?.appId);
+    if (!app?.url) return false;
+    delete iframe.dataset.currentHref;
+    delete iframe.dataset.currentThreadHref;
+    delete iframe.dataset.currentTitle;
+    iframe.src = app.url;
+    return true;
+  }
+
+  async function startNewChatInActiveTab(group) {
+    const chat = activeChatForGroup(group);
+    const iframe = activeIframe(chat);
+    if (!chat || !iframe) return false;
+    return startNewChatInFrame(iframe, chat);
+  }
+
+  async function startNewChatForShortcut(sourceWindow = null) {
+    const groupId = activeShortcutGroupId(sourceWindow);
+    const group = state.groups.find((item) => item.id === groupId) || state.groups[0];
+    if (!group) return false;
+    return startNewChatInActiveTab(group);
   }
 
   async function activeHref(chat) {
@@ -2452,10 +2512,18 @@ export function createWorkspaceController(ctx = {}) {
       addApp: () => menuButton(t("chat.addApp"), "plus", () => openAppPicker(anchor, { group }), "secondary", false, t("chat.addApp"), "", "workspace.group.addApp"),
       openInNewTab: () => menuButton(t("common.openInNewTab"), "external", () => openChatInNewTab(group), "secondary", false, t("common.openInNewTab"), "", "workspace.group.openInNewTab"),
       copyLink: () => menuButton(t("common.copyLink"), "copy", () => copyActiveChatLink(group), "secondary", false, t("common.copyLink"), "", "workspace.group.copyLink"),
-      reload: () => menuButton(t("chat.reload"), "reload", () => {
+      newChat: () => menuButton(t("topbar.newChat"), "edit", async () => {
+        await startNewChatInActiveTab(group);
+        closePopovers();
+      }, "secondary", false, shortcutTooltip(t("topbar.newChat"), "newChat"), "left", "workspace.group.newChat"),
+      refreshPage: () => menuButton(t("chat.refreshPage"), "reload", () => {
+        refreshCurrentPage(activeChatForGroup(group));
+        closePopovers();
+      }, "secondary", false, shortcutTooltip(t("chat.refreshPage"), "refreshPage"), "left", "workspace.group.refreshPage"),
+      reload: () => menuButton(t("chat.home"), "home", () => {
         reloadChat(activeChatForGroup(group));
         closePopovers();
-      }, "secondary", false, shortcutTooltip(t("chat.reload"), "reloadChat"), "left", "workspace.group.reload"),
+      }, "secondary", false, shortcutTooltip(t("chat.home"), "reloadChat"), "left", "workspace.group.reload"),
       messageNavigator: () => menuButton(t("chat.messageNavigator"), "navigator", () => {
         toggleMessageNavigator(group);
       }, "secondary", false, shortcutTooltip(t("chat.messageNavigator"), "toggleMessageNavigator"), "left", "workspace.group.messageNavigator"),
@@ -2531,6 +2599,10 @@ export function createWorkspaceController(ctx = {}) {
     activeShortcutGroupId,
     activeChatForGroup,
     activateChatTab,
+    startNewChatInFrame,
+    startNewChatInActiveTab,
+    startNewChatForShortcut,
+    refreshCurrentPage,
     reloadChat,
     loadPocketEntryInFrame,
     restorePocketBatch,

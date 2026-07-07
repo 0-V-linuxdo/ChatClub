@@ -299,9 +299,36 @@ const ICONS = {
       }]
     ]
   },
-  reload: [
-    ["path", { d: "M21 12a9 9 0 1 1-2.6-6.4" }],
-    ["path", { d: "M21 3v6h-6" }]
+  reload: {
+    viewBox: "3 3 18 18",
+    children: [
+      ["path", {
+        d: "M12,20.75a7.25,7.25,0,0,1,0-14.5h2.5a.75.75,0,0,1,0,1.5H12a5.75,5.75,0,1,0,5.75,5.75.75.75,0,0,1,1.5,0A7.26,7.26,0,0,1,12,20.75Z",
+        fill: "currentColor",
+        stroke: "none"
+      }],
+      ["path", {
+        d: "M12,10.75a.74.74,0,0,1-.53-.22.75.75,0,0,1,0-1.06L13.94,7,11.47,4.53a.75.75,0,1,1,1.06-1.06l3,3a.75.75,0,0,1,0,1.06l-3,3A.74.74,0,0,1,12,10.75Z",
+        fill: "currentColor",
+        stroke: "none"
+      }]
+    ]
+  },
+  reset: {
+    viewBox: "128 104 256 288",
+    children: [
+      ["path", {
+        d: "M208.75 153.5c1.74-.77 3.5-1.48 5.28-2.16a117.29 117.29 0 0 1 41.78-7.68c32.4 0 61.76 13.15 83 34.39l.87.94c20.73 21.19 33.51 50.17 33.51 82.06 0 32.41-13.15 61.77-34.38 83.01-21.24 21.24-50.6 34.39-83 34.39-30.53 0-58.4-11.71-79.31-30.89l-.93-.92c-20.54-19.27-34.18-45.83-36.72-75.48-.74-9.03 5.98-16.97 15.02-17.7 9.03-.74 16.97 5.99 17.7 15.02 1.83 21.34 11.58 40.4 26.24 54.21l.89.76c15 13.74 35.06 22.15 57.11 22.15 23.34 0 44.49-9.47 59.78-24.76 15.29-15.29 24.76-36.45 24.76-59.79 0-23.01-9.14-43.86-23.97-59.05l-.79-.74c-15.29-15.28-36.44-24.75-59.78-24.75-10.65 0-20.8 1.94-30.11 5.49l-2.87 1.15 16.87 6.09c8.5 3.04 12.92 12.42 9.88 20.92-3.05 8.49-12.43 12.92-20.92 9.88l-54.21-19.56c-8.5-3.04-12.93-12.43-9.88-20.92l18.63-51.66c3.04-8.49 12.42-12.92 20.92-9.87 8.49 3.04 12.92 12.42 9.88 20.91l-5.25 14.56z",
+        fill: "currentColor",
+        "fill-rule": "nonzero",
+        stroke: "none"
+      }]
+    ]
+  },
+  home: [
+    ["path", { d: "m3 10.5 9-7.5 9 7.5" }],
+    ["path", { d: "M5 10v10h14V10" }],
+    ["path", { d: "M9 20v-6h6v6" }]
   ],
   right: [
     ["path", { d: "m12 5 7 7-7 7" }],
@@ -1012,13 +1039,9 @@ async function applyPreferredModelsToFrames(frames = null, options = {}) {
 }
 
 async function newChatOnFrames() {
-  await Promise.allSettled(workspaceController.currentFrames().map(async (iframe) => {
-    try {
-      await sendToIframe(iframe, "newChatPreprocess", {}, 1500);
-    } catch {}
-    const app = workspaceController.frameApp(iframe);
-    iframe.src = app.url;
-  }));
+  await Promise.allSettled(workspaceController.currentFrames().map((iframe) =>
+    workspaceController.startNewChatInFrame(iframe)
+  ));
 }
 
 function deleteThreadFailureReason(item) {
@@ -2295,7 +2318,7 @@ function renderTopbarItem(item, prompt, collapsedPreview) {
   if (item.id === "promptLibrary") return renderPromptLibraryButton();
   if (item.id === "composer") return renderTopbarComposer(prompt, collapsedPreview);
   if (item.id === "send") return actionButton(t("topbar.send"), "send", sendPromptToFrames, "primary", t("topbar.send"), "", "", "topbar.send");
-  if (item.id === "newChat") return actionButton(t("topbar.newChat"), "edit", newChatOnFrames, "secondary", shortcutTooltip(t("topbar.newChat"), "newChat"), "", "", "topbar.newChat");
+  if (item.id === "newChat") return actionButton(t("topbar.newChat"), "edit", newChatOnFrames, "secondary", shortcutTooltip(t("topbar.newChat"), "newChatAll"), "", "", "topbar.newChat");
   if (item.id === "deleteThread") return actionButton(t("topbar.deleteThread"), "trash", deleteThreadOnFrames, "danger", shortcutTooltip(t("topbar.deleteThread"), "deleteThread"), "", "", "topbar.deleteThread");
   if (item.id === "summary") return actionButton(t("topbar.summary"), "summary", openSummaryPanel, "secondary", shortcutTooltip(t("topbar.summary"), "openSummaryPanel"), "", "", "topbar.summary");
   if (item.id === "pocket") return actionButton(t("topbar.pocket"), "pocket", openPocketPanel, "secondary", shortcutTooltip(t("topbar.pocket"), "openPocketPanel"), "", topbarItemClass("pocket"), "topbar.pocket");
@@ -2743,13 +2766,15 @@ async function handleShortcutAction(action, matchObj = null, sourceWindow = null
   const chat = group ? workspaceController.activeChatForGroup(group) : null;
   const digit = shortcutDigit(matchObj);
   if (action === "focusInput") focusPromptInput();
-  else if (action === "newChat") await newChatOnFrames();
+  else if (action === "newChat") await workspaceController.startNewChatForShortcut(sourceWindow);
+  else if (action === "newChatAll") await newChatOnFrames();
   else if (action === "deleteThread") await deleteThreadOnFrames();
   else if (action === "optimizePrompt") await optimizeCurrentPrompt();
   else if (action === "openSummaryPanel" || action === "openSummary") openSummaryPanel();
   else if (action === "openPocketPanel") openPocketPanel();
   else if (action === "toggleMessageNavigator") await workspaceController.toggleMessageNavigatorForShortcut(sourceWindow);
   else if (action === "closeChat" && group && chat) await workspaceController.closeTab(group, chat);
+  else if (action === "refreshPage" && chat) workspaceController.refreshCurrentPage(chat);
   else if (action === "reloadChat" && chat) workspaceController.reloadChat(chat);
   else if (action === "enterFullscreen") {
     if (state.summaryOpen) summaryController.toggleMaximized();

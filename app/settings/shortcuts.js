@@ -14,12 +14,12 @@ const SHORTCUT_SETTING_GROUPS = [
   {
     titleKey: "shortcuts.globalTitle",
     descriptionKey: "shortcuts.globalDesc",
-    actions: ["focusInput", "newChat", "deleteThread", "optimizePrompt", "openSummaryPanel", "openPocketPanel", "insertPrompt", "switchLayout", "switchPlatformTab"]
+    actions: ["focusInput", "newChatAll", "deleteThread", "optimizePrompt", "openSummaryPanel", "openPocketPanel", "insertPrompt", "switchLayout", "switchPlatformTab"]
   },
   {
     titleKey: "shortcuts.chatTitle",
     descriptionKey: "shortcuts.chatDesc",
-    actions: ["toggleMessageNavigator", "closeChat", "reloadChat", "enterFullscreen"]
+    actions: ["newChat", "toggleMessageNavigator", "closeChat", "refreshPage", "reloadChat", "enterFullscreen"]
   }
 ];
 
@@ -184,7 +184,7 @@ export function createShortcutSettings(ctx) {
           }
         })
       ),
-      settingsIconAction(t("shortcuts.reset"), "reload", () => {
+      settingsIconAction(t("shortcuts.reset"), "reset", () => {
         const defaults = defaultShortcutConfig();
         const next = updateShortcutDraft(action, defaults.shortcuts[action]);
         queueShortcutAutoSave(next, redraw);

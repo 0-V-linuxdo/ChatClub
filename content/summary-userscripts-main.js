@@ -2222,13 +2222,15 @@ const out=[];const seen=new Set;const norm=v=>api.normalize(String(v||''));const
     sendKeyMode: "enter",
     shortcuts: {
       focusInput: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyK" },
-      newChat: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyN" },
+      newChat: { alt: false, shift: false, cmdOrCtrl: true, code: "KeyN" },
+      newChatAll: { alt: false, shift: true, cmdOrCtrl: true, code: "KeyN" },
       optimizePrompt: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyO" },
       openSummaryPanel: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyS" },
       openPocketPanel: { alt: false, shift: false, cmdOrCtrl: true, code: "KeyP" },
       toggleMessageNavigator: { alt: false, shift: false, cmdOrCtrl: true, code: "KeyM" },
       closeChat: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyW" },
-      reloadChat: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyR" },
+      refreshPage: { alt: false, shift: false, cmdOrCtrl: true, code: "KeyR" },
+      reloadChat: { alt: false, shift: false, cmdOrCtrl: true, code: "KeyH" },
       enterFullscreen: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyF" },
       insertPrompt: { alt: true, shift: false, cmdOrCtrl: false, codePattern: "Digit" },
       switchLayout: { alt: false, shift: true, cmdOrCtrl: true, codePattern: "Digit" },
@@ -2238,11 +2240,13 @@ const out=[];const seen=new Set;const norm=v=>api.normalize(String(v||''));const
   const SHORTCUT_ACTIONS = [
     "focusInput",
     "newChat",
+    "newChatAll",
     "optimizePrompt",
     "openSummaryPanel",
     "openPocketPanel",
     "toggleMessageNavigator",
     "closeChat",
+    "refreshPage",
     "reloadChat",
     "enterFullscreen",
     "insertPrompt",
@@ -2250,6 +2254,17 @@ const out=[];const seen=new Set;const norm=v=>api.normalize(String(v||''));const
     "switchPlatformTab"
   ];
   const PATTERN_ACTIONS = new Set(["insertPrompt", "switchLayout", "switchPlatformTab"]);
+  const LEGACY_DEFAULT_NEW_CHAT_SHORTCUT = Object.freeze({
+    alt: true,
+    shift: false,
+    cmdOrCtrl: false,
+    code: "KeyN"
+  });
+  const LEGACY_DEFAULT_RELOAD_CHAT_SHORTCUTS = Object.freeze([
+    Object.freeze({ alt: true, shift: false, cmdOrCtrl: false, code: "KeyR" }),
+    Object.freeze({ alt: false, shift: false, cmdOrCtrl: true, code: "KeyR" }),
+    Object.freeze({ alt: false, shift: true, cmdOrCtrl: true, code: "KeyR" })
+  ]);
   let activeShortcutConfig = normalizeShortcutConfig(DEFAULT_SHORTCUT_CONFIG);
 
   function requestParent(action, data = {}, timeout = 1200) {
@@ -2275,10 +2290,31 @@ const out=[];const seen=new Set;const norm=v=>api.normalize(String(v||''));const
     return value == null ? fallback : Boolean(value);
   }
 
+  function shortcutSameFixedShape(shortcut, expected) {
+    if (!shortcut || !expected) return false;
+    return Boolean(shortcut.disabled) === Boolean(expected.disabled)
+      && Boolean(shortcut.cmdOrCtrl) === Boolean(expected.cmdOrCtrl)
+      && Boolean(shortcut.alt) === Boolean(expected.alt)
+      && Boolean(shortcut.shift) === Boolean(expected.shift)
+      && String(shortcut.code || "") === String(expected.code || "");
+  }
+
   function normalizeShortcutConfig(raw = {}) {
     const source = raw && typeof raw === "object" ? raw : {};
     const rawShortcuts = { ...(source.shortcuts || {}) };
     if (rawShortcuts.openSummary && !rawShortcuts.openSummaryPanel) rawShortcuts.openSummaryPanel = rawShortcuts.openSummary;
+    if (
+      source.newChatShortcutMigrated !== true
+      && shortcutSameFixedShape(rawShortcuts.newChat, LEGACY_DEFAULT_NEW_CHAT_SHORTCUT)
+    ) {
+      rawShortcuts.newChat = DEFAULT_SHORTCUT_CONFIG.shortcuts.newChat;
+    }
+    if (
+      source.homeShortcutMigrated !== true
+      && LEGACY_DEFAULT_RELOAD_CHAT_SHORTCUTS.some((shortcut) => shortcutSameFixedShape(rawShortcuts.reloadChat, shortcut))
+    ) {
+      rawShortcuts.reloadChat = DEFAULT_SHORTCUT_CONFIG.shortcuts.reloadChat;
+    }
     const shortcuts = {};
     for (const action of SHORTCUT_ACTIONS) {
       const base = DEFAULT_SHORTCUT_CONFIG.shortcuts[action];
@@ -2292,7 +2328,7 @@ const out=[];const seen=new Set;const norm=v=>api.normalize(String(v||''));const
       if (PATTERN_ACTIONS.has(action)) shortcuts[action].codePattern = "Digit";
       else shortcuts[action].code = String(item.code || base.code || "");
     }
-    return { ...DEFAULT_SHORTCUT_CONFIG, ...source, shortcuts };
+    return { ...DEFAULT_SHORTCUT_CONFIG, ...source, newChatShortcutMigrated: true, reloadChatShortcutMigrated: true, homeShortcutMigrated: true, shortcuts };
   }
 
   function digitMatch(code) {

@@ -604,9 +604,11 @@ export function createSettingsController(ctx) {
       "topbar.customize.enter": "customizeTopbar",
       "topbar.customize.cancel": "x",
       "workspace.group.addApp": "plus",
+      "workspace.group.newChat": "edit",
       "workspace.group.openInNewTab": "external",
       "workspace.group.copyLink": "copy",
-      "workspace.group.reload": "reload",
+      "workspace.group.refreshPage": "reload",
+      "workspace.group.reload": "home",
       "workspace.group.messageNavigator": "navigator",
       "workspace.group.deleteThread": "trash",
       "workspace.group.fullscreen": "maximize",
@@ -638,7 +640,7 @@ export function createSettingsController(ctx) {
       "settings.action.edit": "edit",
       "settings.action.duplicate": "copy",
       "settings.action.delete": "trash",
-      "settings.action.reset": "reload",
+      "settings.action.reset": "reset",
       "settings.shortcuts.record": "keyboard"
     })[targetId] || "settings";
     const tooltipPreviewButton = (target, disabled) => {
@@ -709,7 +711,9 @@ export function createSettingsController(ctx) {
       );
     const tabGroupButtonLabel = (id) => ({
       addApp: t("chat.addApp"),
-      reload: t("chat.reload"),
+      newChat: t("topbar.newChat"),
+      refreshPage: t("chat.refreshPage"),
+      reload: t("chat.home"),
       messageNavigator: t("chat.messageNavigator"),
       deleteThread: t("chat.deleteThreadInGroup"),
       fullscreen: t("chat.fullscreen"),
@@ -1454,7 +1458,7 @@ export function createSettingsController(ctx) {
       el("div", { class: "settings-row-action-group" },
         settingsIconAction(t("promptTemplates.edit", { kind: t(meta.labelKey) }), "edit", () => openPromptTemplateEditor(kind, template, redraw), "", false, "settings.action.edit"),
         builtInDefault
-          ? settingsIconAction(t("promptTemplates.reset"), "reload", () => resetPromptTemplate(kind, template, redraw), "settings-reset-icon", false, "settings.action.reset")
+          ? settingsIconAction(t("promptTemplates.reset"), "reset", () => resetPromptTemplate(kind, template, redraw), "settings-reset-icon", false, "settings.action.reset")
           : settingsIconAction(t("promptTemplates.delete"), "trash", () => deletePromptTemplate(kind, template, redraw), "danger", false, "settings.action.delete")
       )
     );
@@ -1795,7 +1799,7 @@ export function createSettingsController(ctx) {
           openSummaryCollectorEditor(config, redraw);
         }, "", false, "settings.action.edit"),
         builtIn
-          ? settingsIconAction(t("common.reset"), "reload", async (event) => {
+          ? settingsIconAction(t("common.reset"), "reset", async (event) => {
             event.stopPropagation();
             await resetSummaryCollector(config, redraw);
           }, "settings-reset-icon", !summaryBuiltInDefault(config) || summaryCollectorSourceMode(config) !== "custom", "settings.action.reset")
@@ -2199,7 +2203,7 @@ export function createSettingsController(ctx) {
           openMessageNavigatorSiteEditor(config, redraw);
         }, "", false, "settings.action.edit"),
         builtIn
-          ? settingsIconAction(t("common.reset"), "reload", async (event) => {
+          ? settingsIconAction(t("common.reset"), "reset", async (event) => {
             event.stopPropagation();
             await resetMessageNavigatorSite(config, redraw);
           }, "settings-reset-icon", !messageNavigatorCanReset(config), "settings.action.reset")
@@ -2557,7 +2561,7 @@ export function createSettingsController(ctx) {
           openTopicDeleteSiteEditor(config, redraw);
         }, "", false, "settings.action.edit"),
         builtIn
-          ? settingsIconAction(t("common.reset"), "reload", async (event) => {
+          ? settingsIconAction(t("common.reset"), "reset", async (event) => {
             event.stopPropagation();
             await resetTopicDeleteSite(config, redraw);
           }, "settings-reset-icon", !topicDeleteCanReset(config), "settings.action.reset")

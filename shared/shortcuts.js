@@ -3,12 +3,14 @@ import { DEFAULT_SHORTCUT_CONFIG } from "./constants.js";
 export const ALL_SHORTCUT_ACTIONS = [
   "focusInput",
   "newChat",
+  "newChatAll",
   "deleteThread",
   "optimizePrompt",
   "openSummaryPanel",
   "openPocketPanel",
   "toggleMessageNavigator",
   "closeChat",
+  "refreshPage",
   "reloadChat",
   "enterFullscreen",
   "insertPrompt",
@@ -18,18 +20,20 @@ export const ALL_SHORTCUT_ACTIONS = [
 
 export const PATTERN_ACTIONS = ["insertPrompt", "switchLayout", "switchPlatformTab"];
 export const FIXED_KEY_ACTIONS = ALL_SHORTCUT_ACTIONS.filter((action) => !PATTERN_ACTIONS.includes(action));
-export const INTENT_SCOPED_ACTIONS = ["toggleMessageNavigator", "closeChat", "reloadChat", "enterFullscreen"];
+export const INTENT_SCOPED_ACTIONS = ["newChat", "toggleMessageNavigator", "closeChat", "refreshPage", "reloadChat", "enterFullscreen"];
 
 export const SHORTCUT_ACTION_LABELS = {
   focusInput: "Focus Input",
-  newChat: "New Chat",
+  newChat: "New Chat Current Tab",
+  newChatAll: "New Chat All Tabs",
   deleteThread: "Delete All Topics",
   optimizePrompt: "Optimize Prompt",
   openSummaryPanel: "Summary Panel",
   openPocketPanel: "Pocket",
   toggleMessageNavigator: "Message Navigator",
   closeChat: "Close Current Tab",
-  reloadChat: "Reload Current App",
+  refreshPage: "Refresh Current Page",
+  reloadChat: "Home",
   enterFullscreen: "Full Screen",
   insertPrompt: "Insert Prompt",
   switchLayout: "Switch Layout",
@@ -38,14 +42,16 @@ export const SHORTCUT_ACTION_LABELS = {
 
 export const SHORTCUT_ACTION_DESCRIPTIONS = {
   focusInput: "Focus the top prompt input.",
-  newChat: "Start a new chat in active pages.",
+  newChat: "Start a new chat in the active tab.",
+  newChatAll: "Start new chats in all active pages.",
   deleteThread: "Delete all current topics in active pages.",
   optimizePrompt: "Optimize the current prompt.",
   openSummaryPanel: "Open Summary / Ask.",
   openPocketPanel: "Open Pocket.",
   toggleMessageNavigator: "Toggle the message navigator for the active chat.",
   closeChat: "Close the active tab or group.",
-  reloadChat: "Reload the active chat app.",
+  refreshPage: "Refresh the active chat page.",
+  reloadChat: "Go to the active app home page.",
   enterFullscreen: "Toggle the active group fullscreen.",
   insertPrompt: "Insert prompt library item 1-9.",
   switchLayout: "Switch layout preset 1-9.",
@@ -69,6 +75,19 @@ const LEGACY_KAGI_CONFLICT_DELETE_THREAD_SHORTCUT = Object.freeze({
   cmdOrCtrl: true,
   code: "Backspace"
 });
+
+const LEGACY_DEFAULT_NEW_CHAT_SHORTCUT = Object.freeze({
+  alt: true,
+  shift: false,
+  cmdOrCtrl: false,
+  code: "KeyN"
+});
+
+const LEGACY_DEFAULT_RELOAD_CHAT_SHORTCUTS = Object.freeze([
+  Object.freeze({ alt: true, shift: false, cmdOrCtrl: false, code: "KeyR" }),
+  Object.freeze({ alt: false, shift: false, cmdOrCtrl: true, code: "KeyR" }),
+  Object.freeze({ alt: false, shift: true, cmdOrCtrl: true, code: "KeyR" })
+]);
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -127,6 +146,18 @@ export function normalizeShortcutConfig(raw = {}) {
   ) {
     rawShortcuts.deleteThread = defaultShortcut("deleteThread");
   }
+  if (
+    source.newChatShortcutMigrated !== true
+    && shortcutSameFixedShape(rawShortcuts.newChat, LEGACY_DEFAULT_NEW_CHAT_SHORTCUT)
+  ) {
+    rawShortcuts.newChat = defaultShortcut("newChat");
+  }
+  if (
+    source.homeShortcutMigrated !== true
+    && LEGACY_DEFAULT_RELOAD_CHAT_SHORTCUTS.some((shortcut) => shortcutSameFixedShape(rawShortcuts.reloadChat, shortcut))
+  ) {
+    rawShortcuts.reloadChat = defaultShortcut("reloadChat");
+  }
   const shortcuts = {};
   for (const action of ALL_SHORTCUT_ACTIONS) {
     shortcuts[action] = PATTERN_ACTIONS.includes(action)
@@ -137,6 +168,9 @@ export function normalizeShortcutConfig(raw = {}) {
     ...clone(DEFAULT_SHORTCUT_CONFIG),
     ...source,
     deleteThreadShortcutMigrated: true,
+    newChatShortcutMigrated: true,
+    reloadChatShortcutMigrated: true,
+    homeShortcutMigrated: true,
     sendKeyMode: source.sendKeyMode === "mod-enter" ? "mod-enter" : "enter",
     shortcuts
   };
