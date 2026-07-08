@@ -1,14 +1,15 @@
 (() => {
   const SOURCE = "chatclub";
-  const COPY_SOURCE = "chatclub-native-copy";
+  const COPY_SOURCE = "chatclub-native-copy:2026.07.08.13";
   const GEMINI_MODEL_PICKER_SOURCE = "chatclub-gemini-model-picker";
   const NOTION_SEND_TEXT_SOURCE = "chatclub-notion-send-text";
-  const CONTENT_BRIDGE_VERSION = "2026.07.08.12";
+  const CONTENT_BRIDGE_VERSION = "2026.07.08.13";
   const SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.07.1";
   const DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.04.1";
   const MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.08.12";
+  const SUMMARY_POST_MESSAGE_SOURCE = "chatclub:summary:2026.07.08.13";
   const DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.07.03.30";
-  const PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript";
+  const PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.08.13";
   const hadContentBridge = Boolean(window.__CHATCLUB_CONTENT_BRIDGE_INSTALLED__);
   if (window.__CHATCLUB_CONTENT_BRIDGE_VERSION__ === CONTENT_BRIDGE_VERSION) {
     try {
@@ -649,30 +650,17 @@
     const copyCaptureGraceMs = Math.max(80, Math.min(800, Number(options.copyCaptureGraceMs) || 240));
     const acceptUnchangedClipboard = Boolean(options.acceptUnchangedClipboard);
     const resetClipboardBeforeCopy = Boolean(options.resetClipboardBeforeCopy);
+    const allowUnchangedClipboard = acceptUnchangedClipboard && !resetClipboardBeforeCopy;
     const id = copyId();
     let before = "";
-    let probe = "";
-    let probeWritten = false;
     let captured = "";
     let capturedPriority = 0;
     let capturedAt = 0;
     try { before = normalize(await navigator.clipboard.readText()); } catch {}
     if (!before) before = await parentClipboardText(id, 500);
-    if (resetClipboardBeforeCopy) {
-      probe = `__sch_copy_probe_${id}__`;
-      try {
-        await navigator.clipboard.writeText(probe);
-        before = probe;
-        probeWritten = true;
-      } catch {}
-      if (!probeWritten) {
-        const parentWrite = await parentClipboardRequest("write", id, { text: probe }, 700);
-        if (parentWrite?.ok) {
-          before = probe;
-          probeWritten = true;
-        }
-      }
-    }
+    const acceptsClipboardValue = (value) => value
+      && !isCopyProbeText(value)
+      && (value !== before || allowUnchangedClipboard);
     const onCapture = (event) => {
       const message = event.data;
       if (message?.source !== COPY_SOURCE || message.type !== "capture" || message.id !== id) return;
@@ -686,35 +674,34 @@
     };
     window.addEventListener("message", onCapture, true);
     try {
-      await copyBridgeRequest("install", id, { timeoutMs: copyTimeoutMs }, 900);
+      const bridge = await copyBridgeRequest("install", id, { timeoutMs: copyTimeoutMs }, 900);
+      if (!bridge?.installed || !bridge?.hooks) return "";
       try { activateElement(button); } catch { try { button.click?.(); } catch {} }
       for (let index = 0, max = Math.ceil(copyTimeoutMs / copyPollMs); index < max; index += 1) {
         await sleep(copyPollMs);
         if (captured && (capturedPriority >= 5 || Date.now() - capturedAt >= copyCaptureGraceMs)) break;
         try {
           const current = normalize(await navigator.clipboard.readText());
-          if (current && current !== before && current !== probe && !isCopyProbeText(current)) {
+          if (acceptsClipboardValue(current)) {
             captured = current;
             capturedPriority = Math.max(capturedPriority, 6);
             break;
           }
         } catch {}
         const parentCurrent = await parentClipboardText(id, 250);
-        if (parentCurrent && parentCurrent !== before && parentCurrent !== probe && !isCopyProbeText(parentCurrent)) {
+        if (acceptsClipboardValue(parentCurrent)) {
           captured = parentCurrent;
           capturedPriority = Math.max(capturedPriority, 6);
           break;
         }
       }
-      if (captured && captured !== probe && !isCopyProbeText(captured)) return cleanCaptured(captured);
+      if (captured && !isCopyProbeText(captured)) return cleanCaptured(captured);
       try {
         const after = normalize(await navigator.clipboard.readText());
-        if (after && after !== before && after !== probe && !isCopyProbeText(after)) return cleanCaptured(after);
-        if (after && acceptUnchangedClipboard && !probeWritten && !isCopyProbeText(after)) return cleanCaptured(after);
+        if (acceptsClipboardValue(after)) return cleanCaptured(after);
       } catch {}
       const parentAfter = await parentClipboardText(id, 700);
-      if (parentAfter && parentAfter !== before && parentAfter !== probe && !isCopyProbeText(parentAfter)) return cleanCaptured(parentAfter);
-      if (parentAfter && acceptUnchangedClipboard && !probeWritten && !isCopyProbeText(parentAfter)) return cleanCaptured(parentAfter);
+      if (acceptsClipboardValue(parentAfter)) return cleanCaptured(parentAfter);
       return "";
     } finally {
       window.removeEventListener("message", onCapture, true);
@@ -5912,19 +5899,23 @@
     const versionedDeleteRequest = message?.source === DELETE_THREAD_POST_MESSAGE_SOURCE;
     const versionedSendTextRequest = message?.source === SEND_TEXT_POST_MESSAGE_SOURCE;
     const versionedNavigatorRequest = message?.source === MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE;
+    const versionedSummaryRequest = message?.source === SUMMARY_POST_MESSAGE_SOURCE;
     const genericRequest = message?.source === SOURCE;
-    if ((!versionedDeleteRequest && !versionedSendTextRequest && !versionedNavigatorRequest && !genericRequest) || message.type !== "request") return;
+    if ((!versionedDeleteRequest && !versionedSendTextRequest && !versionedNavigatorRequest && !versionedSummaryRequest && !genericRequest) || message.type !== "request") return;
     if (genericRequest && hadContentBridge) return;
     if (versionedDeleteRequest && message.action !== "deleteThread" && message.action !== "getDeleteConfirmState") return;
     if (versionedSendTextRequest && message.action !== "sendText") return;
     if (versionedNavigatorRequest && !["setMessageNavigator", "hideMessageNavigatorMenu", "getMessageNavigatorState"].includes(message.action)) return;
+    if (versionedSummaryRequest && !["getLocationHref", "getPageMeta", "getPageText", "collectSummary"].includes(message.action)) return;
     const responseSource = versionedDeleteRequest
       ? DELETE_THREAD_POST_MESSAGE_SOURCE
       : versionedSendTextRequest
         ? SEND_TEXT_POST_MESSAGE_SOURCE
         : versionedNavigatorRequest
           ? MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE
-          : SOURCE;
+          : versionedSummaryRequest
+            ? SUMMARY_POST_MESSAGE_SOURCE
+            : SOURCE;
     try {
       let data;
       if (message.action === "getLocationHref") data = location.href;

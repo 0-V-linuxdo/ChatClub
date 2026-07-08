@@ -1,5 +1,5 @@
 (() => {
-  const COPY_SOURCE = "chatclub-native-copy";
+  const COPY_SOURCE = "chatclub-native-copy:2026.07.08.13";
   const GEMINI_MODEL_PICKER_SOURCE = "chatclub-gemini-model-picker";
   const DEEPSEEK_DELETE_BRIDGE_VERSION = "2026.07.03.30";
   const DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.07.03.30";
@@ -1049,8 +1049,10 @@
     }, true);
   }
 
-  if (!window.__CHATCLUB_NATIVE_COPY_BRIDGE__) {
+  const NATIVE_COPY_BRIDGE_VERSION = "2026.07.08.13";
+  if (window.__CHATCLUB_NATIVE_COPY_BRIDGE_VERSION__ !== NATIVE_COPY_BRIDGE_VERSION) {
     window.__CHATCLUB_NATIVE_COPY_BRIDGE__ = true;
+    window.__CHATCLUB_NATIVE_COPY_BRIDGE_VERSION__ = NATIVE_COPY_BRIDGE_VERSION;
     const captures = new Map();
     let hooksInstalled = false;
     const post = (type, action, data) => {
@@ -1146,7 +1148,7 @@
       try {
         const original = target?.[key];
         if (typeof original !== "function") return false;
-        if (original.__CHATCLUB_NATIVE_COPY_WRAPPED__) return true;
+        if (original.__CHATCLUB_NATIVE_COPY_WRAPPED_VERSION__ === NATIVE_COPY_BRIDGE_VERSION) return true;
         const wrapped = function (...args) {
           const id = activeCaptureId();
           if (id) {
@@ -1156,6 +1158,7 @@
           return original.apply(this && this !== window ? this : target, args);
         };
         wrapped.__CHATCLUB_NATIVE_COPY_WRAPPED__ = true;
+        wrapped.__CHATCLUB_NATIVE_COPY_WRAPPED_VERSION__ = NATIVE_COPY_BRIDGE_VERSION;
         Object.defineProperty(target, key, { configurable: true, writable: true, value: wrapped });
         return true;
       } catch {
@@ -1167,17 +1170,36 @@
         const proto = window.DataTransfer?.prototype;
         const original = proto?.setData;
         if (typeof original !== "function") return false;
-        if (original.__CHATCLUB_NATIVE_COPY_WRAPPED__) return true;
+        if (original.__CHATCLUB_NATIVE_COPY_WRAPPED_VERSION__ === NATIVE_COPY_BRIDGE_VERSION) return true;
         const wrapped = function (...args) {
           const id = activeCaptureId();
           if (id) {
             const priority = mimePriority(args[0]);
             if (priority) captureText(id, args[1], priority);
+            return undefined;
           }
           return original.apply(this, args);
         };
         wrapped.__CHATCLUB_NATIVE_COPY_WRAPPED__ = true;
+        wrapped.__CHATCLUB_NATIVE_COPY_WRAPPED_VERSION__ = NATIVE_COPY_BRIDGE_VERSION;
         Object.defineProperty(proto, "setData", { configurable: true, writable: true, value: wrapped });
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    const dispatchSyntheticCopyEvent = () => {
+      try {
+        const init = { bubbles: true, cancelable: true };
+        let event = null;
+        try {
+          const transfer = typeof DataTransfer === "function" ? new DataTransfer() : undefined;
+          event = new ClipboardEvent("copy", { ...init, clipboardData: transfer });
+        } catch {
+          event = new Event("copy", init);
+        }
+        const target = document.activeElement || document;
+        target.dispatchEvent(event);
         return true;
       } catch {
         return false;
@@ -1187,15 +1209,14 @@
       try {
         const original = document.execCommand;
         if (typeof original !== "function") return false;
-        if (original.__CHATCLUB_NATIVE_COPY_WRAPPED__) return true;
+        if (original.__CHATCLUB_NATIVE_COPY_WRAPPED_VERSION__ === NATIVE_COPY_BRIDGE_VERSION) return true;
         const wrapped = function (...args) {
           const id = activeCaptureId();
           const command = String(args[0] || "").toLowerCase();
           if (id && command === "copy") {
             const before = selectedText();
             if (before) captureText(id, before, 3);
-            let result = false;
-            try { result = original.apply(document, args); } catch {}
+            const result = dispatchSyntheticCopyEvent();
             const after = selectedText();
             if (after) captureText(id, after, 4);
             return result || Boolean(after || before);
@@ -1203,6 +1224,7 @@
           return original.apply(document, args);
         };
         wrapped.__CHATCLUB_NATIVE_COPY_WRAPPED__ = true;
+        wrapped.__CHATCLUB_NATIVE_COPY_WRAPPED_VERSION__ = NATIVE_COPY_BRIDGE_VERSION;
         Object.defineProperty(document, "execCommand", { configurable: true, writable: true, value: wrapped });
         return true;
       } catch {
@@ -1264,6 +1286,7 @@
     const copyEventCapture = (event) => {
       const id = activeCaptureId();
       if (!id) return;
+      try { event?.preventDefault?.(); } catch {}
       const selected = selectedText();
       if (selected) captureText(id, selected, 3);
       const sample = () => {

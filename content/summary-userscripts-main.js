@@ -2113,8 +2113,8 @@ const out=[];const seen=new Set;const norm=v=>api.normalize(String(v||''));const
   scripts["typingmind.js"] = scripts["typingmind"];
   window.__CHATCLUB_SUMMARY_SCRIPTS__ = scripts;
   const SOURCE = "chatclub";
-  const COPY_SOURCE = "chatclub-native-copy";
-  const PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript";
+  const COPY_SOURCE = "chatclub-native-copy:2026.07.08.13";
+  const PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.08.13";
 
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const normalize = (value) => String(value || "")
@@ -2709,30 +2709,17 @@ const out=[];const seen=new Set;const norm=v=>api.normalize(String(v||''));const
     const copyCaptureGraceMs = Math.max(80, Math.min(800, Number(options.copyCaptureGraceMs) || 240));
     const acceptUnchangedClipboard = Boolean(options.acceptUnchangedClipboard);
     const resetClipboardBeforeCopy = Boolean(options.resetClipboardBeforeCopy);
+    const allowUnchangedClipboard = acceptUnchangedClipboard && !resetClipboardBeforeCopy;
     const id = copyId();
     let before = "";
-    let probe = "";
-    let probeWritten = false;
     let captured = "";
     let capturedPriority = 0;
     let capturedAt = 0;
     try { before = normalize(await navigator.clipboard.readText()); } catch {}
     if (!before) before = await parentClipboardText(id, 500);
-    if (resetClipboardBeforeCopy) {
-      probe = `__sch_copy_probe_${id}__`;
-      try {
-        await navigator.clipboard.writeText(probe);
-        before = probe;
-        probeWritten = true;
-      } catch {}
-      if (!probeWritten) {
-        const parentWrite = await parentClipboardRequest("write", id, { text: probe }, 700);
-        if (parentWrite?.ok) {
-          before = probe;
-          probeWritten = true;
-        }
-      }
-    }
+    const acceptsClipboardValue = (value) => value
+      && !isCopyProbeText(value)
+      && (value !== before || allowUnchangedClipboard);
     const onCapture = (event) => {
       const message = event.data;
       if (message?.source !== COPY_SOURCE || message.type !== "capture" || message.id !== id) return;
@@ -2746,35 +2733,34 @@ const out=[];const seen=new Set;const norm=v=>api.normalize(String(v||''));const
     };
     window.addEventListener("message", onCapture, true);
     try {
-      await copyBridgeRequest("install", id, { timeoutMs: copyTimeoutMs }, 900);
+      const bridge = await copyBridgeRequest("install", id, { timeoutMs: copyTimeoutMs }, 900);
+      if (!bridge?.installed || !bridge?.hooks) return "";
       try { activateElement(button); } catch { try { button.click?.(); } catch {} }
       for (let index = 0, max = Math.ceil(copyTimeoutMs / copyPollMs); index < max; index += 1) {
         await sleep(copyPollMs);
         if (captured && (capturedPriority >= 5 || Date.now() - capturedAt >= copyCaptureGraceMs)) break;
         try {
           const current = normalize(await navigator.clipboard.readText());
-          if (current && current !== before && current !== probe && !isCopyProbeText(current)) {
+          if (acceptsClipboardValue(current)) {
             captured = current;
             capturedPriority = Math.max(capturedPriority, 6);
             break;
           }
         } catch {}
         const parentCurrent = await parentClipboardText(id, 250);
-        if (parentCurrent && parentCurrent !== before && parentCurrent !== probe && !isCopyProbeText(parentCurrent)) {
+        if (acceptsClipboardValue(parentCurrent)) {
           captured = parentCurrent;
           capturedPriority = Math.max(capturedPriority, 6);
           break;
         }
       }
-      if (captured && captured !== probe && !isCopyProbeText(captured)) return cleanCaptured(captured);
+      if (captured && !isCopyProbeText(captured)) return cleanCaptured(captured);
       try {
         const after = normalize(await navigator.clipboard.readText());
-        if (after && after !== before && after !== probe && !isCopyProbeText(after)) return cleanCaptured(after);
-        if (after && acceptUnchangedClipboard && !probeWritten && !isCopyProbeText(after)) return cleanCaptured(after);
+        if (acceptsClipboardValue(after)) return cleanCaptured(after);
       } catch {}
       const parentAfter = await parentClipboardText(id, 700);
-      if (parentAfter && parentAfter !== before && parentAfter !== probe && !isCopyProbeText(parentAfter)) return cleanCaptured(parentAfter);
-      if (parentAfter && acceptUnchangedClipboard && !probeWritten && !isCopyProbeText(parentAfter)) return cleanCaptured(parentAfter);
+      if (acceptsClipboardValue(parentAfter)) return cleanCaptured(parentAfter);
       return "";
     } finally {
       window.removeEventListener("message", onCapture, true);

@@ -1,6 +1,6 @@
 import { summarizeContexts } from "../../shared/api.js";
 import { t } from "../../shared/i18n.js";
-import { sendToIframe } from "../../shared/post-message.js";
+import { SUMMARY_POST_MESSAGE_SOURCE, sendToIframe } from "../../shared/post-message.js";
 import { storageGet, storageSet } from "../../shared/storage.js";
 import { findSummarySiteConfig } from "../../shared/url-match.js";
 import { createActionButton } from "../../ui/components.js";
@@ -700,12 +700,12 @@ export function createSummaryController(ctx) {
     let pageTitle = "";
     let logoUrl = summaryFrameLogoUrl(instanceId, href);
     try {
-      const meta = await sendToIframe(iframe, "getPageMeta", {}, 1800);
+      const meta = await sendToIframe(iframe, "getPageMeta", {}, 1800, { source: SUMMARY_POST_MESSAGE_SOURCE });
       href = meta?.href || href;
       pageTitle = meta?.title || "";
       logoUrl = summaryFrameLogoUrl(instanceId, href, meta?.logoUrl) || logoUrl;
     } catch {
-      try { href = await sendToIframe(iframe, "getLocationHref", {}, 1200) || href; } catch {}
+      try { href = await sendToIframe(iframe, "getLocationHref", {}, 1200, { source: SUMMARY_POST_MESSAGE_SOURCE }) || href; } catch {}
       logoUrl = summaryFrameLogoUrl(instanceId, href) || logoUrl;
     }
     const discoveredLogoUrl = await discoverDeclaredFaviconUrl(href);
@@ -754,7 +754,7 @@ export function createSummaryController(ctx) {
       let messages = [];
       let result = null;
       if (siteConfig?.userscript) {
-        result = await sendToIframe(iframe, "collectSummary", { config: siteConfig }, siteConfig.userscriptTimeoutMs || 36000);
+        result = await sendToIframe(iframe, "collectSummary", { config: siteConfig }, siteConfig.userscriptTimeoutMs || 36000, { source: SUMMARY_POST_MESSAGE_SOURCE });
         messages = result?.messages || result || [];
         if (!messages.length && result?.rawMessageCount) {
           return {
@@ -767,7 +767,7 @@ export function createSummaryController(ctx) {
         }
       }
       if ((!messages || !messages.length) && siteConfig?.fallbackMode === "allowPageText") {
-        const text = await sendToIframe(iframe, "getPageText", {}, 2500);
+        const text = await sendToIframe(iframe, "getPageText", {}, 2500, { source: SUMMARY_POST_MESSAGE_SOURCE });
         if (text) messages = [{ role: "page", text }];
       }
       const href = result?.href || base.href;

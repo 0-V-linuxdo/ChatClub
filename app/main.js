@@ -2825,9 +2825,8 @@ function installIframeEventBridge() {
         try {
           if (message.action === "read") {
             data = { ok: true, text: await navigator.clipboard.readText() };
-          } else if (message.action === "write") {
-            await navigator.clipboard.writeText(String(message.data?.text || ""));
-            data = { ok: true };
+          } else {
+            data = { ok: false, error: "Clipboard writes are disabled for internal capture requests." };
           }
         } catch (error) {
           data = { ok: false, error: error.message || String(error) };
