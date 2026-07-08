@@ -654,10 +654,14 @@ function normalizePocketHistoryItems(raw = []) {
   }).filter((item) => item.chatUrl && item.userMessage && item.assistantMessage);
 }
 
+function pocketHistoryKey(item = {}) {
+  return [item.batchId || "legacy", item.chatUrl, item.userMessage, item.assistantMessage].join("\n");
+}
+
 export function dedupePocketHistory(raw = []) {
   const seen = new Set();
   return normalizePocketHistoryItems(raw).filter((item) => {
-    const key = [item.batchId || "legacy", item.chatUrl, item.userMessage, item.assistantMessage].join("\n");
+    const key = pocketHistoryKey(item);
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -665,7 +669,10 @@ export function dedupePocketHistory(raw = []) {
 }
 
 export function mergePocketHistory(existing = [], incoming = []) {
-  return dedupePocketHistory([...incoming, ...existing]);
+  const existingItems = dedupePocketHistory(existing);
+  const existingKeys = new Set(existingItems.map(pocketHistoryKey));
+  const incomingItems = dedupePocketHistory(incoming).filter((item) => !existingKeys.has(pocketHistoryKey(item)));
+  return dedupePocketHistory([...incomingItems, ...existingItems]);
 }
 
 export function normalizePocketHistory(raw = []) {
@@ -888,18 +895,36 @@ export function normalizeConfigBundleKeys(selectedKeys = CONFIG_BUNDLE_KEYS) {
 }
 
 export function exportConfigBundle(state = {}, selectedKeys = CONFIG_BUNDLE_KEYS) {
+  const source = plainObject(state) ? state : {};
   const selected = new Set(normalizeConfigBundleKeys(selectedKeys));
   const bundle = {
     schema: "chatclub.config.v1",
     exportedAt: new Date().toISOString()
   };
-  if (selected.has("options")) bundle.options = dehydrateOptions(state.options);
-  if (selected.has("customConfig")) bundle.customConfig = normalizeCustomConfig(state.customConfig);
-  if (selected.has("promptLibrary")) bundle.promptLibrary = normalizePromptLibrary(state.promptLibrary);
-  if (selected.has("promptSendHistory")) bundle.promptSendHistory = normalizePromptSendHistory(state.promptSendHistory);
-  if (selected.has("shortcutConfig")) bundle.shortcutConfig = normalizeShortcutConfig(state.shortcutConfig);
-  if (selected.has("pocketHistory")) bundle.pocketHistory = dedupePocketHistory(state.pocketEntries || state.pocketHistory);
+  if (selected.has("options")) bundle.options = dehydrateOptions(plainObject(source.options) ? source.options : {});
+  if (selected.has("customConfig")) bundle.customConfig = normalizeCustomConfig(source.customConfig);
+  if (selected.has("promptLibrary")) bundle.promptLibrary = normalizePromptLibrary(source.promptLibrary);
+  if (selected.has("promptSendHistory")) bundle.promptSendHistory = normalizePromptSendHistory(source.promptSendHistory);
+  if (selected.has("shortcutConfig")) bundle.shortcutConfig = normalizeShortcutConfig(source.shortcutConfig);
+  if (selected.has("pocketHistory")) bundle.pocketHistory = dedupePocketHistory(source.pocketEntries || source.pocketHistory);
   return bundle;
+}
+
+export async function loadConfigBundleState(selectedKeys = CONFIG_BUNDLE_KEYS, fallbackState = {}) {
+  const selected = new Set(normalizeConfigBundleKeys(selectedKeys));
+  const source = plainObject(fallbackState) ? fallbackState : {};
+  const state = { ...source };
+  if (selected.has("options")) state.options = await loadOptions();
+  if (selected.has("customConfig")) state.customConfig = await loadCustomConfig();
+  if (selected.has("promptLibrary")) state.promptLibrary = await loadPromptLibrary();
+  if (selected.has("promptSendHistory")) state.promptSendHistory = await loadPromptSendHistory();
+  if (selected.has("shortcutConfig")) state.shortcutConfig = await loadShortcutConfig();
+  if (selected.has("pocketHistory")) state.pocketEntries = await loadPocketHistory();
+  return state;
+}
+
+export async function exportStoredConfigBundle(selectedKeys = CONFIG_BUNDLE_KEYS, fallbackState = {}) {
+  return exportConfigBundle(await loadConfigBundleState(selectedKeys, fallbackState), selectedKeys);
 }
 
 export function migrateImportedConfig(raw) {

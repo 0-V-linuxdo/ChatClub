@@ -2,7 +2,7 @@ import { t } from "../../shared/i18n.js";
 import {
   CONFIG_BUNDLE_KEYS,
   POCKET_HISTORY_LIMIT,
-  exportConfigBundle,
+  exportStoredConfigBundle,
   inspectImportedConfig,
   isStorageQuotaError,
   loadPocketHistory,
@@ -33,6 +33,7 @@ export function createImportExportSettings(ctx) {
     syncI18nLanguage,
     render,
     prepareForConfigImport = async () => {},
+    prepareForConfigExport = prepareForConfigImport,
     resetAfterConfigImport = () => {}
   } = ctx;
 
@@ -90,7 +91,7 @@ export function createImportExportSettings(ctx) {
     return { addedCount, cappedCount, duplicateCount };
   }
 
-  function importWarningMessages(imported, diagnostics, selectedKeys, pocketMode, pocketImportSize) {
+  function importWarningMessages(imported, diagnostics, selectedKeys, pocketMode, pocketImportSize, pocketExistingCount = itemValueCount(state.pocketEntries)) {
     const selected = selectedKeys instanceof Set ? selectedKeys : new Set(selectedKeys || []);
     const messages = [];
     if (selected.has("pocketHistory") && pocketImportSize >= POCKET_IMPORT_SIZE_WARNING_BYTES) {
@@ -108,7 +109,7 @@ export function createImportExportSettings(ctx) {
     if (
       selected.has("pocketHistory")
       && pocketMode === "merge"
-      && itemValueCount(state.pocketEntries) + itemValueCount(imported.pocketHistory) > POCKET_HISTORY_LIMIT
+      && pocketExistingCount + itemValueCount(imported.pocketHistory) > POCKET_HISTORY_LIMIT
     ) {
       messages.push(t("io.pocketLimitWarning", { count: POCKET_HISTORY_LIMIT }));
     }
@@ -229,6 +230,7 @@ export function createImportExportSettings(ctx) {
     let confirmButton = null;
     let pocketModePanel = null;
     let importWarnings = null;
+    let pocketExistingCount = itemValueCount(state.pocketEntries);
     const pocketImportSize = jsonByteSize(imported.pocketHistory || []);
 
     const updateState = () => {
@@ -236,11 +238,18 @@ export function createImportExportSettings(ctx) {
       if (confirmButton) confirmButton.disabled = !hasSelection;
       if (pocketModePanel) pocketModePanel.hidden = !selectedKeys.has("pocketHistory");
       if (importWarnings) {
-        const messages = importWarningMessages(imported, diagnostics, selectedKeys, pocketMode, pocketImportSize);
+        const messages = importWarningMessages(imported, diagnostics, selectedKeys, pocketMode, pocketImportSize, pocketExistingCount);
         importWarnings.hidden = !messages.length;
         importWarnings.replaceChildren(...messages.map((message) => el("span", {}, message)));
       }
     };
+
+    if (imported.pocketHistory !== null) {
+      loadPocketHistory().then((history) => {
+        pocketExistingCount = itemValueCount(history);
+        updateState();
+      }).catch(() => {});
+    }
 
     const close = () => dialog?.remove();
     const confirm = async () => {
@@ -377,11 +386,19 @@ export function createImportExportSettings(ctx) {
     exportButton = el("button", {
       class: "settings-config-button",
       type: "button",
-      onclick: () => {
+      onclick: async () => {
         const selectedKeys = [...selectedExportKeys];
         if (!selectedKeys.length) return toast(t("toast.exportNoSelection"), "error");
-        const bundle = exportConfigBundle(state, selectedKeys);
-        downloadText(`chatclub-config-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(bundle, null, 2));
+        exportButton.disabled = true;
+        try {
+          await prepareForConfigExport(selectedKeys);
+          const bundle = await exportStoredConfigBundle(selectedKeys, state);
+          downloadText(`chatclub-config-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(bundle, null, 2));
+        } catch (error) {
+          toast(error?.message || t("toast.exportFailed"), "error");
+        } finally {
+          updateExportState();
+        }
       }
     }, svgIcon("fileDown"), el("span", {}, t("common.export")));
 

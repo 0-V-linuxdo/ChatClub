@@ -50,6 +50,7 @@ import {
 import { createShortcutSettings } from "./shortcuts.js";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+const CONFIG_IO_AUTOSAVE_TIMEOUT_MS = 5000;
 
 export function createSettingsController(ctx) {
   const {
@@ -87,6 +88,7 @@ export function createSettingsController(ctx) {
   let appearanceAutoSavePending = null;
   let appearanceAutoSaveRedraw = null;
   let appearanceColorSaveTimer = 0;
+  let appearanceColorSavePending = "";
   let modelPreferenceAutoSaveRunning = false;
   let modelPreferenceAutoSavePending = null;
   let modelPreferenceAutoSaveRedraw = null;
@@ -134,12 +136,29 @@ export function createSettingsController(ctx) {
 
   function queueAppearanceColorSave(primaryColor) {
     clearTimeout(appearanceColorSaveTimer);
+    appearanceColorSavePending = primaryColor;
     appearanceColorSaveTimer = setTimeout(() => {
+      const pendingColor = appearanceColorSavePending;
+      appearanceColorSaveTimer = 0;
+      appearanceColorSavePending = "";
       queueAppearanceAutoSave({
-        primaryColor,
+        primaryColor: pendingColor,
         primaryColorCustom: true
       });
     }, 250);
+  }
+
+  function flushAppearanceColorSave() {
+    if (!appearanceColorSaveTimer) return;
+    clearTimeout(appearanceColorSaveTimer);
+    appearanceColorSaveTimer = 0;
+    const pendingColor = appearanceColorSavePending;
+    appearanceColorSavePending = "";
+    if (!pendingColor) return;
+    queueAppearanceAutoSave({
+      primaryColor: pendingColor,
+      primaryColorCustom: true
+    });
   }
 
   function tabGroupButtonsModeForPlacement(placement) {
@@ -200,9 +219,42 @@ export function createSettingsController(ctx) {
     }
   }
 
+  async function waitForConfigAutosaveDrain(isBusy, flush, messageKey = "toast.importAutosaveTimeout") {
+    const startedAt = Date.now();
+    while (isBusy()) {
+      flush?.();
+      if (Date.now() - startedAt > CONFIG_IO_AUTOSAVE_TIMEOUT_MS) {
+        throw new Error(t(messageKey));
+      }
+      await sleep(20);
+    }
+  }
+
+  async function drainOptionsAutoSave(messageKey = "toast.importAutosaveTimeout") {
+    flushAppearanceColorSave();
+    flushAppearanceAutoSave();
+    flushModelPreferenceAutoSave();
+    await waitForConfigAutosaveDrain(
+      () => Boolean(
+        appearanceColorSaveTimer
+        || appearanceAutoSaveRunning
+        || appearanceAutoSavePending
+        || modelPreferenceAutoSaveRunning
+        || modelPreferenceAutoSavePending
+      ),
+      () => {
+        flushAppearanceColorSave();
+        if (appearanceAutoSavePending && !appearanceAutoSaveRunning) flushAppearanceAutoSave();
+        if (modelPreferenceAutoSavePending && !modelPreferenceAutoSaveRunning) flushModelPreferenceAutoSave();
+      },
+      messageKey
+    );
+  }
+
   function clearOptionsImportAutoSaveState() {
     clearTimeout(appearanceColorSaveTimer);
     appearanceColorSaveTimer = 0;
+    appearanceColorSavePending = "";
     appearanceAutoSavePending = null;
     appearanceAutoSaveRedraw = null;
     modelPreferenceAutoSavePending = null;
@@ -212,12 +264,20 @@ export function createSettingsController(ctx) {
   async function prepareForConfigImport(selectedKeys = []) {
     const selected = new Set(selectedKeys || []);
     if (selected.has("options")) {
-      clearOptionsImportAutoSaveState();
-      while (appearanceAutoSaveRunning || modelPreferenceAutoSaveRunning) await sleep(20);
-      clearOptionsImportAutoSaveState();
+      await drainOptionsAutoSave();
     }
     if (selected.has("shortcutConfig")) {
       await prepareShortcutConfigImport(selected);
+    }
+  }
+
+  async function prepareForConfigExport(selectedKeys = []) {
+    const selected = new Set(selectedKeys || []);
+    if (selected.has("options")) {
+      await drainOptionsAutoSave();
+    }
+    if (selected.has("shortcutConfig")) {
+      await prepareShortcutConfigExport(selected);
     }
   }
 
@@ -2928,6 +2988,7 @@ export function createSettingsController(ctx) {
   });
   const {
     prepareForConfigImport: prepareShortcutConfigImport,
+    prepareForConfigExport: prepareShortcutConfigExport,
     resetAfterConfigImport: resetShortcutAfterConfigImport,
     shortcutsPane
   } = shortcutSettings;
@@ -2940,6 +3001,7 @@ export function createSettingsController(ctx) {
     syncI18nLanguage,
     render,
     prepareForConfigImport,
+    prepareForConfigExport,
     resetAfterConfigImport
   });
   const { importConfigText, importExportPane } = importExportSettings;

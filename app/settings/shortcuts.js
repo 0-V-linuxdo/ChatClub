@@ -43,6 +43,7 @@ const SHORTCUT_PREVIEW_META = Object.freeze({
 });
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+const CONFIG_IO_AUTOSAVE_TIMEOUT_MS = 5000;
 
 export function createShortcutSettings(ctx) {
   const { state, svgIcon, notifyConfigReload, settingsKit } = ctx;
@@ -100,16 +101,31 @@ export function createShortcutSettings(ctx) {
     }
   }
 
+  async function drainShortcutAutoSave() {
+    const startedAt = Date.now();
+    if (shortcutAutoSavePending && !shortcutAutoSaveRunning) flushShortcutAutoSave();
+    while (shortcutAutoSaveRunning || shortcutAutoSavePending) {
+      if (shortcutAutoSavePending && !shortcutAutoSaveRunning) flushShortcutAutoSave();
+      if (Date.now() - startedAt > CONFIG_IO_AUTOSAVE_TIMEOUT_MS) {
+        throw new Error(t("toast.importAutosaveTimeout"));
+      }
+      await sleep(20);
+    }
+  }
+
   async function prepareForConfigImport(selectedKeys = []) {
     const selected = new Set(selectedKeys || []);
     if (!selected.has("shortcutConfig")) return;
-    shortcutAutoSavePending = null;
-    shortcutAutoSaveRedraw = null;
     state.shortcutRecordingAction = "";
-    while (shortcutAutoSaveRunning) await sleep(20);
-    shortcutAutoSavePending = null;
+    await drainShortcutAutoSave();
     shortcutAutoSaveRedraw = null;
     state.shortcutDraftConfig = null;
+  }
+
+  async function prepareForConfigExport(selectedKeys = []) {
+    const selected = new Set(selectedKeys || []);
+    if (!selected.has("shortcutConfig")) return;
+    await drainShortcutAutoSave();
   }
 
   function resetAfterConfigImport(selectedKeys = []) {
@@ -338,6 +354,7 @@ export function createShortcutSettings(ctx) {
 
   return Object.freeze({
     prepareForConfigImport,
+    prepareForConfigExport,
     resetAfterConfigImport,
     shortcutsPane
   });
