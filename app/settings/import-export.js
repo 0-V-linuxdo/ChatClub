@@ -5,9 +5,8 @@ import {
   exportStoredConfigBundle,
   inspectImportedConfig,
   isStorageQuotaError,
-  loadPocketHistory,
-  migrateImportedConfig,
   mergePocketHistory,
+  readPocketHistory,
   saveImportedConfigPatch
 } from "../../shared/storage.js";
 import { downloadText, el, modal, readFileAsText, toast } from "../../ui/dom.js";
@@ -91,7 +90,14 @@ export function createImportExportSettings(ctx) {
     return { addedCount, cappedCount, duplicateCount };
   }
 
-  function importWarningMessages(imported, diagnostics, selectedKeys, pocketMode, pocketImportSize, pocketExistingCount = itemValueCount(state.pocketEntries)) {
+  function pocketMergeOmittedExistingCount(existing = [], imported = []) {
+    const existingKeys = [...new Set(existing.map(pocketKey))];
+    if (!existingKeys.length) return 0;
+    const mergedKeys = new Set(mergePocketHistory(existing, imported).map(pocketKey));
+    return existingKeys.filter((key) => !mergedKeys.has(key)).length;
+  }
+
+  function importWarningMessages(imported, diagnostics, selectedKeys, pocketMode, pocketImportSize, pocketExistingEntries = state.pocketEntries || []) {
     const selected = selectedKeys instanceof Set ? selectedKeys : new Set(selectedKeys || []);
     const messages = [];
     if (selected.has("pocketHistory") && pocketImportSize >= POCKET_IMPORT_SIZE_WARNING_BYTES) {
@@ -109,7 +115,7 @@ export function createImportExportSettings(ctx) {
     if (
       selected.has("pocketHistory")
       && pocketMode === "merge"
-      && pocketExistingCount + itemValueCount(imported.pocketHistory) > POCKET_HISTORY_LIMIT
+      && pocketMergeOmittedExistingCount(pocketExistingEntries, imported.pocketHistory || []) > 0
     ) {
       messages.push(t("io.pocketLimitWarning", { count: POCKET_HISTORY_LIMIT }));
     }
@@ -119,6 +125,11 @@ export function createImportExportSettings(ctx) {
   function importFailureMessage(error) {
     if (isStorageQuotaError(error)) return t("toast.importStorageQuota");
     return error?.message || t("toast.importFailed");
+  }
+
+  function exportFailureMessage(error) {
+    const reason = String(error?.message || "").trim();
+    return reason ? t("toast.exportFailedWithReason", { reason }) : t("toast.exportFailed");
   }
 
   function availableImportKeys(imported) {
@@ -155,7 +166,7 @@ export function createImportExportSettings(ctx) {
     let pocketExisting = [];
     let pocketStats = null;
     if (selected.has("pocketHistory")) {
-      pocketExisting = pocketMode === "replace" ? [] : await loadPocketHistory();
+      pocketExisting = pocketMode === "replace" ? [] : await readPocketHistory();
       patch.pocketHistory = pocketMode === "replace"
         ? imported.pocketHistory
         : mergePocketHistory(pocketExisting, imported.pocketHistory);
@@ -184,9 +195,18 @@ export function createImportExportSettings(ctx) {
   }
 
   async function importConfigText(text, choices = {}) {
-    const imported = migrateImportedConfig(JSON.parse(text));
-    const selectedKeys = choices.selectedKeys == null ? availableImportKeys(imported) : choices.selectedKeys;
-    return applyImportedConfig(imported, selectedKeys, choices.pocketMode || "merge");
+    const options = choices && typeof choices === "object" ? choices : {};
+    const inspected = inspectImportedConfig(JSON.parse(text));
+    const imported = inspected.data;
+    if (typeof options.onDiagnostics === "function") {
+      options.onDiagnostics(inspected.diagnostics, imported);
+    }
+    const selectedKeys = options.selectedKeys == null ? availableImportKeys(imported) : options.selectedKeys;
+    const ok = await applyImportedConfig(imported, selectedKeys, options.pocketMode || "merge", options);
+    if (options.returnDiagnostics) {
+      return { ok, diagnostics: inspected.diagnostics, imported };
+    }
+    return ok;
   }
 
   function createChoiceRow(item, options = {}) {
@@ -230,7 +250,7 @@ export function createImportExportSettings(ctx) {
     let confirmButton = null;
     let pocketModePanel = null;
     let importWarnings = null;
-    let pocketExistingCount = itemValueCount(state.pocketEntries);
+    let pocketExistingEntries = Array.isArray(state.pocketEntries) ? state.pocketEntries : [];
     const pocketImportSize = jsonByteSize(imported.pocketHistory || []);
 
     const updateState = () => {
@@ -238,15 +258,15 @@ export function createImportExportSettings(ctx) {
       if (confirmButton) confirmButton.disabled = !hasSelection;
       if (pocketModePanel) pocketModePanel.hidden = !selectedKeys.has("pocketHistory");
       if (importWarnings) {
-        const messages = importWarningMessages(imported, diagnostics, selectedKeys, pocketMode, pocketImportSize, pocketExistingCount);
+        const messages = importWarningMessages(imported, diagnostics, selectedKeys, pocketMode, pocketImportSize, pocketExistingEntries);
         importWarnings.hidden = !messages.length;
         importWarnings.replaceChildren(...messages.map((message) => el("span", {}, message)));
       }
     };
 
     if (imported.pocketHistory !== null) {
-      loadPocketHistory().then((history) => {
-        pocketExistingCount = itemValueCount(history);
+      readPocketHistory().then((history) => {
+        pocketExistingEntries = history;
         updateState();
       }).catch(() => {});
     }
@@ -395,7 +415,7 @@ export function createImportExportSettings(ctx) {
           const bundle = await exportStoredConfigBundle(selectedKeys, state);
           downloadText(`chatclub-config-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(bundle, null, 2));
         } catch (error) {
-          toast(error?.message || t("toast.exportFailed"), "error");
+          toast(exportFailureMessage(error), "error");
         } finally {
           updateExportState();
         }

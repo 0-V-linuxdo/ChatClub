@@ -802,9 +802,13 @@ export async function savePromptSendHistory(promptSendHistory) {
 }
 
 export async function loadPocketHistory() {
-  const history = normalizePocketHistory(await storageGet(STORAGE_KEYS.pocketHistory));
+  const history = await readPocketHistory();
   await storageSet(STORAGE_KEYS.pocketHistory, history);
   return history;
+}
+
+export async function readPocketHistory() {
+  return normalizePocketHistory(await storageGet(STORAGE_KEYS.pocketHistory));
 }
 
 export async function savePocketHistory(pocketHistory) {
@@ -911,20 +915,24 @@ export function exportConfigBundle(state = {}, selectedKeys = CONFIG_BUNDLE_KEYS
 }
 
 export async function loadConfigBundleState(selectedKeys = CONFIG_BUNDLE_KEYS, fallbackState = {}) {
+  return readConfigBundleState(selectedKeys, fallbackState);
+}
+
+export async function readConfigBundleState(selectedKeys = CONFIG_BUNDLE_KEYS, fallbackState = {}) {
   const selected = new Set(normalizeConfigBundleKeys(selectedKeys));
   const source = plainObject(fallbackState) ? fallbackState : {};
   const state = { ...source };
-  if (selected.has("options")) state.options = await loadOptions();
-  if (selected.has("customConfig")) state.customConfig = await loadCustomConfig();
-  if (selected.has("promptLibrary")) state.promptLibrary = await loadPromptLibrary();
-  if (selected.has("promptSendHistory")) state.promptSendHistory = await loadPromptSendHistory();
-  if (selected.has("shortcutConfig")) state.shortcutConfig = await loadShortcutConfig();
-  if (selected.has("pocketHistory")) state.pocketEntries = await loadPocketHistory();
+  if (selected.has("options")) state.options = normalizeOptions(await storageGet(STORAGE_KEYS.options));
+  if (selected.has("customConfig")) state.customConfig = normalizeCustomConfig(await storageGet(STORAGE_KEYS.customConfig));
+  if (selected.has("promptLibrary")) state.promptLibrary = normalizePromptLibrary(await storageGet(STORAGE_KEYS.promptLibrary));
+  if (selected.has("promptSendHistory")) state.promptSendHistory = normalizePromptSendHistory(await storageGet(STORAGE_KEYS.promptSendHistory));
+  if (selected.has("shortcutConfig")) state.shortcutConfig = normalizeShortcutConfig(await storageGet(STORAGE_KEYS.shortcutConfig));
+  if (selected.has("pocketHistory")) state.pocketEntries = await readPocketHistory();
   return state;
 }
 
 export async function exportStoredConfigBundle(selectedKeys = CONFIG_BUNDLE_KEYS, fallbackState = {}) {
-  return exportConfigBundle(await loadConfigBundleState(selectedKeys, fallbackState), selectedKeys);
+  return exportConfigBundle(await readConfigBundleState(selectedKeys, fallbackState), selectedKeys);
 }
 
 export function migrateImportedConfig(raw) {

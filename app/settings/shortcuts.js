@@ -54,6 +54,7 @@ export function createShortcutSettings(ctx) {
     settingsInnerTabs,
     settingsList
   } = settingsKit;
+  let shortcutAutoSaveError = null;
   let shortcutAutoSaveRunning = false;
   let shortcutAutoSavePending = null;
   let shortcutAutoSaveRedraw = null;
@@ -86,6 +87,7 @@ export function createShortcutSettings(ctx) {
         shortcutAutoSavePending = null;
         shortcutAutoSaveRedraw = null;
         state.shortcutConfig = await saveShortcutConfig(next);
+        shortcutAutoSaveError = null;
         await notifyConfigReload();
         if (!shortcutAutoSavePending && shortcutConfigKey(state.shortcutDraftConfig) === shortcutConfigKey(next)) {
           state.shortcutDraftConfig = normalizeShortcutConfig(state.shortcutConfig);
@@ -93,6 +95,7 @@ export function createShortcutSettings(ctx) {
         }
       }
     } catch (error) {
+      shortcutAutoSaveError = error;
       console.warn("[ChatClub] Failed to auto-save shortcuts", error);
       toast(t("toast.shortcutsAutoSaveFailed"), "error");
     } finally {
@@ -110,6 +113,9 @@ export function createShortcutSettings(ctx) {
         throw new Error(t("toast.importAutosaveTimeout"));
       }
       await sleep(20);
+    }
+    if (shortcutAutoSaveError) {
+      throw new Error(t("toast.importAutosaveFailed"));
     }
   }
 
@@ -131,6 +137,7 @@ export function createShortcutSettings(ctx) {
   function resetAfterConfigImport(selectedKeys = []) {
     const selected = new Set(selectedKeys || []);
     if (!selected.has("shortcutConfig")) return;
+    shortcutAutoSaveError = null;
     shortcutAutoSavePending = null;
     shortcutAutoSaveRedraw = null;
     state.shortcutDraftConfig = null;

@@ -84,11 +84,13 @@ export function createSettingsController(ctx) {
     settingsPrimaryAction
   } = settingsKit;
   let activeTabGroupButtonDrag = null;
+  let appearanceAutoSaveError = null;
   let appearanceAutoSaveRunning = false;
   let appearanceAutoSavePending = null;
   let appearanceAutoSaveRedraw = null;
   let appearanceColorSaveTimer = 0;
   let appearanceColorSavePending = "";
+  let modelPreferenceAutoSaveError = null;
   let modelPreferenceAutoSaveRunning = false;
   let modelPreferenceAutoSavePending = null;
   let modelPreferenceAutoSaveRedraw = null;
@@ -118,6 +120,7 @@ export function createSettingsController(ctx) {
           ...state.options,
           ...patch
         });
+        appearanceAutoSaveError = null;
         syncI18nLanguage();
         applyTheme();
         syncTopbar();
@@ -126,6 +129,7 @@ export function createSettingsController(ctx) {
         redraw?.();
       }
     } catch (error) {
+      appearanceAutoSaveError = error;
       console.warn("[ChatClub] Failed to auto-save appearance settings", error);
       toast(t("toast.appearanceAutoSaveFailed"), "error");
     } finally {
@@ -200,6 +204,7 @@ export function createSettingsController(ctx) {
           ...state.options,
           modelPreferences: next
         });
+        modelPreferenceAutoSaveError = null;
         await notifyConfigReload();
         await Promise.resolve(applyPreferredModels(null, { immediate: true }));
         if (!modelPreferenceAutoSavePending && modelPreferenceKey(state.modelPreferenceDraft) === modelPreferenceKey(next)) {
@@ -211,6 +216,7 @@ export function createSettingsController(ctx) {
         }
       }
     } catch (error) {
+      modelPreferenceAutoSaveError = error;
       console.warn("[ChatClub] Failed to auto-save model preferences", error);
       toast(t("toast.modelPreferencesAutoSaveFailed"), "error");
     } finally {
@@ -249,14 +255,19 @@ export function createSettingsController(ctx) {
       },
       messageKey
     );
+    if (appearanceAutoSaveError || modelPreferenceAutoSaveError) {
+      throw new Error(t("toast.importAutosaveFailed"));
+    }
   }
 
   function clearOptionsImportAutoSaveState() {
     clearTimeout(appearanceColorSaveTimer);
     appearanceColorSaveTimer = 0;
     appearanceColorSavePending = "";
+    appearanceAutoSaveError = null;
     appearanceAutoSavePending = null;
     appearanceAutoSaveRedraw = null;
+    modelPreferenceAutoSaveError = null;
     modelPreferenceAutoSavePending = null;
     modelPreferenceAutoSaveRedraw = null;
   }
