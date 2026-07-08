@@ -4941,6 +4941,25 @@ body.settings-tab-group-button-dragging iframe {
   height: 19px;
 }
 
+.io-sensitive-warning {
+  margin: -6px 0 0;
+  padding: 9px 11px;
+  color: color-mix(in srgb, #a16207 76%, var(--text));
+  font-size: 12px;
+  line-height: 1.35;
+  border: 1px solid color-mix(in srgb, #a16207 36%, var(--line));
+  border-radius: 8px;
+  background: color-mix(in srgb, #a16207 12%, var(--panel));
+}
+
+.io-sensitive-warning span {
+  display: block;
+}
+
+.io-sensitive-warning span + span {
+  margin-top: 3px;
+}
+
 .io-choice-list {
   display: grid;
   gap: 8px;

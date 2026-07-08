@@ -612,6 +612,10 @@ const en = {
   "io.pocketModeMergeDesc": "Keep current Pocket content and add imported items.",
   "io.pocketModeReplace": "Replace Pocket",
   "io.pocketModeReplaceDesc": "Clear current Pocket content and use the imported items.",
+  "io.sensitiveWarning.options": "Settings exports include API profile keys.",
+  "io.sensitiveWarning.pocket": "Pocket exports include saved chat content.",
+  "io.sensitiveWarning.prompts": "Prompt exports include saved prompts or recent prompt history.",
+  "io.largePocketWarning": "Pocket import has {count} item(s), about {size}; very large backups may fail browser storage limits.",
 
   "toast.layoutNotFound": "Layout not found",
   "toast.appearanceSaved": "Appearance saved",
@@ -1302,6 +1306,10 @@ const zh_CN = {
   "io.pocketModeMergeDesc": "保留当前 Pocket 内容，并加入导入项目。",
   "io.pocketModeReplace": "替换 Pocket",
   "io.pocketModeReplaceDesc": "清空当前 Pocket 内容，只保留导入项目。",
+  "io.sensitiveWarning.options": "导出「设置」会包含 API 配置密钥。",
+  "io.sensitiveWarning.pocket": "导出 Pocket 会包含保存的聊天内容。",
+  "io.sensitiveWarning.prompts": "导出提示词相关项目会包含保存的提示词或近期发送历史。",
+  "io.largePocketWarning": "Pocket 导入包含 {count} 项，约 {size}；过大的备份可能触发浏览器存储限制。",
 
   "toast.layoutNotFound": "找不到布局",
   "toast.appearanceSaved": "外观已保存",

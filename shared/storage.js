@@ -48,6 +48,10 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function plainObject(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
 function text(value, fallback = "") {
   return String(value ?? fallback).trim();
 }
@@ -817,6 +821,45 @@ function hasBundleField(bundle, key) {
   return Object.prototype.hasOwnProperty.call(bundle, key);
 }
 
+function hasBundleObjectField(bundle, key) {
+  return hasBundleField(bundle, key) && plainObject(bundle[key]);
+}
+
+function hasBundleArrayField(bundle, key) {
+  return hasBundleField(bundle, key) && Array.isArray(bundle[key]);
+}
+
+function hasBundleNonEmptyObjectField(bundle, key) {
+  return hasBundleObjectField(bundle, key) && Object.keys(bundle[key]).length > 0;
+}
+
+function normalizeImportArrayField(raw, normalize, validItem) {
+  if (!Array.isArray(raw)) return null;
+  if (!raw.length) return normalize([]);
+  const validItems = raw.filter(validItem);
+  return validItems.length ? normalize(validItems) : null;
+}
+
+function validImportedCustomConfigItem(item) {
+  return plainObject(item) && !!text(item.url);
+}
+
+function validImportedPromptLibraryItem(item) {
+  return plainObject(item) && !!text(item.prompt || item.content);
+}
+
+function validImportedPromptSendHistoryItem(item) {
+  if (typeof item === "string") return !!text(item);
+  return plainObject(item) && !!text(item.text || item.prompt || item.content);
+}
+
+function validImportedPocketHistoryItem(item) {
+  return plainObject(item)
+    && !!text(item.chatUrl || item.url || item.href)
+    && !!text(item.userMessage || item.user)
+    && !!text(item.assistantMessage || item.assistant);
+}
+
 export function normalizeConfigBundleKeys(selectedKeys = CONFIG_BUNDLE_KEYS) {
   const source = selectedKeys == null ? CONFIG_BUNDLE_KEYS : selectedKeys;
   const keys = Array.isArray(source)
@@ -840,18 +883,60 @@ export function exportConfigBundle(state = {}, selectedKeys = CONFIG_BUNDLE_KEYS
   if (selected.has("promptLibrary")) bundle.promptLibrary = normalizePromptLibrary(state.promptLibrary);
   if (selected.has("promptSendHistory")) bundle.promptSendHistory = normalizePromptSendHistory(state.promptSendHistory);
   if (selected.has("shortcutConfig")) bundle.shortcutConfig = normalizeShortcutConfig(state.shortcutConfig);
-  if (selected.has("pocketHistory")) bundle.pocketHistory = normalizePocketHistory(state.pocketEntries || state.pocketHistory);
+  if (selected.has("pocketHistory")) bundle.pocketHistory = dedupePocketHistory(state.pocketEntries || state.pocketHistory);
   return bundle;
 }
 
 export function migrateImportedConfig(raw) {
-  const bundle = raw && typeof raw === "object" ? raw : {};
+  const bundle = plainObject(raw) ? raw : {};
   return {
-    options: hasBundleField(bundle, "options") && bundle.options ? normalizeOptions(bundle.options) : null,
-    customConfig: hasBundleField(bundle, "customConfig") ? normalizeCustomConfig(bundle.customConfig) : null,
-    promptLibrary: hasBundleField(bundle, "promptLibrary") ? normalizePromptLibrary(bundle.promptLibrary) : null,
-    promptSendHistory: hasBundleField(bundle, "promptSendHistory") ? normalizePromptSendHistory(bundle.promptSendHistory) : null,
-    shortcutConfig: hasBundleField(bundle, "shortcutConfig") && bundle.shortcutConfig ? normalizeShortcutConfig(bundle.shortcutConfig) : null,
-    pocketHistory: hasBundleField(bundle, "pocketHistory") ? normalizePocketHistory(bundle.pocketHistory) : null
+    options: hasBundleNonEmptyObjectField(bundle, "options") ? normalizeOptions(bundle.options) : null,
+    customConfig: hasBundleArrayField(bundle, "customConfig")
+      ? normalizeImportArrayField(bundle.customConfig, normalizeCustomConfig, validImportedCustomConfigItem)
+      : null,
+    promptLibrary: hasBundleArrayField(bundle, "promptLibrary")
+      ? normalizeImportArrayField(bundle.promptLibrary, normalizePromptLibrary, validImportedPromptLibraryItem)
+      : null,
+    promptSendHistory: hasBundleArrayField(bundle, "promptSendHistory")
+      ? normalizeImportArrayField(bundle.promptSendHistory, normalizePromptSendHistory, validImportedPromptSendHistoryItem)
+      : null,
+    shortcutConfig: hasBundleNonEmptyObjectField(bundle, "shortcutConfig") ? normalizeShortcutConfig(bundle.shortcutConfig) : null,
+    pocketHistory: hasBundleArrayField(bundle, "pocketHistory")
+      ? normalizeImportArrayField(bundle.pocketHistory, dedupePocketHistory, validImportedPocketHistoryItem)
+      : null
   };
+}
+
+export async function saveImportedConfigPatch(patch = {}) {
+  const source = plainObject(patch) ? patch : {};
+  const updates = {};
+  const normalized = {};
+  if (hasBundleField(source, "options")) {
+    normalized.options = normalizeOptions(source.options);
+    updates[STORAGE_KEYS.options] = dehydrateOptions(normalized.options);
+  }
+  if (hasBundleField(source, "customConfig")) {
+    normalized.customConfig = normalizeCustomConfig(source.customConfig);
+    updates[STORAGE_KEYS.customConfig] = normalized.customConfig;
+  }
+  if (hasBundleField(source, "promptLibrary")) {
+    normalized.promptLibrary = normalizePromptLibrary(source.promptLibrary);
+    updates[STORAGE_KEYS.promptLibrary] = normalized.promptLibrary;
+  }
+  if (hasBundleField(source, "promptSendHistory")) {
+    normalized.promptSendHistory = normalizePromptSendHistory(source.promptSendHistory);
+    updates[STORAGE_KEYS.promptSendHistory] = normalized.promptSendHistory;
+  }
+  if (hasBundleField(source, "shortcutConfig")) {
+    normalized.shortcutConfig = normalizeShortcutConfig(source.shortcutConfig);
+    updates[STORAGE_KEYS.shortcutConfig] = normalized.shortcutConfig;
+  }
+  if (hasBundleField(source, "pocketHistory")) {
+    normalized.pocketHistory = dedupePocketHistory(source.pocketHistory);
+    updates[STORAGE_KEYS.pocketHistory] = normalized.pocketHistory;
+  }
+  if (Object.keys(updates).length) {
+    await chrome.storage.local.set(updates);
+  }
+  return normalized;
 }

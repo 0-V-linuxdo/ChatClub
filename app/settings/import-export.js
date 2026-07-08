@@ -4,12 +4,7 @@ import {
   exportConfigBundle,
   migrateImportedConfig,
   mergePocketHistory,
-  saveCustomConfig,
-  saveOptions,
-  savePocketHistory,
-  savePromptLibrary,
-  savePromptSendHistory,
-  saveShortcutConfig
+  saveImportedConfigPatch
 } from "../../shared/storage.js";
 import { downloadText, el, modal, readFileAsText, toast } from "../../ui/dom.js";
 
@@ -23,6 +18,7 @@ const IMPORT_EXPORT_ITEMS = Object.freeze([
 ]);
 
 const IMPORT_EXPORT_ITEM_KEYS = IMPORT_EXPORT_ITEMS.map((item) => item.key);
+const POCKET_IMPORT_SIZE_WARNING_BYTES = 4 * 1024 * 1024;
 
 export function createImportExportSettings(ctx) {
   const {
@@ -44,6 +40,30 @@ export function createImportExportSettings(ctx) {
     if (Array.isArray(value)) return t("io.itemCount", { count: value.length });
     if (key === "options" || key === "shortcutConfig") return t("io.itemAvailable");
     return t("io.itemCount", { count: itemValueCount(value) });
+  }
+
+  function jsonByteSize(value) {
+    try {
+      return new Blob([JSON.stringify(value)]).size;
+    } catch {
+      return JSON.stringify(value || "").length;
+    }
+  }
+
+  function formatByteSize(size) {
+    const number = Number(size);
+    if (!Number.isFinite(number) || number <= 0) return "0 KB";
+    if (number >= 1024 * 1024) return `${(number / 1024 / 1024).toFixed(1)} MB`;
+    return `${Math.max(1, Math.round(number / 1024))} KB`;
+  }
+
+  function exportWarningMessages(selectedKeys) {
+    const selected = selectedKeys instanceof Set ? selectedKeys : new Set(selectedKeys || []);
+    const messages = [];
+    if (selected.has("options")) messages.push(t("io.sensitiveWarning.options"));
+    if (selected.has("pocketHistory")) messages.push(t("io.sensitiveWarning.pocket"));
+    if (selected.has("promptLibrary") || selected.has("promptSendHistory")) messages.push(t("io.sensitiveWarning.prompts"));
+    return messages;
   }
 
   function availableImportKeys(imported) {
@@ -69,17 +89,24 @@ export function createImportExportSettings(ctx) {
       toast(t("toast.importNoSelection"), "error");
       return false;
     }
-    if (selected.has("options")) state.options = await saveOptions(imported.options);
-    if (selected.has("customConfig")) state.customConfig = await saveCustomConfig(imported.customConfig);
-    if (selected.has("promptLibrary")) state.promptLibrary = await savePromptLibrary(imported.promptLibrary);
-    if (selected.has("promptSendHistory")) state.promptSendHistory = await savePromptSendHistory(imported.promptSendHistory);
-    if (selected.has("shortcutConfig")) state.shortcutConfig = await saveShortcutConfig(imported.shortcutConfig);
+    const patch = {};
+    if (selected.has("options")) patch.options = imported.options;
+    if (selected.has("customConfig")) patch.customConfig = imported.customConfig;
+    if (selected.has("promptLibrary")) patch.promptLibrary = imported.promptLibrary;
+    if (selected.has("promptSendHistory")) patch.promptSendHistory = imported.promptSendHistory;
+    if (selected.has("shortcutConfig")) patch.shortcutConfig = imported.shortcutConfig;
     if (selected.has("pocketHistory")) {
-      const nextPocketHistory = pocketMode === "replace"
+      patch.pocketHistory = pocketMode === "replace"
         ? imported.pocketHistory
         : mergePocketHistory(state.pocketEntries || [], imported.pocketHistory);
-      state.pocketEntries = await savePocketHistory(nextPocketHistory);
     }
+    const saved = await saveImportedConfigPatch(patch);
+    if ("options" in saved) state.options = saved.options;
+    if ("customConfig" in saved) state.customConfig = saved.customConfig;
+    if ("promptLibrary" in saved) state.promptLibrary = saved.promptLibrary;
+    if ("promptSendHistory" in saved) state.promptSendHistory = saved.promptSendHistory;
+    if ("shortcutConfig" in saved) state.shortcutConfig = saved.shortcutConfig;
+    if ("pocketHistory" in saved) state.pocketEntries = saved.pocketHistory;
     await notifyConfigReload();
     hydrateGroups();
     syncI18nLanguage();
@@ -134,11 +161,14 @@ export function createImportExportSettings(ctx) {
     let dialog = null;
     let confirmButton = null;
     let pocketModePanel = null;
+    let importWarning = null;
+    const pocketImportSize = jsonByteSize(imported.pocketHistory || []);
 
     const updateState = () => {
       const hasSelection = selectedKeys.size > 0;
       if (confirmButton) confirmButton.disabled = !hasSelection;
       if (pocketModePanel) pocketModePanel.hidden = !selectedKeys.has("pocketHistory");
+      if (importWarning) importWarning.hidden = !selectedKeys.has("pocketHistory") || pocketImportSize < POCKET_IMPORT_SIZE_WARNING_BYTES;
     };
 
     const close = () => dialog?.remove();
@@ -190,6 +220,12 @@ export function createImportExportSettings(ctx) {
         )
       )
     );
+    importWarning = el("p", { class: "io-sensitive-warning", hidden: true },
+      t("io.largePocketWarning", {
+        count: itemValueCount(imported.pocketHistory),
+        size: formatByteSize(pocketImportSize)
+      })
+    );
 
     confirmButton = el("button", {
       class: "button button-primary",
@@ -202,6 +238,7 @@ export function createImportExportSettings(ctx) {
         el("p", { class: "io-dialog-lead" }, t("io.importConfirmDesc")),
         el("div", { class: "io-choice-list io-import-choice-list" }, rows),
         pocketModePanel,
+        importWarning,
         el("div", { class: "settings-dialog-actions" },
           el("button", { class: "button button-secondary", type: "button", onclick: close }, t("common.cancel")),
           confirmButton
@@ -220,11 +257,17 @@ export function createImportExportSettings(ctx) {
     const fileInput = el("input", { class: "settings-file-input", type: "file", accept: "application/json" });
     let exportButton = null;
     let exportNotice = null;
+    let exportWarning = null;
 
     const updateExportState = () => {
       const hasSelection = selectedExportKeys.size > 0;
       if (exportButton) exportButton.disabled = !hasSelection;
       if (exportNotice) exportNotice.hidden = hasSelection;
+      if (exportWarning) {
+        const messages = exportWarningMessages(selectedExportKeys);
+        exportWarning.hidden = !messages.length;
+        exportWarning.replaceChildren(...messages.map((message) => el("span", {}, message)));
+      }
     };
 
     const exportRows = IMPORT_EXPORT_ITEMS.map((item) => {
@@ -241,6 +284,7 @@ export function createImportExportSettings(ctx) {
     });
 
     exportNotice = el("p", { class: "io-no-selection", hidden: true }, t("io.noExportSelection"));
+    exportWarning = el("div", { class: "io-sensitive-warning" });
 
     fileInput.addEventListener("change", async () => {
       const file = fileInput.files?.[0];
@@ -276,6 +320,7 @@ export function createImportExportSettings(ctx) {
             el("p", {}, t("io.manageDesc"))
           )
         ),
+        exportWarning,
         el("div", { class: "io-choice-list io-export-choice-list" }, exportRows),
         exportNotice,
         el("div", { class: "settings-config-actions" },
