@@ -8,7 +8,7 @@ import {
   shortcutUsesDigitPattern
 } from "../../shared/shortcuts.js";
 import { saveShortcutConfig } from "../../shared/storage.js";
-import { button, el, field, select, toast } from "../../ui/dom.js";
+import { button, el, select, toast } from "../../ui/dom.js";
 
 const SHORTCUT_SETTING_GROUPS = [
   {
@@ -23,8 +23,27 @@ const SHORTCUT_SETTING_GROUPS = [
   }
 ];
 
+const SHORTCUT_PREVIEW_META = Object.freeze({
+  sendMessage: { icon: "send", labelKey: "topbar.send", tooltipLabelKey: "topbar.sendTooltip", tooltipId: "topbar.send", showLabel: true, primary: true },
+  focusInput: { icon: "keyboard", labelKey: "shortcut.focusInput.label" },
+  newChatAll: { icon: "edit", labelKey: "topbar.newChat", tooltipLabelKey: "topbar.newChatAllTooltip", tooltipId: "topbar.newChat", showLabel: true },
+  deleteThread: { icon: "trash", labelKey: "topbar.deleteThread", tooltipId: "topbar.deleteThread" },
+  optimizePrompt: { icon: "sparkles", labelKey: "topbar.optimizePrompt", tooltipId: "topbar.optimizePrompt" },
+  openSummaryPanel: { icon: "summary", labelKey: "topbar.summary", tooltipId: "topbar.summary", showLabel: true },
+  openPocketPanel: { icon: "pocket", labelKey: "topbar.pocket", tooltipId: "topbar.pocket", showLabel: true },
+  insertPrompt: { icon: "insert", labelKey: "shortcut.insertPrompt.label", showSlot: true },
+  switchLayout: { icon: "layout", labelKey: "topbar.switchLayout", tooltipId: "topbar.layout", showSlot: true },
+  switchPlatformTab: { icon: "apps", labelKey: "shortcut.switchPlatformTab.label", showSlot: true },
+  newChat: { icon: "edit", labelKey: "topbar.newChat", tooltipId: "workspace.group.newChat" },
+  toggleMessageNavigator: { icon: "navigator", labelKey: "chat.messageNavigator", tooltipId: "workspace.group.messageNavigator" },
+  closeChat: { icon: "x", labelKey: "common.close", tooltipId: "workspace.tab.close" },
+  refreshPage: { icon: "reload", labelKey: "chat.refreshPage", tooltipId: "workspace.group.refreshPage" },
+  reloadChat: { icon: "home", labelKey: "chat.home", tooltipId: "workspace.group.reload" },
+  enterFullscreen: { icon: "maximize", labelKey: "chat.fullscreen", tooltipId: "workspace.group.fullscreen" }
+});
+
 export function createShortcutSettings(ctx) {
-  const { state, notifyConfigReload, settingsKit } = ctx;
+  const { state, svgIcon, notifyConfigReload, settingsKit } = ctx;
   const {
     settingsActions,
     settingsBlock,
@@ -90,6 +109,30 @@ export function createShortcutSettings(ctx) {
   function formatShortcutDisplay(action, shortcut, slot = "") {
     const label = formatShortcut(action, shortcut, slot);
     return label === "Disabled" ? t("common.disabled") : label;
+  }
+
+  function shortcutPreviewButton(action, disabled) {
+    const meta = SHORTCUT_PREVIEW_META[action] || { icon: "keyboard", labelKey: `shortcut.${action}.label` };
+    const label = t(meta.labelKey);
+    const tooltipLabel = t(meta.tooltipLabelKey || meta.labelKey);
+    const slot = meta.showSlot ? "1-9" : "";
+    const text = meta.showLabel ? label : slot;
+    const sample = el("button", {
+      class: `tooltip-preview-button shortcut-preview-button tooltip-trigger ${meta.primary ? "shortcut-preview-primary" : ""} ${disabled ? "tooltip-preview-disabled" : ""}`.trim(),
+      type: "button",
+      "aria-label": `${t("shortcuts.preview")}: ${label}`,
+      "data-tooltip": tooltipLabel,
+      "data-tooltip-id": meta.tooltipId || null,
+      "data-tooltip-placement": "left",
+      onclick: (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    },
+      svgIcon(meta.icon),
+      text ? el("span", {}, text) : null
+    );
+    return el("span", { class: "tooltip-preview-cell shortcut-preview-cell" }, sample);
   }
 
   function shortcutDraft() {
@@ -163,6 +206,7 @@ export function createShortcutSettings(ctx) {
         el("strong", {}, shortcutActionLabel(action)),
         el("span", {}, shortcutActionDescription(action))
       ),
+      shortcutPreviewButton(action, disabled),
       el("button", {
         class: `shortcut-record-button tooltip-trigger ${recording ? "recording" : ""}`.trim(),
         type: "button",
@@ -195,7 +239,7 @@ export function createShortcutSettings(ctx) {
 
   function shortcutGroupBlock(group, conflicts, redraw) {
     return settingsBlock(t(group.titleKey), t(group.descriptionKey),
-      settingsList([t("shortcuts.action"), t("shortcuts.shortcut"), t("common.enabled"), ""],
+      settingsList([t("shortcuts.action"), t("shortcuts.preview"), t("shortcuts.shortcut"), t("common.enabled"), ""],
         group.actions.map((action) => shortcutRow(action, conflicts, redraw)),
         "shortcut-list"
       )
@@ -222,11 +266,21 @@ export function createShortcutSettings(ctx) {
       { value: "mod-enter", label: t("shortcuts.modEnterSends") }
     ]);
     sendMode.value = draft.sendKeyMode || "enter";
+    sendMode.setAttribute("aria-label", t("shortcuts.sendKey"));
     sendMode.addEventListener("change", () => {
       queueShortcutAutoSave({ ...shortcutDraft(), sendKeyMode: sendMode.value });
     });
     return settingsBlock(t("shortcuts.sendMessage"), t("shortcuts.sendMessageDesc"),
-      field(t("shortcuts.sendKey"), sendMode)
+      settingsList([t("shortcuts.action"), t("shortcuts.preview"), t("shortcuts.sendKey")], [
+        el("div", { class: "ui-list-row settings-list-row shortcut-input-row" },
+          el("div", { class: "shortcut-row-copy" },
+            el("strong", {}, t("shortcuts.sendMessage")),
+            el("span", {}, t("shortcuts.sendMessageDesc"))
+          ),
+          shortcutPreviewButton("sendMessage", false),
+          sendMode
+        )
+      ], "shortcut-input-list")
     );
   }
 

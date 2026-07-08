@@ -1980,6 +1980,7 @@ export function createSettingsController(ctx) {
   }
 
   function messageNavigatorEffectsBlock(redraw) {
+    const preview = messageNavigatorEffectPreview();
     return settingsBlock(t("messageNavigator.effects.title"), t("messageNavigator.effects.desc"),
       el("div", { class: "message-navigator-effect-layout" },
         el("div", { class: "message-navigator-effect-main" },
@@ -1992,10 +1993,11 @@ export function createSettingsController(ctx) {
               toast(t("toast.messageNavigatorEffectSaved"), "success");
               redraw();
             }
-          }))
+          })),
+          preview.action
         ),
         el("div", { class: "message-navigator-effect-aside" },
-          messageNavigatorEffectPreview()
+          preview.stage
         )
       )
     );
@@ -2022,16 +2024,18 @@ export function createSettingsController(ctx) {
       el("span", { class: "message-navigator-effect-preview-role" }, "A"),
       el("span", { class: "message-navigator-effect-preview-text" }, t("messageNavigator.preview.message"))
     );
-    return el("div", { class: "message-navigator-effect-preview" },
-      el("div", { class: "message-navigator-effect-preview-stage" },
-        target,
-        el("div", { class: "message-navigator-effect-preview-lines", "aria-hidden": "true" },
-          el("span", {}),
-          el("span", { class: "active" }),
-          el("span", {})
+    return {
+      stage: el("div", { class: "message-navigator-effect-preview" },
+        el("div", { class: "message-navigator-effect-preview-stage" },
+          target,
+          el("div", { class: "message-navigator-effect-preview-lines", "aria-hidden": "true" },
+            el("span", {}),
+            el("span", { class: "active" }),
+            el("span", {})
+          )
         )
       ),
-      el("button", {
+      action: el("button", {
         class: "button button-secondary message-navigator-effect-preview-action",
         type: "button",
         onclick: () => playMessageNavigatorEffectPreview(target, mode)
@@ -2039,7 +2043,7 @@ export function createSettingsController(ctx) {
         svgIcon("preview"),
         el("span", {}, t("messageNavigator.preview.play"))
       )
-    );
+    };
   }
 
   function playMessageNavigatorEffectPreview(target, mode) {
@@ -2873,6 +2877,7 @@ export function createSettingsController(ctx) {
 
   const shortcutSettings = createShortcutSettings({
     state,
+    svgIcon,
     notifyConfigReload,
     settingsKit
   });

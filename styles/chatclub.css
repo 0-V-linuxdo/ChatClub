@@ -2400,6 +2400,12 @@ body.settings-tab-group-button-dragging iframe {
   min-width: 0;
 }
 
+.message-navigator-effect-main {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
 .message-navigator-effect-aside {
   padding-left: 24px;
   border-left: 1px solid var(--line);
@@ -2415,12 +2421,12 @@ body.settings-tab-group-button-dragging iframe {
   grid-template-columns: minmax(0, 1fr) 42px;
   gap: 14px;
   align-items: center;
-  min-height: 112px;
-  padding: 14px;
-  overflow: hidden;
-  background: color-mix(in srgb, var(--panel-2) 52%, transparent);
-  border: 1px solid var(--line);
-  border-radius: var(--settings-radius);
+  min-height: 0;
+  padding: 0;
+  overflow: visible;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
 }
 
 .message-navigator-effect-preview-lines {
@@ -3923,7 +3929,8 @@ body.settings-tab-group-button-dragging iframe {
 
 .model-preference-list .settings-list-header,
 .model-preference-row {
-  grid-template-columns: 52px minmax(160px, .72fr) minmax(300px, 1.1fr) minmax(180px, .78fr);
+  min-width: 760px;
+  grid-template-columns: 52px minmax(150px, 220px) minmax(280px, 380px) minmax(184px, 220px) minmax(0, 1fr);
 }
 
 .settings-manager-list.model-preference-list .settings-list-header span:first-child {
@@ -3932,6 +3939,8 @@ body.settings-tab-group-button-dragging iframe {
 
 .settings-manager-list.model-preference-list .settings-list-header span:last-child {
   text-align: left;
+  padding-left: 18px;
+  padding-right: 10px;
 }
 
 .model-preference-row {
@@ -3948,20 +3957,22 @@ body.settings-tab-group-button-dragging iframe {
 }
 
 .model-preference-row > .select {
-  width: min(100%, 360px);
+  width: min(calc(100% - (var(--settings-row-gap) * 2)), 360px);
   justify-self: start;
 }
 
 .model-thinking-toggle {
-  min-width: 82px;
-  min-height: 32px;
-  padding: 4px 5px;
+  min-width: 118px;
+  min-height: 34px;
+  padding: 4px 9px;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  gap: 8px;
   justify-self: start;
+  margin-left: 8px;
   color: var(--text);
-  border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 84%, transparent);
   border-radius: 999px;
   background: color-mix(in srgb, var(--panel) 76%, var(--panel-2));
   cursor: pointer;
@@ -4029,23 +4040,25 @@ body.settings-tab-group-button-dragging iframe {
 
 .model-thinking-toggle-value {
   color: var(--text);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 760;
 }
 
 .model-thinking-toggle-placeholder {
-  width: 82px;
-  min-height: 32px;
+  width: 118px;
+  min-height: 34px;
+  margin-left: 8px;
 }
 
 @media (max-width: 700px) {
   .model-preference-list .settings-list-header,
   .model-preference-row {
-    grid-template-columns: 42px minmax(86px, 104px) minmax(156px, 1fr) minmax(86px, auto);
+    min-width: 720px;
+    grid-template-columns: 42px minmax(86px, 104px) minmax(220px, 300px) minmax(150px, 170px) minmax(0, 1fr);
   }
 
   .model-preference-row > .select {
-    width: min(100%, 208px);
+    width: min(calc(100% - (var(--settings-row-gap) * 2)), 280px);
   }
 }
 
@@ -4300,7 +4313,36 @@ body.settings-tab-group-button-dragging iframe {
 
 .shortcut-list .settings-list-header,
 .shortcut-row {
-  grid-template-columns: minmax(180px, 1fr) minmax(150px, 210px) 112px 42px;
+  grid-template-columns: minmax(180px, 1fr) minmax(112px, 180px) minmax(150px, 210px) 112px 42px;
+}
+
+.shortcut-input-list {
+  overflow-x: hidden;
+}
+
+.shortcut-input-list .settings-list-header,
+.shortcut-input-row {
+  min-width: 0;
+  grid-template-columns: minmax(180px, 1fr) minmax(112px, 180px) minmax(150px, 210px) 112px 42px;
+}
+
+.shortcut-input-list .settings-list-header span:nth-child(3),
+.shortcut-input-row > .select {
+  grid-column: 3 / -1;
+}
+
+.shortcut-input-list .settings-list-header span:last-child {
+  text-align: left;
+}
+
+.shortcut-input-row {
+  min-height: var(--settings-row-height);
+}
+
+.shortcut-input-row > .select {
+  min-width: 0;
+  width: auto;
+  justify-self: stretch;
 }
 
 .settings-list-row .textarea {
@@ -4905,6 +4947,29 @@ body.settings-tab-group-button-dragging iframe {
   white-space: nowrap;
 }
 
+.shortcut-preview-cell {
+  min-width: 0;
+}
+
+.shortcut-preview-button {
+  max-width: 100%;
+}
+
+.shortcut-preview-button.shortcut-preview-primary {
+  color: #fff;
+  background: var(--primary);
+  border-color: var(--primary);
+  box-shadow: none;
+}
+
+.shortcut-preview-button.shortcut-preview-primary:hover,
+.shortcut-preview-button.shortcut-preview-primary:focus-visible,
+.shortcut-preview-button.shortcut-preview-primary.tooltip-open {
+  color: #fff;
+  background: color-mix(in srgb, var(--primary) 88%, #fff 12%);
+  border-color: color-mix(in srgb, var(--primary) 88%, #fff 12%);
+}
+
 .shortcut-record-button {
   height: var(--settings-control-height);
   padding: 0 12px;
@@ -4997,7 +5062,12 @@ body.settings-tab-group-button-dragging iframe {
 
   .shortcut-list .settings-list-header,
   .shortcut-row {
-    grid-template-columns: minmax(0, 1fr) minmax(120px, 180px) 94px 34px;
+    grid-template-columns: minmax(0, 1fr) minmax(96px, 140px) minmax(120px, 170px) 94px 34px;
+  }
+
+  .shortcut-input-list .settings-list-header,
+  .shortcut-input-row {
+    grid-template-columns: minmax(0, 1fr) minmax(96px, 140px) minmax(120px, 170px) 94px 34px;
   }
 
   .topic-delete-list .settings-list-header,
