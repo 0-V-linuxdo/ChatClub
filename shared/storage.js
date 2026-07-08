@@ -33,6 +33,17 @@ export function createId(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+export const CONFIG_BUNDLE_KEYS = Object.freeze([
+  "options",
+  "customConfig",
+  "promptLibrary",
+  "promptSendHistory",
+  "shortcutConfig",
+  "pocketHistory"
+]);
+
+const CONFIG_BUNDLE_KEY_SET = new Set(CONFIG_BUNDLE_KEYS);
+
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
@@ -604,7 +615,7 @@ export function normalizePromptSendHistory(raw = []) {
   }).slice(0, 100);
 }
 
-export function normalizePocketHistory(raw = []) {
+function normalizePocketHistoryItems(raw = []) {
   const wholeNumber = (value, fallback = 0) => {
     const number = Number(value);
     return Number.isFinite(number) ? Math.max(0, Math.round(number)) : fallback;
@@ -635,7 +646,25 @@ export function normalizePocketHistory(raw = []) {
       assistantMessage: text(item.assistantMessage || item.assistant),
       createdAt
     };
-  }).filter((item) => item.chatUrl && item.userMessage && item.assistantMessage).slice(0, 300);
+  }).filter((item) => item.chatUrl && item.userMessage && item.assistantMessage);
+}
+
+export function dedupePocketHistory(raw = []) {
+  const seen = new Set();
+  return normalizePocketHistoryItems(raw).filter((item) => {
+    const key = [item.batchId || "legacy", item.chatUrl, item.userMessage, item.assistantMessage].join("\n");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 300);
+}
+
+export function mergePocketHistory(existing = [], incoming = []) {
+  return dedupePocketHistory([...existing, ...incoming]);
+}
+
+export function normalizePocketHistory(raw = []) {
+  return normalizePocketHistoryItems(raw).slice(0, 300);
 }
 
 export function normalizeShortcutConfig(raw = {}) {
@@ -784,25 +813,45 @@ export async function saveShortcutConfig(shortcutConfig) {
   return normalized;
 }
 
-export function exportConfigBundle({ options, customConfig, promptLibrary, promptSendHistory, shortcutConfig }) {
-  return {
+function hasBundleField(bundle, key) {
+  return Object.prototype.hasOwnProperty.call(bundle, key);
+}
+
+export function normalizeConfigBundleKeys(selectedKeys = CONFIG_BUNDLE_KEYS) {
+  const source = selectedKeys == null ? CONFIG_BUNDLE_KEYS : selectedKeys;
+  const keys = Array.isArray(source)
+    ? source
+    : source && typeof source !== "string" && typeof source[Symbol.iterator] === "function"
+      ? [...source]
+      : [];
+  return keys.filter((key, index) =>
+    CONFIG_BUNDLE_KEY_SET.has(key) && keys.indexOf(key) === index
+  );
+}
+
+export function exportConfigBundle(state = {}, selectedKeys = CONFIG_BUNDLE_KEYS) {
+  const selected = new Set(normalizeConfigBundleKeys(selectedKeys));
+  const bundle = {
     schema: "chatclub.config.v1",
-    exportedAt: new Date().toISOString(),
-    options: dehydrateOptions(options),
-    customConfig: normalizeCustomConfig(customConfig),
-    promptLibrary: normalizePromptLibrary(promptLibrary),
-    promptSendHistory: normalizePromptSendHistory(promptSendHistory),
-    shortcutConfig: normalizeShortcutConfig(shortcutConfig)
+    exportedAt: new Date().toISOString()
   };
+  if (selected.has("options")) bundle.options = dehydrateOptions(state.options);
+  if (selected.has("customConfig")) bundle.customConfig = normalizeCustomConfig(state.customConfig);
+  if (selected.has("promptLibrary")) bundle.promptLibrary = normalizePromptLibrary(state.promptLibrary);
+  if (selected.has("promptSendHistory")) bundle.promptSendHistory = normalizePromptSendHistory(state.promptSendHistory);
+  if (selected.has("shortcutConfig")) bundle.shortcutConfig = normalizeShortcutConfig(state.shortcutConfig);
+  if (selected.has("pocketHistory")) bundle.pocketHistory = normalizePocketHistory(state.pocketEntries || state.pocketHistory);
+  return bundle;
 }
 
 export function migrateImportedConfig(raw) {
   const bundle = raw && typeof raw === "object" ? raw : {};
   return {
-    options: bundle.options ? normalizeOptions(bundle.options) : null,
-    customConfig: bundle.customConfig ? normalizeCustomConfig(bundle.customConfig) : null,
-    promptLibrary: bundle.promptLibrary ? normalizePromptLibrary(bundle.promptLibrary) : null,
-    promptSendHistory: bundle.promptSendHistory ? normalizePromptSendHistory(bundle.promptSendHistory) : null,
-    shortcutConfig: bundle.shortcutConfig ? normalizeShortcutConfig(bundle.shortcutConfig) : null
+    options: hasBundleField(bundle, "options") && bundle.options ? normalizeOptions(bundle.options) : null,
+    customConfig: hasBundleField(bundle, "customConfig") ? normalizeCustomConfig(bundle.customConfig) : null,
+    promptLibrary: hasBundleField(bundle, "promptLibrary") ? normalizePromptLibrary(bundle.promptLibrary) : null,
+    promptSendHistory: hasBundleField(bundle, "promptSendHistory") ? normalizePromptSendHistory(bundle.promptSendHistory) : null,
+    shortcutConfig: hasBundleField(bundle, "shortcutConfig") && bundle.shortcutConfig ? normalizeShortcutConfig(bundle.shortcutConfig) : null,
+    pocketHistory: hasBundleField(bundle, "pocketHistory") ? normalizePocketHistory(bundle.pocketHistory) : null
   };
 }

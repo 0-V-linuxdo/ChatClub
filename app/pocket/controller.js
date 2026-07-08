@@ -1,5 +1,5 @@
 import { t } from "../../shared/i18n.js";
-import { normalizePocketCardSize } from "../../shared/storage.js";
+import { dedupePocketHistory, normalizePocketCardSize } from "../../shared/storage.js";
 import { clear, el, modal, toast } from "../../ui/dom.js";
 import { requireControllerContext, requireControllerFunction } from "../controller-context.js";
 import { renderMarkdown } from "../summary/markdown.js";
@@ -144,13 +144,7 @@ export function createPocketController(ctx) {
   }
 
   function dedupePocketEntries(entries) {
-    const seen = new Set();
-    return (entries || []).filter((entry) => {
-      const key = [entry.batchId || "legacy", entry.chatUrl, entry.userMessage, entry.assistantMessage].join("\n");
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    }).slice(0, 300);
+    return dedupePocketHistory(entries);
   }
 
   async function saveSummaryPreviewToPocket() {
