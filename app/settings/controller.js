@@ -144,6 +144,10 @@ export function createSettingsController(ctx) {
     return TAB_GROUP_HEADER_BUTTONS.some((item) => !item.requiredPinned && placement[item.id] === "menu") ? "hidden" : "pinned";
   }
 
+  function tabGroupButtonPlacementValue(value) {
+    return value === "menu" || value === "hidden" ? value : "pinned";
+  }
+
   function modelPreferenceKey(config) {
     return JSON.stringify({
       ...DEFAULT_OPTIONS.modelPreferences,
@@ -203,7 +207,7 @@ export function createSettingsController(ctx) {
   function tabGroupButtonDropTargetFromPoint(clientX, clientY) {
     const pointTarget = document.elementFromPoint(clientX, clientY);
     const targetFromZone = (zone) => {
-      const placement = zone?.dataset?.placement === "menu" ? "menu" : "pinned";
+      const placement = tabGroupButtonPlacementValue(zone?.dataset?.placement);
       const rows = Array.from(zone?.querySelectorAll?.(".tab-group-button-placement-row") || [])
         .filter((row) => row.dataset?.buttonId && row.dataset.buttonId !== activeTabGroupButtonDrag?.item?.id);
       for (const row of rows) {
@@ -224,10 +228,11 @@ export function createSettingsController(ctx) {
       };
     };
     const zone = pointTarget?.closest?.(".tab-group-button-placement-zone");
-    if (zone?.dataset?.placement === "pinned" || zone?.dataset?.placement === "menu") {
+    if (zone?.dataset?.placement === "pinned" || zone?.dataset?.placement === "menu" || zone?.dataset?.placement === "hidden") {
       return targetFromZone(zone);
     }
-    const zones = Array.from(document.querySelectorAll(".tab-group-button-placement-zone"));
+    const zones = Array.from(document.querySelectorAll(".tab-group-button-placement-zone"))
+      .filter((node) => node.dataset?.placement === "pinned" || node.dataset?.placement === "menu" || node.dataset?.placement === "hidden");
     if (!zones.length) {
       return {
         placement: activeTabGroupButtonDrag?.targetPlacement || "pinned",
@@ -235,18 +240,17 @@ export function createSettingsController(ctx) {
         targetPosition: "end"
       };
     }
-    const pinnedZone = zones.find((node) => node.dataset?.placement === "pinned");
-    const menuZone = zones.find((node) => node.dataset?.placement === "menu");
-    if (!pinnedZone || !menuZone) {
-      return {
-        placement: activeTabGroupButtonDrag?.targetPlacement || "pinned",
-        targetId: "",
-        targetPosition: "end"
-      };
-    }
-    const pinnedRect = pinnedZone.getBoundingClientRect();
-    const menuRect = menuZone.getBoundingClientRect();
-    return targetFromZone(clientY < (pinnedRect.bottom + menuRect.top) / 2 ? pinnedZone : menuZone);
+    const zoneRects = zones.map((node) => ({ node, rect: node.getBoundingClientRect() }));
+    const zonesAreSideBySide = zoneRects.some((entry, index) => zoneRects.some((other, otherIndex) => (
+      index !== otherIndex && Math.min(entry.rect.bottom, other.rect.bottom) > Math.max(entry.rect.top, other.rect.top)
+    )));
+    const distanceToRect = ({ rect }) => {
+      const dx = clientX < rect.left ? rect.left - clientX : clientX > rect.right ? clientX - rect.right : 0;
+      const dy = clientY < rect.top ? rect.top - clientY : clientY > rect.bottom ? clientY - rect.bottom : 0;
+      return zonesAreSideBySide ? dx * 4 + dy : dy * 4 + dx;
+    };
+    zoneRects.sort((a, b) => distanceToRect(a) - distanceToRect(b));
+    return targetFromZone(zoneRects[0]?.node || zones[0]);
   }
 
   function previewTabGroupButtonDrop(clientX, clientY) {
@@ -765,7 +769,7 @@ export function createSettingsController(ctx) {
       .map((id) => tabGroupButtonById.get(id))
       .filter(Boolean);
     const tabGroupButtonsForPlacement = (placement) => orderedTabGroupConfigurableButtons()
-      .filter((item) => (tabGroupButtonPlacement[item.id] || item.defaultPlacement || "pinned") === placement);
+      .filter((item) => tabGroupButtonPlacementValue(tabGroupButtonPlacement[item.id] || item.defaultPlacement || "pinned") === placement);
     const renderTabGroupPlacementRow = (item) => el("div", {
       class: `tab-group-button-placement-row ${item.danger ? "is-danger" : ""}`.trim(),
       dataset: { buttonId: item.id },
@@ -780,31 +784,38 @@ export function createSettingsController(ctx) {
         el("strong", {}, tabGroupButtonLabel(item.id))
       )
     );
-    const tabGroupPlacementDivider = () => el("div", { class: "tab-group-button-placement-divider", role: "separator" },
-      el("span", { class: "tab-group-button-placement-divider-line", "aria-hidden": "true" }),
-      el("span", { class: "tab-group-button-placement-divider-label" },
-        svgIcon("more"),
-        el("span", {}, t("chat.more"))
-      ),
-      el("span", { class: "tab-group-button-placement-divider-line", "aria-hidden": "true" })
-    );
-    const tabGroupPlacementZone = (placement, items, emptyText) => el("div", {
-      class: `tab-group-button-placement-zone is-${placement}`,
-      "data-placement": placement,
-      ondragover: preventTabGroupButtonNativeDrag,
-      ondrop: preventTabGroupButtonNativeDrag
+    const tabGroupPlacementTitle = (placement) => placement === "menu"
+      ? el("span", { class: "tab-group-button-placement-title" }, svgIcon("more"), el("span", {}, t("chat.more")))
+      : placement === "hidden"
+        ? el("span", { class: "tab-group-button-placement-title" }, svgIcon("x"), el("span", {}, t("appearance.tabGroupButtonsHidden")))
+        : el("span", { class: "tab-group-button-placement-title" }, svgIcon("layout"), el("span", {}, t("appearance.tabGroupButtonsPinned")));
+    const tabGroupPlacementZone = (placement, items, emptyText) => el("section", {
+      class: `tab-group-button-placement-panel is-${placement}`,
+      "aria-label": placement === "menu"
+        ? t("chat.more")
+        : placement === "hidden"
+          ? t("appearance.tabGroupButtonsHidden")
+          : t("appearance.tabGroupButtonsPinned")
     },
-      items.length
-        ? items.map(renderTabGroupPlacementRow)
-        : el("div", { class: "tab-group-button-placement-empty" }, emptyText)
+      tabGroupPlacementTitle(placement),
+      el("div", {
+        class: `tab-group-button-placement-zone is-${placement}`,
+        "data-placement": placement,
+        ondragover: preventTabGroupButtonNativeDrag,
+        ondrop: preventTabGroupButtonNativeDrag
+      },
+        items.length
+          ? items.map(renderTabGroupPlacementRow)
+          : el("div", { class: "tab-group-button-placement-empty" }, emptyText)
+      )
     );
     const tabGroupBlock = () => settingsBlock(t("appearance.tabGroup"), t("appearance.tabGroupDesc"),
       el("div", { class: "appearance-field-list" },
         el("p", { class: "settings-muted-help" }, t("appearance.tabGroupButtonsHelp")),
         el("div", { class: "tab-group-button-placement-list" },
           tabGroupPlacementZone("pinned", tabGroupButtonsForPlacement("pinned"), t("appearance.tabGroupDropPinned")),
-          tabGroupPlacementDivider(),
-          tabGroupPlacementZone("menu", tabGroupButtonsForPlacement("menu"), t("appearance.tabGroupDropMenu"))
+          tabGroupPlacementZone("menu", tabGroupButtonsForPlacement("menu"), t("appearance.tabGroupDropMenu")),
+          tabGroupPlacementZone("hidden", tabGroupButtonsForPlacement("hidden"), t("appearance.tabGroupDropHidden"))
         )
       )
     );

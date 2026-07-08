@@ -2099,17 +2099,64 @@ body.tab-gesture-active * {
 
 .tab-group-button-placement-list {
   display: grid;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) minmax(230px, 0.88fr) minmax(210px, 0.78fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.tab-group-button-placement-panel {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.tab-group-button-placement-title {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+.tab-group-button-placement-title .svg-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.tab-group-button-placement-panel.is-menu .tab-group-button-placement-title {
+  color: var(--primary);
+}
+
+.tab-group-button-placement-panel.is-hidden .tab-group-button-placement-title {
+  color: var(--danger);
 }
 
 .tab-group-button-placement-zone {
-  min-height: 52px;
+  min-height: 172px;
   display: grid;
+  align-content: start;
   gap: 8px;
-  padding: 4px;
-  border: 1px dashed transparent;
-  border-radius: 10px;
+  padding: 6px;
+  border: 1px dashed color-mix(in srgb, var(--line) 72%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel-2) 24%, transparent);
   transition: border-color 120ms ease, background 120ms ease;
+}
+
+.tab-group-button-placement-zone.is-menu {
+  border-color: color-mix(in srgb, var(--primary) 32%, var(--line));
+  background: color-mix(in srgb, var(--primary) 5%, transparent);
+}
+
+.tab-group-button-placement-zone.is-hidden {
+  border-color: color-mix(in srgb, var(--danger) 32%, var(--line));
+  background: color-mix(in srgb, var(--danger) 5%, transparent);
 }
 
 .tab-group-button-placement-zone.drop-target {
@@ -2117,14 +2164,19 @@ body.tab-gesture-active * {
   background: color-mix(in srgb, var(--primary) 10%, transparent);
 }
 
+.tab-group-button-placement-zone.is-hidden.drop-target {
+  border-color: color-mix(in srgb, var(--danger) 58%, transparent);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+
 .tab-group-button-placement-row {
   position: relative;
   min-width: 0;
   display: grid;
-  grid-template-columns: 24px 32px minmax(0, 1fr);
-  gap: 12px;
+  grid-template-columns: 22px 28px minmax(0, 1fr);
+  gap: 10px;
   align-items: center;
-  padding: 10px 12px;
+  padding: 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: color-mix(in srgb, var(--panel-2) 60%, transparent);
@@ -2207,7 +2259,7 @@ body.settings-tab-group-button-dragging iframe {
 }
 
 .tab-group-button-placement-empty {
-  min-height: 44px;
+  min-height: 58px;
   display: grid;
   place-items: center;
   padding: 10px 12px;
@@ -2216,35 +2268,6 @@ body.settings-tab-group-button-dragging iframe {
   color: var(--muted);
   font-size: 12px;
   text-align: center;
-}
-
-.tab-group-button-placement-divider {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  gap: 10px;
-  align-items: center;
-  padding: 2px 4px;
-  color: var(--muted);
-}
-
-.tab-group-button-placement-divider-line {
-  height: 1px;
-  background: var(--line);
-}
-
-.tab-group-button-placement-divider-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0;
-  text-transform: uppercase;
-}
-
-.tab-group-button-placement-divider-label .svg-icon {
-  width: 14px;
-  height: 14px;
 }
 
 .appearance-color-control {
@@ -2334,6 +2357,14 @@ body.settings-tab-group-button-dragging iframe {
     padding-left: 0;
     border-top: 1px solid var(--line);
     border-left: 0;
+  }
+
+  .tab-group-button-placement-list {
+    grid-template-columns: 1fr;
+  }
+
+  .tab-group-button-placement-zone {
+    min-height: 92px;
   }
 }
 

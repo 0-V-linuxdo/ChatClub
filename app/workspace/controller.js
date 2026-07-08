@@ -774,11 +774,11 @@ export function createWorkspaceController(ctx = {}) {
   }
 
   function tabGroupButtonIsPinned(id) {
-    return tabGroupButtonPlacement()[id] !== "menu";
+    return tabGroupButtonPlacement()[id] === "pinned";
   }
 
   function tabGroupButtonIsFolded(id) {
-    return !tabGroupButtonIsPinned(id);
+    return tabGroupButtonPlacement()[id] === "menu";
   }
 
   function syncTabGroupHeaderControls(card, group) {
@@ -792,7 +792,7 @@ export function createWorkspaceController(ctx = {}) {
     const addButton = tabs?.querySelector(".tab-add");
     if (tabs && tabGroupButtonIsPinned("addApp") && !addButton) {
       tabs.append(renderTabAddButton(group));
-    } else if (addButton && tabGroupButtonIsFolded("addApp")) {
+    } else if (addButton && !tabGroupButtonIsPinned("addApp")) {
       addButton.remove();
     }
     const actions = card.querySelector(".chat-actions");

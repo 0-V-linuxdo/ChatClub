@@ -124,7 +124,7 @@ function tabGroupPlacementLooksLikeDefault(raw = {}, expected = {}) {
     .every((item) => {
       const expectedPlacement = expected[item.id] || "pinned";
       const saved = raw[item.id];
-      return (saved === "menu" || saved === "pinned" ? saved : expectedPlacement) === expectedPlacement;
+      return (saved === "menu" || saved === "pinned" || saved === "hidden" ? saved : expectedPlacement) === expectedPlacement;
     });
 }
 
@@ -136,14 +136,14 @@ export function normalizeTabGroupButtonPlacement(value = {}, legacyMode = "pinne
   return Object.fromEntries(TAB_GROUP_HEADER_BUTTONS.map((item) => {
     if (item.requiredPinned) return [item.id, "pinned"];
     const saved = raw[item.id];
-    const placement = saved === "menu" || saved === "pinned"
+    const placement = saved === "menu" || saved === "pinned" || saved === "hidden"
       ? saved
       : legacyHidden
         ? "menu"
         : DEFAULT_TAB_GROUP_BUTTON_PLACEMENT[item.id] || "pinned";
     if (migrateFullscreenPinnedDefault && item.id === "fullscreen") return [item.id, "menu"];
     if ((migrateFullscreenPinnedDefault || migrateHomeMenuDefault) && item.id === "reload") return [item.id, "menu"];
-    return [item.id, placement === "menu" ? "menu" : "pinned"];
+    return [item.id, placement === "menu" || placement === "hidden" ? placement : "pinned"];
   }));
 }
 
