@@ -42,6 +42,8 @@ const SHORTCUT_PREVIEW_META = Object.freeze({
   enterFullscreen: { icon: "maximize", labelKey: "chat.fullscreen", tooltipId: "workspace.group.fullscreen" }
 });
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+
 export function createShortcutSettings(ctx) {
   const { state, svgIcon, notifyConfigReload, settingsKit } = ctx;
   const {
@@ -96,6 +98,27 @@ export function createShortcutSettings(ctx) {
       shortcutAutoSaveRunning = false;
       if (shortcutAutoSavePending) flushShortcutAutoSave();
     }
+  }
+
+  async function prepareForConfigImport(selectedKeys = []) {
+    const selected = new Set(selectedKeys || []);
+    if (!selected.has("shortcutConfig")) return;
+    shortcutAutoSavePending = null;
+    shortcutAutoSaveRedraw = null;
+    state.shortcutRecordingAction = "";
+    while (shortcutAutoSaveRunning) await sleep(20);
+    shortcutAutoSavePending = null;
+    shortcutAutoSaveRedraw = null;
+    state.shortcutDraftConfig = null;
+  }
+
+  function resetAfterConfigImport(selectedKeys = []) {
+    const selected = new Set(selectedKeys || []);
+    if (!selected.has("shortcutConfig")) return;
+    shortcutAutoSavePending = null;
+    shortcutAutoSaveRedraw = null;
+    state.shortcutDraftConfig = null;
+    state.shortcutRecordingAction = "";
   }
 
   function shortcutActionLabel(action) {
@@ -314,6 +337,8 @@ export function createShortcutSettings(ctx) {
   }
 
   return Object.freeze({
+    prepareForConfigImport,
+    resetAfterConfigImport,
     shortcutsPane
   });
 }

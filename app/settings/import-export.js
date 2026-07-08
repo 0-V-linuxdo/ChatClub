@@ -1,7 +1,11 @@
 import { t } from "../../shared/i18n.js";
 import {
   CONFIG_BUNDLE_KEYS,
+  POCKET_HISTORY_LIMIT,
   exportConfigBundle,
+  inspectImportedConfig,
+  isStorageQuotaError,
+  loadPocketHistory,
   migrateImportedConfig,
   mergePocketHistory,
   saveImportedConfigPatch
@@ -27,7 +31,9 @@ export function createImportExportSettings(ctx) {
     notifyConfigReload,
     hydrateGroups,
     syncI18nLanguage,
-    render
+    render,
+    prepareForConfigImport = async () => {},
+    resetAfterConfigImport = () => {}
   } = ctx;
 
   function itemValueCount(value) {
@@ -66,6 +72,54 @@ export function createImportExportSettings(ctx) {
     return messages;
   }
 
+  function importBlockLabel(key) {
+    return t(IMPORT_EXPORT_ITEMS.find((item) => item.key === key)?.labelKey || key);
+  }
+
+  function pocketKey(item = {}) {
+    return [item.batchId || "legacy", item.chatUrl, item.userMessage, item.assistantMessage].join("\n");
+  }
+
+  function pocketMergeStats(existing = [], imported = [], saved = []) {
+    const existingKeys = new Set(existing.map(pocketKey));
+    const savedKeys = new Set(saved.map(pocketKey));
+    const importedKeys = [...new Set(imported.map(pocketKey))];
+    const duplicateCount = importedKeys.filter((key) => existingKeys.has(key)).length;
+    const addedCount = importedKeys.filter((key) => savedKeys.has(key) && !existingKeys.has(key)).length;
+    const cappedCount = Math.max(0, importedKeys.length - duplicateCount - addedCount);
+    return { addedCount, cappedCount, duplicateCount };
+  }
+
+  function importWarningMessages(imported, diagnostics, selectedKeys, pocketMode, pocketImportSize) {
+    const selected = selectedKeys instanceof Set ? selectedKeys : new Set(selectedKeys || []);
+    const messages = [];
+    if (selected.has("pocketHistory") && pocketImportSize >= POCKET_IMPORT_SIZE_WARNING_BYTES) {
+      messages.push(t("io.largePocketWarning", {
+        count: itemValueCount(imported.pocketHistory),
+        size: formatByteSize(pocketImportSize)
+      }));
+    }
+    for (const key of IMPORT_EXPORT_ITEM_KEYS) {
+      const dropped = diagnostics?.[key]?.droppedCount || 0;
+      if (selected.has(key) && dropped > 0) {
+        messages.push(t("io.importDroppedItems", { label: importBlockLabel(key), count: dropped }));
+      }
+    }
+    if (
+      selected.has("pocketHistory")
+      && pocketMode === "merge"
+      && itemValueCount(state.pocketEntries) + itemValueCount(imported.pocketHistory) > POCKET_HISTORY_LIMIT
+    ) {
+      messages.push(t("io.pocketLimitWarning", { count: POCKET_HISTORY_LIMIT }));
+    }
+    return messages;
+  }
+
+  function importFailureMessage(error) {
+    if (isStorageQuotaError(error)) return t("toast.importStorageQuota");
+    return error?.message || t("toast.importFailed");
+  }
+
   function availableImportKeys(imported) {
     return IMPORT_EXPORT_ITEM_KEYS.filter((key) => imported[key] !== null);
   }
@@ -83,24 +137,32 @@ export function createImportExportSettings(ctx) {
     );
   }
 
-  async function applyImportedConfig(imported, selectedKeys, pocketMode = "merge") {
-    const selected = new Set(normalizedSelection(imported, selectedKeys));
+  async function applyImportedConfig(imported, selectedKeys, pocketMode = "merge", options = {}) {
+    const selectedList = normalizedSelection(imported, selectedKeys);
+    const selected = new Set(selectedList);
     if (!selected.size) {
       toast(t("toast.importNoSelection"), "error");
       return false;
     }
+    await prepareForConfigImport(selectedList);
     const patch = {};
     if (selected.has("options")) patch.options = imported.options;
     if (selected.has("customConfig")) patch.customConfig = imported.customConfig;
     if (selected.has("promptLibrary")) patch.promptLibrary = imported.promptLibrary;
     if (selected.has("promptSendHistory")) patch.promptSendHistory = imported.promptSendHistory;
     if (selected.has("shortcutConfig")) patch.shortcutConfig = imported.shortcutConfig;
+    let pocketExisting = [];
+    let pocketStats = null;
     if (selected.has("pocketHistory")) {
+      pocketExisting = pocketMode === "replace" ? [] : await loadPocketHistory();
       patch.pocketHistory = pocketMode === "replace"
         ? imported.pocketHistory
-        : mergePocketHistory(state.pocketEntries || [], imported.pocketHistory);
+        : mergePocketHistory(pocketExisting, imported.pocketHistory);
     }
     const saved = await saveImportedConfigPatch(patch);
+    if (selected.has("pocketHistory")) {
+      pocketStats = pocketMergeStats(pocketExisting, imported.pocketHistory, saved.pocketHistory || []);
+    }
     if ("options" in saved) state.options = saved.options;
     if ("customConfig" in saved) state.customConfig = saved.customConfig;
     if ("promptLibrary" in saved) state.promptLibrary = saved.promptLibrary;
@@ -110,8 +172,13 @@ export function createImportExportSettings(ctx) {
     await notifyConfigReload();
     hydrateGroups();
     syncI18nLanguage();
+    resetAfterConfigImport(selectedList);
     render();
+    options.redraw?.();
     toast(t("toast.configImported"), "success");
+    if (pocketStats?.cappedCount > 0) {
+      toast(t("toast.importPocketLimit", { count: pocketStats.cappedCount }), "info");
+    }
     return true;
   }
 
@@ -150,7 +217,7 @@ export function createImportExportSettings(ctx) {
     };
   }
 
-  function openImportConfirmDialog(imported) {
+  function openImportConfirmDialog(imported, diagnostics = {}, options = {}) {
     const availableKeys = availableImportKeys(imported);
     if (!availableKeys.length) {
       toast(t("toast.importNoData"), "error");
@@ -161,14 +228,18 @@ export function createImportExportSettings(ctx) {
     let dialog = null;
     let confirmButton = null;
     let pocketModePanel = null;
-    let importWarning = null;
+    let importWarnings = null;
     const pocketImportSize = jsonByteSize(imported.pocketHistory || []);
 
     const updateState = () => {
       const hasSelection = selectedKeys.size > 0;
       if (confirmButton) confirmButton.disabled = !hasSelection;
       if (pocketModePanel) pocketModePanel.hidden = !selectedKeys.has("pocketHistory");
-      if (importWarning) importWarning.hidden = !selectedKeys.has("pocketHistory") || pocketImportSize < POCKET_IMPORT_SIZE_WARNING_BYTES;
+      if (importWarnings) {
+        const messages = importWarningMessages(imported, diagnostics, selectedKeys, pocketMode, pocketImportSize);
+        importWarnings.hidden = !messages.length;
+        importWarnings.replaceChildren(...messages.map((message) => el("span", {}, message)));
+      }
     };
 
     const close = () => dialog?.remove();
@@ -176,10 +247,10 @@ export function createImportExportSettings(ctx) {
       if (!selectedKeys.size) return toast(t("toast.importNoSelection"), "error");
       if (confirmButton) confirmButton.disabled = true;
       try {
-        const ok = await applyImportedConfig(imported, [...selectedKeys], pocketMode);
+        const ok = await applyImportedConfig(imported, [...selectedKeys], pocketMode, options);
         if (ok) close();
       } catch (error) {
-        toast(error.message || t("toast.importFailed"), "error");
+        toast(importFailureMessage(error), "error");
         updateState();
       }
     };
@@ -201,8 +272,18 @@ export function createImportExportSettings(ctx) {
 
     const mergeInput = el("input", { type: "radio", name: "io-pocket-mode", value: "merge", checked: true });
     const replaceInput = el("input", { type: "radio", name: "io-pocket-mode", value: "replace" });
-    mergeInput.addEventListener("change", () => { if (mergeInput.checked) pocketMode = "merge"; });
-    replaceInput.addEventListener("change", () => { if (replaceInput.checked) pocketMode = "replace"; });
+    mergeInput.addEventListener("change", () => {
+      if (mergeInput.checked) {
+        pocketMode = "merge";
+        updateState();
+      }
+    });
+    replaceInput.addEventListener("change", () => {
+      if (replaceInput.checked) {
+        pocketMode = "replace";
+        updateState();
+      }
+    });
     pocketModePanel = el("div", { class: "io-pocket-mode-panel" },
       el("strong", {}, t("io.pocketModeTitle")),
       el("label", { class: "io-radio-row" },
@@ -220,12 +301,7 @@ export function createImportExportSettings(ctx) {
         )
       )
     );
-    importWarning = el("p", { class: "io-sensitive-warning", hidden: true },
-      t("io.largePocketWarning", {
-        count: itemValueCount(imported.pocketHistory),
-        size: formatByteSize(pocketImportSize)
-      })
-    );
+    importWarnings = el("div", { class: "io-sensitive-warning", hidden: true });
 
     confirmButton = el("button", {
       class: "button button-primary",
@@ -238,7 +314,7 @@ export function createImportExportSettings(ctx) {
         el("p", { class: "io-dialog-lead" }, t("io.importConfirmDesc")),
         el("div", { class: "io-choice-list io-import-choice-list" }, rows),
         pocketModePanel,
-        importWarning,
+        importWarnings,
         el("div", { class: "settings-dialog-actions" },
           el("button", { class: "button button-secondary", type: "button", onclick: close }, t("common.cancel")),
           confirmButton
@@ -252,7 +328,7 @@ export function createImportExportSettings(ctx) {
     updateState();
   }
 
-  function importExportPane() {
+  function importExportPane(redraw) {
     const selectedExportKeys = new Set(CONFIG_BUNDLE_KEYS);
     const fileInput = el("input", { class: "settings-file-input", type: "file", accept: "application/json" });
     let exportButton = null;
@@ -290,10 +366,10 @@ export function createImportExportSettings(ctx) {
       const file = fileInput.files?.[0];
       if (!file) return;
       try {
-        const imported = migrateImportedConfig(JSON.parse(await readFileAsText(file)));
-        openImportConfirmDialog(imported);
+        const inspected = inspectImportedConfig(JSON.parse(await readFileAsText(file)));
+        openImportConfirmDialog(inspected.data, inspected.diagnostics, { redraw });
       } catch (error) {
-        toast(error.message || t("toast.importFailed"), "error");
+        toast(importFailureMessage(error), "error");
       } finally {
         fileInput.value = "";
       }

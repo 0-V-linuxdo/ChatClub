@@ -49,6 +49,8 @@ import {
 } from "./kit.js";
 import { createShortcutSettings } from "./shortcuts.js";
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+
 export function createSettingsController(ctx) {
   const {
     state,
@@ -196,6 +198,48 @@ export function createSettingsController(ctx) {
       modelPreferenceAutoSaveRunning = false;
       if (modelPreferenceAutoSavePending) flushModelPreferenceAutoSave();
     }
+  }
+
+  function clearOptionsImportAutoSaveState() {
+    clearTimeout(appearanceColorSaveTimer);
+    appearanceColorSaveTimer = 0;
+    appearanceAutoSavePending = null;
+    appearanceAutoSaveRedraw = null;
+    modelPreferenceAutoSavePending = null;
+    modelPreferenceAutoSaveRedraw = null;
+  }
+
+  async function prepareForConfigImport(selectedKeys = []) {
+    const selected = new Set(selectedKeys || []);
+    if (selected.has("options")) {
+      clearOptionsImportAutoSaveState();
+      while (appearanceAutoSaveRunning || modelPreferenceAutoSaveRunning) await sleep(20);
+      clearOptionsImportAutoSaveState();
+    }
+    if (selected.has("shortcutConfig")) {
+      await prepareShortcutConfigImport(selected);
+    }
+  }
+
+  function resetAfterConfigImport(selectedKeys = []) {
+    const selected = new Set(selectedKeys || []);
+    if (selected.has("options")) {
+      clearOptionsImportAutoSaveState();
+      state.modelPreferenceDraft = null;
+      state.settingsTabGroupButtonPlacementDraft = null;
+      state.settingsTabGroupButtonOrderDraft = null;
+      state.settingsTabGroupButtonDragId = "";
+      state.topbarEditLayoutDraft = null;
+      modelPreferenceDragId = "";
+      cleanupTabGroupButtonDrag();
+    }
+    if (selected.has("customConfig")) state.settingsCustomAppDragId = "";
+    if (selected.has("promptLibrary")) state.settingsPromptLibraryDragId = "";
+    if (selected.has("promptSendHistory")) {
+      state.promptHistoryCursor = -1;
+      state.promptHistoryDraft = "";
+    }
+    if (selected.has("shortcutConfig")) resetShortcutAfterConfigImport(selected);
   }
 
   function preventTabGroupButtonNativeDrag(event) {
@@ -2876,23 +2920,29 @@ export function createSettingsController(ctx) {
     return promptLibraryController.insertTextIntoPrompt(text);
   }
 
-  const importExportSettings = createImportExportSettings({
-    state,
-    svgIcon,
-    notifyConfigReload,
-    hydrateGroups,
-    syncI18nLanguage,
-    render
-  });
-  const { importConfigText, importExportPane } = importExportSettings;
-
   const shortcutSettings = createShortcutSettings({
     state,
     svgIcon,
     notifyConfigReload,
     settingsKit
   });
-  const { shortcutsPane } = shortcutSettings;
+  const {
+    prepareForConfigImport: prepareShortcutConfigImport,
+    resetAfterConfigImport: resetShortcutAfterConfigImport,
+    shortcutsPane
+  } = shortcutSettings;
+
+  const importExportSettings = createImportExportSettings({
+    state,
+    svgIcon,
+    notifyConfigReload,
+    hydrateGroups,
+    syncI18nLanguage,
+    render,
+    prepareForConfigImport,
+    resetAfterConfigImport
+  });
+  const { importConfigText, importExportPane } = importExportSettings;
 
   const promptLibraryController = createPromptLibraryController({
     state,

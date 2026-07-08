@@ -43,6 +43,7 @@ export const CONFIG_BUNDLE_KEYS = Object.freeze([
 ]);
 
 const CONFIG_BUNDLE_KEY_SET = new Set(CONFIG_BUNDLE_KEYS);
+export const POCKET_HISTORY_LIMIT = 300;
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -660,15 +661,15 @@ export function dedupePocketHistory(raw = []) {
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
-  }).slice(0, 300);
+  }).slice(0, POCKET_HISTORY_LIMIT);
 }
 
 export function mergePocketHistory(existing = [], incoming = []) {
-  return dedupePocketHistory([...existing, ...incoming]);
+  return dedupePocketHistory([...incoming, ...existing]);
 }
 
 export function normalizePocketHistory(raw = []) {
-  return normalizePocketHistoryItems(raw).slice(0, 300);
+  return normalizePocketHistoryItems(raw).slice(0, POCKET_HISTORY_LIMIT);
 }
 
 export function normalizeShortcutConfig(raw = {}) {
@@ -833,11 +834,25 @@ function hasBundleNonEmptyObjectField(bundle, key) {
   return hasBundleObjectField(bundle, key) && Object.keys(bundle[key]).length > 0;
 }
 
-function normalizeImportArrayField(raw, normalize, validItem) {
-  if (!Array.isArray(raw)) return null;
-  if (!raw.length) return normalize([]);
+function normalizeImportArrayFieldResult(raw, normalize, validItem) {
+  if (!Array.isArray(raw)) {
+    return { value: null, rawCount: 0, importedCount: 0, droppedCount: 0 };
+  }
+  if (!raw.length) {
+    return { value: normalize([]), rawCount: 0, importedCount: 0, droppedCount: 0 };
+  }
   const validItems = raw.filter(validItem);
-  return validItems.length ? normalize(validItems) : null;
+  if (!validItems.length) {
+    return { value: null, rawCount: raw.length, importedCount: 0, droppedCount: raw.length };
+  }
+  const value = normalize(validItems);
+  const importedCount = Array.isArray(value) ? value.length : 0;
+  return {
+    value,
+    rawCount: raw.length,
+    importedCount,
+    droppedCount: Math.max(0, raw.length - importedCount)
+  };
 }
 
 function validImportedCustomConfigItem(item) {
@@ -888,23 +903,44 @@ export function exportConfigBundle(state = {}, selectedKeys = CONFIG_BUNDLE_KEYS
 }
 
 export function migrateImportedConfig(raw) {
+  return inspectImportedConfig(raw).data;
+}
+
+export function inspectImportedConfig(raw) {
   const bundle = plainObject(raw) ? raw : {};
+  const customConfig = hasBundleArrayField(bundle, "customConfig")
+    ? normalizeImportArrayFieldResult(bundle.customConfig, normalizeCustomConfig, validImportedCustomConfigItem)
+    : null;
+  const promptLibrary = hasBundleArrayField(bundle, "promptLibrary")
+    ? normalizeImportArrayFieldResult(bundle.promptLibrary, normalizePromptLibrary, validImportedPromptLibraryItem)
+    : null;
+  const promptSendHistory = hasBundleArrayField(bundle, "promptSendHistory")
+    ? normalizeImportArrayFieldResult(bundle.promptSendHistory, normalizePromptSendHistory, validImportedPromptSendHistoryItem)
+    : null;
+  const pocketHistory = hasBundleArrayField(bundle, "pocketHistory")
+    ? normalizeImportArrayFieldResult(bundle.pocketHistory, dedupePocketHistory, validImportedPocketHistoryItem)
+    : null;
   return {
-    options: hasBundleNonEmptyObjectField(bundle, "options") ? normalizeOptions(bundle.options) : null,
-    customConfig: hasBundleArrayField(bundle, "customConfig")
-      ? normalizeImportArrayField(bundle.customConfig, normalizeCustomConfig, validImportedCustomConfigItem)
-      : null,
-    promptLibrary: hasBundleArrayField(bundle, "promptLibrary")
-      ? normalizeImportArrayField(bundle.promptLibrary, normalizePromptLibrary, validImportedPromptLibraryItem)
-      : null,
-    promptSendHistory: hasBundleArrayField(bundle, "promptSendHistory")
-      ? normalizeImportArrayField(bundle.promptSendHistory, normalizePromptSendHistory, validImportedPromptSendHistoryItem)
-      : null,
-    shortcutConfig: hasBundleNonEmptyObjectField(bundle, "shortcutConfig") ? normalizeShortcutConfig(bundle.shortcutConfig) : null,
-    pocketHistory: hasBundleArrayField(bundle, "pocketHistory")
-      ? normalizeImportArrayField(bundle.pocketHistory, dedupePocketHistory, validImportedPocketHistoryItem)
-      : null
+    data: {
+      options: hasBundleNonEmptyObjectField(bundle, "options") ? normalizeOptions(bundle.options) : null,
+      customConfig: customConfig?.value ?? null,
+      promptLibrary: promptLibrary?.value ?? null,
+      promptSendHistory: promptSendHistory?.value ?? null,
+      shortcutConfig: hasBundleNonEmptyObjectField(bundle, "shortcutConfig") ? normalizeShortcutConfig(bundle.shortcutConfig) : null,
+      pocketHistory: pocketHistory?.value ?? null
+    },
+    diagnostics: {
+      customConfig,
+      promptLibrary,
+      promptSendHistory,
+      pocketHistory
+    }
   };
+}
+
+export function isStorageQuotaError(error) {
+  const message = String(error?.message || error || "");
+  return /quota|QUOTA_BYTES|storage\s+area/i.test(message);
 }
 
 export async function saveImportedConfigPatch(patch = {}) {
