@@ -22,6 +22,7 @@ const IMPORT_EXPORT_ITEMS = Object.freeze([
 
 const IMPORT_EXPORT_ITEM_KEYS = IMPORT_EXPORT_ITEMS.map((item) => item.key);
 const POCKET_IMPORT_SIZE_WARNING_BYTES = 4 * 1024 * 1024;
+const EMPTY_REPLACE_IMPORT_KEYS = new Set(["customConfig", "promptLibrary", "promptSendHistory"]);
 
 export function createImportExportSettings(ctx) {
   const {
@@ -33,6 +34,7 @@ export function createImportExportSettings(ctx) {
     render,
     prepareForConfigImport = async () => {},
     prepareForConfigExport = prepareForConfigImport,
+    afterConfigImport = async () => {},
     resetAfterConfigImport = () => {}
   } = ctx;
 
@@ -41,8 +43,34 @@ export function createImportExportSettings(ctx) {
     return value ? 1 : 0;
   }
 
-  function itemMetaText(key, value, available) {
+  function importedOptionsHaveExecutableScripts(options = {}) {
+    const hasCustomUserscript = (config = {}) => {
+      const customMode = config?.sourceMode === "custom" || config?.userscriptOverride === true || config?.builtIn === false;
+      const source = String(config?.customUserscript || (customMode ? config?.userscript : "") || "").trim();
+      return customMode && Boolean(source);
+    };
+    return (Array.isArray(options.summarySiteConfigs) && options.summarySiteConfigs.some(hasCustomUserscript))
+      || (Array.isArray(options.topicDeleteSiteConfigs) && options.topicDeleteSiteConfigs.some(hasCustomUserscript));
+  }
+
+  function importKeyIsEmptyArray(key, imported = {}) {
+    return Array.isArray(imported[key]) && imported[key].length === 0;
+  }
+
+  function importKeyDefaultsChecked(key, imported = {}) {
+    if (key === "options" && importedOptionsHaveExecutableScripts(imported.options || {})) return false;
+    if (importKeyIsEmptyArray(key, imported)) return false;
+    return true;
+  }
+
+  function defaultImportKeys(imported) {
+    return availableImportKeys(imported).filter((key) => importKeyDefaultsChecked(key, imported));
+  }
+
+  function itemMetaText(key, value, available, imported = {}) {
     if (!available) return t("io.itemMissing");
+    if (key === "options" && importedOptionsHaveExecutableScripts(imported.options || {})) return t("io.itemNeedsReview");
+    if (Array.isArray(value) && !value.length) return t("io.itemEmpty");
     if (Array.isArray(value)) return t("io.itemCount", { count: value.length });
     if (key === "options" || key === "shortcutConfig") return t("io.itemAvailable");
     return t("io.itemCount", { count: itemValueCount(value) });
@@ -63,10 +91,11 @@ export function createImportExportSettings(ctx) {
     return `${Math.max(1, Math.round(number / 1024))} KB`;
   }
 
-  function exportWarningMessages(selectedKeys) {
+  function exportWarningMessages(selectedKeys, options = state.options || {}) {
     const selected = selectedKeys instanceof Set ? selectedKeys : new Set(selectedKeys || []);
     const messages = [];
     if (selected.has("options")) messages.push(t("io.sensitiveWarning.options"));
+    if (selected.has("options") && importedOptionsHaveExecutableScripts(options)) messages.push(t("io.sensitiveWarning.scripts"));
     if (selected.has("pocketHistory")) messages.push(t("io.sensitiveWarning.pocket"));
     if (selected.has("promptLibrary") || selected.has("promptSendHistory")) messages.push(t("io.sensitiveWarning.prompts"));
     return messages;
@@ -106,10 +135,17 @@ export function createImportExportSettings(ctx) {
         size: formatByteSize(pocketImportSize)
       }));
     }
+    if (selected.has("options") && importedOptionsHaveExecutableScripts(imported.options || {})) {
+      messages.push(t("io.importExecutableScriptsWarning"));
+    }
     for (const key of IMPORT_EXPORT_ITEM_KEYS) {
       const dropped = diagnostics?.[key]?.droppedCount || 0;
       if (selected.has(key) && dropped > 0) {
         messages.push(t("io.importDroppedItems", { label: importBlockLabel(key), count: dropped }));
+      }
+      const emptyReplacement = EMPTY_REPLACE_IMPORT_KEYS.has(key) || (key === "pocketHistory" && pocketMode === "replace");
+      if (selected.has(key) && emptyReplacement && importKeyIsEmptyArray(key, imported)) {
+        messages.push(t("io.importEmptyReplaceWarning", { label: importBlockLabel(key) }));
       }
     }
     if (
@@ -187,6 +223,7 @@ export function createImportExportSettings(ctx) {
     resetAfterConfigImport(selectedList);
     render();
     options.redraw?.();
+    await afterConfigImport(selectedList, saved);
     toast(t("toast.configImported"), "success");
     if (pocketStats?.cappedCount > 0) {
       toast(t("toast.importPocketLimit", { count: pocketStats.cappedCount }), "info");
@@ -201,8 +238,8 @@ export function createImportExportSettings(ctx) {
     if (typeof options.onDiagnostics === "function") {
       options.onDiagnostics(inspected.diagnostics, imported);
     }
-    const selectedKeys = options.selectedKeys == null ? availableImportKeys(imported) : options.selectedKeys;
-    const ok = await applyImportedConfig(imported, selectedKeys, options.pocketMode || "merge", options);
+    const defaultSelectedKeys = options.selectedKeys == null ? defaultImportKeys(imported) : options.selectedKeys;
+    const ok = await applyImportedConfig(imported, defaultSelectedKeys, options.pocketMode || "merge", options);
     if (options.returnDiagnostics) {
       return { ok, diagnostics: inspected.diagnostics, imported };
     }
@@ -244,7 +281,7 @@ export function createImportExportSettings(ctx) {
       toast(t("toast.importNoData"), "error");
       return;
     }
-    const selectedKeys = new Set(availableKeys);
+    const selectedKeys = new Set(defaultImportKeys(imported));
     let pocketMode = "merge";
     let dialog = null;
     let confirmButton = null;
@@ -287,9 +324,9 @@ export function createImportExportSettings(ctx) {
     const rows = IMPORT_EXPORT_ITEMS.map((item) => {
       const available = imported[item.key] !== null;
       const { row } = createChoiceRow(item, {
-        checked: available,
+        checked: available && selectedKeys.has(item.key),
         disabled: !available,
-        meta: itemMetaText(item.key, imported[item.key], available),
+        meta: itemMetaText(item.key, imported[item.key], available, imported),
         onchange: (checked) => {
           if (checked) selectedKeys.add(item.key);
           else selectedKeys.delete(item.key);

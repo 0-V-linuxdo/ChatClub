@@ -57,6 +57,17 @@ function text(value, fallback = "") {
   return String(value ?? fallback).trim();
 }
 
+function normalizeHttpUrl(value) {
+  const raw = text(value);
+  if (!raw) return "";
+  try {
+    const parsed = new URL(raw);
+    return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.href : "";
+  } catch {
+    return "";
+  }
+}
+
 export function normalizePrimaryColor(value, fallback = DEFAULT_OPTIONS.primaryColor) {
   const raw = text(value, fallback).replace(/^#?/, "#");
   const short = raw.match(/^#([0-9a-f]{3})$/i);
@@ -392,6 +403,34 @@ function normalizeTemplate(template, fallback, prefix, index) {
   };
 }
 
+function normalizePromptTemplates(raw, fallback, prefix) {
+  const templates = Array.isArray(raw)
+    ? raw.filter(Boolean).map((item, index) => normalizeTemplate(item, fallback, prefix, index))
+    : [];
+  return templates.length ? templates : [fallback];
+}
+
+function normalizeLayoutPreset(preset = {}, fallback = {}, index = 0) {
+  const source = plainObject(preset) ? preset : {};
+  const groups = (Array.isArray(source.chatAppIdGroups) ? source.chatAppIdGroups : fallback.chatAppIdGroups || [])
+    .map((group) => (Array.isArray(group) ? group.map((id) => text(id)).filter(Boolean) : []))
+    .filter((group) => group.length);
+  return {
+    ...source,
+    id: text(source.id || fallback.id) || createId("layout"),
+    name: text(source.name || source.title || fallback.name, `Layout ${index + 1}`),
+    chatAppIdGroups: groups
+  };
+}
+
+function normalizeLayoutPresets(raw, fallback = []) {
+  const fallbackPresets = (Array.isArray(fallback) ? fallback : []).map((item, index) => normalizeLayoutPreset(item, {}, index));
+  const presets = (Array.isArray(raw) ? raw : [])
+    .map((item, index) => normalizeLayoutPreset(item, fallbackPresets[index], index))
+    .filter((item) => item.id && item.chatAppIdGroups.length);
+  return presets.length ? presets : fallbackPresets;
+}
+
 function normalizeUserscriptSource(value) {
   return String(value || "").trim().replace(/\r\n?/g, "\n");
 }
@@ -462,11 +501,13 @@ function normalizeSummarySiteConfig(item, fallback = {}, index = 0) {
   return config;
 }
 
-function mergeBuiltInSummaryConfig(current, builtIn) {
-  const byId = new Map((current || []).filter(Boolean).map((item) => [item.id, item]));
+function mergeBuiltInSummaryConfig(current = [], builtIn = SUMMARY_SITE_CONFIGS) {
+  const currentItems = (Array.isArray(current) ? current : []).filter(Boolean);
+  const builtInById = new Map((builtIn || []).filter(Boolean).map((item) => [item.id, item]));
+  const consumedBuiltIns = new Set();
   const merged = [];
-  for (const item of builtIn || []) {
-    const existing = byId.get(item.id) || {};
+
+  const mergeBuiltIn = (item, existing = {}) => {
     const existingUserscript = String(existing.customUserscript || existing.userscript || "").trim();
     const knownBuiltInUserscript = summarySourceLooksLikeBuiltIn(item.id, existingUserscript, item.userscript);
     const explicitCustom = existing.sourceMode === "custom" || Boolean(existing.customUserscript);
@@ -474,7 +515,7 @@ function mergeBuiltInSummaryConfig(current, builtIn) {
       ? "custom"
       : "builtIn";
     const userscript = sourceMode === "custom" ? existingUserscript : String(item.userscript || "").trim();
-    const normalized = normalizeSummarySiteConfig({
+    return normalizeSummarySiteConfig({
       ...item,
       ...existing,
       id: item.id,
@@ -490,17 +531,29 @@ function mergeBuiltInSummaryConfig(current, builtIn) {
       customUserscript: sourceMode === "custom" ? userscript : "",
       userscriptOverride: sourceMode === "custom"
     }, item);
-    merged.push(normalized);
-    byId.delete(item.id);
-  }
+  };
+
   let customIndex = 0;
-  for (const item of byId.values()) {
+  for (const item of currentItems) {
     if (!item) continue;
+    const id = text(item.id);
+    const builtInConfig = builtInById.get(id);
+    if (builtInConfig) {
+      merged.push(mergeBuiltIn(builtInConfig, item));
+      consumedBuiltIns.add(id);
+      continue;
+    }
     merged.push(normalizeSummarySiteConfig({
       ...item,
       builtIn: false
     }, {}, customIndex++));
   }
+
+  for (const item of builtIn || []) {
+    if (!item || consumedBuiltIns.has(item.id)) continue;
+    merged.push(mergeBuiltIn(item));
+  }
+
   return merged.filter((item) => item.id !== "chathub");
 }
 
@@ -530,17 +583,11 @@ export function normalizeOptions(raw = {}) {
 
   const optimizeDefault = base.optimizePromptTemplates[0];
   const summaryDefault = base.summaryPromptTemplates[0];
-  const optimizePromptTemplates = Array.isArray(raw.optimizePromptTemplates)
-    ? raw.optimizePromptTemplates.filter(Boolean).map((item, index) => normalizeTemplate(item, optimizeDefault, "optimize-template", index))
-    : [optimizeDefault];
-  const summaryPromptTemplates = Array.isArray(raw.summaryPromptTemplates)
-    ? raw.summaryPromptTemplates.filter(Boolean).map((item, index) => normalizeTemplate(item, summaryDefault, "summary-template", index))
-    : [summaryDefault];
+  const optimizePromptTemplates = normalizePromptTemplates(raw.optimizePromptTemplates, optimizeDefault, "optimize-template");
+  const summaryPromptTemplates = normalizePromptTemplates(raw.summaryPromptTemplates, summaryDefault, "summary-template");
 
-  const layoutPresets = Array.isArray(raw.layoutPresets) && raw.layoutPresets.length
-    ? raw.layoutPresets
-    : base.layoutPresets;
-  const activeLayoutPresetId = layoutPresets.some((preset) => preset.id === raw.activeLayoutPresetId)
+  const layoutPresets = normalizeLayoutPresets(raw.layoutPresets, base.layoutPresets);
+  const activeLayoutPresetId = layoutPresets.some((preset) => preset?.id === raw.activeLayoutPresetId)
     ? raw.activeLayoutPresetId
     : layoutPresets[0]?.id || "default";
 
@@ -585,15 +632,18 @@ export function normalizeOptions(raw = {}) {
 }
 
 export function normalizeCustomConfig(raw = []) {
-  return (Array.isArray(raw) ? raw : []).filter(Boolean).map((item, index) => ({
-    id: text(item.id) || createId("custom-app"),
-    name: inferCustomName(item, index),
-    provider: text(item.provider || item.company, "Custom"),
-    url: text(item.url, "https://www.example.com/"),
-    inputSelector: text(item.inputSelector),
-    sendButtonSelector: text(item.sendButtonSelector),
-    hosts: Array.isArray(item.hosts) ? item.hosts : []
-  })).filter((item) => item.name && item.url);
+  return (Array.isArray(raw) ? raw : []).filter(Boolean).map((item, index) => {
+    const url = normalizeHttpUrl(item.url);
+    return {
+      id: text(item.id) || createId("custom-app"),
+      name: inferCustomName(item, index),
+      provider: text(item.provider || item.company, "Custom"),
+      url,
+      inputSelector: text(item.inputSelector),
+      sendButtonSelector: text(item.sendButtonSelector),
+      hosts: Array.isArray(item.hosts) ? item.hosts : []
+    };
+  }).filter((item) => item.name && item.url);
 }
 
 export function normalizePromptLibrary(raw = []) {
@@ -867,7 +917,7 @@ function normalizeImportArrayFieldResult(raw, normalize, validItem) {
 }
 
 function validImportedCustomConfigItem(item) {
-  return plainObject(item) && !!text(item.url);
+  return plainObject(item) && !!normalizeHttpUrl(item.url);
 }
 
 function validImportedPromptLibraryItem(item) {

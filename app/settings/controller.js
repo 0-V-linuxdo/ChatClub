@@ -313,6 +313,13 @@ export function createSettingsController(ctx) {
     if (selected.has("shortcutConfig")) resetShortcutAfterConfigImport(selected);
   }
 
+  async function afterConfigImport(selectedKeys = []) {
+    const selected = new Set(selectedKeys || []);
+    if (selected.has("options")) {
+      await Promise.resolve(applyPreferredModels(null, { immediate: true }));
+    }
+  }
+
   function preventTabGroupButtonNativeDrag(event) {
     if (!activeTabGroupButtonDrag) return;
     event.preventDefault();
@@ -1183,6 +1190,15 @@ export function createSettingsController(ctx) {
     cleanupSettingsDragRows(".custom-config-row");
   }
 
+  function normalizeCustomAppEditorUrl(value) {
+    try {
+      const parsed = new URL(String(value || "").trim());
+      return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.href : "";
+    } catch {
+      return "";
+    }
+  }
+
   function previewCustomAppDrop(event, app) {
     const sourceId = state.settingsCustomAppDragId || event.dataTransfer?.getData("application/x-chatclub-custom-app") || "";
     if (!sourceId || sourceId === app.id) return;
@@ -1230,20 +1246,18 @@ export function createSettingsController(ctx) {
     let dialog;
     const close = () => dialog.remove();
     const save = async () => {
+      const rawUrl = urlInput.value.trim();
+      const url = normalizeCustomAppEditorUrl(rawUrl);
       const nextApp = {
         ...draft,
         name: nameInput.value.trim(),
         provider: providerInput.value.trim() || "Custom",
-        url: urlInput.value.trim(),
+        url,
         inputSelector: inputSelectorInput.value.trim(),
         sendButtonSelector: sendSelectorInput.value.trim()
       };
-      if (!nextApp.name || !nextApp.url) return toast(t("apps.nameUrlRequired"), "error");
-      try {
-        new URL(nextApp.url);
-      } catch {
-        return toast(t("apps.invalidUrl"), "error");
-      }
+      if (!nextApp.name || !rawUrl) return toast(t("apps.nameUrlRequired"), "error");
+      if (!nextApp.url) return toast(t("apps.invalidUrl"), "error");
       const customConfig = editing
         ? state.customConfig.map((item) => item.id === draft.id ? nextApp : item)
         : [...state.customConfig, nextApp];
@@ -3013,6 +3027,7 @@ export function createSettingsController(ctx) {
     render,
     prepareForConfigImport,
     prepareForConfigExport,
+    afterConfigImport,
     resetAfterConfigImport
   });
   const { importConfigText, importExportPane } = importExportSettings;
