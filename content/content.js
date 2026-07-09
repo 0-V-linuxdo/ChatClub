@@ -4,8 +4,8 @@
   const GEMINI_MODEL_PICKER_SOURCE = "chatclub-gemini-model-picker";
   const NOTION_SEND_TEXT_SOURCE = "chatclub-notion-send-text:2026.07.09.10";
   const NOTION_SEND_PROMPT_SOURCE = "chatclub-notion-send-prompt:2026.07.09.10";
-  const CONTENT_BRIDGE_VERSION = "2026.07.09.10";
-  const SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.09.10";
+  const CONTENT_BRIDGE_VERSION = "2026.07.09.14";
+  const SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.09.14";
   const DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.04.1";
   const MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.08.12";
   const SUMMARY_POST_MESSAGE_SOURCE = "chatclub:summary:2026.07.08.13";
@@ -1159,8 +1159,24 @@
   async function setInputValue(target, value) {
     target.focus?.();
     if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
-      target.value = value;
-      target.dispatchEvent(new Event("input", { bubbles: true }));
+      try {
+        const proto = target instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+        const descriptor = Object.getOwnPropertyDescriptor(proto, "value");
+        if (descriptor?.set) descriptor.set.call(target, value);
+        else target.value = value;
+      } catch {
+        target.value = value;
+      }
+      try {
+        const length = String(value || "").length;
+        target.setSelectionRange?.(length, length);
+      } catch {}
+      try {
+        target.dispatchEvent(new InputEvent("input", { bubbles: true, cancelable: true, composed: true, inputType: "insertText", data: String(value || "") }));
+      } catch {
+        target.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+      target.dispatchEvent(new Event("change", { bubbles: true }));
       return;
     }
     document.execCommand("selectAll", false, null);
@@ -1238,9 +1254,13 @@
       .map((item) => item.button);
   }
 
-  function clickPromptSubmit(button) {
+  function clickPromptSubmit(button, options = {}) {
     const rect = button?.getBoundingClientRect?.();
     if (!button || !rect) return false;
+    if (options.singleClick) {
+      try { button.click?.(); } catch {}
+      return true;
+    }
     const base = {
       bubbles: true,
       cancelable: true,
@@ -1348,9 +1368,9 @@
     }
   }
 
-  function dispatchPromptTransferEvent(target, type, transfer) {
+  function dispatchPromptTransferEvent(target, type, transfer, options = {}) {
     if (!target || type !== "paste") return false;
-    const init = { bubbles: true, cancelable: true, composed: true };
+    const init = { bubbles: options.bubbles !== false, cancelable: true, composed: true };
     let event = null;
     try {
       if (typeof ClipboardEvent === "function") {
@@ -1363,7 +1383,9 @@
     if (!event) return false;
     if (transfer) {
       try { Object.defineProperty(event, "clipboardData", { value: transfer, configurable: true }); } catch {}
-      try { Object.defineProperty(event, "dataTransfer", { value: transfer, configurable: true }); } catch {}
+      if (options.exposeDataTransfer !== false) {
+        try { Object.defineProperty(event, "dataTransfer", { value: transfer, configurable: true }); } catch {}
+      }
     }
     try {
       target.dispatchEvent(event);
@@ -1384,7 +1406,36 @@
       || document;
   }
 
-  function promptAttachmentSnapshot(input) {
+  function grokHost(hostname = location.hostname) {
+    const host = String(hostname || "").toLowerCase();
+    return host === "grok.com" || host.endsWith(".grok.com") || host === "grok.x.ai" || host.endsWith(".grok.x.ai");
+  }
+
+  function isGrokSendTarget(data = {}) {
+    const appId = String(data?.appId || "").trim().toLowerCase();
+    const appName = String(data?.appName || "").trim().toLowerCase();
+    return appId === "grok" || appName === "grok" || grokHost();
+  }
+
+  function grokComposerScope(input) {
+    if (!input) return promptComposerScope(input);
+    let best = null;
+    for (let node = input.parentElement, depth = 0; node && node !== document.body && depth < 8; node = node.parentElement, depth += 1) {
+      const controls = qsa("button,[role='button']", node).filter(visible);
+      const label = controls.map((button) => buttonText(button)).join(" ");
+      if (/附件|attach|model|模型|submit|send|提交|发送|voice|听写/i.test(label)) best = node;
+      if (/移除此附件|remove\s+(?:this\s+)?attachment/i.test(label)) return node;
+    }
+    return best || promptComposerScope(input);
+  }
+
+  function attachmentRemoveButton(button) {
+    const label = buttonText(button).toLowerCase();
+    return /^(?:remove|delete|移除|删除)$|remove\s+(?:this\s+)?(?:attachment|file|image|photo)|delete\s+(?:attachment|file|image|photo)|移除此附件|移除.*(?:附件|文件|图片|照片)|删除.*(?:附件|文件|图片|照片)/i.test(label);
+  }
+
+  function promptAttachmentSnapshot(input, options = {}) {
+    if (options.grok) return grokPromptAttachmentSnapshot(input);
     const scope = promptComposerScope(input);
     const selectors = [
       "img[src^='blob:']",
@@ -1433,6 +1484,81 @@
     };
   }
 
+  function grokAttachmentRows(scope) {
+    const rows = [];
+    const seen = new Set();
+    const add = (node) => {
+      if (!node || node === scope || seen.has(node) || !visible(node)) return;
+      for (let index = 0; index < rows.length; index += 1) {
+        const row = rows[index];
+        if (row === node || row.contains?.(node)) return;
+        if (node.contains?.(row)) {
+          rows[index] = node;
+          seen.add(node);
+          return;
+        }
+      }
+      seen.add(node);
+      rows.push(node);
+    };
+    const removeButtons = qsa("button,[role='button']", scope).filter((button) => visible(button) && attachmentRemoveButton(button));
+    for (const button of removeButtons) {
+      add(button.closest?.("li,[role='listitem'],[data-testid*='attachment' i],[data-test-id*='attachment' i],[class*='attachment' i],[class*='file' i]") || button.parentElement);
+    }
+    const inputRect = qsa("textarea,[contenteditable='true']", scope).filter(visible).sort((a, b) => b.getBoundingClientRect().bottom - a.getBoundingClientRect().bottom)[0]?.getBoundingClientRect?.() || null;
+    const tileButtons = qsa("button,[role='button']", scope).filter((button) => {
+      if (!visible(button) || attachmentRemoveButton(button)) return false;
+      const rect = button.getBoundingClientRect?.();
+      if (!rect || rect.width < 18 || rect.height < 18 || rect.width > 96 || rect.height > 96) return false;
+      if (inputRect && (rect.bottom < inputRect.top - 140 || rect.top > inputRect.top + 80)) return false;
+      if (inputRect && rect.top >= inputRect.top - 8) return false;
+      if (!qsa("img,svg,canvas,[role='progressbar'],progress", button).some(visible)) return false;
+      const label = buttonText(button).toLowerCase();
+      return !/(attach|附件|model|模型|voice|听写|send|submit|发送|提交|plus|\+|add)/i.test(label);
+    });
+    for (const button of tileButtons) add(button.closest?.("li,[role='listitem'],[data-testid*='attachment' i],[data-test-id*='attachment' i],[class*='attachment' i],[class*='file' i]") || button);
+    if (rows.length) return rows;
+    for (const list of qsa("[aria-label*='attachment' i],[aria-label*='附件' i],[role='list']", scope).filter(visible)) {
+      for (const child of Array.from(list.children || [])) {
+        if (qsa("img,button,[role='button']", child).some(visible)) add(child);
+      }
+    }
+    if (rows.length) return rows;
+    for (const image of qsa("img[src^='blob:'],img[src^='data:image/']", scope).filter(visible)) {
+      add(image.closest?.("[data-testid*='attachment' i],[data-test-id*='attachment' i],[class*='attachment' i],[class*='file' i],li,[role='listitem']") || image.parentElement);
+    }
+    return rows;
+  }
+
+  function grokPromptAttachmentSnapshot(input) {
+    const scope = grokComposerScope(input);
+    const rows = grokAttachmentRows(scope);
+    const busySelectors = [
+      "[aria-busy='true']",
+      "[role='progressbar']",
+      "progress",
+      "[class*='uploading' i]",
+      "[class*='loading' i]",
+      "[class*='pending' i]"
+    ].join(",");
+    let busy = false;
+    try {
+      busy = Array.from(scope.querySelectorAll(busySelectors)).some((node) => visible(node));
+    } catch {}
+    return {
+      count: rows.length,
+      busy,
+      key: rows.map((node) => {
+        const rect = node.getBoundingClientRect?.();
+        return [
+          node.tagName,
+          buttonText(node),
+          rect ? `${Math.round(rect.left)}:${Math.round(rect.top)}:${Math.round(rect.width)}:${Math.round(rect.height)}` : ""
+        ].join("|");
+      }).join("\n")
+    };
+  }
+
   function sendDeadlineAt(data = {}, fallbackMs = 10000) {
     const value = Number(data?.deadlineAt);
     return Number.isFinite(value) && value > Date.now() ? value : Date.now() + Math.max(1000, Number(fallbackMs) || 10000);
@@ -1455,15 +1581,18 @@
     return !deadlineExpired(deadlineAt);
   }
 
-  async function waitForPromptImagesReady(input, expectedCount, timeoutMs = 45000, deadlineAt = 0) {
+  async function waitForPromptImagesReady(input, expectedCount, timeoutMs = 45000, deadlineAt = 0, options = {}) {
     const expected = Math.max(1, Number(expectedCount) || 1);
     const start = Date.now();
     let stableSince = 0;
     let lastKey = "";
-    let last = promptAttachmentSnapshot(input);
+    let last = promptAttachmentSnapshot(input, options);
     while (Date.now() - start < timeoutMs && !deadlineExpired(deadlineAt)) {
-      last = promptAttachmentSnapshot(input);
-      const enough = last.count >= expected;
+      last = promptAttachmentSnapshot(input, options);
+      if (options.exactCount && last.count > expected && !last.busy) {
+        return { ok: false, reason: "Image attachment count exceeded expected count", overflow: true, snapshot: last };
+      }
+      const enough = options.exactCount ? last.count === expected : last.count >= expected;
       const same = last.key === lastKey;
       if (enough && !last.busy) {
         if (!same) stableSince = Date.now();
@@ -1477,23 +1606,50 @@
     return { ok: false, reason: deadlineExpired(deadlineAt) ? "Send deadline exceeded" : "timeout", snapshot: last };
   }
 
-  function clearPromptAttachments(input) {
-    const scope = promptComposerScope(input);
+  function clearPromptAttachments(input, options = {}) {
+    const scope = options.grok ? grokComposerScope(input) : promptComposerScope(input);
     const selectors = [
       "button[aria-label*='remove file' i]",
       "button[aria-label*='remove image' i]",
+      "button[aria-label*='remove attachment' i]",
+      "button[aria-label*='remove this attachment' i]",
       "button[aria-label*='delete file' i]",
       "button[aria-label*='delete image' i]",
+      "button[aria-label*='移除此附件' i]",
+      "button[aria-label*='移除' i]",
+      "button[aria-label*='删除' i]",
       "button[title*='remove' i]",
-      "button[title*='delete' i]"
+      "button[title*='delete' i]",
+      "button[title*='移除此附件' i]",
+      "button[title*='移除' i]",
+      "button[title*='删除' i]"
     ].join(",");
     let clicked = 0;
     try {
-      for (const button of Array.from(scope.querySelectorAll(selectors)).filter(visible).slice(0, 20)) {
+      const candidates = [];
+      const seen = new Set();
+      const add = (button) => {
+        if (!button || seen.has(button)) return;
+        seen.add(button);
+        candidates.push(button);
+      };
+      try { Array.from(scope.querySelectorAll(selectors)).forEach(add); } catch {}
+      try { Array.from(scope.querySelectorAll("button,[role='button']")).filter(attachmentRemoveButton).forEach(add); } catch {}
+      for (const button of candidates.filter((item) => visible(item) && attachmentRemoveButton(item)).slice(0, 20)) {
         try { button.click?.(); clicked += 1; } catch {}
       }
     } catch {}
     return clicked;
+  }
+
+  async function waitForPromptAttachmentsCleared(input, options = {}, timeoutMs = 2500, deadlineAt = 0) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs && !deadlineExpired(deadlineAt)) {
+      const snapshot = promptAttachmentSnapshot(input, options);
+      if (snapshot.count <= 0 && !snapshot.busy) return true;
+      if (!await sleepUntilDeadline(120, deadlineAt)) break;
+    }
+    return promptAttachmentSnapshot(input, options).count <= 0;
   }
 
   async function attachPromptImageOnce(file, input) {
@@ -1503,6 +1659,15 @@
     const target = input || document.activeElement;
     const fired = dispatchPromptTransferEvent(target, "paste", transfer);
     return fired ? { ok: true } : { ok: false, reason: "Paste image insertion was not accepted" };
+  }
+
+  async function attachGrokPromptImagesOnce(files, input, textValue = "") {
+    input?.focus?.();
+    const transfer = createPromptDataTransfer({ files, text: textValue });
+    if (!transfer) return { ok: false, reason: "DataTransfer unavailable" };
+    const target = input || document.activeElement || grokComposerScope(input);
+    const fired = dispatchPromptTransferEvent(target, "paste", transfer, { exposeDataTransfer: false, bubbles: false });
+    return fired ? { ok: true } : { ok: false, reason: "Grok image paste was not accepted" };
   }
 
   function promptImageSendTimeoutMs(data = {}, fallbackMs = 65000) {
@@ -1535,6 +1700,34 @@
       lastReason = ready.reason || "Image upload did not become ready";
     }
     return { ok: false, reason: lastReason || "Image upload did not become ready" };
+  }
+
+  async function attachGrokPromptImagesWithRetries(input, files = [], retryCount = 3, inputSelector = "", deadlineAt = 0, textValue = "") {
+    const list = Array.from(files || []).filter((file) => file && String(file.type || "").startsWith("image/"));
+    if (!list.length) return { ok: true };
+    const attempts = Math.min(2, Math.max(0, Number(retryCount) || 0) + 1);
+    let lastReason = "";
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      if (deadlineExpired(deadlineAt)) return { ok: false, reason: "Send deadline exceeded" };
+      const existing = promptAttachmentSnapshot(input, { grok: true });
+      if (attempt > 1 || existing.count > 0) {
+        clearPromptAttachments(input, { grok: true });
+        if (!await waitForPromptAttachmentsCleared(input, { grok: true }, 2500, deadlineAt)) {
+          return { ok: false, reason: "Grok attachments could not be cleared before retry" };
+        }
+        input = inputCandidates(inputSelector) || input;
+      }
+      const baseline = promptAttachmentSnapshot(input, { grok: true });
+      const result = await attachGrokPromptImagesOnce(list, input, textValue);
+      if (!result.ok) lastReason = result.reason || "Grok image insertion failed";
+      if (!await sleepUntilDeadline(220, deadlineAt)) return { ok: false, reason: "Send deadline exceeded" };
+      const ready = await waitForPromptImagesReady(input, baseline.count + list.length, Math.min(45000, remainingDeadlineMs(deadlineAt, 45000)), deadlineAt, { grok: true, exactCount: true });
+      if (ready.ok) return { ok: true, attempts: attempt, snapshot: ready.snapshot };
+      lastReason = ready.overflow
+        ? "Grok attached duplicate image files"
+        : ready.reason || "Grok image upload did not become ready";
+    }
+    return { ok: false, reason: lastReason || "Grok image upload did not become ready" };
   }
 
   function isNotionSendTarget(data = {}) {
@@ -1684,25 +1877,29 @@
 
   async function sendTextUncached(data) {
     if (isNotionSendTarget(data)) return sendNotionText(data);
+    const grok = isGrokSendTarget(data);
     const deadlineAt = sendDeadlineAt(data, Array.isArray(data?.images) && data.images.length ? 60000 : 10000);
     if (deadlineExpired(deadlineAt)) throw new Error("Send deadline exceeded");
-    const input = inputCandidates(data?.inputSelector);
+    let input = inputCandidates(data?.inputSelector);
     if (!input) throw new Error("Input element not found");
     const files = promptImageFilesFromPayload(data?.images);
+    const textValue = String(data.text || "");
     if (Array.isArray(data?.images) && data.images.length && !files.length) {
       throw new Error("Image payload could not be restored");
     }
     if (files.length) {
-      const attached = await attachPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt);
+      const attached = grok
+        ? await attachGrokPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt, textValue)
+        : await attachPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt);
       if (!attached.ok) throw new Error(attached.reason || "Image insertion failed");
+      if (grok) input = inputCandidates(data?.inputSelector) || input;
     }
     if (deadlineExpired(deadlineAt)) throw new Error("Send deadline exceeded");
-    const textValue = String(data.text || "");
-    if (textValue.trim()) await setInputValue(input, textValue);
-    await sleepUntilDeadline(140, deadlineAt);
+    if (textValue.trim() && (!grok || compareText(text(input)) !== compareText(textValue))) await setInputValue(input, textValue);
+    await sleepUntilDeadline(grok ? 320 : 140, deadlineAt);
     const submit = await waitForPromptSubmitReady(input, data?.sendButtonSelector, deadlineAt, files.length ? 12000 : 8000);
     if (submit) {
-      clickPromptSubmit(submit);
+      clickPromptSubmit(submit, { singleClick: grok });
       return { sent: true, method: "button", verified: false };
     }
     if (files.length) throw new Error("Submit button stayed disabled");
