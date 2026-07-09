@@ -213,30 +213,85 @@ export function createWorkspaceController(ctx = {}) {
     return "";
   }
 
+  function sameHost(host, roots = []) {
+    return roots.some((root) => host === root || host.endsWith(`.${root}`));
+  }
+
+  function normalizedPath(url) {
+    return (url.pathname || "/").replace(/\/+$/, "") || "/";
+  }
+
+  function knownNoConversationPage(config = {}, payload = {}) {
+    const href = openableTabUrl(payload.currentHref || payload.href || payload.url);
+    if (!href) return false;
+    try {
+      const url = new URL(href);
+      const host = url.hostname.toLowerCase();
+      const path = normalizedPath(url);
+      const identity = `${config.id || ""} ${config.name || ""} ${payload.appId || ""} ${payload.appName || ""}`.toLowerCase();
+      if (/kagi/.test(identity) && host === "assistant.kagi.com" && path === "/") return true;
+      if (/chatgpt|chat gpt/.test(identity) && sameHost(host, ["chatgpt.com", "chat.openai.com"]) && path === "/") return true;
+      if (/deepseek/.test(identity) && sameHost(host, ["deepseek.com"]) && path === "/") return true;
+      if (/grok/.test(identity) && sameHost(host, ["grok.com", "grok.x.ai", "gk.dairoot.cn"]) && path === "/") return true;
+      if (/notion/.test(identity) && sameHost(host, ["app.notion.com", "notion.so"]) && (path === "/ai" || (path === "/chat" && !url.searchParams.get("t")))) return true;
+      if (/claude/.test(identity) && sameHost(host, ["claude.ai"]) && path === "/new") return true;
+      if (/gemini|bard/.test(identity) && sameHost(host, ["gemini.google.com", "bard.google.com"]) && path === "/app") return true;
+    } catch {}
+    return false;
+  }
+
   function rememberFrameLocation(iframe, meta = {}) {
     if (!(iframe instanceof HTMLIFrameElement)) return;
     const href = openableTabUrl(meta.href || meta.url);
     const title = String(meta.title || "").trim();
+    let changed = false;
     if (href) {
+      changed = changed || iframe.dataset.currentHref !== href;
       iframe.dataset.currentHref = href;
       const threadHref = threadHrefFromLocation(href);
-      if (threadHref) iframe.dataset.currentThreadHref = threadHref;
+      if (threadHref) {
+        changed = changed || iframe.dataset.currentThreadHref !== threadHref;
+        iframe.dataset.currentThreadHref = threadHref;
+      } else if (iframe.dataset.currentThreadHref) {
+        changed = true;
+        delete iframe.dataset.currentThreadHref;
+      }
     }
-    if (title) iframe.dataset.currentTitle = title;
+    if (title) {
+      changed = changed || iframe.dataset.currentTitle !== title;
+      iframe.dataset.currentTitle = title;
+    }
+    if (changed) syncHeaderForFrameInstance(iframe.dataset.instanceId || "");
   }
 
   function frameDeleteThreadPayload(iframe, fallback = {}) {
-    const app = frameApp(iframe) || appById(fallback.appId);
-    const currentHref = openableTabUrl(iframe?.dataset?.currentHref)
+    const app = iframe instanceof HTMLIFrameElement ? frameApp(iframe) : appById(fallback.appId);
+    const currentHref = openableTabUrl(fallback.currentHref || fallback.href || fallback.url)
+      || openableTabUrl(iframe?.dataset?.currentHref)
       || openableTabUrl(iframe?.src || iframe?.getAttribute?.("src"))
       || openableTabUrl(app?.url);
     return {
       appId: app?.id || fallback.appId || iframe?.dataset?.appId || "",
       appName: app ? inferAppName(app) : "",
       currentHref,
-      currentThreadHref: openableTabUrl(iframe?.dataset?.currentThreadHref) || threadHrefFromLocation(currentHref),
+      currentThreadHref: openableTabUrl(fallback.currentThreadHref) || threadHrefFromLocation(currentHref),
       currentTitle: iframe?.dataset?.currentTitle || iframe?.title || ""
     };
+  }
+
+  function topicDeleteCapabilityForFrame(iframe, fallback = {}) {
+    const app = iframe instanceof HTMLIFrameElement
+      ? frameApp(iframe)
+      : appById(fallback.appId || iframe?.dataset?.appId);
+    const payload = frameDeleteThreadPayload(iframe, {
+      ...fallback,
+      appId: app?.id || fallback.appId || iframe?.dataset?.appId || ""
+    });
+    const config = findTopicDeleteSiteConfig(state.options?.topicDeleteSiteConfigs, payload);
+    const missingCustomScript = Boolean(config && config.builtIn === false && !String(config.userscript || "").trim());
+    const noConversationPage = Boolean(config && knownNoConversationPage(config, payload));
+    const skipped = !config || config.enabled === false || missingCustomScript || noConversationPage;
+    return { iframe, payload, config, missingCustomScript, noConversationPage, skipped, available: !skipped };
   }
 
   function customAppIds() {
@@ -1512,10 +1567,20 @@ export function createWorkspaceController(ctx = {}) {
   }
 
   function renderMessageNavigatorButton(group) {
-    const iframe = activeIframe(activeChatForGroup(group));
+    const chat = activeChatForGroup(group);
+    const iframe = activeIframe(chat);
     const active = messageNavigatorFrameEnabled(iframe);
     const button = compactIconButton(t("chat.messageNavigator"), "navigator", () => toggleMessageNavigator(group), active ? "message-navigator-active" : "", shortcutTooltip(t("chat.messageNavigator"), "toggleMessageNavigator"), "left", "workspace.group.messageNavigator");
     button.setAttribute("aria-pressed", String(active));
+    button.disabled = !active && !messageNavigatorPayloadForFrame(iframe, "", { appId: chat?.appId || "" });
+    return button;
+  }
+
+  function renderDeleteThreadButton(group) {
+    const chat = activeChatForGroup(group);
+    const iframe = activeIframe(chat);
+    const button = compactIconButton(t("chat.deleteThreadInGroup"), "trash", () => deleteActiveThreadForGroup(group), "danger-action", t("chat.deleteThreadInGroup"), "left", "workspace.group.deleteThread");
+    button.disabled = !topicDeleteCapabilityForFrame(iframe, { appId: chat?.appId || "" }).available;
     return button;
   }
 
@@ -1529,7 +1594,7 @@ export function createWorkspaceController(ctx = {}) {
       refreshPage: () => renderRefreshPageButton(group),
       reload: () => renderHomeButton(group),
       messageNavigator: () => renderMessageNavigatorButton(group),
-      deleteThread: () => compactIconButton(t("chat.deleteThreadInGroup"), "trash", () => deleteActiveThreadForGroup(group), "danger-action", t("chat.deleteThreadInGroup"), "left", "workspace.group.deleteThread"),
+      deleteThread: () => renderDeleteThreadButton(group),
       fullscreen: () => compactIconButton(fullscreenLabel, fullscreenIcon, () => toggleFullscreen(group.id), "fullscreen-action", fullscreenTooltipLabel, "left", "workspace.group.fullscreen"),
       removeGroup: () => renderRemoveGroupButton(group)
     };
@@ -1831,10 +1896,10 @@ export function createWorkspaceController(ctx = {}) {
 
   async function activeHref(chat) {
     const iframe = activeIframe(chat);
-    let href = appById(chat?.appId).url;
+    let href = openableTabUrl(iframe?.dataset.currentHref) || appById(chat?.appId).url;
     try { href = await sendToIframe(iframe, "getLocationHref", {}, 1200) || href; } catch {}
     const currentHref = openableTabUrl(href);
-    if (iframe && currentHref) iframe.dataset.currentHref = currentHref;
+    if (iframe && currentHref) rememberFrameLocation(iframe, { href: currentHref });
     return href;
   }
 
@@ -1904,22 +1969,25 @@ export function createWorkspaceController(ctx = {}) {
     if (event.key === "Escape") closeTrackedMessageNavigatorMenu();
   }
 
-  function messageNavigatorPayloadForFrame(iframe, href = "") {
-    const appId = iframe?.dataset.appId || "";
+  function messageNavigatorPayloadForFrame(iframe, href = "", fallback = {}) {
+    const appId = iframe?.dataset.appId || fallback.appId || "";
     const app = appById(appId) || {};
     const currentHref = openableTabUrl(href)
+      || openableTabUrl(fallback.currentHref || fallback.href || fallback.url)
       || openableTabUrl(iframe?.dataset.currentHref)
       || openableTabUrl(iframe?.src || iframe?.getAttribute?.("src"))
       || openableTabUrl(app.url);
-    const config = findMessageNavigatorSiteConfig(state.options?.messageNavigatorSiteConfigs, {
+    const payload = {
       appId,
       appName: app.name || appId,
       currentHref
-    });
-    if (!config || config.enabled === false) return null;
+    };
+    const config = findMessageNavigatorSiteConfig(state.options?.messageNavigatorSiteConfigs, payload);
+    if (!config || config.enabled === false || knownNoConversationPage(config, payload)) return null;
     return {
       enabled: true,
       config,
+      currentHref,
       options: {
         effectMode: state.options?.messageNavigatorEffectMode || "border",
         primaryColor: state.options?.primaryColor || "#1f7a5f"
@@ -2433,11 +2501,13 @@ export function createWorkspaceController(ctx = {}) {
     const iframe = activeIframe(chat);
     if (!chat || !iframe) return;
     const app = frameApp(iframe) || appById(chat.appId);
-    const payload = frameDeleteThreadPayload(iframe, {
-      appId: app?.id || chat.appId || ""
+    const href = await activeHref(chat);
+    const capability = topicDeleteCapabilityForFrame(iframe, {
+      appId: app?.id || chat.appId || "",
+      currentHref: href
     });
-    const deleteSiteConfig = findTopicDeleteSiteConfig(state.options?.topicDeleteSiteConfigs, payload);
-    if (deleteSiteConfig?.enabled === false || (deleteSiteConfig?.builtIn === false && !String(deleteSiteConfig.userscript || "").trim())) {
+    const { payload, config: deleteSiteConfig } = capability;
+    if (!capability.available) {
       notify(t("toast.deleteThreadSkipped", { count: 1, plural: "" }), "info");
       closePopovers();
       return;
@@ -2812,6 +2882,11 @@ export function createWorkspaceController(ctx = {}) {
     anchor.classList.add("popover-anchor");
     const rect = anchor.getBoundingClientRect();
     const { fullscreenLabel, fullscreenTooltipLabel, icon: fullscreenIcon } = fullscreenButtonMeta(group);
+    const activeChat = activeChatForGroup(group);
+    const activeFrame = activeIframe(activeChat);
+    const activeFallback = { appId: activeChat?.appId || "" };
+    const messageNavigatorDisabled = !messageNavigatorFrameEnabled(activeFrame) && !messageNavigatorPayloadForFrame(activeFrame, "", activeFallback);
+    const deleteThreadDisabled = !topicDeleteCapabilityForFrame(activeFrame, activeFallback).available;
     const menuButtonById = {
       addApp: () => menuButton(t("chat.addApp"), "plus", () => openAppPicker(anchor, { group }), "secondary", false, t("chat.addApp"), "", "workspace.group.addApp"),
       openInNewTab: () => menuButton(t("common.openInNewTab"), "external", () => openChatInNewTab(group), "secondary", false, t("common.openInNewTab"), "", "workspace.group.openInNewTab"),
@@ -2828,10 +2903,10 @@ export function createWorkspaceController(ctx = {}) {
       }, "secondary", false, shortcutTooltip(t("chat.home"), "reloadChat"), "left", "workspace.group.reload"),
       messageNavigator: () => menuButton(t("chat.messageNavigator"), "navigator", () => {
         toggleMessageNavigator(group);
-      }, "secondary", false, shortcutTooltip(t("chat.messageNavigator"), "toggleMessageNavigator"), "left", "workspace.group.messageNavigator"),
+      }, "secondary", messageNavigatorDisabled, shortcutTooltip(t("chat.messageNavigator"), "toggleMessageNavigator"), "left", "workspace.group.messageNavigator"),
       deleteThread: () => menuButton(t("chat.deleteThreadInGroup"), "trash", () => {
         deleteActiveThreadForGroup(group);
-      }, "danger", false, t("chat.deleteThreadInGroup"), "left", "workspace.group.deleteThread"),
+      }, "danger", deleteThreadDisabled, t("chat.deleteThreadInGroup"), "left", "workspace.group.deleteThread"),
       fullscreen: () => menuButton(fullscreenLabel, fullscreenIcon, () => {
         toggleFullscreen(group.id);
         closePopovers();
@@ -2913,6 +2988,7 @@ export function createWorkspaceController(ctx = {}) {
     syncFrameFavicon,
     rememberFrameLocation,
     frameDeleteThreadPayload,
+    topicDeleteCapabilityForFrame,
     openableTabUrl,
     openTabUrl,
     hydrateGroups,

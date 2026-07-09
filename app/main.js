@@ -40,7 +40,7 @@ import {
   topbarSettingsItemForSection,
   topbarSettingsSectionForItem
 } from "../shared/topbar.js";
-import { findTopicDeleteSiteConfig, topicDeleteTimeoutMs } from "../shared/topic-delete-sites.js";
+import { topicDeleteTimeoutMs } from "../shared/topic-delete-sites.js";
 import { createAppContext } from "./app-context.js";
 import { createOptimizeController } from "./optimize/controller.js";
 import { createPocketController } from "./pocket/controller.js";
@@ -1437,12 +1437,12 @@ async function settleTopicDeleteResult(iframe, result = {}) {
 async function deleteThreadOnFrames() {
   const frames = workspaceController.currentFrames();
   if (!frames.length) return;
-  const targets = frames.map((iframe) => {
-    const payload = workspaceController.frameDeleteThreadPayload(iframe);
-    const config = findTopicDeleteSiteConfig(state.options?.topicDeleteSiteConfigs, payload);
-    const missingCustomScript = config && config.builtIn === false && !String(config.userscript || "").trim();
-    return { iframe, payload, config, skipped: config?.enabled === false || missingCustomScript };
-  });
+  const targets = await Promise.all(frames.map(async (iframe) => {
+    let href = "";
+    try { href = await sendToIframe(iframe, "getLocationHref", {}, 1200); } catch {}
+    if (href) workspaceController.rememberFrameLocation(iframe, { href });
+    return workspaceController.topicDeleteCapabilityForFrame(iframe, href ? { currentHref: href } : {});
+  }));
   const skippedCount = targets.filter((target) => target.skipped).length;
   const activeTargets = targets.filter((target) => !target.skipped);
   if (!activeTargets.length) {

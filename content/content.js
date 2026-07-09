@@ -3,30 +3,59 @@
   const COPY_SOURCE = "chatclub-native-copy:2026.07.08.13";
   const GEMINI_MODEL_PICKER_SOURCE = "chatclub-gemini-model-picker";
   const NOTION_SEND_TEXT_SOURCE = "chatclub-notion-send-text";
-  const CONTENT_BRIDGE_VERSION = "2026.07.08.13";
+  const CONTENT_BRIDGE_VERSION = "2026.07.09.1";
   const SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.07.1";
   const DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.04.1";
   const MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.08.12";
   const SUMMARY_POST_MESSAGE_SOURCE = "chatclub:summary:2026.07.08.13";
   const DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.07.03.30";
   const PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.08.13";
-  const hadContentBridge = Boolean(window.__CHATCLUB_CONTENT_BRIDGE_INSTALLED__);
-  if (window.__CHATCLUB_CONTENT_BRIDGE_VERSION__ === CONTENT_BRIDGE_VERSION) {
+  function contentReadyData() {
+    return {
+      href: location.href,
+      title: String(document.title || "").replace(/\s+/g, " ").trim()
+    };
+  }
+
+  function postContentReady() {
     try {
       window.parent.postMessage({
         source: SOURCE,
         type: "request",
         action: "contentReady",
         id: `${Date.now()}`,
-        data: { href: location.href, title: String(document.title || "").replace(/\s+/g, " ").trim() }
+        data: contentReadyData()
       }, "*");
     } catch {}
+  }
+
+  const hadContentBridge = Boolean(window.__CHATCLUB_CONTENT_BRIDGE_INSTALLED__);
+  if (window.__CHATCLUB_CONTENT_BRIDGE_VERSION__ === CONTENT_BRIDGE_VERSION) {
+    postContentReady();
     return;
   }
   window.__CHATCLUB_CONTENT_BRIDGE_VERSION__ = CONTENT_BRIDGE_VERSION;
   window.__CHATCLUB_CONTENT_BRIDGE_INSTALLED__ = true;
 
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  try { window.__CHATCLUB_LOCATION_REPORT_CLEANUP__?.(); } catch {}
+  let lastReportedHref = String(location.href || "");
+  function reportLocationChange() {
+    const href = String(location.href || "");
+    if (!href || href === lastReportedHref) return;
+    lastReportedHref = href;
+    postContentReady();
+  }
+  const locationReportController = new AbortController();
+  const locationReportOptions = { capture: true, signal: locationReportController.signal };
+  window.addEventListener("popstate", () => setTimeout(reportLocationChange, 0), locationReportOptions);
+  window.addEventListener("hashchange", () => setTimeout(reportLocationChange, 0), locationReportOptions);
+  const locationReportTimer = setInterval(reportLocationChange, 800);
+  window.__CHATCLUB_LOCATION_REPORT_CLEANUP__ = () => {
+    clearInterval(locationReportTimer);
+    locationReportController.abort();
+  };
+
   const normalize = (value) => String(value || "")
     .replace(/\u00a0/g, " ")
     .replace(/\r\n?/g, "\n")
@@ -5957,5 +5986,5 @@
     });
   } catch {}
 
-  window.parent.postMessage({ source: SOURCE, type: "request", action: "contentReady", id: `${Date.now()}`, data: { href: location.href, title: normalize(document.title || "") } }, "*");
+  postContentReady();
 })();
