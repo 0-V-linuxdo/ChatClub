@@ -21,6 +21,7 @@ import {
   loadPromptLibrary,
   loadPromptSendHistory,
   loadShortcutConfig,
+  normalizePromptImagePasteStrategy,
   normalizePromptSendHistory,
   normalizeOptions,
   normalizePrimaryColor,
@@ -435,9 +436,11 @@ const state = {
   summaryCollectorDragId: "",
   messageNavigatorSiteExpandedId: "",
   messageNavigatorSettingsTab: "effects",
+  settingsAppsTab: "builtIn",
   settingsPromptTemplateDragId: "",
   settingsPromptLibraryDragId: "",
   settingsProfileDragId: "",
+  settingsBuiltinAppDragId: "",
   settingsCustomAppDragId: "",
   settingsAppearanceTab: "workspace",
   settingsTopbarPromptPlaceholderDraft: "",
@@ -530,6 +533,7 @@ const appContext = createAppContext({
   syncPromptInputNode
 });
 const optimizeController = createOptimizeController(appContext);
+let settingsController;
 const workspaceController = createWorkspaceController({
   state,
   createGroupId: () => createId("group"),
@@ -551,7 +555,8 @@ const workspaceController = createWorkspaceController({
   svgIcon,
   compactIconButton,
   menuButton,
-  formatShortcut
+  formatShortcut,
+  openCustomAppEditor: () => settingsController?.openCustomAppEditor?.()
 });
 const pocketController = createPocketController({
   state,
@@ -588,7 +593,7 @@ const summaryController = createSummaryController({
     entries: pocketController.pocketEntriesFromSummaryPreview
   }
 });
-const settingsController = createSettingsController({
+settingsController = createSettingsController({
   state,
   svgIcon,
   syncPromptInputNode,
@@ -737,7 +742,7 @@ function menuButton(label, iconName, onClick, variant = "secondary", disabled = 
 }
 
 function allApps() {
-  return getAllChatApps(state.customConfig);
+  return getAllChatApps(state.customConfig, state.options?.builtinChatAppOrder);
 }
 
 function appById(id) {
@@ -1374,6 +1379,10 @@ function sendPromptAppIsNotion(app = {}) {
     || host.endsWith(".notion.so");
 }
 
+function promptImagePasteStrategyForApp(app = {}) {
+  return normalizePromptImagePasteStrategy(app?.imagePasteStrategy);
+}
+
 function sendPromptFrameHrefHints(iframe, app = {}) {
   const values = [
     iframe?.dataset?.currentHref,
@@ -1417,6 +1426,7 @@ async function sendTextToFrame(iframe, app = {}, text = "", images = [], sendId 
     text,
     images: promptImages,
     imageRetryCount,
+    imagePasteStrategy: promptImagePasteStrategyForApp(app),
     appId: app.id,
     appName: app.name,
     inputSelector: app.inputSelector,

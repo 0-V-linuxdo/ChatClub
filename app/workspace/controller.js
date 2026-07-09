@@ -105,6 +105,7 @@ const APP_PICKER_CHINESE_ID_SET = new Set(APP_PICKER_CHINESE_IDS);
  * @property {(label: string, iconName: string, onClick: Function, extraClass?: string, tooltipLabel?: string, tooltipPlacement?: string, tooltipId?: string) => HTMLElement} compactIconButton
  * @property {(label: string, iconName: string, onClick: Function, variant?: string, disabled?: boolean, tooltipLabel?: string, tooltipPlacement?: string, tooltipId?: string) => HTMLElement} menuButton
  * @property {(action: string, shortcut: any, slot?: string) => string} formatShortcut
+ * @property {() => void} [openCustomAppEditor]
  */
 
 function requireContext(ctx, name) {
@@ -148,6 +149,7 @@ export function createWorkspaceController(ctx = {}) {
   const compactIconButton = requireFunction(ctx, "compactIconButton");
   const menuButton = requireFunction(ctx, "menuButton");
   const formatShortcut = requireFunction(ctx, "formatShortcut");
+  const openCustomAppEditor = typeof ctx.openCustomAppEditor === "function" ? ctx.openCustomAppEditor : null;
   let workspaceNode = null;
   let workspaceRenderSignature = "";
   let messageNavigatorMenuIframe = null;
@@ -515,7 +517,6 @@ export function createWorkspaceController(ctx = {}) {
 
   function appPickerSections() {
     const apps = allApps();
-    const appByPickerId = new Map(apps.map((app) => [app.id, app]));
     const customIds = customAppIds();
     const customApps = apps.filter((app) => !APP_PICKER_INTERNATIONAL_ID_SET.has(app.id)
       && !APP_PICKER_CHINESE_ID_SET.has(app.id)
@@ -523,9 +524,10 @@ export function createWorkspaceController(ctx = {}) {
       && (customIds.has(app.id) || /^custom$/i.test(app.provider || "")));
     const customSet = new Set(customApps.map((app) => app.id));
     const customHostKeys = new Set(customApps.flatMap((app) => Array.from(appPickerHostKeys(app))));
-    const byKnownOrder = (ids) => ids
-      .map((id) => appByPickerId.get(id))
-      .filter((app) => app && !customSet.has(app.id) && !hasCustomAppEquivalent(app, customHostKeys));
+    const byKnownOrder = (ids) => {
+      const idSet = new Set(ids);
+      return apps.filter((app) => idSet.has(app.id) && !customSet.has(app.id) && !hasCustomAppEquivalent(app, customHostKeys));
+    };
     const internationalApps = byKnownOrder(APP_PICKER_INTERNATIONAL_IDS);
     const chineseApps = byKnownOrder(APP_PICKER_CHINESE_IDS);
     const assigned = new Set([...customSet, ...internationalApps.map((app) => app.id), ...chineseApps.map((app) => app.id)]);
@@ -2678,9 +2680,38 @@ export function createWorkspaceController(ctx = {}) {
     );
   }
 
+  function openCustomAppEditorFromPicker(event) {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    const target = event?.currentTarget;
+    if (target?.dataset?.opening === "true") return;
+    if (target?.dataset) target.dataset.opening = "true";
+    closePopovers();
+    openCustomAppEditor?.();
+  }
+
+  function renderAppPickerHeading(section) {
+    const title = el("h3", { class: "app-picker-heading" }, section.title);
+    if (!section.custom || !openCustomAppEditor) return title;
+    return el("div", { class: "app-picker-heading-row" },
+      title,
+      el("button", {
+        class: "app-picker-add-button tooltip-trigger",
+        type: "button",
+        "aria-label": t("appPicker.addCustom"),
+        "data-tooltip": t("appPicker.addCustom"),
+        "data-tooltip-id": "appPicker.addCustom",
+        onpointerdown: openCustomAppEditorFromPicker,
+        onclick: openCustomAppEditorFromPicker
+      },
+        svgIcon("plus")
+      )
+    );
+  }
+
   function renderAppPickerColumn(section, onSelect) {
     return el("section", { class: `app-picker-column app-picker-${section.id}` },
-      el("h3", { class: "app-picker-heading" }, section.title),
+      renderAppPickerHeading(section),
       el("div", { class: "app-picker-list" },
         section.apps.map((app) => renderAppPickerItem(app, section.custom, onSelect))
       )

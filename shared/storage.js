@@ -14,6 +14,8 @@ import {
   GEMINI_THINKING_LEVEL_PREFERENCE_KEY,
   GEMINI_THINKING_LEVEL_TARGETS,
   MODEL_PREFERENCE_TARGETS,
+  PROMPT_IMAGE_PASTE_STRATEGIES,
+  PROMPT_IMAGE_PASTE_STRATEGY_SEQUENTIAL,
   SCRIPT_CONFIG_SCHEMA_VERSION,
   STORAGE_KEYS,
   TAB_GROUP_HEADER_BUTTONS,
@@ -101,6 +103,21 @@ export function normalizeTooltipDisabledIds(value = []) {
     const normalized = text(id);
     if (!validIds.has(normalized) || ordered.includes(normalized)) continue;
     ordered.push(normalized);
+  }
+  return ordered;
+}
+
+export function normalizeBuiltinChatAppOrder(value = []) {
+  const knownIds = BUILTIN_CHAT_APPS.map((app) => app.id).filter(Boolean);
+  const known = new Set(knownIds);
+  const ordered = [];
+  for (const id of Array.isArray(value) ? value : []) {
+    const normalized = text(id);
+    if (!known.has(normalized) || ordered.includes(normalized)) continue;
+    ordered.push(normalized);
+  }
+  for (const id of knownIds) {
+    if (!ordered.includes(id)) ordered.push(id);
   }
   return ordered;
 }
@@ -664,6 +681,7 @@ export function normalizeOptions(raw = {}) {
     summaryPromptTemplateId: summaryPromptTemplates.some((item) => item.id === raw.summaryPromptTemplateId)
       ? raw.summaryPromptTemplateId
       : summaryPromptTemplates[0]?.id || summaryDefault.id,
+    builtinChatAppOrder: normalizeBuiltinChatAppOrder(raw.builtinChatAppOrder),
     modelPreferences: normalizeModelPreferences(raw.modelPreferences),
     modelPreferenceOrder: normalizeModelPreferenceOrder(raw.modelPreferenceOrder),
     messageNavigatorEffectMode: normalizeMessageNavigatorEffectMode(raw.messageNavigatorEffectMode),
@@ -683,6 +701,7 @@ export function normalizeCustomConfig(raw = []) {
       url,
       inputSelector: text(item.inputSelector),
       sendButtonSelector: text(item.sendButtonSelector),
+      imagePasteStrategy: normalizePromptImagePasteStrategy(item.imagePasteStrategy),
       hosts: Array.isArray(item.hosts) ? item.hosts : []
     };
   }).filter((item) => item.name && item.url);
@@ -851,10 +870,18 @@ export function normalizeShortcutConfig(raw = {}) {
   return normalizeShortcutShape(raw);
 }
 
-export function getAllChatApps(customConfig = []) {
+export function normalizePromptImagePasteStrategy(value, fallback = PROMPT_IMAGE_PASTE_STRATEGY_SEQUENTIAL) {
+  const strategy = text(value).toLowerCase();
+  return PROMPT_IMAGE_PASTE_STRATEGIES.includes(strategy) ? strategy : fallback;
+}
+
+export function getAllChatApps(customConfig = [], builtinChatAppOrder = []) {
   const custom = normalizeCustomConfig(customConfig);
+  const builtInOrder = normalizeBuiltinChatAppOrder(builtinChatAppOrder);
+  const builtInById = new Map(BUILTIN_CHAT_APPS.map((app) => [app.id, app]));
+  const builtIn = builtInOrder.map((id) => builtInById.get(id)).filter(Boolean);
   const ids = new Set();
-  return [...custom, ...BUILTIN_CHAT_APPS].filter((app) => {
+  return [...custom, ...builtIn].filter((app) => {
     if (!app.id || ids.has(app.id)) return false;
     ids.add(app.id);
     return true;

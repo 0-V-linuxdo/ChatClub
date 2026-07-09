@@ -1,10 +1,13 @@
 import {
+  BUILTIN_CHAT_APPS,
   DEFAULT_GEMINI_THINKING_LEVEL,
   DEFAULT_MODEL_PREFERENCE_ORDER,
   DEFAULT_OPTIONS,
   GEMINI_THINKING_LEVEL_PREFERENCE_KEY,
   GEMINI_THINKING_LEVEL_TARGETS,
   MODEL_PREFERENCE_TARGETS,
+  PROMPT_IMAGE_PASTE_STRATEGY_BATCH,
+  PROMPT_IMAGE_PASTE_STRATEGY_SEQUENTIAL,
   TAB_GROUP_HEADER_BUTTONS,
   TOOLTIP_TARGET_GROUPS,
   TOPBAR_PROMPT_PLACEHOLDER_INTERVAL_MAX_SEC,
@@ -22,9 +25,11 @@ import { TOPIC_DELETE_SITE_CONFIGS } from "../../shared/topic-delete-sites.js";
 import { t } from "../../shared/i18n.js";
 import {
   createId,
+  normalizeBuiltinChatAppOrder,
   normalizeTabGroupButtonPlacement,
   normalizeTabGroupButtonOrder,
   normalizeModelPreferenceOrder,
+  normalizePromptImagePasteStrategy,
   normalizePrimaryColor,
   normalizeTopbarPromptPlaceholderConfig,
   normalizeTopbarPromptPlaceholderText,
@@ -316,6 +321,7 @@ export function createSettingsController(ctx) {
       cleanupTabGroupButtonDrag();
     }
     if (selected.has("customConfig")) state.settingsCustomAppDragId = "";
+    if (selected.has("options")) state.settingsBuiltinAppDragId = "";
     if (selected.has("promptLibrary")) state.settingsPromptLibraryDragId = "";
     if (selected.has("promptSendHistory")) {
       state.promptHistoryCursor = -1;
@@ -534,6 +540,7 @@ export function createSettingsController(ctx) {
       state.settingsPromptTemplateDragId = "";
       state.settingsPromptLibraryDragId = "";
       state.settingsProfileDragId = "";
+      state.settingsBuiltinAppDragId = "";
       state.settingsCustomAppDragId = "";
       state.settingsAppearanceTab = "workspace";
       state.settingsTopbarPromptPlaceholderDraft = "";
@@ -1406,15 +1413,195 @@ export function createSettingsController(ctx) {
     await saveApiProfiles(state.options.apiProfiles.filter((item) => item.id !== profile.id), redraw, t("toast.apiProfileDeleted"));
   }
 
+  function imagePasteStrategyOptions() {
+    return [
+      { value: PROMPT_IMAGE_PASTE_STRATEGY_SEQUENTIAL, label: t("apps.imageStrategySequential") },
+      { value: PROMPT_IMAGE_PASTE_STRATEGY_BATCH, label: t("apps.imageStrategyBatch") }
+    ];
+  }
+
+  function imagePasteStrategyLabel(strategy) {
+    const normalized = normalizePromptImagePasteStrategy(strategy);
+    return normalized === PROMPT_IMAGE_PASTE_STRATEGY_BATCH
+      ? t("apps.imageStrategyBatch")
+      : t("apps.imageStrategySequential");
+  }
+
+  function builtInAppIsNotion(app = {}) {
+    const id = String(app?.id || "").trim().toLowerCase();
+    const name = String(app?.name || "").trim().toLowerCase();
+    const url = String(app?.url || "");
+    let host = "";
+    try { host = new URL(url).hostname.toLowerCase(); } catch {}
+    return id === "notionai"
+      || /\bnotion\b/.test(name)
+      || host === "app.notion.com"
+      || host === "notion.so"
+      || host === "www.notion.so"
+      || host.endsWith(".notion.so");
+  }
+
+  function builtInImagePasteStrategyLabel(app) {
+    return builtInAppIsNotion(app)
+      ? t("apps.imageStrategyNotionBridge")
+      : imagePasteStrategyLabel(app?.imagePasteStrategy);
+  }
+
   function appsPane(redraw) {
+    const activeTab = state.settingsAppsTab === "custom" ? "custom" : "builtIn";
+    return el("div", { class: "settings-pane settings-manager-pane apps-settings-pane" },
+      settingsInnerTabs([
+        ["builtIn", t("apps.tabBuiltIn"), t("apps.tabBuiltInDesc")],
+        ["custom", t("apps.tabCustom"), t("apps.tabCustomDesc")]
+      ], activeTab, (tabId) => {
+        state.settingsAppsTab = tabId;
+        redraw?.();
+      }),
+      activeTab === "custom" ? customAppsPane(redraw) : builtInAppsPane(redraw)
+    );
+  }
+
+  function builtInAppsPane(redraw) {
+    const rows = orderedBuiltInApps().map((app) => builtInAppRow(app, redraw));
+    return el("div", { class: "settings-apps-tab-panel" },
+      settingsPaneToolbar(t("apps.builtInManage")),
+      settingsList([
+        "",
+        t("apps.platformName"),
+        t("apps.platformUrl"),
+        t("apps.imagePasteStrategy"),
+        t("apps.action")
+      ], rows, "settings-manager-list built-in-config-list")
+    );
+  }
+
+  function orderedBuiltInApps(order = state.options?.builtinChatAppOrder) {
+    const appById = new Map(BUILTIN_CHAT_APPS.map((app) => [app.id, app]));
+    return normalizeBuiltinChatAppOrder(order).map((id) => appById.get(id)).filter(Boolean);
+  }
+
+  function builtInAppRow(app, redraw) {
+    return el("div", {
+      class: "ui-list-row settings-list-row settings-manager-row built-in-config-row",
+      draggable: "true",
+      dataset: { builtInAppId: app.id },
+      ondragstart: (event) => startBuiltInAppDrag(event, app),
+      ondragend: cleanupBuiltInAppDrag,
+      ondragover: (event) => previewBuiltInAppDrop(event, app),
+      ondragleave: (event) => event.currentTarget.classList.remove("drop-before", "drop-after"),
+      ondrop: (event) => dropBuiltInApp(event, app, redraw)
+    },
+      settingsDragHandle(t("apps.platformName")),
+      el("strong", { class: "settings-main-cell" }, app.name || app.id),
+      el("a", { class: "settings-url-link", href: app.url, target: "_blank", rel: "noreferrer" }, app.url),
+      el("span", { class: "settings-strategy-cell" }, builtInImagePasteStrategyLabel(app)),
+      el("div", { class: "settings-row-action-group" },
+        settingsIconAction(t("apps.viewDetails"), "preview", () => openBuiltInAppDetails(app), "", false, "settings.action.view")
+      )
+    );
+  }
+
+  function settingsDetailField(label, content) {
+    return el("div", { class: "field settings-detail-field" },
+      el("span", {}, label),
+      content
+    );
+  }
+
+  function settingsDetailValue(value) {
+    return el("span", { class: "settings-detail-value" }, value || t("apps.default"));
+  }
+
+  function settingsDetailCode(value) {
+    return el("code", { class: "settings-detail-code" }, String(value || t("apps.default")));
+  }
+
+  function builtInAppHostsText(app) {
+    if (Array.isArray(app.hosts) && app.hosts.length) return app.hosts.join("\n");
+    try {
+      return new URL(app.url || "").hostname || t("apps.default");
+    } catch {
+      return t("apps.default");
+    }
+  }
+
+  function openBuiltInAppDetails(app) {
+    let detailDialog;
+    const close = () => detailDialog?.remove();
+    detailDialog = modal(t("apps.builtInDetailsTitle", { name: app.name || app.id }),
+      el("div", { class: "settings-editor-form built-in-detail-form" },
+        el("div", { class: "settings-dialog-grid built-in-detail-grid" },
+          settingsDetailField(t("apps.platformName"), settingsDetailValue(app.name || app.id)),
+          settingsDetailField(t("apps.provider"), settingsDetailValue(app.provider || t("apps.default"))),
+          settingsDetailField(t("apps.platformUrl"),
+            el("a", { class: "settings-detail-link", href: app.url, target: "_blank", rel: "noreferrer" }, app.url || t("apps.default"))
+          ),
+          settingsDetailField(t("apps.hosts"), settingsDetailCode(builtInAppHostsText(app))),
+          settingsDetailField(t("apps.inputSelector"), settingsDetailCode(app.inputSelector)),
+          settingsDetailField(t("apps.sendButtonSelector"), settingsDetailCode(app.sendButtonSelector)),
+          settingsDetailField(t("apps.imagePasteStrategy"), settingsDetailValue(builtInImagePasteStrategyLabel(app)))
+        ),
+        el("div", { class: "settings-dialog-actions" },
+          button(t("common.close"), close, "primary")
+        )
+      ),
+      close,
+      false,
+      t("common.close")
+    );
+    detailDialog.querySelector(".modal")?.classList.add("settings-editor-modal");
+  }
+
+  function startBuiltInAppDrag(event, app) {
+    state.settingsBuiltinAppDragId = app.id;
+    event.currentTarget.classList.add("dragging");
+    event.dataTransfer?.setData("application/x-chatclub-builtin-app", app.id);
+    event.dataTransfer?.setData("text/plain", app.id);
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+  }
+
+  function cleanupBuiltInAppDrag() {
+    state.settingsBuiltinAppDragId = "";
+    cleanupSettingsDragRows(".built-in-config-row");
+  }
+
+  function previewBuiltInAppDrop(event, app) {
+    const sourceId = state.settingsBuiltinAppDragId || event.dataTransfer?.getData("application/x-chatclub-builtin-app") || "";
+    if (!sourceId || sourceId === app.id) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    event.currentTarget.classList.toggle("drop-after", settingsListDropPlacement(event) === "after");
+    event.currentTarget.classList.toggle("drop-before", settingsListDropPlacement(event) !== "after");
+  }
+
+  async function dropBuiltInApp(event, targetApp, redraw) {
+    const sourceId = state.settingsBuiltinAppDragId || event.dataTransfer?.getData("application/x-chatclub-builtin-app") || event.dataTransfer?.getData("text/plain") || "";
+    if (!sourceId || sourceId === targetApp.id) return;
+    event.preventDefault();
+    const currentOrder = normalizeBuiltinChatAppOrder(state.options?.builtinChatAppOrder).map((id) => ({ id }));
+    const nextOrder = moveListItem(currentOrder, sourceId, targetApp.id, settingsListDropPlacement(event)).map((item) => item.id);
+    cleanupBuiltInAppDrag();
+    state.options = await saveOptions({ ...state.options, builtinChatAppOrder: nextOrder });
+    syncWorkspaceDom();
+    redraw?.();
+    toast(t("toast.builtinAppOrderSaved"), "success");
+  }
+
+  function customAppsPane(redraw) {
     const rows = state.customConfig.length
       ? state.customConfig.map((app) => customAppRow(app, redraw))
       : settingsEmptyRow(t("apps.noApps"));
-    return el("div", { class: "settings-pane settings-manager-pane" },
+    return el("div", { class: "settings-apps-tab-panel" },
       settingsPaneToolbar(t("apps.manage"),
         settingsPrimaryAction(t("apps.add"), "plus", () => openCustomAppEditor(null, redraw))
       ),
-      settingsList(["", t("apps.platformName"), t("apps.platformUrl"), t("apps.inputSelector"), t("apps.sendButtonSelector"), t("apps.action")], rows, "settings-manager-list custom-config-list")
+      settingsList([
+        "",
+        t("apps.platformName"),
+        t("apps.platformUrl"),
+        t("apps.imagePasteStrategy"),
+        t("apps.action")
+      ], rows, "settings-manager-list custom-config-list")
     );
   }
 
@@ -1432,8 +1619,7 @@ export function createSettingsController(ctx) {
       settingsDragHandle(t("apps.platformName")),
       el("strong", { class: "settings-main-cell" }, app.name || app.id),
       el("a", { class: "settings-url-link", href: app.url, target: "_blank", rel: "noreferrer" }, app.url),
-      el("code", { class: "settings-selector-cell" }, app.inputSelector || t("apps.default")),
-      el("code", { class: "settings-selector-cell" }, app.sendButtonSelector || t("apps.default")),
+      el("span", { class: "settings-strategy-cell" }, imagePasteStrategyLabel(app.imagePasteStrategy)),
       el("div", { class: "settings-row-action-group" },
         settingsIconAction(t("common.edit"), "edit", () => openCustomAppEditor(app, redraw), "", false, "settings.action.edit"),
         settingsIconAction(t("common.delete"), "trash", () => deleteCustomApp(app, redraw), "danger", false, "settings.action.delete")
@@ -1500,13 +1686,18 @@ export function createSettingsController(ctx) {
       provider: "Custom",
       url: "https://www.example.com/",
       inputSelector: "",
-      sendButtonSelector: ""
+      sendButtonSelector: "",
+      imagePasteStrategy: PROMPT_IMAGE_PASTE_STRATEGY_SEQUENTIAL
     });
     const nameInput = input(draft.name, { placeholder: t("apps.platformName") });
     const providerInput = input(draft.provider, { placeholder: t("apps.provider") });
     const urlInput = input(draft.url, { placeholder: "https://example.com/" });
     const inputSelectorInput = input(draft.inputSelector, { placeholder: t("apps.inputSelector") });
     const sendSelectorInput = input(draft.sendButtonSelector, { placeholder: t("apps.sendButtonSelector") });
+    const imagePasteStrategyInput = select(
+      normalizePromptImagePasteStrategy(draft.imagePasteStrategy),
+      imagePasteStrategyOptions()
+    );
     let dialog;
     const close = () => dialog.remove();
     const save = async () => {
@@ -1518,7 +1709,8 @@ export function createSettingsController(ctx) {
         provider: providerInput.value.trim() || "Custom",
         url,
         inputSelector: inputSelectorInput.value.trim(),
-        sendButtonSelector: sendSelectorInput.value.trim()
+        sendButtonSelector: sendSelectorInput.value.trim(),
+        imagePasteStrategy: normalizePromptImagePasteStrategy(imagePasteStrategyInput.value)
       };
       if (!nextApp.name || !rawUrl) return toast(t("apps.nameUrlRequired"), "error");
       if (!nextApp.url) return toast(t("apps.invalidUrl"), "error");
@@ -1535,7 +1727,8 @@ export function createSettingsController(ctx) {
           field(t("apps.provider"), providerInput),
           field(t("apps.platformUrl"), urlInput),
           field(t("apps.inputSelector"), inputSelectorInput),
-          field(t("apps.sendButtonSelector"), sendSelectorInput)
+          field(t("apps.sendButtonSelector"), sendSelectorInput),
+          field(t("apps.imagePasteStrategy"), imagePasteStrategyInput)
         ),
         el("div", { class: "settings-dialog-actions" },
           button(t("common.cancel"), close),
@@ -3343,6 +3536,7 @@ export function createSettingsController(ctx) {
   return Object.freeze({
     importConfigText,
     insertTextIntoPrompt,
+    openCustomAppEditor,
     openPromptLibraryDialog,
     openSettings,
     promptLibraryManager,

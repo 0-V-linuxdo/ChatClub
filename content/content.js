@@ -4,13 +4,14 @@
   const GEMINI_MODEL_PICKER_SOURCE = "chatclub-gemini-model-picker";
   const NOTION_SEND_TEXT_SOURCE = "chatclub-notion-send-text:2026.07.09.10";
   const NOTION_SEND_PROMPT_SOURCE = "chatclub-notion-send-prompt:2026.07.09.10";
-  const CONTENT_BRIDGE_VERSION = "2026.07.09.14";
-  const SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.09.14";
+  const CONTENT_BRIDGE_VERSION = "2026.07.10.1";
+  const SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.10.1";
   const DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.04.1";
   const MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.08.12";
   const SUMMARY_POST_MESSAGE_SOURCE = "chatclub:summary:2026.07.08.13";
   const DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.07.03.30";
   const PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.08.13";
+  const PROMPT_IMAGE_PASTE_STRATEGY_BATCH = "batch";
   function contentReadyData() {
     return {
       href: location.href,
@@ -1417,6 +1418,12 @@
     return appId === "grok" || appName === "grok" || grokHost();
   }
 
+  function promptImagePasteStrategy(data = {}) {
+    return String(data?.imagePasteStrategy || "").trim().toLowerCase() === PROMPT_IMAGE_PASTE_STRATEGY_BATCH
+      ? PROMPT_IMAGE_PASTE_STRATEGY_BATCH
+      : "sequential";
+  }
+
   function grokComposerScope(input) {
     if (!input) return promptComposerScope(input);
     let best = null;
@@ -1670,6 +1677,15 @@
     return fired ? { ok: true } : { ok: false, reason: "Grok image paste was not accepted" };
   }
 
+  async function attachBatchPromptImagesOnce(files, input) {
+    input?.focus?.();
+    const transfer = createPromptDataTransfer({ files });
+    if (!transfer) return { ok: false, reason: "DataTransfer unavailable" };
+    const target = input || document.activeElement;
+    const fired = dispatchPromptTransferEvent(target, "paste", transfer);
+    return fired ? { ok: true } : { ok: false, reason: "Batch image paste was not accepted" };
+  }
+
   function promptImageSendTimeoutMs(data = {}, fallbackMs = 65000) {
     const hasImages = Array.isArray(data?.images) && data.images.length > 0;
     if (!hasImages) return fallbackMs;
@@ -1685,6 +1701,9 @@
       if (deadlineExpired(deadlineAt)) return { ok: false, reason: "Send deadline exceeded" };
       if (attempt > 1) {
         clearPromptAttachments(input);
+        if (!await waitForPromptAttachmentsCleared(input, {}, 2500, deadlineAt)) {
+          return { ok: false, reason: "Batch attachments could not be cleared before retry" };
+        }
         if (!await sleepUntilDeadline(450, deadlineAt)) return { ok: false, reason: "Send deadline exceeded" };
         input = inputCandidates(inputSelector) || input;
       }
@@ -1700,6 +1719,29 @@
       lastReason = ready.reason || "Image upload did not become ready";
     }
     return { ok: false, reason: lastReason || "Image upload did not become ready" };
+  }
+
+  async function attachBatchPromptImagesWithRetries(input, files = [], retryCount = 3, inputSelector = "", deadlineAt = 0) {
+    const list = Array.from(files || []).filter((file) => file && String(file.type || "").startsWith("image/"));
+    if (!list.length) return { ok: true };
+    const attempts = Math.max(0, Number(retryCount) || 0) + 1;
+    let lastReason = "";
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      if (deadlineExpired(deadlineAt)) return { ok: false, reason: "Send deadline exceeded" };
+      if (attempt > 1) {
+        clearPromptAttachments(input);
+        if (!await sleepUntilDeadline(450, deadlineAt)) return { ok: false, reason: "Send deadline exceeded" };
+        input = inputCandidates(inputSelector) || input;
+      }
+      const baseline = promptAttachmentSnapshot(input);
+      const result = await attachBatchPromptImagesOnce(list, input);
+      if (!result.ok) lastReason = result.reason || "Batch image insertion failed";
+      if (!await sleepUntilDeadline(220, deadlineAt)) return { ok: false, reason: "Send deadline exceeded" };
+      const ready = await waitForPromptImagesReady(input, baseline.count + list.length, Math.min(45000, remainingDeadlineMs(deadlineAt, 45000)), deadlineAt);
+      if (ready.ok) return { ok: true, attempts: attempt, snapshot: ready.snapshot };
+      lastReason = ready.reason || "Batch image upload did not become ready";
+    }
+    return { ok: false, reason: lastReason || "Batch image upload did not become ready" };
   }
 
   async function attachGrokPromptImagesWithRetries(input, files = [], retryCount = 3, inputSelector = "", deadlineAt = 0, textValue = "") {
@@ -1888,8 +1930,11 @@
       throw new Error("Image payload could not be restored");
     }
     if (files.length) {
+      const batch = promptImagePasteStrategy(data) === PROMPT_IMAGE_PASTE_STRATEGY_BATCH;
       const attached = grok
         ? await attachGrokPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt, textValue)
+        : batch
+          ? await attachBatchPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt)
         : await attachPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt);
       if (!attached.ok) throw new Error(attached.reason || "Image insertion failed");
       if (grok) input = inputCandidates(data?.inputSelector) || input;

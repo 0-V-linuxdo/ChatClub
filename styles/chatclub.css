@@ -4229,10 +4229,72 @@ body.settings-tab-group-button-dragging iframe {
   grid-template-columns: 56px minmax(170px, 1fr) minmax(160px, .9fr) minmax(220px, 1fr) minmax(176px, auto);
 }
 
+.built-in-config-list .settings-list-header,
+.built-in-config-row {
+  min-width: 620px;
+  grid-template-columns: 44px minmax(136px, .9fr) minmax(220px, 1.36fr) minmax(128px, .68fr) 78px;
+}
+
 .custom-config-list .settings-list-header,
 .custom-config-row {
   min-width: 640px;
-  grid-template-columns: 44px minmax(118px, .88fr) minmax(178px, 1.16fr) minmax(104px, .72fr) minmax(114px, .76fr) 88px;
+  grid-template-columns: 44px minmax(136px, .9fr) minmax(220px, 1.36fr) minmax(128px, .68fr) 88px;
+}
+
+.settings-apps-tab-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.settings-strategy-cell {
+  min-width: 0;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-detail-field {
+  min-width: 0;
+}
+
+.built-in-detail-grid .settings-detail-field:nth-child(n+3) {
+  grid-column: 1 / -1;
+}
+
+.settings-detail-value,
+.settings-detail-link {
+  min-width: 0;
+  min-height: var(--settings-control-height, 36px);
+  display: flex;
+  align-items: center;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.settings-detail-link {
+  color: var(--primary);
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+
+.settings-detail-link:hover {
+  text-decoration: underline;
+}
+
+.settings-detail-code {
+  display: block;
+  min-width: 0;
+  padding: 10px 12px;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: color-mix(in srgb, var(--panel-2) 58%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+  border-radius: var(--settings-radius, 8px);
 }
 
 .model-preferences-pane {
@@ -5599,10 +5661,16 @@ body.settings-tab-group-button-dragging iframe {
     grid-template-columns: 46px minmax(140px, 1fr) minmax(130px, .8fr) minmax(180px, 1fr) minmax(156px, auto);
   }
 
+  .built-in-config-list .settings-list-header,
+  .built-in-config-row {
+    min-width: 580px;
+    grid-template-columns: 40px minmax(118px, .86fr) minmax(176px, 1.22fr) minmax(104px, .62fr) 74px;
+  }
+
   .custom-config-list .settings-list-header,
   .custom-config-row {
-    min-width: 620px;
-    grid-template-columns: 40px minmax(108px, .86fr) minmax(164px, 1.12fr) minmax(96px, .72fr) minmax(104px, .76fr) 80px;
+    min-width: 600px;
+    grid-template-columns: 40px minmax(118px, .86fr) minmax(176px, 1.22fr) minmax(104px, .62fr) 80px;
   }
 
   .prompt-template-list .settings-list-header,
@@ -6998,12 +7066,53 @@ body.settings-tab-group-button-dragging iframe {
   min-width: 0;
 }
 
+.app-picker-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 9px;
+  margin: 0 0 17px;
+}
+
 .app-picker-heading {
   margin: 0 0 17px;
   color: color-mix(in srgb, var(--muted) 72%, transparent);
   font-size: 17px;
   font-weight: 700;
   line-height: 1.2;
+}
+
+.app-picker-heading-row .app-picker-heading {
+  margin: 0;
+}
+
+.app-picker-add-button {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 28px;
+  min-height: 28px;
+  padding: 0;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.app-picker-add-button .svg-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.app-picker-add-button:hover,
+.app-picker-add-button:focus-visible {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary-2) 62%, transparent);
+  outline: none;
+  border-color: color-mix(in srgb, var(--primary) 72%, var(--line));
 }
 
 .app-picker-list {

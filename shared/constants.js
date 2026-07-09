@@ -1,7 +1,7 @@
 import { DEFAULT_TOPBAR_LAYOUT } from "./topbar.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-07-09｜23:57:33」";
+export const APP_VERSION = "「2026-07-10｜01:18:14」";
 export const BASELINE_MOD_VERSION = "2.4.0.14";
 export const HOMEPAGE_URL = "https://chatclub.local/";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
@@ -24,6 +24,12 @@ export const API_PROFILE_ZERO_ZERO_MODEL = "gpt-5.5";
 export const API_PROFILE_ZERO_ZERO_REGISTER_URL = "https://0-0.pro/register?ref=CSLPRL76";
 export const SUMMARY_SITE_CONFIG_VERSION = 69;
 export const SCRIPT_CONFIG_SCHEMA_VERSION = 2;
+export const PROMPT_IMAGE_PASTE_STRATEGY_SEQUENTIAL = "sequential";
+export const PROMPT_IMAGE_PASTE_STRATEGY_BATCH = "batch";
+export const PROMPT_IMAGE_PASTE_STRATEGIES = Object.freeze([
+  PROMPT_IMAGE_PASTE_STRATEGY_SEQUENTIAL,
+  PROMPT_IMAGE_PASTE_STRATEGY_BATCH
+]);
 
 export const DEFAULT_PROMOTION_API_PROFILES = [
   {
@@ -220,6 +226,7 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
     targets: Object.freeze([
       Object.freeze({ id: "settings.modal.close", labelKey: "common.close" }),
       Object.freeze({ id: "settings.profiles.promotion", labelKey: "profiles.openPromotionChannel" }),
+      Object.freeze({ id: "settings.action.view", labelKey: "apps.viewDetails" }),
       Object.freeze({ id: "settings.action.edit", labelKey: "common.edit" }),
       Object.freeze({ id: "settings.action.duplicate", labelKey: "profiles.duplicate" }),
       Object.freeze({ id: "settings.action.delete", labelKey: "common.delete" }),
@@ -380,6 +387,7 @@ export const BUILTIN_CHAT_APPS = [
     hosts: ["grok.com", "*.grok.com", "grok.x.ai", "*.grok.x.ai"],
     inputSelector: "textarea, [contenteditable='true']",
     sendButtonSelector: "button[aria-label*='Send' i], button[aria-label*='Submit' i], button[aria-label*='发送' i], button[aria-label*='提交' i]",
+    imagePasteStrategy: PROMPT_IMAGE_PASTE_STRATEGY_BATCH,
     noSandbox: true
   },
   {
