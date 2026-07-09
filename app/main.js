@@ -24,6 +24,7 @@ import {
   normalizePromptSendHistory,
   normalizeOptions,
   normalizePrimaryColor,
+  normalizeTopbarPromptPlaceholderConfig,
   saveOptions,
   savePocketHistory,
   savePromptSendHistory,
@@ -81,6 +82,9 @@ const faviconDiscoveryPromises = new Map();
 let faviconCachePersistTimer = 0;
 let appShellNode = null;
 let topbarNode = null;
+let topbarPromptPlaceholderValue = "";
+let topbarPromptPlaceholderTimer = 0;
+let topbarPromptPlaceholderTimerKey = "";
 let activeTopbarEditPointerDrag = null;
 let suppressTopbarPaletteClick = false;
 const MODEL_PREFERENCE_APP_ID_ALIASES = Object.freeze({
@@ -423,6 +427,9 @@ const state = {
   settingsProfileDragId: "",
   settingsCustomAppDragId: "",
   settingsAppearanceTab: "workspace",
+  settingsTopbarPromptPlaceholderDraft: "",
+  settingsTopbarPromptPlaceholderEditingIndex: -1,
+  settingsTopbarPromptPlaceholderDragIndex: "",
   settingsTabGroupButtonPlacementDraft: null,
   settingsTabGroupButtonOrderDraft: null,
   settingsTabGroupButtonDragId: "",
@@ -575,6 +582,7 @@ const settingsController = createSettingsController({
   notifyConfigReload,
   render,
   syncTopbar,
+  syncTopbarPromptPlaceholder,
   syncSummaryPanel,
   syncWorkspaceDom: workspaceController.syncWorkspaceDom,
   applyPreferredModels: applyPreferredModelsToFrames,
@@ -584,8 +592,130 @@ const settingsController = createSettingsController({
   enterTopbarEditMode
 });
 
+function topbarPromptPlaceholderConfig() {
+  return normalizeTopbarPromptPlaceholderConfig(state.options?.topbarPromptPlaceholderConfig);
+}
+
+function pickTopbarPromptPlaceholderIndex(itemCount, config, promptState, advance) {
+  if (itemCount <= 0) return -1;
+  if (itemCount === 1) {
+    promptState.index = 0;
+    promptState.lastRandom = 0;
+    return 0;
+  }
+
+  if (config.order === "random") {
+    if (!advance) {
+      if (promptState.index >= 0 && promptState.index < itemCount) return promptState.index;
+      promptState.index = 0;
+      promptState.lastRandom = 0;
+      return 0;
+    }
+    let next = Math.floor(Math.random() * itemCount);
+    const previous = promptState.index >= 0 && promptState.index < itemCount ? promptState.index : promptState.lastRandom;
+    let guard = 0;
+    while (next === previous && guard < 10) {
+      next = Math.floor(Math.random() * itemCount);
+      guard += 1;
+    }
+    promptState.index = next;
+    promptState.lastRandom = next;
+    return next;
+  }
+
+  if (!advance) {
+    if (promptState.index >= 0 && promptState.index < itemCount) return promptState.index;
+    promptState.index = 0;
+    return 0;
+  }
+  const previous = promptState.index >= -1 && promptState.index < itemCount ? promptState.index : -1;
+  const next = (previous + 1) % itemCount;
+  promptState.index = next;
+  return next;
+}
+
+function applyTopbarPromptPlaceholderSelection({ advance = false } = {}) {
+  const config = topbarPromptPlaceholderConfig();
+  const items = config.items || [];
+  if (!items.length) {
+    topbarPromptPlaceholderValue = "";
+    state.options = {
+      ...state.options,
+      topbarPromptPlaceholderConfig: config
+    };
+    return { changed: false, config };
+  }
+
+  const previousState = JSON.stringify(config.state || {});
+  const nextState = { ...(config.state || {}) };
+  const index = pickTopbarPromptPlaceholderIndex(items.length, config, nextState, advance);
+  const nextConfig = {
+    ...config,
+    state: nextState
+  };
+  state.options = {
+    ...state.options,
+    topbarPromptPlaceholderConfig: nextConfig
+  };
+  topbarPromptPlaceholderValue = items[index] || items[0] || "";
+  return {
+    changed: previousState !== JSON.stringify(nextState),
+    config: nextConfig
+  };
+}
+
+function topbarPromptPlaceholderTimerConfigKey(config) {
+  return [
+    config.mode,
+    config.order,
+    config.intervalSec,
+    ...(config.items || [])
+  ].join("\u0001");
+}
+
+function stopTopbarPromptPlaceholderTimer() {
+  if (!topbarPromptPlaceholderTimer) return;
+  clearInterval(topbarPromptPlaceholderTimer);
+  topbarPromptPlaceholderTimer = 0;
+  topbarPromptPlaceholderTimerKey = "";
+}
+
+function restartTopbarPromptPlaceholderTimer() {
+  const config = topbarPromptPlaceholderConfig();
+  const items = config.items || [];
+  if (config.mode !== "interval" || items.length <= 1) {
+    stopTopbarPromptPlaceholderTimer();
+    return;
+  }
+  const key = topbarPromptPlaceholderTimerConfigKey(config);
+  if (topbarPromptPlaceholderTimer && topbarPromptPlaceholderTimerKey === key) return;
+  stopTopbarPromptPlaceholderTimer();
+  topbarPromptPlaceholderTimerKey = key;
+  topbarPromptPlaceholderTimer = setInterval(() => {
+    applyTopbarPromptPlaceholderSelection({ advance: true });
+    syncTopbar();
+  }, Math.max(1, config.intervalSec) * 1000);
+}
+
+async function initializeTopbarPromptPlaceholder() {
+  const config = topbarPromptPlaceholderConfig();
+  const shouldAdvance = config.mode === "refresh" && (config.items || []).length > 0;
+  const result = applyTopbarPromptPlaceholderSelection({ advance: shouldAdvance });
+  if (shouldAdvance && result.changed) {
+    state.options = await saveOptions(state.options);
+    applyTopbarPromptPlaceholderSelection({ advance: false });
+  }
+  restartTopbarPromptPlaceholderTimer();
+}
+
+function syncTopbarPromptPlaceholder() {
+  applyTopbarPromptPlaceholderSelection({ advance: false });
+  restartTopbarPromptPlaceholderTimer();
+  syncTopbar();
+}
+
 function promptPlaceholder() {
-  return t("topbar.promptPlaceholder");
+  return topbarPromptPlaceholderValue || t("topbar.promptPlaceholder");
 }
 
 function menuButton(label, iconName, onClick, variant = "secondary", disabled = false, tooltipLabel = label, tooltipPlacement = "", tooltipId = "") {
@@ -2893,6 +3023,7 @@ async function init() {
   state.faviconCache = normalizeFaviconCache(await storageGet(FAVICON_CACHE_KEY));
   state.options = normalizeOptions(state.options);
   syncI18nLanguage();
+  await initializeTopbarPromptPlaceholder();
   workspaceController.hydrateGroups();
   installGlobalTooltips({
     getDisabledTooltipIds: () => state.options?.tooltipDisabledIds || []

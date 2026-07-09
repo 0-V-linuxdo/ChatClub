@@ -17,7 +17,11 @@ import {
   SCRIPT_CONFIG_SCHEMA_VERSION,
   STORAGE_KEYS,
   TAB_GROUP_HEADER_BUTTONS,
-  TOOLTIP_TARGET_IDS
+  TOOLTIP_TARGET_IDS,
+  TOPBAR_PROMPT_PLACEHOLDER_INTERVAL_MAX_SEC,
+  TOPBAR_PROMPT_PLACEHOLDER_INTERVAL_MIN_SEC,
+  TOPBAR_PROMPT_PLACEHOLDER_MAX_COUNT,
+  TOPBAR_PROMPT_PLACEHOLDER_MAX_LEN
 } from "./constants.js";
 import { SUMMARY_SITE_CONFIGS } from "./summary-sites.js";
 import {
@@ -99,6 +103,43 @@ export function normalizeTooltipDisabledIds(value = []) {
     ordered.push(normalized);
   }
   return ordered;
+}
+
+export function normalizeTopbarPromptPlaceholderText(value = "") {
+  return String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, TOPBAR_PROMPT_PLACEHOLDER_MAX_LEN);
+}
+
+function normalizeTopbarPromptPlaceholderState(value = {}, itemCount = 0) {
+  const raw = plainObject(value) ? value : {};
+  if (itemCount <= 0) return { index: -1, lastRandom: -1 };
+  const maxIndex = Math.max(0, itemCount - 1);
+  return {
+    index: boundedNumber(raw.index, -1, -1, maxIndex),
+    lastRandom: boundedNumber(raw.lastRandom, -1, -1, maxIndex)
+  };
+}
+
+export function normalizeTopbarPromptPlaceholderConfig(value = {}) {
+  const raw = plainObject(value) ? value : {};
+  const items = (Array.isArray(raw.items) ? raw.items : [])
+    .map(normalizeTopbarPromptPlaceholderText)
+    .filter(Boolean)
+    .slice(0, TOPBAR_PROMPT_PLACEHOLDER_MAX_COUNT);
+  return {
+    items,
+    mode: raw.mode === "interval" ? "interval" : "refresh",
+    order: raw.order === "random" ? "random" : "sequential",
+    intervalSec: boundedNumber(
+      raw.intervalSec,
+      DEFAULT_OPTIONS.topbarPromptPlaceholderConfig.intervalSec,
+      TOPBAR_PROMPT_PLACEHOLDER_INTERVAL_MIN_SEC,
+      TOPBAR_PROMPT_PLACEHOLDER_INTERVAL_MAX_SEC
+    ),
+    state: normalizeTopbarPromptPlaceholderState(raw.state, items.length)
+  };
 }
 
 function normalizeStoredPrimaryColor(raw, fallback) {
@@ -602,6 +643,7 @@ export function normalizeOptions(raw = {}) {
     layoutPresets,
     activeLayoutPresetId,
     tabGroupButtonsMode,
+    topbarPromptPlaceholderConfig: normalizeTopbarPromptPlaceholderConfig(raw.topbarPromptPlaceholderConfig),
     tabGroupButtonPlacement: normalizeTabGroupButtonPlacement(raw.tabGroupButtonPlacement, tabGroupButtonsMode),
     tabGroupButtonOrder: normalizeTabGroupButtonOrder(raw.tabGroupButtonOrder),
     tooltipDisabledIds: normalizeTooltipDisabledIds(raw.tooltipDisabledIds),

@@ -4099,6 +4099,73 @@ body.settings-tab-group-button-dragging iframe {
   grid-template-columns: 52px minmax(170px, .92fr) 104px minmax(260px, 1.45fr) minmax(112px, auto);
 }
 
+.topbar-settings-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.topbar-placeholder-editor {
+  display: grid;
+  gap: 10px;
+}
+
+.topbar-placeholder-editor-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.topbar-placeholder-editor-footer .settings-actions {
+  justify-content: flex-start;
+  padding-top: 0;
+}
+
+.topbar-placeholder-counter {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.settings-inline-error {
+  color: var(--danger);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.topbar-placeholder-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.topbar-placeholder-interval-input {
+  max-width: 180px;
+}
+
+.topbar-placeholder-list .settings-list-header,
+.topbar-placeholder-row {
+  min-width: 620px;
+  grid-template-columns: 52px minmax(280px, 1fr) minmax(112px, auto);
+}
+
+.topbar-placeholder-row-text {
+  overflow: hidden;
+  color: var(--text);
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .topbar-placeholder-controls {
+    grid-template-columns: 1fr;
+  }
+}
+
 .custom-config-list .settings-list-header span {
   padding: 0 9px;
 }

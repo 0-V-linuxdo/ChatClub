@@ -1,7 +1,7 @@
 import { DEFAULT_TOPBAR_LAYOUT } from "./topbar.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-07-09｜14:34:53」";
+export const APP_VERSION = "「2026-07-09｜14:52:38」";
 export const BASELINE_MOD_VERSION = "2.4.0.14";
 export const HOMEPAGE_URL = "https://chatclub.local/";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
@@ -246,6 +246,11 @@ export const SUMMARY_PANEL_PROMPT_DEFAULT = `Summarize the selected chat context
 
 When the user asks a follow-up question, answer from the provided context first and clearly say when the context is insufficient.`;
 
+export const TOPBAR_PROMPT_PLACEHOLDER_MAX_LEN = 100;
+export const TOPBAR_PROMPT_PLACEHOLDER_MAX_COUNT = 30;
+export const TOPBAR_PROMPT_PLACEHOLDER_INTERVAL_MIN_SEC = 1;
+export const TOPBAR_PROMPT_PLACEHOLDER_INTERVAL_MAX_SEC = 3600;
+
 export const DEFAULT_OPTIONS = {
   scriptConfigSchemaVersion: SCRIPT_CONFIG_SCHEMA_VERSION,
   layoutPresets: [
@@ -264,6 +269,16 @@ export const DEFAULT_OPTIONS = {
   frameLoadingOverlayOpacity: 82,
   pocketCardSize: DEFAULT_POCKET_CARD_SIZE,
   tooltipDisabledIds: [],
+  topbarPromptPlaceholderConfig: {
+    items: [],
+    mode: "refresh",
+    order: "sequential",
+    intervalSec: 10,
+    state: {
+      index: -1,
+      lastRandom: -1
+    }
+  },
   tabGroupButtonsMode: "pinned",
   tabGroupButtonPlacement: DEFAULT_TAB_GROUP_BUTTON_PLACEMENT,
   tabGroupButtonOrder: DEFAULT_TAB_GROUP_BUTTON_ORDER,
