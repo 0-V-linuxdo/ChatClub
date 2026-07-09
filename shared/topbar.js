@@ -1,9 +1,7 @@
 export const TOPBAR_BUILTIN_ITEMS = [
   "brand",
   "settings",
-  "promptLibrary",
   "composer",
-  "send",
   "newChat",
   "deleteThread",
   "summary",
@@ -49,9 +47,7 @@ export const TOPBAR_REQUIRED_ITEMS = ["settings", "composer", "settingsJumpMenu"
 export const DEFAULT_TOPBAR_LAYOUT = [
   { type: "item", id: "brand" },
   { type: "item", id: "settings" },
-  { type: "item", id: "promptLibrary" },
   { type: "item", id: "composer" },
-  { type: "item", id: "send" },
   { type: "item", id: "newChat" },
   { type: "item", id: "deleteThread" },
   { type: "item", id: "summary" },
@@ -76,9 +72,7 @@ export const DEFAULT_TOPBAR_LAYOUT = [
 export const TOPBAR_ITEM_META = {
   brand: { labelKey: "topbar.item.brand", icon: "palette" },
   settings: { labelKey: "topbar.settings", icon: "settings" },
-  promptLibrary: { labelKey: "topbar.promptLibrary", icon: "library" },
   composer: { labelKey: "topbar.item.composer", icon: "edit" },
-  send: { labelKey: "topbar.send", icon: "send" },
   newChat: { labelKey: "topbar.newChat", icon: "edit" },
   deleteThread: { labelKey: "topbar.deleteThread", icon: "trash" },
   summary: { labelKey: "topbar.summary", icon: "summary" },

@@ -63,6 +63,7 @@ export function createSettingsController(ctx) {
     state,
     svgIcon,
     syncPromptInputNode,
+    setPromptImages = () => [],
     notifyConfigReload,
     render,
     syncTopbar = () => {},
@@ -3207,13 +3208,27 @@ export function createSettingsController(ctx) {
   }
 
   function insertPromptHistoryItem(item) {
-    if (!item?.text) return;
-    insertTextIntoPrompt(item.text);
+    if (!item?.text && !item?.images?.length) return;
+    state.promptText = String(item.text || "");
+    state.promptSelection = {
+      start: state.promptText.length,
+      end: state.promptText.length,
+      direction: "none"
+    };
+    state.promptHistoryCursor = -1;
+    state.promptHistoryDraft = "";
+    setPromptImages(item.images || [], { focus: false });
+    const inputNode = syncPromptInputNode({ focus: true });
+    try { inputNode?.setSelectionRange(state.promptText.length, state.promptText.length, "none"); } catch {}
     toast(t("toast.promptHistoryInserted"), "success");
   }
 
   async function deletePromptHistoryItem(item, redraw) {
-    const label = promptHistoryPreview(item?.text, 80) || t("promptHistory.thisPrompt");
+    const images = Array.isArray(item?.images) ? item.images : [];
+    const imageLabel = images.length
+      ? t("promptHistory.imageCount", { count: images.length, plural: images.length === 1 ? "" : "s" })
+      : "";
+    const label = promptHistoryPreview(item?.text, 80) || imageLabel || t("promptHistory.thisPrompt");
     if (!window.confirm(t("promptHistory.deleteConfirm", { prompt: label }))) return;
     await savePromptHistoryList(
       promptHistoryItems().filter((entry) => entry.id !== item.id),
@@ -3230,9 +3245,23 @@ export function createSettingsController(ctx) {
 
   function promptHistoryRow(item, redraw) {
     const preview = promptHistoryPreview(item.text, 420);
+    const images = Array.isArray(item.images) ? item.images : [];
+    const imageCountLabel = images.length
+      ? t("promptHistory.imageCount", { count: images.length, plural: images.length === 1 ? "" : "s" })
+      : "";
     return el("div", { class: "ui-list-row settings-list-row prompt-history-row" },
       el("time", { class: "prompt-history-time", datetime: item.createdAt || "" }, promptHistoryDateLabel(item.createdAt)),
-      el("span", { class: "prompt-history-preview", title: item.text || "" }, preview || t("promptHistory.emptyPrompt")),
+      el("span", { class: "prompt-history-preview", title: item.text || imageCountLabel || "" },
+        preview || (images.length ? imageCountLabel : t("promptHistory.emptyPrompt")),
+        images.length ? el("span", { class: "prompt-history-images" },
+          images.slice(0, 4).map((image) => el("img", {
+            src: image.dataUrl,
+            alt: image.name || "",
+            title: image.name || imageCountLabel
+          })),
+          images.length > 4 ? el("span", { class: "prompt-history-image-more" }, `+${images.length - 4}`) : null
+        ) : null
+      ),
       el("div", { class: "settings-row-action-group" },
         settingsIconAction(t("promptHistory.insert"), "insert", () => insertPromptHistoryItem(item)),
         settingsIconAction(t("common.delete"), "trash", () => deletePromptHistoryItem(item, redraw), "danger")

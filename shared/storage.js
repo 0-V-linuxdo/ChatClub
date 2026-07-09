@@ -696,18 +696,94 @@ export function normalizePromptLibrary(raw = []) {
   })).filter((item) => item.title && item.prompt);
 }
 
+function inferPromptImageMimeFromDataUrl(dataUrl) {
+  const match = String(dataUrl || "").match(/^data:([^;,]+)[;,]/i);
+  return match ? match[1].toLowerCase() : "";
+}
+
+function inferPromptImageExtension(mime) {
+  const value = String(mime || "").trim().toLowerCase();
+  if (value === "image/jpeg") return "jpg";
+  if (value === "image/png") return "png";
+  if (value === "image/webp") return "webp";
+  if (value === "image/gif") return "gif";
+  if (value === "image/bmp") return "bmp";
+  if (value === "image/svg+xml") return "svg";
+  if (value === "image/avif") return "avif";
+  const tail = value.split("/").pop();
+  return tail ? tail.replace(/[^a-z0-9]+/gi, "") || "png" : "png";
+}
+
+function normalizePromptHistoryImage(entry, index = 0) {
+  if (!plainObject(entry)) return null;
+  const dataUrl = text(entry.dataUrl || entry.dataURL);
+  if (!/^data:image\//i.test(dataUrl)) return null;
+  const type = text(entry.type).toLowerCase() || inferPromptImageMimeFromDataUrl(dataUrl) || "image/png";
+  const ext = inferPromptImageExtension(type);
+  const lastModifiedRaw = Number(entry.lastModified);
+  return {
+    id: text(entry.id) || createId("prompt-image"),
+    name: text(entry.name) || `prompt-image-${index + 1}.${ext}`,
+    type,
+    size: Math.max(0, Math.round(Number(entry.size) || 0)),
+    lastModified: Number.isFinite(lastModifiedRaw) ? lastModifiedRaw : Date.now(),
+    dataUrl
+  };
+}
+
+export function normalizePromptHistoryImages(raw = []) {
+  const usedNames = new Set();
+  return (Array.isArray(raw) ? raw : [])
+    .map((entry, index) => normalizePromptHistoryImage(entry, index))
+    .filter(Boolean)
+    .map((entry, index) => {
+      let name = entry.name.replace(/[\\/]+/g, "_");
+      const fallback = `prompt-image-${index + 1}.${inferPromptImageExtension(entry.type)}`;
+      if (!name) name = fallback;
+      const lower = name.toLowerCase();
+      if (!usedNames.has(lower)) {
+        usedNames.add(lower);
+        return { ...entry, name };
+      }
+      const dot = name.lastIndexOf(".");
+      const stem = dot > 0 ? name.slice(0, dot) : name;
+      const ext = dot > 0 ? name.slice(dot) : "";
+      let counter = 2;
+      while (counter < 10000) {
+        const candidate = `${stem} (${counter})${ext}`;
+        const key = candidate.toLowerCase();
+        if (!usedNames.has(key)) {
+          usedNames.add(key);
+          return { ...entry, name: candidate };
+        }
+        counter += 1;
+      }
+      return { ...entry, name: fallback };
+    });
+}
+
+function promptHistoryKey(item = {}) {
+  const imageKey = (item.images || [])
+    .map((image) => [image.name, image.type, image.size, image.dataUrl.length].join(":"))
+    .join("|");
+  return `${item.text || ""}\n${imageKey}`;
+}
+
 export function normalizePromptSendHistory(raw = []) {
   const seen = new Set();
   return (Array.isArray(raw) ? raw : []).filter(Boolean).map((item) => {
     const value = typeof item === "string" ? item : item?.text || item?.prompt || item?.content;
+    const images = normalizePromptHistoryImages(typeof item === "string" ? [] : item?.images);
     return {
       id: text(item?.id) || createId("prompt-history"),
       text: text(value),
+      images,
       createdAt: text(item?.createdAt) || new Date().toISOString()
     };
   }).filter((item) => {
-    if (!item.text || seen.has(item.text)) return false;
-    seen.add(item.text);
+    const key = promptHistoryKey(item);
+    if ((!item.text && !item.images.length) || seen.has(key)) return false;
+    seen.add(key);
     return true;
   }).slice(0, 100);
 }
@@ -888,9 +964,16 @@ export async function loadPromptSendHistory() {
 }
 
 export async function savePromptSendHistory(promptSendHistory) {
-  const normalized = normalizePromptSendHistory(promptSendHistory);
-  await storageSet(STORAGE_KEYS.promptSendHistory, normalized);
-  return normalized;
+  let normalized = normalizePromptSendHistory(promptSendHistory);
+  while (true) {
+    try {
+      await storageSet(STORAGE_KEYS.promptSendHistory, normalized);
+      return normalized;
+    } catch (error) {
+      if (!isStorageQuotaError(error) || normalized.length <= 1) throw error;
+      normalized = normalized.slice(0, -1);
+    }
+  }
 }
 
 export async function loadPocketHistory() {
@@ -968,7 +1051,9 @@ function validImportedPromptLibraryItem(item) {
 
 function validImportedPromptSendHistoryItem(item) {
   if (typeof item === "string") return !!text(item);
-  return plainObject(item) && !!text(item.text || item.prompt || item.content);
+  if (!plainObject(item)) return false;
+  if (text(item.text || item.prompt || item.content)) return true;
+  return normalizePromptHistoryImages(item.images).length > 0;
 }
 
 function validImportedPocketHistoryItem(item) {

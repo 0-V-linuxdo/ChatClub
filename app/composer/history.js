@@ -40,43 +40,56 @@ export function promptHistoryNavigate({
   history = [],
   cursor = PROMPT_HISTORY_LIVE_CURSOR,
   draft = "",
+  currentImages = [],
   currentText = "",
   direction = "up"
 } = {}) {
   const entries = (Array.isArray(history) ? history : [])
-    .map((item) => String(item?.text || item || ""))
-    .filter(Boolean);
+    .map((item) => {
+      if (typeof item === "string") return { text: item, images: [] };
+      return {
+        text: String(item?.text || item?.prompt || item?.content || ""),
+        images: Array.isArray(item?.images) ? item.images : []
+      };
+    })
+    .filter((item) => item.text || item.images.length);
   if (!entries.length) {
-    return { handled: false, cursor, draft, text: currentText };
+    return { handled: false, cursor, draft, text: currentText, images: currentImages };
   }
 
   if (direction === "up") {
-    const nextDraft = cursor === PROMPT_HISTORY_LIVE_CURSOR ? String(currentText || "") : String(draft || "");
+    const nextDraft = cursor === PROMPT_HISTORY_LIVE_CURSOR
+      ? { text: String(currentText || ""), images: Array.isArray(currentImages) ? currentImages : [] }
+      : (draft && typeof draft === "object" ? draft : { text: String(draft || ""), images: [] });
     const nextCursor = Math.min(cursor + 1, entries.length - 1);
     return {
       handled: nextCursor !== cursor || cursor === PROMPT_HISTORY_LIVE_CURSOR,
       cursor: nextCursor,
       draft: nextDraft,
-      text: entries[nextCursor] || ""
+      text: entries[nextCursor]?.text || "",
+      images: entries[nextCursor]?.images || []
     };
   }
 
   if (cursor === PROMPT_HISTORY_LIVE_CURSOR) {
-    return { handled: false, cursor, draft, text: currentText };
+    return { handled: false, cursor, draft, text: currentText, images: currentImages };
   }
   if (cursor <= 0) {
+    const liveDraft = draft && typeof draft === "object" ? draft : { text: String(draft || ""), images: [] };
     return {
       handled: true,
       cursor: PROMPT_HISTORY_LIVE_CURSOR,
       draft: "",
-      text: String(draft || "")
+      text: String(liveDraft.text || ""),
+      images: Array.isArray(liveDraft.images) ? liveDraft.images : []
     };
   }
   const nextCursor = cursor - 1;
   return {
     handled: true,
     cursor: nextCursor,
-    draft: String(draft || ""),
-    text: entries[nextCursor] || ""
+    draft,
+    text: entries[nextCursor]?.text || "",
+    images: entries[nextCursor]?.images || []
   };
 }

@@ -2,9 +2,10 @@
   const SOURCE = "chatclub";
   const COPY_SOURCE = "chatclub-native-copy:2026.07.08.13";
   const GEMINI_MODEL_PICKER_SOURCE = "chatclub-gemini-model-picker";
-  const NOTION_SEND_TEXT_SOURCE = "chatclub-notion-send-text";
-  const CONTENT_BRIDGE_VERSION = "2026.07.09.1";
-  const SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.07.1";
+  const NOTION_SEND_TEXT_SOURCE = "chatclub-notion-send-text:2026.07.09.10";
+  const NOTION_SEND_PROMPT_SOURCE = "chatclub-notion-send-prompt:2026.07.09.10";
+  const CONTENT_BRIDGE_VERSION = "2026.07.09.10";
+  const SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.09.10";
   const DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.04.1";
   const MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.08.12";
   const SUMMARY_POST_MESSAGE_SOURCE = "chatclub:summary:2026.07.08.13";
@@ -1167,22 +1168,373 @@
     target.dispatchEvent(new Event("input", { bubbles: true }));
   }
 
+  function submitButtonLabel(button) {
+    return normalize([
+      button?.getAttribute?.("aria-label"),
+      button?.getAttribute?.("title"),
+      button?.getAttribute?.("data-testid"),
+      button?.getAttribute?.("data-test-id"),
+      button?.getAttribute?.("type"),
+      button?.innerText,
+      button?.textContent
+    ].filter(Boolean).join(" "));
+  }
+
+  function submitButtonExcluded(button) {
+    const label = submitButtonLabel(button).toLowerCase();
+    return /\b(close|cancel|delete|remove|clear|dismiss|stop|attach|upload|file|image|photo)\b|关闭|取消|删除|移除|清空|停止|上传/.test(label);
+  }
+
+  function submitButtonScore(button, inputRect = null, explicit = false) {
+    const label = submitButtonLabel(button).toLowerCase();
+    let score = explicit ? 500 : 0;
+    if (button?.matches?.("button[data-testid='send-button']")) score += 900;
+    if (/submit\s+ai\s+message/.test(label)) score += 760;
+    if (/^(send|发送|提交)$/.test(label)) score += 700;
+    if (button?.matches?.("button[type='submit']")) score += 420;
+    if (/\b(send|submit)\b|发送|提交/.test(label)) score += 320;
+    if (inputRect && button?.getBoundingClientRect) {
+      const rect = button.getBoundingClientRect();
+      const yDistance = Math.abs((rect.top + rect.bottom) / 2 - (inputRect.top + inputRect.bottom) / 2);
+      const rightDelta = rect.left - inputRect.left;
+      score += Math.max(0, 240 - yDistance);
+      if (rightDelta > 0) score += Math.min(180, rightDelta / 4);
+      if (rect.bottom >= inputRect.top - 80 && rect.top <= inputRect.bottom + 120) score += 180;
+    }
+    return score;
+  }
+
   function submitCandidates(selector, input) {
-    const buttons = [
-      ...qsa(selector).filter(visible),
-      ...qsa("button,[role='button']").filter(visible).filter((button) => /send|submit|发送|提交/i.test([
-        button.getAttribute("aria-label"),
-        button.getAttribute("title"),
-        button.textContent
-      ].filter(Boolean).join(" ")))
-    ];
-    if (!input) return buttons;
-    const inputRect = input.getBoundingClientRect();
-    return buttons.sort((a, b) => {
-      const ar = a.getBoundingClientRect();
-      const br = b.getBoundingClientRect();
-      return Math.abs(ar.top - inputRect.top) - Math.abs(br.top - inputRect.top);
-    });
+    const inputRect = input?.getBoundingClientRect?.() || null;
+    const explicit = qsa(selector).filter(visible);
+    const generic = qsa([
+      "button[data-testid='send-button']",
+      "button[data-testid*='send' i]",
+      "button[data-test-id*='send' i]",
+      "button[aria-label*='Send' i]",
+      "button[aria-label*='Submit' i]",
+      "button[aria-label*='发送' i]",
+      "button[aria-label*='提交' i]",
+      "button[title*='Send' i]",
+      "button[title*='Submit' i]",
+      "button[type='submit']",
+      "[role='button'][aria-label*='Send' i]",
+      "[role='button'][aria-label*='Submit' i]",
+      "[role='button'][data-testid*='send' i]",
+      "[role='button'][data-test-id*='send' i]"
+    ].join(",")).filter(visible);
+    const seen = new Set();
+    const candidates = [];
+    for (const entry of [...explicit.map((button) => [button, true]), ...generic.map((button) => [button, false])]) {
+      const [button, isExplicit] = entry;
+      if (!button || seen.has(button) || submitButtonExcluded(button)) continue;
+      const score = submitButtonScore(button, inputRect, isExplicit);
+      if (!isExplicit && score <= 0) continue;
+      seen.add(button);
+      candidates.push({ button, score });
+    }
+    return candidates
+      .sort((a, b) => b.score - a.score)
+      .map((item) => item.button);
+  }
+
+  function clickPromptSubmit(button) {
+    const rect = button?.getBoundingClientRect?.();
+    if (!button || !rect) return false;
+    const base = {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      view: window,
+      button: 0,
+      buttons: 1,
+      clientX: rect.left + rect.width / 2,
+      clientY: rect.top + rect.height / 2
+    };
+    try {
+      if (window.PointerEvent) {
+        button.dispatchEvent(new PointerEvent("pointerover", { ...base, pointerId: 1, pointerType: "mouse", isPrimary: true }));
+        button.dispatchEvent(new PointerEvent("pointermove", { ...base, pointerId: 1, pointerType: "mouse", isPrimary: true }));
+        button.dispatchEvent(new PointerEvent("pointerdown", { ...base, pointerId: 1, pointerType: "mouse", isPrimary: true }));
+        button.dispatchEvent(new PointerEvent("pointerup", { ...base, pointerId: 1, pointerType: "mouse", isPrimary: true, buttons: 0 }));
+      }
+    } catch {}
+    try {
+      for (const type of ["mouseover", "mousemove", "mousedown", "mouseup", "click"]) {
+        button.dispatchEvent(new MouseEvent(type, { ...base, buttons: type === "mouseup" || type === "click" ? 0 : 1 }));
+      }
+    } catch {}
+    try { button.click?.(); } catch {}
+    return true;
+  }
+
+  async function waitForPromptSubmitReady(input, selector = "", deadlineAt = 0, timeoutMs = 10000) {
+    const endAt = Math.min(
+      Date.now() + Math.max(1000, Number(timeoutMs) || 10000),
+      Number(deadlineAt) > Date.now() ? Number(deadlineAt) : Date.now() + Math.max(1000, Number(timeoutMs) || 10000)
+    );
+    let last = null;
+    while (Date.now() < endAt) {
+      last = submitCandidates(selector, input);
+      const ready = last.find((button) => !isDisabledElement(button));
+      if (ready) return ready;
+      await sleep(Math.min(140, Math.max(0, endAt - Date.now())));
+    }
+    last = submitCandidates(selector, input);
+    return last.find((button) => !isDisabledElement(button)) || null;
+  }
+
+  function inferImageExtension(mime) {
+    const value = String(mime || "").trim().toLowerCase();
+    if (value === "image/jpeg") return "jpg";
+    if (value === "image/png") return "png";
+    if (value === "image/webp") return "webp";
+    if (value === "image/gif") return "gif";
+    if (value === "image/bmp") return "bmp";
+    if (value === "image/svg+xml") return "svg";
+    if (value === "image/avif") return "avif";
+    const tail = value.split("/").pop();
+    return tail ? tail.replace(/[^a-z0-9]+/gi, "") || "png" : "png";
+  }
+
+  function inferMimeFromDataUrl(dataUrl) {
+    const match = String(dataUrl || "").match(/^data:([^;,]+)[;,]/i);
+    return match ? match[1].toLowerCase() : "";
+  }
+
+  function promptImageDataUrlToFile(entry = {}, index = 0) {
+    const dataUrl = String(entry.dataUrl || entry.dataURL || "").trim();
+    if (!/^data:image\//i.test(dataUrl)) return null;
+    const commaIndex = dataUrl.indexOf(",");
+    if (commaIndex < 0) return null;
+    const meta = dataUrl.slice(5, commaIndex);
+    const payload = dataUrl.slice(commaIndex + 1);
+    const type = String(entry.type || "").trim() || inferMimeFromDataUrl(dataUrl) || "image/png";
+    const name = String(entry.name || "").trim() || `prompt-image-${index + 1}.${inferImageExtension(type)}`;
+    const lastModifiedRaw = Number(entry.lastModified);
+    const lastModified = Number.isFinite(lastModifiedRaw) ? lastModifiedRaw : Date.now();
+    try {
+      let bytes;
+      if (/(?:^|;)base64(?:;|$)/i.test(meta)) {
+        const binary = atob(payload);
+        bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      } else {
+        bytes = new TextEncoder().encode(decodeURIComponent(payload));
+      }
+      return new File([bytes], name, { type, lastModified });
+    } catch {
+      return null;
+    }
+  }
+
+  function promptImageFilesFromPayload(images = []) {
+    return (Array.isArray(images) ? images : [])
+      .map((entry, index) => promptImageDataUrlToFile(entry, index))
+      .filter((file) => file && String(file.type || "").startsWith("image/"));
+  }
+
+  function createPromptDataTransfer({ text = "", files = [] } = {}) {
+    if (typeof DataTransfer !== "function") return null;
+    try {
+      const transfer = new DataTransfer();
+      for (const file of files || []) transfer.items.add(file);
+      if (text) {
+        try { transfer.setData("text/plain", String(text)); } catch {}
+      }
+      return transfer;
+    } catch {
+      return null;
+    }
+  }
+
+  function dispatchPromptTransferEvent(target, type, transfer) {
+    if (!target || type !== "paste") return false;
+    const init = { bubbles: true, cancelable: true, composed: true };
+    let event = null;
+    try {
+      if (typeof ClipboardEvent === "function") {
+        event = new ClipboardEvent("paste", { ...init, clipboardData: transfer });
+      }
+    } catch {}
+    if (!event) {
+      try { event = new Event(type, init); } catch { event = null; }
+    }
+    if (!event) return false;
+    if (transfer) {
+      try { Object.defineProperty(event, "clipboardData", { value: transfer, configurable: true }); } catch {}
+      try { Object.defineProperty(event, "dataTransfer", { value: transfer, configurable: true }); } catch {}
+    }
+    try {
+      target.dispatchEvent(event);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function promptComposerScope(input) {
+    if (!input) return document.body || document.documentElement || document;
+    return input.closest?.("form")
+      || input.closest?.("[data-testid*='composer' i],[data-test-id*='composer' i],[class*='composer' i],[class*='input-area' i],[class*='InputArea']")
+      || input.parentElement?.parentElement
+      || input.parentElement
+      || document.body
+      || document.documentElement
+      || document;
+  }
+
+  function promptAttachmentSnapshot(input) {
+    const scope = promptComposerScope(input);
+    const selectors = [
+      "img[src^='blob:']",
+      "img[src^='data:image/']",
+      "[data-testid*='attachment' i]",
+      "[data-testid*='file' i]",
+      "[data-test-id*='attachment' i]",
+      "[data-test-id*='file' i]",
+      "[aria-label*='remove file' i]",
+      "[aria-label*='remove image' i]",
+      "[aria-label*='delete file' i]",
+      "[aria-label*='delete image' i]",
+      "[class*='attachment' i]",
+      "[class*='file-preview' i]",
+      "[class*='image-preview' i]",
+      "mat-chip"
+    ].join(",");
+    let nodes = [];
+    try { nodes = Array.from(scope.querySelectorAll(selectors)); } catch {}
+    nodes = nodes.filter((node) => node && node !== input && visible(node));
+    const busySelectors = [
+      "[aria-busy='true']",
+      "[role='progressbar']",
+      "progress",
+      "mat-progress-spinner",
+      "mat-progress-bar",
+      "[class*='uploading' i]",
+      "[class*='loading' i]"
+    ].join(",");
+    let busy = false;
+    try {
+      busy = Array.from(scope.querySelectorAll(busySelectors)).some((node) => visible(node));
+    } catch {}
+    return {
+      count: nodes.length,
+      busy,
+      key: nodes.map((node) => {
+        const rect = node.getBoundingClientRect?.();
+        return [
+          node.tagName,
+          node.getAttribute?.("src") || "",
+          node.getAttribute?.("aria-label") || "",
+          rect ? `${Math.round(rect.left)}:${Math.round(rect.top)}:${Math.round(rect.width)}:${Math.round(rect.height)}` : ""
+        ].join("|");
+      }).join("\n")
+    };
+  }
+
+  function sendDeadlineAt(data = {}, fallbackMs = 10000) {
+    const value = Number(data?.deadlineAt);
+    return Number.isFinite(value) && value > Date.now() ? value : Date.now() + Math.max(1000, Number(fallbackMs) || 10000);
+  }
+
+  function remainingDeadlineMs(deadlineAt, fallbackMs = 1000) {
+    const value = Number(deadlineAt);
+    if (!Number.isFinite(value) || value <= 0) return Math.max(0, Number(fallbackMs) || 0);
+    return Math.max(0, value - Date.now());
+  }
+
+  function deadlineExpired(deadlineAt) {
+    return remainingDeadlineMs(deadlineAt, 1) <= 0;
+  }
+
+  async function sleepUntilDeadline(ms, deadlineAt) {
+    const delay = Math.min(Math.max(0, Number(ms) || 0), remainingDeadlineMs(deadlineAt, ms));
+    if (delay <= 0) return false;
+    await sleep(delay);
+    return !deadlineExpired(deadlineAt);
+  }
+
+  async function waitForPromptImagesReady(input, expectedCount, timeoutMs = 45000, deadlineAt = 0) {
+    const expected = Math.max(1, Number(expectedCount) || 1);
+    const start = Date.now();
+    let stableSince = 0;
+    let lastKey = "";
+    let last = promptAttachmentSnapshot(input);
+    while (Date.now() - start < timeoutMs && !deadlineExpired(deadlineAt)) {
+      last = promptAttachmentSnapshot(input);
+      const enough = last.count >= expected;
+      const same = last.key === lastKey;
+      if (enough && !last.busy) {
+        if (!same) stableSince = Date.now();
+        if (Date.now() - stableSince >= 550) return { ok: true, snapshot: last };
+      } else {
+        stableSince = 0;
+      }
+      lastKey = last.key;
+      if (!await sleepUntilDeadline(180, deadlineAt)) break;
+    }
+    return { ok: false, reason: deadlineExpired(deadlineAt) ? "Send deadline exceeded" : "timeout", snapshot: last };
+  }
+
+  function clearPromptAttachments(input) {
+    const scope = promptComposerScope(input);
+    const selectors = [
+      "button[aria-label*='remove file' i]",
+      "button[aria-label*='remove image' i]",
+      "button[aria-label*='delete file' i]",
+      "button[aria-label*='delete image' i]",
+      "button[title*='remove' i]",
+      "button[title*='delete' i]"
+    ].join(",");
+    let clicked = 0;
+    try {
+      for (const button of Array.from(scope.querySelectorAll(selectors)).filter(visible).slice(0, 20)) {
+        try { button.click?.(); clicked += 1; } catch {}
+      }
+    } catch {}
+    return clicked;
+  }
+
+  async function attachPromptImageOnce(file, input) {
+    input?.focus?.();
+    const transfer = createPromptDataTransfer({ files: [file] });
+    if (!transfer) return { ok: false, reason: "DataTransfer unavailable" };
+    const target = input || document.activeElement;
+    const fired = dispatchPromptTransferEvent(target, "paste", transfer);
+    return fired ? { ok: true } : { ok: false, reason: "Paste image insertion was not accepted" };
+  }
+
+  function promptImageSendTimeoutMs(data = {}, fallbackMs = 65000) {
+    const hasImages = Array.isArray(data?.images) && data.images.length > 0;
+    if (!hasImages) return fallbackMs;
+    return 60000;
+  }
+
+  async function attachPromptImagesWithRetries(input, files = [], retryCount = 3, inputSelector = "", deadlineAt = 0) {
+    const list = Array.from(files || []).filter((file) => file && String(file.type || "").startsWith("image/"));
+    if (!list.length) return { ok: true };
+    const attempts = Math.max(0, Number(retryCount) || 0) + 1;
+    let lastReason = "";
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      if (deadlineExpired(deadlineAt)) return { ok: false, reason: "Send deadline exceeded" };
+      if (attempt > 1) {
+        clearPromptAttachments(input);
+        if (!await sleepUntilDeadline(450, deadlineAt)) return { ok: false, reason: "Send deadline exceeded" };
+        input = inputCandidates(inputSelector) || input;
+      }
+      const baseline = promptAttachmentSnapshot(input);
+      for (const file of list) {
+        if (deadlineExpired(deadlineAt)) return { ok: false, reason: "Send deadline exceeded" };
+        const result = await attachPromptImageOnce(file, input);
+        if (!result.ok) lastReason = result.reason || "Image insertion failed";
+        if (!await sleepUntilDeadline(160, deadlineAt)) return { ok: false, reason: "Send deadline exceeded" };
+      }
+      const ready = await waitForPromptImagesReady(input, baseline.count + list.length, Math.min(45000, remainingDeadlineMs(deadlineAt, 45000)), deadlineAt);
+      if (ready.ok) return { ok: true, attempts: attempt, snapshot: ready.snapshot };
+      lastReason = ready.reason || "Image upload did not become ready";
+    }
+    return { ok: false, reason: lastReason || "Image upload did not become ready" };
   }
 
   function isNotionSendTarget(data = {}) {
@@ -1197,13 +1549,56 @@
       || host.endsWith(".notion.so");
   }
 
+  function requestNotionSendPrompt(data = {}, timeoutMs = promptImageSendTimeoutMs(data, 65000)) {
+    return new Promise((resolve) => {
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const deadlineAt = sendDeadlineAt(data, timeoutMs);
+      const timer = setTimeout(() => {
+        window.removeEventListener("message", onMessage, true);
+        resolve({ ok: false, sent: false, method: "notion-prompt-bridge", reason: "Notion AI prompt bridge timed out" });
+      }, Math.max(1000, remainingDeadlineMs(deadlineAt, timeoutMs)));
+      function finish(result) {
+        clearTimeout(timer);
+        window.removeEventListener("message", onMessage, true);
+        resolve(result && typeof result === "object" ? result : { ok: false, sent: false, method: "notion-prompt-bridge" });
+      }
+      function onMessage(event) {
+        const message = event.data;
+        if (message?.source !== NOTION_SEND_PROMPT_SOURCE || message.type !== "response" || message.id !== id) return;
+        finish(message.data || {});
+      }
+      window.addEventListener("message", onMessage, true);
+      try {
+        window.dispatchEvent(new CustomEvent("chatclub:notion-send-prompt:2026.07.09.10", {
+          detail: {
+            id,
+            sendId: String(data?.sendId || ""),
+            deadlineAt,
+            text: String(data?.text || ""),
+            images: Array.isArray(data?.images) ? data.images : [],
+            imageRetryCount: Math.max(0, Number(data?.imageRetryCount) || 0),
+            sendKeyMode: data?.sendKeyMode || "enter"
+          }
+        }));
+      } catch (error) {
+        finish({
+          ok: false,
+          sent: false,
+          method: "notion-prompt-bridge",
+          reason: error?.message || String(error || "Notion AI prompt send failed")
+        });
+      }
+    });
+  }
+
   function requestNotionSendText(data = {}, timeoutMs = 9000) {
     return new Promise((resolve) => {
       const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const deadlineAt = sendDeadlineAt(data, timeoutMs);
       const timer = setTimeout(() => {
         window.removeEventListener("message", onMessage, true);
         resolve({ ok: false, sent: false, method: "notion-bridge", reason: "Notion AI send bridge timed out" });
-      }, timeoutMs);
+      }, Math.max(1000, remainingDeadlineMs(deadlineAt, timeoutMs)));
       function finish(result) {
         clearTimeout(timer);
         window.removeEventListener("message", onMessage, true);
@@ -1216,9 +1611,11 @@
       }
       window.addEventListener("message", onMessage, true);
       try {
-        window.dispatchEvent(new CustomEvent("chatclub:notion-send-text", {
+        window.dispatchEvent(new CustomEvent("chatclub:notion-send-text:2026.07.09.10", {
           detail: {
             id,
+            sendId: String(data?.sendId || ""),
+            deadlineAt,
             text: String(data?.text || ""),
             sendKeyMode: data?.sendKeyMode || "enter"
           }
@@ -1235,7 +1632,8 @@
   }
 
   async function sendNotionText(data = {}) {
-    const result = await requestNotionSendText(data);
+    const hasImages = Array.isArray(data?.images) && data.images.length > 0;
+    const result = hasImages ? await requestNotionSendPrompt(data) : await requestNotionSendText(data);
     if (result?.ok && result?.sent) {
       return {
         sent: true,
@@ -1251,17 +1649,64 @@
     };
   }
 
+  const sendTextRequestCache = new Map();
+  function sendTextRequestKey(data = {}) {
+    return String(data?.sendId || "").trim();
+  }
+
+  function forgetSendTextRequest(key, record, delayMs) {
+    setTimeout(() => {
+      if (sendTextRequestCache.get(key) === record) sendTextRequestCache.delete(key);
+    }, delayMs);
+  }
+
+  async function runSendTextOnce(data, runner) {
+    const key = sendTextRequestKey(data);
+    if (!key) return runner();
+    const existing = sendTextRequestCache.get(key);
+    if (existing) return existing.promise;
+    const record = { promise: null };
+    record.promise = Promise.resolve().then(runner).then((result) => {
+      record.promise = Promise.resolve(result);
+      forgetSendTextRequest(key, record, 120000);
+      return result;
+    }, (error) => {
+      forgetSendTextRequest(key, record, 30000);
+      throw error;
+    });
+    sendTextRequestCache.set(key, record);
+    return record.promise;
+  }
+
   async function sendText(data) {
+    return runSendTextOnce(data, () => sendTextUncached(data));
+  }
+
+  async function sendTextUncached(data) {
     if (isNotionSendTarget(data)) return sendNotionText(data);
+    const deadlineAt = sendDeadlineAt(data, Array.isArray(data?.images) && data.images.length ? 60000 : 10000);
+    if (deadlineExpired(deadlineAt)) throw new Error("Send deadline exceeded");
     const input = inputCandidates(data?.inputSelector);
     if (!input) throw new Error("Input element not found");
-    await setInputValue(input, data.text || "");
-    await sleep(80);
-    const submit = submitCandidates(data?.sendButtonSelector, input)[0];
+    const files = promptImageFilesFromPayload(data?.images);
+    if (Array.isArray(data?.images) && data.images.length && !files.length) {
+      throw new Error("Image payload could not be restored");
+    }
+    if (files.length) {
+      const attached = await attachPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt);
+      if (!attached.ok) throw new Error(attached.reason || "Image insertion failed");
+    }
+    if (deadlineExpired(deadlineAt)) throw new Error("Send deadline exceeded");
+    const textValue = String(data.text || "");
+    if (textValue.trim()) await setInputValue(input, textValue);
+    await sleepUntilDeadline(140, deadlineAt);
+    const submit = await waitForPromptSubmitReady(input, data?.sendButtonSelector, deadlineAt, files.length ? 12000 : 8000);
     if (submit) {
-      submit.click?.();
+      clickPromptSubmit(submit);
       return { sent: true, method: "button", verified: false };
     }
+    if (files.length) throw new Error("Submit button stayed disabled");
+    if (deadlineExpired(deadlineAt)) throw new Error("Send deadline exceeded");
     const keyInit = { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true };
     input.dispatchEvent(new KeyboardEvent("keydown", keyInit));
     input.dispatchEvent(new KeyboardEvent("keyup", keyInit));
@@ -1278,6 +1723,8 @@
     if (el.disabled || el.hasAttribute?.("disabled") || el.hasAttribute?.("data-disabled")) return true;
     const ariaDisabled = String(el.getAttribute?.("aria-disabled") || "").trim().toLowerCase();
     if (ariaDisabled === "true") return true;
+    const dataState = String(el.getAttribute?.("data-state") || "").trim().toLowerCase();
+    if (dataState === "disabled") return true;
     try {
       if (typeof el.matches === "function" && el.matches(":disabled")) return true;
     } catch {}

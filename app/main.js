@@ -77,6 +77,8 @@ const appRoot = document.getElementById("app");
 const SVG_NS = "http://www.w3.org/2000/svg";
 const FAVICON_CACHE_KEY = "chatclub.faviconCache.v4";
 const FAVICON_CACHE_MAX_ENTRIES = 240;
+const PROMPT_IMAGE_RETRY_COUNT = 3;
+const PROMPT_IMAGE_SEND_DEADLINE_MS = 60000;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
 const faviconDiscoveryPromises = new Map();
 let faviconCachePersistTimer = 0;
@@ -147,6 +149,15 @@ const ICONS = {
     ["path", { d: "M14 2v6h6" }],
     ["path", { d: "M12 12v6" }],
     ["path", { d: "m9 15 3-3 3 3" }]
+  ],
+  image: [
+    ["rect", { x: "3", y: "5", width: "18", height: "14", rx: "2" }],
+    ["circle", { cx: "8.5", cy: "10", r: "1.5" }],
+    ["path", { d: "m21 15-4.3-4.3a1 1 0 0 0-1.4 0L9 17" }],
+    ["path", { d: "m3 15 4-4a1 1 0 0 1 1.4 0L13 15.6" }]
+  ],
+  paperclip: [
+    ["path", { d: "m16 6-8.4 8.4a2 2 0 0 0 2.8 2.8l8.4-8.4a4 4 0 0 0-5.7-5.7l-8.3 8.5a6 6 0 0 0 8.5 8.5l8.3-8.5" }]
   ],
   grip: [
     ["circle", { cx: "9", cy: "5", r: "1" }],
@@ -395,6 +406,8 @@ const state = {
   temporaryLayoutPreset: null,
   fullscreenGroupId: null,
   promptText: "",
+  promptImages: [],
+  promptSendInFlight: false,
   promptSelection: { start: 0, end: 0, direction: "none" },
   summaryOpen: false,
   summaryMaximized: false,
@@ -579,6 +592,7 @@ const settingsController = createSettingsController({
   state,
   svgIcon,
   syncPromptInputNode,
+  setPromptImages,
   notifyConfigReload,
   render,
   syncTopbar,
@@ -964,11 +978,382 @@ function resetPromptHistoryNavigation() {
   state.promptHistoryDraft = "";
 }
 
-async function recordPromptSendHistory(text) {
+function inferPromptImageExtension(mime) {
+  const token = String(mime || "").trim().toLowerCase();
+  if (token === "image/jpeg") return "jpg";
+  if (token === "image/png") return "png";
+  if (token === "image/webp") return "webp";
+  if (token === "image/gif") return "gif";
+  if (token === "image/bmp") return "bmp";
+  if (token === "image/svg+xml") return "svg";
+  if (token === "image/avif") return "avif";
+  const tail = token.split("/").pop();
+  return tail ? tail.replace(/[^a-z0-9]+/gi, "") || "png" : "png";
+}
+
+function splitPromptImageFileName(name) {
+  const raw = String(name || "").trim().replace(/[\\/]+/g, "_");
+  if (!raw) return { stem: "", ext: "" };
+  const dotIndex = raw.lastIndexOf(".");
+  if (dotIndex <= 0) return { stem: raw, ext: "" };
+  return { stem: raw.slice(0, dotIndex) || raw, ext: raw.slice(dotIndex) };
+}
+
+function defaultPromptImageName(index = 0, type = "") {
+  const ext = inferPromptImageExtension(type);
+  return `prompt-image-${Math.max(0, Number(index) || 0) + 1}${ext ? `.${ext}` : ""}`;
+}
+
+function claimPromptImageName(rawName, usedNames, index = 0, type = "") {
+  const registry = usedNames instanceof Set ? usedNames : new Set();
+  const fallbackName = defaultPromptImageName(index, type);
+  const preferred = String(rawName || "").trim().replace(/[\\/]+/g, "_") || fallbackName;
+  const preferredKey = preferred.toLowerCase();
+  if (!registry.has(preferredKey)) {
+    registry.add(preferredKey);
+    return preferred;
+  }
+  const preferredParts = splitPromptImageFileName(preferred);
+  const fallbackParts = splitPromptImageFileName(fallbackName);
+  const stem = preferredParts.stem || fallbackParts.stem || "prompt-image";
+  const ext = preferredParts.ext || fallbackParts.ext;
+  let counter = 2;
+  while (counter < 10000) {
+    const candidate = `${stem} (${counter})${ext}`;
+    const key = candidate.toLowerCase();
+    if (!registry.has(key)) {
+      registry.add(key);
+      return candidate;
+    }
+    counter += 1;
+  }
+  return fallbackName;
+}
+
+function inferPromptImageMimeFromDataUrl(dataUrl) {
+  const match = String(dataUrl || "").match(/^data:([^;,]+)[;,]/i);
+  return match ? match[1].toLowerCase() : "";
+}
+
+function normalizePromptImageEntry(value, index = 0, usedNames = new Set()) {
+  if (!value || typeof value !== "object") return null;
+  const dataUrl = String(value.dataUrl || value.dataURL || "").trim();
+  if (!/^data:image\//i.test(dataUrl)) return null;
+  const type = String(value.type || "").trim().toLowerCase() || inferPromptImageMimeFromDataUrl(dataUrl) || "image/png";
+  const name = claimPromptImageName(value.name, usedNames, index, type);
+  const lastModifiedRaw = Number(value.lastModified);
+  return {
+    id: String(value.id || "").trim() || createId("prompt-image"),
+    name,
+    type,
+    size: Math.max(0, Math.round(Number(value.size) || 0)),
+    lastModified: Number.isFinite(lastModifiedRaw) ? lastModifiedRaw : Date.now(),
+    dataUrl
+  };
+}
+
+function normalizePromptImages(value) {
+  const usedNames = new Set();
+  return (Array.isArray(value) ? value : [])
+    .map((entry, index) => normalizePromptImageEntry(entry, index, usedNames))
+    .filter(Boolean);
+}
+
+function promptHasImages(images = state.promptImages) {
+  return normalizePromptImages(images).length > 0;
+}
+
+function promptHasContent(text = state.promptText, images = state.promptImages) {
+  return String(text || "").trim().length > 0 || promptHasImages(images);
+}
+
+function promptImageSendTimeoutMs(images = [], retryCount = PROMPT_IMAGE_RETRY_COUNT) {
+  if (!normalizePromptImages(images).length) return 0;
+  return PROMPT_IMAGE_SEND_DEADLINE_MS;
+}
+
+function readPromptImageFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    if (!file || !String(file.type || "").startsWith("image/")) {
+      reject(new Error("Invalid image file"));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("Failed to read image file"));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function promptImageEntryFromFile(file, index = 0) {
+  const dataUrl = await readPromptImageFileAsDataUrl(file);
+  return normalizePromptImageEntry({
+    id: createId("prompt-image"),
+    name: file.name,
+    type: file.type,
+    size: file.size,
+    lastModified: file.lastModified,
+    dataUrl
+  }, index);
+}
+
+function extractPromptImageFilesFromTransfer(dataTransfer) {
+  if (!dataTransfer) return [];
+  const files = Array.from(dataTransfer.files || [])
+    .filter((file) => file && String(file.type || "").startsWith("image/"));
+  if (files.length) return files;
+  return Array.from(dataTransfer.items || [])
+    .filter((item) => item?.kind === "file" && String(item.type || "").startsWith("image/"))
+    .map((item) => item.getAsFile?.())
+    .filter(Boolean);
+}
+
+function transferHasPromptImages(dataTransfer) {
+  return extractPromptImageFilesFromTransfer(dataTransfer).length > 0;
+}
+
+function renderPromptImagePreview(image) {
+  return el("div", { class: "prompt-image-chip", title: image.name || t("topbar.imageAttachment") },
+    el("img", {
+      src: image.dataUrl,
+      alt: image.name || t("topbar.imageAttachment"),
+      loading: "lazy"
+    }),
+    el("button", {
+      class: "prompt-image-remove prompt-image-remove-visible compact-icon tooltip-trigger",
+      type: "button",
+      "aria-label": t("topbar.removeImage"),
+      "data-tooltip": t("topbar.removeImage"),
+      "data-tooltip-id": "topbar.removeImage",
+      onclick: (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        removePromptImage(image.id);
+      },
+      onpointerdown: (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      },
+      onkeydown: (event) => event.stopPropagation()
+    }, svgIcon("x"))
+  );
+}
+
+function renderCollapsedPromptImages(images = state.promptImages) {
+  const promptImages = normalizePromptImages(images);
+  if (!promptImages.length) return null;
+  const visibleImages = promptImages.slice(0, 3);
+  return el("span", { class: "prompt-collapsed-preview-images", "aria-hidden": "true" },
+    visibleImages.map((image) => el("img", {
+      class: "prompt-collapsed-preview-thumb",
+      src: image.dataUrl,
+      alt: "",
+      loading: "lazy",
+      draggable: "false"
+    })),
+    promptImages.length > visibleImages.length
+      ? el("span", { class: "prompt-collapsed-preview-more" }, `+${promptImages.length - visibleImages.length}`)
+      : null
+  );
+}
+
+function renderCollapsedPromptPreviewContent(collapsed, images = state.promptImages) {
+  return [
+    renderCollapsedPromptImages(images),
+    el("span", { class: "prompt-collapsed-preview-text" }, collapsed.text)
+  ].filter(Boolean);
+}
+
+function syncPromptImagesPreview() {
+  const images = normalizePromptImages(state.promptImages);
+  const hasImages = images.length > 0;
+  document.querySelectorAll(".prompt-shell").forEach((shell) => {
+    shell.classList.toggle("prompt-shell-has-images", hasImages);
+    const list = shell.querySelector(".prompt-image-preview-list");
+    if (list) {
+      list.replaceChildren(...images.map((image) => renderPromptImagePreview(image)));
+      list.hidden = !hasImages;
+    }
+  });
+}
+
+function setPromptImages(images, { focus = false } = {}) {
+  state.promptImages = normalizePromptImages(images);
+  resetPromptHistoryNavigation();
+  syncPromptImagesPreview();
+  const inputNode = syncPromptInputNode({ focus });
+  if (focus && inputNode) expandPromptInput(inputNode);
+  return state.promptImages;
+}
+
+function removePromptImage(id) {
+  setPromptImages(state.promptImages.filter((image) => image.id !== id), { focus: true });
+}
+
+function clearPromptImages() {
+  setPromptImages([], { focus: true });
+}
+
+async function addPromptImageFiles(fileList, { focus = true } = {}) {
+  const files = Array.from(fileList || []).filter((file) => String(file?.type || "").startsWith("image/"));
+  if (!files.length) {
+    toast(t("toast.promptNoImages"), "error");
+    return [];
+  }
+  const entries = [];
+  for (const file of files) {
+    try {
+      const entry = await promptImageEntryFromFile(file, state.promptImages.length + entries.length);
+      if (entry) entries.push(entry);
+    } catch (error) {
+      console.warn("[ChatClub] Failed to load prompt image", error);
+    }
+  }
+  if (!entries.length) {
+    toast(t("toast.promptImageLoadFailed"), "error");
+    return [];
+  }
+  const nextImages = setPromptImages([...state.promptImages, ...entries], { focus });
+  toast(t("toast.promptImagesAdded", { count: entries.length, total: nextImages.length }), "success");
+  return entries;
+}
+
+function openPromptImagePicker(event) {
+  event?.preventDefault?.();
+  event?.stopPropagation?.();
+  const inputNode = event?.currentTarget?.closest?.(".prompt-shell")?.querySelector?.(".prompt-image-file-input")
+    || document.querySelector(".prompt-image-file-input");
+  try { inputNode?.click?.(); } catch {}
+}
+
+function closePromptActionsMenu() {
+  document.querySelectorAll(".prompt-actions-backdrop, .prompt-actions-popover").forEach((node) => node.remove());
+  document.querySelectorAll(".prompt-actions-button-active").forEach((node) => node.classList.remove("prompt-actions-button-active"));
+  document.removeEventListener("keydown", closePromptActionsMenuOnKeydown, true);
+  window.removeEventListener("resize", closePromptActionsMenu, true);
+  window.removeEventListener("scroll", closePromptActionsMenu, true);
+  window.removeEventListener("blur", closePromptActionsMenu, true);
+}
+
+function closePromptActionsMenuOnKeydown(event) {
+  if (event.key === "Escape") closePromptActionsMenu();
+}
+
+function promptActionsMenuItem(label, iconName, onClick) {
+  return el("button", {
+    class: "button button-secondary menu-button prompt-actions-menu-button",
+    type: "button",
+    role: "menuitem",
+    onclick: (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      closePromptActionsMenu();
+      onClick?.(event);
+    },
+    onpointerdown: (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  },
+    svgIcon(iconName),
+    el("span", {}, label)
+  );
+}
+
+function openPromptActionsMenu(event) {
+  event?.preventDefault?.();
+  event?.stopPropagation?.();
+  const anchor = event?.currentTarget;
+  if (!anchor) return;
+  if (anchor.classList.contains("prompt-actions-button-active") && document.querySelector(".prompt-actions-popover")) {
+    closePromptActionsMenu();
+    return;
+  }
+  closePromptActionsMenu();
+  closeSettingsJumpMenu();
+  workspaceController?.closePopovers?.();
+  anchor.classList.add("prompt-actions-button-active");
+  const rect = anchor.getBoundingClientRect();
+  const menuWidth = 236;
+  const left = Math.max(8, Math.min(rect.left, window.innerWidth - menuWidth - 8));
+  const top = Math.min(rect.bottom + 8, window.innerHeight - 8);
+  const backdrop = el("div", {
+    class: "popover-backdrop prompt-actions-backdrop",
+    onpointerdown: (backdropEvent) => {
+      backdropEvent.preventDefault();
+      closePromptActionsMenu();
+    },
+    oncontextmenu: (backdropEvent) => {
+      backdropEvent.preventDefault();
+      closePromptActionsMenu();
+    }
+  });
+  const menu = el("div", {
+    class: "popover-menu prompt-actions-popover",
+    role: "menu",
+    style: { top: `${top}px`, left: `${left}px` },
+    onpointerdown: (menuEvent) => menuEvent.stopPropagation(),
+    onclick: (menuEvent) => menuEvent.stopPropagation()
+  },
+    promptActionsMenuItem(t("topbar.addPhotos"), "paperclip", openPromptImagePicker),
+    promptActionsMenuItem(t("topbar.promptLibrary"), "library", openPromptLibraryDialog),
+    promptActionsMenuItem(t("topbar.optimizePrompt"), "sparkles", optimizeCurrentPrompt)
+  );
+  document.body.append(backdrop, menu);
+  document.addEventListener("keydown", closePromptActionsMenuOnKeydown, true);
+  window.addEventListener("resize", closePromptActionsMenu, true);
+  window.addEventListener("scroll", closePromptActionsMenu, true);
+  window.addEventListener("blur", closePromptActionsMenu, true);
+}
+
+function handlePromptImageFileChange(event) {
+  const inputNode = event.currentTarget;
+  addPromptImageFiles(inputNode.files, { focus: true }).finally(() => {
+    try { inputNode.value = ""; } catch {}
+  });
+}
+
+function handlePromptPaste(event) {
+  const files = extractPromptImageFilesFromTransfer(event.clipboardData);
+  if (!files.length) return;
+  event.preventDefault();
+  event.stopPropagation();
+  addPromptImageFiles(files, { focus: true });
+}
+
+function handlePromptDragEnter(event) {
+  if (!transferHasPromptImages(event.dataTransfer)) return;
+  event.preventDefault();
+  event.currentTarget.classList.add("prompt-shell-drag-over");
+}
+
+function handlePromptDragOver(event) {
+  if (!transferHasPromptImages(event.dataTransfer)) return;
+  event.preventDefault();
+  event.currentTarget.classList.add("prompt-shell-drag-over");
+  try { event.dataTransfer.dropEffect = "copy"; } catch {}
+}
+
+function handlePromptDragLeave(event) {
+  event.currentTarget.classList.remove("prompt-shell-drag-over");
+}
+
+function handlePromptDrop(event) {
+  const files = extractPromptImageFilesFromTransfer(event.dataTransfer);
+  event.currentTarget.classList.remove("prompt-shell-drag-over");
+  if (!files.length) return;
+  event.preventDefault();
+  event.stopPropagation();
+  addPromptImageFiles(files, { focus: true });
+}
+
+async function recordPromptSendHistory(text, images = []) {
   const value = String(text || "").trim();
-  if (!value) return;
+  const promptImages = normalizePromptImages(images);
+  if (!value && !promptImages.length) return;
   const next = normalizePromptSendHistory([
-    { id: createId("prompt-history"), text: value, createdAt: new Date().toISOString() },
+    { id: createId("prompt-history"), text: value, images: promptImages, createdAt: new Date().toISOString() },
     ...state.promptSendHistory
   ]);
   state.promptSendHistory = await savePromptSendHistory(next);
@@ -1020,71 +1405,101 @@ function sendTextTimeoutError(error) {
   return String(error?.message || error || "").includes("[PostMessage] Timeout waiting for response: sendText");
 }
 
-async function sendTextToFrame(iframe, app = {}, text = "") {
+async function sendTextToFrame(iframe, app = {}, text = "", images = [], sendId = "", deadlineAt = 0) {
   const notion = sendPromptAppIsNotion(app);
+  const promptImages = normalizePromptImages(images);
+  const imageRetryCount = PROMPT_IMAGE_RETRY_COUNT;
+  const timeout = promptImages.length ? promptImageSendTimeoutMs(promptImages, imageRetryCount) : (notion ? 12000 : 10000);
+  const sendDeadlineAt = Number(deadlineAt) > Date.now() ? Number(deadlineAt) : Date.now() + timeout;
   const payload = {
+    sendId,
+    deadlineAt: sendDeadlineAt,
     text,
+    images: promptImages,
+    imageRetryCount,
     appId: app.id,
     appName: app.name,
     inputSelector: app.inputSelector,
     sendButtonSelector: app.sendButtonSelector,
     sendKeyMode: state.shortcutConfig?.sendKeyMode || "enter"
   };
-  const options = notion ? { source: SEND_TEXT_POST_MESSAGE_SOURCE } : {};
-  if (notion) {
+  const options = { source: SEND_TEXT_POST_MESSAGE_SOURCE };
+  if (notion || promptImages.length) {
     await ensureSendTextContentBridge(iframe, app);
     await sleep(120);
   }
-  const sendOnce = () => sendToIframe(iframe, "sendText", payload, notion ? 12000 : 10000, options);
+  const remainingMs = Math.max(1000, sendDeadlineAt - Date.now());
+  const sendOnce = () => sendToIframe(iframe, "sendText", payload, remainingMs, options);
   let result;
   try {
     result = await sendOnce();
   } catch (error) {
-    if (!notion || !sendTextTimeoutError(error)) throw error;
-    await ensureSendTextContentBridge(iframe, app);
-    await sleep(220);
-    result = await sendOnce();
+    throw error;
   }
-  if (notion && result?.sent === false && /bridge timed out/i.test(String(result?.reason || ""))) {
-    await ensureSendTextContentBridge(iframe, app);
-    await sleep(220);
-    result = await sendOnce();
+  if (result?.sent === false && /bridge timed out/i.test(String(result?.reason || ""))) {
+    throw new Error(result?.reason || "Send failed");
   }
   if (!result || result.sent === false) throw new Error(result?.reason || "Send failed");
   return result;
 }
 
 async function sendPromptToFrames() {
+  if (state.promptSendInFlight) return;
   const text = state.promptText.trim();
-  if (!text) return;
+  const images = normalizePromptImages(state.promptImages);
+  if (!promptHasContent(text, images)) return;
   const frames = workspaceController.currentFrames();
   if (!frames.length) return;
-  await recordPromptSendHistory(text);
   const targets = frames.map((iframe) => ({ iframe, app: workspaceController.frameApp(iframe) || {} }));
-  const results = await Promise.allSettled(targets.map(({ iframe, app }) => sendTextToFrame(iframe, app, text)));
-  const failures = results
-    .map((result, index) => ({ result, app: targets[index].app }))
-    .filter((item) => item.result.status === "rejected");
-  const successCount = results.length - failures.length;
-  if (!failures.length) {
-    toast(t("toast.sentToChats", { count: successCount, plural: successCount === 1 ? "" : "s" }), "success");
-    return;
+  const sendId = createId("prompt-send");
+  const timeoutMs = images.length ? promptImageSendTimeoutMs(images, PROMPT_IMAGE_RETRY_COUNT) : 12000;
+  const deadlineAt = Date.now() + timeoutMs;
+  state.promptSendInFlight = true;
+  syncPromptSendButton();
+  try {
+    const results = await Promise.allSettled(targets.map(({ iframe, app }) => sendTextToFrame(iframe, app, text, images, sendId, deadlineAt)));
+    const failures = results
+      .map((result, index) => ({ result, app: targets[index].app }))
+      .filter((item) => item.result.status === "rejected");
+    const successCount = results.length - failures.length;
+    await recordPromptSendHistory(text, images);
+    if (!failures.length) {
+      clearPromptInput();
+      toast(t("toast.sentToChats", { count: successCount, plural: successCount === 1 ? "" : "s" }), "success");
+      return;
+    }
+    const failureNames = failures
+      .map((item) => inferAppName(item.app))
+      .filter(Boolean)
+      .slice(0, 4)
+      .join(", ");
+    const names = failureNames || t("common.failed");
+    if (successCount > 0) {
+      toast(t("toast.sentToSomeChats", {
+        sentCount: successCount,
+        sentPlural: successCount === 1 ? "" : "s",
+        names
+      }), "error");
+      return;
+    }
+    toast(t("toast.sendFailedToChats", { names }), "error");
+  } finally {
+    state.promptSendInFlight = false;
+    syncPromptSendButton();
   }
-  const failureNames = failures
-    .map((item) => inferAppName(item.app))
-    .filter(Boolean)
-    .slice(0, 4)
-    .join(", ");
-  const names = failureNames || t("common.failed");
-  if (successCount > 0) {
-    toast(t("toast.sentToSomeChats", {
-      sentCount: successCount,
-      sentPlural: successCount === 1 ? "" : "s",
-      names
-    }), "error");
-    return;
+}
+
+function submitPromptFromComposer(source = null) {
+  const inputNode = source?.classList?.contains?.("prompt-input")
+    ? source
+    : source?.currentTarget?.closest?.(".prompt-shell")?.querySelector?.(".prompt-input")
+      || document.querySelector(".prompt-input");
+  if (inputNode) {
+    state.promptText = inputNode.value;
+    rememberPromptSelection(inputNode);
+    syncPromptCollapsedPreview(inputNode);
   }
-  toast(t("toast.sendFailedToChats", { names }), "error");
+  return sendPromptToFrames();
 }
 
 function preferredModelAppId(app) {
@@ -1666,7 +2081,9 @@ async function loadSummaryPanelSize() {
 }
 
 function resizePromptInput(inputNode, expanded = inputNode.classList.contains("prompt-input-expanded")) {
-  const sizing = promptInputHeight(inputNode.scrollHeight, window.innerHeight, expanded);
+  const sizing = promptInputHeight(inputNode.scrollHeight, window.innerHeight, expanded, {
+    hasImages: state.promptImages.length > 0
+  });
   inputNode.style.height = `${sizing.height}px`;
   inputNode.style.overflowY = sizing.overflowY;
   if (!expanded) {
@@ -1711,7 +2128,18 @@ function syncPromptClearButton(inputNode = document.querySelector(".prompt-input
   const shell = inputNode?.closest?.(".prompt-shell") || document.querySelector(".prompt-shell");
   const clearButton = shell?.querySelector?.(".prompt-clear-button");
   if (!clearButton) return;
-  clearButton.hidden = !promptHasText(inputNode?.value ?? state.promptText);
+  clearButton.hidden = !promptHasContent(inputNode?.value ?? state.promptText, state.promptImages);
+}
+
+function syncPromptSendButton(inputNode = document.querySelector(".prompt-input")) {
+  const shell = inputNode?.closest?.(".prompt-shell") || document.querySelector(".prompt-shell");
+  const sendButton = shell?.querySelector?.(".prompt-send-button");
+  if (!sendButton) return;
+  sendButton.disabled = state.promptSendInFlight || !promptHasContent(inputNode?.value ?? state.promptText, state.promptImages);
+}
+
+function promptCollapsedPreviewWithImages(value = state.promptText, placeholder = promptPlaceholder()) {
+  return promptCollapsedPreview(value, placeholder);
 }
 
 function syncPromptCollapsedPreview(inputNode = document.querySelector(".prompt-input")) {
@@ -1719,16 +2147,19 @@ function syncPromptCollapsedPreview(inputNode = document.querySelector(".prompt-
   const preview = shell?.querySelector?.(".prompt-collapsed-preview");
   const value = inputNode?.value ?? state.promptText;
   syncPromptClearButton(inputNode);
+  syncPromptSendButton(inputNode);
+  syncPromptImagesPreview();
   if (!preview) return;
-  const collapsed = promptCollapsedPreview(value, promptPlaceholder());
-  preview.textContent = collapsed.text;
+  const collapsed = promptCollapsedPreviewWithImages(value, promptPlaceholder());
+  preview.replaceChildren(...renderCollapsedPromptPreviewContent(collapsed, state.promptImages));
   preview.title = collapsed.title;
   preview.classList.toggle("prompt-collapsed-preview-empty", collapsed.empty);
 }
 
 function expandPromptInput(inputNode) {
   syncPromptCollapsedPreview(inputNode);
-  inputNode.closest?.(".prompt-shell")?.classList.add("prompt-shell-expanded");
+  const shell = inputNode.closest?.(".prompt-shell");
+  shell?.classList.add("prompt-shell-expanded");
   inputNode.classList.add("prompt-input-expanded");
   resizePromptInput(inputNode, true);
   restorePromptSelectionSoon(inputNode);
@@ -1737,7 +2168,8 @@ function expandPromptInput(inputNode) {
 function collapsePromptInput(inputNode) {
   rememberPromptSelection(inputNode);
   syncPromptCollapsedPreview(inputNode);
-  inputNode.closest?.(".prompt-shell")?.classList.remove("prompt-shell-expanded");
+  const shell = inputNode.closest?.(".prompt-shell");
+  shell?.classList.remove("prompt-shell-expanded");
   inputNode.classList.remove("prompt-input-expanded");
   resizePromptInput(inputNode, false);
 }
@@ -1787,6 +2219,7 @@ function clearPromptInput(event) {
   event?.preventDefault?.();
   event?.stopPropagation?.();
   state.promptText = "";
+  state.promptImages = [];
   state.promptSelection = { start: 0, end: 0, direction: "none" };
   resetPromptHistoryNavigation();
   const inputNode = syncPromptInputNode({ focus: true }) || document.querySelector(".prompt-input");
@@ -1795,6 +2228,7 @@ function clearPromptInput(event) {
 
 function applyPromptHistoryNavigation(inputNode, result) {
   state.promptText = result.text;
+  state.promptImages = normalizePromptImages(result.images);
   state.promptHistoryCursor = result.cursor;
   state.promptHistoryDraft = result.draft;
   const cursor = state.promptText.length;
@@ -1805,6 +2239,7 @@ function applyPromptHistoryNavigation(inputNode, result) {
 
 function handlePromptInputKeydown(event) {
   const inputNode = event.currentTarget;
+  if (event.isComposing || event.keyCode === 229) return;
   if (shouldOpenPromptLibraryFromSlash(event, inputNode.value, inputNode.selectionStart, inputNode.selectionEnd)) {
     event.preventDefault();
     event.stopPropagation();
@@ -1818,6 +2253,7 @@ function handlePromptInputKeydown(event) {
       cursor: state.promptHistoryCursor,
       draft: state.promptHistoryDraft,
       currentText: inputNode.value,
+      currentImages: state.promptImages,
       direction: event.key === "ArrowUp" ? "up" : "down"
     });
     if (result.handled) {
@@ -1830,7 +2266,8 @@ function handlePromptInputKeydown(event) {
 
   if ((state.shortcutConfig?.sendKeyMode || "enter") === "enter" && event.key === "Enter" && !event.shiftKey) {
     event.preventDefault();
-    sendPromptToFrames();
+    event.stopPropagation();
+    submitPromptFromComposer(inputNode);
   }
 }
 
@@ -1844,6 +2281,7 @@ function renderTopbar() {
     onfocus: (event) => expandPromptInput(event.target),
     onblur: (event) => collapsePromptInput(event.target),
     onclick: handlePromptClick,
+    onpaste: handlePromptPaste,
     onkeyup: (event) => rememberPromptSelection(event.target),
     onselect: (event) => rememberPromptSelection(event.target),
     oninput: (event) => {
@@ -1855,7 +2293,7 @@ function renderTopbar() {
     },
     onkeydown: handlePromptInputKeydown
   });
-  const collapsedPreview = promptCollapsedPreview(state.promptText, promptPlaceholder());
+  const collapsedPreview = promptCollapsedPreviewWithImages(state.promptText, promptPlaceholder());
   const topbarLayout = visibleTopbarLayoutItems(normalizeTopbarLayout(state.options?.topbarLayout));
   return el("header", { class: "topbar" },
     topbarLayout.map((item) => renderTopbarItem(item, prompt, collapsedPreview))
@@ -1941,6 +2379,7 @@ function renderTopbarEditMode() {
     onfocus: (event) => expandPromptInput(event.target),
     onblur: (event) => collapsePromptInput(event.target),
     onclick: handlePromptClick,
+    onpaste: handlePromptPaste,
     onkeyup: (event) => rememberPromptSelection(event.target),
     onselect: (event) => rememberPromptSelection(event.target),
     oninput: (event) => {
@@ -1952,7 +2391,7 @@ function renderTopbarEditMode() {
     },
     onkeydown: handlePromptInputKeydown
   });
-  const collapsedPreview = promptCollapsedPreview(state.promptText, promptPlaceholder());
+  const collapsedPreview = promptCollapsedPreviewWithImages(state.promptText, promptPlaceholder());
   return el("div", { class: "topbar-customize-mode" },
     el("header", { class: "topbar topbar-editing" },
       el("div", { class: "topbar-editing-livebar" },
@@ -2431,8 +2870,6 @@ function topbarTooltipIdForItem(item) {
   if (settingsSectionId) return `topbar.settings.${settingsSectionId}`;
   return ({
     brand: "topbar.brand",
-    promptLibrary: "topbar.promptLibrary",
-    send: "topbar.send",
     newChat: "topbar.newChat",
     deleteThread: "topbar.deleteThread",
     summary: "topbar.summary",
@@ -2454,9 +2891,7 @@ function renderTopbarItem(item, prompt, collapsedPreview) {
   }
   if (item.id === "brand") return renderTopbarBrand();
   if (item.id === "settings") return renderTopbarSettingsButton();
-  if (item.id === "promptLibrary") return renderPromptLibraryButton();
   if (item.id === "composer") return renderTopbarComposer(prompt, collapsedPreview);
-  if (item.id === "send") return actionButton(t("topbar.send"), "send", sendPromptToFrames, "primary", t("topbar.sendTooltip"), "", "", "topbar.send");
   if (item.id === "newChat") return actionButton(t("topbar.newChat"), "edit", newChatOnFrames, "secondary", shortcutTooltip(t("topbar.newChatAllTooltip"), "newChatAll"), "", "", "topbar.newChat");
   if (item.id === "deleteThread") return actionButton(t("topbar.deleteThread"), "trash", deleteThreadOnFrames, "danger", shortcutTooltip(t("topbar.deleteThread"), "deleteThread"), "", "", "topbar.deleteThread");
   if (item.id === "summary") return actionButton(t("topbar.summary"), "summary", openSummaryPanel, "secondary", shortcutTooltip(t("topbar.summary"), "openSummaryPanel"), "", "", "topbar.summary");
@@ -2535,34 +2970,51 @@ function renderTopbarSettingsButton() {
   }, t("topbar.settings"), "left", "topbar.settings");
 }
 
-function renderPromptLibraryButton() {
-  return el("button", {
-    class: `prompt-library-button compact-icon tooltip-trigger ${topbarItemClass("prompt-library")}`,
-    type: "button",
-    "aria-label": t("topbar.promptLibrary"),
-    "data-tooltip": t("topbar.promptLibrary"),
-    "data-tooltip-id": "topbar.promptLibrary",
-    onclick: (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      openPromptLibraryDialog();
-    }
-  }, svgIcon("library"));
-}
-
 function renderTopbarComposer(prompt, collapsedPreview) {
   return el("div", { class: `composer ${topbarItemClass("composer")}` },
-    el("div", { class: "prompt-shell", onpointerdown: handlePromptPointerDown },
+    el("div", {
+      class: `prompt-shell ${state.promptImages.length ? "prompt-shell-has-images" : ""}`.trim(),
+      onpointerdown: handlePromptPointerDown,
+      ondragenter: handlePromptDragEnter,
+      ondragover: handlePromptDragOver,
+      ondragleave: handlePromptDragLeave,
+      ondrop: handlePromptDrop,
+      onpaste: handlePromptPaste
+    },
       prompt,
       el("div", {
         class: `prompt-collapsed-preview ${collapsedPreview.empty ? "prompt-collapsed-preview-empty" : ""}`.trim(),
         title: collapsedPreview.title,
         onclick: handlePromptOverlayClick
-      }, collapsedPreview.text),
+      }, renderCollapsedPromptPreviewContent(collapsedPreview, state.promptImages)),
+      el("div", { class: "prompt-image-preview-list", hidden: state.promptImages.length <= 0 },
+        state.promptImages.map((image) => renderPromptImagePreview(image))
+      ),
+      el("button", {
+        class: "prompt-actions-button compact-icon tooltip-trigger",
+        type: "button",
+        "aria-label": t("topbar.promptActions"),
+        "data-tooltip": t("topbar.promptActions"),
+        "data-tooltip-id": "topbar.promptActions",
+        onclick: openPromptActionsMenu,
+        onpointerdown: (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+        },
+        onkeydown: (event) => event.stopPropagation()
+      }, svgIcon("plus")),
+      el("input", {
+        class: "prompt-image-file-input",
+        type: "file",
+        accept: "image/*",
+        multiple: true,
+        tabindex: "-1",
+        onchange: handlePromptImageFileChange
+      }),
       el("button", {
         class: "prompt-clear-button compact-icon tooltip-trigger",
         type: "button",
-        hidden: !promptHasText(state.promptText),
+        hidden: !promptHasContent(state.promptText, state.promptImages),
         "aria-label": t("topbar.clearPrompt"),
         "data-tooltip": t("topbar.clearPrompt"),
         "data-tooltip-id": "topbar.clearPrompt",
@@ -2571,19 +3023,26 @@ function renderTopbarComposer(prompt, collapsedPreview) {
         onkeydown: (event) => event.stopPropagation()
       }, svgIcon("x")),
       el("button", {
-        class: "prompt-optimize-button compact-icon tooltip-trigger",
+        class: "prompt-send-button tooltip-trigger",
         type: "button",
-        "aria-label": t("topbar.optimizePrompt"),
-        "data-tooltip": shortcutTooltip(t("topbar.optimizePrompt"), "optimizePrompt"),
-        "data-tooltip-id": "topbar.optimizePrompt",
+        disabled: state.promptSendInFlight || !promptHasContent(state.promptText, state.promptImages),
+        "aria-label": t("topbar.send"),
+        "data-tooltip": t("topbar.sendTooltip"),
+        "data-tooltip-id": "topbar.send",
         onclick: (event) => {
           event.preventDefault();
           event.stopPropagation();
-          optimizeCurrentPrompt();
+          if (state.promptSendInFlight) return;
+          submitPromptFromComposer(event);
         },
-        onpointerdown: (event) => event.stopPropagation(),
+        onpointerdown: (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+        },
         onkeydown: (event) => event.stopPropagation()
-      }, svgIcon("sparkles"))
+      },
+        svgIcon("send")
+      )
     )
   );
 }
@@ -2685,19 +3144,9 @@ function runTopbarMenuItem(item, event) {
     openSettings();
     return;
   }
-  if (item.id === "promptLibrary") {
-    closeSettingsJumpMenu();
-    openPromptLibraryDialog();
-    return;
-  }
   if (item.id === "composer") {
     closeSettingsJumpMenu();
     focusPromptInput();
-    return;
-  }
-  if (item.id === "send") {
-    closeSettingsJumpMenu();
-    sendPromptToFrames();
     return;
   }
   if (item.id === "newChat") {

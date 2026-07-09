@@ -1,4 +1,5 @@
 export const PROMPT_COLLAPSED_HEIGHT = 38;
+export const PROMPT_IMAGE_EXPANDED_HEIGHT = 180;
 
 export function promptPreviewText(value = "") {
   return String(value || "").replace(/\s+/g, " ").trim();
@@ -17,10 +18,16 @@ export function promptExpandedMaxHeight(viewportHeight = 0) {
   return Math.min(180, Math.max(88, Math.round(Number(viewportHeight || 0) * 0.36)));
 }
 
-export function promptInputHeight(scrollHeight, viewportHeight, expanded) {
+export function promptInputHeight(scrollHeight, viewportHeight, expanded, options = {}) {
   if (!expanded) {
     return {
       height: PROMPT_COLLAPSED_HEIGHT,
+      overflowY: "hidden"
+    };
+  }
+  if (options?.hasImages) {
+    return {
+      height: PROMPT_IMAGE_EXPANDED_HEIGHT,
       overflowY: "hidden"
     };
   }
