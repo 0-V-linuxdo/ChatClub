@@ -4,8 +4,8 @@
   const GEMINI_MODEL_PICKER_SOURCE = "chatclub-gemini-model-picker";
   const NOTION_SEND_TEXT_SOURCE = "chatclub-notion-send-text:2026.07.10.12";
   const NOTION_SEND_PROMPT_SOURCE = "chatclub-notion-send-prompt:2026.07.10.12";
-  const CONTENT_BRIDGE_VERSION = "2026.07.10.4";
-  const SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.10.3";
+  const CONTENT_BRIDGE_VERSION = "2026.07.10.5";
+  const SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.10.4";
   const DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.10.2";
   const MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.08.12";
   const SUMMARY_POST_MESSAGE_SOURCE = "chatclub:summary:2026.07.08.13";
@@ -1429,6 +1429,17 @@
     return appId === "kagi" || /\bkagi\b/.test(appName) || kagiHost();
   }
 
+  function geminiHost(hostname = location.hostname) {
+    const host = String(hostname || "").toLowerCase();
+    return host === "gemini.google.com" || host.endsWith(".gemini.google.com");
+  }
+
+  function isGeminiSendTarget(data = {}) {
+    const appId = String(data?.appId || "").trim().toLowerCase();
+    const appName = String(data?.appName || "").trim().toLowerCase();
+    return appId === "gemini" || /\bgemini\b/.test(appName) || geminiHost();
+  }
+
   function promptImagePasteStrategy(data = {}) {
     return String(data?.imagePasteStrategy || "").trim().toLowerCase() === PROMPT_IMAGE_PASTE_STRATEGY_BATCH
       ? PROMPT_IMAGE_PASTE_STRATEGY_BATCH
@@ -1447,13 +1458,79 @@
     return best || promptComposerScope(input);
   }
 
+  function geminiComposerScope(input) {
+    if (!input) return promptComposerScope(input);
+    let best = null;
+    for (let node = input.parentElement, depth = 0; node && node !== document.body && depth < 10; node = node.parentElement, depth += 1) {
+      const controls = qsa("button,[role='button']", node).filter(visible);
+      const labels = controls.map((button) => buttonText(button)).join(" ");
+      const hasUpload = /upload\s*(?:&|and)?\s*tools|\bupload\b|上传/i.test(labels);
+      const hasSend = /send\s*message|\bsend\b|发送|提交/i.test(labels);
+      const hasComposerControl = /microphone|mode\s*picker|麦克风|模式/i.test(labels);
+      if (hasUpload && hasSend) return node;
+      if (hasUpload && hasComposerControl) best = node;
+    }
+    return best || promptComposerScope(input);
+  }
+
   function attachmentRemoveButton(button) {
     const label = buttonText(button).toLowerCase();
     return /^(?:remove|delete|移除|删除)$|remove\s+(?:this\s+)?(?:attachment|file|image|photo)|delete\s+(?:attachment|file|image|photo)|(?:remove|delete)\s+[^\n]{1,180}\.(?:avif|bmp|gif|jpe?g|png|svg|webp)\b|移除此附件|移除.*(?:附件|文件|图片|照片)|删除.*(?:附件|文件|图片|照片)/i.test(label);
   }
 
+  function geminiAttachmentCloseButton(button) {
+    const label = buttonText(button).toLowerCase();
+    return /close\s+(?:this\s+)?attachment|关闭(?:此)?附件/i.test(label);
+  }
+
+  function geminiAttachmentRows(scope) {
+    const controls = qsa("button,[role='button']", scope)
+      .filter((button) => visible(button) && (geminiAttachmentCloseButton(button) || attachmentRemoveButton(button)));
+    const images = qsa("img[alt='attachment' i],img[aria-label='attachment' i]", scope).filter(visible);
+    return controls.length >= images.length ? controls : images;
+  }
+
+  function geminiPromptAttachmentSnapshot(input) {
+    const scope = geminiComposerScope(input);
+    const rows = geminiAttachmentRows(scope);
+    const busySelectors = [
+      "[aria-busy='true']",
+      "[role='progressbar']",
+      "progress",
+      "mat-progress-spinner",
+      "mat-progress-bar"
+    ].join(",");
+    let busy = false;
+    try {
+      busy = Array.from(scope.querySelectorAll(busySelectors)).some((node) => visible(node));
+      if (!busy) {
+        busy = qsa("[aria-label],[title],span,div", scope).some((node) => {
+          if (!visible(node)) return false;
+          const explicit = normalize([node.getAttribute?.("aria-label"), node.getAttribute?.("title")].filter(Boolean).join(" "));
+          const leafText = node.children?.length ? "" : normalize(node.textContent || "");
+          return /^(?:loading image|uploading(?: image| file)?|正在加载图片|正在上传)/i.test(explicit || leafText);
+        });
+      }
+    } catch {}
+    return {
+      count: rows.length,
+      busy,
+      key: rows.map((node) => {
+        const rect = node.getBoundingClientRect?.();
+        const image = node.matches?.("img") ? node : node.querySelector?.("img[alt='attachment' i],img[aria-label='attachment' i]");
+        return [
+          node.tagName,
+          buttonText(node),
+          image?.getAttribute?.("src") || "",
+          rect ? `${Math.round(rect.left)}:${Math.round(rect.top)}:${Math.round(rect.width)}:${Math.round(rect.height)}` : ""
+        ].join("|");
+      }).join("\n")
+    };
+  }
+
   function promptAttachmentSnapshot(input, options = {}) {
     if (options.grok) return grokPromptAttachmentSnapshot(input);
+    if (options.gemini) return geminiPromptAttachmentSnapshot(input);
     const scope = promptComposerScope(input);
     const selectors = [
       "img[src^='blob:']",
@@ -1625,7 +1702,11 @@
   }
 
   function clearPromptAttachments(input, options = {}) {
-    const scope = options.grok ? grokComposerScope(input) : promptComposerScope(input);
+    const scope = options.grok
+      ? grokComposerScope(input)
+      : options.gemini
+        ? geminiComposerScope(input)
+        : promptComposerScope(input);
     const selectors = [
       "button[aria-label*='remove file' i]",
       "button[aria-label*='remove image' i]",
@@ -1640,7 +1721,9 @@
       "button[title*='delete' i]",
       "button[title*='移除此附件' i]",
       "button[title*='移除' i]",
-      "button[title*='删除' i]"
+      "button[title*='删除' i]",
+      "button[aria-label*='close attachment' i]",
+      "button[title*='close attachment' i]"
     ].join(",");
     let clicked = 0;
     try {
@@ -1652,8 +1735,9 @@
         candidates.push(button);
       };
       try { Array.from(scope.querySelectorAll(selectors)).forEach(add); } catch {}
-      try { Array.from(scope.querySelectorAll("button,[role='button']")).filter(attachmentRemoveButton).forEach(add); } catch {}
-      for (const button of candidates.filter((item) => visible(item) && attachmentRemoveButton(item)).slice(0, 20)) {
+      const attachmentAction = (button) => attachmentRemoveButton(button) || (options.gemini && geminiAttachmentCloseButton(button));
+      try { Array.from(scope.querySelectorAll("button,[role='button']")).filter(attachmentAction).forEach(add); } catch {}
+      for (const button of candidates.filter((item) => visible(item) && attachmentAction(item)).slice(0, 20)) {
         try { button.click?.(); clicked += 1; } catch {}
       }
     } catch {}
@@ -1695,6 +1779,15 @@
     const target = input || document.activeElement;
     const fired = dispatchPromptTransferEvent(target, "paste", transfer);
     return fired ? { ok: true } : { ok: false, reason: "Kagi image and text paste was not accepted" };
+  }
+
+  async function attachGeminiPromptImagesOnce(files, input, textValue = "") {
+    input?.focus?.();
+    const transfer = createPromptDataTransfer({ files, text: textValue });
+    if (!transfer) return { ok: false, reason: "DataTransfer unavailable" };
+    const target = input || document.activeElement;
+    const fired = dispatchPromptTransferEvent(target, "paste", transfer);
+    return fired ? { ok: true } : { ok: false, reason: "Gemini image and text paste was not accepted" };
   }
 
   async function attachBatchPromptImagesOnce(files, input) {
@@ -1762,6 +1855,68 @@
       lastReason = ready.reason || "Batch image upload did not become ready";
     }
     return { ok: false, reason: lastReason || "Batch image upload did not become ready" };
+  }
+
+  async function commitPastedPromptTextEarly(input, textValue = "", inputSelector = "", deadlineAt = 0) {
+    const expected = compareText(textValue);
+    if (!expected) return { ok: true, input, usedFallback: false };
+    if (!await sleepUntilDeadline(80, deadlineAt)) return { ok: false, input, usedFallback: false, reason: "Send deadline exceeded" };
+    input = inputCandidates(inputSelector) || input;
+    if (compareText(text(input)) === expected) return { ok: true, input, usedFallback: false };
+    try {
+      await setInputValue(input, textValue);
+    } catch (error) {
+      return { ok: false, input, usedFallback: true, reason: error?.message || "Prompt text fallback failed" };
+    }
+    if (!await sleepUntilDeadline(90, deadlineAt)) return { ok: false, input, usedFallback: true, reason: "Send deadline exceeded" };
+    input = inputCandidates(inputSelector) || input;
+    return {
+      ok: compareText(text(input)) === expected,
+      input,
+      usedFallback: true,
+      reason: compareText(text(input)) === expected ? "" : "Prompt text was not committed immediately after paste"
+    };
+  }
+
+  async function attachGeminiPromptImagesWithRetries(input, files = [], retryCount = 3, inputSelector = "", deadlineAt = 0, textValue = "") {
+    const list = Array.from(files || []).filter((file) => file && String(file.type || "").startsWith("image/"));
+    if (!list.length) return { ok: true, input };
+    const attempts = Math.max(0, Number(retryCount) || 0) + 1;
+    let lastReason = "";
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      if (deadlineExpired(deadlineAt)) return { ok: false, reason: "Send deadline exceeded" };
+      if (attempt > 1) {
+        clearPromptAttachments(input, { gemini: true });
+        if (!await waitForPromptAttachmentsCleared(input, { gemini: true }, 2500, deadlineAt)) {
+          return { ok: false, reason: "Gemini attachments could not be cleared before retry" };
+        }
+        input = inputCandidates(inputSelector) || input;
+        if (textValue.trim()) {
+          await setInputValue(input, "");
+          if (!await sleepUntilDeadline(120, deadlineAt)) return { ok: false, reason: "Send deadline exceeded" };
+          input = inputCandidates(inputSelector) || input;
+        }
+      }
+      const baseline = promptAttachmentSnapshot(input, { gemini: true });
+      const result = await attachGeminiPromptImagesOnce(list, input, textValue);
+      if (!result.ok) lastReason = result.reason || "Gemini image and text insertion failed";
+      const earlyText = await commitPastedPromptTextEarly(input, textValue, inputSelector, deadlineAt);
+      input = earlyText.input || input;
+      const ready = await waitForPromptImagesReady(
+        input,
+        baseline.count + list.length,
+        Math.min(45000, remainingDeadlineMs(deadlineAt, 45000)),
+        deadlineAt,
+        { gemini: true, exactCount: true }
+      );
+      if (ready.ok && earlyText.ok) return { ok: true, attempts: attempt, snapshot: ready.snapshot, input };
+      lastReason = ready.overflow
+        ? "Gemini attached duplicate image files"
+        : !earlyText.ok
+          ? earlyText.reason || "Gemini prompt text was not committed immediately after paste"
+          : ready.reason || "Gemini image upload did not become ready";
+    }
+    return { ok: false, reason: lastReason || "Gemini image and text upload did not become ready" };
   }
 
   async function attachGrokPromptImagesWithRetries(input, files = [], retryCount = 3, inputSelector = "", deadlineAt = 0, textValue = "") {
@@ -1970,6 +2125,7 @@
     if (isNotionSendTarget(data)) return sendNotionText(data);
     const grok = isGrokSendTarget(data);
     const kagi = isKagiSendTarget(data);
+    const gemini = isGeminiSendTarget(data);
     const deadlineAt = sendDeadlineAt(data, Array.isArray(data?.images) && data.images.length ? 60000 : 10000);
     if (deadlineExpired(deadlineAt)) throw new Error("Send deadline exceeded");
     let input = inputCandidates(data?.inputSelector);
@@ -1979,20 +2135,24 @@
     if (Array.isArray(data?.images) && data.images.length && !files.length) {
       throw new Error("Image payload could not be restored");
     }
+    const batch = promptImagePasteStrategy(data) === PROMPT_IMAGE_PASTE_STRATEGY_BATCH;
+    const geminiBatch = gemini && batch;
     if (files.length) {
-      const batch = promptImagePasteStrategy(data) === PROMPT_IMAGE_PASTE_STRATEGY_BATCH;
       const attached = grok
         ? await attachGrokPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt, textValue)
         : kagi
           ? await attachKagiPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt, textValue)
+          : geminiBatch
+            ? await attachGeminiPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt, textValue)
           : batch
             ? await attachBatchPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt)
             : await attachPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt);
       if (!attached.ok) throw new Error(attached.reason || "Image insertion failed");
-      if (grok || kagi) input = inputCandidates(data?.inputSelector) || input;
+      if (grok || kagi || geminiBatch) input = inputCandidates(data?.inputSelector) || attached.input || input;
     }
     if (deadlineExpired(deadlineAt)) throw new Error("Send deadline exceeded");
-    if (textValue.trim() && (!(grok || kagi) || compareText(text(input)) !== compareText(textValue))) await setInputValue(input, textValue);
+    const combinedPaste = files.length > 0 && (grok || kagi || geminiBatch);
+    if (textValue.trim() && (!combinedPaste || compareText(text(input)) !== compareText(textValue))) await setInputValue(input, textValue);
     await sleepUntilDeadline(grok ? 320 : 140, deadlineAt);
     const submit = await waitForPromptSubmitReady(input, data?.sendButtonSelector, deadlineAt, files.length ? 12000 : 8000);
     if (submit) {

@@ -1,7 +1,7 @@
 import { DEFAULT_TOPBAR_LAYOUT } from "./topbar.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-07-10｜14:28:42」";
+export const APP_VERSION = "「2026-07-10｜15:39:39」";
 export const BASELINE_MOD_VERSION = "2.4.0.14";
 export const HOMEPAGE_URL = "https://chatclub.local/";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
@@ -377,7 +377,8 @@ export const BUILTIN_CHAT_APPS = [
     url: "https://gemini.google.com/app",
     hosts: ["gemini.google.com", "*.gemini.google.com"],
     inputSelector: "rich-textarea div[contenteditable='true'], textarea, [contenteditable='true']",
-    sendButtonSelector: "button[aria-label*='Send' i]"
+    sendButtonSelector: "button[aria-label*='Send' i]",
+    imagePasteStrategy: PROMPT_IMAGE_PASTE_STRATEGY_BATCH
   },
   {
     id: "Grok",
