@@ -20,7 +20,7 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | ChatGPT | https://chatgpt.com/ | ✓ | ✓ | ✓ | ✓ |  |
 | Claude | https://claude.ai/new | ✓ | ✓ | ✓ |  |  |
-| Gemini | https://gemini.google.com/app | ✓ | ✓ | ✓ |  | ✓ |
+| Gemini | https://gemini.google.com/app | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Grok | https://grok.com/ | ✓ | ✓ |  | ✓ | ✓ |
 | Grok Mirror | https://gk.dairoot.cn/ | ✓ | ✓ | ✓ | ✓ |  |
 | DeepSeek | https://chat.deepseek.com/ | ✓ | ✓ | ✓ | ✓ | ✓ |

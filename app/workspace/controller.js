@@ -208,6 +208,7 @@ export function createWorkspaceController(ctx = {}) {
       const host = url.hostname.toLowerCase();
       const path = url.pathname || "";
       if (/\/(?:a\/)?chat\/s\/[^/?#]+/i.test(path)) return href;
+      if ((host === "gemini.google.com" || host.endsWith(".gemini.google.com")) && /^\/app\/[^/?#]+/i.test(path)) return href;
       if (host === "assistant.kagi.com" && /^\/chat\/[^/?#]+/i.test(path)) return href;
       if ((host === "app.notion.com" || host.endsWith(".notion.com")) && path === "/chat" && url.searchParams.get("t")) return href;
       if ((host === "grok.com" || host.endsWith(".grok.com") || host === "grok.x.ai" || host.endsWith(".grok.x.ai") || host === "gk.dairoot.cn" || host.endsWith(".gk.dairoot.cn")) && /^\/(?:c|chat)\//i.test(path)) return href;

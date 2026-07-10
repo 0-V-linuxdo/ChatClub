@@ -1,6 +1,6 @@
 const SOURCE = "chatclub";
 export const SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.10.1";
-export const DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.04.1";
+export const DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.10.2";
 export const MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.08.12";
 export const SUMMARY_POST_MESSAGE_SOURCE = "chatclub:summary:2026.07.08.13";
 

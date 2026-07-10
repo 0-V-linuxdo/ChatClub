@@ -1,288 +1,23 @@
-const DELETE_USERSCRIPT_VERSION = "2026.07.05.1";
-const GEMINI_DELETE_USERSCRIPT_VERSION = "2026.07.10.1";
-const DELETE_USERSCRIPT_NAMESPACE = "https://chatclub.local/delete-sites";
+// ==UserScript==
+// @name        ChatClub Delete Site - Gemini
+// @namespace   https://chatclub.local/delete-sites
+// @version     2026.07.10.1
+// @description Delete the current Gemini conversation when ChatClub or the userscript menu requests it.
+// @match       https://gemini.google.com/*
+// @match       https://*.gemini.google.com/*
+// @run-at      document-idle
+// @grant       GM_registerMenuCommand
+// @grant       unsafeWindow
+// ==/UserScript==
 
-const GEMINI_DELETE_USERSCRIPT_HELPERS = String.raw`
-  const GEMINI_CONVERSATION_ACTION_SELECTOR = [
-    "top-bar-actions conversation-actions-icon button[data-test-id='conversation-actions-menu-icon-button']",
-    "top-bar-actions button[data-test-id='conversation-actions-menu-icon-button']",
-    "top-bar-actions button.conversation-actions-menu-button",
-    "top-bar-actions button[aria-label*='conversation actions' i]",
-    "top-bar-actions button[aria-label*='open menu' i]",
-    "button[data-test-id='conversation-actions-menu-icon-button']",
-    "button.conversation-actions-menu-button",
-    "button[aria-label*='Open menu for conversation actions' i]",
-    "button[aria-label*='conversation actions' i]",
-    "button[aria-label*='more options' i]",
-    "button[data-test-id='actions-menu-button']"
-  ].join(", ");
-  const GEMINI_CONVERSATION_MENU_ROOT_SELECTOR = [
-    ".cdk-overlay-pane .mat-mdc-menu-panel[role='menu']",
-    ".cdk-overlay-pane .mat-menu-panel[role='menu']",
-    ".cdk-overlay-pane [role='menu']",
-    ".cdk-overlay-pane .mat-mdc-menu-panel",
-    ".cdk-overlay-pane .mat-menu-panel",
-    ".mat-mdc-menu-panel[role='menu']",
-    ".mat-menu-panel[role='menu']",
-    ".cdk-overlay-pane"
-  ].join(", ");
-  const GEMINI_CONVERSATION_MENU_ITEM_SELECTOR = [
-    "button[mat-menu-item]",
-    "button.mat-mdc-menu-item",
-    "button[aria-label]",
-    "button[jslog]",
-    "button[data-test-id]",
-    "[role='menuitem']",
-    "[role='menuitemradio']",
-    "[role='menuitemcheckbox']",
-    "[role='button']",
-    "[aria-label]",
-    "[title]",
-    "[jslog]",
-    "[data-test-id]",
-    "[tabindex]",
-    "mat-icon",
-    "span",
-    "div"
-  ].join(", ");
-  const GEMINI_CONVERSATION_MENU_MARKERS = ["Delete", "Rename", "Pin", "Share", "Unpin", "删除", "重命名", "固定", "取消固定", "分享"];
 
-  function geminiCollectTextExcludingIcons(node, parts = []) {
-    if (!node) return parts;
-    if (node.nodeType === 3) {
-      parts.push(node.nodeValue || "");
-      return parts;
-    }
-    if (node.nodeType !== 1) return parts;
-    const tagName = String(node.tagName || "").toLowerCase();
-    if (tagName === "mat-icon") return parts;
-    if (String(node.getAttribute?.("aria-hidden") || "").trim().toLowerCase() === "true") return parts;
-    if (node.hasAttribute?.("fonticon") || node.hasAttribute?.("data-mat-icon-name")) return parts;
-    try {
-      for (const child of Array.from(node.childNodes || [])) geminiCollectTextExcludingIcons(child, parts);
-    } catch {}
-    return parts;
-  }
-
-  function geminiUiText(node) {
-    if (!node) return "";
-    const ariaLabel = node.getAttribute?.("aria-label");
-    if (ariaLabel && String(ariaLabel).trim()) return normalize(ariaLabel);
-    const title = node.getAttribute?.("title");
-    if (title && String(title).trim()) return normalize(title);
-    const withoutIcons = normalize(geminiCollectTextExcludingIcons(node, []).join(" "));
-    if (withoutIcons) return withoutIcons;
-    return normalize(node.textContent || "");
-  }
-
-  function geminiJslogId(node) {
-    for (let current = node, depth = 0; current && depth < 5; current = current.parentElement, depth += 1) {
-      const match = String(current.getAttribute?.("jslog") || "").match(/^\s*([0-9]+)/);
-      if (match) return match[1];
-    }
-    return "";
-  }
-
-  function geminiDataTestIds(node) {
-    const ids = [];
-    const add = (item) => {
-      const id = String(item?.getAttribute?.("data-test-id") || "").trim().toLowerCase();
-      if (id && !ids.includes(id)) ids.push(id);
-    };
-    add(node);
-    qsa("[data-test-id]", node).forEach(add);
-    return ids;
-  }
-
-  function geminiMenuItemLooksLikeNotebook(node) {
-    const value = normalize([geminiUiText(node), elementText(node), geminiDataTestIds(node).join(" ")].join(" "));
-    return /\bnotebook\b/i.test(value) || value.includes("笔记本");
-  }
-
-  function geminiMenuMarkerCount(node) {
-    const value = normalize([geminiUiText(node), node?.textContent].filter(Boolean).join(" ")).toLowerCase();
-    const matched = [];
-    for (const marker of GEMINI_CONVERSATION_MENU_MARKERS.map((item) => item.toLowerCase()).sort((a, b) => b.length - a.length)) {
-      if (!value.includes(marker) || matched.some((existing) => existing.includes(marker))) continue;
-      matched.push(marker);
-    }
-    return matched.length;
-  }
-
-  function geminiConversationMenuRoot(node) {
-    if (!node || !visible(node)) return false;
-    const tagName = String(node.tagName || "").toLowerCase();
-    const role = String(node.getAttribute?.("role") || "").toLowerCase();
-    if (tagName === "mat-dialog-container" || role === "dialog") return false;
-    const isOverlay = Boolean(node.matches?.(".cdk-overlay-pane"));
-    const panel = node.matches?.(".mat-mdc-menu-panel, .mat-menu-panel, [role='menu']")
-      ? node
-      : node.querySelector?.(".mat-mdc-menu-panel, .mat-menu-panel, [role='menu']");
-    if (!panel && !isOverlay) return false;
-    if (node.querySelector?.("mat-dialog-container, [role='dialog']")) return false;
-    if (node.querySelector?.("button[data-test-id='delete-button'],button[data-test-id='pin-button'],button[data-test-id='rename-button'],button[aria-label*='Delete' i],button[aria-label*='Rename' i],button[aria-label*='Pin' i],button[aria-label*='Share' i]")) return true;
-    return geminiMenuMarkerCount(node) > 0;
-  }
-
-  function geminiConversationActionButtonExcluded(button) {
-    if (!button || !visible(button)) return true;
-    if (button.closest?.("bard-sidenav, side-navigation-content, .sidenav-with-history-container, .conversation-items-container, side-nav-action-button")) return true;
-    if (button.closest?.("input-area-v2, [data-node-type='input-area'], [contenteditable='true'], .prompt-input, .composer, .prompt-composer")) return true;
-    if (button.closest?.("user-query,user-query-content,model-response,message-content,message-actions,response-actions,.message-actions,.response-actions,[data-test-id*='user-query' i],[data-test-id*='model-response' i],[data-test-id*='response' i],[data-test-id*='message' i],[data-test-id*='query' i]")) return true;
-    if (button.closest?.(".cdk-overlay-pane .mat-mdc-menu-panel,.cdk-overlay-pane .mat-menu-panel,.cdk-overlay-pane [role='menu'],mat-dialog-container,[role='dialog']")) return true;
-    return false;
-  }
-
-  function geminiConversationActionButton() {
-    const candidates = [];
-    for (const button of qsa(GEMINI_CONVERSATION_ACTION_SELECTOR, document)) {
-      if (geminiConversationActionButtonExcluded(button)) continue;
-      const dataTestId = String(button.getAttribute?.("data-test-id") || "").trim().toLowerCase();
-      const ariaLabel = normalize(button.getAttribute?.("aria-label") || "").toLowerCase();
-      const title = normalize(button.getAttribute?.("title") || "").toLowerCase();
-      const text = geminiUiText(button).toLowerCase();
-      const className = String(button.className || "").toLowerCase();
-      const inTopBar = Boolean(button.closest?.("top-bar-actions"));
-      const explicitlyConversationAction = inTopBar
-        || dataTestId === "conversation-actions-menu-icon-button"
-        || className.includes("conversation-actions-menu-button")
-        || ariaLabel.includes("conversation actions")
-        || ariaLabel.includes("open menu for conversation actions")
-        || title.includes("conversation actions")
-        || text.includes("conversation actions");
-      if (!explicitlyConversationAction) continue;
-      const box = rect(button);
-      let score = 0;
-      if (dataTestId === "conversation-actions-menu-icon-button") score += 160;
-      if (dataTestId === "actions-menu-button") score += 70;
-      if (className.includes("conversation-actions-menu-button")) score += 130;
-      if (inTopBar) score += 120;
-      if (ariaLabel.includes("conversation actions")) score += 100;
-      if (ariaLabel.includes("open menu for conversation actions")) score += 140;
-      if (inTopBar && ariaLabel.includes("more options")) score += 40;
-      if (title.includes("conversation actions")) score += 60;
-      if (text.includes("conversation actions")) score += 70;
-      if (inTopBar && /more_vert/i.test(elementText(button))) score += 35;
-      if (box && box.top <= Math.max(220, (window.innerHeight || 1) * 0.32)) score += 20;
-      if (box && box.left >= (window.innerWidth || 1) * 0.42) score += 20;
-      candidates.push({ node: button, score });
-    }
-    candidates.sort((a, b) => b.score - a.score);
-    return candidates[0]?.node || null;
-  }
-
-  function geminiConversationMenuRoots(trigger = null) {
-    const roots = [];
-    const add = (node) => {
-      if (node && geminiConversationMenuRoot(node) && !roots.includes(node)) roots.push(node);
-    };
-    const controlsId = String(trigger?.getAttribute?.("aria-controls") || "").trim();
-    if (controlsId) {
-      try { add(document.getElementById(controlsId)); } catch {}
-    }
-    qsa(GEMINI_CONVERSATION_MENU_ROOT_SELECTOR, document).forEach(add);
-    return roots;
-  }
-
-  function geminiDeleteMenuItemMatches(node) {
-    if (!node || !visible(node) || disabled(node) || geminiMenuItemLooksLikeNotebook(node)) return false;
-    const uiText = geminiUiText(node);
-    if (/\bdelete\b/i.test(uiText) || uiText.includes("删除")) return true;
-    if (uiText) return false;
-    if (geminiDataTestIds(node).includes("delete-button")) return true;
-    return geminiJslogId(node) === "186000";
-  }
-
-  function findGeminiDeleteMenuItem(trigger = null) {
-    const candidates = [];
-    const seen = new Set();
-    const roots = geminiConversationMenuRoots(trigger);
-    const add = (node, root, extraScore = 0) => {
-      if (!node || seen.has(node) || !geminiDeleteMenuItemMatches(node)) return;
-      let target = clickable(node) || node;
-      if (target === root || geminiMenuMarkerCount(target) > 1) {
-        target = closest(node, "button,[role='menuitem'],[role='button'],[mat-menu-item],[data-test-id],[jslog],[tabindex]") || node;
-      }
-      if (!target || target === root || seen.has(target) || !visible(target) || disabled(target) || geminiMenuMarkerCount(target) > 1 || geminiMenuItemLooksLikeNotebook(target)) return;
-      const box = rect(target);
-      if (!box || box.width < 8 || box.height < 8 || box.width > 520 || box.height > 140) return;
-      const ids = geminiDataTestIds(target);
-      const uiText = geminiUiText(target);
-      seen.add(node);
-      seen.add(target);
-      candidates.push({
-        node: target,
-        score: extraScore
-          + (ids.includes("delete-button") ? 1000 : 0)
-          + (geminiJslogId(target) === "186000" ? 800 : 0)
-          + (/^(delete|删除)$/i.test(uiText) ? 650 : 0)
-          + (target.matches?.("button,[role='menuitem'],[role='button']") ? 180 : 0),
-        top: box.top,
-        right: box.right
-      });
-    };
-    for (let index = roots.length - 1; index >= 0; index -= 1) {
-      const root = roots[index];
-      qsa(GEMINI_CONVERSATION_MENU_ITEM_SELECTOR, root).forEach((node) => add(node, root, 240 + index));
-    }
-    candidates.sort((a, b) => b.score - a.score || b.right - a.right || a.top - b.top);
-    return candidates[0]?.node || null;
-  }
-
-  function resultWithGeminiTrustedMenuClick(reason, node) {
-    const value = result(false, reason);
-    const trustedMenuClick = trustedMenuClickForElement(node, reason);
-    return trustedMenuClick ? { ...value, needsTrustedMenuClick: true, trustedMenuClick } : value;
-  }
-
-  async function clickGeminiDeleteMenuItem(trigger) {
-    const menuReady = () => findGeminiDeleteMenuItem(trigger);
-    let item = menuReady();
-    if (!item) item = await clickUntil(trigger, menuReady, { settleMs: 220 });
-    if (!item) return null;
-    await sleep(120);
-    item = findGeminiDeleteMenuItem(trigger) || item;
-    return clickAt(item) ? item : null;
-  }
-
-  async function deleteGemini(payload = {}) {
-    if (findDeleteConfirmButton()) {
-      const confirmedExisting = await clickDeleteConfirmIfPresent(6500);
-      return confirmedExisting ? result(true) : resultWithTrustedDeleteConfirm("delete confirmation did not close");
-    }
-    if (payload?.trustedMenuClickRetried) {
-      const openItem = await waitFor(() => findGeminiDeleteMenuItem(), 3000, 90);
-      if (openItem) {
-        clickAt(openItem);
-        const confirmedAfterTrustedMenu = await clickDeleteConfirmIfPresent(6500);
-        if (confirmedAfterTrustedMenu) return result(true);
-        if (deleteDialogRoots().length) return resultWithTrustedDeleteConfirm("delete confirmation did not close");
-        const stillOpenItem = findGeminiDeleteMenuItem();
-        if (stillOpenItem) return result(false, "trusted delete menu click did not open confirmation");
-      }
-      return result(false, "trusted conversation menu click did not open delete menu");
-    }
-    const trigger = geminiConversationActionButton();
-    if (!trigger) return result(false, "conversation menu trigger not found");
-    const clickedItem = await clickGeminiDeleteMenuItem(trigger);
-    if (!clickedItem) return resultWithGeminiTrustedMenuClick("delete menu item not found", trigger);
-    const confirmed = await clickDeleteConfirmIfPresent(6500);
-    if (confirmed) return result(true);
-    if (deleteDialogRoots().length) return resultWithTrustedDeleteConfirm("delete confirmation did not close");
-    const stillOpenItem = findGeminiDeleteMenuItem(trigger);
-    if (stillOpenItem) return resultWithGeminiTrustedMenuClick("delete menu item did not open confirmation", stillOpenItem);
-    return result(false, "delete confirmation button not found");
-  }
-`;
-
-const DELETE_USERSCRIPT_ENGINE = String.raw`
 (function () {
   "use strict";
 
-  const SITE_ID = __CHATCLUB_DELETE_SITE_ID__;
-  const SITE_NAME = __CHATCLUB_DELETE_SITE_NAME__;
-  const SITE_KEYS = __CHATCLUB_DELETE_SITE_KEYS__;
-  const VERSION = __CHATCLUB_DELETE_SITE_VERSION__;
+  const SITE_ID = "gemini";
+  const SITE_NAME = "Gemini";
+  const SITE_KEYS = ["gemini","Gemini","Gemini"];
+  const VERSION = "2026.07.10.1";
   const REQUEST_EVENT = "chatclub:delete-site:request";
   const VERSIONED_REQUEST_EVENT = REQUEST_EVENT + ":" + VERSION;
   const MENU_COMMAND_EVENT = "chatclub:delete-site:menu-command";
@@ -1448,7 +1183,277 @@ const DELETE_USERSCRIPT_ENGINE = String.raw`
       ? result(false, "delete shortcut did not open confirmation")
       : resultWithTrustedDeleteShortcut("delete shortcut did not open confirmation");
   }
-__CHATCLUB_DELETE_SITE_HELPERS__
+
+  const GEMINI_CONVERSATION_ACTION_SELECTOR = [
+    "top-bar-actions conversation-actions-icon button[data-test-id='conversation-actions-menu-icon-button']",
+    "top-bar-actions button[data-test-id='conversation-actions-menu-icon-button']",
+    "top-bar-actions button.conversation-actions-menu-button",
+    "top-bar-actions button[aria-label*='conversation actions' i]",
+    "top-bar-actions button[aria-label*='open menu' i]",
+    "button[data-test-id='conversation-actions-menu-icon-button']",
+    "button.conversation-actions-menu-button",
+    "button[aria-label*='Open menu for conversation actions' i]",
+    "button[aria-label*='conversation actions' i]",
+    "button[aria-label*='more options' i]",
+    "button[data-test-id='actions-menu-button']"
+  ].join(", ");
+  const GEMINI_CONVERSATION_MENU_ROOT_SELECTOR = [
+    ".cdk-overlay-pane .mat-mdc-menu-panel[role='menu']",
+    ".cdk-overlay-pane .mat-menu-panel[role='menu']",
+    ".cdk-overlay-pane [role='menu']",
+    ".cdk-overlay-pane .mat-mdc-menu-panel",
+    ".cdk-overlay-pane .mat-menu-panel",
+    ".mat-mdc-menu-panel[role='menu']",
+    ".mat-menu-panel[role='menu']",
+    ".cdk-overlay-pane"
+  ].join(", ");
+  const GEMINI_CONVERSATION_MENU_ITEM_SELECTOR = [
+    "button[mat-menu-item]",
+    "button.mat-mdc-menu-item",
+    "button[aria-label]",
+    "button[jslog]",
+    "button[data-test-id]",
+    "[role='menuitem']",
+    "[role='menuitemradio']",
+    "[role='menuitemcheckbox']",
+    "[role='button']",
+    "[aria-label]",
+    "[title]",
+    "[jslog]",
+    "[data-test-id]",
+    "[tabindex]",
+    "mat-icon",
+    "span",
+    "div"
+  ].join(", ");
+  const GEMINI_CONVERSATION_MENU_MARKERS = ["Delete", "Rename", "Pin", "Share", "Unpin", "删除", "重命名", "固定", "取消固定", "分享"];
+
+  function geminiCollectTextExcludingIcons(node, parts = []) {
+    if (!node) return parts;
+    if (node.nodeType === 3) {
+      parts.push(node.nodeValue || "");
+      return parts;
+    }
+    if (node.nodeType !== 1) return parts;
+    const tagName = String(node.tagName || "").toLowerCase();
+    if (tagName === "mat-icon") return parts;
+    if (String(node.getAttribute?.("aria-hidden") || "").trim().toLowerCase() === "true") return parts;
+    if (node.hasAttribute?.("fonticon") || node.hasAttribute?.("data-mat-icon-name")) return parts;
+    try {
+      for (const child of Array.from(node.childNodes || [])) geminiCollectTextExcludingIcons(child, parts);
+    } catch {}
+    return parts;
+  }
+
+  function geminiUiText(node) {
+    if (!node) return "";
+    const ariaLabel = node.getAttribute?.("aria-label");
+    if (ariaLabel && String(ariaLabel).trim()) return normalize(ariaLabel);
+    const title = node.getAttribute?.("title");
+    if (title && String(title).trim()) return normalize(title);
+    const withoutIcons = normalize(geminiCollectTextExcludingIcons(node, []).join(" "));
+    if (withoutIcons) return withoutIcons;
+    return normalize(node.textContent || "");
+  }
+
+  function geminiJslogId(node) {
+    for (let current = node, depth = 0; current && depth < 5; current = current.parentElement, depth += 1) {
+      const match = String(current.getAttribute?.("jslog") || "").match(/^\s*([0-9]+)/);
+      if (match) return match[1];
+    }
+    return "";
+  }
+
+  function geminiDataTestIds(node) {
+    const ids = [];
+    const add = (item) => {
+      const id = String(item?.getAttribute?.("data-test-id") || "").trim().toLowerCase();
+      if (id && !ids.includes(id)) ids.push(id);
+    };
+    add(node);
+    qsa("[data-test-id]", node).forEach(add);
+    return ids;
+  }
+
+  function geminiMenuItemLooksLikeNotebook(node) {
+    const value = normalize([geminiUiText(node), elementText(node), geminiDataTestIds(node).join(" ")].join(" "));
+    return /\bnotebook\b/i.test(value) || value.includes("笔记本");
+  }
+
+  function geminiMenuMarkerCount(node) {
+    const value = normalize([geminiUiText(node), node?.textContent].filter(Boolean).join(" ")).toLowerCase();
+    const matched = [];
+    for (const marker of GEMINI_CONVERSATION_MENU_MARKERS.map((item) => item.toLowerCase()).sort((a, b) => b.length - a.length)) {
+      if (!value.includes(marker) || matched.some((existing) => existing.includes(marker))) continue;
+      matched.push(marker);
+    }
+    return matched.length;
+  }
+
+  function geminiConversationMenuRoot(node) {
+    if (!node || !visible(node)) return false;
+    const tagName = String(node.tagName || "").toLowerCase();
+    const role = String(node.getAttribute?.("role") || "").toLowerCase();
+    if (tagName === "mat-dialog-container" || role === "dialog") return false;
+    const isOverlay = Boolean(node.matches?.(".cdk-overlay-pane"));
+    const panel = node.matches?.(".mat-mdc-menu-panel, .mat-menu-panel, [role='menu']")
+      ? node
+      : node.querySelector?.(".mat-mdc-menu-panel, .mat-menu-panel, [role='menu']");
+    if (!panel && !isOverlay) return false;
+    if (node.querySelector?.("mat-dialog-container, [role='dialog']")) return false;
+    if (node.querySelector?.("button[data-test-id='delete-button'],button[data-test-id='pin-button'],button[data-test-id='rename-button'],button[aria-label*='Delete' i],button[aria-label*='Rename' i],button[aria-label*='Pin' i],button[aria-label*='Share' i]")) return true;
+    return geminiMenuMarkerCount(node) > 0;
+  }
+
+  function geminiConversationActionButtonExcluded(button) {
+    if (!button || !visible(button)) return true;
+    if (button.closest?.("bard-sidenav, side-navigation-content, .sidenav-with-history-container, .conversation-items-container, side-nav-action-button")) return true;
+    if (button.closest?.("input-area-v2, [data-node-type='input-area'], [contenteditable='true'], .prompt-input, .composer, .prompt-composer")) return true;
+    if (button.closest?.("user-query,user-query-content,model-response,message-content,message-actions,response-actions,.message-actions,.response-actions,[data-test-id*='user-query' i],[data-test-id*='model-response' i],[data-test-id*='response' i],[data-test-id*='message' i],[data-test-id*='query' i]")) return true;
+    if (button.closest?.(".cdk-overlay-pane .mat-mdc-menu-panel,.cdk-overlay-pane .mat-menu-panel,.cdk-overlay-pane [role='menu'],mat-dialog-container,[role='dialog']")) return true;
+    return false;
+  }
+
+  function geminiConversationActionButton() {
+    const candidates = [];
+    for (const button of qsa(GEMINI_CONVERSATION_ACTION_SELECTOR, document)) {
+      if (geminiConversationActionButtonExcluded(button)) continue;
+      const dataTestId = String(button.getAttribute?.("data-test-id") || "").trim().toLowerCase();
+      const ariaLabel = normalize(button.getAttribute?.("aria-label") || "").toLowerCase();
+      const title = normalize(button.getAttribute?.("title") || "").toLowerCase();
+      const text = geminiUiText(button).toLowerCase();
+      const className = String(button.className || "").toLowerCase();
+      const inTopBar = Boolean(button.closest?.("top-bar-actions"));
+      const explicitlyConversationAction = inTopBar
+        || dataTestId === "conversation-actions-menu-icon-button"
+        || className.includes("conversation-actions-menu-button")
+        || ariaLabel.includes("conversation actions")
+        || ariaLabel.includes("open menu for conversation actions")
+        || title.includes("conversation actions")
+        || text.includes("conversation actions");
+      if (!explicitlyConversationAction) continue;
+      const box = rect(button);
+      let score = 0;
+      if (dataTestId === "conversation-actions-menu-icon-button") score += 160;
+      if (dataTestId === "actions-menu-button") score += 70;
+      if (className.includes("conversation-actions-menu-button")) score += 130;
+      if (inTopBar) score += 120;
+      if (ariaLabel.includes("conversation actions")) score += 100;
+      if (ariaLabel.includes("open menu for conversation actions")) score += 140;
+      if (inTopBar && ariaLabel.includes("more options")) score += 40;
+      if (title.includes("conversation actions")) score += 60;
+      if (text.includes("conversation actions")) score += 70;
+      if (inTopBar && /more_vert/i.test(elementText(button))) score += 35;
+      if (box && box.top <= Math.max(220, (window.innerHeight || 1) * 0.32)) score += 20;
+      if (box && box.left >= (window.innerWidth || 1) * 0.42) score += 20;
+      candidates.push({ node: button, score });
+    }
+    candidates.sort((a, b) => b.score - a.score);
+    return candidates[0]?.node || null;
+  }
+
+  function geminiConversationMenuRoots(trigger = null) {
+    const roots = [];
+    const add = (node) => {
+      if (node && geminiConversationMenuRoot(node) && !roots.includes(node)) roots.push(node);
+    };
+    const controlsId = String(trigger?.getAttribute?.("aria-controls") || "").trim();
+    if (controlsId) {
+      try { add(document.getElementById(controlsId)); } catch {}
+    }
+    qsa(GEMINI_CONVERSATION_MENU_ROOT_SELECTOR, document).forEach(add);
+    return roots;
+  }
+
+  function geminiDeleteMenuItemMatches(node) {
+    if (!node || !visible(node) || disabled(node) || geminiMenuItemLooksLikeNotebook(node)) return false;
+    const uiText = geminiUiText(node);
+    if (/\bdelete\b/i.test(uiText) || uiText.includes("删除")) return true;
+    if (uiText) return false;
+    if (geminiDataTestIds(node).includes("delete-button")) return true;
+    return geminiJslogId(node) === "186000";
+  }
+
+  function findGeminiDeleteMenuItem(trigger = null) {
+    const candidates = [];
+    const seen = new Set();
+    const roots = geminiConversationMenuRoots(trigger);
+    const add = (node, root, extraScore = 0) => {
+      if (!node || seen.has(node) || !geminiDeleteMenuItemMatches(node)) return;
+      let target = clickable(node) || node;
+      if (target === root || geminiMenuMarkerCount(target) > 1) {
+        target = closest(node, "button,[role='menuitem'],[role='button'],[mat-menu-item],[data-test-id],[jslog],[tabindex]") || node;
+      }
+      if (!target || target === root || seen.has(target) || !visible(target) || disabled(target) || geminiMenuMarkerCount(target) > 1 || geminiMenuItemLooksLikeNotebook(target)) return;
+      const box = rect(target);
+      if (!box || box.width < 8 || box.height < 8 || box.width > 520 || box.height > 140) return;
+      const ids = geminiDataTestIds(target);
+      const uiText = geminiUiText(target);
+      seen.add(node);
+      seen.add(target);
+      candidates.push({
+        node: target,
+        score: extraScore
+          + (ids.includes("delete-button") ? 1000 : 0)
+          + (geminiJslogId(target) === "186000" ? 800 : 0)
+          + (/^(delete|删除)$/i.test(uiText) ? 650 : 0)
+          + (target.matches?.("button,[role='menuitem'],[role='button']") ? 180 : 0),
+        top: box.top,
+        right: box.right
+      });
+    };
+    for (let index = roots.length - 1; index >= 0; index -= 1) {
+      const root = roots[index];
+      qsa(GEMINI_CONVERSATION_MENU_ITEM_SELECTOR, root).forEach((node) => add(node, root, 240 + index));
+    }
+    candidates.sort((a, b) => b.score - a.score || b.right - a.right || a.top - b.top);
+    return candidates[0]?.node || null;
+  }
+
+  function resultWithGeminiTrustedMenuClick(reason, node) {
+    const value = result(false, reason);
+    const trustedMenuClick = trustedMenuClickForElement(node, reason);
+    return trustedMenuClick ? { ...value, needsTrustedMenuClick: true, trustedMenuClick } : value;
+  }
+
+  async function clickGeminiDeleteMenuItem(trigger) {
+    const menuReady = () => findGeminiDeleteMenuItem(trigger);
+    let item = menuReady();
+    if (!item) item = await clickUntil(trigger, menuReady, { settleMs: 220 });
+    if (!item) return null;
+    await sleep(120);
+    item = findGeminiDeleteMenuItem(trigger) || item;
+    return clickAt(item) ? item : null;
+  }
+
+  async function deleteGemini(payload = {}) {
+    if (findDeleteConfirmButton()) {
+      const confirmedExisting = await clickDeleteConfirmIfPresent(6500);
+      return confirmedExisting ? result(true) : resultWithTrustedDeleteConfirm("delete confirmation did not close");
+    }
+    if (payload?.trustedMenuClickRetried) {
+      const openItem = await waitFor(() => findGeminiDeleteMenuItem(), 3000, 90);
+      if (openItem) {
+        clickAt(openItem);
+        const confirmedAfterTrustedMenu = await clickDeleteConfirmIfPresent(6500);
+        if (confirmedAfterTrustedMenu) return result(true);
+        if (deleteDialogRoots().length) return resultWithTrustedDeleteConfirm("delete confirmation did not close");
+        const stillOpenItem = findGeminiDeleteMenuItem();
+        if (stillOpenItem) return result(false, "trusted delete menu click did not open confirmation");
+      }
+      return result(false, "trusted conversation menu click did not open delete menu");
+    }
+    const trigger = geminiConversationActionButton();
+    if (!trigger) return result(false, "conversation menu trigger not found");
+    const clickedItem = await clickGeminiDeleteMenuItem(trigger);
+    if (!clickedItem) return resultWithGeminiTrustedMenuClick("delete menu item not found", trigger);
+    const confirmed = await clickDeleteConfirmIfPresent(6500);
+    if (confirmed) return result(true);
+    if (deleteDialogRoots().length) return resultWithTrustedDeleteConfirm("delete confirmation did not close");
+    const stillOpenItem = findGeminiDeleteMenuItem(trigger);
+    if (stillOpenItem) return resultWithGeminiTrustedMenuClick("delete menu item did not open confirmation", stillOpenItem);
+    return result(false, "delete confirmation button not found");
+  }
 
   async function deleteTopRight(site, deleteLabels, menuLabels, selectors = []) {
     const trigger = topRightMenuTrigger(menuLabels, selectors);
@@ -1880,7 +1885,8 @@ __CHATCLUB_DELETE_SITE_HELPERS__
   }
 
   const runners = {
-__CHATCLUB_DELETE_SITE_RUNNER__    chatgpt: deleteChatGpt,
+    gemini: deleteGemini,
+    chatgpt: deleteChatGpt,
     kagi: deleteKagi,
     grok: () => deleteTopRight("grok", ["Delete Chat", "Delete chat", "Delete", "删除聊天", "删除"], ["More", "More actions", "Menu", "Options", "更多", "菜单"]),
     grokMirror: () => deleteTopRight("grokMirror", ["Delete Chat", "Delete chat", "Delete", "删除聊天", "删除"], ["More", "More actions", "Menu", "Options", "更多", "菜单"]),
@@ -2028,102 +2034,3 @@ __CHATCLUB_DELETE_SITE_RUNNER__    chatgpt: deleteChatGpt,
     });
   }
 })();
-`;
-
-function metadataLines(items = []) {
-  return items.map(([key, value]) => `// ${key.padEnd(12, " ")} ${value}`).join("\n");
-}
-
-function standaloneDeleteUserscript({ id, name, description, matches, keys, version = DELETE_USERSCRIPT_VERSION, helpers = "", runner = "" }) {
-  const header = [
-    "// ==UserScript==",
-    metadataLines([
-      ["@name", `ChatClub Delete Site - ${name}`],
-      ["@namespace", DELETE_USERSCRIPT_NAMESPACE],
-      ["@version", version],
-      ["@description", description],
-      ...matches.map((match) => ["@match", match]),
-      ["@run-at", "document-idle"],
-      ["@grant", "GM_registerMenuCommand"],
-      ["@grant", "unsafeWindow"]
-    ]),
-    "// ==/UserScript=="
-  ].join("\n");
-  const engine = DELETE_USERSCRIPT_ENGINE
-    .replace("__CHATCLUB_DELETE_SITE_ID__", JSON.stringify(id))
-    .replace("__CHATCLUB_DELETE_SITE_NAME__", JSON.stringify(name))
-    .replace("__CHATCLUB_DELETE_SITE_KEYS__", JSON.stringify([id, name, ...(keys || [])]))
-    .replace("__CHATCLUB_DELETE_SITE_VERSION__", JSON.stringify(version))
-    .replace("__CHATCLUB_DELETE_SITE_HELPERS__\n", helpers)
-    .replace("__CHATCLUB_DELETE_SITE_RUNNER__", runner);
-  return `${header}\n\n${engine.trimEnd()}\n`;
-}
-
-export const KAGI_DELETE_USERSCRIPT = standaloneDeleteUserscript({
-  id: "kagi",
-  name: "Kagi Assistant",
-  description: "Delete the current Kagi Assistant chat when ChatClub or the userscript menu requests it.",
-  matches: ["https://assistant.kagi.com/*"],
-  keys: ["Kagi"]
-});
-
-export const CHATGPT_DELETE_USERSCRIPT = standaloneDeleteUserscript({
-  id: "chatgpt",
-  name: "ChatGPT",
-  description: "Delete the current ChatGPT chat when ChatClub or the userscript menu requests it.",
-  matches: ["https://chatgpt.com/*", "https://*.chatgpt.com/*", "https://chat.openai.com/*", "https://*.chat.openai.com/*"],
-  keys: ["ChatGPT"]
-});
-
-export const GEMINI_DELETE_USERSCRIPT = standaloneDeleteUserscript({
-  id: "gemini",
-  name: "Gemini",
-  description: "Delete the current Gemini conversation when ChatClub or the userscript menu requests it.",
-  matches: ["https://gemini.google.com/*", "https://*.gemini.google.com/*"],
-  keys: ["Gemini"],
-  version: GEMINI_DELETE_USERSCRIPT_VERSION,
-  helpers: GEMINI_DELETE_USERSCRIPT_HELPERS,
-  runner: "    gemini: deleteGemini,\n"
-});
-
-export const GROK_DELETE_USERSCRIPT = standaloneDeleteUserscript({
-  id: "grok",
-  name: "Grok",
-  description: "Delete the current Grok conversation when ChatClub or the userscript menu requests it.",
-  matches: ["https://grok.com/*", "https://*.grok.com/*", "https://grok.x.ai/*", "https://*.grok.x.ai/*"],
-  keys: ["Grok"]
-});
-
-export const GROK_MIRROR_DELETE_USERSCRIPT = standaloneDeleteUserscript({
-  id: "grokMirror",
-  name: "Grok Mirror",
-  description: "Delete the current Grok Mirror conversation when ChatClub or the userscript menu requests it.",
-  matches: ["https://gk.dairoot.cn/*", "https://*.gk.dairoot.cn/*"],
-  keys: ["GrokMirror"]
-});
-
-export const NOTION_DELETE_USERSCRIPT = standaloneDeleteUserscript({
-  id: "notion",
-  name: "Notion AI",
-  description: "Delete the current Notion AI chat when ChatClub or the userscript menu requests it.",
-  matches: ["https://app.notion.com/*", "https://notion.so/*", "https://www.notion.so/*", "https://*.notion.so/*"],
-  keys: ["NotionAI"]
-});
-
-export const DEEPSEEK_DELETE_USERSCRIPT = standaloneDeleteUserscript({
-  id: "deepseek",
-  name: "DeepSeek",
-  description: "Delete the current DeepSeek chat when ChatClub or the userscript menu requests it.",
-  matches: ["https://deepseek.com/*", "https://*.deepseek.com/*"],
-  keys: ["DeepSeek"]
-});
-
-export const TOPIC_DELETE_USERSCRIPT_SOURCES = Object.freeze({
-  chatgpt: CHATGPT_DELETE_USERSCRIPT,
-  gemini: GEMINI_DELETE_USERSCRIPT,
-  kagi: KAGI_DELETE_USERSCRIPT,
-  grok: GROK_DELETE_USERSCRIPT,
-  grokMirror: GROK_MIRROR_DELETE_USERSCRIPT,
-  notion: NOTION_DELETE_USERSCRIPT,
-  deepseek: DEEPSEEK_DELETE_USERSCRIPT
-});

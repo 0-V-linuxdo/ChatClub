@@ -2,6 +2,7 @@ import { configMatchesHref } from "./url-match.js";
 import {
   CHATGPT_DELETE_USERSCRIPT,
   DEEPSEEK_DELETE_USERSCRIPT,
+  GEMINI_DELETE_USERSCRIPT,
   GROK_DELETE_USERSCRIPT,
   GROK_MIRROR_DELETE_USERSCRIPT,
   KAGI_DELETE_USERSCRIPT,
@@ -124,6 +125,14 @@ export const TOPIC_DELETE_SITE_CONFIGS = Object.freeze([
     ...userscriptMeta("topic-delete-userscripts/chatgpt.user.js", CHATGPT_DELETE_USERSCRIPT, 15000)
   }),
   Object.freeze({
+    id: "gemini",
+    name: "Gemini",
+    appIds: Object.freeze(["Gemini"]),
+    hosts: Object.freeze(["gemini.google.com", "*.gemini.google.com"]),
+    pathPrefixes: Object.freeze(["/app"]),
+    ...userscriptMeta("topic-delete-userscripts/gemini.user.js", GEMINI_DELETE_USERSCRIPT, 18000)
+  }),
+  Object.freeze({
     id: "kagi",
     name: "Kagi Assistant",
     appIds: Object.freeze(["Kagi"]),
@@ -231,6 +240,7 @@ function looksLikeGeneratedStandaloneBuiltInUserscript(id, source) {
   if (!sharedMarkers.every((marker) => source.includes(marker))) return false;
   const siteMarkers = {
     chatgpt: ['chatgpt: deleteChatGpt', 'async function deleteChatGpt'],
+    gemini: ['gemini: deleteGemini', 'async function deleteGemini'],
     kagi: ['kagi: deleteKagi', 'async function deleteKagi'],
     grok: ['grok: deleteGrok', 'async function deleteGrok'],
     grokMirror: ['grokMirror: deleteGrok', 'async function deleteGrok'],
