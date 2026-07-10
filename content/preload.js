@@ -1497,7 +1497,7 @@
   }
 
   if (framed && (host === "app.notion.com" || host.endsWith(".notion.so"))) {
-    const NOTION_SEND_BRIDGE_VERSION = "2026.07.09.10";
+    const NOTION_SEND_BRIDGE_VERSION = "2026.07.10.12";
     if (window.__CHATCLUB_NOTION_SEND_BRIDGE_VERSION__ === NOTION_SEND_BRIDGE_VERSION) return;
     try { window.__CHATCLUB_NOTION_SEND_BRIDGE_CLEANUP__?.(); } catch {}
     const notionSendBridgeAbort = new AbortController();
@@ -1506,10 +1506,10 @@
     };
     window.__CHATCLUB_NOTION_SEND_BRIDGE_VERSION__ = NOTION_SEND_BRIDGE_VERSION;
     window.__CHATCLUB_NOTION_SUBMIT_BRIDGE__ = true;
-    const NOTION_SEND_TEXT_SOURCE = "chatclub-notion-send-text:2026.07.09.10";
-    const NOTION_SEND_PROMPT_SOURCE = "chatclub-notion-send-prompt:2026.07.09.10";
-    const NOTION_SEND_TEXT_EVENT = "chatclub:notion-send-text:2026.07.09.10";
-    const NOTION_SEND_PROMPT_EVENT = "chatclub:notion-send-prompt:2026.07.09.10";
+    const NOTION_SEND_TEXT_SOURCE = "chatclub-notion-send-text:2026.07.10.12";
+    const NOTION_SEND_PROMPT_SOURCE = "chatclub-notion-send-prompt:2026.07.10.12";
+    const NOTION_SEND_TEXT_EVENT = "chatclub:notion-send-text:2026.07.10.12";
+    const NOTION_SEND_PROMPT_EVENT = "chatclub:notion-send-prompt:2026.07.10.12";
     const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     const deadlineFromPayload = (payload = {}, fallbackMs = 10000) => {
       const value = Number(payload?.deadlineAt);
@@ -1627,9 +1627,17 @@
         ? "Notion AI collapsed prompt whitespace/newlines before submit"
         : "Notion AI kept the prompt in the composer after submit";
     };
-    const findEditor = () => Array.from(document.querySelectorAll("div[contenteditable='true'][role='textbox'],div[contenteditable='true'],textarea"))
+    const findEditor = () => Array.from(document.querySelectorAll("div[contenteditable='true'][role='textbox'],div[contenteditable='true'],div[role='textbox'],textarea"))
       .filter(visible)
       .sort((a, b) => b.getBoundingClientRect().bottom - a.getBoundingClientRect().bottom)[0] || null;
+    const activateEditor = async (editor) => {
+      if (!editor) return null;
+      try { editor.scrollIntoView?.({ block: "center", inline: "nearest" }); } catch {}
+      try { editor.click?.(); } catch {}
+      try { editor.focus?.({ preventScroll: true }); } catch { try { editor.focus?.(); } catch {} }
+      await wait(40);
+      return findEditor() || editor;
+    };
     const waitFor = async (check, timeoutMs = 2000, intervalMs = 80, deadlineAt = 0) => {
       const start = Date.now();
       while (Date.now() - start < timeoutMs && !deadlineExpired(deadlineAt)) {
@@ -1695,9 +1703,8 @@
       return promptMatches(editorText(editor), value);
     };
     const setEditorText = async (editor, value) => {
-      editor?.scrollIntoView?.({ block: "center", inline: "nearest" });
-      editor?.focus?.();
-      await wait(30);
+      editor = await activateEditor(editor);
+      if (!editor) return false;
       if (editor instanceof HTMLTextAreaElement || editor instanceof HTMLInputElement) {
         setNativeValue(editor, value);
         dispatchInput(editor, value);
@@ -1710,8 +1717,8 @@
     };
     const liveEditor = async (fallback = null, timeoutMs = 3000, deadlineAt = 0) => await waitFor(findEditor, timeoutMs, 100, deadlineAt) || fallback;
     const clearEditorText = async (editor) => {
-      editor?.focus?.();
-      await wait(30);
+      editor = await activateEditor(editor);
+      if (!editor) return;
       if (editor instanceof HTMLTextAreaElement || editor instanceof HTMLInputElement) {
         setNativeValue(editor, "");
         dispatchInput(editor, "", "deleteContentBackward");
@@ -1788,11 +1795,9 @@
     const focusNotionComposer = async (deadlineAt = 0) => {
       const composer = await waitFor(findEditor, 4000, 120, deadlineAt);
       if (!composer) return null;
-      try { composer.scrollIntoView?.({ block: "center", inline: "nearest" }); } catch {}
-      try { composer.focus?.({ preventScroll: true }); } catch { try { composer.focus?.(); } catch {} }
-      try { clickElement(composer); } catch {}
+      const activated = await activateEditor(composer);
       await waitUntilDeadline(20, deadlineAt);
-      return composer;
+      return activated;
     };
     const findNotionComposerContainer = (composerEl) => {
       const composer = resolveNotionComposerElement(composerEl, { requireVisible: false }) || composerEl || null;
@@ -2009,10 +2014,13 @@
     const promptFiles = (images) => (Array.isArray(images) ? images : [])
       .map((entry, index) => dataUrlToFile(entry, index))
       .filter((file) => file && String(file.type || "").startsWith("image/"));
-    const createTransfer = (files = []) => {
+    const createTransfer = (files = [], textValue = "") => {
       try {
         const transfer = new DataTransfer();
         files.forEach((file) => transfer.items.add(file));
+        if (textValue) {
+          try { transfer.setData("text/plain", String(textValue)); } catch {}
+        }
         return transfer;
       } catch {
         return null;
@@ -2403,13 +2411,29 @@
         message: observed.ok ? "" : `Notion composer not ready: attachment=${state.attachmentCount || 0}, text=${state.textLength || 0}, busy=${state.uploadBusy ? 1 : 0}, sendReady=${state.sendReady ? 1 : 0}`
       };
     };
-    const attachImageOnce = async (editor, file) => {
-      editor?.focus?.();
-      const transfer = createTransfer([file]);
+    const attachImagesOnce = async (editor, files, textValue = "") => {
+      editor = await activateEditor(editor);
+      if (!editor) return false;
+      const transfer = createTransfer(files, textValue);
       if (!transfer) return false;
       const fired = dispatchTransfer(editor, "paste", transfer);
-      await wait(160);
+      await wait(80);
       return fired;
+    };
+    const commitPastedTextEarly = async (editor, textValue, deadlineAt = 0) => {
+      const expected = normalize(textValue);
+      if (!expected) return { editor, committed: true, usedFallback: false };
+      if (deadlineExpired(deadlineAt)) return { editor, committed: false, usedFallback: false };
+      editor = await liveEditor(editor, 1000, deadlineAt);
+      if (!editor) return { editor: null, committed: false, usedFallback: false };
+      if (promptMatches(editorText(editor), expected)) return { editor, committed: true, usedFallback: false };
+      const committed = await setEditorText(editor, expected);
+      editor = await liveEditor(editor, 1000, deadlineAt);
+      return {
+        editor,
+        committed: Boolean(committed && promptMatches(editorText(editor), expected)),
+        usedFallback: true
+      };
     };
     const clearAttachments = async (editor) => {
       const scope = getNotionAttachmentScope(editor);
@@ -2449,34 +2473,28 @@
       } catch {}
       await wait(350);
     };
-    const attachImagesWithRetries = async (editor, files, retryCount = 3, deadlineAt = 0) => {
+    const attachImagesWithRetries = async (editor, files, retryCount = 3, deadlineAt = 0, textValue = "") => {
       const attempts = Math.max(0, Number(retryCount) || 0) + 1;
       let reason = "";
       for (let attempt = 1; attempt <= attempts; attempt += 1) {
         if (deadlineExpired(deadlineAt)) return { ok: false, reason: "Send deadline exceeded" };
         if (attempt > 1) {
-          editor = await waitFor(findEditor, 3000, 100, deadlineAt) || editor;
+          editor = await prepareComposerForRun(await liveEditor(editor, 3000, deadlineAt), deadlineAt);
+          if (!editor) return { ok: false, reason: "Notion AI input element not found before retry" };
         }
         const baseline = attachmentSnapshot(editor);
-        let pasteAccepted = false;
-        for (const file of files) {
-          if (deadlineExpired(deadlineAt)) return { ok: false, reason: "Send deadline exceeded" };
-          const ok = await attachImageOnce(editor, file);
-          pasteAccepted = pasteAccepted || ok;
-          if (!ok) reason = "Notion AI image insertion did not accept paste";
-        }
+        const pasteAccepted = await attachImagesOnce(editor, files, textValue);
+        if (!pasteAccepted) reason = "Notion AI image and text insertion did not accept paste";
+        const earlyText = await commitPastedTextEarly(editor, textValue, deadlineAt);
+        editor = earlyText.editor || editor;
+        if (textValue && !earlyText.committed) reason = "Notion AI prompt text was not committed immediately after paste";
         const accepted = await waitForNotionAttachmentChange(editor, baseline, Math.min(9000, remainingDeadlineMs(deadlineAt, 9000)), deadlineAt);
         if (!accepted.ok && !accepted.busy) {
           if (pasteAccepted) {
-            return {
-              ok: false,
-              reason: "Notion AI image paste was dispatched but no attachment was detected",
-              accepted: true,
-              snapshot: accepted.snapshot,
-              uploadBusy: false
-            };
+            reason = "Notion AI image and text paste was dispatched but no attachment was detected";
+            continue;
           }
-          reason = reason || "Notion AI image insertion did not accept paste";
+          reason = reason || "Notion AI image and text insertion did not accept paste";
           continue;
         }
         const expectedCount = Math.max(Number(baseline.attachmentCount || 0) + files.length, files.length);
@@ -2489,15 +2507,9 @@
           deadlineAt
         });
         if (ready.ok) return { ok: true, attempts: attempt, editor };
-        return {
-          ok: false,
-          reason: ready.message || ready.reason || "Notion AI image upload did not become ready",
-          accepted: true,
-          snapshot: ready.snapshot,
-          uploadBusy: ready.uploadBusy
-        };
+        reason = ready.message || ready.reason || "Notion AI image upload did not become ready";
       }
-      return { ok: false, reason: reason || "Notion AI image upload did not become ready" };
+      return { ok: false, reason: reason || "Notion AI image and text upload did not become ready" };
     };
     const submitted = (editor, value, beforeOutsideCount) => {
       const currentText = editorText(editor);
@@ -2584,7 +2596,7 @@
       editor = await prepareComposerForRun(editor, deadlineAt);
       if (!editor) return { ok: false, sent: false, method: "notion-prompt-bridge", reason: "Notion AI input element not found" };
       if (files.length) {
-        const attached = await attachImagesWithRetries(editor, files, payload.imageRetryCount ?? 3, deadlineAt);
+        const attached = await attachImagesWithRetries(editor, files, payload.imageRetryCount ?? 3, deadlineAt, text);
         if (!attached.ok) return { ok: false, sent: false, method: "notion-prompt-bridge", reason: attached.reason || "Image insertion failed" };
         editor = await liveEditor(attached.editor || editor, 4000, deadlineAt);
       }

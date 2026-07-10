@@ -1,7 +1,7 @@
 import { DEFAULT_TOPBAR_LAYOUT } from "./topbar.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-07-10｜13:54:12」";
+export const APP_VERSION = "「2026-07-10｜14:28:42」";
 export const BASELINE_MOD_VERSION = "2.4.0.14";
 export const HOMEPAGE_URL = "https://chatclub.local/";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
@@ -424,8 +424,9 @@ export const BUILTIN_CHAT_APPS = [
     provider: "Notion",
     url: "https://app.notion.com/ai",
     hosts: ["app.notion.com", "notion.so", "www.notion.so", "*.notion.so"],
-    inputSelector: "div[contenteditable='true'][role='textbox'], div[contenteditable='true'], textarea",
+    inputSelector: "div[contenteditable='true'][role='textbox'], div[contenteditable='true'], div[role='textbox'], textarea",
     sendButtonSelector: "button[aria-label*='Submit AI message' i], button[aria-label*='Send' i]",
+    imagePasteStrategy: PROMPT_IMAGE_PASTE_STRATEGY_BATCH,
     noSandbox: true
   },
   {

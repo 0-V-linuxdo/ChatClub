@@ -2,10 +2,10 @@
   const SOURCE = "chatclub";
   const COPY_SOURCE = "chatclub-native-copy:2026.07.08.13";
   const GEMINI_MODEL_PICKER_SOURCE = "chatclub-gemini-model-picker";
-  const NOTION_SEND_TEXT_SOURCE = "chatclub-notion-send-text:2026.07.09.10";
-  const NOTION_SEND_PROMPT_SOURCE = "chatclub-notion-send-prompt:2026.07.09.10";
-  const CONTENT_BRIDGE_VERSION = "2026.07.10.2";
-  const SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.10.1";
+  const NOTION_SEND_TEXT_SOURCE = "chatclub-notion-send-text:2026.07.10.12";
+  const NOTION_SEND_PROMPT_SOURCE = "chatclub-notion-send-prompt:2026.07.10.12";
+  const CONTENT_BRIDGE_VERSION = "2026.07.10.4";
+  const SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.10.3";
   const DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.10.2";
   const MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.08.12";
   const SUMMARY_POST_MESSAGE_SOURCE = "chatclub:summary:2026.07.08.13";
@@ -1853,7 +1853,7 @@
       }
       window.addEventListener("message", onMessage, true);
       try {
-        window.dispatchEvent(new CustomEvent("chatclub:notion-send-prompt:2026.07.09.10", {
+        window.dispatchEvent(new CustomEvent("chatclub:notion-send-prompt:2026.07.10.12", {
           detail: {
             id,
             sendId: String(data?.sendId || ""),
@@ -1895,7 +1895,7 @@
       }
       window.addEventListener("message", onMessage, true);
       try {
-        window.dispatchEvent(new CustomEvent("chatclub:notion-send-text:2026.07.09.10", {
+        window.dispatchEvent(new CustomEvent("chatclub:notion-send-text:2026.07.10.12", {
           detail: {
             id,
             sendId: String(data?.sendId || ""),
