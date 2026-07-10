@@ -4,8 +4,8 @@
   const GEMINI_MODEL_PICKER_SOURCE = "chatclub-gemini-model-picker";
   const NOTION_SEND_TEXT_SOURCE = "chatclub-notion-send-text:2026.07.10.12";
   const NOTION_SEND_PROMPT_SOURCE = "chatclub-notion-send-prompt:2026.07.10.12";
-  const CONTENT_BRIDGE_VERSION = "2026.07.10.5";
-  const SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.10.4";
+  const CONTENT_BRIDGE_VERSION = "2026.07.10.6";
+  const SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.10.5";
   const DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.10.2";
   const MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.08.12";
   const SUMMARY_POST_MESSAGE_SOURCE = "chatclub:summary:2026.07.08.13";
@@ -38,6 +38,10 @@
   }
   window.__CHATCLUB_CONTENT_BRIDGE_VERSION__ = CONTENT_BRIDGE_VERSION;
   window.__CHATCLUB_CONTENT_BRIDGE_INSTALLED__ = true;
+
+  function contentBridgeIsCurrent() {
+    return window.__CHATCLUB_CONTENT_BRIDGE_VERSION__ === CONTENT_BRIDGE_VERSION;
+  }
 
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   try { window.__CHATCLUB_LOCATION_REPORT_CLEANUP__?.(); } catch {}
@@ -1255,38 +1259,25 @@
       .map((item) => item.button);
   }
 
-  function clickPromptSubmit(button, options = {}) {
-    const rect = button?.getBoundingClientRect?.();
-    if (!button || !rect) return false;
-    if (options.singleClick) {
-      try { button.click?.(); } catch {}
-      return true;
+  function clickPromptSubmit(button) {
+    if (!button) return false;
+    try { button.scrollIntoView?.({ block: "nearest", inline: "nearest" }); } catch {}
+    try { button.focus?.({ preventScroll: true }); } catch {}
+    // Keep one semantic activation: dispatching a synthetic click and then calling click() submits ChatGPT twice.
+    if (typeof button.click === "function") {
+      try {
+        button.click();
+        return true;
+      } catch {
+        return false;
+      }
     }
-    const base = {
-      bubbles: true,
-      cancelable: true,
-      composed: true,
-      view: window,
-      button: 0,
-      buttons: 1,
-      clientX: rect.left + rect.width / 2,
-      clientY: rect.top + rect.height / 2
-    };
     try {
-      if (window.PointerEvent) {
-        button.dispatchEvent(new PointerEvent("pointerover", { ...base, pointerId: 1, pointerType: "mouse", isPrimary: true }));
-        button.dispatchEvent(new PointerEvent("pointermove", { ...base, pointerId: 1, pointerType: "mouse", isPrimary: true }));
-        button.dispatchEvent(new PointerEvent("pointerdown", { ...base, pointerId: 1, pointerType: "mouse", isPrimary: true }));
-        button.dispatchEvent(new PointerEvent("pointerup", { ...base, pointerId: 1, pointerType: "mouse", isPrimary: true, buttons: 0 }));
-      }
-    } catch {}
-    try {
-      for (const type of ["mouseover", "mousemove", "mousedown", "mouseup", "click"]) {
-        button.dispatchEvent(new MouseEvent(type, { ...base, buttons: type === "mouseup" || type === "click" ? 0 : 1 }));
-      }
-    } catch {}
-    try { button.click?.(); } catch {}
-    return true;
+      button.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, composed: true, view: window }));
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   async function waitForPromptSubmitReady(input, selector = "", deadlineAt = 0, timeoutMs = 10000) {
@@ -2088,7 +2079,10 @@
     };
   }
 
-  const sendTextRequestCache = new Map();
+  const sendTextRequestCache = window.__CHATCLUB_SEND_TEXT_REQUEST_CACHE__ instanceof Map
+    ? window.__CHATCLUB_SEND_TEXT_REQUEST_CACHE__
+    : new Map();
+  window.__CHATCLUB_SEND_TEXT_REQUEST_CACHE__ = sendTextRequestCache;
   function sendTextRequestKey(data = {}) {
     return String(data?.sendId || "").trim();
   }
@@ -2156,11 +2150,13 @@
     await sleepUntilDeadline(grok ? 320 : 140, deadlineAt);
     const submit = await waitForPromptSubmitReady(input, data?.sendButtonSelector, deadlineAt, files.length ? 12000 : 8000);
     if (submit) {
-      clickPromptSubmit(submit, { singleClick: grok });
+      if (!contentBridgeIsCurrent()) throw new Error("Send bridge was superseded before submit");
+      if (!clickPromptSubmit(submit)) throw new Error("Submit button activation failed");
       return { sent: true, method: "button", verified: false };
     }
     if (files.length) throw new Error("Submit button stayed disabled");
     if (deadlineExpired(deadlineAt)) throw new Error("Send deadline exceeded");
+    if (!contentBridgeIsCurrent()) throw new Error("Send bridge was superseded before submit");
     const keyInit = { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true };
     input.dispatchEvent(new KeyboardEvent("keydown", keyInit));
     input.dispatchEvent(new KeyboardEvent("keyup", keyInit));
@@ -7110,6 +7106,7 @@
     const versionedSummaryRequest = message?.source === SUMMARY_POST_MESSAGE_SOURCE;
     const genericRequest = message?.source === SOURCE;
     if ((!versionedDeleteRequest && !versionedSendTextRequest && !versionedNavigatorRequest && !versionedSummaryRequest && !genericRequest) || message.type !== "request") return;
+    if (versionedSendTextRequest && !contentBridgeIsCurrent()) return;
     if (genericRequest && hadContentBridge) return;
     if (versionedDeleteRequest && message.action !== "deleteThread" && message.action !== "getDeleteConfirmState") return;
     if (versionedSendTextRequest && message.action !== "sendText") return;

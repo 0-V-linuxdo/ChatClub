@@ -92,6 +92,7 @@ let topbarPromptPlaceholderTimer = 0;
 let topbarPromptPlaceholderTimerKey = "";
 let activeTopbarEditPointerDrag = null;
 let suppressTopbarPaletteClick = false;
+let topbarEditSavePending = false;
 const MODEL_PREFERENCE_APP_ID_ALIASES = Object.freeze({
   Gemini: "Gemini",
   Grok: "Grok",
@@ -2459,12 +2460,23 @@ function renderTopbarCustomizePalette() {
       )
     ),
     el("div", { class: "topbar-customize-controls" },
-      compactIconButton(t("common.cancel"), "x", exitTopbarEditMode, "topbar-edit-utility topbar-edit-cancel", t("common.cancel"), "", "topbar.customize.cancel"),
       el("button", {
-        class: "button button-primary topbar-edit-done",
+        class: "button button-secondary topbar-edit-action topbar-edit-cancel",
         type: "button",
+        onclick: exitTopbarEditMode
+      },
+        svgIcon("x"),
+        el("span", {}, t("common.cancel"))
+      ),
+      el("button", {
+        class: "button button-primary topbar-edit-action topbar-edit-save",
+        type: "button",
+        disabled: topbarEditSavePending,
         onclick: saveTopbarEditLayout
-      }, t("topbar.customize.done"))
+      },
+        svgIcon("check"),
+        el("span", {}, t("common.save"))
+      )
     )
   );
 }
@@ -2482,8 +2494,22 @@ function topbarEditPaletteCandidateIds() {
   return TOPBAR_BUILTIN_ITEMS.filter((id) => !TOPBAR_REQUIRED_ITEMS.includes(id));
 }
 
+function topbarEditItemLabel(item) {
+  if (item?.type !== "flex") return t(topbarItemLabelKey(item));
+  return t("topbar.flexSpace");
+}
+
+function renderTopbarFlexCells(extraClass = "") {
+  return el("span", {
+    class: `topbar-flex-space-cells ${extraClass}`.trim(),
+    "aria-hidden": "true"
+  },
+    el("span", { class: "topbar-flex-space-cell" })
+  );
+}
+
 function renderTopbarPaletteItem(item, flexTemplate = false) {
-  const label = t(topbarItemLabelKey(item));
+  const label = topbarEditItemLabel(item);
   return el("button", {
     class: `topbar-palette-item tooltip-trigger ${flexTemplate ? "topbar-palette-flex" : `topbar-palette-${item.id}`}`,
     type: "button",
@@ -2491,7 +2517,10 @@ function renderTopbarPaletteItem(item, flexTemplate = false) {
     "data-tooltip": label,
     "data-tooltip-id": "topbar.customize.paletteItem",
     draggable: "false",
-    dataset: { topbarItemId: item.id, topbarPalette: flexTemplate ? "flex" : "item" },
+    dataset: {
+      topbarItemId: item.id,
+      topbarPalette: flexTemplate ? "flex" : "item"
+    },
     onclick: (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -2514,13 +2543,15 @@ function renderTopbarPaletteItem(item, flexTemplate = false) {
     ondragover: preventTopbarEditNativeDrag,
     ondrop: preventTopbarEditNativeDrag
   },
-    svgIcon(topbarItemIcon(item)),
-    el("span", {}, label)
+    flexTemplate
+      ? renderTopbarFlexCells("topbar-palette-flex-preview")
+      : svgIcon(topbarItemIcon(item)),
+    el("span", { class: "topbar-palette-item-label" }, label)
   );
 }
 
 function renderTopbarEditSlot(item, prompt, collapsedPreview) {
-  const label = t(topbarItemLabelKey(item));
+  const label = topbarEditItemLabel(item);
   const body = el("div", { class: "topbar-edit-slot-body" },
     renderTopbarItem(item, prompt, collapsedPreview)
   );
@@ -2530,7 +2561,6 @@ function renderTopbarEditSlot(item, prompt, collapsedPreview) {
     draggable: "false",
     title: label,
     "aria-label": label,
-    style: item.type === "flex" ? { "--topbar-flex-weight": String(item.weight || 1) } : {},
     dataset: { topbarItemId: item.id },
     onpointerdown: (event) => startTopbarEditPointerDrag(event, item),
     onmousedown: (event) => {
@@ -2576,39 +2606,65 @@ function exitTopbarEditMode() {
   syncTopbar();
 }
 
-async function saveTopbarEditLayout() {
-  const layout = normalizeTopbarLayout(state.topbarEditLayoutDraft);
-  state.options = await saveOptions({
-    ...state.options,
-    topbarLayout: layout
-  });
-  cleanupTopbarEditPointerDrag();
-  closeSettingsJumpMenu();
-  state.topbarEditMode = false;
-  state.topbarEditLayoutDraft = null;
-  state.topbarEditDragId = "";
-  syncTopbar();
-  toast(t("toast.appearanceSaved"), "success");
+async function saveTopbarEditLayout(event) {
+  if (topbarEditSavePending) return;
+  topbarEditSavePending = true;
+  const saveButton = event?.currentTarget;
+  const controls = saveButton?.closest?.(".topbar-customize-controls");
+  const actionButtons = [...(controls?.querySelectorAll?.("button") || [])];
+  actionButtons.forEach((buttonNode) => { buttonNode.disabled = true; });
+  saveButton?.setAttribute?.("aria-busy", "true");
+  try {
+    const layout = normalizeTopbarLayout(state.topbarEditLayoutDraft);
+    state.options = await saveOptions({
+      ...state.options,
+      topbarLayout: layout
+    });
+    cleanupTopbarEditPointerDrag();
+    closeSettingsJumpMenu();
+    state.topbarEditMode = false;
+    state.topbarEditLayoutDraft = null;
+    state.topbarEditDragId = "";
+    syncTopbar();
+    toast(t("toast.appearanceSaved"), "success");
+  } finally {
+    topbarEditSavePending = false;
+    actionButtons.forEach((buttonNode) => { buttonNode.disabled = false; });
+    saveButton?.removeAttribute?.("aria-busy");
+  }
 }
 
 function addTopbarEditFlexSpace() {
-  setTopbarEditLayoutDraft([
-    ...activeTopbarEditLayout(),
-    { type: "flex", id: createId("topbar-flex"), weight: 1 }
-  ]);
+  const layout = activeTopbarEditLayout();
+  setTopbarEditLayoutDraft(insertTopbarItemBeforeSettingsMenu(layout, {
+    type: "flex",
+    id: createId("topbar-flex"),
+    weight: 1
+  }));
+}
+
+function insertTopbarItemBeforeSettingsMenu(layout, item) {
+  const menuIndex = topbarLayoutMenuIndex(layout);
+  const insertIndex = menuIndex >= 0 ? menuIndex : layout.length;
+  return [
+    ...layout.slice(0, insertIndex),
+    item,
+    ...layout.slice(insertIndex)
+  ];
 }
 
 function insertTopbarPaletteItem(item, flexTemplate = false) {
   const layout = activeTopbarEditLayout();
   if (flexTemplate || item.type === "flex") {
-    setTopbarEditLayoutDraft([
-      ...layout,
-      { type: "flex", id: createId("topbar-flex"), weight: item.weight || 1 }
-    ]);
+    setTopbarEditLayoutDraft(insertTopbarItemBeforeSettingsMenu(layout, {
+      type: "flex",
+      id: createId("topbar-flex"),
+      weight: item.weight || 1
+    }));
     return;
   }
   if (layout.some((entry) => entry.type === "item" && entry.id === item.id)) return;
-  setTopbarEditLayoutDraft([...layout, { type: "item", id: item.id }]);
+  setTopbarEditLayoutDraft(insertTopbarItemBeforeSettingsMenu(layout, { type: "item", id: item.id }));
 }
 
 function topbarEditItemIsRequired(item) {
@@ -2915,9 +2971,8 @@ function renderTopbarItem(item, prompt, collapsedPreview) {
     return el("div", {
       class: "topbar-flex-space",
       title: t("topbar.flexSpace"),
-      "aria-hidden": "true",
-      style: { "--topbar-flex-weight": String(item.weight || 1) }
-    });
+      "aria-hidden": "true"
+    }, renderTopbarFlexCells());
   }
   if (item.id === "brand") return renderTopbarBrand();
   if (item.id === "settings") return renderTopbarSettingsButton();

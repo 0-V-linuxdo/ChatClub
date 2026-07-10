@@ -108,7 +108,7 @@ function normalizeItem(raw, index) {
     return {
       type: "flex",
       id: cleanId(raw?.id) || `flex-${index}`,
-      weight: Math.max(1, Math.min(6, Number(raw?.weight) || 1))
+      weight: 1
     };
   }
   const id = cleanId(raw?.id);
