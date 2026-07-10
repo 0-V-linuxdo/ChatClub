@@ -1418,6 +1418,17 @@
     return appId === "grok" || appName === "grok" || grokHost();
   }
 
+  function kagiHost(hostname = location.hostname) {
+    const host = String(hostname || "").toLowerCase();
+    return host === "assistant.kagi.com";
+  }
+
+  function isKagiSendTarget(data = {}) {
+    const appId = String(data?.appId || "").trim().toLowerCase();
+    const appName = String(data?.appName || "").trim().toLowerCase();
+    return appId === "kagi" || /\bkagi\b/.test(appName) || kagiHost();
+  }
+
   function promptImagePasteStrategy(data = {}) {
     return String(data?.imagePasteStrategy || "").trim().toLowerCase() === PROMPT_IMAGE_PASTE_STRATEGY_BATCH
       ? PROMPT_IMAGE_PASTE_STRATEGY_BATCH
@@ -1438,7 +1449,7 @@
 
   function attachmentRemoveButton(button) {
     const label = buttonText(button).toLowerCase();
-    return /^(?:remove|delete|移除|删除)$|remove\s+(?:this\s+)?(?:attachment|file|image|photo)|delete\s+(?:attachment|file|image|photo)|移除此附件|移除.*(?:附件|文件|图片|照片)|删除.*(?:附件|文件|图片|照片)/i.test(label);
+    return /^(?:remove|delete|移除|删除)$|remove\s+(?:this\s+)?(?:attachment|file|image|photo)|delete\s+(?:attachment|file|image|photo)|(?:remove|delete)\s+[^\n]{1,180}\.(?:avif|bmp|gif|jpe?g|png|svg|webp)\b|移除此附件|移除.*(?:附件|文件|图片|照片)|删除.*(?:附件|文件|图片|照片)/i.test(label);
   }
 
   function promptAttachmentSnapshot(input, options = {}) {
@@ -1677,6 +1688,15 @@
     return fired ? { ok: true } : { ok: false, reason: "Grok image paste was not accepted" };
   }
 
+  async function attachKagiPromptImagesOnce(files, input, textValue = "") {
+    input?.focus?.();
+    const transfer = createPromptDataTransfer({ files, text: textValue });
+    if (!transfer) return { ok: false, reason: "DataTransfer unavailable" };
+    const target = input || document.activeElement;
+    const fired = dispatchPromptTransferEvent(target, "paste", transfer);
+    return fired ? { ok: true } : { ok: false, reason: "Kagi image and text paste was not accepted" };
+  }
+
   async function attachBatchPromptImagesOnce(files, input) {
     input?.focus?.();
     const transfer = createPromptDataTransfer({ files });
@@ -1770,6 +1790,35 @@
         : ready.reason || "Grok image upload did not become ready";
     }
     return { ok: false, reason: lastReason || "Grok image upload did not become ready" };
+  }
+
+  async function attachKagiPromptImagesWithRetries(input, files = [], retryCount = 3, inputSelector = "", deadlineAt = 0, textValue = "") {
+    const list = Array.from(files || []).filter((file) => file && String(file.type || "").startsWith("image/"));
+    if (!list.length) return { ok: true };
+    const attempts = Math.max(0, Number(retryCount) || 0) + 1;
+    let lastReason = "";
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      if (deadlineExpired(deadlineAt)) return { ok: false, reason: "Send deadline exceeded" };
+      if (attempt > 1) {
+        clearPromptAttachments(input);
+        if (!await waitForPromptAttachmentsCleared(input, {}, 2500, deadlineAt)) {
+          return { ok: false, reason: "Kagi attachments could not be cleared before retry" };
+        }
+        input = inputCandidates(inputSelector) || input;
+        if (textValue.trim()) {
+          await setInputValue(input, "");
+          if (!await sleepUntilDeadline(120, deadlineAt)) return { ok: false, reason: "Send deadline exceeded" };
+        }
+      }
+      const baseline = promptAttachmentSnapshot(input);
+      const result = await attachKagiPromptImagesOnce(list, input, textValue);
+      if (!result.ok) lastReason = result.reason || "Kagi image and text insertion failed";
+      if (!await sleepUntilDeadline(220, deadlineAt)) return { ok: false, reason: "Send deadline exceeded" };
+      const ready = await waitForPromptImagesReady(input, baseline.count + list.length, Math.min(45000, remainingDeadlineMs(deadlineAt, 45000)), deadlineAt);
+      if (ready.ok) return { ok: true, attempts: attempt, snapshot: ready.snapshot };
+      lastReason = ready.reason || "Kagi image upload did not become ready";
+    }
+    return { ok: false, reason: lastReason || "Kagi image upload did not become ready" };
   }
 
   function isNotionSendTarget(data = {}) {
@@ -1920,6 +1969,7 @@
   async function sendTextUncached(data) {
     if (isNotionSendTarget(data)) return sendNotionText(data);
     const grok = isGrokSendTarget(data);
+    const kagi = isKagiSendTarget(data);
     const deadlineAt = sendDeadlineAt(data, Array.isArray(data?.images) && data.images.length ? 60000 : 10000);
     if (deadlineExpired(deadlineAt)) throw new Error("Send deadline exceeded");
     let input = inputCandidates(data?.inputSelector);
@@ -1933,14 +1983,16 @@
       const batch = promptImagePasteStrategy(data) === PROMPT_IMAGE_PASTE_STRATEGY_BATCH;
       const attached = grok
         ? await attachGrokPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt, textValue)
-        : batch
-          ? await attachBatchPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt)
-        : await attachPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt);
+        : kagi
+          ? await attachKagiPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt, textValue)
+          : batch
+            ? await attachBatchPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt)
+            : await attachPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt);
       if (!attached.ok) throw new Error(attached.reason || "Image insertion failed");
-      if (grok) input = inputCandidates(data?.inputSelector) || input;
+      if (grok || kagi) input = inputCandidates(data?.inputSelector) || input;
     }
     if (deadlineExpired(deadlineAt)) throw new Error("Send deadline exceeded");
-    if (textValue.trim() && (!grok || compareText(text(input)) !== compareText(textValue))) await setInputValue(input, textValue);
+    if (textValue.trim() && (!(grok || kagi) || compareText(text(input)) !== compareText(textValue))) await setInputValue(input, textValue);
     await sleepUntilDeadline(grok ? 320 : 140, deadlineAt);
     const submit = await waitForPromptSubmitReady(input, data?.sendButtonSelector, deadlineAt, files.length ? 12000 : 8000);
     if (submit) {
