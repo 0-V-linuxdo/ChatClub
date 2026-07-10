@@ -87,6 +87,93 @@ export function toast(message, kind = "info") {
   }, 3200);
 }
 
+export function createFrameToast(iframe, message, kind = "info") {
+  const frameWrap = iframe?.closest?.(".chat-frame-wrap");
+  if (!frameWrap || !iframe?.isConnected) {
+    return Object.freeze({
+      update() {},
+      dismiss() {},
+      remove() {}
+    });
+  }
+
+  const instanceId = String(iframe.dataset?.instanceId || "");
+  for (const existing of frameWrap.querySelectorAll(".frame-submit-toast")) {
+    if (String(existing.dataset?.frameInstanceId || "") === instanceId) existing.remove();
+  }
+
+  let dismissTimer = 0;
+  let removeTimer = 0;
+  let showTimer = 0;
+  let observer = null;
+  const item = el("div", {
+    class: `toast frame-submit-toast toast-${kind}`,
+    dataset: { frameInstanceId: instanceId },
+    role: kind === "error" ? "alert" : "status",
+    "aria-live": kind === "error" ? "assertive" : "polite",
+    "aria-atomic": "true"
+  }, message);
+
+  function clearTimers() {
+    if (dismissTimer) clearTimeout(dismissTimer);
+    if (removeTimer) clearTimeout(removeTimer);
+    if (showTimer) clearTimeout(showTimer);
+    dismissTimer = 0;
+    removeTimer = 0;
+    showTimer = 0;
+  }
+
+  function remove() {
+    clearTimers();
+    observer?.disconnect?.();
+    observer = null;
+    item.remove();
+  }
+
+  function update(nextMessage, nextKind = "info") {
+    clearTimers();
+    if (!frameWrap.isConnected || !iframe.isConnected || !item.isConnected) {
+      remove();
+      return;
+    }
+    item.textContent = String(nextMessage || "");
+    item.classList.remove("toast-info", "toast-success", "toast-error");
+    item.classList.add(`toast-${nextKind}`);
+    item.setAttribute("role", nextKind === "error" ? "alert" : "status");
+    item.setAttribute("aria-live", nextKind === "error" ? "assertive" : "polite");
+    item.classList.add("show");
+  }
+
+  function dismiss(delayMs = 0) {
+    if (!item.isConnected) {
+      remove();
+      return;
+    }
+    if (dismissTimer) clearTimeout(dismissTimer);
+    if (removeTimer) clearTimeout(removeTimer);
+    dismissTimer = setTimeout(() => {
+      dismissTimer = 0;
+      item.classList.remove("show");
+      removeTimer = setTimeout(remove, 240);
+    }, Math.max(0, Number(delayMs) || 0));
+  }
+
+  iframe.insertAdjacentElement("afterend", item);
+  showTimer = setTimeout(() => {
+    showTimer = 0;
+    if (item.isConnected) item.classList.add("show");
+  }, 20);
+
+  if (typeof MutationObserver === "function") {
+    observer = new MutationObserver(() => {
+      if (!iframe.isConnected || !item.isConnected) remove();
+    });
+    observer.observe(frameWrap, { childList: true });
+  }
+
+  return Object.freeze({ update, dismiss, remove });
+}
+
 export function modal(title, content, onClose, wide = false, closeLabel = "Close") {
   const backdrop = el("div", { class: "modal-backdrop", onclick: (event) => {
     if (event.target === backdrop) onClose();

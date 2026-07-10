@@ -63,6 +63,7 @@ import { promptCollapsedPreview, promptInputHeight } from "./composer/model.js";
 import { createActionButton, createCompactIconButton, createMenuButton, createTopIconButton } from "../ui/components.js";
 import {
   button,
+  createFrameToast,
   el,
   field,
   iconButton,
@@ -80,6 +81,7 @@ const FAVICON_CACHE_KEY = "chatclub.faviconCache.v4";
 const FAVICON_CACHE_MAX_ENTRIES = 240;
 const PROMPT_IMAGE_RETRY_COUNT = 3;
 const PROMPT_IMAGE_SEND_DEADLINE_MS = 60000;
+const FRAME_SUBMIT_ERROR_MAX_CHARS = 160;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
 const faviconDiscoveryPromises = new Map();
 let faviconCachePersistTimer = 0;
@@ -1467,7 +1469,25 @@ async function sendPromptToFrames() {
   state.promptSendInFlight = true;
   syncPromptSendButton();
   try {
-    const results = await Promise.allSettled(targets.map(({ iframe, app }) => sendTextToFrame(iframe, app, text, images, sendId, deadlineAt)));
+    const sendTasks = targets.map(async ({ iframe, app }) => {
+      const statusToast = createFrameToast(iframe, t("toast.frameSubmitPending"), "info");
+      try {
+        const result = await sendTextToFrame(iframe, app, text, images, sendId, deadlineAt);
+        statusToast.update(t("toast.frameSubmitSuccess"), "success");
+        statusToast.dismiss(2000);
+        return result;
+      } catch (error) {
+        const rawReason = String(error?.message || error || "").replace(/\s+/g, " ").trim();
+        const reasonChars = Array.from(rawReason || t("toast.frameSubmitFailureFallback"));
+        const reason = reasonChars.length > FRAME_SUBMIT_ERROR_MAX_CHARS
+          ? `${reasonChars.slice(0, FRAME_SUBMIT_ERROR_MAX_CHARS - 1).join("")}…`
+          : reasonChars.join("");
+        statusToast.update(t("toast.frameSubmitFailed", { reason }), "error");
+        statusToast.dismiss(5000);
+        throw error;
+      }
+    });
+    const results = await Promise.allSettled(sendTasks);
     const failures = results
       .map((result, index) => ({ result, app: targets[index].app }))
       .filter((item) => item.result.status === "rejected");

@@ -6798,6 +6798,7 @@ body.settings-tab-group-button-dragging iframe {
   display: grid;
   gap: 8px;
   z-index: 120;
+  transition: bottom 160ms ease;
 }
 
 .toast {
@@ -6816,6 +6817,80 @@ body.settings-tab-group-button-dragging iframe {
 .toast.show {
   opacity: 1;
   transform: translateY(0);
+}
+
+.frame-submit-toast {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 4;
+  display: none;
+  align-items: center;
+  gap: 8px;
+  max-width: min(360px, calc(100% - 24px));
+  min-height: 38px;
+  pointer-events: none;
+  overflow-wrap: anywhere;
+}
+
+.chat-frame.active + .frame-submit-toast {
+  display: flex;
+}
+
+.frame-submit-toast::before {
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.frame-submit-toast.toast-info {
+  border-color: color-mix(in srgb, var(--primary) 48%, var(--toast-border));
+}
+
+.frame-submit-toast.toast-info::before {
+  content: "";
+  box-sizing: border-box;
+  border: 2px solid color-mix(in srgb, var(--primary) 28%, transparent);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: frame-submit-toast-spin 720ms linear infinite;
+}
+
+.frame-submit-toast.toast-success {
+  color: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 48%, var(--toast-border));
+}
+
+.frame-submit-toast.toast-success::before {
+  content: "✓";
+}
+
+.frame-submit-toast.toast-error {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 48%, var(--toast-border));
+}
+
+.frame-submit-toast.toast-error::before {
+  content: "!";
+}
+
+body:has(.chat-frame.active + .frame-submit-toast.show) > .toast-host {
+  bottom: 92px;
+}
+
+@keyframes frame-submit-toast-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .frame-submit-toast.toast-info::before {
+    animation: none;
+  }
 }
 
 .popover-backdrop {
