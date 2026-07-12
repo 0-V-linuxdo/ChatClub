@@ -130,7 +130,7 @@ export const TOPIC_DELETE_SITE_CONFIGS = Object.freeze([
     appIds: Object.freeze(["Gemini"]),
     hosts: Object.freeze(["gemini.google.com", "*.gemini.google.com"]),
     pathPrefixes: Object.freeze(["/app"]),
-    ...userscriptMeta("topic-delete-userscripts/gemini.user.js", GEMINI_DELETE_USERSCRIPT, 18000)
+    ...userscriptMeta("topic-delete-userscripts/gemini.user.js", GEMINI_DELETE_USERSCRIPT, 24000)
   }),
   Object.freeze({
     id: "kagi",
@@ -309,7 +309,11 @@ export function mergeBuiltInTopicDeleteConfig(current = [], builtIn = TOPIC_DELE
       : "builtIn";
     const userscript = sourceMode === "custom" ? existingUserscript : String(item.userscript || "").trim();
     const existingTimeoutMs = Number(existing.userscriptTimeoutMs);
-    const userscriptTimeoutMs = sourceMode !== "custom" && item.id === "deepseek" && existingTimeoutMs === 24000
+    const packagedTimeoutMigrated = sourceMode !== "custom" && (
+      (item.id === "deepseek" && existingTimeoutMs === 24000)
+      || (item.id === "gemini" && existingTimeoutMs === 18000)
+    );
+    const userscriptTimeoutMs = packagedTimeoutMigrated
       ? item.userscriptTimeoutMs
       : existing.userscriptTimeoutMs ?? item.userscriptTimeoutMs;
     return normalizeTopicDeleteSiteConfig({

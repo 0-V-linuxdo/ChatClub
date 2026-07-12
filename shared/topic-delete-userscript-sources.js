@@ -1,5 +1,5 @@
 const DELETE_USERSCRIPT_VERSION = "2026.07.05.1";
-const GEMINI_DELETE_USERSCRIPT_VERSION = "2026.07.10.1";
+const GEMINI_DELETE_USERSCRIPT_VERSION = "2026.07.12.1";
 const DELETE_USERSCRIPT_NAMESPACE = "https://chatclub.local/delete-sites";
 
 const GEMINI_DELETE_USERSCRIPT_HELPERS = String.raw`
@@ -46,6 +46,109 @@ const GEMINI_DELETE_USERSCRIPT_HELPERS = String.raw`
     "div"
   ].join(", ");
   const GEMINI_CONVERSATION_MENU_MARKERS = ["Delete", "Rename", "Pin", "Share", "Unpin", "删除", "重命名", "固定", "取消固定", "分享"];
+  const GEMINI_SIDEBAR_TOGGLE_SELECTOR = [
+    "top-bar-actions button:not([aria-haspopup='menu'])[aria-label*='sidebar' i]",
+    "top-bar-actions button:not([aria-haspopup='menu'])[aria-label*='side bar' i]",
+    "top-bar-actions button:not([aria-haspopup='menu'])[aria-label*='navigation' i]",
+    "top-bar-actions button:not([aria-haspopup='menu'])[aria-label*='侧栏']",
+    "top-bar-actions button:not([aria-haspopup='menu'])[aria-label*='侧边栏']",
+    "top-bar-actions button:not([aria-haspopup='menu'])[aria-label*='导航']",
+    "top-bar-actions button:has(mat-icon[fonticon='menu'])",
+    "top-bar-actions button:has(mat-icon[data-mat-icon-name='menu'])",
+    "top-bar-actions button:has(mat-icon[fonticon='menu_open'])",
+    "top-bar-actions button:has(mat-icon[data-mat-icon-name='menu_open'])",
+    "bard-sidenav button:not([aria-haspopup='menu'])[aria-label*='menu' i]",
+    "side-navigation-content button:not([aria-haspopup='menu'])[aria-label*='menu' i]",
+    "bard-sidenav button:not([aria-haspopup='menu'])[aria-label*='sidebar' i]",
+    "side-navigation-content button:not([aria-haspopup='menu'])[aria-label*='sidebar' i]",
+    "bard-sidenav button:not([aria-haspopup='menu'])[aria-label*='navigation' i]",
+    "side-navigation-content button:not([aria-haspopup='menu'])[aria-label*='navigation' i]",
+    "bard-sidenav button:has(mat-icon[fonticon='menu'])",
+    "side-navigation-content button:has(mat-icon[fonticon='menu'])",
+    "bard-sidenav button:has(mat-icon[data-mat-icon-name='menu'])",
+    "side-navigation-content button:has(mat-icon[data-mat-icon-name='menu'])",
+    "button[aria-label='Open sidebar']",
+    "button[aria-label='Close sidebar']",
+    "button[aria-label='Expand sidebar']",
+    "button[aria-label='Collapse sidebar']",
+    "button:not([aria-haspopup='menu'])[aria-label='Open navigation menu']",
+    "button:not([aria-haspopup='menu'])[aria-label='Close navigation menu']"
+  ].join(", ");
+  const GEMINI_SIDEBAR_ROOT_SELECTOR = "bard-sidenav, side-navigation-content, .sidenav-with-history-container";
+  const GEMINI_SIDEBAR_OPEN_SELECTOR = [
+    ".sidenav-with-history-container.expanded",
+    ".conversation-items-container.side-nav-opened",
+    ".conversation-actions-container.side-nav-opened",
+    "bard-sidenav[style*='--bard-sidenav-open-width']",
+    "bard-sidenav.side-nav-expanded",
+    "side-navigation-content.side-nav-expanded",
+    "top-bar-actions.side-nav-expanded",
+    "side-navigation-content side-nav-action-button.is-expanded",
+    "side-navigation-content [data-test-id='new-chat-button'].is-expanded"
+  ].join(", ");
+  const GEMINI_SIDEBAR_CLOSED_SELECTOR = [
+    ".sidenav-with-history-container:not(.expanded)",
+    "bard-sidenav[style*='--bard-sidenav-closed-width']"
+  ].join(", ");
+  const GEMINI_CONVERSATION_LINK_SELECTOR = [
+    "a[data-test-id='conversation']",
+    "gem-nav-list-item[data-test-id='conversation'] a[href*='/app/']",
+    "a[href*='/app/']"
+  ].join(", ");
+  const GEMINI_CONVERSATION_SEARCH_ROOT_SELECTOR = [
+    "conversations-list",
+    ".chat-history-list",
+    ".chat-history",
+    "mat-nav-list[role='navigation']",
+    "mat-nav-list.gds-sidenav-list",
+    "bard-sidenav",
+    "side-navigation-content",
+    ".sidenav-with-history-container"
+  ].join(", ");
+  const GEMINI_CONVERSATION_ROW_CANDIDATE_SELECTOR = [
+    "gem-nav-list-item[data-test-id='conversation']",
+    "gem-nav-list-item",
+    ".conversation-item",
+    ".conversation-list-item",
+    ".conversation-row",
+    ".gem-nav-list-item",
+    "[data-test-id='conversation-container']",
+    "[data-test-id='conversation-row']",
+    "[role='listitem']",
+    ".mat-mdc-list-item",
+    ".mat-list-item",
+    "li"
+  ].join(", ");
+  const GEMINI_CONVERSATION_ACTION_BUTTON_FAST_SELECTOR = [
+    ".hovered-trailing-content gem-icon-button[data-test-id='actions-menu-button'] button",
+    ".hovered-trailing-content gem-icon-button[data-test-id='actions-menu-button']",
+    "gem-icon-button[data-test-id='actions-menu-button'] button",
+    "gem-icon-button[data-test-id='actions-menu-button']",
+    "gem-icon-button.gem-conversation-actions-menu-button button",
+    "gem-icon-button.gem-conversation-actions-menu-button",
+    "button[data-test-id='actions-menu-button']",
+    "button[data-test-id='conversation-actions-menu-icon-button']"
+  ].join(", ");
+  const GEMINI_CONVERSATION_ACTION_BUTTON_SELECTOR = [
+    GEMINI_CONVERSATION_ACTION_BUTTON_FAST_SELECTOR,
+    "gem-icon-button[data-test-id='conversation-actions-menu-icon-button']",
+    "gem-icon-button[data-test-id='conversation-actions-menu-icon-button'] button",
+    ".hovered-trailing-content gem-icon-button[data-test-id='actions-menu-button']",
+    ".hovered-trailing-content gem-icon-button[data-test-id='actions-menu-button'] button",
+    "button[aria-label*='More options' i]",
+    "button[aria-label*='更多选项' i]",
+    "[role='button'][aria-label*='More options' i]",
+    "[role='button'][aria-label*='更多选项' i]",
+    "button[aria-haspopup='menu']",
+    "[role='button'][aria-haspopup='menu']",
+    "button[aria-label*='menu' i]",
+    "[role='button'][aria-label*='menu' i]",
+    "button:has(mat-icon[fonticon='more_vert'])",
+    "button:has(mat-icon[data-mat-icon-name='more_vert'])",
+    "button:has(mat-icon[fonticon='more_horiz'])",
+    "button:has(mat-icon[data-mat-icon-name='more_horiz'])",
+    "button.conversation-actions-menu-button"
+  ].join(", ");
 
   function geminiCollectTextExcludingIcons(node, parts = []) {
     if (!node) return parts;
@@ -171,6 +274,381 @@ const GEMINI_DELETE_USERSCRIPT_HELPERS = String.raw`
     return candidates[0]?.node || null;
   }
 
+  function geminiSimulateMenuClick(node) {
+    const target = clickable(node) || node;
+    if (!target || disabled(target)) return false;
+    reveal(target);
+    try { target.focus?.({ preventScroll: true }); } catch {
+      try { target.focus?.(); } catch {}
+    }
+    const coords = pointFor(target);
+    const plans = [
+      ["pointerdown", "PointerEvent", { buttons: 1 }],
+      ["mousedown", "MouseEvent", { buttons: 1 }],
+      ["pointerup", "PointerEvent", { buttons: 0 }],
+      ["mouseup", "MouseEvent", { buttons: 0 }],
+      ["click", "MouseEvent", { buttons: 0, detail: 1 }]
+    ];
+    let dispatched = false;
+    for (const [type, ctorName, extra] of plans) {
+      try {
+        const Ctor = eventCtor(ctorName, target);
+        target.dispatchEvent(new Ctor(type, {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          view: window,
+          pointerId: 1,
+          pointerType: "mouse",
+          isPrimary: true,
+          button: 0,
+          ...coords,
+          ...extra
+        }));
+        dispatched = true;
+      } catch {}
+    }
+    if (!dispatched) {
+      try { target.click?.(); dispatched = true; } catch {}
+    }
+    return dispatched;
+  }
+
+  function geminiFirstVisible(selector, fallbackToFirst = false) {
+    const candidates = qsa(selector, document);
+    return candidates.find(visible) || (fallbackToFirst ? candidates[0] || null : null);
+  }
+
+  function geminiStringAttr(node, name) {
+    try { return String(node?.getAttribute?.(name) || "").trim(); } catch { return ""; }
+  }
+
+  function geminiNormalizeConversationPathname(value) {
+    try {
+      const pathname = new URL(String(value || ""), location.origin).pathname.replace(/\/+$/, "");
+      const match = pathname.match(/^\/app\/([^/?#]+)/);
+      return match ? "/app/" + match[1] : "";
+    } catch { return ""; }
+  }
+
+  function geminiCurrentConversationPathname() {
+    return geminiNormalizeConversationPathname(location.href);
+  }
+
+  function geminiSidebarOpen() {
+    const explicitlyOpen = qsa(GEMINI_SIDEBAR_OPEN_SELECTOR, document).some((node) => {
+      const box = rect(node);
+      return visible(node) || Boolean(box && box.width >= 160);
+    });
+    if (explicitlyOpen) return true;
+    for (const root of qsa(GEMINI_SIDEBAR_ROOT_SELECTOR, document)) {
+      const className = String(root.className || "").toLowerCase();
+      const state = geminiStringAttr(root, "data-state").toLowerCase();
+      const expanded = geminiStringAttr(root, "aria-expanded").toLowerCase();
+      if (expanded === "true" || state === "expanded" || state === "open" || /(?:expanded|side-nav-opened|side-nav-expanded)/.test(className)) return true;
+      if (expanded === "false" || state === "collapsed" || state === "closed" || /(?:collapsed|side-nav-closed)/.test(className)) return false;
+      const box = rect(root);
+      if (box && box.width >= 160 && box.right > 0) return true;
+      if (box && box.width > 0 && box.width <= 96) return false;
+    }
+    if (qsa(GEMINI_SIDEBAR_CLOSED_SELECTOR, document).length) return false;
+    const toggle = geminiFirstVisible(GEMINI_SIDEBAR_TOGGLE_SELECTOR, true);
+    const label = normalize([geminiStringAttr(toggle, "aria-label"), geminiStringAttr(toggle, "title")].join(" ")).toLowerCase();
+    if (/(open|expand|show).*(sidebar|side bar|navigation|menu)/.test(label)) return false;
+    if (/(close|collapse|hide).*(sidebar|side bar|navigation|menu)/.test(label)) return true;
+    if (/(打开|展开|显示).*(侧栏|侧边栏|导航|菜单)/.test(label)) return false;
+    if (/(关闭|收起|隐藏).*(侧栏|侧边栏|导航|菜单)/.test(label)) return true;
+    return null;
+  }
+
+  async function geminiEnsureSidebarOpen() {
+    if (geminiSidebarOpen() === true) return true;
+    const toggle = geminiFirstVisible(GEMINI_SIDEBAR_TOGGLE_SELECTOR, true);
+    if (!toggle || !visible(toggle) || disabled(toggle)) return false;
+    geminiSimulateMenuClick(toggle);
+    let opened = await waitFor(() => geminiSidebarOpen() === true ? true : null, 1300, 90);
+    if (opened) return true;
+    if (geminiSidebarOpen() !== true) clickAt(toggle);
+    opened = await waitFor(() => geminiSidebarOpen() === true ? true : null, 1300, 90);
+    return Boolean(opened || geminiSidebarOpen() === true);
+  }
+
+  function geminiMatchesSelector(node, selector) {
+    try { return Boolean(node?.matches?.(selector)); } catch { return false; }
+  }
+
+  function geminiConversationLinkCount(node) {
+    if (!node) return 0;
+    try {
+      return (node.matches?.(GEMINI_CONVERSATION_LINK_SELECTOR) ? 1 : 0)
+        + node.querySelectorAll(GEMINI_CONVERSATION_LINK_SELECTOR).length;
+    } catch { return 0; }
+  }
+
+  function geminiConversationEntryContainer(link) {
+    if (!link) return null;
+    const preferred = [
+      "gem-nav-list-item[data-test-id='conversation']",
+      "gem-nav-list-item",
+      ".conversation-item",
+      ".conversation-list-item",
+      ".conversation-row",
+      ".mat-mdc-list-item",
+      ".mat-list-item",
+      "[role='listitem']"
+    ];
+    for (const selector of preferred) {
+      let candidate = null;
+      try { candidate = link.closest?.(selector) || null; } catch {}
+      if (!candidate || geminiMatchesSelector(candidate, GEMINI_SIDEBAR_ROOT_SELECTOR)) continue;
+      if (geminiConversationLinkCount(candidate) === 1) return candidate;
+    }
+    let best = null;
+    let bestScore = -Infinity;
+    for (let node = link, depth = 0; node && node.nodeType === 1 && depth < 12; node = node.parentElement, depth += 1) {
+      if (geminiMatchesSelector(node, GEMINI_SIDEBAR_ROOT_SELECTOR)) break;
+      const linkCount = geminiConversationLinkCount(node);
+      if (!linkCount) continue;
+      const box = rect(node);
+      let score = linkCount === 1 ? 120 : -Math.min(120, linkCount * 16);
+      if (node === link.parentElement) score += 30;
+      if (geminiMatchesSelector(node, GEMINI_CONVERSATION_ROW_CANDIDATE_SELECTOR)) score += 45;
+      if (box && box.width > 0 && box.height > 0) {
+        score += 8;
+        if (box.height <= 72) score += 28;
+        else if (box.height <= 112) score += 12;
+        else score -= 25;
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        best = node;
+      }
+    }
+    return best || link.parentElement || null;
+  }
+
+  function geminiConversationActionHost(node) {
+    if (!node || node.nodeType !== 1) return null;
+    const selector = [
+      "gem-icon-button[data-test-id='actions-menu-button']",
+      "gem-icon-button[data-test-id='conversation-actions-menu-icon-button']",
+      "gem-icon-button.gem-conversation-actions-menu-button",
+      ".gem-conversation-actions-menu-button"
+    ].join(", ");
+    try {
+      if (node.matches?.(selector)) return node;
+      return node.closest?.(selector) || null;
+    } catch { return null; }
+  }
+
+  function geminiConversationMenuClickTarget(node) {
+    if (!node || node.nodeType !== 1) return null;
+    const role = geminiStringAttr(node, "role").toLowerCase();
+    if (String(node.tagName || "").toLowerCase() === "button" || role === "button") return node;
+    const host = geminiConversationActionHost(node) || node;
+    try { return host.querySelector?.("button, [role='button']") || host; } catch { return host; }
+  }
+
+  function geminiConversationMenuButtonScore(button) {
+    if (!button || disabled(button) || button.closest?.("mat-dialog-container, [role='dialog'], .cdk-overlay-pane")) return -Infinity;
+    const host = geminiConversationActionHost(button);
+    if (host && disabled(host)) return -Infinity;
+    const value = normalize([
+      geminiStringAttr(button, "data-test-id"),
+      geminiStringAttr(host, "data-test-id"),
+      geminiStringAttr(button, "aria-label"),
+      geminiStringAttr(host, "aria-label"),
+      geminiStringAttr(button, "title"),
+      geminiStringAttr(host, "title"),
+      String(button.className || ""),
+      String(host?.className || ""),
+      elementText(button),
+      svgText(button)
+    ].filter(Boolean).join(" ")).toLowerCase();
+    let score = 0;
+    if (value.includes("actions-menu-button")) score += 170;
+    if (value.includes("conversation-actions-menu-icon-button")) score += 170;
+    if (value.includes("conversation-actions-menu-button")) score += 130;
+    if (value.includes("open menu for conversation actions")) score += 150;
+    if (value.includes("conversation actions")) score += 120;
+    if (value.includes("more options for")) score += 140;
+    if (value.includes("more options") || value.includes("更多选项")) score += 115;
+    if (value.includes("aria-haspopup menu") || geminiStringAttr(button, "aria-haspopup").toLowerCase() === "menu") score += 80;
+    if (/more[_ -]?(vert|horiz)/.test(value)) score += 100;
+    if (/\b(delete|rename|pin)\b|删除|重命名|置顶|固定/.test(value)) score -= 80;
+    const box = rect(button);
+    if (box && box.width > 0 && box.height > 0) {
+      score += 8;
+      if (box.width <= 64 && box.height <= 64) score += 18;
+    }
+    return score;
+  }
+
+  function geminiConversationMenuButton(container) {
+    if (!container) return null;
+    const collect = (selector) => {
+      const seen = new Set();
+      return qsa(selector, container)
+        .map(geminiConversationMenuClickTarget)
+        .filter((node) => node && !seen.has(node) && seen.add(node))
+        .map((node) => ({ node, score: geminiConversationMenuButtonScore(node), shown: visible(node) }))
+        .filter((item) => item.score > 0)
+        .sort((a, b) => Number(b.shown) - Number(a.shown) || b.score - a.score)[0]?.node || null;
+    };
+    return collect(GEMINI_CONVERSATION_ACTION_BUTTON_FAST_SELECTOR)
+      || collect(GEMINI_CONVERSATION_ACTION_BUTTON_SELECTOR);
+  }
+
+  function geminiConversationActionContainers(entry) {
+    const containers = [];
+    const add = (node) => {
+      if (node && !containers.includes(node)) containers.push(node);
+    };
+    add(entry?.container);
+    add(entry?.link);
+    const linkBox = rect(entry?.link);
+    const linkMidY = linkBox ? linkBox.top + linkBox.height / 2 : null;
+    for (let node = entry?.link?.parentElement || null, depth = 0; node && depth < 5; node = node.parentElement, depth += 1) {
+      if (geminiMatchesSelector(node, GEMINI_SIDEBAR_ROOT_SELECTOR)) break;
+      if (geminiConversationLinkCount(node) !== 1) break;
+      const box = rect(node);
+      if (box && linkBox) {
+        const maxHeight = Math.max(128, linkBox.height * 2.5);
+        if (box.height > maxHeight || linkMidY < box.top - 2 || linkMidY > box.bottom + 2) break;
+      }
+      add(node);
+    }
+    return containers;
+  }
+
+  function geminiRefreshConversationEntryButton(entry) {
+    if (!entry) return entry;
+    for (const container of geminiConversationActionContainers(entry)) {
+      const button = geminiConversationMenuButton(container);
+      if (button) return { ...entry, container, button };
+    }
+    return { ...entry, button: null };
+  }
+
+  function geminiRevealConversationEntryActions(entry) {
+    if (!entry?.container) return entry;
+    let next = geminiRefreshConversationEntryButton(entry);
+    if (next.button && visible(next.button)) return next;
+    const targets = [];
+    const add = (node) => {
+      if (node && !targets.includes(node)) targets.push(node);
+    };
+    geminiConversationActionContainers(next).forEach(add);
+    for (const target of targets) {
+      try { target.scrollIntoView?.({ block: "nearest", inline: "nearest" }); } catch {}
+      const box = rect(target);
+      const coords = box ? {
+        clientX: Math.max(1, box.right - Math.min(12, Math.max(4, box.width / 6))),
+        clientY: Math.max(1, box.top + Math.min(box.height - 4, Math.max(4, box.height / 2)))
+      } : { clientX: 1, clientY: 1 };
+      for (const type of ["mousemove", "mouseover", "mouseenter", "pointermove", "pointerover", "pointerenter"]) {
+        try {
+          const Ctor = type.startsWith("pointer") ? eventCtor("PointerEvent", target) : eventCtor("MouseEvent", target);
+          target.dispatchEvent(new Ctor(type, {
+            bubbles: true,
+            cancelable: true,
+            composed: true,
+            view: window,
+            pointerId: 1,
+            pointerType: "mouse",
+            isPrimary: true,
+            ...coords
+          }));
+        } catch {}
+      }
+      try { target.focus?.({ preventScroll: true }); } catch {}
+    }
+    next = geminiRefreshConversationEntryButton(next);
+    return next;
+  }
+
+  function geminiConversationLinks() {
+    const roots = [];
+    const seenRoots = new Set();
+    const addRoot = (node) => {
+      if (!node || seenRoots.has(node)) return;
+      seenRoots.add(node);
+      roots.push(node);
+    };
+    qsa(GEMINI_CONVERSATION_SEARCH_ROOT_SELECTOR, document).forEach(addRoot);
+    qsa(GEMINI_SIDEBAR_ROOT_SELECTOR, document).forEach(addRoot);
+    const links = [];
+    const seen = new Set();
+    const collect = (root) => {
+      for (const link of qsa(GEMINI_CONVERSATION_LINK_SELECTOR, root)) {
+        if (!link || seen.has(link) || !link.closest?.(GEMINI_SIDEBAR_ROOT_SELECTOR)) continue;
+        seen.add(link);
+        links.push(link);
+      }
+    };
+    roots.forEach(collect);
+    if (!links.length) collect(document);
+    return links;
+  }
+
+  function geminiCurrentConversationEntry() {
+    const currentPathname = geminiCurrentConversationPathname();
+    if (!currentPathname) return { entry: null, reason: "current page is not a saved Gemini conversation", currentPathname };
+    const matches = geminiConversationLinks().filter((link) => {
+      return geminiNormalizeConversationPathname(link.getAttribute?.("href") || link.href || "") === currentPathname;
+    });
+    if (!matches.length) return { entry: null, reason: "current conversation row not found", currentPathname };
+    const visibleMatches = matches.filter((link) => {
+      const container = geminiConversationEntryContainer(link);
+      return visible(link) || visible(container);
+    });
+    const pool = visibleMatches.length ? visibleMatches : matches;
+    if (pool.length !== 1) return { entry: null, reason: "current conversation row matched more than once", currentPathname };
+    const link = pool[0];
+    const container = geminiConversationEntryContainer(link);
+    if (!container) return { entry: null, reason: "current conversation row container not found", currentPathname };
+    return {
+      entry: geminiRefreshConversationEntryButton({ link, container, button: null }),
+      reason: "",
+      currentPathname
+    };
+  }
+
+  async function geminiCurrentConversationMenuTarget(timeoutMs = 3600) {
+    if (!await geminiEnsureSidebarOpen()) {
+      return { entry: null, reason: "Gemini sidebar could not be opened", currentPathname: geminiCurrentConversationPathname() };
+    }
+    const deadline = Date.now() + Math.max(0, Number(timeoutMs) || 0);
+    let last = geminiCurrentConversationEntry();
+    let revealedContainer = null;
+    let historyReloaded = false;
+    while (Date.now() <= deadline) {
+      const current = geminiCurrentConversationEntry();
+      if (current.entry?.button && visible(current.entry.button)) return current;
+      if (current.entry) {
+        const next = current.entry.container !== revealedContainer
+          ? geminiRevealConversationEntryActions(current.entry)
+          : geminiRefreshConversationEntryButton(current.entry);
+        revealedContainer = current.entry.container;
+        if (next.button && visible(next.button)) return { ...current, entry: next, reason: "" };
+      } else if (!historyReloaded) {
+        const reload = geminiFirstVisible("[data-test-id='sidenav-error-action-link']");
+        if (reload) {
+          historyReloaded = true;
+          geminiSimulateMenuClick(reload);
+        }
+      }
+      last = current;
+      await sleep(180);
+    }
+    const finalValue = geminiCurrentConversationEntry();
+    if (finalValue.entry) {
+      const next = geminiRevealConversationEntryActions(finalValue.entry);
+      if (next.button && visible(next.button)) return { ...finalValue, entry: next, reason: "" };
+    }
+    return finalValue.reason ? finalValue : last;
+  }
+
   function geminiConversationMenuRoots(trigger = null) {
     const roots = [];
     const add = (node) => {
@@ -238,11 +716,35 @@ const GEMINI_DELETE_USERSCRIPT_HELPERS = String.raw`
   async function clickGeminiDeleteMenuItem(trigger) {
     const menuReady = () => findGeminiDeleteMenuItem(trigger);
     let item = menuReady();
-    if (!item) item = await clickUntil(trigger, menuReady, { settleMs: 220 });
+    if (!item && trigger) {
+      const attempts = [
+        () => geminiSimulateMenuClick(trigger),
+        () => clickAt(trigger),
+        () => invokeDirectFrameworkActivation(trigger, pointFor(trigger)),
+        () => invokeFrameworkActivation(trigger, pointFor(trigger))
+      ];
+      for (const attempt of attempts) {
+        try { attempt(); } catch {}
+        item = await waitFor(menuReady, 520, 65);
+        if (item) break;
+      }
+    }
     if (!item) return null;
     await sleep(120);
     item = findGeminiDeleteMenuItem(trigger) || item;
-    return clickAt(item) ? item : null;
+    return (geminiSimulateMenuClick(item) || clickAt(item)) ? item : null;
+  }
+
+  async function tryGeminiDeleteFromTrigger(trigger) {
+    if (!trigger) return null;
+    const clickedItem = await clickGeminiDeleteMenuItem(trigger);
+    if (!clickedItem) return null;
+    const confirmed = await clickDeleteConfirmIfPresent(6500);
+    if (confirmed) return result(true);
+    if (deleteDialogRoots().length) return resultWithTrustedDeleteConfirm("delete confirmation did not close");
+    const stillOpenItem = findGeminiDeleteMenuItem(trigger) || findGeminiDeleteMenuItem();
+    if (stillOpenItem) return resultWithGeminiTrustedMenuClick("delete menu item did not open confirmation", stillOpenItem);
+    return result(false, "delete confirmation button not found");
   }
 
   async function deleteGemini(payload = {}) {
@@ -253,25 +755,44 @@ const GEMINI_DELETE_USERSCRIPT_HELPERS = String.raw`
     if (payload?.trustedMenuClickRetried) {
       const openItem = await waitFor(() => findGeminiDeleteMenuItem(), 3000, 90);
       if (openItem) {
-        clickAt(openItem);
+        geminiSimulateMenuClick(openItem) || clickAt(openItem);
         const confirmedAfterTrustedMenu = await clickDeleteConfirmIfPresent(6500);
         if (confirmedAfterTrustedMenu) return result(true);
         if (deleteDialogRoots().length) return resultWithTrustedDeleteConfirm("delete confirmation did not close");
         const stillOpenItem = findGeminiDeleteMenuItem();
         if (stillOpenItem) return result(false, "trusted delete menu click did not open confirmation");
       }
-      return result(false, "trusted conversation menu click did not open delete menu");
     }
-    const trigger = geminiConversationActionButton();
-    if (!trigger) return result(false, "conversation menu trigger not found");
-    const clickedItem = await clickGeminiDeleteMenuItem(trigger);
-    if (!clickedItem) return resultWithGeminiTrustedMenuClick("delete menu item not found", trigger);
-    const confirmed = await clickDeleteConfirmIfPresent(6500);
-    if (confirmed) return result(true);
-    if (deleteDialogRoots().length) return resultWithTrustedDeleteConfirm("delete confirmation did not close");
-    const stillOpenItem = findGeminiDeleteMenuItem(trigger);
-    if (stillOpenItem) return resultWithGeminiTrustedMenuClick("delete menu item did not open confirmation", stillOpenItem);
-    return result(false, "delete confirmation button not found");
+    const topTrigger = geminiConversationActionButton();
+    if (!payload?.trustedMenuClickRetried && topTrigger) {
+      const topResult = await tryGeminiDeleteFromTrigger(topTrigger);
+      if (topResult) return topResult;
+    }
+
+    const sidebarTarget = await geminiCurrentConversationMenuTarget(3600);
+    const sidebarTrigger = sidebarTarget?.entry?.button || null;
+    if (sidebarTrigger) {
+      const sidebarResult = await tryGeminiDeleteFromTrigger(sidebarTrigger);
+      if (sidebarResult) return sidebarResult;
+      if (!payload?.trustedMenuClickRetried) {
+        return resultWithGeminiTrustedMenuClick("sidebar conversation menu did not open", sidebarTrigger);
+      }
+      return result(false, "trusted sidebar conversation menu click did not open delete menu");
+    }
+    if (sidebarTarget?.entry && !payload?.trustedHoverRetried) {
+      return resultWithTrustedHover(
+        "sidebar conversation menu requires trusted hover",
+        sidebarTarget.entry.container || sidebarTarget.entry.link
+      );
+    }
+
+    if (payload?.trustedMenuClickRetried) {
+      return result(false, sidebarTarget?.reason || "trusted conversation menu click did not open delete menu");
+    }
+    if (topTrigger) {
+      return resultWithGeminiTrustedMenuClick(sidebarTarget?.reason || "delete menu item not found", topTrigger);
+    }
+    return result(false, sidebarTarget?.reason || "conversation menu trigger not found");
   }
 `;
 
