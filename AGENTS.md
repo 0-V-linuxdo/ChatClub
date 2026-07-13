@@ -4,6 +4,7 @@
 
 - Do not use `javascript:` bookmarklets for page inspection or verification.
 - Do not use `osascript`.
+- Do not use the Codex in-app browser for page inspection or verification.
 - Use DevTools for console probes, DOM inspection, and runtime verification.
 
 ## Plugin Versioning

@@ -19,7 +19,8 @@ export const TOPBAR_BUILTIN_ITEMS = [
   "settingsPrompts",
   "settingsPromptHistory",
   "settingsShortcuts",
-  "settingsIo"
+  "settingsIo",
+  "settingsAbout"
 ];
 
 export const TOPBAR_SETTINGS_SECTION_ITEMS = {
@@ -33,7 +34,8 @@ export const TOPBAR_SETTINGS_SECTION_ITEMS = {
   prompts: "settingsPrompts",
   promptHistory: "settingsPromptHistory",
   shortcuts: "settingsShortcuts",
-  io: "settingsIo"
+  io: "settingsIo",
+  about: "settingsAbout"
 };
 
 export const TOPBAR_SETTINGS_ITEM_SECTIONS = Object.fromEntries(
@@ -66,7 +68,8 @@ export const DEFAULT_TOPBAR_LAYOUT = [
   { type: "item", id: "settingsPrompts" },
   { type: "item", id: "settingsPromptHistory" },
   { type: "item", id: "settingsShortcuts" },
-  { type: "item", id: "settingsIo" }
+  { type: "item", id: "settingsIo" },
+  { type: "item", id: "settingsAbout" }
 ];
 
 export const TOPBAR_ITEM_META = {
@@ -91,6 +94,7 @@ export const TOPBAR_ITEM_META = {
   settingsPromptHistory: { labelKey: "settings.promptHistory.title", icon: "history" },
   settingsShortcuts: { labelKey: "settings.shortcuts.title", icon: "keyboard" },
   settingsIo: { labelKey: "settings.io.title", icon: "transfer" },
+  settingsAbout: { labelKey: "settings.about.title", icon: "info" },
   flex: { labelKey: "topbar.flexSpace", icon: "grip" }
 };
 

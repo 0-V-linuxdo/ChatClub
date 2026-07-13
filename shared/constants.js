@@ -1,10 +1,11 @@
 import { DEFAULT_TOPBAR_LAYOUT } from "./topbar.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-07-13｜23:22:29」";
+export const APP_VERSION = "「2026-07-14｜02:22:12」";
 export const BASELINE_MOD_VERSION = "2.4.0.14";
 export const HOMEPAGE_URL = "https://chatclub.local/";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
+export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
 export const STORAGE_KEYS = {
   options: "options",
@@ -133,7 +134,7 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
     id: "topbar",
     labelKey: "tooltip.group.topbar",
     targets: Object.freeze([
-      Object.freeze({ id: "topbar.brand", labelKey: "topbar.repository" }),
+      Object.freeze({ id: "topbar.brand", labelKey: "topbar.about" }),
       Object.freeze({ id: "topbar.settings", labelKey: "topbar.settings" }),
       Object.freeze({ id: "topbar.promptLibrary", labelKey: "topbar.promptLibrary" }),
       Object.freeze({ id: "topbar.clearPrompt", labelKey: "topbar.clearPrompt" }),
@@ -158,6 +159,7 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
       Object.freeze({ id: "topbar.settings.promptHistory", labelKey: "settings.promptHistory.title" }),
       Object.freeze({ id: "topbar.settings.shortcuts", labelKey: "settings.shortcuts.title" }),
       Object.freeze({ id: "topbar.settings.io", labelKey: "settings.io.title" }),
+      Object.freeze({ id: "topbar.settings.about", labelKey: "settings.about.title" }),
       Object.freeze({ id: "topbar.customize.paletteItem", labelKey: "topbar.customize.item" }),
       Object.freeze({ id: "topbar.customize.enter", labelKey: "topbar.customize.enter" }),
       Object.freeze({ id: "topbar.customize.cancel", labelKey: "common.cancel" })

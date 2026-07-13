@@ -1,4 +1,6 @@
 import {
+  APP_NAME,
+  APP_VERSION,
   BUILTIN_CHAT_APPS,
   DEFAULT_GEMINI_THINKING_LEVEL,
   DEFAULT_MODEL_PREFERENCE_ORDER,
@@ -8,7 +10,9 @@ import {
   MODEL_PREFERENCE_TARGETS,
   PROMPT_IMAGE_PASTE_STRATEGY_BATCH,
   PROMPT_IMAGE_PASTE_STRATEGY_SEQUENTIAL,
+  REPOSITORY_URL,
   TAB_GROUP_HEADER_BUTTONS,
+  TELEGRAM_CHANNEL_URL,
   TOOLTIP_TARGET_GROUPS,
   TOPBAR_PROMPT_PLACEHOLDER_INTERVAL_MAX_SEC,
   TOPBAR_PROMPT_PLACEHOLDER_INTERVAL_MIN_SEC,
@@ -82,7 +86,8 @@ export function createSettingsController(ctx) {
     applyTheme,
     syncI18nLanguage,
     hydrateGroups,
-    enterTopbarEditMode
+    enterTopbarEditMode,
+    openTabUrl = (url) => window.open(url, "_blank", "noopener,noreferrer")
   } = ctx;
   let closeActiveSettingsDialog = null;
 
@@ -631,7 +636,80 @@ export function createSettingsController(ctx) {
     if (active === "prompts") return promptLibraryPane(redraw);
     if (active === "promptHistory") return promptHistoryPane(redraw);
     if (active === "shortcuts") return shortcutsPane(redraw);
+    if (active === "about") return aboutPane();
     return importExportPane(redraw);
+  }
+
+  function aboutLinkAction(label, iconName, url) {
+    return el("button", {
+      class: "settings-config-button about-link-button",
+      type: "button",
+      onclick: () => openTabUrl(url)
+    },
+      svgIcon(iconName),
+      el("span", {}, label)
+    );
+  }
+
+  function aboutLinkRow({ title, description, handle, action, icon, url }) {
+    return el("article", { class: "about-link-row" },
+      el("div", { class: "about-link-copy" },
+        el("strong", {}, title),
+        el("p", {}, description),
+        el("code", {}, handle)
+      ),
+      aboutLinkAction(action, icon, url)
+    );
+  }
+
+  function aboutPane() {
+    return el("div", { class: "settings-pane about-settings-pane" },
+      el("section", { class: "settings-manage-card about-product-card" },
+        el("div", { class: "about-identity" },
+          el("img", {
+            class: "about-logo",
+            src: "icons/logo.svg",
+            alt: "",
+            draggable: "false"
+          }),
+          el("div", {},
+            el("h4", {}, APP_NAME),
+            el("p", {}, t("about.description"))
+          )
+        ),
+        el("div", { class: "about-version-row" },
+          el("span", {}, t("about.version")),
+          el("code", {}, APP_VERSION)
+        )
+      ),
+      el("section", { class: "settings-manage-card about-links-card" },
+        el("div", { class: "settings-manage-title" },
+          svgIcon("link"),
+          el("div", {},
+            el("h4", {}, t("about.officialLinks")),
+            el("p", {}, t("about.officialLinksDesc"))
+          )
+        ),
+        el("div", { class: "about-link-list" },
+          aboutLinkRow({
+            title: t("about.telegramChannel"),
+            description: t("about.telegramDesc"),
+            handle: "@chatclub_extension",
+            action: t("about.openTelegram"),
+            icon: "send",
+            url: TELEGRAM_CHANNEL_URL
+          }),
+          aboutLinkRow({
+            title: t("about.githubRepository"),
+            description: t("about.githubDesc"),
+            handle: "0-V-linuxdo/ChatClub",
+            action: t("about.openGithub"),
+            icon: "external",
+            url: REPOSITORY_URL
+          })
+        )
+      )
+    );
   }
 
   function appearancePane(redraw = () => {}) {
@@ -1056,6 +1134,7 @@ export function createSettingsController(ctx) {
       "topbar.settings.prompts": "library",
       "topbar.settings.shortcuts": "keyboard",
       "topbar.settings.io": "transfer",
+      "topbar.settings.about": "info",
       "topbar.customize.paletteItem": "grip",
       "topbar.customize.enter": "customizeTopbar",
       "topbar.customize.cancel": "x",

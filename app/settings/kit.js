@@ -14,7 +14,8 @@ export const SETTINGS_SECTIONS = [
   ["prompts", "settings.prompts.title", "settings.prompts.desc", "library"],
   ["promptHistory", "settings.promptHistory.title", "settings.promptHistory.desc", "history"],
   ["shortcuts", "settings.shortcuts.title", "settings.shortcuts.desc", "keyboard"],
-  ["io", "settings.io.title", "settings.io.desc", "transfer"]
+  ["io", "settings.io.title", "settings.io.desc", "transfer"],
+  ["about", "settings.about.title", "settings.about.desc", "info"]
 ];
 
 export function settingsSectionMeta(active) {

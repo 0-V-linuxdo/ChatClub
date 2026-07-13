@@ -5800,6 +5800,132 @@ body.settings-tab-group-button-dragging iframe {
   height: 19px;
 }
 
+.about-settings-pane {
+  width: 100%;
+  max-width: 760px;
+  align-content: start;
+}
+
+.about-settings-pane .settings-manage-card {
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+}
+
+.about-identity {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 16px;
+  align-items: center;
+}
+
+.about-logo {
+  width: 68px;
+  height: 68px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel-2);
+  box-shadow: 0 8px 22px color-mix(in srgb, black 12%, transparent);
+}
+
+.about-identity h4 {
+  margin: 0 0 6px;
+  color: var(--text);
+  font-size: 21px;
+  line-height: 1.2;
+}
+
+.about-identity p {
+  max-width: 620px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.about-version-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--settings-radius);
+  background: color-mix(in srgb, var(--panel-2) 68%, var(--panel));
+}
+
+.about-version-row > span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.about-version-row > code {
+  color: var(--text);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.about-link-list {
+  display: grid;
+  gap: 10px;
+}
+
+.about-link-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 13px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--settings-radius);
+  background: color-mix(in srgb, var(--panel-2) 58%, var(--panel));
+}
+
+.about-link-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.about-link-copy strong {
+  color: var(--text);
+  font-size: 14px;
+}
+
+.about-link-copy p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.about-link-copy code {
+  width: fit-content;
+  max-width: 100%;
+  color: var(--primary);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.about-link-button {
+  min-width: 148px;
+}
+
+@media (max-width: 820px) {
+  .about-link-row {
+    grid-template-columns: 1fr;
+  }
+
+  .about-link-button {
+    width: 100%;
+  }
+}
+
 .io-sensitive-warning {
   margin: -6px 0 0;
   padding: 9px 11px;

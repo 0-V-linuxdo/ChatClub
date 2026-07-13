@@ -1,6 +1,5 @@
 import {
   APP_NAME,
-  REPOSITORY_URL,
   DEFAULT_GEMINI_THINKING_LEVEL,
   GEMINI_THINKING_LEVEL_PREFERENCE_KEY,
   GEMINI_THINKING_LEVEL_TARGETS,
@@ -300,6 +299,11 @@ const ICONS = {
     ["path", { d: "m15 4 3 3-3 3" }],
     ["path", { d: "M17 17H6" }],
     ["path", { d: "m9 14-3 3 3 3" }]
+  ],
+  info: [
+    ["circle", { cx: "12", cy: "12", r: "9" }],
+    ["path", { d: "M12 11v5" }],
+    ["path", { d: "M12 8h.01" }]
   ],
   left: [
     ["path", { d: "m12 19-7-7 7-7" }],
@@ -635,7 +639,8 @@ settingsController = createSettingsController({
   applyTheme,
   syncI18nLanguage,
   hydrateGroups: workspaceController.hydrateGroups,
-  enterTopbarEditMode
+  enterTopbarEditMode,
+  openTabUrl: workspaceController.openTabUrl
 });
 
 function topbarPromptPlaceholderConfig() {
@@ -3798,21 +3803,21 @@ function renderSettingsJumpMenuButton() {
   return buttonNode;
 }
 
-function openChatClubRepository(event) {
+function openChatClubAbout(event) {
   event?.preventDefault?.();
   event?.stopPropagation?.();
-  workspaceController.openTabUrl(REPOSITORY_URL);
+  openSettings("about");
 }
 
 function renderTopbarBrand() {
-  const label = t("topbar.repository");
+  const label = t("topbar.about");
   return el("button", {
     class: `brand tooltip-trigger ${topbarItemClass("brand")}`,
     type: "button",
     "aria-label": label,
     "data-tooltip": label,
     "data-tooltip-id": "topbar.brand",
-    onclick: openChatClubRepository
+    onclick: openChatClubAbout
   },
     el("img", { class: "brand-logo", src: "icons/logo.svg", alt: "", draggable: "false" }),
     el("div", {}, APP_NAME)
@@ -4023,7 +4028,7 @@ function runTopbarMenuItem(item, event) {
   }
   if (item.id === "brand") {
     closeSettingsJumpMenu();
-    openSettings();
+    openSettings("about");
     return;
   }
   if (item.id === "composer") {

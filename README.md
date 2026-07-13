@@ -2,6 +2,8 @@
 
 多 AI 聊天工作台浏览器扩展。把常用 AI 站点放进同一个页面，一次输入，多处发送，并排比较结果。
 
+官方链接：[Telegram 频道](https://t.me/chatclub_extension) · [GitHub 仓库](https://github.com/0-V-linuxdo/ChatClub)
+
 ## 功能
 
 - 多列工作区：内置分组标签、布局预设、全屏、刷新、新建会话、复制链接、在新标签页打开。
@@ -57,5 +59,3 @@
 | `userscripts/` | Summary 内置采集脚本 |
 | `topic-delete-userscripts/` | 删除会话内置脚本 |
 | `ui/` | 通用 UI 工具 |
-
-仓库：https://github.com/0-V-linuxdo/ChatClub
