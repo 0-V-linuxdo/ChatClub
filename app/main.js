@@ -114,6 +114,7 @@ const MODEL_PREFERENCE_APPLY_RETRY_DELAYS = Object.freeze([0, 700, 1600, 3200, 5
 const MODEL_PREFERENCE_READY_APPLY_RETRY_DELAYS = Object.freeze([1600, 3200, 5200, 8000, 12000, 16000]);
 const MODEL_PREFERENCE_APPLY_TIMEOUT_MS = 15000;
 const MODEL_PREFERENCE_CANCEL_TIMEOUT_MS = 1200;
+const MODEL_PREFERENCE_SUBMISSION_NAVIGATION_GRACE_MS = 15000;
 const preferredModelApplyRuns = new Map();
 let preferredModelPromptComposing = false;
 let preferredModelComposingPromptInput = null;
@@ -1506,16 +1507,23 @@ async function sendTextToFrame(iframe, app = {}, text = "", images = [], sendId 
   }
   const remainingMs = Math.max(1000, sendDeadlineAt - Date.now());
   const sendOnce = () => sendToIframe(iframe, "sendText", payload, remainingMs, options);
+  armPreferredModelSubmissionNavigation(iframe, sendId, sendDeadlineAt);
   let result;
   try {
     result = await sendOnce();
   } catch (error) {
+    finishPreferredModelSubmissionNavigation(iframe, sendId, false);
     throw error;
   }
   if (result?.sent === false && /bridge timed out/i.test(String(result?.reason || ""))) {
+    finishPreferredModelSubmissionNavigation(iframe, sendId, false);
     throw new Error(result?.reason || "Send failed");
   }
-  if (!result || result.sent === false) throw new Error(result?.reason || "Send failed");
+  if (!result || result.sent === false) {
+    finishPreferredModelSubmissionNavigation(iframe, sendId, false);
+    throw new Error(result?.reason || "Send failed");
+  }
+  finishPreferredModelSubmissionNavigation(iframe, sendId, true);
   return result;
 }
 
@@ -1849,7 +1857,164 @@ function preferredModelFrameKey(iframe) {
   if (!payload) return "";
   const thinkingLevel = payload.thinkingLevel ? `:${payload.thinkingLevel}` : "";
   const documentId = String(iframe.dataset.preferredModelDocumentId || "");
-  return `${payload.appId}:${payload.modelId}${thinkingLevel}:${documentId}:${iframe.dataset.currentHref || iframe.src || ""}`;
+  return `${payload.appId}:${payload.modelId}${thinkingLevel}:${documentId}`;
+}
+
+function preferredModelSubmissionRouteState(appId, value) {
+  let url;
+  try {
+    url = new URL(String(value || ""));
+  } catch {
+    return null;
+  }
+  const host = url.hostname.toLowerCase();
+  const path = (url.pathname || "/").replace(/\/+$/, "") || "/";
+  if (appId === "Gemini") {
+    if (host !== "gemini.google.com" && !host.endsWith(".gemini.google.com") && host !== "bard.google.com") return null;
+    if (path === "/app") return { host, phase: "start" };
+    const threadMatch = /^\/app\/([^/?#]+)/i.exec(path);
+    if (threadMatch) return { host, phase: "terminal", threadId: threadMatch[1] };
+    return null;
+  }
+  if (appId === "NotionAI") {
+    const notionHost = host === "app.notion.com"
+      || host === "notion.so"
+      || host === "www.notion.so"
+      || host.endsWith(".notion.so");
+    if (!notionHost) return null;
+    if (path === "/ai") return { host, phase: "start" };
+    if (path === "/chat") {
+      const threadId = String(url.searchParams.get("t") || "");
+      return threadId ? { host, phase: "terminal", threadId } : { host, phase: "intermediate" };
+    }
+  }
+  return null;
+}
+
+function clearPreferredModelSubmissionNavigation(record) {
+  const lease = record?.submissionNavigationLease;
+  if (!lease) return;
+  if (lease.timer) clearTimeout(lease.timer);
+  lease.timer = 0;
+  if (record.submissionNavigationLease === lease) record.submissionNavigationLease = null;
+}
+
+function schedulePreferredModelSubmissionNavigationExpiry(record) {
+  const lease = record?.submissionNavigationLease;
+  if (!lease) return;
+  if (lease.timer) clearTimeout(lease.timer);
+  const delay = Math.max(0, Math.min(0x7fffffff, lease.expiresAt - Date.now()));
+  lease.timer = window.setTimeout(() => {
+    if (record.submissionNavigationLease === lease) record.submissionNavigationLease = null;
+  }, delay);
+}
+
+function armPreferredModelSubmissionNavigation(iframe, sendId, deadlineAt = 0) {
+  const id = String(sendId || "").trim();
+  const record = preferredModelApplyRuns.get(iframe);
+  const key = preferredModelFrameKey(iframe);
+  if (!id || !record?.success || record.cancelled || record.key !== key) return null;
+  const appId = String(record.payload?.appId || "");
+  const initialHref = String(iframe?.dataset?.currentHref || iframe?.src || "");
+  const initialRoute = preferredModelSubmissionRouteState(appId, initialHref);
+  const documentId = String(iframe?.dataset?.preferredModelDocumentId || "");
+  const bridgeVersion = String(iframe?.dataset?.preferredModelContentBridgeVersion || "");
+  const validInitialRoute = initialRoute && (
+    initialRoute.phase === "start"
+    || (appId === "NotionAI" && initialRoute.phase === "intermediate")
+  );
+  if (!validInitialRoute || !documentId || !bridgeVersion) return null;
+  clearPreferredModelSubmissionNavigation(record);
+  const now = Date.now();
+  const expiresAt = Math.max(
+    now + MODEL_PREFERENCE_SUBMISSION_NAVIGATION_GRACE_MS,
+    Math.max(0, Number(deadlineAt) || 0) + MODEL_PREFERENCE_SUBMISSION_NAVIGATION_GRACE_MS
+  );
+  record.submissionNavigationLease = {
+    sendId: id,
+    appId,
+    initialHref,
+    initialHost: initialRoute.host,
+    documentId,
+    bridgeVersion,
+    recordKey: key,
+    armedAt: now,
+    hardExpiresAt: expiresAt,
+    expiresAt,
+    observed: false,
+    terminalObserved: false,
+    terminalThreadId: "",
+    lastHref: initialHref,
+    lastPhase: initialRoute.phase,
+    timer: 0
+  };
+  schedulePreferredModelSubmissionNavigationExpiry(record);
+  return record.submissionNavigationLease;
+}
+
+function finishPreferredModelSubmissionNavigation(iframe, sendId, sent) {
+  const record = preferredModelApplyRuns.get(iframe);
+  const lease = record?.submissionNavigationLease;
+  if (!lease || lease.sendId !== String(sendId || "")) return;
+  lease.sendSettledAt = Date.now();
+  lease.sent = Boolean(sent);
+  if (sent || lease.terminalObserved) return;
+  lease.expiresAt = Math.min(lease.hardExpiresAt, Date.now() + 2000);
+  schedulePreferredModelSubmissionNavigationExpiry(record);
+}
+
+function preservePreferredModelForSubmissionNavigation(iframe, event = {}) {
+  const record = preferredModelApplyRuns.get(iframe);
+  const lease = record?.submissionNavigationLease;
+  if (!lease) return false;
+  const reject = () => {
+    clearPreferredModelSubmissionNavigation(record);
+    return false;
+  };
+  if (Date.now() > lease.expiresAt) return reject();
+  const navigation = event.navigation;
+  const submission = navigation?.submission;
+  const kind = String(navigation?.kind || "").toLowerCase();
+  if (!submission || !["pushstate", "replacestate", "poll"].includes(kind)) return reject();
+  if (String(submission.sendId || "") !== lease.sendId) return reject();
+  const observedAppId = MODEL_PREFERENCE_APP_ID_ALIASES[String(submission.appId || "")]
+    || String(submission.appId || "");
+  if (observedAppId && observedAppId !== lease.appId) return reject();
+  if (String(navigation.documentId || "") !== lease.documentId) return reject();
+  if (String(navigation.bridgeVersion || "") !== lease.bridgeVersion) return reject();
+  if (
+    preferredModelApplyRuns.get(iframe) !== record
+    || !record.success
+    || record.cancelled
+    || record.key !== lease.recordKey
+    || preferredModelFrameKey(iframe) !== lease.recordKey
+  ) return reject();
+  const nextRoute = preferredModelSubmissionRouteState(lease.appId, event.href);
+  if (!nextRoute || nextRoute.host !== lease.initialHost) return reject();
+  if (String(event.previousHref || "") !== lease.lastHref) return reject();
+  const allowedPhaseTransition = lease.appId === "Gemini"
+    ? (
+        (lease.lastPhase === "start" && (nextRoute.phase === "start" || nextRoute.phase === "terminal"))
+        || (lease.lastPhase === "terminal" && nextRoute.phase === "terminal")
+      )
+    : (
+        (lease.lastPhase === "start" && ["start", "intermediate", "terminal"].includes(nextRoute.phase))
+        || (lease.lastPhase === "intermediate" && ["intermediate", "terminal"].includes(nextRoute.phase))
+        || (lease.lastPhase === "terminal" && nextRoute.phase === "terminal")
+      );
+  if (!allowedPhaseTransition) return reject();
+  if (
+    lease.terminalThreadId
+    && (nextRoute.phase !== "terminal" || nextRoute.threadId !== lease.terminalThreadId)
+  ) return reject();
+  lease.observed = true;
+  lease.lastHref = String(event.href || "");
+  lease.lastPhase = nextRoute.phase;
+  if (nextRoute.phase === "terminal") {
+    lease.terminalObserved = true;
+    lease.terminalThreadId = lease.terminalThreadId || String(nextRoute.threadId || "");
+  }
+  return true;
 }
 
 function preferredModelRecordIsCurrent(iframe, record) {
@@ -1892,6 +2057,7 @@ function requestPreferredModelCancellation(iframe, record, reason) {
 
 function stopPreferredModelRecord(iframe, record, reason, options = {}) {
   if (!record) return;
+  clearPreferredModelSubmissionNavigation(record);
   if (record.timer) clearTimeout(record.timer);
   record.timer = 0;
   const wasInFlight = record.inFlight;
@@ -1924,7 +2090,8 @@ function createPreferredModelRecord(iframe, payload, key, delays, options = {}) 
     cancelled: false,
     result: null,
     failureReason: "",
-    statusToast: null
+    statusToast: null,
+    submissionNavigationLease: null
   };
   record.statusToast = createFrameToast(
     iframe,
@@ -2008,7 +2175,9 @@ function invalidatePreferredModelFrame(iframe, reason = "frame-invalidated", { c
   const record = preferredModelApplyRuns.get(iframe);
   if (record) stopPreferredModelRecord(iframe, record, reason);
   preferredModelApplyRuns.delete(iframe);
-  if (clearDocumentId) delete iframe.dataset.preferredModelDocumentId;
+  if (clearDocumentId) {
+    delete iframe.dataset.preferredModelDocumentId;
+  }
   syncPreferredModelInputGate();
 }
 
@@ -2017,6 +2186,7 @@ function handlePreferredModelFrameLifecycleChange(change = {}) {
   const iframe = event.iframe || null;
   if (event.type === "loading") {
     if (event.loading) {
+      if (iframe) iframe.dataset.preferredModelNavigationInvalidated = "1";
       invalidatePreferredModelFrame(iframe, "navigation-start", { clearDocumentId: true });
     } else if (iframe?.isConnected) {
       schedulePreferredModelApplyToFrame(iframe);
@@ -2031,8 +2201,10 @@ function handlePreferredModelFrameLifecycleChange(change = {}) {
   }
   if (event.type === "location") {
     if (iframe?.isConnected) {
-      invalidatePreferredModelFrame(iframe, "location-changed");
-      schedulePreferredModelApplyToFrame(iframe);
+      if (!preservePreferredModelForSubmissionNavigation(iframe, event)) {
+        invalidatePreferredModelFrame(iframe, "location-changed");
+        schedulePreferredModelApplyToFrame(iframe);
+      }
     }
     syncPreferredModelInputGate();
     return;
@@ -4151,6 +4323,19 @@ function installIframeEventBridge() {
       event.source?.postMessage({ source: "chatclub", type: "response", id: message.id, action: message.action, data: { ok: true } }, "*");
       return;
     }
+    if (message.action === "locationChanged") {
+      event.source?.postMessage({ source: "chatclub", type: "response", id: message.id, action: message.action, data: { ok: true } }, "*");
+      const iframe = workspaceController.iframeForWindow(event.source);
+      if (!iframe) return;
+      const currentDocumentId = String(iframe.dataset.preferredModelDocumentId || "");
+      const reportedDocumentId = String(message.data?.documentId || "");
+      const currentBridgeVersion = String(iframe.dataset.preferredModelContentBridgeVersion || "");
+      const reportedBridgeVersion = String(message.data?.bridgeVersion || "");
+      if (currentDocumentId && reportedDocumentId && currentDocumentId !== reportedDocumentId) return;
+      if (currentBridgeVersion && reportedBridgeVersion && currentBridgeVersion !== reportedBridgeVersion) return;
+      workspaceController.rememberFrameLocation(iframe, message.data || {});
+      return;
+    }
     if (message.action === "contentUnloading") {
       event.source?.postMessage({ source: "chatclub", type: "response", id: message.id, action: message.action, data: { ok: true } }, "*");
       const iframe = workspaceController.iframeForWindow(event.source);
@@ -4188,6 +4373,7 @@ function installIframeEventBridge() {
         schedulePreferredModelApplyToFrame(iframe);
         workspaceController.reapplyMessageNavigatorForFrame(iframe).catch((error) => console.warn("[ChatClub] Failed to restore message navigator", error));
       }
+      return;
     }
   }, true);
 }

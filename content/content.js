@@ -2,15 +2,16 @@
   const SOURCE = "chatclub";
   const COPY_SOURCE = "chatclub-native-copy:2026.07.08.13";
   const GEMINI_MODEL_PICKER_SOURCE = "chatclub-gemini-model-picker:2026.07.13.3";
-  const MAIN_WORLD_LOCATION_SOURCE = "chatclub:main-world-location:2026.07.13.2";
+  const MAIN_WORLD_LOCATION_SOURCE = "chatclub:main-world-location:2026.07.13.3";
   const GEMINI_MODEL_PICKER_RUN_TOKEN_ATTRIBUTE = "data-chatclub-gemini-model-picker-run";
   const PREFERRED_MODEL_FOCUS_SHIELD_ATTRIBUTE = "data-chatclub-preferred-model-focus-shield";
   const PREFERRED_MODEL_FOCUS_SHIELD_LEASE_MS = 5000;
   const PREFERRED_MODEL_FOCUS_SHIELD_RELEASE_GRACE_MS = 400;
-  const NOTION_SEND_TEXT_SOURCE = "chatclub-notion-send-text:2026.07.10.12";
-  const NOTION_SEND_PROMPT_SOURCE = "chatclub-notion-send-prompt:2026.07.10.12";
-  const CONTENT_BRIDGE_VERSION = "2026.07.13.4";
-  const SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.10.5";
+  const NOTION_SEND_TEXT_SOURCE = "chatclub-notion-send-text:2026.07.13.13";
+  const NOTION_SEND_PROMPT_SOURCE = "chatclub-notion-send-prompt:2026.07.13.13";
+  const NOTION_SEND_ACTIVATED_EVENT = "chatclub:notion-send-activated:2026.07.13.1";
+  const CONTENT_BRIDGE_VERSION = "2026.07.13.6";
+  const SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.13.7";
   const DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.10.2";
   const PREFERRED_MODEL_POST_MESSAGE_SOURCE = "chatclub:preferred-model:2026.07.13.2";
   const MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.08.12";
@@ -21,6 +22,11 @@
   let contentDocumentId = window.__CHATCLUB_CONTENT_DOCUMENT_ID__ ||
     `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
   window.__CHATCLUB_CONTENT_DOCUMENT_ID__ = contentDocumentId;
+  let contentLocationRevision = Math.max(
+    0,
+    Number(window.__CHATCLUB_CONTENT_LOCATION_REVISION__) || 0
+  );
+  let activeSubmissionNavigation = null;
   let preferredModelBridgeRunSequence = Math.max(
     0,
     Number(window.__CHATCLUB_PREFERRED_MODEL_BRIDGE_RUN_SEQUENCE__) || 0
@@ -145,6 +151,7 @@
     return {
       documentId: contentDocumentId,
       bridgeVersion: CONTENT_BRIDGE_VERSION,
+      locationRevision: contentLocationRevision,
       href: location.href,
       title: String(document.title || "").replace(/\s+/g, " ").trim()
     };
@@ -174,6 +181,102 @@
     } catch {}
   }
 
+  function normalizedSubmissionNavigation(value = {}) {
+    const sendId = String(value?.sendId || "").trim();
+    if (!sendId) return null;
+    const activatedAt = Math.max(0, Number(value?.activatedAt) || Date.now());
+    return {
+      sendId,
+      appId: String(value?.appId || "").trim(),
+      initialHref: String(value?.initialHref || location.href || ""),
+      activatedAt,
+      expiresAt: Math.max(activatedAt + 15000, Number(value?.expiresAt) || 0),
+      method: String(value?.method || "submit")
+    };
+  }
+
+  function markSubmissionNavigation(data = {}, method = "submit") {
+    const activatedAt = Date.now();
+    const deadlineAt = Math.max(0, Number(data?.deadlineAt) || 0);
+    const next = normalizedSubmissionNavigation({
+      sendId: data?.sendId,
+      appId: data?.appId || data?.appName,
+      initialHref: location.href,
+      activatedAt,
+      expiresAt: Math.max(
+        activatedAt + 15000,
+        deadlineAt > activatedAt ? deadlineAt + 15000 : 0
+      ),
+      method
+    });
+    if (!next) return null;
+    activeSubmissionNavigation = next;
+    window.__CHATCLUB_ACTIVE_SUBMISSION_NAVIGATION__ = next;
+    return next;
+  }
+
+  function clearSubmissionNavigation() {
+    activeSubmissionNavigation = null;
+    delete window.__CHATCLUB_ACTIVE_SUBMISSION_NAVIGATION__;
+  }
+
+  function submissionNavigationIntentTarget(value) {
+    const element = value?.nodeType === 1 ? value : value?.parentElement;
+    if (!element?.closest) return null;
+    const direct = element.closest("a[href], [role='link'], [role='tab']");
+    if (direct) return direct;
+    const control = element.closest("button, [role='button'], [role='menuitem']");
+    if (!control) return null;
+    const signal = [
+      control.getAttribute?.("aria-label"),
+      control.getAttribute?.("title"),
+      control.getAttribute?.("data-testid"),
+      control.getAttribute?.("data-action"),
+      control.innerText || control.textContent || ""
+    ].filter(Boolean).join(" ");
+    return /\b(?:new\s+chat|new\s+conversation|conversation|thread|history|sidebar)\b|新建(?:聊天|对话|会话)|聊天记录|对话|会话|历史/i.test(signal)
+      ? control
+      : null;
+  }
+
+  function clearSubmissionNavigationForTrustedIntent(event) {
+    if (!event?.isTrusted || !currentSubmissionNavigation("trusted-intent")) return;
+    const target = submissionNavigationIntentTarget(event.target);
+    const key = String(event.key || "");
+    const keyboardNavigation = event.type === "keydown" && (
+      (event.altKey && (key === "ArrowLeft" || key === "ArrowRight"))
+      || ((event.metaKey || event.ctrlKey) && (key === "[" || key === "]"))
+      || ((key === "Enter" || key === " ") && target)
+    );
+    if (event.type === "pointerdown" ? target : keyboardNavigation) clearSubmissionNavigation();
+  }
+
+  function currentSubmissionNavigation(kind = "") {
+    const navigationKind = String(kind || "navigation");
+    if (navigationKind === "popstate" || navigationKind === "hashchange") return null;
+    const candidate = activeSubmissionNavigation
+      || normalizedSubmissionNavigation(window.__CHATCLUB_ACTIVE_SUBMISSION_NAVIGATION__ || {});
+    if (!candidate || candidate.expiresAt < Date.now()) {
+      activeSubmissionNavigation = null;
+      delete window.__CHATCLUB_ACTIVE_SUBMISSION_NAVIGATION__;
+      return null;
+    }
+    activeSubmissionNavigation = candidate;
+    return candidate;
+  }
+
+  function postLocationChanged(data = {}) {
+    try {
+      window.parent.postMessage({
+        source: SOURCE,
+        type: "request",
+        action: "locationChanged",
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
+        data
+      }, "*");
+    } catch {}
+  }
+
   const hadContentBridge = Boolean(window.__CHATCLUB_CONTENT_BRIDGE_INSTALLED__);
   if (window.__CHATCLUB_CONTENT_BRIDGE_VERSION__ === CONTENT_BRIDGE_VERSION) {
     postContentReady();
@@ -190,30 +293,70 @@
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   try { window.__CHATCLUB_LOCATION_REPORT_CLEANUP__?.(); } catch {}
   let lastReportedHref = String(location.href || "");
-  function reportLocationChange(reportedHref = "", force = false) {
+  function reportLocationChange(reportedHref = "", force = false, metadata = {}) {
     const href = String(reportedHref || location.href || "");
+    if (metadata?.requireCurrentHref && href !== String(location.href || "")) return;
     if (!href || (!force && href === lastReportedHref)) return;
+    const previousHref = lastReportedHref;
     lastReportedHref = href;
     abortActivePreferredModelRun("navigation changed");
-    contentDocumentId = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
-    window.__CHATCLUB_CONTENT_DOCUMENT_ID__ = contentDocumentId;
-    postContentReady();
+    contentLocationRevision += 1;
+    window.__CHATCLUB_CONTENT_LOCATION_REVISION__ = contentLocationRevision;
+    const kind = String(metadata?.kind || "navigation");
+    const submission = currentSubmissionNavigation(kind);
+    postLocationChanged({
+      ...contentReadyData(),
+      href,
+      previousHref,
+      navigation: {
+        kind,
+        forced: Boolean(force),
+        revision: contentLocationRevision,
+        at: Math.max(0, Number(metadata?.at) || Date.now()),
+        ...(submission ? {
+          submission: {
+            sendId: submission.sendId,
+            appId: submission.appId,
+            initialHref: submission.initialHref,
+            activatedAt: submission.activatedAt,
+            method: submission.method
+          }
+        } : {})
+      }
+    });
   }
   const locationReportController = new AbortController();
   const locationReportOptions = { capture: true, signal: locationReportController.signal };
-  window.addEventListener("popstate", () => setTimeout(reportLocationChange, 0), locationReportOptions);
-  window.addEventListener("hashchange", () => setTimeout(reportLocationChange, 0), locationReportOptions);
+  window.addEventListener("pointerdown", clearSubmissionNavigationForTrustedIntent, locationReportOptions);
+  window.addEventListener("keydown", clearSubmissionNavigationForTrustedIntent, locationReportOptions);
+  window.addEventListener(NOTION_SEND_ACTIVATED_EVENT, (event) => {
+    let detail = event?.detail;
+    try {
+      if (typeof detail === "string") detail = JSON.parse(detail);
+    } catch {
+      detail = null;
+    }
+    if (!detail || typeof detail !== "object") return;
+    markSubmissionNavigation(detail, detail.method || "notion-submit");
+  }, locationReportOptions);
   window.addEventListener("message", (event) => {
     const message = event.data;
     if (message?.source !== MAIN_WORLD_LOCATION_SOURCE || message.type !== "notification" || message.action !== "locationChanged") return;
-    reportLocationChange(message.href, message.force === true);
+    reportLocationChange(message.href, message.force === true, {
+      kind: message.kind,
+      at: message.at,
+      requireCurrentHref: true
+    });
   }, locationReportOptions);
   window.addEventListener("pagehide", () => {
     abortActivePreferredModelRun("navigation changed");
+    clearSubmissionNavigation();
     postContentUnloading();
   }, locationReportOptions);
   window.addEventListener("pageshow", () => postContentReady(), locationReportOptions);
-  const locationReportTimer = setInterval(reportLocationChange, 800);
+  const locationReportTimer = setInterval(() => {
+    reportLocationChange("", false, { kind: "poll", at: Date.now() });
+  }, 800);
   window.__CHATCLUB_LOCATION_REPORT_CLEANUP__ = () => {
     clearInterval(locationReportTimer);
     locationReportController.abort();
@@ -2156,7 +2299,7 @@
       }
       window.addEventListener("message", onMessage, true);
       try {
-        window.dispatchEvent(new CustomEvent("chatclub:notion-send-prompt:2026.07.10.12", {
+        window.dispatchEvent(new CustomEvent("chatclub:notion-send-prompt:2026.07.13.13", {
           detail: {
             id,
             sendId: String(data?.sendId || ""),
@@ -2198,7 +2341,7 @@
       }
       window.addEventListener("message", onMessage, true);
       try {
-        window.dispatchEvent(new CustomEvent("chatclub:notion-send-text:2026.07.10.12", {
+        window.dispatchEvent(new CustomEvent("chatclub:notion-send-text:2026.07.13.13", {
           detail: {
             id,
             sendId: String(data?.sendId || ""),
@@ -2308,6 +2451,7 @@
     const submit = await waitForPromptSubmitReady(input, data?.sendButtonSelector, deadlineAt, files.length ? 12000 : 8000);
     if (submit) {
       if (!contentBridgeIsCurrent()) throw new Error("Send bridge was superseded before submit");
+      markSubmissionNavigation(data, "button");
       if (!clickPromptSubmit(submit)) throw new Error("Submit button activation failed");
       return { sent: true, method: "button", verified: false };
     }
@@ -2315,6 +2459,7 @@
     if (deadlineExpired(deadlineAt)) throw new Error("Send deadline exceeded");
     if (!contentBridgeIsCurrent()) throw new Error("Send bridge was superseded before submit");
     const keyInit = { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true };
+    markSubmissionNavigation(data, "enter");
     input.dispatchEvent(new KeyboardEvent("keydown", keyInit));
     input.dispatchEvent(new KeyboardEvent("keyup", keyInit));
     return { sent: true, method: "enter", verified: false };
@@ -6696,7 +6841,7 @@
   }
 
   function scoreNotionModelTrigger(element, options = {}) {
-    if (!element || !visible(element) || isDisabledElement(element)) return -1;
+    if (!element || !visible(element) || (!options.allowDisabled && isDisabledElement(element))) return -1;
     if (element.closest?.(NOTION_MODEL_MENU_ROOT_SELECTORS.join(", "))) return -1;
     const textValue = modelElementText(element);
     const dataTestId = String(element.getAttribute?.("data-testid") || "").toLowerCase();
@@ -6717,14 +6862,26 @@
     return score > 0 ? score : -1;
   }
 
-  function findNotionModelTrigger() {
+  function findNotionModelControl({ allowDisabled = false } = {}) {
     const composerRoot = findNotionComposerRoot();
     const composerRect = modelRect(composerRoot);
     const candidates = visibleSelectorElements(NOTION_MODEL_TRIGGER_SELECTORS)
-      .map((element) => ({ element, score: scoreNotionModelTrigger(element, { composerRoot, composerRect }), bottom: Number(element.getBoundingClientRect?.().bottom || 0) }))
+      .map((element) => ({
+        element,
+        score: scoreNotionModelTrigger(element, { composerRoot, composerRect, allowDisabled }),
+        bottom: Number(element.getBoundingClientRect?.().bottom || 0)
+      }))
       .filter((item) => item.score > 0);
     candidates.sort((a, b) => b.score - a.score || b.bottom - a.bottom);
     return candidates[0]?.element || null;
+  }
+
+  function findNotionModelTrigger() {
+    return findNotionModelControl();
+  }
+
+  function findNotionModelIndicator() {
+    return findNotionModelControl({ allowDisabled: true });
   }
 
   function scoreNotionModelMenuRoot(root) {
@@ -6957,7 +7114,7 @@
   function currentNotionModelId(trigger = null) {
     const selected = selectedNotionModelId(notionModelMenuRoot(trigger));
     if (selected) return selected;
-    const triggerElement = trigger && visible(trigger) ? trigger : findNotionModelTrigger();
+    const triggerElement = trigger && visible(trigger) ? trigger : findNotionModelIndicator();
     return notionModelIdFromText(modelElementText(triggerElement));
   }
 

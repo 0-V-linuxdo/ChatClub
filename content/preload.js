@@ -9,8 +9,8 @@
   const NAVIGATION_FOCUS_GUARD_BRIDGE_VERSION = "2026.07.13.3";
   const NAVIGATION_FOCUS_GUARD_STORAGE_KEY = "chatclub_preferred_model_focus_guard_until";
   const NAVIGATION_FOCUS_GUARD_LEASE_MS = 180000;
-  const MAIN_WORLD_LOCATION_BRIDGE_VERSION = "2026.07.13.2";
-  const MAIN_WORLD_LOCATION_SOURCE = "chatclub:main-world-location:2026.07.13.2";
+  const MAIN_WORLD_LOCATION_BRIDGE_VERSION = "2026.07.13.3";
+  const MAIN_WORLD_LOCATION_SOURCE = "chatclub:main-world-location:2026.07.13.3";
   const DEEPSEEK_DELETE_BRIDGE_VERSION = "2026.07.03.30";
   const DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.07.03.30";
 
@@ -2043,7 +2043,7 @@
   }
 
   if (framed && (host === "app.notion.com" || host.endsWith(".notion.so"))) {
-    const NOTION_SEND_BRIDGE_VERSION = "2026.07.10.12";
+    const NOTION_SEND_BRIDGE_VERSION = "2026.07.13.13";
     if (window.__CHATCLUB_NOTION_SEND_BRIDGE_VERSION__ === NOTION_SEND_BRIDGE_VERSION) return;
     try { window.__CHATCLUB_NOTION_SEND_BRIDGE_CLEANUP__?.(); } catch {}
     const notionSendBridgeAbort = new AbortController();
@@ -2052,10 +2052,11 @@
     };
     window.__CHATCLUB_NOTION_SEND_BRIDGE_VERSION__ = NOTION_SEND_BRIDGE_VERSION;
     window.__CHATCLUB_NOTION_SUBMIT_BRIDGE__ = true;
-    const NOTION_SEND_TEXT_SOURCE = "chatclub-notion-send-text:2026.07.10.12";
-    const NOTION_SEND_PROMPT_SOURCE = "chatclub-notion-send-prompt:2026.07.10.12";
-    const NOTION_SEND_TEXT_EVENT = "chatclub:notion-send-text:2026.07.10.12";
-    const NOTION_SEND_PROMPT_EVENT = "chatclub:notion-send-prompt:2026.07.10.12";
+    const NOTION_SEND_TEXT_SOURCE = "chatclub-notion-send-text:2026.07.13.13";
+    const NOTION_SEND_PROMPT_SOURCE = "chatclub-notion-send-prompt:2026.07.13.13";
+    const NOTION_SEND_TEXT_EVENT = "chatclub:notion-send-text:2026.07.13.13";
+    const NOTION_SEND_PROMPT_EVENT = "chatclub:notion-send-prompt:2026.07.13.13";
+    const NOTION_SEND_ACTIVATED_EVENT = "chatclub:notion-send-activated:2026.07.13.1";
     const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     const deadlineFromPayload = (payload = {}, fallbackMs = 10000) => {
       const value = Number(payload?.deadlineAt);
@@ -2462,13 +2463,29 @@
       const dataState = String(button.getAttribute?.("data-state") || "").toLowerCase();
       return dataState === "disabled";
     };
-    const sendNotionMessage = async (editor, deadlineAt = 0) => {
+    const notifyNotionSendActivated = (payload = {}, method = "notion-submit") => {
+      const sendId = String(payload?.sendId || "").trim();
+      if (!sendId) return;
+      try {
+        window.dispatchEvent(new CustomEvent(NOTION_SEND_ACTIVATED_EVENT, {
+          detail: JSON.stringify({
+            sendId,
+            appId: "NotionAI",
+            method,
+            activatedAt: Date.now(),
+            deadlineAt: Math.max(0, Number(payload?.deadlineAt) || 0)
+          })
+        }));
+      } catch {}
+    };
+    const sendNotionMessage = async (editor, deadlineAt = 0, payload = {}) => {
       const composer = resolveNotionComposerElement(editor, { requireVisible: true }) || await focusNotionComposer(deadlineAt);
       if (!composer) return { ok: false, method: "notion-bridge", reason: "Notion AI input element not found" };
       const button = findNotionSendButtonNearComposer(composer);
       if (button) {
         if (!isNotionSendButtonDisabled(button)) {
           if (deadlineExpired(deadlineAt)) return { ok: false, method: "notion-bridge", reason: "Send deadline exceeded" };
+          notifyNotionSendActivated(payload, "notion-button");
           try {
             if (clickElement(button)) return { ok: true, method: "notion-bridge-button" };
           } catch {}
@@ -2479,6 +2496,7 @@
         }
       }
       if (deadlineExpired(deadlineAt)) return { ok: false, method: "notion-bridge", reason: "Send deadline exceeded" };
+      notifyNotionSendActivated(payload, "notion-enter");
       await pressEnter(composer);
       return { ok: true, method: "notion-bridge-enter" };
     };
@@ -3114,7 +3132,7 @@
         return { ok: false, sent: false, method: "notion-bridge", reason: readyToSend.message || "Notion AI submit button stayed disabled" };
       }
       const sendEditor = readyToSend.composer || editor;
-      const sent = await sendNotionMessage(editor, deadlineAt);
+      const sent = await sendNotionMessage(editor, deadlineAt, payload);
       if (!sent.ok) {
         return { ok: false, sent: false, method: "notion-bridge", reason: sent.reason || "Notion AI submit failed" };
       }
@@ -3179,7 +3197,7 @@
       }
       editor = readyToSend.composer || editor;
       const beforeOutsideCount = text ? countPromptOutsideEditor(editor, text) : 0;
-      const sent = await sendNotionMessage(editor, deadlineAt);
+      const sent = await sendNotionMessage(editor, deadlineAt, payload);
       if (!sent.ok) {
         return { ok: false, sent: false, method: "notion-prompt-bridge", reason: sent.reason || "Notion AI submit failed" };
       }

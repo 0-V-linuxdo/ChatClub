@@ -321,8 +321,15 @@ export function createWorkspaceController(ctx = {}) {
     }
     const instanceId = String(iframe.dataset.instanceId || "");
     if (changed) syncHeaderForFrameInstance(instanceId);
-    if (hrefChanged) {
-      emitFrameLifecycleChange({ type: "location", instanceId, iframe, previousHref, href });
+    const navigation = meta?.navigation && typeof meta.navigation === "object"
+      ? {
+          ...meta.navigation,
+          documentId: String(meta.documentId || ""),
+          bridgeVersion: String(meta.bridgeVersion || "")
+        }
+      : null;
+    if (hrefChanged || navigation?.forced === true) {
+      emitFrameLifecycleChange({ type: "location", instanceId, iframe, previousHref, href, navigation });
     }
   }
 
@@ -1248,7 +1255,11 @@ export function createWorkspaceController(ctx = {}) {
     }
     const discoveredLogoUrl = await discoverDeclaredFaviconUrl(href);
     if (discoveredLogoUrl) logoUrl = discoveredLogoUrl;
-    rememberFrameLocation(iframe, { href });
+    // Favicon discovery can outlive a same-document SPA navigation. Never let
+    // its captured href roll the frame location back to the pre-navigation URL.
+    if (iframe.isConnected && (!iframe.dataset.currentHref || iframe.dataset.currentHref === href)) {
+      rememberFrameLocation(iframe, { href });
+    }
     if (logoUrl) {
       rememberFaviconUrl(href, logoUrl);
       if (app.url && app.url !== href) rememberFaviconUrl(app.url, logoUrl);

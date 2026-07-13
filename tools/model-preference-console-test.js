@@ -217,6 +217,8 @@
     if (el.disabled || el.hasAttribute?.("disabled") || el.hasAttribute?.("data-disabled")) return true;
     const ariaDisabled = String(el.getAttribute?.("aria-disabled") || "").trim().toLowerCase();
     if (ariaDisabled === "true") return true;
+    const dataState = String(el.getAttribute?.("data-state") || "").trim().toLowerCase();
+    if (dataState === "disabled") return true;
     try {
       if (typeof el.matches === "function" && el.matches(":disabled")) return true;
     } catch {}
@@ -2060,7 +2062,7 @@
   }
 
   function scoreNotionTrigger(element, options = {}) {
-    if (!element || !visible(element) || isDisabledElement(element)) return -1;
+    if (!element || !visible(element) || (!options.allowDisabled && isDisabledElement(element))) return -1;
     if (element.closest?.(NOTION_MODEL_MENU_ROOT_SELECTORS.join(", "))) return -1;
     const textValue = elementText(element);
     const dataTestId = String(element.getAttribute?.("data-testid") || "").toLowerCase();
@@ -2081,14 +2083,26 @@
     return score > 0 ? score : -1;
   }
 
-  function findNotionTrigger() {
+  function findNotionControl({ allowDisabled = false } = {}) {
     const composerRoot = findNotionComposerRoot();
     const composerRect = rectOf(composerRoot);
     const candidates = visibleSelectorElements(NOTION_MODEL_TRIGGER_SELECTORS)
-      .map((element) => ({ element, score: scoreNotionTrigger(element, { composerRoot, composerRect }), bottom: Number(element.getBoundingClientRect?.().bottom || 0) }))
+      .map((element) => ({
+        element,
+        score: scoreNotionTrigger(element, { composerRoot, composerRect, allowDisabled }),
+        bottom: Number(element.getBoundingClientRect?.().bottom || 0)
+      }))
       .filter((item) => item.score > 0);
     candidates.sort((a, b) => b.score - a.score || b.bottom - a.bottom);
     return candidates[0]?.element || null;
+  }
+
+  function findNotionTrigger() {
+    return findNotionControl();
+  }
+
+  function findNotionIndicator() {
+    return findNotionControl({ allowDisabled: true });
   }
 
   function scoreNotionMenuRoot(root) {
@@ -2317,7 +2331,7 @@
   function currentNotionModelId(trigger = null) {
     const selected = selectedNotionModelId(notionMenuRoot(trigger));
     if (selected) return selected;
-    const triggerElement = trigger && visible(trigger) ? trigger : findNotionTrigger();
+    const triggerElement = trigger && visible(trigger) ? trigger : findNotionIndicator();
     return notionModelIdFromText(elementText(triggerElement));
   }
 
