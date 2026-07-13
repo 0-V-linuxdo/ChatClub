@@ -1,7 +1,7 @@
 import { DEFAULT_TOPBAR_LAYOUT } from "./topbar.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-07-12｜19:03:13」";
+export const APP_VERSION = "「2026-07-13｜16:04:11」";
 export const BASELINE_MOD_VERSION = "2.4.0.14";
 export const HOMEPAGE_URL = "https://chatclub.local/";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
@@ -257,6 +257,7 @@ export const TOPBAR_PROMPT_PLACEHOLDER_MAX_LEN = 100;
 export const TOPBAR_PROMPT_PLACEHOLDER_MAX_COUNT = 30;
 export const TOPBAR_PROMPT_PLACEHOLDER_INTERVAL_MIN_SEC = 1;
 export const TOPBAR_PROMPT_PLACEHOLDER_INTERVAL_MAX_SEC = 3600;
+export const DEFAULT_FRAME_TOAST_POSITION = Object.freeze({ x: 100, y: 100 });
 
 export const DEFAULT_OPTIONS = {
   scriptConfigSchemaVersion: SCRIPT_CONFIG_SCHEMA_VERSION,
@@ -274,6 +275,7 @@ export const DEFAULT_OPTIONS = {
   primaryColor: "#1f7a5f",
   primaryColorCustom: false,
   frameLoadingOverlayOpacity: 82,
+  frameToastPosition: DEFAULT_FRAME_TOAST_POSITION,
   pocketCardSize: DEFAULT_POCKET_CARD_SIZE,
   tooltipDisabledIds: [],
   topbarPromptPlaceholderConfig: {

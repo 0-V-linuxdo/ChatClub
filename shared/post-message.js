@@ -3,6 +3,7 @@ export const SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.10.5";
 export const DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.10.2";
 export const MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.08.12";
 export const SUMMARY_POST_MESSAGE_SOURCE = "chatclub:summary:2026.07.08.13";
+export const PREFERRED_MODEL_POST_MESSAGE_SOURCE = "chatclub:preferred-model:2026.07.13.2";
 
 function requestId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
@@ -35,22 +36,48 @@ export function sendToIframe(iframe, action, data, timeout = 5000, options = {})
       return;
     }
     const source = String(options?.source || SOURCE);
+    const signal = options?.signal;
     const id = requestId();
-    const timer = setTimeout(() => {
+    let settled = false;
+    let timer = 0;
+    const cleanup = () => {
+      if (timer) clearTimeout(timer);
+      timer = 0;
       window.removeEventListener("message", onMessage);
-      reject(new Error(`[PostMessage] Timeout waiting for response: ${action}`));
-    }, timeout);
+      signal?.removeEventListener?.("abort", onAbort);
+    };
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      callback(value);
+    };
+    const onAbort = () => {
+      const error = new Error(`[PostMessage] Request cancelled: ${action}`);
+      error.name = "AbortError";
+      finish(reject, error);
+    };
     const onMessage = (event) => {
       if (event.source !== iframe.contentWindow) return;
       const message = event.data;
       if (message?.source === source && message.type === "response" && message.id === id) {
-        clearTimeout(timer);
-        window.removeEventListener("message", onMessage);
-        message.error ? reject(new Error(message.error)) : resolve(message.data);
+        message.error ? finish(reject, new Error(message.error)) : finish(resolve, message.data);
       }
     };
+    if (signal?.aborted) {
+      onAbort();
+      return;
+    }
     window.addEventListener("message", onMessage);
-    iframe.contentWindow.postMessage({ source, type: "request", action, id, data }, "*");
+    signal?.addEventListener?.("abort", onAbort, { once: true });
+    timer = setTimeout(() => {
+      finish(reject, new Error(`[PostMessage] Timeout waiting for response: ${action}`));
+    }, timeout);
+    try {
+      iframe.contentWindow.postMessage({ source, type: "request", action, id, data }, "*");
+    } catch (error) {
+      finish(reject, error instanceof Error ? error : new Error(String(error || "postMessage failed")));
+    }
   });
 }
 

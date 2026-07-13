@@ -7,8 +7,9 @@ export function createOptimizeController(ctx) {
   const {
     state,
     svgIcon,
-    syncPromptInputNode
-  } = pickAppContext(ctx, ["state", "svgIcon", "syncPromptInputNode"], "Optimize controller");
+    syncPromptInputNode,
+    ensurePromptInputReady
+  } = pickAppContext(ctx, ["state", "svgIcon", "syncPromptInputNode", "ensurePromptInputReady"], "Optimize controller");
 
   async function optimizeCurrentPrompt() {
     const original = state.promptText;
@@ -18,6 +19,7 @@ export function createOptimizeController(ctx) {
     let requestId = 0;
     let comparison;
     const run = async () => {
+      if (!ensurePromptInputReady()) return;
       requestId += 1;
       const activeRequestId = requestId;
       controller?.abort();
@@ -80,6 +82,7 @@ export function createOptimizeController(ctx) {
       dialog?.remove();
     }
     function apply() {
+      if (!ensurePromptInputReady()) return;
       state.promptText = optimizedInput.value;
       state.promptSelection = {
         start: state.promptText.length,

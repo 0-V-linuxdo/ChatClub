@@ -6,7 +6,8 @@
  * @property {() => void} [syncWorkspaceDom]
  * @property {(message: string, type?: string) => HTMLElement | void} [toast]
  * @property {(name: string) => SVGElement} [svgIcon]
- * @property {(options?: { focus?: boolean }) => HTMLTextAreaElement | null} [syncPromptInputNode]
+ * @property {(options?: { focus?: boolean, bypassModelGate?: boolean }) => HTMLTextAreaElement | null} [syncPromptInputNode]
+ * @property {(options?: { notify?: boolean }) => boolean} [ensurePromptInputReady]
  * @property {() => Promise<void>} [notifyConfigReload]
  * @property {() => void} [applyTheme]
  * @property {() => string} [syncI18nLanguage]
@@ -24,6 +25,7 @@ export const APP_CONTEXT_KEYS = Object.freeze([
   "toast",
   "svgIcon",
   "syncPromptInputNode",
+  "ensurePromptInputReady",
   "notifyConfigReload",
   "applyTheme",
   "syncI18nLanguage",

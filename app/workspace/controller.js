@@ -25,6 +25,13 @@ const DRAG_GROUP_MIME = "application/x-chatclub-group";
 const TAB_DRAG_START_DISTANCE = 6;
 const GROUP_DRAG_START_DISTANCE = 6;
 const LAYOUT_POPOVER_RIGHT_EXTENSION = 40;
+const NAVIGATION_FOCUS_GUARD_SOURCE = "chatclub:navigation-focus-guard:2026.07.13.3";
+const NAVIGATION_FOCUS_GUARD_TIMEOUT_MS = 1200;
+const NAVIGATION_FOCUS_GUARD_RETRY_MS = 75;
+const NAVIGATION_FOCUS_GUARD_POST_NAV_RETRY_MS = 150;
+const NAVIGATION_FOCUS_GUARD_POST_NAV_SETTLE_MS = 10000;
+const NAVIGATION_FOCUS_GUARD_POST_NAV_MAX_MS = 45000;
+const NAVIGATION_FOCUS_GUARD_LEASE_MS = 180000;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
 const CHAT_FRAME_ALLOW_FEATURES = Object.freeze([
   "microphone",
@@ -83,6 +90,13 @@ const APP_PICKER_CHINESE_IDS = [
 const APP_PICKER_CHINESE_ID_SET = new Set(APP_PICKER_CHINESE_IDS);
 
 /**
+ * @typedef {{ type: "loading", instanceId: string, iframe: HTMLIFrameElement | null, loading: boolean }
+ *   | { type: "active-tab", groupId: string, instanceId: string, previousInstanceId: string, iframe: HTMLIFrameElement | null }
+ *   | { type: "location", instanceId: string, iframe: HTMLIFrameElement, previousHref: string, href: string }
+ *   | { type: "workspace-sync", frames: readonly HTMLIFrameElement[], activeFrames: readonly HTMLIFrameElement[], membershipChanged: boolean }} WorkspaceFrameLifecycleEvent
+ */
+
+/**
  * @typedef {object} WorkspaceControllerContext
  * @property {any} state
  * @property {() => string} createGroupId
@@ -106,6 +120,7 @@ const APP_PICKER_CHINESE_ID_SET = new Set(APP_PICKER_CHINESE_IDS);
  * @property {(label: string, iconName: string, onClick: Function, variant?: string, disabled?: boolean, tooltipLabel?: string, tooltipPlacement?: string, tooltipId?: string) => HTMLElement} menuButton
  * @property {(action: string, shortcut: any, slot?: string) => string} formatShortcut
  * @property {() => void} [openCustomAppEditor]
+ * @property {(event: WorkspaceFrameLifecycleEvent) => void} [onFrameLifecycleChange]
  */
 
 function requireContext(ctx, name) {
@@ -150,9 +165,46 @@ export function createWorkspaceController(ctx = {}) {
   const menuButton = requireFunction(ctx, "menuButton");
   const formatShortcut = requireFunction(ctx, "formatShortcut");
   const openCustomAppEditor = typeof ctx.openCustomAppEditor === "function" ? ctx.openCustomAppEditor : null;
+  const onFrameLifecycleChange = typeof ctx.onFrameLifecycleChange === "function" ? ctx.onFrameLifecycleChange : () => {};
   let workspaceNode = null;
   let workspaceRenderSignature = "";
+  let workspaceLifecycleFrames = [];
+  let frameLifecycleCallbackActive = false;
+  const frameNavigationGenerations = new WeakMap();
   let messageNavigatorMenuIframe = null;
+
+  function emitFrameLifecycleChange(event) {
+    if (frameLifecycleCallbackActive) return;
+    frameLifecycleCallbackActive = true;
+    try {
+      const result = onFrameLifecycleChange(event);
+      if (result && typeof result.catch === "function") {
+        result.catch((error) => console.warn("[ChatClub] Frame lifecycle callback failed", error));
+      }
+    } catch (error) {
+      console.warn("[ChatClub] Frame lifecycle callback failed", error);
+    } finally {
+      frameLifecycleCallbackActive = false;
+    }
+  }
+
+  function frameForLifecycleInstance(instanceId) {
+    return Array.from(document.querySelectorAll(".chat-frame"))
+      .find((frame) => frame.dataset.instanceId === instanceId) || null;
+  }
+
+  function notifyWorkspaceFrameSync() {
+    const frames = Array.from(document.querySelectorAll(".chat-frame"));
+    const membershipChanged = frames.length !== workspaceLifecycleFrames.length
+      || frames.some((frame, index) => frame !== workspaceLifecycleFrames[index]);
+    workspaceLifecycleFrames = frames;
+    emitFrameLifecycleChange({
+      type: "workspace-sync",
+      frames: Object.freeze([...frames]),
+      activeFrames: Object.freeze(frames.filter((frame) => frame.classList.contains("active"))),
+      membershipChanged
+    });
+  }
 
   function workspaceSignature() {
     return JSON.stringify({
@@ -247,9 +299,12 @@ export function createWorkspaceController(ctx = {}) {
     if (!(iframe instanceof HTMLIFrameElement)) return;
     const href = openableTabUrl(meta.href || meta.url);
     const title = String(meta.title || "").trim();
+    const previousHref = String(iframe.dataset.currentHref || "");
+    let hrefChanged = false;
     let changed = false;
     if (href) {
-      changed = changed || iframe.dataset.currentHref !== href;
+      hrefChanged = previousHref !== href;
+      changed = changed || hrefChanged;
       iframe.dataset.currentHref = href;
       const threadHref = threadHrefFromLocation(href);
       if (threadHref) {
@@ -264,7 +319,11 @@ export function createWorkspaceController(ctx = {}) {
       changed = changed || iframe.dataset.currentTitle !== title;
       iframe.dataset.currentTitle = title;
     }
-    if (changed) syncHeaderForFrameInstance(iframe.dataset.instanceId || "");
+    const instanceId = String(iframe.dataset.instanceId || "");
+    if (changed) syncHeaderForFrameInstance(instanceId);
+    if (hrefChanged) {
+      emitFrameLifecycleChange({ type: "location", instanceId, iframe, previousHref, href });
+    }
   }
 
   function frameDeleteThreadPayload(iframe, fallback = {}) {
@@ -402,6 +461,14 @@ export function createWorkspaceController(ctx = {}) {
     if (had === set.has(instanceId)) return;
     state.frameLoadingInstanceIds = Array.from(set);
     syncHeaderForFrameInstance(instanceId);
+    emitFrameLifecycleChange({
+      type: "loading",
+      instanceId,
+      iframe: iframeOrInstanceId instanceof HTMLIFrameElement
+        ? iframeOrInstanceId
+        : frameForLifecycleInstance(instanceId),
+      loading: set.has(instanceId)
+    });
   }
 
   function frameIsLoading(instanceId) {
@@ -434,18 +501,181 @@ export function createWorkspaceController(ctx = {}) {
     setFrameLoading(iframe, false);
   }
 
+  function beginFrameNavigationGeneration(iframe) {
+    const generation = (frameNavigationGenerations.get(iframe) || 0) + 1;
+    frameNavigationGenerations.set(iframe, generation);
+    return generation;
+  }
+
+  function frameNavigationIsCurrent(iframe, generation) {
+    return iframe?.isConnected && frameNavigationGenerations.get(iframe) === generation;
+  }
+
+  function maintainFrameNavigationFocusGuard(iframe, generation, expiresAt, preflight = {}) {
+    const startedAt = Date.now();
+    const id = globalThis.crypto?.randomUUID?.()
+      || `focus-guard-adopt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const guardToken = String(preflight.guardToken || "");
+    let loadObserved = false;
+    let lastDocumentToken = "";
+    let lastDocumentAckAt = 0;
+    let stopped = false;
+    let retryTimer = null;
+    let timeoutTimer = null;
+    const finish = () => {
+      if (stopped) return;
+      stopped = true;
+      if (retryTimer) clearInterval(retryTimer);
+      if (timeoutTimer) clearTimeout(timeoutTimer);
+      iframe.removeEventListener("load", onLoad, true);
+      window.removeEventListener("message", onMessage, true);
+    };
+    const onLoad = () => {
+      loadObserved = true;
+      lastDocumentToken = "";
+      lastDocumentAckAt = 0;
+      send();
+    };
+    const onMessage = (event) => {
+      if (event.source !== iframe.contentWindow) return;
+      const message = event.data;
+      if (
+        message?.source !== NAVIGATION_FOCUS_GUARD_SOURCE
+        || message.type !== "response"
+        || message.action !== "prepare"
+        || message.id !== id
+        || message.guardToken !== guardToken
+        || !loadObserved
+      ) return;
+      const documentToken = String(message.documentToken || "");
+      if (!documentToken) return;
+      if (documentToken !== lastDocumentToken) {
+        lastDocumentToken = documentToken;
+        lastDocumentAckAt = Date.now();
+      }
+    };
+    const send = () => {
+      if (
+        !frameNavigationIsCurrent(iframe, generation)
+        || Date.now() - startedAt > NAVIGATION_FOCUS_GUARD_POST_NAV_MAX_MS
+      ) return false;
+      if (loadObserved && lastDocumentAckAt && Date.now() - lastDocumentAckAt >= NAVIGATION_FOCUS_GUARD_POST_NAV_SETTLE_MS) {
+        return false;
+      }
+      try {
+        iframe.contentWindow?.postMessage({
+          source: NAVIGATION_FOCUS_GUARD_SOURCE,
+          type: "request",
+          action: "prepare",
+          phase: "adopt",
+          id,
+          guardToken,
+          expiresAt
+        }, "*");
+      } catch {}
+      return true;
+    };
+    iframe.addEventListener("load", onLoad, true);
+    window.addEventListener("message", onMessage, true);
+    send();
+    retryTimer = setInterval(() => {
+      if (!send()) finish();
+    }, NAVIGATION_FOCUS_GUARD_POST_NAV_RETRY_MS);
+    timeoutTimer = setTimeout(finish, NAVIGATION_FOCUS_GUARD_POST_NAV_MAX_MS + NAVIGATION_FOCUS_GUARD_POST_NAV_RETRY_MS);
+  }
+
+  function prepareFrameNavigationFocusGuard(iframe, generation) {
+    const prompt = document.querySelector(".prompt-input");
+    if (
+      !(iframe instanceof HTMLIFrameElement)
+      || !prompt?.isConnected
+      || document.activeElement !== prompt
+      || !iframe.contentWindow
+    ) return null;
+
+    const id = globalThis.crypto?.randomUUID?.()
+      || `focus-guard-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const guardToken = globalThis.crypto?.randomUUID?.()
+      || `focus-guard-token-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const expiresAt = Date.now() + NAVIGATION_FOCUS_GUARD_LEASE_MS;
+    return new Promise((resolve) => {
+      let settled = false;
+      let timeoutTimer = null;
+      let retryTimer = null;
+      const finish = (result = {}) => {
+        if (settled) return;
+        settled = true;
+        if (timeoutTimer) clearTimeout(timeoutTimer);
+        if (retryTimer) clearInterval(retryTimer);
+        window.removeEventListener("message", onMessage, true);
+        resolve({
+          ok: result.ok === true,
+          guardToken,
+          documentToken: String(result.documentToken || ""),
+          expiresAt
+        });
+      };
+      const onMessage = (event) => {
+        if (event.source !== iframe.contentWindow) return;
+        const message = event.data;
+        if (
+          message?.source !== NAVIGATION_FOCUS_GUARD_SOURCE
+          || message.type !== "response"
+          || message.action !== "prepare"
+          || message.id !== id
+        ) return;
+        finish(message);
+      };
+      window.addEventListener("message", onMessage, true);
+      const send = () => {
+        if (!frameNavigationIsCurrent(iframe, generation)) {
+          finish();
+          return;
+        }
+        try {
+          iframe.contentWindow?.postMessage({
+            source: NAVIGATION_FOCUS_GUARD_SOURCE,
+            type: "request",
+            action: "prepare",
+            phase: "prepare",
+            id,
+            guardToken,
+            expiresAt
+          }, "*");
+        } catch {}
+      };
+      send();
+      if (!settled) {
+        retryTimer = setInterval(send, NAVIGATION_FOCUS_GUARD_RETRY_MS);
+        timeoutTimer = setTimeout(() => finish(), NAVIGATION_FOCUS_GUARD_TIMEOUT_MS);
+      }
+    });
+  }
+
   function assignFrameSrc(iframe, url) {
     if (!(iframe instanceof HTMLIFrameElement) || !url) return false;
+    const generation = beginFrameNavigationGeneration(iframe);
     beginFrameLoading(iframe);
-    iframe.src = url;
+    const assign = (preflight = {}) => {
+      if (!frameNavigationIsCurrent(iframe, generation)) return;
+      const expiresAt = Date.now() + NAVIGATION_FOCUS_GUARD_LEASE_MS;
+      if (guard && document.activeElement === document.querySelector(".prompt-input")) {
+        maintainFrameNavigationFocusGuard(iframe, generation, expiresAt, preflight);
+      }
+      iframe.src = url;
+    };
+    const guard = prepareFrameNavigationFocusGuard(iframe, generation);
+    if (guard) guard.then(assign, assign);
+    else assign();
     return true;
   }
 
   function setFrameSrcAfterPrepare(iframe, url, options = {}) {
+    const generation = beginFrameNavigationGeneration(iframe);
     beginFrameLoading(iframe, true);
     let assigned = false;
     const assign = () => {
-      if (assigned || !iframe?.isConnected) return;
+      if (assigned || !frameNavigationIsCurrent(iframe, generation)) return;
       if (!options.replace && iframe.getAttribute("src")) {
         delete iframe.dataset.frameLoadPending;
         completeFrameLoading(iframe);
@@ -453,7 +683,17 @@ export function createWorkspaceController(ctx = {}) {
       }
       assigned = true;
       delete iframe.dataset.frameLoadPending;
-      iframe.setAttribute("src", url);
+      const setSrc = (preflight = {}) => {
+        if (!frameNavigationIsCurrent(iframe, generation)) return;
+        const expiresAt = Date.now() + NAVIGATION_FOCUS_GUARD_LEASE_MS;
+        if (guard && document.activeElement === document.querySelector(".prompt-input")) {
+          maintainFrameNavigationFocusGuard(iframe, generation, expiresAt, preflight);
+        }
+        iframe.setAttribute("src", url);
+      };
+      const guard = prepareFrameNavigationFocusGuard(iframe, generation);
+      if (guard) guard.then(setSrc, setSrc);
+      else setSrc();
     };
     const fallback = setTimeout(assign, 1800);
     prepareFrameLoad(url)
@@ -865,6 +1105,7 @@ export function createWorkspaceController(ctx = {}) {
         syncTabGroupHeaderControls(card, group);
       }
     });
+    notifyWorkspaceFrameSync();
   }
 
   function appendChatGroup(group) {
@@ -921,10 +1162,15 @@ export function createWorkspaceController(ctx = {}) {
     return group.chatApps.find((chat) => chat.instanceId === active) || group.chatApps[0];
   }
 
-  function activateChatTab(group, instanceId) {
+  function activateChatTab(group, instanceId, previousInstanceIdOverride = "") {
     if (!group?.chatApps.some((chat) => chat.instanceId === instanceId)) return;
-    state.activeTabs[group.id] = instanceId;
     const card = document.querySelector(`.chat-card[data-group-id="${group.id}"]`);
+    const previousInstanceId = previousInstanceIdOverride
+      || card?.querySelector(".chat-frame.active")?.dataset.instanceId
+      || state.activeTabs[group.id]
+      || group.chatApps[0]?.instanceId
+      || "";
+    state.activeTabs[group.id] = instanceId;
     card?.querySelectorAll(".tab").forEach((tab) => {
       tab.classList.toggle("active", tab.dataset.instanceId === instanceId);
     });
@@ -932,6 +1178,15 @@ export function createWorkspaceController(ctx = {}) {
       frame.classList.toggle("active", frame.dataset.instanceId === instanceId);
     });
     if (card) syncTabGroupHeaderControls(card, group);
+    if (previousInstanceId !== instanceId) {
+      emitFrameLifecycleChange({
+        type: "active-tab",
+        groupId: group.id,
+        instanceId,
+        previousInstanceId,
+        iframe: card?.querySelector(`.chat-frame[data-instance-id="${instanceId}"]`) || null
+      });
+    }
   }
 
   function syncGroupTabOrder(group) {
@@ -1378,6 +1633,7 @@ export function createWorkspaceController(ctx = {}) {
 
   async function closeTab(group, chat) {
     if (!group || !chat) return;
+    const previousActiveInstanceId = state.activeTabs[group.id] || group.chatApps[0]?.instanceId || "";
     const result = removeChatFromGroup(state.groups, state.activeTabs, group, chat);
     if (result.removeGroup) {
       await removeChatGroup(group);
@@ -1388,10 +1644,11 @@ export function createWorkspaceController(ctx = {}) {
       const card = document.querySelector(`.chat-card[data-group-id="${group.id}"]`);
       card?.querySelector(`.tab[data-instance-id="${chat.instanceId}"]`)?.remove();
       card?.querySelector(`.chat-frame[data-instance-id="${chat.instanceId}"]`)?.remove();
-      if (result.nextActiveId) activateChatTab(group, result.nextActiveId);
+      if (result.nextActiveId) activateChatTab(group, result.nextActiveId, previousActiveInstanceId);
     }
     await persistLayout();
     syncGroupTabOrder(group);
+    notifyWorkspaceFrameSync();
   }
 
   async function removeChatGroup(group) {
@@ -2638,6 +2895,7 @@ export function createWorkspaceController(ctx = {}) {
     tabs.insertBefore(renderChatTab(group, chat), tabs.querySelector(".tab-add"));
     frameWrap.append(renderChatFrame(group, chat));
     activateChatTab(group, instanceId);
+    notifyWorkspaceFrameSync();
   }
 
   function positionAppPicker(anchor, picker) {

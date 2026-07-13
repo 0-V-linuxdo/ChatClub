@@ -1021,6 +1021,152 @@ button { cursor: pointer; }
   outline: 0;
 }
 
+.prompt-shell-model-gate-applying .prompt-input[readonly],
+.prompt-shell-model-gate-failed .prompt-input[readonly] {
+  /* Keep the draft and selection intact while the in-field status owns the visual line. */
+  opacity: 1;
+  color: transparent;
+  caret-color: transparent;
+  -webkit-text-fill-color: transparent;
+  text-shadow: none;
+}
+
+.prompt-shell-model-gate-applying .prompt-input[readonly]::placeholder,
+.prompt-shell-model-gate-failed .prompt-input[readonly]::placeholder {
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+.prompt-shell-model-gate-applying .prompt-input[readonly]::selection,
+.prompt-shell-model-gate-failed .prompt-input[readonly]::selection {
+  color: transparent;
+  background: transparent;
+}
+
+.prompt-shell-model-gate-applying .prompt-collapsed-preview > *,
+.prompt-shell-model-gate-failed .prompt-collapsed-preview > * {
+  visibility: hidden;
+}
+
+.prompt-shell-model-gate-applying .prompt-input[readonly]:not(:focus),
+.prompt-shell-model-gate-applying .prompt-collapsed-preview {
+  border-color: color-mix(in srgb, var(--primary) 36%, var(--line));
+}
+
+.prompt-shell-model-gate-failed .prompt-input[readonly]:not(:focus),
+.prompt-shell-model-gate-failed .prompt-collapsed-preview {
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--line));
+}
+
+.prompt-shell-model-gate-applying .prompt-collapsed-preview,
+.prompt-shell-model-gate-applying .prompt-input[readonly] {
+  cursor: wait;
+}
+
+.prompt-shell-model-gate-failed .prompt-collapsed-preview,
+.prompt-shell-model-gate-failed .prompt-input[readonly] {
+  cursor: not-allowed;
+}
+
+.prompt-shell-model-gate-applying :is(
+  .prompt-actions-button,
+  .prompt-clear-button,
+  .prompt-send-button,
+  .prompt-image-remove
+):disabled,
+.prompt-shell-model-gate-failed :is(
+  .prompt-actions-button,
+  .prompt-clear-button,
+  .prompt-send-button,
+  .prompt-image-remove
+):disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+  transform: none;
+}
+
+.prompt-model-gate-status {
+  position: absolute;
+  top: 5px;
+  left: 40px;
+  z-index: 65;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  width: max-content;
+  max-width: calc(100% - 118px);
+  min-height: 28px;
+  height: 28px;
+  padding: 4px 8px;
+  overflow: hidden;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--panel) 88%, var(--soft) 12%);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  box-shadow: none;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 16px;
+  pointer-events: none;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.prompt-shell-expanded.prompt-shell-has-images .prompt-model-gate-status {
+  top: auto;
+  bottom: 13px;
+  left: 50px;
+  max-width: calc(100% - 104px);
+}
+
+.prompt-model-gate-status-text {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.prompt-model-gate-status[hidden] {
+  display: none;
+}
+
+.prompt-shell-model-gate-applying .prompt-model-gate-status {
+  color: color-mix(in srgb, var(--primary) 82%, var(--text));
+  border-color: color-mix(in srgb, var(--primary) 42%, var(--line));
+}
+
+.prompt-shell-model-gate-failed .prompt-model-gate-status {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 44%, var(--line));
+}
+
+.prompt-model-gate-spinner {
+  box-sizing: border-box;
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+  border: 2px solid color-mix(in srgb, var(--primary) 26%, transparent);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: prompt-model-gate-spin 720ms linear infinite;
+}
+
+.prompt-shell-model-gate-failed .prompt-model-gate-spinner {
+  display: none;
+}
+
+@keyframes prompt-model-gate-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .prompt-model-gate-spinner {
+    animation: none;
+  }
+}
+
 .button, .icon-button {
   border: 1px solid var(--line);
   background: var(--panel);
@@ -2290,6 +2436,13 @@ body.tab-gesture-active * {
   border-radius: calc(var(--settings-radius) + 2px);
 }
 
+.appearance-settings-pane > .settings-inner-tabs {
+  grid-auto-flow: initial;
+  grid-auto-columns: initial;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  width: 100%;
+}
+
 .settings-inner-tab {
   display: grid;
   gap: 2px;
@@ -2414,6 +2567,208 @@ body.tab-gesture-active * {
 .appearance-workspace-aside .appearance-range-help {
   grid-column: 1 / -1;
 }
+
+.frame-toast-position-editor {
+  display: grid;
+  grid-template-columns: minmax(260px, 300px) minmax(240px, 360px);
+  justify-content: center;
+  gap: clamp(24px, 4vw, 52px);
+  align-items: start;
+}
+
+.frame-toast-position-preview-column,
+.frame-toast-position-preset-column {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.frame-toast-position-preview-column {
+  width: 100%;
+  max-width: 300px;
+  justify-self: center;
+}
+
+.frame-toast-position-preset-column {
+  width: 100%;
+  max-width: 360px;
+  padding-top: 2px;
+}
+
+.frame-toast-position-preview {
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--line) 80%, var(--primary) 20%);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel-2) 86%, #07110f 14%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--panel) 34%, transparent);
+}
+
+.frame-toast-position-preview-header {
+  height: 27px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+  background: color-mix(in srgb, var(--panel) 82%, var(--panel-2));
+}
+
+.frame-toast-position-preview-header span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--muted) 44%, transparent);
+}
+
+.frame-toast-position-preview-body {
+  position: relative;
+  width: 100%;
+  min-height: 0;
+  aspect-ratio: 9 / 16;
+  overflow: hidden;
+  touch-action: none;
+  cursor: crosshair;
+  background:
+    linear-gradient(color-mix(in srgb, var(--line) 36%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--line) 36%, transparent) 1px, transparent 1px),
+    radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 58%);
+  background-size: 25% 25%, 25% 25%, auto;
+}
+
+.frame-toast-position-preview-body.dragging {
+  cursor: grabbing;
+}
+
+.frame-toast-position-sample {
+  position: absolute;
+  z-index: 2;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(220px, calc(100% - 16px));
+  min-height: 38px;
+  padding: 9px 12px;
+  overflow: hidden;
+  color: var(--primary);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  border: 1px solid color-mix(in srgb, var(--primary) 48%, var(--toast-border));
+  border-radius: 8px;
+  background: var(--toast-bg);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  cursor: grab;
+  user-select: none;
+  transition: left 120ms ease, top 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.frame-toast-position-preview-body.dragging .frame-toast-position-sample {
+  cursor: grabbing;
+  transition: none;
+}
+
+.frame-toast-position-sample:focus-visible {
+  outline: 0;
+  border-color: var(--primary);
+  box-shadow: var(--shadow), 0 0 0 3px color-mix(in srgb, var(--primary) 20%, transparent);
+}
+
+.frame-toast-position-sample-icon {
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  border: 2px solid color-mix(in srgb, var(--primary) 28%, transparent);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: frame-submit-toast-spin 720ms linear infinite;
+}
+
+.frame-toast-position-sample-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.frame-toast-position-readout {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.frame-toast-position-readout small,
+.frame-toast-position-preset-column small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.frame-toast-position-coordinates {
+  flex: 0 0 auto;
+  color: var(--text);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.frame-toast-position-preset-title {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.frame-toast-position-presets {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(44px, 1fr));
+  gap: 8px;
+}
+
+.frame-toast-position-preset {
+  position: relative;
+  min-width: 0;
+  height: 52px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--panel-2) 82%, var(--panel));
+  cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
+}
+
+.frame-toast-position-preset:hover,
+.frame-toast-position-preset:focus-visible {
+  color: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 56%, var(--line));
+  outline: 0;
+}
+
+.frame-toast-position-preset.active {
+  color: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 72%, var(--line));
+  background: color-mix(in srgb, var(--primary) 12%, var(--panel));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 18%, transparent);
+}
+
+.frame-toast-position-preset span {
+  position: absolute;
+  width: 11px;
+  height: 7px;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.frame-toast-position-preset:nth-child(3n + 1) span { left: 7px; }
+.frame-toast-position-preset:nth-child(3n + 2) span { left: 50%; transform: translateX(-50%); }
+.frame-toast-position-preset:nth-child(3n) span { right: 7px; }
+.frame-toast-position-preset:nth-child(-n + 3) span { top: 7px; }
+.frame-toast-position-preset:nth-child(n + 4):nth-child(-n + 6) span { top: 50%; transform: translateY(-50%); }
+.frame-toast-position-preset:nth-child(5) span { transform: translate(-50%, -50%); }
+.frame-toast-position-preset:nth-child(n + 7) span { bottom: 7px; }
 
 .settings-muted-help {
   margin: 0;
@@ -2682,6 +3037,29 @@ body.settings-tab-group-button-dragging iframe {
     padding-left: 0;
     border-top: 1px solid var(--line);
     border-left: 0;
+  }
+
+  .frame-toast-position-editor {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .frame-toast-position-preview-column {
+    max-width: 300px;
+    justify-self: center;
+  }
+
+  .frame-toast-position-preset-column {
+    max-width: 380px;
+    justify-self: center;
+  }
+
+  .frame-toast-position-preset-column {
+    padding-top: 0;
+  }
+
+  .frame-toast-position-preview-body {
+    min-height: 0;
   }
 
   .tab-group-button-placement-list {
@@ -6899,9 +7277,12 @@ body.settings-tab-group-button-dragging iframe {
   align-items: center;
   gap: 8px;
   max-width: min(360px, calc(100% - 24px));
+  max-height: calc(100% - 24px);
   min-height: 38px;
   pointer-events: none;
+  overflow: hidden;
   overflow-wrap: anywhere;
+  transition: opacity 160ms ease, transform 160ms ease, left 160ms ease, top 160ms ease;
 }
 
 .chat-frame.active + .frame-submit-toast {
@@ -6950,7 +7331,7 @@ body.settings-tab-group-button-dragging iframe {
   content: "!";
 }
 
-body:has(.chat-frame.active + .frame-submit-toast.show) > .toast-host {
+body:has(.chat-card:not(.fullscreen-hidden) .chat-frame.active + .frame-submit-toast.show[data-frame-toast-bottom-right="true"]) > .toast-host {
   bottom: 92px;
 }
 
@@ -6959,7 +7340,8 @@ body:has(.chat-frame.active + .frame-submit-toast.show) > .toast-host {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .frame-submit-toast.toast-info::before {
+  .frame-submit-toast.toast-info::before,
+  .frame-toast-position-sample-icon {
     animation: none;
   }
 }

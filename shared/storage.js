@@ -4,6 +4,7 @@ import {
   API_PROFILE_MODEL_DEFAULT,
   BUILTIN_CHAT_APPS,
   DEFAULT_POCKET_CARD_SIZE,
+  DEFAULT_FRAME_TOAST_POSITION,
   DEFAULT_GEMINI_THINKING_LEVEL,
   DEFAULT_MODEL_PREFERENCE_ORDER,
   DEFAULT_MODEL_PREFERENCES,
@@ -93,6 +94,19 @@ export function normalizePocketCardSize(value = {}) {
   return {
     width: boundedNumber(source.width, DEFAULT_POCKET_CARD_SIZE.width, 360, 760),
     height: boundedNumber(source.height, DEFAULT_POCKET_CARD_SIZE.height, 420, 820)
+  };
+}
+
+export function normalizeFrameToastPosition(value = {}) {
+  const source = plainObject(value) ? value : {};
+  const coordinate = (input, fallback) => (
+    input === "" || input === null || input === undefined || typeof input === "boolean"
+      ? fallback
+      : boundedNumber(input, fallback, 0, 100)
+  );
+  return {
+    x: coordinate(source.x, DEFAULT_FRAME_TOAST_POSITION.x),
+    y: coordinate(source.y, DEFAULT_FRAME_TOAST_POSITION.y)
   };
 }
 
@@ -668,6 +682,7 @@ export function normalizeOptions(raw = {}) {
     topbarDeleteThreadMigrated: true,
     pocketCardSize: normalizePocketCardSize(raw.pocketCardSize),
     frameLoadingOverlayOpacity: boundedNumber(raw.frameLoadingOverlayOpacity, base.frameLoadingOverlayOpacity, 0, 100),
+    frameToastPosition: normalizeFrameToastPosition(raw.frameToastPosition),
     ...primaryColorState,
     apiProfiles,
     apiPromotionChannelsVersion: Math.max(Number(raw.apiPromotionChannelsVersion) || 0, API_PROMOTION_CHANNELS_VERSION),

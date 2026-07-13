@@ -7,6 +7,7 @@ export function createPromptLibraryController(ctx) {
     createId,
     savePromptLibrary,
     syncPromptInputNode,
+    ensurePromptInputReady = () => true,
     settingsActions,
     settingsDragHandle,
     settingsEmptyRow,
@@ -123,6 +124,7 @@ export function createPromptLibraryController(ctx) {
   }
 
   function insertTextIntoPrompt(text) {
+    if (!ensurePromptInputReady()) return false;
     const current = state.promptText || "";
     const selection = state.promptSelection || {};
     const start = Number.isFinite(selection.start) ? Math.max(0, Math.min(selection.start, current.length)) : current.length;
@@ -134,11 +136,12 @@ export function createPromptLibraryController(ctx) {
     state.promptSelection = { start: nextCursor, end: nextCursor, direction: "none" };
     const inputNode = syncPromptInputNode({ focus: true });
     try { inputNode?.setSelectionRange(nextCursor, nextCursor, "none"); } catch {}
+    return true;
   }
 
   function insertPromptFromLibrary(prompt, afterInsert) {
     if (!prompt?.prompt) return;
-    insertTextIntoPrompt(prompt.prompt);
+    if (!insertTextIntoPrompt(prompt.prompt)) return;
     if (typeof afterInsert === "function") afterInsert();
     toast(t("toast.promptInserted"), "success");
   }

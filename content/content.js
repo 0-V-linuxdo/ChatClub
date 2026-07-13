@@ -1,19 +1,150 @@
 (() => {
   const SOURCE = "chatclub";
   const COPY_SOURCE = "chatclub-native-copy:2026.07.08.13";
-  const GEMINI_MODEL_PICKER_SOURCE = "chatclub-gemini-model-picker";
+  const GEMINI_MODEL_PICKER_SOURCE = "chatclub-gemini-model-picker:2026.07.13.3";
+  const MAIN_WORLD_LOCATION_SOURCE = "chatclub:main-world-location:2026.07.13.2";
+  const GEMINI_MODEL_PICKER_RUN_TOKEN_ATTRIBUTE = "data-chatclub-gemini-model-picker-run";
+  const PREFERRED_MODEL_FOCUS_SHIELD_ATTRIBUTE = "data-chatclub-preferred-model-focus-shield";
+  const PREFERRED_MODEL_FOCUS_SHIELD_LEASE_MS = 5000;
+  const PREFERRED_MODEL_FOCUS_SHIELD_RELEASE_GRACE_MS = 400;
   const NOTION_SEND_TEXT_SOURCE = "chatclub-notion-send-text:2026.07.10.12";
   const NOTION_SEND_PROMPT_SOURCE = "chatclub-notion-send-prompt:2026.07.10.12";
-  const CONTENT_BRIDGE_VERSION = "2026.07.10.6";
+  const CONTENT_BRIDGE_VERSION = "2026.07.13.4";
   const SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.10.5";
   const DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.10.2";
+  const PREFERRED_MODEL_POST_MESSAGE_SOURCE = "chatclub:preferred-model:2026.07.13.2";
   const MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.08.12";
   const SUMMARY_POST_MESSAGE_SOURCE = "chatclub:summary:2026.07.08.13";
   const DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.07.03.30";
   const PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.08.13";
   const PROMPT_IMAGE_PASTE_STRATEGY_BATCH = "batch";
+  let contentDocumentId = window.__CHATCLUB_CONTENT_DOCUMENT_ID__ ||
+    `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+  window.__CHATCLUB_CONTENT_DOCUMENT_ID__ = contentDocumentId;
+  let preferredModelBridgeRunSequence = Math.max(
+    0,
+    Number(window.__CHATCLUB_PREFERRED_MODEL_BRIDGE_RUN_SEQUENCE__) || 0
+  );
+  let activePreferredModelRun = null;
+
+  function nextPreferredModelBridgeRunSequence() {
+    preferredModelBridgeRunSequence += 1;
+    window.__CHATCLUB_PREFERRED_MODEL_BRIDGE_RUN_SEQUENCE__ = preferredModelBridgeRunSequence;
+    return preferredModelBridgeRunSequence;
+  }
+
+  function preferredModelBridgeToken(context) {
+    if (!context?.runId || !context?.bridgeGeneration) return "";
+    return `${contentDocumentId}:${context.bridgeGeneration}:${context.runId}`;
+  }
+
+  function publishPreferredModelBridgeRun(context) {
+    if (!context) return "";
+    context.bridgeToken = preferredModelBridgeToken(context);
+    context.bridgeReleased = false;
+    try {
+      document.documentElement?.setAttribute(GEMINI_MODEL_PICKER_RUN_TOKEN_ATTRIBUTE, context.bridgeToken);
+    } catch {}
+    return context.bridgeToken;
+  }
+
+  function preferredModelFocusShieldValue(context, expiresAt) {
+    return JSON.stringify({
+      token: String(context?.bridgeToken || ""),
+      generation: Math.max(0, Number(context?.focusShieldGeneration) || 0),
+      expiresAt: Math.max(0, Number(expiresAt) || 0)
+    });
+  }
+
+  function armPreferredModelFocusShield(context, leaseMs = PREFERRED_MODEL_FOCUS_SHIELD_LEASE_MS) {
+    assertPreferredModelRun(context);
+    context.focusShieldGeneration = Math.max(0, Number(context.focusShieldGeneration) || 0) + 1;
+    context.focusShieldReleaseScheduled = false;
+    const value = preferredModelFocusShieldValue(
+      context,
+      Date.now() + Math.max(250, Number(leaseMs) || PREFERRED_MODEL_FOCUS_SHIELD_LEASE_MS)
+    );
+    context.focusShieldValue = value;
+    try { document.documentElement?.setAttribute(PREFERRED_MODEL_FOCUS_SHIELD_ATTRIBUTE, value); } catch {}
+    return value;
+  }
+
+  function releasePreferredModelFocusShield(context) {
+    if (!context?.focusShieldValue || context.focusShieldReleaseScheduled) return;
+    context.focusShieldReleaseScheduled = true;
+    const generation = context.focusShieldGeneration;
+    const afterFrame = (callback) => {
+      try {
+        if (typeof requestAnimationFrame === "function") {
+          requestAnimationFrame(callback);
+          return;
+        }
+      } catch {}
+      setTimeout(callback, 17);
+    };
+    afterFrame(() => afterFrame(() => {
+      if (context.focusShieldGeneration !== generation || !context.focusShieldReleaseScheduled) return;
+      let current = "";
+      try { current = String(document.documentElement?.getAttribute(PREFERRED_MODEL_FOCUS_SHIELD_ATTRIBUTE) || ""); } catch {}
+      if (!current || current !== context.focusShieldValue) return;
+      const value = preferredModelFocusShieldValue(
+        context,
+        Date.now() + PREFERRED_MODEL_FOCUS_SHIELD_RELEASE_GRACE_MS
+      );
+      context.focusShieldValue = value;
+      try { document.documentElement?.setAttribute(PREFERRED_MODEL_FOCUS_SHIELD_ATTRIBUTE, value); } catch {}
+      setTimeout(() => {
+        if (context.focusShieldGeneration !== generation) return;
+        try {
+          if (document.documentElement?.getAttribute(PREFERRED_MODEL_FOCUS_SHIELD_ATTRIBUTE) === value) {
+            document.documentElement.removeAttribute(PREFERRED_MODEL_FOCUS_SHIELD_ATTRIBUTE);
+          }
+        } catch {}
+      }, PREFERRED_MODEL_FOCUS_SHIELD_RELEASE_GRACE_MS + 50);
+    }));
+  }
+
+  function postGeminiModelPickerBridgeCancel(context, reason = "preferred model apply cancelled") {
+    if (!context?.runId || !context?.bridgeToken) return;
+    try {
+      window.postMessage({
+        source: GEMINI_MODEL_PICKER_SOURCE,
+        type: "request",
+        action: "cancel",
+        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        runId: context.runId,
+        runGeneration: context.bridgeGeneration,
+        runToken: context.bridgeToken,
+        reason: String(reason || "preferred model apply cancelled")
+      }, "*");
+    } catch {}
+  }
+
+  function releasePreferredModelBridgeRun(context, reason = "preferred model apply finished") {
+    releasePreferredModelFocusShield(context);
+    if (!context || context.bridgeReleased) return;
+    context.bridgeReleased = true;
+    try {
+      if (document.documentElement?.getAttribute(GEMINI_MODEL_PICKER_RUN_TOKEN_ATTRIBUTE) === context.bridgeToken) {
+        document.documentElement.removeAttribute(GEMINI_MODEL_PICKER_RUN_TOKEN_ATTRIBUTE);
+      }
+    } catch {}
+    postGeminiModelPickerBridgeCancel(context, reason);
+  }
+
+  function abortActivePreferredModelRun(reason = "preferred model apply cancelled", runId = "") {
+    const active = activePreferredModelRun;
+    if (!active || (runId && active.runId !== String(runId))) return false;
+    active.abortKind = reason === "preferred model apply timed out" ? "timeout" : "cancel";
+    active.abortReason = String(reason || "preferred model apply cancelled");
+    releasePreferredModelBridgeRun(active, active.abortReason);
+    try { active.controller.abort(active.abortReason); } catch { try { active.controller.abort(); } catch {} }
+    return true;
+  }
   function contentReadyData() {
     return {
+      documentId: contentDocumentId,
+      bridgeVersion: CONTENT_BRIDGE_VERSION,
       href: location.href,
       title: String(document.title || "").replace(/\s+/g, " ").trim()
     };
@@ -31,11 +162,24 @@
     } catch {}
   }
 
+  function postContentUnloading() {
+    try {
+      window.parent.postMessage({
+        source: SOURCE,
+        type: "request",
+        action: "contentUnloading",
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
+        data: contentReadyData()
+      }, "*");
+    } catch {}
+  }
+
   const hadContentBridge = Boolean(window.__CHATCLUB_CONTENT_BRIDGE_INSTALLED__);
   if (window.__CHATCLUB_CONTENT_BRIDGE_VERSION__ === CONTENT_BRIDGE_VERSION) {
     postContentReady();
     return;
   }
+  try { document.documentElement?.removeAttribute(GEMINI_MODEL_PICKER_RUN_TOKEN_ATTRIBUTE); } catch {}
   window.__CHATCLUB_CONTENT_BRIDGE_VERSION__ = CONTENT_BRIDGE_VERSION;
   window.__CHATCLUB_CONTENT_BRIDGE_INSTALLED__ = true;
 
@@ -46,16 +190,29 @@
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   try { window.__CHATCLUB_LOCATION_REPORT_CLEANUP__?.(); } catch {}
   let lastReportedHref = String(location.href || "");
-  function reportLocationChange() {
-    const href = String(location.href || "");
-    if (!href || href === lastReportedHref) return;
+  function reportLocationChange(reportedHref = "", force = false) {
+    const href = String(reportedHref || location.href || "");
+    if (!href || (!force && href === lastReportedHref)) return;
     lastReportedHref = href;
+    abortActivePreferredModelRun("navigation changed");
+    contentDocumentId = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+    window.__CHATCLUB_CONTENT_DOCUMENT_ID__ = contentDocumentId;
     postContentReady();
   }
   const locationReportController = new AbortController();
   const locationReportOptions = { capture: true, signal: locationReportController.signal };
   window.addEventListener("popstate", () => setTimeout(reportLocationChange, 0), locationReportOptions);
   window.addEventListener("hashchange", () => setTimeout(reportLocationChange, 0), locationReportOptions);
+  window.addEventListener("message", (event) => {
+    const message = event.data;
+    if (message?.source !== MAIN_WORLD_LOCATION_SOURCE || message.type !== "notification" || message.action !== "locationChanged") return;
+    reportLocationChange(message.href, message.force === true);
+  }, locationReportOptions);
+  window.addEventListener("pagehide", () => {
+    abortActivePreferredModelRun("navigation changed");
+    postContentUnloading();
+  }, locationReportOptions);
+  window.addEventListener("pageshow", () => postContentReady(), locationReportOptions);
   const locationReportTimer = setInterval(reportLocationChange, 800);
   window.__CHATCLUB_LOCATION_REPORT_CLEANUP__ = () => {
     clearInterval(locationReportTimer);
@@ -2165,7 +2322,98 @@
 
   function modelResult(ok, appId, modelId, reason = "", extra = {}) {
     if (!ok && reason) console.warn(`[ChatClub] ${appId} preferred model: ${reason}`);
-    return { ok, appId, modelId, ...(reason ? { reason } : {}), ...extra };
+    const {
+      skipped: rawSkipped,
+      changed: rawChanged,
+      cancelled: rawCancelled,
+      retryable: rawRetryable,
+      runId: rawRunId,
+      interactionCount: rawInteractionCount,
+      ...details
+    } = extra || {};
+    const skipped = Boolean(rawSkipped);
+    const cancelled = Boolean(rawCancelled);
+    const interactionCount = Math.max(0, Number(rawInteractionCount) || 0);
+    return {
+      ...details,
+      ok: Boolean(ok),
+      appId,
+      modelId,
+      skipped,
+      changed: Boolean(rawChanged),
+      cancelled,
+      retryable: Boolean(rawRetryable) && !cancelled && interactionCount === 0,
+      reason: String(reason || ""),
+      runId: String(rawRunId || ""),
+      interactionCount
+    };
+  }
+
+  function preferredModelAbortReason(context) {
+    if (!context) return "preferred model apply cancelled";
+    return String(
+      context.abortReason ||
+      context.signal?.reason ||
+      (contentBridgeIsCurrent() ? "preferred model apply cancelled" : "content bridge superseded")
+    );
+  }
+
+  function preferredModelCancelled(context) {
+    let tokenIsCurrent = false;
+    try {
+      tokenIsCurrent = Boolean(
+        context?.bridgeToken
+        && document.documentElement?.getAttribute(GEMINI_MODEL_PICKER_RUN_TOKEN_ATTRIBUTE) === context.bridgeToken
+      );
+    } catch {}
+    return !context
+      || context.signal?.aborted
+      || activePreferredModelRun !== context
+      || !contentBridgeIsCurrent()
+      || !tokenIsCurrent;
+  }
+
+  function assertPreferredModelRun(context) {
+    if (!preferredModelCancelled(context)) return;
+    const error = new Error(preferredModelAbortReason(context));
+    error.name = "PreferredModelCancelledError";
+    error.preferredModelCancelled = true;
+    throw error;
+  }
+
+  function preferredModelResult(context, ok, appId, modelId, reason = "", extra = {}) {
+    return modelResult(ok, appId, modelId, reason, {
+      ...extra,
+      runId: context?.runId || extra?.runId || "",
+      interactionCount: context?.interactionCount || 0
+    });
+  }
+
+  function preferredModelSleep(context, ms) {
+    assertPreferredModelRun(context);
+    return new Promise((resolve) => {
+      let timer = null;
+      const finish = () => {
+        if (timer) clearTimeout(timer);
+        try { context.signal.removeEventListener("abort", finish); } catch {}
+        resolve();
+      };
+      timer = setTimeout(finish, Math.max(0, Number(ms) || 0));
+      try { context.signal.addEventListener("abort", finish, { once: true }); } catch {}
+      if (context.signal.aborted) finish();
+    }).then(() => assertPreferredModelRun(context));
+  }
+
+  async function waitForPreferredModel(context, getter, timeoutMs = 2500, intervalMs = 120) {
+    const deadline = Date.now() + Math.max(0, Number(timeoutMs) || 0);
+    while (Date.now() <= deadline) {
+      assertPreferredModelRun(context);
+      const value = getter();
+      if (value) return value;
+      await preferredModelSleep(context, Math.max(30, Number(intervalMs) || 30));
+    }
+    assertPreferredModelRun(context);
+    return getter();
   }
 
   function isDisabledElement(el) {
@@ -2399,6 +2647,16 @@
     } catch {
       return false;
     }
+  }
+
+  function preferredModelActivate(context, target) {
+    assertPreferredModelRun(context);
+    if (!target || !visible(target) || isDisabledElement(target) || typeof target.click !== "function") return false;
+    armPreferredModelFocusShield(context);
+    try { target.scrollIntoView?.({ block: "center", inline: "nearest" }); } catch {}
+    assertPreferredModelRun(context);
+    context.interactionCount += 1;
+    return nativeModelClick(target);
   }
 
   function modelClick(el) {
@@ -4919,28 +5177,56 @@
     return getter();
   }
 
-  function requestGeminiModelPickerBridgeOpen(timeoutMs = 900) {
+  function requestGeminiModelPickerBridgeOpen(context, timeoutMs = 900) {
+    assertPreferredModelRun(context);
+    const runId = String(context.runId || "");
+    const runToken = String(context.bridgeToken || "");
     return new Promise((resolve) => {
       const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      const timer = setTimeout(() => {
+      let settled = false;
+      const finish = (value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
         window.removeEventListener("message", onMessage, true);
-        resolve({ ok: false, reason: "bridge timeout" });
-      }, Math.max(300, Number(timeoutMs) || 900));
+        try { context.signal.removeEventListener("abort", onAbort); } catch {}
+        resolve(value);
+      };
+      const timer = setTimeout(() => finish({ ok: false, reason: "bridge timeout" }), Math.max(300, Number(timeoutMs) || 900));
       function onMessage(event) {
         const message = event.data;
-        if (message?.source !== GEMINI_MODEL_PICKER_SOURCE || message.type !== "response" || message.id !== id) return;
-        clearTimeout(timer);
-        window.removeEventListener("message", onMessage, true);
-        resolve(message);
+        if (
+          message?.source !== GEMINI_MODEL_PICKER_SOURCE
+          || message.type !== "response"
+          || message.action !== "open"
+          || message.id !== id
+          || String(message.runId || "") !== runId
+          || String(message.runToken || "") !== runToken
+        ) return;
+        finish(message);
       }
+      const onAbort = () => finish({ ok: false, cancelled: true, reason: preferredModelAbortReason(context) });
       window.addEventListener("message", onMessage, true);
+      try { context.signal.addEventListener("abort", onAbort, { once: true }); } catch {}
       try {
-        window.postMessage({ source: GEMINI_MODEL_PICKER_SOURCE, type: "request", action: "open", id }, "*");
+        assertPreferredModelRun(context);
+        armPreferredModelFocusShield(context);
+        window.postMessage({
+          source: GEMINI_MODEL_PICKER_SOURCE,
+          type: "request",
+          action: "open",
+          id,
+          runId,
+          runGeneration: context.bridgeGeneration,
+          runToken
+        }, "*");
       } catch (error) {
-        clearTimeout(timer);
-        window.removeEventListener("message", onMessage, true);
-        resolve({ ok: false, reason: error?.message || String(error || "bridge failed") });
+        finish({ ok: false, reason: error?.message || String(error || "bridge failed") });
       }
+    }).then((result) => {
+      if (result?.activated === true) context.interactionCount += 1;
+      assertPreferredModelRun(context);
+      return result;
     });
   }
 
@@ -4987,6 +5273,7 @@
   ]);
 
   const GEMINI_MODEL_MENU_ROOT_SELECTORS = Object.freeze([
+    "gem-mode-menu",
     ".cdk-overlay-pane",
     ".cdk-overlay-container .cdk-overlay-pane",
     ".cdk-overlay-container [role='menu']",
@@ -5011,6 +5298,7 @@
   ]);
 
   const GEMINI_MODEL_ITEM_SELECTORS = Object.freeze([
+    "gem-menu-item",
     "button.bard-mode-list-button[role='menuitemradio']",
     ".bard-mode-list-button",
     "button[role='menuitemradio']",
@@ -5087,15 +5375,31 @@
     return "";
   }
 
-  function currentGeminiModelKey() {
+  function currentGeminiPickerState() {
     const button = firstVisibleBySelectors(GEMINI_MODEL_BUTTON_SELECTORS);
-    return inferGeminiModelKey(modelElementText(button));
+    if (!button) return { button: null, label: "", baseModelId: "", thinkingLevel: "" };
+    const label = String(button.getAttribute?.("aria-label") || modelElementText(button) || "");
+    const keys = geminiModelKeysFromText(label);
+    const baseModelId = ["fast", "flash35", "pro"].find((key) => keys.has(key)) || (() => {
+      const inferred = inferGeminiModelKey(label);
+      return ["fast", "flash35", "pro"].includes(inferred) ? inferred : "";
+    })();
+    const token = compactModelText(label);
+    const thinkingLevel = baseModelId === "pro"
+      ? (keys.has("extended") || /\bextended(?:\s+thinking)?\b/.test(token) ? "extended" : "standard")
+      : "";
+    return { button, label, baseModelId, thinkingLevel };
+  }
+
+  function currentGeminiModelKey() {
+    return currentGeminiPickerState().baseModelId;
   }
 
   function currentGeminiModelHasKey(modelId) {
-    const button = firstVisibleBySelectors(GEMINI_MODEL_BUTTON_SELECTORS);
-    const text = modelElementText(button);
-    return geminiModelKeysFromText(text).has(modelId) || inferGeminiModelKey(text) === modelId;
+    const state = currentGeminiPickerState();
+    if (modelId === "extended") return state.baseModelId === "pro" && state.thinkingLevel === "extended";
+    if (modelId === "thinking") return state.baseModelId === "pro" && state.thinkingLevel === "standard";
+    return state.baseModelId === modelId;
   }
 
   function geminiThinkingLevelModelId(value) {
@@ -5147,27 +5451,39 @@
     return geminiModelMenuRootCandidates().map((candidate) => candidate.element);
   }
 
-  async function openGeminiModelMenu() {
+  async function openGeminiModelMenu(context) {
+    assertPreferredModelRun(context);
+    context.geminiMenuFailureTerminal = false;
     const existing = geminiModelMenuRoot();
     if (existing) return existing;
-    const trigger = await waitForModel(() => firstVisibleBySelectors(GEMINI_MODEL_BUTTON_SELECTORS), 10000, 150);
+    const trigger = await waitForPreferredModel(context, () => firstVisibleBySelectors(GEMINI_MODEL_BUTTON_SELECTORS), 10000, 150);
     if (!trigger) return null;
-    for (let attempt = 0; attempt < 4; attempt += 1) {
-      if (!visible(trigger) || isDisabledElement(trigger)) await sleep(180);
-      modelClick(trigger);
-      let root = await waitForModel(geminiModelMenuRoot, attempt === 0 ? 1400 : 900, 80);
-      if (root) return root;
-      await requestGeminiModelPickerBridgeOpen(attempt === 0 ? 1200 : 900);
-      root = await waitForModel(geminiModelMenuRoot, attempt === 0 ? 1400 : 900, 80);
-      if (root) return root;
-      await sleep(180);
+    const bridgeResult = await requestGeminiModelPickerBridgeOpen(context, 1200);
+    if (bridgeResult?.cancelled === true || bridgeResult?.stale === true) {
+      context.abortKind = "cancel";
+      context.abortReason = String(bridgeResult.reason || "Gemini model picker bridge run was cancelled");
+      try { context.controller.abort(context.abortReason); } catch { try { context.controller.abort(); } catch {} }
+      assertPreferredModelRun(context);
     }
-    return null;
+    let root = await waitForPreferredModel(context, geminiModelMenuRoot, 1400, 80);
+    if (root) return root;
+    if (bridgeResult?.activated === true || bridgeResult?.alreadyOpen === true) {
+      context.geminiMenuFailureTerminal = true;
+      return null;
+    }
+    if (String(bridgeResult?.reason || "").toLowerCase().includes("timeout")) {
+      context.geminiMenuFailureTerminal = true;
+      return null;
+    }
+    if (!preferredModelActivate(context, trigger)) return null;
+    root = await waitForPreferredModel(context, geminiModelMenuRoot, 1400, 80);
+    return root || null;
   }
 
   function geminiModelItemRow(element, root) {
     if (!element || !root || element === root || !root.contains?.(element)) return null;
     const direct = closest(element, [
+      "gem-menu-item",
       "button",
       "[role='menuitemradio']",
       "[role='menuitem']",
@@ -5339,7 +5655,7 @@
 
   function findGeminiThinkingLevelOption(root, modelId) {
     if (modelId !== "thinking" && modelId !== "extended") return null;
-    return geminiCompactMenuRows(root)
+    const row = geminiCompactMenuRows(root)
       .filter((row) => {
         const text = modelElementText(row);
         const token = compactModelText(text);
@@ -5350,6 +5666,7 @@
         return geminiTargetMatchesText(modelId, text);
       })
       .sort((a, b) => modelElementArea(a) - modelElementArea(b))[0] || null;
+    return geminiActualMenuItem(row, root) || row;
   }
 
   function findGeminiThinkingLevelOptionInMenus(modelId) {
@@ -5358,118 +5675,6 @@
       if (item) return { root, item };
     }
     return { root: null, item: null };
-  }
-
-  function geminiThinkingClickTargets(row, root) {
-    const targets = [];
-    const seen = new Set();
-    const add = (element) => {
-      if (!element || seen.has(element) || !visible(element) || isDisabledElement(element)) return;
-      if (root && !root.contains?.(element)) return;
-      seen.add(element);
-      targets.push(element);
-    };
-    add(row);
-    add(closest(row, "button, [role='button'], [role='menuitem'], [role='menuitemradio'], [aria-haspopup='menu'], [aria-haspopup='true'], [tabindex]:not([tabindex='-1'])"));
-    for (const element of qsa("button, [role='button'], [role='menuitem'], [role='menuitemradio'], [aria-haspopup='menu'], [aria-haspopup='true'], [tabindex]:not([tabindex='-1'])", row || document).slice(0, 8)) {
-      add(element);
-    }
-    for (let node = row?.parentElement || null, guard = 0; node && node !== root && guard < 4; guard += 1, node = node.parentElement) {
-      const rect = modelRect(node);
-      if (rect && rect.width >= 80 && rect.height >= 26 && rect.height <= 110 && modelTextIncludes(modelElementText(node), "Thinking level")) add(node);
-    }
-    return targets;
-  }
-
-  function geminiThinkingLevelActivationRow(row, root) {
-    if (!row) return null;
-    let best = row;
-    let bestScore = -1;
-    for (let node = row; node && node.nodeType === 1 && node !== root; node = node.parentElement) {
-      if (!visible(node) || isDisabledElement(node)) continue;
-      const text = modelElementText(node);
-      if (!modelTextIncludes(text, "Thinking level")) continue;
-      const rect = modelRect(node);
-      if (!rect || rect.width < 80 || rect.height < 24 || rect.height > 126) continue;
-      let score = rect.width;
-      if (matches(node, "button, [role='button'], [role='menuitem'], [role='menuitemradio'], [aria-haspopup='menu'], [aria-haspopup='true'], [aria-expanded], [tabindex]:not([tabindex='-1'])")) score += 160;
-      if (modelTextIncludes(text, "Standard") || modelTextIncludes(text, "Extended")) score += 60;
-      if (score > bestScore) {
-        best = node;
-        bestScore = score;
-      }
-    }
-    return best;
-  }
-
-  function geminiThinkingLevelDropdownPoint(row) {
-    const rect = modelRect(row);
-    if (!rect || rect.width <= 0 || rect.height <= 0) return modelCenterPoint(row);
-    const viewportWidth = Math.max(1, Number(window.innerWidth) || Number(document.documentElement?.clientWidth) || 1);
-    const viewportHeight = Math.max(1, Number(window.innerHeight) || Number(document.documentElement?.clientHeight) || 1);
-    const inset = Math.min(28, Math.max(10, rect.width * 0.16));
-    return {
-      x: Math.min(Math.max(rect.right - inset, 1), viewportWidth - 1),
-      y: Math.min(Math.max(rect.top + rect.height / 2, 1), viewportHeight - 1)
-    };
-  }
-
-  function scoreGeminiThinkingDropdownTarget(target, row, point) {
-    if (!target || !row || !visible(target) || isDisabledElement(target)) return -1;
-    const rect = modelRect(target);
-    let score = 0;
-    if (target === row) score += 30;
-    if (row.contains?.(target)) score += 30;
-    if (target.contains?.(row)) score += 10;
-    if (matches(target, "[aria-haspopup='menu'], [aria-haspopup='true'], [aria-expanded], [aria-controls]")) score += 140;
-    if (matches(target, "button, [role='button'], [role='menuitem'], [role='menuitemradio'], [tabindex]:not([tabindex='-1'])")) score += 90;
-    if (modelTextIncludes(modelElementText(target), "Thinking level")) score += 45;
-    if (rect && point) {
-      const targetCenterX = rect.left + rect.width / 2;
-      score += Math.max(0, 70 - Math.abs(targetCenterX - point.x));
-      if (rect.width >= 18 && rect.height >= 18) score += 20;
-    }
-    return score;
-  }
-
-  function geminiThinkingDropdownTargets(row, root) {
-    const activationRow = geminiThinkingLevelActivationRow(row, root);
-    const point = geminiThinkingLevelDropdownPoint(activationRow || row);
-    const candidates = [];
-    const seen = new Set();
-    const add = (element) => {
-      if (!element || seen.has(element) || !visible(element) || isDisabledElement(element)) return;
-      if (root && !root.contains?.(element)) return;
-      seen.add(element);
-      candidates.push(element);
-    };
-    const pointTarget = modelElementFromPoint(point, activationRow || row);
-    add(pointTarget);
-    add(modelClickableAncestor(pointTarget));
-    add(modelCustomActivationAncestor(pointTarget));
-    for (const element of qsa("[aria-haspopup='menu'], [aria-haspopup='true'], [aria-expanded], [aria-controls], button, [role='button'], [role='menuitem'], [role='menuitemradio'], [tabindex]:not([tabindex='-1'])", activationRow || row).slice(0, 12)) {
-      add(element);
-    }
-    add(modelClickableAncestor(activationRow));
-    add(modelCustomActivationAncestor(activationRow));
-    add(activationRow);
-    candidates.sort((a, b) => scoreGeminiThinkingDropdownTarget(b, activationRow, point) - scoreGeminiThinkingDropdownTarget(a, activationRow, point));
-    return { targets: candidates, point };
-  }
-
-  function clickGeminiThinkingDropdown(row, root) {
-    const { targets, point } = geminiThinkingDropdownTargets(row, root);
-    let clicked = false;
-    for (const target of targets) {
-      try { target.scrollIntoView?.({ block: "center", inline: "nearest" }); } catch {}
-      try { target.focus?.({ preventScroll: true }); } catch {
-        try { target.focus?.(); } catch {}
-      }
-      clicked = dispatchPointerActivation(target, point || modelCenterPoint(target)) || clicked;
-      clicked = nativeModelClick(target) || clicked;
-      if (clicked) return true;
-    }
-    return clicked;
   }
 
   function geminiThinkingLevelHeaderKey(root) {
@@ -5488,55 +5693,6 @@
     return geminiThinkingLevelHeaderKey(root) === modelId;
   }
 
-  function clickGeminiMenuItem(item) {
-    return modelDirectClick(item) || modelClick(item);
-  }
-
-  async function waitGeminiThinkingLevelOption(root, modelId) {
-    if (modelId !== "thinking" && modelId !== "extended") return root || null;
-    return await waitForModel(() => {
-      const visibleRoots = geminiModelMenuRoots();
-      for (const nextRoot of visibleRoots) {
-        if (findGeminiThinkingLevelOption(nextRoot, modelId)) return nextRoot;
-      }
-      return root && findGeminiThinkingLevelOption(root, modelId) ? root : null;
-    }, 1500, 80);
-  }
-
-  async function expandGeminiThinkingLevel(root, modelId) {
-    const roots = [root, ...geminiModelMenuRoots()].filter(Boolean);
-    const rows = [];
-    const seenRows = new Set();
-    for (const menuRoot of roots) {
-      for (const row of findGeminiThinkingLevelRows(menuRoot)) {
-        if (!seenRows.has(row)) {
-          seenRows.add(row);
-          rows.push({ row, root: menuRoot });
-        }
-      }
-    }
-    const triedTargets = new Set();
-    for (const entry of rows) {
-      if (clickGeminiThinkingDropdown(entry.row, entry.root)) {
-        const dropdownRoot = await waitGeminiThinkingLevelOption(entry.root, modelId);
-        if (dropdownRoot) return dropdownRoot;
-      }
-      for (const target of geminiThinkingClickTargets(entry.row, entry.root)) {
-        if (triedTargets.has(target)) continue;
-        triedTargets.add(target);
-        if (modelDirectClick(target)) {
-          const directRoot = await waitGeminiThinkingLevelOption(entry.root, modelId);
-          if (directRoot) return directRoot;
-        }
-        if (modelClick(target)) {
-          const clickedRoot = await waitGeminiThinkingLevelOption(entry.root, modelId);
-          if (clickedRoot) return clickedRoot;
-        }
-      }
-    }
-    return null;
-  }
-
   function isGeminiThinkingSubmenuItem(item) {
     if (!item || !modelTextIncludes(modelElementText(item), "Thinking")) return false;
     let node = item;
@@ -5547,12 +5703,46 @@
     return modelTextIncludes(modelElementText(item), "Thinking level");
   }
 
+  function geminiActualMenuItem(element, root = null) {
+    if (!element) return null;
+    const item = element.closest?.("gem-menu-item, button[role='menuitemradio'], button[role='menuitem'], [role='menuitemradio'], [role='menuitem'], [role='option'], mat-list-option") || null;
+    if (!item || (root && !root.contains?.(item))) return null;
+    return item;
+  }
+
+  function findGeminiExtendedThinkingToggle(root) {
+    if (!root) return null;
+    const candidates = [
+      ...qsa("gem-menu-item", root, { all: true }),
+      ...geminiModelItems(root)
+    ];
+    const seen = new Set();
+    for (const candidate of candidates) {
+      const item = geminiActualMenuItem(candidate, root) || candidate;
+      if (!item || seen.has(item) || !visible(item) || isDisabledElement(item)) continue;
+      seen.add(item);
+      const token = compactModelText(modelElementText(item));
+      if (/\bextended\s+thinking\b/.test(token)) return item;
+    }
+    return null;
+  }
+
   function geminiElementHasSelectedState(element) {
     if (!element) return false;
-    const candidates = [element, ...qsa("*", element).slice(0, 20)];
+    const actualItem = geminiActualMenuItem(element);
+    const candidates = actualItem && String(actualItem.tagName || "").toLowerCase() === "gem-menu-item"
+      ? [actualItem]
+      : [element, ...qsa("*", element).slice(0, 20)];
+    for (let node = element.parentElement, guard = 0; node && guard < 5; node = node.parentElement, guard += 1) {
+      if (String(node.tagName || "").toLowerCase() === "gem-mode-menu") break;
+      candidates.push(node);
+    }
     for (const node of candidates) {
+      if (node.hasAttribute?.("selected") && String(node.getAttribute?.("selected") || "").trim().toLowerCase() !== "false") return true;
+      if (node.hasAttribute?.("checked") && String(node.getAttribute?.("checked") || "").trim().toLowerCase() !== "false") return true;
       if (parseBooleanAttr(node.getAttribute?.("aria-checked")) === true) return true;
       if (parseBooleanAttr(node.getAttribute?.("aria-selected")) === true) return true;
+      if (parseBooleanAttr(node.getAttribute?.("aria-pressed")) === true) return true;
       const dataState = String(node.getAttribute?.("data-state") || "").trim().toLowerCase();
       if (["checked", "selected", "active"].includes(dataState)) return true;
       const dataSelected = parseBooleanAttr(node.getAttribute?.("data-selected"));
@@ -5579,108 +5769,165 @@
     return Boolean(item && geminiElementHasSelectedState(item));
   }
 
-  async function closeGeminiModelMenu() {
-    return closeFloatingModelMenuAndWait(geminiModelMenuRoot, 700);
+  async function dismissPreferredModelMenu(context, getMenuRoot, timeoutMs = 700) {
+    assertPreferredModelRun(context);
+    const getter = typeof getMenuRoot === "function" ? getMenuRoot : () => null;
+    if (!getter()) return true;
+    armPreferredModelFocusShield(context);
+    const KeyboardEventCtor = modelEventConstructor("KeyboardEvent", document);
+    if (typeof KeyboardEventCtor === "function") {
+      try {
+        document.dispatchEvent(new KeyboardEventCtor("keydown", {
+          key: "Escape",
+          code: "Escape",
+          keyCode: 27,
+          which: 27,
+          bubbles: true,
+          cancelable: true,
+          composed: true
+        }));
+      } catch {}
+    }
+    return Boolean(await waitForPreferredModel(context, () => !getter(), timeoutMs, 80));
   }
 
-  async function waitGeminiModelSettled(modelId) {
-    const deadline = Date.now() + 2200;
-    while (Date.now() <= deadline) {
-      const root = geminiModelMenuRoot();
-      if (root && isGeminiTargetSelected(root, modelId)) return true;
-      const current = root ? selectedGeminiModelKey(root) : currentGeminiModelKey();
-      if (current && current === modelId) return true;
-      if (!root && modelId === "flash35" && currentGeminiModelHasKey("flash35")) return true;
-      if (!root && modelId === "extended" && currentGeminiModelHasKey("extended")) return true;
-      if (!root && modelId === "thinking" && !currentGeminiModelHasKey("extended")) return true;
-      if (!root && !current) return true;
-      await sleep(120);
-    }
-    const final = currentGeminiModelKey();
-    if (modelId === "flash35") return currentGeminiModelHasKey("flash35");
-    if (modelId === "extended") return currentGeminiModelHasKey("extended");
-    if (modelId === "thinking") return !currentGeminiModelHasKey("extended");
-    return final ? final === modelId : !geminiModelMenuRoot();
+  function geminiPickerMatches(baseModelId, thinkingModelId = "") {
+    const state = currentGeminiPickerState();
+    if (baseModelId && state.baseModelId !== baseModelId) return false;
+    if (thinkingModelId === "extended") return state.baseModelId === "pro" && state.thinkingLevel === "extended";
+    if (thinkingModelId === "thinking") return state.baseModelId === "pro" && state.thinkingLevel === "standard";
+    return Boolean(state.baseModelId);
   }
 
-  async function applyGeminiModelTarget(modelId) {
-    if (!GEMINI_MODEL_TARGETS[modelId]) return modelResult(false, "Gemini", modelId, "unknown model");
-    if ((modelId === "fast" || modelId === "flash35" || modelId === "pro") && currentGeminiModelHasKey(modelId)) {
-      return modelResult(true, "Gemini", modelId, "", { skipped: true });
+  async function waitGeminiPickerSettled(context, baseModelId, thinkingModelId = "") {
+    return Boolean(await waitForPreferredModel(
+      context,
+      () => geminiPickerMatches(baseModelId, thinkingModelId),
+      2600,
+      100
+    ));
+  }
+
+  async function applyGeminiBaseModelTarget(context, modelId) {
+    assertPreferredModelRun(context);
+    if (currentGeminiPickerState().baseModelId === modelId) {
+      return preferredModelResult(context, true, "Gemini", modelId, "", { skipped: true });
+    }
+    const root = await openGeminiModelMenu(context);
+    if (!root) return preferredModelResult(context, false, "Gemini", modelId, "model menu not found", {
+      retryable: context.geminiMenuFailureTerminal !== true
+    });
+    if (currentGeminiPickerState().baseModelId === modelId) {
+      const menuClosed = await dismissPreferredModelMenu(context, geminiModelMenuRoot);
+      return preferredModelResult(context, true, "Gemini", modelId, "", { skipped: true, menuClosed });
+    }
+    const found = findGeminiModelItemInMenus(modelId);
+    const foundRoot = found.root || root;
+    const item = geminiActualMenuItem(found.item || findGeminiModelItem(foundRoot, modelId), foundRoot) || found.item || findGeminiModelItem(foundRoot, modelId);
+    if (!item) {
+      const menuClosed = await dismissPreferredModelMenu(context, geminiModelMenuRoot);
+      return preferredModelResult(context, false, "Gemini", modelId, "target model item not found", { menuClosed });
+    }
+    if (!preferredModelActivate(context, item)) {
+      const menuClosed = await dismissPreferredModelMenu(context, geminiModelMenuRoot);
+      return preferredModelResult(context, false, "Gemini", modelId, "target model item could not be clicked", { menuClosed });
+    }
+    const settled = await waitGeminiPickerSettled(context, modelId);
+    const menuClosed = await dismissPreferredModelMenu(context, geminiModelMenuRoot);
+    return settled
+      ? preferredModelResult(context, true, "Gemini", modelId, "", { changed: true, menuClosed })
+      : preferredModelResult(context, false, "Gemini", modelId, "selection did not settle", { menuClosed });
+  }
+
+  async function applyGeminiThinkingTarget(context, modelId) {
+    assertPreferredModelRun(context);
+    const desiredLevel = modelId === "extended" ? "extended" : "standard";
+    if (geminiPickerMatches("pro", modelId)) {
+      return preferredModelResult(context, true, "Gemini", "pro", "", { skipped: true, thinkingLevel: desiredLevel });
+    }
+    const root = await openGeminiModelMenu(context);
+    if (!root) return preferredModelResult(context, false, "Gemini", "pro", "model menu not found", {
+      retryable: context.geminiMenuFailureTerminal !== true,
+      thinkingLevel: desiredLevel
+    });
+    if (geminiPickerMatches("pro", modelId)) {
+      const menuClosed = await dismissPreferredModelMenu(context, geminiModelMenuRoot);
+      return preferredModelResult(context, true, "Gemini", "pro", "", { skipped: true, thinkingLevel: desiredLevel, menuClosed });
     }
 
-    let root = await openGeminiModelMenu();
-    if (!root) return modelResult(false, "Gemini", modelId, "model menu not found");
-
-    const anyOption = modelId === "thinking" || modelId === "extended"
-      ? findGeminiThinkingLevelOptionInMenus(modelId)
-      : { root: null, item: null };
-    const anyModelItem = findGeminiModelItemInMenus(modelId);
-    let item = modelId === "thinking" || modelId === "extended"
-      ? anyOption.item || findGeminiThinkingLevelOption(root, modelId) || anyModelItem.item || findGeminiModelItem(root, modelId)
-      : anyModelItem.item || findGeminiModelItem(root, modelId);
-    if (anyOption.root || anyModelItem.root) root = anyOption.root || anyModelItem.root || root;
-    if (isGeminiTargetSelected(root, modelId)) {
-      const menuClosed = await closeGeminiModelMenu();
-      return modelResult(true, "Gemini", modelId, "", { skipped: true, menuClosed });
-    }
-    if ((!item || modelTextIncludes(modelElementText(item), "Thinking level")) && (modelId === "thinking" || modelId === "extended")) {
-      root = await expandGeminiThinkingLevel(root, modelId) || geminiModelMenuRoot() || root;
-      const expandedOption = findGeminiThinkingLevelOptionInMenus(modelId);
-      item = expandedOption.item || findGeminiThinkingLevelOption(root, modelId) || findGeminiModelItem(root, modelId);
-      if (expandedOption.root) root = expandedOption.root;
-      if (isGeminiTargetSelected(root, modelId)) {
-        const menuClosed = await closeGeminiModelMenu();
-        return modelResult(true, "Gemini", modelId, "", { skipped: true, menuClosed });
+    const toggle = findGeminiExtendedThinkingToggle(root);
+    let item = null;
+    if (toggle) {
+      const selected = geminiElementHasSelectedState(toggle);
+      const shouldBeSelected = modelId === "extended";
+      if (selected === shouldBeSelected) {
+        const settled = await waitGeminiPickerSettled(context, "pro", modelId);
+        const menuClosed = await dismissPreferredModelMenu(context, geminiModelMenuRoot);
+        return settled
+          ? preferredModelResult(context, true, "Gemini", "pro", "", { skipped: true, thinkingLevel: desiredLevel, menuClosed })
+          : preferredModelResult(context, false, "Gemini", "pro", "thinking level did not settle", { thinkingLevel: desiredLevel, menuClosed });
+      }
+      item = toggle;
+    } else {
+      const option = findGeminiThinkingLevelOptionInMenus(modelId);
+      const optionRoot = option.root || root;
+      item = geminiActualMenuItem(option.item || findGeminiThinkingLevelOption(optionRoot, modelId), optionRoot) || option.item || findGeminiThinkingLevelOption(optionRoot, modelId);
+      if (item && geminiElementHasSelectedState(item)) {
+        const settled = await waitGeminiPickerSettled(context, "pro", modelId);
+        const menuClosed = await dismissPreferredModelMenu(context, geminiModelMenuRoot);
+        return settled
+          ? preferredModelResult(context, true, "Gemini", "pro", "", { skipped: true, thinkingLevel: desiredLevel, menuClosed })
+          : preferredModelResult(context, false, "Gemini", "pro", "thinking level did not settle", { thinkingLevel: desiredLevel, menuClosed });
       }
     }
+
     if (!item) {
-      const menuClosed = await closeGeminiModelMenu();
-      return modelResult(false, "Gemini", modelId, "target model item not found", { menuClosed });
+      const menuClosed = await dismissPreferredModelMenu(context, geminiModelMenuRoot);
+      return preferredModelResult(context, false, "Gemini", "pro", "thinking level item not found", { thinkingLevel: desiredLevel, menuClosed });
     }
-    if (!clickGeminiMenuItem(item)) {
-      const menuClosed = await closeGeminiModelMenu();
-      return modelResult(false, "Gemini", modelId, "target model item could not be clicked", { menuClosed });
+    if (!preferredModelActivate(context, item)) {
+      const menuClosed = await dismissPreferredModelMenu(context, geminiModelMenuRoot);
+      return preferredModelResult(context, false, "Gemini", "pro", "thinking level item could not be clicked", { thinkingLevel: desiredLevel, menuClosed });
     }
-    const settled = await waitGeminiModelSettled(modelId);
-    const menuClosed = await closeGeminiModelMenu();
+    const settled = await waitGeminiPickerSettled(context, "pro", modelId);
+    const menuClosed = await dismissPreferredModelMenu(context, geminiModelMenuRoot);
     return settled
-      ? modelResult(true, "Gemini", modelId, "", { menuClosed })
-      : modelResult(false, "Gemini", modelId, "selection did not settle", { menuClosed });
+      ? preferredModelResult(context, true, "Gemini", "pro", "", { changed: true, thinkingLevel: desiredLevel, menuClosed })
+      : preferredModelResult(context, false, "Gemini", "pro", "selection did not settle", { thinkingLevel: desiredLevel, menuClosed });
   }
 
-  async function applyGeminiPreferredModel(modelId, options = {}) {
-    if (!GEMINI_MODEL_TARGETS[modelId]) return modelResult(false, "Gemini", modelId, "unknown model");
+  async function applyGeminiPreferredModel(context, modelId, options = {}) {
+    if (!GEMINI_MODEL_TARGETS[modelId]) return preferredModelResult(context, false, "Gemini", modelId, "unknown model");
+    if (modelId === "thinking" || modelId === "extended") return applyGeminiThinkingTarget(context, modelId);
     const thinkingModelId = modelId === "pro" ? geminiThinkingLevelModelId(options?.thinkingLevel) : "";
-    const baseAlreadyApplied = currentGeminiModelHasKey(modelId);
-    if (baseAlreadyApplied && !thinkingModelId) {
-      return modelResult(true, "Gemini", modelId, "", {
-        skipped: true
+    if (modelId === "pro" && options?.thinkingLevel && !thinkingModelId) {
+      return preferredModelResult(context, false, "Gemini", modelId, "unknown thinking level");
+    }
+    if (geminiPickerMatches(modelId, thinkingModelId)) {
+      return preferredModelResult(context, true, "Gemini", modelId, "", {
+        skipped: true,
+        ...(thinkingModelId ? { thinkingLevel: options.thinkingLevel } : {})
       });
     }
 
     let baseResult = null;
-    if (!baseAlreadyApplied) {
-      baseResult = await applyGeminiModelTarget(modelId);
-      if (!baseResult?.ok) return baseResult;
+    if (currentGeminiPickerState().baseModelId !== modelId) {
+      baseResult = await applyGeminiBaseModelTarget(context, modelId);
+      if (!baseResult.ok) return baseResult;
     }
-
-    if (thinkingModelId) {
-      const thinkingResult = await applyGeminiModelTarget(thinkingModelId);
-      if (!thinkingResult?.ok) return thinkingResult;
-      return modelResult(true, "Gemini", modelId, "", {
-        thinkingLevel: options.thinkingLevel,
-        baseApplied: Boolean(baseResult && !baseResult.skipped),
-        thinkingApplied: !thinkingResult.skipped,
-        menuClosed: thinkingResult.menuClosed,
-        skipped: Boolean((!baseResult || baseResult.skipped) && thinkingResult.skipped)
-      });
+    let thinkingResult = null;
+    if (thinkingModelId && !geminiPickerMatches("pro", thinkingModelId)) {
+      thinkingResult = await applyGeminiThinkingTarget(context, thinkingModelId);
+      if (!thinkingResult.ok) return thinkingResult;
     }
-
-    return modelResult(true, "Gemini", modelId, "", {
-      skipped: Boolean(!baseResult || baseResult.skipped),
+    const changed = Boolean(baseResult?.changed || thinkingResult?.changed);
+    return preferredModelResult(context, true, "Gemini", modelId, "", {
+      skipped: !changed,
+      changed,
       ...(thinkingModelId ? { thinkingLevel: options.thinkingLevel } : {}),
-      menuClosed: baseResult?.menuClosed
+      baseApplied: Boolean(baseResult?.changed),
+      thinkingApplied: Boolean(thinkingResult?.changed),
+      menuClosed: thinkingResult?.menuClosed ?? baseResult?.menuClosed
     });
   }
 
@@ -6190,20 +6437,13 @@
     return !getter();
   }
 
-  async function openGrokModelMenu() {
+  async function openGrokModelMenu(context) {
+    assertPreferredModelRun(context);
     const existing = grokModelMenuRoot();
     if (existing) return existing;
-    const firstTrigger = await waitForModel(findGrokModelTrigger, 10000, 150);
-    if (!firstTrigger) return null;
-    for (const { element: trigger } of grokModelTriggerCandidates().slice(0, 6)) {
-      if (!modelClick(trigger)) continue;
-      await sleep(140);
-      const root = await waitForModel(() => grokModelMenuRoot(trigger), 900, 90);
-      if (root) return root;
-      closeFloatingModelMenu();
-      await sleep(80);
-    }
-    return null;
+    const trigger = await waitForPreferredModel(context, findGrokModelTrigger, 10000, 150);
+    if (!trigger || !preferredModelActivate(context, trigger)) return null;
+    return await waitForPreferredModel(context, () => grokModelMenuRoot(trigger), 1200, 90) || null;
   }
 
   function currentGrokModelId() {
@@ -6237,35 +6477,44 @@
     return null;
   }
 
-  async function waitGrokModelSettled(modelId) {
+  async function waitGrokModelSettled(context, modelId) {
     const deadline = Date.now() + 2000;
     while (Date.now() <= deadline) {
+      assertPreferredModelRun(context);
       const current = currentGrokModelId();
       if (current && current === modelId) return true;
-      if (!grokModelMenuRoot() && !current) return true;
-      await sleep(120);
+      await preferredModelSleep(context, 120);
     }
+    assertPreferredModelRun(context);
     const final = currentGrokModelId();
-    return final ? final === modelId : !grokModelMenuRoot();
+    return final === modelId;
   }
 
-  async function applyGrokPreferredModel(modelId) {
-    if (!GROK_MODEL_TARGETS[modelId]) return modelResult(false, "Grok", modelId, "unknown model");
-    if (currentGrokModelId() === modelId) return modelResult(true, "Grok", modelId, "", { skipped: true });
-    const root = await openGrokModelMenu();
-    if (!root) return modelResult(false, "Grok", modelId, "model menu not found");
+  async function applyGrokPreferredModel(context, modelId) {
+    if (!GROK_MODEL_TARGETS[modelId]) return preferredModelResult(context, false, "Grok", modelId, "unknown model");
+    assertPreferredModelRun(context);
+    if (currentGrokModelId() === modelId) return preferredModelResult(context, true, "Grok", modelId, "", { skipped: true });
+    const root = await openGrokModelMenu(context);
+    if (!root) return preferredModelResult(context, false, "Grok", modelId, "model menu not found", { retryable: true });
     const maybeItem = findGrokModelItem(root, modelId, { includeUnavailable: true });
     if (maybeItem && grokModelItemLooksUnavailable(maybeItem, modelId)) {
-      await closeFloatingModelMenuAndWait(() => grokModelMenuRoot(), 700);
-      return modelResult(true, "Grok", modelId, "", { skipped: true, unavailable: true });
+      const menuClosed = await dismissPreferredModelMenu(context, () => grokModelMenuRoot());
+      return preferredModelResult(context, true, "Grok", modelId, "", { skipped: true, unavailable: true, menuClosed });
     }
     const item = maybeItem || findGrokModelItem(root, modelId);
-    if (!item) return modelResult(false, "Grok", modelId, "target model item not found");
-    if (!modelClick(item)) return modelResult(false, "Grok", modelId, "target model item could not be clicked");
-    const settled = await waitGrokModelSettled(modelId);
+    if (!item) {
+      const menuClosed = await dismissPreferredModelMenu(context, () => grokModelMenuRoot());
+      return preferredModelResult(context, false, "Grok", modelId, "target model item not found", { menuClosed });
+    }
+    if (!preferredModelActivate(context, item)) {
+      const menuClosed = await dismissPreferredModelMenu(context, () => grokModelMenuRoot());
+      return preferredModelResult(context, false, "Grok", modelId, "target model item could not be clicked", { menuClosed });
+    }
+    const settled = await waitGrokModelSettled(context, modelId);
+    const menuClosed = await dismissPreferredModelMenu(context, () => grokModelMenuRoot());
     return settled
-      ? modelResult(true, "Grok", modelId)
-      : modelResult(false, "Grok", modelId, "selection did not settle");
+      ? preferredModelResult(context, true, "Grok", modelId, "", { changed: true, menuClosed })
+      : preferredModelResult(context, false, "Grok", modelId, "selection did not settle", { menuClosed });
   }
 
   const NOTION_MODEL_TARGETS = Object.freeze({
@@ -6502,12 +6751,12 @@
     return roots[0]?.element || null;
   }
 
-  async function openNotionModelMenu(trigger) {
+  async function openNotionModelMenu(context, trigger) {
+    assertPreferredModelRun(context);
     const existing = notionModelMenuRoot(trigger);
     if (existing) return existing;
-    if (!trigger || !modelClick(trigger)) return null;
-    await sleep(120);
-    return waitForModel(() => notionModelMenuRoot(trigger), 3000, 120);
+    if (!trigger || !preferredModelActivate(context, trigger)) return null;
+    return waitForPreferredModel(context, () => notionModelMenuRoot(trigger), 3000, 120);
   }
 
   function notionMenuItemRow(element, root, matchesSpec = null) {
@@ -6712,89 +6961,72 @@
     return notionModelIdFromText(modelElementText(triggerElement));
   }
 
-  async function waitNotionReadableCurrentModelId(trigger = null, timeoutMs = 2200) {
+  async function waitNotionReadableCurrentModelId(context, trigger = null, timeoutMs = 2200) {
     const deadline = Date.now() + Math.max(0, Number(timeoutMs) || 0);
     while (Date.now() <= deadline) {
+      assertPreferredModelRun(context);
       const current = currentNotionModelId(trigger);
       if (current) return current;
-      await sleep(120);
+      await preferredModelSleep(context, 120);
     }
+    assertPreferredModelRun(context);
     return currentNotionModelId(trigger);
   }
 
-  async function closeNotionModelMenu(trigger = null) {
-    const getRoot = () => notionModelMenuRoot(trigger);
-    if (!getRoot()) return true;
-    if (await closeFloatingModelMenuAndWait(getRoot, 900)) return true;
-    const activeTrigger = trigger && visible(trigger) ? trigger : findNotionModelTrigger();
-    if (activeTrigger && getRoot() && modelClick(activeTrigger)) {
-      await sleep(160);
-      if (!getRoot()) return true;
-    }
-    const composer = findNotionComposerRoot();
-    if (composer && getRoot() && modelClick(composer)) {
-      await sleep(160);
-      if (!getRoot()) return true;
-    }
-    return closeFloatingModelMenuAndWait(getRoot, 500);
+  async function closeNotionModelMenu(context, trigger = null) {
+    return dismissPreferredModelMenu(context, () => notionModelMenuRoot(trigger), 900);
   }
 
-  async function waitNotionModelSettled(modelId, trigger) {
+  async function waitNotionModelSettled(context, modelId, trigger) {
     const deadline = Date.now() + 3000;
     while (Date.now() <= deadline) {
+      assertPreferredModelRun(context);
       const current = currentNotionModelId(trigger);
       if (current && current === modelId) return true;
-      await sleep(120);
+      await preferredModelSleep(context, 120);
     }
+    assertPreferredModelRun(context);
     const final = currentNotionModelId(trigger);
     return final === modelId;
   }
 
-  async function applyNotionPreferredModel(modelId) {
-    if (!NOTION_MODEL_TARGETS[modelId]) return modelResult(false, "NotionAI", modelId, "unknown model");
-    if ((await waitNotionReadableCurrentModelId(null, 1600)) === modelId) {
-      const menuClosed = await closeNotionModelMenu();
-      return modelResult(true, "NotionAI", modelId, "", { skipped: true, menuClosed });
+  async function applyNotionPreferredModel(context, modelId) {
+    if (!NOTION_MODEL_TARGETS[modelId]) return preferredModelResult(context, false, "NotionAI", modelId, "unknown model");
+    if ((await waitNotionReadableCurrentModelId(context, null, 1600)) === modelId) {
+      const menuClosed = await closeNotionModelMenu(context);
+      return preferredModelResult(context, true, "NotionAI", modelId, "", { skipped: true, menuClosed });
     }
-    const trigger = await waitForModel(findNotionModelTrigger, 10000, 150);
+    const trigger = await waitForPreferredModel(context, findNotionModelTrigger, 10000, 150);
     if (!trigger) {
-      await closeNotionModelMenu();
-      return modelResult(false, "NotionAI", modelId, "model trigger not found");
+      await closeNotionModelMenu(context);
+      return preferredModelResult(context, false, "NotionAI", modelId, "model trigger not found", { retryable: true });
     }
-    if ((await waitNotionReadableCurrentModelId(trigger, 2200)) === modelId) {
-      const menuClosed = await closeNotionModelMenu(trigger);
-      return modelResult(true, "NotionAI", modelId, "", { skipped: true, menuClosed });
+    if ((await waitNotionReadableCurrentModelId(context, trigger, 2200)) === modelId) {
+      const menuClosed = await closeNotionModelMenu(context, trigger);
+      return preferredModelResult(context, true, "NotionAI", modelId, "", { skipped: true, menuClosed });
     }
-    const root = await openNotionModelMenu(trigger);
+    const root = await openNotionModelMenu(context, trigger);
     if (!root) {
-      await closeNotionModelMenu(trigger);
-      return modelResult(false, "NotionAI", modelId, "model menu not found");
+      await closeNotionModelMenu(context, trigger);
+      return preferredModelResult(context, false, "NotionAI", modelId, "model menu not found", { retryable: true });
     }
     if (currentNotionModelId(trigger) === modelId) {
-      const menuClosed = await closeNotionModelMenu(trigger);
-      return modelResult(true, "NotionAI", modelId, "", { skipped: true, menuClosed });
+      const menuClosed = await closeNotionModelMenu(context, trigger);
+      return preferredModelResult(context, true, "NotionAI", modelId, "", { skipped: true, menuClosed });
     }
     const item = findNotionModelItem(root, modelId);
     if (!item) {
-      await closeNotionModelMenu(trigger);
-      return modelResult(false, "NotionAI", modelId, "target model item not found");
+      const menuClosed = await closeNotionModelMenu(context, trigger);
+      return preferredModelResult(context, false, "NotionAI", modelId, "target model item not found", { menuClosed });
     }
-    let clicked = modelClick(item);
-    let settled = clicked ? await waitNotionModelSettled(modelId, trigger) : false;
-    if (!settled) {
-      const retryRoot = notionModelMenuRoot(trigger) || root;
-      const pointTarget = retryRoot ? findNotionModelItemPointTarget(item, retryRoot, modelId) : null;
-      if (pointTarget && pointTarget !== item && modelClick(pointTarget)) {
-        clicked = true;
-        settled = await waitNotionModelSettled(modelId, trigger);
-      }
-    }
-    const menuClosed = await closeNotionModelMenu(trigger);
+    const clicked = preferredModelActivate(context, item);
+    let settled = clicked ? await waitNotionModelSettled(context, modelId, trigger) : false;
+    const menuClosed = await closeNotionModelMenu(context, trigger);
     if (!settled && currentNotionModelId(trigger) === modelId) settled = true;
-    if (!clicked) return modelResult(false, "NotionAI", modelId, "target model item could not be clicked", { menuClosed });
+    if (!clicked) return preferredModelResult(context, false, "NotionAI", modelId, "target model item could not be clicked", { menuClosed });
     return settled
-      ? modelResult(true, "NotionAI", modelId, "", { menuClosed })
-      : modelResult(false, "NotionAI", modelId, "selection did not settle", { menuClosed });
+      ? preferredModelResult(context, true, "NotionAI", modelId, "", { changed: true, menuClosed })
+      : preferredModelResult(context, false, "NotionAI", modelId, "selection did not settle", { menuClosed });
   }
 
   const DEEPSEEK_MODE_TARGETS = Object.freeze({
@@ -6911,83 +7143,37 @@
     return matches[0]?.element || null;
   }
 
-  function dispatchDeepSeekMouseClick(target) {
-    if (!target) return false;
-    const point = modelCenterPoint(target);
-    const MouseEventCtor = modelEventConstructor("MouseEvent", target);
-    if (!point || typeof MouseEventCtor !== "function") return false;
-    const view = modelEventView(target);
-    const common = {
-      bubbles: true,
-      cancelable: true,
-      composed: true,
-      view: view || null,
-      clientX: point.x,
-      clientY: point.y,
-      screenX: point.x,
-      screenY: point.y,
-      button: 0
-    };
-    let dispatched = false;
-    for (const plan of [
-      ["mouseover", { buttons: 0, detail: 0 }],
-      ["mousemove", { buttons: 0, detail: 0 }],
-      ["mousedown", { buttons: 1, detail: 1 }],
-      ["mouseup", { buttons: 0, detail: 1 }],
-      ["click", { buttons: 0, detail: 1 }]
-    ]) {
-      try {
-        target.dispatchEvent(new MouseEventCtor(plan[0], { ...common, ...plan[1] }));
-        dispatched = true;
-      } catch {}
-    }
-    return dispatched;
+  function clickDeepSeekMode(context, element) {
+    const target = deepSeekModeClickableElement(element);
+    return preferredModelActivate(context, target);
   }
 
-  function clickDeepSeekMode(element) {
-    if (!element || !visible(element) || isDisabledElement(element)) return false;
-    try { element.scrollIntoView?.({ block: "center", inline: "nearest" }); } catch {}
-    const targets = [
-      element,
-      modelElementFromPoint(modelCenterPoint(element), element),
-      deepSeekModeClickableElement(element)
-    ].filter(Boolean);
-    let clicked = false;
-    const seen = new Set();
-    for (const target of targets) {
-      if (!target || seen.has(target) || !visible(target) || isDisabledElement(target)) continue;
-      seen.add(target);
-      try { target.focus?.({ preventScroll: true }); } catch {
-        try { target.focus?.(); } catch {}
-      }
-      clicked = nativeModelClick(target) || clicked;
-      clicked = dispatchDeepSeekMouseClick(target) || clicked;
-    }
-    return clicked;
-  }
-
-  async function waitDeepSeekModeSettled(modeId) {
+  async function waitDeepSeekModeSettled(context, modeId) {
     const deadline = Date.now() + 2500;
     while (Date.now() <= deadline) {
+      assertPreferredModelRun(context);
       if (currentDeepSeekModeId() === modeId) return true;
-      await sleep(100);
+      await preferredModelSleep(context, 100);
     }
+    assertPreferredModelRun(context);
     return currentDeepSeekModeId() === modeId;
   }
 
-  async function applyDeepSeekPreferredModel(modeId) {
-    if (!DEEPSEEK_MODE_TARGETS[modeId]) return modelResult(false, "DeepSeek", modeId, "unknown mode");
-    const current = await waitForModel(currentDeepSeekModeId, 10000, 150);
-    if (current === modeId) return modelResult(true, "DeepSeek", modeId, "", { skipped: true });
-    const target = await waitForModel(() => findDeepSeekModeTarget(modeId), 10000, 150);
-    if (!target) return modelResult(false, "DeepSeek", modeId, "target mode not found");
-    if (!clickDeepSeekMode(target)) return modelResult(false, "DeepSeek", modeId, "target mode could not be clicked");
-    return (await waitDeepSeekModeSettled(modeId))
-      ? modelResult(true, "DeepSeek", modeId)
-      : modelResult(false, "DeepSeek", modeId, "selection did not settle", { current: currentDeepSeekModeId() });
+  async function applyDeepSeekPreferredModel(context, modeId) {
+    if (!DEEPSEEK_MODE_TARGETS[modeId]) return preferredModelResult(context, false, "DeepSeek", modeId, "unknown mode");
+    await waitForPreferredModel(context, () => currentDeepSeekModeId() || (deepSeekModeCandidates().length ? "ready" : ""), 10000, 150);
+    const current = currentDeepSeekModeId();
+    if (current === modeId) return preferredModelResult(context, true, "DeepSeek", modeId, "", { skipped: true });
+    const target = await waitForPreferredModel(context, () => findDeepSeekModeTarget(modeId), 10000, 150);
+    if (!target) return preferredModelResult(context, false, "DeepSeek", modeId, "target mode not found", { retryable: true });
+    if (!clickDeepSeekMode(context, target)) return preferredModelResult(context, false, "DeepSeek", modeId, "target mode could not be clicked");
+    return (await waitDeepSeekModeSettled(context, modeId))
+      ? preferredModelResult(context, true, "DeepSeek", modeId, "", { changed: true })
+      : preferredModelResult(context, false, "DeepSeek", modeId, "selection did not settle", { current: currentDeepSeekModeId() });
   }
 
-  async function applyPreferredModel(data = {}) {
+  async function applyPreferredModel(context, data = {}) {
+    assertPreferredModelRun(context);
     const rawAppId = String(data.appId || "").trim();
     const appId = ({
       "GrokMirror": "Grok",
@@ -6996,12 +7182,78 @@
       "Notion AI": "NotionAI"
     })[rawAppId] || rawAppId;
     const modelId = String(data.modelId || "").trim();
-    if (!appId || !modelId) return modelResult(true, appId || "unknown", modelId, "", { skipped: true });
-    if (appId === "Gemini") return applyGeminiPreferredModel(modelId, { thinkingLevel: data.thinkingLevel });
-    if (appId === "Grok") return applyGrokPreferredModel(modelId);
-    if (appId === "DeepSeek") return applyDeepSeekPreferredModel(modelId);
-    if (appId === "NotionAI") return applyNotionPreferredModel(modelId);
-    return modelResult(true, appId, modelId, "", { skipped: true, unsupported: true });
+    if (!appId || !modelId) return preferredModelResult(context, true, appId || "unknown", modelId, "", { skipped: true });
+    if (appId === "Gemini") return applyGeminiPreferredModel(context, modelId, { thinkingLevel: data.thinkingLevel });
+    if (appId === "Grok") return applyGrokPreferredModel(context, modelId);
+    if (appId === "DeepSeek") return applyDeepSeekPreferredModel(context, modelId);
+    if (appId === "NotionAI") return applyNotionPreferredModel(context, modelId);
+    return preferredModelResult(context, true, appId, modelId, "", { skipped: true, unsupported: true });
+  }
+
+  async function runPreferredModelApply(data = {}) {
+    const runId = String(data.runId || `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    abortActivePreferredModelRun("superseded by a newer preferred model run");
+    const controller = new AbortController();
+    const context = {
+      runId,
+      controller,
+      signal: controller.signal,
+      bridgeGeneration: nextPreferredModelBridgeRunSequence(),
+      bridgeToken: "",
+      bridgeReleased: false,
+      focusShieldGeneration: 0,
+      focusShieldValue: "",
+      focusShieldReleaseScheduled: false,
+      interactionCount: 0,
+      abortKind: "",
+      abortReason: ""
+    };
+    activePreferredModelRun = context;
+    publishPreferredModelBridgeRun(context);
+    const timeoutMs = Math.max(1000, Math.min(14000, Number(data.timeoutMs) || 12000));
+    const timeout = setTimeout(() => {
+      abortActivePreferredModelRun("preferred model apply timed out", runId);
+    }, timeoutMs);
+    const rawAppId = String(data.appId || "").trim();
+    const appId = ({
+      "GrokMirror": "Grok",
+      "Grok Mirror": "Grok",
+      "DeepSeek AI": "DeepSeek",
+      "Notion AI": "NotionAI"
+    })[rawAppId] || rawAppId || "unknown";
+    const modelId = String(data.modelId || "").trim();
+    try {
+      return await applyPreferredModel(context, data);
+    } catch (error) {
+      const cancelled = Boolean(error?.preferredModelCancelled || preferredModelCancelled(context));
+      if (cancelled) {
+        const timedOut = context.abortKind === "timeout";
+        return preferredModelResult(context, false, appId, modelId, error?.message || preferredModelAbortReason(context), {
+          cancelled: !timedOut,
+          retryable: timedOut
+        });
+      }
+      return preferredModelResult(context, false, appId, modelId, error?.message || String(error));
+    } finally {
+      clearTimeout(timeout);
+      releasePreferredModelBridgeRun(context);
+      if (activePreferredModelRun === context) activePreferredModelRun = null;
+    }
+  }
+
+  function cancelPreferredModelApply(data = {}) {
+    const runId = String(data.runId || "");
+    const active = activePreferredModelRun;
+    const appId = String(data.appId || active?.appId || "unknown");
+    const modelId = String(data.modelId || active?.modelId || "");
+    const reason = String(data.reason || "preferred model apply cancelled");
+    const cancelled = abortActivePreferredModelRun(reason, runId);
+    return modelResult(true, appId, modelId, cancelled ? reason : "preferred model run is not active", {
+      runId,
+      skipped: !cancelled,
+      cancelled,
+      interactionCount: active?.interactionCount || 0
+    });
   }
 
   const inlineSummaryUserscriptCache = new Map();
@@ -7102,25 +7354,31 @@
     const message = event.data;
     const versionedDeleteRequest = message?.source === DELETE_THREAD_POST_MESSAGE_SOURCE;
     const versionedSendTextRequest = message?.source === SEND_TEXT_POST_MESSAGE_SOURCE;
+    const versionedPreferredModelRequest = message?.source === PREFERRED_MODEL_POST_MESSAGE_SOURCE;
     const versionedNavigatorRequest = message?.source === MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE;
     const versionedSummaryRequest = message?.source === SUMMARY_POST_MESSAGE_SOURCE;
     const genericRequest = message?.source === SOURCE;
-    if ((!versionedDeleteRequest && !versionedSendTextRequest && !versionedNavigatorRequest && !versionedSummaryRequest && !genericRequest) || message.type !== "request") return;
+    if ((!versionedDeleteRequest && !versionedSendTextRequest && !versionedPreferredModelRequest && !versionedNavigatorRequest && !versionedSummaryRequest && !genericRequest) || message.type !== "request") return;
     if (versionedSendTextRequest && !contentBridgeIsCurrent()) return;
+    if (versionedPreferredModelRequest && !contentBridgeIsCurrent()) return;
     if (genericRequest && hadContentBridge) return;
+    if (genericRequest && ["applyPreferredModel", "cancelPreferredModelApply"].includes(message.action)) return;
     if (versionedDeleteRequest && message.action !== "deleteThread" && message.action !== "getDeleteConfirmState") return;
     if (versionedSendTextRequest && message.action !== "sendText") return;
+    if (versionedPreferredModelRequest && !["applyPreferredModel", "cancelPreferredModelApply"].includes(message.action)) return;
     if (versionedNavigatorRequest && !["setMessageNavigator", "hideMessageNavigatorMenu", "getMessageNavigatorState"].includes(message.action)) return;
     if (versionedSummaryRequest && !["getLocationHref", "getPageMeta", "getPageText", "collectSummary"].includes(message.action)) return;
     const responseSource = versionedDeleteRequest
       ? DELETE_THREAD_POST_MESSAGE_SOURCE
       : versionedSendTextRequest
         ? SEND_TEXT_POST_MESSAGE_SOURCE
-        : versionedNavigatorRequest
-          ? MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE
-          : versionedSummaryRequest
-            ? SUMMARY_POST_MESSAGE_SOURCE
-            : SOURCE;
+        : versionedPreferredModelRequest
+          ? PREFERRED_MODEL_POST_MESSAGE_SOURCE
+          : versionedNavigatorRequest
+            ? MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE
+            : versionedSummaryRequest
+              ? SUMMARY_POST_MESSAGE_SOURCE
+              : SOURCE;
     try {
       let data;
       if (message.action === "getLocationHref") data = location.href;
@@ -7130,7 +7388,8 @@
       else if (message.action === "newChatPreprocess") data = { ok: true };
       else if (message.action === "deleteThread") data = await deleteThread(message.data || {});
       else if (message.action === "getDeleteConfirmState") data = topicDeleteConfirmState(message.data?.site || "topic-delete");
-      else if (message.action === "applyPreferredModel") data = await applyPreferredModel(message.data || {});
+      else if (message.action === "applyPreferredModel") data = await runPreferredModelApply(message.data || {});
+      else if (message.action === "cancelPreferredModelApply") data = cancelPreferredModelApply(message.data || {});
       else if (message.action === "collectSummary") data = await collectSummary(message.data || {});
       else if (message.action === "setMessageNavigator") data = setMessageNavigator(message.data || {});
       else if (message.action === "hideMessageNavigatorMenu") data = hideMessageNavigatorMenu();

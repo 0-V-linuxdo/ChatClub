@@ -29,6 +29,7 @@ import {
   normalizeTabGroupButtonPlacement,
   normalizeTabGroupButtonOrder,
   normalizeModelPreferenceOrder,
+  normalizeFrameToastPosition,
   normalizePromptImagePasteStrategy,
   normalizePrimaryColor,
   normalizeTopbarPromptPlaceholderConfig,
@@ -43,6 +44,7 @@ import {
   button,
   clear,
   el,
+  FRAME_TOAST_POSITION_EVENT,
   field,
   input,
   modal,
@@ -69,6 +71,7 @@ export function createSettingsController(ctx) {
     svgIcon,
     syncPromptInputNode,
     setPromptImages = () => [],
+    ensurePromptInputReady = () => true,
     notifyConfigReload,
     render,
     syncTopbar = () => {},
@@ -103,6 +106,7 @@ export function createSettingsController(ctx) {
   let appearanceAutoSaveRedraw = null;
   let appearanceColorSaveTimer = 0;
   let appearanceColorSavePending = "";
+  let appearancePaneCleanup = () => {};
   let modelPreferenceAutoSaveError = null;
   let modelPreferenceAutoSaveRunning = false;
   let modelPreferenceAutoSavePending = null;
@@ -123,10 +127,13 @@ export function createSettingsController(ctx) {
   async function flushAppearanceAutoSave() {
     if (appearanceAutoSaveRunning) return;
     appearanceAutoSaveRunning = true;
+    let settleAppearanceSave = null;
     try {
       while (appearanceAutoSavePending) {
         const patch = appearanceAutoSavePending;
         const redraw = appearanceAutoSaveRedraw;
+        const frameToastPositionOnly = Object.keys(patch).every((key) => key === "frameToastPosition");
+        settleAppearanceSave = redraw;
         appearanceAutoSavePending = null;
         appearanceAutoSaveRedraw = null;
         state.options = await saveOptions({
@@ -136,14 +143,18 @@ export function createSettingsController(ctx) {
         appearanceAutoSaveError = null;
         syncI18nLanguage();
         applyTheme();
-        syncTopbar();
-        syncWorkspaceDom();
-        syncSummaryPanel();
+        if (!frameToastPositionOnly) {
+          syncTopbar();
+          syncWorkspaceDom();
+          syncSummaryPanel();
+        }
         redraw?.();
+        settleAppearanceSave = null;
       }
     } catch (error) {
       appearanceAutoSaveError = error;
       console.warn("[ChatClub] Failed to auto-save appearance settings", error);
+      settleAppearanceSave?.();
       toast(t("toast.appearanceAutoSaveFailed"), "error");
     } finally {
       appearanceAutoSaveRunning = false;
@@ -201,6 +212,9 @@ export function createSettingsController(ctx) {
     state.modelPreferenceDraft = next;
     modelPreferenceAutoSavePending = next;
     if (typeof options.redraw === "function") modelPreferenceAutoSaveRedraw = options.redraw;
+    Promise.resolve(applyPreferredModels(null, { immediate: true })).catch((error) => {
+      console.warn("[ChatClub] Failed to apply pending model preferences", error);
+    });
     flushModelPreferenceAutoSave();
   }
 
@@ -549,8 +563,11 @@ export function createSettingsController(ctx) {
       state.settingsTabGroupButtonPlacementDraft = null;
       state.settingsTabGroupButtonOrderDraft = null;
       state.settingsTabGroupButtonDragId = "";
-      state.modelPreferenceDraft = null;
+      if (!modelPreferenceAutoSaveRunning && !modelPreferenceAutoSavePending && !modelPreferenceAutoSaveError) {
+        state.modelPreferenceDraft = null;
+      }
       cleanupTabGroupButtonDrag();
+      appearancePaneCleanup();
       closeActiveSettingsDialog = null;
       dialog.remove();
     };
@@ -569,6 +586,7 @@ export function createSettingsController(ctx) {
       modalSectionTitle
     ));
     const redraw = () => {
+      appearancePaneCleanup();
       clear(host);
       const section = settingsSectionMeta(active);
       clear(modalSectionTitle);
@@ -617,9 +635,19 @@ export function createSettingsController(ctx) {
   }
 
   function appearancePane(redraw = () => {}) {
+    const appearanceCleanupCallbacks = [];
+    let appearancePaneCleaned = false;
+    appearancePaneCleanup = () => {
+      if (appearancePaneCleaned) return;
+      appearancePaneCleaned = true;
+      for (const cleanup of appearanceCleanupCallbacks.splice(0)) {
+        try { cleanup(); } catch {}
+      }
+      appearancePaneCleanup = () => {};
+    };
     let primaryColorDraft = normalizePrimaryColor(state.options.primaryColor);
     const colorHexPattern = /^#?[0-9a-f]{3}(?:[0-9a-f]{3})?$/i;
-    const appearanceTabIds = new Set(["workspace", "topbar", "tabGroup", "tooltips"]);
+    const appearanceTabIds = new Set(["workspace", "frameToast", "topbar", "tabGroup", "tooltips"]);
     if (!appearanceTabIds.has(state.settingsAppearanceTab)) state.settingsAppearanceTab = "workspace";
     const themeMode = select(state.options.themeMode || "system", [
       { value: "system", label: t("appearance.followSystem") },
@@ -743,6 +771,256 @@ export function createSettingsController(ctx) {
       el("small", { class: "appearance-range-help" }, t("appearance.loadingOverlayHelp"))
     );
     const appearanceRow = (node) => el("div", { class: "appearance-field-row" }, node);
+    const frameToastPositionBlock = () => {
+      const presets = [
+        { id: "top-left", x: 0, y: 15, label: t("appearance.frameToastTopLeft") },
+        { id: "top-center", x: 50, y: 15, label: t("appearance.frameToastTopCenter") },
+        { id: "top-right", x: 100, y: 15, label: t("appearance.frameToastTopRight") },
+        { id: "middle-left", x: 0, y: 50, label: t("appearance.frameToastMiddleLeft") },
+        { id: "center", x: 50, y: 50, label: t("appearance.frameToastCenter") },
+        { id: "middle-right", x: 100, y: 50, label: t("appearance.frameToastMiddleRight") },
+        { id: "bottom-left", x: 0, y: 100, label: t("appearance.frameToastBottomLeft") },
+        { id: "bottom-center", x: 50, y: 100, label: t("appearance.frameToastBottomCenter") },
+        { id: "bottom-right", x: 100, y: 100, label: t("appearance.frameToastBottomRight") }
+      ];
+      let draft = normalizeFrameToastPosition(state.options.frameToastPosition);
+      let commitSequence = 0;
+      let latestCommitToken = 0;
+      let deferredSettlementToken = 0;
+      let layoutFrame = 0;
+      let dragging = null;
+      let keyboardDirty = false;
+      let resizeObserver = null;
+      const coordinates = el("strong", { class: "frame-toast-position-coordinates" });
+      const sample = el("button", {
+        class: "frame-toast-position-sample",
+        type: "button",
+        draggable: "false"
+      },
+        el("span", { class: "frame-toast-position-sample-icon", "aria-hidden": "true" }),
+        el("span", { class: "frame-toast-position-sample-text" }, t("appearance.frameToastPreviewText"))
+      );
+      const previewBody = el("div", { class: "frame-toast-position-preview-body" }, sample);
+      const preview = el("div", { class: "frame-toast-position-preview" },
+        el("div", { class: "frame-toast-position-preview-header", "aria-hidden": "true" },
+          el("span", {}), el("span", {}), el("span", {})
+        ),
+        previewBody
+      );
+      const presetButtons = presets.map((preset) => el("button", {
+        class: "frame-toast-position-preset",
+        type: "button",
+        title: preset.label,
+        "aria-label": preset.label,
+        onclick: () => {
+          setDraft(preset);
+          commitDraft();
+        }
+      }, el("span", { "aria-hidden": "true" })));
+      const presetGrid = el("div", {
+        class: "frame-toast-position-presets",
+        role: "group",
+        "aria-label": t("appearance.frameToastPresets")
+      }, presetButtons);
+
+      const axisOffset = (containerSize, itemSize, percent) => {
+        const available = Math.max(0, containerSize - itemSize);
+        const inset = Math.min(8, available / 2);
+        const target = (containerSize * percent / 100) - (itemSize / 2);
+        return Math.max(inset, Math.min(available - inset, target));
+      };
+      const positionEquals = (left, right) => left.x === right.x && left.y === right.y;
+      const layoutPreview = () => {
+        layoutFrame = 0;
+        if (!previewBody.isConnected || !sample.isConnected) return;
+        const width = previewBody.clientWidth;
+        const height = previewBody.clientHeight;
+        const sampleWidth = sample.offsetWidth;
+        const sampleHeight = sample.offsetHeight;
+        if (width <= 0 || height <= 0 || sampleWidth <= 0 || sampleHeight <= 0) return;
+        sample.style.left = `${axisOffset(width, sampleWidth, draft.x)}px`;
+        sample.style.top = `${axisOffset(height, sampleHeight, draft.y)}px`;
+      };
+      const schedulePreviewLayout = () => {
+        if (layoutFrame) return;
+        layoutFrame = requestAnimationFrame(layoutPreview);
+      };
+      const syncDraftUi = () => {
+        coordinates.textContent = t("appearance.frameToastCoordinates", draft);
+        sample.setAttribute("aria-label", `${t("appearance.frameToastPreviewText")}. ${coordinates.textContent}. ${t("appearance.frameToastKeyboardHelp")}`);
+        sample.setAttribute("aria-valuetext", coordinates.textContent);
+        sample.dataset.x = String(draft.x);
+        sample.dataset.y = String(draft.y);
+        presetButtons.forEach((buttonNode, index) => {
+          const active = positionEquals(draft, presets[index]);
+          buttonNode.classList.toggle("active", active);
+          buttonNode.setAttribute("aria-pressed", String(active));
+        });
+        schedulePreviewLayout();
+      };
+      function setDraft(value) {
+        const next = normalizeFrameToastPosition(value);
+        if (positionEquals(next, draft)) return false;
+        draft = next;
+        syncDraftUi();
+        return true;
+      }
+      function restorePersistedDraft() {
+        draft = normalizeFrameToastPosition(state.options.frameToastPosition);
+        syncDraftUi();
+      }
+      function settleCommittedDraft(token) {
+        if (token !== latestCommitToken) return;
+        if (dragging || keyboardDirty) {
+          deferredSettlementToken = token;
+          return;
+        }
+        deferredSettlementToken = 0;
+        restorePersistedDraft();
+      }
+      function settleDeferredDraft() {
+        if (!deferredSettlementToken || dragging || keyboardDirty) return;
+        const token = deferredSettlementToken;
+        deferredSettlementToken = 0;
+        settleCommittedDraft(token);
+      }
+      function commitDraft() {
+        const next = normalizeFrameToastPosition(draft);
+        const saved = normalizeFrameToastPosition(state.options.frameToastPosition);
+        if (positionEquals(next, saved)) {
+          deferredSettlementToken = 0;
+          syncDraftUi();
+          return;
+        }
+        const token = ++commitSequence;
+        latestCommitToken = token;
+        deferredSettlementToken = 0;
+        queueAppearanceAutoSave({ frameToastPosition: next }, {
+          redraw: () => settleCommittedDraft(token)
+        });
+      }
+      const updateDraftFromPointer = (event) => {
+        const rect = previewBody.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return;
+        setDraft({
+          x: Math.round((event.clientX - rect.left) / rect.width * 100),
+          y: Math.round((event.clientY - rect.top) / rect.height * 100)
+        });
+      };
+      const updateDraftFromDrag = (event) => {
+        if (!dragging || dragging.source !== "sample") {
+          updateDraftFromPointer(event);
+          return;
+        }
+        const rect = previewBody.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return;
+        setDraft({
+          x: dragging.start.x + Math.round((event.clientX - dragging.startClientX) / rect.width * 100),
+          y: dragging.start.y + Math.round((event.clientY - dragging.startClientY) / rect.height * 100)
+        });
+      };
+      const finishPointerDrag = (event, cancelled = false) => {
+        if (!dragging || event.pointerId !== dragging.pointerId) return;
+        if (!cancelled) updateDraftFromDrag(event);
+        else setDraft(dragging.start);
+        const pointerId = dragging.pointerId;
+        dragging = null;
+        previewBody.classList.remove("dragging");
+        try { previewBody.releasePointerCapture(pointerId); } catch {}
+        if (!cancelled) commitDraft();
+        else settleDeferredDraft();
+      };
+      previewBody.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0 && event.pointerType !== "touch") return;
+        event.preventDefault();
+        const source = sample.contains(event.target) ? "sample" : "canvas";
+        dragging = {
+          pointerId: event.pointerId,
+          source,
+          start: { ...draft },
+          startClientX: event.clientX,
+          startClientY: event.clientY
+        };
+        previewBody.classList.add("dragging");
+        previewBody.setPointerCapture?.(event.pointerId);
+        if (source === "canvas") updateDraftFromPointer(event);
+        sample.focus({ preventScroll: true });
+      });
+      previewBody.addEventListener("pointermove", (event) => {
+        if (!dragging || event.pointerId !== dragging.pointerId) return;
+        event.preventDefault();
+        updateDraftFromDrag(event);
+      });
+      previewBody.addEventListener("pointerup", (event) => finishPointerDrag(event));
+      previewBody.addEventListener("pointercancel", (event) => finishPointerDrag(event, true));
+      previewBody.addEventListener("lostpointercapture", (event) => {
+        if (dragging && event.pointerId === dragging.pointerId) finishPointerDrag(event, true);
+      });
+      const arrowDelta = {
+        ArrowLeft: [-1, 0],
+        ArrowRight: [1, 0],
+        ArrowUp: [0, -1],
+        ArrowDown: [0, 1]
+      };
+      sample.addEventListener("keydown", (event) => {
+        const delta = arrowDelta[event.key];
+        if (!delta) return;
+        event.preventDefault();
+        const step = event.shiftKey ? 5 : 1;
+        keyboardDirty = setDraft({ x: draft.x + delta[0] * step, y: draft.y + delta[1] * step }) || keyboardDirty;
+      });
+      sample.addEventListener("keyup", (event) => {
+        if (!arrowDelta[event.key] || !keyboardDirty) return;
+        keyboardDirty = false;
+        commitDraft();
+        settleDeferredDraft();
+      });
+      sample.addEventListener("blur", () => {
+        if (!keyboardDirty) return;
+        keyboardDirty = false;
+        commitDraft();
+        settleDeferredDraft();
+      });
+      if (typeof ResizeObserver === "function") {
+        resizeObserver = new ResizeObserver(schedulePreviewLayout);
+        resizeObserver.observe(previewBody);
+        resizeObserver.observe(sample);
+      }
+      const syncSavedPosition = (event) => {
+        if (dragging || keyboardDirty) return;
+        draft = normalizeFrameToastPosition(event?.detail || state.options.frameToastPosition);
+        syncDraftUi();
+      };
+      document.addEventListener(FRAME_TOAST_POSITION_EVENT, syncSavedPosition);
+      appearanceCleanupCallbacks.push(() => {
+        if (layoutFrame) cancelAnimationFrame(layoutFrame);
+        layoutFrame = 0;
+        resizeObserver?.disconnect?.();
+        resizeObserver = null;
+        document.removeEventListener(FRAME_TOAST_POSITION_EVENT, syncSavedPosition);
+        if (dragging) {
+          try { previewBody.releasePointerCapture(dragging.pointerId); } catch {}
+          dragging = null;
+        }
+      });
+      syncDraftUi();
+      return settingsBlock(t("appearance.frameToastPosition"), t("appearance.frameToastPositionDesc"),
+        el("div", { class: "frame-toast-position-editor" },
+          el("div", { class: "frame-toast-position-preview-column" },
+            preview,
+            el("div", { class: "frame-toast-position-readout" },
+              coordinates,
+              el("small", {}, t("appearance.frameToastDragHelp"))
+            )
+          ),
+          el("div", { class: "frame-toast-position-preset-column" },
+            el("strong", { class: "frame-toast-position-preset-title" }, t("appearance.frameToastPresets")),
+            presetGrid,
+            el("small", { class: "settings-muted-help" }, t("appearance.frameToastKeyboardHelp"))
+          )
+        )
+      );
+    };
     const saveTooltipToggle = async (targetId, enabled, inputNode) => {
       const current = new Set(state.options.tooltipDisabledIds || []);
       if (enabled) current.delete(targetId);
@@ -963,16 +1241,19 @@ export function createSettingsController(ctx) {
         )
       )
     );
-    const activeAppearancePane = state.settingsAppearanceTab === "topbar"
-      ? topbarLayoutBlock(redraw)
-      : state.settingsAppearanceTab === "tabGroup"
-        ? tabGroupBlock()
-        : state.settingsAppearanceTab === "tooltips"
-          ? tooltipBlock()
-          : workspaceBlock();
+    const activeAppearancePane = state.settingsAppearanceTab === "frameToast"
+      ? frameToastPositionBlock()
+      : state.settingsAppearanceTab === "topbar"
+        ? topbarLayoutBlock(redraw)
+        : state.settingsAppearanceTab === "tabGroup"
+          ? tabGroupBlock()
+          : state.settingsAppearanceTab === "tooltips"
+            ? tooltipBlock()
+            : workspaceBlock();
     return el("div", { class: "settings-pane appearance-settings-pane" },
       settingsInnerTabs([
         ["workspace", t("appearance.workspace"), t("appearance.workspaceTabDesc")],
+        ["frameToast", t("appearance.frameToastTab"), t("appearance.frameToastTabDesc")],
         ["topbar", t("topbar.customize.title"), t("topbar.customize.tabDesc")],
         ["tabGroup", t("appearance.tabGroup"), t("appearance.tabGroupTabDesc")],
         ["tooltips", t("appearance.buttonTooltips"), t("appearance.buttonTooltipsTabDesc")]
@@ -3402,6 +3683,7 @@ export function createSettingsController(ctx) {
 
   function insertPromptHistoryItem(item) {
     if (!item?.text && !item?.images?.length) return;
+    if (!ensurePromptInputReady()) return;
     state.promptText = String(item.text || "");
     state.promptSelection = {
       start: state.promptText.length,
@@ -3522,6 +3804,7 @@ export function createSettingsController(ctx) {
     createId,
     savePromptLibrary,
     syncPromptInputNode,
+    ensurePromptInputReady,
     settingsActions,
     settingsDragHandle,
     settingsEmptyRow,

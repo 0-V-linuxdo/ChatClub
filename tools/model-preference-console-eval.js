@@ -89,15 +89,12 @@
   function click(el) {
     if (!el || !visible(el)) return false;
     try { el.scrollIntoView({ block: "center", inline: "nearest" }); } catch {}
-    const rect = el.getBoundingClientRect();
-    const x = Math.max(1, Math.min(window.innerWidth - 1, rect.left + rect.width / 2));
-    const y = Math.max(1, Math.min(window.innerHeight - 1, rect.top + rect.height / 2));
-    const opts = { bubbles: true, cancelable: true, composed: true, view: window, clientX: x, clientY: y, button: 0 };
-    try { el.click?.(); } catch {}
-    for (const type of ["mouseover", "mousemove", "mousedown", "mouseup", "click"]) {
-      el.dispatchEvent(new MouseEvent(type, type.includes("down") ? { ...opts, buttons: 1 } : opts));
+    try {
+      el.click();
+      return true;
+    } catch {
+      return false;
     }
-    return true;
   }
 
   async function waitSettled(modeId) {

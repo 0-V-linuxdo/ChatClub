@@ -1,6 +1,16 @@
 (() => {
   const COPY_SOURCE = "chatclub-native-copy:2026.07.08.13";
-  const GEMINI_MODEL_PICKER_SOURCE = "chatclub-gemini-model-picker";
+  const GEMINI_MODEL_PICKER_BRIDGE_VERSION = "2026.07.13.3";
+  const GEMINI_MODEL_PICKER_SOURCE = "chatclub-gemini-model-picker:2026.07.13.3";
+  const GEMINI_MODEL_PICKER_RUN_TOKEN_ATTRIBUTE = "data-chatclub-gemini-model-picker-run";
+  const PREFERRED_MODEL_FOCUS_SHIELD_ATTRIBUTE = "data-chatclub-preferred-model-focus-shield";
+  const PREFERRED_MODEL_FOCUS_SHIELD_VERSION = "2026.07.13.7";
+  const NAVIGATION_FOCUS_GUARD_SOURCE = "chatclub:navigation-focus-guard:2026.07.13.3";
+  const NAVIGATION_FOCUS_GUARD_BRIDGE_VERSION = "2026.07.13.3";
+  const NAVIGATION_FOCUS_GUARD_STORAGE_KEY = "chatclub_preferred_model_focus_guard_until";
+  const NAVIGATION_FOCUS_GUARD_LEASE_MS = 180000;
+  const MAIN_WORLD_LOCATION_BRIDGE_VERSION = "2026.07.13.2";
+  const MAIN_WORLD_LOCATION_SOURCE = "chatclub:main-world-location:2026.07.13.2";
   const DEEPSEEK_DELETE_BRIDGE_VERSION = "2026.07.03.30";
   const DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.07.03.30";
 
@@ -57,10 +67,439 @@
     } catch {}
   }
 
+  function preferredModelFocusShieldLease() {
+    let raw = "";
+    try { raw = String(document.documentElement?.getAttribute(PREFERRED_MODEL_FOCUS_SHIELD_ATTRIBUTE) || ""); } catch {}
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      const token = String(parsed?.token || "");
+      const generation = Math.max(0, Number(parsed?.generation) || 0);
+      const expiresAt = Number(parsed?.expiresAt);
+      if (!token || !Number.isFinite(expiresAt) || expiresAt <= 0) return { raw, invalid: true };
+      return { raw, token, generation, expiresAt, invalid: false };
+    } catch {
+      return { raw, invalid: true };
+    }
+  }
+
+  function removePreferredModelFocusShieldLease(raw = "") {
+    try {
+      const root = document.documentElement;
+      if (!root) return;
+      if (!raw || root.getAttribute(PREFERRED_MODEL_FOCUS_SHIELD_ATTRIBUTE) === raw) {
+        root.removeAttribute(PREFERRED_MODEL_FOCUS_SHIELD_ATTRIBUTE);
+      }
+    } catch {}
+  }
+
+  function shortenPreferredModelFocusShieldLease(graceMs = 500) {
+    const lease = preferredModelFocusShieldLease();
+    if (!lease) return;
+    if (lease.invalid || lease.expiresAt <= Date.now()) {
+      removePreferredModelFocusShieldLease(lease.raw);
+      return;
+    }
+    const expiresAt = Math.min(lease.expiresAt, Date.now() + Math.max(0, Number(graceMs) || 0));
+    if (expiresAt >= lease.expiresAt) return;
+    const value = JSON.stringify({ token: lease.token, generation: lease.generation, expiresAt });
+    try {
+      if (document.documentElement?.getAttribute(PREFERRED_MODEL_FOCUS_SHIELD_ATTRIBUTE) === lease.raw) {
+        document.documentElement.setAttribute(PREFERRED_MODEL_FOCUS_SHIELD_ATTRIBUTE, value);
+      }
+    } catch {}
+  }
+
+  function consumePreferredModelBootstrapFocusShield() {
+    let expiresAt = 0;
+    let guardToken = "";
+    try {
+      const rawName = String(window.name || "");
+      const marker = rawName.match(/(?:^|&)chatclub_focus_guard_until=(\d+)&chatclub_focus_guard_token=([^&]+)$/);
+      if (marker) {
+        expiresAt = Math.max(expiresAt, Number(marker[1]) || 0);
+        guardToken = decodeURIComponent(marker[2] || "");
+        window.name = rawName.slice(0, marker.index);
+      } else {
+        const legacyMarker = rawName.match(/(?:^|&)chatclub_focus_guard_until=(\d+)$/);
+        if (legacyMarker) {
+          expiresAt = Math.max(expiresAt, Number(legacyMarker[1]) || 0);
+          window.name = rawName.slice(0, legacyMarker.index);
+        }
+      }
+    } catch {}
+    try {
+      const stored = String(sessionStorage.getItem(NAVIGATION_FOCUS_GUARD_STORAGE_KEY) || "");
+      try {
+        const parsed = JSON.parse(stored);
+        if (Number(parsed?.expiresAt) > expiresAt) {
+          expiresAt = Number(parsed.expiresAt);
+          guardToken = String(parsed.guardToken || guardToken);
+        }
+      } catch {
+        expiresAt = Math.max(expiresAt, Number(stored) || 0);
+      }
+      sessionStorage.removeItem(NAVIGATION_FOCUS_GUARD_STORAGE_KEY);
+    } catch {}
+    const now = Date.now();
+    if (!Number.isFinite(expiresAt) || expiresAt <= now) return { expiresAt: 0, guardToken: "" };
+    return {
+      expiresAt: Math.min(expiresAt, now + NAVIGATION_FOCUS_GUARD_LEASE_MS),
+      guardToken
+    };
+  }
+
+  function installPreferredModelNavigationFocusGuardBridge() {
+    const registryKey = "__CHATCLUB_PREFERRED_MODEL_NAVIGATION_FOCUS_GUARD_BRIDGE__";
+    const previous = window[registryKey];
+    if (previous?.version === NAVIGATION_FOCUS_GUARD_BRIDGE_VERSION) return;
+    try { previous?.dispose?.(); } catch {}
+
+    const onMessage = (event) => {
+      const message = event.data;
+      if (
+        window.parent === window
+        || event.source !== window.parent
+        || !/^(?:chrome|moz)-extension:\/\//i.test(String(event.origin || ""))
+        || message?.source !== NAVIGATION_FOCUS_GUARD_SOURCE
+        || message.type !== "request"
+        || message.action !== "prepare"
+        || typeof message.id !== "string"
+        || !message.id
+      ) return;
+
+      const now = Date.now();
+      const guardToken = String(message.guardToken || "");
+      if (!guardToken) return;
+      const requestedExpiresAt = Number(message.expiresAt);
+      const expiresAt = Number.isFinite(requestedExpiresAt) && requestedExpiresAt > now
+        ? Math.min(requestedExpiresAt, now + NAVIGATION_FOCUS_GUARD_LEASE_MS)
+        : now + NAVIGATION_FOCUS_GUARD_LEASE_MS;
+      let stored = false;
+      try {
+        const adopt = window.__CHATCLUB_PREFERRED_MODEL_FOCUS_SHIELD__?.adoptBootstrapExpiresAt;
+        stored = typeof adopt === "function" && Number(adopt(expiresAt, guardToken)) > now;
+      } catch {}
+      if (stored && message.phase !== "adopt") {
+        try {
+          sessionStorage.setItem(NAVIGATION_FOCUS_GUARD_STORAGE_KEY, JSON.stringify({ expiresAt, guardToken }));
+          stored = true;
+        } catch {}
+        try {
+          const rawName = String(window.name || "");
+          const cleanName = rawName
+            .replace(/(?:^|&)chatclub_focus_guard_until=\d+&chatclub_focus_guard_token=[^&]+$/, "")
+            .replace(/(?:^|&)chatclub_focus_guard_until=\d+$/, "");
+          window.name = `${cleanName}${cleanName ? "&" : ""}chatclub_focus_guard_until=${expiresAt}&chatclub_focus_guard_token=${encodeURIComponent(guardToken)}`;
+          stored = true;
+        } catch {}
+      }
+      try {
+        event.source?.postMessage({
+          source: NAVIGATION_FOCUS_GUARD_SOURCE,
+          type: "response",
+          action: "prepare",
+          id: message.id,
+          guardToken,
+          ok: stored,
+          expiresAt,
+          documentToken: window.__CHATCLUB_PREFERRED_MODEL_FOCUS_SHIELD__?.documentToken || ""
+        }, event.origin);
+      } catch {}
+    };
+    window.addEventListener("message", onMessage, true);
+    window[registryKey] = {
+      version: NAVIGATION_FOCUS_GUARD_BRIDGE_VERSION,
+      dispose() {
+        window.removeEventListener("message", onMessage, true);
+      }
+    };
+  }
+
+  function installPreferredModelFocusShield() {
+    const registryKey = "__CHATCLUB_PREFERRED_MODEL_FOCUS_SHIELD__";
+    const previous = window[registryKey];
+    const currentElementFocus = (() => {
+      try { return Object.getOwnPropertyDescriptor(HTMLElement.prototype, "focus")?.value; } catch { return null; }
+    })();
+    let currentWindowFocus = null;
+    try { currentWindowFocus = window.focus; } catch {}
+    if (
+      previous?.version === PREFERRED_MODEL_FOCUS_SHIELD_VERSION
+      && currentElementFocus === previous.guardedElementFocus
+      && currentWindowFocus === previous.guardedWindowFocus
+    ) {
+      try { previous.refreshLease?.(); } catch {}
+      return;
+    }
+    const consumedBootstrap = previous
+      ? { expiresAt: 0, guardToken: "" }
+      : consumePreferredModelBootstrapFocusShield();
+    let bootstrapExpiresAt = Math.max(
+      Number(consumedBootstrap.expiresAt) || 0,
+      Number(previous?.bootstrapExpiresAt) || 0
+    );
+    let activeBootstrapGuardToken = String(
+      consumedBootstrap.guardToken
+      || previous?.activeBootstrapGuardToken
+      || ""
+    );
+    const releasedBootstrapGuardTokens = previous?.releasedBootstrapGuardTokens instanceof Set
+      ? previous.releasedBootstrapGuardTokens
+      : new Set();
+    try { previous?.dispose?.(); } catch {}
+
+    let elementFocusDescriptor = null;
+    let windowFocusDescriptor = null;
+    try { elementFocusDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "focus"); } catch {}
+    try { windowFocusDescriptor = Object.getOwnPropertyDescriptor(window, "focus"); } catch {}
+    const nativeElementFocus = elementFocusDescriptor?.value || HTMLElement.prototype.focus;
+    const nativeWindowFocus = window.focus;
+    const preferredModelRunActive = () => {
+      if (bootstrapExpiresAt > Date.now()) return true;
+      const lease = preferredModelFocusShieldLease();
+      if (!lease) return false;
+      if (lease.invalid || lease.expiresAt <= Date.now()) {
+        removePreferredModelFocusShieldLease(lease.raw);
+        return false;
+      }
+      return true;
+    };
+    const guardedElementFocus = function (...args) {
+      if (preferredModelRunActive()) return;
+      return Reflect.apply(nativeElementFocus, this, args);
+    };
+    const guardedWindowFocus = function (...args) {
+      if (preferredModelRunActive()) return;
+      return Reflect.apply(nativeWindowFocus, this, args);
+    };
+    const releaseBootstrapForTrustedIntent = (event) => {
+      if (!event?.isTrusted || bootstrapExpiresAt <= 0) return;
+      if (activeBootstrapGuardToken) releasedBootstrapGuardTokens.add(activeBootstrapGuardToken);
+      bootstrapExpiresAt = 0;
+      try { sessionStorage.removeItem(NAVIGATION_FOCUS_GUARD_STORAGE_KEY); } catch {}
+      try {
+        const rawName = String(window.name || "");
+        const cleanName = rawName
+          .replace(/(?:^|&)chatclub_focus_guard_until=\d+&chatclub_focus_guard_token=[^&]+$/, "")
+          .replace(/(?:^|&)chatclub_focus_guard_until=\d+$/, "");
+        if (cleanName !== rawName) window.name = cleanName;
+      } catch {}
+      try {
+        if (window[registryKey]?.guardedElementFocus === guardedElementFocus) {
+          window[registryKey].bootstrapExpiresAt = 0;
+          window[registryKey].activeBootstrapGuardToken = activeBootstrapGuardToken;
+        }
+      } catch {}
+    };
+    const adoptBootstrapExpiresAt = (expiresAt, guardToken = "") => {
+      const token = String(guardToken || "");
+      if (!token || releasedBootstrapGuardTokens.has(token)) return 0;
+      const next = Number(expiresAt);
+      const now = Date.now();
+      if (!Number.isFinite(next) || next <= now) return bootstrapExpiresAt;
+      activeBootstrapGuardToken = token;
+      bootstrapExpiresAt = Math.max(bootstrapExpiresAt, Math.min(next, now + NAVIGATION_FOCUS_GUARD_LEASE_MS));
+      try {
+        if (window[registryKey]?.guardedElementFocus === guardedElementFocus) {
+          window[registryKey].bootstrapExpiresAt = bootstrapExpiresAt;
+          window[registryKey].activeBootstrapGuardToken = activeBootstrapGuardToken;
+        }
+      } catch {}
+      return bootstrapExpiresAt;
+    };
+    try { guardedElementFocus.toString = () => nativeElementFocus.toString(); } catch {}
+    try { guardedWindowFocus.toString = () => nativeWindowFocus.toString(); } catch {}
+    let elementInstalled = false;
+    let windowInstalled = false;
+    try {
+      Object.defineProperty(HTMLElement.prototype, "focus", {
+        ...(elementFocusDescriptor || { configurable: true, enumerable: false, writable: true }),
+        value: guardedElementFocus
+      });
+      elementInstalled = HTMLElement.prototype.focus === guardedElementFocus;
+    } catch {}
+    try {
+      const descriptor = windowFocusDescriptor && Object.prototype.hasOwnProperty.call(windowFocusDescriptor, "value")
+        ? { ...windowFocusDescriptor, value: guardedWindowFocus }
+        : { configurable: true, enumerable: windowFocusDescriptor?.enumerable ?? true, writable: true, value: guardedWindowFocus };
+      Object.defineProperty(window, "focus", descriptor);
+      windowInstalled = window.focus === guardedWindowFocus;
+    } catch {}
+
+    let expiryTimer = null;
+    const refreshLease = () => {
+      if (expiryTimer) clearTimeout(expiryTimer);
+      expiryTimer = null;
+      const lease = preferredModelFocusShieldLease();
+      if (!lease) return;
+      if (lease.invalid || lease.expiresAt <= Date.now()) {
+        removePreferredModelFocusShieldLease(lease.raw);
+        return;
+      }
+      const delay = Math.min(2147483000, Math.max(1, lease.expiresAt - Date.now() + 25));
+      expiryTimer = setTimeout(() => {
+        expiryTimer = null;
+        const current = preferredModelFocusShieldLease();
+        if (!current) return;
+        if (current.raw !== lease.raw) {
+          refreshLease();
+          return;
+        }
+        if (current.invalid || current.expiresAt <= Date.now()) removePreferredModelFocusShieldLease(current.raw);
+        else refreshLease();
+      }, delay);
+    };
+    let leaseObserver = null;
+    let rootObserver = null;
+    const observeLeaseAttribute = () => {
+      const root = document.documentElement;
+      if (!root) return false;
+      try {
+        leaseObserver = new MutationObserver(refreshLease);
+        leaseObserver.observe(root, {
+          attributes: true,
+          attributeFilter: [PREFERRED_MODEL_FOCUS_SHIELD_ATTRIBUTE]
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    if (!observeLeaseAttribute()) {
+      try {
+        rootObserver = new MutationObserver(() => {
+          if (!observeLeaseAttribute()) return;
+          try { rootObserver?.disconnect?.(); } catch {}
+          rootObserver = null;
+          refreshLease();
+        });
+        rootObserver.observe(document, { childList: true });
+      } catch {}
+    }
+    window.addEventListener("pointerdown", releaseBootstrapForTrustedIntent, true);
+    window.addEventListener("keydown", releaseBootstrapForTrustedIntent, true);
+
+    window[registryKey] = {
+      version: PREFERRED_MODEL_FOCUS_SHIELD_VERSION,
+      documentToken: globalThis.crypto?.randomUUID?.()
+        || `focus-shield-document-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      guardedElementFocus,
+      guardedWindowFocus,
+      bootstrapExpiresAt,
+      activeBootstrapGuardToken,
+      releasedBootstrapGuardTokens,
+      elementInstalled,
+      windowInstalled,
+      refreshLease,
+      adoptBootstrapExpiresAt,
+      dispose() {
+        window.removeEventListener("pointerdown", releaseBootstrapForTrustedIntent, true);
+        window.removeEventListener("keydown", releaseBootstrapForTrustedIntent, true);
+        try { leaseObserver?.disconnect?.(); } catch {}
+        try { rootObserver?.disconnect?.(); } catch {}
+        if (expiryTimer) clearTimeout(expiryTimer);
+        try {
+          if (HTMLElement.prototype.focus === guardedElementFocus) {
+            if (elementFocusDescriptor) Object.defineProperty(HTMLElement.prototype, "focus", elementFocusDescriptor);
+            else delete HTMLElement.prototype.focus;
+          }
+        } catch {}
+        try {
+          if (window.focus === guardedWindowFocus) {
+            if (windowFocusDescriptor) Object.defineProperty(window, "focus", windowFocusDescriptor);
+            else delete window.focus;
+          }
+        } catch {}
+      }
+    };
+    refreshLease();
+  }
+
+  function installMainWorldLocationBridge() {
+    const previousBridge = window.__CHATCLUB_MAIN_WORLD_LOCATION_BRIDGE__;
+    if (previousBridge?.version === MAIN_WORLD_LOCATION_BRIDGE_VERSION) return;
+    try { previousBridge?.dispose?.(); } catch {}
+
+    const originalPushState = history.pushState;
+    const originalReplaceState = history.replaceState;
+    let lastHref = String(location.href || "");
+
+    const notify = (kind, force = false) => {
+      const href = String(location.href || "");
+      if (!href || (!force && href === lastHref)) return;
+      lastHref = href;
+      try { document.documentElement?.removeAttribute(GEMINI_MODEL_PICKER_RUN_TOKEN_ATTRIBUTE); } catch {}
+      shortenPreferredModelFocusShieldLease(500);
+      try {
+        window.postMessage({
+          source: MAIN_WORLD_LOCATION_SOURCE,
+          type: "notification",
+          action: "locationChanged",
+          href,
+          kind: String(kind || "navigation"),
+          force: Boolean(force),
+          at: Date.now()
+        }, "*");
+      } catch {}
+    };
+
+    const wrapHistoryMethod = (original, kind) => function (...args) {
+      const before = String(location.href || "");
+      const result = Reflect.apply(original, this, args);
+      const after = String(location.href || "");
+      if (after !== before) notify(kind);
+      return result;
+    };
+    const wrappedPushState = wrapHistoryMethod(originalPushState, "pushState");
+    const wrappedReplaceState = wrapHistoryMethod(originalReplaceState, "replaceState");
+    try { history.pushState = wrappedPushState; } catch {}
+    try { history.replaceState = wrappedReplaceState; } catch {}
+
+    const onPopState = () => notify("popstate", true);
+    const onHashChange = () => notify("hashchange");
+    const onPageHide = () => {
+      try { document.documentElement?.removeAttribute(GEMINI_MODEL_PICKER_RUN_TOKEN_ATTRIBUTE); } catch {}
+      shortenPreferredModelFocusShieldLease(500);
+    };
+    window.addEventListener("popstate", onPopState, true);
+    window.addEventListener("hashchange", onHashChange, true);
+    window.addEventListener("pagehide", onPageHide, true);
+
+    window.__CHATCLUB_MAIN_WORLD_LOCATION_BRIDGE__ = {
+      version: MAIN_WORLD_LOCATION_BRIDGE_VERSION,
+      source: MAIN_WORLD_LOCATION_SOURCE,
+      notify,
+      dispose() {
+        window.removeEventListener("popstate", onPopState, true);
+        window.removeEventListener("hashchange", onHashChange, true);
+        window.removeEventListener("pagehide", onPageHide, true);
+        try { if (history.pushState === wrappedPushState) history.pushState = originalPushState; } catch {}
+        try { if (history.replaceState === wrappedReplaceState) history.replaceState = originalReplaceState; } catch {}
+      }
+    };
+  }
+
   function installGeminiModelPickerBridge() {
-    if (window.__CHATCLUB_GEMINI_MODEL_PICKER_BRIDGE__) return;
-    const records = [];
-    const originalAddEventListener = EventTarget.prototype.addEventListener;
+    const previousBridge = window.__CHATCLUB_GEMINI_MODEL_PICKER_BRIDGE__;
+    if (previousBridge?.version === GEMINI_MODEL_PICKER_BRIDGE_VERSION) return;
+
+    try { previousBridge?.dispose?.(); } catch {}
+    try {
+      if (typeof previousBridge?.messageListener === "function") {
+        window.removeEventListener("message", previousBridge.messageListener, true);
+      }
+    } catch {}
+
+    const previousRecords = Array.isArray(previousBridge?.records) ? previousBridge.records : [];
+    let capture = window.__CHATCLUB_GEMINI_MODEL_PICKER_LISTENER_CAPTURE__;
+    const records = Array.isArray(capture?.records) ? capture.records : previousRecords;
+    if (records !== previousRecords) {
+      for (const record of previousRecords) {
+        if (!record || records.some((entry) => entry?.target === record.target && entry?.listener === record.listener)) continue;
+        records.push(record);
+      }
+    }
 
     const visible = (el) => {
       try {
@@ -100,24 +539,32 @@
     const recordListener = (target, listener) => {
       if (!looksLikeGeminiModeTarget(target)) return;
       if (typeof listener !== "function" && typeof listener?.handleEvent !== "function") return;
+      const duplicateIndex = records.findIndex((record) => record?.target === target && record?.listener === listener);
+      if (duplicateIndex >= 0) records.splice(duplicateIndex, 1);
       records.push({ target, listener });
       while (records.length > 30) records.shift();
     };
 
-    const wrappedAddEventListener = function (type, listener, options) {
+    if (!capture?.installed) {
+      const originalAddEventListener = EventTarget.prototype.addEventListener;
+      const wrappedAddEventListener = function (type, listener, options) {
+        const result = originalAddEventListener.apply(this, arguments);
+        try {
+          if (String(type || "").toLowerCase() === "click") recordListener(this, listener);
+        } catch {}
+        return result;
+      };
       try {
-        if (String(type || "").toLowerCase() === "click") recordListener(this, listener);
+        wrappedAddEventListener.toString = () => originalAddEventListener.toString();
+        Object.defineProperty(EventTarget.prototype, "addEventListener", {
+          configurable: true,
+          writable: true,
+          value: wrappedAddEventListener
+        });
+        capture = { installed: true, records, wrappedAddEventListener };
+        window.__CHATCLUB_GEMINI_MODEL_PICKER_LISTENER_CAPTURE__ = capture;
       } catch {}
-      return originalAddEventListener.apply(this, arguments);
-    };
-    try {
-      wrappedAddEventListener.toString = () => originalAddEventListener.toString();
-      Object.defineProperty(EventTarget.prototype, "addEventListener", {
-        configurable: true,
-        writable: true,
-        value: wrappedAddEventListener
-      });
-    } catch {}
+    }
 
     const triggerButton = () => firstVisible([
       "button[aria-label='Open mode picker']",
@@ -180,6 +627,7 @@
     };
 
     const menuOpen = () => firstVisible([
+      "gem-mode-menu",
       ".cdk-overlay-pane .gds-mode-switch-menu",
       ".cdk-overlay-pane [role='menu']",
       ".cdk-overlay-pane",
@@ -187,44 +635,139 @@
       "[role='menu']"
     ]);
 
-    const open = () => {
+    const stats = previousBridge?.stats && typeof previousBridge.stats === "object"
+      ? previousBridge.stats
+      : { requests: 0, invocations: 0 };
+    let activeRunId = "";
+    let activeRunToken = "";
+    let activeRunGeneration = 0;
+
+    const documentRunToken = () => {
+      try { return String(document.documentElement?.getAttribute(GEMINI_MODEL_PICKER_RUN_TOKEN_ATTRIBUTE) || ""); } catch { return ""; }
+    };
+
+    const requestRun = (request = {}) => ({
+      runId: String(request.runId || ""),
+      runToken: String(request.runToken || ""),
+      runGeneration: Math.max(0, Number(request.runGeneration) || 0)
+    });
+
+    const runIsCurrent = (run) => Boolean(
+      run?.runId
+      && run?.runToken
+      && documentRunToken() === run.runToken
+      && activeRunId === run.runId
+      && activeRunToken === run.runToken
+      && activeRunGeneration === run.runGeneration
+    );
+
+    const acceptRun = (run) => {
+      if (!run?.runId || !run?.runToken || documentRunToken() !== run.runToken) return false;
+      activeRunId = run.runId;
+      activeRunToken = run.runToken;
+      activeRunGeneration = run.runGeneration;
+      return true;
+    };
+
+    const open = (request = {}) => {
+      stats.requests += 1;
+      const run = requestRun(request);
+      if (!acceptRun(run) || !runIsCurrent(run)) {
+        return {
+          ok: false,
+          activated: false,
+          cancelled: true,
+          stale: true,
+          reason: "stale Gemini model picker run",
+          ...run,
+          records: records.length,
+          invocations: stats.invocations
+        };
+      }
       const existing = menuOpen();
-      if (existing) return { ok: true, alreadyOpen: true, records: records.length };
+      if (existing) return { ok: true, activated: false, alreadyOpen: true, ...run, records: records.length, invocations: stats.invocations };
       const button = triggerButton();
-      if (!button) return { ok: false, reason: "trigger not found", records: records.length };
+      if (!button) return { ok: false, activated: false, reason: "trigger not found", ...run, records: records.length, invocations: stats.invocations };
       const record = listenerRecordFor(button);
-      if (!record) return { ok: false, reason: "trigger listener not captured", records: records.length };
-      try {
-        button.focus?.({ preventScroll: true });
-      } catch {
-        try { button.focus?.(); } catch {}
+      if (!record) return { ok: false, activated: false, reason: "trigger listener not captured", ...run, records: records.length, invocations: stats.invocations };
+      if (!runIsCurrent(run)) {
+        return {
+          ok: false,
+          activated: false,
+          cancelled: true,
+          stale: true,
+          reason: "Gemini model picker run was cancelled before activation",
+          ...run,
+          records: records.length,
+          invocations: stats.invocations
+        };
       }
       try {
         const listener = record.listener;
         const event = modelClickEvent(button, record.target || button);
         if (typeof listener === "function") listener.call(record.target || button, event);
         else listener.handleEvent.call(listener, event);
-        return { ok: true, records: records.length };
+        stats.invocations += 1;
+        return { ok: true, activated: true, ...run, records: records.length, invocations: stats.invocations };
       } catch (error) {
-        return { ok: false, reason: error?.message || String(error || "listener failed"), records: records.length };
+        return { ok: false, activated: true, reason: error?.message || String(error || "listener failed"), ...run, records: records.length, invocations: stats.invocations };
       }
     };
 
-    window.__CHATCLUB_GEMINI_MODEL_PICKER_BRIDGE__ = { open, records };
-    window.addEventListener("message", (event) => {
+    const cancel = (request = {}) => {
+      const run = requestRun(request);
+      const matched = Boolean(run.runId && run.runToken && activeRunId === run.runId && activeRunToken === run.runToken);
+      if (matched) {
+        try {
+          if (documentRunToken() === run.runToken) document.documentElement?.removeAttribute(GEMINI_MODEL_PICKER_RUN_TOKEN_ATTRIBUTE);
+        } catch {}
+        activeRunId = "";
+        activeRunToken = "";
+        activeRunGeneration = 0;
+      }
+      return {
+        ok: true,
+        activated: false,
+        cancelled: matched,
+        stale: !matched,
+        reason: String(request.reason || (matched ? "Gemini model picker run cancelled" : "Gemini model picker run is not active")),
+        ...run,
+        records: records.length,
+        invocations: stats.invocations
+      };
+    };
+
+    const messageListener = (event) => {
       const message = event.data;
-      if (message?.source !== GEMINI_MODEL_PICKER_SOURCE || message.type !== "request" || message.action !== "open") return;
-      const result = open();
+      if (message?.source !== GEMINI_MODEL_PICKER_SOURCE || message.type !== "request" || !["open", "cancel"].includes(message.action)) return;
+      const result = message.action === "cancel" ? cancel(message) : open(message);
       try {
         window.postMessage({
           source: GEMINI_MODEL_PICKER_SOURCE,
           type: "response",
           id: message.id,
-          action: "open",
+          action: message.action,
           ...result
         }, "*");
       } catch {}
-    }, true);
+    };
+    const bridge = {
+      version: GEMINI_MODEL_PICKER_BRIDGE_VERSION,
+      source: GEMINI_MODEL_PICKER_SOURCE,
+      open,
+      cancel,
+      records,
+      stats,
+      state() {
+        return { activeRunId, activeRunToken, activeRunGeneration, documentRunToken: documentRunToken() };
+      },
+      messageListener,
+      dispose() {
+        try { window.removeEventListener("message", messageListener, true); } catch {}
+      }
+    };
+    window.__CHATCLUB_GEMINI_MODEL_PICKER_BRIDGE__ = bridge;
+    window.addEventListener("message", messageListener, true);
   }
 
   function installDeepSeekDeleteBridge() {
@@ -1476,6 +2019,9 @@
   })();
 
   installChatClubWebviewShim();
+  installPreferredModelFocusShield();
+  installPreferredModelNavigationFocusGuardBridge();
+  installMainWorldLocationBridge();
 
   if (host === "gemini.google.com" || host.endsWith(".gemini.google.com")) {
     installGeminiModelPickerBridge();

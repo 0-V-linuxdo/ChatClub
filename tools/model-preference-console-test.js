@@ -1,12 +1,125 @@
 (() => {
   const API_NAME = "ChatClubPreferredModelTest";
-  const GEMINI_MODEL_PICKER_SOURCE = "chatclub-gemini-model-picker";
+  const GEMINI_MODEL_PICKER_SOURCE = "chatclub-gemini-model-picker:2026.07.13.3";
+  const GEMINI_MODEL_PICKER_RUN_TOKEN_ATTRIBUTE = "data-chatclub-gemini-model-picker-run";
+  try { window[API_NAME]?.dispose?.(); } catch {}
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
   const normalize = (value) => String(value || "")
     .replace(/\u00a0/g, " ")
     .replace(/\r\n?/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+
+  const diagnostics = {
+    activationCount: 0,
+    activations: [],
+    observedClickCount: 0,
+    observedClicks: [],
+    focusInCount: 0,
+    focusOutCount: 0,
+    blurCount: 0,
+    composing: false,
+    focusEvents: []
+  };
+
+  function diagnosticElement(element) {
+    if (!element || element.nodeType !== 1) return { tag: "", id: "", className: "", text: "" };
+    return {
+      tag: String(element.tagName || "").toLowerCase(),
+      id: String(element.id || ""),
+      className: typeof element.className === "string" ? element.className.slice(0, 160) : "",
+      text: normalize([
+        element.getAttribute?.("aria-label"),
+        element.getAttribute?.("title"),
+        element.innerText || element.textContent || ""
+      ].filter(Boolean).join(" ")).replace(/\s+/g, " ").slice(0, 180)
+    };
+  }
+
+  function diagnosticActiveElement() {
+    const active = document.activeElement;
+    return {
+      ...diagnosticElement(active),
+      selectionStart: Number.isFinite(active?.selectionStart) ? active.selectionStart : null,
+      selectionEnd: Number.isFinite(active?.selectionEnd) ? active.selectionEnd : null
+    };
+  }
+
+  function recordActivation(target, method) {
+    diagnostics.activationCount += 1;
+    diagnostics.activations.push({
+      index: diagnostics.activationCount,
+      at: Date.now(),
+      method,
+      target: diagnosticElement(target),
+      activeElement: diagnosticActiveElement()
+    });
+    while (diagnostics.activations.length > 80) diagnostics.activations.shift();
+  }
+
+  const diagnosticListeners = {
+    click(event) {
+      diagnostics.observedClickCount += 1;
+      diagnostics.observedClicks.push({
+        index: diagnostics.observedClickCount,
+        at: Date.now(),
+        trusted: Boolean(event.isTrusted),
+        target: diagnosticElement(event.target)
+      });
+      while (diagnostics.observedClicks.length > 80) diagnostics.observedClicks.shift();
+    },
+    focusin(event) {
+      diagnostics.focusInCount += 1;
+      diagnostics.focusEvents.push({ type: "focusin", at: Date.now(), target: diagnosticElement(event.target) });
+      while (diagnostics.focusEvents.length > 80) diagnostics.focusEvents.shift();
+    },
+    focusout(event) {
+      diagnostics.focusOutCount += 1;
+      diagnostics.focusEvents.push({ type: "focusout", at: Date.now(), target: diagnosticElement(event.target) });
+      while (diagnostics.focusEvents.length > 80) diagnostics.focusEvents.shift();
+    },
+    blur(event) {
+      diagnostics.blurCount += 1;
+      diagnostics.focusEvents.push({ type: "blur", at: Date.now(), target: diagnosticElement(event.target) });
+      while (diagnostics.focusEvents.length > 80) diagnostics.focusEvents.shift();
+    },
+    compositionstart() { diagnostics.composing = true; },
+    compositionend() { diagnostics.composing = false; }
+  };
+
+  document.addEventListener("click", diagnosticListeners.click, true);
+  document.addEventListener("focusin", diagnosticListeners.focusin, true);
+  document.addEventListener("focusout", diagnosticListeners.focusout, true);
+  document.addEventListener("blur", diagnosticListeners.blur, true);
+  document.addEventListener("compositionstart", diagnosticListeners.compositionstart, true);
+  document.addEventListener("compositionend", diagnosticListeners.compositionend, true);
+
+  function diagnosticSnapshot() {
+    return {
+      activationCount: diagnostics.activationCount,
+      activations: diagnostics.activations.slice(),
+      observedClickCount: diagnostics.observedClickCount,
+      observedClicks: diagnostics.observedClicks.slice(),
+      focusInCount: diagnostics.focusInCount,
+      focusOutCount: diagnostics.focusOutCount,
+      blurCount: diagnostics.blurCount,
+      composing: diagnostics.composing,
+      activeElement: diagnosticActiveElement(),
+      focusEvents: diagnostics.focusEvents.slice()
+    };
+  }
+
+  function resetDiagnostics() {
+    diagnostics.activationCount = 0;
+    diagnostics.activations.length = 0;
+    diagnostics.observedClickCount = 0;
+    diagnostics.observedClicks.length = 0;
+    diagnostics.focusInCount = 0;
+    diagnostics.focusOutCount = 0;
+    diagnostics.blurCount = 0;
+    diagnostics.focusEvents.length = 0;
+    return diagnosticSnapshot();
+  }
 
   const TARGETS = Object.freeze({
     Gemini: Object.freeze(["pro", "fast", "flash35"]),
@@ -58,7 +171,18 @@
   }
 
   function result(ok, appId, modelId, reason = "", extra = {}) {
-    const payload = { ok, appId, modelId, ...(reason ? { reason } : {}), ...extra };
+    const skipped = Boolean(extra.skipped);
+    const payload = {
+      ok,
+      skipped,
+      changed: Boolean(ok && !skipped),
+      cancelled: false,
+      retryable: false,
+      reason: String(reason || ""),
+      appId,
+      modelId,
+      ...extra
+    };
     if (ok) console.log("[ChatClub model preference test]", payload);
     else console.warn("[ChatClub model preference test]", payload);
     return payload;
@@ -283,6 +407,7 @@
         dispatched = true;
       } catch {}
     }
+    if (dispatched) recordActivation(target, "pointer-sequence");
     return dispatched;
   }
 
@@ -290,6 +415,7 @@
     if (!target || typeof target.click !== "function") return false;
     try {
       target.click();
+      recordActivation(target, "native-click");
       return true;
     } catch {
       return false;
@@ -299,26 +425,14 @@
   function clickElement(el) {
     if (!el || !visible(el) || isDisabledElement(el)) return false;
     try { el.scrollIntoView?.({ block: "center", inline: "nearest" }); } catch {}
-    const point = centerPoint(el);
-    let clicked = false;
-    for (const target of activationTargets(el)) {
-      try { target.focus?.({ preventScroll: true }); } catch {
-        try { target.focus?.(); } catch {}
-      }
-      clicked = dispatchPointerActivation(target, point || centerPoint(target)) || clicked;
-      clicked = nativeClick(target) || clicked;
-      if (clicked) return true;
-    }
-    return clicked;
+    const target = activationTargets(el)[0] || el;
+    return nativeClick(target) || dispatchPointerActivation(target, centerPoint(target) || centerPoint(el));
   }
 
   function directClickElement(el) {
     if (!el || !visible(el) || isDisabledElement(el)) return false;
     try { el.scrollIntoView?.({ block: "center", inline: "nearest" }); } catch {}
-    try { el.focus?.({ preventScroll: true }); } catch {
-      try { el.focus?.(); } catch {}
-    }
-    return dispatchPointerActivation(el, centerPoint(el)) || nativeClick(el);
+    return nativeClick(el) || dispatchPointerActivation(el, centerPoint(el));
   }
 
   function devtoolsListenerEvent(target, currentTarget) {
@@ -356,22 +470,25 @@
   }
 
   async function openGeminiMenuWithDevtoolsListener(trigger) {
-    if (typeof getEventListeners !== "function" || !trigger) return false;
+    if (typeof getEventListeners !== "function" || !trigger) return { invoked: false, opened: false };
     const target = customActivationAncestor(trigger) || trigger;
     let listeners = [];
     try { listeners = getEventListeners(target)?.click || []; } catch {}
-    for (const record of listeners) {
+    for (const record of listeners.slice().reverse()) {
       const listener = record?.listener;
       if (typeof listener !== "function" && typeof listener?.handleEvent !== "function") continue;
       try {
         const event = devtoolsListenerEvent(trigger, target);
         if (typeof listener === "function") listener.call(target, event);
         else listener.handleEvent.call(listener, event);
+        recordActivation(trigger, "devtools-listener");
         await sleep(120);
-        if (geminiMenuRoot()) return true;
-      } catch {}
+        return { invoked: true, opened: Boolean(geminiMenuRoot()) };
+      } catch {
+        return { invoked: true, opened: false };
+      }
     }
-    return false;
+    return { invoked: false, opened: false };
   }
 
   async function waitFor(getter, timeoutMs = 2500, intervalMs = 120) {
@@ -387,24 +504,61 @@
   function requestGeminiMenuBridgeOpen(timeoutMs = 900) {
     return new Promise((resolve) => {
       const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      const timer = setTimeout(() => {
+      const runId = `devtools-${id}`;
+      const runGeneration = Date.now();
+      const runToken = `devtools:${runGeneration}:${runId}`;
+      let settled = false;
+      let timer = 0;
+      const finish = (value) => {
+        if (settled) return;
+        settled = true;
+        if (timer) clearTimeout(timer);
         window.removeEventListener("message", onMessage, true);
-        resolve({ ok: false, reason: "bridge timeout" });
-      }, Math.max(300, Number(timeoutMs) || 900));
+        try {
+          if (document.documentElement?.getAttribute(GEMINI_MODEL_PICKER_RUN_TOKEN_ATTRIBUTE) === runToken) {
+            document.documentElement.removeAttribute(GEMINI_MODEL_PICKER_RUN_TOKEN_ATTRIBUTE);
+          }
+        } catch {}
+        try {
+          window.postMessage({
+            source: GEMINI_MODEL_PICKER_SOURCE,
+            type: "request",
+            action: "cancel",
+            id: `${id}-cancel`,
+            runId,
+            runGeneration,
+            runToken,
+            reason: "DevTools picker probe finished"
+          }, "*");
+        } catch {}
+        resolve(value);
+      };
       function onMessage(event) {
         const message = event.data;
-        if (message?.source !== GEMINI_MODEL_PICKER_SOURCE || message.type !== "response" || message.id !== id) return;
-        clearTimeout(timer);
-        window.removeEventListener("message", onMessage, true);
-        resolve(message);
+        if (
+          message?.source !== GEMINI_MODEL_PICKER_SOURCE
+          || message.type !== "response"
+          || message.id !== id
+          || String(message.runId || "") !== runId
+          || String(message.runToken || "") !== runToken
+        ) return;
+        finish(message);
       }
       window.addEventListener("message", onMessage, true);
       try {
-        window.postMessage({ source: GEMINI_MODEL_PICKER_SOURCE, type: "request", action: "open", id }, "*");
+        document.documentElement?.setAttribute(GEMINI_MODEL_PICKER_RUN_TOKEN_ATTRIBUTE, runToken);
+        timer = setTimeout(() => finish({ ok: false, reason: "bridge timeout", runId, runToken }), Math.max(300, Number(timeoutMs) || 900));
+        window.postMessage({
+          source: GEMINI_MODEL_PICKER_SOURCE,
+          type: "request",
+          action: "open",
+          id,
+          runId,
+          runGeneration,
+          runToken
+        }, "*");
       } catch (error) {
-        clearTimeout(timer);
-        window.removeEventListener("message", onMessage, true);
-        resolve({ ok: false, reason: error?.message || String(error || "bridge failed") });
+        finish({ ok: false, reason: error?.message || String(error || "bridge failed"), runId, runToken });
       }
     });
   }
@@ -426,6 +580,8 @@
     "button[aria-label*='model' i]"
   ]);
   const GEMINI_MODEL_MENU_ROOT_SELECTORS = Object.freeze([
+    "gem-mode-menu",
+    "gem-mode-menu [role='menu']",
     ".cdk-overlay-pane",
     ".cdk-overlay-container .cdk-overlay-pane",
     ".cdk-overlay-container [role='menu']",
@@ -449,6 +605,7 @@
     "[role='dialog']"
   ]);
   const GEMINI_MODEL_ITEM_SELECTORS = Object.freeze([
+    "gem-menu-item",
     "button.bard-mode-list-button[role='menuitemradio']",
     ".bard-mode-list-button",
     "button[role='menuitemradio']",
@@ -525,13 +682,37 @@
     return "";
   }
 
+  function currentGeminiPickerState() {
+    const button = firstVisibleBySelectors(GEMINI_MODEL_BUTTON_SELECTORS);
+    if (!button) return { button: null, label: "", baseModelId: "", thinkingLevel: "" };
+    const label = String(button.getAttribute?.("aria-label") || elementText(button) || "");
+    const keys = geminiModelKeysFromText(label);
+    const baseModelId = ["fast", "flash35", "pro"].find((key) => keys.has(key)) || (() => {
+      const inferred = inferGeminiModelKey(label);
+      return ["fast", "flash35", "pro"].includes(inferred) ? inferred : "";
+    })();
+    const token = compactText(label);
+    const thinkingLevel = baseModelId === "pro"
+      ? (keys.has("extended") || /\bextended(?:\s+thinking)?\b/.test(token) ? "extended" : "standard")
+      : "";
+    return { button, label, baseModelId, thinkingLevel };
+  }
+
   function currentGeminiModelKey() {
-    return inferGeminiModelKey(elementText(firstVisibleBySelectors(GEMINI_MODEL_BUTTON_SELECTORS)));
+    return currentGeminiPickerState().baseModelId;
   }
 
   function currentGeminiModelHasKey(modelId) {
     if (!modelId) return false;
-    return geminiModelKeysFromText(elementText(firstVisibleBySelectors(GEMINI_MODEL_BUTTON_SELECTORS))).has(modelId);
+    const state = currentGeminiPickerState();
+    if (modelId === "extended") return state.baseModelId === "pro" && state.thinkingLevel === "extended";
+    if (modelId === "thinking") return state.baseModelId === "pro" && state.thinkingLevel === "standard";
+    return state.baseModelId === modelId;
+  }
+
+  function currentGeminiThinkingLevelKey() {
+    const level = currentGeminiPickerState().thinkingLevel;
+    return level === "standard" ? "thinking" : level;
   }
 
   function geminiThinkingLevelModelId(value) {
@@ -551,7 +732,7 @@
     if (token.includes("thinking level")) score += 60;
     if (token.includes("select a model") || token.includes("mode picker")) score += 40;
     if (token.includes("gemini") || token.includes("flash")) score += 15;
-    if (matchesSelector(root, ".cdk-overlay-pane, .gds-mode-switch-menu, .mat-mdc-menu-panel, .mat-menu-panel, [role='menu'], [role='listbox']")) score += 25;
+    if (matchesSelector(root, "gem-mode-menu, .cdk-overlay-pane, .gds-mode-switch-menu, .mat-mdc-menu-panel, .mat-menu-panel, [role='menu'], [role='listbox']")) score += 25;
     const rect = rectOf(root);
     if (rect) {
       if (rect.height >= 100 && rect.width >= 180) score += 20;
@@ -583,20 +764,23 @@
     if (existing) return existing;
     const trigger = await waitFor(() => firstVisibleBySelectors(GEMINI_MODEL_BUTTON_SELECTORS), 10000, 150);
     if (!trigger) return null;
-    for (let attempt = 0; attempt < 4; attempt += 1) {
-      if (!visible(trigger) || isDisabledElement(trigger)) await sleep(180);
-      clickElement(trigger);
-      let root = await waitFor(geminiMenuRoot, attempt === 0 ? 1400 : 900, 80);
-      if (root) return root;
-      await openGeminiMenuWithDevtoolsListener(trigger);
-      root = await waitFor(geminiMenuRoot, attempt === 0 ? 1400 : 900, 80);
-      if (root) return root;
-      await requestGeminiMenuBridgeOpen(attempt === 0 ? 1200 : 900);
-      root = await waitFor(geminiMenuRoot, attempt === 0 ? 1400 : 900, 80);
-      if (root) return root;
-      await sleep(180);
+    if (!visible(trigger) || isDisabledElement(trigger)) return null;
+
+    const bridgeResult = await requestGeminiMenuBridgeOpen(1200);
+    if (bridgeResult?.ok) {
+      if (!bridgeResult.alreadyOpen) recordActivation(trigger, "gemini-picker-bridge");
+      return await waitFor(geminiMenuRoot, 1600, 80) || null;
     }
-    return null;
+
+    const listenerResult = await openGeminiMenuWithDevtoolsListener(trigger);
+    if (listenerResult.invoked) {
+      return listenerResult.opened
+        ? geminiMenuRoot()
+        : await waitFor(geminiMenuRoot, 1600, 80) || null;
+    }
+
+    if (!directClickElement(trigger)) return null;
+    return await waitFor(geminiMenuRoot, 1600, 80) || null;
   }
 
   function geminiItems(root) {
@@ -619,6 +803,9 @@
 
   function geminiCompactMenuRows(root) {
     if (!root) return [];
+    const realItems = qsa("gem-menu-item", root)
+      .filter((item) => visible(item) && !isDisabledElement(item) && compactText(elementText(item)));
+    if (realItems.length) return realItems;
     const rows = [];
     const seen = new Set();
     const rootArea = Math.max(1, elementArea(root));
@@ -647,6 +834,7 @@
   function geminiItemRow(element, root) {
     if (!element || !root || element === root || !root.contains?.(element)) return null;
     const direct = closest(element, [
+      "gem-menu-item",
       "button",
       "[role='menuitemradio']",
       "[role='menuitem']",
@@ -789,6 +977,35 @@
     return { root: null, item: null };
   }
 
+  function geminiActualMenuItem(element, root = null) {
+    if (!element) return null;
+    const item = closest(element, "gem-menu-item, button[role='menuitemradio'], button[role='menuitem'], [role='menuitemradio'], [role='menuitem'], [role='option'], mat-list-option");
+    if (!item || (root && !root.contains?.(item))) return null;
+    return item;
+  }
+
+  function findGeminiExtendedToggle(root) {
+    if (!root) return null;
+    const seen = new Set();
+    for (const candidate of [...qsa("gem-menu-item", root), ...geminiItems(root)]) {
+      const item = geminiActualMenuItem(candidate, root) || candidate;
+      if (!item || seen.has(item)) continue;
+      seen.add(item);
+      if (!visible(item) || isDisabledElement(item)) continue;
+      const token = compactText(elementText(item));
+      if (/\bextended\s+thinking\b/.test(token)) return item;
+    }
+    return null;
+  }
+
+  function findGeminiExtendedToggleInMenus() {
+    for (const root of geminiMenuRoots()) {
+      const item = findGeminiExtendedToggle(root);
+      if (item) return { root, item };
+    }
+    return { root: null, item: null };
+  }
+
   function geminiThinkingClickTargets(row, root) {
     const targets = [];
     const seen = new Set();
@@ -888,17 +1105,10 @@
 
   function clickGeminiThinkingDropdown(row, root) {
     const { targets, point } = geminiThinkingDropdownTargets(row, root);
-    let clicked = false;
-    for (const target of targets) {
-      try { target.scrollIntoView?.({ block: "center", inline: "nearest" }); } catch {}
-      try { target.focus?.({ preventScroll: true }); } catch {
-        try { target.focus?.(); } catch {}
-      }
-      clicked = dispatchPointerActivation(target, point || centerPoint(target)) || clicked;
-      clicked = nativeClick(target) || clicked;
-      if (clicked) return true;
-    }
-    return clicked;
+    const target = targets[0];
+    if (!target) return false;
+    try { target.scrollIntoView?.({ block: "center", inline: "nearest" }); } catch {}
+    return nativeClick(target) || dispatchPointerActivation(target, point || centerPoint(target));
   }
 
   function geminiThinkingLevelHeaderKey(root) {
@@ -918,7 +1128,7 @@
   }
 
   function clickGeminiMenuItem(item) {
-    return directClickElement(item) || clickElement(item);
+    return directClickElement(item);
   }
 
   async function waitGeminiThinkingLevelOption(root, modelId) {
@@ -944,26 +1154,13 @@
         }
       }
     }
-    const triedTargets = new Set();
-    for (const entry of rows) {
-      if (clickGeminiThinkingDropdown(entry.row, entry.root)) {
-        const dropdownRoot = await waitGeminiThinkingLevelOption(entry.root, modelId);
-        if (dropdownRoot) return dropdownRoot;
-      }
-      for (const target of geminiThinkingClickTargets(entry.row, entry.root)) {
-        if (triedTargets.has(target)) continue;
-        triedTargets.add(target);
-        if (directClickElement(target)) {
-          const directRoot = await waitGeminiThinkingLevelOption(entry.root, modelId);
-          if (directRoot) return directRoot;
-        }
-        if (clickElement(target)) {
-          const clickedRoot = await waitGeminiThinkingLevelOption(entry.root, modelId);
-          if (clickedRoot) return clickedRoot;
-        }
-      }
-    }
-    return null;
+    const entry = rows[0];
+    if (!entry) return null;
+    const clicked = clickGeminiThinkingDropdown(entry.row, entry.root) || (() => {
+      const target = geminiThinkingClickTargets(entry.row, entry.root)[0];
+      return target ? directClickElement(target) : false;
+    })();
+    return clicked ? await waitGeminiThinkingLevelOption(entry.root, modelId) : null;
   }
 
   function isGeminiThinkingSubmenuItem(item) {
@@ -978,10 +1175,18 @@
 
   function geminiElementHasSelectedState(element) {
     if (!element) return false;
-    const candidates = [element, ...qsa("*", element).slice(0, 20)];
+    const realItem = closest(element, "gem-menu-item");
+    const candidates = [realItem, element, ...qsa("*", realItem || element).slice(0, 20)].filter(Boolean);
+    for (let node = (realItem || element).parentElement, guard = 0; node && guard < 5; node = node.parentElement, guard += 1) {
+      if (String(node.tagName || "").toLowerCase() === "gem-mode-menu") break;
+      candidates.push(node);
+    }
     for (const node of candidates) {
+      if (node.hasAttribute?.("selected") && String(node.getAttribute?.("selected") || "").trim().toLowerCase() !== "false") return true;
+      if (node.hasAttribute?.("checked") && String(node.getAttribute?.("checked") || "").trim().toLowerCase() !== "false") return true;
       if (parseBooleanAttr(node.getAttribute?.("aria-checked")) === true) return true;
       if (parseBooleanAttr(node.getAttribute?.("aria-selected")) === true) return true;
+      if (parseBooleanAttr(node.getAttribute?.("aria-pressed")) === true) return true;
       const dataState = String(node.getAttribute?.("data-state") || "").trim().toLowerCase();
       if (["checked", "selected", "active"].includes(dataState)) return true;
       const dataSelected = parseBooleanAttr(node.getAttribute?.("data-selected"));
@@ -1003,7 +1208,11 @@
   }
 
   function isGeminiTargetSelected(root, modelId) {
-    if (modelId === "thinking" || modelId === "extended") return geminiThinkingLevelOptionIsSelected(root, modelId);
+    if (modelId === "thinking" || modelId === "extended") {
+      const toggle = findGeminiExtendedToggle(root);
+      if (toggle) return geminiElementHasSelectedState(toggle) === (modelId === "extended");
+      return geminiThinkingLevelOptionIsSelected(root, modelId);
+    }
     const item = findGeminiItem(root, modelId);
     return Boolean(item && geminiElementHasSelectedState(item));
   }
@@ -1015,26 +1224,43 @@
   async function waitGeminiSettled(modelId) {
     const deadline = Date.now() + 2200;
     while (Date.now() <= deadline) {
-      const root = geminiMenuRoot();
-      if (root && isGeminiTargetSelected(root, modelId)) return true;
-      const current = root ? selectedGeminiModelKey(root) : currentGeminiModelKey();
-      if (current && current === modelId) return true;
-      if (!root && (modelId === "pro" || modelId === "fast" || modelId === "flash35") && currentGeminiModelHasKey(modelId)) return true;
-      if (!root && modelId === "extended" && currentGeminiModelHasKey("extended")) return true;
-      if (!root && modelId === "thinking" && !currentGeminiModelHasKey("extended")) return true;
-      if (!root && !current) return true;
+      if (currentGeminiModelHasKey(modelId)) return true;
       await sleep(120);
     }
-    const final = currentGeminiModelKey();
-    if (modelId === "flash35") return currentGeminiModelHasKey("flash35");
-    if (modelId === "extended") return currentGeminiModelHasKey("extended");
-    if (modelId === "thinking") return !currentGeminiModelHasKey("extended");
-    return final ? final === modelId : !geminiMenuRoot();
+    return currentGeminiModelHasKey(modelId);
   }
 
   async function applyGeminiTarget(modelId) {
+    if (modelId === "extended" && currentGeminiThinkingLevelKey() === "extended") {
+      return { ok: true, skipped: true };
+    }
+    if (modelId === "thinking" && currentGeminiThinkingLevelKey() === "thinking") {
+      return { ok: true, skipped: true };
+    }
+
     let root = await openGeminiMenu();
     if (!root) return { ok: false, reason: "model menu not found" };
+
+    if (modelId === "thinking" || modelId === "extended") {
+      const compactToggle = findGeminiExtendedToggleInMenus();
+      if (compactToggle.item) {
+        root = compactToggle.root || root;
+        const selected = geminiElementHasSelectedState(compactToggle.item);
+        const shouldBeSelected = modelId === "extended";
+        if (selected === shouldBeSelected) {
+          return (await waitGeminiSettled(modelId))
+            ? { ok: true, skipped: true }
+            : { ok: false, reason: "thinking level did not settle" };
+        }
+        if (!clickGeminiMenuItem(compactToggle.item)) {
+          return { ok: false, reason: "Extended thinking toggle could not be clicked" };
+        }
+        return (await waitGeminiSettled(modelId))
+          ? { ok: true, skipped: false }
+          : { ok: false, reason: "selection did not settle" };
+      }
+    }
+
     const anyOption = modelId === "thinking" || modelId === "extended"
       ? findGeminiThinkingLevelOptionInMenus(modelId)
       : { root: null, item: null };
@@ -1611,15 +1837,10 @@
     if (existing) return existing;
     const firstTrigger = await waitFor(findGrokTrigger, 10000, 150);
     if (!firstTrigger) return null;
-    for (const { element: trigger } of grokTriggerCandidates().slice(0, 6)) {
-      if (!clickElement(trigger)) continue;
-      await sleep(140);
-      const root = await waitFor(() => grokMenuRoot(trigger), 900, 90);
-      if (root) return root;
-      closeFloatingMenu();
-      await sleep(80);
-    }
-    return null;
+    const trigger = grokTriggerCandidates()[0]?.element || firstTrigger;
+    if (!clickElement(trigger)) return null;
+    await sleep(140);
+    return await waitFor(() => grokMenuRoot(trigger), 1200, 90) || null;
   }
 
   function currentGrokModelId() {
@@ -2169,7 +2390,7 @@
     }
     let clicked = clickElement(item);
     let settled = clicked ? await waitNotionSettled(modelId, trigger) : false;
-    if (!settled) {
+    if (!settled && !clicked) {
       const retryRoot = notionMenuRoot(trigger) || root;
       const pointTarget = retryRoot ? findNotionPointTarget(item, retryRoot, modelId) : null;
       if (pointTarget && pointTarget !== item && clickElement(pointTarget)) {
@@ -2340,18 +2561,18 @@
       elementFromPoint(centerPoint(element), element),
       deepSeekClickableElement(element)
     ].filter(Boolean);
-    let clicked = false;
     const seen = new Set();
     for (const target of targets) {
       if (!target || seen.has(target) || !visible(target) || isDisabledElement(target)) continue;
       seen.add(target);
-      try { target.focus?.({ preventScroll: true }); } catch {
-        try { target.focus?.(); } catch {}
+      if (nativeClick(target)) return true;
+      const clicked = dispatchDeepSeekMouseClick(target);
+      if (clicked) {
+        recordActivation(target, "deepseek-mouse-sequence");
+        return true;
       }
-      clicked = nativeClick(target) || clicked;
-      clicked = dispatchDeepSeekMouseClick(target) || clicked;
     }
-    return clicked;
+    return false;
   }
 
   async function waitDeepSeekSettled(modeId) {
@@ -2401,9 +2622,20 @@
       return {
         appId: normalizedApp,
         current: currentGeminiModelKey(),
+        thinkingLevel: currentGeminiPickerState().thinkingLevel,
         triggerText: elementText(trigger),
         menuOpen: Boolean(root),
-        menuItems: root ? geminiItems(root).map((item) => elementText(item)).slice(0, 20) : []
+        extendedToggle: root ? (() => {
+          const item = findGeminiExtendedToggle(root);
+          return item
+            ? { found: true, selected: geminiElementHasSelectedState(item), tag: String(item.tagName || ""), text: elementText(item) }
+            : { found: false, selected: false, tag: "", text: "" };
+        })() : { found: false, selected: false, tag: "", text: "" },
+        menuItems: root ? geminiItems(root).map((item) => ({
+          tag: String(item.tagName || ""),
+          selected: geminiElementHasSelectedState(item),
+          text: elementText(item)
+        })).slice(0, 20) : []
       };
     }
     if (normalizedApp === "Grok") {
@@ -2460,15 +2692,29 @@
       "  await ChatClubPreferredModelTest.apply('Grok', 'grok43')",
       "  await ChatClubPreferredModelTest.apply('DeepSeek', 'expert')",
       "  await ChatClubPreferredModelTest.apply('NotionAI', 'gpt55')",
-      "  ChatClubPreferredModelTest.inspect()"
+      "  ChatClubPreferredModelTest.inspect()",
+      "  ChatClubPreferredModelTest.diagnostics()",
+      "  ChatClubPreferredModelTest.resetDiagnostics()"
     ].join("\n");
+  }
+
+  function dispose() {
+    document.removeEventListener("click", diagnosticListeners.click, true);
+    document.removeEventListener("focusin", diagnosticListeners.focusin, true);
+    document.removeEventListener("focusout", diagnosticListeners.focusout, true);
+    document.removeEventListener("blur", diagnosticListeners.blur, true);
+    document.removeEventListener("compositionstart", diagnosticListeners.compositionstart, true);
+    document.removeEventListener("compositionend", diagnosticListeners.compositionend, true);
   }
 
   window[API_NAME] = Object.freeze({
     apply,
+    diagnostics: diagnosticSnapshot,
+    dispose,
     help,
     inferAppId,
     inspect,
+    resetDiagnostics,
     targets: TARGETS
   });
   console.log(help());
