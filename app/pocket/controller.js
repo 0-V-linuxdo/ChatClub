@@ -1,5 +1,5 @@
 import { t } from "../../shared/i18n.js";
-import { dedupePocketHistory, normalizePocketCardSize } from "../../shared/storage.js";
+import { dedupePocketHistory, normalizePocketCardSize } from "../../shared/storage-schema.js";
 import { clear, el, modal, toast } from "../../ui/dom.js";
 import { requireControllerContext, requireControllerFunction } from "../controller-context.js";
 import { renderMarkdown } from "../summary/markdown.js";

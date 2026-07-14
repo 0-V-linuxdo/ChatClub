@@ -1,28 +1,72 @@
 (() => {
-  const SOURCE = "chatclub";
-  const COPY_SOURCE = "chatclub-native-copy:2026.07.08.13";
-  const GEMINI_MODEL_PICKER_SOURCE = "chatclub-gemini-model-picker:2026.07.13.3";
-  const MAIN_WORLD_LOCATION_SOURCE = "chatclub:main-world-location:2026.07.13.3";
+  // <chatclub-generated-protocol>
+  const PROTOCOL = Object.freeze({
+    "GENERIC_POST_MESSAGE_SOURCE": "chatclub",
+    "NATIVE_COPY_SOURCE": "chatclub-native-copy:2026.07.08.13",
+    "GEMINI_MODEL_PICKER_SOURCE": "chatclub-gemini-model-picker:2026.07.13.3",
+    "MAIN_WORLD_LOCATION_SOURCE": "chatclub:main-world-location:2026.07.13.3",
+    "NOTION_SEND_TEXT_SOURCE": "chatclub-notion-send-text:2026.07.13.13",
+    "NOTION_SEND_PROMPT_SOURCE": "chatclub-notion-send-prompt:2026.07.13.13",
+    "NOTION_SEND_ACTIVATED_EVENT": "chatclub:notion-send-activated:2026.07.13.1",
+    "SEND_TEXT_POST_MESSAGE_SOURCE": "chatclub:send-text:2026.07.13.7",
+    "DELETE_THREAD_POST_MESSAGE_SOURCE": "chatclub:delete-thread:2026.07.10.2",
+    "MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE": "chatclub:message-navigator:2026.07.08.12",
+    "SUMMARY_POST_MESSAGE_SOURCE": "chatclub:summary:2026.07.08.13",
+    "PREFERRED_MODEL_POST_MESSAGE_SOURCE": "chatclub:preferred-model:2026.07.13.2",
+    "CONTENT_BRIDGE_VERSION": "2026.07.15.2",
+    "EXTENSION_RUNTIME_RELAY_SOURCE": "chatclub:runtime-relay:2026.07.15.2",
+    "SECURE_FRAME_COMMAND_SOURCE": "chatclub:frame-command:2026.07.15.2",
+    "DEEPSEEK_DELETE_SOURCE": "chatclub-deepseek-delete-thread:2026.07.03.30",
+    "PAGE_SUMMARY_SOURCE": "chatclub-summary-userscript:2026.07.15.2",
+    "NAVIGATION_FOCUS_GUARD_SOURCE": "chatclub:navigation-focus-guard:2026.07.13.3",
+    "FRAME_TOAST_POSITION_EVENT": "chatclub:frame-toast-position:2026.07.13.1",
+    "CUSTOM_SUMMARY_EXECUTOR": "__CHATCLUB_SUMMARY_CUSTOM_EXECUTOR_2026_07_14__",
+    "TOPIC_DELETE_REQUEST_EVENT": "chatclub:delete-site:request",
+    "TOPIC_DELETE_MENU_COMMAND_EVENT": "chatclub:delete-site:menu-command",
+    "TOPIC_DELETE_RESULT_EVENT": "chatclub:delete-site:result",
+    "TOPIC_DELETE_PING_EVENT": "chatclub:delete-site:ping",
+    "TOPIC_DELETE_READY_EVENT": "chatclub:delete-site:ready",
+    "TOPIC_DELETE_BRIDGE_SOURCE": "chatclub-delete-sites"
+  });
+  // </chatclub-generated-protocol>
+  const EXTENSION_API = globalThis.browser || globalThis.chrome;
+  const EXTENSION_ORIGIN = (() => {
+    try {
+      return String(EXTENSION_API?.runtime?.getURL?.("") || "").match(/^[a-z][a-z0-9+.-]*:\/\/[^/]+/i)?.[0] || "";
+    } catch {
+      return "";
+    }
+  })();
+  const SOURCE = PROTOCOL.GENERIC_POST_MESSAGE_SOURCE;
+  const COPY_SOURCE = PROTOCOL.NATIVE_COPY_SOURCE;
+  const GEMINI_MODEL_PICKER_SOURCE = PROTOCOL.GEMINI_MODEL_PICKER_SOURCE;
+  const MAIN_WORLD_LOCATION_SOURCE = PROTOCOL.MAIN_WORLD_LOCATION_SOURCE;
   const GEMINI_MODEL_PICKER_RUN_TOKEN_ATTRIBUTE = "data-chatclub-gemini-model-picker-run";
   const PREFERRED_MODEL_FOCUS_SHIELD_ATTRIBUTE = "data-chatclub-preferred-model-focus-shield";
   const PREFERRED_MODEL_FOCUS_SHIELD_LEASE_MS = 5000;
   const PREFERRED_MODEL_FOCUS_SHIELD_RELEASE_GRACE_MS = 400;
-  const NOTION_SEND_TEXT_SOURCE = "chatclub-notion-send-text:2026.07.13.13";
-  const NOTION_SEND_PROMPT_SOURCE = "chatclub-notion-send-prompt:2026.07.13.13";
-  const NOTION_SEND_ACTIVATED_EVENT = "chatclub:notion-send-activated:2026.07.13.1";
-  const CONTENT_BRIDGE_VERSION = "2026.07.14.2";
-  const SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.13.7";
-  const DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.10.2";
-  const PREFERRED_MODEL_POST_MESSAGE_SOURCE = "chatclub:preferred-model:2026.07.13.2";
-  const SHORTCUT_TRIGGER_POST_MESSAGE_SOURCE = "chatclub:shortcut-trigger:2026.07.14.1";
-  const MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.08.12";
-  const SUMMARY_POST_MESSAGE_SOURCE = "chatclub:summary:2026.07.08.13";
-  const DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.07.03.30";
-  const PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.08.13";
+  const NOTION_SEND_TEXT_SOURCE = PROTOCOL.NOTION_SEND_TEXT_SOURCE;
+  const NOTION_SEND_PROMPT_SOURCE = PROTOCOL.NOTION_SEND_PROMPT_SOURCE;
+  const NOTION_SEND_ACTIVATED_EVENT = PROTOCOL.NOTION_SEND_ACTIVATED_EVENT;
+  const CONTENT_BRIDGE_VERSION = PROTOCOL.CONTENT_BRIDGE_VERSION;
+  const SEND_TEXT_POST_MESSAGE_SOURCE = PROTOCOL.SEND_TEXT_POST_MESSAGE_SOURCE;
+  const DELETE_THREAD_POST_MESSAGE_SOURCE = PROTOCOL.DELETE_THREAD_POST_MESSAGE_SOURCE;
+  const PREFERRED_MODEL_POST_MESSAGE_SOURCE = PROTOCOL.PREFERRED_MODEL_POST_MESSAGE_SOURCE;
+  const SECURE_FRAME_COMMAND_SOURCE = PROTOCOL.SECURE_FRAME_COMMAND_SOURCE;
+  const MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = PROTOCOL.MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE;
+  const SUMMARY_POST_MESSAGE_SOURCE = PROTOCOL.SUMMARY_POST_MESSAGE_SOURCE;
+  const DEEPSEEK_DELETE_SOURCE = PROTOCOL.DEEPSEEK_DELETE_SOURCE;
+  const PAGE_SUMMARY_SOURCE = PROTOCOL.PAGE_SUMMARY_SOURCE;
   const PROMPT_IMAGE_PASTE_STRATEGY_BATCH = "batch";
   let contentDocumentId = window.__CHATCLUB_CONTENT_DOCUMENT_ID__ ||
     `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
   window.__CHATCLUB_CONTENT_DOCUMENT_ID__ = contentDocumentId;
+  const secureFrameToken = window.__CHATCLUB_SECURE_FRAME_TOKEN__ || (() => {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
+  })();
+  window.__CHATCLUB_SECURE_FRAME_TOKEN__ = secureFrameToken;
   let contentLocationRevision = Math.max(
     0,
     Number(window.__CHATCLUB_CONTENT_LOCATION_REVISION__) || 0
@@ -170,16 +214,26 @@
     } catch {}
   }
 
+  function announceContentReady() {
+    return sendExtensionRuntimeMessage({
+      source: SOURCE,
+      action: "registerFrameContext",
+      bridgeDocumentId: contentDocumentId,
+      secureFrameToken,
+      bridgeVersion: CONTENT_BRIDGE_VERSION
+    }).catch((error) => {
+      console.warn("[ChatClub] Secure frame registration failed", error);
+    }).finally(postContentReady);
+  }
+
   function postContentUnloading() {
-    try {
-      window.parent.postMessage({
-        source: SOURCE,
-        type: "request",
-        action: "contentUnloading",
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
-        data: contentReadyData()
-      }, "*");
-    } catch {}
+    sendExtensionRuntimeMessage({
+      source: SOURCE,
+      action: "relayFrameLifecycle",
+      lifecycleAction: "contentUnloading",
+      bridgeDocumentId: contentDocumentId,
+      data: contentReadyData()
+    }).catch(() => {});
   }
 
   function normalizedSubmissionNavigation(value = {}) {
@@ -267,20 +321,18 @@
   }
 
   function postLocationChanged(data = {}) {
-    try {
-      window.parent.postMessage({
-        source: SOURCE,
-        type: "request",
-        action: "locationChanged",
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
-        data
-      }, "*");
-    } catch {}
+    sendExtensionRuntimeMessage({
+      source: SOURCE,
+      action: "relayFrameLifecycle",
+      lifecycleAction: "locationChanged",
+      bridgeDocumentId: contentDocumentId,
+      data
+    }).catch((error) => console.warn("[ChatClub] Frame lifecycle relay failed", error));
   }
 
   const hadContentBridge = Boolean(window.__CHATCLUB_CONTENT_BRIDGE_INSTALLED__);
   if (window.__CHATCLUB_CONTENT_BRIDGE_VERSION__ === CONTENT_BRIDGE_VERSION) {
-    postContentReady();
+    announceContentReady();
     return;
   }
   try { document.documentElement?.removeAttribute(GEMINI_MODEL_PICKER_RUN_TOKEN_ATTRIBUTE); } catch {}
@@ -354,7 +406,7 @@
     clearSubmissionNavigation();
     postContentUnloading();
   }, locationReportOptions);
-  window.addEventListener("pageshow", () => postContentReady(), locationReportOptions);
+  window.addEventListener("pageshow", () => announceContentReady(), locationReportOptions);
   const locationReportTimer = setInterval(() => {
     reportLocationChange("", false, { kind: "poll", at: Date.now() });
   }, 800);
@@ -370,7 +422,8 @@
     .trim();
 
   function respond(source, id, action, data, error, responseSource = SOURCE) {
-    source?.postMessage({ source: responseSource, type: "response", id, action, data, error }, "*");
+    if (!EXTENSION_ORIGIN) return;
+    source?.postMessage({ source: responseSource, type: "response", id, action, data, error }, EXTENSION_ORIGIN);
   }
 
   const SHORTCUT_CONFIG_SCHEMA_VERSION = 2;
@@ -458,25 +511,6 @@
   ]);
   const ACTIVE_KEYBOARD_PLATFORM = detectKeyboardPlatform();
   let activeShortcutConfig = normalizeShortcutConfig(DEFAULT_SHORTCUT_CONFIG);
-
-  function requestParent(action, data = {}, timeout = 1200) {
-    return new Promise((resolve, reject) => {
-      const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      const timer = setTimeout(() => {
-        window.removeEventListener("message", onMessage, true);
-        reject(new Error("Parent request timed out"));
-      }, timeout);
-      function onMessage(event) {
-        const message = event.data;
-        if (message?.source !== SOURCE || message.type !== "response" || message.id !== id) return;
-        clearTimeout(timer);
-        window.removeEventListener("message", onMessage, true);
-        message.error ? reject(new Error(message.error)) : resolve(message.data);
-      }
-      window.addEventListener("message", onMessage, true);
-      window.parent.postMessage({ source: SOURCE, type: "request", action, id, data }, "*");
-    });
-  }
 
   function bool(value, fallback = false) {
     return value == null ? fallback : Boolean(value);
@@ -661,24 +695,19 @@
 
   async function loadShortcutConfig() {
     try {
-      const parentConfig = await requestParent("getShortcutConfig", {}, 1400);
-      activeShortcutConfig = normalizeShortcutConfig(parentConfig);
-      return;
-    } catch {}
-    try {
-      const stored = await chrome.storage.local.get("shortcutConfig");
+      const stored = await EXTENSION_API?.storage?.local?.get("shortcutConfig");
       activeShortcutConfig = normalizeShortcutConfig(stored.shortcutConfig);
     } catch {}
   }
 
   function postShortcutTriggered(match) {
-    window.parent.postMessage({
-      source: SHORTCUT_TRIGGER_POST_MESSAGE_SOURCE,
-      type: "request",
-      action: "shortcutTriggered",
-      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      data: match
-    }, "*");
+    sendExtensionRuntimeMessage({
+      source: SOURCE,
+      action: "relayShortcutTriggered",
+      bridgeDocumentId: contentDocumentId,
+      shortcutAction: String(match?.action || ""),
+      matchObj: match?.matchObj || {}
+    }).catch((error) => console.warn("[ChatClub] Shortcut relay failed", error));
   }
 
   function shouldBridgeShortcut(match, event) {
@@ -1007,30 +1036,6 @@
     });
   }
 
-  function parentClipboardRequest(action, id, data = {}, timeout = 700) {
-    return new Promise((resolve) => {
-      try {
-        if (!window.parent || window.parent === window) return resolve(null);
-        const timer = setTimeout(() => {
-          window.removeEventListener("message", onMessage, true);
-          resolve(null);
-        }, timeout);
-        const onMessage = (event) => {
-          const message = event.data;
-          if (message?.source === "chatclub-parent-clipboard" && message.type === "response" && message.action === action && message.id === id) {
-            clearTimeout(timer);
-            window.removeEventListener("message", onMessage, true);
-            resolve(message.data || null);
-          }
-        };
-        window.addEventListener("message", onMessage, true);
-        window.parent.postMessage({ source: "chatclub-parent-clipboard", type: "request", action, id, data }, "*");
-      } catch {
-        resolve(null);
-      }
-    });
-  }
-
   function pageSummaryRequest(config = {}) {
     return new Promise((resolve) => {
       const id = copyId();
@@ -1078,9 +1083,37 @@
     });
   }
 
-  async function parentClipboardText(id, timeout = 600) {
-    const result = await parentClipboardRequest("read", id, {}, timeout);
-    return result?.ok ? normalize(result.text || "") : "";
+  function pageSummaryRuntimeState(timeoutMs = 900) {
+    return new Promise((resolve) => {
+      const id = copyId();
+      let settled = false;
+      const finish = (state = null) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        window.removeEventListener("message", onMessage, true);
+        resolve(state);
+      };
+      const onMessage = (event) => {
+        const message = event.data;
+        if (
+          event.source !== window
+          || message?.source !== PAGE_SUMMARY_SOURCE
+          || message.type !== "response"
+          || message.action !== "runtimeState"
+          || message.id !== id
+        ) return;
+        finish(message.data && typeof message.data === "object" ? message.data : null);
+      };
+      const timer = setTimeout(() => finish(null), Math.max(250, Math.min(1800, Number(timeoutMs) || 900)));
+      window.addEventListener("message", onMessage, true);
+      window.postMessage({
+        source: PAGE_SUMMARY_SOURCE,
+        type: "request",
+        action: "runtimeState",
+        id
+      }, "*");
+    });
   }
 
   function copyId() {
@@ -1121,7 +1154,6 @@
     let capturedPriority = 0;
     let capturedAt = 0;
     try { before = normalize(await navigator.clipboard.readText()); } catch {}
-    if (!before) before = await parentClipboardText(id, 500);
     const acceptsClipboardValue = (value) => value
       && !isCopyProbeText(value)
       && (value !== before || allowUnchangedClipboard);
@@ -1152,20 +1184,12 @@
             break;
           }
         } catch {}
-        const parentCurrent = await parentClipboardText(id, 250);
-        if (acceptsClipboardValue(parentCurrent)) {
-          captured = parentCurrent;
-          capturedPriority = Math.max(capturedPriority, 6);
-          break;
-        }
       }
       if (captured && !isCopyProbeText(captured)) return cleanCaptured(captured);
       try {
         const after = normalize(await navigator.clipboard.readText());
         if (acceptsClipboardValue(after)) return cleanCaptured(after);
       } catch {}
-      const parentAfter = await parentClipboardText(id, 700);
-      if (acceptsClipboardValue(parentAfter)) return cleanCaptured(parentAfter);
       return "";
     } finally {
       window.removeEventListener("message", onCapture, true);
@@ -5020,12 +5044,12 @@
     };
   }
 
-  const TOPIC_DELETE_REQUEST_EVENT = "chatclub:delete-site:request";
-  const TOPIC_DELETE_MENU_COMMAND_EVENT = "chatclub:delete-site:menu-command";
-  const TOPIC_DELETE_RESULT_EVENT = "chatclub:delete-site:result";
-  const TOPIC_DELETE_PING_EVENT = "chatclub:delete-site:ping";
-  const TOPIC_DELETE_READY_EVENT = "chatclub:delete-site:ready";
-  const TOPIC_DELETE_BRIDGE_SOURCE = "chatclub-delete-sites";
+  const TOPIC_DELETE_REQUEST_EVENT = PROTOCOL.TOPIC_DELETE_REQUEST_EVENT;
+  const TOPIC_DELETE_MENU_COMMAND_EVENT = PROTOCOL.TOPIC_DELETE_MENU_COMMAND_EVENT;
+  const TOPIC_DELETE_RESULT_EVENT = PROTOCOL.TOPIC_DELETE_RESULT_EVENT;
+  const TOPIC_DELETE_PING_EVENT = PROTOCOL.TOPIC_DELETE_PING_EVENT;
+  const TOPIC_DELETE_READY_EVENT = PROTOCOL.TOPIC_DELETE_READY_EVENT;
+  const TOPIC_DELETE_BRIDGE_SOURCE = PROTOCOL.TOPIC_DELETE_BRIDGE_SOURCE;
   const TOPIC_DELETE_MENU_COMMAND_UNSUPPORTED_REASON = "userscript does not expose menu command trigger";
 
   function topicDeleteSiteName(config = {}, payload = {}) {
@@ -5047,22 +5071,26 @@
   }
 
   function topicDeleteStandaloneVersion(config = {}) {
+    if (config.userscriptVersion) return String(config.userscriptVersion).trim();
     const source = String(config.userscript || "");
     const match = source.match(/^\s*\/\/\s*@version\s+(.+?)\s*$/m);
     return match ? String(match[1] || "").trim() : "";
   }
 
   function topicDeleteSupportsVersionedRequest(config = {}) {
+    if (typeof config.supportsVersionedRequest === "boolean") return config.supportsVersionedRequest;
     const source = String(config.userscript || "");
     return source.includes("VERSIONED_REQUEST_EVENT") && /request:\s*"\s*\+\s*VERSION|request:\s*['"]/.test(source);
   }
 
   function topicDeleteSupportsVersionedMenuCommand(config = {}) {
+    if (typeof config.supportsVersionedMenuCommand === "boolean") return config.supportsVersionedMenuCommand;
     const source = String(config.userscript || "");
     return source.includes("VERSIONED_MENU_COMMAND_EVENT") && /menu-command:\s*"\s*\+\s*VERSION|menu-command:\s*['"]/.test(source);
   }
 
   function topicDeleteSourceSupportsMenuCommand(config = {}) {
+    if (typeof config.supportsMenuCommand === "boolean") return config.supportsMenuCommand;
     const source = String(config.userscript || "");
     return source.includes("MENU_COMMAND_EVENT")
       || source.includes("chatclub:delete-site:menu-command")
@@ -5165,38 +5193,38 @@
     });
   }
 
-  function installStandaloneTopicDeleteUserscript(config = {}) {
+  function sendExtensionRuntimeMessage(message) {
+    const promiseRuntime = globalThis.browser?.runtime;
+    if (promiseRuntime?.sendMessage) return promiseRuntime.sendMessage(message);
     return new Promise((resolve, reject) => {
       if (typeof chrome === "undefined" || !chrome.runtime?.sendMessage) {
-        reject(new Error("Standalone Delete Site userscript installer is unavailable"));
+        reject(new Error("Extension runtime messaging is unavailable"));
         return;
       }
-      const installConfig = {
-        id: config.id || "",
-        name: config.name || "",
-        builtIn: config.builtIn !== false,
-        sourceMode: config.sourceMode === "custom" ? "custom" : "builtIn",
-        userscriptOverride: Boolean(config.userscriptOverride),
-        userscriptFile: String(config.userscriptFile || ""),
-        userscript: String(config.customUserscript || config.userscript || "")
-      };
-      chrome.runtime.sendMessage({
-        source: SOURCE,
-        action: "installTopicDeleteUserscript",
-        config: installConfig
-      }, (response) => {
+      chrome.runtime.sendMessage(message, (response) => {
         const runtimeError = chrome.runtime.lastError?.message;
-        if (runtimeError) {
-          reject(new Error(runtimeError));
-          return;
-        }
-        if (!response?.success) {
-          reject(new Error(response?.error || "Delete Site userscript installation failed"));
-          return;
-        }
-        resolve(response);
+        if (runtimeError) reject(new Error(runtimeError));
+        else resolve(response);
       });
     });
+  }
+
+  async function installStandaloneTopicDeleteUserscript(config = {}) {
+    const installConfig = {
+      id: config.id || ""
+    };
+    const response = await sendExtensionRuntimeMessage({
+      source: SOURCE,
+      action: "installTopicDeleteUserscript",
+      config: installConfig
+    });
+    if (!response?.success) {
+      throw new Error(response?.error || "Delete Site userscript installation failed");
+    }
+    if (response.runtimeConfig && typeof response.runtimeConfig === "object") {
+      Object.assign(config, response.runtimeConfig);
+    }
+    return response;
   }
 
   async function ensureStandaloneTopicDeleteUserscript(config = {}, payload = {}, timeoutMs = 15000) {
@@ -5401,16 +5429,31 @@
     return deleteResult(Boolean(value), site, value ? "" : "userscript returned false");
   }
 
+  function topicDeleteUsesCustomUserscript(config = {}) {
+    return config.builtIn === false || config.sourceMode === "custom" || config.userscriptOverride === true;
+  }
+
+  async function executeCustomTopicDeleteUserscript(config = {}, payload = {}) {
+    const response = await sendExtensionRuntimeMessage({
+      source: SOURCE,
+      action: "executeTopicDeleteUserscript",
+      configId: String(config.id || ""),
+      payload
+    });
+    if (!response?.success) throw new Error(response?.error || "Custom Delete Site userscript execution failed");
+    return response.data || deleteResult(false, topicDeleteSiteName(config, payload), "Custom Delete Site returned no result");
+  }
+
   async function runTopicDeleteUserscript(config = {}, payload = {}) {
     const site = topicDeleteSiteName(config, payload);
     const source = String(config.userscript || "").trim();
-    const standalone = isStandaloneTopicDeleteUserscript(source);
-    let nativeRunner = null;
-    if (!standalone && source) {
+    const customMode = topicDeleteUsesCustomUserscript(config);
+    const nativeRunner = customMode ? null : topicDeleteNativeRunner(config, payload);
+    const standalone = !customMode && !nativeRunner && (config.standaloneUserscript === true || isStandaloneTopicDeleteUserscript(source));
+    if (!customMode && !standalone && source) {
       return deleteResult(false, site, "Legacy bridge snippets are unsupported under MV3 CSP; convert this Delete Site to a standalone userscript.");
     }
-    if (!source) nativeRunner = topicDeleteNativeRunner(config, payload);
-    if (!standalone && !nativeRunner) return deleteResult(false, site, "userscript missing");
+    if (!customMode && !standalone && !nativeRunner) return deleteResult(false, site, "userscript missing");
     const nativeSiteId = nativeRunner ? topicDeleteNativeSiteId(config, payload) : "";
     const requestedTimeoutMs = Math.max(5000, Math.min(45000, Number(config.userscriptTimeoutMs) || 15000));
     const timeoutMs = nativeSiteId === "deepseek" ? Math.max(requestedTimeoutMs, 36000) : requestedTimeoutMs;
@@ -5420,7 +5463,9 @@
         timer = setTimeout(() => resolve({ ok: false, site, reason: "userscript timed out" }), timeoutMs);
       });
       const value = await Promise.race([
-        standalone
+        customMode
+          ? executeCustomTopicDeleteUserscript(config, payload)
+          : standalone
           ? runStandaloneTopicDeleteUserscript(config, payload, timeoutMs)
           : nativeRunner
             ? nativeRunner()
@@ -5444,7 +5489,7 @@
     const config = incomingConfig
       ? incomingConfig
       : topicDeleteFallbackConfig({}, payload);
-    if (!String(config?.userscript || "").trim() && !topicDeleteNativeRunner(config, payload)) {
+    if (!topicDeleteUsesCustomUserscript(config) && config?.standaloneUserscript !== true && !String(config?.userscript || "").trim() && !topicDeleteNativeRunner(config, payload)) {
       return deleteResult(false, topicDeleteSiteName(config || {}, payload), "unsupported site or userscript missing");
     }
     return runTopicDeleteUserscript(config, payload);
@@ -7551,46 +7596,69 @@
     });
   }
 
-  const inlineSummaryUserscriptCache = new Map();
-
-  function shouldUseInlineSummaryUserscript(config, runner) {
-    return Boolean(config?.userscript) && (!runner || config.builtIn === false || config.sourceMode === "custom" || config.userscriptOverride === true);
+  function shouldUseCustomSummaryUserscript(config, runner) {
+    const customMode = config.builtIn === false || config.sourceMode === "custom" || config.userscriptOverride === true;
+    return customMode && (!runner || customMode);
   }
 
-  function inlineSummaryUserscriptRunner(config = {}) {
-    const source = String(config.userscript || "").trim();
-    if (!source) return null;
-    const cacheKey = `${config.id || ""}\n${source}`;
-    const cached = inlineSummaryUserscriptCache.get(cacheKey);
-    if (cached) return cached;
-    try {
-      const AsyncFunction = Object.getPrototypeOf(async function() {}).constructor;
-      const runner = new AsyncFunction("api", source);
-      inlineSummaryUserscriptCache.set(cacheKey, runner);
-      return runner;
-    } catch (error) {
-      throw new Error(`Invalid Summary userscript: ${error?.message || String(error)}`);
+  async function executeCustomSummaryUserscript(config = {}) {
+    const response = await sendExtensionRuntimeMessage({
+      source: SOURCE,
+      action: "executeSummaryUserscript",
+      configId: String(config.id || "")
+    });
+    if (!response?.success) {
+      throw new Error(response?.error || "Custom Summary userscript execution failed");
+    }
+    return response.data || { messages: [] };
+  }
+
+  function assertSummaryTargetCurrent(data = {}) {
+    const expectedDocumentId = String(data?.expectedDocumentId || "");
+    if (expectedDocumentId && expectedDocumentId !== contentDocumentId) {
+      throw new Error("Summary target document changed before collection");
+    }
+    const expectedHref = String(data?.expectedHref || "");
+    if (expectedHref && expectedHref !== String(location.href || "")) {
+      throw new Error("Summary target URL changed during collection");
     }
   }
 
+  function finishSummaryCollection(data, result) {
+    assertSummaryTargetCurrent(data);
+    return result;
+  }
+
   async function collectSummary(data) {
+    assertSummaryTargetCurrent(data);
     const config = data?.config || {};
+    const registry = window.__CHATCLUB_SUMMARY_SCRIPTS__ || {};
+    const packagedRunner = registry[config.id] || registry[config.userscriptFile];
+    if (shouldUseCustomSummaryUserscript(config, packagedRunner)) {
+      const customResult = await executeCustomSummaryUserscript(config);
+      const customMessages = merge(Array.isArray(customResult?.messages) ? customResult.messages : []);
+      return finishSummaryCollection(data, {
+        ...customResult,
+        messages: hasUserAndAssistant(customMessages) ? customMessages : [],
+        rawMessageCount: Number(customResult?.rawMessageCount) || customMessages.length,
+        hasUserAndAssistant: hasUserAndAssistant(customMessages),
+        runner: "user-scripts"
+      });
+    }
     if (config.userscriptRunMode !== "serial") {
       const pageResult = await pageSummaryRequest(config);
       const pageMessages = merge(Array.isArray(pageResult?.messages) ? pageResult.messages : []);
       if (hasUserAndAssistant(pageMessages)) {
-        return {
+        return finishSummaryCollection(data, {
           messages: pageMessages,
           rawMessageCount: Number(pageResult.rawMessageCount) || pageMessages.length,
           hasUserAndAssistant: true,
           runner: "page-world"
-        };
+        });
       }
     }
-    const registry = window.__CHATCLUB_SUMMARY_SCRIPTS__ || {};
-    let runner = registry[config.id] || registry[config.userscriptFile];
-    if (shouldUseInlineSummaryUserscript(config, runner)) runner = inlineSummaryUserscriptRunner(config);
-    if (!runner) return { messages: [] };
+    const runner = packagedRunner;
+    if (!runner) return finishSummaryCollection(data, { messages: [] });
     const api = {
       config,
       sleep,
@@ -7614,11 +7682,11 @@
     };
     const result = await runner(api);
     const messages = merge(Array.isArray(result) ? result : result?.messages || []);
-    return {
+    return finishSummaryCollection(data, {
       messages: hasUserAndAssistant(messages) ? messages : [],
       rawMessageCount: messages.length,
       hasUserAndAssistant: hasUserAndAssistant(messages)
-    };
+    });
   }
 
   function messageNavigatorRuntime() {
@@ -7645,7 +7713,70 @@
       : { ok: false, enabled: false, messageCount: 0, error: "Message navigator runtime is unavailable" };
   }
 
+  async function getSummaryRuntimeState() {
+    const registry = window.__CHATCLUB_SUMMARY_SCRIPTS__;
+    const isolatedVersion = String(window.__CHATCLUB_SUMMARY_SCRIPTS_VERSION__ || "");
+    const isolatedReady = Boolean(
+      registry
+      && typeof registry === "object"
+      && Object.keys(registry).length
+      && isolatedVersion === CONTENT_BRIDGE_VERSION
+    );
+    const pageState = await pageSummaryRuntimeState();
+    const mainReady = Boolean(
+      pageState?.ready
+      && pageState.bridgeVersion === CONTENT_BRIDGE_VERSION
+    );
+    return {
+      ready: isolatedReady && mainReady,
+      isolatedReady,
+      mainReady,
+      isolatedVersion,
+      mainVersion: String(pageState?.bridgeVersion || ""),
+      documentId: contentDocumentId,
+      bridgeVersion: CONTENT_BRIDGE_VERSION
+    };
+  }
+
+  async function handleContentAction(action, data = {}) {
+    if (action === "getLocationHref") return location.href;
+    if (action === "getPageMeta") return pageMeta();
+    if (action === "getPageText") return normalize(document.body?.innerText || "");
+    if (action === "getSummaryRuntimeState") return getSummaryRuntimeState();
+    if (action === "sendText") return sendText(data);
+    if (action === "newChatPreprocess") return { ok: true };
+    if (action === "deleteThread") return deleteThread(data);
+    if (action === "getDeleteConfirmState") return topicDeleteConfirmState(data?.site || "topic-delete");
+    if (action === "applyPreferredModel") return runPreferredModelApply(data);
+    if (action === "cancelPreferredModelApply") return cancelPreferredModelApply(data);
+    if (action === "collectSummary") return collectSummary(data);
+    if (action === "setMessageNavigator") return setMessageNavigator(data);
+    if (action === "hideMessageNavigatorMenu") return hideMessageNavigatorMenu();
+    if (action === "getMessageNavigatorState") return getMessageNavigatorState();
+    throw new Error(`Unknown action: ${action}`);
+  }
+
+  try { window.__CHATCLUB_SECURE_FRAME_RPC_CLEANUP__?.(); } catch {}
+  const secureFrameCommandListener = (message, sender, sendResponse) => {
+    if (
+      message?.source !== SECURE_FRAME_COMMAND_SOURCE
+      || message.type !== "request"
+      || message.bridgeDocumentId !== contentDocumentId
+      || message.secureFrameToken !== secureFrameToken
+      || sender?.id !== EXTENSION_API?.runtime?.id
+    ) return false;
+    Promise.resolve(handleContentAction(message.action, message.data || {}))
+      .then((data) => sendResponse({ success: true, data }))
+      .catch((error) => sendResponse({ success: false, error: error?.message || String(error) }));
+    return true;
+  };
+  EXTENSION_API?.runtime?.onMessage?.addListener?.(secureFrameCommandListener);
+  window.__CHATCLUB_SECURE_FRAME_RPC_CLEANUP__ = () => {
+    try { EXTENSION_API?.runtime?.onMessage?.removeListener?.(secureFrameCommandListener); } catch {}
+  };
+
   window.addEventListener("message", async (event) => {
+    if (!EXTENSION_ORIGIN || event.source !== window.parent || event.origin !== EXTENSION_ORIGIN) return;
     const message = event.data;
     const versionedDeleteRequest = message?.source === DELETE_THREAD_POST_MESSAGE_SOURCE;
     const versionedSendTextRequest = message?.source === SEND_TEXT_POST_MESSAGE_SOURCE;
@@ -7675,22 +7806,7 @@
               ? SUMMARY_POST_MESSAGE_SOURCE
               : SOURCE;
     try {
-      let data;
-      if (message.action === "getLocationHref") data = location.href;
-      else if (message.action === "getPageMeta") data = pageMeta();
-      else if (message.action === "getPageText") data = normalize(document.body?.innerText || "");
-      else if (message.action === "sendText") data = await sendText(message.data || {});
-      else if (message.action === "newChatPreprocess") data = { ok: true };
-      else if (message.action === "deleteThread") data = await deleteThread(message.data || {});
-      else if (message.action === "getDeleteConfirmState") data = topicDeleteConfirmState(message.data?.site || "topic-delete");
-      else if (message.action === "applyPreferredModel") data = await runPreferredModelApply(message.data || {});
-      else if (message.action === "cancelPreferredModelApply") data = cancelPreferredModelApply(message.data || {});
-      else if (message.action === "collectSummary") data = await collectSummary(message.data || {});
-      else if (message.action === "setMessageNavigator") data = setMessageNavigator(message.data || {});
-      else if (message.action === "hideMessageNavigatorMenu") data = hideMessageNavigatorMenu();
-      else if (message.action === "getMessageNavigatorState") data = getMessageNavigatorState();
-      else if (message.action === "getShortcutConfig") data = activeShortcutConfig;
-      else throw new Error(`Unknown action: ${message.action}`);
+      const data = await handleContentAction(message.action, message.data || {});
       respond(event.source, message.id, message.action, data, null, responseSource);
     } catch (error) {
       respond(event.source, message.id, message.action, null, error.message || String(error), responseSource);
@@ -7702,6 +7818,7 @@
   const shortcutBridgeOptions = { capture: true, signal: shortcutBridgeController.signal };
   window.addEventListener("keydown", (event) => {
     if (!contentBridgeIsCurrent()) return;
+    if (!event.isTrusted) return;
     if (Date.now() < suppressShortcutBridgeUntil) return;
     const matched = matchShortcut(event);
     if (!matched) return;
@@ -7719,12 +7836,12 @@
     }
   };
   try {
-    chrome.storage?.onChanged?.addListener(shortcutStorageChanged);
+    EXTENSION_API?.storage?.onChanged?.addListener(shortcutStorageChanged);
   } catch {}
   window.__CHATCLUB_SHORTCUT_BRIDGE_CLEANUP__ = () => {
     shortcutBridgeController.abort();
-    try { chrome.storage?.onChanged?.removeListener(shortcutStorageChanged); } catch {}
+    try { EXTENSION_API?.storage?.onChanged?.removeListener(shortcutStorageChanged); } catch {}
   };
 
-  postContentReady();
+  announceContentReady();
 })();

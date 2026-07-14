@@ -8,6 +8,14 @@ const vm = require("node:vm");
 const root = path.resolve(__dirname, "..");
 const contentSource = fs.readFileSync(path.join(root, "content/content.js"), "utf8");
 const postMessageSource = fs.readFileSync(path.join(root, "shared/post-message.js"), "utf8");
+const protocolSource = fs.readFileSync(path.join(root, "shared/protocol.js"), "utf8");
+const contentProtocolSource = fs.readFileSync(path.join(root, "content/protocol.js"), "utf8");
+
+function protocolString(source, name, declaration) {
+  const match = source.match(new RegExp(`${declaration}\\s*("(?:[^"\\\\]|\\\\.)*")`));
+  assert.ok(match, `${name} must exist in its protocol source`);
+  return JSON.parse(match[1]);
+}
 
 function extractFunction(source, name, nextName) {
   const start = source.indexOf(`function ${name}(`);
@@ -50,10 +58,27 @@ const fallbackButton = {
 assert.equal(context.clickPromptSubmit(fallbackButton), true);
 assert.deepEqual(fallbackActivations, ["click"], "fallback activation must also dispatch exactly one click");
 
-const contentSendSource = contentSource.match(/const SEND_TEXT_POST_MESSAGE_SOURCE = "([^"]+)";/)?.[1];
-const parentSendSource = postMessageSource.match(/export const SEND_TEXT_POST_MESSAGE_SOURCE = "([^"]+)";/)?.[1];
-assert.ok(contentSendSource, "content send source must exist");
-assert.equal(contentSendSource, parentSendSource, "parent and content send channel versions must stay synchronized");
+const sendTextSource = protocolString(
+  protocolSource,
+  "SEND_TEXT_POST_MESSAGE_SOURCE",
+  "export const SEND_TEXT_POST_MESSAGE_SOURCE\\s*=\\s*"
+);
+const generatedSendTextSource = protocolString(
+  contentProtocolSource,
+  "SEND_TEXT_POST_MESSAGE_SOURCE",
+  '"?SEND_TEXT_POST_MESSAGE_SOURCE"?:\\s*'
+);
+assert.equal(generatedSendTextSource, sendTextSource, "content protocol bootstrap must match the shared send channel");
+assert.match(
+  contentSource,
+  /const SEND_TEXT_POST_MESSAGE_SOURCE = PROTOCOL\.SEND_TEXT_POST_MESSAGE_SOURCE;/,
+  "isolated content must consume the send channel from the protocol bootstrap"
+);
+assert.match(
+  postMessageSource,
+  /import\s*\{[\s\S]*?\bSEND_TEXT_POST_MESSAGE_SOURCE\b[\s\S]*?\}\s*from "\.\/protocol\.js";/,
+  "parent messaging must import the send channel from the shared protocol"
+);
 assert.match(
   contentSource,
   /if \(versionedSendTextRequest && !contentBridgeIsCurrent\(\)\) return;/,

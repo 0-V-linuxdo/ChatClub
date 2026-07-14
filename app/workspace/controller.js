@@ -1,7 +1,9 @@
 import { t } from "../../shared/i18n.js";
-import { DELETE_THREAD_POST_MESSAGE_SOURCE, MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE, sendToIframe } from "../../shared/post-message.js";
+import { MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE, sendToIframe } from "../../shared/post-message.js";
+import { sendToContentFrame } from "../../shared/frame-rpc.js";
+import { currentExtensionTabId, runtimeRequest } from "../../shared/extension-api.js";
 import { TAB_GROUP_HEADER_BUTTONS } from "../../shared/constants.js";
-import { normalizeTabGroupButtonOrder, normalizeTabGroupButtonPlacement } from "../../shared/storage.js";
+import { normalizeTabGroupButtonOrder, normalizeTabGroupButtonPlacement } from "../../shared/storage-schema.js";
 import { findMessageNavigatorSiteConfig } from "../../shared/message-navigator-sites.js";
 import { findTopicDeleteSiteConfig, topicDeleteTimeoutMs } from "../../shared/topic-delete-sites.js";
 import { button, el, field, input, modal } from "../../ui/dom.js";
@@ -18,6 +20,9 @@ import {
 } from "./model.js";
 import { createWorkspaceFrameRegistry } from "./frame-registry.js";
 import { createWorkspaceOpenTabs } from "./open-tab.js";
+import { NAVIGATION_FOCUS_GUARD_SOURCE } from "../../shared/protocol.js";
+import { executeTopicDelete } from "../topic-delete/runtime.js";
+import { requireControllerContext, requireControllerFunction } from "../controller-context.js";
 
 const DRAG_TAB_MIME = "application/x-chatclub-tab";
 const DRAG_TAB_GROUP_MIME = "application/x-chatclub-tab-group";
@@ -25,7 +30,6 @@ const DRAG_GROUP_MIME = "application/x-chatclub-group";
 const TAB_DRAG_START_DISTANCE = 6;
 const GROUP_DRAG_START_DISTANCE = 6;
 const LAYOUT_POPOVER_RIGHT_EXTENSION = 40;
-const NAVIGATION_FOCUS_GUARD_SOURCE = "chatclub:navigation-focus-guard:2026.07.13.3";
 const NAVIGATION_FOCUS_GUARD_TIMEOUT_MS = 1200;
 const NAVIGATION_FOCUS_GUARD_RETRY_MS = 75;
 const NAVIGATION_FOCUS_GUARD_POST_NAV_RETRY_MS = 150;
@@ -119,21 +123,14 @@ const APP_PICKER_CHINESE_ID_SET = new Set(APP_PICKER_CHINESE_IDS);
  * @property {(label: string, iconName: string, onClick: Function, extraClass?: string, tooltipLabel?: string, tooltipPlacement?: string, tooltipId?: string) => HTMLElement} compactIconButton
  * @property {(label: string, iconName: string, onClick: Function, variant?: string, disabled?: boolean, tooltipLabel?: string, tooltipPlacement?: string, tooltipId?: string) => HTMLElement} menuButton
  * @property {(action: string, slot?: string) => string} formatShortcut
+ * @property {(config: any) => Promise<boolean>} [requestTopicDeletePermission]
+ * @property {(iframe: HTMLIFrameElement, options?: object) => Promise<any>} [prepareContentFrameRuntime]
  * @property {() => void} [openCustomAppEditor]
  * @property {(event: WorkspaceFrameLifecycleEvent) => void} [onFrameLifecycleChange]
  */
 
-function requireContext(ctx, name) {
-  const value = ctx?.[name];
-  if (value === undefined || value === null) throw new TypeError(`Workspace controller requires ${name}.`);
-  return value;
-}
-
-function requireFunction(ctx, name) {
-  const value = requireContext(ctx, name);
-  if (typeof value !== "function") throw new TypeError(`Workspace controller requires ${name} to be a function.`);
-  return value;
-}
+const requireContext = (ctx, name) => requireControllerContext(ctx, "Workspace controller", name);
+const requireFunction = (ctx, name) => requireControllerFunction(ctx, "Workspace controller", name);
 
 /**
  * Workspace owns group/tab DOM orchestration and iframe lifecycle. It receives
@@ -164,6 +161,12 @@ export function createWorkspaceController(ctx = {}) {
   const compactIconButton = requireFunction(ctx, "compactIconButton");
   const menuButton = requireFunction(ctx, "menuButton");
   const formatShortcut = requireFunction(ctx, "formatShortcut");
+  const requestTopicDeletePermission = typeof ctx.requestTopicDeletePermission === "function"
+    ? ctx.requestTopicDeletePermission
+    : async () => true;
+  const prepareContentFrameRuntime = typeof ctx.prepareContentFrameRuntime === "function"
+    ? ctx.prepareContentFrameRuntime
+    : async () => ({ ok: true });
   const openCustomAppEditor = typeof ctx.openCustomAppEditor === "function" ? ctx.openCustomAppEditor : null;
   const onFrameLifecycleChange = typeof ctx.onFrameLifecycleChange === "function" ? ctx.onFrameLifecycleChange : () => {};
   let workspaceNode = null;
@@ -434,22 +437,12 @@ export function createWorkspaceController(ctx = {}) {
     return params.toString();
   }
 
-  function prepareFrameLoad(url) {
-    return new Promise((resolve) => {
-      try {
-        if (!globalThis.chrome?.runtime?.sendMessage) {
-          resolve({ success: false, error: "chrome.runtime.sendMessage unavailable" });
-          return;
-        }
-        chrome.runtime.sendMessage({ source: "chatclub", action: "prepareFrameLoad", url }, (response) => {
-          const error = chrome.runtime.lastError;
-          if (error) resolve({ success: false, error: error.message || String(error) });
-          else resolve(response || { success: true });
-        });
-      } catch (error) {
-        resolve({ success: false, error: error?.message || String(error || "prepareFrameLoad failed") });
-      }
-    });
+  async function prepareFrameLoad(url) {
+    try {
+      return await runtimeRequest({ source: "chatclub", action: "prepareFrameLoad", url });
+    } catch (error) {
+      return { success: false, error: error?.message || String(error || "prepareFrameLoad failed") };
+    }
   }
 
   function frameLoadingSet() {
@@ -2020,10 +2013,12 @@ export function createWorkspaceController(ctx = {}) {
     return assignFrameSrc(record.iframe, href);
   }
 
-  function refreshCurrentPage(chat) {
+  async function refreshCurrentPage(chat) {
     const iframe = activeIframe(chat);
     if (!iframe) return false;
-    const href = openableTabUrl(iframe.dataset.currentHref)
+    const liveHref = await activeHref(chat);
+    const href = openableTabUrl(liveHref)
+      || openableTabUrl(iframe.dataset.currentHref)
       || openableTabUrl(iframe.src || iframe.getAttribute?.("src"))
       || openableTabUrl(appById(chat?.appId).url);
     if (!href) return false;
@@ -2167,8 +2162,13 @@ export function createWorkspaceController(ctx = {}) {
 
   async function activeHref(chat) {
     const iframe = activeIframe(chat);
-    let href = openableTabUrl(iframe?.dataset.currentHref) || appById(chat?.appId).url;
-    try { href = await sendToIframe(iframe, "getLocationHref", {}, 1200) || href; } catch {}
+    let href = openableTabUrl(iframe?.dataset.currentHref)
+      || openableTabUrl(iframe?.src || iframe?.getAttribute?.("src"))
+      || appById(chat?.appId).url;
+    try {
+      const prepared = await prepareContentFrameRuntime(iframe);
+      if (prepared?.ok) href = await sendToContentFrame(iframe, "getLocationHref", {}, 1800) || href;
+    } catch {}
     const currentHref = openableTabUrl(href);
     if (iframe && currentHref) rememberFrameLocation(iframe, { href: currentHref });
     return href;
@@ -2283,10 +2283,10 @@ export function createWorkspaceController(ctx = {}) {
   }
 
   async function ensureMessageNavigatorContentBridge(iframe, payload = {}) {
-    const tabId = await currentTabId();
+    const tabId = await currentExtensionTabId();
     if (!tabId) return null;
     try {
-      return await runtimeMessage({
+      return await runtimeRequest({
         source: "chatclub",
         action: "ensureContentBridge",
         tabId,
@@ -2408,370 +2408,31 @@ export function createWorkspaceController(ctx = {}) {
     closePopovers();
   }
 
-  function topicDeleteTrustedClick(result = {}) {
-    const click = result?.trustedClick;
-    const point = click?.framePoint || click?.point;
-    const x = Number(point?.x);
-    const y = Number(point?.y);
-    if (!result?.needsTrustedClick || !click || !Number.isFinite(x) || !Number.isFinite(y)) return null;
-    return { ...click, framePoint: { x, y } };
-  }
-
-  function topicDeleteTrustedHover(result = {}) {
-    const hover = result?.trustedHover;
-    const point = hover?.framePoint || hover?.point;
-    const x = Number(point?.x);
-    const y = Number(point?.y);
-    if (!result?.needsTrustedHover || !hover || !Number.isFinite(x) || !Number.isFinite(y)) return null;
-    return { ...hover, framePoint: { x, y } };
-  }
-
-  function topicDeleteTrustedMenuClick(result = {}) {
-    const click = result?.trustedMenuClick;
-    const rawPoints = [
-      ...(Array.isArray(click?.framePoints) ? click.framePoints : []),
-      click?.framePoint,
-      click?.point
-    ];
-    const seen = new Set();
-    const framePoints = rawPoints
-      .map((point) => ({ x: Number(point?.x), y: Number(point?.y) }))
-      .filter((point) => {
-        if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) return false;
-        const key = `${point.x},${point.y}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-    if (!result?.needsTrustedMenuClick || !click || !framePoints.length) return null;
-    return { ...click, framePoint: framePoints[0], framePoints };
-  }
-
-  function topicDeleteTrustedKeySequence(result = {}) {
-    const sequence = result?.trustedKeySequence;
-    if (!result?.needsTrustedKeySequence || !sequence) return null;
-    const rawKeys = Array.isArray(sequence.keys) ? sequence.keys : [];
-    const keys = rawKeys
-      .map((item) => typeof item === "string" ? { key: item } : { key: String(item?.key || ""), settleMs: item?.settleMs })
-      .filter((item) => /^(tab|enter|return|escape|esc| |space|spacebar)$/i.test(item.key));
-    if (!keys.length) return null;
-    const point = sequence.framePoint || sequence.point;
-    const x = Number(point?.x);
-    const y = Number(point?.y);
-    return {
-      ...sequence,
-      keys,
-      ...(Number.isFinite(x) && Number.isFinite(y) ? { framePoint: { x, y } } : {})
-    };
-  }
-
-  function currentTabId() {
-    return new Promise((resolve) => {
-      if (typeof chrome === "undefined" || !chrome.tabs?.getCurrent) {
-        resolve(null);
-        return;
-      }
-      try {
-        chrome.tabs.getCurrent((tab) => {
-          resolve(Number.isInteger(tab?.id) ? tab.id : null);
-        });
-      } catch {
-        resolve(null);
-      }
-    });
-  }
-
-  function runtimeMessage(message) {
-    return new Promise((resolve, reject) => {
-      if (typeof chrome === "undefined" || !chrome.runtime?.sendMessage) {
-        reject(new Error("extension runtime is unavailable"));
-        return;
-      }
-      try {
-        chrome.runtime.sendMessage(message, (response) => {
-          const runtimeError = chrome.runtime.lastError?.message;
-          if (runtimeError) {
-            reject(new Error(runtimeError));
-            return;
-          }
-          if (!response?.success) {
-            reject(new Error(response?.error || "extension request failed"));
-            return;
-          }
-          resolve(response);
-        });
-      } catch (error) {
-        reject(error);
-      }
-    });
-  }
-
-  function topicDeleteTimeoutError(error, action = "") {
-    const message = String(error?.message || error || "");
-    return message.includes(`[PostMessage] Timeout waiting for response: ${action}`);
-  }
-
-  function topicDeleteFrameHrefHints(iframe, payload = {}) {
-    const values = [
-      payload.currentThreadHref,
-      payload.currentHref,
-      payload.cachedHref,
-      payload.href,
-      payload.url,
-      iframe?.dataset?.currentThreadHref,
-      iframe?.dataset?.currentHref,
-      iframe?.src,
-      iframe?.getAttribute?.("src")
-    ].map((item) => String(item || "").trim()).filter(Boolean);
-    return Array.from(new Set(values));
-  }
-
-  async function ensureTopicDeleteContentBridge(iframe, payload = {}) {
-    const tabId = await currentTabId();
-    if (!tabId) return null;
-    try {
-      return await runtimeMessage({
-        source: "chatclub",
-        action: "ensureContentBridge",
-        tabId,
-        hrefs: topicDeleteFrameHrefHints(iframe, payload)
-      });
-    } catch (error) {
-      console.warn("[ChatClub] Failed to ensure iframe content bridge", error);
-      return { error: error?.message || String(error) };
-    }
-  }
-
-  async function pingTopicDeleteContentBridge(iframe, timeoutMs = 900) {
-    try {
-      await sendToIframe(iframe, "getLocationHref", {}, timeoutMs);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  async function prepareTopicDeleteContentBridge(iframe, payload = {}) {
-    if (await pingTopicDeleteContentBridge(iframe, 900)) return { ok: true };
-    const installed = await ensureTopicDeleteContentBridge(iframe, payload);
-    await sleep(180);
-    if (await pingTopicDeleteContentBridge(iframe, 1400)) return { ok: true, installed };
-    const installError = installed?.error || (Array.isArray(installed?.errors) && installed.errors.length ? installed.errors.join("; ") : "");
-    return {
-      ok: false,
-      reason: installError
-        ? `iframe content bridge did not respond; injection failed: ${installError}`
-        : "iframe content bridge did not respond",
-      installed
-    };
-  }
-
-  async function sendTopicDeleteToIframe(iframe, payload = {}, config = null, timeoutMs = 15000) {
-    const site = config?.id || payload.appId || "topic-delete";
-    const ready = await prepareTopicDeleteContentBridge(iframe, payload);
-    if (!ready.ok) return { ok: false, site, reason: ready.reason };
-    const data = { payload, ...(config ? { config } : {}) };
-    try {
-      return await sendToIframe(iframe, "deleteThread", data, timeoutMs + 1000, { source: DELETE_THREAD_POST_MESSAGE_SOURCE });
-    } catch (error) {
-      if (!topicDeleteTimeoutError(error, "deleteThread")) throw error;
-      await ensureTopicDeleteContentBridge(iframe, payload);
-      await sleep(220);
-      return sendToIframe(iframe, "deleteThread", data, timeoutMs + 1000, { source: DELETE_THREAD_POST_MESSAGE_SOURCE });
-    }
-  }
-
-  function getTopicDeleteConfirmState(iframe, site, timeoutMs = 1200) {
-    return sendToIframe(iframe, "getDeleteConfirmState", { site }, timeoutMs, { source: DELETE_THREAD_POST_MESSAGE_SOURCE });
-  }
-
-  async function dispatchTrustedTopicDeleteClick(iframe, trustedClick) {
-    const iframeRect = iframe?.getBoundingClientRect?.();
-    if (!iframeRect || iframeRect.width <= 0 || iframeRect.height <= 0) {
-      throw new Error("trusted browser click failed: iframe is not visible");
-    }
-    const framePoint = trustedClick.framePoint;
-    const x = Math.round((iframeRect.left + (iframe.clientLeft || 0) + framePoint.x) * 100) / 100;
-    const y = Math.round((iframeRect.top + (iframe.clientTop || 0) + framePoint.y) * 100) / 100;
-    if (x < iframeRect.left - 2 || y < iframeRect.top - 2 || x > iframeRect.right + 2 || y > iframeRect.bottom + 2) {
-      throw new Error("trusted browser click failed: confirm button coordinates are outside the iframe");
-    }
-    return runtimeMessage({
-      source: "chatclub",
-      action: "dispatchTrustedClick",
-      tabId: await currentTabId(),
-      x,
-      y,
-      kind: trustedClick.kind || "",
-      hoverSettleMs: trustedClick.hoverSettleMs,
-      reason: trustedClick.reason || "delete confirmation"
-    });
-  }
-
-  async function dispatchTrustedTopicDeleteHover(iframe, trustedHover) {
-    const iframeRect = iframe?.getBoundingClientRect?.();
-    if (!iframeRect || iframeRect.width <= 0 || iframeRect.height <= 0) {
-      throw new Error("trusted browser hover failed: iframe is not visible");
-    }
-    const framePoint = trustedHover.framePoint;
-    const x = Math.round((iframeRect.left + (iframe.clientLeft || 0) + framePoint.x) * 100) / 100;
-    const y = Math.round((iframeRect.top + (iframe.clientTop || 0) + framePoint.y) * 100) / 100;
-    if (x < iframeRect.left - 2 || y < iframeRect.top - 2 || x > iframeRect.right + 2 || y > iframeRect.bottom + 2) {
-      throw new Error("trusted browser hover failed: target coordinates are outside the iframe");
-    }
-    return runtimeMessage({
-      source: "chatclub",
-      action: "dispatchTrustedMouseMove",
-      tabId: await currentTabId(),
-      x,
-      y,
-      kind: trustedHover.kind || "",
-      reason: trustedHover.reason || "topic menu hover"
-    });
-  }
-
-  async function dispatchTrustedTopicDeleteKeySequence(iframe, trustedSequence) {
-    const framePoint = trustedSequence.framePoint;
-    if (framePoint) {
-      await dispatchTrustedTopicDeleteClick(iframe, {
-        kind: trustedSequence.kind || "trusted-key-sequence-focus",
-        reason: trustedSequence.reason || "topic menu keyboard focus",
-        hoverSettleMs: trustedSequence.clickSettleMs,
-        framePoint
-      });
-      await sleep(Math.max(80, Number(trustedSequence.clickSettleMs) || 160));
-    }
-    return runtimeMessage({
-      source: "chatclub",
-      action: "dispatchTrustedKeySequence",
-      tabId: await currentTabId(),
-      keys: trustedSequence.keys,
-      keySettleMs: trustedSequence.keySettleMs,
-      kind: trustedSequence.kind || "trusted-key-sequence",
-      reason: trustedSequence.reason || "topic menu keyboard sequence"
-    });
-  }
-
-  async function retryTopicDeleteAfterTrustedHover(iframe, result = {}, payload = {}, config = null, timeoutMs = 15000) {
-    const trustedHover = topicDeleteTrustedHover(result);
-    if (!trustedHover) return result;
-    await dispatchTrustedTopicDeleteHover(iframe, trustedHover);
-    await sleep(Math.max(180, Number(trustedHover.hoverSettleMs) || 360));
-    return sendTopicDeleteToIframe(
-      iframe,
-      { ...payload, trustedHoverRetried: true },
-      config,
-      timeoutMs
-    );
-  }
-
-  async function retryTopicDeleteAfterTrustedMenuClick(iframe, result = {}, payload = {}, config = null, timeoutMs = 15000) {
-    const trustedMenuClick = topicDeleteTrustedMenuClick(result);
-    if (!trustedMenuClick || payload?.trustedMenuClickRetried) return result;
-    let lastResult = result;
-    for (const framePoint of trustedMenuClick.framePoints || [trustedMenuClick.framePoint]) {
-      await dispatchTrustedTopicDeleteHover(iframe, {
-        kind: trustedMenuClick.kind || "topic-menu-trigger",
-        reason: trustedMenuClick.reason || "topic menu trigger hover",
-        framePoint
-      });
-      await sleep(Math.max(180, Number(trustedMenuClick.hoverSettleMs) || 360));
-      await dispatchTrustedTopicDeleteClick(iframe, { ...trustedMenuClick, framePoint });
-      await sleep(360);
-      lastResult = await sendTopicDeleteToIframe(
-        iframe,
-        { ...payload, trustedMenuClickRetried: true },
-        config,
-        timeoutMs
-      );
-      if (lastResult?.ok) return lastResult;
-      const reason = String(lastResult?.reason || "");
-      if (reason && !/topic menu trigger|delete menu item|menu|trigger/i.test(reason)) return lastResult;
-    }
-    return lastResult;
-  }
-
-  async function retryTopicDeleteAfterTrustedKeySequence(iframe, result = {}, payload = {}, config = null, timeoutMs = 15000) {
-    const trustedSequence = topicDeleteTrustedKeySequence(result);
-    if (!trustedSequence || payload?.trustedKeySequenceRetried) return result;
-    await dispatchTrustedTopicDeleteKeySequence(iframe, trustedSequence);
-    await sleep(Math.max(180, Number(trustedSequence.settleMs) || 360));
-    return sendTopicDeleteToIframe(
-      iframe,
-      { ...payload, trustedKeySequenceRetried: true },
-      config,
-      timeoutMs
-    );
-  }
-
-  async function waitForTopicDeleteConfirmGone(iframe, site, timeoutMs = 5200) {
-    const deadline = Date.now() + Math.max(800, Number(timeoutMs) || 5200);
-    let lastError = null;
-    while (Date.now() <= deadline) {
-      try {
-        const state = await getTopicDeleteConfirmState(iframe, site, 1200);
-        if (!state?.present) return { ok: true };
-      } catch (error) {
-        lastError = error;
-      }
-      await sleep(260);
-    }
-    return {
-      ok: false,
-      reason: lastError
-        ? `trusted browser click sent but verification failed: ${lastError.message || String(lastError)}`
-        : "trusted browser click did not close delete confirmation"
-    };
-  }
-
-  async function tryTrustedTopicDeleteFallback(iframe, result = {}) {
-    const trustedClick = topicDeleteTrustedClick(result);
-    if (!trustedClick) return result;
-    await dispatchTrustedTopicDeleteClick(iframe, trustedClick);
-    await sleep(420);
-    const verified = await waitForTopicDeleteConfirmGone(iframe, result.site || trustedClick.site || "topic-delete");
-    return verified.ok
-      ? { ok: true, site: result.site || trustedClick.site || "topic-delete" }
-      : { ...result, ok: false, reason: verified.reason || result.reason || "delete confirmation did not close" };
-  }
-
-  async function settleTopicDeleteResult(iframe, result = {}) {
-    if (!result?.ok) {
-      const recovered = await tryTrustedTopicDeleteFallback(iframe, result);
-      if (recovered?.ok || topicDeleteTrustedClick(recovered)) return recovered;
-      try {
-        const state = await getTopicDeleteConfirmState(iframe, recovered.site || result.site || "topic-delete", 1200);
-        if (!state?.present) return recovered;
-        return tryTrustedTopicDeleteFallback(iframe, {
-          ...recovered,
-          ok: false,
-          reason: recovered.reason || "delete confirmation is still visible",
-          ...(state.trustedClick ? { needsTrustedClick: true, trustedClick: state.trustedClick } : {})
-        });
-      } catch {
-        return recovered;
-      }
-    }
-    try {
-      const state = await getTopicDeleteConfirmState(iframe, result.site || "topic-delete", 1200);
-      if (!state?.present) return result;
-      const stillVisible = {
-        ...result,
-        ok: false,
-        reason: "delete confirmation is still visible",
-        ...(state.trustedClick ? { needsTrustedClick: true, trustedClick: state.trustedClick } : {})
-      };
-      return tryTrustedTopicDeleteFallback(iframe, stillVisible);
-    } catch {
-      return result;
-    }
-  }
-
   async function deleteActiveThreadForGroup(group) {
     const chat = activeChatForGroup(group);
     const iframe = activeIframe(chat);
     if (!chat || !iframe) return;
     const app = frameApp(iframe) || appById(chat.appId);
+    const initialCapability = topicDeleteCapabilityForFrame(iframe, {
+      appId: app?.id || chat.appId || ""
+    });
+    const initialConfig = initialCapability.config;
+    const initialNeedsPermission = Boolean(
+      initialConfig
+      && (initialConfig.sourceMode === "custom" || initialConfig.userscriptOverride === true || initialConfig.builtIn === false)
+    );
+    const permissionResult = (config) => {
+      try {
+        return Promise.resolve(requestTopicDeletePermission(config))
+          .then(() => ({ granted: true, error: null }))
+          .catch((error) => ({ granted: false, error }));
+      } catch (error) {
+        return Promise.resolve({ granted: false, error });
+      }
+    };
+    const earlyPermission = initialNeedsPermission
+      ? permissionResult(initialConfig)
+      : Promise.resolve({ granted: true, error: null });
     const href = await activeHref(chat);
     const capability = topicDeleteCapabilityForFrame(iframe, {
       appId: app?.id || chat.appId || "",
@@ -2784,25 +2445,21 @@ export function createWorkspaceController(ctx = {}) {
       return;
     }
     if (!window.confirm(t("topbar.deleteThreadConfirm", { count: 1, plural: "" }))) return;
+    const needsPermission = Boolean(
+      deleteSiteConfig
+      && (deleteSiteConfig.sourceMode === "custom" || deleteSiteConfig.userscriptOverride === true || deleteSiteConfig.builtIn === false)
+    );
+    if (needsPermission) {
+      const permission = initialNeedsPermission ? await earlyPermission : await permissionResult(deleteSiteConfig);
+      if (!permission.granted) {
+        notify(permission.error?.message || String(permission.error || "User Scripts access was not granted."), "error");
+        closePopovers();
+        return;
+      }
+    }
     try {
       const timeoutMs = topicDeleteTimeoutMs(deleteSiteConfig, payload);
-      let result;
-      try {
-        result = await sendTopicDeleteToIframe(iframe, payload, deleteSiteConfig, timeoutMs);
-        result = await retryTopicDeleteAfterTrustedHover(iframe, result, payload, deleteSiteConfig, timeoutMs);
-        result = await retryTopicDeleteAfterTrustedKeySequence(iframe, result, payload, deleteSiteConfig, timeoutMs);
-        result = await retryTopicDeleteAfterTrustedMenuClick(iframe, result, payload, deleteSiteConfig, timeoutMs);
-      } catch (error) {
-        const recovered = await settleTopicDeleteResult(iframe, {
-          ok: false,
-          site: deleteSiteConfig?.id || payload.appId || "topic-delete",
-          reason: error?.message || String(error)
-        });
-        if (recovered?.ok) result = recovered;
-        else throw error;
-      }
-      result = await settleTopicDeleteResult(iframe, result);
-      if (!result?.ok) throw new Error(result?.reason || "Delete failed");
+      await executeTopicDelete(iframe, payload, deleteSiteConfig, timeoutMs);
       notify(t("toast.deleteThreadTriggered", { count: 1, plural: "" }), "success");
     } catch (error) {
       console.warn("[ChatClub] Delete thread failed", error);

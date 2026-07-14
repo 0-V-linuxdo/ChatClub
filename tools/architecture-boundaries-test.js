@@ -1,0 +1,72 @@
+#!/usr/bin/env node
+
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+
+const root = path.resolve(__dirname, "..");
+const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
+
+const main = read("app/main.js");
+const workspace = read("app/workspace/controller.js");
+const topicDelete = read("app/topic-delete/runtime.js");
+const serviceWorker = read("background/service-worker.js");
+const trustedInput = read("background/trusted-input.js");
+const state = read("app/state.js");
+const storageFacade = read("shared/storage.js");
+const storageSchema = read("shared/storage-schema.js");
+const storageAdapter = read("shared/storage-adapter.js");
+
+for (const source of [main, workspace]) {
+  assert.doesNotMatch(source, /function topicDeleteTrusted(?:Click|Hover|MenuClick|KeySequence)/);
+  assert.doesNotMatch(source, /function sendTopicDeleteToIframe/);
+  assert.match(source, /executeTopicDelete\(/);
+}
+assert.match(topicDelete, /export function executeTopicDelete/);
+assert.doesNotMatch(topicDelete, /topicDeleteExecutionTail/);
+assert.match(topicDelete, /trustedInputExecutionTail/);
+assert.match(topicDelete, /withTrustedInputLock/);
+assert.match(topicDelete, /return executeTopicDeleteNow/);
+assert.match(topicDelete, /shiftKey: Boolean/);
+assert.match(topicDelete, /backspace\|delete/);
+assert.doesNotMatch(serviceWorker, /chrome\.debugger/);
+assert.match(serviceWorker, /import\("\.\/trusted-input\.js"\)/);
+assert.match(trustedInput, /api\.debugger\.sendCommand/);
+
+assert.doesNotMatch(main, /from "\.\/settings\/controller\.js"/);
+assert.doesNotMatch(main, /from "\.\/summary\/controller\.js"/);
+assert.doesNotMatch(main, /from "\.\/pocket\/controller\.js"/);
+assert.match(main, /import\("\.\/settings\/controller\.js"\)/);
+assert.match(main, /import\("\.\/summary\/controller\.js"\)/);
+assert.match(main, /import\("\.\/pocket\/controller\.js"\)/);
+
+assert.match(state, /createFeatureStatePorts/);
+assert.match(state, /read:\s*\[/);
+assert.match(state, /write:\s*\[/);
+assert.match(state, /readonlyStateValue/);
+for (const feature of ["workspace", "summary", "pocket", "optimize", "settings"]) {
+  assert.match(main, new RegExp(`state: featureState\\.${feature}`));
+}
+assert.match(state, /cannot mutate app state/);
+
+assert.match(storageFacade, /export \* from "\.\/storage-schema\.js"/);
+assert.match(storageFacade, /export \* from "\.\/storage-adapter\.js"/);
+assert.doesNotMatch(storageSchema, /\bchrome\.|storageLocal(?:Get|Set)/);
+assert.match(storageAdapter, /from "\.\/extension-api\.js"/);
+assert.match(storageAdapter, /from "\.\/storage-schema\.js"/);
+
+for (const directory of ["app", "background", "shared"]) {
+  const stack = [path.join(root, directory)];
+  while (stack.length) {
+    const current = stack.pop();
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const absolute = path.join(current, entry.name);
+      if (entry.isDirectory()) stack.push(absolute);
+      else if (entry.isFile() && entry.name.endsWith(".js") && absolute !== path.join(root, "shared/storage.js")) {
+        assert.doesNotMatch(fs.readFileSync(absolute, "utf8"), /from ["'](?:\.\.\/)*shared\/storage\.js["']|from ["']\.\/storage\.js["']/);
+      }
+    }
+  }
+}
+
+console.log("architecture boundaries: ok");

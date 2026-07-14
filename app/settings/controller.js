@@ -37,12 +37,14 @@ import {
   normalizePromptImagePasteStrategy,
   normalizePrimaryColor,
   normalizeTopbarPromptPlaceholderConfig,
-  normalizeTopbarPromptPlaceholderText,
+  normalizeTopbarPromptPlaceholderText
+} from "../../shared/storage-schema.js";
+import {
   saveCustomConfig,
   saveOptions,
   savePromptLibrary,
   savePromptSendHistory
-} from "../../shared/storage.js";
+} from "../../shared/storage-adapter.js";
 import { createPromptLibraryController } from "../prompt-library/controller.js";
 import {
   button,
@@ -65,30 +67,42 @@ import {
   settingsSectionMeta
 } from "./kit.js";
 import { createShortcutSettings } from "./shortcuts.js";
+import { requireControllerContext, requireControllerFunction } from "../controller-context.js";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
 const CONFIG_IO_AUTOSAVE_TIMEOUT_MS = 5000;
 
 export function createSettingsController(ctx) {
-  const {
-    state,
-    svgIcon,
-    syncPromptInputNode,
-    setPromptImages = () => [],
-    ensurePromptInputReady = () => true,
-    notifyConfigReload,
-    render,
-    syncTopbar = () => {},
-    syncTopbarPromptPlaceholder = () => {},
-    syncSummaryPanel = () => {},
-    syncWorkspaceDom = () => {},
-    applyPreferredModels = () => {},
-    applyTheme,
-    syncI18nLanguage,
-    hydrateGroups,
-    enterTopbarEditMode,
-    openTabUrl = (url) => window.open(url, "_blank", "noopener,noreferrer")
-  } = ctx;
+  const controllerName = "Settings controller";
+  const state = requireControllerContext(ctx, controllerName, "state");
+  const svgIcon = requireControllerFunction(ctx, controllerName, "svgIcon");
+  const syncPromptInputNode = requireControllerFunction(ctx, controllerName, "syncPromptInputNode");
+  const notifyConfigReload = requireControllerFunction(ctx, controllerName, "notifyConfigReload");
+  const render = requireControllerFunction(ctx, controllerName, "render");
+  const applyTheme = requireControllerFunction(ctx, controllerName, "applyTheme");
+  const syncI18nLanguage = requireControllerFunction(ctx, controllerName, "syncI18nLanguage");
+  const hydrateGroups = requireControllerFunction(ctx, controllerName, "hydrateGroups");
+  const enterTopbarEditMode = requireControllerFunction(ctx, controllerName, "enterTopbarEditMode");
+  const setPromptImages = requireControllerFunction(ctx, controllerName, "setPromptImages");
+  const ensurePromptInputReady = requireControllerFunction(ctx, controllerName, "ensurePromptInputReady");
+  const syncTopbar = requireControllerFunction(ctx, controllerName, "syncTopbar");
+  const syncTopbarPromptPlaceholder = requireControllerFunction(ctx, controllerName, "syncTopbarPromptPlaceholder");
+  const syncSummaryPanel = requireControllerFunction(ctx, controllerName, "syncSummaryPanel");
+  const requestUserScriptsPermission = typeof ctx.requestUserScriptsPermission === "function"
+    ? ctx.requestUserScriptsPermission
+    : async () => true;
+
+  async function ensureUserScriptsPermission() {
+    try {
+      return await requestUserScriptsPermission();
+    } catch (error) {
+      toast(error?.message || String(error), "error");
+      return false;
+    }
+  }
+  const syncWorkspaceDom = requireControllerFunction(ctx, controllerName, "syncWorkspaceDom");
+  const applyPreferredModels = requireControllerFunction(ctx, controllerName, "applyPreferredModels");
+  const openTabUrl = requireControllerFunction(ctx, controllerName, "openTabUrl");
   let closeActiveSettingsDialog = null;
 
   const settingsKit = createSettingsKit({ svgIcon });
@@ -2643,6 +2657,7 @@ export function createSettingsController(ctx) {
       if (!nameInput.value.trim()) return toast(t("summary.collector.nameRequired"), "error");
       if (!hosts.length) return toast(t("summary.collector.hostsRequired"), "error");
       if (sourceMode === "custom" && !userscript) return toast(t("summary.collector.userscriptRequired"), "error");
+      if (sourceMode === "custom" && !await ensureUserScriptsPermission()) return;
       const timeout = Math.max(5000, Math.min(45000, Number(timeoutInput.value) || 24000));
       const copyTimeout = copyTimeoutInput.value.trim() ? Math.max(300, Math.min(10000, Number(copyTimeoutInput.value) || 0)) : undefined;
       const nextConfig = {
@@ -2767,6 +2782,10 @@ export function createSettingsController(ctx) {
           "aria-label": `${config.name || config.id} ${t("summary.collector.enabled")}`,
           checked: config.enabled !== false,
           onchange: async (event) => {
+            if (event.target.checked && summaryCollectorSourceMode(config) === "custom" && !await ensureUserScriptsPermission()) {
+              event.target.checked = false;
+              return;
+            }
             const configs = state.options.summarySiteConfigs.map((item) => item.id === config.id ? { ...item, enabled: event.target.checked } : item);
             await saveSummaryCollectors(configs, redraw);
           }
@@ -3474,6 +3493,7 @@ export function createSettingsController(ctx) {
       if (!nameInput.value.trim()) return toast(t("topicDeletion.site.nameRequired"), "error");
       if (!appIds.length && !hosts.length) return toast(t("topicDeletion.site.matcherRequired"), "error");
       if (sourceMode === "custom" && !userscript) return toast(t("topicDeletion.site.userscriptRequired"), "error");
+      if (sourceMode === "custom" && !await ensureUserScriptsPermission()) return;
       const timeout = Math.max(5000, Math.min(45000, Number(timeoutInput.value) || 15000));
       const nextConfig = {
         ...draft,
@@ -3596,6 +3616,10 @@ export function createSettingsController(ctx) {
           "aria-label": `${config.name || config.id} ${t("topicDeletion.site.enabled")}`,
           checked: config.enabled !== false,
           onchange: async (event) => {
+            if (event.target.checked && topicDeleteSourceMode(config) === "custom" && !await ensureUserScriptsPermission()) {
+              event.target.checked = false;
+              return;
+            }
             const configs = (state.options.topicDeleteSiteConfigs || []).map((item) => item.id === config.id ? { ...item, enabled: event.target.checked } : item);
             await saveTopicDeleteSites(configs, redraw);
             toast(event.target.checked ? t("toast.topicDeleteSiteEnabled") : t("toast.topicDeleteSiteDisabled"), "success");

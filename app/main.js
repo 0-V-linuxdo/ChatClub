@@ -6,12 +6,20 @@ import {
   MODEL_PREFERENCE_TARGETS
 } from "../shared/constants.js";
 import {
-  DELETE_THREAD_POST_MESSAGE_SOURCE,
   PREFERRED_MODEL_POST_MESSAGE_SOURCE,
   SEND_TEXT_POST_MESSAGE_SOURCE,
-  SHORTCUT_TRIGGER_POST_MESSAGE_SOURCE,
   sendToIframe
 } from "../shared/post-message.js";
+import { CONTENT_BRIDGE_VERSION, EXTENSION_RUNTIME_RELAY_SOURCE } from "../shared/protocol.js";
+import {
+  currentExtensionTabId,
+  extensionApi,
+  permissionsContains,
+  permissionsRequest,
+  runtimeGetUrl,
+  runtimeRequest
+} from "../shared/extension-api.js";
+import { sendToContentFrame, verifyContentFrameRegistration } from "../shared/frame-rpc.js";
 import { setLanguage, t } from "../shared/i18n.js";
 import {
   detectKeyboardPlatform,
@@ -23,24 +31,26 @@ import {
 import {
   createId,
   getAllChatApps,
+  normalizePromptImagePasteStrategy,
+  normalizePromptSendHistory,
+  normalizeFrameToastPosition,
+  normalizeOptions,
+  normalizePrimaryColor,
+  normalizeTopbarPromptPlaceholderConfig
+} from "../shared/storage-schema.js";
+import {
   loadCustomConfig,
   loadOptions,
   loadPocketHistory,
   loadPromptLibrary,
   loadPromptSendHistory,
   loadShortcutConfig,
-  normalizePromptImagePasteStrategy,
-  normalizePromptSendHistory,
-  normalizeFrameToastPosition,
-  normalizeOptions,
-  normalizePrimaryColor,
-  normalizeTopbarPromptPlaceholderConfig,
   saveOptions,
   savePocketHistory,
   savePromptSendHistory,
   storageGet,
   storageSet
-} from "../shared/storage.js";
+} from "../shared/storage-adapter.js";
 import {
   DEFAULT_TOPBAR_LAYOUT,
   TOPBAR_BUILTIN_ITEMS,
@@ -52,16 +62,11 @@ import {
   topbarSettingsSectionForItem
 } from "../shared/topbar.js";
 import { topicDeleteTimeoutMs } from "../shared/topic-delete-sites.js";
+import { executeTopicDelete } from "./topic-delete/runtime.js";
 import { createAppContext } from "./app-context.js";
 import { createOptimizeController } from "./optimize/controller.js";
-import { createPocketController } from "./pocket/controller.js";
-import { createSummaryController } from "./summary/controller.js";
 import { createWorkspaceController } from "./workspace/controller.js";
-import { createSettingsController } from "./settings/controller.js";
-import {
-  SETTINGS_SECTIONS,
-  cleanupSettingsDragRows
-} from "./settings/kit.js";
+import { SETTINGS_SECTIONS } from "./settings/sections.js";
 import {
   PROMPT_HISTORY_LIVE_CURSOR,
   promptHistoryNavigate,
@@ -84,6 +89,7 @@ import {
   toast
 } from "../ui/dom.js";
 import { installGlobalTooltips } from "../ui/tooltip.js";
+import { createAppState, createFeatureStatePorts } from "./state.js";
 
 const appRoot = document.getElementById("app");
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -93,6 +99,11 @@ const PROMPT_IMAGE_RETRY_COUNT = 3;
 const PROMPT_IMAGE_SEND_DEADLINE_MS = 60000;
 const FRAME_SUBMIT_ERROR_MAX_CHARS = 160;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+const cleanupSettingsDragRows = (selector) => {
+  document.querySelectorAll(selector).forEach((row) => {
+    row.classList.remove("dragging", "drop-before", "drop-after");
+  });
+};
 const faviconDiscoveryPromises = new Map();
 let faviconCachePersistTimer = 0;
 let appShellNode = null;
@@ -119,6 +130,9 @@ const MODEL_PREFERENCE_APPLY_TIMEOUT_MS = 15000;
 const MODEL_PREFERENCE_CANCEL_TIMEOUT_MS = 1200;
 const MODEL_PREFERENCE_SUBMISSION_NAVIGATION_GRACE_MS = 15000;
 const preferredModelApplyRuns = new Map();
+const coreContentFramePreparationRuns = new WeakMap();
+const summaryContentFramePreparationRuns = new WeakMap();
+const contentFrameRepairTimers = new WeakMap();
 let preferredModelPromptComposing = false;
 let preferredModelComposingPromptInput = null;
 let preferredModelGateBootstrapping = true;
@@ -419,74 +433,8 @@ const ICONS = {
     ["path", { d: "m6 6 12 12" }]
   ]
 };
-const state = {
-  options: null,
-  customConfig: [],
-  promptLibrary: [],
-  promptSendHistory: [],
-  promptHistoryCursor: PROMPT_HISTORY_LIVE_CURSOR,
-  promptHistoryDraft: "",
-  pocketEntries: [],
-  shortcutConfig: null,
-  groups: [],
-  activeTabs: {},
-  frameLoadingInstanceIds: [],
-  temporaryLayoutPreset: null,
-  fullscreenGroupId: null,
-  promptText: "",
-  promptImages: [],
-  promptSendInFlight: false,
-  promptSelection: { start: 0, end: 0, direction: "none" },
-  preferredModelGateState: "bootstrapping",
-  preferredModelGateReason: "",
-  preferredModelGatePendingCount: 0,
-  preferredModelGateFailedCount: 0,
-  preferredModelGateFailedAppIds: [],
-  summaryOpen: false,
-  summaryMaximized: false,
-  summarySize: null,
-  summaryBusy: false,
-  summaryStatus: "",
-  summaryError: "",
-  summaryNotice: "",
-  summaryLoadingPhase: "",
-  summaryPreviewItems: [],
-  summaryPreviewRefreshingKeys: [],
-  summaryContexts: [],
-  summaryDiagnostics: [],
-  summaryExpandedKeys: [],
-  summaryResult: "",
-  summaryQuestion: "",
-  summaryComposing: false,
-  summaryView: "preview",
-  summarySettingsTab: "ai",
-  faviconCache: {},
-  shortcutDraftConfig: null,
-  shortcutRecordingAction: "",
-  shortcutSettingsTab: "topbar",
-  summaryCollectorEditingId: "",
-  summaryCollectorDragId: "",
-  messageNavigatorSiteExpandedId: "",
-  messageNavigatorSettingsTab: "effects",
-  settingsAppsTab: "builtIn",
-  settingsPromptTemplateDragId: "",
-  settingsPromptLibraryDragId: "",
-  settingsProfileDragId: "",
-  settingsBuiltinAppDragId: "",
-  settingsCustomAppDragId: "",
-  settingsAppearanceTab: "workspace",
-  settingsAppearanceTopbarTab: "placeholder",
-  settingsTopbarPromptPlaceholderDraft: "",
-  settingsTopbarPromptPlaceholderEditingIndex: -1,
-  settingsTopbarPromptPlaceholderDragIndex: "",
-  settingsTabGroupButtonPlacementDraft: null,
-  settingsTabGroupButtonOrderDraft: null,
-  settingsTabGroupButtonDragId: "",
-  modelPreferenceDraft: null,
-  topbarEditMode: false,
-  topbarEditLayoutDraft: null,
-  topbarEditDragId: ""
-};
+const state = createAppState();
+const featureState = createFeatureStatePorts(state);
 
 const keyboardPlatform = detectKeyboardPlatform();
 
@@ -573,15 +521,20 @@ function syncI18nLanguage() {
 }
 
 const appContext = createAppContext({
-  state,
+  state: featureState.optimize,
   svgIcon,
   syncPromptInputNode,
   ensurePromptInputReady: ensurePreferredModelInputReady
 });
 const optimizeController = createOptimizeController(appContext);
-let settingsController;
+let pocketController = null;
+let summaryController = null;
+let settingsController = null;
+let pocketControllerPromise = null;
+let summaryControllerPromise = null;
+let settingsControllerPromise = null;
 const workspaceController = createWorkspaceController({
-  state,
+  state: featureState.workspace,
   createGroupId: () => createId("group"),
   createFrameId: () => createId("frame"),
   createLayoutId: () => createId("layout"),
@@ -602,63 +555,161 @@ const workspaceController = createWorkspaceController({
   compactIconButton,
   menuButton,
   formatShortcut: formatActiveShortcut,
-  onFrameLifecycleChange: handlePreferredModelFrameLifecycleChange,
-  openCustomAppEditor: () => settingsController?.openCustomAppEditor?.()
+  requestTopicDeletePermission: (config) => requestFeatureUserScriptsPermission("topic-delete", config ? [config] : null),
+  prepareContentFrameRuntime,
+  onFrameLifecycleChange: handleWorkspaceFrameLifecycleChange,
+  openCustomAppEditor: () => openCustomAppEditor()
 });
-const pocketController = createPocketController({
-  state,
-  createId,
-  loadPocketHistory,
-  savePocketHistory,
-  saveOptions,
-  openableTabUrl: workspaceController.openableTabUrl,
-  loadPocketEntryInFrame: workspaceController.loadPocketEntryInFrame,
-  restorePocketBatch: workspaceController.restorePocketBatch,
-  setFramePointerBlockedForOverlay: workspaceController.setFramePointerBlockedForOverlay,
-  effectiveFaviconUrl,
-  compactIconButton,
-  svgIcon
-});
-const summaryController = createSummaryController({
-  state,
-  svgIcon,
-  compactIconButton,
-  currentFrames: workspaceController.currentFrames,
-  frameApp: workspaceController.frameApp,
-  setFramePointerBlockedForOverlay: workspaceController.setFramePointerBlockedForOverlay,
-  findFrameForSummarySource: workspaceController.findFrameForSummarySource,
-  highlightFrameForSummarySource: workspaceController.highlightFrameForSummarySource,
-  inferAppName,
-  effectiveFaviconUrl,
-  discoverDeclaredFaviconUrl,
-  rememberFaviconUrl,
-  fallbackFaviconUrl,
-  browserFaviconUrl,
-  formatShortcut: formatActiveShortcut,
-  pocketPort: {
-    save: pocketController.saveSummaryPreviewToPocket,
-    entries: pocketController.pocketEntriesFromSummaryPreview
+
+function lazyControllerError(label, error) {
+  console.error(`[ChatClub] Failed to load ${label}`, error);
+  toast(error?.message || String(error || `Failed to load ${label}`), "error");
+  return null;
+}
+
+let userScriptsPermissionGranted = false;
+
+function executableCustomUserscript(config = {}) {
+  const customMode = config.sourceMode === "custom" || config.userscriptOverride === true || config.builtIn === false;
+  return customMode && Boolean(String(config.customUserscript || config.userscript || "").trim());
+}
+
+function featureNeedsUserScripts(feature, configs = null) {
+  const key = feature === "topic-delete" ? "topicDeleteSiteConfigs" : "summarySiteConfigs";
+  const candidates = Array.isArray(configs) ? configs : state.options?.[key] || [];
+  return candidates.some((config) => config?.enabled !== false && executableCustomUserscript(config));
+}
+
+async function requestFeatureUserScriptsPermission(feature, configs = null) {
+  if (!featureNeedsUserScripts(feature, configs) || userScriptsPermissionGranted) return true;
+  return requestUserScriptsAccess();
+}
+
+async function requestUserScriptsAccess() {
+  if (userScriptsPermissionGranted) return true;
+  let granted = false;
+  try {
+    // Invoke request immediately in the click/keyboard handler. Checking first
+    // would cross an await boundary and lose Firefox's user-activation token.
+    granted = await permissionsRequest({ permissions: ["userScripts"] });
+  } catch (error) {
+    throw new Error(`User Scripts access could not be requested: ${error?.message || String(error)}`);
   }
-});
-settingsController = createSettingsController({
-  state,
-  svgIcon,
-  syncPromptInputNode,
-  setPromptImages,
-  ensurePromptInputReady: ensurePreferredModelInputReady,
-  notifyConfigReload,
-  render,
-  syncTopbar,
-  syncTopbarPromptPlaceholder,
-  syncSummaryPanel,
-  syncWorkspaceDom: workspaceController.syncWorkspaceDom,
-  applyPreferredModels: applyPreferredModelsToFrames,
-  applyTheme,
-  syncI18nLanguage,
-  hydrateGroups: workspaceController.hydrateGroups,
-  enterTopbarEditMode,
-  openTabUrl: workspaceController.openTabUrl
-});
+  if (!granted) throw new Error("User Scripts access was not granted; custom Summary/Delete scripts remain disabled.");
+  userScriptsPermissionGranted = true;
+  return true;
+}
+
+function ensurePocketController() {
+  if (pocketController) return Promise.resolve(pocketController);
+  if (!pocketControllerPromise) {
+    pocketControllerPromise = import("./pocket/controller.js")
+      .then(({ createPocketController }) => {
+        pocketController = createPocketController({
+          state: featureState.pocket,
+          createId,
+          loadPocketHistory,
+          savePocketHistory,
+          saveOptions,
+          openableTabUrl: workspaceController.openableTabUrl,
+          loadPocketEntryInFrame: workspaceController.loadPocketEntryInFrame,
+          restorePocketBatch: workspaceController.restorePocketBatch,
+          setFramePointerBlockedForOverlay: workspaceController.setFramePointerBlockedForOverlay,
+          effectiveFaviconUrl,
+          compactIconButton,
+          svgIcon
+        });
+        summaryController?.sync?.();
+        return pocketController;
+      })
+      .catch((error) => {
+        pocketControllerPromise = null;
+        throw error;
+      });
+  }
+  return pocketControllerPromise;
+}
+
+function ensureSummaryController() {
+  if (summaryController) return Promise.resolve(summaryController);
+  if (!summaryControllerPromise) {
+    ensurePocketController().catch((error) => {
+      console.warn("[ChatClub] Pocket preload failed; it will be retried on demand", error);
+    });
+    summaryControllerPromise = import("./summary/controller.js").then(async ({ createSummaryController }) => {
+      const controller = createSummaryController({
+        state: featureState.summary,
+        svgIcon,
+        compactIconButton,
+        currentFrames: workspaceController.currentFrames,
+        frameApp: workspaceController.frameApp,
+        prepareContentFrameRuntime,
+        setFramePointerBlockedForOverlay: workspaceController.setFramePointerBlockedForOverlay,
+        findFrameForSummarySource: workspaceController.findFrameForSummarySource,
+        highlightFrameForSummarySource: workspaceController.highlightFrameForSummarySource,
+        inferAppName,
+        effectiveFaviconUrl,
+        discoverDeclaredFaviconUrl,
+        rememberFaviconUrl,
+        fallbackFaviconUrl,
+        browserFaviconUrl,
+        formatShortcut: formatActiveShortcut,
+        pocketPort: {
+          save: (...args) => ensurePocketController().then((pocket) => pocket.saveSummaryPreviewToPocket(...args)),
+          entries: (...args) => pocketController?.pocketEntriesFromSummaryPreview(...args) || []
+        }
+      });
+      if (!state.summarySize) {
+        try {
+          state.summarySize = await controller.loadPanelSize();
+        } catch (error) {
+          console.warn("[ChatClub] Failed to restore Summary panel size", error);
+        }
+      }
+      summaryController = controller;
+      return summaryController;
+    }).catch((error) => {
+      summaryControllerPromise = null;
+      throw error;
+    });
+  }
+  return summaryControllerPromise;
+}
+
+function ensureSettingsController() {
+  if (settingsController) return Promise.resolve(settingsController);
+  if (!settingsControllerPromise) {
+    settingsControllerPromise = import("./settings/controller.js")
+      .then(({ createSettingsController }) => {
+        settingsController = createSettingsController({
+          state: featureState.settings,
+          svgIcon,
+          syncPromptInputNode,
+          setPromptImages,
+          ensurePromptInputReady: ensurePreferredModelInputReady,
+          notifyConfigReload,
+          render,
+          syncTopbar,
+          syncTopbarPromptPlaceholder,
+          syncSummaryPanel,
+          syncWorkspaceDom: workspaceController.syncWorkspaceDom,
+          applyPreferredModels: applyPreferredModelsToFrames,
+          applyTheme,
+          syncI18nLanguage,
+          requestUserScriptsPermission: requestUserScriptsAccess,
+          hydrateGroups: workspaceController.hydrateGroups,
+          enterTopbarEditMode,
+          openTabUrl: workspaceController.openTabUrl
+        });
+        return settingsController;
+      })
+      .catch((error) => {
+        settingsControllerPromise = null;
+        throw error;
+      });
+  }
+  return settingsControllerPromise;
+}
 
 function topbarPromptPlaceholderConfig() {
   return normalizeTopbarPromptPlaceholderConfig(state.options?.topbarPromptPlaceholderConfig);
@@ -829,7 +880,7 @@ function browserFaviconUrl(href) {
     const pageUrl = new URL(String(href || ""), location.href);
     if (pageUrl.protocol !== "http:" && pageUrl.protocol !== "https:") return "";
     if (globalThis.chrome?.runtime?.getURL) {
-      const faviconUrl = new URL(chrome.runtime.getURL("/_favicon/"));
+      const faviconUrl = new URL(runtimeGetUrl("/_favicon/"));
       faviconUrl.searchParams.set("pageUrl", pageUrl.href);
       faviconUrl.searchParams.set("size", "32");
       return faviconUrl.href;
@@ -1025,7 +1076,7 @@ function applyTheme() {
 
 async function notifyConfigReload() {
   try {
-    await chrome.runtime.sendMessage({ source: "chatclub", action: "reloadConfigs", data: {} });
+    await runtimeRequest({ source: "chatclub", action: "reloadConfigs", data: {} });
   } catch (error) {
     console.warn("[ChatClub] Failed to reload background config", error);
   }
@@ -1472,7 +1523,7 @@ function promptImagePasteStrategyForApp(app = {}) {
   return normalizePromptImagePasteStrategy(app?.imagePasteStrategy);
 }
 
-function sendPromptFrameHrefHints(iframe, app = {}) {
+function contentFrameHrefHints(iframe, app = {}) {
   const values = [
     iframe?.dataset?.currentHref,
     iframe?.dataset?.currentThreadHref,
@@ -1483,11 +1534,157 @@ function sendPromptFrameHrefHints(iframe, app = {}) {
   return Array.from(new Set(values));
 }
 
+function sendPromptFrameHrefHints(iframe, app = {}) {
+  return contentFrameHrefHints(iframe, app);
+}
+
+async function verifiedCurrentContentFrameRegistration(iframe) {
+  const documentId = String(iframe?.dataset?.preferredModelDocumentId || "").trim();
+  if (!documentId) return null;
+  const registration = await verifyContentFrameRegistration(documentId);
+  if (!registration || String(registration.bridgeVersion || "") !== CONTENT_BRIDGE_VERSION) return null;
+  return { ...registration, documentId };
+}
+
+function contentFramePreparationError(result = null) {
+  const messages = [
+    result?.error,
+    ...(Array.isArray(result?.errors) ? result.errors : [])
+  ].map((item) => String(item || "").trim()).filter(Boolean);
+  return messages.join("; ");
+}
+
+async function waitForCurrentContentFrameRegistration(iframe, timeoutMs = 2600) {
+  const deadline = Date.now() + Math.max(250, Number(timeoutMs) || 0);
+  while (iframe?.isConnected && Date.now() <= deadline) {
+    const registration = await verifiedCurrentContentFrameRegistration(iframe);
+    if (registration) return registration;
+    await sleep(100);
+  }
+  return null;
+}
+
+async function prepareContentFrameRuntimeUncached(iframe, options = {}) {
+  if (!iframe?.isConnected) return { ok: false, cancelled: true, reason: "iframe is detached" };
+  const summary = options.summary === true;
+  let registration = await verifiedCurrentContentFrameRegistration(iframe);
+  const registeredDocumentId = String(registration?.documentId || "");
+  if (
+    registration
+    && (
+      !summary
+      || (
+        String(iframe.dataset.summaryRuntimeDocumentId || "") === registeredDocumentId
+        && String(iframe.dataset.summaryRuntimeBridgeVersion || "") === CONTENT_BRIDGE_VERSION
+      )
+    )
+  ) {
+    return { ok: true, registration, injected: false, summary };
+  }
+
+  const tabId = await currentExtensionTabId();
+  if (!Number.isInteger(tabId)) {
+    return { ok: false, reason: "extension tab is unavailable", summary };
+  }
+  const app = workspaceController.frameApp(iframe) || {};
+  const hrefs = contentFrameHrefHints(iframe, app);
+  if (!hrefs.length) return { ok: false, reason: "iframe URL is unavailable", summary };
+
+  let installed;
+  try {
+    installed = await runtimeRequest({
+      source: "chatclub",
+      action: "ensureContentBridge",
+      tabId,
+      hrefs,
+      features: summary ? ["summary"] : []
+    });
+  } catch (error) {
+    return { ok: false, reason: error?.message || String(error), summary };
+  }
+  registration = await waitForCurrentContentFrameRegistration(iframe);
+  if (!registration) {
+    return {
+      ok: false,
+      reason: contentFramePreparationError(installed) || "iframe content bridge did not become ready",
+      installed,
+      summary
+    };
+  }
+  if (summary) {
+    let summaryState = null;
+    try {
+      summaryState = await sendToContentFrame(iframe, "getSummaryRuntimeState", {}, 1800);
+    } catch (error) {
+      return {
+        ok: false,
+        reason: error?.message || "Summary runtime readiness probe failed",
+        installed,
+        registration,
+        summary
+      };
+    }
+    const confirmedRegistration = await verifiedCurrentContentFrameRegistration(iframe);
+    const summaryRuntimeReady = Boolean(
+      summaryState?.ready
+      && summaryState.mainReady
+      && summaryState.isolatedReady
+      && summaryState.documentId === registration.documentId
+      && summaryState.bridgeVersion === CONTENT_BRIDGE_VERSION
+      && confirmedRegistration?.documentId === registration.documentId
+      && confirmedRegistration?.bridgeVersion === CONTENT_BRIDGE_VERSION
+    );
+    if (!summaryRuntimeReady) {
+      return {
+        ok: false,
+        reason: "Summary runtime did not become ready in the current iframe document",
+        installed,
+        registration,
+        summaryState,
+        summary
+      };
+    }
+    registration = confirmedRegistration;
+    iframe.dataset.summaryRuntimeDocumentId = registration.documentId;
+    iframe.dataset.summaryRuntimeBridgeVersion = CONTENT_BRIDGE_VERSION;
+  }
+  workspaceController.rememberFrameLocation(iframe, registration);
+  return { ok: true, registration, installed, injected: true, summary };
+}
+
+function prepareContentFrameRuntime(iframe, options = {}) {
+  if (!iframe) return Promise.resolve({ ok: false, reason: "iframe is unavailable" });
+  const summary = options.summary === true;
+  const runs = summary ? summaryContentFramePreparationRuns : coreContentFramePreparationRuns;
+  const existing = runs.get(iframe);
+  if (existing) return existing;
+  const run = prepareContentFrameRuntimeUncached(iframe, options).finally(() => {
+    if (runs.get(iframe) === run) runs.delete(iframe);
+  });
+  runs.set(iframe, run);
+  return run;
+}
+
+function scheduleContentFrameRepair(iframe, delay = 0) {
+  if (!iframe?.isConnected) return;
+  const existing = contentFrameRepairTimers.get(iframe);
+  if (existing) clearTimeout(existing);
+  const timer = window.setTimeout(() => {
+    contentFrameRepairTimers.delete(iframe);
+    prepareContentFrameRuntime(iframe).then((result) => {
+      if (!result?.ok && !result?.cancelled) {
+        console.warn("[ChatClub] Content frame bridge repair did not complete", result?.reason || result);
+      }
+    }).catch((error) => console.warn("[ChatClub] Content frame bridge repair failed", error));
+  }, Math.max(0, Number(delay) || 0));
+  contentFrameRepairTimers.set(iframe, timer);
+}
+
 async function ensureSendTextContentBridge(iframe, app = {}) {
-  const tabId = await currentTabId();
+  const tabId = await currentExtensionTabId();
   if (!tabId) return null;
   try {
-    return await runtimeMessage({
+    return await runtimeRequest({
       source: "chatclub",
       action: "ensureContentBridge",
       tabId,
@@ -2112,6 +2309,7 @@ function createPreferredModelRecord(iframe, payload, key, delays, options = {}) 
     cancelled: false,
     result: null,
     failureReason: "",
+    bridgeRecoveryAttempted: false,
     statusToast: null,
     submissionNavigationLease: null
   };
@@ -2199,6 +2397,9 @@ function invalidatePreferredModelFrame(iframe, reason = "frame-invalidated", { c
   preferredModelApplyRuns.delete(iframe);
   if (clearDocumentId) {
     delete iframe.dataset.preferredModelDocumentId;
+    delete iframe.dataset.preferredModelContentBridgeVersion;
+    delete iframe.dataset.summaryRuntimeDocumentId;
+    delete iframe.dataset.summaryRuntimeBridgeVersion;
   }
   syncPreferredModelInputGate();
 }
@@ -2239,6 +2440,18 @@ function handlePreferredModelFrameLifecycleChange(change = {}) {
   }
 }
 
+function handleWorkspaceFrameLifecycleChange(change = {}) {
+  handlePreferredModelFrameLifecycleChange(change);
+  const event = change instanceof HTMLIFrameElement ? { type: "workspace-sync", iframe: change } : (change || {});
+  if (event.type === "loading" && event.loading === false && event.iframe?.isConnected) {
+    scheduleContentFrameRepair(event.iframe, 120);
+    return;
+  }
+  if (event.type !== "workspace-sync" || event.membershipChanged === false) return;
+  const frames = event.frames || (event.iframe ? [event.iframe] : workspaceController.currentFrames());
+  for (const iframe of frames) scheduleContentFrameRepair(iframe, 180);
+}
+
 function installPreferredModelFrameCleanup() {
   if (preferredModelFrameCleanupObserver) return;
   preferredModelFrameCleanupObserver = new MutationObserver(cleanupDetachedPreferredModelFrames);
@@ -2247,6 +2460,36 @@ function installPreferredModelFrameCleanup() {
 
 async function applyPreferredModelToFrame(iframe, record) {
   const payload = { ...record.payload, runId: record.runId };
+  let registration = await verifiedCurrentContentFrameRegistration(iframe);
+  if (!registration) {
+    if (record.bridgeRecoveryAttempted) {
+      return preferredModelResult(record.runId, {
+        retryable: true,
+        reason: "iframe content bridge is not ready"
+      });
+    }
+    record.bridgeRecoveryAttempted = true;
+    const prepared = await prepareContentFrameRuntime(iframe);
+    if (!preferredModelRecordIsCurrent(iframe, record) || record.controller?.signal?.aborted) {
+      return preferredModelResult(record.runId, {
+        cancelled: true,
+        reason: "preferred-model frame was superseded during bridge recovery"
+      });
+    }
+    registration = prepared?.ok ? await verifiedCurrentContentFrameRegistration(iframe) : null;
+    if (!registration) {
+      return preferredModelResult(record.runId, {
+        retryable: true,
+        reason: prepared?.reason || "iframe content bridge recovery failed"
+      });
+    }
+  }
+  if (!preferredModelRecordIsCurrent(iframe, record) || record.controller?.signal?.aborted) {
+    return preferredModelResult(record.runId, {
+      cancelled: true,
+      reason: "preferred-model frame changed before apply"
+    });
+  }
   try {
     const result = await sendToIframe(
       iframe,
@@ -2403,373 +2646,11 @@ function deleteThreadFailureSummary(failures = []) {
   return reasons.slice(0, 2).join("; ");
 }
 
-function topicDeleteTrustedClick(result = {}) {
-  const click = result?.trustedClick;
-  const point = click?.framePoint || click?.point;
-  const x = Number(point?.x);
-  const y = Number(point?.y);
-  if (!result?.needsTrustedClick || !click || !Number.isFinite(x) || !Number.isFinite(y)) return null;
-  return { ...click, framePoint: { x, y } };
-}
-
-function topicDeleteTrustedHover(result = {}) {
-  const hover = result?.trustedHover;
-  const point = hover?.framePoint || hover?.point;
-  const x = Number(point?.x);
-  const y = Number(point?.y);
-  if (!result?.needsTrustedHover || !hover || !Number.isFinite(x) || !Number.isFinite(y)) return null;
-  return { ...hover, framePoint: { x, y } };
-}
-
-function topicDeleteTrustedMenuClick(result = {}) {
-  const click = result?.trustedMenuClick;
-  const rawPoints = [
-    ...(Array.isArray(click?.framePoints) ? click.framePoints : []),
-    click?.framePoint,
-    click?.point
-  ];
-  const seen = new Set();
-  const framePoints = rawPoints
-    .map((point) => ({ x: Number(point?.x), y: Number(point?.y) }))
-    .filter((point) => {
-      if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) return false;
-      const key = `${point.x},${point.y}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-  if (!result?.needsTrustedMenuClick || !click || !framePoints.length) return null;
-  return { ...click, framePoint: framePoints[0], framePoints };
-}
-
-function topicDeleteTrustedKeySequence(result = {}) {
-  const sequence = result?.trustedKeySequence;
-  if (!result?.needsTrustedKeySequence || !sequence) return null;
-  const rawKeys = Array.isArray(sequence.keys) ? sequence.keys : [];
-  const keys = rawKeys
-    .map((item) => typeof item === "string"
-      ? { key: item }
-      : {
-          key: String(item?.key || ""),
-          settleMs: item?.settleMs,
-          shiftKey: Boolean(item?.shiftKey),
-          ctrlKey: Boolean(item?.ctrlKey),
-          metaKey: Boolean(item?.metaKey),
-          altKey: Boolean(item?.altKey),
-          modifiers: Number.isFinite(Number(item?.modifiers)) ? Number(item.modifiers) : undefined
-        })
-    .filter((item) => /^(tab|enter|return|escape|esc|backspace|delete| |space|spacebar)$/i.test(item.key));
-  if (!keys.length) return null;
-  const point = sequence.framePoint || sequence.point;
-  const x = Number(point?.x);
-  const y = Number(point?.y);
-  return {
-    ...sequence,
-    keys,
-    ...(Number.isFinite(x) && Number.isFinite(y) ? { framePoint: { x, y } } : {})
-  };
-}
-
-function currentTabId() {
-  return new Promise((resolve) => {
-    if (typeof chrome === "undefined" || !chrome.tabs?.getCurrent) {
-      resolve(null);
-      return;
-    }
-    try {
-      chrome.tabs.getCurrent((tab) => {
-        resolve(Number.isInteger(tab?.id) ? tab.id : null);
-      });
-    } catch {
-      resolve(null);
-    }
-  });
-}
-
-function runtimeMessage(message) {
-  return new Promise((resolve, reject) => {
-    if (typeof chrome === "undefined" || !chrome.runtime?.sendMessage) {
-      reject(new Error("extension runtime is unavailable"));
-      return;
-    }
-    try {
-      chrome.runtime.sendMessage(message, (response) => {
-        const runtimeError = chrome.runtime.lastError?.message;
-        if (runtimeError) {
-          reject(new Error(runtimeError));
-          return;
-        }
-        if (!response?.success) {
-          reject(new Error(response?.error || "extension request failed"));
-          return;
-        }
-        resolve(response);
-      });
-    } catch (error) {
-      reject(error);
-    }
-  });
-}
-
-function topicDeleteTimeoutError(error, action = "") {
-  const message = String(error?.message || error || "");
-  return message.includes(`[PostMessage] Timeout waiting for response: ${action}`);
-}
-
-function topicDeleteFrameHrefHints(iframe, payload = {}) {
-  const values = [
-    payload.currentThreadHref,
-    payload.currentHref,
-    payload.cachedHref,
-    payload.href,
-    payload.url,
-    iframe?.dataset?.currentThreadHref,
-    iframe?.dataset?.currentHref,
-    iframe?.src,
-    iframe?.getAttribute?.("src")
-  ].map((item) => String(item || "").trim()).filter(Boolean);
-  return Array.from(new Set(values));
-}
-
-async function ensureTopicDeleteContentBridge(iframe, payload = {}) {
-  const tabId = await currentTabId();
-  if (!tabId) return null;
-  const hrefs = topicDeleteFrameHrefHints(iframe, payload);
-  try {
-    return await runtimeMessage({
-      source: "chatclub",
-      action: "ensureContentBridge",
-      tabId,
-      hrefs
-    });
-  } catch (error) {
-    console.warn("[ChatClub] Failed to ensure iframe content bridge", error);
-    return { error: error?.message || String(error) };
-  }
-}
-
-async function pingTopicDeleteContentBridge(iframe, timeoutMs = 900) {
-  try {
-    await sendToIframe(iframe, "getLocationHref", {}, timeoutMs);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function prepareTopicDeleteContentBridge(iframe, payload = {}) {
-  if (await pingTopicDeleteContentBridge(iframe, 900)) return { ok: true };
-  const installed = await ensureTopicDeleteContentBridge(iframe, payload);
-  await sleep(180);
-  if (await pingTopicDeleteContentBridge(iframe, 1400)) return { ok: true, installed };
-  const installError = installed?.error || (Array.isArray(installed?.errors) && installed.errors.length ? installed.errors.join("; ") : "");
-  const reason = installError
-    ? `iframe content bridge did not respond; injection failed: ${installError}`
-    : "iframe content bridge did not respond";
-  return { ok: false, reason, installed };
-}
-
-async function sendTopicDeleteToIframe(iframe, payload = {}, config = null, timeoutMs = 15000) {
-  const site = config?.id || payload.appId || "topic-delete";
-  const ready = await prepareTopicDeleteContentBridge(iframe, payload);
-  if (!ready.ok) return { ok: false, site, reason: ready.reason };
-  const data = { payload, ...(config ? { config } : {}) };
-  try {
-    return await sendToIframe(iframe, "deleteThread", data, timeoutMs + 1000, { source: DELETE_THREAD_POST_MESSAGE_SOURCE });
-  } catch (error) {
-    if (!topicDeleteTimeoutError(error, "deleteThread")) throw error;
-    await ensureTopicDeleteContentBridge(iframe, payload);
-    await sleep(220);
-    return sendToIframe(iframe, "deleteThread", data, timeoutMs + 1000, { source: DELETE_THREAD_POST_MESSAGE_SOURCE });
-  }
-}
-
-function getTopicDeleteConfirmState(iframe, site, timeoutMs = 1200) {
-  return sendToIframe(iframe, "getDeleteConfirmState", { site }, timeoutMs, { source: DELETE_THREAD_POST_MESSAGE_SOURCE });
-}
-
-async function dispatchTrustedTopicDeleteClick(iframe, trustedClick) {
-  const iframeRect = iframe?.getBoundingClientRect?.();
-  if (!iframeRect || iframeRect.width <= 0 || iframeRect.height <= 0) {
-    throw new Error("trusted browser click failed: iframe is not visible");
-  }
-  const framePoint = trustedClick.framePoint;
-  const x = Math.round((iframeRect.left + (iframe.clientLeft || 0) + framePoint.x) * 100) / 100;
-  const y = Math.round((iframeRect.top + (iframe.clientTop || 0) + framePoint.y) * 100) / 100;
-  if (x < iframeRect.left - 2 || y < iframeRect.top - 2 || x > iframeRect.right + 2 || y > iframeRect.bottom + 2) {
-    throw new Error("trusted browser click failed: confirm button coordinates are outside the iframe");
-  }
-  return runtimeMessage({
-    source: "chatclub",
-    action: "dispatchTrustedClick",
-    tabId: await currentTabId(),
-    x,
-    y,
-    kind: trustedClick.kind || "",
-    hoverSettleMs: trustedClick.hoverSettleMs,
-    reason: trustedClick.reason || "delete confirmation"
-  });
-}
-
-async function dispatchTrustedTopicDeleteHover(iframe, trustedHover) {
-  const iframeRect = iframe?.getBoundingClientRect?.();
-  if (!iframeRect || iframeRect.width <= 0 || iframeRect.height <= 0) {
-    throw new Error("trusted browser hover failed: iframe is not visible");
-  }
-  const framePoint = trustedHover.framePoint;
-  const x = Math.round((iframeRect.left + (iframe.clientLeft || 0) + framePoint.x) * 100) / 100;
-  const y = Math.round((iframeRect.top + (iframe.clientTop || 0) + framePoint.y) * 100) / 100;
-  if (x < iframeRect.left - 2 || y < iframeRect.top - 2 || x > iframeRect.right + 2 || y > iframeRect.bottom + 2) {
-    throw new Error("trusted browser hover failed: target coordinates are outside the iframe");
-  }
-  return runtimeMessage({
-    source: "chatclub",
-    action: "dispatchTrustedMouseMove",
-    tabId: await currentTabId(),
-    x,
-    y,
-    kind: trustedHover.kind || "",
-    reason: trustedHover.reason || "topic menu hover"
-  });
-}
-
-async function dispatchTrustedTopicDeleteKeySequence(iframe, trustedSequence) {
-  const framePoint = trustedSequence.framePoint;
-  if (framePoint) {
-    await dispatchTrustedTopicDeleteClick(iframe, {
-      kind: trustedSequence.kind || "trusted-key-sequence-focus",
-      reason: trustedSequence.reason || "topic menu keyboard focus",
-      hoverSettleMs: trustedSequence.clickSettleMs,
-      framePoint
-    });
-    await sleep(Math.max(80, Number(trustedSequence.clickSettleMs) || 160));
-  }
-  return runtimeMessage({
-    source: "chatclub",
-    action: "dispatchTrustedKeySequence",
-    tabId: await currentTabId(),
-    keys: trustedSequence.keys,
-    keySettleMs: trustedSequence.keySettleMs,
-    kind: trustedSequence.kind || "trusted-key-sequence",
-    reason: trustedSequence.reason || "topic menu keyboard sequence"
-  });
-}
-
-async function retryTopicDeleteAfterTrustedHover(iframe, result = {}, payload = {}, config = null, timeoutMs = 15000) {
-  const trustedHover = topicDeleteTrustedHover(result);
-  if (!trustedHover) return result;
-  await dispatchTrustedTopicDeleteHover(iframe, trustedHover);
-  await sleep(Math.max(180, Number(trustedHover.hoverSettleMs) || 360));
-  return sendTopicDeleteToIframe(
-    iframe,
-    { ...payload, trustedHoverRetried: true },
-    config,
-    timeoutMs
-  );
-}
-
-async function retryTopicDeleteAfterTrustedMenuClick(iframe, result = {}, payload = {}, config = null, timeoutMs = 15000) {
-  const trustedMenuClick = topicDeleteTrustedMenuClick(result);
-  if (!trustedMenuClick || payload?.trustedMenuClickRetried) return result;
-  let lastResult = result;
-  for (const framePoint of trustedMenuClick.framePoints || [trustedMenuClick.framePoint]) {
-    await dispatchTrustedTopicDeleteHover(iframe, {
-      kind: trustedMenuClick.kind || "topic-menu-trigger",
-      reason: trustedMenuClick.reason || "topic menu trigger hover",
-      framePoint
-    });
-    await sleep(Math.max(180, Number(trustedMenuClick.hoverSettleMs) || 360));
-    await dispatchTrustedTopicDeleteClick(iframe, { ...trustedMenuClick, framePoint });
-    await sleep(360);
-    lastResult = await sendTopicDeleteToIframe(
-      iframe,
-      { ...payload, trustedMenuClickRetried: true },
-      config,
-      timeoutMs
-    );
-    if (lastResult?.ok) return lastResult;
-    const reason = String(lastResult?.reason || "");
-    if (reason && !/topic menu trigger|delete menu item|menu|trigger/i.test(reason)) return lastResult;
-  }
-  return lastResult;
-}
-
-async function retryTopicDeleteAfterTrustedKeySequence(iframe, result = {}, payload = {}, config = null, timeoutMs = 15000) {
-  const trustedSequence = topicDeleteTrustedKeySequence(result);
-  if (!trustedSequence || payload?.trustedKeySequenceRetried) return result;
-  await dispatchTrustedTopicDeleteKeySequence(iframe, trustedSequence);
-  await sleep(Math.max(180, Number(trustedSequence.settleMs) || 360));
-  return sendTopicDeleteToIframe(
-    iframe,
-    { ...payload, trustedKeySequenceRetried: true },
-    config,
-    timeoutMs
-  );
-}
-
-async function waitForTopicDeleteConfirmGone(iframe, site, timeoutMs = 5200) {
-  const deadline = Date.now() + Math.max(800, Number(timeoutMs) || 5200);
-  let lastError = null;
-  while (Date.now() <= deadline) {
-    try {
-      const state = await getTopicDeleteConfirmState(iframe, site, 1200);
-      if (!state?.present) return { ok: true };
-    } catch (error) {
-      lastError = error;
-    }
-    await sleep(260);
-  }
-  return {
-    ok: false,
-    reason: lastError
-      ? `trusted browser click sent but verification failed: ${lastError.message || String(lastError)}`
-      : "trusted browser click did not close delete confirmation"
-  };
-}
-
-async function tryTrustedTopicDeleteFallback(iframe, result = {}) {
-  const trustedClick = topicDeleteTrustedClick(result);
-  if (!trustedClick) return result;
-  await dispatchTrustedTopicDeleteClick(iframe, trustedClick);
-  await sleep(420);
-  const verified = await waitForTopicDeleteConfirmGone(iframe, result.site || trustedClick.site || "topic-delete");
-  return verified.ok
-    ? { ok: true, site: result.site || trustedClick.site || "topic-delete" }
-    : { ...result, ok: false, reason: verified.reason || result.reason || "delete confirmation did not close" };
-}
-
-async function settleTopicDeleteResult(iframe, result = {}) {
-  if (!result?.ok) {
-    const recovered = await tryTrustedTopicDeleteFallback(iframe, result);
-    if (recovered?.ok || topicDeleteTrustedClick(recovered)) return recovered;
-    try {
-      const state = await getTopicDeleteConfirmState(iframe, recovered.site || result.site || "topic-delete", 1200);
-      if (!state?.present) return recovered;
-      return tryTrustedTopicDeleteFallback(iframe, {
-        ...recovered,
-        ok: false,
-        reason: recovered.reason || "delete confirmation is still visible",
-        ...(state.trustedClick ? { needsTrustedClick: true, trustedClick: state.trustedClick } : {})
-      });
-    } catch {
-      return recovered;
-    }
-  }
-  try {
-    const state = await getTopicDeleteConfirmState(iframe, result.site || "topic-delete", 1200);
-    if (!state?.present) return result;
-    return tryTrustedTopicDeleteFallback(iframe, {
-      ...result,
-      ok: false,
-      reason: "delete confirmation is still visible",
-      ...(state.trustedClick ? { needsTrustedClick: true, trustedClick: state.trustedClick } : {})
-    });
-  } catch {
-    return result;
-  }
-}
-
 async function deleteThreadOnFrames() {
+  const permissionAttempt = requestFeatureUserScriptsPermission("topic-delete").catch((error) => {
+    toast(error.message || String(error), "error");
+    return false;
+  });
   const frames = workspaceController.currentFrames();
   if (!frames.length) return;
   const targets = await Promise.all(frames.map(async (iframe) => {
@@ -2786,27 +2667,22 @@ async function deleteThreadOnFrames() {
   }
   const count = activeTargets.length;
   if (!window.confirm(t("topbar.deleteThreadConfirm", { count, plural: count === 1 ? "" : "s" }))) return;
-  const settled = await Promise.allSettled(activeTargets.map(async ({ iframe, payload, config }) => {
+  const permissionGranted = await permissionAttempt;
+  const runnableTargets = permissionGranted
+    ? activeTargets
+    : activeTargets.filter(({ config }) => !executableCustomUserscript(config));
+  const deniedFailures = permissionGranted
+    ? []
+    : activeTargets
+      .filter(({ config }) => executableCustomUserscript(config))
+      .map(() => ({ status: "rejected", reason: new Error("User Scripts access is required for this custom Delete Site.") }));
+  const settled = [
+    ...await Promise.allSettled(runnableTargets.map(async ({ iframe, payload, config }) => {
     const timeoutMs = topicDeleteTimeoutMs(config, payload);
-    let result;
-    try {
-      result = await sendTopicDeleteToIframe(iframe, payload, config, timeoutMs);
-      result = await retryTopicDeleteAfterTrustedHover(iframe, result, payload, config, timeoutMs);
-      result = await retryTopicDeleteAfterTrustedKeySequence(iframe, result, payload, config, timeoutMs);
-      result = await retryTopicDeleteAfterTrustedMenuClick(iframe, result, payload, config, timeoutMs);
-    } catch (error) {
-      const recovered = await settleTopicDeleteResult(iframe, {
-        ok: false,
-        site: config?.id || payload.appId || "topic-delete",
-        reason: error?.message || String(error)
-      });
-      if (recovered?.ok) return recovered;
-      throw error;
-    }
-    result = await settleTopicDeleteResult(iframe, result);
-    if (!result?.ok) throw new Error(result?.reason || "Delete failed");
-    return result;
-  }));
+    return executeTopicDelete(iframe, payload, config, timeoutMs);
+    })),
+    ...deniedFailures
+  ];
   const failures = settled.filter((item) => item.status === "rejected" || item.value?.ok === false);
   const successCount = settled.length - failures.length;
   if (successCount > 0) {
@@ -2857,19 +2733,29 @@ function render() {
 }
 
 function syncSummaryPanel() {
-  return summaryController.sync();
+  return summaryController?.sync?.();
 }
 
-function openSummaryPanel() {
-  return summaryController.open();
+async function openSummaryPanel() {
+  const permissionAttempt = requestFeatureUserScriptsPermission("summary").catch((error) => {
+    toast(error.message || String(error), "error");
+    return false;
+  });
+  try {
+    const [controller] = await Promise.all([ensureSummaryController(), permissionAttempt]);
+    return controller.open();
+  } catch (error) {
+    return lazyControllerError("Summary", error);
+  }
 }
 
 async function collectSummary() {
-  return summaryController.collect();
-}
-
-async function loadSummaryPanelSize() {
-  return summaryController.loadPanelSize();
+  const permissionAttempt = requestFeatureUserScriptsPermission("summary").catch((error) => {
+    toast(error.message || String(error), "error");
+    return false;
+  });
+  const [controller] = await Promise.all([ensureSummaryController(), permissionAttempt]);
+  return controller.collect();
 }
 
 function resizePromptInput(inputNode, expanded = inputNode.classList.contains("prompt-input-expanded")) {
@@ -3951,8 +3837,20 @@ function renderTopbarComposer(prompt, collapsedPreview) {
   );
 }
 
-function openSettings(sectionId = "appearance") {
-  return settingsController.openSettings(sectionId);
+async function openSettings(sectionId = "appearance") {
+  try {
+    return (await ensureSettingsController()).openSettings(sectionId);
+  } catch (error) {
+    return lazyControllerError("Settings", error);
+  }
+}
+
+async function openCustomAppEditor() {
+  try {
+    return (await ensureSettingsController()).openCustomAppEditor();
+  } catch (error) {
+    return lazyControllerError("Settings", error);
+  }
 }
 
 function closeSettingsJumpMenu() {
@@ -4169,18 +4067,30 @@ function openSettingsJumpMenu(anchor, options = {}) {
   }
 }
 
-function openPromptLibraryDialog() {
+async function openPromptLibraryDialog() {
   if (!ensurePreferredModelInputReady()) return;
-  return settingsController.openPromptLibraryDialog();
+  try {
+    return (await ensureSettingsController()).openPromptLibraryDialog();
+  } catch (error) {
+    return lazyControllerError("Prompt Library", error);
+  }
 }
 
-function insertTextIntoPrompt(text) {
+async function insertTextIntoPrompt(text) {
   if (!ensurePreferredModelInputReady()) return;
-  return settingsController.insertTextIntoPrompt(text);
+  try {
+    return (await ensureSettingsController()).insertTextIntoPrompt(text);
+  } catch (error) {
+    return lazyControllerError("Prompt Library", error);
+  }
 }
 
-function openPocketPanel() {
-  return pocketController.openPocketPanel();
+async function openPocketPanel() {
+  try {
+    return (await ensurePocketController()).openPocketPanel();
+  } catch (error) {
+    return lazyControllerError("Pocket", error);
+  }
 }
 
 function shortcutDigit(matchObj) {
@@ -4271,15 +4181,15 @@ async function handleShortcutAction(action, matchObj = null, sourceWindow = null
   else if (action === "newChatAll") await newChatOnFrames();
   else if (action === "deleteThread") await deleteThreadOnFrames();
   else if (action === "optimizePrompt") await optimizeCurrentPrompt();
-  else if (action === "openSummaryPanel" || action === "openSummary") openSummaryPanel();
-  else if (action === "openPocketPanel") openPocketPanel();
+  else if (action === "openSummaryPanel" || action === "openSummary") await openSummaryPanel();
+  else if (action === "openPocketPanel") await openPocketPanel();
   else if (action === "toggleMessageNavigator") await workspaceController.toggleMessageNavigatorForShortcut(sourceWindow);
   else if (action === "closeChat" && group && chat) await workspaceController.closeTab(group, chat);
-  else if (action === "refreshPage" && chat) workspaceController.refreshCurrentPage(chat);
+  else if (action === "refreshPage" && chat) await workspaceController.refreshCurrentPage(chat);
   else if (action === "reloadChat" && chat) workspaceController.reloadChat(chat);
   else if (action === "enterFullscreen") {
-    if (state.summaryOpen) summaryController.toggleMaximized();
-    else if (pocketController.toggleOpenPocketPanelFullscreen()) {}
+    if (state.summaryOpen) (await ensureSummaryController()).toggleMaximized();
+    else if (pocketController?.toggleOpenPocketPanelFullscreen?.()) {}
     else workspaceController.toggleFullscreen(group?.id || workspaceController.activeShortcutGroupId(sourceWindow));
   }
   else if (action === "insertPrompt" && digit > 0) insertPromptLibraryItem(digit - 1);
@@ -4311,97 +4221,100 @@ function installShortcuts() {
 function installIframeEventBridge() {
   window.addEventListener("message", (event) => {
     const message = event.data;
-    if (message?.source === "chatclub-parent-clipboard" && message.type === "request") {
-      (async () => {
-        let data = { ok: false };
-        try {
-          if (message.action === "read") {
-            data = { ok: true, text: await navigator.clipboard.readText() };
-          } else {
-            data = { ok: false, error: "Clipboard writes are disabled for internal capture requests." };
-          }
-        } catch (error) {
-          data = { ok: false, error: error.message || String(error) };
-        }
-        event.source?.postMessage({
-          source: "chatclub-parent-clipboard",
-          type: "response",
-          action: message.action,
-          id: message.id,
-          data
-        }, "*");
-      })();
-      return;
-    }
     const genericRequest = message?.source === "chatclub";
-    const shortcutTriggerRequest = message?.source === SHORTCUT_TRIGGER_POST_MESSAGE_SOURCE;
-    if ((!genericRequest && !shortcutTriggerRequest) || message.type !== "request") return;
-    if (shortcutTriggerRequest && message.action !== "shortcutTriggered") return;
-    if (genericRequest && message.action === "shortcutTriggered") return;
-    if (message.action === "getShortcutConfig") {
-      event.source?.postMessage({ source: "chatclub", type: "response", id: message.id, action: message.action, data: state.shortcutConfig }, "*");
-      return;
-    }
-    if (message.action === "shortcutTriggered") {
-      handleShortcutAction(message.data?.action, message.data?.matchObj, event.source).catch((error) => {
-        console.warn("[ChatClub] Iframe shortcut action failed", error);
-      });
-      event.source?.postMessage({ source: SHORTCUT_TRIGGER_POST_MESSAGE_SOURCE, type: "response", id: message.id, action: message.action, data: { ok: true } }, "*");
-      return;
-    }
-    if (message.action === "locationChanged") {
-      event.source?.postMessage({ source: "chatclub", type: "response", id: message.id, action: message.action, data: { ok: true } }, "*");
-      const iframe = workspaceController.iframeForWindow(event.source);
-      if (!iframe) return;
-      const currentDocumentId = String(iframe.dataset.preferredModelDocumentId || "");
-      const reportedDocumentId = String(message.data?.documentId || "");
-      const currentBridgeVersion = String(iframe.dataset.preferredModelContentBridgeVersion || "");
-      const reportedBridgeVersion = String(message.data?.bridgeVersion || "");
-      if (currentDocumentId && reportedDocumentId && currentDocumentId !== reportedDocumentId) return;
-      if (currentBridgeVersion && reportedBridgeVersion && currentBridgeVersion !== reportedBridgeVersion) return;
-      workspaceController.rememberFrameLocation(iframe, message.data || {});
-      return;
-    }
-    if (message.action === "contentUnloading") {
-      event.source?.postMessage({ source: "chatclub", type: "response", id: message.id, action: message.action, data: { ok: true } }, "*");
-      const iframe = workspaceController.iframeForWindow(event.source);
-      if (!iframe) return;
-      const currentDocumentId = String(iframe.dataset.preferredModelDocumentId || "");
-      const unloadingDocumentId = String(message.data?.documentId || "");
-      const currentBridgeVersion = String(iframe.dataset.preferredModelContentBridgeVersion || "");
-      const unloadingBridgeVersion = String(message.data?.bridgeVersion || "");
-      if (currentDocumentId && unloadingDocumentId && currentDocumentId !== unloadingDocumentId) return;
-      if (currentBridgeVersion && unloadingBridgeVersion && currentBridgeVersion !== unloadingBridgeVersion) return;
-      iframe.dataset.preferredModelNavigationInvalidated = "1";
-      invalidatePreferredModelFrame(iframe, "content-unloading", { clearDocumentId: true });
-      return;
-    }
+    if (!genericRequest || message.type !== "request") return;
+    const iframe = workspaceController.iframeForWindow(event.source);
+    if (!iframe) return;
     if (message.action === "contentReady") {
-      event.source?.postMessage({ source: "chatclub", type: "response", id: message.id, action: message.action, data: { ok: true } }, "*");
-      const iframe = workspaceController.iframeForWindow(event.source);
-      if (iframe) {
-        const documentId = String(message.data?.documentId || "");
+      const documentId = String(message.data?.documentId || "");
+      const announcedBridgeVersion = String(message.data?.bridgeVersion || "");
+      if (!documentId) return;
+      if (
+        String(iframe.dataset.preferredModelDocumentId || "") === documentId
+        && String(iframe.dataset.preferredModelContentBridgeVersion || "") === announcedBridgeVersion
+        && announcedBridgeVersion === CONTENT_BRIDGE_VERSION
+      ) {
+        event.source?.postMessage({ source: "chatclub", type: "response", id: message.id, action: message.action, data: { ok: true } }, "*");
+        return;
+      }
+      verifyContentFrameRegistration(documentId).then((registration) => {
+        if (!registration || workspaceController.iframeForWindow(event.source) !== iframe) return;
+        event.source?.postMessage({ source: "chatclub", type: "response", id: message.id, action: message.action, data: { ok: true } }, "*");
         const previousDocumentId = String(iframe.dataset.preferredModelDocumentId || "");
-        const bridgeVersion = String(message.data?.bridgeVersion || "");
+        const bridgeVersion = String(registration.bridgeVersion || "");
         const previousBridgeVersion = String(iframe.dataset.preferredModelContentBridgeVersion || "");
-        if (
+        const bridgeChanged = Boolean(
           (documentId && previousDocumentId && documentId !== previousDocumentId)
           || (bridgeVersion && previousBridgeVersion && bridgeVersion !== previousBridgeVersion)
-        ) {
+        );
+        if (bridgeChanged) {
           invalidatePreferredModelFrame(iframe, "document-changed");
         }
-        if (documentId) iframe.dataset.preferredModelDocumentId = documentId;
+        if (
+          bridgeChanged
+          || String(iframe.dataset.summaryRuntimeDocumentId || "") !== documentId
+          || String(iframe.dataset.summaryRuntimeBridgeVersion || "") !== bridgeVersion
+        ) {
+          delete iframe.dataset.summaryRuntimeDocumentId;
+          delete iframe.dataset.summaryRuntimeBridgeVersion;
+        }
+        iframe.dataset.preferredModelDocumentId = documentId;
         if (bridgeVersion) iframe.dataset.preferredModelContentBridgeVersion = bridgeVersion;
-        workspaceController.rememberFrameLocation(iframe, message.data || {});
-      }
-      workspaceController.syncFrameFavicon(event.source).catch((error) => console.warn("[ChatClub] Failed to sync frame favicon", error));
-      if (iframe) {
+        workspaceController.rememberFrameLocation(iframe, {
+          documentId,
+          bridgeVersion,
+          href: String(registration.href || ""),
+          title: String(registration.title || "")
+        });
+        workspaceController.syncFrameFavicon(event.source).catch((error) => console.warn("[ChatClub] Failed to sync frame favicon", error));
         schedulePreferredModelApplyToFrame(iframe);
         workspaceController.reapplyMessageNavigatorForFrame(iframe).catch((error) => console.warn("[ChatClub] Failed to restore message navigator", error));
-      }
+      }).catch((error) => console.warn("[ChatClub] Content frame registration verification failed", error));
       return;
     }
   }, true);
+}
+
+function shortcutRelaySourceWindow(context = {}) {
+  const bridgeDocumentId = String(context.bridgeDocumentId || "");
+  if (!bridgeDocumentId) return null;
+  const iframe = workspaceController.currentFrames().find((frame) =>
+    String(frame.dataset.preferredModelDocumentId || "") === bridgeDocumentId
+  );
+  return iframe?.contentWindow || null;
+}
+
+function installRuntimeEventBridge() {
+  const api = extensionApi();
+  if (!api?.runtime?.onMessage?.addListener) return;
+  api.runtime.onMessage.addListener((message, sender) => {
+    if (message?.source !== EXTENSION_RUNTIME_RELAY_SOURCE || sender?.tab) return false;
+    (async () => {
+      const context = message.senderContext || {};
+      const tabId = await currentExtensionTabId();
+      if (!Number.isInteger(tabId) || context.tabId !== tabId) return;
+      const sourceWindow = shortcutRelaySourceWindow(context);
+      if (!sourceWindow) return;
+      if (message.action === "shortcutTriggered") {
+        await handleShortcutAction(message.shortcutAction, message.matchObj || {}, sourceWindow);
+        return;
+      }
+      if (message.action !== "frameLifecycle") return;
+      const iframe = workspaceController.iframeForWindow(sourceWindow);
+      if (!iframe || message.data?.documentId !== context.bridgeDocumentId) return;
+      if (message.lifecycleAction === "locationChanged") {
+        workspaceController.rememberFrameLocation(iframe, message.data || {});
+        return;
+      }
+      if (message.lifecycleAction === "contentUnloading") {
+        iframe.dataset.preferredModelNavigationInvalidated = "1";
+        delete iframe.dataset.summaryRuntimeDocumentId;
+        delete iframe.dataset.summaryRuntimeBridgeVersion;
+        invalidatePreferredModelFrame(iframe, "content-unloading", { clearDocumentId: true });
+      }
+    })().catch((error) => console.warn("[ChatClub] Runtime shortcut action failed", error));
+    return false;
+  });
 }
 
 function installPreferredModelIframeLoadHandler() {
@@ -4435,9 +4348,19 @@ async function init() {
   state.promptSendHistory = await loadPromptSendHistory();
   state.pocketEntries = await loadPocketHistory();
   state.shortcutConfig = await loadShortcutConfig();
-  state.summarySize = await loadSummaryPanelSize();
+  userScriptsPermissionGranted = await permissionsContains({ permissions: ["userScripts"] }).catch(() => false);
   state.faviconCache = normalizeFaviconCache(await storageGet(FAVICON_CACHE_KEY));
   state.options = normalizeOptions(state.options);
+  await Promise.race([
+    runtimeRequest({
+      source: "chatclub",
+      action: "reloadConfigs",
+      data: { reason: "app-init" }
+    }),
+    sleep(8000).then(() => { throw new Error("runtime registration reconciliation timed out"); })
+  ]).catch((error) => {
+    console.warn("[ChatClub] Runtime registration reconciliation failed; frame-level recovery remains enabled", error);
+  });
   syncI18nLanguage();
   await initializeTopbarPromptPlaceholder();
   workspaceController.hydrateGroups();
@@ -4446,6 +4369,7 @@ async function init() {
   });
   installExtensionTabTracker();
   installShortcuts();
+  installRuntimeEventBridge();
   installIframeEventBridge();
   installPreferredModelIframeLoadHandler();
   installPreferredModelFrameCleanup();

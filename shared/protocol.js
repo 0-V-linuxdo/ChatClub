@@ -1,0 +1,55 @@
+export const GENERIC_POST_MESSAGE_SOURCE = "chatclub";
+export const NATIVE_COPY_SOURCE = "chatclub-native-copy:2026.07.08.13";
+export const GEMINI_MODEL_PICKER_SOURCE = "chatclub-gemini-model-picker:2026.07.13.3";
+export const MAIN_WORLD_LOCATION_SOURCE = "chatclub:main-world-location:2026.07.13.3";
+export const NOTION_SEND_TEXT_SOURCE = "chatclub-notion-send-text:2026.07.13.13";
+export const NOTION_SEND_PROMPT_SOURCE = "chatclub-notion-send-prompt:2026.07.13.13";
+export const NOTION_SEND_ACTIVATED_EVENT = "chatclub:notion-send-activated:2026.07.13.1";
+export const SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.13.7";
+export const DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.10.2";
+export const MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.08.12";
+export const SUMMARY_POST_MESSAGE_SOURCE = "chatclub:summary:2026.07.08.13";
+export const PREFERRED_MODEL_POST_MESSAGE_SOURCE = "chatclub:preferred-model:2026.07.13.2";
+export const CONTENT_BRIDGE_VERSION = "2026.07.15.2";
+export const EXTENSION_RUNTIME_RELAY_SOURCE = "chatclub:runtime-relay:2026.07.15.2";
+export const SECURE_FRAME_COMMAND_SOURCE = "chatclub:frame-command:2026.07.15.2";
+export const DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.07.03.30";
+export const PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.15.2";
+export const NAVIGATION_FOCUS_GUARD_SOURCE = "chatclub:navigation-focus-guard:2026.07.13.3";
+export const FRAME_TOAST_POSITION_EVENT = "chatclub:frame-toast-position:2026.07.13.1";
+export const CUSTOM_SUMMARY_EXECUTOR = "__CHATCLUB_SUMMARY_CUSTOM_EXECUTOR_2026_07_14__";
+export const TOPIC_DELETE_REQUEST_EVENT = "chatclub:delete-site:request";
+export const TOPIC_DELETE_MENU_COMMAND_EVENT = "chatclub:delete-site:menu-command";
+export const TOPIC_DELETE_RESULT_EVENT = "chatclub:delete-site:result";
+export const TOPIC_DELETE_PING_EVENT = "chatclub:delete-site:ping";
+export const TOPIC_DELETE_READY_EVENT = "chatclub:delete-site:ready";
+export const TOPIC_DELETE_BRIDGE_SOURCE = "chatclub-delete-sites";
+
+export const CONTENT_PROTOCOL = Object.freeze({
+  GENERIC_POST_MESSAGE_SOURCE,
+  NATIVE_COPY_SOURCE,
+  GEMINI_MODEL_PICKER_SOURCE,
+  MAIN_WORLD_LOCATION_SOURCE,
+  NOTION_SEND_TEXT_SOURCE,
+  NOTION_SEND_PROMPT_SOURCE,
+  NOTION_SEND_ACTIVATED_EVENT,
+  SEND_TEXT_POST_MESSAGE_SOURCE,
+  DELETE_THREAD_POST_MESSAGE_SOURCE,
+  MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE,
+  SUMMARY_POST_MESSAGE_SOURCE,
+  PREFERRED_MODEL_POST_MESSAGE_SOURCE,
+  CONTENT_BRIDGE_VERSION,
+  EXTENSION_RUNTIME_RELAY_SOURCE,
+  SECURE_FRAME_COMMAND_SOURCE,
+  DEEPSEEK_DELETE_SOURCE,
+  PAGE_SUMMARY_SOURCE,
+  NAVIGATION_FOCUS_GUARD_SOURCE,
+  FRAME_TOAST_POSITION_EVENT,
+  CUSTOM_SUMMARY_EXECUTOR,
+  TOPIC_DELETE_REQUEST_EVENT,
+  TOPIC_DELETE_MENU_COMMAND_EVENT,
+  TOPIC_DELETE_RESULT_EVENT,
+  TOPIC_DELETE_PING_EVENT,
+  TOPIC_DELETE_READY_EVENT,
+  TOPIC_DELETE_BRIDGE_SOURCE
+});

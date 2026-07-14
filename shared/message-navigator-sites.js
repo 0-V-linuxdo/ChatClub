@@ -1,4 +1,4 @@
-import { configMatchesHref } from "./url-match.js";
+import { configMatchesHref, normalizeHostList } from "./url-match.js";
 
 export const MESSAGE_NAVIGATOR_EFFECT_MODES = Object.freeze(["none", "border", "pulse", "fade", "jiggle"]);
 export const DEFAULT_MESSAGE_NAVIGATOR_EFFECT_MODE = "border";
@@ -197,7 +197,7 @@ function normalizeMessageNavigatorSiteConfig(item = {}, fallback = {}, index = 0
     builtIn,
     configVersion: boundedNumber(item.configVersion ?? fallback.configVersion, 1, 1, 9999),
     appIds: uniqueStrings(item.appIds ?? fallback.appIds),
-    hosts: uniqueStrings(item.hosts ?? fallback.hosts),
+    hosts: normalizeHostList(item.hosts ?? fallback.hosts),
     pathPrefixes: uniqueStrings(item.pathPrefixes ?? fallback.pathPrefixes),
     adapter: text(item.adapter || fallback.adapter, "generic") || "generic",
     messageSelector: text(item.messageSelector || fallback.messageSelector),

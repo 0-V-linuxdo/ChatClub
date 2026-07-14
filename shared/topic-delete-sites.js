@@ -1,4 +1,4 @@
-import { configMatchesHref } from "./url-match.js";
+import { configMatchesHref, normalizeHostList } from "./url-match.js";
 import {
   CHATGPT_DELETE_USERSCRIPT,
   DEEPSEEK_DELETE_USERSCRIPT,
@@ -269,7 +269,7 @@ function normalizeTopicDeleteSiteConfig(item = {}, fallback = {}, index = 0) {
     id: text(item.id || fallback.id, `topic-delete-${index + 1}`),
     name: text(item.name || fallback.name, `Delete Site ${index + 1}`),
     appIds: uniqueStrings(item.appIds ?? fallback.appIds),
-    hosts: uniqueStrings(item.hosts ?? fallback.hosts),
+    hosts: normalizeHostList(item.hosts ?? fallback.hosts),
     pathPrefixes: uniqueStrings(item.pathPrefixes ?? fallback.pathPrefixes),
     builtIn,
     enabled: item.enabled !== false,

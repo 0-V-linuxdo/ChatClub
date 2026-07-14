@@ -10,7 +10,7 @@ import {
   shortcutProfile,
   shortcutUsesDigitPattern
 } from "../../shared/shortcuts.js";
-import { saveShortcutConfig } from "../../shared/storage.js";
+import { saveShortcutConfig } from "../../shared/storage-adapter.js";
 import { button, el, select, toast } from "../../ui/dom.js";
 
 const SHORTCUT_SETTING_GROUPS = [

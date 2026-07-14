@@ -1,5 +1,29 @@
 export function normalizeHost(host) {
-  return String(host || "").trim().toLowerCase();
+  const raw = String(host || "").trim().toLowerCase();
+  if (!raw || /\s|:\/\/|[/?#@]/.test(raw)) return "";
+  const wildcard = raw.startsWith("*.");
+  const candidate = wildcard ? raw.slice(2) : raw;
+  if (!candidate || candidate.includes("*") || (!candidate.startsWith("[") && candidate.includes(":"))) return "";
+  let hostname = "";
+  try {
+    const parsed = new URL(`http://${candidate}`);
+    if (parsed.username || parsed.password || parsed.port || parsed.pathname !== "/" || parsed.search || parsed.hash) return "";
+    hostname = parsed.hostname.toLowerCase().replace(/\.$/, "");
+  } catch {
+    return "";
+  }
+  if (!hostname || hostname.length > 253) return "";
+  const bracketedIpv6 = hostname.startsWith("[") && hostname.endsWith("]");
+  if (!bracketedIpv6) {
+    const labels = hostname.split(".");
+    if (labels.some((label) => !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label))) return "";
+  }
+  if (wildcard && (bracketedIpv6 || /^\d+(?:\.\d+){3}$/.test(hostname) || hostname === "localhost")) return "";
+  return wildcard ? `*.${hostname}` : hostname;
+}
+
+export function normalizeHostList(hosts = []) {
+  return Array.from(new Set((Array.isArray(hosts) ? hosts : []).map(normalizeHost).filter(Boolean)));
 }
 
 export function hostMatchesPattern(pattern, host) {

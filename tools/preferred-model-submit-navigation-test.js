@@ -11,7 +11,29 @@ const contentSource = fs.readFileSync(path.join(root, "content/content.js"), "ut
 const preloadSource = fs.readFileSync(path.join(root, "content/preload.js"), "utf8");
 const workspaceSource = fs.readFileSync(path.join(root, "app/workspace/controller.js"), "utf8");
 const postMessageSource = fs.readFileSync(path.join(root, "shared/post-message.js"), "utf8");
+const protocolSource = fs.readFileSync(path.join(root, "shared/protocol.js"), "utf8");
+const contentProtocolSource = fs.readFileSync(path.join(root, "content/protocol.js"), "utf8");
 const modelPreferenceConsoleSource = fs.readFileSync(path.join(root, "tools/model-preference-console-test.js"), "utf8");
+
+function protocolString(name) {
+  const match = protocolSource.match(new RegExp(`export const ${name}\\s*=\\s*("(?:[^"\\\\]|\\\\.)*")\\s*;`));
+  assert.ok(match, `shared protocol must export ${name}`);
+  return JSON.parse(match[1]);
+}
+
+function generatedProtocolString(name) {
+  const match = contentProtocolSource.match(new RegExp(`"?${name}"?:\\s*("(?:[^"\\\\]|\\\\.)*")`));
+  assert.ok(match, `content protocol bootstrap must expose ${name}`);
+  return JSON.parse(match[1]);
+}
+
+function assertProtocolBinding(source, name, label) {
+  assert.match(
+    source,
+    new RegExp(`const\\s+${name}\\s*=\\s*PROTOCOL\\.${name}\\s*;`),
+    `${label} must consume ${name} from the protocol bootstrap`
+  );
+}
 
 function functionSource(source, name) {
   const start = source.indexOf(`function ${name}(`);
@@ -177,23 +199,27 @@ assert.match(locationReportSource, /requireCurrentHref/, "stale queued history n
 
 const frameKeySource = functionSource(mainSource, "preferredModelFrameKey");
 assert.doesNotMatch(frameKeySource, /currentHref|iframe\.src/, "preferred-model identity must not change for an SPA href");
-assert.match(mainSource, /message\.action === "locationChanged"/, "parent must handle dedicated location messages");
+assert.match(contentSource, /action: "relayFrameLifecycle"/, "content must relay lifecycle events over extension runtime messaging");
+assert.match(mainSource, /message\.action !== "frameLifecycle"/, "parent must handle authenticated lifecycle relays");
+assert.match(mainSource, /EXTENSION_RUNTIME_RELAY_SOURCE/, "parent lifecycle handling must use the extension runtime relay source");
 assert.match(workspaceSource, /emitFrameLifecycleChange\(\{ type: "location"[^\n]+navigation \}\)/, "workspace must forward navigation correlation metadata");
 assert.match(workspaceSource, /hrefChanged \|\| navigation\?\.forced === true/, "forced same-href popstate must still emit a lifecycle event");
 assert.match(workspaceSource, /iframe\.dataset\.currentHref === href/, "stale favicon discovery must not roll frame location backward");
 
-const contentSendSource = contentSource.match(/const SEND_TEXT_POST_MESSAGE_SOURCE = "([^"]+)";/)?.[1];
-const parentSendSource = postMessageSource.match(/export const SEND_TEXT_POST_MESSAGE_SOURCE = "([^"]+)";/)?.[1];
-assert.ok(contentSendSource, "content send channel must exist");
-assert.equal(contentSendSource, parentSendSource, "parent and content send channel versions must stay synchronized");
-
-const contentLocationSource = contentSource.match(/const MAIN_WORLD_LOCATION_SOURCE = "([^"]+)";/)?.[1];
-const preloadLocationSource = preloadSource.match(/const MAIN_WORLD_LOCATION_SOURCE = "([^"]+)";/)?.[1];
-assert.equal(contentLocationSource, preloadLocationSource, "main-world location channel versions must stay synchronized");
-
-const contentNotionActivation = contentSource.match(/const NOTION_SEND_ACTIVATED_EVENT = "([^"]+)";/)?.[1];
-const preloadNotionActivation = preloadSource.match(/const NOTION_SEND_ACTIVATED_EVENT = "([^"]+)";/)?.[1];
-assert.equal(contentNotionActivation, preloadNotionActivation, "Notion activation event versions must stay synchronized");
+for (const [name, consumers] of [
+  ["SEND_TEXT_POST_MESSAGE_SOURCE", [[contentSource, "isolated content"]]],
+  ["MAIN_WORLD_LOCATION_SOURCE", [[contentSource, "isolated content"], [preloadSource, "MAIN preload"]]],
+  ["NOTION_SEND_ACTIVATED_EVENT", [[contentSource, "isolated content"], [preloadSource, "MAIN preload"]]]
+]) {
+  const canonicalValue = protocolString(name);
+  assert.equal(generatedProtocolString(name), canonicalValue, `${name} bootstrap must match the shared protocol`);
+  for (const [source, label] of consumers) assertProtocolBinding(source, name, label);
+}
+assert.match(
+  postMessageSource,
+  /import\s*\{[\s\S]*?\bSEND_TEXT_POST_MESSAGE_SOURCE\b[\s\S]*?\}\s*from "\.\/protocol\.js";/,
+  "parent messaging must import the send channel from the shared protocol"
+);
 assert.match(preloadSource, /detail: JSON\.stringify\(/, "Notion cross-world activation detail must be Firefox-safe JSON");
 
 const sendTextSource = functionSource(contentSource, "sendTextUncached");

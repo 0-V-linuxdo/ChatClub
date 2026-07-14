@@ -9,9 +9,13 @@ const root = path.resolve(__dirname, "..");
 const constantsSource = fs.readFileSync(path.join(root, "shared/constants.js"), "utf8");
 const i18nSource = fs.readFileSync(path.join(root, "shared/i18n.js"), "utf8");
 const shortcutsSource = fs.readFileSync(path.join(root, "shared/shortcuts.js"), "utf8");
-const storageSource = fs.readFileSync(path.join(root, "shared/storage.js"), "utf8");
+const storageSource = fs.readFileSync(path.join(root, "shared/storage-schema.js"), "utf8");
 const postMessageSource = fs.readFileSync(path.join(root, "shared/post-message.js"), "utf8");
+const protocolSource = fs.readFileSync(path.join(root, "shared/protocol.js"), "utf8");
+const contentProtocolSource = fs.readFileSync(path.join(root, "content/protocol.js"), "utf8");
 const mainSource = fs.readFileSync(path.join(root, "app/main.js"), "utf8");
+const serviceWorkerSource = fs.readFileSync(path.join(root, "background/service-worker.js"), "utf8");
+const stateSource = fs.readFileSync(path.join(root, "app/state.js"), "utf8");
 const shortcutSettingsSource = fs.readFileSync(path.join(root, "app/settings/shortcuts.js"), "utf8");
 const tooltipSource = fs.readFileSync(path.join(root, "ui/tooltip.js"), "utf8");
 const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"), "utf8");
@@ -20,6 +24,12 @@ const summaryRuntimeSource = fs.readFileSync(path.join(root, "content/summary-us
 
 function plain(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+function protocolString(source, name, declaration) {
+  const match = source.match(new RegExp(`${declaration}\\s*("(?:[^"\\\\]|\\\\.)*")`));
+  assert.ok(match, `${name} must exist in its protocol source`);
+  return JSON.parse(match[1]);
 }
 
 function balancedLiteral(source, name, openingCharacter) {
@@ -425,7 +435,7 @@ assert.equal(shortcutTabContext.__normalizeShortcutSettingsTab("input"), "topbar
 assert.equal(shortcutTabContext.__normalizeShortcutSettingsTab("global"), "topbar");
 assert.equal(shortcutTabContext.__normalizeShortcutSettingsTab("topbar"), "topbar");
 assert.equal(shortcutTabContext.__normalizeShortcutSettingsTab("chat"), "chat");
-assert.match(mainSource, /shortcutSettingsTab: "topbar"/, "Top Bar must be the default shortcut settings tab");
+assert.match(stateSource, /shortcutSettingsTab: "topbar"/, "Top Bar must be the default shortcut settings tab");
 assert.match(
   shortcutSettingsSource,
   /settingsInnerTabs\(\[\s*\["topbar", t\("topbar\.customize\.title"\), t\("shortcuts\.topbarTabDesc"\)\],\s*\["chat", t\("shortcuts\.chatTab"\), t\("shortcuts\.chatTabDesc"\)\]\s*\], active,/,
@@ -531,7 +541,7 @@ vm.runInContext(`
   ${functionSource(storageSource, "inspectImportedConfig")}
   globalThis.__exportConfigBundle = exportConfigBundle;
   globalThis.__inspectImportedConfig = inspectImportedConfig;
-`, bundleContext, { filename: "shared/storage.js" });
+`, bundleContext, { filename: "shared/storage-schema.js" });
 
 let ioConfig = shortcuts.defaultShortcutConfig();
 const ioMac = shortcuts.defaultShortcutProfile("mac");
@@ -577,15 +587,14 @@ const importedLegacyBundle = bundleContext.__inspectImportedConfig({
 }).data.shortcutConfig;
 assert.deepEqual(plain(importedLegacyBundle), plain(migrated), "old shortcut backups must remain importable");
 
-// The shared module and both self-contained content runtimes must ship the same
+// The shared module and isolated content runtime must ship the same
 // raw v2 defaults and action inventory. Legacy cmdOrCtrl may remain only inside
 // migration code, never in a canonical default profile.
 const expectedDefaults = plain(shortcuts.normalizeShortcutConfig(sharedDefault));
 const expectedActions = plain(shortcuts.ALL_SHORTCUT_ACTIONS);
 for (const [label, source] of [
   ["shared/constants.js", constantsSource],
-  ["content/content.js", contentSource],
-  ["content/summary-userscripts-main.js", summaryRuntimeSource]
+  ["content/content.js", contentSource]
 ]) {
   const runtimeDefault = evaluateLiteral(
     source,
@@ -610,8 +619,7 @@ for (const [label, source] of [
 }
 for (const [label, source, declaration] of [
   ["shared/shortcuts.js", shortcutsSource, "ALL_SHORTCUT_ACTIONS"],
-  ["content/content.js", contentSource, "SHORTCUT_ACTIONS"],
-  ["content/summary-userscripts-main.js", summaryRuntimeSource, "SHORTCUT_ACTIONS"]
+  ["content/content.js", contentSource, "SHORTCUT_ACTIONS"]
 ]) {
   assert.deepEqual(
     plain(evaluateLiteral(source, declaration, "[")),
@@ -619,10 +627,7 @@ for (const [label, source, declaration] of [
     `${label} shortcut action order must stay synchronized`
   );
 }
-for (const [label, source] of [
-  ["content/content.js", contentSource],
-  ["content/summary-userscripts-main.js", summaryRuntimeSource]
-]) {
+for (const [label, source] of [["content/content.js", contentSource]]) {
   const context = vm.createContext({});
   vm.runInContext(
     `${functionSource(source, "digitMatch")}; globalThis.__digitMatch = digitMatch;`,
@@ -645,22 +650,35 @@ assert.match(
   /__CHATCLUB_SHORTCUT_BRIDGE_CLEANUP__/,
   "shortcut listeners must expose reinjection cleanup"
 );
-const shortcutTriggerSource = postMessageSource.match(/SHORTCUT_TRIGGER_POST_MESSAGE_SOURCE = "([^"]+)"/)?.[1];
-assert.ok(shortcutTriggerSource, "shared shortcut trigger source must be versioned");
-assert.equal(
-  contentSource.match(/SHORTCUT_TRIGGER_POST_MESSAGE_SOURCE = "([^"]+)"/)?.[1],
-  shortcutTriggerSource,
-  "isolated content shortcut events must use the shared versioned source"
+const shortcutRelaySource = protocolString(
+  protocolSource,
+  "EXTENSION_RUNTIME_RELAY_SOURCE",
+  "export const EXTENSION_RUNTIME_RELAY_SOURCE\\s*=\\s*"
 );
+assert.match(shortcutRelaySource, /^chatclub:runtime-relay:\d/, "shared shortcut relay source must be versioned");
 assert.equal(
-  summaryRuntimeSource.match(/SHORTCUT_TRIGGER_POST_MESSAGE_SOURCE = "([^"]+)"/)?.[1],
-  shortcutTriggerSource,
-  "main-world shortcut events must use the shared versioned source"
+  protocolString(
+    contentProtocolSource,
+    "EXTENSION_RUNTIME_RELAY_SOURCE",
+    '"?EXTENSION_RUNTIME_RELAY_SOURCE"?:\\s*'
+  ),
+  shortcutRelaySource,
+  "content protocol bootstrap must match the shared runtime relay source"
 );
 assert.match(
-  mainSource,
-  /genericRequest && message\.action === "shortcutTriggered"\) return;/,
-  "the parent must ignore shortcut events from stale unversioned content listeners"
+  contentSource,
+  /if \(!event\.isTrusted\) return;/,
+  "isolated shortcut handling must reject synthetic key events"
 );
+assert.match(
+  contentSource,
+  /action: "relayShortcutTriggered"/,
+  "isolated shortcuts must use extension runtime relay"
+);
+assert.match(serviceWorkerSource, /registeredSenderContext\(message, sender\)/, "background must authenticate shortcut frame context");
+assert.match(serviceWorkerSource, /shortcutActions\.has\(action\)/, "background must allowlist shortcut actions");
+assert.match(mainSource, /message\?\.source !== EXTENSION_RUNTIME_RELAY_SOURCE/, "parent must accept only background runtime relays");
+assert.match(mainSource, /if \(!sourceWindow\) return;/, "shortcut relays must fail closed when their iframe is not bound");
+assert.doesNotMatch(summaryRuntimeSource, /SHORTCUT_ACTIONS|SHORTCUT_TRIGGER_POST_MESSAGE_SOURCE/, "MAIN Summary runtime must not handle global shortcuts");
 
 console.log("shortcut platform regression: ok");

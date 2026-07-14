@@ -1,4 +1,34 @@
 (() => {
+  // <chatclub-generated-protocol>
+  const PROTOCOL = Object.freeze({
+    "GENERIC_POST_MESSAGE_SOURCE": "chatclub",
+    "NATIVE_COPY_SOURCE": "chatclub-native-copy:2026.07.08.13",
+    "GEMINI_MODEL_PICKER_SOURCE": "chatclub-gemini-model-picker:2026.07.13.3",
+    "MAIN_WORLD_LOCATION_SOURCE": "chatclub:main-world-location:2026.07.13.3",
+    "NOTION_SEND_TEXT_SOURCE": "chatclub-notion-send-text:2026.07.13.13",
+    "NOTION_SEND_PROMPT_SOURCE": "chatclub-notion-send-prompt:2026.07.13.13",
+    "NOTION_SEND_ACTIVATED_EVENT": "chatclub:notion-send-activated:2026.07.13.1",
+    "SEND_TEXT_POST_MESSAGE_SOURCE": "chatclub:send-text:2026.07.13.7",
+    "DELETE_THREAD_POST_MESSAGE_SOURCE": "chatclub:delete-thread:2026.07.10.2",
+    "MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE": "chatclub:message-navigator:2026.07.08.12",
+    "SUMMARY_POST_MESSAGE_SOURCE": "chatclub:summary:2026.07.08.13",
+    "PREFERRED_MODEL_POST_MESSAGE_SOURCE": "chatclub:preferred-model:2026.07.13.2",
+    "CONTENT_BRIDGE_VERSION": "2026.07.15.2",
+    "EXTENSION_RUNTIME_RELAY_SOURCE": "chatclub:runtime-relay:2026.07.15.2",
+    "SECURE_FRAME_COMMAND_SOURCE": "chatclub:frame-command:2026.07.15.2",
+    "DEEPSEEK_DELETE_SOURCE": "chatclub-deepseek-delete-thread:2026.07.03.30",
+    "PAGE_SUMMARY_SOURCE": "chatclub-summary-userscript:2026.07.15.2",
+    "NAVIGATION_FOCUS_GUARD_SOURCE": "chatclub:navigation-focus-guard:2026.07.13.3",
+    "FRAME_TOAST_POSITION_EVENT": "chatclub:frame-toast-position:2026.07.13.1",
+    "CUSTOM_SUMMARY_EXECUTOR": "__CHATCLUB_SUMMARY_CUSTOM_EXECUTOR_2026_07_14__",
+    "TOPIC_DELETE_REQUEST_EVENT": "chatclub:delete-site:request",
+    "TOPIC_DELETE_MENU_COMMAND_EVENT": "chatclub:delete-site:menu-command",
+    "TOPIC_DELETE_RESULT_EVENT": "chatclub:delete-site:result",
+    "TOPIC_DELETE_PING_EVENT": "chatclub:delete-site:ping",
+    "TOPIC_DELETE_READY_EVENT": "chatclub:delete-site:ready",
+    "TOPIC_DELETE_BRIDGE_SOURCE": "chatclub-delete-sites"
+  });
+  // </chatclub-generated-protocol>
   const scripts = Object.create(null);
   scripts["chatgpt"] = async function(api) {
 const opts = {
@@ -2111,11 +2141,10 @@ return nativeConversation && nativeConversation.length ? nativeConversation : []
 const out=[];const seen=new Set;const norm=v=>api.normalize(String(v||''));const qsa=(sel,root=document)=>{try{return api.qsa(sel,root,{all:true})}catch{return[]}};const qs=(sel,root=document)=>{try{return api.qs(sel,root)}catch{return null}};const closest=(el,sel)=>{try{return api.closest(el,sel)}catch{return null}};const laidOut=el=>{if(!el)return false;try{const style=getComputedStyle(el);return style.display!=='none'&&style.visibility!=='hidden'}catch{return true}};const order=(a,b)=>{try{if(a===b)return 0;const pos=a.compareDocumentPosition(b);return pos&Node.DOCUMENT_POSITION_FOLLOWING?-1:pos&Node.DOCUMENT_POSITION_PRECEDING?1:0}catch{return 0}};const wrapperSelector='div[class*="message-index-"][class*="message-id-"]';const roots=[];const addRoot=node=>{const root=closest(node,wrapperSelector)||node;if(root&&!roots.includes(root))roots.push(root)};qsa('[data-element-id="user-message"],[data-element-id="response-block"]',document).forEach(addRoot);qsa(wrapperSelector,document).forEach(root=>{if(qs('[data-element-id="user-message"],[data-element-id="response-block"]',root)&&!roots.includes(root))roots.push(root)});const opts={copyButtonSelector:'[data-element-id="copy-message-button"]',copyButtonPattern:'copy-message-button|clipboard|copy',copyButtonIconFallback:false,copyButtonExcludePattern:'Copy code|Open in CodePen|Regenerate|List some more',copyTextExcludePattern:'^(Copy code|Open in CodePen|Regenerate|List some more)$',copyMenu:false,resetClipboardBeforeCopy:true,acceptUnchangedClipboard:false,copyTimeoutMs:7000,copyPollMs:40,copyCaptureGraceMs:260,matchMode:'anyUseful'};const sameTurn=(button,turn)=>{const owner=closest(button,wrapperSelector);if(owner)return owner===turn||turn.contains(owner)||owner.contains(turn);if(turn.contains(button))return true;try{const br=button.getBoundingClientRect(),tr=turn.getBoundingClientRect();return br.width>=0&&br.height>=0&&tr.width&&tr.height&&br.bottom>=tr.top-48&&br.top<=tr.bottom+96&&br.right>=tr.left-160&&br.left<=tr.right+160}catch{return false}};const isBadButton=button=>closest(button,'pre,code,[data-language],table,kbd,samp')||/Copy code|Open in CodePen|Regenerate|List some more/i.test(norm(button.innerText||button.textContent||''));const findButtons=async turn=>{api.reveal(turn);await api.sleep(220);let buttons=qsa('[data-element-id="copy-message-button"]',turn).filter(laidOut);if(!buttons.length)buttons=qsa('[data-element-id="copy-message-button"]',document).filter(button=>sameTurn(button,turn)&&laidOut(button));return buttons.filter(button=>!isBadButton(button)).sort(order)};for(const turn of roots.sort(order)){const user=qs('[data-element-id="user-message"]',turn);const assistant=qs('[data-element-id="response-block"]',turn);const role=user?'user':assistant?'assistant':'';if(!role)continue;const source=user||assistant;const expected=norm(source.innerText||source.textContent);const buttons=await findButtons(turn);if(!buttons.length)continue;const copied=await api.copyFirst(buttons,{expected,role,scope:turn,options:opts});const clean=norm(copied);if(clean){const key=role+'|'+clean.toLowerCase().replace(/\s+/g,'');if(!seen.has(key)){seen.add(key);out.push({role,text:clean})}}await api.sleep(80)}return api.merge(out);
   };
   scripts["typingmind.js"] = scripts["typingmind"];
+  window.__CHATCLUB_SUMMARY_SCRIPTS_VERSION__ = "2026.07.15.2";
   window.__CHATCLUB_SUMMARY_SCRIPTS__ = scripts;
-  const SOURCE = "chatclub";
-  const COPY_SOURCE = "chatclub-native-copy:2026.07.08.13";
-  const PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.08.13";
-  const SHORTCUT_TRIGGER_POST_MESSAGE_SOURCE = "chatclub:shortcut-trigger:2026.07.14.1";
+  const COPY_SOURCE = PROTOCOL.NATIVE_COPY_SOURCE;
+  const PAGE_SUMMARY_SOURCE = PROTOCOL.PAGE_SUMMARY_SOURCE;
 
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const normalize = (value) => String(value || "")
@@ -2123,329 +2152,6 @@ const out=[];const seen=new Set;const norm=v=>api.normalize(String(v||''));const
     .replace(/\r\n?/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
-
-  function respond(source, id, action, data, error) {
-    source?.postMessage({ source: SOURCE, type: "response", id, action, data, error }, "*");
-  }
-
-  const SHORTCUT_CONFIG_SCHEMA_VERSION = 2;
-  const KEYBOARD_PLATFORM_MAC = "mac";
-  const KEYBOARD_PLATFORM_WINDOWS = "windows";
-  const DEFAULT_SHORTCUT_CONFIG = {
-    schemaVersion: SHORTCUT_CONFIG_SCHEMA_VERSION,
-    profiles: {
-      mac: {
-        sendKeyMode: "enter",
-        shortcuts: {
-          focusInput: { disabled: false, command: false, control: false, option: true, shift: false, code: "KeyK" },
-          newChat: { disabled: false, command: true, control: false, option: false, shift: false, code: "KeyN" },
-          newChatAll: { disabled: false, command: true, control: false, option: false, shift: true, code: "KeyN" },
-          deleteThread: { disabled: false, command: false, control: false, option: true, shift: true, code: "KeyD" },
-          optimizePrompt: { disabled: false, command: false, control: false, option: true, shift: false, code: "KeyO" },
-          openSummaryPanel: { disabled: false, command: false, control: false, option: true, shift: false, code: "KeyS" },
-          openPocketPanel: { disabled: false, command: true, control: false, option: false, shift: false, code: "KeyP" },
-          toggleMessageNavigator: { disabled: false, command: true, control: false, option: false, shift: false, code: "KeyM" },
-          closeChat: { disabled: false, command: false, control: false, option: true, shift: false, code: "KeyW" },
-          refreshPage: { disabled: false, command: true, control: false, option: false, shift: false, code: "KeyR" },
-          reloadChat: { disabled: false, command: true, control: false, option: false, shift: false, code: "KeyH" },
-          enterFullscreen: { disabled: false, command: false, control: false, option: true, shift: false, code: "KeyF" },
-          insertPrompt: { disabled: false, command: false, control: false, option: true, shift: false, codePattern: "Digit" },
-          switchLayout: { disabled: false, command: true, control: false, option: false, shift: true, codePattern: "Digit" },
-          switchPlatformTab: { disabled: false, command: true, control: false, option: false, shift: false, codePattern: "Digit" }
-        }
-      },
-      windows: {
-        sendKeyMode: "enter",
-        shortcuts: {
-          focusInput: { disabled: false, control: false, alt: true, shift: false, code: "KeyK" },
-          newChat: { disabled: false, control: true, alt: false, shift: false, code: "KeyN" },
-          newChatAll: { disabled: false, control: true, alt: false, shift: true, code: "KeyN" },
-          deleteThread: { disabled: false, control: false, alt: true, shift: true, code: "KeyD" },
-          optimizePrompt: { disabled: false, control: false, alt: true, shift: false, code: "KeyO" },
-          openSummaryPanel: { disabled: false, control: false, alt: true, shift: false, code: "KeyS" },
-          openPocketPanel: { disabled: false, control: true, alt: false, shift: false, code: "KeyP" },
-          toggleMessageNavigator: { disabled: false, control: true, alt: false, shift: false, code: "KeyM" },
-          closeChat: { disabled: false, control: false, alt: true, shift: false, code: "KeyW" },
-          refreshPage: { disabled: false, control: true, alt: false, shift: false, code: "KeyR" },
-          reloadChat: { disabled: false, control: true, alt: false, shift: false, code: "KeyH" },
-          enterFullscreen: { disabled: false, control: false, alt: true, shift: false, code: "KeyF" },
-          insertPrompt: { disabled: false, control: false, alt: true, shift: false, codePattern: "Digit" },
-          switchLayout: { disabled: false, control: true, alt: false, shift: true, codePattern: "Digit" },
-          switchPlatformTab: { disabled: false, control: true, alt: false, shift: false, codePattern: "Digit" }
-        }
-      }
-    }
-  };
-  const SHORTCUT_ACTIONS = [
-    "focusInput",
-    "newChat",
-    "newChatAll",
-    "deleteThread",
-    "optimizePrompt",
-    "openSummaryPanel",
-    "openPocketPanel",
-    "toggleMessageNavigator",
-    "closeChat",
-    "refreshPage",
-    "reloadChat",
-    "enterFullscreen",
-    "insertPrompt",
-    "switchLayout",
-    "switchPlatformTab"
-  ];
-  const PATTERN_ACTIONS = new Set(["insertPrompt", "switchLayout", "switchPlatformTab"]);
-  const LEGACY_KAGI_CONFLICT_DELETE_THREAD_SHORTCUT = Object.freeze({
-    alt: false,
-    shift: true,
-    cmdOrCtrl: true,
-    code: "Backspace"
-  });
-  const LEGACY_DEFAULT_NEW_CHAT_SHORTCUT = Object.freeze({
-    alt: true,
-    shift: false,
-    cmdOrCtrl: false,
-    code: "KeyN"
-  });
-  const LEGACY_DEFAULT_RELOAD_CHAT_SHORTCUTS = Object.freeze([
-    Object.freeze({ alt: true, shift: false, cmdOrCtrl: false, code: "KeyR" }),
-    Object.freeze({ alt: false, shift: false, cmdOrCtrl: true, code: "KeyR" }),
-    Object.freeze({ alt: false, shift: true, cmdOrCtrl: true, code: "KeyR" })
-  ]);
-  const ACTIVE_KEYBOARD_PLATFORM = detectKeyboardPlatform();
-  let activeShortcutConfig = normalizeShortcutConfig(DEFAULT_SHORTCUT_CONFIG);
-
-  function requestParent(action, data = {}, timeout = 1200) {
-    return new Promise((resolve, reject) => {
-      const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      const timer = setTimeout(() => {
-        window.removeEventListener("message", onMessage, true);
-        reject(new Error("Parent request timed out"));
-      }, timeout);
-      function onMessage(event) {
-        const message = event.data;
-        if (message?.source !== SOURCE || message.type !== "response" || message.id !== id) return;
-        clearTimeout(timer);
-        window.removeEventListener("message", onMessage, true);
-        message.error ? reject(new Error(message.error)) : resolve(message.data);
-      }
-      window.addEventListener("message", onMessage, true);
-      window.parent.postMessage({ source: SOURCE, type: "request", action, id, data }, "*");
-    });
-  }
-
-  function bool(value, fallback = false) {
-    return value == null ? fallback : Boolean(value);
-  }
-
-  function normalizeKeyboardPlatform(platform) {
-    return String(platform || "").toLowerCase() === KEYBOARD_PLATFORM_MAC
-      ? KEYBOARD_PLATFORM_MAC
-      : KEYBOARD_PLATFORM_WINDOWS;
-  }
-
-  function detectKeyboardPlatform(navigatorLike = globalThis.navigator) {
-    const platform = [
-      navigatorLike?.userAgentData?.platform,
-      navigatorLike?.platform,
-      navigatorLike?.userAgent
-    ].filter(Boolean).join(" ");
-    return /Mac|iPhone|iPad|iPod/i.test(platform)
-      ? KEYBOARD_PLATFORM_MAC
-      : KEYBOARD_PLATFORM_WINDOWS;
-  }
-
-  function defaultShortcut(action, platform) {
-    return DEFAULT_SHORTCUT_CONFIG.profiles[normalizeKeyboardPlatform(platform)]?.shortcuts?.[action] || {};
-  }
-
-  function shortcutSameFixedShape(shortcut, expected) {
-    if (!shortcut || !expected) return false;
-    return Boolean(shortcut.disabled) === Boolean(expected.disabled)
-      && Boolean(shortcut.cmdOrCtrl) === Boolean(expected.cmdOrCtrl)
-      && Boolean(shortcut.alt) === Boolean(expected.alt)
-      && Boolean(shortcut.shift) === Boolean(expected.shift)
-      && String(shortcut.code || "") === String(expected.code || "");
-  }
-
-  function normalizeShortcutItem(action, raw, platform) {
-    const normalizedPlatform = normalizeKeyboardPlatform(platform);
-    const base = defaultShortcut(action, normalizedPlatform);
-    const source = raw || {};
-    const modifiers = normalizedPlatform === KEYBOARD_PLATFORM_MAC
-      ? {
-        command: bool(source.command, Boolean(base.command)),
-        control: bool(source.control, Boolean(base.control)),
-        option: bool(source.option, Boolean(base.option)),
-        shift: bool(source.shift, Boolean(base.shift))
-      }
-      : {
-        control: bool(source.control, Boolean(base.control)),
-        alt: bool(source.alt, Boolean(base.alt)),
-        shift: bool(source.shift, Boolean(base.shift))
-      };
-    return PATTERN_ACTIONS.has(action)
-      ? { disabled: Boolean(source.disabled), ...modifiers, codePattern: "Digit" }
-      : { disabled: Boolean(source.disabled), ...modifiers, code: String(source.code || base.code || "") };
-  }
-
-  function normalizeShortcutProfile(raw, platform) {
-    const source = raw && typeof raw === "object" ? raw : {};
-    const rawShortcuts = { ...(source.shortcuts || {}) };
-    if (rawShortcuts.openSummary && !rawShortcuts.openSummaryPanel) rawShortcuts.openSummaryPanel = rawShortcuts.openSummary;
-    const shortcuts = {};
-    for (const action of SHORTCUT_ACTIONS) {
-      shortcuts[action] = normalizeShortcutItem(action, rawShortcuts[action], platform);
-    }
-    return {
-      sendKeyMode: source.sendKeyMode === "mod-enter" ? "mod-enter" : "enter",
-      shortcuts
-    };
-  }
-
-  function legacyDefaultShortcut(action) {
-    const mac = defaultShortcut(action, KEYBOARD_PLATFORM_MAC);
-    return {
-      alt: Boolean(mac.option),
-      shift: Boolean(mac.shift),
-      cmdOrCtrl: Boolean(mac.command),
-      ...(mac.codePattern ? { codePattern: "Digit" } : { code: String(mac.code || "") })
-    };
-  }
-
-  function migrateLegacyShortcutConfig(source) {
-    const rawShortcuts = { ...(source.shortcuts || {}) };
-    if (rawShortcuts.openSummary && !rawShortcuts.openSummaryPanel) rawShortcuts.openSummaryPanel = rawShortcuts.openSummary;
-    if (
-      source.deleteThreadShortcutMigrated !== true
-      && shortcutSameFixedShape(rawShortcuts.deleteThread, LEGACY_KAGI_CONFLICT_DELETE_THREAD_SHORTCUT)
-    ) {
-      rawShortcuts.deleteThread = legacyDefaultShortcut("deleteThread");
-    }
-    if (
-      source.newChatShortcutMigrated !== true
-      && shortcutSameFixedShape(rawShortcuts.newChat, LEGACY_DEFAULT_NEW_CHAT_SHORTCUT)
-    ) {
-      rawShortcuts.newChat = legacyDefaultShortcut("newChat");
-    }
-    if (
-      source.homeShortcutMigrated !== true
-      && LEGACY_DEFAULT_RELOAD_CHAT_SHORTCUTS.some((shortcut) => shortcutSameFixedShape(rawShortcuts.reloadChat, shortcut))
-    ) {
-      rawShortcuts.reloadChat = legacyDefaultShortcut("reloadChat");
-    }
-    const sendKeyMode = source.sendKeyMode === "mod-enter" ? "mod-enter" : "enter";
-    const profiles = {};
-    for (const platform of [KEYBOARD_PLATFORM_MAC, KEYBOARD_PLATFORM_WINDOWS]) {
-      const shortcuts = {};
-      for (const action of SHORTCUT_ACTIONS) {
-        const base = legacyDefaultShortcut(action);
-        const item = rawShortcuts[action] || {};
-        const common = {
-          disabled: Boolean(item.disabled),
-          shift: bool(item.shift, Boolean(base.shift))
-        };
-        const modifiers = platform === KEYBOARD_PLATFORM_MAC
-          ? {
-            command: bool(item.cmdOrCtrl, Boolean(base.cmdOrCtrl)),
-            control: false,
-            option: bool(item.alt, Boolean(base.alt))
-          }
-          : {
-            control: bool(item.cmdOrCtrl, Boolean(base.cmdOrCtrl)),
-            alt: bool(item.alt, Boolean(base.alt))
-          };
-        shortcuts[action] = PATTERN_ACTIONS.has(action) || item.codePattern === "Digit"
-          ? { ...common, ...modifiers, codePattern: "Digit" }
-          : { ...common, ...modifiers, code: String(item.code || base.code || "") };
-      }
-      profiles[platform] = normalizeShortcutProfile({ sendKeyMode, shortcuts }, platform);
-    }
-    return { schemaVersion: SHORTCUT_CONFIG_SCHEMA_VERSION, profiles };
-  }
-
-  function normalizeShortcutConfig(raw = {}) {
-    const source = raw && typeof raw === "object" ? raw : {};
-    if (source.schemaVersion !== SHORTCUT_CONFIG_SCHEMA_VERSION || !source.profiles) {
-      return migrateLegacyShortcutConfig(source);
-    }
-    return {
-      schemaVersion: SHORTCUT_CONFIG_SCHEMA_VERSION,
-      profiles: {
-        mac: normalizeShortcutProfile(source.profiles.mac, KEYBOARD_PLATFORM_MAC),
-        windows: normalizeShortcutProfile(source.profiles.windows, KEYBOARD_PLATFORM_WINDOWS)
-      }
-    };
-  }
-
-  function digitMatch(code) {
-    return /^Digit([1-9])$/.exec(code || "") || /^Numpad([1-9])$/.exec(code || "");
-  }
-
-  function matchShortcut(event, config = activeShortcutConfig, platform = ACTIVE_KEYBOARD_PLATFORM) {
-    const normalizedPlatform = normalizeKeyboardPlatform(platform);
-    const shortcuts = normalizeShortcutConfig(config).profiles[normalizedPlatform].shortcuts;
-    for (const action of SHORTCUT_ACTIONS) {
-      const shortcut = shortcuts[action];
-      if (!shortcut || shortcut.disabled) continue;
-      if (normalizedPlatform === KEYBOARD_PLATFORM_MAC) {
-        if (Boolean(shortcut.command) !== Boolean(event.metaKey)) continue;
-        if (Boolean(shortcut.control) !== Boolean(event.ctrlKey)) continue;
-        if (Boolean(shortcut.option) !== Boolean(event.altKey)) continue;
-      } else {
-        if (event.metaKey) continue;
-        if (Boolean(shortcut.control) !== Boolean(event.ctrlKey)) continue;
-        if (Boolean(shortcut.alt) !== Boolean(event.altKey)) continue;
-      }
-      if (Boolean(shortcut.shift) !== Boolean(event.shiftKey)) continue;
-      if (PATTERN_ACTIONS.has(action)) {
-        const match = digitMatch(event.code);
-        if (match) return { action, matchObj: { digit: match[1] } };
-      } else if (shortcut.code && shortcut.code === event.code) {
-        return { action, matchObj: {} };
-      }
-    }
-    return null;
-  }
-
-  function eventMatchesKagiNativeDeleteShortcut(event, platform = ACTIVE_KEYBOARD_PLATFORM) {
-    if (!event || event.code !== "Backspace" || event.altKey || !event.shiftKey) return false;
-    return normalizeKeyboardPlatform(platform) === KEYBOARD_PLATFORM_MAC
-      ? Boolean(event.metaKey) && !event.ctrlKey
-      : Boolean(event.ctrlKey) && !event.metaKey;
-  }
-
-  function shouldBridgeShortcut(match, event) {
-    const action = String(match?.action || "");
-    const host = String(location.hostname || "").toLowerCase();
-    if (action === "deleteThread" && host === "assistant.kagi.com" && eventMatchesKagiNativeDeleteShortcut(event)) {
-      return false;
-    }
-    return true;
-  }
-
-  async function loadShortcutConfig() {
-    try {
-      const parentConfig = await requestParent("getShortcutConfig", {}, 1400);
-      activeShortcutConfig = normalizeShortcutConfig(parentConfig);
-      return;
-    } catch {}
-    try {
-      const stored = await chrome.storage.local.get("shortcutConfig");
-      activeShortcutConfig = normalizeShortcutConfig(stored.shortcutConfig);
-    } catch {}
-  }
-
-  function postShortcutTriggered(match, event) {
-    if (!shouldBridgeShortcut(match, event)) return false;
-    window.parent.postMessage({
-      source: SHORTCUT_TRIGGER_POST_MESSAGE_SOURCE,
-      type: "request",
-      action: "shortcutTriggered",
-      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      data: match
-    }, "*");
-    return true;
-  }
 
   function visible(el) {
     if (!el?.getBoundingClientRect) return false;
@@ -2764,30 +2470,6 @@ const out=[];const seen=new Set;const norm=v=>api.normalize(String(v||''));const
     });
   }
 
-  function parentClipboardRequest(action, id, data = {}, timeout = 700) {
-    return new Promise((resolve) => {
-      try {
-        if (!window.parent || window.parent === window) return resolve(null);
-        const timer = setTimeout(() => {
-          window.removeEventListener("message", onMessage, true);
-          resolve(null);
-        }, timeout);
-        const onMessage = (event) => {
-          const message = event.data;
-          if (message?.source === "chatclub-parent-clipboard" && message.type === "response" && message.action === action && message.id === id) {
-            clearTimeout(timer);
-            window.removeEventListener("message", onMessage, true);
-            resolve(message.data || null);
-          }
-        };
-        window.addEventListener("message", onMessage, true);
-        window.parent.postMessage({ source: "chatclub-parent-clipboard", type: "request", action, id, data }, "*");
-      } catch {
-        resolve(null);
-      }
-    });
-  }
-
   function pageSummaryRequest(config = {}) {
     return new Promise((resolve) => {
       const id = copyId();
@@ -2835,11 +2517,6 @@ const out=[];const seen=new Set;const norm=v=>api.normalize(String(v||''));const
     });
   }
 
-  async function parentClipboardText(id, timeout = 600) {
-    const result = await parentClipboardRequest("read", id, {}, timeout);
-    return result?.ok ? normalize(result.text || "") : "";
-  }
-
   function copyId() {
     return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   }
@@ -2878,7 +2555,6 @@ const out=[];const seen=new Set;const norm=v=>api.normalize(String(v||''));const
     let capturedPriority = 0;
     let capturedAt = 0;
     try { before = normalize(await navigator.clipboard.readText()); } catch {}
-    if (!before) before = await parentClipboardText(id, 500);
     const acceptsClipboardValue = (value) => value
       && !isCopyProbeText(value)
       && (value !== before || allowUnchangedClipboard);
@@ -2909,20 +2585,12 @@ const out=[];const seen=new Set;const norm=v=>api.normalize(String(v||''));const
             break;
           }
         } catch {}
-        const parentCurrent = await parentClipboardText(id, 250);
-        if (acceptsClipboardValue(parentCurrent)) {
-          captured = parentCurrent;
-          capturedPriority = Math.max(capturedPriority, 6);
-          break;
-        }
       }
       if (captured && !isCopyProbeText(captured)) return cleanCaptured(captured);
       try {
         const after = normalize(await navigator.clipboard.readText());
         if (acceptsClipboardValue(after)) return cleanCaptured(after);
       } catch {}
-      const parentAfter = await parentClipboardText(id, 700);
-      if (acceptsClipboardValue(parentAfter)) return cleanCaptured(parentAfter);
       return "";
     } finally {
       window.removeEventListener("message", onCapture, true);
@@ -3393,35 +3061,30 @@ const out=[];const seen=new Set;const norm=v=>api.normalize(String(v||''));const
     return { sent: true, method: "enter" };
   }
 
-  const inlineSummaryUserscriptCache = new Map();
+  const CUSTOM_SUMMARY_EXECUTOR = PROTOCOL.CUSTOM_SUMMARY_EXECUTOR;
+  const SUMMARY_RESULT_MAX_TURNS = 200;
+  const SUMMARY_RESULT_MAX_TURN_CHARS = 50 * 1024;
+  const SUMMARY_RESULT_MAX_TOTAL_CHARS = 1024 * 1024;
 
-  function shouldUseInlineSummaryUserscript(config, runner) {
-    return Boolean(config?.userscript) && (!runner || config.builtIn === false || config.sourceMode === "custom" || config.userscriptOverride === true);
-  }
-
-  function inlineSummaryUserscriptRunner(config = {}) {
-    const source = String(config.userscript || "").trim();
-    if (!source) return null;
-    const cacheKey = `${config.id || ""}\n${source}`;
-    const cached = inlineSummaryUserscriptCache.get(cacheKey);
-    if (cached) return cached;
-    try {
-      const AsyncFunction = Object.getPrototypeOf(async function() {}).constructor;
-      const runner = new AsyncFunction("api", source);
-      inlineSummaryUserscriptCache.set(cacheKey, runner);
-      return runner;
-    } catch (error) {
-      throw new Error(`Invalid Summary userscript: ${error?.message || String(error)}`);
+  function boundedSummaryRunnerMessages(value) {
+    const source = Array.isArray(value) ? value : [];
+    const bounded = [];
+    let totalChars = 0;
+    for (const item of source.slice(0, SUMMARY_RESULT_MAX_TURNS)) {
+      if (!item || typeof item !== "object") continue;
+      const role = item.role === "assistant" ? "assistant" : item.role === "user" ? "user" : "";
+      if (!role) continue;
+      const remaining = SUMMARY_RESULT_MAX_TOTAL_CHARS - totalChars;
+      if (remaining <= 0) break;
+      const textValue = String(item.text ?? item.content ?? "").slice(0, Math.min(SUMMARY_RESULT_MAX_TURN_CHARS, remaining));
+      totalChars += textValue.length;
+      if (textValue) bounded.push({ role, text: textValue });
     }
+    return bounded;
   }
 
-  async function collectSummary(data) {
-    const config = data?.config || {};
-    const registry = window.__CHATCLUB_SUMMARY_SCRIPTS__ || {};
-    let runner = registry[config.id] || registry[config.userscriptFile];
-    if (shouldUseInlineSummaryUserscript(config, runner)) runner = inlineSummaryUserscriptRunner(config);
-    if (!runner) return { messages: [] };
-    const api = {
+  function summaryRuntimeApi(config = {}) {
+    return {
       config,
       sleep,
       normalize,
@@ -3442,8 +3105,13 @@ const out=[];const seen=new Set;const norm=v=>api.normalize(String(v||''));const
       extractTurns,
       findCopyButtons: userscriptFindCopyButtons
     };
-    const result = await runner(api);
-    const messages = merge(Array.isArray(result) ? result : result?.messages || []);
+  }
+
+  async function runSummaryRunner(config, runner) {
+    if (typeof runner !== "function") throw new Error("Summary userscript runner is unavailable");
+    const result = await runner(summaryRuntimeApi(config));
+    const messages = merge(boundedSummaryRunnerMessages(Array.isArray(result) ? result : result?.messages || []))
+      .slice(0, SUMMARY_RESULT_MAX_TURNS);
     return {
       messages: hasUserAndAssistant(messages) ? messages : [],
       rawMessageCount: messages.length,
@@ -3451,12 +3119,64 @@ const out=[];const seen=new Set;const norm=v=>api.normalize(String(v||''));const
     };
   }
 
+  // Custom source is compiled by chrome.userScripts.execute(), not by eval or
+  // Function constructors. The injected wrapper calls this stable packaged API.
+  window[CUSTOM_SUMMARY_EXECUTOR] = (config, runner) => runSummaryRunner(config || {}, runner);
 
-  if (!window.__CHATCLUB_SUMMARY_PAGE_RUNTIME__) {
-    window.__CHATCLUB_SUMMARY_PAGE_RUNTIME__ = true;
-    window.addEventListener("message", async (event) => {
+  async function collectSummary(data) {
+    const config = data?.config || {};
+    const registry = window.__CHATCLUB_SUMMARY_SCRIPTS__ || {};
+    const runner = registry[config.id] || registry[config.userscriptFile];
+    if (!runner) return { messages: [] };
+    return runSummaryRunner(config, runner);
+  }
+
+
+  const SUMMARY_PAGE_RUNTIME_KEY = "__CHATCLUB_SUMMARY_PAGE_RUNTIME_V2__";
+  const previousSummaryPageRuntime = window[SUMMARY_PAGE_RUNTIME_KEY];
+  if (
+    previousSummaryPageRuntime
+    && (
+      previousSummaryPageRuntime.bridgeVersion !== PROTOCOL.CONTENT_BRIDGE_VERSION
+      || previousSummaryPageRuntime.source !== PAGE_SUMMARY_SOURCE
+    )
+  ) {
+    try { previousSummaryPageRuntime.dispose?.(); } catch {}
+    delete window[SUMMARY_PAGE_RUNTIME_KEY];
+  }
+  if (!window[SUMMARY_PAGE_RUNTIME_KEY]) {
+    const onSummaryPageMessage = async (event) => {
       const message = event.data;
-      if (event.source !== window || message?.source !== PAGE_SUMMARY_SOURCE || message.type !== "request" || message.action !== "extract") return;
+      if (
+        event.source !== window
+        || message?.source !== PAGE_SUMMARY_SOURCE
+        || message.type !== "request"
+        || !message.id
+      ) return;
+      if (message.action === "runtimeState") {
+        const registry = window.__CHATCLUB_SUMMARY_SCRIPTS__;
+        const registryVersion = String(window.__CHATCLUB_SUMMARY_SCRIPTS_VERSION__ || "");
+        const ready = Boolean(
+          registry
+          && typeof registry === "object"
+          && Object.keys(registry).length
+          && registryVersion === PROTOCOL.CONTENT_BRIDGE_VERSION
+        );
+        window.postMessage({
+          source: PAGE_SUMMARY_SOURCE,
+          type: "response",
+          action: "runtimeState",
+          id: message.id,
+          ok: true,
+          data: {
+            ready,
+            bridgeVersion: PROTOCOL.CONTENT_BRIDGE_VERSION,
+            registryVersion
+          }
+        }, "*");
+        return;
+      }
+      if (message.action !== "extract") return;
       window.postMessage({ source: PAGE_SUMMARY_SOURCE, type: "ack", action: "extract", id: message.id }, "*");
       try {
         const data = await collectSummary(message.data || {});
@@ -3464,6 +3184,14 @@ const out=[];const seen=new Set;const norm=v=>api.normalize(String(v||''));const
       } catch (error) {
         window.postMessage({ source: PAGE_SUMMARY_SOURCE, type: "response", action: "extract", id: message.id, ok: false, error: error?.message || String(error), data: { messages: [] }, messages: [] }, "*");
       }
-    }, true);
+    };
+    window.addEventListener("message", onSummaryPageMessage, true);
+    window[SUMMARY_PAGE_RUNTIME_KEY] = {
+      bridgeVersion: PROTOCOL.CONTENT_BRIDGE_VERSION,
+      source: PAGE_SUMMARY_SOURCE,
+      dispose() {
+        window.removeEventListener("message", onSummaryPageMessage, true);
+      }
+    };
   }
 })();

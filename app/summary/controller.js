@@ -1,7 +1,7 @@
 import { summarizeContexts } from "../../shared/api.js";
+import { sendToContentFrame } from "../../shared/frame-rpc.js";
 import { t } from "../../shared/i18n.js";
-import { SUMMARY_POST_MESSAGE_SOURCE, sendToIframe } from "../../shared/post-message.js";
-import { storageGet, storageSet } from "../../shared/storage.js";
+import { storageGet, storageSet } from "../../shared/storage-adapter.js";
 import { findSummarySiteConfig } from "../../shared/url-match.js";
 import { createActionButton } from "../../ui/components.js";
 import { el, iconButton, textarea } from "../../ui/dom.js";
@@ -33,6 +33,7 @@ const SUMMARY_PANEL_SIZE_KEY = "chatclub.summaryPanelSize.v4";
  * @property {(label: string, iconName: string, onClick: Function, extraClass?: string, tooltipLabel?: string, tooltipPlacement?: string, tooltipId?: string) => HTMLElement} compactIconButton
  * @property {() => HTMLIFrameElement[]} currentFrames
  * @property {(iframe: HTMLIFrameElement) => any} frameApp
+ * @property {(iframe: HTMLIFrameElement, options?: { summary?: boolean }) => Promise<any>} prepareContentFrameRuntime
  * @property {(blocked: boolean, namespace?: string) => void} setFramePointerBlockedForOverlay
  * @property {(source: any) => HTMLIFrameElement | null} findFrameForSummarySource
  * @property {(source: any) => boolean} [highlightFrameForSummarySource]
@@ -57,6 +58,7 @@ export function createSummaryController(ctx) {
   const compactIconButton = requireControllerFunction(ctx, controllerName, "compactIconButton");
   const currentFrames = requireControllerFunction(ctx, controllerName, "currentFrames");
   const frameApp = requireControllerFunction(ctx, controllerName, "frameApp");
+  const prepareContentFrameRuntime = requireControllerFunction(ctx, controllerName, "prepareContentFrameRuntime");
   const setFramePointerBlockedForOverlay = requireControllerFunction(ctx, controllerName, "setFramePointerBlockedForOverlay");
   const findFrameForSummarySource = requireControllerFunction(ctx, controllerName, "findFrameForSummarySource");
   const highlightFrameForSummarySource = optionalControllerFunction(ctx, "highlightFrameForSummarySource", () => false);
@@ -87,7 +89,7 @@ export function createSummaryController(ctx) {
   function summarySourceKey(source) {
     return summarySourceKeyModel(source);
   }
-  
+
   function summarySourceOrder(source) {
     return summarySourceOrderModel(source);
   }
@@ -700,12 +702,12 @@ export function createSummaryController(ctx) {
     let pageTitle = "";
     let logoUrl = summaryFrameLogoUrl(instanceId, href);
     try {
-      const meta = await sendToIframe(iframe, "getPageMeta", {}, 1800, { source: SUMMARY_POST_MESSAGE_SOURCE });
+      const meta = await sendToContentFrame(iframe, "getPageMeta", {}, 1800);
       href = meta?.href || href;
       pageTitle = meta?.title || "";
       logoUrl = summaryFrameLogoUrl(instanceId, href, meta?.logoUrl) || logoUrl;
     } catch {
-      try { href = await sendToIframe(iframe, "getLocationHref", {}, 1200, { source: SUMMARY_POST_MESSAGE_SOURCE }) || href; } catch {}
+      try { href = await sendToContentFrame(iframe, "getLocationHref", {}, 1200) || href; } catch {}
       logoUrl = summaryFrameLogoUrl(instanceId, href) || logoUrl;
     }
     const discoveredLogoUrl = await discoverDeclaredFaviconUrl(href);
@@ -728,7 +730,8 @@ export function createSummaryController(ctx) {
   
   async function collectFrameSummary(iframe, index = 0) {
     const app = frameApp(iframe);
-    const base = await summaryFrameMeta(iframe, app, index);
+    const coreReady = await prepareContentFrameRuntime(iframe);
+    let base = await summaryFrameMeta(iframe, app, index);
     const diagnostic = (status, message, extra = {}) => ({
       ...base,
       ...extra,
@@ -736,25 +739,57 @@ export function createSummaryController(ctx) {
       status,
       message
     });
-  
-    if (base.href.startsWith("chrome-error://")) {
-      return { diagnostic: diagnostic("error", t("summaryPanel.browserError")) };
+
+    if (!coreReady?.ok) {
+      return { diagnostic: diagnostic("error", coreReady?.reason || t("summaryPanel.collectionFailed")) };
     }
-    const siteConfig = findSummarySiteConfig(state.options.summarySiteConfigs, base.href);
-    if (!siteConfig) {
-      return { diagnostic: diagnostic("skipped", t("summaryPanel.noConfigMatched")) };
+
+    const resolveSiteContext = () => {
+      if (base.href.startsWith("chrome-error://")) {
+        return { failure: { diagnostic: diagnostic("error", t("summaryPanel.browserError")) } };
+      }
+      const config = findSummarySiteConfig(state.options.summarySiteConfigs, base.href);
+      if (!config) {
+        return { failure: { diagnostic: diagnostic("skipped", t("summaryPanel.noConfigMatched")) } };
+      }
+      const fields = { siteId: config.id, siteName: config.name };
+      const blankReason = summaryBlankPageReason(config, base.href);
+      if (blankReason) {
+        return { failure: { diagnostic: diagnostic("skipped", blankReason, fields) } };
+      }
+      return { config, fields };
+    };
+    let siteContext = resolveSiteContext();
+    if (siteContext.failure) return siteContext.failure;
+
+    const summaryReady = await prepareContentFrameRuntime(iframe, { summary: true });
+    if (!summaryReady?.ok) {
+      return {
+        diagnostic: diagnostic(
+          "error",
+          summaryReady?.reason || t("summaryPanel.collectionFailed"),
+          siteContext.fields
+        )
+      };
     }
-    const siteFields = { siteId: siteConfig.id, siteName: siteConfig.name };
-    const blankReason = summaryBlankPageReason(siteConfig, base.href);
-    if (blankReason) {
-      return { diagnostic: diagnostic("skipped", blankReason, siteFields) };
-    }
+    base = await summaryFrameMeta(iframe, app, index);
+    siteContext = resolveSiteContext();
+    if (siteContext.failure) return siteContext.failure;
+    const siteConfig = siteContext.config;
+    const siteFields = siteContext.fields;
   
     try {
       let messages = [];
       let result = null;
       if (siteConfig?.userscript) {
-        result = await sendToIframe(iframe, "collectSummary", { config: siteConfig }, siteConfig.userscriptTimeoutMs || 36000, { source: SUMMARY_POST_MESSAGE_SOURCE });
+        const runtimeConfig = { ...siteConfig };
+        delete runtimeConfig.userscript;
+        delete runtimeConfig.customUserscript;
+        result = await sendToContentFrame(iframe, "collectSummary", {
+          config: runtimeConfig,
+          expectedDocumentId: summaryReady.registration.documentId,
+          expectedHref: base.href
+        }, siteConfig.userscriptTimeoutMs || 36000);
         messages = result?.messages || result || [];
         if (!messages.length && result?.rawMessageCount) {
           return {
@@ -767,7 +802,7 @@ export function createSummaryController(ctx) {
         }
       }
       if ((!messages || !messages.length) && siteConfig?.fallbackMode === "allowPageText") {
-        const text = await sendToIframe(iframe, "getPageText", {}, 2500, { source: SUMMARY_POST_MESSAGE_SOURCE });
+        const text = await sendToContentFrame(iframe, "getPageText", {}, 2500);
         if (text) messages = [{ role: "page", text }];
       }
       const href = result?.href || base.href;

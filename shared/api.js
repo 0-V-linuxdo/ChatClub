@@ -1,5 +1,5 @@
 import { API_PROFILE_ENDPOINT_DEFAULT, API_PROFILE_MODEL_DEFAULT } from "./constants.js";
-import { normalizeOptions } from "./storage.js";
+import { normalizeOptions } from "./storage-schema.js";
 
 export function resolveApiProfile(options, purpose) {
   const normalized = normalizeOptions(options || {});

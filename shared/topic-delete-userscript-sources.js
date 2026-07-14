@@ -1,3 +1,12 @@
+import {
+  TOPIC_DELETE_BRIDGE_SOURCE,
+  TOPIC_DELETE_MENU_COMMAND_EVENT,
+  TOPIC_DELETE_PING_EVENT,
+  TOPIC_DELETE_READY_EVENT,
+  TOPIC_DELETE_REQUEST_EVENT,
+  TOPIC_DELETE_RESULT_EVENT
+} from "./protocol.js";
+
 const DELETE_USERSCRIPT_VERSION = "2026.07.05.1";
 const GEMINI_DELETE_USERSCRIPT_VERSION = "2026.07.12.1";
 const DELETE_USERSCRIPT_NAMESPACE = "https://chatclub.local/delete-sites";
@@ -804,14 +813,14 @@ const DELETE_USERSCRIPT_ENGINE = String.raw`
   const SITE_NAME = __CHATCLUB_DELETE_SITE_NAME__;
   const SITE_KEYS = __CHATCLUB_DELETE_SITE_KEYS__;
   const VERSION = __CHATCLUB_DELETE_SITE_VERSION__;
-  const REQUEST_EVENT = "chatclub:delete-site:request";
+  const REQUEST_EVENT = __CHATCLUB_DELETE_REQUEST_EVENT__;
   const VERSIONED_REQUEST_EVENT = REQUEST_EVENT + ":" + VERSION;
-  const MENU_COMMAND_EVENT = "chatclub:delete-site:menu-command";
+  const MENU_COMMAND_EVENT = __CHATCLUB_DELETE_MENU_COMMAND_EVENT__;
   const VERSIONED_MENU_COMMAND_EVENT = MENU_COMMAND_EVENT + ":" + VERSION;
-  const RESULT_EVENT = "chatclub:delete-site:result";
-  const PING_EVENT = "chatclub:delete-site:ping";
-  const READY_EVENT = "chatclub:delete-site:ready";
-  const BRIDGE_SOURCE = "chatclub-delete-sites";
+  const RESULT_EVENT = __CHATCLUB_DELETE_RESULT_EVENT__;
+  const PING_EVENT = __CHATCLUB_DELETE_PING_EVENT__;
+  const READY_EVENT = __CHATCLUB_DELETE_READY_EVENT__;
+  const BRIDGE_SOURCE = __CHATCLUB_DELETE_BRIDGE_SOURCE__;
   const GLOBAL_NAME = "ChatClubDeleteSites";
   const rootWindow = typeof unsafeWindow !== "undefined" && unsafeWindow ? unsafeWindow : window;
   let active = true;
@@ -2575,6 +2584,12 @@ function standaloneDeleteUserscript({ id, name, description, matches, keys, vers
     .replace("__CHATCLUB_DELETE_SITE_NAME__", JSON.stringify(name))
     .replace("__CHATCLUB_DELETE_SITE_KEYS__", JSON.stringify([id, name, ...(keys || [])]))
     .replace("__CHATCLUB_DELETE_SITE_VERSION__", JSON.stringify(version))
+    .replace("__CHATCLUB_DELETE_REQUEST_EVENT__", JSON.stringify(TOPIC_DELETE_REQUEST_EVENT))
+    .replace("__CHATCLUB_DELETE_MENU_COMMAND_EVENT__", JSON.stringify(TOPIC_DELETE_MENU_COMMAND_EVENT))
+    .replace("__CHATCLUB_DELETE_RESULT_EVENT__", JSON.stringify(TOPIC_DELETE_RESULT_EVENT))
+    .replace("__CHATCLUB_DELETE_PING_EVENT__", JSON.stringify(TOPIC_DELETE_PING_EVENT))
+    .replace("__CHATCLUB_DELETE_READY_EVENT__", JSON.stringify(TOPIC_DELETE_READY_EVENT))
+    .replace("__CHATCLUB_DELETE_BRIDGE_SOURCE__", JSON.stringify(TOPIC_DELETE_BRIDGE_SOURCE))
     .replace("__CHATCLUB_DELETE_SITE_HELPERS__\n", helpers)
     .replace("__CHATCLUB_DELETE_SITE_RUNNER__", runner);
   return `${header}\n\n${engine.trimEnd()}\n`;

@@ -4,8 +4,8 @@
   "short_name": "ChatClub",
   "description": "__MSG_extension_description__",
   "default_locale": "zh_CN",
-  "version": "2026.7.14",
-  "version_name": "「2026-07-14｜12:59:22」",
+  "version": "2026.7.15",
+  "version_name": "「2026-07-15｜05:09:57」",
   "homepage_url": "https://chatclub.local/",
   "action": {
     "default_title": "ChatClub",
@@ -23,7 +23,14 @@
     "128": "icons/icon-128.png"
   },
   "background": {
+    "scripts": [
+      "background/firefox-background.js"
+    ],
     "service_worker": "background/service-worker.js",
+    "preferred_environment": [
+      "document",
+      "service_worker"
+    ],
     "type": "module"
   },
   "options_page": "chatClub.html",
@@ -31,22 +38,20 @@
     "storage",
     "declarativeNetRequest",
     "scripting",
-    "userScripts",
     "webNavigation",
     "debugger",
     "favicon",
     "tabs",
-    "windows",
     "unlimitedStorage",
     "clipboardRead",
     "clipboardWrite"
   ],
+  "optional_permissions": [
+    "userScripts"
+  ],
   "host_permissions": [
     "<all_urls>"
   ],
-  "declarative_net_request": {
-    "rule_resources": []
-  },
   "web_accessible_resources": [
     {
       "matches": [
@@ -59,7 +64,6 @@
         "content/content.js",
         "content/summary-userscripts.js",
         "content/summary-userscripts-main.js",
-        "userscripts/*",
         "topic-delete-userscripts/*"
       ],
       "use_dynamic_url": false

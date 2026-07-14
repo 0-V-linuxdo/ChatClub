@@ -19,26 +19,19 @@ function normalizeExtensionTabInfo(tab) {
 export function createWorkspaceOpenTabs() {
   let currentExtensionTabInfo = null;
 
-  function captureCurrentExtensionTab(callback) {
+  async function captureCurrentExtensionTab() {
     try {
-      if (!globalThis.chrome?.tabs?.getCurrent) {
-        callback(currentExtensionTabInfo);
-        return false;
-      }
-      globalThis.chrome.tabs.getCurrent((tab) => {
-        const info = globalThis.chrome?.runtime?.lastError ? null : normalizeExtensionTabInfo(tab);
-        if (info) currentExtensionTabInfo = info;
-        callback(info || currentExtensionTabInfo);
-      });
-      return true;
+      if (!extensionApi()?.tabs?.getCurrent) return currentExtensionTabInfo;
+      const info = normalizeExtensionTabInfo(await tabsGetCurrent());
+      if (info) currentExtensionTabInfo = info;
+      return info || currentExtensionTabInfo;
     } catch {
-      callback(currentExtensionTabInfo);
-      return false;
+      return currentExtensionTabInfo;
     }
   }
 
   function refreshCurrentExtensionTabInfo() {
-    captureCurrentExtensionTab(() => {});
+    captureCurrentExtensionTab().catch(() => {});
   }
 
   function tabCreateOptions(href, openerTab = currentExtensionTabInfo) {
@@ -51,15 +44,12 @@ export function createWorkspaceOpenTabs() {
 
   function openTabViaBackground(href) {
     try {
-      if (!globalThis.chrome?.runtime?.sendMessage) return false;
-      captureCurrentExtensionTab((openerTab) => {
-        globalThis.chrome.runtime.sendMessage({ source: "chatclub", action: "openTab", url: href, openerTab }, (response) => {
-          if (!globalThis.chrome?.runtime?.lastError && response?.success !== false) return;
-          try {
-            window.open(href, "_blank", "noopener,noreferrer");
-          } catch {}
-        });
-      });
+      if (!extensionApi()?.runtime?.sendMessage) return false;
+      (async () => {
+        const openerTab = await captureCurrentExtensionTab();
+        const response = await runtimeSendMessage({ source: "chatclub", action: "openTab", url: href, openerTab });
+        if (response?.success === false) throw new Error(response.error || "open tab failed");
+      })().catch(() => openTabWindow(href));
       return true;
     } catch {
       return false;
@@ -74,22 +64,18 @@ export function createWorkspaceOpenTabs() {
     }
   }
 
-  function openTabViaChromeApi(href) {
+  function openTabViaExtensionApi(href) {
     try {
-      if (!globalThis.chrome?.tabs?.create) return false;
-      captureCurrentExtensionTab((openerTab) => {
-        globalThis.chrome.tabs.create(tabCreateOptions(href, openerTab), (tab) => {
-          if (globalThis.chrome?.runtime?.lastError) {
-            openTabViaBackground(href) || openTabWindow(href);
-            return;
-          }
-          if (tab?.id) {
-            try { globalThis.chrome.tabs.update(tab.id, { active: true }); } catch {}
-          }
-          if (tab?.windowId && globalThis.chrome?.windows?.update) {
-            try { globalThis.chrome.windows.update(tab.windowId, { focused: true }); } catch {}
-          }
-        });
+      if (!extensionApi()?.tabs?.create) return false;
+      (async () => {
+        const openerTab = await captureCurrentExtensionTab();
+        const tab = await tabsCreate(tabCreateOptions(href, openerTab));
+        if (tab?.id) await tabsUpdate(tab.id, { active: true }).catch(() => {});
+        if (tab?.windowId && extensionApi()?.windows?.update) {
+          await windowsUpdate(tab.windowId, { focused: true }).catch(() => {});
+        }
+      })().catch(() => {
+        openTabViaBackground(href) || openTabWindow(href);
       });
       return true;
     } catch {
@@ -100,7 +86,7 @@ export function createWorkspaceOpenTabs() {
   function openTabUrl(href) {
     href = openableTabUrl(href);
     if (!href) return false;
-    if (openTabViaChromeApi(href)) return true;
+    if (openTabViaExtensionApi(href)) return true;
     if (openTabViaBackground(href)) return true;
     const opened = openTabWindow(href);
     if (opened) return true;
@@ -113,3 +99,11 @@ export function createWorkspaceOpenTabs() {
     refreshCurrentExtensionTabInfo
   });
 }
+import {
+  extensionApi,
+  runtimeSendMessage,
+  tabsCreate,
+  tabsGetCurrent,
+  tabsUpdate,
+  windowsUpdate
+} from "../../shared/extension-api.js";

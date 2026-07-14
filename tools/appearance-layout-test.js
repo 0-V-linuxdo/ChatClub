@@ -10,7 +10,7 @@ const controllerSource = fs.readFileSync(path.join(root, "app/settings/controlle
 const settingsKitSource = fs.readFileSync(path.join(root, "app/settings/kit.js"), "utf8");
 const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"), "utf8");
 const i18nSource = fs.readFileSync(path.join(root, "shared/i18n.js"), "utf8");
-const storageSource = fs.readFileSync(path.join(root, "shared/storage.js"), "utf8");
+const storageSource = fs.readFileSync(path.join(root, "shared/storage-schema.js"), "utf8");
 
 function functionSource(source, name) {
   const signature = new RegExp(`(?:export\\s+)?function\\s+${name}\\s*\\(`, "g");
@@ -103,7 +103,7 @@ vm.runInContext(
   `${functionSource(storageSource, "plainObject")}\n${functionSource(storageSource, "boundedNumber")}\n${functionSource(storageSource, "normalizeFrameToastPosition")}\n`+
   "globalThis.__normalizeFrameToastPosition = normalizeFrameToastPosition;",
   storageContext,
-  { filename: "shared/storage.js" }
+  { filename: "shared/storage-schema.js" }
 );
 const normalize = (value) => JSON.parse(JSON.stringify(storageContext.__normalizeFrameToastPosition(value)));
 for (const position of [

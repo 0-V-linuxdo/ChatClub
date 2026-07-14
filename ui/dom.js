@@ -87,7 +87,8 @@ export function toast(message, kind = "info") {
   }, 3200);
 }
 
-export const FRAME_TOAST_POSITION_EVENT = "chatclub:frame-toast-position:2026.07.13.1";
+export { FRAME_TOAST_POSITION_EVENT } from "../shared/protocol.js";
+import { FRAME_TOAST_POSITION_EVENT } from "../shared/protocol.js";
 
 const FRAME_TOAST_SAFE_INSET = 12;
 const liveFrameToastPositionSetters = new Set();

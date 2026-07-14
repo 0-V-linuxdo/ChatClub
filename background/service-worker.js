@@ -1,18 +1,61 @@
 import { APP_NAME } from "../shared/constants.js";
 import { buildDynamicDnrRules, contentScriptMatches } from "../shared/dnr.js";
-import { getAllChatApps, loadCustomConfig, loadOptions, saveOptions } from "../shared/storage.js";
+import { getAllChatApps } from "../shared/storage-schema.js";
+import { loadCustomConfig, loadOptions, saveOptions } from "../shared/storage-adapter.js";
 import { TOPIC_DELETE_SITE_CONFIGS, topicDeleteUserscriptLooksLikeBuiltIn } from "../shared/topic-delete-sites.js";
+import { ALL_SHORTCUT_ACTIONS } from "../shared/shortcuts.js";
+import {
+  CUSTOM_SUMMARY_EXECUTOR,
+  EXTENSION_RUNTIME_RELAY_SOURCE,
+  SECURE_FRAME_COMMAND_SOURCE
+} from "../shared/protocol.js";
+import { configMatchesHref, normalizeHost } from "../shared/url-match.js";
+
+const chrome = globalThis.browser || globalThis.chrome;
+if (!chrome) throw new Error("[ChatClub] Extension API namespace is unavailable");
 
 const PRELOAD_SCRIPT_ID = "chatclub-preload";
 const SUMMARY_PAGE_SCRIPT_ID = "chatclub-summary-userscripts-main";
 const SUMMARY_SCRIPT_ID = "chatclub-summary-userscripts";
 const MESSAGE_NAVIGATOR_SCRIPT_ID = "chatclub-message-navigator";
 const CONTENT_SCRIPT_ID = "chatclub-content";
+const REGISTERED_CONTENT_SCRIPT_IDS = Object.freeze([
+  PRELOAD_SCRIPT_ID,
+  SUMMARY_PAGE_SCRIPT_ID,
+  SUMMARY_SCRIPT_ID,
+  MESSAGE_NAVIGATOR_SCRIPT_ID,
+  CONTENT_SCRIPT_ID
+]);
+const REGISTERED_CONTENT_SCRIPT_ID_SET = new Set(REGISTERED_CONTENT_SCRIPT_IDS);
+const CORE_CONTENT_SCRIPT_ID_SET = new Set([PRELOAD_SCRIPT_ID, CONTENT_SCRIPT_ID]);
 const TOPIC_DELETE_USERSCRIPT_FILE_PATTERN = /^topic-delete-userscripts\/[a-z0-9-]+\.user\.js$/i;
+const CUSTOM_SUMMARY_SOURCE_MAX_BYTES = 1024 * 1024;
+const CUSTOM_SUMMARY_RESULT_MAX_BYTES = 2 * 1024 * 1024;
+const customSummaryExecutionQueues = new Map();
+const FRAME_CONTEXT_SESSION_KEY = "chatclubSecureFrameContexts";
+const FRAME_CONTEXT_MAX_AGE_MS = 30 * 60 * 1000;
+const FRAME_CONTEXT_MAX_ENTRIES = 512;
+const secureFrameContexts = new Map();
+const secureFrameCommands = new Set([
+  "getLocationHref",
+  "getPageMeta",
+  "getPageText",
+  "getSummaryRuntimeState",
+  "collectSummary",
+  "deleteThread",
+  "getDeleteConfirmState"
+]);
+const shortcutActions = new Set(ALL_SHORTCUT_ACTIONS);
+let secureFrameContextsHydration = null;
+let secureFrameContextsWriteChain = Promise.resolve();
 const CONTENT_BRIDGE_FILES = Object.freeze([
   Object.freeze({ file: "content/preload.js", world: "MAIN" }),
   Object.freeze({ file: "content/message-navigator.js", world: "ISOLATED" }),
   Object.freeze({ file: "content/content.js", world: "ISOLATED" })
+]);
+const SUMMARY_BRIDGE_FILES = Object.freeze([
+  Object.freeze({ file: "content/summary-userscripts-main.js", world: "MAIN" }),
+  Object.freeze({ file: "content/summary-userscripts.js", world: "ISOLATED" })
 ]);
 
 function openableTabUrl(href) {
@@ -22,6 +65,262 @@ function openableTabUrl(href) {
   } catch {
     return "";
   }
+}
+
+function frameContextToken(value) {
+  const token = String(value || "").trim();
+  return /^[a-z0-9][a-z0-9._:-]{8,191}$/i.test(token) ? token : "";
+}
+
+function pruneSecureFrameContexts(now = Date.now()) {
+  for (const [token, context] of secureFrameContexts) {
+    if (!context || now - Number(context.registeredAt || 0) > FRAME_CONTEXT_MAX_AGE_MS) {
+      secureFrameContexts.delete(token);
+    }
+  }
+  if (secureFrameContexts.size <= FRAME_CONTEXT_MAX_ENTRIES) return;
+  const oldest = [...secureFrameContexts.entries()]
+    .sort((a, b) => Number(a[1]?.registeredAt || 0) - Number(b[1]?.registeredAt || 0));
+  for (const [token] of oldest.slice(0, secureFrameContexts.size - FRAME_CONTEXT_MAX_ENTRIES)) {
+    secureFrameContexts.delete(token);
+  }
+}
+
+function serializedSecureFrameContexts() {
+  pruneSecureFrameContexts();
+  return Object.fromEntries(secureFrameContexts);
+}
+
+function hydrateSecureFrameContexts() {
+  if (secureFrameContextsHydration) return secureFrameContextsHydration;
+  secureFrameContextsHydration = (async () => {
+    try {
+      const stored = await chrome.storage.session?.get?.(FRAME_CONTEXT_SESSION_KEY);
+      const entries = stored?.[FRAME_CONTEXT_SESSION_KEY];
+      if (entries && typeof entries === "object" && !Array.isArray(entries)) {
+        for (const [rawToken, context] of Object.entries(entries)) {
+          const token = frameContextToken(rawToken);
+          if (!token || !context || typeof context !== "object") continue;
+          secureFrameContexts.set(token, context);
+        }
+      }
+    } catch (error) {
+      console.warn(`[${APP_NAME}] secure frame registry could not be restored`, error);
+    }
+    pruneSecureFrameContexts();
+  })();
+  return secureFrameContextsHydration;
+}
+
+function persistSecureFrameContexts() {
+  if (!chrome.storage.session?.set) return Promise.resolve();
+  const value = serializedSecureFrameContexts();
+  secureFrameContextsWriteChain = secureFrameContextsWriteChain
+    .catch(() => {})
+    .then(() => chrome.storage.session.set({ [FRAME_CONTEXT_SESSION_KEY]: value }))
+    .catch((error) => console.warn(`[${APP_NAME}] secure frame registry could not be saved`, error));
+  return secureFrameContextsWriteChain;
+}
+
+async function registerSecureFrameContext(message = {}, sender = {}) {
+  const token = frameContextToken(message.bridgeDocumentId);
+  const secureToken = /^[a-f0-9]{32,128}$/i.test(String(message.secureFrameToken || ""))
+    ? String(message.secureFrameToken)
+    : "";
+  const tabId = sender?.tab?.id;
+  const frameId = sender?.frameId;
+  const senderUrl = String(sender?.url || "").trim();
+  if (!token || !secureToken || !Number.isInteger(tabId) || !Number.isInteger(frameId) || frameId <= 0 || !/^https?:\/\//i.test(senderUrl)) {
+    throw new Error("Secure frame registration is invalid");
+  }
+  if (!String(sender?.tab?.url || "").startsWith(chrome.runtime.getURL(""))) {
+    throw new Error("Secure frame registration requires a direct child of the ChatClub extension page");
+  }
+  const frame = await chrome.webNavigation.getFrame({ tabId, frameId });
+  if (!frame || frame.parentFrameId !== 0 || String(frame.url || "") !== senderUrl) {
+    throw new Error("Secure frame registration does not match a direct child document");
+  }
+  const senderDocumentId = String(sender?.documentId || "").trim();
+  const navigationDocumentId = String(frame.documentId || "").trim();
+  if (senderDocumentId && navigationDocumentId && senderDocumentId !== navigationDocumentId) {
+    throw new Error("Secure frame registration document changed");
+  }
+  await hydrateSecureFrameContexts();
+  for (const [existingToken, context] of secureFrameContexts) {
+    if (context?.tabId === tabId && context?.frameId === frameId && existingToken !== token) {
+      secureFrameContexts.delete(existingToken);
+    }
+  }
+  const context = {
+    tabId,
+    frameId,
+    documentId: senderDocumentId || navigationDocumentId,
+    url: senderUrl,
+    secureToken,
+    bridgeVersion: String(message.bridgeVersion || ""),
+    registeredAt: Date.now()
+  };
+  secureFrameContexts.set(token, context);
+  pruneSecureFrameContexts();
+  await persistSecureFrameContexts();
+  return context;
+}
+
+async function secureFrameContext(token) {
+  await hydrateSecureFrameContexts();
+  pruneSecureFrameContexts();
+  return secureFrameContexts.get(frameContextToken(token)) || null;
+}
+
+function extensionPageSender(sender = {}) {
+  const extensionBase = chrome.runtime.getURL("");
+  const senderUrl = String(sender?.url || "");
+  return Boolean(extensionBase && senderUrl.startsWith(extensionBase));
+}
+
+async function verifiedExtensionTabId(message = {}, sender = {}) {
+  if (!extensionPageSender(sender)) throw new Error("Secure frame commands require an extension page sender");
+  const requested = Number(message.appTabId);
+  if (!Number.isInteger(requested)) throw new Error("Secure frame command tab is unavailable");
+  if (Number.isInteger(sender?.tab?.id) && sender.tab.id !== requested) {
+    throw new Error("Secure frame command tab does not match the sender");
+  }
+  if (!Number.isInteger(sender?.tab?.id)) {
+    const tab = await chrome.tabs.get(requested);
+    if (!String(tab?.url || "").startsWith(chrome.runtime.getURL(""))) {
+      throw new Error("Secure frame command tab is not an extension page");
+    }
+  }
+  return requested;
+}
+
+async function sendMessageToRegisteredFrame(context, message) {
+  const options = context.documentId
+    ? { documentId: context.documentId }
+    : { frameId: context.frameId };
+  try {
+    return await chrome.tabs.sendMessage(context.tabId, message, options);
+  } catch (error) {
+    if (!context.documentId || !/documentId|unexpected property|invalid value/i.test(error?.message || String(error))) throw error;
+    return chrome.tabs.sendMessage(context.tabId, message, { frameId: context.frameId });
+  }
+}
+
+async function sendSecureFrameCommand(message = {}, sender = {}) {
+  const tabId = await verifiedExtensionTabId(message, sender);
+  const context = await secureFrameContext(message.bridgeDocumentId);
+  if (!context || context.tabId !== tabId) throw new Error("Secure frame document is not registered in this tab");
+  const command = String(message.command || "");
+  if (!secureFrameCommands.has(command)) throw new Error(`Secure frame command is not allowed: ${command}`);
+  const timeoutMs = Math.max(250, Math.min(60000, Number(message.timeoutMs) || 5000));
+  const response = await timeoutPromise(
+    sendMessageToRegisteredFrame(context, {
+      source: SECURE_FRAME_COMMAND_SOURCE,
+      type: "request",
+      bridgeDocumentId: frameContextToken(message.bridgeDocumentId),
+      secureFrameToken: context.secureToken,
+      action: command,
+      data: message.data || {}
+    }),
+    timeoutMs,
+    `[FrameRPC] Timeout waiting for response: ${command}`
+  );
+  if (!response?.success) throw new Error(response?.error || `Secure frame command failed: ${command}`);
+  context.registeredAt = Date.now();
+  secureFrameContexts.set(frameContextToken(message.bridgeDocumentId), context);
+  persistSecureFrameContexts();
+  return response.data;
+}
+
+async function verifySecureFrameContext(message = {}, sender = {}) {
+  const tabId = await verifiedExtensionTabId(message, sender);
+  const token = frameContextToken(message.bridgeDocumentId);
+  const context = await secureFrameContext(token);
+  if (!context || context.tabId !== tabId) throw new Error("Secure frame document is not registered in this tab");
+  const response = await timeoutPromise(
+    sendMessageToRegisteredFrame(context, {
+      source: SECURE_FRAME_COMMAND_SOURCE,
+      type: "request",
+      bridgeDocumentId: token,
+      secureFrameToken: context.secureToken,
+      action: "getPageMeta",
+      data: {}
+    }),
+    1800,
+    "[FrameRPC] Content registration verification timed out"
+  );
+  if (!response?.success || !response.data || typeof response.data !== "object") {
+    throw new Error(response?.error || "Secure frame document is no longer active");
+  }
+  return {
+    href: String(response.data.href || context.url || ""),
+    title: String(response.data.title || ""),
+    bridgeVersion: String(context.bridgeVersion || "")
+  };
+}
+
+async function registeredSenderContext(message = {}, sender = {}) {
+  const token = frameContextToken(message.bridgeDocumentId);
+  const context = await secureFrameContext(token);
+  if (!context || context.tabId !== sender?.tab?.id || context.frameId !== sender?.frameId) {
+    throw new Error("Runtime relay sender is not the registered frame document");
+  }
+  if (context.documentId && sender?.documentId && context.documentId !== sender.documentId) {
+    throw new Error("Runtime relay sender document changed");
+  }
+  return { token, context };
+}
+
+async function relayShortcutTriggered(message = {}, sender = {}) {
+  const action = String(message.shortcutAction || "");
+  const { token, context } = await registeredSenderContext(message, sender);
+  if (!shortcutActions.has(action)) throw new Error(`Unknown shortcut action: ${action}`);
+  const digit = /^([1-9])$/.exec(String(message.matchObj?.digit || ""))?.[1];
+  await chrome.runtime.sendMessage({
+    source: EXTENSION_RUNTIME_RELAY_SOURCE,
+    action: "shortcutTriggered",
+    shortcutAction: action,
+    matchObj: digit ? { digit } : {},
+    senderContext: {
+      tabId: context.tabId,
+      frameId: context.frameId,
+      documentId: context.documentId,
+      bridgeDocumentId: token,
+      url: context.url
+    }
+  });
+}
+
+async function relayFrameLifecycle(message = {}, sender = {}) {
+  const action = String(message.lifecycleAction || "");
+  if (!new Set(["locationChanged", "contentUnloading"]).has(action)) {
+    throw new Error(`Unknown frame lifecycle action: ${action}`);
+  }
+  const { token, context } = await registeredSenderContext(message, sender);
+  const data = message.data && typeof message.data === "object" ? message.data : {};
+  if (action === "locationChanged" && /^https?:\/\//i.test(String(data.href || ""))) {
+    context.url = String(data.href);
+    context.registeredAt = Date.now();
+    secureFrameContexts.set(token, context);
+    persistSecureFrameContexts();
+  }
+  await chrome.runtime.sendMessage({
+    source: EXTENSION_RUNTIME_RELAY_SOURCE,
+    action: "frameLifecycle",
+    lifecycleAction: action,
+    senderContext: {
+      tabId: context.tabId,
+      frameId: context.frameId,
+      documentId: context.documentId,
+      bridgeDocumentId: token,
+      url: context.url
+    },
+    data: {
+      ...data,
+      documentId: token,
+      bridgeVersion: context.bridgeVersion
+    }
+  });
 }
 
 function normalizeOpenerTab(tab) {
@@ -96,15 +395,15 @@ async function openExternalTab(url, sender, openerTab) {
   return tab;
 }
 
-function senderFrameTarget(sender) {
+function senderFrameTarget(sender, { requireDocumentId = false } = {}) {
   const tabId = sender?.tab?.id;
   const frameId = sender?.frameId;
-  if (typeof tabId !== "number") throw new Error("Cannot install Delete Site userscript: sender tab is unavailable");
-  if (typeof frameId !== "number") throw new Error("Cannot install Delete Site userscript: sender frame is unavailable");
-  return {
-    tabId,
-    frameIds: [frameId]
-  };
+  const documentId = String(sender?.documentId || "").trim();
+  if (typeof tabId !== "number") throw new Error("Cannot inject userscript: sender tab is unavailable");
+  if (documentId) return { tabId, documentIds: [documentId] };
+  if (requireDocumentId) throw new Error("Cannot inject custom userscript: sender document id is unavailable");
+  if (typeof frameId !== "number") throw new Error("Cannot inject userscript: sender frame is unavailable");
+  return { tabId, frameIds: [frameId] };
 }
 
 function safeTopicDeleteUserscriptFile(file) {
@@ -142,7 +441,7 @@ async function executePackagedTopicDeleteUserscript(target, file) {
 function userScriptsUnavailableMessage(error) {
   const message = error?.message || String(error || "");
   const suffix = message ? ` (${message})` : "";
-  return `Edited or custom standalone Delete Site userscripts require Chrome/Arc Allow User Scripts support. Enable Allow User Scripts for ChatClub, update the browser, or install this userscript in Tampermonkey/Violentmonkey.${suffix}`;
+  return `Edited or custom standalone Delete Site userscripts require granted User Scripts access and userScripts.execute (Chrome/Arc 135+ or Firefox Nightly 153+). Chrome 135–137 also requires Developer Mode; Chrome 138+ requires Allow User Scripts. Older Zen builds can use Tampermonkey/Violentmonkey instead.${suffix}`;
 }
 
 async function executeUserTopicDeleteUserscript(target, source) {
@@ -172,170 +471,299 @@ async function executeUserTopicDeleteUserscript(target, source) {
   }
 }
 
-const trustedInputSleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+function customSummarySource(config = {}) {
+  const customMode = config.sourceMode === "custom" || config.userscriptOverride === true || config.builtIn === false;
+  return String(config.customUserscript || (customMode ? config.userscript : "") || "").trim();
+}
 
-function trustedClickTabId(message = {}, sender = {}) {
-  if (Number.isInteger(message.tabId) && message.tabId >= 0) return message.tabId;
-  if (Number.isInteger(sender?.tab?.id) && sender.tab.id >= 0) return sender.tab.id;
+async function storedCustomSummaryConfig(configId, sender = {}) {
+  const id = String(configId || "").trim();
+  const senderUrl = String(sender?.url || "").trim();
+  if (!id) throw new Error("Custom Summary config id is unavailable");
+  if (!senderUrl) throw new Error("Custom Summary sender URL is unavailable");
+  const options = await loadOptions();
+  const config = (options.summarySiteConfigs || []).find((item) => item?.id === id && item.enabled !== false);
+  if (!config) throw new Error(`Custom Summary config is unavailable: ${id}`);
+  if (!configMatchesHref(config, senderUrl)) throw new Error("Custom Summary config does not match the sender document");
+  const userscript = customSummarySource(config);
+  if (!userscript) throw new Error("Custom Summary userscript source is empty");
+  const runtimeConfig = { ...config };
+  delete runtimeConfig.userscript;
+  delete runtimeConfig.customUserscript;
+  return { runtimeConfig, userscript };
+}
+
+function topicDeleteUserscriptSource(config = {}) {
+  const customMode = config.sourceMode === "custom" || config.userscriptOverride === true || config.builtIn === false;
+  return String(config.customUserscript || (customMode ? config.userscript : "") || "").trim();
+}
+
+async function storedTopicDeleteConfig(configId, sender = {}) {
+  const id = String(configId || "").trim();
+  const senderUrl = String(sender?.url || "").trim();
+  if (!id) throw new Error("Delete Site config id is unavailable");
+  if (!senderUrl) throw new Error("Delete Site sender URL is unavailable");
+  const options = await loadOptions();
+  const config = (options.topicDeleteSiteConfigs || []).find((item) => item?.id === id && item.enabled !== false);
+  if (!config) throw new Error(`Delete Site config is unavailable: ${id}`);
+  let matchesSender = configMatchesHref(config, senderUrl);
+  if (!matchesSender && Array.isArray(config.appIds) && config.appIds.length) {
+    const wantedApps = new Set(config.appIds.map((value) => String(value || "").trim().toLowerCase()).filter(Boolean));
+    const appHosts = [];
+    for (const app of await currentChatApps()) {
+      const keys = [app?.id, app?.name].map((value) => String(value || "").trim().toLowerCase());
+      if (!keys.some((key) => wantedApps.has(key))) continue;
+      try { appHosts.push(new URL(String(app.url || "")).hostname); } catch {}
+      appHosts.push(...(Array.isArray(app.hosts) ? app.hosts : []));
+    }
+    matchesSender = configMatchesHref({ ...config, hosts: [...(config.hosts || []), ...appHosts] }, senderUrl);
+  }
+  if (!matchesSender) throw new Error("Delete Site config does not match the sender document");
+  return config;
+}
+
+function topicDeleteUserscriptMetadata(config = {}, source = "") {
+  const version = String(source).match(/^\s*\/\/\s*@version\s+(.+?)\s*$/m)?.[1]?.trim() || "";
+  return {
+    scriptId: String(config.scriptId || config.id || ""),
+    userscriptVersion: version,
+    supportsVersionedRequest: source.includes("VERSIONED_REQUEST_EVENT") && /request:\s*[\"']|request:\s*\"\s*\+\s*VERSION/.test(source),
+    supportsVersionedMenuCommand: source.includes("VERSIONED_MENU_COMMAND_EVENT") && /menu-command:\s*[\"']|menu-command:\s*\"\s*\+\s*VERSION/.test(source),
+    supportsMenuCommand: source.includes("MENU_COMMAND_EVENT")
+      || source.includes("chatclub:delete-site:menu-command")
+      || /\bmenuCommand\b/.test(source)
+  };
+}
+
+function injectionResultForTarget(results, target) {
+  if (!Array.isArray(results)) return null;
+  const documentId = target.documentIds?.[0];
+  const frameId = target.frameIds?.[0];
+  if (documentId) return results.find((item) => item?.documentId === documentId) || null;
+  if (Number.isInteger(frameId)) return results.find((item) => item?.frameId === frameId) || null;
   return null;
+}
+
+async function ensureCustomSummaryRuntime(target) {
+  const probeResults = await chrome.scripting.executeScript({
+    target,
+    world: "MAIN",
+    func: (key) => typeof globalThis[key] === "function",
+    args: [CUSTOM_SUMMARY_EXECUTOR]
+  });
+  const probe = injectionResultForTarget(probeResults, target);
+  if (probe?.result === true) return;
+  await chrome.scripting.executeScript({
+    target,
+    world: "MAIN",
+    files: ["content/summary-userscripts-main.js"]
+  });
+}
+
+function customSummaryQueueKey(target) {
+  return `${target.tabId}:${target.documentIds?.[0] || `frame-${target.frameIds?.[0] ?? "unknown"}`}`;
+}
+
+function queueCustomSummaryExecution(target, task) {
+  const key = customSummaryQueueKey(target);
+  if (customSummaryExecutionQueues.has(key)) {
+    throw new Error("A custom userscript is already running in this document; reload the page if it no longer responds.");
+  }
+  const run = Promise.resolve().then(task);
+  const tail = run.catch(() => {});
+  customSummaryExecutionQueues.set(key, tail);
+  tail.finally(() => {
+    if (customSummaryExecutionQueues.get(key) === tail) customSummaryExecutionQueues.delete(key);
+  });
+  return run;
+}
+
+function timeoutPromise(promise, timeoutMs, message, onTimeout = null) {
+  let timer = 0;
+  return Promise.race([
+    promise.finally(() => clearTimeout(timer)),
+    new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        try { onTimeout?.(); } catch {}
+        reject(new Error(message));
+      }, timeoutMs);
+    })
+  ]);
+}
+
+function utf8ByteLength(value) {
+  return new TextEncoder().encode(String(value || "")).byteLength;
+}
+
+async function executeCustomSummaryUserscript(configId = "", sender = {}) {
+  const target = senderFrameTarget(sender, { requireDocumentId: true });
+  const { runtimeConfig, userscript } = await storedCustomSummaryConfig(configId, sender);
+  if (utf8ByteLength(userscript) > CUSTOM_SUMMARY_SOURCE_MAX_BYTES) throw new Error("Custom Summary userscript exceeds the 1 MiB limit");
+  if (!chrome.userScripts?.execute) {
+    throw new Error("Custom Summary userscripts require userScripts.execute (Chrome/Arc 135+ or Firefox Nightly 153+) and granted User Scripts access. Chrome 135–137 also requires Developer Mode; Chrome 138+ requires Allow User Scripts.");
+  }
+  const code = `(() => {
+    const execute = globalThis[${JSON.stringify(CUSTOM_SUMMARY_EXECUTOR)}];
+    if (typeof execute !== "function") throw new Error("ChatClub Summary MAIN-world runtime is unavailable");
+    return execute(${JSON.stringify(runtimeConfig)}, async function chatClubCustomSummaryUserscript(api) {
+${userscript}
+    }).then((result) => JSON.stringify(result));
+  })()\n//# sourceURL=chatclub-custom-summary-${String(runtimeConfig.id || "userscript").replace(/[^a-z0-9_-]+/gi, "-")}.js`;
+  const execution = queueCustomSummaryExecution(target, async () => {
+    await ensureCustomSummaryRuntime(target);
+    let results;
+    try {
+      results = await chrome.userScripts.execute({
+        target,
+        js: [{ code }],
+        world: "MAIN",
+        injectImmediately: true
+      });
+    } catch (error) {
+      throw new Error(`Custom Summary userscript injection failed: ${error?.message || String(error)}`);
+    }
+    const entry = injectionResultForTarget(results, target);
+    if (entry?.error) throw new Error(`Custom Summary userscript failed: ${entry.error?.message || String(entry.error)}`);
+    const serialized = entry?.result;
+    if (typeof serialized !== "string") throw new Error("Custom Summary userscript returned no serialized result");
+    if (utf8ByteLength(serialized) > CUSTOM_SUMMARY_RESULT_MAX_BYTES) throw new Error("Custom Summary userscript result exceeds the 2 MiB limit");
+    let result;
+    try { result = JSON.parse(serialized); }
+    catch { throw new Error("Custom Summary userscript returned invalid JSON"); }
+    if (!result || typeof result !== "object" || !Array.isArray(result.messages)) {
+      throw new Error("Custom Summary userscript returned no valid result");
+    }
+    return result;
+  });
+  const timeoutMs = Math.max(5000, Math.min(45000, Number(runtimeConfig.userscriptTimeoutMs) || 30000));
+  return timeoutPromise(
+    execution,
+    Math.max(4000, timeoutMs - 1500),
+    "Custom Summary userscript timed out; reload the affected page to stop an unresponsive script."
+  );
+}
+
+function sanitizedTopicDeleteResult(value, config = {}) {
+  const source = value && typeof value === "object" ? value : { ok: Boolean(value) };
+  const result = { ...source };
+  const requestedTrustedInput = Boolean(
+    result.needsTrustedClick
+    || result.needsTrustedHover
+    || result.needsTrustedMenuClick
+    || result.needsTrustedKeySequence
+  );
+  for (const key of [
+    "needsTrustedClick",
+    "trustedClick",
+    "needsTrustedHover",
+    "trustedHover",
+    "needsTrustedMenuClick",
+    "trustedMenuClick",
+    "needsTrustedKeySequence",
+    "trustedKeySequence"
+  ]) delete result[key];
+  if (requestedTrustedInput && !result.ok) {
+    result.reason = result.reason || "Custom Delete Site userscript requires manual trusted input";
+    result.requiresManualInteraction = true;
+  }
+  result.site = String(result.site || config.id || "topic-delete");
+  result.ok = Boolean(result.ok);
+  return result;
+}
+
+async function executeCustomTopicDeleteUserscript(configId = "", payload = {}, sender = {}) {
+  const target = senderFrameTarget(sender, { requireDocumentId: true });
+  const config = await storedTopicDeleteConfig(configId, sender);
+  const source = topicDeleteUserscriptSource(config);
+  if (!source) throw new Error("Custom Delete Site userscript source is empty");
+  if (utf8ByteLength(source) > CUSTOM_SUMMARY_SOURCE_MAX_BYTES) throw new Error("Custom Delete Site userscript exceeds the 1 MiB limit");
+  if (!chrome.userScripts?.execute) throw new Error(userScriptsUnavailableMessage());
+  const safePayload = payload && typeof payload === "object" ? payload : {};
+  const serializedPayload = JSON.stringify(safePayload);
+  if (utf8ByteLength(serializedPayload) > 256 * 1024) throw new Error("Custom Delete Site payload exceeds the 256 KiB limit");
+  const code = `${source}\n;(() => {
+    const compact = (value) => String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+    const wanted = [${JSON.stringify(config.id || "")}, ${JSON.stringify(config.name || "")}, ${JSON.stringify(config.scriptId || "")}].map(compact).filter(Boolean);
+    const registry = globalThis.ChatClubDeleteSites;
+    if (!registry || typeof registry !== "object") throw new Error("Custom Delete Site registry is unavailable");
+    const entry = Object.entries(registry).map(([key, value]) => ({ key, value })).find(({ key, value }) => {
+      if (!value || typeof value.menuCommand !== "function") return false;
+      return [key, value.id, value.site, value.siteId, value.scriptId, value.name].map(compact).some((token) => token && wanted.includes(token));
+    })?.value;
+    if (!entry) throw new Error("Custom Delete Site menuCommand is unavailable");
+    return Promise.resolve(entry.menuCommand(${serializedPayload})).then((value) => {
+      const raw = value && typeof value === "object" ? value : { ok: Boolean(value), reason: value ? "" : "userscript returned false" };
+      const requiresManualInteraction = Boolean(raw.needsTrustedClick || raw.needsTrustedHover || raw.needsTrustedMenuClick || raw.needsTrustedKeySequence);
+      return JSON.stringify({
+        ok: Boolean(raw.ok),
+        site: String(raw.site || ${JSON.stringify(config.id || "topic-delete")}).slice(0, 256),
+        reason: String(raw.reason || (requiresManualInteraction ? "Custom Delete Site userscript requires manual trusted input" : "")).slice(0, 8192),
+        requiresManualInteraction
+      });
+    });
+  })()`;
+  const execution = queueCustomSummaryExecution(target, async () => {
+    let results;
+    try {
+      results = await chrome.userScripts.execute({
+        target,
+        js: [{ code }],
+        world: "MAIN",
+        injectImmediately: true
+      });
+    } catch (error) {
+      const message = error?.message || String(error);
+      if (!/\bworld\b|unexpected property/i.test(message)) throw new Error(userScriptsUnavailableMessage(error));
+      results = await chrome.userScripts.execute({ target, js: [{ code }], injectImmediately: true });
+    }
+    const entry = injectionResultForTarget(results, target);
+    if (entry?.error) throw new Error(entry.error?.message || String(entry.error));
+    if (typeof entry?.result !== "string") throw new Error("Custom Delete Site userscript returned no serialized result");
+    if (utf8ByteLength(entry.result) > CUSTOM_SUMMARY_RESULT_MAX_BYTES) throw new Error("Custom Delete Site result exceeds the 2 MiB limit");
+    let value;
+    try { value = JSON.parse(entry.result); }
+    catch { throw new Error("Custom Delete Site userscript returned invalid JSON"); }
+    return sanitizedTopicDeleteResult(value, config);
+  });
+  const timeoutMs = Math.max(5000, Math.min(45000, Number(config.userscriptTimeoutMs) || 15000));
+  return timeoutPromise(
+    execution,
+    Math.max(4000, timeoutMs - 1500),
+    "Custom Delete Site userscript timed out; reload the affected page to stop an unresponsive script."
+  );
+}
+
+let trustedInputModulePromise = null;
+
+async function trustedInputModule() {
+  if (!("debugger" in chrome)) return null;
+  if (!trustedInputModulePromise) trustedInputModulePromise = import("./trusted-input.js");
+  return trustedInputModulePromise;
 }
 
 async function dispatchTrustedClick(message = {}, sender = {}) {
-  let tabId = trustedClickTabId(message, sender);
-  if (typeof tabId !== "number") {
-    try {
-      const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-      if (Number.isInteger(tabs?.[0]?.id) && tabs[0].id >= 0) tabId = tabs[0].id;
-    } catch {}
-  }
-  if (typeof tabId !== "number") throw new Error("Trusted browser click failed: target tab is unavailable");
-  if (!chrome.debugger?.attach || !chrome.debugger?.sendCommand) {
-    throw new Error("Trusted browser click requires the debugger permission");
-  }
-  const x = Number(message.x);
-  const y = Number(message.y);
-  if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0) {
-    throw new Error("Trusted browser click failed: invalid viewport coordinates");
-  }
-  const target = { tabId };
-  let attached = false;
-  try {
-    await chrome.debugger.attach(target, "1.3");
-    attached = true;
-    const base = { x, y, button: "left", clickCount: 1, modifiers: 0 };
-    await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", { ...base, type: "mouseMoved", buttons: 0 });
-    const reason = String(message.reason || "");
-    const hoverSettleMs = Number.isFinite(Number(message.hoverSettleMs))
-      ? Number(message.hoverSettleMs)
-      : (/topic menu|menu trigger|hover/i.test(reason) || message.kind === "topic-menu-trigger" ? 260 : 80);
-    await trustedInputSleep(Math.min(700, Math.max(0, hoverSettleMs)));
-    await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", { ...base, type: "mousePressed", buttons: 1 });
-    await trustedInputSleep(45);
-    await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", { ...base, type: "mouseReleased", buttons: 0 });
-    return { tabId, x, y };
-  } catch (error) {
-    const messageText = error?.message || String(error || "unknown debugger error");
-    throw new Error(`Trusted browser click failed: ${messageText}`);
-  } finally {
-    if (attached) {
-      try { await chrome.debugger.detach(target); } catch {}
-    }
-  }
+  const input = await trustedInputModule();
+  if (!input) throw new Error("Trusted browser click is unavailable in this browser; complete the visible confirmation manually.");
+  return input.dispatchTrustedClick(chrome, message, sender);
 }
 
 async function dispatchTrustedMouseMove(message = {}, sender = {}) {
-  let tabId = trustedClickTabId(message, sender);
-  if (typeof tabId !== "number") {
-    try {
-      const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-      if (Number.isInteger(tabs?.[0]?.id) && tabs[0].id >= 0) tabId = tabs[0].id;
-    } catch {}
-  }
-  if (typeof tabId !== "number") throw new Error("Trusted browser hover failed: target tab is unavailable");
-  if (!chrome.debugger?.attach || !chrome.debugger?.sendCommand) {
-    throw new Error("Trusted browser hover requires the debugger permission");
-  }
-  const x = Number(message.x);
-  const y = Number(message.y);
-  if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0) {
-    throw new Error("Trusted browser hover failed: invalid viewport coordinates");
-  }
-  const target = { tabId };
-  let attached = false;
-  try {
-    await chrome.debugger.attach(target, "1.3");
-    attached = true;
-    await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", {
-      type: "mouseMoved",
-      x,
-      y,
-      button: "none",
-      buttons: 0,
-      clickCount: 0,
-      modifiers: 0
-    });
-    return { tabId, x, y };
-  } catch (error) {
-    const messageText = error?.message || String(error || "unknown debugger error");
-    throw new Error(`Trusted browser hover failed: ${messageText}`);
-  } finally {
-    if (attached) {
-      try { await chrome.debugger.detach(target); } catch {}
-    }
-  }
-}
-
-function trustedKeyModifiers(value = {}) {
-  const explicit = Number(value?.modifiers);
-  if (Number.isFinite(explicit)) return explicit;
-  return (value?.altKey ? 1 : 0)
-    | (value?.ctrlKey ? 2 : 0)
-    | (value?.metaKey ? 4 : 0)
-    | (value?.shiftKey ? 8 : 0);
-}
-
-function trustedKeyDescriptor(value = {}) {
-  const source = typeof value === "string" ? { key: value } : (value || {});
-  const key = String(source.key || "");
-  const normalized = key.toLowerCase();
-  const modifiers = trustedKeyModifiers(source);
-  const withModifiers = (descriptor) => modifiers ? { ...descriptor, modifiers } : descriptor;
-  if (normalized === "tab") return withModifiers({ key: "Tab", code: "Tab", windowsVirtualKeyCode: 9, nativeVirtualKeyCode: 48 });
-  if (normalized === "enter" || normalized === "return") return withModifiers({ key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 36 });
-  if (normalized === "escape" || normalized === "esc") return withModifiers({ key: "Escape", code: "Escape", windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 53 });
-  if (normalized === "backspace") return withModifiers({ key: "Backspace", code: "Backspace", windowsVirtualKeyCode: 8, nativeVirtualKeyCode: 51 });
-  if (normalized === "delete") return withModifiers({ key: "Delete", code: "Delete", windowsVirtualKeyCode: 46, nativeVirtualKeyCode: 117 });
-  if (normalized === " " || normalized === "space" || normalized === "spacebar") return withModifiers({ key: " ", code: "Space", windowsVirtualKeyCode: 32, nativeVirtualKeyCode: 49, text: " ", unmodifiedText: " " });
-  return null;
+  const input = await trustedInputModule();
+  if (!input) throw new Error("Trusted browser hover is unavailable in this browser; open the row menu manually and retry.");
+  return input.dispatchTrustedMouseMove(chrome, message, sender);
 }
 
 async function dispatchTrustedKeySequence(message = {}, sender = {}) {
-  let tabId = trustedClickTabId(message, sender);
-  if (typeof tabId !== "number") {
-    try {
-      const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-      if (Number.isInteger(tabs?.[0]?.id) && tabs[0].id >= 0) tabId = tabs[0].id;
-    } catch {}
-  }
-  if (typeof tabId !== "number") throw new Error("Trusted browser key sequence failed: target tab is unavailable");
-  if (!chrome.debugger?.attach || !chrome.debugger?.sendCommand) {
-    throw new Error("Trusted browser key sequence requires the debugger permission");
-  }
-  const rawKeys = Array.isArray(message.keys) ? message.keys : [];
-  const keys = rawKeys
-    .map((item) => ({ descriptor: trustedKeyDescriptor(item), settleMs: Number(item?.settleMs) }))
-    .filter((item) => item.descriptor);
-  if (!keys.length) throw new Error("Trusted browser key sequence failed: no supported keys were provided");
-  const target = { tabId };
-  let attached = false;
-  try {
-    await chrome.debugger.attach(target, "1.3");
-    attached = true;
-    for (const item of keys) {
-      const modifiers = Number.isFinite(Number(item.descriptor.modifiers)) ? Number(item.descriptor.modifiers) : 0;
-      const event = { ...item.descriptor, modifiers, autoRepeat: false, isKeypad: false };
-      await chrome.debugger.sendCommand(target, "Input.dispatchKeyEvent", { ...event, type: "keyDown" });
-      await trustedInputSleep(35);
-      await chrome.debugger.sendCommand(target, "Input.dispatchKeyEvent", { ...event, type: "keyUp" });
-      const settleMs = Number.isFinite(item.settleMs) ? item.settleMs : Number(message.keySettleMs);
-      await trustedInputSleep(Math.min(900, Math.max(45, Number.isFinite(settleMs) ? settleMs : 120)));
-    }
-    return { tabId, keys: keys.map((item) => item.descriptor.key) };
-  } catch (error) {
-    const messageText = error?.message || String(error || "unknown debugger error");
-    throw new Error(`Trusted browser key sequence failed: ${messageText}`);
-  } finally {
-    if (attached) {
-      try { await chrome.debugger.detach(target); } catch {}
-    }
-  }
+  const input = await trustedInputModule();
+  if (!input) throw new Error("Trusted browser key input is unavailable in this browser; finish the delete action manually.");
+  return input.dispatchTrustedKeySequence(chrome, message, sender);
 }
 
 function urlHost(value) {
   try {
     return new URL(String(value || "")).hostname.toLowerCase();
   } catch {
-    return "";
+    return normalizeHost(value).replace(/^\*\./, "");
   }
 }
 
@@ -365,66 +793,68 @@ async function executeContentBridgeFile(tabId, frameId, spec) {
 }
 
 async function ensureContentBridge(message = {}, sender = {}) {
-  const tabId = trustedClickTabId(message, sender);
-  if (typeof tabId !== "number") throw new Error("Content bridge injection failed: target tab is unavailable");
+  const tabId = await verifiedExtensionTabId({ appTabId: message.tabId }, sender);
   const hints = {
     hrefs: Array.isArray(message.hrefs) ? message.hrefs : [],
     hosts: Array.isArray(message.hosts) ? message.hosts : []
   };
+  const validHintHosts = new Set([
+    ...hints.hrefs.map(urlHost),
+    ...hints.hosts.map(urlHost)
+  ].filter(Boolean));
+  if (!validHintHosts.size) throw new Error("Content bridge injection failed: target URL hints are unavailable");
+  const features = new Set(
+    (Array.isArray(message.features) ? message.features : [])
+      .map((value) => String(value || "").trim().toLowerCase())
+      .filter((value) => value === "summary")
+  );
   let frames = [];
   try {
     frames = await chrome.webNavigation.getAllFrames({ tabId });
-  } catch {}
+  } catch (error) {
+    throw new Error(`Content bridge injection failed: ${error?.message || String(error)}`);
+  }
   const frameIds = (frames || [])
-    .filter((frame) => Number.isInteger(frame?.frameId) && frame.frameId > 0)
+    .filter((frame) => Number.isInteger(frame?.frameId) && frame.frameId > 0 && frame.parentFrameId === 0)
     .filter((frame) => frameMatchesBridgeHints(frame, hints))
     .map((frame) => frame.frameId);
   const uniqueFrameIds = Array.from(new Set(frameIds));
   const errors = [];
+  const injectedFiles = [];
   let injected = 0;
-  if (!uniqueFrameIds.length && frames?.length) {
-    errors.push("no matching web iframe found for the requested Delete Site target");
-  }
+  if (!uniqueFrameIds.length) errors.push("no matching direct child iframe found for the requested target");
+  const specs = features.has("summary")
+    ? [CONTENT_BRIDGE_FILES[0], ...SUMMARY_BRIDGE_FILES, ...CONTENT_BRIDGE_FILES.slice(1)]
+    : CONTENT_BRIDGE_FILES;
   for (const frameId of uniqueFrameIds) {
-    for (const spec of CONTENT_BRIDGE_FILES) {
+    for (const spec of specs) {
       try {
         await executeContentBridgeFile(tabId, frameId, spec);
         injected += 1;
+        injectedFiles.push(`${spec.file}@${frameId}`);
       } catch (error) {
         errors.push(`${spec.file}@${frameId}: ${error?.message || String(error)}`);
       }
     }
   }
-  if (!uniqueFrameIds.length && !frames?.length) {
-    try {
-      for (const spec of CONTENT_BRIDGE_FILES) {
-        await chrome.scripting.executeScript({
-          target: { tabId, allFrames: true },
-          files: [spec.file],
-          world: spec.world
-        });
-        injected += 1;
-      }
-    } catch (error) {
-      errors.push(error?.message || String(error));
-    }
-  }
-  return { tabId, frameIds: uniqueFrameIds, injected, errors };
+  return { tabId, frameIds: uniqueFrameIds, injected, injectedFiles, features: [...features], errors };
 }
 
 async function installTopicDeleteUserscript(config = {}, sender = {}) {
-  const target = senderFrameTarget(sender);
-  if (canUsePackagedTopicDeleteUserscript(config)) {
-    const file = safeTopicDeleteUserscriptFile(config.userscriptFile);
+  const storedConfig = await storedTopicDeleteConfig(config.id, sender);
+  if (canUsePackagedTopicDeleteUserscript(storedConfig)) {
+    const target = senderFrameTarget(sender, { requireDocumentId: true });
+    const file = safeTopicDeleteUserscriptFile(storedConfig.userscriptFile);
     await executePackagedTopicDeleteUserscript(target, file);
-    return { mode: "packaged", file };
+    return { mode: "packaged", file, runtimeConfig: topicDeleteUserscriptMetadata(storedConfig, storedConfig.userscript || "") };
   }
-  const source = String(config.customUserscript || config.userscript || "").trim();
+  const source = topicDeleteUserscriptSource(storedConfig);
   if (!/\/\/\s*==UserScript==[\s\S]*?\/\/\s*==\/UserScript==/.test(source)) {
     throw new Error("Legacy bridge snippets are unsupported under MV3 CSP; convert this Delete Site to a standalone userscript.");
   }
+  const target = senderFrameTarget(sender, { requireDocumentId: true });
   await executeUserTopicDeleteUserscript(target, source);
-  return { mode: "userScripts" };
+  return { mode: "userScripts", runtimeConfig: topicDeleteUserscriptMetadata(storedConfig, source) };
 }
 
 async function currentChatApps() {
@@ -465,15 +895,42 @@ function messageNavigatorContentTargets(options = {}) {
     }));
 }
 
-async function currentContentScriptTargets() {
-  const customConfig = await loadCustomConfig();
-  const options = await loadOptions();
-  return [
-    ...getAllChatApps(customConfig),
-    ...summaryCollectorContentTargets(options),
-    ...topicDeleteContentTargets(options),
-    ...messageNavigatorContentTargets(options)
-  ];
+async function currentContentScriptTargetGroups() {
+  const [customConfig, options] = await Promise.all([loadCustomConfig(), loadOptions()]);
+  const chatTargets = getAllChatApps(customConfig);
+  const summaryTargets = summaryCollectorContentTargets(options);
+  const topicDeleteTargets = topicDeleteContentTargets(options);
+  const messageNavigatorTargets = messageNavigatorContentTargets(options);
+  return {
+    // content.js owns the request bridge used by every optional feature.
+    coreTargets: [
+      ...chatTargets,
+      ...summaryTargets,
+      ...topicDeleteTargets,
+      ...messageNavigatorTargets
+    ],
+    // preload.js supplies MAIN-world helpers used by normal chat control,
+    // Summary native-copy extraction, and Delete Sites.
+    preloadTargets: [
+      ...chatTargets,
+      ...summaryTargets,
+      ...topicDeleteTargets
+    ],
+    summaryTargets,
+    messageNavigatorTargets
+  };
+}
+
+function matchesForContentTargets(targets) {
+  return Array.isArray(targets) && targets.length ? contentScriptMatches(targets) : [];
+}
+
+function rollbackContentScript(previous = {}, canonical = {}) {
+  const rollback = { ...canonical };
+  for (const key of ["matches", "excludeMatches", "allFrames", "matchOriginAsFallback", "persistAcrossSessions"]) {
+    if (previous[key] !== undefined) rollback[key] = previous[key];
+  }
+  return rollback;
 }
 
 async function updateDnrRules() {
@@ -507,57 +964,142 @@ async function updateDnrRules() {
   });
 }
 
-async function registerContentScripts() {
-  const matches = contentScriptMatches(await currentContentScriptTargets());
-  try {
-    const registered = await chrome.scripting.getRegisteredContentScripts();
-    const ownIds = registered
-      .map((script) => script.id)
-      .filter((id) => id === PRELOAD_SCRIPT_ID || id === SUMMARY_PAGE_SCRIPT_ID || id === SUMMARY_SCRIPT_ID || id === MESSAGE_NAVIGATOR_SCRIPT_ID || id === CONTENT_SCRIPT_ID);
-    if (ownIds.length) await chrome.scripting.unregisterContentScripts({ ids: ownIds });
-  } catch (error) {
-    console.warn(`[${APP_NAME}] Failed to unregister content scripts`, error);
+function assertRegisteredContentScriptFiles(expected = [], actual = []) {
+  const actualById = new Map(actual.map((script) => [script.id, script]));
+  const sorted = (value) => [...(Array.isArray(value) ? value : [])].sort();
+  const normalized = (script = {}) => ({
+    js: Array.isArray(script.js) ? script.js : [],
+    matches: sorted(script.matches),
+    excludeMatches: sorted(script.excludeMatches),
+    allFrames: Boolean(script.allFrames),
+    matchOriginAsFallback: Boolean(script.matchOriginAsFallback),
+    runAt: String(script.runAt || "document_idle"),
+    world: String(script.world || "ISOLATED")
+  });
+  for (const registration of expected) {
+    const registered = actualById.get(registration.id);
+    if (!registered) throw new Error(`content script registration is missing: ${registration.id}`);
+    const expectedValue = normalized(registration);
+    const actualValue = normalized(registered);
+    if (JSON.stringify(actualValue) !== JSON.stringify(expectedValue)) {
+      throw new Error(
+        `content script registration changed: ${registration.id} expected ${JSON.stringify(expectedValue)}, got ${JSON.stringify(actualValue)}`
+      );
+    }
   }
+}
 
-  await chrome.scripting.registerContentScripts([
-    {
+async function registerContentScriptsVerified(registrations = []) {
+  if (!registrations.length) return;
+  await chrome.scripting.registerContentScripts(registrations);
+  const registered = await chrome.scripting.getRegisteredContentScripts();
+  assertRegisteredContentScriptFiles(registrations, registered);
+}
+
+async function registerContentScripts() {
+  const {
+    coreTargets,
+    preloadTargets,
+    summaryTargets,
+    messageNavigatorTargets
+  } = await currentContentScriptTargetGroups();
+  const coreMatches = matchesForContentTargets(coreTargets);
+  const preloadMatches = matchesForContentTargets(preloadTargets);
+  const summaryMatches = matchesForContentTargets(summaryTargets);
+  const messageNavigatorMatches = matchesForContentTargets(messageNavigatorTargets);
+
+  const registrations = [];
+  if (preloadMatches.length) {
+    registrations.push({
       id: PRELOAD_SCRIPT_ID,
-      matches,
+      matches: preloadMatches,
       js: ["content/preload.js"],
       allFrames: true,
       runAt: "document_start",
       world: "MAIN"
-    },
-    {
+    });
+  }
+  if (summaryMatches.length) {
+    registrations.push({
       id: SUMMARY_PAGE_SCRIPT_ID,
-      matches,
+      matches: summaryMatches,
       js: ["content/summary-userscripts-main.js"],
       allFrames: true,
       runAt: "document_idle",
       world: "MAIN"
-    },
-    {
+    }, {
       id: SUMMARY_SCRIPT_ID,
-      matches,
+      matches: summaryMatches,
       js: ["content/summary-userscripts.js"],
       allFrames: true,
       runAt: "document_idle"
-    },
-    {
+    });
+  }
+  if (messageNavigatorMatches.length) {
+    registrations.push({
       id: MESSAGE_NAVIGATOR_SCRIPT_ID,
-      matches,
+      matches: messageNavigatorMatches,
       js: ["content/message-navigator.js"],
       allFrames: true,
       runAt: "document_idle"
-    },
-    {
+    });
+  }
+  if (coreMatches.length) {
+    registrations.push({
       id: CONTENT_SCRIPT_ID,
-      matches,
+      matches: coreMatches,
       js: ["content/content.js"],
       allFrames: true,
       runAt: "document_idle"
+    });
+  }
+  const registered = await chrome.scripting.getRegisteredContentScripts();
+  const previousById = new Map(
+    registered
+      .filter((script) => REGISTERED_CONTENT_SCRIPT_ID_SET.has(script.id))
+      .map((script) => [script.id, script])
+  );
+  const desiredIds = new Set(registrations.map((registration) => registration.id));
+  const staleIds = [...previousById.keys()].filter((id) => !desiredIds.has(id));
+  if (staleIds.length) await chrome.scripting.unregisterContentScripts({ ids: staleIds });
+
+  const failures = [];
+  for (const registration of registrations) {
+    const previous = previousById.get(registration.id) || null;
+    if (previous) await chrome.scripting.unregisterContentScripts({ ids: [registration.id] });
+    try {
+      await registerContentScriptsVerified([registration]);
+    } catch (error) {
+      let recovered = false;
+      try {
+        const partial = await chrome.scripting.getRegisteredContentScripts();
+        if (partial.some((script) => script.id === registration.id)) {
+          await chrome.scripting.unregisterContentScripts({ ids: [registration.id] });
+        }
+        if (previous) {
+          const rollback = rollbackContentScript(previous, registration);
+          await registerContentScriptsVerified([rollback]);
+          recovered = true;
+        }
+      } catch (rollbackError) {
+        failures.push({ registration, error, rollbackError, recovered: false });
+        continue;
+      }
+      failures.push({ registration, error, rollbackError: null, recovered });
     }
-  ]);
+  }
+
+  const fatal = failures.filter(({ registration, recovered }) =>
+    CORE_CONTENT_SCRIPT_ID_SET.has(registration.id) && !recovered
+  );
+  if (failures.length) {
+    console.warn(`[${APP_NAME}] ${failures.length} content script registration(s) failed`, failures);
+  }
+  if (fatal.length) {
+    throw new Error(fatal.map(({ registration, error, rollbackError }) =>
+      `${registration.id}: ${error?.message || String(error)}${rollbackError ? `; rollback: ${rollbackError?.message || String(rollbackError)}` : ""}`
+    ).join(" | "));
+  }
 }
 
 let runtimeConfigReloadChain = Promise.resolve();
@@ -586,6 +1128,31 @@ chrome.action.onClicked.addListener(() => {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.source !== "chatclub") return false;
   (async () => {
+    if (message.action === "registerFrameContext") {
+      const context = await registerSecureFrameContext(message, sender);
+      sendResponse({ success: true, documentId: context.documentId, frameId: context.frameId });
+      return;
+    }
+    if (message.action === "sendFrameCommand") {
+      const data = await sendSecureFrameCommand(message, sender);
+      sendResponse({ success: true, data });
+      return;
+    }
+    if (message.action === "verifyFrameContext") {
+      const data = await verifySecureFrameContext(message, sender);
+      sendResponse({ success: true, data });
+      return;
+    }
+    if (message.action === "relayShortcutTriggered") {
+      await relayShortcutTriggered(message, sender);
+      sendResponse({ success: true });
+      return;
+    }
+    if (message.action === "relayFrameLifecycle") {
+      await relayFrameLifecycle(message, sender);
+      sendResponse({ success: true });
+      return;
+    }
     if (message.action === "reloadConfigs") {
       await reloadRuntimeConfig();
       sendResponse({ success: true });
@@ -614,6 +1181,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === "installTopicDeleteUserscript") {
       const result = await installTopicDeleteUserscript(message.config || {}, sender);
       sendResponse({ success: true, ...result });
+      return;
+    }
+    if (message.action === "executeSummaryUserscript") {
+      const data = await executeCustomSummaryUserscript(message.configId, sender);
+      sendResponse({ success: true, data });
+      return;
+    }
+    if (message.action === "executeTopicDeleteUserscript") {
+      const data = await executeCustomTopicDeleteUserscript(message.configId, message.payload, sender);
+      sendResponse({ success: true, data });
       return;
     }
     if (message.action === "ensureContentBridge") {

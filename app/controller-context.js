@@ -21,11 +21,17 @@ export function requireControllerFunction(ctx, controllerName, name) {
 export function optionalControllerFunction(ctx, name, fallback) {
   const value = ctx?.[name];
   if (value == null) return fallback;
-  return typeof value === "function" ? value : fallback;
+  if (typeof value !== "function") {
+    throw new TypeError(`Optional controller dependency ${name} must be a function when provided.`);
+  }
+  return value;
 }
 
 export function optionalControllerObject(ctx, name, fallback = {}) {
   const value = ctx?.[name];
   if (value == null) return fallback;
-  return typeof value === "object" ? value : fallback;
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError(`Optional controller dependency ${name} must be an object when provided.`);
+  }
+  return value;
 }

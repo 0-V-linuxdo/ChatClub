@@ -1,0 +1,21 @@
+{
+  "name": "chatclub-extension",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Development and release tooling for the ChatClub browser extension",
+  "engines": {
+    "node": "22.x || 24.x"
+  },
+  "scripts": {
+    "generate": "node tools/generate-artifacts.cjs",
+    "verify:generated": "node tools/generate-artifacts.cjs --check",
+    "verify:version": "node tools/verify-version.cjs",
+    "verify:manifest": "node tools/verify-manifest.cjs",
+    "verify:pack": "node tools/pack-extension.cjs --check",
+    "check": "node tools/check.cjs",
+    "test": "node tools/run-node-tests.cjs",
+    "pack": "node tools/pack-extension.cjs",
+    "pack:firefox": "node tools/pack-extension.cjs --target firefox",
+    "ci": "node tools/ci.cjs"
+  }
+}

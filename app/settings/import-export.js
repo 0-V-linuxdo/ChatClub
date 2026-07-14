@@ -2,13 +2,15 @@ import { t } from "../../shared/i18n.js";
 import {
   CONFIG_BUNDLE_KEYS,
   POCKET_HISTORY_LIMIT,
-  exportStoredConfigBundle,
   inspectImportedConfig,
   isStorageQuotaError,
-  mergePocketHistory,
+  mergePocketHistory
+} from "../../shared/storage-schema.js";
+import {
+  exportStoredConfigBundle,
   readPocketHistory,
   saveImportedConfigPatch
-} from "../../shared/storage.js";
+} from "../../shared/storage-adapter.js";
 import { downloadText, el, modal, readFileAsText, toast } from "../../ui/dom.js";
 
 const IMPORT_EXPORT_ITEMS = Object.freeze([
