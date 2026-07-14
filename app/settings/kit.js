@@ -43,12 +43,14 @@ export function cleanupSettingsDragRows(selector) {
 export function createSettingsKit({ svgIcon }) {
   function settingsBlock(title, description, ...children) {
     return el("section", { class: "ui-card settings-block" },
-      el("div", { class: "ui-card-header settings-block-header" },
-        el("div", {},
-          el("h4", {}, title),
-          description ? el("p", {}, description) : null
+      title || description
+        ? el("div", { class: "ui-card-header settings-block-header" },
+          el("div", {},
+            el("h4", {}, title),
+            description ? el("p", {}, description) : null
+          )
         )
-      ),
+        : null,
       el("div", { class: "ui-card-body settings-block-body" }, children)
     );
   }

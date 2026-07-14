@@ -11,6 +11,7 @@ const contentSource = fs.readFileSync(path.join(root, "content/content.js"), "ut
 const preloadSource = fs.readFileSync(path.join(root, "content/preload.js"), "utf8");
 const workspaceSource = fs.readFileSync(path.join(root, "app/workspace/controller.js"), "utf8");
 const postMessageSource = fs.readFileSync(path.join(root, "shared/post-message.js"), "utf8");
+const modelPreferenceConsoleSource = fs.readFileSync(path.join(root, "tools/model-preference-console-test.js"), "utf8");
 
 function functionSource(source, name) {
   const start = source.indexOf(`function ${name}(`);
@@ -221,9 +222,98 @@ assert.match(contentSource, /event\?\.isTrusted[^\n]+currentSubmissionNavigation
 assert.match(contentSource, /window\.addEventListener\("pointerdown", clearSubmissionNavigationForTrustedIntent/, "trusted pointer navigation must be observed before SPA routing");
 assert.match(mainSource, /if \(sent \|\| lease\.terminalObserved\) return;/, "successful or terminal submission routing must retain its lease through the hard deadline");
 assert.match(
-  fs.readFileSync(path.join(root, "tools/model-preference-console-test.js"), "utf8"),
+  modelPreferenceConsoleSource,
   /dataState === "disabled"/,
   "the Notion DevTools adapter must reject data-state=disabled controls for interaction"
+);
+
+const grokOpenSource = functionSource(contentSource, "openGrokModelMenu");
+assert.match(
+  grokOpenSource,
+  /preferredModelPointerActivate\(context, trigger\)/,
+  "Grok must use pointer-first activation for the model menu trigger"
+);
+const pointerDispatchSource = functionSource(contentSource, "dispatchPointerActivation");
+for (const eventName of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) {
+  assert.match(pointerDispatchSource, new RegExp(`type: "${eventName}"`), `Grok pointer activation must include ${eventName}`);
+}
+
+const preferredPointerContext = vm.createContext({});
+vm.runInContext(`
+  const calls = [];
+  let pointerWorks = true;
+  let shieldCount = 0;
+  function assertPreferredModelRun() { calls.push("assert"); }
+  function visible() { return true; }
+  function isDisabledElement() { return false; }
+  function armPreferredModelFocusShield() { shieldCount += 1; calls.push("shield"); }
+  function modelCenterPoint() { return { x: 12, y: 18 }; }
+  function dispatchPointerActivation() { calls.push("pointer"); return pointerWorks; }
+  function nativeModelClick() { calls.push("native"); return true; }
+  ${functionSource(contentSource, "modelDirectClick")}
+  ${functionSource(contentSource, "preferredModelPointerActivate")}
+  globalThis.runPreferredPointer = (nextPointerWorks) => {
+    pointerWorks = nextPointerWorks;
+    calls.length = 0;
+    shieldCount = 0;
+    const context = { interactionCount: 0 };
+    const target = {
+      scrollIntoView() { calls.push("scroll"); },
+      focus() { calls.push("focus"); }
+    };
+    const clicked = preferredModelPointerActivate(context, target);
+    return { clicked, calls: calls.slice(), interactionCount: context.interactionCount, shieldCount };
+  };
+`, preferredPointerContext);
+const pointerSuccess = JSON.parse(JSON.stringify(preferredPointerContext.runPreferredPointer(true)));
+assert.equal(pointerSuccess.clicked, true, "pointer-first activation must report a dispatched pointer sequence");
+assert.equal(pointerSuccess.interactionCount, 1, "pointer-first activation must count one logical interaction");
+assert.equal(pointerSuccess.shieldCount, 1, "pointer-first activation must arm the focus shield once");
+assert.deepEqual(
+  pointerSuccess.calls.filter((call) => call === "pointer" || call === "native"),
+  ["pointer"],
+  "a successful pointer sequence must not be followed by a native click"
+);
+const pointerFallback = JSON.parse(JSON.stringify(preferredPointerContext.runPreferredPointer(false)));
+assert.equal(pointerFallback.interactionCount, 1, "native fallback must remain part of the same logical interaction");
+assert.deepEqual(
+  pointerFallback.calls.filter((call) => call === "pointer" || call === "native"),
+  ["pointer", "native"],
+  "native click must run only when pointer dispatch is unavailable"
+);
+
+const devtoolsGrokOpenSource = functionSource(modelPreferenceConsoleSource, "openGrokMenu");
+assert.match(
+  devtoolsGrokOpenSource,
+  /pointerFirstClickElement\(trigger\)/,
+  "the Grok DevTools adapter must mirror pointer-first trigger activation"
+);
+const devtoolsPointerContext = vm.createContext({});
+vm.runInContext(`
+  const calls = [];
+  let pointerWorks = true;
+  function visible() { return true; }
+  function isDisabledElement() { return false; }
+  function centerPoint() { return { x: 8, y: 10 }; }
+  function dispatchPointerActivation() { calls.push("pointer"); return pointerWorks; }
+  function nativeClick() { calls.push("native"); return true; }
+  ${functionSource(modelPreferenceConsoleSource, "pointerFirstClickElement")}
+  globalThis.runDevtoolsPointer = (nextPointerWorks) => {
+    pointerWorks = nextPointerWorks;
+    calls.length = 0;
+    const target = { scrollIntoView() {}, focus() {} };
+    return { clicked: pointerFirstClickElement(target), calls: calls.slice() };
+  };
+`, devtoolsPointerContext);
+assert.deepEqual(
+  JSON.parse(JSON.stringify(devtoolsPointerContext.runDevtoolsPointer(true))).calls,
+  ["pointer"],
+  "the DevTools adapter must not native-click after successful pointer dispatch"
+);
+assert.deepEqual(
+  JSON.parse(JSON.stringify(devtoolsPointerContext.runDevtoolsPointer(false))).calls,
+  ["pointer", "native"],
+  "the DevTools adapter must native-click only as a fallback"
 );
 
 const notionIndicatorContext = vm.createContext({});

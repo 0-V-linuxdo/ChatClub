@@ -437,6 +437,15 @@
     return nativeClick(el) || dispatchPointerActivation(el, centerPoint(el));
   }
 
+  function pointerFirstClickElement(el) {
+    if (!el || !visible(el) || isDisabledElement(el)) return false;
+    try { el.scrollIntoView?.({ block: "center", inline: "nearest" }); } catch {}
+    try { el.focus?.({ preventScroll: true }); } catch {
+      try { el.focus?.(); } catch {}
+    }
+    return dispatchPointerActivation(el, centerPoint(el)) || nativeClick(el);
+  }
+
   function devtoolsListenerEvent(target, currentTarget) {
     const point = centerPoint(target) || centerPoint(currentTarget) || { x: 1, y: 1 };
     const path = [];
@@ -1840,7 +1849,7 @@
     const firstTrigger = await waitFor(findGrokTrigger, 10000, 150);
     if (!firstTrigger) return null;
     const trigger = grokTriggerCandidates()[0]?.element || firstTrigger;
-    if (!clickElement(trigger)) return null;
+    if (!pointerFirstClickElement(trigger)) return null;
     await sleep(140);
     return await waitFor(() => grokMenuRoot(trigger), 1200, 90) || null;
   }
@@ -2703,7 +2712,7 @@
       "Examples:",
       "  await ChatClubPreferredModelTest.apply('pro')",
       "  await ChatClubPreferredModelTest.apply('Gemini', 'pro', { thinkingLevel: 'extended' })",
-      "  await ChatClubPreferredModelTest.apply('Grok', 'grok43')",
+      "  await ChatClubPreferredModelTest.apply('Grok', 'expert')",
       "  await ChatClubPreferredModelTest.apply('DeepSeek', 'expert')",
       "  await ChatClubPreferredModelTest.apply('NotionAI', 'gpt55')",
       "  ChatClubPreferredModelTest.inspect()",

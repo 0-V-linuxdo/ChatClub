@@ -2596,14 +2596,14 @@ body.tab-gesture-active * {
 
 .frame-toast-position-editor {
   display: grid;
-  grid-template-columns: minmax(260px, 300px) minmax(240px, 360px);
+  grid-template-columns: minmax(0, 300px) minmax(240px, 360px);
   justify-content: center;
-  gap: clamp(24px, 4vw, 52px);
+  gap: clamp(28px, 5vw, 64px);
+  width: 100%;
   align-items: start;
 }
 
-.frame-toast-position-preview-column,
-.frame-toast-position-preset-column {
+.frame-toast-position-preview-column {
   min-width: 0;
   display: grid;
   align-content: start;
@@ -2614,12 +2614,6 @@ body.tab-gesture-active * {
   width: 100%;
   max-width: 300px;
   justify-self: center;
-}
-
-.frame-toast-position-preset-column {
-  width: 100%;
-  max-width: 360px;
-  padding-top: 2px;
 }
 
 .frame-toast-position-preview {
@@ -2759,14 +2753,41 @@ body.tab-gesture-active * {
 
 .frame-toast-position-readout {
   min-width: 0;
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
+  display: grid;
+  gap: 8px;
+  width: 100%;
 }
 
-.frame-toast-position-readout small,
-.frame-toast-position-preset-column small {
+.frame-toast-position-details {
+  min-width: 0;
+  display: grid;
+  align-content: center;
+  gap: 28px;
+  width: 100%;
+  max-width: 360px;
+  padding-top: 40px;
+}
+
+.frame-toast-position-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.frame-toast-position-copy h4 {
+  margin: 0;
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.frame-toast-position-copy p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.frame-toast-position-readout small {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.4;
@@ -2778,61 +2799,6 @@ body.tab-gesture-active * {
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
-
-.frame-toast-position-preset-title {
-  color: var(--text);
-  font-size: 13px;
-}
-
-.frame-toast-position-presets {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(44px, 1fr));
-  gap: 8px;
-}
-
-.frame-toast-position-preset {
-  position: relative;
-  min-width: 0;
-  height: 52px;
-  padding: 0;
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  color: var(--muted);
-  background: color-mix(in srgb, var(--panel-2) 82%, var(--panel));
-  cursor: pointer;
-  transition: color 140ms ease, border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
-}
-
-.frame-toast-position-preset:hover,
-.frame-toast-position-preset:focus-visible {
-  color: var(--primary);
-  border-color: color-mix(in srgb, var(--primary) 56%, var(--line));
-  outline: 0;
-}
-
-.frame-toast-position-preset.active {
-  color: var(--primary);
-  border-color: color-mix(in srgb, var(--primary) 72%, var(--line));
-  background: color-mix(in srgb, var(--primary) 12%, var(--panel));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 18%, transparent);
-}
-
-.frame-toast-position-preset span {
-  position: absolute;
-  width: 22px;
-  height: 7px;
-  border-radius: 999px;
-  background: currentColor;
-  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 12%, transparent);
-}
-
-.frame-toast-position-preset:nth-child(3n + 1) span { left: 7px; }
-.frame-toast-position-preset:nth-child(3n + 2) span { left: 50%; transform: translateX(-50%); }
-.frame-toast-position-preset:nth-child(3n) span { right: 7px; }
-.frame-toast-position-preset:nth-child(-n + 3) span { top: 7px; }
-.frame-toast-position-preset:nth-child(n + 4):nth-child(-n + 6) span { top: 50%; transform: translateY(-50%); }
-.frame-toast-position-preset:nth-child(5) span { transform: translate(-50%, -50%); }
-.frame-toast-position-preset:nth-child(n + 7) span { bottom: 7px; }
 
 .settings-muted-help {
   margin: 0;
@@ -3104,26 +3070,20 @@ body.settings-tab-group-button-dragging iframe {
   }
 
   .frame-toast-position-editor {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 300px);
     gap: 14px;
   }
 
-  .frame-toast-position-preview-column {
+  .frame-toast-position-readout {
+    justify-self: center;
     max-width: 300px;
-    justify-self: center;
   }
 
-  .frame-toast-position-preset-column {
-    max-width: 380px;
+  .frame-toast-position-details {
     justify-self: center;
-  }
-
-  .frame-toast-position-preset-column {
+    gap: 18px;
+    max-width: 300px;
     padding-top: 0;
-  }
-
-  .frame-toast-position-preview-body {
-    min-height: 0;
   }
 
   .tab-group-button-placement-list {

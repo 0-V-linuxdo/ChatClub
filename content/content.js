@@ -10,7 +10,7 @@
   const NOTION_SEND_TEXT_SOURCE = "chatclub-notion-send-text:2026.07.13.13";
   const NOTION_SEND_PROMPT_SOURCE = "chatclub-notion-send-prompt:2026.07.13.13";
   const NOTION_SEND_ACTIVATED_EVENT = "chatclub:notion-send-activated:2026.07.13.1";
-  const CONTENT_BRIDGE_VERSION = "2026.07.14.1";
+  const CONTENT_BRIDGE_VERSION = "2026.07.14.2";
   const SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.13.7";
   const DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.10.2";
   const PREFERRED_MODEL_POST_MESSAGE_SOURCE = "chatclub:preferred-model:2026.07.13.2";
@@ -2931,6 +2931,15 @@
     assertPreferredModelRun(context);
     context.interactionCount += 1;
     return nativeModelClick(target);
+  }
+
+  function preferredModelPointerActivate(context, target) {
+    assertPreferredModelRun(context);
+    if (!target || !visible(target) || isDisabledElement(target)) return false;
+    armPreferredModelFocusShield(context);
+    assertPreferredModelRun(context);
+    context.interactionCount += 1;
+    return modelDirectClick(target);
   }
 
   function modelClick(el) {
@@ -6716,7 +6725,7 @@
     const existing = grokModelMenuRoot();
     if (existing) return existing;
     const trigger = await waitForPreferredModel(context, findGrokModelTrigger, 10000, 150);
-    if (!trigger || !preferredModelActivate(context, trigger)) return null;
+    if (!trigger || !preferredModelPointerActivate(context, trigger)) return null;
     return await waitForPreferredModel(context, () => grokModelMenuRoot(trigger), 1200, 90) || null;
   }
 

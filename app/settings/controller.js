@@ -851,17 +851,6 @@ export function createSettingsController(ctx) {
     );
     const appearanceRow = (node) => el("div", { class: "appearance-field-row" }, node);
     const frameToastPositionBlock = () => {
-      const presets = [
-        { id: "top-left", x: 0, y: 15, label: t("appearance.frameToastTopLeft") },
-        { id: "top-center", x: 50, y: 15, label: t("appearance.frameToastTopCenter") },
-        { id: "top-right", x: 100, y: 15, label: t("appearance.frameToastTopRight") },
-        { id: "middle-left", x: 0, y: 50, label: t("appearance.frameToastMiddleLeft") },
-        { id: "center", x: 50, y: 50, label: t("appearance.frameToastCenter") },
-        { id: "middle-right", x: 100, y: 50, label: t("appearance.frameToastMiddleRight") },
-        { id: "bottom-left", x: 0, y: 100, label: t("appearance.frameToastBottomLeft") },
-        { id: "bottom-center", x: 50, y: 100, label: t("appearance.frameToastBottomCenter") },
-        { id: "bottom-right", x: 100, y: 100, label: t("appearance.frameToastBottomRight") }
-      ];
       let draft = normalizeFrameToastPosition(state.options.frameToastPosition);
       let commitSequence = 0;
       let latestCommitToken = 0;
@@ -889,21 +878,6 @@ export function createSettingsController(ctx) {
         ),
         previewBody
       );
-      const presetButtons = presets.map((preset) => el("button", {
-        class: "frame-toast-position-preset",
-        type: "button",
-        title: preset.label,
-        "aria-label": preset.label,
-        onclick: () => {
-          setDraft(preset);
-          commitDraft();
-        }
-      }, el("span", { "aria-hidden": "true" })));
-      const presetGrid = el("div", {
-        class: "frame-toast-position-presets",
-        role: "group",
-        "aria-label": t("appearance.frameToastPresets")
-      }, presetButtons);
 
       const axisOffset = (containerSize, itemSize, percent) => {
         const available = Math.max(0, containerSize - itemSize);
@@ -933,11 +907,6 @@ export function createSettingsController(ctx) {
         sample.setAttribute("aria-valuetext", coordinates.textContent);
         sample.dataset.x = String(draft.x);
         sample.dataset.y = String(draft.y);
-        presetButtons.forEach((buttonNode, index) => {
-          const active = positionEquals(draft, presets[index]);
-          buttonNode.classList.toggle("active", active);
-          buttonNode.setAttribute("aria-pressed", String(active));
-        });
         schedulePreviewLayout();
       };
       function setDraft(value) {
@@ -1086,19 +1055,21 @@ export function createSettingsController(ctx) {
         }
       });
       syncDraftUi();
-      return settingsBlock(t("appearance.frameToastPosition"), t("appearance.frameToastPositionDesc"),
+      return settingsBlock("", "",
         el("div", { class: "frame-toast-position-editor" },
           el("div", { class: "frame-toast-position-preview-column" },
-            preview,
+            preview
+          ),
+          el("div", { class: "frame-toast-position-details" },
+            el("div", { class: "frame-toast-position-copy" },
+              el("h4", {}, t("appearance.frameToastPosition")),
+              el("p", {}, t("appearance.frameToastPositionDesc"))
+            ),
             el("div", { class: "frame-toast-position-readout" },
               coordinates,
-              el("small", {}, t("appearance.frameToastDragHelp"))
+              el("small", {}, t("appearance.frameToastDragHelp")),
+              el("small", {}, t("appearance.frameToastKeyboardHelp"))
             )
-          ),
-          el("div", { class: "frame-toast-position-preset-column" },
-            el("strong", { class: "frame-toast-position-preset-title" }, t("appearance.frameToastPresets")),
-            presetGrid,
-            el("small", { class: "settings-muted-help" }, t("appearance.frameToastKeyboardHelp"))
           )
         )
       );
