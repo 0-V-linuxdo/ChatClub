@@ -15,8 +15,8 @@ import { button, el, select, toast } from "../../ui/dom.js";
 
 const SHORTCUT_SETTING_GROUPS = [
   {
-    titleKey: "shortcuts.globalTitle",
-    descriptionKey: "shortcuts.globalDesc",
+    titleKey: "shortcuts.topbarTitle",
+    descriptionKey: "shortcuts.topbarDesc",
     actions: ["focusInput", "newChatAll", "deleteThread", "optimizePrompt", "openSummaryPanel", "openPocketPanel", "insertPrompt", "switchLayout", "switchPlatformTab"]
   },
   {
@@ -47,6 +47,10 @@ const SHORTCUT_PREVIEW_META = Object.freeze({
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
 const CONFIG_IO_AUTOSAVE_TIMEOUT_MS = 5000;
+
+function normalizeShortcutSettingsTab(value) {
+  return value === "chat" ? "chat" : "topbar";
+}
 
 export function createShortcutSettings(ctx) {
   const { state, svgIcon, notifyConfigReload, settingsKit } = ctx;
@@ -295,8 +299,24 @@ export function createShortcutSettings(ctx) {
     );
   }
 
+  function shortcutHelpTrigger(label, placement = "center") {
+    return el("button", {
+      class: "icon-button compact-icon shortcut-help-trigger tooltip-trigger",
+      type: "button",
+      "aria-label": label,
+      "data-tooltip": label,
+      "data-tooltip-placement": placement,
+      "data-tooltip-wrap": "true"
+    }, svgIcon("info"));
+  }
+
   function shortcutGroupBlock(group, conflicts, redraw) {
-    return settingsBlock(t(group.titleKey), t(group.descriptionKey),
+    return settingsBlock(
+      el("span", { class: "shortcut-block-title" },
+        el("span", {}, t(group.titleKey)),
+        shortcutHelpTrigger(t("shortcuts.info"), "right")
+      ),
+      t(group.descriptionKey),
       settingsList([t("shortcuts.action"), t("shortcuts.preview"), t("shortcuts.shortcut"), t("common.enabled"), ""],
         group.actions.map((action) => shortcutRow(action, conflicts, redraw)),
         "shortcut-list"
@@ -353,31 +373,35 @@ export function createShortcutSettings(ctx) {
 
   function shortcutActionSettingsBlocks(group, conflicts, redraw) {
     return [
-      conflicts.size
-        ? el("div", { class: "shortcut-conflict-banner" }, t("shortcuts.conflict"))
-        : el("p", { class: "shortcut-info" }, t("shortcuts.info")),
+      ...(conflicts.size ? [el("div", { class: "shortcut-conflict-banner" }, t("shortcuts.conflict"))] : []),
       shortcutGroupBlock(group, conflicts, redraw)
     ];
   }
 
   function shortcutsPane(redraw) {
-    const active = ["global", "chat"].includes(state.shortcutSettingsTab) ? state.shortcutSettingsTab : "input";
+    const active = normalizeShortcutSettingsTab(state.shortcutSettingsTab);
+    state.shortcutSettingsTab = active;
     const draft = shortcutDraft();
     const conflicts = shortcutConflictActions(draft, keyboardPlatform);
     const activeGroup = active === "chat" ? SHORTCUT_SETTING_GROUPS[1] : SHORTCUT_SETTING_GROUPS[0];
+    const activeBlocks = active === "topbar"
+      ? [shortcutInputSettingsBlock(), ...shortcutActionSettingsBlocks(activeGroup, conflicts, redraw)]
+      : shortcutActionSettingsBlocks(activeGroup, conflicts, redraw);
     const platformLabel = t(keyboardPlatform === "mac" ? "shortcuts.platformMac" : "shortcuts.platformWindows");
+    const platformHelp = t("shortcuts.platformDetected", { platform: platformLabel });
     return el("div", { class: "settings-pane" },
-      settingsInnerTabs([
-        ["input", t("shortcuts.inputTab"), t("shortcuts.inputTabDesc")],
-        ["global", t("shortcuts.globalTab"), t("shortcuts.globalTabDesc")],
-        ["chat", t("shortcuts.chatTab"), t("shortcuts.chatTabDesc")]
-      ], active, (id) => {
-        state.shortcutSettingsTab = id;
-        state.shortcutRecordingAction = "";
-        redraw();
-      }),
-      el("p", { class: "shortcut-info" }, t("shortcuts.platformDetected", { platform: platformLabel })),
-      active === "input" ? shortcutInputSettingsBlock() : shortcutActionSettingsBlocks(activeGroup, conflicts, redraw),
+      el("div", { class: "shortcut-tabs-row" },
+        settingsInnerTabs([
+          ["topbar", t("topbar.customize.title"), t("shortcuts.topbarTabDesc")],
+          ["chat", t("shortcuts.chatTab"), t("shortcuts.chatTabDesc")]
+        ], active, (id) => {
+          state.shortcutSettingsTab = id;
+          state.shortcutRecordingAction = "";
+          redraw();
+        }),
+        shortcutHelpTrigger(platformHelp, "right")
+      ),
+      ...activeBlocks,
       shortcutSettingsActions(redraw)
     );
   }

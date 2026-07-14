@@ -7,10 +7,14 @@ const vm = require("node:vm");
 
 const root = path.resolve(__dirname, "..");
 const constantsSource = fs.readFileSync(path.join(root, "shared/constants.js"), "utf8");
+const i18nSource = fs.readFileSync(path.join(root, "shared/i18n.js"), "utf8");
 const shortcutsSource = fs.readFileSync(path.join(root, "shared/shortcuts.js"), "utf8");
 const storageSource = fs.readFileSync(path.join(root, "shared/storage.js"), "utf8");
 const postMessageSource = fs.readFileSync(path.join(root, "shared/post-message.js"), "utf8");
 const mainSource = fs.readFileSync(path.join(root, "app/main.js"), "utf8");
+const shortcutSettingsSource = fs.readFileSync(path.join(root, "app/settings/shortcuts.js"), "utf8");
+const tooltipSource = fs.readFileSync(path.join(root, "ui/tooltip.js"), "utf8");
+const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"), "utf8");
 const contentSource = fs.readFileSync(path.join(root, "content/content.js"), "utf8");
 const summaryRuntimeSource = fs.readFileSync(path.join(root, "content/summary-userscripts-main.js"), "utf8");
 
@@ -394,12 +398,111 @@ for (const modifier of ["metaKey", "ctrlKey", "altKey", "shiftKey"]) {
   assert.equal(shortcuts.matchesSendShortcut(event({ key: "Enter", code: "Enter", [modifier]: true }), "enter", "mac"), false);
 }
 assert.equal(shortcuts.matchesSendShortcut(event({ key: "Enter", code: "Enter", metaKey: true }), "mod-enter", "mac"), true);
+assert.equal(shortcuts.matchesSendShortcut(event({ key: "Enter", code: "Enter" }), "mod-enter", "mac"), false);
 assert.equal(shortcuts.matchesSendShortcut(event({ key: "Enter", code: "Enter", ctrlKey: true }), "mod-enter", "mac"), false);
 assert.equal(shortcuts.matchesSendShortcut(event({ key: "Enter", code: "Enter", ctrlKey: true }), "mod-enter", "windows"), true);
+assert.equal(shortcuts.matchesSendShortcut(event({ key: "Enter", code: "Enter" }), "mod-enter", "windows"), false);
 assert.equal(shortcuts.matchesSendShortcut(event({ key: "Enter", code: "Enter", metaKey: true }), "mod-enter", "windows"), false);
 assert.equal(shortcuts.matchesSendShortcut(event({ key: "Enter", code: "Enter", ctrlKey: true, shiftKey: true }), "mod-enter", "windows"), false);
 assert.equal(shortcuts.matchesSendShortcut(event({ key: "Enter", code: "Enter", isComposing: true }), "enter", "windows"), false);
 assert.equal(shortcuts.matchesSendShortcut(event({ key: "Enter", code: "Enter", keyCode: 229 }), "enter", "windows"), false);
+assert.ok(
+  i18nSource.includes('"shortcuts.modEnterSends": "{modifier}+Enter sends; Enter newline"'),
+  "the English modified-Enter option must explain plain Enter newline behavior"
+);
+assert.ok(
+  i18nSource.includes('"shortcuts.modEnterSends": "{modifier}+Enter 发送；Enter 换行"'),
+  "the Chinese modified-Enter option must explain plain Enter newline behavior"
+);
+
+const shortcutTabContext = vm.createContext({});
+vm.runInContext(
+  `${functionSource(shortcutSettingsSource, "normalizeShortcutSettingsTab")}; globalThis.__normalizeShortcutSettingsTab = normalizeShortcutSettingsTab;`,
+  shortcutTabContext,
+  { filename: "app/settings/shortcuts.js" }
+);
+assert.equal(shortcutTabContext.__normalizeShortcutSettingsTab("input"), "topbar");
+assert.equal(shortcutTabContext.__normalizeShortcutSettingsTab("global"), "topbar");
+assert.equal(shortcutTabContext.__normalizeShortcutSettingsTab("topbar"), "topbar");
+assert.equal(shortcutTabContext.__normalizeShortcutSettingsTab("chat"), "chat");
+assert.match(mainSource, /shortcutSettingsTab: "topbar"/, "Top Bar must be the default shortcut settings tab");
+assert.match(
+  shortcutSettingsSource,
+  /settingsInnerTabs\(\[\s*\["topbar", t\("topbar\.customize\.title"\), t\("shortcuts\.topbarTabDesc"\)\],\s*\["chat", t\("shortcuts\.chatTab"\), t\("shortcuts\.chatTabDesc"\)\]\s*\], active,/,
+  "shortcut settings must expose only Top Bar and Chat Panel tabs"
+);
+assert.doesNotMatch(shortcutSettingsSource, /\["input", t\("shortcuts\.inputTab"\)/);
+assert.doesNotMatch(shortcutSettingsSource, /\["global", t\("shortcuts\.globalTab"\)/);
+assert.match(
+  shortcutSettingsSource,
+  /active === "topbar"\s*\? \[shortcutInputSettingsBlock\(\), \.\.\.shortcutActionSettingsBlocks\(activeGroup, conflicts, redraw\)\]\s*: shortcutActionSettingsBlocks\(activeGroup, conflicts, redraw\)/,
+  "Top Bar must render Send Message before the former Global shortcut list, while Chat Panel omits Send Message"
+);
+assert.doesNotMatch(shortcutSettingsSource, /class: "shortcut-info"/, "shortcut help must not use full-width info cards");
+assert.equal(
+  (shortcutSettingsSource.match(/shortcutHelpTrigger\(/g) || []).length,
+  3,
+  "shortcut settings must define one help trigger and render it beside the tabs and shortcut block title"
+);
+assert.match(shortcutSettingsSource, /"data-tooltip-wrap": "true"/, "shortcut help tooltips must opt into full-text wrapping");
+assert.match(
+  shortcutSettingsSource,
+  /class: "shortcut-tabs-row"[\s\S]*shortcutHelpTrigger\(platformHelp, "right"\)/,
+  "platform help must render beside the shortcut tabs"
+);
+assert.match(
+  shortcutSettingsSource,
+  /class: "shortcut-block-title"[\s\S]*shortcutHelpTrigger\(t\("shortcuts\.info"\), "right"\)/,
+  "recording help must render beside the shortcut block title"
+);
+assert.match(
+  shortcutSettingsSource,
+  /\.\.\.\(conflicts\.size \? \[el\("div", \{ class: "shortcut-conflict-banner" \}/,
+  "shortcut conflicts must keep their full-width warning without a no-conflict placeholder"
+);
+assert.match(
+  tooltipSource,
+  /host\.classList\.toggle\("is-wrapping", trigger\.getAttribute\("data-tooltip-wrap"\) === "true"\)/,
+  "tooltip wrapping must be opt-in per trigger"
+);
+assert.match(
+  tooltipSource,
+  /host\.style\.left = "0px";\s*host\.style\.top = "0px";\s*const tooltipRect = host\.getBoundingClientRect\(\);/,
+  "wrapped tooltip measurement must not inherit the previous trigger position"
+);
+assert.match(
+  tooltipSource,
+  /document\.documentElement\.contains\(trigger\)[\s\S]*tooltipText\(trigger\)[\s\S]*!isDisabledTrigger\(trigger\)[\s\S]*!isTooltipSuppressed\(trigger\)/,
+  "tooltip fallbacks must be connected, non-empty, enabled, and unsuppressed"
+);
+assert.match(
+  tooltipSource,
+  /cleanupTrackedTriggers\(\);\s*if \(focusedTrigger === trigger\)/,
+  "pointer exit must discard stale focused tooltip fallbacks"
+);
+assert.match(
+  tooltipSource,
+  /cleanupTrackedTriggers\(\);\s*if \(hoveredTrigger === trigger\)/,
+  "focus exit must discard stale hovered tooltip fallbacks"
+);
+assert.match(
+  tooltipSource,
+  /if \(focusedTrigger === trigger\) return;\s*if \(focusedTrigger && showTooltip\(focusedTrigger\)\) return;/,
+  "pointer exit must preserve or restore keyboard-focused tooltip help"
+);
+assert.match(
+  tooltipSource,
+  /if \(hoveredTrigger === trigger\) return;\s*if \(hoveredTrigger && showTooltip\(hoveredTrigger\)\) return;/,
+  "focus exit must preserve or restore hovered tooltip help"
+);
+assert.match(tooltipSource, /document\.addEventListener\("focusin"[\s\S]*showTooltip\(trigger\)/, "help tooltips must open on keyboard focus");
+assert.match(tooltipSource, /event\.key === "Escape"\) hideTooltip\(\)/, "help tooltips must close with Escape");
+assert.match(
+  stylesheetSource,
+  /\.global-tooltip\.is-wrapping \.global-tooltip-label \{[\s\S]*?white-space: normal;/,
+  "wrapped global tooltips must show their full text"
+);
+assert.match(stylesheetSource, /\.shortcut-tabs-row[\s\S]*?max-width: 100%;/, "shortcut tab help must stay within the settings pane");
 
 // Exercise the real storage bundle functions with only their unrelated fields
 // stubbed out. The outer backup schema remains v1 while its shortcut payload is

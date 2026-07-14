@@ -1267,6 +1267,13 @@ button { cursor: pointer; }
   text-overflow: ellipsis;
 }
 
+.tooltip-trigger[data-tooltip-wrap="true"]::after {
+  line-height: 1.35;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+
 .tooltip-trigger:hover::before,
 .tooltip-trigger:hover::after,
 .tooltip-trigger:focus-visible::before,
@@ -1355,6 +1362,13 @@ button { cursor: pointer; }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.global-tooltip.is-wrapping .global-tooltip-label {
+  line-height: 1.35;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .global-tooltip-arrow {
@@ -2420,6 +2434,18 @@ body.tab-gesture-active * {
 .settings-pane {
   display: grid;
   gap: 14px;
+}
+
+.shortcut-tabs-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.shortcut-tabs-row > .settings-inner-tabs {
+  min-width: 0;
 }
 
 .settings-inner-tabs {
@@ -6092,7 +6118,6 @@ body.settings-tab-group-button-dragging iframe {
   font-size: 12px;
 }
 
-.shortcut-info,
 .shortcut-conflict-banner {
   margin: 0;
   padding: 10px 12px;
@@ -6102,8 +6127,23 @@ body.settings-tab-group-button-dragging iframe {
   background: color-mix(in srgb, var(--panel-2) 64%, transparent);
 }
 
-.shortcut-info {
-  color: var(--muted);
+.shortcut-block-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.shortcut-help-trigger {
+  width: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  height: 24px;
+  border-radius: 999px;
+}
+
+.shortcut-help-trigger .svg-icon {
+  width: 15px;
+  height: 15px;
 }
 
 .shortcut-conflict-banner {
@@ -6251,6 +6291,15 @@ body.settings-tab-group-button-dragging iframe {
   .settings-inner-tabs {
     width: 100%;
     grid-auto-columns: 1fr;
+  }
+
+  .shortcut-tabs-row {
+    width: 100%;
+  }
+
+  .shortcut-tabs-row > .settings-inner-tabs {
+    flex: 1 1 auto;
+    width: auto;
   }
 
   .shortcut-list .settings-list-header,

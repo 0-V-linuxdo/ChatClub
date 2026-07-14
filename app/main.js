@@ -463,7 +463,7 @@ const state = {
   faviconCache: {},
   shortcutDraftConfig: null,
   shortcutRecordingAction: "",
-  shortcutSettingsTab: "input",
+  shortcutSettingsTab: "topbar",
   summaryCollectorEditingId: "",
   summaryCollectorDragId: "",
   messageNavigatorSiteExpandedId: "",
