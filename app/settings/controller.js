@@ -562,6 +562,7 @@ export function createSettingsController(ctx) {
       state.settingsBuiltinAppDragId = "";
       state.settingsCustomAppDragId = "";
       state.settingsAppearanceTab = "workspace";
+      state.settingsAppearanceTopbarTab = "placeholder";
       state.settingsTopbarPromptPlaceholderDraft = "";
       state.settingsTopbarPromptPlaceholderEditingIndex = -1;
       state.settingsTopbarPromptPlaceholderDragIndex = "";
@@ -881,7 +882,10 @@ export function createSettingsController(ctx) {
       const previewBody = el("div", { class: "frame-toast-position-preview-body" }, sample);
       const preview = el("div", { class: "frame-toast-position-preview" },
         el("div", { class: "frame-toast-position-preview-header", "aria-hidden": "true" },
-          el("span", {}), el("span", {}), el("span", {})
+          el("div", { class: "frame-toast-position-preview-tab" },
+            el("span", { class: "frame-toast-position-preview-tab-icon" }, svgIcon("apps")),
+            el("span", { class: "frame-toast-position-preview-tab-label" }, t("appearance.frameToastPreviewTab"))
+          )
         ),
         previewBody
       );
@@ -1332,10 +1336,10 @@ export function createSettingsController(ctx) {
     return el("div", { class: "settings-pane appearance-settings-pane" },
       settingsInnerTabs([
         ["workspace", t("appearance.workspace"), t("appearance.workspaceTabDesc")],
-        ["frameToast", t("appearance.frameToastTab"), t("appearance.frameToastTabDesc")],
         ["topbar", t("topbar.customize.title"), t("topbar.customize.tabDesc")],
         ["tabGroup", t("appearance.tabGroup"), t("appearance.tabGroupTabDesc")],
-        ["tooltips", t("appearance.buttonTooltips"), t("appearance.buttonTooltipsTabDesc")]
+        ["tooltips", t("appearance.buttonTooltips"), t("appearance.buttonTooltipsTabDesc")],
+        ["frameToast", t("appearance.frameToastTab"), t("appearance.frameToastTabDesc")]
       ], state.settingsAppearanceTab, (id) => {
         state.settingsAppearanceTab = id;
         redraw();
@@ -1591,21 +1595,31 @@ export function createSettingsController(ctx) {
   }
 
   function topbarLayoutBlock(redraw) {
+    const activeTab = state.settingsAppearanceTopbarTab === "layout" ? "layout" : "placeholder";
+    state.settingsAppearanceTopbarTab = activeTab;
     const enterTopbarEditModeFromSettings = () => {
       const closeSettings = closeActiveSettingsDialog;
       closeSettings?.();
       requestAnimationFrame(() => enterTopbarEditMode?.());
     };
     return el("div", { class: "settings-pane topbar-settings-pane" },
-      topbarPromptPlaceholderBlock(redraw),
-      settingsBlock(t("topbar.customize.title"), t("topbar.customize.desc"),
-        settingsPaneToolbar(t("topbar.customize.help"),
-          settingsPrimaryAction(t("topbar.customize.enter"), "customizeTopbar", enterTopbarEditModeFromSettings)
-        ),
-        el("div", { class: "topbar-customizer topbar-customizer-launcher" },
-          el("p", { class: "topbar-layout-hint" }, t("topbar.customize.dragHint"))
+      settingsInnerTabs([
+        ["placeholder", t("topbar.placeholder.title"), t("topbar.placeholder.tabDesc")],
+        ["layout", t("topbar.customize.title"), t("topbar.customize.tabDesc")]
+      ], activeTab, (id) => {
+        state.settingsAppearanceTopbarTab = id;
+        redraw();
+      }),
+      activeTab === "layout"
+        ? settingsBlock(t("topbar.customize.title"), t("topbar.customize.desc"),
+          settingsPaneToolbar(t("topbar.customize.help"),
+            settingsPrimaryAction(t("topbar.customize.enter"), "customizeTopbar", enterTopbarEditModeFromSettings)
+          ),
+          el("div", { class: "topbar-customizer topbar-customizer-launcher" },
+            el("p", { class: "topbar-layout-hint" }, t("topbar.customize.dragHint"))
+          )
         )
-      )
+        : topbarPromptPlaceholderBlock(redraw)
     );
   }
 

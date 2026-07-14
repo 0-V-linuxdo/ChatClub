@@ -4,6 +4,7 @@ export const DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07
 export const MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.08.12";
 export const SUMMARY_POST_MESSAGE_SOURCE = "chatclub:summary:2026.07.08.13";
 export const PREFERRED_MODEL_POST_MESSAGE_SOURCE = "chatclub:preferred-model:2026.07.13.2";
+export const SHORTCUT_TRIGGER_POST_MESSAGE_SOURCE = "chatclub:shortcut-trigger:2026.07.14.1";
 
 function requestId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;

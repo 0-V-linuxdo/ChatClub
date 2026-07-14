@@ -41,7 +41,7 @@ const SUMMARY_PANEL_SIZE_KEY = "chatclub.summaryPanelSize.v4";
  * @property {(href: string) => Promise<string>} discoverDeclaredFaviconUrl
  * @property {(href: string, logoUrl: string) => void} rememberFaviconUrl
  * @property {(href: string) => string} browserFaviconUrl
- * @property {(action: string, shortcut: any, digitLabel?: string) => string} [formatShortcut]
+ * @property {(action: string, digitLabel?: string) => string} [formatShortcut]
  * @property {{ save: () => Promise<void>, entries: () => any[] }} [pocketPort]
  */
 
@@ -416,7 +416,7 @@ export function createSummaryController(ctx) {
   
   function summaryFullscreenLabel() {
     const baseLabel = state.summaryMaximized ? t("summaryPanel.restore") : t("summaryPanel.maximize");
-    const shortcut = formatShortcutLabel?.("enterFullscreen", state.shortcutConfig?.shortcuts?.enterFullscreen);
+    const shortcut = formatShortcutLabel?.("enterFullscreen");
     if (!shortcut || shortcut === "Disabled" || shortcut === "Unassigned") return baseLabel;
     return `${baseLabel} (${shortcut})`;
   }

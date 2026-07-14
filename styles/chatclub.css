@@ -2607,18 +2607,56 @@ body.tab-gesture-active * {
 .frame-toast-position-preview-header {
   height: 27px;
   display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 10px;
+  align-items: flex-end;
+  padding: 0 6px;
   border-bottom: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
   background: color-mix(in srgb, var(--panel) 82%, var(--panel-2));
 }
 
-.frame-toast-position-preview-header span {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--muted) 44%, transparent);
+.frame-toast-position-preview-tab {
+  box-sizing: border-box;
+  display: inline-grid;
+  grid-template-columns: 14px auto;
+  align-items: center;
+  gap: 5px;
+  width: fit-content;
+  max-width: calc(100% - 2px);
+  height: 26px;
+  margin-bottom: -1px;
+  padding: 0 7px 0 5px;
+  overflow: hidden;
+  color: var(--text);
+  background: color-mix(in srgb, var(--panel-2) 86%, #07110f 14%);
+  border: 1px solid color-mix(in srgb, var(--line) 80%, var(--primary) 20%);
+  border-bottom-color: transparent;
+  border-radius: 6px 6px 0 0;
+  pointer-events: none;
+  user-select: none;
+}
+
+.frame-toast-position-preview-tab-icon {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 13%, transparent);
+  border-radius: 4px;
+}
+
+.frame-toast-position-preview-tab-icon .svg-icon {
+  width: 10px;
+  height: 10px;
+}
+
+.frame-toast-position-preview-tab-label {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .frame-toast-position-preview-body {
@@ -2633,7 +2671,7 @@ body.tab-gesture-active * {
     linear-gradient(color-mix(in srgb, var(--line) 36%, transparent) 1px, transparent 1px),
     linear-gradient(90deg, color-mix(in srgb, var(--line) 36%, transparent) 1px, transparent 1px),
     radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 58%);
-  background-size: 25% 25%, 25% 25%, auto;
+  background-size: 33.333333% 33.333333%, 33.333333% 33.333333%, auto;
 }
 
 .frame-toast-position-preview-body.dragging {
@@ -2755,7 +2793,7 @@ body.tab-gesture-active * {
 
 .frame-toast-position-preset span {
   position: absolute;
-  width: 11px;
+  width: 22px;
   height: 7px;
   border-radius: 999px;
   background: currentColor;

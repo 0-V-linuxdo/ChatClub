@@ -118,7 +118,7 @@ const APP_PICKER_CHINESE_ID_SET = new Set(APP_PICKER_CHINESE_IDS);
  * @property {(name: string) => SVGElement} svgIcon
  * @property {(label: string, iconName: string, onClick: Function, extraClass?: string, tooltipLabel?: string, tooltipPlacement?: string, tooltipId?: string) => HTMLElement} compactIconButton
  * @property {(label: string, iconName: string, onClick: Function, variant?: string, disabled?: boolean, tooltipLabel?: string, tooltipPlacement?: string, tooltipId?: string) => HTMLElement} menuButton
- * @property {(action: string, shortcut: any, slot?: string) => string} formatShortcut
+ * @property {(action: string, slot?: string) => string} formatShortcut
  * @property {() => void} [openCustomAppEditor]
  * @property {(event: WorkspaceFrameLifecycleEvent) => void} [onFrameLifecycleChange]
  */
@@ -859,12 +859,12 @@ export function createWorkspaceController(ctx = {}) {
 
   function layoutShortcutLabel(index) {
     if (index < 0 || index > 8) return "";
-    const label = formatShortcut("switchLayout", state.shortcutConfig?.shortcuts?.switchLayout, String(index + 1));
+    const label = formatShortcut("switchLayout", String(index + 1));
     return label === "Disabled" || label === "Unassigned" ? "" : label;
   }
 
   function shortcutLabel(action, digitLabel = "") {
-    const label = formatShortcut(action, state.shortcutConfig?.shortcuts?.[action], digitLabel);
+    const label = formatShortcut(action, digitLabel);
     return label === "Disabled" || label === "Unassigned" ? "" : label;
   }
 

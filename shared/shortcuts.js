@@ -1,5 +1,9 @@
 import { DEFAULT_SHORTCUT_CONFIG } from "./constants.js";
 
+export const SHORTCUT_CONFIG_SCHEMA_VERSION = 2;
+export const KEYBOARD_PLATFORM_MAC = "mac";
+export const KEYBOARD_PLATFORM_WINDOWS = "windows";
+
 export const ALL_SHORTCUT_ACTIONS = [
   "focusInput",
   "newChat",
@@ -97,8 +101,29 @@ function bool(value, fallback = false) {
   return value == null ? fallback : Boolean(value);
 }
 
-function defaultShortcut(action) {
-  return DEFAULT_SHORTCUT_CONFIG.shortcuts[action] || {};
+export function normalizeKeyboardPlatform(platform) {
+  return String(platform || "").toLowerCase() === KEYBOARD_PLATFORM_MAC
+    ? KEYBOARD_PLATFORM_MAC
+    : KEYBOARD_PLATFORM_WINDOWS;
+}
+
+export function detectKeyboardPlatform(navigatorLike = globalThis.navigator) {
+  const platform = [
+    navigatorLike?.userAgentData?.platform,
+    navigatorLike?.platform,
+    navigatorLike?.userAgent
+  ].filter(Boolean).join(" ");
+  return /Mac|iPhone|iPad|iPod/i.test(platform)
+    ? KEYBOARD_PLATFORM_MAC
+    : KEYBOARD_PLATFORM_WINDOWS;
+}
+
+function defaultProfile(platform) {
+  return DEFAULT_SHORTCUT_CONFIG.profiles[normalizeKeyboardPlatform(platform)] || {};
+}
+
+function defaultShortcut(action, platform) {
+  return defaultProfile(platform).shortcuts?.[action] || {};
 }
 
 function shortcutSameFixedShape(shortcut, expected) {
@@ -110,32 +135,81 @@ function shortcutSameFixedShape(shortcut, expected) {
     && String(shortcut.code || "") === String(expected.code || "");
 }
 
-function normalizeFixedShortcut(action, raw) {
-  const base = defaultShortcut(action);
+function normalizeFixedShortcut(action, raw, platform) {
+  const normalizedPlatform = normalizeKeyboardPlatform(platform);
+  const base = defaultShortcut(action, normalizedPlatform);
   const source = raw || {};
+  const modifiers = normalizedPlatform === KEYBOARD_PLATFORM_MAC
+    ? {
+      command: bool(source.command, Boolean(base.command)),
+      control: bool(source.control, Boolean(base.control)),
+      option: bool(source.option, Boolean(base.option)),
+      shift: bool(source.shift, Boolean(base.shift))
+    }
+    : {
+      control: bool(source.control, Boolean(base.control)),
+      alt: bool(source.alt, Boolean(base.alt)),
+      shift: bool(source.shift, Boolean(base.shift))
+    };
   return {
     disabled: Boolean(source.disabled),
-    cmdOrCtrl: bool(source.cmdOrCtrl, Boolean(base.cmdOrCtrl)),
-    alt: bool(source.alt, Boolean(base.alt)),
-    shift: bool(source.shift, Boolean(base.shift)),
+    ...modifiers,
     code: String(source.code || base.code || "")
   };
 }
 
-function normalizePatternShortcut(action, raw) {
-  const base = defaultShortcut(action);
+function normalizePatternShortcut(action, raw, platform) {
+  const normalizedPlatform = normalizeKeyboardPlatform(platform);
+  const base = defaultShortcut(action, normalizedPlatform);
   const source = raw || {};
+  const modifiers = normalizedPlatform === KEYBOARD_PLATFORM_MAC
+    ? {
+      command: bool(source.command, Boolean(base.command)),
+      control: bool(source.control, Boolean(base.control)),
+      option: bool(source.option, Boolean(base.option)),
+      shift: bool(source.shift, Boolean(base.shift))
+    }
+    : {
+      control: bool(source.control, Boolean(base.control)),
+      alt: bool(source.alt, Boolean(base.alt)),
+      shift: bool(source.shift, Boolean(base.shift))
+    };
   return {
     disabled: Boolean(source.disabled),
-    cmdOrCtrl: bool(source.cmdOrCtrl, Boolean(base.cmdOrCtrl)),
-    alt: bool(source.alt, Boolean(base.alt)),
-    shift: bool(source.shift, Boolean(base.shift)),
+    ...modifiers,
     codePattern: "Digit"
   };
 }
 
-export function normalizeShortcutConfig(raw = {}) {
+function normalizeShortcutProfile(raw, platform) {
   const source = raw && typeof raw === "object" ? raw : {};
+  const rawShortcuts = { ...(source.shortcuts || {}) };
+  if (rawShortcuts.openSummary && !rawShortcuts.openSummaryPanel) {
+    rawShortcuts.openSummaryPanel = rawShortcuts.openSummary;
+  }
+  const shortcuts = {};
+  for (const action of ALL_SHORTCUT_ACTIONS) {
+    shortcuts[action] = PATTERN_ACTIONS.includes(action)
+      ? normalizePatternShortcut(action, rawShortcuts[action], platform)
+      : normalizeFixedShortcut(action, rawShortcuts[action], platform);
+  }
+  return {
+    sendKeyMode: source.sendKeyMode === "mod-enter" ? "mod-enter" : "enter",
+    shortcuts
+  };
+}
+
+function legacyDefaultShortcut(action) {
+  const mac = defaultShortcut(action, KEYBOARD_PLATFORM_MAC);
+  return {
+    alt: Boolean(mac.option),
+    shift: Boolean(mac.shift),
+    cmdOrCtrl: Boolean(mac.command),
+    ...(mac.codePattern ? { codePattern: "Digit" } : { code: String(mac.code || "") })
+  };
+}
+
+function migrateLegacyShortcutConfig(source) {
   const rawShortcuts = { ...(source.shortcuts || {}) };
   if (rawShortcuts.openSummary && !rawShortcuts.openSummaryPanel) {
     rawShortcuts.openSummaryPanel = rawShortcuts.openSummary;
@@ -144,35 +218,77 @@ export function normalizeShortcutConfig(raw = {}) {
     source.deleteThreadShortcutMigrated !== true
     && shortcutSameFixedShape(rawShortcuts.deleteThread, LEGACY_KAGI_CONFLICT_DELETE_THREAD_SHORTCUT)
   ) {
-    rawShortcuts.deleteThread = defaultShortcut("deleteThread");
+    rawShortcuts.deleteThread = legacyDefaultShortcut("deleteThread");
   }
   if (
     source.newChatShortcutMigrated !== true
     && shortcutSameFixedShape(rawShortcuts.newChat, LEGACY_DEFAULT_NEW_CHAT_SHORTCUT)
   ) {
-    rawShortcuts.newChat = defaultShortcut("newChat");
+    rawShortcuts.newChat = legacyDefaultShortcut("newChat");
   }
   if (
     source.homeShortcutMigrated !== true
     && LEGACY_DEFAULT_RELOAD_CHAT_SHORTCUTS.some((shortcut) => shortcutSameFixedShape(rawShortcuts.reloadChat, shortcut))
   ) {
-    rawShortcuts.reloadChat = defaultShortcut("reloadChat");
+    rawShortcuts.reloadChat = legacyDefaultShortcut("reloadChat");
   }
-  const shortcuts = {};
-  for (const action of ALL_SHORTCUT_ACTIONS) {
-    shortcuts[action] = PATTERN_ACTIONS.includes(action)
-      ? normalizePatternShortcut(action, rawShortcuts[action])
-      : normalizeFixedShortcut(action, rawShortcuts[action]);
+  const sendKeyMode = source.sendKeyMode === "mod-enter" ? "mod-enter" : "enter";
+  const profiles = {};
+  for (const platform of [KEYBOARD_PLATFORM_MAC, KEYBOARD_PLATFORM_WINDOWS]) {
+    const shortcuts = {};
+    for (const action of ALL_SHORTCUT_ACTIONS) {
+      const base = legacyDefaultShortcut(action);
+      const item = rawShortcuts[action] || {};
+      const common = {
+        disabled: Boolean(item.disabled),
+        shift: bool(item.shift, Boolean(base.shift))
+      };
+      const modifiers = platform === KEYBOARD_PLATFORM_MAC
+        ? {
+          command: bool(item.cmdOrCtrl, Boolean(base.cmdOrCtrl)),
+          control: false,
+          option: bool(item.alt, Boolean(base.alt))
+        }
+        : {
+          control: bool(item.cmdOrCtrl, Boolean(base.cmdOrCtrl)),
+          alt: bool(item.alt, Boolean(base.alt))
+        };
+      shortcuts[action] = shortcutUsesDigitPattern(action, item)
+        ? { ...common, ...modifiers, codePattern: "Digit" }
+        : { ...common, ...modifiers, code: String(item.code || base.code || "") };
+    }
+    profiles[platform] = normalizeShortcutProfile({ sendKeyMode, shortcuts }, platform);
+  }
+  return { schemaVersion: SHORTCUT_CONFIG_SCHEMA_VERSION, profiles };
+}
+
+export function normalizeShortcutConfig(raw = {}) {
+  const source = raw && typeof raw === "object" ? raw : {};
+  if (source.schemaVersion !== SHORTCUT_CONFIG_SCHEMA_VERSION || !source.profiles) {
+    return migrateLegacyShortcutConfig(source);
   }
   return {
-    ...clone(DEFAULT_SHORTCUT_CONFIG),
-    ...source,
-    deleteThreadShortcutMigrated: true,
-    newChatShortcutMigrated: true,
-    reloadChatShortcutMigrated: true,
-    homeShortcutMigrated: true,
-    sendKeyMode: source.sendKeyMode === "mod-enter" ? "mod-enter" : "enter",
-    shortcuts
+    schemaVersion: SHORTCUT_CONFIG_SCHEMA_VERSION,
+    profiles: {
+      mac: normalizeShortcutProfile(source.profiles.mac, KEYBOARD_PLATFORM_MAC),
+      windows: normalizeShortcutProfile(source.profiles.windows, KEYBOARD_PLATFORM_WINDOWS)
+    }
+  };
+}
+
+export function shortcutProfile(shortcutConfig, platform = detectKeyboardPlatform()) {
+  return normalizeShortcutConfig(shortcutConfig).profiles[normalizeKeyboardPlatform(platform)];
+}
+
+export function replaceShortcutProfile(shortcutConfig, platform, profile) {
+  const normalized = normalizeShortcutConfig(shortcutConfig);
+  const key = normalizeKeyboardPlatform(platform);
+  return {
+    ...normalized,
+    profiles: {
+      ...normalized.profiles,
+      [key]: normalizeShortcutProfile(profile, key)
+    }
   };
 }
 
@@ -181,14 +297,21 @@ export function shortcutUsesDigitPattern(action, shortcut) {
 }
 
 export function digitMatch(code) {
-  return /^Digit([0-9])$/.exec(code || "") || /^Numpad([0-9])$/.exec(code || "");
+  return /^Digit([1-9])$/.exec(code || "") || /^Numpad([1-9])$/.exec(code || "");
 }
 
-function matchSingleShortcut(event, action, shortcut) {
+function matchSingleShortcut(event, action, shortcut, platform) {
   if (!shortcut || shortcut.disabled) return null;
-  const cmdOrCtrl = Boolean(event.metaKey || event.ctrlKey);
-  if (Boolean(shortcut.cmdOrCtrl) !== cmdOrCtrl) return null;
-  if (Boolean(shortcut.alt) !== Boolean(event.altKey)) return null;
+  const normalizedPlatform = normalizeKeyboardPlatform(platform);
+  if (normalizedPlatform === KEYBOARD_PLATFORM_MAC) {
+    if (Boolean(shortcut.command) !== Boolean(event.metaKey)) return null;
+    if (Boolean(shortcut.control) !== Boolean(event.ctrlKey)) return null;
+    if (Boolean(shortcut.option) !== Boolean(event.altKey)) return null;
+  } else {
+    if (event.metaKey) return null;
+    if (Boolean(shortcut.control) !== Boolean(event.ctrlKey)) return null;
+    if (Boolean(shortcut.alt) !== Boolean(event.altKey)) return null;
+  }
   if (Boolean(shortcut.shift) !== Boolean(event.shiftKey)) return null;
   if (shortcutUsesDigitPattern(action, shortcut)) {
     const match = digitMatch(event.code);
@@ -197,36 +320,54 @@ function matchSingleShortcut(event, action, shortcut) {
   return shortcut.code && event.code === shortcut.code ? {} : null;
 }
 
-export function matchShortcut(event, shortcutConfig) {
-  const config = normalizeShortcutConfig(shortcutConfig);
+export function matchShortcut(event, shortcutConfig, platform = detectKeyboardPlatform()) {
+  const normalizedPlatform = normalizeKeyboardPlatform(platform);
+  const profile = shortcutProfile(shortcutConfig, normalizedPlatform);
   for (const action of ALL_SHORTCUT_ACTIONS) {
-    const matchObj = matchSingleShortcut(event, action, config.shortcuts[action]);
+    const matchObj = matchSingleShortcut(event, action, profile.shortcuts[action], normalizedPlatform);
     if (matchObj) return { action, matchObj };
   }
   return null;
 }
 
-export function formatShortcut(action, shortcut, digitLabel = "") {
+export function formatShortcut(action, shortcut, digitLabel = "", platform = detectKeyboardPlatform()) {
   if (!shortcut || shortcut.disabled) return "Disabled";
-  const mac = /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || "");
+  const mac = normalizeKeyboardPlatform(platform) === KEYBOARD_PLATFORM_MAC;
   const parts = [];
-  if (shortcut.cmdOrCtrl) parts.push(mac ? "⌘" : "Ctrl");
-  if (shortcut.alt) parts.push(mac ? "⌥" : "Alt");
-  if (shortcut.shift) parts.push(mac ? "⇧" : "Shift");
+  if (mac) {
+    if (shortcut.command) parts.push("⌘");
+    if (shortcut.control) parts.push("⌃");
+    if (shortcut.option) parts.push("⌥");
+    if (shortcut.shift) parts.push("⇧");
+  } else {
+    if (shortcut.control) parts.push("Ctrl");
+    if (shortcut.alt) parts.push("Alt");
+    if (shortcut.shift) parts.push("Shift");
+  }
   if (shortcutUsesDigitPattern(action, shortcut)) parts.push(digitLabel || "1-9");
   else if (shortcut.code) parts.push(shortcut.code.replace(/^Key/, "").replace(/^Digit/, "").replace(/^Numpad/, "Num "));
   return parts.join(mac ? "" : "+") || "Unassigned";
 }
 
-export function shortcutFromKeyboardEvent(event, action) {
+export function shortcutFromKeyboardEvent(event, action, platform = detectKeyboardPlatform()) {
   const pattern = PATTERN_ACTIONS.includes(action);
   if (!event.code || MODIFIER_CODES.has(event.code)) return null;
-  const shortcut = {
-    disabled: false,
-    cmdOrCtrl: Boolean(event.metaKey || event.ctrlKey),
-    alt: Boolean(event.altKey),
-    shift: Boolean(event.shiftKey)
-  };
+  const normalizedPlatform = normalizeKeyboardPlatform(platform);
+  if (normalizedPlatform === KEYBOARD_PLATFORM_WINDOWS && event.metaKey) return null;
+  const shortcut = normalizedPlatform === KEYBOARD_PLATFORM_MAC
+    ? {
+      disabled: false,
+      command: Boolean(event.metaKey),
+      control: Boolean(event.ctrlKey),
+      option: Boolean(event.altKey),
+      shift: Boolean(event.shiftKey)
+    }
+    : {
+      disabled: false,
+      control: Boolean(event.ctrlKey),
+      alt: Boolean(event.altKey),
+      shift: Boolean(event.shiftKey)
+    };
   if (pattern) {
     if (!digitMatch(event.code)) return null;
     shortcut.codePattern = "Digit";
@@ -236,25 +377,27 @@ export function shortcutFromKeyboardEvent(event, action) {
   return shortcut;
 }
 
-function shortcutSignatures(action, shortcut) {
+function shortcutSignatures(action, shortcut, platform) {
   if (!shortcut || shortcut.disabled) return [];
-  const modifiers = [
-    shortcut.cmdOrCtrl ? "mod" : "",
-    shortcut.alt ? "alt" : "",
-    shortcut.shift ? "shift" : ""
-  ].filter(Boolean).join("+");
+  const mac = normalizeKeyboardPlatform(platform) === KEYBOARD_PLATFORM_MAC;
+  const modifiers = (mac
+    ? [shortcut.command ? "command" : "", shortcut.control ? "control" : "", shortcut.option ? "option" : "", shortcut.shift ? "shift" : ""]
+    : [shortcut.control ? "control" : "", shortcut.alt ? "alt" : "", shortcut.shift ? "shift" : ""]
+  ).filter(Boolean).join("+");
   if (shortcutUsesDigitPattern(action, shortcut)) {
-    return Array.from({ length: 10 }, (_, index) => `${modifiers}:Digit${index}`);
+    return Array.from({ length: 9 }, (_, index) => index + 1)
+      .flatMap((digit) => [`${modifiers}:Digit${digit}`, `${modifiers}:Numpad${digit}`]);
   }
   return shortcut.code ? [`${modifiers}:${shortcut.code}`] : [];
 }
 
-export function shortcutConflictActions(shortcutConfig) {
-  const config = normalizeShortcutConfig(shortcutConfig);
+export function shortcutConflictActions(shortcutConfig, platform = detectKeyboardPlatform()) {
+  const normalizedPlatform = normalizeKeyboardPlatform(platform);
+  const profile = shortcutProfile(shortcutConfig, normalizedPlatform);
   const seen = new Map();
   const conflicts = new Set();
   for (const action of ALL_SHORTCUT_ACTIONS) {
-    for (const signature of shortcutSignatures(action, config.shortcuts[action])) {
+    for (const signature of shortcutSignatures(action, profile.shortcuts[action], normalizedPlatform)) {
       const existing = seen.get(signature);
       if (existing) {
         conflicts.add(existing);
@@ -269,4 +412,20 @@ export function shortcutConflictActions(shortcutConfig) {
 
 export function defaultShortcutConfig() {
   return normalizeShortcutConfig(DEFAULT_SHORTCUT_CONFIG);
+}
+
+export function defaultShortcutProfile(platform = detectKeyboardPlatform()) {
+  return clone(shortcutProfile(DEFAULT_SHORTCUT_CONFIG, platform));
+}
+
+export function matchesSendShortcut(event, sendKeyMode = "enter", platform = detectKeyboardPlatform()) {
+  if (event?.key !== "Enter" || event?.isComposing || event?.keyCode === 229) return false;
+  const normalizedPlatform = normalizeKeyboardPlatform(platform);
+  if (sendKeyMode === "mod-enter") {
+    if (event.altKey || event.shiftKey) return false;
+    return normalizedPlatform === KEYBOARD_PLATFORM_MAC
+      ? Boolean(event.metaKey) && !event.ctrlKey
+      : Boolean(event.ctrlKey) && !event.metaKey;
+  }
+  return !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey;
 }

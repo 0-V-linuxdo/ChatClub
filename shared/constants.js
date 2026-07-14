@@ -1,7 +1,7 @@
 import { DEFAULT_TOPBAR_LAYOUT } from "./topbar.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-07-14｜02:22:12」";
+export const APP_VERSION = "「2026-07-14｜09:49:32」";
 export const BASELINE_MOD_VERSION = "2.4.0.14";
 export const HOMEPAGE_URL = "https://chatclub.local/";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
@@ -335,23 +335,48 @@ export const DEFAULT_OPTIONS = {
 };
 
 export const DEFAULT_SHORTCUT_CONFIG = {
-  sendKeyMode: "enter",
-  shortcuts: {
-    focusInput: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyK" },
-    newChat: { alt: false, shift: false, cmdOrCtrl: true, code: "KeyN" },
-    newChatAll: { alt: false, shift: true, cmdOrCtrl: true, code: "KeyN" },
-    deleteThread: { alt: true, shift: true, cmdOrCtrl: false, code: "KeyD" },
-    optimizePrompt: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyO" },
-    openSummaryPanel: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyS" },
-    openPocketPanel: { alt: false, shift: false, cmdOrCtrl: true, code: "KeyP" },
-    toggleMessageNavigator: { alt: false, shift: false, cmdOrCtrl: true, code: "KeyM" },
-    closeChat: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyW" },
-    refreshPage: { alt: false, shift: false, cmdOrCtrl: true, code: "KeyR" },
-    reloadChat: { alt: false, shift: false, cmdOrCtrl: true, code: "KeyH" },
-    enterFullscreen: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyF" },
-    insertPrompt: { alt: true, shift: false, cmdOrCtrl: false, codePattern: "Digit" },
-    switchLayout: { alt: false, shift: true, cmdOrCtrl: true, codePattern: "Digit" },
-    switchPlatformTab: { alt: false, shift: false, cmdOrCtrl: true, codePattern: "Digit" }
+  schemaVersion: 2,
+  profiles: {
+    mac: {
+      sendKeyMode: "enter",
+      shortcuts: {
+        focusInput: { disabled: false, command: false, control: false, option: true, shift: false, code: "KeyK" },
+        newChat: { disabled: false, command: true, control: false, option: false, shift: false, code: "KeyN" },
+        newChatAll: { disabled: false, command: true, control: false, option: false, shift: true, code: "KeyN" },
+        deleteThread: { disabled: false, command: false, control: false, option: true, shift: true, code: "KeyD" },
+        optimizePrompt: { disabled: false, command: false, control: false, option: true, shift: false, code: "KeyO" },
+        openSummaryPanel: { disabled: false, command: false, control: false, option: true, shift: false, code: "KeyS" },
+        openPocketPanel: { disabled: false, command: true, control: false, option: false, shift: false, code: "KeyP" },
+        toggleMessageNavigator: { disabled: false, command: true, control: false, option: false, shift: false, code: "KeyM" },
+        closeChat: { disabled: false, command: false, control: false, option: true, shift: false, code: "KeyW" },
+        refreshPage: { disabled: false, command: true, control: false, option: false, shift: false, code: "KeyR" },
+        reloadChat: { disabled: false, command: true, control: false, option: false, shift: false, code: "KeyH" },
+        enterFullscreen: { disabled: false, command: false, control: false, option: true, shift: false, code: "KeyF" },
+        insertPrompt: { disabled: false, command: false, control: false, option: true, shift: false, codePattern: "Digit" },
+        switchLayout: { disabled: false, command: true, control: false, option: false, shift: true, codePattern: "Digit" },
+        switchPlatformTab: { disabled: false, command: true, control: false, option: false, shift: false, codePattern: "Digit" }
+      }
+    },
+    windows: {
+      sendKeyMode: "enter",
+      shortcuts: {
+        focusInput: { disabled: false, control: false, alt: true, shift: false, code: "KeyK" },
+        newChat: { disabled: false, control: true, alt: false, shift: false, code: "KeyN" },
+        newChatAll: { disabled: false, control: true, alt: false, shift: true, code: "KeyN" },
+        deleteThread: { disabled: false, control: false, alt: true, shift: true, code: "KeyD" },
+        optimizePrompt: { disabled: false, control: false, alt: true, shift: false, code: "KeyO" },
+        openSummaryPanel: { disabled: false, control: false, alt: true, shift: false, code: "KeyS" },
+        openPocketPanel: { disabled: false, control: true, alt: false, shift: false, code: "KeyP" },
+        toggleMessageNavigator: { disabled: false, control: true, alt: false, shift: false, code: "KeyM" },
+        closeChat: { disabled: false, control: false, alt: true, shift: false, code: "KeyW" },
+        refreshPage: { disabled: false, control: true, alt: false, shift: false, code: "KeyR" },
+        reloadChat: { disabled: false, control: true, alt: false, shift: false, code: "KeyH" },
+        enterFullscreen: { disabled: false, control: false, alt: true, shift: false, code: "KeyF" },
+        insertPrompt: { disabled: false, control: false, alt: true, shift: false, codePattern: "Digit" },
+        switchLayout: { disabled: false, control: true, alt: false, shift: true, codePattern: "Digit" },
+        switchPlatformTab: { disabled: false, control: true, alt: false, shift: false, codePattern: "Digit" }
+      }
+    }
   }
 };
 

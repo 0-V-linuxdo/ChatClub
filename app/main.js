@@ -9,12 +9,16 @@ import {
   DELETE_THREAD_POST_MESSAGE_SOURCE,
   PREFERRED_MODEL_POST_MESSAGE_SOURCE,
   SEND_TEXT_POST_MESSAGE_SOURCE,
+  SHORTCUT_TRIGGER_POST_MESSAGE_SOURCE,
   sendToIframe
 } from "../shared/post-message.js";
 import { setLanguage, t } from "../shared/i18n.js";
 import {
-  matchShortcut,
+  detectKeyboardPlatform,
   formatShortcut,
+  matchShortcut,
+  matchesSendShortcut,
+  shortcutProfile
 } from "../shared/shortcuts.js";
 import {
   createId,
@@ -471,6 +475,7 @@ const state = {
   settingsBuiltinAppDragId: "",
   settingsCustomAppDragId: "",
   settingsAppearanceTab: "workspace",
+  settingsAppearanceTopbarTab: "placeholder",
   settingsTopbarPromptPlaceholderDraft: "",
   settingsTopbarPromptPlaceholderEditingIndex: -1,
   settingsTopbarPromptPlaceholderDragIndex: "",
@@ -482,6 +487,18 @@ const state = {
   topbarEditLayoutDraft: null,
   topbarEditDragId: ""
 };
+
+const keyboardPlatform = detectKeyboardPlatform();
+
+function activeShortcutProfile() {
+  return state.shortcutConfig?.profiles?.[keyboardPlatform]
+    || shortcutProfile(state.shortcutConfig, keyboardPlatform);
+}
+
+function formatActiveShortcut(action, digitLabel = "") {
+  const shortcut = activeShortcutProfile()?.shortcuts?.[action];
+  return formatShortcut(action, shortcut, digitLabel, keyboardPlatform);
+}
 
 function svgIcon(name) {
   const iconSpec = ICONS[name];
@@ -520,7 +537,7 @@ function svgBrandNode(spec) {
 }
 
 function shortcutTooltip(label, action, digitLabel = "") {
-  const shortcut = formatShortcut(action, state.shortcutConfig?.shortcuts?.[action], digitLabel);
+  const shortcut = formatActiveShortcut(action, digitLabel);
   if (!shortcut || shortcut === "Disabled" || shortcut === "Unassigned") return label;
   return `${label} (${shortcut})`;
 }
@@ -584,7 +601,7 @@ const workspaceController = createWorkspaceController({
   svgIcon,
   compactIconButton,
   menuButton,
-  formatShortcut,
+  formatShortcut: formatActiveShortcut,
   onFrameLifecycleChange: handlePreferredModelFrameLifecycleChange,
   openCustomAppEditor: () => settingsController?.openCustomAppEditor?.()
 });
@@ -617,7 +634,7 @@ const summaryController = createSummaryController({
   rememberFaviconUrl,
   fallbackFaviconUrl,
   browserFaviconUrl,
-  formatShortcut,
+  formatShortcut: formatActiveShortcut,
   pocketPort: {
     save: pocketController.saveSummaryPreviewToPocket,
     entries: pocketController.pocketEntriesFromSummaryPreview
@@ -1503,7 +1520,7 @@ async function sendTextToFrame(iframe, app = {}, text = "", images = [], sendId 
     appName: app.name,
     inputSelector: app.inputSelector,
     sendButtonSelector: app.sendButtonSelector,
-    sendKeyMode: state.shortcutConfig?.sendKeyMode || "enter"
+    sendKeyMode: activeShortcutProfile()?.sendKeyMode || "enter"
   };
   const options = { source: SEND_TEXT_POST_MESSAGE_SOURCE };
   if (notion || promptImages.length) {
@@ -3051,7 +3068,7 @@ function handlePromptInputKeydown(event) {
     }
   }
 
-  if ((state.shortcutConfig?.sendKeyMode || "enter") === "enter" && event.key === "Enter" && !event.shiftKey) {
+  if (matchesSendShortcut(event, activeShortcutProfile()?.sendKeyMode || "enter", keyboardPlatform)) {
     event.preventDefault();
     event.stopPropagation();
     submitPromptFromComposer(inputNode);
@@ -4280,7 +4297,7 @@ function installShortcuts() {
       syncSummaryPanel();
       return;
     }
-    const matched = matchShortcut(event, state.shortcutConfig);
+    const matched = matchShortcut(event, state.shortcutConfig, keyboardPlatform);
     if (matched) {
       event.preventDefault();
       event.stopPropagation();
@@ -4316,7 +4333,11 @@ function installIframeEventBridge() {
       })();
       return;
     }
-    if (message?.source !== "chatclub" || message.type !== "request") return;
+    const genericRequest = message?.source === "chatclub";
+    const shortcutTriggerRequest = message?.source === SHORTCUT_TRIGGER_POST_MESSAGE_SOURCE;
+    if ((!genericRequest && !shortcutTriggerRequest) || message.type !== "request") return;
+    if (shortcutTriggerRequest && message.action !== "shortcutTriggered") return;
+    if (genericRequest && message.action === "shortcutTriggered") return;
     if (message.action === "getShortcutConfig") {
       event.source?.postMessage({ source: "chatclub", type: "response", id: message.id, action: message.action, data: state.shortcutConfig }, "*");
       return;
@@ -4325,7 +4346,7 @@ function installIframeEventBridge() {
       handleShortcutAction(message.data?.action, message.data?.matchObj, event.source).catch((error) => {
         console.warn("[ChatClub] Iframe shortcut action failed", error);
       });
-      event.source?.postMessage({ source: "chatclub", type: "response", id: message.id, action: message.action, data: { ok: true } }, "*");
+      event.source?.postMessage({ source: SHORTCUT_TRIGGER_POST_MESSAGE_SOURCE, type: "response", id: message.id, action: message.action, data: { ok: true } }, "*");
       return;
     }
     if (message.action === "locationChanged") {

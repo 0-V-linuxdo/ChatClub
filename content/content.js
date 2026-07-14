@@ -10,10 +10,11 @@
   const NOTION_SEND_TEXT_SOURCE = "chatclub-notion-send-text:2026.07.13.13";
   const NOTION_SEND_PROMPT_SOURCE = "chatclub-notion-send-prompt:2026.07.13.13";
   const NOTION_SEND_ACTIVATED_EVENT = "chatclub:notion-send-activated:2026.07.13.1";
-  const CONTENT_BRIDGE_VERSION = "2026.07.13.6";
+  const CONTENT_BRIDGE_VERSION = "2026.07.14.1";
   const SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.13.7";
   const DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.10.2";
   const PREFERRED_MODEL_POST_MESSAGE_SOURCE = "chatclub:preferred-model:2026.07.13.2";
+  const SHORTCUT_TRIGGER_POST_MESSAGE_SOURCE = "chatclub:shortcut-trigger:2026.07.14.1";
   const MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.08.12";
   const SUMMARY_POST_MESSAGE_SOURCE = "chatclub:summary:2026.07.08.13";
   const DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.07.03.30";
@@ -372,24 +373,52 @@
     source?.postMessage({ source: responseSource, type: "response", id, action, data, error }, "*");
   }
 
+  const SHORTCUT_CONFIG_SCHEMA_VERSION = 2;
+  const KEYBOARD_PLATFORM_MAC = "mac";
+  const KEYBOARD_PLATFORM_WINDOWS = "windows";
   const DEFAULT_SHORTCUT_CONFIG = {
-    sendKeyMode: "enter",
-    shortcuts: {
-      focusInput: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyK" },
-      newChat: { alt: false, shift: false, cmdOrCtrl: true, code: "KeyN" },
-      newChatAll: { alt: false, shift: true, cmdOrCtrl: true, code: "KeyN" },
-      deleteThread: { alt: true, shift: true, cmdOrCtrl: false, code: "KeyD" },
-      optimizePrompt: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyO" },
-      openSummaryPanel: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyS" },
-      openPocketPanel: { alt: false, shift: false, cmdOrCtrl: true, code: "KeyP" },
-      toggleMessageNavigator: { alt: false, shift: false, cmdOrCtrl: true, code: "KeyM" },
-      closeChat: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyW" },
-      refreshPage: { alt: false, shift: false, cmdOrCtrl: true, code: "KeyR" },
-      reloadChat: { alt: false, shift: false, cmdOrCtrl: true, code: "KeyH" },
-      enterFullscreen: { alt: true, shift: false, cmdOrCtrl: false, code: "KeyF" },
-      insertPrompt: { alt: true, shift: false, cmdOrCtrl: false, codePattern: "Digit" },
-      switchLayout: { alt: false, shift: true, cmdOrCtrl: true, codePattern: "Digit" },
-      switchPlatformTab: { alt: false, shift: false, cmdOrCtrl: true, codePattern: "Digit" }
+    schemaVersion: SHORTCUT_CONFIG_SCHEMA_VERSION,
+    profiles: {
+      mac: {
+        sendKeyMode: "enter",
+        shortcuts: {
+          focusInput: { disabled: false, command: false, control: false, option: true, shift: false, code: "KeyK" },
+          newChat: { disabled: false, command: true, control: false, option: false, shift: false, code: "KeyN" },
+          newChatAll: { disabled: false, command: true, control: false, option: false, shift: true, code: "KeyN" },
+          deleteThread: { disabled: false, command: false, control: false, option: true, shift: true, code: "KeyD" },
+          optimizePrompt: { disabled: false, command: false, control: false, option: true, shift: false, code: "KeyO" },
+          openSummaryPanel: { disabled: false, command: false, control: false, option: true, shift: false, code: "KeyS" },
+          openPocketPanel: { disabled: false, command: true, control: false, option: false, shift: false, code: "KeyP" },
+          toggleMessageNavigator: { disabled: false, command: true, control: false, option: false, shift: false, code: "KeyM" },
+          closeChat: { disabled: false, command: false, control: false, option: true, shift: false, code: "KeyW" },
+          refreshPage: { disabled: false, command: true, control: false, option: false, shift: false, code: "KeyR" },
+          reloadChat: { disabled: false, command: true, control: false, option: false, shift: false, code: "KeyH" },
+          enterFullscreen: { disabled: false, command: false, control: false, option: true, shift: false, code: "KeyF" },
+          insertPrompt: { disabled: false, command: false, control: false, option: true, shift: false, codePattern: "Digit" },
+          switchLayout: { disabled: false, command: true, control: false, option: false, shift: true, codePattern: "Digit" },
+          switchPlatformTab: { disabled: false, command: true, control: false, option: false, shift: false, codePattern: "Digit" }
+        }
+      },
+      windows: {
+        sendKeyMode: "enter",
+        shortcuts: {
+          focusInput: { disabled: false, control: false, alt: true, shift: false, code: "KeyK" },
+          newChat: { disabled: false, control: true, alt: false, shift: false, code: "KeyN" },
+          newChatAll: { disabled: false, control: true, alt: false, shift: true, code: "KeyN" },
+          deleteThread: { disabled: false, control: false, alt: true, shift: true, code: "KeyD" },
+          optimizePrompt: { disabled: false, control: false, alt: true, shift: false, code: "KeyO" },
+          openSummaryPanel: { disabled: false, control: false, alt: true, shift: false, code: "KeyS" },
+          openPocketPanel: { disabled: false, control: true, alt: false, shift: false, code: "KeyP" },
+          toggleMessageNavigator: { disabled: false, control: true, alt: false, shift: false, code: "KeyM" },
+          closeChat: { disabled: false, control: false, alt: true, shift: false, code: "KeyW" },
+          refreshPage: { disabled: false, control: true, alt: false, shift: false, code: "KeyR" },
+          reloadChat: { disabled: false, control: true, alt: false, shift: false, code: "KeyH" },
+          enterFullscreen: { disabled: false, control: false, alt: true, shift: false, code: "KeyF" },
+          insertPrompt: { disabled: false, control: false, alt: true, shift: false, codePattern: "Digit" },
+          switchLayout: { disabled: false, control: true, alt: false, shift: true, codePattern: "Digit" },
+          switchPlatformTab: { disabled: false, control: true, alt: false, shift: false, codePattern: "Digit" }
+        }
+      }
     }
   };
   const SHORTCUT_ACTIONS = [
@@ -410,7 +439,7 @@
     "switchPlatformTab"
   ];
   const PATTERN_ACTIONS = new Set(["insertPrompt", "switchLayout", "switchPlatformTab"]);
-  const KAGI_NATIVE_DELETE_SHORTCUT = Object.freeze({
+  const LEGACY_KAGI_CONFLICT_DELETE_THREAD_SHORTCUT = Object.freeze({
     alt: false,
     shift: true,
     cmdOrCtrl: true,
@@ -427,6 +456,7 @@
     Object.freeze({ alt: false, shift: false, cmdOrCtrl: true, code: "KeyR" }),
     Object.freeze({ alt: false, shift: true, cmdOrCtrl: true, code: "KeyR" })
   ]);
+  const ACTIVE_KEYBOARD_PLATFORM = detectKeyboardPlatform();
   let activeShortcutConfig = normalizeShortcutConfig(DEFAULT_SHORTCUT_CONFIG);
 
   function requestParent(action, data = {}, timeout = 1200) {
@@ -452,6 +482,27 @@
     return value == null ? fallback : Boolean(value);
   }
 
+  function normalizeKeyboardPlatform(platform) {
+    return String(platform || "").toLowerCase() === KEYBOARD_PLATFORM_MAC
+      ? KEYBOARD_PLATFORM_MAC
+      : KEYBOARD_PLATFORM_WINDOWS;
+  }
+
+  function detectKeyboardPlatform(navigatorLike = globalThis.navigator) {
+    const platform = [
+      navigatorLike?.userAgentData?.platform,
+      navigatorLike?.platform,
+      navigatorLike?.userAgent
+    ].filter(Boolean).join(" ");
+    return /Mac|iPhone|iPad|iPod/i.test(platform)
+      ? KEYBOARD_PLATFORM_MAC
+      : KEYBOARD_PLATFORM_WINDOWS;
+  }
+
+  function defaultShortcut(action, platform) {
+    return DEFAULT_SHORTCUT_CONFIG.profiles[normalizeKeyboardPlatform(platform)]?.shortcuts?.[action] || {};
+  }
+
   function shortcutSameFixedShape(shortcut, expected) {
     if (!shortcut || !expected) return false;
     return Boolean(shortcut.disabled) === Boolean(expected.disabled)
@@ -461,56 +512,135 @@
       && String(shortcut.code || "") === String(expected.code || "");
   }
 
-  function normalizeShortcutConfig(raw = {}) {
+  function normalizeShortcutItem(action, raw, platform) {
+    const normalizedPlatform = normalizeKeyboardPlatform(platform);
+    const base = defaultShortcut(action, normalizedPlatform);
+    const source = raw || {};
+    const modifiers = normalizedPlatform === KEYBOARD_PLATFORM_MAC
+      ? {
+        command: bool(source.command, Boolean(base.command)),
+        control: bool(source.control, Boolean(base.control)),
+        option: bool(source.option, Boolean(base.option)),
+        shift: bool(source.shift, Boolean(base.shift))
+      }
+      : {
+        control: bool(source.control, Boolean(base.control)),
+        alt: bool(source.alt, Boolean(base.alt)),
+        shift: bool(source.shift, Boolean(base.shift))
+      };
+    return PATTERN_ACTIONS.has(action)
+      ? { disabled: Boolean(source.disabled), ...modifiers, codePattern: "Digit" }
+      : { disabled: Boolean(source.disabled), ...modifiers, code: String(source.code || base.code || "") };
+  }
+
+  function normalizeShortcutProfile(raw, platform) {
     const source = raw && typeof raw === "object" ? raw : {};
+    const rawShortcuts = { ...(source.shortcuts || {}) };
+    if (rawShortcuts.openSummary && !rawShortcuts.openSummaryPanel) rawShortcuts.openSummaryPanel = rawShortcuts.openSummary;
+    const shortcuts = {};
+    for (const action of SHORTCUT_ACTIONS) {
+      shortcuts[action] = normalizeShortcutItem(action, rawShortcuts[action], platform);
+    }
+    return {
+      sendKeyMode: source.sendKeyMode === "mod-enter" ? "mod-enter" : "enter",
+      shortcuts
+    };
+  }
+
+  function legacyDefaultShortcut(action) {
+    const mac = defaultShortcut(action, KEYBOARD_PLATFORM_MAC);
+    return {
+      alt: Boolean(mac.option),
+      shift: Boolean(mac.shift),
+      cmdOrCtrl: Boolean(mac.command),
+      ...(mac.codePattern ? { codePattern: "Digit" } : { code: String(mac.code || "") })
+    };
+  }
+
+  function migrateLegacyShortcutConfig(source) {
     const rawShortcuts = { ...(source.shortcuts || {}) };
     if (rawShortcuts.openSummary && !rawShortcuts.openSummaryPanel) rawShortcuts.openSummaryPanel = rawShortcuts.openSummary;
     if (
       source.deleteThreadShortcutMigrated !== true
-      && shortcutSameFixedShape(rawShortcuts.deleteThread, KAGI_NATIVE_DELETE_SHORTCUT)
+      && shortcutSameFixedShape(rawShortcuts.deleteThread, LEGACY_KAGI_CONFLICT_DELETE_THREAD_SHORTCUT)
     ) {
-      rawShortcuts.deleteThread = DEFAULT_SHORTCUT_CONFIG.shortcuts.deleteThread;
+      rawShortcuts.deleteThread = legacyDefaultShortcut("deleteThread");
     }
     if (
       source.newChatShortcutMigrated !== true
       && shortcutSameFixedShape(rawShortcuts.newChat, LEGACY_DEFAULT_NEW_CHAT_SHORTCUT)
     ) {
-      rawShortcuts.newChat = DEFAULT_SHORTCUT_CONFIG.shortcuts.newChat;
+      rawShortcuts.newChat = legacyDefaultShortcut("newChat");
     }
     if (
       source.homeShortcutMigrated !== true
       && LEGACY_DEFAULT_RELOAD_CHAT_SHORTCUTS.some((shortcut) => shortcutSameFixedShape(rawShortcuts.reloadChat, shortcut))
     ) {
-      rawShortcuts.reloadChat = DEFAULT_SHORTCUT_CONFIG.shortcuts.reloadChat;
+      rawShortcuts.reloadChat = legacyDefaultShortcut("reloadChat");
     }
-    const shortcuts = {};
-    for (const action of SHORTCUT_ACTIONS) {
-      const base = DEFAULT_SHORTCUT_CONFIG.shortcuts[action];
-      const item = rawShortcuts[action] || {};
-      shortcuts[action] = {
-        disabled: Boolean(item.disabled),
-        cmdOrCtrl: bool(item.cmdOrCtrl, Boolean(base.cmdOrCtrl)),
-        alt: bool(item.alt, Boolean(base.alt)),
-        shift: bool(item.shift, Boolean(base.shift))
-      };
-      if (PATTERN_ACTIONS.has(action)) shortcuts[action].codePattern = "Digit";
-      else shortcuts[action].code = String(item.code || base.code || "");
+    const sendKeyMode = source.sendKeyMode === "mod-enter" ? "mod-enter" : "enter";
+    const profiles = {};
+    for (const platform of [KEYBOARD_PLATFORM_MAC, KEYBOARD_PLATFORM_WINDOWS]) {
+      const shortcuts = {};
+      for (const action of SHORTCUT_ACTIONS) {
+        const base = legacyDefaultShortcut(action);
+        const item = rawShortcuts[action] || {};
+        const common = {
+          disabled: Boolean(item.disabled),
+          shift: bool(item.shift, Boolean(base.shift))
+        };
+        const modifiers = platform === KEYBOARD_PLATFORM_MAC
+          ? {
+            command: bool(item.cmdOrCtrl, Boolean(base.cmdOrCtrl)),
+            control: false,
+            option: bool(item.alt, Boolean(base.alt))
+          }
+          : {
+            control: bool(item.cmdOrCtrl, Boolean(base.cmdOrCtrl)),
+            alt: bool(item.alt, Boolean(base.alt))
+          };
+        shortcuts[action] = PATTERN_ACTIONS.has(action) || item.codePattern === "Digit"
+          ? { ...common, ...modifiers, codePattern: "Digit" }
+          : { ...common, ...modifiers, code: String(item.code || base.code || "") };
+      }
+      profiles[platform] = normalizeShortcutProfile({ sendKeyMode, shortcuts }, platform);
     }
-    return { ...DEFAULT_SHORTCUT_CONFIG, ...source, deleteThreadShortcutMigrated: true, newChatShortcutMigrated: true, reloadChatShortcutMigrated: true, homeShortcutMigrated: true, shortcuts };
+    return { schemaVersion: SHORTCUT_CONFIG_SCHEMA_VERSION, profiles };
+  }
+
+  function normalizeShortcutConfig(raw = {}) {
+    const source = raw && typeof raw === "object" ? raw : {};
+    if (source.schemaVersion !== SHORTCUT_CONFIG_SCHEMA_VERSION || !source.profiles) {
+      return migrateLegacyShortcutConfig(source);
+    }
+    return {
+      schemaVersion: SHORTCUT_CONFIG_SCHEMA_VERSION,
+      profiles: {
+        mac: normalizeShortcutProfile(source.profiles.mac, KEYBOARD_PLATFORM_MAC),
+        windows: normalizeShortcutProfile(source.profiles.windows, KEYBOARD_PLATFORM_WINDOWS)
+      }
+    };
   }
 
   function digitMatch(code) {
-    return /^Digit([0-9])$/.exec(code || "") || /^Numpad([0-9])$/.exec(code || "");
+    return /^Digit([1-9])$/.exec(code || "") || /^Numpad([1-9])$/.exec(code || "");
   }
 
-  function matchShortcut(event, config = activeShortcutConfig) {
-    const shortcuts = normalizeShortcutConfig(config).shortcuts;
-    const cmdOrCtrl = Boolean(event.metaKey || event.ctrlKey);
+  function matchShortcut(event, config = activeShortcutConfig, platform = ACTIVE_KEYBOARD_PLATFORM) {
+    const normalizedPlatform = normalizeKeyboardPlatform(platform);
+    const shortcuts = normalizeShortcutConfig(config).profiles[normalizedPlatform].shortcuts;
     for (const action of SHORTCUT_ACTIONS) {
       const shortcut = shortcuts[action];
       if (!shortcut || shortcut.disabled) continue;
-      if (Boolean(shortcut.cmdOrCtrl) !== cmdOrCtrl) continue;
-      if (Boolean(shortcut.alt) !== Boolean(event.altKey)) continue;
+      if (normalizedPlatform === KEYBOARD_PLATFORM_MAC) {
+        if (Boolean(shortcut.command) !== Boolean(event.metaKey)) continue;
+        if (Boolean(shortcut.control) !== Boolean(event.ctrlKey)) continue;
+        if (Boolean(shortcut.option) !== Boolean(event.altKey)) continue;
+      } else {
+        if (event.metaKey) continue;
+        if (Boolean(shortcut.control) !== Boolean(event.ctrlKey)) continue;
+        if (Boolean(shortcut.alt) !== Boolean(event.altKey)) continue;
+      }
       if (Boolean(shortcut.shift) !== Boolean(event.shiftKey)) continue;
       if (PATTERN_ACTIONS.has(action)) {
         const match = digitMatch(event.code);
@@ -522,12 +652,11 @@
     return null;
   }
 
-  function eventMatchesFixedShortcut(event, shortcut) {
-    const cmdOrCtrl = Boolean(event.metaKey || event.ctrlKey);
-    return Boolean(shortcut?.cmdOrCtrl) === cmdOrCtrl
-      && Boolean(shortcut?.alt) === Boolean(event.altKey)
-      && Boolean(shortcut?.shift) === Boolean(event.shiftKey)
-      && String(shortcut?.code || "") === String(event.code || "");
+  function eventMatchesKagiNativeDeleteShortcut(event, platform = ACTIVE_KEYBOARD_PLATFORM) {
+    if (event.code !== "Backspace" || event.altKey || !event.shiftKey) return false;
+    return normalizeKeyboardPlatform(platform) === KEYBOARD_PLATFORM_MAC
+      ? Boolean(event.metaKey) && !event.ctrlKey
+      : Boolean(event.ctrlKey) && !event.metaKey;
   }
 
   async function loadShortcutConfig() {
@@ -544,7 +673,7 @@
 
   function postShortcutTriggered(match) {
     window.parent.postMessage({
-      source: SOURCE,
+      source: SHORTCUT_TRIGGER_POST_MESSAGE_SOURCE,
       type: "request",
       action: "shortcutTriggered",
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -555,7 +684,7 @@
   function shouldBridgeShortcut(match, event) {
     const action = String(match?.action || "");
     const host = String(location.hostname || "").toLowerCase();
-    if (action === "deleteThread" && host === "assistant.kagi.com" && eventMatchesFixedShortcut(event, KAGI_NATIVE_DELETE_SHORTCUT)) {
+    if (action === "deleteThread" && host === "assistant.kagi.com" && eventMatchesKagiNativeDeleteShortcut(event)) {
       return false;
     }
     return true;
@@ -7559,7 +7688,11 @@
     }
   }, true);
 
+  try { window.__CHATCLUB_SHORTCUT_BRIDGE_CLEANUP__?.(); } catch {}
+  const shortcutBridgeController = new AbortController();
+  const shortcutBridgeOptions = { capture: true, signal: shortcutBridgeController.signal };
   window.addEventListener("keydown", (event) => {
+    if (!contentBridgeIsCurrent()) return;
     if (Date.now() < suppressShortcutBridgeUntil) return;
     const matched = matchShortcut(event);
     if (!matched) return;
@@ -7567,16 +7700,22 @@
     event.preventDefault();
     event.stopPropagation();
     postShortcutTriggered(matched);
-  }, true);
+  }, shortcutBridgeOptions);
 
   loadShortcutConfig();
+  const shortcutStorageChanged = (changes, areaName) => {
+    if (!contentBridgeIsCurrent()) return;
+    if (areaName === "local" && changes.shortcutConfig) {
+      activeShortcutConfig = normalizeShortcutConfig(changes.shortcutConfig.newValue);
+    }
+  };
   try {
-    chrome.storage?.onChanged?.addListener((changes, areaName) => {
-      if (areaName === "local" && changes.shortcutConfig) {
-        activeShortcutConfig = normalizeShortcutConfig(changes.shortcutConfig.newValue);
-      }
-    });
+    chrome.storage?.onChanged?.addListener(shortcutStorageChanged);
   } catch {}
+  window.__CHATCLUB_SHORTCUT_BRIDGE_CLEANUP__ = () => {
+    shortcutBridgeController.abort();
+    try { chrome.storage?.onChanged?.removeListener(shortcutStorageChanged); } catch {}
+  };
 
   postContentReady();
 })();

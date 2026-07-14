@@ -1,10 +1,13 @@
 import { t } from "../../shared/i18n.js";
 import {
-  defaultShortcutConfig,
+  defaultShortcutProfile,
+  detectKeyboardPlatform,
   formatShortcut,
   normalizeShortcutConfig,
+  replaceShortcutProfile,
   shortcutConflictActions,
   shortcutFromKeyboardEvent,
+  shortcutProfile,
   shortcutUsesDigitPattern
 } from "../../shared/shortcuts.js";
 import { saveShortcutConfig } from "../../shared/storage.js";
@@ -47,6 +50,7 @@ const CONFIG_IO_AUTOSAVE_TIMEOUT_MS = 5000;
 
 export function createShortcutSettings(ctx) {
   const { state, svgIcon, notifyConfigReload, settingsKit } = ctx;
+  const keyboardPlatform = detectKeyboardPlatform();
   const {
     settingsActions,
     settingsBlock,
@@ -66,7 +70,7 @@ export function createShortcutSettings(ctx) {
   function queueShortcutAutoSave(config, redraw = null) {
     const next = normalizeShortcutConfig(config);
     state.shortcutDraftConfig = next;
-    const conflicts = shortcutConflictActions(next);
+    const conflicts = shortcutConflictActions(next, keyboardPlatform);
     if (conflicts.size) {
       toast(t("shortcuts.conflict"), "error");
       redraw?.();
@@ -153,7 +157,7 @@ export function createShortcutSettings(ctx) {
   }
 
   function formatShortcutDisplay(action, shortcut, slot = "") {
-    const label = formatShortcut(action, shortcut, slot);
+    const label = formatShortcut(action, shortcut, slot, keyboardPlatform);
     return label === "Disabled" ? t("common.disabled") : label;
   }
 
@@ -186,14 +190,19 @@ export function createShortcutSettings(ctx) {
     return state.shortcutDraftConfig;
   }
 
+  function shortcutDraftProfile() {
+    return shortcutProfile(shortcutDraft(), keyboardPlatform);
+  }
+
   function updateShortcutDraft(action, patch) {
     const draft = shortcutDraft();
-    state.shortcutDraftConfig = normalizeShortcutConfig({
-      ...draft,
+    const profile = shortcutProfile(draft, keyboardPlatform);
+    state.shortcutDraftConfig = replaceShortcutProfile(draft, keyboardPlatform, {
+      ...profile,
       shortcuts: {
-        ...draft.shortcuts,
+        ...profile.shortcuts,
         [action]: {
-          ...draft.shortcuts[action],
+          ...profile.shortcuts[action],
           ...patch
         }
       }
@@ -225,9 +234,13 @@ export function createShortcutSettings(ctx) {
       redraw();
       return;
     }
-    const shortcut = shortcutFromKeyboardEvent(event, action);
+    if (keyboardPlatform === "windows" && event.metaKey) {
+      toast(t("shortcuts.windowsKeyUnsupported"), "error");
+      return;
+    }
+    const shortcut = shortcutFromKeyboardEvent(event, action, keyboardPlatform);
     if (!shortcut) {
-      toast(shortcutUsesDigitPattern(action, shortcutDraft().shortcuts[action])
+      toast(shortcutUsesDigitPattern(action, shortcutDraftProfile().shortcuts[action])
         ? t("shortcuts.pressNumberKey")
         : t("shortcuts.pressNonModifierKey"), "error");
       return;
@@ -239,8 +252,7 @@ export function createShortcutSettings(ctx) {
   }
 
   function shortcutRow(action, conflicts, redraw) {
-    const draft = shortcutDraft();
-    const shortcut = draft.shortcuts[action];
+    const shortcut = shortcutDraftProfile().shortcuts[action];
     const recording = state.shortcutRecordingAction === action;
     const conflict = conflicts.has(action);
     const disabled = Boolean(shortcut?.disabled);
@@ -275,7 +287,7 @@ export function createShortcutSettings(ctx) {
         })
       ),
       settingsIconAction(t("shortcuts.reset"), "reset", () => {
-        const defaults = defaultShortcutConfig();
+        const defaults = defaultShortcutProfile(keyboardPlatform);
         const next = updateShortcutDraft(action, defaults.shortcuts[action]);
         queueShortcutAutoSave(next, redraw);
         redraw();
@@ -293,7 +305,11 @@ export function createShortcutSettings(ctx) {
   }
 
   function resetShortcutDraft(redraw) {
-    state.shortcutDraftConfig = defaultShortcutConfig();
+    state.shortcutDraftConfig = replaceShortcutProfile(
+      shortcutDraft(),
+      keyboardPlatform,
+      defaultShortcutProfile(keyboardPlatform)
+    );
     state.shortcutRecordingAction = "";
     queueShortcutAutoSave(state.shortcutDraftConfig, redraw);
     redraw();
@@ -306,22 +322,27 @@ export function createShortcutSettings(ctx) {
   }
 
   function shortcutInputSettingsBlock() {
-    const draft = shortcutDraft();
-    const sendMode = select(draft.sendKeyMode || "enter", [
+    const profile = shortcutDraftProfile();
+    const modifier = keyboardPlatform === "mac" ? "⌘" : "Ctrl";
+    const sendMode = select(profile.sendKeyMode || "enter", [
       { value: "enter", label: t("shortcuts.enterSends") },
-      { value: "mod-enter", label: t("shortcuts.modEnterSends") }
+      { value: "mod-enter", label: t("shortcuts.modEnterSends", { modifier }) }
     ]);
-    sendMode.value = draft.sendKeyMode || "enter";
+    sendMode.value = profile.sendKeyMode || "enter";
     sendMode.setAttribute("aria-label", t("shortcuts.sendKey"));
     sendMode.addEventListener("change", () => {
-      queueShortcutAutoSave({ ...shortcutDraft(), sendKeyMode: sendMode.value });
+      const draft = shortcutDraft();
+      queueShortcutAutoSave(replaceShortcutProfile(draft, keyboardPlatform, {
+        ...shortcutProfile(draft, keyboardPlatform),
+        sendKeyMode: sendMode.value
+      }));
     });
-    return settingsBlock(t("shortcuts.sendMessage"), t("shortcuts.sendMessageDesc"),
+    return settingsBlock(t("shortcuts.sendMessage"), t("shortcuts.sendMessageDesc", { modifier }),
       settingsList([t("shortcuts.action"), t("shortcuts.preview"), t("shortcuts.sendKey")], [
         el("div", { class: "ui-list-row settings-list-row shortcut-input-row" },
           el("div", { class: "shortcut-row-copy" },
             el("strong", {}, t("shortcuts.sendMessage")),
-            el("span", {}, t("shortcuts.sendMessageDesc"))
+            el("span", {}, t("shortcuts.sendMessageDesc", { modifier }))
           ),
           shortcutPreviewButton("sendMessage", false),
           sendMode
@@ -342,8 +363,9 @@ export function createShortcutSettings(ctx) {
   function shortcutsPane(redraw) {
     const active = ["global", "chat"].includes(state.shortcutSettingsTab) ? state.shortcutSettingsTab : "input";
     const draft = shortcutDraft();
-    const conflicts = shortcutConflictActions(draft);
+    const conflicts = shortcutConflictActions(draft, keyboardPlatform);
     const activeGroup = active === "chat" ? SHORTCUT_SETTING_GROUPS[1] : SHORTCUT_SETTING_GROUPS[0];
+    const platformLabel = t(keyboardPlatform === "mac" ? "shortcuts.platformMac" : "shortcuts.platformWindows");
     return el("div", { class: "settings-pane" },
       settingsInnerTabs([
         ["input", t("shortcuts.inputTab"), t("shortcuts.inputTabDesc")],
@@ -354,6 +376,7 @@ export function createShortcutSettings(ctx) {
         state.shortcutRecordingAction = "";
         redraw();
       }),
+      el("p", { class: "shortcut-info" }, t("shortcuts.platformDetected", { platform: platformLabel })),
       active === "input" ? shortcutInputSettingsBlock() : shortcutActionSettingsBlocks(activeGroup, conflicts, redraw),
       shortcutSettingsActions(redraw)
     );
