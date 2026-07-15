@@ -93,12 +93,21 @@ function frameHrefHints(iframe, payload = {}) {
 async function ensureContentBridge(iframe, payload = {}) {
   const tabId = await currentExtensionTabId();
   if (!tabId) return null;
+  const expectedFrameId = Number(iframe?.dataset?.browserFrameId);
+  const expectedBindingId = String(iframe?.dataset?.frameBindingId || "");
+  const secureTarget = /^[a-f0-9]{64}$/i.test(expectedBindingId)
+    ? {
+        expectedBindingId,
+        ...(Number.isSafeInteger(expectedFrameId) && expectedFrameId > 0 ? { expectedFrameId } : {})
+      }
+    : {};
   try {
     return await runtimeRequest({
       source: "chatclub",
       action: "ensureContentBridge",
       tabId,
-      hrefs: frameHrefHints(iframe, payload)
+      hrefs: frameHrefHints(iframe, payload),
+      ...secureTarget
     });
   } catch (error) {
     console.warn("[ChatClub] Failed to ensure iframe content bridge", error);
@@ -194,10 +203,30 @@ export function createTopicDeleteRuntime(dependencies = {}) {
   async function prepareContentBridge(iframe, payload = {}) {
     if (await pingContentBridge(iframe, 900)) return { ok: true };
     const installed = await ensureContentBridge(iframe, payload);
-    await sleep(180);
-    if (await pingContentBridge(iframe, 1400)) return { ok: true, installed };
     const installError = installed?.error
       || (Array.isArray(installed?.errors) && installed.errors.length ? installed.errors.join("; ") : "");
+    const injectedFiles = Array.isArray(installed?.injectedFiles) ? installed.injectedFiles : [];
+    const expectedFiles = new Set([
+      "content/preload.js",
+      "content/grok-cookie-bridge.js",
+      "content/message-navigator.js",
+      "content/content.js"
+    ]);
+    const injectedNames = injectedFiles.map((entry) => String(entry || "").split("@")[0]);
+    const injectionComplete = Number(installed?.injected) === expectedFiles.size
+      && injectedFiles.length === expectedFiles.size
+      && new Set(injectedFiles).size === expectedFiles.size
+      && injectedNames.every((file) => expectedFiles.has(file))
+      && [...expectedFiles].every((file) => injectedNames.includes(file));
+    if (installError || !injectionComplete) {
+      return {
+        ok: false,
+        reason: `iframe content bridge injection failed: ${installError || "incomplete injected file inventory"}`,
+        installed
+      };
+    }
+    await sleep(180);
+    if (await pingContentBridge(iframe, 1400)) return { ok: true, installed };
     return {
       ok: false,
       reason: installError

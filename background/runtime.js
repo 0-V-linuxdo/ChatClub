@@ -35,8 +35,10 @@ import {
   executeVerifiedPackagedFrameFile,
   verifiedCustomUserscriptTarget
 } from "./frame-injection.js";
+import { createAuthenticatedFrameRelay } from "./frame-relay.js";
 import {
   injectContentBridge,
+  relayContentFrameBinding,
   registerContentScripts
 } from "./content-registration.js";
 import {
@@ -60,6 +62,16 @@ const FRAME_CONTEXT_MAX_ENTRIES = 512;
 const secureFrameContexts = new Map();
 const secureFrameCommands = new Set(Object.keys(FRAME_COMMAND_SPECS));
 const shortcutActions = new Set(ALL_SHORTCUT_ACTIONS);
+const authenticatedFrameRelay = createAuthenticatedFrameRelay({
+  registeredSenderContext,
+  sendRuntimeMessage: (message) => chrome.runtime.sendMessage(message),
+  relaySource: EXTENSION_RUNTIME_RELAY_SOURCE,
+  shortcutActions,
+  rememberContext(token, context) {
+    secureFrameContexts.set(token, context);
+    persistSecureFrameContexts();
+  }
+});
 let secureFrameContextsHydration = null;
 let secureFrameContextsWriteChain = Promise.resolve();
 let grokCookieBridgeChain = Promise.resolve();
@@ -71,6 +83,11 @@ const GROK_FRAME_PREFLIGHT_MAX_AGE_MS = 60 * 1000;
 function frameContextToken(value) {
   const token = String(value || "").trim();
   return /^[a-z0-9][a-z0-9._:-]{8,191}$/i.test(token) ? token : "";
+}
+
+function frameBindingToken(value) {
+  const token = String(value || "").trim();
+  return /^[a-f0-9]{64}$/i.test(token) ? token : "";
 }
 
 function pruneSecureFrameContexts(now = Date.now()) {
@@ -102,7 +119,7 @@ function hydrateSecureFrameContexts() {
         for (const [rawToken, context] of Object.entries(entries)) {
           const token = frameContextToken(rawToken);
           if (!token || !context || typeof context !== "object") continue;
-          secureFrameContexts.set(token, context);
+          secureFrameContexts.set(token, { ...context, browserDocumentId: String(context.browserDocumentId || context.documentId || ""), legacyDocumentId: String(context.legacyDocumentId || "") });
         }
       }
     } catch (error) {
@@ -125,13 +142,14 @@ function persistSecureFrameContexts() {
 
 async function registerSecureFrameContext(message = {}, sender = {}) {
   const token = frameContextToken(message.bridgeDocumentId);
+  const frameBindingId = frameBindingToken(message.frameBindingId);
   const secureToken = /^[a-f0-9]{32,128}$/i.test(String(message.secureFrameToken || ""))
     ? String(message.secureFrameToken)
     : "";
   const tabId = sender?.tab?.id;
   const frameId = sender?.frameId;
   const senderUrl = String(sender?.url || "").trim();
-  if (!token || !secureToken || !Number.isInteger(tabId) || !Number.isInteger(frameId) || frameId <= 0 || !/^https?:\/\//i.test(senderUrl)) {
+  if (!token || !secureToken || !frameBindingId || !Number.isInteger(tabId) || !Number.isInteger(frameId) || frameId <= 0 || !/^https?:\/\//i.test(senderUrl)) {
     throw new Error("Secure frame registration is invalid");
   }
   if (!String(sender?.tab?.url || "").startsWith(chrome.runtime.getURL(""))) {
@@ -143,9 +161,13 @@ async function registerSecureFrameContext(message = {}, sender = {}) {
   }
   const senderDocumentId = String(sender?.documentId || "").trim();
   const navigationDocumentId = String(frame.documentId || "").trim();
+  const legacyDocumentId = /^legacy:[a-f0-9]{64}$/i.test(String(message.browserDocumentId || "")) ? String(message.browserDocumentId) : "";
   if (senderDocumentId && navigationDocumentId && senderDocumentId !== navigationDocumentId) {
     throw new Error("Secure frame registration document changed");
   }
+  const documentId = senderDocumentId || navigationDocumentId;
+  const browserDocumentId = documentId || legacyDocumentId;
+  if (!browserDocumentId) throw new Error("Secure frame registration browser document is unavailable");
   await hydrateSecureFrameContexts();
   for (const [existingToken, context] of secureFrameContexts) {
     if (context?.tabId === tabId && context?.frameId === frameId && existingToken !== token) {
@@ -155,8 +177,11 @@ async function registerSecureFrameContext(message = {}, sender = {}) {
   const context = {
     tabId,
     frameId,
-    documentId: senderDocumentId || navigationDocumentId,
+    documentId,
+    browserDocumentId,
+    legacyDocumentId,
     url: senderUrl,
+    frameBindingId,
     secureToken,
     bridgeVersion: String(message.bridgeVersion || ""),
     registeredAt: Date.now()
@@ -545,72 +570,37 @@ async function verifySecureFrameContext(message = {}, sender = {}) {
   return {
     href: String(response.data.href || context.url || ""),
     title: String(response.data.title || ""),
-    bridgeVersion: String(context.bridgeVersion || "")
+    bridgeVersion: String(context.bridgeVersion || ""),
+    frameId: context.frameId,
+    frameBindingId: String(context.frameBindingId || ""),
+    browserDocumentId: String(context.browserDocumentId || context.documentId || "")
   };
 }
 
 async function registeredSenderContext(message = {}, sender = {}) {
   const token = frameContextToken(message.bridgeDocumentId);
+  const frameBindingId = frameBindingToken(message.frameBindingId);
   const context = await secureFrameContext(token);
   if (!context || context.tabId !== sender?.tab?.id || context.frameId !== sender?.frameId) {
     throw new Error("Runtime relay sender is not the registered frame document");
   }
-  if (context.documentId && sender?.documentId && context.documentId !== sender.documentId) {
-    throw new Error("Runtime relay sender document changed");
+  const senderDocumentId = String(sender?.documentId || "").trim();
+  const contextDocumentId = String(context.documentId || "").trim();
+  const contextBrowserDocumentId = String(context.browserDocumentId || contextDocumentId).trim();
+  const contextLegacyDocumentId = String(context.legacyDocumentId || "").trim();
+  const claimedBrowserDocumentId = String(message.browserDocumentId || "").trim();
+  if (contextDocumentId && senderDocumentId && contextDocumentId !== senderDocumentId) throw new Error("Runtime relay sender document changed");
+  const browserDocumentMatches = senderDocumentId
+    ? senderDocumentId === contextBrowserDocumentId
+    : claimedBrowserDocumentId === contextBrowserDocumentId
+      || (/^legacy:[a-f0-9]{64}$/i.test(claimedBrowserDocumentId) && claimedBrowserDocumentId === contextLegacyDocumentId);
+  if (!contextBrowserDocumentId || !browserDocumentMatches) {
+    throw new Error("Runtime relay browser document changed");
+  }
+  if (!frameBindingId || frameBindingId !== context.frameBindingId) {
+    throw new Error("Runtime relay frame binding changed");
   }
   return { token, context };
-}
-
-async function relayShortcutTriggered(message = {}, sender = {}) {
-  const action = String(message.shortcutAction || "");
-  const { token, context } = await registeredSenderContext(message, sender);
-  if (!shortcutActions.has(action)) throw new Error(`Unknown shortcut action: ${action}`);
-  const digit = /^([1-9])$/.exec(String(message.matchObj?.digit || ""))?.[1];
-  await chrome.runtime.sendMessage({
-    source: EXTENSION_RUNTIME_RELAY_SOURCE,
-    action: "shortcutTriggered",
-    shortcutAction: action,
-    matchObj: digit ? { digit } : {},
-    senderContext: {
-      tabId: context.tabId,
-      frameId: context.frameId,
-      documentId: context.documentId,
-      bridgeDocumentId: token,
-      url: context.url
-    }
-  });
-}
-
-async function relayFrameLifecycle(message = {}, sender = {}) {
-  const action = String(message.lifecycleAction || "");
-  if (!new Set(["locationChanged", "contentUnloading"]).has(action)) {
-    throw new Error(`Unknown frame lifecycle action: ${action}`);
-  }
-  const { token, context } = await registeredSenderContext(message, sender);
-  const data = message.data && typeof message.data === "object" ? message.data : {};
-  if (action === "locationChanged" && /^https?:\/\//i.test(String(data.href || ""))) {
-    context.url = String(data.href);
-    context.registeredAt = Date.now();
-    secureFrameContexts.set(token, context);
-    persistSecureFrameContexts();
-  }
-  await chrome.runtime.sendMessage({
-    source: EXTENSION_RUNTIME_RELAY_SOURCE,
-    action: "frameLifecycle",
-    lifecycleAction: action,
-    senderContext: {
-      tabId: context.tabId,
-      frameId: context.frameId,
-      documentId: context.documentId,
-      bridgeDocumentId: token,
-      url: context.url
-    },
-    data: {
-      ...data,
-      documentId: token,
-      bridgeVersion: context.bridgeVersion
-    }
-  });
 }
 
 function safeTopicDeleteUserscriptFile(file) {
@@ -957,11 +947,12 @@ async function dispatchTrustedKeySequence(message = {}, sender = {}) {
 
 async function ensureContentBridge(message = {}, sender = {}) {
   const tabId = await verifiedExtensionTabId({ appTabId: message.tabId }, sender);
-  return injectContentBridge(chrome, tabId, {
-    hrefs: Array.isArray(message.hrefs) ? message.hrefs : [],
-    hosts: Array.isArray(message.hosts) ? message.hosts : [],
-    features: Array.isArray(message.features) ? message.features : []
-  });
+  return injectContentBridge(chrome, tabId, message);
+}
+
+async function requestContentFrameBinding(message = {}, sender = {}) {
+  const tabId = await verifiedExtensionTabId({ appTabId: message.tabId }, sender);
+  return relayContentFrameBinding(chrome, tabId, message);
 }
 
 async function installTopicDeleteUserscript(config = {}, sender = {}) {
@@ -1065,7 +1056,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     if (message.action === "registerFrameContext") {
       const context = await registerSecureFrameContext(message, sender);
-      sendResponse({ success: true, documentId: context.documentId, frameId: context.frameId });
+      sendResponse({ success: true, documentId: context.documentId, browserDocumentId: context.browserDocumentId, frameId: context.frameId });
       return;
     }
     if (message.action === "sendFrameCommand") {
@@ -1079,12 +1070,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return;
     }
     if (message.action === "relayShortcutTriggered") {
-      await relayShortcutTriggered(message, sender);
+      await authenticatedFrameRelay.shortcutTriggered(message, sender);
+      sendResponse({ success: true });
+      return;
+    }
+    if (message.action === "relayFrameBinding") {
+      await authenticatedFrameRelay.frameBinding(message, sender);
       sendResponse({ success: true });
       return;
     }
     if (message.action === "relayFrameLifecycle") {
-      await relayFrameLifecycle(message, sender);
+      await authenticatedFrameRelay.frameLifecycle(message, sender);
       sendResponse({ success: true });
       return;
     }
@@ -1156,6 +1152,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     if (message.action === "ensureContentBridge") {
       const result = await ensureContentBridge(message, sender);
+      sendResponse({ success: true, ...result });
+      return;
+    }
+    if (message.action === "requestFrameBinding") {
+      const result = await requestContentFrameBinding(message, sender);
       sendResponse({ success: true, ...result });
       return;
     }

@@ -6,6 +6,7 @@ const os = require("node:os");
 const path = require("node:path");
 const {
   CONTENT_ENTRIES,
+  FIREFOX_CONTENT_FALLBACK_OUTPUT,
   TOPIC_DELETE_OUTPUTS,
   GENERATED_ARTIFACT_FILES,
   unexpectedGeneratedArtifacts,
@@ -14,7 +15,8 @@ const {
 
 assert.equal(Object.keys(CONTENT_ENTRIES).length, 6);
 assert.equal(Object.keys(TOPIC_DELETE_OUTPUTS).length, 7);
-assert.equal(GENERATED_ARTIFACT_FILES.length, 13);
+assert.equal(FIREFOX_CONTENT_FALLBACK_OUTPUT, "background/firefox-content-fallbacks.generated.js");
+assert.equal(GENERATED_ARTIFACT_FILES.length, 14);
 
 const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "chatclub-generated-inventory-"));
 try {

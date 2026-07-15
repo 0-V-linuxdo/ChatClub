@@ -7,17 +7,18 @@ export const NOTION_SEND_PROMPT_SOURCE = "chatclub-notion-send-prompt:2026.07.15
 export const NOTION_SEND_TEXT_EVENT = "chatclub:notion-send-text:2026.07.15.2";
 export const NOTION_SEND_PROMPT_EVENT = "chatclub:notion-send-prompt:2026.07.15.2";
 export const NOTION_SEND_ACTIVATED_EVENT = "chatclub:notion-send-activated:2026.07.15.2";
-export const SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.15.8";
-export const DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.15.8";
-export const MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.15.8";
-export const SUMMARY_POST_MESSAGE_SOURCE = "chatclub:summary:2026.07.15.8";
-export const PREFERRED_MODEL_POST_MESSAGE_SOURCE = "chatclub:preferred-model:2026.07.15.8";
-export const CONTENT_BRIDGE_VERSION = "2026.07.15.8";
+export const SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.16.1";
+export const DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.16.1";
+export const MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.16.1";
+export const SUMMARY_POST_MESSAGE_SOURCE = "chatclub:summary:2026.07.16.1";
+export const PREFERRED_MODEL_POST_MESSAGE_SOURCE = "chatclub:preferred-model:2026.07.16.1";
+export const CONTENT_BRIDGE_VERSION = "2026.07.16.1";
 export const GROK_COOKIE_BRIDGE_VERSION = "2026.07.15.1";
-export const EXTENSION_RUNTIME_RELAY_SOURCE = "chatclub:runtime-relay:2026.07.15.8";
-export const SECURE_FRAME_COMMAND_SOURCE = "chatclub:frame-command:2026.07.15.8";
+export const EXTENSION_RUNTIME_RELAY_SOURCE = "chatclub:runtime-relay:2026.07.16.1";
+export const FRAME_BINDING_POST_MESSAGE_SOURCE = `chatclub:frame-binding:${CONTENT_BRIDGE_VERSION}`;
+export const SECURE_FRAME_COMMAND_SOURCE = "chatclub:frame-command:2026.07.16.1";
 export const DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.07.15.1";
-export const PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.15.8";
+export const PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.16.1";
 export const RUNTIME_REGISTRY_ABI_VERSION = 1;
 export const RUNTIME_REGISTRY_KEY = `__CHATCLUB_RUNTIME_REGISTRY_V${RUNTIME_REGISTRY_ABI_VERSION}__`;
 export const NAVIGATION_FOCUS_GUARD_RUNTIME = "navigation-focus-guard";
@@ -48,6 +49,7 @@ export const CONTENT_PROTOCOL = Object.freeze({
   PREFERRED_MODEL_POST_MESSAGE_SOURCE,
   CONTENT_BRIDGE_VERSION,
   EXTENSION_RUNTIME_RELAY_SOURCE,
+  FRAME_BINDING_POST_MESSAGE_SOURCE,
   SECURE_FRAME_COMMAND_SOURCE,
   DEEPSEEK_DELETE_SOURCE,
   PAGE_SUMMARY_SOURCE,

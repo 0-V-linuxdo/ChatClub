@@ -24,8 +24,8 @@ jobs:
       - run: npm ci
       - run: npm run ci
 
-  browser-smoke:
-    name: Browser smoke
+  browser-smoke-chromium:
+    name: Browser smoke / Chromium
     needs: static
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -37,9 +37,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Install exact Playwright Chromium target and system dependencies
-        run: |
-          npx playwright install --with-deps chromium
-          npx playwright install-deps firefox
+        run: npx playwright install --with-deps chromium
       - name: Current Playwright Chromium persistent-context extension smoke
         env:
           EXPECTED_CHROMIUM_MAJOR: "149"
@@ -61,6 +59,21 @@ jobs:
           CHROMIUM_BINARY: ${{ runner.temp }}/chrome-for-testing-120.0.6099.109/chrome-linux64/chrome
           EXPECTED_CHROMIUM_MAJOR: "120"
         run: npm run smoke:chromium
+
+  browser-smoke-firefox-136:
+    name: Browser smoke / Firefox 136
+    needs: static
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Install Firefox system dependencies
+        run: npx playwright install-deps firefox
       - name: Download Firefox 136
         run: |
           mkdir -p "$RUNNER_TEMP/firefox-136"
@@ -71,6 +84,21 @@ jobs:
           FIREFOX_BINARY: ${{ runner.temp }}/firefox-136/firefox
           EXPECTED_FIREFOX_MAJOR: "136"
         run: npm run smoke:firefox
+
+  browser-smoke-firefox-nightly:
+    name: Browser smoke / Firefox Nightly
+    needs: static
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Install Firefox system dependencies
+        run: npx playwright install-deps firefox
       - name: Download latest Firefox Nightly
         run: |
           mkdir -p "$RUNNER_TEMP/firefox-nightly"
@@ -83,7 +111,7 @@ jobs:
 
   package:
     name: Package verified browser targets
-    needs: [static, browser-smoke]
+    needs: [static, browser-smoke-chromium, browser-smoke-firefox-136, browser-smoke-firefox-nightly]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

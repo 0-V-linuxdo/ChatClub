@@ -15,6 +15,7 @@ const summary = read("app/summary/controller.js");
 const background = [
   "background/service-worker.js",
   "background/runtime.js",
+  "background/frame-relay.js",
   "background/content-registration.js"
 ].map(read).join("\n");
 const content = read("content/content.js");
@@ -95,24 +96,46 @@ function createApplyFixture(options = {}) {
 
 function createSummaryPrepareFixture(options = {}) {
   const calls = { verify: 0, wait: 0, install: 0, probe: 0, remember: 0 };
-  const registration = options.registration || {
+  const registration = {
+    browserDocumentId: options.registration?.browserDocumentId ?? "browser-document-9",
     documentId: "doc-current",
-    bridgeVersion: "bridge-current"
+    bridgeVersion: "bridge-current",
+    ...(options.registration || {})
   };
   const confirmedRegistration = options.confirmedRegistration === undefined
     ? registration
-    : options.confirmedRegistration;
+    : (options.confirmedRegistration
+      ? { browserDocumentId: "browser-document-9", ...options.confirmedRegistration }
+      : options.confirmedRegistration);
   const iframe = {
     isConnected: true,
-    dataset: { ...(options.dataset || {}) }
+    dataset: {
+      browserFrameId: "9",
+      frameBindingId: "f".repeat(64),
+      ...(options.dataset || {})
+    }
   };
   const context = vm.createContext({
     Boolean,
     Error,
     Number,
+    Set,
     String,
+    CORE_BRIDGE_FILE_NAMES: [
+      "content/preload.js",
+      "content/grok-cookie-bridge.js",
+      "content/message-navigator.js",
+      "content/content.js"
+    ],
+    SUMMARY_BRIDGE_FILE_NAMES: [
+      "content/summary-userscripts-main.js",
+      "content/summary-userscripts.js"
+    ],
     CONTENT_BRIDGE_VERSION: "bridge-current",
     calls,
+    frameBindingChallenges: {
+      issue: () => ({ challenge: "a".repeat(64), generation: 1 })
+    },
     iframe
   });
   context.verifiedCurrentContentFrameRegistration = async () => {
@@ -121,10 +144,31 @@ function createSummaryPrepareFixture(options = {}) {
   };
   context.currentExtensionTabId = async () => 7;
   context.contentFrameHrefHints = () => ["https://example.com/chat/current"];
-  context.contentFramePreparationError = () => "";
+  context.contentFramePreparationError = (result) => (result?.errors || []).join("; ");
   context.runtimeRequest = async () => {
     calls.install += 1;
-    return { errors: options.installErrors || [] };
+    return {
+      errors: options.installErrors || [],
+      injected: options.injected ?? 6,
+      ...(options.omitInjectedFiles ? {} : {
+        injectedFiles: options.injectedFiles ?? [
+          "content/preload.js@9",
+          "content/summary-userscripts-main.js@9",
+          "content/summary-userscripts.js@9",
+          "content/grok-cookie-bridge.js@9",
+          "content/message-navigator.js@9",
+          "content/content.js@9"
+        ]
+      }),
+      bindingRelayed: options.bindingRelayed ?? true,
+      ...(options.omitBrowserDocumentId ? {} : {
+        browserDocumentId: options.installedBrowserDocumentId ?? "browser-document-9"
+      })
+    };
+  };
+  context.requestFrameBinding = () => {
+    context.bindingRequests = (context.bindingRequests || 0) + 1;
+    return Promise.resolve(true);
   };
   context.waitForCurrentContentFrameRegistration = async () => {
     calls.wait += 1;
@@ -239,6 +283,41 @@ function createSummaryPrepareFixture(options = {}) {
     assert.deepEqual(fixture.calls, { verify: 2, wait: 1, install: 1, probe: 1, remember: 1 });
   }
 
+  {
+    const fixture = createSummaryPrepareFixture({
+      dataset: { browserFrameId: "" },
+      bindingRelayed: false
+    });
+    const result = await fixture.prepare(fixture.iframe, { summary: true });
+    assert.equal(result.ok, true, "Chromium must bind through the targeted parent WindowProxy challenge when runtime.getFrameId is unavailable");
+    assert.equal(fixture.bindingRequests, 1);
+  }
+
+  for (const failedInstall of [
+    { label: "reported partial injection error", installErrors: ["content/preload.js failed"] },
+    { label: "short injection count", injected: 5 },
+    { label: "missing injection inventory", injectedFiles: undefined, omitInjectedFiles: true },
+    { label: "missing browser document identity", omitBrowserDocumentId: true },
+    { label: "missing authenticated binding relay", bindingRelayed: false }
+  ]) {
+    const fixture = createSummaryPrepareFixture(failedInstall);
+    const result = await fixture.prepare(fixture.iframe, { summary: true });
+    assert.equal(result.ok, false, failedInstall.label);
+    assert.equal(fixture.calls.wait, 0, `${failedInstall.label} must fail before trusting content registration`);
+    assert.equal(fixture.calls.probe, 0, failedInstall.label);
+  }
+
+  {
+    const fixture = createSummaryPrepareFixture({
+      registration: { browserDocumentId: "browser-document-new" },
+      installedBrowserDocumentId: "browser-document-old"
+    });
+    const result = await fixture.prepare(fixture.iframe, { summary: true });
+    assert.equal(result.ok, false, "registration from another browser document must be rejected");
+    assert.match(result.reason, /browser document changed/);
+    assert.equal(fixture.calls.probe, 0, "browser-document mismatch must fail before issuing frame commands");
+  }
+
   for (const { label, state } of [
     {
       label: "stale document",
@@ -342,7 +421,20 @@ function createSummaryPrepareFixture(options = {}) {
     assert.equal(fixture.iframe.dataset.summaryRuntimeBridgeVersion, "bridge-current");
   }
 
-  assert.match(frameBridge, /announcedBridgeVersion === CONTENT_BRIDGE_VERSION/);
+  assert.doesNotMatch(frameBridge, /function installIframeEventBridge|contentReady/);
+  const bindingRequestSource = functionSource(frameBridge, "requestFrameBinding");
+  assert.match(bindingRequestSource, /action: "requestFrameBinding"/);
+  assert.match(bindingRequestSource, /expectedFrameId/);
+  assert.match(bindingRequestSource, /expectedBindingId/);
+  assert.match(bindingRequestSource, /if \(!exactFrameTarget\.expectedFrameId\)/);
+  assert.match(bindingRequestSource, /contentWindow\?\.postMessage/);
+  assert.match(bindingRequestSource, /action: "requestFrameBinding"/);
+  const authenticatedBindingSource = functionSource(frameBridge, "acceptAuthenticatedFrameBinding", true);
+  assert.match(authenticatedBindingSource, /context\.tabId !== tabId/);
+  assert.match(authenticatedBindingSource, /frameBindingChallenges\.claim\(message\.challenge, message\.generation\)/);
+  assert.match(authenticatedBindingSource, /verifyContentFrameRegistration\(documentId\)/);
+  assert.match(authenticatedBindingSource, /frameBindingChallenges\.isCurrent\(entry\)/);
+  assert.match(authenticatedBindingSource, /context\.frameId !== expectedFrameId/);
   assert.match(frameBridge, /scheduleContentFrameRepair\(iframe, 120\)/);
   const repairSource = functionSource(frameBridge, "scheduleContentFrameRepair");
   assert.match(repairSource, /CONTENT_FRAME_REPAIR_RETRY_DELAYS\[retryIndex\]/);
@@ -350,13 +442,28 @@ function createSummaryPrepareFixture(options = {}) {
   assert.match(repairSource, /scheduleContentFrameRepair\(iframe, nextDelay, retryIndex \+ 1, repairGeneration\)/);
   const iframeLoadSource = functionSource(frameBridge, "installPreferredModelIframeLoadHandler");
   assert.match(iframeLoadSource, /scheduleContentFrameRepair\(iframe, 120\)/);
+  assert.ok(
+    iframeLoadSource.indexOf("frameBindingChallenges.invalidate(iframe)")
+      < iframeLoadSource.indexOf("delete iframe.dataset.injectedBrowserDocumentId"),
+    "iframe navigation must invalidate the old challenge before clearing its injected browser document"
+  );
   const initialFrameSource = functionSource(workspace, "setFrameSrcAfterPrepare");
   const assignedStart = initialFrameSource.indexOf("assigned = true");
   const setSrcStart = initialFrameSource.indexOf("const setSrc", assignedStart);
   const realSrcAssignment = initialFrameSource.indexOf('iframe.setAttribute("src", url)', setSrcStart);
+  const browserFrameIdCapture = initialFrameSource.indexOf("rememberBrowserFrameId(iframe)", setSrcStart);
   assert.ok(
     assignedStart >= 0 && setSrcStart > assignedStart && realSrcAssignment > setSrcStart,
     "setFrameSrcAfterPrepare must retain the guarded real-URL assignment"
+  );
+  assert.ok(
+    browserFrameIdCapture > setSrcStart && browserFrameIdCapture < realSrcAssignment,
+    "the stable browser frame id must be captured from about:blank before cross-origin navigation"
+  );
+  const completeLoadingSource = functionSource(workspace, "completeFrameLoading");
+  assert.ok(
+    completeLoadingSource.indexOf("rememberBrowserFrameId(iframe)") < completeLoadingSource.indexOf("frameLoadPending"),
+    "the about:blank load must retry frame-id capture before its pending edge is suppressed"
   );
   assert.doesNotMatch(
     initialFrameSource.slice(assignedStart, setSrcStart),
@@ -409,6 +516,11 @@ function createSummaryPrepareFixture(options = {}) {
   assert.match(background, /frame\.parentFrameId === 0/);
   assert.doesNotMatch(functionSource(background, "ensureContentBridge", true), /allFrames/);
   assert.match(background, /SUMMARY_BRIDGE_FILES/);
+  assert.match(background, /createAuthenticatedFrameRelay\(\{[\s\S]*?registeredSenderContext/);
+  assert.match(background, /async function frameBinding[\s\S]*?authenticate\(message, sender\)/);
+  assert.match(content, /FRAME_BINDING_POST_MESSAGE_SOURCE/);
+  assert.match(content, /expectedBindingId/);
+  assert.match(content, /event\.source !== window\.parent/);
   assert.match(background, /no matching direct child iframe found for the requested target/);
 
   console.log("content bridge recovery: ok");

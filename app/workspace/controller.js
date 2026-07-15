@@ -1,5 +1,5 @@
 import { t } from "../../shared/i18n.js";
-import { currentExtensionTabId, runtimeRequest } from "../../shared/extension-api.js";
+import { currentExtensionTabId, runtimeFrameId, runtimeRequest } from "../../shared/extension-api.js";
 import { TAB_GROUP_HEADER_BUTTONS } from "../../shared/constants.js";
 import { normalizeTabGroupButtonOrder, normalizeTabGroupButtonPlacement } from "../../shared/storage-schema.js";
 import { findMessageNavigatorSiteConfig } from "../../shared/message-navigator-sites.js";
@@ -503,12 +503,19 @@ export function createWorkspaceController(ctx = {}) {
     return CHAT_FRAME_ALLOW_FEATURES.map((feature) => `${feature} *`).join("; ");
   }
 
-  function chatFrameName(app) {
+  function createFrameBindingId() {
+    const bytes = new Uint8Array(32);
+    globalThis.crypto.getRandomValues(bytes);
+    return Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
+  }
+
+  function chatFrameName(app, frameBindingId = "") {
     const params = new URLSearchParams();
     params.set("chatclub_webview", "");
     params.set("ua", globalThis.navigator?.userAgent || "");
     params.set("ssc", "1");
     if (app?.id) params.set("app", app.id);
+    if (frameBindingId) params.set("chatclub_frame_binding", frameBindingId);
     return params.toString();
   }
 
@@ -597,8 +604,20 @@ export function createWorkspaceController(ctx = {}) {
     return true;
   }
 
+  function rememberBrowserFrameId(iframe) {
+    if (!(iframe instanceof HTMLIFrameElement)) return null;
+    const remembered = Number(iframe.dataset.browserFrameId);
+    if (Number.isSafeInteger(remembered) && remembered > 0) return remembered;
+    let targetWindow = null;
+    try { targetWindow = iframe.contentWindow; } catch {}
+    const frameId = runtimeFrameId(targetWindow);
+    if (frameId) iframe.dataset.browserFrameId = String(frameId);
+    return frameId;
+  }
+
   function completeFrameLoading(iframe) {
     if (!(iframe instanceof HTMLIFrameElement)) return;
+    rememberBrowserFrameId(iframe);
     if (iframe.dataset.frameLoadPending === "1") return;
     setFrameLoading(iframe, false);
   }
@@ -730,6 +749,7 @@ export function createWorkspaceController(ctx = {}) {
       assigned = true;
       const setSrc = (preflight = {}) => {
         if (!frameNavigationIsCurrent(iframe, generation)) return;
+        rememberBrowserFrameId(iframe);
         const expiresAt = Date.now() + NAVIGATION_FOCUS_GUARD_LEASE_MS;
         if (guard && document.activeElement === document.querySelector(".prompt-input")) {
           maintainFrameNavigationFocusGuard(iframe, generation, expiresAt, preflight);
@@ -1206,8 +1226,11 @@ export function createWorkspaceController(ctx = {}) {
 
   function iframeForWindow(sourceWindow) {
     if (!sourceWindow) return null;
+    if (sourceWindow instanceof HTMLIFrameElement && sourceWindow.classList.contains("chat-frame")) return sourceWindow;
     for (const iframe of document.querySelectorAll(".chat-frame")) {
-      if (iframe.contentWindow === sourceWindow) return iframe;
+      try {
+        if (iframe.contentWindow === sourceWindow) return iframe;
+      } catch {}
     }
     return null;
   }
@@ -1306,8 +1329,8 @@ export function createWorkspaceController(ctx = {}) {
     });
   }
 
-  async function syncFrameFavicon(sourceWindow) {
-    const iframe = iframeForWindow(sourceWindow);
+  async function syncFrameFavicon(frameOrWindow) {
+    const iframe = iframeForWindow(frameOrWindow);
     if (!iframe) return;
     const instanceId = iframe.dataset.instanceId || "";
     if (!instanceId) return;
@@ -1827,14 +1850,15 @@ export function createWorkspaceController(ctx = {}) {
     const app = appById(chat.appId);
     const initialHref = openableTabUrl(chat.initialHref || "");
     if (initialHref) delete chat.initialHref;
-    const dataset = { instanceId: chat.instanceId, appId: app.id };
+    const frameBindingId = createFrameBindingId();
+    const dataset = { instanceId: chat.instanceId, appId: app.id, frameBindingId };
     if (initialHref) dataset.currentHref = initialHref;
     const attrs = {
       class: `chat-frame ${chat.instanceId === (state.activeTabs[group.id] || group.chatApps[0]?.instanceId) ? "active" : ""}`,
       dataset,
       allow: chatFrameAllow(),
       referrerpolicy: "no-referrer",
-      name: chatFrameName(app),
+      name: chatFrameName(app, frameBindingId),
       onload: (event) => completeFrameLoading(event.currentTarget)
     };
     if (chatFrameNeedsSandbox(app)) attrs.sandbox = chatFrameSandbox(app);

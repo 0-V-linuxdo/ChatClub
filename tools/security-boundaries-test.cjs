@@ -40,6 +40,7 @@ const dataModule = (source) => import(`data:text/javascript;base64,${Buffer.from
   const background = [
     "background/service-worker.js",
     "background/runtime.js",
+    "background/frame-relay.js",
     "background/content-registration.js",
     "background/frame-injection.js",
     "background/tab-runtime.js"
@@ -56,7 +57,7 @@ const dataModule = (source) => import(`data:text/javascript;base64,${Buffer.from
   const commandDispatcher = read("content-src/shared/command-dispatcher.js");
   const secureFrameRpc = read("content-src/shared/secure-frame-rpc.js");
   const preloadEntry = read("content-src/preload.js");
-  assert.match(content, /event\.source !== window\.parent \|\| event\.origin !== EXTENSION_ORIGIN/);
+  assert.match(content, /if \(!EXTENSION_ORIGIN \|\| event\.source !== window\.parent \|\| event\.origin !== EXTENSION_ORIGIN\) return/);
   assert.match(content, /configId: String\(config\.id \|\| ""\)/);
   assert.doesNotMatch(content, /userscript:\s*source/);
   assert.doesNotMatch(content, /chatclub-parent-clipboard|getShortcutConfig/);
@@ -70,6 +71,13 @@ const dataModule = (source) => import(`data:text/javascript;base64,${Buffer.from
   assert.match(background, /documentIds: \[context\.documentId\]/);
   assert.match(background, /frame\.parentFrameId !== 0/);
   assert.match(background, /registeredSenderContext/);
+  assert.match(background, /createAuthenticatedFrameRelay\(\{[\s\S]*?registeredSenderContext/);
+  assert.match(background, /async function frameBinding[\s\S]*?authenticate\(message, sender\)/);
+  assert.match(background, /action: "frameBinding"/);
+  assert.match(contentEntry, /function currentFrameBindingId\(\)/);
+  assert.match(contentEntry, /FRAME_BINDING_POST_MESSAGE_SOURCE/);
+  assert.match(contentEntry, /async function relayFrameBindingChallenge/);
+  assert.match(contentEntry, /expectedBindingId/);
   assert.match(background, /executeCustomTopicDeleteUserscript/);
   assert.match(background, /verifiedCustomUserscriptTarget/);
   const frameCommands = await dataModule(read("shared/frame-commands.js"));
@@ -88,6 +96,12 @@ const dataModule = (source) => import(`data:text/javascript;base64,${Buffer.from
   assert.match(background, /registerContentScriptsVerified\(api, \[rollback\]\)/);
   assert.doesNotMatch(main, /chatclub-parent-clipboard|getShortcutConfig|SHORTCUT_TRIGGER_POST_MESSAGE_SOURCE/);
   assert.match(main, /verifyContentFrameRegistration/);
+  assert.match(main, /frameBindingChallenges\.claim\(message\.challenge, message\.generation\)/);
+  assert.match(main, /frameBindingChallenges\.isCurrent\(entry\)/);
+  assert.match(main, /context\.frameId !== expectedFrameId/);
+  assert.doesNotMatch(main, /iframeForWindow\(event\.source\)/);
+  assert.doesNotMatch(main, /contentReady/);
+  assert.match(main, /if \(!exactFrameTarget\.expectedFrameId\)[\s\S]*?contentWindow\?\.postMessage/);
   assert.doesNotMatch(workspace, /contentWindow\??\.postMessage/);
   assert.match(workspace, /sendToContentFrame\(\s*iframe,\s*"prepareNavigationFocusGuard"/);
   assert.match(workspace, /sendToContentFrame\(\s*iframe,\s*"adoptNavigationFocusGuard"/);

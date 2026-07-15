@@ -7,6 +7,7 @@ const os = require("node:os");
 const path = require("node:path");
 const vm = require("node:vm");
 const { execFileSync } = require("node:child_process");
+const { FIREFOX_CONTENT_FALLBACK_OUTPUT } = require("./generated-artifacts.cjs");
 
 const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
@@ -19,6 +20,7 @@ const outputs = [
   "content/grok-cookie-bridge.js"
 ];
 const entries = outputs.map((file) => file.replace(/^content\//, "content-src/"));
+const deterministicOutputs = [...outputs, FIREFOX_CONTENT_FALLBACK_OUTPUT];
 const hash = (file) => crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
 
 const packageJson = JSON.parse(read("package.json"));
@@ -30,6 +32,8 @@ assert.match(generator, /splitting: false/);
 assert.match(generator, /minify: false/);
 assert.match(generator, /sourcemap: false/);
 assert.doesNotMatch(generator, /read\(["']content\//, "generator must never read a generated content output as a template");
+assert.match(generator, /FIREFOX_CONTENT_FALLBACK_OUTPUT/);
+assert.match(generator, /chatclubFirefoxContentFallback/);
 
 for (const entry of entries) assert.ok(fs.existsSync(path.join(root, entry)), `${entry} must exist`);
 assert.match(read("content-src/content.js"), /\.\/shared\/summary-runtime\.js/);
@@ -51,6 +55,14 @@ for (const output of outputs) {
   assert.doesNotThrow(() => new vm.Script(source, { filename: output }), `${output} must be a classic script`);
   assert.doesNotMatch(source, /\bimport\s*\(|\beval\s*\(|\bnew\s+Function\s*\(/);
 }
+const firefoxFallbacks = read(FIREFOX_CONTENT_FALLBACK_OUTPUT);
+assert.match(firefoxFallbacks, /export const FIREFOX_CONTENT_FALLBACKS = Object\.freeze/);
+assert.equal(
+  (firefoxFallbacks.match(/function chatclubFirefoxContentFallback/g) || []).length,
+  outputs.length,
+  "Firefox generated fallback must contain one self-contained function per content bundle"
+);
+assert.doesNotMatch(firefoxFallbacks, /\bimport\s*\(|\beval\s*\(|\bnew\s+Function\s*\(/);
 
 const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "chatclub-clean-rebuild-"));
 const first = path.join(temporaryRoot, "first");
@@ -64,7 +76,7 @@ try {
       destination
     ], { cwd: root, stdio: "pipe", timeout: 60_000 });
   }
-  for (const output of outputs) {
+  for (const output of deterministicOutputs) {
     const committedHash = hash(path.join(root, output));
     assert.equal(hash(path.join(first, output)), committedHash, `${output} clean rebuild drifted from the committed output`);
     assert.equal(hash(path.join(second, output)), committedHash, `${output} repeated clean rebuild was not deterministic`);

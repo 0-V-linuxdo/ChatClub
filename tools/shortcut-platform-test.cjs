@@ -15,7 +15,7 @@ const contentEntrySource = fs.readFileSync(path.join(root, "content-src/content.
 const mainSource = ["app/main.js", "app/runtime.js", "app/frame-bridge/controller.js"]
   .map((file) => fs.readFileSync(path.join(root, file), "utf8"))
   .join("\n");
-const serviceWorkerSource = ["background/service-worker.js", "background/runtime.js"]
+const serviceWorkerSource = ["background/service-worker.js", "background/runtime.js", "background/frame-relay.js"]
   .map((file) => fs.readFileSync(path.join(root, file), "utf8"))
   .join("\n");
 const stateSource = fs.readFileSync(path.join(root, "app/state.js"), "utf8");
@@ -739,7 +739,8 @@ assert.match(
   /action: "relayShortcutTriggered"/,
   "isolated shortcuts must use extension runtime relay"
 );
-assert.match(serviceWorkerSource, /registeredSenderContext\(message, sender\)/, "background must authenticate shortcut frame context");
+assert.match(serviceWorkerSource, /createAuthenticatedFrameRelay\(\{[\s\S]*?registeredSenderContext/, "background must inject the authenticated shortcut sender verifier");
+assert.match(serviceWorkerSource, /async function shortcutTriggered[\s\S]*?authenticate\(message, sender\)/, "shortcut relay must authenticate the registered frame context");
 assert.match(serviceWorkerSource, /shortcutActions\.has\(action\)/, "background must allowlist shortcut actions");
 assert.match(mainSource, /message\?\.source !== EXTENSION_RUNTIME_RELAY_SOURCE/, "parent must accept only background runtime relays");
 assert.match(mainSource, /if \(!sourceWindow\) return;/, "shortcut relays must fail closed when their iframe is not bound");

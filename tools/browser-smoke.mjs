@@ -39,7 +39,7 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-function assertRuntimeResult(result, browserTarget) {
+function assertRuntimeResult(result, browserTarget, options = {}) {
   assert(result?.shell === true, `${browserTarget}: app shell did not render`);
   assert(result?.fatalPre === false, `${browserTarget}: fatal <pre> rendered during bootstrap`);
   assert(result?.configInfo?.ok === true, `${browserTarget}: getConfigInfo round trip failed: ${result?.configInfo?.error || "unknown"}`);
@@ -65,13 +65,47 @@ function assertRuntimeResult(result, browserTarget) {
   assert(loopback?.summaryState?.mainReady === true, `${browserTarget}: loopback MAIN runtime was not injected`);
   assert(loopback?.summaryState?.bridgeVersion === CONTENT_BRIDGE_VERSION, `${browserTarget}: loopback runtime bridge version mismatch`);
   const injectedFiles = loopback?.injection?.injectedFiles || [];
-  for (const file of [
+  const fallbackFiles = loopback?.injection?.fallbackFiles || [];
+  const injectedFrameIds = loopback?.injection?.frameIds || [];
+  assert(Boolean(loopback?.injection?.browserDocumentId), `${browserTarget}: bridge injection returned no browser document id`);
+  assert(
+    loopback.injection.browserDocumentId === loopback.boundBrowserDocumentId,
+    `${browserTarget}: bridge injection and authenticated relay crossed browser documents`
+  );
+  assert(injectedFrameIds.length === 1, `${browserTarget}: duplicate-URL frame selection was ambiguous`);
+  assert(loopback?.boundFrameId === injectedFrameIds[0], `${browserTarget}: authenticated binding did not come from the injected target frame`);
+  if (loopback?.expectedFrameId != null) {
+    assert(loopback.expectedFrameId === injectedFrameIds[0], `${browserTarget}: exact browser frame id was not preserved across navigation`);
+  }
+  const expectedInjectedFiles = [
     "content/preload.js",
     "content/summary-userscripts-main.js",
     "content/summary-userscripts.js",
+    "content/grok-cookie-bridge.js",
+    "content/message-navigator.js",
     "content/content.js"
-  ]) {
+  ];
+  assert(loopback?.injection?.injected === expectedInjectedFiles.length, `${browserTarget}: loopback injection count mismatch`);
+  for (const file of expectedInjectedFiles) {
     assert(injectedFiles.some((entry) => String(entry).startsWith(`${file}@`)), `${browserTarget}: loopback injection missing ${file}`);
+  }
+  if (browserTarget === "chromium") {
+    assert(fallbackFiles.length === 0, `chromium: unexpected Firefox function fallback(s): ${fallbackFiles.join(" | ")}`);
+  }
+  if (options.expectFirefoxFileFallback) {
+    for (const file of [
+      "content/preload.js",
+      "content/summary-userscripts-main.js",
+      "content/summary-userscripts.js",
+      "content/grok-cookie-bridge.js",
+      "content/message-navigator.js",
+      "content/content.js"
+    ]) {
+      assert(
+        fallbackFiles.some((entry) => String(entry).startsWith(`${file}@`)),
+        `firefox: expected Firefox 136 function fallback for ${file}`
+      );
+    }
   }
   assert(!(loopback?.injection?.errors || []).length, `${browserTarget}: loopback injection error(s): ${(loopback?.injection?.errors || []).join(" | ")}`);
 }
@@ -305,45 +339,131 @@ const pageProbe = `async (fixtureUrl) => {
     const iframe = document.createElement("iframe");
     iframe.id = "chatclub-browser-smoke-loopback";
     iframe.hidden = true;
-    let readyResolve;
-    let readyReject;
-    let readyTimer;
-    const readyPromise = new Promise((resolve, reject) => {
-      readyResolve = resolve;
-      readyReject = reject;
-      readyTimer = setTimeout(() => reject(new Error("loopback contentReady timed out")), 12000);
+    const protocol = await import(api.runtime.getURL("shared/protocol.js"));
+    const challengeBytes = new Uint8Array(32);
+    crypto.getRandomValues(challengeBytes);
+    const challenge = Array.from(challengeBytes, (value) => value.toString(16).padStart(2, "0")).join("");
+    const frameBindingBytes = new Uint8Array(32);
+    crypto.getRandomValues(frameBindingBytes);
+    const expectedBindingId = Array.from(frameBindingBytes, (value) => value.toString(16).padStart(2, "0")).join("");
+    const frameName = new URLSearchParams({ chatclub_frame_binding: expectedBindingId });
+    iframe.name = frameName.toString();
+    const generation = 1;
+    let expectedFrameId = null;
+    let bindingResolve;
+    let bindingTimer;
+    let bindingProbeTimer;
+    const bindingPromise = new Promise((resolve, reject) => {
+      bindingResolve = resolve;
+      bindingTimer = setTimeout(() => reject(new Error("loopback authenticated frame binding timed out")), 12000);
     });
-    readyPromise.catch(() => {});
-    const onMessage = (event) => {
-      const message = event.data;
-      if (event.source !== iframe.contentWindow || message?.source !== "chatclub" || message.type !== "request" || message.action !== "contentReady") return;
-      clearTimeout(readyTimer);
-      readyResolve(message);
+    bindingPromise.catch(() => {});
+    const onRuntimeMessage = (message, sender) => {
+      const context = message?.senderContext || {};
+      if (
+        message?.source !== protocol.EXTENSION_RUNTIME_RELAY_SOURCE
+        || message.action !== "frameBinding"
+        || sender?.tab
+        || message.challenge !== challenge
+        || message.generation !== generation
+        || context.tabId !== currentTab.id
+        || (expectedFrameId != null && context.frameId !== expectedFrameId)
+        || context.frameBindingId !== expectedBindingId
+        || message.data?.documentId !== context.bridgeDocumentId
+        || message.data?.browserDocumentId !== context.documentId
+        || message.data?.frameBindingId !== expectedBindingId
+        || message.data?.bridgeVersion !== protocol.CONTENT_BRIDGE_VERSION
+      ) return false;
+      clearTimeout(bindingTimer);
+      clearInterval(bindingProbeTimer);
+      bindingResolve(message);
+      return false;
     };
-    window.addEventListener("message", onMessage);
+    api.runtime.onMessage.addListener(onRuntimeMessage);
+    let decoy = null;
+    let handshakeStage = "fixture setup";
     try {
+      handshakeStage = "about:blank frame identity";
+      const blankLoaded = new Promise((resolve, reject) => {
+        iframe.addEventListener("load", resolve, { once: true });
+        iframe.addEventListener("error", () => reject(new Error("loopback about:blank iframe failed to load")), { once: true });
+      });
+      iframe.src = "about:blank";
+      document.body.append(iframe);
+      await withTimeout(blankLoaded, 5000, "loopback about:blank iframe load");
+      expectedFrameId = typeof api.runtime.getFrameId === "function"
+        ? api.runtime.getFrameId(iframe.contentWindow)
+        : null;
+      if (expectedFrameId != null && (!Number.isSafeInteger(expectedFrameId) || expectedFrameId <= 0)) {
+        throw new Error("loopback iframe browser frame id is unavailable");
+      }
+      handshakeStage = "fixture navigation";
       const loaded = new Promise((resolve, reject) => {
         iframe.addEventListener("load", resolve, { once: true });
         iframe.addEventListener("error", () => reject(new Error("loopback iframe failed to load")), { once: true });
       });
       iframe.src = fixtureUrl;
-      document.body.append(iframe);
       await withTimeout(loaded, 10000, "loopback iframe load");
+      handshakeStage = "duplicate URL decoy";
+      decoy = document.createElement("iframe");
+      decoy.id = "chatclub-browser-smoke-loopback-decoy";
+      decoy.hidden = true;
+      const decoyBindingBytes = new Uint8Array(32);
+      crypto.getRandomValues(decoyBindingBytes);
+      const decoyBindingId = Array.from(decoyBindingBytes, (value) => value.toString(16).padStart(2, "0")).join("");
+      decoy.name = new URLSearchParams({ chatclub_frame_binding: decoyBindingId }).toString();
+      const decoyLoaded = new Promise((resolve, reject) => {
+        decoy.addEventListener("load", resolve, { once: true });
+        decoy.addEventListener("error", () => reject(new Error("loopback decoy iframe failed to load")), { once: true });
+      });
+      decoy.src = fixtureUrl;
+      document.body.append(decoy);
+      await withTimeout(decoyLoaded, 10000, "loopback decoy iframe load");
+      handshakeStage = "bridge injection";
+      const exactBindingRequest = {
+        expectedBindingId,
+        ...(expectedFrameId == null ? {} : {
+          expectedFrameId,
+          bindingChallenge: challenge,
+          bindingGeneration: generation
+        })
+      };
       const injection = await withTimeout(api.runtime.sendMessage({
         source: "chatclub",
         action: "ensureContentBridge",
         tabId: currentTab.id,
         hrefs: [fixtureUrl],
-        features: ["summary"]
+        features: ["summary"],
+        ...exactBindingRequest
       }), 15000, "loopback bridge injection");
       if (!injection?.success) throw new Error(injection?.error || "loopback bridge injection failed");
-      const ready = await readyPromise;
+      if ((injection.errors || []).length) {
+        throw new Error("loopback bridge injection failed before frame binding: " + injection.errors.join(" | "));
+      }
+      if (expectedFrameId != null) {
+        if (injection.bindingRelayed !== true) throw new Error("loopback bridge injection did not relay the authenticated frame binding");
+      } else {
+        const probeBinding = () => iframe.contentWindow?.postMessage({
+          source: protocol.FRAME_BINDING_POST_MESSAGE_SOURCE,
+          type: "request",
+          action: "bindFrame",
+          challenge,
+          generation,
+          expectedBindingId,
+          browserDocumentId: injection.browserDocumentId
+        }, "*");
+        probeBinding();
+        bindingProbeTimer = setInterval(probeBinding, 250);
+      }
+      handshakeStage = "authenticated frame binding";
+      const binding = await bindingPromise;
+      const ready = binding.data || {};
       const command = async (name) => {
         const response = await withTimeout(api.runtime.sendMessage({
           source: "chatclub",
           action: "sendFrameCommand",
           appTabId: currentTab.id,
-          bridgeDocumentId: ready.data?.documentId,
+          bridgeDocumentId: ready.documentId,
           command: name,
           data: {},
           timeoutMs: 5000
@@ -351,21 +471,26 @@ const pageProbe = `async (fixtureUrl) => {
         if (!response?.success) throw new Error(response?.error || ("loopback " + name + " failed"));
         return response.data;
       };
+      handshakeStage = "secure frame commands";
       return {
         fixtureUrl,
         injection,
-        ready: ready.data || {},
+        ready,
+        boundFrameId: binding.senderContext?.frameId,
+        boundBrowserDocumentId: binding.senderContext?.documentId,
+        expectedFrameId,
         locationHref: await command("getLocationHref"),
         summaryState: await command("getSummaryRuntimeState")
       };
     } catch (error) {
-      clearTimeout(readyTimer);
-      readyReject(error);
-      readyPromise.catch(() => {});
-      throw error;
+      clearTimeout(bindingTimer);
+      clearInterval(bindingProbeTimer);
+      throw new Error(handshakeStage + ": " + (error && error.message ? error.message : String(error)));
     } finally {
-      clearTimeout(readyTimer);
-      window.removeEventListener("message", onMessage);
+      clearTimeout(bindingTimer);
+      clearInterval(bindingProbeTimer);
+      api.runtime.onMessage.removeListener(onRuntimeMessage);
+      decoy?.remove();
       iframe.remove();
     }
   };
@@ -546,7 +671,9 @@ async function firefoxSmoke(extensionDirectory, fixtureUrl) {
       (${pageProbe})(${JSON.stringify(fixtureUrl)}).then(done, (error) => done({ probeError: error && error.message ? error.message : String(error) }));
     `);
     assert(!result?.probeError, `firefox: page probe failed: ${result?.probeError}`);
-    assertRuntimeResult(result, "firefox");
+    assertRuntimeResult(result, "firefox", {
+      expectFirefoxFileFallback: browserVersion.split(".", 1)[0] === "136"
+    });
     console.log(`Firefox browser smoke passed (${browserVersion}).`);
   } finally {
     await driver?.quit().catch(() => {});

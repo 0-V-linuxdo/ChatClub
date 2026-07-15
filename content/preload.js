@@ -9,16 +9,17 @@
   var NOTION_SEND_TEXT_EVENT = "chatclub:notion-send-text:2026.07.15.2";
   var NOTION_SEND_PROMPT_EVENT = "chatclub:notion-send-prompt:2026.07.15.2";
   var NOTION_SEND_ACTIVATED_EVENT = "chatclub:notion-send-activated:2026.07.15.2";
-  var SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.15.8";
-  var DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.15.8";
-  var MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.15.8";
-  var SUMMARY_POST_MESSAGE_SOURCE = "chatclub:summary:2026.07.15.8";
-  var PREFERRED_MODEL_POST_MESSAGE_SOURCE = "chatclub:preferred-model:2026.07.15.8";
-  var CONTENT_BRIDGE_VERSION = "2026.07.15.8";
-  var EXTENSION_RUNTIME_RELAY_SOURCE = "chatclub:runtime-relay:2026.07.15.8";
-  var SECURE_FRAME_COMMAND_SOURCE = "chatclub:frame-command:2026.07.15.8";
+  var SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.16.1";
+  var DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.16.1";
+  var MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.16.1";
+  var SUMMARY_POST_MESSAGE_SOURCE = "chatclub:summary:2026.07.16.1";
+  var PREFERRED_MODEL_POST_MESSAGE_SOURCE = "chatclub:preferred-model:2026.07.16.1";
+  var CONTENT_BRIDGE_VERSION = "2026.07.16.1";
+  var EXTENSION_RUNTIME_RELAY_SOURCE = "chatclub:runtime-relay:2026.07.16.1";
+  var FRAME_BINDING_POST_MESSAGE_SOURCE = `chatclub:frame-binding:${CONTENT_BRIDGE_VERSION}`;
+  var SECURE_FRAME_COMMAND_SOURCE = "chatclub:frame-command:2026.07.16.1";
   var DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.07.15.1";
-  var PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.15.8";
+  var PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.16.1";
   var RUNTIME_REGISTRY_ABI_VERSION = 1;
   var RUNTIME_REGISTRY_KEY = `__CHATCLUB_RUNTIME_REGISTRY_V${RUNTIME_REGISTRY_ABI_VERSION}__`;
   var NAVIGATION_FOCUS_GUARD_RUNTIME = "navigation-focus-guard";
@@ -48,6 +49,7 @@
     PREFERRED_MODEL_POST_MESSAGE_SOURCE,
     CONTENT_BRIDGE_VERSION,
     EXTENSION_RUNTIME_RELAY_SOURCE,
+    FRAME_BINDING_POST_MESSAGE_SOURCE,
     SECURE_FRAME_COMMAND_SOURCE,
     DEEPSEEK_DELETE_SOURCE,
     PAGE_SUMMARY_SOURCE,

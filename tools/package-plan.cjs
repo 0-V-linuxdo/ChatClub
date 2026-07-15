@@ -63,7 +63,11 @@ function allowlistedFiles() {
 
 function targetFileAllowed(file, target) {
   if (file === "shared/topic-delete-userscript-sources.js") return false;
-  if (target === "chromium" && file === "background/firefox-background.js") return false;
+  if (target === "chromium" && (
+    file === "background/firefox-background.js"
+    || file === "background/firefox-content-fallback-loader.js"
+    || file === "background/firefox-content-fallbacks.generated.js"
+  )) return false;
   return true;
 }
 

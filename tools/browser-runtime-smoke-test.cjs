@@ -22,8 +22,15 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
   assert.ok(!Object.hasOwn(manifest, "web_accessible_resources"));
 
   const firefoxSource = read("background/firefox-background.js");
+  const firefoxFallbackLoader = read("background/firefox-content-fallback-loader.js");
+  const firefoxFallbacks = read("background/firefox-content-fallbacks.generated.js");
+  assert.match(firefoxSource, /import "\.\/firefox-content-fallback-loader\.js"/);
   assert.match(firefoxSource, /import "\.\/service-worker\.js"/);
   assert.doesNotMatch(firefoxSource, /\bimport\s*\(/);
+  assert.match(firefoxFallbackLoader, /FIREFOX_CONTENT_FALLBACKS/);
+  assert.match(firefoxFallbackLoader, /__CHATCLUB_FIREFOX_CONTENT_FALLBACKS__/);
+  assert.match(firefoxFallbacks, /export const FIREFOX_CONTENT_FALLBACKS = Object\.freeze/);
+  assert.doesNotMatch(`${firefoxFallbackLoader}\n${firefoxFallbacks}`, /\bimport\s*\(|\beval\s*\(|\bnew\s+Function\s*\(/);
   const firefoxManifest = targetManifest(manifest, "firefox");
   assert.deepEqual(firefoxManifest.background, {
     scripts: ["background/firefox-background.js"],
@@ -64,6 +71,10 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
   assert.match(serviceWorker, /js: \["content\/content\.js"\]/);
   assert.doesNotMatch(serviceWorker, /content\/protocol\.js/);
   assert.match(serviceWorker, /registerContentScriptsVerified/);
+  assert.match(serviceWorker, /FIREFOX_CONTENT_FALLBACKS_KEY/);
+  assert.match(serviceWorker, /fallbackFiles/);
+  assert.match(serviceWorker, /relayContentFrameBinding/);
+  assert.match(serviceWorker, /expectedFrameId/);
   assert.match(serviceWorker, /rollbackContentScript/);
   assert.match(serviceWorker, /import \* as trustedInput from "\.\/trusted-input\.js"/);
   assert.doesNotMatch(serviceWorkerCode, /\bimport\s*\(/);
@@ -74,7 +85,9 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
   const summaryMainEntry = read("content-src/summary-userscripts-main.js");
   assert.doesNotMatch(`${content}\n${summaryMain}`, /AsyncFunction|new Function/);
   assert.match(content, /action: "executeSummaryUserscript"/);
-  assert.match(content, /event\.source !== window\.parent \|\| event\.origin !== EXTENSION_ORIGIN/);
+  assert.match(content, /if \(!EXTENSION_ORIGIN \|\| event\.source !== window\.parent \|\| event\.origin !== EXTENSION_ORIGIN\) return/);
+  assert.match(content, /FRAME_BINDING_POST_MESSAGE_SOURCE/);
+  assert.match(content, /expectedBindingId/);
   assert.doesNotMatch(content, /action: "executeSummaryUserscript",\s*config:/);
   assert.match(serviceWorker, /chrome\.userScripts\.execute/);
   assert.match(serviceWorker, /documentIds: \[context\.documentId\]/);

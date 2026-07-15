@@ -21,11 +21,13 @@ const TOPIC_DELETE_OUTPUTS = Object.freeze({
 });
 
 const CONTENT_OUTPUT_FILES = Object.freeze(Object.keys(CONTENT_ENTRIES).sort());
+const FIREFOX_CONTENT_FALLBACK_OUTPUT = "background/firefox-content-fallbacks.generated.js";
 const TOPIC_DELETE_OUTPUT_FILES = Object.freeze(
   Object.values(TOPIC_DELETE_OUTPUTS).map((file) => `topic-delete-userscripts/${file}`).sort()
 );
 const GENERATED_ARTIFACT_FILES = Object.freeze([
   ...CONTENT_OUTPUT_FILES,
+  FIREFOX_CONTENT_FALLBACK_OUTPUT,
   ...TOPIC_DELETE_OUTPUT_FILES
 ].sort());
 
@@ -62,6 +64,7 @@ module.exports = {
   CONTENT_ENTRIES,
   TOPIC_DELETE_OUTPUTS,
   CONTENT_OUTPUT_FILES,
+  FIREFOX_CONTENT_FALLBACK_OUTPUT,
   TOPIC_DELETE_OUTPUT_FILES,
   GENERATED_ARTIFACT_FILES,
   unexpectedGeneratedArtifacts,

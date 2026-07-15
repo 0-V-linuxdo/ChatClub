@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 
 const assert = require("node:assert/strict");
-const { GENERATED_ARTIFACT_FILES } = require("./generated-artifacts.cjs");
+const {
+  FIREFOX_CONTENT_FALLBACK_OUTPUT,
+  GENERATED_ARTIFACT_FILES
+} = require("./generated-artifacts.cjs");
 const { exactFiles, trees, packagePlan, runtimeModuleEntries } = require("./package-plan.cjs");
 
 assert.equal(Object.hasOwn(trees, "content"), false);
@@ -41,9 +44,13 @@ for (const plan of [chromium, firefox]) {
 }
 
 assert.ok(!chromium.files.includes("background/firefox-background.js"));
+assert.ok(!chromium.files.includes("background/firefox-content-fallback-loader.js"));
+assert.ok(!chromium.files.includes(FIREFOX_CONTENT_FALLBACK_OUTPUT));
 assert.deepEqual(runtimeModuleEntries(chromium), ["app/main.js", "background/service-worker.js"]);
 assert.equal(chromium.manifest.minimum_chrome_version, "120");
 assert.ok(firefox.files.includes("background/firefox-background.js"));
+assert.ok(firefox.files.includes("background/firefox-content-fallback-loader.js"));
+assert.ok(firefox.files.includes(FIREFOX_CONTENT_FALLBACK_OUTPUT));
 assert.deepEqual(runtimeModuleEntries(firefox), ["app/main.js", "background/firefox-background.js"]);
 assert.ok(!Object.hasOwn(firefox.manifest, "minimum_chrome_version"));
 assert.equal(firefox.manifest.browser_specific_settings.gecko.strict_min_version, "136.0");

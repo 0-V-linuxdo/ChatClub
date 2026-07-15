@@ -1,5 +1,5 @@
 await new Promise((resolve) => {
-  const source = "chatclub:preferred-model:2026.07.15.8";
+  const source = "chatclub:preferred-model:2026.07.16.1";
   const iframe = Array.from(document.querySelectorAll("iframe"))
     .find((frame) => /gk\.dairoot/i.test(frame.src || frame.dataset.currentHref || ""));
   const id = `grok-probe-${Date.now()}`;

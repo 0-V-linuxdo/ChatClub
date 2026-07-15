@@ -45,6 +45,16 @@ export function runtimeSendMessage(message) {
   return callPromise(["runtime", "sendMessage"], [message]);
 }
 
+export function runtimeFrameId(targetWindow) {
+  const api = rootApi();
+  try {
+    const frameId = api?.runtime?.getFrameId?.(targetWindow);
+    return Number.isSafeInteger(frameId) && frameId > 0 ? frameId : null;
+  } catch {
+    return null;
+  }
+}
+
 export function tabsGetCurrent() {
   return callPromise(["tabs", "getCurrent"]);
 }

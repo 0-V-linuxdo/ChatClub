@@ -15,16 +15,17 @@
   var NOTION_SEND_TEXT_EVENT = "chatclub:notion-send-text:2026.07.15.2";
   var NOTION_SEND_PROMPT_EVENT = "chatclub:notion-send-prompt:2026.07.15.2";
   var NOTION_SEND_ACTIVATED_EVENT = "chatclub:notion-send-activated:2026.07.15.2";
-  var SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.15.8";
-  var DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.15.8";
-  var MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.15.8";
-  var SUMMARY_POST_MESSAGE_SOURCE = "chatclub:summary:2026.07.15.8";
-  var PREFERRED_MODEL_POST_MESSAGE_SOURCE = "chatclub:preferred-model:2026.07.15.8";
-  var CONTENT_BRIDGE_VERSION = "2026.07.15.8";
-  var EXTENSION_RUNTIME_RELAY_SOURCE = "chatclub:runtime-relay:2026.07.15.8";
-  var SECURE_FRAME_COMMAND_SOURCE = "chatclub:frame-command:2026.07.15.8";
+  var SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.16.1";
+  var DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.16.1";
+  var MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.16.1";
+  var SUMMARY_POST_MESSAGE_SOURCE = "chatclub:summary:2026.07.16.1";
+  var PREFERRED_MODEL_POST_MESSAGE_SOURCE = "chatclub:preferred-model:2026.07.16.1";
+  var CONTENT_BRIDGE_VERSION = "2026.07.16.1";
+  var EXTENSION_RUNTIME_RELAY_SOURCE = "chatclub:runtime-relay:2026.07.16.1";
+  var FRAME_BINDING_POST_MESSAGE_SOURCE = `chatclub:frame-binding:${CONTENT_BRIDGE_VERSION}`;
+  var SECURE_FRAME_COMMAND_SOURCE = "chatclub:frame-command:2026.07.16.1";
   var DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.07.15.1";
-  var PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.15.8";
+  var PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.16.1";
   var RUNTIME_REGISTRY_ABI_VERSION = 1;
   var RUNTIME_REGISTRY_KEY = `__CHATCLUB_RUNTIME_REGISTRY_V${RUNTIME_REGISTRY_ABI_VERSION}__`;
   var NAVIGATION_FOCUS_GUARD_RUNTIME = "navigation-focus-guard";
@@ -54,6 +55,7 @@
     PREFERRED_MODEL_POST_MESSAGE_SOURCE,
     CONTENT_BRIDGE_VERSION,
     EXTENSION_RUNTIME_RELAY_SOURCE,
+    FRAME_BINDING_POST_MESSAGE_SOURCE,
     SECURE_FRAME_COMMAND_SOURCE,
     DEEPSEEK_DELETE_SOURCE,
     PAGE_SUMMARY_SOURCE,
@@ -1904,6 +1906,7 @@ ${value}`);
     const NOTION_SEND_PROMPT_EVENT2 = PROTOCOL.NOTION_SEND_PROMPT_EVENT;
     const NOTION_SEND_ACTIVATED_EVENT2 = PROTOCOL.NOTION_SEND_ACTIVATED_EVENT;
     const CONTENT_BRIDGE_VERSION2 = PROTOCOL.CONTENT_BRIDGE_VERSION;
+    const FRAME_BINDING_POST_MESSAGE_SOURCE2 = PROTOCOL.FRAME_BINDING_POST_MESSAGE_SOURCE;
     const SEND_TEXT_POST_MESSAGE_SOURCE2 = PROTOCOL.SEND_TEXT_POST_MESSAGE_SOURCE;
     const DELETE_THREAD_POST_MESSAGE_SOURCE2 = PROTOCOL.DELETE_THREAD_POST_MESSAGE_SOURCE;
     const PREFERRED_MODEL_POST_MESSAGE_SOURCE2 = PROTOCOL.PREFERRED_MODEL_POST_MESSAGE_SOURCE;
@@ -1921,6 +1924,63 @@ ${value}`);
       return Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
     })();
     window.__CHATCLUB_SECURE_FRAME_TOKEN__ = secureFrameToken;
+    function browserDocumentAttestationState() {
+      const key = "__CHATCLUB_BROWSER_DOCUMENT_ATTESTATION_STATE__";
+      const pattern = /^legacy:[a-f0-9]{64}$/i;
+      const nextId = () => {
+        const bytes = new Uint8Array(32);
+        crypto.getRandomValues(bytes);
+        return `legacy:${Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+      };
+      const rotate = (state2) => {
+        state2.id = nextId();
+        state2.epoch = Number.isSafeInteger(state2.epoch) && state2.epoch > 0 && state2.epoch < Number.MAX_SAFE_INTEGER ? state2.epoch + 1 : 1;
+        state2.dirty = false;
+      };
+      let state = globalThis[key];
+      if (state) {
+        const descriptor = Object.getOwnPropertyDescriptor(globalThis, key);
+        if (!descriptor || descriptor.configurable || descriptor.writable || descriptor.value !== state || typeof state !== "object" || !pattern.test(String(state.id || "")) || !Number.isSafeInteger(state.epoch) || state.epoch <= 0 || typeof state.dirty !== "boolean" || typeof state.lifecycleInstalled !== "boolean") throw new Error("Browser document attestation state is invalid");
+      } else {
+        state = { id: "", epoch: 0, dirty: false, lifecycleInstalled: false };
+        rotate(state);
+        Object.defineProperty(globalThis, key, {
+          configurable: false,
+          enumerable: false,
+          writable: false,
+          value: state
+        });
+      }
+      if (!state.lifecycleInstalled) {
+        state.lifecycleInstalled = true;
+        globalThis.addEventListener("pagehide", () => {
+          state.dirty = true;
+        }, { capture: true });
+        globalThis.addEventListener("pageshow", () => {
+          if (state.dirty) rotate(state);
+        }, { capture: true });
+      }
+      return { state, rotate };
+    }
+    const browserDocumentAttestation = browserDocumentAttestationState();
+    function currentBrowserDocumentAttestationId({ allowDirty = false } = {}) {
+      const { state, rotate } = browserDocumentAttestation;
+      if (state.dirty && !allowDirty) rotate(state);
+      return String(state.id || "");
+    }
+    const initialFrameBindingId = (() => {
+      try {
+        const values = new URLSearchParams(String(window.name || "")).getAll("chatclub_frame_binding");
+        return values.length === 1 && /^[a-f0-9]{64}$/i.test(values[0]) ? values[0] : "";
+      } catch {
+        return "";
+      }
+    })();
+    function currentFrameBindingId() {
+      const bootstrap = String(globalThis.__CHATCLUB_FRAME_BINDING_ID__ || "");
+      if (bootstrap) return /^[a-f0-9]{64}$/i.test(bootstrap) ? bootstrap : "";
+      return initialFrameBindingId;
+    }
     let contentLocationRevision = Math.max(
       0,
       Number(window.__CHATCLUB_CONTENT_LOCATION_REVISION__) || 0
@@ -2061,6 +2121,7 @@ ${value}`);
     function contentReadyData() {
       return {
         documentId: contentDocumentId,
+        frameBindingId: currentFrameBindingId(),
         bridgeVersion: CONTENT_BRIDGE_VERSION2,
         locationRevision: contentLocationRevision,
         href: location.href,
@@ -2084,11 +2145,51 @@ ${value}`);
         source: SOURCE,
         action: "registerFrameContext",
         bridgeDocumentId: contentDocumentId,
+        browserDocumentId: currentBrowserDocumentAttestationId(),
         secureFrameToken,
+        frameBindingId: currentFrameBindingId(),
         bridgeVersion: CONTENT_BRIDGE_VERSION2
       }).catch((error) => {
         console.warn("[ChatClub] Secure frame registration failed", error);
       }).finally(postContentReady);
+    }
+    async function relayFrameBindingChallenge(message = {}) {
+      const challenge = String(message.challenge || "");
+      const generation = Number(message.generation);
+      const expectedBindingId = String(message.expectedBindingId || "");
+      const browserDocumentId = String(message.browserDocumentId || "").trim();
+      if (!/^[a-f0-9]{64}$/i.test(challenge) || !Number.isSafeInteger(generation) || generation <= 0 || !/^[a-f0-9]{64}$/i.test(expectedBindingId) || !browserDocumentId || /^legacy:/i.test(browserDocumentId) && browserDocumentId !== currentBrowserDocumentAttestationId()) return false;
+      const bootstrap = String(globalThis.__CHATCLUB_FRAME_BINDING_ID__ || "");
+      if (bootstrap && bootstrap !== expectedBindingId) return false;
+      if (!bootstrap) {
+        Object.defineProperty(globalThis, "__CHATCLUB_FRAME_BINDING_ID__", {
+          configurable: false,
+          enumerable: false,
+          writable: false,
+          value: expectedBindingId
+        });
+      }
+      const registration = await sendExtensionRuntimeMessage({
+        source: SOURCE,
+        action: "registerFrameContext",
+        bridgeDocumentId: contentDocumentId,
+        browserDocumentId: currentBrowserDocumentAttestationId(),
+        secureFrameToken,
+        frameBindingId: expectedBindingId,
+        bridgeVersion: CONTENT_BRIDGE_VERSION2
+      });
+      if (!registration?.success) throw new Error(registration?.error || "Secure frame registration failed");
+      const relayed = await sendExtensionRuntimeMessage({
+        source: SOURCE,
+        action: "relayFrameBinding",
+        bridgeDocumentId: contentDocumentId,
+        browserDocumentId,
+        frameBindingId: expectedBindingId,
+        challenge,
+        generation
+      });
+      if (!relayed?.success) throw new Error(relayed?.error || "Secure frame binding relay failed");
+      return true;
     }
     function postContentUnloading() {
       sendExtensionRuntimeMessage({
@@ -2096,6 +2197,8 @@ ${value}`);
         action: "relayFrameLifecycle",
         lifecycleAction: "contentUnloading",
         bridgeDocumentId: contentDocumentId,
+        browserDocumentId: currentBrowserDocumentAttestationId({ allowDirty: true }),
+        frameBindingId: currentFrameBindingId(),
         data: contentReadyData()
       }).catch(() => {
       });
@@ -2177,6 +2280,8 @@ ${value}`);
         action: "relayFrameLifecycle",
         lifecycleAction: "locationChanged",
         bridgeDocumentId: contentDocumentId,
+        browserDocumentId: currentBrowserDocumentAttestationId(),
+        frameBindingId: currentFrameBindingId(),
         data
       }).catch((error) => console.warn("[ChatClub] Frame lifecycle relay failed", error));
     }
@@ -2259,7 +2364,10 @@ ${value}`);
       clearSubmissionNavigation();
       postContentUnloading();
     }, locationReportOptions);
-    window.addEventListener("pageshow", () => announceContentReady(), locationReportOptions);
+    window.addEventListener("pageshow", () => {
+      currentBrowserDocumentAttestationId();
+      announceContentReady();
+    }, locationReportOptions);
     const locationReportTimer = setInterval(() => {
       reportLocationChange("", false, { kind: "poll", at: Date.now() });
     }, 800);
@@ -2289,6 +2397,8 @@ ${value}`);
         source: SOURCE,
         action: "relayShortcutTriggered",
         bridgeDocumentId: contentDocumentId,
+        browserDocumentId: currentBrowserDocumentAttestationId(),
+        frameBindingId: currentFrameBindingId(),
         shortcutAction: String(match?.action || ""),
         matchObj: match?.matchObj || {}
       }).catch((error) => console.warn("[ChatClub] Shortcut relay failed", error));
@@ -7919,6 +8029,15 @@ ${value}`);
       if (!EXTENSION_ORIGIN || event.source !== window.parent || event.origin !== EXTENSION_ORIGIN) return;
       if (!contentBridgeIsCurrent()) return;
       const message = event.data;
+      if (message?.source === FRAME_BINDING_POST_MESSAGE_SOURCE2) {
+        if (!event.isTrusted || message.type !== "request" || message.action !== "bindFrame") return;
+        try {
+          await relayFrameBindingChallenge(message);
+        } catch (error) {
+          console.warn("[ChatClub] Secure frame binding relay failed", error);
+        }
+        return;
+      }
       const versionedDeleteRequest = message?.source === DELETE_THREAD_POST_MESSAGE_SOURCE2;
       const versionedSendTextRequest = message?.source === SEND_TEXT_POST_MESSAGE_SOURCE2;
       const versionedPreferredModelRequest = message?.source === PREFERRED_MODEL_POST_MESSAGE_SOURCE2;
