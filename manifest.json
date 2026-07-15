@@ -5,8 +5,8 @@
   "short_name": "ChatClub",
   "description": "__MSG_extension_description__",
   "default_locale": "zh_CN",
-  "version": "2026.7.15",
-  "version_name": "「2026-07-15｜19:31:33」",
+  "version": "2026.7.15.3",
+  "version_name": "「2026-07-15｜22:29:13」",
   "homepage_url": "https://chatclub.local/",
   "action": {
     "default_title": "ChatClub",
@@ -53,22 +53,5 @@
   ],
   "host_permissions": [
     "<all_urls>"
-  ],
-  "web_accessible_resources": [
-    {
-      "matches": [
-        "http://*/*",
-        "https://*/*"
-      ],
-      "resources": [
-        "content/preload.js",
-        "content/message-navigator.js",
-        "content/content.js",
-        "content/summary-userscripts.js",
-        "content/summary-userscripts-main.js",
-        "topic-delete-userscripts/*"
-      ],
-      "use_dynamic_url": false
-    }
   ]
 }

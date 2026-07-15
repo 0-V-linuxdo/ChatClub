@@ -4,6 +4,11 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const esbuild = require("esbuild");
+const {
+  CONTENT_ENTRIES,
+  TOPIC_DELETE_OUTPUTS,
+  assertGeneratedArtifactInventory
+} = require("./generated-artifacts.cjs");
 
 const root = path.resolve(__dirname, "..");
 const checkOnly = process.argv.includes("--check");
@@ -116,15 +121,6 @@ async function validateSummaryCatalog(configs) {
   }
 }
 
-const CONTENT_ENTRIES = Object.freeze({
-  "content/content.js": "content-src/content.js",
-  "content/preload.js": "content-src/preload.js",
-  "content/summary-userscripts.js": "content-src/summary-userscripts.js",
-  "content/summary-userscripts-main.js": "content-src/summary-userscripts-main.js",
-  "content/message-navigator.js": "content-src/message-navigator.js",
-  "content/grok-cookie-bridge.js": "content-src/grok-cookie-bridge.js"
-});
-
 async function buildContent(configs, protocol) {
   const registrySource = summaryRegistryModule(configs, protocol.CONTENT_BRIDGE_VERSION);
   const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "chatclub-content-build-"));
@@ -182,16 +178,7 @@ async function generateDeleteSites() {
   const moduleUrl = `data:text/javascript;base64,${Buffer.from(moduleSource).toString("base64")}`;
   const module = await import(moduleUrl);
   const sources = module.TOPIC_DELETE_USERSCRIPT_SOURCES;
-  const outputs = {
-    chatgpt: "chatgpt.user.js",
-    deepseek: "deepseek.user.js",
-    gemini: "gemini.user.js",
-    grokMirror: "grok-mirror.user.js",
-    grok: "grok.user.js",
-    kagi: "kagi.user.js",
-    notion: "notion.user.js"
-  };
-  for (const [id, filename] of Object.entries(outputs)) {
+  for (const [id, filename] of Object.entries(TOPIC_DELETE_OUTPUTS)) {
     if (typeof sources?.[id] !== "string" || !sources[id]) {
       throw new Error(`shared/topic-delete-userscript-sources.js: missing ${id}`);
     }
@@ -200,6 +187,7 @@ async function generateDeleteSites() {
 }
 
 (async () => {
+  assertGeneratedArtifactInventory(root);
   const [protocol, configs] = await Promise.all([protocolModule(), Promise.resolve(summaryConfigs())]);
   await validateSummaryCatalog(configs);
   await buildContent(configs, protocol);

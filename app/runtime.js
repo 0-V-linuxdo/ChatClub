@@ -1,24 +1,12 @@
+import { APP_NAME } from "../shared/constants.js";
 import {
-  APP_NAME,
-  DEFAULT_GEMINI_THINKING_LEVEL,
-  GEMINI_THINKING_LEVEL_PREFERENCE_KEY,
-  GEMINI_THINKING_LEVEL_TARGETS,
-  MODEL_PREFERENCE_TARGETS
-} from "../shared/constants.js";
-import { CONTENT_BRIDGE_VERSION, EXTENSION_RUNTIME_RELAY_SOURCE } from "../shared/protocol.js";
-import {
-  currentExtensionTabId,
-  extensionApi,
   permissionsContains,
   permissionsRequest,
   runtimeGetUrl,
   runtimeRequest
 } from "../shared/extension-api.js";
 import {
-  configureFrameRuntimePort,
-  frameRuntimePort,
-  sendToContentFrame,
-  verifyContentFrameRegistration
+  FrameRuntimePort
 } from "../shared/frame-rpc.js";
 import { setLanguage, t } from "../shared/i18n.js";
 import {
@@ -52,22 +40,26 @@ import {
   storageSet
 } from "../shared/storage-adapter.js";
 import {
-  DEFAULT_TOPBAR_LAYOUT,
-  TOPBAR_BUILTIN_ITEMS,
-  TOPBAR_REQUIRED_ITEMS,
   normalizeTopbarLayout,
   topbarItemIcon,
   topbarItemLabelKey,
-  topbarSettingsItemForSection,
   topbarSettingsSectionForItem
 } from "../shared/topbar.js";
 import { topicDeleteTimeoutMs } from "../shared/topic-delete-sites.js";
-import { executeTopicDelete } from "./topic-delete/runtime.js";
+import { createTopicDeleteRuntime } from "./topic-delete/runtime.js";
+import { createFrameBridgeController } from "./frame-bridge/controller.js";
 import { createOptimizeController } from "./optimize/controller.js";
 import { createFaviconService } from "./favicon/service.js";
+import { createFaviconStatePort } from "./favicon/state-port.js";
 import { createPromptImageModel } from "./composer/images.js";
+import { createComposerStatePort } from "./composer/state-port.js";
+import { createPreferredModelController } from "./preferred-model/controller.js";
+import { createPreferredModelStatePort } from "./preferred-model/state-port.js";
+import { createTopbarStatePort } from "./topbar/state-port.js";
+import { createTopbarEditor } from "./topbar/editor.js";
 import { createWorkspaceController } from "./workspace/controller.js";
 import { SETTINGS_SECTIONS } from "./settings/sections.js";
+import { createSettingsControllerStatePort } from "./settings/state-ports.js";
 import {
   PROMPT_HISTORY_LIVE_CURSOR,
   promptHistoryNavigate,
@@ -90,53 +82,19 @@ import {
   toast
 } from "../ui/dom.js";
 import { installGlobalTooltips } from "../ui/tooltip.js";
-import { createAppState, createFeatureStatePorts } from "./state.js";
+import { createAppState, createFeatureStatePort } from "./state.js";
 
 const appRoot = document.getElementById("app");
 const SVG_NS = "http://www.w3.org/2000/svg";
 const PROMPT_IMAGE_RETRY_COUNT = 3;
 const FRAME_SUBMIT_ERROR_MAX_CHARS = 160;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
-const cleanupSettingsDragRows = (selector) => {
-  document.querySelectorAll(selector).forEach((row) => {
-    row.classList.remove("dragging", "drop-before", "drop-after");
-  });
-};
 let appShellNode = null;
 let topbarNode = null;
 let topbarPromptPlaceholderValue = "";
 let topbarPromptPlaceholderTimer = 0;
 let topbarPromptPlaceholderTimerKey = "";
-let activeTopbarEditPointerDrag = null;
-let suppressTopbarPaletteClick = false;
 let topbarEditSavePending = false;
-const MODEL_PREFERENCE_APP_ID_ALIASES = Object.freeze({
-  Gemini: "Gemini",
-  Grok: "Grok",
-  GrokMirror: "Grok",
-  "Grok Mirror": "Grok",
-  DeepSeek: "DeepSeek",
-  "DeepSeek AI": "DeepSeek",
-  NotionAI: "NotionAI",
-  "Notion AI": "NotionAI"
-});
-const MODEL_PREFERENCE_APPLY_RETRY_DELAYS = Object.freeze([0, 700, 1600, 3200, 5200, 8000, 12000]);
-const MODEL_PREFERENCE_READY_APPLY_RETRY_DELAYS = Object.freeze([1600, 3200, 5200, 8000, 12000, 16000]);
-const MODEL_PREFERENCE_APPLY_TIMEOUT_MS = 15000;
-const MODEL_PREFERENCE_CANCEL_TIMEOUT_MS = 1200;
-const MODEL_PREFERENCE_SUBMISSION_NAVIGATION_GRACE_MS = 15000;
-const preferredModelApplyRuns = new Map();
-const coreContentFramePreparationRuns = new WeakMap();
-const summaryContentFramePreparationRuns = new WeakMap();
-const contentFrameRepairTimers = new WeakMap();
-const contentFrameRepairGenerations = new WeakMap();
-const CONTENT_FRAME_REPAIR_RETRY_DELAYS = Object.freeze([350, 900, 1800, 3600, 7200]);
-let preferredModelPromptComposing = false;
-let preferredModelComposingPromptInput = null;
-let preferredModelGateBootstrapping = true;
-let preferredModelLockedPromptSnapshot = null;
-let preferredModelGateBlockedToastAt = 0;
-let preferredModelFrameCleanupObserver = null;
 const ICONS = {
   edit: [
     ["path", { d: "M12 20h9" }],
@@ -432,15 +390,109 @@ const ICONS = {
   ]
 };
 const state = createAppState();
-const featureState = createFeatureStatePorts(state);
+const featureState = Object.freeze({
+  workspace: createFeatureStatePort(state, "workspace"),
+  summary: createFeatureStatePort(state, "summary"),
+  pocket: createFeatureStatePort(state, "pocket"),
+  optimize: createFeatureStatePort(state, "optimize"),
+  composer: createComposerStatePort(state),
+  preferredModel: createPreferredModelStatePort(state),
+  topbar: createTopbarStatePort(state),
+  favicon: createFaviconStatePort(state),
+  settings: createSettingsControllerStatePort(state)
+});
 const composerState = featureState.composer;
 const preferredModelState = featureState.preferredModel;
 const topbarState = featureState.topbar;
+const topbarEditor = createTopbarEditor({
+  state: topbarState,
+  settingsSections: SETTINGS_SECTIONS,
+  syncTopbar: (...args) => syncTopbar(...args),
+  openSettingsMenu: (...args) => openSettingsJumpMenu(...args),
+  closeSettingsMenu: (...args) => closeSettingsJumpMenu(...args),
+  openEditorSettingsMenu: (...args) => openTopbarEditSettingsMenu(...args)
+});
+const {
+  activeTopbarEditLayout,
+  cleanupPointerDrag: cleanupTopbarEditPointerDrag,
+  consumePaletteClickSuppression,
+  ensureTopbarSettingsMenuItems,
+  foldedTopbarLayoutItems,
+  insertTopbarPaletteItem,
+  paletteCandidateIds: topbarEditPaletteCandidateIds,
+  preventNativeDrag: preventTopbarEditNativeDrag,
+  startPointerDrag: startTopbarEditPointerDrag,
+  visibleTopbarLayoutItems
+} = topbarEditor;
 const promptImageModel = createPromptImageModel({ createId });
 const normalizePromptImages = promptImageModel.normalize;
 const normalizePromptImageEntry = promptImageModel.normalizeEntry;
 const promptImageEntryFromFile = promptImageModel.fromFile;
 const extractPromptImageFilesFromTransfer = promptImageModel.filesFromTransfer;
+let workspaceController = null;
+let frameBridgeController = null;
+let preferredModelController = null;
+const frameRuntimePort = new FrameRuntimePort({
+  ensureRuntime: (...args) => frameBridgeController.prepareContentFrameRuntime(...args),
+  invalidateRuntime(iframe) {
+    if (!iframe?.dataset) return;
+    delete iframe.dataset.preferredModelDocumentId;
+    delete iframe.dataset.preferredModelContentBridgeVersion;
+    delete iframe.dataset.summaryRuntimeDocumentId;
+    delete iframe.dataset.summaryRuntimeBridgeVersion;
+  }
+});
+const sendToContentFrame = (iframe, command, data = {}, timeoutMs) => {
+  const options = timeoutMs && typeof timeoutMs === "object" ? timeoutMs : { timeoutMs };
+  return frameRuntimePort.request(iframe, command, data, options);
+};
+const topicDeleteRuntime = createTopicDeleteRuntime({ framePort: frameRuntimePort });
+const executeTopicDelete = topicDeleteRuntime.executeTopicDelete;
+frameBridgeController = createFrameBridgeController({
+  framePort: () => frameRuntimePort,
+  workspace: () => workspaceController,
+  schedulePreferredModelApply: (...args) => preferredModelController.schedulePreferredModelApplyToFrame(...args),
+  invalidatePreferredModelFrame: (...args) => preferredModelController.invalidatePreferredModelFrame(...args),
+  preferredModelFrameIsLoading: (...args) => preferredModelController.preferredModelFrameIsLoading(...args),
+  handleShortcutAction: (...args) => handleShortcutAction(...args)
+});
+const prepareContentFrameRuntime = (...args) => frameBridgeController.prepareContentFrameRuntime(...args);
+const scheduleContentFrameRepair = (...args) => frameBridgeController.scheduleContentFrameRepair(...args);
+const verifiedCurrentContentFrameRegistration = (...args) => frameBridgeController.verifiedCurrentContentFrameRegistration(...args);
+preferredModelController = createPreferredModelController({
+  state: preferredModelState,
+  workspace: () => workspaceController,
+  framePort: frameRuntimePort,
+  appRoot,
+  normalizePromptImages,
+  rememberPromptSelection: (...args) => rememberPromptSelection(...args),
+  syncPromptCollapsedPreview: (...args) => syncPromptCollapsedPreview(...args),
+  restorePromptSelection: (...args) => restorePromptSelection(...args),
+  closePromptActionsMenu: (...args) => closePromptActionsMenu(...args),
+  promptHasContent: (...args) => promptHasContent(...args),
+  collapsePromptInput: (...args) => collapsePromptInput(...args),
+  verifiedCurrentContentFrameRegistration,
+  prepareContentFrameRuntime
+});
+const {
+  applyPreferredModelsToFrames,
+  armPreferredModelSubmissionNavigation,
+  capturePreferredModelLockedPromptSnapshot,
+  ensurePreferredModelInputReady,
+  finishBootstrapping: finishPreferredModelBootstrapping,
+  finishPreferredModelSubmissionNavigation,
+  handlePreferredModelFrameLifecycleChange,
+  handlePreferredModelPromptCompositionEnd,
+  handlePreferredModelPromptCompositionStart,
+  handlePromptBlur,
+  installPreferredModelFrameCleanup,
+  notifyPreferredModelGateBlocked,
+  preferredModelInputGateIsLocked,
+  preferredModelPromptCompositionIsActive,
+  rememberPreferredModelLockedPromptSnapshot,
+  restorePreferredModelLockedPromptSnapshot,
+  syncPreferredModelInputGate
+} = preferredModelController;
 
 const keyboardPlatform = detectKeyboardPlatform();
 
@@ -553,7 +605,7 @@ let settingsController = null;
 let pocketControllerPromise = null;
 let summaryControllerPromise = null;
 let settingsControllerPromise = null;
-const workspaceController = createWorkspaceController({
+workspaceController = createWorkspaceController({
   state: featureState.workspace,
   createGroupId: () => createId("group"),
   createFrameId: () => createId("frame"),
@@ -578,7 +630,9 @@ const workspaceController = createWorkspaceController({
   requestTopicDeletePermission: (config) => requestFeatureUserScriptsPermission("topic-delete", config ? [config] : null),
   prepareContentFrameRuntime,
   onFrameLifecycleChange: handleWorkspaceFrameLifecycleChange,
-  openCustomAppEditor: () => openCustomAppEditor()
+  openCustomAppEditor: () => openCustomAppEditor(),
+  framePort: frameRuntimePort,
+  executeTopicDelete
 });
 
 function lazyControllerError(label, error) {
@@ -672,6 +726,7 @@ function ensureSummaryController() {
         discoverDeclaredFaviconUrl,
         rememberFaviconUrl,
         browserFaviconUrl,
+        framePort: frameRuntimePort,
         formatShortcut: formatActiveShortcut,
         pocketPort: {
           save: (...args) => ensurePocketController().then((pocket) => pocket.saveSummaryPreviewToPocket(...args)),
@@ -1243,186 +1298,6 @@ function promptImagePasteStrategyForApp(app = {}) {
   return normalizePromptImagePasteStrategy(app?.imagePasteStrategy);
 }
 
-function contentFrameHrefHints(iframe, app = {}) {
-  const values = [
-    iframe?.dataset?.currentHref,
-    iframe?.dataset?.currentThreadHref,
-    iframe?.src,
-    iframe?.getAttribute?.("src"),
-    app?.url
-  ].map((item) => String(item || "").trim()).filter(Boolean);
-  return Array.from(new Set(values));
-}
-
-async function verifiedCurrentContentFrameRegistration(iframe) {
-  const documentId = String(iframe?.dataset?.preferredModelDocumentId || "").trim();
-  if (!documentId) return null;
-  const registration = await verifyContentFrameRegistration(documentId);
-  if (!registration || String(registration.bridgeVersion || "") !== CONTENT_BRIDGE_VERSION) return null;
-  return { ...registration, documentId };
-}
-
-function contentFramePreparationError(result = null) {
-  const messages = [
-    result?.error,
-    ...(Array.isArray(result?.errors) ? result.errors : [])
-  ].map((item) => String(item || "").trim()).filter(Boolean);
-  return messages.join("; ");
-}
-
-async function waitForCurrentContentFrameRegistration(iframe, timeoutMs = 2600) {
-  const deadline = Date.now() + Math.max(250, Number(timeoutMs) || 0);
-  while (iframe?.isConnected && Date.now() <= deadline) {
-    const registration = await verifiedCurrentContentFrameRegistration(iframe);
-    if (registration) return registration;
-    await sleep(100);
-  }
-  return null;
-}
-
-async function prepareContentFrameRuntimeUncached(iframe, options = {}) {
-  if (!iframe?.isConnected) return { ok: false, cancelled: true, reason: "iframe is detached" };
-  const summary = options.summary === true;
-  let registration = await verifiedCurrentContentFrameRegistration(iframe);
-  const registeredDocumentId = String(registration?.documentId || "");
-  if (
-    registration
-    && (
-      !summary
-      || (
-        String(iframe.dataset.summaryRuntimeDocumentId || "") === registeredDocumentId
-        && String(iframe.dataset.summaryRuntimeBridgeVersion || "") === CONTENT_BRIDGE_VERSION
-      )
-    )
-  ) {
-    return { ok: true, registration, injected: false, summary };
-  }
-
-  const tabId = await currentExtensionTabId();
-  if (!Number.isInteger(tabId)) {
-    return { ok: false, reason: "extension tab is unavailable", summary };
-  }
-  const app = workspaceController.frameApp(iframe) || {};
-  const hrefs = contentFrameHrefHints(iframe, app);
-  if (!hrefs.length) return { ok: false, reason: "iframe URL is unavailable", summary };
-
-  let installed;
-  try {
-    installed = await runtimeRequest({
-      source: "chatclub",
-      action: "ensureContentBridge",
-      tabId,
-      hrefs,
-      features: summary ? ["summary"] : []
-    });
-  } catch (error) {
-    return { ok: false, reason: error?.message || String(error), summary };
-  }
-  registration = await waitForCurrentContentFrameRegistration(iframe);
-  if (!registration) {
-    return {
-      ok: false,
-      reason: contentFramePreparationError(installed) || "iframe content bridge did not become ready",
-      installed,
-      summary
-    };
-  }
-  if (summary) {
-    let summaryState = null;
-    try {
-      summaryState = await frameRuntimePort.request(iframe, "getSummaryRuntimeState", {}, { timeoutMs: 1800, skipEnsure: true });
-    } catch (error) {
-      return {
-        ok: false,
-        reason: error?.message || "Summary runtime readiness probe failed",
-        installed,
-        registration,
-        summary
-      };
-    }
-    const confirmedRegistration = await verifiedCurrentContentFrameRegistration(iframe);
-    const summaryRuntimeReady = Boolean(
-      summaryState?.ready
-      && summaryState.mainReady
-      && summaryState.isolatedReady
-      && summaryState.documentId === registration.documentId
-      && summaryState.bridgeVersion === CONTENT_BRIDGE_VERSION
-      && confirmedRegistration?.documentId === registration.documentId
-      && confirmedRegistration?.bridgeVersion === CONTENT_BRIDGE_VERSION
-    );
-    if (!summaryRuntimeReady) {
-      return {
-        ok: false,
-        reason: "Summary runtime did not become ready in the current iframe document",
-        installed,
-        registration,
-        summaryState,
-        summary
-      };
-    }
-    registration = confirmedRegistration;
-    iframe.dataset.summaryRuntimeDocumentId = registration.documentId;
-    iframe.dataset.summaryRuntimeBridgeVersion = CONTENT_BRIDGE_VERSION;
-  }
-  workspaceController.rememberFrameLocation(iframe, registration);
-  return { ok: true, registration, installed, injected: true, summary };
-}
-
-function prepareContentFrameRuntime(iframe, options = {}) {
-  if (!iframe) return Promise.resolve({ ok: false, reason: "iframe is unavailable" });
-  const summary = options.summary === true;
-  const runs = summary ? summaryContentFramePreparationRuns : coreContentFramePreparationRuns;
-  const existing = runs.get(iframe);
-  if (existing) return existing;
-  const run = prepareContentFrameRuntimeUncached(iframe, options).finally(() => {
-    if (runs.get(iframe) === run) runs.delete(iframe);
-  });
-  runs.set(iframe, run);
-  return run;
-}
-
-configureFrameRuntimePort({
-  ensureRuntime: prepareContentFrameRuntime,
-  invalidateRuntime(iframe) {
-    if (!iframe?.dataset) return;
-    delete iframe.dataset.preferredModelDocumentId;
-    delete iframe.dataset.preferredModelContentBridgeVersion;
-    delete iframe.dataset.summaryRuntimeDocumentId;
-    delete iframe.dataset.summaryRuntimeBridgeVersion;
-  }
-});
-
-function scheduleContentFrameRepair(iframe, delay = 0, retryIndex = 0, repairGeneration = null) {
-  if (!iframe?.isConnected) return;
-  if (repairGeneration == null) {
-    repairGeneration = (contentFrameRepairGenerations.get(iframe) || 0) + 1;
-    contentFrameRepairGenerations.set(iframe, repairGeneration);
-  } else if (contentFrameRepairGenerations.get(iframe) !== repairGeneration) {
-    return;
-  }
-  const existing = contentFrameRepairTimers.get(iframe);
-  if (existing) clearTimeout(existing);
-  const timer = window.setTimeout(() => {
-    if (contentFrameRepairGenerations.get(iframe) !== repairGeneration) return;
-    contentFrameRepairTimers.delete(iframe);
-    const retryOrWarn = (reason) => {
-      if (contentFrameRepairGenerations.get(iframe) !== repairGeneration) return;
-      const nextDelay = CONTENT_FRAME_REPAIR_RETRY_DELAYS[retryIndex];
-      if (iframe?.isConnected && Number.isFinite(nextDelay)) {
-        scheduleContentFrameRepair(iframe, nextDelay, retryIndex + 1, repairGeneration);
-        return;
-      }
-      console.warn("[ChatClub] Content frame bridge repair did not complete", reason);
-    };
-    prepareContentFrameRuntime(iframe).then((result) => {
-      if (!result?.ok && !result?.cancelled) {
-        retryOrWarn(result?.reason || result);
-      }
-    }).catch(retryOrWarn);
-  }, Math.max(0, Number(delay) || 0));
-  contentFrameRepairTimers.set(iframe, timer);
-}
-
 async function sendTextToFrame(iframe, app = {}, text = "", images = [], sendId = "", deadlineAt = 0) {
   const notion = sendPromptAppIsNotion(app);
   const promptImages = normalizePromptImages(images);
@@ -1548,618 +1423,10 @@ function submitPromptFromComposer(source = null) {
   return sendPromptToFrames();
 }
 
-function preferredModelAppId(app) {
-  return MODEL_PREFERENCE_APP_ID_ALIASES[String(app?.id || "")] || MODEL_PREFERENCE_APP_ID_ALIASES[String(app?.name || "")] || String(app?.id || "");
-}
-
-function preferredModelForApp(app) {
-  const appId = preferredModelAppId(app);
-  const preferences = preferredModelState.modelPreferenceDraft || preferredModelState.options?.modelPreferences || {};
-  const modelId = String(preferences[appId] || "");
-  if (!modelId) return "";
-  return (MODEL_PREFERENCE_TARGETS[appId] || []).some((target) => target.id === modelId) ? modelId : "";
-}
-
-function preferredGeminiThinkingLevel() {
-  const preferences = preferredModelState.modelPreferenceDraft || preferredModelState.options?.modelPreferences || {};
-  const value = String(preferences[GEMINI_THINKING_LEVEL_PREFERENCE_KEY] || DEFAULT_GEMINI_THINKING_LEVEL);
-  return GEMINI_THINKING_LEVEL_TARGETS.some((target) => target.id === value)
-    ? value
-    : DEFAULT_GEMINI_THINKING_LEVEL;
-}
-
-function preferredModelPayloadForApp(app) {
-  const appId = preferredModelAppId(app);
-  const modelId = preferredModelForApp(app);
-  if (!modelId) return null;
-  return {
-    appId,
-    modelId,
-    ...(appId === "Gemini" && modelId === "pro" ? { thinkingLevel: preferredGeminiThinkingLevel() } : {})
-  };
-}
-
-function preferredModelInputGateIsLocked() {
-  return preferredModelState.preferredModelGateState !== "ready";
-}
-
-function preferredModelPromptSnapshotFromState() {
-  return {
-    text: String(preferredModelState.promptText || ""),
-    images: normalizePromptImages(preferredModelState.promptImages),
-    selection: { ...(preferredModelState.promptSelection || { start: 0, end: 0, direction: "none" }) }
-  };
-}
-
-function capturePreferredModelLockedPromptSnapshot() {
-  const inputNode = document.querySelector(".prompt-input");
-  if (inputNode) {
-    preferredModelState.promptText = inputNode.value;
-    rememberPromptSelection(inputNode);
-  }
-  preferredModelLockedPromptSnapshot = preferredModelPromptSnapshotFromState();
-  return preferredModelLockedPromptSnapshot;
-}
-
-function restorePreferredModelLockedPromptSnapshot() {
-  const snapshot = preferredModelLockedPromptSnapshot;
-  if (!snapshot) return;
-  preferredModelState.promptText = snapshot.text;
-  preferredModelState.promptImages = normalizePromptImages(snapshot.images);
-  preferredModelState.promptSelection = { ...snapshot.selection };
-  const inputNode = document.querySelector(".prompt-input");
-  if (!inputNode) return;
-  inputNode.value = snapshot.text;
-  syncPromptCollapsedPreview(inputNode);
-  restorePromptSelection(inputNode);
-}
-
-function notifyPreferredModelGateBlocked() {
-  const now = Date.now();
-  if (now - preferredModelGateBlockedToastAt < 1600) return;
-  preferredModelGateBlockedToastAt = now;
-  toast(t("toast.modelGateBlocked"), "info");
-}
-
-function ensurePreferredModelInputReady({ notify = true } = {}) {
-  if (!preferredModelInputGateIsLocked()) return true;
-  if (notify) notifyPreferredModelGateBlocked();
-  return false;
-}
-
-function preferredModelTargetLabel(payload = {}) {
-  const target = (MODEL_PREFERENCE_TARGETS[payload.appId] || [])
-    .find((item) => item.id === payload.modelId);
-  const baseLabel = String(target?.label || payload.modelId || payload.appId || "");
-  if (payload.appId !== "Gemini" || payload.modelId !== "pro" || !payload.thinkingLevel) return baseLabel;
-  const level = GEMINI_THINKING_LEVEL_TARGETS.find((item) => item.id === payload.thinkingLevel);
-  return level?.label ? `${baseLabel} · ${level.label}` : baseLabel;
-}
-
-function compactPreferredModelFailureReason(result = {}) {
-  const fallback = t("toast.frameModelSwitchFailureFallback");
-  const raw = String(
-    result.reason
-      || (result.unavailable ? "unavailable" : "")
-      || (result.unsupported ? "unsupported" : "")
-      || fallback
-  ).replace(/\s+/g, " ").trim();
-  const chars = Array.from(raw || fallback);
-  return chars.length > FRAME_SUBMIT_ERROR_MAX_CHARS
-    ? `${chars.slice(0, FRAME_SUBMIT_ERROR_MAX_CHARS - 1).join("")}…`
-    : chars.join("");
-}
-
-function preferredModelFrameIsLoading(iframe) {
-  const instanceId = String(iframe?.dataset?.instanceId || "");
-  return Boolean(instanceId && (preferredModelState.frameLoadingInstanceIds || []).includes(instanceId));
-}
-
-function preferredModelConfiguredActiveFrames() {
-  return workspaceController.currentFrames()
-    .map((iframe) => ({
-      iframe,
-      app: workspaceController.frameApp(iframe) || {},
-      payload: preferredModelPayloadForApp(workspaceController.frameApp(iframe) || {})
-    }))
-    .filter((item) => item.iframe?.isConnected && item.payload);
-}
-
-function preferredModelGateStatus() {
-  const configuredFrames = preferredModelConfiguredActiveFrames();
-  if (preferredModelGateBootstrapping) {
-    return {
-      state: "bootstrapping",
-      reason: "",
-      pendingCount: configuredFrames.length,
-      failedCount: 0,
-      failedAppIds: []
-    };
-  }
-
-  let pendingCount = 0;
-  const failures = [];
-  for (const { iframe, payload } of configuredFrames) {
-    if (preferredModelFrameIsLoading(iframe)) {
-      pendingCount += 1;
-      continue;
-    }
-    const key = preferredModelFrameKey(iframe);
-    const record = preferredModelApplyRuns.get(iframe);
-    if (record?.key === key && record.success) continue;
-    if (record?.key === key && record.terminal) {
-      failures.push({ appId: payload.appId, reason: record.failureReason || t("toast.frameModelSwitchFailureFallback") });
-      continue;
-    }
-    pendingCount += 1;
-  }
-
-  if (failures.length) {
-    return {
-      state: "failed",
-      reason: failures[0].reason,
-      pendingCount,
-      failedCount: failures.length,
-      failedAppIds: Array.from(new Set(failures.map((item) => item.appId).filter(Boolean)))
-    };
-  }
-  if (pendingCount > 0) {
-    return { state: "applying", reason: "", pendingCount, failedCount: 0, failedAppIds: [] };
-  }
-  return { state: "ready", reason: "", pendingCount: 0, failedCount: 0, failedAppIds: [] };
-}
-
-function syncPreferredModelInputGate() {
-  const next = preferredModelGateStatus();
-  const wasLocked = preferredModelInputGateIsLocked();
-  const willBeLocked = next.state !== "ready";
-  if (willBeLocked && (!wasLocked || !preferredModelLockedPromptSnapshot)) {
-    capturePreferredModelLockedPromptSnapshot();
-  } else if (!willBeLocked) {
-    preferredModelLockedPromptSnapshot = null;
-  }
-
-  preferredModelState.preferredModelGateState = next.state;
-  preferredModelState.preferredModelGateReason = next.reason;
-  preferredModelState.preferredModelGatePendingCount = next.pendingCount;
-  preferredModelState.preferredModelGateFailedCount = next.failedCount;
-  preferredModelState.preferredModelGateFailedAppIds = next.failedAppIds;
-
-  if (willBeLocked) closePromptActionsMenu();
-  document.querySelectorAll(".prompt-shell").forEach((shell) => {
-    const inputNode = shell.querySelector(".prompt-input");
-    const composingHere = preferredModelPromptCompositionIsActive(inputNode);
-    const applying = next.state === "bootstrapping" || next.state === "applying";
-    const failed = next.state === "failed";
-    shell.classList.toggle("prompt-shell-model-gate-applying", applying);
-    shell.classList.toggle("prompt-shell-model-gate-failed", failed);
-    shell.dataset.modelGateState = next.state;
-    shell.dataset.modelGatePendingCount = String(next.pendingCount);
-    shell.dataset.modelGateFailedCount = String(next.failedCount);
-    shell.dataset.modelGateFailedAppIds = next.failedAppIds.join(",");
-    shell.setAttribute("aria-busy", willBeLocked ? "true" : "false");
-
-    if (inputNode) {
-      inputNode.readOnly = willBeLocked && !composingHere;
-      inputNode.dataset.modelGateState = next.state;
-      inputNode.setAttribute("aria-busy", willBeLocked ? "true" : "false");
-      if (willBeLocked) {
-        inputNode.setAttribute("aria-label", failed
-          ? t("topbar.modelGateFailedAria", { reason: next.reason })
-          : t("topbar.modelGateApplyingAria"));
-      } else {
-        inputNode.removeAttribute("aria-label");
-      }
-    }
-
-    shell.querySelectorAll(".prompt-actions-button, .prompt-image-file-input, .prompt-clear-button, .prompt-image-remove")
-      .forEach((node) => { node.disabled = willBeLocked; });
-    const sendButton = shell.querySelector(".prompt-send-button");
-    if (sendButton) {
-      sendButton.disabled = willBeLocked
-        || preferredModelState.promptSendInFlight
-        || !promptHasContent(inputNode?.value ?? preferredModelState.promptText, preferredModelState.promptImages);
-    }
-
-    let statusNode = shell.querySelector(".prompt-model-gate-status");
-    if (!statusNode) {
-      statusNode = el("div", { class: "prompt-model-gate-status", "aria-live": "polite", "aria-atomic": "true" });
-      shell.append(statusNode);
-    }
-    statusNode.hidden = !willBeLocked;
-    if (willBeLocked) {
-      const statusText = failed
-        ? t("topbar.modelGateFailed", { reason: next.reason })
-        : t("topbar.modelGateApplying");
-      const announcementKey = `${applying ? "applying" : "failed"}:${statusText}`;
-      if (statusNode.dataset.modelGateAnnouncementKey !== announcementKey) {
-        statusNode.dataset.modelGateAnnouncementKey = announcementKey;
-        statusNode.replaceChildren(...[
-          applying ? el("span", { class: "prompt-model-gate-spinner", "aria-hidden": "true" }) : null,
-          el("span", { class: "prompt-model-gate-status-text" }, statusText)
-        ].filter(Boolean));
-      }
-    } else {
-      delete statusNode.dataset.modelGateAnnouncementKey;
-      if (statusNode.childNodes.length) statusNode.replaceChildren();
-    }
-  });
-  return next;
-}
-
-function preferredModelFrameKey(iframe) {
-  if (!iframe) return "";
-  const app = workspaceController.frameApp(iframe);
-  const payload = preferredModelPayloadForApp(app);
-  if (!payload) return "";
-  const thinkingLevel = payload.thinkingLevel ? `:${payload.thinkingLevel}` : "";
-  const documentId = String(iframe.dataset.preferredModelDocumentId || "");
-  return `${payload.appId}:${payload.modelId}${thinkingLevel}:${documentId}`;
-}
-
-function preferredModelSubmissionRouteState(appId, value) {
-  let url;
-  try {
-    url = new URL(String(value || ""));
-  } catch {
-    return null;
-  }
-  const host = url.hostname.toLowerCase();
-  const path = (url.pathname || "/").replace(/\/+$/, "") || "/";
-  if (appId === "Gemini") {
-    if (host !== "gemini.google.com" && !host.endsWith(".gemini.google.com") && host !== "bard.google.com") return null;
-    if (path === "/app") return { host, phase: "start" };
-    const threadMatch = /^\/app\/([^/?#]+)/i.exec(path);
-    if (threadMatch) return { host, phase: "terminal", threadId: threadMatch[1] };
-    return null;
-  }
-  if (appId === "NotionAI") {
-    const notionHost = host === "app.notion.com"
-      || host === "notion.so"
-      || host === "www.notion.so"
-      || host.endsWith(".notion.so");
-    if (!notionHost) return null;
-    if (path === "/ai") return { host, phase: "start" };
-    if (path === "/chat") {
-      const threadId = String(url.searchParams.get("t") || "");
-      return threadId ? { host, phase: "terminal", threadId } : { host, phase: "intermediate" };
-    }
-  }
-  return null;
-}
-
-function clearPreferredModelSubmissionNavigation(record) {
-  const lease = record?.submissionNavigationLease;
-  if (!lease) return;
-  if (lease.timer) clearTimeout(lease.timer);
-  lease.timer = 0;
-  if (record.submissionNavigationLease === lease) record.submissionNavigationLease = null;
-}
-
-function schedulePreferredModelSubmissionNavigationExpiry(record) {
-  const lease = record?.submissionNavigationLease;
-  if (!lease) return;
-  if (lease.timer) clearTimeout(lease.timer);
-  const delay = Math.max(0, Math.min(0x7fffffff, lease.expiresAt - Date.now()));
-  lease.timer = window.setTimeout(() => {
-    if (record.submissionNavigationLease === lease) record.submissionNavigationLease = null;
-  }, delay);
-}
-
-function armPreferredModelSubmissionNavigation(iframe, sendId, deadlineAt = 0) {
-  const id = String(sendId || "").trim();
-  const record = preferredModelApplyRuns.get(iframe);
-  const key = preferredModelFrameKey(iframe);
-  if (!id || !record?.success || record.cancelled || record.key !== key) return null;
-  const appId = String(record.payload?.appId || "");
-  const initialHref = String(iframe?.dataset?.currentHref || iframe?.src || "");
-  const initialRoute = preferredModelSubmissionRouteState(appId, initialHref);
-  const documentId = String(iframe?.dataset?.preferredModelDocumentId || "");
-  const bridgeVersion = String(iframe?.dataset?.preferredModelContentBridgeVersion || "");
-  const validInitialRoute = initialRoute && (
-    initialRoute.phase === "start"
-    || (appId === "NotionAI" && initialRoute.phase === "intermediate")
-  );
-  if (!validInitialRoute || !documentId || !bridgeVersion) return null;
-  clearPreferredModelSubmissionNavigation(record);
-  const now = Date.now();
-  const expiresAt = Math.max(
-    now + MODEL_PREFERENCE_SUBMISSION_NAVIGATION_GRACE_MS,
-    Math.max(0, Number(deadlineAt) || 0) + MODEL_PREFERENCE_SUBMISSION_NAVIGATION_GRACE_MS
-  );
-  record.submissionNavigationLease = {
-    sendId: id,
-    appId,
-    initialHref,
-    initialHost: initialRoute.host,
-    documentId,
-    bridgeVersion,
-    recordKey: key,
-    armedAt: now,
-    hardExpiresAt: expiresAt,
-    expiresAt,
-    observed: false,
-    terminalObserved: false,
-    terminalThreadId: "",
-    lastHref: initialHref,
-    lastPhase: initialRoute.phase,
-    timer: 0
-  };
-  schedulePreferredModelSubmissionNavigationExpiry(record);
-  return record.submissionNavigationLease;
-}
-
-function finishPreferredModelSubmissionNavigation(iframe, sendId, sent) {
-  const record = preferredModelApplyRuns.get(iframe);
-  const lease = record?.submissionNavigationLease;
-  if (!lease || lease.sendId !== String(sendId || "")) return;
-  lease.sendSettledAt = Date.now();
-  lease.sent = Boolean(sent);
-  if (sent || lease.terminalObserved) return;
-  lease.expiresAt = Math.min(lease.hardExpiresAt, Date.now() + 2000);
-  schedulePreferredModelSubmissionNavigationExpiry(record);
-}
-
-function preservePreferredModelForSubmissionNavigation(iframe, event = {}) {
-  const record = preferredModelApplyRuns.get(iframe);
-  const lease = record?.submissionNavigationLease;
-  if (!lease) return false;
-  const reject = () => {
-    clearPreferredModelSubmissionNavigation(record);
-    return false;
-  };
-  if (Date.now() > lease.expiresAt) return reject();
-  const navigation = event.navigation;
-  const submission = navigation?.submission;
-  const kind = String(navigation?.kind || "").toLowerCase();
-  if (!submission || !["pushstate", "replacestate", "poll"].includes(kind)) return reject();
-  if (String(submission.sendId || "") !== lease.sendId) return reject();
-  const observedAppId = MODEL_PREFERENCE_APP_ID_ALIASES[String(submission.appId || "")]
-    || String(submission.appId || "");
-  if (observedAppId && observedAppId !== lease.appId) return reject();
-  if (String(navigation.documentId || "") !== lease.documentId) return reject();
-  if (String(navigation.bridgeVersion || "") !== lease.bridgeVersion) return reject();
-  if (
-    preferredModelApplyRuns.get(iframe) !== record
-    || !record.success
-    || record.cancelled
-    || record.key !== lease.recordKey
-    || preferredModelFrameKey(iframe) !== lease.recordKey
-  ) return reject();
-  const nextRoute = preferredModelSubmissionRouteState(lease.appId, event.href);
-  if (!nextRoute || nextRoute.host !== lease.initialHost) return reject();
-  if (String(event.previousHref || "") !== lease.lastHref) return reject();
-  const allowedPhaseTransition = lease.appId === "Gemini"
-    ? (
-        (lease.lastPhase === "start" && (nextRoute.phase === "start" || nextRoute.phase === "terminal"))
-        || (lease.lastPhase === "terminal" && nextRoute.phase === "terminal")
-      )
-    : (
-        (lease.lastPhase === "start" && ["start", "intermediate", "terminal"].includes(nextRoute.phase))
-        || (lease.lastPhase === "intermediate" && ["intermediate", "terminal"].includes(nextRoute.phase))
-        || (lease.lastPhase === "terminal" && nextRoute.phase === "terminal")
-      );
-  if (!allowedPhaseTransition) return reject();
-  if (
-    lease.terminalThreadId
-    && (nextRoute.phase !== "terminal" || nextRoute.threadId !== lease.terminalThreadId)
-  ) return reject();
-  lease.observed = true;
-  lease.lastHref = String(event.href || "");
-  lease.lastPhase = nextRoute.phase;
-  if (nextRoute.phase === "terminal") {
-    lease.terminalObserved = true;
-    lease.terminalThreadId = lease.terminalThreadId || String(nextRoute.threadId || "");
-  }
-  return true;
-}
-
-function preferredModelRecordIsCurrent(iframe, record) {
-  return Boolean(
-    iframe?.isConnected
-    && preferredModelApplyRuns.get(iframe) === record
-    && record?.key
-    && record.key === preferredModelFrameKey(iframe)
-  );
-}
-
-function preferredModelResult(runId, values = {}) {
-  return {
-    ok: false,
-    skipped: false,
-    changed: false,
-    cancelled: false,
-    retryable: false,
-    reason: "",
-    runId,
-    ...values
-  };
-}
-
-function requestPreferredModelCancellation(iframe, record, reason) {
-  if (!iframe?.contentWindow || !record?.runId) return;
-  const payload = {
-    ...record.payload,
-    runId: record.runId,
-    reason: String(reason || "cancelled")
-  };
-  sendToContentFrame(
-    iframe,
-    "cancelPreferredModelApply",
-    payload,
-    { timeoutMs: MODEL_PREFERENCE_CANCEL_TIMEOUT_MS }
-  ).catch(() => {});
-}
-
-function stopPreferredModelRecord(iframe, record, reason, options = {}) {
-  if (!record) return;
-  clearPreferredModelSubmissionNavigation(record);
-  if (record.timer) clearTimeout(record.timer);
-  record.timer = 0;
-  const wasInFlight = record.inFlight;
-  record.controller?.abort?.();
-  record.controller = null;
-  record.pending = false;
-  record.inFlight = false;
-  record.cancelled = true;
-  record.statusToast?.remove?.();
-  record.statusToast = null;
-  if (options.notify !== false && wasInFlight) {
-    requestPreferredModelCancellation(iframe, record, reason);
-  }
-}
-
-function createPreferredModelRecord(iframe, payload, key, delays, options = {}) {
-  const record = {
-    iframe,
-    payload,
-    key,
-    delays,
-    runId: createId("model-apply"),
-    attempt: Math.max(0, Number(options.attempt) || 0),
-    timer: 0,
-    controller: null,
-    pending: true,
-    inFlight: false,
-    success: false,
-    terminal: false,
-    cancelled: false,
-    result: null,
-    failureReason: "",
-    bridgeRecoveryAttempts: 0,
-    statusToast: null,
-    submissionNavigationLease: null
-  };
-  record.statusToast = createFrameToast(
-    iframe,
-    t("toast.frameModelSwitchPending"),
-    "info",
-    preferredModelState.options?.frameToastPosition
-  );
-  return record;
-}
-
-function schedulePreferredModelRecordRun(iframe, record, delay = 0) {
-  if (!preferredModelRecordIsCurrent(iframe, record) || record.success || record.terminal) return;
-  if (record.timer) clearTimeout(record.timer);
-  record.timer = 0;
-  record.pending = true;
-  record.statusToast?.update?.(t("toast.frameModelSwitchPending"), "info");
-  syncPreferredModelInputGate();
-  record.timer = window.setTimeout(() => {
-    record.timer = 0;
-    runPreferredModelRecord(iframe, record);
-  }, Math.max(0, Number(delay) || 0));
-}
-
-function handlePreferredModelPromptCompositionStart(event) {
-  if (preferredModelInputGateIsLocked()) {
-    preferredModelPromptComposing = false;
-    preferredModelComposingPromptInput = null;
-    notifyPreferredModelGateBlocked();
-    syncPreferredModelInputGate();
-    return;
-  }
-  preferredModelPromptComposing = true;
-  preferredModelComposingPromptInput = event.currentTarget || null;
-}
-
-function handlePreferredModelPromptCompositionEnd(event) {
-  if (preferredModelInputGateIsLocked()) {
-    preferredModelState.promptText = event.currentTarget?.value ?? preferredModelState.promptText;
-    rememberPromptSelection(event.currentTarget);
-    capturePreferredModelLockedPromptSnapshot();
-  }
-  preferredModelPromptComposing = false;
-  preferredModelComposingPromptInput = null;
-  syncPreferredModelInputGate();
-}
-
-function preferredModelPromptCompositionIsActive(inputNode) {
-  return Boolean(
-    preferredModelPromptComposing
-    && preferredModelComposingPromptInput === inputNode
-    && inputNode?.isConnected
-    && document.activeElement === inputNode
-  );
-}
-
-function handlePromptBlur(event) {
-  const inputNode = event.currentTarget;
-  collapsePromptInput(inputNode);
-  queueMicrotask(() => {
-    if (preferredModelComposingPromptInput !== inputNode || document.activeElement === inputNode) return;
-    preferredModelPromptComposing = false;
-    preferredModelComposingPromptInput = null;
-    syncPreferredModelInputGate();
-  });
-}
-
-function cleanupDetachedPreferredModelFrames() {
-  let changed = false;
-  for (const [iframe, record] of preferredModelApplyRuns) {
-    if (iframe?.isConnected) continue;
-    stopPreferredModelRecord(iframe, record, "frame-detached");
-    preferredModelApplyRuns.delete(iframe);
-    changed = true;
-  }
-  if (changed) syncPreferredModelInputGate();
-  return changed;
-}
-
-function invalidatePreferredModelFrame(iframe, reason = "frame-invalidated", { clearDocumentId = false } = {}) {
-  if (!iframe) return;
-  const record = preferredModelApplyRuns.get(iframe);
-  if (record) stopPreferredModelRecord(iframe, record, reason);
-  preferredModelApplyRuns.delete(iframe);
-  if (clearDocumentId) {
-    delete iframe.dataset.preferredModelDocumentId;
-    delete iframe.dataset.preferredModelContentBridgeVersion;
-    delete iframe.dataset.summaryRuntimeDocumentId;
-    delete iframe.dataset.summaryRuntimeBridgeVersion;
-  }
-  syncPreferredModelInputGate();
-}
-
-function handlePreferredModelFrameLifecycleChange(change = {}) {
-  const event = change instanceof HTMLIFrameElement ? { type: "workspace-sync", iframe: change } : (change || {});
-  const iframe = event.iframe || null;
-  if (event.type === "loading") {
-    if (event.loading) {
-      if (iframe) iframe.dataset.preferredModelNavigationInvalidated = "1";
-      invalidatePreferredModelFrame(iframe, "navigation-start", { clearDocumentId: true });
-    } else if (iframe?.isConnected) {
-      schedulePreferredModelApplyToFrame(iframe);
-    }
-    syncPreferredModelInputGate();
-    return;
-  }
-  if (event.type === "active-tab") {
-    if (iframe?.isConnected) schedulePreferredModelApplyToFrame(iframe);
-    syncPreferredModelInputGate();
-    return;
-  }
-  if (event.type === "location") {
-    if (iframe?.isConnected) {
-      if (!preservePreferredModelForSubmissionNavigation(iframe, event)) {
-        invalidatePreferredModelFrame(iframe, "location-changed");
-        schedulePreferredModelApplyToFrame(iframe);
-      }
-    }
-    syncPreferredModelInputGate();
-    return;
-  }
-  if (event.type === "workspace-sync") {
-    cleanupDetachedPreferredModelFrames();
-    const activeFrames = Array.from(event.activeFrames || workspaceController.currentFrames()).filter(Boolean);
-    for (const activeFrame of activeFrames) schedulePreferredModelApplyToFrame(activeFrame);
-    syncPreferredModelInputGate();
-  }
-}
-
 function handleWorkspaceFrameLifecycleChange(change = {}) {
   handlePreferredModelFrameLifecycleChange(change);
-  const event = change instanceof HTMLIFrameElement ? { type: "workspace-sync", iframe: change } : (change || {});
+  const isFrame = typeof HTMLIFrameElement !== "undefined" && change instanceof HTMLIFrameElement;
+  const event = isFrame ? { type: "workspace-sync", iframe: change } : (change || {});
   if (event.type === "loading" && event.loading === false && event.iframe?.isConnected) {
     scheduleContentFrameRepair(event.iframe, 120);
     return;
@@ -2167,175 +1434,6 @@ function handleWorkspaceFrameLifecycleChange(change = {}) {
   if (event.type !== "workspace-sync" || event.membershipChanged === false) return;
   const frames = event.frames || (event.iframe ? [event.iframe] : workspaceController.currentFrames());
   for (const iframe of frames) scheduleContentFrameRepair(iframe, 180);
-}
-
-function installPreferredModelFrameCleanup() {
-  if (preferredModelFrameCleanupObserver) return;
-  preferredModelFrameCleanupObserver = new MutationObserver(cleanupDetachedPreferredModelFrames);
-  preferredModelFrameCleanupObserver.observe(appRoot, { childList: true, subtree: true });
-}
-
-async function applyPreferredModelToFrame(iframe, record) {
-  const payload = { ...record.payload, runId: record.runId };
-  let registration = await verifiedCurrentContentFrameRegistration(iframe);
-  if (!registration) {
-    // A document replacement can temporarily disappear from webNavigation.
-    // Retrying bridge preparation is safe because the model command has not
-    // been delivered yet; the mutating apply command remains exactly-once.
-    record.bridgeRecoveryAttempts = Math.max(0, Number(record.bridgeRecoveryAttempts) || 0) + 1;
-    const prepared = await prepareContentFrameRuntime(iframe);
-    if (!preferredModelRecordIsCurrent(iframe, record) || record.controller?.signal?.aborted) {
-      return preferredModelResult(record.runId, {
-        cancelled: true,
-        reason: "preferred-model frame was superseded during bridge recovery"
-      });
-    }
-    registration = prepared?.ok ? await verifiedCurrentContentFrameRegistration(iframe) : null;
-    if (!registration) {
-      return preferredModelResult(record.runId, {
-        retryable: true,
-        reason: prepared?.reason || "iframe content bridge recovery failed"
-      });
-    }
-  }
-  if (!preferredModelRecordIsCurrent(iframe, record) || record.controller?.signal?.aborted) {
-    return preferredModelResult(record.runId, {
-      cancelled: true,
-      reason: "preferred-model frame changed before apply"
-    });
-  }
-  try {
-    const result = await sendToContentFrame(
-      iframe,
-      "applyPreferredModel",
-      payload,
-      {
-        timeoutMs: MODEL_PREFERENCE_APPLY_TIMEOUT_MS,
-        signal: record.controller?.signal
-      }
-    );
-    if (String(result?.runId || "") !== record.runId) {
-      return preferredModelResult(record.runId, { reason: "preferred-model response runId mismatch" });
-    }
-    return preferredModelResult(record.runId, result || {});
-  } catch (error) {
-    const cancelled = error?.code === "ABORTED" || error?.name === "AbortError";
-    const timedOut = error?.code === "TIMEOUT" || /timeout waiting for response/i.test(String(error?.message || ""));
-    if (timedOut) requestPreferredModelCancellation(iframe, record, "parent-timeout");
-    return preferredModelResult(record.runId, {
-      cancelled,
-      // A transport timeout cannot prove that the iframe performed no UI
-      // activation, so it must never start a blind second interaction.
-      retryable: false,
-      reason: error?.message || String(error || "preferred-model request failed")
-    });
-  }
-}
-
-async function runPreferredModelRecord(iframe, record) {
-  if (!preferredModelRecordIsCurrent(iframe, record) || record.success || record.terminal) return;
-  const runId = record.runId;
-  const key = record.key;
-  record.pending = false;
-  record.inFlight = true;
-  record.cancelled = false;
-  record.controller = new AbortController();
-  const result = await applyPreferredModelToFrame(iframe, record);
-  if (!preferredModelRecordIsCurrent(iframe, record) || record.runId !== runId || record.key !== key) return;
-  record.controller = null;
-  record.inFlight = false;
-  record.result = result;
-  if (result.ok === true && result.unavailable !== true && result.unsupported !== true) {
-    record.success = true;
-    record.terminal = true;
-    const model = preferredModelTargetLabel(record.payload);
-    record.statusToast?.update?.(
-      result.changed === true
-        ? t("toast.frameModelSwitchChanged", { model })
-        : t("toast.frameModelSwitchReady", { model }),
-      "success"
-    );
-    record.statusToast?.dismiss?.(2000);
-    syncPreferredModelInputGate();
-    return;
-  }
-  if (result.cancelled === true) {
-    // Navigation and bridge replacement both publish a fresh readiness signal.
-    // Keep the gate closed without surfacing an obsolete run as a failure; the
-    // next contentReady/load signal replaces this cancelled record.
-    record.cancelled = true;
-    record.pending = true;
-    record.statusToast?.update?.(t("toast.frameModelSwitchPending"), "info");
-    syncPreferredModelInputGate();
-    if (/content bridge superseded/i.test(String(result.reason || ""))) {
-      schedulePreferredModelApplyToFrame(iframe, { immediate: true });
-    }
-    return;
-  }
-  if (result.retryable === true && record.attempt + 1 < record.delays.length) {
-    record.attempt += 1;
-    schedulePreferredModelRecordRun(iframe, record, record.delays[record.attempt]);
-    return;
-  }
-  record.terminal = true;
-  record.cancelled = result.cancelled === true;
-  record.failureReason = compactPreferredModelFailureReason(result);
-  record.statusToast?.update?.(t("toast.frameModelSwitchFailed", { reason: record.failureReason }), "error");
-  record.statusToast?.dismiss?.(5000);
-  console.warn(
-    "[ChatClub] Preferred model was not applied",
-    record.payload.appId,
-    record.payload.modelId,
-    result.reason || result
-  );
-  syncPreferredModelInputGate();
-}
-
-function schedulePreferredModelApplyToFrame(iframe, options = {}) {
-  if (!iframe) return null;
-  const key = preferredModelFrameKey(iframe);
-  const existing = preferredModelApplyRuns.get(iframe);
-  if (!key) {
-    if (existing) {
-      stopPreferredModelRecord(iframe, existing, "preference-cleared");
-      preferredModelApplyRuns.delete(iframe);
-    }
-    syncPreferredModelInputGate();
-    return null;
-  }
-  const existingIsLive = Boolean(
-    existing?.success
-    || existing?.terminal
-    || existing?.inFlight
-    || existing?.timer
-  );
-  if (existing?.key === key && existing.cancelled !== true && existingIsLive) {
-    return existing;
-  }
-  if (existing) stopPreferredModelRecord(iframe, existing, "superseded");
-  const app = workspaceController.frameApp(iframe);
-  const payload = preferredModelPayloadForApp(app);
-  if (!payload) {
-    preferredModelApplyRuns.delete(iframe);
-    syncPreferredModelInputGate();
-    return null;
-  }
-  const delays = options.immediate
-    ? MODEL_PREFERENCE_APPLY_RETRY_DELAYS
-    : MODEL_PREFERENCE_READY_APPLY_RETRY_DELAYS;
-  const record = createPreferredModelRecord(iframe, payload, key, delays);
-  preferredModelApplyRuns.set(iframe, record);
-  schedulePreferredModelRecordRun(iframe, record, delays[0]);
-  return record;
-}
-
-async function applyPreferredModelsToFrames(frames = null, options = {}) {
-  const frameList = frames
-    ? Array.from(frames).filter(Boolean)
-    : Array.from(document.querySelectorAll(".chat-frame"));
-  const immediate = options.immediate !== false;
-  for (const iframe of frameList) schedulePreferredModelApplyToFrame(iframe, { immediate });
-  syncPreferredModelInputGate();
 }
 
 async function newChatOnFrames() {
@@ -2724,74 +1822,6 @@ function renderTopbar() {
   );
 }
 
-function activeTopbarEditLayout() {
-  if (!state.topbarEditLayoutDraft) {
-    state.topbarEditLayoutDraft = normalizeTopbarLayout(state.options?.topbarLayout);
-  }
-  return normalizeTopbarLayout(state.topbarEditLayoutDraft);
-}
-
-function topbarLayoutMenuIndex(layout) {
-  return layout.findIndex((entry) => entry.type === "item" && entry.id === "settingsJumpMenu");
-}
-
-function visibleTopbarLayoutItems(layout) {
-  const menuIndex = topbarLayoutMenuIndex(layout);
-  return menuIndex < 0 ? layout : layout.slice(0, menuIndex + 1);
-}
-
-function foldedTopbarLayoutItems(layout) {
-  const menuIndex = topbarLayoutMenuIndex(layout);
-  return menuIndex < 0 ? [] : layout.slice(menuIndex + 1);
-}
-
-function topbarLayoutItemIds(layout) {
-  return new Set(layout
-    .filter((item) => item.type === "item")
-    .map((item) => item.id));
-}
-
-function topbarSettingsSectionItemIds() {
-  return SETTINGS_SECTIONS
-    .map(([id]) => topbarSettingsItemForSection(id))
-    .filter(Boolean);
-}
-
-function ensureTopbarSettingsMenuItems(layout) {
-  const normalized = normalizeTopbarLayout(layout);
-  const existing = topbarLayoutItemIds(normalized);
-  const settingsIds = topbarSettingsSectionItemIds();
-  const missingSettingsIds = settingsIds.filter((id) => !existing.has(id));
-  if (!missingSettingsIds.length) return normalized;
-  let menuIndex = topbarLayoutMenuIndex(normalized);
-  const base = [...normalized];
-  if (menuIndex < 0) {
-    base.push({ type: "item", id: "settingsJumpMenu" });
-    menuIndex = base.length - 1;
-  }
-  const settingsOrder = new Map(settingsIds.map((id, index) => [id, index]));
-  const missingSettings = new Set(missingSettingsIds);
-  const mergedFoldedItems = [];
-  const appendMissingBefore = (orderLimit) => {
-    for (const id of settingsIds) {
-      if (!missingSettings.has(id)) continue;
-      if (settingsOrder.get(id) >= orderLimit) continue;
-      mergedFoldedItems.push({ type: "item", id });
-      missingSettings.delete(id);
-    }
-  };
-  for (const item of base.slice(menuIndex + 1)) {
-    const order = item.type === "item" ? settingsOrder.get(item.id) : undefined;
-    if (typeof order === "number") appendMissingBefore(order);
-    mergedFoldedItems.push(item);
-  }
-  appendMissingBefore(Number.POSITIVE_INFINITY);
-  return [
-    ...base.slice(0, menuIndex + 1),
-    ...mergedFoldedItems
-  ];
-}
-
 function renderTopbarEditMode() {
   const layout = activeTopbarEditLayout();
   const visibleLayout = visibleTopbarLayoutItems(layout);
@@ -2883,10 +1913,6 @@ function hiddenTopbarEditItems() {
     .map((id) => ({ type: "item", id }));
 }
 
-function topbarEditPaletteCandidateIds() {
-  return TOPBAR_BUILTIN_ITEMS.filter((id) => !TOPBAR_REQUIRED_ITEMS.includes(id));
-}
-
 function topbarEditItemLabel(item) {
   if (item?.type !== "flex") return t(topbarItemLabelKey(item));
   return t("topbar.flexSpace");
@@ -2917,10 +1943,7 @@ function renderTopbarPaletteItem(item, flexTemplate = false) {
     onclick: (event) => {
       event.preventDefault();
       event.stopPropagation();
-      if (suppressTopbarPaletteClick) {
-        suppressTopbarPaletteClick = false;
-        return;
-      }
+      if (consumePaletteClickSuppression()) return;
       insertTopbarPaletteItem(item, flexTemplate);
     },
     onpointerdown: (event) => startTopbarEditPointerDrag(event, item, flexTemplate ? "flex-template" : "palette"),
@@ -2970,11 +1993,6 @@ function renderTopbarEditSlot(item, prompt, collapsedPreview) {
   },
     body
   );
-}
-
-function setTopbarEditLayoutDraft(layout) {
-  state.topbarEditLayoutDraft = normalizeTopbarLayout(layout);
-  syncTopbar();
 }
 
 function enterTopbarEditMode() {
@@ -3027,320 +2045,10 @@ async function saveTopbarEditLayout(event) {
   }
 }
 
-function addTopbarEditFlexSpace() {
-  const layout = activeTopbarEditLayout();
-  setTopbarEditLayoutDraft(insertTopbarItemBeforeSettingsMenu(layout, {
-    type: "flex",
-    id: createId("topbar-flex"),
-    weight: 1
-  }));
-}
-
-function insertTopbarItemBeforeSettingsMenu(layout, item) {
-  const menuIndex = topbarLayoutMenuIndex(layout);
-  const insertIndex = menuIndex >= 0 ? menuIndex : layout.length;
-  return [
-    ...layout.slice(0, insertIndex),
-    item,
-    ...layout.slice(insertIndex)
-  ];
-}
-
-function insertTopbarPaletteItem(item, flexTemplate = false) {
-  const layout = activeTopbarEditLayout();
-  if (flexTemplate || item.type === "flex") {
-    setTopbarEditLayoutDraft(insertTopbarItemBeforeSettingsMenu(layout, {
-      type: "flex",
-      id: createId("topbar-flex"),
-      weight: item.weight || 1
-    }));
-    return;
-  }
-  if (layout.some((entry) => entry.type === "item" && entry.id === item.id)) return;
-  setTopbarEditLayoutDraft(insertTopbarItemBeforeSettingsMenu(layout, { type: "item", id: item.id }));
-}
-
-function topbarEditItemIsRequired(item) {
-  return item?.type === "item" && TOPBAR_REQUIRED_ITEMS.includes(item.id);
-}
-
-function removeTopbarEditItem(item) {
-  if (!item || topbarEditItemIsRequired(item)) return;
-  setTopbarEditLayoutDraft(activeTopbarEditLayout().filter((entry) => entry.id !== item.id));
-}
-
-function resetTopbarEditLayout() {
-  setTopbarEditLayoutDraft(DEFAULT_TOPBAR_LAYOUT);
-}
-
 function openTopbarEditSettingsMenu() {
   if (!state.topbarEditMode) return;
   const anchor = document.querySelector(".topbar-edit-slot-settingsJumpMenu .top-icon-action, .topbar-edit-slot-settingsJumpMenu button");
   if (anchor) openSettingsJumpMenu(anchor, { forceOpen: true, editing: true });
-}
-
-function addTopbarEditPointerDragGuards() {
-  document.addEventListener("pointermove", handleTopbarEditPointerMove, true);
-  document.addEventListener("pointerup", handleTopbarEditPointerUp, true);
-  document.addEventListener("pointercancel", cancelTopbarEditPointerDrag, true);
-  document.addEventListener("selectstart", preventTopbarEditNativeDrag, true);
-  document.addEventListener("dragstart", preventTopbarEditNativeDrag, true);
-  document.addEventListener("dragover", preventTopbarEditNativeDrag, true);
-  document.addEventListener("drop", preventTopbarEditNativeDrag, true);
-}
-
-function removeTopbarEditPointerDragGuards() {
-  document.removeEventListener("pointermove", handleTopbarEditPointerMove, true);
-  document.removeEventListener("pointerup", handleTopbarEditPointerUp, true);
-  document.removeEventListener("pointercancel", cancelTopbarEditPointerDrag, true);
-  document.removeEventListener("selectstart", preventTopbarEditNativeDrag, true);
-  document.removeEventListener("dragstart", preventTopbarEditNativeDrag, true);
-  document.removeEventListener("dragover", preventTopbarEditNativeDrag, true);
-  document.removeEventListener("drop", preventTopbarEditNativeDrag, true);
-}
-
-function preventTopbarEditNativeDrag(event) {
-  if (!state.topbarEditMode && !activeTopbarEditPointerDrag) return;
-  event.preventDefault();
-  event.stopPropagation();
-  if (event.dataTransfer) event.dataTransfer.dropEffect = "none";
-}
-
-function startTopbarEditPointerDrag(event, item, source = "toolbar", command = null) {
-  if (event.button !== 0) return;
-  event.preventDefault();
-  event.stopPropagation();
-  globalThis.getSelection?.()?.removeAllRanges?.();
-  cleanupTopbarEditPointerDrag();
-  const slot = event.currentTarget.closest(".topbar-edit-slot, .topbar-settings-menu-slot, .topbar-palette-item") || event.currentTarget;
-  state.topbarEditDragId = item.id;
-  document.body.classList.add("topbar-edit-gesture-active");
-  event.currentTarget?.setPointerCapture?.(event.pointerId);
-  activeTopbarEditPointerDrag = {
-    id: item.id,
-    item,
-    source,
-    pointerId: event.pointerId,
-    startX: event.clientX,
-    startY: event.clientY,
-    targetId: item.id,
-    placement: "before",
-    dropZone: "toolbar",
-    removeTarget: false,
-    slot,
-    started: false,
-    command
-  };
-  addTopbarEditPointerDragGuards();
-}
-
-function beginTopbarEditPointerDrag(drag) {
-  if (drag.started) return;
-  drag.started = true;
-  document.body.classList.add("topbar-edit-dragging");
-  drag.slot?.classList.add("dragging");
-}
-
-function cleanupTopbarEditPointerDrag() {
-  const drag = activeTopbarEditPointerDrag;
-  removeTopbarEditPointerDragGuards();
-  activeTopbarEditPointerDrag = null;
-  state.topbarEditDragId = "";
-  document.body.classList.remove("topbar-edit-gesture-active", "topbar-edit-dragging");
-  drag?.slot?.classList?.remove("dragging");
-  cleanupSettingsDragRows(".topbar-edit-slot");
-  cleanupSettingsDragRows(".topbar-settings-menu-slot");
-  document.querySelectorAll(".topbar-settings-popover.drop-empty").forEach((node) => node.classList.remove("drop-empty"));
-  document.querySelectorAll(".topbar-customize-palette.is-remove-target").forEach((node) => node.classList.remove("is-remove-target"));
-}
-
-function cancelTopbarEditPointerDrag(event) {
-  event?.preventDefault?.();
-  event?.stopPropagation?.();
-  cleanupTopbarEditPointerDrag();
-}
-
-function handleTopbarEditPointerMove(event) {
-  const drag = activeTopbarEditPointerDrag;
-  if (!drag) return;
-  event.preventDefault();
-  event.stopPropagation();
-  if (!drag.started) {
-    const distance = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY);
-    if (distance < 4) return;
-    beginTopbarEditPointerDrag(drag);
-  }
-  previewTopbarEditPointerDrop(event.clientX, event.clientY, drag);
-}
-
-function handleTopbarEditPointerUp(event) {
-  const drag = activeTopbarEditPointerDrag;
-  if (!drag) return;
-  event.preventDefault();
-  event.stopPropagation();
-  if (!drag.started && drag.source === "toolbar" && drag.item?.id === "settingsJumpMenu") {
-    const anchor = drag.slot?.querySelector?.(".top-icon-action, button");
-    cleanupTopbarEditPointerDrag();
-    if (anchor?.isConnected) openSettingsJumpMenu(anchor, { forceOpen: true, editing: true });
-    return;
-  }
-  if (!drag.started && typeof drag.command === "function") {
-    const command = drag.command;
-    cleanupTopbarEditPointerDrag();
-    command(event);
-    return;
-  }
-  if (drag.started && drag.source !== "toolbar") suppressTopbarPaletteClick = true;
-  const shouldRemove = drag.started && drag.removeTarget && drag.source !== "palette" && drag.source !== "flex-template" && !topbarEditItemIsRequired(drag.item);
-  const shouldFoldIntoMenu = drag.started && drag.dropZone === "settings-menu" && drag.item?.type === "item" && !topbarEditItemIsRequired(drag.item);
-  const shouldPlaceOnToolbar = drag.started && drag.targetId && drag.dropZone === "toolbar" && drag.source !== "toolbar";
-  const shouldMove = drag.started && drag.targetId && drag.dropZone === "toolbar" && drag.source === "toolbar" && drag.targetId !== drag.id;
-  let layout = null;
-  if (shouldRemove) {
-    layout = activeTopbarEditLayout().filter((entry) => entry.id !== drag.id);
-  } else if (shouldFoldIntoMenu) {
-    layout = placeTopbarItemInSettingsMenu(activeTopbarEditLayout(), drag.item, drag.targetId, drag.placement);
-  } else if (shouldPlaceOnToolbar) {
-    layout = placeTopbarItemOnToolbar(activeTopbarEditLayout(), drag.item, drag.targetId, drag.placement, drag.source === "flex-template");
-  } else if (shouldMove) {
-    layout = placeTopbarItemOnToolbar(activeTopbarEditLayout(), drag.item, drag.targetId, drag.placement);
-  }
-  const shouldReopenSettingsMenu = Boolean(layout && state.topbarEditMode && document.querySelector(".topbar-settings-popover"));
-  cleanupTopbarEditPointerDrag();
-  if (layout) {
-    if (shouldReopenSettingsMenu) closeSettingsJumpMenu();
-    setTopbarEditLayoutDraft(layout);
-    if (shouldReopenSettingsMenu) requestAnimationFrame(openTopbarEditSettingsMenu);
-  }
-}
-
-function previewTopbarEditPointerDrop(clientX, clientY, drag) {
-  document.querySelectorAll(".topbar-customize-palette.is-remove-target").forEach((node) => node.classList.remove("is-remove-target"));
-  const elementAtPoint = document.elementFromPoint(clientX, clientY);
-  const palette = elementAtPoint?.closest?.(".topbar-customize-palette");
-  cleanupSettingsDragRows(".topbar-edit-slot");
-  cleanupSettingsDragRows(".topbar-settings-menu-slot");
-  drag.slot?.classList.add("dragging");
-  drag.dropZone = "";
-  drag.removeTarget = Boolean(palette && drag.source !== "palette" && drag.source !== "flex-template" && !topbarEditItemIsRequired(drag.item));
-  if (palette) {
-    if (drag.removeTarget) palette.classList.add("is-remove-target");
-    drag.targetId = "";
-    return;
-  }
-  const menuSlot = topbarSettingsMenuSlotFromPoint(clientX, clientY);
-  if (menuSlot && drag.item?.type === "item" && !topbarEditItemIsRequired(drag.item)) {
-    const targetId = menuSlot.dataset?.topbarItemId || "";
-    drag.targetId = targetId;
-    drag.placement = targetId ? topbarEditDropPlacement(menuSlot, clientX) : "after";
-    drag.dropZone = "settings-menu";
-    if (targetId) {
-      menuSlot.classList.toggle("drop-after", drag.placement === "after");
-      menuSlot.classList.toggle("drop-before", drag.placement !== "after");
-    } else {
-      menuSlot.classList.add("drop-empty");
-    }
-    return;
-  }
-  const targetSlot = topbarEditSlotFromPoint(clientX, clientY);
-  if (!targetSlot) return;
-  const targetId = targetSlot.dataset?.topbarItemId || "";
-  drag.targetId = targetId;
-  drag.placement = topbarEditDropPlacement(targetSlot, clientX);
-  drag.dropZone = "toolbar";
-  if (!targetId || targetId === drag.id) return;
-  targetSlot.classList.toggle("drop-after", drag.placement === "after");
-  targetSlot.classList.toggle("drop-before", drag.placement !== "after");
-}
-
-function topbarDropItemEntry(item, flexTemplate = false) {
-  if (flexTemplate || item.type === "flex") {
-    return { type: "flex", id: createId("topbar-flex"), weight: item.weight || 1 };
-  }
-  return { type: "item", id: item.id };
-}
-
-function removeTopbarDropItem(layout, item, flexTemplate = false) {
-  if (flexTemplate) return layout;
-  if (item.type === "item") return layout.filter((entry) => !(entry.type === "item" && entry.id === item.id));
-  return layout.filter((entry) => entry.id !== item.id);
-}
-
-function placeTopbarItemOnToolbar(layout, item, targetId, placement, flexTemplate = false) {
-  const nextItem = topbarDropItemEntry(item, flexTemplate);
-  const base = removeTopbarDropItem(layout, item, flexTemplate);
-  const targetIndex = base.findIndex((entry) => entry.id === targetId);
-  if (targetIndex < 0) return [...base, nextItem];
-  const insertIndex = placement === "after" ? targetIndex + 1 : targetIndex;
-  return [
-    ...base.slice(0, insertIndex),
-    nextItem,
-    ...base.slice(insertIndex)
-  ];
-}
-
-function placeTopbarItemInSettingsMenu(layout, item, targetId, placement) {
-  if (item.type !== "item" || topbarEditItemIsRequired(item)) return layout;
-  const base = removeTopbarDropItem(layout, item);
-  let menuIndex = topbarLayoutMenuIndex(base);
-  if (menuIndex < 0) {
-    base.push({ type: "item", id: "settingsJumpMenu" });
-    menuIndex = base.length - 1;
-  }
-  const targetIndex = base.findIndex((entry, index) => index > menuIndex && entry.id === targetId);
-  const insertIndex = targetIndex >= 0
-    ? targetIndex + (placement === "after" ? 1 : 0)
-    : menuIndex + 1;
-  return [
-    ...base.slice(0, insertIndex),
-    { type: "item", id: item.id },
-    ...base.slice(insertIndex)
-  ];
-}
-
-function topbarSettingsMenuSlotFromPoint(clientX, clientY) {
-  const direct = document.elementFromPoint(clientX, clientY)?.closest?.(".topbar-settings-menu-slot");
-  if (direct) return direct;
-  const menu = document.elementFromPoint(clientX, clientY)?.closest?.(".topbar-settings-popover.is-editing");
-  if (!menu) return null;
-  const slots = [...menu.querySelectorAll(".topbar-settings-menu-slot")];
-  if (!slots.length) return menu;
-  let best = null;
-  let bestDistance = Number.POSITIVE_INFINITY;
-  for (const slot of slots) {
-    const rect = slot.getBoundingClientRect();
-    const centerY = rect.top + rect.height / 2;
-    const distance = Math.abs(clientY - centerY);
-    if (distance < bestDistance) {
-      best = slot;
-      bestDistance = distance;
-    }
-  }
-  return best;
-}
-
-function topbarEditSlotFromPoint(clientX, clientY) {
-  const direct = document.elementFromPoint(clientX, clientY)?.closest?.(".topbar-edit-slot");
-  if (direct) return direct;
-  const slots = [...document.querySelectorAll(".topbar-edit-slot")];
-  let best = null;
-  let bestDistance = Number.POSITIVE_INFINITY;
-  for (const slot of slots) {
-    const rect = slot.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-    const distance = Math.hypot(clientX - centerX, clientY - centerY);
-    if (distance < bestDistance) {
-      best = slot;
-      bestDistance = distance;
-    }
-  }
-  return best;
-}
-
-function topbarEditDropPlacement(slot, clientX) {
-  const rect = slot.getBoundingClientRect();
-  return clientX > rect.left + rect.width / 2 ? "after" : "before";
 }
 
 function topbarTooltipIdForItem(item) {
@@ -3830,7 +2538,7 @@ function syncPromptInputNode({ focus = false, bypassModelGate = false } = {}) {
     return inputNode;
   }
   if (bypassModelGate && preferredModelInputGateIsLocked()) {
-    preferredModelLockedPromptSnapshot = preferredModelPromptSnapshotFromState();
+    rememberPreferredModelLockedPromptSnapshot();
   }
   inputNode.value = state.promptText;
   syncPromptCollapsedPreview(inputNode);
@@ -3931,133 +2639,6 @@ function installShortcuts() {
   }, true);
 }
 
-function installIframeEventBridge() {
-  window.addEventListener("message", (event) => {
-    const message = event.data;
-    const genericRequest = message?.source === "chatclub";
-    if (!genericRequest || message.type !== "request") return;
-    const iframe = workspaceController.iframeForWindow(event.source);
-    if (!iframe) return;
-    if (message.action === "contentReady") {
-      const documentId = String(message.data?.documentId || "");
-      const announcedBridgeVersion = String(message.data?.bridgeVersion || "");
-      if (!documentId) return;
-      if (
-        String(iframe.dataset.preferredModelDocumentId || "") === documentId
-        && String(iframe.dataset.preferredModelContentBridgeVersion || "") === announcedBridgeVersion
-        && announcedBridgeVersion === CONTENT_BRIDGE_VERSION
-      ) {
-        event.source?.postMessage({ source: "chatclub", type: "response", id: message.id, action: message.action, data: { ok: true } }, "*");
-        return;
-      }
-      verifyContentFrameRegistration(documentId).then((registration) => {
-        if (!registration || workspaceController.iframeForWindow(event.source) !== iframe) return;
-        event.source?.postMessage({ source: "chatclub", type: "response", id: message.id, action: message.action, data: { ok: true } }, "*");
-        const previousDocumentId = String(iframe.dataset.preferredModelDocumentId || "");
-        const bridgeVersion = String(registration.bridgeVersion || "");
-        const previousBridgeVersion = String(iframe.dataset.preferredModelContentBridgeVersion || "");
-        const bridgeChanged = Boolean(
-          (documentId && previousDocumentId && documentId !== previousDocumentId)
-          || (bridgeVersion && previousBridgeVersion && bridgeVersion !== previousBridgeVersion)
-        );
-        if (bridgeChanged) {
-          invalidatePreferredModelFrame(iframe, "document-changed");
-        }
-        if (
-          bridgeChanged
-          || String(iframe.dataset.summaryRuntimeDocumentId || "") !== documentId
-          || String(iframe.dataset.summaryRuntimeBridgeVersion || "") !== bridgeVersion
-        ) {
-          delete iframe.dataset.summaryRuntimeDocumentId;
-          delete iframe.dataset.summaryRuntimeBridgeVersion;
-        }
-        iframe.dataset.preferredModelDocumentId = documentId;
-        if (bridgeVersion) iframe.dataset.preferredModelContentBridgeVersion = bridgeVersion;
-        workspaceController.rememberFrameLocation(iframe, {
-          documentId,
-          bridgeVersion,
-          href: String(registration.href || ""),
-          title: String(registration.title || "")
-        });
-        workspaceController.syncFrameFavicon(event.source).catch((error) => console.warn("[ChatClub] Failed to sync frame favicon", error));
-        schedulePreferredModelApplyToFrame(iframe);
-        workspaceController.reapplyMessageNavigatorForFrame(iframe).catch((error) => console.warn("[ChatClub] Failed to restore message navigator", error));
-      }).catch((error) => console.warn("[ChatClub] Content frame registration verification failed", error));
-      return;
-    }
-  }, true);
-}
-
-function shortcutRelaySourceWindow(context = {}) {
-  const bridgeDocumentId = String(context.bridgeDocumentId || "");
-  if (!bridgeDocumentId) return null;
-  const iframe = workspaceController.currentFrames().find((frame) =>
-    String(frame.dataset.preferredModelDocumentId || "") === bridgeDocumentId
-  );
-  return iframe?.contentWindow || null;
-}
-
-function installRuntimeEventBridge() {
-  const api = extensionApi();
-  if (!api?.runtime?.onMessage?.addListener) return;
-  api.runtime.onMessage.addListener((message, sender) => {
-    if (message?.source !== EXTENSION_RUNTIME_RELAY_SOURCE || sender?.tab) return false;
-    (async () => {
-      const context = message.senderContext || {};
-      const tabId = await currentExtensionTabId();
-      if (!Number.isInteger(tabId) || context.tabId !== tabId) return;
-      const sourceWindow = shortcutRelaySourceWindow(context);
-      if (!sourceWindow) return;
-      if (message.action === "shortcutTriggered") {
-        await handleShortcutAction(message.shortcutAction, message.matchObj || {}, sourceWindow);
-        return;
-      }
-      if (message.action !== "frameLifecycle") return;
-      const iframe = workspaceController.iframeForWindow(sourceWindow);
-      if (!iframe || message.data?.documentId !== context.bridgeDocumentId) return;
-      if (message.lifecycleAction === "locationChanged") {
-        workspaceController.rememberFrameLocation(iframe, message.data || {});
-        return;
-      }
-      if (message.lifecycleAction === "contentUnloading") {
-        iframe.dataset.preferredModelNavigationInvalidated = "1";
-        delete iframe.dataset.summaryRuntimeDocumentId;
-        delete iframe.dataset.summaryRuntimeBridgeVersion;
-        invalidatePreferredModelFrame(iframe, "content-unloading", { clearDocumentId: true });
-      }
-    })().catch((error) => console.warn("[ChatClub] Runtime shortcut action failed", error));
-    return false;
-  });
-}
-
-function installPreferredModelIframeLoadHandler() {
-  document.addEventListener("load", (event) => {
-    const iframe = event.target;
-    if (!(iframe instanceof HTMLIFrameElement) || !iframe.classList.contains("chat-frame")) return;
-    // Parent-driven loads were invalidated when loading started. Preserve a
-    // contentReady documentId that arrived before the iframe load event so the
-    // init/load/contentReady signals still coalesce into the same record.
-    const navigationAlreadyInvalidated = iframe.dataset.preferredModelNavigationInvalidated === "1";
-    delete iframe.dataset.preferredModelNavigationInvalidated;
-    if (!preferredModelFrameIsLoading(iframe) && !navigationAlreadyInvalidated) {
-      invalidatePreferredModelFrame(iframe, "iframe-load", { clearDocumentId: true });
-    }
-    // The Grok Cookie bridge may reload the frame without a parent-driven
-    // loading transition. Always start a fresh bounded bridge repair for the
-    // newly loaded document before Preferred Model retries inspect it.
-    scheduleContentFrameRepair(iframe, 120);
-    schedulePreferredModelApplyToFrame(iframe);
-  }, true);
-}
-
-function installExtensionTabTracker() {
-  workspaceController.refreshCurrentExtensionTabInfo();
-  window.addEventListener("focus", workspaceController.refreshCurrentExtensionTabInfo);
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") workspaceController.refreshCurrentExtensionTabInfo();
-  });
-}
-
 async function init() {
   state.options = await loadOptions();
   state.customConfig = await loadCustomConfig();
@@ -4084,16 +2665,12 @@ async function init() {
   installGlobalTooltips({
     getDisabledTooltipIds: () => state.options?.tooltipDisabledIds || []
   });
-  installExtensionTabTracker();
   installShortcuts();
-  installRuntimeEventBridge();
-  installIframeEventBridge();
-  installPreferredModelIframeLoadHandler();
+  frameBridgeController.install();
   installPreferredModelFrameCleanup();
   render();
   applyPreferredModelsToFrames(null, { immediate: false });
-  preferredModelGateBootstrapping = false;
-  syncPreferredModelInputGate();
+  finishPreferredModelBootstrapping();
 }
 
 init().catch((error) => {

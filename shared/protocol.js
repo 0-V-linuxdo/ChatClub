@@ -1,23 +1,25 @@
 export const GENERIC_POST_MESSAGE_SOURCE = "chatclub";
-export const NATIVE_COPY_SOURCE = "chatclub-native-copy:2026.07.08.13";
+export const NATIVE_COPY_SOURCE = "chatclub-native-copy:2026.07.15.1";
 export const GEMINI_MODEL_PICKER_SOURCE = "chatclub-gemini-model-picker:2026.07.13.3";
 export const MAIN_WORLD_LOCATION_SOURCE = "chatclub:main-world-location:2026.07.13.3";
-export const NOTION_SEND_TEXT_SOURCE = "chatclub-notion-send-text:2026.07.13.13";
-export const NOTION_SEND_PROMPT_SOURCE = "chatclub-notion-send-prompt:2026.07.13.13";
-export const NOTION_SEND_ACTIVATED_EVENT = "chatclub:notion-send-activated:2026.07.13.1";
-export const SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.13.7";
-export const DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.10.2";
-export const MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.08.12";
-export const SUMMARY_POST_MESSAGE_SOURCE = "chatclub:summary:2026.07.08.13";
-export const PREFERRED_MODEL_POST_MESSAGE_SOURCE = "chatclub:preferred-model:2026.07.13.2";
-export const CONTENT_BRIDGE_VERSION = "2026.07.15.7";
+export const NOTION_SEND_TEXT_SOURCE = "chatclub-notion-send-text:2026.07.15.2";
+export const NOTION_SEND_PROMPT_SOURCE = "chatclub-notion-send-prompt:2026.07.15.2";
+export const NOTION_SEND_TEXT_EVENT = "chatclub:notion-send-text:2026.07.15.2";
+export const NOTION_SEND_PROMPT_EVENT = "chatclub:notion-send-prompt:2026.07.15.2";
+export const NOTION_SEND_ACTIVATED_EVENT = "chatclub:notion-send-activated:2026.07.15.2";
+export const SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.15.8";
+export const DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.15.8";
+export const MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.15.8";
+export const SUMMARY_POST_MESSAGE_SOURCE = "chatclub:summary:2026.07.15.8";
+export const PREFERRED_MODEL_POST_MESSAGE_SOURCE = "chatclub:preferred-model:2026.07.15.8";
+export const CONTENT_BRIDGE_VERSION = "2026.07.15.8";
 export const GROK_COOKIE_BRIDGE_VERSION = "2026.07.15.1";
-export const EXTENSION_RUNTIME_RELAY_SOURCE = "chatclub:runtime-relay:2026.07.15.7";
-export const SECURE_FRAME_COMMAND_SOURCE = "chatclub:frame-command:2026.07.15.7";
-export const DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.07.03.30";
-export const PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.15.7";
-export const RUNTIME_REGISTRY_KEY = "__CHATCLUB_RUNTIME_REGISTRY_V1__";
+export const EXTENSION_RUNTIME_RELAY_SOURCE = "chatclub:runtime-relay:2026.07.15.8";
+export const SECURE_FRAME_COMMAND_SOURCE = "chatclub:frame-command:2026.07.15.8";
+export const DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.07.15.1";
+export const PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.15.8";
 export const RUNTIME_REGISTRY_ABI_VERSION = 1;
+export const RUNTIME_REGISTRY_KEY = `__CHATCLUB_RUNTIME_REGISTRY_V${RUNTIME_REGISTRY_ABI_VERSION}__`;
 export const NAVIGATION_FOCUS_GUARD_RUNTIME = "navigation-focus-guard";
 export const NAVIGATION_FOCUS_GUARD_RUNTIME_VERSION = "2026.07.15.2";
 export const FRAME_TOAST_POSITION_EVENT = "chatclub:frame-toast-position:2026.07.13.1";
@@ -36,6 +38,8 @@ export const CONTENT_PROTOCOL = Object.freeze({
   MAIN_WORLD_LOCATION_SOURCE,
   NOTION_SEND_TEXT_SOURCE,
   NOTION_SEND_PROMPT_SOURCE,
+  NOTION_SEND_TEXT_EVENT,
+  NOTION_SEND_PROMPT_EVENT,
   NOTION_SEND_ACTIVATED_EVENT,
   SEND_TEXT_POST_MESSAGE_SOURCE,
   DELETE_THREAD_POST_MESSAGE_SOURCE,

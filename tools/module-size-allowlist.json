@@ -2,9 +2,7 @@
   "app/runtime.js": "Top-level application assembly and lifecycle legacy extraction boundary; browser entry remains a minimal bootstrap.",
   "app/settings/controller.js": "Lazy-loaded settings section controllers share modal routing and drag-order persistence during the staged split.",
   "app/workspace/controller.js": "Workspace facade still composes frame lifecycle, layout, drag, and menu behavior behind one lazy boundary.",
-  "background/runtime.js": "Background listener business routing split boundary; the Service Worker entry itself only registers static modules.",
   "content-src/content.js": "Canonical content bridge behavior is kept in one esbuild entry while protocol and reusable Summary runtime are extracted.",
-  "content-src/preload.js": "Canonical MAIN-world preload includes site adapters that must ship as one deterministic classic IIFE.",
   "content-src/message-navigator.js": "Message Navigator site adapters are bundled together into one dynamically registered classic IIFE.",
   "shared/topic-delete-userscript-sources.js": "Build-time canonical Delete userscript templates generate standalone runtime assets and are deliberately excluded from packages."
 }

@@ -160,19 +160,6 @@ export class FrameRuntimePort {
   }
 }
 
-// Compatibility wrappers for modules that receive no app-scoped port yet.
-export let frameRuntimePort = new FrameRuntimePort();
-
-export function configureFrameRuntimePort(options = {}) {
-  frameRuntimePort = options instanceof FrameRuntimePort ? options : new FrameRuntimePort(options);
-  return frameRuntimePort;
-}
-
-export function sendToContentFrame(iframe, command, data = {}, timeoutMs) {
-  const options = timeoutMs && typeof timeoutMs === "object" ? timeoutMs : { timeoutMs };
-  return frameRuntimePort.request(iframe, command, data, options);
-}
-
 export async function verifyContentFrameRegistration(documentId) {
   const token = String(documentId || "").trim();
   if (!token) return false;

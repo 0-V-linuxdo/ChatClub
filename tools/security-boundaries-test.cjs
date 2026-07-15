@@ -37,35 +37,41 @@ const dataModule = (source) => import(`data:text/javascript;base64,${Buffer.from
   assert.equal(rootState.pocketEntries[0].id, "entry-1");
 
   const content = read("content/content.js");
-  const background = `${read("background/service-worker.js")}\n${read("background/runtime.js")}`;
-  const main = `${read("app/main.js")}\n${read("app/runtime.js")}`;
+  const background = [
+    "background/service-worker.js",
+    "background/runtime.js",
+    "background/content-registration.js",
+    "background/frame-injection.js",
+    "background/tab-runtime.js"
+  ].map(read).join("\n");
+  const main = [
+    "app/main.js",
+    "app/runtime.js",
+    "app/frame-bridge/controller.js"
+  ].map(read).join("\n");
   const workspace = read("app/workspace/controller.js");
   const summary = read("app/summary/controller.js");
   const topicDelete = read("app/topic-delete/runtime.js");
+  const contentEntry = read("content-src/content.js");
+  const commandDispatcher = read("content-src/shared/command-dispatcher.js");
+  const secureFrameRpc = read("content-src/shared/secure-frame-rpc.js");
   const preloadEntry = read("content-src/preload.js");
   assert.match(content, /event\.source !== window\.parent \|\| event\.origin !== EXTENSION_ORIGIN/);
   assert.match(content, /configId: String\(config\.id \|\| ""\)/);
   assert.doesNotMatch(content, /userscript:\s*source/);
   assert.doesNotMatch(content, /chatclub-parent-clipboard|getShortcutConfig/);
   assert.match(content, /secureFrameToken/);
-  const secureListenerStart = content.indexOf("const secureFrameCommandListener");
-  const secureListenerEnd = content.indexOf(
-    "EXTENSION_API?.runtime?.onMessage?.addListener",
-    secureListenerStart
-  );
-  assert.notEqual(secureListenerStart, -1);
-  assert.notEqual(secureListenerEnd, -1);
-  const secureListenerSource = content.slice(secureListenerStart, secureListenerEnd);
-  assert.match(secureListenerSource, /message\.bridgeDocumentId !== contentDocumentId/);
-  assert.match(secureListenerSource, /message\.secureFrameToken !== secureFrameToken/);
-  assert.match(secureListenerSource, /sender\?\.id !== EXTENSION_API\?\.runtime\?\.id/);
+  assert.match(contentEntry, /installSecureFrameRpc\(\{/);
+  assert.match(secureFrameRpc, /message\.bridgeDocumentId !== bridgeDocumentId/);
+  assert.match(secureFrameRpc, /message\.secureFrameToken !== secureFrameToken/);
+  assert.match(secureFrameRpc, /sender\?\.id !== extensionApi\?\.runtime\?\.id/);
   assert.match(content, /if \(!event\.isTrusted\) return/);
   assert.match(background, /configMatchesHref\(config, senderUrl\)/);
-  assert.match(background, /documentIds: \[documentId\]/);
+  assert.match(background, /documentIds: \[context\.documentId\]/);
   assert.match(background, /frame\.parentFrameId !== 0/);
   assert.match(background, /registeredSenderContext/);
   assert.match(background, /executeCustomTopicDeleteUserscript/);
-  assert.match(background, /requireDocumentId: true/);
+  assert.match(background, /verifiedCustomUserscriptTarget/);
   const frameCommands = await dataModule(read("shared/frame-commands.js"));
   assert.ok(frameCommands.FRAME_COMMAND_SPECS.getSummaryRuntimeState);
   assert.equal(frameCommands.FRAME_COMMAND_SPECS.prepareNavigationFocusGuard.transport, "main-world");
@@ -75,9 +81,11 @@ const dataModule = (source) => import(`data:text/javascript;base64,${Buffer.from
   assert.match(background, /world: "MAIN"/);
   assert.match(background, /RUNTIME_REGISTRY_KEY/);
   assert.match(background, /registry\.require\(runtimeName, runtimeVersion\)/);
-  assert.match(read("content-src/content.js"), /if \(!FRAME_COMMAND_SPECS\[action\]\) throw new Error/);
+  assert.match(contentEntry, /createCommandDispatcher\(FRAME_COMMAND_SPECS/);
+  assert.match(commandDispatcher, /for \(const command of Object\.keys\(specifications\)\)/);
+  assert.match(commandDispatcher, /Object\.hasOwn\(specifications, command\)/);
   assert.match(background, /rollbackContentScript\(previous, registration\)/);
-  assert.match(background, /registerContentScriptsVerified\(\[rollback\]\)/);
+  assert.match(background, /registerContentScriptsVerified\(api, \[rollback\]\)/);
   assert.doesNotMatch(main, /chatclub-parent-clipboard|getShortcutConfig|SHORTCUT_TRIGGER_POST_MESSAGE_SOURCE/);
   assert.match(main, /verifyContentFrameRegistration/);
   assert.doesNotMatch(workspace, /contentWindow\??\.postMessage/);

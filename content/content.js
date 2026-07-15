@@ -7,24 +7,26 @@
 
   // shared/protocol.js
   var GENERIC_POST_MESSAGE_SOURCE = "chatclub";
-  var NATIVE_COPY_SOURCE = "chatclub-native-copy:2026.07.08.13";
+  var NATIVE_COPY_SOURCE = "chatclub-native-copy:2026.07.15.1";
   var GEMINI_MODEL_PICKER_SOURCE = "chatclub-gemini-model-picker:2026.07.13.3";
   var MAIN_WORLD_LOCATION_SOURCE = "chatclub:main-world-location:2026.07.13.3";
-  var NOTION_SEND_TEXT_SOURCE = "chatclub-notion-send-text:2026.07.13.13";
-  var NOTION_SEND_PROMPT_SOURCE = "chatclub-notion-send-prompt:2026.07.13.13";
-  var NOTION_SEND_ACTIVATED_EVENT = "chatclub:notion-send-activated:2026.07.13.1";
-  var SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.13.7";
-  var DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.10.2";
-  var MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.08.12";
-  var SUMMARY_POST_MESSAGE_SOURCE = "chatclub:summary:2026.07.08.13";
-  var PREFERRED_MODEL_POST_MESSAGE_SOURCE = "chatclub:preferred-model:2026.07.13.2";
-  var CONTENT_BRIDGE_VERSION = "2026.07.15.7";
-  var EXTENSION_RUNTIME_RELAY_SOURCE = "chatclub:runtime-relay:2026.07.15.7";
-  var SECURE_FRAME_COMMAND_SOURCE = "chatclub:frame-command:2026.07.15.7";
-  var DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.07.03.30";
-  var PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.15.7";
-  var RUNTIME_REGISTRY_KEY = "__CHATCLUB_RUNTIME_REGISTRY_V1__";
+  var NOTION_SEND_TEXT_SOURCE = "chatclub-notion-send-text:2026.07.15.2";
+  var NOTION_SEND_PROMPT_SOURCE = "chatclub-notion-send-prompt:2026.07.15.2";
+  var NOTION_SEND_TEXT_EVENT = "chatclub:notion-send-text:2026.07.15.2";
+  var NOTION_SEND_PROMPT_EVENT = "chatclub:notion-send-prompt:2026.07.15.2";
+  var NOTION_SEND_ACTIVATED_EVENT = "chatclub:notion-send-activated:2026.07.15.2";
+  var SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.15.8";
+  var DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.15.8";
+  var MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.15.8";
+  var SUMMARY_POST_MESSAGE_SOURCE = "chatclub:summary:2026.07.15.8";
+  var PREFERRED_MODEL_POST_MESSAGE_SOURCE = "chatclub:preferred-model:2026.07.15.8";
+  var CONTENT_BRIDGE_VERSION = "2026.07.15.8";
+  var EXTENSION_RUNTIME_RELAY_SOURCE = "chatclub:runtime-relay:2026.07.15.8";
+  var SECURE_FRAME_COMMAND_SOURCE = "chatclub:frame-command:2026.07.15.8";
+  var DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.07.15.1";
+  var PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.15.8";
   var RUNTIME_REGISTRY_ABI_VERSION = 1;
+  var RUNTIME_REGISTRY_KEY = `__CHATCLUB_RUNTIME_REGISTRY_V${RUNTIME_REGISTRY_ABI_VERSION}__`;
   var NAVIGATION_FOCUS_GUARD_RUNTIME = "navigation-focus-guard";
   var NAVIGATION_FOCUS_GUARD_RUNTIME_VERSION = "2026.07.15.2";
   var FRAME_TOAST_POSITION_EVENT = "chatclub:frame-toast-position:2026.07.13.1";
@@ -42,6 +44,8 @@
     MAIN_WORLD_LOCATION_SOURCE,
     NOTION_SEND_TEXT_SOURCE,
     NOTION_SEND_PROMPT_SOURCE,
+    NOTION_SEND_TEXT_EVENT,
+    NOTION_SEND_PROMPT_EVENT,
     NOTION_SEND_ACTIVATED_EVENT,
     SEND_TEXT_POST_MESSAGE_SOURCE,
     DELETE_THREAD_POST_MESSAGE_SOURCE,
@@ -1644,10 +1648,46 @@ ${value}`);
     if (!value) throw new TypeError("Runtime name is required");
     return value;
   }
+  function disposeSupersededRegistries(target) {
+    let keys = [];
+    try {
+      keys = Object.getOwnPropertyNames(target);
+    } catch {
+    }
+    for (const key of keys) {
+      if (key === RUNTIME_REGISTRY_KEY || !/^__CHATCLUB_RUNTIME_REGISTRY_V\d+__$/.test(key)) continue;
+      let registry = null;
+      try {
+        registry = target[key];
+      } catch {
+      }
+      if (!registry || registry.abiVersion === RUNTIME_REGISTRY_ABI_VERSION || typeof registry.dispose !== "function") continue;
+      try {
+        registry.dispose(`superseded by runtime registry ABI ${RUNTIME_REGISTRY_ABI_VERSION}`);
+      } catch {
+      }
+    }
+  }
   function runtimeRegistry(target = globalThis) {
     const current = target[RUNTIME_REGISTRY_KEY];
     if (current?.abiVersion === RUNTIME_REGISTRY_ABI_VERSION && typeof current.register === "function") return current;
+    if (current != null) {
+      throw new Error(
+        `Runtime registry key ${RUNTIME_REGISTRY_KEY} is occupied by ABI ${String(current?.abiVersion ?? "unknown")}; incrementing RUNTIME_REGISTRY_ABI_VERSION must also produce a new registry key`
+      );
+    }
+    disposeSupersededRegistries(target);
     const entries = /* @__PURE__ */ new Map();
+    const disposeEntry = (key, reason) => {
+      const entry = entries.get(key);
+      if (!entry) return false;
+      entries.delete(key);
+      try {
+        entry.dispose?.(String(reason || "invalidated"));
+      } catch {
+      }
+      return true;
+    };
     const registry = Object.freeze({
       abiVersion: RUNTIME_REGISTRY_ABI_VERSION,
       register(name, descriptor = {}) {
@@ -1670,6 +1710,25 @@ ${value}`);
         });
         return descriptor.api;
       },
+      install(name, version, factory) {
+        const key = validName(name);
+        const expectedVersion = String(version || "");
+        if (!expectedVersion) throw new TypeError(`Runtime ${key} requires a version`);
+        const previous = entries.get(key);
+        if (previous?.version === expectedVersion) return previous.api;
+        if (previous) disposeEntry(key, `replaced by ${expectedVersion}`);
+        if (typeof factory !== "function") throw new TypeError(`Runtime ${key} requires an installer`);
+        const descriptor = factory();
+        if (!descriptor || typeof descriptor !== "object" || !("api" in descriptor)) {
+          throw new TypeError(`Runtime ${key} installer must return an api descriptor`);
+        }
+        entries.set(key, {
+          version: expectedVersion,
+          api: descriptor.api,
+          dispose: typeof descriptor.dispose === "function" ? descriptor.dispose : null
+        });
+        return descriptor.api;
+      },
       require(name, version) {
         const key = validName(name);
         const entry = entries.get(key);
@@ -1685,14 +1744,10 @@ ${value}`);
       },
       invalidate(name, reason = "invalidated") {
         const key = validName(name);
-        const entry = entries.get(key);
-        if (!entry) return false;
-        entries.delete(key);
-        try {
-          entry.dispose?.(String(reason || "invalidated"));
-        } catch {
-        }
-        return true;
+        return disposeEntry(key, reason);
+      },
+      dispose(reason = "registry disposed") {
+        for (const key of [...entries.keys()]) disposeEntry(key, reason);
       }
     });
     Object.defineProperty(target, RUNTIME_REGISTRY_KEY, {
@@ -1702,6 +1757,82 @@ ${value}`);
       value: registry
     });
     return registry;
+  }
+
+  // content-src/shared/command-dispatcher.js
+  function createCommandDispatcher(commandSpecs, handlers = {}) {
+    const specifications = commandSpecs && typeof commandSpecs === "object" ? commandSpecs : {};
+    const routes = handlers && typeof handlers === "object" ? handlers : {};
+    for (const command2 of Object.keys(specifications)) {
+      if (typeof routes[command2] !== "function") {
+        throw new TypeError(`Missing content command handler: ${command2}`);
+      }
+    }
+    for (const command2 of Object.keys(routes)) {
+      if (!Object.hasOwn(specifications, command2)) {
+        throw new TypeError(`Unknown content command handler: ${command2}`);
+      }
+    }
+    return async function dispatchContentCommand(commandName, data = {}) {
+      const command2 = String(commandName || "");
+      const handler = routes[command2];
+      if (!handler) throw new Error(`Unknown action: ${command2}`);
+      return handler(data);
+    };
+  }
+
+  // content-src/shared/secure-frame-rpc.js
+  function installSecureFrameRpc(options = {}) {
+    const extensionApi = options.extensionApi;
+    const runtimes = options.runtimes;
+    const version = String(options.version || "");
+    const source = String(options.source || "");
+    const bridgeDocumentId = String(options.bridgeDocumentId || "");
+    const secureFrameToken = String(options.secureFrameToken || "");
+    const dispatch = options.dispatch;
+    if (!runtimes?.install || !version || !source || !bridgeDocumentId || !secureFrameToken || typeof dispatch !== "function") {
+      throw new TypeError("Secure Frame RPC installation is incomplete");
+    }
+    return runtimes.install("frame-rpc", version, () => {
+      const listener = (message, sender, sendResponse) => {
+        if (message?.source !== source || message.type !== "request" || message.bridgeDocumentId !== bridgeDocumentId || message.secureFrameToken !== secureFrameToken || sender?.id !== extensionApi?.runtime?.id) return false;
+        Promise.resolve(dispatch(message.action, message.data || {})).then((data) => sendResponse({ success: true, data })).catch((error) => sendResponse({ success: false, error: error?.message || String(error) }));
+        return true;
+      };
+      extensionApi?.runtime?.onMessage?.addListener?.(listener);
+      return {
+        api: Object.freeze({ listener, bridgeDocumentId }),
+        dispose() {
+          try {
+            extensionApi?.runtime?.onMessage?.removeListener?.(listener);
+          } catch {
+          }
+        }
+      };
+    });
+  }
+
+  // content-src/shared/message-navigator-port.js
+  function createMessageNavigatorPort(runtimes) {
+    const runtime = (required = true) => {
+      const api = runtimes?.registration?.("message-navigator")?.api;
+      if (api && typeof api.setEnabled === "function") return api;
+      if (required) throw new Error("Message navigator runtime is unavailable");
+      return null;
+    };
+    return Object.freeze({
+      setEnabled(data = {}) {
+        return runtime().setEnabled(data);
+      },
+      hideMenu() {
+        const api = runtime();
+        return typeof api.closeMenu === "function" ? api.closeMenu() : api.state();
+      },
+      state() {
+        const api = runtime(false);
+        return api && typeof api.state === "function" ? api.state() : { ok: false, enabled: false, messageCount: 0, error: "Message navigator runtime is unavailable" };
+      }
+    });
   }
 
   // content-src/content.js
@@ -1769,6 +1900,8 @@ ${value}`);
     const PREFERRED_MODEL_FOCUS_SHIELD_RELEASE_GRACE_MS = 400;
     const NOTION_SEND_TEXT_SOURCE2 = PROTOCOL.NOTION_SEND_TEXT_SOURCE;
     const NOTION_SEND_PROMPT_SOURCE2 = PROTOCOL.NOTION_SEND_PROMPT_SOURCE;
+    const NOTION_SEND_TEXT_EVENT2 = PROTOCOL.NOTION_SEND_TEXT_EVENT;
+    const NOTION_SEND_PROMPT_EVENT2 = PROTOCOL.NOTION_SEND_PROMPT_EVENT;
     const NOTION_SEND_ACTIVATED_EVENT2 = PROTOCOL.NOTION_SEND_ACTIVATED_EVENT;
     const CONTENT_BRIDGE_VERSION2 = PROTOCOL.CONTENT_BRIDGE_VERSION;
     const SEND_TEXT_POST_MESSAGE_SOURCE2 = PROTOCOL.SEND_TEXT_POST_MESSAGE_SOURCE;
@@ -2979,7 +3112,7 @@ ${value}`);
         }
         window.addEventListener("message", onMessage, true);
         try {
-          window.dispatchEvent(new CustomEvent("chatclub:notion-send-prompt:2026.07.13.13", {
+          window.dispatchEvent(new CustomEvent(NOTION_SEND_PROMPT_EVENT2, {
             detail: {
               id,
               sendId: String(data?.sendId || ""),
@@ -3020,7 +3153,7 @@ ${value}`);
         }
         window.addEventListener("message", onMessage, true);
         try {
-          window.dispatchEvent(new CustomEvent("chatclub:notion-send-text:2026.07.13.13", {
+          window.dispatchEvent(new CustomEvent(NOTION_SEND_TEXT_EVENT2, {
             detail: {
               id,
               sendId: String(data?.sendId || ""),
@@ -7729,24 +7862,7 @@ ${value}`);
         hasUserAndAssistant: hasUserAndAssistant2(messages)
       });
     }
-    function messageNavigatorRuntime() {
-      const runtime = window.__CHATCLUB_MESSAGE_NAVIGATOR__;
-      if (!runtime || typeof runtime.setEnabled !== "function") {
-        throw new Error("Message navigator runtime is unavailable");
-      }
-      return runtime;
-    }
-    function setMessageNavigator(data = {}) {
-      return messageNavigatorRuntime().setEnabled(data);
-    }
-    function hideMessageNavigatorMenu() {
-      const runtime = messageNavigatorRuntime();
-      return typeof runtime.closeMenu === "function" ? runtime.closeMenu() : runtime.state();
-    }
-    function getMessageNavigatorState() {
-      const runtime = window.__CHATCLUB_MESSAGE_NAVIGATOR__;
-      return runtime && typeof runtime.state === "function" ? runtime.state() : { ok: false, enabled: false, messageCount: 0, error: "Message navigator runtime is unavailable" };
-    }
+    const messageNavigatorPort = createMessageNavigatorPort(runtimes);
     async function getSummaryRuntimeState() {
       const registration = runtimes.registration("summary-runners");
       const registry = registration?.api?.scripts;
@@ -7768,50 +7884,40 @@ ${value}`);
         bridgeVersion: CONTENT_BRIDGE_VERSION2
       };
     }
-    async function handleContentAction(action, data = {}) {
-      if (!FRAME_COMMAND_SPECS[action]) throw new Error(`Unknown action: ${action}`);
-      if (action === "getLocationHref") return location.href;
-      if (action === "getPageMeta") return pageMeta2();
-      if (action === "getPageText") return normalize2(document.body?.innerText || "");
-      if (action === "getSummaryRuntimeState") return getSummaryRuntimeState();
-      if (action === "sendText") return sendText(data);
-      if (action === "newChatPreprocess") return { ok: true };
-      if (action === "deleteThread") return deleteThread(data);
-      if (action === "getDeleteConfirmState") return topicDeleteConfirmState(data?.site || "topic-delete");
-      if (action === "applyPreferredModel") return runPreferredModelApply(data);
-      if (action === "cancelPreferredModelApply") return cancelPreferredModelApply(data);
-      if (action === "collectSummary") return collectSummary(data);
-      if (action === "setMessageNavigator") return setMessageNavigator(data);
-      if (action === "hideMessageNavigatorMenu") return hideMessageNavigatorMenu();
-      if (action === "getMessageNavigatorState") return getMessageNavigatorState();
-      throw new Error(`Unknown action: ${action}`);
-    }
-    try {
-      window.__CHATCLUB_SECURE_FRAME_RPC_CLEANUP__?.();
-    } catch {
-    }
-    try {
-      delete window.__CHATCLUB_SECURE_FRAME_RPC_CLEANUP__;
-    } catch {
-    }
-    const secureFrameCommandListener = (message, sender, sendResponse) => {
-      if (message?.source !== SECURE_FRAME_COMMAND_SOURCE2 || message.type !== "request" || message.bridgeDocumentId !== contentDocumentId || message.secureFrameToken !== secureFrameToken || sender?.id !== EXTENSION_API?.runtime?.id) return false;
-      Promise.resolve(handleContentAction(message.action, message.data || {})).then((data) => sendResponse({ success: true, data })).catch((error) => sendResponse({ success: false, error: error?.message || String(error) }));
-      return true;
-    };
-    EXTENSION_API?.runtime?.onMessage?.addListener?.(secureFrameCommandListener);
-    runtimes.register("frame-rpc", {
+    const handleContentAction = createCommandDispatcher(FRAME_COMMAND_SPECS, Object.freeze({
+      getLocationHref: () => location.href,
+      getPageMeta: () => pageMeta2(),
+      getPageText: () => normalize2(document.body?.innerText || ""),
+      getSummaryRuntimeState: () => getSummaryRuntimeState(),
+      sendText: (data) => sendText(data),
+      newChatPreprocess: () => ({ ok: true }),
+      prepareNavigationFocusGuard: () => {
+        throw new Error("prepareNavigationFocusGuard requires the MAIN-world transport");
+      },
+      adoptNavigationFocusGuard: () => {
+        throw new Error("adoptNavigationFocusGuard requires the MAIN-world transport");
+      },
+      deleteThread: (data) => deleteThread(data),
+      getDeleteConfirmState: (data) => topicDeleteConfirmState(data?.site || "topic-delete"),
+      applyPreferredModel: (data) => runPreferredModelApply(data),
+      cancelPreferredModelApply: (data) => cancelPreferredModelApply(data),
+      collectSummary: (data) => collectSummary(data),
+      setMessageNavigator: (data) => messageNavigatorPort.setEnabled(data),
+      hideMessageNavigatorMenu: () => messageNavigatorPort.hideMenu(),
+      getMessageNavigatorState: () => messageNavigatorPort.state()
+    }));
+    installSecureFrameRpc({
+      extensionApi: EXTENSION_API,
+      runtimes,
       version: CONTENT_BRIDGE_VERSION2,
-      api: Object.freeze({ listener: secureFrameCommandListener }),
-      dispose() {
-        try {
-          EXTENSION_API?.runtime?.onMessage?.removeListener?.(secureFrameCommandListener);
-        } catch {
-        }
-      }
+      source: SECURE_FRAME_COMMAND_SOURCE2,
+      bridgeDocumentId: contentDocumentId,
+      secureFrameToken,
+      dispatch: handleContentAction
     });
-    window.addEventListener("message", async (event) => {
+    const onParentWindowMessage = async (event) => {
       if (!EXTENSION_ORIGIN || event.source !== window.parent || event.origin !== EXTENSION_ORIGIN) return;
+      if (!contentBridgeIsCurrent()) return;
       const message = event.data;
       const versionedDeleteRequest = message?.source === DELETE_THREAD_POST_MESSAGE_SOURCE2;
       const versionedSendTextRequest = message?.source === SEND_TEXT_POST_MESSAGE_SOURCE2;
@@ -7820,8 +7926,6 @@ ${value}`);
       const versionedSummaryRequest = message?.source === SUMMARY_POST_MESSAGE_SOURCE2;
       const genericRequest = message?.source === SOURCE;
       if (!versionedDeleteRequest && !versionedSendTextRequest && !versionedPreferredModelRequest && !versionedNavigatorRequest && !versionedSummaryRequest && !genericRequest || message.type !== "request") return;
-      if (versionedSendTextRequest && !contentBridgeIsCurrent()) return;
-      if (versionedPreferredModelRequest && !contentBridgeIsCurrent()) return;
       if (genericRequest && hadContentBridge) return;
       if (genericRequest && ["applyPreferredModel", "cancelPreferredModelApply"].includes(message.action)) return;
       if (versionedDeleteRequest && message.action !== "deleteThread" && message.action !== "getDeleteConfirmState") return;
@@ -7836,7 +7940,16 @@ ${value}`);
       } catch (error) {
         respond(event.source, message.id, message.action, null, error.message || String(error), responseSource);
       }
-    }, true);
+    };
+    runtimes.install("parent-window-rpc", CONTENT_BRIDGE_VERSION2, () => {
+      window.addEventListener("message", onParentWindowMessage, true);
+      return {
+        api: Object.freeze({ source: SOURCE, bridgeVersion: CONTENT_BRIDGE_VERSION2 }),
+        dispose() {
+          window.removeEventListener("message", onParentWindowMessage, true);
+        }
+      };
+    });
     try {
       window.__CHATCLUB_SHORTCUT_BRIDGE_CLEANUP__?.();
     } catch {

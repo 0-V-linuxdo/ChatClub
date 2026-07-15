@@ -1,5 +1,5 @@
 import { APP_NAME } from "../shared/constants.js";
-import { buildDynamicDnrRules, contentScriptMatches } from "../shared/dnr.js";
+import { buildDynamicDnrRules } from "../shared/dnr.js";
 import { getAllChatApps } from "../shared/storage-schema.js";
 import { loadCustomConfig, loadOptions, saveOptions } from "../shared/storage-adapter.js";
 import { TOPIC_DELETE_SITE_CONFIGS } from "../shared/topic-delete-sites.js";
@@ -16,7 +16,7 @@ import {
   RUNTIME_REGISTRY_KEY,
   SECURE_FRAME_COMMAND_SOURCE
 } from "../shared/protocol.js";
-import { configMatchesHref, normalizeHost } from "../shared/url-match.js";
+import { configMatchesHref } from "../shared/url-match.js";
 import {
   chromiumExtensionPartitionKey,
   clearGrokTombstonesForStore,
@@ -31,27 +31,24 @@ import {
   removeManagedGrokPartitionsExcept,
   syncGrokSessionCookies
 } from "./grok-cookie-bridge.js";
+import {
+  executeVerifiedPackagedFrameFile,
+  verifiedCustomUserscriptTarget
+} from "./frame-injection.js";
+import {
+  injectContentBridge,
+  registerContentScripts
+} from "./content-registration.js";
+import {
+  openableTabUrl,
+  openExternalTab,
+  registerActionListener
+} from "./tab-runtime.js";
 import * as trustedInput from "./trusted-input.js";
 
 const chrome = globalThis.browser || globalThis.chrome;
 if (!chrome) throw new Error("[ChatClub] Extension API namespace is unavailable");
 
-const PRELOAD_SCRIPT_ID = "chatclub-preload";
-const GROK_COOKIE_SCRIPT_ID = "chatclub-grok-cookie-bridge";
-const SUMMARY_PAGE_SCRIPT_ID = "chatclub-summary-userscripts-main";
-const SUMMARY_SCRIPT_ID = "chatclub-summary-userscripts";
-const MESSAGE_NAVIGATOR_SCRIPT_ID = "chatclub-message-navigator";
-const CONTENT_SCRIPT_ID = "chatclub-content";
-const REGISTERED_CONTENT_SCRIPT_IDS = Object.freeze([
-  PRELOAD_SCRIPT_ID,
-  GROK_COOKIE_SCRIPT_ID,
-  SUMMARY_PAGE_SCRIPT_ID,
-  SUMMARY_SCRIPT_ID,
-  MESSAGE_NAVIGATOR_SCRIPT_ID,
-  CONTENT_SCRIPT_ID
-]);
-const REGISTERED_CONTENT_SCRIPT_ID_SET = new Set(REGISTERED_CONTENT_SCRIPT_IDS);
-const CORE_CONTENT_SCRIPT_ID_SET = new Set([PRELOAD_SCRIPT_ID, GROK_COOKIE_SCRIPT_ID, CONTENT_SCRIPT_ID]);
 const TOPIC_DELETE_USERSCRIPT_FILE_PATTERN = /^topic-delete-userscripts\/[a-z0-9-]+\.user\.js$/i;
 const CUSTOM_SUMMARY_SOURCE_MAX_BYTES = 1024 * 1024;
 const CUSTOM_SUMMARY_RESULT_MAX_BYTES = 2 * 1024 * 1024;
@@ -70,26 +67,6 @@ const grokSourceChangedAuthNames = new Map();
 const grokFramePreflights = new Map();
 const grokFallbackReloadCounts = new Map();
 const GROK_FRAME_PREFLIGHT_MAX_AGE_MS = 60 * 1000;
-const CONTENT_BRIDGE_FILES = Object.freeze([
-  Object.freeze({ file: "content/preload.js", world: "MAIN" }),
-  Object.freeze({ file: "content/grok-cookie-bridge.js", world: "ISOLATED" }),
-  Object.freeze({ file: "content/message-navigator.js", world: "ISOLATED" }),
-  Object.freeze({ file: "content/content.js", world: "ISOLATED" })
-]);
-const SUMMARY_BRIDGE_FILES = Object.freeze([
-  Object.freeze({ file: "content/summary-userscripts-main.js", world: "MAIN" }),
-  Object.freeze({ file: "content/summary-userscripts.js", world: "ISOLATED" })
-]);
-
-function openableTabUrl(href) {
-  try {
-    const parsed = new URL(String(href || ""));
-    return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.href : "";
-  } catch {
-    return "";
-  }
-}
-
 function frameContextToken(value) {
   const token = String(value || "").trim();
   return /^[a-z0-9][a-z0-9._:-]{8,191}$/i.test(token) ? token : "";
@@ -633,89 +610,6 @@ async function relayFrameLifecycle(message = {}, sender = {}) {
   });
 }
 
-function normalizeOpenerTab(tab) {
-  if (!tab || typeof tab.id !== "number") return null;
-  return {
-    id: tab.id,
-    windowId: typeof tab.windowId === "number" ? tab.windowId : undefined,
-    index: typeof tab.index === "number" ? tab.index : undefined
-  };
-}
-
-async function resolveExplicitTab(openerTab) {
-  const info = normalizeOpenerTab(openerTab);
-  if (!info) return null;
-  try {
-    return await chrome.tabs.get(info.id);
-  } catch {
-    return info;
-  }
-}
-
-async function resolveTargetTab(sender, openerTab) {
-  const explicitTab = await resolveExplicitTab(openerTab);
-  if (explicitTab?.id) return explicitTab;
-  if (sender?.tab?.id) return sender.tab;
-  try {
-    const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-    return tabs?.[0] || null;
-  } catch {
-    return null;
-  }
-}
-
-function openTabCreateOptions(url, targetTab) {
-  const createOptions = { url, active: true };
-  if (targetTab?.windowId) {
-    createOptions.windowId = targetTab.windowId;
-    if (typeof targetTab.index === "number") createOptions.index = targetTab.index + 1;
-    if (typeof targetTab.id === "number") createOptions.openerTabId = targetTab.id;
-  }
-  return createOptions;
-}
-
-async function focusCreatedTab(tab) {
-  if (tab?.id) {
-    try { await chrome.tabs.update(tab.id, { active: true }); } catch {}
-  }
-  if (tab?.windowId && chrome.windows?.update) {
-    try { await chrome.windows.update(tab.windowId, { focused: true }); } catch {}
-  }
-}
-
-async function openExternalTab(url, sender, openerTab) {
-  const targetTab = await resolveTargetTab(sender, openerTab);
-  try {
-    const tab = await chrome.tabs.create(openTabCreateOptions(url, targetTab));
-    await focusCreatedTab(tab);
-    return tab;
-  } catch {}
-  if (targetTab?.id) {
-    try {
-      const duplicate = await chrome.tabs.duplicate(targetTab.id);
-      if (duplicate?.id) {
-        await chrome.tabs.update(duplicate.id, { url, active: true });
-        await focusCreatedTab(duplicate);
-        return duplicate;
-      }
-    } catch {}
-  }
-  const tab = await chrome.tabs.create({ url, active: true });
-  await focusCreatedTab(tab);
-  return tab;
-}
-
-function senderFrameTarget(sender, { requireDocumentId = false } = {}) {
-  const tabId = sender?.tab?.id;
-  const frameId = sender?.frameId;
-  const documentId = String(sender?.documentId || "").trim();
-  if (typeof tabId !== "number") throw new Error("Cannot inject userscript: sender tab is unavailable");
-  if (documentId) return { tabId, documentIds: [documentId] };
-  if (requireDocumentId) throw new Error("Cannot inject custom userscript: sender document id is unavailable");
-  if (typeof frameId !== "number") throw new Error("Cannot inject userscript: sender frame is unavailable");
-  return { tabId, frameIds: [frameId] };
-}
-
 function safeTopicDeleteUserscriptFile(file) {
   const value = String(file || "").trim();
   return TOPIC_DELETE_USERSCRIPT_FILE_PATTERN.test(value) ? value : "";
@@ -737,12 +631,8 @@ function packagedTopicDeleteBuiltInConfig(config = {}) {
   return builtIn?.userscriptFile === file ? builtIn : null;
 }
 
-async function executePackagedTopicDeleteUserscript(target, file) {
-  await chrome.scripting.executeScript({
-    target,
-    files: [file],
-    world: "MAIN"
-  });
+async function executePackagedTopicDeleteUserscript(sender, file) {
+  await executeVerifiedPackagedFrameFile(chrome, sender, file, { world: "MAIN" });
 }
 
 function userScriptsUnavailableMessage(error) {
@@ -910,7 +800,7 @@ function utf8ByteLength(value) {
 }
 
 async function executeCustomSummaryUserscript(configId = "", sender = {}) {
-  const target = senderFrameTarget(sender, { requireDocumentId: true });
+  const target = await verifiedCustomUserscriptTarget(chrome, sender);
   const { runtimeConfig, userscript } = await storedCustomSummaryConfig(configId, sender);
   if (utf8ByteLength(userscript) > CUSTOM_SUMMARY_SOURCE_MAX_BYTES) throw new Error("Custom Summary userscript exceeds the 1 MiB limit");
   if (!chrome.userScripts?.execute) {
@@ -986,7 +876,7 @@ function sanitizedTopicDeleteResult(value, config = {}) {
 }
 
 async function executeCustomTopicDeleteUserscript(configId = "", payload = {}, sender = {}) {
-  const target = senderFrameTarget(sender, { requireDocumentId: true });
+  const target = await verifiedCustomUserscriptTarget(chrome, sender);
   const config = await storedTopicDeleteConfig(configId, sender);
   const source = topicDeleteUserscriptSource(config);
   if (!source) throw new Error("Custom Delete Site userscript source is empty");
@@ -1062,100 +952,27 @@ async function dispatchTrustedKeySequence(message = {}, sender = {}) {
   return trustedInput.dispatchTrustedKeySequence(chrome, message, sender);
 }
 
-function urlHost(value) {
-  try {
-    return new URL(String(value || "")).hostname.toLowerCase();
-  } catch {
-    return normalizeHost(value).replace(/^\*\./, "");
-  }
-}
-
-function frameMatchesBridgeHints(frame = {}, hints = {}) {
-  const url = String(frame.url || "");
-  if (!/^https?:\/\//i.test(url)) return false;
-  const frameHost = urlHost(url);
-  if (!frameHost) return false;
-  const hosts = new Set((hints.hosts || []).map(urlHost).filter(Boolean));
-  for (const href of hints.hrefs || []) {
-    const host = urlHost(href);
-    if (host) hosts.add(host);
-  }
-  if (!hosts.size) return true;
-  for (const host of hosts) {
-    if (frameHost === host || frameHost.endsWith(`.${host}`) || host.endsWith(`.${frameHost}`)) return true;
-  }
-  return false;
-}
-
-async function executeContentBridgeFile(tabId, frameId, spec) {
-  return chrome.scripting.executeScript({
-    target: { tabId, frameIds: [frameId] },
-    files: [spec.file],
-    world: spec.world
-  });
-}
-
 async function ensureContentBridge(message = {}, sender = {}) {
   const tabId = await verifiedExtensionTabId({ appTabId: message.tabId }, sender);
-  const hints = {
+  return injectContentBridge(chrome, tabId, {
     hrefs: Array.isArray(message.hrefs) ? message.hrefs : [],
-    hosts: Array.isArray(message.hosts) ? message.hosts : []
-  };
-  const validHintHosts = new Set([
-    ...hints.hrefs.map(urlHost),
-    ...hints.hosts.map(urlHost)
-  ].filter(Boolean));
-  if (!validHintHosts.size) throw new Error("Content bridge injection failed: target URL hints are unavailable");
-  const features = new Set(
-    (Array.isArray(message.features) ? message.features : [])
-      .map((value) => String(value || "").trim().toLowerCase())
-      .filter((value) => value === "summary")
-  );
-  let frames = [];
-  try {
-    frames = await chrome.webNavigation.getAllFrames({ tabId });
-  } catch (error) {
-    throw new Error(`Content bridge injection failed: ${error?.message || String(error)}`);
-  }
-  const frameIds = (frames || [])
-    .filter((frame) => Number.isInteger(frame?.frameId) && frame.frameId > 0 && frame.parentFrameId === 0)
-    .filter((frame) => frameMatchesBridgeHints(frame, hints))
-    .map((frame) => frame.frameId);
-  const uniqueFrameIds = Array.from(new Set(frameIds));
-  const errors = [];
-  const injectedFiles = [];
-  let injected = 0;
-  if (!uniqueFrameIds.length) errors.push("no matching direct child iframe found for the requested target");
-  const specs = features.has("summary")
-    ? [CONTENT_BRIDGE_FILES[0], ...SUMMARY_BRIDGE_FILES, ...CONTENT_BRIDGE_FILES.slice(1)]
-    : CONTENT_BRIDGE_FILES;
-  for (const frameId of uniqueFrameIds) {
-    for (const spec of specs) {
-      try {
-        await executeContentBridgeFile(tabId, frameId, spec);
-        injected += 1;
-        injectedFiles.push(`${spec.file}@${frameId}`);
-      } catch (error) {
-        errors.push(`${spec.file}@${frameId}: ${error?.message || String(error)}`);
-      }
-    }
-  }
-  return { tabId, frameIds: uniqueFrameIds, injected, injectedFiles, features: [...features], errors };
+    hosts: Array.isArray(message.hosts) ? message.hosts : [],
+    features: Array.isArray(message.features) ? message.features : []
+  });
 }
 
 async function installTopicDeleteUserscript(config = {}, sender = {}) {
   const storedConfig = await storedTopicDeleteConfig(config.id, sender);
   if (canUsePackagedTopicDeleteUserscript(storedConfig)) {
-    const target = senderFrameTarget(sender, { requireDocumentId: true });
     const file = safeTopicDeleteUserscriptFile(storedConfig.userscriptFile);
-    await executePackagedTopicDeleteUserscript(target, file);
+    await executePackagedTopicDeleteUserscript(sender, file);
     return { mode: "packaged", file, runtimeConfig: topicDeleteUserscriptMetadata(storedConfig) };
   }
   const source = topicDeleteUserscriptSource(storedConfig);
   if (!/\/\/\s*==UserScript==[\s\S]*?\/\/\s*==\/UserScript==/.test(source)) {
     throw new Error("Legacy bridge snippets are unsupported under MV3 CSP; convert this Delete Site to a standalone userscript.");
   }
-  const target = senderFrameTarget(sender, { requireDocumentId: true });
+  const target = await verifiedCustomUserscriptTarget(chrome, sender);
   await executeUserTopicDeleteUserscript(target, source);
   return { mode: "userScripts", runtimeConfig: topicDeleteUserscriptMetadata(storedConfig, source) };
 }
@@ -1163,77 +980,6 @@ async function installTopicDeleteUserscript(config = {}, sender = {}) {
 async function currentChatApps() {
   const customConfig = await loadCustomConfig();
   return getAllChatApps(customConfig);
-}
-
-function summaryCollectorContentTargets(options = {}) {
-  return (options.summarySiteConfigs || [])
-    .filter((config) => config?.enabled !== false && Array.isArray(config.hosts) && config.hosts.length)
-    .map((config) => ({
-      id: `summary-${config.id || config.name || "collector"}`,
-      name: config.name || config.id || "Summary Collector",
-      url: "",
-      hosts: config.hosts
-    }));
-}
-
-function topicDeleteContentTargets(options = {}) {
-  return (options.topicDeleteSiteConfigs || [])
-    .filter((config) => config?.enabled !== false && Array.isArray(config.hosts) && config.hosts.length)
-    .map((config) => ({
-      id: `topic-delete-${config.id || config.name || "site"}`,
-      name: config.name || config.id || "Topic Delete Site",
-      url: "",
-      hosts: config.hosts
-    }));
-}
-
-function messageNavigatorContentTargets(options = {}) {
-  return (options.messageNavigatorSiteConfigs || [])
-    .filter((config) => config?.enabled !== false && Array.isArray(config.hosts) && config.hosts.length)
-    .map((config) => ({
-      id: `message-navigator-${config.id || config.name || "site"}`,
-      name: config.name || config.id || "Message Navigator Site",
-      url: "",
-      hosts: config.hosts
-    }));
-}
-
-async function currentContentScriptTargetGroups() {
-  const [customConfig, options] = await Promise.all([loadCustomConfig(), loadOptions()]);
-  const chatTargets = getAllChatApps(customConfig);
-  const summaryTargets = summaryCollectorContentTargets(options);
-  const topicDeleteTargets = topicDeleteContentTargets(options);
-  const messageNavigatorTargets = messageNavigatorContentTargets(options);
-  return {
-    // content.js owns the request bridge used by every optional feature.
-    coreTargets: [
-      ...chatTargets,
-      ...summaryTargets,
-      ...topicDeleteTargets,
-      ...messageNavigatorTargets
-    ],
-    // preload.js supplies MAIN-world helpers used by normal chat control,
-    // Summary native-copy extraction, and Delete Sites.
-    preloadTargets: [
-      ...chatTargets,
-      ...summaryTargets,
-      ...topicDeleteTargets
-    ],
-    summaryTargets,
-    messageNavigatorTargets
-  };
-}
-
-function matchesForContentTargets(targets) {
-  return Array.isArray(targets) && targets.length ? contentScriptMatches(targets) : [];
-}
-
-function rollbackContentScript(previous = {}, canonical = {}) {
-  const rollback = { ...canonical };
-  for (const key of ["matches", "excludeMatches", "allFrames", "matchOriginAsFallback", "persistAcrossSessions"]) {
-    if (previous[key] !== undefined) rollback[key] = previous[key];
-  }
-  return rollback;
 }
 
 async function updateDnrRules() {
@@ -1267,159 +1013,12 @@ async function updateDnrRules() {
   });
 }
 
-function assertRegisteredContentScriptFiles(expected = [], actual = []) {
-  const actualById = new Map(actual.map((script) => [script.id, script]));
-  const sorted = (value) => [...(Array.isArray(value) ? value : [])].sort();
-  const normalized = (script = {}) => ({
-    js: Array.isArray(script.js) ? script.js : [],
-    matches: sorted(script.matches),
-    excludeMatches: sorted(script.excludeMatches),
-    allFrames: Boolean(script.allFrames),
-    matchOriginAsFallback: Boolean(script.matchOriginAsFallback),
-    runAt: String(script.runAt || "document_idle"),
-    world: String(script.world || "ISOLATED")
-  });
-  for (const registration of expected) {
-    const registered = actualById.get(registration.id);
-    if (!registered) throw new Error(`content script registration is missing: ${registration.id}`);
-    const expectedValue = normalized(registration);
-    const actualValue = normalized(registered);
-    if (JSON.stringify(actualValue) !== JSON.stringify(expectedValue)) {
-      throw new Error(
-        `content script registration changed: ${registration.id} expected ${JSON.stringify(expectedValue)}, got ${JSON.stringify(actualValue)}`
-      );
-    }
-  }
-}
-
-async function registerContentScriptsVerified(registrations = []) {
-  if (!registrations.length) return;
-  await chrome.scripting.registerContentScripts(registrations);
-  const registered = await chrome.scripting.getRegisteredContentScripts();
-  assertRegisteredContentScriptFiles(registrations, registered);
-}
-
-async function registerContentScripts() {
-  const {
-    coreTargets,
-    preloadTargets,
-    summaryTargets,
-    messageNavigatorTargets
-  } = await currentContentScriptTargetGroups();
-  const coreMatches = matchesForContentTargets(coreTargets);
-  const preloadMatches = matchesForContentTargets(preloadTargets);
-  const summaryMatches = matchesForContentTargets(summaryTargets);
-  const messageNavigatorMatches = matchesForContentTargets(messageNavigatorTargets);
-
-  const registrations = [];
-  if (preloadMatches.length) {
-    registrations.push({
-      id: PRELOAD_SCRIPT_ID,
-      matches: preloadMatches,
-      js: ["content/preload.js"],
-      allFrames: true,
-      runAt: "document_start",
-      world: "MAIN"
-    });
-  }
-  if (coreMatches.length) {
-    registrations.push({
-      id: GROK_COOKIE_SCRIPT_ID,
-      matches: coreMatches,
-      js: ["content/grok-cookie-bridge.js"],
-      allFrames: true,
-      runAt: "document_start"
-    });
-  }
-  if (summaryMatches.length) {
-    registrations.push({
-      id: SUMMARY_PAGE_SCRIPT_ID,
-      matches: summaryMatches,
-      js: ["content/summary-userscripts-main.js"],
-      allFrames: true,
-      runAt: "document_idle",
-      world: "MAIN"
-    }, {
-      id: SUMMARY_SCRIPT_ID,
-      matches: summaryMatches,
-      js: ["content/summary-userscripts.js"],
-      allFrames: true,
-      runAt: "document_idle"
-    });
-  }
-  if (messageNavigatorMatches.length) {
-    registrations.push({
-      id: MESSAGE_NAVIGATOR_SCRIPT_ID,
-      matches: messageNavigatorMatches,
-      js: ["content/message-navigator.js"],
-      allFrames: true,
-      runAt: "document_idle"
-    });
-  }
-  if (coreMatches.length) {
-    registrations.push({
-      id: CONTENT_SCRIPT_ID,
-      matches: coreMatches,
-      js: ["content/content.js"],
-      allFrames: true,
-      runAt: "document_idle"
-    });
-  }
-  const registered = await chrome.scripting.getRegisteredContentScripts();
-  const previousById = new Map(
-    registered
-      .filter((script) => REGISTERED_CONTENT_SCRIPT_ID_SET.has(script.id))
-      .map((script) => [script.id, script])
-  );
-  const desiredIds = new Set(registrations.map((registration) => registration.id));
-  const staleIds = [...previousById.keys()].filter((id) => !desiredIds.has(id));
-  if (staleIds.length) await chrome.scripting.unregisterContentScripts({ ids: staleIds });
-
-  const failures = [];
-  for (const registration of registrations) {
-    const previous = previousById.get(registration.id) || null;
-    if (previous) await chrome.scripting.unregisterContentScripts({ ids: [registration.id] });
-    try {
-      await registerContentScriptsVerified([registration]);
-    } catch (error) {
-      let recovered = false;
-      try {
-        const partial = await chrome.scripting.getRegisteredContentScripts();
-        if (partial.some((script) => script.id === registration.id)) {
-          await chrome.scripting.unregisterContentScripts({ ids: [registration.id] });
-        }
-        if (previous) {
-          const rollback = rollbackContentScript(previous, registration);
-          await registerContentScriptsVerified([rollback]);
-          recovered = true;
-        }
-      } catch (rollbackError) {
-        failures.push({ registration, error, rollbackError, recovered: false });
-        continue;
-      }
-      failures.push({ registration, error, rollbackError: null, recovered });
-    }
-  }
-
-  const fatal = failures.filter(({ registration, recovered }) =>
-    CORE_CONTENT_SCRIPT_ID_SET.has(registration.id) && !recovered
-  );
-  if (failures.length) {
-    console.warn(`[${APP_NAME}] ${failures.length} content script registration(s) failed`, failures);
-  }
-  if (fatal.length) {
-    throw new Error(fatal.map(({ registration, error, rollbackError }) =>
-      `${registration.id}: ${error?.message || String(error)}${rollbackError ? `; rollback: ${rollbackError?.message || String(rollbackError)}` : ""}`
-    ).join(" | "));
-  }
-}
-
 let runtimeConfigReloadChain = Promise.resolve();
 
 function reloadRuntimeConfig() {
   runtimeConfigReloadChain = runtimeConfigReloadChain
     .catch(() => {})
-    .then(() => Promise.all([updateDnrRules(), registerContentScripts()]));
+    .then(() => Promise.all([updateDnrRules(), registerContentScripts(chrome)]));
   return runtimeConfigReloadChain;
 }
 
@@ -1433,9 +1032,7 @@ chrome.runtime.onStartup?.addListener(() => {
   reloadRuntimeConfig().catch((error) => console.error(`[${APP_NAME}] startup reload failed`, error));
 });
 
-chrome.action.onClicked.addListener(() => {
-  chrome.tabs.create({ url: chrome.runtime.getURL("chatClub.html") });
-});
+registerActionListener(chrome);
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.source !== "chatclub") return false;
@@ -1556,7 +1153,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ success: false, error: "Invalid tab URL" });
         return;
       }
-      await openExternalTab(url, sender, message.openerTab);
+      await openExternalTab(chrome, url, sender, message.openerTab);
       sendResponse({ success: true });
       return;
     }

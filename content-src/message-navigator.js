@@ -1,4 +1,5 @@
 import { MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE } from "../shared/protocol.js";
+import { runtimeRegistry } from "./shared/runtime-registry.js";
 
 export function installMessageNavigator() {
   /*
@@ -6,8 +7,15 @@ export function installMessageNavigator() {
    * Adapted from Notion-style-AI-Navigator-main by 0-V-linuxdo under the MIT License.
    */
   const GLOBAL_NAME = "__CHATCLUB_MESSAGE_NAVIGATOR__";
+  const RUNTIME_NAME = "message-navigator";
   const VERSION = MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE.split(":").at(-1);
-  if (window[GLOBAL_NAME]?.version === VERSION) return;
+  const runtimes = runtimeRegistry(window);
+  const existing = runtimes.registration(RUNTIME_NAME);
+  if (existing?.version === VERSION) {
+    window[GLOBAL_NAME] = existing.api;
+    return;
+  }
+  runtimes.invalidate(RUNTIME_NAME, `replaced by ${VERSION}`);
   try { window[GLOBAL_NAME]?.destroy?.(); } catch {}
 
   const ROOT_ID = "chatclub-message-nav-root";
@@ -2383,7 +2391,16 @@ export function installMessageNavigator() {
     }
   }
 
-  window[GLOBAL_NAME] = new MessageNavigator();
+  const navigatorRuntime = new MessageNavigator();
+  window[GLOBAL_NAME] = navigatorRuntime;
+  runtimes.register(RUNTIME_NAME, {
+    version: VERSION,
+    api: navigatorRuntime,
+    dispose() {
+      navigatorRuntime.destroy();
+      if (window[GLOBAL_NAME] === navigatorRuntime) delete window[GLOBAL_NAME];
+    }
+  });
 }
 
 installMessageNavigator();

@@ -19,6 +19,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
   assert.ok(!manifest.permissions.includes("userScripts"));
   assert.ok(manifest.optional_permissions.includes("userScripts"));
   assert.ok(manifest.permissions.includes("cookies"));
+  assert.ok(!Object.hasOwn(manifest, "web_accessible_resources"));
 
   const firefoxSource = read("background/firefox-background.js");
   assert.match(firefoxSource, /import "\.\/service-worker\.js"/);
@@ -41,8 +42,16 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
     service_worker: "background/service-worker.js",
     type: "module"
   });
+  assert.ok(!Object.hasOwn(chromiumManifest, "web_accessible_resources"));
+  assert.ok(!Object.hasOwn(firefoxManifest, "web_accessible_resources"));
 
-  const serviceWorker = `${read("background/service-worker.js")}\n${read("background/runtime.js")}`;
+  const serviceWorker = [
+    "background/service-worker.js",
+    "background/runtime.js",
+    "background/content-registration.js",
+    "background/frame-injection.js",
+    "background/tab-runtime.js"
+  ].map(read).join("\n");
   const serviceWorkerCode = serviceWorker.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, "");
   assert.match(serviceWorker, /const chrome = globalThis\.browser \|\| globalThis\.chrome/);
   assert.match(serviceWorker, /currentContentScriptTargetGroups/);
@@ -68,7 +77,8 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
   assert.match(content, /event\.source !== window\.parent \|\| event\.origin !== EXTENSION_ORIGIN/);
   assert.doesNotMatch(content, /action: "executeSummaryUserscript",\s*config:/);
   assert.match(serviceWorker, /chrome\.userScripts\.execute/);
-  assert.match(serviceWorker, /documentIds: \[documentId\]/);
+  assert.match(serviceWorker, /documentIds: \[context\.documentId\]/);
+  assert.match(serviceWorker, /verifiedCustomUserscriptTarget/);
   assert.match(serviceWorker, /storedCustomSummaryConfig/);
   assert.match(serviceWorker, /entry\?\.error/);
   assert.match(serviceWorker, /JSON\.parse\(serialized\)/);

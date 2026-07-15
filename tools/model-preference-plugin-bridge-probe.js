@@ -1,6 +1,6 @@
 (() => {
   const SOURCE = "chatclub";
-  const PREFERRED_MODEL_SOURCE = "chatclub:preferred-model:2026.07.13.2";
+  const PREFERRED_MODEL_SOURCE = "chatclub:preferred-model:2026.07.15.8";
   const API_NAME = "ChatClubPreferredModelBridgeTest";
   const activeRuns = new Map();
   const focusProbe = { blurCount: 0, focusCount: 0, composing: false, events: [] };

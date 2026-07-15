@@ -2,8 +2,17 @@
 
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
+const { enforceNodeVersion } = require("./node-version.cjs");
 
 const root = path.resolve(__dirname, "..");
+const ciEnvironment = String(process.env.CI || "").trim();
+const strictNode = Boolean(ciEnvironment) && !/^(?:0|false)$/i.test(ciEnvironment);
+try {
+  enforceNodeVersion({ context: strictNode ? "CI" : "Local CI diagnostics", strict: strictNode });
+} catch (error) {
+  console.error(error?.message || error);
+  process.exit(1);
+}
 const commands = [
   ["tools/check.cjs"],
   ["tools/run-node-tests.cjs"],

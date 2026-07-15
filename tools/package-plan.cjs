@@ -2,18 +2,25 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const { targetManifest } = require("./manifest-targets.cjs");
+const {
+  GENERATED_ARTIFACT_FILES,
+  assertGeneratedArtifactInventory
+} = require("./generated-artifacts.cjs");
 
 const root = path.resolve(__dirname, "..");
-const exactFiles = Object.freeze(["chatClub.html", "manifest.json", "package-info.json"]);
+const exactFiles = Object.freeze([
+  "chatClub.html",
+  "manifest.json",
+  "package-info.json",
+  ...GENERATED_ARTIFACT_FILES
+]);
 const trees = Object.freeze({
   "_locales": new Set([".json"]),
   app: new Set([".js"]),
   background: new Set([".js"]),
-  content: new Set([".js"]),
   icons: new Set([".png", ".svg"]),
   shared: new Set([".js"]),
   styles: new Set([".css"]),
-  "topic-delete-userscripts": new Set([".js"]),
   ui: new Set([".js"]),
   userscripts: new Set([".js", ".json"])
 });
@@ -41,6 +48,7 @@ function collectTree(directory, extensions, prefix = directory) {
 }
 
 function allowlistedFiles() {
+  assertGeneratedArtifactInventory(root);
   const files = [...exactFiles];
   for (const [directory, extensions] of Object.entries(trees)) files.push(...collectTree(directory, extensions));
   const unique = [...new Set(files.map(safeRelative))].sort();

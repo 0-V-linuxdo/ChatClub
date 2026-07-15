@@ -23,7 +23,9 @@ for (const source of [main, workspace]) {
   assert.doesNotMatch(source, /function sendTopicDeleteToIframe/);
   assert.match(source, /executeTopicDelete\(/);
 }
-assert.match(topicDelete, /export function executeTopicDelete/);
+assert.match(topicDelete, /export function createTopicDeleteRuntime/);
+assert.match(topicDelete, /framePort\.request/);
+assert.doesNotMatch(topicDelete, /from "\.\.\/\.\.\/shared\/frame-rpc\.js"/);
 assert.doesNotMatch(topicDelete, /topicDeleteExecutionTail/);
 assert.match(topicDelete, /trustedInputExecutionTail/);
 assert.match(topicDelete, /withTrustedInputLock/);
@@ -41,6 +43,24 @@ assert.doesNotMatch(main, /from "\.\/pocket\/controller\.js"/);
 assert.match(main, /import\("\.\/settings\/controller\.js"\)/);
 assert.match(main, /import\("\.\/summary\/controller\.js"\)/);
 assert.match(main, /import\("\.\/pocket\/controller\.js"\)/);
+for (const statePort of [
+  "./composer/state-port.js",
+  "./preferred-model/state-port.js",
+  "./topbar/state-port.js",
+  "./favicon/state-port.js",
+  "./settings/state-ports.js"
+]) {
+  assert.match(main, new RegExp(`from "${statePort.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`));
+}
+
+assert.match(main, /createFrameBridgeController/);
+assert.match(main, /createPreferredModelController/);
+assert.match(main, /createTopbarEditor/);
+assert.doesNotMatch(main, /function prepareContentFrameRuntimeUncached/);
+assert.doesNotMatch(main, /function applyPreferredModelToFrame/);
+assert.doesNotMatch(main, /function preservePreferredModelForSubmissionNavigation/);
+assert.doesNotMatch(main, /function handleTopbarEditPointerMove/);
+assert.doesNotMatch(read("shared/frame-rpc.js"), /export let frameRuntimePort|configureFrameRuntimePort|export function sendToContentFrame/);
 
 assert.match(state, /createFeatureStatePorts/);
 assert.match(state, /read:\s*Object\.freeze/);

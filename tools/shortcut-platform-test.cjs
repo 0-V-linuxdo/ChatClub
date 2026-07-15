@@ -12,7 +12,7 @@ const shortcutsSource = fs.readFileSync(path.join(root, "shared/shortcuts.js"), 
 const storageSource = fs.readFileSync(path.join(root, "shared/storage-schema.js"), "utf8");
 const protocolSource = fs.readFileSync(path.join(root, "shared/protocol.js"), "utf8");
 const contentEntrySource = fs.readFileSync(path.join(root, "content-src/content.js"), "utf8");
-const mainSource = ["app/main.js", "app/runtime.js"]
+const mainSource = ["app/main.js", "app/runtime.js", "app/frame-bridge/controller.js"]
   .map((file) => fs.readFileSync(path.join(root, file), "utf8"))
   .join("\n");
 const serviceWorkerSource = ["background/service-worker.js", "background/runtime.js"]

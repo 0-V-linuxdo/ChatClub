@@ -61,6 +61,13 @@ function compareVersions(left, right) {
   return 0;
 }
 
+function validNumericManifestVersion(value) {
+  const version = String(value || "");
+  const parts = version.split(".");
+  return /^\d+\.\d+\.\d+\.\d+$/.test(version)
+    && parts.every((part) => Number(part) <= 65535 && (part.length === 1 || !part.startsWith("0")));
+}
+
 function laterVersion(left, right) {
   return compareVersions(left, right) >= 0 ? left : right;
 }
@@ -104,8 +111,11 @@ function stableJson(value) {
 }
 
 function snapshotWriteErrors(previous, current) {
-  if (previous?.schemaVersion !== 1) return [];
   const errors = [];
+  if (!validNumericManifestVersion(current.manifestVersion)) {
+    errors.push("manifest.json version must be exactly four dot-separated integers from 0 to 65535 without leading zeroes");
+  }
+  if (previous?.schemaVersion !== 1) return errors;
   if (compareVersions(current.appVersion, previous.appVersion) < 0) errors.push("APP_VERSION must not move backwards");
   if (compareVersions(current.manifestVersion, previous.manifestVersion) < 0) errors.push("numeric Manifest version must not move backwards");
   const payloadChanged = ["chromium", "firefox"].some((target) =>
@@ -113,6 +123,9 @@ function snapshotWriteErrors(previous, current) {
   );
   if (payloadChanged && compareVersions(current.appVersion, previous.appVersion) <= 0) {
     errors.push("release payload changed without increasing APP_VERSION");
+  }
+  if (payloadChanged && compareVersions(current.manifestVersion, previous.manifestVersion) <= 0) {
+    errors.push("release payload changed without increasing numeric Manifest version");
   }
   for (const [id, site] of Object.entries(current.summary.sites)) {
     const baseline = previous.summary?.sites?.[id];
@@ -142,9 +155,18 @@ function verifyVersionState() {
   const expected = computeVersionState(actual.floors);
 
   const errors = [];
+  if (!validNumericManifestVersion(expected.manifestVersion)) {
+    errors.push("manifest.json version must be exactly four dot-separated integers from 0 to 65535 without leading zeroes");
+  }
   if (compareVersions(expected.appVersion, actual.floors?.appVersion) < 0) errors.push("APP_VERSION must not move backwards");
   if (compareVersions(expected.manifestVersion, actual.floors?.manifestVersion) < 0) errors.push("numeric Manifest version must not move backwards");
   if (expected.summary.configVersion < Number(actual.floors?.summaryConfigVersion || 0)) errors.push("SUMMARY_SITE_CONFIG_VERSION must not move backwards");
+  const payloadChanged = ["chromium", "firefox"].some((target) =>
+    actual.payloads?.[target]?.sha256 !== expected.payloads[target].sha256
+  );
+  if (payloadChanged && compareVersions(expected.manifestVersion, actual.manifestVersion) <= 0) {
+    errors.push("release payload changed without increasing numeric Manifest version");
+  }
   for (const [id, site] of Object.entries(expected.summary.sites)) {
     if (site.configVersion < Number(actual.floors?.summarySites?.[id] || 0)) errors.push(`Summary ${id} configVersion must not move backwards`);
   }
@@ -209,4 +231,10 @@ if (require.main === module) {
   }
 }
 
-module.exports = { computeVersionState, verifyVersionState };
+module.exports = {
+  compareVersions,
+  validNumericManifestVersion,
+  snapshotWriteErrors,
+  computeVersionState,
+  verifyVersionState
+};

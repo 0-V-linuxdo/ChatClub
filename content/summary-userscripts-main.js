@@ -7,24 +7,26 @@
 
   // shared/protocol.js
   var GENERIC_POST_MESSAGE_SOURCE = "chatclub";
-  var NATIVE_COPY_SOURCE = "chatclub-native-copy:2026.07.08.13";
+  var NATIVE_COPY_SOURCE = "chatclub-native-copy:2026.07.15.1";
   var GEMINI_MODEL_PICKER_SOURCE = "chatclub-gemini-model-picker:2026.07.13.3";
   var MAIN_WORLD_LOCATION_SOURCE = "chatclub:main-world-location:2026.07.13.3";
-  var NOTION_SEND_TEXT_SOURCE = "chatclub-notion-send-text:2026.07.13.13";
-  var NOTION_SEND_PROMPT_SOURCE = "chatclub-notion-send-prompt:2026.07.13.13";
-  var NOTION_SEND_ACTIVATED_EVENT = "chatclub:notion-send-activated:2026.07.13.1";
-  var SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.13.7";
-  var DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.10.2";
-  var MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.08.12";
-  var SUMMARY_POST_MESSAGE_SOURCE = "chatclub:summary:2026.07.08.13";
-  var PREFERRED_MODEL_POST_MESSAGE_SOURCE = "chatclub:preferred-model:2026.07.13.2";
-  var CONTENT_BRIDGE_VERSION = "2026.07.15.7";
-  var EXTENSION_RUNTIME_RELAY_SOURCE = "chatclub:runtime-relay:2026.07.15.7";
-  var SECURE_FRAME_COMMAND_SOURCE = "chatclub:frame-command:2026.07.15.7";
-  var DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.07.03.30";
-  var PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.15.7";
-  var RUNTIME_REGISTRY_KEY = "__CHATCLUB_RUNTIME_REGISTRY_V1__";
+  var NOTION_SEND_TEXT_SOURCE = "chatclub-notion-send-text:2026.07.15.2";
+  var NOTION_SEND_PROMPT_SOURCE = "chatclub-notion-send-prompt:2026.07.15.2";
+  var NOTION_SEND_TEXT_EVENT = "chatclub:notion-send-text:2026.07.15.2";
+  var NOTION_SEND_PROMPT_EVENT = "chatclub:notion-send-prompt:2026.07.15.2";
+  var NOTION_SEND_ACTIVATED_EVENT = "chatclub:notion-send-activated:2026.07.15.2";
+  var SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.15.8";
+  var DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.15.8";
+  var MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.15.8";
+  var SUMMARY_POST_MESSAGE_SOURCE = "chatclub:summary:2026.07.15.8";
+  var PREFERRED_MODEL_POST_MESSAGE_SOURCE = "chatclub:preferred-model:2026.07.15.8";
+  var CONTENT_BRIDGE_VERSION = "2026.07.15.8";
+  var EXTENSION_RUNTIME_RELAY_SOURCE = "chatclub:runtime-relay:2026.07.15.8";
+  var SECURE_FRAME_COMMAND_SOURCE = "chatclub:frame-command:2026.07.15.8";
+  var DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.07.15.1";
+  var PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.15.8";
   var RUNTIME_REGISTRY_ABI_VERSION = 1;
+  var RUNTIME_REGISTRY_KEY = `__CHATCLUB_RUNTIME_REGISTRY_V${RUNTIME_REGISTRY_ABI_VERSION}__`;
   var NAVIGATION_FOCUS_GUARD_RUNTIME = "navigation-focus-guard";
   var NAVIGATION_FOCUS_GUARD_RUNTIME_VERSION = "2026.07.15.2";
   var FRAME_TOAST_POSITION_EVENT = "chatclub:frame-toast-position:2026.07.13.1";
@@ -42,6 +44,8 @@
     MAIN_WORLD_LOCATION_SOURCE,
     NOTION_SEND_TEXT_SOURCE,
     NOTION_SEND_PROMPT_SOURCE,
+    NOTION_SEND_TEXT_EVENT,
+    NOTION_SEND_PROMPT_EVENT,
     NOTION_SEND_ACTIVATED_EVENT,
     SEND_TEXT_POST_MESSAGE_SOURCE,
     DELETE_THREAD_POST_MESSAGE_SOURCE,
@@ -2362,7 +2366,7 @@
       return api.merge(out);
     };
     scripts["typingmind.js"] = scripts["typingmind"];
-    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.15.7" });
+    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.15.8" });
     return scripts;
   }
 
@@ -3286,10 +3290,46 @@ ${value}`);
     if (!value) throw new TypeError("Runtime name is required");
     return value;
   }
+  function disposeSupersededRegistries(target) {
+    let keys = [];
+    try {
+      keys = Object.getOwnPropertyNames(target);
+    } catch {
+    }
+    for (const key of keys) {
+      if (key === RUNTIME_REGISTRY_KEY || !/^__CHATCLUB_RUNTIME_REGISTRY_V\d+__$/.test(key)) continue;
+      let registry = null;
+      try {
+        registry = target[key];
+      } catch {
+      }
+      if (!registry || registry.abiVersion === RUNTIME_REGISTRY_ABI_VERSION || typeof registry.dispose !== "function") continue;
+      try {
+        registry.dispose(`superseded by runtime registry ABI ${RUNTIME_REGISTRY_ABI_VERSION}`);
+      } catch {
+      }
+    }
+  }
   function runtimeRegistry(target = globalThis) {
     const current = target[RUNTIME_REGISTRY_KEY];
     if (current?.abiVersion === RUNTIME_REGISTRY_ABI_VERSION && typeof current.register === "function") return current;
+    if (current != null) {
+      throw new Error(
+        `Runtime registry key ${RUNTIME_REGISTRY_KEY} is occupied by ABI ${String(current?.abiVersion ?? "unknown")}; incrementing RUNTIME_REGISTRY_ABI_VERSION must also produce a new registry key`
+      );
+    }
+    disposeSupersededRegistries(target);
     const entries = /* @__PURE__ */ new Map();
+    const disposeEntry = (key, reason) => {
+      const entry = entries.get(key);
+      if (!entry) return false;
+      entries.delete(key);
+      try {
+        entry.dispose?.(String(reason || "invalidated"));
+      } catch {
+      }
+      return true;
+    };
     const registry = Object.freeze({
       abiVersion: RUNTIME_REGISTRY_ABI_VERSION,
       register(name, descriptor = {}) {
@@ -3312,6 +3352,25 @@ ${value}`);
         });
         return descriptor.api;
       },
+      install(name, version, factory) {
+        const key = validName(name);
+        const expectedVersion = String(version || "");
+        if (!expectedVersion) throw new TypeError(`Runtime ${key} requires a version`);
+        const previous = entries.get(key);
+        if (previous?.version === expectedVersion) return previous.api;
+        if (previous) disposeEntry(key, `replaced by ${expectedVersion}`);
+        if (typeof factory !== "function") throw new TypeError(`Runtime ${key} requires an installer`);
+        const descriptor = factory();
+        if (!descriptor || typeof descriptor !== "object" || !("api" in descriptor)) {
+          throw new TypeError(`Runtime ${key} installer must return an api descriptor`);
+        }
+        entries.set(key, {
+          version: expectedVersion,
+          api: descriptor.api,
+          dispose: typeof descriptor.dispose === "function" ? descriptor.dispose : null
+        });
+        return descriptor.api;
+      },
       require(name, version) {
         const key = validName(name);
         const entry = entries.get(key);
@@ -3327,14 +3386,10 @@ ${value}`);
       },
       invalidate(name, reason = "invalidated") {
         const key = validName(name);
-        const entry = entries.get(key);
-        if (!entry) return false;
-        entries.delete(key);
-        try {
-          entry.dispose?.(String(reason || "invalidated"));
-        } catch {
-        }
-        return true;
+        return disposeEntry(key, reason);
+      },
+      dispose(reason = "registry disposed") {
+        for (const key of [...entries.keys()]) disposeEntry(key, reason);
       }
     });
     Object.defineProperty(target, RUNTIME_REGISTRY_KEY, {

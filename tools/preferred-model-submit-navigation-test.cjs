@@ -9,6 +9,9 @@ const root = path.resolve(__dirname, "..");
 const mainSource = ["app/main.js", "app/runtime.js"]
   .map((file) => fs.readFileSync(path.join(root, file), "utf8"))
   .join("\n");
+const preferredModelSource = fs.readFileSync(path.join(root, "app/preferred-model/controller.js"), "utf8");
+const frameBridgeSource = fs.readFileSync(path.join(root, "app/frame-bridge/controller.js"), "utf8");
+const parentSource = `${mainSource}\n${frameBridgeSource}`;
 const contentSource = fs.readFileSync(path.join(root, "content/content.js"), "utf8");
 const contentEntrySource = fs.readFileSync(path.join(root, "content-src/content.js"), "utf8");
 const preloadSource = fs.readFileSync(path.join(root, "content/preload.js"), "utf8");
@@ -27,7 +30,7 @@ function protocolString(name) {
 function assertProtocolBinding(source, name, label) {
   assert.match(
     source,
-    new RegExp(`(?:const|var)\\s+${name}\\d*\\s*=\\s*PROTOCOL\\.${name}\\s*;`),
+    new RegExp(`(?:const|var)\\s+${name}\\d*\\s*=\\s*(?:PROTOCOL|protocol)\\.${name}\\s*;`),
     `${label} must consume ${name} from the bundled shared protocol`
   );
 }
@@ -64,7 +67,7 @@ function functionSource(source, name) {
 
 const routeContext = vm.createContext({ URL });
 vm.runInContext(
-  `${functionSource(mainSource, "preferredModelSubmissionRouteState")}; globalThis.routeState = preferredModelSubmissionRouteState;`,
+  `${functionSource(preferredModelSource, "preferredModelSubmissionRouteState")}; globalThis.routeState = preferredModelSubmissionRouteState;`,
   routeContext
 );
 const routeState = (appId, href) => JSON.parse(JSON.stringify(routeContext.routeState(appId, href)));
@@ -86,9 +89,9 @@ vm.runInContext(`
   function schedulePreferredModelSubmissionNavigationExpiry(record) {
     record.expiryScheduleCount = (record.expiryScheduleCount || 0) + 1;
   }
-  ${functionSource(mainSource, "preferredModelSubmissionRouteState")}
-  ${functionSource(mainSource, "clearPreferredModelSubmissionNavigation")}
-  ${functionSource(mainSource, "preservePreferredModelForSubmissionNavigation")}
+  ${functionSource(preferredModelSource, "preferredModelSubmissionRouteState")}
+  ${functionSource(preferredModelSource, "clearPreferredModelSubmissionNavigation")}
+  ${functionSource(preferredModelSource, "preservePreferredModelForSubmissionNavigation")}
   globalThis.runs = preferredModelApplyRuns;
   globalThis.preserve = preservePreferredModelForSubmissionNavigation;
 `, leaseContext);
@@ -194,11 +197,11 @@ assert.match(locationReportSource, /postLocationChanged\(/, "SPA navigation must
 assert.match(locationReportSource, /previousHref/, "location messages must preserve the previous href");
 assert.match(locationReportSource, /requireCurrentHref/, "stale queued history notifications must be ignored");
 
-const frameKeySource = functionSource(mainSource, "preferredModelFrameKey");
+const frameKeySource = functionSource(preferredModelSource, "preferredModelFrameKey");
 assert.doesNotMatch(frameKeySource, /currentHref|iframe\.src/, "preferred-model identity must not change for an SPA href");
 assert.match(contentSource, /action: "relayFrameLifecycle"/, "content must relay lifecycle events over extension runtime messaging");
-assert.match(mainSource, /message\.action !== "frameLifecycle"/, "parent must handle authenticated lifecycle relays");
-assert.match(mainSource, /EXTENSION_RUNTIME_RELAY_SOURCE/, "parent lifecycle handling must use the extension runtime relay source");
+assert.match(parentSource, /message\.action !== "frameLifecycle"/, "parent must handle authenticated lifecycle relays");
+assert.match(parentSource, /EXTENSION_RUNTIME_RELAY_SOURCE/, "parent lifecycle handling must use the extension runtime relay source");
 assert.match(workspaceSource, /emitFrameLifecycleChange\(\{ type: "location"[^\n]+navigation \}\)/, "workspace must forward navigation correlation metadata");
 assert.match(workspaceSource, /hrefChanged \|\| navigation\?\.forced === true/, "forced same-href popstate must still emit a lifecycle event");
 assert.match(workspaceSource, /iframe\.dataset\.currentHref === href/, "stale favicon discovery must not roll frame location backward");
@@ -235,7 +238,7 @@ assert.ok(
   "generic submit correlation must be armed before Enter"
 );
 
-const preserveSource = functionSource(mainSource, "preservePreferredModelForSubmissionNavigation");
+const preserveSource = functionSource(preferredModelSource, "preservePreferredModelForSubmissionNavigation");
 assert.match(preserveSource, /submission\.sendId[^\n]+lease\.sendId/, "parent must match the exact send id");
 assert.match(preserveSource, /navigation\.documentId[^\n]+lease\.documentId/, "parent must match the exact document id");
 assert.match(preserveSource, /navigation\.bridgeVersion[^\n]+lease\.bridgeVersion/, "parent must match the exact bridge version");
@@ -249,7 +252,7 @@ assert.match(contentSource, /function findNotionModelTrigger\(\)[\s\S]*?findNoti
 assert.match(contentEntrySource, /deadlineAt > activatedAt \? deadlineAt \+ 15000/, "content correlation must cover delayed final routing through the send deadline");
 assert.match(contentSource, /event\?\.isTrusted[^\n]+currentSubmissionNavigation/, "trusted user navigation intent must cancel stale submission correlation");
 assert.match(contentSource, /window\.addEventListener\("pointerdown", clearSubmissionNavigationForTrustedIntent/, "trusted pointer navigation must be observed before SPA routing");
-assert.match(mainSource, /if \(sent \|\| lease\.terminalObserved\) return;/, "successful or terminal submission routing must retain its lease through the hard deadline");
+assert.match(preferredModelSource, /if \(sent \|\| lease\.terminalObserved\) return;/, "successful or terminal submission routing must retain its lease through the hard deadline");
 assert.match(
   modelPreferenceConsoleSource,
   /dataState === "disabled"/,

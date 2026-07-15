@@ -17,8 +17,8 @@
     "verify:pack": "node tools/pack-extension.cjs --check",
     "check": "node tools/check.cjs",
     "test": "node tools/run-node-tests.cjs",
-    "pack": "node tools/pack-extension.cjs",
-    "pack:firefox": "node tools/pack-extension.cjs --target firefox",
+    "pack": "node tools/release-pack.cjs",
+    "pack:firefox": "node tools/release-pack.cjs --target firefox",
     "smoke:chromium": "node tools/browser-smoke.mjs chromium",
     "smoke:firefox": "node tools/browser-smoke.mjs firefox",
     "ci": "node tools/ci.cjs"

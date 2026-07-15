@@ -1,5 +1,4 @@
 import { t } from "../../shared/i18n.js";
-import { sendToContentFrame } from "../../shared/frame-rpc.js";
 import { currentExtensionTabId, runtimeRequest } from "../../shared/extension-api.js";
 import { TAB_GROUP_HEADER_BUTTONS } from "../../shared/constants.js";
 import { normalizeTabGroupButtonOrder, normalizeTabGroupButtonPlacement } from "../../shared/storage-schema.js";
@@ -19,7 +18,6 @@ import {
 } from "./model.js";
 import { createWorkspaceFrameRegistry } from "./frame-registry.js";
 import { createWorkspaceOpenTabs } from "./open-tab.js";
-import { executeTopicDelete } from "../topic-delete/runtime.js";
 import { requireControllerContext, requireControllerFunction, validateControllerContract } from "../controller-contract.js";
 
 const DRAG_TAB_MIME = "application/x-chatclub-tab";
@@ -124,6 +122,8 @@ const APP_PICKER_CHINESE_ID_SET = new Set(APP_PICKER_CHINESE_IDS);
  * @property {(iframe: HTMLIFrameElement, options?: object) => Promise<any>} [prepareContentFrameRuntime]
  * @property {() => void} [openCustomAppEditor]
  * @property {(event: WorkspaceFrameLifecycleEvent) => void} [onFrameLifecycleChange]
+ * @property {{ request: Function }} framePort
+ * @property {(iframe: HTMLIFrameElement, payload?: object, config?: object|null, timeoutMs?: number) => Promise<any>} executeTopicDelete
  */
 
 const requireContext = (ctx, name) => requireControllerContext(ctx, "Workspace controller", name);
@@ -145,7 +145,8 @@ export function createWorkspaceController(ctx = {}) {
     normalizeOptions: "function", toast: "function", render: "function", svgIcon: "function",
     compactIconButton: "function", menuButton: "function", formatShortcut: "function",
     requestTopicDeletePermission: "function?", prepareContentFrameRuntime: "function?",
-    openCustomAppEditor: "function?", onFrameLifecycleChange: "function?"
+    openCustomAppEditor: "function?", onFrameLifecycleChange: "function?", framePort: "object",
+    executeTopicDelete: "function"
   });
   const state = requireContext(ctx, "state");
   const createGroupId = requireFunction(ctx, "createGroupId");
@@ -168,6 +169,13 @@ export function createWorkspaceController(ctx = {}) {
   const compactIconButton = requireFunction(ctx, "compactIconButton");
   const menuButton = requireFunction(ctx, "menuButton");
   const formatShortcut = requireFunction(ctx, "formatShortcut");
+  const framePort = requireContext(ctx, "framePort");
+  if (typeof framePort.request !== "function") throw new TypeError("Workspace controller requires framePort.request.");
+  const sendToContentFrame = (iframe, command, data = {}, timeoutMs) => {
+    const options = timeoutMs && typeof timeoutMs === "object" ? timeoutMs : { timeoutMs };
+    return framePort.request(iframe, command, data, options);
+  };
+  const executeTopicDelete = requireFunction(ctx, "executeTopicDelete");
   const requestTopicDeletePermission = typeof ctx.requestTopicDeletePermission === "function"
     ? ctx.requestTopicDeletePermission
     : async () => true;

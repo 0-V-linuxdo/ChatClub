@@ -1,7 +1,12 @@
 #!/usr/bin/env node
 
 const assert = require("node:assert/strict");
-const { packagePlan, runtimeModuleEntries } = require("./package-plan.cjs");
+const { GENERATED_ARTIFACT_FILES } = require("./generated-artifacts.cjs");
+const { exactFiles, trees, packagePlan, runtimeModuleEntries } = require("./package-plan.cjs");
+
+assert.equal(Object.hasOwn(trees, "content"), false);
+assert.equal(Object.hasOwn(trees, "topic-delete-userscripts"), false);
+for (const file of GENERATED_ARTIFACT_FILES) assert.ok(exactFiles.includes(file), `exact package inventory is missing ${file}`);
 
 const chromium = packagePlan("chromium");
 const firefox = packagePlan("firefox");
@@ -16,6 +21,10 @@ for (const plan of [chromium, firefox]) {
     "content/grok-cookie-bridge.js",
     "userscripts/index.json",
     "userscripts/chatgpt.js",
+    "topic-delete-userscripts/chatgpt.user.js",
+    "background/content-registration.js",
+    "background/frame-injection.js",
+    "background/tab-runtime.js",
     "background/trusted-input.js"
   ]) assert.ok(files.has(runtimeFile), `${plan.target} package is missing ${runtimeFile}`);
   for (const buildOnly of [
@@ -24,6 +33,11 @@ for (const plan of [chromium, firefox]) {
     "shared/topic-delete-userscript-sources.js"
   ]) assert.ok(!files.has(buildOnly), `${plan.target} package contains build-only ${buildOnly}`);
   assert.ok(!plan.files.some((file) => /^(?:dist|output)\//.test(file)));
+  assert.equal(
+    Object.hasOwn(plan.manifest, "web_accessible_resources"),
+    false,
+    `${plan.target} package must not expose scripting-only runtime files as web resources`
+  );
 }
 
 assert.ok(!chromium.files.includes("background/firefox-background.js"));

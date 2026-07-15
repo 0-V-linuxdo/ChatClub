@@ -9,6 +9,10 @@ import { init, parse } from "es-module-lexer";
 
 const require = createRequire(import.meta.url);
 const { packagePlan, root, runtimeModuleEntries } = require("./package-plan.cjs");
+const {
+  NATIVE_BROWSER_TARGETS,
+  nativeEsmSyntaxRequiresLowering
+} = require("./native-esm-syntax.cjs");
 const SIZE_ALLOWLIST_FILE = "tools/module-size-allowlist.json";
 const ignoredDirectories = new Set([".git", ".cache", "build", "dist", "node_modules", "output"]);
 const errors = [];
@@ -111,10 +115,21 @@ function generatedOrSpecial(file) {
     || file === "shared/i18n.js";
 }
 
-async function grammarCheck(file, context, source) {
+async function grammarCheck(file, context, source, nativeRuntimeModule = false) {
   try {
-    if (context === "browser-esm" || context === "node-esm-tool") {
-      await transform(source, { loader: "js", format: "esm", platform: context === "browser-esm" ? "browser" : "node" });
+    if (context === "browser-esm") {
+      if (nativeRuntimeModule) {
+        const result = await nativeEsmSyntaxRequiresLowering(source, file);
+        if (result.requiresLowering) {
+          fail(`${file}: native ESM syntax requires lowering for ${NATIVE_BROWSER_TARGETS.join("/")}; packaged native modules must execute without transformation`);
+        }
+      } else {
+        await transform(source, { loader: "js", format: "esm", platform: "browser" });
+      }
+      return;
+    }
+    if (context === "node-esm-tool") {
+      await transform(source, { loader: "js", format: "esm", platform: "node" });
       return;
     }
     if (context === "cjs-tool") {
@@ -185,6 +200,12 @@ for (const [dependency, version] of Object.entries(pinnedToolchain)) {
   if (packageJson.devDependencies?.[dependency] !== version) fail(`package.json must pin ${dependency}@${version} exactly`);
   if (packageLock.packages?.[`node_modules/${dependency}`]?.version !== version) fail(`package-lock.json does not lock ${dependency}@${version}`);
 }
+const packagePlans = new Map(["chromium", "firefox"].map((target) => [target, packagePlan(target)]));
+const nativeRuntimeModules = new Set(
+  [...packagePlans.values()]
+    .flatMap((plan) => plan.files)
+    .filter((file) => contextFor(file) === "browser-esm")
+);
 const allFiles = walk().sort();
 const javascriptFiles = allFiles.filter((file) => /\.(?:cjs|mjs|js)$/.test(file));
 const graph = new Map();
@@ -198,7 +219,7 @@ for (const file of javascriptFiles) {
     continue;
   }
   const source = fs.readFileSync(path.join(root, file), "utf8");
-  await grammarCheck(file, context, source);
+  await grammarCheck(file, context, source, nativeRuntimeModules.has(file));
   let imports;
   let exports;
   try {
@@ -305,7 +326,7 @@ for (const [file, reason] of Object.entries(sizeAllowlist)) {
 
 const linkedEntryPoints = new Set();
 for (const target of ["chromium", "firefox"]) {
-  const plan = packagePlan(target);
+  const plan = packagePlans.get(target);
   const packaged = new Set(plan.files);
   for (const file of plan.files.filter((candidate) => graph.has(candidate))) {
     for (const dependency of graph.get(file)) {

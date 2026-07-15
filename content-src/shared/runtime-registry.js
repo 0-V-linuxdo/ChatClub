@@ -9,11 +9,42 @@ function validName(name) {
   return value;
 }
 
+function disposeSupersededRegistries(target) {
+  let keys = [];
+  try { keys = Object.getOwnPropertyNames(target); } catch {}
+  for (const key of keys) {
+    if (key === RUNTIME_REGISTRY_KEY || !/^__CHATCLUB_RUNTIME_REGISTRY_V\d+__$/.test(key)) continue;
+    let registry = null;
+    try { registry = target[key]; } catch {}
+    if (
+      !registry
+      || registry.abiVersion === RUNTIME_REGISTRY_ABI_VERSION
+      || typeof registry.dispose !== "function"
+    ) continue;
+    try { registry.dispose(`superseded by runtime registry ABI ${RUNTIME_REGISTRY_ABI_VERSION}`); } catch {}
+  }
+}
+
 export function runtimeRegistry(target = globalThis) {
   const current = target[RUNTIME_REGISTRY_KEY];
   if (current?.abiVersion === RUNTIME_REGISTRY_ABI_VERSION && typeof current.register === "function") return current;
+  if (current != null) {
+    throw new Error(
+      `Runtime registry key ${RUNTIME_REGISTRY_KEY} is occupied by ABI ${String(current?.abiVersion ?? "unknown")}; `
+      + "incrementing RUNTIME_REGISTRY_ABI_VERSION must also produce a new registry key"
+    );
+  }
+
+  disposeSupersededRegistries(target);
 
   const entries = new Map();
+  const disposeEntry = (key, reason) => {
+    const entry = entries.get(key);
+    if (!entry) return false;
+    entries.delete(key);
+    try { entry.dispose?.(String(reason || "invalidated")); } catch {}
+    return true;
+  };
   const registry = Object.freeze({
     abiVersion: RUNTIME_REGISTRY_ABI_VERSION,
     register(name, descriptor = {}) {
@@ -28,6 +59,25 @@ export function runtimeRegistry(target = globalThis) {
       }
       entries.set(key, {
         version,
+        api: descriptor.api,
+        dispose: typeof descriptor.dispose === "function" ? descriptor.dispose : null
+      });
+      return descriptor.api;
+    },
+    install(name, version, factory) {
+      const key = validName(name);
+      const expectedVersion = String(version || "");
+      if (!expectedVersion) throw new TypeError(`Runtime ${key} requires a version`);
+      const previous = entries.get(key);
+      if (previous?.version === expectedVersion) return previous.api;
+      if (previous) disposeEntry(key, `replaced by ${expectedVersion}`);
+      if (typeof factory !== "function") throw new TypeError(`Runtime ${key} requires an installer`);
+      const descriptor = factory();
+      if (!descriptor || typeof descriptor !== "object" || !("api" in descriptor)) {
+        throw new TypeError(`Runtime ${key} installer must return an api descriptor`);
+      }
+      entries.set(key, {
+        version: expectedVersion,
         api: descriptor.api,
         dispose: typeof descriptor.dispose === "function" ? descriptor.dispose : null
       });
@@ -48,11 +98,10 @@ export function runtimeRegistry(target = globalThis) {
     },
     invalidate(name, reason = "invalidated") {
       const key = validName(name);
-      const entry = entries.get(key);
-      if (!entry) return false;
-      entries.delete(key);
-      try { entry.dispose?.(String(reason || "invalidated")); } catch {}
-      return true;
+      return disposeEntry(key, reason);
+    },
+    dispose(reason = "registry disposed") {
+      for (const key of [...entries.keys()]) disposeEntry(key, reason);
     }
   });
 

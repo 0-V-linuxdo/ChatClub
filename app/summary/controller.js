@@ -1,5 +1,4 @@
 import { summarizeContexts } from "../../shared/api.js";
-import { sendToContentFrame } from "../../shared/frame-rpc.js";
 import { t } from "../../shared/i18n.js";
 import { storageGet, storageSet } from "../../shared/storage-adapter.js";
 import { findSummarySiteConfig } from "../../shared/url-match.js";
@@ -44,6 +43,7 @@ const SUMMARY_PANEL_SIZE_KEY = "chatclub.summaryPanelSize.v4";
  * @property {(href: string) => string} browserFaviconUrl
  * @property {(action: string, digitLabel?: string) => string} [formatShortcut]
  * @property {{ save: () => Promise<void>, entries: () => any[] }} [pocketPort]
+ * @property {{ request: Function }} framePort
  */
 
 /**
@@ -58,7 +58,7 @@ export function createSummaryController(ctx) {
     frameApp: "function", prepareContentFrameRuntime: "function", setFramePointerBlockedForOverlay: "function",
     findFrameForSummarySource: "function", highlightFrameForSummarySource: "function?", inferAppName: "function",
     effectiveFaviconUrl: "function", discoverDeclaredFaviconUrl: "function", rememberFaviconUrl: "function",
-    browserFaviconUrl: "function", formatShortcut: "function?", pocketPort: "object?"
+    browserFaviconUrl: "function", formatShortcut: "function?", pocketPort: "object?", framePort: "object"
   });
   const state = requireControllerContext(ctx, controllerName, "state");
   const svgIcon = requireControllerFunction(ctx, controllerName, "svgIcon");
@@ -74,6 +74,12 @@ export function createSummaryController(ctx) {
   const discoverDeclaredFaviconUrl = requireControllerFunction(ctx, controllerName, "discoverDeclaredFaviconUrl");
   const rememberFaviconUrl = requireControllerFunction(ctx, controllerName, "rememberFaviconUrl");
   const browserFaviconUrl = requireControllerFunction(ctx, controllerName, "browserFaviconUrl");
+  const framePort = requireControllerContext(ctx, controllerName, "framePort");
+  if (typeof framePort.request !== "function") throw new TypeError("Summary controller requires framePort.request.");
+  const sendToContentFrame = (iframe, command, data = {}, timeoutMs) => {
+    const options = timeoutMs && typeof timeoutMs === "object" ? timeoutMs : { timeoutMs };
+    return framePort.request(iframe, command, data, options);
+  };
   const formatShortcutLabel = typeof ctx.formatShortcut === "function" ? ctx.formatShortcut : null;
   const pocketPort = optionalControllerObject(ctx, "pocketPort");
   const saveSummaryPreviewToPocket = typeof pocketPort.save === "function" ? pocketPort.save : async () => {};

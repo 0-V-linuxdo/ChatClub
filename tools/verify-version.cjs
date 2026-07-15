@@ -2,7 +2,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-const { verifyVersionState } = require("./version-state.cjs");
+const { validNumericManifestVersion, verifyVersionState } = require("./version-state.cjs");
 
 const root = path.resolve(__dirname, "..");
 const errors = [];
@@ -40,9 +40,8 @@ for (const field of ["version", "versionName", "label"]) {
 
 const chromeVersion = String(manifest.version || "");
 const chromeParts = chromeVersion.split(".");
-if (!/^\d+(?:\.\d+){0,3}$/.test(chromeVersion)
-  || chromeParts.some((part) => Number(part) > 65535 || (part.length > 1 && part.startsWith("0")))) {
-  fail("manifest.json version must be 1-4 dot-separated integers from 0 to 65535 without leading zeroes");
+if (!validNumericManifestVersion(chromeVersion)) {
+  fail("manifest.json version must be exactly four dot-separated integers from 0 to 65535 without leading zeroes");
 }
 
 if (versionMatch) {
@@ -93,7 +92,7 @@ for (const error of verifyVersionState()) fail(error);
 
 if (errors.length) {
   console.error("Version verification failed:");
-  for (const error of errors) console.error(`  - ${error}`);
+  for (const error of [...new Set(errors)]) console.error(`  - ${error}`);
   process.exitCode = 1;
 } else {
   console.log(`Version metadata is consistent: ${appVersion}`);

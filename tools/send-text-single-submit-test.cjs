@@ -81,9 +81,14 @@ assert.match(
 assert.match(frameCommandsSource, /sendText:\s*command\(\{[^}]*mutating:\s*true/, "sendText must be an exactly-once frame command");
 assert.match(frameRpcSource, /action:\s*"sendFrameCommand"/, "parent messaging must use authenticated Frame RPC");
 assert.match(
-  contentSource,
-  /if \(versionedSendTextRequest && !contentBridgeIsCurrent\(\)\) return;/,
-  "superseded content bridges must ignore sendText requests"
+  contentEntrySource,
+  /if \(!contentBridgeIsCurrent\(\)\) return;/,
+  "superseded content bridges must ignore every parent-window request"
+);
+assert.match(
+  contentEntrySource,
+  /runtimes\.install\("parent-window-rpc", CONTENT_BRIDGE_VERSION/,
+  "parent-window requests must use the disposable runtime registry"
 );
 assert.match(
   contentSource,

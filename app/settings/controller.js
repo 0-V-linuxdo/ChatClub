@@ -72,6 +72,12 @@ import { requireControllerContext, requireControllerFunction, validateController
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
 const CONFIG_IO_AUTOSAVE_TIMEOUT_MS = 5000;
 
+function settingsMainScrollTopForRedraw(renderedSection, activeSection, scrollTop) {
+  if (!renderedSection || renderedSection !== activeSection) return 0;
+  const value = Number(scrollTop);
+  return Number.isFinite(value) ? Math.max(0, value) : 0;
+}
+
 export function createSettingsController(ctx) {
   const controllerName = "Settings controller";
   ctx = validateControllerContract(ctx, controllerName, {
@@ -613,37 +619,53 @@ export function createSettingsController(ctx) {
       ),
       modalSectionTitle
     ));
-    const redraw = () => {
+    let renderedSection = "";
+    const settingsMain = el("main", { class: "settings-main" });
+    const selectSection = (id) => {
+      if (!validSectionIds.has(id) || id === active) return;
+      active = id;
+      redraw();
+    };
+    const settingsTabEntries = SETTINGS_SECTIONS.map(([id, labelKey, descriptionKey, icon]) => {
+      const label = el("strong", {}, t(labelKey));
+      const description = el("small", {}, t(descriptionKey));
+      const tab = el("button", {
+        class: `settings-tab ${id === active ? "active" : ""}`,
+        type: "button",
+        onclick: () => selectSection(id)
+      },
+        svgIcon(icon),
+        el("span", { class: "settings-tab-copy" }, label, description)
+      );
+      return { id, labelKey, descriptionKey, label, description, tab };
+    });
+    const settingsNav = el("nav", { class: "settings-tabs", "aria-label": t("settings.sections") },
+      settingsTabEntries.map(({ tab }) => tab)
+    );
+    host.append(
+      el("aside", { class: "settings-sidebar" }, settingsNav),
+      settingsMain
+    );
+
+    function redraw() {
+      const mainScrollTop = settingsMainScrollTopForRedraw(renderedSection, active, settingsMain.scrollTop);
       appearancePaneCleanup();
-      clear(host);
       const section = settingsSectionMeta(active);
       clear(modalSectionTitle);
       modalSectionTitle.append(
         el("h3", {}, section.label),
         el("p", {}, section.description)
       );
-      host.append(
-        el("aside", { class: "settings-sidebar" },
-          el("nav", { class: "settings-tabs", "aria-label": t("settings.sections") },
-            SETTINGS_SECTIONS.map(([id, labelKey, descriptionKey, icon]) => el("button", {
-              class: `settings-tab ${id === active ? "active" : ""}`,
-              type: "button",
-              onclick: () => { active = id; redraw(); }
-            },
-              svgIcon(icon),
-              el("span", { class: "settings-tab-copy" },
-                el("strong", {}, t(labelKey)),
-                el("small", {}, t(descriptionKey))
-              )
-            ))
-          )
-        ),
-        el("main", { class: "settings-main" }, settingsPane(active, redraw, (id) => {
-          active = id;
-          redraw();
-        }))
-      );
-    };
+      settingsNav.setAttribute("aria-label", t("settings.sections"));
+      for (const entry of settingsTabEntries) {
+        entry.tab.classList.toggle("active", entry.id === active);
+        entry.label.textContent = t(entry.labelKey);
+        entry.description.textContent = t(entry.descriptionKey);
+      }
+      settingsMain.replaceChildren(settingsPane(active, redraw, selectSection));
+      settingsMain.scrollTop = mainScrollTop;
+      renderedSection = active;
+    }
     redraw();
   }
 

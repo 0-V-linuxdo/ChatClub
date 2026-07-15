@@ -40,7 +40,26 @@ jobs:
         run: |
           npx playwright install --with-deps chromium
           npx playwright install-deps firefox
-      - name: Chromium persistent-context extension smoke
+      - name: Current Playwright Chromium persistent-context extension smoke
+        env:
+          EXPECTED_CHROMIUM_MAJOR: "149"
+        run: npm run smoke:chromium
+      - name: Download verified Chrome for Testing 120
+        env:
+          CHROME_VERSION: "120.0.6099.109"
+          CHROME_SHA256: "bcb22c5242aabf184c6fadd86ee58b3ae35739177edac9de3938ed33791d4ddf"
+        run: |
+          archive="$RUNNER_TEMP/chrome-for-testing-$CHROME_VERSION-linux64.zip"
+          destination="$RUNNER_TEMP/chrome-for-testing-$CHROME_VERSION"
+          mkdir -p "$destination"
+          curl -fsSL "https://storage.googleapis.com/chrome-for-testing-public/$CHROME_VERSION/linux64/chrome-linux64.zip" -o "$archive"
+          printf '%s  %s\n' "$CHROME_SHA256" "$archive" | sha256sum --check --strict
+          unzip -q "$archive" -d "$destination"
+          test -x "$destination/chrome-linux64/chrome"
+      - name: Chrome 120 minimum-version extension smoke
+        env:
+          CHROMIUM_BINARY: ${{ runner.temp }}/chrome-for-testing-120.0.6099.109/chrome-linux64/chrome
+          EXPECTED_CHROMIUM_MAJOR: "120"
         run: npm run smoke:chromium
       - name: Download Firefox 136
         run: |

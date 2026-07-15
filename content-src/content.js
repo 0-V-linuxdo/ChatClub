@@ -10,6 +10,9 @@ import {
 } from "../shared/shortcuts.js";
 import * as summaryRuntime from "./shared/summary-runtime.js";
 import { runtimeRegistry } from "./shared/runtime-registry.js";
+import { createCommandDispatcher } from "./shared/command-dispatcher.js";
+import { installSecureFrameRpc } from "./shared/secure-frame-rpc.js";
+import { createMessageNavigatorPort } from "./shared/message-navigator-port.js";
 
 export function installContentBridge() {
   const PROTOCOL = CONTENT_PROTOCOL;
@@ -75,6 +78,8 @@ export function installContentBridge() {
   const PREFERRED_MODEL_FOCUS_SHIELD_RELEASE_GRACE_MS = 400;
   const NOTION_SEND_TEXT_SOURCE = PROTOCOL.NOTION_SEND_TEXT_SOURCE;
   const NOTION_SEND_PROMPT_SOURCE = PROTOCOL.NOTION_SEND_PROMPT_SOURCE;
+  const NOTION_SEND_TEXT_EVENT = PROTOCOL.NOTION_SEND_TEXT_EVENT;
+  const NOTION_SEND_PROMPT_EVENT = PROTOCOL.NOTION_SEND_PROMPT_EVENT;
   const NOTION_SEND_ACTIVATED_EVENT = PROTOCOL.NOTION_SEND_ACTIVATED_EVENT;
   const CONTENT_BRIDGE_VERSION = PROTOCOL.CONTENT_BRIDGE_VERSION;
   const SEND_TEXT_POST_MESSAGE_SOURCE = PROTOCOL.SEND_TEXT_POST_MESSAGE_SOURCE;
@@ -1337,7 +1342,7 @@ export function installContentBridge() {
       }
       window.addEventListener("message", onMessage, true);
       try {
-        window.dispatchEvent(new CustomEvent("chatclub:notion-send-prompt:2026.07.13.13", {
+        window.dispatchEvent(new CustomEvent(NOTION_SEND_PROMPT_EVENT, {
           detail: {
             id,
             sendId: String(data?.sendId || ""),
@@ -1379,7 +1384,7 @@ export function installContentBridge() {
       }
       window.addEventListener("message", onMessage, true);
       try {
-        window.dispatchEvent(new CustomEvent("chatclub:notion-send-text:2026.07.13.13", {
+        window.dispatchEvent(new CustomEvent(NOTION_SEND_TEXT_EVENT, {
           detail: {
             id,
             sendId: String(data?.sendId || ""),
@@ -6575,29 +6580,7 @@ export function installContentBridge() {
     });
   }
 
-  function messageNavigatorRuntime() {
-    const runtime = window.__CHATCLUB_MESSAGE_NAVIGATOR__;
-    if (!runtime || typeof runtime.setEnabled !== "function") {
-      throw new Error("Message navigator runtime is unavailable");
-    }
-    return runtime;
-  }
-
-  function setMessageNavigator(data = {}) {
-    return messageNavigatorRuntime().setEnabled(data);
-  }
-
-  function hideMessageNavigatorMenu() {
-    const runtime = messageNavigatorRuntime();
-    return typeof runtime.closeMenu === "function" ? runtime.closeMenu() : runtime.state();
-  }
-
-  function getMessageNavigatorState() {
-    const runtime = window.__CHATCLUB_MESSAGE_NAVIGATOR__;
-    return runtime && typeof runtime.state === "function"
-      ? runtime.state()
-      : { ok: false, enabled: false, messageCount: 0, error: "Message navigator runtime is unavailable" };
-  }
+  const messageNavigatorPort = createMessageNavigatorPort(runtimes);
 
   async function getSummaryRuntimeState() {
     const registration = runtimes.registration("summary-runners");
@@ -6625,51 +6608,42 @@ export function installContentBridge() {
     };
   }
 
-  async function handleContentAction(action, data = {}) {
-    if (!FRAME_COMMAND_SPECS[action]) throw new Error(`Unknown action: ${action}`);
-    if (action === "getLocationHref") return location.href;
-    if (action === "getPageMeta") return pageMeta();
-    if (action === "getPageText") return normalize(document.body?.innerText || "");
-    if (action === "getSummaryRuntimeState") return getSummaryRuntimeState();
-    if (action === "sendText") return sendText(data);
-    if (action === "newChatPreprocess") return { ok: true };
-    if (action === "deleteThread") return deleteThread(data);
-    if (action === "getDeleteConfirmState") return topicDeleteConfirmState(data?.site || "topic-delete");
-    if (action === "applyPreferredModel") return runPreferredModelApply(data);
-    if (action === "cancelPreferredModelApply") return cancelPreferredModelApply(data);
-    if (action === "collectSummary") return collectSummary(data);
-    if (action === "setMessageNavigator") return setMessageNavigator(data);
-    if (action === "hideMessageNavigatorMenu") return hideMessageNavigatorMenu();
-    if (action === "getMessageNavigatorState") return getMessageNavigatorState();
-    throw new Error(`Unknown action: ${action}`);
-  }
+  const handleContentAction = createCommandDispatcher(FRAME_COMMAND_SPECS, Object.freeze({
+    getLocationHref: () => location.href,
+    getPageMeta: () => pageMeta(),
+    getPageText: () => normalize(document.body?.innerText || ""),
+    getSummaryRuntimeState: () => getSummaryRuntimeState(),
+    sendText: (data) => sendText(data),
+    newChatPreprocess: () => ({ ok: true }),
+    prepareNavigationFocusGuard: () => {
+      throw new Error("prepareNavigationFocusGuard requires the MAIN-world transport");
+    },
+    adoptNavigationFocusGuard: () => {
+      throw new Error("adoptNavigationFocusGuard requires the MAIN-world transport");
+    },
+    deleteThread: (data) => deleteThread(data),
+    getDeleteConfirmState: (data) => topicDeleteConfirmState(data?.site || "topic-delete"),
+    applyPreferredModel: (data) => runPreferredModelApply(data),
+    cancelPreferredModelApply: (data) => cancelPreferredModelApply(data),
+    collectSummary: (data) => collectSummary(data),
+    setMessageNavigator: (data) => messageNavigatorPort.setEnabled(data),
+    hideMessageNavigatorMenu: () => messageNavigatorPort.hideMenu(),
+    getMessageNavigatorState: () => messageNavigatorPort.state()
+  }));
 
-  try { window.__CHATCLUB_SECURE_FRAME_RPC_CLEANUP__?.(); } catch {}
-  try { delete window.__CHATCLUB_SECURE_FRAME_RPC_CLEANUP__; } catch {}
-  const secureFrameCommandListener = (message, sender, sendResponse) => {
-    if (
-      message?.source !== SECURE_FRAME_COMMAND_SOURCE
-      || message.type !== "request"
-      || message.bridgeDocumentId !== contentDocumentId
-      || message.secureFrameToken !== secureFrameToken
-      || sender?.id !== EXTENSION_API?.runtime?.id
-    ) return false;
-    Promise.resolve(handleContentAction(message.action, message.data || {}))
-      .then((data) => sendResponse({ success: true, data }))
-      .catch((error) => sendResponse({ success: false, error: error?.message || String(error) }));
-    return true;
-  };
-  EXTENSION_API?.runtime?.onMessage?.addListener?.(secureFrameCommandListener);
-  runtimes.register("frame-rpc", {
+  installSecureFrameRpc({
+    extensionApi: EXTENSION_API,
+    runtimes,
     version: CONTENT_BRIDGE_VERSION,
-    api: Object.freeze({ listener: secureFrameCommandListener }),
-    dispose() {
-      try { EXTENSION_API?.runtime?.onMessage?.removeListener?.(secureFrameCommandListener); } catch {}
-    }
+    source: SECURE_FRAME_COMMAND_SOURCE,
+    bridgeDocumentId: contentDocumentId,
+    secureFrameToken,
+    dispatch: handleContentAction
   });
 
-  window.addEventListener("message", async (event) => {
+  const onParentWindowMessage = async (event) => {
     if (!EXTENSION_ORIGIN || event.source !== window.parent || event.origin !== EXTENSION_ORIGIN) return;
+    if (!contentBridgeIsCurrent()) return;
     const message = event.data;
     const versionedDeleteRequest = message?.source === DELETE_THREAD_POST_MESSAGE_SOURCE;
     const versionedSendTextRequest = message?.source === SEND_TEXT_POST_MESSAGE_SOURCE;
@@ -6678,8 +6652,6 @@ export function installContentBridge() {
     const versionedSummaryRequest = message?.source === SUMMARY_POST_MESSAGE_SOURCE;
     const genericRequest = message?.source === SOURCE;
     if ((!versionedDeleteRequest && !versionedSendTextRequest && !versionedPreferredModelRequest && !versionedNavigatorRequest && !versionedSummaryRequest && !genericRequest) || message.type !== "request") return;
-    if (versionedSendTextRequest && !contentBridgeIsCurrent()) return;
-    if (versionedPreferredModelRequest && !contentBridgeIsCurrent()) return;
     if (genericRequest && hadContentBridge) return;
     if (genericRequest && ["applyPreferredModel", "cancelPreferredModelApply"].includes(message.action)) return;
     if (versionedDeleteRequest && message.action !== "deleteThread" && message.action !== "getDeleteConfirmState") return;
@@ -6704,7 +6676,16 @@ export function installContentBridge() {
     } catch (error) {
       respond(event.source, message.id, message.action, null, error.message || String(error), responseSource);
     }
-  }, true);
+  };
+  runtimes.install("parent-window-rpc", CONTENT_BRIDGE_VERSION, () => {
+    window.addEventListener("message", onParentWindowMessage, true);
+    return {
+      api: Object.freeze({ source: SOURCE, bridgeVersion: CONTENT_BRIDGE_VERSION }),
+      dispose() {
+        window.removeEventListener("message", onParentWindowMessage, true);
+      }
+    };
+  });
 
   try { window.__CHATCLUB_SHORTCUT_BRIDGE_CLEANUP__?.(); } catch {}
   const shortcutBridgeController = new AbortController();

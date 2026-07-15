@@ -8,9 +8,15 @@ const vm = require("node:vm");
 const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const main = `${read("app/main.js")}\n${read("app/runtime.js")}`;
+const frameBridge = read("app/frame-bridge/controller.js");
+const preferredModel = read("app/preferred-model/controller.js");
 const workspace = read("app/workspace/controller.js");
 const summary = read("app/summary/controller.js");
-const background = `${read("background/service-worker.js")}\n${read("background/runtime.js")}`;
+const background = [
+  "background/service-worker.js",
+  "background/runtime.js",
+  "background/content-registration.js"
+].map(read).join("\n");
 const content = read("content/content.js");
 const summaryMain = read("content/summary-userscripts-main.js");
 
@@ -80,8 +86,8 @@ function createApplyFixture(options = {}) {
   context.requestPreferredModelCancellation = () => { calls.cancel += 1; };
   vm.runInContext(`
     const MODEL_PREFERENCE_APPLY_TIMEOUT_MS = 15000;
-    ${functionSource(main, "preferredModelResult")}
-    ${functionSource(main, "applyPreferredModelToFrame", true)}
+    ${functionSource(preferredModel, "preferredModelResult")}
+    ${functionSource(preferredModel, "applyPreferredModelToFrame", true)}
     globalThis.apply = applyPreferredModelToFrame;
   `, context);
   return context;
@@ -124,7 +130,7 @@ function createSummaryPrepareFixture(options = {}) {
     calls.wait += 1;
     return registration;
   };
-  context.frameRuntimePort = { request: async (_iframe, action) => {
+  context.runtimePort = () => ({ request: async (_iframe, action) => {
     calls.probe += 1;
     assert.equal(action, "getSummaryRuntimeState");
     if (options.probeError) throw options.probeError;
@@ -135,16 +141,16 @@ function createSummaryPrepareFixture(options = {}) {
       documentId: registration.documentId,
       bridgeVersion: "bridge-current"
     };
-  }};
-  context.workspaceController = {
+  }});
+  context.workspaceController = () => ({
     frameApp: () => ({ url: "https://example.com/" }),
     rememberFrameLocation: (_iframe, currentRegistration) => {
       calls.remember += 1;
       context.rememberedRegistration = currentRegistration;
     }
-  };
+  });
   vm.runInContext(`
-    ${functionSource(main, "prepareContentFrameRuntimeUncached", true)}
+    ${functionSource(frameBridge, "prepareContentFrameRuntimeUncached", true)}
     globalThis.prepare = prepareContentFrameRuntimeUncached;
   `, context);
   return context;
@@ -336,13 +342,13 @@ function createSummaryPrepareFixture(options = {}) {
     assert.equal(fixture.iframe.dataset.summaryRuntimeBridgeVersion, "bridge-current");
   }
 
-  assert.match(main, /announcedBridgeVersion === CONTENT_BRIDGE_VERSION/);
-  assert.match(main, /scheduleContentFrameRepair\(event\.iframe, 120\)/);
-  const repairSource = functionSource(main, "scheduleContentFrameRepair");
+  assert.match(frameBridge, /announcedBridgeVersion === CONTENT_BRIDGE_VERSION/);
+  assert.match(frameBridge, /scheduleContentFrameRepair\(iframe, 120\)/);
+  const repairSource = functionSource(frameBridge, "scheduleContentFrameRepair");
   assert.match(repairSource, /CONTENT_FRAME_REPAIR_RETRY_DELAYS\[retryIndex\]/);
-  assert.match(repairSource, /contentFrameRepairGenerations\.get\(iframe\) !== repairGeneration/);
+  assert.match(repairSource, /repairGenerations\.get\(iframe\) !== repairGeneration/);
   assert.match(repairSource, /scheduleContentFrameRepair\(iframe, nextDelay, retryIndex \+ 1, repairGeneration\)/);
-  const iframeLoadSource = functionSource(main, "installPreferredModelIframeLoadHandler");
+  const iframeLoadSource = functionSource(frameBridge, "installPreferredModelIframeLoadHandler");
   assert.match(iframeLoadSource, /scheduleContentFrameRepair\(iframe, 120\)/);
   const initialFrameSource = functionSource(workspace, "setFrameSrcAfterPrepare");
   const assignedStart = initialFrameSource.indexOf("assigned = true");
@@ -372,8 +378,8 @@ function createSummaryPrepareFixture(options = {}) {
   assert.match(summary, /prepareContentFrameRuntime\(iframe, \{ summary: true \}\)/);
   assert.match(summary, /expectedDocumentId: summaryReady\.registration\.documentId/);
   assert.match(summary, /expectedHref: base\.href/);
-  const prepareSource = functionSource(main, "prepareContentFrameRuntimeUncached", true);
-  assert.match(prepareSource, /frameRuntimePort\.request\(iframe, "getSummaryRuntimeState", \{\}, \{ timeoutMs: 1800, skipEnsure: true \}\)/);
+  const prepareSource = functionSource(frameBridge, "prepareContentFrameRuntimeUncached", true);
+  assert.match(prepareSource, /runtimePort\(\)\.request\(iframe, "getSummaryRuntimeState", \{\}, \{ timeoutMs: 1800, skipEnsure: true \}\)/);
   assert.match(prepareSource, /summaryState\.documentId === registration\.documentId/);
   assert.match(prepareSource, /summaryState\.bridgeVersion === CONTENT_BRIDGE_VERSION/);
   assert.match(prepareSource, /confirmedRegistration\?\.documentId === registration\.documentId/);

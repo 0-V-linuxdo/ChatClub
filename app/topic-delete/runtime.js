@@ -1,14 +1,7 @@
 import { currentExtensionTabId, runtimeRequest } from "../../shared/extension-api.js";
-import { sendToContentFrame } from "../../shared/frame-rpc.js";
+import { validateControllerContract } from "../controller-contract.js";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
-let trustedInputExecutionTail = Promise.resolve();
-
-function withTrustedInputLock(task) {
-  const run = trustedInputExecutionTail.catch(() => {}).then(task);
-  trustedInputExecutionTail = run.catch(() => {});
-  return run;
-}
 
 function trustedClick(result = {}) {
   const click = result?.trustedClick;
@@ -113,57 +106,6 @@ async function ensureContentBridge(iframe, payload = {}) {
   }
 }
 
-async function pingContentBridge(iframe, timeoutMs = 900) {
-  try {
-    await sendToContentFrame(iframe, "getLocationHref", {}, timeoutMs);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function prepareContentBridge(iframe, payload = {}) {
-  if (await pingContentBridge(iframe, 900)) return { ok: true };
-  const installed = await ensureContentBridge(iframe, payload);
-  await sleep(180);
-  if (await pingContentBridge(iframe, 1400)) return { ok: true, installed };
-  const installError = installed?.error
-    || (Array.isArray(installed?.errors) && installed.errors.length ? installed.errors.join("; ") : "");
-  return {
-    ok: false,
-    reason: installError
-      ? `iframe content bridge did not respond; injection failed: ${installError}`
-      : "iframe content bridge did not respond",
-    installed
-  };
-}
-
-async function sendDelete(iframe, payload = {}, config = null, timeoutMs = 15000) {
-  const site = config?.id || payload.appId || "topic-delete";
-  const ready = await prepareContentBridge(iframe, payload);
-  if (!ready.ok) return { ok: false, site, reason: ready.reason };
-  const runtimeConfig = config ? { ...config } : null;
-  if (runtimeConfig) {
-    const source = String(runtimeConfig.customUserscript || runtimeConfig.userscript || "");
-    runtimeConfig.standaloneUserscript = /\/\/\s*==UserScript==[\s\S]*?\/\/\s*==\/UserScript==/.test(source);
-    delete runtimeConfig.userscript;
-    delete runtimeConfig.customUserscript;
-  }
-  const data = { payload, ...(runtimeConfig ? { config: runtimeConfig } : {}) };
-  try {
-    return await sendToContentFrame(iframe, "deleteThread", data, timeoutMs + 1000);
-  } catch (error) {
-    if (!timeoutError(error, "deleteThread")) throw error;
-    await ensureContentBridge(iframe, payload);
-    await sleep(220);
-    return sendToContentFrame(iframe, "deleteThread", data, timeoutMs + 1000);
-  }
-}
-
-function confirmState(iframe, site, timeoutMs = 1200) {
-  return sendToContentFrame(iframe, "getDeleteConfirmState", { site }, timeoutMs);
-}
-
 function framePointOnPage(iframe, framePoint, kind) {
   const rect = iframe?.getBoundingClientRect?.();
   if (!rect || rect.width <= 0 || rect.height <= 0) throw new Error(`trusted browser ${kind} failed: iframe is not visible`);
@@ -220,6 +162,76 @@ async function dispatchKeySequence(iframe, sequence) {
     reason: sequence.reason || "topic menu keyboard sequence"
   });
 }
+
+export function createTopicDeleteRuntime(dependencies = {}) {
+  const { framePort } = validateControllerContract(dependencies, "Topic Delete runtime", {
+    framePort: "object"
+  });
+  if (typeof framePort.request !== "function") {
+    throw new TypeError("Topic Delete runtime requires framePort.request to be a function.");
+  }
+  let trustedInputExecutionTail = Promise.resolve();
+  const sendToContentFrame = (iframe, command, data = {}, timeoutMs) => {
+    const options = timeoutMs && typeof timeoutMs === "object" ? timeoutMs : { timeoutMs };
+    return framePort.request(iframe, command, data, options);
+  };
+
+  function withTrustedInputLock(task) {
+    const run = trustedInputExecutionTail.catch(() => {}).then(task);
+    trustedInputExecutionTail = run.catch(() => {});
+    return run;
+  }
+
+  async function pingContentBridge(iframe, timeoutMs = 900) {
+    try {
+      await sendToContentFrame(iframe, "getLocationHref", {}, timeoutMs);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function prepareContentBridge(iframe, payload = {}) {
+    if (await pingContentBridge(iframe, 900)) return { ok: true };
+    const installed = await ensureContentBridge(iframe, payload);
+    await sleep(180);
+    if (await pingContentBridge(iframe, 1400)) return { ok: true, installed };
+    const installError = installed?.error
+      || (Array.isArray(installed?.errors) && installed.errors.length ? installed.errors.join("; ") : "");
+    return {
+      ok: false,
+      reason: installError
+        ? `iframe content bridge did not respond; injection failed: ${installError}`
+        : "iframe content bridge did not respond",
+      installed
+    };
+  }
+
+  async function sendDelete(iframe, payload = {}, config = null, timeoutMs = 15000) {
+    const site = config?.id || payload.appId || "topic-delete";
+    const ready = await prepareContentBridge(iframe, payload);
+    if (!ready.ok) return { ok: false, site, reason: ready.reason };
+    const runtimeConfig = config ? { ...config } : null;
+    if (runtimeConfig) {
+      const source = String(runtimeConfig.customUserscript || runtimeConfig.userscript || "");
+      runtimeConfig.standaloneUserscript = /\/\/\s*==UserScript==[\s\S]*?\/\/\s*==\/UserScript==/.test(source);
+      delete runtimeConfig.userscript;
+      delete runtimeConfig.customUserscript;
+    }
+    const data = { payload, ...(runtimeConfig ? { config: runtimeConfig } : {}) };
+    try {
+      return await sendToContentFrame(iframe, "deleteThread", data, timeoutMs + 1000);
+    } catch (error) {
+      if (!timeoutError(error, "deleteThread")) throw error;
+      await ensureContentBridge(iframe, payload);
+      await sleep(220);
+      return sendToContentFrame(iframe, "deleteThread", data, timeoutMs + 1000);
+    }
+  }
+
+  function confirmState(iframe, site, timeoutMs = 1200) {
+    return sendToContentFrame(iframe, "getDeleteConfirmState", { site }, timeoutMs);
+  }
 
 async function retryAfterHover(iframe, result, payload, config, timeoutMs) {
   const hover = trustedHover(result);
@@ -349,6 +361,9 @@ async function executeTopicDeleteNow(iframe, payload = {}, config = null, timeou
   return result;
 }
 
-export function executeTopicDelete(iframe, payload = {}, config = null, timeoutMs = 15000) {
-  return executeTopicDeleteNow(iframe, payload, config, timeoutMs);
+  function executeTopicDelete(iframe, payload = {}, config = null, timeoutMs = 15000) {
+    return executeTopicDeleteNow(iframe, payload, config, timeoutMs);
+  }
+
+  return Object.freeze({ executeTopicDelete });
 }

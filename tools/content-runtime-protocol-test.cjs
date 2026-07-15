@@ -10,13 +10,31 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const dataModule = (source) => import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
 
 function bundledLiteral(source, name) {
-  const match = source.match(new RegExp(`\\bvar\\s+${name}\\s*=\\s*("(?:[^"\\\\]|\\\\.)*")\\s*;`));
-  assert.ok(match, `${name} must be bundled from shared/protocol.js`);
-  return JSON.parse(match[1]);
+  const protocolStart = source.indexOf("// shared/protocol.js");
+  const protocolEnd = source.indexOf("var CONTENT_PROTOCOL", protocolStart);
+  assert.ok(protocolStart >= 0 && protocolEnd > protocolStart, "bundled shared protocol section must exist");
+  const context = vm.createContext({});
+  const declarations = source.slice(protocolStart, protocolEnd)
+    .matchAll(/^\s*var\s+([A-Z][A-Z0-9_]*)\s*=\s*(.+);\s*$/gm);
+  let found = false;
+  for (const declaration of declarations) {
+    const [, declarationName, expression] = declaration;
+    vm.runInContext(`globalThis[${JSON.stringify(declarationName)}] = (${expression});`, context);
+    if (declarationName === name) found = true;
+  }
+  assert.ok(found, `${name} must be bundled from shared/protocol.js`);
+  return context[name];
 }
 
 (async () => {
-  const protocol = (await dataModule(read("shared/protocol.js"))).CONTENT_PROTOCOL;
+  const protocolModule = await dataModule(read("shared/protocol.js"));
+  const protocol = protocolModule.CONTENT_PROTOCOL;
+  const expectedRegistryKey = `__CHATCLUB_RUNTIME_REGISTRY_V${protocolModule.RUNTIME_REGISTRY_ABI_VERSION}__`;
+  assert.equal(
+    protocolModule.RUNTIME_REGISTRY_KEY,
+    expectedRegistryKey,
+    "runtime registry key must be derived from its ABI version"
+  );
   const selfContainedRuntimes = [
     "content/preload.js",
     "content/content.js",
@@ -32,9 +50,24 @@ function bundledLiteral(source, name) {
     for (const [name, value] of Object.entries(protocol)) {
       assert.equal(bundledLiteral(source, name), value, `${file} bundled ${name} drifted`);
     }
+    assert.equal(
+      bundledLiteral(source, "RUNTIME_REGISTRY_ABI_VERSION"),
+      protocolModule.RUNTIME_REGISTRY_ABI_VERSION,
+      `${file} bundled runtime registry ABI drifted`
+    );
+    assert.equal(
+      bundledLiteral(source, "RUNTIME_REGISTRY_KEY"),
+      expectedRegistryKey,
+      `${file} bundled runtime registry key must match its ABI`
+    );
   }
 
-  const background = `${read("background/service-worker.js")}\n${read("background/runtime.js")}`;
+  const background = [
+    "background/service-worker.js",
+    "background/runtime.js",
+    "background/content-registration.js",
+    "background/frame-injection.js"
+  ].map(read).join("\n");
   assert.doesNotMatch(background, /content\/protocol\.js/);
   assert.match(background, /js: \["content\/preload\.js"\]/);
   assert.match(background, /js: \["content\/summary-userscripts-main\.js"\]/);
@@ -44,11 +77,22 @@ function bundledLiteral(source, name) {
 
   assert.equal(fs.existsSync(path.join(root, "content/protocol.js")), false, "obsolete protocol bootstrap must be removed");
   const manifest = JSON.parse(read("manifest.json"));
-  const resources = manifest.web_accessible_resources.flatMap((entry) => entry.resources || []);
-  assert.ok(!resources.includes("content/protocol.js"));
-  for (const file of selfContainedRuntimes) {
-    assert.ok(resources.includes(file), `${file} must remain available to MAIN/dynamic injection`);
+  assert.equal(
+    Object.hasOwn(manifest, "web_accessible_resources"),
+    false,
+    "scripting API files must not be exposed to arbitrary web origins"
+  );
+  for (const file of [
+    "content/preload.js",
+    "content/grok-cookie-bridge.js",
+    "content/message-navigator.js",
+    "content/content.js",
+    "content/summary-userscripts-main.js",
+    "content/summary-userscripts.js"
+  ]) {
+    assert.ok(background.includes(`\"${file}\"`), `${file} must be injected through chrome.scripting`);
   }
+  assert.match(background, /executeVerifiedPackagedFrameFile/);
 
   const contentSource = read("content-src/content.js");
   const preloadSource = read("content-src/preload.js");
