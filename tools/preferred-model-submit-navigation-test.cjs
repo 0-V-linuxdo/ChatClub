@@ -65,6 +65,64 @@ function functionSource(source, name) {
   throw new Error(`${name} body did not close`);
 }
 
+const retryContext = vm.createContext({});
+vm.runInContext(
+  `${functionSource(preferredModelSource, "preferredModelRetryDelay")}; globalThis.retryDelay = preferredModelRetryDelay;`,
+  retryContext
+);
+const retryRecord = { attempt: 0, delays: [0, 700, 1600] };
+for (const reason of [
+  "navigation changed",
+  "content bridge superseded",
+  "superseded by a newer preferred model run",
+  "stale Gemini model picker run",
+  "future cancellation reason"
+]) {
+  assert.equal(
+    retryContext.retryDelay(retryRecord, { cancelled: true, interactionCount: 0, reason }),
+    700,
+    `${reason} must use the same bounded, reason-independent retry policy`
+  );
+}
+assert.equal(
+  retryContext.retryDelay(retryRecord, { cancelled: true, interactionCount: 1 }),
+  null,
+  "a cancelled preferred-model run must not replay after interacting with the site"
+);
+assert.equal(
+  retryContext.retryDelay({ attempt: 2, delays: [0, 700, 1600] }, { cancelled: true, interactionCount: 0 }),
+  null,
+  "a cancelled preferred-model run must become terminal after exhausting its retry budget"
+);
+assert.equal(
+  retryContext.retryDelay(retryRecord, { retryable: true, interactionCount: 1 }),
+  null,
+  "even a retryable result must not replay after a site interaction"
+);
+
+const preferredModelRunSource = functionSource(preferredModelSource, "runPreferredModelRecord");
+assert.match(
+  preferredModelRunSource,
+  /const retryDelay = preferredModelRetryDelay\(record, result\);[\s\S]*record\.cancelled = false;[\s\S]*record\.attempt \+= 1;[\s\S]*schedulePreferredModelRecordRun\(iframe, record, retryDelay\)/,
+  "current cancellations without interactions must consume the existing record's bounded retry budget"
+);
+assert.doesNotMatch(
+  preferredModelRunSource,
+  /content bridge superseded/,
+  "preferred-model cancellation recovery must not depend on brittle reason matching"
+);
+assert.match(
+  preferredModelRunSource,
+  /record\.terminal = true;[\s\S]*record\.failureReason = compactPreferredModelFailureReason\(result\);[\s\S]*record\.statusToast\?\.dismiss\?\.\(5000\)/,
+  "non-retryable or exhausted cancellations must reach an error-toast terminal state"
+);
+const preferredModelScheduleSource = functionSource(preferredModelSource, "schedulePreferredModelApplyToFrame");
+assert.match(
+  preferredModelScheduleSource,
+  /existingIsSettled = Boolean\(existing\?\.success \|\| existing\?\.terminal\)[\s\S]*existing\?\.key === key && \(existingIsSettled \|\| existingIsRunning\)/,
+  "same-key terminal cancellations must stay settled instead of silently resetting their retry budget"
+);
+
 const routeContext = vm.createContext({ URL });
 vm.runInContext(
   `${functionSource(preferredModelSource, "preferredModelSubmissionRouteState")}; globalThis.routeState = preferredModelSubmissionRouteState;`,

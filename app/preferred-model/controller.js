@@ -188,6 +188,14 @@ export function createPreferredModelController(dependencies = {}) {
       : chars.join("");
   }
 
+  function preferredModelRetryDelay(record = {}, result = {}) {
+    const interactionCount = Math.max(0, Number(result.interactionCount) || 0);
+    if (interactionCount > 0 || (result.retryable !== true && result.cancelled !== true)) return null;
+    const nextAttempt = Math.max(0, Number(record.attempt) || 0) + 1;
+    if (!Array.isArray(record.delays) || nextAttempt >= record.delays.length) return null;
+    return Math.max(0, Number(record.delays[nextAttempt]) || 0);
+  }
+
   function preferredModelFrameIsLoading(iframe) {
     const instanceId = String(iframe?.dataset?.instanceId || "");
     return Boolean(instanceId && (preferredModelState.frameLoadingInstanceIds || []).includes(instanceId));
@@ -792,19 +800,11 @@ export function createPreferredModelController(dependencies = {}) {
       syncPreferredModelInputGate();
       return;
     }
-    if (result.cancelled === true) {
-      record.cancelled = true;
-      record.pending = true;
-      record.statusToast?.update?.(t("toast.frameModelSwitchPending"), "info");
-      syncPreferredModelInputGate();
-      if (/content bridge superseded/i.test(String(result.reason || ""))) {
-        schedulePreferredModelApplyToFrame(iframe, { immediate: true });
-      }
-      return;
-    }
-    if (result.retryable === true && record.attempt + 1 < record.delays.length) {
+    const retryDelay = preferredModelRetryDelay(record, result);
+    if (retryDelay !== null) {
+      record.cancelled = false;
       record.attempt += 1;
-      schedulePreferredModelRecordRun(iframe, record, record.delays[record.attempt]);
+      schedulePreferredModelRecordRun(iframe, record, retryDelay);
       return;
     }
     record.terminal = true;
@@ -836,13 +836,12 @@ export function createPreferredModelController(dependencies = {}) {
       syncPreferredModelInputGate();
       return null;
     }
-    const existingIsLive = Boolean(
-      existing?.success
-      || existing?.terminal
-      || existing?.inFlight
-      || existing?.timer
+    const existingIsSettled = Boolean(existing?.success || existing?.terminal);
+    const existingIsRunning = Boolean(
+      existing?.cancelled !== true
+      && (existing?.inFlight || existing?.timer)
     );
-    if (existing?.key === key && existing.cancelled !== true && existingIsLive) {
+    if (existing?.key === key && (existingIsSettled || existingIsRunning)) {
       return existing;
     }
     if (existing) stopPreferredModelRecord(iframe, existing, "superseded");

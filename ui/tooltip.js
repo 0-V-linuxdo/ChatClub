@@ -10,6 +10,8 @@ let activeTrigger = null;
 let hoveredTrigger = null;
 let focusedTrigger = null;
 let installed = false;
+let tooltipConnectivityObserver = null;
+let keyboardInteraction = false;
 let disabledIdsProvider = () => [];
 
 function ensureTooltipHost() {
@@ -45,18 +47,38 @@ function isTooltipSuppressed(trigger) {
 }
 
 function isUsableTooltipTrigger(trigger) {
+  const clientRects = trigger?.getClientRects?.();
   return Boolean(
     trigger
     && document.documentElement.contains(trigger)
+    && (!clientRects || clientRects.length > 0)
     && tooltipText(trigger)
     && !isDisabledTrigger(trigger)
     && !isTooltipSuppressed(trigger)
   );
 }
 
+function isHoveredTooltipTrigger(trigger) {
+  if (!isUsableTooltipTrigger(trigger)) return false;
+  try {
+    return trigger.matches(":hover");
+  } catch {
+    return hoveredTrigger === trigger;
+  }
+}
+
+function isKeyboardFocusedTooltipTrigger(trigger) {
+  if (!isUsableTooltipTrigger(trigger)) return false;
+  try {
+    return trigger.matches(":focus-visible");
+  } catch {
+    return keyboardInteraction && document.activeElement === trigger;
+  }
+}
+
 function cleanupTrackedTriggers() {
-  if (!isUsableTooltipTrigger(hoveredTrigger)) hoveredTrigger = null;
-  if (!isUsableTooltipTrigger(focusedTrigger)) focusedTrigger = null;
+  if (!isHoveredTooltipTrigger(hoveredTrigger)) hoveredTrigger = null;
+  if (!isKeyboardFocusedTooltipTrigger(focusedTrigger)) focusedTrigger = null;
 }
 
 function positionTooltip(trigger) {
@@ -96,27 +118,62 @@ function showTooltip(trigger) {
     if (activeTrigger === trigger) hideTooltip(trigger);
     return false;
   }
-  activeTrigger?.classList.remove("tooltip-open");
+  if (activeTrigger !== trigger && activeTrigger?.classList.contains("tooltip-open")) {
+    activeTrigger.classList.remove("tooltip-open");
+  }
   activeTrigger = trigger;
   const host = ensureTooltipHost();
   tooltipLabel.textContent = text;
   host.classList.toggle("is-wrapping", trigger.getAttribute("data-tooltip-wrap") === "true");
-  host.classList.add("is-visible");
-  host.setAttribute("aria-hidden", "false");
-  trigger.classList.add("tooltip-open");
+  if (!host.classList.contains("is-visible")) host.classList.add("is-visible");
+  if (host.getAttribute("aria-hidden") !== "false") host.setAttribute("aria-hidden", "false");
+  if (!trigger.classList.contains("tooltip-open")) trigger.classList.add("tooltip-open");
   requestAnimationFrame(() => {
-    if (activeTrigger === trigger) positionTooltip(trigger);
+    if (activeTrigger !== trigger) return;
+    if (!isUsableTooltipTrigger(trigger)) {
+      reconcileTooltipState();
+      return;
+    }
+    positionTooltip(trigger);
   });
   return true;
 }
 
 function hideTooltip(trigger = activeTrigger) {
-  if (trigger) trigger.classList.remove("tooltip-open");
+  if (trigger?.classList.contains("tooltip-open")) trigger.classList.remove("tooltip-open");
   if (trigger && trigger !== activeTrigger) return;
   activeTrigger = null;
   if (!tooltipHost) return;
-  tooltipHost.classList.remove("is-visible", "is-wrapping");
-  tooltipHost.setAttribute("aria-hidden", "true");
+  if (tooltipHost.classList.contains("is-visible") || tooltipHost.classList.contains("is-wrapping")) {
+    tooltipHost.classList.remove("is-visible", "is-wrapping");
+  }
+  if (tooltipHost.getAttribute("aria-hidden") !== "true") tooltipHost.setAttribute("aria-hidden", "true");
+}
+
+function resetTooltipInteractionState() {
+  hoveredTrigger = null;
+  focusedTrigger = null;
+  hideTooltip();
+}
+
+function reconcileTooltipState() {
+  cleanupTrackedTriggers();
+  if (
+    isUsableTooltipTrigger(activeTrigger)
+    && (activeTrigger === hoveredTrigger || activeTrigger === focusedTrigger)
+  ) return true;
+  if (focusedTrigger && showTooltip(focusedTrigger)) return true;
+  if (hoveredTrigger && showTooltip(hoveredTrigger)) return true;
+  hideTooltip();
+  return false;
+}
+
+function reconcileTooltipMutations(records = []) {
+  if (
+    records.length
+    && records.every((record) => record.target === tooltipHost || tooltipHost?.contains?.(record.target))
+  ) return;
+  reconcileTooltipState();
 }
 
 function closestTrigger(target) {
@@ -124,17 +181,12 @@ function closestTrigger(target) {
 }
 
 function syncTooltipPosition() {
-  cleanupTrackedTriggers();
-  if (!isUsableTooltipTrigger(activeTrigger)) {
-    hideTooltip();
-    return;
-  }
+  if (!reconcileTooltipState()) return;
   positionTooltip(activeTrigger);
 }
 
 export function notifyTooltipPreferencesChanged() {
-  cleanupTrackedTriggers();
-  if (!isUsableTooltipTrigger(activeTrigger)) hideTooltip();
+  reconcileTooltipState();
 }
 
 export function installGlobalTooltips(options = {}) {
@@ -149,9 +201,19 @@ export function installGlobalTooltips(options = {}) {
 
   document.addEventListener("pointerover", (event) => {
     const trigger = closestTrigger(event.target);
-    if (!trigger) return;
+    if (!trigger) {
+      hoveredTrigger = null;
+      cleanupTrackedTriggers();
+      if (!focusedTrigger) hideTooltip();
+      return;
+    }
     hoveredTrigger = isUsableTooltipTrigger(trigger) ? trigger : null;
     showTooltip(trigger);
+  }, true);
+
+  document.addEventListener("pointerdown", () => {
+    keyboardInteraction = false;
+    resetTooltipInteractionState();
   }, true);
 
   document.addEventListener("pointerout", (event) => {
@@ -169,8 +231,8 @@ export function installGlobalTooltips(options = {}) {
   document.addEventListener("focusin", (event) => {
     const trigger = closestTrigger(event.target);
     if (!trigger) return;
-    focusedTrigger = isUsableTooltipTrigger(trigger) ? trigger : null;
-    showTooltip(trigger);
+    focusedTrigger = isKeyboardFocusedTooltipTrigger(trigger) ? trigger : null;
+    if (focusedTrigger) showTooltip(trigger);
   }, true);
 
   document.addEventListener("focusout", (event) => {
@@ -186,9 +248,28 @@ export function installGlobalTooltips(options = {}) {
   }, true);
 
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") hideTooltip();
+    keyboardInteraction = true;
+    if (event.key === "Escape") resetTooltipInteractionState();
   }, true);
+
+  document.addEventListener("visibilitychange", resetTooltipInteractionState, true);
 
   window.addEventListener("scroll", syncTooltipPosition, true);
   window.addEventListener("resize", syncTooltipPosition);
+  window.addEventListener("blur", resetTooltipInteractionState);
+  window.addEventListener("focus", resetTooltipInteractionState);
+  window.addEventListener("pagehide", resetTooltipInteractionState);
+
+  if (typeof MutationObserver === "function") {
+    tooltipConnectivityObserver = new MutationObserver(reconcileTooltipMutations);
+    tooltipConnectivityObserver.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: [
+        "class", "style", "hidden", "inert", "aria-hidden", "disabled", "aria-disabled",
+        "data-tooltip", "data-tooltip-id"
+      ]
+    });
+  }
 }

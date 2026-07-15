@@ -508,8 +508,70 @@ assert.match(
   /if \(hoveredTrigger === trigger\) return;\s*if \(hoveredTrigger && showTooltip\(hoveredTrigger\)\) return;/,
   "focus exit must preserve or restore hovered tooltip help"
 );
-assert.match(tooltipSource, /document\.addEventListener\("focusin"[\s\S]*showTooltip\(trigger\)/, "help tooltips must open on keyboard focus");
-assert.match(tooltipSource, /event\.key === "Escape"\) hideTooltip\(\)/, "help tooltips must close with Escape");
+assert.match(
+  tooltipSource,
+  /function isKeyboardFocusedTooltipTrigger[\s\S]*trigger\.matches\(":focus-visible"\)/,
+  "only focus-visible keyboard focus may keep a tooltip open after pointer exit"
+);
+assert.match(
+  tooltipSource,
+  /function isHoveredTooltipTrigger[\s\S]*trigger\.matches\(":hover"\)/,
+  "hover fallback state must be validated against the browser's live pointer state"
+);
+assert.match(
+  tooltipSource,
+  /const clientRects = trigger\?\.getClientRects\?\.\(\);[\s\S]*\(!clientRects \|\| clientRects\.length > 0\)/,
+  "connected but hidden tooltip triggers must not keep an orphaned tooltip visible"
+);
+assert.match(
+  tooltipSource,
+  /isUsableTooltipTrigger\(activeTrigger\)[\s\S]*activeTrigger === hoveredTrigger \|\| activeTrigger === focusedTrigger/,
+  "a visible tooltip must still belong to a live hover or keyboard-focus owner"
+);
+assert.match(
+  tooltipSource,
+  /document\.addEventListener\("focusin"[\s\S]*focusedTrigger = isKeyboardFocusedTooltipTrigger\(trigger\) \? trigger : null;[\s\S]*if \(focusedTrigger\) showTooltip\(trigger\)/,
+  "pointer-created button focus must not be treated as persistent keyboard tooltip help"
+);
+assert.match(
+  tooltipSource,
+  /document\.addEventListener\("pointerdown"[\s\S]*keyboardInteraction = false;[\s\S]*resetTooltipInteractionState\(\)/,
+  "pointer activation must synchronously clear the visible tooltip before its trigger can redraw or detach"
+);
+assert.match(
+  tooltipSource,
+  /new MutationObserver\(reconcileTooltipMutations\)[\s\S]*childList: true,[\s\S]*subtree: true,[\s\S]*"class", "style", "hidden", "inert", "aria-hidden"/,
+  "detached, redrawn, or hidden tooltip triggers must be reconciled without relying on pointerout or focusout"
+);
+assert.match(
+  tooltipSource,
+  /records\.every\(\(record\) => record\.target === tooltipHost \|\| tooltipHost\?\.contains\?\.\(record\.target\)\)/,
+  "tooltip-host mutations must not feed back into the global connectivity observer"
+);
+assert.match(
+  tooltipSource,
+  /tooltipHost\.classList\.contains\("is-visible"\) \|\| tooltipHost\.classList\.contains\("is-wrapping"\)/,
+  "tooltip host class cleanup must be idempotent under mutation observation"
+);
+assert.match(
+  tooltipSource,
+  /tooltipHost\.getAttribute\("aria-hidden"\) !== "true"\) tooltipHost\.setAttribute\("aria-hidden", "true"\)/,
+  "observer-visible tooltip attributes must be written idempotently to avoid a mutation feedback loop"
+);
+assert.match(
+  tooltipSource,
+  /document\.addEventListener\("visibilitychange", resetTooltipInteractionState, true\)/,
+  "both hiding and restoring the page must clear stale tooltip interaction state"
+);
+assert.match(tooltipSource, /window\.addEventListener\("blur", resetTooltipInteractionState\)/, "window blur must clear tooltips");
+assert.match(tooltipSource, /window\.addEventListener\("focus", resetTooltipInteractionState\)/, "window focus must not restore stale tooltips");
+assert.match(tooltipSource, /window\.addEventListener\("pagehide", resetTooltipInteractionState\)/, "pagehide must clear tooltips");
+assert.match(tooltipSource, /event\.key === "Escape"\) resetTooltipInteractionState\(\)/, "Escape must clear tooltip state, not only hide its host");
+assert.match(
+  tooltipSource,
+  /if \(!isUsableTooltipTrigger\(trigger\)\) \{\s*reconcileTooltipState\(\);/,
+  "deferred tooltip positioning must not revive a detached trigger"
+);
 assert.match(
   stylesheetSource,
   /\.global-tooltip\.is-wrapping \.global-tooltip-label \{[\s\S]*?white-space: normal;/,
