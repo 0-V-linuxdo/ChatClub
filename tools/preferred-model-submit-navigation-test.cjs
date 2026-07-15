@@ -6,14 +6,17 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 const root = path.resolve(__dirname, "..");
-const mainSource = fs.readFileSync(path.join(root, "app/main.js"), "utf8");
+const mainSource = ["app/main.js", "app/runtime.js"]
+  .map((file) => fs.readFileSync(path.join(root, file), "utf8"))
+  .join("\n");
 const contentSource = fs.readFileSync(path.join(root, "content/content.js"), "utf8");
+const contentEntrySource = fs.readFileSync(path.join(root, "content-src/content.js"), "utf8");
 const preloadSource = fs.readFileSync(path.join(root, "content/preload.js"), "utf8");
+const preloadEntrySource = fs.readFileSync(path.join(root, "content-src/preload.js"), "utf8");
 const workspaceSource = fs.readFileSync(path.join(root, "app/workspace/controller.js"), "utf8");
-const postMessageSource = fs.readFileSync(path.join(root, "shared/post-message.js"), "utf8");
+const frameCommandsSource = fs.readFileSync(path.join(root, "shared/frame-commands.js"), "utf8");
 const protocolSource = fs.readFileSync(path.join(root, "shared/protocol.js"), "utf8");
-const contentProtocolSource = fs.readFileSync(path.join(root, "content/protocol.js"), "utf8");
-const modelPreferenceConsoleSource = fs.readFileSync(path.join(root, "tools/model-preference-console-test.js"), "utf8");
+const modelPreferenceConsoleSource = fs.readFileSync(path.join(root, "tools/model-preference-console-probe.js"), "utf8");
 
 function protocolString(name) {
   const match = protocolSource.match(new RegExp(`export const ${name}\\s*=\\s*("(?:[^"\\\\]|\\\\.)*")\\s*;`));
@@ -21,17 +24,11 @@ function protocolString(name) {
   return JSON.parse(match[1]);
 }
 
-function generatedProtocolString(name) {
-  const match = contentProtocolSource.match(new RegExp(`"?${name}"?:\\s*("(?:[^"\\\\]|\\\\.)*")`));
-  assert.ok(match, `content protocol bootstrap must expose ${name}`);
-  return JSON.parse(match[1]);
-}
-
 function assertProtocolBinding(source, name, label) {
   assert.match(
     source,
-    new RegExp(`const\\s+${name}\\s*=\\s*PROTOCOL\\.${name}\\s*;`),
-    `${label} must consume ${name} from the protocol bootstrap`
+    new RegExp(`(?:const|var)\\s+${name}\\d*\\s*=\\s*PROTOCOL\\.${name}\\s*;`),
+    `${label} must consume ${name} from the bundled shared protocol`
   );
 }
 
@@ -191,7 +188,7 @@ for (const invalid of [
   );
 }
 
-const locationReportSource = functionSource(contentSource, "reportLocationChange");
+const locationReportSource = functionSource(contentEntrySource, "reportLocationChange");
 assert.doesNotMatch(locationReportSource, /contentDocumentId\s*=/, "SPA navigation must not replace the real document id");
 assert.match(locationReportSource, /postLocationChanged\(/, "SPA navigation must use the dedicated location message");
 assert.match(locationReportSource, /previousHref/, "location messages must preserve the previous href");
@@ -212,17 +209,23 @@ for (const [name, consumers] of [
   ["NOTION_SEND_ACTIVATED_EVENT", [[contentSource, "isolated content"], [preloadSource, "MAIN preload"]]]
 ]) {
   const canonicalValue = protocolString(name);
-  assert.equal(generatedProtocolString(name), canonicalValue, `${name} bootstrap must match the shared protocol`);
-  for (const [source, label] of consumers) assertProtocolBinding(source, name, label);
+  for (const [source, label] of consumers) {
+    assert.ok(source.includes(JSON.stringify(canonicalValue)), `${label} must bundle canonical ${name}`);
+    assertProtocolBinding(source, name, label);
+  }
 }
-assert.match(
-  postMessageSource,
-  /import\s*\{[\s\S]*?\bSEND_TEXT_POST_MESSAGE_SOURCE\b[\s\S]*?\}\s*from "\.\/protocol\.js";/,
-  "parent messaging must import the send channel from the shared protocol"
-);
+for (const [source, label] of [[contentEntrySource, "isolated content source"], [preloadEntrySource, "MAIN preload source"]]) {
+  assert.match(
+    source,
+    /import\s*\{\s*CONTENT_PROTOCOL\s*\}\s*from "\.\.\/shared\/protocol\.js";/,
+    `${label} must import the shared protocol`
+  );
+}
+assert.match(frameCommandsSource, /sendText:\s*command\(\{[^}]*mutating:\s*true/, "sendText must use exactly-once Frame RPC semantics");
+assert.match(frameCommandsSource, /applyPreferredModel:\s*command\(\{[^}]*mutating:\s*true/, "preferred model apply must use exactly-once Frame RPC semantics");
 assert.match(preloadSource, /detail: JSON\.stringify\(/, "Notion cross-world activation detail must be Firefox-safe JSON");
 
-const sendTextSource = functionSource(contentSource, "sendTextUncached");
+const sendTextSource = functionSource(contentEntrySource, "sendTextUncached");
 assert.ok(
   sendTextSource.indexOf('markSubmissionNavigation(data, "button")') < sendTextSource.indexOf("clickPromptSubmit(submit)"),
   "generic submit correlation must be armed before the button activation"
@@ -243,7 +246,7 @@ assert.match(preserveSource, /nextRoute\.threadId[^\n]+lease\.terminalThreadId/,
 assert.match(contentSource, /findNotionModelIndicator\(\)/, "Notion must expose a read-only model indicator lookup");
 assert.match(contentSource, /findNotionModelControl\(\{ allowDisabled: true \}\)/, "disabled Notion model controls must remain readable");
 assert.match(contentSource, /function findNotionModelTrigger\(\)[\s\S]*?findNotionModelControl\(\);/, "interactive Notion lookup must still reject disabled controls");
-assert.match(contentSource, /deadlineAt > activatedAt \? deadlineAt \+ 15000/, "content correlation must cover delayed final routing through the send deadline");
+assert.match(contentEntrySource, /deadlineAt > activatedAt \? deadlineAt \+ 15000/, "content correlation must cover delayed final routing through the send deadline");
 assert.match(contentSource, /event\?\.isTrusted[^\n]+currentSubmissionNavigation/, "trusted user navigation intent must cancel stale submission correlation");
 assert.match(contentSource, /window\.addEventListener\("pointerdown", clearSubmissionNavigationForTrustedIntent/, "trusted pointer navigation must be observed before SPA routing");
 assert.match(mainSource, /if \(sent \|\| lease\.terminalObserved\) return;/, "successful or terminal submission routing must retain its lease through the hard deadline");
@@ -253,13 +256,13 @@ assert.match(
   "the Notion DevTools adapter must reject data-state=disabled controls for interaction"
 );
 
-const grokOpenSource = functionSource(contentSource, "openGrokModelMenu");
+const grokOpenSource = functionSource(contentEntrySource, "openGrokModelMenu");
 assert.match(
   grokOpenSource,
   /preferredModelPointerActivate\(context, trigger\)/,
   "Grok must use pointer-first activation for the model menu trigger"
 );
-const pointerDispatchSource = functionSource(contentSource, "dispatchPointerActivation");
+const pointerDispatchSource = functionSource(contentEntrySource, "dispatchPointerActivation");
 for (const eventName of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) {
   assert.match(pointerDispatchSource, new RegExp(`type: "${eventName}"`), `Grok pointer activation must include ${eventName}`);
 }
@@ -276,8 +279,8 @@ vm.runInContext(`
   function modelCenterPoint() { return { x: 12, y: 18 }; }
   function dispatchPointerActivation() { calls.push("pointer"); return pointerWorks; }
   function nativeModelClick() { calls.push("native"); return true; }
-  ${functionSource(contentSource, "modelDirectClick")}
-  ${functionSource(contentSource, "preferredModelPointerActivate")}
+  ${functionSource(contentEntrySource, "modelDirectClick")}
+  ${functionSource(contentEntrySource, "preferredModelPointerActivate")}
   globalThis.runPreferredPointer = (nextPointerWorks) => {
     pointerWorks = nextPointerWorks;
     calls.length = 0;
@@ -352,8 +355,8 @@ vm.runInContext(`
   function notionModelIdFromText() { return "gemini31pro"; }
   function notionText(value) { return String(value || "").toLowerCase(); }
   function notionTextLooksLikeTarget() { return false; }
-  ${functionSource(contentSource, "isDisabledElement")}
-  ${functionSource(contentSource, "scoreNotionModelTrigger")}
+  ${functionSource(contentEntrySource, "isDisabledElement")}
+  ${functionSource(contentEntrySource, "scoreNotionModelTrigger")}
   globalThis.scoreNotion = scoreNotionModelTrigger;
 `, notionIndicatorContext);
 const disabledNotionIndicator = {

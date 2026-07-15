@@ -41,37 +41,42 @@
 ## 安装
 
 1. 下载或克隆本仓库。
-2. Chromium 系浏览器可启用开发者模式后直接选择本项目根目录；发布包使用 `npm run pack` 生成。
-3. Firefox Nightly / Zen 使用 `npm run pack:firefox` 生成的 Firefox 专用包，它会从同一份 Manifest 源派生 Gecko 合法权限与后台入口。
+2. Chromium 120+ 浏览器可启用开发者模式后直接选择本项目根目录；发布包使用 `npm run pack` 生成。
+3. Firefox / Zen 136+ 使用 `npm run pack:firefox` 生成的 Firefox 专用包，它会从同一份 Manifest 源派生 Gecko 合法权限与后台入口。
 4. 打开 ChatClub，按需登录各 AI 平台。
 
 保存或启用自定义 Summary / Delete userscript 时会请求 User Scripts 权限，首次执行时也会再次校验。Chrome 135–137 还需开启 Developer Mode，Chrome 138+ 需开启 Allow User Scripts；Firefox 需 153+，因此较旧的 Zen 版本仅支持内置脚本路径。Firefox 不提供 Chromium Debugger API，需要真实 hover/click 的删除确认应由用户手动完成。
 
 ## 开发
 
-扩展运行时无需 bundler；修改普通源码后，可直接在扩展管理页重新加载。仓库要求使用当前 Node.js LTS（22 或 24）执行生成、校验和发布工具。
+插件页与后台直接运行浏览器原生 ESM：修改 `app/`、`background/`、`shared/` 或 `ui/` 后，可直接在扩展管理页重新加载。`content-src/` 是六个 classic content 产物的唯一作者源；修改后必须先执行 `npm run generate`，由锁定的 esbuild 生成 `content/` 下的自包含 IIFE（不拆 chunk、不压缩、无 eval）。仓库要求使用 Node.js 22 或 24 执行生成、校验和发布工具。
 
 | 命令 | 作用 |
 | --- | --- |
-| `npm run generate` | 从 `userscripts/` 与 Delete Sites 单一源重建同步产物 |
+| `npm run generate` | 从 `content-src/`、协议和 userscript 单一源重建全部 classic content 产物 |
 | `npm run verify:generated` | 检查生成物是否需要更新，不写文件 |
 | `npm run verify:version` | 检查 APP_VERSION、manifest 与 package-info 一致性 |
+| `npm run version:snapshot` | 完成规定的版本提升后，刷新发布 payload / userscript 版本快照 |
 | `npm run verify:manifest` | 检查 manifest 引用的文件、通配符与本地化消息 |
-| `npm run check` | 执行语法、JSON、import、生成物、版本和 manifest 静态校验 |
+| `npm run verify:modules` | 按 ESM、classic、userscript、CJS 和 DevTools probe 的真实语法与分层规则校验模块图 |
+| `npm run check` | 执行 JSON、模块图、生成物、版本和 manifest 静态校验 |
 | `npm test` | 运行可在 Node 中执行的回归脚本 |
+| `npm run smoke:chromium` | 用 Playwright persistent context 加载 Chromium 扩展并执行运行时 smoke |
+| `npm run smoke:firefox` | 用 Selenium 临时安装 Firefox 扩展并执行运行时 smoke；可用 `FIREFOX_BINARY` 指定目标 |
 | `npm run pack` | 生成确定性的 Chromium 包 `dist/chatclub-<version>.zip` |
 | `npm run pack:firefox` | 从同一 Manifest 源生成确定性的 Firefox 包 `dist/chatclub-<version>-firefox.zip` |
 | `npm run ci` | 执行 CI 使用的完整验证链 |
 
-`output/`、开发工具、缓存、Summary 源 userscript 和其他非运行时文件不会进入发布包；生成后的运行时 registry 才会随扩展发布。
+`output/`、开发工具、缓存、`content-src/` 和其他非运行时文件不会进入发布包。`userscripts/` 是按需源码接口的正式运行时资产，会与生成后的 runner registry 一起进入两个目标包；打包、模块闭包校验和浏览器 smoke 共用同一份 package plan。
 
-运行时架构以浏览器原生 ESM 为主：协议常量和生成器保持单一来源；Firefox document background 与 Chromium service worker 复用同一个后台模块；storage schema 与浏览器 I/O adapter 分层；Settings、Summary、Pocket 按需导入；跨功能状态通过带读写边界的 feature port 访问。三个稳定的 classic content 入口会由生成器内嵌只读协议快照，使浏览器中残留的旧动态注册仍可独立启动；应用创建 iframe 前会核对注册，已加载 frame 也具备按文档验证和有界恢复。Summary / Delete 的控制面使用按文档注册的扩展内部 RPC，自定义源码只由后台从 storage 读取并注入，不经过远程页面的 `postMessage` 通道。
+运行时架构以浏览器原生 ESM 为主：协议常量、Frame command contract 和生成器保持单一来源；Firefox document background 与 Chromium service worker 复用同一个后台 runtime；storage schema 与浏览器 I/O adapter 分层；Settings、Summary、Pocket 按需导入；跨功能状态通过带读写边界的 feature port 访问。六个 classic content 入口由 esbuild 从 `content-src/` clean-room 重建并内嵌协议；应用创建 iframe 前会核对注册，已加载 frame 也具备按 documentId 验证和有界恢复。extension page → iframe 命令统一通过 authenticated Frame RPC；自定义源码只由后台从 storage 读取并注入，不经过远程页面的通用 `postMessage` 通道。
 
 | 目录 | 作用 |
 | --- | --- |
 | `app/` | 主界面、工作区、Summary、Pocket、设置 |
 | `background/` | 扩展后台 Service Worker |
-| `content/` | 内容脚本、iframe 桥接、Summary bundle |
+| `content-src/` | 内容脚本 ESM 作者源与共享 runtime |
+| `content/` | 由生成器产出的自包含 classic IIFE；不要手工编辑 |
 | `shared/` | 常量、存储、站点配置、快捷键、i18n |
 | `styles/` | 全局样式 |
 | `userscripts/` | Summary 内置采集脚本 |

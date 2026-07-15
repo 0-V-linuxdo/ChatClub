@@ -104,7 +104,7 @@ function fakeExtensionApi(sources = []) {
 (async () => {
   const bridge = await dataModule(read("background/grok-cookie-bridge.js"));
   const manifest = JSON.parse(read("manifest.json"));
-  const serviceWorker = read("background/service-worker.js");
+  const serviceWorker = `${read("background/service-worker.js")}\n${read("background/runtime.js")}`;
   const relay = read("content/grok-cookie-bridge.js");
   const workspace = read("app/workspace/controller.js");
   const protocol = await dataModule(read("shared/protocol.js"));
@@ -271,7 +271,8 @@ function fakeExtensionApi(sources = []) {
   assert.match(relay, /globalThis\[INSTALLATION_KEY\] === `\$\{BRIDGE_VERSION\}:pending`/);
   assert.match(relay, /delete globalThis\[INSTALLATION_KEY\]/);
   assert.match(relay, /sessionStorage\.setItem\(RELOAD_MARKER/);
-  assert.equal(relay.match(/const BRIDGE_VERSION = "([^"]+)"/)?.[1], protocol.GROK_COOKIE_BRIDGE_VERSION);
+  assert.equal(relay.match(/var GROK_COOKIE_BRIDGE_VERSION = "([^"]+)"/)?.[1], protocol.GROK_COOKIE_BRIDGE_VERSION);
+  assert.match(read("content-src/grok-cookie-bridge.js"), /const BRIDGE_VERSION = GROK_COOKIE_BRIDGE_VERSION/);
   assert.match(workspace, /grokPreflight \? 10000 : 1800/);
   assert.match(workspace, /markGrokFramePreflightFallback\(url, preflightId\)/);
 

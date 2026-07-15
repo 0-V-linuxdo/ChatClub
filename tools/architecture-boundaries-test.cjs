@@ -7,10 +7,11 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 
-const main = read("app/main.js");
+const main = `${read("app/main.js")}\n${read("app/runtime.js")}`;
 const workspace = read("app/workspace/controller.js");
 const topicDelete = read("app/topic-delete/runtime.js");
-const serviceWorker = read("background/service-worker.js");
+const serviceWorker = `${read("background/service-worker.js")}\n${read("background/runtime.js")}`;
+const serviceWorkerCode = serviceWorker.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, "");
 const trustedInput = read("background/trusted-input.js");
 const state = read("app/state.js");
 const storageFacade = read("shared/storage.js");
@@ -30,7 +31,8 @@ assert.match(topicDelete, /return executeTopicDeleteNow/);
 assert.match(topicDelete, /shiftKey: Boolean/);
 assert.match(topicDelete, /backspace\|delete/);
 assert.doesNotMatch(serviceWorker, /chrome\.debugger/);
-assert.match(serviceWorker, /import\("\.\/trusted-input\.js"\)/);
+assert.match(serviceWorker, /import \* as trustedInput from "\.\/trusted-input\.js"/);
+assert.doesNotMatch(serviceWorkerCode, /\bimport\s*\(/);
 assert.match(trustedInput, /api\.debugger\.sendCommand/);
 
 assert.doesNotMatch(main, /from "\.\/settings\/controller\.js"/);
@@ -41,8 +43,8 @@ assert.match(main, /import\("\.\/summary\/controller\.js"\)/);
 assert.match(main, /import\("\.\/pocket\/controller\.js"\)/);
 
 assert.match(state, /createFeatureStatePorts/);
-assert.match(state, /read:\s*\[/);
-assert.match(state, /write:\s*\[/);
+assert.match(state, /read:\s*Object\.freeze/);
+assert.match(state, /write:\s*Object\.freeze/);
 assert.match(state, /readonlyStateValue/);
 for (const feature of ["workspace", "summary", "pocket", "optimize", "settings"]) {
   assert.match(main, new RegExp(`state: featureState\\.${feature}`));

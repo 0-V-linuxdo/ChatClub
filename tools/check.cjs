@@ -35,34 +35,9 @@ for (const file of files.filter((file) => file.endsWith(".json"))) {
   }
 }
 
-const javascriptFiles = files.filter((file) => /\.(?:c?js|mjs)$/.test(file));
-for (const file of javascriptFiles) {
-  const rawSource = fs.readFileSync(path.join(root, file), "utf8");
-  const source = file.startsWith("userscripts/") && file.endsWith(".js")
-    ? `async function __chatclubSummaryUserscriptSyntaxCheck(api) {\n${rawSource}\n}\n`
-    : rawSource;
-  const result = spawnSync(process.execPath, ["--check", "--input-type=module"], { input: source, encoding: "utf8" });
-  if (result.status !== 0) {
-    console.error(`${file}: syntax check failed`);
-    process.stderr.write(result.stderr || result.stdout || "");
-    process.exit(result.status ?? 1);
-  }
-}
-console.log(`Syntax and JSON checks passed (${javascriptFiles.length} JavaScript files).`);
+console.log("JSON syntax checks passed.");
 
-const importPattern = /(?:\bimport\s+(?:[^"']*?\s+from\s+)?|\bexport\s+[^"']*?\s+from\s+|\bimport\s*\()\s*["'](\.[^"']+)["']/g;
-for (const file of javascriptFiles) {
-  const source = fs.readFileSync(path.join(root, file), "utf8");
-  for (const match of source.matchAll(importPattern)) {
-    const target = path.resolve(path.dirname(path.join(root, file)), match[1]);
-    if (!fs.statSync(target, { throwIfNoEntry: false })?.isFile()) {
-      console.error(`${file}: unresolved relative import ${match[1]}`);
-      process.exit(1);
-    }
-  }
-}
-console.log("Relative JavaScript imports resolve.");
-
+run("tools/verify-modules.mjs");
 run("tools/generate-artifacts.cjs", ["--check"]);
 run("tools/verify-version.cjs");
 run("tools/verify-manifest.cjs");

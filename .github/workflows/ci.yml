@@ -8,19 +8,73 @@ permissions:
   contents: read
 
 jobs:
-  verify:
+  static:
+    name: Static / Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run ci
+
+  browser-smoke:
+    name: Browser smoke
+    needs: static
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Install exact Playwright Chromium target and system dependencies
+        run: |
+          npx playwright install --with-deps chromium
+          npx playwright install-deps firefox
+      - name: Chromium persistent-context extension smoke
+        run: npm run smoke:chromium
+      - name: Download Firefox 136
+        run: |
+          mkdir -p "$RUNNER_TEMP/firefox-136"
+          curl -fsSL "https://archive.mozilla.org/pub/firefox/releases/136.0/linux-x86_64/en-US/firefox-136.0.tar.xz" -o "$RUNNER_TEMP/firefox-136.tar.xz"
+          tar -xf "$RUNNER_TEMP/firefox-136.tar.xz" -C "$RUNNER_TEMP/firefox-136" --strip-components=1
+      - name: Firefox 136 temporary-install smoke
+        env:
+          FIREFOX_BINARY: ${{ runner.temp }}/firefox-136/firefox
+          EXPECTED_FIREFOX_MAJOR: "136"
+        run: npm run smoke:firefox
+      - name: Download latest Firefox Nightly
+        run: |
+          mkdir -p "$RUNNER_TEMP/firefox-nightly"
+          curl -fsSL "https://download.mozilla.org/?product=firefox-nightly-latest-ssl&os=linux64&lang=en-US" -o "$RUNNER_TEMP/firefox-nightly.tar.xz"
+          tar -xf "$RUNNER_TEMP/firefox-nightly.tar.xz" -C "$RUNNER_TEMP/firefox-nightly" --strip-components=1
+      - name: Latest Firefox Nightly temporary-install smoke
+        env:
+          FIREFOX_BINARY: ${{ runner.temp }}/firefox-nightly/firefox
+        run: npm run smoke:firefox
+
+  package:
+    name: Package verified browser targets
+    needs: [static, browser-smoke]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
-      - name: Verify source, generated assets, tests, and package allowlist
-        run: npm run ci
-      - name: Build deterministic extension archives
-        run: |
-          npm run pack
-          npm run pack:firefox
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run pack
+      - run: npm run pack:firefox
       - uses: actions/upload-artifact@v4
         with:
           name: chatclub-extension

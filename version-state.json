@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 1,
+  "appVersion": "「2026-07-15｜19:31:33」",
+  "manifestVersion": "2026.7.15",
+  "payloads": {
+    "chromium": {
+      "appVersion": "「2026-07-15｜19:31:33」",
+      "sha256": "5986eece30493ae6da6e0a154b472501b16566403927e7dd9b7863af41979b7f"
+    },
+    "firefox": {
+      "appVersion": "「2026-07-15｜19:31:33」",
+      "sha256": "1c353a84b91fa05fb936d6d3ead3c70e618d53c319fdd98746a918c087992ba8"
+    }
+  },
+  "summary": {
+    "configVersion": 71,
+    "sites": {
+      "chatgpt": {
+        "file": "chatgpt.js",
+        "configVersion": 52,
+        "sha256": "cadde25be1ac5a95ec144c72b8cd50d7b1d0cfc950394c9191fef9492ef24e03"
+      },
+      "claude": {
+        "file": "claude.js",
+        "configVersion": 37,
+        "sha256": "ad1eb6c7a9f9602dc17b6e1e95960f9df798d9ef054863b936837a7f24bc69f7"
+      },
+      "deepseek": {
+        "file": "deepseek.js",
+        "configVersion": 60,
+        "sha256": "9665a251e1e6c7f53fa859ade6af9be97371583cdf61309e4621292e1fd0ff24"
+      },
+      "gemini": {
+        "file": "gemini.js",
+        "configVersion": 32,
+        "sha256": "96648b9bf8b3a97fb3f6ba79bee6e15697bcc6b821aa1891fc9030ed26ab404f"
+      },
+      "grok": {
+        "file": "grok.js",
+        "configVersion": 62,
+        "sha256": "41cf977f1137f2812bb4c766f287e3dada2d36da258fad34c72a39acfe52ef5b"
+      },
+      "grok-dairoot": {
+        "file": "grok-dairoot.js",
+        "configVersion": 68,
+        "sha256": "b86c04419c25a6340e64bd27437447809c74edf887f3de844c3a787abdd01ae7"
+      },
+      "kagi": {
+        "file": "kagi.js",
+        "configVersion": 62,
+        "sha256": "338047893d6e4448672fcd325a4e285b4630d9553255c4702a441b372d62039a"
+      },
+      "lobehub": {
+        "file": "lobehub.js",
+        "configVersion": 46,
+        "sha256": "e4a8eb657dc528ef19e77bd99e76b7f89e3aae92c39a88754f51566f5e9b6394"
+      },
+      "notion": {
+        "file": "notion.js",
+        "configVersion": 62,
+        "sha256": "d1f35226da453c5e0f9afe898251b0ce17db291a5f96be0f424843eca6067b3d"
+      },
+      "typingmind": {
+        "file": "typingmind.js",
+        "configVersion": 45,
+        "sha256": "b17580d99d0e36ff176534a432852b507715c97b7930a96a214d01bb385f11f3"
+      }
+    }
+  },
+  "topicDelete": {
+    "chatgpt.user.js": {
+      "version": "2026.07.05.1",
+      "sha256": "d7f3d7566612d196ee8ff9427cdbf884881c880c474a8066f11a1f3c56d8002e"
+    },
+    "deepseek.user.js": {
+      "version": "2026.07.05.1",
+      "sha256": "2adddf6eadab4fd385fe8b5bada14945befce39e1ac3a773a98174615a05e4a9"
+    },
+    "gemini.user.js": {
+      "version": "2026.07.12.1",
+      "sha256": "f4c6e7cda6b64ad8afa7a6eb22d19ebc295a70cd90d0684927bd1a68234da40e"
+    },
+    "grok-mirror.user.js": {
+      "version": "2026.07.05.1",
+      "sha256": "a294cbcd7ef525f3ecd26e6f0303ae0680d8377643dba8cc65857edea32d46cd"
+    },
+    "grok.user.js": {
+      "version": "2026.07.05.1",
+      "sha256": "30b6750ce77cca5c26927bc811dbb4a1aa49d5fc36d8ebcbfe3bad37003aeb25"
+    },
+    "kagi.user.js": {
+      "version": "2026.07.05.1",
+      "sha256": "4785ec7d17ab120d61af397e2b1d126932e035abdfc194f46c03fa6af9193f67"
+    },
+    "notion.user.js": {
+      "version": "2026.07.05.1",
+      "sha256": "efb71134ec71e147f7de8674e4e595676d7469b3fb94803dfdba62b954b920d5"
+    }
+  },
+  "floors": {
+    "appVersion": "「2026-07-15｜19:31:33」",
+    "manifestVersion": "2026.7.15",
+    "summaryConfigVersion": 71,
+    "summarySites": {
+      "chatgpt": 52,
+      "claude": 37,
+      "deepseek": 60,
+      "gemini": 32,
+      "grok": 62,
+      "grok-dairoot": 68,
+      "kagi": 62,
+      "lobehub": 46,
+      "notion": 62,
+      "typingmind": 45
+    },
+    "topicDelete": {
+      "chatgpt.user.js": "2026.07.05.1",
+      "deepseek.user.js": "2026.07.05.1",
+      "gemini.user.js": "2026.07.12.1",
+      "grok-mirror.user.js": "2026.07.05.1",
+      "grok.user.js": "2026.07.05.1",
+      "kagi.user.js": "2026.07.05.1",
+      "notion.user.js": "2026.07.05.1"
+    }
+  }
+}

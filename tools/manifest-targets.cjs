@@ -15,6 +15,7 @@ function chromiumManifest(source) {
 
 function firefoxManifest(source) {
   const manifest = clone(source);
+  delete manifest.minimum_chrome_version;
   manifest.background = {
     scripts: ["background/firefox-background.js"],
     type: "module"
@@ -23,6 +24,7 @@ function firefoxManifest(source) {
   manifest.browser_specific_settings = {
     gecko: {
       id: "chatclub@chatclub.local",
+      strict_min_version: "136.0",
       data_collection_permissions: {
         required: [
           "authenticationInfo",

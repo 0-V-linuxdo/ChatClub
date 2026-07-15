@@ -1,5 +1,4 @@
 import { t } from "../../shared/i18n.js";
-import { MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE, sendToIframe } from "../../shared/post-message.js";
 import { sendToContentFrame } from "../../shared/frame-rpc.js";
 import { currentExtensionTabId, runtimeRequest } from "../../shared/extension-api.js";
 import { TAB_GROUP_HEADER_BUTTONS } from "../../shared/constants.js";
@@ -20,9 +19,8 @@ import {
 } from "./model.js";
 import { createWorkspaceFrameRegistry } from "./frame-registry.js";
 import { createWorkspaceOpenTabs } from "./open-tab.js";
-import { NAVIGATION_FOCUS_GUARD_SOURCE } from "../../shared/protocol.js";
 import { executeTopicDelete } from "../topic-delete/runtime.js";
-import { requireControllerContext, requireControllerFunction } from "../controller-context.js";
+import { requireControllerContext, requireControllerFunction, validateControllerContract } from "../controller-contract.js";
 
 const DRAG_TAB_MIME = "application/x-chatclub-tab";
 const DRAG_TAB_GROUP_MIME = "application/x-chatclub-tab-group";
@@ -31,7 +29,6 @@ const TAB_DRAG_START_DISTANCE = 6;
 const GROUP_DRAG_START_DISTANCE = 6;
 const LAYOUT_POPOVER_RIGHT_EXTENSION = 40;
 const NAVIGATION_FOCUS_GUARD_TIMEOUT_MS = 1200;
-const NAVIGATION_FOCUS_GUARD_RETRY_MS = 75;
 const NAVIGATION_FOCUS_GUARD_POST_NAV_RETRY_MS = 150;
 const NAVIGATION_FOCUS_GUARD_POST_NAV_SETTLE_MS = 10000;
 const NAVIGATION_FOCUS_GUARD_POST_NAV_MAX_MS = 45000;
@@ -140,6 +137,16 @@ const requireFunction = (ctx, name) => requireControllerFunction(ctx, "Workspace
  * @param {WorkspaceControllerContext} ctx
  */
 export function createWorkspaceController(ctx = {}) {
+  ctx = validateControllerContract(ctx, "Workspace controller", {
+    state: "object", createGroupId: "function", createFrameId: "function", createLayoutId: "function",
+    allApps: "function", appById: "function", inferAppName: "function", appFaviconUrl: "function",
+    fallbackFaviconUrl: "function", browserFaviconUrl: "function", effectiveFaviconUrl: "function",
+    discoverDeclaredFaviconUrl: "function", rememberFaviconUrl: "function", saveOptions: "function",
+    normalizeOptions: "function", toast: "function", render: "function", svgIcon: "function",
+    compactIconButton: "function", menuButton: "function", formatShortcut: "function",
+    requestTopicDeletePermission: "function?", prepareContentFrameRuntime: "function?",
+    openCustomAppEditor: "function?", onFrameLifecycleChange: "function?"
+  });
   const state = requireContext(ctx, "state");
   const createGroupId = requireFunction(ctx, "createGroupId");
   const createFrameId = requireFunction(ctx, "createFrameId");
@@ -360,7 +367,8 @@ export function createWorkspaceController(ctx = {}) {
       appId: app?.id || fallback.appId || iframe?.dataset?.appId || ""
     });
     const config = findTopicDeleteSiteConfig(state.options?.topicDeleteSiteConfigs, payload);
-    const missingCustomScript = Boolean(config && config.builtIn === false && !String(config.userscript || "").trim());
+    const customMode = config?.builtIn === false || config?.sourceMode === "custom";
+    const missingCustomScript = Boolean(config && customMode && !String(config.customUserscript || "").trim());
     const noConversationPage = Boolean(config && knownNoConversationPage(config, payload));
     const skipped = !config || config.enabled === false || missingCustomScript || noConversationPage;
     return { iframe, payload, config, missingCustomScript, noConversationPage, skipped, available: !skipped };
@@ -540,13 +548,12 @@ export function createWorkspaceController(ctx = {}) {
 
   function maintainFrameNavigationFocusGuard(iframe, generation, expiresAt, preflight = {}) {
     const startedAt = Date.now();
-    const id = globalThis.crypto?.randomUUID?.()
-      || `focus-guard-adopt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const guardToken = String(preflight.guardToken || "");
     let loadObserved = false;
     let lastDocumentToken = "";
     let lastDocumentAckAt = 0;
     let stopped = false;
+    let requestInFlight = false;
     let retryTimer = null;
     let timeoutTimer = null;
     const finish = () => {
@@ -555,31 +562,12 @@ export function createWorkspaceController(ctx = {}) {
       if (retryTimer) clearInterval(retryTimer);
       if (timeoutTimer) clearTimeout(timeoutTimer);
       iframe.removeEventListener("load", onLoad, true);
-      window.removeEventListener("message", onMessage, true);
     };
     const onLoad = () => {
       loadObserved = true;
       lastDocumentToken = "";
       lastDocumentAckAt = 0;
       send();
-    };
-    const onMessage = (event) => {
-      if (event.source !== iframe.contentWindow) return;
-      const message = event.data;
-      if (
-        message?.source !== NAVIGATION_FOCUS_GUARD_SOURCE
-        || message.type !== "response"
-        || message.action !== "prepare"
-        || message.id !== id
-        || message.guardToken !== guardToken
-        || !loadObserved
-      ) return;
-      const documentToken = String(message.documentToken || "");
-      if (!documentToken) return;
-      if (documentToken !== lastDocumentToken) {
-        lastDocumentToken = documentToken;
-        lastDocumentAckAt = Date.now();
-      }
     };
     const send = () => {
       if (
@@ -589,21 +577,22 @@ export function createWorkspaceController(ctx = {}) {
       if (loadObserved && lastDocumentAckAt && Date.now() - lastDocumentAckAt >= NAVIGATION_FOCUS_GUARD_POST_NAV_SETTLE_MS) {
         return false;
       }
-      try {
-        iframe.contentWindow?.postMessage({
-          source: NAVIGATION_FOCUS_GUARD_SOURCE,
-          type: "request",
-          action: "prepare",
-          phase: "adopt",
-          id,
-          guardToken,
-          expiresAt
-        }, "*");
-      } catch {}
+      if (requestInFlight) return true;
+      requestInFlight = true;
+      sendToContentFrame(iframe, "adoptNavigationFocusGuard", { guardToken, expiresAt }, NAVIGATION_FOCUS_GUARD_TIMEOUT_MS)
+        .then((result) => {
+          if (!loadObserved || result?.guardToken !== guardToken) return;
+          const documentToken = String(result.documentToken || "");
+          if (documentToken && documentToken !== lastDocumentToken) {
+            lastDocumentToken = documentToken;
+            lastDocumentAckAt = Date.now();
+          }
+        })
+        .catch(() => {})
+        .finally(() => { requestInFlight = false; });
       return true;
     };
     iframe.addEventListener("load", onLoad, true);
-    window.addEventListener("message", onMessage, true);
     send();
     retryTimer = setInterval(() => {
       if (!send()) finish();
@@ -611,7 +600,7 @@ export function createWorkspaceController(ctx = {}) {
     timeoutTimer = setTimeout(finish, NAVIGATION_FOCUS_GUARD_POST_NAV_MAX_MS + NAVIGATION_FOCUS_GUARD_POST_NAV_RETRY_MS);
   }
 
-  function prepareFrameNavigationFocusGuard(iframe, generation) {
+  async function prepareFrameNavigationFocusGuard(iframe, generation) {
     const prompt = document.querySelector(".prompt-input");
     if (
       !(iframe instanceof HTMLIFrameElement)
@@ -620,63 +609,26 @@ export function createWorkspaceController(ctx = {}) {
       || !iframe.contentWindow
     ) return null;
 
-    const id = globalThis.crypto?.randomUUID?.()
-      || `focus-guard-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const guardToken = globalThis.crypto?.randomUUID?.()
       || `focus-guard-token-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const expiresAt = Date.now() + NAVIGATION_FOCUS_GUARD_LEASE_MS;
-    return new Promise((resolve) => {
-      let settled = false;
-      let timeoutTimer = null;
-      let retryTimer = null;
-      const finish = (result = {}) => {
-        if (settled) return;
-        settled = true;
-        if (timeoutTimer) clearTimeout(timeoutTimer);
-        if (retryTimer) clearInterval(retryTimer);
-        window.removeEventListener("message", onMessage, true);
-        resolve({
-          ok: result.ok === true,
-          guardToken,
-          documentToken: String(result.documentToken || ""),
-          expiresAt
-        });
+    if (!frameNavigationIsCurrent(iframe, generation)) return { ok: false, guardToken, expiresAt };
+    try {
+      const result = await sendToContentFrame(
+        iframe,
+        "prepareNavigationFocusGuard",
+        { guardToken, expiresAt },
+        NAVIGATION_FOCUS_GUARD_TIMEOUT_MS
+      );
+      return {
+        ok: result?.ok === true,
+        guardToken,
+        documentToken: String(result?.documentToken || ""),
+        expiresAt
       };
-      const onMessage = (event) => {
-        if (event.source !== iframe.contentWindow) return;
-        const message = event.data;
-        if (
-          message?.source !== NAVIGATION_FOCUS_GUARD_SOURCE
-          || message.type !== "response"
-          || message.action !== "prepare"
-          || message.id !== id
-        ) return;
-        finish(message);
-      };
-      window.addEventListener("message", onMessage, true);
-      const send = () => {
-        if (!frameNavigationIsCurrent(iframe, generation)) {
-          finish();
-          return;
-        }
-        try {
-          iframe.contentWindow?.postMessage({
-            source: NAVIGATION_FOCUS_GUARD_SOURCE,
-            type: "request",
-            action: "prepare",
-            phase: "prepare",
-            id,
-            guardToken,
-            expiresAt
-          }, "*");
-        } catch {}
-      };
-      send();
-      if (!settled) {
-        retryTimer = setInterval(send, NAVIGATION_FOCUS_GUARD_RETRY_MS);
-        timeoutTimer = setTimeout(() => finish(), NAVIGATION_FOCUS_GUARD_TIMEOUT_MS);
-      }
-    });
+    } catch {
+      return { ok: false, guardToken, documentToken: "", expiresAt };
+    }
   }
 
   function assignFrameSrc(iframe, url) {
@@ -709,13 +661,16 @@ export function createWorkspaceController(ctx = {}) {
         return;
       }
       assigned = true;
-      delete iframe.dataset.frameLoadPending;
       const setSrc = (preflight = {}) => {
         if (!frameNavigationIsCurrent(iframe, generation)) return;
         const expiresAt = Date.now() + NAVIGATION_FOCUS_GUARD_LEASE_MS;
         if (guard && document.activeElement === document.querySelector(".prompt-input")) {
           maintainFrameNavigationFocusGuard(iframe, generation, expiresAt, preflight);
         }
+        // Keep the initial about:blank load suppressed until the real URL is
+        // assigned. Otherwise a long Grok Cookie preflight can publish a false
+        // loading=false edge before the direct child frame exists.
+        delete iframe.dataset.frameLoadPending;
         iframe.setAttribute("src", url);
       };
       const guard = prepareFrameNavigationFocusGuard(iframe, generation);
@@ -1278,7 +1233,7 @@ export function createWorkspaceController(ctx = {}) {
     let href = app.url;
     let logoUrl = "";
     try {
-      const meta = await sendToIframe(iframe, "getPageMeta", {}, 1800);
+      const meta = await sendToContentFrame(iframe, "getPageMeta", {}, 1800);
       href = meta?.href || href;
       rememberFrameLocation(iframe, { href, title: meta?.title });
       logoUrl = effectiveFaviconUrl(href, meta?.logoUrl) || meta?.logoUrl || "";
@@ -2078,7 +2033,7 @@ export function createWorkspaceController(ctx = {}) {
   async function startNewChatInFrame(iframe, fallbackChat = null) {
     if (!(iframe instanceof HTMLIFrameElement)) return false;
     try {
-      await sendToIframe(iframe, "newChatPreprocess", {}, 1500);
+      await sendToContentFrame(iframe, "newChatPreprocess", {}, 1500);
     } catch {}
     const app = frameApp(iframe) || appById(fallbackChat?.appId || iframe.dataset?.appId);
     if (!app?.url) return false;
@@ -2256,9 +2211,7 @@ export function createWorkspaceController(ctx = {}) {
 
   function hideMessageNavigatorMenuForFrame(iframe) {
     if (!iframe?.contentWindow) return Promise.resolve(null);
-    return sendToIframe(iframe, "hideMessageNavigatorMenu", {}, 2000, {
-      source: MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE
-    }).catch((error) => {
+    return sendToContentFrame(iframe, "hideMessageNavigatorMenu", {}, 2000).catch((error) => {
       console.warn("[ChatClub] Failed to hide message navigator menu", error);
       return null;
     });
@@ -2305,52 +2258,9 @@ export function createWorkspaceController(ctx = {}) {
     };
   }
 
-  function messageNavigatorTimeoutError(error) {
-    return String(error?.message || error || "").includes("[PostMessage] Timeout waiting for response: setMessageNavigator");
-  }
-
-  function messageNavigatorFrameHrefHints(iframe, payload = {}) {
-    const values = [
-      payload.currentHref,
-      payload.href,
-      iframe?.dataset?.currentHref,
-      iframe?.dataset?.currentThreadHref,
-      iframe?.src,
-      iframe?.getAttribute?.("src")
-    ].map((item) => String(item || "").trim()).filter(Boolean);
-    return Array.from(new Set(values));
-  }
-
-  async function ensureMessageNavigatorContentBridge(iframe, payload = {}) {
-    const tabId = await currentExtensionTabId();
-    if (!tabId) return null;
-    try {
-      return await runtimeRequest({
-        source: "chatclub",
-        action: "ensureContentBridge",
-        tabId,
-        hrefs: messageNavigatorFrameHrefHints(iframe, payload),
-        hosts: payload.config?.hosts || []
-      });
-    } catch (error) {
-      console.warn("[ChatClub] Failed to ensure message navigator bridge", error);
-      return { error: error?.message || String(error) };
-    }
-  }
-
   async function setMessageNavigatorForFrame(iframe, enabled, payload = null) {
     const data = enabled ? payload : { enabled: false };
-    try {
-      return await sendToIframe(iframe, "setMessageNavigator", data, 6000, {
-        source: MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE
-      });
-    } catch (error) {
-      if (!messageNavigatorTimeoutError(error)) throw error;
-      await ensureMessageNavigatorContentBridge(iframe, payload || {});
-      return sendToIframe(iframe, "setMessageNavigator", data, 6000, {
-        source: MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE
-      });
-    }
+    return sendToContentFrame(iframe, "setMessageNavigator", data, 6000);
   }
 
   async function toggleMessageNavigator(group) {
@@ -2458,7 +2368,7 @@ export function createWorkspaceController(ctx = {}) {
     const initialConfig = initialCapability.config;
     const initialNeedsPermission = Boolean(
       initialConfig
-      && (initialConfig.sourceMode === "custom" || initialConfig.userscriptOverride === true || initialConfig.builtIn === false)
+      && (initialConfig.sourceMode === "custom" || initialConfig.builtIn === false)
     );
     const permissionResult = (config) => {
       try {
@@ -2486,7 +2396,7 @@ export function createWorkspaceController(ctx = {}) {
     if (!window.confirm(t("topbar.deleteThreadConfirm", { count: 1, plural: "" }))) return;
     const needsPermission = Boolean(
       deleteSiteConfig
-      && (deleteSiteConfig.sourceMode === "custom" || deleteSiteConfig.userscriptOverride === true || deleteSiteConfig.builtIn === false)
+      && (deleteSiteConfig.sourceMode === "custom" || deleteSiteConfig.builtIn === false)
     );
     if (needsPermission) {
       const permission = initialNeedsPermission ? await earlyPermission : await permissionResult(deleteSiteConfig);

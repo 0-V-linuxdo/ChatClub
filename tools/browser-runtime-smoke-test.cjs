@@ -13,6 +13,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.background.type, "module");
   assert.equal(manifest.background.service_worker, "background/service-worker.js");
+  assert.equal(manifest.minimum_chrome_version, "120");
   assert.deepEqual(manifest.background.scripts, ["background/firefox-background.js"]);
   assert.deepEqual(manifest.background.preferred_environment, ["document", "service_worker"]);
   assert.ok(!manifest.permissions.includes("userScripts"));
@@ -31,14 +32,18 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
   assert.ok(!firefoxManifest.permissions.includes("favicon"));
   assert.ok(!firefoxManifest.permissions.includes("cookies"));
   assert.ok(firefoxManifest.browser_specific_settings.gecko.id);
+  assert.equal(firefoxManifest.browser_specific_settings.gecko.strict_min_version, "136.0");
+  assert.ok(!("minimum_chrome_version" in firefoxManifest));
   const chromiumManifest = targetManifest(manifest, "chromium");
+  assert.equal(chromiumManifest.minimum_chrome_version, "120");
   assert.ok(chromiumManifest.permissions.includes("cookies"));
   assert.deepEqual(chromiumManifest.background, {
     service_worker: "background/service-worker.js",
     type: "module"
   });
 
-  const serviceWorker = read("background/service-worker.js");
+  const serviceWorker = `${read("background/service-worker.js")}\n${read("background/runtime.js")}`;
+  const serviceWorkerCode = serviceWorker.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, "");
   assert.match(serviceWorker, /const chrome = globalThis\.browser \|\| globalThis\.chrome/);
   assert.match(serviceWorker, /currentContentScriptTargetGroups/);
   assert.match(serviceWorker, /matchesForContentTargets/);
@@ -51,10 +56,13 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
   assert.doesNotMatch(serviceWorker, /content\/protocol\.js/);
   assert.match(serviceWorker, /registerContentScriptsVerified/);
   assert.match(serviceWorker, /rollbackContentScript/);
+  assert.match(serviceWorker, /import \* as trustedInput from "\.\/trusted-input\.js"/);
+  assert.doesNotMatch(serviceWorkerCode, /\bimport\s*\(/);
   assert.doesNotMatch(serviceWorker, /const matches = contentScriptMatches\(await currentContentScriptTargets/);
 
   const content = read("content/content.js");
   const summaryMain = read("content/summary-userscripts-main.js");
+  const summaryMainEntry = read("content-src/summary-userscripts-main.js");
   assert.doesNotMatch(`${content}\n${summaryMain}`, /AsyncFunction|new Function/);
   assert.match(content, /action: "executeSummaryUserscript"/);
   assert.match(content, /event\.source !== window\.parent \|\| event\.origin !== EXTENSION_ORIGIN/);
@@ -66,8 +74,8 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
   assert.match(serviceWorker, /JSON\.parse\(serialized\)/);
   assert.match(serviceWorker, /ensureCustomSummaryRuntime/);
   assert.match(serviceWorker, /timeoutPromise\(\s*execution/);
-  assert.match(summaryMain, /window\[CUSTOM_SUMMARY_EXECUTOR\]/);
-  assert.match(summaryMain, /SUMMARY_RESULT_MAX_TURNS/);
+  assert.match(summaryMainEntry, /window\[CUSTOM_SUMMARY_EXECUTOR\]/);
+  assert.match(summaryMainEntry, /SUMMARY_RESULT_MAX_TURNS/);
 
   const extensionApiSource = read("shared/extension-api.js");
   const apiModule = await import(`data:text/javascript;base64,${Buffer.from(extensionApiSource).toString("base64")}`);

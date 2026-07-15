@@ -5,7 +5,7 @@ import { storageGet, storageSet } from "../../shared/storage-adapter.js";
 import { findSummarySiteConfig } from "../../shared/url-match.js";
 import { createActionButton } from "../../ui/components.js";
 import { el, iconButton, textarea } from "../../ui/dom.js";
-import { optionalControllerFunction, optionalControllerObject, requireControllerContext, requireControllerFunction } from "../controller-context.js";
+import { optionalControllerFunction, optionalControllerObject, requireControllerContext, requireControllerFunction, validateControllerContract } from "../controller-contract.js";
 import { renderMarkdown } from "./markdown.js";
 import {
   buildSummaryPreviewItem,
@@ -53,6 +53,13 @@ const SUMMARY_PANEL_SIZE_KEY = "chatclub.summaryPanelSize.v4";
  */
 export function createSummaryController(ctx) {
   const controllerName = "Summary controller";
+  ctx = validateControllerContract(ctx, controllerName, {
+    state: "object", svgIcon: "function", compactIconButton: "function", currentFrames: "function",
+    frameApp: "function", prepareContentFrameRuntime: "function", setFramePointerBlockedForOverlay: "function",
+    findFrameForSummarySource: "function", highlightFrameForSummarySource: "function?", inferAppName: "function",
+    effectiveFaviconUrl: "function", discoverDeclaredFaviconUrl: "function", rememberFaviconUrl: "function",
+    browserFaviconUrl: "function", formatShortcut: "function?", pocketPort: "object?"
+  });
   const state = requireControllerContext(ctx, controllerName, "state");
   const svgIcon = requireControllerFunction(ctx, controllerName, "svgIcon");
   const compactIconButton = requireControllerFunction(ctx, controllerName, "compactIconButton");
@@ -781,7 +788,11 @@ export function createSummaryController(ctx) {
     try {
       let messages = [];
       let result = null;
-      if (siteConfig?.userscript) {
+      const hasSummaryRunner = Boolean(
+        siteConfig?.userscriptFile
+        || ((siteConfig?.sourceMode === "custom" || siteConfig?.builtIn === false) && String(siteConfig?.customUserscript || "").trim())
+      );
+      if (hasSummaryRunner) {
         const runtimeConfig = { ...siteConfig };
         delete runtimeConfig.userscript;
         delete runtimeConfig.customUserscript;

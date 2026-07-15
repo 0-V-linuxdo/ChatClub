@@ -1,8 +1,8 @@
 import { API_PROFILE_ENDPOINT_DEFAULT, API_PROFILE_MODEL_DEFAULT } from "./constants.js";
-import { normalizeOptions } from "./storage-schema.js";
+import { normalizeApiOptions } from "./api-options.js";
 
 export function resolveApiProfile(options, purpose) {
-  const normalized = normalizeOptions(options || {});
+  const normalized = normalizeApiOptions(options || {});
   const id = purpose === "summary" ? normalized.summaryApiProfileId : normalized.optimizeApiProfileId;
   return normalized.apiProfiles.find((profile) => profile.id === id) || normalized.apiProfiles[0] || {
     id: "default",
@@ -14,7 +14,7 @@ export function resolveApiProfile(options, purpose) {
 }
 
 export function resolvePromptTemplate(options, purpose) {
-  const normalized = normalizeOptions(options || {});
+  const normalized = normalizeApiOptions(options || {});
   if (purpose === "summary") {
     return normalized.summaryPromptTemplates.find((item) => item.id === normalized.summaryPromptTemplateId)
       || normalized.summaryPromptTemplates[0];

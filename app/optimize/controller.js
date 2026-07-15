@@ -1,7 +1,7 @@
 import { optimizePromptStream } from "../../shared/api.js";
 import { t } from "../../shared/i18n.js";
 import { button, el, iconButton, modal, textarea, toast } from "../../ui/dom.js";
-import { pickAppContext } from "../app-context.js";
+import { validateControllerContract } from "../controller-contract.js";
 
 export function createOptimizeController(ctx) {
   const {
@@ -9,7 +9,9 @@ export function createOptimizeController(ctx) {
     svgIcon,
     syncPromptInputNode,
     ensurePromptInputReady
-  } = pickAppContext(ctx, ["state", "svgIcon", "syncPromptInputNode", "ensurePromptInputReady"], "Optimize controller");
+  } = validateControllerContract(ctx, "Optimize controller", {
+    state: "object", svgIcon: "function", syncPromptInputNode: "function", ensurePromptInputReady: "function"
+  });
 
   async function optimizeCurrentPrompt() {
     const original = state.promptText;

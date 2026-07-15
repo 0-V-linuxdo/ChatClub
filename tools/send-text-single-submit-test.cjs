@@ -7,9 +7,10 @@ const vm = require("node:vm");
 
 const root = path.resolve(__dirname, "..");
 const contentSource = fs.readFileSync(path.join(root, "content/content.js"), "utf8");
-const postMessageSource = fs.readFileSync(path.join(root, "shared/post-message.js"), "utf8");
+const contentEntrySource = fs.readFileSync(path.join(root, "content-src/content.js"), "utf8");
+const frameCommandsSource = fs.readFileSync(path.join(root, "shared/frame-commands.js"), "utf8");
+const frameRpcSource = fs.readFileSync(path.join(root, "shared/frame-rpc.js"), "utf8");
 const protocolSource = fs.readFileSync(path.join(root, "shared/protocol.js"), "utf8");
-const contentProtocolSource = fs.readFileSync(path.join(root, "content/protocol.js"), "utf8");
 
 function protocolString(source, name, declaration) {
   const match = source.match(new RegExp(`${declaration}\\s*("(?:[^"\\\\]|\\\\.)*")`));
@@ -63,22 +64,22 @@ const sendTextSource = protocolString(
   "SEND_TEXT_POST_MESSAGE_SOURCE",
   "export const SEND_TEXT_POST_MESSAGE_SOURCE\\s*=\\s*"
 );
-const generatedSendTextSource = protocolString(
-  contentProtocolSource,
-  "SEND_TEXT_POST_MESSAGE_SOURCE",
-  '"?SEND_TEXT_POST_MESSAGE_SOURCE"?:\\s*'
+assert.ok(
+  contentSource.includes(JSON.stringify(sendTextSource)),
+  "generated content must bundle the shared send channel"
 );
-assert.equal(generatedSendTextSource, sendTextSource, "content protocol bootstrap must match the shared send channel");
 assert.match(
-  contentSource,
+  contentEntrySource,
+  /import\s*\{\s*CONTENT_PROTOCOL\s*\}\s*from "\.\.\/shared\/protocol\.js";/,
+  "isolated content source must import the shared protocol"
+);
+assert.match(
+  contentEntrySource,
   /const SEND_TEXT_POST_MESSAGE_SOURCE = PROTOCOL\.SEND_TEXT_POST_MESSAGE_SOURCE;/,
-  "isolated content must consume the send channel from the protocol bootstrap"
+  "isolated content source must consume the shared send channel"
 );
-assert.match(
-  postMessageSource,
-  /import\s*\{[\s\S]*?\bSEND_TEXT_POST_MESSAGE_SOURCE\b[\s\S]*?\}\s*from "\.\/protocol\.js";/,
-  "parent messaging must import the send channel from the shared protocol"
-);
+assert.match(frameCommandsSource, /sendText:\s*command\(\{[^}]*mutating:\s*true/, "sendText must be an exactly-once frame command");
+assert.match(frameRpcSource, /action:\s*"sendFrameCommand"/, "parent messaging must use authenticated Frame RPC");
 assert.match(
   contentSource,
   /if \(versionedSendTextRequest && !contentBridgeIsCurrent\(\)\) return;/,

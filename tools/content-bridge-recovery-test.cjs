@@ -7,10 +7,10 @@ const vm = require("node:vm");
 
 const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
-const main = read("app/main.js");
+const main = `${read("app/main.js")}\n${read("app/runtime.js")}`;
 const workspace = read("app/workspace/controller.js");
 const summary = read("app/summary/controller.js");
-const background = read("background/service-worker.js");
+const background = `${read("background/service-worker.js")}\n${read("background/runtime.js")}`;
 const content = read("content/content.js");
 const summaryMain = read("content/summary-userscripts-main.js");
 
@@ -49,6 +49,7 @@ function createApplyFixture(options = {}) {
   const calls = { verify: 0, prepare: 0, send: 0, cancel: 0 };
   let current = true;
   const registrations = [...(options.registrations || [])];
+  const preparedResults = [...(options.preparedResults || [])];
   const context = vm.createContext({
     Error,
     String,
@@ -57,7 +58,7 @@ function createApplyFixture(options = {}) {
     record: {
       payload: { appId: "Gemini", modelId: "pro" },
       runId: "run-1",
-      bridgeRecoveryAttempted: false,
+      bridgeRecoveryAttempts: Math.max(0, Number(options.bridgeRecoveryAttempts) || 0),
       controller: { signal: { aborted: false } }
     }
   });
@@ -68,10 +69,10 @@ function createApplyFixture(options = {}) {
   context.prepareContentFrameRuntime = async () => {
     calls.prepare += 1;
     if (options.supersedeDuringPrepare) current = false;
-    return options.prepared || { ok: true };
+    return preparedResults.length ? preparedResults.shift() : (options.prepared || { ok: true });
   };
   context.preferredModelRecordIsCurrent = () => current;
-  context.sendToIframe = async () => {
+  context.sendToContentFrame = async () => {
     calls.send += 1;
     if (options.sendError) throw options.sendError;
     return { ok: true, runId: "run-1" };
@@ -79,7 +80,6 @@ function createApplyFixture(options = {}) {
   context.requestPreferredModelCancellation = () => { calls.cancel += 1; };
   vm.runInContext(`
     const MODEL_PREFERENCE_APPLY_TIMEOUT_MS = 15000;
-    const PREFERRED_MODEL_POST_MESSAGE_SOURCE = "preferred-model";
     ${functionSource(main, "preferredModelResult")}
     ${functionSource(main, "applyPreferredModelToFrame", true)}
     globalThis.apply = applyPreferredModelToFrame;
@@ -124,7 +124,7 @@ function createSummaryPrepareFixture(options = {}) {
     calls.wait += 1;
     return registration;
   };
-  context.sendToContentFrame = async (_iframe, action) => {
+  context.frameRuntimePort = { request: async (_iframe, action) => {
     calls.probe += 1;
     assert.equal(action, "getSummaryRuntimeState");
     if (options.probeError) throw options.probeError;
@@ -135,7 +135,7 @@ function createSummaryPrepareFixture(options = {}) {
       documentId: registration.documentId,
       bridgeVersion: "bridge-current"
     };
-  };
+  }};
   context.workspaceController = {
     frameApp: () => ({ url: "https://example.com/" }),
     rememberFrameLocation: (_iframe, currentRegistration) => {
@@ -162,8 +162,36 @@ function createSummaryPrepareFixture(options = {}) {
     const fixture = createApplyFixture({ registrations: [null, { bridgeVersion: "current" }] });
     const result = await fixture.apply(fixture.iframe, fixture.record);
     assert.equal(result.ok, true);
-    assert.equal(fixture.record.bridgeRecoveryAttempted, true);
+    assert.equal(fixture.record.bridgeRecoveryAttempts, 1);
     assert.deepEqual(fixture.calls, { verify: 2, prepare: 1, send: 1, cancel: 0 });
+  }
+
+  {
+    const fixture = createApplyFixture({
+      bridgeRecoveryAttempts: 1,
+      registrations: [null, { bridgeVersion: "current" }]
+    });
+    const result = await fixture.apply(fixture.iframe, fixture.record);
+    assert.equal(result.ok, true, "a navigation-gap recovery miss must not suppress the next safe bridge repair");
+    assert.equal(fixture.record.bridgeRecoveryAttempts, 2);
+    assert.deepEqual(fixture.calls, { verify: 2, prepare: 1, send: 1, cancel: 0 });
+  }
+
+  {
+    const fixture = createApplyFixture({
+      registrations: [null, null, { bridgeVersion: "current" }],
+      preparedResults: [
+        { ok: false, reason: "frame is still navigating" },
+        { ok: true }
+      ]
+    });
+    const first = await fixture.apply(fixture.iframe, fixture.record);
+    assert.equal(first.retryable, true);
+    assert.equal(fixture.calls.send, 0, "a bridge miss must not deliver the mutating model command");
+    const second = await fixture.apply(fixture.iframe, fixture.record);
+    assert.equal(second.ok, true, "the same record must recover after the direct child frame appears");
+    assert.equal(fixture.record.bridgeRecoveryAttempts, 2);
+    assert.deepEqual(fixture.calls, { verify: 3, prepare: 2, send: 1, cancel: 0 });
   }
 
   {
@@ -310,6 +338,30 @@ function createSummaryPrepareFixture(options = {}) {
 
   assert.match(main, /announcedBridgeVersion === CONTENT_BRIDGE_VERSION/);
   assert.match(main, /scheduleContentFrameRepair\(event\.iframe, 120\)/);
+  const repairSource = functionSource(main, "scheduleContentFrameRepair");
+  assert.match(repairSource, /CONTENT_FRAME_REPAIR_RETRY_DELAYS\[retryIndex\]/);
+  assert.match(repairSource, /contentFrameRepairGenerations\.get\(iframe\) !== repairGeneration/);
+  assert.match(repairSource, /scheduleContentFrameRepair\(iframe, nextDelay, retryIndex \+ 1, repairGeneration\)/);
+  const iframeLoadSource = functionSource(main, "installPreferredModelIframeLoadHandler");
+  assert.match(iframeLoadSource, /scheduleContentFrameRepair\(iframe, 120\)/);
+  const initialFrameSource = functionSource(workspace, "setFrameSrcAfterPrepare");
+  const assignedStart = initialFrameSource.indexOf("assigned = true");
+  const setSrcStart = initialFrameSource.indexOf("const setSrc", assignedStart);
+  const realSrcAssignment = initialFrameSource.indexOf('iframe.setAttribute("src", url)', setSrcStart);
+  assert.ok(
+    assignedStart >= 0 && setSrcStart > assignedStart && realSrcAssignment > setSrcStart,
+    "setFrameSrcAfterPrepare must retain the guarded real-URL assignment"
+  );
+  assert.doesNotMatch(
+    initialFrameSource.slice(assignedStart, setSrcStart),
+    /delete iframe\.dataset\.frameLoadPending/,
+    "the about:blank load must remain suppressed until the real iframe URL is assigned"
+  );
+  const pendingRelease = initialFrameSource.indexOf("delete iframe.dataset.frameLoadPending", setSrcStart);
+  assert.ok(
+    pendingRelease > setSrcStart && pendingRelease < realSrcAssignment,
+    "the pending marker must be released immediately before assigning the real iframe URL"
+  );
   const initSource = functionSource(main, "init", true);
   assert.ok(
     initSource.indexOf('action: "reloadConfigs"') < initSource.indexOf("workspaceController.hydrateGroups()"),
@@ -321,7 +373,7 @@ function createSummaryPrepareFixture(options = {}) {
   assert.match(summary, /expectedDocumentId: summaryReady\.registration\.documentId/);
   assert.match(summary, /expectedHref: base\.href/);
   const prepareSource = functionSource(main, "prepareContentFrameRuntimeUncached", true);
-  assert.match(prepareSource, /sendToContentFrame\(iframe, "getSummaryRuntimeState", \{\}, 1800\)/);
+  assert.match(prepareSource, /frameRuntimePort\.request\(iframe, "getSummaryRuntimeState", \{\}, \{ timeoutMs: 1800, skipEnsure: true \}\)/);
   assert.match(prepareSource, /summaryState\.documentId === registration\.documentId/);
   assert.match(prepareSource, /summaryState\.bridgeVersion === CONTENT_BRIDGE_VERSION/);
   assert.match(prepareSource, /confirmedRegistration\?\.documentId === registration\.documentId/);
@@ -342,8 +394,8 @@ function createSummaryPrepareFixture(options = {}) {
   assert.match(pageStateSource, /message\.action !== "runtimeState"/);
   assert.match(pageStateSource, /message\.id !== id/);
   assert.match(pageStateSource, /window\.removeEventListener\("message", onMessage, true\)/);
-  assert.match(summaryMain, /const SUMMARY_PAGE_RUNTIME_KEY = "__CHATCLUB_SUMMARY_PAGE_RUNTIME_V2__"/);
-  assert.match(summaryMain, /previousSummaryPageRuntime\.dispose\?\.\(\)/);
+  assert.match(summaryMain, /runtimeRegistry\d*\(window\)/);
+  assert.match(summaryMain, /\.register\("summary-page"/);
   assert.match(summaryMain, /message\.action === "runtimeState"/);
   assert.match(summaryMain, /bridgeVersion: PROTOCOL\.CONTENT_BRIDGE_VERSION/);
   assert.doesNotMatch(summaryMain, /if \(!window\.__CHATCLUB_SUMMARY_PAGE_RUNTIME__\)/);

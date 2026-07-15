@@ -10,13 +10,16 @@ export const DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07
 export const MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.08.12";
 export const SUMMARY_POST_MESSAGE_SOURCE = "chatclub:summary:2026.07.08.13";
 export const PREFERRED_MODEL_POST_MESSAGE_SOURCE = "chatclub:preferred-model:2026.07.13.2";
-export const CONTENT_BRIDGE_VERSION = "2026.07.15.4";
+export const CONTENT_BRIDGE_VERSION = "2026.07.15.7";
 export const GROK_COOKIE_BRIDGE_VERSION = "2026.07.15.1";
-export const EXTENSION_RUNTIME_RELAY_SOURCE = "chatclub:runtime-relay:2026.07.15.4";
-export const SECURE_FRAME_COMMAND_SOURCE = "chatclub:frame-command:2026.07.15.4";
+export const EXTENSION_RUNTIME_RELAY_SOURCE = "chatclub:runtime-relay:2026.07.15.7";
+export const SECURE_FRAME_COMMAND_SOURCE = "chatclub:frame-command:2026.07.15.7";
 export const DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.07.03.30";
-export const PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.15.4";
-export const NAVIGATION_FOCUS_GUARD_SOURCE = "chatclub:navigation-focus-guard:2026.07.13.3";
+export const PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.15.7";
+export const RUNTIME_REGISTRY_KEY = "__CHATCLUB_RUNTIME_REGISTRY_V1__";
+export const RUNTIME_REGISTRY_ABI_VERSION = 1;
+export const NAVIGATION_FOCUS_GUARD_RUNTIME = "navigation-focus-guard";
+export const NAVIGATION_FOCUS_GUARD_RUNTIME_VERSION = "2026.07.15.2";
 export const FRAME_TOAST_POSITION_EVENT = "chatclub:frame-toast-position:2026.07.13.1";
 export const CUSTOM_SUMMARY_EXECUTOR = "__CHATCLUB_SUMMARY_CUSTOM_EXECUTOR_2026_07_14__";
 export const TOPIC_DELETE_REQUEST_EVENT = "chatclub:delete-site:request";
@@ -44,7 +47,8 @@ export const CONTENT_PROTOCOL = Object.freeze({
   SECURE_FRAME_COMMAND_SOURCE,
   DEEPSEEK_DELETE_SOURCE,
   PAGE_SUMMARY_SOURCE,
-  NAVIGATION_FOCUS_GUARD_SOURCE,
+  NAVIGATION_FOCUS_GUARD_RUNTIME,
+  NAVIGATION_FOCUS_GUARD_RUNTIME_VERSION,
   FRAME_TOAST_POSITION_EVENT,
   CUSTOM_SUMMARY_EXECUTOR,
   TOPIC_DELETE_REQUEST_EVENT,

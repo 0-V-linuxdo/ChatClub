@@ -1,13 +1,13 @@
 // Built-in Summary userscript: Grok Mirror (grok-dairoot)
 // Source: Mod/assets/chunk-7dbf4e81.js :: SUMMARY_SITE_CONFIG_DEFAULTS
-// Config version: 66; global config version: 69
+// Config version: 68; global config version: 71
 // Hosts: gk.dairoot.cn, *.gk.dairoot.cn
 // Path prefixes: (none)
 // Run mode: pageWorldFirst; timeout: 36000
 // This is a Simple Chat Hub Summary bridge body, not a standalone browser userscript.
 
-const site = "grok";
 const root = api.qs('main,[role="main"]') || document.body || document.documentElement;
+const controlSelector = "button,[role=button]";
 const copyOptions = {
   resetClipboardBeforeCopy: true,
   acceptUnchangedClipboard: false,
@@ -34,6 +34,9 @@ const visible = node => {
     const rect = rectOf(node);
     if (!rect) return false;
     const style = getComputedStyle(node);
+    // Grok keeps historical message actions at opacity: 0 until the turn is
+    // hovered. They still have layout and are intentionally revealed before
+    // copying, so opacity must not be treated as unavailable here.
     return style.display !== "none" && style.visibility !== "hidden";
   } catch (error) {
     try { return Boolean(api.visible && api.visible(node)); } catch { return false; }
@@ -74,7 +77,7 @@ const meta = node => normalize([
   node && node.textContent,
   node && node.innerText
 ].filter(Boolean).join(" "));
-const svgSignature = node => normalize([node, ...qsa("svg,path,rect,line,polyline,polygon,use,img,[data-icon],[class]", node).slice(0, 80)].map(el => [
+const svgSignature = node => normalize([node, ...qsa("svg,title,desc,path,rect,line,polyline,polygon,use,img,[data-icon],[class]", node).slice(0, 80)].map(el => [
   classText(el),
   el && el.getAttribute && el.getAttribute("data-icon"),
   el && el.getAttribute && el.getAttribute("aria-label"),
@@ -85,33 +88,71 @@ const svgSignature = node => normalize([node, ...qsa("svg,path,rect,line,polylin
   el && el.getAttribute && el.getAttribute("xlink:href"),
   el && el.getAttribute && el.getAttribute("viewBox"),
   el && el.getAttribute && el.getAttribute("d"),
-  el && el.getAttribute && el.getAttribute("x"),
-  el && el.getAttribute && el.getAttribute("y"),
-  el && el.getAttribute && el.getAttribute("width"),
-  el && el.getAttribute && el.getAttribute("height")
+  el && el.textContent
 ].filter(Boolean).join(" ")).join(" ")).toLowerCase();
-const explicitCopy = button => /(?:^|\b)(copy|copied|clipboard)(?:\b|$)|复制|已复制|拷贝|content_copy|copy_all|file_copy/i.test(meta(button));
+const actionSignature = node => normalize(meta(node) + " " + svgSignature(node)).toLowerCase();
+const explicitCopy = button => /(?:^|\b)(copy|copied|clipboard)(?:\b|$)|复制|已复制|拷贝|content[_-]?copy|copy[_-]?all|file[_-]?copy/i.test(meta(button));
+const nestedCopy = button => /copy\s*(?:code|table|link|conversation|source|sources|citation|citations|url)|copy[-_ ]?(?:code|table|link|conversation|source|sources|citation|citations|url)|复制(?:代码|表格|链接|会话|来源|引用)/i.test(meta(button));
 const looksCopyIcon = button => {
   const text = svgSignature(button);
   if (!text) return false;
-  if (/copy|clipboard|content_copy|copy_all|file_copy|lucide-copy|tabler-icon-copy|copy[-_ ]?(?:icon|line|fill)|heroicons.*clipboard|mingcute.*copy|carbon.*copy/.test(text)) return true;
+  if (/copy|clipboard|content[_-]?copy|copy[_-]?all|file[_-]?copy|lucide-copy|tabler-icon-copy|heroicons.*clipboard|mingcute.*copy|carbon.*copy/.test(text)) return true;
   if (/0 0 (16|18|20|24) (16|18|20|24)/.test(text) && /(m12\.668\s*10\.667c|m12\.66810\.667c|m13\.998\s*12\.665c|m13\.99812\.665c|m6\.14929\s*4\.02032c|m6\.149294\.02032c|m9\.80164\s*0\.367975c|m9\.801640\.367975c)/.test(text)) return true;
   const rects = qsa("rect", button).filter(rect => Number(rect.getAttribute("width") || 0) >= 7 && Number(rect.getAttribute("height") || 0) >= 7);
   return rects.length >= 2;
 };
-const copyRejectPattern = /copy\s*(?:code|table|link|conversation|source|sources|citation|citations|url)|copy[-_ ]?(?:code|table|link|conversation|source|sources|citation|citations|url)|(?:link|share|history|source|sources|citation|citations|feedback|thumb|like|dislike|settings|export|docs|menu|more|notification|sidebar|regenerate|retry|upload|voice|submit|send|model|attach|new chat|home page|fullscreen|reload|close|edit|delete|search|deepthink|imagine|project|profile|upgrade)|复制(?:代码|表格|链接|会话|来源|引用)|链接|分享|历史|来源|引用|赞|踩|设置|导出|更多|菜单|通知|侧边栏|重新生成|上传|语音|提交|发送|编辑|删除|搜索/i;
-const inChromeScope = node => Boolean(closest(node, "nav,header,footer,aside,form,input,textarea,select,[contenteditable=true],pre,code,table,kbd,samp,[data-language]"));
-const messageCopyButton = button => {
-  if (!button || !visible(button) || inChromeScope(button)) return false;
-  const label = meta(button);
-  if (copyRejectPattern.test(label) && !/^(?:button\s+)?(?:copy|copied|复制|已复制)\b/i.test(label)) return false;
-  return explicitCopy(button) || looksCopyIcon(button);
+const editAction = control => /(?:^|[^a-z])(?:edit|edited|pencil|compose|modify|revise|square[-_ ]?pen|pen[-_ ]?line)(?:[^a-z]|$)|编辑|修改/.test(actionSignature(control));
+const likeAction = control => {
+  const signature = actionSignature(control);
+  if (/(?:^|[^a-z])(?:dislike|disliked|thumbs?[-_ ]?down|downvote|negative)(?:[^a-z]|$)|点踩|踩|不喜欢/.test(signature)) return false;
+  return /(?:^|[^a-z])(?:like|liked|unlike|thumbs?[-_ ]?up|upvote|positive)(?:[^a-z]|$)|点赞|取消点赞|赞/.test(signature);
+};
+const canonicalControl = control => {
+  if (!control || !visible(control)) return false;
+  return !qsa(controlSelector, control).some(child => child !== control && visible(child));
+};
+const pageChromeControl = control => Boolean(closest(control, "nav,aside,form,input,textarea,select,[contenteditable=true],pre,code,table,kbd,samp,[data-language],[data-code-block],[data-codeblock]"));
+const messageCopyControl = control => {
+  if (!canonicalControl(control) || pageChromeControl(control) || nestedCopy(control)) return false;
+  return explicitCopy(control) || looksCopyIcon(control);
+};
+const sameActionRow = (left, right) => {
+  const a = rectOf(left);
+  const b = rectOf(right);
+  if (!a || !b) return false;
+  const overlap = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+  const minHeight = Math.max(1, Math.min(a.height, b.height));
+  const centerGap = Math.abs(a.top + a.height / 2 - b.top - b.height / 2);
+  return overlap >= minHeight * 0.45 || centerGap <= Math.max(12, minHeight * 0.45);
+};
+const classifiedActionContext = (bar, copy, controls) => {
+  if (!bar || controls.length < 2 || controls.length > 12) return null;
+  const hasEdit = controls.some(control => control !== copy && editAction(control));
+  const hasLike = controls.some(control => control !== copy && likeAction(control));
+  if (hasEdit === hasLike) return null;
+  return { bar, copy, controls, role: hasEdit ? "user" : "assistant" };
+};
+const actionContext = copy => {
+  const exactBar = closest(copy, ".action-buttons,[data-testid*=action-buttons],[data-test-id*=action-buttons]");
+  if (exactBar) {
+    const exact = classifiedActionContext(exactBar, copy, qsa(controlSelector, exactBar).filter(canonicalControl));
+    if (exact) return exact;
+  }
+  for (let scope = copy && copy.parentElement, depth = 0; scope && depth < 10; scope = scope.parentElement, depth += 1) {
+    const controls = qsa(controlSelector, scope)
+      .filter(canonicalControl)
+      .filter(control => control === copy || sameActionRow(copy, control));
+    const classified = classifiedActionContext(scope, copy, controls);
+    if (classified) return classified;
+    if (scope === root || scope === document.body || scope === document.documentElement) break;
+  }
+  return null;
 };
 const compact = value => normalize(value).toLowerCase()
   .replace(/\[[^\]]+\]\([^)]*\)/g, "$1")
   .replace(/[^a-z0-9\u4e00-\u9fff]+/g, "");
 const isCopyProbe = value => /_?sch[\s_-]*copy[\s_-]*probe[\s_-]*[a-z0-9-]+_?/i.test(String(value || "")) || /_?sch[\s_-]*copy[\s_-]*probe[\s_-]*[a-z0-9-]+_?/i.test(normalize(value));
-const uiLine = /^(?:Copy|Copied|Copy prompt|Copy message|Copy response|Create share link|Like|Dislike|Regenerate|More actions|More options|Share|Edit|Search|DeepThink|Ask anything|Upgrade to SuperGrok|New conversation - Grok|AI-generated, for reference only|This response is AI-generated, for reference only|Necessary cookies only|Accept all cookies|Cookie Settings|\d+ sources?|\d+ web pages|Thought for .*|思考了.*|复制|已复制|点赞|点踩|更多|分享|编辑|搜索)$/i;
+const uiLine = /^(?:Copy|Copied|Copy prompt|Copy message|Copy response|Create share link|Like|Dislike|Regenerate|More actions|More options|Share|Edit|Search|DeepThink|Ask anything|Upgrade to SuperGrok|New conversation - Grok|AI-generated, for reference only|This response is AI-generated, for reference only|Necessary cookies only|Accept all cookies|Cookie Settings|\d+ sources?|\d+ web pages|Thought for .*|Worked for .*|思考了.*|工作了.*|复制|已复制|点赞|点踩|更多|分享|编辑|搜索)$/i;
 const cleanCopied = value => {
   const lines = normalize(value)
     .replace(/\r\n?/g, "\n")
@@ -182,61 +223,51 @@ const hoverElement = node => {
     node.dispatchEvent(new MouseEvent("mousemove", mouse));
   } catch (error) {}
 };
-const revealForCopy = async button => {
-  try { api.reveal(button); } catch (error) {}
-  for (let node = button; node && node !== root && node !== document.body; node = node.parentElement) hoverElement(node);
-  hoverElement(button);
+const revealForCopy = async action => {
+  try { api.reveal(action.bar); } catch (error) {}
+  for (let node = action.copy; node && node !== root && node !== document.body; node = node.parentElement) hoverElement(node);
+  hoverElement(action.copy);
   await api.sleep(140);
-  try { api.reveal(button); } catch (error) {}
-  hoverElement(button);
+  try { api.reveal(action.copy); } catch (error) {}
+  hoverElement(action.copy);
 };
-const grokCopyButtons = () => {
-  const buttons = [];
-  const seen = new Set();
-  for (const button of qsa("button,[role=button]", root).filter(messageCopyButton).sort(order)) {
-    if (seen.has(button)) continue;
-    seen.add(button);
-    buttons.push(button);
+const messageActions = () => {
+  const actions = [];
+  const seenBars = new Set();
+  for (const copy of qsa(controlSelector, root).filter(messageCopyControl).sort(order)) {
+    const action = actionContext(copy);
+    if (!action || seenBars.has(action.bar)) continue;
+    seenBars.add(action.bar);
+    actions.push(action);
   }
-  return buttons;
+  return actions.sort((a, b) => order(a.copy, b.copy));
 };
-const copyButtonText = async (button, role, userExpected = "") => {
-  const attempts = role === "assistant" ? 2 : 1;
+const copyActionText = async (action, lastUser = "") => {
+  const attempts = action.role === "assistant" ? 2 : 1;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     if (attempt) await api.sleep(140);
-    await revealForCopy(button);
-    const raw = await api.copy(button, role === "assistant" ? copyOptions : { ...copyOptions, copyTimeoutMs: 2200, copyCaptureGraceMs: 220 });
+    await revealForCopy(action);
+    const raw = await api.copy(action.copy, action.role === "assistant" ? copyOptions : { ...copyOptions, copyTimeoutMs: 2200, copyCaptureGraceMs: 220 });
     let text = useful(raw);
-    if (role === "assistant") {
-      text = stripUserPromptPrefix(text, userExpected);
-      if (userExpected && compact(text) === compact(userExpected)) text = "";
+    if (action.role === "assistant") {
+      text = stripUserPromptPrefix(text, lastUser);
+      if (lastUser && compact(text) === compact(lastUser)) text = "";
     }
-    if (text && (role === "user" ? text.length <= 12000 : text.length >= 8)) return text;
+    if (text && (action.role === "user" ? text.length <= 12000 : text.length >= 2)) return text;
     await escapeMenus();
   }
   return "";
 };
-const grokCopyButtonMessages = async () => {
-  const buttons = grokCopyButtons().slice(0, 32);
-  const out = [];
-  const seen = new Set();
-  let nextRole = "user";
-  let lastUser = "";
-  for (const button of buttons) {
-    const role = nextRole;
-    const text = await copyButtonText(button, role, role === "assistant" ? lastUser : "");
-    if (!text) continue;
-    const key = role + "\n" + compact(text);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push({ role, text });
-    if (role === "user") lastUser = text;
-    nextRole = role === "user" ? "assistant" : "user";
-    if (out.length >= 12) break;
-    await api.sleep(80);
-  }
-  const merged = api.merge(out);
-  return merged.some(item => item.role === "user") && merged.some(item => item.role === "assistant") ? merged : [];
-};
 
-return await grokCopyButtonMessages();
+const out = [];
+let lastUser = "";
+for (const action of messageActions().slice(-24)) {
+  const text = await copyActionText(action, action.role === "assistant" ? lastUser : "");
+  if (!text) continue;
+  out.push({ role: action.role, text });
+  if (action.role === "user") lastUser = text;
+  if (out.length >= 12) break;
+  await api.sleep(80);
+}
+const merged = api.merge(out);
+return merged.some(item => item.role === "user") && merged.some(item => item.role === "assistant") ? merged : [];

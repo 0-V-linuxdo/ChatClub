@@ -47,8 +47,8 @@ export function createImportExportSettings(ctx) {
 
   function importedOptionsHaveExecutableScripts(options = {}) {
     const hasCustomUserscript = (config = {}) => {
-      const customMode = config?.sourceMode === "custom" || config?.userscriptOverride === true || config?.builtIn === false;
-      const source = String(config?.customUserscript || (customMode ? config?.userscript : "") || "").trim();
+      const customMode = config?.sourceMode === "custom" || config?.builtIn === false;
+      const source = String(config?.customUserscript || "").trim();
       return customMode && Boolean(source);
     };
     return (Array.isArray(options.summarySiteConfigs) && options.summarySiteConfigs.some(hasCustomUserscript))
@@ -235,7 +235,14 @@ export function createImportExportSettings(ctx) {
 
   async function importConfigText(text, choices = {}) {
     const options = choices && typeof choices === "object" ? choices : {};
-    const inspected = inspectImportedConfig(JSON.parse(text));
+    let parsed = JSON.parse(text);
+    const legacyScriptConfig = [parsed?.options?.summarySiteConfigs, parsed?.options?.topicDeleteSiteConfigs]
+      .some((items) => Array.isArray(items) && items.some((item) => item && typeof item === "object" && Object.hasOwn(item, "userscript")));
+    if (legacyScriptConfig) {
+      const { migrateLegacyScriptConfig } = await import("../../shared/script-config-migration.js");
+      parsed = { ...parsed, options: await migrateLegacyScriptConfig(parsed.options) };
+    }
+    const inspected = inspectImportedConfig(parsed);
     const imported = inspected.data;
     if (typeof options.onDiagnostics === "function") {
       options.onDiagnostics(inspected.diagnostics, imported);

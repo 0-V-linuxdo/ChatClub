@@ -1,7 +1,7 @@
 import { t } from "../../shared/i18n.js";
 import { dedupePocketHistory, normalizePocketCardSize } from "../../shared/storage-schema.js";
 import { clear, el, modal, toast } from "../../ui/dom.js";
-import { requireControllerContext, requireControllerFunction } from "../controller-context.js";
+import { requireControllerContext, requireControllerFunction, validateControllerContract } from "../controller-contract.js";
 import { renderMarkdown } from "../summary/markdown.js";
 import {
   summaryPreviewPage,
@@ -19,6 +19,12 @@ const POCKET_CARD_GAP = 12;
 
 export function createPocketController(ctx) {
   const controllerName = "Pocket controller";
+  ctx = validateControllerContract(ctx, controllerName, {
+    state: "object", createId: "function", loadPocketHistory: "function", savePocketHistory: "function",
+    saveOptions: "function", openableTabUrl: "function", loadPocketEntryInFrame: "function",
+    restorePocketBatch: "function", setFramePointerBlockedForOverlay: "function",
+    effectiveFaviconUrl: "function", compactIconButton: "function", svgIcon: "function"
+  });
   const state = requireControllerContext(ctx, controllerName, "state");
   const createId = requireControllerFunction(ctx, controllerName, "createId");
   const loadPocketHistory = requireControllerFunction(ctx, controllerName, "loadPocketHistory");

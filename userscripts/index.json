@@ -1,5 +1,5 @@
 {
-  "summarySiteConfigVersion": 69,
+  "summarySiteConfigVersion": 71,
   "source": "dev/userscripts",
   "configs": [
     {
@@ -95,7 +95,7 @@
       "name": "Grok",
       "enabled": true,
       "builtIn": true,
-      "configVersion": 60,
+      "configVersion": 62,
       "hosts": [
         "grok.com",
         "*.grok.com",
@@ -114,14 +114,14 @@
       "copyTimeoutMs": 3600,
       "userscriptFallbackDelayMs": 1000,
       "userscriptFile": "grok.js",
-      "userscriptLength": 11523
+      "userscriptLength": 13420
     },
     {
       "id": "grok-dairoot",
       "name": "Grok Mirror",
       "enabled": true,
       "builtIn": true,
-      "configVersion": 66,
+      "configVersion": 68,
       "hosts": [
         "gk.dairoot.cn",
         "*.gk.dairoot.cn"
@@ -129,7 +129,7 @@
       "pathPrefixes": [],
       "fallbackMode": "structuredOnly",
       "userscriptFile": "grok-dairoot.js",
-      "userscriptLength": 11523,
+      "userscriptLength": 13420,
       "userscriptRunMode": "pageWorldFirst",
       "userscriptTimeoutMs": 36000,
       "domTextFallback": false,

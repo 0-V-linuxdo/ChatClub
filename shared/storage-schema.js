@@ -38,6 +38,7 @@ import { normalizeShortcutConfig as normalizeShortcutShape } from "./shortcuts.j
 import { TOPIC_DELETE_SITE_CONFIGS, mergeBuiltInTopicDeleteConfig } from "./topic-delete-sites.js";
 import { normalizeTopbarLayout } from "./topbar.js";
 import { normalizeHostList } from "./url-match.js";
+import { customUserscriptSource, isCustomUserscriptConfig } from "./userscript-config.js";
 
 export function createId(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -506,46 +507,18 @@ function normalizeLayoutPresets(raw, fallback = []) {
   return presets.length ? presets : fallbackPresets;
 }
 
-function normalizeUserscriptSource(value) {
-  return String(value || "").trim().replace(/\r\n?/g, "\n");
-}
-
 function summaryScriptId(item = {}, fallback = {}) {
   const file = text(item.userscriptFile || fallback.userscriptFile);
   return text(item.scriptId || fallback.scriptId || (file ? file.replace(/\.js$/i, "") : "") || item.id || fallback.id);
 }
 
-function summarySourceLooksLikeBuiltIn(id, source, currentSource = "") {
-  const normalized = normalizeUserscriptSource(source);
-  if (!normalized) return false;
-  if (normalized === normalizeUserscriptSource(currentSource)) return true;
-  const markerSets = {
-    chatgpt: ["copy-turn-action-button", "data-message-author-role"],
-    claude: ["Claude responded", "Copy message"],
-    gemini: ["Gemini said", "copy prompt"],
-    deepseek: ['const site = "deepseek"', "findDeepSeekTurns"],
-    grok: ['const site = "grok"', "grokCopyButtonMessages"],
-    grokMirror: ['const site = "grok"', "grokCopyButtonMessages"],
-    "grok-dairoot": ['const site = "grok"', "grokCopyButtonMessages"],
-    kagi: ["messageCopyButton", "referenceCopyButton"],
-    notion: ["notion", "copy-message-button"],
-    lobeHub: ["lobe", "message"],
-    lobehub: ["lobe", "message"],
-    typingMind: ["TypingMind", "copy"],
-    typingmind: ["TypingMind", "copy"]
-  };
-  const markers = markerSets[id] || [];
-  return Boolean(markers.length && markers.every((marker) => normalized.includes(marker)));
-}
-
 function normalizeSummarySiteConfig(item, fallback = {}, index = 0) {
   const builtIn = Boolean(fallback.builtIn || item?.builtIn);
-  const fallbackUserscript = String(fallback.userscript || "").trim();
-  const customUserscript = String(item?.customUserscript ?? item?.userscript ?? "").trim();
-  const sourceMode = item?.sourceMode === "custom" || (!builtIn && customUserscript)
-    ? "custom"
-    : "builtIn";
-  const userscript = sourceMode === "custom" ? customUserscript : fallbackUserscript;
+  const customUserscript = typeof item?.customUserscript === "string"
+    ? item.customUserscript
+    : typeof item?.userscript === "string" ? item.userscript : "";
+  const sourceMode = isCustomUserscriptConfig(item) || typeof item?.userscript === "string"
+    ? "custom" : "builtIn";
   const copyTimeoutMs = boundedNumber(item?.copyTimeoutMs, 0, 300, 10000);
   const config = {
     ...fallback,
@@ -565,11 +538,11 @@ function normalizeSummarySiteConfig(item, fallback = {}, index = 0) {
       ? text(item?.scriptVersion)
       : text(fallback.configVersion ?? fallback.scriptVersion),
     sourceMode,
-    userscript,
-    userscriptLength: userscript.length,
-    userscriptOverride: Boolean(builtIn && sourceMode === "custom")
+    userscriptLength: sourceMode === "custom" ? customUserscript.length : Number(fallback.userscriptLength) || 0
   };
-  if (sourceMode === "custom") config.customUserscript = userscript;
+  delete config.userscript;
+  delete config.userscriptOverride;
+  if (sourceMode === "custom") config.customUserscript = customUserscript;
   else delete config.customUserscript;
   if (copyTimeoutMs) config.copyTimeoutMs = copyTimeoutMs;
   else delete config.copyTimeoutMs;
@@ -583,13 +556,6 @@ function mergeBuiltInSummaryConfig(current = [], builtIn = SUMMARY_SITE_CONFIGS)
   const merged = [];
 
   const mergeBuiltIn = (item, existing = {}) => {
-    const existingUserscript = String(existing.customUserscript || existing.userscript || "").trim();
-    const knownBuiltInUserscript = summarySourceLooksLikeBuiltIn(item.id, existingUserscript, item.userscript);
-    const explicitCustom = existing.sourceMode === "custom" || Boolean(existing.customUserscript);
-    const sourceMode = explicitCustom || Boolean(existing.userscriptOverride && existingUserscript && !knownBuiltInUserscript)
-      ? "custom"
-      : "builtIn";
-    const userscript = sourceMode === "custom" ? existingUserscript : String(item.userscript || "").trim();
     return normalizeSummarySiteConfig({
       ...item,
       ...existing,
@@ -601,10 +567,7 @@ function mergeBuiltInSummaryConfig(current = [], builtIn = SUMMARY_SITE_CONFIGS)
       scriptType: "summary",
       scriptId: summaryScriptId(item),
       scriptVersion: item.configVersion,
-      sourceMode,
-      userscript,
-      customUserscript: sourceMode === "custom" ? userscript : "",
-      userscriptOverride: sourceMode === "custom"
+      sourceMode: isCustomUserscriptConfig(existing) ? "custom" : "builtIn"
     }, item);
   };
 
@@ -912,14 +875,12 @@ function dehydrateSummarySiteConfig(config = {}) {
   out.scriptType = out.scriptType || "summary";
   out.scriptId = summaryScriptId(out);
   if (sourceMode === "custom") {
-    out.customUserscript = String(config.customUserscript || config.userscript || "").trim();
-    out.userscriptOverride = Boolean(out.builtIn);
+    out.customUserscript = customUserscriptSource(config);
   } else {
     delete out.customUserscript;
-    delete out.userscriptOverride;
   }
   delete out.userscript;
-  delete out.userscriptLength;
+  delete out.userscriptOverride;
   return out;
 }
 
@@ -929,14 +890,12 @@ function dehydrateTopicDeleteSiteConfig(config = {}) {
   out.scriptType = out.scriptType || "topic-delete";
   out.scriptId = text(out.scriptId || out.id);
   if (sourceMode === "custom") {
-    out.customUserscript = String(config.customUserscript || config.userscript || "").trim();
-    out.userscriptOverride = Boolean(out.builtIn);
+    out.customUserscript = customUserscriptSource(config);
   } else {
     delete out.customUserscript;
-    delete out.userscriptOverride;
   }
   delete out.userscript;
-  delete out.userscriptLength;
+  delete out.userscriptOverride;
   return out;
 }
 

@@ -4,52 +4,9 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const zlib = require("node:zlib");
-const { targetManifest } = require("./manifest-targets.cjs");
+const { packagePlan, root } = require("./package-plan.cjs");
 
-const root = path.resolve(__dirname, "..");
 const checkOnly = process.argv.includes("--check");
-const exactFiles = ["chatClub.html", "manifest.json", "package-info.json"];
-const trees = {
-  "_locales": new Set([".json"]),
-  app: new Set([".js"]),
-  background: new Set([".js"]),
-  content: new Set([".js"]),
-  icons: new Set([".png", ".svg"]),
-  shared: new Set([".js"]),
-  styles: new Set([".css"]),
-  "topic-delete-userscripts": new Set([".js"]),
-  ui: new Set([".js"])
-};
-
-function collectTree(directory, extensions, prefix = directory) {
-  const absolute = path.join(root, directory);
-  if (!fs.statSync(absolute, { throwIfNoEntry: false })?.isDirectory()) {
-    throw new Error(`Pack allowlist directory is missing: ${directory}`);
-  }
-  const files = [];
-  for (const entry of fs.readdirSync(absolute, { withFileTypes: true })) {
-    const relative = `${prefix}/${entry.name}`;
-    if (entry.isDirectory()) files.push(...collectTree(path.join(directory, entry.name), extensions, relative));
-    else if (entry.isFile() && extensions.has(path.extname(entry.name))) files.push(relative);
-  }
-  return files;
-}
-
-function allowlistedFiles() {
-  const files = [...exactFiles];
-  for (const [directory, extensions] of Object.entries(trees)) {
-    files.push(...collectTree(directory, extensions));
-  }
-  for (const file of files) {
-    if (!fs.statSync(path.join(root, file), { throwIfNoEntry: false })?.isFile()) {
-      throw new Error(`Pack allowlist file is missing: ${file}`);
-    }
-    if (file === "output" || file.startsWith("output/") || file === "dist" || file.startsWith("dist/")) {
-      throw new Error(`Unsafe pack entry: ${file}`);
-    }
-  }
-  return [...new Set(files)].sort();
-}
 
 const crcTable = (() => {
   const table = new Uint32Array(256);
@@ -141,17 +98,8 @@ function targetArgument() {
   return target;
 }
 
-function targetFileAllowed(file, target) {
-  if (target === "firefox" && file === "background/trusted-input.js") return false;
-  if (target === "chromium" && file === "background/firefox-background.js") return false;
-  return true;
-}
-
-const sourceManifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
 const target = targetArgument();
-const files = allowlistedFiles().filter((file) => targetFileAllowed(file, target));
-const manifest = targetManifest(sourceManifest, target);
-const overrides = new Map([["manifest.json", Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`)]]);
+const { files, manifest, overrides } = packagePlan(target);
 const archive = zip(files, overrides);
 const secondArchive = zip(files, overrides);
 if (!archive.equals(secondArchive)) throw new Error("Deterministic archive verification failed");
@@ -159,9 +107,10 @@ const digest = crypto.createHash("sha256").update(archive).digest("hex");
 
 if (checkOnly) {
   const otherTarget = target === "chromium" ? "firefox" : "chromium";
-  const otherFiles = allowlistedFiles().filter((file) => targetFileAllowed(file, otherTarget));
-  const otherManifest = targetManifest(sourceManifest, otherTarget);
-  const otherOverrides = new Map([["manifest.json", Buffer.from(`${JSON.stringify(otherManifest, null, 2)}\n`)]]);
+  const {
+    files: otherFiles,
+    overrides: otherOverrides
+  } = packagePlan(otherTarget);
   const otherArchive = zip(otherFiles, otherOverrides);
   const otherSecondArchive = zip(otherFiles, otherOverrides);
   if (!otherArchive.equals(otherSecondArchive)) throw new Error(`${otherTarget} deterministic archive verification failed`);

@@ -2,6 +2,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const { verifyVersionState } = require("./version-state.cjs");
 
 const root = path.resolve(__dirname, "..");
 const errors = [];
@@ -87,6 +88,8 @@ if (versionMatch) {
 if (summaryVersionMatch && summaryIndex.summarySiteConfigVersion !== Number(summaryVersionMatch[1])) {
   fail("userscripts/index.json summarySiteConfigVersion must equal SUMMARY_SITE_CONFIG_VERSION");
 }
+
+for (const error of verifyVersionState()) fail(error);
 
 if (errors.length) {
   console.error("Version verification failed:");

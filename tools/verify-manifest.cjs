@@ -66,6 +66,7 @@ try {
 }
 
 if (manifest.manifest_version !== 3) fail("manifest_version must be 3");
+if (manifest.minimum_chrome_version !== "120") fail("minimum_chrome_version must be 120");
 addIconSet(manifest.icons, "icons");
 addIconSet(manifest.action?.default_icon, "action.default_icon");
 addReference(manifest.action?.default_popup, "action.default_popup");
@@ -144,12 +145,17 @@ if (manifest.declarative_net_request?.rule_resources?.length === 0) fail("empty 
 const firefox = targetManifest(manifest, "firefox");
 const chromium = targetManifest(manifest, "chromium");
 if (!chromium.background?.service_worker || chromium.background?.scripts) fail("Chromium target must use only the service worker entry");
+if (chromium.minimum_chrome_version !== "120") fail("Chromium target minimum version must be 120");
 if (firefox.background?.service_worker) fail("Firefox target must use the document background entry only");
+if ("minimum_chrome_version" in firefox) fail("Firefox target must not contain minimum_chrome_version");
 if (!firefox.background?.scripts?.includes("background/firefox-background.js")) fail("Firefox target background entry is missing");
 for (const permission of ["debugger", "favicon", "windows"]) {
   if ((firefox.permissions || []).includes(permission)) fail(`Firefox target contains Chromium-only permission ${permission}`);
 }
 if (!firefox.browser_specific_settings?.gecko?.id) fail("Firefox target requires a Gecko add-on id");
+if (firefox.browser_specific_settings?.gecko?.strict_min_version !== "136.0") {
+  fail("Firefox target minimum version must be 136.0");
+}
 if (!(firefox.browser_specific_settings?.gecko?.data_collection_permissions?.required || []).length) {
   fail("Firefox target requires a data collection declaration");
 }

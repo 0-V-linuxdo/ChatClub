@@ -10,11 +10,14 @@ const constantsSource = fs.readFileSync(path.join(root, "shared/constants.js"), 
 const i18nSource = fs.readFileSync(path.join(root, "shared/i18n.js"), "utf8");
 const shortcutsSource = fs.readFileSync(path.join(root, "shared/shortcuts.js"), "utf8");
 const storageSource = fs.readFileSync(path.join(root, "shared/storage-schema.js"), "utf8");
-const postMessageSource = fs.readFileSync(path.join(root, "shared/post-message.js"), "utf8");
 const protocolSource = fs.readFileSync(path.join(root, "shared/protocol.js"), "utf8");
-const contentProtocolSource = fs.readFileSync(path.join(root, "content/protocol.js"), "utf8");
-const mainSource = fs.readFileSync(path.join(root, "app/main.js"), "utf8");
-const serviceWorkerSource = fs.readFileSync(path.join(root, "background/service-worker.js"), "utf8");
+const contentEntrySource = fs.readFileSync(path.join(root, "content-src/content.js"), "utf8");
+const mainSource = ["app/main.js", "app/runtime.js"]
+  .map((file) => fs.readFileSync(path.join(root, file), "utf8"))
+  .join("\n");
+const serviceWorkerSource = ["background/service-worker.js", "background/runtime.js"]
+  .map((file) => fs.readFileSync(path.join(root, file), "utf8"))
+  .join("\n");
 const stateSource = fs.readFileSync(path.join(root, "app/state.js"), "utf8");
 const shortcutSettingsSource = fs.readFileSync(path.join(root, "app/settings/shortcuts.js"), "utf8");
 const tooltipSource = fs.readFileSync(path.join(root, "ui/tooltip.js"), "utf8");
@@ -592,10 +595,7 @@ assert.deepEqual(plain(importedLegacyBundle), plain(migrated), "old shortcut bac
 // migration code, never in a canonical default profile.
 const expectedDefaults = plain(shortcuts.normalizeShortcutConfig(sharedDefault));
 const expectedActions = plain(shortcuts.ALL_SHORTCUT_ACTIONS);
-for (const [label, source] of [
-  ["shared/constants.js", constantsSource],
-  ["content/content.js", contentSource]
-]) {
+for (const [label, source] of [["shared/constants.js", constantsSource]]) {
   const runtimeDefault = evaluateLiteral(
     source,
     "DEFAULT_SHORTCUT_CONFIG",
@@ -617,10 +617,7 @@ for (const [label, source] of [
     `${label} shortcut defaults must stay synchronized`
   );
 }
-for (const [label, source, declaration] of [
-  ["shared/shortcuts.js", shortcutsSource, "ALL_SHORTCUT_ACTIONS"],
-  ["content/content.js", contentSource, "SHORTCUT_ACTIONS"]
-]) {
+for (const [label, source, declaration] of [["shared/shortcuts.js", shortcutsSource, "ALL_SHORTCUT_ACTIONS"]]) {
   assert.deepEqual(
     plain(evaluateLiteral(source, declaration, "[")),
     expectedActions,
@@ -656,14 +653,19 @@ const shortcutRelaySource = protocolString(
   "export const EXTENSION_RUNTIME_RELAY_SOURCE\\s*=\\s*"
 );
 assert.match(shortcutRelaySource, /^chatclub:runtime-relay:\d/, "shared shortcut relay source must be versioned");
-assert.equal(
-  protocolString(
-    contentProtocolSource,
-    "EXTENSION_RUNTIME_RELAY_SOURCE",
-    '"?EXTENSION_RUNTIME_RELAY_SOURCE"?:\\s*'
-  ),
-  shortcutRelaySource,
-  "content protocol bootstrap must match the shared runtime relay source"
+assert.ok(
+  contentSource.includes(JSON.stringify(shortcutRelaySource)),
+  "generated content must bundle the shared runtime relay source"
+);
+assert.match(
+  contentEntrySource,
+  /import\s*\{[\s\S]*?\bmatchShortcut\b[\s\S]*?\bnormalizeShortcutConfig\b[\s\S]*?\}\s*from "\.\.\/shared\/shortcuts\.js";/,
+  "content source must consume the shared shortcut runtime"
+);
+assert.doesNotMatch(
+  contentEntrySource,
+  /function\s+(?:matchShortcut|normalizeShortcutConfig|digitMatch)\s*\(/,
+  "content source must not fork the shared shortcut implementation"
 );
 assert.match(
   contentSource,

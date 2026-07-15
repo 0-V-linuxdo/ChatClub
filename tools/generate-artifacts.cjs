@@ -1,19 +1,33 @@
 #!/usr/bin/env node
 
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
+const esbuild = require("esbuild");
 
 const root = path.resolve(__dirname, "..");
 const checkOnly = process.argv.includes("--check");
+const contentOnly = process.argv.includes("--content-only");
+const outputRootFlag = process.argv.indexOf("--output-root");
+const contentOutputRoot = outputRootFlag >= 0
+  ? path.resolve(process.argv[outputRootFlag + 1] || "")
+  : root;
 const stale = [];
 let generatedCount = 0;
+
+if (outputRootFlag >= 0 && !process.argv[outputRootFlag + 1]) {
+  throw new Error("--output-root requires a directory");
+}
+if (checkOnly && contentOutputRoot !== root) {
+  throw new Error("--check and --output-root cannot be combined");
+}
 
 function read(relativePath) {
   return fs.readFileSync(path.join(root, relativePath), "utf8");
 }
 
-function expectedFile(relativePath, expected) {
-  const absolutePath = path.join(root, relativePath);
+function expectedFile(relativePath, expected, base = root) {
+  const absolutePath = path.join(base, relativePath);
   const actual = fs.existsSync(absolutePath) ? fs.readFileSync(absolutePath, "utf8") : null;
   if (actual === expected) return;
   if (checkOnly) {
@@ -23,7 +37,7 @@ function expectedFile(relativePath, expected) {
   fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
   fs.writeFileSync(absolutePath, expected);
   generatedCount += 1;
-  console.log(`generated ${relativePath}`);
+  console.log(`generated ${path.relative(root, absolutePath) || relativePath}`);
 }
 
 function summaryBody(relativePath) {
@@ -37,26 +51,12 @@ function summaryBody(relativePath) {
   return body;
 }
 
-function summaryRegistry(configs, runtimeVersion) {
-  let output = "(() => {\n  const scripts = Object.create(null);\n";
-  for (const config of configs) {
-    output += `  scripts[${JSON.stringify(config.id)}] = async function(api) {\n`;
-    output += `${config.userscript}\n`;
-    output += "  };\n";
-    output += `  scripts[${JSON.stringify(config.userscriptFile)}] = scripts[${JSON.stringify(config.id)}];\n`;
-  }
-  output += `  window.__CHATCLUB_SUMMARY_SCRIPTS_VERSION__ = ${JSON.stringify(runtimeVersion)};\n`;
-  output += "  window.__CHATCLUB_SUMMARY_SCRIPTS__ = scripts;\n})();\n";
-  return output;
-}
-
-function generateSummary(protocol) {
+function summaryConfigs() {
   const indexPath = "userscripts/index.json";
   const index = JSON.parse(read(indexPath));
   if (!Array.isArray(index.configs) || !index.configs.length) {
     throw new Error(`${indexPath}: configs must be a non-empty array`);
   }
-
   const ids = new Set();
   const files = new Set();
   const configs = index.configs.map((config) => {
@@ -71,29 +71,106 @@ function generateSummary(protocol) {
     config.userscriptLength = userscript.length;
     return { ...config, userscript };
   });
-
-  expectedFile(indexPath, `${JSON.stringify(index, null, 2)}\n`);
-  expectedFile(
-    "shared/summary-sites.js",
-    `export const SUMMARY_SITE_CONFIGS = ${JSON.stringify(configs, null, 2)};\n`
-  );
-
-  const registry = summaryRegistry(configs, protocol.CONTENT_BRIDGE_VERSION);
-  expectedFile("content/summary-userscripts.js", registry);
-
-  const mainPath = "content/summary-userscripts-main.js";
-  const currentMain = read(mainPath);
-  const registryStartMarker = "  const scripts = Object.create(null);\n";
-  const registryEndMarker = "  window.__CHATCLUB_SUMMARY_SCRIPTS__ = scripts;\n";
-  const registryStart = currentMain.indexOf(registryStartMarker);
-  const registryEnd = currentMain.indexOf(registryEndMarker);
-  if (registryStart < 0 || registryEnd < registryStart) {
-    throw new Error(`${mainPath}: generated registry boundary not found`);
+  if (!contentOnly && contentOutputRoot === root) {
+    expectedFile(indexPath, `${JSON.stringify(index, null, 2)}\n`);
   }
-  const runtimeOffset = registryEnd + registryEndMarker.length;
-  const generatedRegistryBody = registry.slice("(() => {\n".length, -"})();\n".length);
-  const expectedMain = currentMain.slice(0, registryStart) + generatedRegistryBody + currentMain.slice(runtimeOffset);
-  return expectedMain;
+  return configs;
+}
+
+function summaryRegistryModule(configs, runtimeVersion) {
+  let output = "export function createSummaryRunnerRegistry() {\n  const scripts = Object.create(null);\n";
+  for (const config of configs) {
+    output += `  scripts[${JSON.stringify(config.id)}] = async function(api) {\n`;
+    output += `${config.userscript}\n`;
+    output += "  };\n";
+    output += `  scripts[${JSON.stringify(config.userscriptFile)}] = scripts[${JSON.stringify(config.id)}];\n`;
+  }
+  output += `  Object.defineProperty(scripts, "runtimeVersion", { value: ${JSON.stringify(runtimeVersion)} });\n`;
+  output += "  return scripts;\n}\n";
+  return output;
+}
+
+async function protocolModule() {
+  const absolutePath = path.join(root, "shared/protocol.js");
+  return import(`${require("node:url").pathToFileURL(absolutePath).href}?generated=${Date.now()}`);
+}
+
+async function validateSummaryCatalog(configs) {
+  const absolutePath = path.join(root, "shared/summary-sites.js");
+  const module = await import(`${require("node:url").pathToFileURL(absolutePath).href}?generated=${Date.now()}`);
+  const catalog = module.SUMMARY_SITE_CONFIGS;
+  if (!Array.isArray(catalog) || catalog.length !== configs.length) {
+    throw new Error("shared/summary-sites.js: lightweight catalog does not match userscripts/index.json");
+  }
+  for (const expected of configs) {
+    const descriptor = catalog.find((item) => item?.id === expected.id);
+    if (!descriptor) throw new Error(`shared/summary-sites.js: missing ${expected.id}`);
+    if (Object.hasOwn(descriptor, "userscript")) {
+      throw new Error(`shared/summary-sites.js: ${expected.id} must not embed a userscript body`);
+    }
+    for (const field of ["userscriptFile", "userscriptLength", "configVersion"]) {
+      if (descriptor[field] !== expected[field]) {
+        throw new Error(`shared/summary-sites.js: ${expected.id}.${field} drifted from userscripts/index.json`);
+      }
+    }
+  }
+}
+
+const CONTENT_ENTRIES = Object.freeze({
+  "content/content.js": "content-src/content.js",
+  "content/preload.js": "content-src/preload.js",
+  "content/summary-userscripts.js": "content-src/summary-userscripts.js",
+  "content/summary-userscripts-main.js": "content-src/summary-userscripts-main.js",
+  "content/message-navigator.js": "content-src/message-navigator.js",
+  "content/grok-cookie-bridge.js": "content-src/grok-cookie-bridge.js"
+});
+
+async function buildContent(configs, protocol) {
+  const registrySource = summaryRegistryModule(configs, protocol.CONTENT_BRIDGE_VERSION);
+  const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "chatclub-content-build-"));
+  const registryPlugin = {
+    name: "chatclub-summary-registry",
+    setup(build) {
+      build.onResolve({ filter: /^chatclub:summary-registry$/ }, () => ({
+        path: "summary-registry",
+        namespace: "chatclub-generated"
+      }));
+      build.onLoad({ filter: /.*/, namespace: "chatclub-generated" }, () => ({
+        contents: registrySource,
+        loader: "js",
+        resolveDir: root
+      }));
+    }
+  };
+
+  try {
+    for (const [outputPath, entryPath] of Object.entries(CONTENT_ENTRIES)) {
+      const temporaryOutput = path.join(temporaryRoot, outputPath);
+      await esbuild.build({
+        absWorkingDir: root,
+        entryPoints: [entryPath],
+        outfile: temporaryOutput,
+        bundle: true,
+        format: "iife",
+        platform: "browser",
+        target: ["chrome120", "firefox136"],
+        splitting: false,
+        minify: false,
+        sourcemap: false,
+        charset: "utf8",
+        legalComments: "inline",
+        plugins: [registryPlugin],
+        write: true,
+        logLevel: "silent"
+      });
+      const output = fs.readFileSync(temporaryOutput, "utf8");
+      if (/\bimport\s*\(/.test(output)) throw new Error(`${outputPath}: runtime dynamic import is forbidden`);
+      if (/\beval\s*\(|\bnew\s+Function\s*\(/.test(output)) throw new Error(`${outputPath}: eval/Function is forbidden`);
+      expectedFile(outputPath, output, contentOutputRoot);
+    }
+  } finally {
+    fs.rmSync(temporaryRoot, { recursive: true, force: true });
+  }
 }
 
 async function generateDeleteSites() {
@@ -122,63 +199,11 @@ async function generateDeleteSites() {
   }
 }
 
-async function generateProtocol() {
-  const moduleSource = read("shared/protocol.js");
-  const moduleUrl = `data:text/javascript;base64,${Buffer.from(moduleSource).toString("base64")}`;
-  const module = await import(moduleUrl);
-  const protocol = module.CONTENT_PROTOCOL;
-  if (!protocol || typeof protocol !== "object" || !Object.keys(protocol).length) {
-    throw new Error("shared/protocol.js: CONTENT_PROTOCOL must be a non-empty object");
-  }
-  const serialized = JSON.stringify(protocol, null, 2)
-    .split("\n")
-    .map((line, index) => index === 0 ? line : `  ${line}`)
-    .join("\n");
-  const bootstrap = `(() => {\n  // Generated from shared/protocol.js. Run \`npm run generate\` after changing\n  // protocol versions; \`npm run verify:generated\` rejects drift.\n  globalThis.__CHATCLUB_PROTOCOL__ = Object.freeze(${serialized});\n})();\n`;
-  expectedFile("content/protocol.js", bootstrap);
-  return { protocol, serialized, bootstrap };
-}
-
-const LEGACY_CONTENT_PROTOCOL_PRELUDE = `(() => {\n  const PROTOCOL = globalThis.__CHATCLUB_PROTOCOL__;\n  if (!PROTOCOL) throw new Error("ChatClub protocol bootstrap is unavailable");\n`;
-const EMBEDDED_PROTOCOL_START = "  // <chatclub-generated-protocol>\n";
-const EMBEDDED_PROTOCOL_END = "  // </chatclub-generated-protocol>\n";
-
-function embeddedProtocolBlock(serializedProtocol) {
-  return `${EMBEDDED_PROTOCOL_START}  const PROTOCOL = Object.freeze(${serializedProtocol});\n${EMBEDDED_PROTOCOL_END}`;
-}
-
-function embedProtocol(sourcePath, source, serializedProtocol) {
-  const block = embeddedProtocolBlock(serializedProtocol);
-  if (source.startsWith(LEGACY_CONTENT_PROTOCOL_PRELUDE)) {
-    return `(() => {\n${block}${source.slice(LEGACY_CONTENT_PROTOCOL_PRELUDE.length)}`;
-  }
-  const start = source.indexOf(EMBEDDED_PROTOCOL_START);
-  const secondStart = source.indexOf(EMBEDDED_PROTOCOL_START, start + 1);
-  const endStart = source.indexOf(EMBEDDED_PROTOCOL_END, start + EMBEDDED_PROTOCOL_START.length);
-  const secondEnd = source.indexOf(EMBEDDED_PROTOCOL_END, endStart + EMBEDDED_PROTOCOL_END.length);
-  if (!source.startsWith("(() => {\n") || start < 0 || secondStart !== -1 || endStart < start || secondEnd !== -1) {
-    throw new Error(`${sourcePath}: expected exactly one generated protocol block in the runtime IIFE`);
-  }
-  const end = endStart + EMBEDDED_PROTOCOL_END.length;
-  return source.slice(0, start) + block + source.slice(end);
-}
-
-function generateEmbeddedProtocolRuntimes(protocol, expectedSummaryMain) {
-  const runtimes = [
-    ["content/preload.js", read("content/preload.js")],
-    ["content/content.js", read("content/content.js")],
-    ["content/summary-userscripts-main.js", expectedSummaryMain]
-  ];
-  for (const [runtimePath, source] of runtimes) {
-    expectedFile(runtimePath, embedProtocol(runtimePath, source, protocol.serialized));
-  }
-}
-
 (async () => {
-  const protocol = await generateProtocol();
-  const expectedSummaryMain = generateSummary(protocol.protocol);
-  generateEmbeddedProtocolRuntimes(protocol, expectedSummaryMain);
-  await generateDeleteSites();
+  const [protocol, configs] = await Promise.all([protocolModule(), Promise.resolve(summaryConfigs())]);
+  await validateSummaryCatalog(configs);
+  await buildContent(configs, protocol);
+  if (!contentOnly && contentOutputRoot === root) await generateDeleteSites();
   if (stale.length) {
     console.error("Generated artifacts are stale:");
     for (const relativePath of stale) console.error(`  - ${relativePath}`);

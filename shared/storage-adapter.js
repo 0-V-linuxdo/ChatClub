@@ -13,6 +13,7 @@ import {
   normalizePromptSendHistory,
   normalizeShortcutConfig
 } from "./storage-schema.js";
+import { migrateLegacyScriptConfig } from "./script-config-migration.js";
 
 function plainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -20,6 +21,18 @@ function plainObject(value) {
 
 function hasField(value, key) {
   return Object.prototype.hasOwnProperty.call(value, key);
+}
+
+function hasLegacyUserscript(value) {
+  if (!plainObject(value)) return false;
+  return [value.summarySiteConfigs, value.topicDeleteSiteConfigs].some((items) => (
+    Array.isArray(items) && items.some((item) => plainObject(item) && hasField(item, "userscript"))
+  ));
+}
+
+async function migrateOptionsIfNeeded(value) {
+  if (!hasLegacyUserscript(value)) return value;
+  return migrateLegacyScriptConfig(value);
 }
 
 export async function storageGet(key) {
@@ -31,7 +44,8 @@ export async function storageSet(key, value) {
 }
 
 export async function loadOptions() {
-  const options = normalizeOptions(await storageGet(STORAGE_KEYS.options));
+  const raw = await storageGet(STORAGE_KEYS.options);
+  const options = normalizeOptions(await migrateOptionsIfNeeded(raw));
   await storageSet(STORAGE_KEYS.options, dehydrateOptions(options));
   return options;
 }
@@ -117,7 +131,7 @@ export async function readConfigBundleState(selectedKeys, fallbackState = {}) {
   const selected = new Set(normalizeConfigBundleKeys(selectedKeys));
   const source = plainObject(fallbackState) ? fallbackState : {};
   const state = { ...source };
-  if (selected.has("options")) state.options = normalizeOptions(await storageGet(STORAGE_KEYS.options));
+  if (selected.has("options")) state.options = normalizeOptions(await migrateOptionsIfNeeded(await storageGet(STORAGE_KEYS.options)));
   if (selected.has("customConfig")) state.customConfig = normalizeCustomConfig(await storageGet(STORAGE_KEYS.customConfig));
   if (selected.has("promptLibrary")) state.promptLibrary = normalizePromptLibrary(await storageGet(STORAGE_KEYS.promptLibrary));
   if (selected.has("promptSendHistory")) state.promptSendHistory = normalizePromptSendHistory(await storageGet(STORAGE_KEYS.promptSendHistory));
@@ -139,7 +153,7 @@ export async function saveImportedConfigPatch(patch = {}) {
   const updates = {};
   const normalized = {};
   if (hasField(source, "options")) {
-    normalized.options = normalizeOptions(source.options);
+    normalized.options = normalizeOptions(await migrateOptionsIfNeeded(source.options));
     updates[STORAGE_KEYS.options] = dehydrateOptions(normalized.options);
   }
   if (hasField(source, "customConfig")) {
