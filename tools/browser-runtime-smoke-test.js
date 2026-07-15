@@ -17,6 +17,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
   assert.deepEqual(manifest.background.preferred_environment, ["document", "service_worker"]);
   assert.ok(!manifest.permissions.includes("userScripts"));
   assert.ok(manifest.optional_permissions.includes("userScripts"));
+  assert.ok(manifest.permissions.includes("cookies"));
 
   const firefoxSource = read("background/firefox-background.js");
   assert.match(firefoxSource, /import "\.\/service-worker\.js"/);
@@ -28,8 +29,11 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
   });
   assert.ok(!firefoxManifest.permissions.includes("debugger"));
   assert.ok(!firefoxManifest.permissions.includes("favicon"));
+  assert.ok(!firefoxManifest.permissions.includes("cookies"));
   assert.ok(firefoxManifest.browser_specific_settings.gecko.id);
-  assert.deepEqual(targetManifest(manifest, "chromium").background, {
+  const chromiumManifest = targetManifest(manifest, "chromium");
+  assert.ok(chromiumManifest.permissions.includes("cookies"));
+  assert.deepEqual(chromiumManifest.background, {
     service_worker: "background/service-worker.js",
     type: "module"
   });
@@ -41,6 +45,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
   assert.match(serviceWorker, /if \(summaryMatches\.length\)/);
   assert.match(serviceWorker, /if \(messageNavigatorMatches\.length\)/);
   assert.match(serviceWorker, /js: \["content\/preload\.js"\]/);
+  assert.match(serviceWorker, /js: \["content\/grok-cookie-bridge\.js"\]/);
   assert.match(serviceWorker, /js: \["content\/summary-userscripts-main\.js"\]/);
   assert.match(serviceWorker, /js: \["content\/content\.js"\]/);
   assert.doesNotMatch(serviceWorker, /content\/protocol\.js/);

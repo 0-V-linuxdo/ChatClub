@@ -5,7 +5,7 @@
   "description": "__MSG_extension_description__",
   "default_locale": "zh_CN",
   "version": "2026.7.15",
-  "version_name": "「2026-07-15｜05:09:57」",
+  "version_name": "「2026-07-15｜14:01:28」",
   "homepage_url": "https://chatclub.local/",
   "action": {
     "default_title": "ChatClub",
@@ -36,6 +36,7 @@
   "options_page": "chatClub.html",
   "permissions": [
     "storage",
+    "cookies",
     "declarativeNetRequest",
     "scripting",
     "webNavigation",

@@ -7,27 +7,44 @@ import { ALL_SHORTCUT_ACTIONS } from "../shared/shortcuts.js";
 import {
   CUSTOM_SUMMARY_EXECUTOR,
   EXTENSION_RUNTIME_RELAY_SOURCE,
+  GROK_COOKIE_BRIDGE_VERSION,
   SECURE_FRAME_COMMAND_SOURCE
 } from "../shared/protocol.js";
 import { configMatchesHref, normalizeHost } from "../shared/url-match.js";
+import {
+  chromiumExtensionPartitionKey,
+  clearGrokTombstonesForStore,
+  cookieStoreIdForTab,
+  grokCookieChangeOwnedByBridge,
+  isGrokSessionUrl,
+  isPartitionedGrokTargetChange,
+  isUnpartitionedGrokSourceChange,
+  managedGrokPartitionKeys,
+  releaseChangedGrokPartition,
+  removeAllManagedGrokPartitions,
+  removeManagedGrokPartitionsExcept,
+  syncGrokSessionCookies
+} from "./grok-cookie-bridge.js";
 
 const chrome = globalThis.browser || globalThis.chrome;
 if (!chrome) throw new Error("[ChatClub] Extension API namespace is unavailable");
 
 const PRELOAD_SCRIPT_ID = "chatclub-preload";
+const GROK_COOKIE_SCRIPT_ID = "chatclub-grok-cookie-bridge";
 const SUMMARY_PAGE_SCRIPT_ID = "chatclub-summary-userscripts-main";
 const SUMMARY_SCRIPT_ID = "chatclub-summary-userscripts";
 const MESSAGE_NAVIGATOR_SCRIPT_ID = "chatclub-message-navigator";
 const CONTENT_SCRIPT_ID = "chatclub-content";
 const REGISTERED_CONTENT_SCRIPT_IDS = Object.freeze([
   PRELOAD_SCRIPT_ID,
+  GROK_COOKIE_SCRIPT_ID,
   SUMMARY_PAGE_SCRIPT_ID,
   SUMMARY_SCRIPT_ID,
   MESSAGE_NAVIGATOR_SCRIPT_ID,
   CONTENT_SCRIPT_ID
 ]);
 const REGISTERED_CONTENT_SCRIPT_ID_SET = new Set(REGISTERED_CONTENT_SCRIPT_IDS);
-const CORE_CONTENT_SCRIPT_ID_SET = new Set([PRELOAD_SCRIPT_ID, CONTENT_SCRIPT_ID]);
+const CORE_CONTENT_SCRIPT_ID_SET = new Set([PRELOAD_SCRIPT_ID, GROK_COOKIE_SCRIPT_ID, CONTENT_SCRIPT_ID]);
 const TOPIC_DELETE_USERSCRIPT_FILE_PATTERN = /^topic-delete-userscripts\/[a-z0-9-]+\.user\.js$/i;
 const CUSTOM_SUMMARY_SOURCE_MAX_BYTES = 1024 * 1024;
 const CUSTOM_SUMMARY_RESULT_MAX_BYTES = 2 * 1024 * 1024;
@@ -48,8 +65,15 @@ const secureFrameCommands = new Set([
 const shortcutActions = new Set(ALL_SHORTCUT_ACTIONS);
 let secureFrameContextsHydration = null;
 let secureFrameContextsWriteChain = Promise.resolve();
+let grokCookieBridgeChain = Promise.resolve();
+const grokSourceChangeTimers = new Map();
+const grokSourceChangedAuthNames = new Map();
+const grokFramePreflights = new Map();
+const grokFallbackReloadCounts = new Map();
+const GROK_FRAME_PREFLIGHT_MAX_AGE_MS = 60 * 1000;
 const CONTENT_BRIDGE_FILES = Object.freeze([
   Object.freeze({ file: "content/preload.js", world: "MAIN" }),
+  Object.freeze({ file: "content/grok-cookie-bridge.js", world: "ISOLATED" }),
   Object.freeze({ file: "content/message-navigator.js", world: "ISOLATED" }),
   Object.freeze({ file: "content/content.js", world: "ISOLATED" })
 ]);
@@ -177,6 +201,208 @@ function extensionPageSender(sender = {}) {
   const senderUrl = String(sender?.url || "");
   return Boolean(extensionBase && senderUrl.startsWith(extensionBase));
 }
+
+function verifiedExtensionPageSender(sender = {}) {
+  const tabId = sender?.tab?.id;
+  const extensionBase = chrome.runtime.getURL("");
+  if (
+    !extensionPageSender(sender)
+    || !Number.isInteger(tabId)
+    || !String(sender?.tab?.url || "").startsWith(extensionBase)
+  ) {
+    throw new Error("Frame preparation requires the ChatClub extension page");
+  }
+  return tabId;
+}
+
+function grokFramePreflightId(value) {
+  const id = String(value || "");
+  return /^[a-z0-9][a-z0-9._:-]{15,191}$/i.test(id) ? id : "";
+}
+
+function pruneGrokFramePreflights(now = Date.now()) {
+  for (const [id, preflight] of grokFramePreflights) {
+    if (now - Number(preflight?.startedAt || 0) > GROK_FRAME_PREFLIGHT_MAX_AGE_MS) {
+      grokFramePreflights.delete(id);
+    }
+  }
+}
+
+function registerGrokFramePreflight(message = {}, sender = {}) {
+  if (!isGrokSessionUrl(message.url)) return "";
+  const id = grokFramePreflightId(message.preflightId);
+  if (!id) return "";
+  const tabId = verifiedExtensionPageSender(sender);
+  pruneGrokFramePreflights();
+  grokFramePreflights.set(id, {
+    tabId,
+    url: String(message.url || ""),
+    startedAt: Date.now(),
+    fallbackMarked: false
+  });
+  return id;
+}
+
+function finishGrokFramePreflight(id) {
+  if (id) grokFramePreflights.delete(id);
+}
+
+function markGrokFramePreflightFallback(message = {}, sender = {}) {
+  const tabId = verifiedExtensionPageSender(sender);
+  const id = grokFramePreflightId(message.preflightId);
+  const preflight = id ? grokFramePreflights.get(id) : null;
+  if (!preflight || preflight.tabId !== tabId || preflight.url !== String(message.url || "")) return false;
+  if (!preflight.fallbackMarked) {
+    preflight.fallbackMarked = true;
+    grokFramePreflights.set(id, preflight);
+    grokFallbackReloadCounts.set(tabId, Math.min(32, (grokFallbackReloadCounts.get(tabId) || 0) + 1));
+  }
+  return true;
+}
+
+function consumeGrokFallbackReload(tabId) {
+  const count = grokFallbackReloadCounts.get(tabId) || 0;
+  if (!count) return false;
+  if (count === 1) grokFallbackReloadCounts.delete(tabId);
+  else grokFallbackReloadCounts.set(tabId, count - 1);
+  return true;
+}
+
+function queueGrokCookieBridge(task) {
+  const run = grokCookieBridgeChain.catch(() => {}).then(task);
+  grokCookieBridgeChain = run.catch(() => {});
+  return run;
+}
+
+function publicGrokCookieBridgeResult(result = {}) {
+  return {
+    supported: result.supported === true,
+    changed: result.changed === true,
+    created: Math.max(0, Number(result.created) || 0),
+    updated: Math.max(0, Number(result.updated) || 0),
+    removed: Math.max(0, Number(result.removed) || 0),
+    skipped: Math.max(0, Number(result.skipped) || 0)
+  };
+}
+
+async function syncGrokCookiesAtPartition(storeId, partitionKey, options = {}) {
+  const cleanup = options.authoritative
+    ? await removeManagedGrokPartitionsExcept(chrome, { storeId, partitionKey })
+    : { changed: false, removed: 0 };
+  const synced = await syncGrokSessionCookies(chrome, { storeId, partitionKey });
+  return publicGrokCookieBridgeResult({
+    supported: true,
+    changed: cleanup.changed || synced.changed,
+    created: synced.created,
+    updated: synced.updated,
+    removed: Number(cleanup.removed || 0) + Number(synced.removed || 0),
+    skipped: synced.skipped
+  });
+}
+
+async function prepareGrokSessionCookies(url, sender = {}) {
+  const tabId = verifiedExtensionPageSender(sender);
+  if (!isGrokSessionUrl(url)) return publicGrokCookieBridgeResult();
+  const partitionKey = chromiumExtensionPartitionKey(chrome.runtime);
+  if (!partitionKey || !chrome.cookies?.get || !chrome.cookies?.set) return publicGrokCookieBridgeResult();
+  const storeId = await cookieStoreIdForTab(chrome, tabId);
+  return queueGrokCookieBridge(async () => {
+    try {
+      return await syncGrokCookiesAtPartition(storeId, partitionKey);
+    } catch {
+      try {
+        return await syncGrokCookiesAtPartition(storeId, { topLevelSite: partitionKey.topLevelSite });
+      } catch {
+        return publicGrokCookieBridgeResult();
+      }
+    }
+  });
+}
+
+async function verifiedGrokFrameSender(sender = {}) {
+  const tabId = sender?.tab?.id;
+  const frameId = sender?.frameId;
+  const senderUrl = String(sender?.url || "");
+  const extensionBase = chrome.runtime.getURL("");
+  if (
+    (sender?.id && sender.id !== chrome.runtime.id)
+    || !Number.isInteger(tabId)
+    || !Number.isInteger(frameId)
+    || frameId <= 0
+    || !isGrokSessionUrl(senderUrl)
+    || !String(sender?.tab?.url || "").startsWith(extensionBase)
+  ) {
+    throw new Error("Grok Cookie bridge sender is invalid");
+  }
+  const frame = await chrome.webNavigation.getFrame({ tabId, frameId });
+  if (!frame || frame.parentFrameId !== 0 || String(frame.url || "") !== senderUrl) {
+    throw new Error("Grok Cookie bridge frame changed");
+  }
+  const senderDocumentId = String(sender?.documentId || "");
+  const frameDocumentId = String(frame.documentId || "");
+  if (senderDocumentId && frameDocumentId && senderDocumentId !== frameDocumentId) {
+    throw new Error("Grok Cookie bridge document changed");
+  }
+  return { tabId, frameId, documentId: senderDocumentId || frameDocumentId };
+}
+
+async function syncGrokSessionCookiesForFrame(sender = {}) {
+  const frame = await verifiedGrokFrameSender(sender);
+  if (typeof chrome.cookies?.getPartitionKey !== "function") {
+    return queueGrokCookieBridge(() => publicGrokCookieBridgeResult());
+  }
+  const partitionKey = await chrome.cookies.getPartitionKey({
+    tabId: frame.tabId,
+    frameId: frame.frameId,
+    ...(frame.documentId ? { documentId: frame.documentId } : {})
+  });
+  const storeId = await cookieStoreIdForTab(chrome, frame.tabId);
+  return queueGrokCookieBridge(() => syncGrokCookiesAtPartition(storeId, partitionKey, { authoritative: true }));
+}
+
+function scheduleGrokSourceCookieSync(changeInfo = {}) {
+  const storeId = String(changeInfo.cookie?.storeId || "");
+  const timerKey = storeId || "default";
+  const changedAuthNames = grokSourceChangedAuthNames.get(timerKey) || new Set();
+  if (!changeInfo.removed && (changeInfo.cookie?.name === "sso" || changeInfo.cookie?.name === "sso-rw")) {
+    changedAuthNames.add(changeInfo.cookie.name);
+  }
+  grokSourceChangedAuthNames.set(timerKey, changedAuthNames);
+  const previous = grokSourceChangeTimers.get(timerKey);
+  if (previous) clearTimeout(previous);
+  const timer = setTimeout(() => {
+    grokSourceChangeTimers.delete(timerKey);
+    grokSourceChangedAuthNames.delete(timerKey);
+    queueGrokCookieBridge(async () => {
+      await clearGrokTombstonesForStore(chrome, storeId, [...changedAuthNames]);
+      const candidates = await managedGrokPartitionKeys(chrome, storeId);
+      const seen = new Set();
+      for (const partitionKey of candidates) {
+        const id = JSON.stringify(partitionKey);
+        if (seen.has(id)) continue;
+        seen.add(id);
+        try { await syncGrokCookiesAtPartition(storeId, partitionKey); } catch {}
+      }
+    }).catch(() => {});
+  }, 220);
+  grokSourceChangeTimers.set(timerKey, timer);
+}
+
+chrome.cookies?.onChanged?.addListener((changeInfo) => {
+  if (isUnpartitionedGrokSourceChange(changeInfo)) {
+    scheduleGrokSourceCookieSync(changeInfo);
+    return;
+  }
+  if (!isPartitionedGrokTargetChange(changeInfo) || grokCookieChangeOwnedByBridge(changeInfo)) return;
+  queueGrokCookieBridge(() => releaseChangedGrokPartition(chrome, changeInfo)).catch(() => {});
+});
+
+chrome.tabs?.onRemoved?.addListener((tabId) => {
+  grokFallbackReloadCounts.delete(tabId);
+  for (const [id, preflight] of grokFramePreflights) {
+    if (preflight.tabId === tabId) grokFramePreflights.delete(id);
+  }
+});
 
 async function verifiedExtensionTabId(message = {}, sender = {}) {
   if (!extensionPageSender(sender)) throw new Error("Secure frame commands require an extension page sender");
@@ -1019,6 +1245,15 @@ async function registerContentScripts() {
       world: "MAIN"
     });
   }
+  if (coreMatches.length) {
+    registrations.push({
+      id: GROK_COOKIE_SCRIPT_ID,
+      matches: coreMatches,
+      js: ["content/grok-cookie-bridge.js"],
+      allFrames: true,
+      runAt: "document_start"
+    });
+  }
   if (summaryMatches.length) {
     registrations.push({
       id: SUMMARY_PAGE_SCRIPT_ID,
@@ -1159,8 +1394,32 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return;
     }
     if (message.action === "prepareFrameLoad") {
-      await updateDnrRules();
-      sendResponse({ success: true });
+      const preflightId = registerGrokFramePreflight(message, sender);
+      try {
+        const cookieBridge = prepareGrokSessionCookies(message.url, sender)
+          .catch(() => publicGrokCookieBridgeResult());
+        await updateDnrRules();
+        sendResponse({ success: true, grokCookieBridge: await cookieBridge });
+      } finally {
+        finishGrokFramePreflight(preflightId);
+      }
+      return;
+    }
+    if (message.action === "markGrokFramePreflightFallback") {
+      sendResponse({ success: true, marked: markGrokFramePreflightFallback(message, sender) });
+      return;
+    }
+    if (message.action === "syncGrokSessionCookies") {
+      if (message.bridgeVersion !== GROK_COOKIE_BRIDGE_VERSION) {
+        throw new Error("Grok Cookie bridge version is stale");
+      }
+      const result = await syncGrokSessionCookiesForFrame(sender);
+      const fallbackReload = consumeGrokFallbackReload(sender?.tab?.id);
+      sendResponse({
+        success: true,
+        ...publicGrokCookieBridgeResult(result),
+        reloadRequired: result.changed === true || fallbackReload
+      });
       return;
     }
     if (message.action === "getConfigInfo") {
@@ -1172,6 +1431,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return;
     }
     if (message.action === "resetConfig") {
+      await queueGrokCookieBridge(() => removeAllManagedGrokPartitions(chrome));
       await chrome.storage.local.clear();
       const options = await saveOptions({});
       await reloadRuntimeConfig();

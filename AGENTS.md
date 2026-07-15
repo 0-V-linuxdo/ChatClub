@@ -71,6 +71,18 @@
 - Prefer the short visible `Thought for ...` button as the marker, then de-duplicate turns by role and compacted text.
 - Keep assistant-node de-duplication in place so nested wrappers do not produce repeated user or assistant messages.
 
+## Grok iframe Session Cookies
+
+- A working top-level `https://grok.com/` tab does not prove that embedded Grok has the same login session. In Chromium, a third-party iframe inside a `chrome-extension://` page uses the extension origin as its Cookie partition key, so it cannot automatically see the top-level Grok Cookie jar.
+- The characteristic failure is an empty Grok conversation, no history, and repeated `wss://grok.com/ws/mgw/` failures inside ChatClub while direct Grok works. Request-throttling messages and generic DNR/CSP symptoms are not sufficient evidence of the root cause; confirm the WebSocket status in DevTools.
+- Storage Access and Cookie partitioning are separate. `document.hasStorageAccess() === true` does not copy the top-level Cookie jar into the extension partition, and rewriting `document.cookie` cannot migrate HttpOnly session Cookies such as `grok_device_id`.
+- The verified Chromium fix is a background Cookie bridge that copies only `sso`, `sso-rw`, and `grok_device_id` from the unpartitioned Grok jar into the current ChatClub frame partition. Keep the original Cookies untouched, force the mirrored copies to `Secure` plus `SameSite=None`, preserve host/domain, path, HttpOnly, session/expiry, and cookie-store semantics, and never log, persist, or return Cookie values.
+- Prepare the Chromium partition before assigning the iframe URL so the first document and WebSocket can authenticate. After the frame exists, use `chrome.cookies.getPartitionKey({ tabId, frameId, documentId })` when available to validate the real partition and repair only extension-owned mirrors.
+- Treat existing unowned partitioned Cookies as site-owned and do not overwrite them. Track extension-owned mirrors using metadata only, remove them when the unpartitioned source disappears, ignore self-generated `cookies.onChanged` events, and stop re-creating a session immediately after an iframe logout.
+- Do not apply the Chromium mirror logic to `moz-extension://` pages. Firefox does not use a `moz-extension:` dynamic partition key for this case; keep the Storage Access path as the Firefox fallback.
+- Keep extension-origin DNR header rewriting limited to frame navigation resource types. Broadening it to WebSocket, XHR, fetch, images, or other subresources did not fix this issue and increases unrelated request risk.
+- A successful runtime verification requires reloading the extension from a clean mirrored-Cookie state, confirming Grok history renders, and confirming `/ws/mgw` receives HTTP `101 Switching Protocols`. A page shell alone is not proof.
+
 ## Verification
 
 - For generated userscript bundles, run syntax checks such as:

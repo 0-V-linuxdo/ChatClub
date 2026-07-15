@@ -46,7 +46,7 @@ const dataModule = (source) => import(`data:text/javascript;base64,${Buffer.from
   }
 
   const content = read("content/content.js");
-  assert.equal(protocol.CONTENT_BRIDGE_VERSION, "2026.07.15.2");
+  assert.equal(protocol.CONTENT_BRIDGE_VERSION, "2026.07.15.4");
   assert.match(content, /const CONTENT_BRIDGE_VERSION = PROTOCOL\.CONTENT_BRIDGE_VERSION/);
   const summaryIsolated = read("content/summary-userscripts.js");
   const summaryMain = read("content/summary-userscripts-main.js");

@@ -43,7 +43,7 @@ export function buildDynamicDnrRules(chatApps, extensionHost) {
       id: id++,
       priority: 2,
       action: frameLoadAction,
-      condition: { initiatorDomains: [extensionHost] }
+      condition: { initiatorDomains: [extensionHost], resourceTypes }
     });
   }
   if (domains.length) {

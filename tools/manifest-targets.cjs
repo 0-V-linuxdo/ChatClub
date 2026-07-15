@@ -1,4 +1,4 @@
-const CHROMIUM_ONLY_PERMISSIONS = new Set(["debugger", "favicon"]);
+const CHROMIUM_ONLY_PERMISSIONS = new Set(["cookies", "debugger", "favicon"]);
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));

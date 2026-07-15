@@ -437,12 +437,39 @@ export function createWorkspaceController(ctx = {}) {
     return params.toString();
   }
 
-  async function prepareFrameLoad(url) {
+  async function prepareFrameLoad(url, preflightId = "") {
     try {
-      return await runtimeRequest({ source: "chatclub", action: "prepareFrameLoad", url });
+      return await runtimeRequest({ source: "chatclub", action: "prepareFrameLoad", url, preflightId });
     } catch (error) {
       return { success: false, error: error?.message || String(error || "prepareFrameLoad failed") };
     }
+  }
+
+  async function markGrokFramePreflightFallback(url, preflightId) {
+    try {
+      return await runtimeRequest({
+        source: "chatclub",
+        action: "markGrokFramePreflightFallback",
+        url,
+        preflightId
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  function grokCookieBridgeUrl(url) {
+    try {
+      const parsed = new URL(String(url || ""));
+      return parsed.protocol === "https:" && parsed.hostname.toLowerCase() === "grok.com";
+    } catch {
+      return false;
+    }
+  }
+
+  function grokFramePreflightId() {
+    return globalThis.crypto?.randomUUID?.()
+      || `grok-preflight-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   }
 
   function frameLoadingSet() {
@@ -695,8 +722,20 @@ export function createWorkspaceController(ctx = {}) {
       if (guard) guard.then(setSrc, setSrc);
       else setSrc();
     };
-    const fallback = setTimeout(assign, 1800);
-    prepareFrameLoad(url)
+    const grokPreflight = grokCookieBridgeUrl(url);
+    const preflightId = grokPreflight ? grokFramePreflightId() : "";
+    const fallback = setTimeout(() => {
+      if (!grokPreflight) {
+        assign();
+        return;
+      }
+      const guard = setTimeout(assign, 300);
+      markGrokFramePreflightFallback(url, preflightId).finally(() => {
+        clearTimeout(guard);
+        assign();
+      });
+    }, grokPreflight ? 10000 : 1800);
+    prepareFrameLoad(url, preflightId)
       .catch(() => null)
       .finally(() => {
         clearTimeout(fallback);

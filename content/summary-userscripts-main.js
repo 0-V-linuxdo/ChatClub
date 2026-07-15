@@ -13,11 +13,11 @@
     "MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE": "chatclub:message-navigator:2026.07.08.12",
     "SUMMARY_POST_MESSAGE_SOURCE": "chatclub:summary:2026.07.08.13",
     "PREFERRED_MODEL_POST_MESSAGE_SOURCE": "chatclub:preferred-model:2026.07.13.2",
-    "CONTENT_BRIDGE_VERSION": "2026.07.15.2",
-    "EXTENSION_RUNTIME_RELAY_SOURCE": "chatclub:runtime-relay:2026.07.15.2",
-    "SECURE_FRAME_COMMAND_SOURCE": "chatclub:frame-command:2026.07.15.2",
+    "CONTENT_BRIDGE_VERSION": "2026.07.15.4",
+    "EXTENSION_RUNTIME_RELAY_SOURCE": "chatclub:runtime-relay:2026.07.15.4",
+    "SECURE_FRAME_COMMAND_SOURCE": "chatclub:frame-command:2026.07.15.4",
     "DEEPSEEK_DELETE_SOURCE": "chatclub-deepseek-delete-thread:2026.07.03.30",
-    "PAGE_SUMMARY_SOURCE": "chatclub-summary-userscript:2026.07.15.2",
+    "PAGE_SUMMARY_SOURCE": "chatclub-summary-userscript:2026.07.15.4",
     "NAVIGATION_FOCUS_GUARD_SOURCE": "chatclub:navigation-focus-guard:2026.07.13.3",
     "FRAME_TOAST_POSITION_EVENT": "chatclub:frame-toast-position:2026.07.13.1",
     "CUSTOM_SUMMARY_EXECUTOR": "__CHATCLUB_SUMMARY_CUSTOM_EXECUTOR_2026_07_14__",
@@ -2141,7 +2141,7 @@ return nativeConversation && nativeConversation.length ? nativeConversation : []
 const out=[];const seen=new Set;const norm=v=>api.normalize(String(v||''));const qsa=(sel,root=document)=>{try{return api.qsa(sel,root,{all:true})}catch{return[]}};const qs=(sel,root=document)=>{try{return api.qs(sel,root)}catch{return null}};const closest=(el,sel)=>{try{return api.closest(el,sel)}catch{return null}};const laidOut=el=>{if(!el)return false;try{const style=getComputedStyle(el);return style.display!=='none'&&style.visibility!=='hidden'}catch{return true}};const order=(a,b)=>{try{if(a===b)return 0;const pos=a.compareDocumentPosition(b);return pos&Node.DOCUMENT_POSITION_FOLLOWING?-1:pos&Node.DOCUMENT_POSITION_PRECEDING?1:0}catch{return 0}};const wrapperSelector='div[class*="message-index-"][class*="message-id-"]';const roots=[];const addRoot=node=>{const root=closest(node,wrapperSelector)||node;if(root&&!roots.includes(root))roots.push(root)};qsa('[data-element-id="user-message"],[data-element-id="response-block"]',document).forEach(addRoot);qsa(wrapperSelector,document).forEach(root=>{if(qs('[data-element-id="user-message"],[data-element-id="response-block"]',root)&&!roots.includes(root))roots.push(root)});const opts={copyButtonSelector:'[data-element-id="copy-message-button"]',copyButtonPattern:'copy-message-button|clipboard|copy',copyButtonIconFallback:false,copyButtonExcludePattern:'Copy code|Open in CodePen|Regenerate|List some more',copyTextExcludePattern:'^(Copy code|Open in CodePen|Regenerate|List some more)$',copyMenu:false,resetClipboardBeforeCopy:true,acceptUnchangedClipboard:false,copyTimeoutMs:7000,copyPollMs:40,copyCaptureGraceMs:260,matchMode:'anyUseful'};const sameTurn=(button,turn)=>{const owner=closest(button,wrapperSelector);if(owner)return owner===turn||turn.contains(owner)||owner.contains(turn);if(turn.contains(button))return true;try{const br=button.getBoundingClientRect(),tr=turn.getBoundingClientRect();return br.width>=0&&br.height>=0&&tr.width&&tr.height&&br.bottom>=tr.top-48&&br.top<=tr.bottom+96&&br.right>=tr.left-160&&br.left<=tr.right+160}catch{return false}};const isBadButton=button=>closest(button,'pre,code,[data-language],table,kbd,samp')||/Copy code|Open in CodePen|Regenerate|List some more/i.test(norm(button.innerText||button.textContent||''));const findButtons=async turn=>{api.reveal(turn);await api.sleep(220);let buttons=qsa('[data-element-id="copy-message-button"]',turn).filter(laidOut);if(!buttons.length)buttons=qsa('[data-element-id="copy-message-button"]',document).filter(button=>sameTurn(button,turn)&&laidOut(button));return buttons.filter(button=>!isBadButton(button)).sort(order)};for(const turn of roots.sort(order)){const user=qs('[data-element-id="user-message"]',turn);const assistant=qs('[data-element-id="response-block"]',turn);const role=user?'user':assistant?'assistant':'';if(!role)continue;const source=user||assistant;const expected=norm(source.innerText||source.textContent);const buttons=await findButtons(turn);if(!buttons.length)continue;const copied=await api.copyFirst(buttons,{expected,role,scope:turn,options:opts});const clean=norm(copied);if(clean){const key=role+'|'+clean.toLowerCase().replace(/\s+/g,'');if(!seen.has(key)){seen.add(key);out.push({role,text:clean})}}await api.sleep(80)}return api.merge(out);
   };
   scripts["typingmind.js"] = scripts["typingmind"];
-  window.__CHATCLUB_SUMMARY_SCRIPTS_VERSION__ = "2026.07.15.2";
+  window.__CHATCLUB_SUMMARY_SCRIPTS_VERSION__ = "2026.07.15.4";
   window.__CHATCLUB_SUMMARY_SCRIPTS__ = scripts;
   const COPY_SOURCE = PROTOCOL.NATIVE_COPY_SOURCE;
   const PAGE_SUMMARY_SOURCE = PROTOCOL.PAGE_SUMMARY_SOURCE;
