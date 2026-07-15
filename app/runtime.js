@@ -1,5 +1,7 @@
 import { APP_NAME } from "../shared/constants.js";
 import {
+  currentExtensionTab,
+  currentExtensionTabId,
   permissionsContains,
   permissionsRequest,
   runtimeGetUrl,
@@ -37,6 +39,7 @@ import {
   savePocketHistory,
   savePromptSendHistory,
   storageGet,
+  storageRemove,
   storageSet
 } from "../shared/storage-adapter.js";
 import {
@@ -58,6 +61,7 @@ import { createPreferredModelStatePort } from "./preferred-model/state-port.js";
 import { createTopbarStatePort } from "./topbar/state-port.js";
 import { createTopbarEditor } from "./topbar/editor.js";
 import { createWorkspaceController } from "./workspace/controller.js";
+import { createWorkspaceSessionStore } from "./workspace/session-store.js";
 import { SETTINGS_SECTIONS } from "./settings/sections.js";
 import { createSettingsControllerStatePort } from "./settings/state-ports.js";
 import {
@@ -605,6 +609,24 @@ let settingsController = null;
 let pocketControllerPromise = null;
 let summaryControllerPromise = null;
 let settingsControllerPromise = null;
+const workspaceSessionStore = createWorkspaceSessionStore({
+  currentTab: currentExtensionTab,
+  currentTabId: currentExtensionTabId,
+  claimWorkspaceSession: ({ workspaceId = "" } = {}) => runtimeRequest({
+    source: "chatclub",
+    action: "claimWorkspaceSessionRecovery",
+    ...(workspaceId ? { workspaceId } : {})
+  }),
+  commitWorkspaceSession: ({ workspaceId, claimId } = {}) => runtimeRequest({
+    source: "chatclub",
+    action: "commitWorkspaceSessionRecovery",
+    workspaceId,
+    ...(claimId ? { claimId } : {})
+  }),
+  storageGet,
+  storageSet,
+  storageRemove
+});
 workspaceController = createWorkspaceController({
   state: featureState.workspace,
   createGroupId: () => createId("group"),
@@ -631,6 +653,7 @@ workspaceController = createWorkspaceController({
   prepareContentFrameRuntime,
   onFrameLifecycleChange: handleWorkspaceFrameLifecycleChange,
   openCustomAppEditor: () => openCustomAppEditor(),
+  workspaceSessionStore,
   framePort: frameRuntimePort,
   executeTopicDelete
 });
@@ -2640,12 +2663,14 @@ function installShortcuts() {
 }
 
 async function init() {
+  const workspaceSessionSnapshotPromise = workspaceSessionStore.load().catch(() => null);
   state.options = await loadOptions();
   state.customConfig = await loadCustomConfig();
   state.promptLibrary = await loadPromptLibrary();
   state.promptSendHistory = await loadPromptSendHistory();
   state.pocketEntries = await loadPocketHistory();
   state.shortcutConfig = await loadShortcutConfig();
+  const workspaceSessionSnapshot = await workspaceSessionSnapshotPromise;
   userScriptsPermissionGranted = await permissionsContains({ permissions: ["userScripts"] }).catch(() => false);
   await faviconService.load();
   state.options = normalizeOptions(state.options);
@@ -2661,7 +2686,7 @@ async function init() {
   });
   syncI18nLanguage();
   await initializeTopbarPromptPlaceholder();
-  workspaceController.hydrateGroups();
+  workspaceController.hydrateGroups(workspaceSessionSnapshot);
   installGlobalTooltips({
     getDisabledTooltipIds: () => state.options?.tooltipDisabledIds || []
   });

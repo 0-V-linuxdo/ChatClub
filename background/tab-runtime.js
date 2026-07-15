@@ -1,3 +1,8 @@
+import {
+  createWorkspaceSessionId,
+  workspaceSessionUrl
+} from "../shared/workspace-session.js";
+
 export function openableTabUrl(href) {
   try {
     const parsed = new URL(String(href || ""));
@@ -82,6 +87,7 @@ export async function openExternalTab(api, url, sender, openerTab) {
 export function registerActionListener(api) {
   if (!api?.action?.onClicked?.addListener) throw new Error("Extension action API is unavailable");
   api.action.onClicked.addListener(() => {
-    api.tabs.create({ url: api.runtime.getURL("chatClub.html") });
+    const url = workspaceSessionUrl(api.runtime.getURL("chatClub.html"), createWorkspaceSessionId());
+    api.tabs.create({ url });
   });
 }

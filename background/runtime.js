@@ -44,6 +44,7 @@ import {
   openExternalTab,
   registerActionListener
 } from "./tab-runtime.js";
+import { claimWorkspaceSessionRecovery, commitWorkspaceSessionRecovery, detachWorkspaceSessionMirror, prepareWorkspaceSessionLifecycle, rotateWorkspaceSessionGeneration } from "./workspace-session.js";
 import * as trustedInput from "./trusted-input.js";
 
 const chrome = globalThis.browser || globalThis.chrome;
@@ -373,11 +374,13 @@ chrome.cookies?.onChanged?.addListener((changeInfo) => {
   queueGrokCookieBridge(() => releaseChangedGrokPartition(chrome, changeInfo)).catch(() => {});
 });
 
-chrome.tabs?.onRemoved?.addListener((tabId) => {
+chrome.tabs?.onRemoved?.addListener((tabId, removeInfo) => {
   grokFallbackReloadCounts.delete(tabId);
   for (const [id, preflight] of grokFramePreflights) {
     if (preflight.tabId === tabId) grokFramePreflights.delete(id);
   }
+  detachWorkspaceSessionMirror(chrome, tabId, removeInfo)
+    .catch((error) => console.warn(`[${APP_NAME}] closed tab workspace session mirror could not be detached`, error));
 });
 
 async function verifiedExtensionTabId(message = {}, sender = {}) {
@@ -1022,21 +1025,44 @@ function reloadRuntimeConfig() {
   return runtimeConfigReloadChain;
 }
 
-chrome.runtime.onInstalled.addListener(async () => {
+function prepareWorkspaceSessionLifecycleSafely(lifecycle, options = {}) {
+  return prepareWorkspaceSessionLifecycle(chrome, options)
+    .catch((error) => {
+      console.warn(`[${APP_NAME}] ${lifecycle} workspace session lifecycle failed`, error);
+      return null;
+    });
+}
+
+chrome.runtime.onInstalled.addListener(async (details = {}) => {
+  const reason = String(details.reason || "installed");
+  const workspaceSessionReady = prepareWorkspaceSessionLifecycleSafely("install/update", { forceRecovery: reason === "update", reason, previousVersion: String(details.previousVersion || "") });
   await chrome.storage.local.remove(["clientId", "sessionData"]);
   await loadOptions();
   await reloadRuntimeConfig();
+  await workspaceSessionReady;
 });
 
 chrome.runtime.onStartup?.addListener(() => {
   reloadRuntimeConfig().catch((error) => console.error(`[${APP_NAME}] startup reload failed`, error));
+  prepareWorkspaceSessionLifecycleSafely("startup", { reason: "startup" });
 });
 
 registerActionListener(chrome);
+prepareWorkspaceSessionLifecycleSafely("runtime start", { reason: "runtime-start" });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.source !== "chatclub") return false;
   (async () => {
+    if (message.action === "claimWorkspaceSessionRecovery") {
+      verifiedExtensionPageSender(sender);
+      sendResponse({ success: true, ...await claimWorkspaceSessionRecovery(chrome, message, sender) });
+      return;
+    }
+    if (message.action === "commitWorkspaceSessionRecovery") {
+      verifiedExtensionPageSender(sender);
+      sendResponse({ success: true, ...await commitWorkspaceSessionRecovery(chrome, message, sender) });
+      return;
+    }
     if (message.action === "registerFrameContext") {
       const context = await registerSecureFrameContext(message, sender);
       sendResponse({ success: true, documentId: context.documentId, frameId: context.frameId });
@@ -1107,9 +1133,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === "resetConfig") {
       await queueGrokCookieBridge(() => removeAllManagedGrokPartitions(chrome));
       await chrome.storage.local.clear();
+      const workspaceSessionGeneration = await rotateWorkspaceSessionGeneration(chrome);
       const options = await saveOptions({});
       await reloadRuntimeConfig();
-      sendResponse({ success: true, options });
+      sendResponse({ success: true, options, workspaceSessionGeneration });
       return;
     }
     if (message.action === "installTopicDeleteUserscript") {

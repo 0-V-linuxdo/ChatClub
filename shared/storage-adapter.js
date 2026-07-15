@@ -1,5 +1,5 @@
 import { STORAGE_KEYS } from "./constants.js";
-import { storageLocalGet, storageLocalSet } from "./extension-api.js";
+import { storageLocalGet, storageLocalRemove, storageLocalSet } from "./extension-api.js";
 import {
   dedupePocketHistory,
   dehydrateOptions,
@@ -41,6 +41,10 @@ export async function storageGet(key) {
 
 export async function storageSet(key, value) {
   await storageLocalSet({ [key]: value });
+}
+
+export async function storageRemove(key) {
+  await storageLocalRemove(key);
 }
 
 export async function loadOptions() {

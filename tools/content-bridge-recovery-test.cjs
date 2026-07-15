@@ -370,7 +370,7 @@ function createSummaryPrepareFixture(options = {}) {
   );
   const initSource = functionSource(main, "init", true);
   assert.ok(
-    initSource.indexOf('action: "reloadConfigs"') < initSource.indexOf("workspaceController.hydrateGroups()"),
+    initSource.indexOf('action: "reloadConfigs"') < initSource.indexOf("workspaceController.hydrateGroups(workspaceSessionSnapshot)"),
     "the app must reconcile persisted registrations before creating iframe documents"
   );
   assert.match(workspace, /await sendToContentFrame\(iframe, "getLocationHref"/);

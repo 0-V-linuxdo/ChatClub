@@ -16,6 +16,10 @@ import {
   removeGroupFromWorkspace,
   workspaceGridColumnCount
 } from "./model.js";
+import {
+  captureWorkspaceSnapshotV1,
+  restoreWorkspaceSnapshotV1
+} from "./session-state.js";
 import { createWorkspaceFrameRegistry } from "./frame-registry.js";
 import { createWorkspaceOpenTabs } from "./open-tab.js";
 import { requireControllerContext, requireControllerFunction, validateControllerContract } from "../controller-contract.js";
@@ -122,6 +126,7 @@ const APP_PICKER_CHINESE_ID_SET = new Set(APP_PICKER_CHINESE_IDS);
  * @property {(iframe: HTMLIFrameElement, options?: object) => Promise<any>} [prepareContentFrameRuntime]
  * @property {() => void} [openCustomAppEditor]
  * @property {(event: WorkspaceFrameLifecycleEvent) => void} [onFrameLifecycleChange]
+ * @property {{ save: Function, generation: Function }} workspaceSessionStore
  * @property {{ request: Function }} framePort
  * @property {(iframe: HTMLIFrameElement, payload?: object, config?: object|null, timeoutMs?: number) => Promise<any>} executeTopicDelete
  */
@@ -145,7 +150,7 @@ export function createWorkspaceController(ctx = {}) {
     normalizeOptions: "function", toast: "function", render: "function", svgIcon: "function",
     compactIconButton: "function", menuButton: "function", formatShortcut: "function",
     requestTopicDeletePermission: "function?", prepareContentFrameRuntime: "function?",
-    openCustomAppEditor: "function?", onFrameLifecycleChange: "function?", framePort: "object",
+    openCustomAppEditor: "function?", onFrameLifecycleChange: "function?", workspaceSessionStore: "object", framePort: "object",
     executeTopicDelete: "function"
   });
   const state = requireContext(ctx, "state");
@@ -184,6 +189,10 @@ export function createWorkspaceController(ctx = {}) {
     : async () => ({ ok: true });
   const openCustomAppEditor = typeof ctx.openCustomAppEditor === "function" ? ctx.openCustomAppEditor : null;
   const onFrameLifecycleChange = typeof ctx.onFrameLifecycleChange === "function" ? ctx.onFrameLifecycleChange : () => {};
+  const workspaceSessionStore = requireContext(ctx, "workspaceSessionStore");
+  if (typeof workspaceSessionStore.save !== "function" || typeof workspaceSessionStore.generation !== "function") {
+    throw new TypeError("Workspace controller requires workspaceSessionStore.save/generation.");
+  }
   let workspaceNode = null;
   let workspaceRenderSignature = "";
   let workspaceLifecycleFrames = [];
@@ -209,6 +218,55 @@ export function createWorkspaceController(ctx = {}) {
   function frameForLifecycleInstance(instanceId) {
     return Array.from(document.querySelectorAll(".chat-frame"))
       .find((frame) => frame.dataset.instanceId === instanceId) || null;
+  }
+
+  function currentHrefForWorkspaceTab(chat, framesByInstanceId = null) {
+    const instanceId = String(chat?.instanceId || "");
+    const iframe = framesByInstanceId?.get(instanceId) || frameForLifecycleInstance(instanceId);
+    return openableTabUrl(iframe?.dataset?.currentHref)
+      || openableTabUrl(chat?.initialHref)
+      || openableTabUrl(iframe?.getAttribute?.("src"))
+      || openableTabUrl(appById(chat?.appId)?.url);
+  }
+
+  function rememberWorkspaceSession() {
+    if (!Array.isArray(state.groups) || !state.groups.length) return null;
+    const framesByInstanceId = new Map(Array.from(document.querySelectorAll(".chat-frame"))
+      .map((iframe) => [String(iframe.dataset.instanceId || ""), iframe]));
+    const snapshot = captureWorkspaceSnapshotV1({
+      generation: workspaceSessionStore.generation(),
+      options: state.options,
+      temporaryLayoutPreset: state.temporaryLayoutPreset,
+      groups: state.groups,
+      activeTabs: state.activeTabs,
+      fullscreenGroupId: state.fullscreenGroupId,
+      currentHrefForTab: (chat) => currentHrefForWorkspaceTab(chat, framesByInstanceId)
+    });
+    workspaceSessionStore.save(snapshot).catch(() => {});
+    return snapshot;
+  }
+
+  function restoreWorkspaceSession(snapshot) {
+    if (!snapshot) return false;
+    const presets = persistentLayoutPresets();
+    const restored = restoreWorkspaceSnapshotV1(snapshot, {
+      validAppIds: validChatAppIds(),
+      validPresetIds: new Set(presets.map((preset) => preset.id)),
+      fallbackPresetId: state.options?.activeLayoutPresetId || presets[0]?.id || "default",
+      createGroupId,
+      createFrameId,
+      createLayoutId
+    });
+    if (!restored) return false;
+    state.options = {
+      ...state.options,
+      activeLayoutPresetId: restored.activeLayoutPresetId || state.options.activeLayoutPresetId
+    };
+    state.temporaryLayoutPreset = restored.temporaryLayoutPreset;
+    state.groups = restored.groups;
+    state.activeTabs = restored.activeTabs;
+    state.fullscreenGroupId = restored.fullscreenGroupId;
+    return true;
   }
 
   function notifyWorkspaceFrameSync() {
@@ -339,6 +397,7 @@ export function createWorkspaceController(ctx = {}) {
     }
     const instanceId = String(iframe.dataset.instanceId || "");
     if (changed) syncHeaderForFrameInstance(instanceId);
+    if (hrefChanged) rememberWorkspaceSession();
     const navigation = meta?.navigation && typeof meta.navigation === "object"
       ? {
           ...meta.navigation,
@@ -939,7 +998,11 @@ export function createWorkspaceController(ctx = {}) {
     }
   }
 
-  function hydrateGroups() {
+  function hydrateGroups(snapshot = null) {
+    if (restoreWorkspaceSession(snapshot)) {
+      rememberWorkspaceSession();
+      return true;
+    }
     const preset = activePreset();
     const apps = allApps();
     const workspace = hydrateWorkspaceGroups({
@@ -957,6 +1020,9 @@ export function createWorkspaceController(ctx = {}) {
     }
     state.groups = workspace.groups;
     state.activeTabs = workspace.activeTabs;
+    state.fullscreenGroupId = null;
+    rememberWorkspaceSession();
+    return false;
   }
 
   async function persistLayout() {
@@ -966,11 +1032,13 @@ export function createWorkspaceController(ctx = {}) {
         ...temporary,
         chatAppIdGroups: currentLayoutGroups({ includeTemporary: true })
       };
+      rememberWorkspaceSession();
       return;
     }
     const preset = activePreset();
     if (!preset) return;
     const chatAppIdGroups = currentLayoutGroups();
+    rememberWorkspaceSession();
     const next = {
       ...state.options,
       layoutPresets: persistentLayoutPresets().map((item) => item.id === preset.id
@@ -978,6 +1046,7 @@ export function createWorkspaceController(ctx = {}) {
         : item)
     };
     state.options = await saveOptions(next);
+    rememberWorkspaceSession();
   }
 
   async function addGroup(appId = allApps()[0]?.id) {
@@ -1124,7 +1193,10 @@ export function createWorkspaceController(ctx = {}) {
   function currentFullscreenGroup() {
     if (!state.fullscreenGroupId) return null;
     const group = state.groups.find((item) => item.id === state.fullscreenGroupId);
-    if (!group) state.fullscreenGroupId = null;
+    if (!group) {
+      state.fullscreenGroupId = null;
+      rememberWorkspaceSession();
+    }
     return group || null;
   }
 
@@ -1173,6 +1245,7 @@ export function createWorkspaceController(ctx = {}) {
       || group.chatApps[0]?.instanceId
       || "";
     state.activeTabs[group.id] = instanceId;
+    rememberWorkspaceSession();
     card?.querySelectorAll(".tab").forEach((tab) => {
       tab.classList.toggle("active", tab.dataset.instanceId === instanceId);
     });
@@ -1205,6 +1278,7 @@ export function createWorkspaceController(ctx = {}) {
   function toggleFullscreen(groupId = activeShortcutGroupId()) {
     if (!groupId || !state.groups.some((group) => group.id === groupId)) return;
     state.fullscreenGroupId = state.fullscreenGroupId === groupId ? null : groupId;
+    rememberWorkspaceSession();
     closePopovers();
     syncFullscreenLayout();
   }
@@ -2012,6 +2086,7 @@ export function createWorkspaceController(ctx = {}) {
     const instanceId = record.iframe.dataset.instanceId || "";
     if (record.group && instanceId) activateChatTab(record.group, instanceId);
     record.iframe.dataset.currentHref = href;
+    rememberWorkspaceSession();
     return assignFrameSrc(record.iframe, href);
   }
 
@@ -2025,6 +2100,7 @@ export function createWorkspaceController(ctx = {}) {
       || openableTabUrl(appById(chat?.appId).url);
     if (!href) return false;
     iframe.dataset.currentHref = href;
+    rememberWorkspaceSession();
     return assignFrameSrc(iframe, href);
   }
 
@@ -2032,9 +2108,10 @@ export function createWorkspaceController(ctx = {}) {
     const iframe = activeIframe(chat);
     const app = appById(chat?.appId);
     if (!iframe || !app?.url) return false;
-    delete iframe.dataset.currentHref;
+    iframe.dataset.currentHref = app.url;
     delete iframe.dataset.currentThreadHref;
     delete iframe.dataset.currentTitle;
+    rememberWorkspaceSession();
     return assignFrameSrc(iframe, app.url);
   }
 
@@ -2045,9 +2122,10 @@ export function createWorkspaceController(ctx = {}) {
     } catch {}
     const app = frameApp(iframe) || appById(fallbackChat?.appId || iframe.dataset?.appId);
     if (!app?.url) return false;
-    delete iframe.dataset.currentHref;
+    iframe.dataset.currentHref = app.url;
     delete iframe.dataset.currentThreadHref;
     delete iframe.dataset.currentTitle;
+    rememberWorkspaceSession();
     return assignFrameSrc(iframe, app.url);
   }
 
@@ -2093,6 +2171,7 @@ export function createWorkspaceController(ctx = {}) {
     iframe.dataset.currentHref = href;
     delete iframe.dataset.currentThreadHref;
     delete iframe.dataset.currentTitle;
+    rememberWorkspaceSession();
     setFrameSrcAfterPrepare(iframe, href, { replace: true });
     return true;
   }
@@ -2493,6 +2572,7 @@ export function createWorkspaceController(ctx = {}) {
     state.fullscreenGroupId = null;
     state.groups = groups;
     state.activeTabs = activeTabs;
+    rememberWorkspaceSession();
     render();
     return true;
   }

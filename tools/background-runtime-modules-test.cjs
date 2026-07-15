@@ -10,6 +10,7 @@ const load = (file) => import(`${pathToFileURL(path.join(root, file)).href}?test
 (async () => {
   const content = await load("background/content-registration.js");
   const tabs = await load("background/tab-runtime.js");
+  const workspaceSession = await load("shared/workspace-session.js");
 
   const target = { id: "example", name: "Example", url: "", hosts: ["example.com"] };
   const registrations = content.buildContentScriptRegistrations({
@@ -125,7 +126,12 @@ const load = (file) => import(`${pathToFileURL(path.join(root, file)).href}?test
     tabs.registerActionListener(api);
     assert.equal(typeof actionListener, "function");
     actionListener();
-    assert.deepEqual(created.shift(), { url: "chrome-extension://chatclub/chatClub.html" });
+    const actionTab = created.shift();
+    const actionUrl = new URL(actionTab.url);
+    assert.equal(actionUrl.protocol, "chrome-extension:");
+    assert.equal(actionUrl.host, "chatclub");
+    assert.equal(actionUrl.pathname, "/chatClub.html");
+    assert.match(workspaceSession.workspaceSessionIdFromUrl(actionTab.url), /^page-/);
     assert.equal(tabs.openableTabUrl("javascript:alert(1)"), "");
     await tabs.openExternalTab(api, "https://example.com/", {}, { id: 3 });
     assert.deepEqual(created.shift(), {

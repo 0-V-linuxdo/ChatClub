@@ -49,13 +49,18 @@ export function tabsGetCurrent() {
   return callPromise(["tabs", "getCurrent"]);
 }
 
-export async function currentExtensionTabId() {
+export async function currentExtensionTab() {
   try {
     const tab = await tabsGetCurrent();
-    return Number.isInteger(tab?.id) ? tab.id : null;
+    return tab && typeof tab === "object" ? tab : null;
   } catch {
     return null;
   }
+}
+
+export async function currentExtensionTabId() {
+  const tab = await currentExtensionTab();
+  return Number.isInteger(tab?.id) ? tab.id : null;
 }
 
 export async function runtimeRequest(message) {
@@ -82,6 +87,10 @@ export function storageLocalGet(key) {
 
 export function storageLocalSet(value) {
   return callPromise(["storage", "local", "set"], [value]);
+}
+
+export function storageLocalRemove(key) {
+  return callPromise(["storage", "local", "remove"], [key]);
 }
 
 export function permissionsContains(permissions) {

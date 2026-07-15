@@ -92,6 +92,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
   const previousBrowser = globalThis.browser;
   const previousChrome = globalThis.chrome;
   try {
+    const browserRemoved = [];
     globalThis.browser = {
       runtime: {
         getURL: (file) => `moz-extension://chatclub/${file}`,
@@ -99,15 +100,24 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
       },
       tabs: { getCurrent: async () => ({ id: 42 }) },
       permissions: { request: async () => true },
-      storage: { local: { get: async (key) => ({ [key]: "ok" }), set: async () => {} } }
+      storage: {
+        local: {
+          get: async (key) => ({ [key]: "ok" }),
+          set: async () => {},
+          remove: async (key) => { browserRemoved.push(key); }
+        }
+      }
     };
     delete globalThis.chrome;
     assert.equal(await apiModule.currentExtensionTabId(), 42);
     assert.equal((await apiModule.runtimeRequest({ action: "ping" })).echo.action, "ping");
     assert.deepEqual(await apiModule.storageLocalGet("probe"), { probe: "ok" });
+    await apiModule.storageLocalRemove("obsolete-browser-key");
+    assert.deepEqual(browserRemoved, ["obsolete-browser-key"]);
     assert.equal(await apiModule.permissionsRequest({ permissions: ["userScripts"] }), true);
 
     delete globalThis.browser;
+    const chromeRemoved = [];
     globalThis.chrome = {
       runtime: {
         lastError: null,
@@ -115,11 +125,19 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
       },
       tabs: { getCurrent: (callback) => callback({ id: 77 }) },
       permissions: { request: (_permissions, callback) => callback(true) },
-      storage: { local: { get: (key, callback) => callback({ [key]: "chrome" }), set: (_value, callback) => callback() } }
+      storage: {
+        local: {
+          get: (key, callback) => callback({ [key]: "chrome" }),
+          set: (_value, callback) => callback(),
+          remove: (key, callback) => { chromeRemoved.push(key); callback(); }
+        }
+      }
     };
     assert.equal(await apiModule.currentExtensionTabId(), 77);
     assert.equal((await apiModule.runtimeRequest({ action: "callback" })).echo.action, "callback");
     assert.deepEqual(await apiModule.storageLocalGet("probe"), { probe: "chrome" });
+    await apiModule.storageLocalRemove("obsolete-chrome-key");
+    assert.deepEqual(chromeRemoved, ["obsolete-chrome-key"]);
     assert.equal(await apiModule.permissionsRequest({ permissions: ["userScripts"] }), true);
   } finally {
     if (previousBrowser === undefined) delete globalThis.browser;

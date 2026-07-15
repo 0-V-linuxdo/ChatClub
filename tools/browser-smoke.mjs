@@ -76,6 +76,212 @@ function assertRuntimeResult(result, browserTarget) {
   assert(!(loopback?.injection?.errors || []).length, `${browserTarget}: loopback injection error(s): ${(loopback?.injection?.errors || []).join(" | ")}`);
 }
 
+async function chromiumWorkspaceSessionRecoveryProbe(context, page, fixtureUrl, pageErrors) {
+  let activePage = page;
+  const prepared = await page.evaluate(async ({ fixtureUrl }) => {
+    const api = globalThis.chrome;
+    const shared = await import(api.runtime.getURL("shared/workspace-session.js"));
+    const stored = await api.storage.local.get(["options", shared.WORKSPACE_SESSION_GENERATION_KEY]);
+    const generation = stored[shared.WORKSPACE_SESSION_GENERATION_KEY]
+      || shared.DEFAULT_WORKSPACE_SESSION_GENERATION;
+    const presetId = stored.options?.activeLayoutPresetId
+      || stored.options?.layoutPresets?.[0]?.id
+      || "default";
+    const appIds = [...new Set(Array.from(document.querySelectorAll(".chat-frame"))
+      .map((frame) => frame.dataset.appId)
+      .filter(Boolean))];
+    if (appIds.length < 2) throw new Error("workspace session smoke requires at least two valid apps");
+    const href = (marker) => {
+      const url = new URL(fixtureUrl);
+      url.searchParams.set("workspace", marker);
+      return url.href;
+    };
+    const expected = {
+      groups: [
+        {
+          appIds: [appIds[0], appIds[0]],
+          activeIndex: 1,
+          hrefs: [href("duplicate-first"), href("duplicate-active")]
+        },
+        {
+          appIds: [appIds[1]],
+          activeIndex: 0,
+          hrefs: [href("fullscreen")]
+        }
+      ],
+      fullscreenGroupIndex: 1
+    };
+    const snapshot = {
+      schemaVersion: shared.WORKSPACE_SESSION_SCHEMA_VERSION,
+      generation,
+      layout: { type: "preset", presetId },
+      groups: expected.groups.map((group) => ({
+        tabs: group.appIds.map((appId, index) => ({ appId, currentHref: group.hrefs[index] })),
+        activeIndex: group.activeIndex
+      })),
+      fullscreenGroupIndex: expected.fullscreenGroupIndex
+    };
+    sessionStorage.setItem(shared.WORKSPACE_SESSION_PAGE_KEY, JSON.stringify({ generation, snapshot }));
+    const tab = await api.tabs.getCurrent();
+    return {
+      expected,
+      pageKey: shared.WORKSPACE_SESSION_PAGE_KEY,
+      oldTabId: tab.id
+    };
+  }, { fixtureUrl });
+
+  const readWorkspace = () => activePage.evaluate(() => {
+    const cards = Array.from(document.querySelectorAll(".chat-card"));
+    return {
+      shell: Boolean(document.querySelector("#app .app-shell")),
+      fullscreen: cards.findIndex((card) => card.classList.contains("fullscreen")),
+      groups: cards.map((card) => {
+        const frames = Array.from(card.querySelectorAll(".chat-frame"));
+        return {
+          appIds: frames.map((frame) => frame.dataset.appId),
+          activeIndex: frames.findIndex((frame) => frame.classList.contains("active")),
+          hrefs: frames.map((frame) => frame.getAttribute("src") || "")
+        };
+      })
+    };
+  });
+  const matchesExpected = ({ groups, fullscreen }, expected) => (
+    fullscreen === expected.fullscreenGroupIndex
+    && groups.length === expected.groups.length
+    && groups.every((group, groupIndex) => {
+      const wanted = expected.groups[groupIndex];
+      return group.activeIndex === wanted.activeIndex
+        && JSON.stringify(group.appIds) === JSON.stringify(wanted.appIds)
+        && JSON.stringify(group.hrefs) === JSON.stringify(wanted.hrefs);
+    })
+  );
+  const waitForRestoredWorkspace = async () => {
+    await activePage.locator("#app .app-shell").waitFor({ state: "attached", timeout: 25000 });
+    await activePage.waitForFunction((expected) => {
+      const cards = Array.from(document.querySelectorAll(".chat-card"));
+      const groups = cards.map((card) => {
+        const frames = Array.from(card.querySelectorAll(".chat-frame"));
+        return {
+          appIds: frames.map((frame) => frame.dataset.appId),
+          activeIndex: frames.findIndex((frame) => frame.classList.contains("active")),
+          hrefs: frames.map((frame) => frame.getAttribute("src") || "")
+        };
+      });
+      const fullscreen = cards.findIndex((card) => card.classList.contains("fullscreen"));
+      return fullscreen === expected.fullscreenGroupIndex
+        && groups.length === expected.groups.length
+        && groups.every((group, groupIndex) => {
+          const wanted = expected.groups[groupIndex];
+          return group.activeIndex === wanted.activeIndex
+            && JSON.stringify(group.appIds) === JSON.stringify(wanted.appIds)
+            && JSON.stringify(group.hrefs) === JSON.stringify(wanted.hrefs);
+        });
+    }, prepared.expected, { timeout: 25000 });
+    const current = await readWorkspace();
+    assert(matchesExpected(current, prepared.expected), `chromium: restored workspace mismatch: ${JSON.stringify(current)}`);
+  };
+
+  await activePage.reload({ waitUntil: "domcontentloaded", timeout: 20000 });
+  await waitForRestoredWorkspace();
+  await activePage.waitForFunction(async (expected) => {
+    const shared = await import(chrome.runtime.getURL("shared/workspace-session.js"));
+    const workspaceId = shared.workspaceSessionIdFromUrl(location.href);
+    if (!workspaceId) return false;
+    const tab = await chrome.tabs.getCurrent();
+    const workspaceKey = shared.workspaceSessionWorkspaceKey(workspaceId);
+    const bindingKey = shared.workspaceSessionBindingKey(tab.id);
+    const stored = await chrome.storage.local.get([workspaceKey, bindingKey]);
+    const workspace = stored[workspaceKey];
+    const snapshot = workspace?.snapshot;
+    return workspace?.workspaceId === workspaceId
+      && workspace?.owner?.tabId === tab.id
+      && stored[bindingKey]?.workspaceId === workspaceId
+      && snapshot?.groups?.length === expected.groups.length
+      && snapshot.groups[0]?.activeIndex === expected.groups[0].activeIndex
+      && snapshot.fullscreenGroupIndex === expected.fullscreenGroupIndex;
+  }, prepared.expected, { timeout: 10000 });
+
+  const durable = await activePage.evaluate(async () => {
+    const shared = await import(chrome.runtime.getURL("shared/workspace-session.js"));
+    const workspaceId = shared.workspaceSessionIdFromUrl(location.href);
+    const tab = await chrome.tabs.getCurrent();
+    return {
+      workspaceId,
+      workspaceUrl: shared.workspaceSessionUrl(location.href, workspaceId),
+      tabId: tab.id
+    };
+  });
+  assert(durable.tabId === prepared.oldTabId, "chromium: ordinary document reload unexpectedly changed the browser tab id");
+  assert(durable.workspaceId, "chromium: workspace reload did not install a stable URL token");
+
+  // Removing only the page-local layer simulates an update path where the
+  // top-level document is recreated while its stable URL token remains.
+  await activePage.evaluate((pageKey) => sessionStorage.removeItem(pageKey), prepared.pageKey);
+  await activePage.reload({ waitUntil: "domcontentloaded", timeout: 20000 });
+  await waitForRestoredWorkspace();
+
+  // Do not call chrome.runtime.reload() here: Chromium disables an unpacked
+  // command-line-loaded extension after that call in Playwright, leaving no
+  // replacement runtime to verify. Rebuilding the extension page exercises
+  // the actual persistence boundary without mutating the installed extension.
+  await activePage.close();
+  activePage = await context.newPage();
+  activePage.on("pageerror", (error) => pageErrors.push(error.message));
+  await activePage.addInitScript((pageKey) => {
+    globalThis.__chatclubSmokeInitialWorkspacePageValue = sessionStorage.getItem(pageKey);
+  }, prepared.pageKey);
+  await activePage.goto(durable.workspaceUrl, { waitUntil: "domcontentloaded", timeout: 20000 });
+  await waitForRestoredWorkspace();
+  await activePage.waitForFunction(async ({ workspaceId, expected }) => {
+    const shared = await import(chrome.runtime.getURL("shared/workspace-session.js"));
+    if (shared.workspaceSessionIdFromUrl(location.href) !== workspaceId) return false;
+    const tab = await chrome.tabs.getCurrent();
+    const workspaceKey = shared.workspaceSessionWorkspaceKey(workspaceId);
+    const bindingKey = shared.workspaceSessionBindingKey(tab.id);
+    const stored = await chrome.storage.local.get([workspaceKey, bindingKey]);
+    const workspace = stored[workspaceKey];
+    const snapshot = workspace?.snapshot;
+    return workspace?.owner?.tabId === tab.id
+      && stored[bindingKey]?.workspaceId === workspaceId
+      && snapshot?.groups?.length === expected.groups.length
+      && snapshot.groups[0]?.activeIndex === expected.groups[0].activeIndex
+      && snapshot.fullscreenGroupIndex === expected.fullscreenGroupIndex;
+  }, { workspaceId: durable.workspaceId, expected: prepared.expected }, { timeout: 10000 });
+
+  const rebuilt = await activePage.evaluate(async ({ pageKey, workspaceId }) => {
+    const shared = await import(chrome.runtime.getURL("shared/workspace-session.js"));
+    const tab = await chrome.tabs.getCurrent();
+    const workspaceKey = shared.workspaceSessionWorkspaceKey(workspaceId);
+    const bindingKey = shared.workspaceSessionBindingKey(tab.id);
+    const stored = await chrome.storage.local.get([workspaceKey, bindingKey]);
+    return {
+      tabId: tab.id,
+      workspaceId: shared.workspaceSessionIdFromUrl(location.href),
+      initialPageValue: globalThis.__chatclubSmokeInitialWorkspacePageValue,
+      pageValuePresent: Boolean(sessionStorage.getItem(pageKey)),
+      workspaceOwnerTabId: stored[workspaceKey]?.owner?.tabId,
+      bindingWorkspaceId: stored[bindingKey]?.workspaceId
+    };
+  }, { pageKey: prepared.pageKey, workspaceId: durable.workspaceId });
+  assert(rebuilt.tabId !== durable.tabId, "chromium: workspace reconstruction did not allocate a new browser tab id");
+  assert(rebuilt.workspaceId === durable.workspaceId, "chromium: workspace reconstruction changed the stable URL token");
+  assert(rebuilt.initialPageValue === null, "chromium: reconstructed tab unexpectedly inherited page sessionStorage");
+  assert(rebuilt.pageValuePresent, "chromium: stable mirror recovery did not warm the new page sessionStorage");
+  assert(rebuilt.workspaceOwnerTabId === rebuilt.tabId, "chromium: stable mirror owner did not move to the reconstructed tab");
+  assert(rebuilt.bindingWorkspaceId === durable.workspaceId, "chromium: reconstructed tab binding does not point to the stable workspace");
+  return {
+    page: activePage,
+    result: {
+      ok: true,
+      mode: "stable-token-new-tab",
+      expected: prepared.expected,
+      workspaceId: durable.workspaceId,
+      oldTabId: durable.tabId,
+      newTabId: rebuilt.tabId
+    }
+  };
+}
+
 const pageProbe = `async (fixtureUrl) => {
   const request = async (message) => {
     try {
@@ -249,12 +455,15 @@ async function chromiumSmoke(extensionDirectory, temporaryRoot, fixtureUrl) {
     const serviceWorker = workers.find((worker) => worker.url().endsWith("/background/service-worker.js")) || workers[0];
     assert(serviceWorker?.url().startsWith("chrome-extension://"), "chromium: module Service Worker did not start");
     const extensionId = new URL(serviceWorker.url()).host;
-    const page = await context.newPage();
+    let page = await context.newPage();
     const pageErrors = [];
     page.on("pageerror", (error) => pageErrors.push(error.message));
     await page.goto(`chrome-extension://${extensionId}/chatClub.html`, { waitUntil: "domcontentloaded", timeout: 20000 });
     await page.locator("#app .app-shell").waitFor({ state: "attached", timeout: 25000 });
+    const workspaceSessionProbe = await chromiumWorkspaceSessionRecoveryProbe(context, page, fixtureUrl, pageErrors);
+    page = workspaceSessionProbe.page;
     const result = await page.evaluate(`(${pageProbe})(${JSON.stringify(fixtureUrl)})`);
+    result.workspaceSession = workspaceSessionProbe.result;
     if (pageErrors.length) result.pageErrors = pageErrors;
     assertRuntimeResult(result, "chromium");
     assert(!pageErrors.length, `chromium: uncaught page error(s): ${pageErrors.join(" | ")}`);
