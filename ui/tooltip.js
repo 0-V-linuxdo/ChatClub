@@ -1,4 +1,4 @@
-import { el } from "./dom.js";
+import { el, isDismissalEscape } from "./dom.js";
 
 const EDGE_GAP = 8;
 const POINTER_GAP = 10;
@@ -249,7 +249,7 @@ export function installGlobalTooltips(options = {}) {
 
   document.addEventListener("keydown", (event) => {
     keyboardInteraction = true;
-    if (event.key === "Escape") resetTooltipInteractionState();
+    if (isDismissalEscape(event)) resetTooltipInteractionState();
   }, true);
 
   document.addEventListener("visibilitychange", resetTooltipInteractionState, true);

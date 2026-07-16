@@ -1,6 +1,6 @@
 import { t } from "../../shared/i18n.js";
 import { dedupePocketHistory, normalizePocketCardSize } from "../../shared/storage-schema.js";
-import { clear, el, modal, toast } from "../../ui/dom.js";
+import { clear, el, toast, viewerModal } from "../../ui/dom.js";
 import { requireControllerContext, requireControllerFunction, validateControllerContract } from "../controller-contract.js";
 import { renderMarkdown } from "../summary/markdown.js";
 import {
@@ -1062,7 +1062,7 @@ export function createPocketController(ctx) {
       state.pocketEntries = history;
       redraw();
     }).catch(() => redraw());
-    const dialog = modal(t("pocket.title"), host, () => {
+    const dialog = viewerModal(t("pocket.title"), host, () => {
       if (pocketCurrentRedraw === redraw) pocketCurrentRedraw = null;
       dialog.remove();
     }, true, t("common.close"));

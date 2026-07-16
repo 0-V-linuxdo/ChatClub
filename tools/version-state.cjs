@@ -3,6 +3,10 @@
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
+const {
+  TOPIC_DELETE_OUTPUT_FILES,
+  assertGeneratedArtifactInventory
+} = require("./generated-artifacts.cjs");
 const { packageDigest, packagePlan, root } = require("./package-plan.cjs");
 
 const statePath = path.join(root, "version-state.json");
@@ -23,9 +27,14 @@ function appVersion() {
 
 function summaryState() {
   const index = JSON.parse(read("userscripts/index.json"));
+  const ids = new Set();
   return {
     configVersion: index.summarySiteConfigVersion,
     sites: Object.fromEntries(index.configs.map((config) => {
+      if (!config?.id || ids.has(config.id)) {
+        throw new Error(`userscripts/index.json: duplicate or missing summary id ${JSON.stringify(config?.id)}`);
+      }
+      ids.add(config.id);
       const source = read(path.posix.join("userscripts", config.userscriptFile)).replace(/\r\n?/g, "\n");
       return [config.id, {
         file: config.userscriptFile,
@@ -37,8 +46,8 @@ function summaryState() {
 }
 
 function deleteState() {
-  const directory = path.join(root, "topic-delete-userscripts");
-  const files = fs.readdirSync(directory).filter((file) => file.endsWith(".user.js")).sort();
+  assertGeneratedArtifactInventory(root);
+  const files = TOPIC_DELETE_OUTPUT_FILES.map((file) => path.posix.basename(file));
   return Object.fromEntries(files.map((file) => {
     const source = read(path.posix.join("topic-delete-userscripts", file)).replace(/\r\n?/g, "\n");
     const version = source.match(/^\/\/\s*@version\s+([^\s]+)\s*$/m)?.[1];
@@ -235,6 +244,8 @@ module.exports = {
   compareVersions,
   validNumericManifestVersion,
   snapshotWriteErrors,
+  summaryState,
+  deleteState,
   computeVersionState,
   verifyVersionState
 };

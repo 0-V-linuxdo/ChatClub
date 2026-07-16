@@ -9,17 +9,17 @@
   var NOTION_SEND_TEXT_EVENT = "chatclub:notion-send-text:2026.07.15.2";
   var NOTION_SEND_PROMPT_EVENT = "chatclub:notion-send-prompt:2026.07.15.2";
   var NOTION_SEND_ACTIVATED_EVENT = "chatclub:notion-send-activated:2026.07.15.2";
-  var SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.16.1";
-  var DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.16.1";
-  var MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.16.1";
-  var SUMMARY_POST_MESSAGE_SOURCE = "chatclub:summary:2026.07.16.1";
-  var PREFERRED_MODEL_POST_MESSAGE_SOURCE = "chatclub:preferred-model:2026.07.16.1";
-  var CONTENT_BRIDGE_VERSION = "2026.07.16.1";
-  var EXTENSION_RUNTIME_RELAY_SOURCE = "chatclub:runtime-relay:2026.07.16.1";
+  var SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.16.2";
+  var DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.16.2";
+  var MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.16.2";
+  var SUMMARY_POST_MESSAGE_SOURCE = "chatclub:summary:2026.07.16.2";
+  var PREFERRED_MODEL_POST_MESSAGE_SOURCE = "chatclub:preferred-model:2026.07.16.2";
+  var CONTENT_BRIDGE_VERSION = "2026.07.16.2";
+  var EXTENSION_RUNTIME_RELAY_SOURCE = "chatclub:runtime-relay:2026.07.16.2";
   var FRAME_BINDING_POST_MESSAGE_SOURCE = `chatclub:frame-binding:${CONTENT_BRIDGE_VERSION}`;
-  var SECURE_FRAME_COMMAND_SOURCE = "chatclub:frame-command:2026.07.16.1";
-  var DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.07.15.1";
-  var PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.16.1";
+  var SECURE_FRAME_COMMAND_SOURCE = "chatclub:frame-command:2026.07.16.2";
+  var DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.07.16.1";
+  var PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.16.2";
   var RUNTIME_REGISTRY_ABI_VERSION = 1;
   var RUNTIME_REGISTRY_KEY = `__CHATCLUB_RUNTIME_REGISTRY_V${RUNTIME_REGISTRY_ABI_VERSION}__`;
   var NAVIGATION_FOCUS_GUARD_RUNTIME = "navigation-focus-guard";
@@ -1795,11 +1795,38 @@
         if (referenceOnly(text)) return "";
         return text;
       };
+      const messageOwner = (button) => {
+        try {
+          return api.closest(button, "article.message-user,article.message-ai,[data-message-author-role],article") || button;
+        } catch (error) {
+          return button;
+        }
+      };
+      const messageRole = (owner, index) => {
+        const explicit = normalize(owner && owner.getAttribute && owner.getAttribute("data-message-author-role")).toLowerCase();
+        if (explicit === "user" || explicit === "assistant") return explicit;
+        const signature = normalize([
+          owner && owner.getAttribute && owner.getAttribute("class"),
+          owner && owner.getAttribute && owner.getAttribute("data-testid"),
+          owner && owner.getAttribute && owner.getAttribute("aria-label")
+        ].filter(Boolean).join(" ")).toLowerCase();
+        if (/(?:^|\s)message-user(?:\s|$)|\buser[-_ ]message\b/.test(signature)) return "user";
+        if (/(?:^|\s)message-ai(?:\s|$)|\b(?:assistant|ai)[-_ ]message\b/.test(signature)) return "assistant";
+        return index % 2 === 0 ? "user" : "assistant";
+      };
       const buttons = qsa("button,[role=button]", root).filter((button) => visible(button) && !internalTool(button) && messageCopyButton(button) && !referenceCopyButton(button)).sort(order);
+      const actions = [];
+      const seenOwners = /* @__PURE__ */ new Set();
+      for (const button of buttons) {
+        const owner = messageOwner(button);
+        if (seenOwners.has(owner)) continue;
+        seenOwners.add(owner);
+        actions.push({ button, owner });
+      }
       const out = [];
-      const seen = /* @__PURE__ */ new Set();
-      for (const button of buttons.slice(0, 24)) {
-        const role = out.length % 2 === 0 ? "user" : "assistant";
+      for (const [index, action] of actions.slice(0, 24).entries()) {
+        const { button, owner } = action;
+        const role = messageRole(owner, index);
         const text = useful(await api.copy(button, {
           resetClipboardBeforeCopy: true,
           acceptUnchangedClipboard: false,
@@ -1808,9 +1835,6 @@
           copyCaptureGraceMs: 320
         }));
         if (!text) continue;
-        const key = role + "\n" + text.toLowerCase().replace(/\s+/g, "");
-        if (seen.has(key)) continue;
-        seen.add(key);
         out.push({ role, text });
         await api.sleep(80);
       }
@@ -2362,7 +2386,7 @@
       return api.merge(out);
     };
     scripts["typingmind.js"] = scripts["typingmind"];
-    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.1" });
+    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2" });
     return scripts;
   }
 

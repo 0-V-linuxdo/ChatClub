@@ -7,8 +7,8 @@ import {
   TOPIC_DELETE_RESULT_EVENT
 } from "./protocol.js";
 
-const DELETE_USERSCRIPT_VERSION = "2026.07.05.1";
-const GEMINI_DELETE_USERSCRIPT_VERSION = "2026.07.12.1";
+const DELETE_USERSCRIPT_VERSION = "2026.07.16.1";
+const GEMINI_DELETE_USERSCRIPT_VERSION = "2026.07.16.1";
 const DELETE_USERSCRIPT_NAMESPACE = "https://chatclub.local/delete-sites";
 
 const GEMINI_DELETE_USERSCRIPT_HELPERS = String.raw`
@@ -1348,13 +1348,16 @@ const DELETE_USERSCRIPT_ENGINE = String.raw`
 
   async function openTriggerAndClickDelete(trigger, labels, options = {}) {
     if (!trigger || (!visible(trigger) && !options.allowHiddenTrigger)) return false;
+    const guard = () => typeof options.guard !== "function" || options.guard() === true;
+    if (!guard()) return false;
     const menuReady = () => findMenuItem(labels, trigger) || findOpenDeleteMenuItem(labels);
+    if (options.requireFreshMenu && menuReady()) return false;
     if (!menuReady() && !await clickUntil(trigger, menuReady, { allowHidden: options.allowHiddenTrigger, settleMs: 220 })) return false;
     await sleep(120);
     const deadline = Date.now() + Math.max(0, Number(options.timeoutMs) || 3200);
     while (Date.now() <= deadline) {
       const item = findMenuItem(labels, trigger) || findOpenDeleteMenuItem(labels);
-      if (item && clickAt(item)) return true;
+      if (item && guard() && clickAt(item)) return true;
       await sleep(100);
     }
     return false;
@@ -1672,7 +1675,7 @@ const DELETE_USERSCRIPT_ENGINE = String.raw`
     return !findDeleteConfirmButton() && !deleteDialogRoots().length;
   }
 
-  async function clickDeleteConfirmIfPresent(timeoutMs = 4200) {
+  async function clickDeleteConfirmIfPresent(timeoutMs = 4200, guard = null) {
     const deadline = Date.now() + Math.max(0, Number(timeoutMs) || 0);
     let clickedRoot = null;
     let clicked = null;
@@ -1681,6 +1684,7 @@ const DELETE_USERSCRIPT_ENGINE = String.raw`
       if (clicked && deleteConfirmDialogClosed(clickedRoot, clicked)) return true;
       const info = findDeleteConfirmButtonInfo();
       const button = info?.node || null;
+      if (button && typeof guard === "function" && guard() !== true) return false;
       if (button && (button !== clicked || Date.now() - clickedAt > 900) && activateConfirmButton(button, info.root || null)) {
         clickedRoot = info.root || null;
         clicked = button;
@@ -2073,43 +2077,12 @@ __CHATCLUB_DELETE_SITE_HELPERS__
       titleTokens: [document.title, payload.currentTitle, payload.title].map(deepSeekTitleToken).filter(Boolean)
     };
   }
-  function deepSeekRows(root, hints) {
-    const candidates = [];
-    const seen = new Set();
-    for (const node of qsa("a,button,[role='button'],li,div", root || document)) {
-      if (!node || seen.has(node) || !visible(node)) continue;
-      const box = rect(node);
-      if (!box || box.left > 560 || box.width < 80 || box.height < 22 || box.height > 120) continue;
-      const value = elementText(node);
-      const token = compact(value);
-      if (!token || /^(today|yesterday|newchat|threads|history|今天|昨天|新聊天|历史)$/.test(token)) continue;
-      if (/rename|pin|share|delete|cancel|搜索|设置|删除|重命名|分享|置顶/i.test(value)) continue;
-      const target = clickable(node);
-      if (!target) continue;
-      seen.add(target);
-      const href = String(node.href || node.getAttribute?.("href") || target.href || target.getAttribute?.("href") || "");
-      const activeRow = /\b(active|selected|current)\b/i.test(String(target.className || node.className || "")) || String(target.getAttribute?.("aria-current") || "").toLowerCase() === "page";
-      const urlMatch = hints.ids.some((id) => href.includes(id));
-      const titleMatch = hints.titleTokens.some((item) => token.includes(item) || item.includes(token));
-      const score = (urlMatch ? 1200 : 0) + (titleMatch ? 900 : 0) + (activeRow ? 520 : 0) - box.top * 0.02;
-      if (score >= 450) candidates.push({ node: target, score, top: box.top });
-    }
-    candidates.sort((a, b) => b.score - a.score || a.top - b.top);
-    return candidates.map((item) => item.node);
-  }
-  function deepSeekCurrentRow(root, hints) {
-    const links = deepSeekLinks(root || document);
-    const currentId = hints.ids?.[0] || deepSeekChatId(location.href);
-    if (currentId) {
-      const exact = links.find((link) => deepSeekChatId(link.href || link.getAttribute?.("href")) === currentId);
-      if (exact) return exact;
-    }
-    const selected = links.find((link) => {
-      const className = String(link.className || "");
-      const ariaCurrent = String(link.getAttribute?.("aria-current") || "").toLowerCase();
-      return /\b(active|selected|current)\b/i.test(className) || ariaCurrent === "page";
-    });
-    return selected || deepSeekRows(root, hints)[0] || null;
+  function deepSeekCurrentRow(root) {
+    if (!root) return null;
+    const links = deepSeekLinks(root);
+    const currentId = deepSeekChatId(location.href);
+    if (!currentId) return null;
+    return links.find((link) => deepSeekChatId(link.href || link.getAttribute?.("href")) === currentId) || null;
   }
   function deepSeekVisualRow(row) {
     const rowBox = rect(row);
@@ -2267,6 +2240,7 @@ __CHATCLUB_DELETE_SITE_HELPERS__
       const box = rect(node);
       if (!box || box.top < 0 || box.top > 190 || box.left < 120 || box.width < 20 || box.height < 14 || box.height > 92) continue;
       if (String(node.href || node.getAttribute?.("href") || "").match(/\/(?:a\/)?chat\/s\//i)) continue;
+      if (node.closest?.("a[href*='/chat/s/'],a[href*='/a/chat/s/']") || qsa("a[href*='/chat/s/'],a[href*='/a/chat/s/']", node).length) continue;
       const token = compact(elementText(node));
       if (!token || !titleTokens.some((item) => token.includes(item) || item.includes(token))) continue;
       seenTitles.add(node);
@@ -2366,47 +2340,99 @@ __CHATCLUB_DELETE_SITE_HELPERS__
     candidates.sort((a, b) => b.score - a.score || b.right - a.right);
     return candidates[0]?.node || null;
   }
+  let deepSeekPendingTrustedAttempt = null;
+  function deepSeekTrustedRetryRequested(payload = {}) {
+    return Boolean(payload?.trustedMenuClickRetried || payload?.trustedKeySequenceRetried);
+  }
+  function deepSeekAttemptIdentity(payload = {}) {
+    return { attemptId: normalize(payload?.deleteAttemptId), routeId: deepSeekChatId(location.href) };
+  }
+  function deepSeekTrustedRetryOwned(payload = {}) {
+    const identity = deepSeekAttemptIdentity(payload);
+    return Boolean(
+      identity.attemptId
+      && identity.routeId
+      && deepSeekPendingTrustedAttempt?.attemptId === identity.attemptId
+      && deepSeekPendingTrustedAttempt?.routeId === identity.routeId
+      && deepSeekPendingTrustedAttempt?.phase === "awaiting-menu-trigger"
+      && deepSeekPendingTrustedAttempt?.baseline === "no-delete-ui"
+      && Number(deepSeekPendingTrustedAttempt?.expiresAt) >= Date.now()
+    );
+  }
+  function armDeepSeekTrustedRetry(payload = {}, value = {}) {
+    const identity = deepSeekAttemptIdentity(payload);
+    if (!identity.attemptId || !identity.routeId) {
+      deepSeekPendingTrustedAttempt = null;
+      return result(false, (value.reason || "trusted retry required") + "; trusted retry ownership unavailable");
+    }
+    deepSeekPendingTrustedAttempt = { ...identity, phase: "awaiting-menu-trigger", baseline: "no-delete-ui", expiresAt: Date.now() + 20000 };
+    return value;
+  }
   async function deleteDeepSeek(payload = {}) {
-    if (!await ensureDeepSeekSidebarOpen()) return result(false, "sidebar could not be opened");
+    const currentRouteId = deepSeekChatId(location.href);
+    if (!currentRouteId) return result(false, "stable current conversation route is required");
+    const retryRequested = deepSeekTrustedRetryRequested(payload);
+    const retryOwned = retryRequested && deepSeekTrustedRetryOwned(payload);
+    if (retryRequested && !retryOwned) return result(false, "trusted delete retry does not match the pending attempt and route");
+    deepSeekPendingTrustedAttempt = null;
+    await ensureDeepSeekSidebarOpen();
+    const routeStillCurrent = () => deepSeekChatId(location.href) === currentRouteId;
+    if (!routeStillCurrent()) return result(false, "current conversation changed while preparing deletion");
     const hints = deepSeekHints(payload);
     const labels = ["Delete", "删除"];
-    if (payload?.trustedMenuClickRetried || payload?.trustedKeySequenceRetried) {
+    if (findDeleteConfirmButton()) return result(false, "unverified delete confirmation is already open");
+    if (retryOwned) {
       const deleteItem = await waitFor(() => findOpenDeleteMenuItem(labels), 3200, 90);
-      if (deleteItem && clickAt(deleteItem)) {
-        const confirmedAfterTrustedMenu = await clickDeleteConfirmIfPresent(6500);
+      if (deleteItem) {
+        if (!routeStillCurrent()) return result(false, "current conversation changed during trusted menu retry");
+        if (!clickAt(deleteItem)) return result(false, "explicit Delete action could not be safely activated");
+        const confirmedAfterTrustedMenu = await clickDeleteConfirmIfPresent(6500, routeStillCurrent);
         if (!confirmedAfterTrustedMenu) return result(false, "delete confirmation button not found");
         return result(true);
       }
       if (payload?.trustedMenuClickRetried) {
-        return result(false, "trusted topic menu click did not open");
+        if (!routeStillCurrent()) return result(false, "current conversation changed during trusted menu retry");
+        if (findOpenDeleteMenuItem(labels) || findDeleteConfirmButton()) {
+          return result(false, "delete menu state is not clean; trusted retry was not renewed");
+        }
+        return armDeepSeekTrustedRetry(payload, result(false, "trusted topic menu click did not open"));
       }
     }
+    const root = deepSeekSidebarRoot();
+    const row = deepSeekCurrentRow(root);
+    let rowFailureReason = "current topic row not found";
+    let moreButton = null;
+    if (row) {
+      moreButton = await waitFor(() => deepSeekMoreButton(row), 1800, 100);
+      if (moreButton) {
+        if (await openTriggerAndClickDelete(moreButton, labels, { timeoutMs: 2800, allowHiddenTrigger: true, requireFreshMenu: true, guard: routeStillCurrent })) {
+          const confirmed = await clickDeleteConfirmIfPresent(6500, routeStillCurrent);
+          if (!confirmed) return result(false, "delete confirmation button not found");
+          return result(true);
+        }
+        rowFailureReason = "delete menu item not found";
+      } else {
+        rowFailureReason = "topic menu trigger not found";
+      }
+      closeDeepSeekTransientMenus();
+    }
+    if (!routeStillCurrent()) return result(false, "current conversation changed before delete activation");
     const headerButton = deepSeekHeaderMenuButton(hints);
-    if (headerButton && await openTriggerAndClickDelete(headerButton, labels, { timeoutMs: 2600, allowHiddenTrigger: true })) {
-      const confirmedFromHeader = await clickDeleteConfirmIfPresent(6500);
+    if (headerButton && await openTriggerAndClickDelete(headerButton, labels, { timeoutMs: 2600, allowHiddenTrigger: true, requireFreshMenu: true, guard: routeStillCurrent })) {
+      const confirmedFromHeader = await clickDeleteConfirmIfPresent(6500, routeStillCurrent);
       if (!confirmedFromHeader) return result(false, "delete confirmation button not found");
       return result(true);
     }
     if (headerButton) closeDeepSeekTransientMenus();
-    const root = deepSeekSidebarRoot();
-    const row = deepSeekCurrentRow(root, hints);
-    if (!row) return result(false, "current topic row not found");
-    const moreButton = await waitFor(() => deepSeekMoreButton(row), 1800, 100);
-    if (!moreButton) return payload?.trustedMenuClickRetried
-      ? result(false, "topic menu trigger not found")
-      : payload?.trustedKeySequenceRetried
-        ? resultWithDeepSeekTrustedMenuClick("topic menu trigger not found", row)
-        : resultWithDeepSeekTrustedKeySequence("topic menu trigger not found", row);
-    if (!await openTriggerAndClickDelete(moreButton, labels, { timeoutMs: 2800, allowHiddenTrigger: true })) {
-      return payload?.trustedMenuClickRetried
-        ? result(false, "delete menu item not found")
-        : payload?.trustedKeySequenceRetried
-          ? resultWithDeepSeekTrustedMenuClick("delete menu item not found", row, moreButton)
-          : resultWithDeepSeekTrustedKeySequence("delete menu item not found", row);
-    }
-    const confirmed = await clickDeleteConfirmIfPresent(6500);
-    if (!confirmed) return result(false, "delete confirmation button not found");
-    return result(true);
+    if (!row) return result(false, rowFailureReason);
+    const cleanBaseline = await waitFor(() => !findOpenDeleteMenuItem(labels) && !findDeleteConfirmButton(), 700, 70);
+    if (!cleanBaseline) return result(false, "delete menu state remained open; trusted retry was not leased");
+    return armDeepSeekTrustedRetry(
+      payload,
+      payload?.trustedKeySequenceRetried
+        ? resultWithDeepSeekTrustedMenuClick(rowFailureReason, row, moreButton)
+        : resultWithDeepSeekTrustedKeySequence(rowFailureReason, row)
+    );
   }
 
   const runners = {

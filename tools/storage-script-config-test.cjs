@@ -24,11 +24,22 @@ const { fileURLToPath } = require("node:url");
       assert.equal((await loadBuiltInSummarySource(descriptor.id)).length, descriptor.userscriptLength);
     }
     for (const descriptor of TOPIC_DELETE_SITE_CONFIGS) {
-      assert.equal((await loadBuiltInTopicDeleteSource(descriptor.id)).length, descriptor.userscriptLength);
+      const source = await loadBuiltInTopicDeleteSource(descriptor.id);
+      assert.equal(source.length, descriptor.userscriptLength);
+      assert.equal(
+        source.match(/^\/\/\s*@version\s+(\S+)\s*$/m)?.[1],
+        descriptor.scriptVersion,
+        `${descriptor.id} descriptor version must match the generated userscript @version`
+      );
     }
 
     const summarySource = await loadBuiltInSummarySource("chatgpt");
     const deleteSource = await loadBuiltInTopicDeleteSource("chatgpt");
+    const currentDeleteVersion = deleteSource.match(/^\/\/\s*@version\s+(\S+)\s*$/m)?.[1];
+    assert.ok(currentDeleteVersion);
+    const legacyDeleteVersion = currentDeleteVersion === "2000.01.01.1" ? "2000.01.01.2" : "2000.01.01.1";
+    const legacyGeneratedDeleteSource = deleteSource.split(currentDeleteVersion).join(legacyDeleteVersion);
+    const legacyGeneratedDeleteEdit = `${legacyGeneratedDeleteSource}\n// preserved user edit`;
     const migratedBuiltIns = await migrateLegacyScriptConfig({
       scriptConfigSchemaVersion: 2,
       summarySiteConfigs: [{ id: "chatgpt", builtIn: true, userscript: summarySource }],
@@ -39,6 +50,36 @@ const { fileURLToPath } = require("node:url");
       assert.ok(!("userscript" in item));
       assert.ok(!("customUserscript" in item));
     }
+
+    const migratedLegacyGenerated = await migrateLegacyScriptConfig({
+      topicDeleteSiteConfigs: [{ id: "chatgpt", builtIn: true, userscript: legacyGeneratedDeleteSource }]
+    });
+    assert.equal(migratedLegacyGenerated.topicDeleteSiteConfigs[0].sourceMode, "builtIn");
+    assert.ok(!("customUserscript" in migratedLegacyGenerated.topicDeleteSiteConfigs[0]));
+
+    const explicitCustomDeleteSource = `${legacyGeneratedDeleteSource}\n// customUserscript edit`;
+    const migratedExplicitCustom = await migrateLegacyScriptConfig({
+      topicDeleteSiteConfigs: [
+        { id: "chatgpt", builtIn: true, sourceMode: "custom", userscript: legacyGeneratedDeleteEdit },
+        { id: "chatgpt", builtIn: true, userscript: legacyGeneratedDeleteSource, customUserscript: explicitCustomDeleteSource },
+        { id: "chatgpt", builtIn: true, userscriptOverride: true, userscript: legacyGeneratedDeleteEdit }
+      ]
+    });
+    assert.deepEqual(
+      migratedExplicitCustom.topicDeleteSiteConfigs.map((item) => item.sourceMode),
+      ["custom", "custom", "custom"]
+    );
+    assert.equal(migratedExplicitCustom.topicDeleteSiteConfigs[0].customUserscript, legacyGeneratedDeleteEdit);
+    assert.equal(migratedExplicitCustom.topicDeleteSiteConfigs[1].customUserscript, explicitCustomDeleteSource);
+    assert.equal(migratedExplicitCustom.topicDeleteSiteConfigs[2].customUserscript, legacyGeneratedDeleteEdit);
+    assert.ok(migratedExplicitCustom.topicDeleteSiteConfigs.every((item) => !("userscript" in item)));
+    assert.ok(migratedExplicitCustom.topicDeleteSiteConfigs.every((item) => !("userscriptOverride" in item)));
+
+    const dehydratedOverride = dehydrateOptions(normalizeOptions({
+      topicDeleteSiteConfigs: [migratedExplicitCustom.topicDeleteSiteConfigs[2]]
+    }));
+    assert.equal(dehydratedOverride.topicDeleteSiteConfigs[0].sourceMode, "custom");
+    assert.equal(dehydratedOverride.topicDeleteSiteConfigs[0].customUserscript, legacyGeneratedDeleteEdit);
 
     const exactEdit = `  ${summarySource}\n// user edit\n`;
     const exactCustom = "\n  return ['preserve whitespace'];\n\n";

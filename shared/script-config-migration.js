@@ -60,14 +60,24 @@ return api.result(true, "kagi");`
   ].every((marker) => normalized.includes(marker));
 }
 
+function explicitlyCustomEntry(item) {
+  return Boolean(item && typeof item === "object" && (
+    item.sourceMode === "custom"
+    || typeof item.customUserscript === "string"
+    || item.userscriptOverride === true
+  ));
+}
+
 function migrateEntry(item, isPackagedCopy) {
   if (!item || typeof item !== "object") return item;
   const next = { ...item };
   const legacySource = typeof next.userscript === "string" ? next.userscript : "";
+  const explicitCustom = explicitlyCustomEntry(next);
   delete next.userscript;
   delete next.userscriptOverride;
-  if (typeof next.customUserscript === "string") {
+  if (explicitCustom) {
     next.sourceMode = "custom";
+    if (typeof next.customUserscript !== "string" && legacySource) next.customUserscript = legacySource;
     return next;
   }
   if (!legacySource) return next;
@@ -90,7 +100,7 @@ export async function migrateLegacyScriptConfig(raw = {}) {
     options.summarySiteConfigs = await Promise.all(options.summarySiteConfigs.map(async (item) => {
       const descriptor = summaryById.get(String(item?.id || ""));
       const legacySource = typeof item?.userscript === "string" ? item.userscript : "";
-      if (!descriptor || !legacySource || typeof item?.customUserscript === "string") return migrateEntry(item, false);
+      if (!descriptor || !legacySource || explicitlyCustomEntry(item)) return migrateEntry(item, false);
       let packaged = false;
       try { packaged = normalizedSource(legacySource) === normalizedSource(await loadBuiltInSummarySource(descriptor.id)); }
       catch { packaged = false; }
@@ -102,7 +112,7 @@ export async function migrateLegacyScriptConfig(raw = {}) {
     options.topicDeleteSiteConfigs = await Promise.all(options.topicDeleteSiteConfigs.map(async (item) => {
       const descriptor = deleteById.get(String(item?.id || ""));
       const legacySource = typeof item?.userscript === "string" ? item.userscript : "";
-      if (!descriptor || !legacySource || typeof item?.customUserscript === "string") return migrateEntry(item, false);
+      if (!descriptor || !legacySource || explicitlyCustomEntry(item)) return migrateEntry(item, false);
       let packaged = false;
       try { packaged = generatedDeleteSource(descriptor.id, legacySource, await loadBuiltInTopicDeleteSource(descriptor.id)); }
       catch { packaged = false; }

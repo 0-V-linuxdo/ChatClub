@@ -15,17 +15,17 @@
   var NOTION_SEND_TEXT_EVENT = "chatclub:notion-send-text:2026.07.15.2";
   var NOTION_SEND_PROMPT_EVENT = "chatclub:notion-send-prompt:2026.07.15.2";
   var NOTION_SEND_ACTIVATED_EVENT = "chatclub:notion-send-activated:2026.07.15.2";
-  var SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.16.1";
-  var DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.16.1";
-  var MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.16.1";
-  var SUMMARY_POST_MESSAGE_SOURCE = "chatclub:summary:2026.07.16.1";
-  var PREFERRED_MODEL_POST_MESSAGE_SOURCE = "chatclub:preferred-model:2026.07.16.1";
-  var CONTENT_BRIDGE_VERSION = "2026.07.16.1";
-  var EXTENSION_RUNTIME_RELAY_SOURCE = "chatclub:runtime-relay:2026.07.16.1";
+  var SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.16.2";
+  var DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.16.2";
+  var MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.16.2";
+  var SUMMARY_POST_MESSAGE_SOURCE = "chatclub:summary:2026.07.16.2";
+  var PREFERRED_MODEL_POST_MESSAGE_SOURCE = "chatclub:preferred-model:2026.07.16.2";
+  var CONTENT_BRIDGE_VERSION = "2026.07.16.2";
+  var EXTENSION_RUNTIME_RELAY_SOURCE = "chatclub:runtime-relay:2026.07.16.2";
   var FRAME_BINDING_POST_MESSAGE_SOURCE = `chatclub:frame-binding:${CONTENT_BRIDGE_VERSION}`;
-  var SECURE_FRAME_COMMAND_SOURCE = "chatclub:frame-command:2026.07.16.1";
-  var DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.07.15.1";
-  var PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.16.1";
+  var SECURE_FRAME_COMMAND_SOURCE = "chatclub:frame-command:2026.07.16.2";
+  var DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.07.16.1";
+  var PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.16.2";
   var RUNTIME_REGISTRY_ABI_VERSION = 1;
   var RUNTIME_REGISTRY_KEY = `__CHATCLUB_RUNTIME_REGISTRY_V${RUNTIME_REGISTRY_ABI_VERSION}__`;
   var NAVIGATION_FOCUS_GUARD_RUNTIME = "navigation-focus-guard";
@@ -267,6 +267,7 @@
   var DEFAULT_TAB_GROUP_BUTTON_ORDER = Object.freeze(
     TAB_GROUP_HEADER_BUTTONS.filter((item) => !item.requiredPinned).map((item) => item.id)
   );
+  var TAB_GROUP_BUTTON_ORDER_MIGRATION_VERSION = 1;
   var DEFAULT_POCKET_CARD_SIZE = Object.freeze({
     width: 460,
     height: 560
@@ -426,6 +427,7 @@ When the user asks a follow-up question, answer from the provided context first 
     tabGroupButtonsMode: "pinned",
     tabGroupButtonPlacement: DEFAULT_TAB_GROUP_BUTTON_PLACEMENT,
     tabGroupButtonOrder: DEFAULT_TAB_GROUP_BUTTON_ORDER,
+    tabGroupButtonOrderMigrationVersion: TAB_GROUP_BUTTON_ORDER_MIGRATION_VERSION,
     topbarLayout: DEFAULT_TOPBAR_LAYOUT,
     topbarDeleteThreadMigrated: true,
     apiProfiles: [
@@ -511,6 +513,94 @@ When the user asks a follow-up question, answer from the provided context first 
       }
     }
   };
+
+  // shared/delete-completion.js
+  var DELETE_COMPLETION_STATE_VERSION = 1;
+  var MAX_IDENTITY_ID_LENGTH = 512;
+  function hostMatches(host, roots = []) {
+    return roots.some((root) => host === root || host.endsWith(`.${root}`));
+  }
+  function cleanIdentityId(value) {
+    const raw = String(value || "").trim();
+    if (!raw || raw.length > MAX_IDENTITY_ID_LENGTH) return "";
+    try {
+      return decodeURIComponent(raw);
+    } catch {
+      return raw;
+    }
+  }
+  function identity(provider, value) {
+    const id = cleanIdentityId(value);
+    return id ? Object.freeze({ provider, id }) : null;
+  }
+  function normalizeDeleteConversationIdentity(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+    const provider = String(value.provider || "").trim();
+    if (!/^(?:chatgpt|gemini|kagi|notion|grok|deepseek)$/.test(provider)) return null;
+    return identity(provider, value.id);
+  }
+  function normalizeDeleteFrameHref(value) {
+    try {
+      const url = new URL(String(value || ""));
+      return /^https?:$/.test(url.protocol) ? url.href : "";
+    } catch {
+      return "";
+    }
+  }
+  function deleteConversationIdentityFromHref(value, baseHref = void 0) {
+    let url;
+    try {
+      url = baseHref ? new URL(String(value || ""), String(baseHref)) : new URL(String(value || ""));
+    } catch {
+      return null;
+    }
+    if (!/^https?:$/.test(url.protocol)) return null;
+    const host = url.hostname.toLowerCase();
+    const path = url.pathname || "/";
+    let match = null;
+    if (hostMatches(host, ["chatgpt.com", "chat.openai.com"])) {
+      match = /\/(?:g\/[^/?#]+\/)?c\/([^/?#]+)/i.exec(path);
+      return match ? identity("chatgpt", match[1]) : null;
+    }
+    if (hostMatches(host, ["gemini.google.com", "bard.google.com"])) {
+      match = /^\/app\/([^/?#]+)/i.exec(path);
+      return match ? identity("gemini", match[1]) : null;
+    }
+    if (host === "assistant.kagi.com") {
+      match = /^\/chat\/([^/?#]+)/i.exec(path);
+      return match ? identity("kagi", match[1]) : null;
+    }
+    if (hostMatches(host, ["app.notion.com", "notion.so"]) && /^\/chat\/?$/i.test(path)) {
+      return identity("notion", url.searchParams.get("t"));
+    }
+    if (hostMatches(host, ["grok.com", "grok.x.ai", "gk.dairoot.cn"])) {
+      match = /^\/(?:c|chat)\/([^/?#]+)/i.exec(path);
+      return match ? identity("grok", match[1]) : null;
+    }
+    if (hostMatches(host, ["deepseek.com"])) {
+      match = /\/(?:a\/)?chat\/s\/([^/?#]+)/i.exec(path);
+      return match ? identity("deepseek", match[1]) : null;
+    }
+    return null;
+  }
+  function sameDeleteConversationIdentity(left, right) {
+    const normalizedLeft = normalizeDeleteConversationIdentity(left);
+    const normalizedRight = normalizeDeleteConversationIdentity(right);
+    return Boolean(
+      normalizedLeft && normalizedRight && normalizedLeft.provider === normalizedRight.provider && normalizedLeft.id === normalizedRight.id
+    );
+  }
+  function deleteCompletionTargetState(expectedIdentity, currentHref, linkHrefs = []) {
+    const expected = normalizeDeleteConversationIdentity(expectedIdentity);
+    if (!expected) return null;
+    const current = deleteConversationIdentityFromHref(currentHref);
+    const present = (Array.isArray(linkHrefs) ? linkHrefs : []).some((href) => sameDeleteConversationIdentity(expected, deleteConversationIdentityFromHref(href, currentHref)));
+    return {
+      identity: expected,
+      current: sameDeleteConversationIdentity(expected, current),
+      present
+    };
+  }
 
   // shared/shortcuts.js
   var SHORTCUT_CONFIG_SCHEMA_VERSION = 2;
@@ -4154,10 +4244,17 @@ ${value}`);
       const trustedMenuClick = trustedMenuClickForElement(element, site, reason);
       return deleteResult(false, site, reason, trustedMenuClick ? { needsTrustedMenuClick: true, trustedMenuClick } : {});
     }
-    function topicDeleteConfirmState(site = "topic-delete") {
+    function topicDeleteConfirmState(site = "topic-delete", expectedIdentity = null) {
       const trustedClick = deleteConfirmTrustedClick(site, "delete confirmation is still visible");
+      const target = deleteCompletionTargetState(
+        expectedIdentity,
+        location.href,
+        qsa2("a[href]", document, { all: true }).map((link) => String(link.href || link.getAttribute?.("href") || ""))
+      );
       return {
+        version: DELETE_COMPLETION_STATE_VERSION,
         present: Boolean(trustedClick) || deleteDialogRoots().length > 0,
+        target,
         trustedClick
       };
     }
@@ -4242,7 +4339,7 @@ ${value}`);
       }
       return clicked;
     }
-    async function clickDeleteConfirmIfPresent(timeoutMs = 4200) {
+    async function clickDeleteConfirmIfPresent(timeoutMs = 4200, guard = null) {
       const deadline = Date.now() + Math.max(0, Number(timeoutMs) || 0);
       let clickedRoot = null;
       let clickedButton = null;
@@ -4251,6 +4348,7 @@ ${value}`);
         if (clickedButton && deleteConfirmDialogClosed(clickedRoot, clickedButton)) return true;
         const info = findDeleteConfirmButtonInfo();
         const button = info?.element || null;
+        if (button && typeof guard === "function" && guard() !== true) return false;
         if (button && (button !== clickedButton || Date.now() - clickedAt > 900) && clickDeleteConfirmButton(button, info.root || null)) {
           clickedRoot = info.root || null;
           clickedButton = button;
@@ -5011,7 +5109,7 @@ ${value}`);
       });
       if (!links.length) return null;
       const currentId = deepSeekChatIdFromHref(location.href);
-      const current = currentId ? links.find((link) => deepSeekChatIdFromHref(link.href || link.getAttribute?.("href")).includes(currentId)) : null;
+      const current = currentId ? links.find((link) => deepSeekChatIdFromHref(link.href || link.getAttribute?.("href")) === currentId) : null;
       const seeds = current ? [current] : links.slice(0, 4);
       const scoreRoot = (root) => {
         if (!root || !root.isConnected) return null;
@@ -5120,49 +5218,12 @@ ${value}`);
         hasTarget: ids.size > 0 || titleTokens.size > 0
       };
     }
-    function deepSeekTopicRows(root, hints = deepSeekDeleteHints()) {
-      const candidates = [];
-      const seen = /* @__PURE__ */ new Set();
-      for (const element of qsa2("a,button,[role='button'],li,div", root || document, { all: true })) {
-        if (!element || seen.has(element) || !visible2(element)) continue;
-        const rect = modelRect(element);
-        if (!rect || rect.left > 560 || rect.width < 120 || rect.height < 26 || rect.height > 110) continue;
-        const value = deleteElementText(element);
-        const compact = deleteCompactToken(value);
-        if (!compact || compact.length < 2 || compact.length > 120) continue;
-        if (/^(today|yesterday|newchat|threads|history|今天|昨天|新聊天|历史)$/.test(compact)) continue;
-        if (/rename|pin|share|delete|cancel|搜索|设置|删除|重命名|分享|置顶/i.test(value)) continue;
-        const target = deleteClickableElement(element);
-        if (!target || seen.has(target)) continue;
-        seen.add(target);
-        const href = String(element.href || element.getAttribute?.("href") || target.href || target.getAttribute?.("href") || "");
-        const hrefToken = deleteCompactToken(href);
-        const className = String(target.className || element.className || "");
-        const active = /\b(active|selected|current)\b/i.test(className) || String(target.getAttribute?.("aria-current") || "").toLowerCase() === "page";
-        const titleMatch = hints.titleTokens?.some((token) => compact.includes(token) || token.includes(compact));
-        const urlMatch = hints.ids?.some((id) => href.includes(id) || hrefToken.includes(deleteCompactToken(id)));
-        candidates.push({
-          element: target,
-          score: (urlMatch ? 1100 : 0) + (titleMatch ? 900 : 0) + (active ? 520 : 0) + (rect.top < 180 ? 120 : 0) - rect.top * 0.02,
-          rect
-        });
-      }
-      candidates.sort((a, b) => b.score - a.score || a.rect.top - b.rect.top);
-      return candidates.filter((item) => item.score >= 500).map((item) => item.element);
-    }
-    function findDeepSeekCurrentTopicRow(root, hints = deepSeekDeleteHints()) {
-      const links = deepSeekChatLinks(root || document);
-      const currentId = hints.ids?.[0] || deepSeekChatIdFromHref(location.href);
-      if (currentId) {
-        const exact = links.find((link) => deepSeekChatIdFromHref(link.href || link.getAttribute?.("href")) === currentId);
-        if (exact) return exact;
-      }
-      const selected = links.find((link) => {
-        const className = String(link.className || "");
-        const ariaCurrent = String(link.getAttribute?.("aria-current") || "").toLowerCase();
-        return /\b(active|selected|current)\b/i.test(className) || ariaCurrent === "page";
-      });
-      return selected || deepSeekTopicRows(root, hints)[0] || null;
+    function findDeepSeekCurrentTopicRow(root) {
+      if (!root) return null;
+      const links = deepSeekChatLinks(root);
+      const currentId = deepSeekChatIdFromHref(location.href);
+      if (!currentId) return null;
+      return links.find((link) => deepSeekChatIdFromHref(link.href || link.getAttribute?.("href")) === currentId) || null;
     }
     function deepSeekVisualTopicRow(row) {
       const rowRect = modelRect(row);
@@ -5302,6 +5363,7 @@ ${value}`);
         const rect = modelRect(element);
         if (!rect || rect.top < 0 || rect.top > 190 || rect.left < 120 || rect.width < 20 || rect.height < 14 || rect.height > 92) continue;
         if (String(element.href || element.getAttribute?.("href") || "").match(/\/(?:a\/)?chat\/s\//i)) continue;
+        if (element.closest?.("a[href*='/chat/s/'],a[href*='/a/chat/s/']") || qsa2("a[href*='/chat/s/'],a[href*='/a/chat/s/']", element, { all: true }).length) continue;
         const token = deleteCompactToken(deleteElementText(element));
         if (!token || !titleTokens.some((item) => token.includes(item) || item.includes(token))) continue;
         seenTitles.add(element);
@@ -5424,83 +5486,263 @@ ${value}`);
       candidates.sort((a, b) => b.score - a.score || b.right - a.right);
       return candidates[0]?.element || null;
     }
-    async function openDeepSeekTriggerAndClickDelete(trigger, labels, { timeoutMs = 3200, allowHiddenTrigger = false } = {}) {
+    async function openDeepSeekTriggerAndClickDelete(trigger, labels, { timeoutMs = 3200, allowHiddenTrigger = false, guard = null } = {}) {
       if (!trigger) return false;
+      const guarded = () => typeof guard !== "function" || guard() === true;
+      if (!guarded()) return false;
       const menuReady = () => menuRootsWithDelete(labels)[0] || findOpenDeleteMenuItem(labels);
-      const existing = menuReady();
-      if (!existing && !await deleteActivateUntil(trigger, menuReady, { allowHidden: allowHiddenTrigger, settleMs: 220 })) return false;
+      if (menuReady()) return false;
+      if (!await deleteActivateUntil(trigger, menuReady, { allowHidden: allowHiddenTrigger, settleMs: 220 })) return false;
       await sleep2(140);
       const deadline = Date.now() + Math.max(0, Number(timeoutMs) || 0);
       while (Date.now() <= deadline) {
         const root = menuRootsWithDelete(labels)[0] || null;
         const item = (root ? findDeleteMenuItem(root, labels) : null) || findOpenDeleteMenuItem(labels);
-        if (item && (deleteClick(item) || deleteClickLayout(item))) return true;
+        if (item && guarded() && (deleteClick(item) || deleteClickLayout(item))) return true;
         await sleep2(120);
       }
       return false;
     }
+    let deepSeekPendingTrustedAttempt = null;
+    function deepSeekTrustedRetryRequested(data = {}) {
+      return Boolean(data?.trustedMenuClickRetried || data?.trustedKeySequenceRetried);
+    }
+    function deepSeekAttemptIdentity(data = {}) {
+      return {
+        attemptId: normalize2(data?.deleteAttemptId),
+        routeId: deepSeekChatIdFromHref(location.href)
+      };
+    }
+    function deepSeekTrustedRetryOwned(data = {}) {
+      const identity2 = deepSeekAttemptIdentity(data);
+      return Boolean(
+        identity2.attemptId && identity2.routeId && deepSeekPendingTrustedAttempt?.attemptId === identity2.attemptId && deepSeekPendingTrustedAttempt?.routeId === identity2.routeId && deepSeekPendingTrustedAttempt?.phase === "awaiting-menu-trigger" && deepSeekPendingTrustedAttempt?.baseline === "no-delete-ui" && Number(deepSeekPendingTrustedAttempt?.expiresAt) >= Date.now()
+      );
+    }
+    function armDeepSeekTrustedRetry(data = {}, value = {}) {
+      const identity2 = deepSeekAttemptIdentity(data);
+      if (!identity2.attemptId || !identity2.routeId) {
+        deepSeekPendingTrustedAttempt = null;
+        return deleteResult(false, "deepseek", `${value.reason || "trusted retry required"}; trusted retry ownership unavailable`);
+      }
+      deepSeekPendingTrustedAttempt = { ...identity2, phase: "awaiting-menu-trigger", baseline: "no-delete-ui", expiresAt: Date.now() + 2e4 };
+      return value;
+    }
+    function validateDeepSeekTrustedCoordinates(value = {}) {
+      const needsTrusted = value?.needsTrustedHover || value?.needsTrustedMenuClick || value?.needsTrustedKeySequence;
+      if (!needsTrusted) return { ok: true, instructions: {} };
+      const root = deepSeekSidebarRoot();
+      const row = findDeepSeekCurrentTopicRow(root);
+      const rowRect = row ? deepSeekTopicMenuRect(row) : null;
+      if (!root || !row || !rowRect) {
+        return { ok: false, reason: "MAIN trusted-input result has no independently verified current sidebar row" };
+      }
+      const pointInside = (point) => {
+        const x = Number(point?.x);
+        const y = Number(point?.y);
+        return Number.isFinite(x) && Number.isFinite(y) && x >= rowRect.left - 8 && x <= rowRect.right + 8 && y >= rowRect.top - 8 && y <= rowRect.bottom + 8;
+      };
+      const pointInMenuStrip = (point) => pointInside(point) && Number(point?.x) >= rowRect.right - 160;
+      const pointInSafeText = (point) => pointInside(point) && Number(point?.x) >= rowRect.left + 12 && Number(point?.x) <= rowRect.right - 80;
+      const cleanPoint = (point) => ({
+        x: Math.round(Number(point?.x) * 100) / 100,
+        y: Math.round(Number(point?.y) * 100) / 100
+      });
+      const cleanRect = {
+        left: Math.round(Number(rowRect.left) * 100) / 100,
+        top: Math.round(Number(rowRect.top) * 100) / 100,
+        right: Math.round(Number(rowRect.right) * 100) / 100,
+        bottom: Math.round(Number(rowRect.bottom) * 100) / 100,
+        width: Math.round(Number(rowRect.width || rowRect.right - rowRect.left) * 100) / 100,
+        height: Math.round(Number(rowRect.height || rowRect.bottom - rowRect.top) * 100) / 100
+      };
+      const instructions = {};
+      if (value?.needsTrustedHover && !pointInMenuStrip(value?.trustedHover?.framePoint)) {
+        return { ok: false, reason: "MAIN trusted hover is outside the independently verified current row" };
+      }
+      if (value?.needsTrustedHover) {
+        instructions.needsTrustedHover = true;
+        instructions.trustedHover = {
+          kind: "topic-menu-hover",
+          site: "deepseek",
+          framePoint: cleanPoint(value.trustedHover.framePoint),
+          frameRect: cleanRect,
+          hoverSettleMs: 520
+        };
+      }
+      if (value?.needsTrustedMenuClick) {
+        const click = value?.trustedMenuClick || {};
+        const points = Array.isArray(click.framePoints) && click.framePoints.length ? click.framePoints : [click.framePoint];
+        if (!points.length || points.length > 12 || points.some((point) => !pointInMenuStrip(point))) {
+          return { ok: false, reason: "MAIN trusted menu click is outside the independently verified current row" };
+        }
+        const cleanPoints = points.map(cleanPoint);
+        instructions.needsTrustedMenuClick = true;
+        instructions.trustedMenuClick = {
+          kind: "topic-menu-trigger",
+          site: "deepseek",
+          framePoint: cleanPoints[0],
+          framePoints: cleanPoints,
+          frameRect: cleanRect,
+          hoverSettleMs: 360
+        };
+      }
+      if (value?.needsTrustedKeySequence) {
+        const sequence = value?.trustedKeySequence || {};
+        const keys = Array.isArray(sequence.keys) ? sequence.keys : [];
+        const keyName = (entry) => String(typeof entry === "string" ? entry : entry?.key || "").toLowerCase();
+        const safeKey = (entry) => {
+          const item = typeof entry === "string" ? { key: entry } : entry || {};
+          const settleMs = Number(item.settleMs);
+          return !item.shiftKey && !item.ctrlKey && !item.metaKey && !item.altKey && Number(item.modifiers || 0) === 0 && Number.isFinite(settleMs) && settleMs >= 0 && settleMs <= 600;
+        };
+        const boundedSettle = (value2, max) => Number.isFinite(Number(value2)) && Number(value2) >= 0 && Number(value2) <= max;
+        const safeSequence = keys.length === 2 && keyName(keys[0]) === "tab" && /^(?:enter|return)$/.test(keyName(keys[1])) && keys.every(safeKey) && boundedSettle(sequence.clickSettleMs, 500) && boundedSettle(sequence.keySettleMs, 500) && boundedSettle(sequence.settleMs, 1200);
+        if (!pointInSafeText(sequence.framePoint) || !safeSequence) {
+          return { ok: false, reason: "MAIN trusted key sequence is outside the verified DeepSeek contract" };
+        }
+        instructions.needsTrustedKeySequence = true;
+        instructions.trustedKeySequence = {
+          kind: "topic-menu-keyboard",
+          site: "deepseek",
+          framePoint: cleanPoint(sequence.framePoint),
+          frameRect: cleanRect,
+          keys: [
+            { key: "Tab", settleMs: 140 },
+            { key: "Enter", settleMs: 260 }
+          ],
+          clickSettleMs: 160,
+          keySettleMs: 140,
+          settleMs: 460
+        };
+      }
+      return { ok: true, row, rowRect, instructions };
+    }
+    function sanitizeDeepSeekTrustedResult(value = {}, validation = {}) {
+      const sanitized = { ...value };
+      for (const key of [
+        "needsTrustedHover",
+        "trustedHover",
+        "needsTrustedMenuClick",
+        "trustedMenuClick",
+        "needsTrustedKeySequence",
+        "trustedKeySequence"
+      ]) delete sanitized[key];
+      return { ...sanitized, ...validation.instructions || {} };
+    }
+    function validateDeepSeekBridgeTrustedResult(bridged = {}, data = {}, currentRouteId = "") {
+      const needsTrusted = bridged?.needsTrustedHover || bridged?.needsTrustedMenuClick || bridged?.needsTrustedKeySequence;
+      if (!needsTrusted) return { ok: true };
+      const attemptId = normalize2(data?.deleteAttemptId);
+      if (!attemptId || normalize2(bridged?.deleteAttemptId) !== attemptId || String(bridged?.routeId || "") !== currentRouteId) {
+        return { ok: false, reason: "MAIN trusted-input result does not match the current attempt and route" };
+      }
+      return validateDeepSeekTrustedCoordinates(bridged);
+    }
+    function deepSeekBridgeFallbackDisposition(bridged = {}, retryRequested = false) {
+      const reason = String(bridged?.reason || "MAIN delete bridge failed");
+      const explicitlyPreDelivery = bridged?.delivered === false && bridged?.phase === "pre-delete";
+      if (!explicitlyPreDelivery || retryRequested) return { useNativeFallback: false, reason };
+      return { useNativeFallback: true, reason };
+    }
     async function deleteDeepSeekThread(data = {}) {
-      if (!await ensureDeepSeekSidebarOpen()) return deleteResult(false, "deepseek", "sidebar could not be opened");
+      const currentRouteId = deepSeekChatIdFromHref(location.href);
+      const attemptId = normalize2(data?.deleteAttemptId);
+      if (!currentRouteId) return deleteResult(false, "deepseek", "stable current conversation route is required");
+      if (!attemptId) return deleteResult(false, "deepseek", "delete attempt identity is required");
+      const routeStillCurrent = () => deepSeekChatIdFromHref(location.href) === currentRouteId;
+      const retryRequested = deepSeekTrustedRetryRequested(data);
+      const nativeRetryOwned = retryRequested && deepSeekTrustedRetryOwned(data);
+      if (!retryRequested) deepSeekPendingTrustedAttempt = null;
+      if (nativeRetryOwned) deepSeekPendingTrustedAttempt = null;
+      await ensureDeepSeekSidebarOpen();
+      if (!routeStillCurrent()) {
+        return deleteResult(false, "deepseek", "current conversation changed while preparing deletion");
+      }
       const labels = ["Delete", "删除"];
-      if (data?.trustedMenuClickRetried || data?.trustedKeySequenceRetried) {
+      if (findDeleteConfirmButton()) {
+        return deleteResult(false, "deepseek", "unverified delete confirmation is already open");
+      }
+      if (nativeRetryOwned) {
         const deleteItem = await waitForModel(() => findOpenDeleteMenuItem(labels), 3200, 90);
-        if (deleteItem && (deleteClick(deleteItem) || deleteClickLayout(deleteItem))) {
-          const confirmedAfterTrustedMenu = await clickDeleteConfirmIfPresent(6500);
+        if (deleteItem) {
+          if (!routeStillCurrent()) return deleteResult(false, "deepseek", "current conversation changed during trusted menu retry");
+          if (!deleteClick(deleteItem) && !deleteClickLayout(deleteItem)) {
+            return deleteResult(false, "deepseek", "explicit Delete action could not be safely activated");
+          }
+          const confirmedAfterTrustedMenu = await clickDeleteConfirmIfPresent(6500, routeStillCurrent);
           if (!confirmedAfterTrustedMenu) return deleteResult(false, "deepseek", "delete confirmation button not found");
           return deleteResult(true, "deepseek");
         }
         if (data?.trustedMenuClickRetried) {
-          return deleteResult(false, "deepseek", "trusted topic menu click did not open");
+          if (!routeStillCurrent()) return deleteResult(false, "deepseek", "current conversation changed during trusted menu retry");
+          if (findOpenDeleteMenuItem(labels) || findDeleteConfirmButton()) {
+            return deleteResult(false, "deepseek", "delete menu state is not clean; trusted retry was not renewed");
+          }
+          return armDeepSeekTrustedRetry(data, deleteResult(false, "deepseek", "trusted topic menu click did not open"));
         }
       }
-      const bridged = await requestDeepSeekDeleteBridge(10500, data);
-      if (bridged?.needsTrustedHover && bridged.trustedHover) {
-        return deleteResult(false, "deepseek", bridged.reason || "topic menu trigger requires trusted hover", {
-          needsTrustedHover: true,
-          trustedHover: bridged.trustedHover
-        });
+      let bridgeReason = "";
+      let useNativeFallback = nativeRetryOwned;
+      if (!useNativeFallback) {
+        const bridged = await requestDeepSeekDeleteBridge(10500, data);
+        const trustedValidation = validateDeepSeekBridgeTrustedResult(bridged, data, currentRouteId);
+        if (!trustedValidation.ok) return deleteResult(false, "deepseek", trustedValidation.reason);
+        const safeBridged = sanitizeDeepSeekTrustedResult(bridged, trustedValidation);
+        const hasTrustedBridgeInstruction = Boolean(
+          safeBridged?.needsTrustedHover && safeBridged.trustedHover || safeBridged?.needsTrustedMenuClick && safeBridged.trustedMenuClick || safeBridged?.needsTrustedKeySequence && safeBridged.trustedKeySequence
+        );
+        if (hasTrustedBridgeInstruction) {
+          return deleteResult(false, "deepseek", safeBridged.reason || "topic menu trigger requires trusted browser input", {
+            ...safeBridged?.needsTrustedHover && safeBridged.trustedHover ? { needsTrustedHover: true, trustedHover: safeBridged.trustedHover } : {},
+            ...safeBridged?.needsTrustedMenuClick && safeBridged.trustedMenuClick ? { needsTrustedMenuClick: true, trustedMenuClick: safeBridged.trustedMenuClick } : {},
+            ...safeBridged?.needsTrustedKeySequence && safeBridged.trustedKeySequence ? { needsTrustedKeySequence: true, trustedKeySequence: safeBridged.trustedKeySequence } : {}
+          });
+        }
+        if (bridged?.ok) return deleteResult(true, "deepseek");
+        const disposition = deepSeekBridgeFallbackDisposition(bridged, retryRequested);
+        bridgeReason = disposition.reason;
+        if (!disposition.useNativeFallback) return deleteResult(false, "deepseek", bridgeReason);
+        useNativeFallback = disposition.useNativeFallback;
       }
-      if (bridged?.needsTrustedMenuClick && bridged.trustedMenuClick) {
-        return deleteResult(false, "deepseek", bridged.reason || "topic menu trigger requires trusted browser input", {
-          needsTrustedMenuClick: true,
-          trustedMenuClick: bridged.trustedMenuClick
-        });
-      }
-      if (bridged?.needsTrustedKeySequence && bridged.trustedKeySequence) {
-        return deleteResult(false, "deepseek", bridged.reason || "topic menu trigger requires keyboard focus", {
-          needsTrustedKeySequence: true,
-          trustedKeySequence: bridged.trustedKeySequence
-        });
-      }
-      if (bridged?.ok) return deleteResult(true, "deepseek");
-      const bridgeReason = bridged?.reason || "";
-      if (bridgeReason && !/bridge timeout|bridge failed/i.test(bridgeReason)) {
-        const confirmedAfterBridge = await clickDeleteConfirmIfPresent(1800);
-        if (confirmedAfterBridge) return deleteResult(true, "deepseek");
+      if (!useNativeFallback) return deleteResult(false, "deepseek", bridgeReason || "native fallback is unavailable");
+      if (!routeStillCurrent()) {
+        return deleteResult(false, "deepseek", "current conversation changed before native delete fallback");
       }
       const root = deepSeekSidebarRoot();
       const hints = deepSeekDeleteHints(data);
+      const row = findDeepSeekCurrentTopicRow(root);
+      let rowFailureReason = bridgeReason || "current topic row not found";
+      let moreButton = null;
+      if (row) {
+        moreButton = await waitForModel(() => deepSeekTopicMoreButton(row), 1600, 100);
+        if (moreButton) {
+          if (await openDeepSeekTriggerAndClickDelete(moreButton, labels, { timeoutMs: 2600, allowHiddenTrigger: true, guard: routeStillCurrent })) {
+            const confirmed = await clickDeleteConfirmIfPresent(6500, routeStillCurrent);
+            if (!confirmed) return deleteResult(false, "deepseek", bridgeReason || "delete confirmation button not found");
+            return deleteResult(true, "deepseek");
+          }
+          rowFailureReason = bridgeReason || "delete menu item not found";
+        } else {
+          rowFailureReason = bridgeReason || "topic menu trigger not found";
+        }
+        closeDeepSeekTransientMenus();
+      }
+      if (!routeStillCurrent()) return deleteResult(false, "deepseek", "current conversation changed before header delete fallback");
       const headerButton = deepSeekHeaderMenuButton(hints);
-      if (headerButton && await openDeepSeekTriggerAndClickDelete(headerButton, labels, { timeoutMs: 2600, allowHiddenTrigger: true })) {
-        const confirmedFromHeader = await clickDeleteConfirmIfPresent(6500);
+      if (headerButton && await openDeepSeekTriggerAndClickDelete(headerButton, labels, { timeoutMs: 2600, allowHiddenTrigger: true, guard: routeStillCurrent })) {
+        const confirmedFromHeader = await clickDeleteConfirmIfPresent(6500, routeStillCurrent);
         if (!confirmedFromHeader) return deleteResult(false, "deepseek", bridgeReason || "delete confirmation button not found");
         return deleteResult(true, "deepseek");
       }
       if (headerButton) closeDeepSeekTransientMenus();
-      const row = findDeepSeekCurrentTopicRow(root, hints);
-      if (!row) return deleteResult(false, "deepseek", bridgeReason || "current topic row not found");
-      const moreButton = await waitForModel(() => deepSeekTopicMoreButton(row), 1600, 100);
-      if (!moreButton) {
-        const reason = bridgeReason || "topic menu trigger not found";
-        return data?.trustedMenuClickRetried ? deleteResult(false, "deepseek", reason) : data?.trustedKeySequenceRetried ? deleteResultWithDeepSeekTrustedMenuClick(reason, row) : deleteResultWithDeepSeekTrustedKeySequence(reason, row);
-      }
-      if (!await openDeepSeekTriggerAndClickDelete(moreButton, labels, { timeoutMs: 2600, allowHiddenTrigger: true })) {
-        const reason = bridgeReason || "delete menu item not found";
-        return data?.trustedMenuClickRetried ? deleteResult(false, "deepseek", reason) : data?.trustedKeySequenceRetried ? deleteResultWithDeepSeekTrustedMenuClick(reason, row, moreButton) : deleteResultWithDeepSeekTrustedKeySequence(reason, row);
-      }
-      const confirmed = await clickDeleteConfirmIfPresent(6500);
-      if (!confirmed) return deleteResult(false, "deepseek", bridgeReason || "delete confirmation button not found");
-      return deleteResult(true, "deepseek");
+      if (!row) return deleteResult(false, "deepseek", rowFailureReason);
+      const cleanBaseline = await waitForModel(() => !findOpenDeleteMenuItem(labels) && !findDeleteConfirmButton(), 700, 70);
+      if (!cleanBaseline) return deleteResult(false, "deepseek", "delete menu state remained open; trusted retry was not leased");
+      return armDeepSeekTrustedRetry(
+        data,
+        data?.trustedKeySequenceRetried ? deleteResultWithDeepSeekTrustedMenuClick(rowFailureReason, row, moreButton) : deleteResultWithDeepSeekTrustedKeySequence(rowFailureReason, row)
+      );
     }
     const TOPIC_DELETE_FALLBACK_CONFIGS = Object.freeze({
       chatgpt: Object.freeze({
@@ -5926,7 +6168,7 @@ ${value}`);
         ensureDeepSeekSidebarOpen,
         deepSeekSidebarRoot,
         deepSeekDeleteHints,
-        deepSeekTopicRows,
+        findDeepSeekCurrentTopicRow,
         deepSeekTopicMoreButton,
         deleteChatGptThread,
         deleteGeminiThread,
@@ -5991,9 +6233,44 @@ ${value}`);
         if (timer) clearTimeout(timer);
       }
     }
+    function validateTopicDeleteInvocation(data = {}) {
+      const attemptId = normalize2(data?.deleteAttemptId);
+      if (!attemptId || attemptId.length > 256) {
+        return { ok: false, reason: "delete attempt identity is missing or malformed" };
+      }
+      const currentHref = normalizeDeleteFrameHref(location.href);
+      const expectedIdentity = data?.expectedDeleteIdentity;
+      if (!expectedIdentity) return { ok: false, reason: "delete target identity is missing" };
+      const currentIdentity = deleteConversationIdentityFromHref(currentHref);
+      return sameDeleteConversationIdentity(expectedIdentity, currentIdentity) ? { ok: true, attemptId, currentHref, expectedIdentity } : { ok: false, reason: "current conversation changed before delete handler execution" };
+    }
+    function bindDeleteTrustedInstructions(value, attemptId) {
+      if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+      const bound = { ...value };
+      for (const key of ["trustedClick", "trustedHover", "trustedMenuClick", "trustedKeySequence"]) {
+        if (bound[key] && typeof bound[key] === "object" && !Array.isArray(bound[key])) {
+          bound[key] = { ...bound[key], attemptId, documentId: contentDocumentId };
+        }
+      }
+      return bound;
+    }
+    function hasDeleteTrustedInstructions(value) {
+      return Boolean(
+        value?.needsTrustedClick || value?.needsTrustedHover || value?.needsTrustedMenuClick || value?.needsTrustedKeySequence
+      );
+    }
     async function deleteThread(data = {}) {
+      const invocation = validateTopicDeleteInvocation(data);
+      if (!invocation.ok) {
+        return deleteResult(false, "topic-delete", invocation.reason, { delivered: false, preDelivery: true });
+      }
       const incomingConfig = data?.config && typeof data.config === "object" ? data.config : null;
-      const payload = data?.payload && typeof data.payload === "object" ? data.payload : data;
+      const incomingPayload = data?.payload && typeof data.payload === "object" ? data.payload : data;
+      const payload = {
+        ...incomingPayload,
+        deleteAttemptId: invocation.attemptId,
+        expectedDeleteIdentity: invocation.expectedIdentity
+      };
       if (incomingConfig?.enabled === false) {
         return deleteResult(false, topicDeleteSiteName(incomingConfig, payload), "site disabled");
       }
@@ -6001,7 +6278,20 @@ ${value}`);
       if (!topicDeleteUsesCustomUserscript(config) && config?.standaloneUserscript !== true && !String(config?.userscript || "").trim() && !topicDeleteNativeRunner(config, payload)) {
         return deleteResult(false, topicDeleteSiteName(config || {}, payload), "unsupported site or userscript missing");
       }
-      return runTopicDeleteUserscript(config, payload);
+      let value = await runTopicDeleteUserscript(config, payload);
+      if (hasDeleteTrustedInstructions(value)) {
+        const postRunInvocation = validateTopicDeleteInvocation(data);
+        if (!postRunInvocation.ok) {
+          return deleteResult(false, topicDeleteSiteName(config, payload), postRunInvocation.reason);
+        }
+      }
+      const siteId = topicDeleteNativeSiteId(config, payload);
+      if (siteId === "deepseek") {
+        const validation = validateDeepSeekTrustedCoordinates(value);
+        if (!validation.ok) return deleteResult(false, "deepseek", validation.reason);
+        value = sanitizeDeepSeekTrustedResult(value, validation);
+      }
+      return bindDeleteTrustedInstructions(value, invocation.attemptId);
     }
     async function waitForModel(getter, timeoutMs = 2500, intervalMs = 120) {
       const deadline = Date.now() + Math.max(0, Number(timeoutMs) || 0);
@@ -6068,14 +6358,18 @@ ${value}`);
         const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
         const timer = setTimeout(() => {
           window.removeEventListener("message", onMessage, true);
-          resolve({ ok: false, reason: "bridge timeout" });
+          resolve({ ok: false, delivered: "unknown", phase: "unknown", reason: "bridge timeout" });
         }, Math.max(500, Number(timeoutMs) || 9e3));
         function onMessage(event) {
           const message = event.data;
           if (message?.source !== DEEPSEEK_DELETE_SOURCE2 || message.type !== "response" || message.id !== id) return;
           clearTimeout(timer);
           window.removeEventListener("message", onMessage, true);
-          resolve(message);
+          resolve({
+            ...message,
+            delivered: message?.delivered === true || message?.delivered === false ? message.delivered : "unknown",
+            phase: typeof message?.phase === "string" ? message.phase : "unknown"
+          });
         }
         window.addEventListener("message", onMessage, true);
         try {
@@ -6083,7 +6377,7 @@ ${value}`);
         } catch (error) {
           clearTimeout(timer);
           window.removeEventListener("message", onMessage, true);
-          resolve({ ok: false, reason: error?.message || String(error || "bridge failed") });
+          resolve({ ok: false, delivered: false, phase: "pre-delete", reason: error?.message || String(error || "bridge failed") });
         }
       });
     }
@@ -8008,7 +8302,7 @@ ${value}`);
         throw new Error("adoptNavigationFocusGuard requires the MAIN-world transport");
       },
       deleteThread: (data) => deleteThread(data),
-      getDeleteConfirmState: (data) => topicDeleteConfirmState(data?.site || "topic-delete"),
+      getDeleteConfirmState: (data) => topicDeleteConfirmState(data?.site || "topic-delete", data?.identity || null),
       applyPreferredModel: (data) => runPreferredModelApply(data),
       cancelPreferredModelApply: (data) => cancelPreferredModelApply(data),
       collectSummary: (data) => collectSummary(data),

@@ -21,6 +21,7 @@ import {
   PROMPT_IMAGE_PASTE_STRATEGY_SEQUENTIAL,
   SCRIPT_CONFIG_SCHEMA_VERSION,
   STORAGE_KEYS,
+  TAB_GROUP_BUTTON_ORDER_MIGRATION_VERSION,
   TAB_GROUP_HEADER_BUTTONS,
   TOOLTIP_TARGET_IDS,
   TOPBAR_PROMPT_PLACEHOLDER_INTERVAL_MAX_SEC,
@@ -250,15 +251,6 @@ export function normalizeTabGroupButtonPlacement(value = {}, legacyMode = "pinne
   }));
 }
 
-const LEGACY_TAB_GROUP_BUTTON_DEFAULT_ORDERS = Object.freeze([
-  Object.freeze(["addApp", "reload", "messageNavigator", "deleteThread", "fullscreen", "openInNewTab", "copyLink", "removeGroup"]),
-  Object.freeze(["addApp", "reload", "messageNavigator", "deleteThread", "fullscreen", "openInNewTab", "copyLink", "removeGroup", "newChat"]),
-  Object.freeze(["addApp", "reload", "messageNavigator", "deleteThread", "fullscreen", "openInNewTab", "copyLink", "removeGroup", "newChat", "refreshPage"]),
-  Object.freeze(["addApp", "newChat", "reload", "messageNavigator", "deleteThread", "fullscreen", "openInNewTab", "copyLink", "removeGroup"]),
-  Object.freeze(["addApp", "newChat", "reload", "messageNavigator", "deleteThread", "fullscreen", "openInNewTab", "copyLink", "removeGroup", "refreshPage"]),
-  Object.freeze(["addApp", "newChat", "refreshPage", "reload", "messageNavigator", "deleteThread", "fullscreen", "openInNewTab", "copyLink", "removeGroup"])
-]);
-
 function normalizeTabGroupButtonOrderItems(value = [], valid = new Set()) {
   const ordered = [];
   for (const id of Array.isArray(value) ? value : []) {
@@ -267,25 +259,14 @@ function normalizeTabGroupButtonOrderItems(value = [], valid = new Set()) {
   return ordered;
 }
 
-function tabGroupButtonOrderLooksLikeLegacyDefault(value = [], valid = new Set()) {
-  if (!Array.isArray(value)) return false;
-  const ordered = normalizeTabGroupButtonOrderItems(value, valid);
-  return LEGACY_TAB_GROUP_BUTTON_DEFAULT_ORDERS.some((legacyOrder) => {
-    const legacy = normalizeTabGroupButtonOrderItems(legacyOrder, valid);
-    return legacy.length === ordered.length && legacy.every((id, index) => id === ordered[index]);
-  });
-}
-
 export function normalizeTabGroupButtonOrder(value = []) {
   const configurableIds = TAB_GROUP_HEADER_BUTTONS
     .filter((item) => !item.requiredPinned)
     .map((item) => item.id);
   const valid = new Set(configurableIds);
-  const source = tabGroupButtonOrderLooksLikeLegacyDefault(value, valid)
-    ? DEFAULT_TAB_GROUP_BUTTON_ORDER
-    : Array.isArray(value)
-      ? value
-      : DEFAULT_TAB_GROUP_BUTTON_ORDER;
+  // A stored array may be a deliberate custom order even when it happens to
+  // equal an old default. Preserve it; only absent/invalid state gets today's default.
+  const source = Array.isArray(value) ? value : DEFAULT_TAB_GROUP_BUTTON_ORDER;
   const ordered = normalizeTabGroupButtonOrderItems(source, valid);
   for (const id of configurableIds) {
     if (!ordered.includes(id)) ordered.push(id);
@@ -632,6 +613,10 @@ export function normalizeOptions(raw = {}) {
   const primaryColorState = normalizeStoredPrimaryColor(raw, base.primaryColor);
 
   const tabGroupButtonsMode = normalizeTabGroupButtonsMode(raw.tabGroupButtonsMode);
+  const rawTabGroupButtonOrderMigrationVersion = Number(raw.tabGroupButtonOrderMigrationVersion);
+  const storedTabGroupButtonOrderMigrationVersion = Number.isFinite(rawTabGroupButtonOrderMigrationVersion)
+    ? Math.max(0, Math.floor(rawTabGroupButtonOrderMigrationVersion))
+    : 0;
 
   return {
     ...base,
@@ -643,6 +628,10 @@ export function normalizeOptions(raw = {}) {
     topbarPromptPlaceholderConfig: normalizeTopbarPromptPlaceholderConfig(raw.topbarPromptPlaceholderConfig),
     tabGroupButtonPlacement: normalizeTabGroupButtonPlacement(raw.tabGroupButtonPlacement, tabGroupButtonsMode),
     tabGroupButtonOrder: normalizeTabGroupButtonOrder(raw.tabGroupButtonOrder),
+    tabGroupButtonOrderMigrationVersion: Math.max(
+      storedTabGroupButtonOrderMigrationVersion,
+      TAB_GROUP_BUTTON_ORDER_MIGRATION_VERSION
+    ),
     tooltipDisabledIds: normalizeTooltipDisabledIds(raw.tooltipDisabledIds),
     topbarLayout: migrateDeleteThreadTopbarLayout(raw),
     topbarDeleteThreadMigrated: true,

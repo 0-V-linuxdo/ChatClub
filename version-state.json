@@ -1,19 +1,19 @@
 {
   "schemaVersion": 1,
-  "appVersion": "「2026-07-16｜05:03:13」",
-  "manifestVersion": "2026.7.16.6",
+  "appVersion": "「2026-07-16｜21:24:33」",
+  "manifestVersion": "2026.7.16.11",
   "payloads": {
     "chromium": {
-      "appVersion": "「2026-07-16｜05:03:13」",
-      "sha256": "44f02c1b176692aaeda7e757d3c43aa518eae28ac07b5b1f19809bd74bbbdd18"
+      "appVersion": "「2026-07-16｜21:24:33」",
+      "sha256": "7af63ee3a087bed0232584db7d6311a667e4655efbf00f5cc13822efd7dfeb69"
     },
     "firefox": {
-      "appVersion": "「2026-07-16｜05:03:13」",
-      "sha256": "80ffff12ec3c6429fea951e7ec80ed575ca9e3e3d9a20f9cd39cc60bbb31c8b3"
+      "appVersion": "「2026-07-16｜21:24:33」",
+      "sha256": "92eb41c9b58d6463f26727b3c3dfb3331ed69f3263e0a4a26285783f472a5af6"
     }
   },
   "summary": {
-    "configVersion": 71,
+    "configVersion": 72,
     "sites": {
       "chatgpt": {
         "file": "chatgpt.js",
@@ -47,8 +47,8 @@
       },
       "kagi": {
         "file": "kagi.js",
-        "configVersion": 62,
-        "sha256": "338047893d6e4448672fcd325a4e285b4630d9553255c4702a441b372d62039a"
+        "configVersion": 63,
+        "sha256": "1fd3ce88efb2aab88240bfb1cc7ee62fdd4187dbd113b5b993a3b169a21439cb"
       },
       "lobehub": {
         "file": "lobehub.js",
@@ -69,38 +69,38 @@
   },
   "topicDelete": {
     "chatgpt.user.js": {
-      "version": "2026.07.05.1",
-      "sha256": "d7f3d7566612d196ee8ff9427cdbf884881c880c474a8066f11a1f3c56d8002e"
+      "version": "2026.07.16.1",
+      "sha256": "e9fdf9150ff348b5629306d9c40975ccbcc7826dcf15fe2292909c0940ab8666"
     },
     "deepseek.user.js": {
-      "version": "2026.07.05.1",
-      "sha256": "2adddf6eadab4fd385fe8b5bada14945befce39e1ac3a773a98174615a05e4a9"
+      "version": "2026.07.16.1",
+      "sha256": "ad10ec330d069164f7bfd998457851acc8aa7a0c1f9264b3da5bced052922c1e"
     },
     "gemini.user.js": {
-      "version": "2026.07.12.1",
-      "sha256": "f4c6e7cda6b64ad8afa7a6eb22d19ebc295a70cd90d0684927bd1a68234da40e"
+      "version": "2026.07.16.1",
+      "sha256": "13ff0e0ce4beb9cbdf1513e977bdd87f26886e10702970e1048cfd61d796b5b3"
     },
     "grok-mirror.user.js": {
-      "version": "2026.07.05.1",
-      "sha256": "a294cbcd7ef525f3ecd26e6f0303ae0680d8377643dba8cc65857edea32d46cd"
+      "version": "2026.07.16.1",
+      "sha256": "3f2d5614519bb618f6e4f78adb15930600bf919dbd5068c35c66e61e70b1202d"
     },
     "grok.user.js": {
-      "version": "2026.07.05.1",
-      "sha256": "30b6750ce77cca5c26927bc811dbb4a1aa49d5fc36d8ebcbfe3bad37003aeb25"
+      "version": "2026.07.16.1",
+      "sha256": "0ffb10499dfacbc8d73b710af47859c3f4774a0136421cccdf4264a7f7f2b788"
     },
     "kagi.user.js": {
-      "version": "2026.07.05.1",
-      "sha256": "4785ec7d17ab120d61af397e2b1d126932e035abdfc194f46c03fa6af9193f67"
+      "version": "2026.07.16.1",
+      "sha256": "fe0f2ac2b2a29a0791984e5874ed73238d2055624e031c025bcb7e23494b15b2"
     },
     "notion.user.js": {
-      "version": "2026.07.05.1",
-      "sha256": "efb71134ec71e147f7de8674e4e595676d7469b3fb94803dfdba62b954b920d5"
+      "version": "2026.07.16.1",
+      "sha256": "475cb10094d653b64ffc92d25f0bbcabdf67a878eba8baa418820eaf5ed49f6a"
     }
   },
   "floors": {
-    "appVersion": "「2026-07-16｜05:03:13」",
-    "manifestVersion": "2026.7.16.6",
-    "summaryConfigVersion": 71,
+    "appVersion": "「2026-07-16｜21:24:33」",
+    "manifestVersion": "2026.7.16.11",
+    "summaryConfigVersion": 72,
     "summarySites": {
       "chatgpt": 52,
       "claude": 37,
@@ -108,19 +108,19 @@
       "gemini": 32,
       "grok": 62,
       "grok-dairoot": 68,
-      "kagi": 62,
+      "kagi": 63,
       "lobehub": 46,
       "notion": 62,
       "typingmind": 45
     },
     "topicDelete": {
-      "chatgpt.user.js": "2026.07.05.1",
-      "deepseek.user.js": "2026.07.05.1",
-      "gemini.user.js": "2026.07.12.1",
-      "grok-mirror.user.js": "2026.07.05.1",
-      "grok.user.js": "2026.07.05.1",
-      "kagi.user.js": "2026.07.05.1",
-      "notion.user.js": "2026.07.05.1"
+      "chatgpt.user.js": "2026.07.16.1",
+      "deepseek.user.js": "2026.07.16.1",
+      "gemini.user.js": "2026.07.16.1",
+      "grok-mirror.user.js": "2026.07.16.1",
+      "grok.user.js": "2026.07.16.1",
+      "kagi.user.js": "2026.07.16.1",
+      "notion.user.js": "2026.07.16.1"
     }
   }
 }

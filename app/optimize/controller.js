@@ -1,6 +1,6 @@
 import { optimizePromptStream } from "../../shared/api.js";
 import { t } from "../../shared/i18n.js";
-import { button, el, iconButton, modal, textarea, toast } from "../../ui/dom.js";
+import { button, el, iconButton, taskModal, textarea, toast } from "../../ui/dom.js";
 import { validateControllerContract } from "../controller-contract.js";
 
 export function createOptimizeController(ctx) {
@@ -127,7 +127,7 @@ export function createOptimizeController(ctx) {
       updateStatus(t("optimize.failed"));
       toast(message, "error");
     }
-    dialog = modal(t("optimize.title"), el("div", { class: "ui-dialog optimize-compare-dialog" },
+    dialog = taskModal(t("optimize.title"), el("div", { class: "ui-dialog optimize-compare-dialog" },
       el("p", { class: "optimize-compare-lead" }, t("optimize.lead")),
       el("div", { class: "optimize-compare-grid" },
         el("section", { class: "ui-card optimize-compare-panel" },

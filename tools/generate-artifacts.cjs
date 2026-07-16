@@ -8,6 +8,9 @@ const {
   CONTENT_ENTRIES,
   FIREFOX_CONTENT_FALLBACK_OUTPUT,
   TOPIC_DELETE_OUTPUTS,
+  assertGeneratedArtifactDirectInputs,
+  assertSummaryCatalogMetadata,
+  assertTopicDeleteDescriptors,
   assertGeneratedArtifactInventory
 } = require("./generated-artifacts.cjs");
 
@@ -104,22 +107,7 @@ async function protocolModule() {
 async function validateSummaryCatalog(configs) {
   const absolutePath = path.join(root, "shared/summary-sites.js");
   const module = await import(`${require("node:url").pathToFileURL(absolutePath).href}?generated=${Date.now()}`);
-  const catalog = module.SUMMARY_SITE_CONFIGS;
-  if (!Array.isArray(catalog) || catalog.length !== configs.length) {
-    throw new Error("shared/summary-sites.js: lightweight catalog does not match userscripts/index.json");
-  }
-  for (const expected of configs) {
-    const descriptor = catalog.find((item) => item?.id === expected.id);
-    if (!descriptor) throw new Error(`shared/summary-sites.js: missing ${expected.id}`);
-    if (Object.hasOwn(descriptor, "userscript")) {
-      throw new Error(`shared/summary-sites.js: ${expected.id} must not embed a userscript body`);
-    }
-    for (const field of ["userscriptFile", "userscriptLength", "configVersion"]) {
-      if (descriptor[field] !== expected[field]) {
-        throw new Error(`shared/summary-sites.js: ${expected.id}.${field} drifted from userscripts/index.json`);
-      }
-    }
-  }
+  assertSummaryCatalogMetadata(configs, module.SUMMARY_SITE_CONFIGS);
 }
 
 async function buildContent(configs, protocol) {
@@ -199,12 +187,16 @@ async function buildContent(configs, protocol) {
 
 async function generateDeleteSites() {
   const modulePath = path.join(root, "shared/topic-delete-userscript-sources.js");
+  const descriptorPath = path.join(root, "shared/topic-delete-sites.js");
   const protocolSource = read("shared/protocol.js");
   const protocolUrl = `data:text/javascript;base64,${Buffer.from(protocolSource).toString("base64")}`;
   const moduleSource = fs.readFileSync(modulePath, "utf8")
     .replace('from "./protocol.js"', `from ${JSON.stringify(protocolUrl)}`);
   const moduleUrl = `data:text/javascript;base64,${Buffer.from(moduleSource).toString("base64")}`;
-  const module = await import(moduleUrl);
+  const [module, descriptorModule] = await Promise.all([
+    import(moduleUrl),
+    import(`${require("node:url").pathToFileURL(descriptorPath).href}?generated=${Date.now()}`)
+  ]);
   const sources = module.TOPIC_DELETE_USERSCRIPT_SOURCES;
   for (const [id, filename] of Object.entries(TOPIC_DELETE_OUTPUTS)) {
     if (typeof sources?.[id] !== "string" || !sources[id]) {
@@ -212,9 +204,11 @@ async function generateDeleteSites() {
     }
     expectedFile(path.posix.join("topic-delete-userscripts", filename), sources[id]);
   }
+  assertTopicDeleteDescriptors(sources, descriptorModule.TOPIC_DELETE_SITE_CONFIGS);
 }
 
 (async () => {
+  assertGeneratedArtifactDirectInputs(root);
   assertGeneratedArtifactInventory(root);
   const [protocol, configs] = await Promise.all([protocolModule(), Promise.resolve(summaryConfigs())]);
   await validateSummaryCatalog(configs);

@@ -566,7 +566,8 @@ assert.match(
 assert.match(tooltipSource, /window\.addEventListener\("blur", resetTooltipInteractionState\)/, "window blur must clear tooltips");
 assert.match(tooltipSource, /window\.addEventListener\("focus", resetTooltipInteractionState\)/, "window focus must not restore stale tooltips");
 assert.match(tooltipSource, /window\.addEventListener\("pagehide", resetTooltipInteractionState\)/, "pagehide must clear tooltips");
-assert.match(tooltipSource, /event\.key === "Escape"\) resetTooltipInteractionState\(\)/, "Escape must clear tooltip state, not only hide its host");
+assert.match(tooltipSource, /import \{ el, isDismissalEscape \} from "\.\/dom\.js";/, "tooltips must use the shared IME-safe Escape policy");
+assert.match(tooltipSource, /if \(isDismissalEscape\(event\)\) resetTooltipInteractionState\(\)/, "eligible Escape must clear tooltip state, not only hide its host");
 assert.match(
   tooltipSource,
   /if \(!isUsableTooltipTrigger\(trigger\)\) \{\s*reconcileTooltipState\(\);/,

@@ -224,6 +224,7 @@ export function createShortcutSettings(ctx) {
 
   function recordShortcutAction(event, action, redraw) {
     if (state.shortcutRecordingAction !== action) return;
+    if (event.isComposing || event.keyCode === 229) return;
     event.preventDefault();
     event.stopPropagation();
     if (event.key === "Escape") {

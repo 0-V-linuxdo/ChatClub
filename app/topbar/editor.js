@@ -19,16 +19,12 @@ export function createTopbarEditor(dependencies = {}) {
     state,
     settingsSections,
     syncTopbar,
-    openSettingsMenu,
-    closeSettingsMenu,
-    openEditorSettingsMenu
+    openSettingsMenu
   } = validateControllerContract(dependencies, "Topbar editor", {
     state: "object",
     settingsSections: "any",
     syncTopbar: "function",
-    openSettingsMenu: "function",
-    closeSettingsMenu: "function",
-    openEditorSettingsMenu: "function"
+    openSettingsMenu: "function"
   });
   if (!Array.isArray(settingsSections)) throw new TypeError("Topbar editor requires settingsSections to be an array.");
   let activePointerDrag = null;
@@ -278,13 +274,8 @@ export function createTopbarEditor(dependencies = {}) {
     } else if (shouldMove) {
       layout = placeTopbarItemOnToolbar(activeTopbarEditLayout(), drag.item, drag.targetId, drag.placement);
     }
-    const shouldReopenSettingsMenu = Boolean(layout && state.topbarEditMode && document.querySelector(".topbar-settings-popover"));
     cleanupPointerDrag();
-    if (layout) {
-      if (shouldReopenSettingsMenu) closeSettingsMenu();
-      setTopbarEditLayoutDraft(layout);
-      if (shouldReopenSettingsMenu) requestAnimationFrame(openEditorSettingsMenu);
-    }
+    if (layout) setTopbarEditLayoutDraft(layout);
   }
 
   function previewPointerDrop(clientX, clientY, drag) {

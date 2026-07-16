@@ -1,6 +1,6 @@
 // Built-in Summary userscript: Kagi Assistant (kagi)
 // Source: Mod/assets/chunk-7dbf4e81.js :: SUMMARY_SITE_CONFIG_DEFAULTS
-// Config version: 62; global config version: 65
+// Config version: 63; global config version: 72
 // Hosts: assistant.kagi.com
 // Path prefixes: (none)
 // Run mode: serial; timeout: 32000
@@ -53,13 +53,38 @@ const useful = value => {
   if (referenceOnly(text)) return "";
   return text;
 };
+const messageOwner = button => {
+  try {
+    return api.closest(button, "article.message-user,article.message-ai,[data-message-author-role],article") || button;
+  } catch (error) { return button; }
+};
+const messageRole = (owner, index) => {
+  const explicit = normalize(owner && owner.getAttribute && owner.getAttribute("data-message-author-role")).toLowerCase();
+  if (explicit === "user" || explicit === "assistant") return explicit;
+  const signature = normalize([
+    owner && owner.getAttribute && owner.getAttribute("class"),
+    owner && owner.getAttribute && owner.getAttribute("data-testid"),
+    owner && owner.getAttribute && owner.getAttribute("aria-label")
+  ].filter(Boolean).join(" ")).toLowerCase();
+  if (/(?:^|\s)message-user(?:\s|$)|\buser[-_ ]message\b/.test(signature)) return "user";
+  if (/(?:^|\s)message-ai(?:\s|$)|\b(?:assistant|ai)[-_ ]message\b/.test(signature)) return "assistant";
+  return index % 2 === 0 ? "user" : "assistant";
+};
 const buttons = qsa("button,[role=button]", root)
   .filter(button => visible(button) && !internalTool(button) && messageCopyButton(button) && !referenceCopyButton(button))
   .sort(order);
+const actions = [];
+const seenOwners = new Set();
+for (const button of buttons) {
+  const owner = messageOwner(button);
+  if (seenOwners.has(owner)) continue;
+  seenOwners.add(owner);
+  actions.push({ button, owner });
+}
 const out = [];
-const seen = new Set();
-for (const button of buttons.slice(0, 24)) {
-  const role = out.length % 2 === 0 ? "user" : "assistant";
+for (const [index, action] of actions.slice(0, 24).entries()) {
+  const { button, owner } = action;
+  const role = messageRole(owner, index);
   const text = useful(await api.copy(button, {
     resetClipboardBeforeCopy: true,
     acceptUnchangedClipboard: false,
@@ -68,9 +93,6 @@ for (const button of buttons.slice(0, 24)) {
     copyCaptureGraceMs: 320
   }));
   if (!text) continue;
-  const key = role + "\n" + text.toLowerCase().replace(/\s+/g, "");
-  if (seen.has(key)) continue;
-  seen.add(key);
   out.push({ role, text });
   await api.sleep(80);
 }

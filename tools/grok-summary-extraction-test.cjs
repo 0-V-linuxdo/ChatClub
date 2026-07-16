@@ -28,12 +28,21 @@ function matchesSimpleSelector(node, selector) {
   if (!node || node.nodeType !== 1) return false;
   const value = selector.trim();
   if (!value) return false;
-  const attribute = value.match(/^\[([\w-]+)(?:=(?:"([^"]*)"|'([^']*)'|([^\]]+)))?\]$/);
+  const classSelector = value.match(/^([a-z][\w-]*)?\.([\w-]+)$/i);
+  if (classSelector) {
+    if (classSelector[1] && node.tagName.toLowerCase() !== classSelector[1].toLowerCase()) return false;
+    return String(node.getAttribute("class") || "").split(/\s+/).includes(classSelector[2]);
+  }
+  const attribute = value.match(/^\[([\w-]+)(?:(\*=|=)(?:"([^"]*)"|'([^']*)'|([^\]]+)))?\]$/);
   if (attribute) {
     const name = attribute[1];
     if (!node.hasAttribute(name)) return false;
-    const expected = attribute[2] ?? attribute[3] ?? attribute[4];
-    return expected === undefined || node.getAttribute(name) === String(expected).trim();
+    const operator = attribute[2];
+    const expected = attribute[3] ?? attribute[4] ?? attribute[5];
+    if (expected === undefined) return true;
+    const actual = String(node.getAttribute(name) || "");
+    const normalizedExpected = String(expected).trim();
+    return operator === "*=" ? actual.includes(normalizedExpected) : actual === normalizedExpected;
   }
   return node.tagName.toLowerCase() === value.toLowerCase();
 }
@@ -223,6 +232,28 @@ function control(document, id, label, x, y, copyPayload = "") {
   });
 }
 
+function iconControl(document, id, icon, x, y, copyPayload = "") {
+  const svg = element(document, "svg", {
+    id: `${id}-icon`,
+    className: `lucide-${icon}`,
+    attrs: { "data-icon": icon, viewBox: "0 0 24 24" },
+    rect: { left: x + 4, top: y + 4, width: 20, height: 20 }
+  });
+  return element(document, "button", {
+    id,
+    copyPayload,
+    rect: { left: x, top: y, width: 32, height: 28 }
+  }, [svg]);
+}
+
+function interactiveWrapper(document, id, child) {
+  return element(document, "span", {
+    id,
+    attrs: { role: "button" },
+    rect: child.getBoundingClientRect()
+  }, [child]);
+}
+
 function actionBar(document, id, y, controls) {
   return element(document, "div", {
     id,
@@ -231,11 +262,18 @@ function actionBar(document, id, y, controls) {
   }, controls);
 }
 
-function userTurn(document, id, y, text) {
-  const edit = control(document, `${id}-edit`, "Edit", 100, y + 44);
-  const copy = control(document, `${id}-copy`, "Copy", 144, y + 44, text);
+function userTurn(document, id, y, text, options = {}) {
+  const edit = options.iconOnly
+    ? iconControl(document, `${id}-edit`, "square-pen", 100, y + 44)
+    : control(document, `${id}-edit`, options.editLabel || "Edit", 100, y + 44);
+  const copy = options.iconOnly
+    ? iconControl(document, `${id}-copy`, "copy", 144, y + 44, text)
+    : control(document, `${id}-copy`, options.copyLabel || "Copy", 144, y + 44, text);
   edit.setAttribute("data-opacity", "0");
   copy.setAttribute("data-opacity", "0");
+  const controls = options.wrapControls
+    ? [interactiveWrapper(document, `${id}-edit-wrapper`, edit), interactiveWrapper(document, `${id}-copy-wrapper`, copy)]
+    : [edit, copy];
   return {
     node: element(document, "section", {
       id,
@@ -243,9 +281,10 @@ function userTurn(document, id, y, text) {
       rect: { left: 60, top: y, width: 900, height: 90 }
     }, [
       element(document, "p", { text, rect: { left: 80, top: y, width: 720, height: 36 } }),
-      actionBar(document, `${id}-actions`, y + 44, [edit, copy])
+      actionBar(document, `${id}-actions`, y + 44, controls)
     ]),
-    copy
+    copy,
+    edit
   };
 }
 
@@ -285,16 +324,23 @@ function assistantTurn(document, id, y, text, options = {}) {
     }, [explicitHeader, explicitPre]));
     nestedCopies.push(explicitCopy);
   }
-  const copy = control(document, `${id}-copy`, "Copy", 100, y + 380, text);
-  const companionLabel = options.companion || "Like";
-  const companion = control(document, `${id}-companion`, companionLabel, 780, y + 380);
+  const copy = options.iconOnly
+    ? iconControl(document, `${id}-copy`, "copy", 100, y + 380, text)
+    : control(document, `${id}-copy`, options.copyLabel || "Copy", 100, y + 380, text);
+  const companionLabel = options.companion || options.likeLabel || "Like";
+  const companion = options.iconOnly
+    ? iconControl(document, `${id}-companion`, "thumbs-up", 780, y + 380)
+    : control(document, `${id}-companion`, companionLabel, 780, y + 380);
+  const actionControls = options.wrapControls
+    ? [interactiveWrapper(document, `${id}-copy-wrapper`, copy), interactiveWrapper(document, `${id}-companion-wrapper`, companion)]
+    : [copy, companion];
   children.unshift(element(document, "div", {
     id: `${id}-answer`,
     className: "assistant-answer",
     text,
     rect: { left: 80, top: y, width: 900, height: options.codeCards ? 360 : 120 }
   }));
-  children.push(actionBar(document, `${id}-actions`, y + 380, [copy, companion]));
+  children.push(actionBar(document, `${id}-actions`, y + 380, actionControls));
   return {
     node: element(document, "section", {
       id,
@@ -379,7 +425,7 @@ async function executeRunner(body, buildFixture, filename = "userscripts/grok.js
   return { result: JSON.parse(JSON.stringify(result)), copied, fixture };
 }
 
-async function testProseAndNestedCode(body) {
+async function testProseAndNestedCode(body, filename) {
   const prompt = "How can I block selected YouTube videos?";
   const code = "youtube.com##ytd-video-renderer:has(#video-title[title*=\\\"keyword\\\"])";
   const answer = `Use a custom uBlock rule:\n${code}\nThis keeps matching cards hidden.`;
@@ -388,7 +434,7 @@ async function testProseAndNestedCode(body) {
     const assistant = assistantTurn(document, "prose-assistant", 140, answer, { codeCards: true, codeText: code });
     main.append(user.node, assistant.node);
     return { user, assistant };
-  });
+  }, filename);
   assert.deepEqual(run.result, [
     { role: "user", text: prompt },
     { role: "assistant", text: answer }
@@ -399,7 +445,7 @@ async function testProseAndNestedCode(body) {
   }
 }
 
-async function testPureCodeAssistant(body) {
+async function testPureCodeAssistant(body, filename) {
   const prompt = "Return only the filter rule.";
   const code = "youtube.com##ytd-rich-item-renderer:has(a[href*=\\\"/shorts/\\\"])";
   const run = await executeRunner(body, ({ document, main }) => {
@@ -407,7 +453,7 @@ async function testPureCodeAssistant(body) {
     const assistant = assistantTurn(document, "pure-assistant", 140, code, { codeCards: true, codeText: code });
     main.append(user.node, assistant.node);
     return { user, assistant };
-  });
+  }, filename);
   assert.deepEqual(run.result, [
     { role: "user", text: prompt },
     { role: "assistant", text: code }
@@ -415,7 +461,7 @@ async function testPureCodeAssistant(body) {
   assert.deepEqual(run.copied, ["pure-user-copy", "pure-assistant-copy"]);
 }
 
-async function testUnsafeBarsAreSkipped(body) {
+async function testUnsafeBarsAreSkipped(body, filename) {
   const prompt = "Valid prompt";
   const answer = "Valid assistant answer";
   const run = await executeRunner(body, ({ document, main }) => {
@@ -425,7 +471,7 @@ async function testUnsafeBarsAreSkipped(body) {
     const assistant = assistantTurn(document, "safe-assistant", 820, answer);
     main.append(lonely.node, dislike.node, user.node, assistant.node);
     return { lonely, dislike, user, assistant };
-  });
+  }, filename);
   assert.deepEqual(run.result, [
     { role: "user", text: prompt },
     { role: "assistant", text: answer }
@@ -435,7 +481,7 @@ async function testUnsafeBarsAreSkipped(body) {
   assert.ok(!run.copied.includes(run.fixture.dislike.copy.id), "Copy + Dislike must not be treated as Copy + Like");
 }
 
-async function testRealDuplicateTurnsArePreserved(body) {
+async function testRealDuplicateTurnsArePreserved(body, filename) {
   const prompt = "Repeat this request";
   const answer = "Repeated assistant answer";
   const run = await executeRunner(body, ({ document, main }) => {
@@ -445,7 +491,7 @@ async function testRealDuplicateTurnsArePreserved(body) {
     const secondAssistant = assistantTurn(document, "duplicate-assistant-2", 820, answer);
     main.append(firstUser.node, firstAssistant.node, secondUser.node, secondAssistant.node);
     return { firstUser, firstAssistant, secondUser, secondAssistant };
-  });
+  }, filename);
   assert.deepEqual(run.result, [
     { role: "user", text: prompt },
     { role: "assistant", text: answer },
@@ -460,15 +506,111 @@ async function testRealDuplicateTurnsArePreserved(body) {
   ]);
 }
 
+async function testChineseActionBars(body, filename) {
+  const prompt = "请只返回最终答案。";
+  const answer = "这是最终答案。";
+  const run = await executeRunner(body, ({ document, main }) => {
+    const user = userTurn(document, "chinese-user", 20, prompt, { editLabel: "编辑", copyLabel: "复制" });
+    const assistant = assistantTurn(document, "chinese-assistant", 140, answer, { copyLabel: "复制", likeLabel: "点赞" });
+    main.append(user.node, assistant.node);
+    return { user, assistant };
+  }, filename);
+  assert.deepEqual(run.result, [
+    { role: "user", text: prompt },
+    { role: "assistant", text: answer }
+  ]);
+  assert.deepEqual(run.copied, ["chinese-user-copy", "chinese-assistant-copy"]);
+}
+
+async function testNestedIconOnlyControls(body, filename) {
+  const prompt = "Use icon-only controls.";
+  const answer = "Nested interactive wrappers still resolve to their canonical leaf controls.";
+  const run = await executeRunner(body, ({ document, main }) => {
+    const user = userTurn(document, "icon-user", 20, prompt, { iconOnly: true, wrapControls: true });
+    const assistant = assistantTurn(document, "icon-assistant", 140, answer, { iconOnly: true, wrapControls: true });
+    main.append(user.node, assistant.node);
+    return { user, assistant };
+  }, filename);
+  assert.deepEqual(run.result, [
+    { role: "user", text: prompt },
+    { role: "assistant", text: answer }
+  ]);
+  assert.deepEqual(run.copied, ["icon-user-copy", "icon-assistant-copy"]);
+}
+
+async function testSingleRoleFailsClosed(body, filename) {
+  const userOnly = await executeRunner(body, ({ document, main }) => {
+    const user = userTurn(document, "only-user", 20, "There is no assistant turn.");
+    main.append(user.node);
+    return { user };
+  }, filename);
+  assert.deepEqual(userOnly.result, []);
+  assert.deepEqual(userOnly.copied, ["only-user-copy"]);
+
+  const assistantOnly = await executeRunner(body, ({ document, main }) => {
+    const assistant = assistantTurn(document, "only-assistant", 20, "There is no user turn.");
+    main.append(assistant.node);
+    return { assistant };
+  }, filename);
+  assert.deepEqual(assistantOnly.result, []);
+  assert.deepEqual(assistantOnly.copied, ["only-assistant-copy"]);
+}
+
+async function testResponsiveCopiesShareOwningBar(body, filename) {
+  const prompt = "Use the canonical responsive Copy control.";
+  const answer = "Only one Copy control per owning action bar is activated.";
+  const run = await executeRunner(body, ({ document, main }) => {
+    const userEdit = control(document, "responsive-user-edit", "Edit", 100, 64);
+    const userCopy = control(document, "responsive-user-copy", "Copy", 144, 64, prompt);
+    const userCopyClone = control(document, "responsive-user-copy-clone", "Copy", 188, 64, prompt);
+    const userNode = element(document, "section", {
+      id: "responsive-user",
+      rect: { left: 60, top: 20, width: 900, height: 90 }
+    }, [
+      element(document, "p", { text: prompt, rect: { left: 80, top: 20, width: 720, height: 36 } }),
+      actionBar(document, "responsive-user-actions", 64, [userEdit, userCopy, userCopyClone])
+    ]);
+
+    const assistantCopy = control(document, "responsive-assistant-copy", "Copy", 100, 540, answer);
+    const assistantCopyClone = control(document, "responsive-assistant-copy-clone", "Copy", 144, 540, answer);
+    const assistantLike = control(document, "responsive-assistant-like", "Like", 780, 540);
+    const assistantNode = element(document, "section", {
+      id: "responsive-assistant",
+      rect: { left: 60, top: 160, width: 940, height: 430 }
+    }, [
+      element(document, "div", { text: answer, rect: { left: 80, top: 160, width: 900, height: 120 } }),
+      actionBar(document, "responsive-assistant-actions", 540, [assistantCopy, assistantCopyClone, assistantLike])
+    ]);
+    main.append(userNode, assistantNode);
+    return { userCopyClone, assistantCopyClone };
+  }, filename);
+  assert.deepEqual(run.result, [
+    { role: "user", text: prompt },
+    { role: "assistant", text: answer }
+  ]);
+  assert.deepEqual(run.copied, ["responsive-user-copy", "responsive-assistant-copy"]);
+  assert.ok(!run.copied.includes(run.fixture.userCopyClone.id), "responsive user Copy clone in the same bar must not be clicked");
+  assert.ok(!run.copied.includes(run.fixture.assistantCopyClone.id), "responsive assistant Copy clone in the same bar must not be clicked");
+}
+
 (async () => {
   const grokBody = userscriptBody("userscripts/grok.js");
   const mirrorBody = userscriptBody("userscripts/grok-dairoot.js");
   assert.equal(mirrorBody, grokBody, "Grok and Grok Mirror must differ only in their userscript header comments");
 
-  await testProseAndNestedCode(grokBody);
-  await testPureCodeAssistant(grokBody);
-  await testUnsafeBarsAreSkipped(grokBody);
-  await testRealDuplicateTurnsArePreserved(grokBody);
+  for (const [filename, body] of [
+    ["userscripts/grok.js", grokBody],
+    ["userscripts/grok-dairoot.js", mirrorBody]
+  ]) {
+    await testProseAndNestedCode(body, filename);
+    await testPureCodeAssistant(body, filename);
+    await testUnsafeBarsAreSkipped(body, filename);
+    await testRealDuplicateTurnsArePreserved(body, filename);
+    await testChineseActionBars(body, filename);
+    await testNestedIconOnlyControls(body, filename);
+    await testSingleRoleFailsClosed(body, filename);
+    await testResponsiveCopiesShareOwningBar(body, filename);
+  }
 
   console.log("Grok Summary extraction regression checks passed.");
 })().catch((error) => {

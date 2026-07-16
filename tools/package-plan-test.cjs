@@ -2,6 +2,7 @@
 
 const assert = require("node:assert/strict");
 const {
+  CONTENT_ENTRIES,
   FIREFOX_CONTENT_FALLBACK_OUTPUT,
   GENERATED_ARTIFACT_FILES
 } = require("./generated-artifacts.cjs");
@@ -31,7 +32,7 @@ for (const plan of [chromium, firefox]) {
     "background/trusted-input.js"
   ]) assert.ok(files.has(runtimeFile), `${plan.target} package is missing ${runtimeFile}`);
   for (const buildOnly of [
-    "content-src/content.js",
+    ...Object.values(CONTENT_ENTRIES),
     "tools/generate-artifacts.cjs",
     "shared/topic-delete-userscript-sources.js"
   ]) assert.ok(!files.has(buildOnly), `${plan.target} package contains build-only ${buildOnly}`);

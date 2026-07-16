@@ -4,7 +4,15 @@ import { TAB_GROUP_HEADER_BUTTONS } from "../../shared/constants.js";
 import { normalizeTabGroupButtonOrder, normalizeTabGroupButtonPlacement } from "../../shared/storage-schema.js";
 import { findMessageNavigatorSiteConfig } from "../../shared/message-navigator-sites.js";
 import { findTopicDeleteSiteConfig, topicDeleteTimeoutMs } from "../../shared/topic-delete-sites.js";
-import { button, el, field, input, modal } from "../../ui/dom.js";
+import {
+  button,
+  claimTopmostPopoverEscape,
+  editorModal,
+  el,
+  field,
+  input,
+  isDismissalEscape
+} from "../../ui/dom.js";
 import {
   hydrateWorkspaceGroups,
   layoutGroupsFromWorkspace,
@@ -199,6 +207,7 @@ export function createWorkspaceController(ctx = {}) {
   let frameLifecycleCallbackActive = false;
   const frameNavigationGenerations = new WeakMap();
   let messageNavigatorMenuIframe = null;
+  let workspacePopoverAnchor = null;
 
   function emitFrameLifecycleChange(event) {
     if (frameLifecycleCallbackActive) return;
@@ -2239,17 +2248,12 @@ export function createWorkspaceController(ctx = {}) {
     const form = el("form", {
       class: "settings-editor-form go-to-url-form",
       novalidate: true,
-      onsubmit: submit,
-      onkeydown: (event) => {
-        if (event.key !== "Escape") return;
-        event.preventDefault();
-        close();
-      }
+      onsubmit: submit
     },
       field(t("chat.goToUrlField"), urlInput),
       el("div", { class: "settings-dialog-actions" }, cancelButton, submitButton)
     );
-    dialog = modal(t("chat.goToUrl"), form, close, false, t("common.close"));
+    dialog = editorModal(t("chat.goToUrl"), form, close, false, t("common.close"));
     dialog.querySelector(".modal")?.classList.add("go-to-url-modal");
     requestAnimationFrame(() => {
       urlInput.focus({ preventScroll: true });
@@ -2334,13 +2338,43 @@ export function createWorkspaceController(ctx = {}) {
     if (iframe?.isConnected && messageNavigatorFrameEnabled(iframe)) hideMessageNavigatorMenuForFrame(iframe);
   }
 
+  function hasTrackedMessageNavigatorMenu() {
+    return Boolean(messageNavigatorMenuIframe?.isConnected);
+  }
+
+  async function dismissTrackedMessageNavigatorMenu() {
+    const iframe = messageNavigatorMenuIframe;
+    if (!iframe?.isConnected || !messageNavigatorFrameEnabled(iframe)) {
+      clearMessageNavigatorMenuOutsideClose();
+      return false;
+    }
+    try {
+      const result = await sendToContentFrame(iframe, "getMessageNavigatorState", {}, 2000);
+      if (messageNavigatorMenuIframe !== iframe) return true;
+      if (result?.menuOpen === false) {
+        clearMessageNavigatorMenuOutsideClose();
+        return false;
+      }
+      clearMessageNavigatorMenuOutsideClose();
+      await hideMessageNavigatorMenuForFrame(iframe);
+      return true;
+    } catch {
+      if (messageNavigatorMenuIframe === iframe) closeTrackedMessageNavigatorMenu();
+      return true;
+    }
+  }
+
   function closeMessageNavigatorMenuOnParentPointerDown(event) {
     if (messageNavigatorActionTarget(event.target)) return;
     closeTrackedMessageNavigatorMenu();
   }
 
   function closeMessageNavigatorMenuOnParentKeydown(event) {
-    if (event.key === "Escape") closeTrackedMessageNavigatorMenu();
+    if (!isDismissalEscape(event)) return;
+    if (document.querySelector(".modal-backdrop, .popover-menu")) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    dismissTrackedMessageNavigatorMenu().catch(() => {});
   }
 
   function messageNavigatorPayloadForFrame(iframe, href = "", fallback = {}) {
@@ -2708,12 +2742,13 @@ export function createWorkspaceController(ctx = {}) {
 
   function openAppPicker(anchor, options = {}) {
     if (!anchor) return;
-    if (anchor.classList.contains("popover-anchor") && document.querySelector(".app-picker-popover")) {
+    if (anchor.classList.contains("workspace-popover-anchor") && document.querySelector(".workspace-popover-menu.app-picker-popover")) {
       closePopovers();
       return;
     }
     closePopovers();
-    anchor.classList.add("popover-anchor");
+    anchor.classList.add("popover-anchor", "workspace-popover-anchor");
+    workspacePopoverAnchor = anchor;
     const { group, mode } = options;
     const onSelect = async (app) => {
       closePopovers();
@@ -2721,7 +2756,7 @@ export function createWorkspaceController(ctx = {}) {
       else if (group) await addAppToExistingGroup(group, app.id);
     };
     const backdrop = el("div", {
-      class: "popover-backdrop app-picker-backdrop",
+      class: "popover-backdrop workspace-popover-backdrop app-picker-backdrop",
       onpointerdown: (event) => {
         event.preventDefault();
         closePopovers();
@@ -2732,7 +2767,7 @@ export function createWorkspaceController(ctx = {}) {
       }
     });
     const picker = el("div", {
-      class: "popover-menu app-picker-popover",
+      class: "popover-menu workspace-popover-menu app-picker-popover",
       role: "menu",
       onpointerdown: (event) => event.stopPropagation(),
       onclick: (event) => event.stopPropagation()
@@ -2819,17 +2854,18 @@ export function createWorkspaceController(ctx = {}) {
 
   function openLayoutMenu(anchor) {
     if (!anchor) return;
-    if (anchor.classList.contains("popover-anchor") && document.querySelector(".layout-popover")) {
+    if (anchor.classList.contains("workspace-popover-anchor") && document.querySelector(".workspace-popover-menu.layout-popover")) {
       closePopovers();
       return;
     }
     closePopovers();
-    anchor.classList.add("popover-anchor");
+    anchor.classList.add("popover-anchor", "workspace-popover-anchor");
+    workspacePopoverAnchor = anchor;
     const rect = anchor.getBoundingClientRect();
     const right = Math.max(8, window.innerWidth - rect.right - LAYOUT_POPOVER_RIGHT_EXTENSION);
     const top = Math.min(rect.bottom + 7, window.innerHeight - 8);
     const backdrop = el("div", {
-      class: "popover-backdrop layout-backdrop",
+      class: "popover-backdrop workspace-popover-backdrop layout-backdrop",
       onpointerdown: (event) => {
         event.preventDefault();
         closePopovers();
@@ -2840,7 +2876,7 @@ export function createWorkspaceController(ctx = {}) {
       }
     });
     const menu = el("div", {
-      class: "popover-menu layout-popover",
+      class: "popover-menu workspace-popover-menu layout-popover",
       role: "menu",
       style: { top: `${top}px`, right: `${right}px` },
       onpointerdown: (event) => event.stopPropagation(),
@@ -2870,20 +2906,24 @@ export function createWorkspaceController(ctx = {}) {
   }
 
   function closePopoverOnKeydown(event) {
-    if (event.key === "Escape") closePopovers();
+    if (claimTopmostPopoverEscape(event, ".workspace-popover-menu")) closePopovers();
   }
 
   function closePopoverOnOutsideInteraction(event) {
-    const menu = document.querySelector(".popover-menu");
-    const anchor = document.querySelector(".popover-anchor");
+    const menu = document.querySelector(".workspace-popover-menu");
+    const anchor = document.querySelector(".workspace-popover-anchor");
     const target = event.target;
     if (menu?.contains(target) || anchor?.contains(target)) return;
     closePopovers();
   }
 
   function closePopovers() {
-    document.querySelectorAll(".popover-menu, .popover-backdrop").forEach((node) => node.remove());
-    document.querySelectorAll(".popover-anchor").forEach((node) => node.classList.remove("popover-anchor"));
+    document.querySelectorAll(".workspace-popover-menu, .workspace-popover-backdrop").forEach((node) => node.remove());
+    document.querySelectorAll(".workspace-popover-anchor").forEach((node) => {
+      node.classList.remove("popover-anchor", "workspace-popover-anchor");
+    });
+    workspacePopoverAnchor?.classList?.remove("popover-anchor", "workspace-popover-anchor");
+    workspacePopoverAnchor = null;
     document.removeEventListener("pointerdown", closePopoverOnOutsideInteraction, true);
     document.removeEventListener("focusin", closePopoverOnOutsideInteraction, true);
     document.removeEventListener("keydown", closePopoverOnKeydown, true);
@@ -2892,13 +2932,24 @@ export function createWorkspaceController(ctx = {}) {
     window.removeEventListener("blur", closePopovers, true);
   }
 
+  function closePopoversAnchoredWithin(root) {
+    if (!workspacePopoverAnchor) return;
+    if (!workspacePopoverAnchor.isConnected || root?.contains?.(workspacePopoverAnchor)) closePopovers();
+  }
+
+  function closeTransientOverlays() {
+    closePopovers();
+    closeTrackedMessageNavigatorMenu();
+  }
+
   function openChatMenu(anchor, group) {
-    if (anchor.classList.contains("popover-anchor") && document.querySelector(".popover-menu")) {
+    if (anchor.classList.contains("workspace-popover-anchor") && document.querySelector(".workspace-popover-menu")) {
       closePopovers();
       return;
     }
     closePopovers();
-    anchor.classList.add("popover-anchor");
+    anchor.classList.add("popover-anchor", "workspace-popover-anchor");
+    workspacePopoverAnchor = anchor;
     const rect = anchor.getBoundingClientRect();
     const { fullscreenLabel, fullscreenTooltipLabel, icon: fullscreenIcon } = fullscreenButtonMeta(group);
     const activeChat = activeChatForGroup(group);
@@ -2910,7 +2961,10 @@ export function createWorkspaceController(ctx = {}) {
       addApp: () => menuButton(t("chat.addApp"), "plus", () => openAppPicker(anchor, { group }), "secondary", false, t("chat.addApp"), "", "workspace.group.addApp"),
       openInNewTab: () => menuButton(t("common.openInNewTab"), "external", () => openChatInNewTab(group), "secondary", false, t("common.openInNewTab"), "", "workspace.group.openInNewTab"),
       copyLink: () => menuButton(t("common.copyLink"), "copy", () => copyActiveChatLink(group), "secondary", false, t("common.copyLink"), "", "workspace.group.copyLink"),
-      goToUrl: () => menuButton(t("chat.goToUrl"), "link", () => openGoToUrlDialog(group), "secondary", false, t("chat.goToUrl"), "", "workspace.group.goToUrl"),
+      goToUrl: () => menuButton(t("chat.goToUrl"), "link", () => {
+        closePopovers();
+        openGoToUrlDialog(group);
+      }, "secondary", false, t("chat.goToUrl"), "", "workspace.group.goToUrl"),
       newChat: () => menuButton(t("topbar.newChat"), "edit", async () => {
         await startNewChatInActiveTab(group);
         closePopovers();
@@ -2946,7 +3000,7 @@ export function createWorkspaceController(ctx = {}) {
       .filter((entry) => entry.item.danger)
       .map((entry) => entry.node);
     const backdrop = el("div", {
-      class: "popover-backdrop",
+      class: "popover-backdrop workspace-popover-backdrop",
       onpointerdown: (event) => {
         event.preventDefault();
         closePopovers();
@@ -2957,7 +3011,7 @@ export function createWorkspaceController(ctx = {}) {
       }
     });
     const menu = el("div", {
-      class: "popover-menu",
+      class: "popover-menu workspace-popover-menu",
       role: "menu",
       style: { top: `${rect.bottom + 5}px`, right: `${Math.max(8, window.innerWidth - rect.right)}px` },
       onpointerdown: (event) => event.stopPropagation(),
@@ -3013,6 +3067,10 @@ export function createWorkspaceController(ctx = {}) {
     hydrateGroups,
     switchLayoutPreset,
     closePopovers,
+    closePopoversAnchoredWithin,
+    closeTransientOverlays,
+    dismissTrackedMessageNavigatorMenu,
+    hasTrackedMessageNavigatorMenu,
     currentFrames,
     frameApp,
     setFramePointerBlockedForOverlay,

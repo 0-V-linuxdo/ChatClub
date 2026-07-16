@@ -1,7 +1,7 @@
 import { DEFAULT_TOPBAR_LAYOUT } from "./topbar.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-07-16｜05:03:13」";
+export const APP_VERSION = "「2026-07-16｜21:24:33」";
 export const BASELINE_MOD_VERSION = "2.4.0.14";
 export const HOMEPAGE_URL = "https://chatclub.local/";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
@@ -23,7 +23,7 @@ export const API_PROMOTION_CHANNELS_VERSION = 2;
 export const API_PROFILE_ZERO_ZERO_ENDPOINT = "https://api.0-0.pro/v1/chat/completions";
 export const API_PROFILE_ZERO_ZERO_MODEL = "gpt-5.5";
 export const API_PROFILE_ZERO_ZERO_REGISTER_URL = "https://0-0.pro/register?ref=CSLPRL76";
-export const SUMMARY_SITE_CONFIG_VERSION = 71;
+export const SUMMARY_SITE_CONFIG_VERSION = 72;
 export const SCRIPT_CONFIG_SCHEMA_VERSION = 3;
 export const PROMPT_IMAGE_PASTE_STRATEGY_SEQUENTIAL = "sequential";
 export const PROMPT_IMAGE_PASTE_STRATEGY_BATCH = "batch";
@@ -123,6 +123,8 @@ export const DEFAULT_TAB_GROUP_BUTTON_PLACEMENT = Object.freeze(
 export const DEFAULT_TAB_GROUP_BUTTON_ORDER = Object.freeze(
   TAB_GROUP_HEADER_BUTTONS.filter((item) => !item.requiredPinned).map((item) => item.id)
 );
+
+export const TAB_GROUP_BUTTON_ORDER_MIGRATION_VERSION = 1;
 
 export const DEFAULT_POCKET_CARD_SIZE = Object.freeze({
   width: 460,
@@ -293,6 +295,7 @@ export const DEFAULT_OPTIONS = {
   tabGroupButtonsMode: "pinned",
   tabGroupButtonPlacement: DEFAULT_TAB_GROUP_BUTTON_PLACEMENT,
   tabGroupButtonOrder: DEFAULT_TAB_GROUP_BUTTON_ORDER,
+  tabGroupButtonOrderMigrationVersion: TAB_GROUP_BUTTON_ORDER_MIGRATION_VERSION,
   topbarLayout: DEFAULT_TOPBAR_LAYOUT,
   topbarDeleteThreadMigrated: true,
   apiProfiles: [

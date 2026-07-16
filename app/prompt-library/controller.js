@@ -1,5 +1,5 @@
 import { t } from "../../shared/i18n.js";
-import { button, clear, el, field, input, modal, textarea, toast } from "../../ui/dom.js";
+import { button, clear, editorModal, el, field, input, textarea, toast, viewerModal } from "../../ui/dom.js";
 
 export function createPromptLibraryController(ctx) {
   const {
@@ -50,7 +50,7 @@ export function createPromptLibraryController(ctx) {
         onUse: close
       }));
     };
-    dialog = modal(t("prompts.title"), host, close, true, t("common.close"));
+    dialog = viewerModal(t("prompts.title"), host, close, true, t("common.close"));
     dialog.classList.add("prompt-library-backdrop");
     dialog.querySelector(".modal")?.classList.add("prompt-library-modal");
     position();
@@ -198,7 +198,7 @@ export function createPromptLibraryController(ctx) {
       await savePromptLibraryList(replacePromptLibraryItem(draft, nextPrompt, editing), redraw, editing ? t("toast.promptUpdated") : t("toast.promptAdded"));
       close();
     };
-    dialog = modal(editing ? t("prompts.editTitle") : t("prompts.addTitle"),
+    dialog = editorModal(editing ? t("prompts.editTitle") : t("prompts.addTitle"),
       el("div", { class: "settings-editor-form prompt-library-editor" },
         countedField(t("prompts.promptTitle"), titleInput, 100),
         countedField(t("prompts.promptContent"), promptInput, 2000),

@@ -74,13 +74,14 @@ import { promptCollapsedPreview, promptInputHeight } from "./composer/model.js";
 import { createActionButton, createCompactIconButton, createMenuButton, createTopIconButton } from "../ui/components.js";
 import {
   button,
+  claimTopmostPopoverEscape,
   createFrameToast,
   FRAME_TOAST_POSITION_EVENT,
   el,
   field,
   iconButton,
   input,
-  modal,
+  isDismissalEscape,
   select,
   textarea,
   toast
@@ -99,6 +100,8 @@ let topbarPromptPlaceholderValue = "";
 let topbarPromptPlaceholderTimer = 0;
 let topbarPromptPlaceholderTimerKey = "";
 let topbarEditSavePending = false;
+let topbarSettingsMenuReopenFrame = 0;
+let summaryEscapeDismissalPromise = null;
 const ICONS = {
   edit: [
     ["path", { d: "M12 20h9" }],
@@ -412,9 +415,7 @@ const topbarEditor = createTopbarEditor({
   state: topbarState,
   settingsSections: SETTINGS_SECTIONS,
   syncTopbar: (...args) => syncTopbar(...args),
-  openSettingsMenu: (...args) => openSettingsJumpMenu(...args),
-  closeSettingsMenu: (...args) => closeSettingsJumpMenu(...args),
-  openEditorSettingsMenu: (...args) => openTopbarEditSettingsMenu(...args)
+  openSettingsMenu: (...args) => openSettingsJumpMenu(...args)
 });
 const {
   activeTopbarEditLayout,
@@ -1150,7 +1151,7 @@ function closePromptActionsMenu() {
 }
 
 function closePromptActionsMenuOnKeydown(event) {
-  if (event.key === "Escape") closePromptActionsMenu();
+  if (claimTopmostPopoverEscape(event, ".prompt-actions-popover")) closePromptActionsMenu();
 }
 
 function promptActionsMenuItem(label, iconName, onClick) {
@@ -1547,6 +1548,13 @@ function ensureAppShell() {
 }
 
 function syncTopbar() {
+  const restorePersistentSettingsMenu = Boolean(
+    state.topbarEditMode
+    && (topbarSettingsMenuReopenFrame || document.querySelector(".topbar-settings-popover.is-editing"))
+  );
+  closePromptActionsMenu();
+  closeSettingsJumpMenu();
+  workspaceController.closePopoversAnchoredWithin(topbarNode);
   const shell = ensureAppShell();
   shell.classList.toggle("topbar-editing-mode", Boolean(state.topbarEditMode));
   const nextTopbar = renderTopbar();
@@ -1555,11 +1563,23 @@ function syncTopbar() {
   topbarNode = nextTopbar;
   syncPromptInputNode();
   syncPreferredModelInputGate();
+  if (restorePersistentSettingsMenu) {
+    topbarSettingsMenuReopenFrame = requestAnimationFrame(() => {
+      topbarSettingsMenuReopenFrame = 0;
+      openTopbarEditSettingsMenu();
+    });
+  }
+}
+
+function closeTransientOverlays() {
+  closePromptActionsMenu();
+  closeSettingsJumpMenu();
+  workspaceController.closeTransientOverlays();
 }
 
 function render() {
   applyTheme();
-  workspaceController.closePopovers();
+  closeTransientOverlays();
   const shell = ensureAppShell();
   syncTopbar();
   workspaceController.syncWorkspaceIsland(shell);
@@ -2298,6 +2318,8 @@ async function openCustomAppEditor() {
 }
 
 function closeSettingsJumpMenu() {
+  if (topbarSettingsMenuReopenFrame) cancelAnimationFrame(topbarSettingsMenuReopenFrame);
+  topbarSettingsMenuReopenFrame = 0;
   document.querySelectorAll(".topbar-settings-backdrop, .topbar-settings-popover").forEach((node) => node.remove());
   document.querySelectorAll(".topbar-settings-anchor").forEach((node) => node.classList.remove("topbar-settings-anchor"));
   document.removeEventListener("keydown", closeSettingsJumpMenuOnKeydown, true);
@@ -2307,7 +2329,7 @@ function closeSettingsJumpMenu() {
 }
 
 function closeSettingsJumpMenuOnKeydown(event) {
-  if (event.key === "Escape") closeSettingsJumpMenu();
+  if (claimTopmostPopoverEscape(event, ".topbar-settings-popover")) closeSettingsJumpMenu();
 }
 
 function topbarSettingsMenuButton(label, iconName, onClick, variant = "secondary", disabled = false, dragItem = null, options = {}) {
@@ -2417,10 +2439,12 @@ function runTopbarMenuItem(item, event) {
   }
   if (item.id === "addGroup") {
     workspaceController.openAppPicker(event?.currentTarget, { mode: "group" });
+    closeSettingsJumpMenu();
     return;
   }
   if (item.id === "layout") {
     workspaceController.openLayoutMenu(event?.currentTarget);
+    closeSettingsJumpMenu();
   }
 }
 
@@ -2450,6 +2474,7 @@ function openSettingsJumpMenu(anchor, options = {}) {
     return;
   }
   closeSettingsJumpMenu();
+  closePromptActionsMenu();
   workspaceController?.closePopovers?.();
   anchor.classList.add("topbar-settings-anchor");
   const rect = anchor.getBoundingClientRect();
@@ -2641,18 +2666,49 @@ async function handleShortcutAction(action, matchObj = null, sourceWindow = null
   else if (action === "switchPlatformTab" && digit > 0) switchPlatformTabByShortcut(digit - 1, sourceWindow);
 }
 
+function hasForegroundOverlay() {
+  return Boolean(document.querySelector(".modal-backdrop, .popover-menu, .popover-backdrop"));
+}
+
+function closeSummaryFromEscape() {
+  if (!state.summaryOpen || hasForegroundOverlay()) return;
+  state.summaryOpen = false;
+  state.summaryMaximized = false;
+  syncSummaryPanel();
+}
+
 function installShortcuts() {
   window.addEventListener("keydown", (event) => {
     if (state.shortcutRecordingAction) return;
+    if (event.isComposing || event.keyCode === 229) return;
     if (state.summaryOpen && event.key === "Escape") {
+      if (!isDismissalEscape(event) || hasForegroundOverlay()) return;
       event.preventDefault();
-      state.summaryOpen = false;
-      state.summaryMaximized = false;
-      syncSummaryPanel();
+      event.stopPropagation();
+      event.stopImmediatePropagation?.();
+      if (workspaceController.hasTrackedMessageNavigatorMenu()) {
+        if (!summaryEscapeDismissalPromise) {
+          summaryEscapeDismissalPromise = workspaceController.dismissTrackedMessageNavigatorMenu()
+            .then((consumed) => {
+              if (!consumed) closeSummaryFromEscape();
+            })
+            .catch((error) => {
+              console.warn("[ChatClub] Summary Escape dismissal failed", error);
+            })
+            .finally(() => {
+              summaryEscapeDismissalPromise = null;
+            });
+        }
+        return;
+      }
+      closeSummaryFromEscape();
       return;
     }
+    if (document.querySelector(".modal-backdrop")) return;
+    if (isDismissalEscape(event) && (hasForegroundOverlay() || workspaceController.hasTrackedMessageNavigatorMenu())) return;
     const matched = matchShortcut(event, state.shortcutConfig, keyboardPlatform);
     if (matched) {
+      closeTransientOverlays();
       event.preventDefault();
       event.stopPropagation();
       handleShortcutAction(matched.action, matched.matchObj).catch((error) => {

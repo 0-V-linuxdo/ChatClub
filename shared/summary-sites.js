@@ -45,11 +45,11 @@ export const SUMMARY_SITE_CONFIGS = Object.freeze([
     userTextSelector: "", assistantTextSelector: "", copyTimeoutMs: 3600, userscriptFallbackDelayMs: 1000
   },
   {
-    id: "kagi", name: "Kagi Assistant", enabled: true, builtIn: true, configVersion: 62,
+    id: "kagi", name: "Kagi Assistant", enabled: true, builtIn: true, configVersion: 63,
     hosts: ["assistant.kagi.com"], pathPrefixes: [], fallbackMode: "structuredOnly",
     userscriptRunMode: "serial", userscriptTimeoutMs: 32000, domTextFallback: false,
     domTextFallbackRoles: [], messageTextSelector: "", userTextSelector: "", assistantTextSelector: "",
-    copyTimeoutMs: 3600, userscriptFile: "kagi.js", userscriptLength: 3150
+    copyTimeoutMs: 3600, userscriptFile: "kagi.js", userscriptLength: 4231
   },
   {
     id: "notion", name: "Notion", enabled: true, builtIn: true, configVersion: 62,

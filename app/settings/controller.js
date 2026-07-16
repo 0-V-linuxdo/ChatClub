@@ -49,14 +49,15 @@ import { createPromptLibraryController } from "../prompt-library/controller.js";
 import {
   button,
   clear,
+  editorModal,
   el,
   FRAME_TOAST_POSITION_EVENT,
   field,
   input,
-  modal,
   select,
   textarea,
-  toast
+  toast,
+  viewerModal
 } from "../../ui/dom.js";
 import { createImportExportSettings } from "./import-export.js";
 import {
@@ -606,7 +607,7 @@ export function createSettingsController(ctx) {
       dialog.remove();
     };
     closeActiveSettingsDialog = close;
-    const dialog = modal(t("settings.title"), host, close, true, t("common.close"));
+    const dialog = editorModal(t("settings.title"), host, close, true, t("common.close"));
     dialog.querySelector(".modal")?.classList.add("settings-modal");
     const modalTitle = dialog.querySelector(".modal-header h2");
     const modalSectionTitle = el("div", { class: "settings-modal-section-title" });
@@ -1764,7 +1765,7 @@ export function createSettingsController(ctx) {
       await saveApiProfiles(apiProfiles, redraw, editing ? t("toast.apiProfileUpdated") : t("toast.apiProfileAdded"));
       close();
     };
-    dialog = modal(editing ? t("profiles.edit") : t("profiles.addTitle"),
+    dialog = editorModal(editing ? t("profiles.edit") : t("profiles.addTitle"),
       el("div", { class: "settings-editor-form" },
         el("div", { class: "settings-dialog-grid" },
           field(t("profiles.provider"), nameInput),
@@ -1917,7 +1918,7 @@ export function createSettingsController(ctx) {
   function openBuiltInAppDetails(app) {
     let detailDialog;
     const close = () => detailDialog?.remove();
-    detailDialog = modal(t("apps.builtInDetailsTitle", { name: app.name || app.id }),
+    detailDialog = viewerModal(t("apps.builtInDetailsTitle", { name: app.name || app.id }),
       el("div", { class: "settings-editor-form built-in-detail-form" },
         el("div", { class: "settings-dialog-grid built-in-detail-grid" },
           settingsDetailField(t("apps.platformName"), settingsDetailValue(app.name || app.id)),
@@ -2109,7 +2110,7 @@ export function createSettingsController(ctx) {
       await saveCustomConfigList(customConfig, redraw, editing ? t("toast.customPlatformUpdated") : t("toast.customPlatformAdded"));
       close();
     };
-    dialog = modal(editing ? t("apps.editTitle") : t("apps.addTitle"),
+    dialog = editorModal(editing ? t("apps.editTitle") : t("apps.addTitle"),
       el("div", { class: "settings-editor-form" },
         el("div", { class: "settings-dialog-grid" },
           field(t("apps.platformName"), nameInput),
@@ -2395,7 +2396,7 @@ export function createSettingsController(ctx) {
       );
       close();
     };
-    dialog = modal(editing ? t("promptTemplates.edit", { kind: t(meta.labelKey) }) : t("promptTemplates.addTitle", { kind: t(meta.labelKey) }),
+    dialog = editorModal(editing ? t("promptTemplates.edit", { kind: t(meta.labelKey) }) : t("promptTemplates.addTitle", { kind: t(meta.labelKey) }),
       el("div", { class: "settings-editor-form prompt-template-editor" },
         el("div", { class: "settings-dialog-grid" },
           field(t("promptTemplates.name"), titleInput),
@@ -2730,7 +2731,7 @@ export function createSettingsController(ctx) {
       toast(t(editing ? "toast.summaryUserscriptSaved" : "toast.summaryCollectorAdded"), "success");
       close();
     };
-    dialog = modal(t(editing ? "summary.collector.editTitle" : "summary.collector.addTitle"),
+    dialog = editorModal(t(editing ? "summary.collector.editTitle" : "summary.collector.addTitle"),
       el("div", { class: "settings-editor-form summary-userscript-editor" },
         el("div", { class: "settings-dialog-grid summary-userscript-grid" },
           field(t("summary.collector.name"), nameInput),
@@ -3198,7 +3199,7 @@ export function createSettingsController(ctx) {
       toast(t(editing ? "toast.messageNavigatorSiteSaved" : "toast.messageNavigatorSiteAdded"), "success");
       close();
     };
-    dialog = modal(t(editing ? "messageNavigator.site.editTitle" : "messageNavigator.site.addTitle"),
+    dialog = editorModal(t(editing ? "messageNavigator.site.editTitle" : "messageNavigator.site.addTitle"),
       el("div", { class: "settings-editor-form message-navigator-editor" },
         el("div", { class: "settings-dialog-grid message-navigator-grid" },
           field(t("messageNavigator.site.name"), nameInput),
@@ -3570,7 +3571,7 @@ export function createSettingsController(ctx) {
       toast(t(editing ? "toast.topicDeleteSiteSaved" : "toast.topicDeleteSiteAdded"), "success");
       close();
     };
-    dialog = modal(t(editing ? "topicDeletion.site.editTitle" : "topicDeletion.site.addTitle"),
+    dialog = editorModal(t(editing ? "topicDeletion.site.editTitle" : "topicDeletion.site.addTitle"),
       el("div", { class: "settings-editor-form topic-delete-editor" },
         el("div", { class: "settings-dialog-grid topic-delete-grid" },
           field(t("topicDeletion.site.name"), nameInput),

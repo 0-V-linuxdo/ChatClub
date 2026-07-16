@@ -2041,7 +2041,7 @@ export function installMessageNavigator() {
       this.boundScheduleCloseMenu = () => this.scheduleCloseMenu();
       this.boundDocumentPointerDown = (event) => this.onDocumentPointerDown(event);
       this.boundDocumentKeydown = (event) => {
-        if (event.key === "Escape") this.closeMenu();
+        if (event.key === "Escape" && !event.isComposing && event.keyCode !== 229) this.closeMenu();
       };
       this.boundRootFocusIn = () => this.openMenu();
       this.boundRootFocusOut = () => {

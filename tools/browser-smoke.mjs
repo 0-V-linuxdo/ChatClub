@@ -474,6 +474,7 @@ const pageProbe = `async (fixtureUrl) => {
       handshakeStage = "secure frame commands";
       return {
         fixtureUrl,
+        tabId: currentTab.id,
         injection,
         ready,
         boundFrameId: binding.senderContext?.frameId,
@@ -503,19 +504,27 @@ const pageProbe = `async (fixtureUrl) => {
       return { file, ok: false, error: error && error.message ? error.message : String(error) };
     }
   }));
+  const loopback = await loopbackContentHandshake();
+  const trusted = await request({
+    source: "chatclub",
+    action: "dispatchTrustedClick",
+    tabId: loopback.tabId,
+    expectedFrameId: loopback.boundFrameId,
+    expectedBindingId: loopback.ready?.frameBindingId,
+    expectedBrowserDocumentId: loopback.boundBrowserDocumentId,
+    expectedBridgeDocumentId: loopback.ready?.documentId,
+    expectedFrameHref: loopback.fixtureUrl,
+    x: -1,
+    y: -1,
+    reason: "browser smoke must reject before debugger attachment"
+  });
   return {
     shell: Boolean(document.querySelector("#app .app-shell")),
     fatalPre: Boolean(document.querySelector("#app > pre")),
     configInfo: await request({ source: "chatclub", action: "getConfigInfo" }),
     lazy,
-    loopback: await loopbackContentHandshake(),
-    trusted: await request({
-      source: "chatclub",
-      action: "dispatchTrustedClick",
-      x: -1,
-      y: -1,
-      reason: "browser smoke must reject before debugger attachment"
-    })
+    loopback,
+    trusted
   };
 }`;
 

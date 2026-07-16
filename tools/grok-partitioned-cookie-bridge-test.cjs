@@ -101,6 +101,22 @@ function fakeExtensionApi(sources = []) {
   };
 }
 
+async function releaseManagedCookie(bridge, { name, cause, value }) {
+  const api = fakeExtensionApi([sourceCookie(name, value || `${name}-${cause}`)]);
+  await bridge.syncGrokSessionCookies(api, { storeId: "0", partitionKey: { topLevelSite: EXTENSION_SITE, hasCrossSiteAncestor: true }, names: [name] });
+  const key = { topLevelSite: EXTENSION_SITE, hasCrossSiteAncestor: true };
+  const cookie = api.targets.get(partitionId({ name, storeId: "0", partitionKey: key }));
+  assert.ok(cookie, `${name}/${cause}: managed target was not created`);
+  assert.equal(
+    bridge.grokCookieChangeOwnedByBridge({ removed: false, cookie }),
+    true,
+    `${name}/${cause}: bridge-owned set event was not consumed`
+  );
+  api.targets.delete(partitionId({ name, storeId: "0", partitionKey: key }));
+  const released = await bridge.releaseChangedGrokPartition(api, { removed: true, cause, cookie });
+  return { api, cookie, partitionKey: key, released };
+}
+
 (async () => {
   const bridge = await dataModule(read("background/grok-cookie-bridge.js"));
   const manifest = JSON.parse(read("manifest.json"));
@@ -219,35 +235,57 @@ function fakeExtensionApi(sources = []) {
   assert.equal(partial.targets.size, 0);
   assert.equal(partial.stored[bridge.GROK_COOKIE_LEDGER_KEY], undefined);
 
-  const changed = fakeExtensionApi([sourceCookie("sso", "ROTATE")]);
-  await bridge.syncGrokSessionCookies(changed, { storeId: "0", partitionKey, names: ["sso"] });
-  const partitionedCookie = changed.targets.get(partitionId({ name: "sso", storeId: "0", partitionKey }));
-  assert.equal(bridge.grokCookieChangeOwnedByBridge({ removed: false, cookie: partitionedCookie }), true);
-  const externalRemoval = { removed: true, cause: "explicit", cookie: partitionedCookie };
-  assert.equal(bridge.isPartitionedGrokTargetChange(externalRemoval), true);
-  assert.equal(bridge.grokCookieChangeOwnedByBridge(externalRemoval), false);
-  changed.targets.delete(partitionId({ name: "sso", storeId: "0", partitionKey }));
-  const released = await bridge.releaseChangedGrokPartition(changed, externalRemoval);
-  assert.deepEqual(released, { changed: true, tombstoned: true });
-  const afterLogout = await bridge.syncGrokSessionCookies(changed, { storeId: "0", partitionKey, names: ["sso"] });
-  assert.equal(afterLogout.skipped, 1, "iframe logout tombstone must prevent immediate re-login");
-  assert.equal(await bridge.clearGrokTombstonesForStore(changed, "0", ["grok_device_id"]), false);
-  assert.equal((await bridge.syncGrokSessionCookies(changed, { storeId: "0", partitionKey, names: ["sso"] })).skipped, 1);
-  assert.equal(await bridge.clearGrokTombstonesForStore(changed, "0", ["sso"]), true);
-  assert.equal((await bridge.syncGrokSessionCookies(changed, { storeId: "0", partitionKey, names: ["sso"] })).created, 1);
+  const explicitSso = await releaseManagedCookie(bridge, { name: "sso", cause: "explicit", value: "ROTATE" });
+  assert.equal(bridge.isPartitionedGrokTargetChange({ removed: true, cause: "explicit", cookie: explicitSso.cookie }), true);
+  assert.deepEqual(explicitSso.released, { changed: true, tombstoned: true });
+  const afterLogout = await bridge.syncGrokSessionCookies(explicitSso.api, { storeId: "0", partitionKey, names: ["sso"] });
+  assert.equal(afterLogout.skipped, 1, "managed explicit sso removal must prevent immediate mirror recreation");
+  assert.equal(await bridge.clearGrokTombstonesForStore(explicitSso.api, "0", ["grok_device_id"]), false);
+  assert.equal((await bridge.syncGrokSessionCookies(explicitSso.api, { storeId: "0", partitionKey, names: ["sso"] })).skipped, 1);
+  assert.equal(await bridge.clearGrokTombstonesForStore(explicitSso.api, "0", ["sso"]), true);
+  assert.equal((await bridge.syncGrokSessionCookies(explicitSso.api, { storeId: "0", partitionKey, names: ["sso"] })).created, 1);
 
-  const expiredLogout = fakeExtensionApi([sourceCookie("sso-rw", "EXPIRED_LOGOUT")]);
-  await bridge.syncGrokSessionCookies(expiredLogout, { storeId: "0", partitionKey, names: ["sso-rw"] });
-  const expiredCookie = expiredLogout.targets.get(partitionId({ name: "sso-rw", storeId: "0", partitionKey }));
-  assert.equal(bridge.grokCookieChangeOwnedByBridge({ removed: false, cookie: expiredCookie }), true);
-  expiredLogout.targets.delete(partitionId({ name: "sso-rw", storeId: "0", partitionKey }));
+  const positiveTombstones = [
+    await releaseManagedCookie(bridge, { name: "sso", cause: "expired_overwrite" }),
+    await releaseManagedCookie(bridge, { name: "sso-rw", cause: "explicit" }),
+    await releaseManagedCookie(bridge, { name: "sso-rw", cause: "expired_overwrite", value: "EXPIRED_LOGOUT" })
+  ];
+  for (const result of positiveTombstones) {
+    assert.deepEqual(result.released, { changed: true, tombstoned: true });
+  }
+
+  const deviceRemoval = await releaseManagedCookie(bridge, { name: "grok_device_id", cause: "explicit" });
+  assert.deepEqual(deviceRemoval.released, { changed: true, tombstoned: false });
+  assert.equal(
+    (await bridge.syncGrokSessionCookies(deviceRemoval.api, { storeId: "0", partitionKey, names: ["grok_device_id"] })).created,
+    1,
+    "grok_device_id removal must not create an authentication tombstone"
+  );
+
+  const unrelatedCause = await releaseManagedCookie(bridge, { name: "sso", cause: "expired" });
+  assert.deepEqual(unrelatedCause.released, { changed: true, tombstoned: false });
+  assert.equal(
+    (await bridge.syncGrokSessionCookies(unrelatedCause.api, { storeId: "0", partitionKey, names: ["sso"] })).created,
+    1,
+    "non-logout removal causes must not tombstone sso"
+  );
+
+  const unmanagedRemovalApi = fakeExtensionApi([sourceCookie("sso", "UNMANAGED_SOURCE")]);
+  const unmanagedCookie = {
+    ...sourceCookie("sso", "UNMANAGED_TARGET", { storeId: "0" }),
+    sameSite: "no_restriction",
+    partitionKey
+  };
+  unmanagedRemovalApi.targets.set(partitionId({ name: "sso", storeId: "0", partitionKey }), unmanagedCookie);
+  unmanagedRemovalApi.targets.delete(partitionId({ name: "sso", storeId: "0", partitionKey }));
   assert.deepEqual(
-    await bridge.releaseChangedGrokPartition(expiredLogout, {
+    await bridge.releaseChangedGrokPartition(unmanagedRemovalApi, {
       removed: true,
-      cause: "expired_overwrite",
-      cookie: expiredCookie
+      cause: "explicit",
+      cookie: unmanagedCookie
     }),
-    { changed: true, tombstoned: true }
+    { changed: false, tombstoned: false },
+    "an unmanaged partition must never acquire a logout tombstone"
   );
 
   assert.equal(bridge.isUnpartitionedGrokSourceChange({ cookie: sourceCookie("sso", "x") }), true);

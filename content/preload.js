@@ -9,17 +9,17 @@
   var NOTION_SEND_TEXT_EVENT = "chatclub:notion-send-text:2026.07.15.2";
   var NOTION_SEND_PROMPT_EVENT = "chatclub:notion-send-prompt:2026.07.15.2";
   var NOTION_SEND_ACTIVATED_EVENT = "chatclub:notion-send-activated:2026.07.15.2";
-  var SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.16.1";
-  var DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.16.1";
-  var MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.16.1";
-  var SUMMARY_POST_MESSAGE_SOURCE = "chatclub:summary:2026.07.16.1";
-  var PREFERRED_MODEL_POST_MESSAGE_SOURCE = "chatclub:preferred-model:2026.07.16.1";
-  var CONTENT_BRIDGE_VERSION = "2026.07.16.1";
-  var EXTENSION_RUNTIME_RELAY_SOURCE = "chatclub:runtime-relay:2026.07.16.1";
+  var SEND_TEXT_POST_MESSAGE_SOURCE = "chatclub:send-text:2026.07.16.2";
+  var DELETE_THREAD_POST_MESSAGE_SOURCE = "chatclub:delete-thread:2026.07.16.2";
+  var MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = "chatclub:message-navigator:2026.07.16.2";
+  var SUMMARY_POST_MESSAGE_SOURCE = "chatclub:summary:2026.07.16.2";
+  var PREFERRED_MODEL_POST_MESSAGE_SOURCE = "chatclub:preferred-model:2026.07.16.2";
+  var CONTENT_BRIDGE_VERSION = "2026.07.16.2";
+  var EXTENSION_RUNTIME_RELAY_SOURCE = "chatclub:runtime-relay:2026.07.16.2";
   var FRAME_BINDING_POST_MESSAGE_SOURCE = `chatclub:frame-binding:${CONTENT_BRIDGE_VERSION}`;
-  var SECURE_FRAME_COMMAND_SOURCE = "chatclub:frame-command:2026.07.16.1";
-  var DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.07.15.1";
-  var PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.16.1";
+  var SECURE_FRAME_COMMAND_SOURCE = "chatclub:frame-command:2026.07.16.2";
+  var DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.07.16.1";
+  var PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.16.2";
   var RUNTIME_REGISTRY_ABI_VERSION = 1;
   var RUNTIME_REGISTRY_KEY = `__CHATCLUB_RUNTIME_REGISTRY_V${RUNTIME_REGISTRY_ABI_VERSION}__`;
   var NAVIGATION_FOCUS_GUARD_RUNTIME = "navigation-focus-guard";
@@ -1036,19 +1036,59 @@
       }
       return getter();
     };
-    const currentTopicLink = () => {
-      const links = all("a[href*='/chat/s/'],a[href*='/a/chat/s/']").filter(visible);
-      const id = currentChatId();
-      if (id) {
-        const exact = links.find((link) => chatIdFromLink(link) === id);
-        if (exact) return exact;
-      }
-      const selected = links.find((link) => {
-        const className = String(link.className || "");
-        const ariaCurrent = String(link.getAttribute?.("aria-current") || "").toLowerCase();
-        return /\b(active|selected|current)\b/i.test(className) || ariaCurrent === "page";
+    const deepSeekTopicLinks = (root = document) => all("a[href*='/chat/s/'],a[href*='/a/chat/s/']", root).filter(visible);
+    const verifiedSidebarRoot = () => {
+      const links = deepSeekTopicLinks().filter((link) => {
+        const rect = rectOf(link);
+        return rect && rect.left <= 480 && rect.width >= 80 && rect.height >= 18 && rect.height <= 110;
       });
-      return selected || links[0] || null;
+      const candidates = [];
+      const seen = /* @__PURE__ */ new Set();
+      for (const link of links.slice(0, 8)) {
+        for (let node = link; node && node !== document.body; node = node.parentElement) {
+          if (seen.has(node)) continue;
+          seen.add(node);
+          const rect = rectOf(node);
+          if (!rect || rect.left > 560 || rect.width < 120 || rect.width > 620 || rect.height < 40) continue;
+          const linkCount = deepSeekTopicLinks(node).length;
+          if (!linkCount) continue;
+          const historyish = /today|yesterday|pinned|new chat|今天|昨天|新聊天|置顶/i.test(textOf(node)) || /scroll|history|sidebar|sider|conversation/i.test(String(node.className || "")) || linkCount >= 2;
+          if (!historyish) continue;
+          candidates.push({
+            element: node,
+            score: Math.min(linkCount, 12) * 120 + rect.width + Math.min(rect.height, 900) * 0.04 - rect.left
+          });
+        }
+      }
+      candidates.sort((a, b) => b.score - a.score);
+      return candidates[0]?.element || null;
+    };
+    const currentTopicLink = (root = verifiedSidebarRoot()) => {
+      if (!root) return null;
+      const id = currentChatId();
+      if (!id) return null;
+      return deepSeekTopicLinks(root).find((link) => chatIdFromLink(link) === id) || null;
+    };
+    let pendingTrustedDeleteAttempt = null;
+    const trustedRetryRequested = (data = {}) => Boolean(data?.trustedKeySequenceRetried || data?.trustedMenuClickRetried);
+    const trustedAttemptIdentity = (data = {}) => ({
+      attemptId: normalize2(data?.deleteAttemptId),
+      routeId: currentChatId()
+    });
+    const trustedRetryOwned = (data = {}) => {
+      const identity = trustedAttemptIdentity(data);
+      return Boolean(
+        identity.attemptId && identity.routeId && pendingTrustedDeleteAttempt?.attemptId === identity.attemptId && pendingTrustedDeleteAttempt?.routeId === identity.routeId && pendingTrustedDeleteAttempt?.phase === "awaiting-menu-trigger" && pendingTrustedDeleteAttempt?.baseline === "no-delete-ui" && Number(pendingTrustedDeleteAttempt?.expiresAt) >= Date.now()
+      );
+    };
+    const armTrustedRetry = (data = {}, value = {}) => {
+      const identity = trustedAttemptIdentity(data);
+      if (!identity.attemptId || !identity.routeId) {
+        pendingTrustedDeleteAttempt = null;
+        return { ok: false, reason: `${value.reason || "trusted retry required"}; trusted retry ownership unavailable` };
+      }
+      pendingTrustedDeleteAttempt = { ...identity, phase: "awaiting-menu-trigger", baseline: "no-delete-ui", expiresAt: Date.now() + 2e4 };
+      return value;
     };
     const titleTokenFromValue = (value) => {
       const token = compact2(normalize2(value).replace(/\s*[-|–]\s*DeepSeek.*$/i, "").replace(/\s*-\s*深度求索.*$/i, ""));
@@ -1075,6 +1115,7 @@
         const rect = rectOf(node);
         if (!rect || rect.top < 0 || rect.top > 190 || rect.left < 120 || rect.width < 20 || rect.height < 14 || rect.height > 92) continue;
         if (String(node.href || node.getAttribute?.("href") || "").match(/\/(?:a\/)?chat\/s\//i)) continue;
+        if (node.closest?.("a[href*='/chat/s/'],a[href*='/a/chat/s/']") || all("a[href*='/chat/s/'],a[href*='/a/chat/s/']", node).length) continue;
         const token = compact2(textOf(node));
         if (!token || !titleTokens.some((item) => token.includes(item) || item.includes(token))) continue;
         seenTitles.add(node);
@@ -1168,30 +1209,12 @@
       return best.element || link;
     };
     const sidebarRootForTopic = (link) => {
-      const roots = [];
-      const seen = /* @__PURE__ */ new Set();
-      const add = (node, seedRect2) => {
-        if (!node || seen.has(node)) return;
-        seen.add(node);
-        const rect = rectOf(node);
-        if (!rect || rect.left > 560 || rect.width < 120 || rect.width > 620 || rect.height < 36) return;
-        if (seedRect2 && (rect.top > seedRect2.top + 12 || rect.bottom < seedRect2.bottom - 12)) return;
-        const links = all("a[href*='/chat/s/'],a[href*='/a/chat/s/']", node).filter(visible).length;
-        const value = textOf(node);
-        const className = String(node.className || "");
-        const historyish = /today|yesterday|pinned|new chat|今天|昨天|新聊天|置顶/i.test(value) || /scroll|history|sidebar|sider|conversation/i.test(className) || links >= 2;
-        if (!historyish && links < 1) return;
-        roots.push({
-          element: node,
-          score: Math.min(links, 12) * 120 + rect.width + Math.min(rect.height, 900) * 0.04 - rect.left
-        });
-      };
-      const seedRect = rectOf(link);
-      for (const seed of [link, ...all("a[href*='/chat/s/'],a[href*='/a/chat/s/']").filter(visible).slice(0, 5)]) {
-        for (let node = seed; node && node !== document.body; node = node.parentElement) add(node, seed === link ? seedRect : null);
+      const root = verifiedSidebarRoot();
+      try {
+        return root?.contains?.(link) ? root : null;
+      } catch {
+        return null;
       }
-      roots.sort((a, b) => b.score - a.score);
-      return roots[0]?.element || null;
     };
     const topicMenuRect = (link) => {
       const base = rectOf(visualTopicRow(link)) || rectOf(link);
@@ -1500,63 +1523,107 @@
       return candidates[0]?.element || null;
     };
     const confirmGone = () => !findConfirmButton();
-    const clickExistingConfirm = async () => {
-      const button = findConfirmButton();
-      if (!button) return null;
-      if (!activate(button, ["onClick", "onPointerUp", "onMouseUp"])) return { ok: false, reason: "delete confirmation click failed" };
-      const closed = await waitFor(confirmGone, 5200, 140);
-      return closed ? { ok: true } : { ok: false, reason: "delete confirmation did not close" };
-    };
     const deleteThread = async (data = {}) => {
-      const existingConfirm = await clickExistingConfirm();
-      if (existingConfirm) return existingConfirm;
-      const existingDeleteItem = await waitFor(findDeleteMenuItem, data?.trustedKeySequenceRetried || data?.trustedMenuClickRetried ? 3400 : 300, 60);
-      if (existingDeleteItem && activate(existingDeleteItem, ["onClick", "onPointerUp", "onMouseUp"])) {
-        const existingMenuConfirm = await waitFor(findConfirmButton, 4200, 100);
-        if (!existingMenuConfirm) return { ok: false, reason: "delete confirmation button not found" };
-        if (!activate(existingMenuConfirm, ["onClick", "onPointerUp", "onMouseUp"])) {
-          return { ok: false, reason: "delete confirmation click failed" };
-        }
-        const closed2 = await waitFor(confirmGone, 6200, 140);
-        return closed2 ? { ok: true } : { ok: false, reason: "delete confirmation did not close" };
+      let mutationDelivery = false;
+      const finish = (value = {}, phase = "") => ({
+        ...value,
+        delivered: mutationDelivery,
+        phase: phase || (mutationDelivery === true ? "delete-activated" : mutationDelivery === false ? "pre-delete" : "unknown")
+      });
+      const routeId = currentChatId();
+      if (!routeId) return finish({ ok: false, reason: "stable current conversation route is required" });
+      const routeStillCurrent = () => currentChatId() === routeId;
+      const retryRequested = trustedRetryRequested(data);
+      const retryOwned = retryRequested && trustedRetryOwned(data);
+      if (retryRequested && !retryOwned) {
+        return finish({ ok: false, reason: "trusted delete retry does not match the pending attempt and route" });
       }
-      if (data?.trustedMenuClickRetried) return { ok: false, reason: "trusted topic menu click did not open" };
-      const headerTrigger = findHeaderMoreButton();
-      const openTriggerAndDelete = async (trigger2, timeoutMs = 3e3) => {
-        const deleteItem2 = await activateUntil(
-          trigger2,
+      pendingTrustedDeleteAttempt = null;
+      if (findConfirmButton()) {
+        mutationDelivery = "unknown";
+        return finish({ ok: false, reason: "unverified delete confirmation is already open" }, "unknown");
+      }
+      const existingDeleteItem = retryOwned ? await waitFor(findDeleteMenuItem, 3400, 60) : null;
+      if (existingDeleteItem) {
+        if (!routeStillCurrent()) return finish({ ok: false, reason: "current conversation changed during trusted menu retry" });
+        if (!activate(existingDeleteItem, ["onClick", "onPointerUp", "onMouseUp"])) {
+          mutationDelivery = "unknown";
+          return finish({ ok: false, reason: "explicit Delete action could not be safely activated" }, "unknown");
+        }
+        mutationDelivery = true;
+        const existingMenuConfirm = await waitFor(findConfirmButton, 4200, 100);
+        if (!existingMenuConfirm) return finish({ ok: false, reason: "delete confirmation button not found" });
+        if (!routeStillCurrent() || !activate(existingMenuConfirm, ["onClick", "onPointerUp", "onMouseUp"])) {
+          return finish({ ok: false, reason: "delete confirmation click failed" });
+        }
+        const closed = await waitFor(confirmGone, 6200, 140);
+        return finish(closed ? { ok: true } : { ok: false, reason: "delete confirmation did not close" }, closed ? "complete" : "delete-activated");
+      }
+      if (retryOwned && data?.trustedMenuClickRetried) {
+        if (!routeStillCurrent()) return finish({ ok: false, reason: "current conversation changed during trusted menu retry" });
+        if (findDeleteMenuItem() || findConfirmButton()) {
+          mutationDelivery = "unknown";
+          return finish({ ok: false, reason: "delete menu state is not clean; trusted retry was not renewed" }, "unknown");
+        }
+        return finish(armTrustedRetry(data, { ok: false, reason: "trusted topic menu click did not open" }));
+      }
+      const openTriggerAndDelete = async (trigger, timeoutMs = 3e3) => {
+        if (!routeStillCurrent()) return null;
+        if (findDeleteMenuItem()) return null;
+        const deleteItem = await activateUntil(
+          trigger,
           findDeleteMenuItem,
           ["onClick", "onPointerUp", "onMouseUp", "onPointerDown", "onMouseDown"],
           { settleMs: 220 }
         ) || await waitFor(findDeleteMenuItem, timeoutMs, 90);
-        if (!deleteItem2) return null;
-        return activate(deleteItem2, ["onClick", "onPointerUp", "onMouseUp"]) ? deleteItem2 : null;
+        if (!deleteItem || !routeStillCurrent()) return null;
+        return activate(deleteItem, ["onClick", "onPointerUp", "onMouseUp"]) ? deleteItem : null;
       };
-      if (headerTrigger) {
-        if (await openTriggerAndDelete(headerTrigger, 2600)) {
-          const headerConfirm = await waitFor(findConfirmButton, 4200, 100);
-          if (!headerConfirm) return { ok: false, reason: "delete confirmation button not found" };
-          if (!activate(headerConfirm, ["onClick", "onPointerUp", "onMouseUp"])) {
-            return { ok: false, reason: "delete confirmation click failed" };
+      const sidebarRoot = verifiedSidebarRoot();
+      const link = currentTopicLink(sidebarRoot);
+      let rowFailureReason = "current topic row not found";
+      if (link) {
+        const trigger = await waitFor(() => findTopicMoreButton(link), 1800, 80);
+        if (trigger) {
+          const deleteItem = await openTriggerAndDelete(trigger, 3e3);
+          if (deleteItem) {
+            mutationDelivery = true;
+            const confirmButton = await waitFor(findConfirmButton, 4200, 100);
+            if (!confirmButton) return finish({ ok: false, reason: "delete confirmation button not found" });
+            if (!routeStillCurrent() || !activate(confirmButton, ["onClick", "onPointerUp", "onMouseUp"])) {
+              return finish({ ok: false, reason: "delete confirmation click failed" });
+            }
+            const closed = await waitFor(confirmGone, 6200, 140);
+            return finish(closed ? { ok: true } : { ok: false, reason: "delete confirmation did not close" }, closed ? "complete" : "delete-activated");
           }
-          const closed2 = await waitFor(confirmGone, 6200, 140);
-          return closed2 ? { ok: true } : { ok: false, reason: "delete confirmation did not close" };
+          rowFailureReason = "delete menu item not found";
+        } else {
+          rowFailureReason = "topic menu trigger not found";
         }
         closeTransientMenus();
       }
-      const link = currentTopicLink();
-      if (!link) return { ok: false, reason: "current topic row not found" };
-      const trigger = await waitFor(() => findTopicMoreButton(link), 1800, 80);
-      if (!trigger) return data?.trustedMenuClickRetried ? { ok: false, reason: "trusted topic menu click did not open" } : data?.trustedKeySequenceRetried ? resultWithTrustedMenuClick("keyboard topic menu did not open", link) : resultWithTrustedKeySequence("topic menu trigger not found", link);
-      const deleteItem = await openTriggerAndDelete(trigger, 3e3);
-      if (!deleteItem) return data?.trustedMenuClickRetried ? { ok: false, reason: "trusted topic menu click did not open" } : data?.trustedKeySequenceRetried ? resultWithTrustedMenuClick("keyboard topic menu did not open", link) : resultWithTrustedKeySequence("delete menu item not found", link);
-      const confirmButton = await waitFor(findConfirmButton, 4200, 100);
-      if (!confirmButton) return { ok: false, reason: "delete confirmation button not found" };
-      if (!activate(confirmButton, ["onClick", "onPointerUp", "onMouseUp"])) {
-        return { ok: false, reason: "delete confirmation click failed" };
+      if (!routeStillCurrent()) return finish({ ok: false, reason: "current conversation changed before delete activation" });
+      const headerTrigger = findHeaderMoreButton();
+      if (headerTrigger) {
+        if (await openTriggerAndDelete(headerTrigger, 2600)) {
+          mutationDelivery = true;
+          const headerConfirm = await waitFor(findConfirmButton, 4200, 100);
+          if (!headerConfirm) return finish({ ok: false, reason: "delete confirmation button not found" });
+          if (!routeStillCurrent() || !activate(headerConfirm, ["onClick", "onPointerUp", "onMouseUp"])) {
+            return finish({ ok: false, reason: "delete confirmation click failed" });
+          }
+          const closed = await waitFor(confirmGone, 6200, 140);
+          return finish(closed ? { ok: true } : { ok: false, reason: "delete confirmation did not close" }, closed ? "complete" : "delete-activated");
+        }
+        closeTransientMenus();
       }
-      const closed = await waitFor(confirmGone, 6200, 140);
-      return closed ? { ok: true } : { ok: false, reason: "delete confirmation did not close" };
+      if (!link) return finish({ ok: false, reason: rowFailureReason });
+      const cleanBaseline = await waitFor(() => !findDeleteMenuItem() && !findConfirmButton(), 700, 70);
+      if (!cleanBaseline) return finish({ ok: false, reason: "delete menu state remained open; trusted retry was not leased" }, "unknown");
+      return finish(armTrustedRetry(
+        data,
+        data?.trustedKeySequenceRetried ? resultWithTrustedMenuClick("keyboard topic menu did not open", link) : resultWithTrustedKeySequence(rowFailureReason, link)
+      ));
     };
     const messageListener = async (event) => {
       const message = event.data;
@@ -1565,7 +1632,7 @@
       try {
         result = await deleteThread(message.data || {});
       } catch (error) {
-        result = { ok: false, reason: error?.message || String(error || "delete bridge failed") };
+        result = { ok: false, delivered: "unknown", phase: "unknown", reason: error?.message || String(error || "delete bridge failed") };
       }
       try {
         window.postMessage({
@@ -1574,7 +1641,11 @@
           id: message.id,
           action: "deleteThread",
           site: "deepseek",
-          ...result
+          ...result,
+          delivered: result?.delivered === true || result?.delivered === false ? result.delivered : "unknown",
+          phase: typeof result?.phase === "string" ? result.phase : "unknown",
+          deleteAttemptId: normalize2(message.data?.deleteAttemptId),
+          routeId: currentChatId()
         }, "*");
       } catch {
       }

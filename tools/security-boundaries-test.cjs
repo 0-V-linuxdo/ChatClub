@@ -114,6 +114,12 @@ const dataModule = (source) => import(`data:text/javascript;base64,${Buffer.from
   assert.match(summary, /expectedHref: base\.href/);
   assert.match(topicDelete, /delete runtimeConfig\.userscript/);
   assert.match(topicDelete, /sendToContentFrame\(iframe, "deleteThread"/);
+  assert.match(topicDelete, /String\(instruction\?\.documentId \|\| ""\) === documentId/);
+  assert.match(topicDelete, /trustedBridgeDocumentId\(iframe\) !== expectedDocumentId/);
+  assert.match(topicDelete, /return await trustedInputTarget\(iframe, expectedDocumentId\)/);
+  assert.match(topicDelete, /trusted input origin document changed/);
+  assert.match(topicDelete, /sequence\.keys\.length > 12/);
+  assert.match(topicDelete, /Math\.min\(1000, Math\.round\(number\)\)/);
 
   console.log("security and mutation boundaries: ok");
 })().catch((error) => {

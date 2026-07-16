@@ -1,5 +1,5 @@
 {
-  "summarySiteConfigVersion": 71,
+  "summarySiteConfigVersion": 72,
   "source": "dev/userscripts",
   "configs": [
     {
@@ -145,7 +145,7 @@
       "name": "Kagi Assistant",
       "enabled": true,
       "builtIn": true,
-      "configVersion": 62,
+      "configVersion": 63,
       "hosts": [
         "assistant.kagi.com"
       ],
@@ -160,7 +160,7 @@
       "assistantTextSelector": "",
       "copyTimeoutMs": 3600,
       "userscriptFile": "kagi.js",
-      "userscriptLength": 3150
+      "userscriptLength": 4231
     },
     {
       "id": "notion",

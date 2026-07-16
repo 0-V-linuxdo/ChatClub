@@ -11,7 +11,7 @@ import {
   readPocketHistory,
   saveImportedConfigPatch
 } from "../../shared/storage-adapter.js";
-import { downloadText, el, modal, readFileAsText, toast } from "../../ui/dom.js";
+import { confirmationModal, downloadText, el, readFileAsText, toast } from "../../ui/dom.js";
 
 const IMPORT_EXPORT_ITEMS = Object.freeze([
   Object.freeze({ key: "options", labelKey: "io.item.options", descKey: "io.item.optionsDesc" }),
@@ -165,6 +165,12 @@ export function createImportExportSettings(ctx) {
     return error?.message || t("toast.importFailed");
   }
 
+  function committedImportError(error) {
+    const committedError = new Error(error?.message || String(error || t("toast.importFailed")), { cause: error });
+    committedError.importCommitted = true;
+    return committedError;
+  }
+
   function exportFailureMessage(error) {
     const reason = String(error?.message || "").trim();
     return reason ? t("toast.exportFailedWithReason", { reason }) : t("toast.exportFailed");
@@ -210,25 +216,29 @@ export function createImportExportSettings(ctx) {
         : mergePocketHistory(pocketExisting, imported.pocketHistory);
     }
     const saved = await saveImportedConfigPatch(patch);
-    if (selected.has("pocketHistory")) {
-      pocketStats = pocketMergeStats(pocketExisting, imported.pocketHistory, saved.pocketHistory || []);
-    }
-    if ("options" in saved) state.options = saved.options;
-    if ("customConfig" in saved) state.customConfig = saved.customConfig;
-    if ("promptLibrary" in saved) state.promptLibrary = saved.promptLibrary;
-    if ("promptSendHistory" in saved) state.promptSendHistory = saved.promptSendHistory;
-    if ("shortcutConfig" in saved) state.shortcutConfig = saved.shortcutConfig;
-    if ("pocketHistory" in saved) state.pocketEntries = saved.pocketHistory;
-    await notifyConfigReload();
-    hydrateGroups();
-    syncI18nLanguage();
-    resetAfterConfigImport(selectedList);
-    render();
-    options.redraw?.();
-    await afterConfigImport(selectedList, saved);
-    toast(t("toast.configImported"), "success");
-    if (pocketStats?.cappedCount > 0) {
-      toast(t("toast.importPocketLimit", { count: pocketStats.cappedCount }), "info");
+    try {
+      if (selected.has("pocketHistory")) {
+        pocketStats = pocketMergeStats(pocketExisting, imported.pocketHistory, saved.pocketHistory || []);
+      }
+      if ("options" in saved) state.options = saved.options;
+      if ("customConfig" in saved) state.customConfig = saved.customConfig;
+      if ("promptLibrary" in saved) state.promptLibrary = saved.promptLibrary;
+      if ("promptSendHistory" in saved) state.promptSendHistory = saved.promptSendHistory;
+      if ("shortcutConfig" in saved) state.shortcutConfig = saved.shortcutConfig;
+      if ("pocketHistory" in saved) state.pocketEntries = saved.pocketHistory;
+      await notifyConfigReload();
+      hydrateGroups();
+      syncI18nLanguage();
+      resetAfterConfigImport(selectedList);
+      render();
+      options.redraw?.();
+      await afterConfigImport(selectedList, saved);
+      toast(t("toast.configImported"), "success");
+      if (pocketStats?.cappedCount > 0) {
+        toast(t("toast.importPocketLimit", { count: pocketStats.cappedCount }), "info");
+      }
+    } catch (error) {
+      throw committedImportError(error);
     }
     return true;
   }
@@ -294,14 +304,23 @@ export function createImportExportSettings(ctx) {
     let pocketMode = "merge";
     let dialog = null;
     let confirmButton = null;
+    let cancelButton = null;
     let pocketModePanel = null;
     let importWarnings = null;
+    let importing = false;
+    const importControls = [];
     let pocketExistingEntries = Array.isArray(state.pocketEntries) ? state.pocketEntries : [];
     const pocketImportSize = jsonByteSize(imported.pocketHistory || []);
 
     const updateState = () => {
       const hasSelection = selectedKeys.size > 0;
-      if (confirmButton) confirmButton.disabled = !hasSelection;
+      if (confirmButton) confirmButton.disabled = importing || !hasSelection;
+      if (cancelButton) cancelButton.disabled = importing;
+      importControls.forEach(({ node, unavailable = false }) => {
+        node.disabled = importing || unavailable;
+      });
+      const headerCloseButton = dialog?.querySelector(".modal-header .icon-button");
+      if (headerCloseButton) headerCloseButton.disabled = importing;
       if (pocketModePanel) pocketModePanel.hidden = !selectedKeys.has("pocketHistory");
       if (importWarnings) {
         const messages = importWarningMessages(imported, diagnostics, selectedKeys, pocketMode, pocketImportSize, pocketExistingEntries);
@@ -317,22 +336,39 @@ export function createImportExportSettings(ctx) {
       }).catch(() => {});
     }
 
-    const close = () => dialog?.remove();
+    const close = (closeOptions = {}) => {
+      if (importing && closeOptions?.force !== true) return;
+      dialog?.remove();
+    };
     const confirm = async () => {
+      if (importing) return;
       if (!selectedKeys.size) return toast(t("toast.importNoSelection"), "error");
-      if (confirmButton) confirmButton.disabled = true;
+      importing = true;
+      updateState();
       try {
         const ok = await applyImportedConfig(imported, [...selectedKeys], pocketMode, options);
-        if (ok) close();
+        if (ok) {
+          close({ force: true });
+          return;
+        }
       } catch (error) {
+        if (error?.importCommitted) {
+          toast(t("toast.importCommittedRefreshFailed"), "error");
+          close({ force: true });
+          return;
+        }
         toast(importFailureMessage(error), "error");
-        updateState();
+      } finally {
+        if (dialog?.isConnected) {
+          importing = false;
+          updateState();
+        }
       }
     };
 
     const rows = IMPORT_EXPORT_ITEMS.map((item) => {
       const available = imported[item.key] !== null;
-      const { row } = createChoiceRow(item, {
+      const { checkbox, row } = createChoiceRow(item, {
         checked: available && selectedKeys.has(item.key),
         disabled: !available,
         meta: itemMetaText(item.key, imported[item.key], available, imported),
@@ -342,11 +378,13 @@ export function createImportExportSettings(ctx) {
           updateState();
         }
       });
+      importControls.push({ node: checkbox, unavailable: !available });
       return row;
     });
 
     const mergeInput = el("input", { type: "radio", name: "io-pocket-mode", value: "merge", checked: true });
     const replaceInput = el("input", { type: "radio", name: "io-pocket-mode", value: "replace" });
+    importControls.push({ node: mergeInput }, { node: replaceInput });
     mergeInput.addEventListener("change", () => {
       if (mergeInput.checked) {
         pocketMode = "merge";
@@ -383,15 +421,20 @@ export function createImportExportSettings(ctx) {
       type: "button",
       onclick: confirm
     }, t("io.importSelected"));
+    cancelButton = el("button", {
+      class: "button button-secondary",
+      type: "button",
+      onclick: close
+    }, t("common.cancel"));
 
-    dialog = modal(t("io.importConfirmTitle"),
+    dialog = confirmationModal(t("io.importConfirmTitle"),
       el("div", { class: "ui-dialog io-import-dialog" },
         el("p", { class: "io-dialog-lead" }, t("io.importConfirmDesc")),
         el("div", { class: "io-choice-list io-import-choice-list" }, rows),
         pocketModePanel,
         importWarnings,
         el("div", { class: "settings-dialog-actions" },
-          el("button", { class: "button button-secondary", type: "button", onclick: close }, t("common.cancel")),
+          cancelButton,
           confirmButton
         )
       ),

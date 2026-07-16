@@ -1,11 +1,18 @@
 #!/usr/bin/env node
 
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const { TOPIC_DELETE_OUTPUT_FILES } = require("./generated-artifacts.cjs");
 const {
   compareVersions,
   validNumericManifestVersion,
-  snapshotWriteErrors
+  snapshotWriteErrors,
+  summaryState,
+  deleteState
 } = require("./version-state.cjs");
+
+const root = path.resolve(__dirname, "..");
 
 function releaseState({
   appVersion,
@@ -69,5 +76,21 @@ const reusedSequence = { ...secondSameDayRelease, manifestVersion: "2026.7.15.1"
 assert.ok(snapshotWriteErrors(firstSequencedRelease, reusedSequence).includes(
   "release payload changed without increasing numeric Manifest version"
 ));
+
+const summaryIndex = JSON.parse(fs.readFileSync(path.join(root, "userscripts/index.json"), "utf8"));
+const actualSummaryState = summaryState();
+assert.equal(actualSummaryState.configVersion, summaryIndex.summarySiteConfigVersion);
+assert.deepEqual(
+  Object.keys(actualSummaryState.sites).sort(),
+  summaryIndex.configs.map((config) => config.id).sort(),
+  "version snapshot must track every canonical Summary source"
+);
+
+const actualDeleteState = deleteState();
+assert.deepEqual(
+  Object.keys(actualDeleteState).sort(),
+  TOPIC_DELETE_OUTPUT_FILES.map((file) => path.posix.basename(file)).sort(),
+  "version snapshot must track exactly the declared Delete userscript outputs"
+);
 
 console.log("release version history and same-day sequencing: ok");
