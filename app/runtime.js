@@ -90,6 +90,7 @@ import { installGlobalTooltips } from "../ui/tooltip.js";
 import { createAppState, createFeatureStatePort } from "./state.js";
 
 const appRoot = document.getElementById("app");
+const isOptionsPage = document.body?.dataset.chatclubEntry === "options";
 const SVG_NS = "http://www.w3.org/2000/svg";
 const PROMPT_IMAGE_RETRY_COUNT = 3;
 const FRAME_SUBMIT_ERROR_MAX_CHARS = 160;
@@ -2310,6 +2311,19 @@ async function openSettings(sectionId = "appearance") {
   }
 }
 
+let optionsSettingsOpening = false;
+
+async function ensureOptionsSettingsOpen() {
+  if (!isOptionsPage || optionsSettingsOpening || document.visibilityState === "hidden") return;
+  if (document.querySelector(".settings-modal")) return;
+  optionsSettingsOpening = true;
+  try {
+    await openSettings();
+  } finally {
+    optionsSettingsOpening = false;
+  }
+}
+
 async function openCustomAppEditor() {
   try {
     return (await ensureSettingsController()).openCustomAppEditor();
@@ -2751,6 +2765,11 @@ async function init() {
   frameBridgeController.install();
   installPreferredModelFrameCleanup();
   render();
+  if (isOptionsPage) {
+    await ensureOptionsSettingsOpen();
+    window.addEventListener("focus", ensureOptionsSettingsOpen);
+    document.addEventListener("visibilitychange", ensureOptionsSettingsOpen);
+  }
   applyPreferredModelsToFrames(null, { immediate: false });
   finishPreferredModelBootstrapping();
 }

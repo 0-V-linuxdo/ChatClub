@@ -5,9 +5,9 @@
   "short_name": "ChatClub",
   "description": "__MSG_extension_description__",
   "default_locale": "zh_CN",
-  "version": "2026.7.17.1",
-  "version_name": "「2026-07-17｜00:43:49」",
-  "homepage_url": "https://chatclub.local/",
+  "version": "2026.7.17.2",
+  "version_name": "「2026-07-17｜01:37:54」",
+  "homepage_url": "https://github.com/0-V-linuxdo/ChatClub",
   "action": {
     "default_title": "ChatClub",
     "default_icon": {
@@ -34,7 +34,10 @@
     ],
     "type": "module"
   },
-  "options_page": "chatClub.html",
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
   "permissions": [
     "storage",
     "cookies",

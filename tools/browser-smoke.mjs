@@ -1081,6 +1081,13 @@ async function chromiumSmoke(extensionDirectory, temporaryRoot, fixtureUrl) {
     let page = await context.newPage();
     const pageErrors = [];
     page.on("pageerror", (error) => pageErrors.push(error.message));
+    await page.goto(`chrome-extension://${extensionId}/options.html`, { waitUntil: "domcontentloaded", timeout: 20000 });
+    await page.locator("#app .app-shell").waitFor({ state: "attached", timeout: 25000 });
+    await page.locator(".settings-modal").waitFor({ state: "attached", timeout: 25000 });
+    assert(
+      await page.locator(".settings-modal .settings-tab.active").count() === 1,
+      "chromium: options page did not open one active Settings section"
+    );
     await page.goto(`chrome-extension://${extensionId}/chatClub.html`, { waitUntil: "domcontentloaded", timeout: 20000 });
     await page.locator("#app .app-shell").waitFor({ state: "attached", timeout: 25000 });
     const workspaceSessionProbe = await chromiumWorkspaceSessionRecoveryProbe(context, page, fixtureUrl, pageErrors);
@@ -1161,7 +1168,15 @@ async function firefoxSmoke(extensionDirectory, fixtureUrl) {
       "chatClub.html"
     );
     assert(/^moz-extension:\/\//.test(extensionUrl), "firefox: could not resolve the temporary extension URL");
+    const optionsUrl = new URL("options.html", extensionUrl).href;
     await driver.setContext(firefox.Context.CONTENT);
+    await driver.get(optionsUrl);
+    await driver.wait(async () => driver.findElements(selenium.By.css("#app .app-shell")).then((items) => items.length > 0), 25000);
+    await driver.wait(async () => driver.findElements(selenium.By.css(".settings-modal")).then((items) => items.length > 0), 25000);
+    assert(
+      await driver.findElements(selenium.By.css(".settings-modal .settings-tab.active")).then((items) => items.length) === 1,
+      "firefox: options page did not open one active Settings section"
+    );
     await driver.get(extensionUrl);
     await driver.wait(async () => driver.findElements(selenium.By.css("#app .app-shell")).then((items) => items.length > 0), 25000);
     const result = await driver.executeAsyncScript(`

@@ -1,9 +1,9 @@
 import { DEFAULT_TOPBAR_LAYOUT } from "./topbar.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-07-17｜00:43:49」";
+export const APP_VERSION = "「2026-07-17｜01:37:54」";
 export const BASELINE_MOD_VERSION = "2.4.0.14";
-export const HOMEPAGE_URL = "https://chatclub.local/";
+export const HOMEPAGE_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 

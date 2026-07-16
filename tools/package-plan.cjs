@@ -10,6 +10,7 @@ const {
 const root = path.resolve(__dirname, "..");
 const exactFiles = Object.freeze([
   "chatClub.html",
+  "options.html",
   "manifest.json",
   "package-info.json",
   ...GENERATED_ARTIFACT_FILES

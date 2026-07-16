@@ -19,6 +19,9 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
   assert.ok(!manifest.permissions.includes("userScripts"));
   assert.ok(manifest.optional_permissions.includes("userScripts"));
   assert.ok(manifest.permissions.includes("cookies"));
+  assert.equal(manifest.homepage_url, "https://github.com/0-V-linuxdo/ChatClub");
+  assert.deepEqual(manifest.options_ui, { page: "options.html", open_in_tab: true });
+  assert.ok(!Object.hasOwn(manifest, "options_page"));
   assert.ok(!Object.hasOwn(manifest, "web_accessible_resources"));
 
   const firefoxSource = read("background/firefox-background.js");
