@@ -662,6 +662,7 @@ export function normalizeOptions(raw = {}) {
 }
 
 export function normalizeCustomConfig(raw = []) {
+  const ids = new Set();
   return (Array.isArray(raw) ? raw : []).filter(Boolean).map((item, index) => {
     const url = normalizeHttpUrl(item.url);
     return {
@@ -674,7 +675,11 @@ export function normalizeCustomConfig(raw = []) {
       imagePasteStrategy: normalizePromptImagePasteStrategy(item.imagePasteStrategy),
       hosts: normalizeHostList(item.hosts)
     };
-  }).filter((item) => item.name && item.url);
+  }).filter((item) => {
+    if (!item.name || !item.url || ids.has(item.id)) return false;
+    ids.add(item.id);
+    return true;
+  });
 }
 
 export function normalizePromptLibrary(raw = []) {

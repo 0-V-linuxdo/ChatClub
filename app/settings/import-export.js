@@ -31,7 +31,8 @@ export function createImportExportSettings(ctx) {
     state,
     svgIcon,
     notifyConfigReload,
-    hydrateGroups,
+    hydrateImportedLayoutIfNeeded,
+    reconcileAppCatalog,
     syncI18nLanguage,
     render,
     prepareForConfigImport = async () => {},
@@ -201,6 +202,8 @@ export function createImportExportSettings(ctx) {
       return false;
     }
     await prepareForConfigImport(selectedList);
+    const previousOptions = state.options;
+    const previousCustomConfig = state.customConfig;
     const patch = {};
     if (selected.has("options")) patch.options = imported.options;
     if (selected.has("customConfig")) patch.customConfig = imported.customConfig;
@@ -227,7 +230,9 @@ export function createImportExportSettings(ctx) {
       if ("shortcutConfig" in saved) state.shortcutConfig = saved.shortcutConfig;
       if ("pocketHistory" in saved) state.pocketEntries = saved.pocketHistory;
       await notifyConfigReload();
-      hydrateGroups();
+      const layoutHydrated = "options" in saved
+        && hydrateImportedLayoutIfNeeded(previousOptions, previousCustomConfig);
+      if ("customConfig" in saved && !layoutHydrated) await reconcileAppCatalog(previousCustomConfig);
       syncI18nLanguage();
       resetAfterConfigImport(selectedList);
       render();

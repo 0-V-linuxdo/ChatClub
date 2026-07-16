@@ -1,7 +1,11 @@
 import { t } from "../../shared/i18n.js";
 import { currentExtensionTabId, runtimeFrameId, runtimeRequest } from "../../shared/extension-api.js";
 import { TAB_GROUP_HEADER_BUTTONS } from "../../shared/constants.js";
-import { normalizeTabGroupButtonOrder, normalizeTabGroupButtonPlacement } from "../../shared/storage-schema.js";
+import {
+  getAllChatApps,
+  normalizeTabGroupButtonOrder,
+  normalizeTabGroupButtonPlacement
+} from "../../shared/storage-schema.js";
 import { findMessageNavigatorSiteConfig } from "../../shared/message-navigator-sites.js";
 import { findTopicDeleteSiteConfig, topicDeleteTimeoutMs } from "../../shared/topic-delete-sites.js";
 import {
@@ -14,12 +18,15 @@ import {
   isDismissalEscape
 } from "../../ui/dom.js";
 import {
+  diffEffectiveCustomAppCatalog,
   hydrateWorkspaceGroups,
+  importedWorkspaceLayoutNeedsHydration,
   layoutGroupsFromWorkspace,
   moveDroppedGroupWithinWorkspace,
   moveGroupWithinWorkspace,
   moveTabWithinGroup,
   normalizeWorkspaceLayoutGroups,
+  reconcileWorkspaceAppCatalog,
   removeChatFromGroup,
   removeGroupFromWorkspace,
   workspaceGridColumnCount
@@ -1052,6 +1059,165 @@ export function createWorkspaceController(ctx = {}) {
     state.fullscreenGroupId = null;
     rememberWorkspaceSession();
     return false;
+  }
+
+  function activeLayoutGroupsForOptions(options = state.options, customConfig = state.customConfig) {
+    const presets = persistentLayoutPresets(options);
+    const active = presets.find((preset) => preset.id === options?.activeLayoutPresetId) || presets[0];
+    const validIds = new Set(getAllChatApps(customConfig, options?.builtinChatAppOrder).map((app) => app.id));
+    return normalizeWorkspaceLayoutGroups(active?.chatAppIdGroups, validIds);
+  }
+
+  function hydrateImportedLayoutIfNeeded(previousOptions = {}, previousCustomConfig = state.customConfig) {
+    const targetGroups = activeLayoutGroupsForOptions(state.options);
+    const currentGroups = currentLayoutGroups();
+    if (!importedWorkspaceLayoutNeedsHydration({
+      temporary: temporaryLayoutIsActive(),
+      previousTargetGroups: activeLayoutGroupsForOptions(previousOptions, previousCustomConfig),
+      nextTargetGroups: targetGroups,
+      currentGroups
+    })) {
+      rememberWorkspaceSession();
+      return false;
+    }
+    hydrateGroups();
+    return true;
+  }
+
+  function frameSandboxMatchesApp(iframe, app) {
+    const sandboxed = chatFrameNeedsSandbox(app);
+    return sandboxed
+      ? iframe?.getAttribute("sandbox") === chatFrameSandbox(app)
+      : !iframe?.hasAttribute("sandbox");
+  }
+
+  function refreshChatTabPresentations(appIds = new Set(), sourceChangedAppIds = new Set()) {
+    if (!appIds.size) return;
+    for (const group of state.groups || []) {
+      const card = Array.from(document.querySelectorAll(".main-grid > .chat-card"))
+        .find((node) => node.dataset.groupId === group.id);
+      if (!card) continue;
+      for (const chat of group.chatApps || []) {
+        if (!appIds.has(chat.appId)) continue;
+        const tab = Array.from(card.querySelectorAll(".tab[data-instance-id]"))
+          .find((node) => node.dataset.instanceId === chat.instanceId);
+        tab?.replaceWith(renderChatTab(group, chat));
+        const iframe = Array.from(card.querySelectorAll(".chat-frame[data-instance-id]"))
+          .find((node) => node.dataset.instanceId === chat.instanceId);
+        if (iframe && (
+          sourceChangedAppIds.has(chat.appId)
+          || !frameSandboxMatchesApp(iframe, appById(chat.appId))
+        )) {
+          iframe.replaceWith(renderChatFrame(group, chat));
+        }
+      }
+      syncGroupTabOrder(group);
+    }
+  }
+
+  function reconcileAppCatalogDom(result, affectedAppIds, sourceChangedAppIds, previousActiveTabs) {
+    const grid = workspaceNode?.isConnected ? workspaceNode : document.querySelector(".main-grid");
+    if (!grid) return false;
+    const groupById = new Map((state.groups || []).map((group) => [group.id, group]));
+    const cards = Array.from(grid.querySelectorAll(":scope > .chat-card"));
+    for (const card of cards) {
+      if (!groupById.has(card.dataset.groupId)) card.remove();
+    }
+
+    for (const [index, group] of (state.groups || []).entries()) {
+      let card = Array.from(grid.querySelectorAll(":scope > .chat-card"))
+        .find((node) => node.dataset.groupId === group.id);
+      if (!card) {
+        card = renderChatGroup(group, index);
+        grid.append(card);
+        continue;
+      }
+      const instanceIds = new Set((group.chatApps || []).map((chat) => chat.instanceId));
+      card.querySelectorAll(".tab[data-instance-id]").forEach((tab) => {
+        if (!instanceIds.has(tab.dataset.instanceId)) tab.remove();
+      });
+      card.querySelectorAll(".chat-frame[data-instance-id]").forEach((iframe) => {
+        if (!instanceIds.has(iframe.dataset.instanceId)) iframe.remove();
+      });
+
+      const tabs = card.querySelector(".chat-tabs");
+      const frameWrap = card.querySelector(".chat-frame-wrap");
+      for (const chat of group.chatApps || []) {
+        const currentTab = Array.from(card.querySelectorAll(".tab[data-instance-id]"))
+          .find((node) => node.dataset.instanceId === chat.instanceId);
+        if (!currentTab) {
+          tabs?.insertBefore(renderChatTab(group, chat), tabs.querySelector(".tab-add"));
+        } else if (affectedAppIds.has(chat.appId)) {
+          currentTab.replaceWith(renderChatTab(group, chat));
+        }
+        const currentFrame = Array.from(card.querySelectorAll(".chat-frame[data-instance-id]"))
+          .find((node) => node.dataset.instanceId === chat.instanceId);
+        if (!currentFrame) frameWrap?.append(renderChatFrame(group, chat));
+        else if (affectedAppIds.has(chat.appId) && (
+          sourceChangedAppIds.has(chat.appId)
+          || !frameSandboxMatchesApp(currentFrame, appById(chat.appId))
+        )) {
+          currentFrame.replaceWith(renderChatFrame(group, chat));
+        }
+      }
+      card.style.order = String(index + 1);
+      syncGroupTabOrder(group);
+      activateChatTab(
+        group,
+        state.activeTabs[group.id] || group.chatApps[0]?.instanceId || "",
+        previousActiveTabs?.[group.id] || ""
+      );
+    }
+
+    workspaceNode = grid;
+    workspaceRenderSignature = workspaceSignature();
+    syncGridColumnClass();
+    syncFullscreenLayout();
+    return result.changed;
+  }
+
+  /**
+   * Reconcile changes to the custom-app catalog without hydrating a new
+   * workspace. Surviving iframe elements stay attached unless that app's URL,
+   * built-in/custom source, or sandbox contract changed, in which case only
+   * the affected frame is rebuilt.
+   */
+  async function reconcileAppCatalog(previousCustomConfig = []) {
+    const { affectedAppIds, sourceChangedAppIds } = diffEffectiveCustomAppCatalog(previousCustomConfig, state.customConfig);
+    const validAppIds = validChatAppIds();
+    const result = reconcileWorkspaceAppCatalog({
+      groups: state.groups,
+      activeTabs: state.activeTabs,
+      validAppIds,
+      fallbackAppId: allApps()[0]?.id || "",
+      createGroupId,
+      createFrameId
+    });
+
+    if (result.changed) {
+      const previousActiveTabs = state.activeTabs;
+      state.groups = result.groups;
+      state.activeTabs = result.activeTabs;
+      const liveInstanceIds = new Set(result.groups.flatMap((group) =>
+        (group.chatApps || []).map((chat) => chat.instanceId)
+      ));
+      state.frameLoadingInstanceIds = (state.frameLoadingInstanceIds || [])
+        .filter((instanceId) => liveInstanceIds.has(instanceId));
+      if (!result.groups.some((group) => group.id === state.fullscreenGroupId)) {
+        state.fullscreenGroupId = null;
+      }
+      reconcileAppCatalogDom(result, affectedAppIds, sourceChangedAppIds, previousActiveTabs);
+      await persistLayout();
+    } else {
+      refreshChatTabPresentations(affectedAppIds, sourceChangedAppIds);
+      syncWorkspaceDom();
+      // A targeted frame replacement can happen without changing workspace
+      // membership. Persist the new app URL immediately so a reload before the
+      // frame's first location report cannot restore the old URL under the new
+      // sandbox contract.
+      rememberWorkspaceSession();
+    }
+    return result;
   }
 
   async function persistLayout() {
@@ -3065,6 +3231,8 @@ export function createWorkspaceController(ctx = {}) {
     openableTabUrl,
     openTabUrl,
     hydrateGroups,
+    hydrateImportedLayoutIfNeeded,
+    reconcileAppCatalog,
     switchLayoutPreset,
     closePopovers,
     closePopoversAnchoredWithin,

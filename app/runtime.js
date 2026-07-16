@@ -795,7 +795,8 @@ function ensureSettingsController() {
           applyTheme,
           syncI18nLanguage,
           requestUserScriptsPermission: requestUserScriptsAccess,
-          hydrateGroups: workspaceController.hydrateGroups,
+          hydrateImportedLayoutIfNeeded: workspaceController.hydrateImportedLayoutIfNeeded,
+          reconcileAppCatalog: workspaceController.reconcileAppCatalog,
           enterTopbarEditMode,
           openTabUrl: workspaceController.openTabUrl
         });

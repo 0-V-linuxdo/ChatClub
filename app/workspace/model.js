@@ -19,6 +19,19 @@ export function workspaceGridColumnCount(groupCount, colMaxCount) {
   return Math.max(1, Math.min(4, groupCount || 1, desired || 1));
 }
 
+export function importedWorkspaceLayoutNeedsHydration({
+  temporary = false,
+  previousTargetGroups = [],
+  nextTargetGroups = [],
+  currentGroups = []
+} = {}) {
+  if (temporary) return false;
+  const previousSignature = JSON.stringify(previousTargetGroups);
+  const nextSignature = JSON.stringify(nextTargetGroups);
+  if (previousSignature === nextSignature) return false;
+  return nextSignature !== JSON.stringify(currentGroups);
+}
+
 export function hydrateWorkspaceGroups({ presetGroups, apps, createGroupId, createFrameId, fallbackGroups }) {
   const valid = new Set((apps || []).map((app) => app.id));
   const sourceGroups = Array.isArray(presetGroups) && presetGroups.length ? presetGroups : fallbackGroups;
@@ -36,6 +49,126 @@ export function hydrateWorkspaceGroups({ presetGroups, apps, createGroupId, crea
   const activeTabs = {};
   for (const group of groups) activeTabs[group.id] = group.chatApps[0]?.instanceId;
   return { groups, activeTabs };
+}
+
+function sameActiveTabs(left = {}, right = {}) {
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  return leftKeys.length === rightKeys.length
+    && leftKeys.every((key) => left[key] === right[key]);
+}
+
+function effectiveCustomAppsById(config = []) {
+  const byId = new Map();
+  for (const app of Array.isArray(config) ? config : []) {
+    if (app?.id && !byId.has(app.id)) byId.set(app.id, app);
+  }
+  return byId;
+}
+
+export function diffEffectiveCustomAppCatalog(previousConfig = [], currentConfig = []) {
+  const previousById = effectiveCustomAppsById(previousConfig);
+  const currentById = effectiveCustomAppsById(currentConfig);
+  const ids = new Set([...previousById.keys(), ...currentById.keys()]);
+  return {
+    affectedAppIds: new Set([...ids]
+      .filter((appId) => JSON.stringify(previousById.get(appId)) !== JSON.stringify(currentById.get(appId)))),
+    sourceChangedAppIds: new Set([...ids]
+      .filter((appId) => previousById.has(appId) !== currentById.has(appId)
+        || String(previousById.get(appId)?.url || "") !== String(currentById.get(appId)?.url || "")))
+  };
+}
+
+/**
+ * Remove workspace tabs whose app no longer exists without regenerating the
+ * identities of surviving groups or tabs. A fallback tab is created only when
+ * the removed apps would otherwise leave the workspace empty.
+ */
+export function reconcileWorkspaceAppCatalog({
+  groups = [],
+  activeTabs = {},
+  validAppIds = [],
+  fallbackAppId = "",
+  createGroupId,
+  createFrameId
+} = {}) {
+  const sourceGroups = Array.isArray(groups) ? groups : [];
+  const sourceActiveTabs = activeTabs && typeof activeTabs === "object" ? activeTabs : {};
+  const validIds = validAppIds instanceof Set ? validAppIds : new Set(validAppIds || []);
+  const removedGroupIds = [];
+  const removedInstanceIds = [];
+  const addedInstanceIds = [];
+  const fallbackActiveByGroupId = new Map();
+  let groupsChanged = false;
+
+  let nextGroups = sourceGroups.flatMap((group) => {
+    const chats = Array.isArray(group?.chatApps) ? group.chatApps : [];
+    const keptChats = chats.filter((chat) => validIds.has(chat?.appId));
+    for (const chat of chats) {
+      if (!keptChats.includes(chat) && chat?.instanceId) removedInstanceIds.push(chat.instanceId);
+    }
+    if (!keptChats.length) {
+      groupsChanged = true;
+      if (group?.id) removedGroupIds.push(group.id);
+      return [];
+    }
+    const previousActive = sourceActiveTabs[group.id];
+    if (previousActive && !keptChats.some((chat) => chat.instanceId === previousActive)) {
+      const removedActiveIndex = chats.findIndex((chat) => chat.instanceId === previousActive);
+      const nearest = removedActiveIndex >= 0
+        ? chats.slice(removedActiveIndex + 1).find((chat) => keptChats.includes(chat))
+          || chats.slice(0, removedActiveIndex).reverse().find((chat) => keptChats.includes(chat))
+        : null;
+      fallbackActiveByGroupId.set(group.id, nearest?.instanceId || keptChats[0]?.instanceId || "");
+    }
+    if (keptChats.length === chats.length) return [group];
+    groupsChanged = true;
+    group.chatApps = keptChats;
+    return [group];
+  });
+
+  const normalizedFallbackAppId = validIds.has(fallbackAppId)
+    ? fallbackAppId
+    : [...validIds][0] || "";
+  if (!nextGroups.length && normalizedFallbackAppId) {
+    if (typeof createFrameId !== "function") {
+      throw new TypeError("Workspace app reconciliation requires createFrameId for its fallback tab");
+    }
+    const reusableGroup = sourceGroups[0];
+    const groupId = reusableGroup?.id || (() => {
+      if (typeof createGroupId !== "function") {
+        throw new TypeError("Workspace app reconciliation requires createGroupId for its fallback group");
+      }
+      return createGroupId();
+    })();
+    const instanceId = createFrameId();
+    addedInstanceIds.push(instanceId);
+    const fallbackGroup = reusableGroup || { id: groupId, chatApps: [] };
+    fallbackGroup.id = groupId;
+    fallbackGroup.chatApps = [{ appId: normalizedFallbackAppId, instanceId }];
+    nextGroups = [fallbackGroup];
+    const reusedGroupIndex = removedGroupIds.indexOf(groupId);
+    if (reusedGroupIndex >= 0) removedGroupIds.splice(reusedGroupIndex, 1);
+    groupsChanged = true;
+  }
+
+  const nextActiveTabs = {};
+  for (const group of nextGroups) {
+    const previousActive = sourceActiveTabs[group.id];
+    nextActiveTabs[group.id] = group.chatApps.some((chat) => chat.instanceId === previousActive)
+      ? previousActive
+      : fallbackActiveByGroupId.get(group.id) || group.chatApps[0]?.instanceId || "";
+  }
+  const activeTabsChanged = !sameActiveTabs(sourceActiveTabs, nextActiveTabs);
+
+  return {
+    groups: groupsChanged ? nextGroups : sourceGroups,
+    activeTabs: activeTabsChanged ? nextActiveTabs : sourceActiveTabs,
+    removedGroupIds,
+    removedInstanceIds,
+    addedInstanceIds,
+    changed: groupsChanged || activeTabsChanged
+  };
 }
 
 export function moveTabWithinGroup(group, tabId, insertIndex) {
@@ -90,4 +223,3 @@ export function removeGroupFromWorkspace(groups, activeTabs, groupId) {
   delete activeTabs[groupId];
   return { changed: nextGroups.length !== groups.length, groups: nextGroups };
 }
-

@@ -40,6 +40,11 @@ function assert(condition, message) {
 }
 
 function assertRuntimeResult(result, browserTarget, options = {}) {
+  // Firefox extension pages can expose different cross-origin WindowProxy
+  // wrappers for repeated contentWindow reads. For Firefox, exact iframe node,
+  // frame binding, src, and observed load events are the authoritative
+  // retention signals; Chromium additionally checks WindowProxy identity.
+  const contentWindowIdentityIsStable = browserTarget !== "firefox";
   assert(result?.shell === true, `${browserTarget}: app shell did not render`);
   assert(result?.fatalPre === false, `${browserTarget}: fatal <pre> rendered during bootstrap`);
   assert(result?.configInfo?.ok === true, `${browserTarget}: getConfigInfo round trip failed: ${result?.configInfo?.error || "unknown"}`);
@@ -64,6 +69,86 @@ function assertRuntimeResult(result, browserTarget, options = {}) {
   assert(loopback?.summaryState?.isolatedReady === true, `${browserTarget}: loopback ISOLATED runtime was not injected`);
   assert(loopback?.summaryState?.mainReady === true, `${browserTarget}: loopback MAIN runtime was not injected`);
   assert(loopback?.summaryState?.bridgeVersion === CONTENT_BRIDGE_VERSION, `${browserTarget}: loopback runtime bridge version mismatch`);
+  const retention = result?.customAppFrameRetention;
+  assert(retention?.ok === true, `${browserTarget}: custom app iframe-retention probe did not finish`);
+  assert(retention.gridSame === true, `${browserTarget}: adding a custom app replaced the workspace root`);
+  assert(
+    retention.frameCountAfter === retention.frameCountBefore,
+    `${browserTarget}: adding a custom app changed the iframe count (${retention.frameCountBefore} -> ${retention.frameCountAfter})`
+  );
+  assert(retention.fullscreenPreserved === true, `${browserTarget}: adding a custom app changed fullscreen state`);
+  for (const frame of retention.frames || []) {
+    assert(frame.sameNode === true, `${browserTarget}: adding a custom app replaced iframe ${frame.instanceId}`);
+    assert(frame.sameCard === true, `${browserTarget}: adding a custom app moved iframe ${frame.instanceId} to another card`);
+    if (contentWindowIdentityIsStable) {
+      assert(frame.sameContentWindow === true, `${browserTarget}: adding a custom app replaced the browsing context for ${frame.instanceId}`);
+    }
+    assert(frame.sameFrameBindingId === true, `${browserTarget}: adding a custom app changed the frame binding for ${frame.instanceId}`);
+    assert(frame.sameSrc === true, `${browserTarget}: adding a custom app reassigned src for ${frame.instanceId}`);
+    assert(frame.sameActiveState === true, `${browserTarget}: adding a custom app changed active state for ${frame.instanceId}`);
+    assert(frame.loadEvents === 0, `${browserTarget}: adding a custom app reloaded iframe ${frame.instanceId}`);
+  }
+  const usedEdits = retention.usedAppEdits;
+  assert(usedEdits?.metadataEdit?.sameNode === true, `${browserTarget}: metadata-only custom app edit replaced its iframe`);
+  if (contentWindowIdentityIsStable) {
+    assert(usedEdits.metadataEdit.sameContentWindow === true, `${browserTarget}: metadata-only custom app edit replaced its browsing context`);
+  }
+  assert(usedEdits.metadataEdit.sameSrc === true, `${browserTarget}: metadata-only custom app edit reassigned src`);
+  assert(usedEdits.metadataEdit.sameBinding === true, `${browserTarget}: metadata-only custom app edit changed its frame binding`);
+  assert(usedEdits.metadataEdit.loadEvents === 0, `${browserTarget}: metadata-only custom app edit reloaded its iframe`);
+  assert(usedEdits.sandboxEdit.forward.startedSandboxed === true, `${browserTarget}: sandbox contract probe did not start sandboxed`);
+  assert(usedEdits.sandboxEdit.forward.targetReplaced === true, `${browserTarget}: sandbox removal did not replace its target iframe`);
+  assert(usedEdits.sandboxEdit.forward.bindingReplaced === true, `${browserTarget}: sandbox removal retained the stale frame binding`);
+  assert(usedEdits.sandboxEdit.forward.sameSrc === true, `${browserTarget}: sandbox removal changed the target URL`);
+  assert(usedEdits.sandboxEdit.forward.endedSandboxed === false, `${browserTarget}: sandbox removal did not apply the new frame contract`);
+  assert(usedEdits.sandboxEdit.reverse.targetReplaced === true, `${browserTarget}: sandbox restoration did not replace its target iframe`);
+  assert(usedEdits.sandboxEdit.reverse.bindingReplaced === true, `${browserTarget}: sandbox restoration retained the stale frame binding`);
+  assert(usedEdits.sandboxEdit.reverse.sameSrc === true, `${browserTarget}: sandbox restoration changed the target URL`);
+  assert(usedEdits.sandboxEdit.reverse.endedSandboxed === true, `${browserTarget}: sandbox restoration did not apply the new frame contract`);
+  for (const frame of usedEdits.sandboxEdit.unaffectedFrames || []) {
+    assert(frame.sameNode === true, `${browserTarget}: sandbox contract edit replaced unrelated iframe ${frame.instanceId}`);
+    assert(frame.sameCard === true, `${browserTarget}: sandbox contract edit moved unrelated iframe ${frame.instanceId}`);
+    if (contentWindowIdentityIsStable) {
+      assert(frame.sameContentWindow === true, `${browserTarget}: sandbox contract edit replaced unrelated browsing context ${frame.instanceId}`);
+    }
+    assert(frame.sameFrameBindingId === true, `${browserTarget}: sandbox contract edit changed unrelated binding ${frame.instanceId}`);
+    assert(frame.sameSrc === true, `${browserTarget}: sandbox contract edit reassigned unrelated src ${frame.instanceId}`);
+    assert(frame.loadEvents === 0, `${browserTarget}: sandbox contract edit reloaded unrelated iframe ${frame.instanceId}`);
+  }
+  assert(usedEdits.urlEdit.targetReplaced === true, `${browserTarget}: custom app URL edit did not replace its target iframe`);
+  if (contentWindowIdentityIsStable) {
+    assert(usedEdits.urlEdit.contentWindowReplaced === true, `${browserTarget}: custom app URL edit retained the stale browsing context`);
+  }
+  assert(usedEdits.urlEdit.bindingReplaced === true, `${browserTarget}: custom app URL edit retained the stale frame binding`);
+  assert(usedEdits.urlEdit.editedSrc === true, `${browserTarget}: custom app URL edit did not load its new URL`);
+  for (const frame of usedEdits.urlEdit.unaffectedFrames || []) {
+    assert(frame.sameNode === true, `${browserTarget}: custom app URL edit replaced unrelated iframe ${frame.instanceId}`);
+    assert(frame.sameCard === true, `${browserTarget}: custom app URL edit moved unrelated iframe ${frame.instanceId}`);
+    if (contentWindowIdentityIsStable) {
+      assert(frame.sameContentWindow === true, `${browserTarget}: custom app URL edit replaced unrelated browsing context ${frame.instanceId}`);
+    }
+    assert(frame.sameFrameBindingId === true, `${browserTarget}: custom app URL edit changed unrelated binding ${frame.instanceId}`);
+    assert(frame.sameSrc === true, `${browserTarget}: custom app URL edit reassigned unrelated src ${frame.instanceId}`);
+    assert(frame.loadEvents === 0, `${browserTarget}: custom app URL edit reloaded unrelated iframe ${frame.instanceId}`);
+  }
+  const usedDeletion = retention.usedAppDeletion;
+  assert(usedDeletion?.customFrameRemoved === true, `${browserTarget}: deleting a used custom app did not remove its iframe`);
+  assert(
+    usedDeletion.frameCountAfter === retention.frameCountBefore,
+    `${browserTarget}: deleting a used custom app changed unrelated iframe membership`
+  );
+  assert(usedDeletion.fullscreenPreserved === true, `${browserTarget}: deleting a used custom app changed fullscreen state`);
+  for (const frame of usedDeletion.unaffectedFrames || []) {
+    assert(frame.sameNode === true, `${browserTarget}: deleting a used custom app replaced iframe ${frame.instanceId}`);
+    assert(frame.sameCard === true, `${browserTarget}: deleting a used custom app moved iframe ${frame.instanceId}`);
+    if (contentWindowIdentityIsStable) {
+      assert(frame.sameContentWindow === true, `${browserTarget}: deleting a used custom app replaced the browsing context for ${frame.instanceId}`);
+    }
+    assert(frame.sameFrameBindingId === true, `${browserTarget}: deleting a used custom app changed the frame binding for ${frame.instanceId}`);
+    assert(frame.sameSrc === true, `${browserTarget}: deleting a used custom app reassigned src for ${frame.instanceId}`);
+    assert(frame.sameActiveState === true, `${browserTarget}: deleting a used custom app changed active state for ${frame.instanceId}`);
+    assert(frame.loadEvents === 0, `${browserTarget}: deleting a used custom app reloaded iframe ${frame.instanceId}`);
+  }
   const injectedFiles = loopback?.injection?.injectedFiles || [];
   const fallbackFiles = loopback?.injection?.fallbackFiles || [];
   const injectedFrameIds = loopback?.injection?.frameIds || [];
@@ -495,6 +580,408 @@ const pageProbe = `async (fixtureUrl) => {
       iframe.remove();
     }
   };
+  const customAppFrameRetentionProbe = async () => {
+    const quietWindow = (timeoutMs = 300) => new Promise((resolve) => setTimeout(resolve, timeoutMs));
+    const waitForCondition = (predicate, timeoutMs, label) => withTimeout(new Promise((resolve) => {
+      const poll = () => {
+        if (predicate()) return resolve();
+        setTimeout(poll, 25);
+      };
+      poll();
+    }), timeoutMs, label);
+    const grid = document.querySelector(".main-grid");
+    const frames = Array.from(document.querySelectorAll(".chat-frame"));
+    if (!grid || !frames.length) throw new Error("custom app retention probe found no workspace frames");
+    await waitForCondition(
+      () => frames.every((iframe) => Boolean(iframe.getAttribute("src"))),
+      15000,
+      "initial workspace frame assignment"
+    );
+    // Real sites can still be completing their first redirect when Firefox
+    // attaches to the extension page. Move every baseline frame to a local,
+    // deterministic document and wait for that navigation before installing
+    // the retention listeners, so later load events are causally attributable
+    // to the catalog operation under test.
+    await Promise.all(frames.map((iframe, index) => withTimeout(new Promise((resolve, reject) => {
+      const controlledUrl = new URL(fixtureUrl);
+      controlledUrl.searchParams.set("retention-baseline", String(index));
+      const onLoad = () => {
+        iframe.removeEventListener("error", onError);
+        resolve();
+      };
+      const onError = () => {
+        iframe.removeEventListener("load", onLoad);
+        reject(new Error("controlled workspace frame " + index + " failed to load"));
+      };
+      iframe.addEventListener("load", onLoad, { once: true });
+      iframe.addEventListener("error", onError, { once: true });
+      iframe.src = controlledUrl.href;
+    }), 10000, "controlled workspace frame " + index)));
+    await quietWindow(1000);
+    const before = frames.map((iframe) => ({
+      iframe,
+      card: iframe.closest(".chat-card"),
+      contentWindow: iframe.contentWindow,
+      instanceId: iframe.dataset.instanceId || "",
+      frameBindingId: iframe.dataset.frameBindingId || "",
+      currentHref: iframe.dataset.currentHref || "",
+      src: iframe.getAttribute("src") || "",
+      active: iframe.classList.contains("active"),
+      loadEvents: 0,
+      onload: null
+    }));
+    for (const item of before) {
+      item.onload = () => { item.loadEvents += 1; };
+      item.iframe.addEventListener("load", item.onload);
+    }
+    const fullscreenGroupId = document.querySelector(".chat-card.fullscreen")?.dataset.groupId || "";
+    let trackedCustomFrame = null;
+    let trackedCustomLoadHandler = null;
+    try {
+      const addTabButton = document.querySelector(".tab-add");
+      if (!addTabButton) throw new Error("custom app retention probe found no app picker trigger");
+      addTabButton.click();
+      await waitForCondition(
+        () => Boolean(document.querySelector('[data-tooltip-id="appPicker.addCustom"]')),
+        3000,
+        "custom app picker"
+      );
+      document.querySelector('[data-tooltip-id="appPicker.addCustom"]').click();
+      await waitForCondition(
+        () => Boolean(document.querySelector(".settings-editor-modal")),
+        3000,
+        "custom app editor"
+      );
+      const editor = document.querySelector(".settings-editor-modal");
+      const inputs = Array.from(editor.querySelectorAll("input"));
+      if (inputs.length < 5) throw new Error("custom app retention probe found an incomplete editor");
+      inputs[0].value = "Browser Smoke Custom";
+      inputs[1].value = "Browser Smoke";
+      inputs[2].value = fixtureUrl;
+      inputs[3].value = "textarea";
+      inputs[4].value = "button[type=submit]";
+      const saveButton = editor.querySelector(".settings-dialog-actions .button-primary");
+      if (!saveButton) throw new Error("custom app retention probe found no save action");
+      saveButton.click();
+      await waitForCondition(
+        () => !document.querySelector(".settings-editor-modal"),
+        15000,
+        "custom app save"
+      );
+      await quietWindow();
+      const afterFrames = Array.from(document.querySelectorAll(".chat-frame"));
+      const frameStatus = (candidates) => before.map((item) => {
+        const current = candidates.find((iframe) => iframe.dataset.instanceId === item.instanceId);
+        return {
+          instanceId: item.instanceId,
+          sameNode: current === item.iframe,
+          sameCard: current?.closest(".chat-card") === item.card,
+          sameContentWindow: current?.contentWindow === item.contentWindow,
+          sameFrameBindingId: (current?.dataset.frameBindingId || "") === item.frameBindingId,
+          sameCurrentHref: (current?.dataset.currentHref || "") === item.currentHref,
+          sameSrc: (current?.getAttribute("src") || "") === item.src,
+          sameActiveState: Boolean(current?.classList.contains("active")) === item.active,
+          loadEvents: item.loadEvents
+        };
+      });
+      const additionFrames = frameStatus(afterFrames);
+      const api = globalThis.browser || globalThis.chrome;
+      const stored = await api.storage.local.get("customConfig");
+      const customApp = (stored.customConfig || []).find((app) => app?.name === "Browser Smoke Custom");
+      if (!customApp?.id) throw new Error("custom app retention probe could not resolve the saved app");
+
+      const pickerTrigger = document.querySelector(".tab-add");
+      pickerTrigger.click();
+      await waitForCondition(
+        () => Array.from(document.querySelectorAll(".app-picker-custom .app-picker-item"))
+          .some((item) => item.textContent.includes("Browser Smoke Custom")),
+        3000,
+        "saved custom app picker item"
+      );
+      const customPickerItem = Array.from(document.querySelectorAll(".app-picker-custom .app-picker-item"))
+        .find((item) => item.textContent.includes("Browser Smoke Custom"));
+      customPickerItem.click();
+      await waitForCondition(
+        () => Array.from(document.querySelectorAll(".chat-frame"))
+          .some((iframe) => iframe.dataset.appId === customApp.id),
+        10000,
+        "custom app workspace frame"
+      );
+      let customFrame = Array.from(document.querySelectorAll(".chat-frame"))
+        .find((iframe) => iframe.dataset.appId === customApp.id);
+      await waitForCondition(
+        () => Boolean(customFrame.getAttribute("src"))
+          && !customFrame.closest(".chat-card")?.classList.contains("frame-loading"),
+        10000,
+        "settled custom app frame"
+      );
+      await quietWindow(500);
+      trackedCustomFrame = customFrame;
+      let customFrameLoadEvents = 0;
+      trackedCustomLoadHandler = () => { customFrameLoadEvents += 1; };
+      trackedCustomFrame.addEventListener("load", trackedCustomLoadHandler);
+      let customFrameBeforeEdit = {
+        iframe: customFrame,
+        contentWindow: customFrame.contentWindow,
+        src: customFrame.getAttribute("src") || "",
+        binding: customFrame.dataset.frameBindingId || "",
+        instanceId: customFrame.dataset.instanceId || ""
+      };
+
+      const brandButton = document.querySelector('[data-tooltip-id="topbar.brand"]');
+      if (!brandButton) throw new Error("custom app retention probe found no settings entry");
+      brandButton.click();
+      await waitForCondition(
+        () => Boolean(document.querySelector(".settings-modal")),
+        3000,
+        "settings modal"
+      );
+      const settingsTabs = Array.from(document.querySelectorAll(".settings-modal .settings-tab"));
+      if (settingsTabs.length < 3) throw new Error("custom app retention probe found no Apps settings section");
+      settingsTabs[2].click();
+      await waitForCondition(
+        () => Boolean(document.querySelector(".apps-settings-pane")),
+        3000,
+        "Apps settings"
+      );
+      const innerTabs = Array.from(document.querySelectorAll(".apps-settings-pane .settings-inner-tab"));
+      if (innerTabs.length < 2) throw new Error("custom app retention probe found no Custom Apps tab");
+      innerTabs[1].click();
+      await waitForCondition(
+        () => Array.from(document.querySelectorAll(".custom-config-row"))
+          .some((row) => row.dataset.customAppId === customApp.id),
+        3000,
+        "custom app settings row"
+      );
+      const customSettingsRow = () => Array.from(document.querySelectorAll(".custom-config-row"))
+        .find((row) => row.dataset.customAppId === customApp.id);
+      let customRow = customSettingsRow();
+      const editButton = customRow.querySelector('[data-tooltip-id="settings.action.edit"]');
+      if (!editButton) throw new Error("custom app retention probe found no edit action");
+      editButton.click();
+      await waitForCondition(
+        () => Boolean(document.querySelector(".settings-editor-modal")),
+        3000,
+        "custom app metadata editor"
+      );
+      let editInputs = Array.from(document.querySelectorAll(".settings-editor-modal input"));
+      editInputs[0].value = "Browser Smoke Custom Edited";
+      document.querySelector(".settings-editor-modal .settings-dialog-actions .button-primary").click();
+      await waitForCondition(
+        () => !document.querySelector(".settings-editor-modal"),
+        15000,
+        "custom app metadata save"
+      );
+      await quietWindow();
+      const metadataFrame = Array.from(document.querySelectorAll(".chat-frame"))
+        .find((iframe) => iframe.dataset.instanceId === customFrameBeforeEdit.instanceId);
+      const metadataEdit = {
+        sameNode: metadataFrame === customFrameBeforeEdit.iframe,
+        sameContentWindow: metadataFrame?.contentWindow === customFrameBeforeEdit.contentWindow,
+        sameSrc: (metadataFrame?.getAttribute("src") || "") === customFrameBeforeEdit.src,
+        sameBinding: (metadataFrame?.dataset.frameBindingId || "") === customFrameBeforeEdit.binding,
+        loadEvents: customFrameLoadEvents
+      };
+
+      const importCustomCatalog = async (catalog, label) => {
+        if (!document.querySelector(".import-export-pane")) {
+          settingsTabs[11]?.click();
+          await waitForCondition(
+            () => Boolean(document.querySelector(".import-export-pane")),
+            3000,
+            label + " import settings"
+          );
+        }
+        const fileInput = document.querySelector(".import-export-pane .settings-file-input");
+        if (!fileInput) throw new Error(label + " import found no file input");
+        const transfer = new DataTransfer();
+        transfer.items.add(new File([
+          JSON.stringify({ schema: "chatclub.config.v1", customConfig: catalog })
+        ], label + ".json", { type: "application/json" }));
+        fileInput.files = transfer.files;
+        fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+        await waitForCondition(
+          () => Boolean(document.querySelector(".io-import-modal")),
+          3000,
+          label + " import confirmation"
+        );
+        const confirm = document.querySelector(".io-import-modal .settings-dialog-actions .button-primary");
+        if (!confirm) throw new Error(label + " import found no confirmation action");
+        confirm.click();
+        await waitForCondition(
+          () => !document.querySelector(".io-import-modal"),
+          15000,
+          label + " import apply"
+        );
+      };
+      const storedAfterMetadata = await api.storage.local.get("customConfig");
+      const metadataCatalog = storedAfterMetadata.customConfig || [];
+      const sandboxForwardBefore = metadataFrame;
+      const sandboxForwardBinding = sandboxForwardBefore?.dataset.frameBindingId || "";
+      const sandboxForwardSrc = sandboxForwardBefore?.getAttribute("src") || "";
+      await importCustomCatalog(metadataCatalog.map((app) => app.id === customApp.id
+        ? { ...app, hosts: ["grok.com"] }
+        : app), "sandbox-remove");
+      await waitForCondition(
+        () => !sandboxForwardBefore.isConnected
+          && Array.from(document.querySelectorAll(".chat-frame"))
+            .some((iframe) => iframe.dataset.instanceId === customFrameBeforeEdit.instanceId),
+        10000,
+        "sandbox removal frame replacement"
+      );
+      let sandboxFrame = Array.from(document.querySelectorAll(".chat-frame"))
+        .find((iframe) => iframe.dataset.instanceId === customFrameBeforeEdit.instanceId);
+      await waitForCondition(
+        () => Boolean(sandboxFrame?.getAttribute("src"))
+          && !sandboxFrame.closest(".chat-card")?.classList.contains("frame-loading"),
+        10000,
+        "sandbox removal frame load"
+      );
+      await quietWindow(500);
+      const sandboxForward = {
+        startedSandboxed: sandboxForwardBefore?.hasAttribute("sandbox") === true,
+        targetReplaced: sandboxFrame !== sandboxForwardBefore,
+        bindingReplaced: (sandboxFrame?.dataset.frameBindingId || "") !== sandboxForwardBinding,
+        sameSrc: (sandboxFrame?.getAttribute("src") || "") === sandboxForwardSrc,
+        endedSandboxed: sandboxFrame?.hasAttribute("sandbox") === true
+      };
+
+      const sandboxReverseBefore = sandboxFrame;
+      const sandboxReverseBinding = sandboxReverseBefore?.dataset.frameBindingId || "";
+      const sandboxReverseSrc = sandboxReverseBefore?.getAttribute("src") || "";
+      await importCustomCatalog(metadataCatalog.map((app) => app.id === customApp.id
+        ? { ...app, hosts: [] }
+        : app), "sandbox-restore");
+      await waitForCondition(
+        () => !sandboxReverseBefore.isConnected
+          && Array.from(document.querySelectorAll(".chat-frame"))
+            .some((iframe) => iframe.dataset.instanceId === customFrameBeforeEdit.instanceId),
+        10000,
+        "sandbox restoration frame replacement"
+      );
+      sandboxFrame = Array.from(document.querySelectorAll(".chat-frame"))
+        .find((iframe) => iframe.dataset.instanceId === customFrameBeforeEdit.instanceId);
+      await waitForCondition(
+        () => Boolean(sandboxFrame?.getAttribute("src"))
+          && !sandboxFrame.closest(".chat-card")?.classList.contains("frame-loading"),
+        10000,
+        "sandbox restoration frame load"
+      );
+      await quietWindow(500);
+      const sandboxReverse = {
+        targetReplaced: sandboxFrame !== sandboxReverseBefore,
+        bindingReplaced: (sandboxFrame?.dataset.frameBindingId || "") !== sandboxReverseBinding,
+        sameSrc: (sandboxFrame?.getAttribute("src") || "") === sandboxReverseSrc,
+        endedSandboxed: sandboxFrame?.hasAttribute("sandbox") === true
+      };
+      const sandboxEdit = {
+        forward: sandboxForward,
+        reverse: sandboxReverse,
+        unaffectedFrames: frameStatus(Array.from(document.querySelectorAll(".chat-frame")))
+      };
+      customFrameBeforeEdit = {
+        iframe: sandboxFrame,
+        contentWindow: sandboxFrame.contentWindow,
+        src: sandboxFrame.getAttribute("src") || "",
+        binding: sandboxFrame.dataset.frameBindingId || "",
+        instanceId: sandboxFrame.dataset.instanceId || ""
+      };
+
+      settingsTabs[2]?.click();
+      await waitForCondition(
+        () => Boolean(document.querySelector(".apps-settings-pane")),
+        3000,
+        "Apps settings after sandbox imports"
+      );
+      Array.from(document.querySelectorAll(".apps-settings-pane .settings-inner-tab"))[1]?.click();
+      await waitForCondition(
+        () => Boolean(customSettingsRow()),
+        3000,
+        "custom app row after sandbox imports"
+      );
+
+      customRow = customSettingsRow();
+      customRow.querySelector('[data-tooltip-id="settings.action.edit"]').click();
+      await waitForCondition(
+        () => Boolean(document.querySelector(".settings-editor-modal")),
+        3000,
+        "custom app URL editor"
+      );
+      editInputs = Array.from(document.querySelectorAll(".settings-editor-modal input"));
+      const editedUrl = new URL(fixtureUrl);
+      editedUrl.searchParams.set("custom-edit", "1");
+      editInputs[2].value = editedUrl.href;
+      document.querySelector(".settings-editor-modal .settings-dialog-actions .button-primary").click();
+      await waitForCondition(
+        () => !document.querySelector(".settings-editor-modal"),
+        15000,
+        "custom app URL save"
+      );
+      await waitForCondition(
+        () => !customFrameBeforeEdit.iframe.isConnected
+          && Array.from(document.querySelectorAll(".chat-frame"))
+            .some((iframe) => iframe.dataset.instanceId === customFrameBeforeEdit.instanceId),
+        10000,
+        "custom app URL frame replacement"
+      );
+      await quietWindow();
+      customFrame = Array.from(document.querySelectorAll(".chat-frame"))
+        .find((iframe) => iframe.dataset.instanceId === customFrameBeforeEdit.instanceId);
+      await waitForCondition(
+        () => customFrame?.getAttribute("src") === editedUrl.href,
+        10000,
+        "edited custom app frame src"
+      );
+      await quietWindow();
+      const urlEdit = {
+        targetReplaced: customFrame !== customFrameBeforeEdit.iframe,
+        contentWindowReplaced: customFrame?.contentWindow !== customFrameBeforeEdit.contentWindow,
+        bindingReplaced: (customFrame?.dataset.frameBindingId || "") !== customFrameBeforeEdit.binding,
+        editedSrc: customFrame?.getAttribute("src") === editedUrl.href,
+        unaffectedFrames: frameStatus(Array.from(document.querySelectorAll(".chat-frame")))
+      };
+
+      customRow = customSettingsRow();
+      const deleteButton = customRow.querySelector('[data-tooltip-id="settings.action.delete"]');
+      if (!deleteButton) throw new Error("custom app retention probe found no delete action");
+      const originalConfirm = window.confirm;
+      window.confirm = () => true;
+      try {
+        deleteButton.click();
+        await waitForCondition(
+          () => !Array.from(document.querySelectorAll(".custom-config-row"))
+            .some((row) => row.dataset.customAppId === customApp.id),
+          15000,
+          "custom app deletion"
+        );
+      } finally {
+        window.confirm = originalConfirm;
+      }
+      await quietWindow();
+      const finalFrames = Array.from(document.querySelectorAll(".chat-frame"));
+      const deletionFrames = frameStatus(finalFrames);
+      document.querySelector(".settings-modal .modal-header .icon-button")?.click();
+      return {
+        ok: true,
+        gridSame: document.querySelector(".main-grid") === grid,
+        frameCountBefore: before.length,
+        frameCountAfter: afterFrames.length,
+        fullscreenPreserved: (document.querySelector(".chat-card.fullscreen")?.dataset.groupId || "") === fullscreenGroupId,
+        frames: additionFrames,
+        usedAppEdits: { metadataEdit, sandboxEdit, urlEdit },
+        usedAppDeletion: {
+          customFrameRemoved: !customFrame.isConnected
+            && !finalFrames.some((iframe) => iframe.dataset.appId === customApp.id),
+          frameCountAfter: finalFrames.length,
+          fullscreenPreserved: (document.querySelector(".chat-card.fullscreen")?.dataset.groupId || "") === fullscreenGroupId,
+          unaffectedFrames: deletionFrames
+        }
+      };
+    } finally {
+      trackedCustomFrame?.removeEventListener("load", trackedCustomLoadHandler);
+      for (const item of before) item.iframe.removeEventListener("load", item.onload);
+    }
+  };
   const lazyFiles = ["app/settings/controller.js", "app/summary/controller.js", "app/pocket/controller.js"];
   const lazy = await Promise.all(lazyFiles.map(async (file) => {
     try {
@@ -505,6 +992,7 @@ const pageProbe = `async (fixtureUrl) => {
     }
   }));
   const loopback = await loopbackContentHandshake();
+  const customAppFrameRetention = await customAppFrameRetentionProbe();
   const trusted = await request({
     source: "chatclub",
     action: "dispatchTrustedClick",
@@ -524,6 +1012,7 @@ const pageProbe = `async (fixtureUrl) => {
     configInfo: await request({ source: "chatclub", action: "getConfigInfo" }),
     lazy,
     loopback,
+    customAppFrameRetention,
     trusted
   };
 }`;

@@ -83,7 +83,8 @@ export function createSettingsController(ctx) {
   const controllerName = "Settings controller";
   ctx = validateControllerContract(ctx, controllerName, {
     state: "object", svgIcon: "function", syncPromptInputNode: "function", notifyConfigReload: "function",
-    render: "function", applyTheme: "function", syncI18nLanguage: "function", hydrateGroups: "function",
+    render: "function", applyTheme: "function", syncI18nLanguage: "function",
+    hydrateImportedLayoutIfNeeded: "function", reconcileAppCatalog: "function",
     enterTopbarEditMode: "function", setPromptImages: "function", ensurePromptInputReady: "function",
     syncTopbar: "function", syncTopbarPromptPlaceholder: "function", syncSummaryPanel: "function",
     requestUserScriptsPermission: "function?", syncWorkspaceDom: "function", applyPreferredModels: "function",
@@ -96,7 +97,8 @@ export function createSettingsController(ctx) {
   const render = requireControllerFunction(ctx, controllerName, "render");
   const applyTheme = requireControllerFunction(ctx, controllerName, "applyTheme");
   const syncI18nLanguage = requireControllerFunction(ctx, controllerName, "syncI18nLanguage");
-  const hydrateGroups = requireControllerFunction(ctx, controllerName, "hydrateGroups");
+  const hydrateImportedLayoutIfNeeded = requireControllerFunction(ctx, controllerName, "hydrateImportedLayoutIfNeeded");
+  const reconcileAppCatalog = requireControllerFunction(ctx, controllerName, "reconcileAppCatalog");
   const enterTopbarEditMode = requireControllerFunction(ctx, controllerName, "enterTopbarEditMode");
   const setPromptImages = requireControllerFunction(ctx, controllerName, "setPromptImages");
   const ensurePromptInputReady = requireControllerFunction(ctx, controllerName, "ensurePromptInputReady");
@@ -2058,11 +2060,12 @@ export function createSettingsController(ctx) {
   }
 
   async function saveCustomConfigList(customConfig, redraw, message = t("toast.customConfigSaved"), options = {}) {
+    const previousCustomConfig = state.customConfig;
     state.customConfig = await saveCustomConfig(customConfig);
     if (options.reloadRuntime !== false) await notifyConfigReload();
     if (options.syncWorkspace !== false) {
-      hydrateGroups();
-      render();
+      await reconcileAppCatalog(previousCustomConfig);
+      syncSummaryPanel();
     }
     redraw?.();
     if (message) toast(message, "success");
@@ -3922,7 +3925,8 @@ export function createSettingsController(ctx) {
     state,
     svgIcon,
     notifyConfigReload,
-    hydrateGroups,
+    hydrateImportedLayoutIfNeeded,
+    reconcileAppCatalog,
     syncI18nLanguage,
     render,
     prepareForConfigImport,
