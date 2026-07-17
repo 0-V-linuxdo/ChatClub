@@ -1,3 +1,10 @@
+import {
+  BACKGROUND_REQUEST_ACTIONS,
+  createBackgroundRequestClient
+} from "./background-requests.js";
+
+export { BACKGROUND_REQUEST_ACTIONS } from "./background-requests.js";
+
 function rootApi() {
   return globalThis.browser || globalThis.chrome || null;
 }
@@ -45,6 +52,15 @@ export function runtimeSendMessage(message) {
   return callPromise(["runtime", "sendMessage"], [message]);
 }
 
+const requestBackgroundWithRuntime = createBackgroundRequestClient(runtimeSendMessage);
+
+export function requestBackground(action, payload = {}) {
+  if (!Object.values(BACKGROUND_REQUEST_ACTIONS).includes(action)) {
+    return Promise.reject(new TypeError(`Unknown background request action: ${String(action || "(empty)")}`));
+  }
+  return requestBackgroundWithRuntime(action, payload);
+}
+
 export function runtimeFrameId(targetWindow) {
   const api = rootApi();
   try {
@@ -74,8 +90,21 @@ export async function currentExtensionTabId() {
 }
 
 export async function runtimeRequest(message) {
+  const action = String(message?.action || "");
+  if (message?.source === "chatclub" && Object.values(BACKGROUND_REQUEST_ACTIONS).includes(action)) {
+    const payload = { ...message };
+    delete payload.source;
+    delete payload.action;
+    return requestBackgroundWithRuntime(action, payload);
+  }
   const response = await runtimeSendMessage(message);
-  if (!response?.success) throw new Error(response?.error || "extension request failed");
+  if (!response?.success) {
+    const error = new Error(response?.error || "extension request failed");
+    const code = String(response?.code || "").trim();
+    if (code) error.code = code;
+    if (typeof response?.delivered === "boolean") error.delivered = response.delivered;
+    throw error;
+  }
   return response;
 }
 

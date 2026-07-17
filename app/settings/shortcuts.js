@@ -45,7 +45,7 @@ const SHORTCUT_PREVIEW_META = Object.freeze({
   enterFullscreen: { icon: "maximize", labelKey: "chat.fullscreen", tooltipId: "workspace.group.fullscreen" }
 });
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, Math.max(0, Number(ms) || 0)); });
 const CONFIG_IO_AUTOSAVE_TIMEOUT_MS = 5000;
 
 function normalizeShortcutSettingsTab(value) {

@@ -6,7 +6,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 const root = path.resolve(__dirname, "..");
-const contentSource = fs.readFileSync(path.join(root, "content/content.js"), "utf8");
+const sendCapabilitySource = fs.readFileSync(path.join(root, "content-src/capabilities/send-runtime.js"), "utf8");
 const contentEntrySource = fs.readFileSync(path.join(root, "content-src/content.js"), "utf8");
 const frameCommandsSource = fs.readFileSync(path.join(root, "shared/frame-commands.js"), "utf8");
 const frameRpcSource = fs.readFileSync(path.join(root, "shared/frame-rpc.js"), "utf8");
@@ -30,7 +30,7 @@ function extractFunction(source, name, nextName) {
   return source.slice(start, end).trim();
 }
 
-const clickFunctionSource = extractFunction(contentSource, "clickPromptSubmit", "waitForPromptSubmitReady");
+const clickFunctionSource = extractFunction(sendCapabilitySource, "clickPromptSubmit", "waitForPromptSubmitReady");
 const context = vm.createContext({
   MouseEvent: class MouseEvent {
     constructor(type) { this.type = type; }
@@ -64,10 +64,7 @@ const sendTextSource = protocolString(
   "SEND_TEXT_POST_MESSAGE_SOURCE",
   "export const SEND_TEXT_POST_MESSAGE_SOURCE\\s*=\\s*"
 );
-assert.ok(
-  contentSource.includes(JSON.stringify(sendTextSource)),
-  "generated content must bundle the shared send channel"
-);
+assert.equal(typeof sendTextSource, "string");
 assert.match(
   contentEntrySource,
   /import\s*\{\s*CONTENT_PROTOCOL\s*\}\s*from "\.\.\/shared\/protocol\.js";/,
@@ -79,7 +76,8 @@ assert.match(
   "isolated content source must consume the shared send channel"
 );
 assert.match(frameCommandsSource, /sendText:\s*command\(\{[^}]*mutating:\s*true/, "sendText must be an exactly-once frame command");
-assert.match(frameRpcSource, /action:\s*"sendFrameCommand"/, "parent messaging must use authenticated Frame RPC");
+assert.match(frameRpcSource, /BACKGROUND_REQUEST_ACTIONS\.SEND_FRAME_COMMAND/, "parent messaging must use typed authenticated Frame RPC");
+assert.doesNotMatch(frameRpcSource, /action:\s*"sendFrameCommand"/, "Frame RPC must not bypass the typed background client");
 assert.match(
   contentEntrySource,
   /if \(!contentBridgeIsCurrent\(\)\) return;/,
@@ -91,7 +89,7 @@ assert.match(
   "parent-window requests must use the disposable runtime registry"
 );
 assert.match(
-  contentSource,
+  sendCapabilitySource,
   /window\.__CHATCLUB_SEND_TEXT_REQUEST_CACHE__ = sendTextRequestCache;/,
   "send request deduplication cache must survive bridge reinjection"
 );

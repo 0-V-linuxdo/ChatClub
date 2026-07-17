@@ -1,4 +1,4 @@
-export const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+export const wait = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 
 export function deadlineFromPayload(payload = {}, fallbackMs = 10000) {
   const value = Number(payload?.deadlineAt);

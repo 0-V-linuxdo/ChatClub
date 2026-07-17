@@ -1,4 +1,4 @@
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, Math.max(0, Number(ms) || 0)); });
 
 const FRAME_BINDING_PATTERN = /^[a-f0-9]{64}$/i;
 const LEGACY_DOCUMENT_PATTERN = /^legacy:[a-f0-9]{64}$/i;

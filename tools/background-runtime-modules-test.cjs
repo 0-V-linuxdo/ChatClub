@@ -23,29 +23,62 @@ const browserDocumentProbeResult = (details = {}, options = {}) => [{
     epoch: options.epoch || 1
   }
 }];
+const isContentRuntimeGenerationTransition = (details = {}) =>
+  typeof details.func === "function"
+  && Array.isArray(details.args)
+  && /^__CHATCLUB_RUNTIME_REGISTRY_V\d+(?:_SOURCE_[a-f0-9]{64})?__$/i.test(String(details.args[0] || ""))
+  && ["begin", "prepare", "commit", "abort", "failClosed"].includes(details.args[3]);
 
 (async () => {
   const content = await load("background/content-registration.js");
   const tabs = await load("background/tab-runtime.js");
   const workspaceSession = await load("shared/workspace-session.js");
 
-  const target = { id: "example", name: "Example", url: "", hosts: ["example.com"] };
+  const target = { id: "example", name: "Example", url: "", hosts: ["example.com", "grok.com"] };
   const registrations = content.buildContentScriptRegistrations({
     coreTargets: [target],
     preloadTargets: [target],
     summaryTargets: [target],
+    sendTargets: [target],
+    preferredModelTargets: [target],
+    deleteTargets: [target],
     messageNavigatorTargets: [target]
   });
   assert.deepEqual(registrations.map((item) => item.id), [
     "chatclub-preload",
     "chatclub-grok-cookie-bridge",
+    "chatclub-content",
     "chatclub-summary-userscripts-main",
     "chatclub-summary-userscripts",
-    "chatclub-message-navigator",
-    "chatclub-content"
+    "chatclub-summary-bridge",
+    "chatclub-send",
+    "chatclub-preferred-model",
+    "chatclub-delete",
+    "chatclub-message-navigator"
   ]);
   assert.equal(registrations.find((item) => item.id === "chatclub-preload").world, "MAIN");
   assert.equal(registrations.find((item) => item.id === "chatclub-summary-userscripts-main").world, "MAIN");
+  const messageOnlyTarget = { id: "message-only", name: "Message Only", url: "", hosts: ["messages.example"] };
+  const messageOnlyRegistrations = content.buildContentScriptRegistrations({
+    coreTargets: [messageOnlyTarget],
+    preloadTargets: [messageOnlyTarget],
+    messageNavigatorTargets: [messageOnlyTarget]
+  });
+  assert.deepEqual(messageOnlyRegistrations.map((item) => item.id), [
+    "chatclub-preload",
+    "chatclub-content",
+    "chatclub-message-navigator"
+  ], "message-navigator-only hosts must receive the same declared base graph as dynamic repair");
+  const wildcardGrokTarget = { id: "grok-wildcard", name: "Grok", url: "", hosts: ["*.grok.com"] };
+  const wildcardGrokRegistrations = content.buildContentScriptRegistrations({
+    coreTargets: [wildcardGrokTarget],
+    preloadTargets: [wildcardGrokTarget]
+  });
+  assert.deepEqual(
+    wildcardGrokRegistrations.find((item) => item.id === "chatclub-grok-cookie-bridge")?.matches,
+    ["http://grok.com/*", "https://grok.com/*"],
+    "the static Grok ancillary must not inject into wildcard subdomains"
+  );
 
   {
     const listeners = new Map();
@@ -79,6 +112,35 @@ const browserDocumentProbeResult = (details = {}, options = {}) => [{
   }
 
   {
+    const brokerKey = "__CHATCLUB_RUNTIME_REGISTRY_V1__";
+    const migrationKey = "__CHATCLUB_RUNTIME_MIGRATION_STAGE_V1__";
+    const generation = "generation-B";
+    const transitionSource = content.transitionInjectedContentRuntimeGeneration.toString();
+    const transition = (context, action) => vm.runInContext(
+      `(${transitionSource})(${JSON.stringify(brokerKey)}, ${JSON.stringify(migrationKey)}, ${JSON.stringify(generation)}, ${JSON.stringify(action)})`,
+      context
+    );
+    const context = vm.createContext({});
+    vm.runInContext(`globalThis[${JSON.stringify(`__CHATCLUB_RUNTIME_REGISTRY_V1_SOURCE_${"a".repeat(64)}__`)}] = ({ shutdown() {} })`, context);
+    assert.deepEqual(
+      { ...transition(context, "begin") },
+      { supported: true, state: "legacy-staged" }
+    );
+    const descriptor = vm.runInContext(
+      `Object.getOwnPropertyDescriptor(globalThis, ${JSON.stringify(migrationKey)})`,
+      context
+    );
+    assert.equal(descriptor.configurable, true, "an aborted injection must be able to clear the migration stage");
+    assert.equal(descriptor.writable, false);
+    assert.equal(vm.runInContext(`globalThis[${JSON.stringify(migrationKey)}].generation`, context), generation);
+    assert.deepEqual(
+      { ...transition(context, "abort") },
+      { supported: true, state: "legacy-aborted" }
+    );
+    assert.equal(vm.runInContext(`${JSON.stringify(migrationKey)} in globalThis`, context), false);
+  }
+
+  {
     const injected = [];
     const result = await content.injectContentBridge({
       webNavigation: {
@@ -91,25 +153,196 @@ const browserDocumentProbeResult = (details = {}, options = {}) => [{
       scripting: {
         executeScript: async (details) => {
           if (isBrowserDocumentProbe(details)) return browserDocumentProbeResult(details);
+          if (isContentRuntimeGenerationTransition(details)) {
+            const action = details.args[3];
+            injected.push(details);
+            return [{
+              frameId: details.target.frameIds[0],
+              documentId: "browser-document-7",
+              result: { supported: true, state: action === "commit" ? "active" : action }
+            }];
+          }
           injected.push(details);
           return [{ frameId: details.target.frameIds[0], documentId: "browser-document-7" }];
         }
       }
     }, 31, { hrefs: ["https://example.com/thread"], features: ["summary"] });
     assert.deepEqual(result.frameIds, [7]);
-    assert.equal(result.injected, 6);
+    assert.equal(result.injected, 5);
     assert.deepEqual(result.fallbackFiles, []);
     assert.equal(result.bindingRelayed, false);
     assert.equal(result.browserDocumentId, "browser-document-7");
-    assert.deepEqual(injected.map((item) => item.files[0]), [
+    assert.deepEqual(injected.filter((item) => item.files).map((item) => item.files[0]), [
       "content/preload.js",
+      "content/content.js",
       "content/summary-userscripts-main.js",
       "content/summary-userscripts.js",
+      "content/summary-bridge.js"
+    ]);
+    assert.deepEqual(injected.filter(isContentRuntimeGenerationTransition).map((item) => `${item.world}:${item.args[3]}`), [
+      "MAIN:begin",
+      "ISOLATED:begin",
+      "MAIN:prepare",
+      "ISOLATED:prepare",
+      "MAIN:commit",
+      "ISOLATED:commit"
+    ], "a uniquely matched repair without an explicit selector must still commit atomically");
+    assert.deepEqual(new Set(injected.map((item) => item.target.frameIds[0])), new Set([7]));
+  }
+
+  {
+    const injected = [];
+    const api = {
+      webNavigation: {
+        getAllFrames: async () => [
+          { frameId: 7, parentFrameId: 0, url: "https://grok.com/thread" }
+        ]
+      },
+      scripting: {
+        executeScript: async (details) => {
+          if (isBrowserDocumentProbe(details)) return browserDocumentProbeResult(details);
+          if (isContentRuntimeGenerationTransition(details)) {
+            const action = details.args[3];
+            return [{
+              frameId: 7,
+              documentId: "browser-document-7",
+              result: { supported: true, state: action === "commit" ? "active" : action }
+            }];
+          }
+          injected.push(details);
+          return [{ frameId: 7, documentId: "browser-document-7" }];
+        }
+      }
+    };
+    const result = await content.injectContentBridge(api, 31, { hrefs: ["https://grok.com/thread"] });
+    assert.equal(result.injected, 3);
+    assert.deepEqual(result.plannedFiles, [
+      "content/preload.js",
       "content/grok-cookie-bridge.js",
-      "content/message-navigator.js",
       "content/content.js"
     ]);
-    assert.deepEqual(new Set(injected.map((item) => item.target.frameIds[0])), new Set([7]));
+    assert.deepEqual(injected.map((item) => item.files[0]), [
+      "content/preload.js",
+      "content/grok-cookie-bridge.js",
+      "content/content.js"
+    ]);
+    await assert.rejects(
+      content.injectContentBridge(api, 31, { hrefs: ["https://grok.com/thread"], features: ["unknown"] }),
+      /unsupported (?:content )?capabilities:?\s*unknown/i
+    );
+  }
+
+  {
+    let frameSnapshot = 0;
+    const injectedFiles = [];
+    const redirectedApi = {
+      webNavigation: {
+        getAllFrames: async () => {
+          frameSnapshot += 1;
+          return frameSnapshot === 1
+            ? [{ frameId: 7, parentFrameId: 0, url: "https://grok.com/thread", documentId: "browser-document-old" }]
+            : [{ frameId: 7, parentFrameId: 0, url: "https://example.com/thread", documentId: "browser-document-new" }];
+        }
+      },
+      scripting: {
+        executeScript: async (details) => {
+          if (isBrowserDocumentProbe(details)) {
+            return browserDocumentProbeResult(details, { officialDocumentId: "browser-document-new" });
+          }
+          if (isContentRuntimeGenerationTransition(details)) {
+            const action = details.args[3];
+            return [{
+              frameId: 7,
+              documentId: "browser-document-new",
+              result: { supported: true, state: action === "commit" ? "active" : action }
+            }];
+          }
+          injectedFiles.push(details.files[0]);
+          return [{ frameId: 7, documentId: "browser-document-new" }];
+        }
+      }
+    };
+    const redirected = await content.injectContentBridge(redirectedApi, 31, {
+      hrefs: ["https://grok.com/thread", "https://example.com/thread"]
+    });
+    assert.deepEqual(redirected.errors, []);
+    assert.equal(redirected.browserDocumentId, "browser-document-new");
+    assert.deepEqual(redirected.plannedFiles, ["content/preload.js", "content/content.js"]);
+    assert.deepEqual(injectedFiles, redirected.plannedFiles, "repair plan must use the revalidated current frame URL");
+
+    frameSnapshot = 0;
+    injectedFiles.length = 0;
+    const staleHint = await content.injectContentBridge(redirectedApi, 31, {
+      hrefs: ["https://grok.com/thread"]
+    });
+    assert.equal(staleHint.injected, 0);
+    assert.match(staleHint.errors.join(" | "), /no longer matches the requested target/);
+    assert.deepEqual(injectedFiles, [], "a redirected frame must fail before any runtime bundle is injected");
+  }
+
+  {
+    let getAllFramesCalls = 0;
+    let releaseFirstFile;
+    let reportFirstFile;
+    let firstFileBlocked = false;
+    const firstFileStarted = new Promise((resolve) => { reportFirstFile = resolve; });
+    const firstFileRelease = new Promise((resolve) => { releaseFirstFile = resolve; });
+    const injectedFiles = [];
+    const api = {
+      webNavigation: {
+        getAllFrames: async () => {
+          getAllFramesCalls += 1;
+          return [{ frameId: 7, parentFrameId: 0, url: "https://example.com/thread", documentId: "browser-document-7" }];
+        }
+      },
+      scripting: {
+        executeScript: async (details) => {
+          if (isBrowserDocumentProbe(details)) {
+            return browserDocumentProbeResult(details, { officialDocumentId: "browser-document-7" });
+          }
+          if (isContentRuntimeGenerationTransition(details)) {
+            const action = details.args[3];
+            return [{
+              frameId: 7,
+              documentId: "browser-document-7",
+              result: { supported: true, state: action === "commit" ? "active" : action }
+            }];
+          }
+          injectedFiles.push(details.files[0]);
+          if (!firstFileBlocked) {
+            firstFileBlocked = true;
+            reportFirstFile();
+            await firstFileRelease;
+          }
+          return [{ frameId: 7, documentId: "browser-document-7" }];
+        }
+      }
+    };
+    const sendRun = content.injectContentBridge(api, 31, {
+      hrefs: ["https://example.com/thread"],
+      features: ["send"]
+    });
+    await firstFileStarted;
+    const summaryRun = content.injectContentBridge(api, 31, {
+      hrefs: ["https://example.com/thread"],
+      features: ["summary"]
+    });
+    await new Promise((resolve) => { setTimeout(resolve, 0); });
+    assert.equal(getAllFramesCalls, 2, "a second feature signature must wait behind the active tab transaction");
+    releaseFirstFile();
+    const [sendResult, summaryResult] = await Promise.all([sendRun, summaryRun]);
+    assert.deepEqual(sendResult.errors, []);
+    assert.deepEqual(summaryResult.errors, []);
+    assert.deepEqual(injectedFiles, [
+      "content/preload.js",
+      "content/content.js",
+      "content/send.js",
+      "content/preload.js",
+      "content/content.js",
+      "content/summary-userscripts-main.js",
+      "content/summary-userscripts.js",
+      "content/summary-bridge.js"
+    ], "different capability transactions must never interleave generation entries");
   }
 
   {
@@ -142,28 +375,36 @@ const browserDocumentProbeResult = (details = {}, options = {}) => [{
         ]
       },
       scripting: {
-        executeScript: async (details) => [{
-          ...(isBrowserDocumentProbe(details)
-            ? browserDocumentProbeResult(details)[0]
-            : {
-                frameId: details.target.frameIds[0],
-                documentId: "browser-document-7",
-                error: `Unable to load script: ${details.files[0]}`
-              })
-        }]
+        executeScript: async (details) => {
+          if (isBrowserDocumentProbe(details)) return browserDocumentProbeResult(details);
+          if (isContentRuntimeGenerationTransition(details)) {
+            const action = details.args[3];
+            return [{
+              frameId: details.target.frameIds[0],
+              documentId: "browser-document-7",
+              result: { supported: true, state: action === "commit" ? "active" : action }
+            }];
+          }
+          return [{
+            frameId: details.target.frameIds[0],
+            documentId: "browser-document-7",
+            error: `Unable to load script: ${details.files[0]}`
+          }];
+        }
       }
     }, 31, { hrefs: ["https://example.com/thread"] });
     assert.equal(result.injected, 0);
     assert.deepEqual(result.injectedFiles, []);
     assert.deepEqual(result.fallbackFiles, []);
     assert.equal(result.bindingRelayed, false);
-    assert.equal(result.errors.length, 4);
+    assert.equal(result.errors.length, 1, "a failed file must stop the generation before later files run");
     assert.match(result.errors[0], /content\/preload\.js@7: Unable to load script/);
   }
 
   {
     let probeCalls = 0;
-    let actualExecutions = 0;
+    let transitionExecutions = 0;
+    let fileExecutions = 0;
     const result = await content.injectContentBridge({
       webNavigation: {
         getAllFrames: async () => [
@@ -180,13 +421,22 @@ const browserDocumentProbeResult = (details = {}, options = {}) => [{
               epoch: probeCalls <= 2 ? 1 : 2
             });
           }
-          actualExecutions += 1;
+          if (isContentRuntimeGenerationTransition(details)) {
+            transitionExecutions += 1;
+            const action = details.args[3];
+            return [{
+              frameId: 7,
+              result: { supported: true, state: action === "commit" ? "active" : action }
+            }];
+          }
+          fileExecutions += 1;
           return [{ frameId: 7 }];
         }
       }
     }, 31, { hrefs: ["https://example.com/thread"] });
-    assert.equal(result.injected, 1);
-    assert.equal(actualExecutions, 1, "a pre-injection document mismatch must fail before writing into the new document");
+    assert.equal(result.injected, 0);
+    assert.equal(transitionExecutions, 1);
+    assert.equal(fileExecutions, 0, "a generation-begin document mismatch must fail before injecting any bundle");
     assert.match(result.errors.join(" | "), /browser document changed from legacy:6{64} to legacy:7{64}/);
   }
 
@@ -217,7 +467,9 @@ const browserDocumentProbeResult = (details = {}, options = {}) => [{
               return [{ frameId, documentId: "browser-document-new" }];
             }
             if (details.func) {
-              if (Array.isArray(details.args) && details.args.length === 4) relayCalls += 1;
+              if (!isContentRuntimeGenerationTransition(details) && Array.isArray(details.args) && details.args.length === 4) {
+                relayCalls += 1;
+              }
               return [{ frameId, documentId: "browser-document-old", result: { success: true } }];
             }
             const documentId = details.files[0] === changedFile
@@ -262,6 +514,13 @@ const browserDocumentProbeResult = (details = {}, options = {}) => [{
           executeScript: async (details) => {
             if (isBrowserDocumentProbe(details)) {
               return browserDocumentProbeResult(details, { officialDocumentId: "" });
+            }
+            if (isContentRuntimeGenerationTransition(details)) {
+              const action = details.args[3];
+              return [{
+                frameId: 7,
+                result: { supported: true, state: action === "commit" ? "active" : action }
+              }];
             }
             executions.push(details);
             if (details.files) {
@@ -401,9 +660,148 @@ const browserDocumentProbeResult = (details = {}, options = {}) => [{
       }
     }, 31, { hrefs: ["https://example.com/thread"] });
     assert.equal(result.injected, 0);
-    assert.equal(actualExecutions, content.CONTENT_BRIDGE_FILES.length);
-    assert.equal(result.errors.length, content.CONTENT_BRIDGE_FILES.length);
+    assert.equal(actualExecutions, 1, "a malformed injection result must stop the generation immediately");
+    assert.equal(result.errors.length, 1);
     assert.match(result.errors[0], /returned no result for the target frame/);
+  }
+
+  {
+    const bindingId = "4".repeat(64);
+    const transitionActions = [];
+    const realmState = new Map([
+      ["MAIN", { active: "generation-A", pending: "" }],
+      ["ISOLATED", { active: "generation-A", pending: "" }]
+    ]);
+    let fileExecutions = 0;
+    const result = await content.injectContentBridge({
+      webNavigation: {
+        getAllFrames: async () => [
+          { frameId: 7, parentFrameId: 0, url: "https://example.com/thread" }
+        ]
+      },
+      scripting: {
+        executeScript: async (details) => {
+          if (isBrowserDocumentProbe(details)) return browserDocumentProbeResult(details);
+          const frameId = details.target.frameIds[0];
+          const documentId = "browser-document-7";
+          if (isContentRuntimeGenerationTransition(details)) {
+            const generation = details.args[2];
+            const action = details.args[3];
+            const state = realmState.get(details.world);
+            transitionActions.push(`${details.world}:${action}`);
+            if (action === "begin") state.pending = generation;
+            if (action === "prepare") assert.equal(state.pending, generation);
+            if (action === "commit") {
+              assert.equal(state.pending, generation);
+              state.active = generation;
+              state.pending = "";
+            }
+            if (action === "abort") state.pending = "";
+            return [{ frameId, documentId, result: { supported: true, state: action } }];
+          }
+          if (details.files) {
+            fileExecutions += 1;
+            return [{
+              frameId,
+              documentId,
+              ...(fileExecutions === 2 ? { error: "simulated partial generation injection failure" } : {})
+            }];
+          }
+          return [{ frameId, documentId, result: { success: true } }];
+        }
+      }
+    }, 31, {
+      hrefs: ["https://example.com/thread"],
+      expectedFrameId: 7,
+      expectedBindingId: bindingId
+    });
+    assert.equal(result.injected, 1);
+    assert.equal(fileExecutions, 2, "later generation files must not run after the first failed file");
+    assert.deepEqual(transitionActions, [
+      "MAIN:begin",
+      "ISOLATED:begin",
+      "MAIN:abort",
+      "ISOLATED:abort"
+    ]);
+    assert.deepEqual(
+      [...realmState.values()].map(({ active, pending }) => ({ active, pending })),
+      [
+        { active: "generation-A", pending: "" },
+        { active: "generation-A", pending: "" }
+      ],
+      "a partial B injection into a preserved iframe must abort B without replacing active A in either world"
+    );
+    assert.match(result.errors.join(" | "), /simulated partial generation injection failure/);
+  }
+
+  {
+    const bindingId = "5".repeat(64);
+    const transitionActions = [];
+    const realmState = new Map([
+      ["MAIN", { active: "generation-A", pending: "" }],
+      ["ISOLATED", { active: "generation-A", pending: "" }]
+    ]);
+    const result = await content.injectContentBridge({
+      webNavigation: {
+        getAllFrames: async () => [
+          { frameId: 7, parentFrameId: 0, url: "https://example.com/thread" }
+        ]
+      },
+      scripting: {
+        executeScript: async (details) => {
+          if (isBrowserDocumentProbe(details)) return browserDocumentProbeResult(details);
+          const frameId = details.target.frameIds[0];
+          const documentId = "browser-document-7";
+          if (isContentRuntimeGenerationTransition(details)) {
+            const generation = details.args[2];
+            const action = details.args[3];
+            const state = realmState.get(details.world);
+            transitionActions.push(`${details.world}:${action}`);
+            if (action === "begin") state.pending = generation;
+            if (action === "prepare") assert.equal(state.pending, generation);
+            if (action === "commit" && details.world === "ISOLATED") {
+              throw new Error("simulated isolated-world activation failure");
+            }
+            if (action === "commit") {
+              state.active = generation;
+              state.pending = "";
+              return [{ frameId, documentId, result: { supported: true, state: "active" } }];
+            }
+            if (action === "failClosed") {
+              state.active = "";
+              state.pending = "";
+            }
+            return [{ frameId, documentId, result: { supported: true, state: action } }];
+          }
+          if (details.files) return [{ frameId, documentId }];
+          return [{ frameId, documentId, result: { success: true } }];
+        }
+      }
+    }, 31, {
+      hrefs: ["https://example.com/thread"],
+      expectedFrameId: 7,
+      expectedBindingId: bindingId
+    });
+    assert.equal(result.injected, content.CONTENT_BRIDGE_FILES.length);
+    assert.deepEqual(transitionActions, [
+      "MAIN:begin",
+      "ISOLATED:begin",
+      "MAIN:prepare",
+      "ISOLATED:prepare",
+      "MAIN:commit",
+      "ISOLATED:commit",
+      "MAIN:failClosed",
+      "ISOLATED:failClosed"
+    ]);
+    assert.deepEqual(
+      [...realmState.values()].map(({ active, pending }) => ({ active, pending })),
+      [
+        { active: "", pending: "" },
+        { active: "", pending: "" }
+      ],
+      "if the second world cannot commit, both worlds must fail closed instead of retaining a mixed A/B runtime"
+    );
+    assert.match(result.errors.join(" | "), /simulated isolated-world activation failure/);
   }
 
   {
@@ -443,11 +841,12 @@ const browserDocumentProbeResult = (details = {}, options = {}) => [{
     assert.equal(result.browserDocumentId, "browser-document-7");
     assert.deepEqual(result.frameIds, [7]);
     assert.deepEqual(result.errors, []);
-    assert.equal(executions.length, content.CONTENT_BRIDGE_FILES.length + 3);
+    const bridgeExecutions = executions.filter((details) => !isContentRuntimeGenerationTransition(details));
+    assert.equal(bridgeExecutions.length, content.CONTENT_BRIDGE_FILES.length + 3);
     assert.ok(executions.every((details) => details.target.frameIds[0] === 7));
-    assert.deepEqual(executions[0].args, [bindingId]);
-    assert.deepEqual(executions.at(-2).args, [bindingId]);
-    const relay = executions.at(-1);
+    assert.deepEqual(bridgeExecutions[0].args, [bindingId]);
+    assert.deepEqual(bridgeExecutions.at(-2).args, [bindingId]);
+    const relay = bridgeExecutions.at(-1);
     assert.equal(typeof relay.func, "function");
     assert.equal(relay.world, "ISOLATED");
     assert.deepEqual(relay.args, [challenge, 3, bindingId, "browser-document-7"]);
@@ -582,9 +981,10 @@ const browserDocumentProbeResult = (details = {}, options = {}) => [{
     assert.equal(result.bindingRelayed, false);
     assert.equal(result.browserDocumentId, "browser-document-7");
     assert.deepEqual(result.errors, []);
-    assert.equal(executions.length, 2 + 1 + content.CONTENT_BRIDGE_FILES.length);
-    assert.deepEqual(executions[2].args, [bindingId]);
-    assert.ok(executions.slice(2).every((details) => details.target.frameIds[0] === 7));
+    const bridgeExecutions = executions.filter((details) => !isContentRuntimeGenerationTransition(details));
+    assert.equal(bridgeExecutions.length, 2 + 1 + content.CONTENT_BRIDGE_FILES.length);
+    assert.deepEqual(bridgeExecutions[2].args, [bindingId]);
+    assert.ok(bridgeExecutions.slice(2).every((details) => details.target.frameIds[0] === 7));
 
     for (const mode of ["duplicate", "missing"]) {
       let calls = 0;

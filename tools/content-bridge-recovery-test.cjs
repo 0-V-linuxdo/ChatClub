@@ -10,7 +10,10 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const main = `${read("app/main.js")}\n${read("app/runtime.js")}`;
 const frameBridge = read("app/frame-bridge/controller.js");
 const preferredModel = read("app/preferred-model/controller.js");
-const workspace = read("app/workspace/controller.js");
+const workspace = [
+  "app/workspace/controller.js",
+  "app/workspace/frame-controller.js"
+].map(read).join("\n");
 const summary = read("app/summary/controller.js");
 const background = [
   "background/service-worker.js",
@@ -18,8 +21,15 @@ const background = [
   "background/frame-relay.js",
   "background/content-registration.js"
 ].map(read).join("\n");
-const content = read("content/content.js");
-const summaryMain = read("content/summary-userscripts-main.js");
+const content = read("content-src/content.js");
+const summaryCapability = read("content-src/capabilities/summary-runtime.js");
+const summaryRuntime = read("content-src/shared/summary-runtime.js");
+const summaryMain = read("content-src/summary-userscripts-main.js");
+
+const runtimeIdentity = (outputPath) => ({
+  implementationVersion: "runtime-current",
+  bundle: { outputPath }
+});
 
 function functionSource(source, name, asyncFunction = false) {
   const prefix = `${asyncFunction ? "async " : ""}function ${name}(`;
@@ -96,16 +106,18 @@ function createApplyFixture(options = {}) {
 
 function createSummaryPrepareFixture(options = {}) {
   const calls = { verify: 0, wait: 0, install: 0, probe: 0, remember: 0 };
+  const installResults = [...(options.installResults || [])];
   const registration = {
     browserDocumentId: options.registration?.browserDocumentId ?? "browser-document-9",
     documentId: "doc-current",
     bridgeVersion: "bridge-current",
+    runtimeIdentity: runtimeIdentity("content/content.js"),
     ...(options.registration || {})
   };
   const confirmedRegistration = options.confirmedRegistration === undefined
     ? registration
     : (options.confirmedRegistration
-      ? { browserDocumentId: "browser-document-9", ...options.confirmedRegistration }
+      ? { ...registration, ...options.confirmedRegistration }
       : options.confirmedRegistration);
   const iframe = {
     isConnected: true,
@@ -121,17 +133,8 @@ function createSummaryPrepareFixture(options = {}) {
     Number,
     Set,
     String,
-    CORE_BRIDGE_FILE_NAMES: [
-      "content/preload.js",
-      "content/grok-cookie-bridge.js",
-      "content/message-navigator.js",
-      "content/content.js"
-    ],
-    SUMMARY_BRIDGE_FILE_NAMES: [
-      "content/summary-userscripts-main.js",
-      "content/summary-userscripts.js"
-    ],
     CONTENT_BRIDGE_VERSION: "bridge-current",
+    CONTENT_RUNTIME_IDENTITY: { implementationVersion: "runtime-current" },
     calls,
     frameBindingChallenges: {
       issue: () => ({ challenge: "a".repeat(64), generation: 1 })
@@ -143,27 +146,37 @@ function createSummaryPrepareFixture(options = {}) {
     return calls.verify === 1 ? (options.initialRegistration || null) : confirmedRegistration;
   };
   context.currentExtensionTabId = async () => 7;
-  context.contentFrameHrefHints = () => ["https://example.com/chat/current"];
+  context.contentFrameHrefHints = () => options.hrefs || ["https://example.com/chat/current"];
   context.contentFramePreparationError = (result) => (result?.errors || []).join("; ");
-  context.runtimeRequest = async () => {
+  context.runtimeRequest = async (request) => {
     calls.install += 1;
+    context.lastRuntimeRequest = request;
+    const attempt = installResults.length ? installResults.shift() : {};
     return {
       errors: options.installErrors || [],
-      injected: options.injected ?? 6,
+      injected: options.injected ?? 5,
       ...(options.omitInjectedFiles ? {} : {
         injectedFiles: options.injectedFiles ?? [
           "content/preload.js@9",
+          "content/content.js@9",
           "content/summary-userscripts-main.js@9",
           "content/summary-userscripts.js@9",
-          "content/grok-cookie-bridge.js@9",
-          "content/message-navigator.js@9",
-          "content/content.js@9"
+          "content/summary-bridge.js@9"
         ]
       }),
+      features: options.installedFeatures ?? request.features,
+      plannedFiles: options.plannedFiles ?? [
+        "content/preload.js",
+        "content/content.js",
+        "content/summary-userscripts-main.js",
+        "content/summary-userscripts.js",
+        "content/summary-bridge.js"
+      ],
       bindingRelayed: options.bindingRelayed ?? true,
       ...(options.omitBrowserDocumentId ? {} : {
         browserDocumentId: options.installedBrowserDocumentId ?? "browser-document-9"
-      })
+      }),
+      ...attempt
     };
   };
   context.requestFrameBinding = () => {
@@ -174,16 +187,38 @@ function createSummaryPrepareFixture(options = {}) {
     calls.wait += 1;
     return registration;
   };
+  context.contentRuntimePackageBundleIdentityMatches = (value, expectedOutputPath) => (
+    value?.bundle?.outputPath === expectedOutputPath
+  );
+  context.contentInjectionPlan = ({ features = [], frameUrls = [], frameHost = "" } = {}) => {
+    const grok = frameHost === "grok.com"
+      || frameUrls.some((href) => String(href).startsWith("https://grok.com/"));
+    const files = [
+      "content/preload.js",
+      ...(grok ? ["content/grok-cookie-bridge.js"] : []),
+      "content/content.js",
+      ...(features.includes("summary") ? [
+        "content/summary-userscripts-main.js",
+        "content/summary-userscripts.js",
+        "content/summary-bridge.js"
+      ] : [])
+    ];
+    return files.map((file) => ({ file }));
+  };
   context.runtimePort = () => ({ request: async (_iframe, action) => {
     calls.probe += 1;
     assert.equal(action, "getSummaryRuntimeState");
     if (options.probeError) throw options.probeError;
-    return options.summaryState || {
+    return {
       ready: true,
       mainReady: true,
       isolatedReady: true,
       documentId: registration.documentId,
-      bridgeVersion: "bridge-current"
+      bridgeVersion: "bridge-current",
+      runtimeIdentity: runtimeIdentity("content/summary-bridge.js"),
+      mainRuntimeIdentity: runtimeIdentity("content/summary-userscripts-main.js"),
+      isolatedRuntimeIdentity: runtimeIdentity("content/summary-userscripts.js"),
+      ...(options.summaryState || {})
     };
   }});
   context.workspaceController = () => ({
@@ -198,6 +233,59 @@ function createSummaryPrepareFixture(options = {}) {
     globalThis.prepare = prepareContentFrameRuntimeUncached;
   `, context);
   return context;
+}
+
+function createSummaryMainInstallFixture() {
+  const entries = new Map();
+  const listeners = new Set();
+  const window = {
+    addEventListener(type, listener) {
+      if (type === "message") listeners.add(listener);
+    },
+    removeEventListener(type, listener) {
+      if (type === "message") listeners.delete(listener);
+    },
+    postMessage() {}
+  };
+  const runtimes = {
+    registerBundle(identity) { return identity; },
+    register(name, descriptor) {
+      const previous = entries.get(name);
+      if (previous?.version === descriptor.version) return previous.api;
+      const entry = { ...descriptor };
+      entries.set(name, entry);
+      entry.activate?.();
+      return entry.api;
+    },
+    require(name, version) {
+      const entry = entries.get(name);
+      if (!entry) throw new Error(`${name} is unavailable`);
+      if (version != null && entry.version !== version) throw new Error(`${name} has the wrong version`);
+      return entry.api;
+    },
+    registration(name) {
+      const entry = entries.get(name);
+      return entry ? { version: entry.version, api: entry.api } : null;
+    }
+  };
+  const context = vm.createContext({
+    CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY: runtimeIdentity("content/summary-userscripts-main.js"),
+    CONTENT_PROTOCOL: {
+      CONTENT_BRIDGE_VERSION: "bridge-current",
+      CUSTOM_SUMMARY_EXECUTOR: "__fixtureSummaryExecutor__",
+      PAGE_SUMMARY_SOURCE: "fixture-summary-page"
+    },
+    createContentRuntimeBundleIdentity: () => runtimeIdentity("content/summary-userscripts-main.js"),
+    createSummaryRunnerRegistry: () => Object.freeze({ fixture: () => [] }),
+    runtimeRegistry: () => runtimes,
+    summaryRuntime: {},
+    window
+  });
+  vm.runInContext(`
+    ${functionSource(summaryMain, "installSummaryMainRuntime")}
+    globalThis.install = installSummaryMainRuntime;
+  `, context);
+  return { context, entries, listeners, window };
 }
 
 (async () => {
@@ -285,6 +373,48 @@ function createSummaryPrepareFixture(options = {}) {
 
   {
     const fixture = createSummaryPrepareFixture({
+      installResults: [{
+        injected: 4,
+        injectedFiles: [
+          "content/preload.js@9",
+          "content/content.js@9",
+          "content/summary-userscripts-main.js@9",
+          "content/summary-userscripts.js@9"
+        ]
+      }, {}]
+    });
+    const partial = await fixture.prepare(fixture.iframe, { summary: true });
+    assert.equal(partial.ok, false, "a same-generation partial Summary install must fail closed");
+    assert.equal(fixture.calls.probe, 0, "partial inventory must not reach Summary readiness or command execution");
+    assert.equal(fixture.iframe.dataset.summaryRuntimeDocumentId, undefined);
+    assert.equal(fixture.iframe.dataset.contentRuntimeCapabilities, undefined);
+
+    const retried = await fixture.prepare(fixture.iframe, { summary: true });
+    assert.equal(retried.ok, true, "the complete same-generation Summary inventory must be safely retryable");
+    assert.equal(fixture.calls.install, 2);
+    assert.equal(fixture.calls.probe, 1, "only the complete retry may run the exact readiness probe");
+    assert.equal(fixture.calls.remember, 1);
+    assert.equal(fixture.iframe.dataset.summaryRuntimeDocumentId, "doc-current");
+    assert.equal(fixture.iframe.dataset.contentRuntimeCapabilities, "summary");
+  }
+
+  {
+    const fixture = createSummaryMainInstallFixture();
+    fixture.context.install();
+    const firstListener = [...fixture.listeners][0];
+    const firstExecutor = fixture.window.__fixtureSummaryExecutor__;
+    assert.equal(fixture.listeners.size, 1);
+    assert.equal(typeof firstExecutor, "function");
+
+    fixture.context.install();
+    assert.equal(fixture.listeners.size, 1, "same-generation Summary MAIN retry must not duplicate its message listener");
+    assert.equal([...fixture.listeners][0], firstListener, "retry must retain the active listener owner");
+    assert.equal(fixture.window.__fixtureSummaryExecutor__, firstExecutor, "retry must retain the active custom executor owner");
+    assert.equal(fixture.entries.size, 2, "retry must reuse the exact runners and page runtime registrations");
+  }
+
+  {
+    const fixture = createSummaryPrepareFixture({
       dataset: { browserFrameId: "" },
       bindingRelayed: false
     });
@@ -295,8 +425,10 @@ function createSummaryPrepareFixture(options = {}) {
 
   for (const failedInstall of [
     { label: "reported partial injection error", installErrors: ["content/preload.js failed"] },
-    { label: "short injection count", injected: 5 },
+    { label: "short injection count", injected: 4 },
     { label: "missing injection inventory", injectedFiles: undefined, omitInjectedFiles: true },
+    { label: "missing injection plan", plannedFiles: [] },
+    { label: "mismatched installed capability", installedFeatures: ["delete"] },
     { label: "missing browser document identity", omitBrowserDocumentId: true },
     { label: "missing authenticated binding relay", bindingRelayed: false }
   ]) {
@@ -305,6 +437,14 @@ function createSummaryPrepareFixture(options = {}) {
     assert.equal(result.ok, false, failedInstall.label);
     assert.equal(fixture.calls.wait, 0, `${failedInstall.label} must fail before trusting content registration`);
     assert.equal(fixture.calls.probe, 0, failedInstall.label);
+  }
+
+  {
+    const fixture = createSummaryPrepareFixture({
+      hrefs: ["https://grok.com/chat/old", "https://example.com/chat/current"]
+    });
+    const result = await fixture.prepare(fixture.iframe, { summary: true });
+    assert.equal(result.ok, true, "background plannedFiles from the locked frame must override stale Grok href hints");
   }
 
   {
@@ -357,6 +497,24 @@ function createSummaryPrepareFixture(options = {}) {
         isolatedReady: false,
         documentId: "doc-current",
         bridgeVersion: "bridge-current"
+      }
+    },
+    {
+      label: "wrong Summary bridge identity",
+      state: {
+        runtimeIdentity: runtimeIdentity("content/content.js")
+      }
+    },
+    {
+      label: "wrong Summary MAIN identity",
+      state: {
+        mainRuntimeIdentity: runtimeIdentity("content/summary-userscripts.js")
+      }
+    },
+    {
+      label: "wrong Summary ISOLATED identity",
+      state: {
+        isolatedRuntimeIdentity: runtimeIdentity("content/summary-userscripts-main.js")
       }
     }
   ]) {
@@ -437,6 +595,10 @@ function createSummaryPrepareFixture(options = {}) {
   assert.match(authenticatedBindingSource, /context\.frameId !== expectedFrameId/);
   assert.match(frameBridge, /scheduleContentFrameRepair\(iframe, 120\)/);
   const repairSource = functionSource(frameBridge, "scheduleContentFrameRepair");
+  const poisonedRepairSource = functionSource(frameBridge, "contentFrameRepairIsPoisoned");
+  assert.match(poisonedRepairSource, /is aborted/);
+  assert.match(poisonedRepairSource, /is superseded/);
+  assert.match(repairSource, /contentFrameRepairIsPoisoned\(reason\)/);
   assert.match(repairSource, /CONTENT_FRAME_REPAIR_RETRY_DELAYS\[retryIndex\]/);
   assert.match(repairSource, /repairGenerations\.get\(iframe\) !== repairGeneration/);
   assert.match(repairSource, /scheduleContentFrameRepair\(iframe, nextDelay, retryIndex \+ 1, repairGeneration\)/);
@@ -491,17 +653,17 @@ function createSummaryPrepareFixture(options = {}) {
   assert.match(prepareSource, /summaryState\.bridgeVersion === CONTENT_BRIDGE_VERSION/);
   assert.match(prepareSource, /confirmedRegistration\?\.documentId === registration\.documentId/);
   assert.match(prepareSource, /summaryRuntimeBridgeVersion/);
-  const stateSource = functionSource(content, "getSummaryRuntimeState", true);
+  const stateSource = functionSource(summaryCapability, "getSummaryRuntimeState", true);
   assert.match(stateSource, /documentId: contentDocumentId/);
   assert.match(stateSource, /bridgeVersion: CONTENT_BRIDGE_VERSION/);
   assert.match(stateSource, /isolatedVersion === CONTENT_BRIDGE_VERSION/);
-  const targetSource = functionSource(content, "assertSummaryTargetCurrent");
+  const targetSource = functionSource(summaryCapability, "assertSummaryTargetCurrent");
   assert.match(targetSource, /expectedDocumentId !== contentDocumentId/);
   assert.match(targetSource, /expectedHref !== String\(location\.href \|\| ""\)/);
-  const collectSource = functionSource(content, "collectSummary", true);
+  const collectSource = functionSource(summaryCapability, "collectSummary", true);
   assert.match(collectSource, /assertSummaryTargetCurrent\(data\)/);
   assert.match(collectSource, /finishSummaryCollection\(data,/);
-  const pageStateSource = functionSource(content, "pageSummaryRuntimeState");
+  const pageStateSource = functionSource(summaryRuntime, "pageSummaryRuntimeState");
   assert.match(pageStateSource, /event\.source !== window/);
   assert.match(pageStateSource, /message\.type !== "response"/);
   assert.match(pageStateSource, /message\.action !== "runtimeState"/);

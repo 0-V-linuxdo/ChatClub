@@ -288,8 +288,9 @@ function fixture({ local = {}, session = {}, tabs = [] } = {}) {
     assert.match(runtime, /onInstalled\.addListener\(async \(details = \{\}\)/);
     assert.match(runtime, /forceRecovery: reason === "update"/);
     assert.match(runtime, /prepareWorkspaceSessionLifecycleSafely\("runtime start"/);
-    assert.match(runtime, /message\.action === "claimWorkspaceSessionRecovery"/);
-    assert.match(runtime, /message\.action === "commitWorkspaceSessionRecovery"/);
+    assert.match(runtime, /REQUEST\.CLAIM_WORKSPACE_SESSION_RECOVERY/);
+    assert.match(runtime, /REQUEST\.COMMIT_WORKSPACE_SESSION_RECOVERY/);
+    assert.match(runtime, /createBackgroundRequestDispatcher\(/);
     assert.doesNotMatch(runtime, /removeWorkspaceSessionMirror\(chrome, tabId\)/);
   }
 

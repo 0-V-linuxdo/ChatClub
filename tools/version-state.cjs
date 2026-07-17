@@ -4,7 +4,14 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const {
+  CONTENT_ENTRIES,
   TOPIC_DELETE_OUTPUT_FILES,
+  contentRuntimeBundleIdentities,
+  contentRuntimeBundleSourceStates,
+  contentRuntimeBuildRecipeState,
+  contentRuntimeImplementationSha256,
+  contentRuntimeImplementationVersion,
+  contentRuntimeSourceState,
   assertGeneratedArtifactInventory
 } = require("./generated-artifacts.cjs");
 const { packageDigest, packagePlan, root } = require("./package-plan.cjs");
@@ -23,6 +30,121 @@ function appVersion() {
   const match = read("shared/constants.js").match(/export const APP_VERSION\s*=\s*(["'])(.*?)\1\s*;/);
   if (!match) throw new Error("shared/constants.js does not export APP_VERSION");
   return match[2];
+}
+
+function contentRuntimeProtocolVersion() {
+  const match = read("shared/protocol.js").match(
+    /export const CONTENT_BRIDGE_VERSION\s*=\s*(["'])(.*?)\1\s*;/
+  );
+  if (!match) throw new Error("shared/protocol.js does not export CONTENT_BRIDGE_VERSION");
+  return match[2];
+}
+
+function contentRuntimeState() {
+  const source = contentRuntimeSourceState(root);
+  const bundleSources = contentRuntimeBundleSourceStates(root);
+  const buildRecipe = contentRuntimeBuildRecipeState(root);
+  const protocolVersion = contentRuntimeProtocolVersion();
+  const implementationSha256 = contentRuntimeImplementationSha256(
+    protocolVersion,
+    source.sha256,
+    buildRecipe.sha256
+  );
+  const bundleIdentities = contentRuntimeBundleIdentities(
+    protocolVersion,
+    bundleSources,
+    buildRecipe.sha256
+  );
+  return {
+    sourceSchemaVersion: source.schemaVersion,
+    sourceSha256: source.sha256,
+    sourceFileCount: source.files.length,
+    buildRecipeSchemaVersion: buildRecipe.schemaVersion,
+    buildRecipeVersion: buildRecipe.version,
+    buildRecipeSha256: buildRecipe.sha256,
+    buildRecipeFileCount: buildRecipe.files.length,
+    protocolVersion,
+    implementationSha256,
+    implementationVersion: contentRuntimeImplementationVersion(
+      protocolVersion,
+      source.sha256,
+      buildRecipe.sha256
+    ),
+    bundles: Object.fromEntries(Object.keys(CONTENT_ENTRIES).sort().map((outputPath) => [
+      outputPath,
+      {
+        entryPath: bundleSources[outputPath].entryPath,
+        sourceSha256: bundleSources[outputPath].sourceSha256,
+        sourceFileCount: bundleSources[outputPath].files.length,
+        virtualInputs: bundleSources[outputPath].virtualInputs,
+        implementationSha256: bundleIdentities[outputPath].implementationSha256,
+        implementationVersion: bundleIdentities[outputPath].implementationVersion
+      }
+    ]))
+  };
+}
+
+function contentRuntimeBindingErrors(state) {
+  const errors = [];
+  const sourceSha256 = String(state?.sourceSha256 || "");
+  const buildRecipeSha256 = String(state?.buildRecipeSha256 || "");
+  const protocolVersion = String(state?.protocolVersion || "");
+  let expectedSha256 = "";
+  let expectedVersion = "";
+  try {
+    expectedSha256 = contentRuntimeImplementationSha256(
+      protocolVersion,
+      sourceSha256,
+      buildRecipeSha256
+    );
+    expectedVersion = contentRuntimeImplementationVersion(
+      protocolVersion,
+      sourceSha256,
+      buildRecipeSha256
+    );
+  } catch (error) {
+    errors.push(`content runtime identity binding is invalid: ${error.message}`);
+    return errors;
+  }
+  if (state?.implementationSha256 !== expectedSha256) {
+    errors.push("content runtime implementation digest is not bound to protocol, author source, and build recipe");
+  }
+  if (state?.implementationVersion !== expectedVersion) {
+    errors.push("content runtime implementation version is not bound to protocol, author source, and build recipe");
+  }
+  const bundleStates = state?.bundles && typeof state.bundles === "object" ? state.bundles : {};
+  const expectedOutputs = Object.keys(CONTENT_ENTRIES).sort();
+  if (JSON.stringify(Object.keys(bundleStates).sort()) !== JSON.stringify(expectedOutputs)) {
+    errors.push("content runtime bundle identity inventory is incomplete");
+    return errors;
+  }
+  try {
+    const bundleSources = Object.fromEntries(expectedOutputs.map((outputPath) => [
+      outputPath,
+      {
+        outputPath,
+        entryPath: bundleStates[outputPath]?.entryPath,
+        sourceSha256: bundleStates[outputPath]?.sourceSha256
+      }
+    ]));
+    const expectedBundles = contentRuntimeBundleIdentities(
+      protocolVersion,
+      bundleSources,
+      buildRecipeSha256
+    );
+    for (const outputPath of expectedOutputs) {
+      const bundle = bundleStates[outputPath];
+      if (
+        bundle?.implementationSha256 !== expectedBundles[outputPath].implementationSha256
+        || bundle?.implementationVersion !== expectedBundles[outputPath].implementationVersion
+      ) {
+        errors.push(`content runtime bundle identity is not bound to its source closure and build recipe: ${outputPath}`);
+      }
+    }
+  } catch (error) {
+    errors.push(`content runtime bundle identity binding is invalid: ${error.message}`);
+  }
+  return errors;
 }
 
 function summaryState() {
@@ -101,13 +223,14 @@ function computeVersionState(previousFloors = {}) {
   const manifest = JSON.parse(read("manifest.json"));
   const version = appVersion();
   const state = {
-    schemaVersion: 1,
+    schemaVersion: 4,
     appVersion: version,
     manifestVersion: manifest.version,
     payloads: {
       chromium: { appVersion: version, sha256: packageDigest(packagePlan("chromium")) },
       firefox: { appVersion: version, sha256: packageDigest(packagePlan("firefox")) }
     },
+    contentRuntime: contentRuntimeState(),
     summary: summaryState(),
     topicDelete: deleteState()
   };
@@ -120,11 +243,11 @@ function stableJson(value) {
 }
 
 function snapshotWriteErrors(previous, current) {
-  const errors = [];
+  const errors = contentRuntimeBindingErrors(current.contentRuntime);
   if (!validNumericManifestVersion(current.manifestVersion)) {
     errors.push("manifest.json version must be exactly four dot-separated integers from 0 to 65535 without leading zeroes");
   }
-  if (previous?.schemaVersion !== 1) return errors;
+  if (![1, 2, 3, 4].includes(previous?.schemaVersion)) return errors;
   if (compareVersions(current.appVersion, previous.appVersion) < 0) errors.push("APP_VERSION must not move backwards");
   if (compareVersions(current.manifestVersion, previous.manifestVersion) < 0) errors.push("numeric Manifest version must not move backwards");
   const payloadChanged = ["chromium", "firefox"].some((target) =>
@@ -194,6 +317,22 @@ function verifyVersionState() {
       errors.push(`${target} payload version does not equal APP_VERSION`);
     }
   }
+  errors.push(...contentRuntimeBindingErrors(actual.contentRuntime));
+  if (
+    actual.contentRuntime?.sourceSchemaVersion !== expected.contentRuntime.sourceSchemaVersion
+    || actual.contentRuntime?.sourceSha256 !== expected.contentRuntime.sourceSha256
+    || actual.contentRuntime?.sourceFileCount !== expected.contentRuntime.sourceFileCount
+    || actual.contentRuntime?.buildRecipeSchemaVersion !== expected.contentRuntime.buildRecipeSchemaVersion
+    || actual.contentRuntime?.buildRecipeVersion !== expected.contentRuntime.buildRecipeVersion
+    || actual.contentRuntime?.buildRecipeSha256 !== expected.contentRuntime.buildRecipeSha256
+    || actual.contentRuntime?.buildRecipeFileCount !== expected.contentRuntime.buildRecipeFileCount
+    || actual.contentRuntime?.protocolVersion !== expected.contentRuntime.protocolVersion
+    || actual.contentRuntime?.implementationSha256 !== expected.contentRuntime.implementationSha256
+    || actual.contentRuntime?.implementationVersion !== expected.contentRuntime.implementationVersion
+    || stableJson(actual.contentRuntime?.bundles) !== stableJson(expected.contentRuntime.bundles)
+  ) {
+    errors.push("content runtime source/build-recipe identity state is stale; regenerate artifacts and refresh version-state");
+  }
   if (actual.summary?.configVersion !== expected.summary.configVersion) {
     errors.push("SUMMARY_SITE_CONFIG_VERSION state is stale or regressed");
   }
@@ -244,6 +383,8 @@ module.exports = {
   compareVersions,
   validNumericManifestVersion,
   snapshotWriteErrors,
+  contentRuntimeBindingErrors,
+  contentRuntimeState,
   summaryState,
   deleteState,
   computeVersionState,

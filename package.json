@@ -9,11 +9,13 @@
   },
   "scripts": {
     "generate": "node tools/generate-artifacts.cjs",
+    "build:dev": "node tools/dev-build.cjs",
     "verify:generated": "node tools/generate-artifacts.cjs --check",
     "verify:version": "node tools/verify-version.cjs",
     "version:snapshot": "node tools/version-state.cjs --write",
     "verify:manifest": "node tools/verify-manifest.cjs",
     "verify:modules": "node tools/verify-modules.mjs",
+    "lint": "eslint app background shared ui content-src build-src",
     "verify:pack": "node tools/pack-extension.cjs --check",
     "check": "node tools/check.cjs",
     "test": "node tools/run-node-tests.cjs",
@@ -26,6 +28,8 @@
   "devDependencies": {
     "es-module-lexer": "2.3.1",
     "esbuild": "0.28.1",
+    "eslint": "9.39.2",
+    "globals": "16.5.0",
     "playwright": "1.61.1",
     "selenium-webdriver": "4.46.0"
   }

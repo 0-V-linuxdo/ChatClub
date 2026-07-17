@@ -34,8 +34,9 @@ function chatId(value) {
 
 const sources = {
   main: read("content-src/preload/deepseek-delete.js"),
-  native: read("content-src/content.js"),
-  standalone: read("shared/topic-delete-userscript-sources.js"),
+  native: read("content-src/capabilities/delete-deepseek.js"),
+  nativeRuntime: read("content-src/capabilities/delete-runtime.js"),
+  standalone: `${read("build-src/topic-delete-userscript-engine-core.js")}\n${read("build-src/topic-delete-userscript-engine-sites.js")}`,
   runtime: read("app/topic-delete/runtime.js")
 };
 
@@ -173,7 +174,7 @@ assert.match(coordinateValidator({ needsTrustedKeySequence: true, trustedKeySequ
 const bridgeValidatorSource = section(
   sources.native,
   "  function validateDeepSeekBridgeTrustedResult",
-  "\n\n  async function deleteDeepSeekThread",
+  "\n  function deepSeekBridgeFallbackDisposition",
   "isolated MAIN-result validator"
 );
 const bridgeValidator = new Function(
@@ -227,9 +228,9 @@ assert.equal(lease.owned({ deleteAttemptId: "attempt-1" }), true, "a known pre-d
 lease.consume();
 
 const invocationSource = section(
-  sources.native,
+  sources.nativeRuntime,
   "  function validateTopicDeleteInvocation",
-  "\n\n  function bindDeleteTrustedInstructions",
+  "\n  function bindDeleteTrustedInstructions",
   "content handler target validator"
 );
 const locationState = { href: "https://chat.deepseek.com/a/chat/s/topic-1" };
@@ -261,12 +262,12 @@ assert.match(invocationValidator({ deleteAttemptId: "attempt-1", expectedDeleteH
 locationState.href = "https://chat.deepseek.com/a/chat/s/topic-2";
 assert.match(invocationValidator(invocation).reason, /changed/, "handler-time SPA navigation must fail before any runner click");
 
-const handlerSource = section(sources.native, "  async function deleteThread(data", "\n\n  async function waitForModel", "content delete handler");
+const handlerSource = section(sources.nativeRuntime, "  async function deleteThread(data", "\n  return Object.freeze({", "content delete handler");
 assert.ok(handlerSource.indexOf("validateTopicDeleteInvocation(data)") < handlerSource.indexOf("runTopicDeleteUserscript"), "target preflight must precede every runner");
 assert.ok(handlerSource.lastIndexOf("validateTopicDeleteInvocation(data)") > handlerSource.indexOf("runTopicDeleteUserscript"), "trusted results must be revalidated after the runner");
 assert.ok(handlerSource.indexOf("bindDeleteTrustedInstructions") > handlerSource.lastIndexOf("validateTopicDeleteInvocation(data)"), "trusted instructions may be signed only after post-run validation");
 
-const bridgeRequestSource = section(sources.native, "  function requestDeepSeekDeleteBridge", "\n\n  const GEMINI_MODEL_TARGETS", "DeepSeek bridge request");
+const bridgeRequestSource = section(sources.native, "  function requestDeepSeekDeleteBridge", "\n  return Object.freeze({", "DeepSeek bridge request");
 assert.match(bridgeRequestSource, /delivered: "unknown", phase: "unknown", reason: "bridge timeout"/, "bridge timeout is unknown delivery");
 assert.match(bridgeRequestSource, /delivered: false, phase: "pre-delete"/, "only a send exception is explicit pre-delivery");
 assert.match(bridgeRequestSource, /message\?\.delivered === true \|\| message\?\.delivered === false/, "MAIN delivery status must be preserved, not invented");
@@ -276,7 +277,7 @@ assert.match(deletionSections.native, /deepSeekBridgeFallbackDisposition\(bridge
 const dispositionSource = section(
   sources.native,
   "  function deepSeekBridgeFallbackDisposition",
-  "\n\n  async function deleteDeepSeekThread",
+  "\n  async function deleteDeepSeekThread",
   "isolated MAIN fallback disposition"
 );
 const bridgeDisposition = new Function(`"use strict"; ${dispositionSource}; return deepSeekBridgeFallbackDisposition;`)();
@@ -287,7 +288,7 @@ assert.equal(bridgeDisposition({ delivered: "unknown", phase: "unknown", reason:
 
 assert.match(sources.runtime, /trustedAttemptMatches/, "runtime must reject unsigned trusted instructions");
 assert.match(sources.runtime, /reason !== "trusted topic menu click did not open"/, "only the exact clean first-point miss may continue the multi-point loop");
-assert.match(sources.native, /bound\[key\] = \{ \.\.\.bound\[key\], attemptId, documentId: contentDocumentId \}/, "isolated content must sign attempt and document identities after validation");
+assert.match(sources.nativeRuntime, /bound\[key\] = \{ \.\.\.bound\[key\], attemptId, documentId: contentDocumentId \}/, "isolated content must sign attempt and document identities after validation");
 
 const guardedOpenSource = section(
   sources.standalone,

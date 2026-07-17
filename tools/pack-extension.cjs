@@ -5,8 +5,10 @@ const fs = require("node:fs");
 const path = require("node:path");
 const zlib = require("node:zlib");
 const { packagePlan, root } = require("./package-plan.cjs");
+const { enforceNodeVersion } = require("./node-version.cjs");
 
 const checkOnly = process.argv.includes("--check");
+enforceNodeVersion({ context: checkOnly ? "Package verification" : "Package generation", strict: true });
 
 const crcTable = (() => {
   const table = new Uint32Array(256);

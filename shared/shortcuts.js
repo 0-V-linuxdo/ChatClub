@@ -1,4 +1,4 @@
-import { DEFAULT_SHORTCUT_CONFIG } from "./constants.js";
+import { DEFAULT_SHORTCUT_CONFIG } from "./default-shortcuts.js";
 
 export const SHORTCUT_CONFIG_SCHEMA_VERSION = 2;
 export const KEYBOARD_PLATFORM_MAC = "mac";

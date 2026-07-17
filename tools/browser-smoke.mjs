@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
+import { contentInjectionPlan } from "../shared/frame-commands.js";
 import { CONTENT_BRIDGE_VERSION } from "../shared/protocol.js";
 
 const require = createRequire(import.meta.url);
@@ -23,6 +24,10 @@ const registrationIds = [
   "chatclub-grok-cookie-bridge",
   "chatclub-summary-userscripts-main",
   "chatclub-summary-userscripts",
+  "chatclub-summary-bridge",
+  "chatclub-send",
+  "chatclub-preferred-model",
+  "chatclub-delete",
   "chatclub-message-navigator",
   "chatclub-content"
 ];
@@ -162,14 +167,10 @@ function assertRuntimeResult(result, browserTarget, options = {}) {
   if (loopback?.expectedFrameId != null) {
     assert(loopback.expectedFrameId === injectedFrameIds[0], `${browserTarget}: exact browser frame id was not preserved across navigation`);
   }
-  const expectedInjectedFiles = [
-    "content/preload.js",
-    "content/summary-userscripts-main.js",
-    "content/summary-userscripts.js",
-    "content/grok-cookie-bridge.js",
-    "content/message-navigator.js",
-    "content/content.js"
-  ];
+  const expectedInjectedFiles = contentInjectionPlan({
+    features: ["summary"],
+    frameUrls: [loopback.fixtureUrl]
+  }).map(({ file }) => file);
   assert(loopback?.injection?.injected === expectedInjectedFiles.length, `${browserTarget}: loopback injection count mismatch`);
   for (const file of expectedInjectedFiles) {
     assert(injectedFiles.some((entry) => String(entry).startsWith(`${file}@`)), `${browserTarget}: loopback injection missing ${file}`);
@@ -178,14 +179,7 @@ function assertRuntimeResult(result, browserTarget, options = {}) {
     assert(fallbackFiles.length === 0, `chromium: unexpected Firefox function fallback(s): ${fallbackFiles.join(" | ")}`);
   }
   if (options.expectFirefoxFileFallback) {
-    for (const file of [
-      "content/preload.js",
-      "content/summary-userscripts-main.js",
-      "content/summary-userscripts.js",
-      "content/grok-cookie-bridge.js",
-      "content/message-navigator.js",
-      "content/content.js"
-    ]) {
+    for (const file of expectedInjectedFiles) {
       assert(
         fallbackFiles.some((entry) => String(entry).startsWith(`${file}@`)),
         `firefox: expected Firefox 136 function fallback for ${file}`
@@ -1089,7 +1083,10 @@ async function chromiumSmoke(extensionDirectory, temporaryRoot, fixtureUrl) {
       "chromium: options page did not open one active Settings section"
     );
     await page.goto(`chrome-extension://${extensionId}/chatClub.html`, { waitUntil: "domcontentloaded", timeout: 20000 });
-    await page.locator("#app .app-shell").waitFor({ state: "attached", timeout: 25000 });
+    await page.locator(".chat-frame").nth(1).waitFor({ state: "attached", timeout: 25000 }).catch(async (error) => {
+      const bodyText = await page.locator("body").innerText().catch(() => "");
+      throw new Error(`${error.message}\npage errors: ${pageErrors.join(" | ") || "none"}\nbody: ${bodyText.slice(-2000)}`);
+    });
     const workspaceSessionProbe = await chromiumWorkspaceSessionRecoveryProbe(context, page, fixtureUrl, pageErrors);
     page = workspaceSessionProbe.page;
     const result = await page.evaluate(`(${pageProbe})(${JSON.stringify(fixtureUrl)})`);

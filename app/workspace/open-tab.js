@@ -1,3 +1,13 @@
+import { BACKGROUND_REQUEST_ACTIONS } from "../../shared/background-requests.js";
+import {
+  extensionApi,
+  requestBackground,
+  tabsCreate,
+  tabsGetCurrent,
+  tabsUpdate,
+  windowsUpdate
+} from "../../shared/extension-api.js";
+
 export function openableTabUrl(href) {
   try {
     const parsed = new URL(String(href || ""), location.href);
@@ -47,8 +57,10 @@ export function createWorkspaceOpenTabs() {
       if (!extensionApi()?.runtime?.sendMessage) return false;
       (async () => {
         const openerTab = await captureCurrentExtensionTab();
-        const response = await runtimeSendMessage({ source: "chatclub", action: "openTab", url: href, openerTab });
-        if (response?.success === false) throw new Error(response.error || "open tab failed");
+        await requestBackground(BACKGROUND_REQUEST_ACTIONS.OPEN_TAB, {
+          url: href,
+          ...(openerTab ? { openerTab } : {})
+        });
       })().catch(() => openTabWindow(href));
       return true;
     } catch {
@@ -99,11 +111,3 @@ export function createWorkspaceOpenTabs() {
     refreshCurrentExtensionTabInfo
   });
 }
-import {
-  extensionApi,
-  runtimeSendMessage,
-  tabsCreate,
-  tabsGetCurrent,
-  tabsUpdate,
-  windowsUpdate
-} from "../../shared/extension-api.js";

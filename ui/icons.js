@@ -1,0 +1,332 @@
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+export const ICONS = {
+  edit: [
+    ["path", { d: "M12 20h9" }],
+    ["path", { d: "M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" }]
+  ],
+  external: [
+    ["path", { d: "M15 3h6v6" }],
+    ["path", { d: "M10 14 21 3" }],
+    ["path", { d: "M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" }]
+  ],
+  copy: [
+    ["rect", { x: "9", y: "9", width: "13", height: "13", rx: "2" }],
+    ["path", { d: "M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" }]
+  ],
+  link: [
+    ["path", { d: "M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" }],
+    ["path", { d: "M14 11a5 5 0 0 0-7.07 0l-3 3A5 5 0 0 0 11 21.07l1.71-1.71" }]
+  ],
+  trash: [
+    ["path", { d: "M3 6h18" }],
+    ["path", { d: "M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" }],
+    ["path", { d: "M19 6 18 20a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" }],
+    ["path", { d: "M10 11v6" }],
+    ["path", { d: "M14 11v6" }]
+  ],
+  fileCog: [
+    ["path", { d: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" }],
+    ["path", { d: "M14 2v6h6" }],
+    ["circle", { cx: "12", cy: "16", r: "2" }],
+    ["path", { d: "M12 12.5v1" }],
+    ["path", { d: "M12 18.5v1" }],
+    ["path", { d: "m9 14.2.9.5" }],
+    ["path", { d: "m14.1 17.3.9.5" }],
+    ["path", { d: "m15 14.2-.9.5" }],
+    ["path", { d: "m9.9 17.3-.9.5" }]
+  ],
+  fileDown: [
+    ["path", { d: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" }],
+    ["path", { d: "M14 2v6h6" }],
+    ["path", { d: "M12 18v-6" }],
+    ["path", { d: "m9 15 3 3 3-3" }]
+  ],
+  fileUp: [
+    ["path", { d: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" }],
+    ["path", { d: "M14 2v6h6" }],
+    ["path", { d: "M12 12v6" }],
+    ["path", { d: "m9 15 3-3 3 3" }]
+  ],
+  image: [
+    ["rect", { x: "3", y: "5", width: "18", height: "14", rx: "2" }],
+    ["circle", { cx: "8.5", cy: "10", r: "1.5" }],
+    ["path", { d: "m21 15-4.3-4.3a1 1 0 0 0-1.4 0L9 17" }],
+    ["path", { d: "m3 15 4-4a1 1 0 0 1 1.4 0L13 15.6" }]
+  ],
+  paperclip: [
+    ["path", { d: "m16 6-8.4 8.4a2 2 0 0 0 2.8 2.8l8.4-8.4a4 4 0 0 0-5.7-5.7l-8.3 8.5a6 6 0 0 0 8.5 8.5l8.3-8.5" }]
+  ],
+  grip: [
+    ["circle", { cx: "9", cy: "5", r: "1" }],
+    ["circle", { cx: "9", cy: "12", r: "1" }],
+    ["circle", { cx: "9", cy: "19", r: "1" }],
+    ["circle", { cx: "15", cy: "5", r: "1" }],
+    ["circle", { cx: "15", cy: "12", r: "1" }],
+    ["circle", { cx: "15", cy: "19", r: "1" }]
+  ],
+  palette: [
+    ["path", { d: "M12 4.5c-4.1 0-7.5 2.85-7.5 6.45 0 3.2 2.72 5.75 6.25 5.75h1.3c.9 0 1.62.7 1.62 1.56 0 .68.58 1.2 1.25 1.04 2.78-.66 4.58-3.05 4.58-6.22 0-4.72-3.32-8.58-7.5-8.58Z" }],
+    ["path", { d: "M8.15 10.15h.01" }],
+    ["path", { d: "M11.25 8h.01" }],
+    ["path", { d: "M14.75 8.75h.01" }],
+    ["path", { d: "M16.95 12.05h.01" }]
+  ],
+  settings: [
+    ["path", { d: "M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" }],
+    ["circle", { cx: "12", cy: "12", r: "3" }]
+  ],
+  key: [
+    ["circle", { cx: "7.5", cy: "12", r: "3.25" }],
+    ["path", { d: "M10.75 12H21" }],
+    ["path", { d: "M16.5 12v-2.5" }],
+    ["path", { d: "M19 12v-2.5" }]
+  ],
+  check: [
+    ["path", { d: "M20 6 9 17l-5-5" }]
+  ],
+  apps: [
+    ["rect", { x: "4", y: "4", width: "6", height: "6", rx: "1.4" }],
+    ["rect", { x: "14", y: "4", width: "6", height: "6", rx: "1.4" }],
+    ["rect", { x: "4", y: "14", width: "6", height: "6", rx: "1.4" }],
+    ["rect", { x: "14", y: "14", width: "6", height: "6", rx: "1.4" }]
+  ],
+  model: [
+    ["circle", { cx: "12", cy: "12", r: "3" }],
+    ["circle", { cx: "6", cy: "6", r: "2" }],
+    ["circle", { cx: "18", cy: "6", r: "2" }],
+    ["circle", { cx: "6", cy: "18", r: "2" }],
+    ["circle", { cx: "18", cy: "18", r: "2" }],
+    ["path", { d: "M7.5 7.5 10 10" }],
+    ["path", { d: "M16.5 7.5 14 10" }],
+    ["path", { d: "M7.5 16.5 10 14" }],
+    ["path", { d: "M16.5 16.5 14 14" }]
+  ],
+  layout: [
+    ["polygon", { points: "12 4 21 8.5 12 13 3 8.5", "stroke-width": "2.5" }],
+    ["polyline", { points: "3 13 12 17.5 21 13", "stroke-width": "2.5" }],
+    ["polyline", { points: "3 17 12 21.5 21 17", "stroke-width": "2.5" }]
+  ],
+  navigator: [
+    ["path", { d: "M9 7h9", opacity: ".7", "stroke-width": "2.6" }],
+    ["path", { d: "M9 12h9", opacity: ".7", "stroke-width": "2.6" }],
+    ["path", { d: "M4 17h14", "stroke-width": "2.8" }]
+  ],
+  sidebarCollapse: [
+    ["rect", { x: "5", y: "5", width: "14", height: "14", rx: "1.6" }],
+    ["path", { d: "M10 5v14" }]
+  ],
+  sidebarExpand: [
+    ["rect", { x: "5", y: "5", width: "14", height: "14", rx: "1.6" }],
+    ["path", { d: "M10 5v14" }]
+  ],
+  focusMode: [
+    ["path", { d: "M12 7v14" }],
+    ["path", { d: "M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3Z" }],
+    ["path", { d: "M6 8h2" }],
+    ["path", { d: "M6 12h2" }],
+    ["path", { d: "M16 8h2" }],
+    ["path", { d: "M16 12h2" }]
+  ],
+  customizeTopbar: {
+    viewBox: "0 0 117.6 154",
+    children: [
+      ["path", {
+        d: "m92.8 9.5h-67.9c-5.5 0-9.5 2.7-9.5 8.5v41.5c-2.5 0.5-5.2 3.4-5.2 6.6v19c0 8.6 5.1 16.4 14.7 16.4l22.5 0.1v30.9c0 4.6 4.6 11 11.4 11s12.2-6.1 12.2-9.5v-32.4h21.3c6.4 0 15.6-5.2 15.6-15.2v-19.6c0-3-2.9-6.4-5.2-7.3v-41.5c0.1-4.4-4.8-8.5-9.9-8.5zm-3.3 16.9c1 0 1.9 0.6 2.4 1.3v32.2h-64.1v-32.6c1.1-3.1 3.2-4.1 6.1-4.1 5.6-0.2 7.4 5.2 11 7.7 1.3 0.9 2.5 1.4 5.7 1.4 4.3 0.3 5.6-5.3 9.1-5.2h2.2c4.1-0.2 6.5 7.8 12.6 7.8h1.4c4.9 0 9.2-5.5 9.8-6.5 1.2-1.4 2.6-2 3.8-2z",
+        fill: "currentColor",
+        stroke: "none"
+      }],
+      ["path", {
+        d: "m94 9.4h-70c-4.1 0-8.8 2.5-8.8 7.2v42.8c-1.9 0.3-5.1 3.3-5.1 6.9v20.8c1.8 5.4 4.4 13.4 13.6 14l23.7 0.5v32.5c1.4 4.7 5.2 9.7 11.6 9.7 5 0.6 9.1-4.1 11.4-8l0.3-34.2 21 0.1c8.5 0 15.8-5.4 16.3-14.6v-20.8c-0.5-3.3-2.6-5.6-5.3-6.8l-0.1-42.9c-0.7-5.2-5.1-7.2-8.6-7.2zm-5.9 17.8h1.8c0.9 0 1.2 0.5 2 1v31.7h-64.3v-32.6c0.8-1.7 2.4-3.7 5.9-4 5.9-0.8 8.5 7.1 14 8.7 0.9 0.4 2.1 0.2 4.2 0.2 3.8 0 4.5-4.6 7.2-4.8h2.8c4.3-0.4 6.6 7.5 12.1 7.5 1.3 0.1 2.3 0 2.3 0 3.6 0.1 7-3.2 9-5.8 0.7-1 2-1.9 3-1.9z",
+        fill: "currentColor",
+        stroke: "none"
+      }]
+    ]
+  },
+  library: [
+    ["path", { d: "M4 19.5A2.5 2.5 0 0 1 6.5 17H20" }],
+    ["path", { d: "M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" }],
+    ["path", { d: "M8 6h8" }],
+    ["path", { d: "M8 10h6" }]
+  ],
+  pocket: {
+    viewBox: "0 43.5 107 95.5",
+    children: [
+      ["title", { textContent: "Pocket Icon" }],
+      ["path", {
+        d: "M84.06,83.31l-25.52,24a6.69,6.69,0,0,1-4.88,2.07,7.22,7.22,0,0,1-5.25-2.07l-25.14-24a7.59,7.59,0,0,1,0-10.51c2.81-2.63,7.5-3,10.32,0L53.66,92.13,74.11,72.8c2.63-3,7.32-2.63,10,0a8,8,0,0,1,0,10.51M97,43.53H10.32A10.1,10.1,0,0,0,0,53.47V85.56c0,29.08,24,53.29,53.66,53.29A53.5,53.5,0,0,0,107,85.56V53.47A9.89,9.89,0,0,0,97,43.53",
+        fill: "#ef4056",
+        "fill-rule": "evenodd",
+        stroke: "none"
+      }]
+    ]
+  },
+  insert: [
+    ["path", { d: "M9 10 4 15l5 5" }],
+    ["path", { d: "M20 4v7a4 4 0 0 1-4 4H4" }]
+  ],
+  keyboard: [
+    ["rect", { x: "3", y: "5", width: "18", height: "14", rx: "2" }],
+    ["path", { d: "M7 9h.01" }],
+    ["path", { d: "M11 9h.01" }],
+    ["path", { d: "M15 9h.01" }],
+    ["path", { d: "M7 13h.01" }],
+    ["path", { d: "M11 13h6" }]
+  ],
+  transfer: [
+    ["path", { d: "M7 7h11" }],
+    ["path", { d: "m15 4 3 3-3 3" }],
+    ["path", { d: "M17 17H6" }],
+    ["path", { d: "m9 14-3 3 3 3" }]
+  ],
+  info: [
+    ["circle", { cx: "12", cy: "12", r: "9" }],
+    ["path", { d: "M12 11v5" }],
+    ["path", { d: "M12 8h.01" }]
+  ],
+  left: [
+    ["path", { d: "m12 19-7-7 7-7" }],
+    ["path", { d: "M19 12H5" }]
+  ],
+  menu: [
+    ["path", { d: "M4 6h16" }],
+    ["path", { d: "M4 12h16" }],
+    ["path", { d: "M4 18h16" }]
+  ],
+  moreTools: [
+    ["polyline", { points: "4.5,4.75 10.75,12 4.5,19.25", "stroke-width": "2.35" }],
+    ["polyline", { points: "13.25,4.75 19.5,12 13.25,19.25", "stroke-width": "2.35" }]
+  ],
+  more: [
+    ["circle", { cx: "5", cy: "12", r: "1" }],
+    ["circle", { cx: "12", cy: "12", r: "1" }],
+    ["circle", { cx: "19", cy: "12", r: "1" }]
+  ],
+  plus: [
+    ["path", { d: "M12 5v14" }],
+    ["path", { d: "M5 12h14" }]
+  ],
+  preview: {
+    viewBox: "0 0 16 16",
+    children: [
+      ["path", {
+        d: "M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8M1.173 8a13 13 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5s3.879 1.168 5.168 2.457A13 13 0 0 1 14.828 8q-.086.13-.195.288c-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5s-3.879-1.168-5.168-2.457A13 13 0 0 1 1.172 8z",
+        fill: "currentColor",
+        stroke: "none"
+      }],
+      ["path", {
+        d: "M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5M4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0",
+        fill: "currentColor",
+        stroke: "none"
+      }]
+    ]
+  },
+  reload: {
+    viewBox: "3 3 18 18",
+    children: [
+      ["path", {
+        d: "M12,20.75a7.25,7.25,0,0,1,0-14.5h2.5a.75.75,0,0,1,0,1.5H12a5.75,5.75,0,1,0,5.75,5.75.75.75,0,0,1,1.5,0A7.26,7.26,0,0,1,12,20.75Z",
+        fill: "currentColor",
+        stroke: "none"
+      }],
+      ["path", {
+        d: "M12,10.75a.74.74,0,0,1-.53-.22.75.75,0,0,1,0-1.06L13.94,7,11.47,4.53a.75.75,0,1,1,1.06-1.06l3,3a.75.75,0,0,1,0,1.06l-3,3A.74.74,0,0,1,12,10.75Z",
+        fill: "currentColor",
+        stroke: "none"
+      }]
+    ]
+  },
+  reset: {
+    viewBox: "128 104 256 288",
+    children: [
+      ["path", {
+        d: "M208.75 153.5c1.74-.77 3.5-1.48 5.28-2.16a117.29 117.29 0 0 1 41.78-7.68c32.4 0 61.76 13.15 83 34.39l.87.94c20.73 21.19 33.51 50.17 33.51 82.06 0 32.41-13.15 61.77-34.38 83.01-21.24 21.24-50.6 34.39-83 34.39-30.53 0-58.4-11.71-79.31-30.89l-.93-.92c-20.54-19.27-34.18-45.83-36.72-75.48-.74-9.03 5.98-16.97 15.02-17.7 9.03-.74 16.97 5.99 17.7 15.02 1.83 21.34 11.58 40.4 26.24 54.21l.89.76c15 13.74 35.06 22.15 57.11 22.15 23.34 0 44.49-9.47 59.78-24.76 15.29-15.29 24.76-36.45 24.76-59.79 0-23.01-9.14-43.86-23.97-59.05l-.79-.74c-15.29-15.28-36.44-24.75-59.78-24.75-10.65 0-20.8 1.94-30.11 5.49l-2.87 1.15 16.87 6.09c8.5 3.04 12.92 12.42 9.88 20.92-3.05 8.49-12.43 12.92-20.92 9.88l-54.21-19.56c-8.5-3.04-12.93-12.43-9.88-20.92l18.63-51.66c3.04-8.49 12.42-12.92 20.92-9.87 8.49 3.04 12.92 12.42 9.88 20.91l-5.25 14.56z",
+        fill: "currentColor",
+        "fill-rule": "nonzero",
+        stroke: "none"
+      }]
+    ]
+  },
+  home: [
+    ["path", { d: "m3 10.5 9-7.5 9 7.5" }],
+    ["path", { d: "M5 10v10h14V10" }],
+    ["path", { d: "M9 20v-6h6v6" }]
+  ],
+  right: [
+    ["path", { d: "m12 5 7 7-7 7" }],
+    ["path", { d: "M5 12h14" }]
+  ],
+  send: [
+    ["path", { d: "m22 2-7 20-4-9-9-4Z" }],
+    ["path", { d: "M22 2 11 13" }]
+  ],
+  sparkles: [
+    ["path", { d: "m12 3 1.7 4.3L18 9l-4.3 1.7L12 15l-1.7-4.3L6 9l4.3-1.7Z" }],
+    ["path", { d: "m19 15 .9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9Z" }],
+    ["path", { d: "m5 14 .8 1.7L7.5 16.5l-1.7.8L5 19l-.8-1.7-1.7-.8 1.7-.8Z" }]
+  ],
+  summary: [
+    ["path", {
+      d: "M4 4.5h3v3H4v-3zm5 0h11v3H9v-3zm-5 6h3v3H4v-3zm5 0h11v3H9v-3zm-5 6h3v3H4v-3zm5 0h11v3H9v-3z",
+      fill: "currentColor",
+      stroke: "none"
+    }]
+  ],
+  maximize: [
+    ["path", { d: "M8 3H5a2 2 0 0 0-2 2v3" }],
+    ["path", { d: "M16 3h3a2 2 0 0 1 2 2v3" }],
+    ["path", { d: "M8 21H5a2 2 0 0 1-2-2v-3" }],
+    ["path", { d: "M16 21h3a2 2 0 0 0 2-2v-3" }]
+  ],
+  minimize: [
+    ["path", { d: "M8 3v3a2 2 0 0 1-2 2H3" }],
+    ["path", { d: "M21 8h-3a2 2 0 0 1-2-2V3" }],
+    ["path", { d: "M3 16h3a2 2 0 0 1 2 2v3" }],
+    ["path", { d: "M16 21v-3a2 2 0 0 1 2-2h3" }]
+  ],
+  history: [
+    ["path", { d: "M3 12a9 9 0 1 0 3-6.7" }],
+    ["path", { d: "M3 4v5h5" }],
+    ["path", { d: "M12 7v5l3 2" }]
+  ],
+  x: [
+    ["path", { d: "M18 6 6 18" }],
+    ["path", { d: "m6 6 12 12" }]
+  ]
+};
+
+export function createSvgIcon(name) {
+  const iconSpec = ICONS[name];
+  const iconChildren = Array.isArray(iconSpec) ? iconSpec : iconSpec?.children || [];
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("class", "svg-icon");
+  svg.setAttribute("viewBox", Array.isArray(iconSpec) ? "0 0 24 24" : iconSpec?.viewBox || "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "2");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
+  for (const [tag, attrs] of iconChildren) {
+    const child = document.createElementNS(SVG_NS, tag);
+    for (const [key, value] of Object.entries(attrs)) {
+      if (key === "textContent") child.textContent = value;
+      else child.setAttribute(key, value);
+    }
+    svg.append(child);
+  }
+  return svg;
+}
+
+export function createSvgBrandNode(spec) {
+  const [tag, attrs = {}, children = []] = spec;
+  const node = document.createElementNS(SVG_NS, tag);
+  for (const [key, value] of Object.entries(attrs)) {
+    if (key === "textContent") node.textContent = value;
+    else node.setAttribute(key, value);
+  }
+  for (const child of children || []) {
+    node.append(Array.isArray(child) ? createSvgBrandNode(child) : document.createTextNode(String(child)));
+  }
+  return node;
+}

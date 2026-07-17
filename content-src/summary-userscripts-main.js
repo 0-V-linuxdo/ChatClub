@@ -1,11 +1,15 @@
 import { CONTENT_PROTOCOL } from "../shared/protocol.js";
+import { CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY } from "../shared/content-runtime-version.generated.js";
+import { createContentRuntimeBundleIdentity } from "../shared/content-runtime-identity.js";
 import { createSummaryRunnerRegistry } from "chatclub:summary-registry";
 import * as summaryRuntime from "./shared/summary-runtime.js";
-import { runtimeRegistry } from "./shared/runtime-registry.js";
+import { runtimeRegistry } from "./shared/runtime-registry-client.js";
 
 export function installSummaryMainRuntime() {
   const PROTOCOL = CONTENT_PROTOCOL;
   const runtimes = runtimeRegistry(window);
+  const CONTENT_RUNTIME_IDENTITY = createContentRuntimeBundleIdentity(CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY);
+  runtimes.registerBundle(CONTENT_RUNTIME_IDENTITY);
   const summaryRunners = runtimes.register("summary-runners", {
     version: PROTOCOL.CONTENT_BRIDGE_VERSION,
     api: Object.freeze({ scripts: createSummaryRunnerRegistry() })
@@ -96,7 +100,7 @@ export function installSummaryMainRuntime() {
 
   // Custom source is compiled by chrome.userScripts.execute(), not by eval or
   // Function constructors. The injected wrapper calls this stable packaged API.
-  window[CUSTOM_SUMMARY_EXECUTOR] = (config, runner) => runSummaryRunner(config || {}, runner);
+  const customSummaryExecutor = (config, runner) => runSummaryRunner(config || {}, runner);
 
   async function collectSummary(data) {
     const config = data?.config || {};
@@ -133,7 +137,8 @@ export function installSummaryMainRuntime() {
           data: {
             ready,
             bridgeVersion: PROTOCOL.CONTENT_BRIDGE_VERSION,
-            registryVersion
+            registryVersion,
+            runtimeIdentity: CONTENT_RUNTIME_IDENTITY
           }
         }, "*");
         return;
@@ -147,14 +152,16 @@ export function installSummaryMainRuntime() {
         window.postMessage({ source: PAGE_SUMMARY_SOURCE, type: "response", action: "extract", id: message.id, ok: false, error: error?.message || String(error), data: { messages: [] }, messages: [] }, "*");
       }
     };
-    window.addEventListener("message", onSummaryPageMessage, true);
-    const customExecutor = window[CUSTOM_SUMMARY_EXECUTOR];
     runtimes.register("summary-page", {
       version: PROTOCOL.CONTENT_BRIDGE_VERSION,
       api: Object.freeze({ source: PAGE_SUMMARY_SOURCE }),
+      activate() {
+        window[CUSTOM_SUMMARY_EXECUTOR] = customSummaryExecutor;
+        window.addEventListener("message", onSummaryPageMessage, true);
+      },
       dispose() {
         window.removeEventListener("message", onSummaryPageMessage, true);
-        if (window[CUSTOM_SUMMARY_EXECUTOR] === customExecutor) delete window[CUSTOM_SUMMARY_EXECUTOR];
+        if (window[CUSTOM_SUMMARY_EXECUTOR] === customSummaryExecutor) delete window[CUSTOM_SUMMARY_EXECUTOR];
       }
     });
   }

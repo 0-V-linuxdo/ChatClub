@@ -5,10 +5,8 @@ const { spawnSync } = require("node:child_process");
 const { enforceNodeVersion } = require("./node-version.cjs");
 
 const root = path.resolve(__dirname, "..");
-const ciEnvironment = String(process.env.CI || "").trim();
-const strictNode = Boolean(ciEnvironment) && !/^(?:0|false)$/i.test(ciEnvironment);
 try {
-  enforceNodeVersion({ context: strictNode ? "CI" : "Local CI diagnostics", strict: strictNode });
+  enforceNodeVersion({ context: "CI verification", strict: true });
 } catch (error) {
   console.error(error?.message || error);
   process.exit(1);

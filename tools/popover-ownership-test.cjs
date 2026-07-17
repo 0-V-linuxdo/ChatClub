@@ -5,11 +5,17 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
-const workspaceFile = path.join(root, "app/workspace/controller.js");
+const workspaceFile = path.join(root, "app/workspace/view-controller.js");
 const runtimeFile = path.join(root, "app/runtime.js");
 const workspaceSource = fs.readFileSync(workspaceFile, "utf8");
 const runtimeSource = fs.readFileSync(runtimeFile, "utf8");
-const messageNavigatorSource = fs.readFileSync(path.join(root, "content-src/message-navigator.js"), "utf8");
+const composerSource = fs.readFileSync(path.join(root, "app/composer/controller.js"), "utf8");
+const topbarControllerSource = fs.readFileSync(path.join(root, "app/topbar/controller.js"), "utf8");
+const messageNavigatorSource = fs.readFileSync(path.join(root, "content-src/message-navigator/engine.js"), "utf8");
+const workspaceMessageNavigatorSource = fs.readFileSync(
+  path.join(root, "app/workspace/message-navigator-controller.js"),
+  "utf8"
+);
 
 function functionSource(source, functionName, indent = "") {
   const escapedIndent = indent.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -128,11 +134,11 @@ assert.match(summaryEscapeSource, /workspaceController\.hasTrackedMessageNavigat
 assert.match(summaryEscapeSource, /workspaceController\.dismissTrackedMessageNavigatorMenu\(\)/, "Summary Escape must query and dismiss the iframe menu");
 assert.match(summaryEscapeSource, /if\s*\(!consumed\)\s*closeSummaryFromEscape\(\)/, "a false-positive iframe tracker must allow the same Escape to close Summary");
 
-for (const [functionName, selector] of [
-  ["closePromptActionsMenuOnKeydown", ".prompt-actions-popover"],
-  ["closeSettingsJumpMenuOnKeydown", ".topbar-settings-popover"]
+for (const [ownerSource, functionName, selector] of [
+  [composerSource, "closeActionsMenuOnKeydown", ".prompt-actions-popover"],
+  [topbarControllerSource, "closeSettingsMenuOnKeydown", ".topbar-settings-popover"]
 ]) {
-  const source = functionSource(runtimeSource, functionName);
+  const source = functionSource(ownerSource, functionName, "  ");
   assert.match(
     source,
     new RegExp(`claimTopmostPopoverEscape\\(event,\\s*["']${selector.replaceAll(".", "\\.")}["']\\)`),
@@ -147,7 +153,7 @@ assert.match(
   "workspace popovers must claim only their topmost, IME-safe Escape"
 );
 
-const messageNavigatorEscapeSource = functionSource(workspaceSource, "closeMessageNavigatorMenuOnParentKeydown", "  ");
+const messageNavigatorEscapeSource = functionSource(workspaceMessageNavigatorSource, "closeMessageNavigatorMenuOnParentKeydown", "  ");
 assert.match(messageNavigatorEscapeSource, /if\s*\(!isDismissalEscape\(event\)\)\s*return/, "Message Navigator Escape must be IME-safe");
 assert.match(
   messageNavigatorEscapeSource,
@@ -157,7 +163,7 @@ assert.match(
 assert.match(messageNavigatorEscapeSource, /event\.stopImmediatePropagation\(\)/, "Message Navigator must stop sibling Escape owners after claiming");
 assert.match(messageNavigatorEscapeSource, /dismissTrackedMessageNavigatorMenu\(\)/, "Message Navigator Escape must query its live menu state");
 
-const dismissTrackedNavigatorSource = functionSource(workspaceSource, "dismissTrackedMessageNavigatorMenu", "  ");
+const dismissTrackedNavigatorSource = functionSource(workspaceMessageNavigatorSource, "dismissTrackedMessageNavigatorMenu", "  ");
 assert.match(
   dismissTrackedNavigatorSource,
   /sendToContentFrame\(iframe,\s*["']getMessageNavigatorState["']/,
@@ -180,12 +186,12 @@ assert.match(
   "the in-frame Message Navigator Escape handler must ignore IME composition"
 );
 
-const syncTopbarSource = functionSource(runtimeSource, "syncTopbar");
-const replaceTopbarIndex = syncTopbarSource.indexOf("topbarNode.replaceWith");
-assert.ok(syncTopbarSource.indexOf("closePromptActionsMenu()") < replaceTopbarIndex, "topbar redraw must close its Prompt Actions owner before replacing anchors");
-assert.ok(syncTopbarSource.indexOf("closeSettingsJumpMenu()") < replaceTopbarIndex, "topbar redraw must close its Settings owner before replacing anchors");
-assert.ok(syncTopbarSource.indexOf("workspaceController.closePopoversAnchoredWithin(topbarNode)") < replaceTopbarIndex, "topbar redraw must close workspace popovers whose anchor will be replaced");
-assert.match(syncTopbarSource, /restorePersistentSettingsMenu[\s\S]*requestAnimationFrame\([\s\S]*openTopbarEditSettingsMenu\(\)/, "topbar redraw must restore an editing-mode persistent Settings menu");
+const syncTopbarSource = functionSource(topbarControllerSource, "sync", "  ");
+const replaceTopbarIndex = syncTopbarSource.indexOf("node.replaceWith");
+assert.ok(syncTopbarSource.indexOf("composer.closeActionsMenu()") < replaceTopbarIndex, "topbar redraw must close its Prompt Actions owner before replacing anchors");
+assert.ok(syncTopbarSource.indexOf("closeSettingsMenu()") < replaceTopbarIndex, "topbar redraw must close its Settings owner before replacing anchors");
+assert.ok(syncTopbarSource.indexOf("workspace.closePopoversAnchoredWithin(node)") < replaceTopbarIndex, "topbar redraw must close workspace popovers whose anchor will be replaced");
+assert.match(syncTopbarSource, /restorePersistentSettingsMenu[\s\S]*requestAnimationFrame\([\s\S]*openEditSettingsMenu\(\)/, "topbar redraw must restore an editing-mode persistent Settings menu");
 
 const closeTransientSource = functionSource(runtimeSource, "closeTransientOverlays");
 for (const closeCall of [
@@ -214,15 +220,15 @@ assert.ok(
   "a matched global shortcut must close transient owners before running its action"
 );
 
-const topbarMenuItemSource = functionSource(runtimeSource, "runTopbarMenuItem");
+const topbarMenuItemSource = functionSource(topbarControllerSource, "runMenuItem", "  ");
 for (const methodName of ["openAppPicker", "openLayoutMenu"]) {
-  const callPattern = new RegExp(`workspaceController\\.${methodName}\\s*\\(`, "g");
+  const callPattern = new RegExp(`workspace\\.${methodName}\\s*\\(`, "g");
   const call = callPattern.exec(topbarMenuItemSource);
   assert.ok(call, `the folded topbar menu must retain its ${methodName} entry point`);
   const branchStart = topbarMenuItemSource.lastIndexOf('if (item.id ===', call.index);
   const nextBranch = topbarMenuItemSource.indexOf('if (item.id ===', call.index + call[0].length);
   const branchEnd = nextBranch >= 0 ? nextBranch : topbarMenuItemSource.length;
-  const ownerClose = topbarMenuItemSource.indexOf("closeSettingsJumpMenu();", call.index + call[0].length);
+  const ownerClose = topbarMenuItemSource.indexOf("closeSettingsMenu();", call.index + call[0].length);
   assert.ok(
     branchStart >= 0 && ownerClose > call.index && ownerClose < branchEnd,
     `${methodName} must open from its live folded-menu anchor, then explicitly close that topbar menu`

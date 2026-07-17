@@ -20,12 +20,22 @@ export function installSecureFrameRpc(options = {}) {
       ) return false;
       Promise.resolve(dispatch(message.action, message.data || {}))
         .then((data) => sendResponse({ success: true, data }))
-        .catch((error) => sendResponse({ success: false, error: error?.message || String(error) }));
+        .catch((error) => sendResponse({
+          success: false,
+          error: error?.message || String(error),
+          ...(error?.code === "CAPABILITY_UNAVAILABLE" ? {
+            code: "CAPABILITY_UNAVAILABLE",
+            capability: String(error.capability || ""),
+            delivered: false
+          } : { delivered: true })
+        }));
       return true;
     };
-    extensionApi?.runtime?.onMessage?.addListener?.(listener);
     return {
       api: Object.freeze({ listener, bridgeDocumentId }),
+      activate() {
+        extensionApi?.runtime?.onMessage?.addListener?.(listener);
+      },
       dispose() {
         try { extensionApi?.runtime?.onMessage?.removeListener?.(listener); } catch {}
       }

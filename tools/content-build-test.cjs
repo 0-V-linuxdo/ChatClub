@@ -7,20 +7,29 @@ const os = require("node:os");
 const path = require("node:path");
 const vm = require("node:vm");
 const { execFileSync } = require("node:child_process");
-const { FIREFOX_CONTENT_FALLBACK_OUTPUT } = require("./generated-artifacts.cjs");
+const {
+  CONTENT_ENTRIES,
+  CONTENT_RUNTIME_BUNDLE_EXPORT_NAMES,
+  CONTENT_RUNTIME_VERSION_MODULE,
+  FIREFOX_CONTENT_FALLBACK_OUTPUT
+} = require("./generated-artifacts.cjs");
 
 const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const outputs = [
   "content/content.js",
+  "content/delete.js",
   "content/preload.js",
+  "content/preferred-model.js",
+  "content/send.js",
+  "content/summary-bridge.js",
   "content/summary-userscripts.js",
   "content/summary-userscripts-main.js",
   "content/message-navigator.js",
   "content/grok-cookie-bridge.js"
 ];
-const entries = outputs.map((file) => file.replace(/^content\//, "content-src/"));
-const deterministicOutputs = [...outputs, FIREFOX_CONTENT_FALLBACK_OUTPUT];
+const entries = outputs.map((file) => CONTENT_ENTRIES[file]);
+const deterministicOutputs = [...outputs, CONTENT_RUNTIME_VERSION_MODULE, FIREFOX_CONTENT_FALLBACK_OUTPUT];
 const hash = (file) => crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
 
 const packageJson = JSON.parse(read("package.json"));
@@ -34,6 +43,9 @@ assert.match(generator, /sourcemap: false/);
 assert.doesNotMatch(generator, /read\(["']content\//, "generator must never read a generated content output as a template");
 assert.match(generator, /FIREFOX_CONTENT_FALLBACK_OUTPUT/);
 assert.match(generator, /chatclubFirefoxContentFallback/);
+assert.match(generator, /contentRuntimeSourceState\(root\)/);
+assert.match(generator, /contentRuntimeBundleSourceStates\(root\)/);
+assert.match(generator, /contentRuntimeVersionModule/);
 
 for (const entry of entries) assert.ok(fs.existsSync(path.join(root, entry)), `${entry} must exist`);
 assert.match(read("content-src/content.js"), /\.\/shared\/summary-runtime\.js/);
@@ -55,6 +67,39 @@ for (const output of outputs) {
   assert.doesNotThrow(() => new vm.Script(source, { filename: output }), `${output} must be a classic script`);
   assert.doesNotMatch(source, /\bimport\s*\(|\beval\s*\(|\bnew\s+Function\s*\(/);
 }
+const runtimeVersionSource = read(CONTENT_RUNTIME_VERSION_MODULE);
+const allowedAttestedBundleIdentities = Object.freeze({
+  "content/summary-bridge.js": new Set([
+    "content/summary-userscripts-main.js",
+    "content/summary-userscripts.js"
+  ])
+});
+const bundleDigests = Object.fromEntries(Object.entries(CONTENT_RUNTIME_BUNDLE_EXPORT_NAMES).map(([
+  outputPath,
+  exportName
+]) => {
+  const match = runtimeVersionSource.match(new RegExp(
+    `export const ${exportName} = (?:/\\* @__PURE__ \\*/ )?Object\\.freeze\\((\\{[^\\n]+\\})\\);`
+  ));
+  assert.ok(match, `${exportName} must be generated for ${outputPath}`);
+  return [outputPath, JSON.parse(match[1]).implementationSha256];
+}));
+for (const outputPath of outputs) {
+  const source = read(outputPath);
+  assert.ok(source.includes(bundleDigests[outputPath]), `${outputPath} must embed its own source-closure identity`);
+  for (const [otherOutput, digest] of Object.entries(bundleDigests)) {
+    if (
+      otherOutput !== outputPath
+      && !allowedAttestedBundleIdentities[outputPath]?.has(otherOutput)
+    ) {
+      assert.equal(
+        source.includes(digest),
+        false,
+        `${outputPath} must not embed the identity of unrelated bundle ${otherOutput}`
+      );
+    }
+  }
+}
 const firefoxFallbacks = read(FIREFOX_CONTENT_FALLBACK_OUTPUT);
 assert.match(firefoxFallbacks, /export const FIREFOX_CONTENT_FALLBACKS = Object\.freeze/);
 assert.equal(
@@ -69,6 +114,7 @@ const first = path.join(temporaryRoot, "first");
 const second = path.join(temporaryRoot, "second");
 try {
   for (const destination of [first, second]) {
+    fs.mkdirSync(destination, { recursive: true });
     execFileSync(process.execPath, [
       path.join(root, "tools/generate-artifacts.cjs"),
       "--content-only",

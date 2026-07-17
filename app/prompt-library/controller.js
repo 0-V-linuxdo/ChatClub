@@ -19,6 +19,11 @@ export function createPromptLibraryController(ctx) {
     moveListItem
   } = ctx;
 
+  function reset() {
+    state.settingsPromptLibraryDragId = "";
+    cleanupSettingsDragRows(".prompt-library-row");
+  }
+
   function promptLibraryManager(redraw, options = {}) {
     const className = options.className || "prompt-library-list";
     const rows = state.promptLibrary.length
@@ -40,7 +45,7 @@ export function createPromptLibraryController(ctx) {
     const position = () => positionPromptLibraryDialog(dialog);
     const close = () => {
       window.removeEventListener("resize", position);
-      state.settingsPromptLibraryDragId = "";
+      reset();
       dialog.remove();
     };
     const redraw = () => {
@@ -222,6 +227,7 @@ export function createPromptLibraryController(ctx) {
   }
 
   return {
+    reset,
     insertPromptFromLibrary,
     insertTextIntoPrompt,
     openPromptLibraryDialog,

@@ -1,4 +1,6 @@
 import { CONTENT_PROTOCOL } from "../shared/protocol.js";
+import { CONTENT_RUNTIME_PRELOAD_BUNDLE_IDENTITY } from "../shared/content-runtime-version.generated.js";
+import { createContentRuntimeBundleIdentity } from "../shared/content-runtime-identity.js";
 import { runtimeRegistry } from "./shared/runtime-registry.js";
 import { installGrokStorageAccessBridge } from "./preload/grok-storage-access.js";
 import { installNativeCopyBridge } from "./preload/native-copy.js";
@@ -8,17 +10,20 @@ import { installNotionSendBridge } from "./preload/notion-send.js";
 export function installPreload() {
   const PROTOCOL = CONTENT_PROTOCOL;
   const runtimes = runtimeRegistry(window);
+  const runtimeIdentity = createContentRuntimeBundleIdentity(CONTENT_RUNTIME_PRELOAD_BUNDLE_IDENTITY);
+  runtimes.registerBundle(runtimeIdentity);
+  const PRELOAD_IMPLEMENTATION_VERSION = runtimeIdentity.bundle.implementationVersion;
   const COPY_SOURCE = PROTOCOL.NATIVE_COPY_SOURCE;
-  const GEMINI_MODEL_PICKER_BRIDGE_VERSION = "2026.07.13.3";
+  const GEMINI_MODEL_PICKER_BRIDGE_VERSION = PRELOAD_IMPLEMENTATION_VERSION;
   const GEMINI_MODEL_PICKER_SOURCE = PROTOCOL.GEMINI_MODEL_PICKER_SOURCE;
   const GEMINI_MODEL_PICKER_RUN_TOKEN_ATTRIBUTE = "data-chatclub-gemini-model-picker-run";
   const PREFERRED_MODEL_FOCUS_SHIELD_ATTRIBUTE = "data-chatclub-preferred-model-focus-shield";
-  const PREFERRED_MODEL_FOCUS_SHIELD_VERSION = "2026.07.13.7";
+  const PREFERRED_MODEL_FOCUS_SHIELD_VERSION = PRELOAD_IMPLEMENTATION_VERSION;
   const NAVIGATION_FOCUS_GUARD_RUNTIME = PROTOCOL.NAVIGATION_FOCUS_GUARD_RUNTIME;
   const NAVIGATION_FOCUS_GUARD_BRIDGE_VERSION = PROTOCOL.NAVIGATION_FOCUS_GUARD_RUNTIME_VERSION;
   const NAVIGATION_FOCUS_GUARD_STORAGE_KEY = "chatclub_preferred_model_focus_guard_until";
   const NAVIGATION_FOCUS_GUARD_LEASE_MS = 180000;
-  const MAIN_WORLD_LOCATION_BRIDGE_VERSION = "2026.07.13.3";
+  const MAIN_WORLD_LOCATION_BRIDGE_VERSION = PRELOAD_IMPLEMENTATION_VERSION;
   const MAIN_WORLD_LOCATION_SOURCE = PROTOCOL.MAIN_WORLD_LOCATION_SOURCE;
   const DEEPSEEK_DELETE_SOURCE = PROTOCOL.DEEPSEEK_DELETE_SOURCE;
 
@@ -30,8 +35,8 @@ export function installPreload() {
       return;
     }
     if (!params.has("chatclub_webview")) return;
-    if (window.__CHATCLUB_WEBVIEW_SHIM__) return;
-    window.__CHATCLUB_WEBVIEW_SHIM__ = true;
+    if (window.__CHATCLUB_WEBVIEW_SHIM__ === PRELOAD_IMPLEMENTATION_VERSION) return;
+    window.__CHATCLUB_WEBVIEW_SHIM__ = PRELOAD_IMPLEMENTATION_VERSION;
 
     const ua = params.get("ua") || "";
     if (ua) {
@@ -528,6 +533,15 @@ export function installPreload() {
       while (records.length > 30) records.shift();
     };
 
+    if (capture?.installed && capture.version !== PRELOAD_IMPLEMENTATION_VERSION) {
+      try {
+        if (EventTarget.prototype.addEventListener === capture.wrappedAddEventListener && capture.originalAddEventListener) {
+          EventTarget.prototype.addEventListener = capture.originalAddEventListener;
+        }
+      } catch {}
+      capture = { records };
+    }
+
     if (!capture?.installed) {
       const originalAddEventListener = EventTarget.prototype.addEventListener;
       const wrappedAddEventListener = function (type, listener, options) {
@@ -544,7 +558,13 @@ export function installPreload() {
           writable: true,
           value: wrappedAddEventListener
         });
-        capture = { installed: true, records, wrappedAddEventListener };
+        capture = {
+          installed: true,
+          version: PRELOAD_IMPLEMENTATION_VERSION,
+          records,
+          originalAddEventListener,
+          wrappedAddEventListener
+        };
         window.__CHATCLUB_GEMINI_MODEL_PICKER_LISTENER_CAPTURE__ = capture;
       } catch {}
     }
@@ -758,34 +778,48 @@ export function installPreload() {
     try { return window.parent !== window; } catch { return true; }
   })();
 
-  installChatClubWebviewShim();
-  installPreferredModelFocusShield();
-  installPreferredModelNavigationFocusGuardBridge();
-  installMainWorldLocationBridge();
-  installNativeCopyBridge(runtimes, COPY_SOURCE);
+  runtimes.install("preload-root", PRELOAD_IMPLEMENTATION_VERSION, () => ({
+    api: Object.freeze({ version: PRELOAD_IMPLEMENTATION_VERSION }),
+    activate() {
+      installChatClubWebviewShim();
+      installPreferredModelFocusShield();
+      installPreferredModelNavigationFocusGuardBridge();
+      installMainWorldLocationBridge();
+      installNativeCopyBridge(runtimes, COPY_SOURCE);
 
-  if (host === "gemini.google.com" || host.endsWith(".gemini.google.com")) {
-    installGeminiModelPickerBridge();
-  }
+      if (host === "gemini.google.com" || host.endsWith(".gemini.google.com")) {
+        installGeminiModelPickerBridge();
+      }
 
-  if (host === "chat.deepseek.com" || host === "deepseek.com" || host.endsWith(".deepseek.com")) {
-    installDeepSeekDeleteBridge(runtimes, DEEPSEEK_DELETE_SOURCE);
-  }
+      if (host === "chat.deepseek.com" || host === "deepseek.com" || host.endsWith(".deepseek.com")) {
+        installDeepSeekDeleteBridge(runtimes, DEEPSEEK_DELETE_SOURCE);
+      }
 
-  if (framed && (host === "grok.com" || host.endsWith(".grok.com") || host === "grok.x.ai" || host.endsWith(".grok.x.ai"))) {
-    installGrokStorageAccessBridge(runtimes);
-  }
+      if (framed && (host === "grok.com" || host.endsWith(".grok.com") || host === "grok.x.ai" || host.endsWith(".grok.x.ai"))) {
+        installGrokStorageAccessBridge(runtimes);
+      }
 
-  if (framed && (host === "claude.ai" || host.endsWith(".claude.ai"))) {
-    try {
-      if (location.pathname === "/") location.replace(`/new${location.search}${location.hash}`);
-      Object.defineProperty(document, "referrer", { get: () => "" });
-    } catch {}
-  }
+      if (framed && (host === "claude.ai" || host.endsWith(".claude.ai"))) {
+        try {
+          if (location.pathname === "/") location.replace(`/new${location.search}${location.hash}`);
+          Object.defineProperty(document, "referrer", { get: () => "" });
+        } catch {}
+      }
 
-  if (framed && (host === "app.notion.com" || host.endsWith(".notion.so"))) {
-    installNotionSendBridge(runtimes, PROTOCOL);
-  }
+      if (framed && (host === "app.notion.com" || host.endsWith(".notion.so"))) {
+        installNotionSendBridge(runtimes, PROTOCOL);
+      }
+    },
+    dispose() {
+      for (const key of [
+        "__CHATCLUB_PREFERRED_MODEL_FOCUS_SHIELD__",
+        "__CHATCLUB_MAIN_WORLD_LOCATION_BRIDGE__",
+        "__CHATCLUB_GEMINI_MODEL_PICKER_BRIDGE__"
+      ]) {
+        try { window[key]?.dispose?.(); } catch {}
+      }
+    }
+  }));
 }
 
 installPreload();

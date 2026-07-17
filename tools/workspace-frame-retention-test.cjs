@@ -212,8 +212,8 @@ function functionSource(source, name) {
     currentGroups: [["A"]]
   }), true, "an app made valid by the same import must hydrate into its preset");
 
-  const settings = fs.readFileSync(path.join(root, "app/settings/controller.js"), "utf8");
-  const saveCustomConfigList = functionSource(settings, "saveCustomConfigList");
+  const settingsApps = fs.readFileSync(path.join(root, "app/settings/apps.js"), "utf8");
+  const saveCustomConfigList = functionSource(settingsApps, "saveCustomList");
   assert.match(saveCustomConfigList, /await reconcileAppCatalog\(previousCustomConfig\)/);
   assert.ok(
     saveCustomConfigList.indexOf("await notifyConfigReload()") < saveCustomConfigList.indexOf("await reconcileAppCatalog(previousCustomConfig)"),
@@ -228,7 +228,7 @@ function functionSource(source, name) {
   assert.match(applyImportedConfig, /"customConfig" in saved && !layoutHydrated/);
   assert.doesNotMatch(applyImportedConfig, /hydrateGroups\(/, "imports must delegate scoped layout hydration");
 
-  const workspace = fs.readFileSync(path.join(root, "app/workspace/controller.js"), "utf8");
+  const workspace = fs.readFileSync(path.join(root, "app/workspace/layout-controller.js"), "utf8");
   const reconcileAppCatalog = functionSource(workspace, "reconcileAppCatalog");
   assert.doesNotMatch(reconcileAppCatalog, /hydrateGroups\(/);
   assert.doesNotMatch(reconcileAppCatalog, /\brender\(/);

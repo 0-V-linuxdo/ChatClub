@@ -8,6 +8,11 @@ const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const runtime = read("app/runtime.js");
 const workspace = read("app/workspace/controller.js");
+const session = read("app/workspace/session-controller.js");
+const layout = read("app/workspace/layout-controller.js");
+const frame = read("app/workspace/frame-controller.js");
+const pocket = read("app/workspace/pocket-controller.js");
+const workspaceOwners = `${session}\n${layout}\n${frame}\n${pocket}`;
 
 const initStart = runtime.indexOf("async function init()");
 const initEnd = runtime.indexOf("\n}\n\ninit().catch", initStart);
@@ -26,35 +31,35 @@ assert.match(runtime, /action: "commitWorkspaceSessionRecovery"[\s\S]*?workspace
 assert.match(runtime, /workspaceSessionStore,\s*\n\s*framePort:/, "the workspace controller must receive the per-page store");
 
 assert.match(
-  workspace,
+  layout,
   /function hydrateGroups\(snapshot = null\) \{\s*if \(restoreWorkspaceSession\(snapshot\)\) \{\s*rememberWorkspaceSession\(\);\s*return true;/,
   "restored state must be captured before ordinary default hydration can run"
 );
-assert.match(workspace, /generation: workspaceSessionStore\.generation\(\)/);
-assert.match(workspace, /currentHrefForTab: \(chat\) => currentHrefForWorkspaceTab\(chat, framesByInstanceId\)/);
-assert.match(workspace, /workspaceSessionStore\.save\(snapshot\)/);
+assert.match(session, /generation: workspaceSessionStore\.generation\(\)/);
+assert.match(session, /currentHrefForTab: \(chat\) => currentHrefForWorkspaceTab\(chat, framesByInstanceId\)/);
+assert.match(session, /workspaceSessionStore\.save\(snapshot\)/);
 assert.match(
-  workspace,
+  frame,
   /state\.activeTabs\[group\.id\] = instanceId;\s*rememberWorkspaceSession\(\);/,
   "selecting an internal tab must synchronously update the page snapshot"
 );
 assert.match(
-  workspace,
+  frame,
   /if \(hrefChanged\) rememberWorkspaceSession\(\);/,
   "frame navigation must update the saved current URL"
 );
 assert.match(
-  workspace,
+  frame,
   /state\.fullscreenGroupId = state\.fullscreenGroupId === groupId \? null : groupId;\s*rememberWorkspaceSession\(\);/,
   "fullscreen changes must be remembered"
 );
 assert.match(
-  workspace,
+  pocket,
   /state\.temporaryLayoutPreset = \{[\s\S]*?state\.groups = groups;\s*state\.activeTabs = activeTabs;\s*rememberWorkspaceSession\(\);/,
   "temporary Pocket workspaces must be remembered before rendering"
 );
 assert.ok(
-  (workspace.match(/rememberWorkspaceSession\(\);/g) || []).length >= 12,
+  (workspaceOwners.match(/rememberWorkspaceSession\(\);/g) || []).length >= 12,
   "workspace structural, navigation, selection, and fullscreen paths must share one persistence hook"
 );
 

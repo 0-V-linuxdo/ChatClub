@@ -65,7 +65,8 @@ export function createAuthenticatedFrameRelay(options = {}) {
         documentId: token,
         browserDocumentId,
         frameBindingId: context.frameBindingId,
-        bridgeVersion: context.bridgeVersion
+        bridgeVersion: context.bridgeVersion,
+        runtimeIdentity: context.runtimeIdentity
       }
     });
   }
@@ -88,7 +89,8 @@ export function createAuthenticatedFrameRelay(options = {}) {
       data: {
         ...data,
         documentId: token,
-        bridgeVersion: context.bridgeVersion
+        bridgeVersion: context.bridgeVersion,
+        runtimeIdentity: context.runtimeIdentity
       }
     });
   }

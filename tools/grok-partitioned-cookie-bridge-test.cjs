@@ -120,9 +120,10 @@ async function releaseManagedCookie(bridge, { name, cause, value }) {
 (async () => {
   const bridge = await dataModule(read("background/grok-cookie-bridge.js"));
   const manifest = JSON.parse(read("manifest.json"));
-  const serviceWorker = `${read("background/service-worker.js")}\n${read("background/runtime.js")}`;
+  const grokRuntime = read("background/grok-cookie-runtime.js");
+  const serviceWorker = `${read("background/service-worker.js")}\n${read("background/runtime.js")}\n${grokRuntime}`;
   const relay = read("content/grok-cookie-bridge.js");
-  const workspace = read("app/workspace/controller.js");
+  const workspace = `${read("app/workspace/controller.js")}\n${read("app/workspace/frame-controller.js")}`;
   const protocol = await dataModule(read("shared/protocol.js"));
 
   assert.deepEqual(bridge.GROK_SESSION_COOKIE_NAMES, ["sso", "sso-rw", "grok_device_id"]);
@@ -292,25 +293,26 @@ async function releaseManagedCookie(bridge, { name, cause, value }) {
   assert.equal(bridge.isUnpartitionedGrokSourceChange({ cookie: sourceCookie("cf_clearance", "x") }), false);
   assert.equal(manifest.permissions.includes("cookies"), true);
   assert.match(serviceWorker, /extensionPageSender\(sender\)/);
-  assert.match(serviceWorker, /chrome\.cookies\.getPartitionKey\(\{/);
+  assert.match(serviceWorker, /api\.cookies\.getPartitionKey\(\{/);
   assert.match(serviceWorker, /frame\.parentFrameId !== 0/);
   assert.match(serviceWorker, /isGrokSessionUrl\(senderUrl\)/);
-  assert.match(serviceWorker, /removeAllManagedGrokPartitions\(chrome\)/);
-  assert.match(serviceWorker, /markGrokFramePreflightFallback/);
-  assert.match(serviceWorker, /consumeGrokFallbackReload/);
-  const sourceSync = serviceWorker.slice(
-    serviceWorker.indexOf("function scheduleGrokSourceCookieSync"),
-    serviceWorker.indexOf("chrome.cookies?.onChanged", serviceWorker.indexOf("function scheduleGrokSourceCookieSync"))
+  assert.match(serviceWorker, /removeAllManagedGrokPartitions\(api\)/);
+  assert.match(serviceWorker, /markFramePreflightFallback/);
+  assert.match(serviceWorker, /consumeFallbackReload/);
+  const sourceSync = grokRuntime.slice(
+    grokRuntime.indexOf("function scheduleSourceCookieSync"),
+    grokRuntime.indexOf("function handleCookieChange")
   );
   assert.match(sourceSync, /managedGrokPartitionKeys/);
   assert.doesNotMatch(sourceSync, /chromiumExtensionPartitionKey/);
   assert.doesNotMatch(serviceWorker, /message\.(?:partitionKey|topLevelSite|storeId|names)/);
   assert.match(relay, /window\.top === window/);
-  assert.match(relay, /globalThis\[INSTALLATION_KEY\] === `\$\{BRIDGE_VERSION\}:pending`/);
+  assert.match(relay, /globalThis\[INSTALLATION_KEY\] === `\$\{INSTALLATION_VERSION\}:pending`/);
   assert.match(relay, /delete globalThis\[INSTALLATION_KEY\]/);
   assert.match(relay, /sessionStorage\.setItem\(RELOAD_MARKER/);
   assert.equal(relay.match(/var GROK_COOKIE_BRIDGE_VERSION = "([^"]+)"/)?.[1], protocol.GROK_COOKIE_BRIDGE_VERSION);
   assert.match(read("content-src/grok-cookie-bridge.js"), /const BRIDGE_VERSION = GROK_COOKIE_BRIDGE_VERSION/);
+  assert.match(read("content-src/grok-cookie-bridge.js"), /const INSTALLATION_VERSION = runtimeIdentity\.bundle\.implementationVersion/);
   assert.match(workspace, /grokPreflight \? 10000 : 1800/);
   assert.match(workspace, /markGrokFramePreflightFallback\(url, preflightId\)/);
 

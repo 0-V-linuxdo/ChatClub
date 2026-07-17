@@ -2,10 +2,18 @@ function messageText(error) {
   return String(error?.message || error || "");
 }
 
-export function documentTargetUnsupported(error) {
+function unsupportedOption(error, optionPattern) {
   const message = messageText(error);
-  return /\bdocumentIds?\b/i.test(message)
+  return optionPattern.test(message)
     && /(?:not\s+supported|unsupported|unexpected|unknown|unrecognized|invalid\s+(?:property|key|field))/i.test(message);
+}
+
+export function documentTargetUnsupported(error) {
+  return unsupportedOption(error, /\bdocumentIds?\b/i);
+}
+
+export function worldOptionUnsupported(error) {
+  return unsupportedOption(error, /\bworld\b/i);
 }
 
 function extensionBase(api) {

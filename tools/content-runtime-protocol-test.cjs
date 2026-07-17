@@ -27,13 +27,21 @@ function bundledLiteral(source, name) {
 }
 
 (async () => {
-  const protocolModule = await dataModule(read("shared/protocol.js"));
+  const [protocolModule, runtimeVersionModule] = await Promise.all([
+    dataModule(read("shared/protocol.js")),
+    dataModule(read("shared/content-runtime-version.generated.js"))
+  ]);
   const protocol = protocolModule.CONTENT_PROTOCOL;
-  const expectedRegistryKey = `__CHATCLUB_RUNTIME_REGISTRY_V${protocolModule.RUNTIME_REGISTRY_ABI_VERSION}__`;
+  const expectedRegistryBaseKey = `__CHATCLUB_RUNTIME_REGISTRY_V${protocolModule.RUNTIME_REGISTRY_ABI_VERSION}__`;
   assert.equal(
     protocolModule.RUNTIME_REGISTRY_KEY,
-    expectedRegistryKey,
+    expectedRegistryBaseKey,
     "runtime registry key must be derived from its ABI version"
+  );
+  assert.equal(
+    runtimeVersionModule.CONTENT_RUNTIME_REGISTRY_KEY,
+    protocolModule.RUNTIME_REGISTRY_KEY,
+    "generated runtime identity must alias the stable protocol broker key"
   );
   const selfContainedRuntimes = [
     "content/preload.js",
@@ -57,14 +65,15 @@ function bundledLiteral(source, name) {
     );
     assert.equal(
       bundledLiteral(source, "RUNTIME_REGISTRY_KEY"),
-      expectedRegistryKey,
-      `${file} bundled runtime registry key must match its ABI`
+      runtimeVersionModule.CONTENT_RUNTIME_REGISTRY_KEY,
+      `${file} bundled stable broker key must match the generated package identity`
     );
   }
 
   const background = [
     "background/service-worker.js",
     "background/runtime.js",
+    "background/custom-userscript-runtime.js",
     "background/content-registration.js",
     "background/frame-injection.js"
   ].map(read).join("\n");
@@ -87,6 +96,10 @@ function bundledLiteral(source, name) {
     "content/grok-cookie-bridge.js",
     "content/message-navigator.js",
     "content/content.js",
+    "content/send.js",
+    "content/summary-bridge.js",
+    "content/preferred-model.js",
+    "content/delete.js",
     "content/summary-userscripts-main.js",
     "content/summary-userscripts.js"
   ]) {

@@ -18,7 +18,8 @@ function relative(absolute) {
 }
 
 function appDomain(file) {
-  if (new Set(["app/main.js", "app/runtime.js", "app/state.js", "app/controller-contract.js"]).has(file)) return "core";
+  if (file.startsWith("app/state/")) return "core";
+  if (new Set(["app/main.js", "app/runtime.js", "app/state.js", "app/controller-contract.js", "app/controller-port.js"]).has(file)) return "core";
   return file.split("/")[1] || "core";
 }
 
@@ -75,6 +76,10 @@ function appDomain(file) {
     "./preferred-model/state-port.js",
     "./topbar/state-port.js",
     "./favicon/state-port.js",
+    "./workspace/state-port.js",
+    "./summary/state-port.js",
+    "./pocket/state-port.js",
+    "./optimize/state-port.js",
     "./settings/state-ports.js"
   ]) {
     assert.match(runtime, new RegExp(`from ["']${statePort.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["']`));

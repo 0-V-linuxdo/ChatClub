@@ -1,7 +1,7 @@
 import { NATIVE_COPY_SOURCE, PAGE_SUMMARY_SOURCE } from "../../shared/protocol.js";
 
 const COPY_SOURCE = NATIVE_COPY_SOURCE;
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 const normalize = (value) => String(value || "")
   .replace(/\u00a0/g, " ")
   .replace(/\r\n?/g, "\n")

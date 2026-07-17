@@ -14,11 +14,25 @@ const frameBridgeSource = fs.readFileSync(path.join(root, "app/frame-bridge/cont
 const parentSource = `${mainSource}\n${frameBridgeSource}`;
 const contentSource = fs.readFileSync(path.join(root, "content/content.js"), "utf8");
 const contentEntrySource = fs.readFileSync(path.join(root, "content-src/content.js"), "utf8");
+const sendEntrySource = fs.readFileSync(path.join(root, "content-src/capabilities/send-runtime.js"), "utf8");
+const preferredCapabilitySource = [
+  "content-src/shared/dom-runtime.js",
+  "content-src/capabilities/preferred-common.js",
+  "content-src/capabilities/preferred-gemini.js",
+  "content-src/capabilities/preferred-grok.js",
+  "content-src/capabilities/preferred-notion-deepseek.js"
+].map((file) => fs.readFileSync(path.join(root, file), "utf8")).join("\n");
+const submissionNavigationSource = fs.readFileSync(path.join(root, "content-src/shared/submission-navigation.js"), "utf8");
 const preloadSource = fs.readFileSync(path.join(root, "content/preload.js"), "utf8");
 const preloadEntrySource = fs.readFileSync(path.join(root, "content-src/preload.js"), "utf8");
 const workspaceSource = fs.readFileSync(path.join(root, "app/workspace/controller.js"), "utf8");
+const workspaceFrameSource = fs.readFileSync(path.join(root, "app/workspace/frame-controller.js"), "utf8");
 const frameCommandsSource = fs.readFileSync(path.join(root, "shared/frame-commands.js"), "utf8");
 const protocolSource = fs.readFileSync(path.join(root, "shared/protocol.js"), "utf8");
+const contentBackgroundRequestsSource = fs.readFileSync(
+  path.join(root, "shared/content-background-requests.js"),
+  "utf8"
+);
 const modelPreferenceConsoleSource = fs.readFileSync(path.join(root, "tools/model-preference-console-probe.js"), "utf8");
 
 function protocolString(name) {
@@ -257,12 +271,21 @@ assert.match(locationReportSource, /requireCurrentHref/, "stale queued history n
 
 const frameKeySource = functionSource(preferredModelSource, "preferredModelFrameKey");
 assert.doesNotMatch(frameKeySource, /currentHref|iframe\.src/, "preferred-model identity must not change for an SPA href");
-assert.match(contentSource, /action: "relayFrameLifecycle"/, "content must relay lifecycle events over extension runtime messaging");
+assert.match(
+  contentEntrySource,
+  /requestBackground\(RELAY_FRAME_LIFECYCLE_REQUEST,/,
+  "content must relay lifecycle events through the typed background request client"
+);
+assert.match(
+  contentBackgroundRequestsSource,
+  /RELAY_FRAME_LIFECYCLE_REQUEST\s*=\s*[\s\S]*?request\(\s*"relayFrameLifecycle",/,
+  "the content request domain must bind lifecycle relays to the canonical background action"
+);
 assert.match(parentSource, /message\.action !== "frameLifecycle"/, "parent must handle authenticated lifecycle relays");
 assert.match(parentSource, /EXTENSION_RUNTIME_RELAY_SOURCE/, "parent lifecycle handling must use the extension runtime relay source");
-assert.match(workspaceSource, /emitFrameLifecycleChange\(\{ type: "location"[^\n]+navigation \}\)/, "workspace must forward navigation correlation metadata");
-assert.match(workspaceSource, /hrefChanged \|\| navigation\?\.forced === true/, "forced same-href popstate must still emit a lifecycle event");
-assert.match(workspaceSource, /iframe\.dataset\.currentHref === href/, "stale favicon discovery must not roll frame location backward");
+assert.match(workspaceFrameSource, /emitFrameLifecycleChange\(\{ type: "location"[^\n]+navigation \}\)/, "workspace must forward navigation correlation metadata");
+assert.match(workspaceFrameSource, /hrefChanged \|\| navigation\?\.forced === true/, "forced same-href popstate must still emit a lifecycle event");
+assert.match(workspaceFrameSource, /iframe\.dataset\.currentHref === href/, "stale favicon discovery must not roll frame location backward");
 
 for (const [name, consumers] of [
   ["SEND_TEXT_POST_MESSAGE_SOURCE", [[contentSource, "isolated content"]]],
@@ -286,7 +309,7 @@ assert.match(frameCommandsSource, /sendText:\s*command\(\{[^}]*mutating:\s*true/
 assert.match(frameCommandsSource, /applyPreferredModel:\s*command\(\{[^}]*mutating:\s*true/, "preferred model apply must use exactly-once Frame RPC semantics");
 assert.match(preloadSource, /detail: JSON\.stringify\(/, "Notion cross-world activation detail must be Firefox-safe JSON");
 
-const sendTextSource = functionSource(contentEntrySource, "sendTextUncached");
+const sendTextSource = functionSource(sendEntrySource, "sendTextUncached");
 assert.ok(
   sendTextSource.indexOf('markSubmissionNavigation(data, "button")') < sendTextSource.indexOf("clickPromptSubmit(submit)"),
   "generic submit correlation must be armed before the button activation"
@@ -304,12 +327,12 @@ assert.match(preserveSource, /\["pushstate", "replacestate", "poll"\]/, "manual 
 assert.match(preserveSource, /event\.previousHref[^\n]+lease\.lastHref/, "submission navigation chains must be contiguous");
 assert.match(preserveSource, /nextRoute\.threadId[^\n]+lease\.terminalThreadId/, "a settled submission lease must not follow a different thread");
 
-assert.match(contentSource, /findNotionModelIndicator\(\)/, "Notion must expose a read-only model indicator lookup");
-assert.match(contentSource, /findNotionModelControl\(\{ allowDisabled: true \}\)/, "disabled Notion model controls must remain readable");
-assert.match(contentSource, /function findNotionModelTrigger\(\)[\s\S]*?findNotionModelControl\(\);/, "interactive Notion lookup must still reject disabled controls");
-assert.match(contentEntrySource, /deadlineAt > activatedAt \? deadlineAt \+ 15000/, "content correlation must cover delayed final routing through the send deadline");
-assert.match(contentSource, /event\?\.isTrusted[^\n]+currentSubmissionNavigation/, "trusted user navigation intent must cancel stale submission correlation");
-assert.match(contentSource, /window\.addEventListener\("pointerdown", clearSubmissionNavigationForTrustedIntent/, "trusted pointer navigation must be observed before SPA routing");
+assert.match(preferredCapabilitySource, /findNotionModelIndicator\(\)/, "Notion must expose a read-only model indicator lookup");
+assert.match(preferredCapabilitySource, /findNotionModelControl\(\{ allowDisabled: true \}\)/, "disabled Notion model controls must remain readable");
+assert.match(preferredCapabilitySource, /function findNotionModelTrigger\(\)[\s\S]*?findNotionModelControl\(\);/, "interactive Notion lookup must still reject disabled controls");
+assert.match(submissionNavigationSource, /deadlineAt > activatedAt \? deadlineAt \+ 15000/, "content correlation must cover delayed final routing through the send deadline");
+assert.match(submissionNavigationSource, /event\?\.isTrusted[^\n]+current\("trusted-intent"\)/, "trusted user navigation intent must cancel stale submission correlation");
+assert.match(contentEntrySource, /window\.addEventListener\("pointerdown"[\s\S]{0,160}clearSubmissionNavigationForTrustedIntent/, "trusted pointer navigation must be observed before SPA routing");
 assert.match(preferredModelSource, /if \(sent \|\| lease\.terminalObserved\) return;/, "successful or terminal submission routing must retain its lease through the hard deadline");
 assert.match(
   modelPreferenceConsoleSource,
@@ -317,13 +340,13 @@ assert.match(
   "the Notion DevTools adapter must reject data-state=disabled controls for interaction"
 );
 
-const grokOpenSource = functionSource(contentEntrySource, "openGrokModelMenu");
+const grokOpenSource = functionSource(preferredCapabilitySource, "openGrokModelMenu");
 assert.match(
   grokOpenSource,
   /preferredModelPointerActivate\(context, trigger\)/,
   "Grok must use pointer-first activation for the model menu trigger"
 );
-const pointerDispatchSource = functionSource(contentEntrySource, "dispatchPointerActivation");
+const pointerDispatchSource = functionSource(preferredCapabilitySource, "dispatchPointerActivation");
 for (const eventName of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) {
   assert.match(pointerDispatchSource, new RegExp(`type: "${eventName}"`), `Grok pointer activation must include ${eventName}`);
 }
@@ -340,8 +363,8 @@ vm.runInContext(`
   function modelCenterPoint() { return { x: 12, y: 18 }; }
   function dispatchPointerActivation() { calls.push("pointer"); return pointerWorks; }
   function nativeModelClick() { calls.push("native"); return true; }
-  ${functionSource(contentEntrySource, "modelDirectClick")}
-  ${functionSource(contentEntrySource, "preferredModelPointerActivate")}
+  ${functionSource(preferredCapabilitySource, "modelDirectClick")}
+  ${functionSource(preferredCapabilitySource, "preferredModelPointerActivate")}
   globalThis.runPreferredPointer = (nextPointerWorks) => {
     pointerWorks = nextPointerWorks;
     calls.length = 0;
@@ -416,8 +439,8 @@ vm.runInContext(`
   function notionModelIdFromText() { return "gemini31pro"; }
   function notionText(value) { return String(value || "").toLowerCase(); }
   function notionTextLooksLikeTarget() { return false; }
-  ${functionSource(contentEntrySource, "isDisabledElement")}
-  ${functionSource(contentEntrySource, "scoreNotionModelTrigger")}
+  ${functionSource(preferredCapabilitySource, "isDisabledElement")}
+  ${functionSource(preferredCapabilitySource, "scoreNotionModelTrigger")}
   globalThis.scoreNotion = scoreNotionModelTrigger;
 `, notionIndicatorContext);
 const disabledNotionIndicator = {

@@ -3,6 +3,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const { pathToFileURL } = require("node:url");
 const { targetManifest } = require("./manifest-targets.cjs");
 
 const root = path.resolve(__dirname, "..");
@@ -58,6 +59,9 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
   const serviceWorker = [
     "background/service-worker.js",
     "background/runtime.js",
+    "background/secure-frame-contexts.js",
+    "background/custom-userscript-runtime.js",
+    "background/grok-cookie-runtime.js",
     "background/content-registration.js",
     "background/frame-injection.js",
     "background/tab-runtime.js"
@@ -84,15 +88,16 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
   assert.doesNotMatch(serviceWorker, /const matches = contentScriptMatches\(await currentContentScriptTargets/);
 
   const content = read("content/content.js");
+  const summaryCapability = read("content-src/capabilities/summary-runtime.js");
   const summaryMain = read("content/summary-userscripts-main.js");
   const summaryMainEntry = read("content-src/summary-userscripts-main.js");
   assert.doesNotMatch(`${content}\n${summaryMain}`, /AsyncFunction|new Function/);
-  assert.match(content, /action: "executeSummaryUserscript"/);
+  assert.match(summaryCapability, /requestBackground\(EXECUTE_SUMMARY_USERSCRIPT_REQUEST/);
   assert.match(content, /if \(!EXTENSION_ORIGIN \|\| event\.source !== window\.parent \|\| event\.origin !== EXTENSION_ORIGIN\) return/);
   assert.match(content, /FRAME_BINDING_POST_MESSAGE_SOURCE/);
   assert.match(content, /expectedBindingId/);
-  assert.doesNotMatch(content, /action: "executeSummaryUserscript",\s*config:/);
-  assert.match(serviceWorker, /chrome\.userScripts\.execute/);
+  assert.doesNotMatch(summaryCapability, /source:\s*["']chatclub["'][\s\S]*action:/);
+  assert.match(serviceWorker, /api\.userScripts\.execute/);
   assert.match(serviceWorker, /documentIds: \[context\.documentId\]/);
   assert.match(serviceWorker, /verifiedCustomUserscriptTarget/);
   assert.match(serviceWorker, /storedCustomSummaryConfig/);
@@ -103,8 +108,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
   assert.match(summaryMainEntry, /window\[CUSTOM_SUMMARY_EXECUTOR\]/);
   assert.match(summaryMainEntry, /SUMMARY_RESULT_MAX_TURNS/);
 
-  const extensionApiSource = read("shared/extension-api.js");
-  const apiModule = await import(`data:text/javascript;base64,${Buffer.from(extensionApiSource).toString("base64")}`);
+  const apiModule = await import(pathToFileURL(path.join(root, "shared/extension-api.js")).href);
   const previousBrowser = globalThis.browser;
   const previousChrome = globalThis.chrome;
   try {

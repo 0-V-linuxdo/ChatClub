@@ -6,7 +6,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 const root = path.resolve(__dirname, "..");
-const controllerSource = fs.readFileSync(path.join(root, "app/settings/controller.js"), "utf8");
+const controllerSource = fs.readFileSync(path.join(root, "app/settings/appearance.js"), "utf8");
 const settingsKitSource = fs.readFileSync(path.join(root, "app/settings/kit.js"), "utf8");
 const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"), "utf8");
 const i18nSource = fs.readFileSync(path.join(root, "shared/i18n.js"), "utf8");

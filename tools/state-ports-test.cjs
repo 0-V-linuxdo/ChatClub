@@ -95,14 +95,10 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   assert.deepEqual(reopened.apps.customConfig.map(({ id }) => id), ["custom-a", "custom-b"]);
   assert.deepEqual(reopened.summary.options.summarySiteConfigs.map(({ id }) => id), ["first", "second"]);
 
-  const controllerState = settingsModule.createSettingsControllerStatePort(rootState);
-  controllerState.modelPreferenceDraft = { Gemini: "pro" };
-  controllerState.settingsTopbarPromptPlaceholderDraft = "draft";
-  assert.equal(rootState.modelPreferenceDraft.Gemini, "pro");
-  assert.equal(rootState.settingsTopbarPromptPlaceholderDraft, "draft");
-  assert.throws(() => { controllerState.groups; }, /settings cannot read/);
+  assert.equal(settingsModule.createSettingsControllerStatePort, undefined);
 
   const allPorts = stateModule.createFeatureStatePorts(rootState);
+  assert.equal("settings" in allPorts, false);
   assert.equal(allPorts.settingsSections.models.options.modelPreferences.Gemini, "pro");
   assert.equal(allPorts.composer.promptText, "restored snapshot");
   assert.equal(allPorts.preferredModel.preferredModelGateState, "ready");

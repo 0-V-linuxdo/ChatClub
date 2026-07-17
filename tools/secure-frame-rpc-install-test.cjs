@@ -24,14 +24,14 @@ const root = path.resolve(__dirname, "..");
     }
   };
   const runtimes = runtimeRegistry({});
-  const install = (version) => installSecureFrameRpc({
+  const install = (version, dispatch = async (action, data) => ({ action, data })) => installSecureFrameRpc({
     extensionApi,
     runtimes,
     version,
     source: "secure-source",
     bridgeDocumentId: "document-1",
     secureFrameToken: "secure-token",
-    dispatch: async (action, data) => ({ action, data })
+    dispatch
   });
   const first = install("1");
   assert.equal(listeners.size, 1);
@@ -52,6 +52,29 @@ const root = path.resolve(__dirname, "..");
   }, { id: "chatclub-test" }, (value) => { response = value; }), true);
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.deepEqual(response, { success: true, data: { action: "probe", data: { value: 9 } } });
+  install("3", async () => {
+    const error = new Error("Content capability is not installed: delete");
+    error.code = "CAPABILITY_UNAVAILABLE";
+    error.capability = "delete";
+    throw error;
+  });
+  response = null;
+  [...listeners][0]({
+    source: "secure-source",
+    type: "request",
+    bridgeDocumentId: "document-1",
+    secureFrameToken: "secure-token",
+    action: "deleteThread",
+    data: {}
+  }, { id: "chatclub-test" }, (value) => { response = value; });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(response, {
+    success: false,
+    error: "Content capability is not installed: delete",
+    code: "CAPABILITY_UNAVAILABLE",
+    capability: "delete",
+    delivered: false
+  });
   runtimes.dispose();
   assert.equal(listeners.size, 0);
   console.log("secure frame RPC installation: ok");

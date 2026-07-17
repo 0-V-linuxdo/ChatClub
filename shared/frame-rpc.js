@@ -1,15 +1,15 @@
-import { currentExtensionTabId, runtimeSendMessage } from "./extension-api.js";
+import { currentExtensionTabId, requestBackground, runtimeSendMessage } from "./extension-api.js";
+import {
+  BACKGROUND_REQUEST_ACTIONS,
+  FRAME_ROUTE_ERROR_CODES,
+  createBackgroundRequestClient
+} from "./background-requests.js";
+import { CONTENT_RUNTIME_IDENTITY } from "./content-runtime-identity.js";
+import { contentRuntimePackageBundleIdentityMatches } from "./content-runtime-package-identity.js";
 import { frameCommandSpec } from "./frame-commands.js";
 
 const MAX_TIMEOUT_MS = 60000;
-const ERROR_CODES = new Set([
-  "NOT_REGISTERED",
-  "STALE_DOCUMENT",
-  "INJECTION_FAILED",
-  "TIMEOUT",
-  "ABORTED",
-  "REMOTE_ERROR"
-]);
+const ERROR_CODES = new Set(FRAME_ROUTE_ERROR_CODES);
 
 export class FrameCommandError extends Error {
   constructor(code, message, details = {}) {
@@ -17,7 +17,7 @@ export class FrameCommandError extends Error {
     this.name = "FrameCommandError";
     this.code = ERROR_CODES.has(code) ? code : "REMOTE_ERROR";
     this.command = String(details.command || "");
-    this.delivered = details.delivered === true;
+    if (typeof details.delivered === "boolean") this.delivered = details.delivered;
     if (details.cause !== undefined) this.cause = details.cause;
   }
 }
@@ -39,18 +39,32 @@ function asFrameError(error, command, fallbackCode = "REMOTE_ERROR") {
         : fallbackCode;
   return new FrameCommandError(code, message, {
     command,
-    delivered: error?.delivered === true,
+    ...(typeof error?.delivered === "boolean" ? { delivered: error.delivered } : {}),
     cause: error
   });
 }
 
 function abortable(promise, signal, command) {
   if (!signal) return promise;
-  if (signal.aborted) return Promise.reject(new FrameCommandError("ABORTED", `Frame command aborted: ${command}`, { command }));
+  if (signal.aborted) {
+    // The transport promise is created before this helper is entered. Observe a
+    // late transport rejection even though the caller has already aborted.
+    promise.catch(() => {});
+    return Promise.reject(new FrameCommandError("ABORTED", `Frame command aborted: ${command}`, { command }));
+  }
   return new Promise((resolve, reject) => {
     const abort = () => reject(new FrameCommandError("ABORTED", `Frame command aborted: ${command}`, { command, delivered: true }));
     signal.addEventListener("abort", abort, { once: true });
-    promise.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
+    promise.then(
+      (value) => {
+        signal.removeEventListener("abort", abort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener("abort", abort);
+        reject(error);
+      }
+    );
   });
 }
 
@@ -60,13 +74,23 @@ export class FrameRuntimePort {
     this.invalidateRuntime = typeof options.invalidateRuntime === "function" ? options.invalidateRuntime : null;
     this.currentTabId = options.currentTabId || currentExtensionTabId;
     this.sendRuntimeMessage = options.sendRuntimeMessage || runtimeSendMessage;
+    this.requestBackground = options.requestBackground
+      || createBackgroundRequestClient(this.sendRuntimeMessage);
     this.registrations = new WeakMap();
   }
 
   registration(iframe) {
     const remembered = iframe && this.registrations.get(iframe);
     const documentId = bridgeDocumentId(iframe) || String(remembered?.documentId || "");
-    return documentId ? { ...(remembered || {}), documentId } : null;
+    const datasetImplementation = String(
+      iframe?.dataset?.preferredModelContentRuntimeImplementation || ""
+    );
+    if (
+      !documentId
+      || datasetImplementation !== CONTENT_RUNTIME_IDENTITY.implementationVersion
+      || (remembered?.runtimeIdentity && !contentRuntimePackageBundleIdentityMatches(remembered.runtimeIdentity, "content/content.js"))
+    ) return null;
+    return { ...(remembered || {}), documentId };
   }
 
   invalidate(iframe, reason = "invalidated") {
@@ -77,14 +101,23 @@ export class FrameRuntimePort {
   async ensure(iframe, { features = [], force = false } = {}) {
     if (!iframe || iframe.isConnected === false) throw new FrameCommandError("STALE_DOCUMENT", "iframe is detached", { delivered: false });
     const current = this.registration(iframe);
+    const capabilityDocumentCurrent = String(iframe.dataset?.contentRuntimeCapabilitiesDocumentId || "") === current?.documentId;
+    const installedCapabilities = capabilityDocumentCurrent
+      ? new Set(String(iframe.dataset?.contentRuntimeCapabilities || "").split(",").filter(Boolean))
+      : new Set();
+    const capabilitiesReady = features.every((feature) => installedCapabilities.has(feature));
     const summaryReady = !features.includes("summary") || (
-      String(iframe.dataset?.summaryRuntimeDocumentId || "") === current?.documentId
+      capabilitiesReady
+      && String(iframe.dataset?.summaryRuntimeDocumentId || "") === current?.documentId
       && Boolean(iframe.dataset?.summaryRuntimeBridgeVersion)
     );
-    if (!force && current && summaryReady) return current;
+    if (!force && current && capabilitiesReady && summaryReady) return current;
     if (!this.ensureRuntime) {
       const registration = this.registration(iframe);
-      if (registration) return registration;
+      if (registration && capabilitiesReady && summaryReady) return registration;
+      if (registration && features.length) {
+        throw new FrameCommandError("INJECTION_FAILED", `Content capabilities are unavailable: ${features.join(", ")}`, { delivered: false });
+      }
       throw new FrameCommandError("NOT_REGISTERED", "Content document is not registered", { delivered: false });
     }
     let result;
@@ -124,22 +157,23 @@ export class FrameRuntimePort {
       if (!Number.isInteger(appTabId)) throw new FrameCommandError("NOT_REGISTERED", `Extension tab is unavailable: ${command}`, { command, delivered: false });
       let response;
       try {
-        response = await abortable(this.sendRuntimeMessage({
-          source: "chatclub",
-          action: "sendFrameCommand",
-          appTabId,
-          bridgeDocumentId: documentId,
-          command,
-          data,
-          timeoutMs
-        }), options.signal, command);
+        response = await abortable(this.requestBackground(
+          BACKGROUND_REQUEST_ACTIONS.SEND_FRAME_COMMAND,
+          {
+            appTabId,
+            bridgeDocumentId: documentId,
+            command,
+            data,
+            timeoutMs
+          }
+        ), options.signal, command);
       } catch (error) {
         throw asFrameError(error, command);
       }
       if (!response?.success) {
         throw new FrameCommandError(response?.code || "REMOTE_ERROR", response?.error || `Frame command failed: ${command}`, {
           command,
-          delivered: response?.delivered === true
+          ...(typeof response?.delivered === "boolean" ? { delivered: response.delivered } : {})
         });
       }
       return response.data;
@@ -166,9 +200,7 @@ export async function verifyContentFrameRegistration(documentId) {
   const appTabId = await currentExtensionTabId();
   if (!Number.isInteger(appTabId)) return false;
   try {
-    const response = await runtimeSendMessage({
-      source: "chatclub",
-      action: "verifyFrameContext",
+    const response = await requestBackground(BACKGROUND_REQUEST_ACTIONS.VERIFY_FRAME_CONTEXT, {
       appTabId,
       bridgeDocumentId: token
     });

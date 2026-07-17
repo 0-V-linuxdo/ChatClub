@@ -91,7 +91,10 @@ export function createPromptImageModel({ createId }) {
 
   function readFile(file) {
     return new Promise((resolve, reject) => {
-      if (!file || !String(file.type || "").startsWith("image/")) return reject(new Error("Invalid image file"));
+      if (!file || !String(file.type || "").startsWith("image/")) {
+        reject(new Error("Invalid image file"));
+        return;
+      }
       const reader = new FileReader();
       reader.onload = () => resolve(String(reader.result || ""));
       reader.onerror = () => reject(reader.error || new Error("Failed to read image file"));

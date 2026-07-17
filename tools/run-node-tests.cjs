@@ -3,8 +3,10 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
+const { enforceNodeVersion } = require("./node-version.cjs");
 
 const root = path.resolve(__dirname, "..");
+enforceNodeVersion({ context: "Node regression tests", strict: true });
 const toolsDirectory = path.join(root, "tools");
 const tests = fs.readdirSync(toolsDirectory)
   .filter((name) => name.endsWith("-test.cjs"))

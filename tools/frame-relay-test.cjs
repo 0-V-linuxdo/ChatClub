@@ -13,6 +13,7 @@ const root = path.resolve(__dirname, "..");
   const sent = [];
   const remembered = [];
   let authentications = 0;
+  const runtimeIdentity = Object.freeze({ implementationVersion: "content-generation-current" });
   const context = {
     tabId: 7,
     frameId: 9,
@@ -20,6 +21,7 @@ const root = path.resolve(__dirname, "..");
     browserDocumentId: "browser-document-1",
     frameBindingId: "f".repeat(64),
     bridgeVersion: "bridge-current",
+    runtimeIdentity,
     url: "https://example.com/thread",
     registeredAt: 100
   };
@@ -64,7 +66,8 @@ const root = path.resolve(__dirname, "..");
       documentId: "bridge-document-1",
       browserDocumentId: "browser-document-1",
       frameBindingId: "f".repeat(64),
-      bridgeVersion: "bridge-current"
+      bridgeVersion: "bridge-current",
+      runtimeIdentity
     }
   });
   const authenticatedAfterBinding = authentications;

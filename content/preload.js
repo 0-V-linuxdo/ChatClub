@@ -22,6 +22,7 @@
   var PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.16.2";
   var RUNTIME_REGISTRY_ABI_VERSION = 1;
   var RUNTIME_REGISTRY_KEY = `__CHATCLUB_RUNTIME_REGISTRY_V${RUNTIME_REGISTRY_ABI_VERSION}__`;
+  var RUNTIME_MIGRATION_STAGE_KEY = `__CHATCLUB_RUNTIME_MIGRATION_STAGE_V${RUNTIME_REGISTRY_ABI_VERSION}__`;
   var NAVIGATION_FOCUS_GUARD_RUNTIME = "navigation-focus-guard";
   var NAVIGATION_FOCUS_GUARD_RUNTIME_VERSION = "2026.07.15.2";
   var FRAME_TOAST_POSITION_EVENT = "chatclub:frame-toast-position:2026.07.13.1";
@@ -65,121 +66,460 @@
     TOPIC_DELETE_BRIDGE_SOURCE
   });
 
+  // chatclub-runtime-version:shared/content-runtime-version.generated.js
+  var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "42d1e137fe2015d43fe6732ef431f641cc51d65ec7986e095d9a243339d4e9c2";
+  var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.cd06beed22e9f6fcab8057bd949a3c0c68974967bda920471fc1d62f06999029";
+  var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "cd06beed22e9f6fcab8057bd949a3c0c68974967bda920471fc1d62f06999029";
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "ebe2ed4ec1fc3680d7cd904b38a423d86055d3ce43ef5f1d0cb0f96f6d83fd83";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.ebe2ed4ec1fc3680d7cd904b38a423d86055d3ce43ef5f1d0cb0f96f6d83fd83";
+  var CONTENT_RUNTIME_PRELOAD_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preload.js", "entryPath": "content-src/preload.js", "sourceSha256": "2dcb98016e554435a346f167b8ea8b35f58e8f36462c8f22defb51d538ccbeb5", "implementationSha256": "e1106de6027525fbd8fa2860074bfafec821db43030d9c779b91deec93e0aa2f", "implementationVersion": "2026.07.16.2+bundle.e1106de6027525fbd8fa2860074bfafec821db43030d9c779b91deec93e0aa2f" });
+
+  // shared/content-runtime-identity.js
+  if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
+    throw new Error("Generated content runtime identity does not match the packaged protocol");
+  }
+  var CONTENT_RUNTIME_IDENTITY = Object.freeze({
+    protocolVersion: CONTENT_RUNTIME_PROTOCOL_VERSION,
+    implementationVersion: CONTENT_RUNTIME_IMPLEMENTATION_VERSION,
+    implementationSha256: CONTENT_RUNTIME_IMPLEMENTATION_SHA256,
+    sourceSha256: CONTENT_RUNTIME_SOURCE_SHA256,
+    buildRecipeVersion: CONTENT_RUNTIME_BUILD_RECIPE_VERSION,
+    buildRecipeSha256: CONTENT_RUNTIME_BUILD_RECIPE_SHA256
+  });
+  var IDENTITY_FIELDS = Object.freeze(Object.keys(CONTENT_RUNTIME_IDENTITY));
+  var BUNDLE_IDENTITY_FIELDS = Object.freeze([
+    "outputPath",
+    "entryPath",
+    "sourceSha256",
+    "implementationSha256",
+    "implementationVersion"
+  ]);
+  function normalizeContentRuntimeBundleIdentity(value = {}) {
+    const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+    return Object.freeze(Object.fromEntries(
+      BUNDLE_IDENTITY_FIELDS.map((field) => [field, String(source[field] || "")])
+    ));
+  }
+  function createContentRuntimeBundleIdentity(bundle) {
+    const normalized = normalizeContentRuntimeBundleIdentity(bundle);
+    if (BUNDLE_IDENTITY_FIELDS.some((field) => !normalized[field])) {
+      throw new TypeError("Packaged content runtime bundle identity is incomplete");
+    }
+    return Object.freeze({ ...CONTENT_RUNTIME_IDENTITY, bundle: normalized });
+  }
+
   // content-src/shared/runtime-registry.js
+  var BROKER_KIND = "ChatClubContentRuntimeBroker";
+  var BROKER_VERSION = 1;
   function validName(name) {
     const value = String(name || "").trim();
     if (!value) throw new TypeError("Runtime name is required");
     return value;
   }
-  function disposeSupersededRegistries(target) {
+  function validGeneration(version) {
+    const value = String(version || "").trim();
+    if (!value) throw new TypeError("Content runtime generation is required");
+    return value;
+  }
+  function legacyRegistries(target) {
+    const registries = [];
     let keys = [];
     try {
       keys = Object.getOwnPropertyNames(target);
     } catch {
     }
     for (const key of keys) {
-      if (key === RUNTIME_REGISTRY_KEY || !/^__CHATCLUB_RUNTIME_REGISTRY_V\d+__$/.test(key)) continue;
+      if (key === RUNTIME_REGISTRY_KEY || !/^__CHATCLUB_RUNTIME_REGISTRY_V\d+(?:_SOURCE_[a-f0-9]{64})?__$/i.test(key)) continue;
       let registry = null;
       try {
         registry = target[key];
       } catch {
       }
-      if (!registry || registry.abiVersion === RUNTIME_REGISTRY_ABI_VERSION || typeof registry.dispose !== "function") continue;
-      try {
-        registry.dispose(`superseded by runtime registry ABI ${RUNTIME_REGISTRY_ABI_VERSION}`);
-      } catch {
+      if (!registry || typeof registry.dispose !== "function" && typeof registry.shutdown !== "function") continue;
+      registries.push(Object.freeze({ key, registry }));
+    }
+    return registries;
+  }
+  function migrationStage(target) {
+    let stage = null;
+    let descriptor = null;
+    try {
+      stage = target[RUNTIME_MIGRATION_STAGE_KEY];
+      descriptor = Object.getOwnPropertyDescriptor(target, RUNTIME_MIGRATION_STAGE_KEY);
+    } catch {
+    }
+    if (!stage || typeof stage !== "object" || descriptor?.value !== stage || descriptor.writable || stage.registryKey !== RUNTIME_REGISTRY_KEY || stage.generation !== CONTENT_RUNTIME_IMPLEMENTATION_VERSION) return null;
+    return stage;
+  }
+  function createBroker({ legacy = [] } = {}) {
+    const generations = /* @__PURE__ */ new Map();
+    const retiredGenerations = /* @__PURE__ */ new Map();
+    let stagedLegacyRegistries = [...legacy];
+    let activeGenerationVersion = "";
+    let brokerShutdownReason = "";
+    function assertBrokerRunning() {
+      if (brokerShutdownReason) {
+        throw new Error(`Content runtime broker is shut down: ${brokerShutdownReason}`);
       }
     }
-  }
-  function runtimeRegistry(target = globalThis) {
-    const current = target[RUNTIME_REGISTRY_KEY];
-    if (current?.abiVersion === RUNTIME_REGISTRY_ABI_VERSION && typeof current.register === "function") return current;
-    if (current != null) {
-      throw new Error(
-        `Runtime registry key ${RUNTIME_REGISTRY_KEY} is occupied by ABI ${String(current?.abiVersion ?? "unknown")}; incrementing RUNTIME_REGISTRY_ABI_VERSION must also produce a new registry key`
-      );
+    function disposeStagedLegacy(reason) {
+      const staged = stagedLegacyRegistries;
+      stagedLegacyRegistries = [];
+      for (const { registry } of staged) {
+        try {
+          if (typeof registry.dispose === "function") registry.dispose(reason);
+          else registry.shutdown(reason);
+        } catch {
+        }
+      }
     }
-    disposeSupersededRegistries(target);
-    const entries = /* @__PURE__ */ new Map();
-    const disposeEntry = (key, reason) => {
-      const entry = entries.get(key);
+    function completeLegacyMigration(generation) {
+      disposeStagedLegacy(`migrated to content runtime generation ${generation} through ${RUNTIME_REGISTRY_KEY}`);
+    }
+    function generationRecord(version, { create = false } = {}) {
+      const generation = validGeneration(version);
+      const retiredState = retiredGenerations.get(generation);
+      if (retiredState) {
+        throw new Error(`Content runtime generation ${generation} is ${retiredState}`);
+      }
+      let record = generations.get(generation) || null;
+      if (!record && create) {
+        record = {
+          version: generation,
+          state: "pending",
+          entries: /* @__PURE__ */ new Map(),
+          bundles: /* @__PURE__ */ new Map(),
+          facade: null
+        };
+        record.facade = createGenerationFacade(record);
+        generations.set(generation, record);
+      }
+      return record;
+    }
+    function assertUsable(record) {
+      if (record.state === "aborted" || record.state === "superseded") {
+        throw new Error(`Content runtime generation ${record.version} is ${record.state}`);
+      }
+    }
+    function disposeEntry(record, key, reason) {
+      const entry = record.entries.get(key);
       if (!entry) return false;
-      entries.delete(key);
+      record.entries.delete(key);
       try {
         entry.dispose?.(String(reason || "invalidated"));
       } catch {
       }
       return true;
-    };
-    const registry = Object.freeze({
-      abiVersion: RUNTIME_REGISTRY_ABI_VERSION,
-      register(name, descriptor = {}) {
-        const key = validName(name);
-        const version = String(descriptor.version || "");
-        if (!version) throw new TypeError(`Runtime ${key} requires a version`);
-        if (!("api" in descriptor)) throw new TypeError(`Runtime ${key} requires an api`);
-        const previous = entries.get(key);
-        if (previous?.version === version) return previous.api;
-        if (previous) {
+    }
+    function disposeRecord(record, state, reason) {
+      record.state = state;
+      for (const key of [...record.entries.keys()]) disposeEntry(record, key, reason);
+      record.bundles.clear();
+      generations.delete(record.version);
+      retiredGenerations.set(record.version, state);
+    }
+    function activateEntry(entry) {
+      if (entry.activated) return;
+      entry.activate?.();
+      entry.activated = true;
+    }
+    function descriptorEntry(key, version, descriptor) {
+      if (!descriptor || typeof descriptor !== "object" || !("api" in descriptor)) {
+        throw new TypeError(`Runtime ${key} requires an api descriptor`);
+      }
+      return {
+        version,
+        api: descriptor.api,
+        activate: typeof descriptor.activate === "function" ? descriptor.activate : null,
+        dispose: typeof descriptor.dispose === "function" ? descriptor.dispose : null,
+        activated: false
+      };
+    }
+    function bundleClaim(identity, generation = "") {
+      const source = identity?.bundle && typeof identity.bundle === "object" ? identity.bundle : identity;
+      const claim = Object.freeze({
+        outputPath: String(source?.outputPath || ""),
+        entryPath: String(source?.entryPath || ""),
+        sourceSha256: String(source?.sourceSha256 || ""),
+        implementationSha256: String(source?.implementationSha256 || ""),
+        implementationVersion: String(source?.implementationVersion || "")
+      });
+      if (!claim.outputPath || !claim.entryPath || !/^[a-f0-9]{64}$/i.test(claim.sourceSha256) || !/^[a-f0-9]{64}$/i.test(claim.implementationSha256) || !claim.implementationVersion) throw new TypeError("Content runtime bundle identity is incomplete");
+      const declaredGeneration = String(identity?.implementationVersion || "");
+      if (generation && declaredGeneration && declaredGeneration !== generation) {
+        throw new Error(`Content runtime bundle ${claim.outputPath} belongs to generation ${declaredGeneration}, expected ${generation}`);
+      }
+      return claim;
+    }
+    function registerEntry(record, key, entry) {
+      assertUsable(record);
+      const previous = record.entries.get(key);
+      if (previous?.version === entry.version) return previous.api;
+      if (record.state === "active") {
+        try {
+          activateEntry(entry);
+        } catch (error) {
           try {
-            previous.dispose?.(`replaced by ${version}`);
+            entry.dispose?.(`activation failed: ${error?.message || String(error)}`);
           } catch {
           }
+          throw error;
         }
-        entries.set(key, {
-          version,
-          api: descriptor.api,
-          dispose: typeof descriptor.dispose === "function" ? descriptor.dispose : null
-        });
-        return descriptor.api;
-      },
-      install(name, version, factory) {
-        const key = validName(name);
-        const expectedVersion = String(version || "");
-        if (!expectedVersion) throw new TypeError(`Runtime ${key} requires a version`);
-        const previous = entries.get(key);
-        if (previous?.version === expectedVersion) return previous.api;
-        if (previous) disposeEntry(key, `replaced by ${expectedVersion}`);
-        if (typeof factory !== "function") throw new TypeError(`Runtime ${key} requires an installer`);
-        const descriptor = factory();
-        if (!descriptor || typeof descriptor !== "object" || !("api" in descriptor)) {
-          throw new TypeError(`Runtime ${key} installer must return an api descriptor`);
+      }
+      record.entries.set(key, entry);
+      if (previous) {
+        try {
+          previous.dispose?.(`replaced by ${entry.version}`);
+        } catch {
         }
-        entries.set(key, {
-          version: expectedVersion,
-          api: descriptor.api,
-          dispose: typeof descriptor.dispose === "function" ? descriptor.dispose : null
-        });
-        return descriptor.api;
-      },
-      require(name, version) {
-        const key = validName(name);
-        const entry = entries.get(key);
-        if (!entry) throw new Error(`Runtime ${key} is not registered`);
-        if (version != null && entry.version !== String(version)) {
-          throw new Error(`Runtime ${key} version ${entry.version} does not satisfy ${String(version)}`);
+      }
+      return entry.api;
+    }
+    function createGenerationFacade(record) {
+      return Object.freeze({
+        abiVersion: RUNTIME_REGISTRY_ABI_VERSION,
+        generationVersion: record.version,
+        get state() {
+          return record.state;
+        },
+        get isActive() {
+          return record.state === "active";
+        },
+        registerBundle(identity) {
+          assertUsable(record);
+          const claim = bundleClaim(identity, record.version);
+          const previous = record.bundles.get(claim.outputPath);
+          if (previous) {
+            if (JSON.stringify(previous) !== JSON.stringify(claim)) {
+              throw new Error(`Content runtime bundle ${claim.outputPath} was registered with conflicting identities`);
+            }
+            return previous;
+          }
+          record.bundles.set(claim.outputPath, claim);
+          return claim;
+        },
+        bundleRegistration(outputPath) {
+          assertUsable(record);
+          return record.bundles.get(String(outputPath || "")) || null;
+        },
+        register(name, descriptor = {}) {
+          const key = validName(name);
+          const version = String(descriptor.version || "");
+          if (!version) throw new TypeError(`Runtime ${key} requires a version`);
+          if (!("api" in descriptor)) throw new TypeError(`Runtime ${key} requires an api`);
+          return registerEntry(record, key, descriptorEntry(key, version, descriptor));
+        },
+        install(name, version, factory) {
+          const key = validName(name);
+          const expectedVersion = String(version || "");
+          if (!expectedVersion) throw new TypeError(`Runtime ${key} requires a version`);
+          assertUsable(record);
+          const previous = record.entries.get(key);
+          if (previous?.version === expectedVersion) return previous.api;
+          if (typeof factory !== "function") throw new TypeError(`Runtime ${key} requires an installer`);
+          const descriptor = factory();
+          const entry = descriptorEntry(key, expectedVersion, descriptor);
+          return registerEntry(record, key, entry);
+        },
+        require(name, version) {
+          assertUsable(record);
+          const key = validName(name);
+          const entry = record.entries.get(key);
+          if (!entry) throw new Error(`Runtime ${key} is not registered in generation ${record.version}`);
+          if (version != null && entry.version !== String(version)) {
+            throw new Error(`Runtime ${key} version ${entry.version} does not satisfy ${String(version)}`);
+          }
+          return entry.api;
+        },
+        registration(name) {
+          assertUsable(record);
+          const entry = record.entries.get(validName(name));
+          return entry ? Object.freeze({ version: entry.version, api: entry.api }) : null;
+        },
+        invalidate(name, reason = "invalidated") {
+          assertUsable(record);
+          return disposeEntry(record, validName(name), reason);
+        },
+        dispose(reason = "generation registry disposed") {
+          assertUsable(record);
+          for (const key of [...record.entries.keys()]) disposeEntry(record, key, reason);
+        },
+        beginGeneration(version) {
+          return broker.beginGeneration(version);
+        },
+        activateGeneration(version) {
+          return broker.activateGeneration(version);
+        },
+        prepareGeneration(version, expectedBundles) {
+          return broker.prepareGeneration(version, expectedBundles);
+        },
+        commitGeneration(version) {
+          return broker.commitGeneration(version);
+        },
+        abortGeneration(version, reason) {
+          return broker.abortGeneration(version, reason);
+        },
+        shutdown(reason) {
+          return broker.shutdown(reason);
         }
-        return entry.api;
+      });
+    }
+    const broker = Object.freeze({
+      kind: BROKER_KIND,
+      brokerVersion: BROKER_VERSION,
+      abiVersion: RUNTIME_REGISTRY_ABI_VERSION,
+      get closed() {
+        return Boolean(brokerShutdownReason);
       },
-      registration(name) {
-        const entry = entries.get(validName(name));
-        return entry ? Object.freeze({ version: entry.version, api: entry.api }) : null;
+      get activeGenerationVersion() {
+        return activeGenerationVersion;
       },
-      invalidate(name, reason = "invalidated") {
-        const key = validName(name);
-        return disposeEntry(key, reason);
+      beginGeneration(version) {
+        assertBrokerRunning();
+        const generation = validGeneration(version);
+        const retiredState = retiredGenerations.get(generation);
+        if (retiredState) throw new Error(`Content runtime generation ${generation} is ${retiredState}`);
+        const active = activeGenerationVersion ? generations.get(activeGenerationVersion) : null;
+        if (active?.version === generation) return active.facade;
+        const existing = generations.get(generation);
+        if (existing) {
+          assertUsable(existing);
+          return existing.facade;
+        }
+        return generationRecord(generation, { create: true }).facade;
       },
-      dispose(reason = "registry disposed") {
-        for (const key of [...entries.keys()]) disposeEntry(key, reason);
+      activateGeneration(version) {
+        this.prepareGeneration(version);
+        return this.commitGeneration(version);
+      },
+      prepareGeneration(version, expectedBundles = []) {
+        assertBrokerRunning();
+        const generation = validGeneration(version);
+        const next = generations.get(generation);
+        if (!next) throw new Error(`Content runtime generation ${generation} was not begun`);
+        assertUsable(next);
+        const expected = Array.isArray(expectedBundles) ? expectedBundles.map((identity) => bundleClaim(identity)) : [];
+        for (const claim of expected) {
+          const registered = next.bundles.get(claim.outputPath);
+          if (!registered || JSON.stringify(registered) !== JSON.stringify(claim)) {
+            throw new Error(`Content runtime bundle ${claim.outputPath} is missing or has the wrong identity`);
+          }
+        }
+        if (next.state === "active" || next.state === "prepared") return next.facade;
+        if (next.state !== "pending") {
+          throw new Error(`Content runtime generation ${generation} cannot prepare from ${next.state}`);
+        }
+        next.state = "prepared";
+        return next.facade;
+      },
+      commitGeneration(version) {
+        assertBrokerRunning();
+        const generation = validGeneration(version);
+        const next = generations.get(generation);
+        if (!next) throw new Error(`Content runtime generation ${generation} was not begun`);
+        assertUsable(next);
+        if (next.state === "active") return next.facade;
+        if (next.state !== "prepared") {
+          throw new Error(`Content runtime generation ${generation} cannot commit from ${next.state}`);
+        }
+        try {
+          for (const entry of next.entries.values()) activateEntry(entry);
+        } catch (error) {
+          const reason = `activation failed closed: ${error?.message || String(error)}`;
+          activeGenerationVersion = "";
+          for (const record of [...generations.values()]) disposeRecord(record, "aborted", reason);
+          disposeStagedLegacy(reason);
+          throw error;
+        }
+        const previous = activeGenerationVersion ? generations.get(activeGenerationVersion) : null;
+        next.state = "active";
+        activeGenerationVersion = generation;
+        if (previous && previous !== next) {
+          disposeRecord(previous, "superseded", `superseded by content runtime generation ${generation}`);
+        }
+        for (const candidate of [...generations.values()]) {
+          if (candidate !== next && ["pending", "prepared"].includes(candidate.state)) {
+            disposeRecord(candidate, "aborted", `superseded by content runtime generation ${generation}`);
+          }
+        }
+        completeLegacyMigration(generation);
+        return next.facade;
+      },
+      abortGeneration(version, reason = "generation installation aborted") {
+        assertBrokerRunning();
+        const generation = validGeneration(version);
+        const record = generations.get(generation);
+        if (!record) return false;
+        if (record.state === "active") {
+          throw new Error(`Active content runtime generation ${generation} cannot be aborted`);
+        }
+        assertUsable(record);
+        disposeRecord(record, "aborted", reason);
+        return true;
+      },
+      shutdown(reason = "content runtime generation activation failed closed") {
+        const detail = String(reason || "content runtime generation activation failed closed");
+        if (brokerShutdownReason) return 0;
+        brokerShutdownReason = detail;
+        const records = [...generations.values()];
+        activeGenerationVersion = "";
+        for (const record of records) {
+          disposeRecord(record, "aborted", detail);
+        }
+        disposeStagedLegacy(detail);
+        return records.length;
+      },
+      dispose(reason = "content runtime broker disposed") {
+        return broker.shutdown(reason);
+      },
+      acquireGeneration(version) {
+        assertBrokerRunning();
+        const generation = validGeneration(version);
+        const retiredState = retiredGenerations.get(generation);
+        if (retiredState) throw new Error(`Content runtime generation ${generation} is ${retiredState}`);
+        const existing = generations.get(generation);
+        if (existing) {
+          assertUsable(existing);
+          return existing.facade;
+        }
+        const facade = broker.beginGeneration(generation);
+        return broker.activateGeneration(generation) || facade;
       }
     });
-    Object.defineProperty(target, RUNTIME_REGISTRY_KEY, {
-      configurable: false,
-      enumerable: false,
-      writable: false,
-      value: registry
-    });
-    return registry;
+    return broker;
+  }
+  function isRuntimeBroker(value) {
+    return Boolean(
+      value && value.kind === BROKER_KIND && value.brokerVersion === BROKER_VERSION && value.abiVersion === RUNTIME_REGISTRY_ABI_VERSION && typeof value.acquireGeneration === "function" && typeof value.beginGeneration === "function" && typeof value.prepareGeneration === "function" && typeof value.commitGeneration === "function" && typeof value.activateGeneration === "function" && typeof value.abortGeneration === "function" && typeof value.shutdown === "function"
+    );
+  }
+  function runtimeRegistry(target = globalThis) {
+    let broker = target[RUNTIME_REGISTRY_KEY];
+    if (broker != null && !isRuntimeBroker(broker)) {
+      throw new Error(
+        `Runtime broker key ${RUNTIME_REGISTRY_KEY} is occupied by ABI ${String(broker?.abiVersion ?? "unknown")}; incrementing RUNTIME_REGISTRY_ABI_VERSION must also produce a new broker key`
+      );
+    }
+    if (!broker) {
+      const legacy = legacyRegistries(target);
+      broker = createBroker({ legacy });
+      Object.defineProperty(target, RUNTIME_REGISTRY_KEY, {
+        configurable: false,
+        enumerable: false,
+        writable: false,
+        value: broker
+      });
+    }
+    const stage = migrationStage(target);
+    if (stage) {
+      try {
+        delete target[RUNTIME_MIGRATION_STAGE_KEY];
+      } catch {
+      }
+      return broker.beginGeneration(CONTENT_RUNTIME_IMPLEMENTATION_VERSION);
+    }
+    return broker.acquireGeneration(CONTENT_RUNTIME_IMPLEMENTATION_VERSION);
   }
 
   // content-src/preload/grok-storage-access.js
@@ -742,7 +1082,9 @@
       return;
     }
     runtimes.invalidate(runtimeName, `replaced by ${bridgeVersion}`);
-    const wait2 = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const wait2 = (ms) => new Promise((resolve) => {
+      setTimeout(resolve, ms);
+    });
     const normalize2 = (value) => String(value || "").replace(/\s+/g, " ").trim();
     const compact2 = (value) => String(value || "").toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, "");
     const all = (selector, root = document) => {
@@ -1666,7 +2008,9 @@
   }
 
   // content-src/preload/notion-utils.js
-  var wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  var wait = (ms) => new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
   function deadlineFromPayload(payload = {}, fallbackMs = 1e4) {
     const value = Number(payload?.deadlineAt);
     return Number.isFinite(value) && value > Date.now() ? value : Date.now() + Math.max(1e3, Number(fallbackMs) || 1e4);
@@ -1742,6 +2086,251 @@
       }
       window.postMessage({ source: "chatclub-notion-submit", type: "response", id, ok }, "*");
     }, listenerOptions);
+  }
+
+  // content-src/preload/notion-attachments.js
+  function createNotionAttachmentInspector(deps = {}) {
+    const {
+      normalize: normalize2,
+      findNotionComposerContainer,
+      editorScope,
+      rectOf,
+      queryAll,
+      visible,
+      collectOpenShadowElements
+    } = deps;
+    const getElementText = (element) => normalize2(element?.innerText || element?.textContent || "");
+    const getElementSearchText = (element) => normalize2([
+      element?.getAttribute?.("aria-label"),
+      element?.getAttribute?.("title"),
+      element?.getAttribute?.("alt"),
+      element?.getAttribute?.("data-testid"),
+      element?.getAttribute?.("data-test-id"),
+      element?.getAttribute?.("class"),
+      element?.innerText,
+      element?.textContent
+    ].filter(Boolean).join(" "));
+    const getNotionAttachmentScope = (editor) => findNotionComposerContainer(editor) || editorScope(editor) || document.body || document;
+    const isLikelyNotionAttachmentPreviewElement = (element) => {
+      if (!element) return false;
+      const dataTestId = String(element.getAttribute?.("data-testid") || element.getAttribute?.("data-test-id") || "").toLowerCase();
+      const className = String(element.getAttribute?.("class") || "").toLowerCase();
+      return dataTestId.includes("attachment") || dataTestId.includes("file-preview") || dataTestId.includes("upload-preview") || className.includes("attachment") || className.includes("file-preview") || className.includes("upload-preview") || className.includes("image-preview");
+    };
+    const isLikelyNotionAttachmentImage = (element) => {
+      if (!element || String(element.tagName || "").toLowerCase() !== "img") return false;
+      const src = String(element.getAttribute?.("src") || "").trim();
+      if (!src) return false;
+      if (/^blob:|^data:image\//i.test(src)) return true;
+      if (!/^(?:https?:)?\/\//i.test(src)) return false;
+      const rect = rectOf(element);
+      if (!rect) return false;
+      const minSide = Math.min(rect.width, rect.height);
+      const maxSide = Math.max(rect.width, rect.height);
+      if (minSide < 32 || maxSide > 360 || rect.width * rect.height < 1200) return false;
+      const label = getElementSearchText(element).toLowerCase();
+      if (/\b(?:avatar|favicon|logo|icon)\b/.test(label) && maxSide <= 72) return false;
+      return true;
+    };
+    const isNotionAttachmentActionElement = (element) => {
+      if (!element) return false;
+      const tag = String(element.tagName || "").toLowerCase();
+      const role = String(element.getAttribute?.("role") || "").toLowerCase();
+      const isActionElement = tag === "button" || role === "button";
+      const haystack = getElementSearchText(element).toLowerCase();
+      if (/(?:移除|删除|取消|关闭)/.test(haystack)) return true;
+      if (haystack.includes("remove attachment") || haystack.includes("remove file") || haystack.includes("remove image")) return true;
+      if (haystack.includes("delete attachment") || haystack.includes("delete file") || haystack.includes("delete image")) return true;
+      if (haystack.includes("dismiss attachment") || haystack.includes("dismiss file") || haystack.includes("dismiss image")) return true;
+      if (haystack.includes("cancel upload") || haystack.includes("remove upload") || haystack.includes("delete upload")) return true;
+      if (!isActionElement) return false;
+      return /\b(?:remove|delete|dismiss|cancel|close)\b/.test(haystack) && /\b(?:attachment|file|image|upload|preview)\b/.test(haystack);
+    };
+    const isLikelyNotionAttachmentCard = (element, scope) => {
+      if (!element || element === scope || element === document || element === document.body || !visible(element)) return false;
+      const images = queryAll(element, "img").filter(isLikelyNotionAttachmentImage);
+      if (isLikelyNotionAttachmentPreviewElement(element)) return images.length <= 1;
+      const rect = rectOf(element);
+      if (!rect || rect.width > 520 || rect.height > 320) return false;
+      if (images.length !== 1) return false;
+      const actions = queryAll(element, "button,[role='button']").filter(isNotionAttachmentActionElement);
+      if (actions.length > 0) return true;
+      return Math.min(rect.width, rect.height) >= 36 && Math.max(rect.width, rect.height) <= 380;
+    };
+    const findNotionAttachmentCardElement = (element, scope) => {
+      if (!element) return null;
+      let node = element;
+      let depth = 0;
+      while (node && node.nodeType === 1 && depth < 8) {
+        if (isLikelyNotionAttachmentCard(node, scope)) return node;
+        if (node === scope || node === document.body) break;
+        node = node.parentElement;
+        depth += 1;
+      }
+      return isLikelyNotionAttachmentImage(element) ? element : null;
+    };
+    const isNotionAttachmentMarker = (element) => {
+      if (!element || !visible(element)) return false;
+      const tag = String(element.tagName || "").toLowerCase();
+      if (tag === "img") return isLikelyNotionAttachmentImage(element);
+      if (isNotionAttachmentActionElement(element)) return true;
+      if (isLikelyNotionAttachmentPreviewElement(element)) return true;
+      return false;
+    };
+    const attachmentSnapshot = (editor) => {
+      const scope = getNotionAttachmentScope(editor);
+      const selector = [
+        "img",
+        "img[src^='blob:']",
+        "img[src^='data:image/']",
+        "[data-testid*='attachment' i]",
+        "[data-testid*='file-preview' i]",
+        "[data-testid*='upload-preview' i]",
+        "[data-test-id*='attachment' i]",
+        "[data-test-id*='file-preview' i]",
+        "[data-test-id*='upload-preview' i]",
+        "[class*='attachment' i]",
+        "[class*='file-preview' i]",
+        "[class*='upload-preview' i]",
+        "[class*='image-preview' i]",
+        "button[aria-label*='remove attachment' i]",
+        "button[aria-label*='remove file' i]",
+        "button[aria-label*='remove image' i]",
+        "button[aria-label*='delete attachment' i]",
+        "button[aria-label*='delete file' i]",
+        "button[aria-label*='delete image' i]",
+        "button[aria-label*='dismiss' i]",
+        "button[aria-label*='cancel upload' i]",
+        "button[aria-label*='close' i]",
+        "button[title*='remove attachment' i]",
+        "button[title*='remove file' i]",
+        "button[title*='remove image' i]",
+        "button[title*='delete attachment' i]",
+        "button[title*='delete file' i]",
+        "button[title*='delete image' i]",
+        "button[title*='dismiss' i]",
+        "button[title*='cancel upload' i]",
+        "button[title*='close' i]",
+        "[role='button'][aria-label*='remove attachment' i]",
+        "[role='button'][aria-label*='remove file' i]",
+        "[role='button'][aria-label*='remove image' i]",
+        "[role='button'][aria-label*='delete attachment' i]",
+        "[role='button'][aria-label*='delete file' i]",
+        "[role='button'][aria-label*='delete image' i]",
+        "[role='button'][aria-label*='dismiss' i]",
+        "[role='button'][aria-label*='cancel upload' i]",
+        "[role='button'][aria-label*='close' i]",
+        "button[aria-label*='移除' i]",
+        "button[aria-label*='删除' i]",
+        "button[aria-label*='取消' i]"
+      ].join(",");
+      const markers = collectOpenShadowElements(scope, selector).filter(isNotionAttachmentMarker);
+      const groups = /* @__PURE__ */ new Map();
+      for (const marker of markers) {
+        const card = findNotionAttachmentCardElement(marker, scope);
+        const markerTag = String(marker.tagName || "").toLowerCase();
+        const markerSrc = markerTag === "img" ? String(marker.getAttribute?.("src") || "").trim() : "";
+        const key = card || (markerSrc ? `img:${markerSrc}` : marker);
+        const existing = groups.get(key) || {
+          root: card || marker,
+          elements: [],
+          hasImage: false,
+          hasRemove: false,
+          hasPreview: false
+        };
+        existing.elements.push(marker);
+        if (isLikelyNotionAttachmentImage(marker)) existing.hasImage = true;
+        if (isNotionAttachmentActionElement(marker)) existing.hasRemove = true;
+        if (isLikelyNotionAttachmentPreviewElement(marker)) existing.hasPreview = true;
+        if (card && card !== marker) {
+          if (!existing.hasImage && queryAll(card, "img").some(isLikelyNotionAttachmentImage)) existing.hasImage = true;
+          if (!existing.hasRemove && queryAll(card, "button,[role='button']").some(isNotionAttachmentActionElement)) existing.hasRemove = true;
+          if (!existing.hasPreview && isLikelyNotionAttachmentPreviewElement(card)) existing.hasPreview = true;
+        }
+        groups.set(key, existing);
+      }
+      const unique = Array.from(groups.values());
+      const imageCount = unique.filter((group) => group.hasImage).length;
+      const removeCount = unique.filter((group) => group.hasRemove).length;
+      const previewCount = unique.length;
+      const attachmentCount = Math.max(imageCount, removeCount, previewCount);
+      const fingerprint = unique.slice(0, 12).map((group) => {
+        const root = group.root || group.elements[0] || null;
+        const image = group.elements.find(isLikelyNotionAttachmentImage) || (root ? queryAll(root, "img").find(isLikelyNotionAttachmentImage) : null);
+        const rect = rectOf(root);
+        return [
+          String(root?.tagName || "").toLowerCase(),
+          String(root?.getAttribute?.("data-testid") || root?.getAttribute?.("data-test-id") || ""),
+          String(root?.getAttribute?.("aria-label") || ""),
+          String(image?.getAttribute?.("src") || "").slice(0, 80),
+          getElementText(root).slice(0, 80),
+          rect ? `${Math.round(rect.left)},${Math.round(rect.top)},${Math.round(rect.width)},${Math.round(rect.height)}` : ""
+        ].join(":");
+      }).join("|");
+      return {
+        attachmentCount,
+        imageCount,
+        removeCount,
+        previewCount,
+        hasAttachment: attachmentCount > 0,
+        fingerprint
+      };
+    };
+    const getNotionAttachmentFingerprint = (snapshot) => snapshot ? `${snapshot.attachmentCount || 0};${snapshot.imageCount || 0};${snapshot.removeCount || 0};${snapshot.previewCount || 0};${snapshot.fingerprint || ""}` : "";
+    const hasNotionAttachmentSnapshotChange = (previousSnapshot, nextSnapshot) => {
+      const previousCount = Number(previousSnapshot?.attachmentCount || 0);
+      const nextCount = Number(nextSnapshot?.attachmentCount || 0);
+      if (nextCount > previousCount) return true;
+      if (Number(nextSnapshot?.imageCount || 0) > Number(previousSnapshot?.imageCount || 0)) return true;
+      if (Number(nextSnapshot?.removeCount || 0) > Number(previousSnapshot?.removeCount || 0)) return true;
+      if (Number(nextSnapshot?.previewCount || 0) > Number(previousSnapshot?.previewCount || 0)) return true;
+      return nextCount > 0 && getNotionAttachmentFingerprint(nextSnapshot) !== getNotionAttachmentFingerprint(previousSnapshot);
+    };
+    const hasNotionUploadInProgress = (editor) => {
+      const scope = getNotionAttachmentScope(editor);
+      const selector = [
+        "[aria-busy='true']",
+        "[role='progressbar']",
+        "progress",
+        "[data-testid*='uploading' i]",
+        "[data-testid*='upload' i]",
+        "[data-test-id*='uploading' i]",
+        "[data-test-id*='upload' i]",
+        "[class*='uploading' i]",
+        "[class*='spinner' i]",
+        "[class*='loading' i]"
+      ].join(",");
+      return collectOpenShadowElements(scope, selector).some((element) => {
+        if (!element || !visible(element)) return false;
+        if (findNotionAttachmentCardElement(element, scope)) return true;
+        if (isLikelyNotionAttachmentPreviewElement(element)) return true;
+        const tag = String(element.tagName || "").toLowerCase();
+        const role = String(element.getAttribute?.("role") || "").toLowerCase();
+        const ariaBusy = String(element.getAttribute?.("aria-busy") || "").toLowerCase() === "true";
+        const haystack = getElementSearchText(element).toLowerCase();
+        const uploadContext = /\b(?:upload|uploading|attachment|file-preview|upload-preview|file|image|preview)\b/.test(haystack) || /上传|附件|图片|图像|文件|预览/.test(haystack);
+        if (uploadContext) return true;
+        if (!(ariaBusy || role === "progressbar" || tag === "progress")) return false;
+        let node = element.parentElement || null;
+        for (let depth = 0; node && depth < 4; depth += 1) {
+          if (node === scope || node === document.body) break;
+          if (findNotionAttachmentCardElement(node, scope) || isLikelyNotionAttachmentPreviewElement(node)) return true;
+          const parentHaystack = getElementSearchText(node).toLowerCase();
+          if (/\b(?:upload|uploading|attachment|file-preview|upload-preview|file|image|preview)\b/.test(parentHaystack) || /上传|附件|图片|图像|文件|预览/.test(parentHaystack)) return true;
+          node = node.parentElement || null;
+        }
+        return false;
+      });
+    };
+    return Object.freeze({
+      attachmentSnapshot,
+      findNotionAttachmentCardElement,
+      getNotionAttachmentFingerprint,
+      getNotionAttachmentScope,
+      hasNotionAttachmentSnapshotChange,
+      hasNotionUploadInProgress,
+      isNotionAttachmentActionElement
+    });
   }
 
   // content-src/preload/notion-send.js
@@ -2359,229 +2948,23 @@ ${node.nodeValue}`;
         return false;
       }
     };
-    const getElementText = (element) => normalize(element?.innerText || element?.textContent || "");
-    const getElementSearchText = (element) => normalize([
-      element?.getAttribute?.("aria-label"),
-      element?.getAttribute?.("title"),
-      element?.getAttribute?.("alt"),
-      element?.getAttribute?.("data-testid"),
-      element?.getAttribute?.("data-test-id"),
-      element?.getAttribute?.("class"),
-      element?.innerText,
-      element?.textContent
-    ].filter(Boolean).join(" "));
-    const getNotionAttachmentScope = (editor) => findNotionComposerContainer(editor) || editorScope(editor) || document.body || document;
-    const isLikelyNotionAttachmentPreviewElement = (element) => {
-      if (!element) return false;
-      const dataTestId = String(element.getAttribute?.("data-testid") || element.getAttribute?.("data-test-id") || "").toLowerCase();
-      const className = String(element.getAttribute?.("class") || "").toLowerCase();
-      return dataTestId.includes("attachment") || dataTestId.includes("file-preview") || dataTestId.includes("upload-preview") || className.includes("attachment") || className.includes("file-preview") || className.includes("upload-preview") || className.includes("image-preview");
-    };
-    const isLikelyNotionAttachmentImage = (element) => {
-      if (!element || String(element.tagName || "").toLowerCase() !== "img") return false;
-      const src = String(element.getAttribute?.("src") || "").trim();
-      if (!src) return false;
-      if (/^blob:|^data:image\//i.test(src)) return true;
-      if (!/^(?:https?:)?\/\//i.test(src)) return false;
-      const rect = rectOf(element);
-      if (!rect) return false;
-      const minSide = Math.min(rect.width, rect.height);
-      const maxSide = Math.max(rect.width, rect.height);
-      if (minSide < 32 || maxSide > 360 || rect.width * rect.height < 1200) return false;
-      const label = getElementSearchText(element).toLowerCase();
-      if (/\b(?:avatar|favicon|logo|icon)\b/.test(label) && maxSide <= 72) return false;
-      return true;
-    };
-    const isNotionAttachmentActionElement = (element) => {
-      if (!element) return false;
-      const tag = String(element.tagName || "").toLowerCase();
-      const role = String(element.getAttribute?.("role") || "").toLowerCase();
-      const isActionElement = tag === "button" || role === "button";
-      const haystack = getElementSearchText(element).toLowerCase();
-      if (/(?:移除|删除|取消|关闭)/.test(haystack)) return true;
-      if (haystack.includes("remove attachment") || haystack.includes("remove file") || haystack.includes("remove image")) return true;
-      if (haystack.includes("delete attachment") || haystack.includes("delete file") || haystack.includes("delete image")) return true;
-      if (haystack.includes("dismiss attachment") || haystack.includes("dismiss file") || haystack.includes("dismiss image")) return true;
-      if (haystack.includes("cancel upload") || haystack.includes("remove upload") || haystack.includes("delete upload")) return true;
-      if (!isActionElement) return false;
-      return /\b(?:remove|delete|dismiss|cancel|close)\b/.test(haystack) && /\b(?:attachment|file|image|upload|preview)\b/.test(haystack);
-    };
-    const isLikelyNotionAttachmentCard = (element, scope) => {
-      if (!element || element === scope || element === document || element === document.body || !visible(element)) return false;
-      const images = queryAll(element, "img").filter(isLikelyNotionAttachmentImage);
-      if (isLikelyNotionAttachmentPreviewElement(element)) return images.length <= 1;
-      const rect = rectOf(element);
-      if (!rect || rect.width > 520 || rect.height > 320) return false;
-      if (images.length !== 1) return false;
-      const actions = queryAll(element, "button,[role='button']").filter(isNotionAttachmentActionElement);
-      if (actions.length > 0) return true;
-      return Math.min(rect.width, rect.height) >= 36 && Math.max(rect.width, rect.height) <= 380;
-    };
-    const findNotionAttachmentCardElement = (element, scope) => {
-      if (!element) return null;
-      let node = element;
-      let depth = 0;
-      while (node && node.nodeType === 1 && depth < 8) {
-        if (isLikelyNotionAttachmentCard(node, scope)) return node;
-        if (node === scope || node === document.body) break;
-        node = node.parentElement;
-        depth += 1;
-      }
-      return isLikelyNotionAttachmentImage(element) ? element : null;
-    };
-    const isNotionAttachmentMarker = (element) => {
-      if (!element || !visible(element)) return false;
-      const tag = String(element.tagName || "").toLowerCase();
-      if (tag === "img") return isLikelyNotionAttachmentImage(element);
-      if (isNotionAttachmentActionElement(element)) return true;
-      if (isLikelyNotionAttachmentPreviewElement(element)) return true;
-      return false;
-    };
-    const attachmentSnapshot = (editor) => {
-      const scope = getNotionAttachmentScope(editor);
-      const selector = [
-        "img",
-        "img[src^='blob:']",
-        "img[src^='data:image/']",
-        "[data-testid*='attachment' i]",
-        "[data-testid*='file-preview' i]",
-        "[data-testid*='upload-preview' i]",
-        "[data-test-id*='attachment' i]",
-        "[data-test-id*='file-preview' i]",
-        "[data-test-id*='upload-preview' i]",
-        "[class*='attachment' i]",
-        "[class*='file-preview' i]",
-        "[class*='upload-preview' i]",
-        "[class*='image-preview' i]",
-        "button[aria-label*='remove attachment' i]",
-        "button[aria-label*='remove file' i]",
-        "button[aria-label*='remove image' i]",
-        "button[aria-label*='delete attachment' i]",
-        "button[aria-label*='delete file' i]",
-        "button[aria-label*='delete image' i]",
-        "button[aria-label*='dismiss' i]",
-        "button[aria-label*='cancel upload' i]",
-        "button[aria-label*='close' i]",
-        "button[title*='remove attachment' i]",
-        "button[title*='remove file' i]",
-        "button[title*='remove image' i]",
-        "button[title*='delete attachment' i]",
-        "button[title*='delete file' i]",
-        "button[title*='delete image' i]",
-        "button[title*='dismiss' i]",
-        "button[title*='cancel upload' i]",
-        "button[title*='close' i]",
-        "[role='button'][aria-label*='remove attachment' i]",
-        "[role='button'][aria-label*='remove file' i]",
-        "[role='button'][aria-label*='remove image' i]",
-        "[role='button'][aria-label*='delete attachment' i]",
-        "[role='button'][aria-label*='delete file' i]",
-        "[role='button'][aria-label*='delete image' i]",
-        "[role='button'][aria-label*='dismiss' i]",
-        "[role='button'][aria-label*='cancel upload' i]",
-        "[role='button'][aria-label*='close' i]",
-        "button[aria-label*='移除' i]",
-        "button[aria-label*='删除' i]",
-        "button[aria-label*='取消' i]"
-      ].join(",");
-      const markers = collectOpenShadowElements(scope, selector).filter(isNotionAttachmentMarker);
-      const groups = /* @__PURE__ */ new Map();
-      for (const marker of markers) {
-        const card = findNotionAttachmentCardElement(marker, scope);
-        const markerTag = String(marker.tagName || "").toLowerCase();
-        const markerSrc = markerTag === "img" ? String(marker.getAttribute?.("src") || "").trim() : "";
-        const key = card || (markerSrc ? `img:${markerSrc}` : marker);
-        const existing2 = groups.get(key) || {
-          root: card || marker,
-          elements: [],
-          hasImage: false,
-          hasRemove: false,
-          hasPreview: false
-        };
-        existing2.elements.push(marker);
-        if (isLikelyNotionAttachmentImage(marker)) existing2.hasImage = true;
-        if (isNotionAttachmentActionElement(marker)) existing2.hasRemove = true;
-        if (isLikelyNotionAttachmentPreviewElement(marker)) existing2.hasPreview = true;
-        if (card && card !== marker) {
-          if (!existing2.hasImage && queryAll(card, "img").some(isLikelyNotionAttachmentImage)) existing2.hasImage = true;
-          if (!existing2.hasRemove && queryAll(card, "button,[role='button']").some(isNotionAttachmentActionElement)) existing2.hasRemove = true;
-          if (!existing2.hasPreview && isLikelyNotionAttachmentPreviewElement(card)) existing2.hasPreview = true;
-        }
-        groups.set(key, existing2);
-      }
-      const unique = Array.from(groups.values());
-      const imageCount = unique.filter((group) => group.hasImage).length;
-      const removeCount = unique.filter((group) => group.hasRemove).length;
-      const previewCount = unique.length;
-      const attachmentCount = Math.max(imageCount, removeCount, previewCount);
-      const fingerprint = unique.slice(0, 12).map((group) => {
-        const root = group.root || group.elements[0] || null;
-        const image = group.elements.find(isLikelyNotionAttachmentImage) || (root ? queryAll(root, "img").find(isLikelyNotionAttachmentImage) : null);
-        const rect = rectOf(root);
-        return [
-          String(root?.tagName || "").toLowerCase(),
-          String(root?.getAttribute?.("data-testid") || root?.getAttribute?.("data-test-id") || ""),
-          String(root?.getAttribute?.("aria-label") || ""),
-          String(image?.getAttribute?.("src") || "").slice(0, 80),
-          getElementText(root).slice(0, 80),
-          rect ? `${Math.round(rect.left)},${Math.round(rect.top)},${Math.round(rect.width)},${Math.round(rect.height)}` : ""
-        ].join(":");
-      }).join("|");
-      return {
-        attachmentCount,
-        imageCount,
-        removeCount,
-        previewCount,
-        hasAttachment: attachmentCount > 0,
-        fingerprint
-      };
-    };
-    const getNotionAttachmentFingerprint = (snapshot) => snapshot ? `${snapshot.attachmentCount || 0};${snapshot.imageCount || 0};${snapshot.removeCount || 0};${snapshot.previewCount || 0};${snapshot.fingerprint || ""}` : "";
-    const hasNotionAttachmentSnapshotChange = (previousSnapshot, nextSnapshot) => {
-      const previousCount = Number(previousSnapshot?.attachmentCount || 0);
-      const nextCount = Number(nextSnapshot?.attachmentCount || 0);
-      if (nextCount > previousCount) return true;
-      if (Number(nextSnapshot?.imageCount || 0) > Number(previousSnapshot?.imageCount || 0)) return true;
-      if (Number(nextSnapshot?.removeCount || 0) > Number(previousSnapshot?.removeCount || 0)) return true;
-      if (Number(nextSnapshot?.previewCount || 0) > Number(previousSnapshot?.previewCount || 0)) return true;
-      return nextCount > 0 && getNotionAttachmentFingerprint(nextSnapshot) !== getNotionAttachmentFingerprint(previousSnapshot);
-    };
-    const hasNotionUploadInProgress = (editor) => {
-      const scope = getNotionAttachmentScope(editor);
-      const selector = [
-        "[aria-busy='true']",
-        "[role='progressbar']",
-        "progress",
-        "[data-testid*='uploading' i]",
-        "[data-testid*='upload' i]",
-        "[data-test-id*='uploading' i]",
-        "[data-test-id*='upload' i]",
-        "[class*='uploading' i]",
-        "[class*='spinner' i]",
-        "[class*='loading' i]"
-      ].join(",");
-      return collectOpenShadowElements(scope, selector).some((element) => {
-        if (!element || !visible(element)) return false;
-        if (findNotionAttachmentCardElement(element, scope)) return true;
-        if (isLikelyNotionAttachmentPreviewElement(element)) return true;
-        const tag = String(element.tagName || "").toLowerCase();
-        const role = String(element.getAttribute?.("role") || "").toLowerCase();
-        const ariaBusy = String(element.getAttribute?.("aria-busy") || "").toLowerCase() === "true";
-        const haystack = getElementSearchText(element).toLowerCase();
-        const uploadContext = /\b(?:upload|uploading|attachment|file-preview|upload-preview|file|image|preview)\b/.test(haystack) || /上传|附件|图片|图像|文件|预览/.test(haystack);
-        if (uploadContext) return true;
-        if (!(ariaBusy || role === "progressbar" || tag === "progress")) return false;
-        let node = element.parentElement || null;
-        for (let depth = 0; node && depth < 4; depth += 1) {
-          if (node === scope || node === document.body) break;
-          if (findNotionAttachmentCardElement(node, scope) || isLikelyNotionAttachmentPreviewElement(node)) return true;
-          const parentHaystack = getElementSearchText(node).toLowerCase();
-          if (/\b(?:upload|uploading|attachment|file-preview|upload-preview|file|image|preview)\b/.test(parentHaystack) || /上传|附件|图片|图像|文件|预览/.test(parentHaystack)) return true;
-          node = node.parentElement || null;
-        }
-        return false;
-      });
-    };
+    const {
+      attachmentSnapshot,
+      findNotionAttachmentCardElement,
+      getNotionAttachmentFingerprint,
+      getNotionAttachmentScope,
+      hasNotionAttachmentSnapshotChange,
+      hasNotionUploadInProgress,
+      isNotionAttachmentActionElement
+    } = createNotionAttachmentInspector({
+      normalize,
+      findNotionComposerContainer,
+      editorScope,
+      rectOf,
+      queryAll,
+      visible,
+      collectOpenShadowElements
+    });
     const waitForStableNotionState = async ({ computeState, isSatisfied, timeoutMs = 45e3, settleMs = 600, intervalMs = 160, deadlineAt = 0 }) => {
       const start = Date.now();
       let lastState = computeState();
@@ -2989,17 +3372,20 @@ ${node.nodeValue}`;
   function installPreload() {
     const PROTOCOL = CONTENT_PROTOCOL;
     const runtimes = runtimeRegistry(window);
+    const runtimeIdentity = createContentRuntimeBundleIdentity(CONTENT_RUNTIME_PRELOAD_BUNDLE_IDENTITY);
+    runtimes.registerBundle(runtimeIdentity);
+    const PRELOAD_IMPLEMENTATION_VERSION = runtimeIdentity.bundle.implementationVersion;
     const COPY_SOURCE = PROTOCOL.NATIVE_COPY_SOURCE;
-    const GEMINI_MODEL_PICKER_BRIDGE_VERSION = "2026.07.13.3";
+    const GEMINI_MODEL_PICKER_BRIDGE_VERSION = PRELOAD_IMPLEMENTATION_VERSION;
     const GEMINI_MODEL_PICKER_SOURCE2 = PROTOCOL.GEMINI_MODEL_PICKER_SOURCE;
     const GEMINI_MODEL_PICKER_RUN_TOKEN_ATTRIBUTE = "data-chatclub-gemini-model-picker-run";
     const PREFERRED_MODEL_FOCUS_SHIELD_ATTRIBUTE = "data-chatclub-preferred-model-focus-shield";
-    const PREFERRED_MODEL_FOCUS_SHIELD_VERSION = "2026.07.13.7";
+    const PREFERRED_MODEL_FOCUS_SHIELD_VERSION = PRELOAD_IMPLEMENTATION_VERSION;
     const NAVIGATION_FOCUS_GUARD_RUNTIME2 = PROTOCOL.NAVIGATION_FOCUS_GUARD_RUNTIME;
     const NAVIGATION_FOCUS_GUARD_BRIDGE_VERSION = PROTOCOL.NAVIGATION_FOCUS_GUARD_RUNTIME_VERSION;
     const NAVIGATION_FOCUS_GUARD_STORAGE_KEY = "chatclub_preferred_model_focus_guard_until";
     const NAVIGATION_FOCUS_GUARD_LEASE_MS = 18e4;
-    const MAIN_WORLD_LOCATION_BRIDGE_VERSION = "2026.07.13.3";
+    const MAIN_WORLD_LOCATION_BRIDGE_VERSION = PRELOAD_IMPLEMENTATION_VERSION;
     const MAIN_WORLD_LOCATION_SOURCE2 = PROTOCOL.MAIN_WORLD_LOCATION_SOURCE;
     const DEEPSEEK_DELETE_SOURCE2 = PROTOCOL.DEEPSEEK_DELETE_SOURCE;
     function installChatClubWebviewShim() {
@@ -3010,8 +3396,8 @@ ${node.nodeValue}`;
         return;
       }
       if (!params.has("chatclub_webview")) return;
-      if (window.__CHATCLUB_WEBVIEW_SHIM__) return;
-      window.__CHATCLUB_WEBVIEW_SHIM__ = true;
+      if (window.__CHATCLUB_WEBVIEW_SHIM__ === PRELOAD_IMPLEMENTATION_VERSION) return;
+      window.__CHATCLUB_WEBVIEW_SHIM__ = PRELOAD_IMPLEMENTATION_VERSION;
       const ua = params.get("ua") || "";
       if (ua) {
         try {
@@ -3553,6 +3939,15 @@ ${node.nodeValue}`;
         records.push({ target, listener });
         while (records.length > 30) records.shift();
       };
+      if (capture?.installed && capture.version !== PRELOAD_IMPLEMENTATION_VERSION) {
+        try {
+          if (EventTarget.prototype.addEventListener === capture.wrappedAddEventListener && capture.originalAddEventListener) {
+            EventTarget.prototype.addEventListener = capture.originalAddEventListener;
+          }
+        } catch {
+        }
+        capture = { records };
+      }
       if (!capture?.installed) {
         const originalAddEventListener = EventTarget.prototype.addEventListener;
         const wrappedAddEventListener = function(type, listener, options) {
@@ -3570,7 +3965,13 @@ ${node.nodeValue}`;
             writable: true,
             value: wrappedAddEventListener
           });
-          capture = { installed: true, records, wrappedAddEventListener };
+          capture = {
+            installed: true,
+            version: PRELOAD_IMPLEMENTATION_VERSION,
+            records,
+            originalAddEventListener,
+            wrappedAddEventListener
+          };
           window.__CHATCLUB_GEMINI_MODEL_PICKER_LISTENER_CAPTURE__ = capture;
         } catch {
         }
@@ -3782,30 +4183,47 @@ ${node.nodeValue}`;
         return true;
       }
     })();
-    installChatClubWebviewShim();
-    installPreferredModelFocusShield();
-    installPreferredModelNavigationFocusGuardBridge();
-    installMainWorldLocationBridge();
-    installNativeCopyBridge(runtimes, COPY_SOURCE);
-    if (host === "gemini.google.com" || host.endsWith(".gemini.google.com")) {
-      installGeminiModelPickerBridge();
-    }
-    if (host === "chat.deepseek.com" || host === "deepseek.com" || host.endsWith(".deepseek.com")) {
-      installDeepSeekDeleteBridge(runtimes, DEEPSEEK_DELETE_SOURCE2);
-    }
-    if (framed && (host === "grok.com" || host.endsWith(".grok.com") || host === "grok.x.ai" || host.endsWith(".grok.x.ai"))) {
-      installGrokStorageAccessBridge(runtimes);
-    }
-    if (framed && (host === "claude.ai" || host.endsWith(".claude.ai"))) {
-      try {
-        if (location.pathname === "/") location.replace(`/new${location.search}${location.hash}`);
-        Object.defineProperty(document, "referrer", { get: () => "" });
-      } catch {
+    runtimes.install("preload-root", PRELOAD_IMPLEMENTATION_VERSION, () => ({
+      api: Object.freeze({ version: PRELOAD_IMPLEMENTATION_VERSION }),
+      activate() {
+        installChatClubWebviewShim();
+        installPreferredModelFocusShield();
+        installPreferredModelNavigationFocusGuardBridge();
+        installMainWorldLocationBridge();
+        installNativeCopyBridge(runtimes, COPY_SOURCE);
+        if (host === "gemini.google.com" || host.endsWith(".gemini.google.com")) {
+          installGeminiModelPickerBridge();
+        }
+        if (host === "chat.deepseek.com" || host === "deepseek.com" || host.endsWith(".deepseek.com")) {
+          installDeepSeekDeleteBridge(runtimes, DEEPSEEK_DELETE_SOURCE2);
+        }
+        if (framed && (host === "grok.com" || host.endsWith(".grok.com") || host === "grok.x.ai" || host.endsWith(".grok.x.ai"))) {
+          installGrokStorageAccessBridge(runtimes);
+        }
+        if (framed && (host === "claude.ai" || host.endsWith(".claude.ai"))) {
+          try {
+            if (location.pathname === "/") location.replace(`/new${location.search}${location.hash}`);
+            Object.defineProperty(document, "referrer", { get: () => "" });
+          } catch {
+          }
+        }
+        if (framed && (host === "app.notion.com" || host.endsWith(".notion.so"))) {
+          installNotionSendBridge(runtimes, PROTOCOL);
+        }
+      },
+      dispose() {
+        for (const key of [
+          "__CHATCLUB_PREFERRED_MODEL_FOCUS_SHIELD__",
+          "__CHATCLUB_MAIN_WORLD_LOCATION_BRIDGE__",
+          "__CHATCLUB_GEMINI_MODEL_PICKER_BRIDGE__"
+        ]) {
+          try {
+            window[key]?.dispose?.();
+          } catch {
+          }
+        }
       }
-    }
-    if (framed && (host === "app.notion.com" || host.endsWith(".notion.so"))) {
-      installNotionSendBridge(runtimes, PROTOCOL);
-    }
+    }));
   }
   installPreload();
 })();

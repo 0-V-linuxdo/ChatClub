@@ -21,6 +21,7 @@ export const DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.07.1
 export const PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.16.2";
 export const RUNTIME_REGISTRY_ABI_VERSION = 1;
 export const RUNTIME_REGISTRY_KEY = `__CHATCLUB_RUNTIME_REGISTRY_V${RUNTIME_REGISTRY_ABI_VERSION}__`;
+export const RUNTIME_MIGRATION_STAGE_KEY = `__CHATCLUB_RUNTIME_MIGRATION_STAGE_V${RUNTIME_REGISTRY_ABI_VERSION}__`;
 export const NAVIGATION_FOCUS_GUARD_RUNTIME = "navigation-focus-guard";
 export const NAVIGATION_FOCUS_GUARD_RUNTIME_VERSION = "2026.07.15.2";
 export const FRAME_TOAST_POSITION_EVENT = "chatclub:frame-toast-position:2026.07.13.1";

@@ -7,7 +7,7 @@ import {
 } from "../../shared/delete-completion.js";
 import { validateControllerContract } from "../controller-contract.js";
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, Math.max(0, Number(ms) || 0)); });
 
 function createDeleteAttemptId() {
   try {
@@ -190,6 +190,7 @@ async function ensureContentBridge(iframe, payload = {}) {
       action: "ensureContentBridge",
       tabId,
       hrefs: frameHrefHints(iframe, payload),
+      features: ["delete"],
       ...secureTarget
     });
   } catch (error) {
@@ -371,10 +372,12 @@ export function createTopicDeleteRuntime(dependencies = {}) {
     const injectedFiles = Array.isArray(installed?.injectedFiles) ? installed.injectedFiles : [];
     const expectedFiles = new Set([
       "content/preload.js",
-      "content/grok-cookie-bridge.js",
-      "content/message-navigator.js",
-      "content/content.js"
+      "content/content.js",
+      "content/delete.js"
     ]);
+    if (frameHrefHints(iframe, payload).some((href) => {
+      try { return new URL(href).hostname.toLowerCase() === "grok.com"; } catch { return false; }
+    })) expectedFiles.add("content/grok-cookie-bridge.js");
     const injectedNames = injectedFiles.map((entry) => String(entry || "").split("@")[0]);
     const injectionComplete = Number(installed?.injected) === expectedFiles.size
       && injectedFiles.length === expectedFiles.size

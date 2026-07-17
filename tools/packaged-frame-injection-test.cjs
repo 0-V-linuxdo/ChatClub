@@ -48,11 +48,16 @@ function fixture(options = {}) {
   const {
     documentTargetUnsupported,
     executeVerifiedPackagedFrameFile,
-    verifiedCustomUserscriptTarget
+    verifiedCustomUserscriptTarget,
+    worldOptionUnsupported
   } = await dataModule(source);
 
   assert.equal(documentTargetUnsupported(new Error('Unexpected property "documentIds"')), true);
   assert.equal(documentTargetUnsupported(new Error("Invalid tabId")), false);
+  assert.equal(documentTargetUnsupported(new Error("Invalid value")), false);
+  assert.equal(worldOptionUnsupported(new Error('Unexpected property "world"')), true);
+  assert.equal(worldOptionUnsupported(new Error("MAIN world execution failed after dispatch")), false);
+  assert.equal(worldOptionUnsupported(new Error("Unexpected property in script options")), false);
 
   {
     const { api, sender, calls } = fixture();
@@ -143,9 +148,9 @@ function fixture(options = {}) {
     assert.equal(calls.filter((call) => call.kind === "executeScript").length, 1);
   }
 
-  const runtime = fs.readFileSync(path.join(root, "background/runtime.js"), "utf8");
-  assert.match(runtime, /executeCustomSummaryUserscript[\s\S]*?await verifiedCustomUserscriptTarget\(chrome, sender\)/);
-  assert.match(runtime, /executeCustomTopicDeleteUserscript[\s\S]*?await verifiedCustomUserscriptTarget\(chrome, sender\)/);
+  const runtime = fs.readFileSync(path.join(root, "background/custom-userscript-runtime.js"), "utf8");
+  assert.match(runtime, /executeSummaryUserscript[\s\S]*?await verifiedCustomUserscriptTarget\(api, sender\)/);
+  assert.match(runtime, /executeTopicDeleteUserscript[\s\S]*?await verifiedCustomUserscriptTarget\(api, sender\)/);
 
   console.log("verified packaged frame injection fallback: ok");
 })().catch((error) => {

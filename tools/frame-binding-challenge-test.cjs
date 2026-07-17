@@ -35,6 +35,13 @@ function functionSource(source, name, asyncFunction = false) {
   const { createFrameBindingChallengeRegistry, validFrameBindingChallenge } = await import(
     `${pathToFileURL(path.join(root, "app/frame-bridge/frame-binding.js")).href}?test=${Date.now()}`
   );
+  const {
+    contentRuntimeIdentityForBundle,
+    contentRuntimePackageBundleIdentityMatches
+  } = await import(
+    `${pathToFileURL(path.join(root, "shared/content-runtime-package-identity.js")).href}?test=${Date.now()}`
+  );
+  const runtimeIdentity = contentRuntimeIdentityForBundle("content/content.js");
   let now = 1000;
   let randomSeed = 0;
   const registry = createFrameBindingChallengeRegistry({
@@ -129,6 +136,7 @@ function functionSource(source, name, asyncFunction = false) {
     const retries = [];
     const context = vm.createContext({
       CONTENT_BRIDGE_VERSION: "bridge-current",
+      contentRuntimePackageBundleIdentityMatches,
       Number,
       String,
       frameBindingChallenges: challenges,
@@ -137,7 +145,8 @@ function functionSource(source, name, asyncFunction = false) {
         bridgeVersion: "bridge-current",
         frameId: 11,
         frameBindingId,
-        browserDocumentId: "browser-document-1"
+        browserDocumentId: "browser-document-1",
+        runtimeIdentity
       }),
       window: { setTimeout: (callback, delay) => retries.push({ callback, delay }) }
     });
@@ -154,6 +163,7 @@ function functionSource(source, name, asyncFunction = false) {
         browserDocumentId: "browser-document-1",
         frameBindingId,
         bridgeVersion: "bridge-current",
+        runtimeIdentity,
         ...data
       },
       ...rest
@@ -183,7 +193,8 @@ function functionSource(source, name, asyncFunction = false) {
     { label: "invalid child frame", context: senderContext({ frameId: 0 }), data: {} },
     { label: "mismatched relayed document", context: senderContext(), data: { documentId: "bridge-document-2" } },
     { label: "mismatched browser document", context: senderContext(), data: { browserDocumentId: "browser-document-2" } },
-    { label: "stale bridge version", context: senderContext(), data: { bridgeVersion: "bridge-old" } }
+    { label: "stale bridge version", context: senderContext(), data: { bridgeVersion: "bridge-old" } },
+    { label: "stale runtime identity", context: senderContext(), data: { runtimeIdentity: {} } }
   ]) {
     const fixture = bindingFixture();
     const entry = fixture.challenges.issue(boundFrame());
@@ -226,7 +237,8 @@ function functionSource(source, name, asyncFunction = false) {
         bridgeVersion: "bridge-current",
         frameId: 11,
         frameBindingId,
-        browserDocumentId: "browser-document-1"
+        browserDocumentId: "browser-document-1",
+        runtimeIdentity
       };
     };
     assert.equal(await fixture.context.accept(relay(entry), senderContext(), 7), false, "navigation during verification must invalidate the accepted relay");

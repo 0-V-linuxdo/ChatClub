@@ -7,10 +7,15 @@ const vm = require("node:vm");
 
 const root = path.resolve(__dirname, "..");
 const constantsSource = fs.readFileSync(path.join(root, "shared/constants.js"), "utf8");
+const defaultShortcutsSource = fs.readFileSync(path.join(root, "shared/default-shortcuts.js"), "utf8");
 const i18nSource = fs.readFileSync(path.join(root, "shared/i18n.js"), "utf8");
 const shortcutsSource = fs.readFileSync(path.join(root, "shared/shortcuts.js"), "utf8");
 const storageSource = fs.readFileSync(path.join(root, "shared/storage-schema.js"), "utf8");
 const protocolSource = fs.readFileSync(path.join(root, "shared/protocol.js"), "utf8");
+const contentBackgroundRequestsSource = fs.readFileSync(
+  path.join(root, "shared/content-background-requests.js"),
+  "utf8"
+);
 const contentEntrySource = fs.readFileSync(path.join(root, "content-src/content.js"), "utf8");
 const mainSource = ["app/main.js", "app/runtime.js", "app/frame-bridge/controller.js"]
   .map((file) => fs.readFileSync(path.join(root, file), "utf8"))
@@ -18,7 +23,7 @@ const mainSource = ["app/main.js", "app/runtime.js", "app/frame-bridge/controlle
 const serviceWorkerSource = ["background/service-worker.js", "background/runtime.js", "background/frame-relay.js"]
   .map((file) => fs.readFileSync(path.join(root, file), "utf8"))
   .join("\n");
-const stateSource = fs.readFileSync(path.join(root, "app/state.js"), "utf8");
+const stateSource = fs.readFileSync(path.join(root, "app/state/schema.js"), "utf8");
 const shortcutSettingsSource = fs.readFileSync(path.join(root, "app/settings/shortcuts.js"), "utf8");
 const tooltipSource = fs.readFileSync(path.join(root, "ui/tooltip.js"), "utf8");
 const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"), "utf8");
@@ -133,7 +138,7 @@ function loadShortcutModule(defaultConfig) {
   assert.ok(exportNames.length > 0, "shared/shortcuts.js must expose its public API");
   const transformed = shortcutsSource
     .replace(
-      /^import\s+\{\s*DEFAULT_SHORTCUT_CONFIG\s*\}\s+from\s+"\.\/constants\.js";\s*/,
+      /^import\s+\{\s*DEFAULT_SHORTCUT_CONFIG\s*\}\s+from\s+"\.\/default-shortcuts\.js";\s*/,
       "const DEFAULT_SHORTCUT_CONFIG = globalThis.__DEFAULT_SHORTCUT_CONFIG;\n"
     )
     .replace(/\bexport\s+(?=(?:const|function)\b)/g, "");
@@ -191,7 +196,7 @@ function assertNoProperty(value, forbidden, label) {
   }
 }
 
-const sharedDefault = evaluateLiteral(constantsSource, "DEFAULT_SHORTCUT_CONFIG", "{");
+const sharedDefault = evaluateLiteral(defaultShortcutsSource, "DEFAULT_SHORTCUT_CONFIG", "{");
 const shortcuts = loadShortcutModule(sharedDefault);
 
 // Legacy storage must migrate once into independent canonical profiles without
@@ -658,7 +663,7 @@ assert.deepEqual(plain(importedLegacyBundle), plain(migrated), "old shortcut bac
 // migration code, never in a canonical default profile.
 const expectedDefaults = plain(shortcuts.normalizeShortcutConfig(sharedDefault));
 const expectedActions = plain(shortcuts.ALL_SHORTCUT_ACTIONS);
-for (const [label, source] of [["shared/constants.js", constantsSource]]) {
+for (const [label, source] of [["shared/default-shortcuts.js", defaultShortcutsSource]]) {
   const runtimeDefault = evaluateLiteral(
     source,
     "DEFAULT_SHORTCUT_CONFIG",
@@ -736,9 +741,14 @@ assert.match(
   "isolated shortcut handling must reject synthetic key events"
 );
 assert.match(
-  contentSource,
-  /action: "relayShortcutTriggered"/,
-  "isolated shortcuts must use extension runtime relay"
+  contentEntrySource,
+  /requestBackground\(RELAY_SHORTCUT_TRIGGERED_REQUEST,/,
+  "isolated shortcuts must use the typed extension runtime relay request"
+);
+assert.match(
+  contentBackgroundRequestsSource,
+  /RELAY_SHORTCUT_TRIGGERED_REQUEST\s*=\s*[\s\S]*?request\(\s*"relayShortcutTriggered",/,
+  "the content request domain must bind shortcuts to the canonical background action"
 );
 assert.match(serviceWorkerSource, /createAuthenticatedFrameRelay\(\{[\s\S]*?registeredSenderContext/, "background must inject the authenticated shortcut sender verifier");
 assert.match(serviceWorkerSource, /async function shortcutTriggered[\s\S]*?authenticate\(message, sender\)/, "shortcut relay must authenticate the registered frame context");

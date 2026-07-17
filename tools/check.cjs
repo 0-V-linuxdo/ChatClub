@@ -3,8 +3,10 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
+const { enforceNodeVersion } = require("./node-version.cjs");
 
 const root = path.resolve(__dirname, "..");
+enforceNodeVersion({ context: "Static verification", strict: true });
 const ignoredDirectories = new Set([".git", ".cache", "build", "dist", "node_modules", "output"]);
 
 function filesUnder(directory, relative = "") {
@@ -37,7 +39,9 @@ for (const file of files.filter((file) => file.endsWith(".json"))) {
 
 console.log("JSON syntax checks passed.");
 
+run("node_modules/eslint/bin/eslint.js", ["app", "background", "shared", "ui", "content-src", "build-src"]);
 run("tools/verify-modules.mjs");
+run("tools/global-runtime-ownership-test.cjs");
 run("tools/generate-artifacts.cjs", ["--check"]);
 run("tools/verify-version.cjs");
 run("tools/verify-manifest.cjs");

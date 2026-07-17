@@ -3,6 +3,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const { pathToFileURL } = require("node:url");
 
 const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
@@ -21,9 +22,7 @@ const dataModule = (source) => import(`data:text/javascript;base64,${Buffer.from
     ["example.com"]
   );
 
-  const stateHistoryImport = 'im' + 'port { PROMPT_HISTORY_LIVE_CURSOR } from "./composer/history.js";';
-  const stateSource = read("app/state.js").replace(stateHistoryImport, "const PROMPT_HISTORY_LIVE_CURSOR = -1;");
-  const stateModule = await dataModule(stateSource);
+  const stateModule = await import(pathToFileURL(path.join(root, "app/state.js")).href);
   const rootState = stateModule.createAppState();
   rootState.groups = [{ id: "group-1" }];
   rootState.options = { nested: { enabled: true } };
@@ -36,11 +35,17 @@ const dataModule = (source) => import(`data:text/javascript;base64,${Buffer.from
   ports.pocket.pocketEntries = [{ id: "entry-1" }];
   assert.equal(rootState.pocketEntries[0].id, "entry-1");
 
-  const content = read("content/content.js");
+  const content = `${read("content-src/content.js")}\n${read("content-src/capabilities/summary-runtime.js")}`;
   const background = [
     "background/service-worker.js",
     "background/runtime.js",
+    "background/secure-frame-contexts.js",
+    "background/custom-userscript-runtime.js",
+    "background/grok-cookie-runtime.js",
     "background/frame-relay.js",
+    "background/frame-command-errors.js",
+    "background/main-world-runtime.js",
+    "background/registered-frame-transport.js",
     "background/content-registration.js",
     "background/frame-injection.js",
     "background/tab-runtime.js"
@@ -50,11 +55,12 @@ const dataModule = (source) => import(`data:text/javascript;base64,${Buffer.from
     "app/runtime.js",
     "app/frame-bridge/controller.js"
   ].map(read).join("\n");
-  const workspace = read("app/workspace/controller.js");
+  const workspace = `${read("app/workspace/controller.js")}\n${read("app/workspace/frame-controller.js")}`;
   const summary = read("app/summary/controller.js");
   const topicDelete = read("app/topic-delete/runtime.js");
   const contentEntry = read("content-src/content.js");
-  const commandDispatcher = read("content-src/shared/command-dispatcher.js");
+  const contentDocumentIdentity = read("content-src/shared/content-document-identity.js");
+  const commandRouter = read("content-src/shared/command-router.js");
   const secureFrameRpc = read("content-src/shared/secure-frame-rpc.js");
   const preloadEntry = read("content-src/preload.js");
   assert.match(content, /if \(!EXTENSION_ORIGIN \|\| event\.source !== window\.parent \|\| event\.origin !== EXTENSION_ORIGIN\) return/);
@@ -74,11 +80,12 @@ const dataModule = (source) => import(`data:text/javascript;base64,${Buffer.from
   assert.match(background, /createAuthenticatedFrameRelay\(\{[\s\S]*?registeredSenderContext/);
   assert.match(background, /async function frameBinding[\s\S]*?authenticate\(message, sender\)/);
   assert.match(background, /action: "frameBinding"/);
-  assert.match(contentEntry, /function currentFrameBindingId\(\)/);
+  assert.match(contentEntry, /createContentDocumentIdentity\(window\)/);
+  assert.match(contentDocumentIdentity, /const currentFrameBindingId = \(\) =>/);
   assert.match(contentEntry, /FRAME_BINDING_POST_MESSAGE_SOURCE/);
   assert.match(contentEntry, /async function relayFrameBindingChallenge/);
   assert.match(contentEntry, /expectedBindingId/);
-  assert.match(background, /executeCustomTopicDeleteUserscript/);
+  assert.match(background, /executeTopicDeleteUserscript/);
   assert.match(background, /verifiedCustomUserscriptTarget/);
   const frameCommands = await dataModule(read("shared/frame-commands.js"));
   assert.ok(frameCommands.FRAME_COMMAND_SPECS.getSummaryRuntimeState);
@@ -87,11 +94,17 @@ const dataModule = (source) => import(`data:text/javascript;base64,${Buffer.from
   assert.match(background, /new Set\(Object\.keys\(FRAME_COMMAND_SPECS\)\)/);
   assert.match(background, /executeMainWorldFrameCommand/);
   assert.match(background, /world: "MAIN"/);
-  assert.match(background, /RUNTIME_REGISTRY_KEY/);
+  assert.match(background, /CONTENT_RUNTIME_REGISTRY_KEY/);
+  assert.match(background, /broker\?\.activeGenerationVersion !== generation/);
+  assert.match(background, /broker\.acquireGeneration\(generation\)/);
   assert.match(background, /registry\.require\(runtimeName, runtimeVersion\)/);
-  assert.match(contentEntry, /createCommandDispatcher\(FRAME_COMMAND_SPECS/);
-  assert.match(commandDispatcher, /for \(const command of Object\.keys\(specifications\)\)/);
-  assert.match(commandDispatcher, /Object\.hasOwn\(specifications, command\)/);
+  assert.match(background, /documentTargetUnsupported\(error\)/);
+  assert.match(background, /verifiedRegisteredFrameFallbackTarget/);
+  assert.doesNotMatch(background, /documentIds\|unexpected property\|invalid value/);
+  assert.match(background, /return frameRouteError\("REMOTE_ERROR", message, true, error\)/);
+  assert.match(contentEntry, /contentCommandRouter\(runtimes, CONTENT_RUNTIME_IDENTITY\.implementationVersion\)/);
+  assert.match(commandRouter, /if \(!FRAME_COMMAND_SPECS\[command\]\)/);
+  assert.match(commandRouter, /commandCapability\(command\) !== feature/);
   assert.match(background, /rollbackContentScript\(previous, registration\)/);
   assert.match(background, /registerContentScriptsVerified\(api, \[rollback\]\)/);
   assert.doesNotMatch(main, /chatclub-parent-clipboard|getShortcutConfig|SHORTCUT_TRIGGER_POST_MESSAGE_SOURCE/);

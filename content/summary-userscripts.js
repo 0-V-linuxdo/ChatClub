@@ -22,6 +22,7 @@
   var PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.16.2";
   var RUNTIME_REGISTRY_ABI_VERSION = 1;
   var RUNTIME_REGISTRY_KEY = `__CHATCLUB_RUNTIME_REGISTRY_V${RUNTIME_REGISTRY_ABI_VERSION}__`;
+  var RUNTIME_MIGRATION_STAGE_KEY = `__CHATCLUB_RUNTIME_MIGRATION_STAGE_V${RUNTIME_REGISTRY_ABI_VERSION}__`;
   var NAVIGATION_FOCUS_GUARD_RUNTIME = "navigation-focus-guard";
   var NAVIGATION_FOCUS_GUARD_RUNTIME_VERSION = "2026.07.15.2";
   var FRAME_TOAST_POSITION_EVENT = "chatclub:frame-toast-position:2026.07.13.1";
@@ -64,6 +65,49 @@
     TOPIC_DELETE_READY_EVENT,
     TOPIC_DELETE_BRIDGE_SOURCE
   });
+
+  // chatclub-runtime-version:shared/content-runtime-version.generated.js
+  var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "42d1e137fe2015d43fe6732ef431f641cc51d65ec7986e095d9a243339d4e9c2";
+  var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.cd06beed22e9f6fcab8057bd949a3c0c68974967bda920471fc1d62f06999029";
+  var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "cd06beed22e9f6fcab8057bd949a3c0c68974967bda920471fc1d62f06999029";
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "ebe2ed4ec1fc3680d7cd904b38a423d86055d3ce43ef5f1d0cb0f96f6d83fd83";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.ebe2ed4ec1fc3680d7cd904b38a423d86055d3ce43ef5f1d0cb0f96f6d83fd83";
+  var CONTENT_RUNTIME_SUMMARY_ISOLATED_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts.js", "entryPath": "content-src/summary-userscripts.js", "sourceSha256": "1a4124691bcc0b61609986cf6870b922dfc8f5d133acbfac1203789b98ace4b9", "implementationSha256": "03d726386eb69789437d77afb428ca4799d6c4ba4572ca82a327bdf957fb55a9", "implementationVersion": "2026.07.16.2+bundle.03d726386eb69789437d77afb428ca4799d6c4ba4572ca82a327bdf957fb55a9" });
+
+  // shared/content-runtime-identity.js
+  if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
+    throw new Error("Generated content runtime identity does not match the packaged protocol");
+  }
+  var CONTENT_RUNTIME_IDENTITY = Object.freeze({
+    protocolVersion: CONTENT_RUNTIME_PROTOCOL_VERSION,
+    implementationVersion: CONTENT_RUNTIME_IMPLEMENTATION_VERSION,
+    implementationSha256: CONTENT_RUNTIME_IMPLEMENTATION_SHA256,
+    sourceSha256: CONTENT_RUNTIME_SOURCE_SHA256,
+    buildRecipeVersion: CONTENT_RUNTIME_BUILD_RECIPE_VERSION,
+    buildRecipeSha256: CONTENT_RUNTIME_BUILD_RECIPE_SHA256
+  });
+  var IDENTITY_FIELDS = Object.freeze(Object.keys(CONTENT_RUNTIME_IDENTITY));
+  var BUNDLE_IDENTITY_FIELDS = Object.freeze([
+    "outputPath",
+    "entryPath",
+    "sourceSha256",
+    "implementationSha256",
+    "implementationVersion"
+  ]);
+  function normalizeContentRuntimeBundleIdentity(value = {}) {
+    const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+    return Object.freeze(Object.fromEntries(
+      BUNDLE_IDENTITY_FIELDS.map((field) => [field, String(source[field] || "")])
+    ));
+  }
+  function createContentRuntimeBundleIdentity(bundle) {
+    const normalized = normalizeContentRuntimeBundleIdentity(bundle);
+    if (BUNDLE_IDENTITY_FIELDS.some((field) => !normalized[field])) {
+      throw new TypeError("Packaged content runtime bundle identity is incomplete");
+    }
+    return Object.freeze({ ...CONTENT_RUNTIME_IDENTITY, bundle: normalized });
+  }
 
   // chatclub-generated:summary-registry
   function createSummaryRunnerRegistry() {
@@ -2386,132 +2430,27 @@
       return api.merge(out);
     };
     scripts["typingmind.js"] = scripts["typingmind"];
-    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2" });
+    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.ebe2ed4ec1fc3680d7cd904b38a423d86055d3ce43ef5f1d0cb0f96f6d83fd83" });
     return scripts;
   }
 
-  // content-src/shared/runtime-registry.js
-  function validName(name) {
-    const value = String(name || "").trim();
-    if (!value) throw new TypeError("Runtime name is required");
-    return value;
-  }
-  function disposeSupersededRegistries(target) {
-    let keys = [];
-    try {
-      keys = Object.getOwnPropertyNames(target);
-    } catch {
-    }
-    for (const key of keys) {
-      if (key === RUNTIME_REGISTRY_KEY || !/^__CHATCLUB_RUNTIME_REGISTRY_V\d+__$/.test(key)) continue;
-      let registry = null;
-      try {
-        registry = target[key];
-      } catch {
-      }
-      if (!registry || registry.abiVersion === RUNTIME_REGISTRY_ABI_VERSION || typeof registry.dispose !== "function") continue;
-      try {
-        registry.dispose(`superseded by runtime registry ABI ${RUNTIME_REGISTRY_ABI_VERSION}`);
-      } catch {
-      }
-    }
-  }
+  // content-src/shared/runtime-registry-client.js
   function runtimeRegistry(target = globalThis) {
-    const current = target[RUNTIME_REGISTRY_KEY];
-    if (current?.abiVersion === RUNTIME_REGISTRY_ABI_VERSION && typeof current.register === "function") return current;
-    if (current != null) {
-      throw new Error(
-        `Runtime registry key ${RUNTIME_REGISTRY_KEY} is occupied by ABI ${String(current?.abiVersion ?? "unknown")}; incrementing RUNTIME_REGISTRY_ABI_VERSION must also produce a new registry key`
-      );
+    const broker = target[RUNTIME_REGISTRY_KEY];
+    if (!broker || broker.abiVersion !== RUNTIME_REGISTRY_ABI_VERSION || typeof broker.beginGeneration !== "function") {
+      throw new Error("Content base runtime broker must be installed before optional capabilities");
     }
-    disposeSupersededRegistries(target);
-    const entries = /* @__PURE__ */ new Map();
-    const disposeEntry = (key, reason) => {
-      const entry = entries.get(key);
-      if (!entry) return false;
-      entries.delete(key);
-      try {
-        entry.dispose?.(String(reason || "invalidated"));
-      } catch {
-      }
-      return true;
-    };
-    const registry = Object.freeze({
-      abiVersion: RUNTIME_REGISTRY_ABI_VERSION,
-      register(name, descriptor = {}) {
-        const key = validName(name);
-        const version = String(descriptor.version || "");
-        if (!version) throw new TypeError(`Runtime ${key} requires a version`);
-        if (!("api" in descriptor)) throw new TypeError(`Runtime ${key} requires an api`);
-        const previous = entries.get(key);
-        if (previous?.version === version) return previous.api;
-        if (previous) {
-          try {
-            previous.dispose?.(`replaced by ${version}`);
-          } catch {
-          }
-        }
-        entries.set(key, {
-          version,
-          api: descriptor.api,
-          dispose: typeof descriptor.dispose === "function" ? descriptor.dispose : null
-        });
-        return descriptor.api;
-      },
-      install(name, version, factory) {
-        const key = validName(name);
-        const expectedVersion = String(version || "");
-        if (!expectedVersion) throw new TypeError(`Runtime ${key} requires a version`);
-        const previous = entries.get(key);
-        if (previous?.version === expectedVersion) return previous.api;
-        if (previous) disposeEntry(key, `replaced by ${expectedVersion}`);
-        if (typeof factory !== "function") throw new TypeError(`Runtime ${key} requires an installer`);
-        const descriptor = factory();
-        if (!descriptor || typeof descriptor !== "object" || !("api" in descriptor)) {
-          throw new TypeError(`Runtime ${key} installer must return an api descriptor`);
-        }
-        entries.set(key, {
-          version: expectedVersion,
-          api: descriptor.api,
-          dispose: typeof descriptor.dispose === "function" ? descriptor.dispose : null
-        });
-        return descriptor.api;
-      },
-      require(name, version) {
-        const key = validName(name);
-        const entry = entries.get(key);
-        if (!entry) throw new Error(`Runtime ${key} is not registered`);
-        if (version != null && entry.version !== String(version)) {
-          throw new Error(`Runtime ${key} version ${entry.version} does not satisfy ${String(version)}`);
-        }
-        return entry.api;
-      },
-      registration(name) {
-        const entry = entries.get(validName(name));
-        return entry ? Object.freeze({ version: entry.version, api: entry.api }) : null;
-      },
-      invalidate(name, reason = "invalidated") {
-        const key = validName(name);
-        return disposeEntry(key, reason);
-      },
-      dispose(reason = "registry disposed") {
-        for (const key of [...entries.keys()]) disposeEntry(key, reason);
-      }
-    });
-    Object.defineProperty(target, RUNTIME_REGISTRY_KEY, {
-      configurable: false,
-      enumerable: false,
-      writable: false,
-      value: registry
-    });
-    return registry;
+    return broker.beginGeneration(CONTENT_RUNTIME_IMPLEMENTATION_VERSION);
   }
 
   // content-src/summary-userscripts.js
   function installSummaryIsolatedRuntime() {
-    runtimeRegistry(window).register("summary-runners", {
+    const runtimes = runtimeRegistry(window);
+    const runtimeIdentity = createContentRuntimeBundleIdentity(CONTENT_RUNTIME_SUMMARY_ISOLATED_BUNDLE_IDENTITY);
+    runtimes.registerBundle(runtimeIdentity);
+    runtimes.register("summary-runners", {
       version: CONTENT_BRIDGE_VERSION,
-      api: Object.freeze({ scripts: createSummaryRunnerRegistry() })
+      api: Object.freeze({ scripts: createSummaryRunnerRegistry(), runtimeIdentity })
     });
   }
   installSummaryIsolatedRuntime();

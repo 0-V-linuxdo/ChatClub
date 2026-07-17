@@ -8,7 +8,7 @@ export function installDeepSeekDeleteBridge(runtimes, deleteSource) {
   }
   runtimes.invalidate(runtimeName, `replaced by ${bridgeVersion}`);
 
-  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const wait = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
   const normalize = (value) => String(value || "").replace(/\s+/g, " ").trim();
   const compact = (value) => String(value || "").toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, "");
   const all = (selector, root = document) => {

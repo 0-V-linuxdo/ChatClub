@@ -1,8 +1,16 @@
 {
-  "app/runtime.js": "Top-level application assembly and lifecycle legacy extraction boundary; browser entry remains a minimal bootstrap.",
-  "app/settings/controller.js": "Lazy-loaded settings section controllers share modal routing and drag-order persistence during the staged split.",
-  "app/workspace/controller.js": "Workspace facade still composes frame lifecycle, layout, drag, and menu behavior behind one lazy boundary.",
-  "content-src/content.js": "Canonical content bridge behavior is kept in one esbuild entry while protocol and reusable Summary runtime are extracted.",
-  "content-src/message-navigator.js": "Message Navigator site adapters are bundled together into one dynamically registered classic IIFE.",
-  "shared/topic-delete-userscript-sources.js": "Build-time canonical Delete userscript templates generate standalone runtime assets and are deliberately excluded from packages."
+  "shared/i18n.js": {
+    "maxLines": 1662,
+    "target": 1500,
+    "maxBytes": 90511,
+    "targetBytes": 82000,
+    "reason": "Bilingual translation catalog data is kept co-located for key parity; both line and byte size are explicitly ratcheted."
+  },
+  "tools/browser-smoke.mjs": {
+    "maxLines": 1213,
+    "target": 1100,
+    "maxBytes": 62403,
+    "targetBytes": 56000,
+    "reason": "Cross-engine smoke orchestration keeps Chromium and Firefox lifecycle assertions together; line and byte size are explicitly ratcheted."
+  }
 }

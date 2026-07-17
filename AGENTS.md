@@ -55,7 +55,7 @@ Classify overlays by interaction type instead of adding one-off close flags at c
 
 ## Release Versioning
 
-Use Node.js 22 or 24 for generation, verification, and packaging. The repository `.nvmrc` pins Node 24; run `nvm use` and confirm `node --version` before `npm ci` or release-related scripts. `package.json` permits 22.x or 24.x. GitHub CI and release packaging enforce those majors, while a local `npm run ci` only warns; do not rely on an unsupported local runtime merely because an individual script starts.
+Use Node.js 22 or 24 for generation, verification, and packaging. The repository `.nvmrc` pins Node 24; run `nvm use` and confirm `node --version` before `npm ci` or release-related scripts. `package.json` permits 22.x or 24.x. Generation, static verification, Node regression tests, package verification, local CI, GitHub CI, and release packaging all reject unsupported majors.
 
 Every changed Chromium or Firefox release payload must receive a new release version. Documentation- or tooling-only changes outside the package plan do not require a release bump.
 
@@ -129,7 +129,7 @@ Site algorithms and standalone assets have multiple author paths that must stay 
 
 - Isolated-world native runners: `content-src/content.js`
 - DeepSeek MAIN-world bridge: `content-src/preload/deepseek-delete.js`
-- Standalone userscript source/template: `shared/topic-delete-userscript-sources.js`
+- Standalone userscript source/template: `build-src/topic-delete-userscript-sources.js`
 - Standalone descriptors, versions, lengths, hosts, paths, and timeouts: `shared/topic-delete-sites.js`
 - Generated standalone outputs: `topic-delete-userscripts/*.user.js`
 
@@ -143,7 +143,7 @@ When built-in Delete Site behavior changes:
 
 1. Validate the current page structure and proposed interaction in DevTools before editing.
 2. Update every affected author path; do not edit a generated `.user.js`.
-3. When a standalone body changes, bump its author-source version constant in `shared/topic-delete-userscript-sources.js` and every affected descriptor `scriptVersion`. Most sites share `DELETE_USERSCRIPT_VERSION`; Gemini uses `GEMINI_DELETE_USERSCRIPT_VERSION`, so a shared engine change can affect multiple outputs.
+3. When a standalone body changes, bump its author-source version constant in `build-src/topic-delete-userscript-sources.js` and every affected descriptor `scriptVersion`. Most sites share `DELETE_USERSCRIPT_VERSION`; Gemini uses `GEMINI_DELETE_USERSCRIPT_VERSION`, so a shared engine change can affect multiple outputs.
 4. Run `npm run generate` to produce the standalone outputs. The first run may intentionally stop after writing them when the still-old descriptor version or length is detected as drift.
 5. Update every affected descriptor `userscriptLength` to the generated source's normalized, trimmed length, and correct any reported descriptor `scriptVersion` drift.
 6. Rerun `npm run generate`, verify that every descriptor `scriptVersion` equals its generated `@version`, then run `npm run verify:generated`, `npm run check`, and `npm test`.

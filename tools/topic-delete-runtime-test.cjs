@@ -15,7 +15,9 @@ globalThis.browser = {
   runtime: {
     async sendMessage(message) {
       extensionMessages.push(message);
-      if (typeof extensionMessageHandler === "function") return extensionMessageHandler(message);
+      if (typeof extensionMessageHandler === "function") {
+        return completeBackgroundResponse(message, await extensionMessageHandler(message));
+      }
       return { success: false, error: "unexpected extension runtime request" };
     }
   }
@@ -23,6 +25,42 @@ globalThis.browser = {
 
 const DEFAULT_HREF = "https://chat.deepseek.com/a/chat/s/topic-1";
 const DEFAULT_IDENTITY = Object.freeze({ provider: "deepseek", id: "topic-1" });
+
+function completeBackgroundResponse(message, response) {
+  if (response?.success !== true) return response;
+  if (message.action === "ensureContentBridge") {
+    return {
+      tabId: message.tabId,
+      frameIds: [7],
+      injected: 2,
+      injectedFiles: ["content/preload.js@7", "content/content.js@7"],
+      fallbackFiles: [],
+      browserDocumentId: "browser-document-1",
+      bindingRelayed: true,
+      features: [],
+      errors: [],
+      ...response
+    };
+  }
+  if (message.action === "dispatchTrustedClick" || message.action === "dispatchTrustedMouseMove") {
+    return {
+      tabId: message.tabId,
+      frameId: message.expectedFrameId,
+      x: message.x,
+      y: message.y,
+      ...response
+    };
+  }
+  if (message.action === "dispatchTrustedKeySequence") {
+    return {
+      tabId: message.tabId,
+      frameId: message.expectedFrameId,
+      keys: message.keys,
+      ...response
+    };
+  }
+  return response;
+}
 
 function frameError(code, delivered, message = `${code} while deleting`) {
   const error = new Error(message);

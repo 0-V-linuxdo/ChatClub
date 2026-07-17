@@ -32,33 +32,49 @@ export function createPreferredModelController(dependencies = {}) {
     workspace,
     framePort,
     appRoot,
-    normalizePromptImages,
-    rememberPromptSelection,
-    syncPromptCollapsedPreview,
-    restorePromptSelection,
-    closePromptActionsMenu,
-    promptHasContent,
-    collapsePromptInput,
+    composer,
     verifiedCurrentContentFrameRegistration,
     prepareContentFrameRuntime
   } = validateControllerContract(dependencies, "Preferred Model controller", {
     state: "object",
-    workspace: "function",
+    workspace: "object",
     framePort: "object",
     appRoot: "object",
-    normalizePromptImages: "function",
-    rememberPromptSelection: "function",
-    syncPromptCollapsedPreview: "function",
-    restorePromptSelection: "function",
-    closePromptActionsMenu: "function",
-    promptHasContent: "function",
-    collapsePromptInput: "function",
+    composer: "object",
     verifiedCurrentContentFrameRegistration: "function",
     prepareContentFrameRuntime: "function"
   });
   if (typeof framePort.request !== "function") {
     throw new TypeError("Preferred Model controller requires framePort.request.");
   }
+  for (const method of [
+    "normalizePromptImages",
+    "rememberPromptSelection",
+    "syncPromptCollapsedPreview",
+    "restorePromptSelection",
+    "closePromptActionsMenu",
+    "promptHasContent",
+    "collapsePromptInput"
+  ]) {
+    if (typeof composer[method] !== "function") {
+      throw new TypeError(`Preferred Model composer port requires ${method}().`);
+    }
+  }
+  for (const method of ["currentFrames", "frameApp"]) {
+    if (typeof workspace[method] !== "function") {
+      throw new TypeError(`Preferred Model workspace port requires ${method}().`);
+    }
+  }
+
+  const {
+    normalizePromptImages,
+    rememberPromptSelection,
+    syncPromptCollapsedPreview,
+    restorePromptSelection,
+    closePromptActionsMenu,
+    promptHasContent,
+    collapsePromptInput
+  } = composer;
 
   const preferredModelApplyRuns = new Map();
   let preferredModelPromptComposing = false;
@@ -69,11 +85,7 @@ export function createPreferredModelController(dependencies = {}) {
   let preferredModelFrameCleanupObserver = null;
 
   function activeWorkspace() {
-    const controller = workspace();
-    if (!controller || typeof controller !== "object") {
-      throw new Error("Preferred Model workspace is unavailable");
-    }
-    return controller;
+    return workspace;
   }
 
   function sendToContentFrame(iframe, command, data = {}, options = {}) {
@@ -671,8 +683,12 @@ export function createPreferredModelController(dependencies = {}) {
     if (clearDocumentId) {
       delete iframe.dataset.preferredModelDocumentId;
       delete iframe.dataset.preferredModelContentBridgeVersion;
+      delete iframe.dataset.preferredModelContentRuntimeImplementation;
       delete iframe.dataset.summaryRuntimeDocumentId;
       delete iframe.dataset.summaryRuntimeBridgeVersion;
+      delete iframe.dataset.summaryRuntimeImplementationVersion;
+      delete iframe.dataset.contentRuntimeCapabilitiesDocumentId;
+      delete iframe.dataset.contentRuntimeCapabilities;
     }
     syncPreferredModelInputGate();
   }

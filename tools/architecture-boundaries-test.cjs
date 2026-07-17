@@ -8,17 +8,28 @@ const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 
 const main = `${read("app/main.js")}\n${read("app/runtime.js")}`;
+const topbar = read("app/topbar/controller.js");
 const workspace = read("app/workspace/controller.js");
+const workspaceFrame = read("app/workspace/frame-controller.js");
 const topicDelete = read("app/topic-delete/runtime.js");
 const serviceWorker = `${read("background/service-worker.js")}\n${read("background/runtime.js")}`;
 const serviceWorkerCode = serviceWorker.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, "");
 const trustedInput = read("background/trusted-input.js");
 const state = read("app/state.js");
+const statePort = read("app/state/port.js");
+const featureStatePolicies = [
+  "app/composer/state-port.js",
+  "app/preferred-model/state-port.js",
+  "app/topbar/state-port.js",
+  "app/favicon/state-port.js",
+  "app/workspace/state-port.js",
+  "app/settings/state-ports.js"
+].map(read).join("\n");
 const storageFacade = read("shared/storage.js");
 const storageSchema = read("shared/storage-schema.js");
 const storageAdapter = read("shared/storage-adapter.js");
 
-for (const source of [main, workspace]) {
+for (const source of [main, workspaceFrame]) {
   assert.doesNotMatch(source, /function topicDeleteTrusted(?:Click|Hover|MenuClick|KeySequence)/);
   assert.doesNotMatch(source, /function sendTopicDeleteToIframe/);
   assert.match(source, /executeTopicDelete\(/);
@@ -48,6 +59,10 @@ for (const statePort of [
   "./preferred-model/state-port.js",
   "./topbar/state-port.js",
   "./favicon/state-port.js",
+  "./workspace/state-port.js",
+  "./summary/state-port.js",
+  "./pocket/state-port.js",
+  "./optimize/state-port.js",
   "./settings/state-ports.js"
 ]) {
   assert.match(main, new RegExp(`from "${statePort.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`));
@@ -55,7 +70,8 @@ for (const statePort of [
 
 assert.match(main, /createFrameBridgeController/);
 assert.match(main, /createPreferredModelController/);
-assert.match(main, /createTopbarEditor/);
+assert.match(main, /createTopbarController/);
+assert.match(topbar, /createTopbarEditor/);
 assert.doesNotMatch(main, /function prepareContentFrameRuntimeUncached/);
 assert.doesNotMatch(main, /function applyPreferredModelToFrame/);
 assert.doesNotMatch(main, /function preservePreferredModelForSubmissionNavigation/);
@@ -63,13 +79,19 @@ assert.doesNotMatch(main, /function handleTopbarEditPointerMove/);
 assert.doesNotMatch(read("shared/frame-rpc.js"), /export let frameRuntimePort|configureFrameRuntimePort|export function sendToContentFrame/);
 
 assert.match(state, /createFeatureStatePorts/);
-assert.match(state, /read:\s*Object\.freeze/);
-assert.match(state, /write:\s*Object\.freeze/);
-assert.match(state, /readonlyStateValue/);
-for (const feature of ["workspace", "summary", "pocket", "optimize", "settings"]) {
+assert.ok(state.split(/\r?\n/).length < 100, "app/state.js must remain a thin compatibility assembly");
+assert.match(statePort, /read:\s*Object\.freeze/);
+assert.match(statePort, /write:\s*Object\.freeze/);
+assert.match(statePort, /readonlyStateValue/);
+assert.match(featureStatePolicies, /COMPOSER_STATE_ACCESS/);
+assert.match(featureStatePolicies, /WORKSPACE_STATE_ACCESS/);
+assert.match(featureStatePolicies, /SETTINGS_SECTION_STATE_ACCESS/);
+for (const feature of ["workspace", "summary", "pocket", "optimize"]) {
   assert.match(main, new RegExp(`state: featureState\\.${feature}`));
 }
-assert.match(state, /cannot mutate app state/);
+assert.match(main, /settingsSections:\s*featureState\.settingsSections/);
+assert.match(main, /saveOptionsPatch/);
+assert.match(statePort, /cannot mutate app state/);
 
 assert.match(storageFacade, /export \* from "\.\/storage-schema\.js"/);
 assert.match(storageFacade, /export \* from "\.\/storage-adapter\.js"/);

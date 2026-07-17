@@ -4,19 +4,30 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const esbuild = require("esbuild");
+const { enforceNodeVersion } = require("./node-version.cjs");
+const { assertContainedOutputPath } = require("./repository-files.cjs");
 const {
   CONTENT_ENTRIES,
+  CONTENT_RUNTIME_VERSION_MODULE,
   FIREFOX_CONTENT_FALLBACK_OUTPUT,
   TOPIC_DELETE_OUTPUTS,
+  contentRuntimeBundleSourceStates,
+  contentRuntimeBuildRecipeState,
+  contentRuntimeImplementationVersion,
+  contentRuntimeSourceState,
+  contentRuntimeVersionModule,
   assertGeneratedArtifactDirectInputs,
   assertSummaryCatalogMetadata,
   assertTopicDeleteDescriptors,
   assertGeneratedArtifactInventory
 } = require("./generated-artifacts.cjs");
 
+enforceNodeVersion({ context: "Artifact generation", strict: true });
+
 const root = path.resolve(__dirname, "..");
 const checkOnly = process.argv.includes("--check");
 const contentOnly = process.argv.includes("--content-only");
+const sourceMaps = process.argv.includes("--sourcemap");
 const outputRootFlag = process.argv.indexOf("--output-root");
 const contentOutputRoot = outputRootFlag >= 0
   ? path.resolve(process.argv[outputRootFlag + 1] || "")
@@ -30,23 +41,52 @@ if (outputRootFlag >= 0 && !process.argv[outputRootFlag + 1]) {
 if (checkOnly && contentOutputRoot !== root) {
   throw new Error("--check and --output-root cannot be combined");
 }
+if (sourceMaps && (checkOnly || contentOutputRoot === root)) {
+  throw new Error("--sourcemap is supported only for a non-release --output-root build");
+}
 
 function read(relativePath) {
   return fs.readFileSync(path.join(root, relativePath), "utf8");
 }
 
 function expectedFile(relativePath, expected, base = root) {
-  const absolutePath = path.join(base, relativePath);
-  const actual = fs.existsSync(absolutePath) ? fs.readFileSync(absolutePath, "utf8") : null;
+  const absolutePath = assertContainedOutputPath(base, relativePath);
+  const entry = fs.lstatSync(absolutePath, { throwIfNoEntry: false });
+  const actual = entry?.isFile() ? fs.readFileSync(absolutePath, "utf8") : null;
   if (actual === expected) return;
   if (checkOnly) {
     stale.push(relativePath);
     return;
   }
   fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
+  assertContainedOutputPath(base, relativePath);
   fs.writeFileSync(absolutePath, expected);
   generatedCount += 1;
   console.log(`generated ${path.relative(root, absolutePath) || relativePath}`);
+}
+
+function developmentMapSource(source, temporaryOutput) {
+  const value = String(source || "").replace(/\\/g, "/");
+  if (value.startsWith("chatclub-generated:")) {
+    return `virtual/${value.slice("chatclub-generated:".length).replace(/^\/+/, "")}.js`;
+  }
+  if (value.startsWith("chatclub-runtime-version:")) {
+    return value.slice("chatclub-runtime-version:".length).replace(/^\/+/, "");
+  }
+  const absolute = path.resolve(path.dirname(temporaryOutput), value);
+  const relative = path.relative(root, absolute).replace(/\\/g, "/");
+  if (!relative || relative.startsWith("../") || path.posix.isAbsolute(relative)) {
+    throw new Error(`Development source map contains a source outside the repository: ${value}`);
+  }
+  return relative;
+}
+
+function stableDevelopmentSourceMap(source, temporaryOutput) {
+  const map = JSON.parse(source);
+  map.sourceRoot = "chatclub:///";
+  map.sources = (map.sources || []).map((item) => developmentMapSource(item, temporaryOutput));
+  map.file = path.basename(String(map.file || temporaryOutput));
+  return `${JSON.stringify(map)}\n`;
 }
 
 function summaryBody(relativePath) {
@@ -111,10 +151,27 @@ async function validateSummaryCatalog(configs) {
 }
 
 async function buildContent(configs, protocol) {
-  const registrySource = summaryRegistryModule(configs, protocol.CONTENT_BRIDGE_VERSION);
+  const sourceState = contentRuntimeSourceState(root);
+  const bundleSourceStates = contentRuntimeBundleSourceStates(root);
+  const buildRecipeState = contentRuntimeBuildRecipeState(root);
+  const implementationVersion = contentRuntimeImplementationVersion(
+    protocol.CONTENT_BRIDGE_VERSION,
+    sourceState.sha256,
+    buildRecipeState.sha256
+  );
+  const runtimeVersionSource = contentRuntimeVersionModule({
+    protocolVersion: protocol.CONTENT_BRIDGE_VERSION,
+    registryBaseKey: protocol.RUNTIME_REGISTRY_KEY,
+    sourceSha256: sourceState.sha256,
+    buildRecipeVersion: buildRecipeState.version,
+    buildRecipeSha256: buildRecipeState.sha256,
+    bundleSourceStates
+  });
+  expectedFile(CONTENT_RUNTIME_VERSION_MODULE, runtimeVersionSource, contentOutputRoot);
+  const registrySource = summaryRegistryModule(configs, implementationVersion);
   const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "chatclub-content-build-"));
   const registryPlugin = {
-    name: "chatclub-summary-registry",
+    name: "chatclub-generated-content-inputs",
     setup(build) {
       build.onResolve({ filter: /^chatclub:summary-registry$/ }, () => ({
         path: "summary-registry",
@@ -122,6 +179,15 @@ async function buildContent(configs, protocol) {
       }));
       build.onLoad({ filter: /.*/, namespace: "chatclub-generated" }, () => ({
         contents: registrySource,
+        loader: "js",
+        resolveDir: root
+      }));
+      build.onResolve({ filter: /content-runtime-version\.generated\.js$/ }, () => ({
+        path: CONTENT_RUNTIME_VERSION_MODULE,
+        namespace: "chatclub-runtime-version"
+      }));
+      build.onLoad({ filter: /.*/, namespace: "chatclub-runtime-version" }, () => ({
+        contents: runtimeVersionSource,
         loader: "js",
         resolveDir: root
       }));
@@ -142,7 +208,8 @@ async function buildContent(configs, protocol) {
         target: ["chrome120", "firefox136"],
         splitting: false,
         minify: false,
-        sourcemap: false,
+        sourcemap: sourceMaps ? "linked" : false,
+        sourcesContent: sourceMaps,
         charset: "utf8",
         legalComments: "inline",
         plugins: [registryPlugin],
@@ -154,26 +221,34 @@ async function buildContent(configs, protocol) {
       if (/\beval\s*\(|\bnew\s+Function\s*\(/.test(output)) throw new Error(`${outputPath}: eval/Function is forbidden`);
       builtContent.set(outputPath, output);
       expectedFile(outputPath, output, contentOutputRoot);
+      if (sourceMaps) {
+        expectedFile(
+          `${outputPath}.map`,
+          stableDevelopmentSourceMap(fs.readFileSync(`${temporaryOutput}.map`, "utf8"), temporaryOutput),
+          contentOutputRoot
+        );
+      }
     }
     const fallbackEntries = [];
     for (const outputPath of Object.keys(CONTENT_ENTRIES)) {
-      const output = builtContent.get(outputPath);
+      const output = builtContent.get(outputPath)?.replace(/\n?\/\/# sourceMappingURL=[^\n]+\s*$/, "");
       if (!output) throw new Error(`${outputPath}: Firefox fallback source was not built`);
       const transformed = await esbuild.transform(output, {
         loader: "js",
         format: "iife",
         platform: "browser",
         target: ["firefox136"],
-        minify: true,
+        minify: !sourceMaps,
         sourcemap: false,
         charset: "utf8",
-        legalComments: "none",
+        legalComments: sourceMaps ? "inline" : "none",
         logLevel: "silent"
       });
       if (/\bimport\s*\(/.test(transformed.code)) throw new Error(`${outputPath}: Firefox fallback contains dynamic import`);
       if (/\beval\s*\(|\bnew\s+Function\s*\(/.test(transformed.code)) throw new Error(`${outputPath}: Firefox fallback contains eval/Function`);
       const name = `chatclubFirefoxContentFallback${fallbackEntries.length + 1}`;
-      fallbackEntries.push(`  ${JSON.stringify(outputPath)}: function ${name}() {\n${transformed.code.trim()}\n  }`);
+      const sourceUrl = sourceMaps ? `\n//# sourceURL=chatclub:///${outputPath}?firefox-fallback` : "";
+      fallbackEntries.push(`  ${JSON.stringify(outputPath)}: function ${name}() {\n${transformed.code.trim()}${sourceUrl}\n  }`);
     }
     expectedFile(
       FIREFOX_CONTENT_FALLBACK_OUTPUT,
@@ -186,21 +261,16 @@ async function buildContent(configs, protocol) {
 }
 
 async function generateDeleteSites() {
-  const modulePath = path.join(root, "shared/topic-delete-userscript-sources.js");
+  const modulePath = path.join(root, "build-src/topic-delete-userscript-sources.js");
   const descriptorPath = path.join(root, "shared/topic-delete-sites.js");
-  const protocolSource = read("shared/protocol.js");
-  const protocolUrl = `data:text/javascript;base64,${Buffer.from(protocolSource).toString("base64")}`;
-  const moduleSource = fs.readFileSync(modulePath, "utf8")
-    .replace('from "./protocol.js"', `from ${JSON.stringify(protocolUrl)}`);
-  const moduleUrl = `data:text/javascript;base64,${Buffer.from(moduleSource).toString("base64")}`;
   const [module, descriptorModule] = await Promise.all([
-    import(moduleUrl),
+    import(`${require("node:url").pathToFileURL(modulePath).href}?generated=${Date.now()}`),
     import(`${require("node:url").pathToFileURL(descriptorPath).href}?generated=${Date.now()}`)
   ]);
   const sources = module.TOPIC_DELETE_USERSCRIPT_SOURCES;
   for (const [id, filename] of Object.entries(TOPIC_DELETE_OUTPUTS)) {
     if (typeof sources?.[id] !== "string" || !sources[id]) {
-      throw new Error(`shared/topic-delete-userscript-sources.js: missing ${id}`);
+      throw new Error(`build-src/topic-delete-userscript-sources.js: missing ${id}`);
     }
     expectedFile(path.posix.join("topic-delete-userscripts", filename), sources[id]);
   }

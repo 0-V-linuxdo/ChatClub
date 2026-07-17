@@ -3,11 +3,26 @@ import { contentScriptMatches } from "../shared/dnr.js";
 import { getAllChatApps } from "../shared/storage-schema.js";
 import { loadCustomConfig, loadOptions } from "../shared/storage-adapter.js";
 import { normalizeHost } from "../shared/url-match.js";
+import {
+  CONTENT_RUNTIME_BUNDLE_IDENTITIES,
+  CONTENT_RUNTIME_IMPLEMENTATION_VERSION,
+  CONTENT_RUNTIME_REGISTRY_KEY
+} from "../shared/content-runtime-version.generated.js";
+import { RUNTIME_MIGRATION_STAGE_KEY } from "../shared/protocol.js";
+import {
+  CONTENT_CAPABILITY_BUNDLES,
+  contentInjectionPlan,
+  normalizeContentCapabilityFeatures
+} from "../shared/frame-commands.js";
 
 const PRELOAD_SCRIPT_ID = "chatclub-preload";
 const GROK_COOKIE_SCRIPT_ID = "chatclub-grok-cookie-bridge";
 const SUMMARY_PAGE_SCRIPT_ID = "chatclub-summary-userscripts-main";
 const SUMMARY_SCRIPT_ID = "chatclub-summary-userscripts";
+const SUMMARY_BRIDGE_SCRIPT_ID = "chatclub-summary-bridge";
+const SEND_SCRIPT_ID = "chatclub-send";
+const PREFERRED_MODEL_SCRIPT_ID = "chatclub-preferred-model";
+const DELETE_SCRIPT_ID = "chatclub-delete";
 const MESSAGE_NAVIGATOR_SCRIPT_ID = "chatclub-message-navigator";
 const CONTENT_SCRIPT_ID = "chatclub-content";
 const REGISTERED_CONTENT_SCRIPT_IDS = Object.freeze([
@@ -15,6 +30,10 @@ const REGISTERED_CONTENT_SCRIPT_IDS = Object.freeze([
   GROK_COOKIE_SCRIPT_ID,
   SUMMARY_PAGE_SCRIPT_ID,
   SUMMARY_SCRIPT_ID,
+  SUMMARY_BRIDGE_SCRIPT_ID,
+  SEND_SCRIPT_ID,
+  PREFERRED_MODEL_SCRIPT_ID,
+  DELETE_SCRIPT_ID,
   MESSAGE_NAVIGATOR_SCRIPT_ID,
   CONTENT_SCRIPT_ID
 ]);
@@ -22,17 +41,11 @@ const REGISTERED_CONTENT_SCRIPT_ID_SET = new Set(REGISTERED_CONTENT_SCRIPT_IDS);
 const CORE_CONTENT_SCRIPT_ID_SET = new Set([PRELOAD_SCRIPT_ID, GROK_COOKIE_SCRIPT_ID, CONTENT_SCRIPT_ID]);
 const FIREFOX_CONTENT_FALLBACKS_KEY = "__CHATCLUB_FIREFOX_CONTENT_FALLBACKS__";
 
-export const CONTENT_BRIDGE_FILES = Object.freeze([
-  Object.freeze({ file: "content/preload.js", world: "MAIN" }),
-  Object.freeze({ file: "content/grok-cookie-bridge.js", world: "ISOLATED" }),
-  Object.freeze({ file: "content/message-navigator.js", world: "ISOLATED" }),
-  Object.freeze({ file: "content/content.js", world: "ISOLATED" })
-]);
-
-export const SUMMARY_BRIDGE_FILES = Object.freeze([
-  Object.freeze({ file: "content/summary-userscripts-main.js", world: "MAIN" }),
-  Object.freeze({ file: "content/summary-userscripts.js", world: "ISOLATED" })
-]);
+export const CONTENT_BRIDGE_FILES = CONTENT_CAPABILITY_BUNDLES.base;
+export const CONTENT_CAPABILITY_FILES = Object.freeze(Object.fromEntries(
+  Object.entries(CONTENT_CAPABILITY_BUNDLES).filter(([capability]) => capability !== "base")
+));
+export const SUMMARY_BRIDGE_FILES = CONTENT_CAPABILITY_FILES.summary;
 
 function summaryCollectorContentTargets(options = {}) {
   return (options.summarySiteConfigs || [])
@@ -73,18 +86,18 @@ export async function currentContentScriptTargetGroups() {
   const summaryTargets = summaryCollectorContentTargets(options);
   const topicDeleteTargets = topicDeleteContentTargets(options);
   const messageNavigatorTargets = messageNavigatorContentTargets(options);
+  const coreTargets = [
+    ...chatTargets,
+    ...summaryTargets,
+    ...topicDeleteTargets,
+    ...messageNavigatorTargets
+  ];
   return {
-    coreTargets: [
-      ...chatTargets,
-      ...summaryTargets,
-      ...topicDeleteTargets,
-      ...messageNavigatorTargets
-    ],
-    preloadTargets: [
-      ...chatTargets,
-      ...summaryTargets,
-      ...topicDeleteTargets
-    ],
+    coreTargets,
+    preloadTargets: coreTargets,
+    sendTargets: chatTargets,
+    preferredModelTargets: chatTargets,
+    deleteTargets: topicDeleteTargets,
     summaryTargets,
     messageNavigatorTargets
   };
@@ -99,6 +112,10 @@ export function buildContentScriptRegistrations(groups = {}) {
   const preloadMatches = matchesForContentTargets(groups.preloadTargets);
   const summaryMatches = matchesForContentTargets(groups.summaryTargets);
   const messageNavigatorMatches = matchesForContentTargets(groups.messageNavigatorTargets);
+  const sendMatches = matchesForContentTargets(groups.sendTargets);
+  const preferredModelMatches = matchesForContentTargets(groups.preferredModelTargets);
+  const deleteMatches = matchesForContentTargets(groups.deleteTargets);
+  const grokCookieMatches = coreMatches.filter((match) => /^https?:\/\/grok\.com\/\*$/i.test(match));
   const registrations = [];
   if (preloadMatches.length) {
     registrations.push({
@@ -110,13 +127,22 @@ export function buildContentScriptRegistrations(groups = {}) {
       world: "MAIN"
     });
   }
-  if (coreMatches.length) {
+  if (grokCookieMatches.length) {
     registrations.push({
       id: GROK_COOKIE_SCRIPT_ID,
-      matches: coreMatches,
+      matches: grokCookieMatches,
       js: ["content/grok-cookie-bridge.js"],
       allFrames: true,
       runAt: "document_start"
+    });
+  }
+  if (coreMatches.length) {
+    registrations.push({
+      id: CONTENT_SCRIPT_ID,
+      matches: coreMatches,
+      js: ["content/content.js"],
+      allFrames: true,
+      runAt: "document_idle"
     });
   }
   if (summaryMatches.length) {
@@ -133,22 +159,40 @@ export function buildContentScriptRegistrations(groups = {}) {
       js: ["content/summary-userscripts.js"],
       allFrames: true,
       runAt: "document_idle"
+    }, {
+      id: SUMMARY_BRIDGE_SCRIPT_ID,
+      matches: summaryMatches,
+      js: ["content/summary-bridge.js"],
+      allFrames: true,
+      runAt: "document_idle"
     });
   }
+  if (sendMatches.length) registrations.push({
+    id: SEND_SCRIPT_ID,
+    matches: sendMatches,
+    js: ["content/send.js"],
+    allFrames: true,
+    runAt: "document_idle"
+  });
+  if (preferredModelMatches.length) registrations.push({
+    id: PREFERRED_MODEL_SCRIPT_ID,
+    matches: preferredModelMatches,
+    js: ["content/preferred-model.js"],
+    allFrames: true,
+    runAt: "document_idle"
+  });
+  if (deleteMatches.length) registrations.push({
+    id: DELETE_SCRIPT_ID,
+    matches: deleteMatches,
+    js: ["content/delete.js"],
+    allFrames: true,
+    runAt: "document_idle"
+  });
   if (messageNavigatorMatches.length) {
     registrations.push({
       id: MESSAGE_NAVIGATOR_SCRIPT_ID,
       matches: messageNavigatorMatches,
       js: ["content/message-navigator.js"],
-      allFrames: true,
-      runAt: "document_idle"
-    });
-  }
-  if (coreMatches.length) {
-    registrations.push({
-      id: CONTENT_SCRIPT_ID,
-      matches: coreMatches,
-      js: ["content/content.js"],
       allFrames: true,
       runAt: "document_idle"
     });
@@ -501,6 +545,108 @@ function firefoxContentFallback(file) {
   return typeof fallback === "function" ? fallback : null;
 }
 
+export function transitionInjectedContentRuntimeGeneration(
+  brokerKey,
+  migrationKey,
+  generation,
+  transition,
+  expectedBundles = []
+) {
+  const broker = globalThis[brokerKey];
+  if (!broker || typeof broker !== "object") {
+    if (transition === "abort") {
+      const stage = globalThis[migrationKey];
+      if (stage?.registryKey === brokerKey && stage?.generation === generation) {
+        try { delete globalThis[migrationKey]; } catch {}
+        return { supported: true, state: "legacy-aborted" };
+      }
+    }
+    if (transition === "begin") {
+      const legacyKeys = Object.getOwnPropertyNames(globalThis).filter((key) =>
+        key !== brokerKey
+        && /^__CHATCLUB_RUNTIME_REGISTRY_V\d+(?:_SOURCE_[a-f0-9]{64})?__$/i.test(key)
+        && (
+          typeof globalThis[key]?.dispose === "function"
+          || typeof globalThis[key]?.shutdown === "function"
+        )
+      );
+      const current = globalThis[migrationKey];
+      if (current && (current.registryKey !== brokerKey || current.generation !== generation)) {
+        throw new Error("Content runtime migration stage belongs to another generation");
+      }
+      if (!current) {
+        Object.defineProperty(globalThis, migrationKey, {
+          configurable: true,
+          enumerable: false,
+          writable: false,
+          value: Object.freeze({ registryKey: brokerKey, generation })
+        });
+      }
+      return { supported: true, state: legacyKeys.length ? "legacy-staged" : "fresh-staged" };
+    }
+    return { supported: false, state: "broker-unavailable" };
+  }
+  // begin/prepare/commit is atomic only while replacing generation A with B.
+  // Adding a capability to the already-active generation is incremental: its
+  // installers must be idempotent, and the caller must require exact readiness
+  // before exposing the capability. An abort must not tear down active owners.
+  if (transition === "abort" && broker.activeGenerationVersion === generation) {
+    return { supported: true, state: "active" };
+  }
+  const method = ({
+    begin: "beginGeneration",
+    prepare: "prepareGeneration",
+    commit: "commitGeneration",
+    abort: "abortGeneration",
+    failClosed: "shutdown"
+  })[transition] || "";
+  if (!method || typeof broker[method] !== "function") {
+    throw new Error(`Content runtime broker does not support ${transition}`);
+  }
+  if (transition === "failClosed") {
+    broker[method](`background fail-closed after generation ${generation} activation failure`);
+  } else if (transition === "prepare") {
+    broker[method](generation, expectedBundles);
+  } else {
+    broker[method](generation, `background ${transition}`);
+  }
+  return {
+    supported: true,
+    state: broker.activeGenerationVersion === generation ? "active" : transition
+  };
+}
+
+async function transitionContentRuntimeGeneration(
+  api,
+  tabId,
+  frameId,
+  world,
+  action,
+  expectedDocumentId = "",
+  expectedBundles = []
+) {
+  const matching = await executeFrameInjection(
+    api,
+    tabId,
+    frameId,
+    `content-runtime-generation-${action.toLowerCase()}-${String(world || "ISOLATED").toLowerCase()}`,
+    expectedDocumentId,
+    {
+      target: { tabId, frameIds: [frameId] },
+      world,
+      func: transitionInjectedContentRuntimeGeneration,
+      args: [
+        CONTENT_RUNTIME_REGISTRY_KEY,
+        RUNTIME_MIGRATION_STAGE_KEY,
+        CONTENT_RUNTIME_IMPLEMENTATION_VERSION,
+        action,
+        expectedBundles
+      ]
+    }
+  );
+  return matching[0]?.result || { supported: false, state: "no-result" };
+}
+
 function frameInjectionError(file, frameId, error) {
   const prefix = `${file}@${frameId}:`;
   const detail = injectionErrorMessage(error);
@@ -567,6 +713,7 @@ async function frameIdsMatchingBinding(api, tabId, frameIds, bindingId) {
       func: () => {
         const bootstrap = String(globalThis.__CHATCLUB_FRAME_BINDING_ID__ || "");
         if (bootstrap) return { count: 1, bindingId: bootstrap };
+        // eslint-disable-next-line chatclub-realm/no-cross-realm-global -- executeScript runs this closure in the isolated frame DOM realm.
         const values = new URLSearchParams(String(globalThis.name || ""))
           .getAll("chatclub_frame_binding")
           .map((value) => String(value || ""));
@@ -594,10 +741,21 @@ async function relayInjectedFrameBinding(api, tabId, frameId, challenge, generat
       const extensionApi = globalThis.browser || globalThis.chrome;
       const bridgeDocumentId = String(globalThis.__CHATCLUB_CONTENT_DOCUMENT_ID__ || "");
       const secureFrameToken = String(globalThis.__CHATCLUB_SECURE_FRAME_TOKEN__ || "");
-      const bridgeVersion = String(globalThis.__CHATCLUB_CONTENT_BRIDGE_VERSION__ || "");
+      const runtimeIdentity = globalThis.__CHATCLUB_CONTENT_RUNTIME_IDENTITY__;
+      const bridgeVersion = String(
+        globalThis.__CHATCLUB_CONTENT_PROTOCOL_VERSION__
+        || globalThis.__CHATCLUB_CONTENT_BRIDGE_VERSION__
+        || ""
+      );
       const attestationState = globalThis.__CHATCLUB_BROWSER_DOCUMENT_ATTESTATION_STATE__;
       const attestation = String(attestationState?.id || "");
-      if (!bridgeDocumentId || !browserDocumentId || !extensionApi?.runtime?.sendMessage) {
+      if (
+        !bridgeDocumentId
+        || !browserDocumentId
+        || !runtimeIdentity
+        || typeof runtimeIdentity !== "object"
+        || !extensionApi?.runtime?.sendMessage
+      ) {
         throw new Error("Injected content frame registration is unavailable");
       }
       if (/^legacy:/i.test(browserDocumentId) && (attestationState?.dirty || attestation !== browserDocumentId)) {
@@ -610,7 +768,8 @@ async function relayInjectedFrameBinding(api, tabId, frameId, challenge, generat
         browserDocumentId: /^legacy:/i.test(browserDocumentId) ? browserDocumentId : attestation,
         secureFrameToken,
         frameBindingId: bindingId,
-        bridgeVersion
+        bridgeVersion,
+        runtimeIdentity
       });
       if (!registration?.success) throw new Error(registration?.error || "Secure frame registration failed");
       let lastError = "Secure frame binding relay was not accepted";
@@ -630,7 +789,7 @@ async function relayInjectedFrameBinding(api, tabId, frameId, challenge, generat
         } catch (error) {
           lastError = String(error?.message || error || lastError);
         }
-        await new Promise((resolve) => setTimeout(resolve, 50));
+        await new Promise((resolve) => { setTimeout(resolve, 50); });
       }
       throw new Error(lastError);
     },
@@ -696,7 +855,9 @@ export async function relayContentFrameBinding(api, tabId, options = {}) {
   return { tabId, frameId: identity.frameId, browserDocumentId, bindingRelayed: true };
 }
 
-export async function injectContentBridge(api, tabId, options = {}) {
+const contentBridgeInjectionChains = new Map();
+
+async function injectContentBridgeTransaction(api, tabId, options = {}) {
   const hints = {
     hrefs: Array.isArray(options.hrefs) ? options.hrefs : [],
     hosts: Array.isArray(options.hosts) ? options.hosts : []
@@ -706,11 +867,12 @@ export async function injectContentBridge(api, tabId, options = {}) {
     ...hints.hosts.map(urlHost)
   ].filter(Boolean));
   if (!validHintHosts.size) throw new Error("Content bridge injection failed: target URL hints are unavailable");
-  const features = new Set(
-    (Array.isArray(options.features) ? options.features : [])
-      .map((value) => String(value || "").trim().toLowerCase())
-      .filter((value) => value === "summary")
-  );
+  let features;
+  try {
+    features = normalizeContentCapabilityFeatures(Array.isArray(options.features) ? options.features : []);
+  } catch (error) {
+    throw new Error(`Content bridge injection failed: ${error?.message || String(error)}`);
+  }
   let frames = [];
   try {
     frames = await api.webNavigation.getAllFrames({ tabId });
@@ -773,20 +935,80 @@ export async function injectContentBridge(api, tabId, options = {}) {
   let browserDocumentId = "";
   let injected = 0;
   if (!candidateFrameIds.length) errors.push("no matching direct child iframe found for the requested target");
-  const specs = features.has("summary")
-    ? [CONTENT_BRIDGE_FILES[0], ...SUMMARY_BRIDGE_FILES, ...CONTENT_BRIDGE_FILES.slice(1)]
-    : CONTENT_BRIDGE_FILES;
+  let lockedFrameUrl = "";
+  if (uniqueFrameIds.length === 1 && errors.length === 0) {
+    const frameId = uniqueFrameIds[0];
+    try {
+      const currentFrames = await api.webNavigation.getAllFrames({ tabId });
+      const currentFrame = (currentFrames || []).find((frame) => frame?.frameId === frameId);
+      if (!currentFrame || currentFrame.parentFrameId !== 0 || !frameMatchesBridgeHints(currentFrame, hints)) {
+        throw new Error("locked direct child iframe no longer matches the requested target");
+      }
+      const lockedDocument = await probeInjectedFrameDocument(api, tabId, frameId, "content-runtime-target-lock");
+      const navigationDocumentId = String(currentFrame.documentId || "").trim();
+      if (navigationDocumentId && lockedDocument.browserDocumentId !== navigationDocumentId) {
+        throw new Error(
+          `locked direct child iframe document changed from ${navigationDocumentId} to ${lockedDocument.browserDocumentId}`
+        );
+      }
+      frames = currentFrames;
+      lockedFrameUrl = String(currentFrame.url || "");
+      browserDocumentId = lockedDocument.browserDocumentId;
+    } catch (error) {
+      errors.push(`content-runtime-target-lock@${frameId}: ${injectionErrorMessage(error)}`);
+      uniqueFrameIds = [];
+    }
+  }
+  const specs = contentInjectionPlan({
+    features,
+    frameUrls: lockedFrameUrl ? [lockedFrameUrl] : []
+  });
+  const generationTransactionRequested = uniqueFrameIds.length === 1;
   if ((exactFrameRequested || bindingSelectorRequested) && uniqueFrameIds.length === 1 && errors.length === 0) {
     try {
-      browserDocumentId = await seedInjectedFrameBinding(api, tabId, uniqueFrameIds[0], expectedBindingId);
+      browserDocumentId = await seedInjectedFrameBinding(
+        api,
+        tabId,
+        uniqueFrameIds[0],
+        expectedBindingId,
+        browserDocumentId
+      );
     } catch (error) {
       errors.push(`secure-frame-binding-id-seed@${uniqueFrameIds[0]}: ${injectionErrorMessage(error)}`);
       uniqueFrameIds = [];
     }
   }
-  injectionLoop:
   for (const frameId of uniqueFrameIds) {
+    const errorCountBeforeFrame = errors.length;
+    const injectedBeforeFrame = injected;
+    const transactionalWorlds = [];
+    const worlds = generationTransactionRequested
+      ? [...new Set(specs.map((spec) => spec.world || "ISOLATED"))]
+      : [];
+    const expectedBundlesByWorld = new Map(worlds.map((world) => [
+      world,
+      specs
+        .filter((spec) => (spec.world || "ISOLATED") === world)
+        .map((spec) => CONTENT_RUNTIME_BUNDLE_IDENTITIES[spec.file])
+    ]));
+    for (const world of worlds) {
+      try {
+        const transaction = await transitionContentRuntimeGeneration(
+          api,
+          tabId,
+          frameId,
+          world,
+          "begin",
+          browserDocumentId
+        );
+        if (transaction.supported) transactionalWorlds.push(world);
+      } catch (error) {
+        errors.push(`content-runtime-generation-begin-${world.toLowerCase()}@${frameId}: ${injectionErrorMessage(error)}`);
+        break;
+      }
+    }
     for (const spec of specs) {
+      if (errors.length !== errorCountBeforeFrame) break;
       try {
         const matching = await executeFrameInjection(api, tabId, frameId, spec.file, browserDocumentId, {
           target: { tabId, frameIds: [frameId] },
@@ -799,12 +1021,12 @@ export async function injectContentBridge(api, tabId, options = {}) {
       } catch (fileError) {
         if (frameDocumentInvariantFailed(fileError)) {
           errors.push(frameInjectionError(spec.file, frameId, fileError));
-          break injectionLoop;
+          break;
         }
         const fallback = firefoxContentFallback(spec.file);
         if (!fallback) {
           errors.push(frameInjectionError(spec.file, frameId, fileError));
-          continue;
+          break;
         }
         try {
           const matching = await executeFrameInjection(api, tabId, frameId, spec.file, browserDocumentId, {
@@ -820,14 +1042,93 @@ export async function injectContentBridge(api, tabId, options = {}) {
         } catch (fallbackError) {
           if (frameDocumentInvariantFailed(fallbackError)) {
             errors.push(frameInjectionError(spec.file, frameId, fallbackError));
-            break injectionLoop;
+            break;
           }
           errors.push(
             `${spec.file}@${frameId}: packaged file injection failed (${injectionErrorMessage(fileError)}); `
             + `Firefox function fallback failed (${injectionErrorMessage(fallbackError)})`
           );
+          break;
         }
       }
+    }
+    const completeFrameInjection = errors.length === errorCountBeforeFrame
+      && injected - injectedBeforeFrame === specs.length;
+    let generationFailedClosed = false;
+    if (completeFrameInjection) {
+      const committedWorlds = [];
+      let commitStarted = false;
+      try {
+        for (const world of transactionalWorlds) {
+          const prepared = await transitionContentRuntimeGeneration(
+            api,
+            tabId,
+            frameId,
+            world,
+            "prepare",
+            browserDocumentId,
+            expectedBundlesByWorld.get(world)
+          );
+          if (!prepared.supported) throw new Error(`${world} content runtime generation could not be prepared`);
+        }
+        commitStarted = true;
+        for (const world of transactionalWorlds) {
+          const committed = await transitionContentRuntimeGeneration(
+            api,
+            tabId,
+            frameId,
+            world,
+            "commit",
+            browserDocumentId
+          );
+          if (!committed.supported || committed.state !== "active") {
+            throw new Error(`${world} content runtime generation did not become active`);
+          }
+          committedWorlds.push(world);
+        }
+      } catch (error) {
+        errors.push(`content-runtime-generation-activation@${frameId}: ${injectionErrorMessage(error)}`);
+        if (commitStarted || committedWorlds.length) {
+          generationFailedClosed = true;
+          for (const world of worlds) {
+            try {
+              const shutdown = await transitionContentRuntimeGeneration(
+                api,
+                tabId,
+                frameId,
+                world,
+                "failClosed",
+                browserDocumentId
+              );
+              if (!shutdown.supported) throw new Error(`${world} content runtime broker is unavailable`);
+            } catch (shutdownError) {
+              errors.push(
+                `content-runtime-generation-fail-closed-${world.toLowerCase()}@${frameId}: `
+                + injectionErrorMessage(shutdownError)
+              );
+            }
+          }
+        }
+      }
+    }
+    if (!completeFrameInjection || errors.length !== errorCountBeforeFrame) {
+      if (!generationFailedClosed) {
+        for (const world of transactionalWorlds) {
+          try {
+            await transitionContentRuntimeGeneration(
+              api,
+              tabId,
+              frameId,
+              world,
+              "abort",
+              browserDocumentId
+            );
+          } catch (error) {
+            errors.push(`content-runtime-generation-abort-${world.toLowerCase()}@${frameId}: ${injectionErrorMessage(error)}`);
+          }
+        }
+      }
+      break;
     }
   }
   const bindingRequested = options.bindingChallenge !== undefined || options.bindingGeneration !== undefined;
@@ -863,9 +1164,23 @@ export async function injectContentBridge(api, tabId, options = {}) {
     injected,
     injectedFiles,
     fallbackFiles,
+    plannedFiles: specs.map(({ file }) => file),
     browserDocumentId,
     bindingRelayed,
     features: [...features],
     errors
   };
+}
+
+export function injectContentBridge(api, tabId, options = {}) {
+  const queueKey = String(tabId);
+  const previous = contentBridgeInjectionChains.get(queueKey) || Promise.resolve();
+  // A conservative tab-scoped queue also serializes every frame/document pair
+  // within the tab. The transaction itself locks and revalidates the exact
+  // direct-child browser document before its first generation transition.
+  const run = previous.catch(() => {}).then(() => injectContentBridgeTransaction(api, tabId, options));
+  contentBridgeInjectionChains.set(queueKey, run);
+  return run.finally(() => {
+    if (contentBridgeInjectionChains.get(queueKey) === run) contentBridgeInjectionChains.delete(queueKey);
+  });
 }
