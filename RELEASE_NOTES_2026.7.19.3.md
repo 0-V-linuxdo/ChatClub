@@ -38,8 +38,8 @@
 | Arc | 通过（非破坏性） | 重载 unpacked extension 后重新加载保留的 ChatClub 页；版本、主壳、frame 与 fatal 状态正常 |
 | Tabbit | 通过（非破坏性） | 扩展重载会关闭 ChatClub 页；重新打开后版本、主壳、frame 与 fatal 状态正常 |
 | Zen | 有限通过 | 临时扩展主壳与 Settings 可加载；自动 smoke 无法从该临时扩展页取得 current tab，因此不记作完整通过 |
-| Dia | 未完成 | 当前自动化/系统权限未提供可靠 DevTools 控制，未据此推断其行为 |
-| Chrome for Testing 120、Firefox 136、GitHub Chromium/Firefox jobs | 分支门禁 | 以本分支最新 HEAD 的 GitHub Actions 结果为合并前准入条件 |
+| Dia | 通过（非破坏性） | 确认安装版本为 `2026.7.19.3`；主壳、Kagi/ChatGPT/Claude iframe 与 iframe 权限管理页正常渲染 |
+| GitHub 四引擎基线与双目标打包 | 通过 | [CI run 29690128798](https://github.com/0-V-linuxdo/ChatClub/actions/runs/29690128798)：Chromium 149、Chrome for Testing 120、Firefox 136、Firefox Nightly、Node 22/24 与 package job 均为 success |
 
 以下操作会改变外部账号或远端数据，本次未在用户账号中代为执行，因此不宣称已完成实站端到端验收：发送消息、应用模型偏好、Summary 读取剪贴板、Grok Cookie 登录/退出迁移、Delete Site 打开并确认最终删除。合并前如需发布级实站证明，应使用专用测试账号和可删除的测试会话，并记录浏览器版本与结果。
 
@@ -59,6 +59,7 @@
 1. `dc1eab7` — 应用 controller、UI、storage 与 iframe policy。
 2. `753aef2` — content/background runtime、安全契约与生成物。
 3. `1d58fda` — ESM/CJS 活性分析、架构门禁与回归测试。
-4. 本说明所在提交 — 版本快照、README 与交付记录。
+4. `03af890` — 版本快照、README 与初始交付记录。
+5. 本说明的验收更新提交 — GitHub 四基线终态与 Dia 非破坏性人工验收。
 
 优先按相反顺序逐提交回滚。若整批撤销，可在独立修复分支上审阅 `git diff 80f73d5..HEAD` 后使用 `git revert` 生成反向提交；不要重写已共享分支历史。涉及发布 payload 的回滚必须使用一个新的、单调递增的版本号，不能复用 `2026.7.19.3`。
