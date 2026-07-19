@@ -8,17 +8,7 @@ const { pathToFileURL } = require("node:url");
 const root = path.resolve(__dirname, "..");
 const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
 
-function functionSource(source, name) {
-  const start = source.indexOf(`function ${name}(`);
-  assert.notEqual(start, -1, `${name} must exist`);
-  const bodyStart = source.indexOf("{", start);
-  let depth = 0;
-  for (let index = bodyStart; index < source.length; index += 1) {
-    if (source[index] === "{") depth += 1;
-    else if (source[index] === "}" && --depth === 0) return source.slice(start, index + 1);
-  }
-  throw new Error(`${name} body did not close`);
-}
+const { functionSource } = require("./function-source.cjs");
 
 function identityTarget() {
   const listeners = new Map();

@@ -18,23 +18,21 @@ const {
   NATIVE_BROWSER_TARGETS,
   nativeEsmSyntaxRequiresLowering
 } = require("./native-esm-syntax.cjs");
-const { GENERATED_ARTIFACT_FILES } = require("./generated-artifacts.cjs");
+const { CONTENT_ENTRIES, GENERATED_ARTIFACT_FILES } = require("./generated-artifacts.cjs");
+const { analyzeNamedExportLiveness } = require("./export-liveness.cjs");
 const { assertContainedRegularFile } = require("./repository-files.cjs");
 const SIZE_ALLOWLIST_FILE = "tools/module-size-allowlist.json";
-const DEFAULT_CONTENT_ENTRY_POINTS = Object.freeze([
-  "content-src/content.js",
-  "content-src/content-delete.js",
-  "content-src/content-preferred-model.js",
-  "content-src/content-send.js",
-  "content-src/content-summary-bridge.js",
-  "content-src/preload.js",
-  "content-src/summary-userscripts.js",
-  "content-src/summary-userscripts-main.js",
-  "content-src/message-navigator.js",
-  "content-src/grok-cookie-bridge.js"
-]);
+const EXPORT_LIVENESS_ALLOWLIST_FILE = "tools/export-liveness-allowlist.json";
+const NATIVE_ENTRY_BUDGET_FILE = "tools/native-entry-budgets.json";
+const CONTENT_SAFE_SHARED_ALLOWLIST_FILE = "tools/content-safe-shared-modules.json";
+const DEFAULT_CONTENT_ENTRY_POINTS = Object.freeze([...new Set(Object.values(CONTENT_ENTRIES))].sort());
 const DEFAULT_BUILD_ENTRY_POINTS = Object.freeze([
   "build-src/topic-delete-userscript-sources.js"
+]);
+const REQUIRED_APP_LAZY_BOUNDARIES = Object.freeze([
+  "app/pocket/controller.js",
+  "app/settings/controller.js",
+  "app/summary/controller.js"
 ]);
 const DEFAULT_AUTHOR_ESM_MAX_BYTES = 64 * 1024;
 const generatedArtifactFileSet = new Set(GENERATED_ARTIFACT_FILES);
@@ -44,6 +42,7 @@ const pinnedToolchain = Object.freeze({
   esbuild: "0.28.1",
   "es-module-lexer": "2.3.1",
   eslint: "9.39.2",
+  espree: "10.4.0",
   globals: "16.5.0",
   playwright: "1.61.1",
   "selenium-webdriver": "4.46.0"
@@ -77,7 +76,13 @@ function readFixtureConfiguration() {
     plans,
     contentEntryPoints: Object.freeze([...(config.contentEntryPoints || [])]),
     buildEntryPoints: Object.freeze([...(config.buildEntryPoints || [])]),
+    contentSafeSharedModules: Object.freeze([...(config.contentSafeSharedModules || [])]),
     nativeEsmReachabilityAllowlist: Object.freeze({ ...(config.nativeEsmReachabilityAllowlist || {}) }),
+    exportLivenessAllowlist: Object.freeze({ ...(config.exportLivenessAllowlist || {}) }),
+    testFiles: Object.freeze([...(config.testFiles || [])]),
+    verifyExportLiveness: config.verifyExportLiveness !== false,
+    nativeEntryBudgets: Object.freeze({ ...(config.nativeEntryBudgets || {}) }),
+    verifyNativeEntryBudgets: config.verifyNativeEntryBudgets === true,
     verifyToolchain: config.verifyToolchain === true,
     verifySizes: config.verifySizes === true
   });
@@ -91,6 +96,8 @@ const contentEntryPoints = fixtureConfiguration?.contentEntryPoints || DEFAULT_C
 const buildEntryPoints = fixtureConfiguration?.buildEntryPoints || DEFAULT_BUILD_ENTRY_POINTS;
 const nativeEsmReachabilityAllowlist = fixtureConfiguration?.nativeEsmReachabilityAllowlist
   || PACKAGED_NATIVE_ESM_REACHABILITY_ALLOWLIST;
+const verifyExportLiveness = fixtureConfiguration?.verifyExportLiveness ?? true;
+const verifyNativeEntryBudgets = fixtureConfiguration?.verifyNativeEntryBudgets ?? true;
 
 function fail(message) {
   errors.push(message);
@@ -389,6 +396,8 @@ const nativeRuntimeModules = new Set(
 const allFiles = walk().sort();
 const javascriptFiles = allFiles.filter((file) => /\.(?:cjs|mjs|js)$/.test(file));
 const graph = new Map();
+const staticGraph = new Map();
+const dynamicDependencies = new Map();
 const buildGraph = new Map();
 const staticAssets = new Map();
 const dynamicImportOwners = new Set();
@@ -419,6 +428,8 @@ for (const file of javascriptFiles) {
 
   if (context === "browser-esm") {
     const dependencies = new Set();
+    const staticDependencies = new Set();
+    const dynamicTargets = new Set();
     for (const imported of imports) {
       if (imported.d === -2) continue;
       if (imported.d >= 0 && imported.n === undefined) {
@@ -427,7 +438,8 @@ for (const file of javascriptFiles) {
       }
       const specifier = imported.n;
       if (!specifier) continue;
-      if (imported.d >= 0) dynamicImportOwners.add(file);
+      const dynamic = imported.d >= 0;
+      if (dynamic) dynamicImportOwners.add(file);
       if (isVirtualSummaryRegistry(file, specifier)) continue;
       if (!specifier.startsWith("./") && !specifier.startsWith("../")) {
         fail(`${file}: bare, absolute, or remote browser import is forbidden: ${specifier}`);
@@ -437,8 +449,12 @@ for (const file of javascriptFiles) {
       if (!target) continue;
       if (!layerAllowed(file, target)) fail(`${file}: illegal ${sourceLayer(file)} -> ${sourceLayer(target)} dependency: ${target}`);
       dependencies.add(target);
+      if (dynamic) dynamicTargets.add(target);
+      else staticDependencies.add(target);
     }
     graph.set(file, dependencies);
+    staticGraph.set(file, staticDependencies);
+    dynamicDependencies.set(file, dynamicTargets);
 
     const assets = new Set();
     const staticAssetPattern = /new\s+URL\(\s*(["'])(\.\.?\/[^"']+)\1\s*,\s*import\.meta\.url\s*\)/g;
@@ -502,6 +518,17 @@ function reachableFrom(entries, dependencyGraph = graph) {
   }
   for (const entry of entries) collect(entry);
   return reachable;
+}
+
+function staticReachableFrom(entries) {
+  return reachableFrom(entries, staticGraph);
+}
+
+function sourceBytes(files) {
+  return [...files].reduce(
+    (total, file) => total + fs.statSync(path.join(root, file)).size,
+    0
+  );
 }
 
 const serviceWorkerReachable = reachableFrom(["background/service-worker.js"]);
@@ -597,6 +624,7 @@ for (const [file, reason] of allowedNativeEsmOrphans) {
 }
 
 const linkedEntryPoints = new Set();
+const runtimeReachableModules = new Set();
 for (const target of ["chromium", "firefox"]) {
   const plan = packagePlans.get(target);
   const packaged = new Set(plan.files);
@@ -616,6 +644,7 @@ for (const target of ["chromium", "firefox"]) {
     await linkEntry(entry);
   }
   const reachable = reachableFrom(runtimeEntries.filter((entry) => graph.has(entry)));
+  for (const file of reachable) runtimeReachableModules.add(file);
   for (const file of plan.files.filter((candidate) => graph.has(candidate))) {
     if (reachable.has(file)) continue;
     if (allowedNativeEsmOrphans.has(file)) {
@@ -640,6 +669,48 @@ const reachableContentAuthorModules = reachableFrom(
 for (const file of graph.keys()) {
   if (file.startsWith("content-src/") && !reachableContentAuthorModules.has(file)) {
     fail(`content author ESM module is unreachable from declared content entries: ${file}`);
+  }
+}
+let configuredContentSafeSharedModules = fixtureConfiguration?.contentSafeSharedModules;
+if (!fixtureConfiguration) {
+  try {
+    const parsed = JSON.parse(
+      fs.readFileSync(path.join(root, CONTENT_SAFE_SHARED_ALLOWLIST_FILE), "utf8")
+    );
+    if (!Array.isArray(parsed)) throw new Error("top-level value must be an array");
+    configuredContentSafeSharedModules = parsed;
+  } catch (error) {
+    fail(`${CONTENT_SAFE_SHARED_ALLOWLIST_FILE}: invalid content-safe shared allowlist: ${error.message}`);
+    configuredContentSafeSharedModules = [];
+  }
+}
+const contentSafeSharedModules = new Set(configuredContentSafeSharedModules || []);
+if (contentSafeSharedModules.size !== (configuredContentSafeSharedModules || []).length) {
+  fail(`${CONTENT_SAFE_SHARED_ALLOWLIST_FILE}: entries must be unique`);
+}
+if (
+  JSON.stringify(configuredContentSafeSharedModules || [])
+  !== JSON.stringify([...(configuredContentSafeSharedModules || [])].sort())
+) {
+  fail(`${CONTENT_SAFE_SHARED_ALLOWLIST_FILE}: entries must be sorted`);
+}
+for (const file of contentSafeSharedModules) {
+  if (typeof file !== "string" || !/^shared\/.+\.js$/.test(file)) {
+    fail(`${CONTENT_SAFE_SHARED_ALLOWLIST_FILE}: invalid shared module entry: ${String(file)}`);
+  }
+}
+const reachableContentSharedModules = new Set(
+  [...reachableContentAuthorModules].filter((file) => file.startsWith("shared/"))
+);
+for (const owner of reachableContentAuthorModules) {
+  for (const dependency of graph.get(owner) || []) {
+    if (!dependency.startsWith("shared/") || contentSafeSharedModules.has(dependency)) continue;
+    fail(`${owner}: content-safe shared dependency is not allowlisted: ${dependency}`);
+  }
+}
+for (const file of contentSafeSharedModules) {
+  if (!reachableContentSharedModules.has(file)) {
+    fail(`${CONTENT_SAFE_SHARED_ALLOWLIST_FILE}: stale content-safe shared module: ${file}`);
   }
 }
 for (const entry of buildEntryPoints) {
@@ -669,6 +740,201 @@ for (const file of graph.keys()) {
   if (!linkedModules.has(file)) await linkEntry(file);
 }
 
+let nativeEntryBudgetStats = null;
+if (verifyNativeEntryBudgets) {
+  let budgets = fixtureConfiguration?.nativeEntryBudgets;
+  if (!budgets) {
+    try {
+      budgets = JSON.parse(fs.readFileSync(path.join(root, NATIVE_ENTRY_BUDGET_FILE), "utf8"));
+    } catch (error) {
+      fail(`${NATIVE_ENTRY_BUDGET_FILE}: invalid native-entry budget: ${error.message}`);
+      budgets = {};
+    }
+  }
+  if (!budgets || typeof budgets !== "object" || Array.isArray(budgets)) budgets = {};
+  const unknownTopLevel = Object.keys(budgets).filter((field) => !new Set([
+    "entries",
+    "lazyBoundaries"
+  ]).has(field));
+  if (unknownTopLevel.length) {
+    fail(`${NATIVE_ENTRY_BUDGET_FILE}: unsupported top-level fields: ${unknownTopLevel.join(", ")}`);
+  }
+  const entryBudgets = budgets.entries && typeof budgets.entries === "object" && !Array.isArray(budgets.entries)
+    ? budgets.entries
+    : {};
+  const lazyBudgets = budgets.lazyBoundaries
+    && typeof budgets.lazyBoundaries === "object"
+    && !Array.isArray(budgets.lazyBoundaries)
+    ? budgets.lazyBoundaries
+    : {};
+  if (!budgets.entries || entryBudgets !== budgets.entries) {
+    fail(`${NATIVE_ENTRY_BUDGET_FILE}: entries must be an object`);
+  }
+  if (!budgets.lazyBoundaries || lazyBudgets !== budgets.lazyBoundaries) {
+    fail(`${NATIVE_ENTRY_BUDGET_FILE}: lazyBoundaries must be an object`);
+  }
+
+  function enforceFootprint(label, budget, closure, extraFields = []) {
+    const allowedFields = new Set([
+      ...extraFields,
+      "maxFiles",
+      "targetFiles",
+      "maxSourceBytes",
+      "targetSourceBytes",
+      "reason"
+    ]);
+    const unknown = Object.keys(budget).filter((field) => !allowedFields.has(field));
+    if (unknown.length) fail(`${NATIVE_ENTRY_BUDGET_FILE}: ${label} has unsupported fields: ${unknown.join(", ")}`);
+    const bytes = sourceBytes(closure);
+    for (const [field, value] of Object.entries({
+      maxFiles: budget.maxFiles,
+      targetFiles: budget.targetFiles,
+      maxSourceBytes: budget.maxSourceBytes,
+      targetSourceBytes: budget.targetSourceBytes
+    })) {
+      if (!Number.isSafeInteger(value) || value <= 0) {
+        fail(`${NATIVE_ENTRY_BUDGET_FILE}: ${label}.${field} must be a positive integer`);
+      }
+    }
+    if (budget.targetFiles >= budget.maxFiles) {
+      fail(`${NATIVE_ENTRY_BUDGET_FILE}: ${label}.targetFiles must be below maxFiles`);
+    }
+    if (budget.targetSourceBytes >= budget.maxSourceBytes) {
+      fail(`${NATIVE_ENTRY_BUDGET_FILE}: ${label}.targetSourceBytes must be below maxSourceBytes`);
+    }
+    if (closure.size > budget.maxFiles) {
+      fail(`${label}: static footprint has ${closure.size} files, above budget ${budget.maxFiles}`);
+    } else if (closure.size < budget.maxFiles) {
+      fail(`${label}: static footprint improved to ${closure.size} files; lower maxFiles from ${budget.maxFiles}`);
+    }
+    if (bytes > budget.maxSourceBytes) {
+      fail(`${label}: static footprint has ${bytes} source bytes, above budget ${budget.maxSourceBytes}`);
+    } else if (bytes < budget.maxSourceBytes) {
+      fail(`${label}: static footprint improved to ${bytes} source bytes; lower maxSourceBytes from ${budget.maxSourceBytes}`);
+    }
+    if (typeof budget.reason !== "string" || budget.reason.trim().length < 32) {
+      fail(`${NATIVE_ENTRY_BUDGET_FILE}: ${label} has no meaningful reason`);
+    }
+    return Object.freeze({ files: closure.size, sourceBytes: bytes });
+  }
+
+  const requiredEntries = [
+    "app/main.js",
+    "background/service-worker.js",
+    "background/firefox-background.js"
+  ];
+  const entryStates = {};
+  for (const entry of requiredEntries) {
+    const budget = entryBudgets[entry];
+    if (!budget || typeof budget !== "object" || Array.isArray(budget)) {
+      fail(`${NATIVE_ENTRY_BUDGET_FILE}: missing structured entry budget for ${entry}`);
+      continue;
+    }
+    if (!staticGraph.has(entry)) {
+      fail(`${NATIVE_ENTRY_BUDGET_FILE}: native entry is missing from the browser ESM graph: ${entry}`);
+      continue;
+    }
+    entryStates[entry] = enforceFootprint(entry, budget, staticReachableFrom([entry]));
+  }
+  for (const entry of Object.keys(entryBudgets)) {
+    if (!requiredEntries.includes(entry)) {
+      fail(`${NATIVE_ENTRY_BUDGET_FILE}: stale native entry budget for ${entry}`);
+    }
+  }
+
+  const appInitialClosure = staticReachableFrom(["app/main.js"]);
+  const initialDynamicEdges = new Map();
+  for (const owner of appInitialClosure) {
+    for (const target of dynamicDependencies.get(owner) || []) {
+      if (!initialDynamicEdges.has(target)) initialDynamicEdges.set(target, new Set());
+      initialDynamicEdges.get(target).add(owner);
+    }
+  }
+  for (const target of initialDynamicEdges.keys()) {
+    if (!REQUIRED_APP_LAZY_BOUNDARIES.includes(target)) {
+      fail(`${target}: unbudgeted dynamic boundary from the app initial-static closure`);
+    }
+  }
+
+  const lazyStates = {};
+  for (const target of REQUIRED_APP_LAZY_BOUNDARIES) {
+    const budget = lazyBudgets[target];
+    if (!budget || typeof budget !== "object" || Array.isArray(budget)) {
+      fail(`${NATIVE_ENTRY_BUDGET_FILE}: missing structured lazy-boundary budget for ${target}`);
+      continue;
+    }
+    if (typeof budget.owner !== "string" || !budget.owner) {
+      fail(`${NATIVE_ENTRY_BUDGET_FILE}: ${target}.owner must name the dynamic-import owner`);
+    } else if (!appInitialClosure.has(budget.owner)) {
+      fail(`${target}: lazy-boundary owner is not in the app initial-static closure: ${budget.owner}`);
+    }
+    if (appInitialClosure.has(target)) {
+      fail(`${target}: configured lazy boundary became statically reachable from app/main.js`);
+    }
+    if (!dynamicDependencies.get(budget.owner)?.has(target)) {
+      fail(`${target}: configured lazy boundary is not dynamically imported by ${budget.owner || "its owner"}`);
+    }
+    if (!staticGraph.has(target)) {
+      fail(`${NATIVE_ENTRY_BUDGET_FILE}: lazy-boundary target is missing from the browser ESM graph: ${target}`);
+      continue;
+    }
+    const increment = new Set(
+      [...staticReachableFrom([target])].filter((file) => !appInitialClosure.has(file))
+    );
+    lazyStates[target] = enforceFootprint(target, budget, increment, ["owner"]);
+  }
+  for (const target of Object.keys(lazyBudgets)) {
+    if (!REQUIRED_APP_LAZY_BOUNDARIES.includes(target)) {
+      fail(`${NATIVE_ENTRY_BUDGET_FILE}: stale app lazy-boundary budget for ${target}`);
+    }
+  }
+  nativeEntryBudgetStats = Object.freeze({ entries: entryStates, lazyBoundaries: lazyStates });
+}
+
+let exportLivenessStats = null;
+if (verifyExportLiveness) {
+  let exportLivenessAllowlist = fixtureConfiguration?.exportLivenessAllowlist;
+  if (!exportLivenessAllowlist) {
+    try {
+      exportLivenessAllowlist = JSON.parse(
+        fs.readFileSync(path.join(root, EXPORT_LIVENESS_ALLOWLIST_FILE), "utf8")
+      );
+    } catch (error) {
+      fail(`${EXPORT_LIVENESS_ALLOWLIST_FILE}: invalid export-liveness allowlist: ${error.message}`);
+      exportLivenessAllowlist = {};
+    }
+  }
+  const runtimeConsumerFiles = new Set([
+    ...runtimeReachableModules,
+    ...reachableContentAuthorModules,
+    ...reachableBuildAuthorModules
+  ]);
+  const moduleFiles = [...new Set([...graph.keys(), ...buildGraph.keys()])].sort();
+  const reportFiles = moduleFiles.filter((file) => (
+    runtimeConsumerFiles.has(file)
+    && authoredEsm(file, contextFor(file))
+  ));
+  try {
+    const liveness = analyzeNamedExportLiveness({
+      root,
+      moduleFiles,
+      reportFiles,
+      runtimeConsumerFiles: [...runtimeConsumerFiles],
+      toolFiles: allFiles.filter((file) => (
+        /^tools\/.*\.(?:cjs|mjs)$/.test(file)
+        && !/-test\.cjs$/.test(file)
+      )),
+      testFiles: fixtureConfiguration?.testFiles
+        || allFiles.filter((file) => /^tools\/.*-test\.cjs$/.test(file)),
+      allowlist: exportLivenessAllowlist
+    });
+    exportLivenessStats = liveness.stats;
+    for (const error of liveness.errors) fail(error);
+  } catch (error) {
+    fail(`Named export liveness verification failed: ${error.message}`);
+  }
+}
+
 if (errors.length) {
   console.error("Module verification failed:");
   for (const error of [...new Set(errors)]) console.error(`  - ${error}`);
@@ -676,6 +942,14 @@ if (errors.length) {
 } else {
   console.log(
     `Module verification passed (${graph.size} browser ESM modules, ${buildGraph.size} build ESM modules, `
-    + `${javascriptFiles.length} classified JavaScript files, no cycles).`
+    + `${javascriptFiles.length} classified JavaScript files, no cycles`
+    + `${exportLivenessStats
+      ? `, ${exportLivenessStats.reportedNamedExports} named exports analyzed with ${exportLivenessStats.exceptions} exceptions`
+      : ""}`
+    + `${nativeEntryBudgetStats
+      ? `, ${Object.keys(nativeEntryBudgetStats.entries).length} initial-static entry closures and `
+        + `${Object.keys(nativeEntryBudgetStats.lazyBoundaries).length} lazy-boundary increments ratcheted`
+      : ""}`
+    + `, ${reachableContentSharedModules.size} content-safe shared modules).`
   );
 }

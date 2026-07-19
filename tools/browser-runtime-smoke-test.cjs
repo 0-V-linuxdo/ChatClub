@@ -62,7 +62,9 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
     "background/secure-frame-contexts.js",
     "background/custom-userscript-runtime.js",
     "background/grok-cookie-runtime.js",
+    "background/content-script-registration.js",
     "background/content-registration.js",
+    "background/promise-timeout.js",
     "background/frame-injection.js",
     "background/tab-runtime.js"
   ].map(read).join("\n");
@@ -72,10 +74,10 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
   assert.match(serviceWorker, /matchesForContentTargets/);
   assert.match(serviceWorker, /if \(summaryMatches\.length\)/);
   assert.match(serviceWorker, /if \(messageNavigatorMatches\.length\)/);
-  assert.match(serviceWorker, /js: \["content\/preload\.js"\]/);
-  assert.match(serviceWorker, /js: \["content\/grok-cookie-bridge\.js"\]/);
-  assert.match(serviceWorker, /js: \["content\/summary-userscripts-main\.js"\]/);
-  assert.match(serviceWorker, /js: \["content\/content\.js"\]/);
+  assert.match(serviceWorker, /contentScriptRegistration\(CONTENT_BUNDLES\.preload/);
+  assert.match(serviceWorker, /contentScriptRegistration\(CONTENT_BUNDLES\.grokCookie/);
+  assert.match(serviceWorker, /contentScriptRegistration\(CONTENT_BUNDLES\.summaryMain/);
+  assert.match(serviceWorker, /contentScriptRegistration\(CONTENT_BUNDLES\.content/);
   assert.doesNotMatch(serviceWorker, /content\/protocol\.js/);
   assert.match(serviceWorker, /registerContentScriptsVerified/);
   assert.match(serviceWorker, /FIREFOX_CONTENT_FALLBACKS_KEY/);
@@ -104,7 +106,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
   assert.match(serviceWorker, /entry\?\.error/);
   assert.match(serviceWorker, /JSON\.parse\(serialized\)/);
   assert.match(serviceWorker, /ensureCustomSummaryRuntime/);
-  assert.match(serviceWorker, /timeoutPromise\(\s*execution/);
+  assert.match(serviceWorker, /withTimeout\(\s*execution/);
   assert.match(summaryMainEntry, /window\[CUSTOM_SUMMARY_EXECUTOR\]/);
   assert.match(summaryMainEntry, /SUMMARY_RESULT_MAX_TURNS/);
 

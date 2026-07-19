@@ -6,11 +6,10 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 const root = path.resolve(__dirname, "..");
-const constantsSource = fs.readFileSync(path.join(root, "shared/constants.js"), "utf8");
 const defaultShortcutsSource = fs.readFileSync(path.join(root, "shared/default-shortcuts.js"), "utf8");
 const i18nSource = fs.readFileSync(path.join(root, "shared/i18n.js"), "utf8");
 const shortcutsSource = fs.readFileSync(path.join(root, "shared/shortcuts.js"), "utf8");
-const storageSource = fs.readFileSync(path.join(root, "shared/storage-schema.js"), "utf8");
+const storageConfigBundleSource = fs.readFileSync(path.join(root, "shared/storage-config-bundle.js"), "utf8");
 const protocolSource = fs.readFileSync(path.join(root, "shared/protocol.js"), "utf8");
 const contentBackgroundRequestsSource = fs.readFileSync(
   path.join(root, "shared/content-background-requests.js"),
@@ -100,35 +99,7 @@ function evaluateLiteral(source, name, openingCharacter, context = {}) {
   return vm.runInNewContext(`(${balancedLiteral(source, name, openingCharacter)})`, context);
 }
 
-function functionSource(source, name) {
-  const start = source.indexOf(`function ${name}(`);
-  assert.notEqual(start, -1, `${name} must exist`);
-  const signatureEnd = source.indexOf(") {", start);
-  const bodyStart = signatureEnd < 0 ? -1 : signatureEnd + 2;
-  assert.notEqual(bodyStart, -1, `${name} must have a body`);
-  let depth = 0;
-  let quote = "";
-  let escaped = false;
-  for (let index = bodyStart; index < source.length; index += 1) {
-    const character = source[index];
-    if (quote) {
-      if (escaped) escaped = false;
-      else if (character === "\\") escaped = true;
-      else if (character === quote) quote = "";
-      continue;
-    }
-    if (character === "\"" || character === "'" || character === "`") {
-      quote = character;
-      continue;
-    }
-    if (character === "{") depth += 1;
-    else if (character === "}") {
-      depth -= 1;
-      if (depth === 0) return source.slice(start, index + 1);
-    }
-  }
-  throw new Error(`${name} body did not close`);
-}
+const { functionSource } = require("./function-source.cjs");
 
 function loadShortcutModule(defaultConfig) {
   const exportNames = Array.from(
@@ -166,7 +137,7 @@ function event(overrides = {}) {
 }
 
 function isolatedShortcutConfig(shortcuts, platform) {
-  const config = shortcuts.defaultShortcutConfig();
+  const config = shortcuts.normalizeShortcutConfig(sharedDefault);
   const profile = shortcuts.defaultShortcutProfile(platform);
   for (const action of shortcuts.ALL_SHORTCUT_ACTIONS) {
     profile.shortcuts[action] = { ...profile.shortcuts[action], disabled: true };
@@ -276,7 +247,7 @@ assert.equal(canonicalWithLegacyNoise.profiles.windows.shortcuts.focusInput.cont
 assertNoProperty(canonicalWithLegacyNoise, "cmdOrCtrl", "normalized v2 config");
 
 // Replacing or resetting one platform profile must preserve the other profile.
-const baseConfig = shortcuts.defaultShortcutConfig();
+const baseConfig = shortcuts.normalizeShortcutConfig(sharedDefault);
 const windowsBefore = plain(shortcuts.shortcutProfile(baseConfig, "windows"));
 const changedMac = shortcuts.defaultShortcutProfile("mac");
 changedMac.sendKeyMode = "mod-enter";
@@ -602,19 +573,19 @@ vm.runInContext(`
   ];
   const CONFIG_BUNDLE_KEY_SET = new Set(CONFIG_BUNDLE_KEYS);
   function normalizeShortcutConfig(raw) { return globalThis.__normalizeShortcutConfig(raw); }
-  ${functionSource(storageSource, "plainObject")}
-  ${functionSource(storageSource, "hasBundleField")}
-  ${functionSource(storageSource, "hasBundleObjectField")}
-  ${functionSource(storageSource, "hasBundleArrayField")}
-  ${functionSource(storageSource, "hasBundleNonEmptyObjectField")}
-  ${functionSource(storageSource, "normalizeConfigBundleKeys")}
-  ${functionSource(storageSource, "exportConfigBundle")}
-  ${functionSource(storageSource, "inspectImportedConfig")}
+  ${functionSource(storageConfigBundleSource, "plainObject")}
+  ${functionSource(storageConfigBundleSource, "hasBundleField")}
+  ${functionSource(storageConfigBundleSource, "hasBundleObjectField")}
+  ${functionSource(storageConfigBundleSource, "hasBundleArrayField")}
+  ${functionSource(storageConfigBundleSource, "hasBundleNonEmptyObjectField")}
+  ${functionSource(storageConfigBundleSource, "normalizeConfigBundleKeys")}
+  ${functionSource(storageConfigBundleSource, "exportConfigBundle")}
+  ${functionSource(storageConfigBundleSource, "inspectImportedConfig")}
   globalThis.__exportConfigBundle = exportConfigBundle;
   globalThis.__inspectImportedConfig = inspectImportedConfig;
-`, bundleContext, { filename: "shared/storage-schema.js" });
+`, bundleContext, { filename: "shared/storage-config-bundle.js" });
 
-let ioConfig = shortcuts.defaultShortcutConfig();
+let ioConfig = shortcuts.normalizeShortcutConfig(sharedDefault);
 const ioMac = shortcuts.defaultShortcutProfile("mac");
 ioMac.sendKeyMode = "mod-enter";
 ioMac.shortcuts.focusInput = {
@@ -730,10 +701,81 @@ assert.match(
   /import\s*\{[\s\S]*?\bmatchShortcut\b[\s\S]*?\bnormalizeShortcutConfig\b[\s\S]*?\}\s*from "\.\.\/shared\/shortcuts\.js";/,
   "content source must consume the shared shortcut runtime"
 );
+assert.match(
+  contentEntrySource,
+  /const matched = matchShortcut\(event,\s*activeShortcutConfig,\s*ACTIVE_KEYBOARD_PLATFORM\);/,
+  "iframe shortcut matching must use the latest stored shortcut config"
+);
+assert.doesNotMatch(
+  contentEntrySource,
+  /suppressShortcutBridgeUntil/,
+  "trusted shortcut handling must not retain an unassigned synthetic-event suppression gate"
+);
 assert.doesNotMatch(
   contentEntrySource,
   /function\s+(?:matchShortcut|normalizeShortcutConfig|digitMatch)\s*\(/,
   "content source must not fork the shared shortcut implementation"
+);
+
+// Model the content bridge's mutable shortcut-config slot. Together with the
+// source assertion above, this covers custom bindings, disabled bindings, and
+// storage-driven hot replacement without requiring a generated bundle refresh.
+let activeContentShortcutConfig = shortcuts.normalizeShortcutConfig(sharedDefault);
+const matchActiveContentShortcut = (shortcutEvent) => shortcuts.matchShortcut(
+  shortcutEvent,
+  activeContentShortcutConfig,
+  "mac"
+);
+const customizedContentShortcuts = plain(activeContentShortcutConfig);
+customizedContentShortcuts.profiles.mac.shortcuts.focusInput = {
+  ...customizedContentShortcuts.profiles.mac.shortcuts.focusInput,
+  command: false,
+  control: true,
+  option: false,
+  shift: false,
+  code: "KeyQ"
+};
+activeContentShortcutConfig = shortcuts.normalizeShortcutConfig(customizedContentShortcuts);
+assert.equal(
+  matchActiveContentShortcut(event({ code: "KeyQ", ctrlKey: true }))?.action,
+  "focusInput",
+  "iframe shortcut matching must honor a custom binding"
+);
+assert.equal(
+  matchActiveContentShortcut(event({ code: "KeyK", metaKey: true })),
+  null,
+  "a custom binding must replace the default binding"
+);
+
+const disabledContentShortcuts = plain(activeContentShortcutConfig);
+disabledContentShortcuts.profiles.mac.shortcuts.focusInput.disabled = true;
+activeContentShortcutConfig = shortcuts.normalizeShortcutConfig(disabledContentShortcuts);
+assert.equal(
+  matchActiveContentShortcut(event({ code: "KeyQ", ctrlKey: true })),
+  null,
+  "iframe shortcut matching must honor a disabled binding"
+);
+
+const hotUpdatedContentShortcuts = plain(activeContentShortcutConfig);
+hotUpdatedContentShortcuts.profiles.mac.shortcuts.focusInput = {
+  ...hotUpdatedContentShortcuts.profiles.mac.shortcuts.focusInput,
+  disabled: false,
+  command: false,
+  control: false,
+  option: true,
+  shift: false,
+  code: "KeyU"
+};
+activeContentShortcutConfig = shortcuts.normalizeShortcutConfig(hotUpdatedContentShortcuts);
+assert.equal(
+  matchActiveContentShortcut(event({ code: "KeyQ", ctrlKey: true })),
+  null,
+  "hot replacement must stop matching the prior binding"
+);
+assert.equal(
+  matchActiveContentShortcut(event({ code: "KeyU", altKey: true }))?.action,
+  "focusInput",
+  "hot replacement must match the newly stored binding"
 );
 assert.match(
   contentSource,

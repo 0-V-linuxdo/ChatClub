@@ -493,7 +493,9 @@
     const inputOptions = options && typeof options === "object" ? options : {};
     const runId = String(inputOptions.runId || preferredModelRunId());
     const timeoutMs = Math.max(1000, Number(inputOptions.timeoutMs) || 20000);
-    const { runId: ignoredRunId, timeoutMs: ignoredTimeoutMs, ...modelOptions } = inputOptions;
+    const modelOptions = { ...inputOptions };
+    delete modelOptions.runId;
+    delete modelOptions.timeoutMs;
     const previousRunId = activeRuns.get(frame) || "";
     if (previousRunId && previousRunId !== runId) {
       try {

@@ -7,15 +7,9 @@ const { pathToFileURL } = require("node:url");
 const root = path.resolve(__dirname, "..");
 
 (async () => {
-  const { createTopbarPlaceholderController, pickTopbarPromptPlaceholderIndex } = await import(
+  const { createTopbarPlaceholderController } = await import(
     pathToFileURL(path.join(root, "app/topbar/placeholder.js")).href
   );
-
-  const sequenceState = { index: -1, lastRandom: -1 };
-  assert.equal(pickTopbarPromptPlaceholderIndex(3, { order: "sequence" }, sequenceState, false), 0);
-  assert.equal(pickTopbarPromptPlaceholderIndex(3, { order: "sequence" }, sequenceState, true), 1);
-  assert.equal(pickTopbarPromptPlaceholderIndex(3, { order: "sequence" }, sequenceState, true), 2);
-  assert.equal(pickTopbarPromptPlaceholderIndex(3, { order: "sequence" }, sequenceState, true), 0);
 
   const state = {
     options: {
@@ -43,6 +37,12 @@ const root = path.resolve(__dirname, "..");
   await controller.initialize();
   assert.equal(controller.placeholder(), "One");
   assert.equal(saves, 1);
+  await controller.initialize();
+  assert.equal(controller.placeholder(), "Two");
+  assert.equal(saves, 2);
+  await controller.initialize();
+  assert.equal(controller.placeholder(), "One");
+  assert.equal(saves, 3);
   controller.sync();
   assert.equal(controller.placeholder(), "One");
   assert.equal(renders, 1);

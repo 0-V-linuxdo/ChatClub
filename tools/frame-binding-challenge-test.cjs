@@ -8,31 +8,10 @@ const vm = require("node:vm");
 
 const root = path.resolve(__dirname, "..");
 
-function functionSource(source, name, asyncFunction = false) {
-  const prefix = `${asyncFunction ? "async " : ""}function ${name}(`;
-  const start = source.indexOf(prefix);
-  assert.notEqual(start, -1, `${name} must exist`);
-  const bodyStart = source.indexOf(") {", start) + 2;
-  let depth = 0;
-  let quote = "";
-  let escaped = false;
-  for (let index = bodyStart; index < source.length; index += 1) {
-    const character = source[index];
-    if (quote) {
-      if (escaped) escaped = false;
-      else if (character === "\\") escaped = true;
-      else if (character === quote) quote = "";
-      continue;
-    }
-    if (character === "\"" || character === "'" || character === "`") quote = character;
-    else if (character === "{") depth += 1;
-    else if (character === "}" && --depth === 0) return source.slice(start, index + 1);
-  }
-  throw new Error(`${name} body did not close`);
-}
+const { functionSource } = require("./function-source.cjs");
 
 (async () => {
-  const { createFrameBindingChallengeRegistry, validFrameBindingChallenge } = await import(
+  const { createFrameBindingChallengeRegistry } = await import(
     `${pathToFileURL(path.join(root, "app/frame-bridge/frame-binding.js")).href}?test=${Date.now()}`
   );
   const {
@@ -56,7 +35,7 @@ function functionSource(source, name, asyncFunction = false) {
   const iframe = { isConnected: true };
 
   const first = registry.issue(iframe);
-  assert.equal(validFrameBindingChallenge(first.challenge), true);
+  assert.match(first.challenge, /^[a-f0-9]{64}$/i);
   assert.equal(first.generation, 1);
   assert.equal(registry.issue(iframe), first, "an unexpired challenge must be reused instead of rotated by message spam");
   assert.equal(registry.claim(first.challenge, first.generation + 1), null, "the exact challenge generation is required");
@@ -110,7 +89,7 @@ function functionSource(source, name, asyncFunction = false) {
   );
 
   for (const invalid of ["", "abc", "g".repeat(64), "a".repeat(63), "a".repeat(65)]) {
-    assert.equal(validFrameBindingChallenge(invalid), false);
+    assert.equal(registry.claim(invalid, invalidated.generation), null);
   }
 
   const controllerSource = fs.readFileSync(path.join(root, "app/frame-bridge/controller.js"), "utf8");

@@ -38,6 +38,7 @@ for (const plan of [chromium, firefox]) {
     "content/grok-cookie-bridge.js",
     "userscripts/chatgpt.js",
     "topic-delete-userscripts/chatgpt.user.js",
+    "background/content-script-registration.js",
     "background/content-registration.js",
     "background/frame-injection.js",
     "background/tab-runtime.js",
@@ -47,7 +48,6 @@ for (const plan of [chromium, firefox]) {
     ...Object.values(CONTENT_ENTRIES),
     ...TOPIC_DELETE_SOURCE_FILES,
     "tools/generate-artifacts.cjs",
-    "shared/storage.js",
     "userscripts/index.json"
   ]) assert.ok(!files.has(buildOnly), `${plan.target} package contains build-only ${buildOnly}`);
   assert.ok(!plan.files.some((file) => /^(?:dist|output)\//.test(file)));

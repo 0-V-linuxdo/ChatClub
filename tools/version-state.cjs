@@ -387,6 +387,5 @@ module.exports = {
   contentRuntimeState,
   summaryState,
   deleteState,
-  computeVersionState,
   verifyVersionState
 };

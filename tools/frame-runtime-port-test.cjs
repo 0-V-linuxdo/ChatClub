@@ -3,7 +3,8 @@
 const assert = require("node:assert/strict");
 
 (async () => {
-  const { FrameCommandError, FrameRuntimePort } = await import("../shared/frame-rpc.js");
+  const { FrameRuntimePort } = await import("../shared/frame-rpc.js");
+  const isFrameCommandError = (error, code) => error?.name === "FrameCommandError" && error.code === code;
   const { CONTENT_RUNTIME_IDENTITY } = await import("../shared/content-runtime-identity.js");
   const runtimeDataset = (documentId, capabilities = []) => ({
     preferredModelDocumentId: documentId,
@@ -53,7 +54,7 @@ const assert = require("node:assert/strict");
   const mutatingFrame = { isConnected: true, dataset: runtimeDataset("doc-send", ["send"]) };
   await assert.rejects(
     mutatingPort.request(mutatingFrame, "sendText", { text: "once" }),
-    (error) => error instanceof FrameCommandError && error.code === "TIMEOUT" && error.delivered === true
+    (error) => isFrameCommandError(error, "TIMEOUT") && error.delivered === true
   );
   assert.equal(mutatingCalls, 1, "a delivered mutating command must never be retried");
 
@@ -86,7 +87,7 @@ const assert = require("node:assert/strict");
     const error = await uncertainPort.request(uncertainFrame, "deleteThread", {
       deleteAttemptId: "attempt-1"
     }).then(() => null, (reason) => reason);
-    assert.ok(error instanceof FrameCommandError, failure.label);
+    assert.equal(error?.name, "FrameCommandError", failure.label);
     assert.equal(error.code, failure.expectedCode, failure.label);
     assert.equal(Object.hasOwn(error, "delivered"), false, `${failure.label}: unknown delivery must stay unknown`);
     assert.equal(calls, 1, `${failure.label}: Delete must never be replayed`);
@@ -116,16 +117,18 @@ const assert = require("node:assert/strict");
   const controller = new AbortController();
   const abortPort = new FrameRuntimePort({
     currentTabId: async () => 7,
-    sendRuntimeMessage: () => new Promise((resolve) => setTimeout(() => resolve({ success: true }), 25))
+    sendRuntimeMessage: () => new Promise((resolve) => {
+      setTimeout(() => resolve({ success: true }), 25);
+    })
   });
   const abortFrame = { isConnected: true, dataset: runtimeDataset("doc-abort", ["preferred-model"]) };
   const aborted = abortPort.request(abortFrame, "applyPreferredModel", {}, { signal: controller.signal });
   controller.abort();
-  await assert.rejects(aborted, (error) => error instanceof FrameCommandError && error.code === "ABORTED");
+  await assert.rejects(aborted, (error) => isFrameCommandError(error, "ABORTED"));
 
   await assert.rejects(
     port.request(iframe, "notACommand"),
-    (error) => error instanceof FrameCommandError && error.code === "REMOTE_ERROR" && error.delivered === false
+    (error) => isFrameCommandError(error, "REMOTE_ERROR") && error.delivered === false
   );
 
   let featureEnsures = 0;

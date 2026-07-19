@@ -50,7 +50,9 @@ const root = path.resolve(__dirname, "..");
     action: "probe",
     data: { value: 9 }
   }, { id: "chatclub-test" }, (value) => { response = value; }), true);
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
   assert.deepEqual(response, { success: true, data: { action: "probe", data: { value: 9 } } });
   install("3", async () => {
     const error = new Error("Content capability is not installed: delete");
@@ -67,7 +69,9 @@ const root = path.resolve(__dirname, "..");
     action: "deleteThread",
     data: {}
   }, { id: "chatclub-test" }, (value) => { response = value; });
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
   assert.deepEqual(response, {
     success: false,
     error: "Content capability is not installed: delete",

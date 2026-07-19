@@ -49,7 +49,6 @@ const trees = Object.freeze({
 });
 const PACKAGED_NATIVE_ESM_REACHABILITY_ALLOWLIST = Object.freeze({});
 const SOURCE_ONLY_FILES = new Set([
-  "shared/storage.js",
   "build-src/topic-delete-userscript-sources.js",
   "userscripts/index.json"
 ]);
@@ -161,14 +160,9 @@ module.exports = {
   trees,
   SUMMARY_USERSCRIPT_FILES,
   PACKAGED_NATIVE_ESM_REACHABILITY_ALLOWLIST,
-  safeRelative,
   assertPackagedRegularFile,
   assertPackagedDirectory,
-  collectTree,
-  allowlistedFiles,
-  targetFileAllowed,
   packagePlan,
-  packageFileBytes,
   packageDigest,
   materializePackagePlan,
   runtimeModuleEntries

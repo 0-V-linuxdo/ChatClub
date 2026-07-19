@@ -13,33 +13,7 @@ const topbar = read("app/topbar/controller.js");
 const topbarView = read("app/topbar/view.js");
 const preferredModel = read("app/preferred-model/controller.js");
 
-function functionSource(source, name, indent = "  ") {
-  const regularStart = source.indexOf(`${indent}function ${name}(`);
-  const start = regularStart >= 0 ? regularStart : source.indexOf(`${indent}async function ${name}(`);
-  assert.notEqual(start, -1, `${name} must remain discoverable`);
-  const signatureEnd = source.indexOf(") {", start);
-  assert.notEqual(signatureEnd, -1, `${name} signature must close`);
-  const bodyStart = signatureEnd + 2;
-  let depth = 0;
-  let quote = "";
-  let escaped = false;
-  for (let index = bodyStart; index < source.length; index += 1) {
-    const character = source[index];
-    if (quote) {
-      if (escaped) escaped = false;
-      else if (character === "\\") escaped = true;
-      else if (character === quote) quote = "";
-      continue;
-    }
-    if (character === "\"" || character === "'" || character === "`") {
-      quote = character;
-      continue;
-    }
-    if (character === "{") depth += 1;
-    else if (character === "}" && --depth === 0) return source.slice(start, index + 1);
-  }
-  throw new Error(`${name} body did not close`);
-}
+const { functionSource } = require("./function-source.cjs");
 
 (async () => {
   const portModule = await import(pathToFileURL(path.join(root, "app/controller-port.js")).href);

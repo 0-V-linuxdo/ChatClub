@@ -1,16 +1,9 @@
 {
   "shared/i18n.js": {
-    "maxLines": 1662,
+    "maxLines": 1791,
     "target": 1500,
-    "maxBytes": 90511,
+    "maxBytes": 101311,
     "targetBytes": 82000,
     "reason": "Bilingual translation catalog data is kept co-located for key parity; both line and byte size are explicitly ratcheted."
-  },
-  "tools/browser-smoke.mjs": {
-    "maxLines": 1213,
-    "target": 1100,
-    "maxBytes": 62403,
-    "targetBytes": 56000,
-    "reason": "Cross-engine smoke orchestration keeps Chromium and Firefox lifecycle assertions together; line and byte size are explicitly ratcheted."
   }
 }

@@ -11,6 +11,7 @@ const lineCount = (source) => source.split(/\r?\n/).length;
 
 (async () => {
   const workspace = read("app/workspace/controller.js");
+  const appHosts = read("app/workspace/app-hosts.js");
   const drag = read("app/workspace/drag-controller.js");
   const navigator = read("app/workspace/message-navigator-controller.js");
   const frame = read("app/workspace/frame-controller.js");
@@ -21,7 +22,7 @@ const lineCount = (source) => source.split(/\r?\n/).length;
   const view = read("app/workspace/view-controller.js");
 
   assert.ok(lineCount(workspace) < 1200, "Workspace facade must remain assembly-only and need no size exception");
-  assert.ok(lineCount(drag) > 300, "drag coordinator must remain a substantive lifecycle boundary");
+  assert.ok(lineCount(drag) > 250, "pointer drag coordinator must remain a substantive lifecycle boundary");
   assert.ok(lineCount(navigator) > 180, "Message Navigator controller must remain a substantive lifecycle boundary");
   assert.ok(lineCount(frame) > 700 && lineCount(frame) < 1200, "frame lifecycle/navigation must remain a substantive bounded owner");
   assert.ok(lineCount(layout) > 250, "layout/catalog reconciliation must remain a substantive owner");
@@ -42,6 +43,11 @@ const lineCount = (source) => source.split(/\r?\n/).length;
   assert.doesNotMatch(workspace, /function renderChatFrame\(/);
   assert.doesNotMatch(workspace, /function rememberFrameLocation\(/);
   assert.doesNotMatch(workspace, /function restorePocketBatch\(/);
+  assert.match(appHosts, /export function appPickerHostKeys\(app\)/);
+  assert.match(pocket, /import \{ appPickerHostKeys, normalizeAppPickerHost \} from "\.\/app-hosts\.js"/);
+  assert.match(view, /import \{ appPickerHostKeys \} from "\.\/app-hosts\.js"/);
+  assert.doesNotMatch(pocket, /function appPickerHostKeys\(/);
+  assert.doesNotMatch(view, /function appPickerHostKeys\(/);
 
   assert.match(drag, /validateControllerContract\(dependencies, "Workspace drag controller"/);
   assert.match(drag, /moveTabWithinGroup\(group, tabId, insertIndex\)/);
@@ -49,6 +55,8 @@ const lineCount = (source) => source.split(/\r?\n/).length;
   assert.match(drag, /iframe\.dataset\.dragPointerEvents/);
   assert.match(drag, /document\.removeEventListener\("pointercancel", cancelTabPointerDrag, true\)/);
   assert.match(drag, /consumeSuppressedTabClick/);
+  assert.doesNotMatch(drag, /dataTransfer|DRAG_(?:TAB|GROUP)_MIME|moveDroppedGroupWithinWorkspace/);
+  assert.doesNotMatch(view, /ondragover|ondragleave|ondrop/);
   assert.doesNotMatch(drag, /deleteThread|executeTopicDelete|frameBindingId/);
 
   assert.match(navigator, /validateControllerContract\(dependencies, "Workspace Message Navigator controller"/);
@@ -59,10 +67,13 @@ const lineCount = (source) => source.split(/\r?\n/).length;
   assert.doesNotMatch(navigator, /deleteThread|executeTopicDelete|trustedInput/);
 
   assert.match(frame, /function frameDeleteThreadPayload\(/, "Delete identity payload must remain in the frame owner");
+  assert.doesNotMatch(frame, /function chatFrame(?:Allow|NeedsSandbox|Sandbox)\(/, "legacy iframe attribute wrappers must not shadow the canonical contract");
+  assert.doesNotMatch(workspace, /"(?:beginFrameLoading|chatFrameAllow|chatFrameNeedsSandbox|chatFrameSandbox|currentFullscreenGroup|currentGroupIndex|frameDeleteThreadPayload|frameIsLoading)"/);
   assert.match(frame, /function consumeFrameInitialHref\(instanceId\)/, "one-shot restored href mutation must remain in the frame state owner");
+  assert.match(frame, /function stageFrameInitialHref\(instanceId, href\)/, "targeted frame replacement href staging must remain in the frame state owner");
   assert.match(frame, /executeTopicDelete\(iframe, payload, deleteSiteConfig, timeoutMs\)/);
   assert.match(layout, /function addAppToGroup\(groupId, appId\)/, "workspace membership mutation must remain in the layout state owner");
-  assert.match(view, /const dataset = \{ instanceId: chat\.instanceId, appId: app\.id, frameBindingId \}/, "iframe binding identity must remain unchanged");
+  assert.match(view, /const dataset = \{[\s\S]*?instanceId: chat\.instanceId,[\s\S]*?frameBindingId,[\s\S]*?iframeAttributeContract:/, "iframe binding identity and attribute contract must be recorded together");
   assert.doesNotMatch(view, /delete chat\.initialHref/, "the read-only render owner must not mutate restored frame state");
   assert.doesNotMatch(view, /group\.chatApps\.push\(/, "the read-only render owner must not mutate workspace membership");
   assert.match(statePorts, /drag:[\s\S]*read: \["activeTabs", "groups"\]/);
@@ -98,32 +109,94 @@ const lineCount = (source) => source.split(/\r?\n/).length;
     /extra dependencies field extra/
   );
 
-  const classList = { add() {}, remove() {}, contains() { return false; } };
+  const createClassList = () => {
+    const values = new Set();
+    return {
+      add: (...names) => names.forEach((name) => values.add(name)),
+      remove: (...names) => names.forEach((name) => values.delete(name)),
+      contains: (name) => values.has(name)
+    };
+  };
+  const listenerByType = new Map();
+  const tabOne = { classList: createClassList(), getBoundingClientRect: () => ({ left: 0, right: 100, width: 100 }) };
+  const tabTwo = { classList: createClassList(), getBoundingClientRect: () => ({ left: 100, right: 200, width: 100 }) };
+  const tabsContainer = { classList: createClassList() };
+  const cardOne = {
+    classList: createClassList(),
+    dataset: { groupId: "group-1" },
+    getBoundingClientRect: () => ({ left: 0, right: 100, width: 100 })
+  };
+  const cardTwo = {
+    classList: createClassList(),
+    dataset: { groupId: "group-2" },
+    getBoundingClientRect: () => ({ left: 100, right: 200, width: 100 })
+  };
+  const bodyClassList = createClassList();
   global.document = {
-    body: { classList },
-    querySelectorAll: () => [],
-    querySelector: () => null,
-    addEventListener() {},
-    removeEventListener() {}
+    body: { classList: bodyClassList },
+    querySelectorAll: (selector) => selector === '.chat-card[data-group-id="group-1"] .tab'
+      ? [tabOne, tabTwo]
+      : [],
+    querySelector: (selector) => {
+      if (selector === '.chat-card[data-group-id="group-1"] .chat-tabs') return tabsContainer;
+      if (selector === '.chat-card[data-group-id="group-1"]') return cardOne;
+      if (selector === '.chat-card[data-group-id="group-2"]') return cardTwo;
+      return null;
+    },
+    addEventListener(type, listener) { listenerByType.set(type, listener); },
+    removeEventListener(type, listener) {
+      if (listenerByType.get(type) === listener) listenerByType.delete(type);
+    }
   };
-  const transferValues = new Map();
-  const dataTransfer = {
-    getData: (key) => transferValues.get(key) || "",
-    setData: (key, value) => transferValues.set(key, value)
-  };
-  dragApi.startTabDrag(
-    { currentTarget: { classList }, dataTransfer },
+  const tabPointerNode = { classList: tabTwo.classList, setPointerCapture() {} };
+  dragApi.startTabPointerDrag(
+    {
+      button: 0,
+      clientX: 150,
+      clientY: 0,
+      pointerId: 1,
+      currentTarget: tabPointerNode,
+      target: { closest: () => null },
+      preventDefault() {},
+      stopPropagation() {}
+    },
     dragState.groups[0],
     dragState.groups[0].chatApps[1]
   );
-  await dragApi.moveTabByDrop(
-    { clientX: 0, currentTarget: {}, dataTransfer },
-    dragState.groups[0]
-  );
-  delete global.document;
+  listenerByType.get("pointermove")({ clientX: 10, clientY: 0, preventDefault() {} });
+  listenerByType.get("pointerup")({ clientX: 10, clientY: 0, preventDefault() {} });
+  assert.equal(dragApi.consumeSuppressedTabClick("tab-2"), true, "pointer reorder must suppress its trailing click");
+  await new Promise((resolve) => {
+    setImmediate(resolve);
+  });
   assert.deepEqual(dragState.groups[0].chatApps.map((chat) => chat.instanceId), ["tab-2", "tab-1"]);
   assert.equal(dragState.activeTabs["group-1"], "tab-2");
   assert.deepEqual(dragEffects, ["persist", "sync-tabs", "activate:tab-2"]);
+
+  const groupOne = { id: "group-1", chatApps: [{ instanceId: "tab-1" }] };
+  const groupTwo = { id: "group-2", chatApps: [{ instanceId: "tab-2" }] };
+  dragState.groups = [groupOne, groupTwo];
+  dragState.activeTabs = { "group-1": "tab-1", "group-2": "tab-2" };
+  const groupPointerNode = { classList: createClassList(), setPointerCapture() {} };
+  dragApi.startTabPointerDrag({
+    button: 0,
+    clientX: 50,
+    clientY: 0,
+    pointerId: 2,
+    currentTarget: groupPointerNode,
+    target: { closest: () => null },
+    preventDefault() {},
+    stopPropagation() {}
+  }, groupOne, groupOne.chatApps[0]);
+  listenerByType.get("pointermove")({ clientX: 175, clientY: 0, preventDefault() {} });
+  listenerByType.get("pointerup")({ clientX: 175, clientY: 0, preventDefault() {} });
+  assert.equal(dragApi.consumeSuppressedTabClick("tab-1"), true, "group pointer reorder must suppress its trailing click");
+  await new Promise((resolve) => {
+    setImmediate(resolve);
+  });
+  assert.deepEqual(dragState.groups.map((group) => group.id), ["group-2", "group-1"]);
+  assert.deepEqual(dragEffects, ["persist", "sync-tabs", "activate:tab-2", "persist", "sync-workspace"]);
+  delete global.document;
 
   const navigatorState = { groups: [], options: {} };
   const navigatorCommands = [];

@@ -39,16 +39,14 @@ function storageArea(initial = {}) {
 function fixture({ local = {}, session = {}, tabs = [] } = {}) {
   const localArea = storageArea(local);
   const sessionArea = storageArea(session);
-  let currentTabs = tabs;
   const api = {
     storage: { local: localArea.api, session: sessionArea.api },
-    tabs: { query: async () => currentTabs.map((tab) => ({ ...tab })) }
+    tabs: { query: async () => tabs.map((tab) => ({ ...tab })) }
   };
   return {
     api,
     local: localArea,
-    session: sessionArea,
-    setTabs(value) { currentTabs = value; }
+    session: sessionArea
   };
 }
 
@@ -60,7 +58,6 @@ function fixture({ local = {}, session = {}, tabs = [] } = {}) {
     claimWorkspaceSessionRecovery,
     commitWorkspaceSessionRecovery,
     detachWorkspaceSessionMirror,
-    ensureWorkspaceSessionGeneration,
     prepareWorkspaceSessionLifecycle,
     rotateWorkspaceSessionGeneration
   } = background;
@@ -90,18 +87,6 @@ function fixture({ local = {}, session = {}, tabs = [] } = {}) {
     updatedAt,
     detachedAt
   });
-  const binding = (workspaceId, tabId, windowId, index, updatedAt) => ({
-    storageVersion: WORKSPACE_SESSION_STORAGE_VERSION,
-    generation,
-    workspaceId,
-    tabId,
-    windowId,
-    index,
-    pinned: false,
-    updatedAt,
-    detachedAt: null
-  });
-
   {
     let listener = null;
     const created = [];
@@ -118,12 +103,17 @@ function fixture({ local = {}, session = {}, tabs = [] } = {}) {
 
   {
     const store = fixture();
-    assert.equal(await ensureWorkspaceSessionGeneration(store.api), generation);
-    assert.equal(await ensureWorkspaceSessionGeneration(store.api), generation);
-    assert.deepEqual(store.local.calls.set, [{ [WORKSPACE_SESSION_GENERATION_KEY]: generation }]);
+    assert.equal((await prepareWorkspaceSessionLifecycle(store.api, { now: 1000 })).generation, generation);
+    assert.equal((await prepareWorkspaceSessionLifecycle(store.api, { now: 1001 })).generation, generation);
+    assert.deepEqual(
+      store.local.calls.set.filter((update) => Object.hasOwn(update, WORKSPACE_SESSION_GENERATION_KEY)),
+      [{ [WORKSPACE_SESSION_GENERATION_KEY]: generation }],
+      "generation initialization must be idempotent"
+    );
     const rotated = await rotateWorkspaceSessionGeneration(store.api);
     assert.notEqual(rotated, generation);
-    assert.equal(await ensureWorkspaceSessionGeneration(store.api), rotated);
+    assert.equal((await prepareWorkspaceSessionLifecycle(store.api, { now: 1002 })).generation, rotated);
+    assert.equal(store.local.values[WORKSPACE_SESSION_GENERATION_KEY], rotated, "prepare must preserve a rotated generation");
   }
 
   {

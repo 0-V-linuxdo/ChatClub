@@ -31,11 +31,14 @@ const isContentRuntimeGenerationTransition = (details = {}) =>
 
 (async () => {
   const content = await load("background/content-registration.js");
+  const registrationsRuntime = await load("background/content-script-registration.js");
   const tabs = await load("background/tab-runtime.js");
   const workspaceSession = await load("shared/workspace-session.js");
+  const frameCommands = await load("shared/frame-commands.js");
+  const contentBridgeFiles = frameCommands.contentInjectionPlan();
 
   const target = { id: "example", name: "Example", url: "", hosts: ["example.com", "grok.com"] };
-  const registrations = content.buildContentScriptRegistrations({
+  const registrations = registrationsRuntime.buildContentScriptRegistrations({
     coreTargets: [target],
     preloadTargets: [target],
     summaryTargets: [target],
@@ -59,7 +62,7 @@ const isContentRuntimeGenerationTransition = (details = {}) =>
   assert.equal(registrations.find((item) => item.id === "chatclub-preload").world, "MAIN");
   assert.equal(registrations.find((item) => item.id === "chatclub-summary-userscripts-main").world, "MAIN");
   const messageOnlyTarget = { id: "message-only", name: "Message Only", url: "", hosts: ["messages.example"] };
-  const messageOnlyRegistrations = content.buildContentScriptRegistrations({
+  const messageOnlyRegistrations = registrationsRuntime.buildContentScriptRegistrations({
     coreTargets: [messageOnlyTarget],
     preloadTargets: [messageOnlyTarget],
     messageNavigatorTargets: [messageOnlyTarget]
@@ -70,7 +73,7 @@ const isContentRuntimeGenerationTransition = (details = {}) =>
     "chatclub-message-navigator"
   ], "message-navigator-only hosts must receive the same declared base graph as dynamic repair");
   const wildcardGrokTarget = { id: "grok-wildcard", name: "Grok", url: "", hosts: ["*.grok.com"] };
-  const wildcardGrokRegistrations = content.buildContentScriptRegistrations({
+  const wildcardGrokRegistrations = registrationsRuntime.buildContentScriptRegistrations({
     coreTargets: [wildcardGrokTarget],
     preloadTargets: [wildcardGrokTarget]
   });
@@ -444,7 +447,7 @@ const isContentRuntimeGenerationTransition = (details = {}) =>
     const fallbackKey = "__CHATCLUB_FIREFOX_CONTENT_FALLBACKS__";
     const bindingId = "9".repeat(64);
     const challenge = "8".repeat(64);
-    const changedFile = content.CONTENT_BRIDGE_FILES[1].file;
+    const changedFile = contentBridgeFiles[1].file;
     const fallback = function navigationMismatchFallbackMustNotRun() {};
     let fallbackCalls = 0;
     let relayCalls = 0;
@@ -498,7 +501,7 @@ const isContentRuntimeGenerationTransition = (details = {}) =>
 
   {
     const fallbackKey = "__CHATCLUB_FIREFOX_CONTENT_FALLBACKS__";
-    const files = content.CONTENT_BRIDGE_FILES.map((spec) => spec.file);
+    const files = contentBridgeFiles.map((spec) => spec.file);
     const fallbacks = Object.fromEntries(files.map((file) => [file, function firefoxFallbackProbe() {}]));
     const executions = [];
     globalThis[fallbackKey] = fallbacks;
@@ -540,7 +543,7 @@ const isContentRuntimeGenerationTransition = (details = {}) =>
       for (let index = 0; index < executions.length; index += 2) {
         assert.deepEqual(executions[index].files, [files[index / 2]]);
         assert.equal(executions[index + 1].func, fallbacks[files[index / 2]]);
-        assert.equal(executions[index + 1].world, content.CONTENT_BRIDGE_FILES[index / 2].world);
+        assert.equal(executions[index + 1].world, contentBridgeFiles[index / 2].world);
       }
     } finally {
       delete globalThis[fallbackKey];
@@ -549,7 +552,7 @@ const isContentRuntimeGenerationTransition = (details = {}) =>
 
   {
     const fallbackKey = "__CHATCLUB_FIREFOX_CONTENT_FALLBACKS__";
-    const changedFile = content.CONTENT_BRIDGE_FILES[0].file;
+    const changedFile = contentBridgeFiles[0].file;
     const fallback = function legacyNavigationFallbackMustNotRun() {};
     let probeCalls = 0;
     let fallbackCalls = 0;
@@ -585,7 +588,7 @@ const isContentRuntimeGenerationTransition = (details = {}) =>
 
   {
     const fallbackKey = "__CHATCLUB_FIREFOX_CONTENT_FALLBACKS__";
-    const changedFile = content.CONTENT_BRIDGE_FILES[0].file;
+    const changedFile = contentBridgeFiles[0].file;
     const fallback = function officialBfcacheFallbackMustNotRun() {};
     let probeCalls = 0;
     let fallbackCalls = 0;
@@ -782,7 +785,7 @@ const isContentRuntimeGenerationTransition = (details = {}) =>
       expectedFrameId: 7,
       expectedBindingId: bindingId
     });
-    assert.equal(result.injected, content.CONTENT_BRIDGE_FILES.length);
+    assert.equal(result.injected, contentBridgeFiles.length);
     assert.deepEqual(transitionActions, [
       "MAIN:begin",
       "ISOLATED:begin",
@@ -842,7 +845,7 @@ const isContentRuntimeGenerationTransition = (details = {}) =>
     assert.deepEqual(result.frameIds, [7]);
     assert.deepEqual(result.errors, []);
     const bridgeExecutions = executions.filter((details) => !isContentRuntimeGenerationTransition(details));
-    assert.equal(bridgeExecutions.length, content.CONTENT_BRIDGE_FILES.length + 3);
+    assert.equal(bridgeExecutions.length, contentBridgeFiles.length + 3);
     assert.ok(executions.every((details) => details.target.frameIds[0] === 7));
     assert.deepEqual(bridgeExecutions[0].args, [bindingId]);
     assert.deepEqual(bridgeExecutions.at(-2).args, [bindingId]);
@@ -977,12 +980,12 @@ const isContentRuntimeGenerationTransition = (details = {}) =>
       expectedBindingId: bindingId
     });
     assert.deepEqual(result.frameIds, [7]);
-    assert.equal(result.injected, content.CONTENT_BRIDGE_FILES.length);
+    assert.equal(result.injected, contentBridgeFiles.length);
     assert.equal(result.bindingRelayed, false);
     assert.equal(result.browserDocumentId, "browser-document-7");
     assert.deepEqual(result.errors, []);
     const bridgeExecutions = executions.filter((details) => !isContentRuntimeGenerationTransition(details));
-    assert.equal(bridgeExecutions.length, 2 + 1 + content.CONTENT_BRIDGE_FILES.length);
+    assert.equal(bridgeExecutions.length, 2 + 1 + contentBridgeFiles.length);
     assert.deepEqual(bridgeExecutions[2].args, [bindingId]);
     assert.ok(bridgeExecutions.slice(2).every((details) => details.target.frameIds[0] === 7));
 
@@ -1049,7 +1052,7 @@ const isContentRuntimeGenerationTransition = (details = {}) =>
     const originalWarn = console.warn;
     console.warn = () => {};
     try {
-      await content.reconcileContentScripts(api, [desired]);
+      await registrationsRuntime.reconcileContentScripts(api, [desired]);
     } finally {
       console.warn = originalWarn;
     }

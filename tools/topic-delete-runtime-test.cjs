@@ -97,13 +97,13 @@ function createFixture(createTopicDeleteRuntime, options = {}) {
   let deleteCalls = 0;
   let confirmCalls = 0;
   const framePort = {
-    async request(_iframe, command, data) {
+    async request(iframe, command, data) {
       calls.push(command);
       requests.push({ command, data });
       if (command === "getLocationHref") {
         locationCalls += 1;
         if (typeof options.onLocationRequest === "function") {
-          options.onLocationRequest(_iframe, locationCalls);
+          options.onLocationRequest(iframe, locationCalls);
         }
         if (options.failRecoveryProbe && locationCalls > 1) {
           throw frameError("NOT_REGISTERED", false, "content frame is not registered");

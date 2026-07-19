@@ -1,0 +1,11 @@
+[
+  "shared/background-request-core.js",
+  "shared/content-background-requests.js",
+  "shared/content-runtime-identity.js",
+  "shared/content-runtime-version.generated.js",
+  "shared/default-shortcuts.js",
+  "shared/delete-completion.js",
+  "shared/frame-commands.js",
+  "shared/protocol.js",
+  "shared/shortcuts.js"
+]

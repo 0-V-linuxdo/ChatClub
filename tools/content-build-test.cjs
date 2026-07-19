@@ -16,18 +16,7 @@ const {
 
 const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
-const outputs = [
-  "content/content.js",
-  "content/delete.js",
-  "content/preload.js",
-  "content/preferred-model.js",
-  "content/send.js",
-  "content/summary-bridge.js",
-  "content/summary-userscripts.js",
-  "content/summary-userscripts-main.js",
-  "content/message-navigator.js",
-  "content/grok-cookie-bridge.js"
-];
+const outputs = Object.keys(CONTENT_ENTRIES);
 const entries = outputs.map((file) => CONTENT_ENTRIES[file]);
 const deterministicOutputs = [...outputs, CONTENT_RUNTIME_VERSION_MODULE, FIREFOX_CONTENT_FALLBACK_OUTPUT];
 const hash = (file) => crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");

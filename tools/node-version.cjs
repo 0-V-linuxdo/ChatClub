@@ -40,6 +40,5 @@ module.exports = {
   SUPPORTED_NODE_MAJORS,
   nodeMajor,
   supportedNodeVersion,
-  nodeVersionMessage,
   enforceNodeVersion
 };

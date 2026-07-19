@@ -27,10 +27,15 @@ function lintSource(filename, source) {
   const content = realm("content-src/**/*.js");
   const shared = realm("shared/**/*.js");
   const build = realm("build-src/**/*.js");
-
   for (const [name, entry] of Object.entries({ app, background, content, shared, build })) {
     assert.ok(entry, `${name} ESLint realm is missing`);
     assert.equal(entry.rules?.["no-undef"], "error");
+    const unused = entry.rules?.["no-unused-vars"];
+    assert.equal(unused?.[0], "error", `${name} must reject unused imports and locals`);
+    assert.equal(unused?.[1]?.args, "all");
+    assert.equal(unused?.[1]?.argsIgnorePattern, "^_[A-Za-z0-9_$]*$");
+    assert.equal(unused?.[1]?.varsIgnorePattern, undefined, `${name} must not hide unused locals behind a pattern`);
+    assert.equal(unused?.[1]?.reportUsedIgnorePattern, true);
   }
   assert.ok(Object.hasOwn(app.languageOptions.globals, "window"));
   assert.ok(Object.hasOwn(app.languageOptions.globals, "document"));
@@ -48,7 +53,6 @@ function lintSource(filename, source) {
   assert.ok(Object.hasOwn(shared.languageOptions.globals, "chrome"));
   assert.ok(Object.hasOwn(build.languageOptions.globals, "process"));
   assert.equal(Object.hasOwn(build.languageOptions.globals, "document"), false);
-
   for (const [name, filename, source, expected] of [
     ["shared globalThis DOM", "shared/__realm_probe__.js", "export const leak = globalThis.document.body;\n", /document is not available/],
     ["shared computed DOM", "shared/__realm_probe__.js", "export const leak = globalThis[\"doc\" + \"ument\"].body;\n", /document is not available/],
@@ -59,7 +63,11 @@ function lintSource(filename, source) {
     ["app worker global", "app/__realm_probe__.js", "export const leak = globalThis.clients;\n", /clients is not available/],
     ["content worker global", "content-src/__realm_probe__.js", "export const leak = self.clients;\n", /clients is not available/],
     ["app Node global", "app/__realm_probe__.js", "export const leak = globalThis.process.env;\n", /process is not available/],
-    ["build DOM global", "build-src/__realm_probe__.js", "export const leak = globalThis.document.body;\n", /document is not available/]
+    ["build DOM global", "build-src/__realm_probe__.js", "export const leak = globalThis.document.body;\n", /document is not available/],
+    ["unused local", "app/__realm_probe__.js", "const unused = 1; export const value = 2;\n", /unused.*never used/],
+    ["unused import", "shared/__realm_probe__.js", 'import { unused } from "./dependency.js"; export const value = 1;\n', /unused.*never used/],
+    ["unused interface argument", "content-src/__realm_probe__.js", "export function probe(value) { return 1; }\n", /value.*never used/],
+    ["used ignored argument", "background/__realm_probe__.js", "export function probe(_context) { return _context; }\n", /marked as ignored but is used/]
   ]) {
     const result = lintSource(filename, source);
     assert.notEqual(result.status, 0, `${name} unexpectedly passed`);
@@ -71,7 +79,9 @@ function lintSource(filename, source) {
     ["shared extension global", "shared/__realm_probe__.js", "export const value = globalThis.chrome?.runtime?.id;\n"],
     ["background worker global", "background/__realm_probe__.js", "export const value = globalThis.clients;\n"],
     ["app DOM global", "app/__realm_probe__.js", "export const value = globalThis.document.body;\n"],
-    ["build Node global", "build-src/__realm_probe__.js", "export const value = globalThis.process.version;\n"]
+    ["build Node global", "build-src/__realm_probe__.js", "export const value = globalThis.process.version;\n"],
+    ["explicit unused interface argument", "app/__realm_probe__.js", "export function probe(_context) { return 1; }\n"],
+    ["explicit unused caught error", "shared/__realm_probe__.js", "export function probe() { try { return globalThis.crypto.randomUUID(); } catch (_error) { return \"\"; } }\n"]
   ]) {
     const result = lintSource(filename, source);
     assert.equal(result.status, 0, `${name} unexpectedly failed:\n${result.output}`);

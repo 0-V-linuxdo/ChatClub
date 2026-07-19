@@ -31,4 +31,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { RELEASE_PREFLIGHT, releasePack };
+module.exports = { RELEASE_PREFLIGHT };

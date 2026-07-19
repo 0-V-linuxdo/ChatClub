@@ -221,7 +221,7 @@ const summaryExpected = [
   { id: "alpha", name: "Alpha", hosts: ["alpha.example"], pathPrefixes: ["/chat"], configVersion: 3, userscriptFile: "alpha.js", userscriptLength: 12, userscript: "return [];" },
   { id: "beta", name: "Beta", hosts: ["beta.example"], pathPrefixes: [], configVersion: 4, userscriptFile: "beta.js", userscriptLength: 13, userscript: "return [];" }
 ];
-const summaryCatalog = summaryExpected.map(({ userscript, ...descriptor }) => ({ ...descriptor }));
+const summaryCatalog = summaryExpected.map(({ userscript: _userscript, ...descriptor }) => ({ ...descriptor }));
 assert.deepEqual(metadataDifferences(summaryExpected[0], summaryCatalog[0], ["userscript"]), []);
 assert.doesNotThrow(() => assertSummaryCatalogMetadata(summaryExpected, summaryCatalog));
 assert.throws(

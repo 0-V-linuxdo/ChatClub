@@ -1,0 +1,51 @@
+{
+  "entries": {
+    "app/main.js": {
+      "maxFiles": 82,
+      "targetFiles": 74,
+      "maxSourceBytes": 822010,
+      "targetSourceBytes": 750000,
+      "reason": "The application initial-static closure is held to its exact current footprint while feature controllers remain behind explicit lazy boundaries."
+    },
+    "background/service-worker.js": {
+      "maxFiles": 45,
+      "targetFiles": 40,
+      "maxSourceBytes": 390727,
+      "targetSourceBytes": 360000,
+      "reason": "The Chromium service-worker initial-static closure is ratcheted separately from the larger Firefox fallback entry."
+    },
+    "background/firefox-background.js": {
+      "maxFiles": 48,
+      "targetFiles": 43,
+      "maxSourceBytes": 1013509,
+      "targetSourceBytes": 900000,
+      "reason": "The Firefox document-background entry includes its content fallback loader, so its exact static cost is tracked as a distinct browser budget."
+    }
+  },
+  "lazyBoundaries": {
+    "app/pocket/controller.js": {
+      "owner": "app/runtime.js",
+      "maxFiles": 3,
+      "targetFiles": 2,
+      "maxSourceBytes": 52862,
+      "targetSourceBytes": 48000,
+      "reason": "Pocket remains an explicit runtime-owned lazy controller and this budget tracks only modules added beyond the application initial-static closure."
+    },
+    "app/settings/controller.js": {
+      "owner": "app/runtime.js",
+      "maxFiles": 21,
+      "targetFiles": 18,
+      "maxSourceBytes": 281023,
+      "targetSourceBytes": 250000,
+      "reason": "Settings remains an explicit runtime-owned lazy controller and its comparatively broad incremental module closure is independently ratcheted."
+    },
+    "app/summary/controller.js": {
+      "owner": "app/runtime.js",
+      "maxFiles": 3,
+      "targetFiles": 2,
+      "maxSourceBytes": 52385,
+      "targetSourceBytes": 48000,
+      "reason": "Summary remains an explicit runtime-owned lazy controller and this budget tracks only modules added beyond the application initial-static closure."
+    }
+  }
+}

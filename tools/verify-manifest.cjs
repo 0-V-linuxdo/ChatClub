@@ -106,9 +106,9 @@ const localeDirectories = fs.existsSync(path.join(root, "_locales"))
   ? fs.readdirSync(path.join(root, "_locales"), { withFileTypes: true }).filter((entry) => entry.isDirectory())
   : [];
 const messageKeys = new Set();
-JSON.stringify(manifest).replace(/__MSG_([A-Za-z0-9_@]+)__/g, (_, key) => {
+JSON.stringify(manifest).replace(/__MSG_([A-Za-z0-9_@]+)__/g, (match, key) => {
   messageKeys.add(key);
-  return _;
+  return match;
 });
 for (const locale of localeDirectories) {
   const relativePath = `_locales/${locale.name}/messages.json`;

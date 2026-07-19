@@ -25,7 +25,6 @@ const preferredCapabilitySource = [
 const submissionNavigationSource = fs.readFileSync(path.join(root, "content-src/shared/submission-navigation.js"), "utf8");
 const preloadSource = fs.readFileSync(path.join(root, "content/preload.js"), "utf8");
 const preloadEntrySource = fs.readFileSync(path.join(root, "content-src/preload.js"), "utf8");
-const workspaceSource = fs.readFileSync(path.join(root, "app/workspace/controller.js"), "utf8");
 const workspaceFrameSource = fs.readFileSync(path.join(root, "app/workspace/frame-controller.js"), "utf8");
 const frameCommandsSource = fs.readFileSync(path.join(root, "shared/frame-commands.js"), "utf8");
 const protocolSource = fs.readFileSync(path.join(root, "shared/protocol.js"), "utf8");
@@ -36,8 +35,8 @@ const contentBackgroundRequestsSource = fs.readFileSync(
 const modelPreferenceConsoleSource = fs.readFileSync(path.join(root, "tools/model-preference-console-probe.js"), "utf8");
 
 function protocolString(name) {
-  const match = protocolSource.match(new RegExp(`export const ${name}\\s*=\\s*("(?:[^"\\\\]|\\\\.)*")\\s*;`));
-  assert.ok(match, `shared protocol must export ${name}`);
+  const match = protocolSource.match(new RegExp(`(?:export\\s+)?const ${name}\\s*=\\s*("(?:[^"\\\\]|\\\\.)*")\\s*;`));
+  assert.ok(match, `shared protocol must declare ${name}`);
   return JSON.parse(match[1]);
 }
 
@@ -49,35 +48,7 @@ function assertProtocolBinding(source, name, label) {
   );
 }
 
-function functionSource(source, name) {
-  const start = source.indexOf(`function ${name}(`);
-  assert.notEqual(start, -1, `${name} must exist`);
-  const signatureEnd = source.indexOf(") {", start);
-  const bodyStart = signatureEnd < 0 ? -1 : signatureEnd + 2;
-  assert.notEqual(bodyStart, -1, `${name} must have a body`);
-  let depth = 0;
-  let quote = "";
-  let escaped = false;
-  for (let index = bodyStart; index < source.length; index += 1) {
-    const character = source[index];
-    if (quote) {
-      if (escaped) escaped = false;
-      else if (character === "\\") escaped = true;
-      else if (character === quote) quote = "";
-      continue;
-    }
-    if (character === "\"" || character === "'" || character === "`") {
-      quote = character;
-      continue;
-    }
-    if (character === "{") depth += 1;
-    else if (character === "}") {
-      depth -= 1;
-      if (depth === 0) return source.slice(start, index + 1);
-    }
-  }
-  throw new Error(`${name} body did not close`);
-}
+const { functionSource } = require("./function-source.cjs");
 
 const retryContext = vm.createContext({});
 vm.runInContext(

@@ -1,0 +1,46 @@
+{
+  "background/content-registration.js#assertSuccessfulFrameInjection": {
+    "kind": "test-only",
+    "reason": "Focused injection regression tests exercise the fail-closed result validator as a named seam."
+  },
+  "background/content-registration.js#attestInjectedFrameDocument": {
+    "kind": "test-only",
+    "reason": "Focused browser-document lifecycle tests execute this injected function in an isolated VM context."
+  },
+  "background/content-script-registration.js#buildContentScriptRegistrations": {
+    "kind": "test-only",
+    "reason": "Registration inventory regressions inspect the deterministic builder without widening the runtime API."
+  },
+  "background/content-script-registration.js#reconcileContentScripts": {
+    "kind": "test-only",
+    "reason": "Registration reconciliation edge cases require a deterministic test seam around browser scripting state."
+  },
+  "background/content-registration.js#transitionInjectedContentRuntimeGeneration": {
+    "kind": "test-only",
+    "reason": "Atomic runtime-generation transition tests execute the injected function directly in a VM context."
+  },
+  "background/grok-cookie-bridge.js#GROK_COOKIE_LEDGER_KEY": {
+    "kind": "test-only",
+    "reason": "Partitioned Cookie bridge tests inspect the ownership ledger key to verify persistence safety boundaries."
+  },
+  "background/grok-cookie-bridge.js#GROK_SESSION_COOKIE_NAMES": {
+    "kind": "test-only",
+    "reason": "Partitioned Cookie bridge tests assert the deliberately narrow authentication Cookie allowlist."
+  },
+  "content-src/message-navigator/adapters.js#REQUIRED_ADAPTER_IDS": {
+    "kind": "test-only",
+    "reason": "Adapter registry completeness tests compare the constructed registry with its fail-closed required identity set."
+  },
+  "content-src/message-navigator/adapters.js#validateAdapter": {
+    "kind": "test-only",
+    "reason": "Adapter contract regressions directly exercise fail-closed validation for missing and malformed hooks."
+  },
+  "shared/constants.js#SUMMARY_SITE_CONFIG_VERSION": {
+    "kind": "public-api",
+    "reason": "Release tooling parses this declaration as a source-level version contract without importing browser modules."
+  },
+  "ui/dom.js#modal": {
+    "kind": "test-only",
+    "reason": "The backward-compatible modal primitive remains directly exercised by the overlay dismissal policy regression."
+  }
+}

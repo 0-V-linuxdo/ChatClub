@@ -17,17 +17,7 @@ const workspaceMessageNavigatorSource = fs.readFileSync(
   "utf8"
 );
 
-function functionSource(source, functionName, indent = "") {
-  const escapedIndent = indent.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const startPattern = new RegExp(`^${escapedIndent}(?:async\\s+)?function\\s+${functionName}\\s*\\(`, "m");
-  const match = startPattern.exec(source);
-  assert.ok(match, `${functionName} must remain discoverable`);
-  const remainderStart = match.index + match[0].length;
-  const nextPattern = new RegExp(`^${escapedIndent}(?:async\\s+)?function\\s+[A-Za-z_$][\\w$]*\\s*\\(`, "m");
-  const nextFunction = nextPattern.exec(source.slice(remainderStart));
-  const end = nextFunction ? remainderStart + nextFunction.index : source.length;
-  return source.slice(match.index, end);
-}
+const { functionSource } = require("./function-source.cjs");
 
 function literalDocumentSelectors(source, allOnly = false) {
   const method = allOnly ? "querySelectorAll" : "querySelector(?:All)?";

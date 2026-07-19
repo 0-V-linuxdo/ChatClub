@@ -43,7 +43,6 @@ try {
       }
     }
     assert.ok(fs.statSync(path.join(destination, "manifest.json")).isFile());
-    assert.equal(fs.existsSync(path.join(destination, "shared/storage.js")), false);
     assert.equal(fs.existsSync(path.join(destination, "userscripts/index.json")), false);
     if (target === "firefox") {
       const fallback = fs.readFileSync(path.join(destination, FIREFOX_CONTENT_FALLBACK_OUTPUT), "utf8");
@@ -53,7 +52,16 @@ try {
           `${output} Firefox development fallback needs a stable sourceURL`
         );
       }
-      assert.ok(fallback.split(/\r?\n/).length > 1000, "Firefox development fallbacks must remain unminified");
+      assert.equal(
+        (fallback.match(/function chatclubFirefoxContentFallback\d+\(\)/g) || []).length,
+        CONTENT_OUTPUT_FILES.length,
+        "every generated content entry must have exactly one callable Firefox fallback"
+      );
+      assert.equal(
+        (fallback.match(/\/\/# sourceURL=chatclub:\/\/\/content\/[^\s?]+\?firefox-fallback/g) || []).length,
+        CONTENT_OUTPUT_FILES.length,
+        "every generated content entry must have exactly one stable Firefox sourceURL"
+      );
     }
   }
   console.log(`${CONTENT_OUTPUT_FILES.length * 2} cross-target development content source maps verified.`);

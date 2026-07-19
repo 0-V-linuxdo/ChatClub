@@ -1,6 +1,8 @@
 (() => {
   const API_NAME = "ChatClubDeepSeekModeTest";
-  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+  const sleep = (ms) => new Promise((resolve) => {
+    setTimeout(resolve, Math.max(0, Number(ms) || 0));
+  });
   const TARGETS = Object.freeze({
     instant: Object.freeze({ id: "instant", label: "Instant", aliases: ["Instant"] }),
     expert: Object.freeze({ id: "expert", label: "Expert", aliases: ["Expert"] }),

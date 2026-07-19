@@ -3,7 +3,9 @@
   const GEMINI_MODEL_PICKER_SOURCE = "chatclub-gemini-model-picker:2026.07.13.3";
   const GEMINI_MODEL_PICKER_RUN_TOKEN_ATTRIBUTE = "data-chatclub-gemini-model-picker-run";
   try { window[API_NAME]?.dispose?.(); } catch {}
-  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+  const sleep = (ms) => new Promise((resolve) => {
+    setTimeout(resolve, Math.max(0, Number(ms) || 0));
+  });
   const normalize = (value) => String(value || "")
     .replace(/\u00a0/g, " ")
     .replace(/\r\n?/g, "\n")
@@ -141,8 +143,6 @@
       "glm52"
     ])
   });
-  const GEMINI_THINKING_LEVELS = Object.freeze(["standard", "extended"]);
-
   const APP_ALIASES = Object.freeze({
     gemini: "Gemini",
     grok: "Grok",
@@ -1206,16 +1206,6 @@
       if (/(^|\s)(selected|is-selected|checked|is-checked|active|mdc-list-item--selected|mat-mdc-menu-item-highlighted)(\s|$)/i.test(className)) return true;
     }
     return false;
-  }
-
-  function selectedGeminiModelKey(root) {
-    if (!root) return "";
-    const selected = geminiItems(root)
-      .filter(geminiElementHasSelectedState)
-      .map((item) => ({ item, key: geminiModelKeyFromText(elementText(item)), score: elementArea(item) }))
-      .filter((entry) => entry.key);
-    selected.sort((a, b) => a.score - b.score);
-    return selected[0]?.key || "";
   }
 
   function isGeminiTargetSelected(root, modelId) {

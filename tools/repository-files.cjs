@@ -110,7 +110,6 @@ function assertContainedOutputPath(baseRoot, relativePath, options = {}) {
 }
 
 module.exports = {
-  safeRepositoryRelative,
   assertContainedRegularFile,
   assertContainedDirectory,
   assertContainedOutputPath

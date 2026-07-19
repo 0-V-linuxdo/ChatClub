@@ -353,10 +353,10 @@ function event(type, properties = {}) {
     const allAppSource = appSources.join("\n");
     const wrapperNames = ["editorModal", "viewerModal", "taskModal", "confirmationModal"];
     const expectedInventory = new Map([
-      ["editorModal", 9],
+      ["editorModal", 10],
       ["viewerModal", 3],
       ["taskModal", 1],
-      ["confirmationModal", 1]
+      ["confirmationModal", 2]
     ]);
 
     assert.equal(occurrences(allAppSource, /\bmodal\s*\(/g), 0, "app code must not call the raw modal helper");
@@ -371,8 +371,8 @@ function event(type, properties = {}) {
       wrapperNames.reduce((total, wrapperName) => (
         total + occurrences(allAppSource, new RegExp(`\\b${wrapperName}\\s*\\(`, "g"))
       ), 0),
-      14,
-      "all fourteen app modal call sites must use a typed wrapper"
+      16,
+      "all sixteen app modal call sites must use a typed wrapper"
     );
 
     for (let index = 0; index < appFiles.length; index += 1) {
@@ -393,6 +393,7 @@ function event(type, properties = {}) {
       ["app/settings/controller.js", "openSettings", "editorModal", "Settings"],
       ["app/settings/profiles.js", "openEditor", "editorModal", "API profile editor"],
       ["app/settings/apps.js", "openCustomEditor", "editorModal", "custom platform editor"],
+      ["app/settings/apps.js", "openIframePermissionEditor", "editorModal", "iframe permission editor"],
       ["app/settings/prompt-templates.js", "openPromptTemplateEditor", "editorModal", "prompt template editor"],
       ["app/settings/summary.js", "openSummaryCollectorEditor", "editorModal", "Summary collector editor"],
       ["app/settings/message-navigation.js", "openSiteEditor", "editorModal", "Message Navigator editor"],
@@ -403,7 +404,8 @@ function event(type, properties = {}) {
       ["app/prompt-library/controller.js", "openPromptLibraryDialog", "viewerModal", "Prompt Library manager"],
       ["app/pocket/controller.js", "openPocketPanel", "viewerModal", "Pocket history viewer"],
       ["app/optimize/controller.js", "openOptimizeCompareDialog", "taskModal", "prompt optimization task"],
-      ["app/settings/import-export.js", "openImportConfirmDialog", "confirmationModal", "import confirmation"]
+      ["app/settings/import-export.js", "openImportConfirmDialog", "confirmationModal", "import confirmation"],
+      ["app/settings/apps.js", "openIframeRiskConfirmation", "confirmationModal", "iframe risk confirmation"]
     ];
 
     for (const [relativeFile, functionName, expectedWrapper, label] of callSites) {

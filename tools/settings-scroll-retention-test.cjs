@@ -8,34 +8,7 @@ const vm = require("node:vm");
 const root = path.resolve(__dirname, "..");
 const controllerSource = fs.readFileSync(path.join(root, "app/settings/controller.js"), "utf8");
 
-function functionSource(source, name) {
-  const signature = new RegExp(`(?:export\\s+)?function\\s+${name}\\s*\\(`, "g");
-  const match = signature.exec(source);
-  assert.ok(match, `${name} must exist`);
-  const start = match.index + match[0].indexOf("function");
-  const bodyStart = source.indexOf(") {", signature.lastIndex);
-  assert.ok(bodyStart >= 0, `${name} must have an inline function body`);
-  const open = bodyStart + 2;
-  let depth = 0;
-  let quote = "";
-  let escaped = false;
-  for (let index = open; index < source.length; index += 1) {
-    const character = source[index];
-    if (quote) {
-      if (escaped) escaped = false;
-      else if (character === "\\") escaped = true;
-      else if (character === quote) quote = "";
-      continue;
-    }
-    if (character === '"' || character === "'" || character === "`") {
-      quote = character;
-      continue;
-    }
-    if (character === "{") depth += 1;
-    else if (character === "}" && --depth === 0) return source.slice(start, index + 1);
-  }
-  throw new Error(`Unable to extract ${name}`);
-}
+const { functionSource } = require("./function-source.cjs");
 
 const scrollContext = vm.createContext({});
 vm.runInContext(

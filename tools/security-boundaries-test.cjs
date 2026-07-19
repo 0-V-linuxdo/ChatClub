@@ -15,7 +15,7 @@ const dataModule = (source) => import(`data:text/javascript;base64,${Buffer.from
   assert.equal(urlMatch.normalizeHost("*.Sub.Example.com"), "*.sub.example.com");
   for (const invalid of ["https://example.com", "example.com/path", "example.com:443", "bad host", "*.*.example.com"]) {
     assert.equal(urlMatch.normalizeHost(invalid), "", `invalid host must be rejected: ${invalid}`);
-    assert.deepEqual(urlMatch.hostMatchPattern(invalid), []);
+    assert.deepEqual(urlMatch.uniqueMatchPatterns([{ hosts: [invalid] }]), []);
   }
   assert.deepEqual(
     urlMatch.normalizeHostList(["Example.com", "example.com", "https://invalid.example"]),
@@ -46,6 +46,7 @@ const dataModule = (source) => import(`data:text/javascript;base64,${Buffer.from
     "background/frame-command-errors.js",
     "background/main-world-runtime.js",
     "background/registered-frame-transport.js",
+    "background/content-script-registration.js",
     "background/content-registration.js",
     "background/frame-injection.js",
     "background/tab-runtime.js"
@@ -67,6 +68,7 @@ const dataModule = (source) => import(`data:text/javascript;base64,${Buffer.from
   assert.match(content, /configId: String\(config\.id \|\| ""\)/);
   assert.doesNotMatch(content, /userscript:\s*source/);
   assert.doesNotMatch(content, /chatclub-parent-clipboard|getShortcutConfig/);
+  assert.doesNotMatch(contentEntry, /action:\s*["']contentReady["']/, "content registration must not retain an unauthenticated parent-window readiness channel");
   assert.match(content, /secureFrameToken/);
   assert.match(contentEntry, /installSecureFrameRpc\(\{/);
   assert.match(secureFrameRpc, /message\.bridgeDocumentId !== bridgeDocumentId/);
@@ -112,6 +114,8 @@ const dataModule = (source) => import(`data:text/javascript;base64,${Buffer.from
   assert.match(main, /frameBindingChallenges\.claim\(message\.challenge, message\.generation\)/);
   assert.match(main, /frameBindingChallenges\.isCurrent\(entry\)/);
   assert.match(main, /context\.frameId !== expectedFrameId/);
+  assert.match(main, /message\.action === "frameNavigationTarget"/);
+  assert.match(main, /controller\.ensureFrameAttributeContract\(iframe, href/);
   assert.doesNotMatch(main, /iframeForWindow\(event\.source\)/);
   assert.doesNotMatch(main, /contentReady/);
   assert.match(main, /if \(!exactFrameTarget\.expectedFrameId\)[\s\S]*?contentWindow\?\.postMessage/);

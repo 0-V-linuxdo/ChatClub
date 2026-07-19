@@ -3,6 +3,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const { pathToFileURL } = require("node:url");
 
 const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
@@ -118,7 +119,9 @@ async function releaseManagedCookie(bridge, { name, cause, value }) {
 }
 
 (async () => {
-  const bridge = await dataModule(read("background/grok-cookie-bridge.js"));
+  const bridge = await import(
+    `${pathToFileURL(path.join(root, "background/grok-cookie-bridge.js")).href}?test=${Date.now()}`
+  );
   const manifest = JSON.parse(read("manifest.json"));
   const grokRuntime = read("background/grok-cookie-runtime.js");
   const serviceWorker = `${read("background/service-worker.js")}\n${read("background/runtime.js")}\n${grokRuntime}`;

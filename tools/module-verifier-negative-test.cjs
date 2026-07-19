@@ -18,6 +18,8 @@ function baseFiles() {
   };
 }
 
+const fixtureBasePackagedFiles = Object.keys(baseFiles()).sort();
+
 function writeFixtureFile(directory, relativePath, source) {
   const absolutePath = path.join(directory, relativePath);
   fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
@@ -40,9 +42,15 @@ function runFixture(name, options = {}) {
       root: ".",
       verifyToolchain: false,
       verifySizes: options.verifySizes === true,
+      verifyExportLiveness: options.verifyExportLiveness === true,
+      verifyNativeEntryBudgets: options.verifyNativeEntryBudgets === true,
       contentEntryPoints: options.contentEntryPoints || [],
+      contentSafeSharedModules: options.contentSafeSharedModules || [],
       buildEntryPoints: options.buildEntryPoints || [],
       nativeEsmReachabilityAllowlist: options.nativeEsmReachabilityAllowlist || {},
+      exportLivenessAllowlist: options.exportLivenessAllowlist || {},
+      nativeEntryBudgets: options.nativeEntryBudgets || {},
+      testFiles: options.testFiles || [],
       plans: {
         chromium: {
           files: chromiumFiles,
@@ -81,6 +89,7 @@ function runFixture(name, options = {}) {
 function assertFixturePasses(name, options = {}) {
   const result = runFixture(name, options);
   assert.equal(result.status, 0, `${name} unexpectedly failed:\n${result.output}`);
+  return result;
 }
 
 function assertFixtureFails(name, options, expected) {
@@ -123,6 +132,193 @@ assertFixtureFails("computed-import", {
     "app/feature.js": "export const feature = true;\n"
   }
 }, /app\/main\.js: computed dynamic import is forbidden/);
+
+assertFixtureFails("unused-named-export", {
+  files: {
+    "app/main.js": 'import "./feature.js";\nimport { value } from "../shared/value.js";\nglobalThis.__fixtureValue = value;\n',
+    "app/feature.js": "export const unusedFeature = 1;\n"
+  },
+  verifyExportLiveness: true
+}, /app\/feature\.js: named export unusedFeature has no runtime consumer or internal use/);
+
+assertFixtureFails("internal-only-named-export", {
+  files: {
+    "app/main.js": 'import "./feature.js";\nimport { value } from "../shared/value.js";\nglobalThis.__fixtureValue = value;\n',
+    "app/feature.js": "export function internalHelper() { return 1; }\nglobalThis.__internalHelper = internalHelper();\n"
+  },
+  verifyExportLiveness: true
+}, /app\/feature\.js: named export internalHelper is used only inside its defining module/);
+
+const testOnlyFixtureFiles = {
+  "app/main.js": 'import "./feature.js";\nimport { value } from "../shared/value.js";\nglobalThis.__fixtureValue = value;\n',
+  "app/feature.js": "export const testHook = 1;\n",
+  "tools/feature-test.cjs": '(async () => { const { testHook } = await import("../app/feature.js"); void testHook; })();\n'
+};
+assertFixtureFails("test-only-named-export", {
+  files: testOnlyFixtureFiles,
+  testFiles: ["tools/feature-test.cjs"],
+  verifyExportLiveness: true
+}, /app\/feature\.js: named export testHook is consumed only by tests/);
+
+const reasonedTestOnlyResult = assertFixturePasses("reasoned-test-only-export", {
+  files: testOnlyFixtureFiles,
+  testFiles: ["tools/feature-test.cjs"],
+  exportLivenessAllowlist: {
+    "app/feature.js#testHook": {
+      kind: "test-only",
+      reason: "Fixture exposes deterministic state only to its focused regression consumer."
+    }
+  },
+  verifyExportLiveness: true
+});
+assert.match(reasonedTestOnlyResult.output, /\d+ named exports analyzed with 1 exceptions/);
+
+assertFixtureFails("stale-export-allowlist", {
+  files: {
+    "app/main.js": 'import { feature } from "./feature.js";\nimport { value } from "../shared/value.js";\nglobalThis.__fixtureValue = value + feature;\n',
+    "app/feature.js": "export const feature = 1;\n"
+  },
+  exportLivenessAllowlist: {
+    "app/feature.js#feature": {
+      kind: "public-api",
+      reason: "Fixture exception must become stale after a runtime consumer is introduced."
+    }
+  },
+  verifyExportLiveness: true
+}, /export liveness allowlist contains stale runtime entry: app\/feature\.js#feature/);
+
+const nativeBudgetReason = "Native entry closures are held to their exact current dependency and source-byte footprint.";
+const lazyBudgetReason = "The lazy controller remains outside the initial graph and its exact incremental static footprint is ratcheted.";
+const nativeBudgetFiles = {
+  "app/main.js": 'import "./runtime.js";\nimport { value } from "../shared/value.js";\nglobalThis.__fixtureAppValue = value;\n',
+  "app/runtime.js": 'void import("./pocket/controller.js");\nvoid import("./settings/controller.js");\nvoid import("./summary/controller.js");\n',
+  "app/lazy-common.js": "export const lazyCommon = true;\n",
+  "app/pocket/controller.js": 'import { lazyCommon } from "../lazy-common.js";\nglobalThis.__fixturePocket = lazyCommon;\n',
+  "app/settings/controller.js": 'import { lazyCommon } from "../lazy-common.js";\nglobalThis.__fixtureSettings = lazyCommon;\n',
+  "app/summary/controller.js": 'import { lazyCommon } from "../lazy-common.js";\nglobalThis.__fixtureSummary = lazyCommon;\n'
+};
+const nativeBudgetSources = { ...baseFiles(), ...nativeBudgetFiles };
+const byteSum = (...files) => files.reduce(
+  (total, file) => total + Buffer.byteLength(nativeBudgetSources[file]),
+  0
+);
+const appBudgetBytes = byteSum("app/main.js", "app/runtime.js", "shared/value.js");
+const backgroundBudgetBytes = byteSum("background/service-worker.js", "shared/value.js");
+const firefoxBudgetBytes = byteSum(
+  "background/firefox-background.js",
+  "background/service-worker.js",
+  "shared/value.js"
+);
+const exactNativeEntryBudgets = {
+  entries: {
+    "app/main.js": {
+      maxFiles: 3,
+      targetFiles: 2,
+      maxSourceBytes: appBudgetBytes,
+      targetSourceBytes: appBudgetBytes - 1,
+      reason: nativeBudgetReason
+    },
+    "background/service-worker.js": {
+      maxFiles: 2,
+      targetFiles: 1,
+      maxSourceBytes: backgroundBudgetBytes,
+      targetSourceBytes: backgroundBudgetBytes - 1,
+      reason: nativeBudgetReason
+    },
+    "background/firefox-background.js": {
+      maxFiles: 3,
+      targetFiles: 2,
+      maxSourceBytes: firefoxBudgetBytes,
+      targetSourceBytes: firefoxBudgetBytes - 1,
+      reason: nativeBudgetReason
+    }
+  },
+  lazyBoundaries: Object.fromEntries([
+    "app/pocket/controller.js",
+    "app/settings/controller.js",
+    "app/summary/controller.js"
+  ].map((target) => [target, {
+    owner: "app/runtime.js",
+    maxFiles: 2,
+    targetFiles: 1,
+    maxSourceBytes: byteSum(target, "app/lazy-common.js"),
+    targetSourceBytes: byteSum(target, "app/lazy-common.js") - 1,
+    reason: lazyBudgetReason
+  }]))
+};
+
+const nativeBudgetResult = assertFixturePasses("native-entry-budget-exact", {
+  files: nativeBudgetFiles,
+  verifyNativeEntryBudgets: true,
+  nativeEntryBudgets: exactNativeEntryBudgets
+});
+assert.match(nativeBudgetResult.output, /3 initial-static entry closures and 3 lazy-boundary increments ratcheted/);
+
+assertFixtureFails("native-entry-budget-exceeded", {
+  files: {
+    ...nativeBudgetFiles,
+    "app/main.js": 'import "./runtime.js";\nimport "./feature.js";\nimport { value } from "../shared/value.js";\nglobalThis.__fixtureAppValue = value;\n',
+    "app/feature.js": "globalThis.__fixtureFeature = true;\n"
+  },
+  verifyNativeEntryBudgets: true,
+  nativeEntryBudgets: exactNativeEntryBudgets
+}, /app\/main\.js: static footprint has 4 files, above budget 3/);
+
+assertFixtureFails("firefox-entry-budget-exceeded", {
+  files: {
+    ...nativeBudgetFiles,
+    "background/firefox-background.js": 'import "./firefox-only.js";\nimport "./service-worker.js";\n',
+    "background/firefox-only.js": "globalThis.__fixtureFirefoxOnly = true;\n"
+  },
+  verifyNativeEntryBudgets: true,
+  nativeEntryBudgets: exactNativeEntryBudgets
+}, /background\/firefox-background\.js: static footprint has 4 files, above budget 3/);
+
+assertFixtureFails("native-entry-budget-must-decrease", {
+  files: nativeBudgetFiles,
+  verifyNativeEntryBudgets: true,
+  nativeEntryBudgets: {
+    ...exactNativeEntryBudgets,
+    entries: {
+      ...exactNativeEntryBudgets.entries,
+      "app/main.js": {
+        ...exactNativeEntryBudgets.entries["app/main.js"],
+        maxFiles: 4
+      }
+    }
+  }
+}, /app\/main\.js: static footprint improved to 3 files; lower maxFiles from 4/);
+
+assertFixtureFails("native-entry-budget-rejects-stale-key", {
+  files: nativeBudgetFiles,
+  verifyNativeEntryBudgets: true,
+  nativeEntryBudgets: {
+    ...exactNativeEntryBudgets,
+    entries: {
+      ...exactNativeEntryBudgets.entries,
+      "app/retired-entry.js": exactNativeEntryBudgets.entries["app/main.js"]
+    }
+  }
+}, /stale native entry budget for app\/retired-entry\.js/);
+
+assertFixtureFails("lazy-boundary-became-eager", {
+  files: {
+    ...nativeBudgetFiles,
+    "app/runtime.js": 'import "./pocket/controller.js";\nvoid import("./settings/controller.js");\nvoid import("./summary/controller.js");\n'
+  },
+  verifyNativeEntryBudgets: true,
+  nativeEntryBudgets: exactNativeEntryBudgets
+}, /app\/pocket\/controller\.js: configured lazy boundary became statically reachable from app\/main\.js/);
+
+assertFixtureFails("unbudgeted-lazy-boundary", {
+  files: {
+    ...nativeBudgetFiles,
+    "app/runtime.js": `${nativeBudgetFiles["app/runtime.js"]}void import("./extra-controller.js");\n`,
+    "app/extra-controller.js": "globalThis.__fixtureExtraController = true;\n"
+  },
+  verifyNativeEntryBudgets: true,
+  nativeEntryBudgets: exactNativeEntryBudgets
+}, /app\/extra-controller\.js: unbudgeted dynamic boundary from the app initial-static closure/);
 
 assertFixtureFails("bare-import", {
   files: {
@@ -180,6 +376,47 @@ assertFixtureFails("content-author-orphan", {
   },
   contentEntryPoints: ["content-src/entry.js"]
 }, /content author ESM module is unreachable from declared content entries: content-src\/orphan\.js/);
+
+assertFixturePasses("content-safe-shared-positive", {
+  files: {
+    "content-src/entry.js": 'import { safe } from "../shared/content-safe.js";\nglobalThis.__fixtureSafe = safe;\n',
+    "shared/content-safe.js": "export const safe = true;\n"
+  },
+  packagedFiles: fixtureBasePackagedFiles,
+  contentEntryPoints: ["content-src/entry.js"],
+  contentSafeSharedModules: ["shared/content-safe.js"]
+});
+
+assertFixtureFails("content-safe-shared-direct-rejection", {
+  files: {
+    "content-src/entry.js": 'import "../shared/not-content-safe.js";\n',
+    "shared/not-content-safe.js": "globalThis.__fixtureUnsafe = true;\n"
+  },
+  packagedFiles: fixtureBasePackagedFiles,
+  contentEntryPoints: ["content-src/entry.js"]
+}, /content-src\/entry\.js: content-safe shared dependency is not allowlisted: shared\/not-content-safe\.js/);
+
+assertFixtureFails("content-safe-shared-transitive-rejection", {
+  files: {
+    "content-src/entry.js": 'import "../shared/content-safe.js";\n',
+    "shared/content-safe.js": 'import "./not-content-safe.js";\n',
+    "shared/not-content-safe.js": "globalThis.__fixtureUnsafe = true;\n"
+  },
+  packagedFiles: fixtureBasePackagedFiles,
+  contentEntryPoints: ["content-src/entry.js"],
+  contentSafeSharedModules: ["shared/content-safe.js"]
+}, /shared\/content-safe\.js: content-safe shared dependency is not allowlisted: shared\/not-content-safe\.js/);
+
+assertFixtureFails("content-safe-shared-stale-entry", {
+  files: {
+    "content-src/entry.js": 'import "../shared/content-safe.js";\n',
+    "shared/content-safe.js": "globalThis.__fixtureSafe = true;\n",
+    "shared/unused-safe.js": "globalThis.__fixtureUnusedSafe = true;\n"
+  },
+  packagedFiles: fixtureBasePackagedFiles,
+  contentEntryPoints: ["content-src/entry.js"],
+  contentSafeSharedModules: ["shared/content-safe.js", "shared/unused-safe.js"]
+}, /stale content-safe shared module: shared\/unused-safe\.js/);
 
 assertFixturePasses("build-graph-positive", {
   files: {

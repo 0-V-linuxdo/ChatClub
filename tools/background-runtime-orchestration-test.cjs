@@ -24,6 +24,11 @@ for (const [factory, file] of [
 }
 assert.doesNotMatch(runtime, /secureFrameContexts\s*=\s*new Map|grokFramePreflights\s*=\s*new Map|customSummaryExecutionQueues\s*=\s*new Map/);
 assert.match(runtime, /chrome\.cookies\?\.onChanged\?\.addListener\(grokCookieRuntime\.handleCookieChange\)/);
+assert.match(runtime, /chrome\.webNavigation\?\.onBeforeNavigate\?\.addListener/);
+assert.match(runtime, /chrome\.webNavigation\?\.onCommitted\?\.addListener/);
+assert.match(runtime, /registeredFrameContext\(tabId, frameId\)/);
+assert.match(runtime, /action: "frameNavigationTarget"/);
+assert.match(runtime, /Number\(details\.parentFrameId\) !== 0/);
 assert.match(runtime, /chrome\.tabs\?\.onRemoved\?\.addListener\(/);
 assert.match(runtime, /chrome\.runtime\.onMessage\.addListener\(createBackgroundRequestListener\(dispatchBackgroundRequest\)\)/);
 assert.doesNotMatch(runtime, /\bimport\s*\(/);
@@ -44,6 +49,8 @@ assert.match(secureContexts, /api\.storage\.session\.set/);
 assert.match(secureContexts, /frame\.parentFrameId !== 0/);
 assert.match(secureContexts, /contextDocumentId && senderDocumentId && contextDocumentId !== senderDocumentId/);
 assert.match(secureContexts, /frameBindingId !== registered\.frameBindingId/);
+assert.match(secureContexts, /async function registeredFrameContext\(tabId, frameId\)/);
+assert.match(secureContexts, /value\?\.tabId !== tabId \|\| value\?\.frameId !== frameId/);
 
 assert.match(grokRuntime, /removeManagedGrokPartitionsExcept\(api, \{ storeId, partitionKey \}\)/);
 assert.match(grokRuntime, /syncGrokSessionCookies\(api, \{ storeId, partitionKey \}\)/);

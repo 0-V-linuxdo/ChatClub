@@ -9,8 +9,7 @@ const root = path.resolve(__dirname, "..");
 const load = (file) => import(`${pathToFileURL(path.join(root, file)).href}?test=${Date.now()}-${Math.random()}`);
 
 (async () => {
-  const [identity, packageIdentity, generated] = await Promise.all([
-    load("shared/content-runtime-identity.js"),
+  const [packageIdentity, generated] = await Promise.all([
     load("shared/content-runtime-package-identity.js"),
     load("shared/content-runtime-version.generated.js")
   ]);
@@ -21,7 +20,6 @@ const load = (file) => import(`${pathToFileURL(path.join(root, file)).href}?test
   );
   for (const outputPath of Object.keys(CONTENT_ENTRIES)) {
     const entryIdentity = packageIdentity.contentRuntimeIdentityForBundle(outputPath);
-    assert.equal(identity.contentRuntimeIdentityMatches(entryIdentity), true);
     assert.equal(packageIdentity.contentRuntimePackageBundleIdentityMatches(entryIdentity, outputPath), true);
     assert.equal(entryIdentity.bundle.outputPath, outputPath);
     assert.equal(entryIdentity.bundle.entryPath, CONTENT_ENTRIES[outputPath]);

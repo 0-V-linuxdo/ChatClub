@@ -3,6 +3,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const { pathToFileURL } = require("node:url");
 const vm = require("node:vm");
 
 const root = path.resolve(__dirname, "..");
@@ -27,9 +28,11 @@ function bundledLiteral(source, name) {
 }
 
 (async () => {
-  const [protocolModule, runtimeVersionModule] = await Promise.all([
+  const [protocolModule, runtimeVersionModule, frameCommands, registrationModule] = await Promise.all([
     dataModule(read("shared/protocol.js")),
-    dataModule(read("shared/content-runtime-version.generated.js"))
+    dataModule(read("shared/content-runtime-version.generated.js")),
+    import(`${pathToFileURL(path.join(root, "shared/frame-commands.js")).href}?test=${Date.now()}`),
+    import(`${pathToFileURL(path.join(root, "background/content-script-registration.js")).href}?test=${Date.now()}`)
   ]);
   const protocol = protocolModule.CONTENT_PROTOCOL;
   const expectedRegistryBaseKey = `__CHATCLUB_RUNTIME_REGISTRY_V${protocolModule.RUNTIME_REGISTRY_ABI_VERSION}__`;
@@ -74,13 +77,30 @@ function bundledLiteral(source, name) {
     "background/service-worker.js",
     "background/runtime.js",
     "background/custom-userscript-runtime.js",
+    "background/content-script-registration.js",
     "background/content-registration.js",
     "background/frame-injection.js"
   ].map(read).join("\n");
   assert.doesNotMatch(background, /content\/protocol\.js/);
-  assert.match(background, /js: \["content\/preload\.js"\]/);
-  assert.match(background, /js: \["content\/summary-userscripts-main\.js"\]/);
-  assert.match(background, /js: \["content\/content\.js"\]/);
+  const registrationTarget = { id: "protocol-test", hosts: ["grok.com"] };
+  const registrations = registrationModule.buildContentScriptRegistrations({
+    coreTargets: [registrationTarget],
+    preloadTargets: [registrationTarget],
+    summaryTargets: [registrationTarget],
+    sendTargets: [registrationTarget],
+    preferredModelTargets: [registrationTarget],
+    deleteTargets: [registrationTarget],
+    messageNavigatorTargets: [registrationTarget]
+  });
+  const registrationsById = new Map(registrations.map((registration) => [registration.id, registration]));
+  assert.equal(registrations.length, Object.keys(frameCommands.CONTENT_BUNDLES).length);
+  assert.equal(registrationsById.size, registrations.length, "canonical content registration ids must be unique");
+  for (const bundle of Object.values(frameCommands.CONTENT_BUNDLES)) {
+    const registration = registrationsById.get(bundle.id);
+    assert.ok(registration, `${bundle.id} must be registered from the canonical content bundle inventory`);
+    assert.deepEqual(registration.js, [bundle.file]);
+    assert.equal(registration.world || "ISOLATED", bundle.world);
+  }
   assert.match(background, /registerContentScriptsVerified/);
   assert.match(background, /rollbackContentScript\(previous, registration\)/);
 
@@ -91,28 +111,27 @@ function bundledLiteral(source, name) {
     false,
     "scripting API files must not be exposed to arbitrary web origins"
   );
-  for (const file of [
-    "content/preload.js",
-    "content/grok-cookie-bridge.js",
-    "content/message-navigator.js",
-    "content/content.js",
-    "content/send.js",
-    "content/summary-bridge.js",
-    "content/preferred-model.js",
-    "content/delete.js",
-    "content/summary-userscripts-main.js",
-    "content/summary-userscripts.js"
-  ]) {
-    assert.ok(background.includes(`\"${file}\"`), `${file} must be injected through chrome.scripting`);
-  }
   assert.match(background, /executeVerifiedPackagedFrameFile/);
 
   const contentSource = read("content-src/content.js");
   const preloadSource = read("content-src/preload.js");
   const summaryMainSource = read("content-src/summary-userscripts-main.js");
+  const summaryCapabilitySource = read("content-src/capabilities/summary-runtime.js");
+  const summarySharedSource = read("content-src/shared/summary-runtime.js");
   assert.match(contentSource, /from "\.\.\/shared\/protocol\.js"/);
   assert.match(preloadSource, /from "\.\.\/shared\/protocol\.js"/);
   assert.match(summaryMainSource, /from "\.\.\/shared\/protocol\.js"/);
+  assert.doesNotMatch(summaryCapabilitySource, /\b(?:hasUserAndAssistant|runner):/);
+  assert.doesNotMatch(summaryCapabilitySource, /\.\.\.customResult/);
+  assert.doesNotMatch(summaryMainSource, /\bhasUserAndAssistant:/);
+  assert.doesNotMatch(summaryMainSource, /^\s+registryVersion,\s*$/m);
+  assert.doesNotMatch(summaryMainSource, /\b(?:ok|error):/);
+  assert.doesNotMatch(summaryMainSource, /messages:\s*data\?\.messages/);
+  assert.doesNotMatch(summarySharedSource, /\b(?:ok|missing|timeout|error|hasUserAndAssistant):/);
+  assert.doesNotMatch(summarySharedSource, /message\.messages/);
+  const summaryControllerSource = read("app/summary/controller.js");
+  assert.doesNotMatch(summaryControllerSource, /result\?\.(?:href|title|logoUrl)/);
+  assert.doesNotMatch(summaryControllerSource, /result\?\.messages\s*\|\|\s*result/);
 
   const summaryIsolated = read("content/summary-userscripts.js");
   const summaryMain = read("content/summary-userscripts-main.js");

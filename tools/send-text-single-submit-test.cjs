@@ -62,7 +62,7 @@ assert.deepEqual(fallbackActivations, ["click"], "fallback activation must also 
 const sendTextSource = protocolString(
   protocolSource,
   "SEND_TEXT_POST_MESSAGE_SOURCE",
-  "export const SEND_TEXT_POST_MESSAGE_SOURCE\\s*=\\s*"
+  "(?:export\\s+)?const SEND_TEXT_POST_MESSAGE_SOURCE\\s*=\\s*"
 );
 assert.equal(typeof sendTextSource, "string");
 assert.match(

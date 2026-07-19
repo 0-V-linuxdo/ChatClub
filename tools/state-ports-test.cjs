@@ -9,7 +9,6 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
 
 (async () => {
   const stateModule = await import(moduleUrl("app/state.js"));
-  const sectionsModule = await import(moduleUrl("app/settings/sections.js"));
   const composerModule = await import(moduleUrl("app/composer/state-port.js"));
   const preferredModelModule = await import(moduleUrl("app/preferred-model/state-port.js"));
   const topbarModule = await import(moduleUrl("app/topbar/state-port.js"));
@@ -17,8 +16,7 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   const settingsModule = await import(moduleUrl("app/settings/state-ports.js"));
 
   const rootState = stateModule.createAppState();
-  assert.equal(Object.isFrozen(stateModule.FEATURE_STATE_ACCESS.workspace.read), true);
-  assert.equal(Object.isFrozen(stateModule.SETTINGS_SECTION_STATE_ACCESS.appearance.write), true);
+  assert.equal(Object.isFrozen(settingsModule.SETTINGS_OPTION_CAPABILITIES.appearance.write), true);
   rootState.options = {
     apiProfiles: [{ id: "profile-1" }],
     modelPreferenceOrder: ["Gemini"],
@@ -60,14 +58,10 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   assert.throws(() => { favicon.groups; }, /favicon cannot read/);
 
   const settingsSections = settingsModule.createSettingsSectionStatePorts(rootState);
-  assert.deepEqual(Object.keys(settingsSections), stateModule.SETTINGS_STATE_SECTION_IDS);
-  const uiPortOrder = sectionsModule.SETTINGS_SECTIONS.map(([id]) => stateModule.SETTINGS_UI_SECTION_STATE_PORT[id]);
-  assert.deepEqual(uiPortOrder, stateModule.SETTINGS_STATE_SECTION_IDS.filter((id) => id !== "shell"));
-  assert.equal(settingsModule.settingsStatePortForUiSection(settingsSections, "promptHistory"), settingsSections.history);
-  assert.throws(
-    () => settingsModule.settingsStatePortForUiSection(settingsSections, "missing"),
-    /Unknown settings section/
-  );
+  assert.deepEqual(Object.keys(settingsSections), [
+    "appearance", "profiles", "apps", "models", "summary", "messageNavigation", "topicDeletion",
+    "optimize", "prompts", "history", "shortcuts", "io", "about", "shell"
+  ]);
 
   settingsSections.appearance.settingsAppearanceTab = "topbar";
   assert.equal(rootState.settingsAppearanceTab, "topbar");

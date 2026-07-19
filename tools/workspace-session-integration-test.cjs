@@ -12,7 +12,6 @@ const session = read("app/workspace/session-controller.js");
 const layout = read("app/workspace/layout-controller.js");
 const frame = read("app/workspace/frame-controller.js");
 const pocket = read("app/workspace/pocket-controller.js");
-const workspaceOwners = `${session}\n${layout}\n${frame}\n${pocket}`;
 
 const initStart = runtime.indexOf("async function init()");
 const initEnd = runtime.indexOf("\n}\n\ninit().catch", initStart);
@@ -45,7 +44,7 @@ assert.match(
 );
 assert.match(
   frame,
-  /if \(hrefChanged\) rememberWorkspaceSession\(\);/,
+  /if \(hrefChanged\) \{\s*rememberWorkspaceSession\(\);\s*if \(ensureFrameAttributeContract\(iframe, href, \{ phase: "location" \}\)\) return;/,
   "frame navigation must update the saved current URL"
 );
 assert.match(
@@ -58,9 +57,23 @@ assert.match(
   /state\.temporaryLayoutPreset = \{[\s\S]*?state\.groups = groups;\s*state\.activeTabs = activeTabs;\s*rememberWorkspaceSession\(\);/,
   "temporary Pocket workspaces must be remembered before rendering"
 );
-assert.ok(
-  (workspaceOwners.match(/rememberWorkspaceSession\(\);/g) || []).length >= 12,
-  "workspace structural, navigation, selection, and fullscreen paths must share one persistence hook"
-);
+for (const [owner, source] of Object.entries({ layout, frame, pocket })) {
+  assert.match(
+    source,
+    /requireMethods\(session, "session", \[[^\]]*"rememberWorkspaceSession"/,
+    `${owner} mutations must depend on the owned workspace-session port`
+  );
+}
+for (const factory of [
+  "createWorkspaceLayoutController",
+  "createWorkspaceFrameController",
+  "createWorkspacePocketController"
+]) {
+  assert.match(
+    workspace,
+    new RegExp(`const \\w+ = ${factory}\\(\\{[\\s\\S]*?session: sessionBinding\\.port,`),
+    `${factory} must receive the single bound session owner`
+  );
+}
 
 console.log("workspace session bootstrap and mutation integration: ok");

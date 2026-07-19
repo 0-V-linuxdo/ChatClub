@@ -17,8 +17,35 @@ const { fileURLToPath } = require("node:url");
     const { migrateLegacyScriptConfig } = await import("../shared/script-config-migration.js");
     const { dehydrateOptions, normalizeOptions } = await import("../shared/storage-schema.js");
 
+    const legacyBuiltInSummaryFields = [
+      "domTextFallback",
+      "domTextFallbackRoles",
+      "messageTextSelector",
+      "userTextSelector",
+      "assistantTextSelector",
+      "messageSelector",
+      "scopeSelector",
+      "userRolePattern",
+      "assistantRolePattern",
+      "copyButtonSelector",
+      "copyButtonPattern",
+      "copyMenuButtonSelector",
+      "copyMenuItemPattern"
+    ];
+
     assert.equal(SCRIPT_CONFIG_SCHEMA_VERSION, 3);
     assert.ok(SUMMARY_SITE_CONFIGS.every((item) => !("userscript" in item)));
+    assert.ok(SUMMARY_SITE_CONFIGS.every((item) => (
+      legacyBuiltInSummaryFields.every((field) => !(field in item))
+    )));
+    assert.ok(SUMMARY_SITE_CONFIGS.every((item) => (
+      !("enabled" in item)
+      && !("builtIn" in item)
+      && !("fallbackMode" in item)
+      && (!("pathPrefixes" in item) || item.pathPrefixes.length > 0)
+      && item.userscriptRunMode !== "serial"
+      && item.userscriptTimeoutMs !== 24000
+    )), "built-in Summary catalog must omit schema-default metadata");
     assert.ok(TOPIC_DELETE_SITE_CONFIGS.every((item) => !("userscript" in item)));
     for (const descriptor of SUMMARY_SITE_CONFIGS) {
       assert.equal((await loadBuiltInSummarySource(descriptor.id)).length, descriptor.userscriptLength);
@@ -32,6 +59,17 @@ const { fileURLToPath } = require("node:url");
         `${descriptor.id} descriptor version must match the generated userscript @version`
       );
     }
+
+    const normalizedDefaultSummaryConfigs = normalizeOptions({}).summarySiteConfigs;
+    assert.equal(normalizedDefaultSummaryConfigs.length, SUMMARY_SITE_CONFIGS.length);
+    assert.ok(normalizedDefaultSummaryConfigs.every((item) => (
+      item.enabled === true
+      && item.builtIn === true
+      && item.fallbackMode === "structuredOnly"
+      && Array.isArray(item.pathPrefixes)
+      && ["serial", "pageWorldFirst"].includes(item.userscriptRunMode)
+      && item.userscriptTimeoutMs >= 5000
+    )), "normalization must restore omitted built-in Summary defaults");
 
     const summarySource = await loadBuiltInSummarySource("chatgpt");
     const deleteSource = await loadBuiltInTopicDeleteSource("chatgpt");
@@ -101,6 +139,36 @@ const { fileURLToPath } = require("node:url");
     assert.equal(dehydrated.summarySiteConfigs[1].customUserscript, exactCustom);
     assert.ok(dehydrated.summarySiteConfigs.every((item) => !("userscript" in item)));
     assert.ok(dehydrated.topicDeleteSiteConfigs.every((item) => !("userscript" in item)));
+
+    const legacyMetadataCompatibility = dehydrateOptions(normalizeOptions({
+      summarySiteConfigs: [
+        {
+          id: "chatgpt",
+          builtIn: true,
+          domTextFallback: true,
+          domTextFallbackRoles: ["assistant"],
+          scopeSelector: "#stale-built-in"
+        },
+        {
+          id: "custom-summary",
+          name: "Custom Summary",
+          builtIn: false,
+          sourceMode: "custom",
+          customUserscript: "return [];",
+          hosts: ["example.com"],
+          domTextFallback: true,
+          domTextFallbackRoles: ["assistant"],
+          scopeSelector: "#custom-scope"
+        }
+      ]
+    }));
+    const normalizedBuiltInSummary = legacyMetadataCompatibility.summarySiteConfigs.find((item) => item.id === "chatgpt");
+    assert.ok(legacyBuiltInSummaryFields.every((field) => !(field in normalizedBuiltInSummary)));
+    const normalizedCustomSummary = legacyMetadataCompatibility.summarySiteConfigs.find((item) => item.id === "custom-summary");
+    assert.equal(normalizedCustomSummary.customUserscript, "return [];");
+    assert.equal(normalizedCustomSummary.domTextFallback, true);
+    assert.deepEqual(normalizedCustomSummary.domTextFallbackRoles, ["assistant"]);
+    assert.equal(normalizedCustomSummary.scopeSelector, "#custom-scope");
 
     const ordered = normalizeOptions({
       summarySiteConfigs: [

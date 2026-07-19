@@ -39,8 +39,9 @@ for (const file of files.filter((file) => file.endsWith(".json"))) {
 
 console.log("JSON syntax checks passed.");
 
-run("node_modules/eslint/bin/eslint.js", ["app", "background", "shared", "ui", "content-src", "build-src"]);
+run("node_modules/eslint/bin/eslint.js", ["app", "background", "shared", "ui", "content-src", "build-src", "tools"]);
 run("tools/verify-modules.mjs");
+run("tools/cjs-export-liveness.cjs");
 run("tools/global-runtime-ownership-test.cjs");
 run("tools/generate-artifacts.cjs", ["--check"]);
 run("tools/verify-version.cjs");

@@ -11,18 +11,20 @@ const root = path.resolve(__dirname, "..");
   const contracts = await import(
     pathToFileURL(path.join(root, "shared/background-requests.js")).href
   );
+  const core = await import(
+    pathToFileURL(path.join(root, "shared/background-request-core.js")).href
+  );
   const dispatcherModule = await import(
     pathToFileURL(path.join(root, "background/request-dispatcher.js")).href
   );
   const {
     BACKGROUND_REQUEST_ACTIONS,
-    BACKGROUND_REQUEST_ERROR_CONTRACT,
     BACKGROUND_REQUEST_SPECS,
-    BackgroundRequestError,
-    assertBackgroundRequestSpecifications,
-    backgroundRequestMessage,
     createBackgroundRequestClient
   } = contracts;
+  const {
+    assertBackgroundRequestSpecifications
+  } = core;
   const {
     createBackgroundRequestDispatcher,
     createBackgroundRequestListener
@@ -33,7 +35,10 @@ const root = path.resolve(__dirname, "..");
     Object.values(BACKGROUND_REQUEST_ACTIONS).sort(),
     "every named background action must have exactly one contract"
   );
-  assert.equal(assertBackgroundRequestSpecifications(), BACKGROUND_REQUEST_SPECS);
+  assert.equal(
+    assertBackgroundRequestSpecifications(BACKGROUND_REQUEST_SPECS, BACKGROUND_REQUEST_ACTIONS),
+    BACKGROUND_REQUEST_SPECS
+  );
   const configAction = BACKGROUND_REQUEST_ACTIONS.GET_CONFIG_INFO;
   assert.throws(
     () => assertBackgroundRequestSpecifications({
@@ -42,7 +47,7 @@ const root = path.resolve(__dirname, "..");
         ...BACKGROUND_REQUEST_SPECS[configAction],
         senderClass: "direct-child-frame"
       })
-    }),
+    }, BACKGROUND_REQUEST_ACTIONS),
     /sender\/authorizer mismatch/
   );
   assert.throws(
@@ -52,7 +57,7 @@ const root = path.resolve(__dirname, "..");
         ...BACKGROUND_REQUEST_SPECS[configAction],
         mutates: "no"
       })
-    }),
+    }, BACKGROUND_REQUEST_ACTIONS),
     /mutation contract is invalid/
   );
   assert.throws(
@@ -65,10 +70,11 @@ const root = path.resolve(__dirname, "..");
           codes: Object.freeze(["DUPLICATE", "DUPLICATE"])
         })
       })
-    }),
+    }, BACKGROUND_REQUEST_ACTIONS),
     /error codes.*contains duplicates/
   );
-  assert.deepEqual(BACKGROUND_REQUEST_ERROR_CONTRACT.optional, {
+  const backgroundRequestErrorContract = BACKGROUND_REQUEST_SPECS[configAction].error.envelope;
+  assert.deepEqual(backgroundRequestErrorContract.optional, {
     code: "string",
     delivered: "boolean"
   });
@@ -78,11 +84,11 @@ const root = path.resolve(__dirname, "..");
     assert.equal(typeof spec.mutates, "boolean", `${action} mutation metadata`);
     assert.ok(spec.payload?.required && spec.payload?.optional, `${action} payload contract`);
     assert.ok(spec.response?.required && spec.response?.optional, `${action} response contract`);
-    assert.equal(spec.error?.envelope, BACKGROUND_REQUEST_ERROR_CONTRACT, `${action} error contract`);
+    assert.equal(spec.error?.envelope, backgroundRequestErrorContract, `${action} error contract`);
   }
 
   const testError = (codes = []) => Object.freeze({
-    envelope: BACKGROUND_REQUEST_ERROR_CONTRACT,
+    envelope: backgroundRequestErrorContract,
     codes: Object.freeze(codes)
   });
   const testSpecs = Object.freeze({
@@ -172,10 +178,13 @@ const root = path.resolve(__dirname, "..");
   });
   assert.equal(Object.hasOwn(errorResponse, "privateDetail"), false);
 
-  assert.deepEqual(
-    backgroundRequestMessage(BACKGROUND_REQUEST_ACTIONS.GET_CONFIG_INFO),
-    { source: "chatclub", action: "getConfigInfo" }
-  );
+  let readMessage = null;
+  const readClient = createBackgroundRequestClient(async (message) => {
+    readMessage = message;
+    return { success: true, options: {}, customConfig: [], contentScripts: [] };
+  });
+  await readClient(BACKGROUND_REQUEST_ACTIONS.GET_CONFIG_INFO);
+  assert.deepEqual(readMessage, { source: "chatclub", action: "getConfigInfo" });
   let mutatingSendCount = 0;
   const requestBackground = createBackgroundRequestClient(async (message) => {
     mutatingSendCount += 1;
@@ -192,7 +201,7 @@ const root = path.resolve(__dirname, "..");
     bridgeDocumentId: "document-1",
     command: "deleteThread"
   }).then(() => null, (error) => error);
-  assert.ok(clientError instanceof BackgroundRequestError);
+  assert.equal(clientError.name, "BackgroundRequestError");
   assert.equal(clientError.code, "TIMEOUT");
   assert.equal(clientError.delivered, true);
   assert.equal(clientError.mutates, true);

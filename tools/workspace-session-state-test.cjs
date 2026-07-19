@@ -6,7 +6,6 @@ const assert = require("node:assert/strict");
   const session = await import("../shared/workspace-session.js");
   const {
     captureWorkspaceSnapshotV1,
-    normalizeWorkspaceSnapshotV1,
     restoreWorkspaceSnapshotV1
   } = await import("../app/workspace/session-state.js");
 
@@ -20,10 +19,10 @@ const assert = require("node:assert/strict");
     session.normalizeWorkspaceSessionGeneration({ generation: "not-a-string" }),
     session.DEFAULT_WORKSPACE_SESSION_GENERATION
   );
-  assert.equal(session.workspaceSessionMirrorKey(42), `${session.WORKSPACE_SESSION_MIRROR_PREFIX}42`);
+  assert.equal(session.workspaceSessionMirrorKey(42), "chatclubWorkspaceSessionMirror:42");
   assert.equal(session.workspaceSessionMirrorTabId(session.workspaceSessionMirrorKey(42)), 42);
-  assert.equal(session.workspaceSessionMirrorTabId(`${session.WORKSPACE_SESSION_MIRROR_PREFIX}0`), null);
-  assert.equal(session.workspaceSessionMirrorTabId(`${session.WORKSPACE_SESSION_MIRROR_PREFIX}01`), null);
+  assert.equal(session.workspaceSessionMirrorTabId("chatclubWorkspaceSessionMirror:0"), null);
+  assert.equal(session.workspaceSessionMirrorTabId("chatclubWorkspaceSessionMirror:01"), null);
   assert.equal(session.workspaceSessionMirrorTabId("unrelated"), null);
   assert.throws(() => session.workspaceSessionMirrorKey(0), /positive browser tab id/);
 
@@ -127,32 +126,6 @@ const assert = require("node:assert/strict");
     ],
     fullscreenGroupIndex: 2
   };
-  const normalized = normalizeWorkspaceSnapshotV1(raw, {
-    validAppIds: ["A", "B"],
-    validPresetIds: ["default", "second"],
-    fallbackPresetId: "default"
-  });
-  assert.deepEqual(normalized.layout, { type: "preset", presetId: "default" });
-  assert.equal(normalized.groups.length, 2, "an empty group should be removed without losing siblings");
-  assert.deepEqual(normalized.groups[0], {
-    tabs: [
-      { appId: "A", currentHref: "https://a.example/thread" },
-      { appId: "A", currentHref: "https://a.example/second" }
-    ],
-    activeIndex: 1
-  });
-  assert.deepEqual(normalized.groups[1], {
-    tabs: [
-      { appId: "B", currentHref: "" },
-      { appId: "A", currentHref: "https://a.example/last" }
-    ],
-    activeIndex: 1
-  });
-  assert.equal(normalized.fullscreenGroupIndex, 1, "fullscreen group index should follow retained groups");
-  normalized.groups[0].tabs[0].appId = "Changed";
-  assert.equal(raw.groups[0].tabs[0].appId, "A", "normalization must not mutate its input");
-  assert.equal(normalizeWorkspaceSnapshotV1({ ...raw, schemaVersion: 2 }), null);
-
   assert.equal(restoreWorkspaceSnapshotV1(raw, {
     validAppIds: ["A", "B"],
     validPresetIds: ["default"],
@@ -160,6 +133,14 @@ const assert = require("node:assert/strict");
     createGroupId: () => "must-not-run",
     createFrameId: () => "must-not-run"
   }), null, "a deleted persistent preset must fall back through normal workspace hydration");
+
+  assert.equal(restoreWorkspaceSnapshotV1({ ...raw, schemaVersion: 2, layout: { type: "preset", presetId: "default" } }, {
+    validAppIds: ["A", "B"],
+    validPresetIds: ["default"],
+    fallbackPresetId: "default",
+    createGroupId: () => "unused-group",
+    createFrameId: () => "unused-frame"
+  }), null, "an unknown snapshot schema must fail closed");
 
   const restored = restoreWorkspaceSnapshotV1({
     ...raw,

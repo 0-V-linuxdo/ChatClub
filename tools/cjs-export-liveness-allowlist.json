@@ -1,0 +1,122 @@
+{
+  "tools/browser-version.cjs#browserMajor": {
+    "kind": "test-only",
+    "reason": "Browser-version regression tests exercise the major-number parser independently from user-agent validation."
+  },
+  "tools/cjs-export-liveness.cjs#analyzeCommonJsExportLiveness": {
+    "kind": "test-only",
+    "reason": "Focused analyzer fixtures inject temporary module graphs through this deterministic CommonJS test seam."
+  },
+  "tools/function-source.cjs#functionSource": {
+    "kind": "test-only",
+    "reason": "Focused VM-based regressions share this parser to extract exact author functions without widening runtime module APIs."
+  },
+  "tools/generated-artifacts.cjs#CONTENT_OUTPUT_FILES": {
+    "kind": "test-only",
+    "reason": "Build regression tests compare generated content outputs against the canonical artifact inventory."
+  },
+  "tools/generated-artifacts.cjs#CONTENT_RUNTIME_BUNDLE_EXPORT_NAMES": {
+    "kind": "test-only",
+    "reason": "Bundle regression tests validate generated entry exports against this canonical build contract."
+  },
+  "tools/generated-artifacts.cjs#CONTENT_RUNTIME_BUILD_RECIPE_FILES": {
+    "kind": "test-only",
+    "reason": "Generated-artifact regressions assert the exact toolchain inputs captured by the build-recipe fingerprint."
+  },
+  "tools/generated-artifacts.cjs#GENERATED_ARTIFACT_DIRECT_INPUT_FILES": {
+    "kind": "test-only",
+    "reason": "Symlink and provenance regressions construct isolated fixtures from the canonical direct-input inventory."
+  },
+  "tools/generated-artifacts.cjs#TOPIC_DELETE_SOURCE_FILES": {
+    "kind": "test-only",
+    "reason": "Topic-delete build regressions assert that the author-source inventory remains explicit and bounded."
+  },
+  "tools/generated-artifacts.cjs#contentRuntimeBundleImplementationSha256": {
+    "kind": "test-only",
+    "reason": "Version-state fixtures independently calculate deterministic per-bundle implementation identities."
+  },
+  "tools/generated-artifacts.cjs#contentRuntimeRegistryKey": {
+    "kind": "test-only",
+    "reason": "Registry regressions validate deterministic key construction independently from artifact generation."
+  },
+  "tools/generated-artifacts.cjs#contentRuntimeSourceFiles": {
+    "kind": "test-only",
+    "reason": "Author-source safety regressions inspect dependency closure construction through this focused seam."
+  },
+  "tools/generated-artifacts.cjs#generatedArtifactDirectInputFiles": {
+    "kind": "test-only",
+    "reason": "Direct-input regression fixtures exercise canonical source expansion without invoking generation."
+  },
+  "tools/generated-artifacts.cjs#metadataDifferences": {
+    "kind": "test-only",
+    "reason": "Generated-metadata regressions directly exercise field-level drift diagnostics through this pure helper."
+  },
+  "tools/generated-artifacts.cjs#missingGeneratedArtifactDirectInputs": {
+    "kind": "test-only",
+    "reason": "Direct-input regression fixtures assert fail-closed missing-source diagnostics through this pure helper."
+  },
+  "tools/generated-artifacts.cjs#unexpectedGeneratedArtifacts": {
+    "kind": "test-only",
+    "reason": "Artifact inventory regressions directly verify detection of unowned generated files in fixtures."
+  },
+  "tools/node-version.cjs#SUPPORTED_NODE_MAJORS": {
+    "kind": "test-only",
+    "reason": "Node-version regressions assert the exact supported-major policy independently from enforcement."
+  },
+  "tools/node-version.cjs#nodeMajor": {
+    "kind": "test-only",
+    "reason": "Node-version regressions directly exercise parsing of valid and malformed runtime version strings."
+  },
+  "tools/node-version.cjs#supportedNodeVersion": {
+    "kind": "test-only",
+    "reason": "Node-version regressions exercise support decisions independently from process-level enforcement."
+  },
+  "tools/package-plan.cjs#SUMMARY_USERSCRIPT_FILES": {
+    "kind": "test-only",
+    "reason": "Package-plan regressions assert the canonical standalone Summary asset inventory directly."
+  },
+  "tools/package-plan.cjs#assertPackagedDirectory": {
+    "kind": "test-only",
+    "reason": "Package-plan symlink regressions directly exercise fail-closed directory containment checks."
+  },
+  "tools/package-plan.cjs#assertPackagedRegularFile": {
+    "kind": "test-only",
+    "reason": "Package-plan symlink regressions directly exercise fail-closed file containment checks."
+  },
+  "tools/package-plan.cjs#exactFiles": {
+    "kind": "test-only",
+    "reason": "Package-plan regressions inspect the explicit file inventory without materializing a release package."
+  },
+  "tools/package-plan.cjs#trees": {
+    "kind": "test-only",
+    "reason": "Package-plan regressions assert that generated and userscript trees never bypass explicit inventory."
+  },
+  "tools/release-pack.cjs#RELEASE_PREFLIGHT": {
+    "kind": "test-only",
+    "reason": "Release packaging regressions assert the exact preflight command order without executing a release."
+  },
+  "tools/version-state.cjs#compareVersions": {
+    "kind": "test-only",
+    "reason": "Version-state regressions directly exercise numeric extension-version ordering edge cases."
+  },
+  "tools/version-state.cjs#contentRuntimeBindingErrors": {
+    "kind": "test-only",
+    "reason": "Version-state fixtures directly exercise fail-closed content-runtime binding diagnostics."
+  },
+  "tools/version-state.cjs#contentRuntimeState": {
+    "kind": "test-only",
+    "reason": "Version-state fixtures build deterministic content-runtime snapshots through this focused seam."
+  },
+  "tools/version-state.cjs#deleteState": {
+    "kind": "test-only",
+    "reason": "Version-state fixtures build deterministic Delete-site snapshots through this focused seam."
+  },
+  "tools/version-state.cjs#snapshotWriteErrors": {
+    "kind": "test-only",
+    "reason": "Version-state regressions directly exercise release snapshot write-safety diagnostics."
+  },
+  "tools/version-state.cjs#summaryState": {
+    "kind": "test-only",
+    "reason": "Version-state fixtures build deterministic Summary-site snapshots through this focused seam."
+  }
+}

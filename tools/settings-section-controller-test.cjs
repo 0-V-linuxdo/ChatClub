@@ -11,6 +11,7 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
 const stateKeys = (source) => [...new Set(
   [...source.matchAll(/\bstate\.([A-Za-z_$][\w$]*)/g)].map((match) => match[1])
 )].sort();
+const { functionSource } = require("./function-source.cjs");
 const previousDocument = globalThis.document;
 globalThis.document = { addEventListener() {} };
 
@@ -48,11 +49,15 @@ globalThis.document = { addEventListener() {} };
   assert.match(controllerSource, /const settingsSectionPanes = Object\.freeze\(\{/);
   assert.doesNotMatch(controllerSource, /\bstate\./);
   assert.doesNotMatch(controllerSource, /function (?:appearancePane|summarySettingsPane|optimizeSettingsPane|openPromptTemplateEditor|openSummaryCollectorEditor|topbarPromptPlaceholderBlock)\b/);
-  assert.match(runtimeSource, /createSettingsSectionStatePorts\(state\)/);
+  assert.match(runtimeSource, /const featureState = createFeatureStatePorts\(state\)/);
   assert.match(runtimeSource, /settingsSections:\s*featureState\.settingsSections/);
   assert.match(runtimeSource, /saveOptionsPatch/);
   assert.doesNotMatch(runtimeSource, /state:\s*featureState\.settings/);
   assert.doesNotMatch(`${runtimeSource}\n${stateSource}`, /createSettingsControllerStatePort|combinedSettingsAccess/);
+  assert.match(controllerSource, /Object\.entries\(SETTINGS_OPTION_CAPABILITIES\)/);
+  assert.doesNotMatch(controllerSource, /apps:\s*new Set\(/);
+  assert.doesNotMatch(controllerSource, /builtinChatAppOrder/);
+  assert.match(controllerSource, /dataset:\s*\{\s*settingsSectionId:\s*id\s*\}/, "Settings tabs need stable section selectors");
 
   assert.deepEqual(stateKeys(appearanceSource), [
     "options",
@@ -91,6 +96,33 @@ globalThis.document = { addEventListener() {} };
     "settingsBuiltinAppDragId",
     "settingsCustomAppDragId"
   ]);
+  assert.deepEqual(
+    [...appsSource.matchAll(/\["(builtIn|custom|iframe)",\s*t\("apps\.tab/g)].map((match) => match[1]).slice(0, 3),
+    ["builtIn", "custom", "iframe"],
+    "iframe permissions must be the derived third Apps tab"
+  );
+  assert.match(appsSource, /dataset\.appsTabId\s*=\s*tabs\[index\]/);
+  assert.match(appsSource, /function iframePermissionsPane\(/);
+  assert.match(appsSource, /iframe-permission-row/);
+  assert.match(appsSource, /dataset\.iframeAction/);
+  const iframePermissionsPane = functionSource(appsSource, "iframePermissionsPane");
+  assert.ok(
+    iframePermissionsPane.indexOf('iframePermissionGroup("builtIn"') < iframePermissionsPane.indexOf('iframePermissionGroup("custom"'),
+    "iframe permissions must project built-ins before custom platforms"
+  );
+  assert.doesNotMatch(iframePermissionsPane, /draggable|settingsDragHandle/, "the derived iframe projection must not own ordering");
+  const persistIframeConfig = functionSource(appsSource, "persistIframeConfig");
+  assert.match(persistIframeConfig, /const previousOptions = state\.options/);
+  assert.match(persistIframeConfig, /saveOptionsPatch\(\{ builtinChatAppIframeConfigs \}\)/);
+  assert.match(persistIframeConfig, /reconcileAppCatalog\(state\.customConfig, previousOptions\)/);
+  assert.match(persistIframeConfig, /saveCustomList\(customConfig, redraw, message\)/);
+  const resetIframeConfig = functionSource(appsSource, "resetIframeConfig");
+  assert.match(resetIframeConfig, /persistIframeConfig\(app, source, undefined/);
+  const iframeEditor = functionSource(appsSource, "openIframePermissionEditor");
+  assert.match(iframeEditor, /button\(t\("common\.cancel"\), \(\) => close\(\)\)/);
+  assert.match(iframeEditor, /filter\(\(risk\) => !previousRisks\.has\(risk\)\)/);
+  assert.match(iframeEditor, /openIframeRiskConfirmation\(addedRisks/);
+  assert.match(iframeEditor, /iframe-permission-editor-modal/);
   assert.deepEqual(stateKeys(modelsSource), ["modelPreferenceDraft", "options"]);
   assert.deepEqual(stateKeys(historySource), [
     "promptHistoryCursor",
@@ -101,6 +133,7 @@ globalThis.document = { addEventListener() {} };
   ]);
 
   const stateModule = await import(moduleUrl("app/state.js"));
+  const settingsStateModule = await import(moduleUrl("app/settings/state-ports.js"));
   const appearanceModule = await import(moduleUrl("app/settings/appearance.js"));
   const summaryModule = await import(moduleUrl("app/settings/summary.js"));
   const optimizeModule = await import(moduleUrl("app/settings/optimize.js"));
@@ -114,6 +147,7 @@ globalThis.document = { addEventListener() {} };
   rootState.options = {
     apiProfiles: [{ id: "api-1", name: "API", endpoint: "https://example.test", model: "model" }],
     builtinChatAppOrder: [],
+    builtinChatAppIframeConfigs: {},
     colMaxCount: 4,
     frameLoadingOverlayOpacity: 0.5,
     frameToastPosition: { x: 50, y: 50 },
@@ -142,12 +176,19 @@ globalThis.document = { addEventListener() {} };
   rootState.customConfig = [];
   rootState.messageNavigatorSettingsTab = "sites";
   rootState.messageNavigatorSiteExpandedId = "site-1";
-  const ports = stateModule.createSettingsSectionStatePorts(rootState);
+  const ports = settingsStateModule.createSettingsSectionStatePorts(rootState);
+  assert.deepEqual(
+    settingsStateModule.SETTINGS_OPTION_CAPABILITIES.apps.write,
+    ["builtinChatAppOrder", "builtinChatAppIframeConfigs"],
+    "Apps state and persistence enforcement must share one option capability"
+  );
 
   assert.equal(ports.messageNavigation.options.messageNavigatorEffectMode, "border");
   assert.equal(ports.topicDeletion.options.topicDeleteSiteConfigs.length, 0);
+  assert.deepEqual(ports.apps.options.builtinChatAppIframeConfigs, {});
   assert.throws(() => { ports.messageNavigation.options.themeMode; }, /settings\.messageNavigation cannot read/);
   assert.throws(() => { ports.topicDeletion.messageNavigatorSettingsTab; }, /settings\.topicDeletion cannot read/);
+  assert.throws(() => { ports.models.options.builtinChatAppIframeConfigs; }, /settings\.models cannot read/);
 
   const sharedDependencies = {
     svgIcon: () => ({}),

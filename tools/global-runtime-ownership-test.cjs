@@ -24,11 +24,8 @@ function sourceFiles(directory) {
 
 async function registeredAuthorEntries() {
   const inventoryModule = await import(pathToFileURL(path.join(root, "shared/frame-commands.js")).href);
-  const specs = [
-    ...Object.values(inventoryModule.CONTENT_CAPABILITY_BUNDLES).flat(),
-    ...Object.values(inventoryModule.CONTENT_ANCILLARY_BUNDLES)
-  ];
-  assert.equal(new Set(specs.map(({ file }) => file)).size, specs.length, "content capability and ancillary entries must be unique");
+  const specs = Object.values(inventoryModule.CONTENT_BUNDLES);
+  assert.equal(new Set(specs.map(({ file }) => file)).size, specs.length, "content runtime entries must be unique");
   return specs.map(({ file, world }) => {
     const author = CONTENT_ENTRIES[file];
     assert.equal(typeof author, "string", `${file} must be a declared generated content entry`);

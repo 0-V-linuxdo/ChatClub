@@ -173,6 +173,16 @@ const runtimeRules = Object.freeze({
   "no-shadow-restricted-names": "error",
   "no-unreachable": "error",
   "no-unreachable-loop": "error",
+  "no-unused-vars": ["error", {
+    vars: "all",
+    args: "all",
+    argsIgnorePattern: "^_[A-Za-z0-9_$]*$",
+    caughtErrors: "all",
+    caughtErrorsIgnorePattern: "^_[A-Za-z0-9_$]*$",
+    destructuredArrayIgnorePattern: "^_[A-Za-z0-9_$]*$",
+    ignoreRestSiblings: false,
+    reportUsedIgnorePattern: true
+  }],
   "no-unsafe-finally": "error",
   "no-unsafe-negation": "error",
   "no-undef": "error",
@@ -198,6 +208,21 @@ function runtimeRealm(files, realmGlobals, realm, forbiddenGlobals = [], forbidA
       ...runtimeRules,
       "chatclub-realm/no-cross-realm-global": ["error", { forbidden: forbiddenGlobals, realm, forbidAliases }]
     }
+  };
+}
+
+function toolRealm(files, realmGlobals, sourceType) {
+  return {
+    files,
+    languageOptions: {
+      ecmaVersion: "latest",
+      sourceType,
+      globals: realmGlobals
+    },
+    linterOptions: {
+      reportUnusedDisableDirectives: "error"
+    },
+    rules: runtimeRules
   };
 }
 
@@ -247,5 +272,36 @@ export default [
     "build",
     forbiddenRealmGlobals(globals.node),
     true
-  )
+  ),
+  toolRealm(["tools/**/*.cjs"], globals.node, "commonjs"),
+  toolRealm(["tools/verify-modules.mjs"], globals.node, "module"),
+  toolRealm(
+    ["tools/browser-smoke.mjs"],
+    Object.freeze({ ...globals.node, ...domExtensionGlobals }),
+    "module"
+  ),
+  toolRealm(
+    [
+      "tools/grok-postmessage-console.js",
+      "tools/model-preference-console-eval.js",
+      "tools/model-preference-console-probe.js",
+      "tools/model-preference-plugin-bridge-probe.js"
+    ],
+    domExtensionGlobals,
+    "module"
+  ),
+  {
+    files: ["tools/model-preference-console-probe.js"],
+    languageOptions: {
+      // Chrome DevTools Console exposes this helper only in its evaluation realm.
+      globals: { getEventListeners: "readonly" }
+    }
+  },
+  {
+    files: ["tools/deepseek-delete-target-test.cjs"],
+    rules: {
+      // The fixture compiles extracted author-source helpers in an isolated VM context.
+      "no-new-func": "off"
+    }
+  }
 ];
