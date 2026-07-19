@@ -15,6 +15,7 @@
 - 删除会话：对支持站点触发当前会话删除，带站点 userscript 配置。
 - 模型偏好：支持 Gemini、Grok、DeepSeek、Notion AI 的默认模型选择，Gemini 支持 Thinking Level。
 - 可配置：自定义平台、API Profile、Summary / Prompt 优化模板、快捷键、主题、语言、顶部栏和分组按钮。
+- iframe 权限管理：可按应用配置 `allow`、`sandbox`、Referrer Policy 和扩展属性；高风险授权需要显式确认，并支持恢复安全默认值。
 - 备份迁移：导入 / 导出配置、提示词库、发送历史和快捷键。
 
 > **兼容性说明：**“重载插件后恢复工作区”仅支持重载插件后不会关闭 ChatClub 插件标签页的浏览器。实测支持 Arc、Dia；不支持 Tabbit。
