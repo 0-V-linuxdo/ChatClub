@@ -1,6 +1,6 @@
 // Built-in Summary userscript: ChatGPT (chatgpt)
 // Source: Mod/assets/chunk-7dbf4e81.js :: SUMMARY_SITE_CONFIG_DEFAULTS
-// Config version: 52; global config version: 60
+// Config version: 54; global config version: 60
 // Hosts: chatgpt.com, *.chatgpt.com, chat.openai.com, *.chat.openai.com
 // Path prefixes: (none)
 // Run mode: pageWorldFirst; timeout: 24000

@@ -15,7 +15,6 @@ export function createPreferredGeminiCapability(deps = {}) {
     closest,
     isDisabledElement,
     qsa,
-    modelTextIncludes,
     parseBooleanAttr,
     armPreferredModelFocusShield,
     modelEventConstructor,
@@ -155,17 +154,6 @@ export function createPreferredGeminiCapability(deps = {}) {
       ? (keys.has("extended") || /\bextended(?:\s+thinking)?\b/.test(token) ? "extended" : "standard")
       : "";
     return { button, label, baseModelId, thinkingLevel };
-  }
-
-  function currentGeminiModelKey() {
-    return currentGeminiPickerState().baseModelId;
-  }
-
-  function currentGeminiModelHasKey(modelId) {
-    const state = currentGeminiPickerState();
-    if (modelId === "extended") return state.baseModelId === "pro" && state.thinkingLevel === "extended";
-    if (modelId === "thinking") return state.baseModelId === "pro" && state.thinkingLevel === "standard";
-    return state.baseModelId === modelId;
   }
 
   function geminiThinkingLevelModelId(value) {
@@ -382,43 +370,6 @@ export function createPreferredGeminiCapability(deps = {}) {
     return { root: null, item: null };
   }
 
-  function scoreGeminiThinkingLevelRow(row) {
-    const token = compactModelText(modelElementText(row));
-    if (!token || !token.includes("thinking level")) return -1;
-    const rect = modelRect(row);
-    let score = 100;
-    if (matches(row, "button, [role='menuitemradio'], [role='menuitem'], [role='button'], [aria-haspopup='menu'], [aria-haspopup='true'], [tabindex]:not([tabindex='-1'])")) score += 50;
-    if (token.includes("standard") || token.includes("extended")) score += 30;
-    if (rect) {
-      if (rect.width >= 120 && rect.height >= 30 && rect.height <= 96) score += 30;
-      if (rect.width < 80 || rect.height < 24) score -= 70;
-    }
-    return score;
-  }
-
-  function findGeminiThinkingLevelRows(root) {
-    if (!root) return [];
-    const seen = new Set();
-    const rows = [];
-    const add = (row) => {
-      if (!row || seen.has(row) || !visible(row) || isDisabledElement(row)) return;
-      const score = scoreGeminiThinkingLevelRow(row);
-      if (score < 0) return;
-      seen.add(row);
-      rows.push({ row, score, area: modelElementArea(row) });
-    };
-    for (const row of geminiCompactMenuRows(root)) add(row);
-    for (const item of geminiModelItems(root)) {
-      if (isGeminiThinkingSubmenuItem(item)) add(item);
-    }
-    rows.sort((a, b) => b.score - a.score || b.area - a.area);
-    return rows.map((entry) => entry.row);
-  }
-
-  function findGeminiThinkingLevelRow(root) {
-    return findGeminiThinkingLevelRows(root)[0] || null;
-  }
-
   function findGeminiThinkingLevelOption(root, modelId) {
     if (modelId !== "thinking" && modelId !== "extended") return null;
     const row = geminiCompactMenuRows(root)
@@ -441,32 +392,6 @@ export function createPreferredGeminiCapability(deps = {}) {
       if (item) return { root, item };
     }
     return { root: null, item: null };
-  }
-
-  function geminiThinkingLevelHeaderKey(root) {
-    const row = findGeminiThinkingLevelRow(root);
-    const token = compactModelText(modelElementText(row));
-    if (!token || !token.includes("thinking level")) return "";
-    const after = token.split("thinking level").slice(1).join("thinking level").trim();
-    if (/^extended([^a-z0-9]|$)/.test(after)) return "extended";
-    if (/^standard([^a-z0-9]|$)/.test(after)) return "thinking";
-    return "";
-  }
-
-  function geminiThinkingLevelOptionIsSelected(root, modelId) {
-    const option = findGeminiThinkingLevelOption(root, modelId);
-    if (option && (geminiElementHasSelectedState(option) || modelTextIncludes(modelElementText(option), "Selected"))) return true;
-    return geminiThinkingLevelHeaderKey(root) === modelId;
-  }
-
-  function isGeminiThinkingSubmenuItem(item) {
-    if (!item || !modelTextIncludes(modelElementText(item), "Thinking")) return false;
-    let node = item;
-    for (let guard = 0; node && node.nodeType === 1 && guard < 4; guard += 1, node = node.parentElement) {
-      const popup = String(node.getAttribute?.("aria-haspopup") || "").trim().toLowerCase();
-      if (popup === "menu" || popup === "true") return true;
-    }
-    return modelTextIncludes(modelElementText(item), "Thinking level");
   }
 
   function geminiActualMenuItem(element, root = null) {
@@ -517,22 +442,6 @@ export function createPreferredGeminiCapability(deps = {}) {
       if (/(^|\s)(selected|is-selected|checked|is-checked|active|mdc-list-item--selected|mat-mdc-menu-item-highlighted)(\s|$)/i.test(className)) return true;
     }
     return false;
-  }
-
-  function selectedGeminiModelKey(root) {
-    if (!root) return "";
-    const selected = geminiModelItems(root)
-      .filter(geminiElementHasSelectedState)
-      .map((item) => ({ item, key: geminiModelKeyFromText(modelElementText(item)), score: modelElementArea(item) }))
-      .filter((entry) => entry.key);
-    selected.sort((a, b) => a.score - b.score);
-    return selected[0]?.key || "";
-  }
-
-  function isGeminiTargetSelected(root, modelId) {
-    if (modelId === "thinking" || modelId === "extended") return geminiThinkingLevelOptionIsSelected(root, modelId);
-    const item = findGeminiModelItem(root, modelId);
-    return Boolean(item && geminiElementHasSelectedState(item));
   }
 
   async function dismissPreferredModelMenu(context, getMenuRoot, timeoutMs = 700) {

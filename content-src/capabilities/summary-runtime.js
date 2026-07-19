@@ -29,9 +29,8 @@ export function createSummaryCapability(deps = {}) {
     SUMMARY_ISOLATED_RUNTIME_IDENTITY,
     CONTENT_RUNTIME_IDENTITY
   } = deps;
-  function shouldUseCustomSummaryUserscript(config, runner) {
-    const customMode = config.builtIn === false || config.sourceMode === "custom" || config.userscriptOverride === true;
-    return customMode && (!runner || customMode);
+  function shouldUseCustomSummaryUserscript(config) {
+    return config.builtIn === false || config.sourceMode === "custom" || config.userscriptOverride === true;
   }
 
   async function executeCustomSummaryUserscript(config = {}) {
@@ -63,15 +62,12 @@ export function createSummaryCapability(deps = {}) {
     let registry = {};
     try { registry = runtimes.require("summary-runners", CONTENT_BRIDGE_VERSION).scripts || {}; } catch {}
     const packagedRunner = registry[config.id] || registry[config.userscriptFile];
-    if (shouldUseCustomSummaryUserscript(config, packagedRunner)) {
+    if (shouldUseCustomSummaryUserscript(config)) {
       const customResult = await executeCustomSummaryUserscript(config);
       const customMessages = merge(Array.isArray(customResult?.messages) ? customResult.messages : []);
       return finishSummaryCollection(data, {
-        ...customResult,
         messages: hasUserAndAssistant(customMessages) ? customMessages : [],
-        rawMessageCount: Number(customResult?.rawMessageCount) || customMessages.length,
-        hasUserAndAssistant: hasUserAndAssistant(customMessages),
-        runner: "user-scripts"
+        rawMessageCount: Number(customResult?.rawMessageCount) || customMessages.length
       });
     }
     if (config.userscriptRunMode !== "serial") {
@@ -80,9 +76,7 @@ export function createSummaryCapability(deps = {}) {
       if (hasUserAndAssistant(pageMessages)) {
         return finishSummaryCollection(data, {
           messages: pageMessages,
-          rawMessageCount: Number(pageResult.rawMessageCount) || pageMessages.length,
-          hasUserAndAssistant: true,
-          runner: "page-world"
+          rawMessageCount: Number(pageResult.rawMessageCount) || pageMessages.length
         });
       }
     }
@@ -113,8 +107,7 @@ export function createSummaryCapability(deps = {}) {
     const messages = merge(Array.isArray(result) ? result : result?.messages || []);
     return finishSummaryCollection(data, {
       messages: hasUserAndAssistant(messages) ? messages : [],
-      rawMessageCount: messages.length,
-      hasUserAndAssistant: hasUserAndAssistant(messages)
+      rawMessageCount: messages.length
     });
   }
 
@@ -140,8 +133,6 @@ export function createSummaryCapability(deps = {}) {
       ready: isolatedReady && mainReady,
       isolatedReady,
       mainReady,
-      isolatedVersion,
-      mainVersion: String(pageState?.bridgeVersion || ""),
       documentId: contentDocumentId,
       bridgeVersion: CONTENT_BRIDGE_VERSION,
       runtimeIdentity: CONTENT_RUNTIME_IDENTITY,

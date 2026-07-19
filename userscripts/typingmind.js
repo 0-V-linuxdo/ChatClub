@@ -1,6 +1,6 @@
 // Built-in Summary userscript: TypingMind (typingmind)
 // Source: Mod/assets/chunk-7dbf4e81.js :: SUMMARY_SITE_CONFIG_DEFAULTS
-// Config version: 45; global config version: 60
+// Config version: 47; global config version: 60
 // Hosts: setapp.typingcloud.com, *.typingcloud.com
 // Path prefixes: (none)
 // Run mode: serial; timeout: 24000

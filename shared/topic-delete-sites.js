@@ -1,5 +1,10 @@
-import { customUserscriptSource, isCustomUserscriptConfig } from "./userscript-config.js";
+import { isCustomUserscriptConfig } from "./userscript-config.js";
 import { configMatchesHref, normalizeHostList } from "./url-match.js";
+import {
+  boundedSiteConfigNumber as boundedNumber,
+  siteConfigText as text,
+  uniqueSiteConfigStrings as uniqueStrings
+} from "./site-config-values.js";
 
 function descriptor(value) {
   return Object.freeze({
@@ -21,27 +26,6 @@ export const TOPIC_DELETE_SITE_CONFIGS = Object.freeze([
   descriptor({ id: "notion", name: "Notion AI", appIds: ["NotionAI"], hosts: ["app.notion.com", "notion.so", "www.notion.so", "*.notion.so"], pathPrefixes: [], scriptId: "notion", scriptVersion: "2026.07.16.1", userscriptFile: "topic-delete-userscripts/notion.user.js", userscriptLength: 79315, userscriptTimeoutMs: 15000 }),
   descriptor({ id: "deepseek", name: "DeepSeek", appIds: ["DeepSeek"], hosts: ["deepseek.com", "*.deepseek.com"], pathPrefixes: ["/a/chat", "/chat"], scriptId: "deepseek", scriptVersion: "2026.07.16.1", userscriptFile: "topic-delete-userscripts/deepseek.user.js", userscriptLength: 79240, userscriptTimeoutMs: 36000 })
 ]);
-
-function text(value, fallback = "") {
-  return String(value ?? fallback).trim();
-}
-
-function uniqueStrings(value = []) {
-  const seen = new Set();
-  const out = [];
-  for (const item of Array.isArray(value) ? value : []) {
-    const normalized = text(item);
-    if (!normalized || seen.has(normalized)) continue;
-    seen.add(normalized);
-    out.push(normalized);
-  }
-  return out;
-}
-
-function boundedNumber(value, fallback, min, max) {
-  const number = Number(value);
-  return Number.isFinite(number) ? Math.max(min, Math.min(max, Math.round(number))) : fallback;
-}
 
 function normalizeTopicDeleteSiteConfig(item = {}, fallback = {}, index = 0) {
   const builtIn = Boolean(fallback.builtIn || item.builtIn);
@@ -120,7 +104,7 @@ export async function loadBuiltInTopicDeleteSource(idOrFile, options = {}) {
   return source;
 }
 
-export function topicDeleteConfigMatchesPayload(config, payload = {}) {
+function topicDeleteConfigMatchesPayload(config, payload = {}) {
   if (!config) return false;
   const payloadApps = uniqueStrings([payload.appId, payload.appName]).map((item) => item.toLowerCase());
   const configApps = uniqueStrings([...(config.appIds || []), config.id, config.name]).map((item) => item.toLowerCase());

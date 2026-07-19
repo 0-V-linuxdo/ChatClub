@@ -1,6 +1,6 @@
 // Built-in Summary userscript: Claude (claude)
 // Source: Mod/assets/chunk-7dbf4e81.js :: SUMMARY_SITE_CONFIG_DEFAULTS
-// Config version: 37; global config version: 68
+// Config version: 38; global config version: 68
 // Hosts: claude.ai, *.claude.ai
 // Path prefixes: /chat, /new
 // Run mode: default; timeout: default

@@ -23,6 +23,7 @@ import {
   worldOptionUnsupported
 } from "./frame-injection.js";
 import { activeCustomSummaryRuntimeReady } from "./main-world-runtime.js";
+import { withTimeout } from "./promise-timeout.js";
 
 const TOPIC_DELETE_USERSCRIPT_FILE_PATTERN = /^topic-delete-userscripts\/[a-z0-9-]+\.user\.js$/i;
 const CUSTOM_SUMMARY_SOURCE_MAX_BYTES = 1024 * 1024;
@@ -199,16 +200,6 @@ export function createCustomUserscriptRuntime(api, dependencies = {}) {
     return run;
   }
 
-  function timeoutPromise(promise, timeoutMs, message) {
-    let timer = 0;
-    return Promise.race([
-      promise.finally(() => clearTimeout(timer)),
-      new Promise((_, reject) => {
-        timer = setTimeout(() => reject(new Error(message)), timeoutMs);
-      })
-    ]);
-  }
-
   function utf8ByteLength(value) {
     return new TextEncoder().encode(String(value || "")).byteLength;
   }
@@ -253,7 +244,7 @@ ${userscript}
       return result;
     });
     const timeoutMs = Math.max(5000, Math.min(45000, Number(runtimeConfig.userscriptTimeoutMs) || 30000));
-    return timeoutPromise(
+    return withTimeout(
       execution,
       Math.max(4000, timeoutMs - 1500),
       "Custom Summary userscript timed out; reload the affected page to stop an unresponsive script."
@@ -349,7 +340,7 @@ ${userscript}
       return sanitizedTopicDeleteResult(value, config);
     });
     const timeoutMs = Math.max(5000, Math.min(45000, Number(config.userscriptTimeoutMs) || 15000));
-    return timeoutPromise(
+    return withTimeout(
       execution,
       Math.max(4000, timeoutMs - 1500),
       "Custom Delete Site userscript timed out; reload the affected page to stop an unresponsive script."

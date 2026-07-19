@@ -5,7 +5,7 @@ import {
   createContentRuntimeBundleIdentity
 } from "./content-runtime-identity.js";
 
-export const CONTENT_RUNTIME_ENTRY_IDENTITIES = Object.freeze(Object.fromEntries(
+const CONTENT_RUNTIME_ENTRY_IDENTITIES = Object.freeze(Object.fromEntries(
   Object.entries(CONTENT_RUNTIME_BUNDLE_IDENTITIES).map(([outputPath, bundle]) => [
     outputPath,
     createContentRuntimeBundleIdentity(bundle)

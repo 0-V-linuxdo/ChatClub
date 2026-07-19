@@ -610,29 +610,6 @@ export function installDeepSeekDeleteBridge(runtimes, deleteSource) {
       settleMs: 460
     };
   };
-  const trustedHoverForTopicLink = (link, reason = "topic menu trigger requires trusted hover") => {
-    const linkRect = topicMenuRect(link);
-    if (!linkRect) return null;
-    return {
-      kind: "topic-menu-hover",
-      site: "deepseek",
-      reason,
-      framePoint: {
-        x: Math.round(Math.max(linkRect.left + 16, linkRect.right - 28) * 100) / 100,
-        y: Math.round((linkRect.top + linkRect.height / 2) * 100) / 100
-      },
-      frameRect: serializableRect(linkRect),
-      hoverSettleMs: 520
-    };
-  };
-  const resultWithTrustedHover = (reason, link) => {
-    const trustedHover = trustedHoverForTopicLink(link, reason);
-    return {
-      ok: false,
-      reason,
-      ...(trustedHover ? { needsTrustedHover: true, trustedHover } : {})
-    };
-  };
   const resultWithTrustedMenuClick = (reason, link) => {
     const trustedMenuClick = trustedMenuClickForTopicLink(link, reason);
     return {

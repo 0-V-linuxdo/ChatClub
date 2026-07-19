@@ -145,6 +145,20 @@ export function createSecureFrameContextRegistry(api) {
     return contexts.get(frameContextToken(token)) || null;
   }
 
+  async function registeredFrameContext(tabId, frameId) {
+    if (!Number.isInteger(tabId) || !Number.isInteger(frameId) || frameId <= 0) return null;
+    await hydrate();
+    prune();
+    let match = null;
+    for (const [token, value] of contexts) {
+      if (value?.tabId !== tabId || value?.frameId !== frameId) continue;
+      if (!match || Number(value.registeredAt || 0) > Number(match.context.registeredAt || 0)) {
+        match = { token, context: value };
+      }
+    }
+    return match;
+  }
+
   function remember(token, value) {
     contexts.set(token, value);
     persist();
@@ -183,6 +197,7 @@ export function createSecureFrameContextRegistry(api) {
     frameContextToken,
     persist,
     register,
+    registeredFrameContext,
     registeredSenderContext,
     remember
   });

@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "42d1e137fe2015d43fe6732ef431f641cc51d65ec7986e095d9a243339d4e9c2";
-  var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.cd06beed22e9f6fcab8057bd949a3c0c68974967bda920471fc1d62f06999029";
-  var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "cd06beed22e9f6fcab8057bd949a3c0c68974967bda920471fc1d62f06999029";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "ebe2ed4ec1fc3680d7cd904b38a423d86055d3ce43ef5f1d0cb0f96f6d83fd83";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.ebe2ed4ec1fc3680d7cd904b38a423d86055d3ce43ef5f1d0cb0f96f6d83fd83";
-  var CONTENT_RUNTIME_PRELOAD_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preload.js", "entryPath": "content-src/preload.js", "sourceSha256": "2dcb98016e554435a346f167b8ea8b35f58e8f36462c8f22defb51d538ccbeb5", "implementationSha256": "e1106de6027525fbd8fa2860074bfafec821db43030d9c779b91deec93e0aa2f", "implementationVersion": "2026.07.16.2+bundle.e1106de6027525fbd8fa2860074bfafec821db43030d9c779b91deec93e0aa2f" });
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "56ae70c075c19ca583d76133e0edc0d694fecc58c3112f9e246a5812e8650b8f";
+  var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.39e7dff3b817dd590d108ce155af13e47b28138e33c477502664105276787094";
+  var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "39e7dff3b817dd590d108ce155af13e47b28138e33c477502664105276787094";
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "330f3a3515c38cb4bb3d34cf09d63dcb258c91cd538e9214385bdfb2d1ea9799";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.330f3a3515c38cb4bb3d34cf09d63dcb258c91cd538e9214385bdfb2d1ea9799";
+  var CONTENT_RUNTIME_PRELOAD_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preload.js", "entryPath": "content-src/preload.js", "sourceSha256": "d5b80bb0f25ef6c21f8139b9f225b621962dda141e000194f83fcdecc448c461", "implementationSha256": "7b3aac1f5e811e9ce6a180626e89922e40b0ec622c14c7f9d57737961b55e5cf", "implementationVersion": "2026.07.16.2+bundle.7b3aac1f5e811e9ce6a180626e89922e40b0ec622c14c7f9d57737961b55e5cf" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -1723,29 +1723,6 @@
         settleMs: 460
       };
     };
-    const trustedHoverForTopicLink = (link, reason = "topic menu trigger requires trusted hover") => {
-      const linkRect = topicMenuRect(link);
-      if (!linkRect) return null;
-      return {
-        kind: "topic-menu-hover",
-        site: "deepseek",
-        reason,
-        framePoint: {
-          x: Math.round(Math.max(linkRect.left + 16, linkRect.right - 28) * 100) / 100,
-          y: Math.round((linkRect.top + linkRect.height / 2) * 100) / 100
-        },
-        frameRect: serializableRect(linkRect),
-        hoverSettleMs: 520
-      };
-    };
-    const resultWithTrustedHover = (reason, link) => {
-      const trustedHover = trustedHoverForTopicLink(link, reason);
-      return {
-        ok: false,
-        reason,
-        ...trustedHover ? { needsTrustedHover: true, trustedHover } : {}
-      };
-    };
     const resultWithTrustedMenuClick = (reason, link) => {
       const trustedMenuClick = trustedMenuClickForTopicLink(link, reason);
       return {
@@ -2272,7 +2249,6 @@
         imageCount,
         removeCount,
         previewCount,
-        hasAttachment: attachmentCount > 0,
         fingerprint
       };
     };
@@ -3950,7 +3926,7 @@ ${node.nodeValue}`;
       }
       if (!capture?.installed) {
         const originalAddEventListener = EventTarget.prototype.addEventListener;
-        const wrappedAddEventListener = function(type, listener, options) {
+        const wrappedAddEventListener = function(type, listener, _options) {
           const result = originalAddEventListener.apply(this, arguments);
           try {
             if (String(type || "").toLowerCase() === "click") recordListener(this, listener);

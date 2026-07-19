@@ -51,7 +51,7 @@ function standaloneDeleteUserscript({ id, name, description, matches, keys, vers
   return `${header}\n\n${engine.trimEnd()}\n`;
 }
 
-export const KAGI_DELETE_USERSCRIPT = standaloneDeleteUserscript({
+const KAGI_DELETE_USERSCRIPT = standaloneDeleteUserscript({
   id: "kagi",
   name: "Kagi Assistant",
   description: "Delete the current Kagi Assistant chat when ChatClub or the userscript menu requests it.",
@@ -59,7 +59,7 @@ export const KAGI_DELETE_USERSCRIPT = standaloneDeleteUserscript({
   keys: ["Kagi"]
 });
 
-export const CHATGPT_DELETE_USERSCRIPT = standaloneDeleteUserscript({
+const CHATGPT_DELETE_USERSCRIPT = standaloneDeleteUserscript({
   id: "chatgpt",
   name: "ChatGPT",
   description: "Delete the current ChatGPT chat when ChatClub or the userscript menu requests it.",
@@ -67,7 +67,7 @@ export const CHATGPT_DELETE_USERSCRIPT = standaloneDeleteUserscript({
   keys: ["ChatGPT"]
 });
 
-export const GEMINI_DELETE_USERSCRIPT = standaloneDeleteUserscript({
+const GEMINI_DELETE_USERSCRIPT = standaloneDeleteUserscript({
   id: "gemini",
   name: "Gemini",
   description: "Delete the current Gemini conversation when ChatClub or the userscript menu requests it.",
@@ -78,7 +78,7 @@ export const GEMINI_DELETE_USERSCRIPT = standaloneDeleteUserscript({
   runner: "    gemini: deleteGemini,\n"
 });
 
-export const GROK_DELETE_USERSCRIPT = standaloneDeleteUserscript({
+const GROK_DELETE_USERSCRIPT = standaloneDeleteUserscript({
   id: "grok",
   name: "Grok",
   description: "Delete the current Grok conversation when ChatClub or the userscript menu requests it.",
@@ -86,7 +86,7 @@ export const GROK_DELETE_USERSCRIPT = standaloneDeleteUserscript({
   keys: ["Grok"]
 });
 
-export const GROK_MIRROR_DELETE_USERSCRIPT = standaloneDeleteUserscript({
+const GROK_MIRROR_DELETE_USERSCRIPT = standaloneDeleteUserscript({
   id: "grokMirror",
   name: "Grok Mirror",
   description: "Delete the current Grok Mirror conversation when ChatClub or the userscript menu requests it.",
@@ -94,7 +94,7 @@ export const GROK_MIRROR_DELETE_USERSCRIPT = standaloneDeleteUserscript({
   keys: ["GrokMirror"]
 });
 
-export const NOTION_DELETE_USERSCRIPT = standaloneDeleteUserscript({
+const NOTION_DELETE_USERSCRIPT = standaloneDeleteUserscript({
   id: "notion",
   name: "Notion AI",
   description: "Delete the current Notion AI chat when ChatClub or the userscript menu requests it.",
@@ -102,7 +102,7 @@ export const NOTION_DELETE_USERSCRIPT = standaloneDeleteUserscript({
   keys: ["NotionAI"]
 });
 
-export const DEEPSEEK_DELETE_USERSCRIPT = standaloneDeleteUserscript({
+const DEEPSEEK_DELETE_USERSCRIPT = standaloneDeleteUserscript({
   id: "deepseek",
   name: "DeepSeek",
   description: "Delete the current DeepSeek chat when ChatClub or the userscript menu requests it.",

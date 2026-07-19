@@ -98,7 +98,7 @@ export function createBackgroundRequestDispatcher(specs, entries, authorizers = 
   };
 }
 
-export function backgroundRequestErrorResponse(error) {
+function backgroundRequestErrorResponse(error) {
   const response = {
     success: false,
     error: String(error?.message || error || "Background request failed")

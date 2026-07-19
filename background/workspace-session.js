@@ -274,10 +274,6 @@ function currentBindings(stored = {}) {
   return records;
 }
 
-export function ensureWorkspaceSessionGeneration(api) {
-  return queueWorkspaceSession(() => ensureGenerationInternal(localStorageArea(api)));
-}
-
 export function rotateWorkspaceSessionGeneration(api) {
   return queueWorkspaceSession(async () => {
     const storage = localStorageArea(api);
@@ -321,11 +317,6 @@ export function detachWorkspaceSessionMirror(api, tabId, removeInfo = {}, option
     await storage.remove(bindingKey);
     return { detached: Boolean(stable), workspaceId: binding.workspaceId, legacy: false };
   });
-}
-
-// Backward-compatible name for callers from the first workspace-memory build.
-export function removeWorkspaceSessionMirror(api, tabId, removeInfo = {}, options = {}) {
-  return detachWorkspaceSessionMirror(api, tabId, removeInfo, options);
 }
 
 export function prepareWorkspaceSessionLifecycle(api, options = {}) {
@@ -450,10 +441,7 @@ export function prepareWorkspaceSessionLifecycle(api, options = {}) {
       lifecycleRestart,
       forced: forceRecovery,
       generation,
-      runtimeId: marker.runtimeId,
-      recovery,
-      detachedTabIds: [...bindings.keys()].filter((tabId) => !live.tabIds.has(tabId)),
-      removedKeys: removableKeys
+      recovery
     };
   });
 }

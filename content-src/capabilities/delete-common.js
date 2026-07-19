@@ -434,27 +434,6 @@ export function createDeleteCommonCapability(deps = {}) {
     });
   }
 
-  function trustedHoverRightEdge(element, site = "topic-delete", reason = "topic menu trigger requires trusted hover") {
-    const box = modelRect(element);
-    if (!element || !box) return null;
-    return {
-      kind: "topic-menu-hover",
-      site,
-      reason: String(reason || ""),
-      framePoint: {
-        x: Math.round(Math.max(box.left + 8, box.right - 24) * 100) / 100,
-        y: Math.round((box.top + box.height / 2) * 100) / 100
-      },
-      frameRect: serializableDeleteRect(box),
-      hoverSettleMs: 520
-    };
-  }
-
-  function deleteResultWithTrustedHover(site, reason, element) {
-    const trustedHover = trustedHoverRightEdge(element, site, reason);
-    return deleteResult(false, site, reason, trustedHover ? { needsTrustedHover: true, trustedHover } : {});
-  }
-
   function trustedMenuClickPoint(site = "topic-delete", reason = "topic menu trigger requires trusted browser input", point = {}, frameRect = null) {
     const x = Number(point.x ?? point.clientX);
     const y = Number(point.y ?? point.clientY);
@@ -500,7 +479,7 @@ export function createDeleteCommonCapability(deps = {}) {
     };
   }
 
-  function deleteConfirmDialogClosed(root, button) {
+  function deleteConfirmDialogClosed() {
     return !findDeleteConfirmButton() && !deleteDialogRoots().length;
   }
 
@@ -577,24 +556,22 @@ export function createDeleteCommonCapability(deps = {}) {
 
   async function clickDeleteConfirmIfPresent(timeoutMs = 4200, guard = null) {
     const deadline = Date.now() + Math.max(0, Number(timeoutMs) || 0);
-    let clickedRoot = null;
     let clickedButton = null;
     let clickedAt = 0;
     while (Date.now() <= deadline) {
-      if (clickedButton && deleteConfirmDialogClosed(clickedRoot, clickedButton)) return true;
+      if (clickedButton && deleteConfirmDialogClosed()) return true;
       const info = findDeleteConfirmButtonInfo();
       const button = info?.element || null;
       if (button && typeof guard === "function" && guard() !== true) return false;
       if (button && (button !== clickedButton || Date.now() - clickedAt > 900) && clickDeleteConfirmButton(button, info.root || null)) {
-        clickedRoot = info.root || null;
         clickedButton = button;
         clickedAt = Date.now();
         await sleep(220);
-        if (deleteConfirmDialogClosed(clickedRoot, clickedButton)) return true;
+        if (deleteConfirmDialogClosed()) return true;
       }
       await sleep(120);
     }
-    if (clickedButton && deleteConfirmDialogClosed(clickedRoot, clickedButton)) return true;
+    if (clickedButton && deleteConfirmDialogClosed()) return true;
     return false;
   }
 
@@ -609,15 +586,6 @@ export function createDeleteCommonCapability(deps = {}) {
     }
     return { appeared: false, confirmed: false };
   }
-
-  async function confirmKagiDeleteAfterMenuClick() {
-    const result = await clickDeleteConfirmIfAppears(2600, 3200);
-    if (result.confirmed) return true;
-    if (result.appeared) return !deleteDialogRoots().length;
-    return false;
-  }
-
-  let suppressShortcutBridgeUntil = 0;
 
   function dispatchDeleteKeyboardShortcut() {
     const mac = /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || "");
@@ -635,7 +603,6 @@ export function createDeleteCommonCapability(deps = {}) {
       altKey: false
     };
     const targets = [document.activeElement, document.body, document.documentElement, document, window].filter(Boolean);
-    suppressShortcutBridgeUntil = Date.now() + 500;
     let dispatched = false;
     const seen = new Set();
     for (const target of targets) {
@@ -654,7 +621,6 @@ export function createDeleteCommonCapability(deps = {}) {
   }
   return Object.freeze({
     deleteResult,
-    deleteTextToken,
     deleteCompactToken,
     deleteElementText,
     svgSignature,
@@ -665,24 +631,19 @@ export function createDeleteCommonCapability(deps = {}) {
     deleteClickableElement,
     deleteClick,
     deleteActivateUntil,
-    findDeleteConfirmButtonInfo,
     findDeleteConfirmButton,
     deleteResultWithTrustedConfirm,
     deleteResultWithTrustedDeleteShortcut,
-    deleteResultWithTrustedHover,
     deleteResultWithTrustedMenuClick,
     topicDeleteConfirmState,
     clickDeleteConfirmIfPresent,
     clickDeleteConfirmIfAppears,
-    confirmKagiDeleteAfterMenuClick,
     dispatchDeleteKeyboardShortcut,
     DELETE_CANCEL_LABELS,
     deleteDialogRoots,
-    clickDeleteConfirmButton,
     deleteClickLayout,
     serializableDeleteRect,
     trustedMenuClickForElement,
-    trustedMenuClickPoint,
-    trustedHoverRightEdge
+    trustedMenuClickPoint
   });
 }

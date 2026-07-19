@@ -1,6 +1,6 @@
 // Built-in Summary userscript: DeepSeek (deepseek)
 // Source: Mod/assets/chunk-7dbf4e81.js :: SUMMARY_SITE_CONFIG_DEFAULTS
-// Config version: 60; global config version: 60
+// Config version: 62; global config version: 60
 // Hosts: deepseek.com, *.deepseek.com
 // Path prefixes: (none)
 // Run mode: pageWorldFirst; timeout: 36000

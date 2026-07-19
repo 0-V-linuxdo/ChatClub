@@ -2,75 +2,60 @@
 // and are fetched on demand by loadBuiltInSummarySource().
 export const SUMMARY_SITE_CONFIGS = Object.freeze([
   {
-    id: "chatgpt", name: "ChatGPT", enabled: true, builtIn: true, configVersion: 52,
-    hosts: ["chatgpt.com", "*.chatgpt.com", "chat.openai.com", "*.chat.openai.com"], pathPrefixes: [],
-    fallbackMode: "structuredOnly", domTextFallback: false, domTextFallbackRoles: [],
-    messageTextSelector: "", userTextSelector: "", assistantTextSelector: "",
-    userscriptRunMode: "pageWorldFirst", userscriptTimeoutMs: 24000,
+    id: "chatgpt", name: "ChatGPT", configVersion: 54,
+    hosts: ["chatgpt.com", "*.chatgpt.com", "chat.openai.com", "*.chat.openai.com"],
+    userscriptRunMode: "pageWorldFirst",
     userscriptFile: "chatgpt.js", userscriptLength: 3193
   },
   {
-    id: "claude", name: "Claude", enabled: true, builtIn: true, configVersion: 37,
+    id: "claude", name: "Claude", configVersion: 38,
     hosts: ["claude.ai", "*.claude.ai"], pathPrefixes: ["/chat", "/new"],
-    fallbackMode: "structuredOnly", userscriptFile: "claude.js", userscriptLength: 17802
+    userscriptFile: "claude.js", userscriptLength: 17802
   },
   {
-    id: "gemini", name: "Gemini", enabled: true, builtIn: true, configVersion: 32,
-    hosts: ["gemini.google.com", "*.gemini.google.com"], pathPrefixes: [], fallbackMode: "structuredOnly",
-    domTextFallback: false, domTextFallbackRoles: [], messageTextSelector: "", userTextSelector: "",
-    assistantTextSelector: "", userscriptTimeoutMs: 20000, copyTimeoutMs: 1400,
+    id: "gemini", name: "Gemini", configVersion: 34,
+    hosts: ["gemini.google.com", "*.gemini.google.com"],
+    userscriptTimeoutMs: 20000, copyTimeoutMs: 1400,
     userscriptFile: "gemini.js", userscriptLength: 9017
   },
   {
-    id: "deepseek", name: "DeepSeek", enabled: true, builtIn: true, configVersion: 60,
-    hosts: ["deepseek.com", "*.deepseek.com"], pathPrefixes: [], fallbackMode: "structuredOnly",
-    userscriptRunMode: "pageWorldFirst", userscriptTimeoutMs: 36000, domTextFallback: false,
-    domTextFallbackRoles: [], messageTextSelector: "", userTextSelector: "", assistantTextSelector: "",
+    id: "deepseek", name: "DeepSeek", configVersion: 62,
+    hosts: ["deepseek.com", "*.deepseek.com"],
+    userscriptRunMode: "pageWorldFirst", userscriptTimeoutMs: 36000,
     copyTimeoutMs: 3600, userscriptFallbackDelayMs: 1000,
     userscriptFile: "deepseek.js", userscriptLength: 23179
   },
   {
-    id: "grok", name: "Grok", enabled: true, builtIn: true, configVersion: 62,
-    hosts: ["grok.com", "*.grok.com", "grok.x.ai", "*.grok.x.ai"], pathPrefixes: [],
-    fallbackMode: "structuredOnly", userscriptRunMode: "pageWorldFirst", userscriptTimeoutMs: 36000,
-    domTextFallback: false, domTextFallbackRoles: [], messageTextSelector: "", userTextSelector: "",
-    assistantTextSelector: "", copyTimeoutMs: 3600, userscriptFallbackDelayMs: 1000,
+    id: "grok", name: "Grok", configVersion: 64,
+    hosts: ["grok.com", "*.grok.com", "grok.x.ai", "*.grok.x.ai"],
+    userscriptRunMode: "pageWorldFirst", userscriptTimeoutMs: 36000,
+    copyTimeoutMs: 3600, userscriptFallbackDelayMs: 1000,
     userscriptFile: "grok.js", userscriptLength: 13420
   },
   {
-    id: "grok-dairoot", name: "Grok Mirror", enabled: true, builtIn: true, configVersion: 68,
-    hosts: ["gk.dairoot.cn", "*.gk.dairoot.cn"], pathPrefixes: [], fallbackMode: "structuredOnly",
+    id: "grok-dairoot", name: "Grok Mirror", configVersion: 70,
+    hosts: ["gk.dairoot.cn", "*.gk.dairoot.cn"],
     userscriptFile: "grok-dairoot.js", userscriptLength: 13420, userscriptRunMode: "pageWorldFirst",
-    userscriptTimeoutMs: 36000, domTextFallback: false, domTextFallbackRoles: [], messageTextSelector: "",
-    userTextSelector: "", assistantTextSelector: "", copyTimeoutMs: 3600, userscriptFallbackDelayMs: 1000
+    userscriptTimeoutMs: 36000, copyTimeoutMs: 3600, userscriptFallbackDelayMs: 1000
   },
   {
-    id: "kagi", name: "Kagi Assistant", enabled: true, builtIn: true, configVersion: 63,
-    hosts: ["assistant.kagi.com"], pathPrefixes: [], fallbackMode: "structuredOnly",
-    userscriptRunMode: "serial", userscriptTimeoutMs: 32000, domTextFallback: false,
-    domTextFallbackRoles: [], messageTextSelector: "", userTextSelector: "", assistantTextSelector: "",
-    copyTimeoutMs: 3600, userscriptFile: "kagi.js", userscriptLength: 4231
+    id: "kagi", name: "Kagi Assistant", configVersion: 65,
+    hosts: ["assistant.kagi.com"], userscriptTimeoutMs: 32000, copyTimeoutMs: 3600,
+    userscriptFile: "kagi.js", userscriptLength: 4231
   },
   {
-    id: "notion", name: "Notion", enabled: true, builtIn: true, configVersion: 62,
+    id: "notion", name: "Notion", configVersion: 64,
     hosts: ["app.notion.com", "notion.so", "www.notion.so", "*.notion.so"], pathPrefixes: ["/chat", "/ai"],
-    fallbackMode: "structuredOnly", domTextFallback: false, domTextFallbackRoles: [], messageTextSelector: "",
-    userTextSelector: "", assistantTextSelector: "", userscriptFile: "notion.js", userscriptLength: 6091
+    userscriptFile: "notion.js", userscriptLength: 6091
   },
   {
-    id: "lobehub", name: "LobeHub", enabled: true, builtIn: true, configVersion: 46,
-    hosts: ["app.lobehub.com", "*.lobehub.com"], pathPrefixes: ["/"], fallbackMode: "structuredOnly",
-    domTextFallback: false, domTextFallbackRoles: [], messageTextSelector: "", userTextSelector: "",
-    assistantTextSelector: "", userscriptTimeoutMs: 36000, userscriptRunMode: "serial",
+    id: "lobehub", name: "LobeHub", configVersion: 48,
+    hosts: ["app.lobehub.com", "*.lobehub.com"], pathPrefixes: ["/"], userscriptTimeoutMs: 36000,
     userscriptFile: "lobehub.js", userscriptLength: 14030
   },
   {
-    id: "typingmind", name: "TypingMind", enabled: true, builtIn: true, configVersion: 45,
-    hosts: ["setapp.typingcloud.com", "*.typingcloud.com"], pathPrefixes: [], fallbackMode: "structuredOnly",
-    userscriptTimeoutMs: 24000, userscriptRunMode: "serial", messageSelector: "", scopeSelector: "",
-    userRolePattern: "", assistantRolePattern: "", copyButtonSelector: "", copyButtonPattern: "",
-    copyMenuButtonSelector: "", copyMenuItemPattern: "", domTextFallback: false, domTextFallbackRoles: [],
-    messageTextSelector: "", userTextSelector: "", assistantTextSelector: "",
+    id: "typingmind", name: "TypingMind", configVersion: 47,
+    hosts: ["setapp.typingcloud.com", "*.typingcloud.com"],
     userscriptFile: "typingmind.js", userscriptLength: 3232
   }
 ].map(Object.freeze));

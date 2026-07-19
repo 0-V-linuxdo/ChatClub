@@ -13,51 +13,7 @@ export function createDeleteRuntimeCapability(deps = {}) {
     deleteGrokThread,
     deleteNotionThread,
     deleteDeepSeekThread,
-    sleep,
-    waitForModel,
     normalize,
-    text,
-    qsa,
-    qs,
-    closest,
-    visible,
-    reveal,
-    buttonText,
-    modelElementText,
-    modelRect,
-    modelCenterPoint,
-    modelElementFromPoint,
-    modelClick,
-    modelDirectClick,
-    nativeModelClick,
-    dispatchPointerActivation,
-    isDisabledElement,
-    activateElement,
-    deleteElementText,
-    deleteTextToken,
-    deleteLabelMatches,
-    deleteLabelMatchesExactish,
-    visibleDeleteCandidates,
-    layoutDeleteCandidates,
-    deleteClickableElement,
-    deleteClick,
-    deleteClickLayout,
-    deleteDialogRoots,
-    findDeleteConfirmButton,
-    clickDeleteConfirmIfPresent,
-    clickDeleteConfirmButton,
-    dispatchDeleteKeyboardShortcut,
-    menuRootsWithDelete,
-    findDeleteMenuItem,
-    openTriggerAndClickDelete,
-    topRightMenuTrigger,
-    findNotionDeleteMenuTrigger,
-    requestDeepSeekDeleteBridge,
-    ensureDeepSeekSidebarOpen,
-    deepSeekSidebarRoot,
-    deepSeekDeleteHints,
-    findDeepSeekCurrentTopicRow,
-    deepSeekTopicMoreButton,
     normalizeDeleteFrameHref,
     deleteConversationIdentityFromHref,
     sameDeleteConversationIdentity,
@@ -99,7 +55,6 @@ export function createDeleteRuntimeCapability(deps = {}) {
     };
   }
 
-  const TOPIC_DELETE_REQUEST_EVENT = PROTOCOL.TOPIC_DELETE_REQUEST_EVENT;
   const TOPIC_DELETE_MENU_COMMAND_EVENT = PROTOCOL.TOPIC_DELETE_MENU_COMMAND_EVENT;
   const TOPIC_DELETE_RESULT_EVENT = PROTOCOL.TOPIC_DELETE_RESULT_EVENT;
   const TOPIC_DELETE_PING_EVENT = PROTOCOL.TOPIC_DELETE_PING_EVENT;
@@ -372,7 +327,7 @@ export function createDeleteRuntimeCapability(deps = {}) {
     return async () => {
       if (siteId === "chatgpt") return deleteChatGptThread(payload);
       if (siteId === "gemini") return deleteGeminiThread(payload);
-      if (siteId === "kagi") return deleteKagiThread(payload);
+      if (siteId === "kagi") return deleteKagiThread();
       if (siteId === "grokMirror") {
         const result = await deleteGrokThread(payload);
         return { ...result, site: "grokMirror" };
@@ -382,72 +337,6 @@ export function createDeleteRuntimeCapability(deps = {}) {
       if (siteId === "deepseek") return deleteDeepSeekThread(payload);
       return deleteResult(false, siteId || "topic-delete", "unsupported site");
     };
-  }
-
-  function createTopicDeleteApi(config = {}, payload = {}) {
-    const api = {
-      config,
-      data: payload,
-      window,
-      document,
-      location,
-      result: deleteResult,
-      deleteResult,
-      sleep,
-      waitFor: waitForModel,
-      waitForModel,
-      normalize,
-      text,
-      qsa,
-      qs,
-      closest,
-      visible,
-      reveal,
-      buttonText,
-      modelElementText,
-      modelRect,
-      modelCenterPoint,
-      modelElementFromPoint,
-      modelClick,
-      modelDirectClick,
-      nativeModelClick,
-      dispatchPointerActivation,
-      isDisabledElement,
-      activateElement,
-      deleteElementText,
-      deleteTextToken,
-      deleteCompactToken,
-      deleteLabelMatches,
-      deleteLabelMatchesExactish,
-      visibleDeleteCandidates,
-      layoutDeleteCandidates,
-      deleteClickableElement,
-      deleteClick,
-      deleteClickLayout,
-      deleteDialogRoots,
-      findDeleteConfirmButton,
-      clickDeleteConfirmIfPresent,
-      clickDeleteConfirmButton,
-      dispatchDeleteKeyboardShortcut,
-      menuRootsWithDelete,
-      findDeleteMenuItem,
-      openTriggerAndClickDelete,
-      topRightMenuTrigger,
-      findNotionDeleteMenuTrigger,
-      requestDeepSeekDeleteBridge,
-      ensureDeepSeekSidebarOpen,
-      deepSeekSidebarRoot,
-      deepSeekDeleteHints,
-      findDeepSeekCurrentTopicRow,
-      deepSeekTopicMoreButton,
-      deleteChatGptThread,
-      deleteGeminiThread,
-      deleteKagiThread,
-      deleteGrokThread,
-      deleteNotionThread,
-      deleteDeepSeekThread
-    };
-    return Object.freeze(api);
   }
 
   function normalizeTopicDeleteUserscriptResult(value, config = {}, payload = {}) {

@@ -1,6 +1,6 @@
 // Built-in Summary userscript: LobeHub (lobehub)
 // Source: Mod/assets/chunk-7dbf4e81.js :: SUMMARY_SITE_CONFIG_DEFAULTS
-// Config version: 46; global config version: 60
+// Config version: 48; global config version: 60
 // Hosts: app.lobehub.com, *.lobehub.com
 // Path prefixes: /
 // Run mode: serial; timeout: 36000

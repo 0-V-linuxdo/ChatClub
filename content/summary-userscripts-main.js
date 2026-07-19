@@ -74,12 +74,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "42d1e137fe2015d43fe6732ef431f641cc51d65ec7986e095d9a243339d4e9c2";
-  var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.cd06beed22e9f6fcab8057bd949a3c0c68974967bda920471fc1d62f06999029";
-  var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "cd06beed22e9f6fcab8057bd949a3c0c68974967bda920471fc1d62f06999029";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "ebe2ed4ec1fc3680d7cd904b38a423d86055d3ce43ef5f1d0cb0f96f6d83fd83";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.ebe2ed4ec1fc3680d7cd904b38a423d86055d3ce43ef5f1d0cb0f96f6d83fd83";
-  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "12ac7c360b98ebc28bd00c1ab5d46d33a7329fb503e27b5994744ee2cc639968", "implementationSha256": "32e94a5fc5e6045d632c923e7f24256fe385a8a9e90a2ea12b598b7a415b7258", "implementationVersion": "2026.07.16.2+bundle.32e94a5fc5e6045d632c923e7f24256fe385a8a9e90a2ea12b598b7a415b7258" });
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "56ae70c075c19ca583d76133e0edc0d694fecc58c3112f9e246a5812e8650b8f";
+  var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.39e7dff3b817dd590d108ce155af13e47b28138e33c477502664105276787094";
+  var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "39e7dff3b817dd590d108ce155af13e47b28138e33c477502664105276787094";
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "330f3a3515c38cb4bb3d34cf09d63dcb258c91cd538e9214385bdfb2d1ea9799";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.330f3a3515c38cb4bb3d34cf09d63dcb258c91cd538e9214385bdfb2d1ea9799";
+  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "9265e8b1d9b5013ee196311892dbcfcf27fc51f5898960e83eb4dca1bc35c298", "implementationSha256": "db05e5082b072843831926d512de81baa439996bfa5b1f5f1f9105f2db2f461d", "implementationVersion": "2026.07.16.2+bundle.db05e5082b072843831926d512de81baa439996bfa5b1f5f1f9105f2db2f461d" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -2436,7 +2436,7 @@
       return api.merge(out);
     };
     scripts["typingmind.js"] = scripts["typingmind"];
-    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.ebe2ed4ec1fc3680d7cd904b38a423d86055d3ce43ef5f1d0cb0f96f6d83fd83" });
+    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.330f3a3515c38cb4bb3d34cf09d63dcb258c91cd538e9214385bdfb2d1ea9799" });
     return scripts;
   }
 
@@ -2446,62 +2446,26 @@
     activateElement: () => activateElement,
     buttonText: () => buttonText,
     classText: () => classText,
-    cleanCaptured: () => cleanCaptured,
     closest: () => closest,
     compareText: () => compareText,
-    conversationCopyButtons: () => conversationCopyButtons,
     copy: () => copy,
-    copyBridgeRequest: () => copyBridgeRequest,
-    copyButtonRole: () => copyButtonRole,
     copyFirst: () => copyFirst,
-    copyId: () => copyId,
-    copyLooksUseful: () => copyLooksUseful,
-    copyMatches: () => copyMatches,
-    elementOrder: () => elementOrder,
     extractCopySequence: () => extractCopySequence,
-    extractHoverNativeCopyConversation: () => extractHoverNativeCopyConversation,
     extractNativeCopyConversation: () => extractNativeCopyConversation,
     extractTurns: () => extractTurns,
-    fallbackRole: () => fallbackRole,
     hasUserAndAssistant: () => hasUserAndAssistant,
-    hoverCopyAddAnchor: () => hoverCopyAddAnchor,
-    hoverCopyAnchorRole: () => hoverCopyAnchorRole,
-    hoverCopyBadButton: () => hoverCopyBadButton,
-    hoverCopyCandidateButtons: () => hoverCopyCandidateButtons,
-    hoverCopyMessageAnchors: () => hoverCopyMessageAnchors,
-    hoverCopyRect: () => hoverCopyRect,
-    hoverCopySmallIconButton: () => hoverCopySmallIconButton,
-    internalCopyScope: () => internalCopyScope,
-    internalTool: () => internalTool,
-    isCopyProbeText: () => isCopyProbeText,
-    isNativeCopyButton: () => isNativeCopyButton,
     matches: () => matches,
     merge: () => merge,
-    nativeCopyDedup: () => nativeCopyDedup,
-    nodeTextForCopy: () => nodeTextForCopy,
     normalize: () => normalize,
-    pageLogoUrl: () => pageLogoUrl,
     pageMeta: () => pageMeta,
     pageSummaryRequest: () => pageSummaryRequest,
     pageSummaryRuntimeState: () => pageSummaryRuntimeState,
-    pushMessage: () => pushMessage,
     qs: () => qs,
     qsa: () => qsa,
     reveal: () => reveal,
     sleep: () => sleep,
-    svgSignature: () => svgSignature,
     text: () => text,
-    toRegex: () => toRegex,
-    userscriptButtonOk: () => userscriptButtonOk,
-    userscriptCloseMenus: () => userscriptCloseMenus,
-    userscriptCopyAccepted: () => userscriptCopyAccepted,
-    userscriptCopyRoots: () => userscriptCopyRoots,
     userscriptFindCopyButtons: () => userscriptFindCopyButtons,
-    userscriptFindMenuButtons: () => userscriptFindMenuButtons,
-    userscriptLooksLikeCopyIcon: () => userscriptLooksLikeCopyIcon,
-    userscriptMeta: () => userscriptMeta,
-    userscriptOpenCopyButtons: () => userscriptOpenCopyButtons,
-    userscriptRole: () => userscriptRole,
     visible: () => visible
   });
   var COPY_SOURCE = NATIVE_COPY_SOURCE;
@@ -2780,7 +2744,7 @@ ${value}`);
     if (expectedText.includes(copiedText) && copiedText.length >= Math.min(expectedText.length * 0.75, 240)) return true;
     return false;
   }
-  function userscriptCopyAccepted(copied, expected, role, options = {}) {
+  function userscriptCopyAccepted(copied, expected, options = {}) {
     const value = cleanCaptured(copied);
     if (!copyLooksUseful(value)) return "";
     const exclude = toRegex(options.copyTextExcludePattern);
@@ -2825,10 +2789,10 @@ ${value}`);
         resolve(result);
       };
       const ackTimer = setTimeout(() => {
-        if (!acked) finish({ ok: false, missing: true, messages: [], error: "Summary page-world runtime did not acknowledge the request." });
+        if (!acked) finish({ messages: [] });
       }, ackTimeoutMs);
       const totalTimer = setTimeout(() => {
-        finish({ ok: false, timeout: true, messages: [], error: "Summary page-world runtime timed out." });
+        finish({ messages: [] });
       }, totalTimeoutMs);
       const onMessage = (event) => {
         const message = event.data;
@@ -2841,11 +2805,8 @@ ${value}`);
         if (message.type !== "response") return;
         const data = message.data || {};
         finish({
-          ok: Boolean(message.ok),
-          messages: Array.isArray(message.messages) ? message.messages : Array.isArray(data.messages) ? data.messages : [],
-          rawMessageCount: data.rawMessageCount,
-          hasUserAndAssistant: data.hasUserAndAssistant,
-          error: message.error || data.error || ""
+          messages: Array.isArray(data.messages) ? data.messages : [],
+          rawMessageCount: data.rawMessageCount
         });
       };
       window.addEventListener("message", onMessage, true);
@@ -2970,7 +2931,7 @@ ${value}`);
     const details = params || {};
     const options = details.options || details;
     for (const button of (buttons || []).slice(0, 12)) {
-      const value = userscriptCopyAccepted(await copy(button, options), details.expected, details.role, options);
+      const value = userscriptCopyAccepted(await copy(button, options), details.expected, options);
       if (value) return value;
     }
     if (details.scope && options.copyMenu !== false) {
@@ -3078,7 +3039,7 @@ ${value}`);
     const accept = async (button, roleHint) => {
       const role = roleHint || userscriptRole(button, options) || fallbackRole(roleIndex, options);
       if (role !== "user" && role !== "assistant") return false;
-      const value = userscriptCopyAccepted(await copy(button, options), "", role, { ...options, matchMode: "anyUseful" });
+      const value = userscriptCopyAccepted(await copy(button, options), "", { ...options, matchMode: "anyUseful" });
       if (!value) return false;
       pushMessage(out, role, value, seen);
       roleIndex += 1;
@@ -3296,7 +3257,7 @@ ${value}`);
       await sleep(180);
       for (const button of hoverCopyCandidateButtons(anchor, options).slice(0, 14)) {
         const copied = await copy(button, options);
-        const value = userscriptCopyAccepted(copied, expected, role, options);
+        const value = userscriptCopyAccepted(copied, expected, options);
         if (value) {
           pushMessage(out, role, value, seen);
           roleIndex += 1;
@@ -3449,8 +3410,7 @@ ${value}`);
       const messages = merge2(boundedSummaryRunnerMessages(Array.isArray(result) ? result : result?.messages || [])).slice(0, SUMMARY_RESULT_MAX_TURNS);
       return {
         messages: hasUserAndAssistant2(messages) ? messages : [],
-        rawMessageCount: messages.length,
-        hasUserAndAssistant: hasUserAndAssistant2(messages)
+        rawMessageCount: messages.length
       };
     }
     const customSummaryExecutor = (config, runner) => runSummaryRunner(config || {}, runner);
@@ -3476,11 +3436,9 @@ ${value}`);
             type: "response",
             action: "runtimeState",
             id: message.id,
-            ok: true,
             data: {
               ready,
               bridgeVersion: PROTOCOL.CONTENT_BRIDGE_VERSION,
-              registryVersion,
               runtimeIdentity: CONTENT_RUNTIME_IDENTITY2
             }
           }, "*");
@@ -3490,9 +3448,9 @@ ${value}`);
         window.postMessage({ source: PAGE_SUMMARY_SOURCE2, type: "ack", action: "extract", id: message.id }, "*");
         try {
           const data = await collectSummary(message.data || {});
-          window.postMessage({ source: PAGE_SUMMARY_SOURCE2, type: "response", action: "extract", id: message.id, ok: true, data, messages: data?.messages || [] }, "*");
-        } catch (error) {
-          window.postMessage({ source: PAGE_SUMMARY_SOURCE2, type: "response", action: "extract", id: message.id, ok: false, error: error?.message || String(error), data: { messages: [] }, messages: [] }, "*");
+          window.postMessage({ source: PAGE_SUMMARY_SOURCE2, type: "response", action: "extract", id: message.id, data }, "*");
+        } catch {
+          window.postMessage({ source: PAGE_SUMMARY_SOURCE2, type: "response", action: "extract", id: message.id, data: { messages: [] } }, "*");
         }
       };
       runtimes.register("summary-page", {

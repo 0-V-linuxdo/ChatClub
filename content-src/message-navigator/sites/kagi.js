@@ -1,10 +1,7 @@
 import {
   cleanLine,
   compactText,
-  elementOrder,
-  inChromeScope,
   metaText,
-  normalize,
   pageRoot,
   rawText,
   referenceOnlyText,

@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "42d1e137fe2015d43fe6732ef431f641cc51d65ec7986e095d9a243339d4e9c2";
-  var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.cd06beed22e9f6fcab8057bd949a3c0c68974967bda920471fc1d62f06999029";
-  var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "cd06beed22e9f6fcab8057bd949a3c0c68974967bda920471fc1d62f06999029";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "ebe2ed4ec1fc3680d7cd904b38a423d86055d3ce43ef5f1d0cb0f96f6d83fd83";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.ebe2ed4ec1fc3680d7cd904b38a423d86055d3ce43ef5f1d0cb0f96f6d83fd83";
-  var CONTENT_RUNTIME_DELETE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/delete.js", "entryPath": "content-src/content-delete.js", "sourceSha256": "e4fee0f9c2d4c7fc6ca4611472717009e6ae412c5bf497b5f6a31e816a53cf36", "implementationSha256": "8886fc270c90608935f0d4764912583643f32ef3dd33c90820561e881cd26c90", "implementationVersion": "2026.07.16.2+bundle.8886fc270c90608935f0d4764912583643f32ef3dd33c90820561e881cd26c90" });
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "56ae70c075c19ca583d76133e0edc0d694fecc58c3112f9e246a5812e8650b8f";
+  var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.39e7dff3b817dd590d108ce155af13e47b28138e33c477502664105276787094";
+  var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "39e7dff3b817dd590d108ce155af13e47b28138e33c477502664105276787094";
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "330f3a3515c38cb4bb3d34cf09d63dcb258c91cd538e9214385bdfb2d1ea9799";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.330f3a3515c38cb4bb3d34cf09d63dcb258c91cd538e9214385bdfb2d1ea9799";
+  var CONTENT_RUNTIME_DELETE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/delete.js", "entryPath": "content-src/content-delete.js", "sourceSha256": "d3bfc33405c1c5b38be3a425ea4579693c6969586ebb44231ec0f70039fdb299", "implementationSha256": "705bdb95be98af80824971a4c5cec5cbe78160abe3461c7be6cfce85484eaeaa", "implementationVersion": "2026.07.16.2+bundle.705bdb95be98af80824971a4c5cec5cbe78160abe3461c7be6cfce85484eaeaa" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -488,24 +488,12 @@
       return [];
     }
   }
-  function qs(selector, root = document) {
-    try {
-      return root.querySelector(selector);
-    } catch {
-      return null;
-    }
-  }
   function closest(el, selector) {
     try {
       return el?.closest?.(selector) || null;
     } catch {
       return null;
     }
-  }
-  function text(el) {
-    if (!el) return "";
-    if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return el.value || "";
-    return el.innerText || el.textContent || "";
   }
   function reveal(el) {
     if (!el) return;
@@ -659,28 +647,48 @@
     "delete",
     "message-navigator"
   ]);
+  function contentBundle(options) {
+    return Object.freeze({
+      world: "ISOLATED",
+      runAt: "document_idle",
+      ...options,
+      ...options.hosts ? { hosts: Object.freeze([...options.hosts]) } : {}
+    });
+  }
+  var CONTENT_BUNDLES = Object.freeze({
+    preload: contentBundle({ id: "chatclub-preload", file: "content/preload.js", world: "MAIN", runAt: "document_start" }),
+    grokCookie: contentBundle({
+      id: "chatclub-grok-cookie-bridge",
+      file: "content/grok-cookie-bridge.js",
+      hosts: ["grok.com"],
+      runAt: "document_start"
+    }),
+    content: contentBundle({ id: "chatclub-content", file: "content/content.js" }),
+    summaryMain: contentBundle({ id: "chatclub-summary-userscripts-main", file: "content/summary-userscripts-main.js", world: "MAIN" }),
+    summaryIsolated: contentBundle({ id: "chatclub-summary-userscripts", file: "content/summary-userscripts.js" }),
+    summaryBridge: contentBundle({ id: "chatclub-summary-bridge", file: "content/summary-bridge.js" }),
+    send: contentBundle({ id: "chatclub-send", file: "content/send.js" }),
+    preferredModel: contentBundle({ id: "chatclub-preferred-model", file: "content/preferred-model.js" }),
+    delete: contentBundle({ id: "chatclub-delete", file: "content/delete.js" }),
+    messageNavigator: contentBundle({ id: "chatclub-message-navigator", file: "content/message-navigator.js" })
+  });
   var CONTENT_CAPABILITY_BUNDLES = Object.freeze({
     base: Object.freeze([
-      Object.freeze({ file: "content/preload.js", world: "MAIN" }),
-      Object.freeze({ file: "content/content.js", world: "ISOLATED" })
+      CONTENT_BUNDLES.preload,
+      CONTENT_BUNDLES.content
     ]),
-    send: Object.freeze([Object.freeze({ file: "content/send.js", world: "ISOLATED" })]),
+    send: Object.freeze([CONTENT_BUNDLES.send]),
     summary: Object.freeze([
-      Object.freeze({ file: "content/summary-userscripts-main.js", world: "MAIN" }),
-      Object.freeze({ file: "content/summary-userscripts.js", world: "ISOLATED" }),
-      Object.freeze({ file: "content/summary-bridge.js", world: "ISOLATED" })
+      CONTENT_BUNDLES.summaryMain,
+      CONTENT_BUNDLES.summaryIsolated,
+      CONTENT_BUNDLES.summaryBridge
     ]),
-    "preferred-model": Object.freeze([Object.freeze({ file: "content/preferred-model.js", world: "ISOLATED" })]),
-    delete: Object.freeze([Object.freeze({ file: "content/delete.js", world: "ISOLATED" })]),
-    "message-navigator": Object.freeze([Object.freeze({ file: "content/message-navigator.js", world: "ISOLATED" })])
+    "preferred-model": Object.freeze([CONTENT_BUNDLES.preferredModel]),
+    delete: Object.freeze([CONTENT_BUNDLES.delete]),
+    "message-navigator": Object.freeze([CONTENT_BUNDLES.messageNavigator])
   });
   var CONTENT_ANCILLARY_BUNDLES = Object.freeze({
-    "grok-cookie": Object.freeze({
-      file: "content/grok-cookie-bridge.js",
-      world: "ISOLATED",
-      hosts: Object.freeze(["grok.com"]),
-      runAt: "document_start"
-    })
+    "grok-cookie": CONTENT_BUNDLES.grokCookie
   });
   var FRAME_COMMAND_SPECS = Object.freeze({
     getLocationHref: command({ timeoutMs: 1200, capability: "base" }),
@@ -812,9 +820,6 @@
       visible: visible2,
       normalize: normalize2,
       closest: closest2,
-      DELETE_CLICKABLE_SELECTOR,
-      assertPreferredModelRun,
-      armPreferredModelFocusShield,
       activateElement: activateElement2
     } = deps;
     function visibleSelectorElements(selectors, root = document) {
@@ -849,23 +854,6 @@
         el.innerText || el.textContent || "",
         el.value
       ].filter(Boolean).join(" "));
-    }
-    function compactModelText(value) {
-      return normalize2(value).toLowerCase().replace(/\s+/g, " ");
-    }
-    function alnumModelToken(value) {
-      return String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
-    }
-    function modelTextIncludes(value, needle) {
-      const haystack = compactModelText(value);
-      const target = compactModelText(needle);
-      return Boolean(target && (haystack === target || haystack.includes(target)));
-    }
-    function parseBooleanAttr(value) {
-      const token = String(value ?? "").trim().toLowerCase();
-      if (token === "true") return true;
-      if (token === "false") return false;
-      return null;
     }
     function modelEventView(el = null) {
       try {
@@ -905,22 +893,6 @@
     function modelElementArea(el) {
       const rect = modelRect(el);
       return rect ? rect.width * rect.height : Number.MAX_SAFE_INTEGER;
-    }
-    function modelRectInViewport(rect, margin = 0) {
-      if (!rect || rect.width <= 0 || rect.height <= 0) return false;
-      const viewportWidth = Math.max(1, Number(window.innerWidth) || Number(document.documentElement?.clientWidth) || 1);
-      const viewportHeight = Math.max(1, Number(window.innerHeight) || Number(document.documentElement?.clientHeight) || 1);
-      return rect.bottom > margin && rect.right > margin && rect.top < viewportHeight - margin && rect.left < viewportWidth - margin;
-    }
-    function visibleInViewport(el, { hitTest = false } = {}) {
-      if (!visible2(el)) return false;
-      const rect = modelRect(el);
-      if (!modelRectInViewport(rect)) return false;
-      if (!hitTest) return true;
-      const point = modelCenterPoint(el);
-      const target = modelElementFromPoint(point, el);
-      if (!target) return false;
-      return target === el || el.contains?.(target) || target.contains?.(el) || closest2(target, DELETE_CLICKABLE_SELECTOR) === el;
     }
     function modelCenterPoint(el) {
       const rect = modelRect(el);
@@ -1018,26 +990,6 @@
         return false;
       }
     }
-    function preferredModelActivate(context, target) {
-      assertPreferredModelRun(context);
-      if (!target || !visible2(target) || isDisabledElement(target) || typeof target.click !== "function") return false;
-      armPreferredModelFocusShield(context);
-      try {
-        target.scrollIntoView?.({ block: "center", inline: "nearest" });
-      } catch {
-      }
-      assertPreferredModelRun(context);
-      context.interactionCount += 1;
-      return nativeModelClick(target);
-    }
-    function preferredModelPointerActivate(context, target) {
-      assertPreferredModelRun(context);
-      if (!target || !visible2(target) || isDisabledElement(target)) return false;
-      armPreferredModelFocusShield(context);
-      assertPreferredModelRun(context);
-      context.interactionCount += 1;
-      return modelDirectClick(target);
-    }
     function modelClick(el) {
       if (!el || !visible2(el) || isDisabledElement(el)) return false;
       try {
@@ -1087,24 +1039,15 @@
       visibleSelectorElements,
       firstVisibleBySelectors,
       modelElementText,
-      compactModelText,
-      alnumModelToken,
-      modelTextIncludes,
-      parseBooleanAttr,
       modelEventConstructor,
       modelRect,
       modelElementArea,
-      modelRectInViewport,
-      visibleInViewport,
       modelCenterPoint,
       modelElementFromPoint,
       modelClickableAncestor,
       modelCustomActivationAncestor,
-      modelActivationTargets,
       dispatchPointerActivation,
       nativeModelClick,
-      preferredModelActivate,
-      preferredModelPointerActivate,
       modelClick,
       modelDirectClick
     });
@@ -1545,25 +1488,6 @@
         trustedKeySequence: trustedDeleteShortcut(site, reason)
       });
     }
-    function trustedHoverRightEdge(element, site = "topic-delete", reason = "topic menu trigger requires trusted hover") {
-      const box = modelRect(element);
-      if (!element || !box) return null;
-      return {
-        kind: "topic-menu-hover",
-        site,
-        reason: String(reason || ""),
-        framePoint: {
-          x: Math.round(Math.max(box.left + 8, box.right - 24) * 100) / 100,
-          y: Math.round((box.top + box.height / 2) * 100) / 100
-        },
-        frameRect: serializableDeleteRect(box),
-        hoverSettleMs: 520
-      };
-    }
-    function deleteResultWithTrustedHover(site, reason, element) {
-      const trustedHover = trustedHoverRightEdge(element, site, reason);
-      return deleteResult(false, site, reason, trustedHover ? { needsTrustedHover: true, trustedHover } : {});
-    }
     function trustedMenuClickPoint(site = "topic-delete", reason = "topic menu trigger requires trusted browser input", point = {}, frameRect = null) {
       const x = Number(point.x ?? point.clientX);
       const y = Number(point.y ?? point.clientY);
@@ -1605,7 +1529,7 @@
         trustedClick
       };
     }
-    function deleteConfirmDialogClosed(root, button) {
+    function deleteConfirmDialogClosed() {
       return !findDeleteConfirmButton() && !deleteDialogRoots().length;
     }
     function dispatchDeleteConfirmKey(target, key = "Enter") {
@@ -1688,24 +1612,22 @@
     }
     async function clickDeleteConfirmIfPresent(timeoutMs = 4200, guard = null) {
       const deadline = Date.now() + Math.max(0, Number(timeoutMs) || 0);
-      let clickedRoot = null;
       let clickedButton = null;
       let clickedAt = 0;
       while (Date.now() <= deadline) {
-        if (clickedButton && deleteConfirmDialogClosed(clickedRoot, clickedButton)) return true;
+        if (clickedButton && deleteConfirmDialogClosed()) return true;
         const info = findDeleteConfirmButtonInfo();
         const button = info?.element || null;
         if (button && typeof guard === "function" && guard() !== true) return false;
         if (button && (button !== clickedButton || Date.now() - clickedAt > 900) && clickDeleteConfirmButton(button, info.root || null)) {
-          clickedRoot = info.root || null;
           clickedButton = button;
           clickedAt = Date.now();
           await sleep2(220);
-          if (deleteConfirmDialogClosed(clickedRoot, clickedButton)) return true;
+          if (deleteConfirmDialogClosed()) return true;
         }
         await sleep2(120);
       }
-      if (clickedButton && deleteConfirmDialogClosed(clickedRoot, clickedButton)) return true;
+      if (clickedButton && deleteConfirmDialogClosed()) return true;
       return false;
     }
     async function clickDeleteConfirmIfAppears(appearTimeoutMs = 900, closeTimeoutMs = 4200) {
@@ -1719,13 +1641,6 @@
       }
       return { appeared: false, confirmed: false };
     }
-    async function confirmKagiDeleteAfterMenuClick() {
-      const result = await clickDeleteConfirmIfAppears(2600, 3200);
-      if (result.confirmed) return true;
-      if (result.appeared) return !deleteDialogRoots().length;
-      return false;
-    }
-    let suppressShortcutBridgeUntil = 0;
     function dispatchDeleteKeyboardShortcut() {
       const mac = /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || "");
       const init = {
@@ -1742,7 +1657,6 @@
         altKey: false
       };
       const targets = [document.activeElement, document.body, document.documentElement, document, window].filter(Boolean);
-      suppressShortcutBridgeUntil = Date.now() + 500;
       let dispatched = false;
       const seen = /* @__PURE__ */ new Set();
       for (const target of targets) {
@@ -1762,7 +1676,6 @@
     }
     return Object.freeze({
       deleteResult,
-      deleteTextToken,
       deleteCompactToken,
       deleteElementText,
       svgSignature,
@@ -1773,25 +1686,20 @@
       deleteClickableElement,
       deleteClick,
       deleteActivateUntil,
-      findDeleteConfirmButtonInfo,
       findDeleteConfirmButton,
       deleteResultWithTrustedConfirm,
       deleteResultWithTrustedDeleteShortcut,
-      deleteResultWithTrustedHover,
       deleteResultWithTrustedMenuClick,
       topicDeleteConfirmState,
       clickDeleteConfirmIfPresent,
       clickDeleteConfirmIfAppears,
-      confirmKagiDeleteAfterMenuClick,
       dispatchDeleteKeyboardShortcut,
       DELETE_CANCEL_LABELS,
       deleteDialogRoots,
-      clickDeleteConfirmButton,
       deleteClickLayout,
       serializableDeleteRect,
       trustedMenuClickForElement,
-      trustedMenuClickPoint,
-      trustedHoverRightEdge
+      trustedMenuClickPoint
     });
   }
 
@@ -1799,7 +1707,6 @@
   function createDeleteSitesCapability(deps = {}) {
     const {
       qsa: qsa2,
-      visibleInViewport,
       normalize: normalize2,
       deleteCompactToken,
       modelRect,
@@ -1807,7 +1714,6 @@
       deleteClickableElement,
       isDisabledElement: isDisabledElement2,
       svgSignature,
-      layoutDeleteCandidates,
       visible: visible2,
       deleteLabelMatchesExactish,
       deleteLabelMatches,
@@ -1817,10 +1723,6 @@
       deleteClickLayout,
       sleep: sleep2,
       deleteClick,
-      modelEventConstructor,
-      reveal: reveal2,
-      modelRectInViewport,
-      modelElementFromPoint,
       closest: closest2,
       findDeleteConfirmButton,
       clickDeleteConfirmIfPresent,
@@ -1836,221 +1738,7 @@
       waitForModel,
       deleteResultWithTrustedMenuClick
     } = deps;
-    function kagiChatIdFromHref(value) {
-      const match = String(value || "").match(/\/chat\/([^/?#]+)/i);
-      return match?.[1] || "";
-    }
-    function kagiCurrentThreadLink(data = {}) {
-      const ids = new Set([
-        location.href,
-        data.currentThreadHref,
-        data.currentHref,
-        data.href,
-        data.url
-      ].map(kagiChatIdFromHref).filter(Boolean));
-      const links = qsa2("a[href*='/chat/']", document, { all: true }).filter((link) => visibleInViewport(link));
-      if (!ids.size) return links[0] || null;
-      return links.find((link) => ids.has(kagiChatIdFromHref(link.href || link.getAttribute?.("href")))) || null;
-    }
-    function kagiCurrentTitleToken() {
-      const rawTitle = normalize2((document.title || "").replace(/\s+-\s*Kagi Assistant\s*$/i, ""));
-      return deleteCompactToken(rawTitle);
-    }
-    function kagiTitleRenameButtons() {
-      const titleToken = kagiCurrentTitleToken();
-      return qsa2("button,[role='button']", document, { all: true }).filter((button) => {
-        if (!visibleInViewport(button)) return false;
-        const rect = modelRect(button);
-        if (!rect || rect.top > 120 || rect.width < 32 || rect.height < 12 || rect.height > 64) return false;
-        const value = deleteElementText(button);
-        const compact = deleteCompactToken(value);
-        return /clicktorename|rename|重命名/.test(compact) || titleToken.length >= 4 && compact.includes(titleToken);
-      }).sort((a, b) => {
-        const ar = modelRect(a);
-        const br = modelRect(b);
-        return (ar?.top || 0) - (br?.top || 0) || (ar?.left || 0) - (br?.left || 0);
-      });
-    }
-    function kagiTopThreadMenuTrigger() {
-      const titleButtons = kagiTitleRenameButtons();
-      const candidates = [];
-      const seen = /* @__PURE__ */ new Set();
-      const selector = [
-        "button",
-        "[role='button']",
-        "[aria-haspopup]",
-        "[aria-expanded]",
-        "[tabindex]:not([tabindex='-1'])"
-      ].join(", ");
-      const add = (element, titleButton, extraScore = 0) => {
-        const target = deleteClickableElement(element);
-        if (!target || seen.has(target) || target === titleButton || isDisabledElement2(target)) return;
-        if (!visibleInViewport(target)) return;
-        const rect = modelRect(target);
-        const titleRect = modelRect(titleButton);
-        if (!rect || !titleRect || rect.top > 125 || rect.width < 8 || rect.height < 8 || rect.width > 90 || rect.height > 72) return;
-        const verticalOverlap = rect.top < titleRect.bottom + 12 && rect.bottom > titleRect.top - 12;
-        if (!verticalOverlap) return;
-        const value = deleteElementText(target);
-        const compact = deleteCompactToken(value);
-        if (/newthread|showsidebar|markaspermanent|permanent|kagiproducts|settings|searchthreads|folders|newfolder|copy|edit|regenerate|scroll|发送|设置|新建|搜索/.test(compact)) return;
-        const popup = String(target.getAttribute?.("aria-haspopup") || "").toLowerCase();
-        const expanded = target.hasAttribute?.("aria-expanded");
-        const signature = svgSignature(target);
-        const rightGap = Math.abs(rect.left - titleRect.right);
-        const immediateTitleNeighbor = rect.left >= titleRect.right - 8 && rect.left <= titleRect.right + 42 && rect.width <= 52 && rect.height <= 52;
-        const menuLike = popup === "menu" || popup === "true" || expanded || /more|menu|options|ellipsis|dots|dropdown|chevron|caret|arrow|down|triangle|更多|菜单|选项/.test(compact) || /more|ellipsis|dots|dropdown|chevron|caret|arrow|down|triangle/.test(signature) || !compact && rect.width <= 48 || immediateTitleNeighbor;
-        if (!menuLike) return;
-        const closeToTitleRight = rect.left >= titleRect.left - 8 && rect.left <= titleRect.right + 110;
-        if (!closeToTitleRight) return;
-        seen.add(target);
-        candidates.push({
-          element: target,
-          score: extraScore + (popup === "menu" || popup === "true" ? 360 : 0) + (expanded ? 120 : 0) + (/dropdown|chevron|caret|arrow|down|triangle/.test(signature) ? 260 : 0) + (/more|menu|options|更多|菜单|选项/.test(compact) ? 180 : 0) + (!compact && rect.width <= 48 ? 180 : 0) + Math.max(0, 280 - rightGap * 4) + Math.max(0, 90 - Math.abs(rect.top + rect.height / 2 - (titleRect.top + titleRect.height / 2))),
-          top: rect.top,
-          left: rect.left
-        });
-      };
-      for (const titleButton of titleButtons) {
-        for (let scope = titleButton.parentElement, depth = 0; scope && scope !== document.body && depth < 5; scope = scope.parentElement, depth += 1) {
-          for (const element of layoutDeleteCandidates(scope, selector)) add(element, titleButton, 180 - depth * 12);
-        }
-      }
-      candidates.sort((a, b) => b.score - a.score || a.top - b.top || a.left - b.left);
-      return candidates[0]?.element || null;
-    }
-    function kagiDeleteMenuItem(trigger = null, labels = ["Delete", "Delete thread", "Delete chat", "Remove", "删除"]) {
-      const triggerRect = modelRect(trigger);
-      const candidates = [];
-      const seen = /* @__PURE__ */ new Set();
-      const add = (element, extraScore = 0) => {
-        if (!element || seen.has(element) || !visible2(element) || isDisabledElement2(element)) return;
-        const value = deleteElementText(element);
-        if (!deleteLabelMatchesExactish(value, labels)) return;
-        if (deleteLabelMatches(value, DELETE_CANCEL_LABELS)) return;
-        const target = deleteClickableElement(element);
-        if (!target || seen.has(target) || !visible2(target) || isDisabledElement2(target)) return;
-        const rect = modelRect(target);
-        if (!rect || rect.width < 24 || rect.height < 14 || rect.width > 360 || rect.height > 96) return;
-        if (triggerRect) {
-          const nearTrigger = rect.top >= triggerRect.top - 16 && rect.top <= triggerRect.top + 360 && rect.left >= triggerRect.left - 80 && rect.left <= triggerRect.left + 260;
-          if (!nearTrigger) return;
-        }
-        seen.add(element);
-        seen.add(target);
-        candidates.push({
-          element: target,
-          score: extraScore + (matches2(target, "[role='menuitem'],[role='option'],button,[role='button']") ? 220 : 0) + (deleteLabelMatches(value, labels, { exact: true }) ? 300 : 0) + (triggerRect ? Math.max(0, 160 - Math.abs(rect.left - triggerRect.left)) : 0),
-          top: rect.top,
-          right: rect.right,
-          area: rect.width * rect.height
-        });
-      };
-      const selector = "[role='menuitem'],[role='option'],button,[role='button'],a[href],[tabindex]:not([tabindex='-1']),li,div,span";
-      for (const root of visibleSelectorElements(DELETE_MENU_ROOT_SELECTORS)) {
-        const rect = modelRect(root);
-        if (triggerRect) {
-          const nearRoot = rect && rect.top >= triggerRect.top - 24 && rect.top <= triggerRect.top + 330 && rect.left >= triggerRect.left - 120 && rect.left <= triggerRect.left + 260;
-          if (!nearRoot) continue;
-        }
-        for (const element of qsa2(selector, root, { all: true })) add(element, 260);
-      }
-      if (!candidates.length) {
-        for (const element of qsa2(selector, document, { all: true })) add(element, 0);
-      }
-      candidates.sort((a, b) => b.score - a.score || b.right - a.right || b.top - a.top || a.area - b.area);
-      return candidates[0]?.element || null;
-    }
-    async function openKagiTitleMenuAndClickDelete(trigger, labels) {
-      if (!trigger || !deleteClickLayout(trigger)) return false;
-      for (let attempt = 0; attempt < 12; attempt += 1) {
-        await sleep2(attempt < 2 ? 45 : 75);
-        const item = kagiDeleteMenuItem(trigger, labels);
-        if (item && (deleteClick(item) || deleteClickLayout(item))) return true;
-      }
-      return false;
-    }
-    function hoverKagiThreadRow(row) {
-      const rowRect = modelRect(row);
-      if (!rowRect) return;
-      const point = { clientX: Math.max(rowRect.left + 16, rowRect.right - 28), clientY: rowRect.top + rowRect.height / 2 };
-      for (let target = row, depth = 0; target && target !== document.body && depth < 5; target = target.parentElement, depth += 1) {
-        for (const type of ["pointerover", "mouseover", "mouseenter", "mousemove", "pointermove"]) {
-          try {
-            const EventCtor = type.startsWith("pointer") ? modelEventConstructor("PointerEvent", target) : modelEventConstructor("MouseEvent", target);
-            target.dispatchEvent(new EventCtor(type, {
-              bubbles: true,
-              cancelable: true,
-              composed: true,
-              view: window,
-              pointerId: 1,
-              pointerType: "mouse",
-              isPrimary: true,
-              ...point
-            }));
-          } catch {
-          }
-        }
-      }
-    }
-    function kagiThreadRowFromLink(link) {
-      if (!link) return null;
-      const linkRect = modelRect(link);
-      let best = link;
-      for (let node = link.parentElement, depth = 0; node && node !== document.body && depth < 6; node = node.parentElement, depth += 1) {
-        const rect = modelRect(node);
-        if (!rect || rect.width < 120 || rect.height < 20 || rect.height > 96) continue;
-        if (linkRect && (rect.top > linkRect.top + 8 || rect.bottom < linkRect.bottom - 8)) continue;
-        const hasMoreButton = qsa2("button,[role='button'],[aria-haspopup]", node, { all: true }).some((item) => item !== link && modelRect(item));
-        best = node;
-        if (hasMoreButton) break;
-      }
-      return best;
-    }
-    function kagiThreadMoreButton(link) {
-      const row = kagiThreadRowFromLink(link);
-      if (!row) return null;
-      reveal2(row);
-      hoverKagiThreadRow(row);
-      const rowRect = modelRect(row);
-      if (!modelRectInViewport(rowRect)) return null;
-      const candidates = [];
-      const seen = /* @__PURE__ */ new Set();
-      const add = (element, extraScore = 0) => {
-        const target = deleteClickableElement(element);
-        if (!target || seen.has(target) || target === link || isDisabledElement2(target)) return;
-        const rect = modelRect(target);
-        if (!rect || rect.width < 8 || rect.height < 8 || rect.width > 84 || rect.height > 84) return;
-        if (!visibleInViewport(target)) return;
-        const overlaps = rect.top < rowRect.bottom + 10 && rect.bottom > rowRect.top - 10;
-        if (!overlaps) return;
-        const value = deleteElementText(target);
-        const compact = deleteCompactToken(value);
-        const popup = String(target.getAttribute?.("aria-haspopup") || "").toLowerCase();
-        const signature = svgSignature(target);
-        const moreLike = /more|options|menu|ellipsis|dots|更多|菜单|选项/.test(compact) || /more|ellipsis|dots|circle/.test(signature) || popup === "menu" || qsa2("circle", target).length >= 2 || !compact && rect.width <= 48;
-        if (!moreLike) return;
-        seen.add(target);
-        candidates.push({
-          element: target,
-          score: extraScore + (visibleInViewport(target) ? 160 : 40) + (/moreoptions|more|options|menu|更多|菜单|选项/.test(compact) ? 260 : 0) + (popup === "menu" ? 180 : 0) + (/more|ellipsis|dots|circle/.test(signature) ? 120 : 0) + Math.max(0, 90 - Math.abs(rect.right - rowRect.right)),
-          right: rect.right
-        });
-      };
-      for (let scope = row, depth = 0; scope && scope !== document.body && depth < 5; scope = scope.parentElement, depth += 1) {
-        for (const button of layoutDeleteCandidates(scope, "button,[role='button'],[aria-haspopup],[tabindex]:not([tabindex='-1'])")) add(button, 80 - depth * 8);
-      }
-      for (const offset of [10, 22, 36, 54]) {
-        const point = { x: Math.max(rowRect.left + 24, rowRect.right - offset), y: rowRect.top + rowRect.height / 2 };
-        const pointTarget = modelElementFromPoint(point, row);
-        if (pointTarget) add(pointTarget, 160 - offset);
-        const pointButton = pointTarget && closest2(pointTarget, "button,[role='button'],[aria-haspopup],[tabindex]:not([tabindex='-1'])");
-        if (pointButton) add(pointButton, 180 - offset);
-      }
-      candidates.sort((a, b) => b.score - a.score || b.right - a.right);
-      return candidates[0]?.element || null;
-    }
-    async function deleteKagiThread(data = {}) {
+    async function deleteKagiThread() {
       if (findDeleteConfirmButton()) {
         const confirmedExisting = await clickDeleteConfirmIfPresent(6200);
         return confirmedExisting ? deleteResult(true, "kagi") : deleteResult(false, "kagi", "delete confirmation did not close");
@@ -2530,10 +2218,7 @@
       deleteNotionThread,
       menuRootsWithDelete,
       findDeleteMenuItem,
-      findOpenDeleteMenuItem,
-      openTriggerAndClickDelete,
-      topRightMenuTrigger,
-      findNotionDeleteMenuTrigger
+      findOpenDeleteMenuItem
     });
   }
 
@@ -2562,7 +2247,6 @@
       trustedMenuClickPoint,
       serializableDeleteRect,
       deleteResult,
-      trustedHoverRightEdge,
       layoutDeleteCandidates,
       modelEventConstructor,
       reveal: reveal2,
@@ -2676,24 +2360,13 @@
       return match?.[1] || "";
     }
     function deepSeekDeleteHints(data = {}) {
-      const hrefs = [
-        location.href,
-        data.currentThreadHref,
-        data.currentHref,
-        data.cachedHref,
-        data.href,
-        data.url
-      ].filter(Boolean);
-      const ids = new Set(hrefs.map(deepSeekChatIdFromHref).filter(Boolean));
       const titleTokens = new Set([
         document.title,
         data.currentTitle,
         data.title
       ].map(deepSeekTitleTokenFromValue).filter(Boolean));
       return {
-        ids: Array.from(ids),
-        titleTokens: Array.from(titleTokens),
-        hasTarget: ids.size > 0 || titleTokens.size > 0
+        titleTokens: Array.from(titleTokens)
       };
     }
     function findDeepSeekCurrentTopicRow(root) {
@@ -2808,21 +2481,6 @@
         ...trustedKeySequence ? { needsTrustedKeySequence: true, trustedKeySequence } : {},
         ...trustedMenuClick ? { needsTrustedMenuClick: true, trustedMenuClick } : {}
       });
-    }
-    function deleteResultWithDeepSeekTrustedHover(reason, row) {
-      const rowRect = deepSeekTopicMenuRect(row);
-      const trustedHover = rowRect ? {
-        kind: "topic-menu-hover",
-        site: "deepseek",
-        reason: String(reason || ""),
-        framePoint: {
-          x: Math.round(Math.max(rowRect.left + 16, rowRect.right - 28) * 100) / 100,
-          y: Math.round((rowRect.top + rowRect.height / 2) * 100) / 100
-        },
-        frameRect: serializableDeleteRect(rowRect),
-        hoverSettleMs: 520
-      } : trustedHoverRightEdge(deepSeekVisualTopicRow(row) || row, "deepseek", reason);
-      return deleteResult(false, "deepseek", reason, trustedHover ? { needsTrustedHover: true, trustedHover } : {});
     }
     function closeDeepSeekTransientMenus() {
       try {
@@ -3310,12 +2968,6 @@
     }
     return Object.freeze({
       deleteDeepSeekThread,
-      requestDeepSeekDeleteBridge,
-      ensureDeepSeekSidebarOpen,
-      deepSeekSidebarRoot,
-      deepSeekDeleteHints,
-      findDeepSeekCurrentTopicRow,
-      deepSeekTopicMoreButton,
       validateDeepSeekTrustedCoordinates,
       sanitizeDeepSeekTrustedResult,
       TOPIC_DELETE_FALLBACK_CONFIGS
@@ -3338,51 +2990,7 @@
       deleteGrokThread,
       deleteNotionThread,
       deleteDeepSeekThread,
-      sleep: sleep2,
-      waitForModel,
       normalize: normalize2,
-      text: text2,
-      qsa: qsa2,
-      qs: qs2,
-      closest: closest2,
-      visible: visible2,
-      reveal: reveal2,
-      buttonText: buttonText2,
-      modelElementText,
-      modelRect,
-      modelCenterPoint,
-      modelElementFromPoint,
-      modelClick,
-      modelDirectClick,
-      nativeModelClick,
-      dispatchPointerActivation,
-      isDisabledElement: isDisabledElement2,
-      activateElement: activateElement2,
-      deleteElementText,
-      deleteTextToken,
-      deleteLabelMatches,
-      deleteLabelMatchesExactish,
-      visibleDeleteCandidates,
-      layoutDeleteCandidates,
-      deleteClickableElement,
-      deleteClick,
-      deleteClickLayout,
-      deleteDialogRoots,
-      findDeleteConfirmButton,
-      clickDeleteConfirmIfPresent,
-      clickDeleteConfirmButton,
-      dispatchDeleteKeyboardShortcut,
-      menuRootsWithDelete,
-      findDeleteMenuItem,
-      openTriggerAndClickDelete,
-      topRightMenuTrigger,
-      findNotionDeleteMenuTrigger,
-      requestDeepSeekDeleteBridge,
-      ensureDeepSeekSidebarOpen,
-      deepSeekSidebarRoot,
-      deepSeekDeleteHints,
-      findDeepSeekCurrentTopicRow,
-      deepSeekTopicMoreButton,
       normalizeDeleteFrameHref: normalizeDeleteFrameHref2,
       deleteConversationIdentityFromHref: deleteConversationIdentityFromHref2,
       sameDeleteConversationIdentity: sameDeleteConversationIdentity2,
@@ -3419,7 +3027,6 @@
         userscriptTimeoutMs: Number(config?.userscriptTimeoutMs) || fallback.userscriptTimeoutMs || 15e3
       };
     }
-    const TOPIC_DELETE_REQUEST_EVENT2 = PROTOCOL.TOPIC_DELETE_REQUEST_EVENT;
     const TOPIC_DELETE_MENU_COMMAND_EVENT2 = PROTOCOL.TOPIC_DELETE_MENU_COMMAND_EVENT;
     const TOPIC_DELETE_RESULT_EVENT2 = PROTOCOL.TOPIC_DELETE_RESULT_EVENT;
     const TOPIC_DELETE_PING_EVENT2 = PROTOCOL.TOPIC_DELETE_PING_EVENT;
@@ -3671,7 +3278,7 @@
       return async () => {
         if (siteId === "chatgpt") return deleteChatGptThread(payload);
         if (siteId === "gemini") return deleteGeminiThread(payload);
-        if (siteId === "kagi") return deleteKagiThread(payload);
+        if (siteId === "kagi") return deleteKagiThread();
         if (siteId === "grokMirror") {
           const result = await deleteGrokThread(payload);
           return { ...result, site: "grokMirror" };
@@ -3681,71 +3288,6 @@
         if (siteId === "deepseek") return deleteDeepSeekThread(payload);
         return deleteResult(false, siteId || "topic-delete", "unsupported site");
       };
-    }
-    function createTopicDeleteApi(config = {}, payload = {}) {
-      const api = {
-        config,
-        data: payload,
-        window,
-        document,
-        location,
-        result: deleteResult,
-        deleteResult,
-        sleep: sleep2,
-        waitFor: waitForModel,
-        waitForModel,
-        normalize: normalize2,
-        text: text2,
-        qsa: qsa2,
-        qs: qs2,
-        closest: closest2,
-        visible: visible2,
-        reveal: reveal2,
-        buttonText: buttonText2,
-        modelElementText,
-        modelRect,
-        modelCenterPoint,
-        modelElementFromPoint,
-        modelClick,
-        modelDirectClick,
-        nativeModelClick,
-        dispatchPointerActivation,
-        isDisabledElement: isDisabledElement2,
-        activateElement: activateElement2,
-        deleteElementText,
-        deleteTextToken,
-        deleteCompactToken,
-        deleteLabelMatches,
-        deleteLabelMatchesExactish,
-        visibleDeleteCandidates,
-        layoutDeleteCandidates,
-        deleteClickableElement,
-        deleteClick,
-        deleteClickLayout,
-        deleteDialogRoots,
-        findDeleteConfirmButton,
-        clickDeleteConfirmIfPresent,
-        clickDeleteConfirmButton,
-        dispatchDeleteKeyboardShortcut,
-        menuRootsWithDelete,
-        findDeleteMenuItem,
-        openTriggerAndClickDelete,
-        topRightMenuTrigger,
-        findNotionDeleteMenuTrigger,
-        requestDeepSeekDeleteBridge,
-        ensureDeepSeekSidebarOpen,
-        deepSeekSidebarRoot,
-        deepSeekDeleteHints,
-        findDeepSeekCurrentTopicRow,
-        deepSeekTopicMoreButton,
-        deleteChatGptThread,
-        deleteGeminiThread,
-        deleteKagiThread,
-        deleteGrokThread,
-        deleteNotionThread,
-        deleteDeepSeekThread
-      };
-      return Object.freeze(api);
     }
     function normalizeTopicDeleteUserscriptResult(value, config = {}, payload = {}) {
       const site = topicDeleteSiteName(config, payload);
@@ -3869,33 +3411,32 @@
     const runtimeIdentity = createContentRuntimeBundleIdentity(CONTENT_RUNTIME_DELETE_BUNDLE_IDENTITY);
     runtimes.registerBundle(runtimeIdentity);
     const { contentDocumentId } = createContentDocumentIdentity(window);
-    const summaryDeps = {
+    const dom = createDomRuntime({ activateElement, closest, normalize, qsa, visible });
+    const common = createDeleteCommonCapability({
       activateElement,
       buttonText,
       classText,
       closest,
-      matches,
       normalize,
-      qs,
       qsa,
-      reveal,
       sleep,
-      text,
-      visible
-    };
-    const dom = createDomRuntime({
-      ...summaryDeps,
-      DELETE_CLICKABLE_SELECTOR: "button,[role='button'],[role='menuitem'],[role='option'],a[href],[aria-haspopup],[tabindex]:not([tabindex='-1']),[class*='button' i],[class*='btn' i]",
-      assertPreferredModelRun() {
-      },
-      armPreferredModelFocusShield() {
-      }
-    });
-    const common = createDeleteCommonCapability({
-      ...summaryDeps,
-      ...dom,
+      visible,
       deleteCompletionTargetState,
-      DELETE_COMPLETION_STATE_VERSION
+      DELETE_COMPLETION_STATE_VERSION,
+      dispatchPointerActivation: dom.dispatchPointerActivation,
+      isDisabledElement: dom.isDisabledElement,
+      modelCenterPoint: dom.modelCenterPoint,
+      modelClick: dom.modelClick,
+      modelClickableAncestor: dom.modelClickableAncestor,
+      modelCustomActivationAncestor: dom.modelCustomActivationAncestor,
+      modelDirectClick: dom.modelDirectClick,
+      modelElementArea: dom.modelElementArea,
+      modelElementFromPoint: dom.modelElementFromPoint,
+      modelElementText: dom.modelElementText,
+      modelEventConstructor: dom.modelEventConstructor,
+      modelRect: dom.modelRect,
+      nativeModelClick: dom.nativeModelClick,
+      visibleSelectorElements: dom.visibleSelectorElements
     });
     const waitForModel = async (getter, timeoutMs = 2500, intervalMs = 120) => {
       const deadline = Date.now() + timeoutMs;
@@ -3906,22 +3447,89 @@
       }
       return getter();
     };
-    const sites = createDeleteSitesCapability({ ...summaryDeps, ...dom, ...common, waitForModel });
+    const sites = createDeleteSitesCapability({
+      closest,
+      matches,
+      normalize,
+      qsa,
+      sleep,
+      visible,
+      deleteActivateUntil: common.deleteActivateUntil,
+      DELETE_CANCEL_LABELS: common.DELETE_CANCEL_LABELS,
+      deleteClick: common.deleteClick,
+      deleteClickableElement: common.deleteClickableElement,
+      deleteClickLayout: common.deleteClickLayout,
+      deleteCompactToken: common.deleteCompactToken,
+      deleteDialogRoots: common.deleteDialogRoots,
+      deleteElementText: common.deleteElementText,
+      deleteLabelMatches: common.deleteLabelMatches,
+      deleteLabelMatchesExactish: common.deleteLabelMatchesExactish,
+      deleteResult: common.deleteResult,
+      deleteResultWithTrustedConfirm: common.deleteResultWithTrustedConfirm,
+      deleteResultWithTrustedDeleteShortcut: common.deleteResultWithTrustedDeleteShortcut,
+      deleteResultWithTrustedMenuClick: common.deleteResultWithTrustedMenuClick,
+      dispatchDeleteKeyboardShortcut: common.dispatchDeleteKeyboardShortcut,
+      clickDeleteConfirmIfAppears: common.clickDeleteConfirmIfAppears,
+      clickDeleteConfirmIfPresent: common.clickDeleteConfirmIfPresent,
+      findDeleteConfirmButton: common.findDeleteConfirmButton,
+      isDisabledElement: dom.isDisabledElement,
+      modelElementArea: dom.modelElementArea,
+      modelRect: dom.modelRect,
+      svgSignature: common.svgSignature,
+      visibleDeleteCandidates: common.visibleDeleteCandidates,
+      visibleSelectorElements: dom.visibleSelectorElements,
+      waitForModel
+    });
     const deepSeek = createDeleteDeepSeekCapability({
-      ...summaryDeps,
-      ...dom,
-      ...common,
-      ...sites,
+      closest,
+      normalize,
+      qsa,
+      reveal,
+      sleep,
+      visible,
+      deleteActivateUntil: common.deleteActivateUntil,
+      deleteClick: common.deleteClick,
+      deleteClickableElement: common.deleteClickableElement,
+      deleteClickLayout: common.deleteClickLayout,
+      deleteCompactToken: common.deleteCompactToken,
+      deleteElementText: common.deleteElementText,
+      deleteResult: common.deleteResult,
+      findDeleteConfirmButton: common.findDeleteConfirmButton,
+      clickDeleteConfirmIfPresent: common.clickDeleteConfirmIfPresent,
+      layoutDeleteCandidates: common.layoutDeleteCandidates,
+      serializableDeleteRect: common.serializableDeleteRect,
+      svgSignature: common.svgSignature,
+      trustedMenuClickForElement: common.trustedMenuClickForElement,
+      trustedMenuClickPoint: common.trustedMenuClickPoint,
+      dispatchPointerActivation: dom.dispatchPointerActivation,
+      firstVisibleBySelectors: dom.firstVisibleBySelectors,
+      isDisabledElement: dom.isDisabledElement,
+      modelDirectClick: dom.modelDirectClick,
+      modelElementArea: dom.modelElementArea,
+      modelElementFromPoint: dom.modelElementFromPoint,
+      modelEventConstructor: dom.modelEventConstructor,
+      modelRect: dom.modelRect,
+      nativeModelClick: dom.nativeModelClick,
+      visibleSelectorElements: dom.visibleSelectorElements,
+      findDeleteMenuItem: sites.findDeleteMenuItem,
+      findOpenDeleteMenuItem: sites.findOpenDeleteMenuItem,
+      menuRootsWithDelete: sites.menuRootsWithDelete,
       waitForModel,
       DEEPSEEK_DELETE_SOURCE: CONTENT_PROTOCOL.DEEPSEEK_DELETE_SOURCE
     });
     const runtime = createDeleteRuntimeCapability({
-      ...summaryDeps,
-      ...dom,
-      ...common,
-      ...sites,
-      ...deepSeek,
-      waitForModel,
+      normalize,
+      deleteCompactToken: common.deleteCompactToken,
+      deleteResult: common.deleteResult,
+      deleteChatGptThread: sites.deleteChatGptThread,
+      deleteGeminiThread: sites.deleteGeminiThread,
+      deleteGrokThread: sites.deleteGrokThread,
+      deleteKagiThread: sites.deleteKagiThread,
+      deleteNotionThread: sites.deleteNotionThread,
+      deleteDeepSeekThread: deepSeek.deleteDeepSeekThread,
+      sanitizeDeepSeekTrustedResult: deepSeek.sanitizeDeepSeekTrustedResult,
+      TOPIC_DELETE_FALLBACK_CONFIGS: deepSeek.TOPIC_DELETE_FALLBACK_CONFIGS,
+      validateDeepSeekTrustedCoordinates: deepSeek.validateDeepSeekTrustedCoordinates,
       PROTOCOL: CONTENT_PROTOCOL,
       requestBackground,
       EXECUTE_TOPIC_DELETE_USERSCRIPT_REQUEST,

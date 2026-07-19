@@ -1,6 +1,6 @@
 // Built-in Summary userscript: Grok Mirror (grok-dairoot)
 // Source: Mod/assets/chunk-7dbf4e81.js :: SUMMARY_SITE_CONFIG_DEFAULTS
-// Config version: 68; global config version: 71
+// Config version: 70; global config version: 71
 // Hosts: gk.dairoot.cn, *.gk.dairoot.cn
 // Path prefixes: (none)
 // Run mode: pageWorldFirst; timeout: 36000

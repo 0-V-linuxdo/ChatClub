@@ -5,7 +5,7 @@ import { createSummaryRunnerRegistry } from "chatclub:summary-registry";
 import * as summaryRuntime from "./shared/summary-runtime.js";
 import { runtimeRegistry } from "./shared/runtime-registry-client.js";
 
-export function installSummaryMainRuntime() {
+function installSummaryMainRuntime() {
   const PROTOCOL = CONTENT_PROTOCOL;
   const runtimes = runtimeRegistry(window);
   const CONTENT_RUNTIME_IDENTITY = createContentRuntimeBundleIdentity(CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY);
@@ -93,8 +93,7 @@ export function installSummaryMainRuntime() {
       .slice(0, SUMMARY_RESULT_MAX_TURNS);
     return {
       messages: hasUserAndAssistant(messages) ? messages : [],
-      rawMessageCount: messages.length,
-      hasUserAndAssistant: hasUserAndAssistant(messages)
+      rawMessageCount: messages.length
     };
   }
 
@@ -133,11 +132,9 @@ export function installSummaryMainRuntime() {
           type: "response",
           action: "runtimeState",
           id: message.id,
-          ok: true,
           data: {
             ready,
             bridgeVersion: PROTOCOL.CONTENT_BRIDGE_VERSION,
-            registryVersion,
             runtimeIdentity: CONTENT_RUNTIME_IDENTITY
           }
         }, "*");
@@ -147,9 +144,9 @@ export function installSummaryMainRuntime() {
       window.postMessage({ source: PAGE_SUMMARY_SOURCE, type: "ack", action: "extract", id: message.id }, "*");
       try {
         const data = await collectSummary(message.data || {});
-        window.postMessage({ source: PAGE_SUMMARY_SOURCE, type: "response", action: "extract", id: message.id, ok: true, data, messages: data?.messages || [] }, "*");
-      } catch (error) {
-        window.postMessage({ source: PAGE_SUMMARY_SOURCE, type: "response", action: "extract", id: message.id, ok: false, error: error?.message || String(error), data: { messages: [] }, messages: [] }, "*");
+        window.postMessage({ source: PAGE_SUMMARY_SOURCE, type: "response", action: "extract", id: message.id, data }, "*");
+      } catch {
+        window.postMessage({ source: PAGE_SUMMARY_SOURCE, type: "response", action: "extract", id: message.id, data: { messages: [] } }, "*");
       }
     };
     runtimes.register("summary-page", {

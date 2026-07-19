@@ -4,7 +4,7 @@ import { createContentRuntimeBundleIdentity } from "../shared/content-runtime-id
 import { createSummaryRunnerRegistry } from "chatclub:summary-registry";
 import { runtimeRegistry } from "./shared/runtime-registry-client.js";
 
-export function installSummaryIsolatedRuntime() {
+function installSummaryIsolatedRuntime() {
   const runtimes = runtimeRegistry(window);
   const runtimeIdentity = createContentRuntimeBundleIdentity(CONTENT_RUNTIME_SUMMARY_ISOLATED_BUNDLE_IDENTITY);
   runtimes.registerBundle(runtimeIdentity);

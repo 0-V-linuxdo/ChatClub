@@ -7,7 +7,7 @@ import { installNativeCopyBridge } from "./preload/native-copy.js";
 import { installDeepSeekDeleteBridge } from "./preload/deepseek-delete.js";
 import { installNotionSendBridge } from "./preload/notion-send.js";
 
-export function installPreload() {
+function installPreload() {
   const PROTOCOL = CONTENT_PROTOCOL;
   const runtimes = runtimeRegistry(window);
   const runtimeIdentity = createContentRuntimeBundleIdentity(CONTENT_RUNTIME_PRELOAD_BUNDLE_IDENTITY);
@@ -544,7 +544,7 @@ export function installPreload() {
 
     if (!capture?.installed) {
       const originalAddEventListener = EventTarget.prototype.addEventListener;
-      const wrappedAddEventListener = function (type, listener, options) {
+      const wrappedAddEventListener = function (type, listener, _options) {
         const result = originalAddEventListener.apply(this, arguments);
         try {
           if (String(type || "").toLowerCase() === "click") recordListener(this, listener);

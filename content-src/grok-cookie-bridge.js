@@ -5,7 +5,7 @@ import { createContentRuntimeBundleIdentity } from "../shared/content-runtime-id
 import { runtimeRegistry } from "./shared/runtime-registry.js";
 import { requestBackground } from "./shared/extension-runtime.js";
 
-export function installGrokCookieBridge() {
+function installGrokCookieBridge() {
   const runtimes = runtimeRegistry(window);
   const runtimeIdentity = createContentRuntimeBundleIdentity(CONTENT_RUNTIME_GROK_COOKIE_BRIDGE_BUNDLE_IDENTITY);
   runtimes.registerBundle(runtimeIdentity);

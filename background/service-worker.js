@@ -1,5 +1,4 @@
 // The browser-visible Service Worker entry is intentionally listener-only.
-// Keep trusted input a top-level static dependency: Chromium extension Service
-// Workers do not support dynamic module loading.
-import "./trusted-input.js";
+// runtime.js owns the complete static listener graph, including trusted input;
+// Chromium extension Service Workers do not support dynamic module loading.
 import "./runtime.js";

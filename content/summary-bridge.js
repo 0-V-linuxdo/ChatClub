@@ -68,14 +68,14 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "42d1e137fe2015d43fe6732ef431f641cc51d65ec7986e095d9a243339d4e9c2";
-  var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.cd06beed22e9f6fcab8057bd949a3c0c68974967bda920471fc1d62f06999029";
-  var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "cd06beed22e9f6fcab8057bd949a3c0c68974967bda920471fc1d62f06999029";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "ebe2ed4ec1fc3680d7cd904b38a423d86055d3ce43ef5f1d0cb0f96f6d83fd83";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.ebe2ed4ec1fc3680d7cd904b38a423d86055d3ce43ef5f1d0cb0f96f6d83fd83";
-  var CONTENT_RUNTIME_SUMMARY_BRIDGE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-bridge.js", "entryPath": "content-src/content-summary-bridge.js", "sourceSha256": "62d7a7e5baf6502fa2c31f6de2178d1c34762ac838584ff7f9f95d6889ee76dd", "implementationSha256": "129d64723acf8a43b7eed347ee102201529be9078049083ccf317792b887c363", "implementationVersion": "2026.07.16.2+bundle.129d64723acf8a43b7eed347ee102201529be9078049083ccf317792b887c363" });
-  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "12ac7c360b98ebc28bd00c1ab5d46d33a7329fb503e27b5994744ee2cc639968", "implementationSha256": "32e94a5fc5e6045d632c923e7f24256fe385a8a9e90a2ea12b598b7a415b7258", "implementationVersion": "2026.07.16.2+bundle.32e94a5fc5e6045d632c923e7f24256fe385a8a9e90a2ea12b598b7a415b7258" });
-  var CONTENT_RUNTIME_SUMMARY_ISOLATED_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts.js", "entryPath": "content-src/summary-userscripts.js", "sourceSha256": "1a4124691bcc0b61609986cf6870b922dfc8f5d133acbfac1203789b98ace4b9", "implementationSha256": "03d726386eb69789437d77afb428ca4799d6c4ba4572ca82a327bdf957fb55a9", "implementationVersion": "2026.07.16.2+bundle.03d726386eb69789437d77afb428ca4799d6c4ba4572ca82a327bdf957fb55a9" });
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "56ae70c075c19ca583d76133e0edc0d694fecc58c3112f9e246a5812e8650b8f";
+  var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.39e7dff3b817dd590d108ce155af13e47b28138e33c477502664105276787094";
+  var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "39e7dff3b817dd590d108ce155af13e47b28138e33c477502664105276787094";
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "330f3a3515c38cb4bb3d34cf09d63dcb258c91cd538e9214385bdfb2d1ea9799";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.330f3a3515c38cb4bb3d34cf09d63dcb258c91cd538e9214385bdfb2d1ea9799";
+  var CONTENT_RUNTIME_SUMMARY_BRIDGE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-bridge.js", "entryPath": "content-src/content-summary-bridge.js", "sourceSha256": "3f544f885ecaaf7ffeab8669a4f8954b793bf036f14d73a864670d077cb3ce4b", "implementationSha256": "0b173aa892fc9eca591a952e3f5a7d5b3349460e60adde07d355bc925211b5a6", "implementationVersion": "2026.07.16.2+bundle.0b173aa892fc9eca591a952e3f5a7d5b3349460e60adde07d355bc925211b5a6" });
+  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "9265e8b1d9b5013ee196311892dbcfcf27fc51f5898960e83eb4dca1bc35c298", "implementationSha256": "db05e5082b072843831926d512de81baa439996bfa5b1f5f1f9105f2db2f461d", "implementationVersion": "2026.07.16.2+bundle.db05e5082b072843831926d512de81baa439996bfa5b1f5f1f9105f2db2f461d" });
+  var CONTENT_RUNTIME_SUMMARY_ISOLATED_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts.js", "entryPath": "content-src/summary-userscripts.js", "sourceSha256": "f5592eec0fd9d9d9d58d4a41f7697ae58e5a6718b367ed5342287dbd090cce15", "implementationSha256": "6a8ca11ca5e6e039461315bff50ad91da13823a1e3ecbdd45de9a014e88a94de", "implementationVersion": "2026.07.16.2+bundle.6a8ca11ca5e6e039461315bff50ad91da13823a1e3ecbdd45de9a014e88a94de" });
 
   // shared/background-request-core.js
   var BACKGROUND_REQUEST_SOURCE = "chatclub";
@@ -657,7 +657,7 @@ ${value}`);
     if (expectedText.includes(copiedText) && copiedText.length >= Math.min(expectedText.length * 0.75, 240)) return true;
     return false;
   }
-  function userscriptCopyAccepted(copied, expected, role, options = {}) {
+  function userscriptCopyAccepted(copied, expected, options = {}) {
     const value = cleanCaptured(copied);
     if (!copyLooksUseful(value)) return "";
     const exclude = toRegex(options.copyTextExcludePattern);
@@ -702,10 +702,10 @@ ${value}`);
         resolve(result);
       };
       const ackTimer = setTimeout(() => {
-        if (!acked) finish({ ok: false, missing: true, messages: [], error: "Summary page-world runtime did not acknowledge the request." });
+        if (!acked) finish({ messages: [] });
       }, ackTimeoutMs);
       const totalTimer = setTimeout(() => {
-        finish({ ok: false, timeout: true, messages: [], error: "Summary page-world runtime timed out." });
+        finish({ messages: [] });
       }, totalTimeoutMs);
       const onMessage = (event) => {
         const message = event.data;
@@ -718,11 +718,8 @@ ${value}`);
         if (message.type !== "response") return;
         const data = message.data || {};
         finish({
-          ok: Boolean(message.ok),
-          messages: Array.isArray(message.messages) ? message.messages : Array.isArray(data.messages) ? data.messages : [],
-          rawMessageCount: data.rawMessageCount,
-          hasUserAndAssistant: data.hasUserAndAssistant,
-          error: message.error || data.error || ""
+          messages: Array.isArray(data.messages) ? data.messages : [],
+          rawMessageCount: data.rawMessageCount
         });
       };
       window.addEventListener("message", onMessage, true);
@@ -847,7 +844,7 @@ ${value}`);
     const details = params || {};
     const options = details.options || details;
     for (const button of (buttons || []).slice(0, 12)) {
-      const value = userscriptCopyAccepted(await copy(button, options), details.expected, details.role, options);
+      const value = userscriptCopyAccepted(await copy(button, options), details.expected, options);
       if (value) return value;
     }
     if (details.scope && options.copyMenu !== false) {
@@ -955,7 +952,7 @@ ${value}`);
     const accept = async (button, roleHint) => {
       const role = roleHint || userscriptRole(button, options) || fallbackRole(roleIndex, options);
       if (role !== "user" && role !== "assistant") return false;
-      const value = userscriptCopyAccepted(await copy(button, options), "", role, { ...options, matchMode: "anyUseful" });
+      const value = userscriptCopyAccepted(await copy(button, options), "", { ...options, matchMode: "anyUseful" });
       if (!value) return false;
       pushMessage(out, role, value, seen);
       roleIndex += 1;
@@ -1173,7 +1170,7 @@ ${value}`);
       await sleep(180);
       for (const button of hoverCopyCandidateButtons(anchor, options).slice(0, 14)) {
         const copied = await copy(button, options);
-        const value = userscriptCopyAccepted(copied, expected, role, options);
+        const value = userscriptCopyAccepted(copied, expected, options);
         if (value) {
           pushMessage(out, role, value, seen);
           roleIndex += 1;
@@ -1333,28 +1330,48 @@ ${value}`);
     "delete",
     "message-navigator"
   ]);
+  function contentBundle(options) {
+    return Object.freeze({
+      world: "ISOLATED",
+      runAt: "document_idle",
+      ...options,
+      ...options.hosts ? { hosts: Object.freeze([...options.hosts]) } : {}
+    });
+  }
+  var CONTENT_BUNDLES = Object.freeze({
+    preload: contentBundle({ id: "chatclub-preload", file: "content/preload.js", world: "MAIN", runAt: "document_start" }),
+    grokCookie: contentBundle({
+      id: "chatclub-grok-cookie-bridge",
+      file: "content/grok-cookie-bridge.js",
+      hosts: ["grok.com"],
+      runAt: "document_start"
+    }),
+    content: contentBundle({ id: "chatclub-content", file: "content/content.js" }),
+    summaryMain: contentBundle({ id: "chatclub-summary-userscripts-main", file: "content/summary-userscripts-main.js", world: "MAIN" }),
+    summaryIsolated: contentBundle({ id: "chatclub-summary-userscripts", file: "content/summary-userscripts.js" }),
+    summaryBridge: contentBundle({ id: "chatclub-summary-bridge", file: "content/summary-bridge.js" }),
+    send: contentBundle({ id: "chatclub-send", file: "content/send.js" }),
+    preferredModel: contentBundle({ id: "chatclub-preferred-model", file: "content/preferred-model.js" }),
+    delete: contentBundle({ id: "chatclub-delete", file: "content/delete.js" }),
+    messageNavigator: contentBundle({ id: "chatclub-message-navigator", file: "content/message-navigator.js" })
+  });
   var CONTENT_CAPABILITY_BUNDLES = Object.freeze({
     base: Object.freeze([
-      Object.freeze({ file: "content/preload.js", world: "MAIN" }),
-      Object.freeze({ file: "content/content.js", world: "ISOLATED" })
+      CONTENT_BUNDLES.preload,
+      CONTENT_BUNDLES.content
     ]),
-    send: Object.freeze([Object.freeze({ file: "content/send.js", world: "ISOLATED" })]),
+    send: Object.freeze([CONTENT_BUNDLES.send]),
     summary: Object.freeze([
-      Object.freeze({ file: "content/summary-userscripts-main.js", world: "MAIN" }),
-      Object.freeze({ file: "content/summary-userscripts.js", world: "ISOLATED" }),
-      Object.freeze({ file: "content/summary-bridge.js", world: "ISOLATED" })
+      CONTENT_BUNDLES.summaryMain,
+      CONTENT_BUNDLES.summaryIsolated,
+      CONTENT_BUNDLES.summaryBridge
     ]),
-    "preferred-model": Object.freeze([Object.freeze({ file: "content/preferred-model.js", world: "ISOLATED" })]),
-    delete: Object.freeze([Object.freeze({ file: "content/delete.js", world: "ISOLATED" })]),
-    "message-navigator": Object.freeze([Object.freeze({ file: "content/message-navigator.js", world: "ISOLATED" })])
+    "preferred-model": Object.freeze([CONTENT_BUNDLES.preferredModel]),
+    delete: Object.freeze([CONTENT_BUNDLES.delete]),
+    "message-navigator": Object.freeze([CONTENT_BUNDLES.messageNavigator])
   });
   var CONTENT_ANCILLARY_BUNDLES = Object.freeze({
-    "grok-cookie": Object.freeze({
-      file: "content/grok-cookie-bridge.js",
-      world: "ISOLATED",
-      hosts: Object.freeze(["grok.com"]),
-      runAt: "document_start"
-    })
+    "grok-cookie": CONTENT_BUNDLES.grokCookie
   });
   var FRAME_COMMAND_SPECS = Object.freeze({
     getLocationHref: command({ timeoutMs: 1200, capability: "base" }),
@@ -1516,9 +1533,8 @@ ${value}`);
       SUMMARY_ISOLATED_RUNTIME_IDENTITY,
       CONTENT_RUNTIME_IDENTITY: CONTENT_RUNTIME_IDENTITY2
     } = deps;
-    function shouldUseCustomSummaryUserscript(config, runner) {
-      const customMode = config.builtIn === false || config.sourceMode === "custom" || config.userscriptOverride === true;
-      return customMode && (!runner || customMode);
+    function shouldUseCustomSummaryUserscript(config) {
+      return config.builtIn === false || config.sourceMode === "custom" || config.userscriptOverride === true;
     }
     async function executeCustomSummaryUserscript(config = {}) {
       const response = await requestBackground2(EXECUTE_SUMMARY_USERSCRIPT_REQUEST2, {
@@ -1549,15 +1565,12 @@ ${value}`);
       } catch {
       }
       const packagedRunner = registry[config.id] || registry[config.userscriptFile];
-      if (shouldUseCustomSummaryUserscript(config, packagedRunner)) {
+      if (shouldUseCustomSummaryUserscript(config)) {
         const customResult = await executeCustomSummaryUserscript(config);
         const customMessages = merge2(Array.isArray(customResult?.messages) ? customResult.messages : []);
         return finishSummaryCollection(data, {
-          ...customResult,
           messages: hasUserAndAssistant2(customMessages) ? customMessages : [],
-          rawMessageCount: Number(customResult?.rawMessageCount) || customMessages.length,
-          hasUserAndAssistant: hasUserAndAssistant2(customMessages),
-          runner: "user-scripts"
+          rawMessageCount: Number(customResult?.rawMessageCount) || customMessages.length
         });
       }
       if (config.userscriptRunMode !== "serial") {
@@ -1566,9 +1579,7 @@ ${value}`);
         if (hasUserAndAssistant2(pageMessages)) {
           return finishSummaryCollection(data, {
             messages: pageMessages,
-            rawMessageCount: Number(pageResult.rawMessageCount) || pageMessages.length,
-            hasUserAndAssistant: true,
-            runner: "page-world"
+            rawMessageCount: Number(pageResult.rawMessageCount) || pageMessages.length
           });
         }
       }
@@ -1599,8 +1610,7 @@ ${value}`);
       const messages = merge2(Array.isArray(result) ? result : result?.messages || []);
       return finishSummaryCollection(data, {
         messages: hasUserAndAssistant2(messages) ? messages : [],
-        rawMessageCount: messages.length,
-        hasUserAndAssistant: hasUserAndAssistant2(messages)
+        rawMessageCount: messages.length
       });
     }
     async function getSummaryRuntimeState() {
@@ -1618,8 +1628,6 @@ ${value}`);
         ready: isolatedReady && mainReady,
         isolatedReady,
         mainReady,
-        isolatedVersion,
-        mainVersion: String(pageState?.bridgeVersion || ""),
         documentId: contentDocumentId,
         bridgeVersion: CONTENT_BRIDGE_VERSION2,
         runtimeIdentity: CONTENT_RUNTIME_IDENTITY2,

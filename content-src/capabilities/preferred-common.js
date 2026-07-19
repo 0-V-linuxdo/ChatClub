@@ -6,29 +6,7 @@ export function createPreferredCommonCapability(deps = {}) {
     PREFERRED_MODEL_FOCUS_SHIELD_ATTRIBUTE,
     PREFERRED_MODEL_FOCUS_SHIELD_RELEASE_GRACE_MS,
     GEMINI_MODEL_PICKER_SOURCE,
-    contentBridgeIsCurrent,
-    sleep,
-    isDisabledElement,
-    visibleSelectorElements,
-    firstVisibleBySelectors,
-    modelElementText,
-    compactModelText,
-    alnumModelToken,
-    modelTextIncludes,
-    parseBooleanAttr,
-    modelRect,
-    modelElementArea,
-    modelRectInViewport,
-    visibleInViewport,
-    modelCenterPoint,
-    modelElementFromPoint,
-    modelClickableAncestor,
-    modelCustomActivationAncestor,
-    modelActivationTargets,
-    modelClick,
-    modelDirectClick,
-    preferredModelActivate,
-    preferredModelPointerActivate
+    contentBridgeIsCurrent
   } = deps;
   let preferredModelBridgeRunSequence = Math.max(
     0,
@@ -247,16 +225,6 @@ export function createPreferredCommonCapability(deps = {}) {
     return getter();
   }
 
-  async function waitForModel(getter, timeoutMs = 2500, intervalMs = 120) {
-    const deadline = Date.now() + Math.max(0, Number(timeoutMs) || 0);
-    while (Date.now() <= deadline) {
-      const value = getter();
-      if (value) return value;
-      await sleep(Math.max(30, Number(intervalMs) || 30));
-    }
-    return getter();
-  }
-
   function requestGeminiModelPickerBridgeOpen(context, timeoutMs = 900) {
     assertPreferredModelRun(context);
     const runId = String(context.runId || "");
@@ -314,28 +282,6 @@ export function createPreferredCommonCapability(deps = {}) {
     preferredModelResult,
     preferredModelSleep,
     waitForPreferredModel,
-    waitForModel,
-    isDisabledElement,
-    visibleSelectorElements,
-    firstVisibleBySelectors,
-    modelElementText,
-    compactModelText,
-    alnumModelToken,
-    modelTextIncludes,
-    parseBooleanAttr,
-    modelRect,
-    modelElementArea,
-    modelRectInViewport,
-    visibleInViewport,
-    modelCenterPoint,
-    modelElementFromPoint,
-    modelClickableAncestor,
-    modelCustomActivationAncestor,
-    modelActivationTargets,
-    modelClick,
-    modelDirectClick,
-    preferredModelActivate,
-    preferredModelPointerActivate,
     requestGeminiModelPickerBridgeOpen,
     abortActivePreferredModelRun,
     preferredModelState,

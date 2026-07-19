@@ -1,6 +1,6 @@
 // Built-in Summary userscript: Gemini (gemini)
 // Source: Mod/assets/chunk-7dbf4e81.js :: SUMMARY_SITE_CONFIG_DEFAULTS
-// Config version: 32; global config version: 60
+// Config version: 34; global config version: 60
 // Hosts: gemini.google.com, *.gemini.google.com
 // Path prefixes: (none)
 // Run mode: default; timeout: 20000

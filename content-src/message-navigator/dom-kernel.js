@@ -229,7 +229,6 @@ export {
   cleanLine,
   cloneText,
   compactText,
-  controlOnlyText,
   elementArea,
   elementOrder,
   fullMetaText,
@@ -243,7 +242,6 @@ export {
   safeMatches,
   safeQsa,
   targetForText,
-  textMatchesNeedle,
   uniqueElements,
   usefulTurnText,
   visible

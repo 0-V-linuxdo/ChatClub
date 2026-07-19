@@ -7,7 +7,7 @@ function command(options) {
   });
 }
 
-export const CONTENT_CAPABILITIES = Object.freeze([
+const CONTENT_CAPABILITIES = Object.freeze([
   "base",
   "send",
   "summary",
@@ -15,28 +15,51 @@ export const CONTENT_CAPABILITIES = Object.freeze([
   "delete",
   "message-navigator"
 ]);
-export const CONTENT_CAPABILITY_BUNDLES = Object.freeze({
-  base: Object.freeze([
-    Object.freeze({ file: "content/preload.js", world: "MAIN" }),
-    Object.freeze({ file: "content/content.js", world: "ISOLATED" })
-  ]),
-  send: Object.freeze([Object.freeze({ file: "content/send.js", world: "ISOLATED" })]),
-  summary: Object.freeze([
-    Object.freeze({ file: "content/summary-userscripts-main.js", world: "MAIN" }),
-    Object.freeze({ file: "content/summary-userscripts.js", world: "ISOLATED" }),
-    Object.freeze({ file: "content/summary-bridge.js", world: "ISOLATED" })
-  ]),
-  "preferred-model": Object.freeze([Object.freeze({ file: "content/preferred-model.js", world: "ISOLATED" })]),
-  delete: Object.freeze([Object.freeze({ file: "content/delete.js", world: "ISOLATED" })]),
-  "message-navigator": Object.freeze([Object.freeze({ file: "content/message-navigator.js", world: "ISOLATED" })])
-});
-export const CONTENT_ANCILLARY_BUNDLES = Object.freeze({
-  "grok-cookie": Object.freeze({
-    file: "content/grok-cookie-bridge.js",
+
+function contentBundle(options) {
+  return Object.freeze({
     world: "ISOLATED",
-    hosts: Object.freeze(["grok.com"]),
+    runAt: "document_idle",
+    ...options,
+    ...(options.hosts ? { hosts: Object.freeze([...options.hosts]) } : {})
+  });
+}
+
+export const CONTENT_BUNDLES = Object.freeze({
+  preload: contentBundle({ id: "chatclub-preload", file: "content/preload.js", world: "MAIN", runAt: "document_start" }),
+  grokCookie: contentBundle({
+    id: "chatclub-grok-cookie-bridge",
+    file: "content/grok-cookie-bridge.js",
+    hosts: ["grok.com"],
     runAt: "document_start"
-  })
+  }),
+  content: contentBundle({ id: "chatclub-content", file: "content/content.js" }),
+  summaryMain: contentBundle({ id: "chatclub-summary-userscripts-main", file: "content/summary-userscripts-main.js", world: "MAIN" }),
+  summaryIsolated: contentBundle({ id: "chatclub-summary-userscripts", file: "content/summary-userscripts.js" }),
+  summaryBridge: contentBundle({ id: "chatclub-summary-bridge", file: "content/summary-bridge.js" }),
+  send: contentBundle({ id: "chatclub-send", file: "content/send.js" }),
+  preferredModel: contentBundle({ id: "chatclub-preferred-model", file: "content/preferred-model.js" }),
+  delete: contentBundle({ id: "chatclub-delete", file: "content/delete.js" }),
+  messageNavigator: contentBundle({ id: "chatclub-message-navigator", file: "content/message-navigator.js" })
+});
+
+const CONTENT_CAPABILITY_BUNDLES = Object.freeze({
+  base: Object.freeze([
+    CONTENT_BUNDLES.preload,
+    CONTENT_BUNDLES.content
+  ]),
+  send: Object.freeze([CONTENT_BUNDLES.send]),
+  summary: Object.freeze([
+    CONTENT_BUNDLES.summaryMain,
+    CONTENT_BUNDLES.summaryIsolated,
+    CONTENT_BUNDLES.summaryBridge
+  ]),
+  "preferred-model": Object.freeze([CONTENT_BUNDLES.preferredModel]),
+  delete: Object.freeze([CONTENT_BUNDLES.delete]),
+  "message-navigator": Object.freeze([CONTENT_BUNDLES.messageNavigator])
+});
+const CONTENT_ANCILLARY_BUNDLES = Object.freeze({
+  "grok-cookie": CONTENT_BUNDLES.grokCookie
 });
 
 function contentInjectionHost(value) {

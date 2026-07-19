@@ -297,7 +297,7 @@ function copyMatches(copied, expected) {
   return false;
 }
 
-function userscriptCopyAccepted(copied, expected, role, options = {}) {
+function userscriptCopyAccepted(copied, expected, options = {}) {
   const value = cleanCaptured(copied);
   if (!copyLooksUseful(value)) return "";
   const exclude = toRegex(options.copyTextExcludePattern);
@@ -344,10 +344,10 @@ function pageSummaryRequest(config = {}) {
       resolve(result);
     };
     const ackTimer = setTimeout(() => {
-      if (!acked) finish({ ok: false, missing: true, messages: [], error: "Summary page-world runtime did not acknowledge the request." });
+      if (!acked) finish({ messages: [] });
     }, ackTimeoutMs);
     const totalTimer = setTimeout(() => {
-      finish({ ok: false, timeout: true, messages: [], error: "Summary page-world runtime timed out." });
+      finish({ messages: [] });
     }, totalTimeoutMs);
     const onMessage = (event) => {
       const message = event.data;
@@ -360,11 +360,8 @@ function pageSummaryRequest(config = {}) {
       if (message.type !== "response") return;
       const data = message.data || {};
       finish({
-        ok: Boolean(message.ok),
-        messages: Array.isArray(message.messages) ? message.messages : Array.isArray(data.messages) ? data.messages : [],
-        rawMessageCount: data.rawMessageCount,
-        hasUserAndAssistant: data.hasUserAndAssistant,
-        error: message.error || data.error || ""
+        messages: Array.isArray(data.messages) ? data.messages : [],
+        rawMessageCount: data.rawMessageCount
       });
     };
     window.addEventListener("message", onMessage, true);
@@ -490,7 +487,7 @@ async function copyFirst(buttons, params = {}) {
   const details = params || {};
   const options = details.options || details;
   for (const button of (buttons || []).slice(0, 12)) {
-    const value = userscriptCopyAccepted(await copy(button, options), details.expected, details.role, options);
+    const value = userscriptCopyAccepted(await copy(button, options), details.expected, options);
     if (value) return value;
   }
   if (details.scope && options.copyMenu !== false) {
@@ -600,7 +597,7 @@ async function extractCopySequence(options = {}) {
   const accept = async (button, roleHint) => {
     const role = roleHint || userscriptRole(button, options) || fallbackRole(roleIndex, options);
     if (role !== "user" && role !== "assistant") return false;
-    const value = userscriptCopyAccepted(await copy(button, options), "", role, { ...options, matchMode: "anyUseful" });
+    const value = userscriptCopyAccepted(await copy(button, options), "", { ...options, matchMode: "anyUseful" });
     if (!value) return false;
     pushMessage(out, role, value, seen);
     roleIndex += 1;
@@ -830,7 +827,7 @@ async function extractHoverNativeCopyConversation(root = document.body) {
     await sleep(180);
     for (const button of hoverCopyCandidateButtons(anchor, options).slice(0, 14)) {
       const copied = await copy(button, options);
-      const value = userscriptCopyAccepted(copied, expected, role, options);
+      const value = userscriptCopyAccepted(copied, expected, options);
       if (value) {
         pushMessage(out, role, value, seen);
         roleIndex += 1;
@@ -899,55 +896,19 @@ export {
   text,
   reveal,
   merge,
-  toRegex,
   compareText,
-  cleanCaptured,
-  pageLogoUrl,
   pageMeta,
-  copyLooksUseful,
   hasUserAndAssistant,
-  elementOrder,
   classText,
   buttonText,
-  userscriptMeta,
   matches,
-  isNativeCopyButton,
-  svgSignature,
-  userscriptLooksLikeCopyIcon,
-  internalTool,
-  userscriptButtonOk,
-  userscriptCopyRoots,
   userscriptFindCopyButtons,
-  userscriptFindMenuButtons,
-  userscriptOpenCopyButtons,
-  userscriptCloseMenus,
-  copyMatches,
-  userscriptCopyAccepted,
-  copyBridgeRequest,
   pageSummaryRequest,
   pageSummaryRuntimeState,
-  copyId,
-  isCopyProbeText,
   activateElement,
   copy,
   copyFirst,
-  userscriptRole,
-  fallbackRole,
-  pushMessage,
   extractTurns,
   extractCopySequence,
-  nodeTextForCopy,
-  internalCopyScope,
-  copyButtonRole,
-  conversationCopyButtons,
-  nativeCopyDedup,
-  hoverCopyBadButton,
-  hoverCopyRect,
-  hoverCopySmallIconButton,
-  hoverCopyCandidateButtons,
-  hoverCopyAnchorRole,
-  hoverCopyAddAnchor,
-  hoverCopyMessageAnchors,
-  extractHoverNativeCopyConversation,
   extractNativeCopyConversation
 };

@@ -23,7 +23,7 @@ import { contentCommandRouter, installContentCapability } from "./shared/command
 import { installSecureFrameRpc } from "./shared/secure-frame-rpc.js";
 import { requestBackground } from "./shared/extension-runtime.js";
 
-export function installContentBridge() {
+function installContentBridge() {
   const PROTOCOL = CONTENT_PROTOCOL;
   const runtimes = runtimeRegistry(window);
   const CONTENT_RUNTIME_IDENTITY = createContentRuntimeBundleIdentity(CONTENT_RUNTIME_CONTENT_BUNDLE_IDENTITY);
@@ -57,38 +57,23 @@ export function installContentBridge() {
   const clearSubmissionNavigation = submissionNavigation.clear;
   const currentSubmissionNavigation = submissionNavigation.current;
   const clearSubmissionNavigationForTrustedIntent = submissionNavigation.clearForTrustedIntent;
-  let suppressShortcutBridgeUntil = 0;
-
   function abortActivePreferredModelRun(reason = "preferred model apply cancelled", runId = "") {
     commandRouter.dispatch("cancelPreferredModelApply", { reason, runId }).catch(() => {});
     return true;
   }
 
-  function contentReadyData() {
+  function contentLifecycleData() {
     return {
       documentId: contentDocumentId,
       frameBindingId: currentFrameBindingId(),
       bridgeVersion: CONTENT_BRIDGE_VERSION,
       runtimeIdentity: CONTENT_RUNTIME_IDENTITY,
-      locationRevision: contentLocationRevision,
       href: location.href,
       title: String(document.title || "").replace(/\s+/g, " ").trim()
     };
   }
 
-  function postContentReady() {
-    try {
-      window.parent.postMessage({
-        source: SOURCE,
-        type: "request",
-        action: "contentReady",
-        id: `${Date.now()}`,
-        data: contentReadyData()
-      }, "*");
-    } catch {}
-  }
-
-  function announceContentReady() {
+  function announceContentRegistration() {
     return requestBackground(REGISTER_FRAME_CONTEXT_REQUEST, {
       bridgeDocumentId: contentDocumentId,
       browserDocumentId: currentBrowserDocumentAttestationId(),
@@ -98,7 +83,7 @@ export function installContentBridge() {
       runtimeIdentity: CONTENT_RUNTIME_IDENTITY
     }).catch((error) => {
       console.warn("[ChatClub] Secure frame registration failed", error);
-    }).finally(postContentReady);
+    });
   }
 
   async function relayFrameBindingChallenge(message = {}) {
@@ -150,7 +135,7 @@ export function installContentBridge() {
       bridgeDocumentId: contentDocumentId,
       browserDocumentId: currentBrowserDocumentAttestationId({ allowDirty: true }),
       frameBindingId: currentFrameBindingId(),
-      data: contentReadyData()
+      data: contentLifecycleData()
     }).catch(() => {});
   }
 
@@ -169,7 +154,7 @@ export function installContentBridge() {
     runtimes.isActive
     && window.__CHATCLUB_CONTENT_BRIDGE_VERSION__ === CONTENT_RUNTIME_VERSION
   ) {
-    announceContentReady();
+    announceContentRegistration();
     return;
   }
   const previousLocationReportCleanup = window.__CHATCLUB_LOCATION_REPORT_CLEANUP__;
@@ -216,7 +201,7 @@ export function installContentBridge() {
     const kind = String(metadata?.kind || "navigation");
     const submission = currentSubmissionNavigation(kind);
     postLocationChanged({
-      ...contentReadyData(),
+      ...contentLifecycleData(),
       href,
       previousHref,
       navigation: {
@@ -280,7 +265,7 @@ export function installContentBridge() {
     window.addEventListener("pageshow", () => {
       if (!contentBridgeIsCurrent()) return;
       currentBrowserDocumentAttestationId();
-      announceContentReady();
+      announceContentRegistration();
     }, options);
     timer = setInterval(() => {
       reportLocationChange("", false, { kind: "poll", at: Date.now() });
@@ -424,8 +409,7 @@ export function installContentBridge() {
     window.addEventListener("keydown", (event) => {
       if (!contentBridgeIsCurrent()) return;
       if (!event.isTrusted) return;
-      if (Date.now() < suppressShortcutBridgeUntil) return;
-      const matched = matchShortcut(event);
+      const matched = matchShortcut(event, activeShortcutConfig, ACTIVE_KEYBOARD_PLATFORM);
       if (!matched) return;
       if (!shouldBridgeShortcut(matched, event)) return;
       event.preventDefault();
@@ -444,7 +428,7 @@ export function installContentBridge() {
     activate() {
       activateContentGeneration();
       queueMicrotask(() => {
-        if (contentBridgeIsCurrent()) announceContentReady();
+        if (contentBridgeIsCurrent()) announceContentRegistration();
       });
     },
     dispose() {

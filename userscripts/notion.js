@@ -1,6 +1,6 @@
 // Built-in Summary userscript: Notion (notion)
 // Source: Mod/assets/chunk-7dbf4e81.js :: SUMMARY_SITE_CONFIG_DEFAULTS
-// Config version: 62; global config version: 62
+// Config version: 64; global config version: 62
 // Hosts: app.notion.com, notion.so, www.notion.so, *.notion.so
 // Path prefixes: /chat, /ai
 // Run mode: default; timeout: default

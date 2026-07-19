@@ -10,9 +10,6 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
     preferredModelActivate,
     waitForPreferredModel,
     modelElementArea,
-    modelCenterPoint,
-    modelElementFromPoint,
-    modelClickableAncestor,
     preferredModelSleep,
     dismissPreferredModelMenu,
     preferredModelResult,
@@ -374,31 +371,6 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
     for (const element of visibleSelectorElements(["div", "span", "button"], root)) add(element);
     rows.sort((a, b) => scoreNotionModelItem(b, modelId) - scoreNotionModelItem(a, modelId));
     return rows[0] || null;
-  }
-
-  function findNotionModelItemPointTarget(element, root, modelId) {
-    const target = NOTION_MODEL_TARGETS[modelId];
-    const matchesSpec = (candidate) => notionTextLooksLikeTarget(modelElementText(candidate), target);
-    const point = modelCenterPoint(element);
-    const pointElement = modelElementFromPoint(point, element);
-    if (!pointElement || !root?.contains?.(pointElement)) return null;
-    let node = pointElement;
-    while (node && node.nodeType === 1 && node !== root) {
-      if (
-        visible(node) &&
-        !isDisabledElement(node) &&
-        matchesSpec(node) &&
-        countNotionModelTargets(modelElementText(node)) <= 1
-      ) {
-        const row = notionMenuItemRow(node, root, matchesSpec);
-        if (row && root.contains?.(row) && matchesSpec(row)) return row;
-      }
-      node = node.parentElement || null;
-    }
-    const clickable = modelClickableAncestor(pointElement);
-    return clickable && root.contains?.(clickable) && matchesSpec(clickable)
-      ? clickable
-      : null;
   }
 
   function notionElementHasSelectedState(element) {
@@ -780,8 +752,6 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
     });
   }
   return Object.freeze({
-    applyNotionPreferredModel,
-    applyDeepSeekPreferredModel,
     runPreferredModelApply,
     cancelPreferredModelApply
   });

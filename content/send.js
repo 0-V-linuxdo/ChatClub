@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "42d1e137fe2015d43fe6732ef431f641cc51d65ec7986e095d9a243339d4e9c2";
-  var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.cd06beed22e9f6fcab8057bd949a3c0c68974967bda920471fc1d62f06999029";
-  var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "cd06beed22e9f6fcab8057bd949a3c0c68974967bda920471fc1d62f06999029";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "ebe2ed4ec1fc3680d7cd904b38a423d86055d3ce43ef5f1d0cb0f96f6d83fd83";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.ebe2ed4ec1fc3680d7cd904b38a423d86055d3ce43ef5f1d0cb0f96f6d83fd83";
-  var CONTENT_RUNTIME_SEND_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/send.js", "entryPath": "content-src/content-send.js", "sourceSha256": "1141d5952f56096819242f09acf46fb4597aa1123cc1073f5615129b54eea006", "implementationSha256": "d00111ce181d9713a96d27466165b98cca9f6badab06ed1833549edbfd19ab6f", "implementationVersion": "2026.07.16.2+bundle.d00111ce181d9713a96d27466165b98cca9f6badab06ed1833549edbfd19ab6f" });
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "56ae70c075c19ca583d76133e0edc0d694fecc58c3112f9e246a5812e8650b8f";
+  var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.39e7dff3b817dd590d108ce155af13e47b28138e33c477502664105276787094";
+  var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "39e7dff3b817dd590d108ce155af13e47b28138e33c477502664105276787094";
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "330f3a3515c38cb4bb3d34cf09d63dcb258c91cd538e9214385bdfb2d1ea9799";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.330f3a3515c38cb4bb3d34cf09d63dcb258c91cd538e9214385bdfb2d1ea9799";
+  var CONTENT_RUNTIME_SEND_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/send.js", "entryPath": "content-src/content-send.js", "sourceSha256": "7205fb1f4d69392fb5ecf14b1d9480c5a2cbbb704093a885033cfd97aec71c33", "implementationSha256": "62d143f4df7e27d4cb7a817404931783d15a299949cbda33ee1c5b7ef6521ff8", "implementationVersion": "2026.07.16.2+bundle.62d143f4df7e27d4cb7a817404931783d15a299949cbda33ee1c5b7ef6521ff8" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -259,28 +259,48 @@
     "delete",
     "message-navigator"
   ]);
+  function contentBundle(options) {
+    return Object.freeze({
+      world: "ISOLATED",
+      runAt: "document_idle",
+      ...options,
+      ...options.hosts ? { hosts: Object.freeze([...options.hosts]) } : {}
+    });
+  }
+  var CONTENT_BUNDLES = Object.freeze({
+    preload: contentBundle({ id: "chatclub-preload", file: "content/preload.js", world: "MAIN", runAt: "document_start" }),
+    grokCookie: contentBundle({
+      id: "chatclub-grok-cookie-bridge",
+      file: "content/grok-cookie-bridge.js",
+      hosts: ["grok.com"],
+      runAt: "document_start"
+    }),
+    content: contentBundle({ id: "chatclub-content", file: "content/content.js" }),
+    summaryMain: contentBundle({ id: "chatclub-summary-userscripts-main", file: "content/summary-userscripts-main.js", world: "MAIN" }),
+    summaryIsolated: contentBundle({ id: "chatclub-summary-userscripts", file: "content/summary-userscripts.js" }),
+    summaryBridge: contentBundle({ id: "chatclub-summary-bridge", file: "content/summary-bridge.js" }),
+    send: contentBundle({ id: "chatclub-send", file: "content/send.js" }),
+    preferredModel: contentBundle({ id: "chatclub-preferred-model", file: "content/preferred-model.js" }),
+    delete: contentBundle({ id: "chatclub-delete", file: "content/delete.js" }),
+    messageNavigator: contentBundle({ id: "chatclub-message-navigator", file: "content/message-navigator.js" })
+  });
   var CONTENT_CAPABILITY_BUNDLES = Object.freeze({
     base: Object.freeze([
-      Object.freeze({ file: "content/preload.js", world: "MAIN" }),
-      Object.freeze({ file: "content/content.js", world: "ISOLATED" })
+      CONTENT_BUNDLES.preload,
+      CONTENT_BUNDLES.content
     ]),
-    send: Object.freeze([Object.freeze({ file: "content/send.js", world: "ISOLATED" })]),
+    send: Object.freeze([CONTENT_BUNDLES.send]),
     summary: Object.freeze([
-      Object.freeze({ file: "content/summary-userscripts-main.js", world: "MAIN" }),
-      Object.freeze({ file: "content/summary-userscripts.js", world: "ISOLATED" }),
-      Object.freeze({ file: "content/summary-bridge.js", world: "ISOLATED" })
+      CONTENT_BUNDLES.summaryMain,
+      CONTENT_BUNDLES.summaryIsolated,
+      CONTENT_BUNDLES.summaryBridge
     ]),
-    "preferred-model": Object.freeze([Object.freeze({ file: "content/preferred-model.js", world: "ISOLATED" })]),
-    delete: Object.freeze([Object.freeze({ file: "content/delete.js", world: "ISOLATED" })]),
-    "message-navigator": Object.freeze([Object.freeze({ file: "content/message-navigator.js", world: "ISOLATED" })])
+    "preferred-model": Object.freeze([CONTENT_BUNDLES.preferredModel]),
+    delete: Object.freeze([CONTENT_BUNDLES.delete]),
+    "message-navigator": Object.freeze([CONTENT_BUNDLES.messageNavigator])
   });
   var CONTENT_ANCILLARY_BUNDLES = Object.freeze({
-    "grok-cookie": Object.freeze({
-      file: "content/grok-cookie-bridge.js",
-      world: "ISOLATED",
-      hosts: Object.freeze(["grok.com"]),
-      runAt: "document_start"
-    })
+    "grok-cookie": CONTENT_BUNDLES.grokCookie
   });
   var FRAME_COMMAND_SPECS = Object.freeze({
     getLocationHref: command({ timeoutMs: 1200, capability: "base" }),

@@ -22,7 +22,6 @@ export function createDeleteDeepSeekCapability(deps = {}) {
     trustedMenuClickPoint,
     serializableDeleteRect,
     deleteResult,
-    trustedHoverRightEdge,
     layoutDeleteCandidates,
     modelEventConstructor,
     reveal,
@@ -156,24 +155,13 @@ export function createDeleteDeepSeekCapability(deps = {}) {
   }
 
   function deepSeekDeleteHints(data = {}) {
-    const hrefs = [
-      location.href,
-      data.currentThreadHref,
-      data.currentHref,
-      data.cachedHref,
-      data.href,
-      data.url
-    ].filter(Boolean);
-    const ids = new Set(hrefs.map(deepSeekChatIdFromHref).filter(Boolean));
     const titleTokens = new Set([
       document.title,
       data.currentTitle,
       data.title
     ].map(deepSeekTitleTokenFromValue).filter(Boolean));
     return {
-      ids: Array.from(ids),
-      titleTokens: Array.from(titleTokens),
-      hasTarget: ids.size > 0 || titleTokens.size > 0
+      titleTokens: Array.from(titleTokens)
     };
   }
 
@@ -309,24 +297,6 @@ export function createDeleteDeepSeekCapability(deps = {}) {
       ...(trustedKeySequence ? { needsTrustedKeySequence: true, trustedKeySequence } : {}),
       ...(trustedMenuClick ? { needsTrustedMenuClick: true, trustedMenuClick } : {})
     });
-  }
-
-  function deleteResultWithDeepSeekTrustedHover(reason, row) {
-    const rowRect = deepSeekTopicMenuRect(row);
-    const trustedHover = rowRect
-      ? {
-        kind: "topic-menu-hover",
-        site: "deepseek",
-        reason: String(reason || ""),
-        framePoint: {
-          x: Math.round(Math.max(rowRect.left + 16, rowRect.right - 28) * 100) / 100,
-          y: Math.round((rowRect.top + rowRect.height / 2) * 100) / 100
-        },
-        frameRect: serializableDeleteRect(rowRect),
-        hoverSettleMs: 520
-      }
-      : trustedHoverRightEdge(deepSeekVisualTopicRow(row) || row, "deepseek", reason);
-    return deleteResult(false, "deepseek", reason, trustedHover ? { needsTrustedHover: true, trustedHover } : {});
   }
 
   function closeDeepSeekTransientMenus() {
@@ -875,12 +845,6 @@ export function createDeleteDeepSeekCapability(deps = {}) {
   }
   return Object.freeze({
     deleteDeepSeekThread,
-    requestDeepSeekDeleteBridge,
-    ensureDeepSeekSidebarOpen,
-    deepSeekSidebarRoot,
-    deepSeekDeleteHints,
-    findDeepSeekCurrentTopicRow,
-    deepSeekTopicMoreButton,
     validateDeepSeekTrustedCoordinates,
     sanitizeDeepSeekTrustedResult,
     TOPIC_DELETE_FALLBACK_CONFIGS

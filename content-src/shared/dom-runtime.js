@@ -20,9 +20,6 @@ export function createDomRuntime(deps = {}) {
     visible,
     normalize,
     closest,
-    DELETE_CLICKABLE_SELECTOR,
-    assertPreferredModelRun,
-    armPreferredModelFocusShield,
     activateElement
   } = deps;
   function visibleSelectorElements(selectors, root = document) {
@@ -61,27 +58,6 @@ export function createDomRuntime(deps = {}) {
     ].filter(Boolean).join(" "));
   }
 
-  function compactModelText(value) {
-    return normalize(value).toLowerCase().replace(/\s+/g, " ");
-  }
-
-  function alnumModelToken(value) {
-    return String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
-  }
-
-  function modelTextIncludes(value, needle) {
-    const haystack = compactModelText(value);
-    const target = compactModelText(needle);
-    return Boolean(target && (haystack === target || haystack.includes(target)));
-  }
-
-  function parseBooleanAttr(value) {
-    const token = String(value ?? "").trim().toLowerCase();
-    if (token === "true") return true;
-    if (token === "false") return false;
-    return null;
-  }
-
   function modelEventView(el = null) {
     try { return el?.ownerDocument?.defaultView || document?.defaultView || window; } catch {}
     try { return window; } catch {}
@@ -117,27 +93,6 @@ export function createDomRuntime(deps = {}) {
   function modelElementArea(el) {
     const rect = modelRect(el);
     return rect ? rect.width * rect.height : Number.MAX_SAFE_INTEGER;
-  }
-
-  function modelRectInViewport(rect, margin = 0) {
-    if (!rect || rect.width <= 0 || rect.height <= 0) return false;
-    const viewportWidth = Math.max(1, Number(window.innerWidth) || Number(document.documentElement?.clientWidth) || 1);
-    const viewportHeight = Math.max(1, Number(window.innerHeight) || Number(document.documentElement?.clientHeight) || 1);
-    return rect.bottom > margin
-      && rect.right > margin
-      && rect.top < viewportHeight - margin
-      && rect.left < viewportWidth - margin;
-  }
-
-  function visibleInViewport(el, { hitTest = false } = {}) {
-    if (!visible(el)) return false;
-    const rect = modelRect(el);
-    if (!modelRectInViewport(rect)) return false;
-    if (!hitTest) return true;
-    const point = modelCenterPoint(el);
-    const target = modelElementFromPoint(point, el);
-    if (!target) return false;
-    return target === el || el.contains?.(target) || target.contains?.(el) || closest(target, DELETE_CLICKABLE_SELECTOR) === el;
   }
 
   function modelCenterPoint(el) {
@@ -242,25 +197,6 @@ export function createDomRuntime(deps = {}) {
     }
   }
 
-  function preferredModelActivate(context, target) {
-    assertPreferredModelRun(context);
-    if (!target || !visible(target) || isDisabledElement(target) || typeof target.click !== "function") return false;
-    armPreferredModelFocusShield(context);
-    try { target.scrollIntoView?.({ block: "center", inline: "nearest" }); } catch {}
-    assertPreferredModelRun(context);
-    context.interactionCount += 1;
-    return nativeModelClick(target);
-  }
-
-  function preferredModelPointerActivate(context, target) {
-    assertPreferredModelRun(context);
-    if (!target || !visible(target) || isDisabledElement(target)) return false;
-    armPreferredModelFocusShield(context);
-    assertPreferredModelRun(context);
-    context.interactionCount += 1;
-    return modelDirectClick(target);
-  }
-
   function modelClick(el) {
     if (!el || !visible(el) || isDisabledElement(el)) return false;
     try { el.scrollIntoView?.({ block: "center", inline: "nearest" }); } catch {}
@@ -294,25 +230,83 @@ export function createDomRuntime(deps = {}) {
     visibleSelectorElements,
     firstVisibleBySelectors,
     modelElementText,
-    compactModelText,
-    alnumModelToken,
-    modelTextIncludes,
-    parseBooleanAttr,
     modelEventConstructor,
     modelRect,
     modelElementArea,
-    modelRectInViewport,
-    visibleInViewport,
     modelCenterPoint,
     modelElementFromPoint,
     modelClickableAncestor,
     modelCustomActivationAncestor,
-    modelActivationTargets,
     dispatchPointerActivation,
     nativeModelClick,
-    preferredModelActivate,
-    preferredModelPointerActivate,
     modelClick,
     modelDirectClick
+  });
+}
+
+export function createPreferredDomRuntime(deps = {}) {
+  const {
+    activateElement,
+    closest,
+    normalize,
+    qsa,
+    visible,
+    assertPreferredModelRun,
+    armPreferredModelFocusShield
+  } = deps;
+  const dom = createDomRuntime({ activateElement, closest, normalize, qsa, visible });
+  const {
+    isDisabledElement,
+    nativeModelClick,
+    modelDirectClick
+  } = dom;
+
+  function compactModelText(value) {
+    return normalize(value).toLowerCase().replace(/\s+/g, " ");
+  }
+
+  function alnumModelToken(value) {
+    return String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+  }
+
+  function parseBooleanAttr(value) {
+    const token = String(value ?? "").trim().toLowerCase();
+    if (token === "true") return true;
+    if (token === "false") return false;
+    return null;
+  }
+
+  function preferredModelActivate(context, target) {
+    assertPreferredModelRun(context);
+    if (!target || !visible(target) || isDisabledElement(target) || typeof target.click !== "function") return false;
+    armPreferredModelFocusShield(context);
+    try { target.scrollIntoView?.({ block: "center", inline: "nearest" }); } catch {}
+    assertPreferredModelRun(context);
+    context.interactionCount += 1;
+    return nativeModelClick(target);
+  }
+
+  function preferredModelPointerActivate(context, target) {
+    assertPreferredModelRun(context);
+    if (!target || !visible(target) || isDisabledElement(target)) return false;
+    armPreferredModelFocusShield(context);
+    assertPreferredModelRun(context);
+    context.interactionCount += 1;
+    return modelDirectClick(target);
+  }
+
+  return Object.freeze({
+    firstVisibleBySelectors: dom.firstVisibleBySelectors,
+    isDisabledElement,
+    modelElementArea: dom.modelElementArea,
+    modelElementText: dom.modelElementText,
+    modelEventConstructor: dom.modelEventConstructor,
+    modelRect: dom.modelRect,
+    visibleSelectorElements: dom.visibleSelectorElements,
+    compactModelText,
+    alnumModelToken,
+    parseBooleanAttr,
+    preferredModelActivate,
+    preferredModelPointerActivate
   });
 }

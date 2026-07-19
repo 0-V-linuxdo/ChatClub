@@ -145,7 +145,7 @@ async function attestTrustedFrame(api, target) {
   }
 }
 
-export async function verifyTrustedFrameTarget(api, target) {
+async function verifyTrustedFrameTarget(api, target) {
   const before = await exactDirectChildFrame(api, target);
   await attestTrustedFrame(api, target);
   const after = await exactDirectChildFrame(api, target);

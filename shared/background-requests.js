@@ -1,17 +1,12 @@
 import {
   BACKGROUND_REQUEST_AUTHORIZER_BY_SENDER_CLASS,
   BACKGROUND_REQUEST_AUTHORIZERS,
-  BACKGROUND_REQUEST_ERROR_CONTRACT,
-  BACKGROUND_REQUEST_SENDER_CLASSES,
   BACKGROUND_REQUEST_SOURCE,
-  COMMON_BACKGROUND_REQUEST_ERROR_CODES,
   FRAME_ROUTE_ERROR_CODES,
-  BackgroundRequestError,
   assertBackgroundContractValue,
   assertBackgroundRequestError,
   assertBackgroundRequestSpecifications as assertSpecifications,
   backgroundRequestContract,
-  backgroundRequestMessageForContract,
   contract,
   createBackgroundRequestContractClient,
   extensionPageRequest
@@ -31,12 +26,8 @@ import {
 export {
   BACKGROUND_REQUEST_AUTHORIZER_BY_SENDER_CLASS,
   BACKGROUND_REQUEST_AUTHORIZERS,
-  BACKGROUND_REQUEST_ERROR_CONTRACT,
-  BACKGROUND_REQUEST_SENDER_CLASSES,
   BACKGROUND_REQUEST_SOURCE,
-  COMMON_BACKGROUND_REQUEST_ERROR_CODES,
   FRAME_ROUTE_ERROR_CODES,
-  BackgroundRequestError,
   assertBackgroundContractValue,
   assertBackgroundRequestError
 };
@@ -216,20 +207,6 @@ const requestContracts = Object.freeze(Object.fromEntries(
   ])
 ));
 
-export function assertBackgroundRequestSpecifications(
-  specifications = BACKGROUND_REQUEST_SPECS,
-  actions = BACKGROUND_REQUEST_ACTIONS
-) {
-  return assertSpecifications(specifications, actions);
-}
-
-export function backgroundRequestMessage(actionName, payload = {}) {
-  const action = String(actionName || "").trim();
-  const request = requestContracts[action];
-  if (!request) throw new TypeError(`Unknown background request action: ${action || "(empty)"}`);
-  return backgroundRequestMessageForContract(request, payload);
-}
-
 export function createBackgroundRequestClient(sendMessage) {
   const requestContract = createBackgroundRequestContractClient(sendMessage);
   return function requestBackground(actionName, payload = {}) {
@@ -240,4 +217,4 @@ export function createBackgroundRequestClient(sendMessage) {
   };
 }
 
-assertBackgroundRequestSpecifications();
+assertSpecifications(BACKGROUND_REQUEST_SPECS, BACKGROUND_REQUEST_ACTIONS);

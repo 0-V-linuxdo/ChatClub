@@ -30,7 +30,7 @@ const BUNDLE_IDENTITY_FIELDS = Object.freeze([
   "implementationVersion"
 ]);
 
-export function normalizeContentRuntimeBundleIdentity(value = {}) {
+function normalizeContentRuntimeBundleIdentity(value = {}) {
   const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
   return Object.freeze(Object.fromEntries(
     BUNDLE_IDENTITY_FIELDS.map((field) => [field, String(source[field] || "")])
@@ -56,7 +56,7 @@ export function normalizeContentRuntimeIdentity(value = {}) {
   return Object.freeze(identity);
 }
 
-export function contentRuntimeIdentityMatches(value, expected = CONTENT_RUNTIME_IDENTITY) {
+function contentRuntimeIdentityMatches(value, expected = CONTENT_RUNTIME_IDENTITY) {
   const candidate = normalizeContentRuntimeIdentity(value);
   const wanted = normalizeContentRuntimeIdentity(expected);
   return IDENTITY_FIELDS.every((field) => candidate[field] && candidate[field] === wanted[field]);
@@ -84,14 +84,6 @@ export function assertContentRuntimeBundleIdentity(value, expectedBundleIdentity
   if (!contentRuntimeBundleIdentityMatches(identity, expectedBundleIdentity)) {
     const outputPath = String(expectedBundleIdentity?.bundle?.outputPath || expectedBundleIdentity?.outputPath || "");
     throw new Error(`${label} does not match packaged bundle ${outputPath}`);
-  }
-  return identity;
-}
-
-export function assertContentRuntimeIdentity(value, label = "Content runtime identity") {
-  const identity = normalizeContentRuntimeIdentity(value);
-  if (!contentRuntimeIdentityMatches(identity)) {
-    throw new Error(`${label} does not match the packaged content runtime generation`);
   }
   return identity;
 }

@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "42d1e137fe2015d43fe6732ef431f641cc51d65ec7986e095d9a243339d4e9c2";
-  var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.cd06beed22e9f6fcab8057bd949a3c0c68974967bda920471fc1d62f06999029";
-  var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "cd06beed22e9f6fcab8057bd949a3c0c68974967bda920471fc1d62f06999029";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "ebe2ed4ec1fc3680d7cd904b38a423d86055d3ce43ef5f1d0cb0f96f6d83fd83";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.ebe2ed4ec1fc3680d7cd904b38a423d86055d3ce43ef5f1d0cb0f96f6d83fd83";
-  var CONTENT_RUNTIME_PREFERRED_MODEL_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preferred-model.js", "entryPath": "content-src/content-preferred-model.js", "sourceSha256": "e57bd466a71fd3736b049fb82081c70cf3c0c134b916de6eb1625788e5d76387", "implementationSha256": "877a85a24ae878591189d90a54276852b5285b91224c988d34b3c49eab6757c8", "implementationVersion": "2026.07.16.2+bundle.877a85a24ae878591189d90a54276852b5285b91224c988d34b3c49eab6757c8" });
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "56ae70c075c19ca583d76133e0edc0d694fecc58c3112f9e246a5812e8650b8f";
+  var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.39e7dff3b817dd590d108ce155af13e47b28138e33c477502664105276787094";
+  var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "39e7dff3b817dd590d108ce155af13e47b28138e33c477502664105276787094";
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "330f3a3515c38cb4bb3d34cf09d63dcb258c91cd538e9214385bdfb2d1ea9799";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.330f3a3515c38cb4bb3d34cf09d63dcb258c91cd538e9214385bdfb2d1ea9799";
+  var CONTENT_RUNTIME_PREFERRED_MODEL_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preferred-model.js", "entryPath": "content-src/content-preferred-model.js", "sourceSha256": "c2a9f205b61493cd917d0728d7028c78f7df70f6e746b59b329043297394690f", "implementationSha256": "c6d66a9c78750bfd831f6db619f965102fdaef9436fa2eed21bfa1d967ab3ffd", "implementationVersion": "2026.07.16.2+bundle.c6d66a9c78750bfd831f6db619f965102fdaef9436fa2eed21bfa1d967ab3ffd" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -110,9 +110,6 @@
   }
 
   // content-src/shared/summary-runtime.js
-  var sleep = (ms) => new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
   var normalize = (value) => String(value || "").replace(/\u00a0/g, " ").replace(/\r\n?/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
   function visible(el) {
     if (!el?.getBoundingClientRect) return false;
@@ -277,28 +274,48 @@
     "delete",
     "message-navigator"
   ]);
+  function contentBundle(options) {
+    return Object.freeze({
+      world: "ISOLATED",
+      runAt: "document_idle",
+      ...options,
+      ...options.hosts ? { hosts: Object.freeze([...options.hosts]) } : {}
+    });
+  }
+  var CONTENT_BUNDLES = Object.freeze({
+    preload: contentBundle({ id: "chatclub-preload", file: "content/preload.js", world: "MAIN", runAt: "document_start" }),
+    grokCookie: contentBundle({
+      id: "chatclub-grok-cookie-bridge",
+      file: "content/grok-cookie-bridge.js",
+      hosts: ["grok.com"],
+      runAt: "document_start"
+    }),
+    content: contentBundle({ id: "chatclub-content", file: "content/content.js" }),
+    summaryMain: contentBundle({ id: "chatclub-summary-userscripts-main", file: "content/summary-userscripts-main.js", world: "MAIN" }),
+    summaryIsolated: contentBundle({ id: "chatclub-summary-userscripts", file: "content/summary-userscripts.js" }),
+    summaryBridge: contentBundle({ id: "chatclub-summary-bridge", file: "content/summary-bridge.js" }),
+    send: contentBundle({ id: "chatclub-send", file: "content/send.js" }),
+    preferredModel: contentBundle({ id: "chatclub-preferred-model", file: "content/preferred-model.js" }),
+    delete: contentBundle({ id: "chatclub-delete", file: "content/delete.js" }),
+    messageNavigator: contentBundle({ id: "chatclub-message-navigator", file: "content/message-navigator.js" })
+  });
   var CONTENT_CAPABILITY_BUNDLES = Object.freeze({
     base: Object.freeze([
-      Object.freeze({ file: "content/preload.js", world: "MAIN" }),
-      Object.freeze({ file: "content/content.js", world: "ISOLATED" })
+      CONTENT_BUNDLES.preload,
+      CONTENT_BUNDLES.content
     ]),
-    send: Object.freeze([Object.freeze({ file: "content/send.js", world: "ISOLATED" })]),
+    send: Object.freeze([CONTENT_BUNDLES.send]),
     summary: Object.freeze([
-      Object.freeze({ file: "content/summary-userscripts-main.js", world: "MAIN" }),
-      Object.freeze({ file: "content/summary-userscripts.js", world: "ISOLATED" }),
-      Object.freeze({ file: "content/summary-bridge.js", world: "ISOLATED" })
+      CONTENT_BUNDLES.summaryMain,
+      CONTENT_BUNDLES.summaryIsolated,
+      CONTENT_BUNDLES.summaryBridge
     ]),
-    "preferred-model": Object.freeze([Object.freeze({ file: "content/preferred-model.js", world: "ISOLATED" })]),
-    delete: Object.freeze([Object.freeze({ file: "content/delete.js", world: "ISOLATED" })]),
-    "message-navigator": Object.freeze([Object.freeze({ file: "content/message-navigator.js", world: "ISOLATED" })])
+    "preferred-model": Object.freeze([CONTENT_BUNDLES.preferredModel]),
+    delete: Object.freeze([CONTENT_BUNDLES.delete]),
+    "message-navigator": Object.freeze([CONTENT_BUNDLES.messageNavigator])
   });
   var CONTENT_ANCILLARY_BUNDLES = Object.freeze({
-    "grok-cookie": Object.freeze({
-      file: "content/grok-cookie-bridge.js",
-      world: "ISOLATED",
-      hosts: Object.freeze(["grok.com"]),
-      runAt: "document_start"
-    })
+    "grok-cookie": CONTENT_BUNDLES.grokCookie
   });
   var FRAME_COMMAND_SPECS = Object.freeze({
     getLocationHref: command({ timeoutMs: 1200, capability: "base" }),
@@ -430,9 +447,6 @@
       visible: visible2,
       normalize: normalize2,
       closest: closest2,
-      DELETE_CLICKABLE_SELECTOR,
-      assertPreferredModelRun,
-      armPreferredModelFocusShield,
       activateElement: activateElement2
     } = deps;
     function visibleSelectorElements(selectors, root = document) {
@@ -467,23 +481,6 @@
         el.innerText || el.textContent || "",
         el.value
       ].filter(Boolean).join(" "));
-    }
-    function compactModelText(value) {
-      return normalize2(value).toLowerCase().replace(/\s+/g, " ");
-    }
-    function alnumModelToken(value) {
-      return String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
-    }
-    function modelTextIncludes(value, needle) {
-      const haystack = compactModelText(value);
-      const target = compactModelText(needle);
-      return Boolean(target && (haystack === target || haystack.includes(target)));
-    }
-    function parseBooleanAttr(value) {
-      const token = String(value ?? "").trim().toLowerCase();
-      if (token === "true") return true;
-      if (token === "false") return false;
-      return null;
     }
     function modelEventView(el = null) {
       try {
@@ -523,22 +520,6 @@
     function modelElementArea(el) {
       const rect = modelRect(el);
       return rect ? rect.width * rect.height : Number.MAX_SAFE_INTEGER;
-    }
-    function modelRectInViewport(rect, margin = 0) {
-      if (!rect || rect.width <= 0 || rect.height <= 0) return false;
-      const viewportWidth = Math.max(1, Number(window.innerWidth) || Number(document.documentElement?.clientWidth) || 1);
-      const viewportHeight = Math.max(1, Number(window.innerHeight) || Number(document.documentElement?.clientHeight) || 1);
-      return rect.bottom > margin && rect.right > margin && rect.top < viewportHeight - margin && rect.left < viewportWidth - margin;
-    }
-    function visibleInViewport(el, { hitTest = false } = {}) {
-      if (!visible2(el)) return false;
-      const rect = modelRect(el);
-      if (!modelRectInViewport(rect)) return false;
-      if (!hitTest) return true;
-      const point = modelCenterPoint(el);
-      const target = modelElementFromPoint(point, el);
-      if (!target) return false;
-      return target === el || el.contains?.(target) || target.contains?.(el) || closest2(target, DELETE_CLICKABLE_SELECTOR) === el;
     }
     function modelCenterPoint(el) {
       const rect = modelRect(el);
@@ -636,26 +617,6 @@
         return false;
       }
     }
-    function preferredModelActivate(context, target) {
-      assertPreferredModelRun(context);
-      if (!target || !visible2(target) || isDisabledElement(target) || typeof target.click !== "function") return false;
-      armPreferredModelFocusShield(context);
-      try {
-        target.scrollIntoView?.({ block: "center", inline: "nearest" });
-      } catch {
-      }
-      assertPreferredModelRun(context);
-      context.interactionCount += 1;
-      return nativeModelClick(target);
-    }
-    function preferredModelPointerActivate(context, target) {
-      assertPreferredModelRun(context);
-      if (!target || !visible2(target) || isDisabledElement(target)) return false;
-      armPreferredModelFocusShield(context);
-      assertPreferredModelRun(context);
-      context.interactionCount += 1;
-      return modelDirectClick(target);
-    }
     function modelClick(el) {
       if (!el || !visible2(el) || isDisabledElement(el)) return false;
       try {
@@ -705,26 +666,80 @@
       visibleSelectorElements,
       firstVisibleBySelectors,
       modelElementText,
-      compactModelText,
-      alnumModelToken,
-      modelTextIncludes,
-      parseBooleanAttr,
       modelEventConstructor,
       modelRect,
       modelElementArea,
-      modelRectInViewport,
-      visibleInViewport,
       modelCenterPoint,
       modelElementFromPoint,
       modelClickableAncestor,
       modelCustomActivationAncestor,
-      modelActivationTargets,
       dispatchPointerActivation,
       nativeModelClick,
-      preferredModelActivate,
-      preferredModelPointerActivate,
       modelClick,
       modelDirectClick
+    });
+  }
+  function createPreferredDomRuntime(deps = {}) {
+    const {
+      activateElement: activateElement2,
+      closest: closest2,
+      normalize: normalize2,
+      qsa: qsa2,
+      visible: visible2,
+      assertPreferredModelRun,
+      armPreferredModelFocusShield
+    } = deps;
+    const dom = createDomRuntime({ activateElement: activateElement2, closest: closest2, normalize: normalize2, qsa: qsa2, visible: visible2 });
+    const {
+      isDisabledElement: isDisabledElement2,
+      nativeModelClick,
+      modelDirectClick
+    } = dom;
+    function compactModelText(value) {
+      return normalize2(value).toLowerCase().replace(/\s+/g, " ");
+    }
+    function alnumModelToken(value) {
+      return String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+    }
+    function parseBooleanAttr(value) {
+      const token = String(value ?? "").trim().toLowerCase();
+      if (token === "true") return true;
+      if (token === "false") return false;
+      return null;
+    }
+    function preferredModelActivate(context, target) {
+      assertPreferredModelRun(context);
+      if (!target || !visible2(target) || isDisabledElement2(target) || typeof target.click !== "function") return false;
+      armPreferredModelFocusShield(context);
+      try {
+        target.scrollIntoView?.({ block: "center", inline: "nearest" });
+      } catch {
+      }
+      assertPreferredModelRun(context);
+      context.interactionCount += 1;
+      return nativeModelClick(target);
+    }
+    function preferredModelPointerActivate(context, target) {
+      assertPreferredModelRun(context);
+      if (!target || !visible2(target) || isDisabledElement2(target)) return false;
+      armPreferredModelFocusShield(context);
+      assertPreferredModelRun(context);
+      context.interactionCount += 1;
+      return modelDirectClick(target);
+    }
+    return Object.freeze({
+      firstVisibleBySelectors: dom.firstVisibleBySelectors,
+      isDisabledElement: isDisabledElement2,
+      modelElementArea: dom.modelElementArea,
+      modelElementText: dom.modelElementText,
+      modelEventConstructor: dom.modelEventConstructor,
+      modelRect: dom.modelRect,
+      visibleSelectorElements: dom.visibleSelectorElements,
+      compactModelText,
+      alnumModelToken,
+      parseBooleanAttr,
+      preferredModelActivate,
+      preferredModelPointerActivate
     });
   }
 
@@ -737,29 +752,7 @@
       PREFERRED_MODEL_FOCUS_SHIELD_ATTRIBUTE,
       PREFERRED_MODEL_FOCUS_SHIELD_RELEASE_GRACE_MS,
       GEMINI_MODEL_PICKER_SOURCE: GEMINI_MODEL_PICKER_SOURCE2,
-      contentBridgeIsCurrent,
-      sleep: sleep2,
-      isDisabledElement: isDisabledElement2,
-      visibleSelectorElements,
-      firstVisibleBySelectors,
-      modelElementText,
-      compactModelText,
-      alnumModelToken,
-      modelTextIncludes,
-      parseBooleanAttr,
-      modelRect,
-      modelElementArea,
-      modelRectInViewport,
-      visibleInViewport,
-      modelCenterPoint,
-      modelElementFromPoint,
-      modelClickableAncestor,
-      modelCustomActivationAncestor,
-      modelActivationTargets,
-      modelClick,
-      modelDirectClick,
-      preferredModelActivate,
-      preferredModelPointerActivate
+      contentBridgeIsCurrent
     } = deps;
     let preferredModelBridgeRunSequence = Math.max(
       0,
@@ -982,15 +975,6 @@
       assertPreferredModelRun(context);
       return getter();
     }
-    async function waitForModel(getter, timeoutMs = 2500, intervalMs = 120) {
-      const deadline = Date.now() + Math.max(0, Number(timeoutMs) || 0);
-      while (Date.now() <= deadline) {
-        const value = getter();
-        if (value) return value;
-        await sleep2(Math.max(30, Number(intervalMs) || 30));
-      }
-      return getter();
-    }
     function requestGeminiModelPickerBridgeOpen(context, timeoutMs = 900) {
       assertPreferredModelRun(context);
       const runId = String(context.runId || "");
@@ -1047,28 +1031,6 @@
       preferredModelResult,
       preferredModelSleep,
       waitForPreferredModel,
-      waitForModel,
-      isDisabledElement: isDisabledElement2,
-      visibleSelectorElements,
-      firstVisibleBySelectors,
-      modelElementText,
-      compactModelText,
-      alnumModelToken,
-      modelTextIncludes,
-      parseBooleanAttr,
-      modelRect,
-      modelElementArea,
-      modelRectInViewport,
-      visibleInViewport,
-      modelCenterPoint,
-      modelElementFromPoint,
-      modelClickableAncestor,
-      modelCustomActivationAncestor,
-      modelActivationTargets,
-      modelClick,
-      modelDirectClick,
-      preferredModelActivate,
-      preferredModelPointerActivate,
       requestGeminiModelPickerBridgeOpen,
       abortActivePreferredModelRun,
       preferredModelState,
@@ -1100,7 +1062,6 @@
       closest: closest2,
       isDisabledElement: isDisabledElement2,
       qsa: qsa2,
-      modelTextIncludes,
       parseBooleanAttr,
       armPreferredModelFocusShield,
       modelEventConstructor,
@@ -1220,15 +1181,6 @@
       const token = compactModelText(label);
       const thinkingLevel = baseModelId === "pro" ? keys.has("extended") || /\bextended(?:\s+thinking)?\b/.test(token) ? "extended" : "standard" : "";
       return { button, label, baseModelId, thinkingLevel };
-    }
-    function currentGeminiModelKey() {
-      return currentGeminiPickerState().baseModelId;
-    }
-    function currentGeminiModelHasKey(modelId) {
-      const state = currentGeminiPickerState();
-      if (modelId === "extended") return state.baseModelId === "pro" && state.thinkingLevel === "extended";
-      if (modelId === "thinking") return state.baseModelId === "pro" && state.thinkingLevel === "standard";
-      return state.baseModelId === modelId;
     }
     function geminiThinkingLevelModelId(value) {
       const token = String(value || "").trim().toLowerCase();
@@ -1430,40 +1382,6 @@
       }
       return { root: null, item: null };
     }
-    function scoreGeminiThinkingLevelRow(row) {
-      const token = compactModelText(modelElementText(row));
-      if (!token || !token.includes("thinking level")) return -1;
-      const rect = modelRect(row);
-      let score = 100;
-      if (matches2(row, "button, [role='menuitemradio'], [role='menuitem'], [role='button'], [aria-haspopup='menu'], [aria-haspopup='true'], [tabindex]:not([tabindex='-1'])")) score += 50;
-      if (token.includes("standard") || token.includes("extended")) score += 30;
-      if (rect) {
-        if (rect.width >= 120 && rect.height >= 30 && rect.height <= 96) score += 30;
-        if (rect.width < 80 || rect.height < 24) score -= 70;
-      }
-      return score;
-    }
-    function findGeminiThinkingLevelRows(root) {
-      if (!root) return [];
-      const seen = /* @__PURE__ */ new Set();
-      const rows = [];
-      const add = (row) => {
-        if (!row || seen.has(row) || !visible2(row) || isDisabledElement2(row)) return;
-        const score = scoreGeminiThinkingLevelRow(row);
-        if (score < 0) return;
-        seen.add(row);
-        rows.push({ row, score, area: modelElementArea(row) });
-      };
-      for (const row of geminiCompactMenuRows(root)) add(row);
-      for (const item of geminiModelItems(root)) {
-        if (isGeminiThinkingSubmenuItem(item)) add(item);
-      }
-      rows.sort((a, b) => b.score - a.score || b.area - a.area);
-      return rows.map((entry) => entry.row);
-    }
-    function findGeminiThinkingLevelRow(root) {
-      return findGeminiThinkingLevelRows(root)[0] || null;
-    }
     function findGeminiThinkingLevelOption(root, modelId) {
       if (modelId !== "thinking" && modelId !== "extended") return null;
       const row = geminiCompactMenuRows(root).filter((row2) => {
@@ -1483,29 +1401,6 @@
         if (item) return { root, item };
       }
       return { root: null, item: null };
-    }
-    function geminiThinkingLevelHeaderKey(root) {
-      const row = findGeminiThinkingLevelRow(root);
-      const token = compactModelText(modelElementText(row));
-      if (!token || !token.includes("thinking level")) return "";
-      const after = token.split("thinking level").slice(1).join("thinking level").trim();
-      if (/^extended([^a-z0-9]|$)/.test(after)) return "extended";
-      if (/^standard([^a-z0-9]|$)/.test(after)) return "thinking";
-      return "";
-    }
-    function geminiThinkingLevelOptionIsSelected(root, modelId) {
-      const option = findGeminiThinkingLevelOption(root, modelId);
-      if (option && (geminiElementHasSelectedState(option) || modelTextIncludes(modelElementText(option), "Selected"))) return true;
-      return geminiThinkingLevelHeaderKey(root) === modelId;
-    }
-    function isGeminiThinkingSubmenuItem(item) {
-      if (!item || !modelTextIncludes(modelElementText(item), "Thinking")) return false;
-      let node = item;
-      for (let guard = 0; node && node.nodeType === 1 && guard < 4; guard += 1, node = node.parentElement) {
-        const popup = String(node.getAttribute?.("aria-haspopup") || "").trim().toLowerCase();
-        if (popup === "menu" || popup === "true") return true;
-      }
-      return modelTextIncludes(modelElementText(item), "Thinking level");
     }
     function geminiActualMenuItem(element, root = null) {
       if (!element) return null;
@@ -1551,17 +1446,6 @@
         if (/(^|\s)(selected|is-selected|checked|is-checked|active|mdc-list-item--selected|mat-mdc-menu-item-highlighted)(\s|$)/i.test(className)) return true;
       }
       return false;
-    }
-    function selectedGeminiModelKey(root) {
-      if (!root) return "";
-      const selected = geminiModelItems(root).filter(geminiElementHasSelectedState).map((item) => ({ item, key: geminiModelKeyFromText(modelElementText(item)), score: modelElementArea(item) })).filter((entry) => entry.key);
-      selected.sort((a, b) => a.score - b.score);
-      return selected[0]?.key || "";
-    }
-    function isGeminiTargetSelected(root, modelId) {
-      if (modelId === "thinking" || modelId === "extended") return geminiThinkingLevelOptionIsSelected(root, modelId);
-      const item = findGeminiModelItem(root, modelId);
-      return Boolean(item && geminiElementHasSelectedState(item));
     }
     async function dismissPreferredModelMenu(context, getMenuRoot, timeoutMs = 700) {
       assertPreferredModelRun(context);
@@ -1732,8 +1616,6 @@
       matches: matches2,
       closest: closest2,
       parseBooleanAttr,
-      modelEventConstructor,
-      sleep: sleep2,
       assertPreferredModelRun,
       waitForPreferredModel,
       preferredModelPointerActivate,
@@ -2163,41 +2045,6 @@
     function findGrokModelTrigger() {
       return grokModelTriggerCandidates()[0]?.element || null;
     }
-    function closeFloatingModelMenu() {
-      const targets = [document.activeElement, document.body, document.documentElement, document, window].filter(Boolean);
-      const seen = /* @__PURE__ */ new Set();
-      for (const target of targets) {
-        if (!target || seen.has(target)) continue;
-        seen.add(target);
-        const KeyboardEventCtor = modelEventConstructor("KeyboardEvent", target);
-        if (typeof KeyboardEventCtor !== "function") continue;
-        for (const type of ["keydown", "keyup"]) {
-          try {
-            target.dispatchEvent(new KeyboardEventCtor(type, {
-              key: "Escape",
-              code: "Escape",
-              keyCode: 27,
-              which: 27,
-              bubbles: true,
-              cancelable: true,
-              composed: true
-            }));
-          } catch {
-          }
-        }
-      }
-    }
-    async function closeFloatingModelMenuAndWait(getMenuRoot, timeoutMs = 900) {
-      const getter = typeof getMenuRoot === "function" ? getMenuRoot : () => null;
-      if (!getter()) return true;
-      const deadline = Date.now() + Math.max(0, Number(timeoutMs) || 0);
-      while (Date.now() <= deadline) {
-        closeFloatingModelMenu();
-        await sleep2(90);
-        if (!getter()) return true;
-      }
-      return !getter();
-    }
     async function openGrokModelMenu(context) {
       assertPreferredModelRun(context);
       const existing = grokModelMenuRoot();
@@ -2289,9 +2136,6 @@
       preferredModelActivate,
       waitForPreferredModel,
       modelElementArea,
-      modelCenterPoint,
-      modelElementFromPoint,
-      modelClickableAncestor,
       preferredModelSleep,
       dismissPreferredModelMenu,
       preferredModelResult,
@@ -2605,23 +2449,6 @@
       for (const element of visibleSelectorElements(["div", "span", "button"], root)) add(element);
       rows.sort((a, b) => scoreNotionModelItem(b, modelId) - scoreNotionModelItem(a, modelId));
       return rows[0] || null;
-    }
-    function findNotionModelItemPointTarget(element, root, modelId) {
-      const target = NOTION_MODEL_TARGETS[modelId];
-      const matchesSpec = (candidate) => notionTextLooksLikeTarget(modelElementText(candidate), target);
-      const point = modelCenterPoint(element);
-      const pointElement = modelElementFromPoint(point, element);
-      if (!pointElement || !root?.contains?.(pointElement)) return null;
-      let node = pointElement;
-      while (node && node.nodeType === 1 && node !== root) {
-        if (visible2(node) && !isDisabledElement2(node) && matchesSpec(node) && countNotionModelTargets(modelElementText(node)) <= 1) {
-          const row = notionMenuItemRow(node, root, matchesSpec);
-          if (row && root.contains?.(row) && matchesSpec(row)) return row;
-        }
-        node = node.parentElement || null;
-      }
-      const clickable = modelClickableAncestor(pointElement);
-      return clickable && root.contains?.(clickable) && matchesSpec(clickable) ? clickable : null;
     }
     function notionElementHasSelectedState(element) {
       if (!element) return false;
@@ -2970,8 +2797,6 @@
       });
     }
     return Object.freeze({
-      applyNotionPreferredModel,
-      applyDeepSeekPreferredModel,
       runPreferredModelApply,
       cancelPreferredModelApply
     });
@@ -2986,17 +2811,7 @@
     const current = () => Boolean(
       runtimes.isActive && window.__CHATCLUB_CONTENT_BRIDGE_VERSION__ === runtimeIdentity.implementationVersion
     );
-    let common = null;
-    const summaryDeps = { activateElement, closest, matches, normalize, qs, qsa, sleep, visible };
-    const dom = createDomRuntime({
-      ...summaryDeps,
-      DELETE_CLICKABLE_SELECTOR: "button,[role='button'],[role='menuitem'],[role='option'],[tabindex]:not([tabindex='-1'])",
-      assertPreferredModelRun: (...args) => common.assertPreferredModelRun(...args),
-      armPreferredModelFocusShield: (...args) => common.armPreferredModelFocusShield(...args)
-    });
-    common = createPreferredCommonCapability({
-      ...summaryDeps,
-      ...dom,
+    const common = createPreferredCommonCapability({
       contentDocumentId,
       GEMINI_MODEL_PICKER_RUN_TOKEN_ATTRIBUTE: "data-chatclub-gemini-model-picker-run",
       PREFERRED_MODEL_FOCUS_SHIELD_LEASE_MS: 5e3,
@@ -3005,14 +2820,85 @@
       GEMINI_MODEL_PICKER_SOURCE: CONTENT_PROTOCOL.GEMINI_MODEL_PICKER_SOURCE,
       contentBridgeIsCurrent: current
     });
-    const gemini = createPreferredGeminiCapability({ ...summaryDeps, ...dom, ...common });
-    const grok = createPreferredGrokCapability({ ...summaryDeps, ...dom, ...common, ...gemini });
+    const dom = createPreferredDomRuntime({
+      activateElement,
+      closest,
+      normalize,
+      qsa,
+      visible,
+      assertPreferredModelRun: common.assertPreferredModelRun,
+      armPreferredModelFocusShield: common.armPreferredModelFocusShield
+    });
+    const gemini = createPreferredGeminiCapability({
+      closest,
+      matches,
+      qsa,
+      visible,
+      armPreferredModelFocusShield: common.armPreferredModelFocusShield,
+      assertPreferredModelRun: common.assertPreferredModelRun,
+      preferredModelResult: common.preferredModelResult,
+      requestGeminiModelPickerBridgeOpen: common.requestGeminiModelPickerBridgeOpen,
+      waitForPreferredModel: common.waitForPreferredModel,
+      compactModelText: dom.compactModelText,
+      firstVisibleBySelectors: dom.firstVisibleBySelectors,
+      isDisabledElement: dom.isDisabledElement,
+      modelElementArea: dom.modelElementArea,
+      modelElementText: dom.modelElementText,
+      modelEventConstructor: dom.modelEventConstructor,
+      modelRect: dom.modelRect,
+      parseBooleanAttr: dom.parseBooleanAttr,
+      preferredModelActivate: dom.preferredModelActivate,
+      visibleSelectorElements: dom.visibleSelectorElements
+    });
+    const grok = createPreferredGrokCapability({
+      closest,
+      matches,
+      normalize,
+      qs,
+      qsa,
+      visible,
+      assertPreferredModelRun: common.assertPreferredModelRun,
+      preferredModelResult: common.preferredModelResult,
+      preferredModelSleep: common.preferredModelSleep,
+      waitForPreferredModel: common.waitForPreferredModel,
+      dismissPreferredModelMenu: gemini.dismissPreferredModelMenu,
+      alnumModelToken: dom.alnumModelToken,
+      compactModelText: dom.compactModelText,
+      isDisabledElement: dom.isDisabledElement,
+      modelElementArea: dom.modelElementArea,
+      modelElementText: dom.modelElementText,
+      modelRect: dom.modelRect,
+      parseBooleanAttr: dom.parseBooleanAttr,
+      preferredModelActivate: dom.preferredModelActivate,
+      preferredModelPointerActivate: dom.preferredModelPointerActivate,
+      visibleSelectorElements: dom.visibleSelectorElements
+    });
     const handlers = createPreferredNotionDeepSeekCapability({
-      ...summaryDeps,
-      ...dom,
-      ...common,
-      ...gemini,
-      ...grok
+      closest,
+      normalize,
+      visible,
+      abortActivePreferredModelRun: common.abortActivePreferredModelRun,
+      assertPreferredModelRun: common.assertPreferredModelRun,
+      nextPreferredModelBridgeRunSequence: common.nextPreferredModelBridgeRunSequence,
+      preferredModelAbortReason: common.preferredModelAbortReason,
+      preferredModelCancelled: common.preferredModelCancelled,
+      preferredModelResult: common.preferredModelResult,
+      preferredModelSleep: common.preferredModelSleep,
+      preferredModelState: common.preferredModelState,
+      publishPreferredModelBridgeRun: common.publishPreferredModelBridgeRun,
+      releasePreferredModelBridgeRun: common.releasePreferredModelBridgeRun,
+      waitForPreferredModel: common.waitForPreferredModel,
+      modelResult: common.modelResult,
+      applyGeminiPreferredModel: gemini.applyGeminiPreferredModel,
+      dismissPreferredModelMenu: gemini.dismissPreferredModelMenu,
+      applyGrokPreferredModel: grok.applyGrokPreferredModel,
+      alnumModelToken: dom.alnumModelToken,
+      isDisabledElement: dom.isDisabledElement,
+      modelElementArea: dom.modelElementArea,
+      modelElementText: dom.modelElementText,
+      modelRect: dom.modelRect,
+      preferredModelActivate: dom.preferredModelActivate,
+      visibleSelectorElements: dom.visibleSelectorElements
     });
     installContentCapability(runtimes, {
       capability: "preferred-model",

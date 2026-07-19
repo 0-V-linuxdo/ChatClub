@@ -11,7 +11,7 @@ import { frameCommandSpec } from "./frame-commands.js";
 const MAX_TIMEOUT_MS = 60000;
 const ERROR_CODES = new Set(FRAME_ROUTE_ERROR_CODES);
 
-export class FrameCommandError extends Error {
+class FrameCommandError extends Error {
   constructor(code, message, details = {}) {
     super(String(message || code || "Frame command failed"));
     this.name = "FrameCommandError";

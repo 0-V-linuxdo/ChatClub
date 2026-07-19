@@ -10,7 +10,7 @@ import { MessageNavigator } from "./message-navigator/engine.js";
 
 const MESSAGE_NAVIGATOR_GLOBAL_NAME = "__CHATCLUB_MESSAGE_NAVIGATOR__";
 
-export function installMessageNavigator() {
+function installMessageNavigator() {
   /*
    * ChatClub Message Navigator.
    * Adapted from Notion-style-AI-Navigator-main by 0-V-linuxdo under the MIT License.

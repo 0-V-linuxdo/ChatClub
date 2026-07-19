@@ -1,6 +1,6 @@
 export const BACKGROUND_REQUEST_SOURCE = "chatclub";
 
-export const BACKGROUND_REQUEST_SENDER_CLASSES = Object.freeze({
+const BACKGROUND_REQUEST_SENDER_CLASSES = Object.freeze({
   EXTENSION_PAGE: "extension-page",
   DIRECT_CHILD_FRAME: "direct-child-frame",
   REGISTERED_FRAME: "registered-frame",
@@ -21,12 +21,12 @@ export const BACKGROUND_REQUEST_AUTHORIZER_BY_SENDER_CLASS = Object.freeze({
   [BACKGROUND_REQUEST_SENDER_CLASSES.GROK_FRAME]: BACKGROUND_REQUEST_AUTHORIZERS.GROK_FRAME
 });
 
-export const BACKGROUND_REQUEST_ERROR_CONTRACT = Object.freeze({
+const BACKGROUND_REQUEST_ERROR_CONTRACT = Object.freeze({
   required: Object.freeze({ success: "boolean", error: "string" }),
   optional: Object.freeze({ code: "string", delivered: "boolean" })
 });
 
-export const COMMON_BACKGROUND_REQUEST_ERROR_CODES = Object.freeze([]);
+const COMMON_BACKGROUND_REQUEST_ERROR_CODES = Object.freeze([]);
 export const FRAME_ROUTE_ERROR_CODES = Object.freeze([
   "NOT_REGISTERED",
   "STALE_DOCUMENT",
@@ -37,7 +37,7 @@ export const FRAME_ROUTE_ERROR_CODES = Object.freeze([
 ]);
 
 const EMPTY_FIELDS = Object.freeze({});
-export function fields(value = {}) {
+function fields(value = {}) {
   return Object.freeze({ ...value });
 }
 
@@ -45,7 +45,7 @@ export function contract(required = EMPTY_FIELDS, optional = EMPTY_FIELDS) {
   return Object.freeze({ required: fields(required), optional: fields(optional) });
 }
 
-export function requestSpec({
+function requestSpec({
   senderClass,
   authorize,
   mutates = false,
@@ -174,7 +174,7 @@ export function assertBackgroundRequestError(spec, error, label = "Background re
   return error;
 }
 
-export class BackgroundRequestError extends Error {
+class BackgroundRequestError extends Error {
   constructor(action, response, spec) {
     super(String(response?.error || `Background request failed: ${action}`));
     this.name = "BackgroundRequestError";
@@ -186,7 +186,7 @@ export class BackgroundRequestError extends Error {
   }
 }
 
-export function backgroundRequestMessageForContract(request, payload = {}) {
+function backgroundRequestMessageForContract(request, payload = {}) {
   const action = String(request?.action || "").trim();
   const spec = request?.spec;
   if (!action || !spec) throw new TypeError("Unknown background request contract");

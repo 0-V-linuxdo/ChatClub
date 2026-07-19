@@ -4,7 +4,6 @@ import {
   compactText,
   elementArea,
   elementOrder,
-  inChromeScope,
   metaText,
   normalize,
   pageRoot,

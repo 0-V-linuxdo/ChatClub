@@ -46,9 +46,9 @@ import {
 } from "./registered-frame-transport.js";
 import {
   injectContentBridge,
-  relayContentFrameBinding,
-  registerContentScripts
+  relayContentFrameBinding
 } from "./content-registration.js";
+import { registerContentScripts } from "./content-script-registration.js";
 import {
   openableTabUrl,
   openExternalTab,
@@ -59,6 +59,7 @@ import {
   createBackgroundRequestDispatcher,
   createBackgroundRequestListener
 } from "./request-dispatcher.js";
+import { withTimeout } from "./promise-timeout.js";
 import * as trustedInput from "./trusted-input.js";
 
 const chrome = globalThis.browser || globalThis.chrome;
@@ -71,6 +72,7 @@ const {
   context: secureFrameContext,
   frameContextToken,
   register: registerSecureFrameContext,
+  registeredFrameContext,
   registeredSenderContext
 } = secureFrameContextRegistry;
 const authenticatedFrameRelay = createAuthenticatedFrameRelay({
@@ -104,6 +106,45 @@ function verifiedExtensionPageSender(sender = {}) {
 const grokCookieRuntime = createGrokCookieRuntime(chrome, { verifiedExtensionPageSender });
 const customUserscriptRuntime = createCustomUserscriptRuntime(chrome);
 chrome.cookies?.onChanged?.addListener(grokCookieRuntime.handleCookieChange);
+
+async function relayRegisteredFrameNavigation(details = {}, phase = "before") {
+  const tabId = Number(details.tabId);
+  const frameId = Number(details.frameId);
+  if (
+    !Number.isInteger(tabId)
+    || !Number.isInteger(frameId)
+    || frameId <= 0
+    || Number(details.parentFrameId) !== 0
+    || !/^https?:\/\//i.test(String(details.url || ""))
+  ) return;
+  const registered = await registeredFrameContext(tabId, frameId);
+  if (!registered) return;
+  const tab = await chrome.tabs.get(tabId).catch(() => null);
+  if (!String(tab?.url || "").startsWith(chrome.runtime.getURL(""))) return;
+  await chrome.runtime.sendMessage({
+    source: EXTENSION_RUNTIME_RELAY_SOURCE,
+    action: "frameNavigationTarget",
+    senderContext: {
+      tabId,
+      frameId,
+      bridgeDocumentId: registered.token,
+      frameBindingId: registered.context.frameBindingId,
+      browserDocumentId: registered.context.browserDocumentId
+    },
+    data: {
+      href: String(details.url || ""),
+      phase,
+      browserDocumentId: String(details.documentId || "")
+    }
+  }).catch(() => {});
+}
+
+chrome.webNavigation?.onBeforeNavigate?.addListener((details) => {
+  relayRegisteredFrameNavigation(details, "before").catch(() => {});
+});
+chrome.webNavigation?.onCommitted?.addListener((details) => {
+  relayRegisteredFrameNavigation(details, "committed").catch(() => {});
+});
 
 chrome.tabs?.onRemoved?.addListener((tabId, removeInfo) => {
   grokCookieRuntime.handleTabRemoved(tabId);
@@ -184,16 +225,6 @@ async function executeMainWorldFrameCommand(context, command, data = {}) {
   return result.result;
 }
 
-function timeoutPromise(promise, timeoutMs, message) {
-  let timer = 0;
-  return Promise.race([
-    promise.finally(() => clearTimeout(timer)),
-    new Promise((_, reject) => {
-      timer = setTimeout(() => reject(new Error(message)), timeoutMs);
-    })
-  ]);
-}
-
 async function sendSecureFrameCommand(message = {}, sender = {}) {
   const tabId = await verifiedExtensionTabId(message, sender);
   const context = await secureFrameContext(message.bridgeDocumentId);
@@ -220,7 +251,7 @@ async function sendSecureFrameCommand(message = {}, sender = {}) {
           action: command,
           data: message.data || {}
         });
-    response = await timeoutPromise(
+    response = await withTimeout(
       request,
       timeoutMs,
       `[FrameRPC] Timeout waiting for response: ${command}`
@@ -251,7 +282,7 @@ async function verifySecureFrameContext(message = {}, sender = {}) {
   if (!contentRuntimePackageBundleIdentityMatches(context.runtimeIdentity, "content/content.js")) {
     throw new Error("Secure frame runtime generation is stale");
   }
-  const response = await timeoutPromise(
+  const response = await withTimeout(
     sendMessageToRegisteredFrame(context, {
       source: SECURE_FRAME_COMMAND_SOURCE,
       type: "request",

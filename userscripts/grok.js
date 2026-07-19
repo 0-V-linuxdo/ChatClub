@@ -1,6 +1,6 @@
 // Built-in Summary userscript: Grok (grok)
 // Source: Mod/assets/chunk-7dbf4e81.js :: SUMMARY_SITE_CONFIG_DEFAULTS
-// Config version: 62; global config version: 71
+// Config version: 64; global config version: 71
 // Hosts: grok.com, *.grok.com, grok.x.ai, *.grok.x.ai
 // Path prefixes: (none)
 // Run mode: pageWorldFirst; timeout: 36000

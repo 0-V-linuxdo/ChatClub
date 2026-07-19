@@ -8,19 +8,18 @@ import {
   normalize,
   qs,
   qsa,
-  sleep,
   visible
 } from "./shared/summary-runtime.js";
 import { createContentDocumentIdentity } from "./shared/content-document-identity.js";
 import { runtimeRegistry } from "./shared/runtime-registry-client.js";
 import { installContentCapability } from "./shared/command-router.js";
-import { createDomRuntime } from "./shared/dom-runtime.js";
+import { createPreferredDomRuntime } from "./shared/dom-runtime.js";
 import { createPreferredCommonCapability } from "./capabilities/preferred-common.js";
 import { createPreferredGeminiCapability } from "./capabilities/preferred-gemini.js";
 import { createPreferredGrokCapability } from "./capabilities/preferred-grok.js";
 import { createPreferredNotionDeepSeekCapability } from "./capabilities/preferred-notion-deepseek.js";
 
-export function installPreferredModelCapability() {
+function installPreferredModelCapability() {
   const runtimes = runtimeRegistry(window);
   const runtimeIdentity = createContentRuntimeBundleIdentity(CONTENT_RUNTIME_PREFERRED_MODEL_BUNDLE_IDENTITY);
   runtimes.registerBundle(runtimeIdentity);
@@ -29,17 +28,7 @@ export function installPreferredModelCapability() {
     runtimes.isActive
     && window.__CHATCLUB_CONTENT_BRIDGE_VERSION__ === runtimeIdentity.implementationVersion
   );
-  let common = null;
-  const summaryDeps = { activateElement, closest, matches, normalize, qs, qsa, sleep, visible };
-  const dom = createDomRuntime({
-    ...summaryDeps,
-    DELETE_CLICKABLE_SELECTOR: "button,[role='button'],[role='menuitem'],[role='option'],[tabindex]:not([tabindex='-1'])",
-    assertPreferredModelRun: (...args) => common.assertPreferredModelRun(...args),
-    armPreferredModelFocusShield: (...args) => common.armPreferredModelFocusShield(...args)
-  });
-  common = createPreferredCommonCapability({
-    ...summaryDeps,
-    ...dom,
+  const common = createPreferredCommonCapability({
     contentDocumentId,
     GEMINI_MODEL_PICKER_RUN_TOKEN_ATTRIBUTE: "data-chatclub-gemini-model-picker-run",
     PREFERRED_MODEL_FOCUS_SHIELD_LEASE_MS: 5000,
@@ -48,14 +37,85 @@ export function installPreferredModelCapability() {
     GEMINI_MODEL_PICKER_SOURCE: CONTENT_PROTOCOL.GEMINI_MODEL_PICKER_SOURCE,
     contentBridgeIsCurrent: current
   });
-  const gemini = createPreferredGeminiCapability({ ...summaryDeps, ...dom, ...common });
-  const grok = createPreferredGrokCapability({ ...summaryDeps, ...dom, ...common, ...gemini });
+  const dom = createPreferredDomRuntime({
+    activateElement,
+    closest,
+    normalize,
+    qsa,
+    visible,
+    assertPreferredModelRun: common.assertPreferredModelRun,
+    armPreferredModelFocusShield: common.armPreferredModelFocusShield
+  });
+  const gemini = createPreferredGeminiCapability({
+    closest,
+    matches,
+    qsa,
+    visible,
+    armPreferredModelFocusShield: common.armPreferredModelFocusShield,
+    assertPreferredModelRun: common.assertPreferredModelRun,
+    preferredModelResult: common.preferredModelResult,
+    requestGeminiModelPickerBridgeOpen: common.requestGeminiModelPickerBridgeOpen,
+    waitForPreferredModel: common.waitForPreferredModel,
+    compactModelText: dom.compactModelText,
+    firstVisibleBySelectors: dom.firstVisibleBySelectors,
+    isDisabledElement: dom.isDisabledElement,
+    modelElementArea: dom.modelElementArea,
+    modelElementText: dom.modelElementText,
+    modelEventConstructor: dom.modelEventConstructor,
+    modelRect: dom.modelRect,
+    parseBooleanAttr: dom.parseBooleanAttr,
+    preferredModelActivate: dom.preferredModelActivate,
+    visibleSelectorElements: dom.visibleSelectorElements
+  });
+  const grok = createPreferredGrokCapability({
+    closest,
+    matches,
+    normalize,
+    qs,
+    qsa,
+    visible,
+    assertPreferredModelRun: common.assertPreferredModelRun,
+    preferredModelResult: common.preferredModelResult,
+    preferredModelSleep: common.preferredModelSleep,
+    waitForPreferredModel: common.waitForPreferredModel,
+    dismissPreferredModelMenu: gemini.dismissPreferredModelMenu,
+    alnumModelToken: dom.alnumModelToken,
+    compactModelText: dom.compactModelText,
+    isDisabledElement: dom.isDisabledElement,
+    modelElementArea: dom.modelElementArea,
+    modelElementText: dom.modelElementText,
+    modelRect: dom.modelRect,
+    parseBooleanAttr: dom.parseBooleanAttr,
+    preferredModelActivate: dom.preferredModelActivate,
+    preferredModelPointerActivate: dom.preferredModelPointerActivate,
+    visibleSelectorElements: dom.visibleSelectorElements
+  });
   const handlers = createPreferredNotionDeepSeekCapability({
-    ...summaryDeps,
-    ...dom,
-    ...common,
-    ...gemini,
-    ...grok
+    closest,
+    normalize,
+    visible,
+    abortActivePreferredModelRun: common.abortActivePreferredModelRun,
+    assertPreferredModelRun: common.assertPreferredModelRun,
+    nextPreferredModelBridgeRunSequence: common.nextPreferredModelBridgeRunSequence,
+    preferredModelAbortReason: common.preferredModelAbortReason,
+    preferredModelCancelled: common.preferredModelCancelled,
+    preferredModelResult: common.preferredModelResult,
+    preferredModelSleep: common.preferredModelSleep,
+    preferredModelState: common.preferredModelState,
+    publishPreferredModelBridgeRun: common.publishPreferredModelBridgeRun,
+    releasePreferredModelBridgeRun: common.releasePreferredModelBridgeRun,
+    waitForPreferredModel: common.waitForPreferredModel,
+    modelResult: common.modelResult,
+    applyGeminiPreferredModel: gemini.applyGeminiPreferredModel,
+    dismissPreferredModelMenu: gemini.dismissPreferredModelMenu,
+    applyGrokPreferredModel: grok.applyGrokPreferredModel,
+    alnumModelToken: dom.alnumModelToken,
+    isDisabledElement: dom.isDisabledElement,
+    modelElementArea: dom.modelElementArea,
+    modelElementText: dom.modelElementText,
+    modelRect: dom.modelRect,
+    preferredModelActivate: dom.preferredModelActivate,
+    visibleSelectorElements: dom.visibleSelectorElements
   });
   installContentCapability(runtimes, {
     capability: "preferred-model",

@@ -16,7 +16,7 @@ import { installContentCapability } from "./shared/command-router.js";
 import { isDisabledElement } from "./shared/dom-runtime.js";
 import { createSendCapability } from "./capabilities/send-runtime.js";
 
-export function installSendCapability() {
+function installSendCapability() {
   const runtimes = runtimeRegistry(window);
   const runtimeIdentity = createContentRuntimeBundleIdentity(CONTENT_RUNTIME_SEND_BUNDLE_IDENTITY);
   runtimes.registerBundle(runtimeIdentity);

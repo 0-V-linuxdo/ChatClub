@@ -189,7 +189,6 @@ export function createNotionAttachmentInspector(deps = {}) {
       imageCount,
       removeCount,
       previewCount,
-      hasAttachment: attachmentCount > 0,
       fingerprint
     };
   };

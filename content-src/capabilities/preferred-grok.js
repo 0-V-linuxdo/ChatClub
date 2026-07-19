@@ -14,8 +14,6 @@ export function createPreferredGrokCapability(deps = {}) {
     matches,
     closest,
     parseBooleanAttr,
-    modelEventConstructor,
-    sleep,
     assertPreferredModelRun,
     waitForPreferredModel,
     preferredModelPointerActivate,
@@ -492,42 +490,6 @@ export function createPreferredGrokCapability(deps = {}) {
 
   function findGrokModelTrigger() {
     return grokModelTriggerCandidates()[0]?.element || null;
-  }
-
-  function closeFloatingModelMenu() {
-    const targets = [document.activeElement, document.body, document.documentElement, document, window].filter(Boolean);
-    const seen = new Set();
-    for (const target of targets) {
-      if (!target || seen.has(target)) continue;
-      seen.add(target);
-      const KeyboardEventCtor = modelEventConstructor("KeyboardEvent", target);
-      if (typeof KeyboardEventCtor !== "function") continue;
-      for (const type of ["keydown", "keyup"]) {
-        try {
-          target.dispatchEvent(new KeyboardEventCtor(type, {
-            key: "Escape",
-            code: "Escape",
-            keyCode: 27,
-            which: 27,
-            bubbles: true,
-            cancelable: true,
-            composed: true
-          }));
-        } catch {}
-      }
-    }
-  }
-
-  async function closeFloatingModelMenuAndWait(getMenuRoot, timeoutMs = 900) {
-    const getter = typeof getMenuRoot === "function" ? getMenuRoot : () => null;
-    if (!getter()) return true;
-    const deadline = Date.now() + Math.max(0, Number(timeoutMs) || 0);
-    while (Date.now() <= deadline) {
-      closeFloatingModelMenu();
-      await sleep(90);
-      if (!getter()) return true;
-    }
-    return !getter();
   }
 
   async function openGrokModelMenu(context) {

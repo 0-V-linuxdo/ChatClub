@@ -1,7 +1,6 @@
 export function createDeleteSitesCapability(deps = {}) {
   const {
     qsa,
-    visibleInViewport,
     normalize,
     deleteCompactToken,
     modelRect,
@@ -9,7 +8,6 @@ export function createDeleteSitesCapability(deps = {}) {
     deleteClickableElement,
     isDisabledElement,
     svgSignature,
-    layoutDeleteCandidates,
     visible,
     deleteLabelMatchesExactish,
     deleteLabelMatches,
@@ -19,10 +17,6 @@ export function createDeleteSitesCapability(deps = {}) {
     deleteClickLayout,
     sleep,
     deleteClick,
-    modelEventConstructor,
-    reveal,
-    modelRectInViewport,
-    modelElementFromPoint,
     closest,
     findDeleteConfirmButton,
     clickDeleteConfirmIfPresent,
@@ -38,270 +32,7 @@ export function createDeleteSitesCapability(deps = {}) {
     waitForModel,
     deleteResultWithTrustedMenuClick
   } = deps;
-  function kagiChatIdFromHref(value) {
-    const match = String(value || "").match(/\/chat\/([^/?#]+)/i);
-    return match?.[1] || "";
-  }
-
-  function kagiCurrentThreadLink(data = {}) {
-    const ids = new Set([
-      location.href,
-      data.currentThreadHref,
-      data.currentHref,
-      data.href,
-      data.url
-    ].map(kagiChatIdFromHref).filter(Boolean));
-    const links = qsa("a[href*='/chat/']", document, { all: true })
-      .filter((link) => visibleInViewport(link));
-    if (!ids.size) return links[0] || null;
-    return links.find((link) => ids.has(kagiChatIdFromHref(link.href || link.getAttribute?.("href")))) || null;
-  }
-
-  function kagiCurrentTitleToken() {
-    const rawTitle = normalize((document.title || "").replace(/\s+-\s*Kagi Assistant\s*$/i, ""));
-    return deleteCompactToken(rawTitle);
-  }
-
-  function kagiTitleRenameButtons() {
-    const titleToken = kagiCurrentTitleToken();
-    return qsa("button,[role='button']", document, { all: true })
-      .filter((button) => {
-        if (!visibleInViewport(button)) return false;
-        const rect = modelRect(button);
-        if (!rect || rect.top > 120 || rect.width < 32 || rect.height < 12 || rect.height > 64) return false;
-        const value = deleteElementText(button);
-        const compact = deleteCompactToken(value);
-        return /clicktorename|rename|重命名/.test(compact)
-          || (titleToken.length >= 4 && compact.includes(titleToken));
-      })
-      .sort((a, b) => {
-        const ar = modelRect(a);
-        const br = modelRect(b);
-        return (ar?.top || 0) - (br?.top || 0) || (ar?.left || 0) - (br?.left || 0);
-      });
-  }
-
-  function kagiTopThreadMenuTrigger() {
-    const titleButtons = kagiTitleRenameButtons();
-    const candidates = [];
-    const seen = new Set();
-    const selector = [
-      "button",
-      "[role='button']",
-      "[aria-haspopup]",
-      "[aria-expanded]",
-      "[tabindex]:not([tabindex='-1'])"
-    ].join(", ");
-    const add = (element, titleButton, extraScore = 0) => {
-      const target = deleteClickableElement(element);
-      if (!target || seen.has(target) || target === titleButton || isDisabledElement(target)) return;
-      if (!visibleInViewport(target)) return;
-      const rect = modelRect(target);
-      const titleRect = modelRect(titleButton);
-      if (!rect || !titleRect || rect.top > 125 || rect.width < 8 || rect.height < 8 || rect.width > 90 || rect.height > 72) return;
-      const verticalOverlap = rect.top < titleRect.bottom + 12 && rect.bottom > titleRect.top - 12;
-      if (!verticalOverlap) return;
-      const value = deleteElementText(target);
-      const compact = deleteCompactToken(value);
-      if (/newthread|showsidebar|markaspermanent|permanent|kagiproducts|settings|searchthreads|folders|newfolder|copy|edit|regenerate|scroll|发送|设置|新建|搜索/.test(compact)) return;
-      const popup = String(target.getAttribute?.("aria-haspopup") || "").toLowerCase();
-      const expanded = target.hasAttribute?.("aria-expanded");
-      const signature = svgSignature(target);
-      const rightGap = Math.abs(rect.left - titleRect.right);
-      const immediateTitleNeighbor = rect.left >= titleRect.right - 8
-        && rect.left <= titleRect.right + 42
-        && rect.width <= 52
-        && rect.height <= 52;
-      const menuLike = popup === "menu"
-        || popup === "true"
-        || expanded
-        || /more|menu|options|ellipsis|dots|dropdown|chevron|caret|arrow|down|triangle|更多|菜单|选项/.test(compact)
-        || /more|ellipsis|dots|dropdown|chevron|caret|arrow|down|triangle/.test(signature)
-        || (!compact && rect.width <= 48)
-        || immediateTitleNeighbor;
-      if (!menuLike) return;
-      const closeToTitleRight = rect.left >= titleRect.left - 8 && rect.left <= titleRect.right + 110;
-      if (!closeToTitleRight) return;
-      seen.add(target);
-      candidates.push({
-        element: target,
-        score: extraScore
-          + (popup === "menu" || popup === "true" ? 360 : 0)
-          + (expanded ? 120 : 0)
-          + (/dropdown|chevron|caret|arrow|down|triangle/.test(signature) ? 260 : 0)
-          + (/more|menu|options|更多|菜单|选项/.test(compact) ? 180 : 0)
-          + (!compact && rect.width <= 48 ? 180 : 0)
-          + Math.max(0, 280 - rightGap * 4)
-          + Math.max(0, 90 - Math.abs((rect.top + rect.height / 2) - (titleRect.top + titleRect.height / 2))),
-        top: rect.top,
-        left: rect.left
-      });
-    };
-    for (const titleButton of titleButtons) {
-      for (let scope = titleButton.parentElement, depth = 0; scope && scope !== document.body && depth < 5; scope = scope.parentElement, depth += 1) {
-        for (const element of layoutDeleteCandidates(scope, selector)) add(element, titleButton, 180 - depth * 12);
-      }
-    }
-    candidates.sort((a, b) => b.score - a.score || a.top - b.top || a.left - b.left);
-    return candidates[0]?.element || null;
-  }
-
-  function kagiDeleteMenuItem(trigger = null, labels = ["Delete", "Delete thread", "Delete chat", "Remove", "删除"]) {
-    const triggerRect = modelRect(trigger);
-    const candidates = [];
-    const seen = new Set();
-    const add = (element, extraScore = 0) => {
-      if (!element || seen.has(element) || !visible(element) || isDisabledElement(element)) return;
-      const value = deleteElementText(element);
-      if (!deleteLabelMatchesExactish(value, labels)) return;
-      if (deleteLabelMatches(value, DELETE_CANCEL_LABELS)) return;
-      const target = deleteClickableElement(element);
-      if (!target || seen.has(target) || !visible(target) || isDisabledElement(target)) return;
-      const rect = modelRect(target);
-      if (!rect || rect.width < 24 || rect.height < 14 || rect.width > 360 || rect.height > 96) return;
-      if (triggerRect) {
-        const nearTrigger = rect.top >= triggerRect.top - 16
-          && rect.top <= triggerRect.top + 360
-          && rect.left >= triggerRect.left - 80
-          && rect.left <= triggerRect.left + 260;
-        if (!nearTrigger) return;
-      }
-      seen.add(element);
-      seen.add(target);
-      candidates.push({
-        element: target,
-        score: extraScore
-          + (matches(target, "[role='menuitem'],[role='option'],button,[role='button']") ? 220 : 0)
-          + (deleteLabelMatches(value, labels, { exact: true }) ? 300 : 0)
-          + (triggerRect ? Math.max(0, 160 - Math.abs(rect.left - triggerRect.left)) : 0),
-        top: rect.top,
-        right: rect.right,
-        area: rect.width * rect.height
-      });
-    };
-    const selector = "[role='menuitem'],[role='option'],button,[role='button'],a[href],[tabindex]:not([tabindex='-1']),li,div,span";
-    for (const root of visibleSelectorElements(DELETE_MENU_ROOT_SELECTORS)) {
-      const rect = modelRect(root);
-      if (triggerRect) {
-        const nearRoot = rect
-          && rect.top >= triggerRect.top - 24
-          && rect.top <= triggerRect.top + 330
-          && rect.left >= triggerRect.left - 120
-          && rect.left <= triggerRect.left + 260;
-        if (!nearRoot) continue;
-      }
-      for (const element of qsa(selector, root, { all: true })) add(element, 260);
-    }
-    if (!candidates.length) {
-      for (const element of qsa(selector, document, { all: true })) add(element, 0);
-    }
-    candidates.sort((a, b) => b.score - a.score || b.right - a.right || b.top - a.top || a.area - b.area);
-    return candidates[0]?.element || null;
-  }
-
-  async function openKagiTitleMenuAndClickDelete(trigger, labels) {
-    if (!trigger || !deleteClickLayout(trigger)) return false;
-    for (let attempt = 0; attempt < 12; attempt += 1) {
-      await sleep(attempt < 2 ? 45 : 75);
-      const item = kagiDeleteMenuItem(trigger, labels);
-      if (item && (deleteClick(item) || deleteClickLayout(item))) return true;
-    }
-    return false;
-  }
-
-  function hoverKagiThreadRow(row) {
-    const rowRect = modelRect(row);
-    if (!rowRect) return;
-    const point = { clientX: Math.max(rowRect.left + 16, rowRect.right - 28), clientY: rowRect.top + rowRect.height / 2 };
-    for (let target = row, depth = 0; target && target !== document.body && depth < 5; target = target.parentElement, depth += 1) {
-      for (const type of ["pointerover", "mouseover", "mouseenter", "mousemove", "pointermove"]) {
-        try {
-          const EventCtor = type.startsWith("pointer") ? modelEventConstructor("PointerEvent", target) : modelEventConstructor("MouseEvent", target);
-          target.dispatchEvent(new EventCtor(type, {
-            bubbles: true,
-            cancelable: true,
-            composed: true,
-            view: window,
-            pointerId: 1,
-            pointerType: "mouse",
-            isPrimary: true,
-            ...point
-          }));
-        } catch {}
-      }
-    }
-  }
-
-  function kagiThreadRowFromLink(link) {
-    if (!link) return null;
-    const linkRect = modelRect(link);
-    let best = link;
-    for (let node = link.parentElement, depth = 0; node && node !== document.body && depth < 6; node = node.parentElement, depth += 1) {
-      const rect = modelRect(node);
-      if (!rect || rect.width < 120 || rect.height < 20 || rect.height > 96) continue;
-      if (linkRect && (rect.top > linkRect.top + 8 || rect.bottom < linkRect.bottom - 8)) continue;
-      const hasMoreButton = qsa("button,[role='button'],[aria-haspopup]", node, { all: true })
-        .some((item) => item !== link && modelRect(item));
-      best = node;
-      if (hasMoreButton) break;
-    }
-    return best;
-  }
-
-  function kagiThreadMoreButton(link) {
-    const row = kagiThreadRowFromLink(link);
-    if (!row) return null;
-    reveal(row);
-    hoverKagiThreadRow(row);
-    const rowRect = modelRect(row);
-    if (!modelRectInViewport(rowRect)) return null;
-    const candidates = [];
-    const seen = new Set();
-    const add = (element, extraScore = 0) => {
-      const target = deleteClickableElement(element);
-      if (!target || seen.has(target) || target === link || isDisabledElement(target)) return;
-      const rect = modelRect(target);
-      if (!rect || rect.width < 8 || rect.height < 8 || rect.width > 84 || rect.height > 84) return;
-      if (!visibleInViewport(target)) return;
-      const overlaps = rect.top < rowRect.bottom + 10 && rect.bottom > rowRect.top - 10;
-      if (!overlaps) return;
-      const value = deleteElementText(target);
-      const compact = deleteCompactToken(value);
-      const popup = String(target.getAttribute?.("aria-haspopup") || "").toLowerCase();
-      const signature = svgSignature(target);
-      const moreLike = /more|options|menu|ellipsis|dots|更多|菜单|选项/.test(compact)
-        || /more|ellipsis|dots|circle/.test(signature)
-        || popup === "menu"
-        || qsa("circle", target).length >= 2
-        || (!compact && rect.width <= 48);
-      if (!moreLike) return;
-      seen.add(target);
-      candidates.push({
-        element: target,
-        score: extraScore
-          + (visibleInViewport(target) ? 160 : 40)
-          + (/moreoptions|more|options|menu|更多|菜单|选项/.test(compact) ? 260 : 0)
-          + (popup === "menu" ? 180 : 0)
-          + (/more|ellipsis|dots|circle/.test(signature) ? 120 : 0)
-          + Math.max(0, 90 - Math.abs(rect.right - rowRect.right)),
-        right: rect.right
-      });
-    };
-    for (let scope = row, depth = 0; scope && scope !== document.body && depth < 5; scope = scope.parentElement, depth += 1) {
-      for (const button of layoutDeleteCandidates(scope, "button,[role='button'],[aria-haspopup],[tabindex]:not([tabindex='-1'])")) add(button, 80 - depth * 8);
-    }
-    for (const offset of [10, 22, 36, 54]) {
-      const point = { x: Math.max(rowRect.left + 24, rowRect.right - offset), y: rowRect.top + rowRect.height / 2 };
-      const pointTarget = modelElementFromPoint(point, row);
-      if (pointTarget) add(pointTarget, 160 - offset);
-      const pointButton = pointTarget && closest(pointTarget, "button,[role='button'],[aria-haspopup],[tabindex]:not([tabindex='-1'])");
-      if (pointButton) add(pointButton, 180 - offset);
-    }
-    candidates.sort((a, b) => b.score - a.score || b.right - a.right);
-    return candidates[0]?.element || null;
-  }
-
-  async function deleteKagiThread(data = {}) {
+  async function deleteKagiThread() {
     if (findDeleteConfirmButton()) {
       const confirmedExisting = await clickDeleteConfirmIfPresent(6200);
       return confirmedExisting
@@ -833,9 +564,6 @@ export function createDeleteSitesCapability(deps = {}) {
     deleteNotionThread,
     menuRootsWithDelete,
     findDeleteMenuItem,
-    findOpenDeleteMenuItem,
-    openTriggerAndClickDelete,
-    topRightMenuTrigger,
-    findNotionDeleteMenuTrigger
+    findOpenDeleteMenuItem
   });
 }

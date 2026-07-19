@@ -155,11 +155,9 @@ function adapterBaseItems(config, adapter = {}) {
 
 export {
   adapterBaseItems,
-  adapterBaseQuery,
   candidateTextBlocks,
   collectFromCopyButtons,
   conversationLooksUseful,
   dedupeItems,
-  genericRole,
-  genericTarget
+  genericRole
 };

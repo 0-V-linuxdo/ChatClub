@@ -36,7 +36,7 @@ import { installContentCapability } from "./shared/command-router.js";
 import { requestBackground } from "./shared/extension-runtime.js";
 import { createSummaryCapability } from "./capabilities/summary-runtime.js";
 
-export function installSummaryBridgeCapability() {
+function installSummaryBridgeCapability() {
   const runtimes = runtimeRegistry(window);
   const runtimeIdentity = createContentRuntimeBundleIdentity(CONTENT_RUNTIME_SUMMARY_BRIDGE_BUNDLE_IDENTITY);
   const mainRuntimeIdentity = createContentRuntimeBundleIdentity(CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY);

@@ -1,6 +1,6 @@
 // Built-in Summary userscript: Kagi Assistant (kagi)
 // Source: Mod/assets/chunk-7dbf4e81.js :: SUMMARY_SITE_CONFIG_DEFAULTS
-// Config version: 63; global config version: 72
+// Config version: 65; global config version: 72
 // Hosts: assistant.kagi.com
 // Path prefixes: (none)
 // Run mode: serial; timeout: 32000
