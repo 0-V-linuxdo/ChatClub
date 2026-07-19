@@ -55,7 +55,7 @@ export function findSummarySiteConfig(configs, href) {
   return (configs || []).find((config) => config.enabled !== false && configMatchesHref(config, href)) || null;
 }
 
-export function originMatchPattern(rawUrl) {
+function originMatchPattern(rawUrl) {
   try {
     const url = new URL(rawUrl);
     if (!/^https?:$/.test(url.protocol)) return null;
@@ -65,7 +65,7 @@ export function originMatchPattern(rawUrl) {
   }
 }
 
-export function hostMatchPattern(host) {
+function hostMatchPattern(host) {
   const raw = normalizeHost(host);
   if (!raw) return [];
   if (raw.startsWith("*.")) {

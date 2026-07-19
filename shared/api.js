@@ -1,7 +1,7 @@
 import { API_PROFILE_ENDPOINT_DEFAULT, API_PROFILE_MODEL_DEFAULT } from "./constants.js";
 import { normalizeApiOptions } from "./api-options.js";
 
-export function resolveApiProfile(options, purpose) {
+function resolveApiProfile(options, purpose) {
   const normalized = normalizeApiOptions(options || {});
   const id = purpose === "summary" ? normalized.summaryApiProfileId : normalized.optimizeApiProfileId;
   return normalized.apiProfiles.find((profile) => profile.id === id) || normalized.apiProfiles[0] || {
@@ -13,7 +13,7 @@ export function resolveApiProfile(options, purpose) {
   };
 }
 
-export function resolvePromptTemplate(options, purpose) {
+function resolvePromptTemplate(options, purpose) {
   const normalized = normalizeApiOptions(options || {});
   if (purpose === "summary") {
     return normalized.summaryPromptTemplates.find((item) => item.id === normalized.summaryPromptTemplateId)
@@ -23,7 +23,7 @@ export function resolvePromptTemplate(options, purpose) {
     || normalized.optimizePromptTemplates[0];
 }
 
-export async function chatCompletion(profile, messages) {
+async function chatCompletion(profile, messages) {
   if (!profile?.apiKey) throw new Error("API key is not configured");
   const endpoint = profile.endpoint || API_PROFILE_ENDPOINT_DEFAULT;
   const response = await fetch(endpoint, {
@@ -62,7 +62,7 @@ function parseJsonContent(text) {
   }
 }
 
-export async function chatCompletionStream(profile, messages, onDelta, attrs = {}) {
+async function chatCompletionStream(profile, messages, onDelta, attrs = {}) {
   if (!profile?.apiKey) throw new Error("API key is not configured");
   const endpoint = profile.endpoint || API_PROFILE_ENDPOINT_DEFAULT;
   const response = await fetch(endpoint, {
@@ -145,17 +145,6 @@ export async function chatCompletionStream(profile, messages, onDelta, attrs = {
   const content = output.trim();
   if (!content) throw new Error("API response did not include message content");
   return content;
-}
-
-export async function optimizePrompt(options, input) {
-  const prompt = String(input || "").trim();
-  if (!prompt) return "";
-  const profile = resolveApiProfile(options, "optimize");
-  const template = resolvePromptTemplate(options, "optimize");
-  return chatCompletion(profile, [
-    { role: "system", content: template.prompt },
-    { role: "user", content: prompt }
-  ]);
 }
 
 export async function optimizePromptStream(options, input, onDelta, attrs = {}) {

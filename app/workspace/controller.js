@@ -1,4 +1,5 @@
 import { createBindOnceControllerPort } from "../controller-port.js";
+import { createFrameRequest } from "../frame-request.js";
 import { requireControllerContext, requireControllerFunction, validateControllerContract } from "../controller-contract.js";
 import { createWorkspaceDragController } from "./drag-controller.js";
 import { createWorkspaceFrameController } from "./frame-controller.js";
@@ -70,7 +71,7 @@ export function createWorkspaceController(ctx = {}) {
   const executeTopicDelete = requireFunction(ctx, "executeTopicDelete");
   const framePort = requireContext(ctx, "framePort");
   const workspaceSessionStore = requireContext(ctx, "workspaceSessionStore");
-  if (typeof framePort.request !== "function") throw new TypeError("Workspace controller requires framePort.request.");
+  const sendToContentFrame = createFrameRequest(framePort, "Workspace controller");
   if (typeof workspaceSessionStore.save !== "function" || typeof workspaceSessionStore.generation !== "function") {
     throw new TypeError("Workspace controller requires workspaceSessionStore.save/generation.");
   }
@@ -83,10 +84,6 @@ export function createWorkspaceController(ctx = {}) {
     : async () => ({ ok: true });
   const openCustomAppEditor = typeof ctx.openCustomAppEditor === "function" ? ctx.openCustomAppEditor : null;
   const onFrameLifecycleChange = typeof ctx.onFrameLifecycleChange === "function" ? ctx.onFrameLifecycleChange : () => {};
-  const sendToContentFrame = (iframe, command, data = {}, timeoutMs) => {
-    const options = timeoutMs && typeof timeoutMs === "object" ? timeoutMs : { timeoutMs };
-    return framePort.request(iframe, command, data, options);
-  };
 
   const ownerState = createWorkspaceOwnerStatePorts(state);
   const openTabs = createWorkspaceOpenTabs();
@@ -130,21 +127,14 @@ export function createWorkspaceController(ctx = {}) {
     "activeShortcutGroupId",
     "activateChatTab",
     "assignFrameSrc",
-    "beginFrameLoading",
-    "chatFrameAllow",
+    "chatFrameAttributes",
     "chatFrameName",
-    "chatFrameNeedsSandbox",
-    "chatFrameSandbox",
     "closeTab",
     "completeFrameLoading",
     "consumeFrameInitialHref",
     "copyActiveChatLink",
     "createFrameBindingId",
-    "currentFullscreenGroup",
-    "currentGroupIndex",
     "deleteActiveThreadForGroup",
-    "frameDeleteThreadPayload",
-    "frameIsLoading",
     "fullscreenShortcutLabel",
     "groupIdForFrameWindow",
     "iframeForWindow",
@@ -157,6 +147,7 @@ export function createWorkspaceController(ctx = {}) {
     "removeChatGroup",
     "rememberFrameLocation",
     "setFrameSrcAfterPrepare",
+    "stageFrameInitialHref",
     "startNewChatForShortcut",
     "startNewChatInActiveTab",
     "startNewChatInFrame",
@@ -176,6 +167,8 @@ export function createWorkspaceController(ctx = {}) {
     "closePopovers",
     "closePopoversAnchoredWithin",
     "closeTransientOverlays",
+    "ensureFrameAttributeContract",
+    "frameAttributeContractMatches",
     "fullscreenButtonMeta",
     "openAppPicker",
     "openChatMenu",
@@ -202,6 +195,7 @@ export function createWorkspaceController(ctx = {}) {
       openableTabUrl,
       workspaceSessionStore
     },
+    registry: frameRegistry,
     layout: layoutBinding.port
   });
   sessionBinding.bind(sessionController);
@@ -345,7 +339,7 @@ export function createWorkspaceController(ctx = {}) {
     groupIdForFrameWindow: frameController.groupIdForFrameWindow,
     syncFrameFavicon: frameController.syncFrameFavicon,
     rememberFrameLocation: frameController.rememberFrameLocation,
-    frameDeleteThreadPayload: frameController.frameDeleteThreadPayload,
+    ensureFrameAttributeContract: viewController.ensureFrameAttributeContract,
     topicDeleteCapabilityForFrame: frameController.topicDeleteCapabilityForFrame,
     openableTabUrl,
     openTabUrl,

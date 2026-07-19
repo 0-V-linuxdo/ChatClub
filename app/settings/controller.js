@@ -22,6 +22,7 @@ import { createProfilesSettingsSection } from "./profiles.js";
 import { createShortcutSettings } from "./shortcuts.js";
 import { createSummarySettingsSection } from "./summary.js";
 import { createTopicDeletionSettingsSection } from "./topic-deletion.js";
+import { SETTINGS_OPTION_CAPABILITIES } from "./state-ports.js";
 import {
   requireControllerContext,
   requireControllerFunction,
@@ -31,20 +32,12 @@ import {
 const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, Math.max(0, Number(ms) || 0)); });
 const CONFIG_IO_AUTOSAVE_TIMEOUT_MS = 5000;
 
-const SECTION_OPTION_KEYS = Object.freeze({
-  appearance: new Set([
-    "colMaxCount", "frameLoadingOverlayOpacity", "frameToastPosition", "language", "primaryColor",
-    "primaryColorCustom", "tabGroupButtonOrder", "tabGroupButtonPlacement", "tabGroupButtonsMode",
-    "themeMode", "tooltipDisabledIds", "topbarPromptPlaceholderConfig"
-  ]),
-  apps: new Set(["builtinChatAppOrder"]),
-  messageNavigation: new Set(["messageNavigatorEffectMode", "messageNavigatorSiteConfigs"]),
-  models: new Set(["modelPreferenceOrder", "modelPreferences"]),
-  optimize: new Set(["optimizeApiProfileId", "optimizePromptTemplateId", "optimizePromptTemplates"]),
-  profiles: new Set(["apiProfiles", "optimizeApiProfileId", "summaryApiProfileId"]),
-  summary: new Set(["summaryApiProfileId", "summaryPromptTemplateId", "summaryPromptTemplates", "summarySiteConfigs"]),
-  topicDeletion: new Set(["topicDeleteSiteConfigs"])
-});
+const SECTION_OPTION_KEYS = Object.freeze(Object.fromEntries(
+  Object.entries(SETTINGS_OPTION_CAPABILITIES).map(([section, capability]) => [
+    section,
+    new Set(capability.write)
+  ])
+));
 
 function settingsMainScrollTopForRedraw(renderedSection, activeSection, scrollTop) {
   if (!renderedSection || renderedSection !== activeSection) return 0;
@@ -374,6 +367,7 @@ export function createSettingsController(ctx) {
       const description = el("small", {}, t(descriptionKey));
       const tab = el("button", {
         class: `settings-tab ${id === active ? "active" : ""}`,
+        dataset: { settingsSectionId: id },
         type: "button",
         onclick: () => selectSection(id)
       }, svgIcon(icon), el("span", { class: "settings-tab-copy" }, label, description));
@@ -391,6 +385,7 @@ export function createSettingsController(ctx) {
       clear(modalSectionTitle);
       modalSectionTitle.append(el("h3", {}, section.label), el("p", {}, section.description));
       settingsNav.setAttribute("aria-label", t("settings.sections"));
+      settingsMain.dataset.settingsSectionId = active;
       for (const entry of settingsTabEntries) {
         entry.tab.classList.toggle("active", entry.id === active);
         entry.label.textContent = t(entry.labelKey);
@@ -409,7 +404,6 @@ export function createSettingsController(ctx) {
     openCustomAppEditor: appsSection.openCustomAppEditor,
     openPromptLibraryDialog: promptLibraryController.openPromptLibraryDialog,
     openSettings,
-    promptLibraryManager: promptLibraryController.promptLibraryManager,
-    settingsPane
+    promptLibraryManager: promptLibraryController.promptLibraryManager
   });
 }

@@ -123,5 +123,5 @@ export function createPromptImageModel({ createId }) {
       .filter(Boolean);
   }
 
-  return Object.freeze({ normalize, normalizeEntry, hasImages, hasContent, timeoutMs, fromFile, filesFromTransfer });
+  return Object.freeze({ normalize, hasImages, hasContent, timeoutMs, fromFile, filesFromTransfer });
 }

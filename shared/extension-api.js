@@ -3,8 +3,6 @@ import {
   createBackgroundRequestClient
 } from "./background-requests.js";
 
-export { BACKGROUND_REQUEST_ACTIONS } from "./background-requests.js";
-
 function rootApi() {
   return globalThis.browser || globalThis.chrome || null;
 }

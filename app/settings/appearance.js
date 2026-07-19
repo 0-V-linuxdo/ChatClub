@@ -13,10 +13,10 @@ import {
 import {
   el,
   field,
-  FRAME_TOAST_POSITION_EVENT,
   input,
   select
 } from "../../ui/dom.js";
+import { FRAME_TOAST_POSITION_EVENT } from "../../ui/frame-toast.js";
 import { cleanupSettingsDragRows, createSettingsKit } from "./kit.js";
 import { createAppearanceAutosave } from "./appearance-autosave.js";
 import { createAppearanceTopbarController } from "./appearance-topbar.js";

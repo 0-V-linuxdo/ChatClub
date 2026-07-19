@@ -1,5 +1,5 @@
 // Pure configuration schema, normalization, dehydration, and migration logic.
-// Browser persistence lives in storage-adapter.js; storage.js is the facade.
+// Browser persistence and backup-file transport live in their dedicated modules.
 import {
   API_PROMOTION_CHANNELS_VERSION,
   API_PROFILE_ENDPOINT_DEFAULT,
@@ -20,7 +20,6 @@ import {
   PROMPT_IMAGE_PASTE_STRATEGIES,
   PROMPT_IMAGE_PASTE_STRATEGY_SEQUENTIAL,
   SCRIPT_CONFIG_SCHEMA_VERSION,
-  STORAGE_KEYS,
   TAB_GROUP_BUTTON_ORDER_MIGRATION_VERSION,
   TAB_GROUP_HEADER_BUTTONS,
   TOOLTIP_TARGET_IDS,
@@ -40,21 +39,15 @@ import { TOPIC_DELETE_SITE_CONFIGS, mergeBuiltInTopicDeleteConfig } from "./topi
 import { normalizeTopbarLayout } from "./topbar.js";
 import { normalizeHostList } from "./url-match.js";
 import { customUserscriptSource, isCustomUserscriptConfig } from "./userscript-config.js";
+import {
+  normalizeBuiltinChatAppIframeConfigs,
+  normalizeIframeConfig
+} from "./chat-frame-config.js";
 
 export function createId(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export const CONFIG_BUNDLE_KEYS = Object.freeze([
-  "options",
-  "customConfig",
-  "promptLibrary",
-  "promptSendHistory",
-  "shortcutConfig",
-  "pocketHistory"
-]);
-
-const CONFIG_BUNDLE_KEY_SET = new Set(CONFIG_BUNDLE_KEYS);
 export const POCKET_HISTORY_LIMIT = 300;
 
 function clone(value) {
@@ -115,7 +108,7 @@ export function normalizeFrameToastPosition(value = {}) {
   };
 }
 
-export function normalizeTooltipDisabledIds(value = []) {
+function normalizeTooltipDisabledIds(value = []) {
   const validIds = new Set(TOOLTIP_TARGET_IDS);
   const ordered = [];
   for (const id of Array.isArray(value) ? value : []) {
@@ -187,7 +180,7 @@ function normalizeStoredPrimaryColor(raw, fallback) {
   };
 }
 
-export function normalizeTabGroupButtonsMode(value) {
+function normalizeTabGroupButtonsMode(value) {
   return value === "hidden" ? "hidden" : "pinned";
 }
 
@@ -407,7 +400,7 @@ function withoutPromotionApiProfiles(apiProfiles) {
   return apiProfiles.filter((profile) => !DEFAULT_PROMOTION_API_PROFILES.some((promoted) => profile.id === promoted.id));
 }
 
-export function normalizeModelPreferences(raw = {}) {
+function normalizeModelPreferences(raw = {}) {
   const source = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
   const normalized = { ...DEFAULT_MODEL_PREFERENCES };
   for (const [appId, targets] of Object.entries(MODEL_PREFERENCE_TARGETS)) {
@@ -493,6 +486,22 @@ function summaryScriptId(item = {}, fallback = {}) {
   return text(item.scriptId || fallback.scriptId || (file ? file.replace(/\.js$/i, "") : "") || item.id || fallback.id);
 }
 
+const LEGACY_BUILT_IN_SUMMARY_CONFIG_FIELDS = Object.freeze([
+  "domTextFallback",
+  "domTextFallbackRoles",
+  "messageTextSelector",
+  "userTextSelector",
+  "assistantTextSelector",
+  "messageSelector",
+  "scopeSelector",
+  "userRolePattern",
+  "assistantRolePattern",
+  "copyButtonSelector",
+  "copyButtonPattern",
+  "copyMenuButtonSelector",
+  "copyMenuItemPattern"
+]);
+
 function normalizeSummarySiteConfig(item, fallback = {}, index = 0) {
   const builtIn = Boolean(fallback.builtIn || item?.builtIn);
   const customUserscript = typeof item?.customUserscript === "string"
@@ -523,8 +532,12 @@ function normalizeSummarySiteConfig(item, fallback = {}, index = 0) {
   };
   delete config.userscript;
   delete config.userscriptOverride;
-  if (sourceMode === "custom") config.customUserscript = customUserscript;
-  else delete config.customUserscript;
+  if (sourceMode === "custom") {
+    config.customUserscript = customUserscript;
+  } else {
+    delete config.customUserscript;
+    for (const field of LEGACY_BUILT_IN_SUMMARY_CONFIG_FIELDS) delete config[field];
+  }
   if (copyTimeoutMs) config.copyTimeoutMs = copyTimeoutMs;
   else delete config.copyTimeoutMs;
   return config;
@@ -652,6 +665,10 @@ export function normalizeOptions(raw = {}) {
       ? raw.summaryPromptTemplateId
       : summaryPromptTemplates[0]?.id || summaryDefault.id,
     builtinChatAppOrder: normalizeBuiltinChatAppOrder(raw.builtinChatAppOrder),
+    builtinChatAppIframeConfigs: normalizeBuiltinChatAppIframeConfigs(
+      raw.builtinChatAppIframeConfigs,
+      BUILTIN_CHAT_APPS.map((app) => app.id)
+    ),
     modelPreferences: normalizeModelPreferences(raw.modelPreferences),
     modelPreferenceOrder: normalizeModelPreferenceOrder(raw.modelPreferenceOrder),
     messageNavigatorEffectMode: normalizeMessageNavigatorEffectMode(raw.messageNavigatorEffectMode),
@@ -665,7 +682,8 @@ export function normalizeCustomConfig(raw = []) {
   const ids = new Set();
   return (Array.isArray(raw) ? raw : []).filter(Boolean).map((item, index) => {
     const url = normalizeHttpUrl(item.url);
-    return {
+    const iframeConfig = normalizeIframeConfig(item.iframeConfig);
+    const normalized = {
       id: text(item.id) || createId("custom-app"),
       name: inferCustomName(item, index),
       provider: text(item.provider || item.company, "Custom"),
@@ -675,6 +693,8 @@ export function normalizeCustomConfig(raw = []) {
       imagePasteStrategy: normalizePromptImagePasteStrategy(item.imagePasteStrategy),
       hosts: normalizeHostList(item.hosts)
     };
+    if (iframeConfig) normalized.iframeConfig = iframeConfig;
+    return normalized;
   }).filter((item) => {
     if (!item.name || !item.url || ids.has(item.id)) return false;
     ids.add(item.id);
@@ -725,7 +745,7 @@ function normalizePromptHistoryImage(entry, index = 0) {
   };
 }
 
-export function normalizePromptHistoryImages(raw = []) {
+function normalizePromptHistoryImages(raw = []) {
   const usedNames = new Set();
   return (Array.isArray(raw) ? raw : [])
     .map((entry, index) => normalizePromptHistoryImage(entry, index))
@@ -850,11 +870,26 @@ export function normalizePromptImagePasteStrategy(value, fallback = PROMPT_IMAGE
   return PROMPT_IMAGE_PASTE_STRATEGIES.includes(strategy) ? strategy : fallback;
 }
 
-export function getAllChatApps(customConfig = [], builtinChatAppOrder = []) {
-  const custom = normalizeCustomConfig(customConfig);
+export function getAllChatApps(customConfig = [], builtinChatAppOrder = [], builtinChatAppIframeConfigs = {}) {
+  const custom = normalizeCustomConfig(customConfig).map((app) => ({
+    ...app,
+    source: "custom",
+    chatAppSource: "custom"
+  }));
   const builtInOrder = normalizeBuiltinChatAppOrder(builtinChatAppOrder);
+  const iframeConfigs = normalizeBuiltinChatAppIframeConfigs(
+    builtinChatAppIframeConfigs,
+    BUILTIN_CHAT_APPS.map((app) => app.id)
+  );
   const builtInById = new Map(BUILTIN_CHAT_APPS.map((app) => [app.id, app]));
-  const builtIn = builtInOrder.map((id) => builtInById.get(id)).filter(Boolean);
+  const builtIn = builtInOrder
+    .map((id) => builtInById.get(id))
+    .filter(Boolean)
+    .map((app) => {
+      const normalized = { ...app, source: "builtin", chatAppSource: "builtin" };
+      if (iframeConfigs[app.id]) normalized.iframeConfig = iframeConfigs[app.id];
+      return normalized;
+    });
   const ids = new Set();
   return [...custom, ...builtIn].filter((app) => {
     if (!app.id || ids.has(app.id)) return false;
@@ -908,129 +943,6 @@ export function dehydrateOptions(options = {}) {
     messageNavigatorSiteConfigs: (normalized.messageNavigatorSiteConfigs || []).map(dehydrateMessageNavigatorSiteConfig),
     summarySiteConfigs: (normalized.summarySiteConfigs || []).map(dehydrateSummarySiteConfig),
     topicDeleteSiteConfigs: (normalized.topicDeleteSiteConfigs || []).map(dehydrateTopicDeleteSiteConfig)
-  };
-}
-
-function hasBundleField(bundle, key) {
-  return Object.prototype.hasOwnProperty.call(bundle, key);
-}
-
-function hasBundleObjectField(bundle, key) {
-  return hasBundleField(bundle, key) && plainObject(bundle[key]);
-}
-
-function hasBundleArrayField(bundle, key) {
-  return hasBundleField(bundle, key) && Array.isArray(bundle[key]);
-}
-
-function hasBundleNonEmptyObjectField(bundle, key) {
-  return hasBundleObjectField(bundle, key) && Object.keys(bundle[key]).length > 0;
-}
-
-function normalizeImportArrayFieldResult(raw, normalize, validItem) {
-  if (!Array.isArray(raw)) {
-    return { value: null, rawCount: 0, importedCount: 0, droppedCount: 0 };
-  }
-  if (!raw.length) {
-    return { value: normalize([]), rawCount: 0, importedCount: 0, droppedCount: 0 };
-  }
-  const validItems = raw.filter(validItem);
-  if (!validItems.length) {
-    return { value: null, rawCount: raw.length, importedCount: 0, droppedCount: raw.length };
-  }
-  const value = normalize(validItems);
-  const importedCount = Array.isArray(value) ? value.length : 0;
-  return {
-    value,
-    rawCount: raw.length,
-    importedCount,
-    droppedCount: Math.max(0, raw.length - importedCount)
-  };
-}
-
-function validImportedCustomConfigItem(item) {
-  return plainObject(item) && !!normalizeHttpUrl(item.url);
-}
-
-function validImportedPromptLibraryItem(item) {
-  return plainObject(item) && !!text(item.prompt || item.content);
-}
-
-function validImportedPromptSendHistoryItem(item) {
-  if (typeof item === "string") return !!text(item);
-  if (!plainObject(item)) return false;
-  if (text(item.text || item.prompt || item.content)) return true;
-  return normalizePromptHistoryImages(item.images).length > 0;
-}
-
-function validImportedPocketHistoryItem(item) {
-  return plainObject(item)
-    && !!text(item.chatUrl || item.url || item.href)
-    && !!text(item.userMessage || item.user)
-    && !!text(item.assistantMessage || item.assistant);
-}
-
-export function normalizeConfigBundleKeys(selectedKeys = CONFIG_BUNDLE_KEYS) {
-  const source = selectedKeys == null ? CONFIG_BUNDLE_KEYS : selectedKeys;
-  const keys = Array.isArray(source)
-    ? source
-    : source && typeof source !== "string" && typeof source[Symbol.iterator] === "function"
-      ? [...source]
-      : [];
-  return keys.filter((key, index) =>
-    CONFIG_BUNDLE_KEY_SET.has(key) && keys.indexOf(key) === index
-  );
-}
-
-export function exportConfigBundle(state = {}, selectedKeys = CONFIG_BUNDLE_KEYS) {
-  const source = plainObject(state) ? state : {};
-  const selected = new Set(normalizeConfigBundleKeys(selectedKeys));
-  const bundle = {
-    schema: "chatclub.config.v1",
-    exportedAt: new Date().toISOString()
-  };
-  if (selected.has("options")) bundle.options = dehydrateOptions(plainObject(source.options) ? source.options : {});
-  if (selected.has("customConfig")) bundle.customConfig = normalizeCustomConfig(source.customConfig);
-  if (selected.has("promptLibrary")) bundle.promptLibrary = normalizePromptLibrary(source.promptLibrary);
-  if (selected.has("promptSendHistory")) bundle.promptSendHistory = normalizePromptSendHistory(source.promptSendHistory);
-  if (selected.has("shortcutConfig")) bundle.shortcutConfig = normalizeShortcutConfig(source.shortcutConfig);
-  if (selected.has("pocketHistory")) bundle.pocketHistory = dedupePocketHistory(source.pocketEntries || source.pocketHistory);
-  return bundle;
-}
-
-export function migrateImportedConfig(raw) {
-  return inspectImportedConfig(raw).data;
-}
-
-export function inspectImportedConfig(raw) {
-  const bundle = plainObject(raw) ? raw : {};
-  const customConfig = hasBundleArrayField(bundle, "customConfig")
-    ? normalizeImportArrayFieldResult(bundle.customConfig, normalizeCustomConfig, validImportedCustomConfigItem)
-    : null;
-  const promptLibrary = hasBundleArrayField(bundle, "promptLibrary")
-    ? normalizeImportArrayFieldResult(bundle.promptLibrary, normalizePromptLibrary, validImportedPromptLibraryItem)
-    : null;
-  const promptSendHistory = hasBundleArrayField(bundle, "promptSendHistory")
-    ? normalizeImportArrayFieldResult(bundle.promptSendHistory, normalizePromptSendHistory, validImportedPromptSendHistoryItem)
-    : null;
-  const pocketHistory = hasBundleArrayField(bundle, "pocketHistory")
-    ? normalizeImportArrayFieldResult(bundle.pocketHistory, dedupePocketHistory, validImportedPocketHistoryItem)
-    : null;
-  return {
-    data: {
-      options: hasBundleNonEmptyObjectField(bundle, "options") ? normalizeOptions(bundle.options) : null,
-      customConfig: customConfig?.value ?? null,
-      promptLibrary: promptLibrary?.value ?? null,
-      promptSendHistory: promptSendHistory?.value ?? null,
-      shortcutConfig: hasBundleNonEmptyObjectField(bundle, "shortcutConfig") ? normalizeShortcutConfig(bundle.shortcutConfig) : null,
-      pocketHistory: pocketHistory?.value ?? null
-    },
-    diagnostics: {
-      customConfig,
-      promptLibrary,
-      promptSendHistory,
-      pocketHistory
-    }
   };
 }
 

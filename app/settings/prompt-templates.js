@@ -34,7 +34,7 @@ export function createPromptTemplateSettings(ctx) {
     settingsPrimaryAction
   } = requireControllerContext(ctx, controllerName, "settingsKit");
 
-  function profileOptions(selected) {
+  function profileOptions() {
     return state.options.apiProfiles.map((profile) => ({ value: profile.id, label: profile.name || profile.id }));
   }
 
@@ -89,7 +89,7 @@ export function createPromptTemplateSettings(ctx) {
     return String(prompt || "").replace(/\s+/g, " ").trim() || t("promptTemplates.empty");
   }
 
-  function promptTemplateLabel(kind, template) {
+  function promptTemplateLabel(template) {
     if (template?.builtIn && template.id === DEFAULT_OPTIONS.summaryPromptTemplateId) return t("promptTemplates.defaultSummary");
     if (template?.builtIn && template.id === DEFAULT_OPTIONS.optimizePromptTemplateId) return t("promptTemplates.defaultOptimize");
     return template?.title || template?.id || "";
@@ -115,7 +115,7 @@ export function createPromptTemplateSettings(ctx) {
       prompt: meta.defaultPrompt,
       builtIn: false
     });
-    const titleInput = input(promptTemplateLabel(kind, draft), { placeholder: t("promptTemplates.name") });
+    const titleInput = input(promptTemplateLabel(draft), { placeholder: t("promptTemplates.name") });
     const promptInput = textarea(draft.prompt, { placeholder: t("promptTemplates.prompt") });
     let dialog;
     const close = () => dialog.remove();
@@ -181,7 +181,7 @@ export function createPromptTemplateSettings(ctx) {
   async function deletePromptTemplate(kind, template, redraw) {
     const meta = promptTemplateMeta(kind);
     if (template.builtIn) return;
-    if (!window.confirm(t("promptTemplates.deleteConfirm", { name: promptTemplateLabel(kind, template) || t("promptTemplates.fallbackName") }))) return;
+    if (!window.confirm(t("promptTemplates.deleteConfirm", { name: promptTemplateLabel(template) || t("promptTemplates.fallbackName") }))) return;
     const templates = promptTemplateList(kind).filter((item) => item.id !== template.id);
     const activeId = state.options[meta.activeKey] === template.id ? (templates[0]?.id || meta.defaultId) : state.options[meta.activeKey];
     await savePromptTemplateState(kind, templates, activeId, redraw, t("toast.promptTemplateDeleted"));
@@ -203,13 +203,13 @@ export function createPromptTemplateSettings(ctx) {
     },
       settingsDragHandle(t("promptTemplates.title")),
       el("div", { class: "prompt-template-name" },
-        el("strong", {}, promptTemplateLabel(kind, template)),
+        el("strong", {}, promptTemplateLabel(template)),
         template.builtIn ? el("span", { class: "summary-collector-star", title: t("promptTemplates.builtIn"), "aria-label": t("promptTemplates.builtIn") }, "★") : null
       ),
       el("label", { class: "settings-check prompt-template-active", title: active ? t("promptTemplates.activeTemplate") : t("promptTemplates.setActive") },
         el("input", {
           type: "checkbox",
-          "aria-label": `${promptTemplateLabel(kind, template)} ${t("promptTemplates.active")}`,
+          "aria-label": `${promptTemplateLabel(template)} ${t("promptTemplates.active")}`,
           checked: active,
           onchange: async (event) => {
             if (!event.target.checked) {

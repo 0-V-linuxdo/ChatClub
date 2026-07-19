@@ -6,6 +6,7 @@ import {
   sameDeleteConversationIdentity
 } from "../../shared/delete-completion.js";
 import { validateControllerContract } from "../controller-contract.js";
+import { createFrameRequest } from "../frame-request.js";
 
 const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, Math.max(0, Number(ms) || 0)); });
 
@@ -315,17 +316,11 @@ export function createTopicDeleteRuntime(dependencies = {}) {
     completionPollMs: "number?",
     completionStableMs: "number?"
   });
-  if (typeof framePort.request !== "function") {
-    throw new TypeError("Topic Delete runtime requires framePort.request to be a function.");
-  }
+  const sendToContentFrame = createFrameRequest(framePort, "Topic Delete runtime");
   const completionTimeoutMs = Math.max(50, Math.min(15000, Number(configuredCompletionTimeoutMs) || 5200));
   const completionPollMs = Math.max(10, Math.min(1000, Number(configuredCompletionPollMs) || 260));
   const completionStableMs = Math.max(50, Math.min(5000, Number(configuredCompletionStableMs) || 600));
   let trustedInputExecutionTail = Promise.resolve();
-  const sendToContentFrame = (iframe, command, data = {}, timeoutMs) => {
-    const options = timeoutMs && typeof timeoutMs === "object" ? timeoutMs : { timeoutMs };
-    return framePort.request(iframe, command, data, options);
-  };
 
   function withTrustedInputLock(task) {
     const run = trustedInputExecutionTail.catch(() => {}).then(task);
@@ -433,7 +428,6 @@ export function createTopicDeleteRuntime(dependencies = {}) {
       return {
         ok: false,
         site,
-        manualCompletionRequired: true,
         reason: "delete target has no authenticated stable conversation identity"
       };
     }
@@ -520,7 +514,7 @@ function incompleteCompletionReason(inspection, lastError) {
   if (lastError) {
     return `delete completion could not be verified: ${lastError.message || String(lastError)}`;
   }
-  if (inspection?.dialogPresent) return "delete confirmation is still visible";
+  if (inspection?.dialogPresent) return "delete confirmation is still visible; complete it manually";
   const current = inspection?.target?.current === true;
   const present = inspection?.target?.present === true;
   if (current && present) return "delete completion could not be verified: deleted conversation is still current and present";
@@ -591,7 +585,6 @@ async function tryTrustedFallback(iframe, result = {}, completion = {}) {
     return {
       ...result,
       ok: false,
-      manualCompletionRequired: true,
       reason: result.reason || "trusted delete confirmation requires a stable conversation identity; complete it manually"
     };
   }
@@ -628,8 +621,6 @@ async function settle(iframe, result = {}, completion = {}) {
   return {
     ...result,
     ok: false,
-    verificationUncertain: true,
-    ...(verified.inspection?.dialogPresent ? { manualCompletionRequired: true } : {}),
     reason: verified.reason
   };
 }

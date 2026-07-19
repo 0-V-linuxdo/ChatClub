@@ -9,13 +9,9 @@ import {
 import { createActionButton, createTopIconButton } from "../../ui/components.js";
 import { el } from "../../ui/dom.js";
 import { createSvgIcon } from "../../ui/icons.js";
-import { validateControllerContract } from "../controller-contract.js";
+import { createControllerMethodValidator, validateControllerContract } from "../controller-contract.js";
 
-function requireMethods(value, label, methods) {
-  for (const method of methods) {
-    if (typeof value?.[method] !== "function") throw new TypeError(`Topbar view ${label} requires ${method}().`);
-  }
-}
+const requireMethods = createControllerMethodValidator("Topbar view");
 
 export function createTopbarView(dependencies = {}) {
   const { state, composer, editor, settingsSections, actions, editLifecycle } = validateControllerContract(

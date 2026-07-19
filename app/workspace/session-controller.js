@@ -2,9 +2,10 @@ import { captureWorkspaceSnapshotV1, restoreWorkspaceSnapshotV1 } from "./sessio
 import { validateControllerContract } from "../controller-contract.js";
 
 export function createWorkspaceSessionController(dependencies = {}) {
-  const { state, services, layout } = validateControllerContract(dependencies, "Workspace session controller", {
+  const { state, services, registry, layout } = validateControllerContract(dependencies, "Workspace session controller", {
     state: "object",
     services: "object",
+    registry: "object",
     layout: "object"
   });
   const {
@@ -18,19 +19,18 @@ export function createWorkspaceSessionController(dependencies = {}) {
   for (const method of ["persistentLayoutPresets", "validChatAppIds"]) {
     if (typeof layout[method] !== "function") throw new TypeError(`Workspace session layout port requires ${method}().`);
   }
+  if (typeof registry.frameForInstance !== "function") {
+    throw new TypeError("Workspace session registry port requires frameForInstance().");
+  }
   const { persistentLayoutPresets, validChatAppIds } = layout;
+  const { frameForInstance } = registry;
   if (typeof workspaceSessionStore?.save !== "function" || typeof workspaceSessionStore?.generation !== "function") {
     throw new TypeError("Workspace session controller requires workspaceSessionStore.save/generation.");
   }
 
-  function frameForLifecycleInstance(instanceId) {
-    return Array.from(document.querySelectorAll(".chat-frame"))
-      .find((frame) => frame.dataset.instanceId === instanceId) || null;
-  }
-
   function currentHrefForWorkspaceTab(chat, framesByInstanceId = null) {
     const instanceId = String(chat?.instanceId || "");
-    const iframe = framesByInstanceId?.get(instanceId) || frameForLifecycleInstance(instanceId);
+    const iframe = framesByInstanceId?.get(instanceId) || frameForInstance(instanceId);
     return openableTabUrl(iframe?.dataset?.currentHref)
       || openableTabUrl(chat?.initialHref)
       || openableTabUrl(iframe?.getAttribute?.("src"))

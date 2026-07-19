@@ -29,9 +29,6 @@ export function createBindOnceControllerPort(name, methodNames = []) {
       }
       target = controller;
       return port;
-    },
-    isBound() {
-      return Boolean(target);
     }
   });
 }

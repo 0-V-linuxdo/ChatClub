@@ -1,6 +1,6 @@
 import { createScopedStatePort, stateAccess } from "../state/port.js";
 
-export const FAVICON_STATE_ACCESS = stateAccess(
+const FAVICON_STATE_ACCESS = stateAccess(
   ["customConfig", "faviconCache", "options"],
   ["faviconCache"]
 );

@@ -1,7 +1,12 @@
 import { configMatchesHref, normalizeHostList } from "./url-match.js";
+import {
+  boundedSiteConfigNumber as boundedNumber,
+  siteConfigText as text,
+  uniqueSiteConfigStrings as uniqueStrings
+} from "./site-config-values.js";
 
 export const MESSAGE_NAVIGATOR_EFFECT_MODES = Object.freeze(["none", "border", "pulse", "fade", "jiggle"]);
-export const DEFAULT_MESSAGE_NAVIGATOR_EFFECT_MODE = "border";
+const DEFAULT_MESSAGE_NAVIGATOR_EFFECT_MODE = "border";
 
 export const MESSAGE_NAVIGATOR_SITE_CONFIGS = Object.freeze([
   Object.freeze({
@@ -160,28 +165,6 @@ export const MESSAGE_NAVIGATOR_SITE_CONFIGS = Object.freeze([
   }),
 ]);
 
-function text(value, fallback = "") {
-  return String(value ?? fallback).trim();
-}
-
-function uniqueStrings(value = []) {
-  const seen = new Set();
-  const out = [];
-  for (const item of Array.isArray(value) ? value : []) {
-    const normalized = text(item);
-    if (!normalized || seen.has(normalized)) continue;
-    seen.add(normalized);
-    out.push(normalized);
-  }
-  return out;
-}
-
-function boundedNumber(value, fallback, min, max) {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return fallback;
-  return Math.max(min, Math.min(max, Math.round(number)));
-}
-
 export function normalizeMessageNavigatorEffectMode(value) {
   return MESSAGE_NAVIGATOR_EFFECT_MODES.includes(value) ? value : DEFAULT_MESSAGE_NAVIGATOR_EFFECT_MODE;
 }
@@ -250,7 +233,7 @@ export function mergeBuiltInMessageNavigatorConfig(current = [], builtIn = MESSA
   return merged.filter((item) => item.id && item.id !== "chathub" && item.adapter !== "chathub");
 }
 
-export function messageNavigatorConfigMatchesPayload(config, payload = {}) {
+function messageNavigatorConfigMatchesPayload(config, payload = {}) {
   if (!config || config.enabled === false) return false;
   const payloadApps = uniqueStrings([payload.appId, payload.appName]).map((item) => item.toLowerCase());
   const configApps = uniqueStrings([...(config.appIds || []), config.id, config.name]).map((item) => item.toLowerCase());

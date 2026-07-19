@@ -1,6 +1,5 @@
 import { createId } from "../../shared/storage-schema.js";
 import {
-  DEFAULT_TOPBAR_LAYOUT,
   TOPBAR_BUILTIN_ITEMS,
   TOPBAR_REQUIRED_ITEMS,
   normalizeTopbarLayout,
@@ -113,14 +112,6 @@ export function createTopbarEditor(dependencies = {}) {
     ];
   }
 
-  function addTopbarEditFlexSpace() {
-    setTopbarEditLayoutDraft(insertTopbarItemBeforeSettingsMenu(activeTopbarEditLayout(), {
-      type: "flex",
-      id: createId("topbar-flex"),
-      weight: 1
-    }));
-  }
-
   function insertTopbarPaletteItem(item, flexTemplate = false) {
     const layout = activeTopbarEditLayout();
     if (flexTemplate || item.type === "flex") {
@@ -137,15 +128,6 @@ export function createTopbarEditor(dependencies = {}) {
 
   function topbarEditItemIsRequired(item) {
     return item?.type === "item" && TOPBAR_REQUIRED_ITEMS.includes(item.id);
-  }
-
-  function removeTopbarEditItem(item) {
-    if (!item || topbarEditItemIsRequired(item)) return;
-    setTopbarEditLayoutDraft(activeTopbarEditLayout().filter((entry) => entry.id !== item.id));
-  }
-
-  function resetTopbarEditLayout() {
-    setTopbarEditLayoutDraft(DEFAULT_TOPBAR_LAYOUT);
   }
 
   function addPointerDragGuards() {
@@ -419,7 +401,6 @@ export function createTopbarEditor(dependencies = {}) {
 
   return Object.freeze({
     activeTopbarEditLayout,
-    addTopbarEditFlexSpace,
     cleanupPointerDrag,
     consumePaletteClickSuppression,
     ensureTopbarSettingsMenuItems,
@@ -427,10 +408,7 @@ export function createTopbarEditor(dependencies = {}) {
     insertTopbarPaletteItem,
     paletteCandidateIds,
     preventNativeDrag,
-    removeTopbarEditItem,
-    resetTopbarEditLayout,
     startPointerDrag,
-    topbarEditItemIsRequired,
     visibleTopbarLayoutItems
   });
 }

@@ -1,5 +1,3 @@
-export const SUPPORTED_LANGUAGES = ["en", "zh_CN"];
-
 const en = {
   "common.add": "Add",
   "common.cancel": "Cancel",
@@ -273,6 +271,76 @@ const en = {
   "apps.nameUrlRequired": "Platform name and URL are required",
   "apps.invalidUrl": "Platform URL is invalid",
   "apps.deleteConfirm": "Delete {name}?",
+  "apps.tabIframe": "iframe Permissions",
+  "apps.tabIframeDesc": "Per-site attributes",
+  "apps.iframe.manage": "Review the effective iframe policy for every platform. This is a derived view and follows the platform order above.",
+  "apps.iframe.groupBuiltIn": "Built-in platforms",
+  "apps.iframe.groupBuiltInDesc": "Overrides are stored separately from the packaged platform definitions.",
+  "apps.iframe.groupCustom": "Custom platforms",
+  "apps.iframe.groupCustomDesc": "Overrides are stored with each custom platform.",
+  "apps.iframe.platformCount": "{count} platforms",
+  "apps.iframe.source": "Source",
+  "apps.iframe.sourceBuiltIn": "Built-in",
+  "apps.iframe.sourceCustom": "Custom",
+  "apps.iframe.effectivePolicy": "Effective Policy",
+  "apps.iframe.status": "Status",
+  "apps.iframe.usingDefault": "Default",
+  "apps.iframe.overridden": "Overridden",
+  "apps.iframe.edit": "Edit iframe permissions",
+  "apps.iframe.restoreDefault": "Restore default iframe permissions",
+  "apps.iframe.noHosts": "No matching host",
+  "apps.iframe.scopeTitle": "Site-scoped iframe attributes",
+  "apps.iframe.scopeNotice": "An override applies only while the iframe URL matches that platform's URL or matching hosts. These attributes do not grant extension host access, browser permissions, or operating-system permissions.",
+  "apps.iframe.summaryAllow": "allow {enabled}/{total}",
+  "apps.iframe.summaryAllowOmitted": "allow removed",
+  "apps.iframe.summarySandbox": "sandbox {count} tokens",
+  "apps.iframe.summarySandboxStrict": "strict sandbox",
+  "apps.iframe.summarySandboxOmitted": "sandbox removed",
+  "apps.iframe.summaryReferrer": "referrer {value}",
+  "apps.iframe.summaryReferrerOmitted": "referrer removed",
+  "apps.iframe.emptyValue": "empty",
+  "apps.iframe.editorTitle": "{name} iframe Permissions",
+  "apps.iframe.editorScopeTitle": "Scope: {name}",
+  "apps.iframe.editorScopeBody": "This override is active only for matching hosts: {hosts}. A cross-site navigation falls back to ChatClub's neutral compatibility policy.",
+  "apps.iframe.policyMode": "Mode",
+  "apps.iframe.mode.inherit": "Inherit site default",
+  "apps.iframe.mode.visual": "Visual selection",
+  "apps.iframe.mode.raw": "Raw value",
+  "apps.iframe.mode.value": "Choose value",
+  "apps.iframe.mode.omit": "Remove attribute",
+  "apps.iframe.allowHelp": "Choose which browser capabilities the embedded page may request.",
+  "apps.iframe.allowRawHelp": "Use semicolon-separated Permissions Policy directives. An empty raw value keeps an empty allow attribute.",
+  "apps.iframe.sandboxHelp": "Choose which restrictions the sandbox relaxes. Removing sandbox removes iframe isolation.",
+  "apps.iframe.sandboxRawHelp": "Use space-separated sandbox tokens. An empty raw value keeps the strict empty sandbox attribute.",
+  "apps.iframe.referrerPolicyHelp": "Control which referrer information accompanies iframe requests.",
+  "apps.iframe.referrerPolicyValue": "Policy",
+  "apps.iframe.rawValue": "Raw attribute value",
+  "apps.iframe.advancedAttributes": "Advanced attributes",
+  "apps.iframe.advancedAttributesHelp": "Attribute names are normalized to lowercase. Protected ChatClub attributes, event handlers, and data-* attributes cannot be overridden. Leave a value empty to keep a boolean attribute present.",
+  "apps.iframe.attributeName": "Attribute name",
+  "apps.iframe.attributeValue": "Value",
+  "apps.iframe.attributeNamePlaceholder": "for example: credentialless",
+  "apps.iframe.attributeValuePlaceholder": "empty = boolean attribute",
+  "apps.iframe.addAttribute": "Add attribute",
+  "apps.iframe.removeAttribute": "Remove attribute",
+  "apps.iframe.noAdvancedAttributes": "No advanced attributes.",
+  "apps.iframe.validationErrors": "Fix these errors before saving",
+  "apps.iframe.validationWarnings": "Review these forward-compatibility warnings",
+  "apps.iframe.fixValidationErrors": "Fix the iframe configuration errors before saving",
+  "apps.iframe.currentRisks": "Risk changes in this draft",
+  "apps.iframe.riskWarningTitle": "Security-sensitive setting",
+  "apps.iframe.riskWarningBody": "Camera, microphone, display capture, clipboard access, raw future tokens, or removing sandbox can expand what the embedded site can do. Save only policies you understand and trust.",
+  "apps.iframe.riskConfirmTitle": "Confirm iframe risk change",
+  "apps.iframe.riskConfirmLead": "This edit adds security-sensitive capabilities.",
+  "apps.iframe.riskConfirmBody": "The affected iframe will be replaced immediately. Review the newly introduced risks before applying this override.",
+  "apps.iframe.confirmRiskSave": "Accept Risks and Save",
+  "apps.iframe.previewTitle": "Effective iframe preview",
+  "apps.iframe.previewHelp": "Canonical configurable attributes plus representative ChatClub-protected runtime attributes.",
+  "apps.iframe.previewInScope": "Platform URL is in scope",
+  "apps.iframe.previewFallbackScope": "Outside scope: neutral fallback",
+  "apps.iframe.previewUnavailable": "Preview unavailable",
+  "apps.iframe.previewInvalid": "The preview will appear after the configuration is valid.",
+  "apps.iframe.permissionBoundary": "iframe attributes are page-embedding controls. They do not change extension permissions, browser permissions, operating-system privacy grants, DNR rules, or Content Bridge authority.",
 
   "modelPreferences.title": "Preferred models",
   "modelPreferences.desc": "Choose the model ChatClub should apply when a supported chat page finishes loading.",
@@ -697,6 +765,9 @@ const en = {
   "io.sensitiveWarning.prompts": "Prompt exports include saved prompts or recent prompt history.",
   "io.largePocketWarning": "Pocket import has {count} item(s), about {size}; very large backups may fail browser storage limits.",
   "io.importExecutableScriptsWarning": "Imported settings include custom Summary or Delete Site scripts that can run on matching pages. Import only trusted backups.",
+  "io.importIframeInvalidWarning": "{count} invalid iframe configuration(s) will be discarded and inherit packaged defaults.",
+  "io.importIframeCompatibilityWarning": "{count} iframe configuration(s) contain forward-compatible values that this browser may ignore.",
+  "io.importIframeRiskWarning": "{count} iframe configuration(s) relax sandboxing or delegate sensitive browser capabilities. Import only trusted backups.",
   "io.importEmptyReplaceWarning": "{label}: importing this empty block will clear existing data.",
   "io.importDroppedItems": "{label}: {count} invalid or duplicate item(s) will be skipped.",
   "io.pocketLimitWarning": "Pocket keeps at most {count} items; merged imports are prioritized, so older existing items may be omitted.",
@@ -730,6 +801,8 @@ const en = {
   "toast.customConfigOrderSaved": "Custom platform order saved",
   "toast.builtinAppOrderSaved": "Built-in platform order saved",
   "toast.customConfigSaved": "Custom platforms saved",
+  "toast.iframeConfigSaved": "iframe permissions saved",
+  "toast.iframeConfigReset": "iframe permissions restored to defaults",
   "toast.modelPreferencesAutoSaveFailed": "Unable to auto-save model preferences",
   "toast.customPlatformUpdated": "Custom platform updated",
   "toast.customPlatformAdded": "Custom platform added",
@@ -1076,6 +1149,76 @@ const zh_CN = {
   "apps.nameUrlRequired": "平台名称和 URL 不能为空",
   "apps.invalidUrl": "平台 URL 无效",
   "apps.deleteConfirm": "删除 {name}？",
+  "apps.tabIframe": "iframe 权限",
+  "apps.tabIframeDesc": "逐站点属性",
+  "apps.iframe.manage": "查看每个平台实际生效的 iframe 策略。此处是派生视图，顺序跟随上方的平台排序。",
+  "apps.iframe.groupBuiltIn": "内置平台",
+  "apps.iframe.groupBuiltInDesc": "覆盖配置与 ChatClub 自带的平台定义分开保存。",
+  "apps.iframe.groupCustom": "自定义平台",
+  "apps.iframe.groupCustomDesc": "覆盖配置随对应的自定义平台一起保存。",
+  "apps.iframe.platformCount": "{count} 个平台",
+  "apps.iframe.source": "来源",
+  "apps.iframe.sourceBuiltIn": "内置",
+  "apps.iframe.sourceCustom": "自定义",
+  "apps.iframe.effectivePolicy": "实际策略",
+  "apps.iframe.status": "状态",
+  "apps.iframe.usingDefault": "默认",
+  "apps.iframe.overridden": "已覆盖",
+  "apps.iframe.edit": "编辑 iframe 权限",
+  "apps.iframe.restoreDefault": "恢复默认 iframe 权限",
+  "apps.iframe.noHosts": "没有匹配域名",
+  "apps.iframe.scopeTitle": "按站点生效的 iframe 属性",
+  "apps.iframe.scopeNotice": "仅当 iframe URL 匹配该平台 URL 或匹配域名时，覆盖配置才会生效。这些属性不会授予扩展 Host 访问权、浏览器权限或操作系统权限。",
+  "apps.iframe.summaryAllow": "allow {enabled}/{total}",
+  "apps.iframe.summaryAllowOmitted": "已移除 allow",
+  "apps.iframe.summarySandbox": "sandbox {count} 项",
+  "apps.iframe.summarySandboxStrict": "严格 sandbox",
+  "apps.iframe.summarySandboxOmitted": "已移除 sandbox",
+  "apps.iframe.summaryReferrer": "referrer {value}",
+  "apps.iframe.summaryReferrerOmitted": "已移除 referrer",
+  "apps.iframe.emptyValue": "空值",
+  "apps.iframe.editorTitle": "{name} iframe 权限",
+  "apps.iframe.editorScopeTitle": "作用域：{name}",
+  "apps.iframe.editorScopeBody": "此覆盖仅对以下匹配域名生效：{hosts}。跨站导航后会回退到 ChatClub 的中立兼容策略。",
+  "apps.iframe.policyMode": "模式",
+  "apps.iframe.mode.inherit": "继承站点默认值",
+  "apps.iframe.mode.visual": "可视化选择",
+  "apps.iframe.mode.raw": "原始值",
+  "apps.iframe.mode.value": "选择值",
+  "apps.iframe.mode.omit": "移除属性",
+  "apps.iframe.allowHelp": "选择嵌入页面可以请求哪些浏览器能力。",
+  "apps.iframe.allowRawHelp": "使用分号分隔 Permissions Policy 指令。原始空值会保留空的 allow 属性。",
+  "apps.iframe.sandboxHelp": "选择 sandbox 放宽哪些限制。移除 sandbox 会移除 iframe 隔离。",
+  "apps.iframe.sandboxRawHelp": "使用空格分隔 sandbox token。原始空值会保留限制最严格的空 sandbox 属性。",
+  "apps.iframe.referrerPolicyHelp": "控制 iframe 请求携带哪些来源信息。",
+  "apps.iframe.referrerPolicyValue": "策略",
+  "apps.iframe.rawValue": "原始属性值",
+  "apps.iframe.advancedAttributes": "高级属性",
+  "apps.iframe.advancedAttributesHelp": "属性名会统一为小写。不能覆盖 ChatClub 的受保护属性、事件处理器和 data-* 属性。值留空表示保留布尔属性。",
+  "apps.iframe.attributeName": "属性名",
+  "apps.iframe.attributeValue": "值",
+  "apps.iframe.attributeNamePlaceholder": "例如：credentialless",
+  "apps.iframe.attributeValuePlaceholder": "留空 = 布尔属性",
+  "apps.iframe.addAttribute": "添加属性",
+  "apps.iframe.removeAttribute": "移除属性",
+  "apps.iframe.noAdvancedAttributes": "没有高级属性。",
+  "apps.iframe.validationErrors": "请先修正以下错误",
+  "apps.iframe.validationWarnings": "请检查以下前向兼容警告",
+  "apps.iframe.fixValidationErrors": "请先修正 iframe 配置错误再保存",
+  "apps.iframe.currentRisks": "当前草稿中的风险变更",
+  "apps.iframe.riskWarningTitle": "安全敏感设置",
+  "apps.iframe.riskWarningBody": "摄像头、麦克风、屏幕捕获、剪贴板访问、未知的未来 token 或移除 sandbox，均可能扩大嵌入站点可执行的操作。请只保存你理解并信任的策略。",
+  "apps.iframe.riskConfirmTitle": "确认 iframe 风险变更",
+  "apps.iframe.riskConfirmLead": "本次编辑新增了安全敏感能力。",
+  "apps.iframe.riskConfirmBody": "受影响的 iframe 会立即替换。应用覆盖前，请检查本次新增的风险。",
+  "apps.iframe.confirmRiskSave": "接受风险并保存",
+  "apps.iframe.previewTitle": "实际 iframe 预览",
+  "apps.iframe.previewHelp": "展示规范化的可配置属性，以及具有代表性的 ChatClub 受保护运行时属性。",
+  "apps.iframe.previewInScope": "平台 URL 位于作用域内",
+  "apps.iframe.previewFallbackScope": "作用域外：中立回退策略",
+  "apps.iframe.previewUnavailable": "无法预览",
+  "apps.iframe.previewInvalid": "配置有效后将在此显示预览。",
+  "apps.iframe.permissionBoundary": "iframe 属性属于页面嵌入控制，不会更改扩展权限、浏览器权限、操作系统隐私授权、DNR 规则或 Content Bridge 权限。",
 
   "modelPreferences.title": "首选模型",
   "modelPreferences.desc": "选择 ChatClub 在受支持聊天页面加载完成后自动应用的模型。",
@@ -1500,6 +1643,9 @@ const zh_CN = {
   "io.sensitiveWarning.prompts": "导出提示词相关项目会包含保存的提示词或近期发送历史。",
   "io.largePocketWarning": "Pocket 导入包含 {count} 项，约 {size}；过大的备份可能触发浏览器存储限制。",
   "io.importExecutableScriptsWarning": "导入的设置包含自定义 Summary 或话题删除脚本，这些脚本可在匹配页面运行。请只导入可信备份。",
+  "io.importIframeInvalidWarning": "有 {count} 项无效 iframe 配置将被丢弃，并继承插件内置默认值。",
+  "io.importIframeCompatibilityWarning": "有 {count} 项 iframe 配置包含前向兼容值，当前浏览器可能忽略它们。",
+  "io.importIframeRiskWarning": "有 {count} 项 iframe 配置会放宽 sandbox 或委派敏感浏览器能力；请只导入可信备份。",
   "io.importEmptyReplaceWarning": "{label}：导入这个空数据块会清空现有数据。",
   "io.importDroppedItems": "{label}：将跳过 {count} 条无效或重复项目。",
   "io.pocketLimitWarning": "Pocket 最多保留 {count} 条；合并导入会优先保留导入内容，较旧的现有内容可能被省略。",
@@ -1533,6 +1679,8 @@ const zh_CN = {
   "toast.customConfigOrderSaved": "自定义平台顺序已保存",
   "toast.builtinAppOrderSaved": "内置平台顺序已保存",
   "toast.customConfigSaved": "自定义平台已保存",
+  "toast.iframeConfigSaved": "iframe 权限已保存",
+  "toast.iframeConfigReset": "iframe 权限已恢复默认值",
   "toast.modelPreferencesAutoSaveFailed": "无法自动保存模型偏好",
   "toast.customPlatformUpdated": "自定义平台已更新",
   "toast.customPlatformAdded": "自定义平台已添加",
@@ -1606,7 +1754,7 @@ const zh_CN = {
   "toast.topicDeleteUserscriptCopied": "删除用户脚本已复制"
 };
 
-export const TRANSLATIONS = { en, zh_CN };
+const TRANSLATIONS = { en, zh_CN };
 
 function defaultBrowserLanguage() {
   try {
@@ -1622,7 +1770,7 @@ function normalizePreference(preference) {
   return preference === "en" || preference === "zh_CN" ? preference : "system";
 }
 
-export function resolveLanguage(preference = "system", browserLanguage = "") {
+function resolveLanguage(preference = "system", browserLanguage = "") {
   const normalizedPreference = normalizePreference(preference);
   if (normalizedPreference !== "system") return normalizedPreference;
   const normalizedBrowserLanguage = String(browserLanguage || "").replace("_", "-").toLowerCase();
@@ -1635,27 +1783,8 @@ export function setLanguage(preference = "system", browserLanguage = "") {
   return activeLanguage;
 }
 
-export function getLanguage() {
-  return activeLanguage;
-}
-
-export function translationKeys(language = "en") {
-  return Object.keys(TRANSLATIONS[language]).sort();
-}
-
 export function t(key, vars = {}) {
   const table = TRANSLATIONS[activeLanguage] || TRANSLATIONS.en;
   const template = table[key] || TRANSLATIONS.en[key] || key;
   return String(template).replace(/\{(\w+)\}/g, (_, name) => String(vars[name] ?? ""));
-}
-
-export function assertI18nKeyParity() {
-  const enKeys = translationKeys("en");
-  for (const language of SUPPORTED_LANGUAGES) {
-    const keys = translationKeys(language);
-    if (keys.length !== enKeys.length || keys.some((key, index) => key !== enKeys[index])) {
-      throw new Error(`i18n key mismatch for ${language}`);
-    }
-  }
-  return true;
 }

@@ -1,13 +1,9 @@
 import {
-  moveDroppedGroupWithinWorkspace,
   moveGroupWithinWorkspace,
   moveTabWithinGroup
 } from "./model.js";
 import { validateControllerContract } from "../controller-contract.js";
 
-const DRAG_TAB_MIME = "application/x-chatclub-tab";
-const DRAG_TAB_GROUP_MIME = "application/x-chatclub-tab-group";
-const DRAG_GROUP_MIME = "application/x-chatclub-group";
 const TAB_DRAG_START_DISTANCE = 6;
 const GROUP_DRAG_START_DISTANCE = 6;
 
@@ -26,7 +22,6 @@ export function createWorkspaceDragController(dependencies = {}) {
     syncWorkspaceDom: "function"
   });
 
-  let activeTabDrag = null;
   let activeTabPointerDrag = null;
   let activeGroupPointerDrag = null;
   let suppressTabClickInstanceId = "";
@@ -54,7 +49,6 @@ export function createWorkspaceDragController(dependencies = {}) {
     restoreIframePointerEventsForDrag();
     document.body.classList.remove("tab-dragging");
     document.body.classList.remove("tab-gesture-active");
-    document.querySelectorAll(".chat-card.drag-over").forEach((node) => node.classList.remove("drag-over"));
     document.querySelectorAll(".chat-card.group-dragging, .chat-card.group-drop-before, .chat-card.group-drop-after").forEach((node) => {
       node.classList.remove("group-dragging", "group-drop-before", "group-drop-after");
     });
@@ -62,38 +56,8 @@ export function createWorkspaceDragController(dependencies = {}) {
     document.querySelectorAll(".tab.dragging, .tab.drop-before, .tab.drop-after").forEach((node) => {
       node.classList.remove("dragging", "drop-before", "drop-after");
     });
-    activeTabDrag = null;
     activeTabPointerDrag = null;
     activeGroupPointerDrag = null;
-  }
-
-  function draggedGroupId(event) {
-    return event.dataTransfer?.getData(DRAG_GROUP_MIME) || "";
-  }
-
-  function draggedTabId(event) {
-    return event.dataTransfer?.getData(DRAG_TAB_MIME) || activeTabDrag?.instanceId || "";
-  }
-
-  function draggedTabGroupId(event) {
-    return event.dataTransfer?.getData(DRAG_TAB_GROUP_MIME) || activeTabDrag?.groupId || "";
-  }
-
-  function startTabDrag(event, group, chat) {
-    activeTabDrag = { groupId: group.id, instanceId: chat.instanceId };
-    globalThis.getSelection?.()?.removeAllRanges?.();
-    suspendIframePointerEventsForDrag();
-    document.body.classList.add("tab-dragging");
-    event.currentTarget.classList.add("dragging");
-    if (!event.dataTransfer) return;
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData(DRAG_TAB_MIME, chat.instanceId);
-    event.dataTransfer.setData(DRAG_TAB_GROUP_MIME, group.id);
-    event.dataTransfer.setData("text/plain", chat.instanceId);
-  }
-
-  function tabDropIndexFromPoint(event, group) {
-    return tabDropIndexFromClientX(event.clientX, group);
   }
 
   function tabDropIndexFromClientX(clientX, group) {
@@ -115,38 +79,6 @@ export function createWorkspaceDragController(dependencies = {}) {
       if (clientX < rect.right) return { tab, insertIndex: index + 1, after: true };
     }
     return { tab: tabs[tabs.length - 1], insertIndex: tabs.length, after: true };
-  }
-
-  function previewTabDrop(event, group, targetTab = null) {
-    const tabId = draggedTabId(event);
-    if (!tabId || draggedTabGroupId(event) !== group.id) return false;
-    event.preventDefault();
-    if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
-    document.querySelectorAll(".tab.drop-before, .tab.drop-after").forEach((node) => {
-      node.classList.remove("drop-before", "drop-after");
-    });
-    const tabs = event.currentTarget.closest?.(".chat-tabs") || event.currentTarget;
-    tabs?.classList?.add("tab-drop-target");
-    if (targetTab) {
-      const rect = targetTab.getBoundingClientRect();
-      targetTab.classList.add(event.clientX > rect.left + rect.width / 2 ? "drop-after" : "drop-before");
-    }
-    return true;
-  }
-
-  async function moveTabByDrop(event, group, targetChat = null) {
-    const tabId = draggedTabId(event);
-    if (!tabId || draggedTabGroupId(event) !== group.id) return false;
-    let insertIndex = targetChat
-      ? group.chatApps.findIndex((item) => item.instanceId === targetChat.instanceId)
-      : tabDropIndexFromPoint(event, group);
-    if (insertIndex < 0) return false;
-    if (targetChat) {
-      const targetTab = event.currentTarget.closest?.(".tab") || event.currentTarget;
-      const rect = targetTab.getBoundingClientRect();
-      if (event.clientX > rect.left + rect.width / 2) insertIndex += 1;
-    }
-    return moveTabToIndex(group, tabId, insertIndex);
   }
 
   async function moveTabToIndex(group, tabId, insertIndex) {
@@ -220,7 +152,6 @@ export function createWorkspaceDragController(dependencies = {}) {
   function beginTabPointerDrag(drag) {
     if (drag.started) return;
     drag.started = true;
-    activeTabDrag = { groupId: drag.group.id, instanceId: drag.instanceId };
     suspendIframePointerEventsForDrag();
     document.body.classList.add("tab-dragging");
     drag.tab.classList.add("dragging");
@@ -308,7 +239,6 @@ export function createWorkspaceDragController(dependencies = {}) {
   function beginGroupPointerDrag(drag) {
     if (drag.started) return;
     drag.started = true;
-    activeTabDrag = null;
     suspendIframePointerEventsForDrag();
     document.body.classList.add("tab-dragging");
     drag.tab?.classList?.add("dragging");
@@ -388,19 +318,6 @@ export function createWorkspaceDragController(dependencies = {}) {
     return true;
   }
 
-  async function moveGroupByDrop(event, targetIndex) {
-    const fromGroupId = draggedGroupId(event);
-    const targetCard = event.currentTarget.closest?.(".chat-card") || event.currentTarget;
-    const rect = targetCard.getBoundingClientRect();
-    const insertAfterTarget = event.clientX > rect.left + rect.width / 2;
-    const result = moveDroppedGroupWithinWorkspace(state.groups, fromGroupId, targetIndex, insertAfterTarget);
-    if (!result.changed) return false;
-    cleanupGroupDragState();
-    await persistLayout();
-    syncWorkspaceDom();
-    return true;
-  }
-
   function consumeSuppressedTabClick(instanceId) {
     if (!instanceId || suppressTabClickInstanceId !== instanceId) return false;
     suppressTabClickInstanceId = "";
@@ -408,14 +325,7 @@ export function createWorkspaceDragController(dependencies = {}) {
   }
 
   return Object.freeze({
-    cleanupGroupDragState,
     consumeSuppressedTabClick,
-    draggedGroupId,
-    draggedTabId,
-    moveGroupByDrop,
-    moveTabByDrop,
-    previewTabDrop,
-    startTabDrag,
     startTabPointerDrag
   });
 }

@@ -43,6 +43,17 @@ export function requireControllerFunction(ctx, controllerName, name) {
   return value;
 }
 
+export function createControllerMethodValidator(controllerName, labelSuffix = "") {
+  const owner = label(controllerName);
+  const suffix = String(labelSuffix || "").trim();
+  return (value, relationship, methods) => {
+    const context = [owner, String(relationship || "").trim(), suffix].filter(Boolean).join(" ");
+    for (const method of methods) {
+      if (typeof value?.[method] !== "function") throw new TypeError(`${context} requires ${method}().`);
+    }
+  };
+}
+
 export function optionalControllerFunction(ctx, name, fallback) {
   const value = ctx?.[name];
   if (value == null) return fallback;

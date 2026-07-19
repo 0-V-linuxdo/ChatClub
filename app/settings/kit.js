@@ -101,6 +101,15 @@ export function createSettingsKit({ svgIcon }) {
     return event.clientY > rect.top + rect.height / 2 ? "after" : "before";
   }
 
+  function settingsValueChips(items, emptyLabel) {
+    const values = (items || []).filter(Boolean);
+    return el("div", { class: "summary-host-chips" },
+      values.length
+        ? values.map((item) => el("code", {}, item))
+        : el("span", { class: "muted" }, emptyLabel)
+    );
+  }
+
   return Object.freeze({
     settingsActions,
     settingsBlock,
@@ -111,6 +120,7 @@ export function createSettingsKit({ svgIcon }) {
     settingsList,
     settingsListDropPlacement,
     settingsPaneToolbar,
-    settingsPrimaryAction
+    settingsPrimaryAction,
+    settingsValueChips
   });
 }

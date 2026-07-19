@@ -191,7 +191,7 @@ export function captureWorkspaceSnapshotV1(source = {}) {
  * Validate and clone an untrusted V1 snapshot. Invalid apps and empty groups
  * are removed locally; surviving duplicate apps retain their original order.
  */
-export function normalizeWorkspaceSnapshotV1(value, context = {}) {
+function normalizeWorkspaceSnapshotV1(value, context = {}) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   if (Number(value.schemaVersion) !== WORKSPACE_SESSION_SCHEMA_VERSION) return null;
   const validAppIds = idSet(context.validAppIds, own(context, "validAppIds"));

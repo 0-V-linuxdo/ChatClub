@@ -1,6 +1,6 @@
 import { createScopedStatePort, stateAccess } from "../state/port.js";
 
-export const TOPBAR_STATE_ACCESS = stateAccess([
+const TOPBAR_STATE_ACCESS = stateAccess([
   "activeTabs", "fullscreenGroupId", "groups", "options", "preferredModelGateFailedAppIds",
   "preferredModelGateFailedCount", "preferredModelGatePendingCount", "preferredModelGateReason",
   "preferredModelGateState", "promptImages", "promptSendInFlight", "promptText", "shortcutConfig", "summaryOpen",

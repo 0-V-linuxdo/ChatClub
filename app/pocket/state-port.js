@@ -1,6 +1,6 @@
 import { createScopedStatePort, stateAccess } from "../state/port.js";
 
-export const POCKET_STATE_ACCESS = stateAccess(
+const POCKET_STATE_ACCESS = stateAccess(
   ["groups", "options", "pocketEntries", "summaryPreviewItems"],
   ["options", "pocketEntries"]
 );

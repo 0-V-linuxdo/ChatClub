@@ -3,16 +3,12 @@ import { saveOptions } from "../../shared/storage-adapter.js";
 import { normalizeTopbarLayout, topbarSettingsSectionForItem } from "../../shared/topbar.js";
 import { t } from "../../shared/i18n.js";
 import { claimTopmostPopoverEscape, toast } from "../../ui/dom.js";
-import { validateControllerContract } from "../controller-contract.js";
+import { createControllerMethodValidator, validateControllerContract } from "../controller-contract.js";
 import { createTopbarEditor } from "./editor.js";
 import { createTopbarPlaceholderController } from "./placeholder.js";
 import { createTopbarView } from "./view.js";
 
-function requireMethods(value, label, methods) {
-  for (const method of methods) {
-    if (typeof value?.[method] !== "function") throw new TypeError(`Topbar ${label} requires ${method}().`);
-  }
-}
+const requireMethods = createControllerMethodValidator("Topbar");
 
 export function createTopbarController(dependencies = {}) {
   const { state, composer, workspace, preferredModel, settingsSections, actions } = validateControllerContract(

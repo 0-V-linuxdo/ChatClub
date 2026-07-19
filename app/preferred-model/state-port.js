@@ -1,6 +1,6 @@
 import { createScopedStatePort, stateAccess } from "../state/port.js";
 
-export const PREFERRED_MODEL_STATE_ACCESS = stateAccess([
+const PREFERRED_MODEL_STATE_ACCESS = stateAccess([
   "activeTabs", "frameLoadingInstanceIds", "groups", "modelPreferenceDraft", "options", "preferredModelGateFailedAppIds",
   "preferredModelGateFailedCount", "preferredModelGatePendingCount", "preferredModelGateReason",
   "preferredModelGateState", "promptImages", "promptSelection", "promptSendInFlight", "promptText"

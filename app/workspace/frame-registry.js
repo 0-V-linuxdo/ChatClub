@@ -9,6 +9,11 @@ export function createWorkspaceFrameRegistry({ appById, openableTabUrl }) {
     return appById(iframe.dataset.appId);
   }
 
+  function frameForInstance(instanceId) {
+    return Array.from(document.querySelectorAll(".chat-frame"))
+      .find((frame) => frame.dataset.instanceId === instanceId) || null;
+  }
+
   function setFramePointerBlockedForOverlay(blocked, namespace = "overlay") {
     const blockedKey = `${namespace}PointerBlocked`;
     const previousKey = `${namespace}PointerEvents`;
@@ -62,6 +67,7 @@ export function createWorkspaceFrameRegistry({ appById, openableTabUrl }) {
     currentFrames,
     findFrameForSummarySource,
     frameApp,
+    frameForInstance,
     highlightFrameForSummarySource,
     setFramePointerBlockedForOverlay
   });

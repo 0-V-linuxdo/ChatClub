@@ -1,8 +1,8 @@
 import { DEFAULT_SHORTCUT_CONFIG } from "./default-shortcuts.js";
 
-export const SHORTCUT_CONFIG_SCHEMA_VERSION = 2;
+const SHORTCUT_CONFIG_SCHEMA_VERSION = 2;
 export const KEYBOARD_PLATFORM_MAC = "mac";
-export const KEYBOARD_PLATFORM_WINDOWS = "windows";
+const KEYBOARD_PLATFORM_WINDOWS = "windows";
 
 export const ALL_SHORTCUT_ACTIONS = [
   "focusInput",
@@ -22,45 +22,7 @@ export const ALL_SHORTCUT_ACTIONS = [
   "switchPlatformTab"
 ];
 
-export const PATTERN_ACTIONS = ["insertPrompt", "switchLayout", "switchPlatformTab"];
-export const FIXED_KEY_ACTIONS = ALL_SHORTCUT_ACTIONS.filter((action) => !PATTERN_ACTIONS.includes(action));
-export const INTENT_SCOPED_ACTIONS = ["newChat", "toggleMessageNavigator", "closeChat", "refreshPage", "reloadChat", "enterFullscreen"];
-
-export const SHORTCUT_ACTION_LABELS = {
-  focusInput: "Focus Input",
-  newChat: "New Chat Current Tab",
-  newChatAll: "New Chat All Tabs",
-  deleteThread: "Delete All Topics",
-  optimizePrompt: "Optimize Prompt",
-  openSummaryPanel: "Summary Panel",
-  openPocketPanel: "Pocket",
-  toggleMessageNavigator: "Message Navigator",
-  closeChat: "Close Current Tab",
-  refreshPage: "Refresh Current Page",
-  reloadChat: "Home",
-  enterFullscreen: "Full Screen",
-  insertPrompt: "Insert Prompt",
-  switchLayout: "Switch Layout",
-  switchPlatformTab: "Switch Platform Tab"
-};
-
-export const SHORTCUT_ACTION_DESCRIPTIONS = {
-  focusInput: "Focus the top prompt input.",
-  newChat: "Start a new chat in the active tab.",
-  newChatAll: "Start new chats in all active pages.",
-  deleteThread: "Delete all current topics in active pages.",
-  optimizePrompt: "Optimize the current prompt.",
-  openSummaryPanel: "Open Summary / Ask.",
-  openPocketPanel: "Open Pocket.",
-  toggleMessageNavigator: "Toggle the message navigator for the active chat.",
-  closeChat: "Close the active tab or group.",
-  refreshPage: "Refresh the active chat page.",
-  reloadChat: "Go to the active app home page.",
-  enterFullscreen: "Toggle the active group fullscreen.",
-  insertPrompt: "Insert prompt library item 1-9.",
-  switchLayout: "Switch layout preset 1-9.",
-  switchPlatformTab: "Switch tab 1-9 in the active group."
-};
+const PATTERN_ACTIONS = ["insertPrompt", "switchLayout", "switchPlatformTab"];
 
 const MODIFIER_CODES = new Set([
   "AltLeft",
@@ -296,7 +258,7 @@ export function shortcutUsesDigitPattern(action, shortcut) {
   return PATTERN_ACTIONS.includes(action) || shortcut?.codePattern === "Digit";
 }
 
-export function digitMatch(code) {
+function digitMatch(code) {
   return /^Digit([1-9])$/.exec(code || "") || /^Numpad([1-9])$/.exec(code || "");
 }
 
@@ -408,10 +370,6 @@ export function shortcutConflictActions(shortcutConfig, platform = detectKeyboar
     }
   }
   return conflicts;
-}
-
-export function defaultShortcutConfig() {
-  return normalizeShortcutConfig(DEFAULT_SHORTCUT_CONFIG);
 }
 
 export function defaultShortcutProfile(platform = detectKeyboardPlatform()) {

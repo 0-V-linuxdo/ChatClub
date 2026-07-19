@@ -3,9 +3,7 @@ import { storageLocalGet, storageLocalRemove, storageLocalSet } from "./extensio
 import {
   dedupePocketHistory,
   dehydrateOptions,
-  exportConfigBundle,
   isStorageQuotaError,
-  normalizeConfigBundleKeys,
   normalizeCustomConfig,
   normalizeOptions,
   normalizePocketHistory,
@@ -13,6 +11,7 @@ import {
   normalizePromptSendHistory,
   normalizeShortcutConfig
 } from "./storage-schema.js";
+import { exportConfigBundle, normalizeConfigBundleKeys } from "./storage-config-bundle.js";
 import { migrateLegacyScriptConfig } from "./script-config-migration.js";
 
 function plainObject(value) {
@@ -131,7 +130,7 @@ export async function saveShortcutConfig(shortcutConfig) {
   return normalized;
 }
 
-export async function readConfigBundleState(selectedKeys, fallbackState = {}) {
+async function readConfigBundleState(selectedKeys, fallbackState = {}) {
   const selected = new Set(normalizeConfigBundleKeys(selectedKeys));
   const source = plainObject(fallbackState) ? fallbackState : {};
   const state = { ...source };
@@ -142,10 +141,6 @@ export async function readConfigBundleState(selectedKeys, fallbackState = {}) {
   if (selected.has("shortcutConfig")) state.shortcutConfig = normalizeShortcutConfig(await storageGet(STORAGE_KEYS.shortcutConfig));
   if (selected.has("pocketHistory")) state.pocketEntries = await readPocketHistory();
   return state;
-}
-
-export function loadConfigBundleState(selectedKeys, fallbackState = {}) {
-  return readConfigBundleState(selectedKeys, fallbackState);
 }
 
 export async function exportStoredConfigBundle(selectedKeys, fallbackState = {}) {

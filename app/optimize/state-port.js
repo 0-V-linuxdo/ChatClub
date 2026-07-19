@@ -1,6 +1,6 @@
 import { createScopedStatePort, stateAccess } from "../state/port.js";
 
-export const OPTIMIZE_STATE_ACCESS = stateAccess(
+const OPTIMIZE_STATE_ACCESS = stateAccess(
   ["options", "promptSelection", "promptText"],
   ["promptSelection", "promptText"]
 );

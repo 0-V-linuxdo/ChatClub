@@ -2,8 +2,9 @@ import { TAB_GROUP_HEADER_BUTTONS } from "../../shared/constants.js";
 import { t } from "../../shared/i18n.js";
 import { normalizeTabGroupButtonOrder, normalizeTabGroupButtonPlacement } from "../../shared/storage-schema.js";
 import { claimTopmostPopoverEscape, el } from "../../ui/dom.js";
+import { appPickerHostKeys } from "./app-hosts.js";
 import { workspaceGridColumnCount } from "./model.js";
-import { validateControllerContract } from "../controller-contract.js";
+import { createControllerMethodValidator, validateControllerContract } from "../controller-contract.js";
 
 const LAYOUT_POPOVER_RIGHT_EXTENSION = 40;
 const APP_PICKER_INTERNATIONAL_IDS = [
@@ -18,11 +19,7 @@ const APP_PICKER_CHINESE_IDS = [
 ];
 const APP_PICKER_CHINESE_ID_SET = new Set(APP_PICKER_CHINESE_IDS);
 
-function requireMethods(port, label, methods) {
-  for (const method of methods) {
-    if (typeof port?.[method] !== "function") throw new TypeError(`Workspace view ${label} port requires ${method}().`);
-  }
-}
+const requireMethods = createControllerMethodValidator("Workspace view", "port");
 
 export function createWorkspaceViewController(dependencies = {}) {
   const { state, services, frame, layout, pocket, drag, navigator } = validateControllerContract(
@@ -47,52 +44,47 @@ export function createWorkspaceViewController(dependencies = {}) {
     fallbackFaviconUrl,
     inferAppName,
     menuButton,
-    notify,
     openCustomAppEditor,
     openableTabUrl,
     render,
     svgIcon
   } = services;
   requireMethods(frame, "frame", [
-    "activeChatForGroup", "activeFrameIsLoading", "activeIframe", "activateChatTab", "beginFrameLoading",
-    "chatFrameAllow", "chatFrameName", "chatFrameNeedsSandbox", "chatFrameSandbox", "closeTab",
-    "completeFrameLoading", "consumeFrameInitialHref", "copyActiveChatLink", "createFrameBindingId", "currentFullscreenGroup", "currentGroupIndex",
+    "activeChatForGroup", "activeFrameIsLoading", "activeIframe", "activateChatTab",
+    "chatFrameAttributes", "chatFrameName", "closeTab",
+    "completeFrameLoading", "consumeFrameInitialHref", "copyActiveChatLink", "createFrameBindingId",
     "deleteActiveThreadForGroup", "fullscreenShortcutLabel",
     "notifyWorkspaceFrameSync", "openChatInNewTab", "openGoToUrlDialog", "refreshCurrentPage", "reloadChat",
-    "removeChatGroup", "setFrameSrcAfterPrepare", "startNewChatInActiveTab", "syncFullscreenLayout",
+    "removeChatGroup", "setFrameSrcAfterPrepare", "stageFrameInitialHref", "startNewChatInActiveTab", "syncFullscreenLayout",
     "syncGroupTabOrder", "toggleFullscreen", "topicDeleteCapabilityForFrame"
   ]);
   requireMethods(layout, "layout", [
     "activeTemporaryLayoutPreset", "addAppToGroup", "addGroup", "addLayoutPreset", "deleteLayoutPreset", "layoutPresetSummary",
-    "layoutShortcutLabel", "persistLayout", "persistentLayoutPresets", "shortcutTooltip", "switchLayoutPreset"
+    "layoutShortcutLabel", "persistentLayoutPresets", "shortcutTooltip", "switchLayoutPreset"
   ]);
   requireMethods(pocket, "Pocket", ["chatLocationForInstance"]);
   requireMethods(drag, "drag", [
-    "cleanupGroupDragState", "consumeSuppressedTabClick", "draggedGroupId", "draggedTabId",
-    "moveGroupByDrop", "moveTabByDrop", "previewTabDrop", "startTabPointerDrag"
+    "consumeSuppressedTabClick", "startTabPointerDrag"
   ]);
   requireMethods(navigator, "Message Navigator", [
     "closeTrackedMessageNavigatorMenu", "messageNavigatorFrameEnabled", "messageNavigatorPayloadForFrame",
     "toggleMessageNavigator"
   ]);
   const {
-    activeChatForGroup, activeFrameIsLoading, activeIframe, activateChatTab, beginFrameLoading,
-    chatFrameAllow, chatFrameName, chatFrameNeedsSandbox, chatFrameSandbox, closeTab,
-    completeFrameLoading, consumeFrameInitialHref, copyActiveChatLink, createFrameBindingId, currentFullscreenGroup, currentGroupIndex,
+    activeChatForGroup, activeFrameIsLoading, activeIframe, activateChatTab,
+    chatFrameAttributes, chatFrameName, closeTab,
+    completeFrameLoading, consumeFrameInitialHref, copyActiveChatLink, createFrameBindingId,
     deleteActiveThreadForGroup, fullscreenShortcutLabel,
     notifyWorkspaceFrameSync, openChatInNewTab, openGoToUrlDialog, refreshCurrentPage, reloadChat,
-    removeChatGroup, setFrameSrcAfterPrepare, startNewChatInActiveTab, syncFullscreenLayout,
+    removeChatGroup, setFrameSrcAfterPrepare, stageFrameInitialHref, startNewChatInActiveTab, syncFullscreenLayout,
     syncGroupTabOrder, toggleFullscreen, topicDeleteCapabilityForFrame
   } = frame;
   const {
     activeTemporaryLayoutPreset, addAppToGroup, addGroup, addLayoutPreset, deleteLayoutPreset, layoutPresetSummary,
-    layoutShortcutLabel, persistLayout, persistentLayoutPresets, shortcutTooltip, switchLayoutPreset
+    layoutShortcutLabel, persistentLayoutPresets, shortcutTooltip, switchLayoutPreset
   } = layout;
   const { chatLocationForInstance } = pocket;
-  const {
-    cleanupGroupDragState, consumeSuppressedTabClick, draggedGroupId, draggedTabId, moveGroupByDrop,
-    moveTabByDrop, previewTabDrop, startTabPointerDrag
-  } = drag;
+  const { consumeSuppressedTabClick, startTabPointerDrag } = drag;
   const {
     closeTrackedMessageNavigatorMenu, messageNavigatorFrameEnabled, messageNavigatorPayloadForFrame,
     toggleMessageNavigator
@@ -142,27 +134,6 @@ export function createWorkspaceViewController(dependencies = {}) {
 
   function customAppIds() {
     return new Set((state.customConfig || []).map((app) => app?.id).filter(Boolean));
-  }
-
-  function normalizeAppPickerHost(host) {
-    return String(host || "")
-      .trim()
-      .toLowerCase()
-      .replace(/^\*\./, "")
-      .replace(/^www\./, "");
-  }
-
-  function appPickerHostKeys(app) {
-    const keys = new Set();
-    for (const host of app?.hosts || []) {
-      const normalized = normalizeAppPickerHost(host);
-      if (normalized) keys.add(normalized);
-    }
-    try {
-      const normalized = normalizeAppPickerHost(new URL(app.url).hostname);
-      if (normalized) keys.add(normalized);
-    } catch {}
-    return keys;
   }
 
   function hasCustomAppEquivalent(app, customHostKeys) {
@@ -244,11 +215,44 @@ export function createWorkspaceViewController(dependencies = {}) {
     ];
   }
 
-  function frameSandboxMatchesApp(iframe, app) {
-    const sandboxed = chatFrameNeedsSandbox(app);
-    return sandboxed
-      ? iframe?.getAttribute("sandbox") === chatFrameSandbox(app)
-      : !iframe?.hasAttribute("sandbox");
+  function frameAttributeContractMatches(iframe, app, href = "") {
+    const targetHref = openableTabUrl(href)
+      || openableTabUrl(iframe?.dataset?.currentHref)
+      || openableTabUrl(iframe?.getAttribute?.("src"))
+      || openableTabUrl(app?.url);
+    const contract = chatFrameAttributes(app, targetHref);
+    return String(iframe?.dataset?.iframeAttributeContract || "") === String(contract.signature || "");
+  }
+
+  function frameCurrentHref(iframe, app = {}) {
+    return openableTabUrl(iframe?.dataset?.currentHref)
+      || openableTabUrl(iframe?.getAttribute?.("src"))
+      || openableTabUrl(app?.url);
+  }
+
+  function replaceChatFrame(group, chat, iframe, { preserveHref = false, href = "" } = {}) {
+    if (!group || !chat || !(iframe instanceof HTMLIFrameElement)) return null;
+    const app = appById(chat.appId);
+    const targetHref = openableTabUrl(href) || (preserveHref ? frameCurrentHref(iframe, app) : "");
+    if (targetHref) stageFrameInitialHref(chat.instanceId, targetHref);
+    const replacement = renderChatFrame(group, chat);
+    iframe.replaceWith(replacement);
+    syncGroupTabOrder(group);
+    return replacement;
+  }
+
+  function ensureFrameAttributeContract(iframe, href = "") {
+    if (!(iframe instanceof HTMLIFrameElement) || !iframe.isConnected) return false;
+    const instanceId = String(iframe.dataset.instanceId || "");
+    const location = chatLocationForInstance(instanceId);
+    const group = location?.group;
+    const chat = location?.chat;
+    if (!group || !chat) return false;
+    const app = appById(chat.appId);
+    const targetHref = openableTabUrl(href) || frameCurrentHref(iframe, app);
+    if (frameAttributeContractMatches(iframe, app, targetHref)) return false;
+    replaceChatFrame(group, chat, iframe, { preserveHref: true, href: targetHref });
+    return true;
   }
 
   function refreshChatTabPresentations(appIds = new Set(), sourceChangedAppIds = new Set()) {
@@ -266,9 +270,10 @@ export function createWorkspaceViewController(dependencies = {}) {
           .find((node) => node.dataset.instanceId === chat.instanceId);
         if (iframe && (
           sourceChangedAppIds.has(chat.appId)
-          || !frameSandboxMatchesApp(iframe, appById(chat.appId))
+          || !frameAttributeContractMatches(iframe, appById(chat.appId))
         )) {
-          iframe.replaceWith(renderChatFrame(group, chat));
+          if (sourceChangedAppIds.has(chat.appId)) iframe.replaceWith(renderChatFrame(group, chat));
+          else replaceChatFrame(group, chat, iframe, { preserveHref: true });
         }
       }
       syncGroupTabOrder(group);
@@ -315,9 +320,10 @@ export function createWorkspaceViewController(dependencies = {}) {
         if (!currentFrame) frameWrap?.append(renderChatFrame(group, chat));
         else if (affectedAppIds.has(chat.appId) && (
           sourceChangedAppIds.has(chat.appId)
-          || !frameSandboxMatchesApp(currentFrame, appById(chat.appId))
+          || !frameAttributeContractMatches(currentFrame, appById(chat.appId))
         )) {
-          currentFrame.replaceWith(renderChatFrame(group, chat));
+          if (sourceChangedAppIds.has(chat.appId)) currentFrame.replaceWith(renderChatFrame(group, chat));
+          else replaceChatFrame(group, chat, currentFrame, { preserveHref: true });
         }
       }
       card.style.order = String(index + 1);
@@ -551,19 +557,24 @@ export function createWorkspaceViewController(dependencies = {}) {
     const app = appById(chat.appId);
     const initialHref = consumeFrameInitialHref(chat.instanceId);
     const frameBindingId = createFrameBindingId();
-    const dataset = { instanceId: chat.instanceId, appId: app.id, frameBindingId };
+    const targetHref = initialHref || app.url;
+    const contract = chatFrameAttributes(app, targetHref);
+    const dataset = {
+      instanceId: chat.instanceId,
+      appId: app.id,
+      frameBindingId,
+      iframeAttributeContract: String(contract.signature || "")
+    };
     if (initialHref) dataset.currentHref = initialHref;
     const attrs = {
+      ...Object.fromEntries((contract.entries || []).map(({ name, value }) => [name, value])),
       class: `chat-frame ${chat.instanceId === (state.activeTabs[group.id] || group.chatApps[0]?.instanceId) ? "active" : ""}`,
       dataset,
-      allow: chatFrameAllow(),
-      referrerpolicy: "no-referrer",
       name: chatFrameName(app, frameBindingId),
       onload: (event) => completeFrameLoading(event.currentTarget)
     };
-    if (chatFrameNeedsSandbox(app)) attrs.sandbox = chatFrameSandbox(app);
     const iframe = el("iframe", attrs);
-    setFrameSrcAfterPrepare(iframe, initialHref || app.url);
+    setFrameSrcAfterPrepare(iframe, targetHref);
     return iframe;
   }
 
@@ -678,35 +689,10 @@ export function createWorkspaceViewController(dependencies = {}) {
     return el("section", {
       class: `chat-card tab-group-buttons-custom ${isFullscreen ? "fullscreen" : ""} ${isFrameLoading ? "frame-loading" : ""}`.trim(),
       dataset: { groupId: group.id },
-      style: { order: String(index + 1) },
-      ondragover: (event) => {
-        if (!draggedGroupId(event) || draggedGroupId(event) === group.id) return;
-        event.preventDefault();
-        event.currentTarget.classList.add("drag-over");
-      },
-      ondragleave: (event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) event.currentTarget.classList.remove("drag-over");
-      },
-      ondrop: async (event) => {
-        if (!draggedGroupId(event) || draggedGroupId(event) === group.id) return;
-        event.preventDefault();
-        await moveGroupByDrop(event, currentGroupIndex(group));
-      }
+      style: { order: String(index + 1) }
     },
       el("div", { class: "chat-header" },
-        el("div", {
-          class: "chat-tabs",
-          ondragover: (event) => previewTabDrop(event, group),
-          ondragleave: (event) => {
-            if (!event.currentTarget.contains(event.relatedTarget)) cleanupGroupDragState();
-          },
-          ondrop: async (event) => {
-            if (!draggedTabId(event)) return;
-            event.preventDefault();
-            event.stopPropagation();
-            await moveTabByDrop(event, group);
-          }
-        },
+        el("div", { class: "chat-tabs" },
           group.chatApps.map((chat) => renderChatTab(group, chat)),
           tabGroupButtonIsPinned("addApp") ? renderTabAddButton(group) : null
         ),
@@ -1113,14 +1099,14 @@ export function createWorkspaceViewController(dependencies = {}) {
     closePopovers,
     closePopoversAnchoredWithin,
     closeTransientOverlays,
+    ensureFrameAttributeContract,
+    frameAttributeContractMatches,
     fullscreenButtonMeta,
     openAppPicker,
     openChatMenu,
     openLayoutMenu,
     reconcileAppCatalogDom,
     refreshChatTabPresentations,
-    renderChatFrame,
-    renderChatTab,
     renderWorkspace,
     syncGridColumnClass,
     syncGridColumns,

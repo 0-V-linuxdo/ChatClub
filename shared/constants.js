@@ -1,9 +1,7 @@
 import { DEFAULT_TOPBAR_LAYOUT } from "./topbar.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-07-17｜23:22:14」";
-export const BASELINE_MOD_VERSION = "2.4.0.14";
-export const HOMEPAGE_URL = "https://github.com/0-V-linuxdo/ChatClub";
+export const APP_VERSION = "「2026-07-19｜01:55:36」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -20,10 +18,10 @@ export const STORAGE_KEYS = {
 export const API_PROFILE_ENDPOINT_DEFAULT = "https://api.openai.com/v1/chat/completions";
 export const API_PROFILE_MODEL_DEFAULT = "gpt-3.5-turbo";
 export const API_PROMOTION_CHANNELS_VERSION = 2;
-export const API_PROFILE_ZERO_ZERO_ENDPOINT = "https://api.0-0.pro/v1/chat/completions";
-export const API_PROFILE_ZERO_ZERO_MODEL = "gpt-5.5";
-export const API_PROFILE_ZERO_ZERO_REGISTER_URL = "https://0-0.pro/register?ref=CSLPRL76";
-export const SUMMARY_SITE_CONFIG_VERSION = 72;
+const API_PROFILE_ZERO_ZERO_ENDPOINT = "https://api.0-0.pro/v1/chat/completions";
+const API_PROFILE_ZERO_ZERO_MODEL = "gpt-5.5";
+const API_PROFILE_ZERO_ZERO_REGISTER_URL = "https://0-0.pro/register?ref=CSLPRL76";
+export const SUMMARY_SITE_CONFIG_VERSION = 74;
 export const SCRIPT_CONFIG_SCHEMA_VERSION = 3;
 export const PROMPT_IMAGE_PASTE_STRATEGY_SEQUENTIAL = "sequential";
 export const PROMPT_IMAGE_PASTE_STRATEGY_BATCH = "batch";
@@ -244,7 +242,7 @@ export const TOOLTIP_TARGET_IDS = Object.freeze(
   TOOLTIP_TARGET_GROUPS.flatMap((group) => group.targets.map((target) => target.id))
 );
 
-export const OPTIMIZE_PROMPT_TEMPLATE_DEFAULT = `You are an AI prompt expert, skilled at analyzing and optimizing user-provided prompts.
+const OPTIMIZE_PROMPT_TEMPLATE_DEFAULT = `You are an AI prompt expert, skilled at analyzing and optimizing user-provided prompts.
 
 Analyze the user prompt and rewrite it so it is clearer, more specific, and easier for an AI model to follow.
 
@@ -253,7 +251,7 @@ Constraints:
 - Keep the user's intent and language.
 - Return only the optimized prompt.`;
 
-export const SUMMARY_PANEL_PROMPT_DEFAULT = `Summarize the selected chat context. Keep the answer concise, factual, and useful.
+const SUMMARY_PANEL_PROMPT_DEFAULT = `Summarize the selected chat context. Keep the answer concise, factual, and useful.
 
 When the user asks a follow-up question, answer from the provided context first and clearly say when the context is insufficient.`;
 
@@ -331,13 +329,12 @@ export const DEFAULT_OPTIONS = {
   ],
   modelPreferences: DEFAULT_MODEL_PREFERENCES,
   modelPreferenceOrder: DEFAULT_MODEL_PREFERENCE_ORDER,
+  builtinChatAppIframeConfigs: {},
   messageNavigatorEffectMode: "border",
   messageNavigatorSiteConfigs: [],
   summarySiteConfigs: [],
   topicDeleteSiteConfigs: []
 };
-
-export { DEFAULT_SHORTCUT_CONFIG } from "./default-shortcuts.js";
 
 export const BUILTIN_CHAT_APPS = [
   {
@@ -476,19 +473,4 @@ export const BUILTIN_CHAT_APPS = [
     inputSelector: "textarea, [contenteditable='true']",
     sendButtonSelector: "button[aria-label*='Send' i]"
   }
-];
-
-export const LEGACY_OPTION_KEYS = [
-  "optimizeEndpoint",
-  "optimizeApiKey",
-  "optimizeModel",
-  "summaryEndpoint",
-  "summaryApiKey",
-  "summaryModel",
-  "apiProfiles",
-  "messageNavigatorEffectMode",
-  "messageNavigatorSiteConfigs",
-  "summarySiteConfigs",
-  "topicDeleteSiteConfigs",
-  "shortcutConfig"
 ];

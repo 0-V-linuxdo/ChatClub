@@ -1,26 +1,17 @@
-import { currentExtensionTabId, runtimeFrameId, runtimeRequest } from "../../shared/extension-api.js";
+import { runtimeFrameId, runtimeRequest } from "../../shared/extension-api.js";
+import { resolveChatFrameAttributeContract } from "../../shared/chat-frame-config.js";
 import { t } from "../../shared/i18n.js";
 import { findTopicDeleteSiteConfig, topicDeleteTimeoutMs } from "../../shared/topic-delete-sites.js";
 import { button, editorModal, el, field, input } from "../../ui/dom.js";
 import { removeChatFromGroup, removeGroupFromWorkspace } from "./model.js";
-import { validateControllerContract } from "../controller-contract.js";
+import { createControllerMethodValidator, validateControllerContract } from "../controller-contract.js";
 
 const NAVIGATION_FOCUS_GUARD_TIMEOUT_MS = 1200;
 const NAVIGATION_FOCUS_GUARD_POST_NAV_RETRY_MS = 150;
 const NAVIGATION_FOCUS_GUARD_POST_NAV_SETTLE_MS = 10000;
 const NAVIGATION_FOCUS_GUARD_POST_NAV_MAX_MS = 45000;
 const NAVIGATION_FOCUS_GUARD_LEASE_MS = 180000;
-const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, Math.max(0, Number(ms) || 0)); });
-const CHAT_FRAME_ALLOW_FEATURES = Object.freeze([
-  "microphone", "clipboard-write", "clipboard-read", "geolocation", "display-capture", "camera",
-  "unload", "autoplay", "fullscreen", "shared-storage", "picture-in-picture", "storage-access", "web-share"
-]);
-
-function requireMethods(port, label, methods) {
-  for (const method of methods) {
-    if (typeof port?.[method] !== "function") throw new TypeError(`Workspace frame ${label} port requires ${method}().`);
-  }
-}
+const requireMethods = createControllerMethodValidator("Workspace frame", "port");
 
 export function createWorkspaceFrameController(dependencies = {}) {
   const { state, services, registry, session, layout, view } = validateControllerContract(
@@ -51,22 +42,24 @@ export function createWorkspaceFrameController(dependencies = {}) {
     sendToContentFrame,
     svgIcon
   } = services;
-  requireMethods(registry, "registry", ["frameApp"]);
+  requireMethods(registry, "registry", ["frameApp", "frameForInstance"]);
   requireMethods(session, "session", ["rememberWorkspaceSession"]);
   requireMethods(layout, "layout", ["persistLayout", "shortcutLabel"]);
   requireMethods(view, "view", [
     "closePopovers",
+    "ensureFrameAttributeContract",
     "fullscreenButtonMeta",
     "syncGridColumnClass",
     "syncGridColumns",
     "syncHeaderForFrameInstance",
     "syncTabGroupHeaderControls"
   ]);
-  const { frameApp } = registry;
+  const { frameApp, frameForInstance } = registry;
   const { rememberWorkspaceSession } = session;
   const { persistLayout, shortcutLabel } = layout;
   const {
     closePopovers,
+    ensureFrameAttributeContract,
     fullscreenButtonMeta,
     syncGridColumnClass,
     syncGridColumns,
@@ -76,23 +69,6 @@ export function createWorkspaceFrameController(dependencies = {}) {
   let workspaceLifecycleFrames = [];
   let frameLifecycleCallbackActive = false;
   const frameNavigationGenerations = new WeakMap();
-
-  function normalizeAppPickerHost(host) {
-    return String(host || "").trim().toLowerCase().replace(/^\*\./, "").replace(/^www\./, "");
-  }
-
-  function appPickerHostKeys(app) {
-    const keys = new Set();
-    for (const host of app?.hosts || []) {
-      const normalized = normalizeAppPickerHost(host);
-      if (normalized) keys.add(normalized);
-    }
-    try {
-      const normalized = normalizeAppPickerHost(new URL(app.url).hostname);
-      if (normalized) keys.add(normalized);
-    } catch {}
-    return keys;
-  }
 
   function emitFrameLifecycleChange(event) {
     if (frameLifecycleCallbackActive) return;
@@ -109,11 +85,6 @@ export function createWorkspaceFrameController(dependencies = {}) {
     }
   }
 
-  function frameForLifecycleInstance(instanceId) {
-    return Array.from(document.querySelectorAll(".chat-frame"))
-      .find((frame) => frame.dataset.instanceId === instanceId) || null;
-  }
-
   function consumeFrameInitialHref(instanceId) {
     const chat = state.groups
       .flatMap((group) => group.chatApps || [])
@@ -121,6 +92,17 @@ export function createWorkspaceFrameController(dependencies = {}) {
     const initialHref = openableTabUrl(chat?.initialHref);
     if (initialHref) delete chat.initialHref;
     return initialHref;
+  }
+
+  function stageFrameInitialHref(instanceId, href) {
+    const initialHref = openableTabUrl(href);
+    if (!initialHref) return false;
+    const chat = state.groups
+      .flatMap((group) => group.chatApps || [])
+      .find((candidate) => candidate.instanceId === instanceId);
+    if (!chat) return false;
+    chat.initialHref = initialHref;
+    return true;
   }
 
   function notifyWorkspaceFrameSync() {
@@ -205,7 +187,10 @@ export function createWorkspaceFrameController(dependencies = {}) {
     }
     const instanceId = String(iframe.dataset.instanceId || "");
     if (changed) syncHeaderForFrameInstance(instanceId);
-    if (hrefChanged) rememberWorkspaceSession();
+    if (hrefChanged) {
+      rememberWorkspaceSession();
+      if (ensureFrameAttributeContract(iframe, href, { phase: "location" })) return;
+    }
     const navigation = meta?.navigation && typeof meta.navigation === "object"
       ? {
           ...meta.navigation,
@@ -246,44 +231,16 @@ export function createWorkspaceFrameController(dependencies = {}) {
     const missingCustomScript = Boolean(config && customMode && !String(config.customUserscript || "").trim());
     const noConversationPage = Boolean(config && knownNoConversationPage(config, payload));
     const skipped = !config || config.enabled === false || missingCustomScript || noConversationPage;
-    return { iframe, payload, config, missingCustomScript, noConversationPage, skipped, available: !skipped };
+    return { iframe, payload, config, skipped, available: !skipped };
   }
 
-  function appHostMatches(app, roots) {
-    for (const key of appPickerHostKeys(app)) {
-      for (const root of roots) {
-        if (key === root || key.endsWith(`.${root}`)) return true;
-      }
-    }
-    return false;
-  }
-
-  function isGrokEmbedHost(app) {
-    return appHostMatches(app, ["grok.com", "grok.x.ai"]);
-  }
-
-  function chatFrameNeedsSandbox(app) {
-    return !(app?.noSandbox || isGrokEmbedHost(app));
-  }
-
-  function chatFrameSandbox(app) {
-    const tokens = [
-      "allow-scripts",
-      "allow-same-origin",
-      "allow-forms",
-      "allow-popups",
-      "allow-popups-to-escape-sandbox",
-      "allow-top-navigation",
-      "allow-modals",
-      "allow-downloads",
-      "allow-presentation",
-      "allow-storage-access-by-user-activation"
-    ];
-    return tokens.join(" ");
-  }
-
-  function chatFrameAllow() {
-    return CHAT_FRAME_ALLOW_FEATURES.map((feature) => `${feature} *`).join("; ");
+  function chatFrameAttributes(app, url = app?.url) {
+    return resolveChatFrameAttributeContract({
+      app,
+      url,
+      source: app?.chatAppSource || app?.source,
+      options: state.options
+    });
   }
 
   function createFrameBindingId() {
@@ -358,7 +315,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
       instanceId,
       iframe: iframeOrInstanceId instanceof HTMLIFrameElement
         ? iframeOrInstanceId
-        : frameForLifecycleInstance(instanceId),
+        : frameForInstance(instanceId),
       loading: set.has(instanceId)
     });
   }
@@ -494,6 +451,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
 
   function assignFrameSrc(iframe, url) {
     if (!(iframe instanceof HTMLIFrameElement) || !url) return false;
+    if (iframe.isConnected && ensureFrameAttributeContract(iframe, url, { phase: "assign" })) return true;
     const generation = beginFrameNavigationGeneration(iframe);
     beginFrameLoading(iframe);
     const assign = (preflight = {}) => {
@@ -511,6 +469,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
   }
 
   function setFrameSrcAfterPrepare(iframe, url, options = {}) {
+    if (iframe?.isConnected && ensureFrameAttributeContract(iframe, url, { phase: "prepare" })) return;
     const generation = beginFrameNavigationGeneration(iframe);
     beginFrameLoading(iframe, true);
     let assigned = false;
@@ -598,10 +557,6 @@ export function createWorkspaceFrameController(dependencies = {}) {
     const focusedFrame = document.activeElement?.classList?.contains("chat-frame") ? document.activeElement : null;
     const focusedGroupId = focusedFrame?.closest(".chat-card")?.dataset.groupId;
     return focusedGroupId || state.groups[0]?.id || "";
-  }
-
-  function currentGroupIndex(group) {
-    return state.groups.findIndex((item) => item.id === group.id);
   }
 
   function activeChatForGroup(group) {
@@ -1020,26 +975,18 @@ export function createWorkspaceFrameController(dependencies = {}) {
     activeShortcutGroupId,
     activateChatTab,
     assignFrameSrc,
-    beginFrameLoading,
-    chatFrameAllow,
+    chatFrameAttributes,
     chatFrameName,
-    chatFrameNeedsSandbox,
-    chatFrameSandbox,
     closeTab,
     completeFrameLoading,
     consumeFrameInitialHref,
     copyActiveChatLink,
     createFrameBindingId,
-    currentGroupIndex,
-    currentFullscreenGroup,
     deleteActiveThreadForGroup,
-    frameDeleteThreadPayload,
-    frameIsLoading,
     fullscreenShortcutLabel,
     groupIdForFrameWindow,
     iframeForWindow,
     knownNoConversationPage,
-    normalizeUserNavigationUrl,
     notifyWorkspaceFrameSync,
     openChatInNewTab,
     openGoToUrlDialog,
@@ -1048,6 +995,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
     removeChatGroup,
     rememberFrameLocation,
     setFrameSrcAfterPrepare,
+    stageFrameInitialHref,
     startNewChatForShortcut,
     startNewChatInActiveTab,
     startNewChatInFrame,

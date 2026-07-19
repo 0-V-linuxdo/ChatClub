@@ -882,7 +882,7 @@ export function createPocketController(ctx) {
     }, svgIcon(collapsed ? "sidebarExpand" : "sidebarCollapse"));
   }
 
-  function pocketSidebar(batches, activeBatch, redraw, host) {
+  function pocketSidebar(batches, activeBatch, redraw) {
     return el("aside", {
       class: "pocket-sidebar",
       "aria-label": t("pocket.groups")
@@ -929,7 +929,7 @@ export function createPocketController(ctx) {
     );
   }
 
-  function pocketActiveGroupHeader(host, batch, redraw, size, options = {}) {
+  function pocketActiveGroupHeader(host, size, options = {}) {
     if (!pocketActionsExpanded) return null;
     return el("section", { class: `pocket-active-header${options.focusMode ? " pocket-active-header-focus" : ""}` },
       pocketActionsPanel(host, size)
@@ -1026,7 +1026,7 @@ export function createPocketController(ctx) {
       );
     }
     return el("main", { class: "pocket-main" },
-      pocketActiveGroupHeader(host, activeBatch, redraw, size, options),
+      pocketActiveGroupHeader(host, size, options),
       pocketActiveGroupContent(activeBatch, redraw)
     );
   }
@@ -1046,7 +1046,7 @@ export function createPocketController(ctx) {
     syncPocketFocusTitlebar(panel, host, activeBatch, redraw);
     host.append(
       el("div", { class: `pocket-shell${focusMode ? " pocket-shell-focus" : ""}${sidebarCollapsed ? " pocket-shell-sidebar-collapsed" : ""}` },
-        focusMode || sidebarCollapsed ? null : pocketSidebar(batches, activeBatch, redraw, host),
+        focusMode || sidebarCollapsed ? null : pocketSidebar(batches, activeBatch, redraw),
         pocketMainPane(host, activeBatch, redraw, size, { focusMode, sidebarCollapsed })
       )
     );
@@ -1074,10 +1074,7 @@ export function createPocketController(ctx) {
   }
 
   return {
-    dedupePocketEntries,
-    normalizePocketMessage,
     openPocketPanel,
-    pocketEntriesFromMessages,
     pocketEntriesFromSummaryPreview,
     saveSummaryPreviewToPocket,
     toggleOpenPocketPanelFullscreen

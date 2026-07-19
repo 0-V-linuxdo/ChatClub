@@ -39,39 +39,22 @@ import {
 import { topicDeleteTimeoutMs } from "../shared/topic-delete-sites.js";
 import { createTopicDeleteRuntime } from "./topic-delete/runtime.js";
 import { createFrameBridgeController } from "./frame-bridge/controller.js";
+import { createFrameRequest } from "./frame-request.js";
 import { createOptimizeController } from "./optimize/controller.js";
-import { createOptimizeStatePort } from "./optimize/state-port.js";
-import { createPocketStatePort } from "./pocket/state-port.js";
 import { createFaviconService } from "./favicon/service.js";
-import { createFaviconStatePort } from "./favicon/state-port.js";
 import { createComposerController } from "./composer/controller.js";
-import { createComposerStatePort } from "./composer/state-port.js";
 import { createBindOnceControllerPort } from "./controller-port.js";
 import { createPreferredModelController } from "./preferred-model/controller.js";
-import { createPreferredModelStatePort } from "./preferred-model/state-port.js";
-import { createSummaryStatePort } from "./summary/state-port.js";
 import { createTopbarController } from "./topbar/controller.js";
-import { createTopbarStatePort } from "./topbar/state-port.js";
 import { createWorkspaceController } from "./workspace/controller.js";
 import { createWorkspaceSessionStore } from "./workspace/session-store.js";
-import { createWorkspaceStatePort } from "./workspace/state-port.js";
 import { SETTINGS_SECTIONS } from "./settings/sections.js";
-import { createSettingsSectionStatePorts } from "./settings/state-ports.js";
 import { createCompactIconButton, createMenuButton } from "../ui/components.js";
-import {
-  button,
-  FRAME_TOAST_POSITION_EVENT,
-  el,
-  field,
-  iconButton,
-  input,
-  isDismissalEscape,
-  select,
-  toast
-} from "../ui/dom.js";
+import { el, isDismissalEscape, toast } from "../ui/dom.js";
+import { FRAME_TOAST_POSITION_EVENT } from "../ui/frame-toast.js";
 import { installGlobalTooltips } from "../ui/tooltip.js";
 import { createSvgIcon } from "../ui/icons.js";
-import { createAppState } from "./state.js";
+import { createAppState, createFeatureStatePorts } from "./state.js";
 
 const appRoot = document.getElementById("app");
 const isOptionsPage = document.body?.dataset.chatclubEntry === "options";
@@ -79,18 +62,7 @@ const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, Math.max(0,
 let appShellNode = null;
 let summaryEscapeDismissalPromise = null;
 const state = createAppState();
-const settingsSectionStatePorts = createSettingsSectionStatePorts(state);
-const featureState = Object.freeze({
-  workspace: createWorkspaceStatePort(state),
-  summary: createSummaryStatePort(state),
-  pocket: createPocketStatePort(state),
-  optimize: createOptimizeStatePort(state),
-  composer: createComposerStatePort(state),
-  preferredModel: createPreferredModelStatePort(state),
-  topbar: createTopbarStatePort(state),
-  favicon: createFaviconStatePort(state),
-  settingsSections: settingsSectionStatePorts
-});
+const featureState = createFeatureStatePorts(state);
 const composerState = featureState.composer;
 const preferredModelState = featureState.preferredModel;
 const topbarState = featureState.topbar;
@@ -154,10 +126,7 @@ const frameRuntimePort = new FrameRuntimePort({
     delete iframe.dataset.contentRuntimeCapabilities;
   }
 });
-const sendToContentFrame = (iframe, command, data = {}, timeoutMs) => {
-  const options = timeoutMs && typeof timeoutMs === "object" ? timeoutMs : { timeoutMs };
-  return frameRuntimePort.request(iframe, command, data, options);
-};
+const sendToContentFrame = createFrameRequest(frameRuntimePort, "App runtime");
 const topicDeleteRuntime = createTopicDeleteRuntime({ framePort: frameRuntimePort });
 const executeTopicDelete = topicDeleteRuntime.executeTopicDelete;
 const composerController = createComposerController({
@@ -504,7 +473,11 @@ function menuButton(label, iconName, onClick, variant = "secondary", disabled = 
 }
 
 function allApps() {
-  return getAllChatApps(state.customConfig, state.options?.builtinChatAppOrder);
+  return getAllChatApps(
+    state.customConfig,
+    state.options?.builtinChatAppOrder,
+    state.options?.builtinChatAppIframeConfigs
+  );
 }
 
 function appById(id) {
@@ -698,15 +671,6 @@ async function openSummaryPanel() {
   }
 }
 
-async function collectSummary() {
-  const permissionAttempt = requestFeatureUserScriptsPermission("summary").catch((error) => {
-    toast(error.message || String(error), "error");
-    return false;
-  });
-  const [controller] = await Promise.all([ensureSummaryController(), permissionAttempt]);
-  return controller.collect();
-}
-
 async function openSettings(sectionId = "appearance") {
   try {
     return (await ensureSettingsController()).openSettings(sectionId);
@@ -771,11 +735,6 @@ function shortcutDigit(matchObj) {
 function activeGroupForShortcut(sourceWindow) {
   const groupId = workspaceController.activeShortcutGroupId(sourceWindow);
   return state.groups.find((group) => group.id === groupId) || state.groups[0] || null;
-}
-
-function activeChatForShortcut(sourceWindow) {
-  const group = activeGroupForShortcut(sourceWindow);
-  return group ? workspaceController.activeChatForGroup(group) : null;
 }
 
 function insertPromptLibraryItem(index) {

@@ -1,17 +1,18 @@
 import { t } from "../../shared/i18n.js";
 import {
-  CONFIG_BUNDLE_KEYS,
   POCKET_HISTORY_LIMIT,
-  inspectImportedConfig,
   isStorageQuotaError,
   mergePocketHistory
 } from "../../shared/storage-schema.js";
+import { CONFIG_BUNDLE_KEYS, inspectImportedConfig } from "../../shared/storage-config-bundle.js";
 import {
   exportStoredConfigBundle,
   readPocketHistory,
   saveImportedConfigPatch
 } from "../../shared/storage-adapter.js";
-import { confirmationModal, downloadText, el, readFileAsText, toast } from "../../ui/dom.js";
+import { migrateLegacyScriptConfig } from "../../shared/script-config-migration.js";
+import { confirmationModal, el, toast } from "../../ui/dom.js";
+import { downloadText, readFileAsText } from "../../ui/file-io.js";
 
 const IMPORT_EXPORT_ITEMS = Object.freeze([
   Object.freeze({ key: "options", labelKey: "io.item.options", descKey: "io.item.optionsDesc" }),
@@ -151,6 +152,22 @@ export function createImportExportSettings(ctx) {
         messages.push(t("io.importEmptyReplaceWarning", { label: importBlockLabel(key) }));
       }
     }
+    const iframeDiagnosticsSelected = (entry = {}) => (
+      (entry.source === "builtin" && selected.has("options"))
+      || (entry.source === "custom" && selected.has("customConfig"))
+    );
+    const invalidIframeConfigs = (diagnostics?.iframeConfigs?.invalid || []).filter(iframeDiagnosticsSelected).length;
+    const warningIframeConfigs = (diagnostics?.iframeConfigs?.warnings || []).filter(iframeDiagnosticsSelected).length;
+    const riskyIframeConfigs = (diagnostics?.iframeConfigs?.risks || []).filter(iframeDiagnosticsSelected).length;
+    if (invalidIframeConfigs) {
+      messages.push(t("io.importIframeInvalidWarning", { count: invalidIframeConfigs }));
+    }
+    if (warningIframeConfigs) {
+      messages.push(t("io.importIframeCompatibilityWarning", { count: warningIframeConfigs }));
+    }
+    if (riskyIframeConfigs) {
+      messages.push(t("io.importIframeRiskWarning", { count: riskyIframeConfigs }));
+    }
     if (
       selected.has("pocketHistory")
       && pocketMode === "merge"
@@ -232,7 +249,9 @@ export function createImportExportSettings(ctx) {
       await notifyConfigReload();
       const layoutHydrated = "options" in saved
         && hydrateImportedLayoutIfNeeded(previousOptions, previousCustomConfig);
-      if ("customConfig" in saved && !layoutHydrated) await reconcileAppCatalog(previousCustomConfig);
+      if (("customConfig" in saved || "options" in saved) && !layoutHydrated) {
+        await reconcileAppCatalog(previousCustomConfig, previousOptions);
+      }
       syncI18nLanguage();
       resetAfterConfigImport(selectedList);
       render();
@@ -254,7 +273,6 @@ export function createImportExportSettings(ctx) {
     const legacyScriptConfig = [parsed?.options?.summarySiteConfigs, parsed?.options?.topicDeleteSiteConfigs]
       .some((items) => Array.isArray(items) && items.some((item) => item && typeof item === "object" && Object.hasOwn(item, "userscript")));
     if (legacyScriptConfig) {
-      const { migrateLegacyScriptConfig } = await import("../../shared/script-config-migration.js");
       parsed = { ...parsed, options: await migrateLegacyScriptConfig(parsed.options) };
     }
     const inspected = inspectImportedConfig(parsed);

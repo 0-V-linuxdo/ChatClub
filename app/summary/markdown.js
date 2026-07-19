@@ -9,7 +9,7 @@ function safeLinkHref(value = "") {
   }
 }
 
-export function renderInlineMarkdown(text = "") {
+function renderInlineMarkdown(text = "") {
   const nodes = [];
   const pattern = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|\[[^\]]+\]\(([^)]+)\))/g;
   let last = 0;

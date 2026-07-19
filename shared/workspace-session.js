@@ -9,14 +9,14 @@ export const DEFAULT_WORKSPACE_SESSION_GENERATION = "chatclub-workspace-session-
 // Legacy mirrors shipped in the first workspace-memory build and were keyed
 // by the browser's transient tab id. Keep the format readable so an already
 // open page can migrate without losing its snapshot.
-export const WORKSPACE_SESSION_MIRROR_PREFIX = "chatclubWorkspaceSessionMirror:";
-export const WORKSPACE_SESSION_WORKSPACE_PREFIX = "chatclubWorkspaceSessionWorkspace:";
+const WORKSPACE_SESSION_MIRROR_PREFIX = "chatclubWorkspaceSessionMirror:";
+const WORKSPACE_SESSION_WORKSPACE_PREFIX = "chatclubWorkspaceSessionWorkspace:";
 export const WORKSPACE_SESSION_BINDING_PREFIX = "chatclubWorkspaceSessionBinding:";
 export const WORKSPACE_SESSION_RECOVERY_KEY = "chatclubWorkspaceSessionRecoveryV1";
 export const WORKSPACE_SESSION_RUNTIME_MARKER_KEY = "chatclubWorkspaceSessionRuntimeV1";
 export const WORKSPACE_SESSION_STORAGE_VERSION = 1;
 export const WORKSPACE_SESSION_RECOVERY_VERSION = 1;
-export const WORKSPACE_SESSION_URL_PARAM = "workspace";
+const WORKSPACE_SESSION_URL_PARAM = "workspace";
 export const WORKSPACE_SESSION_RECOVERY_TTL_MS = 10 * 60 * 1000;
 export const WORKSPACE_SESSION_RECENT_DETACH_MS = 2 * 60 * 1000;
 export const WORKSPACE_SESSION_DETACHED_TTL_MS = 7 * 24 * 60 * 60 * 1000;

@@ -1,6 +1,10 @@
 const SVG_NS = "http://www.w3.org/2000/svg";
+const SIDEBAR_TOGGLE_ICON = [
+  ["rect", { x: "5", y: "5", width: "14", height: "14", rx: "1.6" }],
+  ["path", { d: "M10 5v14" }]
+];
 
-export const ICONS = {
+const ICONS = {
   edit: [
     ["path", { d: "M12 20h9" }],
     ["path", { d: "M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" }]
@@ -47,12 +51,6 @@ export const ICONS = {
     ["path", { d: "M14 2v6h6" }],
     ["path", { d: "M12 12v6" }],
     ["path", { d: "m9 15 3-3 3 3" }]
-  ],
-  image: [
-    ["rect", { x: "3", y: "5", width: "18", height: "14", rx: "2" }],
-    ["circle", { cx: "8.5", cy: "10", r: "1.5" }],
-    ["path", { d: "m21 15-4.3-4.3a1 1 0 0 0-1.4 0L9 17" }],
-    ["path", { d: "m3 15 4-4a1 1 0 0 1 1.4 0L13 15.6" }]
   ],
   paperclip: [
     ["path", { d: "m16 6-8.4 8.4a2 2 0 0 0 2.8 2.8l8.4-8.4a4 4 0 0 0-5.7-5.7l-8.3 8.5a6 6 0 0 0 8.5 8.5l8.3-8.5" }]
@@ -112,14 +110,8 @@ export const ICONS = {
     ["path", { d: "M9 12h9", opacity: ".7", "stroke-width": "2.6" }],
     ["path", { d: "M4 17h14", "stroke-width": "2.8" }]
   ],
-  sidebarCollapse: [
-    ["rect", { x: "5", y: "5", width: "14", height: "14", rx: "1.6" }],
-    ["path", { d: "M10 5v14" }]
-  ],
-  sidebarExpand: [
-    ["rect", { x: "5", y: "5", width: "14", height: "14", rx: "1.6" }],
-    ["path", { d: "M10 5v14" }]
-  ],
+  sidebarCollapse: SIDEBAR_TOGGLE_ICON,
+  sidebarExpand: SIDEBAR_TOGGLE_ICON,
   focusMode: [
     ["path", { d: "M12 7v14" }],
     ["path", { d: "M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3Z" }],
@@ -183,10 +175,6 @@ export const ICONS = {
     ["circle", { cx: "12", cy: "12", r: "9" }],
     ["path", { d: "M12 11v5" }],
     ["path", { d: "M12 8h.01" }]
-  ],
-  left: [
-    ["path", { d: "m12 19-7-7 7-7" }],
-    ["path", { d: "M19 12H5" }]
   ],
   menu: [
     ["path", { d: "M4 6h16" }],
@@ -252,10 +240,6 @@ export const ICONS = {
     ["path", { d: "M5 10v10h14V10" }],
     ["path", { d: "M9 20v-6h6v6" }]
   ],
-  right: [
-    ["path", { d: "m12 5 7 7-7 7" }],
-    ["path", { d: "M5 12h14" }]
-  ],
   send: [
     ["path", { d: "m22 2-7 20-4-9-9-4Z" }],
     ["path", { d: "M22 2 11 13" }]
@@ -316,17 +300,4 @@ export function createSvgIcon(name) {
     svg.append(child);
   }
   return svg;
-}
-
-export function createSvgBrandNode(spec) {
-  const [tag, attrs = {}, children = []] = spec;
-  const node = document.createElementNS(SVG_NS, tag);
-  for (const [key, value] of Object.entries(attrs)) {
-    if (key === "textContent") node.textContent = value;
-    else node.setAttribute(key, value);
-  }
-  for (const child of children || []) {
-    node.append(Array.isArray(child) ? createSvgBrandNode(child) : document.createTextNode(String(child)));
-  }
-  return node;
 }

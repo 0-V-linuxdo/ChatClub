@@ -1,4 +1,5 @@
 import { t } from "../../shared/i18n.js";
+import { resolveChatFrameAttributeContract } from "../../shared/chat-frame-config.js";
 import { getAllChatApps } from "../../shared/storage-schema.js";
 import {
   diffEffectiveCustomAppCatalog,
@@ -8,13 +9,9 @@ import {
   normalizeWorkspaceLayoutGroups,
   reconcileWorkspaceAppCatalog
 } from "./model.js";
-import { validateControllerContract } from "../controller-contract.js";
+import { createControllerMethodValidator, validateControllerContract } from "../controller-contract.js";
 
-function requireMethods(port, label, methods) {
-  for (const method of methods) {
-    if (typeof port?.[method] !== "function") throw new TypeError(`Workspace layout ${label} port requires ${method}().`);
-  }
-}
+const requireMethods = createControllerMethodValidator("Workspace layout", "port");
 
 export function createWorkspaceLayoutController(dependencies = {}) {
   const { state, services, session, view } = validateControllerContract(
@@ -236,7 +233,11 @@ export function createWorkspaceLayoutController(dependencies = {}) {
   function activeLayoutGroupsForOptions(options = state.options, customConfig = state.customConfig) {
     const presets = persistentLayoutPresets(options);
     const active = presets.find((preset) => preset.id === options?.activeLayoutPresetId) || presets[0];
-    const validIds = new Set(getAllChatApps(customConfig, options?.builtinChatAppOrder).map((app) => app.id));
+    const validIds = new Set(getAllChatApps(
+      customConfig,
+      options?.builtinChatAppOrder,
+      options?.builtinChatAppIframeConfigs
+    ).map((app) => app.id));
     return normalizeWorkspaceLayoutGroups(active?.chatAppIdGroups, validIds);
   }
 
@@ -256,8 +257,56 @@ export function createWorkspaceLayoutController(dependencies = {}) {
     return true;
   }
 
-  async function reconcileAppCatalog(previousCustomConfig = []) {
-    const { affectedAppIds, sourceChangedAppIds } = diffEffectiveCustomAppCatalog(previousCustomConfig, state.customConfig);
+  function effectiveAppsById(customConfig = [], options = {}) {
+    return new Map(getAllChatApps(
+      customConfig,
+      options?.builtinChatAppOrder,
+      options?.builtinChatAppIframeConfigs
+    ).map((app) => [app.id, app]));
+  }
+
+  function diffEffectiveIframeConfigs(previousCustomConfig, currentCustomConfig, previousOptions, currentOptions) {
+    const previous = effectiveAppsById(previousCustomConfig, previousOptions);
+    const current = effectiveAppsById(currentCustomConfig, currentOptions);
+    const affectedAppIds = new Set();
+    const sourceChangedAppIds = new Set();
+    for (const appId of new Set([...previous.keys(), ...current.keys()])) {
+      const before = previous.get(appId);
+      const after = current.get(appId);
+      const beforeContract = before && resolveChatFrameAttributeContract({
+        app: before,
+        url: before.url,
+        source: before.chatAppSource || before.source,
+        options: previousOptions
+      });
+      const afterContract = after && resolveChatFrameAttributeContract({
+        app: after,
+        url: after.url,
+        source: after.chatAppSource || after.source,
+        options: currentOptions
+      });
+      if (String(beforeContract?.signature || "") !== String(afterContract?.signature || "")) {
+        affectedAppIds.add(appId);
+      }
+      if (
+        Boolean(before) !== Boolean(after)
+        || String(before?.chatAppSource || before?.source || "") !== String(after?.chatAppSource || after?.source || "")
+        || String(before?.url || "") !== String(after?.url || "")
+      ) sourceChangedAppIds.add(appId);
+    }
+    return { affectedAppIds, sourceChangedAppIds };
+  }
+
+  async function reconcileAppCatalog(previousCustomConfig = [], previousOptions = state.options) {
+    const customDiff = diffEffectiveCustomAppCatalog(previousCustomConfig, state.customConfig);
+    const iframeDiff = diffEffectiveIframeConfigs(
+      previousCustomConfig,
+      state.customConfig,
+      previousOptions,
+      state.options
+    );
+    const affectedAppIds = new Set([...customDiff.affectedAppIds, ...iframeDiff.affectedAppIds]);
+    const sourceChangedAppIds = new Set([...customDiff.sourceChangedAppIds, ...iframeDiff.sourceChangedAppIds]);
     const validAppIds = validChatAppIds();
     const result = reconcileWorkspaceAppCatalog({
       groups: state.groups,
@@ -343,29 +392,21 @@ export function createWorkspaceLayoutController(dependencies = {}) {
   }
 
   return Object.freeze({
-    activeLayoutGroupsForOptions,
-    activePreset,
     activeTemporaryLayoutPreset,
     addAppToGroup,
     addGroup,
     addLayoutPreset,
-    currentLayoutGroups,
     deleteLayoutPreset,
     hydrateGroups,
     hydrateImportedLayoutIfNeeded,
-    layoutPresetGroups,
     layoutPresetSummary,
     layoutShortcutLabel,
-    normalizeLayoutGroups,
     persistLayout,
-    persistentLayoutOptions,
     persistentLayoutPresets,
-    preferredLayoutGroupsForLocale,
     reconcileAppCatalog,
     shortcutLabel,
     shortcutTooltip,
     switchLayoutPreset,
-    temporaryLayoutIsActive,
     validChatAppIds
   });
 }

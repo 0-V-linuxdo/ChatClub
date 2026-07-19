@@ -95,21 +95,14 @@ export function reconcileWorkspaceAppCatalog({
   const sourceGroups = Array.isArray(groups) ? groups : [];
   const sourceActiveTabs = activeTabs && typeof activeTabs === "object" ? activeTabs : {};
   const validIds = validAppIds instanceof Set ? validAppIds : new Set(validAppIds || []);
-  const removedGroupIds = [];
-  const removedInstanceIds = [];
-  const addedInstanceIds = [];
   const fallbackActiveByGroupId = new Map();
   let groupsChanged = false;
 
   let nextGroups = sourceGroups.flatMap((group) => {
     const chats = Array.isArray(group?.chatApps) ? group.chatApps : [];
     const keptChats = chats.filter((chat) => validIds.has(chat?.appId));
-    for (const chat of chats) {
-      if (!keptChats.includes(chat) && chat?.instanceId) removedInstanceIds.push(chat.instanceId);
-    }
     if (!keptChats.length) {
       groupsChanged = true;
-      if (group?.id) removedGroupIds.push(group.id);
       return [];
     }
     const previousActive = sourceActiveTabs[group.id];
@@ -142,13 +135,10 @@ export function reconcileWorkspaceAppCatalog({
       return createGroupId();
     })();
     const instanceId = createFrameId();
-    addedInstanceIds.push(instanceId);
     const fallbackGroup = reusableGroup || { id: groupId, chatApps: [] };
     fallbackGroup.id = groupId;
     fallbackGroup.chatApps = [{ appId: normalizedFallbackAppId, instanceId }];
     nextGroups = [fallbackGroup];
-    const reusedGroupIndex = removedGroupIds.indexOf(groupId);
-    if (reusedGroupIndex >= 0) removedGroupIds.splice(reusedGroupIndex, 1);
     groupsChanged = true;
   }
 
@@ -164,9 +154,6 @@ export function reconcileWorkspaceAppCatalog({
   return {
     groups: groupsChanged ? nextGroups : sourceGroups,
     activeTabs: activeTabsChanged ? nextActiveTabs : sourceActiveTabs,
-    removedGroupIds,
-    removedInstanceIds,
-    addedInstanceIds,
     changed: groupsChanged || activeTabsChanged
   };
 }
@@ -191,19 +178,9 @@ export function moveGroupWithinWorkspace(groups, groupId, insertIndex) {
   return { changed: true, moved, noop: false };
 }
 
-export function moveDroppedGroupWithinWorkspace(groups, groupId, targetIndex, insertAfterTarget) {
-  const fromIndex = (groups || []).findIndex((item) => item.id === groupId);
-  if (fromIndex < 0 || fromIndex === targetIndex) return { changed: false, moved: null };
-  let insertIndex = targetIndex + (insertAfterTarget ? 1 : 0);
-  const [moved] = groups.splice(fromIndex, 1);
-  if (fromIndex < insertIndex) insertIndex -= 1;
-  groups.splice(Math.max(0, Math.min(insertIndex, groups.length)), 0, moved);
-  return { changed: true, moved };
-}
-
 export function removeChatFromGroup(groups, activeTabs, group, chat) {
   const closeIndex = group?.chatApps?.findIndex((item) => item.instanceId === chat?.instanceId) ?? -1;
-  if (closeIndex < 0) return { removed: false, removeGroup: false, closeIndex };
+  if (closeIndex < 0) return { removed: false, removeGroup: false };
   if (group.chatApps.length > 1) {
     group.chatApps = group.chatApps.filter((item) => item.instanceId !== chat.instanceId);
     let nextActiveId = activeTabs[group.id];
@@ -212,9 +189,9 @@ export function removeChatFromGroup(groups, activeTabs, group, chat) {
       nextActiveId = group.chatApps[nextIndex]?.instanceId || group.chatApps[0]?.instanceId || "";
       activeTabs[group.id] = nextActiveId;
     }
-    return { removed: true, removeGroup: false, closeIndex, nextActiveId };
+    return { removed: true, removeGroup: false, nextActiveId };
   }
-  return { removed: false, removeGroup: (groups || []).length > 1, closeIndex };
+  return { removed: false, removeGroup: (groups || []).length > 1 };
 }
 
 export function removeGroupFromWorkspace(groups, activeTabs, groupId) {

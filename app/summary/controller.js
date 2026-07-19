@@ -5,19 +5,16 @@ import { findSummarySiteConfig } from "../../shared/url-match.js";
 import { createActionButton } from "../../ui/components.js";
 import { el, iconButton, textarea } from "../../ui/dom.js";
 import { optionalControllerFunction, optionalControllerObject, requireControllerContext, requireControllerFunction, validateControllerContract } from "../controller-contract.js";
+import { createFrameRequest } from "../frame-request.js";
 import { renderMarkdown } from "./markdown.js";
 import {
   buildSummaryPreviewItem,
-  compareSummarySourceItems as compareSummarySourceItemsModel,
   normalizeSummaryPanelSize as normalizeSummaryPanelSizeModel,
   SUMMARY_PANEL_MIN_HEIGHT,
   SUMMARY_PANEL_MIN_WIDTH,
   summaryContextsFromPreviewItems as summaryContextsFromPreviewItemsModel,
-  summaryPreviewIndex as summaryPreviewIndexModel,
-  summaryPreviewKey as summaryPreviewKeyModel,
   summaryPreviewPage as summaryPreviewPageModel,
   summaryPreviewStatus as summaryPreviewStatusModel,
-  summarySourceId as summarySourceIdModel,
   summarySourceKey as summarySourceKeyModel,
   summarySourceMeta as summarySourceMetaModel,
   summarySourceOrder as summarySourceOrderModel
@@ -75,11 +72,7 @@ export function createSummaryController(ctx) {
   const rememberFaviconUrl = requireControllerFunction(ctx, controllerName, "rememberFaviconUrl");
   const browserFaviconUrl = requireControllerFunction(ctx, controllerName, "browserFaviconUrl");
   const framePort = requireControllerContext(ctx, controllerName, "framePort");
-  if (typeof framePort.request !== "function") throw new TypeError("Summary controller requires framePort.request.");
-  const sendToContentFrame = (iframe, command, data = {}, timeoutMs) => {
-    const options = timeoutMs && typeof timeoutMs === "object" ? timeoutMs : { timeoutMs };
-    return framePort.request(iframe, command, data, options);
-  };
+  const sendToContentFrame = createFrameRequest(framePort, controllerName);
   const formatShortcutLabel = typeof ctx.formatShortcut === "function" ? ctx.formatShortcut : null;
   const pocketPort = optionalControllerObject(ctx, "pocketPort");
   const saveSummaryPreviewToPocket = typeof pocketPort.save === "function" ? pocketPort.save : async () => {};
@@ -105,10 +98,6 @@ export function createSummaryController(ctx) {
 
   function summarySourceOrder(source) {
     return summarySourceOrderModel(source);
-  }
-  
-  function compareSummarySourceItems(a, b) {
-    return compareSummarySourceItemsModel(a, b);
   }
   
   function summaryLogoUrl(href) {
@@ -147,10 +136,6 @@ export function createSummaryController(ctx) {
     else set.add(key);
     state.summaryExpandedKeys = Array.from(set);
     syncSummaryPanel();
-  }
-  
-  function summarySourceId(source = {}) {
-    return summarySourceIdModel(source);
   }
   
   function summarySourceMeta(source = {}) {
@@ -241,14 +226,6 @@ export function createSummaryController(ctx) {
   
   function summaryPreviewPage(item = {}) {
     return summaryPreviewPageModel(item);
-  }
-  
-  function summaryPreviewIndex(source = {}, fallback = {}) {
-    return summaryPreviewIndexModel(source, fallback);
-  }
-  
-  function summaryPreviewKey(source = {}, fallback = {}) {
-    return summaryPreviewKeyModel(source, fallback);
   }
   
   function summaryPreviewItemFromResult(result = {}, fallback = {}) {
@@ -793,7 +770,6 @@ export function createSummaryController(ctx) {
   
     try {
       let messages = [];
-      let result = null;
       const hasSummaryRunner = Boolean(
         siteConfig?.userscriptFile
         || ((siteConfig?.sourceMode === "custom" || siteConfig?.builtIn === false) && String(siteConfig?.customUserscript || "").trim())
@@ -802,12 +778,12 @@ export function createSummaryController(ctx) {
         const runtimeConfig = { ...siteConfig };
         delete runtimeConfig.userscript;
         delete runtimeConfig.customUserscript;
-        result = await sendToContentFrame(iframe, "collectSummary", {
+        const result = await sendToContentFrame(iframe, "collectSummary", {
           config: runtimeConfig,
           expectedDocumentId: summaryReady.registration.documentId,
           expectedHref: base.href
         }, siteConfig.userscriptTimeoutMs || 36000);
-        messages = result?.messages || result || [];
+        messages = result?.messages || [];
         if (!messages.length && result?.rawMessageCount) {
           return {
             diagnostic: diagnostic(
@@ -822,12 +798,8 @@ export function createSummaryController(ctx) {
         const text = await sendToContentFrame(iframe, "getPageText", {}, 2500);
         if (text) messages = [{ role: "page", text }];
       }
-      const href = result?.href || base.href;
       const contextBase = {
         ...base,
-        href,
-        pageTitle: result?.title || base.pageTitle,
-        logoUrl: summaryFrameLogoUrl(base.instanceId, href, result?.logoUrl || base.logoUrl) || base.logoUrl,
         siteId: siteConfig.id,
         siteName: siteConfig.name
       };
@@ -955,20 +927,7 @@ export function createSummaryController(ctx) {
   return {
     sync: syncSummaryPanel,
     open: openSummaryPanel,
-    render: renderSummaryPanel,
-    collect: collectSummary,
-    collectSource: collectSummarySource,
-    ask: askSummary,
-    summarize: summarizeSummary,
     toggleMaximized: toggleSummaryMaximized,
-    loadPanelSize: loadSummaryPanelSize,
-    summarySourceKey,
-    summarySourceOrder,
-    compareSummarySourceItems,
-    summaryPreviewStatus,
-    summaryPreviewPage,
-    summarySourceMeta,
-    summaryContextsFromPreviewItems,
-    pocketEntriesFromSummaryPreview
+    loadPanelSize: loadSummaryPanelSize
   };
 }

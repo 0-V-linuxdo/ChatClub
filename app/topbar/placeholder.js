@@ -1,4 +1,4 @@
-export function pickTopbarPromptPlaceholderIndex(itemCount, config, promptState, advance) {
+function pickTopbarPromptPlaceholderIndex(itemCount, config, promptState, advance) {
   if (itemCount <= 0) return -1;
   if (itemCount === 1) {
     promptState.index = 0;

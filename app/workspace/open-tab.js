@@ -8,7 +8,7 @@ import {
   windowsUpdate
 } from "../../shared/extension-api.js";
 
-export function openableTabUrl(href) {
+function openableTabUrl(href) {
   try {
     const parsed = new URL(String(href || ""), location.href);
     return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.href : "";

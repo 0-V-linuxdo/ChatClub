@@ -185,7 +185,7 @@ function syncTooltipPosition() {
   positionTooltip(activeTrigger);
 }
 
-export function notifyTooltipPreferencesChanged() {
+function notifyTooltipPreferencesChanged() {
   reconcileTooltipState();
 }
 

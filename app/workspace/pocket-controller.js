@@ -1,12 +1,9 @@
 import { t } from "../../shared/i18n.js";
+import { appPickerHostKeys, normalizeAppPickerHost } from "./app-hosts.js";
 import { layoutGroupsFromWorkspace } from "./model.js";
-import { validateControllerContract } from "../controller-contract.js";
+import { createControllerMethodValidator, validateControllerContract } from "../controller-contract.js";
 
-function requireMethods(port, label, methods) {
-  for (const method of methods) {
-    if (typeof port?.[method] !== "function") throw new TypeError(`Workspace Pocket ${label} port requires ${method}().`);
-  }
-}
+const requireMethods = createControllerMethodValidator("Workspace Pocket", "port");
 
 export function createWorkspacePocketController(dependencies = {}) {
   const { state, services, registry, session, layout, frame } = validateControllerContract(
@@ -38,23 +35,6 @@ export function createWorkspacePocketController(dependencies = {}) {
   const { rememberWorkspaceSession } = session;
   const { validChatAppIds } = layout;
   const { activateChatTab, assignFrameSrc } = frame;
-
-  function normalizeAppPickerHost(host) {
-    return String(host || "").trim().toLowerCase().replace(/^\*\./, "").replace(/^www\./, "");
-  }
-
-  function appPickerHostKeys(app) {
-    const keys = new Set();
-    for (const host of app?.hosts || []) {
-      const normalized = normalizeAppPickerHost(host);
-      if (normalized) keys.add(normalized);
-    }
-    try {
-      const normalized = normalizeAppPickerHost(new URL(app.url).hostname);
-      if (normalized) keys.add(normalized);
-    } catch {}
-    return keys;
-  }
 
   function pocketEntryHref(entry = {}) {
     return openableTabUrl(entry.chatUrl || entry.url || entry.href || "");

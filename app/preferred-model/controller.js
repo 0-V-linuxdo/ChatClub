@@ -6,8 +6,10 @@ import {
 } from "../../shared/constants.js";
 import { t } from "../../shared/i18n.js";
 import { createId } from "../../shared/storage-schema.js";
-import { createFrameToast, el, toast } from "../../ui/dom.js";
+import { el, toast } from "../../ui/dom.js";
+import { createFrameToast } from "../../ui/frame-toast.js";
 import { validateControllerContract } from "../controller-contract.js";
+import { createFrameRequest } from "../frame-request.js";
 
 const MODEL_PREFERENCE_APP_ID_ALIASES = Object.freeze({
   Gemini: "Gemini",
@@ -27,6 +29,7 @@ const MODEL_PREFERENCE_SUBMISSION_NAVIGATION_GRACE_MS = 15000;
 const FRAME_SUBMIT_ERROR_MAX_CHARS = 160;
 
 export function createPreferredModelController(dependencies = {}) {
+  const controllerName = "Preferred Model controller";
   const {
     state: preferredModelState,
     workspace,
@@ -35,7 +38,7 @@ export function createPreferredModelController(dependencies = {}) {
     composer,
     verifiedCurrentContentFrameRegistration,
     prepareContentFrameRuntime
-  } = validateControllerContract(dependencies, "Preferred Model controller", {
+  } = validateControllerContract(dependencies, controllerName, {
     state: "object",
     workspace: "object",
     framePort: "object",
@@ -44,9 +47,6 @@ export function createPreferredModelController(dependencies = {}) {
     verifiedCurrentContentFrameRegistration: "function",
     prepareContentFrameRuntime: "function"
   });
-  if (typeof framePort.request !== "function") {
-    throw new TypeError("Preferred Model controller requires framePort.request.");
-  }
   for (const method of [
     "normalizePromptImages",
     "rememberPromptSelection",
@@ -88,9 +88,7 @@ export function createPreferredModelController(dependencies = {}) {
     return workspace;
   }
 
-  function sendToContentFrame(iframe, command, data = {}, options = {}) {
-    return framePort.request(iframe, command, data, options);
-  }
+  const sendToContentFrame = createFrameRequest(framePort, controllerName);
 
   function preferredModelAppId(app) {
     return MODEL_PREFERENCE_APP_ID_ALIASES[String(app?.id || "")]

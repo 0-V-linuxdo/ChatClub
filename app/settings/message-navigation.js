@@ -51,7 +51,8 @@ export function createMessageNavigationSettingsSection(ctx) {
     settingsList,
     settingsListDropPlacement,
     settingsPaneToolbar,
-    settingsPrimaryAction
+    settingsPrimaryAction,
+    settingsValueChips
   } = createSettingsKit({ svgIcon });
   let siteDragId = "";
 
@@ -417,19 +418,11 @@ export function createMessageNavigationSettingsSection(ctx) {
   }
 
   function siteDetails(config) {
-    const chips = (items, emptyKey) => {
-      const values = (items || []).filter(Boolean);
-      return el("div", { class: "summary-host-chips" },
-        values.length
-          ? values.map((item) => el("code", {}, item))
-          : el("span", { class: "muted" }, t(emptyKey))
-      );
-    };
     return el("div", { class: "message-navigator-details summary-collector-details" },
       el("div", { class: "summary-collector-details-grid" },
-        field(t("messageNavigator.site.appIds"), chips(config.appIds, "messageNavigator.site.noAppIds")),
-        field(t("messageNavigator.site.hosts"), chips(config.hosts, "messageNavigator.site.noHosts")),
-        field(t("messageNavigator.site.pathPrefixes"), chips(config.pathPrefixes, "messageNavigator.site.noPathPrefixes")),
+        field(t("messageNavigator.site.appIds"), settingsValueChips(config.appIds, t("messageNavigator.site.noAppIds"))),
+        field(t("messageNavigator.site.hosts"), settingsValueChips(config.hosts, t("messageNavigator.site.noHosts"))),
+        field(t("messageNavigator.site.pathPrefixes"), settingsValueChips(config.pathPrefixes, t("messageNavigator.site.noPathPrefixes"))),
         field(t("messageNavigator.site.adapter"), el("div", { class: "summary-script-meta" },
           el("strong", {}, adapterLabel(config.adapter)),
           el("small", {}, config.builtIn ? t("messageNavigator.site.builtInAutoUpdate") : t("messageNavigator.site.customConfig"))

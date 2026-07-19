@@ -12,13 +12,7 @@ export function summarySourceOrder(source) {
   return Number.isFinite(order) ? order : Number.MAX_SAFE_INTEGER;
 }
 
-export function compareSummarySourceItems(a, b) {
-  const order = summarySourceOrder(a) - summarySourceOrder(b);
-  if (order) return order;
-  return summarySourceKey(a).localeCompare(summarySourceKey(b));
-}
-
-export function summarySourceId(source = {}) {
+function summarySourceId(source = {}) {
   const text = `${source.siteId || ""} ${source.siteName || ""} ${source.name || ""} ${source.title || ""} ${source.href || ""}`.toLowerCase();
   if (text.includes("kagi")) return "kagi";
   if (text.includes("grok") || text.includes("dairoot")) return "grok";
@@ -68,7 +62,7 @@ export function summaryPreviewPage(item = {}) {
   return item.status === "ok" && item.page ? item.page : item;
 }
 
-export function summaryPreviewIndex(source = {}, fallback = {}) {
+function summaryPreviewIndex(source = {}, fallback = {}) {
   const index = Number(source.index);
   if (Number.isFinite(index)) return index;
   const order = Number(source.order);
@@ -77,7 +71,7 @@ export function summaryPreviewIndex(source = {}, fallback = {}) {
   return Number.isFinite(fallbackIndex) ? fallbackIndex : 0;
 }
 
-export function summaryPreviewKey(source = {}, fallback = {}) {
+function summaryPreviewKey(source = {}, fallback = {}) {
   return summarySourceKey(source) || summarySourceKey(fallback) || `iframe-${summaryPreviewIndex(source, fallback) + 1}`;
 }
 

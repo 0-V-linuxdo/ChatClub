@@ -518,10 +518,16 @@ export function createFrameBridgeController(dependencies = {}) {
 
   function shortcutRelaySourceWindow(context = {}) {
     const bridgeDocumentId = String(context.bridgeDocumentId || "");
-    if (!bridgeDocumentId) return null;
-    const iframe = workspaceController().currentFrames().find((frame) =>
-      String(frame.dataset.preferredModelDocumentId || "") === bridgeDocumentId
-    );
+    const expectedFrameId = Number(context.frameId);
+    const expectedBindingId = String(context.frameBindingId || "");
+    const iframe = workspaceController().currentFrames().find((frame) => {
+      if (bridgeDocumentId && String(frame.dataset.preferredModelDocumentId || "") === bridgeDocumentId) return true;
+      return Number.isSafeInteger(expectedFrameId)
+        && expectedFrameId > 0
+        && Number(frame.dataset.browserFrameId) === expectedFrameId
+        && expectedBindingId
+        && String(frame.dataset.frameBindingId || "") === expectedBindingId;
+    });
     return iframe || null;
   }
 
@@ -540,6 +546,16 @@ export function createFrameBridgeController(dependencies = {}) {
         }
         const sourceWindow = shortcutRelaySourceWindow(context);
         if (!sourceWindow) return;
+        if (message.action === "frameNavigationTarget") {
+          const controller = workspaceController();
+          const iframe = controller.iframeForWindow(sourceWindow);
+          const href = String(message.data?.href || "");
+          if (!iframe || !/^https?:\/\//i.test(href)) return;
+          controller.ensureFrameAttributeContract(iframe, href, {
+            phase: String(message.data?.phase || "navigation")
+          });
+          return;
+        }
         if (message.action === "shortcutTriggered") {
           await handleShortcutAction(message.shortcutAction, message.matchObj || {}, sourceWindow);
           return;

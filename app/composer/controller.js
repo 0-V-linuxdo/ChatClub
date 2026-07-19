@@ -8,11 +8,11 @@ import {
 import { savePromptSendHistory } from "../../shared/storage-adapter.js";
 import {
   claimTopmostPopoverEscape,
-  createFrameToast,
   el,
   textarea,
   toast
 } from "../../ui/dom.js";
+import { createFrameToast } from "../../ui/frame-toast.js";
 import { createSvgIcon } from "../../ui/icons.js";
 import { validateControllerContract } from "../controller-contract.js";
 import {
@@ -871,7 +871,6 @@ export function createComposerController(dependencies = {}) {
     syncInputNode,
     focusInput,
     setImages,
-    sendPromptToFrames,
     closeActionsMenu,
     preferredModelPort
   });

@@ -23,7 +23,7 @@ export const TOPBAR_BUILTIN_ITEMS = [
   "settingsAbout"
 ];
 
-export const TOPBAR_SETTINGS_SECTION_ITEMS = {
+const TOPBAR_SETTINGS_SECTION_ITEMS = {
   appearance: "settingsAppearance",
   profiles: "settingsProfiles",
   apps: "settingsApps",
@@ -38,7 +38,7 @@ export const TOPBAR_SETTINGS_SECTION_ITEMS = {
   about: "settingsAbout"
 };
 
-export const TOPBAR_SETTINGS_ITEM_SECTIONS = Object.fromEntries(
+const TOPBAR_SETTINGS_ITEM_SECTIONS = Object.fromEntries(
   Object.entries(TOPBAR_SETTINGS_SECTION_ITEMS).map(([section, itemId]) => [itemId, section])
 );
 
@@ -72,7 +72,7 @@ export const DEFAULT_TOPBAR_LAYOUT = [
   { type: "item", id: "settingsAbout" }
 ];
 
-export const TOPBAR_ITEM_META = {
+const TOPBAR_ITEM_META = {
   brand: { labelKey: "topbar.item.brand", icon: "palette" },
   settings: { labelKey: "topbar.settings", icon: "settings" },
   composer: { labelKey: "topbar.item.composer", icon: "edit" },

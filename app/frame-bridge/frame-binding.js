@@ -11,7 +11,7 @@ function secureChallenge(randomValues = globalThis.crypto?.getRandomValues?.bind
   return Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
 }
 
-export function validFrameBindingChallenge(value) {
+function validFrameBindingChallenge(value) {
   return CHALLENGE_PATTERN.test(String(value || ""));
 }
 

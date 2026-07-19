@@ -228,11 +228,8 @@ export function createPromptLibraryController(ctx) {
 
   return {
     reset,
-    insertPromptFromLibrary,
     insertTextIntoPrompt,
     openPromptLibraryDialog,
-    openPromptLibraryEditor,
-    promptLibraryManager,
-    promptLibraryPromptList
+    promptLibraryManager
   };
 }

@@ -1,6 +1,6 @@
 import { createScopedStatePort, stateAccess } from "../state/port.js";
 
-export const COMPOSER_STATE_ACCESS = stateAccess([
+const COMPOSER_STATE_ACCESS = stateAccess([
   "options", "promptHistoryCursor", "promptHistoryDraft", "promptImages", "promptLibrary", "promptSelection",
   "promptSendHistory", "promptSendInFlight", "promptText", "shortcutConfig"
 ], [

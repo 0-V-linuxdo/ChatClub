@@ -168,7 +168,6 @@ export function createOptimizeController(ctx) {
   }
 
   return {
-    optimizeCurrentPrompt,
-    openOptimizeCompareDialog
+    optimizeCurrentPrompt
   };
 }

@@ -11,7 +11,7 @@ import {
   textarea,
   toast
 } from "../../ui/dom.js";
-import { cleanupSettingsDragRows, createSettingsKit } from "./kit.js";
+import { createSettingsKit } from "./kit.js";
 import { linesFromText, requireSettingsSectionStatePort } from "./section-contract.js";
 import { createPromptTemplateSettings } from "./prompt-templates.js";
 import {
@@ -51,7 +51,6 @@ export function createSummarySettingsSection(ctx) {
     settingsIconAction,
     settingsInnerTabs,
     settingsList,
-    settingsListDropPlacement,
     settingsPaneToolbar,
     settingsPrimaryAction
   } = settingsKit;

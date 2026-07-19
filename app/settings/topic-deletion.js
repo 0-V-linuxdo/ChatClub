@@ -47,7 +47,8 @@ export function createTopicDeletionSettingsSection(ctx) {
     settingsList,
     settingsListDropPlacement,
     settingsPaneToolbar,
-    settingsPrimaryAction
+    settingsPrimaryAction,
+    settingsValueChips
   } = createSettingsKit({ svgIcon });
   let siteDragId = "";
 
@@ -357,19 +358,11 @@ export function createTopicDeletionSettingsSection(ctx) {
   }
 
   function siteDetails(config) {
-    const chips = (items, emptyKey) => {
-      const values = (items || []).filter(Boolean);
-      return el("div", { class: "summary-host-chips" },
-        values.length
-          ? values.map((item) => el("code", {}, item))
-          : el("span", { class: "muted" }, t(emptyKey))
-      );
-    };
     return el("div", { class: "topic-delete-details summary-collector-details" },
       el("div", { class: "summary-collector-details-grid" },
-        field(t("topicDeletion.site.appIds"), chips(config.appIds, "topicDeletion.site.noAppIds")),
-        field(t("topicDeletion.site.hosts"), chips(config.hosts, "topicDeletion.site.noHosts")),
-        field(t("topicDeletion.site.pathPrefixes"), chips(config.pathPrefixes, "topicDeletion.site.noPathPrefixes")),
+        field(t("topicDeletion.site.appIds"), settingsValueChips(config.appIds, t("topicDeletion.site.noAppIds"))),
+        field(t("topicDeletion.site.hosts"), settingsValueChips(config.hosts, t("topicDeletion.site.noHosts"))),
+        field(t("topicDeletion.site.pathPrefixes"), settingsValueChips(config.pathPrefixes, t("topicDeletion.site.noPathPrefixes"))),
         field(t("topicDeletion.site.userscript"), el("div", { class: "summary-script-meta" },
           el("strong", {}, config.userscriptFile || t("topicDeletion.site.inlineRuntime")),
           el("small", {}, userscriptRuntimeLabel(config)),

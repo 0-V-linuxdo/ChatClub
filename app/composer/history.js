@@ -17,7 +17,7 @@ export function shouldOpenPromptLibraryFromSlash(event, value = "", selectionSta
     && Number(selectionEnd || 0) === 0;
 }
 
-export function promptCursorLineState(value = "", selectionStart = 0) {
+function promptCursorLineState(value = "", selectionStart = 0) {
   const text = String(value || "");
   const cursor = Math.max(0, Math.min(Number(selectionStart || 0), text.length));
   const before = text.slice(0, cursor);
