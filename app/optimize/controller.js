@@ -8,9 +8,11 @@ export function createOptimizeController(ctx) {
     state,
     svgIcon,
     syncPromptInputNode,
-    ensurePromptInputReady
+    ensurePromptInputReady,
+    recordFunctionalAnomaly
   } = validateControllerContract(ctx, "Optimize controller", {
-    state: "object", svgIcon: "function", syncPromptInputNode: "function", ensurePromptInputReady: "function"
+    state: "object", svgIcon: "function", syncPromptInputNode: "function", ensurePromptInputReady: "function",
+    recordFunctionalAnomaly: "function"
   });
 
   async function optimizeCurrentPrompt() {
@@ -34,6 +36,12 @@ export function createOptimizeController(ctx) {
         if (activeRequestId === requestId) comparison.finish();
       } catch (error) {
         if (controller.signal.aborted || activeRequestId !== requestId || !comparison.isOpen()) return;
+        void recordFunctionalAnomaly({
+          feature: "optimize",
+          operation: "optimizePrompt",
+          error,
+          message: error?.message || t("optimize.failed")
+        });
         comparison.fail(error.message || t("optimize.failed"));
       }
     };

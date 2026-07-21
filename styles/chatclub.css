@@ -3384,6 +3384,184 @@ body.settings-tab-group-button-dragging iframe {
   grid-template-columns: minmax(180px, .45fr) minmax(360px, 1fr) minmax(104px, auto);
 }
 
+.functional-anomaly-list .settings-list-header,
+.functional-anomaly-row {
+  min-width: 860px;
+  grid-template-columns: minmax(168px, .52fr) minmax(190px, .65fr) minmax(300px, 1.2fr) minmax(132px, auto);
+}
+
+.functional-anomalies-settings-pane .settings-pane-toolbar-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.functional-anomalies-settings-pane .functional-anomaly-privacy {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--primary) 7%, var(--panel-2));
+  border: 1px solid color-mix(in srgb, var(--primary) 18%, var(--line));
+  border-radius: var(--settings-radius);
+}
+
+.functional-anomalies-settings-pane .functional-anomaly-privacy .svg-icon {
+  width: 19px;
+  height: 19px;
+  flex: 0 0 auto;
+  color: var(--primary);
+}
+
+.functional-anomalies-settings-pane .functional-anomaly-privacy p,
+.functional-anomaly-confirmation p,
+.functional-anomaly-detail > .functional-anomaly-privacy {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.functional-anomaly-row {
+  min-height: 76px;
+}
+
+.functional-anomaly-time,
+.functional-anomaly-identity small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.functional-anomaly-identity,
+.functional-anomaly-summary {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.functional-anomaly-identity strong,
+.functional-anomaly-identity span,
+.functional-anomaly-identity small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.functional-anomaly-identity strong {
+  font-size: 13px;
+}
+
+.functional-anomaly-identity span,
+.functional-anomaly-summary > span {
+  font-size: 12px;
+}
+
+.functional-anomaly-summary > span {
+  overflow: hidden;
+  color: var(--text);
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.functional-anomaly-summary-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.functional-anomaly-severity,
+.functional-anomaly-count {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 8px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 780;
+  line-height: 1;
+  background: color-mix(in srgb, var(--panel-2) 72%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.functional-anomaly-severity[data-severity="error"],
+.functional-anomaly-severity[data-severity="fatal"] {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 9%, var(--panel));
+  border-color: color-mix(in srgb, var(--danger) 34%, var(--line));
+}
+
+.functional-anomaly-detail {
+  display: grid;
+  gap: 14px;
+}
+
+.functional-anomaly-detail-list {
+  display: grid;
+  grid-template-columns: minmax(140px, .35fr) minmax(260px, 1fr);
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--settings-radius);
+}
+
+.functional-anomaly-detail-row {
+  display: contents;
+}
+
+.functional-anomaly-detail-row dt,
+.functional-anomaly-detail-row dd {
+  min-width: 0;
+  margin: 0;
+  padding: 9px 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  border-top: 1px solid var(--line);
+}
+
+.functional-anomaly-detail-row:first-child dt,
+.functional-anomaly-detail-row:first-child dd {
+  border-top: 0;
+}
+
+.functional-anomaly-detail-row dt {
+  color: var(--muted);
+  font-weight: 740;
+  background: color-mix(in srgb, var(--panel-2) 70%, transparent);
+  border-right: 1px solid var(--line);
+}
+
+.functional-anomaly-detail-row dd {
+  overflow-wrap: anywhere;
+}
+
+.functional-anomaly-detail > .functional-anomaly-privacy {
+  color: var(--muted);
+}
+
+.functional-anomaly-export-preview {
+  max-height: min(280px, 35vh);
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  color: var(--text);
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: color-mix(in srgb, var(--panel-2) 74%, transparent);
+  border: 1px solid var(--line);
+  border-radius: var(--settings-radius);
+}
+
+.functional-anomaly-confirmation {
+  display: grid;
+  gap: 18px;
+}
+
 .topbar-layout-hint {
   margin: 0;
   color: var(--muted);

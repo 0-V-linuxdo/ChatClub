@@ -354,9 +354,9 @@ function event(type, properties = {}) {
     const wrapperNames = ["editorModal", "viewerModal", "taskModal", "confirmationModal"];
     const expectedInventory = new Map([
       ["editorModal", 10],
-      ["viewerModal", 3],
+      ["viewerModal", 4],
       ["taskModal", 1],
-      ["confirmationModal", 2]
+      ["confirmationModal", 3]
     ]);
 
     assert.equal(occurrences(allAppSource, /\bmodal\s*\(/g), 0, "app code must not call the raw modal helper");
@@ -371,8 +371,8 @@ function event(type, properties = {}) {
       wrapperNames.reduce((total, wrapperName) => (
         total + occurrences(allAppSource, new RegExp(`\\b${wrapperName}\\s*\\(`, "g"))
       ), 0),
-      16,
-      "all sixteen app modal call sites must use a typed wrapper"
+      18,
+      "all eighteen app modal call sites must use a typed wrapper"
     );
 
     for (let index = 0; index < appFiles.length; index += 1) {
@@ -401,11 +401,13 @@ function event(type, properties = {}) {
       ["app/prompt-library/controller.js", "openPromptLibraryEditor", "editorModal", "Prompt Library editor"],
       ["app/workspace/frame-controller.js", "openGoToUrlDialog", "editorModal", "Go To URL editor"],
       ["app/settings/apps.js", "openBuiltInDetails", "viewerModal", "built-in platform details"],
+      ["app/settings/functional-anomalies.js", "openDetails", "viewerModal", "functional anomaly details"],
       ["app/prompt-library/controller.js", "openPromptLibraryDialog", "viewerModal", "Prompt Library manager"],
       ["app/pocket/controller.js", "openPocketPanel", "viewerModal", "Pocket history viewer"],
       ["app/optimize/controller.js", "openOptimizeCompareDialog", "taskModal", "prompt optimization task"],
       ["app/settings/import-export.js", "openImportConfirmDialog", "confirmationModal", "import confirmation"],
-      ["app/settings/apps.js", "openIframeRiskConfirmation", "confirmationModal", "iframe risk confirmation"]
+      ["app/settings/apps.js", "openIframeRiskConfirmation", "confirmationModal", "iframe risk confirmation"],
+      ["app/settings/functional-anomalies.js", "openMutationConfirmation", "confirmationModal", "functional anomaly mutation confirmation"]
     ];
 
     for (const [relativeFile, functionName, expectedWrapper, label] of callSites) {
@@ -473,6 +475,41 @@ function event(type, properties = {}) {
       importDialogSource,
       /if\s*\(error\?\.importCommitted\)\s*\{[\s\S]*?toast\(t\(["']toast\.importCommittedRefreshFailed["']\),\s*["']error["']\)[\s\S]*?close\(\s*\{\s*force\s*:\s*true\s*\}\s*\)[\s\S]*?return\s*;/,
       "a post-commit refresh failure must close instead of presenting the import as safely retryable"
+    );
+
+    const functionalAnomalyConfirmationSource = directFunctionSource(
+      path.join(root, "app/settings/functional-anomalies.js"),
+      "openMutationConfirmation"
+    );
+    assert.match(
+      functionalAnomalyConfirmationSource,
+      /if\s*\(applying\s*&&\s*force\s*!==\s*true\)\s*return\s*;/,
+      "functional anomaly mutations must reject ordinary top-close and Cancel attempts while busy"
+    );
+    assert.match(
+      functionalAnomalyConfirmationSource,
+      /cancelButton\.disabled\s*=\s*value\s*;/,
+      "functional anomaly mutation Cancel must be disabled while busy"
+    );
+    assert.match(
+      functionalAnomalyConfirmationSource,
+      /confirmButton\.disabled\s*=\s*value\s*;/,
+      "functional anomaly mutation confirmation must be disabled while busy"
+    );
+    assert.match(
+      functionalAnomalyConfirmationSource,
+      /querySelector\("\.modal-header \.icon-button"\)\?\.toggleAttribute\("disabled",\s*value\)/,
+      "functional anomaly mutation modal X must be disabled while busy"
+    );
+    assert.match(
+      functionalAnomalyConfirmationSource,
+      /await mutate\(\);[\s\S]*?close\(true\)\s*;/,
+      "functional anomaly mutation confirmations must force-close only after success"
+    );
+    assert.match(
+      functionalAnomalyConfirmationSource,
+      /catch\s*\(error\)\s*\{[\s\S]*?setApplying\(false\)\s*;/,
+      "failed functional anomaly mutations must restore modal controls"
     );
 
     const applyImportSource = directFunctionSource(

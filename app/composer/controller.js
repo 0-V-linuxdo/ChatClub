@@ -50,7 +50,8 @@ export function createComposerController(dependencies = {}) {
     activeShortcutProfile,
     inferAppName,
     openPromptLibrary,
-    optimizePrompt
+    optimizePrompt,
+    recordFunctionalAnomaly
   } = validateControllerContract(dependencies, "Composer controller", {
     state: "object",
     workspace: "object",
@@ -61,7 +62,8 @@ export function createComposerController(dependencies = {}) {
     activeShortcutProfile: "function",
     inferAppName: "function",
     openPromptLibrary: "function",
-    optimizePrompt: "function"
+    optimizePrompt: "function",
+    recordFunctionalAnomaly: "function"
   });
   requirePort(workspace, "workspace", ["currentFrames", "frameApp", "closePopovers"]);
   requirePort(topbar, "topbar", ["closeSettingsMenu"]);
@@ -471,6 +473,17 @@ export function createComposerController(dependencies = {}) {
         clearInput(null, { bypassModelGate: true });
         toast(t("toast.sentToChats", { count: successCount, plural: successCount === 1 ? "" : "s" }), "success");
         return;
+      }
+      for (const { result, app } of failures) {
+        void recordFunctionalAnomaly({
+          feature: "composer",
+          operation: "sendPrompt",
+          appId: app?.id || "",
+          appName: inferAppName(app),
+          href: app?.url || "",
+          error: result.reason,
+          message: result.reason?.message || t("toast.frameSubmitFailureFallback")
+        });
       }
       const names = failures.map((item) => inferAppName(item.app)).filter(Boolean).slice(0, 4).join(", ") || t("common.failed");
       if (successCount > 0) {

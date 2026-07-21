@@ -3,9 +3,11 @@ import {
   currentExtensionTabId,
   permissionsContains,
   permissionsRequest,
+  requestBackground,
   runtimeGetUrl,
   runtimeRequest
 } from "../shared/extension-api.js";
+import { APP_VERSION } from "../shared/constants.js";
 import {
   FrameRuntimePort
 } from "../shared/frame-rpc.js";
@@ -48,6 +50,10 @@ import { createPreferredModelController } from "./preferred-model/controller.js"
 import { createTopbarController } from "./topbar/controller.js";
 import { createWorkspaceController } from "./workspace/controller.js";
 import { createWorkspaceSessionStore } from "./workspace/session-store.js";
+import {
+  createFunctionalAnomalyController,
+  settledOperationFailure
+} from "./functional-anomalies/controller.js";
 import { SETTINGS_SECTIONS } from "./settings/sections.js";
 import { createCompactIconButton, createMenuButton } from "../ui/components.js";
 import { el, isDismissalEscape, toast } from "../ui/dom.js";
@@ -63,6 +69,13 @@ let appShellNode = null;
 let summaryEscapeDismissalPromise = null;
 const state = createAppState();
 const featureState = createFeatureStatePorts(state);
+const functionalAnomalyController = createFunctionalAnomalyController({
+  state: featureState.functionalAnomalies,
+  requestBackground,
+  appVersion: APP_VERSION,
+  surface: isOptionsPage ? "options" : "workspace"
+});
+const recordFunctionalAnomaly = functionalAnomalyController.record;
 const composerState = featureState.composer;
 const preferredModelState = featureState.preferredModel;
 const topbarState = featureState.topbar;
@@ -139,7 +152,8 @@ const composerController = createComposerController({
   activeShortcutProfile,
   inferAppName,
   openPromptLibrary: openPromptLibraryDialog,
-  optimizePrompt: optimizeCurrentPrompt
+  optimizePrompt: optimizeCurrentPrompt,
+  recordFunctionalAnomaly
 });
 const preferredModelController = createPreferredModelController({
   state: preferredModelState,
@@ -148,7 +162,8 @@ const preferredModelController = createPreferredModelController({
   appRoot,
   composer: composerController.preferredModelPort,
   verifiedCurrentContentFrameRegistration: frameBridgeBinding.port.verifiedCurrentContentFrameRegistration,
-  prepareContentFrameRuntime: frameBridgeBinding.port.prepareContentFrameRuntime
+  prepareContentFrameRuntime: frameBridgeBinding.port.prepareContentFrameRuntime,
+  recordFunctionalAnomaly
 });
 composerPreferredModelBinding.bind(preferredModelController);
 topbarPreferredModelBinding.bind(preferredModelController);
@@ -250,7 +265,8 @@ const appContext = Object.freeze({
   state: featureState.optimize,
   svgIcon,
   syncPromptInputNode,
-  ensurePromptInputReady: ensurePreferredModelInputReady
+  ensurePromptInputReady: ensurePreferredModelInputReady,
+  recordFunctionalAnomaly
 });
 const optimizeController = createOptimizeController(appContext);
 let pocketController = null;
@@ -291,6 +307,7 @@ const workspaceController = createWorkspaceController({
   effectiveFaviconUrl,
   discoverDeclaredFaviconUrl,
   rememberFaviconUrl,
+  recordFunctionalAnomaly,
   saveOptions,
   normalizeOptions,
   toast,
@@ -311,6 +328,12 @@ workspaceBinding.bind(workspaceController);
 frameBridgeWorkspaceBinding.bind(workspaceController);
 
 function lazyControllerError(label, error) {
+  void recordFunctionalAnomaly({
+    feature: "runtime",
+    operation: `load${String(label || "Feature").replace(/\s+/g, "")}`,
+    error,
+    message: error?.message || String(error || `Failed to load ${label}`)
+  });
   console.error(`[ChatClub] Failed to load ${label}`, error);
   toast(error?.message || String(error || `Failed to load ${label}`), "error");
   return null;
@@ -403,6 +426,7 @@ function ensureSummaryController() {
         browserFaviconUrl,
         framePort: frameRuntimePort,
         formatShortcut: formatActiveShortcut,
+        recordFunctionalAnomaly,
         pocketPort: {
           save: (...args) => ensurePocketController().then((pocket) => pocket.saveSummaryPreviewToPocket(...args)),
           entries: (...args) => pocketController?.pocketEntriesFromSummaryPreview(...args) || []
@@ -447,6 +471,7 @@ function ensureSettingsController() {
           applyTheme,
           syncI18nLanguage,
           requestUserScriptsPermission: requestUserScriptsAccess,
+          functionalAnomalyLog: functionalAnomalyController,
           hydrateImportedLayoutIfNeeded: workspaceController.hydrateImportedLayoutIfNeeded,
           reconcileAppCatalog: workspaceController.reconcileAppCatalog,
           enterTopbarEditMode,
@@ -532,6 +557,12 @@ async function notifyConfigReload() {
   try {
     await runtimeRequest({ source: "chatclub", action: "reloadConfigs", data: {} });
   } catch (error) {
+    void recordFunctionalAnomaly({
+      feature: "settings",
+      operation: "reloadRuntimeConfig",
+      error,
+      message: error?.message || "Failed to reload background config"
+    });
     console.warn("[ChatClub] Failed to reload background config", error);
   }
 }
@@ -550,9 +581,25 @@ function handleWorkspaceFrameLifecycleChange(change = {}) {
 }
 
 async function newChatOnFrames() {
-  await Promise.allSettled(workspaceController.currentFrames().map((iframe) =>
+  const frames = workspaceController.currentFrames();
+  const settled = await Promise.allSettled(frames.map((iframe) =>
     workspaceController.startNewChatInFrame(iframe)
   ));
+  settled.forEach((result, index) => {
+    const error = settledOperationFailure(result, "New chat did not start");
+    if (!error) return;
+    const iframe = frames[index];
+    const app = workspaceController.frameApp(iframe) || {};
+    void recordFunctionalAnomaly({
+      feature: "newChat",
+      operation: "startNewChat",
+      appId: app.id || iframe?.dataset?.appId || "",
+      appName: inferAppName(app),
+      href: iframe?.dataset?.currentHref || app.url || "",
+      error,
+      message: error?.message || "New chat failed"
+    });
+  });
 }
 
 function deleteThreadFailureReason(item) {
@@ -599,12 +646,18 @@ async function deleteThreadOnFrames() {
     ? []
     : activeTargets
       .filter(({ config }) => executableCustomUserscript(config))
-      .map(() => ({ status: "rejected", reason: new Error("User Scripts access is required for this custom Delete Site.") }));
-  const settled = [
-    ...await Promise.allSettled(runnableTargets.map(async ({ iframe, payload, config }) => {
+      .map((target) => ({
+        status: "rejected",
+        reason: new Error("User Scripts access is required for this custom Delete Site."),
+        reportable: false,
+        target
+      }));
+  const runnableSettled = (await Promise.allSettled(runnableTargets.map(async ({ iframe, payload, config }) => {
     const timeoutMs = topicDeleteTimeoutMs(config, payload);
     return executeTopicDelete(iframe, payload, config, timeoutMs);
-    })),
+  }))).map((item, index) => ({ ...item, reportable: true, target: runnableTargets[index] }));
+  const settled = [
+    ...runnableSettled,
     ...deniedFailures
   ];
   const failures = settled.filter((item) => item.status === "rejected" || item.value?.ok === false);
@@ -613,6 +666,21 @@ async function deleteThreadOnFrames() {
     toast(t("toast.deleteThreadTriggered", { count: successCount, plural: successCount === 1 ? "" : "s" }), "success");
   }
   if (failures.length > 0) {
+    for (const item of failures) {
+      if (item.reportable === false) continue;
+      const target = item.target || {};
+      const app = workspaceController.frameApp(target.iframe) || {};
+      const error = item.status === "rejected" ? item.reason : item.value;
+      void recordFunctionalAnomaly({
+        feature: "topicDeletion",
+        operation: "deleteTopic",
+        appId: app.id || target.payload?.appId || target.config?.id || "",
+        appName: inferAppName(app) || target.payload?.appName || target.config?.name || "",
+        href: target.payload?.currentHref || target.iframe?.dataset?.currentHref || app.url || "",
+        error,
+        message: deleteThreadFailureReason(item) || t("toast.deleteThreadFailed", { count: 1, plural: "" })
+      });
+    }
     console.warn("[ChatClub] Delete thread failed", failures);
     const reason = deleteThreadFailureSummary(failures);
     const message = t("toast.deleteThreadFailed", { count: failures.length, plural: failures.length === 1 ? "" : "s" });
@@ -781,7 +849,18 @@ async function handleShortcutAction(action, matchObj = null, sourceWindow = null
   const chat = group ? workspaceController.activeChatForGroup(group) : null;
   const digit = shortcutDigit(matchObj);
   if (action === "focusInput") focusPromptInput();
-  else if (action === "newChat") await workspaceController.startNewChatForShortcut(sourceWindow);
+  else if (action === "newChat") {
+    const started = await workspaceController.startNewChatForShortcut(sourceWindow);
+    const error = settledOperationFailure({ status: "fulfilled", value: started }, "New chat did not start");
+    if (error) {
+      void recordFunctionalAnomaly({
+        feature: "newChat",
+        operation: "startNewChat",
+        error,
+        message: error.message
+      });
+    }
+  }
   else if (action === "newChatAll") await newChatOnFrames();
   else if (action === "deleteThread") await deleteThreadOnFrames();
   else if (action === "optimizePrompt") await optimizeCurrentPrompt();
@@ -847,6 +926,12 @@ function installShortcuts() {
       event.preventDefault();
       event.stopPropagation();
       handleShortcutAction(matched.action, matched.matchObj).catch((error) => {
+        void recordFunctionalAnomaly({
+          feature: "shortcuts",
+          operation: matched.action || "unknown",
+          error,
+          message: error?.message || "Shortcut action failed"
+        });
         console.warn("[ChatClub] Shortcut action failed", error);
       });
     }
@@ -854,6 +939,9 @@ function installShortcuts() {
 }
 
 async function init() {
+  void functionalAnomalyController.refresh().catch((error) => {
+    console.warn("[ChatClub] Failed to load functional anomaly records", error);
+  });
   const workspaceSessionSnapshotPromise = workspaceSessionStore.load().catch(() => null);
   state.options = await loadOptions();
   state.customConfig = await loadCustomConfig();
@@ -873,6 +961,12 @@ async function init() {
     }),
     sleep(8000).then(() => { throw new Error("runtime registration reconciliation timed out"); })
   ]).catch((error) => {
+    void recordFunctionalAnomaly({
+      feature: "runtime",
+      operation: "reconcileRegistration",
+      error,
+      message: error?.message || "Runtime registration reconciliation failed"
+    });
     console.warn("[ChatClub] Runtime registration reconciliation failed; frame-level recovery remains enabled", error);
   });
   syncI18nLanguage();
@@ -895,6 +989,12 @@ async function init() {
 }
 
 init().catch((error) => {
+  void recordFunctionalAnomaly({
+    feature: "runtime",
+    operation: "initialize",
+    error,
+    message: error?.message || "ChatClub initialization failed"
+  });
   console.error(error);
   appRoot.append(el("pre", {}, error.stack || error.message || String(error)));
 });

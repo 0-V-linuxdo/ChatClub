@@ -41,6 +41,7 @@ const SUMMARY_PANEL_SIZE_KEY = "chatclub.summaryPanelSize.v4";
  * @property {(action: string, digitLabel?: string) => string} [formatShortcut]
  * @property {{ save: () => Promise<void>, entries: () => any[] }} [pocketPort]
  * @property {{ request: Function }} framePort
+ * @property {(details: any) => Promise<any>} recordFunctionalAnomaly
  */
 
 /**
@@ -55,7 +56,8 @@ export function createSummaryController(ctx) {
     frameApp: "function", prepareContentFrameRuntime: "function", setFramePointerBlockedForOverlay: "function",
     findFrameForSummarySource: "function", highlightFrameForSummarySource: "function?", inferAppName: "function",
     effectiveFaviconUrl: "function", discoverDeclaredFaviconUrl: "function", rememberFaviconUrl: "function",
-    browserFaviconUrl: "function", formatShortcut: "function?", pocketPort: "object?", framePort: "object"
+    browserFaviconUrl: "function", formatShortcut: "function?", pocketPort: "object?", framePort: "object",
+    recordFunctionalAnomaly: "function"
   });
   const state = requireControllerContext(ctx, controllerName, "state");
   const svgIcon = requireControllerFunction(ctx, controllerName, "svgIcon");
@@ -71,6 +73,7 @@ export function createSummaryController(ctx) {
   const discoverDeclaredFaviconUrl = requireControllerFunction(ctx, controllerName, "discoverDeclaredFaviconUrl");
   const rememberFaviconUrl = requireControllerFunction(ctx, controllerName, "rememberFaviconUrl");
   const browserFaviconUrl = requireControllerFunction(ctx, controllerName, "browserFaviconUrl");
+  const recordFunctionalAnomaly = requireControllerFunction(ctx, controllerName, "recordFunctionalAnomaly");
   const framePort = requireControllerContext(ctx, controllerName, "framePort");
   const sendToContentFrame = createFrameRequest(framePort, controllerName);
   const formatShortcutLabel = typeof ctx.formatShortcut === "function" ? ctx.formatShortcut : null;
@@ -78,6 +81,19 @@ export function createSummaryController(ctx) {
   const saveSummaryPreviewToPocket = typeof pocketPort.save === "function" ? pocketPort.save : async () => {};
   const pocketEntriesFromSummaryPreview = typeof pocketPort.entries === "function" ? pocketPort.entries : () => [];
   let summaryCollectionQueue = Promise.resolve();
+
+  function recordSummaryFailure(operation, app = {}, meta = {}, error = null, message = "") {
+    const hasAppIdentity = Boolean(app?.id || app?.name || app?.provider || app?.url);
+    void recordFunctionalAnomaly({
+      feature: "summary",
+      operation,
+      appId: app?.id || meta?.siteId || "",
+      appName: (hasAppIdentity ? inferAppName(app) : "") || meta?.siteName || "",
+      href: meta?.href || app?.url || "",
+      error,
+      message: message || error?.message || t("summaryPanel.collectionFailed")
+    });
+  }
 
   function syncSummaryPanel() {
     const currentPanel = document.querySelector(".summary-panel");
@@ -731,11 +747,14 @@ export function createSummaryController(ctx) {
     });
 
     if (!coreReady?.ok) {
-      return { diagnostic: diagnostic("error", coreReady?.reason || t("summaryPanel.collectionFailed")) };
+      const message = coreReady?.reason || t("summaryPanel.collectionFailed");
+      recordSummaryFailure("prepareCollector", app, base, coreReady, message);
+      return { diagnostic: diagnostic("error", message) };
     }
 
     const resolveSiteContext = () => {
       if (base.href.startsWith("chrome-error://")) {
+        recordSummaryFailure("loadSource", app, base, null, t("summaryPanel.browserError"));
         return { failure: { diagnostic: diagnostic("error", t("summaryPanel.browserError")) } };
       }
       const config = findSummarySiteConfig(state.options.summarySiteConfigs, base.href);
@@ -754,10 +773,12 @@ export function createSummaryController(ctx) {
 
     const summaryReady = await prepareContentFrameRuntime(iframe, { summary: true });
     if (!summaryReady?.ok) {
+      const message = summaryReady?.reason || t("summaryPanel.collectionFailed");
+      recordSummaryFailure("prepareSummaryCollector", app, { ...base, ...siteContext.fields }, summaryReady, message);
       return {
         diagnostic: diagnostic(
           "error",
-          summaryReady?.reason || t("summaryPanel.collectionFailed"),
+          message,
           siteContext.fields
         )
       };
@@ -819,7 +840,9 @@ export function createSummaryController(ctx) {
         diagnostic: diagnostic("skipped", t("summaryPanel.userscriptNoTurns", { name: siteConfig.name || siteConfig.id }), siteFields)
       };
     } catch (error) {
-      return { diagnostic: diagnostic("error", error.message || t("summaryPanel.collectionFailed"), siteFields) };
+      const message = error.message || t("summaryPanel.collectionFailed");
+      recordSummaryFailure("collectSource", app, { ...base, ...siteFields }, error, message);
+      return { diagnostic: diagnostic("error", message, siteFields) };
     }
   }
   
@@ -857,6 +880,7 @@ export function createSummaryController(ctx) {
     } catch (error) {
       state.summaryError = error.message || t("summaryPanel.previewFailed");
       state.summaryStatus = t("summaryPanel.previewFailed");
+      if (currentFrames().length) recordSummaryFailure("collect", {}, {}, error, state.summaryError);
     } finally {
       state.summaryBusy = false;
       state.summaryLoadingPhase = "";
@@ -869,6 +893,7 @@ export function createSummaryController(ctx) {
     const key = summarySourceKey(item);
     const iframe = findFrameForSummarySource(item);
     if (!iframe) {
+      recordSummaryFailure("refreshSource", {}, item, null, t("summaryPanel.iframeMissing"));
       state.summaryPreviewItems = state.summaryPreviewItems.map((entry) => summarySourceKey(entry) === key
         ? { ...entry, status: "failed", reason: t("summaryPanel.iframeMissing"), page: undefined }
         : entry);
@@ -887,6 +912,7 @@ export function createSummaryController(ctx) {
       state.summaryPreviewItems = state.summaryPreviewItems.map((entry) => summarySourceKey(entry) === key ? nextItem : entry);
       syncSummaryPreviewDerivedState();
     } catch (error) {
+      recordSummaryFailure("refreshSource", frameApp(iframe) || {}, item, error, error.message || t("summaryPanel.refreshFailed"));
       state.summaryPreviewItems = state.summaryPreviewItems.map((entry) => summarySourceKey(entry) === key
         ? { ...entry, status: "failed", reason: error.message || t("summaryPanel.refreshFailed"), page: undefined }
         : entry);
@@ -916,6 +942,7 @@ export function createSummaryController(ctx) {
       state.summaryResult = await summarizeContexts(state.options, state.summaryContexts, state.summaryQuestion);
     } catch (error) {
       state.summaryResult = error.message || t("summaryPanel.summaryFailed");
+      recordSummaryFailure("generate", {}, {}, error, state.summaryResult);
     } finally {
       state.summaryBusy = false;
       state.summaryStatus = "";

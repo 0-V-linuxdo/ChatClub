@@ -6,6 +6,7 @@ import { clear, editorModal, el, toast } from "../../ui/dom.js";
 import { createAboutSettingsPane } from "./about.js";
 import { createAppearanceSettingsSection } from "./appearance.js";
 import { createAppsSettingsSection } from "./apps.js";
+import { createFunctionalAnomaliesSettingsSection } from "./functional-anomalies.js";
 import { createPromptHistorySettingsSection } from "./history.js";
 import { createImportExportSettings } from "./import-export.js";
 import {
@@ -24,6 +25,7 @@ import { createSummarySettingsSection } from "./summary.js";
 import { createTopicDeletionSettingsSection } from "./topic-deletion.js";
 import { SETTINGS_OPTION_CAPABILITIES } from "./state-ports.js";
 import {
+  createControllerMethodValidator,
   requireControllerContext,
   requireControllerFunction,
   validateControllerContract
@@ -67,7 +69,8 @@ export function createSettingsController(ctx) {
     requestUserScriptsPermission: "function?",
     syncWorkspaceDom: "function",
     applyPreferredModels: "function",
-    openTabUrl: "function"
+    openTabUrl: "function",
+    functionalAnomalyLog: "object"
   });
   const settingsSections = requireControllerContext(ctx, controllerName, "settingsSections");
   const saveOptionsPatch = requireControllerFunction(ctx, controllerName, "saveOptionsPatch");
@@ -88,6 +91,12 @@ export function createSettingsController(ctx) {
   const syncWorkspaceDom = requireControllerFunction(ctx, controllerName, "syncWorkspaceDom");
   const applyPreferredModels = requireControllerFunction(ctx, controllerName, "applyPreferredModels");
   const openTabUrl = requireControllerFunction(ctx, controllerName, "openTabUrl");
+  const functionalAnomalyLog = requireControllerContext(ctx, controllerName, "functionalAnomalyLog");
+  createControllerMethodValidator(controllerName, "functional anomaly log")(
+    functionalAnomalyLog,
+    "dependency",
+    ["record"]
+  );
   const requestUserScriptsPermission = typeof ctx.requestUserScriptsPermission === "function"
     ? ctx.requestUserScriptsPermission
     : async () => true;
@@ -109,7 +118,19 @@ export function createSettingsController(ctx) {
       if (!keys.length || keys.some((key) => !allowedKeys.has(key))) {
         throw new TypeError(`${sectionName} received an invalid options patch: ${keys.join(", ")}`);
       }
-      return saveOptionsPatch(patch);
+      try {
+        return await saveOptionsPatch(patch);
+      } catch (error) {
+        try {
+          void functionalAnomalyLog.record({
+            feature: "settings",
+            operation: `save${sectionName.replace(/\s+/g, "")}`,
+            error,
+            message: "Settings save failed"
+          });
+        } catch {}
+        throw error;
+      }
     };
   }
 
@@ -288,6 +309,11 @@ export function createSettingsController(ctx) {
     afterConfigImport,
     resetAfterConfigImport
   });
+  const functionalAnomaliesSection = createFunctionalAnomaliesSettingsSection({
+    state: settingsSections.functionalAnomalies,
+    functionalAnomalyLog,
+    svgIcon
+  });
   const aboutPane = createAboutSettingsPane({ openTabUrl, svgIcon });
 
   function promptLibraryPane(redraw) {
@@ -311,6 +337,7 @@ export function createSettingsController(ctx) {
     promptHistory: (redraw) => promptHistorySection.pane(redraw),
     shortcuts: (redraw) => shortcutsPane(redraw),
     io: (redraw) => importExportSettings.importExportPane(redraw),
+    functionalAnomalies: () => functionalAnomaliesSection.pane(),
     about: () => aboutPane()
   });
 

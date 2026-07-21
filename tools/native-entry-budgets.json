@@ -1,23 +1,23 @@
 {
   "entries": {
     "app/main.js": {
-      "maxFiles": 82,
+      "maxFiles": 85,
       "targetFiles": 74,
-      "maxSourceBytes": 822010,
+      "maxSourceBytes": 850684,
       "targetSourceBytes": 750000,
       "reason": "The application initial-static closure is held to its exact current footprint while feature controllers remain behind explicit lazy boundaries."
     },
     "background/service-worker.js": {
-      "maxFiles": 45,
+      "maxFiles": 47,
       "targetFiles": 40,
-      "maxSourceBytes": 390727,
+      "maxSourceBytes": 403645,
       "targetSourceBytes": 360000,
       "reason": "The Chromium service-worker initial-static closure is ratcheted separately from the larger Firefox fallback entry."
     },
     "background/firefox-background.js": {
-      "maxFiles": 48,
+      "maxFiles": 50,
       "targetFiles": 43,
-      "maxSourceBytes": 1018889,
+      "maxSourceBytes": 1031807,
       "targetSourceBytes": 900000,
       "reason": "The Firefox document-background entry includes its content fallback loader, so its exact static cost is tracked as a distinct browser budget."
     }
@@ -33,9 +33,9 @@
     },
     "app/settings/controller.js": {
       "owner": "app/runtime.js",
-      "maxFiles": 21,
+      "maxFiles": 22,
       "targetFiles": 18,
-      "maxSourceBytes": 281023,
+      "maxSourceBytes": 294081,
       "targetSourceBytes": 250000,
       "reason": "Settings remains an explicit runtime-owned lazy controller and its comparatively broad incremental module closure is independently ratcheted."
     },
@@ -43,7 +43,7 @@
       "owner": "app/runtime.js",
       "maxFiles": 3,
       "targetFiles": 2,
-      "maxSourceBytes": 52385,
+      "maxSourceBytes": 54019,
       "targetSourceBytes": 48000,
       "reason": "Summary remains an explicit runtime-owned lazy controller and this budget tracks only modules added beyond the application initial-static closure."
     }

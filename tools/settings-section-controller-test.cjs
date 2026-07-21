@@ -29,6 +29,7 @@ globalThis.document = { addEventListener() {} };
   const appsSource = read("app/settings/apps.js");
   const modelsSource = read("app/settings/models.js");
   const historySource = read("app/settings/history.js");
+  const functionalAnomaliesSource = read("app/settings/functional-anomalies.js");
 
   const controllerLines = controllerSource.trim().split(/\r?\n/).length;
   assert.ok(controllerLines <= 700, `Settings shell must remain at or below 700 lines; found ${controllerLines}`);
@@ -41,7 +42,8 @@ globalThis.document = { addEventListener() {} };
     ["createMessageNavigationSettingsSection", "messageNavigation"],
     ["createTopicDeletionSettingsSection", "topicDeletion"],
     ["createOptimizeSettingsSection", "optimize"],
-    ["createPromptHistorySettingsSection", "history"]
+    ["createPromptHistorySettingsSection", "history"],
+    ["createFunctionalAnomaliesSettingsSection", "functionalAnomalies"]
   ]) {
     assert.match(controllerSource, new RegExp(factory));
     assert.match(controllerSource, new RegExp(`state:\\s*settingsSections\\.${port}`));
@@ -131,9 +133,16 @@ globalThis.document = { addEventListener() {} };
     "promptSendHistory",
     "promptText"
   ]);
+  assert.deepEqual(stateKeys(functionalAnomaliesSource), ["functionalAnomalyRecords"]);
+  assert.match(functionalAnomaliesSource, /sort\(\(left, right\) => timestamp\(right\) - timestamp\(left\)\)/);
+  assert.match(functionalAnomaliesSource, /functionalAnomalyLog\.subscribe\(\(\) => renderLivePane\?\.\(\)\)/);
+  assert.match(functionalAnomaliesSource, /functionalAnomalyLog\.exportText\(recordsToCopy\)/);
+  assert.match(functionalAnomaliesSource, /functionalAnomalyLog\.exportText\(\[record\]\)/);
+  assert.doesNotMatch(functionalAnomaliesSource, /JSON\.stringify\(record/);
 
   const stateModule = await import(moduleUrl("app/state.js"));
   const settingsStateModule = await import(moduleUrl("app/settings/state-ports.js"));
+  const settingsSectionsModule = await import(moduleUrl("app/settings/sections.js"));
   const appearanceModule = await import(moduleUrl("app/settings/appearance.js"));
   const summaryModule = await import(moduleUrl("app/settings/summary.js"));
   const optimizeModule = await import(moduleUrl("app/settings/optimize.js"));
@@ -143,6 +152,7 @@ globalThis.document = { addEventListener() {} };
   const appsModule = await import(moduleUrl("app/settings/apps.js"));
   const modelsModule = await import(moduleUrl("app/settings/models.js"));
   const historyModule = await import(moduleUrl("app/settings/history.js"));
+  const functionalAnomaliesModule = await import(moduleUrl("app/settings/functional-anomalies.js"));
   const rootState = stateModule.createAppState();
   rootState.options = {
     apiProfiles: [{ id: "api-1", name: "API", endpoint: "https://example.test", model: "model" }],
@@ -174,9 +184,15 @@ globalThis.document = { addEventListener() {} };
     topicDeleteSiteConfigs: []
   };
   rootState.customConfig = [];
+  rootState.functionalAnomalyRecords = [];
   rootState.messageNavigatorSettingsTab = "sites";
   rootState.messageNavigatorSiteExpandedId = "site-1";
   const ports = settingsStateModule.createSettingsSectionStatePorts(rootState);
+  assert.deepEqual(
+    settingsSectionsModule.SETTINGS_SECTIONS.slice(-3).map(([id]) => id),
+    ["io", "functionalAnomalies", "about"],
+    "Functional anomalies must appear between Import / Export and About"
+  );
   assert.deepEqual(
     settingsStateModule.SETTINGS_OPTION_CAPABILITIES.apps.write,
     ["builtinChatAppOrder", "builtinChatAppIframeConfigs"],
@@ -240,6 +256,17 @@ globalThis.document = { addEventListener() {} };
       setPromptImages() {},
       ensurePromptInputReady: () => true,
       syncPromptInputNode: () => null
+    }],
+    [functionalAnomaliesModule.createFunctionalAnomaliesSettingsSection, ports.functionalAnomalies, {
+      svgIcon: sharedDependencies.svgIcon,
+      functionalAnomalyLog: {
+        refresh: async () => [],
+        remove: async () => [],
+        clear: async () => [],
+        snapshot: () => [],
+        subscribe: () => () => {},
+        exportText: () => ""
+      }
     }]
   ];
   for (const [createSection, port, dependencies] of sectionConstructors) {

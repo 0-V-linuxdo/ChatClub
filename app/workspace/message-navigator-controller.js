@@ -15,6 +15,7 @@ export function createWorkspaceMessageNavigatorController(dependencies = {}) {
     activeHref,
     activeShortcutGroupId,
     notify,
+    recordFunctionalAnomaly,
     syncWorkspaceDom,
     closePopovers
   } = validateControllerContract(dependencies, "Workspace Message Navigator controller", {
@@ -28,6 +29,7 @@ export function createWorkspaceMessageNavigatorController(dependencies = {}) {
     activeHref: "function",
     activeShortcutGroupId: "function",
     notify: "function",
+    recordFunctionalAnomaly: "function",
     syncWorkspaceDom: "function",
     closePopovers: "function"
   });
@@ -183,6 +185,16 @@ export function createWorkspaceMessageNavigatorController(dependencies = {}) {
       iframe.dataset.messageNavigatorSiteId = "";
       syncWorkspaceDom();
       closePopovers();
+      const app = appById(iframe?.dataset?.appId || "") || {};
+      void recordFunctionalAnomaly({
+        feature: "messageNavigator",
+        operation: "open",
+        appId: app.id || iframe?.dataset?.appId || "",
+        appName: app.name || "",
+        href: href || iframe?.dataset?.currentHref || app.url || "",
+        error,
+        message: error?.message || t("messageNavigator.failed")
+      });
       console.warn("[ChatClub] Message navigator failed", error);
       notify(t("messageNavigator.failed"), "error");
     }
@@ -212,6 +224,16 @@ export function createWorkspaceMessageNavigatorController(dependencies = {}) {
       iframe.dataset.messageNavigatorSiteId = payload.config.id || "";
       syncWorkspaceDom();
     } catch (error) {
+      const app = appById(iframe?.dataset?.appId || "") || {};
+      void recordFunctionalAnomaly({
+        feature: "messageNavigator",
+        operation: "restore",
+        appId: app.id || iframe?.dataset?.appId || "",
+        appName: app.name || "",
+        href: iframe?.dataset?.currentHref || app.url || "",
+        error,
+        message: error?.message || t("messageNavigator.failed")
+      });
       console.warn("[ChatClub] Failed to reapply message navigator", error);
     }
   }

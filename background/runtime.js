@@ -34,6 +34,7 @@ import { createAuthenticatedFrameRelay } from "./frame-relay.js";
 import { createSecureFrameContextRegistry } from "./secure-frame-contexts.js";
 import { createGrokCookieRuntime } from "./grok-cookie-runtime.js";
 import { createCustomUserscriptRuntime } from "./custom-userscript-runtime.js";
+import { createFunctionalAnomalyStore } from "./functional-anomaly-store.js";
 import {
   frameRouteError,
   normalizeFrameTransportError
@@ -105,6 +106,7 @@ function verifiedExtensionPageSender(sender = {}) {
 
 const grokCookieRuntime = createGrokCookieRuntime(chrome, { verifiedExtensionPageSender });
 const customUserscriptRuntime = createCustomUserscriptRuntime(chrome);
+const functionalAnomalyStore = createFunctionalAnomalyStore(chrome);
 chrome.cookies?.onChanged?.addListener(grokCookieRuntime.handleCookieChange);
 
 async function relayRegisteredFrameNavigation(details = {}, phase = "before") {
@@ -460,6 +462,10 @@ const backgroundRequestHandlers = [
   [REQUEST.DISPATCH_TRUSTED_CLICK, (message, sender) => dispatchTrustedClick(message, sender)],
   [REQUEST.DISPATCH_TRUSTED_MOUSE_MOVE, (message, sender) => dispatchTrustedMouseMove(message, sender)],
   [REQUEST.DISPATCH_TRUSTED_KEY_SEQUENCE, (message, sender) => dispatchTrustedKeySequence(message, sender)],
+  [REQUEST.RECORD_FUNCTIONAL_ANOMALIES, async (message) => functionalAnomalyStore.record(message)],
+  [REQUEST.LIST_FUNCTIONAL_ANOMALIES, async () => ({ records: await functionalAnomalyStore.list() })],
+  [REQUEST.REMOVE_FUNCTIONAL_ANOMALIES, async (message) => ({ records: await functionalAnomalyStore.remove(message.id) })],
+  [REQUEST.CLEAR_FUNCTIONAL_ANOMALIES, async () => ({ records: await functionalAnomalyStore.clear() })],
   [REQUEST.OPEN_TAB, async (message, sender) => {
     const url = openableTabUrl(message.url);
     if (!url) throw new Error("Invalid tab URL");

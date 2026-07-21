@@ -37,6 +37,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
     openTabUrl,
     openableTabUrl,
     prepareContentFrameRuntime,
+    recordFunctionalAnomaly,
     rememberFaviconUrl,
     requestTopicDeletePermission,
     sendToContentFrame,
@@ -958,6 +959,15 @@ export function createWorkspaceFrameController(dependencies = {}) {
       await executeTopicDelete(iframe, payload, deleteSiteConfig, timeoutMs);
       notify(t("toast.deleteThreadTriggered", { count: 1, plural: "" }), "success");
     } catch (error) {
+      void recordFunctionalAnomaly({
+        feature: "topicDeletion",
+        operation: "deleteTopic",
+        appId: app?.id || chat.appId || deleteSiteConfig?.id || "",
+        appName: inferAppName(app || {}),
+        href,
+        error,
+        message: error?.message || t("toast.deleteThreadFailed", { count: 1, plural: "" })
+      });
       console.warn("[ChatClub] Delete thread failed", error);
       const reason = String(error?.message || "").trim();
       const message = t("toast.deleteThreadFailed", { count: 1, plural: "" });

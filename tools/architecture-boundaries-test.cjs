@@ -24,6 +24,7 @@ const featureStatePolicies = [
   "app/topbar/state-port.js",
   "app/favicon/state-port.js",
   "app/workspace/state-port.js",
+  "app/functional-anomalies/state-port.js",
   "app/settings/state-ports.js"
 ].map(read).join("\n");
 const storageSchema = read("shared/storage-schema.js");
@@ -73,6 +74,7 @@ for (const statePort of [
   "./summary/state-port.js",
   "./pocket/state-port.js",
   "./optimize/state-port.js",
+  "./functional-anomalies/state-port.js",
   "./settings/state-ports.js"
 ]) {
   assert.doesNotMatch(main, new RegExp(`from "${statePort.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`));

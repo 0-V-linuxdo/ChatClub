@@ -37,7 +37,8 @@ export function createPreferredModelController(dependencies = {}) {
     appRoot,
     composer,
     verifiedCurrentContentFrameRegistration,
-    prepareContentFrameRuntime
+    prepareContentFrameRuntime,
+    recordFunctionalAnomaly
   } = validateControllerContract(dependencies, controllerName, {
     state: "object",
     workspace: "object",
@@ -45,7 +46,8 @@ export function createPreferredModelController(dependencies = {}) {
     appRoot: "object",
     composer: "object",
     verifiedCurrentContentFrameRegistration: "function",
-    prepareContentFrameRuntime: "function"
+    prepareContentFrameRuntime: "function",
+    recordFunctionalAnomaly: "function"
   });
   for (const method of [
     "normalizePromptImages",
@@ -829,6 +831,18 @@ export function createPreferredModelController(dependencies = {}) {
       "error"
     );
     record.statusToast?.dismiss?.(5000);
+    if (!record.cancelled) {
+      const app = workspace.frameApp(iframe) || {};
+      void recordFunctionalAnomaly({
+        feature: "preferredModel",
+        operation: "applyPreferredModel",
+        appId: record.payload.appId || app.id || "",
+        appName: app.name || record.payload.appId || "",
+        href: iframe?.dataset?.currentHref || app.url || "",
+        error: result,
+        message: record.failureReason
+      });
+    }
     console.warn(
       "[ChatClub] Preferred model was not applied",
       record.payload.appId,

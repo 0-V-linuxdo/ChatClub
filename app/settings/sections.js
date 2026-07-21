@@ -11,5 +11,6 @@ export const SETTINGS_SECTIONS = Object.freeze([
   ["promptHistory", "settings.promptHistory.title", "settings.promptHistory.desc", "history"],
   ["shortcuts", "settings.shortcuts.title", "settings.shortcuts.desc", "keyboard"],
   ["io", "settings.io.title", "settings.io.desc", "transfer"],
+  ["functionalAnomalies", "settings.functionalAnomalies.title", "settings.functionalAnomalies.desc", "alert"],
   ["about", "settings.about.title", "settings.about.desc", "info"]
 ]);

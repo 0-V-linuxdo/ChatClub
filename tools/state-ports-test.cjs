@@ -27,6 +27,7 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   };
   rootState.customConfig = [{ id: "custom-b" }, { id: "custom-a" }];
   rootState.groups = [{ id: "group-1" }];
+  rootState.functionalAnomalyRecords = [{ id: "anomaly-1", message: "failed" }];
 
   const composer = composerModule.createComposerStatePort(rootState);
   composer.promptText = "hello";
@@ -60,7 +61,7 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   const settingsSections = settingsModule.createSettingsSectionStatePorts(rootState);
   assert.deepEqual(Object.keys(settingsSections), [
     "appearance", "profiles", "apps", "models", "summary", "messageNavigation", "topicDeletion",
-    "optimize", "prompts", "history", "shortcuts", "io", "about", "shell"
+    "optimize", "prompts", "history", "shortcuts", "io", "functionalAnomalies", "about", "shell"
   ]);
 
   settingsSections.appearance.settingsAppearanceTab = "topbar";
@@ -78,6 +79,15 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   assert.throws(() => { settingsSections.apps.settingsAppearanceTab = "workspace"; }, /settings\.apps cannot mutate/);
   assert.throws(() => { settingsSections.summary.options.apiProfiles.push({ id: "profile-2" }); }, /read-only/);
   assert.throws(() => { settingsSections.about.options; }, /settings\.about cannot read/);
+  assert.equal(settingsSections.functionalAnomalies.functionalAnomalyRecords[0].id, "anomaly-1");
+  assert.throws(
+    () => { settingsSections.functionalAnomalies.functionalAnomalyRecords.push({ id: "anomaly-2" }); },
+    /read-only/
+  );
+  assert.throws(
+    () => { settingsSections.functionalAnomalies.functionalAnomalyRecords = []; },
+    /settings\.functionalAnomalies cannot mutate/
+  );
   assert.throws(() => { settingsSections.shell.options; }, /settings\.shell cannot read/);
 
   settingsSections.apps.customConfig = [...rootState.customConfig].reverse();

@@ -30,6 +30,7 @@ export function createWorkspaceController(ctx = {}) {
     effectiveFaviconUrl: "function",
     discoverDeclaredFaviconUrl: "function",
     rememberFaviconUrl: "function",
+    recordFunctionalAnomaly: "function",
     saveOptions: "function",
     normalizeOptions: "function",
     toast: "function",
@@ -60,6 +61,7 @@ export function createWorkspaceController(ctx = {}) {
   const effectiveFaviconUrl = requireFunction(ctx, "effectiveFaviconUrl");
   const discoverDeclaredFaviconUrl = requireFunction(ctx, "discoverDeclaredFaviconUrl");
   const rememberFaviconUrl = requireFunction(ctx, "rememberFaviconUrl");
+  const recordFunctionalAnomaly = requireFunction(ctx, "recordFunctionalAnomaly");
   const saveOptions = requireFunction(ctx, "saveOptions");
   const normalizeOptions = requireFunction(ctx, "normalizeOptions");
   const notify = requireFunction(ctx, "toast");
@@ -233,6 +235,7 @@ export function createWorkspaceController(ctx = {}) {
       openTabUrl,
       openableTabUrl,
       prepareContentFrameRuntime,
+      recordFunctionalAnomaly,
       rememberFaviconUrl,
       requestTopicDeletePermission,
       sendToContentFrame,
@@ -282,6 +285,7 @@ export function createWorkspaceController(ctx = {}) {
     activeHref: frameBinding.port.activeHref,
     activeShortcutGroupId: frameBinding.port.activeShortcutGroupId,
     notify,
+    recordFunctionalAnomaly,
     syncWorkspaceDom: viewBinding.port.syncWorkspaceDom,
     closePopovers: viewBinding.port.closePopovers
   });

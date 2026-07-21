@@ -18,6 +18,7 @@ export function createAppState() {
     promptText: "",
     promptImages: [],
     promptSendInFlight: false,
+    functionalAnomalyRecords: [],
     promptSelection: { start: 0, end: 0, direction: "none" },
     preferredModelGateState: "bootstrapping",
     preferredModelGateReason: "",

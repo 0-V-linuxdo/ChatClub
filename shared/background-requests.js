@@ -55,6 +55,10 @@ export const BACKGROUND_REQUEST_ACTIONS = Object.freeze({
   DISPATCH_TRUSTED_CLICK: "dispatchTrustedClick",
   DISPATCH_TRUSTED_MOUSE_MOVE: "dispatchTrustedMouseMove",
   DISPATCH_TRUSTED_KEY_SEQUENCE: "dispatchTrustedKeySequence",
+  RECORD_FUNCTIONAL_ANOMALIES: "recordFunctionalAnomalies",
+  LIST_FUNCTIONAL_ANOMALIES: "listFunctionalAnomalies",
+  REMOVE_FUNCTIONAL_ANOMALIES: "removeFunctionalAnomalies",
+  CLEAR_FUNCTIONAL_ANOMALIES: "clearFunctionalAnomalies",
   OPEN_TAB: "openTab"
 });
 
@@ -192,6 +196,37 @@ export const BACKGROUND_REQUEST_SPECS = Object.freeze({
       keys: "array"
     }, { keySettleMs: "number", kind: "string", reason: "string" }),
     response: contract({ tabId: "integer", frameId: "integer", keys: "array" })
+  }),
+  [ACTION.RECORD_FUNCTIONAL_ANOMALIES]: extensionPage({
+    mutates: true,
+    payload: contract({}, {
+      feature: "string",
+      operation: "string",
+      appId: "string",
+      appName: "string",
+      host: "string",
+      errorName: "string",
+      errorCode: "string",
+      delivered: "boolean",
+      reason: "string",
+      message: "string",
+      severity: "string",
+      appVersion: "string",
+      surface: "string"
+    }),
+    response: contract({ record: "object", records: "array" })
+  }),
+  [ACTION.LIST_FUNCTIONAL_ANOMALIES]: extensionPage({
+    response: contract({ records: "array" })
+  }),
+  [ACTION.REMOVE_FUNCTIONAL_ANOMALIES]: extensionPage({
+    mutates: true,
+    payload: contract({ id: "string" }),
+    response: contract({ records: "array" })
+  }),
+  [ACTION.CLEAR_FUNCTIONAL_ANOMALIES]: extensionPage({
+    mutates: true,
+    response: contract({ records: "array" })
   }),
   [ACTION.OPEN_TAB]: extensionPage({
     mutates: true,

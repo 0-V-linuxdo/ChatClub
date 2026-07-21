@@ -21,6 +21,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
     "app/summary/state-port.js",
     "app/pocket/state-port.js",
     "app/optimize/state-port.js",
+    "app/functional-anomalies/state-port.js",
     "app/settings/state-ports.js"
   ];
 

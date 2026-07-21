@@ -124,6 +124,7 @@ function appDomain(file) {
     "./summary/state-port.js",
     "./pocket/state-port.js",
     "./optimize/state-port.js",
+    "./functional-anomalies/state-port.js",
     "./settings/state-ports.js"
   ]) {
     assert.doesNotMatch(runtime, new RegExp(`from ["']${statePort.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["']`));

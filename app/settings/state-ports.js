@@ -47,6 +47,7 @@ const SETTINGS_STATE_SECTION_IDS = Object.freeze([
   "history",
   "shortcuts",
   "io",
+  "functionalAnomalies",
   "about",
   "shell"
 ]);
@@ -112,6 +113,7 @@ const SETTINGS_SECTION_STATE_ACCESS = Object.freeze({
   io: stateAccess([
     "customConfig", "options", "pocketEntries", "promptLibrary", "promptSendHistory", "shortcutConfig"
   ], ["customConfig", "options", "pocketEntries", "promptLibrary", "promptSendHistory", "shortcutConfig"]),
+  functionalAnomalies: stateAccess(["functionalAnomalyRecords"]),
   about: stateAccess(),
   shell: stateAccess()
 });

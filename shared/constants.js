@@ -1,7 +1,7 @@
 import { DEFAULT_TOPBAR_LAYOUT } from "./topbar.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-07-22｜01:05:48」";
+export const APP_VERSION = "「2026-07-22｜02:29:27」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -12,7 +12,8 @@ export const STORAGE_KEYS = {
   promptSendHistory: "promptSendHistory",
   pocketHistory: "pocketHistory",
   shortcutConfig: "shortcutConfig",
-  cachedConfig: "cachedConfig"
+  cachedConfig: "cachedConfig",
+  functionalAnomalies: "functionalAnomalies"
 };
 
 export const API_PROFILE_ENDPOINT_DEFAULT = "https://api.openai.com/v1/chat/completions";
@@ -159,6 +160,7 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
       Object.freeze({ id: "topbar.settings.promptHistory", labelKey: "settings.promptHistory.title" }),
       Object.freeze({ id: "topbar.settings.shortcuts", labelKey: "settings.shortcuts.title" }),
       Object.freeze({ id: "topbar.settings.io", labelKey: "settings.io.title" }),
+      Object.freeze({ id: "topbar.settings.functionalAnomalies", labelKey: "settings.functionalAnomalies.title" }),
       Object.freeze({ id: "topbar.settings.about", labelKey: "settings.about.title" }),
       Object.freeze({ id: "topbar.customize.paletteItem", labelKey: "topbar.customize.item" }),
       Object.freeze({ id: "topbar.customize.enter", labelKey: "topbar.customize.enter" }),

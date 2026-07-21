@@ -214,6 +214,7 @@ const lineCount = (source) => source.split(/\r?\n/).length;
     activeHref: async () => "",
     activeShortcutGroupId: () => "",
     notify: noop,
+    recordFunctionalAnomaly: async () => null,
     syncWorkspaceDom: noop,
     closePopovers: noop
   });

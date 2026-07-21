@@ -1,8 +1,8 @@
 {
   "shared/i18n.js": {
-    "maxLines": 1791,
+    "maxLines": 1901,
     "target": 1500,
-    "maxBytes": 101311,
+    "maxBytes": 108191,
     "targetBytes": 82000,
     "reason": "Bilingual translation catalog data is kept co-located for key parity; both line and byte size are explicitly ratcheted."
   }

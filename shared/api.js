@@ -23,6 +23,21 @@ function resolvePromptTemplate(options, purpose) {
     || normalized.optimizePromptTemplates[0];
 }
 
+function apiResponseError(response, responseText = "") {
+  const status = Number(response?.status);
+  const safeMessage = Number.isFinite(status) && status > 0
+    ? `API request failed with HTTP ${status}`
+    : "API request failed";
+  const error = new Error(String(responseText || "").trim() || safeMessage);
+  Object.defineProperty(error, "functionalAnomalyMessage", {
+    value: safeMessage,
+    configurable: false,
+    enumerable: false,
+    writable: false
+  });
+  return error;
+}
+
 async function chatCompletion(profile, messages) {
   if (!profile?.apiKey) throw new Error("API key is not configured");
   const endpoint = profile.endpoint || API_PROFILE_ENDPOINT_DEFAULT;
@@ -39,7 +54,7 @@ async function chatCompletion(profile, messages) {
   });
   if (!response.ok) {
     const text = await response.text().catch(() => "");
-    throw new Error(text || `Request failed with HTTP ${response.status}`);
+    throw apiResponseError(response, text);
   }
   const data = await response.json();
   const content = data?.choices?.[0]?.message?.content || data?.choices?.[0]?.text || "";
@@ -80,7 +95,7 @@ async function chatCompletionStream(profile, messages, onDelta, attrs = {}) {
   });
   if (!response.ok) {
     const text = await response.text().catch(() => "");
-    throw new Error(text || `Request failed with HTTP ${response.status}`);
+    throw apiResponseError(response, text);
   }
   if (!response.body) {
     const data = await response.json();
