@@ -90,11 +90,13 @@ export function createDeleteCommonCapability(deps = {}) {
       const textLabel = deleteTextToken(label);
       const compactLabel = deleteCompactToken(label);
       if (!textLabel && !compactLabel) return false;
-      return textValue === textLabel
-        || compactValue === compactLabel
-        || textValue === `${textLabel} ${textLabel}`
-        || compactValue === `${compactLabel}${compactLabel}`;
-      });
+      if (textValue === textLabel || compactValue === compactLabel) return true;
+      if (!compactValue || !compactLabel || compactValue.length % compactLabel.length !== 0) return false;
+      for (let offset = 0; offset < compactValue.length; offset += compactLabel.length) {
+        if (compactValue.slice(offset, offset + compactLabel.length) !== compactLabel) return false;
+      }
+      return true;
+    });
   }
 
   const DELETE_CLICKABLE_SELECTOR = "button,[role='button'],[role='menuitem'],[role='option'],a[href],[aria-haspopup],[tabindex]:not([tabindex='-1']),[class*='button' i],[class*='btn' i]";
@@ -247,9 +249,13 @@ export function createDeleteCommonCapability(deps = {}) {
     const roots = visibleSelectorElements([
       "[role='alertdialog']",
       "[role='dialog']",
+      "dialog",
+      "[aria-modal='true']",
+      "mat-dialog-container",
       "[data-radix-dialog-content]",
       "[data-state='open']",
-      ".modal",
+      "[class*='modal' i]",
+      "[class*='dialog' i]",
       ".fixed"
     ]).filter((root) => {
       const value = deleteElementText(root);
@@ -266,7 +272,10 @@ export function createDeleteCommonCapability(deps = {}) {
   }
 
   function deleteConfirmQuestionMatches(value) {
-    return /are you sure you want to delete(?: this)? chat|are you sure.*delete|this chat can(?:'|’)?t be recovered|this chat cant be recovered|delete this chat|share links from it will be disabled|cannot be undone|can(?:'|’)?t be undone|permanently delete|permanent deletion|确定.*删除|确认.*删除|删除.*不可恢复|无法恢复|不能恢复/i.test(deleteTextToken(value));
+    const textValue = deleteTextToken(value);
+    const compactValue = deleteCompactToken(value);
+    return /are you sure you want to delete(?: this)? chat|are you sure.*delete|this chat can(?:'|’)?t be recovered|this chat cant be recovered|delete this chat|delete (?:the )?(?:chat|conversation)\s*[?？]|share links from it will be disabled|cannot be undone|can(?:'|’)?t be undone|permanently delete|permanent deletion|删除(?:此|该|这个|本)?(?:聊天|对话|会话|话题)\s*[?？]|确定.*删除|确认.*删除|删除.*不可恢复|无法恢复|不能恢复/i.test(textValue)
+      || /confirmdelete|deleteconfirm|删除确认|确认删除/.test(compactValue);
   }
 
   function deleteConfirmRootTextMatches(value) {
@@ -282,7 +291,7 @@ export function createDeleteCommonCapability(deps = {}) {
 
   function deleteQuestionDialogRoots() {
     const roots = [];
-    const questions = qsa("div,section,[role='dialog'],[role='alertdialog']", document, { all: true })
+    const questions = qsa("div,section,[role='dialog'],[role='alertdialog'],dialog,[aria-modal='true'],mat-dialog-container,[class*='modal' i],[class*='dialog' i]", document, { all: true })
       .filter((element) => visible(element) && deleteConfirmQuestionMatches(deleteElementText(element)))
       .sort((a, b) => modelElementArea(a) - modelElementArea(b))
       .slice(0, 24);
@@ -345,7 +354,7 @@ export function createDeleteCommonCapability(deps = {}) {
         addCandidate(element, root, 260);
       }
     }
-    if (!candidates.length && qsa("div,section,[role='dialog'],[role='alertdialog'],h1,h2,h3,p,span", document, { all: true }).some((element) => visible(element) && deleteConfirmQuestionMatches(deleteElementText(element)))) {
+    if (!candidates.length && qsa("div,section,[role='dialog'],[role='alertdialog'],dialog,[aria-modal='true'],mat-dialog-container,[class*='modal' i],[class*='dialog' i],h1,h2,h3,p,span", document, { all: true }).some((element) => visible(element) && deleteConfirmQuestionMatches(deleteElementText(element)))) {
       const buttons = visibleDeleteCandidates(document, DELETE_CONFIRM_CLICKABLE_SELECTOR);
       const cancelButtons = buttons.filter(deleteCancelButtonMatches);
       if (cancelButtons.length) {

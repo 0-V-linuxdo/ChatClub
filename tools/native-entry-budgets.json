@@ -17,7 +17,7 @@
     "background/firefox-background.js": {
       "maxFiles": 48,
       "targetFiles": 43,
-      "maxSourceBytes": 1013509,
+      "maxSourceBytes": 1018889,
       "targetSourceBytes": 900000,
       "reason": "The Firefox document-background entry includes its content fallback loader, so its exact static cost is tracked as a distinct browser budget."
     }

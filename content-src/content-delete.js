@@ -102,6 +102,7 @@ function installDeleteCapability() {
     findDeleteConfirmButton: common.findDeleteConfirmButton,
     isDisabledElement: dom.isDisabledElement,
     modelElementArea: dom.modelElementArea,
+    modelElementFromPoint: dom.modelElementFromPoint,
     modelRect: dom.modelRect,
     svgSignature: common.svgSignature,
     visibleDeleteCandidates: common.visibleDeleteCandidates,

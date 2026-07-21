@@ -421,6 +421,18 @@ export const DELETE_USERSCRIPT_ENGINE_CORE = String.raw`
       return token.includes(wanted) || text.toLowerCase().includes(raw.toLowerCase());
     });
   };
+  const matchesExactLabelRepeats = (value, labels) => {
+    const token = compact(value);
+    if (!token) return false;
+    return labels.some((label) => {
+      const wanted = compact(label);
+      if (!wanted || token.length % wanted.length !== 0) return false;
+      for (let offset = 0; offset < token.length; offset += wanted.length) {
+        if (token.slice(offset, offset + wanted.length) !== wanted) return false;
+      }
+      return true;
+    });
+  };
   const MENU_ROOT_SELECTORS = [
     "[role='menu']",
     "[role='listbox']",
@@ -599,8 +611,8 @@ export const DELETE_USERSCRIPT_ENGINE_CORE = String.raw`
   function confirmQuestionMatches(value) {
     const text = normalize(value).toLowerCase();
     const token = compact(value);
-    return /are you sure you want to delete(?: this)? chat|are you sure.*delete|this chat can(?:'|’)?t be recovered|this chat cant be recovered|delete this chat|share links from it will be disabled|cannot be undone|can(?:'|’)?t be undone|permanently delete|permanent deletion|确定.*删除|确认.*删除|删除.*不可恢复|无法恢复|不能恢复/i.test(text)
-      || /delete.*chat|confirm.*delete|删除.*确认|确认.*删除/.test(token);
+    return /are you sure you want to delete(?: this)? chat|are you sure.*delete|this chat can(?:'|’)?t be recovered|this chat cant be recovered|delete this chat|delete (?:the )?(?:chat|conversation)\s*[?？]|share links from it will be disabled|cannot be undone|can(?:'|’)?t be undone|permanently delete|permanent deletion|删除(?:此|该|这个|本)?(?:聊天|对话|会话|话题)\s*[?？]|确定.*删除|确认.*删除|删除.*不可恢复|无法恢复|不能恢复/i.test(text)
+      || /confirmdelete|deleteconfirm|删除确认|确认删除/.test(token);
   }
 
   function confirmRootTextMatches(value) {
@@ -622,8 +634,8 @@ export const DELETE_USERSCRIPT_ENGINE_CORE = String.raw`
   function confirmButtonMatches(node, root = null) {
     const value = elementText(node);
     if (!value || matchesLabel(value, CANCEL_LABELS) || confirmRejectButtonMatches(node)) return false;
-    if (matchesLabel(value, CONFIRM_STRICT_LABELS, true)) return true;
-    if (matchesLabel(value, CONFIRM_GENERIC_LABELS, true)) return true;
+    if (matchesExactLabelRepeats(value, CONFIRM_STRICT_LABELS)) return true;
+    if (matchesExactLabelRepeats(value, CONFIRM_GENERIC_LABELS)) return true;
     if (root && confirmRootTextMatches(elementText(root))) return matchesLabel(value, CONFIRM_LABELS);
     return matchesLabel(value, CONFIRM_STRICT_LABELS);
   }
@@ -639,7 +651,7 @@ export const DELETE_USERSCRIPT_ENGINE_CORE = String.raw`
 
   function deleteQuestionDialogRoots() {
     const roots = [];
-    const questions = qsa("div,section,[role='dialog'],[role='alertdialog'],dialog", document)
+    const questions = qsa("div,section,[role='dialog'],[role='alertdialog'],dialog,[aria-modal='true'],mat-dialog-container,[class*='modal' i],[class*='dialog' i]", document)
       .filter((node) => visible(node) && confirmQuestionMatches(elementText(node)))
       .sort((a, b) => elementArea(a) - elementArea(b))
       .slice(0, 24);
@@ -672,12 +684,12 @@ export const DELETE_USERSCRIPT_ENGINE_CORE = String.raw`
   }
 
   function deleteConfirmationQuestionVisible() {
-    return qsa("div,section,[role='dialog'],[role='alertdialog'],dialog,h1,h2,h3,p,span", document)
+    return qsa("div,section,[role='dialog'],[role='alertdialog'],dialog,[aria-modal='true'],mat-dialog-container,[class*='modal' i],[class*='dialog' i],h1,h2,h3,p,span", document)
       .some((node) => visible(node) && confirmQuestionMatches(elementText(node)));
   }
 
   function deleteDialogRoots() {
-    const roots = qsa("[role='alertdialog'],[role='dialog'],dialog,[aria-modal='true'],[data-radix-dialog-content],[data-state='open'],[class*='modal' i],[class*='dialog' i]", document)
+    const roots = qsa("[role='alertdialog'],[role='dialog'],dialog,[aria-modal='true'],mat-dialog-container,[data-radix-dialog-content],[data-state='open'],[class*='modal' i],[class*='dialog' i]", document)
       .filter(visible)
       .filter((node) => confirmRootTextMatches(elementText(node)));
     for (const root of deleteQuestionDialogRoots()) addUniqueRoot(roots, root);
@@ -706,8 +718,8 @@ export const DELETE_USERSCRIPT_ENGINE_CORE = String.raw`
         node: target,
         root,
         score: score
-          + (matchesLabel(value, CONFIRM_STRICT_LABELS, true) ? 700 : 0)
-          + (matchesLabel(value, CONFIRM_GENERIC_LABELS, true) ? 420 : 0)
+          + (matchesExactLabelRepeats(value, CONFIRM_STRICT_LABELS) ? 700 : 0)
+          + (matchesExactLabelRepeats(value, CONFIRM_GENERIC_LABELS) ? 420 : 0)
           + (target.matches?.("button,[role='button']") ? 220 : 0),
         top: box.top,
         right: box.right,
@@ -723,7 +735,7 @@ export const DELETE_USERSCRIPT_ENGINE_CORE = String.raw`
       if (cancelButtons.length) {
         for (const node of buttons) {
           const value = elementText(node);
-          if (!matchesLabel(value, CONFIRM_GENERIC_LABELS, true) && !matchesLabel(value, CONFIRM_STRICT_LABELS, true)) continue;
+          if (!matchesExactLabelRepeats(value, CONFIRM_GENERIC_LABELS) && !matchesExactLabelRepeats(value, CONFIRM_STRICT_LABELS)) continue;
           const box = rect(node);
           if (!box) continue;
           const nearCancel = cancelButtons.some((cancel) => {
@@ -739,7 +751,7 @@ export const DELETE_USERSCRIPT_ENGINE_CORE = String.raw`
     if (!candidates.length && deleteConfirmationQuestionVisible()) {
       for (const node of visibleConfirmCandidates(document)) {
         const value = elementText(node);
-        if (!matchesLabel(value, CONFIRM_GENERIC_LABELS, true) && !matchesLabel(value, CONFIRM_STRICT_LABELS, true)) continue;
+        if (!matchesExactLabelRepeats(value, CONFIRM_GENERIC_LABELS) && !matchesExactLabelRepeats(value, CONFIRM_STRICT_LABELS)) continue;
         add(node, 80);
       }
     }

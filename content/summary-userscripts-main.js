@@ -74,11 +74,11 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "56ae70c075c19ca583d76133e0edc0d694fecc58c3112f9e246a5812e8650b8f";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "9fd1e5dd9f7a64af34f287b0287caceabbe605f42c5bc0fc6f2fdb6b76aa0aa8";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.39e7dff3b817dd590d108ce155af13e47b28138e33c477502664105276787094";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "39e7dff3b817dd590d108ce155af13e47b28138e33c477502664105276787094";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "330f3a3515c38cb4bb3d34cf09d63dcb258c91cd538e9214385bdfb2d1ea9799";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.330f3a3515c38cb4bb3d34cf09d63dcb258c91cd538e9214385bdfb2d1ea9799";
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "1e59af82b478228bd65d6ae73a9732db5331fa9dd6fdb447c866345f03a518f7";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.1e59af82b478228bd65d6ae73a9732db5331fa9dd6fdb447c866345f03a518f7";
   var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "9265e8b1d9b5013ee196311892dbcfcf27fc51f5898960e83eb4dca1bc35c298", "implementationSha256": "db05e5082b072843831926d512de81baa439996bfa5b1f5f1f9105f2db2f461d", "implementationVersion": "2026.07.16.2+bundle.db05e5082b072843831926d512de81baa439996bfa5b1f5f1f9105f2db2f461d" });
 
   // shared/content-runtime-identity.js
@@ -2436,7 +2436,7 @@
       return api.merge(out);
     };
     scripts["typingmind.js"] = scripts["typingmind"];
-    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.330f3a3515c38cb4bb3d34cf09d63dcb258c91cd538e9214385bdfb2d1ea9799" });
+    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.1e59af82b478228bd65d6ae73a9732db5331fa9dd6fdb447c866345f03a518f7" });
     return scripts;
   }
 

@@ -10,8 +10,8 @@ import { GEMINI_DELETE_USERSCRIPT_HELPERS } from "./topic-delete-gemini-helpers.
 import { DELETE_USERSCRIPT_ENGINE_CORE } from "./topic-delete-userscript-engine-core.js";
 import { DELETE_USERSCRIPT_ENGINE_SITES } from "./topic-delete-userscript-engine-sites.js";
 
-const DELETE_USERSCRIPT_VERSION = "2026.07.16.1";
-const GEMINI_DELETE_USERSCRIPT_VERSION = "2026.07.16.1";
+const DELETE_USERSCRIPT_VERSION = "2026.07.22.2";
+const GEMINI_DELETE_USERSCRIPT_VERSION = "2026.07.22.2";
 const DELETE_USERSCRIPT_NAMESPACE = "https://chatclub.local/delete-sites";
 
 const DELETE_USERSCRIPT_ENGINE = DELETE_USERSCRIPT_ENGINE_CORE + DELETE_USERSCRIPT_ENGINE_SITES;

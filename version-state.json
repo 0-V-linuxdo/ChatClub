@@ -1,28 +1,28 @@
 {
   "schemaVersion": 4,
-  "appVersion": "「2026-07-19｜01:55:36」",
-  "manifestVersion": "2026.7.19.3",
+  "appVersion": "「2026-07-22｜01:05:48」",
+  "manifestVersion": "2026.7.22.2",
   "payloads": {
     "chromium": {
-      "appVersion": "「2026-07-19｜01:55:36」",
-      "sha256": "0a227fb2cd06f8759174280165fb7f99c03fbd9747e7e75458d07bb798f2c966"
+      "appVersion": "「2026-07-22｜01:05:48」",
+      "sha256": "408c8904157fb894367986b84cbf4af561d5d671f68f38e9f0c34001d7926ef7"
     },
     "firefox": {
-      "appVersion": "「2026-07-19｜01:55:36」",
-      "sha256": "da3c800efe2ad7c3e25b74ee37c0107299a1ea814a87ea57de7da23c966e96ae"
+      "appVersion": "「2026-07-22｜01:05:48」",
+      "sha256": "5fe9525a12c7f9008cca641e145539978b92c899b1c41c2ce20cc80e81157f89"
     }
   },
   "contentRuntime": {
     "sourceSchemaVersion": 1,
-    "sourceSha256": "56ae70c075c19ca583d76133e0edc0d694fecc58c3112f9e246a5812e8650b8f",
+    "sourceSha256": "9fd1e5dd9f7a64af34f287b0287caceabbe605f42c5bc0fc6f2fdb6b76aa0aa8",
     "sourceFileCount": 70,
     "buildRecipeSchemaVersion": 1,
     "buildRecipeVersion": "1+recipe.39e7dff3b817dd590d108ce155af13e47b28138e33c477502664105276787094",
     "buildRecipeSha256": "39e7dff3b817dd590d108ce155af13e47b28138e33c477502664105276787094",
     "buildRecipeFileCount": 2,
     "protocolVersion": "2026.07.16.2",
-    "implementationSha256": "330f3a3515c38cb4bb3d34cf09d63dcb258c91cd538e9214385bdfb2d1ea9799",
-    "implementationVersion": "2026.07.16.2+implementation.330f3a3515c38cb4bb3d34cf09d63dcb258c91cd538e9214385bdfb2d1ea9799",
+    "implementationSha256": "1e59af82b478228bd65d6ae73a9732db5331fa9dd6fdb447c866345f03a518f7",
+    "implementationVersion": "2026.07.16.2+implementation.1e59af82b478228bd65d6ae73a9732db5331fa9dd6fdb447c866345f03a518f7",
     "bundles": {
       "content/content.js": {
         "entryPath": "content-src/content.js",
@@ -34,11 +34,11 @@
       },
       "content/delete.js": {
         "entryPath": "content-src/content-delete.js",
-        "sourceSha256": "d3bfc33405c1c5b38be3a425ea4579693c6969586ebb44231ec0f70039fdb299",
+        "sourceSha256": "eb8f153a44a57009136666e0b9d3be34674aff665cc0c47d67a234fa5868c39c",
         "sourceFileCount": 17,
         "virtualInputs": [],
-        "implementationSha256": "705bdb95be98af80824971a4c5cec5cbe78160abe3461c7be6cfce85484eaeaa",
-        "implementationVersion": "2026.07.16.2+bundle.705bdb95be98af80824971a4c5cec5cbe78160abe3461c7be6cfce85484eaeaa"
+        "implementationSha256": "f05b59fb23526b961295eea265c8f7863a502481b7568932474e80ce32c0b26b",
+        "implementationVersion": "2026.07.16.2+bundle.f05b59fb23526b961295eea265c8f7863a502481b7568932474e80ce32c0b26b"
       },
       "content/grok-cookie-bridge.js": {
         "entryPath": "content-src/grok-cookie-bridge.js",
@@ -167,37 +167,37 @@
   },
   "topicDelete": {
     "chatgpt.user.js": {
-      "version": "2026.07.16.1",
-      "sha256": "e9fdf9150ff348b5629306d9c40975ccbcc7826dcf15fe2292909c0940ab8666"
+      "version": "2026.07.22.2",
+      "sha256": "82db0a686cb1e77d6f94b1ada4b1da9098b7c23fbc2ad820354806e5312b19a7"
     },
     "deepseek.user.js": {
-      "version": "2026.07.16.1",
-      "sha256": "ad10ec330d069164f7bfd998457851acc8aa7a0c1f9264b3da5bced052922c1e"
+      "version": "2026.07.22.2",
+      "sha256": "1b04e3be6b6758a42371a99f625d991664886c1e227b89198e366cba20d37857"
     },
     "gemini.user.js": {
-      "version": "2026.07.16.1",
-      "sha256": "13ff0e0ce4beb9cbdf1513e977bdd87f26886e10702970e1048cfd61d796b5b3"
+      "version": "2026.07.22.2",
+      "sha256": "3296f0ca7e6efe2d9c3360c695772cbae102ace435d035387a68e2ae76dd765a"
     },
     "grok-mirror.user.js": {
-      "version": "2026.07.16.1",
-      "sha256": "3f2d5614519bb618f6e4f78adb15930600bf919dbd5068c35c66e61e70b1202d"
+      "version": "2026.07.22.2",
+      "sha256": "c6454f2dcb552b6639134710c012cb62a9a280bdd02a825facbf4b60d19620c5"
     },
     "grok.user.js": {
-      "version": "2026.07.16.1",
-      "sha256": "0ffb10499dfacbc8d73b710af47859c3f4774a0136421cccdf4264a7f7f2b788"
+      "version": "2026.07.22.2",
+      "sha256": "3be7e74a47d96e507b53f78d58c42fdd94be23b1b93bf1a03ee8c29ae16d6457"
     },
     "kagi.user.js": {
-      "version": "2026.07.16.1",
-      "sha256": "fe0f2ac2b2a29a0791984e5874ed73238d2055624e031c025bcb7e23494b15b2"
+      "version": "2026.07.22.2",
+      "sha256": "4c810cd57d01553154eb44b753e13ea4e341a71cd494e4007dd4914ad0c1f537"
     },
     "notion.user.js": {
-      "version": "2026.07.16.1",
-      "sha256": "475cb10094d653b64ffc92d25f0bbcabdf67a878eba8baa418820eaf5ed49f6a"
+      "version": "2026.07.22.2",
+      "sha256": "7bd3f870c15da95dc8b1932019a9ba41b79a1e7f3e49bf0e4f20e2305e1a1ef9"
     }
   },
   "floors": {
-    "appVersion": "「2026-07-19｜01:55:36」",
-    "manifestVersion": "2026.7.19.3",
+    "appVersion": "「2026-07-22｜01:05:48」",
+    "manifestVersion": "2026.7.22.2",
     "summaryConfigVersion": 74,
     "summarySites": {
       "chatgpt": 54,
@@ -212,13 +212,13 @@
       "typingmind": 47
     },
     "topicDelete": {
-      "chatgpt.user.js": "2026.07.16.1",
-      "deepseek.user.js": "2026.07.16.1",
-      "gemini.user.js": "2026.07.16.1",
-      "grok-mirror.user.js": "2026.07.16.1",
-      "grok.user.js": "2026.07.16.1",
-      "kagi.user.js": "2026.07.16.1",
-      "notion.user.js": "2026.07.16.1"
+      "chatgpt.user.js": "2026.07.22.2",
+      "deepseek.user.js": "2026.07.22.2",
+      "gemini.user.js": "2026.07.22.2",
+      "grok-mirror.user.js": "2026.07.22.2",
+      "grok.user.js": "2026.07.22.2",
+      "kagi.user.js": "2026.07.22.2",
+      "notion.user.js": "2026.07.22.2"
     }
   }
 }

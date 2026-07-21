@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "56ae70c075c19ca583d76133e0edc0d694fecc58c3112f9e246a5812e8650b8f";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "9fd1e5dd9f7a64af34f287b0287caceabbe605f42c5bc0fc6f2fdb6b76aa0aa8";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.39e7dff3b817dd590d108ce155af13e47b28138e33c477502664105276787094";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "39e7dff3b817dd590d108ce155af13e47b28138e33c477502664105276787094";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "330f3a3515c38cb4bb3d34cf09d63dcb258c91cd538e9214385bdfb2d1ea9799";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.330f3a3515c38cb4bb3d34cf09d63dcb258c91cd538e9214385bdfb2d1ea9799";
-  var CONTENT_RUNTIME_DELETE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/delete.js", "entryPath": "content-src/content-delete.js", "sourceSha256": "d3bfc33405c1c5b38be3a425ea4579693c6969586ebb44231ec0f70039fdb299", "implementationSha256": "705bdb95be98af80824971a4c5cec5cbe78160abe3461c7be6cfce85484eaeaa", "implementationVersion": "2026.07.16.2+bundle.705bdb95be98af80824971a4c5cec5cbe78160abe3461c7be6cfce85484eaeaa" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "1e59af82b478228bd65d6ae73a9732db5331fa9dd6fdb447c866345f03a518f7";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.1e59af82b478228bd65d6ae73a9732db5331fa9dd6fdb447c866345f03a518f7";
+  var CONTENT_RUNTIME_DELETE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/delete.js", "entryPath": "content-src/content-delete.js", "sourceSha256": "eb8f153a44a57009136666e0b9d3be34674aff665cc0c47d67a234fa5868c39c", "implementationSha256": "f05b59fb23526b961295eea265c8f7863a502481b7568932474e80ce32c0b26b", "implementationVersion": "2026.07.16.2+bundle.f05b59fb23526b961295eea265c8f7863a502481b7568932474e80ce32c0b26b" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -1157,7 +1157,12 @@
         const textLabel = deleteTextToken(label);
         const compactLabel = deleteCompactToken(label);
         if (!textLabel && !compactLabel) return false;
-        return textValue === textLabel || compactValue === compactLabel || textValue === `${textLabel} ${textLabel}` || compactValue === `${compactLabel}${compactLabel}`;
+        if (textValue === textLabel || compactValue === compactLabel) return true;
+        if (!compactValue || !compactLabel || compactValue.length % compactLabel.length !== 0) return false;
+        for (let offset = 0; offset < compactValue.length; offset += compactLabel.length) {
+          if (compactValue.slice(offset, offset + compactLabel.length) !== compactLabel) return false;
+        }
+        return true;
       });
     }
     const DELETE_CLICKABLE_SELECTOR = "button,[role='button'],[role='menuitem'],[role='option'],a[href],[aria-haspopup],[tabindex]:not([tabindex='-1']),[class*='button' i],[class*='btn' i]";
@@ -1321,9 +1326,13 @@
       const roots = visibleSelectorElements([
         "[role='alertdialog']",
         "[role='dialog']",
+        "dialog",
+        "[aria-modal='true']",
+        "mat-dialog-container",
         "[data-radix-dialog-content]",
         "[data-state='open']",
-        ".modal",
+        "[class*='modal' i]",
+        "[class*='dialog' i]",
         ".fixed"
       ]).filter((root) => {
         const value = deleteElementText(root);
@@ -1339,7 +1348,9 @@
       return roots;
     }
     function deleteConfirmQuestionMatches(value) {
-      return /are you sure you want to delete(?: this)? chat|are you sure.*delete|this chat can(?:'|’)?t be recovered|this chat cant be recovered|delete this chat|share links from it will be disabled|cannot be undone|can(?:'|’)?t be undone|permanently delete|permanent deletion|确定.*删除|确认.*删除|删除.*不可恢复|无法恢复|不能恢复/i.test(deleteTextToken(value));
+      const textValue = deleteTextToken(value);
+      const compactValue = deleteCompactToken(value);
+      return /are you sure you want to delete(?: this)? chat|are you sure.*delete|this chat can(?:'|’)?t be recovered|this chat cant be recovered|delete this chat|delete (?:the )?(?:chat|conversation)\s*[?？]|share links from it will be disabled|cannot be undone|can(?:'|’)?t be undone|permanently delete|permanent deletion|删除(?:此|该|这个|本)?(?:聊天|对话|会话|话题)\s*[?？]|确定.*删除|确认.*删除|删除.*不可恢复|无法恢复|不能恢复/i.test(textValue) || /confirmdelete|deleteconfirm|删除确认|确认删除/.test(compactValue);
     }
     function deleteConfirmRootTextMatches(value) {
       const textValue = deleteTextToken(value);
@@ -1353,7 +1364,7 @@
     }
     function deleteQuestionDialogRoots() {
       const roots = [];
-      const questions = qsa2("div,section,[role='dialog'],[role='alertdialog']", document, { all: true }).filter((element) => visible2(element) && deleteConfirmQuestionMatches(deleteElementText(element))).sort((a, b) => modelElementArea(a) - modelElementArea(b)).slice(0, 24);
+      const questions = qsa2("div,section,[role='dialog'],[role='alertdialog'],dialog,[aria-modal='true'],mat-dialog-container,[class*='modal' i],[class*='dialog' i]", document, { all: true }).filter((element) => visible2(element) && deleteConfirmQuestionMatches(deleteElementText(element))).sort((a, b) => modelElementArea(a) - modelElementArea(b)).slice(0, 24);
       for (const question of questions) {
         let node = question;
         for (let depth = 0; node && node !== document.body && depth < 8; depth += 1, node = node.parentElement) {
@@ -1407,7 +1418,7 @@
           addCandidate(element, root, 260);
         }
       }
-      if (!candidates.length && qsa2("div,section,[role='dialog'],[role='alertdialog'],h1,h2,h3,p,span", document, { all: true }).some((element) => visible2(element) && deleteConfirmQuestionMatches(deleteElementText(element)))) {
+      if (!candidates.length && qsa2("div,section,[role='dialog'],[role='alertdialog'],dialog,[aria-modal='true'],mat-dialog-container,[class*='modal' i],[class*='dialog' i],h1,h2,h3,p,span", document, { all: true }).some((element) => visible2(element) && deleteConfirmQuestionMatches(deleteElementText(element)))) {
         const buttons = visibleDeleteCandidates(document, DELETE_CONFIRM_CLICKABLE_SELECTOR);
         const cancelButtons = buttons.filter(deleteCancelButtonMatches);
         if (cancelButtons.length) {
@@ -1734,6 +1745,7 @@
       deleteResultWithTrustedDeleteShortcut,
       visibleDeleteCandidates,
       modelElementArea,
+      modelElementFromPoint,
       deleteActivateUntil,
       waitForModel,
       deleteResultWithTrustedMenuClick
@@ -2196,19 +2208,219 @@
       ];
       return topRightMenuTrigger({ selectors, labels: ["Delete, rename, and more", "More", "更多", "删除", "重命名"] });
     }
-    async function deleteNotionThread() {
-      if (findDeleteConfirmButton()) {
-        const confirmedExisting = await clickDeleteConfirmIfPresent(6500);
-        return confirmedExisting ? deleteResult(true, "notion") : deleteResultWithTrustedConfirm("notion", "delete confirmation did not close");
+    const NOTION_DELETE_MENU_ROOT_SELECTORS = [
+      "[role='menu']",
+      "[role='listbox']",
+      "[role='dialog']",
+      "[data-radix-menu-content]",
+      "[data-radix-popper-content-wrapper]",
+      "[data-floating-ui-portal]",
+      "[data-slot='dropdown-menu-content']",
+      "[class*='dropdown' i]",
+      "[class*='popover' i]",
+      "[class*='popper' i]"
+    ];
+    const NOTION_DELETE_LABELS = ["Delete", "Delete topic", "删除", "删除话题"];
+    function notionDeleteLabelMatchesExact(value) {
+      if (deleteLabelMatchesExactish(value, NOTION_DELETE_LABELS)) return true;
+      let token = deleteCompactToken(value);
+      if (!token) return false;
+      const allowed = NOTION_DELETE_LABELS.map(deleteCompactToken).filter(Boolean).sort((a, b) => b.length - a.length);
+      let parts = 0;
+      while (token && parts < 8) {
+        const next = allowed.find((label) => token.startsWith(label));
+        if (!next) return false;
+        token = token.slice(next.length);
+        parts += 1;
       }
-      const labels = ["Delete", "Delete topic", "删除", "删除话题"];
+      return parts > 0 && !token;
+    }
+    function notionDeleteTargetLabelMatchesExact(target) {
+      if (!target) return false;
+      const semanticValues = [
+        target.getAttribute?.("aria-label"),
+        target.getAttribute?.("title"),
+        target.innerText,
+        target.textContent
+      ].map((value) => String(value || "").trim()).filter(Boolean);
+      if (semanticValues.length) return semanticValues.every(notionDeleteLabelMatchesExact);
+      return notionDeleteLabelMatchesExact(deleteElementText(target));
+    }
+    function notionDeleteLinkedMenuRoot(trigger = null) {
+      const controlsId = String(trigger?.getAttribute?.("aria-controls") || "").trim();
+      if (!controlsId) return null;
+      try {
+        return document.getElementById(controlsId) || null;
+      } catch {
+        return null;
+      }
+    }
+    function notionDeleteMenuRoots(trigger = null) {
+      const roots = [];
+      const seen = /* @__PURE__ */ new Set();
+      const confirmationRoots = deleteDialogRoots();
+      const add = (root) => {
+        if (!root || root === trigger || seen.has(root) || !root.isConnected || !visible2(root)) return;
+        if (trigger && (root.contains?.(trigger) || trigger.contains?.(root))) return;
+        if (confirmationRoots.some((dialog) => dialog === root || dialog.contains?.(root) || root.contains?.(dialog))) return;
+        const rect = modelRect(root);
+        if (!rect || rect.width < 48 || rect.height < 20 || rect.width > 640 || rect.height > 720) return;
+        seen.add(root);
+        roots.push(root);
+      };
+      add(notionDeleteLinkedMenuRoot(trigger));
+      visibleSelectorElements(NOTION_DELETE_MENU_ROOT_SELECTORS).forEach(add);
+      return roots.sort((a, b) => modelElementArea(a) - modelElementArea(b));
+    }
+    function notionDeleteItemCenterIsTopmost(element) {
+      const rect = modelRect(element);
+      if (!element || !rect) return false;
+      const pointTarget = modelElementFromPoint({
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2
+      }, element);
+      return Boolean(pointTarget && (pointTarget === element || element.contains?.(pointTarget)));
+    }
+    function findNotionDeleteMenuItem(root, trigger = null) {
+      if (!root || !root.isConnected || !visible2(root)) return null;
+      const candidates = [];
+      const seen = /* @__PURE__ */ new Set();
+      const add = (element, extraScore = 0) => {
+        if (!element || element === trigger || seen.has(element) || !visible2(element) || isDisabledElement2(element)) return;
+        const target = deleteClickableElement(element);
+        if (!target || target === trigger || target === root || seen.has(target) || !root?.contains?.(target)) return;
+        if (!visible2(target) || isDisabledElement2(target)) return;
+        if (!notionDeleteTargetLabelMatchesExact(target)) return;
+        const rect = modelRect(target);
+        if (!rect || rect.width < 8 || rect.height < 8 || rect.width > 520 || rect.height > 120) return;
+        if (!notionDeleteItemCenterIsTopmost(target)) return;
+        seen.add(element);
+        seen.add(target);
+        candidates.push({
+          element: target,
+          score: extraScore + (matches2(target, "[role='menuitem'],[role='option'],button,[role='button']") ? 240 : 0),
+          top: rect.top,
+          area: rect.width * rect.height
+        });
+      };
+      for (const element of qsa2("[role='menuitem'],[role='option'],button,[role='button'],[tabindex]:not([tabindex='-1']),li,div,span", root, { all: true })) {
+        add(element, 320);
+      }
+      candidates.sort((a, b) => b.score - a.score || a.top - b.top || a.area - b.area);
+      return candidates[0]?.element || null;
+    }
+    function notionDeleteMenuSession(trigger, baselineRoots = /* @__PURE__ */ new Set()) {
+      const linkedRoot = notionDeleteLinkedMenuRoot(trigger);
+      for (const root of notionDeleteMenuRoots(trigger)) {
+        if (root !== linkedRoot && baselineRoots.has(root)) continue;
+        const item = findNotionDeleteMenuItem(root, trigger);
+        if (item) return { root, item };
+      }
+      return null;
+    }
+    function refreshNotionDeleteMenuSession(session, trigger) {
+      const root = session?.root || null;
+      if (!root || !root.isConnected || !visible2(root)) return null;
+      if (!notionDeleteMenuRoots(trigger).includes(root)) return null;
+      const item = findNotionDeleteMenuItem(root, trigger);
+      return item ? { root, item } : null;
+    }
+    function notionDeleteConversationId() {
+      try {
+        const url = new URL(String(location.href || ""));
+        const host = url.hostname.toLowerCase();
+        if (!(host === "app.notion.com" || host === "notion.so" || host.endsWith(".notion.so"))) return "";
+        return /^\/chat\/?$/i.test(url.pathname || "/") ? String(url.searchParams.get("t") || "") : "";
+      } catch {
+        return "";
+      }
+    }
+    function notionDeleteRouteGuard(data = {}) {
+      const expected = data?.expectedDeleteIdentity;
+      const expectedId = expected ? expected.provider === "notion" ? String(expected.id || "").trim() : "" : notionDeleteConversationId();
+      return () => Boolean(expectedId) && notionDeleteConversationId() === expectedId;
+    }
+    async function openNotionDeleteMenu(trigger, routeStillCurrent) {
+      const baselineRoots = new Set(notionDeleteMenuRoots(trigger));
+      if (!routeStillCurrent()) return null;
+      const session = await deleteActivateUntil(
+        trigger,
+        () => routeStillCurrent() && notionDeleteMenuSession(trigger, baselineRoots),
+        { settleMs: 220 }
+      );
+      if (!session || !routeStillCurrent()) return null;
+      await sleep2(120);
+      return waitForModel(() => routeStillCurrent() && refreshNotionDeleteMenuSession(session, trigger), 1800, 80);
+    }
+    function notionDeleteConfirmationOwnership(baselineRoots = null) {
+      const button = findDeleteConfirmButton();
+      if (!button || !button.isConnected || !visible2(button)) return null;
+      const root = deleteDialogRoots().find((candidate) => candidate === button || candidate.contains?.(button)) || null;
+      if (!root || !root.isConnected || !visible2(root) || baselineRoots?.has(root)) return null;
+      return { root, button };
+    }
+    function notionDeleteConfirmationOwnershipIsCurrent(ownership, routeStillCurrent) {
+      const root = ownership?.root || null;
+      const button = ownership?.button || null;
+      if (!root || !button || !routeStillCurrent()) return false;
+      if (!root.isConnected || !button.isConnected || !visible2(root) || !visible2(button) || !root.contains?.(button)) return false;
+      if (findDeleteConfirmButton() !== button) return false;
+      return deleteDialogRoots().some((candidate) => candidate === root);
+    }
+    async function waitForNotionDeleteMenuOutcome(session, trigger, routeStillCurrent, confirmationBaseline, timeoutMs = 1800) {
+      const confirmation = await waitForModel(() => {
+        if (!routeStillCurrent()) return null;
+        return notionDeleteConfirmationOwnership(confirmationBaseline);
+      }, timeoutMs, 90);
+      if (!routeStillCurrent()) return { state: "route-changed", item: null };
+      if (confirmation) return { state: "confirmation", confirmation };
+      const currentSession = refreshNotionDeleteMenuSession(session, trigger);
+      return currentSession ? { state: "menu-open", session: currentSession } : { state: "uncertain" };
+    }
+    async function finishNotionDeleteConfirmation(ownership, routeStillCurrent) {
+      const ownershipGuard = () => notionDeleteConfirmationOwnershipIsCurrent(ownership, routeStillCurrent);
+      if (!ownershipGuard()) return deleteResult(false, "notion", "delete confirmation ownership is uncertain");
+      const confirmed = await clickDeleteConfirmIfPresent(6500, ownershipGuard);
+      if (confirmed) return deleteResult(true, "notion");
+      if (!routeStillCurrent()) return deleteResult(false, "notion", "current conversation changed during delete confirmation");
+      if (!ownershipGuard()) return deleteResult(false, "notion", "delete confirmation ownership changed");
+      return deleteResultWithTrustedConfirm("notion", "delete confirmation did not close");
+    }
+    async function deleteNotionThread(data = {}) {
+      const routeStillCurrent = notionDeleteRouteGuard(data);
+      if (!routeStillCurrent()) {
+        return deleteResult(false, "notion", "stable current conversation identity not found");
+      }
+      if (data?.trustedMenuClickRetried) {
+        const confirmation = notionDeleteConfirmationOwnership() || await waitForModel(() => routeStillCurrent() && notionDeleteConfirmationOwnership(), 3e3, 90);
+        if (!routeStillCurrent()) return deleteResult(false, "notion", "current conversation changed during trusted delete menu click");
+        if (confirmation) return finishNotionDeleteConfirmation(confirmation, routeStillCurrent);
+        return deleteResult(false, "notion", "trusted delete menu click did not open an owned confirmation");
+      }
+      if (findDeleteConfirmButton() || deleteDialogRoots().length) {
+        return deleteResult(false, "notion", "unverified delete confirmation is already open");
+      }
       const trigger = findNotionDeleteMenuTrigger();
       if (!trigger) return deleteResult(false, "notion", "conversation menu trigger not found");
-      if (!await openTriggerAndClickDelete(trigger, labels)) return deleteResult(false, "notion", "delete menu item not found");
-      const confirmed = await clickDeleteConfirmIfPresent(6500);
-      if (!confirmed && deleteDialogRoots().length) return deleteResultWithTrustedConfirm("notion", "delete confirmation did not close");
-      if (!confirmed) return deleteResultWithTrustedConfirm("notion", "delete confirmation button not found");
-      return deleteResult(true, "notion");
+      let session = await openNotionDeleteMenu(trigger, routeStillCurrent);
+      if (!session) return deleteResult(false, "notion", routeStillCurrent() ? "owned delete menu item not found" : "current conversation changed before delete menu opened");
+      await sleep2(120);
+      session = refreshNotionDeleteMenuSession(session, trigger);
+      if (!session || !routeStillCurrent()) {
+        return deleteResult(false, "notion", routeStillCurrent() ? "owned delete menu item changed before activation" : "current conversation changed before delete activation");
+      }
+      if (findDeleteConfirmButton() || deleteDialogRoots().length) {
+        return deleteResult(false, "notion", "unverified delete confirmation appeared before delete activation");
+      }
+      const confirmationBaseline = new Set(deleteDialogRoots());
+      deleteClick(session.item) || deleteClickLayout(session.item);
+      const outcome = await waitForNotionDeleteMenuOutcome(session, trigger, routeStillCurrent, confirmationBaseline);
+      if (outcome.state === "confirmation") return finishNotionDeleteConfirmation(outcome.confirmation, routeStillCurrent);
+      if (outcome.state === "menu-open") {
+        return deleteResultWithTrustedMenuClick("notion", "delete menu item did not open confirmation", outcome.session.item);
+      }
+      if (outcome.state === "route-changed") return deleteResult(false, "notion", "current conversation changed after delete activation");
+      return deleteResult(false, "notion", "delete menu item outcome is uncertain");
     }
     return Object.freeze({
       deleteKagiThread,
@@ -3474,6 +3686,7 @@
       findDeleteConfirmButton: common.findDeleteConfirmButton,
       isDisabledElement: dom.isDisabledElement,
       modelElementArea: dom.modelElementArea,
+      modelElementFromPoint: dom.modelElementFromPoint,
       modelRect: dom.modelRect,
       svgSignature: common.svgSignature,
       visibleDeleteCandidates: common.visibleDeleteCandidates,

@@ -298,9 +298,13 @@ export default [
     }
   },
   {
-    files: ["tools/deepseek-delete-target-test.cjs"],
+    files: [
+      "tools/deepseek-delete-target-test.cjs",
+      "tools/gemini-delete-target-test.cjs",
+      "tools/notion-delete-target-test.cjs"
+    ],
     rules: {
-      // The fixture compiles extracted author-source helpers in an isolated VM context.
+      // These fixtures compile extracted author-source helpers in isolated test contexts.
       "no-new-func": "off"
     }
   }
