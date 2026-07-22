@@ -7,6 +7,7 @@ import {
   runtimeGetUrl,
   runtimeRequest
 } from "../shared/extension-api.js";
+import { BACKGROUND_REQUEST_ACTIONS } from "../shared/background-requests.js";
 import { APP_VERSION } from "../shared/constants.js";
 import {
   FrameRuntimePort
@@ -178,6 +179,7 @@ const topbarController = createTopbarController({
     deleteThread: deleteThreadOnFrames,
     formatShortcutTooltip: shortcutTooltip,
     newChat: newChatOnFrames,
+    openNewWorkspaceTab,
     openPocket: openPocketPanel,
     openSettings,
     openSummary: openSummaryPanel
@@ -578,6 +580,20 @@ function handleWorkspaceFrameLifecycleChange(change = {}) {
   if (event.type !== "workspace-sync" || event.membershipChanged === false) return;
   const frames = event.frames || (event.iframe ? [event.iframe] : workspaceController.currentFrames());
   for (const iframe of frames) scheduleContentFrameRepair(iframe, 180);
+}
+
+async function openNewWorkspaceTab() {
+  try {
+    await requestBackground(BACKGROUND_REQUEST_ACTIONS.OPEN_WORKSPACE_TAB, {});
+  } catch (error) {
+    toast(t("chat.unableToOpenTab"), "error");
+    void recordFunctionalAnomaly({
+      feature: "workspace",
+      operation: "openNewWorkspaceTab",
+      error,
+      message: error?.message || "Failed to open a new ChatClub tab"
+    });
+  }
 }
 
 async function newChatOnFrames() {

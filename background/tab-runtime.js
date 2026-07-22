@@ -53,6 +53,15 @@ function openTabCreateOptions(url, targetTab) {
   return createOptions;
 }
 
+function workspaceTabCreateOptions(url, targetTab) {
+  const createOptions = { url, active: true };
+  if (targetTab?.windowId) {
+    createOptions.windowId = targetTab.windowId;
+    if (typeof targetTab.index === "number") createOptions.index = targetTab.index + 1;
+  }
+  return createOptions;
+}
+
 async function focusCreatedTab(api, tab) {
   if (tab?.id) {
     try { await api.tabs.update(tab.id, { active: true }); } catch {}
@@ -84,10 +93,23 @@ export async function openExternalTab(api, url, sender, openerTab) {
   return tab;
 }
 
+export async function openWorkspaceTab(api, sender = {}, openerTab = null) {
+  const url = workspaceSessionUrl(api.runtime.getURL("chatClub.html"), createWorkspaceSessionId());
+  if (!url) throw new Error("Unable to create a workspace URL");
+  const targetTab = await resolveTargetTab(api, sender, openerTab);
+  let tab;
+  try {
+    tab = await api.tabs.create(workspaceTabCreateOptions(url, targetTab));
+  } catch {
+    tab = await api.tabs.create({ url, active: true });
+  }
+  await focusCreatedTab(api, tab);
+  return tab;
+}
+
 export function registerActionListener(api) {
   if (!api?.action?.onClicked?.addListener) throw new Error("Extension action API is unavailable");
-  api.action.onClicked.addListener(() => {
-    const url = workspaceSessionUrl(api.runtime.getURL("chatClub.html"), createWorkspaceSessionId());
-    api.tabs.create({ url });
+  api.action.onClicked.addListener((tab) => {
+    return openWorkspaceTab(api, {}, tab).catch(() => null);
   });
 }

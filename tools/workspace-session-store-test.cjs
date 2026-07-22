@@ -183,6 +183,27 @@ function pageEnvelope(generation, snapshotValue, workspaceId) {
     assert.equal(claims, 0);
   }
 
+  // A fresh token must reject same-origin sessionStorage cloned from another
+  // workspace rather than replacing its URL token and restoring the old page.
+  {
+    const oldWorkspaceId = `page-${"m".repeat(12)}`;
+    const freshWorkspaceId = `page-${"n".repeat(12)}`;
+    const context = pageContext(workspaceSessionUrl("chrome-extension://chatclub/chatClub.html", freshWorkspaceId));
+    const page = memorySessionStorage({
+      [WORKSPACE_SESSION_PAGE_KEY]: pageEnvelope(generation, snapshot("cloned-old-page", generation), oldWorkspaceId)
+    });
+    const local = memoryLocalStorage({ [WORKSPACE_SESSION_GENERATION_KEY]: generation });
+    const store = createWorkspaceSessionStore(dependencies(local, page, context, {
+      currentTabId: async () => 304,
+      claimWorkspaceSession: async () => ({ claimed: true, workspaceId: oldWorkspaceId })
+    }));
+    assert.equal(await store.load(), null);
+    assert.equal(store.workspaceId(), freshWorkspaceId);
+    assert.equal(workspaceSessionIdFromUrl(context.location.href), freshWorkspaceId);
+    assert.equal(page.value(WORKSPACE_SESSION_PAGE_KEY), null);
+    assert.equal(local.calls.get.includes(workspaceSessionWorkspaceKey(oldWorkspaceId)), false);
+  }
+
   // The first stable build migrates a tab-id mirror, then removes only that
   // legacy source after stable mirror and binding writes succeed.
   {

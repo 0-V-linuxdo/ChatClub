@@ -1065,6 +1065,8 @@ const isContentRuntimeGenerationTransition = (details = {}) =>
     let actionListener = null;
     const created = [];
     const updated = [];
+    const focused = [];
+    let nextTabId = 4;
     const api = {
       runtime: { getURL: (file) => `chrome-extension://chatclub/${file}` },
       action: { onClicked: { addListener: (listener) => { actionListener = listener; } } },
@@ -1073,7 +1075,7 @@ const isContentRuntimeGenerationTransition = (details = {}) =>
         query: async () => [],
         create: async (details) => {
           created.push(details);
-          return { id: 4, windowId: details.windowId || 5 };
+          return { id: nextTabId++, windowId: details.windowId || 5 };
         },
         update: async (tabId, details) => {
           updated.push({ tabId, details });
@@ -1081,17 +1083,65 @@ const isContentRuntimeGenerationTransition = (details = {}) =>
         },
         duplicate: async () => null
       },
-      windows: { update: async () => {} }
+      windows: { update: async (windowId, details) => { focused.push({ windowId, details }); } }
     };
     tabs.registerActionListener(api);
     assert.equal(typeof actionListener, "function");
-    actionListener();
+    await actionListener({ id: 3, windowId: 5, index: 2 });
     const actionTab = created.shift();
     const actionUrl = new URL(actionTab.url);
     assert.equal(actionUrl.protocol, "chrome-extension:");
     assert.equal(actionUrl.host, "chatclub");
     assert.equal(actionUrl.pathname, "/chatClub.html");
-    assert.match(workspaceSession.workspaceSessionIdFromUrl(actionTab.url), /^page-/);
+    const firstWorkspaceId = workspaceSession.workspaceSessionIdFromUrl(actionTab.url);
+    assert.match(firstWorkspaceId, /^page-/);
+    assert.deepEqual(actionTab, {
+      url: actionTab.url,
+      active: true,
+      windowId: 5,
+      index: 3
+    });
+    assert.deepEqual(updated.shift(), { tabId: 4, details: { active: true } });
+    assert.deepEqual(focused.shift(), { windowId: 5, details: { focused: true } });
+
+    await tabs.openWorkspaceTab(api, {}, { id: 3, windowId: 5, index: 2 });
+    const secondWorkspaceTab = created.shift();
+    const secondWorkspaceId = workspaceSession.workspaceSessionIdFromUrl(secondWorkspaceTab.url);
+    assert.match(secondWorkspaceId, /^page-/);
+    assert.notEqual(secondWorkspaceId, firstWorkspaceId, "every new page must receive an independent workspace session");
+    assert.equal(Object.hasOwn(secondWorkspaceTab, "openerTabId"), false, "fresh workspaces must not inherit same-origin session state through an opener");
+    assert.deepEqual(updated.shift(), { tabId: 5, details: { active: true } });
+    assert.deepEqual(focused.shift(), { windowId: 5, details: { focused: true } });
+
+    const fallbackCreates = [];
+    const fallbackUpdates = [];
+    const fallbackFocuses = [];
+    let duplicateCalls = 0;
+    const fallbackApi = {
+      runtime: api.runtime,
+      tabs: {
+        get: async (tabId) => ({ id: tabId, windowId: 8, index: 1 }),
+        query: async () => [],
+        create: async (details) => {
+          fallbackCreates.push(details);
+          if (fallbackCreates.length === 1) throw new Error("simulated adjacent create failure");
+          return { id: 41, windowId: 8 };
+        },
+        update: async (tabId, details) => { fallbackUpdates.push({ tabId, details }); },
+        duplicate: async () => { duplicateCalls += 1; return null; }
+      },
+      windows: { update: async (windowId, details) => { fallbackFocuses.push({ windowId, details }); } }
+    };
+    await tabs.openWorkspaceTab(fallbackApi, {}, { id: 40, windowId: 8, index: 1 });
+    assert.equal(fallbackCreates.length, 2);
+    assert.equal(fallbackCreates[0].url, fallbackCreates[1].url, "fallback must retain the fresh workspace token");
+    assert.deepEqual(fallbackCreates[1], { url: fallbackCreates[0].url, active: true });
+    assert.equal(Object.hasOwn(fallbackCreates[0], "openerTabId"), false);
+    assert.equal(Object.hasOwn(fallbackCreates[1], "openerTabId"), false);
+    assert.equal(duplicateCalls, 0, "workspace fallback must never duplicate an existing page");
+    assert.deepEqual(fallbackUpdates, [{ tabId: 41, details: { active: true } }]);
+    assert.deepEqual(fallbackFocuses, [{ windowId: 8, details: { focused: true } }]);
+
     assert.equal(tabs.openableTabUrl("javascript:alert(1)"), "");
     await tabs.openExternalTab(api, "https://example.com/", {}, { id: 3 });
     assert.deepEqual(created.shift(), {
@@ -1101,7 +1151,8 @@ const isContentRuntimeGenerationTransition = (details = {}) =>
       index: 3,
       openerTabId: 3
     });
-    assert.deepEqual(updated[0], { tabId: 4, details: { active: true } });
+    assert.deepEqual(updated.shift(), { tabId: 6, details: { active: true } });
+    assert.deepEqual(focused.shift(), { windowId: 5, details: { focused: true } });
   }
 
   console.log("background static runtime modules: ok");

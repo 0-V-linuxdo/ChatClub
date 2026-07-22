@@ -3,21 +3,21 @@
     "app/main.js": {
       "maxFiles": 85,
       "targetFiles": 74,
-      "maxSourceBytes": 850684,
+      "maxSourceBytes": 851413,
       "targetSourceBytes": 750000,
       "reason": "The application initial-static closure is held to its exact current footprint while feature controllers remain behind explicit lazy boundaries."
     },
     "background/service-worker.js": {
       "maxFiles": 47,
       "targetFiles": 40,
-      "maxSourceBytes": 403645,
+      "maxSourceBytes": 404830,
       "targetSourceBytes": 360000,
       "reason": "The Chromium service-worker initial-static closure is ratcheted separately from the larger Firefox fallback entry."
     },
     "background/firefox-background.js": {
       "maxFiles": 50,
       "targetFiles": 43,
-      "maxSourceBytes": 1031807,
+      "maxSourceBytes": 1032992,
       "targetSourceBytes": 900000,
       "reason": "The Firefox document-background entry includes its content fallback loader, so its exact static cost is tracked as a distinct browser budget."
     }

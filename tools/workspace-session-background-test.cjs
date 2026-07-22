@@ -93,11 +93,25 @@ function fixture({ local = {}, session = {}, tabs = [] } = {}) {
     tabRuntime.registerActionListener({
       runtime: { getURL: (file) => `chrome-extension://chatclub/${file}` },
       action: { onClicked: { addListener: (value) => { listener = value; } } },
-      tabs: { create: (details) => { created.push(details); } }
+      tabs: {
+        get: async (tabId) => ({ id: tabId, windowId: 7, index: 4 }),
+        create: async (details) => {
+          created.push(details);
+          return { id: 956, windowId: details.windowId };
+        },
+        update: async () => {}
+      },
+      windows: { update: async () => {} }
     });
-    listener();
+    await listener({ id: 955, windowId: 7, index: 4 });
     assert.equal(created.length, 1);
     assert.match(created[0].url, /^chrome-extension:\/\/chatclub\/chatClub\.html#workspace=page-/);
+    assert.deepEqual({ ...created[0], url: "<workspace>" }, {
+      url: "<workspace>",
+      active: true,
+      windowId: 7,
+      index: 5
+    });
     assert.ok(workspaceSessionIdFromUrl(created[0].url), "action-created pages must carry a stable workspace id");
   }
 

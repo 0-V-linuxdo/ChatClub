@@ -73,7 +73,7 @@ export const DEFAULT_TOPBAR_LAYOUT = [
 ];
 
 const TOPBAR_ITEM_META = {
-  brand: { labelKey: "topbar.item.brand", icon: "palette" },
+  brand: { labelKey: "common.openInNewTab", icon: "plus" },
   settings: { labelKey: "topbar.settings", icon: "settings" },
   composer: { labelKey: "topbar.item.composer", icon: "edit" },
   newChat: { labelKey: "topbar.newChat", icon: "edit" },

@@ -8,7 +8,7 @@ import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { CONTENT_BUNDLES, contentInjectionPlan } from "../shared/frame-commands.js";
 import { CONTENT_BRIDGE_VERSION } from "../shared/protocol.js";
-
+import { assertNewWorkspaceTabResult, completeChromiumNewWorkspaceTabProbe, completeFirefoxNewWorkspaceTabProbe, newWorkspaceTabProbe, stableConfigInfoProbe } from "./browser-smoke-page-probes.mjs";
 const require = createRequire(import.meta.url);
 const { materializePackagePlan, packagePlan } = require("./package-plan.cjs");
 const {
@@ -23,7 +23,6 @@ const registrationIds = Object.freeze(Object.values(CONTENT_BUNDLES).map(({ id }
 const mainWorldRegistrationIds = Object.freeze(
   Object.values(CONTENT_BUNDLES).filter(({ world }) => world === "MAIN").map(({ id }) => id)
 );
-
 function diagnostic(message) {
   if (allowSkip) {
     console.warn(`Browser smoke skipped: ${message}`);
@@ -31,11 +30,9 @@ function diagnostic(message) {
   }
   throw new Error(message);
 }
-
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
-
 function assertRuntimeResult(result, browserTarget, options = {}) {
   const contentWindowIdentityIsStable = browserTarget !== "firefox";
   const assertRetainedFrame = (frame, operation) => {
@@ -57,6 +54,7 @@ function assertRuntimeResult(result, browserTarget, options = {}) {
     assert(byId.get(id)?.world === "MAIN", `${browserTarget}: ${id} is not registered in MAIN world`);
   }
   assert(result.lazy?.every((entry) => entry.ok), `${browserTarget}: lazy module import failed: ${JSON.stringify(result.lazy)}`);
+  assertNewWorkspaceTabResult(result?.newWorkspaceTab, browserTarget, assert);
   const trustedError = String(result.trusted?.error || result.trusted?.value?.error || "");
   if (browserTarget === "chromium") {
     assert(/invalid viewport coordinates/i.test(trustedError), `chromium: trusted-input helper did not reject negative coordinates: ${trustedError}`);
@@ -154,12 +152,13 @@ function assertRuntimeResult(result, browserTarget, options = {}) {
   }
   assert(!(loopback?.injection?.errors || []).length, `${browserTarget}: loopback injection error(s): ${(loopback?.injection?.errors || []).join(" | ")}`);
 }
-
 async function chromiumWorkspaceSessionRecoveryProbe(context, page, fixtureUrl, pageErrors) {
   let activePage = page;
   const prepared = await page.evaluate(async ({ fixtureUrl }) => {
     const api = globalThis.chrome;
     const shared = await import(api.runtime.getURL("shared/workspace-session.js"));
+    const workspaceId = shared.workspaceSessionIdFromUrl(location.href);
+    if (!workspaceId) throw new Error("workspace session smoke requires a stable page token");
     const stored = await api.storage.local.get(["options", shared.WORKSPACE_SESSION_GENERATION_KEY]);
     const generation = stored[shared.WORKSPACE_SESSION_GENERATION_KEY]
       || shared.DEFAULT_WORKSPACE_SESSION_GENERATION;
@@ -200,7 +199,7 @@ async function chromiumWorkspaceSessionRecoveryProbe(context, page, fixtureUrl, 
       })),
       fullscreenGroupIndex: expected.fullscreenGroupIndex
     };
-    sessionStorage.setItem(shared.WORKSPACE_SESSION_PAGE_KEY, JSON.stringify({ generation, snapshot }));
+    sessionStorage.setItem(shared.WORKSPACE_SESSION_PAGE_KEY, JSON.stringify({ generation, workspaceId, snapshot }));
     const tab = await api.tabs.getCurrent();
     return {
       expected,
@@ -208,7 +207,6 @@ async function chromiumWorkspaceSessionRecoveryProbe(context, page, fixtureUrl, 
       oldTabId: tab.id
     };
   }, { fixtureUrl });
-
   const readWorkspace = () => activePage.evaluate(() => {
     const cards = Array.from(document.querySelectorAll(".chat-card"));
     return {
@@ -360,7 +358,6 @@ async function chromiumWorkspaceSessionRecoveryProbe(context, page, fixtureUrl, 
     }
   };
 }
-
 const pageProbe = `async (fixtureUrl) => {
   const request = async (message) => {
     try {
@@ -377,6 +374,8 @@ const pageProbe = `async (fixtureUrl) => {
       (error) => { clearTimeout(timer); reject(error); }
     );
   });
+  const newWorkspaceTabProbe = ${newWorkspaceTabProbe.toString()};
+  const stableConfigInfoProbe = ${stableConfigInfoProbe.toString()};
   const loopbackContentHandshake = async () => {
     const api = globalThis.browser || globalThis.chrome;
     const currentTab = await api.tabs.getCurrent();
@@ -699,9 +698,9 @@ const pageProbe = `async (fixtureUrl) => {
       });
       let customFrameBeforeEdit = snapshotFrame(customFrame);
 
-      const brandButton = document.querySelector('[data-tooltip-id="topbar.brand"]');
-      if (!brandButton) throw new Error("custom app retention probe found no settings entry");
-      brandButton.click();
+      const settingsButton = document.querySelector('[data-tooltip-id="topbar.settings"]');
+      if (!settingsButton) throw new Error("custom app retention probe found no settings entry");
+      settingsButton.click();
       await waitForCondition(
         () => Boolean(document.querySelector(".settings-modal")),
         3000,
@@ -974,6 +973,7 @@ const pageProbe = `async (fixtureUrl) => {
   }));
   const loopback = await loopbackContentHandshake();
   const customAppFrameRetention = await customAppFrameRetentionProbe();
+  const newWorkspaceTab = await newWorkspaceTabProbe({ withTimeout });
   const trusted = await request({
     source: "chatclub",
     action: "dispatchTrustedClick",
@@ -990,14 +990,14 @@ const pageProbe = `async (fixtureUrl) => {
   return {
     shell: Boolean(document.querySelector("#app .app-shell")),
     fatalPre: Boolean(document.querySelector("#app > pre")),
-    configInfo: await request({ source: "chatclub", action: "getConfigInfo" }),
+    configInfo: await stableConfigInfoProbe({ request, withTimeout, expectedIds: ${JSON.stringify(registrationIds)} }),
     lazy,
     loopback,
     customAppFrameRetention,
+    newWorkspaceTab,
     trusted
   };
 }`;
-
 async function startLoopbackFixture() {
   const server = http.createServer((request, response) => {
     const url = new URL(request.url || "/", "http://127.0.0.1");
@@ -1077,6 +1077,7 @@ async function chromiumSmoke(extensionDirectory, temporaryRoot, fixtureUrl) {
     const workspaceSessionProbe = await chromiumWorkspaceSessionRecoveryProbe(context, page, fixtureUrl, pageErrors);
     page = workspaceSessionProbe.page;
     const result = await page.evaluate(`(${pageProbe})(${JSON.stringify(fixtureUrl)})`);
+    await completeChromiumNewWorkspaceTabProbe(context, page, result.newWorkspaceTab);
     result.workspaceSession = workspaceSessionProbe.result;
     if (pageErrors.length) result.pageErrors = pageErrors;
     assertRuntimeResult(result, "chromium");
@@ -1095,12 +1096,10 @@ async function chromiumSmoke(extensionDirectory, temporaryRoot, fixtureUrl) {
     await context?.close().catch(() => {});
   }
 }
-
 function executableOnPath(name) {
   const result = spawnSync("which", [name], { encoding: "utf8" });
   return result.status === 0 ? result.stdout.trim() : "";
 }
-
 function firefoxBinary() {
   const candidates = [
     process.env.FIREFOX_BINARY,
@@ -1111,7 +1110,6 @@ function firefoxBinary() {
   ].filter(Boolean);
   return candidates.find((candidate) => fs.statSync(candidate, { throwIfNoEntry: false })?.isFile()) || "";
 }
-
 async function firefoxSmoke(extensionDirectory, fixtureUrl) {
   let selenium;
   let firefox;
@@ -1163,10 +1161,12 @@ async function firefoxSmoke(extensionDirectory, fixtureUrl) {
     );
     await driver.get(extensionUrl);
     await driver.wait(async () => driver.findElements(selenium.By.css("#app .app-shell")).then((items) => items.length > 0), 25000);
+    const sourceHandle = await driver.getWindowHandle();
     const result = await driver.executeAsyncScript(`
       const done = arguments[arguments.length - 1];
       (${pageProbe})(${JSON.stringify(fixtureUrl)}).then(done, (error) => done({ probeError: error && error.message ? error.message : String(error) }));
     `);
+    await completeFirefoxNewWorkspaceTabProbe(driver, selenium.By, result.newWorkspaceTab, sourceHandle);
     assert(!result?.probeError, `firefox: page probe failed: ${result?.probeError}`);
     assertRuntimeResult(result, "firefox", {
       expectFirefoxFileFallback: browserVersion.split(".", 1)[0] === "136"

@@ -59,6 +59,7 @@ export const BACKGROUND_REQUEST_ACTIONS = Object.freeze({
   LIST_FUNCTIONAL_ANOMALIES: "listFunctionalAnomalies",
   REMOVE_FUNCTIONAL_ANOMALIES: "removeFunctionalAnomalies",
   CLEAR_FUNCTIONAL_ANOMALIES: "clearFunctionalAnomalies",
+  OPEN_WORKSPACE_TAB: "openWorkspaceTab",
   OPEN_TAB: "openTab"
 });
 
@@ -227,6 +228,10 @@ export const BACKGROUND_REQUEST_SPECS = Object.freeze({
   [ACTION.CLEAR_FUNCTIONAL_ANOMALIES]: extensionPage({
     mutates: true,
     response: contract({ records: "array" })
+  }),
+  [ACTION.OPEN_WORKSPACE_TAB]: extensionPage({
+    mutates: true,
+    response: contract({ tabId: "integer" })
   }),
   [ACTION.OPEN_TAB]: extensionPage({
     mutates: true,

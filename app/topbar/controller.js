@@ -35,6 +35,7 @@ export function createTopbarController(dependencies = {}) {
     "deleteThread",
     "formatShortcutTooltip",
     "newChat",
+    "openNewWorkspaceTab",
     "openPocket",
     "openSettings",
     "openSummary"
@@ -101,7 +102,7 @@ export function createTopbarController(dependencies = {}) {
     }
     if (item.id === "brand") {
       closeSettingsMenu();
-      actions.openSettings("about");
+      actions.openNewWorkspaceTab();
       return;
     }
     if (item.id === "composer") {

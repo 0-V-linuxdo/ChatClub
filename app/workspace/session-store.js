@@ -61,7 +61,7 @@ function envelopeRecord(value, expectedGeneration = "", expectedWorkspaceId = ""
   const generation = generationValue(source.generation);
   if (!generation || (expectedGeneration && generation !== expectedGeneration)) return null;
   const workspaceId = normalizeWorkspaceSessionId(source.workspaceId);
-  if (expectedWorkspaceId && workspaceId && workspaceId !== expectedWorkspaceId) return null;
+  if (expectedWorkspaceId && workspaceId !== expectedWorkspaceId) return null;
   const snapshot = snapshotRecord(source.snapshot);
   return snapshot ? { generation, workspaceId, snapshot } : null;
 }
@@ -277,7 +277,7 @@ export function createWorkspaceSessionStore({
   async function load() {
     const pageValue = readPageValue();
     const targetGeneration = await resolveGeneration({ refresh: true });
-    const page = envelopeRecord(pageValue, targetGeneration);
+    const page = envelopeRecord(pageValue, targetGeneration, initialWorkspaceId);
     if (page) {
       const workspaceId = installWorkspaceId(page.workspaceId || initialWorkspaceId || ensureWorkspaceId());
       const snapshot = snapshotWithGeneration(page.snapshot, targetGeneration);

@@ -1,7 +1,7 @@
 import { DEFAULT_TOPBAR_LAYOUT } from "./topbar.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-07-22｜02:29:27」";
+export const APP_VERSION = "「2026-07-23｜00:30:00」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -135,7 +135,7 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
     id: "topbar",
     labelKey: "tooltip.group.topbar",
     targets: Object.freeze([
-      Object.freeze({ id: "topbar.brand", labelKey: "topbar.about" }),
+      Object.freeze({ id: "topbar.brand", labelKey: "common.openInNewTab" }),
       Object.freeze({ id: "topbar.settings", labelKey: "topbar.settings" }),
       Object.freeze({ id: "topbar.promptLibrary", labelKey: "topbar.promptLibrary" }),
       Object.freeze({ id: "topbar.clearPrompt", labelKey: "topbar.clearPrompt" }),

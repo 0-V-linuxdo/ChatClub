@@ -43,6 +43,7 @@ export function createTopbarView(dependencies = {}) {
     "newChat",
     "openAppPicker",
     "openLayoutMenu",
+    "openNewWorkspaceTab",
     "openPocket",
     "openSettings",
     "openSettingsMenu",
@@ -106,7 +107,7 @@ export function createTopbarView(dependencies = {}) {
   }
 
   function renderBrand() {
-    const label = t("topbar.about");
+    const label = t("common.openInNewTab");
     return el("button", {
       class: `brand tooltip-trigger ${topbarItemClass("brand")}`,
       type: "button",
@@ -116,7 +117,7 @@ export function createTopbarView(dependencies = {}) {
       onclick: (event) => {
         event.preventDefault();
         event.stopPropagation();
-        actions.openSettings("about");
+        actions.openNewWorkspaceTab();
       }
     },
       el("img", { class: "brand-logo", src: "icons/logo.svg", alt: "", draggable: "false" }),

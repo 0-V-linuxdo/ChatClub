@@ -53,6 +53,7 @@ import { registerContentScripts } from "./content-script-registration.js";
 import {
   openableTabUrl,
   openExternalTab,
+  openWorkspaceTab,
   registerActionListener
 } from "./tab-runtime.js";
 import { claimWorkspaceSessionRecovery, commitWorkspaceSessionRecovery, detachWorkspaceSessionMirror, prepareWorkspaceSessionLifecycle, rotateWorkspaceSessionGeneration } from "./workspace-session.js";
@@ -466,6 +467,11 @@ const backgroundRequestHandlers = [
   [REQUEST.LIST_FUNCTIONAL_ANOMALIES, async () => ({ records: await functionalAnomalyStore.list() })],
   [REQUEST.REMOVE_FUNCTIONAL_ANOMALIES, async (message) => ({ records: await functionalAnomalyStore.remove(message.id) })],
   [REQUEST.CLEAR_FUNCTIONAL_ANOMALIES, async () => ({ records: await functionalAnomalyStore.clear() })],
+  [REQUEST.OPEN_WORKSPACE_TAB, async (_message, sender) => {
+    const tab = await openWorkspaceTab(chrome, sender);
+    if (!Number.isInteger(tab?.id)) throw new Error("New workspace tab is unavailable");
+    return { tabId: tab.id };
+  }],
   [REQUEST.OPEN_TAB, async (message, sender) => {
     const url = openableTabUrl(message.url);
     if (!url) throw new Error("Invalid tab URL");

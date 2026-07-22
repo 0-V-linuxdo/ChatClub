@@ -57,9 +57,16 @@ const { functionSource } = require("./function-source.cjs");
   assert.match(topbarSync, /preferredModel\.syncPreferredModelInputGate\(\)/, "Topbar redraw must preserve the Preferred Model gate state");
   assert.match(functionSource(topbar, "saveEditLayout"), /editSavePending = true[\s\S]*finally[\s\S]*editSavePending = false/, "Topbar must guard every edit-save close path while persistence is pending");
   assert.match(functionSource(topbar, "closeSettingsMenuOnKeydown"), /claimTopmostPopoverEscape\(event,\s*"\.topbar-settings-popover"\)/, "Topbar Settings must claim only its topmost Escape");
+  const brandMenuAction = functionSource(topbar, "runMenuItem");
+  assert.match(brandMenuAction, /item\.id === "brand"[\s\S]*actions\.openNewWorkspaceTab\(\)/, "a folded Logo item must open a fresh ChatClub tab");
+  assert.doesNotMatch(brandMenuAction, /item\.id === "brand"[\s\S]{0,160}openSettings\("about"\)/, "a folded Logo item must no longer open About");
   assert.match(topbarView, /function render\(/, "Topbar view must own normal and edit-mode rendering");
   assert.match(topbarView, /function renderSettingsMenu\(/, "Topbar view must own Settings menu rendering");
   assert.doesNotMatch(topbarView, /addEventListener\("keydown"/, "the view must not own dismissal listeners");
+  const brandView = functionSource(topbarView, "renderBrand");
+  assert.match(brandView, /t\("common\.openInNewTab"\)/, "the Logo must announce its new-tab behavior");
+  assert.match(brandView, /actions\.openNewWorkspaceTab\(\)/, "the visible Logo must open a fresh ChatClub tab");
+  assert.doesNotMatch(brandView, /openSettings\("about"\)/, "the visible Logo must no longer open About");
 
   assert.match(preferredModel, /workspace:\s*"object"/, "Preferred Model must consume a stable workspace port");
   assert.match(preferredModel, /composer:\s*"object"/, "Preferred Model must consume the initialized Composer port");
