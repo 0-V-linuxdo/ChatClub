@@ -687,6 +687,9 @@ export function createPreferredModelController(dependencies = {}) {
       delete iframe.dataset.summaryRuntimeDocumentId;
       delete iframe.dataset.summaryRuntimeBridgeVersion;
       delete iframe.dataset.summaryRuntimeImplementationVersion;
+      iframe.dataset.contentRuntimeCapabilitiesEpoch = String(
+        Math.max(0, Number(iframe.dataset.contentRuntimeCapabilitiesEpoch) || 0) + 1
+      );
       delete iframe.dataset.contentRuntimeCapabilitiesDocumentId;
       delete iframe.dataset.contentRuntimeCapabilities;
     }

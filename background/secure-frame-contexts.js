@@ -6,7 +6,6 @@ import {
 } from "../shared/content-runtime-package-identity.js";
 
 const FRAME_CONTEXT_SESSION_KEY = "chatclubSecureFrameContexts";
-const FRAME_CONTEXT_MAX_AGE_MS = 30 * 60 * 1000;
 const FRAME_CONTEXT_MAX_ENTRIES = 512;
 
 export function createSecureFrameContextRegistry(api) {
@@ -25,13 +24,16 @@ export function createSecureFrameContextRegistry(api) {
     return /^[a-f0-9]{64}$/i.test(token) ? token : "";
   }
 
-  function prune(now = Date.now()) {
+  function prune() {
     for (const [token, context] of contexts) {
-      if (!context || now - Number(context.registeredAt || 0) > FRAME_CONTEXT_MAX_AGE_MS) contexts.delete(token);
+      if (!context) contexts.delete(token);
     }
     if (contexts.size <= FRAME_CONTEXT_MAX_ENTRIES) return;
     const oldest = [...contexts.entries()]
-      .sort((a, b) => Number(a[1]?.registeredAt || 0) - Number(b[1]?.registeredAt || 0));
+      .sort((a, b) => (
+        Number(a[1]?.lastActiveAt || a[1]?.registeredAt || 0)
+        - Number(b[1]?.lastActiveAt || b[1]?.registeredAt || 0)
+      ));
     for (const [token] of oldest.slice(0, contexts.size - FRAME_CONTEXT_MAX_ENTRIES)) contexts.delete(token);
   }
 
@@ -56,7 +58,9 @@ export function createSecureFrameContextRegistry(api) {
               ...context,
               runtimeIdentity,
               browserDocumentId: String(context.browserDocumentId || context.documentId || ""),
-              legacyDocumentId: String(context.legacyDocumentId || "")
+              legacyDocumentId: String(context.legacyDocumentId || ""),
+              registeredAt: Number(context.registeredAt || 0),
+              lastActiveAt: Number(context.lastActiveAt || context.registeredAt || 0)
             });
           }
         }
@@ -101,25 +105,47 @@ export function createSecureFrameContextRegistry(api) {
     if (!String(sender?.tab?.url || "").startsWith(api.runtime.getURL(""))) {
       throw new Error("Secure frame registration requires a direct child of the ChatClub extension page");
     }
+    const senderDocumentId = String(sender?.documentId || "").trim();
+    const legacyDocumentId = /^legacy:[a-f0-9]{64}$/i.test(String(message.browserDocumentId || ""))
+      ? String(message.browserDocumentId)
+      : "";
+    await hydrate();
     const frame = await api.webNavigation.getFrame({ tabId, frameId });
     if (!frame || frame.parentFrameId !== 0 || String(frame.url || "") !== senderUrl) {
       throw new Error("Secure frame registration does not match a direct child document");
     }
-    const senderDocumentId = String(sender?.documentId || "").trim();
-    const navigationDocumentId = String(frame.documentId || "").trim();
-    const legacyDocumentId = /^legacy:[a-f0-9]{64}$/i.test(String(message.browserDocumentId || ""))
-      ? String(message.browserDocumentId)
-      : "";
+    if (!legacyDocumentId) throw new Error("Secure frame registration legacy document is unavailable");
+    const results = await api.scripting?.executeScript?.({
+      target: { tabId, frameIds: [frameId] },
+      world: "ISOLATED",
+      func: () => {
+        // eslint-disable-next-line chatclub-realm/no-cross-realm-global -- serialized ISOLATED-world probe must select Firefox's DOM-global owner.
+        const target = globalThis.window || globalThis;
+        return {
+          legacyDocumentId: String(target.__CHATCLUB_BROWSER_DOCUMENT_ATTESTATION_STATE__?.id || ""),
+          href: String(target.location?.href || "")
+        };
+      }
+    });
+    const currentProbe = results?.[0] || null;
+    const currentLegacyDocumentId = String(currentProbe?.result?.legacyDocumentId || "").trim();
+    if (
+      !currentLegacyDocumentId
+      || currentLegacyDocumentId !== legacyDocumentId
+      || String(currentProbe?.result?.href || "").trim() !== senderUrl
+    ) {
+      throw new Error("Secure frame registration legacy document changed");
+    }
+    const navigationDocumentId = String(currentProbe?.documentId || frame.documentId || "").trim();
     if (senderDocumentId && navigationDocumentId && senderDocumentId !== navigationDocumentId) {
       throw new Error("Secure frame registration document changed");
     }
     const documentId = senderDocumentId || navigationDocumentId;
     const browserDocumentId = documentId || legacyDocumentId;
-    if (!browserDocumentId) throw new Error("Secure frame registration browser document is unavailable");
-    await hydrate();
     for (const [existingToken, context] of contexts) {
       if (context?.tabId === tabId && context?.frameId === frameId && existingToken !== token) contexts.delete(existingToken);
     }
+    const registeredAt = Date.now();
     const context = {
       tabId,
       frameId,
@@ -131,7 +157,8 @@ export function createSecureFrameContextRegistry(api) {
       secureToken,
       bridgeVersion: String(message.bridgeVersion || ""),
       runtimeIdentity,
-      registeredAt: Date.now()
+      registeredAt,
+      lastActiveAt: registeredAt
     };
     contexts.set(token, context);
     prune();
@@ -159,9 +186,59 @@ export function createSecureFrameContextRegistry(api) {
     return match;
   }
 
-  function remember(token, value) {
-    contexts.set(token, value);
+  async function forgetFrame(tabId, frameId, options = {}) {
+    if (!Number.isInteger(tabId) || !Number.isInteger(frameId) || frameId <= 0) return 0;
+    const currentDocumentId = String(options.documentId || "").trim();
+    const registeredBefore = Number(options.registeredBefore);
+    await hydrate();
+    let removed = 0;
+    for (const [token, context] of contexts) {
+      if (context?.tabId !== tabId || context?.frameId !== frameId) continue;
+      const registeredDocumentId = String(context.documentId || context.browserDocumentId || "").trim();
+      if (currentDocumentId && registeredDocumentId === currentDocumentId) continue;
+      if (
+        Number.isFinite(registeredBefore)
+        && Number(context.registeredAt || 0) >= registeredBefore
+      ) continue;
+      contexts.delete(token);
+      removed += 1;
+    }
+    if (removed) await persist();
+    return removed;
+  }
+
+  async function forgetContext(token, value) {
+    const normalizedToken = frameContextToken(token);
+    if (!normalizedToken || contexts.get(normalizedToken) !== value) return false;
+    contexts.delete(normalizedToken);
+    await persist();
+    return true;
+  }
+
+  async function forgetTab(tabId, options = {}) {
+    if (!Number.isInteger(tabId)) return 0;
+    const registeredBefore = Number(options.registeredBefore);
+    await hydrate();
+    let removed = 0;
+    for (const [token, context] of contexts) {
+      if (context?.tabId !== tabId) continue;
+      if (
+        Number.isFinite(registeredBefore)
+        && Number(context.registeredAt || 0) >= registeredBefore
+      ) continue;
+      contexts.delete(token);
+      removed += 1;
+    }
+    if (removed) await persist();
+    return removed;
+  }
+
+  function touch(token, value) {
+    const normalizedToken = frameContextToken(token);
+    if (!normalizedToken || contexts.get(normalizedToken) !== value) return false;
+    value.lastActiveAt = Date.now();
     persist();
+    return true;
   }
 
   async function registeredSenderContext(message = {}, sender = {}) {
@@ -193,12 +270,15 @@ export function createSecureFrameContextRegistry(api) {
 
   return Object.freeze({
     context,
+    forgetContext,
+    forgetFrame,
+    forgetTab,
     frameBindingToken,
     frameContextToken,
     persist,
     register,
     registeredFrameContext,
     registeredSenderContext,
-    remember
+    touch
   });
 }

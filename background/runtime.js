@@ -72,6 +72,8 @@ const shortcutActions = new Set(ALL_SHORTCUT_ACTIONS);
 const secureFrameContextRegistry = createSecureFrameContextRegistry(chrome);
 const {
   context: secureFrameContext,
+  forgetFrame: forgetSecureFrameContext,
+  forgetTab: forgetSecureTabContexts,
   frameContextToken,
   register: registerSecureFrameContext,
   registeredFrameContext,
@@ -82,7 +84,8 @@ const authenticatedFrameRelay = createAuthenticatedFrameRelay({
   sendRuntimeMessage: (message) => chrome.runtime.sendMessage(message),
   relaySource: EXTENSION_RUNTIME_RELAY_SOURCE,
   shortcutActions,
-  rememberContext: secureFrameContextRegistry.remember
+  touchContext: secureFrameContextRegistry.touch,
+  forgetContext: secureFrameContextRegistry.forgetContext
 });
 
 function extensionPageSender(sender = {}) {
@@ -146,11 +149,31 @@ chrome.webNavigation?.onBeforeNavigate?.addListener((details) => {
   relayRegisteredFrameNavigation(details, "before").catch(() => {});
 });
 chrome.webNavigation?.onCommitted?.addListener((details) => {
-  relayRegisteredFrameNavigation(details, "committed").catch(() => {});
+  const committedAt = Date.now();
+  (async () => {
+    if (Number(details?.frameId) === 0 && Number.isInteger(details?.tabId)) {
+      await forgetSecureTabContexts(Number(details.tabId), { registeredBefore: committedAt });
+      return;
+    }
+    await relayRegisteredFrameNavigation(details, "committed");
+    if (
+      Number(details?.parentFrameId) === 0
+      && Number.isInteger(details?.tabId)
+      && Number.isInteger(details?.frameId)
+      && Number(details.frameId) > 0
+    ) {
+      await forgetSecureFrameContext(Number(details.tabId), Number(details.frameId), {
+        documentId: String(details.documentId || ""),
+        registeredBefore: committedAt
+      });
+    }
+  })().catch(() => {});
 });
 
 chrome.tabs?.onRemoved?.addListener((tabId, removeInfo) => {
   grokCookieRuntime.handleTabRemoved(tabId);
+  forgetSecureTabContexts(tabId)
+    .catch((error) => console.warn(`[${APP_NAME}] closed tab secure frame contexts could not be removed`, error));
   detachWorkspaceSessionMirror(chrome, tabId, removeInfo)
     .catch((error) => console.warn(`[${APP_NAME}] closed tab workspace session mirror could not be detached`, error));
 });
@@ -272,8 +295,9 @@ async function sendSecureFrameCommand(message = {}, sender = {}) {
     }
     throw frameRouteError("REMOTE_ERROR", response?.error || `Secure frame command failed: ${command}`, true);
   }
-  context.registeredAt = Date.now();
-  secureFrameContextRegistry.remember(frameContextToken(message.bridgeDocumentId), context);
+  if (!secureFrameContextRegistry.touch(frameContextToken(message.bridgeDocumentId), context)) {
+    throw frameRouteError("STALE_DOCUMENT", "Secure frame document changed while the command was in flight", true);
+  }
   return FRAME_COMMAND_SPECS[command]?.transport === "main-world" ? response : response.data;
 }
 
@@ -299,6 +323,9 @@ async function verifySecureFrameContext(message = {}, sender = {}) {
   );
   if (!response?.success || !response.data || typeof response.data !== "object") {
     throw new Error(response?.error || "Secure frame document is no longer active");
+  }
+  if (!secureFrameContextRegistry.touch(token, context)) {
+    throw new Error("Secure frame document changed during registration verification");
   }
   return {
     href: String(response.data.href || context.url || ""),

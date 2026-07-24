@@ -99,10 +99,10 @@ function installContentBridge() {
       || !browserDocumentId
       || (/^legacy:/i.test(browserDocumentId) && browserDocumentId !== currentBrowserDocumentAttestationId())
     ) return false;
-    const bootstrap = String(globalThis.__CHATCLUB_FRAME_BINDING_ID__ || "");
+    const bootstrap = String(window.__CHATCLUB_FRAME_BINDING_ID__ || "");
     if (bootstrap && bootstrap !== expectedBindingId) return false;
     if (!bootstrap) {
-      Object.defineProperty(globalThis, "__CHATCLUB_FRAME_BINDING_ID__", {
+      Object.defineProperty(window, "__CHATCLUB_FRAME_BINDING_ID__", {
         configurable: false,
         enumerable: false,
         writable: false,

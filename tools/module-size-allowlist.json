@@ -5,5 +5,12 @@
     "maxBytes": 108191,
     "targetBytes": 82000,
     "reason": "Bilingual translation catalog data is kept co-located for key parity; both line and byte size are explicitly ratcheted."
+  },
+  "tools/browser-smoke.mjs": {
+    "maxLines": 1211,
+    "target": 1200,
+    "maxBytes": 63546,
+    "targetBytes": 60000,
+    "reason": "The cross-engine smoke now exercises the production two-phase frame injection and authenticated post-injection binding handshake."
   }
 }

@@ -36,6 +36,7 @@ export function createFrameBridgeController(dependencies = {}) {
     handleShortcutAction: "function"
   });
   const capabilityPreparationRuns = new WeakMap();
+  const capabilityPreparationTails = new WeakMap();
   const repairTimers = new WeakMap();
   const repairGenerations = new WeakMap();
   const frameBindingChallenges = createFrameBindingChallengeRegistry();
@@ -90,6 +91,38 @@ export function createFrameBridgeController(dependencies = {}) {
     return messages.join("; ");
   }
 
+  function invalidateContentRuntimeCapabilityLedger(iframe) {
+    if (!iframe?.dataset) return;
+    iframe.dataset.contentRuntimeCapabilitiesEpoch = String(
+      Math.max(0, Number(iframe.dataset.contentRuntimeCapabilitiesEpoch) || 0) + 1
+    );
+    delete iframe.dataset.summaryRuntimeDocumentId;
+    delete iframe.dataset.summaryRuntimeBridgeVersion;
+    delete iframe.dataset.summaryRuntimeImplementationVersion;
+    delete iframe.dataset.contentRuntimeCapabilitiesDocumentId;
+    delete iframe.dataset.contentRuntimeCapabilities;
+  }
+
+  function mergedContentRuntimeCapabilities(
+    iframe,
+    documentId,
+    installedCapabilities,
+    features,
+    capabilityEpochAtStart
+  ) {
+    const finalInstalledCapabilities = String(iframe?.dataset?.contentRuntimeCapabilitiesDocumentId || "") === documentId
+      ? String(iframe.dataset.contentRuntimeCapabilities || "").split(",").filter(Boolean)
+      : [];
+    const capabilitySnapshotStillCurrent = String(
+      iframe?.dataset?.contentRuntimeCapabilitiesEpoch || "0"
+    ) === capabilityEpochAtStart;
+    return [...new Set([
+      ...finalInstalledCapabilities,
+      ...(capabilitySnapshotStillCurrent ? installedCapabilities : []),
+      ...features
+    ])].sort();
+  }
+
   async function waitForCurrentContentFrameRegistration(iframe, timeoutMs = 2600) {
     const deadline = Date.now() + Math.max(250, Number(timeoutMs) || 0);
     let lastBindingProbeAt = 0;
@@ -114,6 +147,7 @@ export function createFrameBridgeController(dependencies = {}) {
     const summary = features.includes("summary");
     let registration = await verifiedCurrentContentFrameRegistration(iframe);
     const registeredDocumentId = String(registration?.documentId || "");
+    const capabilityEpochAtStart = String(iframe.dataset.contentRuntimeCapabilitiesEpoch || "0");
     const capabilityDocumentCurrent = String(iframe.dataset.contentRuntimeCapabilitiesDocumentId || "") === registeredDocumentId;
     const installedCapabilities = capabilityDocumentCurrent
       ? String(iframe.dataset.contentRuntimeCapabilities || "").split(",").filter(Boolean)
@@ -149,21 +183,12 @@ export function createFrameBridgeController(dependencies = {}) {
     const exactFrameTarget = Number.isSafeInteger(expectedFrameId) && expectedFrameId > 0
       ? { expectedFrameId }
       : {};
-    let bindingEntry = null;
-    try {
-      bindingEntry = frameBindingChallenges.issue(iframe);
-    } catch (error) {
-      console.warn("[ChatClub] Could not create a secure frame binding challenge", error);
-    }
-
     let installed;
     try {
       const exactBindingRequest = exactFrameTarget.expectedFrameId
         ? {
             ...exactFrameTarget,
-            expectedBindingId,
-            bindingChallenge: bindingEntry?.challenge || "",
-            bindingGeneration: bindingEntry?.generation || 0
+            expectedBindingId
           }
         : { expectedBindingId };
       installed = await runtimeRequest({
@@ -202,13 +227,11 @@ export function createFrameBridgeController(dependencies = {}) {
       && new Set(injectedFiles).size === injectedCount
       && expectedFileNames.every((file) => injectedFileNames.includes(file))
       && injectedFileNames.every((file) => expectedFileNames.includes(file));
-    const exactFrameRequested = Boolean(exactFrameTarget.expectedFrameId);
     const injectionCountIsValid = injectedCount === expectedInjectionCount;
     const installedBrowserDocumentId = String(installed?.browserDocumentId || "").trim();
     const installationFailureReason = installationError
       || (!installedFeaturesAreValid ? "content bridge installed capabilities did not match the request" : "")
       || (!plannedFilesAreValid ? "content bridge injection plan was invalid" : "")
-      || (exactFrameRequested && installed?.bindingRelayed !== true ? "secure iframe binding was not relayed" : "")
       || (!installedBrowserDocumentId ? "content bridge injection browser document is unavailable" : "")
       || (!injectionCountIsValid || !completeInjectionInventory ? "content bridge injection was incomplete" : "");
     if (installationFailureReason) {
@@ -220,8 +243,18 @@ export function createFrameBridgeController(dependencies = {}) {
       };
     }
     iframe.dataset.injectedBrowserDocumentId = installedBrowserDocumentId;
-    if (bindingEntry) bindingEntry.browserDocumentId = installedBrowserDocumentId;
-    if (!exactFrameRequested) requestFrameBinding(iframe, { skipRegistered: false });
+    const bindingRelayed = await requestFrameBinding(iframe, {
+      rotate: true,
+      skipRegistered: false
+    });
+    if (!bindingRelayed) {
+      return {
+        ok: false,
+        reason: "secure iframe binding was not relayed",
+        installed,
+        summary
+      };
+    }
     registration = await waitForCurrentContentFrameRegistration(iframe);
     if (!registration) {
       return {
@@ -282,8 +315,15 @@ export function createFrameBridgeController(dependencies = {}) {
       iframe.dataset.summaryRuntimeBridgeVersion = CONTENT_BRIDGE_VERSION;
       iframe.dataset.summaryRuntimeImplementationVersion = CONTENT_RUNTIME_IDENTITY.implementationVersion;
     }
+    const mergedCapabilities = mergedContentRuntimeCapabilities(
+      iframe,
+      registration.documentId,
+      installedCapabilities,
+      features,
+      capabilityEpochAtStart
+    );
     iframe.dataset.contentRuntimeCapabilitiesDocumentId = registration.documentId;
-    iframe.dataset.contentRuntimeCapabilities = [...new Set([...installedCapabilities, ...features])].sort().join(",");
+    iframe.dataset.contentRuntimeCapabilities = mergedCapabilities.join(",");
     controller.rememberFrameLocation(iframe, registration);
     return { ok: true, registration, installed, injected: true, summary, features };
   }
@@ -301,11 +341,16 @@ export function createFrameBridgeController(dependencies = {}) {
     }
     const existing = runs.get(signature);
     if (existing) return existing;
-    const run = prepareContentFrameRuntimeUncached(iframe, options).finally(() => {
+    const previous = capabilityPreparationTails.get(iframe) || Promise.resolve();
+    const run = previous.catch(() => {}).then(
+      () => prepareContentFrameRuntimeUncached(iframe, options)
+    ).finally(() => {
       if (runs.get(signature) === run) runs.delete(signature);
       if (!runs.size) capabilityPreparationRuns.delete(iframe);
+      if (capabilityPreparationTails.get(iframe) === run) capabilityPreparationTails.delete(iframe);
     });
     runs.set(signature, run);
+    capabilityPreparationTails.set(iframe, run);
     return run;
   }
 
@@ -421,6 +466,14 @@ export function createFrameBridgeController(dependencies = {}) {
     const bridgeVersion = String(registration.bridgeVersion || "");
     const implementationVersion = String(registration.runtimeIdentity?.implementationVersion || "");
     const previousBridgeVersion = String(iframe.dataset.preferredModelContentBridgeVersion || "");
+    const sameRuntimeDocument = Boolean(
+      documentId
+      && documentId === previousDocumentId
+      && bridgeVersion
+      && bridgeVersion === previousBridgeVersion
+      && implementationVersion
+      && implementationVersion === String(iframe.dataset.preferredModelContentRuntimeImplementation || "")
+    );
     const bridgeChanged = Boolean(
       (documentId && previousDocumentId && documentId !== previousDocumentId)
       || (bridgeVersion && previousBridgeVersion && bridgeVersion !== previousBridgeVersion)
@@ -431,17 +484,17 @@ export function createFrameBridgeController(dependencies = {}) {
       )
     );
     if (bridgeChanged) invalidatePreferredModelFrame(iframe, "document-changed");
-    if (
-      bridgeChanged
-      || String(iframe.dataset.summaryRuntimeDocumentId || "") !== documentId
+    const hasSummaryRuntimeState = Boolean(
+      iframe.dataset.summaryRuntimeDocumentId
+      || iframe.dataset.summaryRuntimeBridgeVersion
+      || iframe.dataset.summaryRuntimeImplementationVersion
+    );
+    if (bridgeChanged || (hasSummaryRuntimeState && (
+      String(iframe.dataset.summaryRuntimeDocumentId || "") !== documentId
       || String(iframe.dataset.summaryRuntimeBridgeVersion || "") !== bridgeVersion
       || String(iframe.dataset.summaryRuntimeImplementationVersion || "") !== implementationVersion
-    ) {
-      delete iframe.dataset.summaryRuntimeDocumentId;
-      delete iframe.dataset.summaryRuntimeBridgeVersion;
-      delete iframe.dataset.summaryRuntimeImplementationVersion;
-      delete iframe.dataset.contentRuntimeCapabilitiesDocumentId;
-      delete iframe.dataset.contentRuntimeCapabilities;
+    ))) {
+      invalidateContentRuntimeCapabilityLedger(iframe);
     }
     iframe.dataset.preferredModelDocumentId = documentId;
     iframe.dataset.preferredModelContentBridgeVersion = bridgeVersion;
@@ -455,8 +508,10 @@ export function createFrameBridgeController(dependencies = {}) {
       title: String(registration.title || "")
     });
     controller.syncFrameFavicon(iframe).catch((error) => console.warn("[ChatClub] Failed to sync frame favicon", error));
-    schedulePreferredModelApply(iframe);
-    controller.reapplyMessageNavigatorForFrame(iframe).catch((error) => console.warn("[ChatClub] Failed to restore message navigator", error));
+    if (!sameRuntimeDocument) {
+      schedulePreferredModelApply(iframe);
+      controller.reapplyMessageNavigatorForFrame(iframe).catch((error) => console.warn("[ChatClub] Failed to restore message navigator", error));
+    }
   }
 
   async function acceptAuthenticatedFrameBinding(message = {}, context = {}, tabId = null) {
@@ -571,11 +626,7 @@ export function createFrameBridgeController(dependencies = {}) {
         if (message.lifecycleAction === "contentUnloading") {
           frameBindingChallenges.invalidate(iframe);
           iframe.dataset.preferredModelNavigationInvalidated = "1";
-          delete iframe.dataset.summaryRuntimeDocumentId;
-          delete iframe.dataset.summaryRuntimeBridgeVersion;
-          delete iframe.dataset.summaryRuntimeImplementationVersion;
-          delete iframe.dataset.contentRuntimeCapabilitiesDocumentId;
-          delete iframe.dataset.contentRuntimeCapabilities;
+          invalidateContentRuntimeCapabilityLedger(iframe);
           delete iframe.dataset.injectedBrowserDocumentId;
           invalidatePreferredModelFrame(iframe, "content-unloading", { clearDocumentId: true });
         }

@@ -93,6 +93,7 @@ const { functionSource } = require("./function-source.cjs");
   }
 
   const controllerSource = fs.readFileSync(path.join(root, "app/frame-bridge/controller.js"), "utf8");
+  const appRuntimeSource = fs.readFileSync(path.join(root, "app/runtime.js"), "utf8");
   const acceptSource = functionSource(controllerSource, "acceptAuthenticatedFrameBinding", true);
   const frameBindingId = "f".repeat(64);
   const boundFrame = () => ({
@@ -231,6 +232,86 @@ const { functionSource } = require("./function-source.cjs");
     assert.equal(await fixture.context.accept(relay(entry), senderContext(), 7), false);
     assert.equal(fixture.retries.length, 1, "a failed liveness verification should request a fresh binding challenge");
     assert.equal(fixture.retries[0].delay, 100);
+  }
+
+  {
+    const rememberSource = functionSource(controllerSource, "rememberVerifiedContentFrameRegistration");
+    const invalidateLedgerSource = functionSource(controllerSource, "invalidateContentRuntimeCapabilityLedger");
+    const invalidateSource = functionSource(appRuntimeSource, "invalidateFrameRuntimeState");
+    const sameDocumentFrame = {
+      dataset: {
+        preferredModelDocumentId: "bridge-document-1",
+        preferredModelContentBridgeVersion: "bridge-current",
+        preferredModelContentRuntimeImplementation: runtimeIdentity.implementationVersion,
+        summaryRuntimeDocumentId: "bridge-document-1",
+        summaryRuntimeBridgeVersion: "bridge-current",
+        summaryRuntimeImplementationVersion: runtimeIdentity.implementationVersion,
+        contentRuntimeCapabilitiesDocumentId: "bridge-document-1",
+        contentRuntimeCapabilities: "delete,preferred-model"
+      }
+    };
+    const effects = { invalidated: 0, scheduled: 0, navigator: 0, remembered: 0, favicon: 0 };
+    const rememberContext = vm.createContext({
+      Boolean,
+      String,
+      console,
+      invalidatePreferredModelFrame: () => { effects.invalidated += 1; },
+      schedulePreferredModelApply: () => { effects.scheduled += 1; },
+      workspaceController: () => ({
+        rememberFrameLocation: () => { effects.remembered += 1; },
+        syncFrameFavicon: async () => { effects.favicon += 1; },
+        reapplyMessageNavigatorForFrame: async () => { effects.navigator += 1; }
+      })
+    });
+    vm.runInContext(`
+      ${invalidateSource}
+      ${invalidateLedgerSource}
+      ${rememberSource}
+      globalThis.invalidateRuntime = invalidateFrameRuntimeState;
+      globalThis.remember = rememberVerifiedContentFrameRegistration;
+    `, rememberContext);
+    rememberContext.invalidateRuntime(sameDocumentFrame, "deleteThread:INJECTION_FAILED", {
+      preserveDocument: true,
+      clearCapabilities: true
+    });
+    assert.equal(sameDocumentFrame.dataset.preferredModelDocumentId, "bridge-document-1");
+    assert.equal(sameDocumentFrame.dataset.preferredModelContentBridgeVersion, "bridge-current");
+    assert.equal(
+      sameDocumentFrame.dataset.preferredModelContentRuntimeImplementation,
+      runtimeIdentity.implementationVersion
+    );
+    assert.equal(sameDocumentFrame.dataset.contentRuntimeCapabilities, undefined);
+    assert.equal(sameDocumentFrame.dataset.summaryRuntimeDocumentId, undefined);
+    assert.equal(sameDocumentFrame.dataset.contentRuntimeCapabilitiesEpoch, "1");
+    const registration = {
+      bridgeVersion: "bridge-current",
+      browserDocumentId: "browser-document-1",
+      href: "https://example.com/chat/1",
+      title: "Current chat",
+      runtimeIdentity
+    };
+    rememberContext.remember(sameDocumentFrame, "bridge-document-1", registration);
+    await Promise.resolve();
+    assert.equal(effects.invalidated, 0);
+    assert.equal(effects.scheduled, 0, "same-document background rebind must not reopen the preferred-model UI");
+    assert.equal(effects.navigator, 0, "same-document background rebind must not rebuild an intact navigator");
+    assert.equal(effects.remembered, 1);
+
+    const staleFrame = { dataset: { ...sameDocumentFrame.dataset } };
+    rememberContext.invalidateRuntime(staleFrame, "deleteThread:STALE_DOCUMENT", {
+      preserveDocument: false,
+      clearCapabilities: false
+    });
+    assert.equal(staleFrame.dataset.preferredModelDocumentId, undefined, "a stale browser document must clear model identity");
+
+    rememberContext.remember(sameDocumentFrame, "bridge-document-2", {
+      ...registration,
+      browserDocumentId: "browser-document-2"
+    });
+    await Promise.resolve();
+    assert.equal(effects.invalidated, 1, "a real content-document change must still invalidate preferred-model state");
+    assert.equal(effects.scheduled, 1);
+    assert.equal(effects.navigator, 1);
   }
 
   console.log("secure frame binding challenges: ok");

@@ -11,7 +11,8 @@ const root = path.resolve(__dirname, "..");
     `${pathToFileURL(path.join(root, "background/frame-relay.js")).href}?test=${Date.now()}`
   );
   const sent = [];
-  const remembered = [];
+  const touched = [];
+  const forgotten = [];
   let authentications = 0;
   const runtimeIdentity = Object.freeze({ implementationVersion: "content-generation-current" });
   const context = {
@@ -35,7 +36,14 @@ const root = path.resolve(__dirname, "..");
     sendRuntimeMessage: async (message) => { sent.push(message); },
     relaySource: "authenticated-relay-source",
     shortcutActions: new Set(["newChat"]),
-    rememberContext: (token, value) => remembered.push({ token, value: { ...value } })
+    touchContext: (token, value) => {
+      touched.push({ token, value: { ...value } });
+      return true;
+    },
+    forgetContext: async (token, value) => {
+      forgotten.push({ token, value });
+      return true;
+    }
   });
   const sender = { frameId: 9, documentId: "browser-document-1", tab: { id: 7 } };
   const base = {
@@ -98,16 +106,19 @@ const root = path.resolve(__dirname, "..");
     lifecycleAction: "locationChanged",
     data: { href: "https://example.com/thread/new", title: "New" }
   }, sender);
-  assert.equal(remembered.length, 1);
-  assert.equal(remembered[0].token, "bridge-document-1");
-  assert.equal(remembered[0].value.url, "https://example.com/thread/new");
+  assert.equal(touched.length, 1);
+  assert.equal(touched[0].token, "bridge-document-1");
+  assert.equal(touched[0].value.url, "https://example.com/thread/new");
   const lifecycle = sent.shift();
   assert.equal(lifecycle.action, "frameLifecycle");
   assert.equal(lifecycle.data.documentId, "bridge-document-1");
   assert.equal(lifecycle.data.bridgeVersion, "bridge-current");
 
   await relay.frameLifecycle({ ...base, lifecycleAction: "contentUnloading", data: {} }, sender);
-  assert.equal(remembered.length, 1, "unloading must not rewrite the registered location");
+  assert.equal(touched.length, 1, "unloading must not rewrite the registered location");
+  assert.equal(forgotten.length, 1, "authenticated unloading must release its exact registered context");
+  assert.equal(forgotten[0].token, "bridge-document-1");
+  assert.equal(forgotten[0].value, context);
   await assert.rejects(
     relay.frameLifecycle({ ...base, lifecycleAction: "forged", data: {} }, sender),
     /Unknown frame lifecycle action/
@@ -118,12 +129,32 @@ const root = path.resolve(__dirname, "..");
     sendRuntimeMessage: async () => { throw new Error("must not send"); },
     relaySource: "authenticated-relay-source",
     shortcutActions: new Set(),
-    rememberContext() {}
+    touchContext() { return true; },
+    async forgetContext() {}
   });
   await assert.rejects(
     rejectingRelay.frameBinding({ ...base, challenge: "b".repeat(64), generation: 1 }, sender),
     /sender document changed/
   );
+
+  let failedRelayCleanup = 0;
+  const failingLifecycleRelay = createAuthenticatedFrameRelay({
+    registeredSenderContext: async () => ({ token: "bridge-document-1", context }),
+    sendRuntimeMessage: async () => { throw new Error("extension page unavailable"); },
+    relaySource: "authenticated-relay-source",
+    shortcutActions: new Set(),
+    touchContext() { return true; },
+    async forgetContext(token, value) {
+      assert.equal(token, "bridge-document-1");
+      assert.equal(value, context);
+      failedRelayCleanup += 1;
+    }
+  });
+  await assert.rejects(
+    failingLifecycleRelay.frameLifecycle({ ...base, lifecycleAction: "contentUnloading", data: {} }, sender),
+    /extension page unavailable/
+  );
+  assert.equal(failedRelayCleanup, 1, "unloading must release its context even when the app relay is unavailable");
 
   console.log("authenticated background frame relay: ok");
 })().catch((error) => {

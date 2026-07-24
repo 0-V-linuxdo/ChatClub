@@ -30,6 +30,11 @@ assert.match(runtime, /registeredFrameContext\(tabId, frameId\)/);
 assert.match(runtime, /action: "frameNavigationTarget"/);
 assert.match(runtime, /Number\(details\.parentFrameId\) !== 0/);
 assert.match(runtime, /chrome\.tabs\?\.onRemoved\?\.addListener\(/);
+assert.match(runtime, /forgetSecureFrameContext\(Number\(details\.tabId\), Number\(details\.frameId\)/);
+assert.match(runtime, /forgetSecureTabContexts\(tabId\)/);
+assert.match(runtime, /Number\(details\?\.frameId\) === 0[\s\S]*?forgetSecureTabContexts/);
+assert.match(runtime, /touchContext: secureFrameContextRegistry\.touch/);
+assert.match(runtime, /forgetContext: secureFrameContextRegistry\.forgetContext/);
 assert.match(runtime, /chrome\.runtime\.onMessage\.addListener\(createBackgroundRequestListener\(dispatchBackgroundRequest\)\)/);
 assert.doesNotMatch(runtime, /\bimport\s*\(/);
 assert.match(runtime, /runtimeIdentity: CONTENT_BRIDGE_RUNTIME_IDENTITY/);
@@ -51,6 +56,11 @@ assert.match(secureContexts, /contextDocumentId && senderDocumentId && contextDo
 assert.match(secureContexts, /frameBindingId !== registered\.frameBindingId/);
 assert.match(secureContexts, /async function registeredFrameContext\(tabId, frameId\)/);
 assert.match(secureContexts, /value\?\.tabId !== tabId \|\| value\?\.frameId !== frameId/);
+assert.match(secureContexts, /async function forgetFrame\(tabId, frameId, options = \{\}\)/);
+assert.match(secureContexts, /async function forgetContext\(token, value\)/);
+assert.match(secureContexts, /async function forgetTab\(tabId, options = \{\}\)/);
+assert.match(secureContexts, /function touch\(token, value\)/);
+assert.doesNotMatch(secureContexts, /FRAME_CONTEXT_MAX_AGE_MS/, "live secure frame contexts must not expire only because they were idle");
 
 assert.match(grokRuntime, /removeManagedGrokPartitionsExcept\(api, \{ storeId, partitionKey \}\)/);
 assert.match(grokRuntime, /syncGrokSessionCookies\(api, \{ storeId, partitionKey \}\)/);

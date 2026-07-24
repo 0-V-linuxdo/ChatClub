@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const vm = require("node:vm");
+const { functionSource } = require("./function-source.cjs");
 
 const root = path.resolve(__dirname, "..");
 const load = (file) => import(`${pathToFileURL(path.join(root, file)).href}?test=${Date.now()}-${Math.random()}`);
@@ -115,6 +117,78 @@ const isContentRuntimeGenerationTransition = (details = {}) =>
   }
 
   {
+    const listeners = new Map();
+    let randomGeneration = 8;
+    const firefoxContext = vm.createContext({
+      window: {
+        addEventListener(type, listener) { listeners.set(type, listener); },
+        location: { href: "https://example.com/thread" }
+      },
+      crypto: {
+        getRandomValues(bytes) {
+          bytes.fill(++randomGeneration);
+          return bytes;
+        }
+      }
+    });
+    vm.runInContext(`
+      Object.setPrototypeOf(globalThis, window);
+      Object.defineProperty(window, "__CHATCLUB_BROWSER_DOCUMENT_ATTESTATION_STATE__", {
+        configurable: false,
+        enumerable: false,
+        writable: false,
+        value: {
+          id: ${JSON.stringify(`legacy:${"a".repeat(64)}`)},
+          epoch: 4,
+          dirty: false,
+          lifecycleInstalled: false
+        }
+      });
+      Object.defineProperty(window, "__CHATCLUB_FRAME_BINDING_ID__", {
+        configurable: false,
+        enumerable: false,
+        writable: false,
+        value: ${JSON.stringify("b".repeat(64))}
+      });
+      Object.defineProperty(window, "__CHATCLUB_CONTENT_DOCUMENT_ID__", {
+        configurable: false,
+        enumerable: false,
+        writable: false,
+        value: "content-document-firefox"
+      });
+    `, firefoxContext);
+    assert.equal(vm.runInContext("globalThis === window", firefoxContext), false);
+    assert.equal(
+      vm.runInContext("globalThis.__CHATCLUB_BROWSER_DOCUMENT_ATTESTATION_STATE__ === window.__CHATCLUB_BROWSER_DOCUMENT_ATTESTATION_STATE__", firefoxContext),
+      true,
+      "the Firefox content global must inherit the window-owned identity"
+    );
+    assert.equal(
+      vm.runInContext("Object.getOwnPropertyDescriptor(globalThis, '__CHATCLUB_BROWSER_DOCUMENT_ATTESTATION_STATE__')", firefoxContext),
+      undefined,
+      "the inherited Firefox identity must not appear as a globalThis own property"
+    );
+    const probeSource = `(${content.attestInjectedFrameDocument.toString()})()`;
+    const attested = vm.runInContext(probeSource, firefoxContext);
+    assert.deepEqual({ ...attested }, { attestation: `legacy:${"a".repeat(64)}`, epoch: 4 });
+    assert.equal(listeners.has("pagehide"), true);
+    assert.equal(listeners.has("pageshow"), true);
+
+    const trustedInputSource = fs.readFileSync(path.join(root, "background/trusted-input.js"), "utf8");
+    const trustedProbe = vm.runInContext(
+      `(${functionSource(trustedInputSource, "readTrustedFrameAttestation")})()`,
+      firefoxContext
+    );
+    assert.deepEqual({ ...trustedProbe }, {
+      frameBindingId: "b".repeat(64),
+      bridgeDocumentId: "content-document-firefox",
+      legacyDocumentId: `legacy:${"a".repeat(64)}`,
+      legacyDocumentValid: true,
+      href: "https://example.com/thread"
+    });
+  }
+
+  {
     const brokerKey = "__CHATCLUB_RUNTIME_REGISTRY_V1__";
     const migrationKey = "__CHATCLUB_RUNTIME_MIGRATION_STAGE_V1__";
     const generation = "generation-B";
@@ -141,6 +215,30 @@ const isContentRuntimeGenerationTransition = (details = {}) =>
       { supported: true, state: "legacy-aborted" }
     );
     assert.equal(vm.runInContext(`${JSON.stringify(migrationKey)} in globalThis`, context), false);
+
+    const firefoxContext = vm.createContext({ window: {} });
+    vm.runInContext(`
+      Object.setPrototypeOf(globalThis, window);
+      window[${JSON.stringify(`__CHATCLUB_RUNTIME_REGISTRY_V1_SOURCE_${"b".repeat(64)}__`)}] = ({ shutdown() {} });
+    `, firefoxContext);
+    assert.deepEqual(
+      { ...transition(firefoxContext, "begin") },
+      { supported: true, state: "legacy-staged" },
+      "Firefox generation transitions must use the window-owned runtime registry"
+    );
+    const firefoxDescriptor = vm.runInContext(
+      `Object.getOwnPropertyDescriptor(window, ${JSON.stringify(migrationKey)})`,
+      firefoxContext
+    );
+    assert.equal(firefoxDescriptor.configurable, true);
+    assert.equal(
+      vm.runInContext(`Object.getOwnPropertyDescriptor(globalThis, ${JSON.stringify(migrationKey)})`, firefoxContext),
+      undefined
+    );
+    assert.deepEqual(
+      { ...transition(firefoxContext, "abort") },
+      { supported: true, state: "legacy-aborted" }
+    );
   }
 
   {

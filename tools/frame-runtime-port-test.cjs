@@ -43,6 +43,93 @@ const assert = require("node:assert/strict");
   assert.equal(messages[1].bridgeDocumentId, "doc-new");
   assert.equal(port.registration(iframe).documentId, "doc-new");
 
+  {
+    const liveFrame = {
+      isConnected: true,
+      dataset: {
+        ...runtimeDataset("doc-live"),
+        preferredModelContentBridgeVersion: "bridge-current",
+        injectedBrowserDocumentId: "browser-document-live"
+      }
+    };
+    const liveResponses = [
+      { success: false, code: "NOT_REGISTERED", delivered: false, error: "background registry restarted" },
+      { success: true, data: { href: "https://example.com/live" } }
+    ];
+    let liveEnsures = 0;
+    let invalidation = null;
+    const livePort = new FrameRuntimePort({
+      currentTabId: async () => 7,
+      sendRuntimeMessage: async () => liveResponses.shift(),
+      invalidateRuntime(target, reason, options) {
+        invalidation = { reason, options };
+        if (!options?.preserveDocument) delete target.dataset.preferredModelDocumentId;
+      },
+      async ensureRuntime(target, options) {
+        liveEnsures += 1;
+        assert.deepEqual(options.features, [], "base-command recovery must revalidate without unrelated capabilities");
+        assert.equal(target.dataset.preferredModelDocumentId, "doc-live");
+        return { ok: true, registration: { documentId: "doc-live", bridgeVersion: "bridge-current" } };
+      }
+    });
+    assert.deepEqual(await livePort.request(liveFrame, "getLocationHref"), { href: "https://example.com/live" });
+    assert.equal(liveEnsures, 1);
+    assert.equal(invalidation.reason, "getLocationHref:NOT_REGISTERED");
+    assert.deepEqual(invalidation.options, { preserveDocument: true, clearCapabilities: false });
+    assert.equal(liveFrame.dataset.preferredModelDocumentId, "doc-live", "a background cache miss must not churn the live model document identity");
+    assert.equal(liveFrame.dataset.injectedBrowserDocumentId, "browser-document-live");
+  }
+
+  {
+    const capabilityFrame = {
+      isConnected: true,
+      dataset: {
+        ...runtimeDataset("doc-capability", ["message-navigator"]),
+        preferredModelContentBridgeVersion: "bridge-current"
+      }
+    };
+    const capabilityResponses = [
+      { success: false, code: "INJECTION_FAILED", delivered: false, error: "message navigator capability unavailable" },
+      { success: true, data: { enabled: true } }
+    ];
+    let capabilityInvalidation = null;
+    let capabilityEnsures = 0;
+    const capabilityPort = new FrameRuntimePort({
+      currentTabId: async () => 7,
+      sendRuntimeMessage: async () => capabilityResponses.shift(),
+      invalidateRuntime(target, reason, options) {
+        capabilityInvalidation = { reason, options };
+        if (options.clearCapabilities) {
+          delete target.dataset.contentRuntimeCapabilitiesDocumentId;
+          delete target.dataset.contentRuntimeCapabilities;
+        }
+      },
+      async ensureRuntime(target, options) {
+        capabilityEnsures += 1;
+        assert.deepEqual(options.features, ["message-navigator"]);
+        assert.equal(target.dataset.preferredModelDocumentId, "doc-capability");
+        assert.equal(target.dataset.contentRuntimeCapabilities, undefined);
+        target.dataset.contentRuntimeCapabilitiesDocumentId = "doc-capability";
+        target.dataset.contentRuntimeCapabilities = "message-navigator";
+        return { ok: true, registration: { documentId: "doc-capability", bridgeVersion: "bridge-current" } };
+      }
+    });
+    assert.deepEqual(
+      await capabilityPort.request(capabilityFrame, "getMessageNavigatorState"),
+      { enabled: true }
+    );
+    assert.equal(capabilityEnsures, 1);
+    assert.deepEqual(capabilityInvalidation, {
+      reason: "getMessageNavigatorState:INJECTION_FAILED",
+      options: { preserveDocument: true, clearCapabilities: true }
+    });
+    assert.equal(
+      capabilityFrame.dataset.preferredModelDocumentId,
+      "doc-capability",
+      "capability-only repair must preserve same-document model identity"
+    );
+  }
+
   let mutatingCalls = 0;
   const mutatingPort = new FrameRuntimePort({
     currentTabId: async () => 7,

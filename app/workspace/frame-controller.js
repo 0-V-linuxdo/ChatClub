@@ -647,7 +647,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
       const meta = await sendToContentFrame(iframe, "getPageMeta", {}, 1800);
       href = meta?.href || href;
       rememberFrameLocation(iframe, { href, title: meta?.title });
-      logoUrl = effectiveFaviconUrl(href, meta?.logoUrl) || meta?.logoUrl || "";
+      logoUrl = effectiveFaviconUrl(href, meta?.logoUrl) || "";
     } catch {
       logoUrl = effectiveFaviconUrl(href);
     }

@@ -101,6 +101,12 @@ function validLegacyBrowserDocumentId(value) {
 export function attestInjectedFrameDocument() {
   const key = "__CHATCLUB_BROWSER_DOCUMENT_ATTESTATION_STATE__";
   const pattern = /^legacy:[a-f0-9]{64}$/i;
+  // Firefox content-script globals inherit from `window` instead of being the
+  // same object. Author bundles own document-scoped state on that DOM global,
+  // so privileged probes must validate the same owner rather than an inherited
+  // value on `globalThis`.
+  // eslint-disable-next-line chatclub-realm/no-cross-realm-global -- serialized ISOLATED-world probe must select Firefox's DOM-global owner.
+  const target = globalThis.window || globalThis;
   const nextId = () => {
     const bytes = new Uint8Array(32);
     globalThis.crypto.getRandomValues(bytes);
@@ -113,9 +119,9 @@ export function attestInjectedFrameDocument() {
       : 1;
     state.dirty = false;
   };
-  let state = globalThis[key];
+  let state = target[key];
   if (state) {
-    const descriptor = Object.getOwnPropertyDescriptor(globalThis, key);
+    const descriptor = Object.getOwnPropertyDescriptor(target, key);
     if (
       !descriptor
       || descriptor.configurable
@@ -131,7 +137,7 @@ export function attestInjectedFrameDocument() {
   } else {
     state = { id: "", epoch: 0, dirty: false, lifecycleInstalled: false };
     rotate(state);
-    Object.defineProperty(globalThis, key, {
+    Object.defineProperty(target, key, {
       configurable: false,
       enumerable: false,
       writable: false,
@@ -140,8 +146,8 @@ export function attestInjectedFrameDocument() {
   }
   if (!state.lifecycleInstalled) {
     state.lifecycleInstalled = true;
-    globalThis.addEventListener?.("pagehide", () => { state.dirty = true; }, { capture: true });
-    globalThis.addEventListener?.("pageshow", () => { if (state.dirty) rotate(state); }, { capture: true });
+    target.addEventListener?.("pagehide", () => { state.dirty = true; }, { capture: true });
+    target.addEventListener?.("pageshow", () => { if (state.dirty) rotate(state); }, { capture: true });
   }
   if (state.dirty) rotate(state);
   return { attestation: state.id, epoch: state.epoch };
@@ -269,30 +275,32 @@ export function transitionInjectedContentRuntimeGeneration(
   transition,
   expectedBundles = []
 ) {
-  const broker = globalThis[brokerKey];
+  // eslint-disable-next-line chatclub-realm/no-cross-realm-global -- serialized transition must use the content bundle's DOM-global registry owner.
+  const target = globalThis.window || globalThis;
+  const broker = target[brokerKey];
   if (!broker || typeof broker !== "object") {
     if (transition === "abort") {
-      const stage = globalThis[migrationKey];
+      const stage = target[migrationKey];
       if (stage?.registryKey === brokerKey && stage?.generation === generation) {
-        try { delete globalThis[migrationKey]; } catch {}
+        try { delete target[migrationKey]; } catch {}
         return { supported: true, state: "legacy-aborted" };
       }
     }
     if (transition === "begin") {
-      const legacyKeys = Object.getOwnPropertyNames(globalThis).filter((key) =>
+      const legacyKeys = Object.getOwnPropertyNames(target).filter((key) =>
         key !== brokerKey
         && /^__CHATCLUB_RUNTIME_REGISTRY_V\d+(?:_SOURCE_[a-f0-9]{64})?__$/i.test(key)
         && (
-          typeof globalThis[key]?.dispose === "function"
-          || typeof globalThis[key]?.shutdown === "function"
+          typeof target[key]?.dispose === "function"
+          || typeof target[key]?.shutdown === "function"
         )
       );
-      const current = globalThis[migrationKey];
+      const current = target[migrationKey];
       if (current && (current.registryKey !== brokerKey || current.generation !== generation)) {
         throw new Error("Content runtime migration stage belongs to another generation");
       }
       if (!current) {
-        Object.defineProperty(globalThis, migrationKey, {
+        Object.defineProperty(target, migrationKey, {
           configurable: true,
           enumerable: false,
           writable: false,
@@ -392,19 +400,21 @@ async function seedInjectedFrameBinding(api, tabId, frameId, frameBindingId, exp
     world: "ISOLATED",
     func: (bindingId) => {
       const key = "__CHATCLUB_FRAME_BINDING_ID__";
-      const current = String(globalThis[key] || "");
+      // eslint-disable-next-line chatclub-realm/no-cross-realm-global -- serialized ISOLATED-world seed shares the content bundle's DOM-global owner.
+      const target = globalThis.window || globalThis;
+      const current = String(target[key] || "");
       if (current && current !== bindingId) {
         throw new Error("Injected frame binding id changed in the current document");
       }
       if (!current) {
-        Object.defineProperty(globalThis, key, {
+        Object.defineProperty(target, key, {
           configurable: false,
           enumerable: false,
           writable: false,
           value: bindingId
         });
       }
-      return { success: globalThis[key] === bindingId };
+      return { success: target[key] === bindingId };
     },
     args: [frameBindingId]
     }
@@ -428,10 +438,11 @@ async function frameIdsMatchingBinding(api, tabId, frameIds, bindingId) {
       target: { tabId, frameIds: [frameId] },
       world: "ISOLATED",
       func: () => {
-        const bootstrap = String(globalThis.__CHATCLUB_FRAME_BINDING_ID__ || "");
+        // eslint-disable-next-line chatclub-realm/no-cross-realm-global -- serialized ISOLATED-world probe shares the content bundle's DOM-global owner.
+        const target = globalThis.window || globalThis;
+        const bootstrap = String(target.__CHATCLUB_FRAME_BINDING_ID__ || "");
         if (bootstrap) return { count: 1, bindingId: bootstrap };
-        // eslint-disable-next-line chatclub-realm/no-cross-realm-global -- executeScript runs this closure in the isolated frame DOM realm.
-        const values = new URLSearchParams(String(globalThis.name || ""))
+        const values = new URLSearchParams(String(target.name || ""))
           .getAll("chatclub_frame_binding")
           .map((value) => String(value || ""));
         return { count: values.length, bindingId: values.length === 1 ? values[0] : "" };
@@ -456,15 +467,17 @@ async function relayInjectedFrameBinding(api, tabId, frameId, challenge, generat
     world: "ISOLATED",
     func: async (bindingChallenge, bindingGeneration, bindingId, browserDocumentId) => {
       const extensionApi = globalThis.browser || globalThis.chrome;
-      const bridgeDocumentId = String(globalThis.__CHATCLUB_CONTENT_DOCUMENT_ID__ || "");
-      const secureFrameToken = String(globalThis.__CHATCLUB_SECURE_FRAME_TOKEN__ || "");
-      const runtimeIdentity = globalThis.__CHATCLUB_CONTENT_RUNTIME_IDENTITY__;
+      // eslint-disable-next-line chatclub-realm/no-cross-realm-global -- serialized ISOLATED-world relay shares the content bundle's DOM-global owner.
+      const target = globalThis.window || globalThis;
+      const bridgeDocumentId = String(target.__CHATCLUB_CONTENT_DOCUMENT_ID__ || "");
+      const secureFrameToken = String(target.__CHATCLUB_SECURE_FRAME_TOKEN__ || "");
+      const runtimeIdentity = target.__CHATCLUB_CONTENT_RUNTIME_IDENTITY__;
       const bridgeVersion = String(
-        globalThis.__CHATCLUB_CONTENT_PROTOCOL_VERSION__
-        || globalThis.__CHATCLUB_CONTENT_BRIDGE_VERSION__
+        target.__CHATCLUB_CONTENT_PROTOCOL_VERSION__
+        || target.__CHATCLUB_CONTENT_BRIDGE_VERSION__
         || ""
       );
-      const attestationState = globalThis.__CHATCLUB_BROWSER_DOCUMENT_ATTESTATION_STATE__;
+      const attestationState = target.__CHATCLUB_BROWSER_DOCUMENT_ATTESTATION_STATE__;
       const attestation = String(attestationState?.id || "");
       if (
         !bridgeDocumentId

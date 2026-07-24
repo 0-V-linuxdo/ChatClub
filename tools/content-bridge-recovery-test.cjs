@@ -108,8 +108,20 @@ function createSummaryPrepareFixture(options = {}) {
     CONTENT_BRIDGE_VERSION: "bridge-current",
     CONTENT_RUNTIME_IDENTITY: { implementationVersion: "runtime-current" },
     calls,
+    injectionClock: 0,
+    challengeIssues: [],
     frameBindingChallenges: {
-      issue: () => ({ challenge: "a".repeat(64), generation: 1 })
+      issue: (_iframe, issueOptions = {}) => {
+        const entry = {
+          challenge: "a".repeat(64),
+          generation: context.challengeIssues.length + 1,
+          issuedAt: context.injectionClock,
+          expiresAt: context.injectionClock + 8000,
+          options: { ...issueOptions }
+        };
+        context.challengeIssues.push(entry);
+        return entry;
+      }
     },
     iframe
   });
@@ -123,6 +135,9 @@ function createSummaryPrepareFixture(options = {}) {
   context.runtimeRequest = async (request) => {
     calls.install += 1;
     context.lastRuntimeRequest = request;
+    context.injectionStartedAt = context.injectionClock;
+    context.injectionClock += Math.max(0, Number(options.injectionDelayMs) || 0);
+    context.injectionFinishedAt = context.injectionClock;
     const attempt = installResults.length ? installResults.shift() : {};
     return {
       errors: options.installErrors || [],
@@ -144,16 +159,21 @@ function createSummaryPrepareFixture(options = {}) {
         "content/summary-userscripts.js",
         "content/summary-bridge.js"
       ],
-      bindingRelayed: options.bindingRelayed ?? true,
       ...(options.omitBrowserDocumentId ? {} : {
         browserDocumentId: options.installedBrowserDocumentId ?? "browser-document-9"
       }),
       ...attempt
     };
   };
-  context.requestFrameBinding = () => {
+  context.requestFrameBinding = (target, bindingOptions = {}) => {
     context.bindingRequests = (context.bindingRequests || 0) + 1;
-    return Promise.resolve(true);
+    context.lastBindingTarget = target;
+    context.lastBindingRequestOptions = { ...bindingOptions };
+    context.frameBindingChallenges.issue(target, { rotate: bindingOptions.rotate === true });
+    const result = Object.hasOwn(options, "bindingRequestResult")
+      ? options.bindingRequestResult
+      : true;
+    return Promise.resolve(result);
   };
   context.waitForCurrentContentFrameRegistration = async () => {
     calls.wait += 1;
@@ -201,6 +221,7 @@ function createSummaryPrepareFixture(options = {}) {
     }
   });
   vm.runInContext(`
+    ${functionSource(frameBridge, "mergedContentRuntimeCapabilities")}
     ${functionSource(frameBridge, "prepareContentFrameRuntimeUncached", true)}
     globalThis.prepare = prepareContentFrameRuntimeUncached;
   `, context);
@@ -340,7 +361,78 @@ function createSummaryMainInstallFixture() {
     assert.equal(result.ok, true);
     assert.equal(fixture.iframe.dataset.summaryRuntimeDocumentId, "doc-current");
     assert.equal(fixture.iframe.dataset.summaryRuntimeBridgeVersion, "bridge-current");
+    assert.equal(fixture.bindingRequests, 1);
+    assert.equal(fixture.challengeIssues.length, 1);
+    assert.equal(fixture.lastBindingTarget, fixture.iframe);
+    assert.equal(fixture.lastBindingRequestOptions.rotate, true);
+    assert.equal(fixture.lastBindingRequestOptions.skipRegistered, false);
+    assert.equal(Object.hasOwn(fixture.lastRuntimeRequest, "bindingChallenge"), false);
+    assert.equal(Object.hasOwn(fixture.lastRuntimeRequest, "bindingGeneration"), false);
     assert.deepEqual(fixture.calls, { verify: 2, wait: 1, install: 1, probe: 1, remember: 1 });
+  }
+
+  {
+    const fixture = createSummaryPrepareFixture({ injectionDelayMs: 8001 });
+    const result = await fixture.prepare(fixture.iframe, { summary: true });
+    assert.equal(result.ok, true, "an injection queue delay longer than the challenge TTL must not age the binding challenge");
+    assert.equal(fixture.injectionFinishedAt - fixture.injectionStartedAt, 8001);
+    assert.equal(fixture.challengeIssues.length, 1);
+    assert.equal(
+      fixture.challengeIssues[0].issuedAt,
+      fixture.injectionFinishedAt,
+      "the authenticated binding challenge must be issued only after queued injection completes"
+    );
+    assert.ok(fixture.challengeIssues[0].expiresAt > fixture.injectionFinishedAt);
+    assert.equal(Object.hasOwn(fixture.lastRuntimeRequest, "bindingChallenge"), false);
+    assert.equal(Object.hasOwn(fixture.lastRuntimeRequest, "bindingGeneration"), false);
+  }
+
+  {
+    const starts = [];
+    const releases = [];
+    const queueContext = vm.createContext({
+      Map,
+      Promise,
+      Set,
+      String,
+      WeakMap,
+      capabilityPreparationRuns: new WeakMap(),
+      capabilityPreparationTails: new WeakMap(),
+      prepareContentFrameRuntimeUncached: (iframe, options) => new Promise((resolve) => {
+        starts.push({ iframe, signature: [...(options.features || [])].sort().join(",") });
+        releases.push(resolve);
+      })
+    });
+    vm.runInContext(`
+      ${functionSource(frameBridge, "prepareContentFrameRuntime")}
+      globalThis.prepareQueued = prepareContentFrameRuntime;
+    `, queueContext);
+    const sameFrame = {};
+    const first = queueContext.prepareQueued(sameFrame, { features: ["delete"] });
+    const duplicate = queueContext.prepareQueued(sameFrame, { features: ["delete"] });
+    const second = queueContext.prepareQueued(sameFrame, { features: ["message-navigator"] });
+    assert.equal(first, duplicate, "same-frame same-capability preparation must share one run");
+    await new Promise((resolve) => { setImmediate(resolve); });
+    assert.deepEqual(starts.map((entry) => entry.signature), ["delete"]);
+    releases.shift()({ ok: true });
+    await first;
+    await new Promise((resolve) => { setImmediate(resolve); });
+    assert.deepEqual(
+      starts.map((entry) => entry.signature),
+      ["delete", "message-navigator"],
+      "different capabilities for one iframe must serialize to avoid challenge rotation and ledger loss"
+    );
+    releases.shift()({ ok: true });
+    await second;
+
+    starts.length = 0;
+    const threeFrames = [{ id: 1 }, { id: 2 }, { id: 3 }];
+    const threeRuns = threeFrames.map((frame) => queueContext.prepareQueued(frame, { features: ["delete"] }));
+    await new Promise((resolve) => { setImmediate(resolve); });
+    assert.equal(starts.length, 3, "three independent iframes must remain concurrently recoverable");
+    assert.deepEqual(starts.map((entry) => entry.iframe.id).sort(), [1, 2, 3]);
+    while (releases.length) releases.shift()({ ok: true });
+    await Promise.all(threeRuns);
   }
 
   {
@@ -388,11 +480,21 @@ function createSummaryMainInstallFixture() {
   {
     const fixture = createSummaryPrepareFixture({
       dataset: { browserFrameId: "" },
-      bindingRelayed: false
+      installResults: [{ bindingRelayed: false }]
     });
     const result = await fixture.prepare(fixture.iframe, { summary: true });
     assert.equal(result.ok, true, "Chromium must bind through the targeted parent WindowProxy challenge when runtime.getFrameId is unavailable");
     assert.equal(fixture.bindingRequests, 1);
+  }
+
+  for (const bindingRequestResult of [undefined, false]) {
+    const fixture = createSummaryPrepareFixture({ bindingRequestResult });
+    const result = await fixture.prepare(fixture.iframe, { summary: true });
+    assert.equal(result.ok, false, "a missing or false post-injection binding relay must fail closed");
+    assert.match(result.reason, /secure iframe binding was not relayed/);
+    assert.equal(fixture.bindingRequests, 1);
+    assert.equal(fixture.calls.wait, 0, "registration readiness must not run after the binding relay failed");
+    assert.equal(fixture.calls.probe, 0, "frame commands must not run after the binding relay failed");
   }
 
   for (const failedInstall of [
@@ -401,8 +503,7 @@ function createSummaryMainInstallFixture() {
     { label: "missing injection inventory", injectedFiles: undefined, omitInjectedFiles: true },
     { label: "missing injection plan", plannedFiles: [] },
     { label: "mismatched installed capability", installedFeatures: ["delete"] },
-    { label: "missing browser document identity", omitBrowserDocumentId: true },
-    { label: "missing authenticated binding relay", bindingRelayed: false }
+    { label: "missing browser document identity", omitBrowserDocumentId: true }
   ]) {
     const fixture = createSummaryPrepareFixture(failedInstall);
     const result = await fixture.prepare(fixture.iframe, { summary: true });
@@ -620,11 +721,56 @@ function createSummaryMainInstallFixture() {
   assert.match(summary, /expectedDocumentId: summaryReady\.registration\.documentId/);
   assert.match(summary, /expectedHref: base\.href/);
   const prepareSource = functionSource(frameBridge, "prepareContentFrameRuntimeUncached", true);
+  assert.doesNotMatch(prepareSource, /\bbindingChallenge\b|\bbindingGeneration\b/);
+  assert.match(
+    prepareSource,
+    /requestFrameBinding\(iframe, \{\s*rotate: true,\s*skipRegistered: false\s*\}\)/
+  );
+  assert.ok(
+    prepareSource.indexOf("installed = await runtimeRequest")
+      < prepareSource.indexOf("const bindingRelayed = await requestFrameBinding"),
+    "app preparation must finish queued injection before issuing its authenticated binding challenge"
+  );
   assert.match(prepareSource, /runtimePort\(\)\.request\(iframe, "getSummaryRuntimeState", \{\}, \{ timeoutMs: 1800, skipEnsure: true \}\)/);
   assert.match(prepareSource, /summaryState\.documentId === registration\.documentId/);
   assert.match(prepareSource, /summaryState\.bridgeVersion === CONTENT_BRIDGE_VERSION/);
   assert.match(prepareSource, /confirmedRegistration\?\.documentId === registration\.documentId/);
   assert.match(prepareSource, /summaryRuntimeBridgeVersion/);
+  {
+    const mergeContext = vm.createContext({ Set, String });
+    vm.runInContext(`
+      ${functionSource(frameBridge, "mergedContentRuntimeCapabilities")}
+      globalThis.mergeCapabilities = mergedContentRuntimeCapabilities;
+    `, mergeContext);
+    const capabilityFrame = {
+      dataset: {
+        contentRuntimeCapabilitiesDocumentId: "doc-current",
+        contentRuntimeCapabilities: "",
+        contentRuntimeCapabilitiesEpoch: "2"
+      }
+    };
+    const mergedAfterInvalidation = [...mergeContext.mergeCapabilities(
+      capabilityFrame,
+      "doc-current",
+      ["delete"],
+      ["message-navigator"],
+      "1"
+    )];
+    assert.deepEqual(
+      mergedAfterInvalidation,
+      ["message-navigator"],
+      "an in-flight preparation must not restore capabilities invalidated after its snapshot"
+    );
+    capabilityFrame.dataset.contentRuntimeCapabilities = mergedAfterInvalidation.join(",");
+    assert.equal(
+      capabilityFrame.dataset.contentRuntimeCapabilities.includes("delete"),
+      false,
+      "the queued forced Delete preparation must still observe Delete as missing"
+    );
+  }
+  const queuedPrepareSource = functionSource(frameBridge, "prepareContentFrameRuntime");
+  assert.match(queuedPrepareSource, /capabilityPreparationTails\.get\(iframe\)/);
+  assert.match(queuedPrepareSource, /previous\.catch\(\(\) => \{\}\)\.then/);
   const stateSource = functionSource(summaryCapability, "getSummaryRuntimeState", true);
   assert.match(stateSource, /documentId: contentDocumentId/);
   assert.match(stateSource, /bridgeVersion: CONTENT_BRIDGE_VERSION/);

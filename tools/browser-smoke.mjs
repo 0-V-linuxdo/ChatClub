@@ -384,9 +384,7 @@ const pageProbe = `async (fixtureUrl) => {
     iframe.id = "chatclub-browser-smoke-loopback";
     iframe.hidden = true;
     const protocol = await import(api.runtime.getURL("shared/protocol.js"));
-    const challengeBytes = new Uint8Array(32);
-    crypto.getRandomValues(challengeBytes);
-    const challenge = Array.from(challengeBytes, (value) => value.toString(16).padStart(2, "0")).join("");
+    let challenge = "";
     const frameBindingBytes = new Uint8Array(32);
     crypto.getRandomValues(frameBindingBytes);
     const expectedBindingId = Array.from(frameBindingBytes, (value) => value.toString(16).padStart(2, "0")).join("");
@@ -397,11 +395,7 @@ const pageProbe = `async (fixtureUrl) => {
     let bindingResolve;
     let bindingTimer;
     let bindingProbeTimer;
-    const bindingPromise = new Promise((resolve, reject) => {
-      bindingResolve = resolve;
-      bindingTimer = setTimeout(() => reject(new Error("loopback authenticated frame binding timed out")), 12000);
-    });
-    bindingPromise.catch(() => {});
+    let bindingPromise = null;
     const onRuntimeMessage = (message, sender) => {
       const context = message?.senderContext || {};
       if (
@@ -466,11 +460,7 @@ const pageProbe = `async (fixtureUrl) => {
       handshakeStage = "bridge injection";
       const exactBindingRequest = {
         expectedBindingId,
-        ...(expectedFrameId == null ? {} : {
-          expectedFrameId,
-          bindingChallenge: challenge,
-          bindingGeneration: generation
-        })
+        ...(expectedFrameId == null ? {} : { expectedFrameId })
       };
       const injection = await withTimeout(api.runtime.sendMessage({
         source: "chatclub",
@@ -484,8 +474,29 @@ const pageProbe = `async (fixtureUrl) => {
       if ((injection.errors || []).length) {
         throw new Error("loopback bridge injection failed before frame binding: " + injection.errors.join(" | "));
       }
+      const challengeBytes = new Uint8Array(32);
+      crypto.getRandomValues(challengeBytes);
+      challenge = Array.from(challengeBytes, (value) => value.toString(16).padStart(2, "0")).join("");
+      bindingPromise = new Promise((resolve, reject) => {
+        bindingResolve = resolve;
+        bindingTimer = setTimeout(() => reject(new Error("loopback authenticated frame binding timed out")), 12000);
+      });
+      bindingPromise.catch(() => {});
+      handshakeStage = "post-injection frame binding";
       if (expectedFrameId != null) {
-        if (injection.bindingRelayed !== true) throw new Error("loopback bridge injection did not relay the authenticated frame binding");
+        const bindingRelay = await withTimeout(api.runtime.sendMessage({
+          source: "chatclub",
+          action: "requestFrameBinding",
+          tabId: currentTab.id,
+          hrefs: [fixtureUrl],
+          expectedFrameId,
+          expectedBindingId,
+          browserDocumentId: injection.browserDocumentId,
+          bindingChallenge: challenge,
+          bindingGeneration: generation
+        }), 12000, "loopback post-injection frame binding");
+        if (!bindingRelay?.success) throw new Error(bindingRelay?.error || "loopback frame binding failed");
+        if (bindingRelay.bindingRelayed !== true) throw new Error("loopback post-injection frame binding was not relayed");
       } else {
         const probeBinding = () => iframe.contentWindow?.postMessage({
           source: protocol.FRAME_BINDING_POST_MESSAGE_SOURCE,

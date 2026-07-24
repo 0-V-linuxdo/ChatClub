@@ -16,13 +16,15 @@ export function createAuthenticatedFrameRelay(options = {}) {
   const sendRuntimeMessage = options.sendRuntimeMessage;
   const relaySource = String(options.relaySource || "");
   const shortcutActions = options.shortcutActions;
-  const rememberContext = options.rememberContext;
+  const touchContext = options.touchContext;
+  const forgetContext = options.forgetContext;
   if (
     typeof authenticate !== "function"
     || typeof sendRuntimeMessage !== "function"
     || !relaySource
     || !(shortcutActions instanceof Set)
-    || typeof rememberContext !== "function"
+    || typeof touchContext !== "function"
+    || typeof forgetContext !== "function"
   ) throw new TypeError("Authenticated frame relay dependencies are incomplete");
 
   async function shortcutTriggered(message = {}, sender = {}) {
@@ -78,21 +80,24 @@ export function createAuthenticatedFrameRelay(options = {}) {
     const data = message.data && typeof message.data === "object" ? message.data : {};
     if (action === "locationChanged" && /^https?:\/\//i.test(String(data.href || ""))) {
       context.url = String(data.href);
-      context.registeredAt = Date.now();
-      rememberContext(token, context);
+      if (!touchContext(token, context)) throw new Error("Frame lifecycle document changed");
     }
-    await sendRuntimeMessage({
-      source: relaySource,
-      action: "frameLifecycle",
-      lifecycleAction: action,
-      senderContext: relaySenderContext(token, context),
-      data: {
-        ...data,
-        documentId: token,
-        bridgeVersion: context.bridgeVersion,
-        runtimeIdentity: context.runtimeIdentity
-      }
-    });
+    try {
+      await sendRuntimeMessage({
+        source: relaySource,
+        action: "frameLifecycle",
+        lifecycleAction: action,
+        senderContext: relaySenderContext(token, context),
+        data: {
+          ...data,
+          documentId: token,
+          bridgeVersion: context.bridgeVersion,
+          runtimeIdentity: context.runtimeIdentity
+        }
+      });
+    } finally {
+      if (action === "contentUnloading") await forgetContext(token, context);
+    }
   }
 
   return Object.freeze({ frameBinding, frameLifecycle, shortcutTriggered });

@@ -86,14 +86,16 @@ async function exactDirectChildFrame(api, target) {
 }
 
 function readTrustedFrameAttestation() {
-  const state = globalThis.__CHATCLUB_BROWSER_DOCUMENT_ATTESTATION_STATE__;
+  // eslint-disable-next-line chatclub-realm/no-cross-realm-global -- serialized ISOLATED-world attestation must validate Firefox's DOM-global owner.
+  const target = globalThis.window || globalThis;
+  const state = target.__CHATCLUB_BROWSER_DOCUMENT_ATTESTATION_STATE__;
   const descriptor = Object.getOwnPropertyDescriptor(
-    globalThis,
+    target,
     "__CHATCLUB_BROWSER_DOCUMENT_ATTESTATION_STATE__"
   );
   return {
-    frameBindingId: String(globalThis.__CHATCLUB_FRAME_BINDING_ID__ || ""),
-    bridgeDocumentId: String(globalThis.__CHATCLUB_CONTENT_DOCUMENT_ID__ || ""),
+    frameBindingId: String(target.__CHATCLUB_FRAME_BINDING_ID__ || ""),
+    bridgeDocumentId: String(target.__CHATCLUB_CONTENT_DOCUMENT_ID__ || ""),
     legacyDocumentId: String(state?.id || ""),
     legacyDocumentValid: Boolean(
       state
@@ -106,7 +108,7 @@ function readTrustedFrameAttestation() {
       && state.epoch > 0
       && state.dirty === false
     ),
-    href: String(globalThis.location?.href || "")
+    href: String(target.location?.href || "")
   };
 }
 

@@ -28,20 +28,6 @@ const DEFAULT_IDENTITY = Object.freeze({ provider: "deepseek", id: "topic-1" });
 
 function completeBackgroundResponse(message, response) {
   if (response?.success !== true) return response;
-  if (message.action === "ensureContentBridge") {
-    return {
-      tabId: message.tabId,
-      frameIds: [7],
-      injected: 2,
-      injectedFiles: ["content/preload.js@7", "content/content.js@7"],
-      fallbackFiles: [],
-      browserDocumentId: "browser-document-1",
-      bindingRelayed: true,
-      features: [],
-      errors: [],
-      ...response
-    };
-  }
   if (message.action === "dispatchTrustedClick" || message.action === "dispatchTrustedMouseMove") {
     return {
       tabId: message.tabId,
@@ -93,10 +79,23 @@ function secureIframe(href = DEFAULT_HREF) {
 function createFixture(createTopicDeleteRuntime, options = {}) {
   const calls = [];
   const requests = [];
+  const ensureCalls = [];
+  const invalidations = [];
   let locationCalls = 0;
   let deleteCalls = 0;
   let confirmCalls = 0;
   const framePort = {
+    invalidate(iframe, reason, invalidateOptions) {
+      invalidations.push({ iframe, reason, options: { ...invalidateOptions } });
+    },
+    async ensure(iframe, ensureOptions) {
+      ensureCalls.push({ iframe, options: ensureOptions });
+      if (options.ensureError) throw options.ensureError;
+      if (typeof options.ensureResult === "function") {
+        return options.ensureResult(iframe, ensureOptions, ensureCalls.length);
+      }
+      return options.ensureResult || { documentId: "bridge-document-1" };
+    },
     async request(iframe, command, data) {
       calls.push(command);
       requests.push({ command, data });
@@ -105,7 +104,7 @@ function createFixture(createTopicDeleteRuntime, options = {}) {
         if (typeof options.onLocationRequest === "function") {
           options.onLocationRequest(iframe, locationCalls);
         }
-        if (options.failRecoveryProbe && locationCalls > 1) {
+        if (Array.isArray(options.failLocationCalls) && options.failLocationCalls.includes(locationCalls)) {
           throw frameError("NOT_REGISTERED", false, "content frame is not registered");
         }
         const hrefs = Array.isArray(options.hrefs) ? options.hrefs : [];
@@ -148,12 +147,20 @@ function createFixture(createTopicDeleteRuntime, options = {}) {
   return {
     calls,
     requests,
+    ensureCalls,
+    invalidations,
     get deleteCalls() { return deleteCalls; },
     get confirmCalls() { return confirmCalls; },
     get trustedDispatchCalls() {
       return extensionMessages
         .slice(messageStart)
         .filter((message) => /^dispatchTrusted/.test(String(message?.action || "")))
+        .length;
+    },
+    get rawEnsureContentBridgeCalls() {
+      return extensionMessages
+        .slice(messageStart)
+        .filter((message) => message?.action === "ensureContentBridge")
         .length;
     },
     async execute() {
@@ -175,6 +182,17 @@ function createFixture(createTopicDeleteRuntime, options = {}) {
 (async () => {
   const moduleUrl = pathToFileURL(path.join(root, "app/topic-delete/runtime.js")).href;
   const { createTopicDeleteRuntime } = await import(moduleUrl);
+
+  assert.throws(
+    () => createTopicDeleteRuntime({ framePort: { async request() {} } }),
+    /requires framePort\.ensure/,
+    "Topic Delete must require authenticated bridge recovery through framePort.ensure"
+  );
+  assert.throws(
+    () => createTopicDeleteRuntime({ framePort: { async ensure() {}, async request() {} } }),
+    /requires framePort\.invalidate/,
+    "Topic Delete must require identity-aware bridge invalidation before a safe retry"
+  );
 
   for (const failure of [
     frameError("TIMEOUT", true, "[FrameRPC] Timeout waiting for response: deleteThread"),
@@ -216,6 +234,25 @@ function createFixture(createTopicDeleteRuntime, options = {}) {
       fixture.calls.slice(0, 4),
       ["getLocationHref", "deleteThread", "getLocationHref", "deleteThread"]
     );
+    assert.deepEqual(fixture.invalidations, [{
+      iframe: fixture.ensureCalls[0].iframe,
+      reason: `deleteThread:${code}`,
+      options: {
+        preserveDocument: code !== "STALE_DOCUMENT",
+        clearCapabilities: code === "INJECTION_FAILED"
+      }
+    }], `${code} recovery must invalidate only the state proven stale`);
+    assert.equal(fixture.ensureCalls.length, 1, `${code} recovery must authenticate a fresh frame binding`);
+    assert.deepEqual(
+      fixture.ensureCalls[0].options,
+      { features: ["delete"], force: true },
+      `${code} recovery must request the Delete feature through framePort.ensure`
+    );
+    assert.equal(
+      fixture.rawEnsureContentBridgeCalls,
+      0,
+      `${code} recovery must not bypass FrameRuntimePort with a raw ensureContentBridge message`
+    );
     assert.ok(
       fixture.calls.slice(4).length >= 2
       && fixture.calls.slice(4).every((command) => command === "getDeleteConfirmState"),
@@ -239,12 +276,27 @@ function createFixture(createTopicDeleteRuntime, options = {}) {
   }
 
   {
+    const recoveryError = new Error("authenticated bridge repair unavailable");
     const fixture = createFixture(createTopicDeleteRuntime, {
       firstDeleteError: frameError("NOT_REGISTERED", false),
-      failRecoveryProbe: true,
-      extensionMessageHandler: () => ({ success: true, injected: 0, injectedFiles: [] })
+      ensureError: recoveryError
     });
-    await assert.rejects(fixture.execute(), /iframe content bridge injection failed/);
+    await assert.rejects(
+      fixture.execute(),
+      /iframe content bridge recovery failed: authenticated bridge repair unavailable/
+    );
+    assert.equal(fixture.ensureCalls.length, 1, "failed recovery must make one authenticated ensure attempt");
+    assert.equal(fixture.invalidations.length, 1, "failed recovery must still invalidate the stale background registration");
+    assert.deepEqual(
+      fixture.ensureCalls[0].options,
+      { features: ["delete"], force: true },
+      "failed recovery must use the same force-authenticated Delete contract"
+    );
+    assert.equal(
+      fixture.rawEnsureContentBridgeCalls,
+      0,
+      "failed recovery must not fall back to a raw ensureContentBridge runtime message"
+    );
     assert.equal(fixture.deleteCalls, 1, "delete must not retry when pre-delivery bridge recovery fails");
     assert.equal(fixture.confirmCalls, 0, "an explicit pre-delivery recovery failure must not inspect an unrelated dialog");
     assert.equal(fixture.trustedDispatchCalls, 0);
@@ -765,6 +817,12 @@ function createFixture(createTopicDeleteRuntime, options = {}) {
     assert.equal(fixture.deleteCalls, 0, "an unsupported URL must fail before mutation");
     assert.equal(fixture.confirmCalls, 0, "an unsupported URL has no post-mutation completion to probe");
   }
+
+  assert.equal(
+    extensionMessages.some((message) => message?.action === "ensureContentBridge"),
+    false,
+    "Topic Delete must never send raw ensureContentBridge runtime messages"
+  );
 
   console.log("topic delete delivery-safe retry and identity-aware fail-closed settlement: ok");
 })().catch((error) => {

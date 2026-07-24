@@ -126,19 +126,27 @@ const frameBridgeBinding = createBindOnceControllerPort("Frame Bridge", [
   "scheduleContentFrameRepair",
   "verifiedCurrentContentFrameRegistration"
 ]);
-const frameRuntimePort = new FrameRuntimePort({
-  ensureRuntime: frameBridgeBinding.port.prepareContentFrameRuntime,
-  invalidateRuntime(iframe) {
-    if (!iframe?.dataset) return;
+function invalidateFrameRuntimeState(iframe, _reason, options = {}) {
+  if (!iframe?.dataset) return;
+  if (!options.preserveDocument) {
     delete iframe.dataset.preferredModelDocumentId;
     delete iframe.dataset.preferredModelContentBridgeVersion;
     delete iframe.dataset.preferredModelContentRuntimeImplementation;
+  }
+  if (!options.preserveDocument || options.clearCapabilities) {
+    iframe.dataset.contentRuntimeCapabilitiesEpoch = String(
+      Math.max(0, Number(iframe.dataset.contentRuntimeCapabilitiesEpoch) || 0) + 1
+    );
     delete iframe.dataset.summaryRuntimeDocumentId;
     delete iframe.dataset.summaryRuntimeBridgeVersion;
     delete iframe.dataset.summaryRuntimeImplementationVersion;
     delete iframe.dataset.contentRuntimeCapabilitiesDocumentId;
     delete iframe.dataset.contentRuntimeCapabilities;
   }
+}
+const frameRuntimePort = new FrameRuntimePort({
+  ensureRuntime: frameBridgeBinding.port.prepareContentFrameRuntime,
+  invalidateRuntime: invalidateFrameRuntimeState
 });
 const sendToContentFrame = createFrameRequest(frameRuntimePort, "App runtime");
 const topicDeleteRuntime = createTopicDeleteRuntime({ framePort: frameRuntimePort });

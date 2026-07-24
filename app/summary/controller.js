@@ -131,7 +131,11 @@ export function createSummaryController(ctx) {
   }
 
   function summaryFrameLogoUrl(instanceId, href, declaredLogoUrl = "") {
-    return summaryTabFaviconUrl(instanceId) || effectiveFaviconUrl(href, declaredLogoUrl) || declaredLogoUrl || "";
+    if (declaredLogoUrl) {
+      const resolvedDeclaredLogoUrl = effectiveFaviconUrl(href, declaredLogoUrl);
+      if (resolvedDeclaredLogoUrl) return resolvedDeclaredLogoUrl;
+    }
+    return summaryTabFaviconUrl(instanceId) || effectiveFaviconUrl(href) || "";
   }
   
   function summaryKeySet(name) {
@@ -689,6 +693,9 @@ export function createSummaryController(ctx) {
     if ((siteConfig?.id === "grok" || siteConfig?.id === "grok-dairoot") && (host === "grok.com" || host.endsWith(".grok.com") || host === "grok.x.ai" || host.endsWith(".grok.x.ai") || host === "gk.dairoot.cn" || host.endsWith(".gk.dairoot.cn")) && path === "/" && noSearchOrHash) {
       return t("summaryPanel.blankChat", { name: "Grok" });
     }
+    if (siteConfig?.id === "gemini" && (host === "gemini.google.com" || host.endsWith(".gemini.google.com") || host === "bard.google.com" || host.endsWith(".bard.google.com")) && path === "/app") {
+      return t("summaryPanel.blankChat", { name: "Gemini" });
+    }
     if (siteConfig?.id === "lobehub" && (host === "app.lobehub.com" || host.endsWith(".lobehub.com")) && path === "/" && noSearchOrHash) {
       return t("summaryPanel.blankChat", { name: "LobeHub" });
     }
@@ -701,23 +708,48 @@ export function createSummaryController(ctx) {
     return "";
   }
   
-  async function summaryFrameMeta(iframe, app, order = 0) {
+  function summaryFrameBase(iframe, app, order = 0) {
     const name = inferAppName(app);
     const instanceId = iframe.dataset.instanceId || "";
-    let href = app.url;
+    const href = String(
+      iframe.dataset.currentThreadHref
+      || iframe.dataset.currentHref
+      || iframe.getAttribute?.("src")
+      || iframe.src
+      || app.url
+      || ""
+    );
+    return {
+      key: instanceId || `${name}\n${href}`,
+      instanceId,
+      name,
+      title: name,
+      pageTitle: name,
+      href,
+      logoUrl: summaryFrameLogoUrl(instanceId, href),
+      order
+    };
+  }
+
+  async function summaryFrameMeta(iframe, app, order = 0, { skipEnsure = false } = {}) {
+    const fallback = summaryFrameBase(iframe, app, order);
+    const { instanceId, name } = fallback;
+    let href = fallback.href;
     let pageTitle = "";
-    let logoUrl = summaryFrameLogoUrl(instanceId, href);
+    let logoUrl = fallback.logoUrl;
     try {
-      const meta = await sendToContentFrame(iframe, "getPageMeta", {}, 1800);
+      const meta = await sendToContentFrame(iframe, "getPageMeta", {}, { timeoutMs: 1800, skipEnsure });
       href = meta?.href || href;
       pageTitle = meta?.title || "";
       logoUrl = summaryFrameLogoUrl(instanceId, href, meta?.logoUrl) || logoUrl;
     } catch {
-      try { href = await sendToContentFrame(iframe, "getLocationHref", {}, 1200) || href; } catch {}
+      try {
+        href = await sendToContentFrame(iframe, "getLocationHref", {}, { timeoutMs: 1200, skipEnsure }) || href;
+      } catch {}
       logoUrl = summaryFrameLogoUrl(instanceId, href) || logoUrl;
     }
     const discoveredLogoUrl = await discoverDeclaredFaviconUrl(href);
-    logoUrl = summaryTabFaviconUrl(instanceId) || discoveredLogoUrl || logoUrl || summaryLogoUrl(href);
+    logoUrl = discoveredLogoUrl || logoUrl || summaryTabFaviconUrl(instanceId) || summaryLogoUrl(href);
     if (logoUrl) {
       rememberFaviconUrl(href, logoUrl);
       if (app.url && app.url !== href) rememberFaviconUrl(app.url, logoUrl);
@@ -736,8 +768,11 @@ export function createSummaryController(ctx) {
   
   async function collectFrameSummary(iframe, index = 0) {
     const app = frameApp(iframe);
-    const coreReady = await prepareContentFrameRuntime(iframe);
-    let base = await summaryFrameMeta(iframe, app, index);
+    // Probe the already-registered content bridge before deciding that a page
+    // is blank. This both discovers Firefox-safe declared favicons for skipped
+    // cards and lets a live route replace stale iframe attributes after an
+    // extension reload. Runtime repair remains reserved for eligible pages.
+    let base = await summaryFrameMeta(iframe, app, index, { skipEnsure: true });
     const diagnostic = (status, message, extra = {}) => ({
       ...base,
       ...extra,
@@ -745,12 +780,6 @@ export function createSummaryController(ctx) {
       status,
       message
     });
-
-    if (!coreReady?.ok) {
-      const message = coreReady?.reason || t("summaryPanel.collectionFailed");
-      recordSummaryFailure("prepareCollector", app, base, coreReady, message);
-      return { diagnostic: diagnostic("error", message) };
-    }
 
     const resolveSiteContext = () => {
       if (base.href.startsWith("chrome-error://")) {
@@ -769,6 +798,16 @@ export function createSummaryController(ctx) {
       return { config, fields };
     };
     let siteContext = resolveSiteContext();
+    if (siteContext.failure) return siteContext.failure;
+
+    const coreReady = await prepareContentFrameRuntime(iframe);
+    if (!coreReady?.ok) {
+      const message = coreReady?.reason || t("summaryPanel.collectionFailed");
+      recordSummaryFailure("prepareCollector", app, base, coreReady, message);
+      return { diagnostic: diagnostic("error", message) };
+    }
+    base = await summaryFrameMeta(iframe, app, index);
+    siteContext = resolveSiteContext();
     if (siteContext.failure) return siteContext.failure;
 
     const summaryReady = await prepareContentFrameRuntime(iframe, { summary: true });

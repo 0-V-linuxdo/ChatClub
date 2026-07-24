@@ -160,46 +160,6 @@ async function runTrustedDispatch(task) {
   }
 }
 
-function frameHrefHints(iframe, payload = {}) {
-  return Array.from(new Set([
-    payload.currentThreadHref,
-    payload.currentHref,
-    payload.cachedHref,
-    payload.href,
-    payload.url,
-    iframe?.dataset?.currentThreadHref,
-    iframe?.dataset?.currentHref,
-    iframe?.src,
-    iframe?.getAttribute?.("src")
-  ].map((item) => String(item || "").trim()).filter(Boolean)));
-}
-
-async function ensureContentBridge(iframe, payload = {}) {
-  const tabId = await currentExtensionTabId();
-  if (!tabId) return null;
-  const expectedFrameId = Number(iframe?.dataset?.browserFrameId);
-  const expectedBindingId = String(iframe?.dataset?.frameBindingId || "");
-  const secureTarget = /^[a-f0-9]{64}$/i.test(expectedBindingId)
-    ? {
-        expectedBindingId,
-        ...(Number.isSafeInteger(expectedFrameId) && expectedFrameId > 0 ? { expectedFrameId } : {})
-      }
-    : {};
-  try {
-    return await runtimeRequest({
-      source: "chatclub",
-      action: "ensureContentBridge",
-      tabId,
-      hrefs: frameHrefHints(iframe, payload),
-      features: ["delete"],
-      ...secureTarget
-    });
-  } catch (error) {
-    console.warn("[ChatClub] Failed to ensure iframe content bridge", error);
-    return { error: error?.message || String(error) };
-  }
-}
-
 function framePointOnPage(iframe, framePoint, kind) {
   const rect = iframe?.getBoundingClientRect?.();
   if (!rect || rect.width <= 0 || rect.height <= 0) throw new Error(`trusted browser ${kind} failed: iframe is not visible`);
@@ -316,6 +276,12 @@ export function createTopicDeleteRuntime(dependencies = {}) {
     completionPollMs: "number?",
     completionStableMs: "number?"
   });
+  if (typeof framePort.ensure !== "function") {
+    throw new TypeError("Topic Delete runtime requires framePort.ensure.");
+  }
+  if (typeof framePort.invalidate !== "function") {
+    throw new TypeError("Topic Delete runtime requires framePort.invalidate.");
+  }
   const sendToContentFrame = createFrameRequest(framePort, "Topic Delete runtime");
   const completionTimeoutMs = Math.max(50, Math.min(15000, Number(configuredCompletionTimeoutMs) || 5200));
   const completionPollMs = Math.max(10, Math.min(1000, Number(configuredCompletionPollMs) || 260));
@@ -358,43 +324,33 @@ export function createTopicDeleteRuntime(dependencies = {}) {
     }
   }
 
-  async function prepareContentBridge(iframe, payload = {}) {
-    const existing = await pingContentBridge(iframe, 900);
-    if (existing.ok) return existing;
-    const installed = await ensureContentBridge(iframe, payload);
-    const installError = installed?.error
-      || (Array.isArray(installed?.errors) && installed.errors.length ? installed.errors.join("; ") : "");
-    const injectedFiles = Array.isArray(installed?.injectedFiles) ? installed.injectedFiles : [];
-    const expectedFiles = new Set([
-      "content/preload.js",
-      "content/content.js",
-      "content/delete.js"
-    ]);
-    if (frameHrefHints(iframe, payload).some((href) => {
-      try { return new URL(href).hostname.toLowerCase() === "grok.com"; } catch { return false; }
-    })) expectedFiles.add("content/grok-cookie-bridge.js");
-    const injectedNames = injectedFiles.map((entry) => String(entry || "").split("@")[0]);
-    const injectionComplete = Number(installed?.injected) === expectedFiles.size
-      && injectedFiles.length === expectedFiles.size
-      && new Set(injectedFiles).size === expectedFiles.size
-      && injectedNames.every((file) => expectedFiles.has(file))
-      && [...expectedFiles].every((file) => injectedNames.includes(file));
-    if (installError || !injectionComplete) {
+  async function prepareContentBridge(iframe, options = {}) {
+    if (!options.forceEnsure) {
+      const existing = await pingContentBridge(iframe, 900);
+      if (existing.ok) return existing;
+    }
+    let registration;
+    try {
+      registration = await framePort.ensure(iframe, {
+        features: ["delete"],
+        force: true
+      });
+    } catch (error) {
       return {
         ok: false,
-        reason: `iframe content bridge injection failed: ${installError || "incomplete injected file inventory"}`,
-        installed
+        reason: `iframe content bridge recovery failed: ${error?.message || String(error)}`
       };
+    }
+    if (!registration?.documentId) {
+      return { ok: false, reason: "iframe content bridge recovery returned no authenticated document" };
     }
     await sleep(180);
     const recovered = await pingContentBridge(iframe, 1400);
-    if (recovered.ok) return { ...recovered, installed };
+    if (recovered.ok) return { ...recovered, registration };
     return {
       ok: false,
-      reason: installError
-        ? `iframe content bridge did not respond; injection failed: ${installError}`
-        : "iframe content bridge did not respond",
-      installed
+      reason: "iframe content bridge did not respond after authenticated recovery",
+      registration
     };
   }
 
@@ -420,7 +376,7 @@ export function createTopicDeleteRuntime(dependencies = {}) {
 
   async function sendDelete(iframe, payload = {}, config = null, timeoutMs = 15000, completion = {}) {
     const site = config?.id || payload.appId || "topic-delete";
-    const ready = await prepareContentBridge(iframe, payload);
+    const ready = await prepareContentBridge(iframe);
     if (!ready.ok) return { ok: false, site, reason: ready.reason };
     const captured = captureCompletionIdentity(completion, ready.href);
     if (!captured.ok) return { ok: false, site, reason: captured.reason };
@@ -445,7 +401,11 @@ export function createTopicDeleteRuntime(dependencies = {}) {
       return await sendToContentFrame(iframe, "deleteThread", data, timeoutMs + 1000);
     } catch (error) {
       if (!recoverableBeforeDeleteDelivery(error)) throw error;
-      const repaired = await prepareContentBridge(iframe, payload);
+      framePort.invalidate(iframe, `deleteThread:${error.code}`, {
+        preserveDocument: error.code !== "STALE_DOCUMENT",
+        clearCapabilities: error.code === "INJECTION_FAILED"
+      });
+      const repaired = await prepareContentBridge(iframe, { forceEnsure: true });
       if (!repaired.ok) return { ok: false, site, reason: repaired.reason };
       const recaptured = captureCompletionIdentity(completion, repaired.href);
       if (!recaptured.ok) return { ok: false, site, reason: recaptured.reason };

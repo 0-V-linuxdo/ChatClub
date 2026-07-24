@@ -386,12 +386,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "9fd1e5dd9f7a64af34f287b0287caceabbe605f42c5bc0fc6f2fdb6b76aa0aa8";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "74eef65473a6f090d918d02fbe44a1aa6469ab71fd20455b2a2a82091962217c";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.39e7dff3b817dd590d108ce155af13e47b28138e33c477502664105276787094";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "39e7dff3b817dd590d108ce155af13e47b28138e33c477502664105276787094";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "1e59af82b478228bd65d6ae73a9732db5331fa9dd6fdb447c866345f03a518f7";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.1e59af82b478228bd65d6ae73a9732db5331fa9dd6fdb447c866345f03a518f7";
-  var CONTENT_RUNTIME_CONTENT_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/content.js", "entryPath": "content-src/content.js", "sourceSha256": "fb07d06d0adeb220ca6618ce8787dbb9ffb84b10edb16fce94d3c03546608202", "implementationSha256": "ec86fbd2404c15f4f11c55f36f1a2433c35611696d1405ed44325c5663b7b372", "implementationVersion": "2026.07.16.2+bundle.ec86fbd2404c15f4f11c55f36f1a2433c35611696d1405ed44325c5663b7b372" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "e4e372e589be4377c2cc79a334c47981d328d22cf0813e080d1177ce7334b36d";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.e4e372e589be4377c2cc79a334c47981d328d22cf0813e080d1177ce7334b36d";
+  var CONTENT_RUNTIME_CONTENT_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/content.js", "entryPath": "content-src/content.js", "sourceSha256": "f16267be890ecf9be02a48c09ba61dbf0fb83c65523a2914d6199ac5e6f4f418", "implementationSha256": "3d2c330b975ef7e2091155f006201e6047e4a11ac0627098f29c55f8c8ced89b", "implementationVersion": "2026.07.16.2+bundle.3d2c330b975ef7e2091155f006201e6047e4a11ac0627098f29c55f8c8ced89b" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -1548,10 +1548,10 @@
       const expectedBindingId = String(message.expectedBindingId || "");
       const browserDocumentId = String(message.browserDocumentId || "").trim();
       if (!/^[a-f0-9]{64}$/i.test(challenge) || !Number.isSafeInteger(generation) || generation <= 0 || !/^[a-f0-9]{64}$/i.test(expectedBindingId) || !browserDocumentId || /^legacy:/i.test(browserDocumentId) && browserDocumentId !== currentBrowserDocumentAttestationId()) return false;
-      const bootstrap = String(globalThis.__CHATCLUB_FRAME_BINDING_ID__ || "");
+      const bootstrap = String(window.__CHATCLUB_FRAME_BINDING_ID__ || "");
       if (bootstrap && bootstrap !== expectedBindingId) return false;
       if (!bootstrap) {
-        Object.defineProperty(globalThis, "__CHATCLUB_FRAME_BINDING_ID__", {
+        Object.defineProperty(window, "__CHATCLUB_FRAME_BINDING_ID__", {
           configurable: false,
           enumerable: false,
           writable: false,

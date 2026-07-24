@@ -7,6 +7,7 @@ export function createFaviconService(dependencies) {
     storageGet,
     storageSet,
     runtimeGetUrl,
+    runtimeGetManifest = () => (globalThis.browser || globalThis.chrome)?.runtime?.getManifest?.(),
     inferAppName,
     fetchPage = (...args) => fetch(...args),
     parseHtml = (html) => new DOMParser().parseFromString(html, "text/html")
@@ -25,8 +26,15 @@ export function createFaviconService(dependencies) {
 
   function browserUrl(href) {
     const page = pageUrl(href);
-    if (!page || !globalThis.chrome?.runtime?.getURL) return "";
+    if (!page) return "";
     try {
+      const extensionUrl = new URL(runtimeGetUrl(""));
+      const manifest = runtimeGetManifest();
+      if (
+        extensionUrl.protocol !== "chrome-extension:"
+        || !Array.isArray(manifest?.permissions)
+        || !manifest.permissions.includes("favicon")
+      ) return "";
       const faviconUrl = new URL(runtimeGetUrl("/_favicon/"));
       faviconUrl.searchParams.set("pageUrl", page.href);
       faviconUrl.searchParams.set("size", "32");
@@ -60,11 +68,12 @@ export function createFaviconService(dependencies) {
   }
 
   function siteIcon(href, logoUrl) {
+    if (!String(logoUrl || "").trim()) return false;
     const page = pageUrl(href);
     const icon = page && pageUrl(logoUrl, page.href);
-    if (!page || !icon || icon.origin !== page.origin) return false;
-    const path = icon.pathname.toLowerCase();
-    return path === "/favicon.ico" || path.includes("/favicon") || path.includes("apple-touch-icon") || path.includes("touch-icon");
+    if (!page || !icon || icon.username || icon.password) return false;
+    if (page.protocol === "https:" && icon.protocol !== "https:") return false;
+    return true;
   }
 
   function chooseDeclared(doc, href) {
@@ -107,6 +116,7 @@ export function createFaviconService(dependencies) {
   }
 
   function remember(href, logoUrl) {
+    if (!String(logoUrl || "").trim()) return;
     const icon = pageUrl(logoUrl, href);
     if (!icon || !siteIcon(href, icon.href)) return;
     const keys = cacheKeys(href);
@@ -145,7 +155,7 @@ export function createFaviconService(dependencies) {
   }
 
   function effective(href, declaredLogoUrl = "") {
-    const declared = pageUrl(declaredLogoUrl, href);
+    const declared = String(declaredLogoUrl || "").trim() ? pageUrl(declaredLogoUrl, href) : null;
     if (declared && siteIcon(href, declared.href)) return declared.href;
     return cached(href) || browserUrl(href);
   }

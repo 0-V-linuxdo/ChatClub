@@ -93,9 +93,9 @@ export class FrameRuntimePort {
     return { ...(remembered || {}), documentId };
   }
 
-  invalidate(iframe, reason = "invalidated") {
+  invalidate(iframe, reason = "invalidated", options = {}) {
     if (iframe) this.registrations.delete(iframe);
-    this.invalidateRuntime?.(iframe, reason);
+    this.invalidateRuntime?.(iframe, reason, options);
   }
 
   async ensure(iframe, { features = [], force = false } = {}) {
@@ -187,8 +187,11 @@ export class FrameRuntimePort {
         && frameError.delivered === false
         && ["NOT_REGISTERED", "STALE_DOCUMENT", "INJECTION_FAILED"].includes(frameError.code);
       if (!recoverableBeforeDelivery) throw frameError;
-      this.invalidate(iframe, `${command}:${frameError.code}`);
-      await this.ensure(iframe, { features });
+      this.invalidate(iframe, `${command}:${frameError.code}`, {
+        preserveDocument: frameError.code !== "STALE_DOCUMENT",
+        clearCapabilities: frameError.code === "INJECTION_FAILED"
+      });
+      await this.ensure(iframe, { features, force: true });
       return send();
     }
   }
