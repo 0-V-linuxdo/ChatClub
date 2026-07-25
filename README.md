@@ -25,7 +25,7 @@
 | 站点名 | URL | 工作台 | Summary | 消息导航 | 删除会话 | 模型偏好 |
 | --- | --- | --- | --- | --- | --- | --- |
 | ChatGPT | https://chatgpt.com/ | ✓ | ✓ | ✓ | ✓ |  |
-| Claude | https://claude.ai/new | ✓ | ✓ | ✓ |  |  |
+| Claude | https://claude.ai/new | ✓ | ✓ | ✓ | ✓ |  |
 | Gemini | https://gemini.google.com/app | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Grok | https://grok.com/ | ✓ | ✓ |  | ✓ | ✓ |
 | Grok Mirror | https://gk.dairoot.cn/ | ✓ | ✓ | ✓ | ✓ |  |

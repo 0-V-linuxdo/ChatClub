@@ -39,16 +39,18 @@ const generatorSource = fs.readFileSync(path.join(root, "tools/generate-artifact
 assert.match(generatorSource, /assertContainedOutputPath\(base, relativePath\)/);
 
 assert.equal(Object.keys(CONTENT_ENTRIES).length, 10);
-assert.equal(Object.keys(TOPIC_DELETE_OUTPUTS).length, 7);
+assert.equal(Object.keys(TOPIC_DELETE_OUTPUTS).length, 8);
+assert.equal(TOPIC_DELETE_OUTPUTS.claude, "claude.user.js");
 assert.equal(FIREFOX_CONTENT_FALLBACK_OUTPUT, "background/firefox-content-fallbacks.generated.js");
 assert.equal(CONTENT_RUNTIME_VERSION_MODULE, "shared/content-runtime-version.generated.js");
-assert.equal(GENERATED_ARTIFACT_FILES.length, 19);
+assert.equal(GENERATED_ARTIFACT_FILES.length, 20);
 assert.ok(GENERATED_ARTIFACT_DIRECT_INPUT_FILES.includes("shared/protocol.js"));
 assert.ok(GENERATED_ARTIFACT_DIRECT_INPUT_FILES.includes("shared/summary-sites.js"));
 assert.ok(GENERATED_ARTIFACT_DIRECT_INPUT_FILES.includes("shared/topic-delete-sites.js"));
 for (const file of TOPIC_DELETE_SOURCE_FILES) {
   assert.ok(GENERATED_ARTIFACT_DIRECT_INPUT_FILES.includes(file), `direct input inventory is missing ${file}`);
 }
+assert.ok(TOPIC_DELETE_SOURCE_FILES.includes("build-src/topic-delete-claude-helpers.js"));
 assert.ok(GENERATED_ARTIFACT_DIRECT_INPUT_FILES.includes("userscripts/index.json"));
 for (const entry of Object.values(CONTENT_ENTRIES)) {
   assert.ok(GENERATED_ARTIFACT_DIRECT_INPUT_FILES.includes(entry), `direct input inventory is missing ${entry}`);

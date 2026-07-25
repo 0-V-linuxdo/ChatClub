@@ -393,6 +393,10 @@ const en = {
 
   "modelPreferences.title": "Preferred models",
   "modelPreferences.desc": "Choose the model ChatClub should apply when a supported chat page finishes loading.",
+  "modelPreferences.preferredTab": "Preferred models",
+  "modelPreferences.preferredTabDesc": "Choose models to apply after chat pages load.",
+  "modelPreferences.failureTab": "Failure handling",
+  "modelPreferences.failureTabDesc": "Choose what queued messages do if model selection fails.",
   "modelPreferences.manage": "Supported now: Gemini, Grok, DeepSeek, and Notion AI.",
   "modelPreferences.platform": "Platform",
   "modelPreferences.preferredModel": "Preferred model",
@@ -1339,6 +1343,10 @@ const zh_CN = {
 
   "modelPreferences.title": "首选模型",
   "modelPreferences.desc": "选择 ChatClub 在受支持聊天页面加载完成后自动应用的模型。",
+  "modelPreferences.preferredTab": "首选模型",
+  "modelPreferences.preferredTabDesc": "选择聊天页面加载后自动应用的模型。",
+  "modelPreferences.failureTab": "失败处理",
+  "modelPreferences.failureTabDesc": "选择模型选择失败时队列消息的处理方式。",
   "modelPreferences.manage": "当前支持 Gemini、Grok、DeepSeek 和 Notion AI。",
   "modelPreferences.platform": "平台",
   "modelPreferences.preferredModel": "首选模型",

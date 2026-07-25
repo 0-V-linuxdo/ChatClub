@@ -46,7 +46,7 @@ export function createModelsSettingsSection(ctx) {
   const state = requireSettingsSectionStatePort(
     requireControllerContext(ctx, controllerName, "state"),
     controllerName,
-    ["modelPreferenceDraft", "options"]
+    ["modelPreferenceDraft", "modelPreferenceSettingsTab", "options"]
   );
   const svgIcon = requireControllerFunction(ctx, controllerName, "svgIcon");
   const notifyConfigReload = requireControllerFunction(ctx, controllerName, "notifyConfigReload");
@@ -56,6 +56,7 @@ export function createModelsSettingsSection(ctx) {
     settingsActions,
     settingsBlock,
     settingsDragHandle,
+    settingsInnerTabs,
     settingsList,
     settingsListDropPlacement,
     settingsPaneToolbar
@@ -382,7 +383,7 @@ export function createModelsSettingsSection(ctx) {
     redraw();
   }
 
-  function pane(redraw) {
+  function failurePolicyBlock() {
     const defaultFailureField = field(
       t("modelPreferences.failurePolicyDefault"),
       failurePolicySelect()
@@ -404,6 +405,10 @@ export function createModelsSettingsSection(ctx) {
       )
     );
     failureBlock.classList.add("model-preference-failure-block");
+    return failureBlock;
+  }
+
+  function preferredModelsBlock(redraw) {
     const block = settingsBlock(t("modelPreferences.title"), t("modelPreferences.desc"),
       settingsList(
         [
@@ -418,10 +423,32 @@ export function createModelsSettingsSection(ctx) {
       settingsActions(button(t("modelPreferences.clear"), () => clearDraft(redraw)))
     );
     block.classList.add("model-preference-block");
+    return block;
+  }
+
+  function pane(redraw) {
+    const activeTab = state.modelPreferenceSettingsTab === "failure" ? "failure" : "preferred";
+    state.modelPreferenceSettingsTab = activeTab;
+    const tabs = [
+      ["preferred", t("modelPreferences.preferredTab"), t("modelPreferences.preferredTabDesc")],
+      ["failure", t("modelPreferences.failureTab"), t("modelPreferences.failureTabDesc")]
+    ];
+    const tabBar = settingsInnerTabs(tabs, activeTab, (id) => {
+      state.modelPreferenceSettingsTab = id;
+      cleanupDrag();
+      redraw();
+    });
+    Array.from(tabBar.children).forEach((tab, index) => {
+      tab.dataset.modelPreferenceTabId = tabs[index]?.[0] || "";
+    });
     return el("div", { class: "settings-pane settings-manager-pane model-preferences-pane" },
-      settingsPaneToolbar(t("modelPreferences.manage")),
-      failureBlock,
-      block
+      tabBar,
+      activeTab === "failure"
+        ? failurePolicyBlock()
+        : [
+          settingsPaneToolbar(t("modelPreferences.manage")),
+          preferredModelsBlock(redraw)
+        ]
     );
   }
 

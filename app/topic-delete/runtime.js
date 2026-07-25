@@ -432,10 +432,8 @@ async function retryAfterHover(iframe, result, payload, config, timeoutMs, compl
 }
 
 async function retryAfterMenuClick(iframe, result, payload, config, timeoutMs, completion) {
-  const menuClick = trustedMenuClick(result, completion?.attemptId, trustedBridgeDocumentId(iframe));
-  if (!menuClick || payload?.trustedMenuClickRetried) return result;
-  return withTrustedInputLock(async () => {
-    let lastResult = result;
+  async function dispatchPhase(currentResult, menuClick, nextPayload) {
+    let lastResult = currentResult;
     for (const framePoint of menuClick.framePoints || [menuClick.framePoint]) {
       const hoverTarget = await revalidateTrustedTarget(iframe, completion, menuClick.documentId);
       await runTrustedDispatch(() => dispatchHover(iframe, {
@@ -447,13 +445,52 @@ async function retryAfterMenuClick(iframe, result, payload, config, timeoutMs, c
       const clickTarget = await revalidateTrustedTarget(iframe, completion, menuClick.documentId);
       await runTrustedDispatch(() => dispatchClick(iframe, { ...menuClick, framePoint }, clickTarget));
       await sleep(360);
-      lastResult = await sendDelete(iframe, { ...payload, trustedMenuClickRetried: true }, config, timeoutMs, completion);
+      lastResult = await sendDelete(iframe, nextPayload, config, timeoutMs, completion);
       if (lastResult?.ok) return lastResult;
       const reason = String(lastResult?.reason || "");
       if (reason !== "trusted topic menu click did not open") return lastResult;
     }
     return lastResult;
-  });
+  }
+
+  const firstClick = trustedMenuClick(result, completion?.attemptId, trustedBridgeDocumentId(iframe));
+  if (!firstClick) return result;
+  const firstKind = String(firstClick.kind || "").trim();
+  if (firstKind === "conversation-menu-trigger") {
+    if (
+      payload?.trustedMenuTriggerRetried
+      || payload?.trustedMenuClickRetried
+      || firstClick.framePoints?.length !== 1
+    ) return result;
+    return withTrustedInputLock(async () => {
+      const triggerPayload = { ...payload, trustedMenuTriggerRetried: true };
+      const triggerResult = await dispatchPhase(result, firstClick, triggerPayload);
+      if (triggerResult?.ok) return triggerResult;
+      const deleteItemClick = trustedMenuClick(
+        triggerResult,
+        completion?.attemptId,
+        trustedBridgeDocumentId(iframe)
+      );
+      if (
+        String(deleteItemClick?.kind || "").trim() !== "delete-menu-item"
+        || deleteItemClick?.framePoints?.length !== 1
+      ) {
+        return triggerResult;
+      }
+      return dispatchPhase(
+        triggerResult,
+        deleteItemClick,
+        { ...triggerPayload, trustedMenuClickRetried: true }
+      );
+    });
+  }
+
+  if (firstKind && firstKind !== "delete-menu-item" && firstKind !== "topic-menu-trigger") return result;
+  if (payload?.trustedMenuTriggerRetried || payload?.trustedMenuClickRetried) return result;
+  if (firstKind === "delete-menu-item" && firstClick.framePoints?.length !== 1) return result;
+  return withTrustedInputLock(() => (
+    dispatchPhase(result, firstClick, { ...payload, trustedMenuClickRetried: true })
+  ));
 }
 
 async function retryAfterKeySequence(iframe, result, payload, config, timeoutMs, completion) {

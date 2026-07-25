@@ -32,6 +32,7 @@ const CONTENT_RUNTIME_BUNDLE_EXPORT_NAMES = Object.freeze({
 
 const TOPIC_DELETE_OUTPUTS = Object.freeze({
   chatgpt: "chatgpt.user.js",
+  claude: "claude.user.js",
   deepseek: "deepseek.user.js",
   gemini: "gemini.user.js",
   grokMirror: "grok-mirror.user.js",
@@ -40,6 +41,7 @@ const TOPIC_DELETE_OUTPUTS = Object.freeze({
   notion: "notion.user.js"
 });
 const TOPIC_DELETE_SOURCE_FILES = Object.freeze([
+  "build-src/topic-delete-claude-helpers.js",
   "build-src/topic-delete-gemini-helpers.js",
   "build-src/topic-delete-userscript-engine-core.js",
   "build-src/topic-delete-userscript-engine-sites.js",

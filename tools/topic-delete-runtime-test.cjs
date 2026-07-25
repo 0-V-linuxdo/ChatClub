@@ -462,6 +462,161 @@ function createFixture(createTopicDeleteRuntime, options = {}) {
   }
 
   {
+    const observedPayloads = [];
+    const fixture = createFixture(createTopicDeleteRuntime, {
+      deleteResult: (data, call) => {
+        observedPayloads.push({
+          attemptId: data.deleteAttemptId,
+          triggerRetried: data.payload?.trustedMenuTriggerRetried === true,
+          itemRetried: data.payload?.trustedMenuClickRetried === true
+        });
+        if (call === 1) {
+          return {
+            ok: false,
+            site: "claude",
+            reason: "Claude title menu requires a trusted click",
+            needsTrustedMenuClick: true,
+            trustedMenuClick: {
+              attemptId: data.deleteAttemptId,
+              documentId: "bridge-document-1",
+              kind: "conversation-menu-trigger",
+              framePoint: { x: 20, y: 20 }
+            }
+          };
+        }
+        if (call === 2) {
+          assert.equal(data.payload?.trustedMenuTriggerRetried, true);
+          assert.equal(data.payload?.trustedMenuClickRetried, undefined);
+          return {
+            ok: false,
+            site: "claude",
+            reason: "Claude Delete item requires a trusted click",
+            needsTrustedMenuClick: true,
+            trustedMenuClick: {
+              attemptId: data.deleteAttemptId,
+              documentId: "bridge-document-1",
+              kind: "delete-menu-item",
+              framePoint: { x: 30, y: 20 }
+            }
+          };
+        }
+        assert.equal(call, 3, "Claude's trusted menu state machine must stop after the Delete-item phase");
+        assert.equal(data.payload?.trustedMenuTriggerRetried, true);
+        assert.equal(data.payload?.trustedMenuClickRetried, true);
+        return { ok: true, site: "claude" };
+      },
+      iframe: secureIframe(),
+      extensionMessageHandler(message) {
+        if (/^dispatchTrusted/.test(String(message.action || ""))) return { success: true };
+        return { success: false, error: "unexpected runtime request" };
+      }
+    });
+    assert.deepEqual(await fixture.execute(), { ok: true, site: "claude" });
+    assert.equal(fixture.deleteCalls, 3, "Claude may advance through exactly two trusted menu phases");
+    assert.equal(fixture.trustedDispatchCalls, 4, "each Claude phase requires exactly one hover and one click");
+    assert.deepEqual(
+      observedPayloads.map(({ triggerRetried, itemRetried }) => [triggerRetried, itemRetried]),
+      [[false, false], [true, false], [true, true]],
+      "Claude retry flags must advance monotonically from title trigger to Delete item"
+    );
+    assert.equal(new Set(observedPayloads.map(({ attemptId }) => attemptId)).size, 1, "both trusted phases must retain one attempt id");
+  }
+
+  {
+    const fixture = createFixture(createTopicDeleteRuntime, {
+      deleteResult: (data, call) => call === 1
+        ? {
+            ok: false,
+            site: "probe",
+            reason: "legacy topic menu requires one trusted click",
+            needsTrustedMenuClick: true,
+            trustedMenuClick: {
+              attemptId: data.deleteAttemptId,
+              documentId: "bridge-document-1",
+              kind: "topic-menu-trigger",
+              framePoint: { x: 20, y: 20 }
+            }
+          }
+        : {
+            ok: false,
+            site: "probe",
+            reason: "legacy menu retry must remain single phase",
+            needsTrustedMenuClick: true,
+            trustedMenuClick: {
+              attemptId: data.deleteAttemptId,
+              documentId: "bridge-document-1",
+              kind: "conversation-menu-trigger",
+              framePoint: { x: 30, y: 20 }
+            }
+          },
+      iframe: secureIframe(),
+      extensionMessageHandler(message) {
+        if (/^dispatchTrusted/.test(String(message.action || ""))) return { success: true };
+        return { success: false, error: "unexpected runtime request" };
+      }
+    });
+    await assert.rejects(fixture.execute(), /legacy menu retry must remain single phase/);
+    assert.equal(fixture.deleteCalls, 2, "a legacy menu lease must never enter Claude's second phase");
+    assert.equal(fixture.trustedDispatchCalls, 2, "a legacy menu lease remains one hover plus one click");
+    const deleteRequests = fixture.requests.filter(({ command }) => command === "deleteThread");
+    assert.equal(deleteRequests[1].data.payload.trustedMenuClickRetried, true);
+    assert.equal(deleteRequests[1].data.payload.trustedMenuTriggerRetried, undefined);
+  }
+
+  {
+    const fixture = createFixture(createTopicDeleteRuntime, {
+      deleteResult: (data, call) => {
+        const kind = call === 1 ? "conversation-menu-trigger" : "topic-menu-trigger";
+        return {
+          ok: false,
+          site: "claude",
+          reason: call === 1 ? "trusted title trigger required" : "wrong second trusted-menu phase",
+          needsTrustedMenuClick: true,
+          trustedMenuClick: {
+            attemptId: data.deleteAttemptId,
+            documentId: "bridge-document-1",
+            kind,
+            framePoint: { x: 20 + call * 10, y: 20 }
+          }
+        };
+      },
+      iframe: secureIframe(),
+      extensionMessageHandler(message) {
+        if (/^dispatchTrusted/.test(String(message.action || ""))) return { success: true };
+        return { success: false, error: "unexpected runtime request" };
+      }
+    });
+    await assert.rejects(fixture.execute(), /wrong second trusted-menu phase/);
+    assert.equal(fixture.deleteCalls, 2, "Claude's second phase must be exactly delete-menu-item");
+    assert.equal(fixture.trustedDispatchCalls, 2, "a wrong second phase must not dispatch another coordinate");
+  }
+
+  {
+    const fixture = createFixture(createTopicDeleteRuntime, {
+      deleteResult: (data, call) => ({
+        ok: false,
+        site: "claude",
+        reason: call === 3 ? "third trusted-menu phase must be rejected" : `trusted Claude phase ${call}`,
+        needsTrustedMenuClick: true,
+        trustedMenuClick: {
+          attemptId: data.deleteAttemptId,
+          documentId: "bridge-document-1",
+          kind: call === 1 ? "conversation-menu-trigger" : "delete-menu-item",
+          framePoint: { x: 20 + call * 10, y: 20 }
+        }
+      }),
+      iframe: secureIframe(),
+      extensionMessageHandler(message) {
+        if (/^dispatchTrusted/.test(String(message.action || ""))) return { success: true };
+        return { success: false, error: "unexpected runtime request" };
+      }
+    });
+    await assert.rejects(fixture.execute(), /third trusted-menu phase must be rejected/);
+    assert.equal(fixture.deleteCalls, 3, "the two-phase state machine must never issue a fourth delete command");
+    assert.equal(fixture.trustedDispatchCalls, 4, "the two-phase state machine must never dispatch a third trusted click");
+  }
+
+  {
     const fixture = createFixture(createTopicDeleteRuntime, {
       deleteResult: (data) => ({
         ok: false,

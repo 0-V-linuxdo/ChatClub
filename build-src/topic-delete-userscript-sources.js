@@ -6,11 +6,13 @@ import {
   TOPIC_DELETE_REQUEST_EVENT,
   TOPIC_DELETE_RESULT_EVENT
 } from "../shared/protocol.js";
+import { CLAUDE_DELETE_USERSCRIPT_HELPERS } from "./topic-delete-claude-helpers.js";
 import { GEMINI_DELETE_USERSCRIPT_HELPERS } from "./topic-delete-gemini-helpers.js";
 import { DELETE_USERSCRIPT_ENGINE_CORE } from "./topic-delete-userscript-engine-core.js";
 import { DELETE_USERSCRIPT_ENGINE_SITES } from "./topic-delete-userscript-engine-sites.js";
 
 const DELETE_USERSCRIPT_VERSION = "2026.07.22.2";
+const CLAUDE_DELETE_USERSCRIPT_VERSION = "2026.07.26.3";
 const GEMINI_DELETE_USERSCRIPT_VERSION = "2026.07.22.2";
 const DELETE_USERSCRIPT_NAMESPACE = "https://chatclub.local/delete-sites";
 
@@ -67,6 +69,17 @@ const CHATGPT_DELETE_USERSCRIPT = standaloneDeleteUserscript({
   keys: ["ChatGPT"]
 });
 
+const CLAUDE_DELETE_USERSCRIPT = standaloneDeleteUserscript({
+  id: "claude",
+  name: "Claude",
+  description: "Delete the current Claude chat when ChatClub or the userscript menu requests it.",
+  matches: ["https://claude.ai/*", "https://*.claude.ai/*"],
+  keys: ["Claude"],
+  version: CLAUDE_DELETE_USERSCRIPT_VERSION,
+  helpers: CLAUDE_DELETE_USERSCRIPT_HELPERS,
+  runner: "    claude: deleteClaude,\n"
+});
+
 const GEMINI_DELETE_USERSCRIPT = standaloneDeleteUserscript({
   id: "gemini",
   name: "Gemini",
@@ -112,6 +125,7 @@ const DEEPSEEK_DELETE_USERSCRIPT = standaloneDeleteUserscript({
 
 export const TOPIC_DELETE_USERSCRIPT_SOURCES = Object.freeze({
   chatgpt: CHATGPT_DELETE_USERSCRIPT,
+  claude: CLAUDE_DELETE_USERSCRIPT,
   gemini: GEMINI_DELETE_USERSCRIPT,
   kagi: KAGI_DELETE_USERSCRIPT,
   grok: GROK_DELETE_USERSCRIPT,

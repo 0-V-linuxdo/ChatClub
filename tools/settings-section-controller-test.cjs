@@ -125,7 +125,7 @@ globalThis.document = { addEventListener() {} };
   assert.match(iframeEditor, /filter\(\(risk\) => !previousRisks\.has\(risk\)\)/);
   assert.match(iframeEditor, /openIframeRiskConfirmation\(addedRisks/);
   assert.match(iframeEditor, /iframe-permission-editor-modal/);
-  assert.deepEqual(stateKeys(modelsSource), ["modelPreferenceDraft", "options"]);
+  assert.deepEqual(stateKeys(modelsSource), ["modelPreferenceDraft", "modelPreferenceSettingsTab", "options"]);
   const failurePolicySelect = functionSource(modelsSource, "failurePolicySelect");
   const failureOverrideSelect = functionSource(modelsSource, "failureOverrideSelect");
   const modelAutosave = functionSource(modelsSource, "flushAutosave", true);
@@ -151,13 +151,23 @@ globalThis.document = { addEventListener() {} };
   );
   const modelPreferenceRow = functionSource(modelsSource, "row");
   const modelPreferencePane = functionSource(modelsSource, "pane");
+  const modelFailurePolicyBlock = functionSource(modelsSource, "failurePolicyBlock");
   const modelPreferenceDrop = functionSource(modelsSource, "drop");
   assert.doesNotMatch(
     modelPreferenceRow,
     /failureOverrideSelect/,
     "failure overrides must not consume a fifth draggable model-list column"
   );
-  assert.match(modelPreferencePane, /preferenceOrder\(\)\.map\(\(appId\) => failureOverrideField\(appId\)\)/);
+  assert.match(modelFailurePolicyBlock, /preferenceOrder\(\)\.map\(\(appId\) => failureOverrideField\(appId\)\)/);
+  assert.match(modelPreferencePane, /settingsInnerTabs\(tabs, activeTab/);
+  assert.match(modelPreferencePane, /\["preferred", t\("modelPreferences\.preferredTab"\)/);
+  assert.match(modelPreferencePane, /\["failure", t\("modelPreferences\.failureTab"\)/);
+  assert.match(modelPreferencePane, /state\.modelPreferenceSettingsTab = id[\s\S]*redraw\(\)/);
+  assert.doesNotMatch(
+    modelPreferencePane,
+    /saveOptionsPatch|queueOptionsAutoSave|queueAutoSave|applyPreferredModels/,
+    "switching model-preference tabs must remain UI-only"
+  );
   assert.match(modelsSource, /t\("modelPreferences\.failureOverrides"\)/);
   assert.match(modelsSource, /t\("modelPreferences\.failureOverrideFor"/);
   assert.match(modelPreferenceDrop, /state\.options\.modelPreferenceOrder = modelPreferenceOrder/);
@@ -196,6 +206,7 @@ globalThis.document = { addEventListener() {} };
   const historyModule = await import(moduleUrl("app/settings/history.js"));
   const functionalAnomaliesModule = await import(moduleUrl("app/settings/functional-anomalies.js"));
   const rootState = stateModule.createAppState();
+  assert.equal(rootState.modelPreferenceSettingsTab, "preferred", "preferred models must be the default settings tab");
   rootState.options = {
     apiProfiles: [{ id: "api-1", name: "API", endpoint: "https://example.test", model: "model" }],
     builtinChatAppOrder: [],
@@ -249,6 +260,8 @@ globalThis.document = { addEventListener() {} };
   );
 
   assert.equal(ports.messageNavigation.options.messageNavigatorEffectMode, "border");
+  ports.models.modelPreferenceSettingsTab = "failure";
+  assert.equal(rootState.modelPreferenceSettingsTab, "failure");
   assert.equal(ports.topicDeletion.options.topicDeleteSiteConfigs.length, 0);
   assert.deepEqual(ports.apps.options.builtinChatAppIframeConfigs, {});
   assert.throws(() => { ports.messageNavigation.options.themeMode; }, /settings\.messageNavigation cannot read/);

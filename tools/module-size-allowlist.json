@@ -1,10 +1,10 @@
 {
   "shared/i18n.js": {
-    "maxLines": 1927,
+    "maxLines": 1935,
     "target": 1500,
-    "maxBytes": 110186,
+    "maxBytes": 110771,
     "targetBytes": 82000,
-    "reason": "Bilingual translation catalog data is kept co-located for key parity; the queued-send status, model-failure policy, and accessible per-platform preference labels are included in the exact line and byte ratchets."
+    "reason": "Bilingual translation catalog data is kept co-located for key parity; the queued-send status, model-failure policy, two model-preference tab labels, and accessible per-platform preference labels are included in the exact line and byte ratchets."
   },
   "tools/browser-smoke.mjs": {
     "maxLines": 1211,

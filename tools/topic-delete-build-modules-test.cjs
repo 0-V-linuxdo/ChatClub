@@ -17,6 +17,7 @@ const sha256 = (source) => crypto.createHash("sha256").update(source).digest("he
 
 (async () => {
   assert.deepEqual(TOPIC_DELETE_SOURCE_FILES, [
+    "build-src/topic-delete-claude-helpers.js",
     "build-src/topic-delete-gemini-helpers.js",
     "build-src/topic-delete-userscript-engine-core.js",
     "build-src/topic-delete-userscript-engine-sites.js",
@@ -28,12 +29,25 @@ const sha256 = (source) => crypto.createHash("sha256").update(source).digest("he
   }
 
   const assembly = read("build-src/topic-delete-userscript-sources.js");
+  assert.match(assembly, /from "\.\/topic-delete-claude-helpers\.js"/);
   assert.match(assembly, /from "\.\/topic-delete-gemini-helpers\.js"/);
   assert.match(assembly, /from "\.\/topic-delete-userscript-engine-core\.js"/);
   assert.match(assembly, /from "\.\/topic-delete-userscript-engine-sites\.js"/);
   assert.match(assembly, /DELETE_USERSCRIPT_ENGINE_CORE \+ DELETE_USERSCRIPT_ENGINE_SITES/);
   assert.doesNotMatch(assembly, /const GEMINI_CONVERSATION_ACTION_SELECTOR/);
+  assert.doesNotMatch(assembly, /function claudeConversationIdFromHref/);
   assert.doesNotMatch(assembly, /function deepSeekCurrentRow/);
+
+  const claudeHelpers = read("build-src/topic-delete-claude-helpers.js");
+  assert.match(claudeHelpers, /\[data-testid='chat-title-split'\]/);
+  assert.match(claudeHelpers, /\^More options/);
+  assert.match(claudeHelpers, /"conversation-menu-trigger"/);
+  assert.match(claudeHelpers, /"delete-menu-item"/);
+  assert.match(claudeHelpers, /trustedMenuTriggerRetried/);
+  assert.match(claudeHelpers, /trustedMenuClickRetried/);
+  assert.match(claudeHelpers, /lease\.attemptId === attemptId/);
+  assert.match(claudeHelpers, /lease\.routeId === claudeConversationIdFromHref\(\)/);
+  assert.doesNotMatch(claudeHelpers, /openTriggerAndClickDelete/);
 
   const sizeAllowlist = JSON.parse(read("tools/module-size-allowlist.json"));
   for (const file of TOPIC_DELETE_SOURCE_FILES) {
@@ -54,7 +68,7 @@ const sha256 = (source) => crypto.createHash("sha256").update(source).digest("he
     assert.equal(actual, expected, `${id} split modules must reproduce the generated userscript byte-for-byte`);
     hashes[id] = sha256(actual);
   }
-  assert.equal(Object.keys(hashes).length, 7);
+  assert.equal(Object.keys(hashes).length, 8);
 
   console.log(`topic Delete build modules: ok (${JSON.stringify(hashes)})`);
 })().catch((error) => {

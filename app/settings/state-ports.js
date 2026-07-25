@@ -75,8 +75,8 @@ const SETTINGS_SECTION_STATE_ACCESS = Object.freeze({
     options: settingsOptionAccess("apps")
   }),
   models: stateAccess(
-    ["modelPreferenceDraft", "options"],
-    ["modelPreferenceDraft", "options"],
+    ["modelPreferenceDraft", "modelPreferenceSettingsTab", "options"],
+    ["modelPreferenceDraft", "modelPreferenceSettingsTab", "options"],
     { options: settingsOptionAccess("models") }
   ),
   summary: stateAccess([

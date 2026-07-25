@@ -765,6 +765,14 @@ export function createDeleteDeepSeekCapability(deps = {}) {
       userscript: "",
       userscriptTimeoutMs: 15000
     }),
+    claude: Object.freeze({
+      id: "claude",
+      name: "Claude",
+      builtIn: true,
+      enabled: true,
+      userscript: "",
+      userscriptTimeoutMs: 15000
+    }),
     gemini: Object.freeze({
       id: "gemini",
       name: "Gemini",

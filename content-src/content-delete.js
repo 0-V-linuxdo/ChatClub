@@ -151,6 +151,7 @@ function installDeleteCapability() {
     deleteCompactToken: common.deleteCompactToken,
     deleteResult: common.deleteResult,
     deleteChatGptThread: sites.deleteChatGptThread,
+    deleteClaudeThread: sites.deleteClaudeThread,
     deleteGeminiThread: sites.deleteGeminiThread,
     deleteGrokThread: sites.deleteGrokThread,
     deleteKagiThread: sites.deleteKagiThread,

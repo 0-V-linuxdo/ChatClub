@@ -190,21 +190,21 @@ globalThis.document = {
   });
 
   let redrawCalls = 0;
+  assert.equal(rootState.modelPreferenceSettingsTab, "preferred", "preferred models must be the default tab");
   const pane = section.pane(() => { redrawCalls += 1; });
   globalThis.document.body.append(pane);
-  const globalPolicy = findNode(pane, (node) => node.dataset?.modelPreferenceFailurePolicy === "global");
-  const geminiOverride = findNode(
-    pane,
-    (node) => node.dataset?.modelPreferenceFailureOverrideAppId === "Gemini"
-  );
-  assert.ok(globalPolicy && geminiOverride, "failure-policy controls must be rendered");
+  const preferredTab = findNode(pane, (node) => node.dataset?.modelPreferenceTabId === "preferred");
+  const failureTab = findNode(pane, (node) => node.dataset?.modelPreferenceTabId === "failure");
+  assert.ok(preferredTab && failureTab, "model preferences must expose preferred and failure tabs");
+  assert.equal(preferredTab.getAttribute("aria-selected"), "true");
+  assert.equal(failureTab.getAttribute("aria-selected"), "false");
   const modelRows = findNodes(pane, (node) => Boolean(node.dataset?.modelPreferenceAppId));
   const modelHeader = findNode(pane, (node) => node.classList?.contains("settings-list-header"));
   const modelSelects = findNodes(pane, (node) => Boolean(node.dataset?.modelPreferenceSelectAppId));
-  const failureFields = findNodes(pane, (node) => Boolean(node.dataset?.modelPreferenceFailureAppId));
-  const failureOverrides = findNodes(
-    pane,
-    (node) => Boolean(node.dataset?.modelPreferenceFailureOverrideAppId)
+  assert.equal(
+    findNode(pane, (node) => node.dataset?.modelPreferenceFailurePolicy === "global"),
+    null,
+    "the preferred tab must not render failure controls"
   );
   assert.deepEqual(
     modelRows.map((node) => node.dataset.modelPreferenceAppId),
@@ -215,16 +215,6 @@ globalThis.document = {
     modelSelects.map((node) => node.dataset.modelPreferenceSelectAppId),
     preferenceOrder,
     "model controls must follow the saved preference order"
-  );
-  assert.deepEqual(
-    failureFields.map((node) => node.dataset.modelPreferenceFailureAppId),
-    preferenceOrder,
-    "failure overrides must project the model preference order"
-  );
-  assert.deepEqual(
-    failureOverrides.map((node) => node.dataset.modelPreferenceFailureOverrideAppId),
-    preferenceOrder,
-    "failure override controls must not maintain a second order"
   );
   assert.ok(
     modelRows.every((node) => node.children.length === 4),
@@ -244,16 +234,73 @@ globalThis.document = {
     modelRows.every((node) => !findNode(node, (child) => Boolean(child.dataset?.modelPreferenceFailureOverrideAppId))),
     "failure overrides must render in the failure-policy block, not the draggable model rows"
   );
+  const renderedSelects = findNodes(pane, (node) => node.tagName === "SELECT");
+  assert.equal(renderedSelects.length, 4, "the preferred tab must render only preferred-model selects");
+  assert.ok(
+    renderedSelects.every((node) => Boolean(node.getAttribute("aria-label")?.trim())),
+    "every preferred-model select must have an explicit accessible name"
+  );
+
+  const savesBeforeTabSwitch = saves.length;
+  const appliesBeforeTabSwitch = applyPreferredModelCalls;
+  failureTab.dispatch("click");
+  assert.equal(rootState.modelPreferenceSettingsTab, "failure", "the failure tab must update UI-only state");
+  assert.equal(redrawCalls, 1, "switching tabs must request one redraw");
+  assert.equal(saves.length, savesBeforeTabSwitch, "switching tabs must not persist options");
+  assert.equal(applyPreferredModelCalls, appliesBeforeTabSwitch, "switching tabs must not apply models");
+  const failurePane = section.pane(() => { redrawCalls += 1; });
+  globalThis.document.body.append(failurePane);
+  const globalPolicy = findNode(
+    failurePane,
+    (node) => node.dataset?.modelPreferenceFailurePolicy === "global"
+  );
+  const geminiOverride = findNode(
+    failurePane,
+    (node) => node.dataset?.modelPreferenceFailureOverrideAppId === "Gemini"
+  );
+  const failureFields = findNodes(
+    failurePane,
+    (node) => Boolean(node.dataset?.modelPreferenceFailureAppId)
+  );
+  const failureOverrides = findNodes(
+    failurePane,
+    (node) => Boolean(node.dataset?.modelPreferenceFailureOverrideAppId)
+  );
+  assert.ok(globalPolicy && geminiOverride, "the failure tab must render failure-policy controls");
+  assert.equal(
+    findNodes(failurePane, (node) => Boolean(node.dataset?.modelPreferenceAppId)).length,
+    0,
+    "the failure tab must not render the preferred-model list"
+  );
+  assert.deepEqual(
+    failureFields.map((node) => node.dataset.modelPreferenceFailureAppId),
+    preferenceOrder,
+    "failure overrides must project the saved model preference order"
+  );
+  assert.deepEqual(
+    failureOverrides.map((node) => node.dataset.modelPreferenceFailureOverrideAppId),
+    preferenceOrder,
+    "failure override controls must not maintain a second order"
+  );
   assert.ok(
     failureFields.every((node) => !findNode(node, (child) => child.getAttribute?.("draggable") === "true")),
     "the failure-policy projection must not add a second draggable list"
   );
-  const renderedSelects = findNodes(pane, (node) => node.tagName === "SELECT");
-  assert.equal(renderedSelects.length, 9, "global, per-site, and preferred-model selects must all render");
+  const failureSelects = findNodes(failurePane, (node) => node.tagName === "SELECT");
+  assert.equal(failureSelects.length, 5, "the failure tab must render the global and four per-site selects");
   assert.ok(
-    renderedSelects.every((node) => Boolean(node.getAttribute("aria-label")?.trim())),
-    "every model-preference select must have an explicit accessible name"
+    failureSelects.every((node) => Boolean(node.getAttribute("aria-label")?.trim())),
+    "every failure-policy select must have an explicit accessible name"
   );
+  const failurePreferredTab = findNode(
+    failurePane,
+    (node) => node.dataset?.modelPreferenceTabId === "preferred"
+  );
+  failurePreferredTab.dispatch("click");
+  assert.equal(rootState.modelPreferenceSettingsTab, "preferred");
+  assert.equal(redrawCalls, 2, "switching back must request one redraw");
+  assert.equal(saves.length, savesBeforeTabSwitch, "switching back must not persist options");
+  assert.equal(applyPreferredModelCalls, appliesBeforeTabSwitch, "switching back must not apply models");
 
   const modelStylesStart = stylesSource.indexOf(".model-preferences-pane");
   const modelStylesEnd = stylesSource.indexOf(".prompt-template-list", modelStylesStart);
@@ -291,10 +338,11 @@ globalThis.document = {
   assert.equal(modelRows.at(-1).classList.contains("drop-before"), false, "dragleave must clear drop feedback");
   modelRows.at(-1).dispatch("dragover", { clientY: 75, dataTransfer });
   assert.equal(modelRows.at(-1).classList.contains("drop-after"), true, "lower-half dragover must show drop-after feedback");
+  const redrawsBeforeDrop = redrawCalls;
   modelRows.at(-1).dispatch("drop", { clientY: 75, dataTransfer });
   assert.equal(saves.length, 1, "dropping a model row must persist the new order");
   assert.equal(section.autosaveBusy(), true, "a pending model-order write must participate in config I/O draining");
-  assert.equal(redrawCalls, 1, "a successful drop admission must redraw the projected lists immediately");
+  assert.equal(redrawCalls, redrawsBeforeDrop + 1, "a successful drop admission must redraw the model list immediately");
   assert.ok(
     modelRows.every((node) => !node.classList.contains("dragging")
       && !node.classList.contains("drop-before")
@@ -317,16 +365,28 @@ globalThis.document = {
     ports.preferredModel.options.modelPreferenceOrder,
     "redraw must project the persisted model order"
   );
-  assert.deepEqual(
-    findNodes(redrawnPane, (node) => Boolean(node.dataset?.modelPreferenceFailureAppId))
-      .map((node) => node.dataset.modelPreferenceFailureAppId),
-    ports.preferredModel.options.modelPreferenceOrder,
-    "the failure projection must follow a reordered model list after redraw"
-  );
   const redrawnRows = findNodes(redrawnPane, (node) => Boolean(node.dataset?.modelPreferenceAppId));
   redrawnRows[0].dispatch("dragstart", { dataTransfer });
   redrawnRows[0].dispatch("dragend");
   assert.equal(redrawnRows[0].classList.contains("dragging"), false, "dragend must clean a cancelled reorder");
+
+  const reorderedFailureTab = findNode(
+    redrawnPane,
+    (node) => node.dataset?.modelPreferenceTabId === "failure"
+  );
+  const savesBeforeReorderedTab = saves.length;
+  const appliesBeforeReorderedTab = applyPreferredModelCalls;
+  reorderedFailureTab.dispatch("click");
+  assert.equal(saves.length, savesBeforeReorderedTab, "opening the reordered failure view must not save");
+  assert.equal(applyPreferredModelCalls, appliesBeforeReorderedTab, "opening the reordered failure view must not apply models");
+  const reorderedFailurePane = section.pane(() => { redrawCalls += 1; });
+  globalThis.document.body.append(reorderedFailurePane);
+  assert.deepEqual(
+    findNodes(reorderedFailurePane, (node) => Boolean(node.dataset?.modelPreferenceFailureAppId))
+      .map((node) => node.dataset.modelPreferenceFailureAppId),
+    ports.preferredModel.options.modelPreferenceOrder,
+    "the failure tab must follow a reordered model list after redraw"
+  );
 
   globalPolicy.value = "skip";
   globalPolicy.dispatch("change");
@@ -395,15 +455,28 @@ globalThis.document = {
     saveOptionsPatch: async () => { throw new Error("reloaded render must not save"); },
     applyPreferredModels: async () => {}
   });
-  const reloadedPane = reloadedSection.pane(() => {});
+  let reloadedRedrawCalls = 0;
+  assert.equal(reloadedRootState.modelPreferenceSettingsTab, "preferred");
+  const reloadedPane = reloadedSection.pane(() => { reloadedRedrawCalls += 1; });
   assert.deepEqual(
     findNodes(reloadedPane, (node) => Boolean(node.dataset?.modelPreferenceAppId))
       .map((node) => node.dataset.modelPreferenceAppId),
     rehydratedOptions.modelPreferenceOrder,
     "a fresh Settings controller must restore the stored model order"
   );
+  assert.equal(
+    findNodes(reloadedPane, (node) => Boolean(node.dataset?.modelPreferenceFailureAppId)).length,
+    0,
+    "a fresh Settings controller must open on the preferred tab"
+  );
+  findNode(
+    reloadedPane,
+    (node) => node.dataset?.modelPreferenceTabId === "failure"
+  ).dispatch("click");
+  assert.equal(reloadedRedrawCalls, 1, "the restored failure tab must redraw without persistence");
+  const reloadedFailurePane = reloadedSection.pane(() => { reloadedRedrawCalls += 1; });
   assert.deepEqual(
-    findNodes(reloadedPane, (node) => Boolean(node.dataset?.modelPreferenceFailureAppId))
+    findNodes(reloadedFailurePane, (node) => Boolean(node.dataset?.modelPreferenceFailureAppId))
       .map((node) => node.dataset.modelPreferenceFailureAppId),
     rehydratedOptions.modelPreferenceOrder,
     "a fresh failure-policy projection must follow the restored model order"

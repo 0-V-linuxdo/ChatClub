@@ -8,6 +8,7 @@ export function createDeleteRuntimeCapability(deps = {}) {
     INSTALL_TOPIC_DELETE_USERSCRIPT_REQUEST,
     deleteResult,
     deleteChatGptThread,
+    deleteClaudeThread,
     deleteGeminiThread,
     deleteKagiThread,
     deleteGrokThread,
@@ -27,6 +28,7 @@ export function createDeleteRuntimeCapability(deps = {}) {
     const host = String(location.hostname || "").toLowerCase();
     let fallback = null;
     if (id === "chatgpt" || /chatgpt|chat gpt/.test(app) || host === "chatgpt.com" || host.endsWith(".chatgpt.com") || host === "chat.openai.com" || host.endsWith(".chat.openai.com")) fallback = TOPIC_DELETE_FALLBACK_CONFIGS.chatgpt;
+    else if (id === "claude" || /claude/.test(app) || host === "claude.ai" || host.endsWith(".claude.ai")) fallback = TOPIC_DELETE_FALLBACK_CONFIGS.claude;
     else if (id === "gemini" || /gemini/.test(app) || host === "gemini.google.com" || host.endsWith(".gemini.google.com")) fallback = TOPIC_DELETE_FALLBACK_CONFIGS.gemini;
     else if (id === "kagi" || /kagi/.test(app) || host === "assistant.kagi.com") fallback = TOPIC_DELETE_FALLBACK_CONFIGS.kagi;
     else if (id === "grokmirror" || /grokmirror|grok mirror/.test(app) || host === "gk.dairoot.cn" || host.endsWith(".gk.dairoot.cn")) fallback = TOPIC_DELETE_FALLBACK_CONFIGS.grokMirror;
@@ -311,6 +313,7 @@ export function createDeleteRuntimeCapability(deps = {}) {
     const app = `${payload?.appId || ""} ${payload?.appName || ""} ${config?.name || ""}`.toLowerCase();
     const host = String(location.hostname || "").toLowerCase();
     if (id === "chatgpt" || /chatgpt|chat gpt/.test(app) || host === "chatgpt.com" || host.endsWith(".chatgpt.com") || host === "chat.openai.com" || host.endsWith(".chat.openai.com")) return "chatgpt";
+    if (id === "claude" || /claude/.test(app) || host === "claude.ai" || host.endsWith(".claude.ai")) return "claude";
     if (id === "gemini" || /gemini/.test(app) || host === "gemini.google.com" || host.endsWith(".gemini.google.com")) return "gemini";
     if (id === "kagi" || /kagi/.test(app) || host === "assistant.kagi.com") return "kagi";
     if (id === "grokmirror" || /grokmirror|grok mirror/.test(app) || host === "gk.dairoot.cn" || host.endsWith(".gk.dairoot.cn")) return "grokMirror";
@@ -326,6 +329,7 @@ export function createDeleteRuntimeCapability(deps = {}) {
     if (!siteId) return null;
     return async () => {
       if (siteId === "chatgpt") return deleteChatGptThread(payload);
+      if (siteId === "claude") return deleteClaudeThread(payload);
       if (siteId === "gemini") return deleteGeminiThread(payload);
       if (siteId === "kagi") return deleteKagiThread();
       if (siteId === "grokMirror") {

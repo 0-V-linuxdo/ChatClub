@@ -1,92 +1,92 @@
 {
   "schemaVersion": 4,
-  "appVersion": "「2026-07-25｜22:56:12」",
-  "manifestVersion": "2026.7.25.10",
+  "appVersion": "「2026-07-26｜03:52:28」",
+  "manifestVersion": "2026.7.26.5",
   "payloads": {
     "chromium": {
-      "appVersion": "「2026-07-25｜22:56:12」",
-      "sha256": "c3a50ed446badf2506cb74c2dfbae2db174ee163b57d2ee0117a210534e5a667"
+      "appVersion": "「2026-07-26｜03:52:28」",
+      "sha256": "e50c5ef631ebe93d34e1a3cc358cfb48a86a39dce30064063dd2c401fcba46f9"
     },
     "firefox": {
-      "appVersion": "「2026-07-25｜22:56:12」",
-      "sha256": "f59b641662179fad81d42027e3a77c17f8fbfd492fa771a0e9e38b63747d817e"
+      "appVersion": "「2026-07-26｜03:52:28」",
+      "sha256": "15b66866724e3ab9c62949d5eeb7c3eed15d5bf486b12aa0e8a764bb7da59bf1"
     }
   },
   "contentRuntime": {
     "sourceSchemaVersion": 1,
-    "sourceSha256": "f915f5f5dfeb33438f730820a39bb0ee5baaea884f9033b8b46069e7a4bf5c3b",
-    "sourceFileCount": 70,
+    "sourceSha256": "6fdf5880830e8789e55bbfdf3fbdbb7a0814fa54dba7030ad30c07382329c9ef",
+    "sourceFileCount": 71,
     "buildRecipeSchemaVersion": 1,
-    "buildRecipeVersion": "1+recipe.39e7dff3b817dd590d108ce155af13e47b28138e33c477502664105276787094",
-    "buildRecipeSha256": "39e7dff3b817dd590d108ce155af13e47b28138e33c477502664105276787094",
+    "buildRecipeVersion": "1+recipe.706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180",
+    "buildRecipeSha256": "706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180",
     "buildRecipeFileCount": 2,
     "protocolVersion": "2026.07.16.2",
-    "implementationSha256": "426370735476decce18503d12b0b93bef44bf00f1701a34441f5bfcd97162659",
-    "implementationVersion": "2026.07.16.2+implementation.426370735476decce18503d12b0b93bef44bf00f1701a34441f5bfcd97162659",
+    "implementationSha256": "8952f543167c54af2198cb194be57fe90778f0a8bcceaeba5bdca4664b61bdf6",
+    "implementationVersion": "2026.07.16.2+implementation.8952f543167c54af2198cb194be57fe90778f0a8bcceaeba5bdca4664b61bdf6",
     "bundles": {
       "content/content.js": {
         "entryPath": "content-src/content.js",
         "sourceSha256": "4a286ae9ddbc708ac0c01fbd778dd575ea30a6ff370d7d1a94f7d4253e37e949",
         "sourceFileCount": 15,
         "virtualInputs": [],
-        "implementationSha256": "db5234feb15dd544b31353b9c9f2057afef0e7e2b6a4ed2ef7c9eee538a59e1e",
-        "implementationVersion": "2026.07.16.2+bundle.db5234feb15dd544b31353b9c9f2057afef0e7e2b6a4ed2ef7c9eee538a59e1e"
+        "implementationSha256": "aa511dd88ea9cb39da90b7bf42cbd58ed208999fd2312ef54d6a2fe5253a2486",
+        "implementationVersion": "2026.07.16.2+bundle.aa511dd88ea9cb39da90b7bf42cbd58ed208999fd2312ef54d6a2fe5253a2486"
       },
       "content/delete.js": {
         "entryPath": "content-src/content-delete.js",
-        "sourceSha256": "2f4fc0c44e2b01355a6b897f9784d690ef091d25bcff53d8cb9dbc857d9a6d12",
-        "sourceFileCount": 17,
+        "sourceSha256": "ffdf93ef4b1888dbdc48276cbaff451f5eb488ca28a05e54baff8b43ee4fe2c0",
+        "sourceFileCount": 18,
         "virtualInputs": [],
-        "implementationSha256": "2efaad3c13209a009d80f945818048b144864532534ed0f6cc829f80ff5da795",
-        "implementationVersion": "2026.07.16.2+bundle.2efaad3c13209a009d80f945818048b144864532534ed0f6cc829f80ff5da795"
+        "implementationSha256": "0bc15f9208ac64bfc13d761988feaf89bdcc8fcba1975b602c7f9f5b701ac214",
+        "implementationVersion": "2026.07.16.2+bundle.0bc15f9208ac64bfc13d761988feaf89bdcc8fcba1975b602c7f9f5b701ac214"
       },
       "content/grok-cookie-bridge.js": {
         "entryPath": "content-src/grok-cookie-bridge.js",
         "sourceSha256": "d09cd36316d9c63abfc773c63295861f25eeb935ac626f943481d76048e64800",
         "sourceFileCount": 7,
         "virtualInputs": [],
-        "implementationSha256": "83aa277d1f684448ce86fedac76585e47d309fc83299d3ea66145142c4d6b6e4",
-        "implementationVersion": "2026.07.16.2+bundle.83aa277d1f684448ce86fedac76585e47d309fc83299d3ea66145142c4d6b6e4"
+        "implementationSha256": "74e33bec2177ab7d3b452742a59e2738cdb128a1639cb80a7ba872279d365e7f",
+        "implementationVersion": "2026.07.16.2+bundle.74e33bec2177ab7d3b452742a59e2738cdb128a1639cb80a7ba872279d365e7f"
       },
       "content/message-navigator.js": {
         "entryPath": "content-src/message-navigator.js",
         "sourceSha256": "b5d38087b07d9d7ce7f456946c5f0e043b8319301bf5eb8e6bec53f2e2d75c76",
         "sourceFileCount": 21,
         "virtualInputs": [],
-        "implementationSha256": "9fdaea32ebb63f4780840c89b9963be57aa47006adbe16c067c8cd0f5437a7da",
-        "implementationVersion": "2026.07.16.2+bundle.9fdaea32ebb63f4780840c89b9963be57aa47006adbe16c067c8cd0f5437a7da"
+        "implementationSha256": "21bc56d98921eb953897e0450e5932bc6b82d5dba01f6182bdd1117fa1307a95",
+        "implementationVersion": "2026.07.16.2+bundle.21bc56d98921eb953897e0450e5932bc6b82d5dba01f6182bdd1117fa1307a95"
       },
       "content/preferred-model.js": {
         "entryPath": "content-src/content-preferred-model.js",
         "sourceSha256": "36993790d84a2749b76d33106b0d16b3efe9d77507bb351c54e92e872ebbec16",
         "sourceFileCount": 13,
         "virtualInputs": [],
-        "implementationSha256": "771176edc703b3e4310ad74921e0019591517203ccbe8acaa2f3bf7aa76874a1",
-        "implementationVersion": "2026.07.16.2+bundle.771176edc703b3e4310ad74921e0019591517203ccbe8acaa2f3bf7aa76874a1"
+        "implementationSha256": "a8050603ed9701c381f44041d159ff02c59d3fe76262105178c4fb2f869e3f1b",
+        "implementationVersion": "2026.07.16.2+bundle.a8050603ed9701c381f44041d159ff02c59d3fe76262105178c4fb2f869e3f1b"
       },
       "content/preload.js": {
         "entryPath": "content-src/preload.js",
         "sourceSha256": "b5e85129ba22836d882bed56c31c9ccd8d24360d2f6bccfd337972bb6667af8f",
         "sourceFileCount": 11,
         "virtualInputs": [],
-        "implementationSha256": "5576ed6e51332198a8490926184bf2f1c810edc95aeecdcfebb6760c7b896ce1",
-        "implementationVersion": "2026.07.16.2+bundle.5576ed6e51332198a8490926184bf2f1c810edc95aeecdcfebb6760c7b896ce1"
+        "implementationSha256": "45ca98130c8c499dec43f09e2e2b9d4069824e0068b91ce141ba3a2e9942df9e",
+        "implementationVersion": "2026.07.16.2+bundle.45ca98130c8c499dec43f09e2e2b9d4069824e0068b91ce141ba3a2e9942df9e"
       },
       "content/send.js": {
         "entryPath": "content-src/content-send.js",
         "sourceSha256": "a1b3986c7289c1f9a01ed77065d950108cf3796181a892dd16e68c5e5e4e63c7",
         "sourceFileCount": 10,
         "virtualInputs": [],
-        "implementationSha256": "8d3baca7d2e8e4ecb42adff84772db13e5032625df5a669a3d49114cf47975ce",
-        "implementationVersion": "2026.07.16.2+bundle.8d3baca7d2e8e4ecb42adff84772db13e5032625df5a669a3d49114cf47975ce"
+        "implementationSha256": "9c36943c25e9e2c431cff8f32c46353ad49d42e71610a8e1130a1e01664a6915",
+        "implementationVersion": "2026.07.16.2+bundle.9c36943c25e9e2c431cff8f32c46353ad49d42e71610a8e1130a1e01664a6915"
       },
       "content/summary-bridge.js": {
         "entryPath": "content-src/content-summary-bridge.js",
         "sourceSha256": "b4460f18ab845962f455731b5d8d16d5487e251dc667b6b130b95134fac7b34f",
         "sourceFileCount": 12,
         "virtualInputs": [],
-        "implementationSha256": "699b28b50926448473e6874800a0f13ccf5ec1d7693ab2767cc9a9e0517459c6",
-        "implementationVersion": "2026.07.16.2+bundle.699b28b50926448473e6874800a0f13ccf5ec1d7693ab2767cc9a9e0517459c6"
+        "implementationSha256": "bd332cdac9ab821665016efa07c631dcfbe435d1eb6872e66e0b09c9d6775e7c",
+        "implementationVersion": "2026.07.16.2+bundle.bd332cdac9ab821665016efa07c631dcfbe435d1eb6872e66e0b09c9d6775e7c"
       },
       "content/summary-userscripts-main.js": {
         "entryPath": "content-src/summary-userscripts-main.js",
@@ -95,8 +95,8 @@
         "virtualInputs": [
           "chatclub:summary-registry"
         ],
-        "implementationSha256": "40e622a721512877938045b602de491b95fa12d0e7948fcb5b457341a0e73017",
-        "implementationVersion": "2026.07.16.2+bundle.40e622a721512877938045b602de491b95fa12d0e7948fcb5b457341a0e73017"
+        "implementationSha256": "1399128cc88f0018d8c55b2c3d5aa3cd8f9e5750e193b45123d0c66d720c22cf",
+        "implementationVersion": "2026.07.16.2+bundle.1399128cc88f0018d8c55b2c3d5aa3cd8f9e5750e193b45123d0c66d720c22cf"
       },
       "content/summary-userscripts.js": {
         "entryPath": "content-src/summary-userscripts.js",
@@ -105,8 +105,8 @@
         "virtualInputs": [
           "chatclub:summary-registry"
         ],
-        "implementationSha256": "6a8ca11ca5e6e039461315bff50ad91da13823a1e3ecbdd45de9a014e88a94de",
-        "implementationVersion": "2026.07.16.2+bundle.6a8ca11ca5e6e039461315bff50ad91da13823a1e3ecbdd45de9a014e88a94de"
+        "implementationSha256": "8b7264a2dcd9bca91fb6a9be2652ec09e9e1a1b186eabf5b2f57315da6064fe7",
+        "implementationVersion": "2026.07.16.2+bundle.8b7264a2dcd9bca91fb6a9be2652ec09e9e1a1b186eabf5b2f57315da6064fe7"
       }
     }
   },
@@ -170,6 +170,10 @@
       "version": "2026.07.22.2",
       "sha256": "82db0a686cb1e77d6f94b1ada4b1da9098b7c23fbc2ad820354806e5312b19a7"
     },
+    "claude.user.js": {
+      "version": "2026.07.26.3",
+      "sha256": "355f8804148258e3eafbdd8612b55e23621b9d7744aea8c2462f0314d19f3228"
+    },
     "deepseek.user.js": {
       "version": "2026.07.22.2",
       "sha256": "1b04e3be6b6758a42371a99f625d991664886c1e227b89198e366cba20d37857"
@@ -196,8 +200,8 @@
     }
   },
   "floors": {
-    "appVersion": "「2026-07-25｜22:56:12」",
-    "manifestVersion": "2026.7.25.10",
+    "appVersion": "「2026-07-26｜03:52:28」",
+    "manifestVersion": "2026.7.26.5",
     "summaryConfigVersion": 74,
     "summarySites": {
       "chatgpt": 54,
@@ -213,6 +217,7 @@
     },
     "topicDelete": {
       "chatgpt.user.js": "2026.07.22.2",
+      "claude.user.js": "2026.07.26.3",
       "deepseek.user.js": "2026.07.22.2",
       "gemini.user.js": "2026.07.22.2",
       "grok-mirror.user.js": "2026.07.22.2",

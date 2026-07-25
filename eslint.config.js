@@ -301,6 +301,7 @@ export default [
     files: [
       "tools/deepseek-delete-target-test.cjs",
       "tools/gemini-delete-target-test.cjs",
+      "tools/claude-delete-target-test.cjs",
       "tools/notion-delete-target-test.cjs"
     ],
     rules: {

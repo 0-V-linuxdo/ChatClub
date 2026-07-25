@@ -13,8 +13,15 @@ const root = path.resolve(__dirname, "..");
     deleteCompletionTargetState,
     deleteConversationIdentityFromHref,
     inspectDeleteCompletionState,
+    normalizeDeleteConversationIdentity,
     normalizeDeleteFrameHref
   } = completion;
+
+  assert.deepEqual(
+    normalizeDeleteConversationIdentity({ provider: "claude", id: "thread-1" }),
+    { provider: "claude", id: "thread-1" },
+    "Claude must be an authenticated completion-identity provider"
+  );
 
   assert.equal(
     normalizeDeleteFrameHref("HTTPS://Chat.DeepSeek.Com:443/a/../chat/s/thread-1?x=1#turn"),
@@ -31,6 +38,8 @@ const root = path.resolve(__dirname, "..");
     ["https://app.notion.com/chat?t=thread-1", { provider: "notion", id: "thread-1" }],
     ["https://grok.com/c/thread-1", { provider: "grok", id: "thread-1" }],
     ["https://gk.dairoot.cn/chat/thread-1", { provider: "grok", id: "thread-1" }],
+    ["https://claude.ai/chat/thread-1", { provider: "claude", id: "thread-1" }],
+    ["https://www.claude.ai/chat/thread-1?turn=2#answer", { provider: "claude", id: "thread-1" }],
     ["https://chat.deepseek.com/a/chat/s/thread-1", { provider: "deepseek", id: "thread-1" }]
   ];
   for (const [href, expected] of routes) {
@@ -40,6 +49,8 @@ const root = path.resolve(__dirname, "..");
     "https://chatgpt.com/",
     "https://gemini.google.com/app",
     "https://app.notion.com/chat",
+    "https://claude.ai/new",
+    "https://claude.ai/chat",
     "https://example.test/chat/thread-1",
     "javascript:alert(1)",
     "not a URL"
@@ -81,6 +92,35 @@ const root = path.resolve(__dirname, "..");
     "an unsupported pre-delete route must expose identity as unavailable"
   );
 
+  const expectedClaude = { provider: "claude", id: "thread-1" };
+  assert.deepEqual(
+    deleteCompletionTargetState(
+      expectedClaude,
+      "https://claude.ai/chat/thread-1",
+      ["/chat/thread-1", "/chat/thread-2"]
+    ),
+    { identity: expectedClaude, current: true, present: true },
+    "Claude completion must bind both the current route and sidebar presence to the exact chat id"
+  );
+  assert.deepEqual(
+    deleteCompletionTargetState(
+      expectedClaude,
+      "https://claude.ai/new",
+      ["/chat/thread-1"]
+    ),
+    { identity: expectedClaude, current: false, present: true },
+    "leaving the Claude chat route is insufficient while the exact sidebar link remains"
+  );
+  assert.deepEqual(
+    deleteCompletionTargetState(
+      expectedClaude,
+      "https://claude.ai/new",
+      ["/chat/thread-10", "/chat/thread-2"]
+    ),
+    { identity: expectedClaude, current: false, present: false },
+    "Claude completion must reject substring matches and require the exact chat link to disappear"
+  );
+
   const complete = {
     version: DELETE_COMPLETION_STATE_VERSION,
     present: false,
@@ -95,6 +135,27 @@ const root = path.resolve(__dirname, "..");
   assert.equal(
     inspectDeleteCompletionState({ ...complete, target: { identity: expected, current: false, present: true } }, expected).complete,
     false
+  );
+  const claudeComplete = {
+    version: DELETE_COMPLETION_STATE_VERSION,
+    present: false,
+    target: { identity: expectedClaude, current: false, present: false }
+  };
+  assert.equal(inspectDeleteCompletionState(claudeComplete, expectedClaude).complete, true);
+  assert.equal(
+    inspectDeleteCompletionState({ ...claudeComplete, present: true }, expectedClaude).complete,
+    false,
+    "a still-visible Claude confirmation must reset completion stability"
+  );
+  assert.equal(
+    inspectDeleteCompletionState({ ...claudeComplete, target: { identity: expectedClaude, current: true, present: false } }, expectedClaude).complete,
+    false,
+    "Claude cannot complete while the deleted chat is still current"
+  );
+  assert.equal(
+    inspectDeleteCompletionState({ ...claudeComplete, target: { identity: expectedClaude, current: false, present: true } }, expectedClaude).complete,
+    false,
+    "Claude cannot complete while the exact sidebar link remains"
   );
   for (const malformed of [
     null,

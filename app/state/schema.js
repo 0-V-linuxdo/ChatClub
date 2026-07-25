@@ -67,6 +67,7 @@ export function createAppState() {
     settingsTabGroupButtonPlacementDraft: null,
     settingsTabGroupButtonOrderDraft: null,
     settingsTabGroupButtonDragId: "",
+    modelPreferenceSettingsTab: "preferred",
     modelPreferenceDraft: null,
     topbarEditMode: false,
     topbarEditLayoutDraft: null,

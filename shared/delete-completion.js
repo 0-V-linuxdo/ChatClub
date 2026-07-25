@@ -24,7 +24,7 @@ function identity(provider, value) {
 export function normalizeDeleteConversationIdentity(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const provider = String(value.provider || "").trim();
-  if (!/^(?:chatgpt|gemini|kagi|notion|grok|deepseek)$/.test(provider)) return null;
+  if (!/^(?:chatgpt|claude|gemini|kagi|notion|grok|deepseek)$/.test(provider)) return null;
   return identity(provider, value.id);
 }
 
@@ -52,6 +52,10 @@ export function deleteConversationIdentityFromHref(value, baseHref = undefined) 
   if (hostMatches(host, ["chatgpt.com", "chat.openai.com"])) {
     match = /\/(?:g\/[^/?#]+\/)?c\/([^/?#]+)/i.exec(path);
     return match ? identity("chatgpt", match[1]) : null;
+  }
+  if (hostMatches(host, ["claude.ai"])) {
+    match = /^\/chat\/([^/?#]+)\/?$/i.exec(path);
+    return match ? identity("claude", match[1]) : null;
   }
   if (hostMatches(host, ["gemini.google.com", "bard.google.com"])) {
     match = /^\/app\/([^/?#]+)/i.exec(path);

@@ -1,3 +1,5 @@
+import { createDeleteClaudeCapability } from "./delete-claude.js";
+
 export function createDeleteSitesCapability(deps = {}) {
   const {
     qsa,
@@ -33,6 +35,7 @@ export function createDeleteSitesCapability(deps = {}) {
     waitForModel,
     deleteResultWithTrustedMenuClick
   } = deps;
+  const { deleteClaudeThread } = createDeleteClaudeCapability(deps);
   async function deleteKagiThread() {
     if (findDeleteConfirmButton()) {
       const confirmedExisting = await clickDeleteConfirmIfPresent(6200);
@@ -773,12 +776,14 @@ export function createDeleteSitesCapability(deps = {}) {
     if (outcome.state === "route-changed") return deleteResult(false, "notion", "current conversation changed after delete activation");
     return deleteResult(false, "notion", "delete menu item outcome is uncertain");
   }
+
   return Object.freeze({
     deleteKagiThread,
     deleteChatGptThread,
     deleteGrokThread,
     deleteGeminiThread,
     deleteNotionThread,
+    deleteClaudeThread,
     menuRootsWithDelete,
     findDeleteMenuItem,
     findOpenDeleteMenuItem
