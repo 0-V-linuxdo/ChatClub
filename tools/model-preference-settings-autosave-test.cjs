@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 
 const root = path.resolve(__dirname, "..");
 const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
+const stylesSource = fs.readFileSync(path.join(root, "styles/chatclub.css"), "utf8");
 
 function deferred() {
   let resolve;
@@ -67,8 +69,16 @@ class FakeNode {
     this.listeners.set(type, listeners);
   }
 
-  dispatch(type) {
-    for (const listener of this.listeners.get(type) || []) listener({ currentTarget: this, target: this });
+  dispatch(type, values = {}) {
+    const event = {
+      currentTarget: this,
+      target: this,
+      clientY: 0,
+      preventDefault() { this.defaultPrevented = true; },
+      ...values
+    };
+    event.results = (this.listeners.get(type) || []).map((listener) => listener(event));
+    return event;
   }
 
   setAttribute(name, value) {
@@ -80,6 +90,34 @@ class FakeNode {
   getAttribute(name) {
     return this.attributes.get(name) ?? null;
   }
+
+  getBoundingClientRect() {
+    return { top: 0, right: 100, bottom: 100, left: 0, width: 100, height: 100 };
+  }
+
+  matches(selector) {
+    const value = String(selector || "").trim();
+    if (value.startsWith(".")) {
+      return value.split(".").slice(1).filter(Boolean).every((name) => this.classList.contains(name));
+    }
+    return value.toUpperCase() === this.tagName;
+  }
+
+  querySelectorAll(selector) {
+    const matches = [];
+    const visit = (node) => {
+      for (const child of node.children || []) {
+        if (child.matches?.(selector)) matches.push(child);
+        visit(child);
+      }
+    };
+    visit(this);
+    return matches;
+  }
+
+  querySelector(selector) {
+    return this.querySelectorAll(selector)[0] || null;
+  }
 }
 
 function findNode(rootNode, predicate) {
@@ -89,6 +127,12 @@ function findNode(rootNode, predicate) {
     if (match) return match;
   }
   return null;
+}
+
+function findNodes(rootNode, predicate, matches = []) {
+  if (predicate(rootNode)) matches.push(rootNode);
+  for (const child of rootNode.children || []) findNodes(child, predicate, matches);
+  return matches;
 }
 
 const previousGlobals = {
@@ -105,12 +149,14 @@ globalThis.document = {
     node.textContent = String(value);
     return node;
   },
-  querySelectorAll: () => []
+  querySelectorAll(selector) { return this.body.querySelectorAll(selector); }
 };
 
 (async () => {
+  const preferenceOrder = ["NotionAI", "DeepSeek", "Gemini", "Grok"];
   const stateModule = await import(moduleUrl("app/state.js"));
   const modelsModule = await import(moduleUrl("app/settings/models.js"));
+  const { dehydrateOptions, normalizeOptions } = await import(moduleUrl("shared/storage-schema.js"));
   const rootState = stateModule.createAppState();
   rootState.options = {
     ...rootState.options,
@@ -121,7 +167,7 @@ globalThis.document = {
       DeepSeek: "inherit",
       NotionAI: "inherit"
     },
-    modelPreferenceOrder: ["Gemini", "Grok", "DeepSeek", "NotionAI"],
+    modelPreferenceOrder: preferenceOrder,
     modelPreferences: {}
   };
   const ports = stateModule.createFeatureStatePorts(rootState);
@@ -143,13 +189,144 @@ globalThis.document = {
     applyPreferredModels: async () => { applyPreferredModelCalls += 1; }
   });
 
-  const pane = section.pane(() => {});
+  let redrawCalls = 0;
+  const pane = section.pane(() => { redrawCalls += 1; });
+  globalThis.document.body.append(pane);
   const globalPolicy = findNode(pane, (node) => node.dataset?.modelPreferenceFailurePolicy === "global");
   const geminiOverride = findNode(
     pane,
     (node) => node.dataset?.modelPreferenceFailureOverrideAppId === "Gemini"
   );
   assert.ok(globalPolicy && geminiOverride, "failure-policy controls must be rendered");
+  const modelRows = findNodes(pane, (node) => Boolean(node.dataset?.modelPreferenceAppId));
+  const modelHeader = findNode(pane, (node) => node.classList?.contains("settings-list-header"));
+  const modelSelects = findNodes(pane, (node) => Boolean(node.dataset?.modelPreferenceSelectAppId));
+  const failureFields = findNodes(pane, (node) => Boolean(node.dataset?.modelPreferenceFailureAppId));
+  const failureOverrides = findNodes(
+    pane,
+    (node) => Boolean(node.dataset?.modelPreferenceFailureOverrideAppId)
+  );
+  assert.deepEqual(
+    modelRows.map((node) => node.dataset.modelPreferenceAppId),
+    preferenceOrder,
+    "the draggable model list must follow the saved preference order"
+  );
+  assert.deepEqual(
+    modelSelects.map((node) => node.dataset.modelPreferenceSelectAppId),
+    preferenceOrder,
+    "model controls must follow the saved preference order"
+  );
+  assert.deepEqual(
+    failureFields.map((node) => node.dataset.modelPreferenceFailureAppId),
+    preferenceOrder,
+    "failure overrides must project the model preference order"
+  );
+  assert.deepEqual(
+    failureOverrides.map((node) => node.dataset.modelPreferenceFailureOverrideAppId),
+    preferenceOrder,
+    "failure override controls must not maintain a second order"
+  );
+  assert.ok(
+    modelRows.every((node) => node.children.length === 4),
+    "the model list must return to drag, platform, model, and thinking columns"
+  );
+  assert.ok(
+    modelRows.every((node) => node.children[0]?.classList?.contains("settings-drag-handle")),
+    "every configurable model row must keep a leading drag handle"
+  );
+  assert.equal(modelHeader?.children.length, 4, "the model-list header must match the four row columns");
+  assert.ok(
+    modelRows.filter((node) => node.dataset.modelPreferenceAppId !== "Gemini")
+      .every((node) => node.children[3]?.getAttribute("aria-hidden") === "true"),
+    "non-Gemini thinking placeholders must be hidden as complete fields"
+  );
+  assert.ok(
+    modelRows.every((node) => !findNode(node, (child) => Boolean(child.dataset?.modelPreferenceFailureOverrideAppId))),
+    "failure overrides must render in the failure-policy block, not the draggable model rows"
+  );
+  assert.ok(
+    failureFields.every((node) => !findNode(node, (child) => child.getAttribute?.("draggable") === "true")),
+    "the failure-policy projection must not add a second draggable list"
+  );
+  const renderedSelects = findNodes(pane, (node) => node.tagName === "SELECT");
+  assert.equal(renderedSelects.length, 9, "global, per-site, and preferred-model selects must all render");
+  assert.ok(
+    renderedSelects.every((node) => Boolean(node.getAttribute("aria-label")?.trim())),
+    "every model-preference select must have an explicit accessible name"
+  );
+
+  const modelStylesStart = stylesSource.indexOf(".model-preferences-pane");
+  const modelStylesEnd = stylesSource.indexOf(".prompt-template-list", modelStylesStart);
+  const modelStyles = stylesSource.slice(modelStylesStart, modelStylesEnd);
+  assert.match(modelStyles, /container-name:\s*model-preferences/);
+  assert.match(modelStyles, /\.model-preference-failure-grid\s*\{[^}]*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s);
+  assert.match(
+    modelStyles,
+    /\.model-preference-list \.settings-list-header,\s*\.model-preference-row\s*\{[^}]*grid-template-columns:\s*52px\s+minmax\([^;]+\)\s+minmax\([^;]+\)\s+minmax\([^;]+\);/s,
+    "the wide model list must define exactly four responsive columns"
+  );
+  assert.match(modelStyles, /@container model-preferences \(max-width:\s*700px\)/);
+  assert.match(modelStyles, /@container[\s\S]*\.model-preference-failure-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
+  assert.match(modelStyles, /@container[\s\S]*\.model-preference-list\s*\{[^}]*display:\s*grid[^}]*overflow:\s*visible/s);
+  assert.match(modelStyles, /@container[\s\S]*\.model-preference-row\s*\{[^}]*grid-template-columns:\s*24px\s+minmax\(0,\s*1fr\)/);
+  assert.match(modelStyles, /\.model-preference-list\s*\{[^}]*overflow:\s*visible/s);
+  assert.doesNotMatch(modelStyles, /\.model-preference-list\s*\{[^}]*overflow:\s*(?:auto|hidden|clip)/s);
+  assert.match(modelStyles, /\.model-preference-list \.settings-list-header,\s*\.model-preference-row\s*\{[^}]*min-width:\s*0/s);
+  assert.doesNotMatch(modelStyles, /min-width:\s*(?:720|760)px/);
+  assert.doesNotMatch(modelStyles, /@media\s*\(max-width:\s*700px\)/);
+
+  const dragData = new Map();
+  const dataTransfer = {
+    effectAllowed: "",
+    dropEffect: "",
+    getData: (type) => dragData.get(type) || "",
+    setData: (type, value) => dragData.set(type, String(value))
+  };
+  modelRows[0].dispatch("dragstart", { dataTransfer });
+  assert.equal(modelRows[0].classList.contains("dragging"), true, "drag start must mark the source row");
+  const beforePreview = modelRows.at(-1).dispatch("dragover", { clientY: 25, dataTransfer });
+  assert.equal(beforePreview.defaultPrevented, true, "a valid dragover must accept the drop");
+  assert.equal(modelRows.at(-1).classList.contains("drop-before"), true, "upper-half dragover must show drop-before feedback");
+  modelRows.at(-1).dispatch("dragleave");
+  assert.equal(modelRows.at(-1).classList.contains("drop-before"), false, "dragleave must clear drop feedback");
+  modelRows.at(-1).dispatch("dragover", { clientY: 75, dataTransfer });
+  assert.equal(modelRows.at(-1).classList.contains("drop-after"), true, "lower-half dragover must show drop-after feedback");
+  modelRows.at(-1).dispatch("drop", { clientY: 75, dataTransfer });
+  assert.equal(saves.length, 1, "dropping a model row must persist the new order");
+  assert.equal(section.autosaveBusy(), true, "a pending model-order write must participate in config I/O draining");
+  assert.equal(redrawCalls, 1, "a successful drop admission must redraw the projected lists immediately");
+  assert.ok(
+    modelRows.every((node) => !node.classList.contains("dragging")
+      && !node.classList.contains("drop-before")
+      && !node.classList.contains("drop-after")),
+    "drop admission must clean source and target drag classes"
+  );
+  saves[0].gate.resolve();
+  await waitUntil(() => !section.autosaveBusy(), "model-order autosave did not settle");
+  assert.deepEqual(
+    ports.preferredModel.options.modelPreferenceOrder,
+    ["DeepSeek", "Gemini", "Grok", "NotionAI"],
+    "dropping after the final row must move the first platform to the end"
+  );
+  saves.splice(0);
+  const redrawnPane = section.pane(() => { redrawCalls += 1; });
+  globalThis.document.body.append(redrawnPane);
+  assert.deepEqual(
+    findNodes(redrawnPane, (node) => Boolean(node.dataset?.modelPreferenceAppId))
+      .map((node) => node.dataset.modelPreferenceAppId),
+    ports.preferredModel.options.modelPreferenceOrder,
+    "redraw must project the persisted model order"
+  );
+  assert.deepEqual(
+    findNodes(redrawnPane, (node) => Boolean(node.dataset?.modelPreferenceFailureAppId))
+      .map((node) => node.dataset.modelPreferenceFailureAppId),
+    ports.preferredModel.options.modelPreferenceOrder,
+    "the failure projection must follow a reordered model list after redraw"
+  );
+  const redrawnRows = findNodes(redrawnPane, (node) => Boolean(node.dataset?.modelPreferenceAppId));
+  redrawnRows[0].dispatch("dragstart", { dataTransfer });
+  redrawnRows[0].dispatch("dragend");
+  assert.equal(redrawnRows[0].classList.contains("dragging"), false, "dragend must clean a cancelled reorder");
 
   globalPolicy.value = "skip";
   globalPolicy.dispatch("change");
@@ -190,6 +367,46 @@ globalThis.document = {
     applyPreferredModelCalls,
     0,
     "failure-strategy changes must not retrigger preferred-model selection"
+  );
+
+  section.close();
+  const storedOptions = JSON.parse(JSON.stringify(dehydrateOptions(persistedOptions)));
+  const rehydratedOptions = normalizeOptions(storedOptions);
+  assert.deepEqual(
+    rehydratedOptions.modelPreferenceOrder,
+    ["DeepSeek", "Gemini", "Grok", "NotionAI"],
+    "model order must survive dehydration, serialized storage, and normalization"
+  );
+  assert.deepEqual(
+    normalizeOptions({
+      ...storedOptions,
+      modelPreferenceOrder: ["Grok", "unknown", "Grok"]
+    }).modelPreferenceOrder,
+    ["Grok", "Gemini", "DeepSeek", "NotionAI"],
+    "normalization must discard duplicates and unknowns while appending missing built-ins"
+  );
+  const reloadedRootState = stateModule.createAppState();
+  reloadedRootState.options = rehydratedOptions;
+  const reloadedPorts = stateModule.createFeatureStatePorts(reloadedRootState);
+  const reloadedSection = modelsModule.createModelsSettingsSection({
+    state: reloadedPorts.settingsSections.models,
+    svgIcon: () => new FakeNode("svg"),
+    notifyConfigReload: async () => {},
+    saveOptionsPatch: async () => { throw new Error("reloaded render must not save"); },
+    applyPreferredModels: async () => {}
+  });
+  const reloadedPane = reloadedSection.pane(() => {});
+  assert.deepEqual(
+    findNodes(reloadedPane, (node) => Boolean(node.dataset?.modelPreferenceAppId))
+      .map((node) => node.dataset.modelPreferenceAppId),
+    rehydratedOptions.modelPreferenceOrder,
+    "a fresh Settings controller must restore the stored model order"
+  );
+  assert.deepEqual(
+    findNodes(reloadedPane, (node) => Boolean(node.dataset?.modelPreferenceFailureAppId))
+      .map((node) => node.dataset.modelPreferenceFailureAppId),
+    rehydratedOptions.modelPreferenceOrder,
+    "a fresh failure-policy projection must follow the restored model order"
   );
 
   console.log("model-preference strategy autosave: ok");

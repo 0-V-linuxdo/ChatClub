@@ -598,9 +598,14 @@ button { cursor: pointer; }
   overflow: visible;
   position: relative;
   min-width: 420px;
+  container-name: chatclub-composer;
+  container-type: inline-size;
 }
 
 .prompt-shell {
+  --prompt-model-gate-width: clamp(132px, 32cqi, 240px);
+  --prompt-model-gate-reserve: calc(var(--prompt-model-gate-width) + 8px);
+  --prompt-model-gate-control-right: 76px;
   position: relative;
   z-index: 30;
   width: 100%;
@@ -1055,43 +1060,62 @@ button { cursor: pointer; }
   border-color: color-mix(in srgb, var(--danger) 40%, var(--line));
 }
 
-.prompt-model-gate-status {
+.prompt-shell:is(.prompt-shell-model-gate-applying, .prompt-shell-model-gate-failed):has(.prompt-clear-button[hidden]) {
+  --prompt-model-gate-control-right: 40px;
+}
+
+.prompt-shell.prompt-shell-expanded.prompt-shell-has-images:is(.prompt-shell-model-gate-applying, .prompt-shell-model-gate-failed) {
+  --prompt-model-gate-control-right: 48px;
+}
+
+.prompt-shell:is(.prompt-shell-model-gate-applying, .prompt-shell-model-gate-failed):not(.prompt-shell-has-images) .textarea.prompt-input,
+.prompt-shell:is(.prompt-shell-model-gate-applying, .prompt-shell-model-gate-failed) .prompt-collapsed-preview {
+  padding-right: calc(var(--prompt-model-gate-control-right) + var(--prompt-model-gate-reserve));
+}
+
+.prompt-shell.prompt-shell-expanded.prompt-shell-has-images:is(.prompt-shell-model-gate-applying, .prompt-shell-model-gate-failed) .prompt-image-preview-list {
+  right: calc(var(--prompt-model-gate-control-right) + var(--prompt-model-gate-reserve));
+  max-width: calc(100% - 10px - var(--prompt-model-gate-control-right) - var(--prompt-model-gate-reserve));
+}
+
+.prompt-model-gate-status.tooltip-trigger {
   position: absolute;
-  top: calc(100% + 5px);
-  right: 4px;
+  top: 5px;
+  right: var(--prompt-model-gate-control-right);
   left: auto;
-  z-index: 65;
+  bottom: auto;
+  z-index: 73;
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  width: max-content;
-  max-width: min(340px, calc(100vw - 24px));
+  box-sizing: border-box;
+  width: var(--prompt-model-gate-width);
+  max-width: var(--prompt-model-gate-width);
   min-height: 28px;
   height: 28px;
   padding: 4px 8px;
-  overflow: hidden;
   color: var(--muted);
   background: color-mix(in srgb, var(--panel) 88%, var(--soft) 12%);
   border: 1px solid var(--line);
   border-radius: 7px;
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.15);
+  box-shadow: none;
   font-size: 12px;
   font-weight: 650;
   line-height: 16px;
-  pointer-events: none;
+  cursor: help;
+  pointer-events: auto;
   white-space: nowrap;
-  text-overflow: ellipsis;
 }
 
 .prompt-shell-expanded.prompt-shell-has-images .prompt-model-gate-status {
-  top: calc(100% + 5px);
-  right: 4px;
+  top: 12px;
+  right: var(--prompt-model-gate-control-right);
   left: auto;
   bottom: auto;
-  max-width: min(340px, calc(100vw - 24px));
 }
 
 .prompt-model-gate-status-text {
+  display: block;
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
@@ -1112,6 +1136,11 @@ button { cursor: pointer; }
   border-color: color-mix(in srgb, var(--danger) 44%, var(--line));
 }
 
+.prompt-model-gate-status:focus-visible {
+  outline: 2px solid color-mix(in srgb, currentColor 48%, transparent);
+  outline-offset: 2px;
+}
+
 .prompt-model-gate-spinner {
   box-sizing: border-box;
   display: inline-block;
@@ -1124,8 +1153,39 @@ button { cursor: pointer; }
   animation: prompt-model-gate-spin 720ms linear infinite;
 }
 
-.prompt-shell-model-gate-failed .prompt-model-gate-spinner {
-  display: none;
+.prompt-model-gate-failure-icon {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
+
+.prompt-model-gate-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+@container chatclub-composer (max-width: 420px) {
+  .prompt-shell {
+    --prompt-model-gate-width: 28px;
+  }
+
+  .prompt-model-gate-status.tooltip-trigger {
+    justify-content: center;
+    gap: 0;
+    padding: 0;
+  }
+
+  .prompt-model-gate-status-text {
+    display: none;
+  }
 }
 
 @keyframes prompt-model-gate-spin {
@@ -5244,12 +5304,46 @@ body.settings-tab-group-button-dragging iframe {
 
 .model-preferences-pane {
   align-content: start;
+  container-name: model-preferences;
+  container-type: inline-size;
+}
+
+.model-preference-failure-default {
+  width: min(100%, 360px);
+}
+
+.model-preference-failure-overrides {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.model-preference-failure-overrides-title {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.model-preference-failure-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  min-width: 0;
+}
+
+.model-preference-failure-field,
+.model-preference-failure-field > .select {
+  min-width: 0;
+  width: 100%;
+}
+
+.model-preference-list {
+  overflow: visible;
 }
 
 .model-preference-list .settings-list-header,
 .model-preference-row {
-  min-width: 760px;
-  grid-template-columns: 52px minmax(150px, 220px) minmax(280px, 380px) minmax(184px, 220px) minmax(0, 1fr);
+  min-width: 0;
+  grid-template-columns: 52px minmax(112px, .72fr) minmax(190px, 1.35fr) minmax(150px, .9fr);
 }
 
 .settings-manager-list.model-preference-list .settings-list-header span:first-child {
@@ -5275,9 +5369,30 @@ body.settings-tab-group-button-dragging iframe {
   font-weight: 760;
 }
 
-.model-preference-row > .select {
-  width: min(calc(100% - (var(--settings-row-gap) * 2)), 360px);
-  justify-self: start;
+.model-preference-row-field {
+  display: grid;
+  align-items: center;
+  min-width: 0;
+}
+
+.model-preference-row-field-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.model-preference-model-select {
+  min-width: 0;
+  width: 100%;
+  max-width: 360px;
+  justify-self: stretch;
 }
 
 .model-thinking-toggle {
@@ -5289,7 +5404,7 @@ body.settings-tab-group-button-dragging iframe {
   justify-content: center;
   gap: 8px;
   justify-self: start;
-  margin-left: 8px;
+  margin-left: 0;
   color: var(--text);
   border: 1px solid color-mix(in srgb, var(--line) 84%, transparent);
   border-radius: 999px;
@@ -5366,18 +5481,101 @@ body.settings-tab-group-button-dragging iframe {
 .model-thinking-toggle-placeholder {
   width: 118px;
   min-height: 34px;
-  margin-left: 8px;
+  margin-left: 0;
 }
 
-@media (max-width: 700px) {
-  .model-preference-list .settings-list-header,
-  .model-preference-row {
-    min-width: 720px;
-    grid-template-columns: 42px minmax(86px, 104px) minmax(220px, 300px) minmax(150px, 170px) minmax(0, 1fr);
+@container model-preferences (max-width: 700px) {
+  .model-preference-failure-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  .model-preference-row > .select {
-    width: min(calc(100% - (var(--settings-row-gap) * 2)), 280px);
+  .model-preference-list {
+    display: grid;
+    gap: 10px;
+    overflow: visible;
+    border: 0;
+    background: transparent;
+  }
+
+  .model-preference-list .settings-list-header {
+    display: none;
+  }
+
+  .model-preference-row {
+    grid-template-columns: 24px minmax(0, 1fr);
+    grid-template-areas:
+      "drag platform"
+      "drag model";
+    align-items: start;
+    gap: 10px 12px;
+    min-width: 0;
+    min-height: 0;
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: var(--settings-radius);
+    background: color-mix(in srgb, var(--panel) 86%, var(--panel-2));
+  }
+
+  .model-preference-list .model-preference-row:first-of-type {
+    border-top: 1px solid var(--line);
+  }
+
+  .model-preference-row-has-thinking {
+    grid-template-areas:
+      "drag platform"
+      "drag model"
+      "drag thinking";
+  }
+
+  .model-preference-row > * {
+    margin: 0;
+  }
+
+  .model-preference-row > :first-child {
+    grid-area: drag;
+    align-self: start;
+    margin-top: 2px;
+  }
+
+  .model-preference-row > .settings-main-cell {
+    grid-area: platform;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .model-preference-model-field {
+    grid-area: model;
+  }
+
+  .model-preference-thinking-field {
+    grid-area: thinking;
+  }
+
+  .model-preference-thinking-placeholder-field {
+    display: none;
+  }
+
+  .model-preference-row-field {
+    gap: 7px;
+  }
+
+  .model-preference-row-field-label {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    clip: auto;
+    clip-path: none;
+    white-space: normal;
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 650;
+  }
+
+  .model-preference-model-select {
+    max-width: none;
   }
 }
 

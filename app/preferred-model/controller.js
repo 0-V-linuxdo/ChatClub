@@ -8,6 +8,7 @@ import { t } from "../../shared/i18n.js";
 import { createId } from "../../shared/storage-schema.js";
 import { el } from "../../ui/dom.js";
 import { createFrameToast } from "../../ui/frame-toast.js";
+import { createSvgIcon } from "../../ui/icons.js";
 import { validateControllerContract } from "../controller-contract.js";
 import { createFrameRequest } from "../frame-request.js";
 
@@ -291,6 +292,68 @@ export function createPreferredModelController(dependencies = {}) {
     return { state: "ready", reason: "", pendingCount: 0, failedCount: 0, failedAppIds: [] };
   }
 
+  function preferredModelGateStatusIcon(applying) {
+    if (applying) return el("span", { class: "prompt-model-gate-spinner", "aria-hidden": "true" });
+    const icon = createSvgIcon("alert");
+    icon.classList.add("prompt-model-gate-failure-icon");
+    return icon;
+  }
+
+  function syncPreferredModelGateVisual(statusNode, { applying, failed, statusText }) {
+    const visible = applying || failed;
+    statusNode.classList.add("tooltip-trigger");
+    statusNode.setAttribute("role", "note");
+    statusNode.removeAttribute("aria-live");
+    statusNode.removeAttribute("aria-atomic");
+    if (!visible && document.activeElement === statusNode) {
+      statusNode.closest?.(".prompt-shell")?.querySelector?.(".prompt-input")?.focus?.({ preventScroll: true });
+    }
+    statusNode.hidden = !visible;
+
+    if (!visible) {
+      for (const attribute of [
+        "aria-label",
+        "data-tooltip",
+        "data-tooltip-id",
+        "data-tooltip-placement",
+        "data-tooltip-wrap",
+        "tabindex"
+      ]) statusNode.removeAttribute(attribute);
+      delete statusNode.dataset.modelGateVisualKey;
+      if (statusNode.childNodes.length) statusNode.replaceChildren();
+      return;
+    }
+
+    statusNode.setAttribute("tabindex", "0");
+    statusNode.setAttribute("aria-label", statusText);
+    statusNode.setAttribute("data-tooltip", statusText);
+    statusNode.setAttribute("data-tooltip-id", "topbar.modelGateStatus");
+    statusNode.setAttribute("data-tooltip-placement", "left");
+    statusNode.setAttribute("data-tooltip-wrap", "true");
+    const visualKey = (applying ? "applying:" : "failed:") + statusText;
+    if (statusNode.dataset.modelGateVisualKey === visualKey) return;
+    statusNode.dataset.modelGateVisualKey = visualKey;
+    statusNode.replaceChildren(
+      preferredModelGateStatusIcon(applying),
+      el("span", { class: "prompt-model-gate-status-text" }, statusText)
+    );
+  }
+
+  function syncPreferredModelGateLive(liveNode, { applying, failed, statusText }) {
+    liveNode.hidden = false;
+    liveNode.setAttribute("aria-live", "polite");
+    liveNode.setAttribute("aria-atomic", "true");
+    if (!(applying || failed)) {
+      delete liveNode.dataset.modelGateAnnouncementKey;
+      if (liveNode.textContent) liveNode.textContent = "";
+      return;
+    }
+    const announcementKey = (applying ? "applying:" : "failed:") + statusText;
+    if (liveNode.dataset.modelGateAnnouncementKey === announcementKey) return;
+    liveNode.dataset.modelGateAnnouncementKey = announcementKey;
+    liveNode.textContent = statusText;
+  }
+
   function syncPreferredModelInputGate() {
     const next = preferredModelGateStatus();
     preferredModelState.preferredModelGateState = next.state;
@@ -325,32 +388,35 @@ export function createPreferredModelController(dependencies = {}) {
         inputNode.removeAttribute("aria-label");
       }
 
-      let statusNode = shell.querySelector(".prompt-model-gate-status");
+      const statusNodes = Array.from(shell.querySelectorAll(".prompt-model-gate-status"));
+      let statusNode = statusNodes.shift() || null;
+      statusNodes.forEach((node) => node.remove());
       if (!statusNode) {
         statusNode = el("div", {
-          class: "prompt-model-gate-status",
-          "aria-live": "polite",
-          "aria-atomic": "true"
+          class: "prompt-model-gate-status tooltip-trigger",
+          role: "note",
+          onpointerdown: (event) => event.stopPropagation(),
+          onclick: (event) => event.stopPropagation(),
+          onkeydown: (event) => event.stopPropagation()
         });
         shell.append(statusNode);
       }
-      statusNode.hidden = !(applying || failed);
-      if (applying || failed) {
-        const statusText = failed
-          ? t("topbar.modelGateFailed", { reason: next.reason })
-          : t("topbar.modelGateApplying");
-        const announcementKey = (applying ? "applying:" : "failed:") + statusText;
-        if (statusNode.dataset.modelGateAnnouncementKey !== announcementKey) {
-          statusNode.dataset.modelGateAnnouncementKey = announcementKey;
-          statusNode.replaceChildren(...[
-            applying ? el("span", { class: "prompt-model-gate-spinner", "aria-hidden": "true" }) : null,
-            el("span", { class: "prompt-model-gate-status-text" }, statusText)
-          ].filter(Boolean));
-        }
-      } else {
-        delete statusNode.dataset.modelGateAnnouncementKey;
-        if (statusNode.childNodes.length) statusNode.replaceChildren();
+      const liveNodes = Array.from(shell.querySelectorAll(".prompt-model-gate-live"));
+      let liveNode = liveNodes.shift() || null;
+      liveNodes.forEach((node) => node.remove());
+      if (!liveNode) {
+        liveNode = el("div", {
+          class: "prompt-model-gate-live",
+          "aria-live": "polite",
+          "aria-atomic": "true"
+        });
+        shell.append(liveNode);
       }
+      const statusText = failed
+        ? t("topbar.modelGateFailed", { reason: next.reason })
+        : t("topbar.modelGateApplying");
+      syncPreferredModelGateVisual(statusNode, { applying, failed, statusText });
+      syncPreferredModelGateLive(liveNode, { applying, failed, statusText });
     });
     notifyPreferredModelFrameWaiters();
     return next;

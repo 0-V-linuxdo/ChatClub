@@ -66,6 +66,7 @@ export function createModelsSettingsSection(ctx) {
   let autoSaveRedraw = null;
   let failurePolicyDraft = "";
   let failureOverridesDraft = null;
+  let preferenceOrderDraft = null;
   let dragId = "";
 
   function preferenceKey(config) {
@@ -118,6 +119,9 @@ export function createModelsSettingsSection(ctx) {
             : {}),
           ...(failureOverridesDraft
             ? { modelPreferenceFailureOverrides: failureOverridesDraft }
+            : {}),
+          ...(preferenceOrderDraft
+            ? { modelPreferenceOrder: preferenceOrderDraft }
             : {})
         };
         autoSaveError = null;
@@ -131,6 +135,12 @@ export function createModelsSettingsSection(ctx) {
             ...(state.options.modelPreferences || {})
           };
           redraw?.();
+        }
+        const savedOrder = patch.modelPreferenceOrder;
+        const pendingOrder = autoSavePending?.patch?.modelPreferenceOrder;
+        if (savedOrder && !pendingOrder
+          && normalizeModelPreferenceOrder(preferenceOrderDraft).join("\n") === normalizeModelPreferenceOrder(savedOrder).join("\n")) {
+          preferenceOrderDraft = null;
         }
       }
     } catch (error) {
@@ -192,6 +202,8 @@ export function createModelsSettingsSection(ctx) {
   function failurePolicySelect() {
     const value = failurePolicyValue();
     const control = select(value, failurePolicyOptions(MODEL_PREFERENCE_FAILURE_POLICIES), {
+      class: "select model-preference-failure-select",
+      "aria-label": t("modelPreferences.failurePolicyDefault"),
       dataset: { modelPreferenceFailurePolicy: "global" }
     });
     control.value = value;
@@ -207,6 +219,8 @@ export function createModelsSettingsSection(ctx) {
     const overrides = failureOverridesValue();
     const value = overrides[appId];
     const control = select(value, failurePolicyOptions(MODEL_PREFERENCE_FAILURE_OVERRIDE_POLICIES), {
+      class: "select model-preference-failure-select",
+      "aria-label": t("modelPreferences.failureOverrideFor", { platform: APP_LABELS[appId] || appId }),
       dataset: { modelPreferenceFailureOverrideAppId: appId }
     });
     control.value = value;
@@ -221,8 +235,17 @@ export function createModelsSettingsSection(ctx) {
     return control;
   }
 
+  function failureOverrideField(appId) {
+    const item = field(APP_LABELS[appId] || appId, failureOverrideSelect(appId));
+    item.classList.add("model-preference-failure-field");
+    item.dataset.modelPreferenceFailureAppId = appId;
+    return item;
+  }
+
   function preferenceOrder() {
-    return normalizeModelPreferenceOrder(state.options.modelPreferenceOrder || DEFAULT_MODEL_PREFERENCE_ORDER);
+    return normalizeModelPreferenceOrder(
+      preferenceOrderDraft || state.options.modelPreferenceOrder || DEFAULT_MODEL_PREFERENCE_ORDER
+    );
   }
 
   function cleanupDrag() {
@@ -248,7 +271,7 @@ export function createModelsSettingsSection(ctx) {
     event.currentTarget.classList.toggle("drop-before", placement !== "after");
   }
 
-  async function drop(event, targetAppId, redraw) {
+  function drop(event, targetAppId, redraw) {
     const sourceId = dragId
       || event.dataTransfer?.getData("application/x-chatclub-model-preference")
       || event.dataTransfer?.getData("text/plain")
@@ -263,7 +286,9 @@ export function createModelsSettingsSection(ctx) {
       settingsListDropPlacement(event)
     ).map((item) => item.id);
     cleanupDrag();
-    state.options = await saveOptionsPatch({ modelPreferenceOrder });
+    preferenceOrderDraft = modelPreferenceOrder;
+    state.options.modelPreferenceOrder = modelPreferenceOrder;
+    queueOptionsAutoSave({ modelPreferenceOrder });
     redraw();
   }
 
@@ -302,15 +327,27 @@ export function createModelsSettingsSection(ctx) {
     );
   }
 
+  function modelPreferenceRowField(label, control, className) {
+    return el("div", { class: `model-preference-row-field ${className}`.trim() },
+      el("span", { class: "model-preference-row-field-label" }, label),
+      control
+    );
+  }
+
   function row(appId, redraw) {
     const config = draft();
-    const modelSelect = select(config[appId] || "", preferenceOptions(appId));
+    const platform = APP_LABELS[appId] || appId;
+    const modelSelect = select(config[appId] || "", preferenceOptions(appId), {
+      class: "select model-preference-model-select",
+      "aria-label": t("modelPreferences.preferredModelFor", { platform }),
+      dataset: { modelPreferenceSelectAppId: appId }
+    });
     modelSelect.value = config[appId] || "";
     modelSelect.addEventListener("change", () => {
       queueAutoSave({ ...draft(), [appId]: modelSelect.value });
     });
     return el("div", {
-      class: "ui-list-row settings-list-row model-preference-row",
+      class: `ui-list-row settings-list-row model-preference-row ${appId === "Gemini" ? "model-preference-row-has-thinking" : ""}`.trim(),
       draggable: "true",
       dataset: { modelPreferenceAppId: appId },
       ondragstart: (event) => startDrag(event, appId),
@@ -320,12 +357,22 @@ export function createModelsSettingsSection(ctx) {
       ondrop: (event) => drop(event, appId, redraw)
     },
       settingsDragHandle(t("modelPreferences.drag")),
-      el("strong", { class: "settings-main-cell" }, APP_LABELS[appId] || appId),
-      modelSelect,
+      el("strong", { class: "settings-main-cell" }, platform),
+      modelPreferenceRowField(
+        t("modelPreferences.preferredModel"),
+        modelSelect,
+        "model-preference-model-field"
+      ),
       appId === "Gemini"
-        ? thinkingLevelSwitch()
-        : el("span", { class: "model-thinking-toggle-placeholder", "aria-hidden": "true" }),
-      failureOverrideSelect(appId)
+        ? modelPreferenceRowField(
+          t("modelPreferences.thinkingLevel"),
+          thinkingLevelSwitch(),
+          "model-preference-thinking-field"
+        )
+        : el("div", {
+          class: "model-preference-row-field model-preference-thinking-field model-preference-thinking-placeholder-field",
+          "aria-hidden": "true"
+        }, el("span", { class: "model-thinking-toggle-placeholder" }))
     );
   }
 
@@ -336,10 +383,25 @@ export function createModelsSettingsSection(ctx) {
   }
 
   function pane(redraw) {
+    const defaultFailureField = field(
+      t("modelPreferences.failurePolicyDefault"),
+      failurePolicySelect()
+    );
+    defaultFailureField.classList.add("model-preference-failure-default");
     const failureBlock = settingsBlock(
       t("modelPreferences.failurePolicyTitle"),
       t("modelPreferences.failurePolicyDesc"),
-      field(t("modelPreferences.failurePolicyDefault"), failurePolicySelect())
+      defaultFailureField,
+      el("div", { class: "model-preference-failure-overrides" },
+        el("strong", { class: "model-preference-failure-overrides-title" },
+          t("modelPreferences.failureOverrides")
+        ),
+        el("div", {
+          class: "model-preference-failure-grid",
+          role: "group",
+          "aria-label": t("modelPreferences.failureOverrides")
+        }, preferenceOrder().map((appId) => failureOverrideField(appId)))
+      )
     );
     failureBlock.classList.add("model-preference-failure-block");
     const block = settingsBlock(t("modelPreferences.title"), t("modelPreferences.desc"),
@@ -348,8 +410,7 @@ export function createModelsSettingsSection(ctx) {
           "",
           t("modelPreferences.platform"),
           t("modelPreferences.preferredModel"),
-          t("modelPreferences.thinkingLevel"),
-          t("modelPreferences.failureOverride")
+          t("modelPreferences.thinkingLevel")
         ],
         preferenceOrder().map((appId) => row(appId, redraw)),
         "settings-manager-list model-preference-list"
@@ -369,6 +430,7 @@ export function createModelsSettingsSection(ctx) {
     state.modelPreferenceDraft = null;
     failurePolicyDraft = "";
     failureOverridesDraft = null;
+    preferenceOrderDraft = null;
     cleanupDrag();
   }
 
@@ -377,6 +439,7 @@ export function createModelsSettingsSection(ctx) {
       state.modelPreferenceDraft = null;
       failurePolicyDraft = "";
       failureOverridesDraft = null;
+      preferenceOrderDraft = null;
     }
     cleanupDrag();
   }

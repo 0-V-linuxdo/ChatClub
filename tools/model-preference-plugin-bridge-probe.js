@@ -228,6 +228,33 @@
     };
   }
 
+  function layoutRect(element) {
+    if (!element?.getBoundingClientRect) return null;
+    const rect = element.getBoundingClientRect();
+    if (![rect.top, rect.right, rect.bottom, rect.left, rect.width, rect.height].every(Number.isFinite)) return null;
+    return {
+      top: Math.round(rect.top * 100) / 100,
+      right: Math.round(rect.right * 100) / 100,
+      bottom: Math.round(rect.bottom * 100) / 100,
+      left: Math.round(rect.left * 100) / 100,
+      width: Math.round(rect.width * 100) / 100,
+      height: Math.round(rect.height * 100) / 100
+    };
+  }
+
+  function layoutRectsOverlap(first, second) {
+    if (!first || !second || first.width <= 0 || first.height <= 0 || second.width <= 0 || second.height <= 0) return false;
+    return first.left < second.right
+      && first.right > second.left
+      && first.top < second.bottom
+      && first.bottom > second.top;
+  }
+
+  function computedStyleValue(element, property) {
+    if (!element || typeof window.getComputedStyle !== "function") return "";
+    return String(window.getComputedStyle(element).getPropertyValue(property) || "").trim();
+  }
+
   function modelGateControls() {
     return {
       send: controlSummary(".prompt-send-button"),
@@ -244,6 +271,11 @@
     const input = promptInput();
     const status = shell?.querySelector?.(".prompt-model-gate-status") || document.querySelector(".prompt-model-gate-status");
     const statusTextNode = status?.querySelector?.(".prompt-model-gate-status-text") || status;
+    const live = shell?.querySelector?.(".prompt-model-gate-live") || document.querySelector(".prompt-model-gate-live");
+    const collapsedPreview = shell?.querySelector?.(".prompt-collapsed-preview") || null;
+    const imageList = shell?.querySelector?.(".prompt-image-preview-list") || null;
+    const clearButton = shell?.querySelector?.(".prompt-clear-button") || null;
+    const sendButton = shell?.querySelector?.(".prompt-send-button") || null;
     const state = inferredGateState(shell, input);
     const pendingCount = datasetCount(shell, "modelGatePendingCount");
     const failedCount = datasetCount(shell, "modelGateFailedCount");
@@ -251,6 +283,19 @@
     const failedAppIds = commaList(shell?.dataset?.modelGateFailedAppIds);
     const queueBadge = shell?.querySelector?.(".prompt-send-queue-badge") || null;
     const queueStatus = shell?.querySelector?.(".prompt-send-queue-status") || null;
+    const composerRect = layoutRect(shell?.closest?.(".composer"));
+    const shellRect = layoutRect(shell);
+    const statusRect = layoutRect(status);
+    const clearRect = clearButton?.hidden ? null : layoutRect(clearButton);
+    const sendRect = sendButton?.hidden ? null : layoutRect(sendButton);
+    const queueBadgeRect = queueBadge?.hidden ? null : layoutRect(queueBadge);
+    const imageListRect = imageList?.hidden ? null : layoutRect(imageList);
+    const inputRect = layoutRect(input);
+    const collapsedPreviewRect = layoutRect(collapsedPreview);
+    const statusDisplay = computedStyleValue(status, "display");
+    const statusTextDisplay = computedStyleValue(statusTextNode, "display");
+    const inputPaddingRight = Number.parseFloat(computedStyleValue(input, "padding-right"));
+    const collapsedPaddingRight = Number.parseFloat(computedStyleValue(collapsedPreview, "padding-right"));
     const promptBlocked = Boolean(
       input
       && (input.readOnly || input.disabled || input.getAttribute("aria-busy") === "true")
@@ -297,9 +342,54 @@
         : { found: false },
       status: {
         found: Boolean(status),
-        visible: Boolean(status && !status.hidden),
-        hidden: Boolean(!status || status.hidden),
-        text: String(statusTextNode?.textContent || "").replace(/\s+/g, " ").trim()
+        count: shell?.querySelectorAll?.(".prompt-model-gate-status")?.length || 0,
+        visible: Boolean(status && !status.hidden && statusDisplay !== "none"),
+        hidden: Boolean(!status || status.hidden || statusDisplay === "none"),
+        text: String(statusTextNode?.textContent || "").replace(/\s+/g, " ").trim(),
+        ariaLabel: String(status?.getAttribute?.("aria-label") || ""),
+        role: String(status?.getAttribute?.("role") || ""),
+        ariaLive: status?.getAttribute?.("aria-live"),
+        tooltip: String(status?.getAttribute?.("data-tooltip") || ""),
+        tooltipWraps: status?.getAttribute?.("data-tooltip-wrap") === "true",
+        focusable: status?.getAttribute?.("tabindex") === "0",
+        mode: !status || status.hidden || statusDisplay === "none"
+          ? "hidden"
+          : statusTextDisplay === "none" ? "icon-only" : "icon-and-text",
+        rect: statusRect,
+        inTopControlRow: statusRect && shellRect
+          ? statusRect.top >= shellRect.top - 0.5 && statusRect.bottom <= shellRect.top + 38.5
+          : null,
+        overlaps: {
+          clear: layoutRectsOverlap(statusRect, clearRect),
+          send: layoutRectsOverlap(statusRect, sendRect),
+          queueBadge: layoutRectsOverlap(statusRect, queueBadgeRect),
+          imageList: layoutRectsOverlap(statusRect, imageListRect)
+        }
+      },
+      live: {
+        found: Boolean(live),
+        count: shell?.querySelectorAll?.(".prompt-model-gate-live")?.length || 0,
+        hidden: Boolean(live?.hidden),
+        ariaLive: live?.getAttribute?.("aria-live"),
+        ariaAtomic: live?.getAttribute?.("aria-atomic"),
+        text: String(live?.textContent || "").replace(/\s+/g, " ").trim()
+      },
+      layout: {
+        composerWidth: composerRect?.width ?? null,
+        shellWidth: shellRect?.width ?? null,
+        modelGateWidth: computedStyleValue(shell, "--prompt-model-gate-width"),
+        modelGateReserve: computedStyleValue(shell, "--prompt-model-gate-reserve"),
+        inputPaddingRight: Number.isFinite(inputPaddingRight) ? inputPaddingRight : null,
+        collapsedPaddingRight: Number.isFinite(collapsedPaddingRight) ? collapsedPaddingRight : null,
+        inputContentClearsStatus: inputRect && statusRect && Number.isFinite(inputPaddingRight)
+          ? inputRect.right - inputPaddingRight <= statusRect.left + 0.5
+          : null,
+        collapsedContentClearsStatus: collapsedPreviewRect && statusRect && Number.isFinite(collapsedPaddingRight)
+          ? collapsedPreviewRect.right - collapsedPaddingRight <= statusRect.left + 0.5
+          : null,
+        imageListClearsStatus: imageListRect && statusRect
+          ? !layoutRectsOverlap(imageListRect, statusRect)
+          : null
       },
       queue: {
         pendingCount: queuePendingCount,

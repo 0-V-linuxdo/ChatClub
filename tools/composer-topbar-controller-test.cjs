@@ -13,6 +13,7 @@ const composer = read("app/composer/controller.js");
 const topbar = read("app/topbar/controller.js");
 const topbarView = read("app/topbar/view.js");
 const preferredModel = read("app/preferred-model/controller.js");
+const chatclubCss = read("styles/chatclub.css");
 
 const { functionSource } = require("./function-source.cjs");
 
@@ -72,6 +73,16 @@ const { functionSource } = require("./function-source.cjs");
     "model preparation must never gate Composer editing, IME, paste, attachments, or submit admission"
   );
   assert.match(functionSource(composer, "handleInputKeydown"), /promptHistoryNavigate\(/, "Composer must own prompt-history navigation");
+  assert.match(
+    functionSource(composer, "handleInputBlur"),
+    /focusRemainsInPromptShell\(shell, event\.relatedTarget\)[\s\S]*return;[\s\S]*collapseInput\(inputNode\)/,
+    "focusing a control inside Composer must not collapse multiline or image input"
+  );
+  assert.match(
+    functionSource(composer, "handlePromptShellFocusOut"),
+    /focusRemainsInPromptShell\(shell, event\.relatedTarget\)[\s\S]*prompt-input-expanded[\s\S]*collapseInput\(inputNode\)/,
+    "expanded input must collapse only after focus leaves the entire Composer shell"
+  );
   const promptMenu = functionSource(composer, "openActionsMenu");
   assert.match(promptMenu, /topbar\.closeSettingsMenu\(\)/, "Prompt Actions must dismiss only the Topbar menu owner");
   assert.match(promptMenu, /workspace\.closePopovers\(\)/, "Prompt Actions must dismiss the workspace popover owner through its port");
@@ -169,6 +180,48 @@ const { functionSource } = require("./function-source.cjs");
     },
     "global Composer status must expose the same terminal frame failure"
   );
+  const gateVisualSource = functionSource(preferredModel, "syncPreferredModelGateVisual");
+  assert.match(gateVisualSource, /removeAttribute\("aria-live"\)/, "the visual model badge must not duplicate live announcements");
+  assert.match(gateVisualSource, /setAttribute\("role", "note"\)/, "the focusable visual badge must expose named non-live semantics");
+  assert.match(gateVisualSource, /document\.activeElement === statusNode[\s\S]*prompt-input[\s\S]*preventScroll: true/, "hiding a focused badge must return focus to Composer before it can collapse");
+  assert.match(gateVisualSource, /data-tooltip[\s\S]*data-tooltip-wrap[\s\S]*tabindex/, "the full model status must be available on hover and focus");
+  assert.match(gateVisualSource, /preferredModelGateStatusIcon\(applying\)/, "the visual badge must retain an icon in every unsettled state");
+  const gateLiveSource = functionSource(preferredModel, "syncPreferredModelGateLive");
+  assert.match(gateLiveSource, /hidden = false/, "the model live region must remain mounted and exposed to assistive technology");
+  assert.match(gateLiveSource, /modelGateAnnouncementKey/, "duplicate model-state notifications must not be re-announced");
+  assert.match(gateLiveSource, /liveNode\.textContent = statusText/, "the dedicated model live region must own status announcements");
+  const syncGateSource = functionSource(preferredModel, "syncPreferredModelInputGate");
+  assert.match(syncGateSource, /querySelectorAll\("\.prompt-model-gate-status"\)[\s\S]*statusNodes\.forEach\(\(node\) => node\.remove\(\)\)/, "Preferred Model sync must keep exactly one visual badge");
+  assert.match(syncGateSource, /querySelectorAll\("\.prompt-model-gate-live"\)[\s\S]*liveNodes\.forEach\(\(node\) => node\.remove\(\)\)/, "Preferred Model sync must keep exactly one live region");
+  assert.match(
+    chatclubCss,
+    /\.composer\s*\{[\s\S]*?container-name:\s*chatclub-composer;[\s\S]*?container-type:\s*inline-size;/,
+    "the 420px badge breakpoint must use the Composer's own inline size"
+  );
+  assert.match(
+    chatclubCss,
+    /@container chatclub-composer \(max-width:\s*420px\)\s*\{[\s\S]*?--prompt-model-gate-width:\s*28px;[\s\S]*?\.prompt-model-gate-status-text\s*\{[\s\S]*?display:\s*none;/,
+    "Composer widths up to and including 420px must expose an icon-only model badge"
+  );
+  assert.match(
+    chatclubCss,
+    /--prompt-model-gate-width:\s*clamp\([^)]+\);[\s\S]*?\.prompt-model-gate-status-text\s*\{[\s\S]*?display:\s*block;/,
+    "Composer widths above 420px must expose an icon plus status text"
+  );
+  assert.match(
+    chatclubCss,
+    /padding-right:\s*calc\(var\(--prompt-model-gate-control-right\) \+ var\(--prompt-model-gate-reserve\)\);/,
+    "textarea and collapsed preview content must reserve the model badge width"
+  );
+  assert.match(
+    chatclubCss,
+    /prompt-image-preview-list\s*\{[\s\S]*?right:\s*calc\(var\(--prompt-model-gate-control-right\) \+ var\(--prompt-model-gate-reserve\)\);/,
+    "expanded image previews must reserve the model badge width"
+  );
+  assert.match(chatclubCss, /\.prompt-model-gate-status\.tooltip-trigger\s*\{[\s\S]*?top:\s*5px;[\s\S]*?pointer-events:\s*auto;/, "the visual model status must stay in the top control row and remain interactive");
+  assert.match(chatclubCss, /prompt-shell-expanded\.prompt-shell-has-images \.prompt-model-gate-status\s*\{[\s\S]*?top:\s*12px;/, "image mode must keep the model status in its top control row");
+  assert.doesNotMatch(chatclubCss, /\.prompt-model-gate-status[^\{]*\{[^}]*top:\s*calc\(100%/, "the model status must never float below Composer over an iframe");
+  assert.match(chatclubCss, /\.prompt-model-gate-live\s*\{[\s\S]*?clip-path:\s*inset\(50%\);/, "the dedicated model live region must be visually hidden without the hidden attribute");
   for (const method of [
     "preferredModelFrameReadiness",
     "preferredModelFrameReadinessIsCurrent",

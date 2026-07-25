@@ -3,9 +3,9 @@
     "app/main.js": {
       "maxFiles": 86,
       "targetFiles": 74,
-      "maxSourceBytes": 874098,
+      "maxSourceBytes": 879012,
       "targetSourceBytes": 750000,
-      "reason": "The application initial-static closure includes the independently testable per-frame send queue and is held to its exact current footprint while feature controllers remain behind explicit lazy boundaries."
+      "reason": "The application initial-static closure includes the independently testable per-frame send queue and the non-blocking Composer model-status badge/live-region synchronization, and is held to its exact current footprint while feature controllers remain behind explicit lazy boundaries."
     },
     "background/service-worker.js": {
       "maxFiles": 47,
@@ -35,9 +35,9 @@
       "owner": "app/runtime.js",
       "maxFiles": 22,
       "targetFiles": 18,
-      "maxSourceBytes": 297337,
+      "maxSourceBytes": 300029,
       "targetSourceBytes": 250000,
-      "reason": "Settings remains an explicit runtime-owned lazy controller; the global and per-site model-failure policy controls are included in its exact incremental closure ratchet."
+      "reason": "Settings remains an explicit runtime-owned lazy controller; the responsive global/per-site model-failure policy controls and four-column preference layout are included in its exact incremental closure ratchet."
     },
     "app/summary/controller.js": {
       "owner": "app/runtime.js",

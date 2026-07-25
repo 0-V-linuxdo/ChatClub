@@ -728,6 +728,24 @@ export function createComposerController(dependencies = {}) {
     resizeInput(inputNode, false);
   }
 
+  function focusRemainsInPromptShell(shell, nextTarget) {
+    return Boolean(shell && nextTarget?.closest?.(".prompt-shell") === shell);
+  }
+
+  function handleInputBlur(event) {
+    const inputNode = event.currentTarget;
+    const shell = inputNode?.closest?.(".prompt-shell");
+    if (focusRemainsInPromptShell(shell, event.relatedTarget)) return;
+    collapseInput(inputNode);
+  }
+
+  function handlePromptShellFocusOut(event) {
+    const shell = event.currentTarget;
+    if (focusRemainsInPromptShell(shell, event.relatedTarget)) return;
+    const inputNode = shell?.querySelector?.(".prompt-input");
+    if (inputNode?.classList?.contains("prompt-input-expanded")) collapseInput(inputNode);
+  }
+
   function inputFromEvent(event) {
     const target = event.currentTarget;
     if (target?.classList?.contains("prompt-input")) return target;
@@ -843,6 +861,13 @@ export function createComposerController(dependencies = {}) {
     syncInputNode({ focus: true });
   }
 
+  function modelGateStatusIcon(applying) {
+    if (applying) return el("span", { class: "prompt-model-gate-spinner", "aria-hidden": "true" });
+    const icon = createSvgIcon("alert");
+    icon.classList.add("prompt-model-gate-failure-icon");
+    return icon;
+  }
+
   function render({ placeholder = "", gate = {} } = {}) {
     currentPlaceholder = String(placeholder || "");
     const gateState = String(gate.state || "");
@@ -858,7 +883,7 @@ export function createComposerController(dependencies = {}) {
       dataset: { modelGateState: gateState },
       onpointerdown: handlePointerDown,
       onfocus: (event) => expandInput(event.target),
-      onblur: (event) => collapseInput(event.target),
+      onblur: handleInputBlur,
       onclick: handleClick,
       onpaste: handlePaste,
       onkeyup: (event) => rememberSelection(event.target),
@@ -882,7 +907,8 @@ export function createComposerController(dependencies = {}) {
         ondragover: handleDragOver,
         ondragleave: (event) => event.currentTarget.classList.remove("prompt-shell-drag-over"),
         ondrop: handleDrop,
-        onpaste: handlePaste
+        onpaste: handlePaste,
+        onfocusout: handlePromptShellFocusOut
       },
         prompt,
         el("div", {
@@ -959,14 +985,32 @@ export function createComposerController(dependencies = {}) {
           ? t("topbar.promptQueuedTargets", { count: Number(state.promptQueuedTargetCount) })
           : ""),
         el("div", {
-          class: "prompt-model-gate-status",
+          class: "prompt-model-gate-status tooltip-trigger",
           hidden: !(gateApplying || gateFailed),
+          role: "note",
+          tabindex: (gateApplying || gateFailed) ? "0" : null,
+          "aria-label": (gateApplying || gateFailed) ? gateStatusText : null,
+          "data-tooltip": (gateApplying || gateFailed) ? gateStatusText : null,
+          "data-tooltip-id": "topbar.modelGateStatus",
+          "data-tooltip-placement": "left",
+          "data-tooltip-wrap": "true",
+          dataset: {
+            modelGateVisualKey: (gateApplying || gateFailed)
+              ? (gateApplying ? "applying:" : "failed:") + gateStatusText
+              : ""
+          },
+          onpointerdown: (event) => event.stopPropagation(),
+          onclick: (event) => event.stopPropagation(),
+          onkeydown: (event) => event.stopPropagation()
+        },
+          (gateApplying || gateFailed) ? modelGateStatusIcon(gateApplying) : null,
+          (gateApplying || gateFailed) ? el("span", { class: "prompt-model-gate-status-text" }, gateStatusText) : null
+        ),
+        el("div", {
+          class: "prompt-model-gate-live",
           "aria-live": "polite",
           "aria-atomic": "true"
-        },
-          gateApplying ? el("span", { class: "prompt-model-gate-spinner", "aria-hidden": "true" }) : null,
-          (gateApplying || gateFailed) ? el("span", { class: "prompt-model-gate-status-text" }, gateStatusText) : null
-        )
+        })
       )
     );
   }

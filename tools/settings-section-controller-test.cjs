@@ -149,7 +149,25 @@ globalThis.document = { addEventListener() {} };
     /const savedOptions = await saveOptionsPatch\(patch\)[\s\S]*modelPreferenceFailurePolicy: failurePolicyDraft[\s\S]*modelPreferenceFailureOverrides: failureOverridesDraft/,
     "an older in-flight save must not temporarily overwrite newer visible failure-policy drafts"
   );
-  assert.match(modelsSource, /t\("modelPreferences\.failureOverride"\)/);
+  const modelPreferenceRow = functionSource(modelsSource, "row");
+  const modelPreferencePane = functionSource(modelsSource, "pane");
+  const modelPreferenceDrop = functionSource(modelsSource, "drop");
+  assert.doesNotMatch(
+    modelPreferenceRow,
+    /failureOverrideSelect/,
+    "failure overrides must not consume a fifth draggable model-list column"
+  );
+  assert.match(modelPreferencePane, /preferenceOrder\(\)\.map\(\(appId\) => failureOverrideField\(appId\)\)/);
+  assert.match(modelsSource, /t\("modelPreferences\.failureOverrides"\)/);
+  assert.match(modelsSource, /t\("modelPreferences\.failureOverrideFor"/);
+  assert.match(modelPreferenceDrop, /state\.options\.modelPreferenceOrder = modelPreferenceOrder/);
+  assert.match(modelPreferenceDrop, /queueOptionsAutoSave\(\{ modelPreferenceOrder \}\)/);
+  assert.doesNotMatch(modelPreferenceDrop, /await saveOptionsPatch/, "model-order saves must participate in the autosave drain");
+  assert.match(
+    modelPreferenceRow,
+    /model-preference-thinking-placeholder-field[\s\S]*"aria-hidden": "true"/,
+    "non-Gemini placeholder columns must not expose a label without a control"
+  );
   assert.deepEqual(stateKeys(historySource), [
     "promptHistoryCursor",
     "promptHistoryDraft",
