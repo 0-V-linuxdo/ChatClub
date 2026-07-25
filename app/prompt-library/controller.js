@@ -7,7 +7,6 @@ export function createPromptLibraryController(ctx) {
     createId,
     savePromptLibrary,
     syncPromptInputNode,
-    ensurePromptInputReady = () => true,
     settingsActions,
     settingsDragHandle,
     settingsEmptyRow,
@@ -129,7 +128,6 @@ export function createPromptLibraryController(ctx) {
   }
 
   function insertTextIntoPrompt(text) {
-    if (!ensurePromptInputReady()) return false;
     const current = state.promptText || "";
     const selection = state.promptSelection || {};
     const start = Number.isFinite(selection.start) ? Math.max(0, Math.min(selection.start, current.length)) : current.length;

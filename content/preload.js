@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "74eef65473a6f090d918d02fbe44a1aa6469ab71fd20455b2a2a82091962217c";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "f915f5f5dfeb33438f730820a39bb0ee5baaea884f9033b8b46069e7a4bf5c3b";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.39e7dff3b817dd590d108ce155af13e47b28138e33c477502664105276787094";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "39e7dff3b817dd590d108ce155af13e47b28138e33c477502664105276787094";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "e4e372e589be4377c2cc79a334c47981d328d22cf0813e080d1177ce7334b36d";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.e4e372e589be4377c2cc79a334c47981d328d22cf0813e080d1177ce7334b36d";
-  var CONTENT_RUNTIME_PRELOAD_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preload.js", "entryPath": "content-src/preload.js", "sourceSha256": "d5b80bb0f25ef6c21f8139b9f225b621962dda141e000194f83fcdecc448c461", "implementationSha256": "7b3aac1f5e811e9ce6a180626e89922e40b0ec622c14c7f9d57737961b55e5cf", "implementationVersion": "2026.07.16.2+bundle.7b3aac1f5e811e9ce6a180626e89922e40b0ec622c14c7f9d57737961b55e5cf" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "426370735476decce18503d12b0b93bef44bf00f1701a34441f5bfcd97162659";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.426370735476decce18503d12b0b93bef44bf00f1701a34441f5bfcd97162659";
+  var CONTENT_RUNTIME_PRELOAD_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preload.js", "entryPath": "content-src/preload.js", "sourceSha256": "b5e85129ba22836d882bed56c31c9ccd8d24360d2f6bccfd337972bb6667af8f", "implementationSha256": "5576ed6e51332198a8490926184bf2f1c810edc95aeecdcfebb6760c7b896ce1", "implementationVersion": "2026.07.16.2+bundle.5576ed6e51332198a8490926184bf2f1c810edc95aeecdcfebb6760c7b896ce1" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -1990,7 +1990,7 @@
   });
   function deadlineFromPayload(payload = {}, fallbackMs = 1e4) {
     const value = Number(payload?.deadlineAt);
-    return Number.isFinite(value) && value > Date.now() ? value : Date.now() + Math.max(1e3, Number(fallbackMs) || 1e4);
+    return Number.isFinite(value) && value > 0 ? value : Date.now() + Math.max(1e3, Number(fallbackMs) || 1e4);
   }
   function remainingDeadlineMs(deadlineAt, fallbackMs = 1e3) {
     const value = Number(deadlineAt);
@@ -2006,6 +2006,20 @@
   }
   var normalize = (value) => String(value || "").replace(/\u00a0/g, " ").replace(/\r\n?/g, "\n").trim();
   var compact = (value) => normalize(value).toLowerCase().replace(/\s+/g, "");
+  var withDeliveryState = (state, result) => ({ ...result, deliveryState: state });
+  function createNotionSubmissionNavigation(sendId, method, href) {
+    let url;
+    try {
+      url = new URL(String(href || ""));
+    } catch {
+      return { sendId, appId: "NotionAI", initialHref: String(href || ""), barrierState: "unknown", method };
+    }
+    const host = url.hostname.toLowerCase();
+    const path = (url.pathname || "/").replace(/\/+$/, "") || "/";
+    const validHost = host === "app.notion.com" || host === "notion.so" || host === "www.notion.so" || host.endsWith(".notion.so");
+    const barrierState = validHost && path === "/ai" ? "required" : validHost && path === "/chat" && url.searchParams.get("t") ? "not-required" : validHost && path === "/chat" ? "required" : "unknown";
+    return { sendId, appId: "NotionAI", initialHref: String(href || ""), barrierState, method };
+  }
 
   // content-src/preload/notion-events.js
   function installNotionEventListeners(options = {}) {
@@ -2019,6 +2033,7 @@
         data = {
           ok: false,
           sent: false,
+          deliveryState: "unknown",
           method: "notion-bridge",
           reason: error?.message || String(error || "Notion AI send failed")
         };
@@ -2034,6 +2049,7 @@
         data = {
           ok: false,
           sent: false,
+          deliveryState: "unknown",
           method: "notion-prompt-bridge",
           reason: error?.message || String(error || "Notion AI prompt send failed")
         };
@@ -2285,14 +2301,16 @@
         const ariaBusy = String(element.getAttribute?.("aria-busy") || "").toLowerCase() === "true";
         const haystack = getElementSearchText(element).toLowerCase();
         const uploadContext = /\b(?:upload|uploading|attachment|file-preview|upload-preview|file|image|preview)\b/.test(haystack) || /上传|附件|图片|图像|文件|预览/.test(haystack);
-        if (uploadContext) return true;
-        if (!(ariaBusy || role === "progressbar" || tag === "progress")) return false;
+        const explicitProgress = ariaBusy || role === "progressbar" || tag === "progress" || /\b(?:uploading|upload progress|processing (?:file|image))\b/.test(haystack) || /正在(?:上传|处理)|上传(?:中|进度)/.test(haystack);
+        if (explicitProgress && uploadContext) return true;
         let node = element.parentElement || null;
         for (let depth = 0; node && depth < 4; depth += 1) {
           if (node === scope || node === document.body) break;
           if (findNotionAttachmentCardElement(node, scope) || isLikelyNotionAttachmentPreviewElement(node)) return true;
           const parentHaystack = getElementSearchText(node).toLowerCase();
-          if (/\b(?:upload|uploading|attachment|file-preview|upload-preview|file|image|preview)\b/.test(parentHaystack) || /上传|附件|图片|图像|文件|预览/.test(parentHaystack)) return true;
+          const parentUploadContext = /\b(?:upload|uploading|attachment|file-preview|upload-preview|file|image|preview)\b/.test(parentHaystack) || /上传|附件|图片|图像|文件|预览/.test(parentHaystack);
+          const parentExplicitProgress = String(node.getAttribute?.("aria-busy") || "").toLowerCase() === "true" || String(node.getAttribute?.("role") || "").toLowerCase() === "progressbar" || String(node.tagName || "").toLowerCase() === "progress" || /\b(?:uploading|upload progress|processing (?:file|image))\b/.test(parentHaystack) || /正在(?:上传|处理)|上传(?:中|进度)/.test(parentHaystack);
+          if (parentUploadContext && parentExplicitProgress) return true;
           node = node.parentElement || null;
         }
         return false;
@@ -2564,8 +2582,14 @@
       await clearAttachments(editor);
       if (deadlineExpired(deadlineAt)) return null;
       editor = await liveEditor(editor, 3e3, deadlineAt);
+      const attachmentsCleared = await waitFor(() => {
+        const snapshot = attachmentSnapshot(editor);
+        return Number(snapshot?.attachmentCount || 0) <= 0 && !hasNotionUploadInProgress(editor);
+      }, 2500, 100, deadlineAt);
+      if (!attachmentsCleared) return null;
       await clearEditorText(editor);
-      return await liveEditor(editor, 3e3, deadlineAt);
+      editor = await liveEditor(editor, 3e3, deadlineAt);
+      return editor && !editorText(editor) ? editor : null;
     };
     const ensurePromptCommitted = async (editor, text, deadlineAt = 0) => {
       if (!text) return { ok: true, editor: await liveEditor(editor, 2e3, deadlineAt) };
@@ -2753,19 +2777,16 @@ ${node.nodeValue}`;
     };
     const notifyNotionSendActivated = (payload = {}, method = "notion-submit") => {
       const sendId = String(payload?.sendId || "").trim();
-      if (!sendId) return;
+      if (!sendId) return null;
+      const initialHref = String(location.href || "");
+      const submissionNavigation = createNotionSubmissionNavigation(sendId, String(method || "notion-submit"), initialHref);
       try {
         window.dispatchEvent(new CustomEvent(NOTION_SEND_ACTIVATED_EVENT2, {
-          detail: JSON.stringify({
-            sendId,
-            appId: "NotionAI",
-            method,
-            activatedAt: Date.now(),
-            deadlineAt: Math.max(0, Number(payload?.deadlineAt) || 0)
-          })
+          detail: JSON.stringify({ sendId, appId: "NotionAI", method, activatedAt: Date.now(), deadlineAt: Math.max(0, Number(payload?.deadlineAt) || 0) })
         }));
       } catch {
       }
+      return submissionNavigation;
     };
     const sendNotionMessage = async (editor, deadlineAt = 0, payload = {}) => {
       const composer = resolveNotionComposerElement(editor, { requireVisible: true }) || await focusNotionComposer(deadlineAt);
@@ -2774,22 +2795,21 @@ ${node.nodeValue}`;
       if (button) {
         if (!isNotionSendButtonDisabled(button)) {
           if (deadlineExpired(deadlineAt)) return { ok: false, method: "notion-bridge", reason: "Send deadline exceeded" };
-          notifyNotionSendActivated(payload, "notion-button");
-          try {
-            if (clickElement(button)) return { ok: true, method: "notion-bridge-button" };
-          } catch {
-          }
-          try {
-            button.click?.();
-            return { ok: true, method: "notion-bridge-button" };
-          } catch {
-          }
+          const submissionNavigation2 = notifyNotionSendActivated(payload, "notion-button");
+          if (clickElement(button)) return { ok: true, method: "notion-bridge-button", submissionNavigation: submissionNavigation2 };
+          return {
+            ok: false,
+            deliveryState: "unknown",
+            method: "notion-bridge-button",
+            reason: "Notion AI submit activation failed",
+            submissionNavigation: submissionNavigation2
+          };
         }
       }
       if (deadlineExpired(deadlineAt)) return { ok: false, method: "notion-bridge", reason: "Send deadline exceeded" };
-      notifyNotionSendActivated(payload, "notion-enter");
+      const submissionNavigation = notifyNotionSendActivated(payload, "notion-enter");
       await pressEnter(composer);
-      return { ok: true, method: "notion-bridge-enter" };
+      return { ok: true, method: "notion-bridge-enter", submissionNavigation };
     };
     const clickElement = (el) => {
       const rect = el?.getBoundingClientRect?.();
@@ -2818,16 +2838,25 @@ ${node.nodeValue}`;
       } catch {
       }
       try {
-        for (const type of ["mouseover", "mouseenter", "mousemove", "mousedown", "mouseup", "click"]) {
-          el.dispatchEvent(new MouseEvent(type, { ...base, buttons: type === "mouseup" || type === "click" ? 0 : 1 }));
+        for (const type of ["mouseover", "mouseenter", "mousemove", "mousedown", "mouseup"]) {
+          el.dispatchEvent(new MouseEvent(type, { ...base, buttons: type === "mouseup" ? 0 : 1 }));
         }
       } catch {
       }
-      try {
-        el.click?.();
-      } catch {
+      if (typeof el?.click === "function") {
+        try {
+          el.click();
+          return true;
+        } catch {
+          return false;
+        }
       }
-      return true;
+      try {
+        el?.dispatchEvent?.(new MouseEvent("click", { ...base, buttons: 0 }));
+        return true;
+      } catch {
+        return false;
+      }
     };
     const pressEnter = async (editor) => {
       editor?.focus?.();
@@ -3214,16 +3243,16 @@ ${node.nodeValue}`;
     const sendNotionText = async (payload = {}) => {
       const deadlineAt = deadlineFromPayload(payload, 1e4);
       const text = String(payload?.text || "").trim();
-      if (!text) return { ok: false, sent: false, method: "notion-bridge", reason: "Prompt is empty" };
-      if (deadlineExpired(deadlineAt)) return { ok: false, sent: false, method: "notion-bridge", reason: "Send deadline exceeded" };
-      const editor = await waitFor(findEditor, 3e3, 100, deadlineAt);
-      if (!editor) return { ok: false, sent: false, method: "notion-bridge", reason: "Notion AI input element not found" };
+      if (!text) return withDeliveryState("not-sent", { ok: false, sent: false, method: "notion-bridge", reason: "Prompt is empty" });
+      if (deadlineExpired(deadlineAt)) return withDeliveryState("not-sent", { ok: false, sent: false, method: "notion-bridge", reason: "Send deadline exceeded" });
+      let editor = await waitFor(findEditor, 3e3, 100, deadlineAt);
+      if (!editor) return withDeliveryState("not-sent", { ok: false, sent: false, method: "notion-bridge", reason: "Notion AI input element not found" });
+      editor = await prepareComposerForRun(editor, deadlineAt);
+      if (!editor) return withDeliveryState("not-sent", { ok: false, sent: false, method: "notion-bridge", reason: "Notion AI composer could not be prepared" });
       const beforeOutsideCount = countPromptOutsideEditor(editor, text);
       const writeStarted = await setEditorText(editor, text);
       const written = writeStarted && await waitFor(() => promptMatches(editorText(editor), text), 2200, 80, deadlineAt);
-      if (!written) {
-        return { ok: false, sent: false, method: "notion-bridge", reason: deadlineExpired(deadlineAt) ? "Send deadline exceeded" : promptReceiveFailureReason(editor, text) };
-      }
+      if (!written) return withDeliveryState("not-sent", { ok: false, sent: false, method: "notion-bridge", reason: deadlineExpired(deadlineAt) ? "Send deadline exceeded" : promptReceiveFailureReason(editor, text) });
       const readyToSend = await waitForNotionReadyToSend(editor, {
         requireImage: false,
         timeoutMs: Math.min(1e4, remainingDeadlineMs(deadlineAt, 1e4)),
@@ -3231,62 +3260,73 @@ ${node.nodeValue}`;
         settleMs: 300,
         deadlineAt
       });
-      if (!readyToSend.ok) {
-        return { ok: false, sent: false, method: "notion-bridge", reason: readyToSend.message || "Notion AI submit button stayed disabled" };
-      }
+      if (!readyToSend.ok) return withDeliveryState("not-sent", { ok: false, sent: false, method: "notion-bridge", reason: readyToSend.message || "Notion AI submit button stayed disabled" });
       const sendEditor = readyToSend.composer || editor;
       const sent = await sendNotionMessage(editor, deadlineAt, payload);
       if (!sent.ok) {
-        return { ok: false, sent: false, method: "notion-bridge", reason: sent.reason || "Notion AI submit failed" };
+        return withDeliveryState(sent.deliveryState === "unknown" ? "unknown" : "not-sent", {
+          ok: false,
+          sent: false,
+          method: "notion-bridge",
+          reason: sent.reason || "Notion AI submit failed",
+          submissionNavigation: sent.submissionNavigation
+        });
       }
       if (await waitFor(() => submitted(sendEditor, text, beforeOutsideCount), 2600, 100, deadlineAt)) {
-        return { ok: true, sent: true, method: sent.method || "notion-bridge-button", verified: true };
+        return withDeliveryState("sent", {
+          ok: true,
+          sent: true,
+          method: sent.method || "notion-bridge-button",
+          verified: true,
+          submissionNavigation: sent.submissionNavigation
+        });
       }
-      return {
+      return withDeliveryState("unknown", {
         ok: false,
         sent: false,
         method: "notion-bridge",
-        reason: promptSubmitFailureReason(sendEditor, text)
-      };
+        reason: promptSubmitFailureReason(sendEditor, text),
+        submissionNavigation: sent.submissionNavigation
+      });
     };
     const sendNotionPrompt = async (payload = {}) => runNotionSendOnce(payload, "prompt", async () => {
       const deadlineAt = deadlineFromPayload(payload, 6e4);
       const text = String(payload.text || "").trim();
       const files = promptFiles(payload.images);
-      if (!text && !files.length) return { ok: false, sent: false, method: "notion-prompt-bridge", reason: "Prompt is empty" };
+      if (!text && !files.length) return withDeliveryState("not-sent", { ok: false, sent: false, method: "notion-prompt-bridge", reason: "Prompt is empty" });
       if (Array.isArray(payload.images) && payload.images.length && !files.length) {
-        return { ok: false, sent: false, method: "notion-prompt-bridge", reason: "Image payload could not be restored" };
+        return withDeliveryState("not-sent", { ok: false, sent: false, method: "notion-prompt-bridge", reason: "Image payload could not be restored" });
       }
-      if (deadlineExpired(deadlineAt)) return { ok: false, sent: false, method: "notion-prompt-bridge", reason: "Send deadline exceeded" };
+      if (deadlineExpired(deadlineAt)) return withDeliveryState("not-sent", { ok: false, sent: false, method: "notion-prompt-bridge", reason: "Send deadline exceeded" });
       let editor = await waitFor(findEditor, 3e3, 100, deadlineAt);
-      if (!editor) return { ok: false, sent: false, method: "notion-prompt-bridge", reason: "Notion AI input element not found" };
+      if (!editor) return withDeliveryState("not-sent", { ok: false, sent: false, method: "notion-prompt-bridge", reason: "Notion AI input element not found" });
       editor = await prepareComposerForRun(editor, deadlineAt);
-      if (!editor) return { ok: false, sent: false, method: "notion-prompt-bridge", reason: "Notion AI input element not found" };
+      if (!editor) return withDeliveryState("not-sent", { ok: false, sent: false, method: "notion-prompt-bridge", reason: "Notion AI input element not found" });
       if (files.length) {
         const attached = await attachImagesWithRetries(editor, files, payload.imageRetryCount ?? 3, deadlineAt, text);
-        if (!attached.ok) return { ok: false, sent: false, method: "notion-prompt-bridge", reason: attached.reason || "Image insertion failed" };
+        if (!attached.ok) return withDeliveryState("not-sent", { ok: false, sent: false, method: "notion-prompt-bridge", reason: attached.reason || "Image insertion failed" });
         editor = await liveEditor(attached.editor || editor, 4e3, deadlineAt);
       }
       if (text) {
         const committedAfterImages = await ensurePromptCommitted(editor, text, deadlineAt);
         if (!committedAfterImages.ok) {
-          return { ok: false, sent: false, method: "notion-prompt-bridge", reason: committedAfterImages.reason || promptReceiveFailureReason(committedAfterImages.editor || editor, text) };
+          return withDeliveryState("not-sent", { ok: false, sent: false, method: "notion-prompt-bridge", reason: committedAfterImages.reason || promptReceiveFailureReason(committedAfterImages.editor || editor, text) });
         }
         editor = await liveEditor(committedAfterImages.editor, 4e3, deadlineAt);
         const committedBeforeSend = await ensurePromptCommitted(editor, text, deadlineAt);
         if (!committedBeforeSend.ok) {
-          return { ok: false, sent: false, method: "notion-prompt-bridge", reason: committedBeforeSend.reason || promptReceiveFailureReason(committedBeforeSend.editor || editor, text) };
+          return withDeliveryState("not-sent", { ok: false, sent: false, method: "notion-prompt-bridge", reason: committedBeforeSend.reason || promptReceiveFailureReason(committedBeforeSend.editor || editor, text) });
         }
         editor = await liveEditor(committedBeforeSend.editor, 4e3, deadlineAt);
       }
       if (text && !promptMatches(editorText(editor), text)) {
         const committedBeforeClick = await ensurePromptCommitted(editor, text, deadlineAt);
         if (!committedBeforeClick.ok || !promptMatches(editorText(committedBeforeClick.editor || editor), text)) {
-          return { ok: false, sent: false, method: "notion-prompt-bridge", reason: committedBeforeClick.reason || promptReceiveFailureReason(committedBeforeClick.editor || editor, text) };
+          return withDeliveryState("not-sent", { ok: false, sent: false, method: "notion-prompt-bridge", reason: committedBeforeClick.reason || promptReceiveFailureReason(committedBeforeClick.editor || editor, text) });
         }
         editor = committedBeforeClick.editor || editor;
       }
-      if (deadlineExpired(deadlineAt)) return { ok: false, sent: false, method: "notion-prompt-bridge", reason: "Send deadline exceeded" };
+      if (deadlineExpired(deadlineAt)) return withDeliveryState("not-sent", { ok: false, sent: false, method: "notion-prompt-bridge", reason: "Send deadline exceeded" });
       const readyToSend = await waitForNotionReadyToSend(editor, {
         requireImage: files.length > 0,
         minAttachments: files.length,
@@ -3296,25 +3336,46 @@ ${node.nodeValue}`;
         deadlineAt
       });
       if (!readyToSend.ok) {
-        return { ok: false, sent: false, method: "notion-prompt-bridge", reason: readyToSend.message || "Notion AI composer not ready to send" };
+        return withDeliveryState("not-sent", { ok: false, sent: false, method: "notion-prompt-bridge", reason: readyToSend.message || "Notion AI composer not ready to send" });
       }
       editor = readyToSend.composer || editor;
       const beforeOutsideCount = text ? countPromptOutsideEditor(editor, text) : 0;
       const sent = await sendNotionMessage(editor, deadlineAt, payload);
       if (!sent.ok) {
-        return { ok: false, sent: false, method: "notion-prompt-bridge", reason: sent.reason || "Notion AI submit failed" };
+        return withDeliveryState(sent.deliveryState === "unknown" ? "unknown" : "not-sent", {
+          ok: false,
+          sent: false,
+          method: "notion-prompt-bridge",
+          reason: sent.reason || "Notion AI submit failed",
+          submissionNavigation: sent.submissionNavigation
+        });
       }
       const method = sent.method === "notion-bridge-enter" ? "notion-prompt-bridge-enter" : "notion-prompt-bridge-button";
-      if (!text) return { ok: true, sent: true, method, verified: false };
-      if (await waitFor(() => submitted(editor, text, beforeOutsideCount), 2600, 100, deadlineAt)) {
-        return { ok: true, sent: true, method, verified: true };
+      if (!text) {
+        return withDeliveryState("sent", {
+          ok: true,
+          sent: true,
+          method,
+          verified: false,
+          submissionNavigation: sent.submissionNavigation
+        });
       }
-      return {
+      if (await waitFor(() => submitted(editor, text, beforeOutsideCount), 2600, 100, deadlineAt)) {
+        return withDeliveryState("sent", {
+          ok: true,
+          sent: true,
+          method,
+          verified: true,
+          submissionNavigation: sent.submissionNavigation
+        });
+      }
+      return withDeliveryState("unknown", {
         ok: false,
         sent: false,
         method: "notion-prompt-bridge",
-        reason: promptSubmitFailureReason(editor, text)
-      };
+        reason: promptSubmitFailureReason(editor, text),
+        submissionNavigation: sent.submissionNavigation
+      });
     });
     installNotionEventListeners({
       signal: notionSendBridgeAbort.signal,

@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "74eef65473a6f090d918d02fbe44a1aa6469ab71fd20455b2a2a82091962217c";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "f915f5f5dfeb33438f730820a39bb0ee5baaea884f9033b8b46069e7a4bf5c3b";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.39e7dff3b817dd590d108ce155af13e47b28138e33c477502664105276787094";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "39e7dff3b817dd590d108ce155af13e47b28138e33c477502664105276787094";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "e4e372e589be4377c2cc79a334c47981d328d22cf0813e080d1177ce7334b36d";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.e4e372e589be4377c2cc79a334c47981d328d22cf0813e080d1177ce7334b36d";
-  var CONTENT_RUNTIME_SEND_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/send.js", "entryPath": "content-src/content-send.js", "sourceSha256": "7205fb1f4d69392fb5ecf14b1d9480c5a2cbbb704093a885033cfd97aec71c33", "implementationSha256": "62d143f4df7e27d4cb7a817404931783d15a299949cbda33ee1c5b7ef6521ff8", "implementationVersion": "2026.07.16.2+bundle.62d143f4df7e27d4cb7a817404931783d15a299949cbda33ee1c5b7ef6521ff8" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "426370735476decce18503d12b0b93bef44bf00f1701a34441f5bfcd97162659";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.426370735476decce18503d12b0b93bef44bf00f1701a34441f5bfcd97162659";
+  var CONTENT_RUNTIME_SEND_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/send.js", "entryPath": "content-src/content-send.js", "sourceSha256": "a1b3986c7289c1f9a01ed77065d950108cf3796181a892dd16e68c5e5e4e63c7", "implementationSha256": "8d3baca7d2e8e4ecb42adff84772db13e5032625df5a669a3d49114cf47975ce", "implementationVersion": "2026.07.16.2+bundle.8d3baca7d2e8e4ecb42adff84772db13e5032625df5a669a3d49114cf47975ce" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -133,9 +133,6 @@
     if (!el) return "";
     if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return el.value || "";
     return el.innerText || el.textContent || "";
-  }
-  function compareText(value) {
-    return normalize(value).toLowerCase().replace(/\s+/g, "");
   }
   function buttonText(el) {
     if (!el) return "";
@@ -437,7 +434,6 @@
       sleep: sleep2,
       PROMPT_IMAGE_PASTE_STRATEGY_BATCH,
       buttonText: buttonText2,
-      compareText: compareText2,
       text: text2,
       NOTION_SEND_PROMPT_SOURCE: NOTION_SEND_PROMPT_SOURCE2,
       NOTION_SEND_PROMPT_EVENT: NOTION_SEND_PROMPT_EVENT2,
@@ -459,6 +455,9 @@
         if (candidate) return candidate;
       }
       return null;
+    }
+    function promptTextSnapshot(value) {
+      return String(value || "").replace(/\u00a0/g, " ").replace(/\r\n?/g, "\n").trim();
     }
     async function setInputValue(target, value) {
       target.focus?.();
@@ -720,6 +719,42 @@
       const appName = String(data?.appName || "").trim().toLowerCase();
       return appId === "gemini" || /\bgemini\b/.test(appName) || geminiHost();
     }
+    function submissionNavigationBarrierState(appId, href) {
+      let url;
+      try {
+        url = new URL(String(href || ""));
+      } catch {
+        return "unknown";
+      }
+      const host = url.hostname.toLowerCase();
+      const path = (url.pathname || "/").replace(/\/+$/, "") || "/";
+      if (appId === "Gemini") {
+        const validHost = host === "gemini.google.com" || host.endsWith(".gemini.google.com") || host === "bard.google.com";
+        if (!validHost) return "unknown";
+        if (path === "/app") return "required";
+        if (/^\/app\/[^/?#]+/i.test(path)) return "not-required";
+        return "unknown";
+      }
+      if (appId === "NotionAI") {
+        const validHost = host === "app.notion.com" || host === "notion.so" || host === "www.notion.so" || host.endsWith(".notion.so");
+        if (!validHost) return "unknown";
+        if (path === "/ai") return "required";
+        if (path === "/chat") return url.searchParams.get("t") ? "not-required" : "required";
+      }
+      return "unknown";
+    }
+    function submissionNavigationCorrelation(data, appId, marked, method) {
+      const sendId = String(marked?.sendId || data?.sendId || "").trim();
+      const initialHref = String(marked?.initialHref || location.href || "");
+      if (!sendId || !initialHref || appId !== "Gemini" && appId !== "NotionAI") return null;
+      return {
+        sendId,
+        appId,
+        initialHref,
+        barrierState: submissionNavigationBarrierState(appId, initialHref),
+        method: String(method || marked?.method || "submit")
+      };
+    }
     function promptImagePasteStrategy(data = {}) {
       return String(data?.imagePasteStrategy || "").trim().toLowerCase() === PROMPT_IMAGE_PASTE_STRATEGY_BATCH ? PROMPT_IMAGE_PASTE_STRATEGY_BATCH : "sequential";
     }
@@ -853,6 +888,42 @@
         }).join("\n")
       };
     }
+    function promptResidualAttachmentSnapshot(input, options = {}) {
+      if (options.grok) return grokPromptAttachmentSnapshot(input);
+      if (options.gemini) return geminiPromptAttachmentSnapshot(input);
+      const scope = promptComposerScope(input);
+      const removeButtons = qsa2("button,[role='button']", scope).filter((button) => visible2(button) && attachmentRemoveButton(button));
+      const images = qsa2("img[src^='blob:'],img[src^='data:image/']", scope).filter(visible2);
+      const nodes = removeButtons.length >= images.length ? removeButtons : images;
+      const busySelectors = [
+        "[aria-busy='true']",
+        "[role='progressbar']",
+        "progress",
+        "mat-progress-spinner",
+        "mat-progress-bar",
+        "[class*='uploading' i]"
+      ].join(",");
+      let busy = false;
+      if (nodes.length) {
+        try {
+          busy = Array.from(scope.querySelectorAll(busySelectors)).some((node) => visible2(node));
+        } catch {
+        }
+      }
+      return {
+        count: nodes.length,
+        busy,
+        key: nodes.map((node) => {
+          const rect = node.getBoundingClientRect?.();
+          return [
+            node.tagName,
+            buttonText2(node),
+            node.getAttribute?.("src") || "",
+            rect ? `${Math.round(rect.left)}:${Math.round(rect.top)}:${Math.round(rect.width)}:${Math.round(rect.height)}` : ""
+          ].join("|");
+        }).join("\n")
+      };
+    }
     function grokAttachmentRows(scope) {
       const rows = [];
       const seen = /* @__PURE__ */ new Set();
@@ -929,7 +1000,7 @@
     }
     function sendDeadlineAt(data = {}, fallbackMs = 1e4) {
       const value = Number(data?.deadlineAt);
-      return Number.isFinite(value) && value > Date.now() ? value : Date.now() + Math.max(1e3, Number(fallbackMs) || 1e4);
+      return Number.isFinite(value) && value > 0 ? value : Date.now() + Math.max(1e3, Number(fallbackMs) || 1e4);
     }
     function remainingDeadlineMs(deadlineAt, fallbackMs = 1e3) {
       const value = Number(deadlineAt);
@@ -1021,11 +1092,44 @@
     async function waitForPromptAttachmentsCleared(input, options = {}, timeoutMs = 2500, deadlineAt = 0) {
       const start = Date.now();
       while (Date.now() - start < timeoutMs && !deadlineExpired(deadlineAt)) {
-        const snapshot = promptAttachmentSnapshot(input, options);
+        const snapshot = promptResidualAttachmentSnapshot(input, options);
         if (snapshot.count <= 0 && !snapshot.busy) return true;
         if (!await sleepUntilDeadline(120, deadlineAt)) break;
       }
-      return promptAttachmentSnapshot(input, options).count <= 0;
+      const final = promptResidualAttachmentSnapshot(input, options);
+      return final.count <= 0 && !final.busy;
+    }
+    async function preparePromptComposerForRun(input, inputSelector = "", deadlineAt = 0, options = {}) {
+      const existing = promptResidualAttachmentSnapshot(input, options);
+      if (existing.count > 0 || existing.busy) {
+        clearPromptAttachments(input, options);
+        const cleared = await (async () => {
+          const start = Date.now();
+          while (Date.now() - start < 2500 && !deadlineExpired(deadlineAt)) {
+            const snapshot2 = promptResidualAttachmentSnapshot(input, options);
+            if (snapshot2.count <= 0 && !snapshot2.busy) return true;
+            if (!await sleepUntilDeadline(120, deadlineAt)) break;
+          }
+          const snapshot = promptResidualAttachmentSnapshot(input, options);
+          return snapshot.count <= 0 && !snapshot.busy;
+        })();
+        if (!cleared) {
+          return { ok: false, input, reason: "Existing composer attachments could not be cleared" };
+        }
+        input = inputCandidates(inputSelector) || input;
+      }
+      if (deadlineExpired(deadlineAt)) return { ok: false, input, reason: "Send deadline exceeded" };
+      if (promptTextSnapshot(text2(input))) {
+        await setInputValue(input, "");
+        if (!await sleepUntilDeadline(80, deadlineAt)) {
+          return { ok: false, input, reason: "Send deadline exceeded" };
+        }
+        input = inputCandidates(inputSelector) || input;
+        if (promptTextSnapshot(text2(input))) {
+          return { ok: false, input, reason: "Existing composer text could not be cleared" };
+        }
+      }
+      return { ok: true, input };
     }
     async function attachPromptImageOnce(file, input) {
       input?.focus?.();
@@ -1123,11 +1227,11 @@
       return { ok: false, reason: lastReason || "Batch image upload did not become ready" };
     }
     async function commitPastedPromptTextEarly(input, textValue = "", inputSelector = "", deadlineAt = 0) {
-      const expected = compareText2(textValue);
+      const expected = promptTextSnapshot(textValue);
       if (!expected) return { ok: true, input, usedFallback: false };
       if (!await sleepUntilDeadline(80, deadlineAt)) return { ok: false, input, usedFallback: false, reason: "Send deadline exceeded" };
       input = inputCandidates(inputSelector) || input;
-      if (compareText2(text2(input)) === expected) return { ok: true, input, usedFallback: false };
+      if (promptTextSnapshot(text2(input)) === expected) return { ok: true, input, usedFallback: false };
       try {
         await setInputValue(input, textValue);
       } catch (error) {
@@ -1136,10 +1240,10 @@
       if (!await sleepUntilDeadline(90, deadlineAt)) return { ok: false, input, usedFallback: true, reason: "Send deadline exceeded" };
       input = inputCandidates(inputSelector) || input;
       return {
-        ok: compareText2(text2(input)) === expected,
+        ok: promptTextSnapshot(text2(input)) === expected,
         input,
         usedFallback: true,
-        reason: compareText2(text2(input)) === expected ? "" : "Prompt text was not committed immediately after paste"
+        reason: promptTextSnapshot(text2(input)) === expected ? "" : "Prompt text was not committed immediately after paste"
       };
     }
     async function attachGeminiPromptImagesWithRetries(input, files = [], retryCount = 3, inputSelector = "", deadlineAt = 0, textValue = "") {
@@ -1243,12 +1347,12 @@
         const deadlineAt = sendDeadlineAt(data, timeoutMs);
         const timer = setTimeout(() => {
           window.removeEventListener("message", onMessage, true);
-          resolve({ ok: false, sent: false, method: "notion-prompt-bridge", reason: "Notion AI prompt bridge timed out" });
+          resolve({ ok: false, sent: false, deliveryState: "unknown", method: "notion-prompt-bridge", reason: "Notion AI prompt bridge timed out" });
         }, Math.max(1e3, remainingDeadlineMs(deadlineAt, timeoutMs)));
         function finish(result) {
           clearTimeout(timer);
           window.removeEventListener("message", onMessage, true);
-          resolve(result && typeof result === "object" ? result : { ok: false, sent: false, method: "notion-prompt-bridge" });
+          resolve(result && typeof result === "object" ? result : { ok: false, sent: false, deliveryState: "unknown", method: "notion-prompt-bridge" });
         }
         function onMessage(event) {
           const message = event.data;
@@ -1272,6 +1376,7 @@
           finish({
             ok: false,
             sent: false,
+            deliveryState: "not-sent",
             method: "notion-prompt-bridge",
             reason: error?.message || String(error || "Notion AI prompt send failed")
           });
@@ -1284,12 +1389,12 @@
         const deadlineAt = sendDeadlineAt(data, timeoutMs);
         const timer = setTimeout(() => {
           window.removeEventListener("message", onMessage, true);
-          resolve({ ok: false, sent: false, method: "notion-bridge", reason: "Notion AI send bridge timed out" });
+          resolve({ ok: false, sent: false, deliveryState: "unknown", method: "notion-bridge", reason: "Notion AI send bridge timed out" });
         }, Math.max(1e3, remainingDeadlineMs(deadlineAt, timeoutMs)));
         function finish(result) {
           clearTimeout(timer);
           window.removeEventListener("message", onMessage, true);
-          resolve(result && typeof result === "object" ? result : { ok: false, sent: false, method: "notion-bridge" });
+          resolve(result && typeof result === "object" ? result : { ok: false, sent: false, deliveryState: "unknown", method: "notion-bridge" });
         }
         function onMessage(event) {
           const message = event.data;
@@ -1311,6 +1416,7 @@
           finish({
             ok: false,
             sent: false,
+            deliveryState: "not-sent",
             method: "notion-bridge",
             reason: error?.message || String(error || "Notion AI send bridge failed")
           });
@@ -1323,15 +1429,19 @@
       if (result?.ok && result?.sent) {
         return {
           sent: true,
+          deliveryState: "sent",
           method: result.method || "notion-bridge",
-          verified: result.verified !== false
+          verified: result.verified !== false,
+          ...result.submissionNavigation ? { submissionNavigation: result.submissionNavigation } : {}
         };
       }
       return {
         sent: false,
+        deliveryState: result?.deliveryState === "not-sent" ? "not-sent" : "unknown",
         method: result?.method || "notion-bridge",
         verified: false,
-        reason: result?.reason || "Notion AI did not accept the prompt"
+        reason: result?.reason || "Notion AI did not accept the prompt",
+        ...result?.submissionNavigation ? { submissionNavigation: result.submissionNavigation } : {}
       };
     }
     const sendTextRequestCache = window.__CHATCLUB_SEND_TEXT_REQUEST_CACHE__ instanceof Map ? window.__CHATCLUB_SEND_TEXT_REQUEST_CACHE__ : /* @__PURE__ */ new Map();
@@ -1366,44 +1476,71 @@
     }
     async function sendTextUncached(data) {
       if (isNotionSendTarget(data)) return sendNotionText(data);
-      const grok = isGrokSendTarget(data);
-      const kagi = isKagiSendTarget(data);
-      const gemini = isGeminiSendTarget(data);
-      const deadlineAt = sendDeadlineAt(data, Array.isArray(data?.images) && data.images.length ? 6e4 : 1e4);
-      if (deadlineExpired(deadlineAt)) throw new Error("Send deadline exceeded");
-      let input = inputCandidates(data?.inputSelector);
-      if (!input) throw new Error("Input element not found");
-      const files = promptImageFilesFromPayload(data?.images);
-      const textValue = String(data.text || "");
-      if (Array.isArray(data?.images) && data.images.length && !files.length) {
-        throw new Error("Image payload could not be restored");
-      }
-      const batch = promptImagePasteStrategy(data) === PROMPT_IMAGE_PASTE_STRATEGY_BATCH;
-      const geminiBatch = gemini && batch;
-      if (files.length) {
-        const attached = grok ? await attachGrokPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt, textValue) : kagi ? await attachKagiPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt, textValue) : geminiBatch ? await attachGeminiPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt, textValue) : batch ? await attachBatchPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt) : await attachPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt);
-        if (!attached.ok) throw new Error(attached.reason || "Image insertion failed");
-        if (grok || kagi || geminiBatch) input = inputCandidates(data?.inputSelector) || attached.input || input;
-      }
-      if (deadlineExpired(deadlineAt)) throw new Error("Send deadline exceeded");
-      const combinedPaste = files.length > 0 && (grok || kagi || geminiBatch);
-      if (textValue.trim() && (!combinedPaste || compareText2(text2(input)) !== compareText2(textValue))) await setInputValue(input, textValue);
-      await sleepUntilDeadline(grok ? 320 : 140, deadlineAt);
-      const submit = await waitForPromptSubmitReady(input, data?.sendButtonSelector, deadlineAt, files.length ? 12e3 : 8e3);
-      if (submit) {
+      let deliveryState = "not-sent";
+      let submissionNavigation = null;
+      try {
+        const grok = isGrokSendTarget(data);
+        const kagi = isKagiSendTarget(data);
+        const gemini = isGeminiSendTarget(data);
+        const deadlineAt = sendDeadlineAt(data, Array.isArray(data?.images) && data.images.length ? 6e4 : 1e4);
+        if (deadlineExpired(deadlineAt)) throw new Error("Send deadline exceeded");
+        let input = inputCandidates(data?.inputSelector);
+        if (!input) throw new Error("Input element not found");
+        const files = promptImageFilesFromPayload(data?.images);
+        const textValue = String(data.text || "");
+        if (Array.isArray(data?.images) && data.images.length && !files.length) {
+          throw new Error("Image payload could not be restored");
+        }
+        const prepared = await preparePromptComposerForRun(
+          input,
+          data?.inputSelector || "",
+          deadlineAt,
+          { grok, gemini }
+        );
+        if (!prepared.ok) throw new Error(prepared.reason || "Composer could not be prepared");
+        input = prepared.input || input;
+        const batch = promptImagePasteStrategy(data) === PROMPT_IMAGE_PASTE_STRATEGY_BATCH;
+        const geminiBatch = gemini && batch;
+        if (files.length) {
+          const attached = grok ? await attachGrokPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt, textValue) : kagi ? await attachKagiPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt, textValue) : geminiBatch ? await attachGeminiPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt, textValue) : batch ? await attachBatchPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt) : await attachPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt);
+          if (!attached.ok) throw new Error(attached.reason || "Image insertion failed");
+          if (grok || kagi || geminiBatch) input = inputCandidates(data?.inputSelector) || attached.input || input;
+        }
+        if (deadlineExpired(deadlineAt)) throw new Error("Send deadline exceeded");
+        const combinedPaste = files.length > 0 && (grok || kagi || geminiBatch);
+        if (textValue.trim() && (!combinedPaste || promptTextSnapshot(text2(input)) !== promptTextSnapshot(textValue))) {
+          await setInputValue(input, textValue);
+        }
+        await sleepUntilDeadline(grok ? 320 : 140, deadlineAt);
+        const submit = await waitForPromptSubmitReady(input, data?.sendButtonSelector, deadlineAt, files.length ? 12e3 : 8e3);
+        if (submit) {
+          if (!contentBridgeIsCurrent()) throw new Error("Send bridge was superseded before submit");
+          const marked2 = markSubmissionNavigation(data, "button");
+          if (gemini) submissionNavigation = submissionNavigationCorrelation(data, "Gemini", marked2, "button");
+          deliveryState = "unknown";
+          if (!clickPromptSubmit(submit)) throw new Error("Submit button activation failed");
+          return { sent: true, deliveryState: "sent", method: "button", verified: false, ...submissionNavigation ? { submissionNavigation } : {} };
+        }
+        if (files.length) throw new Error("Submit button stayed disabled");
+        if (deadlineExpired(deadlineAt)) throw new Error("Send deadline exceeded");
         if (!contentBridgeIsCurrent()) throw new Error("Send bridge was superseded before submit");
-        markSubmissionNavigation(data, "button");
-        if (!clickPromptSubmit(submit)) throw new Error("Submit button activation failed");
-        return { sent: true, method: "button", verified: false };
+        const keyInit = { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true };
+        const marked = markSubmissionNavigation(data, "enter");
+        if (gemini) submissionNavigation = submissionNavigationCorrelation(data, "Gemini", marked, "enter");
+        deliveryState = "unknown";
+        input.dispatchEvent(new KeyboardEvent("keydown", keyInit));
+        input.dispatchEvent(new KeyboardEvent("keyup", keyInit));
+        return { sent: true, deliveryState: "sent", method: "enter", verified: false, ...submissionNavigation ? { submissionNavigation } : {} };
+      } catch (error) {
+        return {
+          sent: false,
+          deliveryState,
+          method: "composer",
+          verified: false,
+          reason: error?.message || String(error || "Send failed"),
+          ...submissionNavigation ? { submissionNavigation } : {}
+        };
       }
-      if (files.length) throw new Error("Submit button stayed disabled");
-      if (deadlineExpired(deadlineAt)) throw new Error("Send deadline exceeded");
-      if (!contentBridgeIsCurrent()) throw new Error("Send bridge was superseded before submit");
-      const keyInit = { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true };
-      markSubmissionNavigation(data, "enter");
-      input.dispatchEvent(new KeyboardEvent("keydown", keyInit));
-      input.dispatchEvent(new KeyboardEvent("keyup", keyInit));
-      return { sent: true, method: "enter", verified: false };
     }
     return Object.freeze({
       sendText,
@@ -1424,7 +1561,6 @@
       isDisabledElement,
       sleep,
       buttonText,
-      compareText,
       text,
       PROMPT_IMAGE_PASTE_STRATEGY_BATCH: "batch",
       NOTION_SEND_PROMPT_SOURCE: CONTENT_PROTOCOL.NOTION_SEND_PROMPT_SOURCE,

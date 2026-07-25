@@ -139,6 +139,9 @@ export class FrameRuntimePort {
     if (!spec) throw new FrameCommandError("REMOTE_ERROR", `Unknown frame command: ${command}`, { command, delivered: false });
     const timeoutMs = boundedTimeout(options.timeoutMs, spec.timeoutMs);
     const features = [...new Set([...(spec.features || []), ...(options.features || [])])];
+    const expectedDocumentId = options.expectedDocumentId === undefined
+      ? null
+      : String(options.expectedDocumentId || "").trim();
     if (options.signal?.aborted) {
       throw new FrameCommandError("ABORTED", `Frame command aborted: ${command}`, { command, delivered: false });
     }
@@ -151,10 +154,35 @@ export class FrameRuntimePort {
     }
 
     const send = async () => {
-      const documentId = bridgeDocumentId(iframe);
-      if (!documentId) throw new FrameCommandError("NOT_REGISTERED", `Content document is not registered: ${command}`, { command, delivered: false });
+      if (!iframe || iframe.isConnected === false) {
+        throw new FrameCommandError("STALE_DOCUMENT", `iframe detached before delivery: ${command}`, {
+          command,
+          delivered: false
+        });
+      }
       const appTabId = await this.currentTabId();
       if (!Number.isInteger(appTabId)) throw new FrameCommandError("NOT_REGISTERED", `Extension tab is unavailable: ${command}`, { command, delivered: false });
+      if (iframe.isConnected === false) {
+        throw new FrameCommandError("STALE_DOCUMENT", `iframe detached before delivery: ${command}`, {
+          command,
+          delivered: false
+        });
+      }
+      const currentDocumentId = bridgeDocumentId(iframe);
+      if (expectedDocumentId !== null && currentDocumentId !== expectedDocumentId) {
+        throw new FrameCommandError("STALE_DOCUMENT", `Content document changed before delivery: ${command}`, {
+          command,
+          delivered: false
+        });
+      }
+      const documentId = expectedDocumentId ?? currentDocumentId;
+      if (!documentId) throw new FrameCommandError("NOT_REGISTERED", `Content document is not registered: ${command}`, { command, delivered: false });
+      if (options.signal?.aborted) {
+        throw new FrameCommandError("ABORTED", `Frame command aborted before delivery: ${command}`, {
+          command,
+          delivered: false
+        });
+      }
       let response;
       try {
         response = await abortable(this.requestBackground(
@@ -185,6 +213,7 @@ export class FrameRuntimePort {
       const frameError = asFrameError(error, command);
       const recoverableBeforeDelivery = !spec.mutating
         && frameError.delivered === false
+        && (expectedDocumentId === null || bridgeDocumentId(iframe) === expectedDocumentId)
         && ["NOT_REGISTERED", "STALE_DOCUMENT", "INJECTION_FAILED"].includes(frameError.code);
       if (!recoverableBeforeDelivery) throw frameError;
       this.invalidate(iframe, `${command}:${frameError.code}`, {

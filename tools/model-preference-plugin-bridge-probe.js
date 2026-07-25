@@ -5,7 +5,7 @@
   const activeRuns = new Map();
   const focusProbe = { blurCount: 0, focusCount: 0, composing: false, events: [] };
   const GATE_STATES = new Set(["bootstrapping", "applying", "failed", "ready"]);
-  const BLOCKING_GATE_STATES = new Set(["bootstrapping", "applying", "failed"]);
+  const MODEL_UNSETTLED_GATE_STATES = new Set(["bootstrapping", "applying", "failed"]);
 
   try { window[API_NAME]?.dispose?.(); } catch {}
 
@@ -247,10 +247,18 @@
     const state = inferredGateState(shell, input);
     const pendingCount = datasetCount(shell, "modelGatePendingCount");
     const failedCount = datasetCount(shell, "modelGateFailedCount");
+    const queuePendingCount = datasetCount(shell, "promptQueuePendingCount");
     const failedAppIds = commaList(shell?.dataset?.modelGateFailedAppIds);
+    const queueBadge = shell?.querySelector?.(".prompt-send-queue-badge") || null;
+    const queueStatus = shell?.querySelector?.(".prompt-send-queue-status") || null;
+    const promptBlocked = Boolean(
+      input
+      && (input.readOnly || input.disabled || input.getAttribute("aria-busy") === "true")
+    );
     return {
       state,
-      blocked: BLOCKING_GATE_STATES.has(state),
+      blocked: promptBlocked,
+      modelUnsettled: MODEL_UNSETTLED_GATE_STATES.has(state),
       exposedState: normalizedGateState(input?.dataset?.modelGateState || shell?.dataset?.modelGateState) || null,
       counts: {
         pending: pendingCount,
@@ -265,7 +273,8 @@
               modelGateState: String(shell.dataset.modelGateState || ""),
               modelGatePendingCount: shell.dataset.modelGatePendingCount ?? null,
               modelGateFailedCount: shell.dataset.modelGateFailedCount ?? null,
-              modelGateFailedAppIds: String(shell.dataset.modelGateFailedAppIds || "")
+              modelGateFailedAppIds: String(shell.dataset.modelGateFailedAppIds || ""),
+              promptQueuePendingCount: shell.dataset.promptQueuePendingCount ?? null
             }
           }
         : { found: false, classes: [], dataset: {} },
@@ -291,6 +300,13 @@
         visible: Boolean(status && !status.hidden),
         hidden: Boolean(!status || status.hidden),
         text: String(statusTextNode?.textContent || "").replace(/\s+/g, " ").trim()
+      },
+      queue: {
+        pendingCount: queuePendingCount,
+        badgeVisible: Boolean(queueBadge && !queueBadge.hidden),
+        badgeText: String(queueBadge?.textContent || "").trim(),
+        liveRegionVisible: Boolean(queueStatus && !queueStatus.hidden),
+        liveText: String(queueStatus?.textContent || "").replace(/\s+/g, " ").trim()
       },
       controls: modelGateControls(),
       capturedAt: Date.now()
@@ -319,7 +335,7 @@
     const failed = Boolean(normalizedAppId && failedAppIds.includes(normalizedAppId));
     const configured = configuredFlag ?? ((exposedTarget || explicitState || failed) ? true : null);
     let blocking = null;
-    if (failed || BLOCKING_GATE_STATES.has(explicitState)) blocking = true;
+    if (failed || MODEL_UNSETTLED_GATE_STATES.has(explicitState)) blocking = true;
     else if (explicitState === "ready" || configured === false) blocking = false;
     return {
       ...frameInfo(frame, index),
@@ -363,61 +379,73 @@
         : Math.max(0, gate.counts.pending - knownPendingCount),
       unmatchedFailedAppIds,
       note: perFrameExposed
-        ? "Blocking frames are derived from per-frame DOM data."
-        : "Only aggregate gate data is exposed; unknown frames are intentionally not guessed."
+        ? "Waiting frames are derived from per-frame DOM data; they do not block Composer editing."
+        : "Only aggregate model-state data is exposed; unknown frames are intentionally not guessed."
     };
   }
 
   function safeGateBlockProbe() {
     const gate = modelGateSnapshot();
     const controls = gate.controls;
-    const inputLocked = gate.prompt.found && gate.prompt.readOnly === true;
-    const gateBlocked = gate.blocked;
-    const sendBlocked = controls.send.allDisabled === true;
+    const inputBlocked = gate.prompt.found
+      ? (
+          gate.prompt.readOnly === true
+          || gate.prompt.disabled === true
+          || gate.prompt.ariaBusy === "true"
+        )
+      : null;
+    const hasPromptContent = Number(gate.prompt.valueLength) > 0;
+    const sendBlocked = hasPromptContent && controls.send.allDisabled === true;
     const actionBlocked = controls.actionTrigger.allDisabled === true;
-    const actionMenuItemsBlocked = controls.actionMenuItems.count === 0 || controls.actionMenuItems.allDisabled === true;
     const filePickerBlocked = controls.imageFileInput.allDisabled === true;
-    const imageRemoveBlocked = controls.imageRemove.count === 0 || controls.imageRemove.allDisabled === true;
-    const clearBlocked = controls.clear.count === 0 || controls.clear.allDisabled === true;
+    const imageRemoveBlocked = controls.imageRemove.count > 0 ? controls.imageRemove.allDisabled === true : null;
+    const clearBlocked = hasPromptContent && controls.clear.count > 0
+      ? controls.clear.allDisabled === true
+      : null;
     const capabilities = {
-      textEntry: { blocked: inputLocked, evidence: ["textarea.readOnly"] },
+      textEntry: { blocked: inputBlocked, evidence: ["textarea.readOnly", "textarea.disabled", "textarea.ariaBusy"] },
       enterSubmit: {
-        blocked: gateBlocked && inputLocked && sendBlocked,
+        blocked: inputBlocked,
         inferred: true,
-        evidence: ["gate.blocked", "textarea.readOnly", "sendButton.disabled"]
+        evidence: ["textarea editability", "Composer keydown remains installed"]
       },
-      sendButton: { blocked: sendBlocked, evidence: ["sendButton.disabled"] },
+      sendButton: {
+        blocked: hasPromptContent ? sendBlocked : null,
+        evidence: ["sendButton.disabled when prompt has content"]
+      },
+      queueAdmission: {
+        blocked: inputBlocked === null ? null : inputBlocked || sendBlocked,
+        evidence: ["textarea editability", "sendButton.disabled", "promptQueuePendingCount"]
+      },
       paste: {
-        blocked: gateBlocked && inputLocked,
+        blocked: inputBlocked,
         inferred: true,
-        evidence: ["gate.blocked", "textarea.readOnly"]
+        evidence: ["textarea editability"]
       },
       drop: {
-        blocked: gateBlocked && inputLocked,
+        blocked: inputBlocked,
         inferred: true,
-        evidence: ["gate.blocked", "textarea.readOnly"]
+        evidence: ["textarea editability"]
       },
       imagePicker: {
         blocked: filePickerBlocked && actionBlocked,
         evidence: ["imageFileInput.disabled", "actionTrigger.disabled"]
       },
-      imageRemoval: { blocked: imageRemoveBlocked, evidence: ["imageRemove.disabled-or-absent"] },
+      imageRemoval: { blocked: imageRemoveBlocked, evidence: ["present imageRemove.disabled"] },
       promptActions: {
-        blocked: actionBlocked && actionMenuItemsBlocked,
-        evidence: ["actionTrigger.disabled", "openActionMenuItems.disabled-or-absent"]
+        blocked: actionBlocked,
+        evidence: ["actionTrigger.disabled"]
       },
-      clearPrompt: { blocked: clearBlocked, evidence: ["clearButton.disabled-or-absent"] }
+      clearPrompt: { blocked: clearBlocked, evidence: ["present clearButton.disabled when prompt has content"] }
     };
     const required = [
       "textEntry",
       "enterSubmit",
-      "sendButton",
+      "queueAdmission",
       "paste",
       "drop",
       "imagePicker",
-      "imageRemoval",
-      "promptActions",
-      "clearPrompt"
+      "promptActions"
     ];
     return {
       safe: true,
@@ -426,10 +454,8 @@
       method: "DOM attributes only; inferred event paths are never dispatched",
       gate,
       capabilities,
-      allBlocked: gateBlocked ? required.every((key) => capabilities[key].blocked === true) : null,
-      discrepancies: gateBlocked
-        ? required.filter((key) => capabilities[key].blocked !== true)
-        : []
+      allNonBlocking: required.every((key) => capabilities[key].blocked === false),
+      discrepancies: required.filter((key) => capabilities[key].blocked !== false)
     };
   }
 

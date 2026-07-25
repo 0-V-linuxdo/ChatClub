@@ -126,6 +126,30 @@ globalThis.document = { addEventListener() {} };
   assert.match(iframeEditor, /openIframeRiskConfirmation\(addedRisks/);
   assert.match(iframeEditor, /iframe-permission-editor-modal/);
   assert.deepEqual(stateKeys(modelsSource), ["modelPreferenceDraft", "options"]);
+  const failurePolicySelect = functionSource(modelsSource, "failurePolicySelect");
+  const failureOverrideSelect = functionSource(modelsSource, "failureOverrideSelect");
+  const modelAutosave = functionSource(modelsSource, "flushAutosave", true);
+  assert.match(failurePolicySelect, /queueOptionsAutoSave\(\{ modelPreferenceFailurePolicy:/);
+  assert.match(failureOverrideSelect, /queueOptionsAutoSave\(\{ modelPreferenceFailureOverrides:/);
+  assert.ok(
+    failurePolicySelect.indexOf("state.options.modelPreferenceFailurePolicy = failurePolicyDraft")
+      < failurePolicySelect.indexOf("queueOptionsAutoSave"),
+    "a changed global failure policy must become visible to Composer before asynchronous persistence"
+  );
+  assert.ok(
+    failureOverrideSelect.indexOf("state.options.modelPreferenceFailureOverrides = failureOverridesDraft")
+      < failureOverrideSelect.indexOf("queueOptionsAutoSave"),
+    "a changed per-site failure override must become visible to Composer before asynchronous persistence"
+  );
+  assert.doesNotMatch(failurePolicySelect, /applyPreferredModels/);
+  assert.doesNotMatch(failureOverrideSelect, /applyPreferredModels/);
+  assert.match(modelAutosave, /if \(applyModels\) await Promise\.resolve\(applyPreferredModels/);
+  assert.match(
+    modelAutosave,
+    /const savedOptions = await saveOptionsPatch\(patch\)[\s\S]*modelPreferenceFailurePolicy: failurePolicyDraft[\s\S]*modelPreferenceFailureOverrides: failureOverridesDraft/,
+    "an older in-flight save must not temporarily overwrite newer visible failure-policy drafts"
+  );
+  assert.match(modelsSource, /t\("modelPreferences\.failureOverride"\)/);
   assert.deepEqual(stateKeys(historySource), [
     "promptHistoryCursor",
     "promptHistoryDraft",
@@ -164,6 +188,8 @@ globalThis.document = { addEventListener() {} };
     language: "system",
     messageNavigatorEffectMode: "border",
     messageNavigatorSiteConfigs: [],
+    modelPreferenceFailureOverrides: {},
+    modelPreferenceFailurePolicy: "send-current",
     modelPreferenceOrder: [],
     modelPreferences: {},
     optimizeApiProfileId: "api-1",
@@ -197,6 +223,11 @@ globalThis.document = { addEventListener() {} };
     settingsStateModule.SETTINGS_OPTION_CAPABILITIES.apps.write,
     ["builtinChatAppOrder", "builtinChatAppIframeConfigs"],
     "Apps state and persistence enforcement must share one option capability"
+  );
+  assert.deepEqual(
+    settingsStateModule.SETTINGS_OPTION_CAPABILITIES.models.write,
+    ["modelPreferenceFailureOverrides", "modelPreferenceFailurePolicy", "modelPreferenceOrder", "modelPreferences"],
+    "Model settings must own preferred-model selection and failure handling"
   );
 
   assert.equal(ports.messageNavigation.options.messageNavigatorEffectMode, "border");
@@ -254,7 +285,6 @@ globalThis.document = { addEventListener() {} };
     [historyModule.createPromptHistorySettingsSection, ports.history, {
       svgIcon: sharedDependencies.svgIcon,
       setPromptImages() {},
-      ensurePromptInputReady: () => true,
       syncPromptInputNode: () => null
     }],
     [functionalAnomaliesModule.createFunctionalAnomaliesSettingsSection, ports.functionalAnomalies, {

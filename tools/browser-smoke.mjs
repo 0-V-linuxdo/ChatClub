@@ -1133,14 +1133,14 @@ async function firefoxSmoke(extensionDirectory, fixtureUrl) {
   const binary = firefoxBinary();
   if (!binary) diagnostic("Firefox binary not found; set FIREFOX_BINARY to Firefox 136 or Firefox Nightly");
   const options = new firefox.Options().setBinary(binary);
-  options.addArguments("-remote-allow-system-access");
   if (process.env.CHATCLUB_SMOKE_HEADFUL !== "1") options.addArguments("-headless");
   let driver;
   try {
     const builder = new selenium.Builder().forBrowser("firefox").setFirefoxOptions(options);
-    if (process.env.GECKODRIVER_BINARY) {
-      builder.setFirefoxService(new firefox.ServiceBuilder(process.env.GECKODRIVER_BINARY));
-    }
+    const service = new firefox.ServiceBuilder(process.env.GECKODRIVER_BINARY);
+    service.addArguments("--allow-system-access");
+    if (process.env.CHATCLUB_SMOKE_DRIVER_LOG === "1") service.setStdio("inherit");
+    builder.setFirefoxService(service);
     driver = await builder.build();
   } catch (error) {
     diagnostic(`Firefox WebDriver could not start (${error.message}); install geckodriver or set GECKODRIVER_BINARY`);

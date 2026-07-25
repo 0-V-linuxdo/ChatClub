@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "74eef65473a6f090d918d02fbe44a1aa6469ab71fd20455b2a2a82091962217c";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "f915f5f5dfeb33438f730820a39bb0ee5baaea884f9033b8b46069e7a4bf5c3b";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.39e7dff3b817dd590d108ce155af13e47b28138e33c477502664105276787094";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "39e7dff3b817dd590d108ce155af13e47b28138e33c477502664105276787094";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "e4e372e589be4377c2cc79a334c47981d328d22cf0813e080d1177ce7334b36d";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.e4e372e589be4377c2cc79a334c47981d328d22cf0813e080d1177ce7334b36d";
-  var CONTENT_RUNTIME_PREFERRED_MODEL_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preferred-model.js", "entryPath": "content-src/content-preferred-model.js", "sourceSha256": "c2a9f205b61493cd917d0728d7028c78f7df70f6e746b59b329043297394690f", "implementationSha256": "c6d66a9c78750bfd831f6db619f965102fdaef9436fa2eed21bfa1d967ab3ffd", "implementationVersion": "2026.07.16.2+bundle.c6d66a9c78750bfd831f6db619f965102fdaef9436fa2eed21bfa1d967ab3ffd" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "426370735476decce18503d12b0b93bef44bf00f1701a34441f5bfcd97162659";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.426370735476decce18503d12b0b93bef44bf00f1701a34441f5bfcd97162659";
+  var CONTENT_RUNTIME_PREFERRED_MODEL_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preferred-model.js", "entryPath": "content-src/content-preferred-model.js", "sourceSha256": "36993790d84a2749b76d33106b0d16b3efe9d77507bb351c54e92e872ebbec16", "implementationSha256": "771176edc703b3e4310ad74921e0019591517203ccbe8acaa2f3bf7aa76874a1", "implementationVersion": "2026.07.16.2+bundle.771176edc703b3e4310ad74921e0019591517203ccbe8acaa2f3bf7aa76874a1" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {

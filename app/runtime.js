@@ -100,17 +100,12 @@ const frameBridgeWorkspaceBinding = createBindOnceControllerPort("Frame Bridge W
 ]);
 const composerPreferredModelBinding = createBindOnceControllerPort("Composer Preferred Model", [
   "armPreferredModelSubmissionNavigation",
-  "capturePreferredModelLockedPromptSnapshot",
-  "ensurePreferredModelInputReady",
   "finishPreferredModelSubmissionNavigation",
-  "handlePreferredModelPromptCompositionEnd",
-  "handlePreferredModelPromptCompositionStart",
-  "handlePromptBlur",
-  "notifyPreferredModelGateBlocked",
-  "preferredModelInputGateIsLocked",
-  "preferredModelPromptCompositionIsActive",
-  "rememberPreferredModelLockedPromptSnapshot",
-  "restorePreferredModelLockedPromptSnapshot"
+  "preferredModelFailurePolicyForApp",
+  "preferredModelFrameReadiness",
+  "preferredModelFrameReadinessIsCurrent",
+  "waitForPreferredModelFrame",
+  "waitForPreferredModelSubmissionBarrier"
 ]);
 const topbarPreferredModelBinding = createBindOnceControllerPort("Topbar Preferred Model", [
   "syncPreferredModelInputGate"
@@ -169,7 +164,6 @@ const preferredModelController = createPreferredModelController({
   workspace: workspaceBinding.port,
   framePort: frameRuntimePort,
   appRoot,
-  composer: composerController.preferredModelPort,
   verifiedCurrentContentFrameRegistration: frameBridgeBinding.port.verifiedCurrentContentFrameRegistration,
   prepareContentFrameRuntime: frameBridgeBinding.port.prepareContentFrameRuntime,
   recordFunctionalAnomaly
@@ -215,7 +209,6 @@ const initializeTopbarPromptPlaceholder = topbarController.initializePlaceholder
 const syncTopbarPromptPlaceholder = topbarController.syncPlaceholder;
 const syncPromptInputNode = composerController.syncInputNode;
 const setPromptImages = composerController.setImages;
-const ensurePreferredModelInputReady = composerPreferredModelBinding.port.ensurePreferredModelInputReady;
 const focusPromptInput = composerController.focusInput;
 const closePromptActionsMenu = composerController.closeActionsMenu;
 const closeSettingsJumpMenu = topbarController.closeSettingsMenu;
@@ -275,7 +268,6 @@ const appContext = Object.freeze({
   state: featureState.optimize,
   svgIcon,
   syncPromptInputNode,
-  ensurePromptInputReady: ensurePreferredModelInputReady,
   recordFunctionalAnomaly
 });
 const optimizeController = createOptimizeController(appContext);
@@ -470,7 +462,6 @@ function ensureSettingsController() {
           svgIcon,
           syncPromptInputNode,
           setPromptImages,
-          ensurePromptInputReady: ensurePreferredModelInputReady,
           notifyConfigReload,
           render,
           syncTopbar,
@@ -497,9 +488,38 @@ function ensureSettingsController() {
   return settingsControllerPromise;
 }
 
-async function saveOptionsPatch(patch = {}) {
-  state.options = await saveOptions({ ...state.options, ...patch });
-  return state.options;
+let optionsPatchWriteTail = Promise.resolve();
+const pendingOptionsPatches = [];
+
+function pendingOptionsPatchOverlay() {
+  return pendingOptionsPatches.reduce(
+    (overlay, entry) => Object.assign(overlay, entry.patch),
+    {}
+  );
+}
+
+function saveOptionsPatch(patch = {}) {
+  const acceptedPatch = { ...patch };
+  const entry = { patch: acceptedPatch };
+  pendingOptionsPatches.push(entry);
+  state.options = { ...state.options, ...acceptedPatch };
+  const write = async () => {
+    try {
+      const savedOptions = await saveOptions({ ...state.options, ...acceptedPatch });
+      const entryIndex = pendingOptionsPatches.indexOf(entry);
+      if (entryIndex >= 0) pendingOptionsPatches.splice(entryIndex, 1);
+      state.options = { ...savedOptions, ...pendingOptionsPatchOverlay() };
+      return state.options;
+    } catch (error) {
+      const entryIndex = pendingOptionsPatches.indexOf(entry);
+      if (entryIndex >= 0) pendingOptionsPatches.splice(entryIndex, 1);
+      state.options = { ...state.options, ...pendingOptionsPatchOverlay() };
+      throw error;
+    }
+  };
+  const queued = optionsPatchWriteTail.catch(() => {}).then(write);
+  optionsPatchWriteTail = queued.then(() => undefined, () => undefined);
+  return queued;
 }
 
 
@@ -716,7 +736,6 @@ async function deleteThreadOnFrames() {
 }
 
 async function optimizeCurrentPrompt() {
-  if (!ensurePreferredModelInputReady()) return;
   return optimizeController.optimizeCurrentPrompt();
 }
 
@@ -793,7 +812,6 @@ async function openCustomAppEditor() {
 }
 
 async function openPromptLibraryDialog() {
-  if (!ensurePreferredModelInputReady()) return;
   try {
     return (await ensureSettingsController()).openPromptLibraryDialog();
   } catch (error) {
@@ -802,7 +820,6 @@ async function openPromptLibraryDialog() {
 }
 
 async function insertTextIntoPrompt(text) {
-  if (!ensurePreferredModelInputReady()) return;
   try {
     return (await ensureSettingsController()).insertTextIntoPrompt(text);
   } catch (error) {

@@ -586,6 +586,35 @@ export function createFrameBridgeController(dependencies = {}) {
     return iframe || null;
   }
 
+  function frameLifecycleBelongsToCurrentDocument(iframe, message = {}, context = {}) {
+    const contextDocumentId = String(context.bridgeDocumentId || "");
+    return Boolean(
+      iframe
+      && contextDocumentId
+      && String(iframe.dataset?.preferredModelDocumentId || "") === contextDocumentId
+      && String(message.data?.documentId || "") === contextDocumentId
+    );
+  }
+
+  function handleAuthenticatedFrameLifecycle(message = {}, context = {}, sourceWindow = null) {
+    const controller = workspaceController();
+    const iframe = controller.iframeForWindow(sourceWindow);
+    if (!frameLifecycleBelongsToCurrentDocument(iframe, message, context)) return false;
+    if (message.lifecycleAction === "locationChanged") {
+      controller.rememberFrameLocation(iframe, message.data || {});
+      return true;
+    }
+    if (message.lifecycleAction === "contentUnloading") {
+      frameBindingChallenges.invalidate(iframe);
+      iframe.dataset.preferredModelNavigationInvalidated = "1";
+      invalidateContentRuntimeCapabilityLedger(iframe);
+      delete iframe.dataset.injectedBrowserDocumentId;
+      invalidatePreferredModelFrame(iframe, "content-unloading", { clearDocumentId: true });
+      return true;
+    }
+    return false;
+  }
+
   function installRuntimeEventBridge() {
     const api = extensionApi();
     if (!api?.runtime?.onMessage?.addListener) return;
@@ -616,20 +645,7 @@ export function createFrameBridgeController(dependencies = {}) {
           return;
         }
         if (message.action !== "frameLifecycle") return;
-        const controller = workspaceController();
-        const iframe = controller.iframeForWindow(sourceWindow);
-        if (!iframe || message.data?.documentId !== context.bridgeDocumentId) return;
-        if (message.lifecycleAction === "locationChanged") {
-          controller.rememberFrameLocation(iframe, message.data || {});
-          return;
-        }
-        if (message.lifecycleAction === "contentUnloading") {
-          frameBindingChallenges.invalidate(iframe);
-          iframe.dataset.preferredModelNavigationInvalidated = "1";
-          invalidateContentRuntimeCapabilityLedger(iframe);
-          delete iframe.dataset.injectedBrowserDocumentId;
-          invalidatePreferredModelFrame(iframe, "content-unloading", { clearDocumentId: true });
-        }
+        handleAuthenticatedFrameLifecycle(message, context, sourceWindow);
       })().catch((error) => console.warn("[ChatClub] Runtime shortcut action failed", error));
       return false;
     });

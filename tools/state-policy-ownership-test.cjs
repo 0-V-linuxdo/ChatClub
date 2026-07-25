@@ -49,6 +49,8 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
   const rootState = stateModule.createAppState();
   rootState.options = {
     themeMode: "dark",
+    modelPreferenceFailureOverrides: { Gemini: "inherit" },
+    modelPreferenceFailurePolicy: "send-current",
     modelPreferences: { Gemini: "pro" },
     messageNavigatorEffectMode: "border",
     nested: { enabled: true }
@@ -101,6 +103,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
   assert.throws(() => Object.preventExtensions(composer.options), /read-only app state\.options/);
   assert.equal(Object.isExtensible(rootState.options), true, "read-only meta operations must not affect root state");
   assert.throws(() => settings.appearance.options.modelPreferences, /settings\.appearance cannot read/);
+  assert.throws(() => settings.appearance.options.modelPreferenceFailurePolicy, /settings\.appearance cannot read/);
   assert.throws(() => {
     settings.appearance.options = { ...rootState.options, modelPreferences: { Gemini: "flash" } };
   }, /cannot mutate app state\.options\.modelPreferences/);

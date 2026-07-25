@@ -6,7 +6,7 @@ import {
 } from "../../shared/constants.js";
 import { t } from "../../shared/i18n.js";
 import { createId } from "../../shared/storage-schema.js";
-import { el, toast } from "../../ui/dom.js";
+import { el } from "../../ui/dom.js";
 import { createFrameToast } from "../../ui/frame-toast.js";
 import { validateControllerContract } from "../controller-contract.js";
 import { createFrameRequest } from "../frame-request.js";
@@ -35,7 +35,6 @@ export function createPreferredModelController(dependencies = {}) {
     workspace,
     framePort,
     appRoot,
-    composer,
     verifiedCurrentContentFrameRegistration,
     prepareContentFrameRuntime,
     recordFunctionalAnomaly
@@ -44,46 +43,23 @@ export function createPreferredModelController(dependencies = {}) {
     workspace: "object",
     framePort: "object",
     appRoot: "object",
-    composer: "object",
     verifiedCurrentContentFrameRegistration: "function",
     prepareContentFrameRuntime: "function",
     recordFunctionalAnomaly: "function"
   });
-  for (const method of [
-    "normalizePromptImages",
-    "rememberPromptSelection",
-    "syncPromptCollapsedPreview",
-    "restorePromptSelection",
-    "closePromptActionsMenu",
-    "promptHasContent",
-    "collapsePromptInput"
-  ]) {
-    if (typeof composer[method] !== "function") {
-      throw new TypeError(`Preferred Model composer port requires ${method}().`);
-    }
-  }
   for (const method of ["currentFrames", "frameApp"]) {
     if (typeof workspace[method] !== "function") {
       throw new TypeError(`Preferred Model workspace port requires ${method}().`);
     }
   }
 
-  const {
-    normalizePromptImages,
-    rememberPromptSelection,
-    syncPromptCollapsedPreview,
-    restorePromptSelection,
-    closePromptActionsMenu,
-    promptHasContent,
-    collapsePromptInput
-  } = composer;
-
   const preferredModelApplyRuns = new Map();
-  let preferredModelPromptComposing = false;
-  let preferredModelComposingPromptInput = null;
+  const preferredModelFrameWaiters = new Set();
+  const preferredModelSubmissionWaiters = new Set();
+  const preferredModelSubmissionNavigations = new WeakMap();
+  const preferredModelSubmissionNavigationFrames = new Set();
+  const preferredModelSubmissionOutcomes = new WeakMap();
   let preferredModelGateBootstrapping = true;
-  let preferredModelLockedPromptSnapshot = null;
-  let preferredModelGateBlockedToastAt = 0;
   let preferredModelFrameCleanupObserver = null;
 
   function activeWorkspace() {
@@ -125,56 +101,12 @@ export function createPreferredModelController(dependencies = {}) {
     };
   }
 
-  function preferredModelInputGateIsLocked() {
-    return preferredModelState.preferredModelGateState !== "ready";
-  }
-
-  function preferredModelPromptSnapshotFromState() {
-    return {
-      text: String(preferredModelState.promptText || ""),
-      images: normalizePromptImages(preferredModelState.promptImages),
-      selection: { ...(preferredModelState.promptSelection || { start: 0, end: 0, direction: "none" }) }
-    };
-  }
-
-  function rememberPreferredModelLockedPromptSnapshot() {
-    preferredModelLockedPromptSnapshot = preferredModelPromptSnapshotFromState();
-    return preferredModelLockedPromptSnapshot;
-  }
-
-  function capturePreferredModelLockedPromptSnapshot() {
-    const inputNode = document.querySelector(".prompt-input");
-    if (inputNode) {
-      preferredModelState.promptText = inputNode.value;
-      rememberPromptSelection(inputNode);
-    }
-    return rememberPreferredModelLockedPromptSnapshot();
-  }
-
-  function restorePreferredModelLockedPromptSnapshot() {
-    const snapshot = preferredModelLockedPromptSnapshot;
-    if (!snapshot) return;
-    preferredModelState.promptText = snapshot.text;
-    preferredModelState.promptImages = normalizePromptImages(snapshot.images);
-    preferredModelState.promptSelection = { ...snapshot.selection };
-    const inputNode = document.querySelector(".prompt-input");
-    if (!inputNode) return;
-    inputNode.value = snapshot.text;
-    syncPromptCollapsedPreview(inputNode);
-    restorePromptSelection(inputNode);
-  }
-
-  function notifyPreferredModelGateBlocked() {
-    const now = Date.now();
-    if (now - preferredModelGateBlockedToastAt < 1600) return;
-    preferredModelGateBlockedToastAt = now;
-    toast(t("toast.modelGateBlocked"), "info");
-  }
-
-  function ensurePreferredModelInputReady({ notify = true } = {}) {
-    if (!preferredModelInputGateIsLocked()) return true;
-    if (notify) notifyPreferredModelGateBlocked();
-    return false;
+  function preferredModelFailurePolicyForApp(app) {
+    const appId = preferredModelAppId(app);
+    const options = preferredModelState.options || {};
+    const override = String(options.modelPreferenceFailureOverrides?.[appId] || "inherit");
+    if (override === "send-current" || override === "skip") return override;
+    return options.modelPreferenceFailurePolicy === "skip" ? "skip" : "send-current";
   }
 
   function preferredModelTargetLabel(payload = {}) {
@@ -213,6 +145,100 @@ export function createPreferredModelController(dependencies = {}) {
     return Boolean(instanceId && (preferredModelState.frameLoadingInstanceIds || []).includes(instanceId));
   }
 
+  function preferredModelFrameReadiness(iframe) {
+    const app = iframe ? activeWorkspace().frameApp(iframe) || {} : {};
+    const payload = preferredModelPayloadForApp(app);
+    const appId = preferredModelAppId(app);
+    const instanceId = String(iframe?.dataset?.instanceId || "");
+    const documentId = String(iframe?.dataset?.preferredModelDocumentId || "");
+    const bridgeVersion = String(iframe?.dataset?.preferredModelContentBridgeVersion || "");
+    const frameKey = preferredModelFrameKey(iframe);
+    const record = iframe ? preferredModelApplyRuns.get(iframe) : null;
+    const base = {
+      iframe: iframe || null,
+      instanceId,
+      appId,
+      frameKey,
+      runId: String(record?.runId || ""),
+      documentId,
+      bridgeVersion,
+      reason: ""
+    };
+    if (!iframe?.isConnected) return { ...base, state: "detached", reason: "iframe is detached" };
+    if (record?.key === frameKey && record.success && !record.cancelled) {
+      return { ...base, state: "ready" };
+    }
+    if (record?.key === frameKey && record.terminal) {
+      return {
+        ...base,
+        state: "failed",
+        reason: record.failureReason || t("toast.frameModelSwitchFailureFallback")
+      };
+    }
+    if (preferredModelFrameIsLoading(iframe)) return { ...base, state: "loading" };
+    if (!payload) return { ...base, state: "unconfigured" };
+    if (!frameKey || !documentId) return { ...base, state: "pending" };
+    return { ...base, state: "pending" };
+  }
+
+  function preferredModelFrameReadinessIsCurrent(iframe, lease = {}) {
+    if (!iframe || lease?.iframe !== iframe) return false;
+    const current = preferredModelFrameReadiness(iframe);
+    if (current.state !== lease.state) return false;
+    if (String(current.instanceId || "") !== String(lease.instanceId || "")) return false;
+    if (String(current.appId || "") !== String(lease.appId || "")) return false;
+    if (lease.documentId && String(current.documentId || "") !== String(lease.documentId)) return false;
+    if (lease.bridgeVersion && String(current.bridgeVersion || "") !== String(lease.bridgeVersion)) return false;
+    if (["ready", "failed"].includes(lease.state)) {
+      return String(current.frameKey || "") === String(lease.frameKey || "")
+        && String(current.runId || "") === String(lease.runId || "");
+    }
+    return lease.state === "unconfigured";
+  }
+
+  function preferredModelReadinessIsSettled(snapshot = {}) {
+    return ["unconfigured", "ready", "failed", "detached"].includes(snapshot.state);
+  }
+
+  function preferredModelAbortError(message = "preferred-model wait aborted") {
+    const error = new Error(message);
+    error.name = "AbortError";
+    error.code = "ABORTED";
+    return error;
+  }
+
+  function settlePreferredModelFrameWaiter(waiter, outcome, error = null) {
+    if (!preferredModelFrameWaiters.delete(waiter)) return;
+    waiter.signal?.removeEventListener?.("abort", waiter.abort);
+    if (error) waiter.reject(error);
+    else waiter.resolve(outcome);
+  }
+
+  function notifyPreferredModelFrameWaiters() {
+    for (const waiter of [...preferredModelFrameWaiters]) {
+      if (waiter.signal?.aborted) {
+        settlePreferredModelFrameWaiter(waiter, null, preferredModelAbortError());
+        continue;
+      }
+      const snapshot = preferredModelFrameReadiness(waiter.iframe);
+      if (preferredModelReadinessIsSettled(snapshot)) settlePreferredModelFrameWaiter(waiter, snapshot);
+    }
+  }
+
+  function waitForPreferredModelFrame(iframe, options = {}) {
+    const current = preferredModelFrameReadiness(iframe);
+    if (preferredModelReadinessIsSettled(current)) return Promise.resolve(current);
+    const signal = options?.signal || null;
+    if (signal?.aborted) return Promise.reject(preferredModelAbortError());
+    return new Promise((resolve, reject) => {
+      const waiter = { iframe, signal, resolve, reject, abort: null };
+      waiter.abort = () => settlePreferredModelFrameWaiter(waiter, null, preferredModelAbortError());
+      preferredModelFrameWaiters.add(waiter);
+      signal?.addEventListener?.("abort", waiter.abort, { once: true });
+      notifyPreferredModelFrameWaiters();
+    });
+  }
+
   function preferredModelConfiguredActiveFrames() {
     const controller = activeWorkspace();
     return controller.currentFrames()
@@ -238,17 +264,12 @@ export function createPreferredModelController(dependencies = {}) {
     let pendingCount = 0;
     const failures = [];
     for (const { iframe, payload } of configuredFrames) {
-      if (preferredModelFrameIsLoading(iframe)) {
-        pendingCount += 1;
-        continue;
-      }
-      const key = preferredModelFrameKey(iframe);
-      const record = preferredModelApplyRuns.get(iframe);
-      if (record?.key === key && record.success) continue;
-      if (record?.key === key && record.terminal) {
+      const readiness = preferredModelFrameReadiness(iframe);
+      if (readiness.state === "ready") continue;
+      if (readiness.state === "failed") {
         failures.push({
           appId: payload.appId,
-          reason: record.failureReason || t("toast.frameModelSwitchFailureFallback")
+          reason: readiness.reason || t("toast.frameModelSwitchFailureFallback")
         });
         continue;
       }
@@ -272,24 +293,21 @@ export function createPreferredModelController(dependencies = {}) {
 
   function syncPreferredModelInputGate() {
     const next = preferredModelGateStatus();
-    const wasLocked = preferredModelInputGateIsLocked();
-    const willBeLocked = next.state !== "ready";
-    if (willBeLocked && (!wasLocked || !preferredModelLockedPromptSnapshot)) {
-      capturePreferredModelLockedPromptSnapshot();
-    } else if (!willBeLocked) {
-      preferredModelLockedPromptSnapshot = null;
-    }
-
     preferredModelState.preferredModelGateState = next.state;
     preferredModelState.preferredModelGateReason = next.reason;
     preferredModelState.preferredModelGatePendingCount = next.pendingCount;
     preferredModelState.preferredModelGateFailedCount = next.failedCount;
     preferredModelState.preferredModelGateFailedAppIds = next.failedAppIds;
 
-    if (willBeLocked) closePromptActionsMenu();
+    for (const iframe of activeWorkspace().currentFrames()) {
+      const readiness = preferredModelFrameReadiness(iframe);
+      iframe.dataset.preferredModelGateState = readiness.state;
+      iframe.dataset.preferredModelConfigured = readiness.state === "unconfigured" ? "false" : "true";
+      iframe.dataset.preferredModelTarget = readiness.frameKey;
+    }
+
     document.querySelectorAll(".prompt-shell").forEach((shell) => {
       const inputNode = shell.querySelector(".prompt-input");
-      const composingHere = preferredModelPromptCompositionIsActive(inputNode);
       const applying = next.state === "bootstrapping" || next.state === "applying";
       const failed = next.state === "failed";
       shell.classList.toggle("prompt-shell-model-gate-applying", applying);
@@ -298,31 +316,13 @@ export function createPreferredModelController(dependencies = {}) {
       shell.dataset.modelGatePendingCount = String(next.pendingCount);
       shell.dataset.modelGateFailedCount = String(next.failedCount);
       shell.dataset.modelGateFailedAppIds = next.failedAppIds.join(",");
-      shell.setAttribute("aria-busy", willBeLocked ? "true" : "false");
+      shell.removeAttribute("aria-busy");
 
       if (inputNode) {
-        inputNode.readOnly = willBeLocked && !composingHere;
+        inputNode.readOnly = false;
         inputNode.dataset.modelGateState = next.state;
-        inputNode.setAttribute("aria-busy", willBeLocked ? "true" : "false");
-        if (willBeLocked) {
-          inputNode.setAttribute(
-            "aria-label",
-            failed
-              ? t("topbar.modelGateFailedAria", { reason: next.reason })
-              : t("topbar.modelGateApplyingAria")
-          );
-        } else {
-          inputNode.removeAttribute("aria-label");
-        }
-      }
-
-      shell.querySelectorAll(".prompt-actions-button, .prompt-image-file-input, .prompt-clear-button, .prompt-image-remove")
-        .forEach((node) => { node.disabled = willBeLocked; });
-      const sendButton = shell.querySelector(".prompt-send-button");
-      if (sendButton) {
-        sendButton.disabled = willBeLocked
-          || preferredModelState.promptSendInFlight
-          || !promptHasContent(inputNode?.value ?? preferredModelState.promptText, preferredModelState.promptImages);
+        inputNode.removeAttribute("aria-busy");
+        inputNode.removeAttribute("aria-label");
       }
 
       let statusNode = shell.querySelector(".prompt-model-gate-status");
@@ -334,8 +334,8 @@ export function createPreferredModelController(dependencies = {}) {
         });
         shell.append(statusNode);
       }
-      statusNode.hidden = !willBeLocked;
-      if (willBeLocked) {
+      statusNode.hidden = !(applying || failed);
+      if (applying || failed) {
         const statusText = failed
           ? t("topbar.modelGateFailed", { reason: next.reason })
           : t("topbar.modelGateApplying");
@@ -352,6 +352,7 @@ export function createPreferredModelController(dependencies = {}) {
         if (statusNode.childNodes.length) statusNode.replaceChildren();
       }
     });
+    notifyPreferredModelFrameWaiters();
     return next;
   }
 
@@ -396,50 +397,177 @@ export function createPreferredModelController(dependencies = {}) {
     return null;
   }
 
-  function clearPreferredModelSubmissionNavigation(record) {
-    const lease = record?.submissionNavigationLease;
+  function preferredModelSubmissionRouteRequirement(appId, value) {
+    const route = preferredModelSubmissionRouteState(appId, value);
+    if (!route) return { state: "unknown", route: null };
+    const required = route.phase === "start"
+      || (appId === "NotionAI" && route.phase === "intermediate");
+    return { state: required ? "required" : "not-required", route };
+  }
+
+  function bindPreferredModelSubmissionInitialRoute(lease, initialHref) {
+    const href = String(initialHref || "");
+    const requirement = preferredModelSubmissionRouteRequirement(lease?.appId, href);
+    if (!lease || requirement.state !== "required" || !requirement.route) return false;
+    if (lease.routeConfirmed) {
+      return lease.initialHref === href
+        && lease.initialHost === requirement.route.host
+        && lease.lastHref !== "";
+    }
+    lease.routeConfirmed = true;
+    lease.initialHref = href;
+    lease.initialHost = requirement.route.host;
+    lease.lastHref = href;
+    lease.lastPhase = requirement.route.phase;
+    return true;
+  }
+
+  function preferredModelSubmissionCorrelation(lease, value = {}) {
+    const sendId = String(value?.sendId || "");
+    const observedAppId = MODEL_PREFERENCE_APP_ID_ALIASES[String(value?.appId || "")]
+      || String(value?.appId || "");
+    const initialHref = String(value?.initialHref || "");
+    const barrierState = String(value?.barrierState || "");
+    if (
+      !lease
+      || sendId !== lease.sendId
+      || observedAppId !== lease.appId
+      || !initialHref
+      || !["required", "not-required", "unknown"].includes(barrierState)
+    ) return null;
+    const requirement = preferredModelSubmissionRouteRequirement(lease.appId, initialHref);
+    if (requirement.state !== barrierState) return null;
+    return { sendId, appId: observedAppId, initialHref, barrierState, requirement };
+  }
+
+  function preferredModelSubmissionBarrierSnapshot(iframe, sendId) {
+    const id = String(sendId || "");
+    const lease = preferredModelSubmissionNavigations.get(iframe);
+    if (lease?.sendId === id) {
+      if (!iframe?.isConnected) return { state: "detached", sendId: id, reason: "iframe detached during submission navigation" };
+      if (lease.terminalObserved) return { state: "complete", sendId: id, reason: "terminal route observed" };
+      if (Date.now() > lease.expiresAt) return { state: "expired", sendId: id, reason: "submission navigation expired" };
+      return { state: "pending", sendId: id, reason: "" };
+    }
+    const outcome = preferredModelSubmissionOutcomes.get(iframe);
+    if (outcome?.sendId === id) return outcome;
+    return { state: "none", sendId: id, reason: "" };
+  }
+
+  function preferredModelSubmissionBarrierError(snapshot = {}) {
+    const error = new Error(snapshot.reason || "submission navigation could not be verified");
+    error.name = "SubmissionNavigationError";
+    error.code = "SUBMISSION_BARRIER_UNCERTAIN";
+    error.delivered = true;
+    error.barrierState = snapshot.state || "unknown";
+    return error;
+  }
+
+  function settlePreferredModelSubmissionWaiter(waiter, snapshot, error = null) {
+    if (!preferredModelSubmissionWaiters.delete(waiter)) return;
+    waiter.signal?.removeEventListener?.("abort", waiter.abort);
+    if (error) waiter.reject(error);
+    else waiter.resolve(snapshot);
+  }
+
+  function notifyPreferredModelSubmissionWaiters(iframe = null) {
+    for (const waiter of [...preferredModelSubmissionWaiters]) {
+      if (iframe && waiter.iframe !== iframe) continue;
+      if (waiter.signal?.aborted) {
+        settlePreferredModelSubmissionWaiter(waiter, null, preferredModelAbortError("submission barrier wait aborted"));
+        continue;
+      }
+      const snapshot = preferredModelSubmissionBarrierSnapshot(waiter.iframe, waiter.sendId);
+      if (snapshot.state === "pending") continue;
+      if (snapshot.state === "none" || snapshot.state === "complete") {
+        settlePreferredModelSubmissionWaiter(waiter, snapshot);
+      } else {
+        settlePreferredModelSubmissionWaiter(waiter, null, preferredModelSubmissionBarrierError(snapshot));
+      }
+    }
+  }
+
+  function waitForPreferredModelSubmissionBarrier(iframe, sendId, options = {}) {
+    const snapshot = preferredModelSubmissionBarrierSnapshot(iframe, sendId);
+    if (snapshot.state === "none" || snapshot.state === "complete") return Promise.resolve(snapshot);
+    if (snapshot.state !== "pending") return Promise.reject(preferredModelSubmissionBarrierError(snapshot));
+    const signal = options?.signal || null;
+    if (signal?.aborted) return Promise.reject(preferredModelAbortError("submission barrier wait aborted"));
+    return new Promise((resolve, reject) => {
+      const waiter = { iframe, sendId: String(sendId || ""), signal, resolve, reject, abort: null };
+      waiter.abort = () => settlePreferredModelSubmissionWaiter(
+        waiter,
+        null,
+        preferredModelAbortError("submission barrier wait aborted")
+      );
+      preferredModelSubmissionWaiters.add(waiter);
+      signal?.addEventListener?.("abort", waiter.abort, { once: true });
+      notifyPreferredModelSubmissionWaiters(iframe);
+    });
+  }
+
+  function clearPreferredModelSubmissionNavigation(iframe, state = "invalidated", reason = "") {
+    const lease = preferredModelSubmissionNavigations.get(iframe);
     if (!lease) return;
     if (lease.timer) clearTimeout(lease.timer);
     lease.timer = 0;
-    if (record.submissionNavigationLease === lease) record.submissionNavigationLease = null;
+    preferredModelSubmissionNavigations.delete(iframe);
+    preferredModelSubmissionNavigationFrames.delete(iframe);
+    preferredModelSubmissionOutcomes.set(iframe, {
+      state,
+      sendId: lease.sendId,
+      reason: String(reason || state || "submission navigation ended")
+    });
+    notifyPreferredModelSubmissionWaiters(iframe);
   }
 
-  function schedulePreferredModelSubmissionNavigationExpiry(record) {
-    const lease = record?.submissionNavigationLease;
-    if (!lease) return;
+  function schedulePreferredModelSubmissionNavigationExpiry(iframe, lease) {
+    if (!lease || preferredModelSubmissionNavigations.get(iframe) !== lease) return;
     if (lease.timer) clearTimeout(lease.timer);
     const delay = Math.max(0, Math.min(0x7fffffff, lease.expiresAt - Date.now()));
     lease.timer = window.setTimeout(() => {
-      if (record.submissionNavigationLease === lease) record.submissionNavigationLease = null;
+      if (preferredModelSubmissionNavigations.get(iframe) !== lease) return;
+      clearPreferredModelSubmissionNavigation(
+        iframe,
+        lease.terminalObserved ? "complete" : "expired",
+        lease.terminalObserved ? "terminal route observed" : "submission navigation expired"
+      );
     }, delay);
   }
 
-  function armPreferredModelSubmissionNavigation(iframe, sendId, deadlineAt = 0) {
+  function armPreferredModelSubmissionNavigation(iframe, sendId, deadlineAt = 0, readinessLease = null) {
     const id = String(sendId || "").trim();
-    const record = preferredModelApplyRuns.get(iframe);
     const key = preferredModelFrameKey(iframe);
-    if (!id || !record?.success || record.cancelled || record.key !== key) return null;
-    const appId = String(record.payload?.appId || "");
-    const initialHref = String(iframe?.dataset?.currentHref || iframe?.src || "");
-    const initialRoute = preferredModelSubmissionRouteState(appId, initialHref);
+    if (!id || !iframe?.isConnected) return null;
+    if (readinessLease && !preferredModelFrameReadinessIsCurrent(iframe, readinessLease)) {
+      const error = new Error("preferred-model readiness changed before submission");
+      error.code = "STALE_DOCUMENT";
+      error.delivered = false;
+      throw error;
+    }
+    const app = activeWorkspace().frameApp(iframe) || {};
+    const appId = preferredModelAppId(app);
+    if (appId !== "Gemini" && appId !== "NotionAI") return null;
     const documentId = String(iframe?.dataset?.preferredModelDocumentId || "");
     const bridgeVersion = String(iframe?.dataset?.preferredModelContentBridgeVersion || "");
-    const validInitialRoute = initialRoute && (
-      initialRoute.phase === "start"
-      || (appId === "NotionAI" && initialRoute.phase === "intermediate")
-    );
-    if (!validInitialRoute || !documentId || !bridgeVersion) return null;
-    clearPreferredModelSubmissionNavigation(record);
+    if (!documentId || !bridgeVersion) {
+      const error = new Error("submission navigation requires an exact content document");
+      error.code = "NOT_REGISTERED";
+      error.delivered = false;
+      throw error;
+    }
+    clearPreferredModelSubmissionNavigation(iframe, "superseded", "submission navigation was superseded");
+    preferredModelSubmissionOutcomes.delete(iframe);
     const now = Date.now();
     const expiresAt = Math.max(
       now + MODEL_PREFERENCE_SUBMISSION_NAVIGATION_GRACE_MS,
       Math.max(0, Number(deadlineAt) || 0) + MODEL_PREFERENCE_SUBMISSION_NAVIGATION_GRACE_MS
     );
-    record.submissionNavigationLease = {
+    const lease = {
       sendId: id,
       appId,
-      initialHref,
-      initialHost: initialRoute.host,
+      initialHref: "",
+      initialHost: "",
       documentId,
       bridgeVersion,
       recordKey: key,
@@ -447,33 +575,68 @@ export function createPreferredModelController(dependencies = {}) {
       hardExpiresAt: expiresAt,
       expiresAt,
       observed: false,
+      routeConfirmed: false,
       terminalObserved: false,
       terminalThreadId: "",
-      lastHref: initialHref,
-      lastPhase: initialRoute.phase,
+      lastHref: "",
+      lastPhase: "",
       timer: 0
     };
-    schedulePreferredModelSubmissionNavigationExpiry(record);
-    return record.submissionNavigationLease;
+    preferredModelSubmissionNavigations.set(iframe, lease);
+    preferredModelSubmissionNavigationFrames.add(iframe);
+    schedulePreferredModelSubmissionNavigationExpiry(iframe, lease);
+    return lease;
   }
 
-  function finishPreferredModelSubmissionNavigation(iframe, sendId, sent) {
-    const record = preferredModelApplyRuns.get(iframe);
-    const lease = record?.submissionNavigationLease;
+  function finishPreferredModelSubmissionNavigation(iframe, sendId, sent, correlation = null) {
+    const lease = preferredModelSubmissionNavigations.get(iframe);
     if (!lease || lease.sendId !== String(sendId || "")) return;
     lease.sendSettledAt = Date.now();
     lease.sent = Boolean(sent);
-    if (sent || lease.terminalObserved) return;
-    lease.expiresAt = Math.min(lease.hardExpiresAt, Date.now() + 2000);
-    schedulePreferredModelSubmissionNavigationExpiry(record);
+    if (sent) {
+      const confirmed = preferredModelSubmissionCorrelation(lease, correlation);
+      if (!confirmed || confirmed.barrierState === "unknown") {
+        clearPreferredModelSubmissionNavigation(
+          iframe,
+          "invalidated",
+          "submission navigation correlation was not confirmed by the exact content document"
+        );
+        return;
+      }
+      if (confirmed.barrierState === "not-required") {
+        clearPreferredModelSubmissionNavigation(
+          iframe,
+          "complete",
+          "the exact content route does not require a submission navigation barrier"
+        );
+        return;
+      }
+      if (!bindPreferredModelSubmissionInitialRoute(lease, confirmed.initialHref)) {
+        clearPreferredModelSubmissionNavigation(
+          iframe,
+          "invalidated",
+          "submission navigation initial route did not match the exact content result"
+        );
+        return;
+      }
+    }
+    if (lease.terminalObserved) {
+      notifyPreferredModelSubmissionWaiters(iframe);
+      return;
+    }
+    lease.expiresAt = Math.min(
+      lease.hardExpiresAt,
+      Date.now() + (sent ? MODEL_PREFERENCE_SUBMISSION_NAVIGATION_GRACE_MS : 2000)
+    );
+    schedulePreferredModelSubmissionNavigationExpiry(iframe, lease);
+    notifyPreferredModelSubmissionWaiters(iframe);
   }
 
   function preservePreferredModelForSubmissionNavigation(iframe, event = {}) {
-    const record = preferredModelApplyRuns.get(iframe);
-    const lease = record?.submissionNavigationLease;
+    const lease = preferredModelSubmissionNavigations.get(iframe);
     if (!lease) return false;
     const reject = () => {
-      clearPreferredModelSubmissionNavigation(record);
+      clearPreferredModelSubmissionNavigation(iframe, "invalidated", "submission navigation correlation was invalidated");
       return false;
     };
     if (Date.now() > lease.expiresAt) return reject();
@@ -487,13 +650,9 @@ export function createPreferredModelController(dependencies = {}) {
     if (observedAppId && observedAppId !== lease.appId) return reject();
     if (String(navigation.documentId || "") !== lease.documentId) return reject();
     if (String(navigation.bridgeVersion || "") !== lease.bridgeVersion) return reject();
-    if (
-      preferredModelApplyRuns.get(iframe) !== record
-      || !record.success
-      || record.cancelled
-      || record.key !== lease.recordKey
-      || preferredModelFrameKey(iframe) !== lease.recordKey
-    ) return reject();
+    if (!iframe?.isConnected) return reject();
+    if (lease.recordKey && preferredModelFrameKey(iframe) !== lease.recordKey) return reject();
+    if (!bindPreferredModelSubmissionInitialRoute(lease, submission.initialHref)) return reject();
     const nextRoute = preferredModelSubmissionRouteState(lease.appId, event.href);
     if (!nextRoute || nextRoute.host !== lease.initialHost) return reject();
     if (String(event.previousHref || "") !== lease.lastHref) return reject();
@@ -518,6 +677,12 @@ export function createPreferredModelController(dependencies = {}) {
     if (nextRoute.phase === "terminal") {
       lease.terminalObserved = true;
       lease.terminalThreadId = lease.terminalThreadId || String(nextRoute.threadId || "");
+      preferredModelSubmissionOutcomes.set(iframe, {
+        state: "complete",
+        sendId: lease.sendId,
+        reason: "terminal route observed"
+      });
+      notifyPreferredModelSubmissionWaiters(iframe);
     }
     return true;
   }
@@ -561,7 +726,7 @@ export function createPreferredModelController(dependencies = {}) {
 
   function stopPreferredModelRecord(iframe, record, reason, options = {}) {
     if (!record) return;
-    clearPreferredModelSubmissionNavigation(record);
+    clearPreferredModelSubmissionNavigation(iframe, "invalidated", String(reason || "preferred-model record stopped"));
     if (record.timer) clearTimeout(record.timer);
     record.timer = 0;
     const wasInFlight = record.inFlight;
@@ -595,8 +760,7 @@ export function createPreferredModelController(dependencies = {}) {
       result: null,
       failureReason: "",
       bridgeRecoveryAttempts: 0,
-      statusToast: null,
-      submissionNavigationLease: null
+      statusToast: null
     };
     record.statusToast = createFrameToast(
       iframe,
@@ -620,49 +784,6 @@ export function createPreferredModelController(dependencies = {}) {
     }, Math.max(0, Number(delay) || 0));
   }
 
-  function handlePreferredModelPromptCompositionStart(event) {
-    if (preferredModelInputGateIsLocked()) {
-      preferredModelPromptComposing = false;
-      preferredModelComposingPromptInput = null;
-      notifyPreferredModelGateBlocked();
-      syncPreferredModelInputGate();
-      return;
-    }
-    preferredModelPromptComposing = true;
-    preferredModelComposingPromptInput = event.currentTarget || null;
-  }
-
-  function handlePreferredModelPromptCompositionEnd(event) {
-    if (preferredModelInputGateIsLocked()) {
-      preferredModelState.promptText = event.currentTarget?.value ?? preferredModelState.promptText;
-      rememberPromptSelection(event.currentTarget);
-      capturePreferredModelLockedPromptSnapshot();
-    }
-    preferredModelPromptComposing = false;
-    preferredModelComposingPromptInput = null;
-    syncPreferredModelInputGate();
-  }
-
-  function preferredModelPromptCompositionIsActive(inputNode) {
-    return Boolean(
-      preferredModelPromptComposing
-      && preferredModelComposingPromptInput === inputNode
-      && inputNode?.isConnected
-      && document.activeElement === inputNode
-    );
-  }
-
-  function handlePromptBlur(event) {
-    const inputNode = event.currentTarget;
-    collapsePromptInput(inputNode);
-    queueMicrotask(() => {
-      if (preferredModelComposingPromptInput !== inputNode || document.activeElement === inputNode) return;
-      preferredModelPromptComposing = false;
-      preferredModelComposingPromptInput = null;
-      syncPreferredModelInputGate();
-    });
-  }
-
   function cleanupDetachedPreferredModelFrames() {
     let changed = false;
     for (const [iframe, record] of preferredModelApplyRuns) {
@@ -671,7 +792,12 @@ export function createPreferredModelController(dependencies = {}) {
       preferredModelApplyRuns.delete(iframe);
       changed = true;
     }
+    for (const iframe of [...preferredModelSubmissionNavigationFrames]) {
+      if (iframe?.isConnected) continue;
+      clearPreferredModelSubmissionNavigation(iframe, "detached", "iframe detached during submission navigation");
+    }
     if (changed) syncPreferredModelInputGate();
+    else notifyPreferredModelFrameWaiters();
     return changed;
   }
 
@@ -772,7 +898,8 @@ export function createPreferredModelController(dependencies = {}) {
         payload,
         {
           timeoutMs: MODEL_PREFERENCE_APPLY_TIMEOUT_MS,
-          signal: record.controller?.signal
+          signal: record.controller?.signal,
+          expectedDocumentId: registration.documentId
         }
       );
       if (String(result?.runId || "") !== record.runId) {
@@ -909,23 +1036,18 @@ export function createPreferredModelController(dependencies = {}) {
   return Object.freeze({
     applyPreferredModelsToFrames,
     armPreferredModelSubmissionNavigation,
-    capturePreferredModelLockedPromptSnapshot,
-    ensurePreferredModelInputReady,
     finishBootstrapping,
     finishPreferredModelSubmissionNavigation,
     handlePreferredModelFrameLifecycleChange,
-    handlePreferredModelPromptCompositionEnd,
-    handlePreferredModelPromptCompositionStart,
-    handlePromptBlur,
     installPreferredModelFrameCleanup,
     invalidatePreferredModelFrame,
-    notifyPreferredModelGateBlocked,
+    preferredModelFailurePolicyForApp,
+    preferredModelFrameReadiness,
+    preferredModelFrameReadinessIsCurrent,
     preferredModelFrameIsLoading,
-    preferredModelInputGateIsLocked,
-    preferredModelPromptCompositionIsActive,
-    rememberPreferredModelLockedPromptSnapshot,
-    restorePreferredModelLockedPromptSnapshot,
     schedulePreferredModelApplyToFrame,
-    syncPreferredModelInputGate
+    syncPreferredModelInputGate,
+    waitForPreferredModelFrame,
+    waitForPreferredModelSubmissionBarrier
   });
 }

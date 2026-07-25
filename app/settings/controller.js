@@ -62,7 +62,6 @@ export function createSettingsController(ctx) {
     reconcileAppCatalog: "function",
     enterTopbarEditMode: "function",
     setPromptImages: "function",
-    ensurePromptInputReady: "function",
     syncTopbar: "function",
     syncTopbarPromptPlaceholder: "function",
     syncSummaryPanel: "function",
@@ -84,7 +83,6 @@ export function createSettingsController(ctx) {
   const reconcileAppCatalog = requireControllerFunction(ctx, controllerName, "reconcileAppCatalog");
   const enterTopbarEditMode = requireControllerFunction(ctx, controllerName, "enterTopbarEditMode");
   const setPromptImages = requireControllerFunction(ctx, controllerName, "setPromptImages");
-  const ensurePromptInputReady = requireControllerFunction(ctx, controllerName, "ensurePromptInputReady");
   const syncTopbar = requireControllerFunction(ctx, controllerName, "syncTopbar");
   const syncTopbarPromptPlaceholder = requireControllerFunction(ctx, controllerName, "syncTopbarPromptPlaceholder");
   const syncSummaryPanel = requireControllerFunction(ctx, controllerName, "syncSummaryPanel");
@@ -200,7 +198,6 @@ export function createSettingsController(ctx) {
     state: settingsSections.history,
     svgIcon,
     setPromptImages,
-    ensurePromptInputReady,
     syncPromptInputNode
   });
   const shortcutSettings = createShortcutSettings({
@@ -214,7 +211,6 @@ export function createSettingsController(ctx) {
     createId,
     savePromptLibrary,
     syncPromptInputNode,
-    ensurePromptInputReady,
     settingsActions: settingsKit.settingsActions,
     settingsDragHandle: settingsKit.settingsDragHandle,
     settingsEmptyRow: settingsKit.settingsEmptyRow,

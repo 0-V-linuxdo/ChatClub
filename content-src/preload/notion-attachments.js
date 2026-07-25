@@ -228,14 +228,25 @@ export function createNotionAttachmentInspector(deps = {}) {
       const haystack = getElementSearchText(element).toLowerCase();
       const uploadContext = /\b(?:upload|uploading|attachment|file-preview|upload-preview|file|image|preview)\b/.test(haystack)
         || /上传|附件|图片|图像|文件|预览/.test(haystack);
-      if (uploadContext) return true;
-      if (!(ariaBusy || role === "progressbar" || tag === "progress")) return false;
+      const explicitProgress = ariaBusy
+        || role === "progressbar"
+        || tag === "progress"
+        || /\b(?:uploading|upload progress|processing (?:file|image))\b/.test(haystack)
+        || /正在(?:上传|处理)|上传(?:中|进度)/.test(haystack);
+      if (explicitProgress && uploadContext) return true;
       let node = element.parentElement || null;
       for (let depth = 0; node && depth < 4; depth += 1) {
         if (node === scope || node === document.body) break;
         if (findNotionAttachmentCardElement(node, scope) || isLikelyNotionAttachmentPreviewElement(node)) return true;
         const parentHaystack = getElementSearchText(node).toLowerCase();
-        if (/\b(?:upload|uploading|attachment|file-preview|upload-preview|file|image|preview)\b/.test(parentHaystack) || /上传|附件|图片|图像|文件|预览/.test(parentHaystack)) return true;
+        const parentUploadContext = /\b(?:upload|uploading|attachment|file-preview|upload-preview|file|image|preview)\b/.test(parentHaystack)
+          || /上传|附件|图片|图像|文件|预览/.test(parentHaystack);
+        const parentExplicitProgress = String(node.getAttribute?.("aria-busy") || "").toLowerCase() === "true"
+          || String(node.getAttribute?.("role") || "").toLowerCase() === "progressbar"
+          || String(node.tagName || "").toLowerCase() === "progress"
+          || /\b(?:uploading|upload progress|processing (?:file|image))\b/.test(parentHaystack)
+          || /正在(?:上传|处理)|上传(?:中|进度)/.test(parentHaystack);
+        if (parentUploadContext && parentExplicitProgress) return true;
         node = node.parentElement || null;
       }
       return false;

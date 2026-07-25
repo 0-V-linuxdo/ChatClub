@@ -1,16 +1,16 @@
 {
   "shared/i18n.js": {
-    "maxLines": 1901,
+    "maxLines": 1921,
     "target": 1500,
-    "maxBytes": 108191,
+    "maxBytes": 109766,
     "targetBytes": 82000,
-    "reason": "Bilingual translation catalog data is kept co-located for key parity; both line and byte size are explicitly ratcheted."
+    "reason": "Bilingual translation catalog data is kept co-located for key parity; the queued-send status and model-failure policy strings are included in the exact line and byte ratchets."
   },
   "tools/browser-smoke.mjs": {
     "maxLines": 1211,
     "target": 1200,
-    "maxBytes": 63546,
+    "maxBytes": 63605,
     "targetBytes": 60000,
-    "reason": "The cross-engine smoke now exercises the production two-phase frame injection and authenticated post-injection binding handshake."
+    "reason": "The cross-engine smoke exercises the production two-phase frame injection, authenticated binding handshake, and current geckodriver system-access startup contract."
   }
 }

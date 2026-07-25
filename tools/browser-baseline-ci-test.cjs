@@ -84,6 +84,8 @@ assert.match(smoke, /command\("getSummaryRuntimeState"\)/);
 assert.match(smoke, /summaryState\?\.isolatedReady === true/);
 assert.match(smoke, /summaryState\?\.mainReady === true/);
 assert.match(smoke, /expectFirefoxFileFallback: browserVersion\.split/);
+assert.match(smoke, /new firefox\.ServiceBuilder\(process\.env\.GECKODRIVER_BINARY\)[\s\S]*?service\.addArguments\("--allow-system-access"\)/);
+assert.doesNotMatch(smoke, /options\.addArguments\("-remote-allow-system-access"\)/);
 assert.match(smoke, /loopback bridge injection failed before frame binding/);
 assert.match(smoke, /fallbackFiles/);
 

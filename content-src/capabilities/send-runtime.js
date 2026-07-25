@@ -7,7 +7,6 @@ export function createSendCapability(deps = {}) {
     sleep,
     PROMPT_IMAGE_PASTE_STRATEGY_BATCH,
     buttonText,
-    compareText,
     text,
     NOTION_SEND_PROMPT_SOURCE,
     NOTION_SEND_PROMPT_EVENT,
@@ -29,6 +28,13 @@ export function createSendCapability(deps = {}) {
       if (candidate) return candidate;
     }
     return null;
+  }
+
+  function promptTextSnapshot(value) {
+    return String(value || "")
+      .replace(/\u00a0/g, " ")
+      .replace(/\r\n?/g, "\n")
+      .trim();
   }
 
   async function setInputValue(target, value) {
@@ -301,6 +307,49 @@ export function createSendCapability(deps = {}) {
     return appId === "gemini" || /\bgemini\b/.test(appName) || geminiHost();
   }
 
+  function submissionNavigationBarrierState(appId, href) {
+    let url;
+    try {
+      url = new URL(String(href || ""));
+    } catch {
+      return "unknown";
+    }
+    const host = url.hostname.toLowerCase();
+    const path = (url.pathname || "/").replace(/\/+$/, "") || "/";
+    if (appId === "Gemini") {
+      const validHost = host === "gemini.google.com"
+        || host.endsWith(".gemini.google.com")
+        || host === "bard.google.com";
+      if (!validHost) return "unknown";
+      if (path === "/app") return "required";
+      if (/^\/app\/[^/?#]+/i.test(path)) return "not-required";
+      return "unknown";
+    }
+    if (appId === "NotionAI") {
+      const validHost = host === "app.notion.com"
+        || host === "notion.so"
+        || host === "www.notion.so"
+        || host.endsWith(".notion.so");
+      if (!validHost) return "unknown";
+      if (path === "/ai") return "required";
+      if (path === "/chat") return url.searchParams.get("t") ? "not-required" : "required";
+    }
+    return "unknown";
+  }
+
+  function submissionNavigationCorrelation(data, appId, marked, method) {
+    const sendId = String(marked?.sendId || data?.sendId || "").trim();
+    const initialHref = String(marked?.initialHref || location.href || "");
+    if (!sendId || !initialHref || (appId !== "Gemini" && appId !== "NotionAI")) return null;
+    return {
+      sendId,
+      appId,
+      initialHref,
+      barrierState: submissionNavigationBarrierState(appId, initialHref),
+      method: String(method || marked?.method || "submit")
+    };
+  }
+
   function promptImagePasteStrategy(data = {}) {
     return String(data?.imagePasteStrategy || "").trim().toLowerCase() === PROMPT_IMAGE_PASTE_STRATEGY_BATCH
       ? PROMPT_IMAGE_PASTE_STRATEGY_BATCH
@@ -440,6 +489,41 @@ export function createSendCapability(deps = {}) {
     };
   }
 
+  function promptResidualAttachmentSnapshot(input, options = {}) {
+    if (options.grok) return grokPromptAttachmentSnapshot(input);
+    if (options.gemini) return geminiPromptAttachmentSnapshot(input);
+    const scope = promptComposerScope(input);
+    const removeButtons = qsa("button,[role='button']", scope)
+      .filter((button) => visible(button) && attachmentRemoveButton(button));
+    const images = qsa("img[src^='blob:'],img[src^='data:image/']", scope).filter(visible);
+    const nodes = removeButtons.length >= images.length ? removeButtons : images;
+    const busySelectors = [
+      "[aria-busy='true']",
+      "[role='progressbar']",
+      "progress",
+      "mat-progress-spinner",
+      "mat-progress-bar",
+      "[class*='uploading' i]"
+    ].join(",");
+    let busy = false;
+    if (nodes.length) {
+      try { busy = Array.from(scope.querySelectorAll(busySelectors)).some((node) => visible(node)); } catch {}
+    }
+    return {
+      count: nodes.length,
+      busy,
+      key: nodes.map((node) => {
+        const rect = node.getBoundingClientRect?.();
+        return [
+          node.tagName,
+          buttonText(node),
+          node.getAttribute?.("src") || "",
+          rect ? `${Math.round(rect.left)}:${Math.round(rect.top)}:${Math.round(rect.width)}:${Math.round(rect.height)}` : ""
+        ].join("|");
+      }).join("\n")
+    };
+  }
+
   function grokAttachmentRows(scope) {
     const rows = [];
     const seen = new Set();
@@ -517,7 +601,7 @@ export function createSendCapability(deps = {}) {
 
   function sendDeadlineAt(data = {}, fallbackMs = 10000) {
     const value = Number(data?.deadlineAt);
-    return Number.isFinite(value) && value > Date.now() ? value : Date.now() + Math.max(1000, Number(fallbackMs) || 10000);
+    return Number.isFinite(value) && value > 0 ? value : Date.now() + Math.max(1000, Number(fallbackMs) || 10000);
   }
 
   function remainingDeadlineMs(deadlineAt, fallbackMs = 1000) {
@@ -608,11 +692,45 @@ export function createSendCapability(deps = {}) {
   async function waitForPromptAttachmentsCleared(input, options = {}, timeoutMs = 2500, deadlineAt = 0) {
     const start = Date.now();
     while (Date.now() - start < timeoutMs && !deadlineExpired(deadlineAt)) {
-      const snapshot = promptAttachmentSnapshot(input, options);
+      const snapshot = promptResidualAttachmentSnapshot(input, options);
       if (snapshot.count <= 0 && !snapshot.busy) return true;
       if (!await sleepUntilDeadline(120, deadlineAt)) break;
     }
-    return promptAttachmentSnapshot(input, options).count <= 0;
+    const final = promptResidualAttachmentSnapshot(input, options);
+    return final.count <= 0 && !final.busy;
+  }
+
+  async function preparePromptComposerForRun(input, inputSelector = "", deadlineAt = 0, options = {}) {
+    const existing = promptResidualAttachmentSnapshot(input, options);
+    if (existing.count > 0 || existing.busy) {
+      clearPromptAttachments(input, options);
+      const cleared = await (async () => {
+        const start = Date.now();
+        while (Date.now() - start < 2500 && !deadlineExpired(deadlineAt)) {
+          const snapshot = promptResidualAttachmentSnapshot(input, options);
+          if (snapshot.count <= 0 && !snapshot.busy) return true;
+          if (!await sleepUntilDeadline(120, deadlineAt)) break;
+        }
+        const snapshot = promptResidualAttachmentSnapshot(input, options);
+        return snapshot.count <= 0 && !snapshot.busy;
+      })();
+      if (!cleared) {
+        return { ok: false, input, reason: "Existing composer attachments could not be cleared" };
+      }
+      input = inputCandidates(inputSelector) || input;
+    }
+    if (deadlineExpired(deadlineAt)) return { ok: false, input, reason: "Send deadline exceeded" };
+    if (promptTextSnapshot(text(input))) {
+      await setInputValue(input, "");
+      if (!await sleepUntilDeadline(80, deadlineAt)) {
+        return { ok: false, input, reason: "Send deadline exceeded" };
+      }
+      input = inputCandidates(inputSelector) || input;
+      if (promptTextSnapshot(text(input))) {
+        return { ok: false, input, reason: "Existing composer text could not be cleared" };
+      }
+    }
+    return { ok: true, input };
   }
 
   async function attachPromptImageOnce(file, input) {
@@ -719,11 +837,11 @@ export function createSendCapability(deps = {}) {
   }
 
   async function commitPastedPromptTextEarly(input, textValue = "", inputSelector = "", deadlineAt = 0) {
-    const expected = compareText(textValue);
+    const expected = promptTextSnapshot(textValue);
     if (!expected) return { ok: true, input, usedFallback: false };
     if (!await sleepUntilDeadline(80, deadlineAt)) return { ok: false, input, usedFallback: false, reason: "Send deadline exceeded" };
     input = inputCandidates(inputSelector) || input;
-    if (compareText(text(input)) === expected) return { ok: true, input, usedFallback: false };
+    if (promptTextSnapshot(text(input)) === expected) return { ok: true, input, usedFallback: false };
     try {
       await setInputValue(input, textValue);
     } catch (error) {
@@ -732,10 +850,10 @@ export function createSendCapability(deps = {}) {
     if (!await sleepUntilDeadline(90, deadlineAt)) return { ok: false, input, usedFallback: true, reason: "Send deadline exceeded" };
     input = inputCandidates(inputSelector) || input;
     return {
-      ok: compareText(text(input)) === expected,
+      ok: promptTextSnapshot(text(input)) === expected,
       input,
       usedFallback: true,
-      reason: compareText(text(input)) === expected ? "" : "Prompt text was not committed immediately after paste"
+      reason: promptTextSnapshot(text(input)) === expected ? "" : "Prompt text was not committed immediately after paste"
     };
   }
 
@@ -855,12 +973,14 @@ export function createSendCapability(deps = {}) {
       const deadlineAt = sendDeadlineAt(data, timeoutMs);
       const timer = setTimeout(() => {
         window.removeEventListener("message", onMessage, true);
-        resolve({ ok: false, sent: false, method: "notion-prompt-bridge", reason: "Notion AI prompt bridge timed out" });
+        resolve({ ok: false, sent: false, deliveryState: "unknown", method: "notion-prompt-bridge", reason: "Notion AI prompt bridge timed out" });
       }, Math.max(1000, remainingDeadlineMs(deadlineAt, timeoutMs)));
       function finish(result) {
         clearTimeout(timer);
         window.removeEventListener("message", onMessage, true);
-        resolve(result && typeof result === "object" ? result : { ok: false, sent: false, method: "notion-prompt-bridge" });
+        resolve(result && typeof result === "object"
+          ? result
+          : { ok: false, sent: false, deliveryState: "unknown", method: "notion-prompt-bridge" });
       }
       function onMessage(event) {
         const message = event.data;
@@ -884,6 +1004,7 @@ export function createSendCapability(deps = {}) {
         finish({
           ok: false,
           sent: false,
+          deliveryState: "not-sent",
           method: "notion-prompt-bridge",
           reason: error?.message || String(error || "Notion AI prompt send failed")
         });
@@ -897,12 +1018,14 @@ export function createSendCapability(deps = {}) {
       const deadlineAt = sendDeadlineAt(data, timeoutMs);
       const timer = setTimeout(() => {
         window.removeEventListener("message", onMessage, true);
-        resolve({ ok: false, sent: false, method: "notion-bridge", reason: "Notion AI send bridge timed out" });
+        resolve({ ok: false, sent: false, deliveryState: "unknown", method: "notion-bridge", reason: "Notion AI send bridge timed out" });
       }, Math.max(1000, remainingDeadlineMs(deadlineAt, timeoutMs)));
       function finish(result) {
         clearTimeout(timer);
         window.removeEventListener("message", onMessage, true);
-        resolve(result && typeof result === "object" ? result : { ok: false, sent: false, method: "notion-bridge" });
+        resolve(result && typeof result === "object"
+          ? result
+          : { ok: false, sent: false, deliveryState: "unknown", method: "notion-bridge" });
       }
       function onMessage(event) {
         const message = event.data;
@@ -924,6 +1047,7 @@ export function createSendCapability(deps = {}) {
         finish({
           ok: false,
           sent: false,
+          deliveryState: "not-sent",
           method: "notion-bridge",
           reason: error?.message || String(error || "Notion AI send bridge failed")
         });
@@ -937,15 +1061,19 @@ export function createSendCapability(deps = {}) {
     if (result?.ok && result?.sent) {
       return {
         sent: true,
+        deliveryState: "sent",
         method: result.method || "notion-bridge",
-        verified: result.verified !== false
+        verified: result.verified !== false,
+        ...(result.submissionNavigation ? { submissionNavigation: result.submissionNavigation } : {})
       };
     }
     return {
       sent: false,
+      deliveryState: result?.deliveryState === "not-sent" ? "not-sent" : "unknown",
       method: result?.method || "notion-bridge",
       verified: false,
-      reason: result?.reason || "Notion AI did not accept the prompt"
+      reason: result?.reason || "Notion AI did not accept the prompt",
+      ...(result?.submissionNavigation ? { submissionNavigation: result.submissionNavigation } : {})
     };
   }
 
@@ -987,52 +1115,79 @@ export function createSendCapability(deps = {}) {
 
   async function sendTextUncached(data) {
     if (isNotionSendTarget(data)) return sendNotionText(data);
-    const grok = isGrokSendTarget(data);
-    const kagi = isKagiSendTarget(data);
-    const gemini = isGeminiSendTarget(data);
-    const deadlineAt = sendDeadlineAt(data, Array.isArray(data?.images) && data.images.length ? 60000 : 10000);
-    if (deadlineExpired(deadlineAt)) throw new Error("Send deadline exceeded");
-    let input = inputCandidates(data?.inputSelector);
-    if (!input) throw new Error("Input element not found");
-    const files = promptImageFilesFromPayload(data?.images);
-    const textValue = String(data.text || "");
-    if (Array.isArray(data?.images) && data.images.length && !files.length) {
-      throw new Error("Image payload could not be restored");
-    }
-    const batch = promptImagePasteStrategy(data) === PROMPT_IMAGE_PASTE_STRATEGY_BATCH;
-    const geminiBatch = gemini && batch;
-    if (files.length) {
-      const attached = grok
-        ? await attachGrokPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt, textValue)
-        : kagi
-          ? await attachKagiPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt, textValue)
-          : geminiBatch
-            ? await attachGeminiPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt, textValue)
-          : batch
-            ? await attachBatchPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt)
-            : await attachPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt);
-      if (!attached.ok) throw new Error(attached.reason || "Image insertion failed");
-      if (grok || kagi || geminiBatch) input = inputCandidates(data?.inputSelector) || attached.input || input;
-    }
-    if (deadlineExpired(deadlineAt)) throw new Error("Send deadline exceeded");
-    const combinedPaste = files.length > 0 && (grok || kagi || geminiBatch);
-    if (textValue.trim() && (!combinedPaste || compareText(text(input)) !== compareText(textValue))) await setInputValue(input, textValue);
-    await sleepUntilDeadline(grok ? 320 : 140, deadlineAt);
-    const submit = await waitForPromptSubmitReady(input, data?.sendButtonSelector, deadlineAt, files.length ? 12000 : 8000);
-    if (submit) {
+    let deliveryState = "not-sent";
+    let submissionNavigation = null;
+    try {
+      const grok = isGrokSendTarget(data);
+      const kagi = isKagiSendTarget(data);
+      const gemini = isGeminiSendTarget(data);
+      const deadlineAt = sendDeadlineAt(data, Array.isArray(data?.images) && data.images.length ? 60000 : 10000);
+      if (deadlineExpired(deadlineAt)) throw new Error("Send deadline exceeded");
+      let input = inputCandidates(data?.inputSelector);
+      if (!input) throw new Error("Input element not found");
+      const files = promptImageFilesFromPayload(data?.images);
+      const textValue = String(data.text || "");
+      if (Array.isArray(data?.images) && data.images.length && !files.length) {
+        throw new Error("Image payload could not be restored");
+      }
+      const prepared = await preparePromptComposerForRun(
+        input,
+        data?.inputSelector || "",
+        deadlineAt,
+        { grok, gemini }
+      );
+      if (!prepared.ok) throw new Error(prepared.reason || "Composer could not be prepared");
+      input = prepared.input || input;
+      const batch = promptImagePasteStrategy(data) === PROMPT_IMAGE_PASTE_STRATEGY_BATCH;
+      const geminiBatch = gemini && batch;
+      if (files.length) {
+        const attached = grok
+          ? await attachGrokPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt, textValue)
+          : kagi
+            ? await attachKagiPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt, textValue)
+            : geminiBatch
+              ? await attachGeminiPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt, textValue)
+            : batch
+              ? await attachBatchPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt)
+              : await attachPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt);
+        if (!attached.ok) throw new Error(attached.reason || "Image insertion failed");
+        if (grok || kagi || geminiBatch) input = inputCandidates(data?.inputSelector) || attached.input || input;
+      }
+      if (deadlineExpired(deadlineAt)) throw new Error("Send deadline exceeded");
+      const combinedPaste = files.length > 0 && (grok || kagi || geminiBatch);
+      if (textValue.trim() && (!combinedPaste || promptTextSnapshot(text(input)) !== promptTextSnapshot(textValue))) {
+        await setInputValue(input, textValue);
+      }
+      await sleepUntilDeadline(grok ? 320 : 140, deadlineAt);
+      const submit = await waitForPromptSubmitReady(input, data?.sendButtonSelector, deadlineAt, files.length ? 12000 : 8000);
+      if (submit) {
+        if (!contentBridgeIsCurrent()) throw new Error("Send bridge was superseded before submit");
+        const marked = markSubmissionNavigation(data, "button");
+        if (gemini) submissionNavigation = submissionNavigationCorrelation(data, "Gemini", marked, "button");
+        deliveryState = "unknown";
+        if (!clickPromptSubmit(submit)) throw new Error("Submit button activation failed");
+        return { sent: true, deliveryState: "sent", method: "button", verified: false, ...(submissionNavigation ? { submissionNavigation } : {}) };
+      }
+      if (files.length) throw new Error("Submit button stayed disabled");
+      if (deadlineExpired(deadlineAt)) throw new Error("Send deadline exceeded");
       if (!contentBridgeIsCurrent()) throw new Error("Send bridge was superseded before submit");
-      markSubmissionNavigation(data, "button");
-      if (!clickPromptSubmit(submit)) throw new Error("Submit button activation failed");
-      return { sent: true, method: "button", verified: false };
+      const keyInit = { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true };
+      const marked = markSubmissionNavigation(data, "enter");
+      if (gemini) submissionNavigation = submissionNavigationCorrelation(data, "Gemini", marked, "enter");
+      deliveryState = "unknown";
+      input.dispatchEvent(new KeyboardEvent("keydown", keyInit));
+      input.dispatchEvent(new KeyboardEvent("keyup", keyInit));
+      return { sent: true, deliveryState: "sent", method: "enter", verified: false, ...(submissionNavigation ? { submissionNavigation } : {}) };
+    } catch (error) {
+      return {
+        sent: false,
+        deliveryState,
+        method: "composer",
+        verified: false,
+        reason: error?.message || String(error || "Send failed"),
+        ...(submissionNavigation ? { submissionNavigation } : {})
+      };
     }
-    if (files.length) throw new Error("Submit button stayed disabled");
-    if (deadlineExpired(deadlineAt)) throw new Error("Send deadline exceeded");
-    if (!contentBridgeIsCurrent()) throw new Error("Send bridge was superseded before submit");
-    const keyInit = { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true };
-    markSubmissionNavigation(data, "enter");
-    input.dispatchEvent(new KeyboardEvent("keydown", keyInit));
-    input.dispatchEvent(new KeyboardEvent("keyup", keyInit));
-    return { sent: true, method: "enter", verified: false };
   }
   return Object.freeze({
     sendText,

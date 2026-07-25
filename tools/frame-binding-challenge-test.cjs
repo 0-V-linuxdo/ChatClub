@@ -314,6 +314,102 @@ const { functionSource } = require("./function-source.cjs");
     assert.equal(effects.navigator, 1);
   }
 
+  {
+    const lifecycleCurrentSource = functionSource(controllerSource, "frameLifecycleBelongsToCurrentDocument");
+    const lifecycleHandlerSource = functionSource(controllerSource, "handleAuthenticatedFrameLifecycle");
+    const currentDocumentId = "bridge-document-new";
+    const staleDocumentId = "bridge-document-old";
+    const frame = {
+      dataset: {
+        preferredModelDocumentId: currentDocumentId,
+        injectedBrowserDocumentId: "browser-document-new",
+        summaryRuntimeDocumentId: currentDocumentId,
+        contentRuntimeCapabilitiesDocumentId: currentDocumentId,
+        contentRuntimeCapabilities: "send,preferred-model"
+      }
+    };
+    const effects = {
+      remembered: [],
+      challengeInvalidations: 0,
+      capabilityInvalidations: 0,
+      preferredModelInvalidations: 0
+    };
+    const controller = {
+      iframeForWindow: (source) => source === frame ? frame : null,
+      rememberFrameLocation: (_iframe, data) => effects.remembered.push(data)
+    };
+    const lifecycleContext = vm.createContext({
+      Boolean,
+      String,
+      workspaceController: () => controller,
+      frameBindingChallenges: {
+        invalidate: () => { effects.challengeInvalidations += 1; }
+      },
+      invalidateContentRuntimeCapabilityLedger: () => { effects.capabilityInvalidations += 1; },
+      invalidatePreferredModelFrame: () => { effects.preferredModelInvalidations += 1; }
+    });
+    vm.runInContext(`
+      ${lifecycleCurrentSource}
+      ${lifecycleHandlerSource}
+      globalThis.handleLifecycle = handleAuthenticatedFrameLifecycle;
+    `, lifecycleContext);
+    const lifecycleMessage = (lifecycleAction, documentId, data = {}) => ({
+      lifecycleAction,
+      data: { documentId, ...data }
+    });
+    const lifecycleSender = (bridgeDocumentId) => ({ bridgeDocumentId });
+
+    assert.equal(
+      lifecycleContext.handleLifecycle(
+        lifecycleMessage("locationChanged", staleDocumentId, { href: "https://example.com/stale" }),
+        lifecycleSender(staleDocumentId),
+        frame
+      ),
+      false,
+      "a delayed old-document location relay must be ignored after a new document is registered"
+    );
+    assert.deepEqual(effects.remembered, []);
+
+    assert.equal(
+      lifecycleContext.handleLifecycle(
+        lifecycleMessage("contentUnloading", staleDocumentId),
+        lifecycleSender(staleDocumentId),
+        frame
+      ),
+      false,
+      "a delayed old-document unload relay must not invalidate the new document"
+    );
+    assert.equal(effects.challengeInvalidations, 0);
+    assert.equal(effects.capabilityInvalidations, 0);
+    assert.equal(effects.preferredModelInvalidations, 0);
+    assert.equal(frame.dataset.preferredModelDocumentId, currentDocumentId);
+    assert.equal(frame.dataset.injectedBrowserDocumentId, "browser-document-new");
+
+    const currentLocation = lifecycleMessage("locationChanged", currentDocumentId, {
+      href: "https://example.com/current"
+    });
+    assert.equal(
+      lifecycleContext.handleLifecycle(currentLocation, lifecycleSender(currentDocumentId), frame),
+      true,
+      "the current document's location relay must still be accepted"
+    );
+    assert.deepEqual(effects.remembered, [currentLocation.data]);
+
+    assert.equal(
+      lifecycleContext.handleLifecycle(
+        lifecycleMessage("contentUnloading", currentDocumentId),
+        lifecycleSender(currentDocumentId),
+        frame
+      ),
+      true,
+      "the current document's unload relay must still invalidate its runtime state"
+    );
+    assert.equal(effects.challengeInvalidations, 1);
+    assert.equal(effects.capabilityInvalidations, 1);
+    assert.equal(effects.preferredModelInvalidations, 1);
+    assert.equal(frame.dataset.injectedBrowserDocumentId, undefined);
+  }
+
   console.log("secure frame binding challenges: ok");
 })().catch((error) => {
   console.error(error?.stack || error);

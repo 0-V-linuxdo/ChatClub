@@ -14,10 +14,8 @@
 ### Manual target browsers
 
 - Arc
-- Zen
-- Firefox Nightly
-- Dia
-- Tabbit
+
+Unless the user explicitly requests another branded browser, perform manual browser verification only in Arc.
 
 Use DevTools for real-site console probes, DOM inspection, network inspection, and runtime verification.
 
@@ -88,7 +86,7 @@ After all intended source and generated changes are present:
 6. Run the relevant browser smoke and manual branded-browser checks for runtime-facing changes.
 7. Build both `npm run pack` and `npm run pack:firefox` for a release.
 
-The complete automated engine-baseline gate is the GitHub Actions workflow, not `npm run ci` by itself. It does not replace manual checks in Arc, Zen, Firefox Nightly, Dia, or Tabbit when a branded-browser behavior is affected.
+The complete automated engine-baseline gate is the GitHub Actions workflow, not `npm run ci` by itself. It does not replace the manual Arc check when a branded-browser behavior is affected.
 
 Do not refresh `version-state.json` to hide a missing version or site-config bump. Fix the version first, then regenerate the snapshot.
 Treat `version-state.json` as a generated release snapshot; update it only with `npm run version:snapshot` after the required version changes.

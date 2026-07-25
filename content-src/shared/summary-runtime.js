@@ -896,7 +896,6 @@ export {
   text,
   reveal,
   merge,
-  compareText,
   pageMeta,
   hasUserAndAssistant,
   classText,

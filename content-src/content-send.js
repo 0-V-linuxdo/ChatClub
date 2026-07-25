@@ -3,7 +3,6 @@ import { CONTENT_RUNTIME_SEND_BUNDLE_IDENTITY } from "../shared/content-runtime-
 import { createContentRuntimeBundleIdentity } from "../shared/content-runtime-identity.js";
 import {
   buttonText,
-  compareText,
   normalize,
   qsa,
   sleep,
@@ -28,7 +27,6 @@ function installSendCapability() {
     isDisabledElement,
     sleep,
     buttonText,
-    compareText,
     text,
     PROMPT_IMAGE_PASTE_STRATEGY_BATCH: "batch",
     NOTION_SEND_PROMPT_SOURCE: CONTENT_PROTOCOL.NOTION_SEND_PROMPT_SOURCE,

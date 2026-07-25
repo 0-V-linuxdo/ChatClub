@@ -748,6 +748,42 @@ button { cursor: pointer; }
   height: 17px;
 }
 
+.prompt-send-queue-badge {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  z-index: 2;
+  display: inline-grid;
+  place-items: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  color: #ffffff;
+  background: var(--danger);
+  border: 2px solid var(--panel);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.prompt-send-queue-badge[hidden] {
+  display: none;
+}
+
+.prompt-send-queue-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .prompt-send-button:hover {
   background: color-mix(in srgb, var(--primary) 90%, #ffffff 10%);
   border-color: color-mix(in srgb, var(--primary) 76%, #ffffff 24%);
@@ -1009,81 +1045,27 @@ button { cursor: pointer; }
   outline: 0;
 }
 
-.prompt-shell-model-gate-applying .prompt-input[readonly],
-.prompt-shell-model-gate-failed .prompt-input[readonly] {
-  /* Keep the draft and selection intact while the in-field status owns the visual line. */
-  opacity: 1;
-  color: transparent;
-  caret-color: transparent;
-  -webkit-text-fill-color: transparent;
-  text-shadow: none;
-}
-
-.prompt-shell-model-gate-applying .prompt-input[readonly]::placeholder,
-.prompt-shell-model-gate-failed .prompt-input[readonly]::placeholder {
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-}
-
-.prompt-shell-model-gate-applying .prompt-input[readonly]::selection,
-.prompt-shell-model-gate-failed .prompt-input[readonly]::selection {
-  color: transparent;
-  background: transparent;
-}
-
-.prompt-shell-model-gate-applying .prompt-collapsed-preview > *,
-.prompt-shell-model-gate-failed .prompt-collapsed-preview > * {
-  visibility: hidden;
-}
-
-.prompt-shell-model-gate-applying .prompt-input[readonly]:not(:focus),
+.prompt-shell-model-gate-applying .prompt-input:not(:focus),
 .prompt-shell-model-gate-applying .prompt-collapsed-preview {
   border-color: color-mix(in srgb, var(--primary) 36%, var(--line));
 }
 
-.prompt-shell-model-gate-failed .prompt-input[readonly]:not(:focus),
+.prompt-shell-model-gate-failed .prompt-input:not(:focus),
 .prompt-shell-model-gate-failed .prompt-collapsed-preview {
   border-color: color-mix(in srgb, var(--danger) 40%, var(--line));
 }
 
-.prompt-shell-model-gate-applying .prompt-collapsed-preview,
-.prompt-shell-model-gate-applying .prompt-input[readonly] {
-  cursor: wait;
-}
-
-.prompt-shell-model-gate-failed .prompt-collapsed-preview,
-.prompt-shell-model-gate-failed .prompt-input[readonly] {
-  cursor: not-allowed;
-}
-
-.prompt-shell-model-gate-applying :is(
-  .prompt-actions-button,
-  .prompt-clear-button,
-  .prompt-send-button,
-  .prompt-image-remove
-):disabled,
-.prompt-shell-model-gate-failed :is(
-  .prompt-actions-button,
-  .prompt-clear-button,
-  .prompt-send-button,
-  .prompt-image-remove
-):disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  pointer-events: none;
-  transform: none;
-}
-
 .prompt-model-gate-status {
   position: absolute;
-  top: 5px;
-  left: 40px;
+  top: calc(100% + 5px);
+  right: 4px;
+  left: auto;
   z-index: 65;
   display: inline-flex;
   align-items: center;
   gap: 7px;
   width: max-content;
-  max-width: calc(100% - 118px);
+  max-width: min(340px, calc(100vw - 24px));
   min-height: 28px;
   height: 28px;
   padding: 4px 8px;
@@ -1092,7 +1074,7 @@ button { cursor: pointer; }
   background: color-mix(in srgb, var(--panel) 88%, var(--soft) 12%);
   border: 1px solid var(--line);
   border-radius: 7px;
-  box-shadow: none;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.15);
   font-size: 12px;
   font-weight: 650;
   line-height: 16px;
@@ -1102,10 +1084,11 @@ button { cursor: pointer; }
 }
 
 .prompt-shell-expanded.prompt-shell-has-images .prompt-model-gate-status {
-  top: auto;
-  bottom: 13px;
-  left: 50px;
-  max-width: calc(100% - 104px);
+  top: calc(100% + 5px);
+  right: 4px;
+  left: auto;
+  bottom: auto;
+  max-width: min(340px, calc(100vw - 24px));
 }
 
 .prompt-model-gate-status-text {

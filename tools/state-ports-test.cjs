@@ -19,6 +19,8 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   assert.equal(Object.isFrozen(settingsModule.SETTINGS_OPTION_CAPABILITIES.appearance.write), true);
   rootState.options = {
     apiProfiles: [{ id: "profile-1" }],
+    modelPreferenceFailureOverrides: { Gemini: "inherit" },
+    modelPreferenceFailurePolicy: "send-current",
     modelPreferenceOrder: ["Gemini"],
     modelPreferences: { Gemini: "pro" },
     nested: { enabled: true },
@@ -31,23 +33,25 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
 
   const composer = composerModule.createComposerStatePort(rootState);
   composer.promptText = "hello";
+  composer.promptQueuedTargetCount = 3;
+  composer.promptSendingTargetCount = 1;
   assert.equal(rootState.promptText, "hello");
+  assert.equal(rootState.promptQueuedTargetCount, 3);
   assert.throws(() => { composer.groups; }, /composer cannot read/);
   assert.throws(() => { composer.options.nested.enabled = false; }, /read-only/);
 
   const preferredModel = preferredModelModule.createPreferredModelStatePort(rootState);
   preferredModel.preferredModelGateState = "ready";
   assert.equal(rootState.preferredModelGateState, "ready");
-  assert.equal(preferredModel.groups[0].id, "group-1");
-  assert.throws(() => { preferredModel.groups.push({ id: "group-2" }); }, /read-only/);
-  preferredModel.promptText = "restored snapshot";
-  preferredModel.promptImages = [{ id: "image-1" }];
-  preferredModel.promptSelection = { start: 3, end: 3, direction: "none" };
-  assert.equal(rootState.promptText, "restored snapshot");
+  assert.throws(() => { preferredModel.groups; }, /preferredModel cannot read/);
+  assert.throws(() => { preferredModel.promptText; }, /preferredModel cannot read/);
+  assert.throws(() => { preferredModel.promptImages = []; }, /preferredModel cannot mutate/);
   assert.throws(() => { preferredModel.options.nested.enabled = false; }, /read-only/);
 
   const topbar = topbarModule.createTopbarStatePort(rootState);
-  assert.equal(topbar.promptText, "restored snapshot");
+  assert.equal(topbar.promptText, "hello");
+  assert.equal(topbar.promptQueuedTargetCount, 3);
+  assert.equal(topbar.promptSendingTargetCount, 1);
   topbar.topbarEditMode = true;
   assert.equal(rootState.topbarEditMode, true);
   assert.throws(() => { topbar.promptText = "cross-feature write"; }, /topbar cannot mutate/);
@@ -68,6 +72,7 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   assert.equal(rootState.settingsAppearanceTab, "topbar");
   assert.throws(() => { settingsSections.appearance.customConfig; }, /settings\.appearance cannot read/);
   assert.throws(() => { settingsSections.appearance.options.modelPreferences; }, /settings\.appearance cannot read/);
+  assert.throws(() => { settingsSections.appearance.options.modelPreferenceFailurePolicy; }, /settings\.appearance cannot read/);
   settingsSections.appearance.options.themeMode = "dark";
   assert.equal(rootState.options.themeMode, "dark");
   assert.throws(() => {
@@ -104,7 +109,17 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   const allPorts = stateModule.createFeatureStatePorts(rootState);
   assert.equal("settings" in allPorts, false);
   assert.equal(allPorts.settingsSections.models.options.modelPreferences.Gemini, "pro");
-  assert.equal(allPorts.composer.promptText, "restored snapshot");
+  assert.equal(allPorts.settingsSections.models.options.modelPreferenceFailurePolicy, "send-current");
+  assert.equal(allPorts.settingsSections.models.options.modelPreferenceFailureOverrides.Gemini, "inherit");
+  allPorts.settingsSections.models.options.modelPreferenceFailurePolicy = "skip";
+  allPorts.settingsSections.models.options.modelPreferenceFailureOverrides = {
+    ...allPorts.settingsSections.models.options.modelPreferenceFailureOverrides,
+    Gemini: "send-current"
+  };
+  assert.equal(allPorts.preferredModel.options.modelPreferenceFailurePolicy, "skip");
+  assert.equal(allPorts.preferredModel.options.modelPreferenceFailureOverrides.Gemini, "send-current");
+  assert.equal(allPorts.composer.promptText, "hello");
+  assert.equal(allPorts.composer.promptQueuedTargetCount, 3);
   assert.equal(allPorts.preferredModel.preferredModelGateState, "ready");
   assert.equal(allPorts.topbar.topbarEditMode, true);
   assert.equal(allPorts.favicon.faviconCache.example.url, "https://example.com/favicon.ico");

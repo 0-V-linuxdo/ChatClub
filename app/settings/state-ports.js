@@ -15,7 +15,9 @@ export const SETTINGS_OPTION_CAPABILITIES = Object.freeze({
   ]),
   profiles: optionCapability(["apiProfiles", "optimizeApiProfileId", "summaryApiProfileId"]),
   apps: optionCapability(["builtinChatAppOrder", "builtinChatAppIframeConfigs"]),
-  models: optionCapability(["modelPreferenceOrder", "modelPreferences"]),
+  models: optionCapability([
+    "modelPreferenceFailureOverrides", "modelPreferenceFailurePolicy", "modelPreferenceOrder", "modelPreferences"
+  ]),
   summary: optionCapability(
     ["apiProfiles", "summaryApiProfileId", "summaryPromptTemplateId", "summaryPromptTemplates", "summarySiteConfigs"],
     ["summaryApiProfileId", "summaryPromptTemplateId", "summaryPromptTemplates", "summarySiteConfigs"]

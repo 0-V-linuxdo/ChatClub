@@ -4,11 +4,17 @@ import {
   DEFAULT_OPTIONS,
   GEMINI_THINKING_LEVEL_PREFERENCE_KEY,
   GEMINI_THINKING_LEVEL_TARGETS,
+  MODEL_PREFERENCE_FAILURE_OVERRIDE_POLICIES,
+  MODEL_PREFERENCE_FAILURE_POLICIES,
   MODEL_PREFERENCE_TARGETS
 } from "../../shared/constants.js";
 import { t } from "../../shared/i18n.js";
-import { normalizeModelPreferenceOrder } from "../../shared/storage-schema.js";
-import { button, el, select, toast } from "../../ui/dom.js";
+import {
+  normalizeModelPreferenceFailureOverrides,
+  normalizeModelPreferenceFailurePolicy,
+  normalizeModelPreferenceOrder
+} from "../../shared/storage-schema.js";
+import { button, el, field, select, toast } from "../../ui/dom.js";
 import {
   cleanupSettingsDragRows,
   createSettingsKit,
@@ -58,6 +64,8 @@ export function createModelsSettingsSection(ctx) {
   let autoSaveRunning = false;
   let autoSavePending = null;
   let autoSaveRedraw = null;
+  let failurePolicyDraft = "";
+  let failureOverridesDraft = null;
   let dragId = "";
 
   function preferenceKey(config) {
@@ -74,15 +82,22 @@ export function createModelsSettingsSection(ctx) {
     return state.modelPreferenceDraft;
   }
 
+  function queueOptionsAutoSave(patch, options = {}) {
+    autoSavePending = {
+      patch: { ...(autoSavePending?.patch || {}), ...patch },
+      applyModels: Boolean(autoSavePending?.applyModels || options.applyModels)
+    };
+    if (typeof options.redraw === "function") autoSaveRedraw = options.redraw;
+    flushAutosave();
+  }
+
   function queueAutoSave(config, options = {}) {
     const next = { ...DEFAULT_OPTIONS.modelPreferences, ...(config || {}) };
     state.modelPreferenceDraft = next;
-    autoSavePending = next;
-    if (typeof options.redraw === "function") autoSaveRedraw = options.redraw;
     Promise.resolve(applyPreferredModels(null, { immediate: true })).catch((error) => {
       console.warn("[ChatClub] Failed to apply pending model preferences", error);
     });
-    flushAutosave();
+    queueOptionsAutoSave({ modelPreferences: next }, { ...options, applyModels: true });
   }
 
   async function flushAutosave() {
@@ -90,15 +105,27 @@ export function createModelsSettingsSection(ctx) {
     autoSaveRunning = true;
     try {
       while (autoSavePending) {
-        const next = autoSavePending;
+        const pending = autoSavePending;
+        const { patch, applyModels } = pending;
         const redraw = autoSaveRedraw;
         autoSavePending = null;
         autoSaveRedraw = null;
-        state.options = await saveOptionsPatch({ modelPreferences: next });
+        const savedOptions = await saveOptionsPatch(patch);
+        state.options = {
+          ...savedOptions,
+          ...(failurePolicyDraft
+            ? { modelPreferenceFailurePolicy: failurePolicyDraft }
+            : {}),
+          ...(failureOverridesDraft
+            ? { modelPreferenceFailureOverrides: failureOverridesDraft }
+            : {})
+        };
         autoSaveError = null;
         await notifyConfigReload();
-        await Promise.resolve(applyPreferredModels(null, { immediate: true }));
-        if (!autoSavePending && preferenceKey(state.modelPreferenceDraft) === preferenceKey(next)) {
+        if (applyModels) await Promise.resolve(applyPreferredModels(null, { immediate: true }));
+        const savedPreferences = patch.modelPreferences;
+        const pendingPreferences = autoSavePending?.patch?.modelPreferences;
+        if (savedPreferences && !pendingPreferences && preferenceKey(state.modelPreferenceDraft) === preferenceKey(savedPreferences)) {
           state.modelPreferenceDraft = {
             ...DEFAULT_OPTIONS.modelPreferences,
             ...(state.options.modelPreferences || {})
@@ -135,6 +162,63 @@ export function createModelsSettingsSection(ctx) {
       value: target.id,
       label: target.id ? target.label : t("modelPreferences.none")
     }));
+  }
+
+  function failurePolicyValue() {
+    return normalizeModelPreferenceFailurePolicy(
+      failurePolicyDraft || state.options.modelPreferenceFailurePolicy
+    );
+  }
+
+  function failureOverridesValue() {
+    if (!failureOverridesDraft) {
+      failureOverridesDraft = normalizeModelPreferenceFailureOverrides(
+        state.options.modelPreferenceFailureOverrides
+      );
+    }
+    return failureOverridesDraft;
+  }
+
+  function failurePolicyLabel(value) {
+    if (value === "send-current") return t("modelPreferences.failureSendCurrent");
+    if (value === "skip") return t("modelPreferences.failureSkip");
+    return t("modelPreferences.failureInherit");
+  }
+
+  function failurePolicyOptions(values) {
+    return values.map((value) => ({ value, label: failurePolicyLabel(value) }));
+  }
+
+  function failurePolicySelect() {
+    const value = failurePolicyValue();
+    const control = select(value, failurePolicyOptions(MODEL_PREFERENCE_FAILURE_POLICIES), {
+      dataset: { modelPreferenceFailurePolicy: "global" }
+    });
+    control.value = value;
+    control.addEventListener("change", () => {
+      failurePolicyDraft = normalizeModelPreferenceFailurePolicy(control.value);
+      state.options.modelPreferenceFailurePolicy = failurePolicyDraft;
+      queueOptionsAutoSave({ modelPreferenceFailurePolicy: failurePolicyDraft });
+    });
+    return control;
+  }
+
+  function failureOverrideSelect(appId) {
+    const overrides = failureOverridesValue();
+    const value = overrides[appId];
+    const control = select(value, failurePolicyOptions(MODEL_PREFERENCE_FAILURE_OVERRIDE_POLICIES), {
+      dataset: { modelPreferenceFailureOverrideAppId: appId }
+    });
+    control.value = value;
+    control.addEventListener("change", () => {
+      failureOverridesDraft = normalizeModelPreferenceFailureOverrides({
+        ...failureOverridesValue(),
+        [appId]: control.value
+      });
+      state.options.modelPreferenceFailureOverrides = failureOverridesDraft;
+      queueOptionsAutoSave({ modelPreferenceFailureOverrides: failureOverridesDraft });
+    });
+    return control;
   }
 
   function preferenceOrder() {
@@ -240,7 +324,8 @@ export function createModelsSettingsSection(ctx) {
       modelSelect,
       appId === "Gemini"
         ? thinkingLevelSwitch()
-        : el("span", { class: "model-thinking-toggle-placeholder", "aria-hidden": "true" })
+        : el("span", { class: "model-thinking-toggle-placeholder", "aria-hidden": "true" }),
+      failureOverrideSelect(appId)
     );
   }
 
@@ -251,9 +336,21 @@ export function createModelsSettingsSection(ctx) {
   }
 
   function pane(redraw) {
+    const failureBlock = settingsBlock(
+      t("modelPreferences.failurePolicyTitle"),
+      t("modelPreferences.failurePolicyDesc"),
+      field(t("modelPreferences.failurePolicyDefault"), failurePolicySelect())
+    );
+    failureBlock.classList.add("model-preference-failure-block");
     const block = settingsBlock(t("modelPreferences.title"), t("modelPreferences.desc"),
       settingsList(
-        ["", t("modelPreferences.platform"), t("modelPreferences.preferredModel"), t("modelPreferences.thinkingLevel")],
+        [
+          "",
+          t("modelPreferences.platform"),
+          t("modelPreferences.preferredModel"),
+          t("modelPreferences.thinkingLevel"),
+          t("modelPreferences.failureOverride")
+        ],
         preferenceOrder().map((appId) => row(appId, redraw)),
         "settings-manager-list model-preference-list"
       ),
@@ -262,6 +359,7 @@ export function createModelsSettingsSection(ctx) {
     block.classList.add("model-preference-block");
     return el("div", { class: "settings-pane settings-manager-pane model-preferences-pane" },
       settingsPaneToolbar(t("modelPreferences.manage")),
+      failureBlock,
       block
     );
   }
@@ -269,11 +367,17 @@ export function createModelsSettingsSection(ctx) {
   function resetAfterImport() {
     clearAutosaveState();
     state.modelPreferenceDraft = null;
+    failurePolicyDraft = "";
+    failureOverridesDraft = null;
     cleanupDrag();
   }
 
   function close() {
-    if (!autosaveBusy() && !autosaveFailed()) state.modelPreferenceDraft = null;
+    if (!autosaveBusy() && !autosaveFailed()) {
+      state.modelPreferenceDraft = null;
+      failurePolicyDraft = "";
+      failureOverridesDraft = null;
+    }
     cleanupDrag();
   }
 

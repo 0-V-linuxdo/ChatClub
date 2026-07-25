@@ -25,6 +25,8 @@ const preferredCapabilitySource = [
 const submissionNavigationSource = fs.readFileSync(path.join(root, "content-src/shared/submission-navigation.js"), "utf8");
 const preloadSource = fs.readFileSync(path.join(root, "content/preload.js"), "utf8");
 const preloadEntrySource = fs.readFileSync(path.join(root, "content-src/preload.js"), "utf8");
+const notionSendSource = fs.readFileSync(path.join(root, "content-src/preload/notion-send.js"), "utf8");
+const notionUtilsSource = fs.readFileSync(path.join(root, "content-src/preload/notion-utils.js"), "utf8");
 const workspaceFrameSource = fs.readFileSync(path.join(root, "app/workspace/frame-controller.js"), "utf8");
 const frameCommandsSource = fs.readFileSync(path.join(root, "shared/frame-commands.js"), "utf8");
 const protocolSource = fs.readFileSync(path.join(root, "shared/protocol.js"), "utf8");
@@ -107,6 +109,12 @@ assert.match(
   /existingIsSettled = Boolean\(existing\?\.success \|\| existing\?\.terminal\)[\s\S]*existing\?\.key === key && \(existingIsSettled \|\| existingIsRunning\)/,
   "same-key terminal cancellations must stay settled instead of silently resetting their retry budget"
 );
+const preferredModelApplySource = functionSource(preferredModelSource, "applyPreferredModelToFrame");
+assert.match(
+  preferredModelApplySource,
+  /expectedDocumentId:\s*registration\.documentId/,
+  "a preferred-model run must remain bound to the exact verified content document"
+);
 
 const routeContext = vm.createContext({ URL });
 vm.runInContext(
@@ -123,50 +131,151 @@ assert.deepEqual(routeState("NotionAI", "https://app.notion.com/chat"), { host: 
 assert.deepEqual(routeState("NotionAI", "https://app.notion.com/chat?t=thread-1"), { host: "app.notion.com", phase: "terminal", threadId: "thread-1" });
 assert.equal(routeState("NotionAI", "https://app.notion.com/page/other"), null);
 
-const leaseContext = vm.createContext({ URL, Date, clearTimeout() {} });
+const contentCorrelationContext = vm.createContext({
+  URL,
+  location: { href: "https://gemini.google.com/app/fallback-thread" }
+});
+vm.runInContext(`
+  ${functionSource(sendEntrySource, "submissionNavigationBarrierState")}
+  ${functionSource(sendEntrySource, "submissionNavigationCorrelation")}
+  globalThis.correlation = submissionNavigationCorrelation;
+`, contentCorrelationContext);
+const exactStartCorrelation = JSON.parse(JSON.stringify(contentCorrelationContext.correlation(
+  { sendId: "send-content" },
+  "Gemini",
+  { sendId: "send-content", initialHref: "https://gemini.google.com/app" },
+  "button"
+)));
+assert.equal(exactStartCorrelation.barrierState, "required");
+assert.equal(exactStartCorrelation.initialHref, "https://gemini.google.com/app");
+const exactTerminalCorrelation = JSON.parse(JSON.stringify(contentCorrelationContext.correlation(
+  { sendId: "send-content" },
+  "Gemini",
+  { sendId: "send-content", initialHref: "https://gemini.google.com/app/live-thread" },
+  "enter"
+)));
+assert.equal(exactTerminalCorrelation.barrierState, "not-required");
+
+const notionCorrelationContext = vm.createContext({ URL });
+vm.runInContext(`
+  ${functionSource(notionUtilsSource, "createNotionSubmissionNavigation")}
+  globalThis.correlation = createNotionSubmissionNavigation;
+`, notionCorrelationContext);
+assert.equal(notionCorrelationContext.correlation("send-notion", "button", "https://app.notion.com/ai").barrierState, "required");
+assert.equal(notionCorrelationContext.correlation("send-notion", "button", "https://app.notion.com/chat").barrierState, "required");
+assert.equal(notionCorrelationContext.correlation("send-notion", "button", "https://app.notion.com/chat?t=live-thread").barrierState, "not-required");
+
+let leaseNow = Date.now();
+let leaseTimerId = 0;
+const leaseTimers = new Map();
+const leaseContext = vm.createContext({
+  URL,
+  Date: { now: () => leaseNow },
+  clearTimeout(timerId) {
+    leaseTimers.delete(timerId);
+  },
+  window: {
+    setTimeout(callback, delay) {
+      const timerId = ++leaseTimerId;
+      leaseTimers.set(timerId, { callback, dueAt: leaseNow + Math.max(0, Number(delay) || 0) });
+      return timerId;
+    }
+  }
+});
 vm.runInContext(`
   const MODEL_PREFERENCE_APP_ID_ALIASES = Object.freeze({ Gemini: "Gemini", NotionAI: "NotionAI" });
+  const MODEL_PREFERENCE_SUBMISSION_NAVIGATION_GRACE_MS = 15000;
   const preferredModelApplyRuns = new Map();
+  const preferredModelSubmissionNavigations = new WeakMap();
+  const preferredModelSubmissionNavigationFrames = new Set();
+  const preferredModelSubmissionOutcomes = new WeakMap();
+  const preferredModelSubmissionWaiters = new Set();
   var currentPreferredModelKey = "target:document-1";
+  var currentPreferredModelAppId = "Gemini";
   function preferredModelFrameKey() { return currentPreferredModelKey; }
-  function schedulePreferredModelSubmissionNavigationExpiry(record) {
-    record.expiryScheduleCount = (record.expiryScheduleCount || 0) + 1;
+  function preferredModelAppId(app) { return String(app?.id || ""); }
+  function preferredModelFrameReadinessIsCurrent() { return true; }
+  function activeWorkspace() {
+    return { frameApp: () => ({ id: currentPreferredModelAppId }) };
+  }
+  function preferredModelAbortError(reason) {
+    const error = new Error(reason || "aborted");
+    error.name = "AbortError";
+    error.code = "ABORTED";
+    error.delivered = false;
+    return error;
   }
   ${functionSource(preferredModelSource, "preferredModelSubmissionRouteState")}
+  ${functionSource(preferredModelSource, "preferredModelSubmissionRouteRequirement")}
+  ${functionSource(preferredModelSource, "bindPreferredModelSubmissionInitialRoute")}
+  ${functionSource(preferredModelSource, "preferredModelSubmissionCorrelation")}
+  ${functionSource(preferredModelSource, "preferredModelSubmissionBarrierSnapshot")}
+  ${functionSource(preferredModelSource, "preferredModelSubmissionBarrierError")}
+  ${functionSource(preferredModelSource, "settlePreferredModelSubmissionWaiter")}
+  ${functionSource(preferredModelSource, "notifyPreferredModelSubmissionWaiters")}
+  ${functionSource(preferredModelSource, "waitForPreferredModelSubmissionBarrier")}
   ${functionSource(preferredModelSource, "clearPreferredModelSubmissionNavigation")}
+  ${functionSource(preferredModelSource, "schedulePreferredModelSubmissionNavigationExpiry")}
+  ${functionSource(preferredModelSource, "armPreferredModelSubmissionNavigation")}
+  ${functionSource(preferredModelSource, "finishPreferredModelSubmissionNavigation")}
   ${functionSource(preferredModelSource, "preservePreferredModelForSubmissionNavigation")}
   globalThis.runs = preferredModelApplyRuns;
+  globalThis.navigations = preferredModelSubmissionNavigations;
+  globalThis.navigationFrames = preferredModelSubmissionNavigationFrames;
+  globalThis.outcomes = preferredModelSubmissionOutcomes;
+  globalThis.waiters = preferredModelSubmissionWaiters;
+  globalThis.waitForBarrier = waitForPreferredModelSubmissionBarrier;
+  globalThis.arm = (iframe, sendId, deadlineAt, readiness) => armPreferredModelSubmissionNavigation(iframe, sendId, deadlineAt, readiness);
+  globalThis.setAppId = (appId) => { currentPreferredModelAppId = appId; };
+  globalThis.clearLease = clearPreferredModelSubmissionNavigation;
+  globalThis.scheduleExpiry = schedulePreferredModelSubmissionNavigationExpiry;
+  globalThis.finish = finishPreferredModelSubmissionNavigation;
   globalThis.preserve = preservePreferredModelForSubmissionNavigation;
 `, leaseContext);
 
+function advanceLeaseClock(duration) {
+  leaseNow += Math.max(0, Number(duration) || 0);
+  for (const [timerId, timer] of [...leaseTimers.entries()].sort((left, right) => left[1].dueAt - right[1].dueAt)) {
+    if (timer.dueAt > leaseNow) continue;
+    leaseTimers.delete(timerId);
+    timer.callback();
+  }
+}
+
 function navigationFixture(appId, initialHref, lastPhase) {
-  const iframe = {};
+  const iframe = { isConnected: true };
   const record = {
     success: true,
     cancelled: false,
-    key: "target:document-1",
-    submissionNavigationLease: {
-      sendId: "send-1",
-      appId,
-      initialHref,
-      initialHost: new URL(initialHref).hostname,
-      documentId: "document-1",
-      bridgeVersion: "bridge-1",
-      recordKey: "target:document-1",
-      hardExpiresAt: Date.now() + 60000,
-      expiresAt: Date.now() + 60000,
-      terminalObserved: false,
-      terminalThreadId: "",
-      lastHref: initialHref,
-      lastPhase,
-      timer: 0
-    }
+    key: "target:document-1"
+  };
+  const lease = {
+    sendId: "send-1",
+    appId,
+    initialHref,
+    initialHost: new URL(initialHref).hostname,
+    documentId: "document-1",
+    bridgeVersion: "bridge-1",
+    recordKey: "target:document-1",
+    hardExpiresAt: leaseNow + 60000,
+    expiresAt: leaseNow + 60000,
+    terminalObserved: false,
+    terminalThreadId: "",
+    lastHref: initialHref,
+    lastPhase,
+    timer: 0
   };
   leaseContext.runs.set(iframe, record);
-  return { iframe, record };
+  leaseContext.navigations.set(iframe, lease);
+  leaseContext.navigationFrames.add(iframe);
+  leaseContext.outcomes.delete(iframe);
+  return { iframe, record, lease };
 }
 
 function correlatedEvent(previousHref, href, overrides = {}) {
+  const appId = overrides.appId || "Gemini";
+  const initialHref = overrides.initialHref
+    || (appId === "NotionAI" ? "https://app.notion.com/ai" : "https://gemini.google.com/app");
   return {
     previousHref,
     href,
@@ -174,64 +283,224 @@ function correlatedEvent(previousHref, href, overrides = {}) {
       kind: "pushState",
       documentId: "document-1",
       bridgeVersion: "bridge-1",
-      submission: { sendId: "send-1", appId: overrides.appId || "" },
+      submission: { sendId: "send-1", appId, initialHref },
       ...overrides
     }
   };
 }
 
-{
-  const initial = "https://gemini.google.com/app";
-  const terminal = "https://gemini.google.com/app/thread-a";
-  const fixture = navigationFixture("Gemini", initial, "start");
-  assert.equal(leaseContext.preserve(fixture.iframe, correlatedEvent(initial, terminal, { appId: "Gemini" })), true);
-  assert.equal(fixture.record.submissionNavigationLease.terminalThreadId, "thread-a");
-  assert.equal(leaseContext.runs.get(fixture.iframe), fixture.record, "Gemini submission route must preserve the exact record");
-  const sameThread = "https://gemini.google.com/app/thread-a?hl=en";
-  assert.equal(leaseContext.preserve(fixture.iframe, correlatedEvent(terminal, sameThread, { kind: "replaceState", appId: "Gemini" })), true);
-  const otherThread = "https://gemini.google.com/app/thread-b";
-  assert.equal(leaseContext.preserve(fixture.iframe, correlatedEvent(sameThread, otherThread, { appId: "Gemini" })), false);
-  assert.equal(fixture.record.submissionNavigationLease, null, "a different Gemini thread must end inheritance");
-}
-
-{
-  const initial = "https://app.notion.com/ai";
-  const intermediate = "https://app.notion.com/chat";
-  const terminal = "https://app.notion.com/chat?t=thread-a";
-  const fixture = navigationFixture("NotionAI", initial, "start");
-  assert.equal(leaseContext.preserve(fixture.iframe, correlatedEvent(initial, intermediate, { appId: "NotionAI" })), true);
-  assert.equal(fixture.record.submissionNavigationLease.terminalObserved, false, "Notion intermediate route must retain the lease");
-  assert.equal(leaseContext.preserve(fixture.iframe, correlatedEvent(intermediate, terminal, { kind: "replaceState", appId: "NotionAI" })), true);
-  assert.equal(fixture.record.submissionNavigationLease.terminalThreadId, "thread-a");
-}
-
-for (const invalid of [
-  { label: "wrong send id", overrides: { submission: { sendId: "send-2", appId: "Gemini" } } },
-  { label: "wrong document", overrides: { documentId: "document-2", appId: "Gemini" } },
-  { label: "wrong bridge", overrides: { bridgeVersion: "bridge-2", appId: "Gemini" } },
-  { label: "manual popstate", overrides: { kind: "popstate", submission: undefined, appId: "Gemini" } },
-  { label: "non-contiguous route", previousHref: "https://gemini.google.com/app/other", overrides: { appId: "Gemini" } }
-]) {
-  const initial = "https://gemini.google.com/app";
-  const fixture = navigationFixture("Gemini", initial, "start");
-  const event = correlatedEvent(
-    invalid.previousHref || initial,
-    "https://gemini.google.com/app/thread-a",
-    invalid.overrides
+function observedBarrier(promise) {
+  return promise.then(
+    (value) => ({ ok: true, value }),
+    (error) => ({
+      ok: false,
+      name: error?.name,
+      code: error?.code,
+      delivered: error?.delivered,
+      barrierState: error?.barrierState
+    })
   );
-  assert.equal(leaseContext.preserve(fixture.iframe, event), false, invalid.label);
-  assert.equal(fixture.record.submissionNavigationLease, null, `${invalid.label} must clear inheritance`);
 }
 
-{
-  const initial = "https://gemini.google.com/app";
-  const fixture = navigationFixture("Gemini", initial, "start");
-  fixture.record.submissionNavigationLease.expiresAt = Date.now() - 1;
-  assert.equal(
-    leaseContext.preserve(fixture.iframe, correlatedEvent(initial, "https://gemini.google.com/app/thread-a", { appId: "Gemini" })),
-    false,
-    "expired submission leases must not preserve model state"
-  );
+async function runSubmissionLeaseTests() {
+  {
+    leaseContext.setAppId("Gemini");
+    const cachedTerminal = "https://gemini.google.com/app/cached-thread";
+    const actualStart = "https://gemini.google.com/app";
+    const actualTerminal = "https://gemini.google.com/app/actual-thread";
+    const iframe = {
+      isConnected: true,
+      src: cachedTerminal,
+      dataset: {
+        currentHref: cachedTerminal,
+        preferredModelDocumentId: "document-1",
+        preferredModelContentBridgeVersion: "bridge-1"
+      }
+    };
+    const lease = leaseContext.arm(iframe, "send-1", leaseNow + 12000);
+    assert.ok(lease, "Gemini must provisionally arm even when the parent cache still says terminal");
+    leaseContext.finish(iframe, "send-1", true, {
+      sendId: "send-1",
+      appId: "Gemini",
+      initialHref: actualStart,
+      barrierState: "required",
+      method: "button"
+    });
+    let released = false;
+    const barrier = leaseContext.waitForBarrier(iframe, "send-1").then((snapshot) => {
+      released = true;
+      return snapshot;
+    });
+    await Promise.resolve();
+    assert.equal(released, false, "the exact start route must hold S2 despite a cached terminal parent route");
+    assert.equal(
+      leaseContext.preserve(iframe, correlatedEvent(actualStart, actualTerminal, { appId: "Gemini", initialHref: actualStart })),
+      true
+    );
+    assert.equal((await barrier).state, "complete");
+  }
+
+  {
+    leaseContext.setAppId("NotionAI");
+    const cachedStart = "https://app.notion.com/ai";
+    const actualTerminal = "https://app.notion.com/chat?t=existing-thread";
+    const iframe = {
+      isConnected: true,
+      src: cachedStart,
+      dataset: {
+        currentHref: cachedStart,
+        preferredModelDocumentId: "document-1",
+        preferredModelContentBridgeVersion: "bridge-1"
+      }
+    };
+    leaseContext.arm(iframe, "send-1", leaseNow + 12000);
+    leaseContext.finish(iframe, "send-1", true, {
+      sendId: "send-1",
+      appId: "NotionAI",
+      initialHref: actualTerminal,
+      barrierState: "not-required",
+      method: "notion-button"
+    });
+    const snapshot = await leaseContext.waitForBarrier(iframe, "send-1");
+    assert.equal(snapshot.state, "complete", "the exact terminal route must release immediately despite a cached start route");
+    assert.equal(leaseContext.navigations.get(iframe), undefined);
+  }
+
+  {
+    leaseContext.setAppId("Gemini");
+    const iframe = {
+      isConnected: true,
+      dataset: {
+        currentHref: "https://gemini.google.com/app",
+        preferredModelDocumentId: "document-1"
+      }
+    };
+    assert.throws(
+      () => leaseContext.arm(iframe, "send-1", leaseNow + 12000),
+      (error) => error?.code === "NOT_REGISTERED" && error?.delivered === false,
+      "a Gemini/Notion provisional barrier must fail before delivery when bridge identity is missing"
+    );
+  }
+
+  leaseContext.setAppId("Gemini");
+  {
+    const initial = "https://gemini.google.com/app";
+    const terminal = "https://gemini.google.com/app/thread-a";
+    const fixture = navigationFixture("Gemini", initial, "start");
+    let nextSameFrameMessageAdvanced = false;
+    const barrier = leaseContext.waitForBarrier(fixture.iframe, "send-1").then((snapshot) => {
+      nextSameFrameMessageAdvanced = true;
+      return snapshot;
+    });
+    leaseContext.finish(fixture.iframe, "send-1", true, {
+      sendId: "send-1",
+      appId: "Gemini",
+      initialHref: initial,
+      barrierState: "required",
+      method: "button"
+    });
+    await Promise.resolve();
+    assert.equal(
+      nextSameFrameMessageAdvanced,
+      false,
+      "a successful send must not advance the next same-frame message before terminal navigation"
+    );
+    assert.equal(leaseContext.preserve(fixture.iframe, correlatedEvent(initial, terminal, { appId: "Gemini" })), true);
+    assert.equal(fixture.lease.terminalThreadId, "thread-a");
+    assert.equal(leaseContext.runs.get(fixture.iframe), fixture.record, "Gemini submission routing must preserve the model run");
+    assert.equal((await barrier).state, "complete", "terminal routing must resolve the submission barrier");
+    assert.equal(nextSameFrameMessageAdvanced, true, "the next same-frame message may advance after the terminal route");
+    const sameThread = "https://gemini.google.com/app/thread-a?hl=en";
+    assert.equal(leaseContext.preserve(fixture.iframe, correlatedEvent(terminal, sameThread, { kind: "replaceState", appId: "Gemini" })), true);
+    const otherThread = "https://gemini.google.com/app/thread-b";
+    assert.equal(leaseContext.preserve(fixture.iframe, correlatedEvent(sameThread, otherThread, { appId: "Gemini" })), false);
+    assert.equal(leaseContext.navigations.get(fixture.iframe), undefined, "a different Gemini thread must invalidate the lease");
+  }
+
+  {
+    const initial = "https://app.notion.com/ai";
+    const intermediate = "https://app.notion.com/chat";
+    const terminal = "https://app.notion.com/chat?t=thread-a";
+    const fixture = navigationFixture("NotionAI", initial, "start");
+    let released = false;
+    const barrier = leaseContext.waitForBarrier(fixture.iframe, "send-1").then((snapshot) => {
+      released = true;
+      return snapshot;
+    });
+    assert.equal(leaseContext.preserve(fixture.iframe, correlatedEvent(initial, intermediate, { appId: "NotionAI" })), true);
+    await Promise.resolve();
+    assert.equal(fixture.lease.terminalObserved, false, "Notion intermediate route must retain the lease");
+    assert.equal(released, false, "Notion intermediate routing must not release the next same-frame message");
+    assert.equal(leaseContext.preserve(fixture.iframe, correlatedEvent(intermediate, terminal, { kind: "replaceState", appId: "NotionAI" })), true);
+    assert.equal(fixture.lease.terminalThreadId, "thread-a");
+    assert.equal((await barrier).state, "complete", "Notion terminal routing must resolve the submission barrier");
+  }
+
+  for (const invalid of [
+    { label: "wrong send id", overrides: { submission: { sendId: "send-2", appId: "Gemini" } } },
+    { label: "wrong document", overrides: { documentId: "document-2", appId: "Gemini" } },
+    { label: "wrong bridge", overrides: { bridgeVersion: "bridge-2", appId: "Gemini" } },
+    { label: "wrong app", overrides: { appId: "NotionAI" } },
+    { label: "manual popstate", overrides: { kind: "popstate", submission: undefined, appId: "Gemini" } },
+    { label: "non-contiguous route", previousHref: "https://gemini.google.com/app/other", overrides: { appId: "Gemini" } }
+  ]) {
+    const initial = "https://gemini.google.com/app";
+    const fixture = navigationFixture("Gemini", initial, "start");
+    const barrier = observedBarrier(leaseContext.waitForBarrier(fixture.iframe, "send-1"));
+    const event = correlatedEvent(
+      invalid.previousHref || initial,
+      "https://gemini.google.com/app/thread-a",
+      invalid.overrides
+    );
+    assert.equal(leaseContext.preserve(fixture.iframe, event), false, invalid.label);
+    assert.equal(leaseContext.navigations.get(fixture.iframe), undefined, `${invalid.label} must clear the exact lease`);
+    assert.deepEqual(
+      await barrier,
+      {
+        ok: false,
+        name: "SubmissionNavigationError",
+        code: "SUBMISSION_BARRIER_UNCERTAIN",
+        delivered: true,
+        barrierState: "invalidated"
+      },
+      `${invalid.label} must reject the barrier as an uncertain delivered state`
+    );
+  }
+
+  {
+    const fixture = navigationFixture("Gemini", "https://gemini.google.com/app", "start");
+    fixture.iframe.isConnected = false;
+    await assert.rejects(
+      leaseContext.waitForBarrier(fixture.iframe, "send-1"),
+      (error) => error?.code === "SUBMISSION_BARRIER_UNCERTAIN" && error?.barrierState === "detached",
+      "a detached iframe must fail the submission barrier immediately instead of holding its queue"
+    );
+    leaseContext.clearLease(fixture.iframe, "detached", "iframe detached during submission navigation");
+    assert.equal(leaseContext.navigationFrames.has(fixture.iframe), false);
+  }
+
+  {
+    const fixture = navigationFixture("Gemini", "https://gemini.google.com/app", "start");
+    fixture.lease.expiresAt = leaseNow + 25;
+    fixture.lease.hardExpiresAt = fixture.lease.expiresAt;
+    const barrier = observedBarrier(leaseContext.waitForBarrier(fixture.iframe, "send-1"));
+    leaseContext.scheduleExpiry(fixture.iframe, fixture.lease);
+    advanceLeaseClock(25);
+    assert.deepEqual(
+      await barrier,
+      {
+        ok: false,
+        name: "SubmissionNavigationError",
+        code: "SUBMISSION_BARRIER_UNCERTAIN",
+        delivered: true,
+        barrierState: "expired"
+      },
+      "an expired submission lease must reject the barrier as uncertain"
+    );
+    assert.equal(leaseContext.navigations.get(fixture.iframe), undefined, "expiry must remove the WeakMap lease");
+  }
+
+  assert.equal(leaseContext.waiters.size, 0, "terminal and failed barriers must release all waiters");
 }
 
 const locationReportSource = functionSource(contentEntrySource, "reportLocationChange");
@@ -289,6 +558,33 @@ assert.ok(
   sendTextSource.indexOf('markSubmissionNavigation(data, "enter")') < sendTextSource.indexOf('input.dispatchEvent(new KeyboardEvent("keydown"'),
   "generic submit correlation must be armed before Enter"
 );
+assert.match(
+  sendTextSource,
+  /submissionNavigationCorrelation\(data, "Gemini", marked, "(?:button|enter)"\)/,
+  "Gemini send results must describe the exact content route captured at activation"
+);
+assert.match(
+  notionSendSource,
+  /initialHref = String\(location\.href \|\| ""\)/,
+  "Notion must capture its actual MAIN-world route immediately before activation"
+);
+assert.match(
+  notionSendSource,
+  /submissionNavigation: sent\.submissionNavigation/,
+  "Notion must propagate exact-route correlation through its send result"
+);
+
+const armSubmissionSource = functionSource(preferredModelSource, "armPreferredModelSubmissionNavigation");
+assert.doesNotMatch(
+  armSubmissionSource,
+  /currentHref|iframe\?\.src|initialRoute/,
+  "parent provisional barrier arming must not guess eligibility from its cached iframe route"
+);
+assert.match(
+  armSubmissionSource,
+  /!documentId \|\| !bridgeVersion[\s\S]*error\.code = "NOT_REGISTERED"[\s\S]*error\.delivered = false/,
+  "barrier targets with incomplete exact-document identity must fail before delivery"
+);
 
 const preserveSource = functionSource(preferredModelSource, "preservePreferredModelForSubmissionNavigation");
 assert.match(preserveSource, /submission\.sendId[^\n]+lease\.sendId/, "parent must match the exact send id");
@@ -297,6 +593,23 @@ assert.match(preserveSource, /navigation\.bridgeVersion[^\n]+lease\.bridgeVersio
 assert.match(preserveSource, /\["pushstate", "replacestate", "poll"\]/, "manual popstate/hashchange navigation must not inherit submission state");
 assert.match(preserveSource, /event\.previousHref[^\n]+lease\.lastHref/, "submission navigation chains must be contiguous");
 assert.match(preserveSource, /nextRoute\.threadId[^\n]+lease\.terminalThreadId/, "a settled submission lease must not follow a different thread");
+assert.match(
+  preserveSource,
+  /preferredModelSubmissionOutcomes\.set\(iframe,[\s\S]*state: "complete"[\s\S]*notifyPreferredModelSubmissionWaiters\(iframe\)/,
+  "a terminal route must publish completion and wake the per-frame submission barrier"
+);
+
+const finishSubmissionSource = functionSource(preferredModelSource, "finishPreferredModelSubmissionNavigation");
+assert.match(
+  finishSubmissionSource,
+  /if \(lease\.terminalObserved\) \{[\s\S]*notifyPreferredModelSubmissionWaiters\(iframe\);[\s\S]*return;/,
+  "a terminal observation may release waiters when the send operation settles"
+);
+assert.match(
+  finishSubmissionSource,
+  /Date\.now\(\) \+ \(sent \? MODEL_PREFERENCE_SUBMISSION_NAVIGATION_GRACE_MS : 2000\)/,
+  "send completion without a terminal route must retain a bounded barrier instead of releasing the next message"
+);
 
 assert.match(preferredCapabilitySource, /findNotionModelIndicator\(\)/, "Notion must expose a read-only model indicator lookup");
 assert.match(preferredCapabilitySource, /findNotionModelControl\(\{ allowDisabled: true \}\)/, "disabled Notion model controls must remain readable");
@@ -304,7 +617,6 @@ assert.match(preferredCapabilitySource, /function findNotionModelTrigger\(\)[\s\
 assert.match(submissionNavigationSource, /deadlineAt > activatedAt \? deadlineAt \+ 15000/, "content correlation must cover delayed final routing through the send deadline");
 assert.match(submissionNavigationSource, /event\?\.isTrusted[^\n]+current\("trusted-intent"\)/, "trusted user navigation intent must cancel stale submission correlation");
 assert.match(contentEntrySource, /window\.addEventListener\("pointerdown"[\s\S]{0,160}clearSubmissionNavigationForTrustedIntent/, "trusted pointer navigation must be observed before SPA routing");
-assert.match(preferredModelSource, /if \(sent \|\| lease\.terminalObserved\) return;/, "successful or terminal submission routing must retain its lease through the hard deadline");
 assert.match(
   modelPreferenceConsoleSource,
   /dataState === "disabled"/,
@@ -433,4 +745,10 @@ assert.ok(
   "disabled Notion controls must remain readable as current-model indicators"
 );
 
-console.log("preferred-model submit-navigation regression: ok");
+runSubmissionLeaseTests().then(
+  () => console.log("preferred-model submit-navigation regression: ok"),
+  (error) => {
+    console.error(error);
+    process.exitCode = 1;
+  }
+);

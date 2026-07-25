@@ -1,7 +1,7 @@
 import { DEFAULT_TOPBAR_LAYOUT } from "./topbar.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-07-25｜02:21:47」";
+export const APP_VERSION = "「2026-07-25｜20:50:25」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -99,6 +99,16 @@ export const DEFAULT_MODEL_PREFERENCES = Object.freeze(
 );
 
 export const DEFAULT_MODEL_PREFERENCE_ORDER = Object.freeze(Object.keys(MODEL_PREFERENCE_TARGETS));
+
+export const MODEL_PREFERENCE_FAILURE_POLICIES = Object.freeze(["send-current", "skip"]);
+export const MODEL_PREFERENCE_FAILURE_OVERRIDE_POLICIES = Object.freeze([
+  "inherit",
+  ...MODEL_PREFERENCE_FAILURE_POLICIES
+]);
+export const DEFAULT_MODEL_PREFERENCE_FAILURE_POLICY = "send-current";
+export const DEFAULT_MODEL_PREFERENCE_FAILURE_OVERRIDES = Object.freeze(
+  Object.fromEntries(Object.keys(MODEL_PREFERENCE_TARGETS).map((appId) => [appId, "inherit"]))
+);
 
 export const TAB_GROUP_HEADER_BUTTONS = [
   { id: "addApp", icon: "plus", section: "header", defaultPlacement: "pinned" },
@@ -331,6 +341,8 @@ export const DEFAULT_OPTIONS = {
   ],
   modelPreferences: DEFAULT_MODEL_PREFERENCES,
   modelPreferenceOrder: DEFAULT_MODEL_PREFERENCE_ORDER,
+  modelPreferenceFailurePolicy: DEFAULT_MODEL_PREFERENCE_FAILURE_POLICY,
+  modelPreferenceFailureOverrides: DEFAULT_MODEL_PREFERENCE_FAILURE_OVERRIDES,
   builtinChatAppIframeConfigs: {},
   messageNavigatorEffectMode: "border",
   messageNavigatorSiteConfigs: [],

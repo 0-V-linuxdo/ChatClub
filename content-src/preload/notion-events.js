@@ -9,6 +9,7 @@ export function installNotionEventListeners(options = {}) {
       data = {
         ok: false,
         sent: false,
+        deliveryState: "unknown",
         method: "notion-bridge",
         reason: error?.message || String(error || "Notion AI send failed")
       };
@@ -24,6 +25,7 @@ export function installNotionEventListeners(options = {}) {
       data = {
         ok: false,
         sent: false,
+        deliveryState: "unknown",
         method: "notion-prompt-bridge",
         reason: error?.message || String(error || "Notion AI prompt send failed")
       };

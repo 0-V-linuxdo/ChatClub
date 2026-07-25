@@ -44,6 +44,142 @@ const assert = require("node:assert/strict");
   assert.equal(port.registration(iframe).documentId, "doc-new");
 
   {
+    const changingFrame = { isConnected: true, dataset: runtimeDataset("doc-before-ensure") };
+    let changingEnsures = 0;
+    let changingCalls = 0;
+    const changingPort = new FrameRuntimePort({
+      currentTabId: async () => 7,
+      async ensureRuntime(target, options) {
+        changingEnsures += 1;
+        assert.deepEqual(options.features, ["message-navigator"]);
+        target.dataset = runtimeDataset("doc-after-ensure", ["message-navigator"]);
+        return { ok: true, registration: { documentId: "doc-after-ensure" } };
+      },
+      sendRuntimeMessage: async () => {
+        changingCalls += 1;
+        return { success: true, data: { enabled: true } };
+      }
+    });
+    await assert.rejects(
+      changingPort.request(changingFrame, "getMessageNavigatorState", {}, {
+        expectedDocumentId: "doc-before-ensure"
+      }),
+      (error) => isFrameCommandError(error, "STALE_DOCUMENT") && error.delivered === false
+    );
+    assert.equal(changingEnsures, 1, "an expected document change during ensure must not trigger repair or replay");
+    assert.equal(changingCalls, 0, "a stale expected document must fail before delivery");
+  }
+
+  {
+    const boundFrame = { isConnected: true, dataset: runtimeDataset("doc-bound") };
+    const routes = [];
+    const boundPort = new FrameRuntimePort({
+      currentTabId: async () => 7,
+      requestBackground: async (action, payload) => {
+        routes.push({ action, payload });
+        return { success: true, data: { href: "https://example.com/bound" } };
+      }
+    });
+    assert.deepEqual(
+      await boundPort.request(boundFrame, "getLocationHref", {}, { expectedDocumentId: "doc-bound" }),
+      { href: "https://example.com/bound" }
+    );
+    assert.equal(routes.length, 1);
+    assert.equal(routes[0].payload.bridgeDocumentId, "doc-bound", "the command must route through the exact expected token");
+  }
+
+  {
+    const compatibleFrame = { isConnected: true, dataset: runtimeDataset("doc-compatible-old", ["send"]) };
+    const compatibleRoutes = [];
+    const compatiblePort = new FrameRuntimePort({
+      currentTabId: async () => 7,
+      async ensureRuntime(target) {
+        target.dataset = runtimeDataset("doc-compatible-new", ["send"]);
+        return { ok: true, registration: { documentId: "doc-compatible-new" } };
+      },
+      requestBackground: async (action, payload) => {
+        compatibleRoutes.push({ action, payload });
+        return { success: true, data: { sent: true } };
+      }
+    });
+    assert.deepEqual(
+      await compatiblePort.request(compatibleFrame, "sendText", { text: "compatible" }),
+      { sent: true }
+    );
+    assert.equal(compatibleRoutes.length, 1);
+    assert.equal(
+      compatibleRoutes[0].payload.bridgeDocumentId,
+      "doc-compatible-new",
+      "requests without expectedDocumentId must retain current-document routing"
+    );
+  }
+
+  {
+    const abortFrame = { isConnected: true, dataset: runtimeDataset("doc-abort-before") };
+    const abortController = new AbortController();
+    let releaseEnsure;
+    let markEnsureStarted;
+    let backgroundCalls = 0;
+    const ensureStarted = new Promise((resolve) => { markEnsureStarted = resolve; });
+    const ensureRelease = new Promise((resolve) => { releaseEnsure = resolve; });
+    const abortPort = new FrameRuntimePort({
+      currentTabId: async () => 7,
+      async ensureRuntime(target) {
+        markEnsureStarted();
+        await ensureRelease;
+        target.dataset = runtimeDataset("doc-abort-after", ["preferred-model"]);
+        return { ok: true, registration: { documentId: "doc-abort-after" } };
+      },
+      requestBackground: async () => {
+        backgroundCalls += 1;
+        return { success: true, data: { success: true } };
+      }
+    });
+    const request = abortPort.request(abortFrame, "applyPreferredModel", { runId: "old-run" }, {
+      signal: abortController.signal
+    });
+    await ensureStarted;
+    abortController.abort();
+    releaseEnsure();
+    await assert.rejects(
+      request,
+      (error) => isFrameCommandError(error, "ABORTED") && error.delivered === false
+    );
+    assert.equal(backgroundCalls, 0, "an abort during runtime ensure must stop a mutating command before delivery");
+  }
+
+  {
+    const detachedFrame = { isConnected: true, dataset: runtimeDataset("doc-detach-before") };
+    let releaseEnsure;
+    let markEnsureStarted;
+    let backgroundCalls = 0;
+    const ensureStarted = new Promise((resolve) => { markEnsureStarted = resolve; });
+    const ensureRelease = new Promise((resolve) => { releaseEnsure = resolve; });
+    const detachedPort = new FrameRuntimePort({
+      currentTabId: async () => 7,
+      async ensureRuntime(target) {
+        markEnsureStarted();
+        await ensureRelease;
+        target.dataset = runtimeDataset("doc-detach-after", ["send"]);
+        return { ok: true, registration: { documentId: "doc-detach-after" } };
+      },
+      requestBackground: async () => {
+        backgroundCalls += 1;
+        return { success: true, data: { sent: true } };
+      }
+    });
+    const request = detachedPort.request(detachedFrame, "sendText", { text: "must not send" });
+    await ensureStarted;
+    detachedFrame.isConnected = false;
+    releaseEnsure();
+    await assert.rejects(
+      request,
+      (error) => isFrameCommandError(error, "STALE_DOCUMENT") && error.delivered === false
+    );
+    assert.equal(backgroundCalls, 0, "a frame detached during runtime ensure must stop before delivery");
+  }
+
+  {
     const liveFrame = {
       isConnected: true,
       dataset: {

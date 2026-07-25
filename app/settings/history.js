@@ -15,7 +15,6 @@ export function createPromptHistorySettingsSection(ctx) {
     state: "object",
     svgIcon: "function",
     setPromptImages: "function",
-    ensurePromptInputReady: "function",
     syncPromptInputNode: "function"
   });
   const state = requireSettingsSectionStatePort(
@@ -25,7 +24,6 @@ export function createPromptHistorySettingsSection(ctx) {
   );
   const svgIcon = requireControllerFunction(ctx, controllerName, "svgIcon");
   const setPromptImages = requireControllerFunction(ctx, controllerName, "setPromptImages");
-  const ensurePromptInputReady = requireControllerFunction(ctx, controllerName, "ensurePromptInputReady");
   const syncPromptInputNode = requireControllerFunction(ctx, controllerName, "syncPromptInputNode");
   const {
     settingsBlock,
@@ -69,7 +67,6 @@ export function createPromptHistorySettingsSection(ctx) {
 
   function insert(item) {
     if (!item?.text && !item?.images?.length) return;
-    if (!ensurePromptInputReady()) return;
     state.promptText = String(item.text || "");
     state.promptSelection = {
       start: state.promptText.length,

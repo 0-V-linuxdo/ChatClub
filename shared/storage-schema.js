@@ -8,6 +8,8 @@ import {
   DEFAULT_POCKET_CARD_SIZE,
   DEFAULT_FRAME_TOAST_POSITION,
   DEFAULT_GEMINI_THINKING_LEVEL,
+  DEFAULT_MODEL_PREFERENCE_FAILURE_OVERRIDES,
+  DEFAULT_MODEL_PREFERENCE_FAILURE_POLICY,
   DEFAULT_MODEL_PREFERENCE_ORDER,
   DEFAULT_MODEL_PREFERENCES,
   DEFAULT_PROMOTION_API_PROFILES,
@@ -16,6 +18,8 @@ import {
   DEFAULT_OPTIONS,
   GEMINI_THINKING_LEVEL_PREFERENCE_KEY,
   GEMINI_THINKING_LEVEL_TARGETS,
+  MODEL_PREFERENCE_FAILURE_OVERRIDE_POLICIES,
+  MODEL_PREFERENCE_FAILURE_POLICIES,
   MODEL_PREFERENCE_TARGETS,
   PROMPT_IMAGE_PASTE_STRATEGIES,
   PROMPT_IMAGE_PASTE_STRATEGY_SEQUENTIAL,
@@ -416,6 +420,23 @@ function normalizeModelPreferences(raw = {}) {
   return normalized;
 }
 
+export function normalizeModelPreferenceFailurePolicy(raw) {
+  const value = text(raw);
+  return MODEL_PREFERENCE_FAILURE_POLICIES.includes(value)
+    ? value
+    : DEFAULT_MODEL_PREFERENCE_FAILURE_POLICY;
+}
+
+export function normalizeModelPreferenceFailureOverrides(raw = {}) {
+  const source = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  const normalized = { ...DEFAULT_MODEL_PREFERENCE_FAILURE_OVERRIDES };
+  for (const appId of Object.keys(MODEL_PREFERENCE_TARGETS)) {
+    const value = text(source[appId]);
+    normalized[appId] = MODEL_PREFERENCE_FAILURE_OVERRIDE_POLICIES.includes(value) ? value : "inherit";
+  }
+  return normalized;
+}
+
 export function normalizeModelPreferenceOrder(raw = []) {
   const validIds = new Set(Object.keys(MODEL_PREFERENCE_TARGETS));
   const ordered = [];
@@ -671,6 +692,8 @@ export function normalizeOptions(raw = {}) {
     ),
     modelPreferences: normalizeModelPreferences(raw.modelPreferences),
     modelPreferenceOrder: normalizeModelPreferenceOrder(raw.modelPreferenceOrder),
+    modelPreferenceFailurePolicy: normalizeModelPreferenceFailurePolicy(raw.modelPreferenceFailurePolicy),
+    modelPreferenceFailureOverrides: normalizeModelPreferenceFailureOverrides(raw.modelPreferenceFailureOverrides),
     messageNavigatorEffectMode: normalizeMessageNavigatorEffectMode(raw.messageNavigatorEffectMode),
     messageNavigatorSiteConfigs: mergeBuiltInMessageNavigatorConfig(raw.messageNavigatorSiteConfigs, MESSAGE_NAVIGATOR_SITE_CONFIGS),
     summarySiteConfigs: mergeBuiltInSummaryConfig(raw.summarySiteConfigs, SUMMARY_SITE_CONFIGS),
