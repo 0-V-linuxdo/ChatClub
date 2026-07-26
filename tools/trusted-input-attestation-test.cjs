@@ -70,7 +70,8 @@ function createApi(options = {}) {
       getURL: (value = "") => `chrome-extension://${EXTENSION_ID}/${value}`
     },
     webNavigation: {
-      async getFrame() {
+      async getFrame(details) {
+        assert.deepEqual(details, { tabId: TAB_ID, frameId: FRAME_ID });
         state.frameCalls += 1;
         options.onGetFrame?.(state);
         return state.frame ? { ...state.frame } : null;
@@ -104,6 +105,7 @@ function createApi(options = {}) {
       }
     }
   };
+  if (options.omitFrameId) delete state.frame.frameId;
   return { api, state };
 }
 
@@ -167,6 +169,16 @@ function createApi(options = {}) {
   }
 
   {
+    const { api, state } = createApi({ omitFrameId: true });
+    await dispatchTrustedMouseMove(api, message(), sender);
+    assert.deepEqual(
+      state.commands.map((entry) => entry.params.type),
+      ["mouseMoved"],
+      "webNavigation.getFrame may omit the frameId already supplied in its exact lookup"
+    );
+  }
+
+  {
     const legacyDocumentId = `legacy:${"d".repeat(64)}`;
     const { api, state } = createApi({ expectedBrowserDocumentId: legacyDocumentId });
     await dispatchTrustedMouseMove(api, message({ expectedBrowserDocumentId: legacyDocumentId }), sender);
@@ -195,6 +207,7 @@ function createApi(options = {}) {
   }
 
   for (const [label, options, expected] of [
+    ["conflicting returned frame", { frame: { frameId: FRAME_ID + 1 } }, /direct child iframe/i],
     ["nested frame", { frame: { parentFrameId: 3 } }, /direct child iframe/i],
     ["browser document", { frame: { documentId: "browser-document-2" } }, /document changed/i],
     ["binding", { attestation: { frameBindingId: "c".repeat(64) } }, /attestation changed/i],

@@ -34,6 +34,43 @@ const runtimeIdentity = (outputPath) => ({
 
 const { functionSource } = require("./function-source.cjs");
 
+function createVerifiedRegistrationFixture(options = {}) {
+  const frameBindingId = "f".repeat(64);
+  const iframe = {
+    isConnected: options.isConnected ?? true,
+    dataset: {
+      preferredModelDocumentId: "bridge-document-current",
+      frameBindingId,
+      ...(options.dataset || {})
+    }
+  };
+  const registration = options.registration === null
+    ? null
+    : {
+        bridgeVersion: "bridge-current",
+        frameId: 80,
+        frameBindingId,
+        browserDocumentId: "browser-document-current",
+        runtimeIdentity: runtimeIdentity("content/content.js"),
+        ...(options.registration || {})
+      };
+  const context = vm.createContext({
+    CONTENT_BRIDGE_VERSION: "bridge-current",
+    Number,
+    String,
+    contentRuntimePackageBundleIdentityMatches: (value, expectedOutputPath) => (
+      value?.bundle?.outputPath === expectedOutputPath
+    ),
+    iframe,
+    verifyContentFrameRegistration: options.verifyContentFrameRegistration || (async () => registration)
+  });
+  vm.runInContext(`
+    ${functionSource(frameBridge, "verifiedCurrentContentFrameRegistration")}
+    globalThis.verifyCurrent = verifiedCurrentContentFrameRegistration;
+  `, context);
+  return { context, iframe, registration };
+}
+
 function createApplyFixture(options = {}) {
   const calls = { verify: 0, prepare: 0, send: 0, cancel: 0 };
   let current = true;
@@ -282,6 +319,83 @@ function createSummaryMainInstallFixture() {
 }
 
 (async () => {
+  {
+    const fixture = createVerifiedRegistrationFixture({
+      dataset: { injectedBrowserDocumentId: "browser-document-current" }
+    });
+    const result = await fixture.context.verifyCurrent(fixture.iframe);
+    assert.equal(result.frameId, 80);
+    assert.equal(result.browserDocumentId, "browser-document-current");
+    assert.equal(
+      fixture.iframe.dataset.browserFrameId,
+      "80",
+      "an authenticated registration must restore frameId when runtime.getFrameId is unavailable"
+    );
+  }
+
+  {
+    const fixture = createVerifiedRegistrationFixture();
+    const result = await fixture.context.verifyCurrent(fixture.iframe);
+    assert.equal(result.frameId, 80);
+    assert.equal(
+      fixture.iframe.dataset.injectedBrowserDocumentId,
+      "browser-document-current",
+      "the same live registration may restore its missing browser-document identity"
+    );
+  }
+
+  {
+    let finishVerification;
+    const fixture = createVerifiedRegistrationFixture({
+      verifyContentFrameRegistration: () => new Promise((resolve) => { finishVerification = resolve; })
+    });
+    const pending = fixture.context.verifyCurrent(fixture.iframe);
+    fixture.iframe.dataset.preferredModelDocumentId = "bridge-document-navigated";
+    finishVerification(fixture.registration);
+    assert.equal(await pending, null);
+    assert.equal(
+      fixture.iframe.dataset.browserFrameId,
+      undefined,
+      "a registration for a document that navigated during verification must not restore stale identity"
+    );
+  }
+
+  for (const invalid of [
+    {
+      label: "conflicting remembered frame id",
+      dataset: { browserFrameId: "81" }
+    },
+    {
+      label: "malformed remembered frame id",
+      dataset: { browserFrameId: "not-a-frame" }
+    },
+    {
+      label: "conflicting browser document",
+      dataset: { injectedBrowserDocumentId: "browser-document-old" }
+    },
+    {
+      label: "invalid authenticated frame id",
+      registration: { frameId: 0 }
+    },
+    {
+      label: "detached iframe",
+      isConnected: false
+    },
+    {
+      label: "mismatched authenticated binding",
+      registration: { frameBindingId: "e".repeat(64) }
+    }
+  ]) {
+    const fixture = createVerifiedRegistrationFixture(invalid);
+    const before = { ...fixture.iframe.dataset };
+    assert.equal(await fixture.context.verifyCurrent(fixture.iframe), null, invalid.label);
+    assert.deepEqual(
+      { ...fixture.iframe.dataset },
+      before,
+      `${invalid.label} must fail closed without overwriting iframe identity`
+    );
+  }
+
   {
     const fixture = createApplyFixture({ registrations: [{ bridgeVersion: "current" }] });
     const result = await fixture.apply(fixture.iframe, fixture.record);

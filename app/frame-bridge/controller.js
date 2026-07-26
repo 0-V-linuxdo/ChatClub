@@ -68,18 +68,30 @@ export function createFrameBridgeController(dependencies = {}) {
   async function verifiedCurrentContentFrameRegistration(iframe) {
     const documentId = String(iframe?.dataset?.preferredModelDocumentId || "").trim();
     if (!documentId) return null;
-    const registration = await verifyContentFrameRegistration(documentId);
-    const expectedFrameId = Number(iframe?.dataset?.browserFrameId);
+    const expectedFrameId = String(iframe?.dataset?.browserFrameId || "").trim();
     const expectedBrowserDocumentId = String(iframe?.dataset?.injectedBrowserDocumentId || "").trim();
+    const expectedBindingId = String(iframe?.dataset?.frameBindingId || "");
+    const registration = await verifyContentFrameRegistration(documentId);
+    const frameId = Number(registration?.frameId);
+    const browserDocumentId = String(registration?.browserDocumentId || "").trim();
     if (
-      !registration
+      iframe?.isConnected === false
+      || documentId !== String(iframe?.dataset?.preferredModelDocumentId || "").trim()
+      || expectedFrameId !== String(iframe?.dataset?.browserFrameId || "").trim()
+      || expectedBrowserDocumentId !== String(iframe?.dataset?.injectedBrowserDocumentId || "").trim()
+      || expectedBindingId !== String(iframe?.dataset?.frameBindingId || "")
+      || !registration
       || String(registration.bridgeVersion || "") !== CONTENT_BRIDGE_VERSION
       || !contentRuntimePackageBundleIdentityMatches(registration.runtimeIdentity, "content/content.js")
-      || !String(registration.browserDocumentId || "").trim()
-      || (Number.isSafeInteger(expectedFrameId) && expectedFrameId > 0 && Number(registration.frameId) !== expectedFrameId)
-      || String(registration.frameBindingId || "") !== String(iframe?.dataset?.frameBindingId || "")
-      || (expectedBrowserDocumentId && String(registration.browserDocumentId || "") !== expectedBrowserDocumentId)
+      || !Number.isSafeInteger(frameId)
+      || frameId <= 0
+      || !browserDocumentId
+      || (expectedFrameId && Number(expectedFrameId) !== frameId)
+      || String(registration.frameBindingId || "") !== expectedBindingId
+      || (expectedBrowserDocumentId && browserDocumentId !== expectedBrowserDocumentId)
     ) return null;
+    iframe.dataset.browserFrameId = String(frameId);
+    iframe.dataset.injectedBrowserDocumentId = browserDocumentId;
     return { ...registration, documentId };
   }
 

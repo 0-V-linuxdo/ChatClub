@@ -3,23 +3,23 @@
     "app/main.js": {
       "maxFiles": 86,
       "targetFiles": 74,
-      "maxSourceBytes": 881569,
+      "maxSourceBytes": 882216,
       "targetSourceBytes": 750000,
-      "reason": "The application initial-static closure includes the independently testable per-frame send queue, non-blocking Composer model status, and Claude delete completion identity support, and is held to its exact current footprint while feature controllers remain behind explicit lazy boundaries."
+      "reason": "The application initial-static closure includes the independently testable per-frame send queue, non-blocking Composer model status, and authenticated Dia frame identity recovery for Claude deletion, and is held to its exact current footprint while feature controllers remain behind explicit lazy boundaries."
     },
     "background/service-worker.js": {
       "maxFiles": 47,
       "targetFiles": 40,
-      "maxSourceBytes": 412591,
+      "maxSourceBytes": 412618,
       "targetSourceBytes": 360000,
-      "reason": "The Chromium service-worker initial-static closure includes exact-document Frame RPC routing and strict Claude delete completion identity parsing, and is ratcheted separately from the larger Firefox fallback entry."
+      "reason": "The Chromium service-worker initial-static closure includes exact-document Frame RPC routing and strict Claude delete attestation compatible with Dia's optional getFrame fields, and is ratcheted separately from the larger Firefox fallback entry."
     },
     "background/firefox-background.js": {
       "maxFiles": 50,
       "targetFiles": 43,
-      "maxSourceBytes": 1057666,
+      "maxSourceBytes": 1057693,
       "targetSourceBytes": 900000,
-      "reason": "The Firefox document-background entry includes its regenerated send correlation fallback and Claude native delete runner, so its exact static cost is tracked as a distinct browser budget."
+      "reason": "The Firefox document-background entry includes its regenerated send correlation fallback, Claude native delete runner, and shared optional-field frame attestation, so its exact static cost is tracked as a distinct browser budget."
     }
   },
   "lazyBoundaries": {

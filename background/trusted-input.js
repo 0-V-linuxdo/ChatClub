@@ -68,7 +68,7 @@ async function exactDirectChildFrame(api, target) {
   const frame = await api.webNavigation.getFrame({ tabId: target.tabId, frameId: target.frameId });
   if (
     !frame
-    || Number(frame.frameId) !== target.frameId
+    || (frame.frameId != null && Number(frame.frameId) !== target.frameId)
     || Number(frame.parentFrameId) !== 0
     || !/^https?:\/\//i.test(String(frame.url || ""))
   ) {
