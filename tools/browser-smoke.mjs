@@ -77,6 +77,12 @@ function assertRuntimeResult(result, browserTarget, options = {}) {
     `${browserTarget}: adding a custom app changed the iframe count (${retention.frameCountBefore} -> ${retention.frameCountAfter})`
   );
   assert(retention.fullscreenPreserved === true, `${browserTarget}: adding a custom app changed fullscreen state`);
+  assert(retention.tabScopedSelfNavigation?.ready === true, `${browserTarget}: tab-scoped protected iframe self-navigation did not finish`);
+  assert(retention.tabScopedSelfNavigation?.ruleMatched === true, `${browserTarget}: active extension tab has no domain-scoped session rule`);
+  assert(
+    retention.tabScopedSelfNavigation?.finalHref === retention.tabScopedSelfNavigation?.targetHref,
+    `${browserTarget}: protected iframe self-navigation did not reach its target`
+  );
   for (const frame of retention.frames || []) assertRetainedFrame(frame, "adding a custom app");
   const usedEdits = retention.usedAppEdits;
   assert(usedEdits?.metadataEdit?.sameNode === true, `${browserTarget}: metadata-only custom app edit replaced its iframe`);
@@ -683,6 +689,56 @@ const pageProbe = `async (fixtureUrl) => {
         "settled custom app frame"
       );
       await quietWindow(500);
+      const currentTab = await api.tabs.getCurrent();
+      const domain = new URL(fixtureUrl).hostname;
+      const sessionRules = await api.declarativeNetRequest.getSessionRules();
+      const tabScopedRule = sessionRules.find((rule) => (
+        rule.condition?.requestDomains?.includes(domain)
+        && rule.condition?.resourceTypes?.includes("sub_frame")
+        && rule.condition?.tabIds?.includes(currentTab.id)
+      ));
+      if (!tabScopedRule) throw new Error("custom app host has no tab-scoped session DNR rule");
+      const selfNavigationFrame = document.createElement("iframe");
+      selfNavigationFrame.hidden = true;
+      const readyWaiters = new Map();
+      const onFixtureReady = (event) => {
+        if (
+          event.data?.source !== "chatclub-browser-smoke-fixture"
+          || event.data?.type !== "ready"
+        ) return;
+        const resolve = readyWaiters.get(event.data.href);
+        if (!resolve) return;
+        readyWaiters.delete(event.data.href);
+        resolve(event.data);
+      };
+      window.addEventListener("message", onFixtureReady);
+      const fixtureReady = (expectedHref, label) => withTimeout(new Promise((resolve) => {
+        readyWaiters.set(expectedHref, resolve);
+      }), 10000, label);
+      const initialProtectedUrl = new URL(fixtureUrl);
+      initialProtectedUrl.searchParams.set("tab-scope", "initial");
+      const targetUrl = new URL(fixtureUrl);
+      targetUrl.searchParams.set("tab-scope", "self-navigation");
+      const initialReady = fixtureReady(initialProtectedUrl.href, "protected iframe initial ready marker");
+      const navigatedReady = fixtureReady(targetUrl.href, "protected iframe self-navigation ready marker");
+      selfNavigationFrame.src = initialProtectedUrl.href;
+      document.body.append(selfNavigationFrame);
+      let tabScopedSelfNavigation;
+      try {
+        await initialReady;
+        const finalReady = await navigatedReady;
+        tabScopedSelfNavigation = {
+          ready: true,
+          ruleMatched: true,
+          ruleId: tabScopedRule.id,
+          tabId: currentTab.id,
+          targetHref: targetUrl.href,
+          finalHref: finalReady.href
+        };
+      } finally {
+        window.removeEventListener("message", onFixtureReady);
+        selfNavigationFrame.remove();
+      }
       const editActiveState = new Map(before.map((item) => [
         item.instanceId,
         item.iframe.classList.contains("active")
@@ -958,6 +1014,7 @@ const pageProbe = `async (fixtureUrl) => {
         frameCountBefore: before.length,
         frameCountAfter: afterFrames.length,
         fullscreenPreserved: (document.querySelector(".chat-card.fullscreen")?.dataset.groupId || "") === fullscreenGroupId,
+        tabScopedSelfNavigation,
         frames: additionFrames,
         usedAppEdits: { metadataEdit, attributeContractEdit, urlEdit },
         usedAppDeletion: {
@@ -1019,9 +1076,20 @@ async function startLoopbackFixture() {
     }
     response.writeHead(200, {
       "Content-Type": "text/html; charset=utf-8",
-      "Cache-Control": "no-store"
+      "Cache-Control": "no-store",
+      "X-Frame-Options": "DENY",
+      "Content-Security-Policy": "frame-ancestors 'none'",
+      "Content-Security-Policy-Report-Only": "frame-ancestors 'none'"
     });
-    response.end("<!doctype html><html><head><meta charset=\"utf-8\"><title>ChatClub frame fixture</title></head><body><main id=\"fixture\">loopback frame ready</main></body></html>");
+    response.end([
+      "<!doctype html><html><head><meta charset=\"utf-8\"><title>ChatClub frame fixture</title></head><body>",
+      "<main id=\"fixture\">loopback frame ready</main><script>",
+      "parent.postMessage({source:'chatclub-browser-smoke-fixture',type:'ready',href:location.href},'*');",
+      "const target=new URL(location.href);",
+      "if(target.searchParams.get('tab-scope')==='initial'){",
+      "target.searchParams.set('tab-scope','self-navigation');setTimeout(()=>location.replace(target.href),50);",
+      "}</script></body></html>"
+    ].join(""));
   });
   await new Promise((resolve, reject) => {
     server.once("error", reject);
@@ -1177,8 +1245,8 @@ async function firefoxSmoke(extensionDirectory, fixtureUrl) {
       const done = arguments[arguments.length - 1];
       (${pageProbe})(${JSON.stringify(fixtureUrl)}).then(done, (error) => done({ probeError: error && error.message ? error.message : String(error) }));
     `);
-    await completeFirefoxNewWorkspaceTabProbe(driver, selenium.By, result.newWorkspaceTab, sourceHandle);
     assert(!result?.probeError, `firefox: page probe failed: ${result?.probeError}`);
+    await completeFirefoxNewWorkspaceTabProbe(driver, selenium.By, result.newWorkspaceTab, sourceHandle);
     assertRuntimeResult(result, "firefox", {
       expectFirefoxFileFallback: browserVersion.split(".", 1)[0] === "136"
     });

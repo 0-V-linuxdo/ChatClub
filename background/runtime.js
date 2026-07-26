@@ -105,6 +105,7 @@ function verifiedExtensionPageSender(sender = {}) {
   ) {
     throw new Error("Frame preparation requires the ChatClub extension page");
   }
+  rememberKnownExtensionPageTab(tabId);
   return tabId;
 }
 
@@ -171,11 +172,19 @@ chrome.webNavigation?.onCommitted?.addListener((details) => {
 });
 
 chrome.tabs?.onRemoved?.addListener((tabId, removeInfo) => {
+  forgetKnownExtensionPageTab(tabId);
   grokCookieRuntime.handleTabRemoved(tabId);
   forgetSecureTabContexts(tabId)
     .catch((error) => console.warn(`[${APP_NAME}] closed tab secure frame contexts could not be removed`, error));
   detachWorkspaceSessionMirror(chrome, tabId, removeInfo)
     .catch((error) => console.warn(`[${APP_NAME}] closed tab workspace session mirror could not be detached`, error));
+});
+chrome.tabs?.onUpdated?.addListener((tabId, changeInfo, tab) => {
+  const changedUrl = String(changeInfo?.url || "");
+  const url = changedUrl || String(tab?.url || "");
+  if (!url) return;
+  if (url.startsWith(chrome.runtime.getURL(""))) rememberKnownExtensionPageTab(tabId);
+  else if (changedUrl || extensionPageTabTracked(tabId)) forgetKnownExtensionPageTab(tabId);
 });
 
 async function verifiedExtensionTabId(message = {}, sender = {}) {
@@ -191,6 +200,7 @@ async function verifiedExtensionTabId(message = {}, sender = {}) {
       throw new Error("Secure frame command tab is not an extension page");
     }
   }
+  rememberKnownExtensionPageTab(requested);
   return requested;
 }
 
@@ -368,43 +378,204 @@ async function currentChatApps() {
   return getAllChatApps(customConfig);
 }
 
-async function updateDnrRules() {
-  const chatApps = await currentChatApps();
-  const extensionHost = new URL(chrome.runtime.getURL("")).hostname;
-  const rules = buildDynamicDnrRules(chatApps, extensionHost);
-  const oldRules = await chrome.declarativeNetRequest.getDynamicRules();
-  if (chrome.declarativeNetRequest.updateSessionRules) {
-    try {
-      const oldSessionRules = chrome.declarativeNetRequest.getSessionRules
-        ? await chrome.declarativeNetRequest.getSessionRules()
-        : [];
-      await chrome.declarativeNetRequest.updateSessionRules({
-        removeRuleIds: oldSessionRules.map((rule) => rule.id),
-        addRules: rules
-      });
-      if (oldRules.length) {
-        await chrome.declarativeNetRequest.updateDynamicRules({
-          removeRuleIds: oldRules.map((rule) => rule.id),
-          addRules: []
-        });
-      }
-      return;
-    } catch (error) {
-      console.warn(`[${APP_NAME}] Failed to update session DNR rules; falling back to dynamic rules`, error);
+const knownExtensionPageTabIds = new Set();
+const candidateExtensionPageTabIds = new Set();
+const revokedExtensionPageTabIds = new Set();
+const extensionPageTabRevisions = new Map();
+
+function advanceExtensionPageTabRevision(tabId) {
+  extensionPageTabRevisions.set(tabId, (extensionPageTabRevisions.get(tabId) || 0) + 1);
+}
+
+function rememberKnownExtensionPageTab(tabId) {
+  if (!Number.isInteger(tabId) || tabId < 0) return;
+  advanceExtensionPageTabRevision(tabId);
+  revokedExtensionPageTabIds.delete(tabId);
+  candidateExtensionPageTabIds.add(tabId);
+  knownExtensionPageTabIds.add(tabId);
+}
+
+function discoverExtensionPageTab(tabId) {
+  if (!Number.isInteger(tabId) || tabId < 0 || revokedExtensionPageTabIds.has(tabId)) return;
+  candidateExtensionPageTabIds.add(tabId);
+  knownExtensionPageTabIds.add(tabId);
+}
+
+function extensionPageTabTracked(tabId) {
+  return candidateExtensionPageTabIds.has(tabId) || knownExtensionPageTabIds.has(tabId);
+}
+
+function normalizedPreferredTabIds(values) {
+  return (Array.isArray(values) ? values : [values])
+    .filter((value) => Number.isInteger(value) && value >= 0);
+}
+
+async function currentExtensionPageTabIds(preferredTabIds = []) {
+  const extensionBase = chrome.runtime.getURL("");
+  const preferred = normalizedPreferredTabIds(preferredTabIds);
+  for (const tabId of preferred) {
+    if (!revokedExtensionPageTabIds.has(tabId)) {
+      candidateExtensionPageTabIds.add(tabId);
+      knownExtensionPageTabIds.add(tabId);
     }
   }
-  await chrome.declarativeNetRequest.updateDynamicRules({
-    removeRuleIds: oldRules.map((rule) => rule.id),
-    addRules: rules
+  const queryRevisions = new Map(extensionPageTabRevisions);
+  try {
+    const tabs = await chrome.tabs.query({});
+    const changedKnownTabIds = Array.from(knownExtensionPageTabIds).filter((tabId) => (
+      (queryRevisions.get(tabId) || 0) !== (extensionPageTabRevisions.get(tabId) || 0)
+    ));
+    knownExtensionPageTabIds.clear();
+    for (const tabId of changedKnownTabIds) knownExtensionPageTabIds.add(tabId);
+    for (const tab of tabs || []) {
+      if (!Number.isInteger(tab?.id)) continue;
+      if ((queryRevisions.get(tab.id) || 0) !== (extensionPageTabRevisions.get(tab.id) || 0)) continue;
+      if (String(tab?.url || "").startsWith(extensionBase)) discoverExtensionPageTab(tab.id);
+      else if (candidateExtensionPageTabIds.has(tab.id) || preferred.includes(tab.id)) {
+        candidateExtensionPageTabIds.delete(tab.id);
+        revokedExtensionPageTabIds.add(tab.id);
+      }
+    }
+    const observedTabIds = new Set((tabs || []).map((tab) => tab?.id).filter(Number.isInteger));
+    for (const tabId of preferred) {
+      if (!observedTabIds.has(tabId) && !revokedExtensionPageTabIds.has(tabId)) {
+        candidateExtensionPageTabIds.add(tabId);
+        knownExtensionPageTabIds.add(tabId);
+      }
+    }
+  } catch (error) {
+    console.warn(`[${APP_NAME}] Extension page tabs could not be listed for frame rules`, error);
+  }
+  for (const tabId of revokedExtensionPageTabIds) knownExtensionPageTabIds.delete(tabId);
+  return Array.from(knownExtensionPageTabIds).sort((a, b) => a - b);
+}
+
+function createDnrRuleUpdater(applyRules) {
+  if (typeof applyRules !== "function") throw new TypeError("DNR rule updater requires an apply function");
+  const pendingTabIds = new Set();
+  let pendingWaiters = [];
+  let running = false;
+  let scheduled = false;
+  const drain = async () => {
+    scheduled = false;
+    if (running) return;
+    running = true;
+    while (pendingWaiters.length) {
+      const tabIds = Array.from(pendingTabIds).sort((a, b) => a - b);
+      const waiters = pendingWaiters;
+      pendingTabIds.clear();
+      pendingWaiters = [];
+      try {
+        const result = await applyRules(tabIds);
+        for (const waiter of waiters) waiter.resolve(result);
+      } catch (error) {
+        for (const waiter of waiters) waiter.reject(error);
+      }
+    }
+    running = false;
+  };
+  return (preferredTabIds = []) => {
+    for (const tabId of normalizedPreferredTabIds(preferredTabIds)) pendingTabIds.add(tabId);
+    const result = new Promise((resolve, reject) => { pendingWaiters.push({ resolve, reject }); });
+    if (!running && !scheduled) {
+      scheduled = true;
+      queueMicrotask(drain);
+    }
+    return result;
+  };
+}
+
+async function replaceDnrRules(api, sessionRules, dynamicRules, warn = () => {}) {
+  const oldDynamicRules = await api.getDynamicRules();
+  const supportsSessionRules = typeof api.getSessionRules === "function"
+    && typeof api.updateSessionRules === "function";
+  if (!supportsSessionRules) {
+    await api.updateDynamicRules({
+      removeRuleIds: oldDynamicRules.map((rule) => rule.id),
+      addRules: dynamicRules
+    });
+    return "dynamic";
+  }
+  let oldSessionRules = [];
+  try {
+    oldSessionRules = await api.getSessionRules();
+    await api.updateSessionRules({
+      removeRuleIds: oldSessionRules.map((rule) => rule.id),
+      addRules: sessionRules
+    });
+  } catch (error) {
+    warn("Failed to update session DNR rules; falling back to dynamic rules", error);
+    if (oldSessionRules.length) {
+      try {
+        await api.updateSessionRules({
+          removeRuleIds: oldSessionRules.map((rule) => rule.id),
+          addRules: []
+        });
+      } catch (cleanupError) {
+        warn("Stale session DNR rules could not be removed before dynamic fallback", cleanupError);
+      }
+    }
+    await api.updateDynamicRules({
+      removeRuleIds: oldDynamicRules.map((rule) => rule.id),
+      addRules: dynamicRules
+    });
+    return "dynamic";
+  }
+  if (oldDynamicRules.length) {
+    try {
+      await api.updateDynamicRules({
+        removeRuleIds: oldDynamicRules.map((rule) => rule.id),
+        addRules: []
+      });
+    } catch (error) {
+      warn("Session DNR rules are active, but stale dynamic rules could not be removed", error);
+    }
+  }
+  return "session";
+}
+
+async function applyDnrRules(preferredTabIds = []) {
+  const chatApps = await currentChatApps();
+  const extensionHost = new URL(chrome.runtime.getURL("")).hostname;
+  const supportsSessionRules = typeof chrome.declarativeNetRequest.getSessionRules === "function"
+    && typeof chrome.declarativeNetRequest.updateSessionRules === "function";
+  const extensionTabIds = supportsSessionRules
+    ? await currentExtensionPageTabIds(preferredTabIds)
+    : [];
+  const sessionRules = buildDynamicDnrRules(chatApps, extensionHost, extensionTabIds);
+  // Dynamic rules cannot safely express ownership by a ChatClub tab. Keep only
+  // extension-initiated frame loading there instead of weakening ordinary tabs.
+  const dynamicRules = supportsSessionRules
+    ? buildDynamicDnrRules(chatApps, extensionHost, [])
+    : sessionRules;
+  await replaceDnrRules(
+    chrome.declarativeNetRequest,
+    sessionRules,
+    dynamicRules,
+    (message, error) => console.warn(`[${APP_NAME}] ${message}`, error)
+  );
+}
+
+const updateDnrRules = createDnrRuleUpdater(applyDnrRules);
+
+function forgetKnownExtensionPageTab(tabId) {
+  if (!Number.isInteger(tabId)) return;
+  const wasCandidate = candidateExtensionPageTabIds.delete(tabId);
+  const wasKnown = knownExtensionPageTabIds.delete(tabId);
+  advanceExtensionPageTabRevision(tabId);
+  revokedExtensionPageTabIds.add(tabId);
+  if (!wasCandidate && !wasKnown) return;
+  updateDnrRules().catch((error) => {
+    console.warn(`[${APP_NAME}] Inactive extension tab frame rules could not be refreshed`, error);
   });
 }
 
 let runtimeConfigReloadChain = Promise.resolve();
 
-function reloadRuntimeConfig() {
+function reloadRuntimeConfig(preferredTabId = null) {
   runtimeConfigReloadChain = runtimeConfigReloadChain
     .catch(() => {})
-    .then(() => Promise.all([updateDnrRules(), registerContentScripts(chrome)]));
+    .then(() => Promise.all([updateDnrRules(preferredTabId), registerContentScripts(chrome)]));
   return runtimeConfigReloadChain;
 }
 
@@ -467,8 +638,8 @@ const backgroundRequestHandlers = [
   [REQUEST.RELAY_FRAME_LIFECYCLE, async (message, sender) => {
     await authenticatedFrameRelay.frameLifecycle(message, sender);
   }],
-  [REQUEST.RELOAD_CONFIGS, async () => {
-    await reloadRuntimeConfig();
+  [REQUEST.RELOAD_CONFIGS, async (_message, _sender, tabId) => {
+    await reloadRuntimeConfig(tabId);
   }],
   ...grokCookieRuntime.requestHandlers(REQUEST, { updateDnrRules }),
   [REQUEST.GET_CONFIG_INFO, async () => ({
@@ -476,12 +647,12 @@ const backgroundRequestHandlers = [
     customConfig: await loadCustomConfig(),
     contentScripts: await chrome.scripting.getRegisteredContentScripts()
   })],
-  [REQUEST.RESET_CONFIG, async () => {
+  [REQUEST.RESET_CONFIG, async (_message, _sender, tabId) => {
     await grokCookieRuntime.removeAllManagedPartitions();
     await chrome.storage.local.clear();
     const workspaceSessionGeneration = await rotateWorkspaceSessionGeneration(chrome);
     const options = await saveOptions({});
-    await reloadRuntimeConfig();
+    await reloadRuntimeConfig(tabId);
     return { options, workspaceSessionGeneration };
   }],
   ...customUserscriptRuntime.requestHandlers(REQUEST),

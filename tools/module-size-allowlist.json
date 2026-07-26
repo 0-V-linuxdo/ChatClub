@@ -7,10 +7,10 @@
     "reason": "Bilingual translation catalog data is kept co-located for key parity; the queued-send status, model-failure policy, two model-preference tab labels, and accessible per-platform preference labels are included in the exact line and byte ratchets."
   },
   "tools/browser-smoke.mjs": {
-    "maxLines": 1211,
+    "maxLines": 1279,
     "target": 1200,
-    "maxBytes": 63605,
+    "maxBytes": 66976,
     "targetBytes": 60000,
-    "reason": "The cross-engine smoke exercises the production two-phase frame injection, authenticated binding handshake, and current geckodriver system-access startup contract."
+    "reason": "The cross-engine smoke exercises protected-header initial loading, owner-tab session rules, document-initiated iframe self-navigation, the authenticated binding handshake, and the current geckodriver system-access startup contract."
   }
 }

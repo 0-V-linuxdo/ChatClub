@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
+const { functionSource } = require("./function-source.cjs");
 
 const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
@@ -316,7 +317,10 @@ async function releaseManagedCookie(bridge, { name, cause, value }) {
   assert.equal(relay.match(/var GROK_COOKIE_BRIDGE_VERSION = "([^"]+)"/)?.[1], protocol.GROK_COOKIE_BRIDGE_VERSION);
   assert.match(read("content-src/grok-cookie-bridge.js"), /const BRIDGE_VERSION = GROK_COOKIE_BRIDGE_VERSION/);
   assert.match(read("content-src/grok-cookie-bridge.js"), /const INSTALLATION_VERSION = runtimeIdentity\.bundle\.implementationVersion/);
-  assert.match(workspace, /grokPreflight \? 10000 : 1800/);
+  const frameLoad = functionSource(workspace, "setFrameSrcAfterPrepare");
+  assert.match(frameLoad, /const fallback = grokPreflight \? setTimeout/);
+  assert.match(frameLoad, /}, 10000\) : null/);
+  assert.doesNotMatch(frameLoad, /1800/, "ordinary frame loads must not share the Grok Cookie fallback timer");
   assert.match(workspace, /markGrokFramePreflightFallback\(url, preflightId\)/);
 
   console.log("Grok partitioned Cookie bridge: ok");

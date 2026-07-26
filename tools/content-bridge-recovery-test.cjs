@@ -1133,6 +1133,16 @@ async function createPreservedRuntimeReloadFixture() {
     "iframe navigation must invalidate the old challenge before clearing its injected browser document"
   );
   const initialFrameSource = functionSource(workspace, "setFrameSrcAfterPrepare");
+  assert.match(
+    initialFrameSource,
+    /const fallback = grokPreflight \? setTimeout/,
+    "only the Grok Cookie preflight may retain a bounded fallback assignment"
+  );
+  assert.doesNotMatch(
+    initialFrameSource,
+    /grokPreflight \? 10000 : 1800|if \(!grokPreflight\)[\s\S]{0,120}?assign\(\)/,
+    "ordinary frames must not race their real URL ahead of DNR preparation"
+  );
   const assignedStart = initialFrameSource.indexOf("assigned = true");
   const setSrcStart = initialFrameSource.indexOf("const setSrc", assignedStart);
   const realSrcAssignment = initialFrameSource.indexOf('iframe.setAttribute("src", url)', setSrcStart);

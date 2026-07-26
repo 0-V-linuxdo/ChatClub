@@ -261,11 +261,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
   }
 
   async function prepareFrameLoad(url, preflightId = "") {
-    try {
-      return await runtimeRequest({ source: "chatclub", action: "prepareFrameLoad", url, preflightId });
-    } catch (error) {
-      return { success: false, error: error?.message || String(error || "prepareFrameLoad failed") };
-    }
+    return runtimeRequest({ source: "chatclub", action: "prepareFrameLoad", url, preflightId });
   }
 
   async function markGrokFramePreflightFallback(url, preflightId) {
@@ -501,21 +497,23 @@ export function createWorkspaceFrameController(dependencies = {}) {
     };
     const grokPreflight = grokCookieBridgeUrl(url);
     const preflightId = grokPreflight ? grokFramePreflightId() : "";
-    const fallback = setTimeout(() => {
-      if (!grokPreflight) {
-        assign();
-        return;
-      }
+    // Dia can take longer than a short UI timeout to wake the extension
+    // Service Worker. Never race a normal frame navigation ahead of the DNR
+    // response-header rules that make CSP/XFO-protected apps embeddable.
+    const fallback = grokPreflight ? setTimeout(() => {
       const guard = setTimeout(assign, 300);
       markGrokFramePreflightFallback(url, preflightId).finally(() => {
         clearTimeout(guard);
         assign();
       });
-    }, grokPreflight ? 10000 : 1800);
+    }, 10000) : null;
     prepareFrameLoad(url, preflightId)
-      .catch(() => null)
+      .catch((error) => {
+        console.warn("[ChatClub] Frame load preparation failed; continuing without the preflight", error);
+        return null;
+      })
       .finally(() => {
-        clearTimeout(fallback);
+        if (fallback) clearTimeout(fallback);
         assign();
       });
   }

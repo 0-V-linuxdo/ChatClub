@@ -221,10 +221,11 @@ export function createGrokCookieRuntime(api, dependencies = {}) {
     }
     return [
       [request.PREPARE_FRAME_LOAD, async (message, sender) => {
+        const tabId = verifiedExtensionPageSender(sender);
         const preflightId = registerFramePreflight(message, sender);
         try {
           const cookieBridge = prepareSessionCookies(message.url, sender).catch(() => publicResult());
-          await dependencies.updateDnrRules();
+          await dependencies.updateDnrRules(tabId);
           return { grokCookieBridge: await cookieBridge };
         } finally {
           finishFramePreflight(preflightId);

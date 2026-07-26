@@ -36,6 +36,13 @@ assert.match(runtime, /Number\(details\?\.frameId\) === 0[\s\S]*?forgetSecureTab
 assert.match(runtime, /touchContext: secureFrameContextRegistry\.touch/);
 assert.match(runtime, /forgetContext: secureFrameContextRegistry\.forgetContext/);
 assert.match(runtime, /chrome\.runtime\.onMessage\.addListener\(createBackgroundRequestListener\(dispatchBackgroundRequest\)\)/);
+assert.match(runtime, /createDnrRuleUpdater\(applyDnrRules\)/);
+assert.match(runtime, /replaceDnrRules\(/);
+assert.match(runtime, /currentExtensionPageTabIds\(preferredTabIds\)/);
+assert.match(runtime, /knownExtensionPageTabIds/);
+assert.match(runtime, /queueMicrotask\(drain\)/);
+assert.match(runtime, /buildDynamicDnrRules\(chatApps, extensionHost, extensionTabIds\)/);
+assert.match(runtime, /buildDynamicDnrRules\(chatApps, extensionHost, \[\]\)/);
 assert.doesNotMatch(runtime, /\bimport\s*\(/);
 assert.match(runtime, /runtimeIdentity: CONTENT_BRIDGE_RUNTIME_IDENTITY/);
 assert.match(runtime, /contentRuntimeIdentityForBundle\("content\/content\.js"\)/);
@@ -70,6 +77,7 @@ assert.match(grokRuntime, /senderDocumentId && frameDocumentId && senderDocument
 assert.match(grokRuntime, /grokCookieChangeOwnedByBridge\(changeInfo\)/);
 assert.match(grokRuntime, /releaseChangedGrokPartition\(api, changeInfo\)/);
 assert.match(grokRuntime, /request\.PREPARE_FRAME_LOAD/);
+assert.match(grokRuntime, /dependencies\.updateDnrRules\(tabId\)/);
 assert.match(grokRuntime, /request\.SYNC_GROK_SESSION_COOKIES/);
 assert.doesNotMatch(grokRuntime, /console\.(?:log|info|debug).*cookie/i);
 
