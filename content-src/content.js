@@ -57,6 +57,18 @@ function installContentBridge() {
   const clearSubmissionNavigation = submissionNavigation.clear;
   const currentSubmissionNavigation = submissionNavigation.current;
   const clearSubmissionNavigationForTrustedIntent = submissionNavigation.clearForTrustedIntent;
+  const handleContentAction = commandRouter.dispatch;
+  function ensureSecureFrameRpc() {
+    return installSecureFrameRpc({
+      extensionApi: EXTENSION_API,
+      runtimes,
+      version: CONTENT_BRIDGE_VERSION,
+      source: SECURE_FRAME_COMMAND_SOURCE,
+      bridgeDocumentId: contentDocumentId,
+      secureFrameToken,
+      dispatch: handleContentAction
+    });
+  }
   function abortActivePreferredModelRun(reason = "preferred model apply cancelled", runId = "") {
     commandRouter.dispatch("cancelPreferredModelApply", { reason, runId }).catch(() => {});
     return true;
@@ -154,6 +166,7 @@ function installContentBridge() {
     runtimes.isActive
     && window.__CHATCLUB_CONTENT_BRIDGE_VERSION__ === CONTENT_RUNTIME_VERSION
   ) {
+    ensureSecureFrameRpc();
     announceContentRegistration();
     return;
   }
@@ -324,16 +337,7 @@ function installContentBridge() {
       getPageText: () => normalize(document.body?.innerText || "")
     }
   });
-  const handleContentAction = commandRouter.dispatch;
-  installSecureFrameRpc({
-    extensionApi: EXTENSION_API,
-    runtimes,
-    version: CONTENT_BRIDGE_VERSION,
-    source: SECURE_FRAME_COMMAND_SOURCE,
-    bridgeDocumentId: contentDocumentId,
-    secureFrameToken,
-    dispatch: handleContentAction
-  });
+  ensureSecureFrameRpc();
 
   const onParentWindowMessage = async (event) => {
     if (!EXTENSION_ORIGIN || event.source !== window.parent || event.origin !== EXTENSION_ORIGIN) return;

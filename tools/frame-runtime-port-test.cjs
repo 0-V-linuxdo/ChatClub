@@ -89,6 +89,87 @@ const assert = require("node:assert/strict");
   }
 
   {
+    const preparedFrame = {
+      isConnected: true,
+      dataset: runtimeDataset("doc-prepared-send", ["send"])
+    };
+    let preparedEnsures = 0;
+    const preparedRoutes = [];
+    const preparedPort = new FrameRuntimePort({
+      currentTabId: async () => 7,
+      async ensureRuntime() {
+        preparedEnsures += 1;
+        throw new Error("skipEnsure must not prepare an already-bound frame");
+      },
+      requestBackground: async (action, payload) => {
+        preparedRoutes.push({ action, payload });
+        return { success: true, data: { sent: true } };
+      }
+    });
+    assert.deepEqual(
+      await preparedPort.request(preparedFrame, "sendText", { text: "prepared" }, {
+        expectedDocumentId: "doc-prepared-send",
+        skipEnsure: true
+      }),
+      { sent: true }
+    );
+    assert.equal(preparedEnsures, 0, "skipEnsure must not run hidden preparation after the caller freezes frame identity");
+    assert.equal(preparedRoutes.length, 1, "an exact prepared frame must route the mutating command exactly once");
+    assert.equal(preparedRoutes[0].payload.bridgeDocumentId, "doc-prepared-send");
+    assert.equal(preparedRoutes[0].payload.command, "sendText");
+  }
+
+  for (const failure of [
+    {
+      label: "missing registration",
+      frame: { isConnected: true, dataset: runtimeDataset("") },
+      expectedDocumentId: "doc-missing",
+      expectedCode: "NOT_REGISTERED"
+    },
+    {
+      label: "expected document mismatch",
+      frame: { isConnected: true, dataset: runtimeDataset("doc-current", ["send"]) },
+      expectedDocumentId: "doc-expected",
+      expectedCode: "STALE_DOCUMENT"
+    },
+    {
+      label: "missing send capability",
+      frame: { isConnected: true, dataset: runtimeDataset("doc-no-send") },
+      expectedDocumentId: "doc-no-send",
+      expectedCode: "INJECTION_FAILED"
+    }
+  ]) {
+    let preflightEnsures = 0;
+    let preflightBackgroundCalls = 0;
+    let preflightTabLookups = 0;
+    const preflightPort = new FrameRuntimePort({
+      async currentTabId() {
+        preflightTabLookups += 1;
+        return 7;
+      },
+      async ensureRuntime() {
+        preflightEnsures += 1;
+        return { ok: true, registration: { documentId: failure.expectedDocumentId } };
+      },
+      requestBackground: async () => {
+        preflightBackgroundCalls += 1;
+        return { success: true, data: { sent: true } };
+      }
+    });
+    await assert.rejects(
+      preflightPort.request(failure.frame, "sendText", { text: "must not send" }, {
+        expectedDocumentId: failure.expectedDocumentId,
+        skipEnsure: true
+      }),
+      (error) => isFrameCommandError(error, failure.expectedCode) && error.delivered === false,
+      failure.label
+    );
+    assert.equal(preflightEnsures, 0, `${failure.label}: skipEnsure must never prepare the frame`);
+    assert.equal(preflightTabLookups, 0, `${failure.label}: validation must finish before resolving a delivery route`);
+    assert.equal(preflightBackgroundCalls, 0, `${failure.label}: validation must fail before any background call`);
+  }
+
+  {
     const compatibleFrame = { isConnected: true, dataset: runtimeDataset("doc-compatible-old", ["send"]) };
     const compatibleRoutes = [];
     const compatiblePort = new FrameRuntimePort({

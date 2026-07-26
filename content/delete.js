@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "6fdf5880830e8789e55bbfdf3fbdbb7a0814fa54dba7030ad30c07382329c9ef";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "4b25a56bd08c2508af23fc884a7595f95663bd227768e9548427f9046db01267";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "8952f543167c54af2198cb194be57fe90778f0a8bcceaeba5bdca4664b61bdf6";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.8952f543167c54af2198cb194be57fe90778f0a8bcceaeba5bdca4664b61bdf6";
-  var CONTENT_RUNTIME_DELETE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/delete.js", "entryPath": "content-src/content-delete.js", "sourceSha256": "ffdf93ef4b1888dbdc48276cbaff451f5eb488ca28a05e54baff8b43ee4fe2c0", "implementationSha256": "0bc15f9208ac64bfc13d761988feaf89bdcc8fcba1975b602c7f9f5b701ac214", "implementationVersion": "2026.07.16.2+bundle.0bc15f9208ac64bfc13d761988feaf89bdcc8fcba1975b602c7f9f5b701ac214" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "719d8f56f36ec4f38931fc8156ef7fef9f04aae0b645871786954dfdf241ba64";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.719d8f56f36ec4f38931fc8156ef7fef9f04aae0b645871786954dfdf241ba64";
+  var CONTENT_RUNTIME_DELETE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/delete.js", "entryPath": "content-src/content-delete.js", "sourceSha256": "5a2c490948967822f5abcf55ec4d658804d01e5a78a13a356625bb8dca593f20", "implementationSha256": "a69e1f79c374b949a2061d0c6adc34d9c2d5066f88184bf185f4e195a14763fe", "implementationVersion": "2026.07.16.2+bundle.a69e1f79c374b949a2061d0c6adc34d9c2d5066f88184bf185f4e195a14763fe" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -1725,7 +1725,6 @@
       normalize: normalize2,
       deleteCompactToken,
       modelRect,
-      deleteElementText,
       deleteClickableElement,
       isDisabledElement: isDisabledElement2,
       visible: visible2,
@@ -1742,24 +1741,17 @@
       deleteResultWithTrustedMenuClick
     } = deps;
     const CLAUDE_CHAT_TITLE_ROOT_SELECTOR = "[data-testid='chat-title-split']";
-    const CLAUDE_DELETE_MENU_ROOT_SELECTOR = [
-      "[role='menu']",
-      "[role='listbox']",
-      "[data-radix-menu-content]",
-      "[data-radix-popper-content-wrapper]",
-      "[data-floating-ui-portal]",
-      "[data-slot='dropdown-menu-content']"
-    ].join(",");
     const CLAUDE_DELETE_LABELS = ["Delete chat", "Delete", "删除聊天", "删除"];
-    const CLAUDE_DELETE_MENU_SHORTCUT_TOKENS = /* @__PURE__ */ new Set([
-      "deleted",
-      "deletechatd",
-      "删除d",
-      "删除聊天d"
-    ]);
+    const CLAUDE_DELETE_MENU_SHORTCUT_COMPACT_VALUES = /* @__PURE__ */ new Set(["DeleteD", "deleteD", "删除D"]);
+    const CLAUDE_PRIVATE_USE_PATTERN = /[\uE000-\uF8FF\u{F0000}-\u{FFFFD}\u{100000}-\u{10FFFD}]/gu;
+    const CLAUDE_ZERO_WIDTH_PATTERN = /[\u200B-\u200F\u2060\uFEFF]/g;
     const CLAUDE_WRONG_DELETE_TARGET_PATTERN = /\b(?:delete|remove)\b[^\n]{0,48}\b(?:project|account|workspace)\b|(?:删除|移除)[^\n]{0,24}(?:项目|账户|帐号|账号|工作区)/i;
-    const CLAUDE_DELETE_CONFIRMATION_PATTERN = /\bdelete\s+(?:this\s+)?(?:chat|conversation)\b|(?:删除|移除)(?:此|这)?(?:聊天|对话)/i;
+    const CLAUDE_DELETE_CONFIRMATION_HEADING = "Delete chat";
+    const CLAUDE_DELETE_CONFIRMATION_PROMPT = "Are you sure you want to delete this chat?";
     let claudeTrustedDeleteLease = null;
+    function claudeLabelText(value) {
+      return normalize2(String(value || "").replace(CLAUDE_PRIVATE_USE_PATTERN, " ").replace(CLAUDE_ZERO_WIDTH_PATTERN, " "));
+    }
     function claudeConversationIdFromHref(value = location.href) {
       try {
         const url = new URL(String(value || ""), location.origin);
@@ -1842,14 +1834,32 @@
       }
       return candidates.length === 1 ? candidates[0] : null;
     }
+    function claudeMenuBindingIds(trigger = null) {
+      const byAttribute = ["aria-controls", "aria-owns"].map((name) => ({
+        name,
+        ids: String(trigger?.getAttribute?.(name) || "").trim().split(/\s+/).filter(Boolean)
+      }));
+      const ids = byAttribute.flatMap((entry) => entry.ids);
+      return {
+        byAttribute,
+        ids,
+        key: byAttribute.map((entry) => `${entry.name}:${entry.ids.join(" ")}`).join("|")
+      };
+    }
     function claudeLinkedDeleteMenuRoot(trigger = null) {
-      const controlsId = String(trigger?.getAttribute?.("aria-controls") || "").trim();
-      if (!controlsId) return null;
+      const binding = claudeMenuBindingIds(trigger);
+      if (!binding.ids.length) return null;
+      const roots = /* @__PURE__ */ new Set();
       try {
-        return document.getElementById(controlsId) || null;
+        for (const id of binding.ids) {
+          const root = document.getElementById(id) || null;
+          if (!root || String(root.id || "") !== id) return null;
+          roots.add(root);
+        }
       } catch {
         return null;
       }
+      return roots.size === 1 ? [...roots][0] : null;
     }
     function claudeDeleteMenuRoots(trigger = null) {
       const roots = [];
@@ -1865,22 +1875,22 @@
         roots.push(root);
       };
       add(claudeLinkedDeleteMenuRoot(trigger));
-      qsa2(CLAUDE_DELETE_MENU_ROOT_SELECTOR, document, { all: true }).forEach(add);
       return roots.sort((a, b) => modelElementArea(a) - modelElementArea(b));
     }
     function claudeDeleteLabelMatchesExact(value) {
-      const text = normalize2(value);
+      const text = claudeLabelText(value);
       if (!text || CLAUDE_WRONG_DELETE_TARGET_PATTERN.test(text)) return false;
       return deleteLabelMatchesExactish(text, CLAUDE_DELETE_LABELS);
     }
     function claudeDeleteMenuLabelMatchesExact(value) {
-      const text = normalize2(value);
+      const text = claudeLabelText(value);
       if (claudeDeleteLabelMatchesExact(text)) return true;
       if (!text || CLAUDE_WRONG_DELETE_TARGET_PATTERN.test(text)) return false;
       return /^(?:delete(?:\s+chat)?|删除(?:聊天)?)\s+d$/i.test(text);
     }
     function claudeDeleteMenuShortcutTokenMatches(value) {
-      return CLAUDE_DELETE_MENU_SHORTCUT_TOKENS.has(deleteCompactToken(value));
+      const compactValue = claudeLabelText(value).replace(/[^A-Za-z0-9\u4E00-\u9FFF]+/g, "");
+      return CLAUDE_DELETE_MENU_SHORTCUT_COMPACT_VALUES.has(compactValue);
     }
     function claudeMenuSemanticTokens(target) {
       return [
@@ -1888,7 +1898,7 @@
         target?.getAttribute?.("title"),
         target?.innerText,
         target?.textContent
-      ].map(deleteCompactToken).filter(Boolean);
+      ].map((value) => deleteCompactToken(claudeLabelText(value))).filter(Boolean);
     }
     function claudeDeleteMenuHasConversationFingerprint(root, deleteItem) {
       const readStateTargets = /* @__PURE__ */ new Set();
@@ -1907,16 +1917,6 @@
       }
       return [...readStateTargets].some((readTarget) => [...conversationActionTargets].some((actionTarget) => actionTarget !== readTarget));
     }
-    function claudeDeleteTargetLabelMatchesExact(target) {
-      if (!target) return false;
-      const semanticValues = [
-        target.getAttribute?.("aria-label"),
-        target.getAttribute?.("title"),
-        target.innerText,
-        target.textContent
-      ].map((value) => String(value || "").trim()).filter(Boolean);
-      return Boolean(semanticValues.length) && semanticValues.every(claudeDeleteLabelMatchesExact);
-    }
     function claudeDeleteMenuTargetLabelMatchesExact(target) {
       if (!target) return false;
       const semanticValues = [
@@ -1927,7 +1927,7 @@
       ].map((value) => String(value || "").trim()).filter(Boolean);
       if (!semanticValues.length) return false;
       const hasRawShortcutEvidence = semanticValues.some((value) => {
-        const text = normalize2(value);
+        const text = claudeLabelText(value);
         return Boolean(text) && !CLAUDE_WRONG_DELETE_TARGET_PATTERN.test(text) && /^(?:delete(?:\s+chat)?|删除(?:聊天)?)\s+d$/i.test(text);
       });
       return semanticValues.every((value) => claudeDeleteMenuLabelMatchesExact(value) || hasRawShortcutEvidence && claudeDeleteMenuShortcutTokenMatches(value));
@@ -1959,11 +1959,62 @@
       if (candidates.length !== 1) return null;
       return claudeDeleteMenuHasConversationFingerprint(root, candidates[0]) ? candidates[0] : null;
     }
+    function claudeDeleteMenuShortcutTargetMatches(target) {
+      if (!claudeDeleteMenuTargetLabelMatchesExact(target)) return false;
+      return [
+        target?.getAttribute?.("aria-label"),
+        target?.getAttribute?.("title"),
+        target?.innerText,
+        target?.textContent
+      ].some((value) => {
+        const text = claudeLabelText(value);
+        return Boolean(text) && !CLAUDE_WRONG_DELETE_TARGET_PATTERN.test(text) && /^(?:delete(?:\s+chat)?|删除(?:聊天)?)\s+d$/i.test(text);
+      });
+    }
+    function findClaudeDeleteMenuShortcutItem(root, trigger = null) {
+      if (!root || !root.isConnected || !visible2(root)) return null;
+      const candidates = [];
+      const seen = /* @__PURE__ */ new Set();
+      for (const node of qsa2("[role='menuitem'],[role='option'],button,[role='button']", root, { all: true })) {
+        const target = deleteClickableElement(node);
+        if (!target || target === root || target === trigger || seen.has(target) || !root.contains?.(target)) continue;
+        if (!target.isConnected || !visible2(target) || isDisabledElement2(target)) continue;
+        if (!claudeDeleteMenuShortcutTargetMatches(target)) continue;
+        const box = modelRect(target);
+        if (!box || box.width < 8 || box.height < 8 || box.width > 520 || box.height > 120) continue;
+        seen.add(target);
+        candidates.push(target);
+      }
+      if (candidates.length !== 1) return null;
+      return claudeDeleteMenuHasConversationFingerprint(root, candidates[0]) ? candidates[0] : null;
+    }
+    function claudeOwnedDeleteMenuRoots(trigger = null) {
+      return new Set(
+        claudeDeleteMenuRoots(trigger).filter((root) => Boolean(findClaudeDeleteMenuItem(root, trigger)))
+      );
+    }
+    function claudeShortcutDeleteMenuRoots(trigger = null) {
+      return new Set(
+        claudeDeleteMenuRoots(trigger).filter((root) => Boolean(findClaudeDeleteMenuShortcutItem(root, trigger)))
+      );
+    }
     function claudeDeleteMenuSession(trigger, baselineRoots = /* @__PURE__ */ new Set()) {
       const sessionsByItem = /* @__PURE__ */ new Map();
       for (const root of claudeDeleteMenuRoots(trigger)) {
         if (baselineRoots.has(root)) continue;
         const item = findClaudeDeleteMenuItem(root, trigger);
+        if (!item) continue;
+        const existing = sessionsByItem.get(item);
+        if (!existing || modelElementArea(root) < modelElementArea(existing.root)) sessionsByItem.set(item, { root, item });
+      }
+      const sessions = [...sessionsByItem.values()];
+      return sessions.length === 1 ? sessions[0] : null;
+    }
+    function claudeDeleteMenuShortcutSession(trigger, baselineRoots = /* @__PURE__ */ new Set()) {
+      const sessionsByItem = /* @__PURE__ */ new Map();
+      for (const root of claudeDeleteMenuRoots(trigger)) {
+        if (baselineRoots.has(root)) continue;
+        const item = findClaudeDeleteMenuShortcutItem(root, trigger);
         if (!item) continue;
         const existing = sessionsByItem.get(item);
         if (!existing || modelElementArea(root) < modelElementArea(existing.root)) sessionsByItem.set(item, { root, item });
@@ -1978,74 +2029,227 @@
       const item = findClaudeDeleteMenuItem(root, trigger);
       return item ? { root, item } : null;
     }
-    function claudeDeleteConfirmButton(root) {
+    function refreshClaudeDeleteMenuShortcutSession(session, trigger) {
+      const root = session?.root || null;
+      const expectedItem = session?.item || null;
+      if (!root || !expectedItem || !root.isConnected || !visible2(root)) return null;
+      if (!claudeDeleteMenuRoots(trigger).includes(root)) return null;
+      const item = findClaudeDeleteMenuShortcutItem(root, trigger);
+      return item && item === expectedItem ? { root, item } : null;
+    }
+    function claudeExactActionLabelMatches(target, expectedLabel) {
+      if (!target) return false;
+      const values = [
+        target.getAttribute?.("aria-label"),
+        target.getAttribute?.("title"),
+        target.innerText,
+        target.textContent
+      ].map(claudeLabelText).filter(Boolean);
+      return Boolean(values.length) && values.every((value) => value === expectedLabel);
+    }
+    function claudeDeleteConfirmationDetails(root) {
       if (!root || !root.isConnected || !visible2(root)) return null;
-      const candidates = [];
+      const headings = qsa2("h1,h2,h3,h4,[role='heading']", root, { all: true }).filter((node) => node?.isConnected && visible2(node)).filter((node) => claudeLabelText(node.innerText || node.textContent) === CLAUDE_DELETE_CONFIRMATION_HEADING);
+      if (headings.length !== 1) return null;
+      const rootText = claudeLabelText(root.innerText || root.textContent);
+      if (CLAUDE_WRONG_DELETE_TARGET_PATTERN.test(rootText) || !rootText.includes(CLAUDE_DELETE_CONFIRMATION_PROMPT)) return null;
+      const actions = [];
       const seen = /* @__PURE__ */ new Set();
       for (const node of qsa2("button,[role='button']", root, { all: true })) {
         const target = deleteClickableElement(node);
         if (!target || seen.has(target) || !root.contains?.(target)) continue;
         if (!target.isConnected || !visible2(target) || isDisabledElement2(target)) continue;
-        if (!claudeDeleteTargetLabelMatchesExact(target)) continue;
         const box = modelRect(target);
         if (!box || box.width < 12 || box.height < 10 || box.width > 420 || box.height > 120) continue;
         seen.add(target);
-        candidates.push(target);
+        actions.push(target);
       }
-      return candidates.length === 1 ? candidates[0] : null;
+      const cancelButtons = actions.filter((target) => claudeExactActionLabelMatches(target, "Cancel"));
+      const deleteButtons = actions.filter((target) => claudeExactActionLabelMatches(target, "Delete"));
+      if (cancelButtons.length !== 1 || deleteButtons.length !== 1 || cancelButtons[0] === deleteButtons[0]) return null;
+      return { button: deleteButtons[0], cancelButton: cancelButtons[0] };
     }
-    function claudeDeleteConfirmationOwnership(baselineRoots = /* @__PURE__ */ new Set()) {
+    function claudeDeleteConfirmationOwnerships(baselineRoots = /* @__PURE__ */ new Set()) {
       const ownedByButton = /* @__PURE__ */ new Map();
       for (const root of deleteDialogRoots()) {
         if (!root || baselineRoots.has(root) || !root.isConnected || !visible2(root)) continue;
-        const text = deleteElementText(root);
-        if (CLAUDE_WRONG_DELETE_TARGET_PATTERN.test(text) || !CLAUDE_DELETE_CONFIRMATION_PATTERN.test(text)) continue;
-        const button = claudeDeleteConfirmButton(root);
-        if (!button) continue;
+        const details = claudeDeleteConfirmationDetails(root);
+        if (!details) continue;
+        const { button, cancelButton } = details;
         const existing = ownedByButton.get(button);
         if (!existing || modelElementArea(root) < modelElementArea(existing.root)) {
-          ownedByButton.set(button, { root, button, baselineRoots });
+          ownedByButton.set(button, { root, button, cancelButton, baselineRoots });
         }
       }
-      const ownerships = [...ownedByButton.values()];
-      return ownerships.length === 1 ? ownerships[0] : null;
+      return [...ownedByButton.values()];
+    }
+    function claudeLeaseCoreIsCurrent(lease, routeStillCurrent) {
+      return Boolean(
+        lease?.attemptId && claudeTrustedDeleteLease === lease && lease.documentRef === document && lease.routeId === claudeConversationIdFromHref() && Number(lease.expiresAt) >= Date.now() && routeStillCurrent()
+      );
+    }
+    function claudeReleaseActiveDeleteLease(lease) {
+      if (claudeTrustedDeleteLease !== lease) return;
+      claudeDisposeTrustedDeleteKeyObserver(lease);
+      claudeTrustedDeleteLease = null;
+    }
+    function claudeLeaseOriginalMenuClosed(lease, routeStillCurrent) {
+      if (!lease?.trigger || !lease?.menuRoot || !lease?.item) return false;
+      if (!claudeLeaseCoreIsCurrent(lease, routeStillCurrent)) return false;
+      if (claudeConversationMenuTrigger() !== lease.trigger) return false;
+      const binding = claudeMenuBindingIds(lease.trigger);
+      if (String(lease.trigger.getAttribute?.("aria-expanded") || "").trim().toLowerCase() !== "false") return false;
+      if (binding.ids.length) {
+        if (binding.key !== lease.menuBindingKey) return false;
+        try {
+          for (const id of binding.ids) {
+            const current = document.getElementById?.(id) || null;
+            if (current !== lease.menuRoot) return false;
+          }
+        } catch {
+          return false;
+        }
+      }
+      return !visible2(lease.menuRoot) && !visible2(lease.item);
+    }
+    function claudeLeaseObservedTrustedDeleteShortcut(lease) {
+      if (lease?.activationKind !== "shortcut") return true;
+      const observer = lease.trustedKeyObserver;
+      return Boolean(observer?.observed && !observer.invalid && Number(observer.observedAt) >= Number(observer.installedAt));
+    }
+    function claudeDeleteConfirmationOwnershipForLease(lease, routeStillCurrent) {
+      if (!claudeLeaseOriginalMenuClosed(lease, routeStillCurrent)) return null;
+      if (!claudeLeaseObservedTrustedDeleteShortcut(lease) || lease.confirmationAmbiguous) return null;
+      if (lease.frozenConfirmation) {
+        return claudeDeleteConfirmationOwnershipIsCurrent(lease.frozenConfirmation, routeStillCurrent) ? lease.frozenConfirmation : null;
+      }
+      const ownerships = claudeDeleteConfirmationOwnerships(lease?.confirmationBaseline);
+      if (ownerships.length > 1) {
+        lease.confirmationAmbiguous = true;
+        return null;
+      }
+      const ownership = ownerships.length === 1 ? ownerships[0] : null;
+      const active = document.activeElement || null;
+      if (!ownership || !active || !ownership.root.contains?.(active)) return null;
+      const frozen = { ...ownership, lease };
+      lease.frozenConfirmation = frozen;
+      return frozen;
     }
     function claudeDeleteConfirmationOwnershipIsCurrent(ownership, routeStillCurrent) {
       const root = ownership?.root || null;
       const button = ownership?.button || null;
-      if (!root || !button || !routeStillCurrent()) return false;
-      if (!root.isConnected || !button.isConnected || !visible2(root) || !visible2(button) || !root.contains?.(button)) return false;
+      const cancelButton = ownership?.cancelButton || null;
+      const lease = ownership?.lease || null;
+      if (!root || !button || !cancelButton || lease?.frozenConfirmation !== ownership) return false;
+      if (!claudeLeaseOriginalMenuClosed(lease, routeStillCurrent)) return false;
+      if (!claudeLeaseObservedTrustedDeleteShortcut(lease) || lease.confirmationAmbiguous) return false;
+      if (!root.isConnected || !button.isConnected || !cancelButton.isConnected || !visible2(root) || !visible2(button) || !visible2(cancelButton)) return false;
+      if (!root.contains?.(button) || !root.contains?.(cancelButton)) return false;
+      if (!root.contains?.(document.activeElement || null)) return false;
       if (ownership.baselineRoots?.has(root)) return false;
-      if (CLAUDE_WRONG_DELETE_TARGET_PATTERN.test(deleteElementText(root))) return false;
-      if (!CLAUDE_DELETE_CONFIRMATION_PATTERN.test(deleteElementText(root))) return false;
-      if (claudeDeleteConfirmButton(root) !== button) return false;
-      return deleteDialogRoots().some((candidate) => candidate === root);
+      const details = claudeDeleteConfirmationDetails(root);
+      if (!details || details.button !== button || details.cancelButton !== cancelButton) return false;
+      const currentOwnerships = claudeDeleteConfirmationOwnerships(ownership.baselineRoots);
+      return currentOwnerships.length === 1 && currentOwnerships[0].root === root && currentOwnerships[0].button === button && currentOwnerships[0].cancelButton === cancelButton;
+    }
+    function claudeDisposeTrustedDeleteKeyObserver(lease) {
+      try {
+        lease?.trustedKeyObserver?.dispose?.();
+      } catch {
+      }
+    }
+    function claudeInstallTrustedDeleteKeyObserver(lease, routeStillCurrent) {
+      if (typeof document.addEventListener !== "function" || typeof document.removeEventListener !== "function") return null;
+      const state = {
+        installedAt: Date.now(),
+        observedAt: 0,
+        observed: false,
+        invalid: false,
+        disposed: false,
+        dispose: null
+      };
+      let listening = false;
+      let expiryTimer = null;
+      const dispose = () => {
+        if (expiryTimer != null) {
+          clearTimeout(expiryTimer);
+          expiryTimer = null;
+        }
+        if (listening) {
+          listening = false;
+          document.removeEventListener("keydown", onKeyDown, true);
+        }
+        state.disposed = true;
+      };
+      const onKeyDown = (event) => {
+        dispose();
+        let path = [];
+        try {
+          const value = event?.composedPath?.();
+          if (Array.isArray(value)) path = value;
+        } catch {
+        }
+        const target = event?.target || null;
+        const exactPath = path.includes(lease.item) && path.includes(lease.menuRoot);
+        const exactTarget = Boolean(target && (target === lease.item || lease.item.contains?.(target)));
+        const valid = event?.isTrusted === true && event.key === "d" && event.repeat !== true && event.isComposing !== true && Number(event.keyCode || 0) !== 229 && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey && exactTarget && exactPath && claudeTrustedDeleteLease === lease && claudeLeaseCoreIsCurrent(lease, routeStillCurrent) && claudeConversationMenuTrigger() === lease.trigger && claudeLinkedDeleteMenuRoot(lease.trigger) === lease.menuRoot && String(lease.trigger.getAttribute?.("aria-expanded") || "").trim().toLowerCase() === "true" && document.hasFocus?.() && document.activeElement === lease.item && Boolean(refreshClaudeDeleteMenuShortcutSession({ root: lease.menuRoot, item: lease.item }, lease.trigger));
+        if (!valid) {
+          state.invalid = true;
+          return;
+        }
+        state.observed = true;
+        state.observedAt = Date.now();
+      };
+      state.dispose = dispose;
+      try {
+        document.addEventListener("keydown", onKeyDown, true);
+        listening = true;
+        expiryTimer = setTimeout(() => {
+          state.invalid = true;
+          dispose();
+        }, Math.max(0, Number(lease.expiresAt) - Date.now()));
+        expiryTimer?.unref?.();
+        return state;
+      } catch {
+        dispose();
+        return null;
+      }
+    }
+    function claudeHasNewDeleteConfirmation(baselineRoots = /* @__PURE__ */ new Set()) {
+      return deleteDialogRoots().some((root) => !baselineRoots.has(root));
     }
     function claudeTrustedMenuResult(reason, element, kind) {
       const value = deleteResultWithTrustedMenuClick("claude", reason, element);
       return value?.trustedMenuClick ? { ...value, trustedMenuClick: { ...value.trustedMenuClick, kind } } : value;
     }
-    function claudeTrustedConfirmResult(reason, ownership) {
-      const box = modelRect(ownership?.button);
-      if (!box) return deleteResult(false, "claude", reason);
-      const round = (value) => Math.round(Number(value) * 100) / 100;
+    function claudeTrustedDeleteShortcutResult(reason) {
       return deleteResult(false, "claude", reason, {
-        needsTrustedClick: true,
-        trustedClick: {
-          kind: "delete-confirm",
+        needsTrustedKeySequence: true,
+        trustedKeySequence: {
+          kind: "claude-menu-delete-shortcut",
           site: "claude",
           reason,
-          framePoint: { x: round(box.left + box.width / 2), y: round(box.top + box.height / 2) },
-          frameRect: {
-            left: round(box.left),
-            top: round(box.top),
-            right: round(box.right),
-            bottom: round(box.bottom),
-            width: round(box.width),
-            height: round(box.height)
-          }
+          keys: [{ key: "d", settleMs: 420 }],
+          keySettleMs: 160,
+          settleMs: 520
         }
       });
+    }
+    function claudeExactConfirmationClick(button, ownershipStillCurrent) {
+      if (!button || typeof button.click !== "function") return false;
+      try {
+        button.focus?.({ preventScroll: true });
+      } catch {
+        return false;
+      }
+      if (!document.hasFocus?.() || document.activeElement !== button) return false;
+      if (typeof ownershipStillCurrent !== "function" || ownershipStillCurrent() !== true) return false;
+      try {
+        button.click();
+        return true;
+      } catch {
+        return false;
+      }
     }
     async function finishClaudeDeleteConfirmation(ownership, routeStillCurrent) {
       if (!claudeDeleteConfirmationOwnershipIsCurrent(ownership, routeStillCurrent)) {
@@ -2054,19 +2258,24 @@
       const root = ownership.root;
       const button = ownership.button;
       if (!routeStillCurrent()) return deleteResult(false, "claude", "current conversation changed before delete confirmation");
-      deleteClick(button) || deleteClickLayout(button);
+      if (!claudeExactConfirmationClick(
+        button,
+        () => claudeDeleteConfirmationOwnershipIsCurrent(ownership, routeStillCurrent)
+      )) {
+        return deleteResult(false, "claude", "exact delete confirmation click was not accepted");
+      }
       const closed = await waitForModel(() => !root.isConnected || !visible2(root), 5200, 100);
       if (closed) return deleteResult(true, "claude");
       if (!routeStillCurrent()) return deleteResult(false, "claude", "current conversation changed during delete confirmation");
       if (!claudeDeleteConfirmationOwnershipIsCurrent(ownership, routeStillCurrent)) {
         return deleteResult(false, "claude", "delete confirmation ownership changed");
       }
-      return claudeTrustedConfirmResult("delete confirmation did not close", ownership);
+      return deleteResult(false, "claude", "delete confirmation outcome is uncertain after its one allowed click");
     }
     async function waitForClaudeDeleteOutcome(lease, trigger, routeStillCurrent, timeoutMs = 2200) {
       const confirmation = await waitForModel(() => {
         if (!routeStillCurrent()) return null;
-        return claudeDeleteConfirmationOwnership(lease.confirmationBaseline);
+        return claudeDeleteConfirmationOwnershipForLease(lease, routeStillCurrent);
       }, timeoutMs, 90);
       if (!routeStillCurrent()) return { state: "route-changed" };
       if (confirmation) return { state: "confirmation", confirmation };
@@ -2075,95 +2284,266 @@
     }
     function claudeLeaseMatches(lease, data, phase, routeStillCurrent) {
       return Boolean(
-        lease && lease.phase === phase && lease.attemptId && lease.attemptId === String(data?.deleteAttemptId || "") && lease.routeId === claudeConversationIdFromHref() && routeStillCurrent()
+        lease && lease.phase === phase && lease.attemptId && lease.attemptId === String(data?.deleteAttemptId || "") && lease.documentRef === document && lease.routeId === claudeConversationIdFromHref() && Number(lease.expiresAt) >= Date.now() && routeStillCurrent()
       );
+    }
+    function leaseClaudeTrustedDeleteShortcut(data, session, routeStillCurrent, confirmationBaseline) {
+      const trigger = claudeConversationMenuTrigger();
+      const current = refreshClaudeDeleteMenuShortcutSession(session, trigger);
+      if (!current || !routeStillCurrent()) {
+        return deleteResult(false, "claude", "owned Claude delete shortcut changed before activation");
+      }
+      if (claudeHasNewDeleteConfirmation(confirmationBaseline)) {
+        return deleteResult(false, "claude", "unverified delete confirmation appeared before Delete D activation");
+      }
+      const menuBinding = claudeMenuBindingIds(trigger);
+      if (!menuBinding.ids.length || claudeLinkedDeleteMenuRoot(trigger) !== current.root || String(trigger.getAttribute?.("aria-expanded") || "").trim().toLowerCase() !== "true") {
+        return deleteResult(false, "claude", "owned Claude delete shortcut lost its title-menu binding");
+      }
+      claudeDisposeTrustedDeleteKeyObserver(claudeTrustedDeleteLease);
+      claudeTrustedDeleteLease = {
+        phase: "shortcut",
+        activationKind: "shortcut",
+        attemptId: String(data?.deleteAttemptId || ""),
+        routeId: claudeConversationIdFromHref(),
+        documentRef: document,
+        trigger,
+        menuRoot: current.root,
+        menuBindingKey: menuBinding.key,
+        item: current.item,
+        confirmationBaseline,
+        expiresAt: Date.now() + 12e3
+      };
+      return claudeTrustedDeleteShortcutResult("owned Claude menu requires its Delete D shortcut");
+    }
+    function focusClaudeDeleteShortcutLease(lease, routeStillCurrent) {
+      if (!lease?.trigger || !lease?.menuRoot || !lease?.item || !routeStillCurrent()) return null;
+      if (claudeConversationMenuTrigger() !== lease.trigger) return null;
+      if (claudeLinkedDeleteMenuRoot(lease.trigger) !== lease.menuRoot) return null;
+      if (claudeMenuBindingIds(lease.trigger).key !== lease.menuBindingKey) return null;
+      if (String(lease.trigger.getAttribute?.("aria-expanded") || "").trim().toLowerCase() !== "true") return null;
+      const current = refreshClaudeDeleteMenuShortcutSession(
+        { root: lease.menuRoot, item: lease.item },
+        lease.trigger
+      );
+      if (!current || current.item !== lease.item) return null;
+      try {
+        current.item.focus?.({ preventScroll: true });
+      } catch {
+        return null;
+      }
+      const focused = refreshClaudeDeleteMenuShortcutSession(current, lease.trigger);
+      if (!focused || focused.item !== lease.item || !routeStillCurrent()) return null;
+      return document.hasFocus?.() && document.activeElement === focused.item ? focused : null;
+    }
+    function preflightClaudeTrustedDeleteShortcut(data, routeStillCurrent) {
+      const lease = claudeTrustedDeleteLease;
+      if (!claudeLeaseMatches(lease, data, "shortcut", routeStillCurrent)) {
+        return deleteResult(false, "claude", "trusted Claude Delete D shortcut has no owned activation lease");
+      }
+      lease.phase = "preflighting";
+      claudeDisposeTrustedDeleteKeyObserver(lease);
+      if (claudeHasNewDeleteConfirmation(lease.confirmationBaseline)) {
+        claudeReleaseActiveDeleteLease(lease);
+        return deleteResult(false, "claude", "unverified delete confirmation appeared before trusted Delete D activation");
+      }
+      const focused = focusClaudeDeleteShortcutLease(lease, routeStillCurrent);
+      if (!focused) {
+        claudeReleaseActiveDeleteLease(lease);
+        return deleteResult(false, "claude", "trusted Claude Delete D shortcut could not establish exact menu focus");
+      }
+      if (claudeHasNewDeleteConfirmation(lease.confirmationBaseline)) {
+        claudeReleaseActiveDeleteLease(lease);
+        return deleteResult(false, "claude", "unverified delete confirmation appeared while focusing trusted Delete D activation");
+      }
+      Object.assign(lease, {
+        phase: "confirmation",
+        activationKind: "shortcut",
+        menuRoot: focused.root,
+        item: focused.item,
+        frozenConfirmation: null,
+        confirmationAmbiguous: false,
+        expiresAt: Date.now() + 12e3
+      });
+      const trustedKeyObserver = claudeInstallTrustedDeleteKeyObserver(lease, routeStillCurrent);
+      if (!trustedKeyObserver) {
+        claudeReleaseActiveDeleteLease(lease);
+        return deleteResult(false, "claude", "trusted Claude Delete D observer could not be installed");
+      }
+      lease.trustedKeyObserver = trustedKeyObserver;
+      return claudeTrustedDeleteShortcutResult("owned Claude menu Delete D shortcut is ready");
     }
     async function activateClaudeDeleteMenuItem(session, trigger, data, routeStillCurrent, confirmationBaseline) {
       if (!session || !routeStillCurrent()) return deleteResult(false, "claude", "owned delete menu item changed before activation");
+      if (claudeHasNewDeleteConfirmation(confirmationBaseline)) {
+        return deleteResult(false, "claude", "unverified delete confirmation appeared before delete activation");
+      }
+      const menuBinding = claudeMenuBindingIds(trigger);
+      if (!menuBinding.ids.length || claudeLinkedDeleteMenuRoot(trigger) !== session.root || String(trigger.getAttribute?.("aria-expanded") || "").trim().toLowerCase() !== "true") {
+        return deleteResult(false, "claude", "owned delete menu lost its title-trigger binding before activation");
+      }
       const lease = {
         phase: "confirmation",
+        activationKind: "click",
         attemptId: String(data?.deleteAttemptId || ""),
         routeId: claudeConversationIdFromHref(),
+        documentRef: document,
+        trigger,
         menuRoot: session.root,
+        menuBindingKey: menuBinding.key,
         item: session.item,
-        confirmationBaseline
+        confirmationBaseline,
+        frozenConfirmation: null,
+        confirmationAmbiguous: false,
+        expiresAt: Date.now() + 12e3
       };
+      claudeDisposeTrustedDeleteKeyObserver(claudeTrustedDeleteLease);
       claudeTrustedDeleteLease = lease;
       deleteClick(session.item) || deleteClickLayout(session.item);
       const outcome = await waitForClaudeDeleteOutcome(lease, trigger, routeStillCurrent);
       if (outcome.state === "confirmation") {
-        claudeTrustedDeleteLease = null;
-        return finishClaudeDeleteConfirmation(outcome.confirmation, routeStillCurrent);
+        if (claudeTrustedDeleteLease !== lease) {
+          return deleteResult(false, "claude", "delete confirmation lease was replaced before finalization");
+        }
+        lease.phase = "confirming";
+        try {
+          return await finishClaudeDeleteConfirmation(outcome.confirmation, routeStillCurrent);
+        } finally {
+          claudeReleaseActiveDeleteLease(lease);
+        }
       }
       if (outcome.state === "menu-open") {
+        if (claudeTrustedDeleteLease !== lease || lease.phase !== "confirmation") {
+          return deleteResult(false, "claude", "delete menu item lease was replaced before trusted retry");
+        }
         return claudeTrustedMenuResult("delete menu item did not open an owned confirmation", lease.item, "delete-menu-item");
       }
-      claudeTrustedDeleteLease = null;
+      claudeReleaseActiveDeleteLease(lease);
       if (outcome.state === "route-changed") return deleteResult(false, "claude", "current conversation changed after delete activation");
       return deleteResult(false, "claude", "delete menu item outcome is uncertain");
     }
     async function resumeClaudeTrustedMenuTrigger(data, routeStillCurrent) {
       const lease = claudeTrustedDeleteLease;
-      claudeTrustedDeleteLease = null;
       if (!claudeLeaseMatches(lease, data, "menu", routeStillCurrent)) {
         return deleteResult(false, "claude", "trusted conversation menu click has no owned activation lease");
       }
       if (!lease.trigger?.isConnected || claudeConversationMenuTrigger() !== lease.trigger) {
         return deleteResult(false, "claude", "trusted conversation menu trigger changed");
       }
-      const session = claudeDeleteMenuSession(lease.trigger, lease.menuBaseline) || await waitForModel(() => routeStillCurrent() && claudeDeleteMenuSession(lease.trigger, lease.menuBaseline), 3200, 90);
-      if (!routeStillCurrent()) return deleteResult(false, "claude", "current conversation changed during trusted conversation menu click");
-      if (!session) return deleteResult(false, "claude", "trusted topic menu click did not open");
-      return activateClaudeDeleteMenuItem(session, lease.trigger, data, routeStillCurrent, lease.confirmationBaseline);
+      lease.phase = "opening-menu";
+      try {
+        const activation = await waitForModel(() => {
+          if (claudeTrustedDeleteLease !== lease || lease.phase !== "opening-menu" || !claudeLeaseCoreIsCurrent(lease, routeStillCurrent)) return null;
+          const shortcut = claudeDeleteMenuShortcutSession(lease.trigger, lease.shortcutMenuBaseline);
+          if (shortcut) return { kind: "shortcut", session: shortcut };
+          const session = claudeDeleteMenuSession(lease.trigger, lease.ownedMenuBaseline);
+          return session ? { kind: "item", session } : null;
+        }, 3200, 90);
+        if (claudeTrustedDeleteLease !== lease) {
+          return deleteResult(false, "claude", "trusted conversation menu lease was replaced while opening");
+        }
+        if (!routeStillCurrent()) return deleteResult(false, "claude", "current conversation changed during trusted conversation menu click");
+        if (!activation) return deleteResult(false, "claude", "trusted topic menu click did not open");
+        if (activation.kind === "shortcut") {
+          return leaseClaudeTrustedDeleteShortcut(data, activation.session, routeStillCurrent, lease.confirmationBaseline);
+        }
+        return await activateClaudeDeleteMenuItem(activation.session, lease.trigger, data, routeStillCurrent, lease.confirmationBaseline);
+      } finally {
+        claudeReleaseActiveDeleteLease(lease);
+      }
     }
     async function resumeClaudeTrustedDeleteItem(data, routeStillCurrent) {
       const lease = claudeTrustedDeleteLease;
-      claudeTrustedDeleteLease = null;
       if (!claudeLeaseMatches(lease, data, "confirmation", routeStillCurrent)) {
         return deleteResult(false, "claude", "trusted delete menu click has no owned activation lease");
       }
-      const confirmation = claudeDeleteConfirmationOwnership(lease.confirmationBaseline) || await waitForModel(() => routeStillCurrent() && claudeDeleteConfirmationOwnership(lease.confirmationBaseline), 3200, 90);
-      if (!routeStillCurrent()) return deleteResult(false, "claude", "current conversation changed during trusted delete menu click");
-      if (!confirmation) return deleteResult(false, "claude", "trusted delete menu click did not open an owned confirmation");
-      return finishClaudeDeleteConfirmation(confirmation, routeStillCurrent);
+      lease.phase = "confirming";
+      claudeDisposeTrustedDeleteKeyObserver(lease);
+      try {
+        if (lease.activationKind === "shortcut" && !claudeLeaseObservedTrustedDeleteShortcut(lease)) {
+          return deleteResult(false, "claude", "trusted Claude Delete D keydown was not observed on the owned menu item");
+        }
+        const confirmation = claudeDeleteConfirmationOwnershipForLease(lease, routeStillCurrent) || await waitForModel(() => routeStillCurrent() && claudeDeleteConfirmationOwnershipForLease(lease, routeStillCurrent), 3200, 90);
+        if (!routeStillCurrent()) return deleteResult(false, "claude", "current conversation changed during trusted delete menu click");
+        if (!confirmation) return deleteResult(false, "claude", "trusted delete menu click did not open an owned confirmation");
+        return await finishClaudeDeleteConfirmation(confirmation, routeStillCurrent);
+      } finally {
+        claudeReleaseActiveDeleteLease(lease);
+      }
     }
     async function deleteClaudeThread(data = {}) {
       const routeStillCurrent = claudeDeleteRouteGuard(data);
       if (!routeStillCurrent()) return deleteResult(false, "claude", "stable current conversation identity not found");
-      if (data?.trustedMenuClickRetried) return resumeClaudeTrustedDeleteItem(data, routeStillCurrent);
+      if (data?.trustedKeySequencePreflight) return preflightClaudeTrustedDeleteShortcut(data, routeStillCurrent);
+      if (data?.trustedMenuClickRetried || data?.trustedKeySequenceRetried) return resumeClaudeTrustedDeleteItem(data, routeStillCurrent);
       if (data?.trustedMenuTriggerRetried) return resumeClaudeTrustedMenuTrigger(data, routeStillCurrent);
+      claudeDisposeTrustedDeleteKeyObserver(claudeTrustedDeleteLease);
       claudeTrustedDeleteLease = null;
       if (findDeleteConfirmButton() || deleteDialogRoots().length) {
         return deleteResult(false, "claude", "unverified delete confirmation is already open");
       }
       const trigger = claudeConversationMenuTrigger();
       if (!trigger) return deleteResult(false, "claude", "conversation menu trigger not found");
-      const menuBaseline = new Set(claudeDeleteMenuRoots(trigger));
+      const ownedMenuBaseline = claudeOwnedDeleteMenuRoots(trigger);
+      const shortcutMenuBaseline = claudeShortcutDeleteMenuRoots(trigger);
       const confirmationBaseline = new Set(deleteDialogRoots());
       if (!routeStillCurrent()) return deleteResult(false, "claude", "current conversation changed before delete menu opened");
-      deleteClick(trigger) || deleteClickLayout(trigger);
-      const session = await waitForModel(() => routeStillCurrent() && claudeDeleteMenuSession(trigger, menuBaseline), 2400, 80);
-      if (!routeStillCurrent()) return deleteResult(false, "claude", "current conversation changed before delete menu opened");
-      if (!session) {
-        claudeTrustedDeleteLease = {
-          phase: "menu",
-          attemptId: String(data?.deleteAttemptId || ""),
-          routeId: claudeConversationIdFromHref(),
-          trigger,
-          menuBaseline,
-          confirmationBaseline
-        };
-        return claudeTrustedMenuResult("owned delete menu item not found", trigger, "conversation-menu-trigger");
+      const openingLease = {
+        phase: "opening-menu",
+        attemptId: String(data?.deleteAttemptId || ""),
+        routeId: claudeConversationIdFromHref(),
+        documentRef: document,
+        trigger,
+        ownedMenuBaseline,
+        shortcutMenuBaseline,
+        confirmationBaseline,
+        expiresAt: Date.now() + 12e3
+      };
+      claudeTrustedDeleteLease = openingLease;
+      let retainOpeningLease = false;
+      try {
+        deleteClick(trigger) || deleteClickLayout(trigger);
+        const activation = await waitForModel(() => {
+          if (claudeTrustedDeleteLease !== openingLease || !claudeLeaseMatches(openingLease, data, "opening-menu", routeStillCurrent)) return null;
+          const shortcut = claudeDeleteMenuShortcutSession(trigger, shortcutMenuBaseline);
+          if (shortcut) return { kind: "shortcut", session: shortcut };
+          const session = claudeDeleteMenuSession(trigger, ownedMenuBaseline);
+          return session ? { kind: "item", session } : null;
+        }, 2400, 80);
+        if (claudeTrustedDeleteLease !== openingLease) {
+          return deleteResult(false, "claude", "initial conversation menu lease was replaced while opening");
+        }
+        if (!claudeLeaseMatches(openingLease, data, "opening-menu", routeStillCurrent)) {
+          return deleteResult(false, "claude", "current conversation changed before delete menu opened");
+        }
+        if (!activation) {
+          openingLease.phase = "menu";
+          openingLease.expiresAt = Date.now() + 12e3;
+          retainOpeningLease = true;
+          return claudeTrustedMenuResult("owned delete menu item not found", trigger, "conversation-menu-trigger");
+        }
+        if (activation.kind === "shortcut") {
+          return leaseClaudeTrustedDeleteShortcut(data, activation.session, routeStillCurrent, confirmationBaseline);
+        }
+        await sleep2(120);
+        if (claudeTrustedDeleteLease !== openingLease) {
+          return deleteResult(false, "claude", "initial conversation menu lease was replaced before delete activation");
+        }
+        if (!routeStillCurrent()) return deleteResult(false, "claude", "current conversation changed before delete activation");
+        if (!claudeLeaseMatches(openingLease, data, "opening-menu", routeStillCurrent)) {
+          return deleteResult(false, "claude", "initial conversation menu lease expired before delete activation");
+        }
+        const currentSession = refreshClaudeDeleteMenuSession(activation.session, trigger);
+        if (!currentSession || !routeStillCurrent()) {
+          return deleteResult(false, "claude", routeStillCurrent() ? "owned delete menu item changed before activation" : "current conversation changed before delete activation");
+        }
+        if (findDeleteConfirmButton() || deleteDialogRoots().length) {
+          return deleteResult(false, "claude", "unverified delete confirmation appeared before delete activation");
+        }
+        return activateClaudeDeleteMenuItem(currentSession, trigger, data, routeStillCurrent, confirmationBaseline);
+      } finally {
+        if (!retainOpeningLease) claudeReleaseActiveDeleteLease(openingLease);
       }
-      await sleep2(120);
-      const currentSession = refreshClaudeDeleteMenuSession(session, trigger);
-      if (!currentSession || !routeStillCurrent()) {
-        return deleteResult(false, "claude", routeStillCurrent() ? "owned delete menu item changed before activation" : "current conversation changed before delete activation");
-      }
-      if (findDeleteConfirmButton() || deleteDialogRoots().length) {
-        return deleteResult(false, "claude", "unverified delete confirmation appeared before delete activation");
-      }
-      return activateClaudeDeleteMenuItem(currentSession, trigger, data, routeStillCurrent, confirmationBaseline);
     }
     return Object.freeze({ deleteClaudeThread });
   }
@@ -4065,7 +4445,16 @@
       if (!topicDeleteUsesCustomUserscript(config) && config?.standaloneUserscript !== true && !String(config?.userscript || "").trim() && !topicDeleteNativeRunner(config, payload)) {
         return deleteResult(false, topicDeleteSiteName(config || {}, payload), "unsupported site or userscript missing");
       }
+      const customMode = topicDeleteUsesCustomUserscript(config);
+      const source = String(config?.userscript || "").trim();
+      const nativeRunner = customMode ? null : topicDeleteNativeRunner(config, payload);
+      const nativeClaudeExecution = Boolean(
+        !customMode && !source && nativeRunner && topicDeleteNativeSiteId(config, payload) === "claude"
+      );
       let value = await runTopicDeleteUserscript(config, payload);
+      if (value?.needsTrustedKeySequence && value?.trustedKeySequence?.kind === "claude-menu-delete-shortcut" && !nativeClaudeExecution) {
+        return deleteResult(false, topicDeleteSiteName(config, payload), "trusted Claude Delete D shortcut requires the isolated native Claude runner");
+      }
       if (hasDeleteTrustedInstructions(value)) {
         const postRunInvocation = validateTopicDeleteInvocation(data);
         if (!postRunInvocation.ok) {

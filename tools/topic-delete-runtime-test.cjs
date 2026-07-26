@@ -25,6 +25,7 @@ globalThis.browser = {
 
 const DEFAULT_HREF = "https://chat.deepseek.com/a/chat/s/topic-1";
 const DEFAULT_IDENTITY = Object.freeze({ provider: "deepseek", id: "topic-1" });
+const CLAUDE_HREF = "https://claude.ai/chat/thread-1";
 
 function completeBackgroundResponse(message, response) {
   if (response?.success !== true) return response;
@@ -56,8 +57,10 @@ function frameError(code, delivered, message = `${code} while deleting`) {
 }
 
 function secureIframe(href = DEFAULT_HREF) {
-  return {
+  const ownerDocument = { activeElement: null };
+  const iframe = {
     isConnected: true,
+    ownerDocument,
     dataset: {
       browserFrameId: "7",
       frameBindingId: "a".repeat(64),
@@ -72,8 +75,13 @@ function secureIframe(href = DEFAULT_HREF) {
     },
     getAttribute(name) {
       return name === "src" ? href : "";
+    },
+    focus() {
+      ownerDocument.activeElement = iframe;
+      iframe.focusCalls = Number(iframe.focusCalls || 0) + 1;
     }
   };
+  return iframe;
 }
 
 function createFixture(createTopicDeleteRuntime, options = {}) {
@@ -390,6 +398,324 @@ function createFixture(createTopicDeleteRuntime, options = {}) {
     assert.equal(fixture.deleteCalls, 1);
     assert.equal(fixture.confirmCalls, 0);
     assert.equal(fixture.trustedDispatchCalls, 0, "an oversized key list must be rejected as a whole");
+  }
+
+  for (const [label, resultSite, clickFields] of [
+    ["legacy delete-confirm", "claude", { kind: "delete-confirm", site: "claude" }],
+    ["missing kind and site", "claude", {}],
+    ["malformed foreign labels", "probe", { kind: "unexpected", site: "other" }]
+  ]) {
+    const iframe = secureIframe(CLAUDE_HREF);
+    const fixture = createFixture(createTopicDeleteRuntime, {
+      iframe,
+      href: CLAUDE_HREF,
+      deleteResult: (data) => ({
+        ok: false,
+        site: resultSite,
+        reason: `stale Claude trusted click: ${label}`,
+        needsTrustedClick: true,
+        trustedClick: {
+          attemptId: data.deleteAttemptId,
+          documentId: "bridge-document-1",
+          framePoint: { x: 20, y: 20 },
+          ...clickFields
+        }
+      })
+    });
+    await assert.rejects(fixture.execute(), /Claude delete confirmation remained visible/i, label);
+    assert.equal(fixture.deleteCalls, 1);
+    assert.equal(fixture.confirmCalls, 0);
+    assert.equal(fixture.trustedDispatchCalls, 0, `${label} must never restart CDP confirmation input for a Claude identity`);
+  }
+
+  {
+    const iframe = secureIframe(CLAUDE_HREF);
+    const observedPayloads = [];
+    const events = [];
+    const focus = iframe.focus.bind(iframe);
+    iframe.focus = (options) => {
+      events.push("parent-iframe-focus");
+      assert.deepEqual(options, { preventScroll: true });
+      focus(options);
+    };
+    const fixture = createFixture(createTopicDeleteRuntime, {
+      iframe,
+      href: CLAUDE_HREF,
+      deleteResult(data, call) {
+        events.push(call === 1 ? "initial-delete" : call === 2 ? "content-preflight" : "post-d-continuation");
+        observedPayloads.push({ ...data.payload });
+        if (call <= 2) {
+          if (call === 2) {
+            assert.equal(data.payload?.trustedKeySequencePreflight, true);
+            assert.equal(iframe.focusCalls, 1, "content preflight must run after exactly one parent iframe focus");
+          }
+          return {
+            ok: false,
+            site: "claude",
+            reason: call === 1 ? "owned Claude menu requires its Delete D shortcut" : "owned Claude menu Delete D shortcut is ready",
+            needsTrustedKeySequence: true,
+            trustedKeySequence: {
+              attemptId: data.deleteAttemptId,
+              documentId: "bridge-document-1",
+              kind: "claude-menu-delete-shortcut",
+              site: "claude",
+              keys: [{ key: "d", settleMs: 1 }],
+              settleMs: 1
+            }
+          };
+        }
+        assert.equal(call, 3);
+        assert.equal(data.payload?.trustedKeySequenceRetried, true);
+        assert.equal(iframe.focusCalls, 1, "parent iframe must not be focused again after content preflight");
+        return { ok: true, site: "claude" };
+      },
+      extensionMessageHandler(message) {
+        if (message.action === "dispatchTrustedKeySequence") {
+          events.push("dispatch-d");
+          assert.equal(iframe.focusCalls, 1, "D dispatch must follow, not precede, the sole parent iframe focus");
+          assert.equal(message.kind, "claude-menu-delete-shortcut");
+          assert.equal(message.site, "claude");
+          assert.equal(message.keys.length, 1);
+          assert.equal(message.keys[0].key, "d");
+          return { success: true };
+        }
+        return { success: false, error: "unexpected runtime request" };
+      }
+    });
+    assert.deepEqual(await fixture.execute(), { ok: true, site: "claude" });
+    assert.equal(iframe.focusCalls, 1, "the exact Claude iframe must receive keyboard focus before its Delete D preflight");
+    assert.equal(fixture.deleteCalls, 3, "Delete D requires one preflight and one post-key continuation");
+    assert.equal(fixture.trustedDispatchCalls, 1, "Delete D must be delivered exactly once");
+    assert.deepEqual(
+      observedPayloads.map((payload) => [
+        payload.trustedKeySequencePreflight === true,
+        payload.trustedKeySequenceRetried === true
+      ]),
+      [[false, false], [true, false], [false, true]]
+    );
+    assert.deepEqual(
+      events,
+      ["initial-delete", "parent-iframe-focus", "content-preflight", "dispatch-d", "post-d-continuation"],
+      "Claude D ordering must be parent iframe focus -> content exact-item preflight -> one trusted dispatch"
+    );
+  }
+
+  {
+    const iframe = secureIframe(CLAUDE_HREF);
+    const fixture = createFixture(createTopicDeleteRuntime, {
+      iframe,
+      href: CLAUDE_HREF,
+      deleteResult(data, call) {
+        if (call === 1) {
+          return {
+            ok: false,
+            site: "claude",
+            reason: "Claude title menu requires a trusted click",
+            needsTrustedMenuClick: true,
+            trustedMenuClick: {
+              attemptId: data.deleteAttemptId,
+              documentId: "bridge-document-1",
+              kind: "conversation-menu-trigger",
+              framePoint: { x: 20, y: 20 }
+            }
+          };
+        }
+        if (call <= 3) {
+          if (call === 2) assert.equal(data.payload?.trustedMenuTriggerRetried, true);
+          if (call === 3) assert.equal(data.payload?.trustedKeySequencePreflight, true);
+          return {
+            ok: false,
+            site: "claude",
+            reason: "owned Claude menu requires its Delete D shortcut",
+            needsTrustedKeySequence: true,
+            trustedKeySequence: {
+              attemptId: data.deleteAttemptId,
+              documentId: "bridge-document-1",
+              kind: "claude-menu-delete-shortcut",
+              site: "claude",
+              keys: [{ key: "d", settleMs: 1 }],
+              settleMs: 1
+            }
+          };
+        }
+        assert.equal(call, 4);
+        assert.equal(data.payload?.trustedKeySequenceRetried, true);
+        return { ok: true, site: "claude" };
+      },
+      extensionMessageHandler(message) {
+        if (/^dispatchTrusted/.test(String(message.action || ""))) return { success: true };
+        return { success: false, error: "unexpected runtime request" };
+      }
+    });
+    assert.deepEqual(await fixture.execute(), { ok: true, site: "claude" });
+    assert.equal(fixture.deleteCalls, 4, "a trusted menu trigger may advance once into the Delete D phase");
+    assert.equal(fixture.trustedDispatchCalls, 3, "the trigger hover/click and one lowercase d are the only trusted inputs");
+    assert.equal(iframe.focusCalls, 1);
+  }
+
+  {
+    const iframe = secureIframe(CLAUDE_HREF);
+    let focusAttempts = 0;
+    iframe.focus = () => { focusAttempts += 1; };
+    const fixture = createFixture(createTopicDeleteRuntime, {
+      iframe,
+      href: CLAUDE_HREF,
+      deleteResult: (data) => ({
+        ok: false,
+        site: "claude",
+        reason: "owned Claude menu requires its Delete D shortcut",
+        needsTrustedKeySequence: true,
+        trustedKeySequence: {
+          attemptId: data.deleteAttemptId,
+          documentId: "bridge-document-1",
+          kind: "claude-menu-delete-shortcut",
+          site: "claude",
+          keys: [{ key: "d" }]
+        }
+      })
+    });
+    await assert.rejects(fixture.execute(), /lost iframe focus/i);
+    assert.equal(focusAttempts, 1, "runtime may attempt parent iframe focus only once");
+    assert.equal(fixture.deleteCalls, 1, "focus loss must stop before consuming the content preflight lease");
+    assert.equal(fixture.trustedDispatchCalls, 0);
+  }
+
+  {
+    const iframe = secureIframe(CLAUDE_HREF);
+    const fixture = createFixture(createTopicDeleteRuntime, {
+      iframe,
+      href: CLAUDE_HREF,
+      deleteResult(data, call) {
+        const instruction = {
+          ok: false,
+          site: "claude",
+          reason: call === 3
+            ? "stale runner repeated Delete D after delivery"
+            : "owned Claude menu requires its Delete D shortcut",
+          needsTrustedKeySequence: true,
+          trustedKeySequence: {
+            attemptId: data.deleteAttemptId,
+            documentId: "bridge-document-1",
+            kind: "claude-menu-delete-shortcut",
+            site: "claude",
+            keys: [{ key: "d" }]
+          }
+        };
+        if (call === 2) assert.equal(data.payload?.trustedKeySequencePreflight, true);
+        if (call === 3) assert.equal(data.payload?.trustedKeySequenceRetried, true);
+        return instruction;
+      },
+      extensionMessageHandler(message) {
+        if (message.action === "dispatchTrustedKeySequence") return { success: true };
+        return { success: false, error: "unexpected runtime request" };
+      }
+    });
+    await assert.rejects(fixture.execute(), /Delete D shortcut was already consumed/i);
+    assert.equal(fixture.deleteCalls, 3, "a stale post-D instruction may be observed but must not receive another preflight");
+    assert.equal(iframe.focusCalls, 1, "a consumed D instruction must not refocus the parent iframe");
+    assert.equal(fixture.trustedDispatchCalls, 1, "one delete attempt may dispatch lowercase d at most once");
+    assert.equal(fixture.confirmCalls, 0);
+  }
+
+  {
+    const iframe = secureIframe(CLAUDE_HREF);
+    const fixture = createFixture(createTopicDeleteRuntime, {
+      iframe,
+      href: CLAUDE_HREF,
+      deleteResult(data, call) {
+        if (call <= 2) {
+          return {
+            ok: false,
+            site: "claude",
+            reason: "owned Claude menu requires its Delete D shortcut",
+            needsTrustedKeySequence: true,
+            trustedKeySequence: {
+              attemptId: data.deleteAttemptId,
+              documentId: "bridge-document-1",
+              kind: "claude-menu-delete-shortcut",
+              site: "claude",
+              keys: [{ key: "d" }]
+            }
+          };
+        }
+        assert.equal(data.payload?.trustedKeySequenceRetried, true);
+        return {
+          ok: false,
+          site: "claude",
+          reason: "stale runner offered a menu click after Delete D",
+          needsTrustedMenuClick: true,
+          trustedMenuClick: {
+            attemptId: data.deleteAttemptId,
+            documentId: "bridge-document-1",
+            kind: "delete-menu-item",
+            site: "claude",
+            framePoint: { x: 20, y: 20 }
+          }
+        };
+      },
+      extensionMessageHandler(message) {
+        if (message.action === "dispatchTrustedKeySequence") return { success: true };
+        throw new Error(`unexpected post-D trusted dispatch: ${message.action}`);
+      }
+    });
+    await assert.rejects(fixture.execute(), /Delete D was already delivered; no later browser input is allowed/i);
+    assert.equal(fixture.deleteCalls, 3);
+    assert.equal(iframe.focusCalls, 1);
+    assert.equal(fixture.trustedDispatchCalls, 1, "a consumed D attempt must reject every later menu hover/click");
+    assert.equal(fixture.confirmCalls, 0);
+  }
+
+  {
+    const iframe = secureIframe(CLAUDE_HREF);
+    const fixture = createFixture(createTopicDeleteRuntime, {
+      iframe,
+      href: CLAUDE_HREF,
+      deleteResult: (data, call) => ({
+        ok: false,
+        site: "claude",
+        reason: call === 1 ? "owned Claude menu requires its Delete D shortcut" : "owned Claude menu Delete D shortcut is ready",
+        needsTrustedKeySequence: true,
+        trustedKeySequence: {
+          attemptId: data.deleteAttemptId,
+          documentId: "bridge-document-1",
+          kind: "claude-menu-delete-shortcut",
+          site: "claude",
+          keys: [{ key: "d" }]
+        }
+      }),
+      extensionMessageHandler(message) {
+        if (message.action === "dispatchTrustedKeySequence") throw new Error("trusted D response was lost");
+        return { success: false, error: "unexpected runtime request" };
+      }
+    });
+    await assert.rejects(fixture.execute(), /trusted D response was lost/i);
+    assert.equal(fixture.deleteCalls, 2, "an unknown D delivery stops after the one-time content preflight");
+    assert.equal(fixture.confirmCalls, 0);
+    assert.equal(fixture.trustedDispatchCalls, 1, "an unknown D delivery must never be replayed");
+    assert.equal(iframe.focusCalls, 1, "unknown D delivery remains consumed after the sole parent focus");
+  }
+
+  {
+    const iframe = secureIframe();
+    const fixture = createFixture(createTopicDeleteRuntime, {
+      iframe,
+      deleteResult: (data) => ({
+        ok: false,
+        site: "claude",
+        reason: "spoofed Claude Delete D shortcut",
+        needsTrustedKeySequence: true,
+        trustedKeySequence: {
+          attemptId: data.deleteAttemptId,
+          documentId: "bridge-document-1",
+          kind: "claude-menu-delete-shortcut",
+          site: "claude",
+          keys: [{ key: "d" }]
+        }
+      })
+    });
+    await assert.rejects(fixture.execute(), /target is not a Claude conversation/i);
+    assert.equal(fixture.deleteCalls, 1);
+    assert.equal(fixture.trustedDispatchCalls, 0, "a non-Claude completion identity must never dispatch printable input");
   }
 
   {

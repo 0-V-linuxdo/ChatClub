@@ -27,6 +27,14 @@ import { promptCollapsedPreview, promptInputHeight } from "./model.js";
 
 const PROMPT_IMAGE_RETRY_COUNT = 3;
 const FRAME_SUBMIT_ERROR_MAX_CHARS = 160;
+const FRAME_SEND_PREPARE_TIMEOUT_MS = 8000;
+const FRAME_SEND_PREPARE_RETRY_LIMIT = 1;
+const FRAME_SEND_IDENTITY_STABILIZE_LIMIT = 3;
+const FRAME_SEND_PREDELIVERY_ERROR_CODES = new Set([
+  "INJECTION_FAILED",
+  "NOT_REGISTERED",
+  "STALE_DOCUMENT"
+]);
 
 function requirePort(port, label, methodNames) {
   if (!port || typeof port !== "object" || Array.isArray(port)) {
@@ -53,6 +61,7 @@ export function createComposerController(dependencies = {}) {
     openPromptLibrary,
     optimizePrompt,
     recordFunctionalAnomaly,
+    frameSendPrepareTimeoutMs = FRAME_SEND_PREPARE_TIMEOUT_MS,
     savePromptSendHistory = defaultSavePromptSendHistory,
     toast = defaultToast,
     createFrameToast = defaultCreateFrameToast
@@ -68,6 +77,7 @@ export function createComposerController(dependencies = {}) {
     openPromptLibrary: "function",
     optimizePrompt: "function",
     recordFunctionalAnomaly: "function",
+    frameSendPrepareTimeoutMs: "number?",
     savePromptSendHistory: "function?",
     toast: "function?",
     createFrameToast: "function?"
@@ -387,6 +397,75 @@ export function createComposerController(dependencies = {}) {
     return true;
   }
 
+  function frameSendKnownPreDeliveryFailure(error) {
+    return error?.delivered === false && FRAME_SEND_PREDELIVERY_ERROR_CODES.has(String(error?.code || ""));
+  }
+
+  function frameSendAbortError(signal, fallback = "Frame send queue was cancelled.") {
+    if (signal?.reason instanceof Error) return signal.reason;
+    return frameSubmitError(fallback, {
+      code: "FRAME_SEND_QUEUE_CANCELLED",
+      delivered: false
+    });
+  }
+
+  function waitForFrameSendPreparation(promise, signal) {
+    const timeoutMs = Math.max(250, Number(frameSendPrepareTimeoutMs) || FRAME_SEND_PREPARE_TIMEOUT_MS);
+    if (signal?.aborted) {
+      promise.catch(() => {});
+      return Promise.reject(frameSendAbortError(signal));
+    }
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (callback, value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        signal?.removeEventListener?.("abort", abort);
+        callback(value);
+      };
+      const abort = () => finish(reject, frameSendAbortError(signal));
+      const timer = setTimeout(() => finish(reject, frameSubmitError(
+        "iframe send runtime preparation timed out",
+        { code: "FRAME_SEND_PREPARE_TIMEOUT", delivered: false }
+      )), timeoutMs);
+      signal?.addEventListener?.("abort", abort, { once: true });
+      promise.then(
+        (value) => finish(resolve, value),
+        (error) => finish(reject, error)
+      );
+    });
+  }
+
+  function invalidateFrameAfterKnownPreDeliveryFailure(iframe, error) {
+    if (!frameSendKnownPreDeliveryFailure(error) || typeof framePort.invalidate !== "function") return;
+    framePort.invalidate(iframe, `sendText:${error.code}`, {
+      preserveDocument: error.code !== "STALE_DOCUMENT",
+      clearCapabilities: error.code === "INJECTION_FAILED"
+    });
+  }
+
+  async function prepareFrameSendRuntime(iframe, signal) {
+    let attempt = 0;
+    while (true) {
+      if (signal?.aborted) throw frameSendAbortError(signal);
+      try {
+        return await waitForFrameSendPreparation(
+          Promise.resolve().then(() => framePort.ensure(iframe, {
+            features: ["send"],
+            force: true
+          })),
+          signal
+        );
+      } catch (error) {
+        const retry = attempt < FRAME_SEND_PREPARE_RETRY_LIMIT && frameSendKnownPreDeliveryFailure(error);
+        if (!retry) throw error;
+        attempt += 1;
+        invalidateFrameAfterKnownPreDeliveryFailure(iframe, error);
+      }
+    }
+  }
+
   function syncFrameSendQueueState(snapshot = frameSendQueue.snapshot()) {
     state.promptQueuedTargetCount = Math.max(0, Number(snapshot.pendingCount) || 0);
     state.promptSendingTargetCount = Math.max(0, Number(snapshot.runningCount) || 0);
@@ -432,6 +511,7 @@ export function createComposerController(dependencies = {}) {
       result = await framePort.request(iframe, "sendText", payload, {
         timeoutMs: remainingMs,
         signal,
+        skipEnsure: true,
         ...(readiness.documentId ? { expectedDocumentId: readiness.documentId } : {})
       });
     } catch (error) {
@@ -474,18 +554,24 @@ export function createComposerController(dependencies = {}) {
       throw modelPreferenceSkipError(readiness);
     };
     rejectSkippedModelFailure();
-    let barrierTarget = readiness.appId === "Gemini" || readiness.appId === "NotionAI";
-    let barrierIdentityIncomplete = barrierTarget && (!readiness.documentId || !readiness.bridgeVersion);
-    if (!readiness.documentId || barrierIdentityIncomplete) {
-      await framePort.ensure(iframe, { features: ["send"], force: barrierIdentityIncomplete });
+    let preparedRegistration = null;
+    let identityStable = false;
+    for (let pass = 0; pass < FRAME_SEND_IDENTITY_STABILIZE_LIMIT; pass += 1) {
+      preparedRegistration = await prepareFrameSendRuntime(iframe, signal);
       readiness = await settledPreferredModelReadiness(iframe, signal);
       rejectSkippedModelFailure();
-      barrierTarget = readiness.appId === "Gemini" || readiness.appId === "NotionAI";
-      barrierIdentityIncomplete = barrierTarget && (!readiness.documentId || !readiness.bridgeVersion);
+      const barrierTarget = readiness.appId === "Gemini" || readiness.appId === "NotionAI";
+      const preparedDocumentId = String(preparedRegistration?.documentId || "");
+      const readinessDocumentId = String(readiness.documentId || "");
+      const barrierIdentityIncomplete = barrierTarget && !readiness.bridgeVersion;
+      if (preparedDocumentId && readinessDocumentId === preparedDocumentId && !barrierIdentityIncomplete) {
+        identityStable = true;
+        break;
+      }
     }
-    if (!readiness.documentId || barrierIdentityIncomplete) {
-      throw frameSubmitError("Content document identity is not registered", {
-        code: "NOT_REGISTERED",
+    if (!identityStable) {
+      throw frameSubmitError("Content document identity changed while preparing to send", {
+        code: "STALE_DOCUMENT",
         delivered: false
       });
     }
@@ -506,6 +592,7 @@ export function createComposerController(dependencies = {}) {
       statusToast.dismiss(2000);
       return { ...result, usedCurrentModel: usingCurrentModel };
     } catch (error) {
+      invalidateFrameAfterKnownPreDeliveryFailure(iframe, error);
       statusToast.update(t("toast.frameSubmitFailed", { reason: compactFrameSubmitReason(error) }), "error");
       statusToast.dismiss(5000);
       throw error;

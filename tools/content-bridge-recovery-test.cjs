@@ -144,6 +144,7 @@ function createSummaryPrepareFixture(options = {}) {
     String,
     CONTENT_BRIDGE_VERSION: "bridge-current",
     CONTENT_RUNTIME_IDENTITY: { implementationVersion: "runtime-current" },
+    frameBindingRelayErrors: new WeakMap(),
     calls,
     injectionClock: 0,
     challengeIssues: [],
@@ -210,11 +211,15 @@ function createSummaryPrepareFixture(options = {}) {
     const result = Object.hasOwn(options, "bindingRequestResult")
       ? options.bindingRequestResult
       : true;
+    if (result === true) context.frameBindingRelayErrors.delete(target);
+    else context.frameBindingRelayErrors.set(target, "secure frame binding relay was not accepted");
     return Promise.resolve(result);
   };
   context.waitForCurrentContentFrameRegistration = async () => {
     calls.wait += 1;
-    return registration;
+    return Object.hasOwn(options, "waitRegistration")
+      ? options.waitRegistration
+      : registration;
   };
   context.contentRuntimePackageBundleIdentityMatches = (value, expectedOutputPath) => (
     value?.bundle?.outputPath === expectedOutputPath
@@ -318,7 +323,328 @@ function createSummaryMainInstallFixture() {
   return { context, entries, listeners, window };
 }
 
+async function createPreservedRuntimeReloadFixture() {
+  const [
+    { createFrameBridgeController },
+    { FrameRuntimePort },
+    { contentInjectionPlan },
+    { contentRuntimeIdentityForBundle },
+    { CONTENT_BRIDGE_VERSION, EXTENSION_RUNTIME_RELAY_SOURCE }
+  ] = await Promise.all([
+    import("../app/frame-bridge/controller.js"),
+    import("../shared/frame-rpc.js"),
+    import("../shared/frame-commands.js"),
+    import("../shared/content-runtime-package-identity.js"),
+    import("../shared/protocol.js")
+  ]);
+  const tabId = 31;
+  const frameId = 7;
+  const frameBindingId = "b".repeat(64);
+  const browserDocumentId = "browser-document-preserved";
+  const bridgeDocumentId = "bridge-document-preserved";
+  const href = "https://claude.ai/chat/preserved-thread";
+  const contentRuntimeIdentity = contentRuntimeIdentityForBundle("content/content.js");
+  const summaryRuntimeIdentity = contentRuntimeIdentityForBundle("content/summary-bridge.js");
+  const summaryMainRuntimeIdentity = contentRuntimeIdentityForBundle("content/summary-userscripts-main.js");
+  const summaryIsolatedRuntimeIdentity = contentRuntimeIdentityForBundle("content/summary-userscripts.js");
+  const relayRequests = [];
+  const ensureRequests = [];
+  const frameCommands = [];
+  let registeredInCurrentBackground = false;
+  let src = href;
+  let srcAssignments = 0;
+  const contentWindow = Object.freeze({ preserved: true });
+  const iframe = {
+    isConnected: true,
+    contentWindow,
+    dataset: {
+      browserFrameId: String(frameId),
+      frameBindingId,
+      currentHref: href,
+      preferredModelDocumentId: bridgeDocumentId,
+      preferredModelContentBridgeVersion: CONTENT_BRIDGE_VERSION,
+      preferredModelContentRuntimeImplementation: contentRuntimeIdentity.implementationVersion,
+      injectedBrowserDocumentId: browserDocumentId
+    },
+    getAttribute(name) {
+      return name === "src" ? src : null;
+    }
+  };
+  Object.defineProperty(iframe, "src", {
+    configurable: false,
+    enumerable: true,
+    get: () => src,
+    set(value) {
+      srcAssignments += 1;
+      src = String(value || "");
+    }
+  });
+  const registration = () => ({
+    href,
+    title: "Preserved thread",
+    bridgeVersion: CONTENT_BRIDGE_VERSION,
+    runtimeIdentity: contentRuntimeIdentity,
+    frameId,
+    frameBindingId,
+    browserDocumentId
+  });
+
+  let activeGeneration = null;
+  function createRuntimeGeneration(label) {
+    const listeners = new Set();
+    const runtime = {
+      id: "chatclub-runtime-reload-test",
+      lastError: null,
+      getURL(pathname = "") {
+        return `chrome-extension://chatclub-runtime-reload-test/${String(pathname).replace(/^\/+/, "")}`;
+      },
+      onMessage: {
+        addListener(listener) { listeners.add(listener); },
+        removeListener(listener) { listeners.delete(listener); }
+      },
+      sendMessage(message, callback) {
+        Promise.resolve()
+          .then(() => backgroundRequest(message, generation))
+          .then(
+            (response) => callback(response),
+            (error) => {
+              runtime.lastError = { message: error?.message || String(error) };
+              try { callback(undefined); }
+              finally { runtime.lastError = null; }
+            }
+          );
+      }
+    };
+    const generation = {
+      label,
+      listeners,
+      api: {
+        runtime,
+        tabs: {
+          getCurrent(callback) { callback({ id: tabId }); }
+        }
+      }
+    };
+    return generation;
+  }
+
+  async function dispatchFrameBinding(generation, request) {
+    if (!generation.listeners.size) {
+      throw new Error(`Extension page listener is unavailable in runtime ${generation.label}`);
+    }
+    const message = {
+      source: EXTENSION_RUNTIME_RELAY_SOURCE,
+      action: "frameBinding",
+      challenge: request.bindingChallenge,
+      generation: request.bindingGeneration,
+      senderContext: {
+        tabId,
+        frameId,
+        documentId: browserDocumentId,
+        bridgeDocumentId,
+        frameBindingId,
+        url: href
+      },
+      data: {
+        documentId: bridgeDocumentId,
+        browserDocumentId,
+        frameBindingId,
+        bridgeVersion: CONTENT_BRIDGE_VERSION,
+        runtimeIdentity: contentRuntimeIdentity
+      }
+    };
+    for (const listener of generation.listeners) listener(message, {});
+    await new Promise((resolve) => { setImmediate(resolve); });
+  }
+
+  async function backgroundRequest(message, generation) {
+    assert.equal(generation, activeGeneration, "preserved page requests must use the current extension runtime");
+    if (message.action === "ensureContentBridge") {
+      ensureRequests.push({ ...message });
+      const plannedFiles = contentInjectionPlan({ features: message.features }).map(({ file }) => file);
+      return {
+        success: true,
+        tabId,
+        frameIds: [frameId],
+        injected: plannedFiles.length,
+        injectedFiles: plannedFiles.map((file) => `${file}@${frameId}`),
+        fallbackFiles: [],
+        plannedFiles,
+        browserDocumentId,
+        bindingRelayed: false,
+        features: [...message.features],
+        errors: []
+      };
+    }
+    if (message.action === "requestFrameBinding") {
+      relayRequests.push({ ...message });
+      registeredInCurrentBackground = true;
+      await dispatchFrameBinding(generation, message);
+      return { success: true, tabId, frameId, browserDocumentId, bindingRelayed: true };
+    }
+    if (message.action === "verifyFrameContext") {
+      return registeredInCurrentBackground
+        ? { success: true, data: registration() }
+        : { success: false, error: "preserved iframe is not registered in the reloaded background" };
+    }
+    if (message.action === "sendFrameCommand") {
+      frameCommands.push({ command: message.command, bridgeDocumentId: message.bridgeDocumentId });
+      if (message.command === "getSummaryRuntimeState") {
+        return {
+          success: true,
+          data: {
+            ready: true,
+            mainReady: true,
+            isolatedReady: true,
+            documentId: bridgeDocumentId,
+            bridgeVersion: CONTENT_BRIDGE_VERSION,
+            runtimeIdentity: summaryRuntimeIdentity,
+            mainRuntimeIdentity: summaryMainRuntimeIdentity,
+            isolatedRuntimeIdentity: summaryIsolatedRuntimeIdentity
+          }
+        };
+      }
+      return { success: true, data: { ok: true, command: message.command } };
+    }
+    throw new Error(`Unexpected background request: ${message.action}`);
+  }
+
+  const runtimeA = createRuntimeGeneration("A");
+  const runtimeB = createRuntimeGeneration("B");
+  activeGeneration = runtimeA;
+  const workspace = {
+    currentFrames: () => [iframe],
+    ensureFrameAttributeContract: () => false,
+    frameApp: () => ({ id: "Claude", url: href }),
+    iframeForWindow: (value) => value === contentWindow ? iframe : null,
+    reapplyMessageNavigatorForFrame: async () => {},
+    refreshCurrentExtensionTabInfo: () => {},
+    rememberFrameLocation: () => {},
+    syncFrameFavicon: async () => {}
+  };
+  let port = null;
+  const controller = createFrameBridgeController({
+    framePort: () => port,
+    workspace: () => workspace,
+    schedulePreferredModelApply: () => {},
+    invalidatePreferredModelFrame: () => {},
+    preferredModelFrameIsLoading: () => false,
+    handleShortcutAction: async () => {}
+  });
+  port = new FrameRuntimePort({
+    ensureRuntime: (target, options = {}) => controller.prepareContentFrameRuntime(target, {
+      features: options.features || [],
+      summary: (options.features || []).includes("summary")
+    })
+  });
+  return {
+    controller,
+    iframe,
+    contentWindow,
+    port,
+    runtimeA,
+    runtimeB,
+    relayRequests,
+    ensureRequests,
+    frameCommands,
+    activate(generation) {
+      activeGeneration = generation;
+      globalThis.chrome = generation.api;
+    },
+    srcAssignments: () => srcAssignments
+  };
+}
+
 (async () => {
+  {
+    const previousGlobals = Object.fromEntries(["browser", "chrome", "document", "window"].map((key) => [
+      key,
+      { owned: Object.hasOwn(globalThis, key), value: globalThis[key] }
+    ]));
+    const restoreGlobal = (key) => {
+      if (previousGlobals[key].owned) globalThis[key] = previousGlobals[key].value;
+      else delete globalThis[key];
+    };
+    try {
+      delete globalThis.browser;
+      globalThis.window = {
+        addEventListener() {},
+        setTimeout
+      };
+      globalThis.document = {
+        addEventListener() {},
+        visibilityState: "visible"
+      };
+      const fixture = await createPreservedRuntimeReloadFixture();
+      fixture.activate(fixture.runtimeA);
+      fixture.controller.install();
+      assert.equal(fixture.runtimeA.listeners.size, 1, "the preserved page must begin on runtime A");
+      const preservedIframe = fixture.iframe;
+      const preservedWindow = fixture.contentWindow;
+
+      // Dia keeps the extension page and its already-loaded third-party iframes
+      // alive while an unpacked extension reload replaces the extension API.
+      // Outgoing calls therefore use B, while a one-shot runtime listener can
+      // remain stranded on A unless the page bridge explicitly rebinds it.
+      fixture.activate(fixture.runtimeB);
+      const operations = [
+        { command: "deleteThread", data: { payload: { appId: "Claude" } } },
+        { command: "collectSummary", data: { config: { id: "claude" } } },
+        { command: "sendText", data: { text: "preserved-runtime-send" } }
+      ];
+      const outcomes = [];
+      for (const operation of operations) {
+        try {
+          outcomes.push({
+            command: operation.command,
+            status: "fulfilled",
+            value: await fixture.port.request(fixture.iframe, operation.command, operation.data)
+          });
+        } catch (error) {
+          outcomes.push({
+            command: operation.command,
+            status: "rejected",
+            reason: error?.message || String(error)
+          });
+        }
+      }
+
+      assert.deepEqual(
+        outcomes.map(({ command, status }) => ({ command, status })),
+        operations.map(({ command }) => ({ command, status: "fulfilled" })),
+        `a preserved Dia page must recover every public Frame RPC after runtime A -> B: ${JSON.stringify(outcomes)}`
+      );
+      assert.equal(fixture.runtimeB.listeners.size, 1, "runtime B must own exactly one authenticated relay listener");
+      assert.equal(fixture.iframe, preservedIframe, "runtime recovery must not replace the preserved iframe");
+      assert.equal(fixture.iframe.contentWindow, preservedWindow, "runtime recovery must retain the existing WindowProxy");
+      assert.equal(fixture.srcAssignments(), 0, "runtime recovery must not navigate or reload the third-party page");
+      assert.equal(fixture.iframe.dataset.browserFrameId, "7");
+      assert.equal(fixture.iframe.dataset.frameBindingId, "b".repeat(64));
+      assert.equal(fixture.iframe.dataset.injectedBrowserDocumentId, "browser-document-preserved");
+      assert.equal(fixture.iframe.dataset.preferredModelDocumentId, "bridge-document-preserved");
+      assert.equal(fixture.ensureRequests.length, 3, "Delete, Summary, and Send must each install only their missing capability");
+      assert.deepEqual(
+        fixture.ensureRequests.map((request) => request.features.join(",")),
+        ["delete", "summary", "send"]
+      );
+      assert.equal(fixture.relayRequests.length, 3, "each post-reload capability install must bind exactly once");
+      assert.ok(fixture.relayRequests.every((request) => (
+        request.expectedFrameId === 7
+        && request.expectedBindingId === "b".repeat(64)
+        && request.browserDocumentId === "browser-document-preserved"
+      )), "every recovery relay must stay bound to the exact preserved browser frame and document");
+      assert.deepEqual(
+        fixture.frameCommands.map(({ command }) => command),
+        ["deleteThread", "getSummaryRuntimeState", "collectSummary", "sendText"],
+        "commands must run only after the current runtime accepts the authenticated binding"
+      );
+      assert.ok(fixture.frameCommands.every(({ bridgeDocumentId }) => bridgeDocumentId === "bridge-document-preserved"));
+      assert.equal(fixture.iframe.dataset.contentRuntimeCapabilities, "delete,send,summary");
+    } finally {
+      for (const key of ["browser", "chrome", "document", "window"]) restoreGlobal(key);
+    }
+  }
+
   {
     const fixture = createVerifiedRegistrationFixture({
       dataset: { injectedBrowserDocumentId: "browser-document-current" }
@@ -512,6 +838,7 @@ function createSummaryMainInstallFixture() {
       WeakMap,
       capabilityPreparationRuns: new WeakMap(),
       capabilityPreparationTails: new WeakMap(),
+      installRuntimeEventBridge: () => true,
       prepareContentFrameRuntimeUncached: (iframe, options) => new Promise((resolve) => {
         starts.push({ iframe, signature: [...(options.features || [])].sort().join(",") });
         releases.push(resolve);
@@ -604,11 +931,20 @@ function createSummaryMainInstallFixture() {
   for (const bindingRequestResult of [undefined, false]) {
     const fixture = createSummaryPrepareFixture({ bindingRequestResult });
     const result = await fixture.prepare(fixture.iframe, { summary: true });
-    assert.equal(result.ok, false, "a missing or false post-injection binding relay must fail closed");
-    assert.match(result.reason, /secure iframe binding was not relayed/);
+    assert.equal(result.ok, true, "a missing or false first binding relay must enter bounded registration recovery");
     assert.equal(fixture.bindingRequests, 1);
-    assert.equal(fixture.calls.wait, 0, "registration readiness must not run after the binding relay failed");
-    assert.equal(fixture.calls.probe, 0, "frame commands must not run after the binding relay failed");
+    assert.equal(fixture.calls.wait, 1, "the first relay result must not bypass bounded registration readiness");
+    assert.equal(fixture.calls.probe, 1, "frame commands may run only after bounded recovery authenticates the registration");
+  }
+
+  for (const bindingRequestResult of [undefined, false]) {
+    const fixture = createSummaryPrepareFixture({ bindingRequestResult, waitRegistration: null });
+    const result = await fixture.prepare(fixture.iframe, { summary: true });
+    assert.equal(result.ok, false, "an unaccepted relay must still fail closed when bounded recovery finds no registration");
+    assert.match(result.reason, /secure frame binding relay was not accepted/);
+    assert.equal(fixture.bindingRequests, 1);
+    assert.equal(fixture.calls.wait, 1, "the failed first relay must receive exactly one bounded readiness attempt");
+    assert.equal(fixture.calls.probe, 0, "frame commands must not run without an authenticated registration");
   }
 
   for (const failedInstall of [
@@ -842,7 +1178,7 @@ function createSummaryMainInstallFixture() {
   );
   assert.ok(
     prepareSource.indexOf("installed = await runtimeRequest")
-      < prepareSource.indexOf("const bindingRelayed = await requestFrameBinding"),
+      < prepareSource.indexOf("await requestFrameBinding"),
     "app preparation must finish queued injection before issuing its authenticated binding challenge"
   );
   assert.match(prepareSource, /runtimePort\(\)\.request\(iframe, "getSummaryRuntimeState", \{\}, \{ timeoutMs: 1800, skipEnsure: true \}\)/);

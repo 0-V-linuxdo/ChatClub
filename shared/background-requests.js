@@ -195,7 +195,7 @@ export const BACKGROUND_REQUEST_SPECS = Object.freeze({
       expectedBridgeDocumentId: "string",
       expectedFrameHref: "string",
       keys: "array"
-    }, { keySettleMs: "number", kind: "string", reason: "string" }),
+    }, { keySettleMs: "number", kind: "string", site: "string", reason: "string" }),
     response: contract({ tabId: "integer", frameId: "integer", keys: "array" })
   }),
   [ACTION.RECORD_FUNCTIONAL_ANOMALIES]: extensionPage({

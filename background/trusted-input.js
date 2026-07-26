@@ -13,6 +13,16 @@ function normalizedHref(value) {
   }
 }
 
+function isClaudeHref(value) {
+  try {
+    const url = new URL(String(value || ""));
+    const host = url.hostname.toLowerCase();
+    return url.protocol === "https:" && (host === "claude.ai" || host.endsWith(".claude.ai"));
+  } catch {
+    return false;
+  }
+}
+
 function trustedFrameTarget(api, message = {}, sender = {}) {
   const extensionId = String(api.runtime?.id || "");
   const extensionBase = String(api.runtime?.getURL?.("") || "");
@@ -88,11 +98,140 @@ async function exactDirectChildFrame(api, target) {
 function readTrustedFrameAttestation() {
   // eslint-disable-next-line chatclub-realm/no-cross-realm-global -- serialized ISOLATED-world attestation must validate Firefox's DOM-global owner.
   const target = globalThis.window || globalThis;
+  const document = target.document;
   const state = target.__CHATCLUB_BROWSER_DOCUMENT_ATTESTATION_STATE__;
   const descriptor = Object.getOwnPropertyDescriptor(
     target,
     "__CHATCLUB_BROWSER_DOCUMENT_ATTESTATION_STATE__"
   );
+  const claudeDeleteShortcutReady = (() => {
+    try {
+      const active = document?.activeElement || null;
+      if (!active || active === document.body || active === document.documentElement) return false;
+      const stripPrivateUse = (value) => String(value || "").replace(
+        /[\uE000-\uF8FF\u{F0000}-\u{FFFFD}\u{100000}-\u{10FFFD}]/gu,
+        " "
+      );
+      const normalize = (value) => stripPrivateUse(value)
+        .replace(/[\u200B-\u200F\u2060\uFEFF]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      const compact = (value) => normalize(value).toLowerCase().replace(/[\s\u00a0:：·•()（）\[\]{}<>_-]+/g, "");
+      const visible = (node) => {
+        if (!node?.isConnected) return false;
+        const box = node.getBoundingClientRect?.();
+        if (!box || box.width < 1 || box.height < 1) return false;
+        const style = target.getComputedStyle?.(node);
+        return !style || (style.display !== "none" && style.visibility !== "hidden");
+      };
+      const itemSelector = [
+        "[role='menuitem']",
+        "[role='menuitemradio']",
+        "[role='menuitemcheckbox']",
+        "[role='option']",
+        "[data-radix-collection-item]",
+        "button",
+        "[role='button']"
+      ].join(",");
+      const valuesFor = (node) => [
+        node.getAttribute?.("aria-label"),
+        node.getAttribute?.("title"),
+        node.innerText,
+        node.textContent
+      ].map(normalize).filter(Boolean);
+      const wrongDeleteTarget = /\b(?:delete|remove)\b[^\n]{0,48}\b(?:project|account|workspace)\b|(?:删除|移除)[^\n]{0,24}(?:项目|账户|帐号|账号|工作区)/i;
+      const exactDeleteLabel = /^(?:delete(?:\s+(?:chat|conversation))?|删除(?:聊天|对话)?)$/i;
+      const exactDeleteShortcut = /^(?:delete(?:\s+(?:chat|conversation))?|删除(?:聊天|对话)?)\s+d$/i;
+      const compactShortcutWithExplicitD = /^(?:Delete(?:Chat|Conversation)?|delete(?:chat|conversation)?|删除(?:聊天|对话)?)D$/;
+      const deleteShortcutMatches = (node) => {
+        const values = valuesFor(node);
+        const hasRawShortcutEvidence = values.some((value) => exactDeleteShortcut.test(value));
+        return values.length > 0
+          && hasRawShortcutEvidence
+          && values.every((value) => (
+            !wrongDeleteTarget.test(value)
+            && (
+              exactDeleteLabel.test(value)
+              || exactDeleteShortcut.test(value)
+              || (hasRawShortcutEvidence && compactShortcutWithExplicitD.test(value.replace(/\s+/g, "")))
+            )
+          ));
+      };
+      const ownedMenuRootForTrigger = (trigger) => {
+        const ids = ["aria-controls", "aria-owns"].flatMap((name) => (
+          String(trigger?.getAttribute?.(name) || "").trim().split(/\s+/).filter(Boolean)
+        ));
+        if (!ids.length) return null;
+        const roots = new Set();
+        for (const id of ids) {
+          const root = document.getElementById?.(id) || null;
+          if (!root || String(root.id || "") !== id) return null;
+          roots.add(root);
+        }
+        return roots.size === 1 ? [...roots][0] : null;
+      };
+      const titleRoots = [...document.querySelectorAll?.("[data-testid='chat-title-split']") || []]
+        .filter(visible);
+      if (titleRoots.length !== 1) return false;
+      const titleTriggers = [...titleRoots[0].querySelectorAll?.("button[aria-label],[role='button'][aria-label]") || []]
+        .filter((trigger) => {
+          if (!visible(trigger) || trigger.disabled || trigger.getAttribute?.("aria-disabled") === "true") return false;
+          if (!/^More options for\s+.+$/i.test(normalize(trigger.getAttribute?.("aria-label")))) return false;
+          if (String(trigger.getAttribute?.("aria-expanded") || "").trim().toLowerCase() !== "true") return false;
+          const controlled = ownedMenuRootForTrigger(trigger);
+          return Boolean(
+            controlled
+            && visible(controlled)
+            && controlled.contains?.(active)
+          );
+        });
+      if (titleTriggers.length !== 1) return false;
+      const ownedMenuRoot = ownedMenuRootForTrigger(titleTriggers[0]);
+      if (!ownedMenuRoot) return false;
+      const roots = [ownedMenuRoot];
+      const matchingItems = [];
+      const matchingSet = new Set();
+      for (const root of roots) {
+        for (const node of root.querySelectorAll?.(itemSelector) || []) {
+          if (
+            matchingSet.has(node)
+            || !visible(node)
+            || node.disabled
+            || node.getAttribute?.("aria-disabled") === "true"
+            || !deleteShortcutMatches(node)
+          ) continue;
+          matchingSet.add(node);
+          matchingItems.push(node);
+        }
+      }
+      if (matchingItems.length !== 1 || matchingItems[0] !== active) return false;
+      return roots.some((root) => {
+        const readStateTargets = new Set();
+        const conversationActionTargets = new Set();
+        for (const node of root.querySelectorAll?.(itemSelector) || []) {
+          if (!visible(node) || node.disabled || node.getAttribute?.("aria-disabled") === "true") continue;
+          for (const value of valuesFor(node).map(compact)) {
+            if (/^(?:markasunread|markasread)u?$/.test(value) || /^(?:标记为未读|标记为已读)u?$/.test(value)) {
+              readStateTargets.add(node);
+            }
+            if (/^(?:star|unstar)p?$/.test(value)
+              || /^rename(?:chat|conversation)?r?$/.test(value)
+              || value === "addtoproject"
+              || /^(?:加星|取消加星)p?$/.test(value)
+              || /^重命名(?:聊天|对话)?r?$/.test(value)
+              || value === "添加到项目") {
+              conversationActionTargets.add(node);
+            }
+          }
+        }
+        return [...readStateTargets].some((readTarget) => (
+          [...conversationActionTargets].some((actionTarget) => actionTarget !== readTarget)
+        ));
+      });
+    } catch {
+      return false;
+    }
+  })();
   return {
     frameBindingId: String(target.__CHATCLUB_FRAME_BINDING_ID__ || ""),
     bridgeDocumentId: String(target.__CHATCLUB_CONTENT_DOCUMENT_ID__ || ""),
@@ -108,7 +247,9 @@ function readTrustedFrameAttestation() {
       && state.epoch > 0
       && state.dirty === false
     ),
-    href: String(target.location?.href || "")
+    href: String(target.location?.href || ""),
+    documentHasFocus: Boolean(document?.hasFocus?.()),
+    claudeDeleteShortcutReady
   };
 }
 
@@ -145,11 +286,18 @@ async function attestTrustedFrame(api, target) {
   } else if (String(entry.documentId || "").trim() !== target.browserDocumentId) {
     throw new Error("trusted browser input target document changed during attestation");
   }
+  return attestation;
 }
 
-async function verifyTrustedFrameTarget(api, target) {
+async function verifyTrustedFrameTarget(api, target, options = {}) {
   const before = await exactDirectChildFrame(api, target);
-  await attestTrustedFrame(api, target);
+  const attestation = await attestTrustedFrame(api, target);
+  if (options.requireDocumentFocus && attestation.documentHasFocus !== true) {
+    throw new Error("trusted browser input target document lost keyboard focus");
+  }
+  if (options.requireClaudeDeleteShortcut && attestation.claudeDeleteShortcutReady !== true) {
+    throw new Error("trusted browser input target lost the owned Claude Delete D menu");
+  }
   const after = await exactDirectChildFrame(api, target);
   if (before.href !== after.href || before.documentId !== after.documentId) {
     throw new Error("trusted browser input target navigated during verification");
@@ -178,18 +326,36 @@ export async function dispatchTrustedClick(api, message = {}, sender = {}) {
     await api.debugger.attach(target, "1.3");
     attached = true;
     await verifyTrustedFrameTarget(api, frameTarget);
-    const base = { x, y, button: "left", clickCount: 1, modifiers: 0 };
-    await api.debugger.sendCommand(target, "Input.dispatchMouseEvent", { ...base, type: "mouseMoved", buttons: 0 });
+    const pointer = { x, y, modifiers: 0 };
+    await api.debugger.sendCommand(target, "Input.dispatchMouseEvent", {
+      ...pointer,
+      type: "mouseMoved",
+      button: "none",
+      buttons: 0,
+      clickCount: 0
+    });
     const reason = String(message.reason || "");
     const hoverSettleMs = Number.isFinite(Number(message.hoverSettleMs))
       ? Number(message.hoverSettleMs)
       : (/topic menu|menu trigger|hover/i.test(reason) || message.kind === "topic-menu-trigger" ? 260 : 80);
     await sleep(Math.min(700, Math.max(0, hoverSettleMs)));
     await verifyTrustedFrameTarget(api, frameTarget);
-    await api.debugger.sendCommand(target, "Input.dispatchMouseEvent", { ...base, type: "mousePressed", buttons: 1 });
+    await api.debugger.sendCommand(target, "Input.dispatchMouseEvent", {
+      ...pointer,
+      type: "mousePressed",
+      button: "left",
+      buttons: 1,
+      clickCount: 1
+    });
     await sleep(45);
     await verifyTrustedFrameTarget(api, frameTarget);
-    await api.debugger.sendCommand(target, "Input.dispatchMouseEvent", { ...base, type: "mouseReleased", buttons: 0 });
+    await api.debugger.sendCommand(target, "Input.dispatchMouseEvent", {
+      ...pointer,
+      type: "mouseReleased",
+      button: "left",
+      buttons: 0,
+      clickCount: 1
+    });
     return { tabId: frameTarget.tabId, frameId: frameTarget.frameId, x, y };
   } catch (error) {
     throw new Error(`Trusted browser click failed: ${error?.message || String(error || "unknown debugger error")}`);
@@ -255,29 +421,59 @@ function keyDescriptor(value = {}) {
   if (normalized === "backspace") return withModifiers({ key: "Backspace", code: "Backspace", windowsVirtualKeyCode: 8, nativeVirtualKeyCode: 51 });
   if (normalized === "delete") return withModifiers({ key: "Delete", code: "Delete", windowsVirtualKeyCode: 46, nativeVirtualKeyCode: 117 });
   if (normalized === " " || normalized === "space" || normalized === "spacebar") return withModifiers({ key: " ", code: "Space", windowsVirtualKeyCode: 32, nativeVirtualKeyCode: 49, text: " ", unmodifiedText: " " });
+  if (key === "d") return withModifiers({ key: "d", code: "KeyD", windowsVirtualKeyCode: 68, nativeVirtualKeyCode: 2 });
   return null;
 }
 
 export async function dispatchTrustedKeySequence(api, message = {}, sender = {}) {
   requireDebugger(api, "key input");
   const frameTarget = trustedFrameTarget(api, message, sender);
-  const keys = (Array.isArray(message.keys) ? message.keys : [])
+  const rawKeys = Array.isArray(message.keys) ? message.keys : [];
+  const claudeDeleteShortcut = String(message.kind || "") === "claude-menu-delete-shortcut"
+    && String(message.site || "").toLowerCase() === "claude"
+    && rawKeys.length === 1
+    && rawKeys[0]
+    && typeof rawKeys[0] === "object"
+    && rawKeys[0].key === "d"
+    && !rawKeys[0].shiftKey
+    && !rawKeys[0].ctrlKey
+    && !rawKeys[0].metaKey
+    && !rawKeys[0].altKey
+    && (rawKeys[0].modifiers == null || Number(rawKeys[0].modifiers) === 0);
+  const requestsPrintableD = rawKeys.some((item) => String(typeof item === "string" ? item : item?.key || "") === "d")
+    || String(message.kind || "") === "claude-menu-delete-shortcut";
+  if (requestsPrintableD && !claudeDeleteShortcut) {
+    throw new Error("Trusted browser key sequence failed: lowercase d is outside the verified Claude menu contract");
+  }
+  if (claudeDeleteShortcut && !isClaudeHref(frameTarget.href)) {
+    throw new Error("Trusted browser key sequence failed: lowercase d target is not Claude");
+  }
+  const keys = rawKeys
     .map((item) => ({ descriptor: keyDescriptor(item), settleMs: Number(item?.settleMs) }))
     .filter((item) => item.descriptor);
   if (!keys.length) throw new Error("Trusted browser key sequence failed: no supported keys were provided");
   const target = { tabId: frameTarget.tabId };
   let attached = false;
   try {
-    await verifyTrustedFrameTarget(api, frameTarget);
+    await verifyTrustedFrameTarget(api, frameTarget, {
+      requireDocumentFocus: claudeDeleteShortcut,
+      requireClaudeDeleteShortcut: claudeDeleteShortcut
+    });
     await api.debugger.attach(target, "1.3");
     attached = true;
     for (const item of keys) {
       const modifiers = Number.isFinite(Number(item.descriptor.modifiers)) ? Number(item.descriptor.modifiers) : 0;
       const event = { ...item.descriptor, modifiers, autoRepeat: false, isKeypad: false };
-      await verifyTrustedFrameTarget(api, frameTarget);
-      await api.debugger.sendCommand(target, "Input.dispatchKeyEvent", { ...event, type: "keyDown" });
+      await verifyTrustedFrameTarget(api, frameTarget, {
+        requireDocumentFocus: claudeDeleteShortcut,
+        requireClaudeDeleteShortcut: claudeDeleteShortcut
+      });
+      await api.debugger.sendCommand(target, "Input.dispatchKeyEvent", {
+        ...event,
+        type: claudeDeleteShortcut ? "rawKeyDown" : "keyDown"
+      });
       await sleep(35);
-      await verifyTrustedFrameTarget(api, frameTarget);
+      await verifyTrustedFrameTarget(api, frameTarget, { requireDocumentFocus: claudeDeleteShortcut });
       await api.debugger.sendCommand(target, "Input.dispatchKeyEvent", { ...event, type: "keyUp" });
       const settleMs = Number.isFinite(item.settleMs) ? item.settleMs : Number(message.keySettleMs);
       await sleep(Math.min(900, Math.max(45, Number.isFinite(settleMs) ? settleMs : 120)));

@@ -227,7 +227,11 @@ export function createPreferredModelController(dependencies = {}) {
   }
 
   function waitForPreferredModelFrame(iframe, options = {}) {
-    const current = preferredModelFrameReadiness(iframe);
+    let current = preferredModelFrameReadiness(iframe);
+    if (current.state === "pending") {
+      schedulePreferredModelApplyToFrame(iframe);
+      current = preferredModelFrameReadiness(iframe);
+    }
     if (preferredModelReadinessIsSettled(current)) return Promise.resolve(current);
     const signal = options?.signal || null;
     if (signal?.aborted) return Promise.reject(preferredModelAbortError());

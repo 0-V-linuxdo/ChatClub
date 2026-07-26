@@ -184,7 +184,9 @@ const isContentRuntimeGenerationTransition = (details = {}) =>
       bridgeDocumentId: "content-document-firefox",
       legacyDocumentId: `legacy:${"a".repeat(64)}`,
       legacyDocumentValid: true,
-      href: "https://example.com/thread"
+      href: "https://example.com/thread",
+      documentHasFocus: false,
+      claudeDeleteShortcutReady: false
     });
   }
 

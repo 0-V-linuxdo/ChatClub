@@ -102,6 +102,9 @@ function trustedKeySequence(result = {}, expectedAttemptId = "", expectedDocumen
   const sequence = result?.trustedKeySequence;
   if (!result?.needsTrustedKeySequence || !trustedAttemptMatches(sequence, expectedAttemptId, expectedDocumentId)) return null;
   if (!Array.isArray(sequence.keys) || sequence.keys.length < 1 || sequence.keys.length > 12) return null;
+  const kind = String(sequence.kind || "").trim();
+  const site = String(sequence.site || "").trim().toLowerCase();
+  const claudeMenuDeleteShortcut = kind === "claude-menu-delete-shortcut" && site === "claude";
   const keys = sequence.keys
     .map((item) => typeof item === "string"
       ? { key: item }
@@ -114,8 +117,20 @@ function trustedKeySequence(result = {}, expectedAttemptId = "", expectedDocumen
           altKey: Boolean(item?.altKey),
           modifiers: Number.isFinite(Number(item?.modifiers)) ? Number(item.modifiers) : undefined
         })
-    .filter((item) => /^(tab|enter|return|escape|esc|backspace|delete| |space|spacebar)$/i.test(item.key));
-  if (!keys.length) return null;
+    .filter((item) => /^(tab|enter|return|escape|esc|backspace|delete| |space|spacebar)$/i.test(item.key)
+      || (claudeMenuDeleteShortcut && item.key === "d"));
+  if (!keys.length || keys.length !== sequence.keys.length) return null;
+  if (claudeMenuDeleteShortcut && (
+    keys.length !== 1
+    || keys[0].key !== "d"
+    || keys[0].shiftKey
+    || keys[0].ctrlKey
+    || keys[0].metaKey
+    || keys[0].altKey
+    || (keys[0].modifiers !== undefined && keys[0].modifiers !== 0)
+    || sequence.framePoint
+    || sequence.point
+  )) return null;
   const point = sequence.framePoint || sequence.point;
   const x = Number(point?.x);
   const y = Number(point?.y);
@@ -242,6 +257,9 @@ async function dispatchHover(iframe, hover, target) {
 }
 
 async function dispatchKeySequence(iframe, sequence, beforeDispatch = async () => {}) {
+  if (sequence.kind === "claude-menu-delete-shortcut" && iframe?.ownerDocument?.activeElement !== iframe) {
+    throw new Error("trusted browser key sequence failed: Claude iframe no longer owns keyboard focus");
+  }
   if (sequence.framePoint) {
     const target = await beforeDispatch();
     await dispatchClick(iframe, {
@@ -260,6 +278,7 @@ async function dispatchKeySequence(iframe, sequence, beforeDispatch = async () =
     keys: sequence.keys,
     keySettleMs: sequence.keySettleMs,
     kind: sequence.kind || "trusted-key-sequence",
+    site: sequence.site || "",
     reason: sequence.reason || "topic menu keyboard sequence"
   });
 }
@@ -431,7 +450,7 @@ async function retryAfterHover(iframe, result, payload, config, timeoutMs, compl
   });
 }
 
-async function retryAfterMenuClick(iframe, result, payload, config, timeoutMs, completion) {
+async function retryAfterMenuClick(iframe, result, payload, config, timeoutMs, completion, deliveryState = {}) {
   async function dispatchPhase(currentResult, menuClick, nextPayload) {
     let lastResult = currentResult;
     for (const framePoint of menuClick.framePoints || [menuClick.framePoint]) {
@@ -455,6 +474,12 @@ async function retryAfterMenuClick(iframe, result, payload, config, timeoutMs, c
 
   const firstClick = trustedMenuClick(result, completion?.attemptId, trustedBridgeDocumentId(iframe));
   if (!firstClick) return result;
+  if (
+    deliveryState.claudeDeleteDConsumed
+    && String(completion?.identity?.provider || "").toLowerCase() === "claude"
+  ) {
+    return { ...result, ok: false, reason: "trusted Claude Delete D was already delivered; no later browser input is allowed" };
+  }
   const firstKind = String(firstClick.kind || "").trim();
   if (firstKind === "conversation-menu-trigger") {
     if (
@@ -493,9 +518,58 @@ async function retryAfterMenuClick(iframe, result, payload, config, timeoutMs, c
   ));
 }
 
-async function retryAfterKeySequence(iframe, result, payload, config, timeoutMs, completion) {
-  const sequence = trustedKeySequence(result, completion?.attemptId, trustedBridgeDocumentId(iframe));
+async function retryAfterKeySequence(iframe, result, payload, config, timeoutMs, completion, deliveryState = {}) {
+  let sequence = trustedKeySequence(result, completion?.attemptId, trustedBridgeDocumentId(iframe));
   if (!sequence || payload?.trustedKeySequenceRetried) return result;
+  if (sequence.kind === "claude-menu-delete-shortcut") {
+    const withoutClaudeDeleteInstruction = (value, reason = "") => {
+      const next = { ...(value || {}) };
+      delete next.needsTrustedKeySequence;
+      delete next.trustedKeySequence;
+      return { ...next, ok: false, reason: reason || next.reason || "trusted Claude Delete D shortcut failed" };
+    };
+    if (String(completion?.identity?.provider || "").toLowerCase() !== "claude") {
+      return withoutClaudeDeleteInstruction(result, "trusted Claude Delete D shortcut target is not a Claude conversation");
+    }
+    if (deliveryState.claudeDeleteDConsumed) {
+      return withoutClaudeDeleteInstruction(result, "trusted Claude Delete D shortcut was already consumed for this delete attempt");
+    }
+    deliveryState.claudeDeleteDConsumed = true;
+    return withTrustedInputLock(async () => {
+      try { iframe?.focus?.({ preventScroll: true }); } catch {
+        try { iframe?.focus?.(); } catch {}
+      }
+      if (iframe?.ownerDocument?.activeElement !== iframe) {
+        return withoutClaudeDeleteInstruction(result, "trusted Claude Delete D shortcut lost iframe focus");
+      }
+      const preflightResult = await sendDelete(
+        iframe,
+        { ...payload, trustedKeySequencePreflight: true },
+        config,
+        timeoutMs,
+        completion
+      );
+      const preflightSequence = trustedKeySequence(
+        preflightResult,
+        completion?.attemptId,
+        trustedBridgeDocumentId(iframe)
+      );
+      if (
+        preflightSequence?.kind !== "claude-menu-delete-shortcut"
+        || preflightSequence?.site !== "claude"
+        || preflightSequence?.keys?.length !== 1
+        || preflightSequence.keys[0]?.key !== "d"
+      ) return withoutClaudeDeleteInstruction(preflightResult);
+      sequence = preflightSequence;
+      await runTrustedDispatch(() => dispatchKeySequence(
+        iframe,
+        sequence,
+        () => revalidateTrustedTarget(iframe, completion, sequence.documentId)
+      ));
+      await sleep(Math.max(180, Number(sequence.settleMs) || 360));
+      return sendDelete(iframe, { ...payload, trustedKeySequenceRetried: true }, config, timeoutMs, completion);
+    });
+  }
   return withTrustedInputLock(async () => {
     await runTrustedDispatch(() => dispatchKeySequence(
       iframe,
@@ -587,6 +661,13 @@ async function tryTrustedFallback(iframe, result = {}, completion = {}) {
   }
   const click = trustedClick(result, completion.attemptId, trustedBridgeDocumentId(iframe));
   if (!click) return result;
+  if (String(completion.identity.provider || "").toLowerCase() === "claude") {
+    return {
+      ...result,
+      ok: false,
+      reason: "Claude delete confirmation remained visible after its one-time verified page click"
+    };
+  }
   return withTrustedInputLock(async () => {
     const target = await revalidateTrustedTarget(iframe, completion, click.documentId);
     await runTrustedDispatch(() => dispatchClick(iframe, click, target));
@@ -635,12 +716,16 @@ async function executeTopicDeleteNow(iframe, payload = {}, config = null, timeou
   const attemptId = createDeleteAttemptId();
   payload = { ...payload, deleteAttemptId: attemptId };
   const completion = { attemptId, captured: false, href: "", identity: null };
+  const trustedDeliveryState = { claudeDeleteDConsumed: false };
   let result;
   try {
     result = await sendDelete(iframe, payload, config, timeoutMs, completion);
     result = await retryAfterHover(iframe, result, payload, config, timeoutMs, completion);
-    result = await retryAfterKeySequence(iframe, result, payload, config, timeoutMs, completion);
-    result = await retryAfterMenuClick(iframe, result, payload, config, timeoutMs, completion);
+    result = await retryAfterKeySequence(iframe, result, payload, config, timeoutMs, completion, trustedDeliveryState);
+    result = await retryAfterMenuClick(iframe, result, payload, config, timeoutMs, completion, trustedDeliveryState);
+    if (result?.trustedKeySequence?.kind === "claude-menu-delete-shortcut") {
+      result = await retryAfterKeySequence(iframe, result, payload, config, timeoutMs, completion, trustedDeliveryState);
+    }
   } catch (error) {
     if (!error?.chatClubTrustedDispatchFailed) {
       await readOnlyCompletionAudit(

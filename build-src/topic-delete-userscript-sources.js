@@ -12,7 +12,7 @@ import { DELETE_USERSCRIPT_ENGINE_CORE } from "./topic-delete-userscript-engine-
 import { DELETE_USERSCRIPT_ENGINE_SITES } from "./topic-delete-userscript-engine-sites.js";
 
 const DELETE_USERSCRIPT_VERSION = "2026.07.22.2";
-const CLAUDE_DELETE_USERSCRIPT_VERSION = "2026.07.26.3";
+const CLAUDE_DELETE_USERSCRIPT_VERSION = "2026.07.26.7";
 const GEMINI_DELETE_USERSCRIPT_VERSION = "2026.07.22.2";
 const DELETE_USERSCRIPT_NAMESPACE = "https://chatclub.local/delete-sites";
 

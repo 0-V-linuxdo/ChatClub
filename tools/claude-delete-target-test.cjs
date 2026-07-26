@@ -9,6 +9,14 @@ const root = path.resolve(__dirname, "..");
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8").replace(/\r\n?/g, "\n");
 const normalize = (value) => String(value || "").replace(/\s+/g, " ").trim();
 const compact = (value) => normalize(value).toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, "");
+const CLAUDE_DIA_MENU_LABELS = Object.freeze({
+  star: "\uE0E7 Star P",
+  markUnread: "\uE06A Mark as unread U",
+  rename: "\uE064 Rename R",
+  addToProject: "\uE0C9 Add to project \uE02A",
+  delete: "\uE101 Delete D",
+  deleteCompact: "\uE101 DeleteD"
+});
 
 function matchesExactLabelRepeats(value, labels) {
   const token = compact(value);
@@ -36,6 +44,12 @@ function element(id, options = {}) {
     getAttribute(name) {
       if (name === "role") return this.role;
       return Object.hasOwn(attributes, name) ? attributes[name] : "";
+    },
+    setAttribute(name, value) {
+      attributes[name] = String(value);
+    },
+    removeAttribute(name) {
+      delete attributes[name];
     },
     hasAttribute(name) {
       return name === "role" ? Boolean(this.role) : Object.hasOwn(attributes, name);
@@ -72,14 +86,24 @@ function createFixture(options = {}) {
     route: options.href || "https://claude.ai/chat/thread-1",
     menuOpen: Boolean(options.existingMenu),
     confirmationOpen: Boolean(options.existingConfirmation),
+    unrelatedMenuOpen: options.concurrentSameFingerprintMenu ? false : options.unrelatedMenu !== false,
     triggerClicks: 0,
     sidebarTriggerClicks: 0,
     deleteClicks: 0,
     unrelatedDeleteClicks: 0,
     confirmClicks: 0,
+    deleteFocusCalls: 0,
+    confirmFocusCalls: 0,
+    confirmDomClicks: 0,
     waitCalls: 0,
     sleepCalls: 0,
-    replacementTriggerActive: false
+    replacementTriggerActive: false,
+    premountedMenuDismissed: false,
+    confirmationRootReplaced: false,
+    onConfirmFocus: null,
+    insertedAttempt: null,
+    onWaitStart: null,
+    suppressNextWaitResult: false
   };
   const location = {
     origin: "https://claude.ai",
@@ -106,7 +130,11 @@ function createFixture(options = {}) {
     attributes: {
       "data-kind": "button",
       "aria-label": options.triggerLabel || "More options for Identifier code verification",
-      "aria-haspopup": "menu"
+      "aria-haspopup": "menu",
+      "aria-expanded": state.menuOpen ? "true" : "false",
+      ...(options.titleOwnsOnly
+        ? { "aria-owns": options.titleControlsId || "owned-menu" }
+        : { "aria-controls": options.titleControlsId || "owned-menu" })
     },
     box: rect(824, 24, 40, 36)
   });
@@ -115,7 +143,11 @@ function createFixture(options = {}) {
     attributes: {
       "data-kind": "button",
       "aria-label": options.triggerLabel || "More options for Identifier code verification",
-      "aria-haspopup": "menu"
+      "aria-haspopup": "menu",
+      "aria-expanded": state.menuOpen ? "true" : "false",
+      ...(options.titleOwnsOnly
+        ? { "aria-owns": options.titleControlsId || "owned-menu" }
+        : { "aria-controls": options.titleControlsId || "owned-menu" })
     },
     box: rect(824, 24, 40, 36)
   });
@@ -126,7 +158,8 @@ function createFixture(options = {}) {
     attributes: {
       "data-kind": "button",
       "aria-label": "More options for Identifier code verification",
-      "aria-haspopup": "menu"
+      "aria-haspopup": "menu",
+      "aria-controls": "unrelated-menu"
     },
     box: rect(244, 160, 40, 36)
   });
@@ -142,19 +175,51 @@ function createFixture(options = {}) {
     attributes: { "data-kind": "button", "aria-label": "Delete" },
     box: rect(64, 150, 210, 38)
   });
+  const unrelatedMarkRead = element("unrelated-mark-read", {
+    parentElement: unrelatedMenu,
+    role: "menuitem",
+    text: CLAUDE_DIA_MENU_LABELS.markUnread,
+    attributes: { "data-kind": "button" },
+    box: rect(64, 116, 210, 32)
+  });
+  const unrelatedRename = element("unrelated-rename", {
+    parentElement: unrelatedMenu,
+    role: "menuitem",
+    text: CLAUDE_DIA_MENU_LABELS.rename,
+    attributes: { "data-kind": "button" },
+    box: rect(64, 150, 210, 32)
+  });
+  const unrelatedShortcutDelete = element("unrelated-shortcut-delete", {
+    parentElement: unrelatedMenu,
+    role: "menuitem",
+    innerText: CLAUDE_DIA_MENU_LABELS.delete,
+    textContent: CLAUDE_DIA_MENU_LABELS.deleteCompact,
+    attributes: { "data-kind": "button" },
+    box: rect(64, 184, 210, 38)
+  });
   const menu = element("owned-menu", {
     parentElement: body,
     role: "menu",
     box: rect(672, 74, 220, 180)
   });
+  const menuStar = element("owned-star", {
+    parentElement: menu,
+    role: "menuitem",
+    innerText: options.realPuaMenu ? CLAUDE_DIA_MENU_LABELS.star : "Star P",
+    textContent: options.realPuaMenu ? CLAUDE_DIA_MENU_LABELS.star : "StarP",
+    attributes: { "data-kind": "button" },
+    box: rect(690, 82, 184, 36)
+  });
   const menuMarkRead = element("owned-mark-read", {
     parentElement: menu,
     role: "menuitem",
-    innerText: options.menuMarkInnerText || "Mark as unread U",
-    textContent: options.menuMarkTextContent || "Mark as unreadU",
+    innerText: options.menuMarkInnerText || (options.realPuaMenu ? CLAUDE_DIA_MENU_LABELS.markUnread : "Mark as unread U"),
+    textContent: options.menuMarkTextContent || (options.realPuaMenu ? CLAUDE_DIA_MENU_LABELS.markUnread : "Mark as unreadU"),
     attributes: {
       "data-kind": "button",
-      "aria-label": options.menuMarkAriaLabel || "Mark as unread",
+      ...(options.realPuaMenu && options.menuMarkAriaLabel == null
+        ? {}
+        : { "aria-label": options.menuMarkAriaLabel || "Mark as unread" }),
       ...(options.disableMenuMarkRead ? { disabled: "" } : {})
     },
     box: rect(690, 92, 184, 36)
@@ -162,28 +227,64 @@ function createFixture(options = {}) {
   const menuRename = element("owned-rename", {
     parentElement: menu,
     role: "menuitem",
-    innerText: "Rename R",
-    textContent: "RenameR",
-    attributes: { "data-kind": "button", "aria-label": "Rename" },
+    innerText: options.realPuaMenu ? CLAUDE_DIA_MENU_LABELS.rename : "Rename R",
+    textContent: options.realPuaMenu ? CLAUDE_DIA_MENU_LABELS.rename : "RenameR",
+    attributes: options.realPuaMenu
+      ? { "data-kind": "button" }
+      : { "data-kind": "button", "aria-label": "Rename" },
     box: rect(690, 136, 184, 36)
   });
+  const menuAddProject = element("owned-add-project", {
+    parentElement: menu,
+    role: "menuitem",
+    innerText: options.realPuaMenu ? CLAUDE_DIA_MENU_LABELS.addToProject : "Add to project",
+    textContent: options.realPuaMenu ? CLAUDE_DIA_MENU_LABELS.addToProject : "Add to project",
+    attributes: { "data-kind": "button" },
+    box: rect(690, 172, 184, 36)
+  });
+  const renameTextbox = element("owned-rename-textbox", {
+    parentElement: menu,
+    role: "textbox",
+    text: "Identifier code verification",
+    attributes: { contenteditable: "true" },
+    box: rect(690, 136, 184, 36)
+  });
+  const defaultDeleteText = options.realPuaMenu ? CLAUDE_DIA_MENU_LABELS.delete : "Delete";
+  const deleteText = options.deleteText ?? defaultDeleteText;
+  const deleteAriaLabel = Object.hasOwn(options, "deleteAriaLabel")
+    ? options.deleteAriaLabel
+    : (options.realPuaMenu ? null : deleteText);
   const deleteItem = element("owned-delete", {
     parentElement: menu,
     role: "menuitem",
-    text: options.deleteText || "Delete",
-    innerText: options.deleteInnerText,
-    textContent: options.deleteTextContent,
+    text: deleteText,
+    innerText: options.deleteInnerText ?? deleteText,
+    textContent: options.deleteTextContent
+      ?? (options.realPuaMenu && !Object.hasOwn(options, "deleteText") ? CLAUDE_DIA_MENU_LABELS.deleteCompact : deleteText),
     attributes: {
       "data-kind": "button",
-      ...(options.deleteAriaLabel === null ? {} : { "aria-label": options.deleteAriaLabel || options.deleteText || "Delete" })
+      ...(deleteAriaLabel == null ? {} : { "aria-label": deleteAriaLabel })
     },
     box: rect(690, 190, 184, 40)
   });
   const confirmation = element("owned-confirmation", {
     parentElement: body,
     role: "dialog",
-    text: options.confirmationText || "Delete chat? This action cannot be undone. Cancel Delete",
+    text: options.confirmationText || "Delete chat Are you sure you want to delete this chat? Cancel Delete",
     box: rect(360, 220, 480, 260)
+  });
+  const confirmHeading = element("owned-confirm-heading", {
+    parentElement: confirmation,
+    role: "heading",
+    text: options.confirmationHeadingText || "Delete chat",
+    box: rect(390, 244, 420, 36)
+  });
+  const cancelButton = element("owned-cancel", {
+    parentElement: confirmation,
+    role: "button",
+    text: options.cancelText || "Cancel",
+    attributes: { "data-kind": "button", "aria-label": options.cancelAriaLabel || options.cancelText || "Cancel" },
+    box: rect(570, 420, 110, 38)
   });
   const confirmButton = element("owned-confirm", {
     parentElement: confirmation,
@@ -192,19 +293,65 @@ function createFixture(options = {}) {
     attributes: { "data-kind": "button", "aria-label": options.confirmAriaLabel || options.confirmText || "Delete" },
     box: rect(700, 420, 110, 38)
   });
+  const duplicateConfirmButton = element("owned-confirm-duplicate", {
+    parentElement: confirmation,
+    role: "button",
+    text: options.duplicateConfirmText || "Delete",
+    attributes: { "data-kind": "button", "aria-label": options.duplicateConfirmAriaLabel || options.duplicateConfirmText || "Delete" },
+    box: rect(700, 370, 110, 38)
+  });
+  duplicateConfirmButton.isConnected = Boolean(options.duplicateConfirmButton);
+  const foreignConfirmation = element("foreign-confirmation", {
+    parentElement: body,
+    role: "dialog",
+    text: "Delete chat Are you sure you want to delete this chat? Cancel Delete",
+    box: rect(370, 230, 480, 260)
+  });
+  const foreignConfirmHeading = element("foreign-confirm-heading", {
+    parentElement: foreignConfirmation,
+    role: "heading",
+    text: "Delete chat",
+    box: rect(400, 254, 420, 36)
+  });
+  const foreignCancelButton = element("foreign-cancel", {
+    parentElement: foreignConfirmation,
+    role: "button",
+    text: "Cancel",
+    attributes: { "data-kind": "button", "aria-label": "Cancel" },
+    box: rect(580, 430, 110, 38)
+  });
+  const foreignConfirmButton = element("foreign-confirm", {
+    parentElement: foreignConfirmation,
+    role: "button",
+    text: "Delete",
+    attributes: { "data-kind": "button", "aria-label": "Delete" },
+    box: rect(710, 430, 110, 38)
+  });
 
   const visible = (node) => {
     if (!node?.isConnected) return false;
     if (node === titleControl && options.hiddenTitleEvidence) return false;
-    if (node === menu || node === menuMarkRead || node === menuRename || node === deleteItem) return state.menuOpen;
-    if (node === unrelatedMenu || node === unrelatedDelete) return options.unrelatedMenu !== false;
-    if (node === confirmation || node === confirmButton) return state.confirmationOpen;
+    if (node === menu) return state.menuOpen || (options.premountedMenuRoot && !state.premountedMenuDismissed);
+    if ([menuStar, menuMarkRead, menuRename, menuAddProject, renameTextbox, deleteItem].includes(node)) return state.menuOpen;
+    if ([unrelatedMenu, unrelatedDelete, unrelatedMarkRead, unrelatedRename, unrelatedShortcutDelete].includes(node)) {
+      return state.unrelatedMenuOpen;
+    }
+    if ([confirmation, confirmHeading, cancelButton, confirmButton, duplicateConfirmButton].includes(node)) {
+      if (state.confirmationRootReplaced) return false;
+      if (node === confirmHeading && options.omitConfirmHeading) return false;
+      if (node === cancelButton && options.omitCancelButton) return false;
+      if (node === duplicateConfirmButton && !options.duplicateConfirmButton) return false;
+      return state.confirmationOpen && !options.unrelatedConfirmationOnly;
+    }
+    if ([foreignConfirmation, foreignConfirmHeading, foreignCancelButton, foreignConfirmButton].includes(node)) {
+      return Boolean((options.concurrentConfirmation || options.unrelatedConfirmationOnly || state.confirmationRootReplaced) && state.confirmationOpen);
+    }
     return true;
   };
   const nodeRect = (node) => visible(node) ? node.box : null;
   const menuRoots = () => [
-    ...(options.unrelatedMenu !== false ? [unrelatedMenu] : []),
-    ...(state.menuOpen ? [menu] : [])
+    ...(state.unrelatedMenuOpen ? [unrelatedMenu] : []),
+    ...(state.menuOpen || (options.premountedMenuRoot && !state.premountedMenuDismissed) ? [menu] : [])
   ];
   const qsa = (selector, queryRoot = document) => {
     const value = String(selector || "");
@@ -214,13 +361,37 @@ function createFixture(options = {}) {
     if (queryRoot === menu) {
       if (!state.menuOpen) return [];
       return [
+        ...(options.realPuaMenu ? [menuStar] : []),
         ...(options.omitMenuReadState ? [] : [menuMarkRead]),
         ...(options.omitMenuConversationAction ? [] : [menuRename]),
+        ...(options.realPuaMenu ? [menuAddProject] : []),
         deleteItem
       ];
     }
-    if (queryRoot === unrelatedMenu) return options.unrelatedMenu !== false ? [unrelatedDelete] : [];
-    if (queryRoot === confirmation) return state.confirmationOpen ? [confirmButton] : [];
+    if (queryRoot === unrelatedMenu) {
+      if (!state.unrelatedMenuOpen) return [];
+      return options.concurrentSameFingerprintMenu
+        ? [unrelatedMarkRead, unrelatedRename, unrelatedShortcutDelete]
+        : [unrelatedDelete];
+    }
+    if (queryRoot === confirmation) {
+      if (!state.confirmationOpen || options.unrelatedConfirmationOnly) return [];
+      if (/heading|\bh[1-4]\b/i.test(value)) return options.omitConfirmHeading ? [] : [confirmHeading];
+      if (/button|role=['\"]button/i.test(value)) {
+        return [
+          ...(options.omitCancelButton ? [] : [cancelButton]),
+          confirmButton,
+          ...(options.duplicateConfirmButton ? [duplicateConfirmButton] : [])
+        ];
+      }
+      return [];
+    }
+    if (queryRoot === foreignConfirmation) {
+      if ((!options.concurrentConfirmation && !options.unrelatedConfirmationOnly && !state.confirmationRootReplaced) || !state.confirmationOpen) return [];
+      if (/heading|\bh[1-4]\b/i.test(value)) return [foreignConfirmHeading];
+      if (/button|role=['\"]button/i.test(value)) return [foreignCancelButton, foreignConfirmButton];
+      return [];
+    }
     if (queryRoot !== document) return [];
     if (value.includes("chat-title-split") && value.includes("button")) return [titleControl, currentTrigger];
     if (value.includes("chat-title-split")) return options.duplicateTitleRoot ? [titleRoot, { ...titleRoot }] : [titleRoot];
@@ -228,10 +399,26 @@ function createFixture(options = {}) {
     if (value.includes("aria-label") || value.includes("button") || value.includes("role='button'")) return [sidebarTrigger, currentTrigger];
     return [];
   };
+  const eventListeners = new Map();
   const document = {
     body,
     documentElement: body,
-    getElementById() { return null; },
+    activeElement: body,
+    hasFocus: () => options.documentHasFocus !== false,
+    addEventListener(type, listener) {
+      if (!eventListeners.has(type)) eventListeners.set(type, new Set());
+      eventListeners.get(type).add(listener);
+    },
+    removeEventListener(type, listener) {
+      eventListeners.get(type)?.delete(listener);
+    },
+    getElementById(id) {
+      if (id === menu.id) return menu;
+      if (id === unrelatedMenu.id) return unrelatedMenu;
+      if (id === confirmation.id) return confirmation;
+      if (id === foreignConfirmation.id) return foreignConfirmation;
+      return null;
+    },
     querySelectorAll(selector) { return qsa(selector, document); },
     querySelector(selector) { return qsa(selector, document)[0] || null; },
     elementFromPoint(x, y) {
@@ -240,8 +427,8 @@ function createFixture(options = {}) {
         return box && x >= box.left && x <= box.right && y >= box.top && y <= box.bottom;
       };
       if (state.confirmationOpen && inside(confirmButton)) return confirmButton;
-      if (state.menuOpen && inside(deleteItem)) return deleteItem;
-      if (options.unrelatedMenu !== false && inside(unrelatedDelete)) return unrelatedDelete;
+      if (state.menuOpen && inside(deleteItem)) return options.deleteItemNotTopmost ? body : deleteItem;
+      if (state.unrelatedMenuOpen && inside(unrelatedDelete)) return unrelatedDelete;
       return body;
     }
   };
@@ -252,11 +439,42 @@ function createFixture(options = {}) {
     node?.textContent
   ].filter(Boolean).join(" "));
   const clickable = (node) => node;
+  const setMenuOpen = (open, config = {}) => {
+    state.menuOpen = Boolean(open);
+    if (!state.menuOpen) state.premountedMenuDismissed = true;
+    for (const node of [trigger, replacementTrigger]) {
+      node.setAttribute("aria-expanded", state.menuOpen ? "true" : "false");
+      if (!state.menuOpen && (config.removeBinding || options.removeMenuBindingOnClose)) {
+        node.removeAttribute("aria-controls");
+        node.removeAttribute("aria-owns");
+      }
+    }
+  };
+  const dispatchTrustedDeleteD = (overrides = {}) => {
+    const event = {
+      isTrusted: true,
+      key: "d",
+      keyCode: 68,
+      repeat: false,
+      isComposing: false,
+      shiftKey: false,
+      ctrlKey: false,
+      metaKey: false,
+      altKey: false,
+      target: deleteItem,
+      composedPath: () => [deleteItem, menu, body, document],
+      ...overrides
+    };
+    for (const listener of [...(eventListeners.get("keydown") || [])]) listener(event);
+    return event;
+  };
   const clickAt = (node) => {
     if (node === trigger) {
       state.triggerClicks += 1;
       if (options.routeChangeOnTrigger) state.route = "https://claude.ai/chat/thread-2";
-      if (!options.ignoreTrigger) state.menuOpen = true;
+      if (options.concurrentSameFingerprintMenu) state.unrelatedMenuOpen = true;
+      if (!options.ignoreTrigger && options.openOwnedMenu !== false) setMenuOpen(options.toggleTrigger ? !state.menuOpen : true);
+      document.activeElement = state.menuOpen && !options.menuFocusOutside ? menuMarkRead : body;
       return true;
     }
     if (node === sidebarTrigger) {
@@ -271,20 +489,56 @@ function createFixture(options = {}) {
       state.deleteClicks += 1;
       if (options.routeChangeOnDelete) state.route = "https://claude.ai/chat/thread-2";
       if (!options.ignoreDelete) {
-        state.menuOpen = false;
+        setMenuOpen(false);
         state.confirmationOpen = true;
+        document.activeElement = confirmButton;
       }
       return true;
     }
     if (node === confirmButton) {
       state.confirmClicks += 1;
       if (!options.ignoreConfirm) state.confirmationOpen = false;
+      document.activeElement = body;
       return true;
     }
     return false;
   };
+  const focusNode = (node) => {
+    if (node === deleteItem) state.deleteFocusCalls += 1;
+    if (node === confirmButton) state.confirmFocusCalls += 1;
+    if (node === deleteItem && options.ignoreDeleteFocus) return;
+    if (node === confirmButton && options.ignoreConfirmFocus) return;
+    document.activeElement = node;
+    if (node === confirmButton && options.replaceConfirmationRootOnFocus) {
+      state.confirmationRootReplaced = true;
+      confirmation.isConnected = false;
+      confirmHeading.isConnected = false;
+      cancelButton.isConnected = false;
+      confirmButton.isConnected = false;
+    }
+    if (node === confirmButton && typeof state.onConfirmFocus === "function") {
+      const hook = state.onConfirmFocus;
+      state.onConfirmFocus = null;
+      hook();
+    }
+  };
+  deleteItem.focus = () => focusNode(deleteItem);
+  confirmButton.focus = () => focusNode(confirmButton);
+  confirmButton.click = () => {
+    state.confirmDomClicks += 1;
+    return clickAt(confirmButton);
+  };
   const waitFor = async (getter) => {
     state.waitCalls += 1;
+    if (typeof state.onWaitStart === "function") {
+      const hook = state.onWaitStart;
+      state.onWaitStart = null;
+      await hook();
+    }
+    if (state.suppressNextWaitResult) {
+      state.suppressNextWaitResult = false;
+      return null;
+    }
     for (let index = 0; index < 3; index += 1) {
       const value = getter();
       if (value) return value;
@@ -297,7 +551,14 @@ function createFixture(options = {}) {
       state.route = "https://claude.ai/chat/thread-2";
     }
   };
-  const deleteDialogRoots = () => state.confirmationOpen ? [confirmation] : [];
+  const deleteDialogRoots = () => state.confirmationOpen
+    ? state.confirmationRootReplaced
+      ? [foreignConfirmation]
+      : [
+          ...(!options.unrelatedConfirmationOnly ? [confirmation] : []),
+          ...(options.concurrentConfirmation || options.unrelatedConfirmationOnly ? [foreignConfirmation] : [])
+        ]
+    : [];
   const findDeleteConfirmButton = () => state.confirmationOpen ? confirmButton : null;
   const activateConfirmButton = (button, rootNode) => {
     assert.equal(button, confirmButton, "only the owned Claude confirmation button may be activated");
@@ -388,6 +649,8 @@ function createFixture(options = {}) {
     state,
     location,
     document,
+    setMenuOpen,
+    dispatchTrustedDeleteD,
     nodes: {
       titleRoot,
       titleControl,
@@ -397,11 +660,20 @@ function createFixture(options = {}) {
       unrelatedMenu,
       unrelatedDelete,
       menu,
+      menuStar,
       menuMarkRead,
       menuRename,
+      menuAddProject,
+      renameTextbox,
       deleteItem,
       confirmation,
-      confirmButton
+      confirmHeading,
+      cancelButton,
+      confirmButton,
+      foreignConfirmation,
+      foreignConfirmHeading,
+      foreignCancelButton,
+      foreignConfirmButton
     },
     dependencies
   };
@@ -455,6 +727,7 @@ function expectedPayload(extra = {}) {
   const standaloneSource = read("build-src/topic-delete-claude-helpers.js");
   const nativeFacadeSource = read("content-src/capabilities/delete-sites.js");
   const nativeSource = read("content-src/capabilities/delete-claude.js");
+  const contentRuntimeSource = read("content-src/capabilities/delete-runtime.js");
   const runtimeSource = read("app/topic-delete/runtime.js");
   assert.match(nativeFacadeSource, /import \{ createDeleteClaudeCapability \} from "\.\/delete-claude\.js";/);
   assert.match(nativeFacadeSource, /const \{ deleteClaudeThread \} = createDeleteClaudeCapability\(deps\);/);
@@ -468,6 +741,9 @@ function expectedPayload(extra = {}) {
     assert.match(source, /unverified delete confirmation is already open/, `${name}: existing confirmations must never be adopted`);
     assert.match(source, /conversation-menu-trigger/, `${name}: the first trusted phase must identify the title trigger`);
     assert.match(source, /delete-menu-item/, `${name}: the second trusted phase must identify the exact Delete item`);
+    assert.match(source, /addEventListener\("keydown"/, `${name}: Delete D must be observed in the exact isolated document`);
+    assert.match(source, /setTimeout\(\(\) => \{[\s\S]*state\.invalid = true;[\s\S]*lease\.expiresAt/, `${name}: the one-shot D observer must expire with its lease`);
+    assert.doesNotMatch(source, /claudeLeaseControlsDeleteConfirmation/, `${name}: confirmation ownership must not assume an item/dialog IDREF`);
   }
   assert.match(runtimeSource, /trustedMenuTriggerRetried/, "runtime must track the Claude title-trigger retry independently");
   assert.match(runtimeSource, /trustedMenuClickRetried/, "runtime must retain the Delete-item retry phase");
@@ -496,6 +772,11 @@ function expectedPayload(extra = {}) {
   );
   assert.match(runtimeSource, /trusted input origin document changed/, "document replacement must reject trusted input");
   assert.match(runtimeSource, /trusted input target conversation changed/, "route replacement must reject trusted input");
+  assert.match(
+    contentRuntimeSource,
+    /trusted Claude Delete D shortcut requires the isolated native Claude runner/,
+    "custom and MAIN-world runners must not authorize printable Claude shortcut input"
+  );
 
   const parserFixture = createFixture();
   const parser = (await standaloneRunner(parserFixture)).api.claudeConversationIdFromHref;
@@ -533,6 +814,206 @@ function expectedPayload(extra = {}) {
       assert.equal(value.state.deleteClicks, 1);
       assert.equal(value.state.unrelatedDeleteClicks, 0, `${runner.name}: a pre-existing unrelated Delete must never be activated`);
       assert.equal(value.state.confirmClicks, 1);
+    }
+
+    {
+      const value = createFixture({ premountedMenuRoot: true });
+      const result = await (await runner.create(value)).run(expectedPayload());
+      assert.equal(result.ok, true, `${runner.name}: a reused pre-mounted menu root must be adopted only after it gains Claude's verified menu contents`);
+      assert.equal(value.state.triggerClicks, 1);
+      assert.equal(value.state.deleteClicks, 1);
+      assert.equal(value.state.confirmClicks, 1);
+      assert.equal(result.needsTrustedMenuClick, undefined, `${runner.name}: a reused root must not force a trusted trigger retry`);
+    }
+
+    {
+      const value = createFixture({ titleOwnsOnly: true });
+      const result = await (await runner.create(value)).run(expectedPayload());
+      assert.equal(result.ok, true, `${runner.name}: an unambiguous current-title aria-owns binding must be accepted`);
+      assert.equal(value.state.confirmClicks, 1);
+    }
+
+    {
+      const value = createFixture({ realPuaMenu: true, removeMenuBindingOnClose: true });
+      const api = await runner.create(value);
+      const shortcut = await api.run(expectedPayload());
+      assert.equal(shortcut.ok, false, `${runner.name}: Dia's real PUA-prefixed Delete D item must use its exact keyboard shortcut`);
+      assert.equal(shortcut.needsTrustedKeySequence, true);
+      assert.equal(shortcut.trustedKeySequence.kind, "claude-menu-delete-shortcut");
+      assert.equal(shortcut.trustedKeySequence.site, "claude");
+      assert.deepEqual(shortcut.trustedKeySequence.keys, [{ key: "d", settleMs: 420 }]);
+      assert.equal(value.document.activeElement, value.nodes.menuMarkRead, `${runner.name}: the initial lease must not assume the menu's current focus is safe`);
+      assert.equal(value.state.deleteFocusCalls, 0, `${runner.name}: parent iframe focus must happen before content focuses Delete D`);
+      assert.equal(value.state.deleteClicks, 0, `${runner.name}: the shortcut path must not click the unstable Delete node`);
+
+      const preflight = await api.run(expectedPayload({ trustedKeySequencePreflight: true }));
+      assert.equal(preflight.needsTrustedKeySequence, true, `${runner.name}: only the still-focused exact Delete D item may pass the one-time preflight`);
+      assert.equal(preflight.trustedKeySequence.kind, "claude-menu-delete-shortcut");
+      assert.equal(value.document.activeElement, value.nodes.deleteItem, `${runner.name}: preflight must establish exact Delete D focus`);
+      assert.equal(value.state.deleteFocusCalls, 1, `${runner.name}: preflight must focus Delete D exactly once`);
+
+      value.dispatchTrustedDeleteD();
+      value.setMenuOpen(false);
+      assert.equal(value.nodes.trigger.getAttribute("aria-controls"), "", `${runner.name}: live-style closed menu may remove aria-controls after the observed D`);
+      value.state.confirmationOpen = true;
+      value.document.activeElement = value.nodes.confirmButton;
+      const completed = await api.run(expectedPayload({ trustedKeySequenceRetried: true }));
+      assert.equal(completed.ok, true, `${runner.name}: only the new strict Claude confirmation may complete after Delete D`);
+      assert.equal(value.state.confirmClicks, 1);
+      assert.equal(value.state.confirmFocusCalls, 1, `${runner.name}: final confirmation must receive exact focus once`);
+      assert.equal(value.state.confirmDomClicks, 1, `${runner.name}: final confirmation must use one structural button click`);
+      assert.equal(value.state.deleteClicks, 0);
+
+      const duplicate = await api.run(expectedPayload({ trustedKeySequenceRetried: true }));
+      assert.equal(duplicate.ok, false, `${runner.name}: the consumed D continuation must not confirm twice`);
+      assert.equal(value.state.confirmClicks, 1);
+    }
+
+    {
+      const value = createFixture({
+        realPuaMenu: true,
+        concurrentSameFingerprintMenu: true,
+        openOwnedMenu: false
+      });
+      const result = await (await runner.create(value)).run(expectedPayload());
+      assert.equal(result.ok, false, `${runner.name}: a same-shaped sidebar menu must not replace the title trigger's controlled menu`);
+      assert.equal(result.needsTrustedKeySequence, undefined);
+      assert.equal(value.state.deleteFocusCalls, 0);
+      assert.equal(value.state.deleteClicks + value.state.confirmClicks, 0);
+    }
+
+    {
+      const value = createFixture({ realPuaMenu: true, concurrentConfirmation: true });
+      const api = await runner.create(value);
+      const shortcut = await api.run(expectedPayload());
+      assert.equal(shortcut.needsTrustedKeySequence, true);
+      const preflight = await api.run(expectedPayload({ trustedKeySequencePreflight: true }));
+      assert.equal(preflight.needsTrustedKeySequence, true);
+      value.dispatchTrustedDeleteD();
+      value.setMenuOpen(false);
+      value.state.confirmationOpen = true;
+      value.document.activeElement = value.nodes.confirmButton;
+      const result = await api.run(expectedPayload({ trustedKeySequenceRetried: true }));
+      assert.equal(result.ok, false, `${runner.name}: two exact post-D confirmations must fail closed`);
+      assert.equal(value.state.confirmClicks, 0);
+      assert.equal(value.state.confirmDomClicks, 0);
+    }
+
+    {
+      const value = createFixture({ realPuaMenu: true, replaceConfirmationRootOnFocus: true });
+      const api = await runner.create(value);
+      assert.equal((await api.run(expectedPayload())).needsTrustedKeySequence, true);
+      assert.equal((await api.run(expectedPayload({ trustedKeySequencePreflight: true }))).needsTrustedKeySequence, true);
+      value.dispatchTrustedDeleteD();
+      value.setMenuOpen(false);
+      value.state.confirmationOpen = true;
+      value.document.activeElement = value.nodes.cancelButton;
+      const result = await api.run(expectedPayload({ trustedKeySequenceRetried: true }));
+      assert.equal(result.ok, false, `${runner.name}: focus-time frozen confirmation-root replacement must cancel the final click`);
+      assert.equal(value.state.confirmFocusCalls, 1);
+      assert.equal(value.state.confirmDomClicks, 0);
+      assert.equal(value.state.confirmClicks, 0);
+    }
+
+    {
+      const value = createFixture({ realPuaMenu: true });
+      const api = await runner.create(value);
+      assert.equal((await api.run(expectedPayload())).needsTrustedKeySequence, true);
+      assert.equal((await api.run(expectedPayload({ trustedKeySequencePreflight: true }))).needsTrustedKeySequence, true);
+      value.dispatchTrustedDeleteD();
+      value.setMenuOpen(false);
+      value.state.confirmationOpen = true;
+      value.document.activeElement = value.nodes.cancelButton;
+      value.state.onConfirmFocus = () => {
+        value.state.insertedAttempt = api.run(expectedPayload({ deleteAttemptId: "attempt-2" }));
+      };
+      const result = await api.run(expectedPayload({ trustedKeySequenceRetried: true }));
+      await value.state.insertedAttempt;
+      assert.equal(result.ok, false, `${runner.name}: a new same-route attempt must invalidate the old confirming lease`);
+      assert.equal(value.state.confirmFocusCalls, 1);
+      assert.equal(value.state.confirmDomClicks, 0, `${runner.name}: the invalidated old continuation must not click`);
+      assert.equal(value.state.confirmClicks, 0);
+    }
+
+    for (const [focusLabel, focusTarget] of [
+      ["Mark as unread", (value) => value.nodes.menuMarkRead],
+      ["Rename", (value) => value.nodes.menuRename],
+      ["menu root", (value) => value.nodes.menu],
+      ["document body", (value) => value.document.body],
+      ["rename textbox", (value) => value.nodes.renameTextbox]
+    ]) {
+      const value = createFixture({ realPuaMenu: true, ignoreDeleteFocus: true });
+      const api = await runner.create(value);
+      const shortcut = await api.run(expectedPayload());
+      assert.equal(shortcut.needsTrustedKeySequence, true);
+      value.document.activeElement = focusTarget(value);
+      const preflight = await api.run(expectedPayload({ trustedKeySequencePreflight: true }));
+      assert.equal(preflight.ok, false, `${runner.name}: ${focusLabel} focus must fail before trusted D`);
+      assert.match(preflight.reason, /could not establish exact menu focus|lost its owned menu focus/i, `${runner.name}: ${focusLabel}`);
+      assert.equal(preflight.needsTrustedKeySequence, undefined);
+      assert.equal(value.state.deleteFocusCalls, 1, `${runner.name}: ${focusLabel} must survive the failed exact-focus attempt`);
+      assert.equal(value.state.deleteClicks + value.state.confirmClicks, 0);
+    }
+
+    {
+      const value = createFixture({ realPuaMenu: true });
+      const api = await runner.create(value);
+      const shortcut = await api.run(expectedPayload());
+      assert.equal(shortcut.needsTrustedKeySequence, true);
+      value.state.confirmationOpen = true;
+      const preflight = await api.run(expectedPayload({ trustedKeySequencePreflight: true }));
+      assert.equal(preflight.ok, false, `${runner.name}: a confirmation that appears before D must invalidate the shortcut lease`);
+      assert.match(preflight.reason, /confirmation appeared before trusted Delete D activation/i);
+      assert.equal(preflight.needsTrustedKeySequence, undefined);
+      assert.equal(value.state.confirmClicks, 0);
+    }
+
+    for (const [eventLabel, eventFor] of [
+      ["missing event", null],
+      ["untrusted event", () => ({ isTrusted: false })],
+      ["modified event", () => ({ ctrlKey: true })],
+      ["wrong event path", (value) => ({
+        target: value.nodes.menuMarkRead,
+        composedPath: () => [value.nodes.menuMarkRead, value.nodes.menu, value.document.body, value.document]
+      })]
+    ]) {
+      const value = createFixture({ realPuaMenu: true });
+      const api = await runner.create(value);
+      assert.equal((await api.run(expectedPayload())).needsTrustedKeySequence, true);
+      assert.equal((await api.run(expectedPayload({ trustedKeySequencePreflight: true }))).needsTrustedKeySequence, true);
+      if (eventFor) value.dispatchTrustedDeleteD(eventFor(value));
+      value.setMenuOpen(false);
+      value.state.confirmationOpen = true;
+      value.document.activeElement = value.nodes.confirmButton;
+      const result = await api.run(expectedPayload({ trustedKeySequenceRetried: true }));
+      assert.equal(result.ok, false, `${runner.name}: ${eventLabel} must not release the frozen D lease`);
+      assert.match(result.reason, /keydown was not observed/i, `${runner.name}: ${eventLabel}`);
+      assert.equal(value.state.confirmDomClicks, 0);
+      assert.equal(value.state.confirmClicks, 0);
+    }
+
+    for (const [outcomeLabel, keepMenuOpen] of [
+      ["menu remains open", true],
+      ["menu closes without confirmation", false]
+    ]) {
+      const value = createFixture({ realPuaMenu: true });
+      const api = await runner.create(value);
+      const shortcut = await api.run(expectedPayload());
+      assert.equal(shortcut.needsTrustedKeySequence, true);
+      const preflight = await api.run(expectedPayload({ trustedKeySequencePreflight: true }));
+      assert.equal(preflight.needsTrustedKeySequence, true);
+      value.dispatchTrustedDeleteD();
+      value.setMenuOpen(keepMenuOpen);
+      value.state.confirmationOpen = false;
+      value.document.activeElement = keepMenuOpen ? value.nodes.deleteItem : value.document.body;
+      const unresolved = await api.run(expectedPayload({ trustedKeySequenceRetried: true }));
+      assert.equal(unresolved.ok, false, `${runner.name}: ${outcomeLabel} after D is not success`);
+      assert.equal(unresolved.needsTrustedKeySequence, undefined, `${runner.name}: ${outcomeLabel} must not request D again`);
+      assert.equal(unresolved.needsTrustedMenuClick, undefined, `${runner.name}: ${outcomeLabel} must not switch to another mutation path`);
+      assert.equal(value.state.deleteClicks + value.state.confirmClicks, 0);
+      const duplicate = await api.run(expectedPayload({ trustedKeySequenceRetried: true }));
+      assert.equal(duplicate.ok, false, `${runner.name}: ${outcomeLabel} consumes the continuation lease`);
+      assert.equal(duplicate.needsTrustedKeySequence, undefined);
     }
 
     {
@@ -582,7 +1063,7 @@ function expectedPayload(extra = {}) {
     }
 
     for (const deleteText of ["Delete chat", "删除", "删除聊天"]) {
-      const value = createFixture({ deleteText, confirmText: deleteText, confirmAriaLabel: deleteText });
+      const value = createFixture({ deleteText });
       const result = await (await runner.create(value)).run(expectedPayload());
       assert.equal(result.ok, true, `${runner.name}: exact localized Claude action must remain usable: ${deleteText}`);
       assert.equal(value.state.deleteClicks, 1);
@@ -599,9 +1080,43 @@ function expectedPayload(extra = {}) {
         confirmAriaLabel: "Delete"
       });
       const result = await (await runner.create(value)).run(expectedPayload());
-      assert.equal(result.ok, true, `${runner.name}: Claude's observed Delete D shortcut label must remain usable`);
-      assert.equal(value.state.deleteClicks, 1);
-      assert.equal(value.state.confirmClicks, 1);
+      assert.equal(result.ok, false, `${runner.name}: Claude's observed Delete D shortcut label must use its keyboard path`);
+      assert.equal(result.needsTrustedKeySequence, true);
+      assert.equal(result.trustedKeySequence.kind, "claude-menu-delete-shortcut");
+      assert.equal(value.state.deleteClicks, 0);
+      assert.equal(value.state.confirmClicks, 0);
+    }
+
+    for (const maliciousLabel of [
+      "\uE101 Delete project D",
+      "\uE101 Deleted D"
+    ]) {
+      const value = createFixture({
+        realPuaMenu: true,
+        deleteText: maliciousLabel,
+        deleteInnerText: maliciousLabel,
+        deleteTextContent: maliciousLabel,
+        deleteAriaLabel: null
+      });
+      const result = await (await runner.create(value)).run(expectedPayload());
+      assert.equal(result.ok, false, `${runner.name}: PUA lookalike ${JSON.stringify(maliciousLabel)} must not authorize D`);
+      assert.equal(result.needsTrustedKeySequence, undefined);
+      assert.equal(result.trustedKeySequence, undefined);
+      assert.equal(value.state.deleteFocusCalls, 0);
+      assert.equal(value.state.deleteClicks + value.state.confirmClicks, 0);
+    }
+
+    for (const conflictingTextContent of ["\uE101 Deleted", "\uE101 DELETED"]) {
+      const value = createFixture({ realPuaMenu: true, deleteTextContent: conflictingTextContent });
+      const result = await (await runner.create(value)).run(expectedPayload());
+      assert.equal(
+        result.ok,
+        false,
+        `${runner.name}: an exact raw Delete D value must not override conflicting ${JSON.stringify(conflictingTextContent)}`
+      );
+      assert.equal(result.needsTrustedKeySequence, undefined);
+      assert.equal(value.state.deleteFocusCalls, 0);
+      assert.equal(value.state.deleteClicks + value.state.confirmClicks, 0);
     }
 
     {
@@ -630,12 +1145,17 @@ function expectedPayload(extra = {}) {
     }
 
     {
-      const value = createFixture({ existingMenu: true, unrelatedMenu: false });
-      const result = await (await runner.create(value)).run(expectedPayload());
+      const value = createFixture({ existingMenu: true, unrelatedMenu: false, toggleTrigger: true });
+      const api = await runner.create(value);
+      const result = await api.run(expectedPayload());
       assert.equal(result.ok, false);
       assert.equal(value.state.deleteClicks, 0, `${runner.name}: an already-open menu must not be adopted as this attempt's menu`);
       assert.equal(result.needsTrustedMenuClick, true, `${runner.name}: a failed synthetic title trigger may lease only that trigger`);
       assert.equal(result.trustedMenuClick.kind, "conversation-menu-trigger");
+      value.setMenuOpen(true);
+      const retried = await api.run(expectedPayload({ trustedMenuTriggerRetried: true }));
+      assert.equal(retried.ok, false, `${runner.name}: a trusted title-trigger retry must not adopt an already-open verified baseline menu`);
+      assert.equal(value.state.deleteClicks, 0, `${runner.name}: an existing verified menu must remain excluded after the trusted retry`);
     }
 
     {
@@ -698,6 +1218,30 @@ function expectedPayload(extra = {}) {
       assert.equal(value.state.confirmClicks, 0, `${runner.name}: a non-chat confirmation must not be owned or clicked`);
     }
 
+    for (const [structureLabel, options] of [
+      ["missing Delete chat heading", { omitConfirmHeading: true }],
+      ["missing exact prompt", { confirmationText: "Delete chat This cannot be undone. Cancel Delete" }],
+      ["missing exact Cancel action", { omitCancelButton: true }],
+      ["duplicate exact Delete action", { duplicateConfirmButton: true }]
+    ]) {
+      const value = createFixture({ realPuaMenu: true, ...options });
+      const api = await runner.create(value);
+      const shortcut = await api.run(expectedPayload());
+      assert.equal(shortcut.needsTrustedKeySequence, true);
+      const preflight = await api.run(expectedPayload({ trustedKeySequencePreflight: true }));
+      assert.equal(preflight.needsTrustedKeySequence, true);
+      value.dispatchTrustedDeleteD();
+      value.setMenuOpen(false);
+      value.state.confirmationOpen = true;
+      value.document.activeElement = value.nodes.confirmButton;
+      const result = await api.run(expectedPayload({ trustedKeySequenceRetried: true }));
+      assert.equal(result.ok, false, `${runner.name}: ${structureLabel} must not be treated as Claude's final confirmation`);
+      assert.equal(result.needsTrustedClick, undefined, `${runner.name}: malformed confirmation must not fall back to trusted coordinates`);
+      assert.equal(value.state.confirmFocusCalls, 0);
+      assert.equal(value.state.confirmDomClicks, 0);
+      assert.equal(value.state.confirmClicks, 0);
+    }
+
     {
       const value = createFixture({ ignoreTrigger: true, ignoreDelete: true });
       const api = await runner.create(value);
@@ -706,16 +1250,17 @@ function expectedPayload(extra = {}) {
       assert.equal(triggerFailure.needsTrustedMenuClick, true, `${runner.name}: ignored title activation must lease one trusted trigger click`);
       assert.equal(triggerFailure.trustedMenuClick.kind, "conversation-menu-trigger");
 
-      value.state.menuOpen = true;
+      value.setMenuOpen(true);
       const deleteFailure = await api.run(expectedPayload({ trustedMenuTriggerRetried: true }));
       assert.equal(deleteFailure.ok, false);
-      assert.equal(deleteFailure.needsTrustedMenuClick, true, `${runner.name}: the first-phase retry may advance to one Delete-item lease`);
+      assert.equal(deleteFailure.needsTrustedMenuClick, true, `${runner.name}: the first-phase retry may advance to one Delete-item lease: ${JSON.stringify(deleteFailure)}`);
       assert.equal(deleteFailure.trustedMenuClick.kind, "delete-menu-item");
       assert.equal(value.state.triggerClicks, 1, `${runner.name}: title trigger synthetic activation must not repeat on retry`);
       assert.equal(value.state.deleteClicks, 1, `${runner.name}: Delete synthetic activation occurs once after the trusted title click`);
 
-      value.state.menuOpen = false;
+      value.setMenuOpen(false);
       value.state.confirmationOpen = true;
+      value.document.activeElement = value.nodes.confirmButton;
       const completed = await api.run(expectedPayload({ trustedMenuTriggerRetried: true, trustedMenuClickRetried: true }));
       assert.equal(completed.ok, true, `${runner.name}: the owned second-phase confirmation may finish once`);
       assert.equal(value.state.confirmClicks, 1);
@@ -727,10 +1272,56 @@ function expectedPayload(extra = {}) {
     }
 
     {
+      const value = createFixture({ realPuaMenu: true, ignoreTrigger: true });
+      const api = await runner.create(value);
+      let insertedResult = null;
+      value.state.onWaitStart = async () => {
+        value.options.ignoreTrigger = false;
+        insertedResult = await api.run(expectedPayload({ deleteAttemptId: "attempt-2" }));
+      };
+      const replacedFirstClick = await api.run(expectedPayload());
+      assert.equal(insertedResult?.needsTrustedKeySequence, true, `${runner.name}: the newer same-route attempt must own the menu it opened`);
+      assert.equal(replacedFirstClick.ok, false, `${runner.name}: the superseded first-click attempt must fail closed`);
+      assert.match(replacedFirstClick.reason, /lease was replaced/i);
+      assert.equal(replacedFirstClick.needsTrustedKeySequence, undefined, `${runner.name}: the old attempt must not adopt the new attempt's menu`);
+      assert.equal(value.state.triggerClicks, 2);
+      assert.equal(value.state.deleteClicks + value.state.confirmClicks, 0);
+
+      const insertedPreflight = await api.run(expectedPayload({
+        deleteAttemptId: "attempt-2",
+        trustedKeySequencePreflight: true
+      }));
+      assert.equal(insertedPreflight.needsTrustedKeySequence, true, `${runner.name}: old-attempt cleanup must retain the newer shortcut lease`);
+      const cleanup = await api.run(expectedPayload({
+        deleteAttemptId: "attempt-2",
+        trustedKeySequenceRetried: true
+      }));
+      assert.equal(cleanup.ok, false, `${runner.name}: missing trusted D safely consumes the test lease`);
+    }
+
+    {
       const value = createFixture({ ignoreTrigger: true });
       const api = await runner.create(value);
       await api.run(expectedPayload());
-      value.state.menuOpen = true;
+      value.state.onWaitStart = async () => {
+        value.options.ignoreTrigger = false;
+        value.state.suppressNextWaitResult = true;
+        value.state.insertedAttempt = api.run(expectedPayload({ deleteAttemptId: "attempt-2" }));
+        await value.state.insertedAttempt;
+      };
+      const replacedWhileWaiting = await api.run(expectedPayload({ trustedMenuTriggerRetried: true }));
+      assert.equal(replacedWhileWaiting.ok, false, `${runner.name}: a new same-route attempt must replace the old opening-menu lease`);
+      assert.match(replacedWhileWaiting.reason, /lease was replaced/i);
+      assert.equal(value.state.deleteClicks, 0, `${runner.name}: the old menu continuation must not activate Delete from the new attempt's menu`);
+      assert.equal(value.state.deleteFocusCalls, 0, `${runner.name}: the old menu continuation must not lease Delete D from the new attempt's menu`);
+      assert.equal(replacedWhileWaiting.needsTrustedKeySequence, undefined);
+    }
+
+    {
+      const value = createFixture({ ignoreTrigger: true });
+      const api = await runner.create(value);
+      await api.run(expectedPayload());
+      value.setMenuOpen(true);
       const wrongAttempt = await api.run(expectedPayload({ deleteAttemptId: "attempt-2", trustedMenuTriggerRetried: true }));
       assert.equal(wrongAttempt.ok, false, `${runner.name}: a trusted lease cannot cross attempt ids`);
       assert.equal(value.state.deleteClicks, 0);
@@ -740,7 +1331,7 @@ function expectedPayload(extra = {}) {
       const value = createFixture({ ignoreTrigger: true });
       const api = await runner.create(value);
       await api.run(expectedPayload());
-      value.state.menuOpen = true;
+      value.setMenuOpen(true);
       value.nodes.trigger.isConnected = false;
       value.nodes.replacementTrigger.isConnected = true;
       value.state.replacementTriggerActive = true;
@@ -754,7 +1345,7 @@ function expectedPayload(extra = {}) {
       const value = createFixture({ ignoreTrigger: true });
       const api = await runner.create(value);
       await api.run(expectedPayload());
-      value.state.menuOpen = true;
+      value.setMenuOpen(true);
       value.location.href = "https://claude.ai/chat/thread-2";
       const wrongRoute = await api.run({
         deleteAttemptId: "attempt-1",

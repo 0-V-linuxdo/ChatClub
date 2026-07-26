@@ -9,6 +9,11 @@ export function installSecureFrameRpc(options = {}) {
   if (!runtimes?.install || !version || !source || !bridgeDocumentId || !secureFrameToken || typeof dispatch !== "function") {
     throw new TypeError("Secure Frame RPC installation is incomplete");
   }
+  const extensionRuntime = extensionApi?.runtime || null;
+  const existing = runtimes.registration?.("frame-rpc") || null;
+  if (existing && existing.api?.extensionRuntime !== extensionRuntime) {
+    runtimes.invalidate?.("frame-rpc", "extension runtime context changed");
+  }
   return runtimes.install("frame-rpc", version, () => {
     const listener = (message, sender, sendResponse) => {
       if (
@@ -32,7 +37,7 @@ export function installSecureFrameRpc(options = {}) {
       return true;
     };
     return {
-      api: Object.freeze({ listener, bridgeDocumentId }),
+      api: Object.freeze({ listener, bridgeDocumentId, extensionRuntime }),
       activate() {
         extensionApi?.runtime?.onMessage?.addListener?.(listener);
       },

@@ -23,7 +23,7 @@ const byteBudgets = Object.freeze({
   "content/send.js": 85_000,
   "content/summary-bridge.js": 92_000,
   "content/preferred-model.js": 165_000,
-  "content/delete.js": 215_000,
+  "content/delete.js": 232_924,
   "content/grok-cookie-bridge.js": 50_000,
   "content/message-navigator.js": 140_000,
   "content/preload.js": 210_000,

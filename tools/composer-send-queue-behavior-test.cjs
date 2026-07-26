@@ -157,7 +157,9 @@ function preferredModelHarness(frame, initialReadiness, { failurePolicy = "send-
     },
     waitForPreferredModelSubmissionBarrier(target, sendId) {
       barrierWaits.push({ target, sendId });
-      return sendId === armed[0]?.sendId
+      const current = readiness.get(target) || {};
+      const needsNavigationBarrier = current.appId === "Gemini" || current.appId === "NotionAI";
+      return needsNavigationBarrier && sendId === armed[0]?.sendId
         ? firstBarrier.promise
         : Promise.resolve({ state: "complete", sendId });
     }
@@ -186,6 +188,7 @@ function controllerDependencies({
   appByFrame,
   preferredModel,
   framePort,
+  frameSendPrepareTimeoutMs,
   savePromptSendHistory,
   toastCalls
 }) {
@@ -205,6 +208,7 @@ function controllerDependencies({
     openPromptLibrary() {},
     optimizePrompt() {},
     recordFunctionalAnomaly() {},
+    ...(frameSendPrepareTimeoutMs === undefined ? {} : { frameSendPrepareTimeoutMs }),
     savePromptSendHistory,
     toast: (message, kind) => toastCalls.push({ message, kind }),
     createFrameToast: frameToastStub
@@ -230,10 +234,12 @@ function controllerDependencies({
       documentId: "",
       bridgeVersion: ""
     });
+    const ensureCalls = [];
     const requestCalls = [];
     const framePort = {
-      async ensure() {
-        throw new Error("ready test frames must not need a second runtime ensure");
+      async ensure(target, options) {
+        ensureCalls.push({ target, options });
+        return { documentId: "document-1" };
       },
       async request(target, command, payload, options) {
         requestCalls.push({ target, command, payload, options });
@@ -311,6 +317,11 @@ function controllerDependencies({
     assert.equal(requestCalls[0].payload.images[0].name, "first.png", "S1 must use its immutable image snapshot");
     assert.equal(requestCalls[0].payload.images[0].dataUrl, "data:image/png;base64,QUFBQQ==");
     assert.equal(requestCalls[0].options.expectedDocumentId, "document-1");
+    assert.equal(requestCalls[0].options.skipEnsure, true, "delivery must not perform a hidden second ensure");
+    assert.deepEqual(ensureCalls[0], {
+      target: frame,
+      options: { features: ["send"], force: true }
+    }, "S1 must explicitly prepare the send capability before delivery");
     assert.equal(requestCalls[0].payload.deadlineAt, 1_060_000, "S1 image timeout must begin at actual dequeue");
     await flush();
     assert.equal(requestCalls.length, 1, "same-frame S2 must not send before the S1 navigation barrier");
@@ -320,6 +331,10 @@ function controllerDependencies({
     await waitUntil(() => requestCalls.length === 2, "S2 did not run after the S1 barrier");
     assert.equal(requestCalls[1].payload.text, "S2");
     assert.equal(requestCalls[1].payload.deadlineAt, 2_012_000, "S2 timeout must be recomputed after its queue wait");
+    assert.equal(requestCalls[1].options.skipEnsure, true);
+    assert.equal(ensureCalls.length, 2, "each queued job must run its own explicit preparation");
+    assert.ok(ensureCalls.every((call) => call.target === frame));
+    assert.ok(ensureCalls.every((call) => call.options.force === true));
     Date.now = realDateNow;
     await Promise.all([s1, s2]);
     assert.equal(state.promptText, "S3 still editing", "async completion must not clear or restore an in-progress S3 draft");
@@ -389,6 +404,216 @@ function controllerDependencies({
     assert.equal(model.armed.length, 1, "the barrier must arm only after exact identity preparation");
     assert.equal(requestCalls.length, 1, "identity preparation must not replay the mutating send");
     assert.equal(requestCalls[0].options.expectedDocumentId, "document-force");
+    assert.equal(requestCalls[0].options.skipEnsure, true);
+  }
+
+  {
+    const frame = { isConnected: true };
+    const app = { id: "ChatGPT", name: "ChatGPT" };
+    const state = baseState({ promptText: "wait for fresh preparation" });
+    const documentId = "document-fresh-preparation";
+    const model = preferredModelHarness(frame, {
+      state: "unconfigured",
+      appId: "ChatGPT",
+      frameKey: "",
+      runId: "",
+      documentId,
+      bridgeVersion: "bridge-fresh-preparation"
+    });
+    const preparation = deferred();
+    const ensureCalls = [];
+    const requestCalls = [];
+    const controller = createComposerController(controllerDependencies({
+      state,
+      frames: [frame],
+      appByFrame: new Map([[frame, app]]),
+      preferredModel: model.port,
+      framePort: {
+        ensure(target, options) {
+          ensureCalls.push({ target, options });
+          return preparation.promise;
+        },
+        async request(target, command, payload, options) {
+          requestCalls.push({ target, command, payload, options });
+          return { sent: true, deliveryState: "sent" };
+        }
+      },
+      savePromptSendHistory: async (next) => next,
+      toastCalls: []
+    }));
+    const input = fakeInput(state.promptText);
+    currentInput = input;
+    const submission = controller.submit(input);
+    await waitUntil(() => ensureCalls.length === 1, "fresh frame preparation did not start");
+    assert.equal(requestCalls.length, 0, "a fresh frame must not receive a mutating request before preparation resolves");
+    assert.equal(state.promptQueuedTargetCount, 1, "the queue badge must include a job blocked in preparation");
+    assert.deepEqual(ensureCalls[0], {
+      target: frame,
+      options: { features: ["send"], force: true }
+    });
+    preparation.resolve({ documentId });
+    const result = await submission;
+    assert.equal(result[0].status, "fulfilled");
+    assert.equal(requestCalls.length, 1);
+    assert.equal(requestCalls[0].options.expectedDocumentId, documentId);
+    assert.equal(requestCalls[0].options.skipEnsure, true);
+    assert.equal(state.promptQueuedTargetCount, 0);
+  }
+
+  {
+    const frame = { isConnected: true };
+    const app = { id: "ChatGPT", name: "ChatGPT" };
+    const state = baseState({ promptText: "document changes during preparation" });
+    const model = preferredModelHarness(frame, {
+      state: "unconfigured",
+      appId: "ChatGPT",
+      frameKey: "",
+      runId: "",
+      documentId: "document-before-preparation",
+      bridgeVersion: "bridge-document-change"
+    });
+    const ensureCalls = [];
+    const requestCalls = [];
+    const controller = createComposerController(controllerDependencies({
+      state,
+      frames: [frame],
+      appByFrame: new Map([[frame, app]]),
+      preferredModel: model.port,
+      framePort: {
+        async ensure(target, options) {
+          ensureCalls.push({ target, options });
+          if (ensureCalls.length === 1) {
+            model.setReadiness(frame, {
+              state: "unconfigured",
+              appId: "ChatGPT",
+              frameKey: "",
+              runId: "",
+              documentId: "document-after-preparation",
+              bridgeVersion: "bridge-document-change"
+            });
+            return { documentId: "document-before-preparation" };
+          }
+          return { documentId: "document-after-preparation" };
+        },
+        async request(target, command, payload, options) {
+          requestCalls.push({ target, command, payload, options });
+          return { sent: true, deliveryState: "sent" };
+        }
+      },
+      savePromptSendHistory: async (next) => next,
+      toastCalls: []
+    }));
+    const input = fakeInput(state.promptText);
+    currentInput = input;
+    const result = await controller.submit(input);
+    assert.equal(result[0].status, "fulfilled");
+    assert.equal(ensureCalls.length, 2, "a document change during preparation must stabilize before delivery");
+    assert.ok(ensureCalls.every((call) => call.options.force === true));
+    assert.equal(requestCalls.length, 1, "the old document must receive no mutating request");
+    assert.equal(requestCalls[0].options.expectedDocumentId, "document-after-preparation");
+    assert.equal(requestCalls[0].options.skipEnsure, true);
+  }
+
+  {
+    const frame = { isConnected: true };
+    const app = { id: "ChatGPT", name: "ChatGPT" };
+    const state = baseState({ promptText: "retry explicit preparation failure" });
+    const documentId = "document-after-preparation-retry";
+    const model = preferredModelHarness(frame, {
+      state: "unconfigured",
+      appId: "ChatGPT",
+      frameKey: "",
+      runId: "",
+      documentId,
+      bridgeVersion: "bridge-preparation-retry"
+    });
+    const ensureCalls = [];
+    const invalidateCalls = [];
+    const requestCalls = [];
+    const controller = createComposerController(controllerDependencies({
+      state,
+      frames: [frame],
+      appByFrame: new Map([[frame, app]]),
+      preferredModel: model.port,
+      framePort: {
+        async ensure(target, options) {
+          ensureCalls.push({ target, options });
+          if (ensureCalls.length === 1) {
+            throw Object.assign(new Error("content runtime was not registered"), {
+              code: "INJECTION_FAILED",
+              delivered: false
+            });
+          }
+          return { documentId };
+        },
+        invalidate(...args) {
+          invalidateCalls.push(args);
+        },
+        async request(target, command, payload, options) {
+          requestCalls.push({ target, command, payload, options });
+          return { sent: true, deliveryState: "sent" };
+        }
+      },
+      savePromptSendHistory: async (next) => next,
+      toastCalls: []
+    }));
+    const input = fakeInput(state.promptText);
+    currentInput = input;
+    const result = await controller.submit(input);
+    assert.equal(result[0].status, "fulfilled");
+    assert.equal(ensureCalls.length, 2, "an explicit pre-delivery preparation failure may retry once");
+    assert.deepEqual(invalidateCalls, [[frame, "sendText:INJECTION_FAILED", {
+      preserveDocument: true,
+      clearCapabilities: true
+    }]]);
+    assert.equal(requestCalls.length, 1, "preparation retry must still lead to at most one mutating request");
+    assert.equal(requestCalls[0].options.expectedDocumentId, documentId);
+    assert.equal(requestCalls[0].options.skipEnsure, true);
+  }
+
+  {
+    const frame = { isConnected: true };
+    const app = { id: "ChatGPT", name: "ChatGPT" };
+    const state = baseState({ promptText: "bounded preparation timeout" });
+    const model = preferredModelHarness(frame, {
+      state: "unconfigured",
+      appId: "ChatGPT",
+      frameKey: "",
+      runId: "",
+      documentId: "document-preparation-timeout",
+      bridgeVersion: "bridge-preparation-timeout"
+    });
+    const ensureCalls = [];
+    const requestCalls = [];
+    const controller = createComposerController(controllerDependencies({
+      state,
+      frames: [frame],
+      appByFrame: new Map([[frame, app]]),
+      preferredModel: model.port,
+      framePort: {
+        ensure(target, options) {
+          ensureCalls.push({ target, options });
+          return new Promise(() => {});
+        },
+        async request(...args) {
+          requestCalls.push(args);
+          return { sent: true, deliveryState: "sent" };
+        }
+      },
+      frameSendPrepareTimeoutMs: 250,
+      savePromptSendHistory: async (next) => next,
+      toastCalls: []
+    }));
+    const input = fakeInput(state.promptText);
+    currentInput = input;
+    const result = await controller.submit(input);
+    assert.equal(result[0].status, "rejected");
+    assert.equal(result[0].reason.code, "FRAME_SEND_PREPARE_TIMEOUT");
+    assert.equal(ensureCalls.length, 1);
+    assert.deepEqual(ensureCalls[0].options, { features: ["send"], force: true });
+    assert.equal(requestCalls.length, 0, "timed-out preparation must never reach the mutating request");
+    assert.equal(state.promptQueuedTargetCount, 0, "the queue badge must clear after a bounded preparation failure");
+    assert.equal(state.promptSendingTargetCount, 0);
   }
 
   for (const deliveryCase of [
@@ -450,14 +675,17 @@ function controllerDependencies({
     const frame = { isConnected: true };
     const app = { id: "ChatGPT", name: "ChatGPT" };
     const state = baseState({ promptText: `${deliveryCase.label} S1` });
+    const documentId = `document-${deliveryCase.label}`;
     const model = preferredModelHarness(frame, {
       state: "unconfigured",
       appId: "ChatGPT",
       frameKey: "",
       runId: "",
-      documentId: `document-${deliveryCase.label}`,
+      documentId,
       bridgeVersion: "bridge-delivery"
     });
+    const ensureCalls = [];
+    const invalidateCalls = [];
     const requestCalls = [];
     const controller = createComposerController(controllerDependencies({
       state,
@@ -465,9 +693,15 @@ function controllerDependencies({
       appByFrame: new Map([[frame, app]]),
       preferredModel: model.port,
       framePort: {
-        ensure: async () => { throw new Error("registered delivery test must not ensure"); },
-        request: async (_target, _command, payload) => {
-          requestCalls.push(payload.text);
+        async ensure(target, options) {
+          ensureCalls.push({ target, options });
+          return { documentId };
+        },
+        invalidate(...args) {
+          invalidateCalls.push(args);
+        },
+        request: async (target, command, payload, options) => {
+          requestCalls.push({ target, command, payload, options });
           if (requestCalls.length === 1 && deliveryCase.firstError) {
             throw Object.assign(new Error(`${deliveryCase.label} transport failure`), deliveryCase.firstError);
           }
@@ -493,6 +727,31 @@ function controllerDependencies({
       deliveryCase.expectedRequests,
       `${deliveryCase.label}: the lane must continue only when delivery is known not to have happened`
     );
+    assert.deepEqual(
+      requestCalls.map((call) => call.payload.text),
+      deliveryCase.expectedRequests === 2
+        ? [`${deliveryCase.label} S1`, `${deliveryCase.label} S2`]
+        : [`${deliveryCase.label} S1`],
+      `${deliveryCase.label}: S1 must never be replayed after the mutating request begins`
+    );
+    assert.ok(
+      requestCalls.every((call) => call.options.skipEnsure === true),
+      `${deliveryCase.label}: all mutating requests must skip hidden preparation`
+    );
+    assert.ok(
+      requestCalls.every((call) => call.options.expectedDocumentId === documentId),
+      `${deliveryCase.label}: delivery must remain bound to the prepared document`
+    );
+    assert.equal(ensureCalls.length, deliveryCase.expectedRequests);
+    assert.ok(ensureCalls.every((call) => call.target === frame));
+    assert.ok(ensureCalls.every((call) => call.options.force === true));
+    if (deliveryCase.label === "stale before delivery") {
+      assert.equal(invalidateCalls.length, 1, "a stale pre-delivery S1 must invalidate before S2 prepares");
+      assert.deepEqual(invalidateCalls[0], [frame, "sendText:STALE_DOCUMENT", {
+        preserveDocument: false,
+        clearCapabilities: false
+      }]);
+    }
     assert.equal(state.promptQueuedTargetCount, 0);
   }
 

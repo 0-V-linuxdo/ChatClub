@@ -13,16 +13,33 @@ const root = path.resolve(__dirname, "..");
   const { installSecureFrameRpc } = await import(
     pathToFileURL(path.join(root, "content-src/shared/secure-frame-rpc.js")).href
   );
-  const listeners = new Set();
-  const extensionApi = {
-    runtime: {
-      id: "chatclub-test",
-      onMessage: {
-        addListener: (listener) => listeners.add(listener),
-        removeListener: (listener) => listeners.delete(listener)
+  const createExtensionApi = (label) => {
+    const listeners = new Set();
+    const calls = { add: 0, remove: 0 };
+    return {
+      label,
+      listeners,
+      calls,
+      api: {
+        runtime: {
+          id: "chatclub-test",
+          onMessage: {
+            addListener(listener) {
+              calls.add += 1;
+              listeners.add(listener);
+            },
+            removeListener(listener) {
+              calls.remove += 1;
+              listeners.delete(listener);
+            }
+          }
+        }
       }
-    }
+    };
   };
+  const runtimeA = createExtensionApi("A");
+  const runtimeB = createExtensionApi("B");
+  let extensionApi = runtimeA.api;
   const runtimes = runtimeRegistry({});
   const install = (version, dispatch = async (action, data) => ({ action, data })) => installSecureFrameRpc({
     extensionApi,
@@ -34,12 +51,29 @@ const root = path.resolve(__dirname, "..");
     dispatch
   });
   const first = install("1");
-  assert.equal(listeners.size, 1);
+  assert.equal(runtimeA.listeners.size, 1);
+  assert.equal(runtimeA.calls.add, 1);
   assert.equal(install("1"), first);
-  assert.equal(listeners.size, 1, "same-version injection must keep one listener");
+  assert.equal(runtimeA.listeners.size, 1, "same-version injection must keep one listener");
+  assert.equal(runtimeA.calls.add, 1, "same-runtime reinjection must not add another listener");
+
+  extensionApi = runtimeB.api;
+  const rebound = install("1");
+  assert.notEqual(rebound, first, "the same content generation must replace an RPC owned by an obsolete extension runtime");
+  assert.equal(runtimeA.listeners.size, 0, "runtime A must release its obsolete listener");
+  assert.equal(runtimeA.calls.remove, 1, "runtime A listener teardown must run exactly once");
+  assert.equal(runtimeB.listeners.size, 1, "runtime B must receive exactly one listener");
+  assert.equal(runtimeB.calls.add, 1, "runtime B listener activation must run exactly once");
+  assert.equal(runtimes.registration("frame-rpc").api.extensionRuntime, runtimeB.api.runtime);
+  assert.equal(install("1"), rebound, "same-version reinjection on runtime B must be idempotent");
+  assert.equal(runtimeB.listeners.size, 1);
+  assert.equal(runtimeB.calls.add, 1);
+
   install("2");
-  assert.equal(listeners.size, 1, "version replacement must remove the prior listener");
-  const listener = [...listeners][0];
+  assert.equal(runtimeB.listeners.size, 1, "version replacement must remove the prior listener");
+  assert.equal(runtimeB.calls.remove, 1, "version replacement must dispose the runtime B predecessor once");
+  assert.equal(runtimeB.calls.add, 2, "version replacement must activate one successor listener");
+  const listener = [...runtimeB.listeners][0];
   assert.equal(listener({ source: "wrong" }, { id: "chatclub-test" }, () => {}), false);
   let response;
   assert.equal(listener({
@@ -61,7 +95,7 @@ const root = path.resolve(__dirname, "..");
     throw error;
   });
   response = null;
-  [...listeners][0]({
+  [...runtimeB.listeners][0]({
     source: "secure-source",
     type: "request",
     bridgeDocumentId: "document-1",
@@ -80,7 +114,8 @@ const root = path.resolve(__dirname, "..");
     delivered: false
   });
   runtimes.dispose();
-  assert.equal(listeners.size, 0);
+  assert.equal(runtimeA.listeners.size, 0);
+  assert.equal(runtimeB.listeners.size, 0);
   console.log("secure frame RPC installation: ok");
 })().catch((error) => {
   console.error(error?.stack || error);

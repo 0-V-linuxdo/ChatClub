@@ -1,44 +1,44 @@
 {
   "schemaVersion": 4,
-  "appVersion": "「2026-07-26｜09:27:52」",
-  "manifestVersion": "2026.7.26.8",
+  "appVersion": "「2026-07-26｜21:05:46」",
+  "manifestVersion": "2026.7.26.13",
   "payloads": {
     "chromium": {
-      "appVersion": "「2026-07-26｜09:27:52」",
-      "sha256": "e253af64aff74bf709a658b47a1f51b1020c90c7ba577a8c5783a1b730acef1a"
+      "appVersion": "「2026-07-26｜21:05:46」",
+      "sha256": "05d8869562da84bfc7e2a1a64780352b7b4bec0d6fc1b7b1e552691a285de892"
     },
     "firefox": {
-      "appVersion": "「2026-07-26｜09:27:52」",
-      "sha256": "7b1a022fffe99655b7f3a8b4d1566be352fbd4e99c7d78911405f3826cf855d3"
+      "appVersion": "「2026-07-26｜21:05:46」",
+      "sha256": "df53351acc1a245c7d3215571986f0b09816ae461f4b8afdcd22a85d00b6dfa0"
     }
   },
   "contentRuntime": {
     "sourceSchemaVersion": 1,
-    "sourceSha256": "6fdf5880830e8789e55bbfdf3fbdbb7a0814fa54dba7030ad30c07382329c9ef",
+    "sourceSha256": "4b25a56bd08c2508af23fc884a7595f95663bd227768e9548427f9046db01267",
     "sourceFileCount": 71,
     "buildRecipeSchemaVersion": 1,
     "buildRecipeVersion": "1+recipe.706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180",
     "buildRecipeSha256": "706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180",
     "buildRecipeFileCount": 2,
     "protocolVersion": "2026.07.16.2",
-    "implementationSha256": "8952f543167c54af2198cb194be57fe90778f0a8bcceaeba5bdca4664b61bdf6",
-    "implementationVersion": "2026.07.16.2+implementation.8952f543167c54af2198cb194be57fe90778f0a8bcceaeba5bdca4664b61bdf6",
+    "implementationSha256": "719d8f56f36ec4f38931fc8156ef7fef9f04aae0b645871786954dfdf241ba64",
+    "implementationVersion": "2026.07.16.2+implementation.719d8f56f36ec4f38931fc8156ef7fef9f04aae0b645871786954dfdf241ba64",
     "bundles": {
       "content/content.js": {
         "entryPath": "content-src/content.js",
-        "sourceSha256": "4a286ae9ddbc708ac0c01fbd778dd575ea30a6ff370d7d1a94f7d4253e37e949",
+        "sourceSha256": "03f113f00e9e23e5b4080fb8caab3ce2d5dcce9eb6a7f5587268da29f7a78280",
         "sourceFileCount": 15,
         "virtualInputs": [],
-        "implementationSha256": "aa511dd88ea9cb39da90b7bf42cbd58ed208999fd2312ef54d6a2fe5253a2486",
-        "implementationVersion": "2026.07.16.2+bundle.aa511dd88ea9cb39da90b7bf42cbd58ed208999fd2312ef54d6a2fe5253a2486"
+        "implementationSha256": "7cce8583ad9baad5f57d615e2da60191c74cba4c17c1842c190d213efb756696",
+        "implementationVersion": "2026.07.16.2+bundle.7cce8583ad9baad5f57d615e2da60191c74cba4c17c1842c190d213efb756696"
       },
       "content/delete.js": {
         "entryPath": "content-src/content-delete.js",
-        "sourceSha256": "ffdf93ef4b1888dbdc48276cbaff451f5eb488ca28a05e54baff8b43ee4fe2c0",
+        "sourceSha256": "5a2c490948967822f5abcf55ec4d658804d01e5a78a13a356625bb8dca593f20",
         "sourceFileCount": 18,
         "virtualInputs": [],
-        "implementationSha256": "0bc15f9208ac64bfc13d761988feaf89bdcc8fcba1975b602c7f9f5b701ac214",
-        "implementationVersion": "2026.07.16.2+bundle.0bc15f9208ac64bfc13d761988feaf89bdcc8fcba1975b602c7f9f5b701ac214"
+        "implementationSha256": "a69e1f79c374b949a2061d0c6adc34d9c2d5066f88184bf185f4e195a14763fe",
+        "implementationVersion": "2026.07.16.2+bundle.a69e1f79c374b949a2061d0c6adc34d9c2d5066f88184bf185f4e195a14763fe"
       },
       "content/grok-cookie-bridge.js": {
         "entryPath": "content-src/grok-cookie-bridge.js",
@@ -171,8 +171,8 @@
       "sha256": "82db0a686cb1e77d6f94b1ada4b1da9098b7c23fbc2ad820354806e5312b19a7"
     },
     "claude.user.js": {
-      "version": "2026.07.26.3",
-      "sha256": "355f8804148258e3eafbdd8612b55e23621b9d7744aea8c2462f0314d19f3228"
+      "version": "2026.07.26.7",
+      "sha256": "97766211e14d5f70511caf6601fe230ea0f3b50b70c1fdc67697af4d10ba40a3"
     },
     "deepseek.user.js": {
       "version": "2026.07.22.2",
@@ -200,8 +200,8 @@
     }
   },
   "floors": {
-    "appVersion": "「2026-07-26｜09:27:52」",
-    "manifestVersion": "2026.7.26.8",
+    "appVersion": "「2026-07-26｜21:05:46」",
+    "manifestVersion": "2026.7.26.13",
     "summaryConfigVersion": 74,
     "summarySites": {
       "chatgpt": 54,
@@ -217,7 +217,7 @@
     },
     "topicDelete": {
       "chatgpt.user.js": "2026.07.22.2",
-      "claude.user.js": "2026.07.26.3",
+      "claude.user.js": "2026.07.26.7",
       "deepseek.user.js": "2026.07.22.2",
       "gemini.user.js": "2026.07.22.2",
       "grok-mirror.user.js": "2026.07.22.2",

@@ -459,7 +459,23 @@ export function createDeleteRuntimeCapability(deps = {}) {
     if (!topicDeleteUsesCustomUserscript(config) && config?.standaloneUserscript !== true && !String(config?.userscript || "").trim() && !topicDeleteNativeRunner(config, payload)) {
       return deleteResult(false, topicDeleteSiteName(config || {}, payload), "unsupported site or userscript missing");
     }
+    const customMode = topicDeleteUsesCustomUserscript(config);
+    const source = String(config?.userscript || "").trim();
+    const nativeRunner = customMode ? null : topicDeleteNativeRunner(config, payload);
+    const nativeClaudeExecution = Boolean(
+      !customMode
+      && !source
+      && nativeRunner
+      && topicDeleteNativeSiteId(config, payload) === "claude"
+    );
     let value = await runTopicDeleteUserscript(config, payload);
+    if (
+      value?.needsTrustedKeySequence
+      && value?.trustedKeySequence?.kind === "claude-menu-delete-shortcut"
+      && !nativeClaudeExecution
+    ) {
+      return deleteResult(false, topicDeleteSiteName(config, payload), "trusted Claude Delete D shortcut requires the isolated native Claude runner");
+    }
     if (hasDeleteTrustedInstructions(value)) {
       const postRunInvocation = validateTopicDeleteInvocation(data);
       if (!postRunInvocation.ok) {

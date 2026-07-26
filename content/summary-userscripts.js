@@ -68,11 +68,11 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "6fdf5880830e8789e55bbfdf3fbdbb7a0814fa54dba7030ad30c07382329c9ef";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "4b25a56bd08c2508af23fc884a7595f95663bd227768e9548427f9046db01267";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "8952f543167c54af2198cb194be57fe90778f0a8bcceaeba5bdca4664b61bdf6";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.8952f543167c54af2198cb194be57fe90778f0a8bcceaeba5bdca4664b61bdf6";
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "719d8f56f36ec4f38931fc8156ef7fef9f04aae0b645871786954dfdf241ba64";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.719d8f56f36ec4f38931fc8156ef7fef9f04aae0b645871786954dfdf241ba64";
   var CONTENT_RUNTIME_SUMMARY_ISOLATED_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts.js", "entryPath": "content-src/summary-userscripts.js", "sourceSha256": "f5592eec0fd9d9d9d58d4a41f7697ae58e5a6718b367ed5342287dbd090cce15", "implementationSha256": "8b7264a2dcd9bca91fb6a9be2652ec09e9e1a1b186eabf5b2f57315da6064fe7", "implementationVersion": "2026.07.16.2+bundle.8b7264a2dcd9bca91fb6a9be2652ec09e9e1a1b186eabf5b2f57315da6064fe7" });
 
   // shared/content-runtime-identity.js
@@ -2430,7 +2430,7 @@
       return api.merge(out);
     };
     scripts["typingmind.js"] = scripts["typingmind"];
-    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.8952f543167c54af2198cb194be57fe90778f0a8bcceaeba5bdca4664b61bdf6" });
+    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.719d8f56f36ec4f38931fc8156ef7fef9f04aae0b645871786954dfdf241ba64" });
     return scripts;
   }
 

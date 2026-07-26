@@ -30,6 +30,24 @@ function boundedTimeout(value, fallback) {
   return Math.max(250, Math.min(MAX_TIMEOUT_MS, Number(value) || fallback));
 }
 
+function frameCapabilityReadiness(iframe, registration, features = []) {
+  const documentId = String(registration?.documentId || "");
+  const capabilityDocumentCurrent = Boolean(
+    documentId
+    && String(iframe?.dataset?.contentRuntimeCapabilitiesDocumentId || "") === documentId
+  );
+  const installedCapabilities = capabilityDocumentCurrent
+    ? new Set(String(iframe?.dataset?.contentRuntimeCapabilities || "").split(",").filter(Boolean))
+    : new Set();
+  const capabilitiesReady = features.every((feature) => installedCapabilities.has(feature));
+  const summaryReady = !features.includes("summary") || (
+    capabilitiesReady
+    && String(iframe?.dataset?.summaryRuntimeDocumentId || "") === documentId
+    && Boolean(iframe?.dataset?.summaryRuntimeBridgeVersion)
+  );
+  return { capabilitiesReady, summaryReady };
+}
+
 function asFrameError(error, command, fallbackCode = "REMOTE_ERROR") {
   if (error instanceof FrameCommandError) return error;
   const message = error?.message || String(error || `Frame command failed: ${command}`);
@@ -101,16 +119,7 @@ export class FrameRuntimePort {
   async ensure(iframe, { features = [], force = false } = {}) {
     if (!iframe || iframe.isConnected === false) throw new FrameCommandError("STALE_DOCUMENT", "iframe is detached", { delivered: false });
     const current = this.registration(iframe);
-    const capabilityDocumentCurrent = String(iframe.dataset?.contentRuntimeCapabilitiesDocumentId || "") === current?.documentId;
-    const installedCapabilities = capabilityDocumentCurrent
-      ? new Set(String(iframe.dataset?.contentRuntimeCapabilities || "").split(",").filter(Boolean))
-      : new Set();
-    const capabilitiesReady = features.every((feature) => installedCapabilities.has(feature));
-    const summaryReady = !features.includes("summary") || (
-      capabilitiesReady
-      && String(iframe.dataset?.summaryRuntimeDocumentId || "") === current?.documentId
-      && Boolean(iframe.dataset?.summaryRuntimeBridgeVersion)
-    );
+    const { capabilitiesReady, summaryReady } = frameCapabilityReadiness(iframe, current, features);
     if (!force && current && capabilitiesReady && summaryReady) return current;
     if (!this.ensureRuntime) {
       const registration = this.registration(iframe);
@@ -146,8 +155,23 @@ export class FrameRuntimePort {
       throw new FrameCommandError("ABORTED", `Frame command aborted: ${command}`, { command, delivered: false });
     }
     if (options.skipEnsure) {
-      if (!this.registration(iframe)) {
+      const registration = this.registration(iframe);
+      if (!registration) {
         throw new FrameCommandError("NOT_REGISTERED", `Content document is not registered: ${command}`, { command, delivered: false });
+      }
+      if (expectedDocumentId !== null && registration.documentId !== expectedDocumentId) {
+        throw new FrameCommandError("STALE_DOCUMENT", `Content document changed before delivery: ${command}`, {
+          command,
+          delivered: false
+        });
+      }
+      const readiness = frameCapabilityReadiness(iframe, registration, features);
+      if (spec.mutating && (!readiness.capabilitiesReady || !readiness.summaryReady)) {
+        throw new FrameCommandError(
+          "INJECTION_FAILED",
+          `Content capabilities are unavailable: ${features.join(", ")}`,
+          { command, delivered: false }
+        );
       }
     } else {
       await this.ensure(iframe, { features, force: spec.mutating });

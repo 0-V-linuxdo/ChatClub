@@ -41,6 +41,9 @@ export function createFrameBridgeController(dependencies = {}) {
   const repairGenerations = new WeakMap();
   const frameBindingChallenges = createFrameBindingChallengeRegistry();
   const frameBindingRelayRuns = new WeakMap();
+  const frameBindingRelayErrors = new WeakMap();
+  let runtimeEventBridgeRuntime = null;
+  let runtimeEventBridgeListener = null;
 
   function workspaceController() {
     const controller = workspace();
@@ -255,27 +258,23 @@ export function createFrameBridgeController(dependencies = {}) {
       };
     }
     iframe.dataset.injectedBrowserDocumentId = installedBrowserDocumentId;
-    const bindingRelayed = await requestFrameBinding(iframe, {
+    await requestFrameBinding(iframe, {
       rotate: true,
       skipRegistered: false
     });
-    if (!bindingRelayed) {
-      return {
-        ok: false,
-        reason: "secure iframe binding was not relayed",
-        installed,
-        summary
-      };
-    }
     registration = await waitForCurrentContentFrameRegistration(iframe);
     if (!registration) {
+      const relayError = String(frameBindingRelayErrors.get(iframe) || "").trim();
       return {
         ok: false,
-        reason: contentFramePreparationError(installed) || "iframe content bridge did not become ready",
+        reason: contentFramePreparationError(installed)
+          || relayError
+          || "iframe content bridge did not become ready",
         installed,
         summary
       };
     }
+    frameBindingRelayErrors.delete(iframe);
     if (String(registration.browserDocumentId || "") !== installedBrowserDocumentId) {
       return {
         ok: false,
@@ -342,6 +341,7 @@ export function createFrameBridgeController(dependencies = {}) {
 
   function prepareContentFrameRuntime(iframe, options = {}) {
     if (!iframe) return Promise.resolve({ ok: false, reason: "iframe is unavailable" });
+    installRuntimeEventBridge();
     const signature = [...new Set([
       ...(Array.isArray(options.features) ? options.features : []),
       ...(options.summary === true ? ["summary"] : [])
@@ -401,6 +401,7 @@ export function createFrameBridgeController(dependencies = {}) {
 
   function requestFrameBinding(iframe, { rotate = false, skipRegistered = true } = {}) {
     if (!iframe?.isConnected) return Promise.resolve(false);
+    installRuntimeEventBridge();
     if (
       skipRegistered
       && String(iframe.dataset.preferredModelDocumentId || "")
@@ -461,8 +462,15 @@ export function createFrameBridgeController(dependencies = {}) {
           bindingChallenge: entry.challenge,
           bindingGeneration: entry.generation
         });
-        return result?.bindingRelayed === true;
-      } catch {
+        const relayed = result?.bindingRelayed === true;
+        if (relayed) frameBindingRelayErrors.delete(iframe);
+        else frameBindingRelayErrors.set(iframe, "secure frame binding relay was not accepted");
+        return relayed;
+      } catch (error) {
+        frameBindingRelayErrors.set(
+          iframe,
+          String(error?.message || error || "secure frame binding relay failed")
+        );
         return false;
       }
     })().finally(() => {
@@ -627,10 +635,8 @@ export function createFrameBridgeController(dependencies = {}) {
     return false;
   }
 
-  function installRuntimeEventBridge() {
-    const api = extensionApi();
-    if (!api?.runtime?.onMessage?.addListener) return;
-    api.runtime.onMessage.addListener((message, sender) => {
+  function createRuntimeEventBridgeListener() {
+    return (message, sender) => {
       if (message?.source !== EXTENSION_RUNTIME_RELAY_SOURCE || sender?.tab) return false;
       (async () => {
         const context = message.senderContext || {};
@@ -660,7 +666,30 @@ export function createFrameBridgeController(dependencies = {}) {
         handleAuthenticatedFrameLifecycle(message, context, sourceWindow);
       })().catch((error) => console.warn("[ChatClub] Runtime shortcut action failed", error));
       return false;
-    });
+    };
+  }
+
+  function installRuntimeEventBridge() {
+    const runtime = extensionApi()?.runtime || null;
+    if (!runtime?.onMessage?.addListener) return false;
+    if (runtimeEventBridgeRuntime === runtime && runtimeEventBridgeListener) return true;
+    if (runtimeEventBridgeRuntime && runtimeEventBridgeListener) {
+      try {
+        runtimeEventBridgeRuntime.onMessage?.removeListener?.(runtimeEventBridgeListener);
+      } catch {}
+    }
+    const listener = createRuntimeEventBridgeListener();
+    try {
+      runtime.onMessage.addListener(listener);
+    } catch (error) {
+      runtimeEventBridgeRuntime = null;
+      runtimeEventBridgeListener = null;
+      console.warn("[ChatClub] Runtime frame relay listener could not be installed", error);
+      return false;
+    }
+    runtimeEventBridgeRuntime = runtime;
+    runtimeEventBridgeListener = listener;
+    return true;
   }
 
   function installPreferredModelIframeLoadHandler() {
@@ -681,17 +710,26 @@ export function createFrameBridgeController(dependencies = {}) {
 
   function installExtensionTabTracker() {
     const controller = workspaceController();
-    controller.refreshCurrentExtensionTabInfo();
-    window.addEventListener("focus", controller.refreshCurrentExtensionTabInfo);
+    const refresh = () => {
+      installRuntimeEventBridge();
+      controller.refreshCurrentExtensionTabInfo();
+    };
+    refresh();
+    window.addEventListener("focus", refresh);
     document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible") controller.refreshCurrentExtensionTabInfo();
+      if (document.visibilityState === "visible") refresh();
     });
   }
 
   function install() {
-    installExtensionTabTracker();
     installRuntimeEventBridge();
+    installExtensionTabTracker();
     installPreferredModelIframeLoadHandler();
+    queueMicrotask(() => {
+      let frames = [];
+      try { frames = workspaceController().currentFrames(); } catch {}
+      for (const iframe of frames || []) scheduleContentFrameRepair(iframe, 0);
+    });
   }
 
   return Object.freeze({

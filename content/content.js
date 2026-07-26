@@ -386,12 +386,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "6fdf5880830e8789e55bbfdf3fbdbb7a0814fa54dba7030ad30c07382329c9ef";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "4b25a56bd08c2508af23fc884a7595f95663bd227768e9548427f9046db01267";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "8952f543167c54af2198cb194be57fe90778f0a8bcceaeba5bdca4664b61bdf6";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.8952f543167c54af2198cb194be57fe90778f0a8bcceaeba5bdca4664b61bdf6";
-  var CONTENT_RUNTIME_CONTENT_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/content.js", "entryPath": "content-src/content.js", "sourceSha256": "4a286ae9ddbc708ac0c01fbd778dd575ea30a6ff370d7d1a94f7d4253e37e949", "implementationSha256": "aa511dd88ea9cb39da90b7bf42cbd58ed208999fd2312ef54d6a2fe5253a2486", "implementationVersion": "2026.07.16.2+bundle.aa511dd88ea9cb39da90b7bf42cbd58ed208999fd2312ef54d6a2fe5253a2486" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "719d8f56f36ec4f38931fc8156ef7fef9f04aae0b645871786954dfdf241ba64";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.719d8f56f36ec4f38931fc8156ef7fef9f04aae0b645871786954dfdf241ba64";
+  var CONTENT_RUNTIME_CONTENT_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/content.js", "entryPath": "content-src/content.js", "sourceSha256": "03f113f00e9e23e5b4080fb8caab3ce2d5dcce9eb6a7f5587268da29f7a78280", "implementationSha256": "7cce8583ad9baad5f57d615e2da60191c74cba4c17c1842c190d213efb756696", "implementationVersion": "2026.07.16.2+bundle.7cce8583ad9baad5f57d615e2da60191c74cba4c17c1842c190d213efb756696" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -1432,6 +1432,11 @@
     if (!runtimes?.install || !version || !source || !bridgeDocumentId || !secureFrameToken || typeof dispatch !== "function") {
       throw new TypeError("Secure Frame RPC installation is incomplete");
     }
+    const extensionRuntime = extensionApi?.runtime || null;
+    const existing = runtimes.registration?.("frame-rpc") || null;
+    if (existing && existing.api?.extensionRuntime !== extensionRuntime) {
+      runtimes.invalidate?.("frame-rpc", "extension runtime context changed");
+    }
     return runtimes.install("frame-rpc", version, () => {
       const listener = (message, sender, sendResponse) => {
         if (message?.source !== source || message.type !== "request" || message.bridgeDocumentId !== bridgeDocumentId || message.secureFrameToken !== secureFrameToken || sender?.id !== extensionApi?.runtime?.id) return false;
@@ -1447,7 +1452,7 @@
         return true;
       };
       return {
-        api: Object.freeze({ listener, bridgeDocumentId }),
+        api: Object.freeze({ listener, bridgeDocumentId, extensionRuntime }),
         activate() {
           extensionApi?.runtime?.onMessage?.addListener?.(listener);
         },
@@ -1515,6 +1520,18 @@
     const clearSubmissionNavigation = submissionNavigation.clear;
     const currentSubmissionNavigation = submissionNavigation.current;
     const clearSubmissionNavigationForTrustedIntent = submissionNavigation.clearForTrustedIntent;
+    const handleContentAction = commandRouter.dispatch;
+    function ensureSecureFrameRpc() {
+      return installSecureFrameRpc({
+        extensionApi: EXTENSION_API,
+        runtimes,
+        version: CONTENT_BRIDGE_VERSION2,
+        source: SECURE_FRAME_COMMAND_SOURCE2,
+        bridgeDocumentId: contentDocumentId,
+        secureFrameToken,
+        dispatch: handleContentAction
+      });
+    }
     function abortActivePreferredModelRun(reason = "preferred model apply cancelled", runId = "") {
       commandRouter.dispatch("cancelPreferredModelApply", { reason, runId }).catch(() => {
       });
@@ -1598,6 +1615,7 @@
     }
     const hadContentBridge = Boolean(window.__CHATCLUB_CONTENT_BRIDGE_INSTALLED__);
     if (runtimes.isActive && window.__CHATCLUB_CONTENT_BRIDGE_VERSION__ === CONTENT_RUNTIME_VERSION) {
+      ensureSecureFrameRpc();
       announceContentRegistration();
       return;
     }
@@ -1764,16 +1782,7 @@
         getPageText: () => normalize(document.body?.innerText || "")
       }
     });
-    const handleContentAction = commandRouter.dispatch;
-    installSecureFrameRpc({
-      extensionApi: EXTENSION_API,
-      runtimes,
-      version: CONTENT_BRIDGE_VERSION2,
-      source: SECURE_FRAME_COMMAND_SOURCE2,
-      bridgeDocumentId: contentDocumentId,
-      secureFrameToken,
-      dispatch: handleContentAction
-    });
+    ensureSecureFrameRpc();
     const onParentWindowMessage = async (event) => {
       if (!EXTENSION_ORIGIN || event.source !== window.parent || event.origin !== EXTENSION_ORIGIN) return;
       if (!contentBridgeIsCurrent()) return;
