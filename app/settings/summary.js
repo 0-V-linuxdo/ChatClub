@@ -185,6 +185,28 @@ export function createSummarySettingsSection(ctx) {
     userscriptInput.classList.add("settings-code-textarea");
     hostsInput.classList.add("settings-compact-textarea");
     pathInput.classList.add("settings-compact-textarea");
+    const sourceLabelNode = builtIn
+      ? el("small", { dataset: { userscriptSourceLabel: "summary" } })
+      : null;
+    const permissionNotice = el("div", {
+      class: "settings-info-callout settings-userscript-permission-notice",
+      role: "note",
+      "aria-live": "polite",
+      dataset: { userscriptPermissionNotice: "summary" }
+    },
+      svgIcon("alert"),
+      el("div", {},
+        el("strong", {}, t("userscripts.permissionNoticeTitle")),
+        el("p", {}, t("userscripts.permissionNoticeBody"))
+      )
+    );
+    const syncSourceModeUi = () => {
+      permissionNotice.hidden = sourceMode !== "custom";
+      if (sourceLabelNode) {
+        sourceLabelNode.textContent = summaryCollectorSourceLabel({ ...draft, sourceMode });
+      }
+    };
+    syncSourceModeUi();
     let dialog;
     const close = () => dialog.remove();
     const save = async () => {
@@ -254,14 +276,16 @@ export function createSummarySettingsSection(ctx) {
           el("div", {},
             el("strong", {}, t("summary.collector.infoTitle")),
             el("p", {}, t("summary.collector.infoBody")),
-            builtIn ? el("small", {}, summaryCollectorSourceLabel({ ...draft, sourceMode })) : null
+            sourceLabelNode
           )
         ),
+        permissionNotice,
         field(t("summary.collector.userscript"), userscriptInput),
         el("div", { class: "settings-dialog-actions" },
           builtIn ? button(t("summary.collector.editCopy"), () => {
             sourceMode = "custom";
             userscriptInput.readOnly = false;
+            syncSourceModeUi();
             userscriptInput.focus();
           }) : null,
           builtIn ? button(t("summary.collector.resetBuiltIn"), async () => {

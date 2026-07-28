@@ -341,22 +341,60 @@ export function createModelsSettingsSection(ctx) {
     }));
   }
 
-  function notionAllSourcesSelect() {
+  function notionAllSourcesRadioGroup() {
     const config = draft();
     const value = NOTION_ALL_SOURCES_PREFERENCE_VALUES.includes(config[NOTION_ALL_SOURCES_PREFERENCE_KEY])
       ? config[NOTION_ALL_SOURCES_PREFERENCE_KEY]
       : "";
-    const control = select(value, allSourcesPreferenceOptions(), {
-      class: "select model-preference-all-sources-select",
+    const options = allSourcesPreferenceOptions();
+    const controls = options.map((option) => {
+      const control = el("input", {
+        type: "radio",
+        name: "model-preference-all-sources-notion-ai",
+        value: option.value,
+        checked: option.value === value,
+        dataset: { modelPreferenceAllSourcesValue: option.value }
+      });
+      control.value = option.value;
+      control.checked = option.value === value;
+      control.addEventListener("change", () => {
+        if (!control.checked) return;
+        const next = NOTION_ALL_SOURCES_PREFERENCE_VALUES.includes(control.value) ? control.value : "";
+        queueAutoSave({ ...draft(), [NOTION_ALL_SOURCES_PREFERENCE_KEY]: next });
+      });
+      return el("label", { class: "model-preference-all-sources-option" },
+        control,
+        el("span", { class: "model-preference-all-sources-option-label" }, option.label)
+      );
+    });
+    return el("div", {
+      class: "model-preference-all-sources-control",
+      role: "radiogroup",
       "aria-label": t("modelPreferences.allSourcesFor", { platform: APP_LABELS.NotionAI }),
       dataset: { modelPreferenceAllSourcesAppId: "NotionAI" }
-    });
-    control.value = value;
-    control.addEventListener("change", () => {
-      const next = NOTION_ALL_SOURCES_PREFERENCE_VALUES.includes(control.value) ? control.value : "";
-      queueAutoSave({ ...draft(), [NOTION_ALL_SOURCES_PREFERENCE_KEY]: next });
-    });
-    return control;
+    },
+      el("span", { class: "model-preference-all-sources-heading" },
+        el("span", { class: "model-preference-all-sources-title" },
+          t("modelPreferences.allSources")
+        ),
+        el("span", {
+          class: "model-preference-all-sources-info tooltip-trigger",
+          role: "img",
+          tabindex: "0",
+          "aria-label": t("modelPreferences.allSourcesDesc"),
+          "data-tooltip": t("modelPreferences.allSourcesDesc"),
+          "data-tooltip-id": "settings.models.allSources",
+          "data-tooltip-placement": "left",
+          "data-tooltip-wrap": "true"
+        },
+          el("span", {
+            class: "model-preference-all-sources-info-glyph",
+            "aria-hidden": "true"
+          }, svgIcon("library"))
+        )
+      ),
+      el("div", { class: "model-preference-all-sources-segments" }, controls)
+    );
   }
 
   function additionalPreferenceField(appId) {
@@ -368,11 +406,9 @@ export function createModelsSettingsSection(ctx) {
       );
     }
     if (appId === "NotionAI") {
-      return modelPreferenceRowField(
-        t("modelPreferences.allSources"),
-        notionAllSourcesSelect(),
-        "model-preference-additional-field model-preference-all-sources-field"
-      );
+      return el("div", {
+        class: "model-preference-row-field model-preference-additional-field model-preference-all-sources-field"
+      }, notionAllSourcesRadioGroup());
     }
     return el("div", {
       class: "model-preference-row-field model-preference-additional-field model-preference-thinking-field model-preference-additional-placeholder-field model-preference-thinking-placeholder-field",

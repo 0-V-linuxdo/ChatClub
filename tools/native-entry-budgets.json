@@ -3,9 +3,9 @@
     "app/main.js": {
       "maxFiles": 88,
       "targetFiles": 74,
-      "maxSourceBytes": 912032,
+      "maxSourceBytes": 912915,
       "targetSourceBytes": 750000,
-      "reason": "The application initial-static closure includes the per-frame send queue, DNR-ready iframe assignment and exact-host Grok Mirror Cookie preflight/account-switch proceed contracts, exact-document Grok Cookie ancillary-runtime attestation and repair, nonce-bound Notion Service Worker navigation with logical-URL snapshot and link sanitization, non-blocking Composer model and Notion All Sources status with an owner-scoped bounded bridge-preparation gate, authenticated frame identity and navigation recovery, owner-safe tab removal, and the transient new-topic/restoring frame status UI, and is held to its exact footprint while feature controllers remain behind lazy boundaries."
+      "reason": "The application initial-static closure includes the per-frame send queue, DNR-ready iframe assignment and exact-host Grok Mirror Cookie preflight/account-switch proceed contracts, exact-document Grok Cookie ancillary-runtime attestation and repair, nonce-bound Notion Service Worker navigation with logical-URL snapshot and link sanitization, non-blocking Composer model and Notion All Sources status with an owner-scoped bounded bridge-preparation gate, authenticated frame identity and navigation recovery, owner-safe tab removal, the transient new-topic/restoring frame status UI, and bilingual model/source and custom User Scripts permission copy, and is held to its exact footprint while feature controllers remain behind lazy boundaries."
     },
     "background/service-worker.js": {
       "maxFiles": 50,
@@ -35,9 +35,9 @@
       "owner": "app/runtime.js",
       "maxFiles": 22,
       "targetFiles": 18,
-      "maxSourceBytes": 302881,
+      "maxSourceBytes": 305912,
       "targetSourceBytes": 250000,
-      "reason": "Settings remains an explicit runtime-owned lazy controller; the two model-preference tabs, responsive failure policy controls, and four-column preference layout including Notion All Sources are included in its exact incremental closure ratchet."
+      "reason": "Settings remains an explicit runtime-owned lazy controller; the two model-preference tabs, responsive failure policy controls, four-column preference layout with the Notion All Sources three-state segmented control, and custom Summary/Delete userscript permission notices are included in its exact incremental closure ratchet."
     },
     "app/summary/controller.js": {
       "owner": "app/runtime.js",

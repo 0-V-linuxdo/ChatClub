@@ -7,11 +7,11 @@
     "reason": "The Grok Cookie runtime co-locates exact registered-frame authorization, browser-specific partition discovery, parent-document-bound Mirror account-switch capture and recovery including Arc's omitted top-frame metadata fallback, a connect-only same-document gateway WebSocket readiness proof with bounded a=1/a=2/a=3 account rotation, Cookie-ledger cleanup, and fail-closed navigation handling so their shared attempt, frame, and top-document identities cannot drift across modules."
   },
   "shared/i18n.js": {
-    "maxLines": 1951,
+    "maxLines": 1957,
     "target": 1500,
-    "maxBytes": 111608,
+    "maxBytes": 112491,
     "targetBytes": 82000,
-    "reason": "Bilingual translation catalog data is kept co-located for key parity; the queued-send status, model-failure policy, model-preference labels, Notion All Sources choices, and accessible new-topic/restoring frame status labels are included in the exact line and byte ratchets."
+    "reason": "Bilingual translation catalog data is kept co-located for key parity; the queued-send status, model-failure policy, model-preference labels and Notion All Sources segmented-control help, custom User Scripts permission guidance, and accessible new-topic/restoring frame status labels are included in the exact line and byte ratchets."
   },
   "tools/browser-smoke.mjs": {
     "maxLines": 1279,

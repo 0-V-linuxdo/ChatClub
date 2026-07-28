@@ -208,9 +208,13 @@ globalThis.document = {
   const notionModelSelect = modelSelects.find(
     (node) => node.dataset.modelPreferenceSelectAppId === "NotionAI"
   );
-  const allSourcesSelect = findNode(
+  const allSourcesGroup = findNode(
     pane,
     (node) => node.dataset?.modelPreferenceAllSourcesAppId === "NotionAI"
+  );
+  const allSourcesRadios = findNodes(
+    allSourcesGroup,
+    (node) => node.tagName === "INPUT" && node.getAttribute("type") === "radio"
   );
   assert.equal(
     findNode(pane, (node) => node.dataset?.modelPreferenceFailurePolicy === "global"),
@@ -279,21 +283,75 @@ globalThis.document = {
       .every((node) => node.children[3]?.getAttribute("aria-hidden") === "true"),
     "platforms without an additional preference must hide the complete placeholder field"
   );
-  assert.ok(allSourcesSelect, "Notion AI must expose its All sources preference in the fourth column");
-  assert.equal(allSourcesSelect.value, "", "All sources must default to no preference");
+  assert.ok(allSourcesGroup, "Notion AI must expose its All sources preference in the fourth column");
+  assert.equal(allSourcesGroup.getAttribute("role"), "radiogroup", "All sources must expose a radio group");
   assert.ok(
-    Boolean(allSourcesSelect.getAttribute("aria-label")?.trim()),
+    Boolean(allSourcesGroup.getAttribute("aria-label")?.trim()),
     "the All sources preference must have an explicit accessible name"
   );
   assert.deepEqual(
-    allSourcesSelect.children.map((node) => node.getAttribute("value")),
+    allSourcesRadios.map((node) => node.value),
     ["", "enabled", "disabled"],
     "the All sources preference must expose only the normalized tri-state values"
   );
   assert.deepEqual(
-    allSourcesSelect.children.map((node) => node.children[0]?.textContent),
+    allSourcesRadios.map((node) => node.parentElement?.children[1]?.children[0]?.textContent),
     ["Do not change", "On", "Off"],
     "the All sources control must explain no-interference, enabled, and disabled states"
+  );
+  assert.deepEqual(
+    allSourcesRadios.map((node) => node.checked),
+    [true, false, false],
+    "All sources must default to the no-interference segment"
+  );
+  assert.equal(
+    new Set(allSourcesRadios.map((node) => node.getAttribute("name"))).size,
+    1,
+    "the three native radios must share one name for browser keyboard navigation"
+  );
+  assert.ok(
+    allSourcesRadios.every((node) => node.parentElement?.tagName === "LABEL"),
+    "every All sources radio must have a native label"
+  );
+  assert.equal(
+    findNode(allSourcesGroup, (node) => node.classList?.contains("model-preference-all-sources-title"))
+      ?.children[0]?.textContent,
+    "All sources",
+    "the All sources title must remain visible in wide and compact layouts"
+  );
+  const allSourcesInfo = findNode(
+    allSourcesGroup,
+    (node) => node.classList?.contains("model-preference-all-sources-info")
+  );
+  assert.ok(allSourcesInfo, "All sources must expose its explanation through a compact source icon");
+  assert.equal(allSourcesInfo.getAttribute("role"), "img");
+  assert.equal(allSourcesInfo.getAttribute("tabindex"), "0", "the source icon tooltip must be keyboard reachable");
+  assert.equal(
+    allSourcesInfo.getAttribute("aria-label"),
+    "Controls whether Notion AI uses all sources it can access.",
+    "the source icon must retain the full accessible explanation"
+  );
+  assert.equal(
+    allSourcesInfo.getAttribute("data-tooltip"),
+    allSourcesInfo.getAttribute("aria-label"),
+    "the source icon tooltip and accessible explanation must stay aligned"
+  );
+  assert.equal(allSourcesInfo.getAttribute("data-tooltip-wrap"), "true");
+  assert.equal(allSourcesInfo.getAttribute("data-tooltip-id"), "settings.models.allSources");
+  const allSourcesInfoGlyph = findNode(
+    allSourcesInfo,
+    (node) => node.classList?.contains("model-preference-all-sources-info-glyph")
+  );
+  assert.equal(allSourcesInfoGlyph?.getAttribute("aria-hidden"), "true");
+  assert.equal(
+    findNode(allSourcesInfoGlyph, (node) => node.tagName === "SVG")?.tagName,
+    "SVG",
+    "the compact source-off icon must reuse the existing SVG icon system"
+  );
+  assert.equal(
+    findNode(allSourcesGroup, (node) => node.classList?.contains("model-preference-all-sources-hint")),
+    null,
+    "the long All sources explanation must not remain visible in the row"
   );
   assert.ok(
     ["Gemini", "NotionAI"].every((appId) => modelRows.find(
@@ -306,14 +364,14 @@ globalThis.document = {
     "failure overrides must render in the failure-policy block, not the draggable model rows"
   );
   const renderedSelects = findNodes(pane, (node) => node.tagName === "SELECT");
-  assert.equal(renderedSelects.length, 5, "the preferred tab must render model selects plus Notion All sources");
+  assert.equal(renderedSelects.length, 4, "the preferred tab must keep exactly four model dropdowns");
   assert.ok(
     renderedSelects.every((node) => Boolean(node.getAttribute("aria-label")?.trim())),
-    "every preferred-model and source select must have an explicit accessible name"
+    "every preferred-model select must have an explicit accessible name"
   );
 
-  allSourcesSelect.value = "enabled";
-  allSourcesSelect.dispatch("change");
+  allSourcesRadios.forEach((node) => { node.checked = node.value === "enabled"; });
+  allSourcesRadios.find((node) => node.value === "enabled").dispatch("change");
   assert.equal(saves.length, 1, "changing All sources must start an autosave");
   assert.equal(
     saves[0].patch.modelPreferences[NOTION_ALL_SOURCES_PREFERENCE_KEY],
@@ -340,10 +398,24 @@ globalThis.document = {
   );
   saves[0].gate.resolve();
   await waitUntil(() => !section.autosaveBusy(), "clearing All sources did not settle");
+  const clearedPane = section.pane(() => { redrawCalls += 1; });
+  const clearedAllSourcesGroup = findNode(
+    clearedPane,
+    (node) => node.dataset?.modelPreferenceAllSourcesAppId === "NotionAI"
+  );
+  const clearedAllSourcesRadios = findNodes(
+    clearedAllSourcesGroup,
+    (node) => node.tagName === "INPUT" && node.getAttribute("type") === "radio"
+  );
+  assert.deepEqual(
+    clearedAllSourcesRadios.map((node) => node.checked),
+    [true, false, false],
+    "Clear must redraw All sources with no-interference selected"
+  );
   saves.splice(0);
 
-  allSourcesSelect.value = "disabled";
-  allSourcesSelect.dispatch("change");
+  allSourcesRadios.forEach((node) => { node.checked = node.value === "disabled"; });
+  allSourcesRadios.find((node) => node.value === "disabled").dispatch("change");
   assert.equal(saves.length, 1, "All sources Off must start an autosave");
   saves[0].gate.resolve();
   await waitUntil(() => !section.autosaveBusy(), "All sources Off autosave did not settle");
@@ -439,6 +511,27 @@ globalThis.document = {
     /@container[\s\S]*\.model-preference-thinking-field,\s*\.model-preference-additional-field\s*\{[^}]*grid-area:\s*thinking/s,
     "the additional preference must occupy its compact grid area"
   );
+  assert.match(
+    modelStyles,
+    /\.model-preference-all-sources-segments\s*\{[^}]*display:\s*grid[^}]*grid-template-columns:\s*minmax\(0,\s*1\.5fr\)\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s,
+    "All sources must render as three responsive segments"
+  );
+  assert.match(modelStyles, /\.model-preference-all-sources-option input:checked \+ \.model-preference-all-sources-option-label/);
+  assert.match(modelStyles, /\.model-preference-all-sources-option input:focus-visible \+ \.model-preference-all-sources-option-label/);
+  assert.match(
+    modelStyles,
+    /@container[\s\S]*\.model-preference-model-select,\s*\.model-preference-all-sources-control\s*\{[^}]*max-width:\s*none/s,
+    "the compact All sources group must use the full available width"
+  );
+  assert.match(modelStyles, /\.model-preference-all-sources-heading\s*\{[^}]*display:\s*inline-flex/s);
+  assert.match(modelStyles, /\.model-preference-all-sources-info\s*\{[^}]*border-radius:\s*50%/s);
+  assert.match(modelStyles, /\.model-preference-all-sources-info:focus-visible\s*\{[^}]*box-shadow:/s);
+  assert.match(
+    modelStyles,
+    /\.model-preference-all-sources-info-glyph::after\s*\{[^}]*transform:\s*rotate\(-45deg\)/s,
+    "the reused source icon must receive a diagonal off-state slash"
+  );
+  assert.doesNotMatch(modelStyles, /\.model-preference-all-sources-hint\s*\{/);
   assert.match(modelStyles, /\.model-preference-list\s*\{[^}]*overflow:\s*visible/s);
   assert.doesNotMatch(modelStyles, /\.model-preference-list\s*\{[^}]*overflow:\s*(?:auto|hidden|clip)/s);
   assert.match(modelStyles, /\.model-preference-list \.settings-list-header,\s*\.model-preference-row\s*\{[^}]*min-width:\s*0/s);
@@ -597,13 +690,16 @@ globalThis.document = {
   let reloadedRedrawCalls = 0;
   assert.equal(reloadedRootState.modelPreferenceSettingsTab, "preferred");
   const reloadedPane = reloadedSection.pane(() => { reloadedRedrawCalls += 1; });
-  const reloadedAllSourcesSelect = findNode(
+  const reloadedAllSourcesGroup = findNode(
     reloadedPane,
     (node) => node.dataset?.modelPreferenceAllSourcesAppId === "NotionAI"
   );
   assert.equal(
-    reloadedAllSourcesSelect?.value,
-    "disabled",
+    findNodes(
+      reloadedAllSourcesGroup,
+      (node) => node.tagName === "INPUT" && node.getAttribute("type") === "radio"
+    ).find((node) => node.value === "disabled")?.checked,
+    true,
     "a fresh Settings controller must restore the stored All sources preference"
   );
   assert.deepEqual(

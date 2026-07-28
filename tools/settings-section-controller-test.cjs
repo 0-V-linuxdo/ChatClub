@@ -154,7 +154,7 @@ globalThis.document = { addEventListener() {} };
   const modelFailurePolicyBlock = functionSource(modelsSource, "failurePolicyBlock");
   const modelPreferenceDrop = functionSource(modelsSource, "drop");
   const modelAdditionalPreferenceField = functionSource(modelsSource, "additionalPreferenceField");
-  const notionAllSourcesSelect = functionSource(modelsSource, "notionAllSourcesSelect");
+  const notionAllSourcesRadioGroup = functionSource(modelsSource, "notionAllSourcesRadioGroup");
   assert.doesNotMatch(
     modelPreferenceRow,
     /failureOverrideSelect/,
@@ -181,9 +181,17 @@ globalThis.document = { addEventListener() {} };
     "platforms without an additional preference must not expose a label without a control"
   );
   assert.match(modelPreferenceRow, /additionalPreferenceField\(appId\)/);
-  assert.match(notionAllSourcesSelect, /NOTION_ALL_SOURCES_PREFERENCE_KEY/);
-  assert.match(notionAllSourcesSelect, /queueAutoSave/);
-  assert.match(notionAllSourcesSelect, /modelPreferenceAllSourcesAppId: "NotionAI"/);
+  assert.match(notionAllSourcesRadioGroup, /NOTION_ALL_SOURCES_PREFERENCE_KEY/);
+  assert.match(notionAllSourcesRadioGroup, /queueAutoSave/);
+  assert.match(notionAllSourcesRadioGroup, /type: "radio"/);
+  assert.match(notionAllSourcesRadioGroup, /role: "radiogroup"/);
+  assert.match(notionAllSourcesRadioGroup, /modelPreferenceAllSourcesAppId: "NotionAI"/);
+  assert.match(notionAllSourcesRadioGroup, /t\("modelPreferences\.allSourcesDesc"\)/);
+  assert.match(notionAllSourcesRadioGroup, /svgIcon\("library"\)/);
+  assert.match(notionAllSourcesRadioGroup, /class: "model-preference-all-sources-info tooltip-trigger"/);
+  assert.match(notionAllSourcesRadioGroup, /"aria-label": t\("modelPreferences\.allSourcesDesc"\)/);
+  assert.match(notionAllSourcesRadioGroup, /"data-tooltip": t\("modelPreferences\.allSourcesDesc"\)/);
+  assert.doesNotMatch(notionAllSourcesRadioGroup, /aria-describedby|model-preference-all-sources-hint/);
   assert.deepEqual(stateKeys(historySource), [
     "promptHistoryCursor",
     "promptHistoryDraft",

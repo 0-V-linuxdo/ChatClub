@@ -198,6 +198,28 @@ export function createTopicDeletionSettingsSection(ctx) {
     hostsInput.classList.add("settings-compact-textarea");
     pathInput.classList.add("settings-compact-textarea");
     userscriptInput.classList.add("settings-code-textarea");
+    const sourceLabelNode = builtIn
+      ? el("small", { dataset: { userscriptSourceLabel: "topic-deletion" } })
+      : null;
+    const permissionNotice = el("div", {
+      class: "settings-info-callout settings-userscript-permission-notice",
+      role: "note",
+      "aria-live": "polite",
+      dataset: { userscriptPermissionNotice: "topic-deletion" }
+    },
+      svgIcon("alert"),
+      el("div", {},
+        el("strong", {}, t("userscripts.permissionNoticeTitle")),
+        el("p", {}, t("userscripts.permissionNoticeBody"))
+      )
+    );
+    const syncSourceModeUi = () => {
+      permissionNotice.hidden = currentSourceMode !== "custom";
+      if (sourceLabelNode) {
+        sourceLabelNode.textContent = sourceLabel({ ...draft, sourceMode: currentSourceMode });
+      }
+    };
+    syncSourceModeUi();
     let dialog;
     const close = () => dialog.remove();
     const save = async () => {
@@ -259,15 +281,17 @@ export function createTopicDeletionSettingsSection(ctx) {
           el("div", {},
             el("strong", {}, t("topicDeletion.site.infoTitle")),
             el("p", {}, t("topicDeletion.site.infoBody")),
-            builtIn ? el("small", {}, sourceLabel({ ...draft, sourceMode: currentSourceMode })) : null
+            sourceLabelNode
           )
         ),
+        permissionNotice,
         field(t("topicDeletion.site.userscript"), userscriptInput),
         el("div", { class: "settings-dialog-actions" },
           button(t("topicDeletion.site.copyUserscript"), () => copyUserscript(userscriptInput.value)),
           builtIn ? button(t("topicDeletion.site.editCopy"), () => {
             currentSourceMode = "custom";
             userscriptInput.readOnly = false;
+            syncSourceModeUi();
             userscriptInput.focus();
           }) : null,
           builtIn ? button(t("topicDeletion.site.resetBuiltIn"), async () => {

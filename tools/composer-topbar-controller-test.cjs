@@ -17,6 +17,37 @@ const chatclubCss = read("styles/chatclub.css");
 
 const { functionSource } = require("./function-source.cjs");
 
+function cssBlockBody(source, openingBraceIndex) {
+  let depth = 0;
+  for (let index = openingBraceIndex; index < source.length; index += 1) {
+    if (source[index] === "{") depth += 1;
+    if (source[index] !== "}") continue;
+    depth -= 1;
+    if (depth === 0) return source.slice(openingBraceIndex + 1, index);
+  }
+  throw new Error("unterminated CSS block in topbar boundary test");
+}
+
+function cssRuleBody(source, header, label) {
+  const match = header.exec(source);
+  assert.ok(match, `${label} CSS rule must exist`);
+  return cssBlockBody(source, source.indexOf("{", match.index));
+}
+
+function responsiveBrandRules(kind) {
+  const header = kind === "viewport"
+    ? /@media\s*\(max-width:\s*(\d+)px\)\s*\{/g
+    : /@container\s+chatclub-topbar\s*\(max-width:\s*(\d+)px\)\s*\{/g;
+  const rules = [];
+  for (let match = header.exec(chatclubCss); match; match = header.exec(chatclubCss)) {
+    const body = cssBlockBody(chatclubCss, header.lastIndex - 1);
+    if (/(?:^|\n)\s*\.brand(?:\s*>|\s*\{)/.test(body)) {
+      rules.push({ maxWidth: Number(match[1]), body });
+    }
+  }
+  return rules;
+}
+
 (async () => {
   const portModule = await import(pathToFileURL(path.join(root, "app/controller-port.js")).href);
   const binding = portModule.createBindOnceControllerPort("Boundary Test", ["read", "write"]);
@@ -102,8 +133,37 @@ const { functionSource } = require("./function-source.cjs");
   assert.doesNotMatch(topbarView, /addEventListener\("keydown"/, "the view must not own dismissal listeners");
   const brandView = functionSource(topbarView, "renderBrand");
   assert.match(brandView, /t\("common\.openInNewTab"\)/, "the Logo must announce its new-tab behavior");
+  assert.match(brandView, /"aria-label": label[\s\S]*"data-tooltip": label[\s\S]*"data-tooltip-id": "topbar\.brand"/, "the Logo must retain its accessible name and tooltip contract");
   assert.match(brandView, /actions\.openNewWorkspaceTab\(\)/, "the visible Logo must open a fresh ChatClub tab");
+  assert.match(brandView, /el\("div", \{\}, APP_NAME\)/, "the wide Logo must retain the complete ChatClub title");
   assert.doesNotMatch(brandView, /openSettings\("about"\)/, "the visible Logo must no longer open About");
+
+  const appShellCss = cssRuleBody(chatclubCss, /(?:^|\n)\.app-shell\s*\{/, "App shell");
+  const topbarCss = cssRuleBody(chatclubCss, /(?:^|\n)\.topbar\s*\{/, "Topbar");
+  assert.match(appShellCss, /container:\s*chatclub-topbar \/ inline-size;/, "the viewport-sized app shell must own the named topbar container");
+  assert.doesNotMatch(appShellCss, /\b(?:padding|border)(?:-(?:inline|left|right|width)[\w-]*)?\s*:/, "the container owner must not subtract inline padding or borders from the viewport breakpoint");
+  assert.doesNotMatch(topbarCss, /container(?:-name|-type)?:\s*chatclub-topbar\b/, "the padded Topbar must not own its responsive inline-size container");
+  assert.match(topbarCss, /padding:\s*6px 8px;/, "Topbar padding must remain independent from the viewport-aligned container boundary");
+  assert.equal((chatclubCss.match(/container:\s*chatclub-topbar \/ inline-size;/g) || []).length, 1, "the topbar container must have one viewport-aligned owner");
+
+  assert.match(
+    chatclubCss,
+    /\.brand\s*\{[^}]*flex:\s*0 0 clamp\(126px, 12vw, 180px\);[^}]*width:\s*clamp\(126px, 12vw, 180px\);[^}]*min-width:\s*126px;/,
+    "the wide brand must reserve its full title width and never flex-shrink"
+  );
+  assert.doesNotMatch(chatclubCss, /\.brand > div\s*\{[^}]*text-overflow:\s*ellipsis;/, "the wide ChatClub title must never enter an ellipsis state");
+  assert.match(chatclubCss, /\.brand-logo\s*\{[^}]*width:\s*28px;[^}]*height:\s*28px;[^}]*flex:\s*0 0 auto;/, "the brand logo must remain a complete 28px square");
+  for (const kind of ["viewport", "container"]) {
+    const rules = responsiveBrandRules(kind);
+    assert.equal(rules.length, 1, `${kind} sizing must have one authoritative brand breakpoint`);
+    const [{ maxWidth, body }] = rules;
+    assert.equal(maxWidth, 1280, `${kind} sizing must collapse the brand at the inclusive 1280px boundary`);
+    assert.match(body, /\.brand\s*\{[^}]*flex:\s*0 0 40px;[^}]*width:\s*40px;[^}]*min-width:\s*40px;/, `${kind} collapse must reserve the logo's complete 40px button box`);
+    assert.match(body, /\.brand > div\s*\{[^}]*display:\s*none;/, `${kind} collapse must hide the title instead of truncating it`);
+    for (const [width, expectedCollapsed] of [[1279, true], [1280, true], [1281, false]]) {
+      assert.equal(width <= maxWidth, expectedCollapsed, `${kind} width ${width}px must ${expectedCollapsed ? "hide" : "show"} the complete ChatClub title`);
+    }
+  }
 
   assert.match(preferredModel, /workspace:\s*"object"/, "Preferred Model must consume a stable workspace port");
   assert.doesNotMatch(preferredModel, /\bcomposer\s*:\s*"object"/, "Preferred Model readiness must not depend on the Composer controller");

@@ -135,6 +135,7 @@ button { cursor: pointer; }
   display: grid;
   grid-template-rows: 51px minmax(0, 1fr);
   overflow: hidden;
+  container: chatclub-topbar / inline-size;
 }
 
 .app-shell.fullscreen-mode {
@@ -161,7 +162,6 @@ button { cursor: pointer; }
   position: sticky;
   top: 0;
   z-index: 20;
-  container: chatclub-topbar / inline-size;
 }
 
 .topbar.topbar-editing {
@@ -554,9 +554,9 @@ button { cursor: pointer; }
   font: inherit;
   font-weight: 800;
   letter-spacing: 0;
-  flex: 0 1 clamp(126px, 12vw, 180px);
+  flex: 0 0 clamp(126px, 12vw, 180px);
   width: clamp(126px, 12vw, 180px);
-  min-width: 0;
+  min-width: 126px;
   overflow: hidden;
   white-space: nowrap;
   cursor: pointer;
@@ -572,8 +572,7 @@ button { cursor: pointer; }
 }
 
 .brand > div {
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex: 0 0 auto;
 }
 
 .brand small {
@@ -1676,8 +1675,13 @@ button { cursor: pointer; }
 
 @media (max-width: 1280px) {
   .brand {
-    flex-basis: clamp(96px, 10vw, 126px);
-    width: clamp(96px, 10vw, 126px);
+    flex: 0 0 40px;
+    width: 40px;
+    min-width: 40px;
+  }
+
+  .brand > div {
+    display: none;
   }
 
   .composer {
@@ -1700,11 +1704,6 @@ button { cursor: pointer; }
 }
 
 @container chatclub-topbar (max-width: 2200px) {
-  .brand {
-    flex-basis: clamp(96px, 10vw, 126px);
-    width: clamp(96px, 10vw, 126px);
-  }
-
   .composer {
     min-width: 360px;
   }
@@ -1724,31 +1723,25 @@ button { cursor: pointer; }
   }
 }
 
-@media (max-width: 920px) {
+@container chatclub-topbar (max-width: 1280px) {
   .brand {
-    flex-basis: 28px;
-    width: 28px;
+    flex: 0 0 40px;
+    width: 40px;
+    min-width: 40px;
   }
 
   .brand > div {
     display: none;
   }
+}
 
+@media (max-width: 920px) {
   .composer {
     min-width: 260px;
   }
 }
 
 @container chatclub-topbar (max-width: 920px) {
-  .brand {
-    flex-basis: 28px;
-    width: 28px;
-  }
-
-  .brand > div {
-    display: none;
-  }
-
   .composer {
     min-width: 260px;
   }
@@ -5421,11 +5414,152 @@ body.settings-tab-group-button-dragging iframe {
   justify-self: stretch;
 }
 
-.model-preference-all-sources-select {
+.model-preference-all-sources-control {
+  display: grid;
+  gap: 5px;
   min-width: 0;
   width: 100%;
-  max-width: 220px;
+  max-width: 280px;
   justify-self: stretch;
+}
+
+.model-preference-all-sources-heading {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 5px;
+  min-width: 0;
+}
+
+.model-preference-all-sources-title {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 720;
+  line-height: 1.25;
+}
+
+.model-preference-all-sources-info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  color: var(--muted);
+  border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--panel-2) 82%, var(--panel));
+  cursor: help;
+  outline: none;
+  transition: color 160ms ease, border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.model-preference-all-sources-info:hover,
+.model-preference-all-sources-info:focus-visible {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--primary) 48%, var(--line));
+  background: color-mix(in srgb, var(--primary) 12%, var(--panel-2));
+}
+
+.model-preference-all-sources-info:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 20%, transparent);
+}
+
+.model-preference-all-sources-info-glyph {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+}
+
+.model-preference-all-sources-info-glyph .svg-icon {
+  width: 12px;
+  height: 12px;
+}
+
+.model-preference-all-sources-info-glyph::after {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: 5px;
+  width: 14px;
+  height: 1.5px;
+  border-radius: 999px;
+  background: currentColor;
+  transform: rotate(-45deg);
+  transform-origin: center;
+}
+
+.model-preference-all-sources-info.tooltip-trigger[data-tooltip-wrap="true"]::after {
+  width: min(280px, calc(100vw - 24px));
+}
+
+.model-preference-all-sources-segments {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) repeat(2, minmax(0, 1fr));
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--line) 84%, transparent);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--panel) 76%, var(--panel-2));
+}
+
+.model-preference-all-sources-option {
+  position: relative;
+  display: block;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.model-preference-all-sources-option + .model-preference-all-sources-option {
+  border-left: 1px solid color-mix(in srgb, var(--line) 84%, transparent);
+}
+
+.model-preference-all-sources-option input {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.model-preference-all-sources-option-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 34px;
+  height: 100%;
+  padding: 5px 7px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 680;
+  line-height: 1.15;
+  text-align: center;
+  overflow-wrap: anywhere;
+  transition: color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.model-preference-all-sources-option:hover .model-preference-all-sources-option-label {
+  color: var(--text);
+  background: color-mix(in srgb, var(--panel-2) 82%, var(--panel));
+}
+
+.model-preference-all-sources-option input:checked + .model-preference-all-sources-option-label {
+  color: var(--text);
+  background: color-mix(in srgb, var(--primary) 24%, var(--panel));
+}
+
+.model-preference-all-sources-option input:focus-visible + .model-preference-all-sources-option-label {
+  position: relative;
+  z-index: 2;
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--primary) 76%, transparent);
 }
 
 .model-thinking-toggle {
@@ -5611,7 +5745,7 @@ body.settings-tab-group-button-dragging iframe {
   }
 
   .model-preference-model-select,
-  .model-preference-all-sources-select {
+  .model-preference-all-sources-control {
     max-width: none;
   }
 }
@@ -6380,6 +6514,10 @@ body.settings-tab-group-button-dragging iframe {
   font-size: 12px;
   line-height: 1.48;
   white-space: pre;
+}
+
+.settings-userscript-permission-notice[hidden] {
+  display: none;
 }
 
 .settings-info-callout {
