@@ -1,8 +1,12 @@
 import { currentExtensionTabId, extensionApi, runtimeRequest } from "../../shared/extension-api.js";
+import { stripNotionFrameLoadNonce } from "../../shared/chat-frame-config.js";
 import { verifyContentFrameRegistration } from "../../shared/frame-rpc.js";
 import { CONTENT_RUNTIME_IDENTITY } from "../../shared/content-runtime-identity.js";
-import { contentRuntimePackageBundleIdentityMatches } from "../../shared/content-runtime-package-identity.js";
-import { contentInjectionPlan } from "../../shared/frame-commands.js";
+import {
+  contentRuntimeIdentityForBundle,
+  contentRuntimePackageBundleIdentityMatches
+} from "../../shared/content-runtime-package-identity.js";
+import { CONTENT_BUNDLES, contentInjectionPlan } from "../../shared/frame-commands.js";
 import {
   CONTENT_BRIDGE_VERSION,
   EXTENSION_RUNTIME_RELAY_SOURCE,
@@ -12,7 +16,31 @@ import { validateControllerContract } from "../controller-contract.js";
 import { createFrameBindingChallengeRegistry } from "./frame-binding.js";
 
 const CONTENT_FRAME_REPAIR_RETRY_DELAYS = Object.freeze([350, 900, 1800, 3600, 7200]);
+const GROK_COOKIE_RUNTIME_IDENTITY = contentRuntimeIdentityForBundle(CONTENT_BUNDLES.grokCookie.file);
 const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, Math.max(0, Number(ms) || 0)); });
+
+function exactGrokCookieRuntimeHost(value) {
+  try {
+    const url = new URL(String(value || ""));
+    const host = url.hostname.toLowerCase();
+    return url.protocol === "https:" && CONTENT_BUNDLES.grokCookie.hosts.includes(host) ? host : "";
+  } catch {
+    return "";
+  }
+}
+
+function grokCookieRuntimeReady(registration = null) {
+  if (!exactGrokCookieRuntimeHost(registration?.href)) return true;
+  const attestation = registration?.grokCookieRuntime;
+  return Boolean(
+    attestation
+    && String(attestation.version || "") === GROK_COOKIE_RUNTIME_IDENTITY.bundle.implementationVersion
+    && contentRuntimePackageBundleIdentityMatches(
+      attestation.runtimeIdentity,
+      CONTENT_BUNDLES.grokCookie.file
+    )
+  );
+}
 
 function contentFrameRepairIsPoisoned(reason) {
   return /(?:content runtime generation\b[^\n]*(?:\bis aborted\b|\bis superseded\b|fail(?:ed)?[- ]closed)|content runtime broker is shut down)/i
@@ -64,7 +92,7 @@ export function createFrameBridgeController(dependencies = {}) {
       iframe?.src,
       iframe?.getAttribute?.("src"),
       app?.url
-    ].map((item) => String(item || "").trim()).filter(Boolean);
+    ].map((item) => String(stripNotionFrameLoadNonce(item) || "").trim()).filter(Boolean);
     return Array.from(new Set(values));
   }
 
@@ -86,6 +114,7 @@ export function createFrameBridgeController(dependencies = {}) {
       || !registration
       || String(registration.bridgeVersion || "") !== CONTENT_BRIDGE_VERSION
       || !contentRuntimePackageBundleIdentityMatches(registration.runtimeIdentity, "content/content.js")
+      || !grokCookieRuntimeReady(registration)
       || !Number.isSafeInteger(frameId)
       || frameId <= 0
       || !browserDocumentId
@@ -171,6 +200,7 @@ export function createFrameBridgeController(dependencies = {}) {
       || (capabilityDocumentCurrent && features.every((feature) => installedCapabilities.includes(feature)));
     if (
       registration
+      && grokCookieRuntimeReady(registration)
       && capabilitiesCurrent
       && (
         !summary
@@ -224,7 +254,9 @@ export function createFrameBridgeController(dependencies = {}) {
     const expectedFileNames = Array.isArray(installed?.plannedFiles) ? installed.plannedFiles.map(String) : [];
     const validPlans = [
       contentInjectionPlan({ features }).map(({ file }) => file),
-      contentInjectionPlan({ features, frameHost: "grok.com" }).map(({ file }) => file)
+      ...CONTENT_BUNDLES.grokCookie.hosts.map((frameHost) => (
+        contentInjectionPlan({ features, frameHost }).map(({ file }) => file)
+      ))
     ];
     const plannedFilesAreValid = expectedFileNames.length > 0
       && new Set(expectedFileNames).size === expectedFileNames.length
@@ -263,7 +295,7 @@ export function createFrameBridgeController(dependencies = {}) {
       skipRegistered: false
     });
     registration = await waitForCurrentContentFrameRegistration(iframe);
-    if (!registration) {
+    if (!registration || !grokCookieRuntimeReady(registration)) {
       const relayError = String(frameBindingRelayErrors.get(iframe) || "").trim();
       return {
         ok: false,

@@ -130,15 +130,24 @@
     NotionAI: Object.freeze([
       "auto",
       "sonnet46",
+      "sonnet5",
       "opus47",
       "opus48",
+      "opus5",
+      "fable5",
       "gemini31pro",
+      "gemini35flash",
+      "gpt56sol",
+      "gpt56terra",
       "gpt52",
       "gpt54",
       "gpt55",
       "grok43",
+      "grok45",
       "grokBuild01",
       "kimi26",
+      "kimi27code",
+      "kimi3",
       "deepseekV4Pro",
       "glm52"
     ])
@@ -1907,19 +1916,29 @@
   const NOTION_MODEL_TARGETS = Object.freeze({
     auto: Object.freeze({ id: "auto", label: "Auto", aliases: ["Automatic"] }),
     sonnet46: Object.freeze({ id: "sonnet46", label: "Claude Sonnet 4.6", aliases: ["Sonnet 4.6"] }),
+    sonnet5: Object.freeze({ id: "sonnet5", label: "Claude Sonnet 5", aliases: ["Sonnet 5"] }),
     opus47: Object.freeze({ id: "opus47", label: "Claude Opus 4.7", aliases: ["Opus 4.7"] }),
     opus48: Object.freeze({ id: "opus48", label: "Claude Opus 4.8", aliases: ["Opus 4.8"] }),
-    gemini31pro: Object.freeze({ id: "gemini31pro", label: "Gemini 3.1 Pro", aliases: ["Gemini Pro"] }),
+    opus5: Object.freeze({ id: "opus5", label: "Claude Opus 5", aliases: ["Opus 5"] }),
+    fable5: Object.freeze({ id: "fable5", label: "Claude Fable 5", aliases: ["Fable 5"] }),
+    gemini31pro: Object.freeze({ id: "gemini31pro", label: "Gemini 3.1 Pro", aliases: [] }),
+    gemini35flash: Object.freeze({ id: "gemini35flash", label: "Gemini 3.5 Flash", aliases: [] }),
+    gpt56sol: Object.freeze({ id: "gpt56sol", label: "GPT-5.6 Sol", aliases: ["GPT 5.6 Sol"] }),
+    gpt56terra: Object.freeze({ id: "gpt56terra", label: "GPT-5.6 Terra", aliases: ["GPT 5.6 Terra"] }),
     gpt52: Object.freeze({ id: "gpt52", label: "GPT-5.2", aliases: ["GPT 5.2"] }),
     gpt54: Object.freeze({ id: "gpt54", label: "GPT-5.4", aliases: ["GPT 5.4"] }),
     gpt55: Object.freeze({ id: "gpt55", label: "GPT-5.5", aliases: ["GPT 5.5"] }),
-    grok43: Object.freeze({ id: "grok43", label: "Grok 4.3", aliases: ["Grok 43", "grok43"] }),
-    grokBuild01: Object.freeze({ id: "grokBuild01", label: "Grok Build 0.1", aliases: ["Grok Build 01", "Grok Build"] }),
-    kimi26: Object.freeze({ id: "kimi26", label: "Kimi K2.6", aliases: ["Kimi K2.6"] }),
-    deepseekV4Pro: Object.freeze({ id: "deepseekV4Pro", label: "DeepSeek V4 Pro", aliases: ["DeepSeek V4"] }),
-    glm52: Object.freeze({ id: "glm52", label: "GLM 5.2", aliases: ["GLM-5.2", "GLM"] })
+    grok43: Object.freeze({ id: "grok43", label: "Grok 4.3", aliases: [] }),
+    grok45: Object.freeze({ id: "grok45", label: "Grok 4.5", aliases: [] }),
+    grokBuild01: Object.freeze({ id: "grokBuild01", label: "Grok Build 0.1", aliases: ["Grok Build 01"] }),
+    kimi26: Object.freeze({ id: "kimi26", label: "Kimi K2.6", aliases: [] }),
+    kimi27code: Object.freeze({ id: "kimi27code", label: "Kimi K2.7 Code", aliases: [] }),
+    kimi3: Object.freeze({ id: "kimi3", label: "Kimi K3", aliases: [] }),
+    deepseekV4Pro: Object.freeze({ id: "deepseekV4Pro", label: "DeepSeek V4 Pro", aliases: [] }),
+    glm52: Object.freeze({ id: "glm52", label: "GLM 5.2", aliases: ["GLM-5.2"] })
   });
   const NOTION_MODEL_TRIGGER_SELECTORS = Object.freeze([
+    '[data-testid="agent-chat-model-button"]',
     '[data-testid="unified-chat-model-button"]',
     '[data-testid*="model" i]',
     '[aria-label*="model" i]',
@@ -1934,6 +1953,10 @@
     '[role="button"][aria-haspopup="listbox"]',
     '[role="combobox"]',
     "button"
+  ]);
+  const NOTION_MODEL_DIRECT_TRIGGER_SELECTORS = Object.freeze([
+    '[data-testid="agent-chat-model-button"]',
+    '[data-testid="unified-chat-model-button"]'
   ]);
   const NOTION_MODEL_MENU_ROOT_SELECTORS = Object.freeze([
     '[role="menu"]',
@@ -1964,35 +1987,82 @@
     return [target?.label, ...(target?.aliases || [])].map(notionText).filter(Boolean);
   }
 
+  function notionTextEvidence(value) {
+    const evidence = new Set();
+    const add = (candidate) => {
+      const normalized = notionText(candidate);
+      if (normalized) evidence.add(normalized);
+    };
+    const raw = String(value || "");
+    add(raw);
+    for (const line of raw.split(/[\r\n\u2028\u2029]+/)) add(line);
+    return [...evidence];
+  }
+
   function notionTextLooksLikeTarget(value, target) {
-    const textValue = notionText(value);
-    if (!textValue || !target) return false;
-    if (notionLabels(target).some((label) => textValue === label || textValue.includes(label))) return true;
-    if (target.id === "gemini31pro") return textValue.includes("gemini") && textValue.includes("pro");
-    if (target.id === "opus48") return textValue.includes("opus") && textValue.includes("4.8");
-    if (target.id === "opus47") return textValue.includes("opus") && textValue.includes("4.7");
-    if (target.id === "sonnet46") return textValue.includes("sonnet") && textValue.includes("4.6");
-    if (target.id === "grok43") return textValue.includes("grok") && textValue.includes("4.3");
-    if (target.id === "grokBuild01") return textValue.includes("grok") && textValue.includes("build");
-    if (target.id === "deepseekV4Pro") return textValue.includes("deepseek") && textValue.includes("v4");
-    if (target.id === "kimi26") return textValue.includes("kimi") && textValue.includes("k2.6");
-    if (target.id === "glm52") return textValue.includes("glm") && textValue.includes("5.2");
-    return false;
+    if (!target) return false;
+    const labels = notionLabels(target);
+    return notionTextEvidence(value).some((candidate) => labels.includes(candidate));
   }
 
-  function notionModelIdFromText(value) {
-    for (const [id, target] of Object.entries(NOTION_MODEL_TARGETS)) {
-      if (notionTextLooksLikeTarget(value, target)) return id;
+  function notionModelIdsFromEvidence(evidence) {
+    const ids = new Set();
+    for (const candidate of evidence) {
+      for (const [id, target] of Object.entries(NOTION_MODEL_TARGETS)) {
+        if (notionLabels(target).includes(candidate)) ids.add(id);
+      }
     }
-    return "";
+    return ids;
   }
 
-  function countNotionModelTargets(value) {
-    return Object.values(NOTION_MODEL_TARGETS).reduce((count, target) => count + (notionTextLooksLikeTarget(value, target) ? 1 : 0), 0);
+  function notionElementTextEvidence(element) {
+    if (!element) return [];
+    const evidence = new Set();
+    const add = (value) => {
+      for (const candidate of notionTextEvidence(value)) evidence.add(candidate);
+    };
+    const nodes = [element];
+    try { nodes.push(...element.querySelectorAll?.("*") || []); } catch {}
+    for (const node of nodes) {
+      add(node.getAttribute?.("aria-label"));
+      add(node.getAttribute?.("aria-valuetext"));
+      add(node.getAttribute?.("title"));
+      add(node.getAttribute?.("data-value"));
+      add(node.getAttribute?.("value"));
+      add(node.innerText || node.textContent || "");
+      add(node.value);
+      add(elementText(node));
+    }
+    return [...evidence];
+  }
+
+  function notionModelIdsFromElement(element) {
+    return notionModelIdsFromEvidence(notionElementTextEvidence(element));
+  }
+
+  function notionElementLooksLikeTarget(element, target) {
+    if (!element || !target) return false;
+    return notionElementTextEvidence(element).some((candidate) => notionTextLooksLikeTarget(candidate, target));
+  }
+
+  function notionModelIdFromElement(element) {
+    const ids = notionModelIdsFromElement(element);
+    return ids.size === 1 ? [...ids][0] : "";
+  }
+
+  function notionResponsiveComposerMinWidth(wideMinimum) {
+    const viewportWidth = Number(window.innerWidth || document.documentElement?.clientWidth || 0);
+    if (!(viewportWidth > 0)) return wideMinimum;
+    return Math.min(wideMinimum, Math.max(216, Math.floor(viewportWidth * 0.7)));
   }
 
   function isLikelyNotionMainComposerRect(rect) {
-    if (!rect || rect.width < 280 || rect.height < 40 || rect.height > 280) return false;
+    if (
+      !rect
+      || rect.width < notionResponsiveComposerMinWidth(280)
+      || rect.height < 40
+      || rect.height > 280
+    ) return false;
     const viewportWidth = Number(window.innerWidth || document.documentElement?.clientWidth || 0);
     const viewportHeight = Number(window.innerHeight || document.documentElement?.clientHeight || 0);
     if (viewportWidth > 0 && rect.right < viewportWidth * 0.35) return false;
@@ -2038,7 +2108,12 @@
       let best = element;
       while (node && node.nodeType === 1 && node !== document.body) {
         const rect = rectOf(node);
-        if (rect && rect.width >= 320 && rect.height >= 44 && rect.height <= 260) best = node;
+        if (
+          rect
+          && rect.width >= notionResponsiveComposerMinWidth(320)
+          && rect.height >= 44
+          && rect.height <= 260
+        ) best = node;
         node = node.parentElement || null;
       }
       const rect = rectOf(best);
@@ -2063,35 +2138,48 @@
   function scoreNotionTrigger(element, options = {}) {
     if (!element || !visible(element) || (!options.allowDisabled && isDisabledElement(element))) return -1;
     if (element.closest?.(NOTION_MODEL_MENU_ROOT_SELECTORS.join(", "))) return -1;
-    const textValue = elementText(element);
     const dataTestId = String(element.getAttribute?.("data-testid") || "").toLowerCase();
     const ariaLabel = String(element.getAttribute?.("aria-label") || "");
     const title = String(element.getAttribute?.("title") || "");
     const popup = String(element.getAttribute?.("aria-haspopup") || "").trim().toLowerCase();
     const nearMainComposer = isNotionTriggerNearMainComposer(element, options.composerRoot || null, options.composerRect || null);
-    let score = 0;
+    let semanticScore = 0;
+    if (dataTestId === "agent-chat-model-button" || dataTestId === "unified-chat-model-button") semanticScore += 1000;
+    if (dataTestId.includes("model")) semanticScore += 500;
+    if (/\bmodel\b|模型/i.test(ariaLabel)) semanticScore += 420;
+    if (/\bmodel\b|模型/i.test(title)) semanticScore += 320;
+    if (notionModelIdFromElement(element)) semanticScore += 360;
+    if (semanticScore <= 0) return -1;
+    let score = semanticScore;
     if (nearMainComposer) score += 900;
     if (options.composerRoot && !nearMainComposer) score -= 420;
-    if (dataTestId === "unified-chat-model-button") score += 1000;
-    if (dataTestId.includes("model")) score += 500;
-    if (/\bmodel\b|模型/i.test(ariaLabel)) score += 420;
-    if (/\bmodel\b|模型/i.test(title)) score += 320;
-    if (notionModelIdFromText(textValue)) score += 360;
     if (popup === "menu" || popup === "listbox") score += 80;
-    if (notionText(textValue) === "auto" || notionTextLooksLikeTarget(textValue, NOTION_MODEL_TARGETS.auto)) score += 80;
+    if (notionElementLooksLikeTarget(element, NOTION_MODEL_TARGETS.auto)) score += 80;
     return score > 0 ? score : -1;
   }
 
   function findNotionControl({ allowDisabled = false } = {}) {
+    const directCandidates = visibleSelectorElements(NOTION_MODEL_DIRECT_TRIGGER_SELECTORS)
+      .map((element) => ({
+        element,
+        score: scoreNotionTrigger(element, { allowDisabled }),
+        bottom: Number(element.getBoundingClientRect?.().bottom || 0)
+      }))
+      .filter((item) => item.score > 0);
+    directCandidates.sort((a, b) => b.score - a.score || b.bottom - a.bottom);
+    if (directCandidates[0]?.element) return directCandidates[0].element;
+
     const composerRoot = findNotionComposerRoot();
+    if (!composerRoot) return null;
     const composerRect = rectOf(composerRoot);
     const candidates = visibleSelectorElements(NOTION_MODEL_TRIGGER_SELECTORS)
       .map((element) => ({
         element,
         score: scoreNotionTrigger(element, { composerRoot, composerRect, allowDisabled }),
+        nearMainComposer: isNotionTriggerNearMainComposer(element, composerRoot, composerRect),
         bottom: Number(element.getBoundingClientRect?.().bottom || 0)
       }))
-      .filter((item) => item.score > 0);
+      .filter((item) => item.nearMainComposer && item.score > 0);
     candidates.sort((a, b) => b.score - a.score || b.bottom - a.bottom);
     return candidates[0]?.element || null;
   }
@@ -2111,7 +2199,7 @@
     let score = 0;
     if (normalized.includes("select a model")) score += 160;
     if (normalized.includes("open models")) score += 80;
-    score += Math.min(5, countNotionModelTargets(textValue)) * 80;
+    score += Math.min(5, notionModelIdsFromElement(root).size) * 80;
     return score >= 160 ? score : -1;
   }
 
@@ -2136,28 +2224,27 @@
     return waitFor(() => notionMenuRoot(trigger), 3000, 120);
   }
 
-  function notionMenuItemRow(element, root, matchesSpec = null) {
+  function notionMenuItemRow(element, root, modelId = "") {
     const rootArea = elementArea(root);
     const rootRect = rectOf(root);
     let bestRoleRow = null;
     let bestAction = null;
     let bestRowLike = null;
-    let fallback = null;
     let node = element;
     while (node && node.nodeType === 1 && node !== root) {
-      if (!visible(node) || isDisabledElement(node)) {
+      if (!visible(node)) {
         node = node.parentElement || null;
         continue;
       }
-      const textValue = elementText(node);
-      const targetCount = countNotionModelTargets(textValue);
+      if (isDisabledElement(node)) return null;
+      const targetIds = notionModelIdsFromElement(node);
       const area = elementArea(node);
       if (rootArea > 0 && area >= rootArea * 0.85) break;
-      if (typeof matchesSpec === "function" && !matchesSpec(node)) {
+      if (modelId && !targetIds.has(modelId)) {
         node = node.parentElement || null;
         continue;
       }
-      if (targetCount > 1) {
+      if (targetIds.size > 1) {
         node = node.parentElement || null;
         continue;
       }
@@ -2174,29 +2261,27 @@
         rect.width <= rootRect.width + 32;
       if (roleRowLike && !bestRoleRow) bestRoleRow = node;
       if (actionLike && !bestAction) bestAction = node;
-      if (rowLike && !bestRowLike) bestRowLike = node;
-      if (!fallback) fallback = node;
+      if (rowLike) bestRowLike = node;
       node = node.parentElement || null;
     }
-    return bestRoleRow || bestAction || bestRowLike || fallback || element;
+    return bestRoleRow || bestAction || bestRowLike || null;
   }
 
   function scoreNotionItem(element, modelId) {
     if (!element || !visible(element) || isDisabledElement(element)) return Number.NEGATIVE_INFINITY;
-    const textValue = elementText(element);
     const target = NOTION_MODEL_TARGETS[modelId];
+    if (!target || !notionElementLooksLikeTarget(element, target)) return Number.NEGATIVE_INFINITY;
     const role = String(element.getAttribute?.("role") || "").toLowerCase();
     const tag = String(element.tagName || "").toLowerCase();
     const tabIndex = String(element.getAttribute?.("tabindex") || "").trim();
-    const targetCount = countNotionModelTargets(textValue);
+    const targetCount = notionModelIdsFromElement(element).size;
     let score = 0;
     if (role === "menuitem" || role === "menuitemradio" || role === "option") score += 900;
     if (tag === "button" || role === "button") score += 360;
     if (tabIndex && tabIndex !== "-1") score += 120;
     if (targetCount === 1) score += 260;
     if (targetCount > 1) score -= 700;
-    if (notionTextLooksLikeTarget(textValue, target)) score += 620;
-    if (notionLabels(target).includes(notionText(textValue))) score += 260;
+    score += 880;
     const rect = rectOf(element);
     if (rect && rect.height >= 24 && rect.height <= 72) score += 100;
     if (rect && rect.width >= 120) score += 40;
@@ -2207,27 +2292,27 @@
   function findNotionItem(root, modelId) {
     if (!root || !NOTION_MODEL_TARGETS[modelId]) return null;
     const target = NOTION_MODEL_TARGETS[modelId];
-    const matchesSpec = (element) => notionTextLooksLikeTarget(elementText(element), target);
     const seenRows = new Set();
     const rows = [];
     const add = (element) => {
-      if (!element || !matchesSpec(element)) return;
-      const row = notionMenuItemRow(element, root, matchesSpec);
-      if (!row || seenRows.has(row) || !root.contains?.(row)) return;
-      if (!matchesSpec(row)) return;
-      if (countNotionModelTargets(elementText(row)) > 1) return;
+      if (!element || isDisabledElement(element) || !notionElementLooksLikeTarget(element, target)) return;
+      const row = notionMenuItemRow(element, root, modelId);
+      if (!row || isDisabledElement(row) || seenRows.has(row) || !root.contains?.(row)) return;
+      const targetIds = notionModelIdsFromElement(row);
+      if (targetIds.size !== 1 || !targetIds.has(modelId)) return;
+      if (!Number.isFinite(scoreNotionItem(row, modelId))) return;
       seenRows.add(row);
       rows.push(row);
     };
     for (const element of visibleSelectorElements(NOTION_MODEL_MENU_ITEM_SELECTORS, root)) add(element);
     for (const element of visibleSelectorElements(["div", "span", "button"], root)) add(element);
     rows.sort((a, b) => scoreNotionItem(b, modelId) - scoreNotionItem(a, modelId));
-    return rows[0] || null;
+    return rows.length === 1 ? rows[0] : null;
   }
 
   function findNotionPointTarget(element, root, modelId) {
     const target = NOTION_MODEL_TARGETS[modelId];
-    const matchesSpec = (candidate) => notionTextLooksLikeTarget(elementText(candidate), target);
+    const matchesSpec = (candidate) => notionElementLooksLikeTarget(candidate, target);
     const point = centerPoint(element);
     const pointElement = elementFromPoint(point, element);
     if (!pointElement || !root?.contains?.(pointElement)) return null;
@@ -2237,9 +2322,9 @@
         visible(node) &&
         !isDisabledElement(node) &&
         matchesSpec(node) &&
-        countNotionModelTargets(elementText(node)) <= 1
+        notionModelIdsFromElement(node).size <= 1
       ) {
-        const row = notionMenuItemRow(node, root, matchesSpec);
+        const row = notionMenuItemRow(node, root, modelId);
         if (row && root.contains?.(row) && matchesSpec(row)) return row;
       }
       node = node.parentElement || null;
@@ -2252,12 +2337,13 @@
 
   function notionElementHasSelectedState(element) {
     if (!element) return false;
-    for (const attr of ["aria-checked", "aria-selected", "aria-current", "data-state", "data-selected", "data-active", "data-checked"]) {
+    for (const attr of ["aria-checked", "aria-selected", "aria-current", "aria-pressed", "data-state", "data-selected", "data-active", "data-checked"]) {
       const value = String(element.getAttribute?.(attr) || "").trim().toLowerCase();
-      if (value === "true" || value === "checked" || value === "selected" || value === "active" || value === "page") return true;
+      if (["true", "checked", "selected", "active", "on", "page", "step", "location", "date", "time"].includes(value)) return true;
     }
     const className = String(element.className || "");
-    return /\b(?:selected|checked|active)\b/i.test(className) && !/\b(?:unselected|inactive|unchecked)\b/i.test(className);
+    return /\b(?:selected|checked|active)\b/i.test(className)
+      && !/\b(?:not[-_\s]?(?:selected|checked|active)|unselected|inactive|unchecked)\b/i.test(className);
   }
 
   function notionRowHasRightCheckMarker(row) {
@@ -2265,10 +2351,12 @@
     if (!rowRect || rowRect.width <= 0 || rowRect.height <= 0) return false;
     if (/[✓✔]/.test(String(row?.innerText || row?.textContent || ""))) return true;
     for (const marker of visibleSelectorElements([
-      "[aria-label*='check' i]",
-      "[aria-label*='selected' i]",
-      "[data-testid*='check' i]",
-      "[class*='check' i]",
+      "[aria-label]",
+      "[data-testid]",
+      "[class]",
+      "[title]",
+      "[data-icon]",
+      "[data-icon-name]",
       "svg"
     ], row)) {
       if (notionElementHasSelectedState(marker)) return true;
@@ -2277,14 +2365,12 @@
         marker.getAttribute?.("data-testid"),
         marker.getAttribute?.("class"),
         marker.getAttribute?.("title"),
+        marker.getAttribute?.("data-icon"),
+        marker.getAttribute?.("data-icon-name"),
         marker.innerText || marker.textContent || ""
       ].filter(Boolean).join(" ");
+      if (/\b(?:not[-_ ]?(?:selected|checked|active)|unselected|unchecked|inactive)\b/i.test(label)) continue;
       if (/\b(?:check|checked|selected|done)\b|✓|✔/i.test(label)) return true;
-      const rect = rectOf(marker);
-      if (!rect || rect.width < 5 || rect.height < 5 || rect.width > 32 || rect.height > 32) continue;
-      const nearRight = rect.left >= rowRect.left + rowRect.width * 0.66 && rect.right <= rowRect.right + 10;
-      const verticallyInside = rect.top >= rowRect.top - 3 && rect.bottom <= rowRect.bottom + 3;
-      if (nearRight && verticallyInside) return true;
     }
     return false;
   }
@@ -2296,6 +2382,7 @@
       "[aria-checked]",
       "[aria-selected]",
       "[aria-current]",
+      "[aria-pressed]",
       "[data-state]",
       "[data-selected]",
       "[data-active]",
@@ -2314,9 +2401,9 @@
       if (!element) return;
       const row = notionMenuItemRow(element, root);
       if (!row || seenRows.has(row) || !root.contains?.(row)) return;
-      const textValue = elementText(row);
-      if (countNotionModelTargets(textValue) !== 1) return;
-      const id = notionModelIdFromText(textValue);
+      const targetIds = notionModelIdsFromElement(row);
+      if (targetIds.size !== 1) return;
+      const id = [...targetIds][0];
       if (!id || !notionRowLooksSelected(row)) return;
       seenRows.add(row);
       rows.push({ element: row, id, score: scoreNotionItem(row, id) });
@@ -2324,14 +2411,14 @@
     for (const element of visibleSelectorElements(NOTION_MODEL_MENU_ITEM_SELECTORS, root)) add(element);
     for (const element of visibleSelectorElements(["div", "span", "button", "svg"], root)) add(element);
     rows.sort((a, b) => b.score - a.score);
-    return rows[0]?.id || "";
+    return rows.length === 1 ? rows[0].id : "";
   }
 
   function currentNotionModelId(trigger = null) {
     const selected = selectedNotionModelId(notionMenuRoot(trigger));
     if (selected) return selected;
     const triggerElement = trigger && visible(trigger) ? trigger : findNotionIndicator();
-    return notionModelIdFromText(elementText(triggerElement));
+    return notionModelIdFromElement(triggerElement);
   }
 
   async function waitNotionReadableCurrent(trigger = null, timeoutMs = 2200) {

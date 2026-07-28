@@ -2,7 +2,9 @@ import {
   DEFAULT_GEMINI_THINKING_LEVEL,
   GEMINI_THINKING_LEVEL_PREFERENCE_KEY,
   GEMINI_THINKING_LEVEL_TARGETS,
-  MODEL_PREFERENCE_TARGETS
+  MODEL_PREFERENCE_TARGETS,
+  NOTION_ALL_SOURCES_PREFERENCE_KEY,
+  NOTION_ALL_SOURCES_PREFERENCE_VALUES
 } from "../../shared/constants.js";
 import { t } from "../../shared/i18n.js";
 import { createId } from "../../shared/storage-schema.js";
@@ -11,6 +13,7 @@ import { createFrameToast } from "../../ui/frame-toast.js";
 import { createSvgIcon } from "../../ui/icons.js";
 import { validateControllerContract } from "../controller-contract.js";
 import { createFrameRequest } from "../frame-request.js";
+import { waitForPreferredModelBridgePreparation } from "./bridge-preparation.js";
 
 const MODEL_PREFERENCE_APP_ID_ALIASES = Object.freeze({
   Gemini: "Gemini",
@@ -24,7 +27,10 @@ const MODEL_PREFERENCE_APP_ID_ALIASES = Object.freeze({
 });
 const MODEL_PREFERENCE_APPLY_RETRY_DELAYS = Object.freeze([0, 700, 1600, 3200, 5200, 8000, 12000]);
 const MODEL_PREFERENCE_READY_APPLY_RETRY_DELAYS = Object.freeze([1600, 3200, 5200, 8000, 12000, 16000]);
+const NOTION_ALL_SOURCES_APPLY_RETRY_DELAYS = Object.freeze([0, 800, 2000, 4200]);
+const NOTION_ALL_SOURCES_READY_APPLY_RETRY_DELAYS = Object.freeze([1000, 2400, 5000]);
 const MODEL_PREFERENCE_APPLY_TIMEOUT_MS = 15000;
+const NOTION_ALL_SOURCES_APPLY_TIMEOUT_MS = 48000;
 const MODEL_PREFERENCE_CANCEL_TIMEOUT_MS = 1200;
 const MODEL_PREFERENCE_SUBMISSION_NAVIGATION_GRACE_MS = 15000;
 const FRAME_SUBMIT_ERROR_MAX_CHARS = 160;
@@ -91,14 +97,28 @@ export function createPreferredModelController(dependencies = {}) {
       : DEFAULT_GEMINI_THINKING_LEVEL;
   }
 
+  function preferredNotionAllSourcesState() {
+    const preferences = preferredModelState.modelPreferenceDraft || preferredModelState.options?.modelPreferences || {};
+    const value = String(preferences[NOTION_ALL_SOURCES_PREFERENCE_KEY] || "");
+    return NOTION_ALL_SOURCES_PREFERENCE_VALUES.includes(value) ? value : "";
+  }
+
+  function preferredModelApplyTimeoutMs(payload = {}) {
+    return payload.appId === "NotionAI" && payload.allSourcesState
+      ? NOTION_ALL_SOURCES_APPLY_TIMEOUT_MS
+      : MODEL_PREFERENCE_APPLY_TIMEOUT_MS;
+  }
+
   function preferredModelPayloadForApp(app) {
     const appId = preferredModelAppId(app);
     const modelId = preferredModelForApp(app);
-    if (!modelId) return null;
+    const allSourcesState = appId === "NotionAI" ? preferredNotionAllSourcesState() : "";
+    if (!modelId && !allSourcesState) return null;
     return {
       appId,
       modelId,
-      ...(appId === "Gemini" && modelId === "pro" ? { thinkingLevel: preferredGeminiThinkingLevel() } : {})
+      ...(appId === "Gemini" && modelId === "pro" ? { thinkingLevel: preferredGeminiThinkingLevel() } : {}),
+      ...(allSourcesState ? { allSourcesState } : {})
     };
   }
 
@@ -114,9 +134,21 @@ export function createPreferredModelController(dependencies = {}) {
     const target = (MODEL_PREFERENCE_TARGETS[payload.appId] || [])
       .find((item) => item.id === payload.modelId);
     const baseLabel = String(target?.label || payload.modelId || payload.appId || "");
-    if (payload.appId !== "Gemini" || payload.modelId !== "pro" || !payload.thinkingLevel) return baseLabel;
-    const level = GEMINI_THINKING_LEVEL_TARGETS.find((item) => item.id === payload.thinkingLevel);
-    return level?.label ? baseLabel + " · " + level.label : baseLabel;
+    let label = baseLabel;
+    if (payload.appId === "Gemini" && payload.modelId === "pro" && payload.thinkingLevel) {
+      const level = GEMINI_THINKING_LEVEL_TARGETS.find((item) => item.id === payload.thinkingLevel);
+      if (level?.label) label += " · " + level.label;
+    }
+    if (payload.appId === "NotionAI" && payload.allSourcesState) {
+      const sourceStateLabel = t(
+        payload.allSourcesState === "enabled"
+          ? "modelPreferences.allSourcesEnabled"
+          : "modelPreferences.allSourcesDisabled"
+      );
+      const sourceLabel = t("modelPreferences.allSources") + " · " + sourceStateLabel;
+      label = payload.modelId ? label + " · " + sourceLabel : sourceLabel;
+    }
+    return label;
   }
 
   function compactPreferredModelFailureReason(result = {}) {
@@ -432,8 +464,9 @@ export function createPreferredModelController(dependencies = {}) {
     const payload = preferredModelPayloadForApp(app);
     if (!payload) return "";
     const thinkingLevel = payload.thinkingLevel ? ":" + payload.thinkingLevel : "";
+    const allSourcesState = payload.allSourcesState ? ":sources=" + payload.allSourcesState : "";
     const documentId = String(iframe.dataset.preferredModelDocumentId || "");
-    return payload.appId + ":" + payload.modelId + thinkingLevel + ":" + documentId;
+    return payload.appId + ":" + payload.modelId + thinkingLevel + allSourcesState + ":" + documentId;
   }
 
   function preferredModelSubmissionRouteState(appId, value) {
@@ -940,11 +973,22 @@ export function createPreferredModelController(dependencies = {}) {
     let registration = await verifiedCurrentContentFrameRegistration(iframe);
     if (!registration) {
       record.bridgeRecoveryAttempts = Math.max(0, Number(record.bridgeRecoveryAttempts) || 0) + 1;
-      const prepared = await prepareContentFrameRuntime(iframe);
-      if (!preferredModelRecordIsCurrent(iframe, record) || record.controller?.signal?.aborted) {
+      const preparationSignal = record.controller?.signal || null;
+      const prepared = await waitForPreferredModelBridgePreparation(
+        () => prepareContentFrameRuntime(iframe),
+        {
+          signal: preparationSignal,
+          ownerIsCurrent: () => preferredModelRecordIsCurrent(iframe, record)
+        }
+      );
+      if (
+        prepared?.cancelled
+        || !preferredModelRecordIsCurrent(iframe, record)
+        || preparationSignal?.aborted
+      ) {
         return preferredModelResult(record.runId, {
           cancelled: true,
-          reason: "preferred-model frame was superseded during bridge recovery"
+          reason: prepared?.reason || "preferred-model frame was superseded during bridge recovery"
         });
       }
       registration = prepared?.ok ? await verifiedCurrentContentFrameRegistration(iframe) : null;
@@ -967,7 +1011,7 @@ export function createPreferredModelController(dependencies = {}) {
         "applyPreferredModel",
         payload,
         {
-          timeoutMs: MODEL_PREFERENCE_APPLY_TIMEOUT_MS,
+          timeoutMs: preferredModelApplyTimeoutMs(payload),
           signal: record.controller?.signal,
           expectedDocumentId: registration.documentId
         }
@@ -991,6 +1035,12 @@ export function createPreferredModelController(dependencies = {}) {
 
   async function runPreferredModelRecord(iframe, record) {
     if (!preferredModelRecordIsCurrent(iframe, record) || record.success || record.terminal) return;
+    if (preferredModelFrameIsLoading(iframe)) {
+      record.pending = true;
+      record.inFlight = false;
+      syncPreferredModelInputGate();
+      return;
+    }
     const runId = record.runId;
     const key = record.key;
     record.pending = false;
@@ -1054,8 +1104,21 @@ export function createPreferredModelController(dependencies = {}) {
 
   function schedulePreferredModelApplyToFrame(iframe, options = {}) {
     if (!iframe) return null;
-    const key = preferredModelFrameKey(iframe);
     const existing = preferredModelApplyRuns.get(iframe);
+    const key = preferredModelFrameKey(iframe);
+    if (preferredModelFrameIsLoading(iframe)) {
+      const existingIsSettled = Boolean(existing?.success || existing?.terminal);
+      if (existing?.key === key && existingIsSettled) {
+        syncPreferredModelInputGate();
+        return existing;
+      }
+      if (existing) {
+        stopPreferredModelRecord(iframe, existing, "frame-loading");
+        preferredModelApplyRuns.delete(iframe);
+      }
+      syncPreferredModelInputGate();
+      return null;
+    }
     if (!key) {
       if (existing) {
         stopPreferredModelRecord(iframe, existing, "preference-cleared");
@@ -1080,9 +1143,14 @@ export function createPreferredModelController(dependencies = {}) {
       syncPreferredModelInputGate();
       return null;
     }
-    const delays = options.immediate
-      ? MODEL_PREFERENCE_APPLY_RETRY_DELAYS
-      : MODEL_PREFERENCE_READY_APPLY_RETRY_DELAYS;
+    const notionAllSources = payload.appId === "NotionAI" && Boolean(payload.allSourcesState);
+    const delays = notionAllSources
+      ? (options.immediate
+          ? NOTION_ALL_SOURCES_APPLY_RETRY_DELAYS
+          : NOTION_ALL_SOURCES_READY_APPLY_RETRY_DELAYS)
+      : (options.immediate
+          ? MODEL_PREFERENCE_APPLY_RETRY_DELAYS
+          : MODEL_PREFERENCE_READY_APPLY_RETRY_DELAYS);
     const record = createPreferredModelRecord(iframe, payload, key, delays);
     preferredModelApplyRuns.set(iframe, record);
     schedulePreferredModelRecordRun(iframe, record, delays[0]);

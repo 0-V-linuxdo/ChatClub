@@ -6,7 +6,9 @@ import {
   GEMINI_THINKING_LEVEL_TARGETS,
   MODEL_PREFERENCE_FAILURE_OVERRIDE_POLICIES,
   MODEL_PREFERENCE_FAILURE_POLICIES,
-  MODEL_PREFERENCE_TARGETS
+  MODEL_PREFERENCE_TARGETS,
+  NOTION_ALL_SOURCES_PREFERENCE_KEY,
+  NOTION_ALL_SOURCES_PREFERENCE_VALUES
 } from "../../shared/constants.js";
 import { t } from "../../shared/i18n.js";
 import {
@@ -328,6 +330,56 @@ export function createModelsSettingsSection(ctx) {
     );
   }
 
+  function allSourcesPreferenceOptions() {
+    return NOTION_ALL_SOURCES_PREFERENCE_VALUES.map((value) => ({
+      value,
+      label: value === "enabled"
+        ? t("modelPreferences.allSourcesEnabled")
+        : value === "disabled"
+          ? t("modelPreferences.allSourcesDisabled")
+          : t("modelPreferences.allSourcesUnchanged")
+    }));
+  }
+
+  function notionAllSourcesSelect() {
+    const config = draft();
+    const value = NOTION_ALL_SOURCES_PREFERENCE_VALUES.includes(config[NOTION_ALL_SOURCES_PREFERENCE_KEY])
+      ? config[NOTION_ALL_SOURCES_PREFERENCE_KEY]
+      : "";
+    const control = select(value, allSourcesPreferenceOptions(), {
+      class: "select model-preference-all-sources-select",
+      "aria-label": t("modelPreferences.allSourcesFor", { platform: APP_LABELS.NotionAI }),
+      dataset: { modelPreferenceAllSourcesAppId: "NotionAI" }
+    });
+    control.value = value;
+    control.addEventListener("change", () => {
+      const next = NOTION_ALL_SOURCES_PREFERENCE_VALUES.includes(control.value) ? control.value : "";
+      queueAutoSave({ ...draft(), [NOTION_ALL_SOURCES_PREFERENCE_KEY]: next });
+    });
+    return control;
+  }
+
+  function additionalPreferenceField(appId) {
+    if (appId === "Gemini") {
+      return modelPreferenceRowField(
+        t("modelPreferences.thinkingLevel"),
+        thinkingLevelSwitch(),
+        "model-preference-additional-field model-preference-thinking-field"
+      );
+    }
+    if (appId === "NotionAI") {
+      return modelPreferenceRowField(
+        t("modelPreferences.allSources"),
+        notionAllSourcesSelect(),
+        "model-preference-additional-field model-preference-all-sources-field"
+      );
+    }
+    return el("div", {
+      class: "model-preference-row-field model-preference-additional-field model-preference-thinking-field model-preference-additional-placeholder-field model-preference-thinking-placeholder-field",
+      "aria-hidden": "true"
+    }, el("span", { class: "model-thinking-toggle-placeholder" }));
+  }
+
   function modelPreferenceRowField(label, control, className) {
     return el("div", { class: `model-preference-row-field ${className}`.trim() },
       el("span", { class: "model-preference-row-field-label" }, label),
@@ -338,6 +390,12 @@ export function createModelsSettingsSection(ctx) {
   function row(appId, redraw) {
     const config = draft();
     const platform = APP_LABELS[appId] || appId;
+    const hasAdditionalPreference = appId === "Gemini" || appId === "NotionAI";
+    const rowClasses = [
+      "ui-list-row settings-list-row model-preference-row",
+      appId === "Gemini" ? "model-preference-row-has-thinking" : "",
+      hasAdditionalPreference ? "model-preference-row-has-additional" : ""
+    ].filter(Boolean).join(" ");
     const modelSelect = select(config[appId] || "", preferenceOptions(appId), {
       class: "select model-preference-model-select",
       "aria-label": t("modelPreferences.preferredModelFor", { platform }),
@@ -348,7 +406,7 @@ export function createModelsSettingsSection(ctx) {
       queueAutoSave({ ...draft(), [appId]: modelSelect.value });
     });
     return el("div", {
-      class: `ui-list-row settings-list-row model-preference-row ${appId === "Gemini" ? "model-preference-row-has-thinking" : ""}`.trim(),
+      class: rowClasses,
       draggable: "true",
       dataset: { modelPreferenceAppId: appId },
       ondragstart: (event) => startDrag(event, appId),
@@ -364,16 +422,7 @@ export function createModelsSettingsSection(ctx) {
         modelSelect,
         "model-preference-model-field"
       ),
-      appId === "Gemini"
-        ? modelPreferenceRowField(
-          t("modelPreferences.thinkingLevel"),
-          thinkingLevelSwitch(),
-          "model-preference-thinking-field"
-        )
-        : el("div", {
-          class: "model-preference-row-field model-preference-thinking-field model-preference-thinking-placeholder-field",
-          "aria-hidden": "true"
-        }, el("span", { class: "model-thinking-toggle-placeholder" }))
+      additionalPreferenceField(appId)
     );
   }
 
@@ -415,7 +464,7 @@ export function createModelsSettingsSection(ctx) {
           "",
           t("modelPreferences.platform"),
           t("modelPreferences.preferredModel"),
-          t("modelPreferences.thinkingLevel")
+          t("modelPreferences.additionalOption")
         ],
         preferenceOrder().map((appId) => row(appId, redraw)),
         "settings-manager-list model-preference-list"

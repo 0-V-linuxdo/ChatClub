@@ -2115,6 +2115,32 @@ body.tab-gesture-active * {
   background: rgba(0, 0, 0, var(--frame-loading-overlay-opacity));
 }
 
+.chat-frame-loading-status {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 3;
+  display: none;
+  max-width: calc(100% - 32px);
+  padding: 9px 14px;
+  transform: translate(-50%, -50%);
+  border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+  border-radius: 999px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
+  box-shadow: 0 8px 24px color-mix(in srgb, #000 20%, transparent);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: center;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.chat-card.frame-loading .chat-frame-loading-status:not([hidden]) {
+  display: block;
+}
+
 .chat-frame {
   width: 100%;
   height: 100%;
@@ -5395,6 +5421,13 @@ body.settings-tab-group-button-dragging iframe {
   justify-self: stretch;
 }
 
+.model-preference-all-sources-select {
+  min-width: 0;
+  width: 100%;
+  max-width: 220px;
+  justify-self: stretch;
+}
+
 .model-thinking-toggle {
   min-width: 118px;
   min-height: 34px;
@@ -5520,7 +5553,8 @@ body.settings-tab-group-button-dragging iframe {
     border-top: 1px solid var(--line);
   }
 
-  .model-preference-row-has-thinking {
+  .model-preference-row-has-thinking,
+  .model-preference-row-has-additional {
     grid-template-areas:
       "drag platform"
       "drag model"
@@ -5548,11 +5582,13 @@ body.settings-tab-group-button-dragging iframe {
     grid-area: model;
   }
 
-  .model-preference-thinking-field {
+  .model-preference-thinking-field,
+  .model-preference-additional-field {
     grid-area: thinking;
   }
 
-  .model-preference-thinking-placeholder-field {
+  .model-preference-thinking-placeholder-field,
+  .model-preference-additional-placeholder-field {
     display: none;
   }
 
@@ -5574,7 +5610,8 @@ body.settings-tab-group-button-dragging iframe {
     font-weight: 650;
   }
 
-  .model-preference-model-select {
+  .model-preference-model-select,
+  .model-preference-all-sources-select {
     max-width: none;
   }
 }

@@ -1,6 +1,6 @@
 export function installGrokStorageAccessBridge(runtimes) {
   const runtimeName = "grok-storage-access-bridge";
-  const version = "2026.07.15.2";
+  const version = "2026.07.28.1";
   const existing = runtimes.registration(runtimeName);
   if (existing?.version === version) {
     window.__CHATCLUB_GROK_STORAGE_ACCESS_BRIDGE__ = existing.api;
@@ -132,6 +132,30 @@ export function installGrokStorageAccessBridge(runtimes) {
     }
   };
 
+  const mirrorAccountSwitchGesture = (rawTarget) => {
+    if (location.hostname.toLowerCase() !== "gk.dairoot.cn") return false;
+    const target = rawTarget instanceof Element ? rawTarget : null;
+    if (!target) return false;
+    const normalizedText = (element) => String(element?.textContent || "")
+      .replace(/\s+/g, " ")
+      .trim();
+    const floatingBall = target.closest("#floatingBall");
+    if (
+      floatingBall
+      && floatingBall === document.getElementById("floatingBall")
+      && document.querySelectorAll("#floatingBall").length === 1
+      && floatingBall.matches("div#floatingBall")
+      && normalizedText(floatingBall) === "换号"
+    ) return true;
+    const button = target.closest("button");
+    const modal = button?.closest("#randomAccountModal");
+    if (!button || !modal || modal !== document.getElementById("randomAccountModal")) return false;
+    const explicitActions = [...modal.querySelectorAll(".modal-footer button.btn.btn-primary")];
+    return explicitActions.length === 1
+      && explicitActions[0] === button
+      && normalizedText(button) === "确定";
+  };
+
   const armUserGesture = (reason) => {
     if (disposed || diag.userGestureArmed || typeof document.requestStorageAccess !== "function") return;
     update({ status: "waiting-for-user-gesture", userGestureArmed: true, userGestureReason: reason || "" });
@@ -146,6 +170,7 @@ export function installGrokStorageAccessBridge(runtimes) {
       if (disposed) return;
       if (!event?.isTrusted) return;
       if (event.type === "keydown" && !["Enter", " ", "Spacebar"].includes(event.key)) return;
+      if (mirrorAccountSwitchGesture(event.target)) return;
       cleanup();
       update({ userGestureArmed: false, status: "user-gesture-received", userGestureType: event.type });
       requestAccess("trusted-user-gesture");

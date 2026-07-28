@@ -12,6 +12,7 @@ import {
   extensionPageRequest
 } from "./background-request-core.js";
 import {
+  ARM_GROK_MIRROR_ACCOUNT_SWITCH_REQUEST,
   CONTENT_BACKGROUND_REQUEST_CONTRACTS,
   EXECUTE_SUMMARY_USERSCRIPT_REQUEST,
   EXECUTE_TOPIC_DELETE_USERSCRIPT_REQUEST,
@@ -43,8 +44,10 @@ export const BACKGROUND_REQUEST_ACTIONS = Object.freeze({
   RELAY_FRAME_LIFECYCLE: RELAY_FRAME_LIFECYCLE_REQUEST.action,
   RELOAD_CONFIGS: "reloadConfigs",
   PREPARE_FRAME_LOAD: "prepareFrameLoad",
+  CANCEL_NOTION_FRAME_LOAD: "cancelNotionFrameLoad",
   MARK_GROK_FRAME_PREFLIGHT_FALLBACK: "markGrokFramePreflightFallback",
   SYNC_GROK_SESSION_COOKIES: SYNC_GROK_SESSION_COOKIES_REQUEST.action,
+  ARM_GROK_MIRROR_ACCOUNT_SWITCH: ARM_GROK_MIRROR_ACCOUNT_SWITCH_REQUEST.action,
   GET_CONFIG_INFO: "getConfigInfo",
   RESET_CONFIG: "resetConfig",
   INSTALL_TOPIC_DELETE_USERSCRIPT: INSTALL_TOPIC_DELETE_USERSCRIPT_REQUEST.action,
@@ -110,6 +113,11 @@ export const BACKGROUND_REQUEST_SPECS = Object.freeze({
     mutates: true,
     payload: contract({ url: "string" }, { preflightId: "string" }),
     response: contract({ grokCookieBridge: "object" })
+  }),
+  [ACTION.CANCEL_NOTION_FRAME_LOAD]: extensionPage({
+    mutates: true,
+    payload: contract({ url: "string", preflightId: "string" }),
+    response: contract({ cancelled: "boolean" })
   }),
   [ACTION.MARK_GROK_FRAME_PREFLIGHT_FALLBACK]: extensionPage({
     mutates: true,

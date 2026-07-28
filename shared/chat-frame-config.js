@@ -688,3 +688,60 @@ export function resolveChatFrameAttributeContract(input = {}) {
     inScope
   };
 }
+
+const NOTION_FRAME_LOAD_NONCE_PARAM = "__chatclub_frame_load_nonce";
+const NOTION_FRAME_LOAD_NONCE_PATTERN = /^ccn-[a-f0-9]{32}$/;
+
+function normalizeNotionFrameLoadNonce(value) {
+  const nonce = String(value || "");
+  return NOTION_FRAME_LOAD_NONCE_PATTERN.test(nonce) ? nonce : "";
+}
+
+function exactNotionAppUrl(value) {
+  try {
+    const parsed = new URL(String(value || ""));
+    if (
+      parsed.protocol !== "https:"
+      || parsed.hostname.toLowerCase() !== "app.notion.com"
+      || parsed.username
+      || parsed.password
+      || parsed.port
+    ) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function stripNotionFrameLoadNonce(value) {
+  const source = String(value || "");
+  const parsed = exactNotionAppUrl(source);
+  if (!parsed || !parsed.searchParams.has(NOTION_FRAME_LOAD_NONCE_PARAM)) return source;
+  parsed.searchParams.delete(NOTION_FRAME_LOAD_NONCE_PARAM);
+  return parsed.href;
+}
+
+export function notionFrameLoadTarget(value, nonceValue) {
+  const nonce = normalizeNotionFrameLoadNonce(nonceValue);
+  const logicalHref = stripNotionFrameLoadNonce(value);
+  const parsed = exactNotionAppUrl(logicalHref);
+  if (!nonce || !parsed) return null;
+  parsed.searchParams.set(NOTION_FRAME_LOAD_NONCE_PARAM, nonce);
+  return Object.freeze({ logicalHref, navigationHref: parsed.href, nonce });
+}
+
+export function notionFrameLoadRequest(value, nonceValue) {
+  const source = String(value || "");
+  const nonce = normalizeNotionFrameLoadNonce(nonceValue);
+  const parsed = exactNotionAppUrl(source);
+  if (
+    !nonce
+    || !parsed
+    || parsed.href !== source
+    || parsed.searchParams.getAll(NOTION_FRAME_LOAD_NONCE_PARAM).length !== 1
+    || parsed.searchParams.get(NOTION_FRAME_LOAD_NONCE_PARAM) !== nonce
+  ) return null;
+  const networkUrl = new URL(parsed.href);
+  networkUrl.hash = "";
+  return Object.freeze({ navigationHref: parsed.href, networkHref: networkUrl.href, nonce });
+}

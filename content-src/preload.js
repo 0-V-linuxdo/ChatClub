@@ -468,6 +468,31 @@ function installPreload() {
     };
   }
 
+  function stripNotionFrameLoadNonceFromLocation() {
+    try {
+      if (window.parent === window) return false;
+      const url = new URL(String(location.href || ""));
+      const param = "__chatclub_frame_load_nonce";
+      const values = url.searchParams.getAll(param);
+      if (
+        url.protocol !== "https:"
+        || url.hostname.toLowerCase() !== "app.notion.com"
+        || url.username
+        || url.password
+        || url.port
+        || values.length !== 1
+        || !/^ccn-[a-f0-9]{32}$/.test(values[0])
+      ) return false;
+      url.searchParams.delete(param);
+      const nativeReplaceState = Object.getOwnPropertyDescriptor(History.prototype, "replaceState")?.value;
+      if (typeof nativeReplaceState !== "function") return false;
+      Reflect.apply(nativeReplaceState, history, [history.state, "", url.href]);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   function installGeminiModelPickerBridge() {
     const previousBridge = window.__CHATCLUB_GEMINI_MODEL_PICKER_BRIDGE__;
     if (previousBridge?.version === GEMINI_MODEL_PICKER_BRIDGE_VERSION) return;
@@ -777,6 +802,7 @@ function installPreload() {
   const framed = (() => {
     try { return window.parent !== window; } catch { return true; }
   })();
+  if (framed && host === "app.notion.com") stripNotionFrameLoadNonceFromLocation();
 
   runtimes.install("preload-root", PRELOAD_IMPLEMENTATION_VERSION, () => ({
     api: Object.freeze({ version: PRELOAD_IMPLEMENTATION_VERSION }),
@@ -795,7 +821,13 @@ function installPreload() {
         installDeepSeekDeleteBridge(runtimes, DEEPSEEK_DELETE_SOURCE);
       }
 
-      if (framed && (host === "grok.com" || host.endsWith(".grok.com") || host === "grok.x.ai" || host.endsWith(".grok.x.ai"))) {
+      if (framed && (
+        host === "grok.com"
+        || host.endsWith(".grok.com")
+        || host === "grok.x.ai"
+        || host.endsWith(".grok.x.ai")
+        || host === "gk.dairoot.cn"
+      )) {
         installGrokStorageAccessBridge(runtimes);
       }
 

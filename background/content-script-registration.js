@@ -129,24 +129,34 @@ function rollbackContentScript(previous = {}, canonical = {}) {
   return rollback;
 }
 
-function assertRegisteredContentScriptFiles(expected = [], actual = []) {
-  const actualById = new Map(actual.map((script) => [script.id, script]));
+function canonicalContentScriptRegistration(script = {}) {
   const sorted = (value) => [...(Array.isArray(value) ? value : [])].sort();
-  const normalized = (script = {}) => ({
+  return {
     js: Array.isArray(script.js) ? script.js : [],
+    css: Array.isArray(script.css) ? script.css : [],
     matches: sorted(script.matches),
     excludeMatches: sorted(script.excludeMatches),
     allFrames: Boolean(script.allFrames),
     matchOriginAsFallback: Boolean(script.matchOriginAsFallback),
+    persistAcrossSessions: script.persistAcrossSessions !== false,
     runAt: String(script.runAt || "document_idle"),
     world: String(script.world || "ISOLATED")
-  });
+  };
+}
+
+function contentScriptRegistrationMatches(expected = {}, actual = {}) {
+  return JSON.stringify(canonicalContentScriptRegistration(actual))
+    === JSON.stringify(canonicalContentScriptRegistration(expected));
+}
+
+function assertRegisteredContentScriptFiles(expected = [], actual = []) {
+  const actualById = new Map(actual.map((script) => [script.id, script]));
   for (const registration of expected) {
     const registered = actualById.get(registration.id);
     if (!registered) throw new Error(`content script registration is missing: ${registration.id}`);
-    const expectedValue = normalized(registration);
-    const actualValue = normalized(registered);
-    if (JSON.stringify(actualValue) !== JSON.stringify(expectedValue)) {
+    const expectedValue = canonicalContentScriptRegistration(registration);
+    const actualValue = canonicalContentScriptRegistration(registered);
+    if (!contentScriptRegistrationMatches(registration, registered)) {
       throw new Error(
         `content script registration changed: ${registration.id} expected ${JSON.stringify(expectedValue)}, got ${JSON.stringify(actualValue)}`
       );
@@ -175,6 +185,10 @@ export async function reconcileContentScripts(api, registrations = []) {
   const failures = [];
   for (const registration of registrations) {
     const previous = previousById.get(registration.id) || null;
+    if (previous && contentScriptRegistrationMatches(registration, previous)) {
+      assertRegisteredContentScriptFiles([registration], [previous]);
+      continue;
+    }
     if (previous) await api.scripting.unregisterContentScripts({ ids: [registration.id] });
     try {
       await registerContentScriptsVerified(api, [registration]);

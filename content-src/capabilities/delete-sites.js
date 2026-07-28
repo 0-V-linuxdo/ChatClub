@@ -255,12 +255,16 @@ export function createDeleteSitesCapability(deps = {}) {
 
   async function deleteGrokThread() {
     const labels = ["Delete Chat", "Delete chat", "Delete", "删除聊天", "删除"];
+    if (findDeleteConfirmButton() || deleteDialogRoots().length) {
+      return deleteResult(false, "grok", "unverified delete confirmation is already open");
+    }
     const trigger = topRightMenuTrigger({ labels: ["More", "More actions", "Menu", "Options", "更多", "菜单"] });
     if (!trigger) return deleteResult(false, "grok", "conversation menu trigger not found");
     if (!await openTriggerAndClickDelete(trigger, labels)) return deleteResult(false, "grok", "delete menu item not found");
-    const confirmed = await clickDeleteConfirmIfPresent(5200);
-    if (!confirmed && deleteDialogRoots().length) return deleteResult(false, "grok", "delete confirmation did not close");
-    if (!confirmed) return deleteResult(false, "grok", "delete confirmation button not found");
+    await clickDeleteConfirmIfAppears(900, 5200);
+    if (findDeleteConfirmButton() || deleteDialogRoots().length) {
+      return deleteResult(false, "grok", "delete confirmation did not close");
+    }
     return deleteResult(true, "grok");
   }
 

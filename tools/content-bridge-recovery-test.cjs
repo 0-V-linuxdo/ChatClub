@@ -10,6 +10,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const main = `${read("app/main.js")}\n${read("app/runtime.js")}`;
 const frameBridge = read("app/frame-bridge/controller.js");
 const preferredModel = read("app/preferred-model/controller.js");
+const preferredModelBridgePreparation = read("app/preferred-model/bridge-preparation.js");
 const workspace = [
   "app/workspace/controller.js",
   "app/workspace/frame-controller.js"
@@ -31,6 +32,10 @@ const runtimeIdentity = (outputPath) => ({
   implementationVersion: "runtime-current",
   bundle: { outputPath }
 });
+const grokCookieRuntimeAttestation = (version = "grok-cookie-current", outputPath = "content/grok-cookie-bridge.js") => ({
+  version,
+  runtimeIdentity: runtimeIdentity(outputPath)
+});
 
 const { functionSource } = require("./function-source.cjs");
 
@@ -51,13 +56,24 @@ function createVerifiedRegistrationFixture(options = {}) {
         frameId: 80,
         frameBindingId,
         browserDocumentId: "browser-document-current",
+        href: "https://example.com/chat/current",
         runtimeIdentity: runtimeIdentity("content/content.js"),
         ...(options.registration || {})
       };
   const context = vm.createContext({
     CONTENT_BRIDGE_VERSION: "bridge-current",
+    CONTENT_BUNDLES: {
+      grokCookie: {
+        file: "content/grok-cookie-bridge.js",
+        hosts: ["grok.com", "gk.dairoot.cn"]
+      }
+    },
+    GROK_COOKIE_RUNTIME_IDENTITY: {
+      bundle: { implementationVersion: "grok-cookie-current" }
+    },
     Number,
     String,
+    URL,
     contentRuntimePackageBundleIdentityMatches: (value, expectedOutputPath) => (
       value?.bundle?.outputPath === expectedOutputPath
     ),
@@ -65,6 +81,8 @@ function createVerifiedRegistrationFixture(options = {}) {
     verifyContentFrameRegistration: options.verifyContentFrameRegistration || (async () => registration)
   });
   vm.runInContext(`
+    ${functionSource(frameBridge, "exactGrokCookieRuntimeHost")}
+    ${functionSource(frameBridge, "grokCookieRuntimeReady")}
     ${functionSource(frameBridge, "verifiedCurrentContentFrameRegistration")}
     globalThis.verifyCurrent = verifiedCurrentContentFrameRegistration;
   `, context);
@@ -76,16 +94,27 @@ function createApplyFixture(options = {}) {
   let current = true;
   const registrations = [...(options.registrations || [])];
   const preparedResults = [...(options.preparedResults || [])];
+  let resolvePreparation = null;
+  let rejectPreparation = null;
+  const sharedPreparation = options.hangingPreparation
+    ? new Promise((resolve, reject) => {
+        resolvePreparation = resolve;
+        rejectPreparation = reject;
+      })
+    : null;
+  const controller = new AbortController();
   const context = vm.createContext({
     Error,
     String,
+    clearTimeout,
+    setTimeout,
     calls,
     iframe: { isConnected: true, contentWindow: {} },
     record: {
       payload: { appId: "Gemini", modelId: "pro" },
       runId: "run-1",
       bridgeRecoveryAttempts: Math.max(0, Number(options.bridgeRecoveryAttempts) || 0),
-      controller: { signal: { aborted: false } }
+      controller
     }
   });
   context.verifiedCurrentContentFrameRegistration = async () => {
@@ -95,6 +124,7 @@ function createApplyFixture(options = {}) {
   context.prepareContentFrameRuntime = async () => {
     calls.prepare += 1;
     if (options.supersedeDuringPrepare) current = false;
+    if (sharedPreparation) return sharedPreparation;
     return preparedResults.length ? preparedResults.shift() : (options.prepared || { ok: true });
   };
   context.preferredModelRecordIsCurrent = () => current;
@@ -106,10 +136,22 @@ function createApplyFixture(options = {}) {
   context.requestPreferredModelCancellation = () => { calls.cancel += 1; };
   vm.runInContext(`
     const MODEL_PREFERENCE_APPLY_TIMEOUT_MS = 15000;
+    const NOTION_ALL_SOURCES_APPLY_TIMEOUT_MS = 48000;
+    const PREFERRED_MODEL_BRIDGE_PREPARATION_TIMEOUT_MS = ${Math.max(
+      1,
+      Number(options.bridgePreparationTimeoutMs) || 50
+    )};
     ${functionSource(preferredModel, "preferredModelResult")}
+    ${functionSource(preferredModel, "preferredModelApplyTimeoutMs")}
+    ${functionSource(preferredModel, "preferredModelRetryDelay")}
+    ${functionSource(preferredModelBridgePreparation, "waitForPreferredModelBridgePreparation")}
     ${functionSource(preferredModel, "applyPreferredModelToFrame", true)}
     globalThis.apply = applyPreferredModelToFrame;
+    globalThis.retryDelay = preferredModelRetryDelay;
   `, context);
+  context.abort = (reason = "test abort") => controller.abort(reason);
+  context.resolvePreparation = (result = { ok: true }) => resolvePreparation?.(result);
+  context.rejectPreparation = (error = new Error("late preparation rejection")) => rejectPreparation?.(error);
   return context;
 }
 
@@ -120,6 +162,7 @@ function createSummaryPrepareFixture(options = {}) {
     browserDocumentId: options.registration?.browserDocumentId ?? "browser-document-9",
     documentId: "doc-current",
     bridgeVersion: "bridge-current",
+    href: options.registration?.href ?? "https://example.com/chat/current",
     runtimeIdentity: runtimeIdentity("content/content.js"),
     ...(options.registration || {})
   };
@@ -142,8 +185,12 @@ function createSummaryPrepareFixture(options = {}) {
     Number,
     Set,
     String,
+    URL,
     CONTENT_BRIDGE_VERSION: "bridge-current",
     CONTENT_RUNTIME_IDENTITY: { implementationVersion: "runtime-current" },
+    GROK_COOKIE_RUNTIME_IDENTITY: {
+      bundle: { implementationVersion: "grok-cookie-current" }
+    },
     frameBindingRelayErrors: new WeakMap(),
     calls,
     injectionClock: 0,
@@ -224,9 +271,18 @@ function createSummaryPrepareFixture(options = {}) {
   context.contentRuntimePackageBundleIdentityMatches = (value, expectedOutputPath) => (
     value?.bundle?.outputPath === expectedOutputPath
   );
+  context.CONTENT_BUNDLES = {
+    grokCookie: {
+      file: "content/grok-cookie-bridge.js",
+      hosts: ["grok.com", "gk.dairoot.cn"]
+    }
+  };
   context.contentInjectionPlan = ({ features = [], frameUrls = [], frameHost = "" } = {}) => {
-    const grok = frameHost === "grok.com"
-      || frameUrls.some((href) => String(href).startsWith("https://grok.com/"));
+    const grok = ["grok.com", "gk.dairoot.cn"].includes(frameHost)
+      || frameUrls.some((href) => (
+        String(href).startsWith("https://grok.com/")
+        || String(href).startsWith("https://gk.dairoot.cn/")
+      ));
     const files = [
       "content/preload.js",
       ...(grok ? ["content/grok-cookie-bridge.js"] : []),
@@ -263,6 +319,8 @@ function createSummaryPrepareFixture(options = {}) {
     }
   });
   vm.runInContext(`
+    ${functionSource(frameBridge, "exactGrokCookieRuntimeHost")}
+    ${functionSource(frameBridge, "grokCookieRuntimeReady")}
     ${functionSource(frameBridge, "mergedContentRuntimeCapabilities")}
     ${functionSource(frameBridge, "prepareContentFrameRuntimeUncached", true)}
     globalThis.prepare = prepareContentFrameRuntimeUncached;
@@ -722,6 +780,67 @@ async function createPreservedRuntimeReloadFixture() {
     );
   }
 
+  for (const href of ["https://grok.com/", "https://gk.dairoot.cn/c/current"]) {
+    const fixture = createVerifiedRegistrationFixture({
+      registration: {
+        href,
+        grokCookieRuntime: grokCookieRuntimeAttestation()
+      }
+    });
+    assert.ok(
+      await fixture.context.verifyCurrent(fixture.iframe),
+      `${href}: the exact current Grok ancillary attestation must be accepted`
+    );
+  }
+
+  for (const invalid of [
+    {
+      label: "missing Grok ancillary runtime",
+      registration: { href: "https://gk.dairoot.cn/", grokCookieRuntime: null }
+    },
+    {
+      label: "stale Grok ancillary version",
+      registration: {
+        href: "https://gk.dairoot.cn/",
+        grokCookieRuntime: grokCookieRuntimeAttestation("grok-cookie-old")
+      }
+    },
+    {
+      label: "wrong Grok ancillary bundle",
+      registration: {
+        href: "https://grok.com/",
+        grokCookieRuntime: grokCookieRuntimeAttestation(
+          "grok-cookie-current",
+          "content/content.js"
+        )
+      }
+    },
+    {
+      label: "Grok ancillary browser document changed",
+      dataset: { injectedBrowserDocumentId: "browser-document-old" },
+      registration: {
+        href: "https://gk.dairoot.cn/",
+        grokCookieRuntime: grokCookieRuntimeAttestation()
+      }
+    }
+  ]) {
+    const fixture = createVerifiedRegistrationFixture(invalid);
+    assert.equal(await fixture.context.verifyCurrent(fixture.iframe), null, invalid.label);
+  }
+
+  {
+    const fixture = createVerifiedRegistrationFixture({
+      registration: {
+        href: "https://sub.gk.dairoot.cn/",
+        grokCookieRuntime: null
+      }
+    });
+    assert.ok(
+      await fixture.context.verifyCurrent(fixture.iframe),
+      "the exact-host ancillary contract must not expand to Mirror subdomains"
+    );
+  }
+
   {
     const fixture = createApplyFixture({ registrations: [{ bridgeVersion: "current" }] });
     const result = await fixture.apply(fixture.iframe, fixture.record);
@@ -771,6 +890,140 @@ async function createPreservedRuntimeReloadFixture() {
     assert.equal(result.retryable, true);
     assert.match(result.reason, /injection failed/);
     assert.equal(fixture.calls.send, 0);
+  }
+
+  {
+    const fixture = createApplyFixture({
+      registrations: [null, null, { bridgeVersion: "current", documentId: "recovered-document" }],
+      hangingPreparation: true,
+      bridgePreparationTimeoutMs: 30
+    });
+    const startedAt = Date.now();
+    const first = await fixture.apply(fixture.iframe, fixture.record);
+    assert.equal(first.retryable, true, "a bridge preparation deadline must remain a safe zero-interaction retry");
+    assert.equal(first.cancelled, false);
+    assert.match(first.reason, /content bridge recovery timed out/i);
+    assert.ok(Date.now() - startedAt < 500, "an unresolved bridge preparation must not hold the applying gate indefinitely");
+    assert.equal(fixture.calls.send, 0, "a timed-out bridge preparation must not deliver a mutating model command");
+    assert.equal(
+      fixture.retryDelay({ attempt: 0, delays: [0, 800, 2000, 4200] }, first),
+      800,
+      "the bounded Notion retry schedule must accept a bridge preparation timeout"
+    );
+
+    const second = await fixture.apply(fixture.iframe, fixture.record);
+    assert.equal(second.retryable, true, "a dedicated retry must not become stuck on the shared unresolved preparation");
+    assert.equal(fixture.calls.prepare, 2, "each preferred-model attempt must acquire its own bounded waiter");
+    assert.equal(fixture.calls.send, 0);
+
+    fixture.rejectPreparation(new Error("late shared preparation rejection"));
+    await new Promise((resolve) => { setImmediate(resolve); });
+    const recovered = await fixture.apply(fixture.iframe, fixture.record);
+    assert.equal(recovered.ok, true, "a later retry may use a newly verified frame after the abandoned preparation settles");
+    assert.equal(fixture.calls.send, 1, "late preparation settlement must never itself deliver the model command");
+  }
+
+  {
+    const fixture = createApplyFixture({
+      registrations: [null],
+      hangingPreparation: true,
+      bridgePreparationTimeoutMs: 500
+    });
+    const pending = fixture.apply(fixture.iframe, fixture.record);
+    await new Promise((resolve) => { setImmediate(resolve); });
+    fixture.abort();
+    const result = await pending;
+    assert.equal(result.cancelled, true, "the current run AbortSignal must immediately release its bridge-preparation waiter");
+    assert.equal(result.retryable, false);
+    assert.equal(fixture.calls.send, 0);
+    fixture.rejectPreparation(new Error("late rejection after abort"));
+    await new Promise((resolve) => { setImmediate(resolve); });
+    assert.equal(fixture.calls.send, 0, "late completion after abort must remain owner-scoped and inert");
+  }
+
+  {
+    const readyRegistration = {
+      documentId: "doc-current",
+      browserDocumentId: "browser-document-9",
+      bridgeVersion: "bridge-current",
+      href: "https://gk.dairoot.cn/",
+      runtimeIdentity: runtimeIdentity("content/content.js"),
+      grokCookieRuntime: grokCookieRuntimeAttestation()
+    };
+    const fixture = createSummaryPrepareFixture({
+      initialRegistration: readyRegistration,
+      registration: readyRegistration
+    });
+    const result = await fixture.prepare(fixture.iframe);
+    assert.equal(result.ok, true);
+    assert.equal(result.injected, false);
+    assert.equal(
+      fixture.calls.install,
+      0,
+      "an exact-document current Grok ancillary attestation must not trigger duplicate injection"
+    );
+  }
+
+  {
+    const fixture = createSummaryPrepareFixture({
+      initialRegistration: {
+        documentId: "doc-current",
+        browserDocumentId: "browser-document-9",
+        bridgeVersion: "bridge-current",
+        href: "https://example.com/chat/current",
+        runtimeIdentity: runtimeIdentity("content/content.js"),
+        grokCookieRuntime: null
+      }
+    });
+    const result = await fixture.prepare(fixture.iframe);
+    assert.equal(result.ok, true);
+    assert.equal(result.injected, false);
+    assert.equal(
+      fixture.calls.install,
+      0,
+      "a non-Grok host must not require the Grok ancillary runtime"
+    );
+  }
+
+  for (const { label, initialRuntime } of [
+    { label: "missing", initialRuntime: null },
+    { label: "stale-version", initialRuntime: grokCookieRuntimeAttestation("grok-cookie-old") }
+  ]) {
+    const fixture = createSummaryPrepareFixture({
+      initialRegistration: {
+        documentId: "doc-current",
+        browserDocumentId: "browser-document-9",
+        bridgeVersion: "bridge-current",
+        href: "https://gk.dairoot.cn/",
+        runtimeIdentity: runtimeIdentity("content/content.js"),
+        grokCookieRuntime: initialRuntime
+      },
+      registration: {
+        href: "https://gk.dairoot.cn/",
+        grokCookieRuntime: grokCookieRuntimeAttestation()
+      },
+      hrefs: ["https://gk.dairoot.cn/"],
+      injected: 3,
+      injectedFiles: [
+        "content/preload.js@9",
+        "content/grok-cookie-bridge.js@9",
+        "content/content.js@9"
+      ],
+      plannedFiles: [
+        "content/preload.js",
+        "content/grok-cookie-bridge.js",
+        "content/content.js"
+      ]
+    });
+    const result = await fixture.prepare(fixture.iframe);
+    assert.equal(result.ok, true, `${label}: the missing ancillary must be repairable`);
+    assert.equal(result.injected, true, `${label}: repair must use the full locked-frame plan`);
+    assert.equal(fixture.calls.install, 1, `${label}: repair must run exactly once`);
+    assert.deepEqual(
+      [...fixture.lastRuntimeRequest.features],
+      [],
+      `${label}: ancillary repair must not invent a public capability`
+    );
   }
 
   {
@@ -972,6 +1225,14 @@ async function createPreservedRuntimeReloadFixture() {
 
   {
     const fixture = createSummaryPrepareFixture({
+      hrefs: ["https://gk.dairoot.cn/chat/old", "https://example.com/chat/current"]
+    });
+    const result = await fixture.prepare(fixture.iframe, { summary: true });
+    assert.equal(result.ok, true, "background plannedFiles from the locked frame must override stale Mirror href hints");
+  }
+
+  {
+    const fixture = createSummaryPrepareFixture({
       registration: { browserDocumentId: "browser-document-new" },
       installedBrowserDocumentId: "browser-document-old"
     });
@@ -1135,17 +1396,17 @@ async function createPreservedRuntimeReloadFixture() {
   const initialFrameSource = functionSource(workspace, "setFrameSrcAfterPrepare");
   assert.match(
     initialFrameSource,
-    /const fallback = grokPreflight \? setTimeout/,
+    /const fallback = plan\.grokPreflight \? setTimeout/,
     "only the Grok Cookie preflight may retain a bounded fallback assignment"
   );
   assert.doesNotMatch(
     initialFrameSource,
-    /grokPreflight \? 10000 : 1800|if \(!grokPreflight\)[\s\S]{0,120}?assign\(\)/,
+    /plan\.grokPreflight \? 10000 : 1800|if \(!plan\.grokPreflight\)[\s\S]{0,120}?assign\(\)/,
     "ordinary frames must not race their real URL ahead of DNR preparation"
   );
   const assignedStart = initialFrameSource.indexOf("assigned = true");
   const setSrcStart = initialFrameSource.indexOf("const setSrc", assignedStart);
-  const realSrcAssignment = initialFrameSource.indexOf('iframe.setAttribute("src", url)', setSrcStart);
+  const realSrcAssignment = initialFrameSource.indexOf('iframe.setAttribute("src", navigationUrl)', setSrcStart);
   const browserFrameIdCapture = initialFrameSource.indexOf("rememberBrowserFrameId(iframe)", setSrcStart);
   assert.ok(
     assignedStart >= 0 && setSrcStart > assignedStart && realSrcAssignment > setSrcStart,
@@ -1196,6 +1457,13 @@ async function createPreservedRuntimeReloadFixture() {
   assert.match(prepareSource, /summaryState\.bridgeVersion === CONTENT_BRIDGE_VERSION/);
   assert.match(prepareSource, /confirmedRegistration\?\.documentId === registration\.documentId/);
   assert.match(prepareSource, /summaryRuntimeBridgeVersion/);
+  assert.match(prepareSource, /grokCookieRuntimeReady\(registration\)/);
+  assert.match(content, /function grokCookieRuntimeAttestation\(\)/);
+  assert.match(content, /grokCookieRuntime: grokCookieRuntimeAttestation\(\)/);
+  const verifySecureFrameSource = functionSource(background, "verifySecureFrameContext", true);
+  assert.match(verifySecureFrameSource, /response\.data\.grokCookieRuntime/);
+  assert.match(verifySecureFrameSource, /runtimeIdentity: normalizeContentRuntimeIdentity/);
+  assert.match(verifySecureFrameSource, /grokCookieRuntime/);
   {
     const mergeContext = vm.createContext({ Set, String });
     vm.runInContext(`

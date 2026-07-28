@@ -44,6 +44,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
   const stateModule = await import(pathToFileURL(path.join(root, "app/state.js")).href);
   const workspaceModule = await import(pathToFileURL(path.join(root, "app/workspace/state-port.js")).href);
   const workspaceOwnerModule = await import(pathToFileURL(path.join(root, "app/workspace/state-ports.js")).href);
+  const workspaceModelModule = await import(pathToFileURL(path.join(root, "app/workspace/model.js")).href);
   const composerModule = await import(pathToFileURL(path.join(root, "app/composer/state-port.js")).href);
   const settingsModule = await import(pathToFileURL(path.join(root, "app/settings/state-ports.js")).href);
   const rootState = stateModule.createAppState();
@@ -55,7 +56,11 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
     messageNavigatorEffectMode: "border",
     nested: { enabled: true }
   };
-  rootState.groups = [{ id: "group-1", chatApps: [] }];
+  rootState.groups = [{
+    id: "group-1",
+    chatApps: [{ instanceId: "tab-1" }, { instanceId: "tab-2" }]
+  }];
+  rootState.activeTabs = { "group-1": "tab-1" };
 
   const workspace = workspaceModule.createWorkspaceStatePort(rootState);
   const workspaceOwners = workspaceOwnerModule.createWorkspaceOwnerStatePorts(workspace);
@@ -92,6 +97,29 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
     () => Object.preventExtensions(workspaceOwners.messageNavigator.groups),
     /workspace\.messageNavigator cannot mutate read-only workspace state\.groups/
   );
+  const renderGroup = workspaceOwners.render.groups[0];
+  const renderChat = renderGroup.chatApps[0];
+  const closeResult = workspaceModelModule.removeChatFromGroup(
+    workspaceOwners.frame.groups,
+    workspaceOwners.frame.activeTabs,
+    renderGroup,
+    renderChat
+  );
+  assert.deepEqual(closeResult, { removed: true, removeGroup: false, nextActiveId: "tab-2" });
+  assert.deepEqual(
+    rootState.groups[0].chatApps.map((chat) => chat.instanceId),
+    ["tab-2"],
+    "the frame owner must resolve a canonical writable group from a render-owned read-only proxy"
+  );
+  assert.equal(rootState.activeTabs["group-1"], "tab-2");
+  const staleCloseResult = workspaceModelModule.removeChatFromGroup(
+    workspaceOwners.frame.groups,
+    workspaceOwners.frame.activeTabs,
+    { id: "missing-group" },
+    { instanceId: "tab-2" }
+  );
+  assert.deepEqual(staleCloseResult, { removed: false, removeGroup: false });
+  assert.deepEqual(rootState.groups[0].chatApps.map((chat) => chat.instanceId), ["tab-2"]);
   workspaceOwners.layout.options.themeMode = "light";
   workspaceOwners.frame.groups.push({ id: "group-2", chatApps: [] });
   assert.equal(rootState.options.themeMode, "light", "write owners must retain intentional nested mutation access");

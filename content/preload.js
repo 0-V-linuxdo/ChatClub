@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "4b25a56bd08c2508af23fc884a7595f95663bd227768e9548427f9046db01267";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "24a63db0de70fdf6c845e0c7b99ffcc76be9eac6cfef2335bb1c06f608a321c0";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "719d8f56f36ec4f38931fc8156ef7fef9f04aae0b645871786954dfdf241ba64";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.719d8f56f36ec4f38931fc8156ef7fef9f04aae0b645871786954dfdf241ba64";
-  var CONTENT_RUNTIME_PRELOAD_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preload.js", "entryPath": "content-src/preload.js", "sourceSha256": "b5e85129ba22836d882bed56c31c9ccd8d24360d2f6bccfd337972bb6667af8f", "implementationSha256": "45ca98130c8c499dec43f09e2e2b9d4069824e0068b91ce141ba3a2e9942df9e", "implementationVersion": "2026.07.16.2+bundle.45ca98130c8c499dec43f09e2e2b9d4069824e0068b91ce141ba3a2e9942df9e" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "a130203366b9178fc7f7e5c781304d73091d830727def868a377cc753710ae75";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.a130203366b9178fc7f7e5c781304d73091d830727def868a377cc753710ae75";
+  var CONTENT_RUNTIME_PRELOAD_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preload.js", "entryPath": "content-src/preload.js", "sourceSha256": "562a0447969c9c77f10f135bb7e723dde259109bbc190065ab375e229efbceec", "implementationSha256": "dd6f758dde5dcb65438cebdcad7edebcbefb6dd7bd318c1eb43d64a66fef176c", "implementationVersion": "2026.07.16.2+bundle.dd6f758dde5dcb65438cebdcad7edebcbefb6dd7bd318c1eb43d64a66fef176c" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -525,7 +525,7 @@
   // content-src/preload/grok-storage-access.js
   function installGrokStorageAccessBridge(runtimes) {
     const runtimeName = "grok-storage-access-bridge";
-    const version = "2026.07.15.2";
+    const version = "2026.07.28.1";
     const existing = runtimes.registration(runtimeName);
     if (existing?.version === version) {
       window.__CHATCLUB_GROK_STORAGE_ACCESS_BRIDGE__ = existing.api;
@@ -656,6 +656,19 @@
         return false;
       }
     };
+    const mirrorAccountSwitchGesture = (rawTarget) => {
+      if (location.hostname.toLowerCase() !== "gk.dairoot.cn") return false;
+      const target = rawTarget instanceof Element ? rawTarget : null;
+      if (!target) return false;
+      const normalizedText = (element) => String(element?.textContent || "").replace(/\s+/g, " ").trim();
+      const floatingBall = target.closest("#floatingBall");
+      if (floatingBall && floatingBall === document.getElementById("floatingBall") && document.querySelectorAll("#floatingBall").length === 1 && floatingBall.matches("div#floatingBall") && normalizedText(floatingBall) === "换号") return true;
+      const button = target.closest("button");
+      const modal = button?.closest("#randomAccountModal");
+      if (!button || !modal || modal !== document.getElementById("randomAccountModal")) return false;
+      const explicitActions = [...modal.querySelectorAll(".modal-footer button.btn.btn-primary")];
+      return explicitActions.length === 1 && explicitActions[0] === button && normalizedText(button) === "确定";
+    };
     const armUserGesture = (reason) => {
       if (disposed || diag.userGestureArmed || typeof document.requestStorageAccess !== "function") return;
       update({ status: "waiting-for-user-gesture", userGestureArmed: true, userGestureReason: reason || "" });
@@ -670,6 +683,7 @@
         if (disposed) return;
         if (!event?.isTrusted) return;
         if (event.type === "keydown" && !["Enter", " ", "Spacebar"].includes(event.key)) return;
+        if (mirrorAccountSwitchGesture(event.target)) return;
         cleanup();
         update({ userGestureArmed: false, status: "user-gesture-received", userGestureType: event.type });
         requestAccess("trusted-user-gesture");
@@ -3913,6 +3927,22 @@ ${node.nodeValue}`;
         }
       };
     }
+    function stripNotionFrameLoadNonceFromLocation() {
+      try {
+        if (window.parent === window) return false;
+        const url = new URL(String(location.href || ""));
+        const param = "__chatclub_frame_load_nonce";
+        const values = url.searchParams.getAll(param);
+        if (url.protocol !== "https:" || url.hostname.toLowerCase() !== "app.notion.com" || url.username || url.password || url.port || values.length !== 1 || !/^ccn-[a-f0-9]{32}$/.test(values[0])) return false;
+        url.searchParams.delete(param);
+        const nativeReplaceState = Object.getOwnPropertyDescriptor(History.prototype, "replaceState")?.value;
+        if (typeof nativeReplaceState !== "function") return false;
+        Reflect.apply(nativeReplaceState, history, [history.state, "", url.href]);
+        return true;
+      } catch {
+        return false;
+      }
+    }
     function installGeminiModelPickerBridge() {
       const previousBridge = window.__CHATCLUB_GEMINI_MODEL_PICKER_BRIDGE__;
       if (previousBridge?.version === GEMINI_MODEL_PICKER_BRIDGE_VERSION) return;
@@ -4220,6 +4250,7 @@ ${node.nodeValue}`;
         return true;
       }
     })();
+    if (framed && host === "app.notion.com") stripNotionFrameLoadNonceFromLocation();
     runtimes.install("preload-root", PRELOAD_IMPLEMENTATION_VERSION, () => ({
       api: Object.freeze({ version: PRELOAD_IMPLEMENTATION_VERSION }),
       activate() {
@@ -4234,7 +4265,7 @@ ${node.nodeValue}`;
         if (host === "chat.deepseek.com" || host === "deepseek.com" || host.endsWith(".deepseek.com")) {
           installDeepSeekDeleteBridge(runtimes, DEEPSEEK_DELETE_SOURCE2);
         }
-        if (framed && (host === "grok.com" || host.endsWith(".grok.com") || host === "grok.x.ai" || host.endsWith(".grok.x.ai"))) {
+        if (framed && (host === "grok.com" || host.endsWith(".grok.com") || host === "grok.x.ai" || host.endsWith(".grok.x.ai") || host === "gk.dairoot.cn")) {
           installGrokStorageAccessBridge(runtimes);
         }
         if (framed && (host === "claude.ai" || host.endsWith(".claude.ai"))) {

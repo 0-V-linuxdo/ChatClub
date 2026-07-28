@@ -305,98 +305,111 @@ async function verifyTrustedFrameTarget(api, target, options = {}) {
   return target;
 }
 
-function requireDebugger(api, action) {
-  if (!api.debugger?.attach || !api.debugger?.sendCommand) {
+function requireDebugger(api, action, dependencies = {}) {
+  if (
+    typeof dependencies.withTabDebugger !== "function"
+    && (!api.debugger?.attach || !api.debugger?.sendCommand)
+  ) {
     throw new Error(`Trusted browser ${action} is unavailable in this browser; complete the action manually.`);
   }
 }
 
-export async function dispatchTrustedClick(api, message = {}, sender = {}) {
-  requireDebugger(api, "click");
+async function withTrustedDebugger(api, tabId, dependencies, task) {
+  if (typeof dependencies?.withTabDebugger === "function") {
+    return dependencies.withTabDebugger(tabId, async (lease) => {
+      if (typeof lease?.sendCommand !== "function") {
+        throw new Error("Browser debugger session command delivery is unavailable");
+      }
+      return task((method, params = {}) => lease.sendCommand(method, params));
+    });
+  }
+  const target = { tabId };
+  let attached = false;
+  try {
+    await api.debugger.attach(target, "1.3");
+    attached = true;
+    return await task((method, params = {}) => api.debugger.sendCommand(target, method, params));
+  } finally {
+    if (attached) {
+      try { await api.debugger.detach(target); } catch {}
+    }
+  }
+}
+
+export async function dispatchTrustedClick(api, message = {}, sender = {}, dependencies = {}) {
+  requireDebugger(api, "click", dependencies);
   const frameTarget = trustedFrameTarget(api, message, sender);
   const x = Number(message.x);
   const y = Number(message.y);
   if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0) {
     throw new Error("Trusted browser click failed: invalid viewport coordinates");
   }
-  const target = { tabId: frameTarget.tabId };
-  let attached = false;
   try {
     await verifyTrustedFrameTarget(api, frameTarget);
-    await api.debugger.attach(target, "1.3");
-    attached = true;
-    await verifyTrustedFrameTarget(api, frameTarget);
-    const pointer = { x, y, modifiers: 0 };
-    await api.debugger.sendCommand(target, "Input.dispatchMouseEvent", {
-      ...pointer,
-      type: "mouseMoved",
-      button: "none",
-      buttons: 0,
-      clickCount: 0
+    return await withTrustedDebugger(api, frameTarget.tabId, dependencies, async (sendCommand) => {
+      await verifyTrustedFrameTarget(api, frameTarget);
+      const pointer = { x, y, modifiers: 0 };
+      await sendCommand("Input.dispatchMouseEvent", {
+        ...pointer,
+        type: "mouseMoved",
+        button: "none",
+        buttons: 0,
+        clickCount: 0
+      });
+      const reason = String(message.reason || "");
+      const hoverSettleMs = Number.isFinite(Number(message.hoverSettleMs))
+        ? Number(message.hoverSettleMs)
+        : (/topic menu|menu trigger|hover/i.test(reason) || message.kind === "topic-menu-trigger" ? 260 : 80);
+      await sleep(Math.min(700, Math.max(0, hoverSettleMs)));
+      await verifyTrustedFrameTarget(api, frameTarget);
+      await sendCommand("Input.dispatchMouseEvent", {
+        ...pointer,
+        type: "mousePressed",
+        button: "left",
+        buttons: 1,
+        clickCount: 1
+      });
+      await sleep(45);
+      await verifyTrustedFrameTarget(api, frameTarget);
+      await sendCommand("Input.dispatchMouseEvent", {
+        ...pointer,
+        type: "mouseReleased",
+        button: "left",
+        buttons: 0,
+        clickCount: 1
+      });
+      return { tabId: frameTarget.tabId, frameId: frameTarget.frameId, x, y };
     });
-    const reason = String(message.reason || "");
-    const hoverSettleMs = Number.isFinite(Number(message.hoverSettleMs))
-      ? Number(message.hoverSettleMs)
-      : (/topic menu|menu trigger|hover/i.test(reason) || message.kind === "topic-menu-trigger" ? 260 : 80);
-    await sleep(Math.min(700, Math.max(0, hoverSettleMs)));
-    await verifyTrustedFrameTarget(api, frameTarget);
-    await api.debugger.sendCommand(target, "Input.dispatchMouseEvent", {
-      ...pointer,
-      type: "mousePressed",
-      button: "left",
-      buttons: 1,
-      clickCount: 1
-    });
-    await sleep(45);
-    await verifyTrustedFrameTarget(api, frameTarget);
-    await api.debugger.sendCommand(target, "Input.dispatchMouseEvent", {
-      ...pointer,
-      type: "mouseReleased",
-      button: "left",
-      buttons: 0,
-      clickCount: 1
-    });
-    return { tabId: frameTarget.tabId, frameId: frameTarget.frameId, x, y };
   } catch (error) {
     throw new Error(`Trusted browser click failed: ${error?.message || String(error || "unknown debugger error")}`);
-  } finally {
-    if (attached) {
-      try { await api.debugger.detach(target); } catch {}
-    }
   }
 }
 
-export async function dispatchTrustedMouseMove(api, message = {}, sender = {}) {
-  requireDebugger(api, "hover");
+export async function dispatchTrustedMouseMove(api, message = {}, sender = {}, dependencies = {}) {
+  requireDebugger(api, "hover", dependencies);
   const frameTarget = trustedFrameTarget(api, message, sender);
   const x = Number(message.x);
   const y = Number(message.y);
   if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0) {
     throw new Error("Trusted browser hover failed: invalid viewport coordinates");
   }
-  const target = { tabId: frameTarget.tabId };
-  let attached = false;
   try {
     await verifyTrustedFrameTarget(api, frameTarget);
-    await api.debugger.attach(target, "1.3");
-    attached = true;
-    await verifyTrustedFrameTarget(api, frameTarget);
-    await api.debugger.sendCommand(target, "Input.dispatchMouseEvent", {
-      type: "mouseMoved",
-      x,
-      y,
-      button: "none",
-      buttons: 0,
-      clickCount: 0,
-      modifiers: 0
+    return await withTrustedDebugger(api, frameTarget.tabId, dependencies, async (sendCommand) => {
+      await verifyTrustedFrameTarget(api, frameTarget);
+      await sendCommand("Input.dispatchMouseEvent", {
+        type: "mouseMoved",
+        x,
+        y,
+        button: "none",
+        buttons: 0,
+        clickCount: 0,
+        modifiers: 0
+      });
+      return { tabId: frameTarget.tabId, frameId: frameTarget.frameId, x, y };
     });
-    return { tabId: frameTarget.tabId, frameId: frameTarget.frameId, x, y };
   } catch (error) {
     throw new Error(`Trusted browser hover failed: ${error?.message || String(error || "unknown debugger error")}`);
-  } finally {
-    if (attached) {
-      try { await api.debugger.detach(target); } catch {}
-    }
   }
 }
 
@@ -425,8 +438,8 @@ function keyDescriptor(value = {}) {
   return null;
 }
 
-export async function dispatchTrustedKeySequence(api, message = {}, sender = {}) {
-  requireDebugger(api, "key input");
+export async function dispatchTrustedKeySequence(api, message = {}, sender = {}, dependencies = {}) {
+  requireDebugger(api, "key input", dependencies);
   const frameTarget = trustedFrameTarget(api, message, sender);
   const rawKeys = Array.isArray(message.keys) ? message.keys : [];
   const claudeDeleteShortcut = String(message.kind || "") === "claude-menu-delete-shortcut"
@@ -452,38 +465,36 @@ export async function dispatchTrustedKeySequence(api, message = {}, sender = {})
     .map((item) => ({ descriptor: keyDescriptor(item), settleMs: Number(item?.settleMs) }))
     .filter((item) => item.descriptor);
   if (!keys.length) throw new Error("Trusted browser key sequence failed: no supported keys were provided");
-  const target = { tabId: frameTarget.tabId };
-  let attached = false;
   try {
     await verifyTrustedFrameTarget(api, frameTarget, {
       requireDocumentFocus: claudeDeleteShortcut,
       requireClaudeDeleteShortcut: claudeDeleteShortcut
     });
-    await api.debugger.attach(target, "1.3");
-    attached = true;
-    for (const item of keys) {
-      const modifiers = Number.isFinite(Number(item.descriptor.modifiers)) ? Number(item.descriptor.modifiers) : 0;
-      const event = { ...item.descriptor, modifiers, autoRepeat: false, isKeypad: false };
+    return await withTrustedDebugger(api, frameTarget.tabId, dependencies, async (sendCommand) => {
       await verifyTrustedFrameTarget(api, frameTarget, {
         requireDocumentFocus: claudeDeleteShortcut,
         requireClaudeDeleteShortcut: claudeDeleteShortcut
       });
-      await api.debugger.sendCommand(target, "Input.dispatchKeyEvent", {
-        ...event,
-        type: claudeDeleteShortcut ? "rawKeyDown" : "keyDown"
-      });
-      await sleep(35);
-      await verifyTrustedFrameTarget(api, frameTarget, { requireDocumentFocus: claudeDeleteShortcut });
-      await api.debugger.sendCommand(target, "Input.dispatchKeyEvent", { ...event, type: "keyUp" });
-      const settleMs = Number.isFinite(item.settleMs) ? item.settleMs : Number(message.keySettleMs);
-      await sleep(Math.min(900, Math.max(45, Number.isFinite(settleMs) ? settleMs : 120)));
-    }
-    return { tabId: frameTarget.tabId, frameId: frameTarget.frameId, keys: keys.map((item) => item.descriptor.key) };
+      for (const item of keys) {
+        const modifiers = Number.isFinite(Number(item.descriptor.modifiers)) ? Number(item.descriptor.modifiers) : 0;
+        const event = { ...item.descriptor, modifiers, autoRepeat: false, isKeypad: false };
+        await verifyTrustedFrameTarget(api, frameTarget, {
+          requireDocumentFocus: claudeDeleteShortcut,
+          requireClaudeDeleteShortcut: claudeDeleteShortcut
+        });
+        await sendCommand("Input.dispatchKeyEvent", {
+          ...event,
+          type: claudeDeleteShortcut ? "rawKeyDown" : "keyDown"
+        });
+        await sleep(35);
+        await verifyTrustedFrameTarget(api, frameTarget, { requireDocumentFocus: claudeDeleteShortcut });
+        await sendCommand("Input.dispatchKeyEvent", { ...event, type: "keyUp" });
+        const settleMs = Number.isFinite(item.settleMs) ? item.settleMs : Number(message.keySettleMs);
+        await sleep(Math.min(900, Math.max(45, Number.isFinite(settleMs) ? settleMs : 120)));
+      }
+      return { tabId: frameTarget.tabId, frameId: frameTarget.frameId, keys: keys.map((item) => item.descriptor.key) };
+    });
   } catch (error) {
     throw new Error(`Trusted browser key sequence failed: ${error?.message || String(error || "unknown debugger error")}`);
-  } finally {
-    if (attached) {
-      try { await api.debugger.detach(target); } catch {}
-    }
   }
 }

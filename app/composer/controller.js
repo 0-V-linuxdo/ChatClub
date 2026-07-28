@@ -716,11 +716,21 @@ export function createComposerController(dependencies = {}) {
   }
 
   function resizeInput(inputNode, expanded = inputNode.classList.contains("prompt-input-expanded")) {
-    const sizing = promptInputHeight(inputNode.scrollHeight, window.innerHeight, expanded, {
-      hasImages: state.promptImages.length > 0
-    });
+    const hasImages = state.promptImages.length > 0;
+    let restoreTransition = null;
+    if (expanded && !hasImages) {
+      restoreTransition = inputNode.style.transition;
+      inputNode.style.transition = "none";
+      inputNode.style.height = "0px";
+      inputNode.style.overflowY = "hidden";
+    }
+    const sizing = promptInputHeight(inputNode.scrollHeight, window.innerHeight, expanded, { hasImages });
     inputNode.style.height = `${sizing.height}px`;
     inputNode.style.overflowY = sizing.overflowY;
+    if (restoreTransition !== null) {
+      void inputNode.offsetHeight;
+      inputNode.style.transition = restoreTransition;
+    }
     if (expanded) return;
     inputNode.scrollTop = 0;
     requestAnimationFrame(() => { inputNode.scrollTop = 0; });

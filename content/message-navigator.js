@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "4b25a56bd08c2508af23fc884a7595f95663bd227768e9548427f9046db01267";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "24a63db0de70fdf6c845e0c7b99ffcc76be9eac6cfef2335bb1c06f608a321c0";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "719d8f56f36ec4f38931fc8156ef7fef9f04aae0b645871786954dfdf241ba64";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.719d8f56f36ec4f38931fc8156ef7fef9f04aae0b645871786954dfdf241ba64";
-  var CONTENT_RUNTIME_MESSAGE_NAVIGATOR_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/message-navigator.js", "entryPath": "content-src/message-navigator.js", "sourceSha256": "b5d38087b07d9d7ce7f456946c5f0e043b8319301bf5eb8e6bec53f2e2d75c76", "implementationSha256": "21bc56d98921eb953897e0450e5932bc6b82d5dba01f6182bdd1117fa1307a95", "implementationVersion": "2026.07.16.2+bundle.21bc56d98921eb953897e0450e5932bc6b82d5dba01f6182bdd1117fa1307a95" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "a130203366b9178fc7f7e5c781304d73091d830727def868a377cc753710ae75";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.a130203366b9178fc7f7e5c781304d73091d830727def868a377cc753710ae75";
+  var CONTENT_RUNTIME_MESSAGE_NAVIGATOR_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/message-navigator.js", "entryPath": "content-src/message-navigator.js", "sourceSha256": "81dd69edcf85a9a23286ddc15abac091db9dc186234a16542ebd79f6f6300ab8", "implementationSha256": "1b6e7b5d2f23d3e37e6490307a34108031fb4a4fef73fbe52d866e8cb7053d79", "implementationVersion": "2026.07.16.2+bundle.1b6e7b5d2f23d3e37e6490307a34108031fb4a4fef73fbe52d866e8cb7053d79" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -148,7 +148,7 @@
     grokCookie: contentBundle({
       id: "chatclub-grok-cookie-bridge",
       file: "content/grok-cookie-bridge.js",
-      hosts: ["grok.com"],
+      hosts: ["grok.com", "gk.dairoot.cn"],
       runAt: "document_start"
     }),
     content: contentBundle({ id: "chatclub-content", file: "content/content.js" }),
@@ -190,7 +190,7 @@
     adoptNavigationFocusGuard: command({ timeoutMs: 1200, mutating: true, transport: "main-world", features: Object.freeze(["preferred-model"]) }),
     deleteThread: command({ timeoutMs: 37e3, mutating: true, features: Object.freeze(["delete"]) }),
     getDeleteConfirmState: command({ timeoutMs: 2400, features: Object.freeze(["delete"]) }),
-    applyPreferredModel: command({ timeoutMs: 18e3, mutating: true, features: Object.freeze(["preferred-model"]) }),
+    applyPreferredModel: command({ timeoutMs: 5e4, mutating: true, features: Object.freeze(["preferred-model"]) }),
     cancelPreferredModelApply: command({ timeoutMs: 2e3, mutating: true, features: Object.freeze(["preferred-model"]) }),
     setMessageNavigator: command({ timeoutMs: 6e3, mutating: true, features: Object.freeze(["message-navigator"]) }),
     hideMessageNavigatorMenu: command({ timeoutMs: 2e3, mutating: true, features: Object.freeze(["message-navigator"]) }),

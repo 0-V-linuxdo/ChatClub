@@ -35,6 +35,11 @@ const contentBackgroundRequestsSource = fs.readFileSync(
   "utf8"
 );
 const modelPreferenceConsoleSource = fs.readFileSync(path.join(root, "tools/model-preference-console-probe.js"), "utf8");
+const modelPreferenceBridgeProbeSource = fs.readFileSync(
+  path.join(root, "tools/model-preference-plugin-bridge-probe.js"),
+  "utf8"
+);
+const grokPostMessageConsoleSource = fs.readFileSync(path.join(root, "tools/grok-postmessage-console.js"), "utf8");
 
 function protocolString(name) {
   const match = protocolSource.match(new RegExp(`(?:export\\s+)?const ${name}\\s*=\\s*("(?:[^"\\\\]|\\\\.)*")\\s*;`));
@@ -90,6 +95,11 @@ assert.equal(
 const preferredModelRunSource = functionSource(preferredModelSource, "runPreferredModelRecord");
 assert.match(
   preferredModelRunSource,
+  /preferredModelFrameIsLoading\(iframe\)[\s\S]*record\.pending = true;[\s\S]*return;/,
+  "a preferred-model timer must not execute while its iframe is still loading"
+);
+assert.match(
+  preferredModelRunSource,
   /const retryDelay = preferredModelRetryDelay\(record, result\);[\s\S]*record\.cancelled = false;[\s\S]*record\.attempt \+= 1;[\s\S]*schedulePreferredModelRecordRun\(iframe, record, retryDelay\)/,
   "current cancellations without interactions must consume the existing record's bounded retry budget"
 );
@@ -104,6 +114,16 @@ assert.match(
   "non-retryable or exhausted cancellations must reach an error-toast terminal state"
 );
 const preferredModelScheduleSource = functionSource(preferredModelSource, "schedulePreferredModelApplyToFrame");
+assert.match(
+  preferredModelScheduleSource,
+  /preferredModelFrameIsLoading\(iframe\)[\s\S]*stopPreferredModelRecord\(iframe, existing, "frame-loading"\)[\s\S]*return null;/,
+  "workspace synchronization must not create or retain a preferred-model run for a loading iframe"
+);
+assert.match(
+  preferredModelScheduleSource,
+  /preferredModelFrameIsLoading\(iframe\)[\s\S]*existing\?\.key === key && existingIsSettled[\s\S]*return existing;[\s\S]*stopPreferredModelRecord/,
+  "a stale loading marker must not erase a same-document settled run before readiness can wake queued sends"
+);
 assert.match(
   preferredModelScheduleSource,
   /existingIsSettled = Boolean\(existing\?\.success \|\| existing\?\.terminal\)[\s\S]*existing\?\.key === key && \(existingIsSettled \|\| existingIsRunning\)/,
@@ -511,6 +531,85 @@ assert.match(locationReportSource, /requireCurrentHref/, "stale queued history n
 
 const frameKeySource = functionSource(preferredModelSource, "preferredModelFrameKey");
 assert.doesNotMatch(frameKeySource, /currentHref|iframe\.src/, "preferred-model identity must not change for an SPA href");
+const notionPreferenceContext = vm.createContext({});
+vm.runInContext(`
+  const NOTION_ALL_SOURCES_PREFERENCE_KEY = "NotionAIAllSources";
+  const NOTION_ALL_SOURCES_PREFERENCE_VALUES = Object.freeze(["", "enabled", "disabled"]);
+  const DEFAULT_GEMINI_THINKING_LEVEL = "standard";
+  const GEMINI_THINKING_LEVEL_PREFERENCE_KEY = "GeminiThinkingLevel";
+  const GEMINI_THINKING_LEVEL_TARGETS = Object.freeze([{ id: "standard" }]);
+  const MODEL_PREFERENCE_APP_ID_ALIASES = Object.freeze({ NotionAI: "NotionAI", "Notion AI": "NotionAI" });
+  const MODEL_PREFERENCE_TARGETS = Object.freeze({
+    NotionAI: Object.freeze([{ id: "gpt54", label: "GPT-5.4" }])
+  });
+  const preferredModelState = {
+    options: { modelPreferences: {} },
+    modelPreferenceDraft: null
+  };
+  const iframe = { dataset: { preferredModelDocumentId: "document-1" } };
+  const workspace = { frameApp: () => ({ id: "NotionAI" }) };
+  function activeWorkspace() { return workspace; }
+  ${functionSource(preferredModelSource, "preferredModelAppId")}
+  ${functionSource(preferredModelSource, "preferredModelForApp")}
+  ${functionSource(preferredModelSource, "preferredGeminiThinkingLevel")}
+  ${functionSource(preferredModelSource, "preferredNotionAllSourcesState")}
+  ${functionSource(preferredModelSource, "preferredModelPayloadForApp")}
+  ${frameKeySource}
+  globalThis.state = preferredModelState;
+  globalThis.payload = () => preferredModelPayloadForApp({ id: "NotionAI" });
+  globalThis.frameKey = () => preferredModelFrameKey(iframe);
+`, notionPreferenceContext);
+const notionPayload = () => {
+  const value = notionPreferenceContext.payload();
+  return value == null ? null : JSON.parse(JSON.stringify(value));
+};
+assert.equal(notionPayload(), null, "Notion remains unconfigured when neither a model nor All Sources is preferred");
+notionPreferenceContext.state.options.modelPreferences.NotionAIAllSources = "enabled";
+assert.deepEqual(
+  notionPayload(),
+  { appId: "NotionAI", modelId: "", allSourcesState: "enabled" },
+  "All Sources must be applicable without forcing a model preference"
+);
+assert.equal(
+  notionPreferenceContext.frameKey(),
+  "NotionAI::sources=enabled:document-1",
+  "the desired source state must participate in the per-document apply identity"
+);
+notionPreferenceContext.state.options.modelPreferences.NotionAI = "gpt54";
+notionPreferenceContext.state.options.modelPreferences.NotionAIAllSources = "disabled";
+assert.deepEqual(
+  notionPayload(),
+  { appId: "NotionAI", modelId: "gpt54", allSourcesState: "disabled" },
+  "model and source preferences must travel in one controlled Notion run"
+);
+assert.equal(
+  notionPreferenceContext.frameKey(),
+  "NotionAI:gpt54:sources=disabled:document-1",
+  "changing the source preference must invalidate a settled model-only frame key"
+);
+notionPreferenceContext.state.options.modelPreferences.NotionAI = "";
+notionPreferenceContext.state.options.modelPreferences.NotionAIAllSources = "invalid";
+assert.equal(notionPayload(), null, "unknown stored source states must fail normalization to no preference");
+assert.match(
+  preferredModelSource,
+  /const MODEL_PREFERENCE_APPLY_TIMEOUT_MS = 15000;/,
+  "model-only runs must retain their existing bounded parent timeout"
+);
+assert.match(
+  preferredModelSource,
+  /const NOTION_ALL_SOURCES_APPLY_TIMEOUT_MS = 48000;/,
+  "the opt-in source parent timeout must outlive the 44s Notion content run and cleanup margin"
+);
+assert.match(
+  preferredModelSource,
+  /timeoutMs:\s*preferredModelApplyTimeoutMs\(payload\)/,
+  "only payloads carrying an All Sources preference may use the extended parent timeout"
+);
+assert.match(
+  frameCommandsSource,
+  /applyPreferredModel:\s*command\(\{\s*timeoutMs:\s*50000,/,
+  "the Frame RPC command ceiling must outlive the preferred-model parent deadline"
+);
 assert.match(
   contentEntrySource,
   /requestBackground\(RELAY_FRAME_LIFECYCLE_REQUEST,/,
@@ -537,6 +636,16 @@ for (const [name, consumers] of [
     assert.ok(source.includes(JSON.stringify(canonicalValue)), `${label} must bundle canonical ${name}`);
     assertProtocolBinding(source, name, label);
   }
+}
+const preferredModelPostMessageSource = protocolString("PREFERRED_MODEL_POST_MESSAGE_SOURCE");
+for (const [source, label] of [
+  [modelPreferenceBridgeProbeSource, "preferred-model bridge probe"],
+  [grokPostMessageConsoleSource, "Grok preferred-model console probe"]
+]) {
+  assert.ok(
+    source.includes(JSON.stringify(preferredModelPostMessageSource)),
+    `${label} must use the current versioned preferred-model protocol source`
+  );
 }
 for (const [source, label] of [[contentEntrySource, "isolated content source"], [preloadEntrySource, "MAIN preload source"]]) {
   assert.match(
@@ -622,6 +731,102 @@ assert.match(
   /dataState === "disabled"/,
   "the Notion DevTools adapter must reject data-state=disabled controls for interaction"
 );
+
+const expectedNotionConsoleModels = [
+  ["auto", "Auto"],
+  ["sonnet46", "Sonnet 4.6"],
+  ["sonnet5", "Sonnet 5"],
+  ["opus47", "Opus 4.7"],
+  ["opus48", "Opus 4.8"],
+  ["opus5", "Opus 5"],
+  ["fable5", "Fable 5"],
+  ["gemini31pro", "Gemini 3.1 Pro"],
+  ["gemini35flash", "Gemini 3.5 Flash"],
+  ["gpt56sol", "GPT-5.6 Sol"],
+  ["gpt56terra", "GPT-5.6 Terra"],
+  ["gpt52", "GPT-5.2"],
+  ["gpt54", "GPT-5.4"],
+  ["gpt55", "GPT-5.5"],
+  ["grok43", "Grok 4.3"],
+  ["grok45", "Grok 4.5"],
+  ["grokBuild01", "Grok Build 0.1"],
+  ["kimi26", "Kimi K2.6"],
+  ["kimi27code", "Kimi K2.7 Code"],
+  ["kimi3", "Kimi K3"],
+  ["deepseekV4Pro", "DeepSeek V4 Pro"],
+  ["glm52", "GLM 5.2"]
+];
+const consoleNotionTargetIds = JSON.parse(`[${
+  modelPreferenceConsoleSource.match(/NotionAI: Object\.freeze\(\[([\s\S]*?)\]\)\n\s*\}\);/)?.[1] || ""
+}]`);
+const consoleNotionRuntimeBlock = modelPreferenceConsoleSource.match(
+  /const NOTION_MODEL_TARGETS = Object\.freeze\(\{([\s\S]*?)\n  \}\);/
+)?.[1] || "";
+const parseNotionRuntimeTargets = (block) => [...block.matchAll(
+  /^\s+(\w+): Object\.freeze\(\{ id: "([^"]+)", label: "([^"]+)", aliases: \[([^\]]*)\] \}\),?$/gm
+)].map((match) => ({
+  key: match[1],
+  id: match[2],
+  label: match[3],
+  aliases: JSON.parse(`[${match[4]}]`)
+}));
+const consoleNotionRuntimeTargets = parseNotionRuntimeTargets(consoleNotionRuntimeBlock);
+const packagedNotionRuntimeBlock = preferredCapabilitySource.match(
+  /const NOTION_MODEL_TARGETS = Object\.freeze\(\{([\s\S]*?)\n  \}\);/
+)?.[1] || "";
+const packagedNotionRuntimeTargets = parseNotionRuntimeTargets(packagedNotionRuntimeBlock);
+assert.deepEqual(
+  consoleNotionTargetIds,
+  expectedNotionConsoleModels.map(([id]) => id),
+  "the Notion DevTools adapter must expose all 21 current models plus Auto"
+);
+assert.deepEqual(
+  consoleNotionRuntimeTargets.map(({ id }) => id),
+  packagedNotionRuntimeTargets.map(({ id }) => id),
+  "the Notion DevTools adapter and packaged runtime must keep the same exact target ids"
+);
+for (const [id, menuLabel] of expectedNotionConsoleModels) {
+  const target = consoleNotionRuntimeTargets.find((entry) => entry.id === id);
+  assert.equal(target?.key, id, `Notion DevTools target ${id} must keep its stable key`);
+  assert.ok(
+    [target?.label, ...(target?.aliases || [])].includes(menuLabel),
+    `Notion DevTools target ${id} must include the exact menu label ${menuLabel}`
+  );
+}
+
+const notionConsoleExactContext = vm.createContext({});
+vm.runInContext(`
+  const NOTION_MODEL_TARGETS = Object.freeze({
+    gpt54: Object.freeze({ id: "gpt54", label: "GPT-5.4", aliases: ["GPT 5.4"] }),
+    gpt55: Object.freeze({ id: "gpt55", label: "GPT-5.5", aliases: ["GPT 5.5"] })
+  });
+  function normalize(value) { return String(value || "").replace(/\\s+/g, " ").trim(); }
+  function elementText(element) {
+    return [
+      element?.getAttribute?.("aria-label"),
+      element?.getAttribute?.("data-testid"),
+      element?.innerText || element?.textContent || ""
+    ].filter(Boolean).join(" ");
+  }
+  ${functionSource(modelPreferenceConsoleSource, "notionText")}
+  ${functionSource(modelPreferenceConsoleSource, "notionLabels")}
+  ${functionSource(modelPreferenceConsoleSource, "notionTextEvidence")}
+  ${functionSource(modelPreferenceConsoleSource, "notionTextLooksLikeTarget")}
+  ${functionSource(modelPreferenceConsoleSource, "notionElementTextEvidence")}
+  ${functionSource(modelPreferenceConsoleSource, "notionElementLooksLikeTarget")}
+  globalThis.matchesText = (value, id) => notionTextLooksLikeTarget(value, NOTION_MODEL_TARGETS[id]);
+  globalThis.matchesElement = (text, id, testId = "agent-chat-model-button") => notionElementLooksLikeTarget({
+    innerText: text,
+    textContent: text,
+    getAttribute(name) { return name === "data-testid" ? testId : ""; },
+    querySelectorAll() { return []; }
+  }, NOTION_MODEL_TARGETS[id]);
+`, notionConsoleExactContext);
+assert.equal(notionConsoleExactContext.matchesText("GPT-5.4", "gpt54"), true);
+assert.equal(notionConsoleExactContext.matchesText("GPT-5.4 Mini", "gpt54"), false, "Notion DevTools matching must reject longer model names");
+assert.equal(notionConsoleExactContext.matchesText("GPT-5.4\nBeta", "gpt54"), true, "an exact independent text line may identify the model");
+assert.equal(notionConsoleExactContext.matchesElement("GPT-5.4", "gpt54"), true, "data-testid metadata must not hide an exact model label");
+assert.equal(notionConsoleExactContext.matchesElement("GPT-5.4 Mini", "gpt54"), false, "element matching must not restore substring selection");
 
 const grokOpenSource = functionSource(preferredCapabilitySource, "openGrokModelMenu");
 assert.match(
@@ -719,9 +924,10 @@ vm.runInContext(`
   function visible() { return true; }
   function modelElementText(element) { return element.textValue || ""; }
   function isNotionModelTriggerNearMainComposer() { return true; }
-  function notionModelIdFromText() { return "gemini31pro"; }
+  function notionModelIdFromElement() { return "gemini31pro"; }
   function notionText(value) { return String(value || "").toLowerCase(); }
   function notionTextLooksLikeTarget() { return false; }
+  function notionElementLooksLikeTarget() { return false; }
   ${functionSource(preferredCapabilitySource, "isDisabledElement")}
   ${functionSource(preferredCapabilitySource, "scoreNotionModelTrigger")}
   globalThis.scoreNotion = scoreNotionModelTrigger;

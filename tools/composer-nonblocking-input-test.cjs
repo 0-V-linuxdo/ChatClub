@@ -29,7 +29,7 @@ class FakeNode {
     this.tagName = String(tagName).toUpperCase();
     this.children = [];
     this.dataset = {};
-    this.style = { setProperty() {} };
+    this.style = { transition: "", setProperty() {} };
     this.attributes = new Map();
     this.listeners = new Map();
     this.parentElement = null;
@@ -41,7 +41,9 @@ class FakeNode {
     this.selectionStart = 0;
     this.selectionEnd = 0;
     this.selectionDirection = "none";
-    this.scrollHeight = 42;
+    this.naturalScrollHeight = 42;
+    this.animatedScrollHeight = 0;
+    this.scrollHeightMeasurements = [];
     this.scrollTop = 0;
     this._classes = new Set();
     this.classList = {
@@ -59,6 +61,22 @@ class FakeNode {
 
   get childNodes() {
     return this.children;
+  }
+
+  get scrollHeight() {
+    this.scrollHeightMeasurements.push({
+      height: this.style.height || "",
+      overflowY: this.style.overflowY || "",
+      transition: this.style.transition || ""
+    });
+    const inlineHeight = Number.parseFloat(this.style.height);
+    const animatedHeight = this.style.transition === "none" ? 0 : this.animatedScrollHeight;
+    return Math.max(this.naturalScrollHeight, Number.isFinite(inlineHeight) ? inlineHeight : 0, animatedHeight);
+  }
+
+  get offsetHeight() {
+    const inlineHeight = Number.parseFloat(this.style.height);
+    return Number.isFinite(inlineHeight) ? inlineHeight : this.naturalScrollHeight;
   }
 
   get className() {
@@ -366,6 +384,7 @@ function preferredModelStub() {
       false,
       `${gateState}: leaving the prompt shell must collapse multiline input`
     );
+    assert.equal(input.style.height, "38px", `${gateState}: collapsed input must retain its 38px height`);
     input.dispatch("focus");
 
     const paste = input.dispatch("paste", {
@@ -396,6 +415,83 @@ function preferredModelStub() {
     assert.equal(statusPointerDown.defaultPrevented, undefined, `${gateState}: status pointer input must remain focusable`);
     input.dispatch("focus");
 
+    const firstImage = state.promptImages[0];
+    controller.setImages([
+      firstImage,
+      {
+        id: `second-${gateState}`,
+        name: `second-${gateState}.png`,
+        type: "image/png",
+        size: 4,
+        lastModified: 2,
+        dataUrl: "data:image/png;base64,RUZHSA=="
+      }
+    ], { focus: true });
+    assert.equal(state.promptImages.length, 2, `${gateState}: sizing fixture must contain two images`);
+    assert.equal(input.style.height, "180px", `${gateState}: two images must keep the expanded image height`);
+    view.querySelector(".prompt-image-remove").dispatch("click");
+    assert.equal(state.promptImages.length, 1, `${gateState}: removing one of two images must preserve the other`);
+    assert.equal(input.style.height, "180px", `${gateState}: one remaining image must keep the 180px image layout`);
+
+    input.naturalScrollHeight = 96;
+    input.animatedScrollHeight = 178;
+    view.querySelector(".prompt-image-remove").dispatch("click");
+    assert.equal(state.promptImages.length, 0, `${gateState}: removing the last image must clear image layout`);
+    assert.equal(input.style.height, "96px", `${gateState}: removing the last image must restore the text's natural height`);
+    assert.deepEqual(
+      input.scrollHeightMeasurements.at(-1),
+      { height: "0px", overflowY: "hidden", transition: "none" },
+      `${gateState}: natural height must be measured from zero with the stale image-height transition disabled`
+    );
+    assert.equal(input.style.transition, "", `${gateState}: natural sizing must restore the authored height transition`);
+    input.animatedScrollHeight = 0;
+
+    input.value = "short";
+    input.naturalScrollHeight = 42;
+    input.dispatch("input");
+    assert.equal(input.style.height, "42px", `${gateState}: deleting multiline text must shrink the input`);
+    assert.equal(input.style.overflowY, "hidden", `${gateState}: short text must hide its scrollbar`);
+
+    input.value = "line one\nline two\nline three";
+    input.naturalScrollHeight = 96;
+    input.dispatch("input");
+    assert.equal(input.style.height, "96px", `${gateState}: adding text lines must grow to the natural multiline height`);
+    assert.equal(input.style.overflowY, "hidden", `${gateState}: multiline text below the cap must hide its scrollbar`);
+
+    input.value = "short after multiline";
+    input.naturalScrollHeight = 42;
+    input.dispatch("input");
+    assert.equal(input.style.height, "42px", `${gateState}: deleting added lines must restore the short-text height`);
+
+    input.value = Array.from({ length: 16 }, (_, index) => `line-${index}`).join("\n");
+    input.naturalScrollHeight = 240;
+    input.dispatch("input");
+    assert.equal(input.style.height, "180px", `${gateState}: long text must remain capped at the viewport maximum`);
+    assert.equal(input.style.overflowY, "auto", `${gateState}: capped long text must remain scrollable`);
+
+    input.value = "short again";
+    input.naturalScrollHeight = 42;
+    input.dispatch("input");
+    assert.equal(input.style.height, "42px", `${gateState}: shortening capped text must shrink the input again`);
+    assert.equal(input.style.overflowY, "hidden", `${gateState}: shrinking capped text must hide its scrollbar`);
+
+    state.promptSendHistory = [{ text: "history line one\nhistory line two\nhistory line three", images: [] }];
+    input.value = "live draft";
+    input.naturalScrollHeight = 42;
+    input.selectionStart = input.selectionEnd = input.value.length;
+    input.dispatch("input");
+    input.naturalScrollHeight = 96;
+    const historyUp = input.dispatch("keydown", { key: "ArrowUp" });
+    assert.equal(historyUp.defaultPrevented, true, `${gateState}: history recall must handle ArrowUp`);
+    assert.equal(input.value, state.promptSendHistory[0].text, `${gateState}: history recall must restore the saved text`);
+    assert.equal(input.style.height, "96px", `${gateState}: multiline history recall must grow to its natural height`);
+    input.naturalScrollHeight = 42;
+    const historyDown = input.dispatch("keydown", { key: "ArrowDown" });
+    assert.equal(historyDown.defaultPrevented, true, `${gateState}: history draft restore must handle ArrowDown`);
+    assert.equal(input.value, "live draft", `${gateState}: history navigation must restore the live draft`);
+    assert.equal(input.style.height, "42px", `${gateState}: short history draft restore must shrink to its natural height`);
+    assert.equal(input.style.overflowY, "hidden", `${gateState}: short history draft restore must hide its scrollbar`);
+
     actions.dispatch("click");
     let menu = globalThis.document.querySelector(".prompt-actions-popover");
     assert.ok(menu, `${gateState}: prompt actions menu must open`);
@@ -413,6 +509,8 @@ function preferredModelStub() {
     assert.equal(state.promptText, "", `${gateState}: clear must reset text`);
     assert.deepEqual(state.promptImages, [], `${gateState}: clear must reset images`);
     assert.equal(input.value, "", `${gateState}: clear must synchronize the textarea`);
+    assert.equal(input.style.height, "42px", `${gateState}: clear must preserve the empty input's natural height`);
+    assert.equal(input.style.overflowY, "hidden", `${gateState}: clear must hide the empty input's scrollbar`);
   }
 
   globalThis.document.body.replaceChildren();

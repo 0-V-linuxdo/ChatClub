@@ -1,7 +1,7 @@
 import { DEFAULT_TOPBAR_LAYOUT } from "./topbar.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-07-27｜01:07:34」";
+export const APP_VERSION = "「2026-07-29｜01:18:21」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -44,6 +44,7 @@ export const DEFAULT_PROMOTION_API_PROFILES = [
 ];
 
 export const GEMINI_THINKING_LEVEL_PREFERENCE_KEY = "GeminiThinkingLevel";
+export const NOTION_ALL_SOURCES_PREFERENCE_KEY = "NotionAIAllSources";
 
 export const GEMINI_THINKING_LEVEL_TARGETS = Object.freeze([
   Object.freeze({ id: "standard", label: "Standard" }),
@@ -51,6 +52,12 @@ export const GEMINI_THINKING_LEVEL_TARGETS = Object.freeze([
 ]);
 
 export const DEFAULT_GEMINI_THINKING_LEVEL = "standard";
+
+export const NOTION_ALL_SOURCES_PREFERENCE_VALUES = Object.freeze([
+  "",
+  "enabled",
+  "disabled"
+]);
 
 export const MODEL_PREFERENCE_TARGETS = Object.freeze({
   Gemini: Object.freeze([
@@ -77,15 +84,24 @@ export const MODEL_PREFERENCE_TARGETS = Object.freeze({
     Object.freeze({ id: "", label: "" }),
     Object.freeze({ id: "auto", label: "Auto" }),
     Object.freeze({ id: "sonnet46", label: "Claude Sonnet 4.6" }),
+    Object.freeze({ id: "sonnet5", label: "Claude Sonnet 5" }),
     Object.freeze({ id: "opus47", label: "Claude Opus 4.7" }),
     Object.freeze({ id: "opus48", label: "Claude Opus 4.8" }),
+    Object.freeze({ id: "opus5", label: "Claude Opus 5" }),
+    Object.freeze({ id: "fable5", label: "Claude Fable 5" }),
     Object.freeze({ id: "gemini31pro", label: "Gemini 3.1 Pro" }),
+    Object.freeze({ id: "gemini35flash", label: "Gemini 3.5 Flash" }),
+    Object.freeze({ id: "gpt56sol", label: "GPT-5.6 Sol" }),
+    Object.freeze({ id: "gpt56terra", label: "GPT-5.6 Terra" }),
     Object.freeze({ id: "gpt52", label: "GPT-5.2" }),
     Object.freeze({ id: "gpt54", label: "GPT-5.4" }),
     Object.freeze({ id: "gpt55", label: "GPT-5.5" }),
     Object.freeze({ id: "grok43", label: "Grok 4.3" }),
+    Object.freeze({ id: "grok45", label: "Grok 4.5" }),
     Object.freeze({ id: "grokBuild01", label: "Grok Build 0.1" }),
     Object.freeze({ id: "kimi26", label: "Kimi K2.6" }),
+    Object.freeze({ id: "kimi27code", label: "Kimi K2.7 Code" }),
+    Object.freeze({ id: "kimi3", label: "Kimi K3" }),
     Object.freeze({ id: "deepseekV4Pro", label: "DeepSeek V4 Pro" }),
     Object.freeze({ id: "glm52", label: "GLM 5.2" })
   ])
@@ -94,7 +110,8 @@ export const MODEL_PREFERENCE_TARGETS = Object.freeze({
 export const DEFAULT_MODEL_PREFERENCES = Object.freeze(
   {
     ...Object.fromEntries(Object.keys(MODEL_PREFERENCE_TARGETS).map((appId) => [appId, ""])),
-    [GEMINI_THINKING_LEVEL_PREFERENCE_KEY]: DEFAULT_GEMINI_THINKING_LEVEL
+    [GEMINI_THINKING_LEVEL_PREFERENCE_KEY]: DEFAULT_GEMINI_THINKING_LEVEL,
+    [NOTION_ALL_SOURCES_PREFERENCE_KEY]: ""
   }
 );
 
@@ -397,7 +414,8 @@ export const BUILTIN_CHAT_APPS = [
     url: "https://gk.dairoot.cn/",
     hosts: ["gk.dairoot.cn", "*.gk.dairoot.cn"],
     inputSelector: "textarea, [contenteditable='true']",
-    sendButtonSelector: "button[aria-label*='Send' i]"
+    sendButtonSelector: "button[aria-label*='Send' i], button[aria-label*='Submit' i], button[aria-label*='发送' i], button[aria-label*='提交' i]",
+    imagePasteStrategy: PROMPT_IMAGE_PASTE_STRATEGY_BATCH
   },
   {
     id: "DeepSeek",

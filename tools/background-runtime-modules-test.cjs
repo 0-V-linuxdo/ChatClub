@@ -84,6 +84,16 @@ const isContentRuntimeGenerationTransition = (details = {}) =>
     ["http://grok.com/*", "https://grok.com/*"],
     "the static Grok ancillary must not inject into wildcard subdomains"
   );
+  const mirrorTarget = { id: "grok-mirror", name: "Grok Mirror", url: "", hosts: ["gk.dairoot.cn", "*.gk.dairoot.cn"] };
+  const mirrorRegistrations = registrationsRuntime.buildContentScriptRegistrations({
+    coreTargets: [mirrorTarget],
+    preloadTargets: [mirrorTarget]
+  });
+  assert.deepEqual(
+    mirrorRegistrations.find((item) => item.id === "chatclub-grok-cookie-bridge")?.matches,
+    ["http://gk.dairoot.cn/*", "https://gk.dairoot.cn/*"],
+    "the Mirror ancillary must inject only into the exact configured gateway host"
+  );
 
   {
     const listeners = new Map();
@@ -333,6 +343,43 @@ const isContentRuntimeGenerationTransition = (details = {}) =>
       content.injectContentBridge(api, 31, { hrefs: ["https://grok.com/thread"], features: ["unknown"] }),
       /unsupported (?:content )?capabilities:?\s*unknown/i
     );
+  }
+
+  {
+    const injected = [];
+    const api = {
+      webNavigation: {
+        getAllFrames: async () => [
+          { frameId: 7, parentFrameId: 0, url: "https://gk.dairoot.cn/chat/1" }
+        ]
+      },
+      scripting: {
+        executeScript: async (details) => {
+          if (isBrowserDocumentProbe(details)) return browserDocumentProbeResult(details);
+          if (isContentRuntimeGenerationTransition(details)) {
+            const action = details.args[3];
+            return [{
+              frameId: 7,
+              documentId: "browser-document-7",
+              result: { supported: true, state: action === "commit" ? "active" : action }
+            }];
+          }
+          injected.push(details);
+          return [{ frameId: 7, documentId: "browser-document-7" }];
+        }
+      }
+    };
+    const result = await content.injectContentBridge(api, 31, {
+      hrefs: ["https://gk.dairoot.cn/chat/1"],
+      features: ["send"]
+    });
+    assert.deepEqual(result.plannedFiles, [
+      "content/preload.js",
+      "content/grok-cookie-bridge.js",
+      "content/content.js",
+      "content/send.js"
+    ]);
+    assert.deepEqual(injected.map((item) => item.files[0]), result.plannedFiles);
   }
 
   {
@@ -1118,6 +1165,41 @@ const isContentRuntimeGenerationTransition = (details = {}) =>
         mode === "duplicate" ? /matched multiple direct child iframes/ : /No direct child iframe matched/
       );
     }
+  }
+
+  {
+    const desired = {
+      id: "chatclub-grok-cookie-bridge",
+      matches: ["http://gk.dairoot.cn/*", "https://gk.dairoot.cn/*"],
+      js: ["content/grok-cookie-bridge.js"],
+      allFrames: true,
+      runAt: "document_start"
+    };
+    const registered = [{
+      ...desired,
+      matches: [...desired.matches].reverse(),
+      css: [],
+      excludeMatches: [],
+      matchOriginAsFallback: false,
+      persistAcrossSessions: true,
+      world: "ISOLATED"
+    }];
+    const calls = { get: 0, unregister: 0, register: 0 };
+    await registrationsRuntime.reconcileContentScripts({
+      scripting: {
+        getRegisteredContentScripts: async () => {
+          calls.get += 1;
+          return registered.map((item) => ({ ...item }));
+        },
+        unregisterContentScripts: async () => { calls.unregister += 1; },
+        registerContentScripts: async () => { calls.register += 1; }
+      }
+    }, [desired]);
+    assert.deepEqual(
+      calls,
+      { get: 1, unregister: 0, register: 0 },
+      "a canonical no-op reconciliation must not create a document_start injection gap"
+    );
   }
 
   {

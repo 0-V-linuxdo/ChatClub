@@ -4,9 +4,7 @@ import { getAllChatApps } from "../shared/storage-schema.js";
 import { loadCustomConfig, loadOptions, saveOptions } from "../shared/storage-adapter.js";
 import { FRAME_COMMAND_SPECS } from "../shared/frame-commands.js";
 import { ALL_SHORTCUT_ACTIONS } from "../shared/shortcuts.js";
-import {
-  normalizeContentRuntimeIdentity
-} from "../shared/content-runtime-identity.js";
+import { normalizeContentRuntimeIdentity } from "../shared/content-runtime-identity.js";
 import {
   contentRuntimeIdentityForBundle,
   contentRuntimePackageBundleIdentityMatches
@@ -32,13 +30,13 @@ const CONTENT_BRIDGE_RUNTIME_IDENTITY = contentRuntimeIdentityForBundle("content
 import { verifiedDirectChildFrameContext } from "./frame-injection.js";
 import { createAuthenticatedFrameRelay } from "./frame-relay.js";
 import { createSecureFrameContextRegistry } from "./secure-frame-contexts.js";
+import { normalizeSecureFrameRuntimeAttestation } from "./secure-frame-contexts.js";
 import { createGrokCookieRuntime } from "./grok-cookie-runtime.js";
+import { createDebuggerSessionCoordinator } from "./debugger-session.js";
+import { createNotionFramePreflightRuntime } from "./notion-frame-preflight.js";
 import { createCustomUserscriptRuntime } from "./custom-userscript-runtime.js";
 import { createFunctionalAnomalyStore } from "./functional-anomaly-store.js";
-import {
-  frameRouteError,
-  normalizeFrameTransportError
-} from "./frame-command-errors.js";
+import { frameRouteError, normalizeFrameTransportError } from "./frame-command-errors.js";
 import { invokeActiveRuntimeMethod } from "./main-world-runtime.js";
 import {
   executeInRegisteredFrameWithDocumentFallback,
@@ -63,7 +61,6 @@ import {
 } from "./request-dispatcher.js";
 import { withTimeout } from "./promise-timeout.js";
 import * as trustedInput from "./trusted-input.js";
-
 const chrome = globalThis.browser || globalThis.chrome;
 if (!chrome) throw new Error("[ChatClub] Extension API namespace is unavailable");
 
@@ -109,7 +106,12 @@ function verifiedExtensionPageSender(sender = {}) {
   return tabId;
 }
 
-const grokCookieRuntime = createGrokCookieRuntime(chrome, { verifiedExtensionPageSender });
+const debuggerSessionCoordinator = createDebuggerSessionCoordinator(chrome);
+const debuggerSessionDependencies = debuggerSessionCoordinator.available ? debuggerSessionCoordinator : undefined;
+const notionFramePreflightRuntime = createNotionFramePreflightRuntime(chrome);
+const grokCookieRuntime = createGrokCookieRuntime(chrome, {
+  registeredFrameContext, verifiedExtensionPageSender, withTabDebugger: debuggerSessionDependencies?.withTabDebugger
+});
 const customUserscriptRuntime = createCustomUserscriptRuntime(chrome);
 const functionalAnomalyStore = createFunctionalAnomalyStore(chrome);
 chrome.cookies?.onChanged?.addListener(grokCookieRuntime.handleCookieChange);
@@ -147,16 +149,19 @@ async function relayRegisteredFrameNavigation(details = {}, phase = "before") {
 }
 
 chrome.webNavigation?.onBeforeNavigate?.addListener((details) => {
+  if (grokCookieRuntime.handleBeforeNavigate(details)) return;
   relayRegisteredFrameNavigation(details, "before").catch(() => {});
 });
 chrome.webNavigation?.onCommitted?.addListener((details) => {
+  notionFramePreflightRuntime.settleNavigation(details);
   const committedAt = Date.now();
   (async () => {
+    const grokNavigationClaimed = grokCookieRuntime.handleCommittedNavigation(details);
     if (Number(details?.frameId) === 0 && Number.isInteger(details?.tabId)) {
       await forgetSecureTabContexts(Number(details.tabId), { registeredBefore: committedAt });
       return;
     }
-    await relayRegisteredFrameNavigation(details, "committed");
+    if (!grokNavigationClaimed) await relayRegisteredFrameNavigation(details, "committed");
     if (
       Number(details?.parentFrameId) === 0
       && Number.isInteger(details?.tabId)
@@ -170,9 +175,11 @@ chrome.webNavigation?.onCommitted?.addListener((details) => {
     }
   })().catch(() => {});
 });
+chrome.webNavigation?.onErrorOccurred?.addListener((details) => { notionFramePreflightRuntime.settleNavigation(details); grokCookieRuntime.handleNavigationError(details); });
 
 chrome.tabs?.onRemoved?.addListener((tabId, removeInfo) => {
   forgetKnownExtensionPageTab(tabId);
+  notionFramePreflightRuntime.handleTabRemoved(tabId);
   grokCookieRuntime.handleTabRemoved(tabId);
   forgetSecureTabContexts(tabId)
     .catch((error) => console.warn(`[${APP_NAME}] closed tab secure frame contexts could not be removed`, error));
@@ -337,6 +344,7 @@ async function verifySecureFrameContext(message = {}, sender = {}) {
   if (!secureFrameContextRegistry.touch(token, context)) {
     throw new Error("Secure frame document changed during registration verification");
   }
+  const grokCookieRuntime = normalizeSecureFrameRuntimeAttestation(response.data.grokCookieRuntime);
   return {
     href: String(response.data.href || context.url || ""),
     title: String(response.data.title || ""),
@@ -344,23 +352,24 @@ async function verifySecureFrameContext(message = {}, sender = {}) {
     runtimeIdentity: normalizeContentRuntimeIdentity(context.runtimeIdentity),
     frameId: context.frameId,
     frameBindingId: String(context.frameBindingId || ""),
-    browserDocumentId: String(context.browserDocumentId || context.documentId || "")
+    browserDocumentId: String(context.browserDocumentId || context.documentId || ""),
+    grokCookieRuntime
   };
 }
 
 async function dispatchTrustedClick(message = {}, sender = {}) {
   if (!("debugger" in chrome)) throw new Error("Trusted browser click is unavailable in this browser; complete the visible confirmation manually.");
-  return trustedInput.dispatchTrustedClick(chrome, message, sender);
+  return trustedInput.dispatchTrustedClick(chrome, message, sender, debuggerSessionDependencies);
 }
 
 async function dispatchTrustedMouseMove(message = {}, sender = {}) {
   if (!("debugger" in chrome)) throw new Error("Trusted browser hover is unavailable in this browser; open the row menu manually and retry.");
-  return trustedInput.dispatchTrustedMouseMove(chrome, message, sender);
+  return trustedInput.dispatchTrustedMouseMove(chrome, message, sender, debuggerSessionDependencies);
 }
 
 async function dispatchTrustedKeySequence(message = {}, sender = {}) {
   if (!("debugger" in chrome)) throw new Error("Trusted browser key input is unavailable in this browser; finish the delete action manually.");
-  return trustedInput.dispatchTrustedKeySequence(chrome, message, sender);
+  return trustedInput.dispatchTrustedKeySequence(chrome, message, sender, debuggerSessionDependencies);
 }
 
 async function ensureContentBridge(message = {}, sender = {}) {
@@ -542,22 +551,18 @@ async function applyDnrRules(preferredTabIds = []) {
   const extensionTabIds = supportsSessionRules
     ? await currentExtensionPageTabIds(preferredTabIds)
     : [];
-  const sessionRules = buildDynamicDnrRules(chatApps, extensionHost, extensionTabIds);
+  const baseSessionRules = buildDynamicDnrRules(chatApps, extensionHost, extensionTabIds);
   // Dynamic rules cannot safely express ownership by a ChatClub tab. Keep only
   // extension-initiated frame loading there instead of weakening ordinary tabs.
   const dynamicRules = supportsSessionRules
     ? buildDynamicDnrRules(chatApps, extensionHost, [])
-    : sessionRules;
-  await replaceDnrRules(
-    chrome.declarativeNetRequest,
-    sessionRules,
-    dynamicRules,
-    (message, error) => console.warn(`[${APP_NAME}] ${message}`, error)
-  );
+    : baseSessionRules;
+  return notionFramePreflightRuntime.withDnrMutation(() => replaceDnrRules(chrome.declarativeNetRequest,
+    [...baseSessionRules, ...notionFramePreflightRuntime.activeSessionRules()], dynamicRules,
+    (message, error) => console.warn(`[${APP_NAME}] ${message}`, error)));
 }
 
 const updateDnrRules = createDnrRuleUpdater(applyDnrRules);
-
 function forgetKnownExtensionPageTab(tabId) {
   if (!Number.isInteger(tabId)) return;
   const wasCandidate = candidateExtensionPageTabIds.delete(tabId);
@@ -602,6 +607,7 @@ chrome.runtime.onStartup?.addListener(() => {
 });
 
 registerActionListener(chrome);
+notionFramePreflightRuntime.cleanupStaleSessionRules().catch(() => {});
 prepareWorkspaceSessionLifecycleSafely("runtime start", { reason: "runtime-start" });
 
 const REQUEST = BACKGROUND_REQUEST_ACTIONS;
@@ -641,14 +647,15 @@ const backgroundRequestHandlers = [
   [REQUEST.RELOAD_CONFIGS, async (_message, _sender, tabId) => {
     await reloadRuntimeConfig(tabId);
   }],
-  ...grokCookieRuntime.requestHandlers(REQUEST, { updateDnrRules }),
+  ...grokCookieRuntime.requestHandlers(REQUEST, { updateDnrRules: notionFramePreflightRuntime.dnrRuleUpdater(updateDnrRules) }),
+  [REQUEST.CANCEL_NOTION_FRAME_LOAD, async (message, sender) => ({ cancelled: await notionFramePreflightRuntime.cancelFrameLoad(message, verifiedExtensionPageSender(sender)) })],
   [REQUEST.GET_CONFIG_INFO, async () => ({
     options: await loadOptions(),
     customConfig: await loadCustomConfig(),
     contentScripts: await chrome.scripting.getRegisteredContentScripts()
   })],
   [REQUEST.RESET_CONFIG, async (_message, _sender, tabId) => {
-    await grokCookieRuntime.removeAllManagedPartitions();
+    await grokCookieRuntime.removeAllManagedPartitions(tabId);
     await chrome.storage.local.clear();
     const workspaceSessionGeneration = await rotateWorkspaceSessionGeneration(chrome);
     const options = await saveOptions({});

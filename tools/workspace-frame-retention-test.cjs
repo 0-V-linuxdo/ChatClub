@@ -272,7 +272,7 @@ const { functionSource } = require("./function-source.cjs");
   );
   const assignFrameSrc = functionSource(frameController, "assignFrameSrc");
   assert.ok(
-    assignFrameSrc.indexOf("ensureFrameAttributeContract") < assignFrameSrc.indexOf("iframe.src = url"),
+    assignFrameSrc.indexOf("ensureFrameAttributeContract") < assignFrameSrc.indexOf("iframe.src = navigationUrl"),
     "active navigation must apply the target URL contract before assigning src"
   );
 

@@ -112,9 +112,11 @@ function installPreferredModelCapability() {
     alnumModelToken: dom.alnumModelToken,
     isDisabledElement: dom.isDisabledElement,
     modelElementArea: dom.modelElementArea,
+    modelEventConstructor: dom.modelEventConstructor,
     modelElementText: dom.modelElementText,
     modelRect: dom.modelRect,
     preferredModelActivate: dom.preferredModelActivate,
+    preferredModelPointerActivate: dom.preferredModelPointerActivate,
     visibleSelectorElements: dom.visibleSelectorElements
   });
   installContentCapability(runtimes, {

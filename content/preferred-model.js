@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "4b25a56bd08c2508af23fc884a7595f95663bd227768e9548427f9046db01267";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "24a63db0de70fdf6c845e0c7b99ffcc76be9eac6cfef2335bb1c06f608a321c0";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "719d8f56f36ec4f38931fc8156ef7fef9f04aae0b645871786954dfdf241ba64";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.719d8f56f36ec4f38931fc8156ef7fef9f04aae0b645871786954dfdf241ba64";
-  var CONTENT_RUNTIME_PREFERRED_MODEL_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preferred-model.js", "entryPath": "content-src/content-preferred-model.js", "sourceSha256": "36993790d84a2749b76d33106b0d16b3efe9d77507bb351c54e92e872ebbec16", "implementationSha256": "a8050603ed9701c381f44041d159ff02c59d3fe76262105178c4fb2f869e3f1b", "implementationVersion": "2026.07.16.2+bundle.a8050603ed9701c381f44041d159ff02c59d3fe76262105178c4fb2f869e3f1b" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "a130203366b9178fc7f7e5c781304d73091d830727def868a377cc753710ae75";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.a130203366b9178fc7f7e5c781304d73091d830727def868a377cc753710ae75";
+  var CONTENT_RUNTIME_PREFERRED_MODEL_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preferred-model.js", "entryPath": "content-src/content-preferred-model.js", "sourceSha256": "9bfcac033de3183279a45d5ab57685a29fce622030ecda3c680f15723f0479db", "implementationSha256": "720bc6035290083de74c7e5b953b807aaa1ab40b5822349e6349a2e4d6b41cb9", "implementationVersion": "2026.07.16.2+bundle.720bc6035290083de74c7e5b953b807aaa1ab40b5822349e6349a2e4d6b41cb9" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -287,7 +287,7 @@
     grokCookie: contentBundle({
       id: "chatclub-grok-cookie-bridge",
       file: "content/grok-cookie-bridge.js",
-      hosts: ["grok.com"],
+      hosts: ["grok.com", "gk.dairoot.cn"],
       runAt: "document_start"
     }),
     content: contentBundle({ id: "chatclub-content", file: "content/content.js" }),
@@ -329,7 +329,7 @@
     adoptNavigationFocusGuard: command({ timeoutMs: 1200, mutating: true, transport: "main-world", features: Object.freeze(["preferred-model"]) }),
     deleteThread: command({ timeoutMs: 37e3, mutating: true, features: Object.freeze(["delete"]) }),
     getDeleteConfirmState: command({ timeoutMs: 2400, features: Object.freeze(["delete"]) }),
-    applyPreferredModel: command({ timeoutMs: 18e3, mutating: true, features: Object.freeze(["preferred-model"]) }),
+    applyPreferredModel: command({ timeoutMs: 5e4, mutating: true, features: Object.freeze(["preferred-model"]) }),
     cancelPreferredModelApply: command({ timeoutMs: 2e3, mutating: true, features: Object.freeze(["preferred-model"]) }),
     setMessageNavigator: command({ timeoutMs: 6e3, mutating: true, features: Object.freeze(["message-navigator"]) }),
     hideMessageNavigatorMenu: command({ timeoutMs: 2e3, mutating: true, features: Object.freeze(["message-navigator"]) }),
@@ -2123,6 +2123,1143 @@
     });
   }
 
+  // content-src/capabilities/preferred-notion-source-indicator.js
+  var NOTION_SOURCE_INDICATOR_SELECTORS = Object.freeze([
+    '[data-testid="unified-chat-search-scope-button"]',
+    '[role="button"][aria-haspopup="menu"]',
+    'button[aria-haspopup="menu"]'
+  ]);
+  var NOTION_SOURCE_DISABLED_ICON_SELECTOR = 'svg.teamspaceSlashSmall[role="graphics-symbol"]';
+  var NOTION_SOURCE_ENABLED_LABELS = /* @__PURE__ */ new Set([
+    "all sources i can access",
+    "all sources",
+    "我可以访问的所有来源",
+    "我能访问的所有来源",
+    "所有我可以访问的来源",
+    "所有来源",
+    "全部来源",
+    "所有资料源",
+    "全部资料源"
+  ]);
+  var NOTION_SOURCE_DISABLED_LABELS = /* @__PURE__ */ new Set([
+    "web search only",
+    "no sources",
+    "仅限网页搜索",
+    "仅限网络搜索",
+    "仅使用网页搜索",
+    "仅使用网络搜索",
+    "只搜索网页",
+    "只搜索网络",
+    "无来源",
+    "没有来源",
+    "无资料源",
+    "没有资料源"
+  ]);
+  function createPreferredNotionSourceIndicator(deps = {}) {
+    const {
+      notionText,
+      visibleSelectorElements,
+      modelRect,
+      findNotionComposerRoot,
+      isNotionControlNearMainComposer,
+      findNotionSourcesTrigger,
+      waitForPreferredModelWithinDeadline,
+      assertPreferredModelRun
+    } = deps;
+    function notionSourceIndicatorLabel(element) {
+      for (const name of ["aria-label", "aria-valuetext", "title"]) {
+        const value = notionText(element?.getAttribute?.(name));
+        if (value) return value;
+      }
+      return "";
+    }
+    function notionSourceStateFromLabel(label) {
+      if (NOTION_SOURCE_ENABLED_LABELS.has(label)) return true;
+      if (NOTION_SOURCE_DISABLED_LABELS.has(label)) return false;
+      return null;
+    }
+    function notionSourceIndicatorIsSettings(element) {
+      const testId = notionText(element?.getAttribute?.("data-testid"));
+      const label = notionSourceIndicatorLabel(element);
+      return testId === "unified-chat-mode-menu-button" || label === "settings" || label === "设置";
+    }
+    function notionSourceIndicatorIsModelControl(element) {
+      const testId = notionText(element?.getAttribute?.("data-testid"));
+      const label = notionSourceIndicatorLabel(element);
+      return testId === "unified-chat-model-button" || testId.includes("model") || /^(?:select |open )?models?$/.test(label) || /^(?:选择|打开)?模型$/.test(label);
+    }
+    function notionSourceIndicatorCandidates(composerRoot, composerRect) {
+      const candidates = visibleSelectorElements(NOTION_SOURCE_INDICATOR_SELECTORS).filter((element) => isNotionControlNearMainComposer(element, composerRoot, composerRect)).filter((element) => !notionSourceIndicatorIsSettings(element)).filter((element) => !notionSourceIndicatorIsModelControl(element));
+      return [...new Set(candidates)];
+    }
+    function notionSourceButtonForDisabledIcon(icon) {
+      let node = icon?.parentElement || null;
+      while (node && node.nodeType === 1) {
+        if (String(node.getAttribute?.("role") || "").toLowerCase() === "button" && String(node.getAttribute?.("aria-haspopup") || "").toLowerCase() === "menu") return node;
+        node = node.parentElement || null;
+      }
+      return null;
+    }
+    function observeNotionMainSourceState() {
+      const composer = findNotionComposerRoot();
+      const composerRect = modelRect(composer);
+      const trigger = findNotionSourcesTrigger();
+      if (!composer || !composerRect || !trigger) {
+        return { state: null, reason: "sources indicator is not ready" };
+      }
+      const candidates = notionSourceIndicatorCandidates(composer, composerRect);
+      const disabledIcons = visibleSelectorElements(NOTION_SOURCE_DISABLED_ICON_SELECTOR).map((icon) => ({ icon, indicator: notionSourceButtonForDisabledIcon(icon) })).filter(({ indicator: indicator2 }) => indicator2 && (composer.contains?.(indicator2) || isNotionControlNearMainComposer(indicator2, composer, composerRect)));
+      if (disabledIcons.length > 1) {
+        return { state: null, reason: "sources disabled indicator is ambiguous" };
+      }
+      if (disabledIcons.length === 1) {
+        const { icon, indicator: indicator2 } = disabledIcons[0];
+        if (candidates.length !== 1 || candidates[0] !== indicator2) {
+          return { state: null, reason: "sources indicator is ambiguous" };
+        }
+        if (notionSourceStateFromLabel(notionSourceIndicatorLabel(indicator2)) === true) {
+          return { state: null, reason: "sources indicator state conflicts" };
+        }
+        return { state: false, proofElement: icon, indicator: indicator2, composer, trigger, reason: "" };
+      }
+      if (candidates.length > 1) {
+        return { state: null, reason: "sources indicator is ambiguous" };
+      }
+      const indicator = candidates[0] || null;
+      if (!indicator) {
+        return { state: true, proofElement: null, indicator: null, composer, trigger, reason: "" };
+      }
+      const state = notionSourceStateFromLabel(notionSourceIndicatorLabel(indicator));
+      return {
+        state,
+        proofElement: indicator,
+        indicator,
+        composer,
+        trigger,
+        reason: state === null ? "sources indicator state is unreadable" : ""
+      };
+    }
+    function sameNotionSourceIndicator(first, second) {
+      if (!first || !second || first.state !== second.state) return false;
+      if (first.proofElement || second.proofElement) return first.proofElement === second.proofElement;
+      return first.composer === second.composer && first.trigger === second.trigger;
+    }
+    async function waitNotionMainSourceState(context, desiredState = null, timeoutMs = 1e3) {
+      let previous = null;
+      let samples = 0;
+      const observation = await waitForPreferredModelWithinDeadline(context, () => {
+        const current = observeNotionMainSourceState();
+        if (current.state === null || desiredState !== null && current.state !== desiredState) {
+          previous = null;
+          samples = 0;
+          return null;
+        }
+        if (!sameNotionSourceIndicator(previous, current)) {
+          previous = current;
+          samples = 1;
+          return null;
+        }
+        samples += 1;
+        previous = current;
+        return samples >= 2 ? current : null;
+      }, timeoutMs, 120);
+      assertPreferredModelRun(context);
+      return observation || null;
+    }
+    return Object.freeze({ observeNotionMainSourceState, waitNotionMainSourceState });
+  }
+
+  // content-src/capabilities/preferred-notion-sources.js
+  var NOTION_ALL_SOURCES_STATES = Object.freeze(["enabled", "disabled"]);
+  function createPreferredNotionSourcesCapability(deps = {}) {
+    const {
+      normalize: normalize2,
+      modelElementText,
+      visibleSelectorElements,
+      modelRect,
+      visible: visible2,
+      isDisabledElement: isDisabledElement2,
+      assertPreferredModelRun,
+      preferredModelActivate,
+      preferredModelPointerActivate,
+      waitForPreferredModel,
+      modelElementArea,
+      modelEventConstructor,
+      closest: closest2,
+      preferredModelResult,
+      findNotionComposerRoot,
+      isNotionControlNearMainComposer
+    } = deps;
+    const NOTION_SOURCES_DIRECT_TRIGGER_SELECTORS = Object.freeze([
+      '[data-testid="unified-chat-mode-menu-button"]',
+      '[data-testid="unified-chat-search-scope-button"]'
+    ]);
+    const NOTION_SOURCES_TRIGGER_SELECTORS = Object.freeze([
+      ...NOTION_SOURCES_DIRECT_TRIGGER_SELECTORS,
+      'button[aria-label="Settings" i]',
+      '[role="button"][aria-label="Settings" i]',
+      'button[title="Settings" i]',
+      '[role="button"][title="Settings" i]',
+      'button[aria-label="设置"]',
+      '[role="button"][aria-label="设置"]',
+      'button[title="设置"]',
+      '[role="button"][title="设置"]'
+    ]);
+    const NOTION_SOURCES_MENU_ROOT_SELECTORS = Object.freeze([
+      '[role="menu"]',
+      '[role="listbox"]',
+      '[role="dialog"]',
+      "[data-radix-menu-content]",
+      "[data-radix-popper-content-wrapper]",
+      "[data-popper-placement]",
+      "[data-floating-ui-focusable]",
+      '[data-floating-ui-portal] [role="menu"]',
+      '[data-floating-ui-portal] [role="listbox"]'
+    ]);
+    const NOTION_SOURCES_MENU_ITEM_SELECTORS = Object.freeze([
+      '[role="menuitem"]',
+      '[role="menuitemcheckbox"]',
+      '[role="switch"]',
+      "button",
+      '[tabindex]:not([tabindex="-1"])'
+    ]);
+    const NOTION_SOURCES_TOGGLE_SELECTORS = Object.freeze([
+      '[role="switch"]',
+      '[role="checkbox"]',
+      '[role="menuitemcheckbox"]',
+      'input[type="checkbox"]',
+      "button[aria-checked]",
+      "[aria-checked]",
+      'button[data-state="checked"]',
+      'button[data-state="unchecked"]',
+      '[data-state="checked"]',
+      '[data-state="unchecked"]'
+    ]);
+    const NOTION_SOURCES_TRIGGER_WAIT_MS = 1700;
+    const NOTION_SOURCES_HYDRATION_TRIGGER_WAIT_MS = 3e3;
+    const NOTION_SOURCES_MENU_OPEN_WAIT_MS = 3e3;
+    const NOTION_SOURCES_SUBMENU_WAIT_MS = 2300;
+    const NOTION_SOURCES_SETTLE_WAIT_MS = 1e3;
+    const NOTION_SOURCES_MENU_CLOSE_WAIT_MS = 1500;
+    const NOTION_SOURCES_STABLE_SAMPLES = 2;
+    let notionSourcesOperationTail = Promise.resolve();
+    const notionText = (value) => normalize2(value).toLowerCase().replace(/\s+/g, " ");
+    function activateNotionSourcesElement(context, element) {
+      const activate = typeof preferredModelPointerActivate === "function" ? preferredModelPointerActivate : preferredModelActivate;
+      return activate(context, element);
+    }
+    function preferredModelTimeRemaining(context, requestedMs) {
+      const requested = Math.max(0, Number(requestedMs) || 0);
+      const deadlineAt = Math.max(0, Number(context?.deadlineAt) || 0);
+      return deadlineAt > 0 ? Math.min(requested, Math.max(0, deadlineAt - Date.now())) : requested;
+    }
+    function waitForPreferredModelWithinDeadline(context, getter, timeoutMs, intervalMs) {
+      const remaining = preferredModelTimeRemaining(context, timeoutMs);
+      if (remaining <= 0) return Promise.resolve(null);
+      return waitForPreferredModel(context, getter, remaining, intervalMs);
+    }
+    function notionTextLooksLikeMySourcesSeed(value) {
+      const textValue = notionText(value);
+      return Boolean(textValue && (textValue === "my sources" || textValue.startsWith("my sources ") || textValue.includes("我的来源") || textValue.includes("我的资料源") || textValue.includes("我的资源")));
+    }
+    function notionTextContainsMySources(value) {
+      const textValue = notionText(value);
+      return Boolean(textValue && (textValue.includes("my sources") || textValue.includes("我的来源") || textValue.includes("我的资料源") || textValue.includes("我的资源")));
+    }
+    function notionTextLooksLikeAllSources(value) {
+      const textValue = notionText(value);
+      return Boolean(textValue && (textValue === "all sources" || textValue === "all sources i can access" || textValue.includes("all sources") || textValue.includes("all sources i can access") || textValue.includes("全部来源") || textValue.includes("所有来源") || textValue.includes("全部资料源") || textValue.includes("所有资料源")));
+    }
+    function notionTextLooksLikeWebAccess(value) {
+      const textValue = notionText(value);
+      return Boolean(textValue && (textValue.includes("web access") || textValue.includes("internet access") || textValue.includes("联网") || textValue.includes("网络访问")));
+    }
+    function notionSourcesDisclosureState(element) {
+      if (!element) return null;
+      const ariaExpanded = String(element.getAttribute?.("aria-expanded") || "").trim().toLowerCase();
+      if (ariaExpanded === "true") return true;
+      if (ariaExpanded === "false") return false;
+      const dataState = String(element.getAttribute?.("data-state") || "").trim().toLowerCase();
+      if (dataState === "open") return true;
+      if (dataState === "closed") return false;
+      return null;
+    }
+    function notionSourcesPopupIsOpen(root) {
+      if (!root || root.isConnected === false || !visible2(root)) return false;
+      let node = root;
+      while (node && node.nodeType === 1) {
+        if (node.hidden === true || node.inert === true || node.hasAttribute?.("inert") || String(node.getAttribute?.("aria-hidden") || "").trim().toLowerCase() === "true" || String(node.getAttribute?.("data-state") || "").trim().toLowerCase() === "closed") return false;
+        let style = null;
+        try {
+          const view = node.ownerDocument?.defaultView || globalThis;
+          style = view?.getComputedStyle?.(node) || null;
+        } catch {
+        }
+        if (style && (style.display === "none" || style.visibility === "hidden" || style.visibility === "collapse" || Number.parseFloat(style.opacity) === 0)) return false;
+        node = node.parentElement || null;
+      }
+      return true;
+    }
+    function scoreNotionSourcesMenuRoot(root) {
+      if (!notionSourcesPopupIsOpen(root)) return -1;
+      const textValue = modelElementText(root);
+      const normalized = notionText(textValue);
+      let score = 0;
+      if (notionTextContainsMySources(textValue)) score += 180;
+      if (notionTextLooksLikeAllSources(textValue)) score += 220;
+      if (notionTextLooksLikeWebAccess(textValue)) score += 240;
+      if (normalized.includes("add sources") || normalized.includes("添加来源") || normalized.includes("添加资料源")) score += 180;
+      if (normalized.includes("personalize") || normalized.includes("个性化")) score += 60;
+      if (normalized.includes("mode") || normalized.includes("模式")) score += 40;
+      if (normalized.includes("default") && normalized.includes("ask") && normalized.includes("plan")) score += 220;
+      if (normalized.includes("answers only") || normalized.includes("plans first") || normalized.includes("think deeper")) score += 100;
+      return score >= 160 ? score : -1;
+    }
+    function innermostIndependentElements(elements) {
+      const unique = [...new Set(elements.filter(Boolean))];
+      return unique.filter((element) => !unique.some((other) => other !== element && element.contains?.(other)));
+    }
+    function notionSourcesMenuRoots() {
+      const roots = visibleSelectorElements(NOTION_SOURCES_MENU_ROOT_SELECTORS).map((element) => ({ element, score: scoreNotionSourcesMenuRoot(element), area: modelElementArea(element) })).filter((item) => item.score > 0).sort((a, b) => b.score - a.score || a.area - b.area).map((item) => item.element);
+      return innermostIndependentElements(roots);
+    }
+    function findNotionSourcesTrigger() {
+      const directCandidates = visibleSelectorElements(NOTION_SOURCES_DIRECT_TRIGGER_SELECTORS).filter((element) => !isDisabledElement2(element));
+      const composerRoot = findNotionComposerRoot();
+      const composerRect = modelRect(composerRoot);
+      const rank = (pool) => pool.map((element) => {
+        const testId = String(element.getAttribute?.("data-testid") || "").toLowerCase();
+        const label = notionText(element.getAttribute?.("aria-label") || "");
+        const title = notionText(element.getAttribute?.("title") || "");
+        const rect = modelRect(element);
+        let score = 0;
+        if (testId === "unified-chat-mode-menu-button") score += 500;
+        if (testId === "unified-chat-search-scope-button") score += 400;
+        if (label === "settings" || label === "设置") score += 300;
+        if (title === "settings" || title === "设置") score += 240;
+        if (String(element.getAttribute?.("aria-haspopup") || "").toLowerCase() === "dialog") score += 80;
+        return { element, score, bottom: Number(rect?.bottom || 0) };
+      }).sort((a, b) => b.score - a.score || b.bottom - a.bottom);
+      if (directCandidates.length) {
+        const scoped = directCandidates.filter((element) => isNotionControlNearMainComposer(element, composerRoot, composerRect));
+        if (!composerRoot || !composerRect || !scoped.length) return null;
+        const ranked2 = rank(scoped);
+        if (ranked2[0] && (!ranked2[1] || ranked2[0].score > ranked2[1].score)) return ranked2[0].element;
+        return null;
+      }
+      if (!composerRoot || !composerRect) return null;
+      const scopedFallbacks = visibleSelectorElements(NOTION_SOURCES_TRIGGER_SELECTORS).filter((element) => !isDisabledElement2(element)).filter((element) => isNotionControlNearMainComposer(element, composerRoot, composerRect));
+      const ranked = rank(scopedFallbacks);
+      return ranked[0] && ranked[0].score > 0 && (!ranked[1] || ranked[0].score > ranked[1].score) ? ranked[0].element : null;
+    }
+    const notionMainSourceIndicator = createPreferredNotionSourceIndicator({
+      notionText,
+      visibleSelectorElements,
+      modelRect,
+      findNotionComposerRoot,
+      isNotionControlNearMainComposer,
+      findNotionSourcesTrigger,
+      waitForPreferredModelWithinDeadline,
+      assertPreferredModelRun
+    });
+    function notionRawRect(element) {
+      try {
+        const rect = element?.getBoundingClientRect?.();
+        if (!rect) return null;
+        return {
+          top: Number(rect.top || 0),
+          right: Number(rect.right || 0),
+          bottom: Number(rect.bottom || 0),
+          left: Number(rect.left || 0),
+          width: Math.max(0, Number(rect.width || 0)),
+          height: Math.max(0, Number(rect.height || 0))
+        };
+      } catch {
+        return null;
+      }
+    }
+    function notionRawSelectorElements(selectors, root) {
+      if (!root?.querySelectorAll) return [];
+      const out = [];
+      const seen = /* @__PURE__ */ new Set();
+      for (const selector of Array.isArray(selectors) ? selectors : [selectors]) {
+        try {
+          for (const element of root.querySelectorAll(selector)) {
+            if (!seen.has(element)) {
+              seen.add(element);
+              out.push(element);
+            }
+          }
+        } catch {
+        }
+      }
+      return out;
+    }
+    function notionIsSemanticToggle(element) {
+      if (!element) return false;
+      const role = String(element.getAttribute?.("role") || "").toLowerCase();
+      const tag = String(element.tagName || "").toLowerCase();
+      const type = String(element.type || element.getAttribute?.("type") || "").toLowerCase();
+      return ["switch", "checkbox", "menuitemcheckbox"].includes(role) || tag === "input" && type === "checkbox" || element.hasAttribute?.("aria-checked") || ["checked", "unchecked"].includes(String(element.getAttribute?.("data-state") || "").toLowerCase());
+    }
+    function notionToggleIsLaidOut(element) {
+      if (!notionIsSemanticToggle(element) || isDisabledElement2(element)) return false;
+      const rect = notionRawRect(element);
+      if (!rect || rect.width <= 0 || rect.height <= 0) return false;
+      let style = null;
+      try {
+        const view = element.ownerDocument?.defaultView || globalThis;
+        style = view?.getComputedStyle?.(element) || null;
+      } catch {
+      }
+      if (!style) return true;
+      return style.display !== "none" && style.visibility !== "hidden" && style.visibility !== "collapse";
+    }
+    function notionElementAcceptsPointerInput(element) {
+      if (!element) return false;
+      let style = null;
+      try {
+        const view = element.ownerDocument?.defaultView || globalThis;
+        style = view?.getComputedStyle?.(element) || null;
+      } catch {
+      }
+      return !style || style.pointerEvents !== "none";
+    }
+    function notionToggleIsEligible(element) {
+      if (!notionIsSemanticToggle(element) || isDisabledElement2(element)) return false;
+      if (visible2(element)) return true;
+      const tag = String(element.tagName || "").toLowerCase();
+      const role = String(element.getAttribute?.("role") || "").toLowerCase();
+      const type = String(element.type || element.getAttribute?.("type") || "").toLowerCase();
+      return tag === "input" && (type === "checkbox" || ["switch", "checkbox"].includes(role)) && notionToggleIsLaidOut(element);
+    }
+    function notionRectsShareVisualRow(first, second) {
+      const firstRect = notionRawRect(first);
+      const secondRect = notionRawRect(second);
+      if (!firstRect || !secondRect) return false;
+      const verticalOverlap = Math.min(firstRect.bottom, secondRect.bottom) - Math.max(firstRect.top, secondRect.top);
+      return verticalOverlap >= Math.min(8, Math.min(firstRect.height, secondRect.height) * 0.35);
+    }
+    function notionSourcesCandidateRow(element, root, predicate) {
+      if (!element || !root || typeof predicate !== "function") return null;
+      const rootArea = modelElementArea(root);
+      const rootRect = modelRect(root);
+      let bestToggleOwner = null;
+      let bestAction = null;
+      let bestRowLike = null;
+      let fallback = null;
+      let node = element;
+      while (node && node.nodeType === 1 && node !== root && root.contains?.(node)) {
+        if (!visible2(node) || isDisabledElement2(node) || !predicate(modelElementText(node))) {
+          node = node.parentElement || null;
+          continue;
+        }
+        const area = modelElementArea(node);
+        if (rootArea > 0 && area >= rootArea * 0.85) break;
+        const role = String(node.getAttribute?.("role") || "").toLowerCase();
+        const tag = String(node.tagName || "").toLowerCase();
+        const tabIndex = String(node.getAttribute?.("tabindex") || "").trim();
+        const actionLike = ["menuitem", "menuitemcheckbox", "switch", "checkbox", "button"].includes(role) || tag === "button" || tabIndex && tabIndex !== "-1";
+        const rect = modelRect(node);
+        const rowLike = rect && rootRect && rect.height >= 22 && rect.height <= 96 && rect.width >= Math.min(140, rootRect.width * 0.4) && rect.width <= rootRect.width + 32;
+        const toggle = findNotionAllSourcesToggle(node, element);
+        const sameVisualRow = toggle.target && notionRectsShareVisualRow(toggle.target, element);
+        if (!bestToggleOwner && (actionLike || rowLike) && (toggle.ambiguous || sameVisualRow)) bestToggleOwner = node;
+        if (actionLike && !bestAction) bestAction = node;
+        if (rowLike && !bestRowLike) bestRowLike = node;
+        if (!fallback) fallback = node;
+        node = node.parentElement || null;
+      }
+      return bestToggleOwner || bestAction || bestRowLike || fallback;
+    }
+    function findNotionSourcesRows(root, seedPredicate, ancestorPredicate = seedPredicate) {
+      if (!root || typeof seedPredicate !== "function" || typeof ancestorPredicate !== "function") return [];
+      const rows = /* @__PURE__ */ new Set();
+      const add = (element) => {
+        if (!element || !seedPredicate(modelElementText(element))) return;
+        const row = notionSourcesCandidateRow(element, root, ancestorPredicate);
+        if (row && root.contains?.(row)) rows.add(row);
+      };
+      for (const element of visibleSelectorElements(NOTION_SOURCES_MENU_ITEM_SELECTORS, root)) add(element);
+      for (const element of visibleSelectorElements(["div", "span", "button", "label"], root)) add(element);
+      return [...rows].sort((a, b) => modelElementArea(a) - modelElementArea(b));
+    }
+    function singleNotionSourcesRow(root, seedPredicate, ancestorPredicate = seedPredicate) {
+      const rows = innermostIndependentElements(findNotionSourcesRows(root, seedPredicate, ancestorPredicate));
+      return { row: rows.length === 1 ? rows[0] : null, ambiguous: rows.length > 1 };
+    }
+    function findNotionSourcesMenuRoot(trigger = null, options = {}) {
+      const controlsId = String(trigger?.getAttribute?.("aria-controls") || "").trim();
+      if (controlsId) {
+        const controlled = document.getElementById?.(controlsId) || null;
+        if (scoreNotionSourcesMenuRoot(controlled) > 0) return controlled;
+      }
+      if (options.exactOnly === true) return null;
+      const excluded = options.excludeRoots instanceof Set ? options.excludeRoots : null;
+      const roots = notionSourcesMenuRoots().filter((root) => !excluded?.has(root));
+      return roots.length === 1 ? roots[0] : null;
+    }
+    function notionAllSourcesBindingBelongsToSettingsRoot(binding, root, lease) {
+      const overlay = binding?.overlay || null;
+      if (!overlay || !binding?.row || binding?.ambiguous || lease?.baselineAllSources?.has(overlay) || lease?.settingsRootsBeforeActivation?.has(overlay)) return false;
+      return overlay === root || root?.contains?.(overlay) || overlay.contains?.(root);
+    }
+    function bindDirectNotionAllSources(lease, binding) {
+      lease.directAllSources = true;
+      lease.allSourcesOverlay = binding.overlay || null;
+      lease.allSourcesRow = binding.row || null;
+      lease.allSourcesTarget = binding.target || null;
+      return binding;
+    }
+    function findOpenNotionAllSourcesBinding() {
+      const overlays = notionSourcesMenuRoots().filter((root) => notionTextLooksLikeAllSources(modelElementText(root)));
+      if (overlays.length !== 1) {
+        return { overlay: null, row: null, target: null, state: null, ambiguous: overlays.length > 1 };
+      }
+      const overlay = overlays[0];
+      const rowResult = singleNotionSourcesRow(overlay, notionTextLooksLikeAllSources);
+      if (!rowResult.row) {
+        return { overlay, row: null, target: null, state: null, ambiguous: rowResult.ambiguous };
+      }
+      const toggleResult = findNotionAllSourcesToggle(rowResult.row);
+      if (!toggleResult.target) {
+        return {
+          overlay,
+          row: rowResult.row,
+          target: null,
+          state: null,
+          ambiguous: toggleResult.ambiguous
+        };
+      }
+      return {
+        overlay,
+        row: rowResult.row,
+        target: toggleResult.target,
+        state: notionToggleState(toggleResult.target),
+        ambiguous: false
+      };
+    }
+    function notionToggleState(element) {
+      if (!element) return null;
+      const candidates = [.../* @__PURE__ */ new Set([element, ...visibleSelectorElements([
+        'input[type="checkbox"]',
+        "[aria-checked]",
+        "[data-state]"
+      ], element), ...notionRawSelectorElements([
+        'input[type="checkbox"]',
+        '[role="switch"]',
+        '[role="checkbox"]',
+        "[aria-checked]",
+        "[data-state]"
+      ], element)])];
+      for (const candidate of candidates) {
+        const tag = String(candidate?.tagName || "").toLowerCase();
+        const type = String(candidate?.type || candidate?.getAttribute?.("type") || "").toLowerCase();
+        const role = String(candidate?.getAttribute?.("role") || "").toLowerCase();
+        if (tag === "input" && (type === "checkbox" || ["switch", "checkbox"].includes(role)) && typeof candidate.checked === "boolean") return candidate.checked;
+        const ariaChecked = String(candidate?.getAttribute?.("aria-checked") || "").trim().toLowerCase();
+        if (ariaChecked === "true") return true;
+        if (ariaChecked === "false") return false;
+        const dataState = String(candidate?.getAttribute?.("data-state") || "").trim().toLowerCase();
+        if (["checked", "on", "open"].includes(dataState)) return true;
+        if (["unchecked", "off", "closed"].includes(dataState)) return false;
+      }
+      return null;
+    }
+    function notionAllSourcesLabelAnchor(row) {
+      if (!row) return null;
+      const candidates = [row, ...visibleSelectorElements(["div", "span", "label", "button"], row)].filter((element) => notionTextLooksLikeAllSources(modelElementText(element))).filter((element) => {
+        const rect = notionRawRect(element);
+        return visible2(element) && rect && rect.height > 0 && rect.height <= 56;
+      });
+      const innermost = innermostIndependentElements(candidates);
+      return innermost.length === 1 ? innermost[0] : null;
+    }
+    function notionToggleActivationTarget(target, row) {
+      if (!target || !row) return null;
+      if (visible2(target) && !isDisabledElement2(target) && notionElementAcceptsPointerInput(target)) return target;
+      const targetRect = notionRawRect(target);
+      if (!targetRect) return null;
+      const proxies = [];
+      let node = target.parentElement || null;
+      while (node && node.nodeType === 1 && node !== row && row.contains?.(node)) {
+        const nodeRect = notionRawRect(node);
+        const widthLimit = Math.max(targetRect.width + 8, targetRect.width * 1.75);
+        const heightLimit = Math.max(targetRect.height + 8, targetRect.height * 1.75);
+        const centerDeltaX = nodeRect ? Math.abs(nodeRect.left + nodeRect.width / 2 - (targetRect.left + targetRect.width / 2)) : Number.MAX_SAFE_INTEGER;
+        const centerDeltaY = nodeRect ? Math.abs(nodeRect.top + nodeRect.height / 2 - (targetRect.top + targetRect.height / 2)) : Number.MAX_SAFE_INTEGER;
+        if (visible2(node) && !isDisabledElement2(node) && notionElementAcceptsPointerInput(node) && nodeRect && notionRectsShareVisualRow(node, target) && nodeRect.width <= widthLimit && nodeRect.height <= heightLimit && centerDeltaX <= Math.max(4, targetRect.width * 0.25) && centerDeltaY <= Math.max(4, targetRect.height * 0.25)) proxies.push(node);
+        node = node.parentElement || null;
+      }
+      const innermost = innermostIndependentElements(proxies);
+      return innermost.length === 1 ? innermost[0] : null;
+    }
+    function findNotionAllSourcesToggle(row, labelAnchor = null) {
+      if (!row) return { target: null, ambiguous: false };
+      const candidates = [];
+      const role = String(row.getAttribute?.("role") || "").toLowerCase();
+      const tag = String(row.tagName || "").toLowerCase();
+      const type = String(row.type || row.getAttribute?.("type") || "").toLowerCase();
+      if (["switch", "checkbox", "menuitemcheckbox"].includes(role) || tag === "input" && type === "checkbox") {
+        candidates.push(row);
+      }
+      candidates.push(...visibleSelectorElements(NOTION_SOURCES_TOGGLE_SELECTORS, row));
+      candidates.push(...notionRawSelectorElements(NOTION_SOURCES_TOGGLE_SELECTORS, row));
+      const anchor = labelAnchor || notionAllSourcesLabelAnchor(row);
+      const unique = [...new Set(candidates)].filter((element) => notionToggleIsEligible(element)).filter((element) => anchor && notionRectsShareVisualRow(element, anchor));
+      const leaves = unique.filter((element) => !unique.some((other) => other !== element && element.contains?.(other)));
+      const target = leaves.length === 1 ? leaves[0] : null;
+      return {
+        target,
+        activationTarget: target ? notionToggleActivationTarget(target, row) : null,
+        anchor,
+        ambiguous: leaves.length > 1
+      };
+    }
+    function notionSourcesOverlayMatches(expected, current) {
+      return Boolean(expected && current && expected === current);
+    }
+    function createNotionSourcesLease() {
+      const baselineRoots = new Set(notionSourcesMenuRoots());
+      return {
+        baselineRoots,
+        baselineAllSources: new Set(
+          [...baselineRoots].filter((root) => notionTextLooksLikeAllSources(modelElementText(root)))
+        ),
+        trigger: null,
+        settingsRoot: null,
+        settingsRootsBeforeActivation: null,
+        settingsActivated: false,
+        mySourcesRoot: null,
+        mySourcesRow: null,
+        mySourcesTarget: null,
+        submenuActivated: false,
+        directAllSources: false,
+        allSourcesRootsBeforeActivation: null,
+        allSourcesOverlay: null,
+        allSourcesRow: null,
+        allSourcesTarget: null,
+        unownedMenuDetected: false,
+        cleanupEscapedRoots: /* @__PURE__ */ new Set(),
+        cleanupTriggerRootsWithOverlay: /* @__PURE__ */ new Set(),
+        cleanupTriggerSettingsRoots: /* @__PURE__ */ new Set()
+      };
+    }
+    function connectedVisibleNotionSourcesRoot(root) {
+      const currentRoots = notionSourcesMenuRoots();
+      return Boolean(
+        root && root.isConnected !== false && notionSourcesPopupIsOpen(root) && scoreNotionSourcesMenuRoot(root) > 0 && currentRoots.some((candidate) => candidate === root || root.contains?.(candidate))
+      );
+    }
+    function resetNotionSourcesCleanupAttempts(lease) {
+      lease.cleanupEscapedRoots = /* @__PURE__ */ new Set();
+      lease.cleanupTriggerRootsWithOverlay = /* @__PURE__ */ new Set();
+      lease.cleanupTriggerSettingsRoots = /* @__PURE__ */ new Set();
+    }
+    function exactBoundNotionSettingsRoot(lease) {
+      const trigger = lease?.trigger || null;
+      const controlsId = String(trigger?.getAttribute?.("aria-controls") || "").trim();
+      const root = controlsId ? document.getElementById?.(controlsId) || null : null;
+      return connectedVisibleNotionSourcesRoot(root) && !lease?.baselineRoots?.has(root) && !lease?.settingsRootsBeforeActivation?.has(root) ? root : null;
+    }
+    function resolveOwnedNotionSettingsRoot(lease) {
+      if (lease?.settingsRoot) {
+        if (connectedVisibleNotionSourcesRoot(lease.settingsRoot)) return lease.settingsRoot;
+        const replacement = exactBoundNotionSettingsRoot(lease);
+        if (replacement) lease.settingsRoot = replacement;
+        return replacement;
+      }
+      if (!lease?.settingsActivated || !lease.trigger) return null;
+      const exact = exactBoundNotionSettingsRoot(lease);
+      if (exact) {
+        lease.settingsRoot = exact;
+        return exact;
+      }
+      const roots = notionSourcesMenuRoots().filter((root) => !lease.baselineRoots.has(root) && !lease.settingsRootsBeforeActivation?.has(root));
+      if (roots.length === 1) lease.settingsRoot = roots[0];
+      return roots.length === 1 ? roots[0] : null;
+    }
+    function exactBoundNotionAllSourcesOverlay(lease) {
+      const controlsId = String(
+        (lease?.directAllSources ? lease?.trigger?.getAttribute?.("aria-controls") : lease?.mySourcesTarget?.getAttribute?.("aria-controls")) || lease?.mySourcesRow?.getAttribute?.("aria-controls") || ""
+      ).trim();
+      const root = controlsId ? document.getElementById?.(controlsId) || null : null;
+      return connectedVisibleNotionSourcesRoot(root) && !lease?.baselineAllSources?.has(root) && !lease?.allSourcesRootsBeforeActivation?.has(root) && notionTextLooksLikeAllSources(modelElementText(root)) ? root : null;
+    }
+    function resolveOwnedNotionAllSourcesOverlay(lease) {
+      if (lease?.allSourcesOverlay) {
+        if (connectedVisibleNotionSourcesRoot(lease.allSourcesOverlay) && !lease.baselineAllSources.has(lease.allSourcesOverlay)) return lease.allSourcesOverlay;
+        const replacement = exactBoundNotionAllSourcesOverlay(lease);
+        if (replacement) lease.allSourcesOverlay = replacement;
+        return replacement;
+      }
+      if (!lease?.submenuActivated || !lease.mySourcesRoot) return null;
+      const exact = exactBoundNotionAllSourcesOverlay(lease);
+      if (exact) {
+        lease.allSourcesOverlay = exact;
+        return exact;
+      }
+      const overlays = notionSourcesMenuRoots().filter((root) => notionTextLooksLikeAllSources(modelElementText(root)) && !lease.baselineAllSources.has(root) && !lease.allSourcesRootsBeforeActivation?.has(root));
+      if (overlays.length === 1) lease.allSourcesOverlay = overlays[0];
+      return overlays.length === 1 ? overlays[0] : null;
+    }
+    function observeNotionAllSourcesState(binding) {
+      const overlays = notionSourcesMenuRoots().filter((root) => notionTextLooksLikeAllSources(modelElementText(root)));
+      if (overlays.length > 1) return { state: null, reason: "all sources overlay is ambiguous" };
+      const overlay = overlays[0] || null;
+      if (!overlay) return { state: null, reason: "all sources row not found" };
+      if (binding?.overlay && !notionSourcesOverlayMatches(binding.overlay, overlay)) {
+        return { state: null, reason: "all sources overlay changed" };
+      }
+      const rowResult = singleNotionSourcesRow(overlay, notionTextLooksLikeAllSources);
+      if (rowResult.ambiguous) return { state: null, reason: "all sources row is ambiguous" };
+      if (!rowResult.row) return { state: null, reason: "all sources row not found" };
+      if (binding?.row && binding.row !== rowResult.row) {
+        return { state: null, reason: "all sources row changed" };
+      }
+      const toggleResult = findNotionAllSourcesToggle(rowResult.row);
+      if (toggleResult.ambiguous) return { state: null, reason: "all sources toggle is ambiguous", row: rowResult.row };
+      if (!toggleResult.target) return { state: null, reason: "all sources toggle not found", row: rowResult.row };
+      if (binding?.target && binding.target !== toggleResult.target) {
+        return { state: null, reason: "all sources toggle changed", row: rowResult.row };
+      }
+      if (binding?.anchor && binding.anchor !== toggleResult.anchor) {
+        return { state: null, reason: "all sources label changed", row: rowResult.row };
+      }
+      const state = notionToggleState(toggleResult.target);
+      const currentOverlays = notionSourcesMenuRoots().filter((root) => notionTextLooksLikeAllSources(modelElementText(root)));
+      const currentOverlay = currentOverlays.length === 1 ? currentOverlays[0] : null;
+      if (!notionSourcesOverlayMatches(overlay, currentOverlay) || !notionToggleIsEligible(toggleResult.target) || !(currentOverlay === toggleResult.target || currentOverlay?.contains?.(toggleResult.target))) {
+        return { state: null, reason: "all sources overlay changed" };
+      }
+      return {
+        state,
+        reason: state === null ? "all sources toggle state is unreadable" : "",
+        overlay,
+        row: rowResult.row,
+        target: toggleResult.target,
+        activationTarget: toggleResult.activationTarget,
+        anchor: toggleResult.anchor
+      };
+    }
+    async function waitNotionAllSourcesStable(context, desiredState, binding, timeoutMs = NOTION_SOURCES_SETTLE_WAIT_MS) {
+      let samples = 0;
+      return Boolean(await waitForPreferredModelWithinDeadline(context, () => {
+        const observation = observeNotionAllSourcesState(binding);
+        if (observation.state === desiredState) {
+          samples += 1;
+          return samples >= NOTION_SOURCES_STABLE_SAMPLES ? observation : null;
+        }
+        samples = 0;
+        return null;
+      }, timeoutMs, 120));
+    }
+    async function openNotionSourcesMenu(context, trigger, lease) {
+      const existing = findNotionSourcesMenuRoot(trigger, { exactOnly: true });
+      lease.trigger = trigger;
+      if (existing) {
+        lease.unownedMenuDetected = true;
+        return null;
+      }
+      const rootsBeforeActivation = new Set(notionSourcesMenuRoots());
+      lease.settingsRootsBeforeActivation = rootsBeforeActivation;
+      if (notionSourcesDisclosureState(trigger) === true || rootsBeforeActivation.size > 0) {
+        lease.unownedMenuDetected = true;
+        return null;
+      }
+      resetNotionSourcesCleanupAttempts(lease);
+      if (!trigger || !activateNotionSourcesElement(context, trigger)) return null;
+      lease.settingsActivated = true;
+      const root = await waitForPreferredModelWithinDeadline(
+        context,
+        () => {
+          const exact = findNotionSourcesMenuRoot(trigger, { exactOnly: true });
+          if (exact && !rootsBeforeActivation.has(exact)) return exact;
+          return findNotionSourcesMenuRoot(trigger, { excludeRoots: rootsBeforeActivation });
+        },
+        NOTION_SOURCES_MENU_OPEN_WAIT_MS,
+        120
+      );
+      if (root && !rootsBeforeActivation.has(root) && !lease.baselineRoots.has(root)) {
+        lease.settingsRoot = root;
+      }
+      return root;
+    }
+    function notionMySourcesActivationTargets(row, root) {
+      const rect = modelRect(row);
+      const targets = [];
+      const seen = /* @__PURE__ */ new Set();
+      const add = (target) => {
+        if (!target || seen.has(target) || !visible2(target) || isDisabledElement2(target) || target !== row && !row.contains?.(target) || root && target !== root && !root.contains?.(target)) return;
+        seen.add(target);
+        targets.push(target);
+      };
+      if (rect && rect.width > 0 && rect.height > 0) {
+        for (const ratio of [0.18, 0.52, 0.88]) {
+          let pointElement = null;
+          try {
+            pointElement = document.elementFromPoint?.(
+              rect.left + rect.width * ratio,
+              rect.top + rect.height * 0.5
+            ) || null;
+          } catch {
+          }
+          add(closest2(pointElement, "button, [role='button'], [role='menuitem'], [tabindex]:not([tabindex='-1'])"));
+          add(pointElement);
+        }
+      }
+      add(closest2(row, "button, [role='button'], [role='menuitem'], [tabindex]:not([tabindex='-1'])"));
+      add(row);
+      return targets;
+    }
+    async function activateNotionMySourcesRow(context, row, root, lease) {
+      const deadlineAt = Math.min(
+        Math.max(0, Number(context?.deadlineAt) || Number.MAX_SAFE_INTEGER),
+        Date.now() + NOTION_SOURCES_SUBMENU_WAIT_MS
+      );
+      const overlaysBeforeActivation = new Set(
+        notionSourcesMenuRoots().filter((candidate) => notionTextLooksLikeAllSources(modelElementText(candidate)))
+      );
+      lease.mySourcesRoot = root;
+      lease.mySourcesRow = row;
+      lease.allSourcesRootsBeforeActivation = overlaysBeforeActivation;
+      const ownedBinding = () => {
+        const current = findOpenNotionAllSourcesBinding();
+        if (current.overlay && overlaysBeforeActivation.has(current.overlay)) return null;
+        return current.row || current.ambiguous ? current : null;
+      };
+      const target = notionMySourcesActivationTargets(row, root)[0] || null;
+      if (!target || !activateNotionSourcesElement(context, target)) return null;
+      lease.mySourcesTarget = target;
+      lease.submenuActivated = true;
+      const result = await waitForPreferredModelWithinDeadline(
+        context,
+        ownedBinding,
+        Math.max(0, deadlineAt - Date.now()),
+        120
+      );
+      if (result) {
+        lease.allSourcesOverlay = result.overlay || null;
+        lease.allSourcesRow = result.row || null;
+        lease.allSourcesTarget = result.target || null;
+      }
+      return result;
+    }
+    async function ensureNotionAllSourcesRow(context, lease, triggerWaitMs = NOTION_SOURCES_TRIGGER_WAIT_MS) {
+      const trigger = await waitForPreferredModelWithinDeadline(
+        context,
+        findNotionSourcesTrigger,
+        triggerWaitMs,
+        120
+      );
+      if (!trigger) {
+        return {
+          row: null,
+          ambiguous: false,
+          reason: "sources trigger not found",
+          trigger: null,
+          menusOwned: false
+        };
+      }
+      const preexisting = findOpenNotionAllSourcesBinding();
+      if (preexisting.overlay || preexisting.ambiguous) {
+        return {
+          row: null,
+          ambiguous: preexisting.ambiguous,
+          reason: "unowned all sources overlay is open",
+          trigger,
+          menusOwned: false
+        };
+      }
+      const root = await openNotionSourcesMenu(context, trigger, lease);
+      if (!root) return {
+        row: null,
+        ambiguous: false,
+        reason: lease.unownedMenuDetected ? "unowned sources menu is open" : "sources menu not found",
+        trigger,
+        menusOwned: false
+      };
+      const directAllSources = findOpenNotionAllSourcesBinding();
+      if (notionAllSourcesBindingBelongsToSettingsRoot(directAllSources, root, lease)) {
+        return { ...bindDirectNotionAllSources(lease, directAllSources), trigger, menusOwned: true };
+      }
+      if (directAllSources.ambiguous) {
+        return { row: null, ambiguous: true, reason: "all sources overlay is ambiguous", trigger, menusOwned: true };
+      }
+      const mySources = singleNotionSourcesRow(root, notionTextLooksLikeMySourcesSeed, notionTextContainsMySources);
+      if (mySources.ambiguous) return { row: null, ambiguous: true, reason: "my sources row is ambiguous", trigger, menusOwned: true };
+      if (!mySources.row) return { row: null, ambiguous: false, reason: "my sources row not found", trigger, menusOwned: true };
+      const result = await activateNotionMySourcesRow(context, mySources.row, root, lease);
+      return result ? { ...result, trigger, menusOwned: true } : { row: null, ambiguous: false, reason: "my sources row could not be opened", trigger, menusOwned: true };
+    }
+    function dispatchNotionSourcesEscapeEvent(target) {
+      const KeyboardEventCtor = modelEventConstructor?.("KeyboardEvent", target) || null;
+      if (!target || typeof KeyboardEventCtor !== "function") return false;
+      const options = {
+        key: "Escape",
+        code: "Escape",
+        keyCode: 27,
+        which: 27,
+        bubbles: true,
+        cancelable: true,
+        composed: true
+      };
+      let dispatched = false;
+      for (const type of ["keydown", "keyup"]) {
+        try {
+          target.dispatchEvent?.(new KeyboardEventCtor(type, options));
+          dispatched = true;
+        } catch {
+        }
+      }
+      return dispatched;
+    }
+    function dispatchNotionSourcesEscape(root) {
+      if (!root || !connectedVisibleNotionSourcesRoot(root)) return false;
+      return dispatchNotionSourcesEscapeEvent(notionSourcesEscapeTarget(root));
+    }
+    function notionSourcesCleanupSleep(ms) {
+      return new Promise((resolve) => {
+        setTimeout(resolve, Math.max(0, Number(ms) || 0));
+      });
+    }
+    async function waitOwnedNotionSourcesRootClosed(root, deadlineAt, intervalMs) {
+      while (Date.now() < deadlineAt) {
+        if (!connectedVisibleNotionSourcesRoot(root)) return true;
+        await notionSourcesCleanupSleep(Math.min(
+          Math.max(20, Number(intervalMs) || 20),
+          Math.max(0, deadlineAt - Date.now())
+        ));
+      }
+      return !connectedVisibleNotionSourcesRoot(root);
+    }
+    function notionSourcesEscapeTarget(root) {
+      const activeElement = document.activeElement || null;
+      return activeElement && (root === activeElement || root.contains?.(activeElement)) ? activeElement : root;
+    }
+    function clickOwnedNotionSourcesTrigger(lease, root) {
+      const trigger = lease?.trigger || null;
+      if (!trigger || lease?.settingsActivated !== true || lease?.settingsRoot !== root || !visible2(trigger) || isDisabledElement2(trigger) || !connectedVisibleNotionSourcesRoot(root) || lease.baselineRoots.has(root) || lease.settingsRootsBeforeActivation?.has(root) || scoreNotionSourcesMenuRoot(root) <= 0 || root === trigger || root.contains?.(trigger) || notionSourcesDisclosureState(trigger) === false || typeof trigger.click !== "function") return false;
+      try {
+        trigger.click();
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    function notionSourcesLeaseIsClosed(lease) {
+      if (resolveOwnedNotionAllSourcesOverlay(lease) || resolveOwnedNotionSettingsRoot(lease)) return false;
+      const roots = notionSourcesMenuRoots();
+      if (lease?.submenuActivated && roots.some((root) => notionTextLooksLikeAllSources(modelElementText(root)) && !lease.baselineAllSources.has(root) && !lease.allSourcesRootsBeforeActivation?.has(root))) return false;
+      if (lease?.settingsActivated && roots.some((root) => !lease.baselineRoots.has(root) && !lease.settingsRootsBeforeActivation?.has(root))) return false;
+      return true;
+    }
+    async function closeNotionSourcesMenus(context, lease, options = {}) {
+      const contextRemaining = preferredModelTimeRemaining(context, NOTION_SOURCES_MENU_CLOSE_WAIT_MS);
+      const cleanupBudget = options.forceCleanup === true || context?.signal?.aborted ? NOTION_SOURCES_MENU_CLOSE_WAIT_MS : contextRemaining;
+      const deadlineAt = Date.now() + Math.max(0, cleanupBudget);
+      const escapedRoots = lease.cleanupEscapedRoots || (lease.cleanupEscapedRoots = /* @__PURE__ */ new Set());
+      const triggerFallbackRootsWithOverlay = lease.cleanupTriggerRootsWithOverlay || (lease.cleanupTriggerRootsWithOverlay = /* @__PURE__ */ new Set());
+      const triggerFallbackSettingsOnlyRoots = lease.cleanupTriggerSettingsRoots || (lease.cleanupTriggerSettingsRoots = /* @__PURE__ */ new Set());
+      while (Date.now() < deadlineAt) {
+        const overlay = resolveOwnedNotionAllSourcesOverlay(lease);
+        if (overlay) {
+          const settingsRoot2 = resolveOwnedNotionSettingsRoot(lease);
+          const unexpectedOverlay = notionSourcesMenuRoots().some((root) => notionTextLooksLikeAllSources(modelElementText(root)) && root !== overlay && !lease.baselineAllSources.has(root) && !lease.allSourcesRootsBeforeActivation?.has(root));
+          if (settingsRoot2 && !unexpectedOverlay && !triggerFallbackRootsWithOverlay.has(settingsRoot2) && clickOwnedNotionSourcesTrigger(lease, settingsRoot2)) {
+            triggerFallbackRootsWithOverlay.add(settingsRoot2);
+            await waitOwnedNotionSourcesRootClosed(
+              overlay,
+              Math.min(deadlineAt, Date.now() + 320),
+              40
+            );
+            if (!connectedVisibleNotionSourcesRoot(overlay)) continue;
+          }
+          if (!escapedRoots.has(overlay)) {
+            escapedRoots.add(overlay);
+            dispatchNotionSourcesEscape(overlay);
+            await waitOwnedNotionSourcesRootClosed(
+              overlay,
+              Math.min(deadlineAt, Date.now() + 360),
+              40
+            );
+            if (!connectedVisibleNotionSourcesRoot(overlay)) continue;
+          }
+          await waitOwnedNotionSourcesRootClosed(
+            overlay,
+            Math.min(deadlineAt, Date.now() + 60),
+            40
+          );
+          continue;
+        }
+        const settingsRoot = resolveOwnedNotionSettingsRoot(lease);
+        if (settingsRoot) {
+          const unexpectedOverlay = notionSourcesMenuRoots().some((root) => notionTextLooksLikeAllSources(modelElementText(root)) && !lease.baselineAllSources.has(root) && !lease.allSourcesRootsBeforeActivation?.has(root));
+          if (!unexpectedOverlay && !triggerFallbackSettingsOnlyRoots.has(settingsRoot) && clickOwnedNotionSourcesTrigger(lease, settingsRoot)) {
+            triggerFallbackSettingsOnlyRoots.add(settingsRoot);
+            await waitOwnedNotionSourcesRootClosed(
+              settingsRoot,
+              Math.min(deadlineAt, Date.now() + 320),
+              40
+            );
+            if (!connectedVisibleNotionSourcesRoot(settingsRoot)) continue;
+          }
+          if (!escapedRoots.has(settingsRoot)) {
+            escapedRoots.add(settingsRoot);
+            dispatchNotionSourcesEscape(settingsRoot);
+            await waitOwnedNotionSourcesRootClosed(
+              settingsRoot,
+              Math.min(deadlineAt, Date.now() + 360),
+              40
+            );
+            if (!connectedVisibleNotionSourcesRoot(settingsRoot)) continue;
+          }
+          await waitOwnedNotionSourcesRootClosed(settingsRoot, deadlineAt, 60);
+          if (connectedVisibleNotionSourcesRoot(settingsRoot)) break;
+          continue;
+        }
+        if (notionSourcesLeaseIsClosed(lease)) return true;
+        await notionSourcesCleanupSleep(Math.min(40, Math.max(0, deadlineAt - Date.now())));
+      }
+      return notionSourcesLeaseIsClosed(lease);
+    }
+    const closeNotionSourcesMenusForResult = (context, lease) => closeNotionSourcesMenus(context, lease, { forceCleanup: true });
+    const preflightNotionAllSourcesTrigger = (context) => waitForPreferredModelWithinDeadline(context, findNotionSourcesTrigger, NOTION_SOURCES_TRIGGER_WAIT_MS, 120);
+    async function applyNotionAllSourcesPreference(context, modelId, allSourcesState, lease) {
+      const desiredState = allSourcesState === "enabled";
+      const triggerWaitMs = context.interactionCount === 0 ? NOTION_SOURCES_TRIGGER_WAIT_MS : NOTION_SOURCES_HYDRATION_TRIGGER_WAIT_MS;
+      const trigger = await waitForPreferredModelWithinDeadline(
+        context,
+        findNotionSourcesTrigger,
+        triggerWaitMs,
+        120
+      );
+      if (!trigger) {
+        const menuClosed2 = notionSourcesMenuRoots().length === 0;
+        return preferredModelResult(context, false, "NotionAI", modelId, "sources trigger not found", {
+          retryable: context.interactionCount === 0,
+          menuClosed: menuClosed2,
+          allSourcesState
+        });
+      }
+      if (lease.baselineRoots.size > 0) {
+        assertPreferredModelRun(context);
+        const reason = lease.baselineAllSources.size > 0 ? "unowned all sources overlay is open" : "unowned sources menu is open";
+        return preferredModelResult(context, false, "NotionAI", modelId, reason, {
+          retryable: context.interactionCount === 0,
+          menuClosed: false,
+          allSourcesState
+        });
+      }
+      const mainState = await notionMainSourceIndicator.waitNotionMainSourceState(
+        context,
+        null,
+        NOTION_SOURCES_SETTLE_WAIT_MS
+      );
+      if (!mainState) {
+        const observation = notionMainSourceIndicator.observeNotionMainSourceState();
+        return preferredModelResult(context, false, "NotionAI", modelId, observation.reason || "sources indicator state is unreadable", {
+          retryable: context.interactionCount === 0,
+          menuClosed: true,
+          allSourcesState
+        });
+      }
+      if (mainState.state === desiredState) {
+        return preferredModelResult(context, true, "NotionAI", modelId, "", {
+          skipped: true,
+          menuClosed: true,
+          allSourcesState
+        });
+      }
+      const opened = await ensureNotionAllSourcesRow(context, lease, NOTION_SOURCES_TRIGGER_WAIT_MS);
+      if (!opened.row) {
+        const menuClosed2 = opened.menusOwned === false ? notionSourcesMenuRoots().length === 0 : await closeNotionSourcesMenus(context, lease);
+        assertPreferredModelRun(context);
+        const reason = opened.reason || (opened.ambiguous ? "all sources overlay is ambiguous" : "all sources row not found");
+        return preferredModelResult(context, false, "NotionAI", modelId, reason, {
+          retryable: context.interactionCount === 0,
+          menuClosed: menuClosed2,
+          allSourcesState
+        });
+      }
+      const initial = observeNotionAllSourcesState(opened);
+      if (initial.state === null) {
+        const menuClosed2 = await closeNotionSourcesMenus(context, lease);
+        assertPreferredModelRun(context);
+        return preferredModelResult(context, false, "NotionAI", modelId, initial.reason, { menuClosed: menuClosed2, allSourcesState });
+      }
+      const stableInitial = await waitNotionAllSourcesStable(context, initial.state, opened);
+      if (!stableInitial) {
+        const menuClosed2 = await closeNotionSourcesMenus(context, lease);
+        assertPreferredModelRun(context);
+        return preferredModelResult(context, false, "NotionAI", modelId, "all sources state was not stable", {
+          menuClosed: menuClosed2,
+          allSourcesState
+        });
+      }
+      const changed = initial.state !== desiredState;
+      if (changed && (!initial.activationTarget || !activateNotionSourcesElement(context, initial.activationTarget))) {
+        const menuClosed2 = await closeNotionSourcesMenus(context, lease);
+        assertPreferredModelRun(context);
+        return preferredModelResult(context, false, "NotionAI", modelId, "all sources toggle could not be clicked", { menuClosed: menuClosed2, allSourcesState });
+      }
+      const menuClosed = await closeNotionSourcesMenusForResult(context, lease);
+      assertPreferredModelRun(context);
+      if (!menuClosed) {
+        return preferredModelResult(context, false, "NotionAI", modelId, "sources menu did not close", {
+          menuClosed,
+          allSourcesState
+        });
+      }
+      const settled = await notionMainSourceIndicator.waitNotionMainSourceState(
+        context,
+        desiredState,
+        NOTION_SOURCES_SETTLE_WAIT_MS
+      );
+      assertPreferredModelRun(context);
+      return settled ? preferredModelResult(context, true, "NotionAI", modelId, "", {
+        changed,
+        skipped: !changed,
+        menuClosed,
+        allSourcesState
+      }) : preferredModelResult(context, false, "NotionAI", modelId, "main sources indicator did not settle", {
+        menuClosed,
+        allSourcesState
+      });
+    }
+    async function runNotionPreferenceOperation(context, operation) {
+      const previous = notionSourcesOperationTail.catch(() => {
+      });
+      let releaseOperation = () => {
+      };
+      const operationGate = new Promise((resolve) => {
+        releaseOperation = resolve;
+      });
+      notionSourcesOperationTail = previous.then(() => operationGate);
+      await previous;
+      let lease = null;
+      let outcome;
+      let operationError = null;
+      try {
+        assertPreferredModelRun(context);
+        lease = createNotionSourcesLease();
+        outcome = await operation(lease);
+      } catch (error) {
+        operationError = error;
+      } finally {
+        try {
+          if (lease) await closeNotionSourcesMenus(context, lease, { forceCleanup: true });
+        } catch {
+        }
+        releaseOperation();
+      }
+      if (operationError) throw operationError;
+      assertPreferredModelRun(context);
+      return outcome;
+    }
+    return Object.freeze({ applyNotionAllSourcesPreference, preflightNotionAllSourcesTrigger, runNotionPreferenceOperation });
+  }
+
   // content-src/capabilities/preferred-notion-deepseek.js
   function createPreferredNotionDeepSeekCapability(deps = {}) {
     const {
@@ -2134,8 +3271,10 @@
       isDisabledElement: isDisabledElement2,
       assertPreferredModelRun,
       preferredModelActivate,
+      preferredModelPointerActivate,
       waitForPreferredModel,
       modelElementArea,
+      modelEventConstructor,
       preferredModelSleep,
       dismissPreferredModelMenu,
       preferredModelResult,
@@ -2155,17 +3294,26 @@
     const NOTION_MODEL_TARGETS = Object.freeze({
       auto: Object.freeze({ id: "auto", label: "Auto", aliases: ["Automatic"] }),
       sonnet46: Object.freeze({ id: "sonnet46", label: "Claude Sonnet 4.6", aliases: ["Sonnet 4.6"] }),
+      sonnet5: Object.freeze({ id: "sonnet5", label: "Claude Sonnet 5", aliases: ["Sonnet 5"] }),
       opus47: Object.freeze({ id: "opus47", label: "Claude Opus 4.7", aliases: ["Opus 4.7"] }),
       opus48: Object.freeze({ id: "opus48", label: "Claude Opus 4.8", aliases: ["Opus 4.8"] }),
-      gemini31pro: Object.freeze({ id: "gemini31pro", label: "Gemini 3.1 Pro", aliases: ["Gemini Pro"] }),
+      opus5: Object.freeze({ id: "opus5", label: "Claude Opus 5", aliases: ["Opus 5"] }),
+      fable5: Object.freeze({ id: "fable5", label: "Claude Fable 5", aliases: ["Fable 5"] }),
+      gemini31pro: Object.freeze({ id: "gemini31pro", label: "Gemini 3.1 Pro", aliases: [] }),
+      gemini35flash: Object.freeze({ id: "gemini35flash", label: "Gemini 3.5 Flash", aliases: [] }),
+      gpt56sol: Object.freeze({ id: "gpt56sol", label: "GPT-5.6 Sol", aliases: ["GPT 5.6 Sol"] }),
+      gpt56terra: Object.freeze({ id: "gpt56terra", label: "GPT-5.6 Terra", aliases: ["GPT 5.6 Terra"] }),
       gpt52: Object.freeze({ id: "gpt52", label: "GPT-5.2", aliases: ["GPT 5.2"] }),
       gpt54: Object.freeze({ id: "gpt54", label: "GPT-5.4", aliases: ["GPT 5.4"] }),
       gpt55: Object.freeze({ id: "gpt55", label: "GPT-5.5", aliases: ["GPT 5.5"] }),
-      grok43: Object.freeze({ id: "grok43", label: "Grok 4.3", aliases: ["Grok 43", "grok43"] }),
-      grokBuild01: Object.freeze({ id: "grokBuild01", label: "Grok Build 0.1", aliases: ["Grok Build 01", "Grok Build"] }),
-      kimi26: Object.freeze({ id: "kimi26", label: "Kimi K2.6", aliases: ["Kimi K2.6"] }),
-      deepseekV4Pro: Object.freeze({ id: "deepseekV4Pro", label: "DeepSeek V4 Pro", aliases: ["DeepSeek V4"] }),
-      glm52: Object.freeze({ id: "glm52", label: "GLM 5.2", aliases: ["GLM-5.2", "GLM"] })
+      grok43: Object.freeze({ id: "grok43", label: "Grok 4.3", aliases: [] }),
+      grok45: Object.freeze({ id: "grok45", label: "Grok 4.5", aliases: [] }),
+      grokBuild01: Object.freeze({ id: "grokBuild01", label: "Grok Build 0.1", aliases: ["Grok Build 01"] }),
+      kimi26: Object.freeze({ id: "kimi26", label: "Kimi K2.6", aliases: [] }),
+      kimi27code: Object.freeze({ id: "kimi27code", label: "Kimi K2.7 Code", aliases: [] }),
+      kimi3: Object.freeze({ id: "kimi3", label: "Kimi K3", aliases: [] }),
+      deepseekV4Pro: Object.freeze({ id: "deepseekV4Pro", label: "DeepSeek V4 Pro", aliases: [] }),
+      glm52: Object.freeze({ id: "glm52", label: "GLM 5.2", aliases: ["GLM-5.2"] })
     });
     const NOTION_MODEL_TRIGGER_SELECTORS = Object.freeze([
       '[data-testid="unified-chat-model-button"]',
@@ -2183,6 +3331,17 @@
       '[role="combobox"]',
       "button"
     ]);
+    const NOTION_MODEL_DIRECT_TRIGGER_SELECTORS = Object.freeze([
+      '[data-testid="agent-chat-model-button"]',
+      '[data-testid="unified-chat-model-button"]'
+    ]);
+    const NOTION_MODEL_TRIGGER_WAIT_MS = 3500;
+    const NOTION_MODEL_TRIGGER_HYDRATION_WAIT_MS = 600;
+    const NOTION_MODEL_TRIGGER_HYDRATION_SAMPLES = 2;
+    const NOTION_MODEL_MENU_OPEN_WAIT_MS = 2200;
+    const NOTION_MODEL_ITEM_READY_WAIT_MS = 800;
+    const NOTION_MODEL_SETTLE_WAIT_MS = 2200;
+    const NOTION_MODEL_MENU_CLOSE_WAIT_MS = 700;
     const NOTION_MODEL_MENU_ROOT_SELECTORS = Object.freeze([
       '[role="menu"]',
       '[role="listbox"]',
@@ -2203,35 +3362,71 @@
       "button",
       '[tabindex]:not([tabindex="-1"])'
     ]);
+    const notionOwnedMenuRoots = /* @__PURE__ */ new WeakMap();
     function notionText(value) {
       return normalize2(value).toLowerCase().replace(/\s+/g, " ");
     }
     function notionLabels(target) {
       return [target?.label, ...target?.aliases || []].map(notionText).filter(Boolean);
     }
+    function notionTextEvidence(value) {
+      const evidence = /* @__PURE__ */ new Set();
+      const add = (candidate) => {
+        const normalized = notionText(candidate);
+        if (normalized) evidence.add(normalized);
+      };
+      const raw = String(value || "");
+      add(raw);
+      for (const line of raw.split(/[\r\n\u2028\u2029]+/)) add(line);
+      return [...evidence];
+    }
     function notionTextLooksLikeTarget(value, target) {
-      const textValue = notionText(value);
-      if (!textValue || !target) return false;
-      if (notionLabels(target).some((label) => textValue === label || textValue.includes(label))) return true;
-      if (target.id === "gemini31pro") return textValue.includes("gemini") && textValue.includes("pro");
-      if (target.id === "opus48") return textValue.includes("opus") && textValue.includes("4.8");
-      if (target.id === "opus47") return textValue.includes("opus") && textValue.includes("4.7");
-      if (target.id === "sonnet46") return textValue.includes("sonnet") && textValue.includes("4.6");
-      if (target.id === "grok43") return textValue.includes("grok") && textValue.includes("4.3");
-      if (target.id === "grokBuild01") return textValue.includes("grok") && textValue.includes("build");
-      if (target.id === "deepseekV4Pro") return textValue.includes("deepseek") && textValue.includes("v4");
-      if (target.id === "kimi26") return textValue.includes("kimi") && textValue.includes("k2.6");
-      if (target.id === "glm52") return textValue.includes("glm") && textValue.includes("5.2");
-      return false;
+      if (!target) return false;
+      const labels = notionLabels(target);
+      return notionTextEvidence(value).some((candidate) => labels.includes(candidate));
     }
-    function notionModelIdFromText(value) {
-      for (const [id, target] of Object.entries(NOTION_MODEL_TARGETS)) {
-        if (notionTextLooksLikeTarget(value, target)) return id;
+    function notionModelIdsFromEvidence(evidence) {
+      const ids = /* @__PURE__ */ new Set();
+      for (const candidate of evidence) {
+        for (const [id, target] of Object.entries(NOTION_MODEL_TARGETS)) {
+          if (notionLabels(target).includes(candidate)) ids.add(id);
+        }
       }
-      return "";
+      return ids;
     }
-    function countNotionModelTargets(value) {
-      return Object.values(NOTION_MODEL_TARGETS).reduce((count, target) => count + (notionTextLooksLikeTarget(value, target) ? 1 : 0), 0);
+    function notionElementTextEvidence(element) {
+      if (!element) return [];
+      const evidence = /* @__PURE__ */ new Set();
+      const add = (value) => {
+        for (const candidate of notionTextEvidence(value)) evidence.add(candidate);
+      };
+      const nodes = [element];
+      try {
+        nodes.push(...element.querySelectorAll?.("*") || []);
+      } catch {
+      }
+      for (const node of nodes) {
+        add(node.getAttribute?.("aria-label"));
+        add(node.getAttribute?.("aria-valuetext"));
+        add(node.getAttribute?.("title"));
+        add(node.getAttribute?.("data-value"));
+        add(node.getAttribute?.("value"));
+        add(node.innerText || node.textContent || "");
+        add(node.value);
+        add(modelElementText(node));
+      }
+      return [...evidence];
+    }
+    function notionModelIdsFromElement(element) {
+      return notionModelIdsFromEvidence(notionElementTextEvidence(element));
+    }
+    function notionElementLooksLikeTarget(element, target) {
+      if (!element || !target) return false;
+      return notionElementTextEvidence(element).some((candidate) => notionTextLooksLikeTarget(candidate, target));
+    }
+    function notionModelIdFromElement(element) {
+      const ids = notionModelIdsFromElement(element);
+      return ids.size === 1 ? [...ids][0] : "";
     }
     function notionViewportSize() {
       return {
@@ -2239,8 +3434,13 @@
         height: Number(window.innerHeight || document.documentElement?.clientHeight || 0)
       };
     }
+    function notionResponsiveComposerMinWidth(wideMinimum) {
+      const viewportWidth = notionViewportSize().width;
+      if (!(viewportWidth > 0)) return wideMinimum;
+      return Math.min(wideMinimum, Math.max(216, Math.floor(viewportWidth * 0.7)));
+    }
     function isLikelyNotionMainComposerRect(rect) {
-      if (!rect || rect.width < 280 || rect.height < 40 || rect.height > 280) return false;
+      if (!rect || rect.width < notionResponsiveComposerMinWidth(280) || rect.height < 40 || rect.height > 280) return false;
       const viewport = notionViewportSize();
       if (viewport.width > 0 && rect.right < viewport.width * 0.35) return false;
       if (viewport.height > 0 && rect.bottom < viewport.height * 0.28) return false;
@@ -2262,12 +3462,12 @@
     function findNotionComposerRoot() {
       const selector = [
         "textarea",
+        'input[role="textbox"]',
         '[contenteditable="true"]',
         '[role="textbox"]',
         "[data-placeholder]",
         "[aria-placeholder]",
-        "form",
-        "div"
+        "form"
       ].join(", ");
       const candidates = [];
       const seen = /* @__PURE__ */ new Set();
@@ -2280,7 +3480,7 @@
         let bestScore = -1;
         while (node && node.nodeType === 1 && node !== document.body) {
           const rect2 = modelRect(node);
-          if (rect2 && rect2.width >= 320 && rect2.height >= 44 && rect2.height <= 260) {
+          if (rect2 && rect2.width >= notionResponsiveComposerMinWidth(320) && rect2.height >= 44 && rect2.height <= 260) {
             best = node;
           }
           node = node.parentElement || null;
@@ -2306,34 +3506,46 @@
     function scoreNotionModelTrigger(element, options = {}) {
       if (!element || !visible2(element) || !options.allowDisabled && isDisabledElement2(element)) return -1;
       if (element.closest?.(NOTION_MODEL_MENU_ROOT_SELECTORS.join(", "))) return -1;
-      const textValue = modelElementText(element);
       const dataTestId = String(element.getAttribute?.("data-testid") || "").toLowerCase();
       const ariaLabel = String(element.getAttribute?.("aria-label") || "");
       const title = String(element.getAttribute?.("title") || "");
       const popup = String(element.getAttribute?.("aria-haspopup") || "").trim().toLowerCase();
       const nearMainComposer = isNotionModelTriggerNearMainComposer(element, options.composerRoot || null, options.composerRect || null);
-      let score = 0;
+      let semanticScore = 0;
+      if (dataTestId === "agent-chat-model-button" || dataTestId === "unified-chat-model-button") semanticScore += 1e3;
+      if (dataTestId.includes("model")) semanticScore += 500;
+      if (/\bmodel\b|模型/i.test(ariaLabel)) semanticScore += 420;
+      if (/\bmodel\b|模型/i.test(title)) semanticScore += 320;
+      if (notionModelIdFromElement(element)) semanticScore += 360;
+      if (semanticScore <= 0) return -1;
+      let score = semanticScore;
       if (nearMainComposer) score += 900;
       if (options.composerRoot && !nearMainComposer) score -= 420;
-      if (dataTestId === "unified-chat-model-button") score += 1e3;
-      if (dataTestId.includes("model")) score += 500;
-      if (/\bmodel\b|模型/i.test(ariaLabel)) score += 420;
-      if (/\bmodel\b|模型/i.test(title)) score += 320;
-      if (notionModelIdFromText(textValue)) score += 360;
       if (popup === "menu" || popup === "listbox") score += 80;
-      if (notionText(textValue) === "auto" || notionTextLooksLikeTarget(textValue, NOTION_MODEL_TARGETS.auto)) score += 80;
+      if (notionElementLooksLikeTarget(element, NOTION_MODEL_TARGETS.auto)) score += 80;
       return score > 0 ? score : -1;
     }
     function findNotionModelControl({ allowDisabled = false } = {}) {
-      const composerRoot = findNotionComposerRoot();
-      const composerRect = modelRect(composerRoot);
-      const candidates = visibleSelectorElements(NOTION_MODEL_TRIGGER_SELECTORS).map((element) => ({
+      const directCandidates = [...new Set(visibleSelectorElements(NOTION_MODEL_DIRECT_TRIGGER_SELECTORS))].map((element) => ({
         element,
-        score: scoreNotionModelTrigger(element, { composerRoot, composerRect, allowDisabled }),
+        score: scoreNotionModelTrigger(element, { allowDisabled }),
         bottom: Number(element.getBoundingClientRect?.().bottom || 0)
       })).filter((item) => item.score > 0);
+      directCandidates.sort((a, b) => b.score - a.score || b.bottom - a.bottom);
+      if (directCandidates.length > 0) {
+        return directCandidates.length === 1 ? directCandidates[0].element : null;
+      }
+      const composerRoot = findNotionComposerRoot();
+      if (!composerRoot) return null;
+      const composerRect = modelRect(composerRoot);
+      const candidates = [...new Set(visibleSelectorElements(NOTION_MODEL_TRIGGER_SELECTORS))].map((element) => ({
+        element,
+        score: scoreNotionModelTrigger(element, { composerRoot, composerRect, allowDisabled }),
+        nearMainComposer: isNotionModelTriggerNearMainComposer(element, composerRoot, composerRect),
+        bottom: Number(element.getBoundingClientRect?.().bottom || 0)
+      })).filter((item) => item.nearMainComposer && item.score > 0);
       candidates.sort((a, b) => b.score - a.score || b.bottom - a.bottom);
-      return candidates[0]?.element || null;
+      return candidates.length === 1 ? candidates[0].element : null;
     }
     function findNotionModelTrigger() {
       return findNotionModelControl();
@@ -2348,47 +3560,77 @@
       let score = 0;
       if (normalized.includes("select a model")) score += 160;
       if (normalized.includes("open models")) score += 80;
-      score += Math.min(5, countNotionModelTargets(textValue)) * 80;
+      score += Math.min(5, notionModelIdsFromElement(root).size) * 80;
       return score >= 160 ? score : -1;
     }
-    function notionModelMenuRoot(trigger = null) {
+    function notionModelMenuRoots() {
+      const roots = [...new Set(visibleSelectorElements(NOTION_MODEL_MENU_ROOT_SELECTORS))].filter((element) => scoreNotionModelMenuRoot(element) > 0);
+      return roots.filter((root) => !roots.some((candidate) => candidate !== root && root.contains?.(candidate)));
+    }
+    function notionControlledModelMenuRoot(trigger) {
       const controlsId = String(trigger?.getAttribute?.("aria-controls") || "").trim();
-      if (controlsId) {
-        const controlled = document.getElementById(controlsId);
-        if (scoreNotionModelMenuRoot(controlled) > 0) return controlled;
+      if (!controlsId) return null;
+      let controlled = [];
+      const escapeId = globalThis.CSS?.escape;
+      if (typeof document.querySelectorAll === "function" && typeof escapeId === "function") {
+        try {
+          controlled = [...document.querySelectorAll(`#${escapeId(controlsId)}`)];
+        } catch {
+        }
+      } else {
+        const element = document.getElementById?.(controlsId);
+        if (element) controlled = [element];
       }
-      const roots = visibleSelectorElements(NOTION_MODEL_MENU_ROOT_SELECTORS).map((element) => ({ element, score: scoreNotionModelMenuRoot(element) })).filter((item) => item.score > 0).sort((a, b) => b.score - a.score);
-      return roots[0]?.element || null;
+      return controlled.length === 1 && scoreNotionModelMenuRoot(controlled[0]) > 0 ? controlled[0] : null;
+    }
+    function notionModelMenuRoot(trigger = null) {
+      if (!trigger) return null;
+      const controlled = notionControlledModelMenuRoot(trigger);
+      if (controlled) return controlled;
+      const owned = notionOwnedMenuRoots.get(trigger);
+      if (scoreNotionModelMenuRoot(owned) > 0) return owned;
+      notionOwnedMenuRoots.delete(trigger);
+      return null;
     }
     async function openNotionModelMenu(context, trigger) {
       assertPreferredModelRun(context);
       const existing = notionModelMenuRoot(trigger);
       if (existing) return existing;
+      const baselineRoots = new Set(notionModelMenuRoots());
       if (!trigger || !preferredModelActivate(context, trigger)) return null;
-      return waitForPreferredModel(context, () => notionModelMenuRoot(trigger), 3e3, 120);
+      return waitForPreferredModel(context, () => {
+        const controlled = notionControlledModelMenuRoot(trigger);
+        if (controlled) {
+          notionOwnedMenuRoots.set(trigger, controlled);
+          return controlled;
+        }
+        const opened = notionModelMenuRoots().filter((root) => !baselineRoots.has(root));
+        if (opened.length !== 1) return null;
+        notionOwnedMenuRoots.set(trigger, opened[0]);
+        return opened[0];
+      }, NOTION_MODEL_MENU_OPEN_WAIT_MS, 120);
     }
-    function notionMenuItemRow(element, root, matchesSpec = null) {
+    function notionMenuItemRow(element, root, modelId = "") {
       const rootArea = modelElementArea(root);
       const rootRect = modelRect(root);
       let bestRoleRow = null;
       let bestAction = null;
       let bestRowLike = null;
-      let fallback = null;
       let node = element;
       while (node && node.nodeType === 1 && node !== root) {
-        if (!visible2(node) || isDisabledElement2(node)) {
+        if (!visible2(node)) {
           node = node.parentElement || null;
           continue;
         }
-        const textValue = modelElementText(node);
-        const targetCount = countNotionModelTargets(textValue);
+        if (isDisabledElement2(node)) return null;
+        const targetIds = notionModelIdsFromElement(node);
         const area = modelElementArea(node);
         if (rootArea > 0 && area >= rootArea * 0.85) break;
-        if (typeof matchesSpec === "function" && !matchesSpec(node)) {
+        if (modelId && !targetIds.has(modelId)) {
           node = node.parentElement || null;
           continue;
         }
-        if (targetCount > 1) {
+        if (targetIds.size > 1) {
           node = node.parentElement || null;
           continue;
         }
@@ -2401,29 +3643,26 @@
         const rowLike = rect && rootRect && rect.height >= 22 && rect.height <= 88 && rect.width >= Math.min(120, rootRect.width * 0.38) && rect.width <= rootRect.width + 32;
         if (roleRowLike && !bestRoleRow) bestRoleRow = node;
         if (actionLike && !bestAction) bestAction = node;
-        if (rowLike && !bestRowLike) bestRowLike = node;
-        if (!fallback) fallback = node;
+        if (rowLike) bestRowLike = node;
         node = node.parentElement || null;
       }
-      return bestRoleRow || bestAction || bestRowLike || fallback || element;
+      return bestRoleRow || bestAction || bestRowLike || null;
     }
     function scoreNotionModelItem(element, modelId) {
       if (!element || !visible2(element) || isDisabledElement2(element)) return Number.NEGATIVE_INFINITY;
-      const textValue = modelElementText(element);
       const target = NOTION_MODEL_TARGETS[modelId];
+      if (!target || !notionElementLooksLikeTarget(element, target)) return Number.NEGATIVE_INFINITY;
       let score = 0;
       const role = String(element.getAttribute?.("role") || "").toLowerCase();
       const tag = String(element.tagName || "").toLowerCase();
       const tabIndex = String(element.getAttribute?.("tabindex") || "").trim();
-      const targetCount = countNotionModelTargets(textValue);
+      const targetCount = notionModelIdsFromElement(element).size;
       if (role === "menuitem" || role === "menuitemradio" || role === "option") score += 900;
       if (tag === "button" || role === "button") score += 360;
       if (tabIndex && tabIndex !== "-1") score += 120;
       if (targetCount === 1) score += 260;
       if (targetCount > 1) score -= 700;
-      if (notionTextLooksLikeTarget(textValue, target)) score += 620;
-      const labels = notionLabels(target);
-      if (labels.includes(notionText(textValue))) score += 260;
+      score += 880;
       const rect = modelRect(element);
       if (rect && rect.height >= 24 && rect.height <= 72) score += 100;
       if (rect && rect.width >= 120) score += 40;
@@ -2433,41 +3672,43 @@
     function findNotionModelItem(root, modelId) {
       if (!root || !NOTION_MODEL_TARGETS[modelId]) return null;
       const target = NOTION_MODEL_TARGETS[modelId];
-      const matchesSpec = (element) => notionTextLooksLikeTarget(modelElementText(element), target);
       const seenRows = /* @__PURE__ */ new Set();
       const rows = [];
       const add = (element) => {
-        if (!element || !matchesSpec(element)) return;
-        const row = notionMenuItemRow(element, root, matchesSpec);
-        if (!row || seenRows.has(row) || !root.contains?.(row)) return;
-        if (!matchesSpec(row)) return;
-        if (countNotionModelTargets(modelElementText(row)) > 1) return;
+        if (!element || isDisabledElement2(element) || !notionElementLooksLikeTarget(element, target)) return;
+        const row = notionMenuItemRow(element, root, modelId);
+        if (!row || isDisabledElement2(row) || seenRows.has(row) || !root.contains?.(row)) return;
+        const targetIds = notionModelIdsFromElement(row);
+        if (targetIds.size !== 1 || !targetIds.has(modelId)) return;
+        if (!Number.isFinite(scoreNotionModelItem(row, modelId))) return;
         seenRows.add(row);
         rows.push(row);
       };
       for (const element of visibleSelectorElements(NOTION_MODEL_MENU_ITEM_SELECTORS, root)) add(element);
       for (const element of visibleSelectorElements(["div", "span", "button"], root)) add(element);
       rows.sort((a, b) => scoreNotionModelItem(b, modelId) - scoreNotionModelItem(a, modelId));
-      return rows[0] || null;
+      return rows.length === 1 ? rows[0] : null;
     }
     function notionElementHasSelectedState(element) {
       if (!element) return false;
-      for (const attr of ["aria-checked", "aria-selected", "aria-current", "data-state", "data-selected", "data-active", "data-checked"]) {
+      for (const attr of ["aria-checked", "aria-selected", "aria-current", "aria-pressed", "data-state", "data-selected", "data-active", "data-checked"]) {
         const value = String(element.getAttribute?.(attr) || "").trim().toLowerCase();
-        if (value === "true" || value === "checked" || value === "selected" || value === "active" || value === "page") return true;
+        if (["true", "checked", "selected", "active", "on", "page", "step", "location", "date", "time"].includes(value)) return true;
       }
       const className = String(element.className || "");
-      return /\b(?:selected|checked|active)\b/i.test(className) && !/\b(?:unselected|inactive|unchecked)\b/i.test(className);
+      return /\b(?:selected|checked|active)\b/i.test(className) && !/\b(?:not[-_\s]?(?:selected|checked|active)|unselected|inactive|unchecked)\b/i.test(className);
     }
     function notionRowHasRightCheckMarker(row) {
       const rowRect = modelRect(row);
       if (!rowRect || rowRect.width <= 0 || rowRect.height <= 0) return false;
       if (/[✓✔]/.test(String(row?.innerText || row?.textContent || ""))) return true;
       for (const marker of visibleSelectorElements([
-        "[aria-label*='check' i]",
-        "[aria-label*='selected' i]",
-        "[data-testid*='check' i]",
-        "[class*='check' i]",
+        "[aria-label]",
+        "[data-testid]",
+        "[class]",
+        "[title]",
+        "[data-icon]",
+        "[data-icon-name]",
         "svg"
       ], row)) {
         if (notionElementHasSelectedState(marker)) return true;
@@ -2476,14 +3717,12 @@
           marker.getAttribute?.("data-testid"),
           marker.getAttribute?.("class"),
           marker.getAttribute?.("title"),
+          marker.getAttribute?.("data-icon"),
+          marker.getAttribute?.("data-icon-name"),
           marker.innerText || marker.textContent || ""
         ].filter(Boolean).join(" ");
+        if (/\b(?:not[ -]?selected|unselected|unchecked|not[ -]?checked|inactive)\b/i.test(label)) continue;
         if (/\b(?:check|checked|selected|done)\b|✓|✔/i.test(label)) return true;
-        const rect = modelRect(marker);
-        if (!rect || rect.width < 5 || rect.height < 5 || rect.width > 32 || rect.height > 32) continue;
-        const nearRight = rect.left >= rowRect.left + rowRect.width * 0.66 && rect.right <= rowRect.right + 10;
-        const verticallyInside = rect.top >= rowRect.top - 3 && rect.bottom <= rowRect.bottom + 3;
-        if (nearRight && verticallyInside) return true;
       }
       return false;
     }
@@ -2494,6 +3733,7 @@
         "[aria-checked]",
         "[aria-selected]",
         "[aria-current]",
+        "[aria-pressed]",
         "[data-state]",
         "[data-selected]",
         "[data-active]",
@@ -2511,9 +3751,9 @@
         if (!element) return;
         const row = notionMenuItemRow(element, root);
         if (!row || seenRows.has(row) || !root.contains?.(row)) return;
-        const textValue = modelElementText(row);
-        if (countNotionModelTargets(textValue) !== 1) return;
-        const id = notionModelIdFromText(textValue);
+        const targetIds = notionModelIdsFromElement(row);
+        if (targetIds.size !== 1) return;
+        const id = [...targetIds][0];
         if (!id || !notionRowLooksSelected(row)) return;
         seenRows.add(row);
         rows.push({ element: row, id, score: scoreNotionModelItem(row, id) });
@@ -2521,30 +3761,19 @@
       for (const element of visibleSelectorElements(NOTION_MODEL_MENU_ITEM_SELECTORS, root)) add(element);
       for (const element of visibleSelectorElements(["div", "span", "button", "svg"], root)) add(element);
       rows.sort((a, b) => b.score - a.score);
-      return rows[0]?.id || "";
+      return rows.length === 1 ? rows[0].id : "";
     }
     function currentNotionModelId(trigger = null) {
       const selected = selectedNotionModelId(notionModelMenuRoot(trigger));
       if (selected) return selected;
       const triggerElement = trigger && visible2(trigger) ? trigger : findNotionModelIndicator();
-      return notionModelIdFromText(modelElementText(triggerElement));
-    }
-    async function waitNotionReadableCurrentModelId(context, trigger = null, timeoutMs = 2200) {
-      const deadline = Date.now() + Math.max(0, Number(timeoutMs) || 0);
-      while (Date.now() <= deadline) {
-        assertPreferredModelRun(context);
-        const current = currentNotionModelId(trigger);
-        if (current) return current;
-        await preferredModelSleep(context, 120);
-      }
-      assertPreferredModelRun(context);
-      return currentNotionModelId(trigger);
+      return notionModelIdFromElement(triggerElement);
     }
     async function closeNotionModelMenu(context, trigger = null) {
-      return dismissPreferredModelMenu(context, () => notionModelMenuRoot(trigger), 900);
+      return dismissPreferredModelMenu(context, () => notionModelMenuRoot(trigger), NOTION_MODEL_MENU_CLOSE_WAIT_MS);
     }
     async function waitNotionModelSettled(context, modelId, trigger) {
-      const deadline = Date.now() + 3e3;
+      const deadline = Date.now() + NOTION_MODEL_SETTLE_WAIT_MS;
       while (Date.now() <= deadline) {
         assertPreferredModelRun(context);
         const current = currentNotionModelId(trigger);
@@ -2555,18 +3784,55 @@
       const final = currentNotionModelId(trigger);
       return final === modelId;
     }
+    async function waitNotionModelItemOrCurrent(context, modelId, trigger) {
+      return waitForPreferredModel(context, () => {
+        if (currentNotionModelId(trigger) === modelId) return { current: true, item: null };
+        const activeRoot = notionModelMenuRoot(trigger);
+        const item = findNotionModelItem(activeRoot, modelId);
+        return item ? { current: false, item } : null;
+      }, NOTION_MODEL_ITEM_READY_WAIT_MS, 80);
+    }
+    function notionTriggerModelId(trigger) {
+      return notionModelIdFromElement(trigger);
+    }
+    async function waitNotionTriggerHydration(context, modelId, trigger, deadlineAt) {
+      const initialModelId = notionTriggerModelId(trigger);
+      if (initialModelId === modelId) return { current: true, modelId: initialModelId };
+      if (initialModelId && initialModelId !== "auto") return { current: false, modelId: initialModelId };
+      const timeoutMs = Math.min(
+        NOTION_MODEL_TRIGGER_HYDRATION_WAIT_MS,
+        Math.max(0, Number(deadlineAt || 0) - Date.now())
+      );
+      if (timeoutMs <= 0) return { current: false, modelId: initialModelId };
+      let targetSamples = 0;
+      const readiness = await waitForPreferredModel(context, () => {
+        const currentModelId = notionTriggerModelId(trigger);
+        if (currentModelId === modelId) {
+          targetSamples += 1;
+          return targetSamples >= NOTION_MODEL_TRIGGER_HYDRATION_SAMPLES ? { current: true, modelId: currentModelId } : null;
+        }
+        targetSamples = 0;
+        if (currentModelId && currentModelId !== "auto") {
+          return { current: false, modelId: currentModelId };
+        }
+        return null;
+      }, timeoutMs, 80);
+      return readiness || { current: false, modelId: notionTriggerModelId(trigger) };
+    }
     async function applyNotionPreferredModel(context, modelId) {
       if (!NOTION_MODEL_TARGETS[modelId]) return preferredModelResult(context, false, "NotionAI", modelId, "unknown model");
-      if (await waitNotionReadableCurrentModelId(context, null, 1600) === modelId) {
+      if (currentNotionModelId() === modelId) {
         const menuClosed2 = await closeNotionModelMenu(context);
         return preferredModelResult(context, true, "NotionAI", modelId, "", { skipped: true, menuClosed: menuClosed2 });
       }
-      const trigger = await waitForPreferredModel(context, findNotionModelTrigger, 1e4, 150);
+      const triggerDeadlineAt = Date.now() + NOTION_MODEL_TRIGGER_WAIT_MS;
+      const trigger = await waitForPreferredModel(context, findNotionModelTrigger, NOTION_MODEL_TRIGGER_WAIT_MS, 150);
       if (!trigger) {
         await closeNotionModelMenu(context);
         return preferredModelResult(context, false, "NotionAI", modelId, "model trigger not found", { retryable: true });
       }
-      if (await waitNotionReadableCurrentModelId(context, trigger, 2200) === modelId) {
+      const triggerReadiness = await waitNotionTriggerHydration(context, modelId, trigger, triggerDeadlineAt);
+      if (triggerReadiness.current) {
         const menuClosed2 = await closeNotionModelMenu(context, trigger);
         return preferredModelResult(context, true, "NotionAI", modelId, "", { skipped: true, menuClosed: menuClosed2 });
       }
@@ -2579,9 +3845,18 @@
         const menuClosed2 = await closeNotionModelMenu(context, trigger);
         return preferredModelResult(context, true, "NotionAI", modelId, "", { skipped: true, menuClosed: menuClosed2 });
       }
-      const item = findNotionModelItem(root, modelId);
+      const immediateItem = findNotionModelItem(root, modelId);
+      const readiness = immediateItem ? { current: false, item: immediateItem } : await waitNotionModelItemOrCurrent(context, modelId, trigger);
+      if (readiness?.current) {
+        const menuClosed2 = await closeNotionModelMenu(context, trigger);
+        return preferredModelResult(context, true, "NotionAI", modelId, "", { skipped: true, menuClosed: menuClosed2 });
+      }
+      const item = readiness?.item || null;
       if (!item) {
         const menuClosed2 = await closeNotionModelMenu(context, trigger);
+        if (currentNotionModelId(trigger) === modelId) {
+          return preferredModelResult(context, true, "NotionAI", modelId, "", { skipped: true, menuClosed: menuClosed2 });
+        }
         return preferredModelResult(context, false, "NotionAI", modelId, "target model item not found", { menuClosed: menuClosed2 });
       }
       const clicked = preferredModelActivate(context, item);
@@ -2590,6 +3865,77 @@
       if (!settled && currentNotionModelId(trigger) === modelId) settled = true;
       if (!clicked) return preferredModelResult(context, false, "NotionAI", modelId, "target model item could not be clicked", { menuClosed });
       return settled ? preferredModelResult(context, true, "NotionAI", modelId, "", { changed: true, menuClosed }) : preferredModelResult(context, false, "NotionAI", modelId, "selection did not settle", { menuClosed });
+    }
+    const notionSources = createPreferredNotionSourcesCapability({
+      normalize: normalize2,
+      modelElementText,
+      visibleSelectorElements,
+      modelRect,
+      visible: visible2,
+      isDisabledElement: isDisabledElement2,
+      assertPreferredModelRun,
+      preferredModelActivate,
+      preferredModelPointerActivate,
+      waitForPreferredModel,
+      modelElementArea,
+      modelEventConstructor,
+      closest: closest2,
+      preferredModelResult,
+      findNotionComposerRoot,
+      isNotionControlNearMainComposer: isNotionModelTriggerNearMainComposer
+    });
+    async function applyNotionPreferencesTransaction(context, modelId, allSourcesState, sourcesLease) {
+      let modelOutcome = null;
+      let sourceOutcome = null;
+      if (modelId && allSourcesState) {
+        const sourceTrigger = await notionSources.preflightNotionAllSourcesTrigger(context);
+        assertPreferredModelRun(context);
+        if (!sourceTrigger) {
+          return preferredModelResult(context, false, "NotionAI", modelId, "sources trigger not found", {
+            retryable: true,
+            allSourcesState
+          });
+        }
+      }
+      if (modelId) {
+        modelOutcome = await applyNotionPreferredModel(context, modelId);
+        if (modelOutcome.ok !== true || !allSourcesState) return modelOutcome;
+      }
+      if (allSourcesState) {
+        sourceOutcome = await notionSources.applyNotionAllSourcesPreference(
+          context,
+          modelId,
+          allSourcesState,
+          sourcesLease
+        );
+        if (sourceOutcome.ok !== true || !modelId) return sourceOutcome;
+      }
+      if (currentNotionModelId() !== modelId) {
+        return preferredModelResult(context, false, "NotionAI", modelId, "model changed while applying sources", {
+          menuClosed: sourceOutcome.menuClosed,
+          allSourcesState
+        });
+      }
+      await preferredModelSleep(context, 120);
+      if (currentNotionModelId() !== modelId) {
+        return preferredModelResult(context, false, "NotionAI", modelId, "model was not stable after applying sources", {
+          menuClosed: sourceOutcome.menuClosed,
+          allSourcesState
+        });
+      }
+      const changed = modelOutcome?.changed === true || sourceOutcome.changed === true;
+      return preferredModelResult(context, true, "NotionAI", modelId, "", {
+        changed,
+        skipped: !changed,
+        menuClosed: sourceOutcome.menuClosed,
+        allSourcesState
+      });
+    }
+    function applyNotionPreferences(context, modelId, allSourcesState) {
+      return notionSources.runNotionPreferenceOperation(
+        context,
+        (sourcesLease) => applyNotionPreferencesTransaction(context, modelId, allSourcesState, sourcesLease)
+      );
     }
     const DEEPSEEK_MODE_TARGETS = Object.freeze({
       instant: Object.freeze({ id: "instant", label: "Instant" }),
@@ -2725,21 +4071,47 @@
         "Notion AI": "NotionAI"
       }[rawAppId] || rawAppId;
       const modelId = String(data.modelId || "").trim();
-      if (!appId || !modelId) return preferredModelResult(context, true, appId || "unknown", modelId, "", { skipped: true });
+      const rawAllSourcesState = String(data.allSourcesState || "").trim();
+      const allSourcesState = NOTION_ALL_SOURCES_STATES.includes(rawAllSourcesState) ? rawAllSourcesState : "";
+      if (!appId) return preferredModelResult(context, true, "unknown", modelId, "", { skipped: true });
+      if (appId === "NotionAI") {
+        if (rawAllSourcesState && !allSourcesState) {
+          return preferredModelResult(context, false, appId, modelId, "unknown all sources state");
+        }
+        if (!modelId && !allSourcesState) {
+          return preferredModelResult(context, true, appId, modelId, "", { skipped: true });
+        }
+        if (modelId && !NOTION_MODEL_TARGETS[modelId]) {
+          return preferredModelResult(context, false, appId, modelId, "unknown model");
+        }
+        return applyNotionPreferences(context, modelId, allSourcesState);
+      }
+      if (!modelId) return preferredModelResult(context, true, appId, modelId, "", { skipped: true });
       if (appId === "Gemini") return applyGeminiPreferredModel(context, modelId, { thinkingLevel: data.thinkingLevel });
       if (appId === "Grok") return applyGrokPreferredModel(context, modelId);
       if (appId === "DeepSeek") return applyDeepSeekPreferredModel(context, modelId);
-      if (appId === "NotionAI") return applyNotionPreferredModel(context, modelId);
       return preferredModelResult(context, true, appId, modelId, "", { skipped: true, unsupported: true });
     }
     async function runPreferredModelApply(data = {}) {
       const runId = String(data.runId || `${Date.now()}-${Math.random().toString(36).slice(2)}`);
       abortActivePreferredModelRun("superseded by a newer preferred model run");
       const controller = new AbortController();
+      const rawAppId = String(data.appId || "").trim();
+      const appId = {
+        "GrokMirror": "Grok",
+        "Grok Mirror": "Grok",
+        "DeepSeek AI": "DeepSeek",
+        "Notion AI": "NotionAI"
+      }[rawAppId] || rawAppId || "unknown";
+      const hasNotionSourcesPreference = appId === "NotionAI" && NOTION_ALL_SOURCES_STATES.includes(String(data.allSourcesState || "").trim());
+      const defaultTimeoutMs = hasNotionSourcesPreference ? 43e3 : 12e3;
+      const maximumTimeoutMs = hasNotionSourcesPreference ? 44e3 : 14e3;
+      const timeoutMs = Math.max(1e3, Math.min(maximumTimeoutMs, Number(data.timeoutMs) || defaultTimeoutMs));
       const context = {
         runId,
         controller,
         signal: controller.signal,
+        deadlineAt: Date.now() + timeoutMs,
         bridgeGeneration: nextPreferredModelBridgeRunSequence(),
         bridgeToken: "",
         bridgeReleased: false,
@@ -2752,17 +4124,9 @@
       };
       preferredModelState.activeRun = context;
       publishPreferredModelBridgeRun(context);
-      const timeoutMs = Math.max(1e3, Math.min(14e3, Number(data.timeoutMs) || 12e3));
       const timeout = setTimeout(() => {
         abortActivePreferredModelRun("preferred model apply timed out", runId);
       }, timeoutMs);
-      const rawAppId = String(data.appId || "").trim();
-      const appId = {
-        "GrokMirror": "Grok",
-        "Grok Mirror": "Grok",
-        "DeepSeek AI": "DeepSeek",
-        "Notion AI": "NotionAI"
-      }[rawAppId] || rawAppId || "unknown";
       const modelId = String(data.modelId || "").trim();
       try {
         return await applyPreferredModel(context, data);
@@ -2895,9 +4259,11 @@
       alnumModelToken: dom.alnumModelToken,
       isDisabledElement: dom.isDisabledElement,
       modelElementArea: dom.modelElementArea,
+      modelEventConstructor: dom.modelEventConstructor,
       modelElementText: dom.modelElementText,
       modelRect: dom.modelRect,
       preferredModelActivate: dom.preferredModelActivate,
+      preferredModelPointerActivate: dom.preferredModelPointerActivate,
       visibleSelectorElements: dom.visibleSelectorElements
     });
     installContentCapability(runtimes, {

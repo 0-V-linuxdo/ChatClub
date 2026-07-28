@@ -82,6 +82,15 @@ export const SYNC_GROK_SESSION_COOKIES_REQUEST = /* @__PURE__ */ request(
   })
 );
 
+export const ARM_GROK_MIRROR_ACCOUNT_SWITCH_REQUEST = /* @__PURE__ */ request(
+  "armGrokMirrorAccountSwitch",
+  /* @__PURE__ */ grokFrameRequest({
+    mutates: true,
+    payload: /* @__PURE__ */ contract({ bridgeVersion: "string" }),
+    response: /* @__PURE__ */ contract({ armed: "boolean", proceed: "boolean" })
+  })
+);
+
 export const INSTALL_TOPIC_DELETE_USERSCRIPT_REQUEST = /* @__PURE__ */ request(
   "installTopicDeleteUserscript",
   /* @__PURE__ */ directChildFrameRequest({
@@ -115,6 +124,7 @@ export const CONTENT_BACKGROUND_REQUEST_CONTRACTS = Object.freeze([
   RELAY_FRAME_BINDING_REQUEST,
   RELAY_FRAME_LIFECYCLE_REQUEST,
   SYNC_GROK_SESSION_COOKIES_REQUEST,
+  ARM_GROK_MIRROR_ACCOUNT_SWITCH_REQUEST,
   INSTALL_TOPIC_DELETE_USERSCRIPT_REQUEST,
   EXECUTE_SUMMARY_USERSCRIPT_REQUEST,
   EXECUTE_TOPIC_DELETE_USERSCRIPT_REQUEST

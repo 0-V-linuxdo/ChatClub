@@ -116,6 +116,11 @@ const dataModule = (source) => import(`data:text/javascript;base64,${Buffer.from
   assert.match(main, /context\.frameId !== expectedFrameId/);
   assert.match(main, /message\.action === "frameNavigationTarget"/);
   assert.match(main, /controller\.ensureFrameAttributeContract\(iframe, href/);
+  assert.match(
+    main,
+    /createBindOnceControllerPort\("Frame Bridge Workspace", \[[\s\S]*?"ensureFrameAttributeContract"[\s\S]*?\]\)/,
+    "the authenticated navigation relay must receive the iframe attribute-contract method through its bound workspace port"
+  );
   assert.doesNotMatch(main, /iframeForWindow\(event\.source\)/);
   assert.doesNotMatch(main, /contentReady/);
   assert.match(main, /if \(!exactFrameTarget\.expectedFrameId\)[\s\S]*?contentWindow\?\.postMessage/);

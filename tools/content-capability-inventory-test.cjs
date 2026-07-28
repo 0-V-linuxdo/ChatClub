@@ -39,6 +39,15 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
     "content/preload.js",
     "content/content.js"
   ], "Grok ancillary repair must require the exact verified host");
+  assert.deepEqual(filesFor({ frameUrls: ["https://gk.dairoot.cn/chat/1"] }), [
+    "content/preload.js",
+    "content/grok-cookie-bridge.js",
+    "content/content.js"
+  ]);
+  assert.deepEqual(filesFor({ frameUrls: ["https://sub.gk.dairoot.cn/chat/1"] }), [
+    "content/preload.js",
+    "content/content.js"
+  ], "Grok Mirror ancillary repair must require the exact verified host");
   assert.deepEqual(filesFor({
     frameUrls: ["https://grok.com/chat/1"],
     features: ["delete", "summary", "delete"]

@@ -92,6 +92,7 @@ export function createWorkspaceViewController(dependencies = {}) {
   let workspaceNode = null;
   let workspaceRenderSignature = "";
   let workspacePopoverAnchor = null;
+  let frameLoadingAnnouncementSequence = 0;
 
   function workspaceSignature() {
     return JSON.stringify({
@@ -237,6 +238,7 @@ export function createWorkspaceViewController(dependencies = {}) {
     if (targetHref) stageFrameInitialHref(chat.instanceId, targetHref);
     const replacement = renderChatFrame(group, chat);
     iframe.replaceWith(replacement);
+    syncHeaderForFrameInstance(chat.instanceId);
     syncGroupTabOrder(group);
     return replacement;
   }
@@ -272,7 +274,7 @@ export function createWorkspaceViewController(dependencies = {}) {
           sourceChangedAppIds.has(chat.appId)
           || !frameAttributeContractMatches(iframe, appById(chat.appId))
         )) {
-          if (sourceChangedAppIds.has(chat.appId)) iframe.replaceWith(renderChatFrame(group, chat));
+          if (sourceChangedAppIds.has(chat.appId)) replaceChatFrame(group, chat, iframe);
           else replaceChatFrame(group, chat, iframe, { preserveHref: true });
         }
       }
@@ -322,7 +324,7 @@ export function createWorkspaceViewController(dependencies = {}) {
           sourceChangedAppIds.has(chat.appId)
           || !frameAttributeContractMatches(currentFrame, appById(chat.appId))
         )) {
-          if (sourceChangedAppIds.has(chat.appId)) currentFrame.replaceWith(renderChatFrame(group, chat));
+          if (sourceChangedAppIds.has(chat.appId)) replaceChatFrame(group, chat, currentFrame);
           else replaceChatFrame(group, chat, currentFrame, { preserveHref: true });
         }
       }
@@ -435,10 +437,60 @@ export function createWorkspaceViewController(dependencies = {}) {
     return tabGroupButtonPlacement()[id] === "menu";
   }
 
+  function frameLoadingStatusText(iframe) {
+    return t(iframe?.dataset?.frameLoadingKind === "new-topic"
+      ? "chat.frameLoadingNewTopic"
+      : "chat.frameLoadingRestoring");
+  }
+
+  function renderFrameLoadingStatus() {
+    return el("div", {
+      class: "chat-frame-loading-status",
+      role: "status",
+      "aria-live": "polite",
+      "aria-atomic": "true",
+      hidden: true
+    }, "");
+  }
+
+  function syncFrameLoadingStatus(card, group) {
+    const loading = activeFrameIsLoading(group);
+    const frameWrap = card.querySelector(".chat-frame-wrap");
+    const activeFrame = frameWrap?.querySelector(".chat-frame.active");
+    const status = frameWrap?.querySelector(".chat-frame-loading-status");
+    frameWrap?.querySelectorAll(".chat-frame").forEach((frame) => {
+      frame.setAttribute("aria-busy", String(frame === activeFrame && loading));
+    });
+    if (status) {
+      if (!loading) {
+        status.hidden = true;
+        status.textContent = "";
+        delete status.dataset.frameLoadingAnnouncement;
+      } else {
+        const message = frameLoadingStatusText(activeFrame);
+        if (status.hidden || status.textContent !== message) {
+          status.hidden = false;
+          const announcementId = String(++frameLoadingAnnouncementSequence);
+          status.dataset.frameLoadingAnnouncement = announcementId;
+          queueMicrotask(() => {
+            if (
+              status.hidden
+              || status.dataset.frameLoadingAnnouncement !== announcementId
+              || frameWrap?.querySelector(".chat-frame.active") !== activeFrame
+              || !activeFrameIsLoading(group)
+            ) return;
+            status.textContent = message;
+          });
+        }
+      }
+    }
+    return loading;
+  }
+
   function syncTabGroupHeaderControls(card, group) {
     card.classList.add("tab-group-buttons-custom");
     card.classList.remove("tab-group-buttons-hidden", "tab-group-buttons-pinned");
-    card.classList.toggle("frame-loading", activeFrameIsLoading(group));
+    card.classList.toggle("frame-loading", syncFrameLoadingStatus(card, group));
     for (const item of TAB_GROUP_HEADER_BUTTONS) {
       card.dataset[`button${item.id.charAt(0).toUpperCase()}${item.id.slice(1)}`] = tabGroupButtonPlacement()[item.id] || "pinned";
     }
@@ -686,6 +738,8 @@ export function createWorkspaceViewController(dependencies = {}) {
     const isFullscreen = state.fullscreenGroupId === group.id;
     const frames = group.chatApps.map((chat) => renderChatFrame(group, chat));
     const isFrameLoading = activeFrameIsLoading(group);
+    const activeFrame = frames.find((iframe) => iframe.classList.contains("active"));
+    activeFrame?.setAttribute("aria-busy", String(isFrameLoading));
     return el("section", {
       class: `chat-card tab-group-buttons-custom ${isFullscreen ? "fullscreen" : ""} ${isFrameLoading ? "frame-loading" : ""}`.trim(),
       dataset: { groupId: group.id },
@@ -699,7 +753,8 @@ export function createWorkspaceViewController(dependencies = {}) {
         el("div", { class: "chat-actions" }, renderChatActionButtons(group))
       ),
       el("div", { class: "chat-frame-wrap" },
-        frames
+        frames,
+        renderFrameLoadingStatus(activeFrame, isFrameLoading)
       )
     );
   }

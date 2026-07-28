@@ -68,14 +68,14 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "4b25a56bd08c2508af23fc884a7595f95663bd227768e9548427f9046db01267";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "24a63db0de70fdf6c845e0c7b99ffcc76be9eac6cfef2335bb1c06f608a321c0";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "719d8f56f36ec4f38931fc8156ef7fef9f04aae0b645871786954dfdf241ba64";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.719d8f56f36ec4f38931fc8156ef7fef9f04aae0b645871786954dfdf241ba64";
-  var CONTENT_RUNTIME_SUMMARY_BRIDGE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-bridge.js", "entryPath": "content-src/content-summary-bridge.js", "sourceSha256": "b4460f18ab845962f455731b5d8d16d5487e251dc667b6b130b95134fac7b34f", "implementationSha256": "bd332cdac9ab821665016efa07c631dcfbe435d1eb6872e66e0b09c9d6775e7c", "implementationVersion": "2026.07.16.2+bundle.bd332cdac9ab821665016efa07c631dcfbe435d1eb6872e66e0b09c9d6775e7c" });
-  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "460b07015febbe34d16fd7db079534fbf0020440693c07d8861308aa4f5c2a86", "implementationSha256": "1399128cc88f0018d8c55b2c3d5aa3cd8f9e5750e193b45123d0c66d720c22cf", "implementationVersion": "2026.07.16.2+bundle.1399128cc88f0018d8c55b2c3d5aa3cd8f9e5750e193b45123d0c66d720c22cf" });
-  var CONTENT_RUNTIME_SUMMARY_ISOLATED_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts.js", "entryPath": "content-src/summary-userscripts.js", "sourceSha256": "f5592eec0fd9d9d9d58d4a41f7697ae58e5a6718b367ed5342287dbd090cce15", "implementationSha256": "8b7264a2dcd9bca91fb6a9be2652ec09e9e1a1b186eabf5b2f57315da6064fe7", "implementationVersion": "2026.07.16.2+bundle.8b7264a2dcd9bca91fb6a9be2652ec09e9e1a1b186eabf5b2f57315da6064fe7" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "a130203366b9178fc7f7e5c781304d73091d830727def868a377cc753710ae75";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.a130203366b9178fc7f7e5c781304d73091d830727def868a377cc753710ae75";
+  var CONTENT_RUNTIME_SUMMARY_BRIDGE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-bridge.js", "entryPath": "content-src/content-summary-bridge.js", "sourceSha256": "2e258dc1888ef5ff0873a516adf5a159162a48f45dc96412ecf4da6159eb8c8d", "implementationSha256": "0a95609fa9c4f4e73e4e4eab00ebd193eca2e276cbcce715732a8eb430aed252", "implementationVersion": "2026.07.16.2+bundle.0a95609fa9c4f4e73e4e4eab00ebd193eca2e276cbcce715732a8eb430aed252" });
+  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "0af96ee2121c5cf69ee68e8a0c07c81126c5e1d7e570ce30d34c80b8889d5256", "implementationSha256": "05a0b354f2e3e92dbd2241d7f365a8d377e6a941499902e77d1f18f1772ab94b", "implementationVersion": "2026.07.16.2+bundle.05a0b354f2e3e92dbd2241d7f365a8d377e6a941499902e77d1f18f1772ab94b" });
+  var CONTENT_RUNTIME_SUMMARY_ISOLATED_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts.js", "entryPath": "content-src/summary-userscripts.js", "sourceSha256": "3eef2c6d409565fbe527826ebb4a1dc04703ed17ffa3cd598f00c7cf4d8e3cdb", "implementationSha256": "35cbe8ed1077595f33f78d8c133f9f6eb037becf385fd96ee3771bf9456df848", "implementationVersion": "2026.07.16.2+bundle.35cbe8ed1077595f33f78d8c133f9f6eb037becf385fd96ee3771bf9456df848" });
 
   // shared/background-request-core.js
   var BACKGROUND_REQUEST_SOURCE = "chatclub";
@@ -313,6 +313,14 @@
       })
     })
   );
+  var ARM_GROK_MIRROR_ACCOUNT_SWITCH_REQUEST = /* @__PURE__ */ request(
+    "armGrokMirrorAccountSwitch",
+    /* @__PURE__ */ grokFrameRequest({
+      mutates: true,
+      payload: /* @__PURE__ */ contract({ bridgeVersion: "string" }),
+      response: /* @__PURE__ */ contract({ armed: "boolean", proceed: "boolean" })
+    })
+  );
   var INSTALL_TOPIC_DELETE_USERSCRIPT_REQUEST = /* @__PURE__ */ request(
     "installTopicDeleteUserscript",
     /* @__PURE__ */ directChildFrameRequest({
@@ -343,6 +351,7 @@
     RELAY_FRAME_BINDING_REQUEST,
     RELAY_FRAME_LIFECYCLE_REQUEST,
     SYNC_GROK_SESSION_COOKIES_REQUEST,
+    ARM_GROK_MIRROR_ACCOUNT_SWITCH_REQUEST,
     INSTALL_TOPIC_DELETE_USERSCRIPT_REQUEST,
     EXECUTE_SUMMARY_USERSCRIPT_REQUEST,
     EXECUTE_TOPIC_DELETE_USERSCRIPT_REQUEST
@@ -1343,7 +1352,7 @@ ${value}`);
     grokCookie: contentBundle({
       id: "chatclub-grok-cookie-bridge",
       file: "content/grok-cookie-bridge.js",
-      hosts: ["grok.com"],
+      hosts: ["grok.com", "gk.dairoot.cn"],
       runAt: "document_start"
     }),
     content: contentBundle({ id: "chatclub-content", file: "content/content.js" }),
@@ -1385,7 +1394,7 @@ ${value}`);
     adoptNavigationFocusGuard: command({ timeoutMs: 1200, mutating: true, transport: "main-world", features: Object.freeze(["preferred-model"]) }),
     deleteThread: command({ timeoutMs: 37e3, mutating: true, features: Object.freeze(["delete"]) }),
     getDeleteConfirmState: command({ timeoutMs: 2400, features: Object.freeze(["delete"]) }),
-    applyPreferredModel: command({ timeoutMs: 18e3, mutating: true, features: Object.freeze(["preferred-model"]) }),
+    applyPreferredModel: command({ timeoutMs: 5e4, mutating: true, features: Object.freeze(["preferred-model"]) }),
     cancelPreferredModelApply: command({ timeoutMs: 2e3, mutating: true, features: Object.freeze(["preferred-model"]) }),
     setMessageNavigator: command({ timeoutMs: 6e3, mutating: true, features: Object.freeze(["message-navigator"]) }),
     hideMessageNavigatorMenu: command({ timeoutMs: 2e3, mutating: true, features: Object.freeze(["message-navigator"]) }),

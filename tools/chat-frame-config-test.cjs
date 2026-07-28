@@ -23,13 +23,16 @@ const assert = require("node:assert/strict");
 
   const claude = { id: "Claude", url: "https://claude.ai/new", hosts: ["claude.ai", "*.claude.ai"] };
   const grok = { id: "Grok", url: "https://grok.com/", hosts: ["grok.com", "*.grok.com"], noSandbox: true };
+  const grokMirror = { id: "GrokMirror", url: "https://gk.dairoot.cn/", hosts: ["gk.dairoot.cn", "*.gk.dairoot.cn"] };
   const notion = { id: "NotionAI", url: "https://app.notion.com/ai", hosts: ["app.notion.com"], noSandbox: true };
-  for (const app of [claude, grok, notion]) {
+  for (const app of [claude, grokMirror, grok, notion]) {
     const contract = resolveChatFrameAttributeContract({ app, url: app.url });
     assert.equal(contract.attributes.allow.split("; ").length, CHAT_FRAME_ALLOW_FEATURES.length);
     assert.equal(contract.attributes.referrerpolicy, "no-referrer");
-    assert.equal("sandbox" in contract.attributes, app === claude);
-    if (app === claude) assert.equal(contract.attributes.sandbox, CHAT_FRAME_SANDBOX_TOKENS.join(" "));
+    assert.equal("sandbox" in contract.attributes, app === claude || app === grokMirror);
+    if (app === claude || app === grokMirror) {
+      assert.equal(contract.attributes.sandbox, CHAT_FRAME_SANDBOX_TOKENS.join(" "));
+    }
   }
 
   assert.equal(resolveChatFrameAttributeContract({ app: claude, url: "https://sub.claude.ai/chat/1" }).inScope, true);

@@ -276,13 +276,16 @@ export function createSendCapability(deps = {}) {
 
   function grokHost(hostname = location.hostname) {
     const host = String(hostname || "").toLowerCase();
-    return host === "grok.com" || host.endsWith(".grok.com") || host === "grok.x.ai" || host.endsWith(".grok.x.ai");
+    return host === "grok.com" || host.endsWith(".grok.com") || host === "grok.x.ai" || host.endsWith(".grok.x.ai")
+      || host === "gk.dairoot.cn" || host.endsWith(".gk.dairoot.cn");
   }
 
   function isGrokSendTarget(data = {}) {
     const appId = String(data?.appId || "").trim().toLowerCase();
     const appName = String(data?.appName || "").trim().toLowerCase();
-    return appId === "grok" || appName === "grok" || grokHost();
+    return ["grok", "grokmirror"].includes(appId)
+      || ["grok", "grok mirror"].includes(appName)
+      || grokHost();
   }
 
   function kagiHost(hostname = location.hostname) {

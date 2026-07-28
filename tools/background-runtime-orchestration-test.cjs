@@ -9,6 +9,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const runtime = read("background/runtime.js");
 const secureContexts = read("background/secure-frame-contexts.js");
 const grokRuntime = read("background/grok-cookie-runtime.js");
+const notionPreflight = read("background/notion-frame-preflight.js");
 const customUserscripts = read("background/custom-userscript-runtime.js");
 const registeredFrameTransport = read("background/registered-frame-transport.js");
 
@@ -17,6 +18,7 @@ assert.ok(runtimeLines <= 700, `background runtime assembly must remain at or be
 for (const [factory, file] of [
   ["createSecureFrameContextRegistry", "./secure-frame-contexts.js"],
   ["createGrokCookieRuntime", "./grok-cookie-runtime.js"],
+  ["createNotionFramePreflightRuntime", "./notion-frame-preflight.js"],
   ["createCustomUserscriptRuntime", "./custom-userscript-runtime.js"]
 ]) {
   assert.match(runtime, new RegExp(`import \\{ ${factory} \\} from "${file.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`));
@@ -69,17 +71,34 @@ assert.match(secureContexts, /async function forgetTab\(tabId, options = \{\}\)/
 assert.match(secureContexts, /function touch\(token, value\)/);
 assert.doesNotMatch(secureContexts, /FRAME_CONTEXT_MAX_AGE_MS/, "live secure frame contexts must not expire only because they were idle");
 
-assert.match(grokRuntime, /removeManagedGrokPartitionsExcept\(api, \{ storeId, partitionKey \}\)/);
-assert.match(grokRuntime, /syncGrokSessionCookies\(api, \{ storeId, partitionKey \}\)/);
+assert.match(grokRuntime, /removeManagedGrokPartitionsExcept\(api, \{ storeId, partitionKey, revalidate \}\)/);
+assert.match(grokRuntime, /syncGrokSessionCookies\(api, \{ storeId, partitionKey, \.\.\.profileOptions, \.\.\.backendOptions \}\)/);
 assert.match(grokRuntime, /api\.cookies\.getPartitionKey\(\{/);
 assert.match(grokRuntime, /frame\.parentFrameId !== 0/);
-assert.match(grokRuntime, /senderDocumentId && frameDocumentId && senderDocumentId !== frameDocumentId/);
+assert.match(grokRuntime, /!senderDocumentId[\s\S]{0,120}!frameDocumentId[\s\S]{0,180}senderDocumentId !== frameDocumentId/);
 assert.match(grokRuntime, /grokCookieChangeOwnedByBridge\(changeInfo\)/);
 assert.match(grokRuntime, /releaseChangedGrokPartition\(api, changeInfo\)/);
 assert.match(grokRuntime, /request\.PREPARE_FRAME_LOAD/);
-assert.match(grokRuntime, /dependencies\.updateDnrRules\(tabId\)/);
+assert.match(grokRuntime, /dependencies\.updateDnrRules\(tabId, message\)/);
+assert.ok(
+  notionPreflight.indexOf("await updateDnrRules(tabId)")
+    < notionPreflight.indexOf("await prepareFrameLoad({ ...message, tabId })"),
+  "document-only DNR rules must be ready before arming the exact Notion nonce rule"
+);
 assert.match(grokRuntime, /request\.SYNC_GROK_SESSION_COOKIES/);
 assert.doesNotMatch(grokRuntime, /console\.(?:log|info|debug).*cookie/i);
+assert.match(runtime, /notionFramePreflightRuntime\.dnrRuleUpdater\(updateDnrRules\)/);
+assert.match(runtime, /notionFramePreflightRuntime\.activeSessionRules\(\)/);
+assert.match(runtime, /notionFramePreflightRuntime\.withDnrMutation/);
+assert.match(runtime, /REQUEST\.CANCEL_NOTION_FRAME_LOAD/);
+assert.match(notionPreflight, /extensionUrl\.startsWith\("chrome-extension:\/\/"\)/);
+assert.match(notionPreflight, /NOTION_FRAME_RULE_TIMEOUT_MS = 10_000/);
+assert.match(notionPreflight, /resourceTypes: \["xmlhttprequest", "other"\]/);
+assert.match(notionPreflight, /requestMethods: \["get"\]/);
+assert.match(notionPreflight, /initiatorDomains: \["app\.notion\.com"\]/);
+assert.doesNotMatch(notionPreflight, /\b(?:debugger|getTargets|Runtime\.evaluate|DEBUG_instance)\b/);
+assert.doesNotMatch(notionPreflight, /requestHeaders|websocket|script|image/);
+assert.match(runtime, /debuggerSessionCoordinator\.available \? debuggerSessionCoordinator : undefined/);
 
 assert.match(customUserscripts, /executeSummaryUserscript[\s\S]*?verifiedCustomUserscriptTarget\(api, sender\)/);
 assert.match(customUserscripts, /executeTopicDeleteUserscript[\s\S]*?verifiedCustomUserscriptTarget\(api, sender\)/);

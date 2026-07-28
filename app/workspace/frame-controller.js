@@ -1,8 +1,13 @@
 import { runtimeFrameId, runtimeRequest } from "../../shared/extension-api.js";
-import { resolveChatFrameAttributeContract } from "../../shared/chat-frame-config.js";
+import {
+  notionFrameLoadTarget,
+  resolveChatFrameAttributeContract,
+  stripNotionFrameLoadNonce
+} from "../../shared/chat-frame-config.js";
 import { t } from "../../shared/i18n.js";
 import { findTopicDeleteSiteConfig, topicDeleteTimeoutMs } from "../../shared/topic-delete-sites.js";
 import { button, editorModal, el, field, input } from "../../ui/dom.js";
+import { frameLoadingKindForTarget } from "./frame-loading.js";
 import { removeChatFromGroup, removeGroupFromWorkspace } from "./model.js";
 import { createControllerMethodValidator, validateControllerContract } from "../controller-contract.js";
 
@@ -11,6 +16,7 @@ const NAVIGATION_FOCUS_GUARD_POST_NAV_RETRY_MS = 150;
 const NAVIGATION_FOCUS_GUARD_POST_NAV_SETTLE_MS = 10000;
 const NAVIGATION_FOCUS_GUARD_POST_NAV_MAX_MS = 45000;
 const NAVIGATION_FOCUS_GUARD_LEASE_MS = 180000;
+const NOTION_FRAME_PREFLIGHT_DEADLINE_MS = 8_000;
 const requireMethods = createControllerMethodValidator("Workspace frame", "port");
 
 export function createWorkspaceFrameController(dependencies = {}) {
@@ -70,6 +76,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
   let workspaceLifecycleFrames = [];
   let frameLifecycleCallbackActive = false;
   const frameNavigationGenerations = new WeakMap();
+  const openableFrameUrl = (value) => openableTabUrl(stripNotionFrameLoadNonce(value));
 
   function emitFrameLifecycleChange(event) {
     if (frameLifecycleCallbackActive) return;
@@ -90,13 +97,13 @@ export function createWorkspaceFrameController(dependencies = {}) {
     const chat = state.groups
       .flatMap((group) => group.chatApps || [])
       .find((candidate) => candidate.instanceId === instanceId);
-    const initialHref = openableTabUrl(chat?.initialHref);
+    const initialHref = openableFrameUrl(chat?.initialHref);
     if (initialHref) delete chat.initialHref;
     return initialHref;
   }
 
   function stageFrameInitialHref(instanceId, href) {
-    const initialHref = openableTabUrl(href);
+    const initialHref = openableFrameUrl(href);
     if (!initialHref) return false;
     const chat = state.groups
       .flatMap((group) => group.chatApps || [])
@@ -120,7 +127,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
   }
 
   function threadHrefFromLocation(value) {
-    const href = openableTabUrl(value);
+    const href = openableFrameUrl(value);
     if (!href) return "";
     try {
       const url = new URL(href);
@@ -144,7 +151,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
   }
 
   function knownNoConversationPage(config = {}, payload = {}) {
-    const href = openableTabUrl(payload.currentHref || payload.href || payload.url);
+    const href = openableFrameUrl(payload.currentHref || payload.href || payload.url);
     if (!href) return false;
     try {
       const url = new URL(href);
@@ -164,7 +171,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
 
   function rememberFrameLocation(iframe, meta = {}) {
     if (!(iframe instanceof HTMLIFrameElement)) return;
-    const href = openableTabUrl(meta.href || meta.url);
+    const href = openableFrameUrl(meta.href || meta.url);
     const title = String(meta.title || "").trim();
     const previousHref = String(iframe.dataset.currentHref || "");
     let hrefChanged = false;
@@ -206,15 +213,15 @@ export function createWorkspaceFrameController(dependencies = {}) {
 
   function frameDeleteThreadPayload(iframe, fallback = {}) {
     const app = iframe instanceof HTMLIFrameElement ? frameApp(iframe) : appById(fallback.appId);
-    const currentHref = openableTabUrl(fallback.currentHref || fallback.href || fallback.url)
-      || openableTabUrl(iframe?.dataset?.currentHref)
-      || openableTabUrl(iframe?.src || iframe?.getAttribute?.("src"))
-      || openableTabUrl(app?.url);
+    const currentHref = openableFrameUrl(fallback.currentHref || fallback.href || fallback.url)
+      || openableFrameUrl(iframe?.dataset?.currentHref)
+      || openableFrameUrl(iframe?.src || iframe?.getAttribute?.("src"))
+      || openableFrameUrl(app?.url);
     return {
       appId: app?.id || fallback.appId || iframe?.dataset?.appId || "",
       appName: app ? inferAppName(app) : "",
       currentHref,
-      currentThreadHref: openableTabUrl(fallback.currentThreadHref) || threadHrefFromLocation(currentHref),
+      currentThreadHref: openableFrameUrl(fallback.currentThreadHref) || threadHrefFromLocation(currentHref),
       currentTitle: iframe?.dataset?.currentTitle || iframe?.title || ""
     };
   }
@@ -264,6 +271,19 @@ export function createWorkspaceFrameController(dependencies = {}) {
     return runtimeRequest({ source: "chatclub", action: "prepareFrameLoad", url, preflightId });
   }
 
+  function preparePlannedFrameLoad(plan) {
+    const request = prepareFrameLoad(plan.requestUrl, plan.preflightId);
+    if (!plan.notionPreflight) return request;
+    let deadlineTimer = 0;
+    const deadline = new Promise((_, reject) => {
+      deadlineTimer = setTimeout(() => {
+        cancelNotionFrameLoad(plan.requestUrl, plan.preflightId);
+        reject(new Error("Notion frame preflight timed out"));
+      }, NOTION_FRAME_PREFLIGHT_DEADLINE_MS);
+    });
+    return Promise.race([request, deadline]).finally(() => clearTimeout(deadlineTimer));
+  }
+
   async function markGrokFramePreflightFallback(url, preflightId) {
     try {
       return await runtimeRequest({
@@ -277,10 +297,19 @@ export function createWorkspaceFrameController(dependencies = {}) {
     }
   }
 
+  async function cancelNotionFrameLoad(url, preflightId) {
+    try {
+      return await runtimeRequest({ source: "chatclub", action: "cancelNotionFrameLoad", url, preflightId });
+    } catch {
+      return null;
+    }
+  }
+
   function grokCookieBridgeUrl(url) {
     try {
       const parsed = new URL(String(url || ""));
-      return parsed.protocol === "https:" && parsed.hostname.toLowerCase() === "grok.com";
+      const host = parsed.hostname.toLowerCase();
+      return parsed.protocol === "https:" && (host === "grok.com" || host === "gk.dairoot.cn");
     } catch {
       return false;
     }
@@ -289,6 +318,41 @@ export function createWorkspaceFrameController(dependencies = {}) {
   function grokFramePreflightId() {
     return globalThis.crypto?.randomUUID?.()
       || `grok-preflight-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
+
+  function notionFramePreflightId() {
+    const bytes = new Uint8Array(16);
+    globalThis.crypto.getRandomValues(bytes);
+    return `ccn-${Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("")}`;
+  }
+
+  function frameLoadPlan(value) {
+    const logicalUrl = openableFrameUrl(value);
+    let notionTarget = null;
+    try {
+      const parsed = new URL(logicalUrl);
+      if (
+        parsed.protocol === "https:"
+        && parsed.hostname.toLowerCase() === "app.notion.com"
+        && !parsed.username
+        && !parsed.password
+        && !parsed.port
+      ) notionTarget = notionFrameLoadTarget(logicalUrl, notionFramePreflightId());
+    } catch {}
+    const grokPreflight = !notionTarget && grokCookieBridgeUrl(logicalUrl);
+    return {
+      logicalUrl,
+      requestUrl: notionTarget?.navigationHref || logicalUrl,
+      preflightId: notionTarget?.nonce || (grokPreflight ? grokFramePreflightId() : ""),
+      notionPreflight: Boolean(notionTarget),
+      grokPreflight
+    };
+  }
+
+  function preparedFrameNavigationUrl(plan, prepared = false) {
+    return plan.notionPreflight && prepared
+      ? plan.requestUrl
+      : plan.logicalUrl;
   }
 
   function frameLoadingSet() {
@@ -325,11 +389,20 @@ export function createWorkspaceFrameController(dependencies = {}) {
     return frameIsLoading(activeChatForGroup(group)?.instanceId);
   }
 
-  function beginFrameLoading(iframe, pending = false) {
+  function beginFrameLoading(iframe, targetHref = "", pending = false) {
     if (!(iframe instanceof HTMLIFrameElement)) return false;
+    const previousKind = String(iframe.dataset.frameLoadingKind || "");
+    iframe.dataset.frameLoadingKind = frameLoadingKindForTarget(
+      frameApp(iframe) || appById(iframe.dataset.appId),
+      targetHref
+    );
     if (pending) iframe.dataset.frameLoadPending = "1";
     else delete iframe.dataset.frameLoadPending;
+    const alreadyLoading = frameIsLoading(iframe.dataset.instanceId);
     setFrameLoading(iframe, true);
+    if (alreadyLoading && previousKind !== iframe.dataset.frameLoadingKind) {
+      syncHeaderForFrameInstance(iframe.dataset.instanceId);
+    }
     return true;
   }
 
@@ -348,6 +421,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
     if (!(iframe instanceof HTMLIFrameElement)) return;
     rememberBrowserFrameId(iframe);
     if (iframe.dataset.frameLoadPending === "1") return;
+    delete iframe.dataset.frameLoadingKind;
     setFrameLoading(iframe, false);
   }
 
@@ -447,30 +521,51 @@ export function createWorkspaceFrameController(dependencies = {}) {
   }
 
   function assignFrameSrc(iframe, url) {
-    if (!(iframe instanceof HTMLIFrameElement) || !url) return false;
-    if (iframe.isConnected && ensureFrameAttributeContract(iframe, url, { phase: "assign" })) return true;
+    if (!(iframe instanceof HTMLIFrameElement)) return false;
+    const plan = frameLoadPlan(url);
+    if (!plan.logicalUrl) return false;
+    if (iframe.isConnected && ensureFrameAttributeContract(iframe, plan.logicalUrl, { phase: "assign" })) return true;
     const generation = beginFrameNavigationGeneration(iframe);
-    beginFrameLoading(iframe);
-    const assign = (preflight = {}) => {
+    beginFrameLoading(iframe, plan.logicalUrl);
+    const assign = (navigationUrl, preflight = {}) => {
       if (!frameNavigationIsCurrent(iframe, generation)) return;
       const expiresAt = Date.now() + NAVIGATION_FOCUS_GUARD_LEASE_MS;
       if (guard && document.activeElement === document.querySelector(".prompt-input")) {
         maintainFrameNavigationFocusGuard(iframe, generation, expiresAt, preflight);
       }
-      iframe.src = url;
+      iframe.src = navigationUrl;
     };
-    const guard = prepareFrameNavigationFocusGuard(iframe, generation);
-    if (guard) guard.then(assign, assign);
-    else assign();
+    let guard = null;
+    const assignWithFocusGuard = (navigationUrl) => {
+      if (!frameNavigationIsCurrent(iframe, generation)) return;
+      guard = prepareFrameNavigationFocusGuard(iframe, generation);
+      if (guard) guard.then(
+        (preflight) => assign(navigationUrl, preflight),
+        () => assign(navigationUrl)
+      );
+      else assign(navigationUrl);
+    };
+    if (plan.notionPreflight) {
+      preparePlannedFrameLoad(plan)
+        .then(() => preparedFrameNavigationUrl(plan, true))
+        .catch(() => plan.logicalUrl)
+        .then(assignWithFocusGuard);
+    } else {
+      assignWithFocusGuard(plan.logicalUrl);
+    }
     return true;
   }
 
   function setFrameSrcAfterPrepare(iframe, url, options = {}) {
-    if (iframe?.isConnected && ensureFrameAttributeContract(iframe, url, { phase: "prepare" })) return;
+    if (!(iframe instanceof HTMLIFrameElement)) return;
+    const plan = frameLoadPlan(url);
+    if (!plan.logicalUrl) return;
+    if (iframe?.isConnected && ensureFrameAttributeContract(iframe, plan.logicalUrl, { phase: "prepare" })) return;
+    iframe.dataset.currentHref = plan.logicalUrl;
     const generation = beginFrameNavigationGeneration(iframe);
-    beginFrameLoading(iframe, true);
+    beginFrameLoading(iframe, plan.logicalUrl, true);
     let assigned = false;
-    const assign = () => {
+    const assign = (navigationUrl = plan.logicalUrl) => {
       if (assigned || !frameNavigationIsCurrent(iframe, generation)) return;
       if (!options.replace && iframe.getAttribute("src")) {
         delete iframe.dataset.frameLoadPending;
@@ -489,32 +584,34 @@ export function createWorkspaceFrameController(dependencies = {}) {
         // assigned. Otherwise a long Grok Cookie preflight can publish a false
         // loading=false edge before the direct child frame exists.
         delete iframe.dataset.frameLoadPending;
-        iframe.setAttribute("src", url);
+        iframe.setAttribute("src", navigationUrl);
       };
       const guard = prepareFrameNavigationFocusGuard(iframe, generation);
       if (guard) guard.then(setSrc, setSrc);
       else setSrc();
     };
-    const grokPreflight = grokCookieBridgeUrl(url);
-    const preflightId = grokPreflight ? grokFramePreflightId() : "";
     // Dia can take longer than a short UI timeout to wake the extension
     // Service Worker. Never race a normal frame navigation ahead of the DNR
     // response-header rules that make CSP/XFO-protected apps embeddable.
-    const fallback = grokPreflight ? setTimeout(() => {
+    const fallback = plan.grokPreflight ? setTimeout(() => {
       const guard = setTimeout(assign, 300);
-      markGrokFramePreflightFallback(url, preflightId).finally(() => {
+      markGrokFramePreflightFallback(plan.logicalUrl, plan.preflightId).finally(() => {
         clearTimeout(guard);
         assign();
       });
     }, 10000) : null;
-    prepareFrameLoad(url, preflightId)
+    let navigationUrl = plan.logicalUrl;
+    preparePlannedFrameLoad(plan)
+      .then(() => {
+        navigationUrl = preparedFrameNavigationUrl(plan, true);
+      })
       .catch((error) => {
         console.warn("[ChatClub] Frame load preparation failed; continuing without the preflight", error);
         return null;
       })
       .finally(() => {
         if (fallback) clearTimeout(fallback);
-        assign();
+        assign(navigationUrl);
       });
   }
 
@@ -710,10 +807,10 @@ export function createWorkspaceFrameController(dependencies = {}) {
     const iframe = activeIframe(chat);
     if (!iframe) return false;
     const liveHref = await activeHref(chat);
-    const href = openableTabUrl(liveHref)
-      || openableTabUrl(iframe.dataset.currentHref)
-      || openableTabUrl(iframe.src || iframe.getAttribute?.("src"))
-      || openableTabUrl(appById(chat?.appId).url);
+    const href = openableFrameUrl(liveHref)
+      || openableFrameUrl(iframe.dataset.currentHref)
+      || openableFrameUrl(iframe.src || iframe.getAttribute?.("src"))
+      || openableFrameUrl(appById(chat?.appId).url);
     if (!href) return false;
     iframe.dataset.currentHref = href;
     rememberWorkspaceSession();
@@ -724,11 +821,13 @@ export function createWorkspaceFrameController(dependencies = {}) {
     const iframe = activeIframe(chat);
     const app = appById(chat?.appId);
     if (!iframe || !app?.url) return false;
-    iframe.dataset.currentHref = app.url;
+    const href = openableFrameUrl(app.url);
+    if (!href) return false;
+    iframe.dataset.currentHref = href;
     delete iframe.dataset.currentThreadHref;
     delete iframe.dataset.currentTitle;
     rememberWorkspaceSession();
-    return assignFrameSrc(iframe, app.url);
+    return assignFrameSrc(iframe, href);
   }
 
   async function startNewChatInFrame(iframe, fallbackChat = null) {
@@ -738,11 +837,13 @@ export function createWorkspaceFrameController(dependencies = {}) {
     } catch {}
     const app = frameApp(iframe) || appById(fallbackChat?.appId || iframe.dataset?.appId);
     if (!app?.url) return false;
-    iframe.dataset.currentHref = app.url;
+    const href = openableFrameUrl(app.url);
+    if (!href) return false;
+    iframe.dataset.currentHref = href;
     delete iframe.dataset.currentThreadHref;
     delete iframe.dataset.currentTitle;
     rememberWorkspaceSession();
-    return assignFrameSrc(iframe, app.url);
+    return assignFrameSrc(iframe, href);
   }
 
   async function startNewChatInActiveTab(group) {
@@ -782,7 +883,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
   function navigateActiveChatToUrl(group, rawUrl) {
     const chat = activeChatForGroup(group);
     const iframe = activeIframe(chat);
-    const href = normalizeUserNavigationUrl(rawUrl);
+    const href = openableFrameUrl(normalizeUserNavigationUrl(rawUrl));
     if (!chat || !iframe || !href) return false;
     iframe.dataset.currentHref = href;
     delete iframe.dataset.currentThreadHref;
@@ -854,29 +955,29 @@ export function createWorkspaceFrameController(dependencies = {}) {
 
   async function activeHref(chat) {
     const iframe = activeIframe(chat);
-    let href = openableTabUrl(iframe?.dataset.currentHref)
-      || openableTabUrl(iframe?.src || iframe?.getAttribute?.("src"))
-      || appById(chat?.appId).url;
+    let href = openableFrameUrl(iframe?.dataset.currentHref)
+      || openableFrameUrl(iframe?.src || iframe?.getAttribute?.("src"))
+      || openableFrameUrl(appById(chat?.appId).url);
     try {
       const prepared = await prepareContentFrameRuntime(iframe);
       if (prepared?.ok) href = await sendToContentFrame(iframe, "getLocationHref", {}, 1800) || href;
     } catch {}
-    const currentHref = openableTabUrl(href);
+    const currentHref = openableFrameUrl(href);
     if (iframe && currentHref) rememberFrameLocation(iframe, { href: currentHref });
-    return href;
+    return currentHref;
   }
 
   function cachedChatHref(chat) {
     const iframe = activeIframe(chat);
-    return openableTabUrl(iframe?.dataset.currentHref) || openableTabUrl(appById(chat?.appId).url);
+    return openableFrameUrl(iframe?.dataset.currentHref) || openableFrameUrl(appById(chat?.appId).url);
   }
 
   function cachedGroupHref(group) {
     const chat = activeChatForGroup(group);
     const card = document.querySelector(`.chat-card[data-group-id="${group.id}"]`);
     const iframe = card?.querySelector(".chat-frame.active") || activeIframe(chat);
-    return openableTabUrl(iframe?.dataset.currentHref)
-      || openableTabUrl(iframe?.src || iframe?.getAttribute?.("src"))
+    return openableFrameUrl(iframe?.dataset.currentHref)
+      || openableFrameUrl(iframe?.src || iframe?.getAttribute?.("src"))
       || cachedChatHref(chat);
   }
 

@@ -287,11 +287,16 @@ const DELETE_USERSCRIPT_ENGINE_SITES_RAW = String.raw`
 __CHATCLUB_DELETE_SITE_HELPERS__
 
   async function deleteTopRight(site, deleteLabels, menuLabels, selectors = []) {
+    if (findDeleteConfirmButton() || deleteDialogRoots().length) {
+      return { ...result(false, "unverified delete confirmation is already open"), site };
+    }
     const trigger = topRightMenuTrigger(menuLabels, selectors);
     if (!trigger) return result(false, "conversation menu trigger not found");
     if (!await openTriggerAndClickDelete(trigger, deleteLabels)) return result(false, "delete menu item not found");
-    const confirmed = await clickDeleteConfirmIfPresent(5200);
-    if (!confirmed) return { ...result(false, "delete confirmation button not found"), site };
+    await clickDeleteConfirmIfAppears(900, 5200);
+    if (findDeleteConfirmButton() || deleteDialogRoots().length) {
+      return { ...result(false, "delete confirmation did not close"), site };
+    }
     return { ...result(true), site };
   }
 

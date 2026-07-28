@@ -15,7 +15,7 @@
   var SUMMARY_POST_MESSAGE_SOURCE = "chatclub:summary:2026.07.16.2";
   var PREFERRED_MODEL_POST_MESSAGE_SOURCE = "chatclub:preferred-model:2026.07.16.2";
   var CONTENT_BRIDGE_VERSION = "2026.07.16.2";
-  var GROK_COOKIE_BRIDGE_VERSION = "2026.07.15.1";
+  var GROK_COOKIE_BRIDGE_VERSION = "2026.07.28.3";
   var EXTENSION_RUNTIME_RELAY_SOURCE = "chatclub:runtime-relay:2026.07.16.2";
   var FRAME_BINDING_POST_MESSAGE_SOURCE = `chatclub:frame-binding:${CONTENT_BRIDGE_VERSION}`;
   var SECURE_FRAME_COMMAND_SOURCE = "chatclub:frame-command:2026.07.16.2";
@@ -69,12 +69,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "4b25a56bd08c2508af23fc884a7595f95663bd227768e9548427f9046db01267";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "24a63db0de70fdf6c845e0c7b99ffcc76be9eac6cfef2335bb1c06f608a321c0";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "719d8f56f36ec4f38931fc8156ef7fef9f04aae0b645871786954dfdf241ba64";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.719d8f56f36ec4f38931fc8156ef7fef9f04aae0b645871786954dfdf241ba64";
-  var CONTENT_RUNTIME_GROK_COOKIE_BRIDGE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/grok-cookie-bridge.js", "entryPath": "content-src/grok-cookie-bridge.js", "sourceSha256": "d09cd36316d9c63abfc773c63295861f25eeb935ac626f943481d76048e64800", "implementationSha256": "74e33bec2177ab7d3b452742a59e2738cdb128a1639cb80a7ba872279d365e7f", "implementationVersion": "2026.07.16.2+bundle.74e33bec2177ab7d3b452742a59e2738cdb128a1639cb80a7ba872279d365e7f" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "a130203366b9178fc7f7e5c781304d73091d830727def868a377cc753710ae75";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.a130203366b9178fc7f7e5c781304d73091d830727def868a377cc753710ae75";
+  var CONTENT_RUNTIME_GROK_COOKIE_BRIDGE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/grok-cookie-bridge.js", "entryPath": "content-src/grok-cookie-bridge.js", "sourceSha256": "0f22834f7def00a4c47f192b43d19644e61421bfb20fda62ab934c2aa51b0b38", "implementationSha256": "1fc8079451d01394d2327851d3c6c037f459e4dde2ff916a6a05bcacfceeb861", "implementationVersion": "2026.07.16.2+bundle.1fc8079451d01394d2327851d3c6c037f459e4dde2ff916a6a05bcacfceeb861" });
 
   // shared/background-request-core.js
   var BACKGROUND_REQUEST_SOURCE = "chatclub";
@@ -312,6 +312,14 @@
       })
     })
   );
+  var ARM_GROK_MIRROR_ACCOUNT_SWITCH_REQUEST = /* @__PURE__ */ request(
+    "armGrokMirrorAccountSwitch",
+    /* @__PURE__ */ grokFrameRequest({
+      mutates: true,
+      payload: /* @__PURE__ */ contract({ bridgeVersion: "string" }),
+      response: /* @__PURE__ */ contract({ armed: "boolean", proceed: "boolean" })
+    })
+  );
   var INSTALL_TOPIC_DELETE_USERSCRIPT_REQUEST = /* @__PURE__ */ request(
     "installTopicDeleteUserscript",
     /* @__PURE__ */ directChildFrameRequest({
@@ -342,6 +350,7 @@
     RELAY_FRAME_BINDING_REQUEST,
     RELAY_FRAME_LIFECYCLE_REQUEST,
     SYNC_GROK_SESSION_COOKIES_REQUEST,
+    ARM_GROK_MIRROR_ACCOUNT_SWITCH_REQUEST,
     INSTALL_TOPIC_DELETE_USERSCRIPT_REQUEST,
     EXECUTE_SUMMARY_USERSCRIPT_REQUEST,
     EXECUTE_TOPIC_DELETE_USERSCRIPT_REQUEST
@@ -822,17 +831,101 @@
     const INSTALLATION_VERSION = runtimeIdentity.bundle.implementationVersion;
     const INSTALLATION_KEY = "__CHATCLUB_GROK_COOKIE_BRIDGE_VERSION__";
     const RELOAD_MARKER = `chatclub:grok-cookie-bridge:reload:${INSTALLATION_VERSION}`;
-    if (location.protocol !== "https:" || location.hostname.toLowerCase() !== "grok.com") return;
+    const MIRROR_ACCOUNT_SWITCH_ARM_TIMEOUT_MS = 9e3;
+    const supportedHosts = /* @__PURE__ */ new Set(["grok.com", "gk.dairoot.cn"]);
+    const extensionProtocol = (() => {
+      try {
+        const extensionApi = globalThis.browser || globalThis.chrome;
+        return new URL(extensionApi?.runtime?.getURL?.("") || "").protocol;
+      } catch {
+        return "";
+      }
+    })();
+    const accountSwitchInterceptionEnabled = extensionProtocol === "chrome-extension:";
+    if (location.protocol !== "https:" || !supportedHosts.has(location.hostname.toLowerCase())) return;
     if (window.top === window) return;
     runtimes.install("grok-cookie-bridge-root", INSTALLATION_VERSION, () => {
       let disposed = false;
+      let accountSwitching = false;
+      let cancelAccountSwitchWait = () => {
+      };
+      const normalizedActionText = (element) => String(element?.textContent || "").replace(/\s+/g, " ").trim();
+      const mirrorAccountSwitchAction = (rawTarget) => {
+        const target = rawTarget instanceof Element ? rawTarget : null;
+        if (!target) return null;
+        const floatingBall = target.closest("#floatingBall");
+        if (floatingBall && floatingBall === document.getElementById("floatingBall") && document.querySelectorAll("#floatingBall").length === 1 && floatingBall.matches("div#floatingBall") && normalizedActionText(floatingBall) === "换号") return floatingBall;
+        const button = target.closest("button");
+        const modal = button?.closest("#randomAccountModal");
+        if (!button || !modal || modal !== document.getElementById("randomAccountModal")) return null;
+        const explicitActions = [...modal.querySelectorAll(".modal-footer button.btn.btn-primary")];
+        return explicitActions.length === 1 && explicitActions[0] === button && normalizedActionText(button) === "确定" ? button : null;
+      };
+      const interceptMirrorAccountSwitch = (event) => {
+        if (disposed || location.hostname.toLowerCase() !== "gk.dairoot.cn" || event?.isTrusted !== true || event?.button !== 0 || event?.metaKey || event?.ctrlKey || event?.shiftKey || event?.altKey) return;
+        if (!mirrorAccountSwitchAction(event.target)) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (accountSwitching) return;
+        accountSwitching = true;
+        const sourceDocument = document;
+        const sourceHref = String(location.href || "");
+        const continueNativeAccountSwitch = () => {
+          if (disposed || document !== sourceDocument || location.protocol !== "https:" || location.hostname.toLowerCase() !== "gk.dairoot.cn" || String(location.href || "") !== sourceHref) {
+            accountSwitching = false;
+            return false;
+          }
+          try {
+            localStorage.removeItem("modes-selected-id");
+            location.assign("/api/random-login");
+            return true;
+          } catch {
+            accountSwitching = false;
+            return false;
+          }
+        };
+        const armResponseIsValid = (response) => Boolean(
+          response && typeof response === "object" && !Array.isArray(response) && Object.keys(response).length === 3 && response.success === true && typeof response.armed === "boolean" && typeof response.proceed === "boolean"
+        );
+        let armRequest;
+        try {
+          armRequest = requestBackground(
+            ARM_GROK_MIRROR_ACCOUNT_SWITCH_REQUEST,
+            { bridgeVersion: BRIDGE_VERSION }
+          );
+        } catch {
+          accountSwitching = false;
+          return;
+        }
+        let settled = false;
+        let armTimer = 0;
+        const settleArm = (response) => {
+          if (settled) return;
+          settled = true;
+          if (armTimer) clearTimeout(armTimer);
+          armTimer = 0;
+          cancelAccountSwitchWait = () => {
+          };
+          if (armResponseIsValid(response) && response.proceed === true) {
+            continueNativeAccountSwitch();
+          } else {
+            accountSwitching = false;
+          }
+        };
+        cancelAccountSwitchWait = () => settleArm(null);
+        armTimer = setTimeout(() => settleArm(null), MIRROR_ACCOUNT_SWITCH_ARM_TIMEOUT_MS);
+        Promise.resolve(armRequest).then(settleArm, () => settleArm(null));
+      };
       return {
         api: Object.freeze({ version: INSTALLATION_VERSION, runtimeIdentity }),
         activate() {
           if (disposed || globalThis[INSTALLATION_KEY] === `${INSTALLATION_VERSION}:pending`) return;
+          if (accountSwitchInterceptionEnabled) {
+            document.addEventListener("click", interceptMirrorAccountSwitch, true);
+          }
           globalThis[INSTALLATION_KEY] = `${INSTALLATION_VERSION}:pending`;
           requestBackground(SYNC_GROK_SESSION_COOKIES_REQUEST, { bridgeVersion: BRIDGE_VERSION }).then((response) => {
-            if (disposed) return;
+            if (disposed || accountSwitching) return;
             if (!response.reloadRequired) {
               try {
                 sessionStorage.removeItem(RELOAD_MARKER);
@@ -842,8 +935,9 @@
             }
             let alreadyReloaded = false;
             try {
-              alreadyReloaded = sessionStorage.getItem(RELOAD_MARKER) === location.href;
-              if (!alreadyReloaded) sessionStorage.setItem(RELOAD_MARKER, location.href);
+              const reloadTarget = `${location.origin || ""}${location.pathname || "/"}`;
+              alreadyReloaded = sessionStorage.getItem(RELOAD_MARKER) === reloadTarget;
+              if (!alreadyReloaded) sessionStorage.setItem(RELOAD_MARKER, reloadTarget);
             } catch {
               return;
             }
@@ -857,6 +951,12 @@
         },
         dispose() {
           disposed = true;
+          cancelAccountSwitchWait();
+          cancelAccountSwitchWait = () => {
+          };
+          if (accountSwitchInterceptionEnabled) {
+            document.removeEventListener("click", interceptMirrorAccountSwitch, true);
+          }
           if (globalThis[INSTALLATION_KEY] === `${INSTALLATION_VERSION}:pending`) {
             delete globalThis[INSTALLATION_KEY];
           }

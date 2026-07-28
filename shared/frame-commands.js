@@ -30,7 +30,7 @@ export const CONTENT_BUNDLES = Object.freeze({
   grokCookie: contentBundle({
     id: "chatclub-grok-cookie-bridge",
     file: "content/grok-cookie-bridge.js",
-    hosts: ["grok.com"],
+    hosts: ["grok.com", "gk.dairoot.cn"],
     runAt: "document_start"
   }),
   content: contentBundle({ id: "chatclub-content", file: "content/content.js" }),
@@ -117,7 +117,7 @@ export const FRAME_COMMAND_SPECS = Object.freeze({
   adoptNavigationFocusGuard: command({ timeoutMs: 1200, mutating: true, transport: "main-world", features: Object.freeze(["preferred-model"]) }),
   deleteThread: command({ timeoutMs: 37000, mutating: true, features: Object.freeze(["delete"]) }),
   getDeleteConfirmState: command({ timeoutMs: 2400, features: Object.freeze(["delete"]) }),
-  applyPreferredModel: command({ timeoutMs: 18000, mutating: true, features: Object.freeze(["preferred-model"]) }),
+  applyPreferredModel: command({ timeoutMs: 50000, mutating: true, features: Object.freeze(["preferred-model"]) }),
   cancelPreferredModelApply: command({ timeoutMs: 2000, mutating: true, features: Object.freeze(["preferred-model"]) }),
   setMessageNavigator: command({ timeoutMs: 6000, mutating: true, features: Object.freeze(["message-navigator"]) }),
   hideMessageNavigatorMenu: command({ timeoutMs: 2000, mutating: true, features: Object.freeze(["message-navigator"]) }),

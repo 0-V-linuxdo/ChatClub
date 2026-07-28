@@ -1,3 +1,8 @@
+import {
+  createPreferredNotionSourcesCapability,
+  NOTION_ALL_SOURCES_STATES
+} from "./preferred-notion-sources.js";
+
 export function createPreferredNotionDeepSeekCapability(deps = {}) {
   const {
     normalize,
@@ -8,8 +13,10 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
     isDisabledElement,
     assertPreferredModelRun,
     preferredModelActivate,
+    preferredModelPointerActivate,
     waitForPreferredModel,
     modelElementArea,
+    modelEventConstructor,
     preferredModelSleep,
     dismissPreferredModelMenu,
     preferredModelResult,
@@ -29,17 +36,26 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
   const NOTION_MODEL_TARGETS = Object.freeze({
     auto: Object.freeze({ id: "auto", label: "Auto", aliases: ["Automatic"] }),
     sonnet46: Object.freeze({ id: "sonnet46", label: "Claude Sonnet 4.6", aliases: ["Sonnet 4.6"] }),
+    sonnet5: Object.freeze({ id: "sonnet5", label: "Claude Sonnet 5", aliases: ["Sonnet 5"] }),
     opus47: Object.freeze({ id: "opus47", label: "Claude Opus 4.7", aliases: ["Opus 4.7"] }),
     opus48: Object.freeze({ id: "opus48", label: "Claude Opus 4.8", aliases: ["Opus 4.8"] }),
-    gemini31pro: Object.freeze({ id: "gemini31pro", label: "Gemini 3.1 Pro", aliases: ["Gemini Pro"] }),
+    opus5: Object.freeze({ id: "opus5", label: "Claude Opus 5", aliases: ["Opus 5"] }),
+    fable5: Object.freeze({ id: "fable5", label: "Claude Fable 5", aliases: ["Fable 5"] }),
+    gemini31pro: Object.freeze({ id: "gemini31pro", label: "Gemini 3.1 Pro", aliases: [] }),
+    gemini35flash: Object.freeze({ id: "gemini35flash", label: "Gemini 3.5 Flash", aliases: [] }),
+    gpt56sol: Object.freeze({ id: "gpt56sol", label: "GPT-5.6 Sol", aliases: ["GPT 5.6 Sol"] }),
+    gpt56terra: Object.freeze({ id: "gpt56terra", label: "GPT-5.6 Terra", aliases: ["GPT 5.6 Terra"] }),
     gpt52: Object.freeze({ id: "gpt52", label: "GPT-5.2", aliases: ["GPT 5.2"] }),
     gpt54: Object.freeze({ id: "gpt54", label: "GPT-5.4", aliases: ["GPT 5.4"] }),
     gpt55: Object.freeze({ id: "gpt55", label: "GPT-5.5", aliases: ["GPT 5.5"] }),
-    grok43: Object.freeze({ id: "grok43", label: "Grok 4.3", aliases: ["Grok 43", "grok43"] }),
-    grokBuild01: Object.freeze({ id: "grokBuild01", label: "Grok Build 0.1", aliases: ["Grok Build 01", "Grok Build"] }),
-    kimi26: Object.freeze({ id: "kimi26", label: "Kimi K2.6", aliases: ["Kimi K2.6"] }),
-    deepseekV4Pro: Object.freeze({ id: "deepseekV4Pro", label: "DeepSeek V4 Pro", aliases: ["DeepSeek V4"] }),
-    glm52: Object.freeze({ id: "glm52", label: "GLM 5.2", aliases: ["GLM-5.2", "GLM"] })
+    grok43: Object.freeze({ id: "grok43", label: "Grok 4.3", aliases: [] }),
+    grok45: Object.freeze({ id: "grok45", label: "Grok 4.5", aliases: [] }),
+    grokBuild01: Object.freeze({ id: "grokBuild01", label: "Grok Build 0.1", aliases: ["Grok Build 01"] }),
+    kimi26: Object.freeze({ id: "kimi26", label: "Kimi K2.6", aliases: [] }),
+    kimi27code: Object.freeze({ id: "kimi27code", label: "Kimi K2.7 Code", aliases: [] }),
+    kimi3: Object.freeze({ id: "kimi3", label: "Kimi K3", aliases: [] }),
+    deepseekV4Pro: Object.freeze({ id: "deepseekV4Pro", label: "DeepSeek V4 Pro", aliases: [] }),
+    glm52: Object.freeze({ id: "glm52", label: "GLM 5.2", aliases: ["GLM-5.2"] })
   });
 
   const NOTION_MODEL_TRIGGER_SELECTORS = Object.freeze([
@@ -58,6 +74,17 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
     '[role="combobox"]',
     "button"
   ]);
+  const NOTION_MODEL_DIRECT_TRIGGER_SELECTORS = Object.freeze([
+    '[data-testid="agent-chat-model-button"]',
+    '[data-testid="unified-chat-model-button"]'
+  ]);
+  const NOTION_MODEL_TRIGGER_WAIT_MS = 3500;
+  const NOTION_MODEL_TRIGGER_HYDRATION_WAIT_MS = 600;
+  const NOTION_MODEL_TRIGGER_HYDRATION_SAMPLES = 2;
+  const NOTION_MODEL_MENU_OPEN_WAIT_MS = 2200;
+  const NOTION_MODEL_ITEM_READY_WAIT_MS = 800;
+  const NOTION_MODEL_SETTLE_WAIT_MS = 2200;
+  const NOTION_MODEL_MENU_CLOSE_WAIT_MS = 700;
   const NOTION_MODEL_MENU_ROOT_SELECTORS = Object.freeze([
     '[role="menu"]',
     '[role="listbox"]',
@@ -78,7 +105,7 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
     "button",
     '[tabindex]:not([tabindex="-1"])'
   ]);
-
+  const notionOwnedMenuRoots = new WeakMap();
   function notionText(value) {
     return normalize(value).toLowerCase().replace(/\s+/g, " ");
   }
@@ -89,32 +116,67 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
       .filter(Boolean);
   }
 
+  function notionTextEvidence(value) {
+    const evidence = new Set();
+    const add = (candidate) => {
+      const normalized = notionText(candidate);
+      if (normalized) evidence.add(normalized);
+    };
+    const raw = String(value || "");
+    add(raw);
+    for (const line of raw.split(/[\r\n\u2028\u2029]+/)) add(line);
+    return [...evidence];
+  }
+
   function notionTextLooksLikeTarget(value, target) {
-    const textValue = notionText(value);
-    if (!textValue || !target) return false;
-    if (notionLabels(target).some((label) => textValue === label || textValue.includes(label))) return true;
-    if (target.id === "gemini31pro") return textValue.includes("gemini") && textValue.includes("pro");
-    if (target.id === "opus48") return textValue.includes("opus") && textValue.includes("4.8");
-    if (target.id === "opus47") return textValue.includes("opus") && textValue.includes("4.7");
-    if (target.id === "sonnet46") return textValue.includes("sonnet") && textValue.includes("4.6");
-    if (target.id === "grok43") return textValue.includes("grok") && textValue.includes("4.3");
-    if (target.id === "grokBuild01") return textValue.includes("grok") && textValue.includes("build");
-    if (target.id === "deepseekV4Pro") return textValue.includes("deepseek") && textValue.includes("v4");
-    if (target.id === "kimi26") return textValue.includes("kimi") && textValue.includes("k2.6");
-    if (target.id === "glm52") return textValue.includes("glm") && textValue.includes("5.2");
-    return false;
+    if (!target) return false;
+    const labels = notionLabels(target);
+    return notionTextEvidence(value).some((candidate) => labels.includes(candidate));
   }
 
-  function notionModelIdFromText(value) {
-    for (const [id, target] of Object.entries(NOTION_MODEL_TARGETS)) {
-      if (notionTextLooksLikeTarget(value, target)) return id;
+  function notionModelIdsFromEvidence(evidence) {
+    const ids = new Set();
+    for (const candidate of evidence) {
+      for (const [id, target] of Object.entries(NOTION_MODEL_TARGETS)) {
+        if (notionLabels(target).includes(candidate)) ids.add(id);
+      }
     }
-    return "";
+    return ids;
   }
 
-  function countNotionModelTargets(value) {
-    return Object.values(NOTION_MODEL_TARGETS)
-      .reduce((count, target) => count + (notionTextLooksLikeTarget(value, target) ? 1 : 0), 0);
+  function notionElementTextEvidence(element) {
+    if (!element) return [];
+    const evidence = new Set();
+    const add = (value) => {
+      for (const candidate of notionTextEvidence(value)) evidence.add(candidate);
+    };
+    const nodes = [element];
+    try { nodes.push(...element.querySelectorAll?.("*") || []); } catch {}
+    for (const node of nodes) {
+      add(node.getAttribute?.("aria-label"));
+      add(node.getAttribute?.("aria-valuetext"));
+      add(node.getAttribute?.("title"));
+      add(node.getAttribute?.("data-value"));
+      add(node.getAttribute?.("value"));
+      add(node.innerText || node.textContent || "");
+      add(node.value);
+      add(modelElementText(node));
+    }
+    return [...evidence];
+  }
+
+  function notionModelIdsFromElement(element) {
+    return notionModelIdsFromEvidence(notionElementTextEvidence(element));
+  }
+
+  function notionElementLooksLikeTarget(element, target) {
+    if (!element || !target) return false;
+    return notionElementTextEvidence(element).some((candidate) => notionTextLooksLikeTarget(candidate, target));
+  }
+
+  function notionModelIdFromElement(element) {
+    const ids = notionModelIdsFromElement(element);
+    return ids.size === 1 ? [...ids][0] : "";
   }
 
   function notionViewportSize() {
@@ -124,8 +186,22 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
     };
   }
 
+  function notionResponsiveComposerMinWidth(wideMinimum) {
+    const viewportWidth = notionViewportSize().width;
+    if (!(viewportWidth > 0)) return wideMinimum;
+    // Notion keeps the same bottom composer in narrow split panes, where the
+    // iframe itself can be only about 308px wide. Keep the wide-layout guard,
+    // but allow a narrow composer only when it still spans most of its viewport.
+    return Math.min(wideMinimum, Math.max(216, Math.floor(viewportWidth * 0.7)));
+  }
+
   function isLikelyNotionMainComposerRect(rect) {
-    if (!rect || rect.width < 280 || rect.height < 40 || rect.height > 280) return false;
+    if (
+      !rect
+      || rect.width < notionResponsiveComposerMinWidth(280)
+      || rect.height < 40
+      || rect.height > 280
+    ) return false;
     const viewport = notionViewportSize();
     if (viewport.width > 0 && rect.right < viewport.width * 0.35) return false;
     if (viewport.height > 0 && rect.bottom < viewport.height * 0.28) return false;
@@ -161,12 +237,12 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
   function findNotionComposerRoot() {
     const selector = [
       "textarea",
+      'input[role="textbox"]',
       '[contenteditable="true"]',
       '[role="textbox"]',
       '[data-placeholder]',
       '[aria-placeholder]',
-      "form",
-      "div"
+      "form"
     ].join(", ");
     const candidates = [];
     const seen = new Set();
@@ -179,7 +255,12 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
       let bestScore = -1;
       while (node && node.nodeType === 1 && node !== document.body) {
         const rect = modelRect(node);
-        if (rect && rect.width >= 320 && rect.height >= 44 && rect.height <= 260) {
+        if (
+          rect
+          && rect.width >= notionResponsiveComposerMinWidth(320)
+          && rect.height >= 44
+          && rect.height <= 260
+        ) {
           best = node;
         }
         node = node.parentElement || null;
@@ -207,37 +288,52 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
   function scoreNotionModelTrigger(element, options = {}) {
     if (!element || !visible(element) || (!options.allowDisabled && isDisabledElement(element))) return -1;
     if (element.closest?.(NOTION_MODEL_MENU_ROOT_SELECTORS.join(", "))) return -1;
-    const textValue = modelElementText(element);
     const dataTestId = String(element.getAttribute?.("data-testid") || "").toLowerCase();
     const ariaLabel = String(element.getAttribute?.("aria-label") || "");
     const title = String(element.getAttribute?.("title") || "");
     const popup = String(element.getAttribute?.("aria-haspopup") || "").trim().toLowerCase();
     const nearMainComposer = isNotionModelTriggerNearMainComposer(element, options.composerRoot || null, options.composerRect || null);
-    let score = 0;
+    let semanticScore = 0;
+    if (dataTestId === "agent-chat-model-button" || dataTestId === "unified-chat-model-button") semanticScore += 1000;
+    if (dataTestId.includes("model")) semanticScore += 500;
+    if (/\bmodel\b|模型/i.test(ariaLabel)) semanticScore += 420;
+    if (/\bmodel\b|模型/i.test(title)) semanticScore += 320;
+    if (notionModelIdFromElement(element)) semanticScore += 360;
+    if (semanticScore <= 0) return -1;
+    let score = semanticScore;
     if (nearMainComposer) score += 900;
     if (options.composerRoot && !nearMainComposer) score -= 420;
-    if (dataTestId === "unified-chat-model-button") score += 1000;
-    if (dataTestId.includes("model")) score += 500;
-    if (/\bmodel\b|模型/i.test(ariaLabel)) score += 420;
-    if (/\bmodel\b|模型/i.test(title)) score += 320;
-    if (notionModelIdFromText(textValue)) score += 360;
     if (popup === "menu" || popup === "listbox") score += 80;
-    if (notionText(textValue) === "auto" || notionTextLooksLikeTarget(textValue, NOTION_MODEL_TARGETS.auto)) score += 80;
+    if (notionElementLooksLikeTarget(element, NOTION_MODEL_TARGETS.auto)) score += 80;
     return score > 0 ? score : -1;
   }
 
   function findNotionModelControl({ allowDisabled = false } = {}) {
-    const composerRoot = findNotionComposerRoot();
-    const composerRect = modelRect(composerRoot);
-    const candidates = visibleSelectorElements(NOTION_MODEL_TRIGGER_SELECTORS)
+    const directCandidates = [...new Set(visibleSelectorElements(NOTION_MODEL_DIRECT_TRIGGER_SELECTORS))]
       .map((element) => ({
         element,
-        score: scoreNotionModelTrigger(element, { composerRoot, composerRect, allowDisabled }),
+        score: scoreNotionModelTrigger(element, { allowDisabled }),
         bottom: Number(element.getBoundingClientRect?.().bottom || 0)
       }))
       .filter((item) => item.score > 0);
+    directCandidates.sort((a, b) => b.score - a.score || b.bottom - a.bottom);
+    if (directCandidates.length > 0) {
+      return directCandidates.length === 1 ? directCandidates[0].element : null;
+    }
+
+    const composerRoot = findNotionComposerRoot();
+    if (!composerRoot) return null;
+    const composerRect = modelRect(composerRoot);
+    const candidates = [...new Set(visibleSelectorElements(NOTION_MODEL_TRIGGER_SELECTORS))]
+      .map((element) => ({
+        element,
+        score: scoreNotionModelTrigger(element, { composerRoot, composerRect, allowDisabled }),
+        nearMainComposer: isNotionModelTriggerNearMainComposer(element, composerRoot, composerRect),
+        bottom: Number(element.getBoundingClientRect?.().bottom || 0)
+      }))
+      .filter((item) => item.nearMainComposer && item.score > 0);
     candidates.sort((a, b) => b.score - a.score || b.bottom - a.bottom);
-    return candidates[0]?.element || null;
+    return candidates.length === 1 ? candidates[0].element : null;
   }
 
   function findNotionModelTrigger() {
@@ -255,54 +351,87 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
     let score = 0;
     if (normalized.includes("select a model")) score += 160;
     if (normalized.includes("open models")) score += 80;
-    score += Math.min(5, countNotionModelTargets(textValue)) * 80;
+    score += Math.min(5, notionModelIdsFromElement(root).size) * 80;
     return score >= 160 ? score : -1;
   }
 
-  function notionModelMenuRoot(trigger = null) {
+  function notionModelMenuRoots() {
+    const roots = [...new Set(visibleSelectorElements(NOTION_MODEL_MENU_ROOT_SELECTORS))]
+      .filter((element) => scoreNotionModelMenuRoot(element) > 0);
+    return roots.filter((root) => !roots.some((candidate) => (
+      candidate !== root && root.contains?.(candidate)
+    )));
+  }
+
+  function notionControlledModelMenuRoot(trigger) {
     const controlsId = String(trigger?.getAttribute?.("aria-controls") || "").trim();
-    if (controlsId) {
-      const controlled = document.getElementById(controlsId);
-      if (scoreNotionModelMenuRoot(controlled) > 0) return controlled;
+    if (!controlsId) return null;
+    let controlled = [];
+    const escapeId = globalThis.CSS?.escape;
+    if (typeof document.querySelectorAll === "function" && typeof escapeId === "function") {
+      try {
+        controlled = [...document.querySelectorAll(`#${escapeId(controlsId)}`)];
+      } catch {}
+    } else {
+      const element = document.getElementById?.(controlsId);
+      if (element) controlled = [element];
     }
-    const roots = visibleSelectorElements(NOTION_MODEL_MENU_ROOT_SELECTORS)
-      .map((element) => ({ element, score: scoreNotionModelMenuRoot(element) }))
-      .filter((item) => item.score > 0)
-      .sort((a, b) => b.score - a.score);
-    return roots[0]?.element || null;
+    return controlled.length === 1 && scoreNotionModelMenuRoot(controlled[0]) > 0
+      ? controlled[0]
+      : null;
+  }
+
+  function notionModelMenuRoot(trigger = null) {
+    if (!trigger) return null;
+    const controlled = notionControlledModelMenuRoot(trigger);
+    if (controlled) return controlled;
+    const owned = notionOwnedMenuRoots.get(trigger);
+    if (scoreNotionModelMenuRoot(owned) > 0) return owned;
+    notionOwnedMenuRoots.delete(trigger);
+    return null;
   }
 
   async function openNotionModelMenu(context, trigger) {
     assertPreferredModelRun(context);
     const existing = notionModelMenuRoot(trigger);
     if (existing) return existing;
+    const baselineRoots = new Set(notionModelMenuRoots());
     if (!trigger || !preferredModelActivate(context, trigger)) return null;
-    return waitForPreferredModel(context, () => notionModelMenuRoot(trigger), 3000, 120);
+    return waitForPreferredModel(context, () => {
+      const controlled = notionControlledModelMenuRoot(trigger);
+      if (controlled) {
+        notionOwnedMenuRoots.set(trigger, controlled);
+        return controlled;
+      }
+      const opened = notionModelMenuRoots().filter((root) => !baselineRoots.has(root));
+      if (opened.length !== 1) return null;
+      notionOwnedMenuRoots.set(trigger, opened[0]);
+      return opened[0];
+    }, NOTION_MODEL_MENU_OPEN_WAIT_MS, 120);
   }
 
-  function notionMenuItemRow(element, root, matchesSpec = null) {
+  function notionMenuItemRow(element, root, modelId = "") {
     const rootArea = modelElementArea(root);
     const rootRect = modelRect(root);
     let bestRoleRow = null;
     let bestAction = null;
     let bestRowLike = null;
-    let fallback = null;
     let node = element;
     while (node && node.nodeType === 1 && node !== root) {
-      if (!visible(node) || isDisabledElement(node)) {
+      if (!visible(node)) {
         node = node.parentElement || null;
         continue;
       }
+      if (isDisabledElement(node)) return null;
 
-      const textValue = modelElementText(node);
-      const targetCount = countNotionModelTargets(textValue);
+      const targetIds = notionModelIdsFromElement(node);
       const area = modelElementArea(node);
       if (rootArea > 0 && area >= rootArea * 0.85) break;
-      if (typeof matchesSpec === "function" && !matchesSpec(node)) {
+      if (modelId && !targetIds.has(modelId)) {
         node = node.parentElement || null;
         continue;
       }
-      if (targetCount > 1) {
+      if (targetIds.size > 1) {
         node = node.parentElement || null;
         continue;
       }
@@ -321,30 +450,27 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
 
       if (roleRowLike && !bestRoleRow) bestRoleRow = node;
       if (actionLike && !bestAction) bestAction = node;
-      if (rowLike && !bestRowLike) bestRowLike = node;
-      if (!fallback) fallback = node;
+      if (rowLike) bestRowLike = node;
       node = node.parentElement || null;
     }
-    return bestRoleRow || bestAction || bestRowLike || fallback || element;
+    return bestRoleRow || bestAction || bestRowLike || null;
   }
 
   function scoreNotionModelItem(element, modelId) {
     if (!element || !visible(element) || isDisabledElement(element)) return Number.NEGATIVE_INFINITY;
-    const textValue = modelElementText(element);
     const target = NOTION_MODEL_TARGETS[modelId];
+    if (!target || !notionElementLooksLikeTarget(element, target)) return Number.NEGATIVE_INFINITY;
     let score = 0;
     const role = String(element.getAttribute?.("role") || "").toLowerCase();
     const tag = String(element.tagName || "").toLowerCase();
     const tabIndex = String(element.getAttribute?.("tabindex") || "").trim();
-    const targetCount = countNotionModelTargets(textValue);
+    const targetCount = notionModelIdsFromElement(element).size;
     if (role === "menuitem" || role === "menuitemradio" || role === "option") score += 900;
     if (tag === "button" || role === "button") score += 360;
     if (tabIndex && tabIndex !== "-1") score += 120;
     if (targetCount === 1) score += 260;
     if (targetCount > 1) score -= 700;
-    if (notionTextLooksLikeTarget(textValue, target)) score += 620;
-    const labels = notionLabels(target);
-    if (labels.includes(notionText(textValue))) score += 260;
+    score += 880;
     const rect = modelRect(element);
     if (rect && rect.height >= 24 && rect.height <= 72) score += 100;
     if (rect && rect.width >= 120) score += 40;
@@ -355,32 +481,33 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
   function findNotionModelItem(root, modelId) {
     if (!root || !NOTION_MODEL_TARGETS[modelId]) return null;
     const target = NOTION_MODEL_TARGETS[modelId];
-    const matchesSpec = (element) => notionTextLooksLikeTarget(modelElementText(element), target);
     const seenRows = new Set();
     const rows = [];
     const add = (element) => {
-      if (!element || !matchesSpec(element)) return;
-      const row = notionMenuItemRow(element, root, matchesSpec);
-      if (!row || seenRows.has(row) || !root.contains?.(row)) return;
-      if (!matchesSpec(row)) return;
-      if (countNotionModelTargets(modelElementText(row)) > 1) return;
+      if (!element || isDisabledElement(element) || !notionElementLooksLikeTarget(element, target)) return;
+      const row = notionMenuItemRow(element, root, modelId);
+      if (!row || isDisabledElement(row) || seenRows.has(row) || !root.contains?.(row)) return;
+      const targetIds = notionModelIdsFromElement(row);
+      if (targetIds.size !== 1 || !targetIds.has(modelId)) return;
+      if (!Number.isFinite(scoreNotionModelItem(row, modelId))) return;
       seenRows.add(row);
       rows.push(row);
     };
     for (const element of visibleSelectorElements(NOTION_MODEL_MENU_ITEM_SELECTORS, root)) add(element);
     for (const element of visibleSelectorElements(["div", "span", "button"], root)) add(element);
     rows.sort((a, b) => scoreNotionModelItem(b, modelId) - scoreNotionModelItem(a, modelId));
-    return rows[0] || null;
+    return rows.length === 1 ? rows[0] : null;
   }
 
   function notionElementHasSelectedState(element) {
     if (!element) return false;
-    for (const attr of ["aria-checked", "aria-selected", "aria-current", "data-state", "data-selected", "data-active", "data-checked"]) {
+    for (const attr of ["aria-checked", "aria-selected", "aria-current", "aria-pressed", "data-state", "data-selected", "data-active", "data-checked"]) {
       const value = String(element.getAttribute?.(attr) || "").trim().toLowerCase();
-      if (value === "true" || value === "checked" || value === "selected" || value === "active" || value === "page") return true;
+      if (["true", "checked", "selected", "active", "on", "page", "step", "location", "date", "time"].includes(value)) return true;
     }
     const className = String(element.className || "");
-    return /\b(?:selected|checked|active)\b/i.test(className) && !/\b(?:unselected|inactive|unchecked)\b/i.test(className);
+    return /\b(?:selected|checked|active)\b/i.test(className)
+      && !/\b(?:not[-_\s]?(?:selected|checked|active)|unselected|inactive|unchecked)\b/i.test(className);
   }
 
   function notionRowHasRightCheckMarker(row) {
@@ -388,10 +515,12 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
     if (!rowRect || rowRect.width <= 0 || rowRect.height <= 0) return false;
     if (/[✓✔]/.test(String(row?.innerText || row?.textContent || ""))) return true;
     for (const marker of visibleSelectorElements([
-      "[aria-label*='check' i]",
-      "[aria-label*='selected' i]",
-      "[data-testid*='check' i]",
-      "[class*='check' i]",
+      "[aria-label]",
+      "[data-testid]",
+      "[class]",
+      "[title]",
+      "[data-icon]",
+      "[data-icon-name]",
       "svg"
     ], row)) {
       if (notionElementHasSelectedState(marker)) return true;
@@ -400,14 +529,12 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
         marker.getAttribute?.("data-testid"),
         marker.getAttribute?.("class"),
         marker.getAttribute?.("title"),
+        marker.getAttribute?.("data-icon"),
+        marker.getAttribute?.("data-icon-name"),
         marker.innerText || marker.textContent || ""
       ].filter(Boolean).join(" ");
+      if (/\b(?:not[ -]?selected|unselected|unchecked|not[ -]?checked|inactive)\b/i.test(label)) continue;
       if (/\b(?:check|checked|selected|done)\b|✓|✔/i.test(label)) return true;
-      const rect = modelRect(marker);
-      if (!rect || rect.width < 5 || rect.height < 5 || rect.width > 32 || rect.height > 32) continue;
-      const nearRight = rect.left >= rowRect.left + rowRect.width * 0.66 && rect.right <= rowRect.right + 10;
-      const verticallyInside = rect.top >= rowRect.top - 3 && rect.bottom <= rowRect.bottom + 3;
-      if (nearRight && verticallyInside) return true;
     }
     return false;
   }
@@ -419,6 +546,7 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
       "[aria-checked]",
       "[aria-selected]",
       "[aria-current]",
+      "[aria-pressed]",
       "[data-state]",
       "[data-selected]",
       "[data-active]",
@@ -437,9 +565,9 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
       if (!element) return;
       const row = notionMenuItemRow(element, root);
       if (!row || seenRows.has(row) || !root.contains?.(row)) return;
-      const textValue = modelElementText(row);
-      if (countNotionModelTargets(textValue) !== 1) return;
-      const id = notionModelIdFromText(textValue);
+      const targetIds = notionModelIdsFromElement(row);
+      if (targetIds.size !== 1) return;
+      const id = [...targetIds][0];
       if (!id || !notionRowLooksSelected(row)) return;
       seenRows.add(row);
       rows.push({ element: row, id, score: scoreNotionModelItem(row, id) });
@@ -447,34 +575,22 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
     for (const element of visibleSelectorElements(NOTION_MODEL_MENU_ITEM_SELECTORS, root)) add(element);
     for (const element of visibleSelectorElements(["div", "span", "button", "svg"], root)) add(element);
     rows.sort((a, b) => b.score - a.score);
-    return rows[0]?.id || "";
+    return rows.length === 1 ? rows[0].id : "";
   }
 
   function currentNotionModelId(trigger = null) {
     const selected = selectedNotionModelId(notionModelMenuRoot(trigger));
     if (selected) return selected;
     const triggerElement = trigger && visible(trigger) ? trigger : findNotionModelIndicator();
-    return notionModelIdFromText(modelElementText(triggerElement));
-  }
-
-  async function waitNotionReadableCurrentModelId(context, trigger = null, timeoutMs = 2200) {
-    const deadline = Date.now() + Math.max(0, Number(timeoutMs) || 0);
-    while (Date.now() <= deadline) {
-      assertPreferredModelRun(context);
-      const current = currentNotionModelId(trigger);
-      if (current) return current;
-      await preferredModelSleep(context, 120);
-    }
-    assertPreferredModelRun(context);
-    return currentNotionModelId(trigger);
+    return notionModelIdFromElement(triggerElement);
   }
 
   async function closeNotionModelMenu(context, trigger = null) {
-    return dismissPreferredModelMenu(context, () => notionModelMenuRoot(trigger), 900);
+    return dismissPreferredModelMenu(context, () => notionModelMenuRoot(trigger), NOTION_MODEL_MENU_CLOSE_WAIT_MS);
   }
 
   async function waitNotionModelSettled(context, modelId, trigger) {
-    const deadline = Date.now() + 3000;
+    const deadline = Date.now() + NOTION_MODEL_SETTLE_WAIT_MS;
     while (Date.now() <= deadline) {
       assertPreferredModelRun(context);
       const current = currentNotionModelId(trigger);
@@ -486,18 +602,62 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
     return final === modelId;
   }
 
+  async function waitNotionModelItemOrCurrent(context, modelId, trigger) {
+    return waitForPreferredModel(context, () => {
+      if (currentNotionModelId(trigger) === modelId) return { current: true, item: null };
+      const activeRoot = notionModelMenuRoot(trigger);
+      const item = findNotionModelItem(activeRoot, modelId);
+      return item ? { current: false, item } : null;
+    }, NOTION_MODEL_ITEM_READY_WAIT_MS, 80);
+  }
+
+  function notionTriggerModelId(trigger) {
+    return notionModelIdFromElement(trigger);
+  }
+
+  async function waitNotionTriggerHydration(context, modelId, trigger, deadlineAt) {
+    const initialModelId = notionTriggerModelId(trigger);
+    if (initialModelId === modelId) return { current: true, modelId: initialModelId };
+    if (initialModelId && initialModelId !== "auto") return { current: false, modelId: initialModelId };
+
+    const timeoutMs = Math.min(
+      NOTION_MODEL_TRIGGER_HYDRATION_WAIT_MS,
+      Math.max(0, Number(deadlineAt || 0) - Date.now())
+    );
+    if (timeoutMs <= 0) return { current: false, modelId: initialModelId };
+
+    let targetSamples = 0;
+    const readiness = await waitForPreferredModel(context, () => {
+      const currentModelId = notionTriggerModelId(trigger);
+      if (currentModelId === modelId) {
+        targetSamples += 1;
+        return targetSamples >= NOTION_MODEL_TRIGGER_HYDRATION_SAMPLES
+          ? { current: true, modelId: currentModelId }
+          : null;
+      }
+      targetSamples = 0;
+      if (currentModelId && currentModelId !== "auto") {
+        return { current: false, modelId: currentModelId };
+      }
+      return null;
+    }, timeoutMs, 80);
+    return readiness || { current: false, modelId: notionTriggerModelId(trigger) };
+  }
+
   async function applyNotionPreferredModel(context, modelId) {
     if (!NOTION_MODEL_TARGETS[modelId]) return preferredModelResult(context, false, "NotionAI", modelId, "unknown model");
-    if ((await waitNotionReadableCurrentModelId(context, null, 1600)) === modelId) {
+    if (currentNotionModelId() === modelId) {
       const menuClosed = await closeNotionModelMenu(context);
       return preferredModelResult(context, true, "NotionAI", modelId, "", { skipped: true, menuClosed });
     }
-    const trigger = await waitForPreferredModel(context, findNotionModelTrigger, 10000, 150);
+    const triggerDeadlineAt = Date.now() + NOTION_MODEL_TRIGGER_WAIT_MS;
+    const trigger = await waitForPreferredModel(context, findNotionModelTrigger, NOTION_MODEL_TRIGGER_WAIT_MS, 150);
     if (!trigger) {
       await closeNotionModelMenu(context);
       return preferredModelResult(context, false, "NotionAI", modelId, "model trigger not found", { retryable: true });
     }
-    if ((await waitNotionReadableCurrentModelId(context, trigger, 2200)) === modelId) {
+    const triggerReadiness = await waitNotionTriggerHydration(context, modelId, trigger, triggerDeadlineAt);
+    if (triggerReadiness.current) {
       const menuClosed = await closeNotionModelMenu(context, trigger);
       return preferredModelResult(context, true, "NotionAI", modelId, "", { skipped: true, menuClosed });
     }
@@ -510,9 +670,20 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
       const menuClosed = await closeNotionModelMenu(context, trigger);
       return preferredModelResult(context, true, "NotionAI", modelId, "", { skipped: true, menuClosed });
     }
-    const item = findNotionModelItem(root, modelId);
+    const immediateItem = findNotionModelItem(root, modelId);
+    const readiness = immediateItem
+      ? { current: false, item: immediateItem }
+      : await waitNotionModelItemOrCurrent(context, modelId, trigger);
+    if (readiness?.current) {
+      const menuClosed = await closeNotionModelMenu(context, trigger);
+      return preferredModelResult(context, true, "NotionAI", modelId, "", { skipped: true, menuClosed });
+    }
+    const item = readiness?.item || null;
     if (!item) {
       const menuClosed = await closeNotionModelMenu(context, trigger);
+      if (currentNotionModelId(trigger) === modelId) {
+        return preferredModelResult(context, true, "NotionAI", modelId, "", { skipped: true, menuClosed });
+      }
       return preferredModelResult(context, false, "NotionAI", modelId, "target model item not found", { menuClosed });
     }
     const clicked = preferredModelActivate(context, item);
@@ -523,6 +694,82 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
     return settled
       ? preferredModelResult(context, true, "NotionAI", modelId, "", { changed: true, menuClosed })
       : preferredModelResult(context, false, "NotionAI", modelId, "selection did not settle", { menuClosed });
+  }
+
+  const notionSources = createPreferredNotionSourcesCapability({
+    normalize,
+    modelElementText,
+    visibleSelectorElements,
+    modelRect,
+    visible,
+    isDisabledElement,
+    assertPreferredModelRun,
+    preferredModelActivate,
+    preferredModelPointerActivate,
+    waitForPreferredModel,
+    modelElementArea,
+    modelEventConstructor,
+    closest,
+    preferredModelResult,
+    findNotionComposerRoot,
+    isNotionControlNearMainComposer: isNotionModelTriggerNearMainComposer
+  });
+
+  async function applyNotionPreferencesTransaction(context, modelId, allSourcesState, sourcesLease) {
+    let modelOutcome = null;
+    let sourceOutcome = null;
+    // Keep a missing Sources control safely retryable before any model click, then
+    // traverse the visible Sources UI only once after the model has settled.
+    if (modelId && allSourcesState) {
+      const sourceTrigger = await notionSources.preflightNotionAllSourcesTrigger(context);
+      assertPreferredModelRun(context);
+      if (!sourceTrigger) {
+        return preferredModelResult(context, false, "NotionAI", modelId, "sources trigger not found", {
+          retryable: true,
+          allSourcesState
+        });
+      }
+    }
+    if (modelId) {
+      modelOutcome = await applyNotionPreferredModel(context, modelId);
+      if (modelOutcome.ok !== true || !allSourcesState) return modelOutcome;
+    }
+    if (allSourcesState) {
+      sourceOutcome = await notionSources.applyNotionAllSourcesPreference(
+        context,
+        modelId,
+        allSourcesState,
+        sourcesLease
+      );
+      if (sourceOutcome.ok !== true || !modelId) return sourceOutcome;
+    }
+    if (currentNotionModelId() !== modelId) {
+      return preferredModelResult(context, false, "NotionAI", modelId, "model changed while applying sources", {
+        menuClosed: sourceOutcome.menuClosed,
+        allSourcesState
+      });
+    }
+    await preferredModelSleep(context, 120);
+    if (currentNotionModelId() !== modelId) {
+      return preferredModelResult(context, false, "NotionAI", modelId, "model was not stable after applying sources", {
+        menuClosed: sourceOutcome.menuClosed,
+        allSourcesState
+      });
+    }
+    const changed = modelOutcome?.changed === true || sourceOutcome.changed === true;
+    return preferredModelResult(context, true, "NotionAI", modelId, "", {
+      changed,
+      skipped: !changed,
+      menuClosed: sourceOutcome.menuClosed,
+      allSourcesState
+    });
+  }
+
+  function applyNotionPreferences(context, modelId, allSourcesState) {
+    return notionSources.runNotionPreferenceOperation(
+      context,
+      (sourcesLease) => applyNotionPreferencesTransaction(context, modelId, allSourcesState, sourcesLease)
+    );
   }
 
   const DEEPSEEK_MODE_TARGETS = Object.freeze({
@@ -678,11 +925,25 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
       "Notion AI": "NotionAI"
     })[rawAppId] || rawAppId;
     const modelId = String(data.modelId || "").trim();
-    if (!appId || !modelId) return preferredModelResult(context, true, appId || "unknown", modelId, "", { skipped: true });
+    const rawAllSourcesState = String(data.allSourcesState || "").trim();
+    const allSourcesState = NOTION_ALL_SOURCES_STATES.includes(rawAllSourcesState) ? rawAllSourcesState : "";
+    if (!appId) return preferredModelResult(context, true, "unknown", modelId, "", { skipped: true });
+    if (appId === "NotionAI") {
+      if (rawAllSourcesState && !allSourcesState) {
+        return preferredModelResult(context, false, appId, modelId, "unknown all sources state");
+      }
+      if (!modelId && !allSourcesState) {
+        return preferredModelResult(context, true, appId, modelId, "", { skipped: true });
+      }
+      if (modelId && !NOTION_MODEL_TARGETS[modelId]) {
+        return preferredModelResult(context, false, appId, modelId, "unknown model");
+      }
+      return applyNotionPreferences(context, modelId, allSourcesState);
+    }
+    if (!modelId) return preferredModelResult(context, true, appId, modelId, "", { skipped: true });
     if (appId === "Gemini") return applyGeminiPreferredModel(context, modelId, { thinkingLevel: data.thinkingLevel });
     if (appId === "Grok") return applyGrokPreferredModel(context, modelId);
     if (appId === "DeepSeek") return applyDeepSeekPreferredModel(context, modelId);
-    if (appId === "NotionAI") return applyNotionPreferredModel(context, modelId);
     return preferredModelResult(context, true, appId, modelId, "", { skipped: true, unsupported: true });
   }
 
@@ -690,10 +951,23 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
     const runId = String(data.runId || `${Date.now()}-${Math.random().toString(36).slice(2)}`);
     abortActivePreferredModelRun("superseded by a newer preferred model run");
     const controller = new AbortController();
+    const rawAppId = String(data.appId || "").trim();
+    const appId = ({
+      "GrokMirror": "Grok",
+      "Grok Mirror": "Grok",
+      "DeepSeek AI": "DeepSeek",
+      "Notion AI": "NotionAI"
+    })[rawAppId] || rawAppId || "unknown";
+    const hasNotionSourcesPreference = appId === "NotionAI"
+      && NOTION_ALL_SOURCES_STATES.includes(String(data.allSourcesState || "").trim());
+    const defaultTimeoutMs = hasNotionSourcesPreference ? 43000 : 12000;
+    const maximumTimeoutMs = hasNotionSourcesPreference ? 44000 : 14000;
+    const timeoutMs = Math.max(1000, Math.min(maximumTimeoutMs, Number(data.timeoutMs) || defaultTimeoutMs));
     const context = {
       runId,
       controller,
       signal: controller.signal,
+      deadlineAt: Date.now() + timeoutMs,
       bridgeGeneration: nextPreferredModelBridgeRunSequence(),
       bridgeToken: "",
       bridgeReleased: false,
@@ -706,17 +980,9 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
     };
     preferredModelState.activeRun = context;
     publishPreferredModelBridgeRun(context);
-    const timeoutMs = Math.max(1000, Math.min(14000, Number(data.timeoutMs) || 12000));
     const timeout = setTimeout(() => {
       abortActivePreferredModelRun("preferred model apply timed out", runId);
     }, timeoutMs);
-    const rawAppId = String(data.appId || "").trim();
-    const appId = ({
-      "GrokMirror": "Grok",
-      "Grok Mirror": "Grok",
-      "DeepSeek AI": "DeepSeek",
-      "Notion AI": "NotionAI"
-    })[rawAppId] || rawAppId || "unknown";
     const modelId = String(data.modelId || "").trim();
     try {
       return await applyPreferredModel(context, data);

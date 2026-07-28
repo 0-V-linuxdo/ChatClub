@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "4b25a56bd08c2508af23fc884a7595f95663bd227768e9548427f9046db01267";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "24a63db0de70fdf6c845e0c7b99ffcc76be9eac6cfef2335bb1c06f608a321c0";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "719d8f56f36ec4f38931fc8156ef7fef9f04aae0b645871786954dfdf241ba64";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.719d8f56f36ec4f38931fc8156ef7fef9f04aae0b645871786954dfdf241ba64";
-  var CONTENT_RUNTIME_DELETE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/delete.js", "entryPath": "content-src/content-delete.js", "sourceSha256": "5a2c490948967822f5abcf55ec4d658804d01e5a78a13a356625bb8dca593f20", "implementationSha256": "a69e1f79c374b949a2061d0c6adc34d9c2d5066f88184bf185f4e195a14763fe", "implementationVersion": "2026.07.16.2+bundle.a69e1f79c374b949a2061d0c6adc34d9c2d5066f88184bf185f4e195a14763fe" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "a130203366b9178fc7f7e5c781304d73091d830727def868a377cc753710ae75";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.a130203366b9178fc7f7e5c781304d73091d830727def868a377cc753710ae75";
+  var CONTENT_RUNTIME_DELETE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/delete.js", "entryPath": "content-src/content-delete.js", "sourceSha256": "f38bd340cbc69438774d38fafa51b5888b56d261803f28f8c57ba4a4efb73e6d", "implementationSha256": "d1c8117a92364b2b5c9156ceb2b9dbe1bc0f67405590140776e24e6811c807c7", "implementationVersion": "2026.07.16.2+bundle.d1c8117a92364b2b5c9156ceb2b9dbe1bc0f67405590140776e24e6811c807c7" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -437,6 +437,14 @@
       })
     })
   );
+  var ARM_GROK_MIRROR_ACCOUNT_SWITCH_REQUEST = /* @__PURE__ */ request(
+    "armGrokMirrorAccountSwitch",
+    /* @__PURE__ */ grokFrameRequest({
+      mutates: true,
+      payload: /* @__PURE__ */ contract({ bridgeVersion: "string" }),
+      response: /* @__PURE__ */ contract({ armed: "boolean", proceed: "boolean" })
+    })
+  );
   var INSTALL_TOPIC_DELETE_USERSCRIPT_REQUEST = /* @__PURE__ */ request(
     "installTopicDeleteUserscript",
     /* @__PURE__ */ directChildFrameRequest({
@@ -467,6 +475,7 @@
     RELAY_FRAME_BINDING_REQUEST,
     RELAY_FRAME_LIFECYCLE_REQUEST,
     SYNC_GROK_SESSION_COOKIES_REQUEST,
+    ARM_GROK_MIRROR_ACCOUNT_SWITCH_REQUEST,
     INSTALL_TOPIC_DELETE_USERSCRIPT_REQUEST,
     EXECUTE_SUMMARY_USERSCRIPT_REQUEST,
     EXECUTE_TOPIC_DELETE_USERSCRIPT_REQUEST
@@ -664,7 +673,7 @@
     grokCookie: contentBundle({
       id: "chatclub-grok-cookie-bridge",
       file: "content/grok-cookie-bridge.js",
-      hosts: ["grok.com"],
+      hosts: ["grok.com", "gk.dairoot.cn"],
       runAt: "document_start"
     }),
     content: contentBundle({ id: "chatclub-content", file: "content/content.js" }),
@@ -706,7 +715,7 @@
     adoptNavigationFocusGuard: command({ timeoutMs: 1200, mutating: true, transport: "main-world", features: Object.freeze(["preferred-model"]) }),
     deleteThread: command({ timeoutMs: 37e3, mutating: true, features: Object.freeze(["delete"]) }),
     getDeleteConfirmState: command({ timeoutMs: 2400, features: Object.freeze(["delete"]) }),
-    applyPreferredModel: command({ timeoutMs: 18e3, mutating: true, features: Object.freeze(["preferred-model"]) }),
+    applyPreferredModel: command({ timeoutMs: 5e4, mutating: true, features: Object.freeze(["preferred-model"]) }),
     cancelPreferredModelApply: command({ timeoutMs: 2e3, mutating: true, features: Object.freeze(["preferred-model"]) }),
     setMessageNavigator: command({ timeoutMs: 6e3, mutating: true, features: Object.freeze(["message-navigator"]) }),
     hideMessageNavigatorMenu: command({ timeoutMs: 2e3, mutating: true, features: Object.freeze(["message-navigator"]) }),
@@ -2781,12 +2790,16 @@
     }
     async function deleteGrokThread() {
       const labels = ["Delete Chat", "Delete chat", "Delete", "删除聊天", "删除"];
+      if (findDeleteConfirmButton() || deleteDialogRoots().length) {
+        return deleteResult(false, "grok", "unverified delete confirmation is already open");
+      }
       const trigger = topRightMenuTrigger({ labels: ["More", "More actions", "Menu", "Options", "更多", "菜单"] });
       if (!trigger) return deleteResult(false, "grok", "conversation menu trigger not found");
       if (!await openTriggerAndClickDelete(trigger, labels)) return deleteResult(false, "grok", "delete menu item not found");
-      const confirmed = await clickDeleteConfirmIfPresent(5200);
-      if (!confirmed && deleteDialogRoots().length) return deleteResult(false, "grok", "delete confirmation did not close");
-      if (!confirmed) return deleteResult(false, "grok", "delete confirmation button not found");
+      await clickDeleteConfirmIfAppears(900, 5200);
+      if (findDeleteConfirmButton() || deleteDialogRoots().length) {
+        return deleteResult(false, "grok", "delete confirmation did not close");
+      }
       return deleteResult(true, "grok");
     }
     const GEMINI_DELETE_CONVERSATION_ACTION_SELECTOR = [

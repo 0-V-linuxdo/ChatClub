@@ -91,6 +91,7 @@ const workspaceBinding = createBindOnceControllerPort("Workspace", [
 ]);
 const frameBridgeWorkspaceBinding = createBindOnceControllerPort("Frame Bridge Workspace", [
   "currentFrames",
+  "ensureFrameAttributeContract",
   "frameApp",
   "iframeForWindow",
   "reapplyMessageNavigatorForFrame",

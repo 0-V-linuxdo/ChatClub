@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name        ChatClub Delete Site - Grok Mirror
 // @namespace   https://chatclub.local/delete-sites
-// @version     2026.07.22.2
+// @version     2026.07.28.1
 // @description Delete the current Grok Mirror conversation when ChatClub or the userscript menu requests it.
 // @match       https://gk.dairoot.cn/*
 // @match       https://*.gk.dairoot.cn/*
@@ -17,7 +17,7 @@
   const SITE_ID = "grokMirror";
   const SITE_NAME = "Grok Mirror";
   const SITE_KEYS = ["grokMirror","Grok Mirror","GrokMirror"];
-  const VERSION = "2026.07.22.2";
+  const VERSION = "2026.07.28.1";
   const REQUEST_EVENT = "chatclub:delete-site:request";
   const VERSIONED_REQUEST_EVENT = REQUEST_EVENT + ":" + VERSION;
   const MENU_COMMAND_EVENT = "chatclub:delete-site:menu-command";
@@ -1201,11 +1201,16 @@
   }
 
   async function deleteTopRight(site, deleteLabels, menuLabels, selectors = []) {
+    if (findDeleteConfirmButton() || deleteDialogRoots().length) {
+      return { ...result(false, "unverified delete confirmation is already open"), site };
+    }
     const trigger = topRightMenuTrigger(menuLabels, selectors);
     if (!trigger) return result(false, "conversation menu trigger not found");
     if (!await openTriggerAndClickDelete(trigger, deleteLabels)) return result(false, "delete menu item not found");
-    const confirmed = await clickDeleteConfirmIfPresent(5200);
-    if (!confirmed) return { ...result(false, "delete confirmation button not found"), site };
+    await clickDeleteConfirmIfAppears(900, 5200);
+    if (findDeleteConfirmButton() || deleteDialogRoots().length) {
+      return { ...result(false, "delete confirmation did not close"), site };
+    }
     return { ...result(true), site };
   }
 

@@ -57,11 +57,19 @@ function createApi(session) {
         }
       }
     },
-    setFrame({ tabId, frameId, documentId, legacyDocumentId = "", url }) {
+    setFrame({
+      tabId,
+      frameId,
+      documentId,
+      legacyDocumentId = "",
+      parentDocumentId = `extension-document-${tabId}`,
+      url
+    }) {
       frames.set(frameKey(tabId, frameId), {
         tabId,
         frameId,
         parentFrameId: 0,
+        parentDocumentId,
         documentId,
         legacyDocumentId,
         url
@@ -89,14 +97,26 @@ function bindingToken(seed) {
   function fixture(session = memorySessionStorage()) {
     const frameApi = createApi(session);
     const registry = createSecureFrameContextRegistry(frameApi.api);
-    async function register({ token, tabId, frameId, documentId = "", browserDocumentId = "", legacyDocumentId = "", url, seed = frameId }) {
+    async function register({
+      token,
+      tabId,
+      frameId,
+      documentId = "",
+      browserDocumentId = "",
+      legacyDocumentId = "",
+      parentDocumentId = `extension-document-${tabId}`,
+      url,
+      seed = frameId,
+      secureFrameToken = bindingToken(seed + 97),
+      frameBindingId = bindingToken(seed)
+    }) {
       const attestation = legacyDocumentId || `legacy:${bindingToken(seed + 151)}`;
-      frameApi.setFrame({ tabId, frameId, documentId, legacyDocumentId: attestation, url });
+      frameApi.setFrame({ tabId, frameId, documentId, legacyDocumentId: attestation, parentDocumentId, url });
       await registry.register({
         bridgeDocumentId: token,
         browserDocumentId: browserDocumentId || attestation,
-        secureFrameToken: bindingToken(seed + 97),
-        frameBindingId: bindingToken(seed),
+        secureFrameToken,
+        frameBindingId,
         bridgeVersion: runtimeIdentity.protocolVersion,
         runtimeIdentity
       }, {
@@ -128,8 +148,102 @@ function bindingToken(seed) {
       const restored = await rehydrated.context(token);
       assert.ok(restored, "a live registration must survive far beyond the former 30-minute idle cutoff");
       assert.equal(restored.documentId, "browser-document-long-lived");
+      assert.equal(restored.parentDocumentId, "extension-document-7");
       const byFrame = await rehydrated.registeredFrameContext(7, 9);
       assert.equal(byFrame?.token, token, "service-worker rehydration must restore frame lookup state");
+    }
+
+    {
+      const parentBound = fixture();
+      const registration = {
+        token: "bridge-document-parent-bound",
+        tabId: 18,
+        frameId: 12,
+        documentId: "browser-document-parent-bound",
+        url: "https://example.com/chat/parent-bound",
+        seed: 72
+      };
+      const token = await parentBound.register({
+        ...registration,
+        parentDocumentId: "extension-parent-before"
+      });
+      const before = await parentBound.registry.context(token);
+      now += 1;
+      await parentBound.register({
+        ...registration,
+        parentDocumentId: "extension-parent-after"
+      });
+      const after = await parentBound.registry.context(token);
+      assert.notStrictEqual(after, before, "a browser-reported parent document change must replace the context");
+      assert.equal(after.parentDocumentId, "extension-parent-after");
+      assert.equal(parentBound.registry.touch(token, before), false);
+    }
+
+    {
+      const notion = fixture();
+      const token = await notion.register({
+        token: "bridge-document-notion-nonce",
+        tabId: 71,
+        frameId: 19,
+        documentId: "browser-document-notion-nonce",
+        url: `https://app.notion.com/ai?mode=new&__chatclub_frame_load_nonce=ccn-${"a".repeat(32)}#composer`
+      });
+      const expected = "https://app.notion.com/ai?mode=new#composer";
+      assert.equal((await notion.registry.context(token))?.url, expected);
+      assert.equal(
+        notion.session.snapshot(FRAME_CONTEXT_SESSION_KEY)?.[token]?.url,
+        expected,
+        "secure-context storage.session must never persist the internal Notion nonce"
+      );
+    }
+
+    {
+      const duplicate = fixture();
+      const registration = {
+        token: "bridge-document-idempotent-registration",
+        tabId: 8,
+        frameId: 10,
+        documentId: "browser-document-idempotent-registration",
+        legacyDocumentId: `legacy:${bindingToken(241)}`,
+        url: "https://example.com/chat/idempotent",
+        seed: 42
+      };
+      const token = await duplicate.register(registration);
+      const firstContext = await duplicate.registry.context(token);
+      const firstRegisteredAt = firstContext.registeredAt;
+
+      now += 10;
+      await duplicate.register(registration);
+      const repeatedContext = await duplicate.registry.context(token);
+      assert.strictEqual(
+        repeatedContext,
+        firstContext,
+        "an exactly identical same-document registration must preserve the in-flight context object"
+      );
+      assert.equal(repeatedContext.registeredAt, now, "an idempotent registration must refresh its registration time");
+      assert.ok(repeatedContext.registeredAt > firstRegisteredAt);
+      assert.equal(
+        duplicate.registry.touch(token, firstContext),
+        true,
+        "an in-flight command must survive an authenticated duplicate registration for the same document"
+      );
+
+      now += 10;
+      await duplicate.register({
+        ...registration,
+        secureFrameToken: bindingToken(250)
+      });
+      const replacedContext = await duplicate.registry.context(token);
+      assert.notStrictEqual(
+        replacedContext,
+        firstContext,
+        "a changed secure token must replace the registered context even when the browser document is unchanged"
+      );
+      assert.equal(
+        duplicate.registry.touch(token, firstContext),
+        false,
+        "a changed secure identity must still invalidate an older in-flight command"
+      );
     }
 
     {

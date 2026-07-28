@@ -1,5 +1,6 @@
 import { captureWorkspaceSnapshotV1, restoreWorkspaceSnapshotV1 } from "./session-state.js";
 import { validateControllerContract } from "../controller-contract.js";
+import { stripNotionFrameLoadNonce } from "../../shared/chat-frame-config.js";
 
 export function createWorkspaceSessionController(dependencies = {}) {
   const { state, services, registry, layout } = validateControllerContract(dependencies, "Workspace session controller", {
@@ -31,10 +32,11 @@ export function createWorkspaceSessionController(dependencies = {}) {
   function currentHrefForWorkspaceTab(chat, framesByInstanceId = null) {
     const instanceId = String(chat?.instanceId || "");
     const iframe = framesByInstanceId?.get(instanceId) || frameForInstance(instanceId);
-    return openableTabUrl(iframe?.dataset?.currentHref)
-      || openableTabUrl(chat?.initialHref)
-      || openableTabUrl(iframe?.getAttribute?.("src"))
-      || openableTabUrl(appById(chat?.appId)?.url);
+    const openableFrameUrl = (value) => openableTabUrl(stripNotionFrameLoadNonce(value));
+    return openableFrameUrl(iframe?.dataset?.currentHref)
+      || openableFrameUrl(chat?.initialHref)
+      || openableFrameUrl(iframe?.getAttribute?.("src"))
+      || openableFrameUrl(appById(chat?.appId)?.url);
   }
 
   function rememberWorkspaceSession() {

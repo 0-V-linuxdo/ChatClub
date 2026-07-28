@@ -74,6 +74,19 @@ function installContentBridge() {
     return true;
   }
 
+  function grokCookieRuntimeAttestation() {
+    try {
+      const registration = runtimes.registration("grok-cookie-bridge-root");
+      const version = String(registration?.version || "");
+      const runtimeIdentity = registration?.api?.runtimeIdentity;
+      return version && runtimeIdentity && typeof runtimeIdentity === "object"
+        ? { version, runtimeIdentity }
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
   function contentLifecycleData() {
     return {
       documentId: contentDocumentId,
@@ -333,7 +346,10 @@ function installContentBridge() {
     routerVersion: CONTENT_RUNTIME_IDENTITY.implementationVersion,
     handlers: {
       getLocationHref: () => location.href,
-      getPageMeta: () => pageMeta(),
+      getPageMeta: () => ({
+        ...pageMeta(),
+        grokCookieRuntime: grokCookieRuntimeAttestation()
+      }),
       getPageText: () => normalize(document.body?.innerText || "")
     }
   });

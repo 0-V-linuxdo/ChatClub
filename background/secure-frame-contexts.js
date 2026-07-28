@@ -1,4 +1,5 @@
 import { APP_NAME } from "../shared/constants.js";
+import { stripNotionFrameLoadNonce } from "../shared/chat-frame-config.js";
 import { normalizeContentRuntimeIdentity } from "../shared/content-runtime-identity.js";
 import {
   assertContentRuntimePackageBundleIdentity,
@@ -7,6 +8,14 @@ import {
 
 const FRAME_CONTEXT_SESSION_KEY = "chatclubSecureFrameContexts";
 const FRAME_CONTEXT_MAX_ENTRIES = 512;
+
+export function normalizeSecureFrameRuntimeAttestation(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const version = String(value.version || "");
+  const runtimeIdentity = value.runtimeIdentity;
+  if (!version || !runtimeIdentity || typeof runtimeIdentity !== "object" || Array.isArray(runtimeIdentity)) return null;
+  return { version, runtimeIdentity: normalizeContentRuntimeIdentity(runtimeIdentity) };
+}
 
 export function createSecureFrameContextRegistry(api) {
   if (!api?.runtime || !api?.webNavigation) throw new TypeError("Secure frame context registry requires the extension API");
@@ -56,9 +65,11 @@ export function createSecureFrameContextRegistry(api) {
             if (!contentRuntimePackageBundleIdentityMatches(runtimeIdentity, "content/content.js")) continue;
             contexts.set(token, {
               ...context,
+              url: stripNotionFrameLoadNonce(context.url),
               runtimeIdentity,
               browserDocumentId: String(context.browserDocumentId || context.documentId || ""),
               legacyDocumentId: String(context.legacyDocumentId || ""),
+              parentDocumentId: String(context.parentDocumentId || ""),
               registeredAt: Number(context.registeredAt || 0),
               lastActiveAt: Number(context.lastActiveAt || context.registeredAt || 0)
             });
@@ -80,6 +91,33 @@ export function createSecureFrameContextRegistry(api) {
       .then(() => api.storage.session.set({ [FRAME_CONTEXT_SESSION_KEY]: value }))
       .catch((error) => console.warn(`[${APP_NAME}] secure frame registry could not be saved`, error));
     return writeChain;
+  }
+
+  function sameRuntimeIdentity(first, second) {
+    try {
+      return JSON.stringify(normalizeContentRuntimeIdentity(first))
+        === JSON.stringify(normalizeContentRuntimeIdentity(second));
+    } catch {
+      return false;
+    }
+  }
+
+  function sameFrameContextIdentity(first, second) {
+    if (!first || !second) return false;
+    const fields = [
+      "tabId",
+      "frameId",
+      "documentId",
+      "browserDocumentId",
+      "legacyDocumentId",
+      "parentDocumentId",
+      "url",
+      "frameBindingId",
+      "secureToken",
+      "bridgeVersion"
+    ];
+    return fields.every((field) => first[field] === second[field])
+      && sameRuntimeIdentity(first.runtimeIdentity, second.runtimeIdentity);
   }
 
   async function register(message = {}, sender = {}) {
@@ -142,6 +180,10 @@ export function createSecureFrameContextRegistry(api) {
     }
     const documentId = senderDocumentId || navigationDocumentId;
     const browserDocumentId = documentId || legacyDocumentId;
+    const parentDocumentId = String(frame.parentDocumentId || "").trim();
+    if (parentDocumentId && parentDocumentId === browserDocumentId) {
+      throw new Error("Secure frame registration parent document is invalid");
+    }
     for (const [existingToken, context] of contexts) {
       if (context?.tabId === tabId && context?.frameId === frameId && existingToken !== token) contexts.delete(existingToken);
     }
@@ -152,7 +194,8 @@ export function createSecureFrameContextRegistry(api) {
       documentId,
       browserDocumentId,
       legacyDocumentId,
-      url: senderUrl,
+      parentDocumentId,
+      url: stripNotionFrameLoadNonce(senderUrl),
       frameBindingId,
       secureToken,
       bridgeVersion: String(message.bridgeVersion || ""),
@@ -160,6 +203,14 @@ export function createSecureFrameContextRegistry(api) {
       registeredAt,
       lastActiveAt: registeredAt
     };
+    const existing = contexts.get(token) || null;
+    if (sameFrameContextIdentity(existing, context)) {
+      existing.registeredAt = registeredAt;
+      existing.lastActiveAt = registeredAt;
+      prune();
+      await persist();
+      return existing;
+    }
     contexts.set(token, context);
     prune();
     await persist();

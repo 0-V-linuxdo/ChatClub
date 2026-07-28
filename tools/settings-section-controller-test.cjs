@@ -153,6 +153,8 @@ globalThis.document = { addEventListener() {} };
   const modelPreferencePane = functionSource(modelsSource, "pane");
   const modelFailurePolicyBlock = functionSource(modelsSource, "failurePolicyBlock");
   const modelPreferenceDrop = functionSource(modelsSource, "drop");
+  const modelAdditionalPreferenceField = functionSource(modelsSource, "additionalPreferenceField");
+  const notionAllSourcesSelect = functionSource(modelsSource, "notionAllSourcesSelect");
   assert.doesNotMatch(
     modelPreferenceRow,
     /failureOverrideSelect/,
@@ -174,10 +176,14 @@ globalThis.document = { addEventListener() {} };
   assert.match(modelPreferenceDrop, /queueOptionsAutoSave\(\{ modelPreferenceOrder \}\)/);
   assert.doesNotMatch(modelPreferenceDrop, /await saveOptionsPatch/, "model-order saves must participate in the autosave drain");
   assert.match(
-    modelPreferenceRow,
+    modelAdditionalPreferenceField,
     /model-preference-thinking-placeholder-field[\s\S]*"aria-hidden": "true"/,
-    "non-Gemini placeholder columns must not expose a label without a control"
+    "platforms without an additional preference must not expose a label without a control"
   );
+  assert.match(modelPreferenceRow, /additionalPreferenceField\(appId\)/);
+  assert.match(notionAllSourcesSelect, /NOTION_ALL_SOURCES_PREFERENCE_KEY/);
+  assert.match(notionAllSourcesSelect, /queueAutoSave/);
+  assert.match(notionAllSourcesSelect, /modelPreferenceAllSourcesAppId: "NotionAI"/);
   assert.deepEqual(stateKeys(historySource), [
     "promptHistoryCursor",
     "promptHistoryDraft",

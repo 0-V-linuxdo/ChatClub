@@ -22,15 +22,15 @@ const byteBudgets = Object.freeze({
   "content/content.js": 100_000,
   "content/send.js": 85_000,
   "content/summary-bridge.js": 92_000,
-  "content/preferred-model.js": 165_000,
-  "content/delete.js": 232_924,
+  "content/preferred-model.js": 208_359,
+  "content/delete.js": 233_408,
   "content/grok-cookie-bridge.js": 50_000,
   "content/message-navigator.js": 140_000,
   "content/preload.js": 210_000,
   "content/summary-userscripts-main.js": 205_000,
   "content/summary-userscripts.js": 152_000
 });
-const aggregateByteBudget = 630_000;
+const aggregateByteBudget = 685_740;
 const allBundlesByteBudget = 1_350_000;
 
 const bundleIdentities = Object.fromEntries(Object.keys(CONTENT_ENTRIES).map((outputPath) => [

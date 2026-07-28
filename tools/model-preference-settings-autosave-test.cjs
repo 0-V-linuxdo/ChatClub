@@ -156,6 +156,10 @@ globalThis.document = {
   const preferenceOrder = ["NotionAI", "DeepSeek", "Gemini", "Grok"];
   const stateModule = await import(moduleUrl("app/state.js"));
   const modelsModule = await import(moduleUrl("app/settings/models.js"));
+  const {
+    MODEL_PREFERENCE_TARGETS,
+    NOTION_ALL_SOURCES_PREFERENCE_KEY
+  } = await import(moduleUrl("shared/constants.js"));
   const { dehydrateOptions, normalizeOptions } = await import(moduleUrl("shared/storage-schema.js"));
   const rootState = stateModule.createAppState();
   rootState.options = {
@@ -201,6 +205,13 @@ globalThis.document = {
   const modelRows = findNodes(pane, (node) => Boolean(node.dataset?.modelPreferenceAppId));
   const modelHeader = findNode(pane, (node) => node.classList?.contains("settings-list-header"));
   const modelSelects = findNodes(pane, (node) => Boolean(node.dataset?.modelPreferenceSelectAppId));
+  const notionModelSelect = modelSelects.find(
+    (node) => node.dataset.modelPreferenceSelectAppId === "NotionAI"
+  );
+  const allSourcesSelect = findNode(
+    pane,
+    (node) => node.dataset?.modelPreferenceAllSourcesAppId === "NotionAI"
+  );
   assert.equal(
     findNode(pane, (node) => node.dataset?.modelPreferenceFailurePolicy === "global"),
     null,
@@ -216,9 +227,47 @@ globalThis.document = {
     preferenceOrder,
     "model controls must follow the saved preference order"
   );
+  const expectedNotionModels = [
+    ["", ""],
+    ["auto", "Auto"],
+    ["sonnet46", "Claude Sonnet 4.6"],
+    ["sonnet5", "Claude Sonnet 5"],
+    ["opus47", "Claude Opus 4.7"],
+    ["opus48", "Claude Opus 4.8"],
+    ["opus5", "Claude Opus 5"],
+    ["fable5", "Claude Fable 5"],
+    ["gemini31pro", "Gemini 3.1 Pro"],
+    ["gemini35flash", "Gemini 3.5 Flash"],
+    ["gpt56sol", "GPT-5.6 Sol"],
+    ["gpt56terra", "GPT-5.6 Terra"],
+    ["gpt52", "GPT-5.2"],
+    ["gpt54", "GPT-5.4"],
+    ["gpt55", "GPT-5.5"],
+    ["grok43", "Grok 4.3"],
+    ["grok45", "Grok 4.5"],
+    ["grokBuild01", "Grok Build 0.1"],
+    ["kimi26", "Kimi K2.6"],
+    ["kimi27code", "Kimi K2.7 Code"],
+    ["kimi3", "Kimi K3"],
+    ["deepseekV4Pro", "DeepSeek V4 Pro"],
+    ["glm52", "GLM 5.2"]
+  ];
+  assert.deepEqual(
+    MODEL_PREFERENCE_TARGETS.NotionAI.map(({ id, label }) => [id, label]),
+    expectedNotionModels,
+    "the canonical Notion settings catalog must include every current model"
+  );
+  assert.deepEqual(
+    notionModelSelect.children.map((node, index) => [
+      node.getAttribute("value"),
+      index === 0 ? "" : node.children[0]?.textContent
+    ]),
+    expectedNotionModels,
+    "the rendered Notion model select must expose every current model in canonical order"
+  );
   assert.ok(
     modelRows.every((node) => node.children.length === 4),
-    "the model list must return to drag, platform, model, and thinking columns"
+    "the model list must keep drag, platform, model, and additional-option columns"
   );
   assert.ok(
     modelRows.every((node) => node.children[0]?.classList?.contains("settings-drag-handle")),
@@ -226,20 +275,84 @@ globalThis.document = {
   );
   assert.equal(modelHeader?.children.length, 4, "the model-list header must match the four row columns");
   assert.ok(
-    modelRows.filter((node) => node.dataset.modelPreferenceAppId !== "Gemini")
+    modelRows.filter((node) => !["Gemini", "NotionAI"].includes(node.dataset.modelPreferenceAppId))
       .every((node) => node.children[3]?.getAttribute("aria-hidden") === "true"),
-    "non-Gemini thinking placeholders must be hidden as complete fields"
+    "platforms without an additional preference must hide the complete placeholder field"
+  );
+  assert.ok(allSourcesSelect, "Notion AI must expose its All sources preference in the fourth column");
+  assert.equal(allSourcesSelect.value, "", "All sources must default to no preference");
+  assert.ok(
+    Boolean(allSourcesSelect.getAttribute("aria-label")?.trim()),
+    "the All sources preference must have an explicit accessible name"
+  );
+  assert.deepEqual(
+    allSourcesSelect.children.map((node) => node.getAttribute("value")),
+    ["", "enabled", "disabled"],
+    "the All sources preference must expose only the normalized tri-state values"
+  );
+  assert.deepEqual(
+    allSourcesSelect.children.map((node) => node.children[0]?.textContent),
+    ["Do not change", "On", "Off"],
+    "the All sources control must explain no-interference, enabled, and disabled states"
+  );
+  assert.ok(
+    ["Gemini", "NotionAI"].every((appId) => modelRows.find(
+      (node) => node.dataset.modelPreferenceAppId === appId
+    )?.classList.contains("model-preference-row-has-additional")),
+    "Gemini and Notion AI must expose their additional preference in compact layouts"
   );
   assert.ok(
     modelRows.every((node) => !findNode(node, (child) => Boolean(child.dataset?.modelPreferenceFailureOverrideAppId))),
     "failure overrides must render in the failure-policy block, not the draggable model rows"
   );
   const renderedSelects = findNodes(pane, (node) => node.tagName === "SELECT");
-  assert.equal(renderedSelects.length, 4, "the preferred tab must render only preferred-model selects");
+  assert.equal(renderedSelects.length, 5, "the preferred tab must render model selects plus Notion All sources");
   assert.ok(
     renderedSelects.every((node) => Boolean(node.getAttribute("aria-label")?.trim())),
-    "every preferred-model select must have an explicit accessible name"
+    "every preferred-model and source select must have an explicit accessible name"
   );
+
+  allSourcesSelect.value = "enabled";
+  allSourcesSelect.dispatch("change");
+  assert.equal(saves.length, 1, "changing All sources must start an autosave");
+  assert.equal(
+    saves[0].patch.modelPreferences[NOTION_ALL_SOURCES_PREFERENCE_KEY],
+    "enabled",
+    "the tri-state value must use the stable persisted key"
+  );
+  saves[0].gate.resolve();
+  await waitUntil(() => !section.autosaveBusy(), "All sources autosave did not settle");
+  assert.equal(
+    ports.preferredModel.options.modelPreferences[NOTION_ALL_SOURCES_PREFERENCE_KEY],
+    "enabled",
+    "the saved All sources preference must become visible to runtime readers"
+  );
+  saves.splice(0);
+
+  const clearButton = findNode(pane, (node) => node.classList?.contains("button-secondary"));
+  assert.ok(clearButton, "the preferred-model pane must expose its Clear action");
+  clearButton.dispatch("click");
+  assert.equal(saves.length, 1, "Clear must persist the default model-preference object");
+  assert.equal(
+    saves[0].patch.modelPreferences[NOTION_ALL_SOURCES_PREFERENCE_KEY],
+    "",
+    "Clear must reset All sources to no preference"
+  );
+  saves[0].gate.resolve();
+  await waitUntil(() => !section.autosaveBusy(), "clearing All sources did not settle");
+  saves.splice(0);
+
+  allSourcesSelect.value = "disabled";
+  allSourcesSelect.dispatch("change");
+  assert.equal(saves.length, 1, "All sources Off must start an autosave");
+  saves[0].gate.resolve();
+  await waitUntil(() => !section.autosaveBusy(), "All sources Off autosave did not settle");
+  assert.equal(
+    ports.preferredModel.options.modelPreferences[NOTION_ALL_SOURCES_PREFERENCE_KEY],
+    "disabled"
+  );
+  saves.splice(0);
+  redrawCalls = 0;
 
   const savesBeforeTabSwitch = saves.length;
   const appliesBeforeTabSwitch = applyPreferredModelCalls;
@@ -316,6 +429,16 @@ globalThis.document = {
   assert.match(modelStyles, /@container[\s\S]*\.model-preference-failure-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
   assert.match(modelStyles, /@container[\s\S]*\.model-preference-list\s*\{[^}]*display:\s*grid[^}]*overflow:\s*visible/s);
   assert.match(modelStyles, /@container[\s\S]*\.model-preference-row\s*\{[^}]*grid-template-columns:\s*24px\s+minmax\(0,\s*1fr\)/);
+  assert.match(
+    modelStyles,
+    /@container[\s\S]*\.model-preference-row-has-thinking,\s*\.model-preference-row-has-additional\s*\{[^}]*"drag thinking"/s,
+    "compact Gemini and Notion rows must allocate the additional-option row"
+  );
+  assert.match(
+    modelStyles,
+    /@container[\s\S]*\.model-preference-thinking-field,\s*\.model-preference-additional-field\s*\{[^}]*grid-area:\s*thinking/s,
+    "the additional preference must occupy its compact grid area"
+  );
   assert.match(modelStyles, /\.model-preference-list\s*\{[^}]*overflow:\s*visible/s);
   assert.doesNotMatch(modelStyles, /\.model-preference-list\s*\{[^}]*overflow:\s*(?:auto|hidden|clip)/s);
   assert.match(modelStyles, /\.model-preference-list \.settings-list-header,\s*\.model-preference-row\s*\{[^}]*min-width:\s*0/s);
@@ -425,13 +548,29 @@ globalThis.document = {
   assert.equal(ports.preferredModel.options.modelPreferenceFailureOverrides.Gemini, "skip");
   assert.equal(
     applyPreferredModelCalls,
-    0,
+    appliesBeforeReorderedTab,
     "failure-strategy changes must not retrigger preferred-model selection"
   );
 
   section.close();
   const storedOptions = JSON.parse(JSON.stringify(dehydrateOptions(persistedOptions)));
   const rehydratedOptions = normalizeOptions(storedOptions);
+  assert.equal(
+    rehydratedOptions.modelPreferences[NOTION_ALL_SOURCES_PREFERENCE_KEY],
+    "disabled",
+    "All sources must survive dehydration, serialization, and normalization"
+  );
+  assert.equal(
+    normalizeOptions({
+      ...storedOptions,
+      modelPreferences: {
+        ...storedOptions.modelPreferences,
+        [NOTION_ALL_SOURCES_PREFERENCE_KEY]: "invalid"
+      }
+    }).modelPreferences[NOTION_ALL_SOURCES_PREFERENCE_KEY],
+    "",
+    "unknown All sources values must normalize to no preference"
+  );
   assert.deepEqual(
     rehydratedOptions.modelPreferenceOrder,
     ["DeepSeek", "Gemini", "Grok", "NotionAI"],
@@ -458,6 +597,15 @@ globalThis.document = {
   let reloadedRedrawCalls = 0;
   assert.equal(reloadedRootState.modelPreferenceSettingsTab, "preferred");
   const reloadedPane = reloadedSection.pane(() => { reloadedRedrawCalls += 1; });
+  const reloadedAllSourcesSelect = findNode(
+    reloadedPane,
+    (node) => node.dataset?.modelPreferenceAllSourcesAppId === "NotionAI"
+  );
+  assert.equal(
+    reloadedAllSourcesSelect?.value,
+    "disabled",
+    "a fresh Settings controller must restore the stored All sources preference"
+  );
   assert.deepEqual(
     findNodes(reloadedPane, (node) => Boolean(node.dataset?.modelPreferenceAppId))
       .map((node) => node.dataset.modelPreferenceAppId),
