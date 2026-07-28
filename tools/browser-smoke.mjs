@@ -573,22 +573,36 @@ const pageProbe = `async (fixtureUrl) => {
       15000,
       "initial workspace frame assignment"
     );
-    await Promise.all(frames.map((iframe, index) => withTimeout(new Promise((resolve, reject) => {
+    const navigateControlledFrame = (iframe, index, href, label, timeoutMs) => {
+      let onLoad;
+      let onError;
+      const loaded = new Promise((resolve, reject) => {
+        onLoad = resolve;
+        onError = () => reject(new Error(label + " " + index + " failed to load"));
+        iframe.addEventListener("load", onLoad, { once: true });
+        iframe.addEventListener("error", onError, { once: true });
+        iframe.src = href;
+      });
+      return withTimeout(loaded, timeoutMs, label + " " + index).finally(() => {
+        iframe.removeEventListener("load", onLoad);
+        iframe.removeEventListener("error", onError);
+      });
+    };
+    for (const [index, iframe] of frames.entries()) {
+      await navigateControlledFrame(iframe, index, "about:blank", "workspace frame reset", 5000);
+    }
+    for (const [index, iframe] of frames.entries()) {
       const controlledUrl = new URL(fixtureUrl);
       controlledUrl.searchParams.set("retention-baseline", String(index));
-      const onLoad = () => {
-        iframe.removeEventListener("error", onError);
-        resolve();
-      };
-      const onError = () => {
-        iframe.removeEventListener("load", onLoad);
-        reject(new Error("controlled workspace frame " + index + " failed to load"));
-      };
-      iframe.addEventListener("load", onLoad, { once: true });
-      iframe.addEventListener("error", onError, { once: true });
       iframe.dataset.currentHref = controlledUrl.href;
-      iframe.src = controlledUrl.href;
-    }), 10000, "controlled workspace frame " + index)));
+      await navigateControlledFrame(
+        iframe,
+        index,
+        controlledUrl.href,
+        "controlled workspace frame",
+        15000
+      );
+    }
     await quietWindow(1000);
     const before = frames.map((iframe) => ({
       iframe,
