@@ -120,7 +120,7 @@ export function createAppsSettingsSection(ctx) {
     Array.from(tabBar.querySelectorAll("[role='tab']")).forEach((tab, index) => {
       tab.dataset.appsTabId = tabs[index]?.[0] || "";
     });
-    return el("div", { class: "settings-pane settings-manager-pane apps-settings-pane" },
+    return el("div", { class: `settings-pane settings-manager-pane apps-settings-pane is-${activeTab}` },
       tabBar,
       activeTab === "iframe" ? iframePermissionsPane(redraw) : platformsPane(redraw)
     );

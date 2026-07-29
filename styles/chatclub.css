@@ -4846,6 +4846,24 @@ body.settings-tab-group-button-dragging iframe {
   gap: 14px;
 }
 
+.apps-settings-pane.is-platforms {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.apps-settings-pane.is-platforms > .settings-inner-tabs {
+  flex: 0 0 auto;
+}
+
+.apps-settings-pane.is-platforms > .settings-platforms-pane {
+  display: contents;
+}
+
+.apps-settings-pane.is-platforms > .settings-platforms-pane > .settings-apps-tab-panel {
+  flex: 0 0 100%;
+}
+
 .iframe-permissions-pane {
   align-content: start;
 }
