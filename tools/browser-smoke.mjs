@@ -847,6 +847,9 @@ const pageProbe = `async (fixtureUrl) => {
         "custom app iframe permission row"
       );
       const iframeHeaderLayout = appsHeaderLayout("iframe permissions");
+      if (iframeHeaderLayout.outer.width <= iframeHeaderLayout.source.width) {
+        throw new Error("Apps tab header must keep the primary tab bar wider than the source tab bar");
+      }
       selectIframePermissionsTab("builtIn");
       await waitForCondition(
         () => document.querySelectorAll('.iframe-permission-row[data-app-source="builtIn"]').length > 0

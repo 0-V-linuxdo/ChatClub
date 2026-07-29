@@ -106,7 +106,7 @@ globalThis.document = { addEventListener() {} };
   );
   assert.match(appsSource, /dataset\.appsTabId\s*=\s*tabs\[index\]/);
   assert.match(appsSource, /apps-settings-tab-bar-row/);
-  assert.match(stylesSource, /\.apps-settings-tab-bar-row\s*\{[\s\S]*display:\s*grid[\s\S]*grid-template-columns:\s*minmax\(0, \.56fr\) minmax\(0, 1fr\)/);
+  assert.match(stylesSource, /\.apps-settings-tab-bar-row\s*\{[\s\S]*display:\s*grid[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) minmax\(0, \.56fr\)/);
   assert.match(stylesSource, /\.apps-settings-tab-bar-row > \.settings-inner-tabs\s*\{[\s\S]*width:\s*100%[\s\S]*grid-auto-columns:\s*minmax\(0, 1fr\)/);
   assert.match(stylesSource, /\.apps-settings-tab-bar-row\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\)/);
   assert.match(appsSource, /function iframePermissionsTabBar\(/);

@@ -4848,7 +4848,7 @@ body.settings-tab-group-button-dragging iframe {
 
 .apps-settings-tab-bar-row {
   display: grid;
-  grid-template-columns: minmax(0, .56fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, .56fr);
   align-items: flex-start;
   gap: 28px;
   width: 100%;

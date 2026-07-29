@@ -14,10 +14,10 @@
     "reason": "Bilingual translation catalog data is kept co-located for key parity; the queued-send status, model-failure policy, model-preference labels and Notion All Sources segmented-control help, custom User Scripts permission guidance, accessible new-topic/restoring frame status labels, and platform-management navigation labels are included in the exact line and byte ratchets."
   },
   "tools/browser-smoke.mjs": {
-    "maxLines": 1354,
+    "maxLines": 1357,
     "target": 1200,
-    "maxBytes": 70287,
+    "maxBytes": 70478,
     "targetBytes": 60000,
-    "reason": "The cross-engine smoke exercises protected-header initial loading, deterministic workspace-frame reset before retention baselines, owner-tab session rules, document-initiated iframe self-navigation, the authenticated binding handshake, exact cross-tab platform and iframe-permission header geometry, and the current geckodriver system-access startup contract."
+    "reason": "The cross-engine smoke exercises protected-header initial loading, deterministic workspace-frame reset before retention baselines, owner-tab session rules, document-initiated iframe self-navigation, the authenticated binding handshake, exact cross-tab platform and iframe-permission header geometry with a primary-bar-width guard, and the current geckodriver system-access startup contract."
   }
 }
