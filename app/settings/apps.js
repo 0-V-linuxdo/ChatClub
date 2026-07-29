@@ -293,7 +293,13 @@ export function createAppsSettingsSection(ctx) {
       dataset: { iframeConfigSource: source }
     },
       el("div", { class: "iframe-permission-group-header" },
-        el("div", {}, el("h4", {}, title), el("p", {}, description)),
+        el("div", {},
+          el("div", { class: "iframe-permission-group-title" },
+            el("h4", {}, title),
+            iframePermissionHelpTrigger()
+          ),
+          el("p", {}, description)
+        ),
         el("span", { class: "settings-usage-chip muted" }, t("apps.iframe.platformCount", { count: apps.length }))
       ),
       settingsList([
@@ -305,6 +311,19 @@ export function createAppsSettingsSection(ctx) {
         t("apps.action")
       ], rows, "settings-manager-list iframe-permission-list")
     );
+  }
+
+  function iframePermissionHelpTrigger() {
+    const help = t("apps.iframe.scopeHelp");
+    return el("button", {
+      class: "icon-button compact-icon iframe-permission-help-trigger tooltip-trigger",
+      type: "button",
+      "aria-label": help,
+      "data-tooltip": help,
+      "data-tooltip-id": "settings.apps.iframe.scopeHelp",
+      "data-tooltip-placement": "right",
+      "data-tooltip-wrap": "true"
+    }, svgIcon("info"));
   }
 
   async function selectIframePermissionsSource(source, redraw) {
@@ -343,14 +362,6 @@ export function createAppsSettingsSection(ctx) {
 
   function iframePermissionsPane(activeSource, redraw) {
     return el("div", { class: "settings-apps-tab-panel iframe-permissions-pane" },
-      el("div", { class: "settings-info-callout iframe-permission-scope-callout" },
-        svgIcon("info"),
-        el("div", {},
-          el("strong", {}, t("apps.iframe.scopeTitle")),
-          el("p", {}, t("apps.iframe.scopeNotice")),
-          el("p", { class: "iframe-permission-derived-note" }, t("apps.iframe.manage"))
-        )
-      ),
       activeSource === "custom"
         ? iframePermissionGroup("custom", state.customConfig, redraw)
         : iframePermissionGroup("builtIn", orderedBuiltInApps(), redraw)

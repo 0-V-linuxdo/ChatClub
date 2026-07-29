@@ -7,17 +7,17 @@
     "reason": "The Grok Cookie runtime co-locates exact registered-frame authorization, browser-specific partition discovery, parent-document-bound Mirror account-switch capture and recovery including Arc's omitted top-frame metadata fallback, a connect-only same-document gateway WebSocket readiness proof with bounded a=1/a=2/a=3 account rotation, Cookie-ledger cleanup, and fail-closed navigation handling so their shared attempt, frame, and top-document identities cannot drift across modules."
   },
   "shared/i18n.js": {
-    "maxLines": 1961,
+    "maxLines": 1963,
     "target": 1500,
-    "maxBytes": 112697,
+    "maxBytes": 112630,
     "targetBytes": 82000,
-    "reason": "Bilingual translation catalog data is kept co-located for key parity; the queued-send status, model-failure policy, model-preference labels and Notion All Sources segmented-control help, custom User Scripts permission guidance, accessible new-topic/restoring frame status labels, and platform-management navigation labels are included in the exact line and byte ratchets."
+    "reason": "Bilingual translation catalog data is kept co-located for key parity; the queued-send status, model-failure policy, model-preference labels and Notion All Sources segmented-control help, custom User Scripts permission guidance, accessible new-topic/restoring frame status labels, platform-management navigation labels, and concise iframe-permission hover help are included in the exact line and byte ratchets."
   },
   "tools/browser-smoke.mjs": {
-    "maxLines": 1373,
+    "maxLines": 1377,
     "target": 1200,
-    "maxBytes": 71540,
+    "maxBytes": 71867,
     "targetBytes": 60000,
-    "reason": "The cross-engine smoke exercises protected-header initial loading, deterministic workspace-frame reset before retention baselines, owner-tab session rules, document-initiated iframe self-navigation, the authenticated binding handshake, the fixed standard desktop Apps-header geometry, and both source-specific iframe list drag-handle shapes without a redundant source column."
+    "reason": "The cross-engine smoke exercises protected-header initial loading, deterministic workspace-frame reset before retention baselines, owner-tab session rules, document-initiated iframe self-navigation, the authenticated binding handshake, content-sized Apps headers, source-specific iframe list drag-handle shapes without a redundant source column, and compact iframe hover-help validation."
   }
 }

@@ -4861,24 +4861,6 @@ body.settings-tab-group-button-dragging iframe {
   grid-auto-columns: minmax(132px, auto);
 }
 
-.iframe-permissions-pane {
-  align-content: start;
-}
-
-.iframe-permission-scope-callout {
-  max-width: none;
-  padding: 16px 18px;
-}
-
-.iframe-permission-scope-callout .iframe-permission-derived-note {
-  margin-top: 10px;
-  padding-top: 10px;
-  color: color-mix(in srgb, var(--muted) 88%, var(--text));
-  font-size: 12px;
-  line-height: 1.42;
-  border-top: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
-}
-
 .iframe-permission-group {
   min-width: 0;
   display: grid;
@@ -4903,6 +4885,25 @@ body.settings-tab-group-button-dragging iframe {
   color: var(--text);
   font-size: 15px;
   line-height: 1.25;
+}
+
+.iframe-permission-group-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.iframe-permission-help-trigger {
+  width: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  height: 24px;
+  border-radius: 999px;
+}
+
+.iframe-permission-help-trigger .svg-icon {
+  width: 15px;
+  height: 15px;
 }
 
 .iframe-permission-group-header p {

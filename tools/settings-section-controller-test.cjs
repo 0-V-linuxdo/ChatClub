@@ -122,13 +122,17 @@ globalThis.document = { addEventListener() {} };
   assert.match(iframePermissionsTabBar, /dataset\.iframePermissionsTabId/);
   assert.match(iframePermissionsTabBar, /dataset\.platformSourceTabId/);
   const iframePermissionsPane = functionSource(appsSource, "iframePermissionsPane");
-  assert.match(iframePermissionsPane, /iframe-permission-derived-note/);
+  assert.doesNotMatch(iframePermissionsPane, /iframe-permission-scope-callout|settings-info-callout/);
   assert.doesNotMatch(iframePermissionsPane, /settingsPaneToolbar/);
   assert.match(
     iframePermissionsPane,
     /activeSource === "custom"\s*\? iframePermissionGroup\("custom", state\.customConfig, redraw\)\s*: iframePermissionGroup\("builtIn", orderedBuiltInApps\(\), redraw\)/,
     "iframe permissions must render only the selected source"
   );
+  const iframePermissionHelpTrigger = functionSource(appsSource, "iframePermissionHelpTrigger");
+  assert.match(iframePermissionHelpTrigger, /tooltip-trigger/);
+  assert.match(iframePermissionHelpTrigger, /data-tooltip-wrap": "true"/);
+  assert.match(iframePermissionHelpTrigger, /t\("apps\.iframe\.scopeHelp"\)/);
   const iframePermissionRow = functionSource(appsSource, "iframePermissionRow");
   assert.match(iframePermissionRow, /draggable:\s*"true"/);
   assert.match(iframePermissionRow, /settingsDragHandle\(t\("apps\.platformName"\)\)/);

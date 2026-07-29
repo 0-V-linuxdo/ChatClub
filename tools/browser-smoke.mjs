@@ -836,11 +836,15 @@ const pageProbe = `async (fixtureUrl) => {
         const list = document.querySelector('.iframe-permission-list');
         const header = list?.querySelector('.settings-list-header');
         const row = list?.querySelector('.iframe-permission-row[data-app-source="' + source + '"]');
+        const help = document.querySelector('.iframe-permission-help-trigger');
         if (!header || header.children.length !== 6 || header.firstElementChild?.textContent.trim()) {
           throw new Error(source + " iframe permission list must begin with an empty drag-handle column");
         }
         if (!row?.draggable || !row.querySelector('.settings-drag-handle') || row.querySelector('.iframe-permission-source')) {
           throw new Error(source + " iframe permission row must expose a drag handle without a redundant source column");
+        }
+        if (!help?.dataset.tooltip || help.dataset.tooltipWrap !== "true" || document.querySelector('.iframe-permission-scope-callout')) {
+          throw new Error(source + " iframe permission help must use the compact hover tooltip");
         }
       };
       selectSettingsSection("apps");
