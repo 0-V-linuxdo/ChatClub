@@ -54,7 +54,6 @@ export function createAppState() {
     messageNavigatorSettingsTab: "effects",
     topicDeleteSiteExpandedId: "",
     settingsAppsTab: "platforms",
-    settingsPlatformTab: "builtIn",
     settingsPromptTemplateDragId: "",
     settingsPromptLibraryDragId: "",
     settingsProfileDragId: "",

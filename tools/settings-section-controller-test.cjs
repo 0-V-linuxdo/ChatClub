@@ -97,8 +97,7 @@ globalThis.document = { addEventListener() {} };
     "options",
     "settingsAppsTab",
     "settingsBuiltinAppDragId",
-    "settingsCustomAppDragId",
-    "settingsPlatformTab"
+    "settingsCustomAppDragId"
   ]);
   assert.deepEqual(
     [...appsSource.matchAll(/\["(platforms|iframe)",\s*t\("apps\.tab/g)].map((match) => match[1]).slice(0, 2),
@@ -106,22 +105,24 @@ globalThis.document = { addEventListener() {} };
     "platform management and iframe permissions must be the two Apps tabs"
   );
   assert.match(appsSource, /dataset\.appsTabId\s*=\s*tabs\[index\]/);
-  assert.match(stylesSource, /\.apps-settings-pane\.is-platforms\s*\{[\s\S]*display:\s*flex/);
-  assert.match(stylesSource, /\.apps-settings-pane\.is-iframe\s*\{[\s\S]*display:\s*flex/);
-  assert.match(stylesSource, /\.apps-settings-pane\.is-iframe > \.iframe-permissions-pane\s*\{\s*display:\s*contents/);
-  assert.match(stylesSource, /\.apps-settings-pane\.is-iframe > \.iframe-permissions-pane > \.settings-inner-tabs[\s\S]*order:\s*0/);
-  assert.match(stylesSource, /\.apps-settings-pane\.is-iframe > \.iframe-permissions-pane > \.settings-pane-toolbar[\s\S]*order:\s*1/);
+  assert.match(appsSource, /apps-settings-tab-bar-row/);
+  assert.match(stylesSource, /\.apps-settings-tab-bar-row\s*\{[\s\S]*display:\s*grid[\s\S]*grid-template-columns:\s*minmax\(0, \.56fr\) minmax\(0, 1fr\)/);
+  assert.match(stylesSource, /\.apps-settings-tab-bar-row > \.settings-inner-tabs\s*\{[\s\S]*width:\s*100%[\s\S]*grid-auto-columns:\s*minmax\(0, 1fr\)/);
+  assert.match(stylesSource, /\.apps-settings-tab-bar-row\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\)/);
+  assert.match(appsSource, /function iframePermissionsTabBar\(/);
   assert.match(appsSource, /function platformsPane\(/);
   assert.match(appsSource, /function iframePermissionsPane\(/);
   assert.match(appsSource, /iframe-permission-row/);
   assert.match(appsSource, /dataset\.iframeAction/);
   const platformsPane = functionSource(appsSource, "platformsPane");
-  assert.match(platformsPane, /state\.settingsPlatformTab === "custom"/);
-  assert.match(platformsPane, /dataset\.platformSourceTabId/);
-  assert.match(platformsPane, /activeTab === "custom" \? customPane\(redraw\) : builtInPane\(redraw\)/);
+  assert.match(platformsPane, /activeSource === "custom" \? customPane\(redraw\) : builtInPane\(redraw\)/);
+  const iframePermissionsTabBar = functionSource(appsSource, "iframePermissionsTabBar");
+  assert.match(iframePermissionsTabBar, /state\.options\?\.iframePermissionsSource === "custom"/);
+  assert.match(iframePermissionsTabBar, /dataset\.iframePermissionsTabId/);
+  assert.match(iframePermissionsTabBar, /dataset\.platformSourceTabId/);
   const iframePermissionsPane = functionSource(appsSource, "iframePermissionsPane");
-  assert.match(iframePermissionsPane, /state\.options\?\.iframePermissionsSource === "custom"/);
-  assert.match(iframePermissionsPane, /dataset\.iframePermissionsTabId/);
+  assert.match(iframePermissionsPane, /iframe-permission-derived-note/);
+  assert.doesNotMatch(iframePermissionsPane, /settingsPaneToolbar/);
   assert.match(
     iframePermissionsPane,
     /activeSource === "custom"\s*\? iframePermissionGroup\("custom", state\.customConfig, redraw\)\s*: iframePermissionGroup\("builtIn", orderedBuiltInApps\(\), redraw\)/,

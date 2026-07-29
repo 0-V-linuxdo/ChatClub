@@ -4846,45 +4846,18 @@ body.settings-tab-group-button-dragging iframe {
   gap: 14px;
 }
 
-.apps-settings-pane.is-platforms {
-  display: flex;
-  flex-wrap: wrap;
+.apps-settings-tab-bar-row {
+  display: grid;
+  grid-template-columns: minmax(0, .56fr) minmax(0, 1fr);
   align-items: flex-start;
+  gap: 28px;
+  width: 100%;
 }
 
-.apps-settings-pane.is-platforms > .settings-inner-tabs {
-  flex: 0 0 auto;
-}
-
-.apps-settings-pane.is-platforms > .settings-platforms-pane {
-  display: contents;
-}
-
-.apps-settings-pane.is-platforms > .settings-platforms-pane > .settings-apps-tab-panel {
-  flex: 0 0 100%;
-}
-
-.apps-settings-pane.is-iframe {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-}
-
-.apps-settings-pane.is-iframe > .settings-inner-tabs,
-.apps-settings-pane.is-iframe > .iframe-permissions-pane > .settings-inner-tabs {
-  flex: 0 0 auto;
-  order: 0;
-}
-
-.apps-settings-pane.is-iframe > .iframe-permissions-pane {
-  display: contents;
-}
-
-.apps-settings-pane.is-iframe > .iframe-permissions-pane > .settings-pane-toolbar,
-.apps-settings-pane.is-iframe > .iframe-permissions-pane > .iframe-permission-scope-callout,
-.apps-settings-pane.is-iframe > .iframe-permissions-pane > .iframe-permission-group {
-  flex: 0 0 100%;
-  order: 1;
+.apps-settings-tab-bar-row > .settings-inner-tabs {
+  min-width: 0;
+  width: 100%;
+  grid-auto-columns: minmax(0, 1fr);
 }
 
 .iframe-permissions-pane {
@@ -4893,6 +4866,16 @@ body.settings-tab-group-button-dragging iframe {
 
 .iframe-permission-scope-callout {
   max-width: none;
+  padding: 16px 18px;
+}
+
+.iframe-permission-scope-callout .iframe-permission-derived-note {
+  margin-top: 10px;
+  padding-top: 10px;
+  color: color-mix(in srgb, var(--muted) 88%, var(--text));
+  font-size: 12px;
+  line-height: 1.42;
+  border-top: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
 }
 
 .iframe-permission-group {
@@ -7013,6 +6996,11 @@ body.settings-tab-group-button-dragging iframe {
   .settings-inner-tabs {
     width: 100%;
     grid-auto-columns: 1fr;
+  }
+
+  .apps-settings-tab-bar-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
   }
 
   .shortcut-tabs-row {

@@ -56,7 +56,7 @@ export function createAppsSettingsSection(ctx) {
   const state = requireSettingsSectionStatePort(
     requireControllerContext(ctx, controllerName, "state"),
     controllerName,
-    ["customConfig", "options", "settingsAppsTab", "settingsPlatformTab", "settingsBuiltinAppDragId", "settingsCustomAppDragId"]
+    ["customConfig", "options", "settingsAppsTab", "settingsBuiltinAppDragId", "settingsCustomAppDragId"]
   );
   const svgIcon = requireControllerFunction(ctx, controllerName, "svgIcon");
   const notifyConfigReload = requireControllerFunction(ctx, controllerName, "notifyConfigReload");
@@ -120,29 +120,17 @@ export function createAppsSettingsSection(ctx) {
     Array.from(tabBar.querySelectorAll("[role='tab']")).forEach((tab, index) => {
       tab.dataset.appsTabId = tabs[index]?.[0] || "";
     });
-    return el("div", { class: `settings-pane settings-manager-pane apps-settings-pane is-${activeTab}` },
-      tabBar,
-      activeTab === "iframe" ? iframePermissionsPane(redraw) : platformsPane(redraw)
+    const secondaryTabs = iframePermissionsTabBar(redraw);
+    return el("div", { class: "settings-pane settings-manager-pane apps-settings-pane" },
+      el("div", { class: "apps-settings-tab-bar-row" }, tabBar, secondaryTabs.tabBar),
+      activeTab === "iframe"
+        ? iframePermissionsPane(secondaryTabs.activeSource, redraw)
+        : platformsPane(secondaryTabs.activeSource, redraw)
     );
   }
 
-  function platformsPane(redraw) {
-    const activeTab = state.settingsPlatformTab === "custom" ? "custom" : "builtIn";
-    const tabs = [
-      ["builtIn", t("apps.tabBuiltIn"), t("apps.tabBuiltInDesc")],
-      ["custom", t("apps.tabCustom"), t("apps.tabCustomDesc")]
-    ];
-    const tabBar = settingsInnerTabs(tabs, activeTab, (tabId) => {
-      state.settingsPlatformTab = tabId;
-      redraw?.();
-    });
-    Array.from(tabBar.querySelectorAll("[role='tab']")).forEach((tab, index) => {
-      tab.dataset.platformSourceTabId = tabs[index]?.[0] || "";
-    });
-    return el("div", { class: "settings-apps-tab-panel settings-platforms-pane" },
-      tabBar,
-      activeTab === "custom" ? customPane(redraw) : builtInPane(redraw)
-    );
+  function platformsPane(activeSource, redraw) {
+    return activeSource === "custom" ? customPane(redraw) : builtInPane(redraw);
   }
 
   function reset() {
@@ -331,7 +319,7 @@ export function createAppsSettingsSection(ctx) {
     }
   }
 
-  function iframePermissionsPane(redraw) {
+  function iframePermissionsTabBar(redraw) {
     const activeSource = state.options?.iframePermissionsSource === "custom" ? "custom" : "builtIn";
     const tabs = [
       ["builtIn", t("apps.iframe.groupBuiltIn"), t("apps.iframe.groupBuiltInDesc")],
@@ -341,16 +329,21 @@ export function createAppsSettingsSection(ctx) {
       void selectIframePermissionsSource(source, redraw);
     });
     Array.from(tabBar.querySelectorAll("[role='tab']")).forEach((tab, index) => {
-      tab.dataset.iframePermissionsTabId = tabs[index]?.[0] || "";
+      const source = tabs[index]?.[0] || "";
+      tab.dataset.iframePermissionsTabId = source;
+      tab.dataset.platformSourceTabId = source;
     });
+    return { activeSource, tabBar };
+  }
+
+  function iframePermissionsPane(activeSource, redraw) {
     return el("div", { class: "settings-apps-tab-panel iframe-permissions-pane" },
-      settingsPaneToolbar(t("apps.iframe.manage")),
-      tabBar,
       el("div", { class: "settings-info-callout iframe-permission-scope-callout" },
         svgIcon("info"),
         el("div", {},
           el("strong", {}, t("apps.iframe.scopeTitle")),
-          el("p", {}, t("apps.iframe.scopeNotice"))
+          el("p", {}, t("apps.iframe.scopeNotice")),
+          el("p", { class: "iframe-permission-derived-note" }, t("apps.iframe.manage"))
         )
       ),
       activeSource === "custom"
