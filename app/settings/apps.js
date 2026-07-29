@@ -322,8 +322,8 @@ export function createAppsSettingsSection(ctx) {
   function iframePermissionsTabBar(redraw) {
     const activeSource = state.options?.iframePermissionsSource === "custom" ? "custom" : "builtIn";
     const tabs = [
-      ["builtIn", t("apps.iframe.groupBuiltIn"), t("apps.iframe.groupBuiltInDesc")],
-      ["custom", t("apps.iframe.groupCustom"), t("apps.iframe.groupCustomDesc")]
+      ["builtIn", t("apps.tabBuiltIn"), t("apps.tabBuiltInDesc")],
+      ["custom", t("apps.tabCustom"), t("apps.tabCustomDesc")]
     ];
     const tabBar = settingsInnerTabs(tabs, activeSource, (source) => {
       void selectIframePermissionsSource(source, redraw);

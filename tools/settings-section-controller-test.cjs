@@ -118,6 +118,8 @@ globalThis.document = { addEventListener() {} };
   assert.match(platformsPane, /activeSource === "custom" \? customPane\(redraw\) : builtInPane\(redraw\)/);
   const iframePermissionsTabBar = functionSource(appsSource, "iframePermissionsTabBar");
   assert.match(iframePermissionsTabBar, /state\.options\?\.iframePermissionsSource === "custom"/);
+  assert.match(iframePermissionsTabBar, /t\("apps\.tabBuiltIn"\), t\("apps\.tabBuiltInDesc"\)/);
+  assert.match(iframePermissionsTabBar, /t\("apps\.tabCustom"\), t\("apps\.tabCustomDesc"\)/);
   assert.match(iframePermissionsTabBar, /dataset\.iframePermissionsTabId/);
   assert.match(iframePermissionsTabBar, /dataset\.platformSourceTabId/);
   const iframePermissionsPane = functionSource(appsSource, "iframePermissionsPane");

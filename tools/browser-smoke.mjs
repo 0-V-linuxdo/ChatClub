@@ -807,6 +807,31 @@ const pageProbe = `async (fixtureUrl) => {
         if (!tab) throw new Error("custom app retention probe found no " + id + " iframe permissions tab");
         tab.click();
       };
+      const appsHeaderLayout = (label) => {
+        const row = document.querySelector(".apps-settings-tab-bar-row");
+        const bars = Array.from(row?.querySelectorAll(":scope > .settings-inner-tabs") || []);
+        if (bars.length !== 2) throw new Error(label + " Apps header must contain two tab bars");
+        const box = (element) => {
+          const rect = element.getBoundingClientRect();
+          return {
+            left: Math.round(rect.left),
+            top: Math.round(rect.top),
+            width: Math.round(rect.width),
+            height: Math.round(rect.height)
+          };
+        };
+        return {
+          outer: box(bars[0]),
+          source: box(bars[1]),
+          sourceText: Array.from(bars[1].querySelectorAll("[role='tab']"), (tab) => tab.textContent.trim())
+        };
+      };
+      const sameBox = (left, right) => (
+        left.left === right.left
+        && left.top === right.top
+        && left.width === right.width
+        && left.height === right.height
+      );
       selectSettingsSection("apps");
       await waitForCondition(
         () => Boolean(document.querySelector(".apps-settings-pane")),
@@ -821,6 +846,7 @@ const pageProbe = `async (fixtureUrl) => {
         3000,
         "custom app iframe permission row"
       );
+      const iframeHeaderLayout = appsHeaderLayout("iframe permissions");
       selectIframePermissionsTab("builtIn");
       await waitForCondition(
         () => document.querySelectorAll('.iframe-permission-row[data-app-source="builtIn"]').length > 0
@@ -843,6 +869,14 @@ const pageProbe = `async (fixtureUrl) => {
         3000,
         "custom app settings row"
       );
+      const platformHeaderLayout = appsHeaderLayout("platform management");
+      if (
+        !sameBox(iframeHeaderLayout.outer, platformHeaderLayout.outer)
+        || !sameBox(iframeHeaderLayout.source, platformHeaderLayout.source)
+        || JSON.stringify(iframeHeaderLayout.sourceText) !== JSON.stringify(platformHeaderLayout.sourceText)
+      ) {
+        throw new Error("Apps tab headers changed layout or source text after switching sections");
+      }
       const customSettingsRow = () => Array.from(document.querySelectorAll(".custom-config-row"))
         .find((row) => row.dataset.customAppId === customApp.id);
       let customRow = customSettingsRow();
