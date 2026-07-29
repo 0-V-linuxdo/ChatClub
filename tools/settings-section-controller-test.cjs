@@ -96,21 +96,30 @@ globalThis.document = { addEventListener() {} };
     "options",
     "settingsAppsTab",
     "settingsBuiltinAppDragId",
-    "settingsCustomAppDragId"
+    "settingsCustomAppDragId",
+    "settingsPlatformTab"
   ]);
   assert.deepEqual(
-    [...appsSource.matchAll(/\["(builtIn|custom|iframe)",\s*t\("apps\.tab/g)].map((match) => match[1]).slice(0, 3),
-    ["builtIn", "custom", "iframe"],
-    "iframe permissions must be the derived third Apps tab"
+    [...appsSource.matchAll(/\["(platforms|iframe)",\s*t\("apps\.tab/g)].map((match) => match[1]).slice(0, 2),
+    ["platforms", "iframe"],
+    "platform management and iframe permissions must be the two Apps tabs"
   );
   assert.match(appsSource, /dataset\.appsTabId\s*=\s*tabs\[index\]/);
+  assert.match(appsSource, /function platformsPane\(/);
   assert.match(appsSource, /function iframePermissionsPane\(/);
   assert.match(appsSource, /iframe-permission-row/);
   assert.match(appsSource, /dataset\.iframeAction/);
+  const platformsPane = functionSource(appsSource, "platformsPane");
+  assert.match(platformsPane, /state\.settingsPlatformTab === "custom"/);
+  assert.match(platformsPane, /dataset\.platformSourceTabId/);
+  assert.match(platformsPane, /activeTab === "custom" \? customPane\(redraw\) : builtInPane\(redraw\)/);
   const iframePermissionsPane = functionSource(appsSource, "iframePermissionsPane");
-  assert.ok(
-    iframePermissionsPane.indexOf('iframePermissionGroup("builtIn"') < iframePermissionsPane.indexOf('iframePermissionGroup("custom"'),
-    "iframe permissions must project built-ins before custom platforms"
+  assert.match(iframePermissionsPane, /state\.options\?\.iframePermissionsSource === "custom"/);
+  assert.match(iframePermissionsPane, /dataset\.iframePermissionsTabId/);
+  assert.match(
+    iframePermissionsPane,
+    /activeSource === "custom"\s*\? iframePermissionGroup\("custom", state\.customConfig, redraw\)\s*: iframePermissionGroup\("builtIn", orderedBuiltInApps\(\), redraw\)/,
+    "iframe permissions must render only the selected source"
   );
   assert.doesNotMatch(iframePermissionsPane, /draggable|settingsDragHandle/, "the derived iframe projection must not own ordering");
   const persistIframeConfig = functionSource(appsSource, "persistIframeConfig");
@@ -231,6 +240,7 @@ globalThis.document = { addEventListener() {} };
     colMaxCount: 4,
     frameLoadingOverlayOpacity: 0.5,
     frameToastPosition: { x: 50, y: 50 },
+    iframePermissionsSource: "builtIn",
     language: "system",
     messageNavigatorEffectMode: "border",
     messageNavigatorSiteConfigs: [],
@@ -267,7 +277,7 @@ globalThis.document = { addEventListener() {} };
   );
   assert.deepEqual(
     settingsStateModule.SETTINGS_OPTION_CAPABILITIES.apps.write,
-    ["builtinChatAppOrder", "builtinChatAppIframeConfigs"],
+    ["builtinChatAppOrder", "builtinChatAppIframeConfigs", "iframePermissionsSource"],
     "Apps state and persistence enforcement must share one option capability"
   );
   assert.deepEqual(
@@ -281,6 +291,8 @@ globalThis.document = { addEventListener() {} };
   assert.equal(rootState.modelPreferenceSettingsTab, "failure");
   assert.equal(ports.topicDeletion.options.topicDeleteSiteConfigs.length, 0);
   assert.deepEqual(ports.apps.options.builtinChatAppIframeConfigs, {});
+  ports.apps.options.iframePermissionsSource = "custom";
+  assert.equal(rootState.options.iframePermissionsSource, "custom");
   assert.throws(() => { ports.messageNavigation.options.themeMode; }, /settings\.messageNavigation cannot read/);
   assert.throws(() => { ports.topicDeletion.messageNavigatorSettingsTab; }, /settings\.topicDeletion cannot read/);
   assert.throws(() => { ports.models.options.builtinChatAppIframeConfigs; }, /settings\.models cannot read/);

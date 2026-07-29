@@ -14,7 +14,7 @@ export const SETTINGS_OPTION_CAPABILITIES = Object.freeze({
     "topbarPromptPlaceholderConfig"
   ]),
   profiles: optionCapability(["apiProfiles", "optimizeApiProfileId", "summaryApiProfileId"]),
-  apps: optionCapability(["builtinChatAppOrder", "builtinChatAppIframeConfigs"]),
+  apps: optionCapability(["builtinChatAppOrder", "builtinChatAppIframeConfigs", "iframePermissionsSource"]),
   models: optionCapability([
     "modelPreferenceFailureOverrides", "modelPreferenceFailurePolicy", "modelPreferenceOrder", "modelPreferences"
   ]),
@@ -70,8 +70,8 @@ const SETTINGS_SECTION_STATE_ACCESS = Object.freeze({
     { options: settingsOptionAccess("profiles") }
   ),
   apps: stateAccess([
-    "customConfig", "options", "settingsAppsTab", "settingsBuiltinAppDragId", "settingsCustomAppDragId"
-  ], ["customConfig", "options", "settingsAppsTab", "settingsBuiltinAppDragId", "settingsCustomAppDragId"], {
+    "customConfig", "options", "settingsAppsTab", "settingsPlatformTab", "settingsBuiltinAppDragId", "settingsCustomAppDragId"
+  ], ["customConfig", "options", "settingsAppsTab", "settingsPlatformTab", "settingsBuiltinAppDragId", "settingsCustomAppDragId"], {
     options: settingsOptionAccess("apps")
   }),
   models: stateAccess(

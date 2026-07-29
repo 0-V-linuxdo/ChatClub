@@ -696,6 +696,7 @@ export function normalizeOptions(raw = {}) {
       raw.builtinChatAppIframeConfigs,
       BUILTIN_CHAT_APPS.map((app) => app.id)
     ),
+    iframePermissionsSource: raw.iframePermissionsSource === "custom" ? "custom" : "builtIn",
     modelPreferences: normalizeModelPreferences(raw.modelPreferences),
     modelPreferenceOrder: normalizeModelPreferenceOrder(raw.modelPreferenceOrder),
     modelPreferenceFailurePolicy: normalizeModelPreferenceFailurePolicy(raw.modelPreferenceFailurePolicy),

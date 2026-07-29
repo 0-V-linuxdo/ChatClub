@@ -797,6 +797,16 @@ const pageProbe = `async (fixtureUrl) => {
         if (!tab) throw new Error("custom app retention probe found no " + id + " Apps tab");
         tab.click();
       };
+      const selectPlatformSourceTab = (id) => {
+        const tab = document.querySelector('[data-platform-source-tab-id="' + id + '"]');
+        if (!tab) throw new Error("custom app retention probe found no " + id + " platform source tab");
+        tab.click();
+      };
+      const selectIframePermissionsTab = (id) => {
+        const tab = document.querySelector('[data-iframe-permissions-tab-id="' + id + '"]');
+        if (!tab) throw new Error("custom app retention probe found no " + id + " iframe permissions tab");
+        tab.click();
+      };
       selectSettingsSection("apps");
       await waitForCondition(
         () => Boolean(document.querySelector(".apps-settings-pane")),
@@ -804,13 +814,29 @@ const pageProbe = `async (fixtureUrl) => {
         "Apps settings"
       );
       selectAppsTab("iframe");
+      selectIframePermissionsTab("custom");
       await waitForCondition(
         () => Array.from(document.querySelectorAll('.iframe-permission-row[data-app-source="custom"]'))
           .some((row) => row.dataset.appId === customApp.id),
         3000,
         "custom app iframe permission row"
       );
-      selectAppsTab("custom");
+      selectIframePermissionsTab("builtIn");
+      await waitForCondition(
+        () => document.querySelectorAll('.iframe-permission-row[data-app-source="builtIn"]').length > 0
+          && !document.querySelector('.iframe-permission-row[data-app-source="custom"]'),
+        3000,
+        "built-in-only iframe permission rows"
+      );
+      selectIframePermissionsTab("custom");
+      await waitForCondition(
+        () => Array.from(document.querySelectorAll('.iframe-permission-row[data-app-source="custom"]'))
+          .some((row) => row.dataset.appId === customApp.id),
+        3000,
+        "restored custom app iframe permission row"
+      );
+      selectAppsTab("platforms");
+      selectPlatformSourceTab("custom");
       await waitForCondition(
         () => Array.from(document.querySelectorAll(".custom-config-row"))
           .some((row) => row.dataset.customAppId === customApp.id),
@@ -954,7 +980,8 @@ const pageProbe = `async (fixtureUrl) => {
         3000,
         "Apps settings after iframe contract imports"
       );
-      selectAppsTab("custom");
+      selectAppsTab("platforms");
+      selectPlatformSourceTab("custom");
       await waitForCondition(
         () => Boolean(customSettingsRow()),
         3000,

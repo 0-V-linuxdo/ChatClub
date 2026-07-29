@@ -296,6 +296,8 @@ const en = {
 
   "apps.manage": "Add, reorder, edit, or delete custom platforms. Selectors tell ChatClub where to type and send.",
   "apps.builtInManage": "Drag built-in platforms to reorder them. Selectors and image paste behavior are shipped with ChatClub.",
+  "apps.tabPlatforms": "Platform Management",
+  "apps.tabPlatformsDesc": "Built-in and custom platforms",
   "apps.tabBuiltIn": "Built-in",
   "apps.tabBuiltInDesc": "Packaged platforms",
   "apps.tabCustom": "Custom",
@@ -1257,6 +1259,8 @@ const zh_CN = {
 
   "apps.manage": "添加、排序、编辑或删除自定义平台。选择器用于指定输入框和发送按钮。",
   "apps.builtInManage": "拖拽内置平台可调整顺序。选择器和图片粘贴行为随 ChatClub 提供。",
+  "apps.tabPlatforms": "平台管理",
+  "apps.tabPlatformsDesc": "内置和自定义聊天平台",
   "apps.tabBuiltIn": "内置",
   "apps.tabBuiltInDesc": "内置平台",
   "apps.tabCustom": "自定义",

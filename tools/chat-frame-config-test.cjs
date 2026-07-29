@@ -148,6 +148,7 @@ const assert = require("node:assert/strict");
   assert.equal(canonicalA.signature, canonicalB.signature);
 
   const options = normalizeOptions({
+    iframePermissionsSource: "custom",
     builtinChatAppIframeConfigs: {
       Claude: { allow: { mode: "omit" } },
       Grok: { sandbox: { mode: "raw", value: "" } },
@@ -157,6 +158,8 @@ const assert = require("node:assert/strict");
   });
   assert.deepEqual(Object.keys(options.builtinChatAppIframeConfigs), ["Claude", "Grok"]);
   assert.equal(options.builtinChatAppIframeConfigs.Grok.sandbox.value, "");
+  assert.equal(options.iframePermissionsSource, "custom");
+  assert.equal(normalizeOptions({ iframePermissionsSource: "unknown" }).iframePermissionsSource, "builtIn");
 
   const custom = normalizeCustomConfig([
     {
@@ -199,6 +202,7 @@ const assert = require("node:assert/strict");
 
   const exported = exportConfigBundle({ options, customConfig: custom }, ["options", "customConfig"]);
   assert.deepEqual(exported.options.builtinChatAppIframeConfigs, options.builtinChatAppIframeConfigs);
+  assert.equal(exported.options.iframePermissionsSource, "custom");
   assert.deepEqual(exported.customConfig[0].iframeConfig, custom[0].iframeConfig);
 
   const inspectedImport = inspectImportedConfig({

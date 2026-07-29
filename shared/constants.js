@@ -1,7 +1,7 @@
 import { DEFAULT_TOPBAR_LAYOUT } from "./topbar.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-07-29｜23:09:04」";
+export const APP_VERSION = "「2026-07-30｜00:15:28」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -361,6 +361,7 @@ export const DEFAULT_OPTIONS = {
   modelPreferenceFailurePolicy: DEFAULT_MODEL_PREFERENCE_FAILURE_POLICY,
   modelPreferenceFailureOverrides: DEFAULT_MODEL_PREFERENCE_FAILURE_OVERRIDES,
   builtinChatAppIframeConfigs: {},
+  iframePermissionsSource: "builtIn",
   messageNavigatorEffectMode: "border",
   messageNavigatorSiteConfigs: [],
   summarySiteConfigs: [],
