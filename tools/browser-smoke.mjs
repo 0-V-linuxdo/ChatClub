@@ -832,6 +832,17 @@ const pageProbe = `async (fixtureUrl) => {
         && left.width === right.width
         && left.height === right.height
       );
+      const assertIframePermissionListShape = (source) => {
+        const list = document.querySelector('.iframe-permission-list');
+        const header = list?.querySelector('.settings-list-header');
+        const row = list?.querySelector('.iframe-permission-row[data-app-source="' + source + '"]');
+        if (!header || header.children.length !== 6 || header.firstElementChild?.textContent.trim()) {
+          throw new Error(source + " iframe permission list must begin with an empty drag-handle column");
+        }
+        if (!row?.draggable || !row.querySelector('.settings-drag-handle') || row.querySelector('.iframe-permission-source')) {
+          throw new Error(source + " iframe permission row must expose a drag handle without a redundant source column");
+        }
+      };
       selectSettingsSection("apps");
       await waitForCondition(
         () => Boolean(document.querySelector(".apps-settings-pane")),
@@ -846,9 +857,16 @@ const pageProbe = `async (fixtureUrl) => {
         3000,
         "custom app iframe permission row"
       );
+      assertIframePermissionListShape("custom");
       const iframeHeaderLayout = appsHeaderLayout("iframe permissions");
       if (iframeHeaderLayout.outer.width <= iframeHeaderLayout.source.width) {
         throw new Error("Apps tab header must keep the primary tab bar wider than the source tab bar");
+      }
+      if (
+        iframeHeaderLayout.outer.width !== 700
+        || iframeHeaderLayout.source.width !== 556
+      ) {
+        throw new Error("Apps tab header does not match the 700px / 556px standard layout");
       }
       selectIframePermissionsTab("builtIn");
       await waitForCondition(
@@ -857,6 +875,7 @@ const pageProbe = `async (fixtureUrl) => {
         3000,
         "built-in-only iframe permission rows"
       );
+      assertIframePermissionListShape("builtIn");
       selectIframePermissionsTab("custom");
       await waitForCondition(
         () => Array.from(document.querySelectorAll('.iframe-permission-row[data-app-source="custom"]'))

@@ -106,9 +106,9 @@ globalThis.document = { addEventListener() {} };
   );
   assert.match(appsSource, /dataset\.appsTabId\s*=\s*tabs\[index\]/);
   assert.match(appsSource, /apps-settings-tab-bar-row/);
-  assert.match(stylesSource, /\.apps-settings-tab-bar-row\s*\{[\s\S]*display:\s*grid[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) minmax\(0, \.56fr\)/);
-  assert.match(stylesSource, /\.apps-settings-tab-bar-row > \.settings-inner-tabs\s*\{[\s\S]*width:\s*100%[\s\S]*grid-auto-columns:\s*minmax\(0, 1fr\)/);
-  assert.match(stylesSource, /\.apps-settings-tab-bar-row\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\)/);
+  assert.match(stylesSource, /\.apps-settings-tab-bar-row\s*\{[\s\S]*display:\s*flex[\s\S]*flex-wrap:\s*wrap[\s\S]*gap:\s*28px/);
+  assert.match(stylesSource, /\.apps-settings-tab-bar-row > \.settings-inner-tabs\s*\{[\s\S]*flex:\s*0 0 min\(700px, 100%\)[\s\S]*grid-auto-columns:\s*minmax\(0, 1fr\)/);
+  assert.match(stylesSource, /\.apps-settings-tab-bar-row > \.settings-inner-tabs:last-child\s*\{[\s\S]*flex-basis:\s*min\(556px, 100%\)/);
   assert.match(appsSource, /function iframePermissionsTabBar\(/);
   assert.match(appsSource, /function platformsPane\(/);
   assert.match(appsSource, /function iframePermissionsPane\(/);
@@ -130,7 +130,14 @@ globalThis.document = { addEventListener() {} };
     /activeSource === "custom"\s*\? iframePermissionGroup\("custom", state\.customConfig, redraw\)\s*: iframePermissionGroup\("builtIn", orderedBuiltInApps\(\), redraw\)/,
     "iframe permissions must render only the selected source"
   );
-  assert.doesNotMatch(iframePermissionsPane, /draggable|settingsDragHandle/, "the derived iframe projection must not own ordering");
+  const iframePermissionRow = functionSource(appsSource, "iframePermissionRow");
+  assert.match(iframePermissionRow, /draggable:\s*"true"/);
+  assert.match(iframePermissionRow, /settingsDragHandle\(t\("apps\.platformName"\)\)/);
+  assert.match(iframePermissionRow, /startBuiltInDrag\(event, app\)[\s\S]*startCustomDrag\(event, app\)/);
+  assert.doesNotMatch(iframePermissionRow, /iframe-permission-source/);
+  const iframePermissionGroup = functionSource(appsSource, "iframePermissionGroup");
+  assert.match(iframePermissionGroup, /settingsList\(\[\s*"",\s*t\("apps\.platformName"\)/);
+  assert.doesNotMatch(iframePermissionGroup, /t\("apps\.iframe\.source"\)/);
   const persistIframeConfig = functionSource(appsSource, "persistIframeConfig");
   assert.match(persistIframeConfig, /const previousOptions = state\.options/);
   assert.match(persistIframeConfig, /saveOptionsPatch\(\{ builtinChatAppIframeConfigs \}\)/);

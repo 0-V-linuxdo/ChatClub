@@ -4847,8 +4847,8 @@ body.settings-tab-group-button-dragging iframe {
 }
 
 .apps-settings-tab-bar-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, .56fr);
+  display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   gap: 28px;
   width: 100%;
@@ -4856,8 +4856,12 @@ body.settings-tab-group-button-dragging iframe {
 
 .apps-settings-tab-bar-row > .settings-inner-tabs {
   min-width: 0;
-  width: 100%;
+  flex: 0 0 min(700px, 100%);
   grid-auto-columns: minmax(0, 1fr);
+}
+
+.apps-settings-tab-bar-row > .settings-inner-tabs:last-child {
+  flex-basis: min(556px, 100%);
 }
 
 .iframe-permissions-pane {
@@ -4914,14 +4918,9 @@ body.settings-tab-group-button-dragging iframe {
 .iframe-permission-list .settings-list-header,
 .iframe-permission-row {
   min-width: 980px;
-  grid-template-columns: 92px minmax(132px, .72fr) minmax(210px, 1.05fr) minmax(286px, 1.42fr) 104px 92px;
+  grid-template-columns: 44px minmax(132px, .72fr) minmax(210px, 1.05fr) minmax(286px, 1.42fr) 104px 92px;
 }
 
-.iframe-permission-list .settings-list-header span:first-child {
-  padding-left: 18px;
-}
-
-.iframe-permission-source,
 .iframe-permission-status {
   width: fit-content;
   max-width: calc(100% - (var(--settings-row-gap) * 2));
@@ -4938,18 +4937,6 @@ body.settings-tab-group-button-dragging iframe {
   background: color-mix(in srgb, var(--panel-2) 78%, transparent);
   border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
   border-radius: 999px;
-}
-
-.iframe-permission-source.is-builtin {
-  color: color-mix(in srgb, var(--primary) 78%, var(--text));
-  background: color-mix(in srgb, var(--primary) 12%, var(--panel));
-  border-color: color-mix(in srgb, var(--primary) 34%, var(--line));
-}
-
-.iframe-permission-source.is-custom {
-  color: color-mix(in srgb, #b996ff 80%, var(--text));
-  background: color-mix(in srgb, #805ad5 13%, var(--panel));
-  border-color: color-mix(in srgb, #a985ef 34%, var(--line));
 }
 
 .iframe-permission-status.is-overridden {
@@ -6999,7 +6986,6 @@ body.settings-tab-group-button-dragging iframe {
   }
 
   .apps-settings-tab-bar-row {
-    grid-template-columns: minmax(0, 1fr);
     gap: 10px;
   }
 

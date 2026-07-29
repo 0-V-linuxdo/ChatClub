@@ -136,8 +136,8 @@ export function createAppsSettingsSection(ctx) {
   function reset() {
     state.settingsBuiltinAppDragId = "";
     state.settingsCustomAppDragId = "";
-    cleanupSettingsDragRows(".built-in-config-row");
-    cleanupSettingsDragRows(".custom-config-row");
+    cleanupSettingsDragRows(".built-in-config-row, .iframe-permission-row[data-app-source='builtIn']");
+    cleanupSettingsDragRows(".custom-config-row, .iframe-permission-row[data-app-source='custom']");
   }
 
   function builtInPane(redraw) {
@@ -255,13 +255,18 @@ export function createAppsSettingsSection(ctx) {
 
   function iframePermissionRow(app, source, redraw) {
     const overridden = iframeConfigIsOverridden(app, source);
+    const builtIn = source === "builtIn";
     return el("div", {
       class: "ui-list-row settings-list-row settings-manager-row iframe-permission-row",
-      dataset: { appId: app.id, appSource: source }
+      draggable: "true",
+      dataset: { appId: app.id, appSource: source },
+      ondragstart: (event) => builtIn ? startBuiltInDrag(event, app) : startCustomDrag(event, app),
+      ondragend: builtIn ? cleanupBuiltInDrag : cleanupCustomDrag,
+      ondragover: (event) => builtIn ? previewBuiltInDrop(event, app) : previewCustomDrop(event, app),
+      ondragleave: (event) => event.currentTarget.classList.remove("drop-before", "drop-after"),
+      ondrop: (event) => builtIn ? dropBuiltIn(event, app, redraw) : dropCustom(event, app, redraw)
     },
-      el("span", { class: `iframe-permission-source is-${source === "builtIn" ? "builtin" : "custom"}` },
-        source === "builtIn" ? t("apps.iframe.sourceBuiltIn") : t("apps.iframe.sourceCustom")
-      ),
+      settingsDragHandle(t("apps.platformName")),
       el("strong", { class: "settings-main-cell iframe-permission-app" }, app.name || app.id),
       el("span", { class: "iframe-permission-hosts", title: iframeAppHostsText(app, "\n") }, iframeAppHostsText(app)),
       el("span", { class: "iframe-permission-summary", title: iframeAttributeSummary(app, source) }, iframeAttributeSummary(app, source)),
@@ -292,7 +297,7 @@ export function createAppsSettingsSection(ctx) {
         el("span", { class: "settings-usage-chip muted" }, t("apps.iframe.platformCount", { count: apps.length }))
       ),
       settingsList([
-        t("apps.iframe.source"),
+        "",
         t("apps.platformName"),
         t("apps.hosts"),
         t("apps.iframe.effectivePolicy"),
@@ -861,7 +866,7 @@ export function createAppsSettingsSection(ctx) {
 
   function cleanupBuiltInDrag() {
     state.settingsBuiltinAppDragId = "";
-    cleanupSettingsDragRows(".built-in-config-row");
+    cleanupSettingsDragRows(".built-in-config-row, .iframe-permission-row[data-app-source='builtIn']");
   }
 
   function previewBuiltInDrop(event, app) {
@@ -941,7 +946,7 @@ export function createAppsSettingsSection(ctx) {
 
   function cleanupCustomDrag() {
     state.settingsCustomAppDragId = "";
-    cleanupSettingsDragRows(".custom-config-row");
+    cleanupSettingsDragRows(".custom-config-row, .iframe-permission-row[data-app-source='custom']");
   }
 
   function normalizeCustomUrl(value) {
