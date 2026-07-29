@@ -862,11 +862,8 @@ const pageProbe = `async (fixtureUrl) => {
       if (iframeHeaderLayout.outer.width <= iframeHeaderLayout.source.width) {
         throw new Error("Apps tab header must keep the primary tab bar wider than the source tab bar");
       }
-      if (
-        iframeHeaderLayout.outer.width !== 700
-        || iframeHeaderLayout.source.width !== 556
-      ) {
-        throw new Error("Apps tab header does not match the 700px / 556px standard layout");
+      if (iframeHeaderLayout.outer.top !== iframeHeaderLayout.source.top) {
+        throw new Error("Apps tab headers must share one row when their content fits");
       }
       selectIframePermissionsTab("builtIn");
       await waitForCondition(

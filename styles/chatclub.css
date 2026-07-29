@@ -4856,12 +4856,9 @@ body.settings-tab-group-button-dragging iframe {
 
 .apps-settings-tab-bar-row > .settings-inner-tabs {
   min-width: 0;
-  flex: 0 0 min(700px, 100%);
-  grid-auto-columns: minmax(0, 1fr);
-}
-
-.apps-settings-tab-bar-row > .settings-inner-tabs:last-child {
-  flex-basis: min(556px, 100%);
+  flex: 0 0 auto;
+  width: fit-content;
+  grid-auto-columns: minmax(132px, auto);
 }
 
 .iframe-permissions-pane {
@@ -6987,6 +6984,11 @@ body.settings-tab-group-button-dragging iframe {
 
   .apps-settings-tab-bar-row {
     gap: 10px;
+  }
+
+  .apps-settings-tab-bar-row > .settings-inner-tabs {
+    width: fit-content;
+    grid-auto-columns: minmax(132px, auto);
   }
 
   .shortcut-tabs-row {
