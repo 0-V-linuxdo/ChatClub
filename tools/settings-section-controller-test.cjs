@@ -30,6 +30,7 @@ globalThis.document = { addEventListener() {} };
   const modelsSource = read("app/settings/models.js");
   const historySource = read("app/settings/history.js");
   const functionalAnomaliesSource = read("app/settings/functional-anomalies.js");
+  const stylesSource = read("styles/chatclub.css");
 
   const controllerLines = controllerSource.trim().split(/\r?\n/).length;
   assert.ok(controllerLines <= 700, `Settings shell must remain at or below 700 lines; found ${controllerLines}`);
@@ -105,6 +106,11 @@ globalThis.document = { addEventListener() {} };
     "platform management and iframe permissions must be the two Apps tabs"
   );
   assert.match(appsSource, /dataset\.appsTabId\s*=\s*tabs\[index\]/);
+  assert.match(stylesSource, /\.apps-settings-pane\.is-platforms\s*\{[\s\S]*display:\s*flex/);
+  assert.match(stylesSource, /\.apps-settings-pane\.is-iframe\s*\{[\s\S]*display:\s*flex/);
+  assert.match(stylesSource, /\.apps-settings-pane\.is-iframe > \.iframe-permissions-pane\s*\{\s*display:\s*contents/);
+  assert.match(stylesSource, /\.apps-settings-pane\.is-iframe > \.iframe-permissions-pane > \.settings-inner-tabs[\s\S]*order:\s*0/);
+  assert.match(stylesSource, /\.apps-settings-pane\.is-iframe > \.iframe-permissions-pane > \.settings-pane-toolbar[\s\S]*order:\s*1/);
   assert.match(appsSource, /function platformsPane\(/);
   assert.match(appsSource, /function iframePermissionsPane\(/);
   assert.match(appsSource, /iframe-permission-row/);

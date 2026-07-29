@@ -4864,6 +4864,29 @@ body.settings-tab-group-button-dragging iframe {
   flex: 0 0 100%;
 }
 
+.apps-settings-pane.is-iframe {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.apps-settings-pane.is-iframe > .settings-inner-tabs,
+.apps-settings-pane.is-iframe > .iframe-permissions-pane > .settings-inner-tabs {
+  flex: 0 0 auto;
+  order: 0;
+}
+
+.apps-settings-pane.is-iframe > .iframe-permissions-pane {
+  display: contents;
+}
+
+.apps-settings-pane.is-iframe > .iframe-permissions-pane > .settings-pane-toolbar,
+.apps-settings-pane.is-iframe > .iframe-permissions-pane > .iframe-permission-scope-callout,
+.apps-settings-pane.is-iframe > .iframe-permissions-pane > .iframe-permission-group {
+  flex: 0 0 100%;
+  order: 1;
+}
+
 .iframe-permissions-pane {
   align-content: start;
 }
