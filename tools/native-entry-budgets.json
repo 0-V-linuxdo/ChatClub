@@ -3,9 +3,9 @@
     "app/main.js": {
       "maxFiles": 88,
       "targetFiles": 74,
-      "maxSourceBytes": 913215,
+      "maxSourceBytes": 922623,
       "targetSourceBytes": 750000,
-      "reason": "The application initial-static closure includes the per-frame send queue, DNR-ready iframe assignment and exact-host Grok Mirror Cookie preflight/account-switch proceed contracts, exact-document Grok Cookie ancillary-runtime attestation and repair, nonce-bound Notion Service Worker navigation with logical-URL snapshot and link sanitization, non-blocking Composer model and Notion All Sources status with an owner-scoped bounded bridge-preparation gate, authenticated frame identity and navigation recovery, owner-safe tab removal, persistent iframe-permission source selection, the transient new-topic/restoring frame status UI, and bilingual model/source and custom User Scripts permission copy, and is held to its exact footprint while feature controllers remain behind lazy boundaries."
+      "reason": "The application initial-static closure includes the per-frame send queue, DNR-ready iframe assignment and exact-host Grok Mirror Cookie preflight/account-switch proceed contracts, exact-document Grok Cookie ancillary-runtime attestation and repair, nonce-bound Notion Service Worker navigation with logical-URL snapshot and link sanitization, non-blocking Composer model and Notion All Sources status with an owner-scoped bounded bridge-preparation gate, authenticated frame identity and navigation recovery, canonical ID-based within/across-group tab dragging with Add Group drops, transactional DOM reparenting and immediate order-aware workspace reconciliation, owner-safe tab removal, persistent iframe-permission source selection, the transient new-topic/restoring frame status UI, and bilingual model/source and custom User Scripts permission copy, and is held to its exact footprint while feature controllers remain behind lazy boundaries."
     },
     "background/service-worker.js": {
       "maxFiles": 50,

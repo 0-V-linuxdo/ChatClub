@@ -1,30 +1,53 @@
 import {
   moveGroupWithinWorkspace,
+  moveTabBetweenGroups,
   moveTabWithinGroup
 } from "./model.js";
 import { validateControllerContract } from "../controller-contract.js";
 
 const TAB_DRAG_START_DISTANCE = 6;
-const GROUP_DRAG_START_DISTANCE = 6;
+const TAB_GROUP_HIT_SLOP = 6;
+const ADD_GROUP_DROP_SELECTOR = '[data-tooltip-id="topbar.addGroup"]';
 
 export function createWorkspaceDragController(dependencies = {}) {
   const {
     state,
+    createGroupId,
     persistLayout,
+    appendEmptyChatGroup,
     syncGroupTabOrder,
     activateChatTab,
-    syncWorkspaceDom
+    syncWorkspaceDom,
+    syncGridColumnClass,
+    syncFullscreenLayout
   } = validateControllerContract(dependencies, "Workspace drag controller", {
     state: "object",
+    createGroupId: "function",
     persistLayout: "function",
+    appendEmptyChatGroup: "function",
     syncGroupTabOrder: "function",
     activateChatTab: "function",
-    syncWorkspaceDom: "function"
+    syncWorkspaceDom: "function",
+    syncGridColumnClass: "function",
+    syncFullscreenLayout: "function"
   });
 
   let activeTabPointerDrag = null;
-  let activeGroupPointerDrag = null;
   let suppressTabClickInstanceId = "";
+
+  function canonicalGroup(groupId) {
+    return state.groups.find((group) => group.id === groupId) || null;
+  }
+
+  function groupCard(groupId) {
+    return Array.from(document.querySelectorAll(".chat-card[data-group-id]"))
+      .find((card) => card.dataset.groupId === groupId) || null;
+  }
+
+  function instanceNode(selector, instanceId, root = document) {
+    return Array.from(root.querySelectorAll(selector))
+      .find((node) => node.dataset.instanceId === instanceId) || null;
+  }
 
   function suspendIframePointerEventsForDrag() {
     document.querySelectorAll("iframe").forEach((iframe) => {
@@ -43,64 +66,33 @@ export function createWorkspaceDragController(dependencies = {}) {
     });
   }
 
-  function cleanupGroupDragState() {
-    removeTabPointerDragListeners();
-    removeGroupPointerDragListeners();
-    restoreIframePointerEventsForDrag();
-    document.body.classList.remove("tab-dragging");
-    document.body.classList.remove("tab-gesture-active");
-    document.querySelectorAll(".chat-card.group-dragging, .chat-card.group-drop-before, .chat-card.group-drop-after").forEach((node) => {
-      node.classList.remove("group-dragging", "group-drop-before", "group-drop-after");
-    });
-    document.querySelectorAll(".chat-tabs.tab-drop-target").forEach((node) => node.classList.remove("tab-drop-target"));
-    document.querySelectorAll(".tab.dragging, .tab.drop-before, .tab.drop-after").forEach((node) => {
-      node.classList.remove("dragging", "drop-before", "drop-after");
-    });
-    activeTabPointerDrag = null;
-    activeGroupPointerDrag = null;
-  }
-
-  function tabDropIndexFromClientX(clientX, group) {
-    const tabs = Array.from(document.querySelectorAll(`.chat-card[data-group-id="${group.id}"] .tab`));
-    if (!tabs.length) return 0;
-    for (const [index, tab] of tabs.entries()) {
-      const rect = tab.getBoundingClientRect();
-      if (clientX < rect.left + rect.width / 2) return index;
-    }
-    return tabs.length;
-  }
-
-  function tabDropTargetFromClientX(clientX, group) {
-    const tabs = Array.from(document.querySelectorAll(`.chat-card[data-group-id="${group.id}"] .tab`));
-    if (!tabs.length) return { tab: null, insertIndex: 0, after: false };
-    for (const [index, tab] of tabs.entries()) {
-      const rect = tab.getBoundingClientRect();
-      if (clientX < rect.left + rect.width / 2) return { tab, insertIndex: index, after: false };
-      if (clientX < rect.right) return { tab, insertIndex: index + 1, after: true };
-    }
-    return { tab: tabs[tabs.length - 1], insertIndex: tabs.length, after: true };
-  }
-
-  async function moveTabToIndex(group, tabId, insertIndex) {
-    const result = moveTabWithinGroup(group, tabId, insertIndex);
-    if (!result.moved) return false;
-    if (result.noop) {
-      cleanupGroupDragState();
-      return true;
-    }
-    state.activeTabs[group.id] = result.moved.instanceId;
-    cleanupGroupDragState();
-    await persistLayout();
-    syncGroupTabOrder(group);
-    activateChatTab(group, result.moved.instanceId);
-    return true;
-  }
-
   function removeTabPointerDragListeners() {
     document.removeEventListener("pointermove", handleTabPointerMove, true);
     document.removeEventListener("pointerup", handleTabPointerUp, true);
     document.removeEventListener("pointercancel", cancelTabPointerDrag, true);
     removeTabNativeSelectionGuards();
+  }
+
+  function clearDropPreview() {
+    document.querySelectorAll(".chat-card.group-dragging, .chat-card.group-drop-before, .chat-card.group-drop-after").forEach((node) => {
+      node.classList.remove("group-dragging", "group-drop-before", "group-drop-after");
+    });
+    document.querySelectorAll(".chat-tabs.tab-drop-target").forEach((node) => node.classList.remove("tab-drop-target"));
+    document.querySelectorAll(".tab.drop-before, .tab.drop-after").forEach((node) => {
+      node.classList.remove("drop-before", "drop-after");
+    });
+    document.querySelectorAll(`${ADD_GROUP_DROP_SELECTOR}.tab-new-group-drop-target`).forEach((node) => {
+      node.classList.remove("tab-new-group-drop-target");
+    });
+  }
+
+  function cleanupDragState() {
+    removeTabPointerDragListeners();
+    restoreIframePointerEventsForDrag();
+    document.body.classList.remove("tab-dragging", "tab-gesture-active");
+    clearDropPreview();
+    document.querySelectorAll(".tab.dragging").forEach((node) => node.classList.remove("dragging"));
+    activeTabPointerDrag = null;
   }
 
   function addTabNativeSelectionGuards() {
@@ -118,31 +110,87 @@ export function createWorkspaceDragController(dependencies = {}) {
     event.preventDefault();
   }
 
-  function startTabPointerDrag(event, group, chat) {
+  function rectContainsPoint(rect, clientX, clientY, slop = 0) {
+    return clientX >= rect.left - slop
+      && clientX <= rect.right + slop
+      && clientY >= rect.top - slop
+      && clientY <= rect.bottom + slop;
+  }
+
+  function addGroupDropTarget(clientX, clientY) {
+    return Array.from(document.querySelectorAll(ADD_GROUP_DROP_SELECTOR))
+      .find((button) => {
+        const rect = button.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0 && rectContainsPoint(rect, clientX, clientY);
+      }) || null;
+  }
+
+  function tabGroupDropTarget(clientX, clientY) {
+    for (const group of state.groups) {
+      const card = groupCard(group.id);
+      const header = card?.querySelector(".chat-header");
+      const tabs = card?.querySelector(".chat-tabs");
+      const rect = header?.getBoundingClientRect();
+      if (
+        tabs
+        && rect
+        && clientX >= rect.left
+        && clientX <= rect.right
+        && clientY >= rect.top - TAB_GROUP_HIT_SLOP
+        && clientY <= rect.bottom + TAB_GROUP_HIT_SLOP
+      ) {
+        return { group, card, tabs };
+      }
+    }
+    return null;
+  }
+
+  function tabDropTargetFromClientX(clientX, groupId) {
+    const card = groupCard(groupId);
+    const tabs = Array.from(card?.querySelectorAll(".tab[data-instance-id]") || []);
+    if (!tabs.length) return { tab: null, insertIndex: 0, after: false };
+    for (const [index, tab] of tabs.entries()) {
+      const rect = tab.getBoundingClientRect();
+      if (clientX < rect.left + rect.width / 2) return { tab, insertIndex: index, after: false };
+      if (clientX < rect.right) return { tab, insertIndex: index + 1, after: true };
+    }
+    return { tab: tabs[tabs.length - 1], insertIndex: tabs.length, after: true };
+  }
+
+  function groupDropTargetFromClientX(clientX) {
+    const cards = state.groups.map((group) => groupCard(group.id)).filter(Boolean);
+    if (!cards.length) return { card: null, insertIndex: 0, after: false };
+    for (const [index, card] of cards.entries()) {
+      const rect = card.getBoundingClientRect();
+      if (clientX < rect.left + rect.width / 2) return { card, insertIndex: index, after: false };
+      if (clientX < rect.right) return { card, insertIndex: index + 1, after: true };
+    }
+    return { card: cards[cards.length - 1], insertIndex: cards.length, after: true };
+  }
+
+  function startTabPointerDrag(event, sourceGroupId, instanceId) {
     if (event.button !== 0 || event.target?.closest?.(".tab-close")) return;
+    const group = canonicalGroup(sourceGroupId);
+    const chatIndex = group?.chatApps?.findIndex((chat) => chat.instanceId === instanceId) ?? -1;
+    if (!group || chatIndex < 0) return;
     event.preventDefault();
     event.stopPropagation();
     globalThis.getSelection?.()?.removeAllRanges?.();
     removeTabPointerDragListeners();
     addTabNativeSelectionGuards();
     document.body.classList.add("tab-gesture-active");
-    if (group.chatApps.length <= 1) {
-      if (state.groups.length > 1) startGroupPointerDrag(event, group, event.currentTarget);
-      else {
-        removeTabNativeSelectionGuards();
-        document.body.classList.remove("tab-gesture-active");
-      }
-      return;
-    }
     event.currentTarget?.setPointerCapture?.(event.pointerId);
     activeTabPointerDrag = {
-      group,
-      instanceId: chat.instanceId,
+      sourceGroupId,
+      instanceId,
       startX: event.clientX,
       startY: event.clientY,
-      insertIndex: group.chatApps.findIndex((item) => item.instanceId === chat.instanceId),
+      insertIndex: chatIndex,
+      targetGroupId: sourceGroupId,
+      mode: null,
       tab: event.currentTarget,
-      started: false
+      started: false,
+      singleTab: group.chatApps.length === 1
     };
     document.addEventListener("pointermove", handleTabPointerMove, true);
     document.addEventListener("pointerup", handleTabPointerUp, true);
@@ -154,20 +202,47 @@ export function createWorkspaceDragController(dependencies = {}) {
     drag.started = true;
     suspendIframePointerEventsForDrag();
     document.body.classList.add("tab-dragging");
-    drag.tab.classList.add("dragging");
+    drag.tab?.classList?.add("dragging");
   }
 
-  function updateTabPointerDropPreview(drag, clientX) {
-    document.querySelectorAll(".tab.drop-before, .tab.drop-after").forEach((node) => {
-      node.classList.remove("drop-before", "drop-after");
-    });
-    const tabs = document.querySelector(`.chat-card[data-group-id="${drag.group.id}"] .chat-tabs`);
-    tabs?.classList?.add("tab-drop-target");
-    const target = tabDropTargetFromClientX(clientX, drag.group);
-    drag.insertIndex = target.insertIndex;
-    if (target.tab && target.tab !== drag.tab) {
-      target.tab.classList.add(target.after ? "drop-after" : "drop-before");
+  function updateTabPointerDropPreview(drag, clientX, clientY) {
+    clearDropPreview();
+    const newGroupButton = addGroupDropTarget(clientX, clientY);
+    if (newGroupButton) {
+      drag.mode = "new-group";
+      drag.targetGroupId = "";
+      drag.insertIndex = 0;
+      newGroupButton.classList.add("tab-new-group-drop-target");
+      return;
     }
+
+    const groupTarget = tabGroupDropTarget(clientX, clientY);
+    if (groupTarget) {
+      const target = tabDropTargetFromClientX(clientX, groupTarget.group.id);
+      drag.mode = "tab";
+      drag.targetGroupId = groupTarget.group.id;
+      drag.insertIndex = target.insertIndex;
+      groupTarget.tabs.classList.add("tab-drop-target");
+      if (target.tab && target.tab !== drag.tab) {
+        target.tab.classList.add(target.after ? "drop-after" : "drop-before");
+      }
+      return;
+    }
+
+    if (drag.singleTab && state.groups.length > 1) {
+      const target = groupDropTargetFromClientX(clientX);
+      drag.mode = "group";
+      drag.targetGroupId = "";
+      drag.insertIndex = target.insertIndex;
+      groupCard(drag.sourceGroupId)?.classList.add("group-dragging");
+      if (target.card && target.card.dataset.groupId !== drag.sourceGroupId) {
+        target.card.classList.add(target.after ? "group-drop-after" : "group-drop-before");
+      }
+      return;
+    }
+
+    drag.mode = null;
+    drag.targetGroupId = "";
   }
 
   function handleTabPointerMove(event) {
@@ -177,7 +252,178 @@ export function createWorkspaceDragController(dependencies = {}) {
     if (!drag.started && distance < TAB_DRAG_START_DISTANCE) return;
     event.preventDefault();
     beginTabPointerDrag(drag);
-    updateTabPointerDropPreview(drag, event.clientX);
+    updateTabPointerDropPreview(drag, event.clientX, event.clientY);
+  }
+
+  function moveNodeToParent(parent, node, before = null) {
+    if (typeof parent.moveBefore === "function") {
+      parent.moveBefore(node, before);
+      return;
+    }
+    // Older packaged baselines do not expose moveBefore(). Reusing the exact
+    // node preserves identity, though those engines may reload a moved iframe.
+    parent.insertBefore(node, before);
+  }
+
+  function transferTabDom(sourceGroupId, targetGroupId, instanceId, targetIndex) {
+    const sourceCard = groupCard(sourceGroupId);
+    const targetCard = groupCard(targetGroupId);
+    const sourceTabs = sourceCard?.querySelector(".chat-tabs");
+    const targetTabs = targetCard?.querySelector(".chat-tabs");
+    const sourceFrames = sourceCard?.querySelector(".chat-frame-wrap");
+    const targetFrames = targetCard?.querySelector(".chat-frame-wrap");
+    const tab = sourceTabs && instanceNode(".tab[data-instance-id]", instanceId, sourceTabs);
+    const iframe = sourceFrames && instanceNode(".chat-frame[data-instance-id]", instanceId, sourceFrames);
+    if (!sourceTabs || !targetTabs || !sourceFrames || !targetFrames || !tab || !iframe) return null;
+    const targetTabNodes = Array.from(targetTabs.querySelectorAll(".tab[data-instance-id]"));
+    const tabBefore = targetTabNodes[Math.max(0, Math.min(targetIndex, targetTabNodes.length))]
+      || targetTabs.querySelector(".tab-add")
+      || null;
+    const frameBefore = targetFrames.querySelector(".chat-frame-loading-status") || null;
+    const sourceTabBefore = tab.nextSibling || null;
+    const sourceFrameBefore = iframe.nextSibling || null;
+    let tabMoved = false;
+    let frameMoved = false;
+    const validReference = (parent, node) => node
+      && (node.parentNode === parent || node.parentElement === parent)
+      ? node
+      : null;
+    const rollback = () => {
+      if (tabMoved) moveNodeToParent(sourceTabs, tab, validReference(sourceTabs, sourceTabBefore));
+      if (frameMoved) moveNodeToParent(sourceFrames, iframe, validReference(sourceFrames, sourceFrameBefore));
+      tabMoved = false;
+      frameMoved = false;
+    };
+    try {
+      moveNodeToParent(targetTabs, tab, tabBefore);
+      tabMoved = true;
+      moveNodeToParent(targetFrames, iframe, frameBefore);
+      frameMoved = true;
+    } catch (error) {
+      try {
+        rollback();
+      } catch {}
+      throw error;
+    }
+    return { rollback };
+  }
+
+  async function moveTabToIndex(groupId, tabId, insertIndex) {
+    const group = canonicalGroup(groupId);
+    const result = moveTabWithinGroup(state.groups, groupId, tabId, insertIndex);
+    if (!group || !result.moved) return false;
+    cleanupDragState();
+    syncGroupTabOrder(group);
+    if (result.noop) return true;
+    state.activeTabs[group.id] = result.moved.instanceId;
+    activateChatTab(group, result.moved.instanceId);
+    await persistLayout();
+    return true;
+  }
+
+  async function moveTabToGroup(sourceGroupId, targetGroupId, tabId, insertIndex) {
+    const sourceGroup = canonicalGroup(sourceGroupId);
+    const targetGroup = canonicalGroup(targetGroupId);
+    if (!sourceGroup || !targetGroup || sourceGroup === targetGroup) return false;
+    const sourceIndex = sourceGroup.chatApps.findIndex((chat) => chat.instanceId === tabId);
+    if (sourceIndex < 0 || targetGroup.chatApps.some((chat) => chat.instanceId === tabId)) return false;
+    const requestedIndex = Number(insertIndex);
+    const targetIndex = Number.isFinite(requestedIndex)
+      ? Math.max(0, Math.min(Math.trunc(requestedIndex), targetGroup.chatApps.length))
+      : targetGroup.chatApps.length;
+    const domTransfer = transferTabDom(sourceGroupId, targetGroupId, tabId, targetIndex);
+    if (!domTransfer) return false;
+    let result;
+    try {
+      result = moveTabBetweenGroups(
+        state.groups,
+        state.activeTabs,
+        sourceGroupId,
+        targetGroupId,
+        tabId,
+        targetIndex
+      );
+    } catch (error) {
+      domTransfer.rollback();
+      throw error;
+    }
+    if (!result.changed) {
+      domTransfer.rollback();
+      return false;
+    }
+    if (result.sourceGroupRemoved) groupCard(sourceGroupId)?.remove();
+    else activateChatTab(result.sourceGroup, result.sourceActiveId, result.previousSourceActiveId);
+    activateChatTab(result.targetGroup, result.targetActiveId, result.previousTargetActiveId);
+    cleanupDragState();
+    syncGridColumnClass();
+    syncFullscreenLayout();
+    await persistLayout();
+    return true;
+  }
+
+  function createDraggedTabGroup(sourceGroupId) {
+    const sourceGroup = canonicalGroup(sourceGroupId);
+    if (!sourceGroup) return null;
+    const groupId = createGroupId();
+    if (!groupId || canonicalGroup(groupId)) return null;
+    const group = {
+      id: groupId,
+      ...(sourceGroup.temporary ? {
+        temporary: true,
+        pocketBatchId: sourceGroup.pocketBatchId || ""
+      } : {}),
+      chatApps: []
+    };
+    state.groups.push(group);
+    const rollback = () => {
+      groupCard(group.id)?.remove();
+      const groupIndex = state.groups.findIndex((item) => item.id === group.id);
+      if (groupIndex >= 0) state.groups.splice(groupIndex, 1);
+      delete state.activeTabs[group.id];
+    };
+    try {
+      const card = appendEmptyChatGroup(group);
+      if (card) return group;
+      rollback();
+      return null;
+    } catch (error) {
+      rollback();
+      throw error;
+    }
+  }
+
+  async function moveTabToNewGroup(sourceGroupId, tabId) {
+    const targetGroup = createDraggedTabGroup(sourceGroupId);
+    if (!targetGroup) return false;
+    const discardEmptyTarget = () => {
+      if (targetGroup.chatApps.length) return false;
+      groupCard(targetGroup.id)?.remove();
+      const targetIndex = state.groups.findIndex((group) => group.id === targetGroup.id);
+      if (targetIndex >= 0) state.groups.splice(targetIndex, 1);
+      delete state.activeTabs[targetGroup.id];
+      syncGridColumnClass();
+      syncFullscreenLayout();
+      return true;
+    };
+    try {
+      const moved = await moveTabToGroup(sourceGroupId, targetGroup.id, tabId, 0);
+      if (moved) return true;
+      discardEmptyTarget();
+      return false;
+    } catch (error) {
+      discardEmptyTarget();
+      throw error;
+    }
+  }
+
+  async function moveGroupToIndex(groupId, insertIndex) {
+    const result = moveGroupWithinWorkspace(state.groups, groupId, insertIndex);
+    if (!result.moved) return false;
+    cleanupDragState();
+    syncWorkspaceDom();
+    if (result.noop) return true;
+    await persistLayout();
+    return true;
   }
 
   function handleTabPointerUp(event) {
@@ -194,128 +440,25 @@ export function createWorkspaceDragController(dependencies = {}) {
     setTimeout(() => {
       if (suppressTabClickInstanceId === drag.instanceId) suppressTabClickInstanceId = "";
     }, 0);
-    moveTabToIndex(drag.group, drag.instanceId, drag.insertIndex ?? tabDropIndexFromClientX(event.clientX, drag.group))
-      .catch((error) => {
-        cleanupGroupDragState();
-        console.warn("[ChatClub] Failed to reorder tab", error);
-      });
+    const operation = drag.mode === "new-group"
+      ? moveTabToNewGroup(drag.sourceGroupId, drag.instanceId)
+      : drag.mode === "tab" && drag.targetGroupId !== drag.sourceGroupId
+        ? moveTabToGroup(drag.sourceGroupId, drag.targetGroupId, drag.instanceId, drag.insertIndex)
+        : drag.mode === "tab"
+          ? moveTabToIndex(drag.sourceGroupId, drag.instanceId, drag.insertIndex)
+          : drag.mode === "group"
+            ? moveGroupToIndex(drag.sourceGroupId, drag.insertIndex)
+            : Promise.resolve(false);
+    operation.then((moved) => {
+      if (!moved) cleanupDragState();
+    }).catch((error) => {
+      cleanupDragState();
+      console.warn("[ChatClub] Failed to move dragged tab", error);
+    });
   }
 
   function cancelTabPointerDrag() {
-    removeTabPointerDragListeners();
-    cleanupGroupDragState();
-  }
-
-  function removeGroupPointerDragListeners() {
-    document.removeEventListener("pointermove", handleGroupPointerMove, true);
-    document.removeEventListener("pointerup", handleGroupPointerUp, true);
-    document.removeEventListener("pointercancel", cancelGroupPointerDrag, true);
-    removeTabNativeSelectionGuards();
-  }
-
-  function startGroupPointerDrag(event, group, tab) {
-    const index = state.groups.findIndex((item) => item.id === group.id);
-    if (index < 0) {
-      removeTabNativeSelectionGuards();
-      document.body.classList.remove("tab-gesture-active");
-      return;
-    }
-    tab?.setPointerCapture?.(event.pointerId);
-    activeGroupPointerDrag = {
-      group,
-      startX: event.clientX,
-      startY: event.clientY,
-      insertIndex: index,
-      tab,
-      started: false
-    };
-    removeGroupPointerDragListeners();
-    addTabNativeSelectionGuards();
-    document.addEventListener("pointermove", handleGroupPointerMove, true);
-    document.addEventListener("pointerup", handleGroupPointerUp, true);
-    document.addEventListener("pointercancel", cancelGroupPointerDrag, true);
-  }
-
-  function beginGroupPointerDrag(drag) {
-    if (drag.started) return;
-    drag.started = true;
-    suspendIframePointerEventsForDrag();
-    document.body.classList.add("tab-dragging");
-    drag.tab?.classList?.add("dragging");
-    document.querySelector(`.chat-card[data-group-id="${drag.group.id}"]`)?.classList.add("group-dragging");
-  }
-
-  function groupDropTargetFromClientX(clientX) {
-    const cards = state.groups
-      .map((group) => document.querySelector(`.chat-card[data-group-id="${group.id}"]`))
-      .filter(Boolean);
-    if (!cards.length) return { card: null, insertIndex: 0, after: false };
-    for (const [index, card] of cards.entries()) {
-      const rect = card.getBoundingClientRect();
-      if (clientX < rect.left + rect.width / 2) return { card, insertIndex: index, after: false };
-      if (clientX < rect.right) return { card, insertIndex: index + 1, after: true };
-    }
-    return { card: cards[cards.length - 1], insertIndex: cards.length, after: true };
-  }
-
-  function updateGroupPointerDropPreview(drag, clientX) {
-    document.querySelectorAll(".chat-card.group-drop-before, .chat-card.group-drop-after").forEach((node) => {
-      node.classList.remove("group-drop-before", "group-drop-after");
-    });
-    const target = groupDropTargetFromClientX(clientX);
-    drag.insertIndex = target.insertIndex;
-    if (target.card && target.card.dataset.groupId !== drag.group.id) {
-      target.card.classList.add(target.after ? "group-drop-after" : "group-drop-before");
-    }
-  }
-
-  function handleGroupPointerMove(event) {
-    const drag = activeGroupPointerDrag;
-    if (!drag) return;
-    const distance = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY);
-    if (!drag.started && distance < GROUP_DRAG_START_DISTANCE) return;
-    event.preventDefault();
-    beginGroupPointerDrag(drag);
-    updateGroupPointerDropPreview(drag, event.clientX);
-  }
-
-  function handleGroupPointerUp(event) {
-    const drag = activeGroupPointerDrag;
-    removeGroupPointerDragListeners();
-    if (!drag) return;
-    if (!drag.started) {
-      activeGroupPointerDrag = null;
-      document.body.classList.remove("tab-gesture-active");
-      return;
-    }
-    event.preventDefault();
-    suppressTabClickInstanceId = drag.group.chatApps[0]?.instanceId || "";
-    setTimeout(() => {
-      if (suppressTabClickInstanceId === drag.group.chatApps[0]?.instanceId) suppressTabClickInstanceId = "";
-    }, 0);
-    moveGroupToIndex(drag.group, drag.insertIndex ?? groupDropTargetFromClientX(event.clientX).insertIndex)
-      .catch((error) => {
-        cleanupGroupDragState();
-        console.warn("[ChatClub] Failed to reorder group", error);
-      });
-  }
-
-  function cancelGroupPointerDrag() {
-    removeGroupPointerDragListeners();
-    cleanupGroupDragState();
-  }
-
-  async function moveGroupToIndex(group, insertIndex) {
-    const result = moveGroupWithinWorkspace(state.groups, group.id, insertIndex);
-    if (!result.moved) return false;
-    if (result.noop) {
-      cleanupGroupDragState();
-      return true;
-    }
-    cleanupGroupDragState();
-    await persistLayout();
-    syncWorkspaceDom();
-    return true;
+    cleanupDragState();
   }
 
   function consumeSuppressedTabClick(instanceId) {

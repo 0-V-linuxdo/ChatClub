@@ -166,6 +166,7 @@ export function createWorkspaceController(ctx = {}) {
   ]);
   const viewBinding = createBindOnceControllerPort("Workspace view", [
     "appendChatGroup",
+    "appendEmptyChatGroup",
     "closePopovers",
     "closePopoversAnchoredWithin",
     "closeTransientOverlays",
@@ -268,10 +269,14 @@ export function createWorkspaceController(ctx = {}) {
 
   const dragController = createWorkspaceDragController({
     state: ownerState.drag,
+    createGroupId,
     persistLayout: layoutBinding.port.persistLayout,
+    appendEmptyChatGroup: viewBinding.port.appendEmptyChatGroup,
     syncGroupTabOrder: frameBinding.port.syncGroupTabOrder,
     activateChatTab: frameBinding.port.activateChatTab,
-    syncWorkspaceDom: viewBinding.port.syncWorkspaceDom
+    syncWorkspaceDom: viewBinding.port.syncWorkspaceDom,
+    syncGridColumnClass: viewBinding.port.syncGridColumnClass,
+    syncFullscreenLayout: frameBinding.port.syncFullscreenLayout
   });
 
   const messageNavigatorController = createWorkspaceMessageNavigatorController({

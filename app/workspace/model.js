@@ -158,14 +158,85 @@ export function reconcileWorkspaceAppCatalog({
   };
 }
 
-export function moveTabWithinGroup(group, tabId, insertIndex) {
+export function moveTabWithinGroup(groups, groupId, tabId, insertIndex) {
+  const group = (Array.isArray(groups) ? groups : []).find((item) => item?.id === groupId);
   const fromIndex = group?.chatApps?.findIndex((item) => item.instanceId === tabId) ?? -1;
   if (fromIndex < 0) return { changed: false, moved: null, noop: false };
-  const normalizedIndex = fromIndex < insertIndex ? insertIndex - 1 : insertIndex;
+  const requestedIndex = Number(insertIndex);
+  const targetIndex = Number.isFinite(requestedIndex)
+    ? Math.max(0, Math.min(Math.trunc(requestedIndex), group.chatApps.length))
+    : fromIndex;
+  const normalizedIndex = fromIndex < targetIndex ? targetIndex - 1 : targetIndex;
   if (normalizedIndex === fromIndex) return { changed: false, moved: group.chatApps[fromIndex], noop: true };
   const [moved] = group.chatApps.splice(fromIndex, 1);
   group.chatApps.splice(Math.max(0, Math.min(normalizedIndex, group.chatApps.length)), 0, moved);
   return { changed: true, moved, noop: false };
+}
+
+export function moveTabBetweenGroups(
+  groups,
+  activeTabs,
+  sourceGroupId,
+  targetGroupId,
+  tabId,
+  insertIndex
+) {
+  const sourceGroups = Array.isArray(groups) ? groups : [];
+  const activeByGroupId = activeTabs && typeof activeTabs === "object" ? activeTabs : null;
+  const sourceGroup = sourceGroups.find((group) => group?.id === sourceGroupId);
+  const targetGroup = sourceGroups.find((group) => group?.id === targetGroupId);
+  const fromIndex = sourceGroup?.chatApps?.findIndex((chat) => chat.instanceId === tabId) ?? -1;
+  if (
+    !activeByGroupId
+    || !sourceGroup
+    || !targetGroup
+    || sourceGroup === targetGroup
+    || fromIndex < 0
+    || targetGroup.chatApps.some((chat) => chat.instanceId === tabId)
+  ) {
+    return { changed: false, moved: null, sourceGroup: null, targetGroup: null };
+  }
+
+  const previousSourceActiveId = activeByGroupId[sourceGroup.id] || sourceGroup.chatApps[0]?.instanceId || "";
+  const previousTargetActiveId = activeByGroupId[targetGroup.id] || targetGroup.chatApps[0]?.instanceId || "";
+  const [moved] = sourceGroup.chatApps.splice(fromIndex, 1);
+  const requestedTargetIndex = Number(insertIndex);
+  const targetIndex = Number.isFinite(requestedTargetIndex)
+    ? Math.max(0, Math.min(Math.trunc(requestedTargetIndex), targetGroup.chatApps.length))
+    : targetGroup.chatApps.length;
+  targetGroup.chatApps.splice(targetIndex, 0, moved);
+
+  let sourceActiveId = "";
+  let sourceGroupRemoved = false;
+  if (!sourceGroup.chatApps.length) {
+    const sourceIndex = sourceGroups.indexOf(sourceGroup);
+    if (sourceIndex >= 0) sourceGroups.splice(sourceIndex, 1);
+    delete activeByGroupId[sourceGroup.id];
+    sourceGroupRemoved = true;
+  } else {
+    sourceActiveId = previousSourceActiveId !== moved.instanceId
+      && sourceGroup.chatApps.some((chat) => chat.instanceId === previousSourceActiveId)
+      ? previousSourceActiveId
+      : sourceGroup.chatApps[Math.min(fromIndex, sourceGroup.chatApps.length - 1)]?.instanceId
+        || sourceGroup.chatApps[0]?.instanceId
+        || "";
+    activeByGroupId[sourceGroup.id] = sourceActiveId;
+  }
+  activeByGroupId[targetGroup.id] = moved.instanceId;
+
+  return {
+    changed: true,
+    moved,
+    sourceGroup,
+    targetGroup,
+    sourceGroupRemoved,
+    sourceActiveId,
+    nextSourceActiveId: sourceActiveId,
+    previousSourceActiveId,
+    previousTargetActiveId,
+    targetActiveId: moved.instanceId,
+    targetIndex
+  };
 }
 
 export function moveGroupWithinWorkspace(groups, groupId, insertIndex) {

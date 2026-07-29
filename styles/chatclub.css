@@ -1673,6 +1673,13 @@ button { cursor: pointer; }
   background: var(--panel-2);
 }
 
+.topbar .top-icon-action.tab-new-group-drop-target {
+  color: var(--primary);
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 14%, var(--panel-2));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 20%, transparent);
+}
+
 @media (max-width: 1280px) {
   .brand {
     flex: 0 0 40px;

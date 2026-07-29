@@ -120,9 +120,13 @@ export function createWorkspaceViewController(dependencies = {}) {
       const ids = (group.chatApps || []).map((chat) => chat.instanceId);
       return ids.length === tabs.length
         && ids.length === frames.length
-        && ids.every((id) => tabs.some((tab) => tab.dataset.instanceId === id))
+        && ids.every((id, index) => tabs[index]?.dataset.instanceId === id)
         && ids.every((id) => frames.some((frame) => frame.dataset.instanceId === id));
     });
+  }
+
+  function syncWorkspaceTabOrder() {
+    for (const group of state.groups || []) syncGroupTabOrder(group);
   }
 
   function syncHeaderForFrameInstance(instanceId) {
@@ -389,6 +393,11 @@ export function createWorkspaceViewController(dependencies = {}) {
       syncFullscreenLayout();
       return workspaceNode;
     }
+    // Repair tab order before deciding whether the existing workspace island
+    // can be retained. Membership can match while a prior async save left the
+    // DOM in an older order; replacing the island would unnecessarily reload
+    // every live chat iframe.
+    syncWorkspaceTabOrder();
     if (workspaceDomMatchesState()) {
       workspaceNode = workspaceNode?.isConnected ? workspaceNode : document.querySelector(".main-grid");
       workspaceRenderSignature = signature;
@@ -506,6 +515,7 @@ export function createWorkspaceViewController(dependencies = {}) {
   }
 
   function syncWorkspaceDom() {
+    syncWorkspaceTabOrder();
     state.groups.forEach((group, index) => {
       const card = document.querySelector(`.chat-card[data-group-id="${group.id}"]`);
       if (card) {
@@ -527,10 +537,22 @@ export function createWorkspaceViewController(dependencies = {}) {
     syncFullscreenLayout();
   }
 
+  function appendEmptyChatGroup(group) {
+    const grid = document.querySelector(".main-grid");
+    if (!grid || !group) return null;
+    const card = renderChatGroup(group, state.groups.findIndex((item) => item.id === group.id), { chatApps: [] });
+    grid.append(card);
+    return card;
+  }
   function renderChatTab(group, chat) {
     const app = appById(chat.appId);
     const name = inferAppName(app);
     const active = state.activeTabs[group.id] || group.chatApps[0]?.instanceId;
+    const currentLocation = () => chatLocationForInstance(chat.instanceId);
+    const activateCurrentLocation = () => {
+      const location = currentLocation();
+      if (location?.group) activateChatTab(location.group, chat.instanceId);
+    };
     return el("div", {
       class: `tab ${chat.instanceId === active ? "active" : ""}`,
       role: "button",
@@ -547,18 +569,18 @@ export function createWorkspaceViewController(dependencies = {}) {
         event.preventDefault();
         event.stopPropagation();
       },
-      onpointerdown: (event) => startTabPointerDrag(event, group, chat),
+      onpointerdown: (event) => startTabPointerDrag(event, currentLocation()?.group?.id, chat.instanceId),
       onclick: (event) => {
         if (consumeSuppressedTabClick(chat.instanceId)) {
           event.preventDefault();
           return;
         }
-        activateChatTab(group, chat.instanceId);
+        activateCurrentLocation();
       },
       onkeydown: (event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          activateChatTab(group, chat.instanceId);
+          activateCurrentLocation();
         }
       }
     },
@@ -597,7 +619,8 @@ export function createWorkspaceViewController(dependencies = {}) {
         onclick: async (event) => {
           event.preventDefault();
           event.stopPropagation();
-          await closeTab(group, chat);
+          const location = currentLocation();
+          if (location?.group && location.chat) await closeTab(location.group, location.chat);
         },
         onpointerdown: (event) => event.stopPropagation(),
         onkeydown: (event) => event.stopPropagation()
@@ -734,9 +757,9 @@ export function createWorkspaceViewController(dependencies = {}) {
     ];
   }
 
-  function renderChatGroup(group, index) {
+  function renderChatGroup(group, index, { chatApps = group.chatApps } = {}) {
     const isFullscreen = state.fullscreenGroupId === group.id;
-    const frames = group.chatApps.map((chat) => renderChatFrame(group, chat));
+    const frames = chatApps.map((chat) => renderChatFrame(group, chat));
     const isFrameLoading = activeFrameIsLoading(group);
     const activeFrame = frames.find((iframe) => iframe.classList.contains("active"));
     activeFrame?.setAttribute("aria-busy", String(isFrameLoading));
@@ -747,7 +770,7 @@ export function createWorkspaceViewController(dependencies = {}) {
     },
       el("div", { class: "chat-header" },
         el("div", { class: "chat-tabs" },
-          group.chatApps.map((chat) => renderChatTab(group, chat)),
+          chatApps.map((chat) => renderChatTab(group, chat)),
           tabGroupButtonIsPinned("addApp") ? renderTabAddButton(group) : null
         ),
         el("div", { class: "chat-actions" }, renderChatActionButtons(group))
@@ -1151,6 +1174,7 @@ export function createWorkspaceViewController(dependencies = {}) {
 
   return Object.freeze({
     appendChatGroup,
+    appendEmptyChatGroup,
     closePopovers,
     closePopoversAnchoredWithin,
     closeTransientOverlays,

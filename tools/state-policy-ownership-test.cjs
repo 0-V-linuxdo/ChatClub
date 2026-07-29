@@ -120,6 +120,153 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
   );
   assert.deepEqual(staleCloseResult, { removed: false, removeGroup: false });
   assert.deepEqual(rootState.groups[0].chatApps.map((chat) => chat.instanceId), ["tab-2"]);
+
+  const withinTabOne = { appId: "duplicate", instanceId: "within-tab-1" };
+  const withinTabTwo = { appId: "duplicate", instanceId: "within-tab-2" };
+  const withinTabThree = { appId: "duplicate", instanceId: "within-tab-3" };
+  const withinRootState = stateModule.createAppState();
+  withinRootState.groups = [{
+    id: "within-group",
+    chatApps: [withinTabOne, withinTabTwo, withinTabThree]
+  }];
+  withinRootState.activeTabs = { "within-group": "within-tab-2" };
+  const withinWorkspace = workspaceModule.createWorkspaceStatePort(withinRootState);
+  const withinOwners = workspaceOwnerModule.createWorkspaceOwnerStatePorts(withinWorkspace);
+  const readonlyWithinGroup = withinOwners.render.groups[0];
+  const readonlyWithinTab = readonlyWithinGroup.chatApps[0];
+  const withinMove = workspaceModelModule.moveTabWithinGroup(
+    withinOwners.drag.groups,
+    readonlyWithinGroup.id,
+    readonlyWithinTab.instanceId,
+    3
+  );
+  assert.equal(withinMove.changed, true);
+  assert.equal(withinMove.moved, withinTabOne, "ID-based reordering must return the canonical tab record");
+  assert.deepEqual(
+    withinRootState.groups[0].chatApps,
+    [withinTabTwo, withinTabThree, withinTabOne],
+    "render-owned read-only IDs must let the drag owner mutate canonical state without splicing the proxy"
+  );
+
+  const sourceLeft = { appId: "duplicate", instanceId: "source-left" };
+  const sourceMoved = { appId: "duplicate", instanceId: "source-moved" };
+  const sourceRight = { appId: "duplicate", instanceId: "source-right" };
+  const targetLeft = { appId: "duplicate", instanceId: "target-left" };
+  const targetRight = { appId: "duplicate", instanceId: "target-right" };
+  const sourceGroup = { id: "source-group", chatApps: [sourceLeft, sourceMoved, sourceRight] };
+  const targetGroup = { id: "target-group", chatApps: [targetLeft, targetRight] };
+  const betweenRootState = stateModule.createAppState();
+  betweenRootState.groups = [sourceGroup, targetGroup];
+  betweenRootState.activeTabs = {
+    "source-group": sourceMoved.instanceId,
+    "target-group": targetLeft.instanceId
+  };
+  const betweenWorkspace = workspaceModule.createWorkspaceStatePort(betweenRootState);
+  const betweenOwners = workspaceOwnerModule.createWorkspaceOwnerStatePorts(betweenWorkspace);
+  const readonlySourceGroup = betweenOwners.render.groups[0];
+  const readonlyTargetGroup = betweenOwners.render.groups[1];
+  const betweenMove = workspaceModelModule.moveTabBetweenGroups(
+    betweenOwners.drag.groups,
+    betweenOwners.drag.activeTabs,
+    readonlySourceGroup.id,
+    readonlyTargetGroup.id,
+    readonlySourceGroup.chatApps[1].instanceId,
+    1
+  );
+  assert.equal(betweenMove.changed, true);
+  assert.equal(betweenMove.moved, sourceMoved, "cross-group moves must preserve canonical tab identity");
+  assert.equal(betweenMove.sourceGroup, sourceGroup);
+  assert.equal(betweenMove.targetGroup, targetGroup);
+  assert.deepEqual(sourceGroup.chatApps, [sourceLeft, sourceRight]);
+  assert.deepEqual(targetGroup.chatApps, [targetLeft, sourceMoved, targetRight]);
+  assert.equal(
+    betweenRootState.activeTabs[sourceGroup.id],
+    sourceRight.instanceId,
+    "moving the active tab must select its nearest surviving source neighbor"
+  );
+  assert.equal(betweenRootState.activeTabs[targetGroup.id], sourceMoved.instanceId);
+  assert.equal(betweenMove.previousTargetActiveId, targetLeft.instanceId);
+
+  const inactiveMove = workspaceModelModule.moveTabBetweenGroups(
+    betweenOwners.drag.groups,
+    betweenOwners.drag.activeTabs,
+    sourceGroup.id,
+    targetGroup.id,
+    sourceLeft.instanceId,
+    Number.POSITIVE_INFINITY
+  );
+  assert.equal(inactiveMove.changed, true);
+  assert.deepEqual(sourceGroup.chatApps, [sourceRight]);
+  assert.deepEqual(targetGroup.chatApps, [targetLeft, sourceMoved, targetRight, sourceLeft]);
+  assert.equal(
+    betweenRootState.activeTabs[sourceGroup.id],
+    sourceRight.instanceId,
+    "moving an inactive tab must preserve the source group's active tab"
+  );
+  assert.equal(betweenRootState.activeTabs[targetGroup.id], sourceLeft.instanceId);
+
+  const soleMoved = { appId: "duplicate", instanceId: "sole-moved" };
+  const soleTargetTab = { appId: "duplicate", instanceId: "sole-target" };
+  const soleSourceGroup = { id: "sole-source", chatApps: [soleMoved] };
+  const soleTargetGroup = { id: "sole-target-group", chatApps: [soleTargetTab] };
+  const soleRootState = stateModule.createAppState();
+  soleRootState.groups = [soleSourceGroup, soleTargetGroup];
+  soleRootState.activeTabs = {
+    "sole-source": soleMoved.instanceId,
+    "sole-target-group": soleTargetTab.instanceId
+  };
+  const soleWorkspace = workspaceModule.createWorkspaceStatePort(soleRootState);
+  const soleOwners = workspaceOwnerModule.createWorkspaceOwnerStatePorts(soleWorkspace);
+  const soleMove = workspaceModelModule.moveTabBetweenGroups(
+    soleOwners.drag.groups,
+    soleOwners.drag.activeTabs,
+    soleOwners.render.groups[0].id,
+    soleOwners.render.groups[1].id,
+    soleOwners.render.groups[0].chatApps[0].instanceId,
+    1
+  );
+  assert.equal(soleMove.changed, true);
+  assert.equal(soleMove.moved, soleMoved);
+  assert.equal(soleMove.sourceGroupRemoved, true);
+  assert.deepEqual(soleRootState.groups, [soleTargetGroup]);
+  assert.equal(soleRootState.groups[0], soleTargetGroup, "empty-source removal must retain the target group object");
+  assert.deepEqual(soleTargetGroup.chatApps, [soleTargetTab, soleMoved]);
+  assert.equal(Object.hasOwn(soleRootState.activeTabs, soleSourceGroup.id), false);
+  assert.deepEqual(soleRootState.activeTabs, { "sole-target-group": soleMoved.instanceId });
+
+  const invalidSourceTab = { appId: "duplicate", instanceId: "invalid-source-tab" };
+  const invalidTargetTab = { appId: "duplicate", instanceId: "invalid-target-tab" };
+  const invalidSourceGroup = { id: "invalid-source", chatApps: [invalidSourceTab] };
+  const invalidTargetGroup = { id: "invalid-target", chatApps: [invalidTargetTab] };
+  const invalidGroups = [invalidSourceGroup, invalidTargetGroup];
+  const invalidActiveTabs = {
+    "invalid-source": invalidSourceTab.instanceId,
+    "invalid-target": invalidTargetTab.instanceId
+  };
+  const invalidSnapshot = JSON.stringify({ groups: invalidGroups, activeTabs: invalidActiveTabs });
+  for (const [sourceGroupId, targetGroupId, instanceId] of [
+    ["missing-source", invalidTargetGroup.id, invalidSourceTab.instanceId],
+    [invalidSourceGroup.id, "missing-target", invalidSourceTab.instanceId],
+    [invalidSourceGroup.id, invalidTargetGroup.id, "missing-tab"],
+    [invalidSourceGroup.id, invalidSourceGroup.id, invalidSourceTab.instanceId]
+  ]) {
+    const invalidMove = workspaceModelModule.moveTabBetweenGroups(
+      invalidGroups,
+      invalidActiveTabs,
+      sourceGroupId,
+      targetGroupId,
+      instanceId,
+      0
+    );
+    assert.equal(invalidMove.changed, false);
+    assert.equal(invalidMove.moved, null);
+    assert.equal(JSON.stringify({ groups: invalidGroups, activeTabs: invalidActiveTabs }), invalidSnapshot);
+    assert.equal(invalidGroups[0], invalidSourceGroup);
+    assert.equal(invalidGroups[1], invalidTargetGroup);
+    assert.equal(invalidSourceGroup.chatApps[0], invalidSourceTab);
+    assert.equal(invalidTargetGroup.chatApps[0], invalidTargetTab);
+  }
+
   workspaceOwners.layout.options.themeMode = "light";
   workspaceOwners.frame.groups.push({ id: "group-2", chatApps: [] });
   assert.equal(rootState.options.themeMode, "light", "write owners must retain intentional nested mutation access");
