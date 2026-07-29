@@ -35,9 +35,9 @@
       "owner": "app/runtime.js",
       "maxFiles": 22,
       "targetFiles": 18,
-      "maxSourceBytes": 305912,
+      "maxSourceBytes": 306067,
       "targetSourceBytes": 250000,
-      "reason": "Settings remains an explicit runtime-owned lazy controller; the two model-preference tabs, responsive failure policy controls, four-column preference layout with the Notion All Sources three-state segmented control, and custom Summary/Delete userscript permission notices are included in its exact incremental closure ratchet."
+      "reason": "Settings remains an explicit runtime-owned lazy controller; the two model-preference tabs, responsive failure policy controls, equal-width model/additional columns, shared Gemini and Notion segmented controls, and custom Summary/Delete userscript permission notices are included in its exact incremental closure ratchet."
     },
     "app/summary/controller.js": {
       "owner": "app/runtime.js",

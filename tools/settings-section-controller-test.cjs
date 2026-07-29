@@ -154,7 +154,9 @@ globalThis.document = { addEventListener() {} };
   const modelFailurePolicyBlock = functionSource(modelsSource, "failurePolicyBlock");
   const modelPreferenceDrop = functionSource(modelsSource, "drop");
   const modelAdditionalPreferenceField = functionSource(modelsSource, "additionalPreferenceField");
-  const notionAllSourcesRadioGroup = functionSource(modelsSource, "notionAllSourcesRadioGroup");
+  const modelPreferenceSegmentedControl = functionSource(modelsSource, "modelPreferenceSegmentedControl");
+  const thinkingLevelSegmentedControl = functionSource(modelsSource, "thinkingLevelSegmentedControl");
+  const notionAllSourcesSegmentedControl = functionSource(modelsSource, "notionAllSourcesSegmentedControl");
   assert.doesNotMatch(
     modelPreferenceRow,
     /failureOverrideSelect/,
@@ -181,17 +183,18 @@ globalThis.document = { addEventListener() {} };
     "platforms without an additional preference must not expose a label without a control"
   );
   assert.match(modelPreferenceRow, /additionalPreferenceField\(appId\)/);
-  assert.match(notionAllSourcesRadioGroup, /NOTION_ALL_SOURCES_PREFERENCE_KEY/);
-  assert.match(notionAllSourcesRadioGroup, /queueAutoSave/);
-  assert.match(notionAllSourcesRadioGroup, /type: "radio"/);
-  assert.match(notionAllSourcesRadioGroup, /role: "radiogroup"/);
-  assert.match(notionAllSourcesRadioGroup, /modelPreferenceAllSourcesAppId: "NotionAI"/);
-  assert.match(notionAllSourcesRadioGroup, /t\("modelPreferences\.allSourcesDesc"\)/);
-  assert.match(notionAllSourcesRadioGroup, /svgIcon\("library"\)/);
-  assert.match(notionAllSourcesRadioGroup, /class: "model-preference-all-sources-info tooltip-trigger"/);
-  assert.match(notionAllSourcesRadioGroup, /"aria-label": t\("modelPreferences\.allSourcesDesc"\)/);
-  assert.match(notionAllSourcesRadioGroup, /"data-tooltip": t\("modelPreferences\.allSourcesDesc"\)/);
-  assert.doesNotMatch(notionAllSourcesRadioGroup, /aria-describedby|model-preference-all-sources-hint/);
+  assert.match(modelPreferenceSegmentedControl, /type: "radio"/);
+  assert.match(modelPreferenceSegmentedControl, /role: "radiogroup"/);
+  assert.match(modelPreferenceSegmentedControl, /class: "model-preference-segmented-info tooltip-trigger"/);
+  assert.match(modelPreferenceSegmentedControl, /svgIcon\("info"\)/);
+  assert.doesNotMatch(modelPreferenceSegmentedControl, /svgIcon\("library"\)|rotate\(-45deg\)/);
+  assert.match(thinkingLevelSegmentedControl, /GEMINI_THINKING_LEVEL_PREFERENCE_KEY/);
+  assert.match(thinkingLevelSegmentedControl, /queueAutoSave/);
+  assert.match(thinkingLevelSegmentedControl, /modelPreferenceThinkingLevelAppId: "Gemini"/);
+  assert.match(notionAllSourcesSegmentedControl, /NOTION_ALL_SOURCES_PREFERENCE_KEY/);
+  assert.match(notionAllSourcesSegmentedControl, /queueAutoSave/);
+  assert.match(notionAllSourcesSegmentedControl, /modelPreferenceAllSourcesAppId: "NotionAI"/);
+  assert.match(notionAllSourcesSegmentedControl, /t\("modelPreferences\.allSourcesDesc"\)/);
   assert.deepEqual(stateKeys(historySource), [
     "promptHistoryCursor",
     "promptHistoryDraft",

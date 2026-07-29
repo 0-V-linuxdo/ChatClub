@@ -295,39 +295,86 @@ export function createModelsSettingsSection(ctx) {
     redraw();
   }
 
-  function thinkingLevelLabel(value) {
-    const normalized = GEMINI_THINKING_LEVEL_TARGETS.some((target) => target.id === value)
-      ? value
-      : DEFAULT_GEMINI_THINKING_LEVEL;
-    return normalized === "extended"
-      ? t("modelPreferences.thinkingExtended")
-      : t("modelPreferences.thinkingStandard");
+  function modelPreferenceSegmentedControl({
+    name,
+    title,
+    ariaLabel,
+    value,
+    options,
+    onChange,
+    dataset = {},
+    optionDataset,
+    info = ""
+  }) {
+    const sizeClass = options.length === 2 ? "two" : "three";
+    const controls = options.map((option) => {
+      const control = el("input", {
+        type: "radio",
+        name,
+        value: option.value,
+        checked: option.value === value,
+        dataset: optionDataset?.(option) || {}
+      });
+      control.value = option.value;
+      control.checked = option.value === value;
+      control.addEventListener("change", () => {
+        if (control.checked) onChange(control.value);
+      });
+      return el("label", { class: "model-preference-segmented-option" },
+        control,
+        el("span", { class: "model-preference-segmented-option-label" }, option.label)
+      );
+    });
+    return el("div", {
+      class: "model-preference-segmented-control",
+      role: "radiogroup",
+      "aria-label": ariaLabel,
+      dataset
+    },
+      el("span", { class: "model-preference-segmented-heading" },
+        el("span", { class: "model-preference-segmented-title" }, title),
+        info ? el("button", {
+          class: "model-preference-segmented-info tooltip-trigger",
+          type: "button",
+          "aria-label": info,
+          "data-tooltip": info,
+          "data-tooltip-id": "settings.models.allSources",
+          "data-tooltip-placement": "left",
+          "data-tooltip-wrap": "true"
+        }, svgIcon("info")) : null
+      ),
+      el("div", {
+        class: `model-preference-segmented-options model-preference-segmented-options-${sizeClass}`
+      }, controls)
+    );
   }
 
-  function thinkingLevelSwitch() {
+  function thinkingLevelSegmentedControl() {
     const config = draft();
     const value = GEMINI_THINKING_LEVEL_TARGETS.some((target) => target.id === config[GEMINI_THINKING_LEVEL_PREFERENCE_KEY])
       ? config[GEMINI_THINKING_LEVEL_PREFERENCE_KEY]
       : DEFAULT_GEMINI_THINKING_LEVEL;
-    const checkbox = el("input", {
-      type: "checkbox",
-      role: "switch",
-      "aria-label": t("modelPreferences.thinkingLevel"),
-      checked: value === "extended"
+    const options = GEMINI_THINKING_LEVEL_TARGETS.map((target) => ({
+      value: target.id,
+      label: target.id === "extended"
+        ? t("modelPreferences.thinkingExtended")
+        : t("modelPreferences.thinkingStandard")
+    }));
+    return modelPreferenceSegmentedControl({
+      name: "model-preference-thinking-level-gemini",
+      title: t("modelPreferences.thinkingLevel"),
+      ariaLabel: t("modelPreferences.thinkingLevel"),
+      value,
+      options,
+      dataset: { modelPreferenceThinkingLevelAppId: "Gemini" },
+      optionDataset: (option) => ({ modelPreferenceThinkingLevelValue: option.value }),
+      onChange: (nextValue) => {
+        const next = GEMINI_THINKING_LEVEL_TARGETS.some((target) => target.id === nextValue)
+          ? nextValue
+          : DEFAULT_GEMINI_THINKING_LEVEL;
+        queueAutoSave({ ...draft(), [GEMINI_THINKING_LEVEL_PREFERENCE_KEY]: next });
+      }
     });
-    const valueNode = el("span", { class: "model-thinking-toggle-value" }, thinkingLevelLabel(value));
-    checkbox.addEventListener("change", () => {
-      const next = checkbox.checked ? "extended" : "standard";
-      valueNode.textContent = thinkingLevelLabel(next);
-      queueAutoSave({ ...draft(), [GEMINI_THINKING_LEVEL_PREFERENCE_KEY]: next });
-    });
-    return el("label", { class: "model-thinking-toggle" },
-      checkbox,
-      el("span", { class: "model-thinking-toggle-track" },
-        el("span", { class: "model-thinking-toggle-thumb" })
-      ),
-      el("span", { class: "model-thinking-toggle-copy" }, valueNode)
-    );
   }
 
   function allSourcesPreferenceOptions() {
@@ -341,79 +388,43 @@ export function createModelsSettingsSection(ctx) {
     }));
   }
 
-  function notionAllSourcesRadioGroup() {
+  function notionAllSourcesSegmentedControl() {
     const config = draft();
     const value = NOTION_ALL_SOURCES_PREFERENCE_VALUES.includes(config[NOTION_ALL_SOURCES_PREFERENCE_KEY])
       ? config[NOTION_ALL_SOURCES_PREFERENCE_KEY]
       : "";
     const options = allSourcesPreferenceOptions();
-    const controls = options.map((option) => {
-      const control = el("input", {
-        type: "radio",
-        name: "model-preference-all-sources-notion-ai",
-        value: option.value,
-        checked: option.value === value,
-        dataset: { modelPreferenceAllSourcesValue: option.value }
-      });
-      control.value = option.value;
-      control.checked = option.value === value;
-      control.addEventListener("change", () => {
-        if (!control.checked) return;
-        const next = NOTION_ALL_SOURCES_PREFERENCE_VALUES.includes(control.value) ? control.value : "";
+    return modelPreferenceSegmentedControl({
+      name: "model-preference-all-sources-notion-ai",
+      title: t("modelPreferences.allSources"),
+      ariaLabel: t("modelPreferences.allSourcesFor", { platform: APP_LABELS.NotionAI }),
+      value,
+      options,
+      dataset: { modelPreferenceAllSourcesAppId: "NotionAI" },
+      optionDataset: (option) => ({ modelPreferenceAllSourcesValue: option.value }),
+      info: t("modelPreferences.allSourcesDesc"),
+      onChange: (nextValue) => {
+        const next = NOTION_ALL_SOURCES_PREFERENCE_VALUES.includes(nextValue) ? nextValue : "";
         queueAutoSave({ ...draft(), [NOTION_ALL_SOURCES_PREFERENCE_KEY]: next });
-      });
-      return el("label", { class: "model-preference-all-sources-option" },
-        control,
-        el("span", { class: "model-preference-all-sources-option-label" }, option.label)
-      );
+      }
     });
-    return el("div", {
-      class: "model-preference-all-sources-control",
-      role: "radiogroup",
-      "aria-label": t("modelPreferences.allSourcesFor", { platform: APP_LABELS.NotionAI }),
-      dataset: { modelPreferenceAllSourcesAppId: "NotionAI" }
-    },
-      el("span", { class: "model-preference-all-sources-heading" },
-        el("span", { class: "model-preference-all-sources-title" },
-          t("modelPreferences.allSources")
-        ),
-        el("span", {
-          class: "model-preference-all-sources-info tooltip-trigger",
-          role: "img",
-          tabindex: "0",
-          "aria-label": t("modelPreferences.allSourcesDesc"),
-          "data-tooltip": t("modelPreferences.allSourcesDesc"),
-          "data-tooltip-id": "settings.models.allSources",
-          "data-tooltip-placement": "left",
-          "data-tooltip-wrap": "true"
-        },
-          el("span", {
-            class: "model-preference-all-sources-info-glyph",
-            "aria-hidden": "true"
-          }, svgIcon("library"))
-        )
-      ),
-      el("div", { class: "model-preference-all-sources-segments" }, controls)
-    );
   }
 
   function additionalPreferenceField(appId) {
     if (appId === "Gemini") {
-      return modelPreferenceRowField(
-        t("modelPreferences.thinkingLevel"),
-        thinkingLevelSwitch(),
-        "model-preference-additional-field model-preference-thinking-field"
-      );
+      return el("div", {
+        class: "model-preference-row-field model-preference-additional-field model-preference-thinking-field"
+      }, thinkingLevelSegmentedControl());
     }
     if (appId === "NotionAI") {
       return el("div", {
         class: "model-preference-row-field model-preference-additional-field model-preference-all-sources-field"
-      }, notionAllSourcesRadioGroup());
+      }, notionAllSourcesSegmentedControl());
     }
     return el("div", {
       class: "model-preference-row-field model-preference-additional-field model-preference-thinking-field model-preference-additional-placeholder-field model-preference-thinking-placeholder-field",
       "aria-hidden": "true"
-    }, el("span", { class: "model-thinking-toggle-placeholder" }));
+    }, el("span", { class: "model-preference-additional-placeholder" }));
   }
 
   function modelPreferenceRowField(label, control, className) {

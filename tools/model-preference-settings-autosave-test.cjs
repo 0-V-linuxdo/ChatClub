@@ -55,6 +55,15 @@ class FakeNode {
     this._classes = new Set(String(value || "").split(/\s+/).filter(Boolean));
   }
 
+  get textContent() {
+    if (this._textContent !== undefined) return this._textContent;
+    return this.children.map((child) => child.textContent || "").join("");
+  }
+
+  set textContent(value) {
+    this._textContent = String(value);
+  }
+
   append(...children) {
     for (const child of children) {
       if (!child) continue;
@@ -157,6 +166,7 @@ globalThis.document = {
   const stateModule = await import(moduleUrl("app/state.js"));
   const modelsModule = await import(moduleUrl("app/settings/models.js"));
   const {
+    GEMINI_THINKING_LEVEL_PREFERENCE_KEY,
     MODEL_PREFERENCE_TARGETS,
     NOTION_ALL_SOURCES_PREFERENCE_KEY
   } = await import(moduleUrl("shared/constants.js"));
@@ -216,6 +226,14 @@ globalThis.document = {
     allSourcesGroup,
     (node) => node.tagName === "INPUT" && node.getAttribute("type") === "radio"
   );
+  const thinkingLevelGroup = findNode(
+    pane,
+    (node) => node.dataset?.modelPreferenceThinkingLevelAppId === "Gemini"
+  );
+  const thinkingLevelRadios = findNodes(
+    thinkingLevelGroup,
+    (node) => node.tagName === "INPUT" && node.getAttribute("type") === "radio"
+  );
   assert.equal(
     findNode(pane, (node) => node.dataset?.modelPreferenceFailurePolicy === "global"),
     null,
@@ -264,7 +282,7 @@ globalThis.document = {
   assert.deepEqual(
     notionModelSelect.children.map((node, index) => [
       node.getAttribute("value"),
-      index === 0 ? "" : node.children[0]?.textContent
+      index === 0 ? "" : node.textContent
     ]),
     expectedNotionModels,
     "the rendered Notion model select must expose every current model in canonical order"
@@ -283,6 +301,35 @@ globalThis.document = {
       .every((node) => node.children[3]?.getAttribute("aria-hidden") === "true"),
     "platforms without an additional preference must hide the complete placeholder field"
   );
+  assert.ok(
+    modelRows.filter((node) => !["Gemini", "NotionAI"].includes(node.dataset.modelPreferenceAppId))
+      .every((node) => !findNode(
+        node.children[3],
+        (child) => child.classList?.contains("model-preference-segmented-control")
+      )),
+    "platforms without an additional preference must not render a segmented control"
+  );
+  assert.ok(thinkingLevelGroup, "Gemini must expose Thinking level in the fourth column");
+  assert.equal(thinkingLevelGroup.getAttribute("role"), "radiogroup", "Thinking level must expose a radio group");
+  assert.ok(
+    Boolean(thinkingLevelGroup.getAttribute("aria-label")?.trim()),
+    "Thinking level must have an explicit accessible name"
+  );
+  assert.deepEqual(
+    thinkingLevelRadios.map((node) => node.value),
+    ["standard", "extended"],
+    "Thinking level must preserve the stable standard and extended values"
+  );
+  assert.deepEqual(
+    thinkingLevelRadios.map((node) => node.parentElement?.children[1]?.textContent),
+    ["Standard", "Extended"],
+    "Thinking level must expose both localized segment labels"
+  );
+  assert.deepEqual(
+    thinkingLevelRadios.map((node) => node.checked),
+    [true, false],
+    "Thinking level must default to Standard"
+  );
   assert.ok(allSourcesGroup, "Notion AI must expose its All sources preference in the fourth column");
   assert.equal(allSourcesGroup.getAttribute("role"), "radiogroup", "All sources must expose a radio group");
   assert.ok(
@@ -295,7 +342,7 @@ globalThis.document = {
     "the All sources preference must expose only the normalized tri-state values"
   );
   assert.deepEqual(
-    allSourcesRadios.map((node) => node.parentElement?.children[1]?.children[0]?.textContent),
+    allSourcesRadios.map((node) => node.parentElement?.children[1]?.textContent),
     ["Do not change", "On", "Off"],
     "the All sources control must explain no-interference, enabled, and disabled states"
   );
@@ -310,26 +357,53 @@ globalThis.document = {
     "the three native radios must share one name for browser keyboard navigation"
   );
   assert.ok(
-    allSourcesRadios.every((node) => node.parentElement?.tagName === "LABEL"),
-    "every All sources radio must have a native label"
+    allSourcesRadios[0]?.getAttribute("name"),
+    "the All sources radio group must use a non-empty native name"
+  );
+  assert.ok(
+    [...thinkingLevelRadios, ...allSourcesRadios].every(
+      (node) => node.parentElement?.tagName === "LABEL"
+        && node.parentElement?.classList?.contains("model-preference-segmented-option")
+    ),
+    "every additional-preference radio must use the shared native-label segment"
   );
   assert.equal(
-    findNode(allSourcesGroup, (node) => node.classList?.contains("model-preference-all-sources-title"))
-      ?.children[0]?.textContent,
+    new Set(thinkingLevelRadios.map((node) => node.getAttribute("name"))).size,
+    1,
+    "the two Thinking level radios must share one name for browser keyboard navigation"
+  );
+  assert.ok(
+    thinkingLevelRadios[0]?.getAttribute("name"),
+    "the Thinking level radio group must use a non-empty native name"
+  );
+  assert.notEqual(
+    thinkingLevelRadios[0]?.getAttribute("name"),
+    allSourcesRadios[0]?.getAttribute("name"),
+    "the two segmented controls must use independent native radio groups"
+  );
+  assert.equal(
+    findNode(thinkingLevelGroup, (node) => node.classList?.contains("model-preference-segmented-title"))
+      ?.textContent,
+    "Thinking level",
+    "the Thinking level title must remain visible in wide and compact layouts"
+  );
+  assert.equal(
+    findNode(allSourcesGroup, (node) => node.classList?.contains("model-preference-segmented-title"))
+      ?.textContent,
     "All sources",
     "the All sources title must remain visible in wide and compact layouts"
   );
   const allSourcesInfo = findNode(
     allSourcesGroup,
-    (node) => node.classList?.contains("model-preference-all-sources-info")
+    (node) => node.classList?.contains("model-preference-segmented-info")
   );
-  assert.ok(allSourcesInfo, "All sources must expose its explanation through a compact source icon");
-  assert.equal(allSourcesInfo.getAttribute("role"), "img");
-  assert.equal(allSourcesInfo.getAttribute("tabindex"), "0", "the source icon tooltip must be keyboard reachable");
+  assert.ok(allSourcesInfo, "All sources must expose its explanation through a compact info button");
+  assert.equal(allSourcesInfo.tagName, "BUTTON");
+  assert.equal(allSourcesInfo.getAttribute("type"), "button", "the info control must not submit a surrounding form");
   assert.equal(
     allSourcesInfo.getAttribute("aria-label"),
     "Controls whether Notion AI uses all sources it can access.",
-    "the source icon must retain the full accessible explanation"
+    "the info button must retain the full accessible explanation"
   );
   assert.equal(
     allSourcesInfo.getAttribute("data-tooltip"),
@@ -338,20 +412,29 @@ globalThis.document = {
   );
   assert.equal(allSourcesInfo.getAttribute("data-tooltip-wrap"), "true");
   assert.equal(allSourcesInfo.getAttribute("data-tooltip-id"), "settings.models.allSources");
-  const allSourcesInfoGlyph = findNode(
-    allSourcesInfo,
-    (node) => node.classList?.contains("model-preference-all-sources-info-glyph")
-  );
-  assert.equal(allSourcesInfoGlyph?.getAttribute("aria-hidden"), "true");
   assert.equal(
-    findNode(allSourcesInfoGlyph, (node) => node.tagName === "SVG")?.tagName,
+    findNode(allSourcesInfo, (node) => node.tagName === "SVG")?.tagName,
     "SVG",
-    "the compact source-off icon must reuse the existing SVG icon system"
+    "the compact info button must reuse the existing SVG icon system"
   );
   assert.equal(
-    findNode(allSourcesGroup, (node) => node.classList?.contains("model-preference-all-sources-hint")),
+    findNode(thinkingLevelGroup, (node) => node.classList?.contains("model-preference-segmented-info")),
     null,
-    "the long All sources explanation must not remain visible in the row"
+    "Thinking level must not render an irrelevant info button"
+  );
+  assert.ok(
+    findNode(
+      thinkingLevelGroup,
+      (node) => node.classList?.contains("model-preference-segmented-options-two")
+    ),
+    "Thinking level must mount the two-segment layout modifier"
+  );
+  assert.ok(
+    findNode(
+      allSourcesGroup,
+      (node) => node.classList?.contains("model-preference-segmented-options-three")
+    ),
+    "All sources must mount the three-segment layout modifier"
   );
   assert.ok(
     ["Gemini", "NotionAI"].every((appId) => modelRows.find(
@@ -369,6 +452,23 @@ globalThis.document = {
     renderedSelects.every((node) => Boolean(node.getAttribute("aria-label")?.trim())),
     "every preferred-model select must have an explicit accessible name"
   );
+
+  thinkingLevelRadios.forEach((node) => { node.checked = node.value === "extended"; });
+  thinkingLevelRadios.find((node) => node.value === "extended").dispatch("change");
+  assert.equal(saves.length, 1, "changing Thinking level must start an autosave");
+  assert.equal(
+    saves[0].patch.modelPreferences[GEMINI_THINKING_LEVEL_PREFERENCE_KEY],
+    "extended",
+    "Thinking level must keep its stable persisted value"
+  );
+  saves[0].gate.resolve();
+  await waitUntil(() => !section.autosaveBusy(), "Thinking level autosave did not settle");
+  assert.equal(
+    ports.preferredModel.options.modelPreferences[GEMINI_THINKING_LEVEL_PREFERENCE_KEY],
+    "extended",
+    "the saved Thinking level must become visible to runtime readers"
+  );
+  saves.splice(0);
 
   allSourcesRadios.forEach((node) => { node.checked = node.value === "enabled"; });
   allSourcesRadios.find((node) => node.value === "enabled").dispatch("change");
@@ -396,9 +496,22 @@ globalThis.document = {
     "",
     "Clear must reset All sources to no preference"
   );
+  assert.equal(
+    saves[0].patch.modelPreferences[GEMINI_THINKING_LEVEL_PREFERENCE_KEY],
+    "standard",
+    "Clear must reset Thinking level to Standard"
+  );
   saves[0].gate.resolve();
-  await waitUntil(() => !section.autosaveBusy(), "clearing All sources did not settle");
+  await waitUntil(() => !section.autosaveBusy(), "clearing model preferences did not settle");
   const clearedPane = section.pane(() => { redrawCalls += 1; });
+  const clearedThinkingLevelGroup = findNode(
+    clearedPane,
+    (node) => node.dataset?.modelPreferenceThinkingLevelAppId === "Gemini"
+  );
+  const clearedThinkingLevelRadios = findNodes(
+    clearedThinkingLevelGroup,
+    (node) => node.tagName === "INPUT" && node.getAttribute("type") === "radio"
+  );
   const clearedAllSourcesGroup = findNode(
     clearedPane,
     (node) => node.dataset?.modelPreferenceAllSourcesAppId === "NotionAI"
@@ -412,6 +525,11 @@ globalThis.document = {
     [true, false, false],
     "Clear must redraw All sources with no-interference selected"
   );
+  assert.deepEqual(
+    clearedThinkingLevelRadios.map((node) => node.checked),
+    [true, false],
+    "Clear must redraw Thinking level with Standard selected"
+  );
   saves.splice(0);
 
   allSourcesRadios.forEach((node) => { node.checked = node.value === "disabled"; });
@@ -422,6 +540,17 @@ globalThis.document = {
   assert.equal(
     ports.preferredModel.options.modelPreferences[NOTION_ALL_SOURCES_PREFERENCE_KEY],
     "disabled"
+  );
+  saves.splice(0);
+
+  thinkingLevelRadios.forEach((node) => { node.checked = node.value === "extended"; });
+  thinkingLevelRadios.find((node) => node.value === "extended").dispatch("change");
+  assert.equal(saves.length, 1, "restoring Extended Thinking level must start an autosave");
+  saves[0].gate.resolve();
+  await waitUntil(() => !section.autosaveBusy(), "restoring Extended Thinking level did not settle");
+  assert.equal(
+    ports.preferredModel.options.modelPreferences[GEMINI_THINKING_LEVEL_PREFERENCE_KEY],
+    "extended"
   );
   saves.splice(0);
   redrawCalls = 0;
@@ -494,8 +623,8 @@ globalThis.document = {
   assert.match(modelStyles, /\.model-preference-failure-grid\s*\{[^}]*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s);
   assert.match(
     modelStyles,
-    /\.model-preference-list \.settings-list-header,\s*\.model-preference-row\s*\{[^}]*grid-template-columns:\s*52px\s+minmax\([^;]+\)\s+minmax\([^;]+\)\s+minmax\([^;]+\);/s,
-    "the wide model list must define exactly four responsive columns"
+    /\.model-preference-list \.settings-list-header,\s*\.model-preference-row\s*\{[^}]*grid-template-columns:\s*52px\s+minmax\(140px,\s*180px\)\s+repeat\(2,\s*minmax\(220px,\s*1fr\)\);/s,
+    "the wide model list must give the model and additional-option columns equal flexible tracks"
   );
   assert.match(modelStyles, /@container model-preferences \(max-width:\s*700px\)/);
   assert.match(modelStyles, /@container[\s\S]*\.model-preference-failure-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
@@ -513,25 +642,32 @@ globalThis.document = {
   );
   assert.match(
     modelStyles,
-    /\.model-preference-all-sources-segments\s*\{[^}]*display:\s*grid[^}]*grid-template-columns:\s*minmax\(0,\s*1\.5fr\)\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s,
-    "All sources must render as three responsive segments"
+    /\.model-preference-segmented-options-two\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s,
+    "Thinking level must render as two equal responsive segments"
   );
-  assert.match(modelStyles, /\.model-preference-all-sources-option input:checked \+ \.model-preference-all-sources-option-label/);
-  assert.match(modelStyles, /\.model-preference-all-sources-option input:focus-visible \+ \.model-preference-all-sources-option-label/);
   assert.match(
     modelStyles,
-    /@container[\s\S]*\.model-preference-model-select,\s*\.model-preference-all-sources-control\s*\{[^}]*max-width:\s*none/s,
-    "the compact All sources group must use the full available width"
+    /\.model-preference-segmented-options-three\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1\.35fr\)\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s,
+    "All sources must preserve extra room for its longer no-interference label"
   );
-  assert.match(modelStyles, /\.model-preference-all-sources-heading\s*\{[^}]*display:\s*inline-flex/s);
-  assert.match(modelStyles, /\.model-preference-all-sources-info\s*\{[^}]*border-radius:\s*50%/s);
-  assert.match(modelStyles, /\.model-preference-all-sources-info:focus-visible\s*\{[^}]*box-shadow:/s);
+  assert.match(modelStyles, /\.model-preference-segmented-option input:checked \+ \.model-preference-segmented-option-label/);
+  assert.match(modelStyles, /\.model-preference-segmented-option input:focus-visible \+ \.model-preference-segmented-option-label/);
   assert.match(
     modelStyles,
-    /\.model-preference-all-sources-info-glyph::after\s*\{[^}]*transform:\s*rotate\(-45deg\)/s,
-    "the reused source icon must receive a diagonal off-state slash"
+    /\.model-preference-model-select,\s*\.model-preference-segmented-control\s*\{[^}]*width:\s*100%[^}]*max-width:\s*none/s,
+    "the model select and additional preference must fill their equal desktop columns"
   );
-  assert.doesNotMatch(modelStyles, /\.model-preference-all-sources-hint\s*\{/);
+  assert.match(
+    modelStyles,
+    /@container[\s\S]*\.model-preference-model-select,\s*\.model-preference-segmented-control\s*\{[^}]*max-width:\s*none/s,
+    "compact segmented controls must use the full available width"
+  );
+  assert.match(modelStyles, /\.model-preference-segmented-heading\s*\{[^}]*display:\s*inline-flex/s);
+  assert.match(modelStyles, /\.model-preference-segmented-info\s*\{[^}]*border-radius:\s*5px/s);
+  assert.match(modelStyles, /\.model-preference-segmented-info:focus-visible\s*\{[^}]*box-shadow:/s);
+  assert.doesNotMatch(modelStyles, /model-thinking-toggle/);
+  assert.doesNotMatch(modelStyles, /model-preference-all-sources-(?:control|heading|title|info|segments|option)/);
+  assert.doesNotMatch(modelStyles, /transform:\s*rotate\(-45deg\)/);
   assert.match(modelStyles, /\.model-preference-list\s*\{[^}]*overflow:\s*visible/s);
   assert.doesNotMatch(modelStyles, /\.model-preference-list\s*\{[^}]*overflow:\s*(?:auto|hidden|clip)/s);
   assert.match(modelStyles, /\.model-preference-list \.settings-list-header,\s*\.model-preference-row\s*\{[^}]*min-width:\s*0/s);
@@ -654,6 +790,11 @@ globalThis.document = {
     "All sources must survive dehydration, serialization, and normalization"
   );
   assert.equal(
+    rehydratedOptions.modelPreferences[GEMINI_THINKING_LEVEL_PREFERENCE_KEY],
+    "extended",
+    "Thinking level must survive dehydration, serialization, and normalization"
+  );
+  assert.equal(
     normalizeOptions({
       ...storedOptions,
       modelPreferences: {
@@ -693,6 +834,18 @@ globalThis.document = {
   const reloadedAllSourcesGroup = findNode(
     reloadedPane,
     (node) => node.dataset?.modelPreferenceAllSourcesAppId === "NotionAI"
+  );
+  const reloadedThinkingLevelGroup = findNode(
+    reloadedPane,
+    (node) => node.dataset?.modelPreferenceThinkingLevelAppId === "Gemini"
+  );
+  assert.equal(
+    findNodes(
+      reloadedThinkingLevelGroup,
+      (node) => node.tagName === "INPUT" && node.getAttribute("type") === "radio"
+    ).find((node) => node.value === "extended")?.checked,
+    true,
+    "a fresh Settings controller must restore the stored Thinking level"
   );
   assert.equal(
     findNodes(
