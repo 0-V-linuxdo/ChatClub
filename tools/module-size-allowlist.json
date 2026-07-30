@@ -21,10 +21,10 @@
     "reason": "Bilingual translation catalog data is kept co-located for key parity; the queued-send status, preferred and secondary model controls and fallback results, model-failure policy, Notion All Sources segmented-control help, custom User Scripts permission guidance, accessible new-topic/restoring frame status labels, platform-management navigation labels, concise iframe-permission hover help, and focused topbar input font-size copy are included in the exact line and byte ratchets."
   },
   "tools/browser-smoke.mjs": {
-    "maxLines": 1377,
+    "maxLines": 1396,
     "target": 1200,
-    "maxBytes": 71867,
+    "maxBytes": 72524,
     "targetBytes": 60000,
-    "reason": "The cross-engine smoke exercises protected-header initial loading, deterministic workspace-frame reset before retention baselines, owner-tab session rules, document-initiated iframe self-navigation, the authenticated binding handshake, content-sized Apps headers, source-specific iframe list drag-handle shapes without a redundant source column, and compact iframe hover-help validation."
+    "reason": "The cross-engine smoke exercises protected-header initial loading, target-correlated workspace-frame reset that ignores delayed initial-navigation events before retention baselines, owner-tab session rules, document-initiated iframe self-navigation, the authenticated binding handshake, content-sized Apps headers, source-specific iframe list drag-handle shapes without a redundant source column, and compact iframe hover-help validation."
   }
 }

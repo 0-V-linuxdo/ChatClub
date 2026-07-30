@@ -573,14 +573,32 @@ const pageProbe = `async (fixtureUrl) => {
       15000,
       "initial workspace frame assignment"
     );
-    const navigateControlledFrame = (iframe, index, href, label, timeoutMs) => {
+    const navigateControlledFrame = (iframe, index, href, label, timeoutMs, expectedCurrentHref = "") => {
       let onLoad;
       let onError;
       const loaded = new Promise((resolve, reject) => {
-        onLoad = resolve;
-        onError = () => reject(new Error(label + " " + index + " failed to load"));
-        iframe.addEventListener("load", onLoad, { once: true });
-        iframe.addEventListener("error", onError, { once: true });
+        // Keep listening until the reset document is current. A delayed event
+        // from an iframe's initial remote navigation must not consume the reset.
+        const currentHrefMatches = () => {
+          if (!expectedCurrentHref) return true;
+          try {
+            return iframe.contentWindow?.location?.href === expectedCurrentHref;
+          } catch {
+            return false;
+          }
+        };
+        onLoad = () => {
+          if (currentHrefMatches()) resolve();
+        };
+        onError = () => {
+          if (expectedCurrentHref) {
+            if (currentHrefMatches()) resolve();
+            return;
+          }
+          reject(new Error(label + " " + index + " failed to load"));
+        };
+        iframe.addEventListener("load", onLoad);
+        iframe.addEventListener("error", onError);
         iframe.src = href;
       });
       return withTimeout(loaded, timeoutMs, label + " " + index).finally(() => {
@@ -589,7 +607,8 @@ const pageProbe = `async (fixtureUrl) => {
       });
     };
     for (const [index, iframe] of frames.entries()) {
-      await navigateControlledFrame(iframe, index, "about:blank", "workspace frame reset", 5000);
+      const resetHref = "about:blank";
+      await navigateControlledFrame(iframe, index, resetHref, "workspace frame reset", 5000, resetHref);
     }
     for (const [index, iframe] of frames.entries()) {
       const controlledUrl = new URL(fixtureUrl);
