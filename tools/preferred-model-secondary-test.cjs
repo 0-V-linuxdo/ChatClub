@@ -11,7 +11,7 @@ async function waitUntil(predicate, message) {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     const value = predicate();
     if (value) return value;
-    await new Promise((resolve) => { setImmediate(resolve); });
+    await new Promise((resolve) => { setTimeout(resolve, 0); });
   }
   assert.fail(message);
 }
@@ -98,12 +98,16 @@ globalThis.window = {
     controller.finishBootstrapping();
     const record = controller.schedulePreferredModelApplyToFrame(iframe, { immediate: true });
     assert.ok(record, "a configured preferred model must create one logical apply record");
-    const readiness = await waitUntil(() => {
-      const current = controller.preferredModelFrameReadiness(iframe);
-      return ["ready", "failed"].includes(current.state) ? current : null;
-    }, `${appId} preferred-model scenario did not settle`);
-    await new Promise((resolve) => { setImmediate(resolve); });
-    return { calls, anomalies, iframe, readiness };
+    try {
+      const readiness = await waitUntil(() => {
+        const current = controller.preferredModelFrameReadiness(iframe);
+        return ["ready", "failed"].includes(current.state) ? current : null;
+      }, `${appId} preferred-model scenario did not settle`);
+      await new Promise((resolve) => { setImmediate(resolve); });
+      return { calls, anomalies, iframe, readiness };
+    } finally {
+      controller.invalidatePreferredModelFrame(iframe, "test-cleanup");
+    }
   }
 
   const explicitlyUnavailable = {
