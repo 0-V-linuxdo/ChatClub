@@ -24,7 +24,8 @@ import {
   getAllChatApps,
   normalizeFrameToastPosition,
   normalizeOptions,
-  normalizePrimaryColor
+  normalizePrimaryColor,
+  normalizeTopbarPromptInputFontSize
 } from "../shared/storage-schema.js";
 import {
   loadCustomConfig,
@@ -575,10 +576,12 @@ function inferAppName(app) {
   const rawFrameLoadingOverlayOpacity = Number(state.options?.frameLoadingOverlayOpacity);
   const frameLoadingOverlayOpacity = Math.max(0, Math.min(100, Math.round(Number.isFinite(rawFrameLoadingOverlayOpacity) ? rawFrameLoadingOverlayOpacity : 82))) / 100;
   const frameToastPosition = normalizeFrameToastPosition(state.options?.frameToastPosition);
+  const topbarPromptInputFontSize = normalizeTopbarPromptInputFontSize(state.options?.topbarPromptInputFontSize);
   document.documentElement.style.setProperty("--primary", primaryColor);
   document.documentElement.style.setProperty("--primary-2", `color-mix(in srgb, ${primaryColor} ${isDark ? "22%" : "14%"}, ${isDark ? "#020617" : "#ffffff"})`);
   document.documentElement.style.setProperty("--summary-panel-link", primaryColor);
   document.documentElement.style.setProperty("--frame-loading-overlay-opacity", String(frameLoadingOverlayOpacity));
+  document.documentElement.style.setProperty("--topbar-prompt-input-font-size", `${topbarPromptInputFontSize}px`);
   document.documentElement.dataset.frameToastX = String(frameToastPosition.x);
   document.documentElement.dataset.frameToastY = String(frameToastPosition.y);
   document.dispatchEvent(new CustomEvent(FRAME_TOAST_POSITION_EVENT, { detail: frameToastPosition }));

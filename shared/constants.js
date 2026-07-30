@@ -1,7 +1,7 @@
 import { DEFAULT_TOPBAR_LAYOUT } from "./topbar.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-07-30｜19:10:00」";
+export const APP_VERSION = "「2026-07-31｜05:41:37」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -17,7 +17,8 @@ export const STORAGE_KEYS = {
 };
 
 export const API_PROFILE_ENDPOINT_DEFAULT = "https://api.openai.com/v1/chat/completions";
-export const API_PROFILE_MODEL_DEFAULT = "gpt-3.5-turbo";
+export const API_PROFILE_MODEL_DEFAULT = "GPT5.5";
+export const API_PROFILE_DEFAULT_MODEL_MIGRATION_VERSION = 1;
 export const API_PROMOTION_CHANNELS_VERSION = 2;
 const API_PROFILE_ZERO_ZERO_ENDPOINT = "https://api.0-0.pro/v1/chat/completions";
 const API_PROFILE_ZERO_ZERO_MODEL = "gpt-5.5";
@@ -297,6 +298,8 @@ export const TOPBAR_PROMPT_PLACEHOLDER_MAX_LEN = 100;
 export const TOPBAR_PROMPT_PLACEHOLDER_MAX_COUNT = 30;
 export const TOPBAR_PROMPT_PLACEHOLDER_INTERVAL_MIN_SEC = 1;
 export const TOPBAR_PROMPT_PLACEHOLDER_INTERVAL_MAX_SEC = 3600;
+export const TOPBAR_PROMPT_INPUT_FONT_SIZE_MIN_PX = 13;
+export const TOPBAR_PROMPT_INPUT_FONT_SIZE_MAX_PX = 18;
 export const DEFAULT_FRAME_TOAST_POSITION = Object.freeze({ x: 100, y: 100 });
 
 export const DEFAULT_OPTIONS = {
@@ -318,6 +321,7 @@ export const DEFAULT_OPTIONS = {
   frameToastPosition: DEFAULT_FRAME_TOAST_POSITION,
   pocketCardSize: DEFAULT_POCKET_CARD_SIZE,
   tooltipDisabledIds: [],
+  topbarPromptInputFontSize: 15,
   topbarPromptPlaceholderConfig: {
     items: [],
     mode: "refresh",
@@ -345,6 +349,7 @@ export const DEFAULT_OPTIONS = {
     ...DEFAULT_PROMOTION_API_PROFILES
   ],
   apiPromotionChannelsVersion: API_PROMOTION_CHANNELS_VERSION,
+  apiProfileDefaultModelMigrationVersion: API_PROFILE_DEFAULT_MODEL_MIGRATION_VERSION,
   optimizeApiProfileId: "default-openai",
   summaryApiProfileId: "default-openai",
   optimizePromptTemplateId: "optimize-default",

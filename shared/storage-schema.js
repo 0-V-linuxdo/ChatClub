@@ -2,6 +2,7 @@
 // Browser persistence and backup-file transport live in their dedicated modules.
 import {
   API_PROMOTION_CHANNELS_VERSION,
+  API_PROFILE_DEFAULT_MODEL_MIGRATION_VERSION,
   API_PROFILE_ENDPOINT_DEFAULT,
   API_PROFILE_MODEL_DEFAULT,
   BUILTIN_CHAT_APPS,
@@ -31,6 +32,8 @@ import {
   TAB_GROUP_BUTTON_ORDER_MIGRATION_VERSION,
   TAB_GROUP_HEADER_BUTTONS,
   TOOLTIP_TARGET_IDS,
+  TOPBAR_PROMPT_INPUT_FONT_SIZE_MAX_PX,
+  TOPBAR_PROMPT_INPUT_FONT_SIZE_MIN_PX,
   TOPBAR_PROMPT_PLACEHOLDER_INTERVAL_MAX_SEC,
   TOPBAR_PROMPT_PLACEHOLDER_INTERVAL_MIN_SEC,
   TOPBAR_PROMPT_PLACEHOLDER_MAX_COUNT,
@@ -147,6 +150,22 @@ export function normalizeTopbarPromptPlaceholderText(value = "") {
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, TOPBAR_PROMPT_PLACEHOLDER_MAX_LEN);
+}
+
+export function normalizeTopbarPromptInputFontSize(
+  value,
+  fallback = DEFAULT_OPTIONS.topbarPromptInputFontSize
+) {
+  if (
+    (typeof value !== "number" && typeof value !== "string")
+    || (typeof value === "string" && !value.trim())
+  ) return fallback;
+  return boundedNumber(
+    value,
+    fallback,
+    TOPBAR_PROMPT_INPUT_FONT_SIZE_MIN_PX,
+    TOPBAR_PROMPT_INPUT_FONT_SIZE_MAX_PX
+  );
 }
 
 function normalizeTopbarPromptPlaceholderState(value = {}, itemCount = 0) {
@@ -312,6 +331,18 @@ function normalizeProfile(profile, index) {
     ...(registerUrl ? { registerUrl } : {}),
     ...(profile?.promotionChannel === true ? { promotionChannel: true } : {})
   };
+}
+
+function migrateDefaultApiProfileModel(profile, migrationVersion) {
+  if (migrationVersion >= API_PROFILE_DEFAULT_MODEL_MIGRATION_VERSION) return profile;
+  if (
+    profile.id !== "default-openai"
+    || profile.name !== "Default API"
+    || profile.endpoint !== API_PROFILE_ENDPOINT_DEFAULT
+    || profile.apiKey
+    || profile.model !== "gpt-3.5-turbo"
+  ) return profile;
+  return { ...profile, model: API_PROFILE_MODEL_DEFAULT };
 }
 
 function sameApiHost(left, right) {
@@ -627,6 +658,10 @@ function mergeBuiltInSummaryConfig(current = [], builtIn = SUMMARY_SITE_CONFIGS)
 export function normalizeOptions(raw = {}) {
   const base = clone(DEFAULT_OPTIONS);
   const storedOptions = hasStoredOptions(raw);
+  const rawApiProfileDefaultModelMigrationVersion = Number(raw.apiProfileDefaultModelMigrationVersion);
+  const apiProfileDefaultModelMigrationVersion = Number.isFinite(rawApiProfileDefaultModelMigrationVersion)
+    ? Math.max(0, Math.floor(rawApiProfileDefaultModelMigrationVersion))
+    : 0;
   const hadProfiles = Array.isArray(raw.apiProfiles);
   let apiProfiles = hadProfiles ? raw.apiProfiles.filter(Boolean).map(normalizeProfile) : [];
   if (!apiProfiles.length) {
@@ -637,6 +672,9 @@ export function normalizeOptions(raw = {}) {
   if (!apiProfiles.length) {
     apiProfiles = storedOptions ? withoutPromotionApiProfiles(clone(base.apiProfiles)) : clone(base.apiProfiles);
   }
+  apiProfiles = apiProfiles.map((profile) => (
+    migrateDefaultApiProfileModel(profile, apiProfileDefaultModelMigrationVersion)
+  ));
   const fallbackProfileIds = apiProfiles.map((profile) => profile.id);
   apiProfiles = mergePromotionApiProfiles(apiProfiles, raw, !storedOptions);
 
@@ -673,6 +711,7 @@ export function normalizeOptions(raw = {}) {
     layoutPresets,
     activeLayoutPresetId,
     tabGroupButtonsMode,
+    topbarPromptInputFontSize: normalizeTopbarPromptInputFontSize(raw.topbarPromptInputFontSize),
     topbarPromptPlaceholderConfig: normalizeTopbarPromptPlaceholderConfig(raw.topbarPromptPlaceholderConfig),
     tabGroupButtonPlacement: normalizeTabGroupButtonPlacement(raw.tabGroupButtonPlacement, tabGroupButtonsMode),
     tabGroupButtonOrder: normalizeTabGroupButtonOrder(raw.tabGroupButtonOrder),
@@ -688,6 +727,10 @@ export function normalizeOptions(raw = {}) {
     frameToastPosition: normalizeFrameToastPosition(raw.frameToastPosition),
     ...primaryColorState,
     apiProfiles,
+    apiProfileDefaultModelMigrationVersion: Math.max(
+      apiProfileDefaultModelMigrationVersion,
+      API_PROFILE_DEFAULT_MODEL_MIGRATION_VERSION
+    ),
     apiPromotionChannelsVersion: Math.max(Number(raw.apiPromotionChannelsVersion) || 0, API_PROMOTION_CHANNELS_VERSION),
     optimizeApiProfileId: profileIds.has(raw.optimizeApiProfileId) ? raw.optimizeApiProfileId : optimizeFallback,
     summaryApiProfileId: profileIds.has(raw.summaryApiProfileId) ? raw.summaryApiProfileId : summaryFallback,

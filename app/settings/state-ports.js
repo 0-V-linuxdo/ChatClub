@@ -11,7 +11,7 @@ export const SETTINGS_OPTION_CAPABILITIES = Object.freeze({
   appearance: optionCapability([
     "colMaxCount", "frameLoadingOverlayOpacity", "frameToastPosition", "language", "primaryColor", "primaryColorCustom",
     "tabGroupButtonOrder", "tabGroupButtonPlacement", "tabGroupButtonsMode", "themeMode", "tooltipDisabledIds",
-    "topbarPromptPlaceholderConfig"
+    "topbarPromptInputFontSize", "topbarPromptPlaceholderConfig"
   ]),
   profiles: optionCapability(["apiProfiles", "optimizeApiProfileId", "summaryApiProfileId"]),
   apps: optionCapability(["builtinChatAppOrder", "builtinChatAppIframeConfigs", "iframePermissionsSource"]),

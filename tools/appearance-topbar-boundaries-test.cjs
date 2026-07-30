@@ -19,6 +19,11 @@ assert.ok(lineCount(appearanceSource) < 950, `Appearance section must remain bel
 assert.ok(lineCount(topbarSource) > 250 && lineCount(topbarSource) < 400, "Topbar settings must remain a substantive bounded controller");
 assert.match(appearanceSource, /import \{ createAppearanceTopbarController \} from "\.\/appearance-topbar\.js";/);
 assert.match(appearanceSource, /const appearanceTopbar = createAppearanceTopbarController\(\{[\s\S]*?closeSettingsDialog\s*\}\);/);
+assert.match(
+  appearanceSource,
+  /const appearanceTopbar = createAppearanceTopbarController\(\{[\s\S]*?queueAppearanceAutoSave,[\s\S]*?closeSettingsDialog\s*\}\);/,
+  "Topbar appearance controls must share the serialized appearance autosave queue"
+);
 assert.match(appearanceSource, /appearanceTopbar\.pane\(redraw\)/);
 assert.doesNotMatch(
   appearanceSource,
@@ -122,6 +127,10 @@ function firstByClass(rootNode, className) {
   return descendants(rootNode).find((node) => node.classList.contains(className));
 }
 
+function nodeText(node) {
+  return [node?.textContent || "", ...(node?.children || []).map(nodeText)].join("");
+}
+
 const previousGlobals = {
   Node: globalThis.Node,
   document: globalThis.document,
@@ -156,6 +165,7 @@ globalThis.window = { confirm: () => true };
   );
   const state = {
     options: {
+      topbarPromptInputFontSize: 15,
       topbarPromptPlaceholderConfig: {
         enabled: true,
         intervalSec: 10,
@@ -170,6 +180,7 @@ globalThis.window = { confirm: () => true };
     settingsTopbarPromptPlaceholderEditingIndex: -1
   };
   const savedPatches = [];
+  const autosavePatches = [];
   let closeCount = 0;
   let editCount = 0;
   let redrawCount = 0;
@@ -181,6 +192,7 @@ globalThis.window = { confirm: () => true };
       savedPatches.push(patch);
       return { ...state.options, ...patch };
     },
+    queueAppearanceAutoSave: (patch) => { autosavePatches.push(patch); },
     syncTopbarPromptPlaceholder: () => { syncCount += 1; },
     enterTopbarEditMode: () => { editCount += 1; },
     closeSettingsDialog: () => { closeCount += 1; }
@@ -252,6 +264,21 @@ globalThis.window = { confirm: () => true };
   assert.equal(state.settingsTopbarPromptPlaceholderDragIndex, "");
   assert.equal(syncCount, 2);
   assert.equal(redrawCount, 2);
+
+  state.settingsAppearanceTopbarTab = "input";
+  const inputPane = controller.pane(() => {});
+  const fontSizeSlider = firstByClass(inputPane, "topbar-prompt-input-font-size-slider");
+  const fontSizeValue = firstByClass(inputPane, "appearance-range-value");
+  assert.ok(fontSizeSlider && fontSizeValue, "Input tab must render the font-size control and readout");
+  assert.equal(fontSizeSlider.attributes.min, "13");
+  assert.equal(fontSizeSlider.attributes.max, "18");
+  assert.equal(fontSizeSlider.attributes.step, "1");
+  assert.equal(fontSizeSlider.value, "15");
+  assert.equal(nodeText(fontSizeValue), "15px");
+  fontSizeSlider.value = "18";
+  fontSizeSlider.listeners.get("input")[0]();
+  assert.deepEqual(autosavePatches, [{ topbarPromptInputFontSize: 18 }]);
+  assert.equal(fontSizeValue.textContent, "18px");
 
   state.settingsAppearanceTopbarTab = "layout";
   const layoutPane = controller.pane(() => {});

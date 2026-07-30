@@ -40,6 +40,7 @@
   --summary-panel-code-text: var(--text);
   --summary-frame-highlight: #facc15;
   --frame-loading-overlay-opacity: 0.82;
+  --topbar-prompt-input-font-size: 15px;
   --settings-modal-app-icon: #000000;
   --toast-bg: rgba(255, 255, 255, 0.96);
   --toast-text: #17201c;
@@ -2284,6 +2285,7 @@ body.tab-gesture-active * {
 
 .prompt-input-expanded {
   z-index: 60;
+  font-size: var(--topbar-prompt-input-font-size);
   overflow-y: auto;
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
 }

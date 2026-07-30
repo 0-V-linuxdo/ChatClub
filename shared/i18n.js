@@ -96,6 +96,11 @@ const en = {
   "topbar.placeholder.maxCount": "You can save up to {maxCount} hints.",
   "topbar.placeholder.thisItem": "this hint",
   "topbar.placeholder.deleteConfirm": "Delete \"{text}\"?",
+  "topbar.input.title": "Input",
+  "topbar.input.desc": "Adjust the focused top prompt input without changing its collapsed preview.",
+  "topbar.input.tabDesc": "Focused input text.",
+  "topbar.input.fontSize": "Input Font Size",
+  "topbar.input.fontSizeHelp": "Applies only while the top prompt input is focused or expanded. The collapsed preview remains 13px.",
 
   "chat.addApp": "Add app",
   "chat.reload": "Reload",
@@ -1070,6 +1075,11 @@ const zh_CN = {
   "topbar.placeholder.maxCount": "最多只能保存 {maxCount} 条提示。",
   "topbar.placeholder.thisItem": "这条提示",
   "topbar.placeholder.deleteConfirm": "删除「{text}」？",
+  "topbar.input.title": "输入框",
+  "topbar.input.desc": "调整顶部提示词输入框的输入态显示，不改变收起查看态。",
+  "topbar.input.tabDesc": "输入态文字大小。",
+  "topbar.input.fontSize": "输入态字号",
+  "topbar.input.fontSizeHelp": "仅在顶部输入框聚焦或展开时生效；收起查看态保持 13px。",
 
   "chat.addApp": "添加应用",
   "chat.reload": "刷新",

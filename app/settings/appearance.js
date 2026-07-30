@@ -91,6 +91,7 @@ export function createAppearanceSettingsSection(ctx) {
     state,
     svgIcon,
     saveOptionsPatch,
+    queueAppearanceAutoSave,
     syncTopbarPromptPlaceholder,
     enterTopbarEditMode,
     closeSettingsDialog

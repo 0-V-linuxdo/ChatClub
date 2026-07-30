@@ -1,4 +1,6 @@
 import {
+  TOPBAR_PROMPT_INPUT_FONT_SIZE_MAX_PX,
+  TOPBAR_PROMPT_INPUT_FONT_SIZE_MIN_PX,
   TOPBAR_PROMPT_PLACEHOLDER_INTERVAL_MAX_SEC,
   TOPBAR_PROMPT_PLACEHOLDER_INTERVAL_MIN_SEC,
   TOPBAR_PROMPT_PLACEHOLDER_MAX_COUNT,
@@ -6,6 +8,7 @@ import {
 } from "../../shared/constants.js";
 import { t } from "../../shared/i18n.js";
 import {
+  normalizeTopbarPromptInputFontSize,
   normalizeTopbarPromptPlaceholderConfig,
   normalizeTopbarPromptPlaceholderText
 } from "../../shared/storage-schema.js";
@@ -39,6 +42,7 @@ export function createAppearanceTopbarController(dependencies = {}) {
     state: "object",
     svgIcon: "function",
     saveOptionsPatch: "function",
+    queueAppearanceAutoSave: "function",
     syncTopbarPromptPlaceholder: "function",
     enterTopbarEditMode: "function",
     closeSettingsDialog: "function"
@@ -47,6 +51,7 @@ export function createAppearanceTopbarController(dependencies = {}) {
   const {
     svgIcon,
     saveOptionsPatch,
+    queueAppearanceAutoSave,
     syncTopbarPromptPlaceholder,
     enterTopbarEditMode,
     closeSettingsDialog
@@ -290,8 +295,41 @@ export function createAppearanceTopbarController(dependencies = {}) {
     );
   }
 
+  function topbarPromptInputBlock() {
+    const initialFontSize = normalizeTopbarPromptInputFontSize(state.options.topbarPromptInputFontSize);
+    const fontSizeValue = el("span", { class: "appearance-range-value" }, `${initialFontSize}px`);
+    const fontSizeSlider = el("input", {
+      class: "appearance-range-slider topbar-prompt-input-font-size-slider",
+      type: "range",
+      min: String(TOPBAR_PROMPT_INPUT_FONT_SIZE_MIN_PX),
+      max: String(TOPBAR_PROMPT_INPUT_FONT_SIZE_MAX_PX),
+      step: "1",
+      value: String(initialFontSize),
+      "aria-label": t("topbar.input.fontSize")
+    });
+    fontSizeSlider.addEventListener("input", () => {
+      const nextFontSize = normalizeTopbarPromptInputFontSize(fontSizeSlider.value);
+      fontSizeSlider.value = String(nextFontSize);
+      fontSizeValue.textContent = `${nextFontSize}px`;
+      queueAppearanceAutoSave({ topbarPromptInputFontSize: nextFontSize });
+    });
+    return settingsBlock(t("topbar.input.title"), t("topbar.input.desc"),
+      el("div", { class: "appearance-field-list topbar-prompt-input-settings" },
+        field(t("topbar.input.fontSize"),
+          el("div", { class: "appearance-range-control topbar-prompt-input-font-size-control" },
+            fontSizeSlider,
+            fontSizeValue,
+            el("small", { class: "appearance-range-help" }, t("topbar.input.fontSizeHelp"))
+          )
+        )
+      )
+    );
+  }
+
   function pane(redraw) {
-    const activeTab = state.settingsAppearanceTopbarTab === "layout" ? "layout" : "placeholder";
+    const activeTab = ["input", "layout"].includes(state.settingsAppearanceTopbarTab)
+      ? state.settingsAppearanceTopbarTab
+      : "placeholder";
     state.settingsAppearanceTopbarTab = activeTab;
     const enterTopbarEditModeFromSettings = () => {
       closeSettingsDialog();
@@ -300,6 +338,7 @@ export function createAppearanceTopbarController(dependencies = {}) {
     return el("div", { class: "settings-pane topbar-settings-pane" },
       settingsInnerTabs([
         ["placeholder", t("topbar.placeholder.title"), t("topbar.placeholder.tabDesc")],
+        ["input", t("topbar.input.title"), t("topbar.input.tabDesc")],
         ["layout", t("topbar.customize.title"), t("topbar.customize.tabDesc")]
       ], activeTab, (id) => {
         state.settingsAppearanceTopbarTab = id;
@@ -314,7 +353,9 @@ export function createAppearanceTopbarController(dependencies = {}) {
             el("p", { class: "topbar-layout-hint" }, t("topbar.customize.dragHint"))
           )
         )
-        : topbarPromptPlaceholderBlock(redraw)
+        : activeTab === "input"
+          ? topbarPromptInputBlock()
+          : topbarPromptPlaceholderBlock(redraw)
     );
   }
 

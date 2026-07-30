@@ -1,4 +1,5 @@
 import { t } from "../../shared/i18n.js";
+import { API_PROFILE_MODEL_DEFAULT } from "../../shared/constants.js";
 import { createId } from "../../shared/storage-schema.js";
 import { button, editorModal, el, field, input, toast } from "../../ui/dom.js";
 import {
@@ -155,7 +156,7 @@ export function createProfilesSettingsSection(ctx) {
       name: "New API",
       endpoint: "https://api.openai.com/v1/chat/completions",
       apiKey: "",
-      model: "gpt-3.5-turbo"
+      model: API_PROFILE_MODEL_DEFAULT
     });
     const nameInput = input(draft.name, { placeholder: t("profiles.providerName") });
     const endpointInput = input(draft.endpoint, { placeholder: "https://api.openai.com/v1/chat/completions" });
