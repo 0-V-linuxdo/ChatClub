@@ -110,7 +110,7 @@ assert.doesNotMatch(
 );
 assert.match(
   preferredModelRunSource,
-  /record\.terminal = true;[\s\S]*record\.failureReason = compactPreferredModelFailureReason\(result\);[\s\S]*record\.statusToast\?\.dismiss\?\.\(5000\)/,
+  /record\.terminal = true;[\s\S]*record\.failureReason = record\.fallbackAttempted[\s\S]*compactPreferredModelFailureReason\(finalResult\);[\s\S]*record\.statusToast\?\.dismiss\?\.\(5000\)/,
   "non-retryable or exhausted cancellations must reach an error-toast terminal state"
 );
 const preferredModelScheduleSource = functionSource(preferredModelSource, "schedulePreferredModelApplyToFrame");
@@ -538,9 +538,14 @@ vm.runInContext(`
   const DEFAULT_GEMINI_THINKING_LEVEL = "standard";
   const GEMINI_THINKING_LEVEL_PREFERENCE_KEY = "GeminiThinkingLevel";
   const GEMINI_THINKING_LEVEL_TARGETS = Object.freeze([{ id: "standard" }]);
+  const MODEL_PREFERENCE_SECONDARY_ENABLED_KEY = "SecondaryModelEnabled";
+  const MODEL_PREFERENCE_SECONDARY_KEYS = Object.freeze({ NotionAI: "NotionAISecondary" });
   const MODEL_PREFERENCE_APP_ID_ALIASES = Object.freeze({ NotionAI: "NotionAI", "Notion AI": "NotionAI" });
   const MODEL_PREFERENCE_TARGETS = Object.freeze({
-    NotionAI: Object.freeze([{ id: "gpt54", label: "GPT-5.4" }])
+    NotionAI: Object.freeze([
+      { id: "gpt54", label: "GPT-5.4" },
+      { id: "fable5", label: "Fable 5" }
+    ])
   });
   const preferredModelState = {
     options: { modelPreferences: {} },
@@ -551,6 +556,7 @@ vm.runInContext(`
   function activeWorkspace() { return workspace; }
   ${functionSource(preferredModelSource, "preferredModelAppId")}
   ${functionSource(preferredModelSource, "preferredModelForApp")}
+  ${functionSource(preferredModelSource, "preferredSecondaryModelForApp")}
   ${functionSource(preferredModelSource, "preferredGeminiThinkingLevel")}
   ${functionSource(preferredModelSource, "preferredNotionAllSourcesState")}
   ${functionSource(preferredModelSource, "preferredModelPayloadForApp")}
@@ -586,6 +592,18 @@ assert.equal(
   notionPreferenceContext.frameKey(),
   "NotionAI:gpt54:sources=disabled:document-1",
   "changing the source preference must invalidate a settled model-only frame key"
+);
+notionPreferenceContext.state.options.modelPreferences.SecondaryModelEnabled = true;
+notionPreferenceContext.state.options.modelPreferences.NotionAISecondary = "fable5";
+assert.deepEqual(
+  notionPayload(),
+  { appId: "NotionAI", modelId: "gpt54", secondaryModelId: "fable5", allSourcesState: "disabled" },
+  "an enabled secondary model must remain part of the parent-only apply plan"
+);
+assert.equal(
+  notionPreferenceContext.frameKey(),
+  "NotionAI:gpt54:secondary=fable5:sources=disabled:document-1",
+  "changing the secondary model must invalidate a settled per-document apply identity"
 );
 notionPreferenceContext.state.options.modelPreferences.NotionAI = "";
 notionPreferenceContext.state.options.modelPreferences.NotionAIAllSources = "invalid";

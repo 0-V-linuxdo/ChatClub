@@ -109,7 +109,9 @@ function createFixture({
   targetBecomesCurrentOnDismiss = false,
   triggerHydrationTexts = [],
   onTriggerWait = null,
-  abortDuringTriggerHydration = false
+  abortDuringTriggerHydration = false,
+  modelMenuCloseFails = false,
+  itemSelectionSettles = true
 } = {}) {
   let triggerHydrationIndex = 0;
   const state = {
@@ -316,7 +318,7 @@ function createFixture({
       visibleSelectorElements,
       modelRect,
       visible,
-      isDisabledElement: (node) => itemDisabled && node === item,
+      isDisabledElement: (node) => itemDisabled && (node === item || node === duplicate),
       assertPreferredModelRun,
       preferredModelActivate(context, target) {
         assertPreferredModelRun(context);
@@ -339,7 +341,7 @@ function createFixture({
         }
         assert.equal(target, item, "only the exact requested Notion model row may be activated");
         state.itemClicks += 1;
-        setTriggerText(targetLabel);
+        if (itemSelectionSettles) setTriggerText(targetLabel);
         state.menuOpen = false;
         return true;
       },
@@ -375,7 +377,7 @@ function createFixture({
         state.sleepCalls += 1;
       },
       async dismissPreferredModelMenu(_context, getter) {
-        if (getter()) state.menuOpen = false;
+        if (getter() && !modelMenuCloseFails) state.menuOpen = false;
         if (targetBecomesCurrentOnDismiss) setTriggerText(targetLabel);
         return !getter();
       },
@@ -442,6 +444,7 @@ function createSourcesFixture({
   baselineSettingsOpen = false,
   modelPreference = false,
   modelInitialText = "GPT-5.4",
+  modelItemDisabled = false,
   sourceTriggerMinWaitMs = 0,
   sourceTriggerMinWaitMsAfterModelSelection = 0,
   sourceToggleResetsModel = false,
@@ -1430,7 +1433,7 @@ function createSourcesFixture({
       visibleSelectorElements,
       modelRect,
       visible,
-      isDisabledElement: () => false,
+      isDisabledElement: (node) => modelItemDisabled && node === modelItem,
       assertPreferredModelRun,
       preferredModelActivate: activate,
       preferredModelPointerActivate: activate,
@@ -1706,18 +1709,19 @@ function createSourcesFixture({
   for (const scenario of [
     {
       name: "substring",
-      options: { targetLabel: "GPT-5.4 Mini" },
+      options: { targetLabel: "GPT-5.4 Mini", itemDisabled: true },
       message: "a longer model label must not satisfy the exact GPT-5.4 target"
     },
     {
       name: "disabled",
       options: { targetLabel: "Fable 5", itemDisabled: true },
       modelId: "fable5",
-      message: "a disabled exact model row must fail closed"
+      unavailable: true,
+      message: "a unique disabled exact model row must be typed as unavailable before model activation"
     },
     {
       name: "ambiguous",
-      options: { targetLabel: "GPT-5.4", duplicateItem: true },
+      options: { targetLabel: "GPT-5.4", itemDisabled: true, duplicateItem: true },
       message: "duplicate exact model rows must fail closed"
     }
   ]) {
@@ -1731,9 +1735,46 @@ function createSourcesFixture({
       modelId: scenario.modelId || "gpt54",
       runId: `notion-exact-${scenario.name}`
     });
-    assert.equal(result.ok, false, scenario.message);
-    assert.equal(result.reason, "target model item not found");
+    if (scenario.unavailable) {
+      assert.equal(result.ok, true, scenario.message);
+      assert.equal(result.unavailable, true);
+      assert.equal(result.fallbackEligible, true);
+      assert.equal(result.selectionActivated, false);
+      assert.equal(result.menuClosed, true);
+      assert.equal(result.reason, "");
+    } else {
+      assert.equal(result.ok, false, scenario.message);
+      assert.equal(result.reason, "target model item not found");
+      assert.notEqual(result.unavailable, true);
+      assert.notEqual(result.fallbackEligible, true);
+    }
+    assert.equal(fixture.state.triggerClicks, 1, `${scenario.name} may open only the owned model menu`);
     assert.equal(fixture.state.itemClicks, 0, `${scenario.name} must not activate a model row`);
+  }
+
+  {
+    const fixture = createFixture({
+      triggerText: "Choose model",
+      targetLabel: "Fable 5",
+      itemDisabled: true,
+      modelMenuCloseFails: true
+    });
+    global.document.getElementById = (id) => id === "model-menu" && fixture.state.menuOpen
+      ? fixture.dependencies.visibleSelectorElements('[role="menu"]')[0]
+      : null;
+    const api = createPreferredNotionDeepSeekCapability(fixture.dependencies);
+    const result = await api.runPreferredModelApply({
+      appId: "NotionAI",
+      modelId: "fable5",
+      runId: "notion-exact-disabled-menu-remains-open"
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.unavailable, true, "the exact disabled row remains a typed availability observation");
+    assert.equal(result.fallbackEligible, false, "an open model menu must prevent fallback activation");
+    assert.equal(result.selectionActivated, false);
+    assert.equal(result.menuClosed, false, "the adapter must report the actual failed menu cleanup");
+    assert.equal(fixture.state.triggerClicks, 1);
+    assert.equal(fixture.state.itemClicks, 0, "failed menu cleanup must not activate the unavailable row");
   }
 
   {
@@ -1971,6 +2012,32 @@ function createSourcesFixture({
     assert.equal(fixture.state.itemClicks, 1);
     assert.equal(result.interactionCount, 2, "hydrated target selection must record trigger and target interactions");
     assert.deepEqual(fixture.state.waitCalls.at(-1), { timeoutMs: 800, intervalMs: 80 });
+  }
+
+  {
+    const fixture = createFixture({
+      triggerText: "Choose model",
+      targetLabel: "Gemini 3.1 Pro",
+      itemSelectionSettles: false
+    });
+    global.document.getElementById = (id) => id === "model-menu" && fixture.state.menuOpen
+      ? fixture.dependencies.visibleSelectorElements('[role="menu"]')[0]
+      : null;
+    const api = createPreferredNotionDeepSeekCapability(fixture.dependencies);
+    const result = await api.runPreferredModelApply({
+      appId: "NotionAI",
+      modelId: "gemini31pro",
+      runId: "notion-selection-does-not-settle"
+    });
+    assert.equal(result.ok, false);
+    assert.equal(result.reason, "selection did not settle");
+    assert.notEqual(result.unavailable, true);
+    assert.equal(result.fallbackEligible, true, "a closed Notion menu makes a typed secondary attempt safe");
+    assert.equal(result.selectionActivated, true);
+    assert.equal(result.selectionUnsettled, true);
+    assert.equal(result.menuClosed, true);
+    assert.equal(fixture.state.triggerClicks, 1);
+    assert.equal(fixture.state.itemClicks, 1, "the failed settlement follows one explicit model activation");
   }
 
   {
@@ -2419,6 +2486,32 @@ function createSourcesFixture({
     assert.equal(result.ok, true, `owned Escape cleanup must settle: ${JSON.stringify({ result, state: fixture.state })}`);
     assert.equal(fixture.state.documentEscapeDispatches, 1, "one keydown from the active element inside the owned root must reach the document listener");
     assert.equal(fixture.state.baselineGlobalCloseCount, 0);
+  }
+
+  {
+    const fixture = createSourcesFixture({
+      initialState: false,
+      modelPreference: true,
+      modelItemDisabled: true
+    });
+    global.document.getElementById = fixture.documentGetElementById;
+    global.document.elementFromPoint = fixture.documentElementFromPoint;
+    const api = createPreferredNotionDeepSeekCapability(fixture.dependencies);
+    const result = await api.runPreferredModelApply({
+      appId: "NotionAI",
+      modelId: "gemini31pro",
+      allSourcesState: "enabled",
+      runId: "notion-disabled-model-before-sources"
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.unavailable, true);
+    assert.equal(result.fallbackEligible, true);
+    assert.equal(result.selectionActivated, false);
+    assert.equal(result.menuClosed, true);
+    assert.equal(fixture.state.modelTriggerClicks, 1, "availability proof may open only the model menu");
+    assert.equal(fixture.state.modelItemClicks, 0, "an unavailable model row must never be activated");
+    assert.equal(fixture.state.triggerClicks, 0, "All Sources must wait for the eventual applied model");
+    assert.equal(fixture.state.toggleClicks, 0, "an unavailable primary model must not mutate Sources before fallback");
   }
 
   {

@@ -2,6 +2,8 @@ import {
   DEFAULT_GEMINI_THINKING_LEVEL,
   GEMINI_THINKING_LEVEL_PREFERENCE_KEY,
   GEMINI_THINKING_LEVEL_TARGETS,
+  MODEL_PREFERENCE_SECONDARY_ENABLED_KEY,
+  MODEL_PREFERENCE_SECONDARY_KEYS,
   MODEL_PREFERENCE_TARGETS,
   NOTION_ALL_SOURCES_PREFERENCE_KEY,
   NOTION_ALL_SOURCES_PREFERENCE_VALUES
@@ -89,6 +91,16 @@ export function createPreferredModelController(dependencies = {}) {
     return (MODEL_PREFERENCE_TARGETS[appId] || []).some((target) => target.id === modelId) ? modelId : "";
   }
 
+  function preferredSecondaryModelForApp(app, primaryModelId = preferredModelForApp(app)) {
+    const appId = preferredModelAppId(app);
+    const preferences = preferredModelState.modelPreferenceDraft || preferredModelState.options?.modelPreferences || {};
+    if (preferences[MODEL_PREFERENCE_SECONDARY_ENABLED_KEY] !== true) return "";
+    const preferenceKey = MODEL_PREFERENCE_SECONDARY_KEYS[appId];
+    const modelId = String(preferenceKey ? preferences[preferenceKey] || "" : "");
+    if (!modelId || modelId === primaryModelId) return "";
+    return (MODEL_PREFERENCE_TARGETS[appId] || []).some((target) => target.id === modelId) ? modelId : "";
+  }
+
   function preferredGeminiThinkingLevel() {
     const preferences = preferredModelState.modelPreferenceDraft || preferredModelState.options?.modelPreferences || {};
     const value = String(preferences[GEMINI_THINKING_LEVEL_PREFERENCE_KEY] || DEFAULT_GEMINI_THINKING_LEVEL);
@@ -112,14 +124,29 @@ export function createPreferredModelController(dependencies = {}) {
   function preferredModelPayloadForApp(app) {
     const appId = preferredModelAppId(app);
     const modelId = preferredModelForApp(app);
+    const secondaryModelId = modelId ? preferredSecondaryModelForApp(app, modelId) : "";
     const allSourcesState = appId === "NotionAI" ? preferredNotionAllSourcesState() : "";
     if (!modelId && !allSourcesState) return null;
     return {
       appId,
       modelId,
-      ...(appId === "Gemini" && modelId === "pro" ? { thinkingLevel: preferredGeminiThinkingLevel() } : {}),
+      ...(secondaryModelId ? { secondaryModelId } : {}),
+      ...(appId === "Gemini" && (modelId === "pro" || secondaryModelId === "pro")
+        ? { thinkingLevel: preferredGeminiThinkingLevel() }
+        : {}),
       ...(allSourcesState ? { allSourcesState } : {})
     };
+  }
+
+  function preferredModelAttemptPayload(payload = {}, modelId = payload.modelId, runId = "") {
+    const attempt = {
+      ...payload,
+      modelId: String(modelId || ""),
+      ...(runId ? { runId: String(runId) } : {})
+    };
+    delete attempt.secondaryModelId;
+    if (attempt.appId !== "Gemini" || attempt.modelId !== "pro") delete attempt.thinkingLevel;
+    return attempt;
   }
 
   function preferredModelFailurePolicyForApp(app) {
@@ -187,6 +214,7 @@ export function createPreferredModelController(dependencies = {}) {
     const bridgeVersion = String(iframe?.dataset?.preferredModelContentBridgeVersion || "");
     const frameKey = preferredModelFrameKey(iframe);
     const record = iframe ? preferredModelApplyRuns.get(iframe) : null;
+    const result = record?.result || {};
     const base = {
       iframe: iframe || null,
       instanceId,
@@ -195,6 +223,10 @@ export function createPreferredModelController(dependencies = {}) {
       runId: String(record?.runId || ""),
       documentId,
       bridgeVersion,
+      requestedModelId: String(result.requestedModelId || record?.requestedModelId || ""),
+      appliedModelId: String(result.appliedModelId || ""),
+      fallbackAttempted: result.fallbackAttempted === true,
+      fallbackUsed: result.fallbackUsed === true,
       reason: ""
     };
     if (!iframe?.isConnected) return { ...base, state: "detached", reason: "iframe is detached" };
@@ -464,9 +496,10 @@ export function createPreferredModelController(dependencies = {}) {
     const payload = preferredModelPayloadForApp(app);
     if (!payload) return "";
     const thinkingLevel = payload.thinkingLevel ? ":" + payload.thinkingLevel : "";
+    const secondaryModel = payload.secondaryModelId ? ":secondary=" + payload.secondaryModelId : "";
     const allSourcesState = payload.allSourcesState ? ":sources=" + payload.allSourcesState : "";
     const documentId = String(iframe.dataset.preferredModelDocumentId || "");
-    return payload.appId + ":" + payload.modelId + thinkingLevel + allSourcesState + ":" + documentId;
+    return payload.appId + ":" + payload.modelId + thinkingLevel + secondaryModel + allSourcesState + ":" + documentId;
   }
 
   function preferredModelSubmissionRouteState(appId, value) {
@@ -812,6 +845,69 @@ export function createPreferredModelController(dependencies = {}) {
     };
   }
 
+  function preferredModelAttemptSucceeded(result = {}) {
+    return result.ok === true && result.unavailable !== true && result.unsupported !== true;
+  }
+
+  function preferredModelSecondaryEligible(record, result = {}) {
+    const explicitlyUnavailable = result.unavailable === true
+      && result.selectionActivated === false;
+    const selectionDidNotSettle = result.ok === false
+      && result.selectionUnsettled === true
+      && result.selectionActivated === true;
+    return Boolean(
+      record?.stage === "primary"
+      && record.secondaryModelId
+      && result.fallbackEligible === true
+      && result.menuClosed === true
+      && result.cancelled !== true
+      && (explicitlyUnavailable || selectionDidNotSettle)
+    );
+  }
+
+  function preferredModelAttemptFailureReason(result = {}) {
+    return compactPreferredModelFailureReason(result);
+  }
+
+  function preferredModelRecordResult(record, attemptResult = {}) {
+    const success = preferredModelAttemptSucceeded(attemptResult);
+    const fallbackAttempted = record?.fallbackAttempted === true;
+    const requestedModelId = String(record?.requestedModelId || attemptResult.modelId || "");
+    const appliedModelId = success ? String(attemptResult.modelId || record?.payload?.modelId || "") : "";
+    const base = {
+      ...attemptResult,
+      requestedModelId,
+      appliedModelId,
+      fallbackAttempted,
+      fallbackUsed: fallbackAttempted && success
+    };
+    if (!fallbackAttempted) return base;
+
+    const primaryResult = record?.primaryResult || {};
+    const primaryReason = preferredModelAttemptFailureReason(primaryResult);
+    const secondaryReason = success ? "" : preferredModelAttemptFailureReason(attemptResult);
+    const interactionCount = Math.max(0, Number(primaryResult.interactionCount) || 0)
+      + Math.max(0, Number(attemptResult.interactionCount) || 0);
+    return {
+      ...base,
+      interactionCount,
+      primaryRunId: String(record?.primaryRunId || ""),
+      secondaryRunId: String(record?.runId || attemptResult.runId || ""),
+      ...(success
+        ? {
+            unavailable: false,
+            unsupported: false,
+            fallbackEligible: false,
+            reason: ""
+          }
+        : {
+            primaryReason,
+            secondaryReason,
+            reason: [primaryReason, secondaryReason].filter(Boolean).join(" → ")
+          })
+    };
+  }
+
   function requestPreferredModelCancellation(iframe, record, reason) {
     if (!iframe?.contentWindow || !record?.runId) return;
     const payload = {
@@ -846,12 +942,23 @@ export function createPreferredModelController(dependencies = {}) {
   }
 
   function createPreferredModelRecord(iframe, payload, key, delays, options = {}) {
+    const runId = createId("model-apply");
+    const requestedPayload = { ...payload };
+    const requestedModelId = String(requestedPayload.modelId || "");
+    const secondaryModelId = String(requestedPayload.secondaryModelId || "");
     const record = {
       iframe,
-      payload,
+      payload: preferredModelAttemptPayload(requestedPayload, requestedModelId),
+      requestedPayload,
+      requestedModelId,
+      secondaryModelId,
       key,
       delays,
-      runId: createId("model-apply"),
+      runId,
+      primaryRunId: runId,
+      stage: "primary",
+      fallbackAttempted: false,
+      primaryResult: null,
       attempt: Math.max(0, Number(options.attempt) || 0),
       timer: 0,
       controller: null,
@@ -874,12 +981,44 @@ export function createPreferredModelController(dependencies = {}) {
     return record;
   }
 
+  function startPreferredModelSecondary(iframe, record, primaryResult) {
+    if (!preferredModelRecordIsCurrent(iframe, record)) return false;
+    record.primaryResult = primaryResult;
+    record.fallbackAttempted = true;
+    record.stage = "secondary";
+    record.payload = preferredModelAttemptPayload(record.requestedPayload, record.secondaryModelId);
+    record.runId = createId("model-apply");
+    record.attempt = 0;
+    record.bridgeRecoveryAttempts = 0;
+    record.controller = null;
+    record.pending = true;
+    record.inFlight = false;
+    record.success = false;
+    record.terminal = false;
+    record.cancelled = false;
+    record.failureReason = "";
+    record.result = {
+      ...primaryResult,
+      requestedModelId: record.requestedModelId,
+      appliedModelId: "",
+      fallbackAttempted: true,
+      fallbackUsed: false
+    };
+    schedulePreferredModelRecordRun(iframe, record, 0);
+    return true;
+  }
+
   function schedulePreferredModelRecordRun(iframe, record, delay = 0) {
     if (!preferredModelRecordIsCurrent(iframe, record) || record.success || record.terminal) return;
     if (record.timer) clearTimeout(record.timer);
     record.timer = 0;
     record.pending = true;
-    record.statusToast?.update?.(t("toast.frameModelSwitchPending"), "info");
+    const pendingMessage = record.stage === "secondary"
+      ? t("toast.frameSecondaryModelSwitchPending", {
+          model: preferredModelTargetLabel(record.payload)
+        })
+      : t("toast.frameModelSwitchPending");
+    record.statusToast?.update?.(pendingMessage, "info");
     syncPreferredModelInputGate();
     record.timer = window.setTimeout(() => {
       record.timer = 0;
@@ -969,7 +1108,7 @@ export function createPreferredModelController(dependencies = {}) {
   }
 
   async function applyPreferredModelToFrame(iframe, record) {
-    const payload = { ...record.payload, runId: record.runId };
+    const payload = preferredModelAttemptPayload(record.payload, record.payload.modelId, record.runId);
     let registration = await verifiedCurrentContentFrameRegistration(iframe);
     if (!registration) {
       record.bridgeRecoveryAttempts = Math.max(0, Number(record.bridgeRecoveryAttempts) || 0) + 1;
@@ -1016,8 +1155,17 @@ export function createPreferredModelController(dependencies = {}) {
           expectedDocumentId: registration.documentId
         }
       );
+      if (!result || typeof result !== "object" || Array.isArray(result)) {
+        return preferredModelResult(record.runId, { reason: "preferred-model response was malformed" });
+      }
       if (String(result?.runId || "") !== record.runId) {
         return preferredModelResult(record.runId, { reason: "preferred-model response runId mismatch" });
+      }
+      if (
+        String(result.appId || "") !== String(payload.appId || "")
+        || String(result.modelId || "") !== String(payload.modelId || "")
+      ) {
+        return preferredModelResult(record.runId, { reason: "preferred-model response target mismatch" });
       }
       return preferredModelResult(record.runId, result || {});
     } catch (error) {
@@ -1052,14 +1200,27 @@ export function createPreferredModelController(dependencies = {}) {
     record.controller = null;
     record.inFlight = false;
     record.result = result;
-    if (result.ok === true && result.unavailable !== true && result.unsupported !== true) {
+    if (preferredModelSecondaryEligible(record, result)) {
+      if (startPreferredModelSecondary(iframe, record, result)) return;
+    }
+    if (preferredModelAttemptSucceeded(result)) {
+      const finalResult = preferredModelRecordResult(record, result);
+      record.result = finalResult;
       record.success = true;
       record.terminal = true;
-      const model = preferredModelTargetLabel(record.payload);
+      const model = preferredModelTargetLabel(
+        preferredModelAttemptPayload(record.requestedPayload, finalResult.appliedModelId)
+      );
+      const changedKey = record.fallbackAttempted
+        ? "toast.frameSecondaryModelSwitchChanged"
+        : "toast.frameModelSwitchChanged";
+      const readyKey = record.fallbackAttempted
+        ? "toast.frameSecondaryModelSwitchReady"
+        : "toast.frameModelSwitchReady";
       record.statusToast?.update?.(
-        result.changed === true
-          ? t("toast.frameModelSwitchChanged", { model })
-          : t("toast.frameModelSwitchReady", { model }),
+        finalResult.changed === true
+          ? t(changedKey, { model })
+          : t(readyKey, { model }),
         "success"
       );
       record.statusToast?.dismiss?.(2000);
@@ -1073,11 +1234,22 @@ export function createPreferredModelController(dependencies = {}) {
       schedulePreferredModelRecordRun(iframe, record, retryDelay);
       return;
     }
+    const finalResult = preferredModelRecordResult(record, result);
+    record.result = finalResult;
     record.terminal = true;
-    record.cancelled = result.cancelled === true;
-    record.failureReason = compactPreferredModelFailureReason(result);
+    record.cancelled = finalResult.cancelled === true;
+    record.failureReason = record.fallbackAttempted
+      ? compactPreferredModelFailureReason({
+          reason: t("toast.frameSecondaryModelSwitchFailed", {
+            primaryReason: finalResult.primaryReason,
+            reason: finalResult.secondaryReason
+          })
+        })
+      : compactPreferredModelFailureReason(finalResult);
     record.statusToast?.update?.(
-      t("toast.frameModelSwitchFailed", { reason: record.failureReason }),
+      record.fallbackAttempted
+        ? record.failureReason
+        : t("toast.frameModelSwitchFailed", { reason: record.failureReason }),
       "error"
     );
     record.statusToast?.dismiss?.(5000);
@@ -1089,7 +1261,7 @@ export function createPreferredModelController(dependencies = {}) {
         appId: record.payload.appId || app.id || "",
         appName: app.name || record.payload.appId || "",
         href: iframe?.dataset?.currentHref || app.url || "",
-        error: result,
+        error: finalResult,
         message: record.failureReason
       });
     }
@@ -1097,7 +1269,7 @@ export function createPreferredModelController(dependencies = {}) {
       "[ChatClub] Preferred model was not applied",
       record.payload.appId,
       record.payload.modelId,
-      result.reason || result
+      finalResult.reason || finalResult
     );
     syncPreferredModelInputGate();
   }

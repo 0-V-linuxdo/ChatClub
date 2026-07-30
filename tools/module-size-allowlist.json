@@ -1,4 +1,11 @@
 {
+  "app/preferred-model/controller.js": {
+    "maxLines": 1364,
+    "target": 1200,
+    "maxBytes": 56002,
+    "targetBytes": 50000,
+    "reason": "The preferred-model controller keeps one document-bound apply record across an explicitly unavailable primary or typed closed-menu Notion settlement failure and its optional secondary attempt, including fresh run correlation, queued-send readiness, retry safety, failure policy handoff, and per-attempt Gemini and Notion desired state."
+  },
   "background/grok-cookie-runtime.js": {
     "maxLines": 1740,
     "target": 1200,
@@ -7,11 +14,11 @@
     "reason": "The Grok Cookie runtime co-locates exact registered-frame authorization, browser-specific partition discovery, parent-document-bound Mirror account-switch capture and recovery including Arc's omitted top-frame metadata fallback, a connect-only same-document gateway WebSocket readiness proof with bounded a=1/a=2/a=3 account rotation, Cookie-ledger cleanup, and fail-closed navigation handling so their shared attempt, frame, and top-document identities cannot drift across modules."
   },
   "shared/i18n.js": {
-    "maxLines": 1963,
+    "maxLines": 1983,
     "target": 1500,
-    "maxBytes": 112630,
+    "maxBytes": 114343,
     "targetBytes": 82000,
-    "reason": "Bilingual translation catalog data is kept co-located for key parity; the queued-send status, model-failure policy, model-preference labels and Notion All Sources segmented-control help, custom User Scripts permission guidance, accessible new-topic/restoring frame status labels, platform-management navigation labels, and concise iframe-permission hover help are included in the exact line and byte ratchets."
+    "reason": "Bilingual translation catalog data is kept co-located for key parity; the queued-send status, preferred and secondary model controls and fallback results, model-failure policy, Notion All Sources segmented-control help, custom User Scripts permission guidance, accessible new-topic/restoring frame status labels, platform-management navigation labels, and concise iframe-permission hover help are included in the exact line and byte ratchets."
   },
   "tools/browser-smoke.mjs": {
     "maxLines": 1377,

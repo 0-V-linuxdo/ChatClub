@@ -167,6 +167,8 @@ globalThis.document = {
   const modelsModule = await import(moduleUrl("app/settings/models.js"));
   const {
     GEMINI_THINKING_LEVEL_PREFERENCE_KEY,
+    MODEL_PREFERENCE_SECONDARY_ENABLED_KEY,
+    MODEL_PREFERENCE_SECONDARY_KEYS,
     MODEL_PREFERENCE_TARGETS,
     NOTION_ALL_SOURCES_PREFERENCE_KEY
   } = await import(moduleUrl("shared/constants.js"));
@@ -215,6 +217,10 @@ globalThis.document = {
   const modelRows = findNodes(pane, (node) => Boolean(node.dataset?.modelPreferenceAppId));
   const modelHeader = findNode(pane, (node) => node.classList?.contains("settings-list-header"));
   const modelSelects = findNodes(pane, (node) => Boolean(node.dataset?.modelPreferenceSelectAppId));
+  const secondaryToggle = findNode(
+    pane,
+    (node) => node.dataset?.modelPreferenceSecondaryEnabled === "true"
+  );
   const notionModelSelect = modelSelects.find(
     (node) => node.dataset.modelPreferenceSelectAppId === "NotionAI"
   );
@@ -248,6 +254,14 @@ globalThis.document = {
     modelSelects.map((node) => node.dataset.modelPreferenceSelectAppId),
     preferenceOrder,
     "model controls must follow the saved preference order"
+  );
+  assert.ok(secondaryToggle, "the preferred tab must expose the secondary-model feature switch");
+  assert.equal(secondaryToggle.checked, false, "secondary models must be disabled by default");
+  assert.equal(secondaryToggle.getAttribute("role"), "switch");
+  assert.equal(
+    findNodes(pane, (node) => Boolean(node.dataset?.modelPreferenceSecondarySelectAppId)).length,
+    0,
+    "secondary-model controls must stay hidden until the user enables the feature"
   );
   const expectedNotionModels = [
     ["", ""],
@@ -453,6 +467,84 @@ globalThis.document = {
     "every preferred-model select must have an explicit accessible name"
   );
 
+  secondaryToggle.checked = true;
+  secondaryToggle.dispatch("change");
+  assert.equal(saves.length, 1, "enabling secondary models must start an autosave");
+  assert.equal(
+    saves[0].patch.modelPreferences[MODEL_PREFERENCE_SECONDARY_ENABLED_KEY],
+    true,
+    "the feature switch must use a stable boolean storage key"
+  );
+  saves[0].gate.resolve();
+  await waitUntil(() => !section.autosaveBusy(), "secondary-model enable autosave did not settle");
+  saves.splice(0);
+
+  const enabledPane = section.pane(() => { redrawCalls += 1; });
+  const secondarySelects = findNodes(
+    enabledPane,
+    (node) => Boolean(node.dataset?.modelPreferenceSecondarySelectAppId)
+  );
+  assert.deepEqual(
+    secondarySelects.map((node) => node.dataset.modelPreferenceSecondarySelectAppId),
+    preferenceOrder,
+    "enabling the feature must render one ordered secondary selector per platform"
+  );
+  assert.ok(
+    secondarySelects.every((node) => node.getAttribute("disabled") !== null),
+    "a secondary selector must remain disabled until its platform has a preferred model"
+  );
+  assert.ok(
+    secondarySelects.every((node) => Boolean(node.getAttribute("aria-label")?.trim())),
+    "every secondary-model selector must have an explicit accessible name"
+  );
+
+  const enabledNotionPrimary = findNode(
+    enabledPane,
+    (node) => node.dataset?.modelPreferenceSelectAppId === "NotionAI"
+  );
+  enabledNotionPrimary.value = "opus47";
+  enabledNotionPrimary.dispatch("change");
+  assert.equal(saves.length, 1, "choosing a preferred model must persist before secondary configuration");
+  saves[0].gate.resolve();
+  await waitUntil(() => !section.autosaveBusy(), "preferred-model prerequisite autosave did not settle");
+  saves.splice(0);
+
+  const configuredPrimaryPane = section.pane(() => { redrawCalls += 1; });
+  const notionSecondary = findNode(
+    configuredPrimaryPane,
+    (node) => node.dataset?.modelPreferenceSecondarySelectAppId === "NotionAI"
+  );
+  assert.equal(notionSecondary.getAttribute("disabled"), null);
+  assert.equal(
+    notionSecondary.children.some((node) => node.getAttribute("value") === "opus47"),
+    false,
+    "a secondary selector must exclude its current preferred model"
+  );
+  notionSecondary.value = "fable5";
+  notionSecondary.dispatch("change");
+  assert.equal(saves.length, 1, "choosing a secondary model must start an autosave");
+  assert.equal(
+    saves[0].patch.modelPreferences[MODEL_PREFERENCE_SECONDARY_KEYS.NotionAI],
+    "fable5"
+  );
+  saves[0].gate.resolve();
+  await waitUntil(() => !section.autosaveBusy(), "secondary-model selection autosave did not settle");
+  assert.equal(
+    ports.preferredModel.options.modelPreferences[MODEL_PREFERENCE_SECONDARY_KEYS.NotionAI],
+    "fable5",
+    "the saved secondary model must become visible to runtime readers"
+  );
+  const configuredPane = section.pane(() => { redrawCalls += 1; });
+  assert.equal(
+    findNode(
+      configuredPane,
+      (node) => node.dataset?.modelPreferenceSecondarySelectAppId === "NotionAI"
+    )?.value,
+    "fable5",
+    "a Settings redraw must retain the saved secondary model"
+  );
+  saves.splice(0);
+
   thinkingLevelRadios.forEach((node) => { node.checked = node.value === "extended"; });
   thinkingLevelRadios.find((node) => node.value === "extended").dispatch("change");
   assert.equal(saves.length, 1, "changing Thinking level must start an autosave");
@@ -620,6 +712,8 @@ globalThis.document = {
   const modelStylesEnd = stylesSource.indexOf(".prompt-template-list", modelStylesStart);
   const modelStyles = stylesSource.slice(modelStylesStart, modelStylesEnd);
   assert.match(modelStyles, /container-name:\s*model-preferences/);
+  assert.match(modelStyles, /\.model-preference-secondary-toggle\s*\{[^}]*display:\s*flex/s);
+  assert.match(modelStyles, /\.model-preference-row-models\s*\{[^}]*display:\s*grid/s);
   assert.match(modelStyles, /\.model-preference-failure-grid\s*\{[^}]*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s);
   assert.match(
     modelStyles,
@@ -804,6 +898,40 @@ globalThis.document = {
     }).modelPreferences[NOTION_ALL_SOURCES_PREFERENCE_KEY],
     "",
     "unknown All sources values must normalize to no preference"
+  );
+  const normalizedSecondary = normalizeOptions({
+    ...storedOptions,
+    modelPreferences: {
+      NotionAI: "opus47",
+      [MODEL_PREFERENCE_SECONDARY_ENABLED_KEY]: true,
+      [MODEL_PREFERENCE_SECONDARY_KEYS.NotionAI]: "fable5"
+    }
+  }).modelPreferences;
+  assert.equal(normalizedSecondary[MODEL_PREFERENCE_SECONDARY_ENABLED_KEY], true);
+  assert.equal(normalizedSecondary[MODEL_PREFERENCE_SECONDARY_KEYS.NotionAI], "fable5");
+  assert.equal(
+    normalizeOptions({
+      ...storedOptions,
+      modelPreferences: {
+        NotionAI: "opus47",
+        [MODEL_PREFERENCE_SECONDARY_ENABLED_KEY]: "true",
+        [MODEL_PREFERENCE_SECONDARY_KEYS.NotionAI]: "opus47"
+      }
+    }).modelPreferences[MODEL_PREFERENCE_SECONDARY_ENABLED_KEY],
+    false,
+    "only a stored boolean true may enable secondary-model fallback"
+  );
+  assert.equal(
+    normalizeOptions({
+      ...storedOptions,
+      modelPreferences: {
+        NotionAI: "opus47",
+        [MODEL_PREFERENCE_SECONDARY_ENABLED_KEY]: true,
+        [MODEL_PREFERENCE_SECONDARY_KEYS.NotionAI]: "opus47"
+      }
+    }).modelPreferences[MODEL_PREFERENCE_SECONDARY_KEYS.NotionAI],
+    "",
+    "normalization must reject a secondary model that duplicates the preferred model"
   );
   assert.deepEqual(
     rehydratedOptions.modelPreferenceOrder,

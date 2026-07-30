@@ -6,6 +6,8 @@ import {
   GEMINI_THINKING_LEVEL_TARGETS,
   MODEL_PREFERENCE_FAILURE_OVERRIDE_POLICIES,
   MODEL_PREFERENCE_FAILURE_POLICIES,
+  MODEL_PREFERENCE_SECONDARY_ENABLED_KEY,
+  MODEL_PREFERENCE_SECONDARY_KEYS,
   MODEL_PREFERENCE_TARGETS,
   NOTION_ALL_SOURCES_PREFERENCE_KEY,
   NOTION_ALL_SOURCES_PREFERENCE_VALUES
@@ -170,11 +172,21 @@ export function createModelsSettingsSection(ctx) {
     autoSaveRedraw = null;
   }
 
-  function preferenceOptions(appId) {
-    return (MODEL_PREFERENCE_TARGETS[appId] || []).map((target) => ({
-      value: target.id,
-      label: target.id ? target.label : t("modelPreferences.none")
-    }));
+  function preferenceOptions(appId, excludedModelId = "") {
+    return (MODEL_PREFERENCE_TARGETS[appId] || [])
+      .filter((target) => !target.id || target.id !== excludedModelId)
+      .map((target) => ({
+        value: target.id,
+        label: target.id ? target.label : t("modelPreferences.none")
+      }));
+  }
+
+  function secondaryModelsEnabled() {
+    return draft()[MODEL_PREFERENCE_SECONDARY_ENABLED_KEY] === true;
+  }
+
+  function secondaryModelKey(appId) {
+    return MODEL_PREFERENCE_SECONDARY_KEYS[appId] || "";
   }
 
   function failurePolicyValue() {
@@ -434,24 +446,93 @@ export function createModelsSettingsSection(ctx) {
     );
   }
 
-  function row(appId, redraw) {
+  function secondaryModelToggle(redraw) {
+    const enabled = secondaryModelsEnabled();
+    const control = el("input", {
+      type: "checkbox",
+      role: "switch",
+      checked: enabled,
+      "aria-label": t("modelPreferences.secondaryEnabled"),
+      dataset: { modelPreferenceSecondaryEnabled: "true" }
+    });
+    control.checked = enabled;
+    control.addEventListener("change", () => {
+      queueAutoSave({
+        ...draft(),
+        [MODEL_PREFERENCE_SECONDARY_ENABLED_KEY]: control.checked
+      });
+      redraw();
+    });
+    return el("label", { class: "model-preference-secondary-toggle" },
+      el("span", { class: "model-preference-secondary-toggle-copy" },
+        el("strong", {}, t("modelPreferences.secondaryEnabled")),
+        el("small", {}, t("modelPreferences.secondaryEnabledDesc"))
+      ),
+      control
+    );
+  }
+
+  function modelFields(appId, platform, redraw) {
     const config = draft();
+    const secondaryKey = secondaryModelKey(appId);
+    const primaryModelId = config[appId] || "";
+    const primarySelect = select(primaryModelId, preferenceOptions(appId), {
+      class: "select model-preference-model-select",
+      "aria-label": t("modelPreferences.preferredModelFor", { platform }),
+      dataset: { modelPreferenceSelectAppId: appId }
+    });
+    primarySelect.value = primaryModelId;
+    primarySelect.addEventListener("change", () => {
+      const next = { ...draft(), [appId]: primarySelect.value };
+      if (secondaryKey && next[secondaryKey] === primarySelect.value) next[secondaryKey] = "";
+      queueAutoSave(next);
+      redraw();
+    });
+
+    let secondaryField = null;
+    if (secondaryModelsEnabled()) {
+      const secondaryModelId = config[secondaryKey] === primaryModelId ? "" : config[secondaryKey] || "";
+      const secondarySelect = select(
+        secondaryModelId,
+        preferenceOptions(appId, primaryModelId),
+        {
+          class: "select model-preference-model-select model-preference-secondary-select",
+          "aria-label": t("modelPreferences.secondaryModelFor", { platform }),
+          disabled: !primaryModelId,
+          title: primaryModelId ? "" : t("modelPreferences.secondaryRequiresPrimary"),
+          dataset: { modelPreferenceSecondarySelectAppId: appId }
+        }
+      );
+      secondarySelect.value = secondaryModelId;
+      secondarySelect.addEventListener("change", () => {
+        queueAutoSave({ ...draft(), [secondaryKey]: secondarySelect.value });
+      });
+      secondaryField = modelPreferenceRowField(
+        t("modelPreferences.secondaryModel"),
+        secondarySelect,
+        "model-preference-secondary-field"
+      );
+    }
+
+    return el("div", { class: "model-preference-row-models" },
+      modelPreferenceRowField(
+        t("modelPreferences.preferredModel"),
+        primarySelect,
+        "model-preference-model-field"
+      ),
+      secondaryField
+    );
+  }
+
+  function row(appId, redraw) {
     const platform = APP_LABELS[appId] || appId;
     const hasAdditionalPreference = appId === "Gemini" || appId === "NotionAI";
     const rowClasses = [
       "ui-list-row settings-list-row model-preference-row",
       appId === "Gemini" ? "model-preference-row-has-thinking" : "",
-      hasAdditionalPreference ? "model-preference-row-has-additional" : ""
+      hasAdditionalPreference ? "model-preference-row-has-additional" : "",
+      secondaryModelsEnabled() ? "model-preference-row-secondary-enabled" : ""
     ].filter(Boolean).join(" ");
-    const modelSelect = select(config[appId] || "", preferenceOptions(appId), {
-      class: "select model-preference-model-select",
-      "aria-label": t("modelPreferences.preferredModelFor", { platform }),
-      dataset: { modelPreferenceSelectAppId: appId }
-    });
-    modelSelect.value = config[appId] || "";
-    modelSelect.addEventListener("change", () => {
-      queueAutoSave({ ...draft(), [appId]: modelSelect.value });
-    });
     return el("div", {
       class: rowClasses,
       draggable: "true",
@@ -464,11 +545,7 @@ export function createModelsSettingsSection(ctx) {
     },
       settingsDragHandle(t("modelPreferences.drag")),
       el("strong", { class: "settings-main-cell" }, platform),
-      modelPreferenceRowField(
-        t("modelPreferences.preferredModel"),
-        modelSelect,
-        "model-preference-model-field"
-      ),
+      modelFields(appId, platform, redraw),
       additionalPreferenceField(appId)
     );
   }
@@ -506,11 +583,14 @@ export function createModelsSettingsSection(ctx) {
 
   function preferredModelsBlock(redraw) {
     const block = settingsBlock(t("modelPreferences.title"), t("modelPreferences.desc"),
+      secondaryModelToggle(redraw),
       settingsList(
         [
           "",
           t("modelPreferences.platform"),
-          t("modelPreferences.preferredModel"),
+          secondaryModelsEnabled()
+            ? t("modelPreferences.modelPriority")
+            : t("modelPreferences.preferredModel"),
           t("modelPreferences.additionalOption")
         ],
         preferenceOrder().map((appId) => row(appId, redraw)),

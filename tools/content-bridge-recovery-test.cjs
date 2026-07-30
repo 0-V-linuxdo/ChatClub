@@ -128,10 +128,15 @@ function createApplyFixture(options = {}) {
     return preparedResults.length ? preparedResults.shift() : (options.prepared || { ok: true });
   };
   context.preferredModelRecordIsCurrent = () => current;
-  context.sendToContentFrame = async () => {
+  context.sendToContentFrame = async (_iframe, _command, data) => {
     calls.send += 1;
     if (options.sendError) throw options.sendError;
-    return { ok: true, runId: "run-1" };
+    return {
+      ok: true,
+      appId: data.appId,
+      modelId: data.modelId,
+      runId: data.runId
+    };
   };
   context.requestPreferredModelCancellation = () => { calls.cancel += 1; };
   vm.runInContext(`
@@ -143,6 +148,7 @@ function createApplyFixture(options = {}) {
     )};
     ${functionSource(preferredModel, "preferredModelResult")}
     ${functionSource(preferredModel, "preferredModelApplyTimeoutMs")}
+    ${functionSource(preferredModel, "preferredModelAttemptPayload")}
     ${functionSource(preferredModel, "preferredModelRetryDelay")}
     ${functionSource(preferredModelBridgePreparation, "waitForPreferredModelBridgePreparation")}
     ${functionSource(preferredModel, "applyPreferredModelToFrame", true)}

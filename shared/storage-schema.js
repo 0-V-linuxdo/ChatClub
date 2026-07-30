@@ -20,6 +20,8 @@ import {
   GEMINI_THINKING_LEVEL_TARGETS,
   MODEL_PREFERENCE_FAILURE_OVERRIDE_POLICIES,
   MODEL_PREFERENCE_FAILURE_POLICIES,
+  MODEL_PREFERENCE_SECONDARY_ENABLED_KEY,
+  MODEL_PREFERENCE_SECONDARY_KEYS,
   MODEL_PREFERENCE_TARGETS,
   NOTION_ALL_SOURCES_PREFERENCE_KEY,
   NOTION_ALL_SOURCES_PREFERENCE_VALUES,
@@ -413,6 +415,12 @@ function normalizeModelPreferences(raw = {}) {
     const value = text(source[appId]);
     const allowed = new Set((targets || []).map((target) => target.id));
     normalized[appId] = allowed.has(value) ? value : "";
+  }
+  normalized[MODEL_PREFERENCE_SECONDARY_ENABLED_KEY] = source[MODEL_PREFERENCE_SECONDARY_ENABLED_KEY] === true;
+  for (const [appId, key] of Object.entries(MODEL_PREFERENCE_SECONDARY_KEYS)) {
+    const value = text(source[key]);
+    const allowed = new Set((MODEL_PREFERENCE_TARGETS[appId] || []).map((target) => target.id));
+    normalized[key] = allowed.has(value) && value !== normalized[appId] ? value : "";
   }
   const thinkingLevel = text(source[GEMINI_THINKING_LEVEL_PREFERENCE_KEY], DEFAULT_GEMINI_THINKING_LEVEL);
   const allowedThinkingLevels = new Set(GEMINI_THINKING_LEVEL_TARGETS.map((target) => target.id));

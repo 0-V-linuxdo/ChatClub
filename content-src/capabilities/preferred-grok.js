@@ -554,7 +554,13 @@ export function createPreferredGrokCapability(deps = {}) {
     const maybeItem = findGrokModelItem(root, modelId, { includeUnavailable: true });
     if (maybeItem && grokModelItemLooksUnavailable(maybeItem, modelId)) {
       const menuClosed = await dismissPreferredModelMenu(context, () => grokModelMenuRoot());
-      return preferredModelResult(context, true, "Grok", modelId, "", { skipped: true, unavailable: true, menuClosed });
+      return preferredModelResult(context, true, "Grok", modelId, "", {
+        skipped: true,
+        unavailable: true,
+        fallbackEligible: menuClosed === true,
+        selectionActivated: false,
+        menuClosed
+      });
     }
     const item = maybeItem || findGrokModelItem(root, modelId);
     if (!item) {

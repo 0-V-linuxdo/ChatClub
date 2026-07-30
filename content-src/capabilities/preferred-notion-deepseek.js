@@ -410,7 +410,8 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
     }, NOTION_MODEL_MENU_OPEN_WAIT_MS, 120);
   }
 
-  function notionMenuItemRow(element, root, modelId = "") {
+  function notionMenuItemRow(element, root, modelId = "", options = {}) {
+    const allowDisabled = options.allowDisabled === true;
     const rootArea = modelElementArea(root);
     const rootRect = modelRect(root);
     let bestRoleRow = null;
@@ -422,7 +423,7 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
         node = node.parentElement || null;
         continue;
       }
-      if (isDisabledElement(node)) return null;
+      if (!allowDisabled && isDisabledElement(node)) return null;
 
       const targetIds = notionModelIdsFromElement(node);
       const area = modelElementArea(node);
@@ -456,8 +457,11 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
     return bestRoleRow || bestAction || bestRowLike || null;
   }
 
-  function scoreNotionModelItem(element, modelId) {
-    if (!element || !visible(element) || isDisabledElement(element)) return Number.NEGATIVE_INFINITY;
+  function scoreNotionModelItem(element, modelId, options = {}) {
+    const allowDisabled = options.allowDisabled === true;
+    if (!element || !visible(element) || (!allowDisabled && isDisabledElement(element))) {
+      return Number.NEGATIVE_INFINITY;
+    }
     const target = NOTION_MODEL_TARGETS[modelId];
     if (!target || !notionElementLooksLikeTarget(element, target)) return Number.NEGATIVE_INFINITY;
     let score = 0;
@@ -478,25 +482,47 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
     return score;
   }
 
-  function findNotionModelItem(root, modelId) {
-    if (!root || !NOTION_MODEL_TARGETS[modelId]) return null;
+  function notionModelRowIsDisabled(row, root) {
+    for (let node = row; node && node.nodeType === 1 && node !== root; node = node.parentElement || null) {
+      if (isDisabledElement(node)) return true;
+    }
+    return false;
+  }
+
+  function notionModelItemRows(root, modelId, options = {}) {
+    if (!root || !NOTION_MODEL_TARGETS[modelId]) return [];
+    const allowDisabled = options.allowDisabled === true;
     const target = NOTION_MODEL_TARGETS[modelId];
     const seenRows = new Set();
     const rows = [];
     const add = (element) => {
-      if (!element || isDisabledElement(element) || !notionElementLooksLikeTarget(element, target)) return;
-      const row = notionMenuItemRow(element, root, modelId);
-      if (!row || isDisabledElement(row) || seenRows.has(row) || !root.contains?.(row)) return;
+      if (!element || !notionElementLooksLikeTarget(element, target)) return;
+      const row = notionMenuItemRow(element, root, modelId, { allowDisabled });
+      if (!row || seenRows.has(row) || !root.contains?.(row)) return;
+      if (!allowDisabled && notionModelRowIsDisabled(row, root)) return;
       const targetIds = notionModelIdsFromElement(row);
       if (targetIds.size !== 1 || !targetIds.has(modelId)) return;
-      if (!Number.isFinite(scoreNotionModelItem(row, modelId))) return;
+      if (!Number.isFinite(scoreNotionModelItem(row, modelId, { allowDisabled }))) return;
       seenRows.add(row);
       rows.push(row);
     };
     for (const element of visibleSelectorElements(NOTION_MODEL_MENU_ITEM_SELECTORS, root)) add(element);
     for (const element of visibleSelectorElements(["div", "span", "button"], root)) add(element);
-    rows.sort((a, b) => scoreNotionModelItem(b, modelId) - scoreNotionModelItem(a, modelId));
+    rows.sort((a, b) => (
+      scoreNotionModelItem(b, modelId, { allowDisabled })
+      - scoreNotionModelItem(a, modelId, { allowDisabled })
+    ));
+    return rows;
+  }
+
+  function findNotionModelItem(root, modelId) {
+    const rows = notionModelItemRows(root, modelId);
     return rows.length === 1 ? rows[0] : null;
+  }
+
+  function findNotionExactUnavailableModelItem(root, modelId) {
+    const rows = notionModelItemRows(root, modelId, { allowDisabled: true });
+    return rows.length === 1 && notionModelRowIsDisabled(rows[0], root) ? rows[0] : null;
   }
 
   function notionElementHasSelectedState(element) {
@@ -644,6 +670,17 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
     return readiness || { current: false, modelId: notionTriggerModelId(trigger) };
   }
 
+  async function notionUnavailableModelResult(context, modelId, trigger) {
+    const menuClosed = await closeNotionModelMenu(context, trigger);
+    return preferredModelResult(context, true, "NotionAI", modelId, "", {
+      skipped: true,
+      unavailable: true,
+      fallbackEligible: menuClosed === true,
+      selectionActivated: false,
+      menuClosed
+    });
+  }
+
   async function applyNotionPreferredModel(context, modelId) {
     if (!NOTION_MODEL_TARGETS[modelId]) return preferredModelResult(context, false, "NotionAI", modelId, "unknown model");
     if (currentNotionModelId() === modelId) {
@@ -671,6 +708,12 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
       return preferredModelResult(context, true, "NotionAI", modelId, "", { skipped: true, menuClosed });
     }
     const immediateItem = findNotionModelItem(root, modelId);
+    const immediateUnavailableItem = immediateItem
+      ? null
+      : findNotionExactUnavailableModelItem(root, modelId);
+    if (immediateUnavailableItem) {
+      return notionUnavailableModelResult(context, modelId, trigger);
+    }
     const readiness = immediateItem
       ? { current: false, item: immediateItem }
       : await waitNotionModelItemOrCurrent(context, modelId, trigger);
@@ -680,6 +723,10 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
     }
     const item = readiness?.item || null;
     if (!item) {
+      const unavailableItem = findNotionExactUnavailableModelItem(notionModelMenuRoot(trigger), modelId);
+      if (unavailableItem) {
+        return notionUnavailableModelResult(context, modelId, trigger);
+      }
       const menuClosed = await closeNotionModelMenu(context, trigger);
       if (currentNotionModelId(trigger) === modelId) {
         return preferredModelResult(context, true, "NotionAI", modelId, "", { skipped: true, menuClosed });
@@ -693,7 +740,12 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
     if (!clicked) return preferredModelResult(context, false, "NotionAI", modelId, "target model item could not be clicked", { menuClosed });
     return settled
       ? preferredModelResult(context, true, "NotionAI", modelId, "", { changed: true, menuClosed })
-      : preferredModelResult(context, false, "NotionAI", modelId, "selection did not settle", { menuClosed });
+      : preferredModelResult(context, false, "NotionAI", modelId, "selection did not settle", {
+          fallbackEligible: menuClosed === true,
+          selectionActivated: true,
+          selectionUnsettled: true,
+          menuClosed
+        });
   }
 
   const notionSources = createPreferredNotionSourcesCapability({
@@ -732,7 +784,9 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
     }
     if (modelId) {
       modelOutcome = await applyNotionPreferredModel(context, modelId);
-      if (modelOutcome.ok !== true || !allSourcesState) return modelOutcome;
+      if (modelOutcome.ok !== true || modelOutcome.unavailable === true || !allSourcesState) {
+        return modelOutcome;
+      }
     }
     if (allSourcesState) {
       sourceOutcome = await notionSources.applyNotionAllSourcesPreference(

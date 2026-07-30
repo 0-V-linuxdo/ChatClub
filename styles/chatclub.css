@@ -5375,6 +5375,44 @@ body.settings-tab-group-button-dragging iframe {
   overflow: visible;
 }
 
+.model-preference-secondary-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--line) 84%, transparent);
+  border-radius: var(--settings-radius, 8px);
+  background: color-mix(in srgb, var(--panel-2) 58%, transparent);
+  cursor: pointer;
+}
+
+.model-preference-secondary-toggle-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.model-preference-secondary-toggle-copy strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.model-preference-secondary-toggle-copy small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.model-preference-secondary-toggle input {
+  flex: 0 0 auto;
+  width: 19px;
+  height: 19px;
+  margin: 0;
+  accent-color: var(--primary);
+}
+
 .model-preference-list .settings-list-header,
 .model-preference-row {
   min-width: 0;
@@ -5408,6 +5446,30 @@ body.settings-tab-group-button-dragging iframe {
   display: grid;
   align-items: center;
   min-width: 0;
+}
+
+.model-preference-row-models {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.model-preference-row-secondary-enabled .model-preference-row-models .model-preference-row-field {
+  gap: 5px;
+}
+
+.model-preference-row-secondary-enabled .model-preference-row-models .model-preference-row-field-label {
+  position: static;
+  width: auto;
+  height: auto;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  clip-path: none;
+  white-space: normal;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 650;
 }
 
 .model-preference-row-field-label {
@@ -5627,7 +5689,7 @@ body.settings-tab-group-button-dragging iframe {
     white-space: normal;
   }
 
-  .model-preference-model-field {
+  .model-preference-row-models {
     grid-area: model;
   }
 

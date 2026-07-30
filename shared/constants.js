@@ -1,7 +1,7 @@
 import { DEFAULT_TOPBAR_LAYOUT } from "./topbar.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-07-30｜07:47:12」";
+export const APP_VERSION = "「2026-07-30｜19:10:00」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -107,9 +107,18 @@ export const MODEL_PREFERENCE_TARGETS = Object.freeze({
   ])
 });
 
+export const MODEL_PREFERENCE_SECONDARY_ENABLED_KEY = "SecondaryModelEnabled";
+export const MODEL_PREFERENCE_SECONDARY_KEYS = Object.freeze(
+  Object.fromEntries(
+    Object.keys(MODEL_PREFERENCE_TARGETS).map((appId) => [appId, `${appId}Secondary`])
+  )
+);
+
 export const DEFAULT_MODEL_PREFERENCES = Object.freeze(
   {
     ...Object.fromEntries(Object.keys(MODEL_PREFERENCE_TARGETS).map((appId) => [appId, ""])),
+    ...Object.fromEntries(Object.values(MODEL_PREFERENCE_SECONDARY_KEYS).map((key) => [key, ""])),
+    [MODEL_PREFERENCE_SECONDARY_ENABLED_KEY]: false,
     [GEMINI_THINKING_LEVEL_PREFERENCE_KEY]: DEFAULT_GEMINI_THINKING_LEVEL,
     [NOTION_ALL_SOURCES_PREFERENCE_KEY]: ""
   }
