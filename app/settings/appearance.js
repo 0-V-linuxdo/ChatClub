@@ -673,6 +673,7 @@ export function createAppearanceSettingsSection(ctx) {
       "topbar.settings.summary": "summary",
       "topbar.settings.messageNavigation": "navigator",
       "topbar.settings.topicDeletion": "trash",
+      "topbar.settings.rules": "fileCog",
       "topbar.settings.optimize": "sparkles",
       "topbar.settings.prompts": "library",
       "topbar.settings.shortcuts": "keyboard",

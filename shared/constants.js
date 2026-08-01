@@ -1,7 +1,7 @@
 import { DEFAULT_TOPBAR_LAYOUT } from "./topbar.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-08-01｜22:26:13」";
+export const APP_VERSION = "「2026-08-01｜23:42:21」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -192,6 +192,7 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
       Object.freeze({ id: "topbar.settings.summary", labelKey: "settings.summary.title" }),
       Object.freeze({ id: "topbar.settings.messageNavigation", labelKey: "settings.messageNavigation.title" }),
       Object.freeze({ id: "topbar.settings.topicDeletion", labelKey: "settings.topicDeletion.title" }),
+      Object.freeze({ id: "topbar.settings.rules", labelKey: "settings.rules.title" }),
       Object.freeze({ id: "topbar.settings.optimize", labelKey: "settings.optimize.title" }),
       Object.freeze({ id: "topbar.settings.prompts", labelKey: "settings.prompts.title" }),
       Object.freeze({ id: "topbar.settings.promptHistory", labelKey: "settings.promptHistory.title" }),

@@ -8,17 +8,43 @@ const FEATURE_LABELS = Object.freeze({
 });
 
 const SITE_LABELS = Object.freeze({
+  aiStudio: "Google AI Studio",
   chatgpt: "ChatGPT",
   claude: "Claude",
   deepseek: "DeepSeek",
   gemini: "Gemini",
   grok: "Grok",
+  "grok-dairoot": "Grok Mirror",
   grokMirror: "Grok Mirror",
   kagi: "Kagi",
+  lechat: "Le Chat",
   lobehub: "LobeHub",
   notion: "Notion",
+  poe: "Poe",
   typingmind: "TypingMind"
 });
+
+const SITE_GROUP_ALIASES = Object.freeze({
+  "grok-dairoot": "grokMirror"
+});
+
+const SITE_GROUP_ORDER = Object.freeze([
+  "chatgpt",
+  "claude",
+  "gemini",
+  "deepseek",
+  "grok",
+  "grokMirror",
+  "kagi",
+  "notion",
+  "lobehub",
+  "typingmind",
+  "poe",
+  "aiStudio",
+  "lechat"
+]);
+
+const FEATURE_ORDER = Object.freeze(["summary", "messageNavigator", "delete"]);
 
 const OFFICIAL_RULES_ZH_CN = Object.freeze({
   title: "官方增量规则",
@@ -51,6 +77,8 @@ const OFFICIAL_RULES_ZH_CN = Object.freeze({
   lastChecked: "上次检查",
   lastApplied: "上次应用",
   components: "组件状态",
+  componentsDescription: "按站点展开查看 Summary、Message Navigator 与 Delete Sites 规则。",
+  componentUnit: "个功能",
   candidate: "待应用更新",
   aliases: "Delete Sites 新域名授权",
   aliasesDescription: "新域名只有在你逐项授权后才会获得删除能力。未授权域名不会随其他规则一起启用。",
@@ -126,20 +154,75 @@ function normalizeComponentKey(value) {
   return /^[^/\s]+\/[^/\s]+$/.test(key) ? key : "";
 }
 
-function officialRulesComponentLabel(componentKey, providedLabel = "") {
+function officialRulesComponentIdentity(componentKey) {
   const key = normalizeComponentKey(componentKey);
   const [feature, siteId, ...extra] = key.split("/");
-  if (!feature || !siteId || extra.length) return clean(providedLabel) || key || OFFICIAL_RULES_ZH_CN.noValue;
-  const featureLabel = FEATURE_LABELS[feature] || feature;
-  const siteLabel = clean(providedLabel) || SITE_LABELS[siteId] || siteId;
-  return `${featureLabel} · ${siteLabel}`;
+  if (!feature || !siteId || extra.length) return null;
+  const siteGroupId = SITE_GROUP_ALIASES[siteId] || siteId;
+  return {
+    feature,
+    featureLabel: FEATURE_LABELS[feature] || feature,
+    siteId,
+    siteGroupId,
+    siteLabel: SITE_LABELS[siteGroupId] || SITE_LABELS[siteId] || siteId
+  };
+}
+
+function orderIndex(order, value) {
+  const index = order.indexOf(value);
+  return index < 0 ? Number.MAX_SAFE_INTEGER : index;
+}
+
+function compareStableText(left, right) {
+  const a = clean(left).toLowerCase();
+  const b = clean(right).toLowerCase();
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+function groupOfficialRulesComponentsBySite(components) {
+  const groups = new Map();
+  for (const component of list(components)) {
+    const identity = component.siteGroupId ? component : officialRulesComponentIdentity(component.componentKey);
+    if (!identity) continue;
+    const siteGroupId = identity.siteGroupId;
+    if (!groups.has(siteGroupId)) {
+      groups.set(siteGroupId, {
+        siteGroupId,
+        siteLabel: identity.siteLabel,
+        components: []
+      });
+    }
+    groups.get(siteGroupId).components.push(component);
+  }
+  return [...groups.values()]
+    .map((group) => ({
+      ...group,
+      components: group.components.sort((left, right) => (
+        orderIndex(FEATURE_ORDER, left.feature) - orderIndex(FEATURE_ORDER, right.feature)
+        || compareStableText(left.componentKey, right.componentKey)
+      ))
+    }))
+    .sort((left, right) => (
+      orderIndex(SITE_GROUP_ORDER, left.siteGroupId) - orderIndex(SITE_GROUP_ORDER, right.siteGroupId)
+      || compareStableText(left.siteLabel, right.siteLabel)
+      || compareStableText(left.siteGroupId, right.siteGroupId)
+    ));
+}
+
+function officialRulesComponentLabel(componentKey, providedLabel = "") {
+  const identity = officialRulesComponentIdentity(componentKey);
+  if (!identity) return clean(providedLabel) || normalizeComponentKey(componentKey) || OFFICIAL_RULES_ZH_CN.noValue;
+  const siteLabel = clean(providedLabel) || identity.siteLabel;
+  return `${identity.featureLabel} · ${siteLabel}`;
 }
 
 function normalizeChangedComponent(value) {
   const item = typeof value === "string" ? { componentKey: value } : record(value);
   const componentKey = normalizeComponentKey(item.componentKey || item.key || item.id);
+  const identity = officialRulesComponentIdentity(componentKey);
   return componentKey ? {
     ...item,
+    ...identity,
     componentKey,
     label: officialRulesComponentLabel(componentKey, item.label || item.name),
     currentVersion: clean(item.currentVersion || item.activeVersion),
@@ -169,6 +252,7 @@ function normalizeComponent(value, fallbackKey, changedKeys) {
   const item = typeof value === "string" ? { componentKey: value } : record(value);
   const componentKey = normalizeComponentKey(item.componentKey || item.key || item.id || fallbackKey);
   if (!componentKey) return null;
+  const identity = officialRulesComponentIdentity(componentKey);
   const overrideSource = item.overrideFields ?? item.userOverrideFields ?? item.overrides;
   const overrideFields = [...new Set((Array.isArray(overrideSource)
     ? overrideSource
@@ -183,6 +267,7 @@ function normalizeComponent(value, fallbackKey, changedKeys) {
   );
   return {
     ...item,
+    ...identity,
     componentKey,
     label: officialRulesComponentLabel(componentKey, item.label || item.name),
     sourceMode: userOverride ? "userOverride" : rolledBack ? "rolledBack" : "followOfficial",
@@ -202,8 +287,10 @@ function normalizeDeleteAlias(value) {
   const componentKey = normalizeComponentKey(item.componentKey || item.key || item.id);
   const host = clean(item.host || item.hostname);
   if (!componentKey.startsWith("delete/") || !host) return null;
+  const identity = officialRulesComponentIdentity(componentKey);
   return {
     ...item,
+    ...identity,
     componentKey,
     componentLabel: officialRulesComponentLabel(componentKey, item.componentLabel || item.siteName || item.label),
     host: host.toLowerCase(),
@@ -353,14 +440,14 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
 
   const host = el("section", {
     class: "settings-manage-card official-rules-card",
-    dataset: { officialRulesSettings: "true" },
-    "aria-live": "polite"
+    dataset: { officialRulesSettings: "true" }
   });
   let current = normalizeOfficialRulesSnapshot();
   let busy = "loading";
   let destroyed = false;
   let refreshGeneration = 0;
   let unsubscribe = () => {};
+  const siteDisclosureState = new Map();
 
   function icon(name) {
     try { return svgIcon(name); } catch { return null; }
@@ -401,6 +488,7 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
   function candidateBlock() {
     if (!current.candidate.available) return el("div", { class: "official-rules-empty" }, copy.noCandidate);
     const changed = current.candidate.changedComponents;
+    const siteGroups = groupOfficialRulesComponentsBySite(changed);
     return el("div", { class: "official-rules-candidate" },
       el("strong", {}, [
         current.candidate.version ? `${copy.version} ${current.candidate.version}` : "",
@@ -410,19 +498,34 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
       current.candidate.releaseNotes
         ? el("p", { class: "official-rules-release-notes" }, `${copy.releaseNotes}：${current.candidate.releaseNotes}`)
         : null,
-      changed.length ? el("div", { class: "official-rules-chip-list" },
-        changed.map((component) => el("span", { class: "official-rules-chip" }, component.label))
-      ) : null,
-      changed.some((component) => component.fieldDiffs.length)
-        ? el("div", { class: "official-rules-diff-list" }, changed.filter((component) => component.fieldDiffs.length)
-          .map((component) => el("article", { class: "official-rules-diff" },
-            el("strong", {}, component.label),
-            el("dl", {}, component.fieldDiffs.map((diff) => el("div", {},
-              el("dt", {}, diff.field),
-              el("dd", {}, `${copy.before}：${displayDiffValue(diff.before)} · ${copy.after}：${displayDiffValue(diff.after)}`)
-            )))
-          )))
+      siteGroups.length
+        ? el("div", { class: "official-rules-candidate-sites" }, siteGroups.map(candidateSiteGroup))
         : null
+    );
+  }
+
+  function candidateSiteGroup(group) {
+    return el("article", {
+      class: "official-rules-candidate-site",
+      dataset: { officialRulesCandidateSite: group.siteGroupId }
+    },
+    el("div", { class: "official-rules-candidate-site-heading" },
+      el("strong", {}, group.siteLabel),
+      el("div", { class: "official-rules-chip-list" }, group.components.map((component) => (
+        el("span", { class: "official-rules-chip" }, component.featureLabel)
+      )))
+    ),
+    group.components.some((component) => component.fieldDiffs.length)
+      ? el("div", { class: "official-rules-diff-list" }, group.components
+        .filter((component) => component.fieldDiffs.length)
+        .map((component) => el("section", { class: "official-rules-diff" },
+          el("strong", {}, component.featureLabel),
+          el("dl", {}, component.fieldDiffs.map((diff) => el("div", {},
+            el("dt", {}, diff.field),
+            el("dd", {}, `${copy.before}：${displayDiffValue(diff.before)} · ${copy.after}：${displayDiffValue(diff.after)}`)
+          )))
+        )))
+      : null
     );
   }
 
@@ -558,7 +661,7 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
       }
     },
     el("div", { class: "official-rules-component-copy" },
-      el("strong", {}, component.label),
+      el("strong", {}, component.featureLabel),
       el("code", { class: "official-rules-component-key" }, component.componentKey),
       el("small", {}, `${copy.source}：${sourceLabel}`),
       component.overrideFields.length
@@ -591,6 +694,50 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
         disabled: Boolean(busy) || current.phase === "recovery-required" || !component.canRestore
       })
     ));
+  }
+
+  function siteGroupNeedsAttention(group) {
+    return group.components.some((component) => (
+      component.changed || component.sourceMode === "userOverride" || component.sourceMode === "rolledBack"
+    ));
+  }
+
+  function siteGroupStateBadges(group) {
+    const states = [];
+    if (group.components.some((component) => component.changed)) states.push(copy.changed);
+    if (group.components.some((component) => component.sourceMode === "userOverride")) states.push(copy.userOverride);
+    if (group.components.some((component) => component.sourceMode === "rolledBack")) states.push(copy.sourceRolledBack);
+    return states.map((label) => el("span", { class: "official-rules-site-state" }, label));
+  }
+
+  function siteGroup(group) {
+    const defaultOpen = siteGroupNeedsAttention(group);
+    const open = siteDisclosureState.has(group.siteGroupId)
+      ? siteDisclosureState.get(group.siteGroupId)
+      : defaultOpen;
+    return el("details", {
+      class: "official-rules-site",
+      dataset: {
+        officialRulesSite: group.siteGroupId,
+        attention: String(defaultOpen)
+      },
+      open,
+      ontoggle: (event) => {
+        siteDisclosureState.set(group.siteGroupId, event.currentTarget.open === true);
+      }
+    },
+    el("summary", { class: "official-rules-site-summary" },
+      el("span", { class: "official-rules-site-name" },
+        el("strong", {}, group.siteLabel),
+        el("small", {}, `${group.components.length} ${copy.componentUnit}`)
+      ),
+      el("span", { class: "official-rules-site-features" }, group.components.map((component) => (
+        el("span", { class: "official-rules-feature" }, component.featureLabel)
+      ))),
+      el("span", { class: "official-rules-site-states" }, siteGroupStateBadges(group))
+    ),
+    el("div", { class: "official-rules-site-components" }, group.components.map(componentRow))
+    );
   }
 
   function aliasesSection() {
@@ -631,13 +778,18 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
         ? "recovery-required"
         : current.error ? "error" : current.phase;
     host.setAttribute("aria-busy", String(Boolean(busy)));
-    host.replaceChildren(
+    const content = [
       el("div", { class: "official-rules-heading" },
         el("div", { class: "official-rules-heading-copy" },
           icon("reload"),
           el("div", {}, el("h4", {}, copy.title), el("p", {}, copy.description))
         ),
-        el("span", { class: "official-rules-status", dataset: { state: phase } }, stateLabel(phase, copy))
+        el("span", {
+          class: "official-rules-status",
+          dataset: { state: phase },
+          role: "status",
+          "aria-live": "polite"
+        }, stateLabel(phase, copy))
       ),
       el("div", { class: "official-rules-toolbar" },
         modeControls(),
@@ -675,13 +827,19 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
         candidateBlock()
       ),
       el("div", { class: "official-rules-section" },
-        el("div", { class: "official-rules-component-heading" }, el("h5", {}, copy.components)),
+        el("div", { class: "official-rules-component-heading" },
+          el("div", {},
+            el("h5", {}, copy.components),
+            el("p", { class: "official-rules-section-copy" }, copy.componentsDescription)
+          )
+        ),
         current.components.length
-          ? el("div", { class: "official-rules-component-list" }, current.components.map(componentRow))
+          ? el("div", { class: "official-rules-site-list" }, groupOfficialRulesComponentsBySite(current.components).map(siteGroup))
           : el("div", { class: "official-rules-empty" }, copy.noComponents)
       ),
       aliasesSection()
-    );
+    ];
+    host.replaceChildren(...content.filter(Boolean));
   }
 
   async function readSnapshot(generation) {

@@ -52,6 +52,14 @@ class FakeNode {
     this.setAttribute("id", value);
   }
 
+  get open() {
+    return this.attributes.has("open");
+  }
+
+  set open(value) {
+    this.toggleAttribute("open", Boolean(value));
+  }
+
   get textContent() {
     if (this.tagName === "#TEXT" || this._text) return this._text;
     return this.children.map((child) => child.textContent || "").join("");
@@ -71,11 +79,11 @@ class FakeNode {
 
   append(...children) {
     for (const child of children) {
-      if (!child) continue;
-      child.remove?.();
-      child.parentElement = this;
-      child.ownerDocument = this.ownerDocument;
-      this.children.push(child);
+      const node = child instanceof FakeNode ? child : this.ownerDocument.createTextNode(String(child));
+      node.remove?.();
+      node.parentElement = this;
+      node.ownerDocument = this.ownerDocument;
+      this.children.push(node);
     }
   }
 
@@ -230,6 +238,7 @@ assert.doesNotMatch(moduleSource, /\bmodal\(/, "the raw modal primitive must not
 assert.match(moduleSource, /if \(applying && force !== true\) return;/, "applying confirmations must guard close paths");
 assert.match(moduleSource, /header\?\.querySelector\("\.icon-button"\)\?\.toggleAttribute\("disabled", value\)/);
 assert.match(stylesSource, /\.official-rules-card/);
+assert.match(stylesSource, /\.official-rules-site-summary/);
 assert.match(stylesSource, /@media \(max-width: 820px\)/);
 
 const previousGlobals = {
@@ -243,6 +252,15 @@ globalThis.document = document;
 (async () => {
   try {
     const module = await import(moduleUrl("app/settings/official-rules.js"));
+    const baselineComponentKeys = [
+      "summary/chatgpt", "summary/claude", "summary/gemini", "summary/deepseek", "summary/grok",
+      "summary/grok-dairoot", "summary/kagi", "summary/notion", "summary/lobehub", "summary/typingmind",
+      "messageNavigator/chatgpt", "messageNavigator/claude", "messageNavigator/gemini",
+      "messageNavigator/deepseek", "messageNavigator/grok", "messageNavigator/grokMirror",
+      "messageNavigator/kagi", "messageNavigator/notion", "messageNavigator/poe",
+      "messageNavigator/aiStudio", "messageNavigator/lechat", "delete/chatgpt", "delete/claude",
+      "delete/gemini", "delete/kagi", "delete/grok", "delete/grokMirror", "delete/notion", "delete/deepseek"
+    ];
     const rawSnapshot = {
       mode: "manual",
       phase: "candidate",
@@ -259,6 +277,11 @@ globalThis.document = document;
       lastAppliedAt: "2026-08-01T07:00:00.000Z",
       canRollbackLast: true,
       components: {
+        ...Object.fromEntries(baselineComponentKeys.map((componentKey) => [componentKey, {
+          source: "official",
+          activeVersion: "1",
+          packagedVersion: "0"
+        }])),
         "summary/chatgpt": {
           source: "official",
           overrideFields: ["hosts"],
@@ -402,10 +425,55 @@ globalThis.document = document;
     assert.match(card.textContent, /当前来源：已回滚/);
     assert.match(card.textContent, /当前来源：跟随官方/);
     assert.match(card.textContent, /用户覆盖字段：hosts/);
+    assert.doesNotMatch(card.textContent, /\b(?:null|undefined)\b/);
     assert.match(findAction(card, "apply").textContent, /应用本次全部增量/);
     assert.ok(findButton(card, "自动检查"));
     assert.ok(findButton(card, "仅手动检查"));
     assert.equal(document.querySelectorAll("#chatclub-official-rules-settings-style").length, 1);
+
+    const siteList = card.querySelector(".official-rules-site-list");
+    const siteGroups = siteList.children;
+    assert.equal(siteGroups.length, 13, "29 components must collapse into 13 canonical site groups");
+    const renderedComponentKeys = card.querySelectorAll(".official-rules-component")
+      .map((node) => node.dataset.officialRulesComponent);
+    assert.equal(renderedComponentKeys.length, baselineComponentKeys.length);
+    assert.deepEqual(
+      [...renderedComponentKeys].sort(),
+      [...baselineComponentKeys].sort(),
+      "site grouping must render every component key exactly once"
+    );
+    assert.deepEqual(siteGroups.map((group) => group.dataset.officialRulesSite), [
+      "chatgpt", "claude", "gemini", "deepseek", "grok", "grokMirror", "kagi", "notion",
+      "lobehub", "typingmind", "poe", "aiStudio", "lechat"
+    ]);
+    const chatgptGroup = findNode(card, (node) => node.dataset?.officialRulesSite === "chatgpt");
+    assert.equal(chatgptGroup.tagName, "DETAILS");
+    assert.deepEqual(
+      chatgptGroup.querySelectorAll(".official-rules-component").map((node) => node.dataset.officialRulesComponent),
+      ["summary/chatgpt", "messageNavigator/chatgpt", "delete/chatgpt"]
+    );
+    const grokMirrorGroup = findNode(card, (node) => node.dataset?.officialRulesSite === "grokMirror");
+    assert.deepEqual(
+      grokMirrorGroup.querySelectorAll(".official-rules-component").map((node) => node.dataset.officialRulesComponent),
+      ["summary/grok-dairoot", "messageNavigator/grokMirror", "delete/grokMirror"],
+      "Grok Mirror display grouping must preserve each raw component key"
+    );
+    assert.equal(grokMirrorGroup.open, false, "unchanged sites should start collapsed");
+    assert.equal(chatgptGroup.open, true, "sites requiring attention should start expanded");
+    assert.deepEqual(
+      card.querySelectorAll(".official-rules-candidate-site").map((node) => node.dataset.officialRulesCandidateSite),
+      ["chatgpt", "deepseek"],
+      "candidate components must use the same site grouping"
+    );
+
+    grokMirrorGroup.open = true;
+    grokMirrorGroup.dispatch("toggle", { currentTarget: grokMirrorGroup });
+    subscriber(structuredClone(snapshot));
+    assert.equal(
+      findNode(card, (node) => node.dataset?.officialRulesSite === "grokMirror").open,
+      true,
+      "site disclosure state must survive service-driven rerenders"
+    );
 
     const autoMode = findNode(card, (node) => node.dataset?.officialRulesMode === "auto");
     await settleEvent(autoMode.click());
@@ -468,6 +536,7 @@ globalThis.document = document;
     snapshot = { ...snapshot, phase: "ready", candidate: { available: false, changedComponents: [], deleteAliases: [] } };
     subscriber(structuredClone(snapshot));
     assert.match(card.textContent, /当前没有待应用的官方规则更新/);
+    assert.doesNotMatch(card.textContent, /\b(?:null|undefined)\b/);
     assert.equal(findAction(card, "apply").disabled, true);
     assert.ok(notifications.some(([message, kind]) => message === "官方规则已应用" && kind === "success"));
 

@@ -213,6 +213,31 @@ const OFFICIAL_RULES_SETTINGS_CSS = `
   white-space: pre-wrap;
 }
 
+.official-rules-candidate-sites {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.official-rules-candidate-site {
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--primary) 18%, var(--line));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 76%, transparent);
+}
+
+.official-rules-candidate-site-heading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.official-rules-candidate-site-heading .official-rules-chip-list {
+  margin-top: 0;
+}
+
 .official-rules-diff-list {
   display: grid;
   gap: 8px;
@@ -271,10 +296,115 @@ const OFFICIAL_RULES_SETTINGS_CSS = `
   background: color-mix(in srgb, var(--primary) 8%, var(--panel));
 }
 
-.official-rules-component-list,
+.official-rules-site-list,
 .official-rules-alias-list {
   display: grid;
   gap: 8px;
+}
+
+.official-rules-site {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--panel-2) 54%, var(--panel));
+}
+
+.official-rules-site[data-attention="true"] {
+  border-color: color-mix(in srgb, var(--primary) 34%, var(--line));
+}
+
+.official-rules-site-summary {
+  display: flex;
+  min-height: 54px;
+  box-sizing: border-box;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.official-rules-site-summary::-webkit-details-marker {
+  display: none;
+}
+
+.official-rules-site-summary::before {
+  content: "›";
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 22px;
+  line-height: 1;
+  transform: rotate(0deg);
+  transition: transform 150ms ease;
+}
+
+.official-rules-site[open] > .official-rules-site-summary::before {
+  transform: rotate(90deg);
+}
+
+.official-rules-site-summary:hover {
+  background: color-mix(in srgb, var(--primary) 6%, transparent);
+}
+
+.official-rules-site-summary:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary) 72%, transparent);
+  outline-offset: -2px;
+}
+
+.official-rules-site-name {
+  min-width: 130px;
+  display: grid;
+  gap: 2px;
+}
+
+.official-rules-site-name small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.official-rules-site-features,
+.official-rules-site-states {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+}
+
+.official-rules-site-features {
+  min-width: 0;
+  flex: 1 1 220px;
+}
+
+.official-rules-site-states:empty {
+  display: none;
+}
+
+.official-rules-feature,
+.official-rules-site-state {
+  padding: 3px 7px;
+  font-size: 10px;
+  font-weight: 720;
+  border-radius: 999px;
+}
+
+.official-rules-feature {
+  color: var(--muted);
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.official-rules-site-state {
+  color: var(--primary);
+  border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--line));
+  background: color-mix(in srgb, var(--primary) 8%, var(--panel));
+}
+
+.official-rules-site-components {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  border-top: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel-2) 42%, transparent);
 }
 
 .official-rules-component,
@@ -371,6 +501,19 @@ const OFFICIAL_RULES_SETTINGS_CSS = `
   .official-rules-component,
   .official-rules-alias {
     grid-template-columns: 1fr;
+  }
+
+  .official-rules-site-summary {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .official-rules-site-name {
+    min-width: calc(100% - 34px);
+  }
+
+  .official-rules-site-features {
+    padding-left: 28px;
   }
 
   .official-rules-row-actions .official-rules-action {

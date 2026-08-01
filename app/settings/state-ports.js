@@ -44,6 +44,7 @@ const SETTINGS_STATE_SECTION_IDS = Object.freeze([
   "summary",
   "messageNavigation",
   "topicDeletion",
+  "rules",
   "optimize",
   "prompts",
   "history",
@@ -94,6 +95,7 @@ const SETTINGS_SECTION_STATE_ACCESS = Object.freeze({
     ["options", "topicDeleteSiteExpandedId"],
     { options: settingsOptionAccess("topicDeletion") }
   ),
+  rules: stateAccess(),
   optimize: stateAccess(
     ["options", "settingsPromptTemplateDragId"],
     ["options", "settingsPromptTemplateDragId"],

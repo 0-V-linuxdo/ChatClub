@@ -65,7 +65,7 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   const settingsSections = settingsModule.createSettingsSectionStatePorts(rootState);
   assert.deepEqual(Object.keys(settingsSections), [
     "appearance", "profiles", "apps", "models", "summary", "messageNavigation", "topicDeletion",
-    "optimize", "prompts", "history", "shortcuts", "io", "functionalAnomalies", "about", "shell"
+    "rules", "optimize", "prompts", "history", "shortcuts", "io", "functionalAnomalies", "about", "shell"
   ]);
 
   settingsSections.appearance.settingsAppearanceTab = "topbar";
@@ -84,6 +84,7 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   assert.throws(() => { settingsSections.apps.settingsAppearanceTab = "workspace"; }, /settings\.apps cannot mutate/);
   assert.throws(() => { settingsSections.summary.options.apiProfiles.push({ id: "profile-2" }); }, /read-only/);
   assert.throws(() => { settingsSections.about.options; }, /settings\.about cannot read/);
+  assert.throws(() => { settingsSections.rules.options; }, /settings\.rules cannot read/);
   assert.equal(settingsSections.functionalAnomalies.functionalAnomalyRecords[0].id, "anomaly-1");
   assert.throws(
     () => { settingsSections.functionalAnomalies.functionalAnomalyRecords.push({ id: "anomaly-2" }); },

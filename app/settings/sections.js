@@ -6,6 +6,7 @@ export const SETTINGS_SECTIONS = Object.freeze([
   ["summary", "settings.summary.title", "settings.summary.desc", "summary"],
   ["messageNavigation", "settings.messageNavigation.title", "settings.messageNavigation.desc", "navigator"],
   ["topicDeletion", "settings.topicDeletion.title", "settings.topicDeletion.desc", "trash"],
+  ["rules", "settings.rules.title", "settings.rules.desc", "fileCog"],
   ["optimize", "settings.optimize.title", "settings.optimize.desc", "sparkles"],
   ["prompts", "settings.prompts.title", "settings.prompts.desc", "library"],
   ["promptHistory", "settings.promptHistory.title", "settings.promptHistory.desc", "history"],

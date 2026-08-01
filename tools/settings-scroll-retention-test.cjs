@@ -22,6 +22,8 @@ const scrollTopForRedraw = scrollContext.__settingsMainScrollTopForRedraw;
 assert.equal(scrollTopForRedraw("", "shortcuts", 411), 0, "the initial section must start at the top");
 assert.equal(scrollTopForRedraw("shortcuts", "shortcuts", 411), 411, "same-section redraws must retain main scroll");
 assert.equal(scrollTopForRedraw("shortcuts", "about", 411), 0, "a newly selected section must start at the top");
+assert.equal(scrollTopForRedraw("about", "rules", 411), 0, "the new Rules section must start at the top");
+assert.equal(scrollTopForRedraw("rules", "rules", 411), 411, "Rules redraws must retain main scroll");
 assert.equal(scrollTopForRedraw("shortcuts", "shortcuts", -10), 0, "invalid negative offsets must be clamped");
 assert.equal(scrollTopForRedraw("shortcuts", "shortcuts", Number.NaN), 0, "invalid offsets must not leak into the DOM");
 

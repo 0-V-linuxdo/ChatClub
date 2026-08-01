@@ -50,6 +50,9 @@ globalThis.document = { addEventListener() {} };
     assert.match(controllerSource, new RegExp(`state:\\s*settingsSections\\.${port}`));
   }
   assert.match(controllerSource, /const settingsSectionPanes = Object\.freeze\(\{/);
+  assert.match(controllerSource, /rules:\s*\(redraw\)\s*=>\s*officialRulesPane\(redraw\)/);
+  assert.match(controllerSource, /about:\s*\(\)\s*=>\s*aboutPane\(\)/);
+  assert.doesNotMatch(controllerSource, /aboutPaneWithOfficialRules|pane\.prepend\(officialRulesSettings\.card\)/);
   assert.doesNotMatch(controllerSource, /\bstate\./);
   assert.doesNotMatch(controllerSource, /function (?:appearancePane|summarySettingsPane|optimizeSettingsPane|openPromptTemplateEditor|openSummaryCollectorEditor|topbarPromptPlaceholderBlock)\b/);
   assert.match(runtimeSource, /const featureState = createFeatureStatePorts\(state\)/);
@@ -293,6 +296,11 @@ globalThis.document = { addEventListener() {} };
     settingsSectionsModule.SETTINGS_SECTIONS.slice(-3).map(([id]) => id),
     ["io", "functionalAnomalies", "about"],
     "Functional anomalies must appear between Import / Export and About"
+  );
+  assert.deepEqual(
+    settingsSectionsModule.SETTINGS_SECTIONS.slice(6, 9).map(([id]) => id),
+    ["topicDeletion", "rules", "optimize"],
+    "Rules must appear directly after the three site-rule features"
   );
   assert.deepEqual(
     settingsStateModule.SETTINGS_OPTION_CAPABILITIES.apps.write,

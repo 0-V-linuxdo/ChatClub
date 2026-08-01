@@ -3,21 +3,21 @@
     "app/main.js": {
       "maxFiles": 89,
       "targetFiles": 74,
-      "maxSourceBytes": 953386,
+      "maxSourceBytes": 953795,
       "targetSourceBytes": 750000,
       "reason": "The application initial-static closure includes the background-owned StoredOptionsV4 snapshot client with optimistic revision conflicts and sparse official overrides, committed-reset cleanup warning recovery in core state, plus the per-frame send queue, DNR-ready iframe assignment, authenticated frame identity, Grok Cookie preflight, Notion navigation safeguards, model settlement, workspace reconciliation and persistent user settings; signed-rules controls remain behind explicit lazy boundaries while this shared runtime is held to its exact footprint."
     },
     "background/service-worker.js": {
       "maxFiles": 59,
       "targetFiles": 40,
-      "maxSourceBytes": 766319,
+      "maxSourceBytes": 766407,
       "targetSourceBytes": 360000,
       "reason": "The Chromium service-worker initial-static closure owns signed channel verification with pinned recovery keys, strict declarative schema and host policy, content-addressed component storage, anti-rollback watermarks, opt-in one-shot alarms, atomic apply/rollback and committed-reset cleanup journals, generation-aware snapshot coordination and exact content-registration/DNR compensation, alongside its authenticated Frame RPC, Grok Cookie, debugger and Notion navigation safety runtimes; the combined security boundary is held to this exact footprint."
     },
     "background/firefox-background.js": {
       "maxFiles": 62,
       "targetFiles": 43,
-      "maxSourceBytes": 1486157,
+      "maxSourceBytes": 1486245,
       "targetSourceBytes": 900000,
       "reason": "The Firefox document-background entry packages the same signed official-rules verifier, strict declarative contracts, immutable component repository, anti-rollback state, manual atomic activation, crash and committed-reset cleanup recovery, and compensated content-registration/DNR coordinator as Chromium, together with generated content fallbacks, secure Frame RPC, site-native Storage Access, Notion model handling and fail-closed Delete behavior when trusted input is unavailable; its larger exact static cost is tracked separately."
     }
@@ -43,7 +43,7 @@
       "owner": "app/runtime.js",
       "maxFiles": 25,
       "targetFiles": 18,
-      "maxSourceBytes": 337822,
+      "maxSourceBytes": 337929,
       "targetSourceBytes": 250000,
       "reason": "Settings remains an explicit runtime-owned lazy controller; its exact incremental closure includes background-owned import/reset coordination with durable committed-reset cleanup warnings, signed official-rules consent and status composition, apply-all and rollback entry points, sparse override clearing, platform and iframe source ordering, model controls, custom Summary/Delete permission notices and the focused topbar input setting."
     },

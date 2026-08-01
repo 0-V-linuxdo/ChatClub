@@ -328,17 +328,17 @@ export function createSettingsController(ctx) {
   let officialRulesSettings = null;
   let officialRulesSettingsPromise = null;
 
-  function aboutPaneWithOfficialRules(redraw) {
-    const pane = aboutPane();
+  function officialRulesPane(redraw) {
+    const pane = el("div", { class: "settings-pane official-rules-settings-pane" });
     if (officialRulesSettings) {
-      pane.prepend(officialRulesSettings.card);
+      pane.append(officialRulesSettings.card);
       return pane;
     }
     const placeholder = el("section", {
       class: "settings-manage-card official-rules-card",
       "aria-busy": "true"
     }, el("p", {}, "正在读取官方规则状态…"));
-    pane.prepend(placeholder);
+    pane.append(placeholder);
     if (!officialRulesSettingsPromise) {
       officialRulesSettingsPromise = import("./official-rules.js")
         .then(({ createOfficialRulesSettingsCard }) => {
@@ -372,13 +372,14 @@ export function createSettingsController(ctx) {
     summary: (redraw, goToSection) => summarySection.pane(redraw, goToSection),
     messageNavigation: (redraw) => messageNavigationSection.pane(redraw),
     topicDeletion: (redraw) => topicDeletionSection.pane(redraw),
+    rules: (redraw) => officialRulesPane(redraw),
     optimize: (redraw, goToSection) => optimizeSection.pane(redraw, goToSection),
     prompts: (redraw) => promptLibraryPane(redraw),
     promptHistory: (redraw) => promptHistorySection.pane(redraw),
     shortcuts: (redraw) => shortcutsPane(redraw),
     io: (redraw) => importExportSettings.importExportPane(redraw),
     functionalAnomalies: () => functionalAnomaliesSection.pane(),
-    about: (redraw) => aboutPaneWithOfficialRules(redraw)
+    about: () => aboutPane()
   });
 
   function settingsPane(active, redraw, goToSection = () => {}) {
