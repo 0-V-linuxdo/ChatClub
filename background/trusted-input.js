@@ -1,3 +1,5 @@
+import { frameDocumentUrlsMatch } from "../shared/chat-frame-config.js";
+
 const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, Math.max(0, Number(ms) || 0)); });
 
 const FRAME_BINDING_PATTERN = /^[a-f0-9]{64}$/i;
@@ -85,7 +87,7 @@ async function exactDirectChildFrame(api, target) {
     throw new Error("trusted browser input target is not the expected direct child iframe");
   }
   const frameHref = normalizedHref(frame.url);
-  if (!frameHref || frameHref !== target.href) {
+  if (!frameHref || !frameDocumentUrlsMatch(frameHref, target.href)) {
     throw new Error("trusted browser input target URL changed");
   }
   const frameDocumentId = String(frame.documentId || "").trim();
@@ -275,7 +277,7 @@ async function attestTrustedFrame(api, target) {
   if (
     attestation.frameBindingId !== target.frameBindingId
     || attestation.bridgeDocumentId !== target.bridgeDocumentId
-    || normalizedHref(attestation.href) !== target.href
+    || !frameDocumentUrlsMatch(normalizedHref(attestation.href), target.href)
   ) {
     throw new Error("trusted browser input target attestation changed");
   }
@@ -299,7 +301,7 @@ async function verifyTrustedFrameTarget(api, target, options = {}) {
     throw new Error("trusted browser input target lost the owned Claude Delete D menu");
   }
   const after = await exactDirectChildFrame(api, target);
-  if (before.href !== after.href || before.documentId !== after.documentId) {
+  if (!frameDocumentUrlsMatch(before.href, after.href) || before.documentId !== after.documentId) {
     throw new Error("trusted browser input target navigated during verification");
   }
   return target;

@@ -1,5 +1,8 @@
 import { APP_NAME } from "../shared/constants.js";
-import { stripNotionFrameLoadNonce } from "../shared/chat-frame-config.js";
+import {
+  frameDocumentUrlsMatch,
+  stripValidNotionFrameLoadNonce
+} from "../shared/chat-frame-config.js";
 import { normalizeContentRuntimeIdentity } from "../shared/content-runtime-identity.js";
 import {
   assertContentRuntimePackageBundleIdentity,
@@ -65,7 +68,7 @@ export function createSecureFrameContextRegistry(api) {
             if (!contentRuntimePackageBundleIdentityMatches(runtimeIdentity, "content/content.js")) continue;
             contexts.set(token, {
               ...context,
-              url: stripNotionFrameLoadNonce(context.url),
+              url: stripValidNotionFrameLoadNonce(context.url),
               runtimeIdentity,
               browserDocumentId: String(context.browserDocumentId || context.documentId || ""),
               legacyDocumentId: String(context.legacyDocumentId || ""),
@@ -149,7 +152,7 @@ export function createSecureFrameContextRegistry(api) {
       : "";
     await hydrate();
     const frame = await api.webNavigation.getFrame({ tabId, frameId });
-    if (!frame || frame.parentFrameId !== 0 || String(frame.url || "") !== senderUrl) {
+    if (!frame || frame.parentFrameId !== 0 || !frameDocumentUrlsMatch(frame.url, senderUrl)) {
       throw new Error("Secure frame registration does not match a direct child document");
     }
     if (!legacyDocumentId) throw new Error("Secure frame registration legacy document is unavailable");
@@ -170,7 +173,7 @@ export function createSecureFrameContextRegistry(api) {
     if (
       !currentLegacyDocumentId
       || currentLegacyDocumentId !== legacyDocumentId
-      || String(currentProbe?.result?.href || "").trim() !== senderUrl
+      || !frameDocumentUrlsMatch(String(currentProbe?.result?.href || "").trim(), senderUrl)
     ) {
       throw new Error("Secure frame registration legacy document changed");
     }
@@ -195,7 +198,7 @@ export function createSecureFrameContextRegistry(api) {
       browserDocumentId,
       legacyDocumentId,
       parentDocumentId,
-      url: stripNotionFrameLoadNonce(senderUrl),
+      url: stripValidNotionFrameLoadNonce(senderUrl),
       frameBindingId,
       secureToken,
       bridgeVersion: String(message.bridgeVersion || ""),

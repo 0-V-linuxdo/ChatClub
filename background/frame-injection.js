@@ -1,3 +1,5 @@
+import { frameDocumentUrlsMatch } from "../shared/chat-frame-config.js";
+
 function messageText(error) {
   return String(error?.message || error || "");
 }
@@ -44,7 +46,7 @@ function senderFrameIdentity(api, sender = {}) {
   return { tabId, frameId, senderUrl };
 }
 
-export async function verifiedDirectChildFrameContext(api, sender = {}, expected = null) {
+export async function verifiedDirectChildFrameContext(api, sender = {}, expected = null, options = {}) {
   if (!api?.webNavigation?.getFrame) {
     throw new Error("Packaged userscript frame verification API is unavailable");
   }
@@ -53,17 +55,29 @@ export async function verifiedDirectChildFrameContext(api, sender = {}, expected
     tabId: identity.tabId,
     frameId: identity.frameId
   });
+  const frameUrl = String(frame?.url || "");
+  const senderDocumentId = String(sender?.documentId || "").trim();
+  const navigationDocumentId = String(frame?.documentId || "").trim();
+  const requiredNavigationDocumentId = String(options.requiredNavigationDocumentId || "").trim();
   if (
     !frame
     || (Number.isInteger(frame.tabId) && frame.tabId !== identity.tabId)
     || (Number.isInteger(frame.frameId) && frame.frameId !== identity.frameId)
     || frame.parentFrameId !== 0
-    || String(frame.url || "") !== identity.senderUrl
+    || !frameDocumentUrlsMatch(frameUrl, identity.senderUrl)
+    || (requiredNavigationDocumentId && navigationDocumentId !== requiredNavigationDocumentId)
+    || (
+      options.requireDocumentBoundUrlNormalization === true
+      && frameUrl !== identity.senderUrl
+      && (
+        !senderDocumentId
+        || !navigationDocumentId
+        || senderDocumentId !== navigationDocumentId
+      )
+    )
   ) {
     throw new Error("Packaged userscript injection frame is not the verified direct child document");
   }
-  const senderDocumentId = String(sender?.documentId || "").trim();
-  const navigationDocumentId = String(frame.documentId || "").trim();
   if (senderDocumentId && navigationDocumentId && senderDocumentId !== navigationDocumentId) {
     throw new Error("Packaged userscript injection document changed");
   }
@@ -89,7 +103,8 @@ export async function executeVerifiedPackagedFrameFile(api, sender, file, option
   const scriptFile = String(file || "").trim();
   if (!scriptFile) throw new Error("Packaged userscript file is unavailable");
   if (!api?.scripting?.executeScript) throw new Error("Packaged userscript injection API is unavailable");
-  const context = await verifiedDirectChildFrameContext(api, sender);
+  const verificationOptions = { requireDocumentBoundUrlNormalization: true };
+  const context = await verifiedDirectChildFrameContext(api, sender, null, verificationOptions);
   const frameTarget = { tabId: context.tabId, frameIds: [context.frameId] };
   const execute = (target) => api.scripting.executeScript({
     target,
@@ -101,13 +116,18 @@ export async function executeVerifiedPackagedFrameFile(api, sender, file, option
     return await execute({ tabId: context.tabId, documentIds: [context.documentId] });
   } catch (error) {
     if (!documentTargetUnsupported(error)) throw error;
-    await verifiedDirectChildFrameContext(api, sender, context);
+    await verifiedDirectChildFrameContext(api, sender, context, {
+      ...verificationOptions,
+      requiredNavigationDocumentId: context.documentId
+    });
     return execute(frameTarget);
   }
 }
 
 export async function verifiedCustomUserscriptTarget(api, sender) {
-  const context = await verifiedDirectChildFrameContext(api, sender);
+  const context = await verifiedDirectChildFrameContext(api, sender, null, {
+    requireDocumentBoundUrlNormalization: true
+  });
   if (!context.documentId) {
     throw new Error("Cannot inject custom userscript: sender document id is unavailable");
   }

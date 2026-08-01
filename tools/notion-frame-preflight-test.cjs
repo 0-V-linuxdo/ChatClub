@@ -87,6 +87,26 @@ function fakeApi(options = {}) {
     nonce: NONCE_A
   });
   assert.equal(frameConfig.stripNotionFrameLoadNonce(targetA.navigationHref), targetA.logicalHref);
+  assert.equal(frameConfig.stripValidNotionFrameLoadNonce(targetA.navigationHref), targetA.logicalHref);
+  assert.equal(frameConfig.frameDocumentUrlsMatch(targetA.navigationHref, targetA.logicalHref), true);
+  assert.equal(frameConfig.frameDocumentUrlsMatch(targetA.logicalHref, targetA.navigationHref), true);
+  assert.equal(
+    frameConfig.frameDocumentUrlsMatch(
+      targetA.navigationHref,
+      targetA.navigationHref.replace(NONCE_A, `ccn-${"f".repeat(32)}`)
+    ),
+    false
+  );
+  assert.equal(
+    frameConfig.stripValidNotionFrameLoadNonce("https://app.notion.com/ai?__chatclub_frame_load_nonce=garbage"),
+    "https://app.notion.com/ai?__chatclub_frame_load_nonce=garbage"
+  );
+  assert.equal(
+    frameConfig.stripValidNotionFrameLoadNonce(
+      "https://app.notion.com/ai?__chatclub_frame_load_nonce=ccn-0123456789abcdef0123456789abcdef&__chatclub_frame_load_nonce=ccn-fedcba9876543210fedcba9876543210"
+    ),
+    "https://app.notion.com/ai?__chatclub_frame_load_nonce=ccn-0123456789abcdef0123456789abcdef&__chatclub_frame_load_nonce=ccn-fedcba9876543210fedcba9876543210"
+  );
   assert.deepEqual(frameConfig.notionFrameLoadRequest(targetA.navigationHref, NONCE_A), {
     navigationHref: targetA.navigationHref,
     networkHref: `https://app.notion.com/ai?mode=new&${PARAM}=${NONCE_A}`,

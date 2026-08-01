@@ -721,6 +721,29 @@ export function stripNotionFrameLoadNonce(value) {
   return parsed.href;
 }
 
+export function stripValidNotionFrameLoadNonce(value) {
+  const source = String(value || "");
+  const parsed = exactNotionAppUrl(source);
+  const nonces = parsed?.searchParams.getAll(NOTION_FRAME_LOAD_NONCE_PARAM) || [];
+  if (
+    parsed?.href !== source
+    || nonces.length !== 1
+    || !normalizeNotionFrameLoadNonce(nonces[0])
+  ) return source;
+  parsed.searchParams.delete(NOTION_FRAME_LOAD_NONCE_PARAM);
+  return parsed.href;
+}
+
+export function frameDocumentUrlsMatch(first, second) {
+  const left = String(first || "");
+  const right = String(second || "");
+  if (left === right) return true;
+  const leftLogical = stripValidNotionFrameLoadNonce(left);
+  const rightLogical = stripValidNotionFrameLoadNonce(right);
+  return leftLogical === rightLogical
+    && (leftLogical !== left) !== (rightLogical !== right);
+}
+
 export function notionFrameLoadTarget(value, nonceValue) {
   const nonce = normalizeNotionFrameLoadNonce(nonceValue);
   const logicalHref = stripNotionFrameLoadNonce(value);

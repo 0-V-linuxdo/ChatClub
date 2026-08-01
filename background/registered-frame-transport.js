@@ -1,5 +1,6 @@
 import { documentTargetUnsupported } from "./frame-injection.js";
 import { frameRouteError } from "./frame-command-errors.js";
+import { frameDocumentUrlsMatch } from "../shared/chat-frame-config.js";
 
 export async function verifiedRegisteredFrameFallbackTarget(api, context = {}) {
   const tabId = context.tabId;
@@ -16,7 +17,7 @@ export async function verifiedRegisteredFrameFallbackTarget(api, context = {}) {
     || (Number.isInteger(frame.tabId) && frame.tabId !== tabId)
     || (Number.isInteger(frame.frameId) && frame.frameId !== frameId)
     || frame.parentFrameId !== 0
-    || String(frame.url || "") !== expectedUrl
+    || !frameDocumentUrlsMatch(frame.url, expectedUrl)
     || !currentDocumentId
     || currentDocumentId !== expectedDocumentId
   ) {

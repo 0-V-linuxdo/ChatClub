@@ -115,6 +115,39 @@ const root = path.resolve(__dirname, "..");
   }
 
   {
+    const registered = { ...context, url: "https://app.notion.com/ai?mode=chat" };
+    const nonceUrl = `${registered.url}&__chatclub_frame_load_nonce=ccn-${"a".repeat(32)}`;
+    const api = {
+      webNavigation: {
+        async getFrame() {
+          return {
+            tabId: 21,
+            frameId: 9,
+            parentFrameId: 0,
+            documentId: "document-1",
+            url: nonceUrl
+          };
+        }
+      }
+    };
+    assert.deepEqual(
+      await verifiedRegisteredFrameFallbackTarget(api, registered),
+      { tabId: 21, frameId: 9 }
+    );
+    api.webNavigation.getFrame = async () => ({
+      tabId: 21,
+      frameId: 9,
+      parentFrameId: 0,
+      documentId: "document-1",
+      url: "https://app.notion.com/search?mode=chat"
+    });
+    await assert.rejects(
+      verifiedRegisteredFrameFallbackTarget(api, registered),
+      (error) => error?.code === "STALE_DOCUMENT" && error?.delivered === false
+    );
+  }
+
+  {
     const targets = [];
     let fallbackChecks = 0;
     await assert.rejects(

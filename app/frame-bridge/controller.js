@@ -63,8 +63,7 @@ export function createFrameBridgeController(dependencies = {}) {
     preferredModelFrameIsLoading: "function",
     handleShortcutAction: "function"
   });
-  const capabilityPreparationRuns = new WeakMap();
-  const capabilityPreparationTails = new WeakMap();
+  const capabilityPreparationQueues = new WeakMap();
   const repairTimers = new WeakMap();
   const repairGenerations = new WeakMap();
   const frameBindingChallenges = createFrameBindingChallengeRegistry();
@@ -147,6 +146,23 @@ export function createFrameBridgeController(dependencies = {}) {
     delete iframe.dataset.contentRuntimeCapabilities;
   }
 
+  function framePreparationGeneration(iframe) {
+    return String(iframe?.dataset?.contentRuntimeCapabilitiesEpoch || "0");
+  }
+
+  function framePreparationIsCurrent(iframe, generation) {
+    return Boolean(iframe?.isConnected && framePreparationGeneration(iframe) === generation);
+  }
+
+  function cancelledFramePreparation(summary = false) {
+    return {
+      ok: false,
+      cancelled: true,
+      reason: "iframe document changed during content bridge preparation",
+      summary
+    };
+  }
+
   function mergedContentRuntimeCapabilities(
     iframe,
     documentId,
@@ -167,11 +183,16 @@ export function createFrameBridgeController(dependencies = {}) {
     ])].sort();
   }
 
-  async function waitForCurrentContentFrameRegistration(iframe, timeoutMs = 2600) {
+  async function waitForCurrentContentFrameRegistration(
+    iframe,
+    timeoutMs = 2600,
+    ownerIsCurrent = () => true
+  ) {
     const deadline = Date.now() + Math.max(250, Number(timeoutMs) || 0);
     let lastBindingProbeAt = 0;
-    while (iframe?.isConnected && Date.now() <= deadline) {
+    while (iframe?.isConnected && ownerIsCurrent() && Date.now() <= deadline) {
       const registration = await verifiedCurrentContentFrameRegistration(iframe);
+      if (!ownerIsCurrent()) return null;
       if (registration) return registration;
       if (Date.now() - lastBindingProbeAt >= 350) {
         requestFrameBinding(iframe, { skipRegistered: false });
@@ -182,16 +203,23 @@ export function createFrameBridgeController(dependencies = {}) {
     return null;
   }
 
-  async function prepareContentFrameRuntimeUncached(iframe, options = {}) {
-    if (!iframe?.isConnected) return { ok: false, cancelled: true, reason: "iframe is detached" };
+  async function prepareContentFrameRuntimeUncached(
+    iframe,
+    options = {},
+    preparationGeneration = framePreparationGeneration(iframe)
+  ) {
     const features = [...new Set([
       ...(Array.isArray(options.features) ? options.features : []),
       ...(options.summary === true ? ["summary"] : [])
     ].map((value) => String(value || "").trim().toLowerCase()).filter(Boolean))].sort();
     const summary = features.includes("summary");
+    const preparationIsCurrent = () => framePreparationIsCurrent(iframe, preparationGeneration);
+    const cancelled = () => cancelledFramePreparation(summary);
+    if (!preparationIsCurrent()) return cancelled();
     let registration = await verifiedCurrentContentFrameRegistration(iframe);
+    if (!preparationIsCurrent()) return cancelled();
     const registeredDocumentId = String(registration?.documentId || "");
-    const capabilityEpochAtStart = String(iframe.dataset.contentRuntimeCapabilitiesEpoch || "0");
+    const capabilityEpochAtStart = preparationGeneration;
     const capabilityDocumentCurrent = String(iframe.dataset.contentRuntimeCapabilitiesDocumentId || "") === registeredDocumentId;
     const installedCapabilities = capabilityDocumentCurrent
       ? String(iframe.dataset.contentRuntimeCapabilities || "").split(",").filter(Boolean)
@@ -215,6 +243,7 @@ export function createFrameBridgeController(dependencies = {}) {
     }
 
     const tabId = await currentExtensionTabId();
+    if (!preparationIsCurrent()) return cancelled();
     if (!Number.isInteger(tabId)) return { ok: false, reason: "extension tab is unavailable", summary };
     const controller = workspaceController();
     const app = controller.frameApp(iframe) || {};
@@ -245,8 +274,10 @@ export function createFrameBridgeController(dependencies = {}) {
         ...exactBindingRequest
       });
     } catch (error) {
+      if (!preparationIsCurrent()) return cancelled();
       return { ok: false, reason: error?.message || String(error), summary };
     }
+    if (!preparationIsCurrent()) return cancelled();
     const installationError = contentFramePreparationError(installed);
     const installedFeatures = Array.isArray(installed?.features) ? installed.features : [];
     const normalizedFeatureKey = (value) => [...new Set(value.map(String))].sort().join(",");
@@ -289,12 +320,19 @@ export function createFrameBridgeController(dependencies = {}) {
         summary
       };
     }
+    if (!preparationIsCurrent()) return cancelled();
     iframe.dataset.injectedBrowserDocumentId = installedBrowserDocumentId;
     await requestFrameBinding(iframe, {
       rotate: true,
       skipRegistered: false
     });
-    registration = await waitForCurrentContentFrameRegistration(iframe);
+    if (!preparationIsCurrent()) return cancelled();
+    registration = await waitForCurrentContentFrameRegistration(
+      iframe,
+      2600,
+      preparationIsCurrent
+    );
+    if (!preparationIsCurrent()) return cancelled();
     if (!registration || !grokCookieRuntimeReady(registration)) {
       const relayError = String(frameBindingRelayErrors.get(iframe) || "").trim();
       return {
@@ -321,6 +359,7 @@ export function createFrameBridgeController(dependencies = {}) {
       try {
         summaryState = await runtimePort().request(iframe, "getSummaryRuntimeState", {}, { timeoutMs: 1800, skipEnsure: true });
       } catch (error) {
+        if (!preparationIsCurrent()) return cancelled();
         return {
           ok: false,
           reason: error?.message || "Summary runtime readiness probe failed",
@@ -329,7 +368,9 @@ export function createFrameBridgeController(dependencies = {}) {
           summary
         };
       }
+      if (!preparationIsCurrent()) return cancelled();
       const confirmedRegistration = await verifiedCurrentContentFrameRegistration(iframe);
+      if (!preparationIsCurrent()) return cancelled();
       const summaryRuntimeReady = Boolean(
         summaryState?.ready
         && summaryState.mainReady
@@ -358,6 +399,7 @@ export function createFrameBridgeController(dependencies = {}) {
       iframe.dataset.summaryRuntimeBridgeVersion = CONTENT_BRIDGE_VERSION;
       iframe.dataset.summaryRuntimeImplementationVersion = CONTENT_RUNTIME_IDENTITY.implementationVersion;
     }
+    if (!preparationIsCurrent()) return cancelled();
     const mergedCapabilities = mergedContentRuntimeCapabilities(
       iframe,
       registration.documentId,
@@ -378,23 +420,30 @@ export function createFrameBridgeController(dependencies = {}) {
       ...(Array.isArray(options.features) ? options.features : []),
       ...(options.summary === true ? ["summary"] : [])
     ])].map(String).sort().join(",");
-    let runs = capabilityPreparationRuns.get(iframe);
-    if (!runs) {
-      runs = new Map();
-      capabilityPreparationRuns.set(iframe, runs);
+    const generation = framePreparationGeneration(iframe);
+    let queue = capabilityPreparationQueues.get(iframe);
+    if (!queue || queue.generation !== generation) {
+      queue = { generation, runs: new Map(), tail: Promise.resolve() };
+      capabilityPreparationQueues.set(iframe, queue);
     }
-    const existing = runs.get(signature);
+    const existing = queue.runs.get(signature);
     if (existing) return existing;
-    const previous = capabilityPreparationTails.get(iframe) || Promise.resolve();
+    // New documents bypass stale app queues; background injection stays tab-serialized.
+    const previous = queue.tail;
     const run = previous.catch(() => {}).then(
-      () => prepareContentFrameRuntimeUncached(iframe, options)
+      async () => {
+        if (!framePreparationIsCurrent(iframe, generation)) return cancelledFramePreparation();
+        const result = await prepareContentFrameRuntimeUncached(iframe, options, generation);
+        return framePreparationIsCurrent(iframe, generation) ? result : cancelledFramePreparation();
+      }
     ).finally(() => {
-      if (runs.get(signature) === run) runs.delete(signature);
-      if (!runs.size) capabilityPreparationRuns.delete(iframe);
-      if (capabilityPreparationTails.get(iframe) === run) capabilityPreparationTails.delete(iframe);
+      if (queue.runs.get(signature) === run) queue.runs.delete(signature);
+      if (capabilityPreparationQueues.get(iframe) === queue && !queue.runs.size) {
+        capabilityPreparationQueues.delete(iframe);
+      }
     });
-    runs.set(signature, run);
-    capabilityPreparationTails.set(iframe, run);
+    queue.runs.set(signature, run);
+    queue.tail = run;
     return run;
   }
 
@@ -729,9 +778,16 @@ export function createFrameBridgeController(dependencies = {}) {
       const iframe = event.target;
       if (!(iframe instanceof HTMLIFrameElement) || !iframe.classList.contains("chat-frame")) return;
       const navigationAlreadyInvalidated = iframe.dataset.preferredModelNavigationInvalidated === "1";
+      const preparationGenerationBeforeLoad = framePreparationGeneration(iframe);
       delete iframe.dataset.preferredModelNavigationInvalidated;
       if (!preferredModelFrameIsLoading(iframe) && !navigationAlreadyInvalidated) {
         invalidatePreferredModelFrame(iframe, "iframe-load", { clearDocumentId: true });
+      }
+      if (
+        framePreparationGeneration(iframe) === preparationGenerationBeforeLoad
+      ) {
+        // Invalidate repairs that started between navigation-start and load.
+        invalidateContentRuntimeCapabilityLedger(iframe);
       }
       frameBindingChallenges.invalidate(iframe);
       delete iframe.dataset.injectedBrowserDocumentId;

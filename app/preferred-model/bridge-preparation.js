@@ -1,4 +1,5 @@
-const PREFERRED_MODEL_BRIDGE_PREPARATION_TIMEOUT_MS = 2500;
+// Covers the accepted 8s injection queue plus registration/readiness handshakes.
+const PREFERRED_MODEL_BRIDGE_PREPARATION_TIMEOUT_MS = 15000;
 
 export function waitForPreferredModelBridgePreparation(prepare, options = {}) {
   const signal = options.signal || null;

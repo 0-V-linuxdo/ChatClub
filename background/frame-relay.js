@@ -1,3 +1,5 @@
+import { stripValidNotionFrameLoadNonce } from "../shared/chat-frame-config.js";
+
 const FRAME_LIFECYCLE_ACTIONS = new Set(["locationChanged", "contentUnloading"]);
 
 function relaySenderContext(token, context = {}) {
@@ -78,8 +80,11 @@ export function createAuthenticatedFrameRelay(options = {}) {
     if (!FRAME_LIFECYCLE_ACTIONS.has(action)) throw new Error(`Unknown frame lifecycle action: ${action}`);
     const { token, context } = await authenticate(message, sender);
     const data = message.data && typeof message.data === "object" ? message.data : {};
+    let relayData = data;
     if (action === "locationChanged" && /^https?:\/\//i.test(String(data.href || ""))) {
-      context.url = String(data.href);
+      const href = stripValidNotionFrameLoadNonce(String(data.href));
+      context.url = href;
+      relayData = { ...data, href };
       if (!touchContext(token, context)) throw new Error("Frame lifecycle document changed");
     }
     try {
@@ -89,7 +94,7 @@ export function createAuthenticatedFrameRelay(options = {}) {
         lifecycleAction: action,
         senderContext: relaySenderContext(token, context),
         data: {
-          ...data,
+          ...relayData,
           documentId: token,
           bridgeVersion: context.bridgeVersion,
           runtimeIdentity: context.runtimeIdentity

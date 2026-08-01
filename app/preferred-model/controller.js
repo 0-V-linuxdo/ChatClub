@@ -36,6 +36,11 @@ const NOTION_ALL_SOURCES_APPLY_TIMEOUT_MS = 48000;
 const MODEL_PREFERENCE_CANCEL_TIMEOUT_MS = 1200;
 const MODEL_PREFERENCE_SUBMISSION_NAVIGATION_GRACE_MS = 15000;
 const FRAME_SUBMIT_ERROR_MAX_CHARS = 160;
+const PREFERRED_MODEL_PRE_DELIVERY_RETRY_CODES = Object.freeze([
+  "NOT_REGISTERED",
+  "STALE_DOCUMENT",
+  "INJECTION_FAILED"
+]);
 
 export function createPreferredModelController(dependencies = {}) {
   const controllerName = "Preferred Model controller";
@@ -203,6 +208,17 @@ export function createPreferredModelController(dependencies = {}) {
   function preferredModelFrameIsLoading(iframe) {
     const instanceId = String(iframe?.dataset?.instanceId || "");
     return Boolean(instanceId && (preferredModelState.frameLoadingInstanceIds || []).includes(instanceId));
+  }
+
+  function preferredModelContentRuntimeReady(iframe, registration) {
+    const documentId = String(registration?.documentId || "");
+    if (
+      !documentId
+      || String(iframe?.dataset?.contentRuntimeCapabilitiesDocumentId || "") !== documentId
+    ) return false;
+    return String(iframe.dataset.contentRuntimeCapabilities || "")
+      .split(",")
+      .includes("preferred-model");
   }
 
   function preferredModelFrameReadiness(iframe) {
@@ -1110,11 +1126,11 @@ export function createPreferredModelController(dependencies = {}) {
   async function applyPreferredModelToFrame(iframe, record) {
     const payload = preferredModelAttemptPayload(record.payload, record.payload.modelId, record.runId);
     let registration = await verifiedCurrentContentFrameRegistration(iframe);
-    if (!registration) {
+    if (!registration || !preferredModelContentRuntimeReady(iframe, registration)) {
       record.bridgeRecoveryAttempts = Math.max(0, Number(record.bridgeRecoveryAttempts) || 0) + 1;
       const preparationSignal = record.controller?.signal || null;
       const prepared = await waitForPreferredModelBridgePreparation(
-        () => prepareContentFrameRuntime(iframe),
+        () => prepareContentFrameRuntime(iframe, { features: ["preferred-model"] }),
         {
           signal: preparationSignal,
           ownerIsCurrent: () => preferredModelRecordIsCurrent(iframe, record)
@@ -1130,8 +1146,10 @@ export function createPreferredModelController(dependencies = {}) {
           reason: prepared?.reason || "preferred-model frame was superseded during bridge recovery"
         });
       }
-      registration = prepared?.ok ? await verifiedCurrentContentFrameRegistration(iframe) : null;
-      if (!registration) {
+      if (prepared?.ok === true) {
+        registration = await verifiedCurrentContentFrameRegistration(iframe);
+      }
+      if (!registration || !preferredModelContentRuntimeReady(iframe, registration)) {
         return preferredModelResult(record.runId, {
           retryable: true,
           reason: prepared?.reason || "iframe content bridge recovery failed"
@@ -1152,7 +1170,8 @@ export function createPreferredModelController(dependencies = {}) {
         {
           timeoutMs: preferredModelApplyTimeoutMs(payload),
           signal: record.controller?.signal,
-          expectedDocumentId: registration.documentId
+          expectedDocumentId: registration.documentId,
+          skipEnsure: true
         }
       );
       if (!result || typeof result !== "object" || Array.isArray(result)) {
@@ -1172,10 +1191,12 @@ export function createPreferredModelController(dependencies = {}) {
       const cancelled = error?.code === "ABORTED" || error?.name === "AbortError";
       const timedOut = error?.code === "TIMEOUT"
         || /timeout waiting for response/i.test(String(error?.message || ""));
+      const retryable = error?.delivered === false
+        && PREFERRED_MODEL_PRE_DELIVERY_RETRY_CODES.includes(String(error?.code || ""));
       if (timedOut) requestPreferredModelCancellation(iframe, record, "parent-timeout");
       return preferredModelResult(record.runId, {
         cancelled,
-        retryable: false,
+        retryable,
         reason: error?.message || String(error || "preferred-model request failed")
       });
     }

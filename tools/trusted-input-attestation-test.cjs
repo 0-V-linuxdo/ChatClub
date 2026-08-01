@@ -15,6 +15,8 @@ const BROWSER_DOCUMENT_ID = "browser-document-1";
 const BRIDGE_DOCUMENT_ID = "bridge-document-1";
 const FRAME_HREF = "https://chat.deepseek.com/a/chat/s/topic-1";
 const CLAUDE_FRAME_HREF = "https://claude.ai/chat/thread-1";
+const NOTION_FRAME_HREF = "https://app.notion.com/chat?t=thread-1";
+const NOTION_FRAME_NAVIGATION_HREF = `${NOTION_FRAME_HREF}&__chatclub_frame_load_nonce=ccn-${"c".repeat(32)}`;
 const CLAUDE_DIA_MENU_LABELS = Object.freeze({
   star: "\uE0E7 Star P",
   markUnread: "\uE06A Mark as unread U",
@@ -415,6 +417,34 @@ function createApi(options = {}) {
     await dispatchTrustedMouseMove(api, message(), sender);
     assert.deepEqual(state.commands.map((entry) => entry.params.type), ["mouseMoved"]);
     assert.ok(state.attestationCalls >= 2, "hover identity must be checked before and after debugger attachment");
+  }
+
+  {
+    const { api, state } = createApi({
+      targetHref: NOTION_FRAME_HREF,
+      frame: { url: NOTION_FRAME_NAVIGATION_HREF },
+      attestation: { href: NOTION_FRAME_HREF }
+    });
+    await dispatchTrustedMouseMove(api, message({ expectedFrameHref: NOTION_FRAME_HREF }), sender);
+    assert.deepEqual(state.commands.map((entry) => entry.params.type), ["mouseMoved"]);
+    assert.ok(state.attestationCalls >= 2, "the document-bound Notion nonce cleanup race must remain attestable");
+  }
+
+  {
+    const secondNavigationHref = `${NOTION_FRAME_HREF}&__chatclub_frame_load_nonce=ccn-${"d".repeat(32)}`;
+    const { api, state } = createApi({
+      targetHref: NOTION_FRAME_HREF,
+      frame: { url: NOTION_FRAME_NAVIGATION_HREF },
+      attestation: { href: NOTION_FRAME_HREF },
+      onGetFrame(current) {
+        if (current.frameCalls >= 2) current.frame.url = secondNavigationHref;
+      }
+    });
+    await assert.rejects(
+      dispatchTrustedMouseMove(api, message({ expectedFrameHref: NOTION_FRAME_HREF }), sender),
+      /navigated during verification/i
+    );
+    assert.equal(state.commands.length, 0, "a changed Notion load nonce must fail before trusted pointer input");
   }
 
   {

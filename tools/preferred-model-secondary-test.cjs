@@ -48,7 +48,9 @@ globalThis.window = {
       dataset: {
         instanceId: `instance-${appId}`,
         preferredModelDocumentId: `document-${appId}`,
-        preferredModelContentBridgeVersion: "test-bridge"
+        preferredModelContentBridgeVersion: "test-bridge",
+        contentRuntimeCapabilitiesDocumentId: `document-${appId}`,
+        contentRuntimeCapabilities: "preferred-model"
       },
       closest() { return null; }
     };
@@ -77,6 +79,7 @@ globalThis.window = {
           assert.equal(candidate, iframe);
           assert.equal(command, "applyPreferredModel");
           assert.equal(options.expectedDocumentId, iframe.dataset.preferredModelDocumentId);
+          assert.equal(options.skipEnsure, true);
           const call = { ...data };
           calls.push(call);
           const values = await respond(call, calls.length - 1);

@@ -17,6 +17,7 @@ import {
 } from "../shared/content-runtime-version.generated.js";
 import { contentRuntimeIdentityForBundle } from "../shared/content-runtime-package-identity.js";
 import { configMatchesHref } from "../shared/url-match.js";
+import { stripValidNotionFrameLoadNonce } from "../shared/chat-frame-config.js";
 import {
   executeVerifiedPackagedFrameFile,
   verifiedCustomUserscriptTarget,
@@ -204,15 +205,21 @@ export function createCustomUserscriptRuntime(api, dependencies = {}) {
     return new TextEncoder().encode(String(value || "")).byteLength;
   }
 
+  function guardedFrameHrefs(sender = {}) {
+    const href = String(sender?.url || "").trim();
+    const logicalHref = stripValidNotionFrameLoadNonce(href);
+    return logicalHref && logicalHref !== href ? [href, logicalHref] : [href];
+  }
+
   async function executeSummaryUserscript(configId = "", sender = {}) {
     const { runtimeConfig, userscript } = await storedCustomSummaryConfig(configId, sender);
     if (utf8ByteLength(userscript) > CUSTOM_SUMMARY_SOURCE_MAX_BYTES) throw new Error("Custom Summary userscript exceeds the 1 MiB limit");
     if (!api.userScripts?.execute) {
       throw new Error("Custom Summary userscripts require userScripts.execute (Chrome/Arc 135+ or Firefox Nightly 153+) and granted User Scripts access. Chrome 135–137 also requires Developer Mode; Chrome 138+ requires Allow User Scripts.");
     }
-    const expectedHref = String(sender?.url || "").trim();
+    const expectedHrefs = guardedFrameHrefs(sender);
     const code = `(() => {
-    if (String(location.href || "") !== ${JSON.stringify(expectedHref)}) {
+    if (!${JSON.stringify(expectedHrefs)}.includes(String(location.href || ""))) {
       throw new Error("Custom Summary target URL changed before execution");
     }
     const execute = globalThis[${JSON.stringify(CUSTOM_SUMMARY_EXECUTOR)}];
@@ -280,7 +287,8 @@ ${userscript}
     if (utf8ByteLength(source) > CUSTOM_SUMMARY_SOURCE_MAX_BYTES) throw new Error("Custom Delete Site userscript exceeds the 1 MiB limit");
     if (!api.userScripts?.execute) throw new Error(userScriptsUnavailableMessage());
     const safePayload = payload && typeof payload === "object" ? payload : {};
-    const expectedHref = String(sender?.url || "").trim();
+    const expectedHrefs = guardedFrameHrefs(sender);
+    const expectedHref = expectedHrefs.at(-1);
     const expectedIdentity = normalizeDeleteConversationIdentity(safePayload.expectedDeleteIdentity);
     const currentIdentity = deleteConversationIdentityFromHref(expectedHref);
     if (!expectedIdentity || !sameDeleteConversationIdentity(expectedIdentity, currentIdentity)) {
@@ -289,12 +297,12 @@ ${userscript}
     const serializedPayload = JSON.stringify(safePayload);
     if (utf8ByteLength(serializedPayload) > 256 * 1024) throw new Error("Custom Delete Site payload exceeds the 256 KiB limit");
     const targetGuard = `;(() => {
-    if (String(location.href || "") !== ${JSON.stringify(expectedHref)}) {
+    if (!${JSON.stringify(expectedHrefs)}.includes(String(location.href || ""))) {
       throw new Error("Custom Delete Site target URL changed before execution");
     }
   })();`;
     const code = `${targetGuard}\n${source}\n;(() => {
-    if (String(location.href || "") !== ${JSON.stringify(expectedHref)}) {
+    if (!${JSON.stringify(expectedHrefs)}.includes(String(location.href || ""))) {
       throw new Error("Custom Delete Site target URL changed before menuCommand");
     }
     const compact = (value) => String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "");

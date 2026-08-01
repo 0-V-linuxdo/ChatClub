@@ -51,7 +51,7 @@ function createApi(session) {
             documentId: String(frame?.documentId || ""),
             result: {
               legacyDocumentId: String(frame?.legacyDocumentId || ""),
-              href: String(frame?.url || "")
+              href: String(frame?.probeUrl || frame?.url || "")
             }
           }];
         }
@@ -63,7 +63,8 @@ function createApi(session) {
       documentId,
       legacyDocumentId = "",
       parentDocumentId = `extension-document-${tabId}`,
-      url
+      url,
+      probeUrl = url
     }) {
       frames.set(frameKey(tabId, frameId), {
         tabId,
@@ -72,7 +73,8 @@ function createApi(session) {
         parentDocumentId,
         documentId,
         legacyDocumentId,
-        url
+        url,
+        probeUrl
       });
     }
   };
@@ -106,12 +108,22 @@ function bindingToken(seed) {
       legacyDocumentId = "",
       parentDocumentId = `extension-document-${tabId}`,
       url,
+      frameUrl = url,
+      probeUrl = frameUrl,
       seed = frameId,
       secureFrameToken = bindingToken(seed + 97),
       frameBindingId = bindingToken(seed)
     }) {
       const attestation = legacyDocumentId || `legacy:${bindingToken(seed + 151)}`;
-      frameApi.setFrame({ tabId, frameId, documentId, legacyDocumentId: attestation, parentDocumentId, url });
+      frameApi.setFrame({
+        tabId,
+        frameId,
+        documentId,
+        legacyDocumentId: attestation,
+        parentDocumentId,
+        url: frameUrl,
+        probeUrl
+      });
       await registry.register({
         bridgeDocumentId: token,
         browserDocumentId: browserDocumentId || attestation,
@@ -194,6 +206,38 @@ function bindingToken(seed) {
         notion.session.snapshot(FRAME_CONTEXT_SESSION_KEY)?.[token]?.url,
         expected,
         "secure-context storage.session must never persist the internal Notion nonce"
+      );
+    }
+
+    {
+      const notion = fixture();
+      const nonce = `ccn-${"b".repeat(32)}`;
+      const navigationUrl = `https://app.notion.com/ai?mode=new&__chatclub_frame_load_nonce=${nonce}#composer`;
+      const logicalUrl = "https://app.notion.com/ai?mode=new#composer";
+      const token = await notion.register({
+        token: "bridge-document-notion-cleanup-race",
+        tabId: 72,
+        frameId: 20,
+        documentId: "browser-document-notion-cleanup-race",
+        url: navigationUrl,
+        frameUrl: logicalUrl,
+        probeUrl: logicalUrl
+      });
+      assert.equal((await notion.registry.context(token))?.url, logicalUrl);
+    }
+
+    {
+      const notion = fixture();
+      await assert.rejects(
+        notion.register({
+          token: "bridge-document-notion-different-nonce",
+          tabId: 73,
+          frameId: 21,
+          documentId: "browser-document-notion-different-nonce",
+          url: `https://app.notion.com/ai?__chatclub_frame_load_nonce=ccn-${"c".repeat(32)}`,
+          frameUrl: `https://app.notion.com/ai?__chatclub_frame_load_nonce=ccn-${"d".repeat(32)}`
+        }),
+        /does not match a direct child document/
       );
     }
 

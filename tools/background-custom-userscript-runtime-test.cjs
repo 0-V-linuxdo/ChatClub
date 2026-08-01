@@ -3,6 +3,7 @@
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
+const vm = require("node:vm");
 
 const root = path.resolve(__dirname, "..");
 const SUMMARY_ACTION = "executeSummaryUserscript";
@@ -38,7 +39,7 @@ function runtimeFixture(createCustomUserscriptRuntime, options = {}) {
           frameId: 9,
           parentFrameId: 0,
           documentId: "document-1",
-          url: senderUrl
+          url: options.frameUrl || senderUrl
         };
       }
     },
@@ -77,9 +78,11 @@ function runtimeFixture(createCustomUserscriptRuntime, options = {}) {
 }
 
 (async () => {
-  const { createCustomUserscriptRuntime } = await import(
-    pathToFileURL(path.join(root, "background/custom-userscript-runtime.js")).href
-  );
+  const [runtimeModule, protocol] = await Promise.all([
+    import(pathToFileURL(path.join(root, "background/custom-userscript-runtime.js")).href),
+    import(pathToFileURL(path.join(root, "shared/protocol.js")).href)
+  ]);
+  const { createCustomUserscriptRuntime } = runtimeModule;
   const summaryConfig = Object.freeze({
     id: "custom-summary",
     name: "Custom Summary",
@@ -127,6 +130,46 @@ function runtimeFixture(createCustomUserscriptRuntime, options = {}) {
     }
   }
 
+  {
+    const notionLogicalUrl = "https://app.notion.com/ai?mode=chat";
+    const notionNavigationUrl = `${notionLogicalUrl}&__chatclub_frame_load_nonce=ccn-${"a".repeat(32)}`;
+    const notionSender = Object.freeze({ ...sender, url: notionNavigationUrl });
+    const notionSummaryConfig = Object.freeze({
+      ...summaryConfig,
+      id: "custom-notion-summary",
+      hosts: ["app.notion.com"]
+    });
+    const fixture = runtimeFixture(createCustomUserscriptRuntime, {
+      frameUrl: notionLogicalUrl,
+      storedOptions: { summarySiteConfigs: [notionSummaryConfig], topicDeleteSiteConfigs: [] },
+      probe: () => true,
+      async executeUserScript(details) {
+        const sandbox = { location: { href: notionLogicalUrl } };
+        sandbox.globalThis = sandbox;
+        sandbox[protocol.CUSTOM_SUMMARY_EXECUTOR] = async (_config, userscript) => ({
+          messages: await userscript({})
+        });
+        return [{
+          documentId: "document-1",
+          result: await vm.runInNewContext(details.js[0].code, sandbox)
+        }];
+      }
+    });
+    assert.deepEqual(
+      await fixture.handlers.get(SUMMARY_ACTION)({ configId: notionSummaryConfig.id }, notionSender),
+      {
+        data: {
+          messages: [
+            { role: "user", text: "question" },
+            { role: "assistant", text: "answer" }
+          ]
+        }
+      }
+    );
+    assert.equal(fixture.userScriptCalls[0].js[0].code.includes(notionNavigationUrl), true);
+    assert.equal(fixture.userScriptCalls[0].js[0].code.includes(notionLogicalUrl), true);
+  }
+
   const deleteConfig = Object.freeze({
     id: "custom-delete",
     name: "Custom Delete",
@@ -144,6 +187,54 @@ globalThis.ChatClubDeleteSites.customDelete = { id: "custom-delete", menuCommand
     deleteAttemptId: "attempt-1",
     expectedDeleteIdentity: Object.freeze({ provider: "chatgpt", id: "thread-1" })
   });
+
+  {
+    const notionLogicalUrl = "https://app.notion.com/chat?t=thread-1";
+    const notionNavigationUrl = `${notionLogicalUrl}&__chatclub_frame_load_nonce=ccn-${"b".repeat(32)}`;
+    const notionSender = Object.freeze({ ...sender, url: notionNavigationUrl });
+    const notionDeleteConfig = Object.freeze({
+      ...deleteConfig,
+      id: "custom-notion-delete",
+      name: "Custom Notion Delete",
+      hosts: ["app.notion.com"],
+      customUserscript: `// ==UserScript==
+// @name Custom Notion Delete
+// ==/UserScript==
+globalThis.ChatClubDeleteSites = globalThis.ChatClubDeleteSites || {};
+globalThis.ChatClubDeleteSites.customNotionDelete = { id: "custom-notion-delete", menuCommand() { return { ok: true }; } };`
+    });
+    const fixture = runtimeFixture(createCustomUserscriptRuntime, {
+      frameUrl: notionLogicalUrl,
+      storedOptions: { summarySiteConfigs: [], topicDeleteSiteConfigs: [notionDeleteConfig] },
+      async executeUserScript(details) {
+        const sandbox = { location: { href: notionLogicalUrl } };
+        sandbox.globalThis = sandbox;
+        return [{
+          documentId: "document-1",
+          result: await vm.runInNewContext(details.js[0].code, sandbox)
+        }];
+      }
+    });
+    assert.deepEqual(
+      await fixture.handlers.get(DELETE_ACTION)({
+        configId: notionDeleteConfig.id,
+        payload: {
+          ...deletePayload,
+          expectedDeleteIdentity: { provider: "notion", id: "thread-1" }
+        }
+      }, notionSender),
+      {
+        data: {
+          ok: true,
+          site: "custom-notion-delete",
+          reason: "",
+          requiresManualInteraction: false
+        }
+      }
+    );
+    assert.equal(fixture.userScriptCalls[0].js[0].code.includes(notionNavigationUrl), true);
+    assert.equal(fixture.userScriptCalls[0].js[0].code.includes(notionLogicalUrl), true);
+  }
 
   {
     const fixture = runtimeFixture(createCustomUserscriptRuntime, {

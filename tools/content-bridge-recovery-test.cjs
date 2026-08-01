@@ -121,15 +121,18 @@ function createApplyFixture(options = {}) {
     calls.verify += 1;
     return registrations.length ? registrations.shift() : null;
   };
-  context.prepareContentFrameRuntime = async () => {
+  context.prepareContentFrameRuntime = async (_iframe, prepareOptions) => {
     calls.prepare += 1;
+    context.preparationOptions = prepareOptions;
     if (options.supersedeDuringPrepare) current = false;
     if (sharedPreparation) return sharedPreparation;
     return preparedResults.length ? preparedResults.shift() : (options.prepared || { ok: true });
   };
   context.preferredModelRecordIsCurrent = () => current;
-  context.sendToContentFrame = async (_iframe, _command, data) => {
+  context.preferredModelContentRuntimeReady = options.runtimeReady || (() => true);
+  context.sendToContentFrame = async (_iframe, _command, data, requestOptions) => {
     calls.send += 1;
+    context.lastSendOptions = { ...requestOptions };
     if (options.sendError) throw options.sendError;
     return {
       ok: true,
@@ -142,6 +145,11 @@ function createApplyFixture(options = {}) {
   vm.runInContext(`
     const MODEL_PREFERENCE_APPLY_TIMEOUT_MS = 15000;
     const NOTION_ALL_SOURCES_APPLY_TIMEOUT_MS = 48000;
+    const PREFERRED_MODEL_PRE_DELIVERY_RETRY_CODES = Object.freeze([
+      "NOT_REGISTERED",
+      "STALE_DOCUMENT",
+      "INJECTION_FAILED"
+    ]);
     const PREFERRED_MODEL_BRIDGE_PREPARATION_TIMEOUT_MS = ${Math.max(
       1,
       Number(options.bridgePreparationTimeoutMs) || 50
@@ -226,6 +234,7 @@ function createSummaryPrepareFixture(options = {}) {
   context.runtimeRequest = async (request) => {
     calls.install += 1;
     context.lastRuntimeRequest = request;
+    if (options.installBarrier) await options.installBarrier;
     context.injectionStartedAt = context.injectionClock;
     context.injectionClock += Math.max(0, Number(options.injectionDelayMs) || 0);
     context.injectionFinishedAt = context.injectionClock;
@@ -328,6 +337,9 @@ function createSummaryPrepareFixture(options = {}) {
     ${functionSource(frameBridge, "exactGrokCookieRuntimeHost")}
     ${functionSource(frameBridge, "grokCookieRuntimeReady")}
     ${functionSource(frameBridge, "mergedContentRuntimeCapabilities")}
+    ${functionSource(frameBridge, "framePreparationGeneration")}
+    ${functionSource(frameBridge, "framePreparationIsCurrent")}
+    ${functionSource(frameBridge, "cancelledFramePreparation")}
     ${functionSource(frameBridge, "prepareContentFrameRuntimeUncached", true)}
     globalThis.prepare = prepareContentFrameRuntimeUncached;
   `, context);
@@ -621,6 +633,81 @@ async function createPreservedRuntimeReloadFixture() {
 
 (async () => {
   {
+    const match = preferredModelBridgePreparation.match(
+      /const PREFERRED_MODEL_BRIDGE_PREPARATION_TIMEOUT_MS = ([\d_]+);/
+    );
+    const timeoutMs = Number(String(match?.[1] || "0").replaceAll("_", ""));
+    assert.ok(
+      timeoutMs >= 13000,
+      "the preferred-model waiter must cover the accepted 8s injection queue, registration, and readiness budgets"
+    );
+  }
+
+  {
+    const readinessContext = vm.createContext({ String });
+    vm.runInContext(`
+      ${functionSource(preferredModel, "preferredModelContentRuntimeReady")}
+      globalThis.ready = preferredModelContentRuntimeReady;
+    `, readinessContext);
+    const iframe = {
+      dataset: {
+        contentRuntimeCapabilitiesDocumentId: "document-current",
+        contentRuntimeCapabilities: "send,preferred-model"
+      }
+    };
+    assert.equal(readinessContext.ready(iframe, { documentId: "document-current" }), true);
+    assert.equal(readinessContext.ready(iframe, { documentId: "document-old" }), false);
+    iframe.dataset.contentRuntimeCapabilities = "send";
+    assert.equal(readinessContext.ready(iframe, { documentId: "document-current" }), false);
+  }
+
+  {
+    const [{ FrameRuntimePort }, { CONTENT_RUNTIME_IDENTITY }] = await Promise.all([
+      import("../shared/frame-rpc.js"),
+      import("../shared/content-runtime-identity.js")
+    ]);
+    let ensureCalls = 0;
+    const iframe = {
+      isConnected: true,
+      dataset: {
+        preferredModelDocumentId: "document-current",
+        preferredModelContentRuntimeImplementation: CONTENT_RUNTIME_IDENTITY.implementationVersion,
+        contentRuntimeCapabilitiesDocumentId: "document-current",
+        contentRuntimeCapabilities: "preferred-model"
+      }
+    };
+    const port = new FrameRuntimePort({
+      ensureRuntime: () => {
+        ensureCalls += 1;
+        return new Promise(() => {});
+      },
+      currentTabId: async () => 7,
+      requestBackground: async () => ({ success: true, data: { ok: true } })
+    });
+    assert.deepEqual(
+      await port.request(
+        iframe,
+        "applyPreferredModel",
+        { appId: "NotionAI", modelId: "fable5", runId: "run-current" },
+        { expectedDocumentId: "document-current", skipEnsure: true, timeoutMs: 50 }
+      ),
+      { ok: true }
+    );
+    assert.equal(ensureCalls, 0, "a ledger-verified preferred-model command must not re-enter a hanging ensure queue");
+    iframe.dataset.contentRuntimeCapabilities = "";
+    await assert.rejects(
+      port.request(
+        iframe,
+        "applyPreferredModel",
+        { appId: "NotionAI", modelId: "fable5", runId: "run-current" },
+        { expectedDocumentId: "document-current", skipEnsure: true, timeoutMs: 50 }
+      ),
+      (error) => error?.code === "INJECTION_FAILED" && error?.delivered === false
+    );
+    assert.equal(ensureCalls, 0, "missing readiness must fail closed without joining the unresolved ensure queue");
+  }
+
+  {
     const previousGlobals = Object.fromEntries(["browser", "chrome", "document", "window"].map((key) => [
       key,
       { owned: Object.hasOwn(globalThis, key), value: globalThis[key] }
@@ -852,6 +939,7 @@ async function createPreservedRuntimeReloadFixture() {
     const result = await fixture.apply(fixture.iframe, fixture.record);
     assert.equal(result.ok, true);
     assert.deepEqual(fixture.calls, { verify: 1, prepare: 0, send: 1, cancel: 0 });
+    assert.equal(fixture.lastSendOptions.skipEnsure, true);
   }
 
   {
@@ -860,6 +948,11 @@ async function createPreservedRuntimeReloadFixture() {
     assert.equal(result.ok, true);
     assert.equal(fixture.record.bridgeRecoveryAttempts, 1);
     assert.deepEqual(fixture.calls, { verify: 2, prepare: 1, send: 1, cancel: 0 });
+    assert.deepEqual(
+      Array.from(fixture.preparationOptions.features || []),
+      ["preferred-model"]
+    );
+    assert.deepEqual(Object.keys(fixture.preparationOptions), ["features"]);
   }
 
   {
@@ -896,6 +989,55 @@ async function createPreservedRuntimeReloadFixture() {
     assert.equal(result.retryable, true);
     assert.match(result.reason, /injection failed/);
     assert.equal(fixture.calls.send, 0);
+  }
+
+  {
+    const fixture = createApplyFixture({
+      registrations: [null, { bridgeVersion: "core-only", documentId: "partial-document" }],
+      prepared: { ok: false, reason: "preferred-model capability injection failed" }
+    });
+    const result = await fixture.apply(fixture.iframe, fixture.record);
+    assert.equal(result.retryable, true);
+    assert.match(result.reason, /capability injection failed/);
+    assert.deepEqual(
+      fixture.calls,
+      { verify: 1, prepare: 1, send: 0, cancel: 0 },
+      "an explicit preparation failure must not promote a core-only registration into a mutating command"
+    );
+  }
+
+  {
+    const error = Object.assign(new Error("preferred-model capability is not registered"), {
+      code: "INJECTION_FAILED",
+      delivered: false
+    });
+    const fixture = createApplyFixture({
+      registrations: [{ bridgeVersion: "current", documentId: "current-document" }],
+      sendError: error
+    });
+    const result = await fixture.apply(fixture.iframe, fixture.record);
+    assert.equal(result.retryable, true, "an explicit pre-delivery injection failure must remain safely retryable");
+    assert.equal(result.cancelled, false);
+    assert.equal(fixture.calls.send, 1);
+  }
+
+  {
+    const fixture = createApplyFixture({
+      registrations: [null, { bridgeVersion: "current", documentId: "boundary-document" }],
+      prepared: {
+        ok: false,
+        timedOut: true,
+        reason: "iframe content bridge recovery timed out"
+      }
+    });
+    const result = await fixture.apply(fixture.iframe, fixture.record);
+    assert.equal(result.retryable, true);
+    assert.match(result.reason, /content bridge recovery timed out/i);
+    assert.deepEqual(
+      fixture.calls,
+      { verify: 1, prepare: 1, send: 0, cancel: 0 },
+      "a preparation deadline must remain a zero-interaction retry even when core registration appears"
+    );
   }
 
   {
@@ -1055,6 +1197,29 @@ async function createPreservedRuntimeReloadFixture() {
   }
 
   {
+    let releaseStaleInstall;
+    const installBarrier = new Promise((resolve) => { releaseStaleInstall = resolve; });
+    const fixture = createSummaryPrepareFixture({
+      dataset: { contentRuntimeCapabilitiesEpoch: "20" },
+      installBarrier
+    });
+    const pending = fixture.prepare(fixture.iframe, { summary: true });
+    await new Promise((resolve) => { setImmediate(resolve); });
+    assert.equal(fixture.calls.install, 1, "the stale-document fixture must reach the injection boundary");
+    fixture.iframe.dataset.contentRuntimeCapabilitiesEpoch = "21";
+    releaseStaleInstall();
+    const result = await pending;
+    assert.equal(result.cancelled, true, "a preparation superseded during injection must cancel");
+    assert.equal(fixture.bindingRequests, undefined, "a stale injection result must not issue a binding challenge");
+    assert.equal(
+      fixture.iframe.dataset.injectedBrowserDocumentId,
+      undefined,
+      "a stale injection result must not overwrite the refreshed browser-document identity"
+    );
+    assert.deepEqual(fixture.calls, { verify: 1, wait: 0, install: 1, probe: 0, remember: 0 });
+  }
+
+  {
     const fixture = createSummaryPrepareFixture();
     const result = await fixture.prepare(fixture.iframe, { summary: true });
     assert.equal(result.ok, true);
@@ -1090,24 +1255,34 @@ async function createPreservedRuntimeReloadFixture() {
     const starts = [];
     const releases = [];
     const queueContext = vm.createContext({
+      Boolean,
       Map,
       Promise,
       Set,
       String,
       WeakMap,
-      capabilityPreparationRuns: new WeakMap(),
-      capabilityPreparationTails: new WeakMap(),
+      capabilityPreparationQueues: new WeakMap(),
       installRuntimeEventBridge: () => true,
-      prepareContentFrameRuntimeUncached: (iframe, options) => new Promise((resolve) => {
-        starts.push({ iframe, signature: [...(options.features || [])].sort().join(",") });
+      prepareContentFrameRuntimeUncached: (iframe, options, generation) => new Promise((resolve) => {
+        starts.push({
+          iframe,
+          generation,
+          signature: [...(options.features || [])].sort().join(",")
+        });
         releases.push(resolve);
       })
     });
     vm.runInContext(`
+      ${functionSource(frameBridge, "framePreparationGeneration")}
+      ${functionSource(frameBridge, "framePreparationIsCurrent")}
+      ${functionSource(frameBridge, "cancelledFramePreparation")}
       ${functionSource(frameBridge, "prepareContentFrameRuntime")}
       globalThis.prepareQueued = prepareContentFrameRuntime;
     `, queueContext);
-    const sameFrame = {};
+    const sameFrame = {
+      isConnected: true,
+      dataset: { contentRuntimeCapabilitiesEpoch: "1" }
+    };
     const first = queueContext.prepareQueued(sameFrame, { features: ["delete"] });
     const duplicate = queueContext.prepareQueued(sameFrame, { features: ["delete"] });
     const second = queueContext.prepareQueued(sameFrame, { features: ["message-navigator"] });
@@ -1126,7 +1301,48 @@ async function createPreservedRuntimeReloadFixture() {
     await second;
 
     starts.length = 0;
-    const threeFrames = [{ id: 1 }, { id: 2 }, { id: 3 }];
+    const refreshedFrame = {
+      isConnected: true,
+      dataset: { contentRuntimeCapabilitiesEpoch: "10" }
+    };
+    const staleDocumentRun = queueContext.prepareQueued(refreshedFrame, { features: ["delete"] });
+    await new Promise((resolve) => { setImmediate(resolve); });
+    assert.equal(starts.length, 1);
+    refreshedFrame.dataset.contentRuntimeCapabilitiesEpoch = "11";
+    const currentDocumentRun = queueContext.prepareQueued(refreshedFrame, { features: ["delete"] });
+    assert.notEqual(
+      staleDocumentRun,
+      currentDocumentRun,
+      "a refreshed iframe document must not reuse the prior document's capability run"
+    );
+    await new Promise((resolve) => { setImmediate(resolve); });
+    assert.deepEqual(
+      starts.map((entry) => entry.generation),
+      ["10", "11"],
+      "the refreshed document must bypass the stale app-level tail"
+    );
+    const [releaseStaleDocument, releaseCurrentDocument] = releases.splice(0, 2);
+    releaseStaleDocument({ ok: true, documentId: "stale-document" });
+    const staleResult = await staleDocumentRun;
+    assert.equal(staleResult.cancelled, true, "a late stale-document result must be owner-scoped and inert");
+    const duplicateCurrentDocumentRun = queueContext.prepareQueued(
+      refreshedFrame,
+      { features: ["delete"] }
+    );
+    assert.equal(
+      duplicateCurrentDocumentRun,
+      currentDocumentRun,
+      "stale cleanup must not discard the current document's cached run"
+    );
+    releaseCurrentDocument({ ok: true, documentId: "current-document" });
+    assert.equal((await currentDocumentRun).ok, true);
+
+    starts.length = 0;
+    const threeFrames = [1, 2, 3].map((id) => ({
+      id,
+      isConnected: true,
+      dataset: { contentRuntimeCapabilitiesEpoch: "1" }
+    }));
     const threeRuns = threeFrames.map((frame) => queueContext.prepareQueued(frame, { features: ["delete"] }));
     await new Promise((resolve) => { setImmediate(resolve); });
     assert.equal(starts.length, 3, "three independent iframes must remain concurrently recoverable");
@@ -1392,8 +1608,87 @@ async function createPreservedRuntimeReloadFixture() {
   assert.match(repairSource, /CONTENT_FRAME_REPAIR_RETRY_DELAYS\[retryIndex\]/);
   assert.match(repairSource, /repairGenerations\.get\(iframe\) !== repairGeneration/);
   assert.match(repairSource, /scheduleContentFrameRepair\(iframe, nextDelay, retryIndex \+ 1, repairGeneration\)/);
+  {
+    class TestIframe {}
+    const calls = { invalidations: [], challenge: 0, repair: 0, apply: 0, sync: 0 };
+    let loadHandler = null;
+    const iframe = new TestIframe();
+    iframe.isConnected = true;
+    iframe.dataset = { contentRuntimeCapabilitiesEpoch: "5" };
+    iframe.classList = { contains: (value) => value === "chat-frame" };
+    const context = vm.createContext({
+      HTMLIFrameElement: TestIframe,
+      document: {
+        addEventListener(type, handler, capture) {
+          assert.equal(type, "load");
+          assert.equal(capture, true);
+          loadHandler = handler;
+        }
+      },
+      frameBindingChallenges: {
+        invalidate(target) {
+          assert.equal(target, iframe);
+          calls.challenge += 1;
+        }
+      },
+      calls,
+      iframe
+    });
+    context.preferredModelFrameIsLoading = () => false;
+    context.invalidatePreferredModelFrame = (target, reason, options) => {
+      calls.invalidations.push({ target, reason, options });
+      context.invalidateLedger(target);
+    };
+    context.scheduleContentFrameRepair = (target, delay) => {
+      assert.equal(target, iframe);
+      assert.equal(delay, 120);
+      calls.repair += 1;
+    };
+    context.schedulePreferredModelApply = (target) => {
+      assert.equal(target, iframe);
+      calls.apply += 1;
+    };
+    context.schedulePreferredModelApplyToFrame = () => {
+      throw new Error("navigation start must not schedule a model apply before load");
+    };
+    context.syncPreferredModelInputGate = () => { calls.sync += 1; };
+    vm.runInContext(`
+      ${functionSource(frameBridge, "framePreparationGeneration")}
+      ${functionSource(frameBridge, "invalidateContentRuntimeCapabilityLedger")}
+      ${functionSource(preferredModel, "handlePreferredModelFrameLifecycleChange")}
+      ${functionSource(frameBridge, "installPreferredModelIframeLoadHandler")}
+      globalThis.invalidateLedger = invalidateContentRuntimeCapabilityLedger;
+      globalThis.lifecycle = handlePreferredModelFrameLifecycleChange;
+      installPreferredModelIframeLoadHandler();
+    `, context);
+    context.lifecycle({ type: "loading", loading: true, iframe });
+    assert.equal(iframe.dataset.preferredModelNavigationInvalidated, "1");
+    assert.equal(iframe.dataset.contentRuntimeCapabilitiesEpoch, "6");
+    assert.equal(calls.invalidations.length, 1);
+    assert.equal(calls.invalidations[0].reason, "navigation-start");
+    assert.equal(calls.invalidations[0].options.clearDocumentId, true);
+    assert.deepEqual(Object.keys(calls.invalidations[0].options), ["clearDocumentId"]);
+    loadHandler({ target: iframe });
+    assert.equal(iframe.dataset.preferredModelNavigationInvalidated, undefined);
+    assert.equal(
+      iframe.dataset.contentRuntimeCapabilitiesEpoch,
+      "7",
+      "the iframe load must supersede repairs that began after navigation-start invalidation"
+    );
+    assert.equal(calls.invalidations.length, 1, "the load must not stop the already-invalidated record twice");
+    assert.deepEqual(
+      { challenge: calls.challenge, repair: calls.repair, apply: calls.apply },
+      { challenge: 1, repair: 1, apply: 1 },
+      "the refreshed document must receive exactly one new repair and preferred-model apply schedule"
+    );
+  }
   const iframeLoadSource = functionSource(frameBridge, "installPreferredModelIframeLoadHandler");
   assert.match(iframeLoadSource, /scheduleContentFrameRepair\(iframe, 120\)/);
+  assert.match(
+    iframeLoadSource,
+    /preparationGenerationBeforeLoad[\s\S]*?invalidateContentRuntimeCapabilityLedger\(iframe\)/,
+    "every iframe load must advance the preparation generation even when navigation was already invalidated"
+  );
   assert.ok(
     iframeLoadSource.indexOf("frameBindingChallenges.invalidate(iframe)")
       < iframeLoadSource.indexOf("delete iframe.dataset.injectedBrowserDocumentId"),
@@ -1503,8 +1798,9 @@ async function createPreservedRuntimeReloadFixture() {
     );
   }
   const queuedPrepareSource = functionSource(frameBridge, "prepareContentFrameRuntime");
-  assert.match(queuedPrepareSource, /capabilityPreparationTails\.get\(iframe\)/);
+  assert.match(queuedPrepareSource, /capabilityPreparationQueues\.get\(iframe\)/);
   assert.match(queuedPrepareSource, /previous\.catch\(\(\) => \{\}\)\.then/);
+  assert.match(queuedPrepareSource, /framePreparationGeneration\(iframe\)/);
   const stateSource = functionSource(summaryCapability, "getSummaryRuntimeState", true);
   assert.match(stateSource, /documentId: contentDocumentId/);
   assert.match(stateSource, /bridgeVersion: CONTENT_BRIDGE_VERSION/);

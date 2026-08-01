@@ -114,8 +114,35 @@ const root = path.resolve(__dirname, "..");
   assert.equal(lifecycle.data.documentId, "bridge-document-1");
   assert.equal(lifecycle.data.bridgeVersion, "bridge-current");
 
+  const notionLogicalUrl = "https://app.notion.com/ai?mode=chat";
+  const notionNavigationUrl = `${notionLogicalUrl}&__chatclub_frame_load_nonce=ccn-${"a".repeat(32)}`;
+  await relay.frameLifecycle({
+    ...base,
+    lifecycleAction: "locationChanged",
+    data: { href: notionNavigationUrl, title: "Notion AI" }
+  }, sender);
+  assert.equal(touched.at(-1).value.url, notionLogicalUrl);
+  const notionLifecycle = sent.shift();
+  assert.equal(notionLifecycle.senderContext.url, notionLogicalUrl);
+  assert.equal(notionLifecycle.data.href, notionLogicalUrl);
+
+  for (const href of [
+    "https://app.notion.com/ai?__chatclub_frame_load_nonce=garbage",
+    `https://app.notion.com/ai?__chatclub_frame_load_nonce=ccn-${"b".repeat(32)}&__chatclub_frame_load_nonce=ccn-${"c".repeat(32)}`
+  ]) {
+    await relay.frameLifecycle({
+      ...base,
+      lifecycleAction: "locationChanged",
+      data: { href }
+    }, sender);
+    assert.equal(touched.at(-1).value.url, href);
+    const invalidNonceLifecycle = sent.shift();
+    assert.equal(invalidNonceLifecycle.senderContext.url, href);
+    assert.equal(invalidNonceLifecycle.data.href, href);
+  }
+
   await relay.frameLifecycle({ ...base, lifecycleAction: "contentUnloading", data: {} }, sender);
-  assert.equal(touched.length, 1, "unloading must not rewrite the registered location");
+  assert.equal(touched.length, 4, "unloading must not rewrite the registered location");
   assert.equal(forgotten.length, 1, "authenticated unloading must release its exact registered context");
   assert.equal(forgotten[0].token, "bridge-document-1");
   assert.equal(forgotten[0].value, context);

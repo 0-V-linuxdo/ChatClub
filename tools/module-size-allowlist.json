@@ -1,10 +1,10 @@
 {
   "app/preferred-model/controller.js": {
-    "maxLines": 1364,
+    "maxLines": 1385,
     "target": 1200,
-    "maxBytes": 56002,
+    "maxBytes": 56868,
     "targetBytes": 50000,
-    "reason": "The preferred-model controller keeps one document-bound apply record across an explicitly unavailable primary or typed closed-menu Notion settlement failure and its optional secondary attempt, including fresh run correlation, queued-send readiness, retry safety, failure policy handoff, and per-attempt Gemini and Notion desired state."
+    "reason": "The preferred-model controller keeps one document-bound apply record across an explicitly unavailable primary or typed closed-menu Notion settlement failure and its optional secondary attempt, including fresh run correlation, navigation-generation bridge recovery, delivery-aware retry safety, queued-send readiness, failure policy handoff, and per-attempt Gemini and Notion desired state."
   },
   "background/grok-cookie-runtime.js": {
     "maxLines": 1740,
