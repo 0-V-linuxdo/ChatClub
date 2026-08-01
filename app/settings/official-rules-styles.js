@@ -85,6 +85,77 @@ const OFFICIAL_RULES_SETTINGS_CSS = `
   background: color-mix(in srgb, #dc2626 10%, var(--panel));
 }
 
+.official-rules-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--panel-2) 60%, transparent);
+}
+
+.official-rules-tab {
+  min-width: 0;
+  min-height: 42px;
+  display: grid;
+  gap: 2px;
+  align-content: center;
+  padding: 6px 13px;
+  color: var(--muted);
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+}
+
+.official-rules-tab:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--primary-2) 28%, transparent);
+}
+
+.official-rules-tab:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary) 72%, transparent);
+  outline-offset: -2px;
+}
+
+.official-rules-tab[aria-selected="true"] {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--primary) 52%, var(--line));
+  background: color-mix(in srgb, var(--primary-2) 70%, var(--panel));
+  box-shadow: 0 1px 0 color-mix(in srgb, white 8%, transparent) inset;
+}
+
+.official-rules-tab strong,
+.official-rules-tab span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.official-rules-tab strong {
+  font-size: 13px;
+  line-height: 1.15;
+}
+
+.official-rules-tab span {
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.official-rules-tab-panel {
+  min-width: 0;
+  display: grid;
+  gap: 18px;
+}
+
+.official-rules-tab-panel[hidden] {
+  display: none;
+}
+
 .official-rules-mode {
   display: inline-grid;
   grid-template-columns: repeat(2, minmax(92px, 1fr));
@@ -494,6 +565,20 @@ const OFFICIAL_RULES_SETTINGS_CSS = `
 }
 
 @media (max-width: 820px) {
+  .official-rules-tabs {
+    gap: 3px;
+    padding: 3px;
+  }
+
+  .official-rules-tab {
+    min-height: 40px;
+    padding: 6px 9px;
+  }
+
+  .official-rules-tab-panel {
+    gap: 14px;
+  }
+
   .official-rules-details {
     grid-template-columns: 1fr;
   }

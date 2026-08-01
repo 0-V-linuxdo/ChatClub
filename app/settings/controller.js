@@ -331,13 +331,14 @@ export function createSettingsController(ctx) {
   function officialRulesPane(redraw) {
     const pane = el("div", { class: "settings-pane official-rules-settings-pane" });
     if (officialRulesSettings) {
+      officialRulesSettings.syncLanguage();
       pane.append(officialRulesSettings.card);
       return pane;
     }
     const placeholder = el("section", {
       class: "settings-manage-card official-rules-card",
       "aria-busy": "true"
-    }, el("p", {}, "正在读取官方规则状态…"));
+    }, el("p", {}, t("officialRules.loading")));
     pane.append(placeholder);
     if (!officialRulesSettingsPromise) {
       officialRulesSettingsPromise = import("./official-rules.js")

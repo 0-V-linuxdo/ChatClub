@@ -3,9 +3,9 @@
     "app/main.js": {
       "maxFiles": 89,
       "targetFiles": 74,
-      "maxSourceBytes": 953795,
+      "maxSourceBytes": 965315,
       "targetSourceBytes": 750000,
-      "reason": "The application initial-static closure includes the background-owned StoredOptionsV4 snapshot client with optimistic revision conflicts and sparse official overrides, committed-reset cleanup warning recovery in core state, plus the per-frame send queue, DNR-ready iframe assignment, authenticated frame identity, Grok Cookie preflight, Notion navigation safeguards, model settlement, workspace reconciliation and persistent user settings; signed-rules controls remain behind explicit lazy boundaries while this shared runtime is held to its exact footprint."
+      "reason": "The application initial-static closure includes the background-owned StoredOptionsV4 snapshot client with optimistic revision conflicts and sparse official overrides, bilingual official-rules view and safety copy, committed-reset cleanup warning recovery in core state, plus the per-frame send queue, DNR-ready iframe assignment, authenticated frame identity, Grok Cookie preflight, Notion navigation safeguards, model settlement, workspace reconciliation and persistent user settings; signed-rules controls remain behind explicit lazy boundaries while this shared runtime is held to its exact footprint."
     },
     "background/service-worker.js": {
       "maxFiles": 59,
@@ -43,9 +43,9 @@
       "owner": "app/runtime.js",
       "maxFiles": 25,
       "targetFiles": 18,
-      "maxSourceBytes": 337929,
+      "maxSourceBytes": 337964,
       "targetSourceBytes": 250000,
-      "reason": "Settings remains an explicit runtime-owned lazy controller; its exact incremental closure includes background-owned import/reset coordination with durable committed-reset cleanup warnings, signed official-rules consent and status composition, apply-all and rollback entry points, sparse override clearing, platform and iframe source ordering, model controls, custom Summary/Delete permission notices and the focused topbar input setting."
+      "reason": "Settings remains an explicit runtime-owned lazy controller; its exact incremental closure includes background-owned import/reset coordination with durable committed-reset cleanup warnings, signed official-rules consent and status composition with cached-card language synchronization, apply-all and rollback entry points, sparse override clearing, platform and iframe source ordering, model controls, custom Summary/Delete permission notices and the focused topbar input setting."
     },
     "app/summary/controller.js": {
       "owner": "app/runtime.js",

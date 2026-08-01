@@ -60,6 +60,14 @@ class FakeNode {
     this.toggleAttribute("open", Boolean(value));
   }
 
+  get hidden() {
+    return this.attributes.has("hidden");
+  }
+
+  set hidden(value) {
+    this.toggleAttribute("hidden", Boolean(value));
+  }
+
   get textContent() {
     if (this.tagName === "#TEXT" || this._text) return this._text;
     return this.children.map((child) => child.textContent || "").join("");
@@ -75,6 +83,17 @@ class FakeNode {
       if (node === this.ownerDocument?.documentElement) return true;
     }
     return false;
+  }
+
+  contains(node) {
+    for (let current = node; current; current = current.parentElement) {
+      if (current === this) return true;
+    }
+    return false;
+  }
+
+  focus() {
+    if (this.ownerDocument) this.ownerDocument.activeElement = this;
   }
 
   append(...children) {
@@ -152,6 +171,11 @@ class FakeNode {
     const value = String(selector || "").trim();
     if (value.startsWith(".")) return value.slice(1).split(".").every((name) => this.classList.contains(name));
     if (value.startsWith("#")) return this.id === value.slice(1);
+    const datasetMatch = /^\[data-([a-z0-9-]+)="([^"]*)"\]$/i.exec(value);
+    if (datasetMatch) {
+      const key = datasetMatch[1].replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
+      return String(this.dataset[key] ?? "") === datasetMatch[2];
+    }
     return this.tagName.toLowerCase() === value.toLowerCase();
   }
 
@@ -178,6 +202,7 @@ class FakeDocument {
     this.head = new FakeNode("head", this);
     this.body = new FakeNode("body", this);
     this.documentElement.append(this.head, this.body);
+    this.activeElement = this.body;
   }
 
   createElement(tagName) {
@@ -220,6 +245,18 @@ function findAction(rootNode, action) {
   return findNode(rootNode, (node) => node.tagName === "BUTTON" && node.dataset.officialRulesAction === action);
 }
 
+function findRulesTab(rootNode, tabId) {
+  return findNode(rootNode, (node) => node.tagName === "BUTTON" && node.dataset.officialRulesTab === tabId);
+}
+
+function findRulesPanel(rootNode, panelId) {
+  return findNode(rootNode, (node) => node.dataset?.officialRulesPanel === panelId);
+}
+
+function panelIsHidden(panel) {
+  return panel?.hidden === true || panel?.getAttribute?.("hidden") !== null;
+}
+
 async function settleEvent(event) {
   await Promise.all((event?.results || []).map((result) => Promise.resolve(result)));
   await new Promise((resolve) => { setImmediate(resolve); });
@@ -248,9 +285,12 @@ const previousGlobals = {
 const document = new FakeDocument();
 globalThis.Node = FakeNode;
 globalThis.document = document;
+let i18n = null;
 
 (async () => {
   try {
+    i18n = await import(pathToFileURL(path.join(root, "shared/i18n.js")).href);
+    i18n.setLanguage("zh_CN");
     const module = await import(moduleUrl("app/settings/official-rules.js"));
     const baselineComponentKeys = [
       "summary/chatgpt", "summary/claude", "summary/gemini", "summary/deepseek", "summary/grok",
@@ -324,12 +364,18 @@ globalThis.document = document;
     let snapshot = structuredClone(rawSnapshot);
     let subscriber = null;
     let unsubscribeCount = 0;
+    let snapshotCount = 0;
+    let subscribeCount = 0;
     let resolveApply = null;
     const calls = [];
     const notifications = [];
     const service = {
-      async snapshot() { return structuredClone(snapshot); },
+      async snapshot() {
+        snapshotCount += 1;
+        return structuredClone(snapshot);
+      },
       subscribe(listener) {
+        subscribeCount += 1;
         subscriber = listener;
         return () => { unsubscribeCount += 1; };
       },
@@ -399,8 +445,10 @@ globalThis.document = document;
     document.body.append(updateRequiredController.card);
     await settleAsyncWork();
     assert.match(updateRequiredController.card.textContent, /需要更新插件/);
+    const updateRequiredTabId = findRulesTab(updateRequiredController.card, "updates").id;
     updateRequiredController.destroy();
 
+    i18n.setLanguage("en");
     const controller = module.createOfficialRulesSettingsCard({
       officialRules: service,
       svgIcon: (name) => document.createTextNode(`[${name}]`),
@@ -411,7 +459,10 @@ globalThis.document = document;
     document.body.append(card);
     await settleAsyncWork();
 
-    assert.match(card.textContent, /官方增量规则/);
+    assert.equal(snapshotCount, 1, "creating one rules card should read exactly one initial snapshot");
+    assert.equal(subscribeCount, 1, "creating one rules card should install exactly one status subscription");
+    assert.match(card.textContent, /Official/i, "the rules card should use English when English is active");
+    assert.doesNotMatch(card.textContent, /官方增量规则|更新管理|组件状态/);
     assert.match(card.textContent, /github\.com\/0-V-linuxdo\/ChatClub-rules/);
     assert.match(card.textContent, /ed25519:primary/);
     assert.match(card.textContent, new RegExp("a{64}"));
@@ -420,18 +471,71 @@ globalThis.document = document;
     assert.match(card.textContent, /selectors\.messageRoot/);
     assert.match(card.textContent, /article\.old/);
     assert.match(card.textContent, /article\.new/);
-    assert.match(card.textContent, /Delete Sites 新域名授权/);
-    assert.match(card.textContent, /当前来源：用户覆盖/);
-    assert.match(card.textContent, /当前来源：已回滚/);
-    assert.match(card.textContent, /当前来源：跟随官方/);
-    assert.match(card.textContent, /用户覆盖字段：hosts/);
+    assert.match(card.textContent, /Delete Sites/i);
     assert.doesNotMatch(card.textContent, /\b(?:null|undefined)\b/);
-    assert.match(findAction(card, "apply").textContent, /应用本次全部增量/);
-    assert.ok(findButton(card, "自动检查"));
-    assert.ok(findButton(card, "仅手动检查"));
     assert.equal(document.querySelectorAll("#chatclub-official-rules-settings-style").length, 1);
 
-    const siteList = card.querySelector(".official-rules-site-list");
+    let updatesTab = findRulesTab(card, "updates");
+    let componentsTab = findRulesTab(card, "components");
+    let updatesPanel = findRulesPanel(card, "updates");
+    let componentsPanel = findRulesPanel(card, "components");
+    assert.ok(updatesTab && componentsTab, "the rules card must expose stable update and component tabs");
+    assert.ok(updatesPanel && componentsPanel, "the rules card must expose matching update and component panels");
+    assert.equal(updatesTab.querySelector("strong").textContent, "Update Management");
+    assert.equal(componentsTab.querySelector("strong").textContent, "Component Status");
+    assert.notEqual(updatesTab.id, updateRequiredTabId, "each rules card instance must own unique tab and panel ids");
+    assert.equal(findNode(card, (node) => node.getAttribute?.("role") === "tablist").getAttribute("aria-label"), "Rules views");
+    assert.equal(findNode(card, (node) => node.getAttribute?.("role") === "group").getAttribute("aria-label"), "Official rules update mode");
+    assert.equal(updatesTab.getAttribute("aria-selected"), "true", "update management must be the default inner tab");
+    assert.equal(componentsTab.getAttribute("aria-selected"), "false");
+    assert.equal(panelIsHidden(updatesPanel), false);
+    assert.equal(panelIsHidden(componentsPanel), true);
+    assert.ok(findAction(updatesPanel, "check"), "update actions belong only to the update-management panel");
+    assert.match(
+      updatesPanel.textContent,
+      new RegExp(new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(new Date(rawSnapshot.lastCheckedAt)).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+      "forced English must use an English date locale"
+    );
+    assert.equal(findAction(componentsPanel, "check"), null);
+    assert.equal(updatesPanel.querySelector(".official-rules-site-list"), null);
+    assert.equal(
+      componentsPanel.querySelector(".official-rules-site-list"),
+      null,
+      "an inactive component-status panel must not keep its long site list mounted"
+    );
+    assert.deepEqual(
+      updatesPanel.querySelectorAll(".official-rules-candidate-site").map((node) => node.dataset.officialRulesCandidateSite),
+      ["chatgpt", "deepseek"],
+      "candidate components must remain isolated in update management"
+    );
+
+    updatesTab.focus();
+    await settleEvent(updatesTab.dispatch("keydown", { key: "ArrowRight" }));
+    updatesTab = findRulesTab(card, "updates");
+    componentsTab = findRulesTab(card, "components");
+    updatesPanel = findRulesPanel(card, "updates");
+    componentsPanel = findRulesPanel(card, "components");
+    assert.equal(updatesTab.getAttribute("aria-selected"), "false");
+    assert.equal(componentsTab.getAttribute("aria-selected"), "true");
+    assert.equal(panelIsHidden(updatesPanel), true);
+    assert.equal(panelIsHidden(componentsPanel), false);
+    assert.equal(document.activeElement.dataset.officialRulesTab, "components", "arrow navigation must move focus with selection");
+    assert.equal(findAction(updatesPanel, "check"), null, "inactive update management must not keep its controls mounted");
+    assert.ok(componentsPanel.querySelector(".official-rules-site-list"), "component groups belong only to the component-status panel");
+    assert.match(card.textContent, /User override/i);
+    assert.match(card.textContent, /Rolled back/i);
+    assert.match(card.textContent, /Following official/i);
+    assert.match(card.textContent, /User-overridden fields[^\n]*hosts/i);
+
+    snapshot.phase = "recovery-required";
+    subscriber(structuredClone(snapshot));
+    assert.equal(findAction(card, "clear-override:summary/chatgpt").disabled, true);
+    assert.equal(findAction(card, "rollback:summary/chatgpt").disabled, true);
+    assert.equal(findAction(card, "restore:delete/deepseek").disabled, true);
+    snapshot.phase = "candidate";
+    subscriber(structuredClone(snapshot));
+
+    const siteList = componentsPanel.querySelector(".official-rules-site-list");
     const siteGroups = siteList.children;
     assert.equal(siteGroups.length, 13, "29 components must collapse into 13 canonical site groups");
     const renderedComponentKeys = card.querySelectorAll(".official-rules-component")
@@ -452,7 +556,7 @@ globalThis.document = document;
       chatgptGroup.querySelectorAll(".official-rules-component").map((node) => node.dataset.officialRulesComponent),
       ["summary/chatgpt", "messageNavigator/chatgpt", "delete/chatgpt"]
     );
-    const grokMirrorGroup = findNode(card, (node) => node.dataset?.officialRulesSite === "grokMirror");
+    let grokMirrorGroup = findNode(card, (node) => node.dataset?.officialRulesSite === "grokMirror");
     assert.deepEqual(
       grokMirrorGroup.querySelectorAll(".official-rules-component").map((node) => node.dataset.officialRulesComponent),
       ["summary/grok-dairoot", "messageNavigator/grokMirror", "delete/grokMirror"],
@@ -460,12 +564,7 @@ globalThis.document = document;
     );
     assert.equal(grokMirrorGroup.open, false, "unchanged sites should start collapsed");
     assert.equal(chatgptGroup.open, true, "sites requiring attention should start expanded");
-    assert.deepEqual(
-      card.querySelectorAll(".official-rules-candidate-site").map((node) => node.dataset.officialRulesCandidateSite),
-      ["chatgpt", "deepseek"],
-      "candidate components must use the same site grouping"
-    );
-
+    grokMirrorGroup = findNode(card, (node) => node.dataset?.officialRulesSite === "grokMirror");
     grokMirrorGroup.open = true;
     grokMirrorGroup.dispatch("toggle", { currentTarget: grokMirrorGroup });
     subscriber(structuredClone(snapshot));
@@ -474,6 +573,65 @@ globalThis.document = document;
       true,
       "site disclosure state must survive service-driven rerenders"
     );
+    assert.equal(
+      findRulesTab(card, "components").getAttribute("aria-selected"),
+      "true",
+      "the selected inner tab must survive service-driven rerenders"
+    );
+    assert.equal(document.activeElement.dataset.officialRulesTab, "components", "service rerenders must preserve focused tab identity");
+
+    const snapshotCountBeforeLanguageSync = snapshotCount;
+    const subscribeCountBeforeLanguageSync = subscribeCount;
+    i18n.setLanguage("zh_CN");
+    await Promise.resolve(controller.syncLanguage());
+    assert.equal(controller.card, card, "language synchronization must update the existing card");
+    assert.equal(snapshotCount, snapshotCountBeforeLanguageSync, "language synchronization must not reread the rules snapshot");
+    assert.equal(subscribeCount, subscribeCountBeforeLanguageSync, "language synchronization must not install another subscription");
+    assert.match(card.textContent, /官方增量规则/);
+    assert.equal(findRulesTab(card, "updates").querySelector("strong").textContent, "更新管理");
+    assert.equal(findRulesTab(card, "components").querySelector("strong").textContent, "组件状态");
+    assert.equal(findRulesTab(card, "components").getAttribute("aria-selected"), "true");
+    assert.equal(document.activeElement.dataset.officialRulesTab, "components", "language synchronization must preserve tab focus");
+    assert.equal(
+      findNode(card, (node) => node.dataset?.officialRulesSite === "grokMirror").open,
+      true,
+      "language synchronization must preserve disclosure state"
+    );
+
+    await settleEvent(findAction(card, "clear-override:summary/chatgpt").click());
+    assert.deepEqual(calls.shift(), ["clearOverride", "summary/chatgpt"]);
+    assert.equal(findAction(card, "clear-override:summary/chatgpt").disabled, true);
+
+    findAction(card, "rollback:summary/chatgpt").click();
+    let dialog = activeConfirmation(document);
+    await settleEvent(findButton(dialog, "确认回退").click());
+    assert.deepEqual(calls.shift(), ["rollbackComponent", "summary/chatgpt"]);
+
+    findAction(card, "restore:delete/deepseek").click();
+    dialog = activeConfirmation(document);
+    await settleEvent(findButton(dialog, "确认恢复").click());
+    assert.deepEqual(calls.shift(), ["restoreComponent", "delete/deepseek"]);
+
+    await settleEvent(findRulesTab(card, "updates").click());
+    assert.equal(findRulesTab(card, "updates").getAttribute("aria-selected"), "true");
+    assert.equal(panelIsHidden(findRulesPanel(card, "updates")), false);
+    assert.equal(panelIsHidden(findRulesPanel(card, "components")), true);
+    assert.match(
+      findRulesPanel(card, "updates").textContent,
+      new RegExp(new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(rawSnapshot.lastCheckedAt)).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+      "forced Chinese must use a Chinese date locale"
+    );
+    assert.equal(findNode(card, (node) => node.dataset?.officialRulesSite === "grokMirror"), null);
+    await settleEvent(findRulesTab(card, "components").click());
+    assert.equal(
+      findNode(card, (node) => node.dataset?.officialRulesSite === "grokMirror").open,
+      true,
+      "switching away from and back to component status must preserve its disclosure state"
+    );
+    await settleEvent(findRulesTab(card, "updates").click());
+    assert.match(findAction(card, "apply").textContent, /应用本次全部增量/);
+    assert.ok(findButton(card, "自动检查"));
+    assert.ok(findButton(card, "仅手动检查"));
 
     const autoMode = findNode(card, (node) => node.dataset?.officialRulesMode === "auto");
     await settleEvent(autoMode.click());
@@ -482,15 +640,11 @@ globalThis.document = document;
     await settleEvent(findAction(card, "check").click());
     assert.deepEqual(calls.shift(), ["checkNow"]);
 
-    await settleEvent(findAction(card, "clear-override:summary/chatgpt").click());
-    assert.deepEqual(calls.shift(), ["clearOverride", "summary/chatgpt"]);
-    assert.equal(findAction(card, "clear-override:summary/chatgpt").disabled, true);
-
     findAction(card, "apply").click();
-    let dialog = activeConfirmation(document);
+    dialog = activeConfirmation(document);
     assert.ok(dialog, "applying a candidate must open a confirmation modal");
     assert.equal(dialog.dataset.modalType, "confirmation");
-    assert.match(dialog.textContent, /全部 changed components/);
+    assert.match(dialog.textContent, /全部变更组件/);
     assert.match(dialog.textContent, /不能部分选择/);
     const applyConfirmation = findButton(dialog, "确认应用");
     const cancelConfirmation = findButton(dialog, "取消");
@@ -513,16 +667,6 @@ globalThis.document = document;
     await settleEvent(findButton(dialog, "确认回退").click());
     assert.deepEqual(calls.shift(), ["rollbackLast"]);
 
-    findAction(card, "rollback:summary/chatgpt").click();
-    dialog = activeConfirmation(document);
-    await settleEvent(findButton(dialog, "确认回退").click());
-    assert.deepEqual(calls.shift(), ["rollbackComponent", "summary/chatgpt"]);
-
-    findAction(card, "restore:delete/deepseek").click();
-    dialog = activeConfirmation(document);
-    await settleEvent(findButton(dialog, "确认恢复").click());
-    assert.deepEqual(calls.shift(), ["restoreComponent", "delete/deepseek"]);
-
     findAction(card, "alias:delete/deepseek:new.example.test").click();
     dialog = activeConfirmation(document);
     assert.match(dialog.textContent, /new\.example\.test/);
@@ -544,6 +688,7 @@ globalThis.document = document;
     assert.equal(unsubscribeCount, 1);
     assert.equal(card.parentElement, null);
   } finally {
+    i18n?.setLanguage("en");
     globalThis.Node = previousGlobals.Node;
     globalThis.document = previousGlobals.document;
   }

@@ -1,4 +1,5 @@
 import { button, confirmationModal, el, toast } from "../../ui/dom.js";
+import { t } from "../../shared/i18n.js";
 import { installOfficialRulesSettingsStyles } from "./official-rules-styles.js";
 
 const FEATURE_LABELS = Object.freeze({
@@ -46,88 +47,44 @@ const SITE_GROUP_ORDER = Object.freeze([
 
 const FEATURE_ORDER = Object.freeze(["summary", "messageNavigator", "delete"]);
 
-const OFFICIAL_RULES_ZH_CN = Object.freeze({
-  title: "官方增量规则",
-  description: "无需更新插件即可接收经签名验证的官方站点规则；自定义规则不会被覆盖。",
-  auto: "自动检查",
-  manual: "仅手动检查",
-  enableAuto: "启用自动检查",
-  keepBuiltIn: "保持内置规则／仅手动检查",
-  checkNow: "立即检查",
-  applyAll: "应用本次全部增量",
-  rollbackLast: "回退上次更新",
-  rollback: "回退",
-  restore: "恢复",
-  source: "当前来源",
-  followOfficial: "跟随官方",
-  userOverride: "用户覆盖",
-  sourceRolledBack: "已回滚",
-  overrideFields: "用户覆盖字段",
-  clearOverride: "清除覆盖",
-  catalog: "规则目录",
-  version: "规则版本",
-  sequence: "序列号",
-  signingKey: "签名密钥",
-  currentKeyFingerprint: "当前密钥指纹",
-  recoveryKeyFingerprint: "恢复密钥指纹",
-  releaseNotes: "发布说明",
-  fieldDiffs: "字段变化",
-  before: "更新前",
-  after: "更新后",
-  lastChecked: "上次检查",
-  lastApplied: "上次应用",
-  components: "组件状态",
-  componentsDescription: "按站点展开查看 Summary、Message Navigator 与 Delete Sites 规则。",
-  componentUnit: "个功能",
-  candidate: "待应用更新",
-  aliases: "Delete Sites 新域名授权",
-  aliasesDescription: "新域名只有在你逐项授权后才会获得删除能力。未授权域名不会随其他规则一起启用。",
-  approveAlias: "允许此域名",
-  revokeAlias: "撤销授权",
-  approved: "已授权",
-  approvalRequired: "等待授权",
-  activeVersion: "当前",
-  packagedVersion: "插件内置",
-  candidateVersion: "候选",
-  changed: "有更新",
-  noCandidate: "当前没有待应用的官方规则更新。",
-  noComponents: "尚无可显示的组件状态。",
-  noValue: "—",
-  never: "从未",
-  cancel: "取消",
-  confirmApply: "确认应用",
-  confirmRollback: "确认回退",
-  confirmRestore: "确认恢复",
-  applyTitle: "应用官方规则更新",
-  applyBody: "将原子应用本次发布涉及的全部 changed components，不能部分选择；未授权的 Delete Sites 新域名会保持禁用。",
-  rollbackLastTitle: "回退上次官方规则更新",
-  rollbackLastBody: "将恢复到应用上次增量更新之前的规则快照。",
-  rollbackComponentTitle: "回退组件规则",
-  rollbackComponentBody: "将只回退这个组件，其他组件保持当前版本。",
-  restoreComponentTitle: "恢复组件规则",
-  restoreComponentBody: "将恢复这个组件此前回退的官方规则版本。",
-  approveAliasTitle: "授权 Delete Sites 新域名",
-  approveAliasBody: "授权后，Delete Sites 可在此域名执行删除操作。仅在确认它属于所示官方站点时继续。",
-  revokeAliasTitle: "撤销 Delete Sites 域名授权",
-  revokeAliasBody: "撤销后，此域名不会再获得官方 Delete Sites 删除能力。",
-  checked: "已完成规则检查",
-  modeSaved: "更新方式已保存",
-  applied: "官方规则已应用",
-  rolledBack: "已回退官方规则",
-  componentRolledBack: "组件规则已回退",
-  componentRestored: "组件规则已恢复",
-  aliasApproved: "新域名已授权",
-  aliasRevoked: "新域名授权已撤销",
-  overrideCleared: "用户覆盖已清除",
-  statusIdle: "等待检查",
-  statusChecking: "正在检查",
-  statusApplying: "正在应用",
-  statusAvailable: "发现更新",
-  statusReady: "已是最新",
-  statusExtensionUpdateRequired: "需要更新插件",
-  statusRecoveryRequired: "需要恢复配置",
-  statusError: "更新异常"
+const OFFICIAL_RULES_COPY_FIELDS = Object.freeze([
+  "title", "description", "tabsLabel", "tabUpdates", "tabUpdatesDescription", "tabComponents",
+  "tabComponentsDescription", "modeLabel", "auto", "manual", "enableAuto", "keepBuiltIn", "checkNow",
+  "applyAll", "rollbackLast", "rollback", "restore", "source", "followOfficial", "userOverride",
+  "sourceRolledBack", "overrideFields", "clearOverride", "catalog", "version", "sequence", "signingKey",
+  "currentKeyFingerprint", "recoveryKeyFingerprint", "releaseNotes", "fieldDiffs", "before", "after",
+  "lastChecked", "lastApplied", "components", "componentsDescription", "componentUnit", "componentUnitOne",
+  "candidate", "aliases", "aliasesDescription", "approveAlias", "revokeAlias", "approved", "approvalRequired",
+  "activeVersion", "packagedVersion", "candidateVersion", "changed", "noCandidate", "noComponents", "noValue",
+  "never", "cancel", "close", "confirmApply", "confirmRollback", "confirmRestore", "applyTitle", "applyBody",
+  "rollbackLastTitle", "rollbackLastBody", "rollbackComponentTitle", "rollbackComponentBody",
+  "restoreComponentTitle", "restoreComponentBody", "approveAliasTitle", "approveAliasBody", "revokeAliasTitle",
+  "revokeAliasBody", "checked", "modeSaved", "applied", "rolledBack", "componentRolledBack",
+  "componentRestored", "aliasApproved", "aliasRevoked", "overrideCleared", "statusIdle", "statusChecking",
+  "statusApplying", "statusAvailable", "statusReady", "statusExtensionUpdateRequired", "statusRecoveryRequired",
+  "statusError", "dateLocale", "labelSeparator"
+]);
+
+const FEATURE_I18N_KEYS = Object.freeze({
+  summary: "officialRules.featureSummary",
+  messageNavigator: "officialRules.featureMessageNavigator",
+  delete: "officialRules.featureDelete"
 });
+
+const OFFICIAL_RULES_TAB_ORDER = Object.freeze(["updates", "components"]);
+let officialRulesSettingsInstanceSequence = 0;
+
+function officialRulesCopy(overrides) {
+  return Object.freeze({
+    ...Object.fromEntries(OFFICIAL_RULES_COPY_FIELDS.map((field) => [field, t(`officialRules.${field}`)])),
+    ...record(overrides)
+  });
+}
+
+function officialRulesFeatureLabel(feature) {
+  const key = FEATURE_I18N_KEYS[feature];
+  return key ? t(key) : FEATURE_LABELS[feature] || clean(feature);
+}
 
 function record(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -161,7 +118,7 @@ function officialRulesComponentIdentity(componentKey) {
   const siteGroupId = SITE_GROUP_ALIASES[siteId] || siteId;
   return {
     feature,
-    featureLabel: FEATURE_LABELS[feature] || feature,
+    featureLabel: officialRulesFeatureLabel(feature),
     siteId,
     siteGroupId,
     siteLabel: SITE_LABELS[siteGroupId] || SITE_LABELS[siteId] || siteId
@@ -211,9 +168,9 @@ function groupOfficialRulesComponentsBySite(components) {
 
 function officialRulesComponentLabel(componentKey, providedLabel = "") {
   const identity = officialRulesComponentIdentity(componentKey);
-  if (!identity) return clean(providedLabel) || normalizeComponentKey(componentKey) || OFFICIAL_RULES_ZH_CN.noValue;
+  if (!identity) return clean(providedLabel) || normalizeComponentKey(componentKey) || t("officialRules.noValue");
   const siteLabel = clean(providedLabel) || identity.siteLabel;
-  return `${identity.featureLabel} · ${siteLabel}`;
+  return `${officialRulesFeatureLabel(identity.feature)} · ${siteLabel}`;
 }
 
 function normalizeChangedComponent(value) {
@@ -389,12 +346,12 @@ function approvedOfficialDeleteAliases(value) {
     .map((item) => ({ componentKey: item.componentKey, host: item.host }));
 }
 
-function formatOfficialRulesTime(value, fallback = OFFICIAL_RULES_ZH_CN.never) {
+function formatOfficialRulesTime(value, fallback, locale) {
   if (value === null || value === undefined || value === "") return fallback;
   const timestamp = typeof value === "number" ? value : Date.parse(String(value));
   if (!Number.isFinite(timestamp)) return fallback;
   try {
-    return new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(timestamp));
+    return new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(new Date(timestamp));
   } catch {
     return new Date(timestamp).toLocaleString();
   }
@@ -435,8 +392,11 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
   if (typeof dependencies.svgIcon !== "function") throw new TypeError("Official rules settings requires svgIcon().");
   const svgIcon = dependencies.svgIcon;
   const notify = typeof dependencies.notify === "function" ? dependencies.notify : toast;
-  const copy = Object.freeze({ ...OFFICIAL_RULES_ZH_CN, ...record(dependencies.copy) });
+  const copyOverrides = record(dependencies.copy);
+  let copy = officialRulesCopy(copyOverrides);
   installOfficialRulesSettingsStyles();
+
+  const instanceId = ++officialRulesSettingsInstanceSequence;
 
   const host = el("section", {
     class: "settings-manage-card official-rules-card",
@@ -447,6 +407,7 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
   let destroyed = false;
   let refreshGeneration = 0;
   let unsubscribe = () => {};
+  let activeRulesTab = "updates";
   const siteDisclosureState = new Map();
 
   function icon(name) {
@@ -470,8 +431,21 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
     );
   }
 
+  function labeled(label, value) {
+    const spacing = copy.dateLocale === "zh-CN" ? "" : " ";
+    return `${label}${copy.labelSeparator}${spacing}${value}`;
+  }
+
+  function componentFeatureLabel(component) {
+    return officialRulesFeatureLabel(component?.feature);
+  }
+
+  function componentCountLabel(count) {
+    return `${count} ${count === 1 ? copy.componentUnitOne : copy.componentUnit}`;
+  }
+
   function modeControls() {
-    return el("div", { class: "official-rules-mode", role: "group", "aria-label": "官方规则更新方式" },
+    return el("div", { class: "official-rules-mode", role: "group", "aria-label": copy.modeLabel },
       [
         ["auto", current.consentDecided ? copy.auto : copy.enableAuto],
         ["manual", current.consentDecided ? copy.manual : copy.keepBuiltIn]
@@ -485,6 +459,58 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
     );
   }
 
+  function rulesTabId(tab) {
+    return `official-rules-${instanceId}-tab-${tab}`;
+  }
+
+  function rulesPanelId(tab) {
+    return `official-rules-${instanceId}-panel-${tab}`;
+  }
+
+  function selectRulesTab(tab, focus = false) {
+    if (!OFFICIAL_RULES_TAB_ORDER.includes(tab)) return;
+    if (tab !== activeRulesTab) {
+      activeRulesTab = tab;
+      render();
+    }
+    if (focus) host.querySelector(`[data-official-rules-tab="${tab}"]`)?.focus?.();
+  }
+
+  function rulesTabKeydown(event, tab) {
+    const currentIndex = OFFICIAL_RULES_TAB_ORDER.indexOf(tab);
+    let nextIndex = currentIndex;
+    if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + OFFICIAL_RULES_TAB_ORDER.length) % OFFICIAL_RULES_TAB_ORDER.length;
+    else if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % OFFICIAL_RULES_TAB_ORDER.length;
+    else if (event.key === "Home") nextIndex = 0;
+    else if (event.key === "End") nextIndex = OFFICIAL_RULES_TAB_ORDER.length - 1;
+    else return;
+    event.preventDefault();
+    selectRulesTab(OFFICIAL_RULES_TAB_ORDER[nextIndex], true);
+  }
+
+  function rulesTabButton(tab, label, description) {
+    const active = tab === activeRulesTab;
+    return el("button", {
+      id: rulesTabId(tab),
+      class: "official-rules-tab",
+      type: "button",
+      role: "tab",
+      tabindex: active ? "0" : "-1",
+      "aria-selected": String(active),
+      "aria-controls": rulesPanelId(tab),
+      dataset: { officialRulesTab: tab },
+      onclick: () => selectRulesTab(tab, true),
+      onkeydown: (event) => rulesTabKeydown(event, tab)
+    }, el("strong", {}, label), el("span", {}, description));
+  }
+
+  function rulesTabs() {
+    return el("div", { class: "official-rules-tabs", role: "tablist", "aria-label": copy.tabsLabel },
+      rulesTabButton("updates", copy.tabUpdates, copy.tabUpdatesDescription),
+      rulesTabButton("components", copy.tabComponents, copy.tabComponentsDescription)
+    );
+  }
+
   function candidateBlock() {
     if (!current.candidate.available) return el("div", { class: "official-rules-empty" }, copy.noCandidate);
     const changed = current.candidate.changedComponents;
@@ -494,9 +520,9 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
         current.candidate.version ? `${copy.version} ${current.candidate.version}` : "",
         current.candidate.sequence ? `${copy.sequence} ${current.candidate.sequence}` : ""
       ].filter(Boolean).join(" · ") || copy.candidate),
-      current.candidate.keyId ? el("p", { class: "official-rules-section-copy" }, `${copy.signingKey}：${current.candidate.keyId}`) : null,
+      current.candidate.keyId ? el("p", { class: "official-rules-section-copy" }, labeled(copy.signingKey, current.candidate.keyId)) : null,
       current.candidate.releaseNotes
-        ? el("p", { class: "official-rules-release-notes" }, `${copy.releaseNotes}：${current.candidate.releaseNotes}`)
+        ? el("p", { class: "official-rules-release-notes" }, labeled(copy.releaseNotes, current.candidate.releaseNotes))
         : null,
       siteGroups.length
         ? el("div", { class: "official-rules-candidate-sites" }, siteGroups.map(candidateSiteGroup))
@@ -512,17 +538,17 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
     el("div", { class: "official-rules-candidate-site-heading" },
       el("strong", {}, group.siteLabel),
       el("div", { class: "official-rules-chip-list" }, group.components.map((component) => (
-        el("span", { class: "official-rules-chip" }, component.featureLabel)
+        el("span", { class: "official-rules-chip" }, componentFeatureLabel(component))
       )))
     ),
     group.components.some((component) => component.fieldDiffs.length)
       ? el("div", { class: "official-rules-diff-list" }, group.components
         .filter((component) => component.fieldDiffs.length)
         .map((component) => el("section", { class: "official-rules-diff" },
-          el("strong", {}, component.featureLabel),
+          el("strong", {}, componentFeatureLabel(component)),
           el("dl", {}, component.fieldDiffs.map((diff) => el("div", {},
             el("dt", {}, diff.field),
-            el("dd", {}, `${copy.before}：${displayDiffValue(diff.before)} · ${copy.after}：${displayDiffValue(diff.after)}`)
+            el("dd", {}, `${labeled(copy.before, displayDiffValue(diff.before))} · ${labeled(copy.after, displayDiffValue(diff.after))}`)
           )))
         )))
       : null
@@ -567,7 +593,7 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
       ),
       close,
       false,
-      "关闭"
+      copy.close
     );
     dialog.querySelector(".modal")?.classList.add("official-rules-confirmation-modal");
   }
@@ -607,7 +633,7 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
       title: rollback ? copy.rollbackComponentTitle : copy.restoreComponentTitle,
       body: el("div", {},
         el("p", {}, rollback ? copy.rollbackComponentBody : copy.restoreComponentBody),
-        el("code", {}, component.label)
+        el("code", {}, officialRulesComponentLabel(component.componentKey))
       ),
       confirmLabel: rollback ? copy.confirmRollback : copy.confirmRestore,
       variant: rollback ? "danger" : "primary",
@@ -661,12 +687,12 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
       }
     },
     el("div", { class: "official-rules-component-copy" },
-      el("strong", {}, component.featureLabel),
+      el("strong", {}, componentFeatureLabel(component)),
       el("code", { class: "official-rules-component-key" }, component.componentKey),
-      el("small", {}, `${copy.source}：${sourceLabel}`),
+      el("small", {}, labeled(copy.source, sourceLabel)),
       component.overrideFields.length
         ? el("div", { class: "official-rules-override-fields" },
-          el("small", {}, `${copy.overrideFields}：`),
+          el("small", {}, labeled(copy.overrideFields, "")),
           component.overrideFields.map((field) => el("code", { class: "official-rules-chip" }, field))
         )
         : null,
@@ -682,7 +708,7 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
     el("div", { class: "official-rules-row-actions" },
       actionButton(copy.clearOverride, "reset", () => clearComponentOverride(component), {
         action: `clear-override:${component.componentKey}`,
-        disabled: Boolean(busy) || !component.canClearOverride
+        disabled: Boolean(busy) || current.phase === "recovery-required" || !component.canClearOverride
       }),
       actionButton(copy.rollback, "history", () => componentAction(component, "rollback"), {
         action: `rollback:${component.componentKey}`,
@@ -715,6 +741,7 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
     const open = siteDisclosureState.has(group.siteGroupId)
       ? siteDisclosureState.get(group.siteGroupId)
       : defaultOpen;
+    let renderedOpen = open;
     return el("details", {
       class: "official-rules-site",
       dataset: {
@@ -723,16 +750,20 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
       },
       open,
       ontoggle: (event) => {
-        siteDisclosureState.set(group.siteGroupId, event.currentTarget.open === true);
+        if (!event.currentTarget.isConnected) return;
+        const nextOpen = event.currentTarget.open === true;
+        if (nextOpen === renderedOpen) return;
+        renderedOpen = nextOpen;
+        siteDisclosureState.set(group.siteGroupId, nextOpen);
       }
     },
     el("summary", { class: "official-rules-site-summary" },
       el("span", { class: "official-rules-site-name" },
         el("strong", {}, group.siteLabel),
-        el("small", {}, `${group.components.length} ${copy.componentUnit}`)
+        el("small", {}, componentCountLabel(group.components.length))
       ),
       el("span", { class: "official-rules-site-features" }, group.components.map((component) => (
-        el("span", { class: "official-rules-feature" }, component.featureLabel)
+        el("span", { class: "official-rules-feature" }, componentFeatureLabel(component))
       ))),
       el("span", { class: "official-rules-site-states" }, siteGroupStateBadges(group))
     ),
@@ -752,7 +783,7 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
         dataset: { officialRulesAlias: `${alias.componentKey}:${alias.host}` }
       },
       el("div", { class: "official-rules-alias-copy" },
-        el("strong", {}, alias.componentLabel),
+        el("strong", {}, officialRulesComponentLabel(alias.componentKey)),
         el("small", {}, alias.componentKey),
         el("code", {}, alias.host),
         el("span", {
@@ -770,27 +801,9 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
     );
   }
 
-  function render() {
-    if (destroyed) return;
-    const phase = busy === "loading"
-      ? "checking"
-      : current.phase === "recovery-required"
-        ? "recovery-required"
-        : current.error ? "error" : current.phase;
-    host.setAttribute("aria-busy", String(Boolean(busy)));
-    const content = [
-      el("div", { class: "official-rules-heading" },
-        el("div", { class: "official-rules-heading-copy" },
-          icon("reload"),
-          el("div", {}, el("h4", {}, copy.title), el("p", {}, copy.description))
-        ),
-        el("span", {
-          class: "official-rules-status",
-          dataset: { state: phase },
-          role: "status",
-          "aria-live": "polite"
-        }, stateLabel(phase, copy))
-      ),
+  function updatesPanel() {
+    const active = activeRulesTab === "updates";
+    const children = active ? [
       el("div", { class: "official-rules-toolbar" },
         modeControls(),
         el("div", { class: "official-rules-actions" },
@@ -818,14 +831,29 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
         detail(copy.signingKey, current.keyId),
         detail(copy.currentKeyFingerprint, current.currentKeyFingerprint),
         detail(copy.recoveryKeyFingerprint, current.recoveryKeyFingerprint),
-        detail(copy.lastChecked, formatOfficialRulesTime(current.lastCheckedAt, copy.never)),
-        detail(copy.lastApplied, formatOfficialRulesTime(current.lastAppliedAt, copy.never))
+        detail(copy.lastChecked, formatOfficialRulesTime(current.lastCheckedAt, copy.never, copy.dateLocale)),
+        detail(copy.lastApplied, formatOfficialRulesTime(current.lastAppliedAt, copy.never, copy.dateLocale))
       ),
-      current.error ? el("div", { class: "official-rules-error", role: "alert" }, current.error) : null,
       el("div", { class: "official-rules-section" },
         el("div", { class: "official-rules-component-heading" }, el("h5", {}, copy.candidate)),
         candidateBlock()
       ),
+      aliasesSection()
+    ].filter(Boolean) : [];
+    return el("section", {
+      id: rulesPanelId("updates"),
+      class: "official-rules-tab-panel",
+      role: "tabpanel",
+      tabindex: "0",
+      hidden: !active,
+      "aria-labelledby": rulesTabId("updates"),
+      dataset: { officialRulesPanel: "updates" }
+    }, children);
+  }
+
+  function componentsPanel() {
+    const active = activeRulesTab === "components";
+    const children = active ? [
       el("div", { class: "official-rules-section" },
         el("div", { class: "official-rules-component-heading" },
           el("div", {},
@@ -836,10 +864,50 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
         current.components.length
           ? el("div", { class: "official-rules-site-list" }, groupOfficialRulesComponentsBySite(current.components).map(siteGroup))
           : el("div", { class: "official-rules-empty" }, copy.noComponents)
+      )
+    ] : [];
+    return el("section", {
+      id: rulesPanelId("components"),
+      class: "official-rules-tab-panel",
+      role: "tabpanel",
+      tabindex: "0",
+      hidden: !active,
+      "aria-labelledby": rulesTabId("components"),
+      dataset: { officialRulesPanel: "components" }
+    }, children);
+  }
+
+  function render() {
+    if (destroyed) return;
+    const focusedTab = host.contains?.(document.activeElement)
+      ? clean(document.activeElement?.dataset?.officialRulesTab)
+      : "";
+    const phase = busy === "loading"
+      ? "checking"
+      : current.phase === "recovery-required"
+        ? "recovery-required"
+        : current.error ? "error" : current.phase;
+    host.setAttribute("aria-busy", String(Boolean(busy)));
+    const content = [
+      el("div", { class: "official-rules-heading" },
+        el("div", { class: "official-rules-heading-copy" },
+          icon("reload"),
+          el("div", {}, el("h4", {}, copy.title), el("p", {}, copy.description))
+        ),
+        el("span", {
+          class: "official-rules-status",
+          dataset: { state: phase },
+          role: "status",
+          "aria-live": "polite"
+        }, stateLabel(phase, copy))
       ),
-      aliasesSection()
+      rulesTabs(),
+      current.error ? el("div", { class: "official-rules-error", role: "alert" }, current.error) : null,
+      updatesPanel(),
+      componentsPanel()
     ];
     host.replaceChildren(...content.filter(Boolean));
+    if (focusedTab) host.querySelector(`[data-official-rules-tab="${focusedTab}"]`)?.focus?.();
   }
 
   async function readSnapshot(generation) {
@@ -888,6 +956,13 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
     }
   }
 
+  function syncLanguage() {
+    if (destroyed) return false;
+    copy = officialRulesCopy(copyOverrides);
+    render();
+    return true;
+  }
+
   try {
     const stop = officialRules.subscribe((value) => {
       if (destroyed) return;
@@ -909,6 +984,7 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
   return Object.freeze({
     card: host,
     refresh,
+    syncLanguage,
     destroy() {
       if (destroyed) return;
       destroyed = true;

@@ -21,11 +21,11 @@
     "reason": "The official-rules runtime is the single background configuration writer and keeps revision-CAS patch/import/reset handling, v3-to-v4 migration, immutable snapshot composition, signed component activation, rollback pins, alias authorization, reset cleanup journaling and startup recovery behind one serialized coordinator so atomic commit, compensation and destructive-operation fail-closed state cannot diverge across modules."
   },
   "shared/i18n.js": {
-    "maxLines": 2013,
+    "maxLines": 2201,
     "target": 1500,
-    "maxBytes": 116666,
+    "maxBytes": 128186,
     "targetBytes": 82000,
-    "reason": "Bilingual translation catalog data is kept co-located for key parity; the signed official-rules consent, check, apply-all, compatibility, rollback, per-component source, committed-reset cleanup warning and full-reset safety copy joins the queued-send, preferred-model, platform-management and accessibility labels under exact line and byte ratchets."
+    "reason": "Bilingual translation catalog data is kept co-located for key parity; the signed official-rules update-management and component-status views, consent, check, apply-all, compatibility, rollback, per-component source, confirmation and accessibility copy join the committed-reset cleanup warning, queued-send, preferred-model and platform-management labels under exact line and byte ratchets."
   },
   "tools/browser-smoke.mjs": {
     "maxLines": 1396,

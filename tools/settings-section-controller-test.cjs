@@ -31,6 +31,7 @@ globalThis.document = { addEventListener() {} };
   const historySource = read("app/settings/history.js");
   const functionalAnomaliesSource = read("app/settings/functional-anomalies.js");
   const stylesSource = read("styles/chatclub.css");
+  const officialRulesPaneSource = functionSource(controllerSource, "officialRulesPane");
 
   const controllerLines = controllerSource.trim().split(/\r?\n/).length;
   assert.ok(controllerLines <= 700, `Settings shell must remain at or below 700 lines; found ${controllerLines}`);
@@ -53,6 +54,16 @@ globalThis.document = { addEventListener() {} };
   assert.match(controllerSource, /rules:\s*\(redraw\)\s*=>\s*officialRulesPane\(redraw\)/);
   assert.match(controllerSource, /about:\s*\(\)\s*=>\s*aboutPane\(\)/);
   assert.doesNotMatch(controllerSource, /aboutPaneWithOfficialRules|pane\.prepend\(officialRulesSettings\.card\)/);
+  assert.match(
+    officialRulesPaneSource,
+    /officialRulesSettings\.syncLanguage\(\)[\s\S]*pane\.append\(officialRulesSettings\.card\)/,
+    "reattaching the cached rules card must synchronize language without recreating it"
+  );
+  assert.doesNotMatch(
+    officialRulesPaneSource,
+    /officialRulesSettings\.refresh\(/,
+    "language synchronization must not reread the official-rules snapshot"
+  );
   assert.doesNotMatch(controllerSource, /\bstate\./);
   assert.doesNotMatch(controllerSource, /function (?:appearancePane|summarySettingsPane|optimizeSettingsPane|openPromptTemplateEditor|openSummaryCollectorEditor|topbarPromptPlaceholderBlock)\b/);
   assert.match(runtimeSource, /const featureState = createFeatureStatePorts\(state\)/);
