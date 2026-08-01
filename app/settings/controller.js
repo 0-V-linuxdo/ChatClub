@@ -51,6 +51,11 @@ export function createSettingsController(ctx) {
   const controllerName = "Settings controller";
   ctx = validateControllerContract(ctx, controllerName, {
     settingsSections: "object",
+    officialRules: "object",
+    importConfigPatch: "function",
+    resetConfig: "function",
+    reloadAfterConfigReset: "function",
+    saveCustomConfig: "function",
     saveOptionsPatch: "function",
     svgIcon: "function",
     syncPromptInputNode: "function",
@@ -72,6 +77,11 @@ export function createSettingsController(ctx) {
     functionalAnomalyLog: "object"
   });
   const settingsSections = requireControllerContext(ctx, controllerName, "settingsSections");
+  const officialRules = requireControllerContext(ctx, controllerName, "officialRules");
+  const importConfigPatch = requireControllerFunction(ctx, controllerName, "importConfigPatch");
+  const resetConfig = requireControllerFunction(ctx, controllerName, "resetConfig");
+  const reloadAfterConfigReset = requireControllerFunction(ctx, controllerName, "reloadAfterConfigReset");
+  const saveCustomConfig = requireControllerFunction(ctx, controllerName, "saveCustomConfig");
   const saveOptionsPatch = requireControllerFunction(ctx, controllerName, "saveOptionsPatch");
   const svgIcon = requireControllerFunction(ctx, controllerName, "svgIcon");
   const syncPromptInputNode = requireControllerFunction(ctx, controllerName, "syncPromptInputNode");
@@ -156,6 +166,7 @@ export function createSettingsController(ctx) {
     state: settingsSections.apps,
     svgIcon,
     notifyConfigReload,
+    saveCustomConfig,
     saveOptionsPatch: sectionOptionsPatch("Apps settings section", SECTION_OPTION_KEYS.apps),
     reconcileAppCatalog,
     syncSummaryPanel,
@@ -300,6 +311,9 @@ export function createSettingsController(ctx) {
     reconcileAppCatalog,
     syncI18nLanguage,
     render,
+    importConfigPatch,
+    resetConfig,
+    reloadAfterConfigReset,
     prepareForConfigImport,
     prepareForConfigExport,
     afterConfigImport,
@@ -311,6 +325,36 @@ export function createSettingsController(ctx) {
     svgIcon
   });
   const aboutPane = createAboutSettingsPane({ openTabUrl, svgIcon });
+  let officialRulesSettings = null;
+  let officialRulesSettingsPromise = null;
+
+  function aboutPaneWithOfficialRules(redraw) {
+    const pane = aboutPane();
+    if (officialRulesSettings) {
+      pane.prepend(officialRulesSettings.card);
+      return pane;
+    }
+    const placeholder = el("section", {
+      class: "settings-manage-card official-rules-card",
+      "aria-busy": "true"
+    }, el("p", {}, "正在读取官方规则状态…"));
+    pane.prepend(placeholder);
+    if (!officialRulesSettingsPromise) {
+      officialRulesSettingsPromise = import("./official-rules.js")
+        .then(({ createOfficialRulesSettingsCard }) => {
+          officialRulesSettings = createOfficialRulesSettingsCard({ officialRules, svgIcon });
+          redraw?.();
+          return officialRulesSettings;
+        })
+        .catch((error) => {
+          officialRulesSettingsPromise = null;
+          placeholder.replaceChildren(el("p", { role: "alert" }, error?.message || String(error)));
+          console.error("[ChatClub] Failed to load official rules settings", error);
+          return null;
+        });
+    }
+    return pane;
+  }
 
   function promptLibraryPane(redraw) {
     return el("div", { class: "settings-pane" },
@@ -334,7 +378,7 @@ export function createSettingsController(ctx) {
     shortcuts: (redraw) => shortcutsPane(redraw),
     io: (redraw) => importExportSettings.importExportPane(redraw),
     functionalAnomalies: () => functionalAnomaliesSection.pane(),
-    about: () => aboutPane()
+    about: (redraw) => aboutPaneWithOfficialRules(redraw)
   });
 
   function settingsPane(active, redraw, goToSection = () => {}) {

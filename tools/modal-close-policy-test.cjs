@@ -356,7 +356,7 @@ function event(type, properties = {}) {
       ["editorModal", 10],
       ["viewerModal", 4],
       ["taskModal", 1],
-      ["confirmationModal", 3]
+      ["confirmationModal", 5]
     ]);
 
     assert.equal(occurrences(allAppSource, /\bmodal\s*\(/g), 0, "app code must not call the raw modal helper");
@@ -371,8 +371,8 @@ function event(type, properties = {}) {
       wrapperNames.reduce((total, wrapperName) => (
         total + occurrences(allAppSource, new RegExp(`\\b${wrapperName}\\s*\\(`, "g"))
       ), 0),
-      18,
-      "all eighteen app modal call sites must use a typed wrapper"
+      20,
+      "all twenty app modal call sites must use a typed wrapper"
     );
 
     for (let index = 0; index < appFiles.length; index += 1) {
@@ -405,9 +405,11 @@ function event(type, properties = {}) {
       ["app/prompt-library/controller.js", "openPromptLibraryDialog", "viewerModal", "Prompt Library manager"],
       ["app/pocket/controller.js", "openPocketPanel", "viewerModal", "Pocket history viewer"],
       ["app/optimize/controller.js", "openOptimizeCompareDialog", "taskModal", "prompt optimization task"],
+      ["app/settings/import-export.js", "openFullResetDialog", "confirmationModal", "full reset confirmation"],
       ["app/settings/import-export.js", "openImportConfirmDialog", "confirmationModal", "import confirmation"],
       ["app/settings/apps.js", "openIframeRiskConfirmation", "confirmationModal", "iframe risk confirmation"],
-      ["app/settings/functional-anomalies.js", "openMutationConfirmation", "confirmationModal", "functional anomaly mutation confirmation"]
+      ["app/settings/functional-anomalies.js", "openMutationConfirmation", "confirmationModal", "functional anomaly mutation confirmation"],
+      ["app/settings/official-rules.js", "openConfirmation", "confirmationModal", "official rules mutation confirmation"]
     ];
 
     for (const [relativeFile, functionName, expectedWrapper, label] of callSites) {
@@ -516,7 +518,7 @@ function event(type, properties = {}) {
       path.join(root, "app/settings/import-export.js"),
       "applyImportedConfig"
     );
-    const committedWriteIndex = applyImportSource.indexOf("await saveImportedConfigPatch");
+    const committedWriteIndex = applyImportSource.indexOf("await importConfigPatch");
     const postCommitTryIndex = applyImportSource.indexOf("try {", committedWriteIndex);
     const committedErrorIndex = applyImportSource.indexOf("throw committedImportError(error)", postCommitTryIndex);
     assert.ok(committedWriteIndex >= 0, "the durable import write must remain discoverable");

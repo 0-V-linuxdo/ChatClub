@@ -343,6 +343,10 @@ globalThis.document = { addEventListener() {} };
     }],
     [appsModule.createAppsSettingsSection, ports.apps, {
       ...sharedDependencies,
+      saveCustomConfig: async (customConfig) => {
+        rootState.customConfig = structuredClone(customConfig);
+        return rootState.customConfig;
+      },
       reconcileAppCatalog: async () => {},
       syncSummaryPanel() {},
       syncWorkspaceDom() {}

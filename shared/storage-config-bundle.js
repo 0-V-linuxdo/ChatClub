@@ -1,4 +1,4 @@
-import { BUILTIN_CHAT_APPS } from "./constants.js";
+import { BUILTIN_CHAT_APPS, DEFAULT_OPTIONS } from "./constants.js";
 import {
   inspectBuiltinChatAppIframeConfigs,
   inspectIframeConfig
@@ -12,6 +12,11 @@ import {
   normalizePromptSendHistory,
   normalizeShortcutConfig
 } from "./storage-schema.js";
+import {
+  OFFICIAL_RULES_COMPONENT_KEYS,
+  OFFICIAL_RULES_FEATURES
+} from "./official-rules-baseline.js";
+import { inspectOfficialRuleOverrides } from "./official-rules-user-config.js";
 
 export const CONFIG_BUNDLE_KEYS = Object.freeze([
   "options",
@@ -23,9 +28,102 @@ export const CONFIG_BUNDLE_KEYS = Object.freeze([
 ]);
 
 const CONFIG_BUNDLE_KEY_SET = new Set(CONFIG_BUNDLE_KEYS);
+const STORED_OPTIONS_SCHEMA_VERSION = 4;
+const STORED_OPTION_KEYS = new Set([
+  ...Object.keys(DEFAULT_OPTIONS),
+  "builtinChatAppOrder",
+  "optionsSchemaVersion",
+  "officialOrders",
+  "officialOverrides"
+]);
+const OFFICIAL_RULES_COMPONENT_KEY_SET = new Set(OFFICIAL_RULES_COMPONENT_KEYS);
+const OFFICIAL_RULES_FEATURE_SET = new Set(OFFICIAL_RULES_FEATURES);
 
 function plainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function jsonClone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function prepareLegacyOptionsForBackground(value) {
+  const source = jsonClone(plainObject(value) ? value : {});
+  const normalized = normalizeOptions(source);
+  for (const field of ["summarySiteConfigs", "messageNavigatorSiteConfigs", "topicDeleteSiteConfigs"]) {
+    if (Array.isArray(source[field])) normalized[field] = source[field];
+  }
+  if (Object.hasOwn(source, "scriptConfigSchemaVersion")) {
+    normalized.scriptConfigSchemaVersion = source.scriptConfigSchemaVersion;
+  }
+  return normalized;
+}
+
+function validCustomOrderToken(value, feature) {
+  const prefix = `custom/${feature}/`;
+  const token = String(value || "");
+  return token.startsWith(prefix)
+    && token.length > prefix.length
+    && token.length <= 512
+    && !/[\u0000-\u001f\u007f]/.test(token);
+}
+
+function sanitizeOfficialOrders(value, dropped) {
+  const result = {};
+  if (!plainObject(value)) {
+    if (value !== undefined) dropped.push("officialOrders");
+    return result;
+  }
+  for (const [feature, order] of Object.entries(value)) {
+    if (!OFFICIAL_RULES_FEATURE_SET.has(feature) || !Array.isArray(order)) {
+      dropped.push(`officialOrders.${feature}`);
+      continue;
+    }
+    const seen = new Set();
+    result[feature] = [];
+    for (const rawToken of order) {
+      const token = typeof rawToken === "string" ? rawToken : "";
+      const valid = (OFFICIAL_RULES_COMPONENT_KEY_SET.has(token) && token.startsWith(`${feature}/`))
+        || validCustomOrderToken(token, feature);
+      if (!valid || seen.has(token)) {
+        dropped.push(`officialOrders.${feature}`);
+        continue;
+      }
+      seen.add(token);
+      result[feature].push(token);
+    }
+  }
+  return result;
+}
+
+function sanitizeOfficialOverrides(value, dropped) {
+  const inspected = inspectOfficialRuleOverrides(value);
+  dropped.push(...inspected.errors);
+  return jsonClone(inspected.value);
+}
+
+function sanitizeStoredOptionsV4(value) {
+  const source = plainObject(value) ? value : {};
+  const droppedFields = [];
+  const result = { optionsSchemaVersion: STORED_OPTIONS_SCHEMA_VERSION };
+  for (const [key, fieldValue] of Object.entries(source)) {
+    if (!STORED_OPTION_KEYS.has(key)) {
+      droppedFields.push(key);
+      continue;
+    }
+    if (key === "optionsSchemaVersion") continue;
+    if (key === "officialOrders") {
+      result.officialOrders = sanitizeOfficialOrders(fieldValue, droppedFields);
+      continue;
+    }
+    if (key === "officialOverrides") {
+      result.officialOverrides = sanitizeOfficialOverrides(fieldValue, droppedFields);
+      continue;
+    }
+    if (fieldValue === undefined) continue;
+    result[key] = jsonClone(fieldValue);
+  }
+  return { value: result, droppedFields };
 }
 
 function hasBundleField(bundle, key) {
@@ -116,7 +214,7 @@ function inspectImportedIframeConfigs(bundle = {}) {
   };
 }
 
-export function normalizeConfigBundleKeys(selectedKeys = CONFIG_BUNDLE_KEYS) {
+function normalizeConfigBundleKeys(selectedKeys = CONFIG_BUNDLE_KEYS) {
   const source = selectedKeys == null ? CONFIG_BUNDLE_KEYS : selectedKeys;
   const keys = Array.isArray(source)
     ? source
@@ -135,7 +233,12 @@ export function exportConfigBundle(state = {}, selectedKeys = CONFIG_BUNDLE_KEYS
     schema: "chatclub.config.v1",
     exportedAt: new Date().toISOString()
   };
-  if (selected.has("options")) bundle.options = dehydrateOptions(plainObject(source.options) ? source.options : {});
+  if (selected.has("options")) {
+    bundle.options = plainObject(source.storedOptions)
+      && source.storedOptions.optionsSchemaVersion === STORED_OPTIONS_SCHEMA_VERSION
+      ? sanitizeStoredOptionsV4(source.storedOptions).value
+      : dehydrateOptions(plainObject(source.options) ? source.options : {});
+  }
   if (selected.has("customConfig")) bundle.customConfig = normalizeCustomConfig(source.customConfig);
   if (selected.has("promptLibrary")) bundle.promptLibrary = normalizePromptLibrary(source.promptLibrary);
   if (selected.has("promptSendHistory")) bundle.promptSendHistory = normalizePromptSendHistory(source.promptSendHistory);
@@ -173,9 +276,15 @@ export function inspectImportedConfig(raw) {
   const pocketHistory = hasBundleArrayField(bundle, "pocketHistory")
     ? normalizeImportArrayFieldResult(bundle.pocketHistory, dedupePocketHistory, validImportedPocketHistoryItem)
     : null;
+  const storedOptionsV4 = hasBundleObjectField(bundle, "options")
+    && bundle.options.optionsSchemaVersion === STORED_OPTIONS_SCHEMA_VERSION
+    ? sanitizeStoredOptionsV4(bundle.options)
+    : null;
   return {
     data: {
-      options: hasBundleNonEmptyObjectField(bundle, "options") ? normalizeOptions(bundle.options) : null,
+      options: hasBundleNonEmptyObjectField(bundle, "options")
+        ? storedOptionsV4?.value || prepareLegacyOptionsForBackground(bundle.options)
+        : null,
       customConfig: customConfig?.value ?? null,
       promptLibrary: promptLibrary?.value ?? null,
       promptSendHistory: promptSendHistory?.value ?? null,
@@ -187,6 +296,9 @@ export function inspectImportedConfig(raw) {
       promptLibrary,
       promptSendHistory,
       pocketHistory,
+      options: storedOptionsV4
+        ? { droppedCount: storedOptionsV4.droppedFields.length, droppedFields: storedOptionsV4.droppedFields }
+        : { droppedCount: 0, droppedFields: [] },
       iframeConfigs
     }
   };

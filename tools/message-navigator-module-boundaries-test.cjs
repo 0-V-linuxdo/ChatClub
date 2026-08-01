@@ -47,10 +47,15 @@ function fixtureElement(role, text, order) {
     Node: globalThis.Node,
     document: globalThis.document,
     getComputedStyle: globalThis.getComputedStyle,
+    location: globalThis.location,
     window: globalThis.window
   };
   const first = fixtureElement("user", "first prompt", 1);
   const second = fixtureElement("assistant", "second answer", 2);
+  const untypedFirst = fixtureElement("", "alpha payload", 3);
+  const untypedSecond = fixtureElement("", "beta payload", 4);
+  const composerFake = fixtureElement("user", "composer draft", 5);
+  composerFake.closest = (selector) => selector.includes(".official-composer") ? composerFake : null;
   const scrollingElement = { scrollTop: 0 };
   globalThis.Node = { DOCUMENT_POSITION_PRECEDING: 2, DOCUMENT_POSITION_FOLLOWING: 4 };
   globalThis.getComputedStyle = () => ({ display: "block", visibility: "visible", overflow: "visible", overflowY: "visible" });
@@ -59,13 +64,18 @@ function fixtureElement(role, text, order) {
     documentElement: null,
     scrollingElement,
     querySelectorAll(selector) {
-      return selector === ".message" ? [first, second, first] : [];
+      if (selector === ".message") return [first, second, first];
+      if (selector === ".message-untyped") return [untypedFirst, untypedSecond];
+      if (selector === ".official-message") return [first, second, composerFake];
+      return [];
     }
   };
   globalThis.window = { innerHeight: 800, scrollY: 0 };
+  globalThis.location = { href: "https://chatgpt.com/new/thread" };
 
   try {
     const adapterModule = await import(moduleUrl("content-src/message-navigator/adapters.js"));
+    const collectionModule = await import(moduleUrl("content-src/message-navigator/collection-kernel.js"));
     const engineModule = await import(moduleUrl("content-src/message-navigator/engine.js"));
     const adapters = adapterModule.createMessageNavigatorAdapters();
 
@@ -90,6 +100,46 @@ function fixtureElement(role, text, order) {
       genericItems.map(({ role, text }) => ({ role, text })),
       [{ role: "user", text: "first prompt" }, { role: "assistant", text: "second answer" }]
     );
+    const strictConfig = {
+      messageSelector: ".message-untyped",
+      summaryMaxChars: 60,
+      strictOfficialRoles: true,
+      officialRuleRevision: 1
+    };
+    assert.deepEqual(adapters.generic.collect(strictConfig), [], "strict official fallback must not default messages to assistant");
+    assert.deepEqual(adapters.chatgpt.collect(strictConfig), [], "strict official fallback must not use ChatGPT parity roles");
+    assert.deepEqual(adapters.kagi.collect(strictConfig), [], "strict official fallback must not use Kagi parity roles");
+    const officialConfig = {
+      officialRuleHints: {
+        conversationRoot: [],
+        message: [".official-message"],
+        userRole: ["[data-message-author-role='user']"],
+        assistantRole: ["[data-message-author-role='assistant']"],
+        content: [],
+        effectTarget: [],
+        exclude: [],
+        composer: [".official-composer"]
+      },
+      summaryMaxChars: 60
+    };
+    first.matches = (selector) => selector.includes("data-message-author-role='user'");
+    second.matches = (selector) => selector.includes("data-message-author-role='assistant'");
+    composerFake.matches = (selector) => selector.includes("data-message-author-role='user'");
+    assert.deepEqual(
+      collectionModule.collectOfficialRuleItems(officialConfig).map(({ role, text }) => ({ role, text })),
+      [{ role: "user", text: "first prompt" }, { role: "assistant", text: "second answer" }],
+      "official collection must exclude composer descendants and require explicit remote roles"
+    );
+    assert.deepEqual(collectionModule.collectOfficialRuleItems({
+      ...officialConfig,
+      officialRuleHints: {
+        ...officialConfig.officialRuleHints,
+        userRole: [".remote-user-missing"],
+        assistantRole: [".remote-assistant-missing"]
+      }
+    }, {
+      role: (element) => element.getAttribute("data-message-author-role")
+    }), [], "packaged adapter roles must never fill missing remote roles inside the official collector");
 
     assert.throws(() => new engineModule.MessageNavigator(), /requires version/);
     assert.throws(
@@ -98,6 +148,72 @@ function fixtureElement(role, text, order) {
     );
     const engine = new engineModule.MessageNavigator({ version: "1", adapters });
     assert.equal(engine.state().version, "1");
+    const unknownRoleEngine = new engineModule.MessageNavigator({
+      version: "1",
+      adapters: {
+        generic: {
+          collect() {
+            return [
+              { element: untypedFirst, target: untypedFirst, role: "", text: "alpha payload" },
+              { element: untypedSecond, target: untypedSecond, text: "beta payload" }
+            ];
+          }
+        }
+      }
+    });
+    unknownRoleEngine.config = {
+      adapter: "generic",
+      officialRuleRevision: 1,
+      officialRuleHosts: ["chatgpt.com"],
+      officialRulePathPrefixes: ["/new"],
+      officialRuleHints: {
+        message: [".official-message"],
+        userRole: [".official-user"],
+        assistantRole: [".official-assistant"],
+        composer: [".official-composer"]
+      },
+      summaryMaxChars: 60
+    };
+    assert.deepEqual(
+      unknownRoleEngine.collect(),
+      [],
+      "official-rule fallback must drop adapter items whose roles remain unknown"
+    );
+    unknownRoleEngine.config.officialRuleHints = {
+      message: [],
+      userRole: [],
+      assistantRole: [],
+      composer: []
+    };
+    assert.deepEqual(
+      unknownRoleEngine.collect(),
+      [],
+      "an in-scope official revision with empty selectors must keep the packaged fallback in strict-role mode"
+    );
+    globalThis.location.href = "https://sibling.chatgpt.com/new/thread";
+    assert.equal(
+      unknownRoleEngine.collect().length,
+      2,
+      "an out-of-scope URL may retain the packaged adapter's legacy role fallback"
+    );
+    globalThis.location.href = "https://chatgpt.com/new/thread";
+
+    const scopedEngine = new engineModule.MessageNavigator({ version: "1", adapters });
+    scopedEngine.config = {
+      adapter: "generic",
+      messageSelector: ".message",
+      officialRuleRevision: 1,
+      officialRuleHosts: ["chatgpt.com"],
+      officialRulePathPrefixes: ["/new"],
+      officialRuleHints: officialConfig.officialRuleHints,
+      summaryMaxChars: 60
+    };
+    globalThis.location.href = "https://sibling.chatgpt.com/new/thread";
+    assert.equal(scopedEngine.collect()[0]?.officialStrict, undefined, "a wildcard sibling must use the packaged Message Navigator adapter only");
+    globalThis.location.href = "https://chatgpt.com/old/thread";
+    assert.equal(scopedEngine.collect()[0]?.officialStrict, undefined, "a packaged-only path must use the packaged Message Navigator adapter only");
+    globalThis.location.href = "https://chatgpt.com/new/thread";
+    assert.equal(scopedEngine.collect()[0]?.officialStrict, true, "the exact signed HTTPS host and path may use official Message Navigator hints");
 
     const entrySource = read("content-src/message-navigator.js");
     const adapterSource = read("content-src/message-navigator/adapters.js");
@@ -106,6 +222,11 @@ function fixtureElement(role, text, order) {
     assert.doesNotMatch(adapterSource, /\bdependencies\s*=\s*\{\}/);
     assert.doesNotMatch(adapterSource, /safeQsa|resolveEffectTarget|grokDomItems/);
     assert.doesNotMatch(engineSource, /grokDomItems|notionDomFallbackItems|kagiDomFallbackItems/);
+    assert.match(
+      engineSource,
+      /officialStrictRoles\s*\?\s*""\s*:\s*"assistant"/,
+      "official-rule fallback must reject unknown roles instead of defaulting them to assistant"
+    );
     assert.match(read("content-src/message-navigator/sites/grok.js"), /function grokDomItems/);
     assert.match(read("content-src/message-navigator/sites/notion.js"), /function notionDomFallbackItems/);
     assert.match(read("content-src/message-navigator/sites/kagi.js"), /function kagiDomFallbackItems/);

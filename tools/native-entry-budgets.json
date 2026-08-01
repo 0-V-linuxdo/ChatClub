@@ -1,28 +1,36 @@
 {
   "entries": {
     "app/main.js": {
-      "maxFiles": 88,
+      "maxFiles": 89,
       "targetFiles": 74,
-      "maxSourceBytes": 935388,
+      "maxSourceBytes": 953386,
       "targetSourceBytes": 750000,
-      "reason": "The application initial-static closure includes the per-frame send queue, DNR-ready iframe assignment and exact-host Grok Mirror Cookie preflight/account-switch proceed contracts, exact-document Grok Cookie ancillary-runtime attestation and repair, nonce-bound Notion Service Worker navigation with logical-URL snapshot and link sanitization, non-blocking Composer preferred and secondary model status including typed closed-menu Notion settlement fallback plus Notion All Sources state with an owner-scoped bounded bridge-preparation gate, authenticated frame identity and navigation recovery, canonical ID-based within/across-group tab dragging with Add Group drops, transactional DOM reparenting and immediate order-aware workspace reconciliation, owner-safe tab removal, persistent iframe-permission source selection, the transient new-topic/restoring frame status UI, bilingual model/source and custom User Scripts permission copy, and the persisted focused-input font-size setting, and is held to its exact footprint while feature controllers remain behind lazy boundaries."
+      "reason": "The application initial-static closure includes the background-owned StoredOptionsV4 snapshot client with optimistic revision conflicts and sparse official overrides, committed-reset cleanup warning recovery in core state, plus the per-frame send queue, DNR-ready iframe assignment, authenticated frame identity, Grok Cookie preflight, Notion navigation safeguards, model settlement, workspace reconciliation and persistent user settings; signed-rules controls remain behind explicit lazy boundaries while this shared runtime is held to its exact footprint."
     },
     "background/service-worker.js": {
-      "maxFiles": 50,
+      "maxFiles": 59,
       "targetFiles": 40,
-      "maxSourceBytes": 559921,
+      "maxSourceBytes": 766319,
       "targetSourceBytes": 360000,
-      "reason": "The Chromium service-worker initial-static closure includes exact-document Frame RPC routing and Grok ancillary-runtime attestation, zero-churn dynamic content registration, compensating Grok Cookie-ledger transactions, strict Grok and Grok Mirror partitioned-Cookie profiles, registered-source gateway-login authorization, the shared tab/target debugger coordinator, an exact nonce-bound one-shot Notion Service Worker navigation preflight, parent-document-bound exact-OOPIF capture, first-party Mirror account recovery gated by a connect-only same-document WebSocket readiness proof including Arc's exact omitted-top-frame fallback, persistent iframe-permission source storage, and preferred/secondary-model plus serialized DNR preparation lifecycles; it is ratcheted separately from the larger Firefox fallback entry."
+      "reason": "The Chromium service-worker initial-static closure owns signed channel verification with pinned recovery keys, strict declarative schema and host policy, content-addressed component storage, anti-rollback watermarks, opt-in one-shot alarms, atomic apply/rollback and committed-reset cleanup journals, generation-aware snapshot coordination and exact content-registration/DNR compensation, alongside its authenticated Frame RPC, Grok Cookie, debugger and Notion navigation safety runtimes; the combined security boundary is held to this exact footprint."
     },
     "background/firefox-background.js": {
-      "maxFiles": 53,
+      "maxFiles": 62,
       "targetFiles": 43,
-      "maxSourceBytes": 1249601,
+      "maxSourceBytes": 1486157,
       "targetSourceBytes": 900000,
-      "reason": "The Firefox document-background entry includes its regenerated send correlation fallback and Grok Mirror send classification, secure frame RPC rebinding with Grok ancillary-runtime attestation, zero-churn dynamic content registration, shared compensating Cookie-ledger/profile transactions, registered-source gateway authorization, and the packaged parent-document-bound account-switch recovery and connect-only readiness implementation while moz-extension continues to use the site-native Storage Access fallback, persistent iframe-permission source storage, the serialized owner-tab DNR lifecycle, the Chromium-guarded Notion Service Worker preflight that remains inert under moz-extension, Notion preferred/secondary model handling with exact owner-trigger, typed closed-menu settlement fallback, and ancestor-aware Portal cleanup, and Grok deletion fallbacks; its exact static cost is tracked separately."
+      "reason": "The Firefox document-background entry packages the same signed official-rules verifier, strict declarative contracts, immutable component repository, anti-rollback state, manual atomic activation, crash and committed-reset cleanup recovery, and compensated content-registration/DNR coordinator as Chromium, together with generated content fallbacks, secure Frame RPC, site-native Storage Access, Notion model handling and fail-closed Delete behavior when trusted input is unavailable; its larger exact static cost is tracked separately."
     }
   },
   "lazyBoundaries": {
+    "app/official-rules/service.js": {
+      "owner": "app/runtime.js",
+      "maxFiles": 1,
+      "targetFiles": 0,
+      "maxSourceBytes": 8851,
+      "targetSourceBytes": 7000,
+      "reason": "The Settings-owned official-rules service remains an explicit lazy boundary for signed catalog status, checks, atomic activation, rollback and user override coordination."
+    },
     "app/pocket/controller.js": {
       "owner": "app/runtime.js",
       "maxFiles": 3,
@@ -33,11 +41,11 @@
     },
     "app/settings/controller.js": {
       "owner": "app/runtime.js",
-      "maxFiles": 22,
+      "maxFiles": 25,
       "targetFiles": 18,
-      "maxSourceBytes": 313396,
+      "maxSourceBytes": 337822,
       "targetSourceBytes": 250000,
-      "reason": "Settings remains an explicit runtime-owned lazy controller; the nested platform-management and iframe-permission source tabs, including source-specific iframe list ordering controls and compact iframe hover help, two model-preference tabs, the opt-in secondary-model selectors, responsive failure policy controls, equal-width model/additional columns, shared Gemini and Notion segmented controls, custom Summary/Delete userscript permission notices, and the focused topbar input font-size control are included in its exact incremental closure ratchet."
+      "reason": "Settings remains an explicit runtime-owned lazy controller; its exact incremental closure includes background-owned import/reset coordination with durable committed-reset cleanup warnings, signed official-rules consent and status composition, apply-all and rollback entry points, sparse override clearing, platform and iframe source ordering, model controls, custom Summary/Delete permission notices and the focused topbar input setting."
     },
     "app/summary/controller.js": {
       "owner": "app/runtime.js",

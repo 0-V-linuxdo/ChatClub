@@ -21,10 +21,10 @@ export function createDeleteSitesCapability(deps = {}) {
     deleteClick,
     closest,
     findDeleteConfirmButton,
+    findDeleteConfirmButtonInfo,
     clickDeleteConfirmIfPresent,
     deleteResult,
     dispatchDeleteKeyboardShortcut,
-    clickDeleteConfirmIfAppears,
     deleteDialogRoots,
     deleteResultWithTrustedConfirm,
     deleteResultWithTrustedDeleteShortcut,
@@ -36,43 +36,194 @@ export function createDeleteSitesCapability(deps = {}) {
     deleteResultWithTrustedMenuClick
   } = deps;
   const { deleteClaudeThread } = createDeleteClaudeCapability(deps);
-  async function deleteKagiThread() {
-    if (findDeleteConfirmButton()) {
-      const confirmedExisting = await clickDeleteConfirmIfPresent(6200);
-      return confirmedExisting
-        ? deleteResult(true, "kagi")
-        : deleteResult(false, "kagi", "delete confirmation did not close");
+  const officialHints = (data = {}) => data?.officialRuleHints && typeof data.officialRuleHints === "object"
+    ? data.officialRuleHints
+    : {};
+  const officialSelectors = (data = {}, slot = "") => (Array.isArray(officialHints(data)?.[slot])
+    ? officialHints(data)[slot]
+    : []).map((selector) => String(selector || "").trim()).filter(Boolean).slice(0, 8);
+
+  const pendingDeleteConfirmationLeases = new Map();
+  const deleteAttemptIdentity = (data = {}) => {
+    const attemptId = String(data?.deleteAttemptId || "").trim();
+    const provider = String(data?.expectedDeleteIdentity?.provider || "").trim().toLowerCase();
+    const id = String(data?.expectedDeleteIdentity?.id || "").trim();
+    return attemptId && attemptId.length <= 256 && provider && id
+      ? { attemptId, provider, id }
+      : null;
+  };
+  const currentDeleteHref = () => {
+    try { return String(location.href || ""); } catch { return ""; }
+  };
+  const deleteAttemptRouteGuard = (data = {}, expectedHref = "") => {
+    const identity = deleteAttemptIdentity(data);
+    const href = String(expectedHref || currentDeleteHref());
+    if (!identity || !href || currentDeleteHref() !== href) return null;
+    return () => {
+      const current = deleteAttemptIdentity(data);
+      return Boolean(
+        current
+        && current.attemptId === identity.attemptId
+        && current.provider === identity.provider
+        && current.id === identity.id
+        && currentDeleteHref() === href
+      );
+    };
+  };
+  const grokDeleteAttemptRouteGuard = (data = {}) => {
+    const identity = deleteAttemptIdentity(data);
+    let routeId = "";
+    try { routeId = new URL(String(location.href || "")).pathname.match(/^\/(?:c|chat)\/([^/?#]+)/i)?.[1] || ""; } catch {}
+    if (!identity || identity.provider !== "grok" || !routeId || identity.id !== routeId) return null;
+    return deleteAttemptRouteGuard(data);
+  };
+  const armDeleteConfirmationLease = (site, data, phase, baseline, metadata = {}) => {
+    const identity = deleteAttemptIdentity(data);
+    const href = currentDeleteHref();
+    if (!identity || !href) return false;
+    pendingDeleteConfirmationLeases.set(site, {
+      ...identity,
+      href,
+      phase,
+      baseline,
+      metadata,
+      expiresAt: Date.now() + 20000
+    });
+    return true;
+  };
+  const consumeDeleteConfirmationLease = (site, data) => {
+    const identity = deleteAttemptIdentity(data);
+    const lease = pendingDeleteConfirmationLeases.get(site) || null;
+    pendingDeleteConfirmationLeases.delete(site);
+    return Boolean(
+      identity
+      && lease
+      && lease.attemptId === identity.attemptId
+      && lease.provider === identity.provider
+      && lease.id === identity.id
+      && lease.href === currentDeleteHref()
+      && Number(lease.expiresAt) >= Date.now()
+    ) ? lease : null;
+  };
+  const deleteConfirmationAlreadyOpen = (hints = {}) => Boolean(
+    findDeleteConfirmButton(hints) || deleteDialogRoots(hints.dialog).length
+  );
+  const sameDeleteConfirmationRoot = (left, right) => Boolean(
+    left
+    && right
+    && (left === right || left.contains?.(right) || right.contains?.(left))
+  );
+  const deleteConfirmationOwnership = (baseline = new Set(), hints = {}, attemptGuard = null) => {
+    if (typeof attemptGuard === "function" && attemptGuard() !== true) return null;
+    const roots = deleteDialogRoots(hints.dialog);
+    const info = findDeleteConfirmButtonInfo(hints);
+    const button = info?.element || null;
+    const root = info?.root || roots
+      .find((candidate) => candidate === button || candidate.contains?.(button)) || null;
+    if (!button || !root || baseline?.has(root)) return null;
+    if ([...(baseline || [])].some((candidate) => sameDeleteConfirmationRoot(candidate, root))) return null;
+    if (!button.isConnected || !root.isConnected || !visible(button) || !visible(root) || !root.contains?.(button)) return null;
+    if (!roots.some((candidate) => candidate === root)) return null;
+    if (roots.some((candidate) => !sameDeleteConfirmationRoot(candidate, root))) return null;
+    return { root, button };
+  };
+  const deleteConfirmationOwnershipIsCurrent = (ownership, hints = {}, attemptGuard = null) => {
+    const root = ownership?.root || null;
+    const button = ownership?.button || null;
+    if (typeof attemptGuard === "function" && attemptGuard() !== true) return false;
+    if (!root || !button || !root.isConnected || !button.isConnected || !visible(root) || !visible(button)) return false;
+    if (!root.contains?.(button)) return false;
+    const roots = deleteDialogRoots(hints.dialog);
+    const info = findDeleteConfirmButtonInfo(hints);
+    const currentRoot = info?.root || roots
+      .find((candidate) => candidate === info?.element || candidate.contains?.(info?.element)) || null;
+    return info?.element === button
+      && currentRoot === root
+      && roots.some((candidate) => candidate === root)
+      && roots.every((candidate) => sameDeleteConfirmationRoot(candidate, root));
+  };
+  const waitForOwnedDeleteConfirmation = (baseline, hints, timeoutMs = 2600, attemptGuard = null) => waitForModel(
+    () => deleteConfirmationOwnership(baseline, hints, attemptGuard),
+    timeoutMs,
+    80
+  );
+  const deleteConfirmationObservation = (baseline, hints, attemptGuard = null) => {
+    const hasConfirmation = deleteConfirmationAlreadyOpen(hints);
+    if (!hasConfirmation) return { state: "none", ownership: null };
+    const ownership = deleteConfirmationOwnership(baseline, hints, attemptGuard);
+    return ownership
+      ? { state: "owned", ownership }
+      : { state: "unowned", ownership: null };
+  };
+  async function observeOptionalDeleteConfirmation(baseline, hints, attemptGuard, timeoutMs = 900) {
+    const deadline = Date.now() + Math.max(0, Number(timeoutMs) || 0);
+    while (Date.now() <= deadline) {
+      const observation = deleteConfirmationObservation(baseline, hints, attemptGuard);
+      if (observation.state !== "none") return observation;
+      await sleep(80);
     }
+    return deleteConfirmationObservation(baseline, hints, attemptGuard);
+  }
+  async function finishOwnedDeleteConfirmation(site, ownership, hints, timeoutMs, attemptGuard = null, allowTrustedFallback = true) {
+    const guard = () => deleteConfirmationOwnershipIsCurrent(ownership, hints, attemptGuard);
+    if (!guard()) return deleteResult(false, site, "delete confirmation ownership is uncertain");
+    const confirmed = await clickDeleteConfirmIfPresent(timeoutMs, guard, hints);
+    if (confirmed) return deleteResult(true, site);
+    if (guard() && allowTrustedFallback) return deleteResultWithTrustedConfirm(site, "delete confirmation did not close", hints);
+    if (guard()) return deleteResult(false, site, "delete confirmation did not close");
+    return deleteResult(false, site, "delete confirmation ownership changed");
+  }
+
+  async function deleteKagiThread(data = {}) {
+    const hints = officialHints(data);
+    const attemptGuard = deleteAttemptRouteGuard(data);
+    pendingDeleteConfirmationLeases.delete("kagi");
+    if (!attemptGuard || !attemptGuard()) return deleteResult(false, "kagi", "stable delete attempt and route identity not found");
+    if (deleteConfirmationAlreadyOpen(hints)) return deleteResult(false, "kagi", "unverified delete confirmation is already open");
+    const confirmationBaseline = new Set(deleteDialogRoots(hints.dialog));
     const shortcutDispatched = dispatchDeleteKeyboardShortcut();
     if (!shortcutDispatched) return deleteResult(false, "kagi", "delete shortcut dispatch failed");
-    const result = await clickDeleteConfirmIfAppears(2600, 3600);
-    if (!result.appeared) return deleteResult(false, "kagi", "delete shortcut did not open confirmation");
-    if (!result.confirmed && deleteDialogRoots().length) return deleteResult(false, "kagi", "delete confirmation did not close");
-    if (!result.confirmed) return deleteResult(false, "kagi", "delete confirmation button not found");
-    return deleteResult(true, "kagi");
+    if (!attemptGuard()) return deleteResult(false, "kagi", "current conversation changed before delete shortcut");
+    const confirmation = await waitForOwnedDeleteConfirmation(confirmationBaseline, hints, 2600, attemptGuard);
+    if (!confirmation) return deleteResult(false, "kagi", deleteConfirmationAlreadyOpen(hints)
+      ? "delete confirmation ownership is uncertain"
+      : "delete shortcut did not open confirmation");
+    return finishOwnedDeleteConfirmation("kagi", confirmation, hints, 3600, attemptGuard);
   }
 
   async function deleteChatGptThread(data = {}) {
-    if (findDeleteConfirmButton()) {
-      const confirmedExisting = await clickDeleteConfirmIfPresent(6200);
-      return confirmedExisting
-        ? deleteResult(true, "chatgpt")
-        : deleteResultWithTrustedConfirm("chatgpt", "delete confirmation did not close");
+    const hints = officialHints(data);
+    if (data?.trustedKeySequenceRetried) {
+      const lease = consumeDeleteConfirmationLease("chatgpt", data);
+      if (!lease || lease.phase !== "shortcut-confirmation") {
+        return deleteResult(false, "chatgpt", "trusted delete shortcut does not match the pending attempt");
+      }
+      const attemptGuard = deleteAttemptRouteGuard(data, lease.href);
+      if (!attemptGuard) return deleteResult(false, "chatgpt", "trusted delete shortcut route ownership changed");
+      const confirmation = deleteConfirmationOwnership(lease.baseline, hints, attemptGuard)
+        || await waitForOwnedDeleteConfirmation(lease.baseline, hints, 2600, attemptGuard);
+      if (!confirmation) return deleteResult(false, "chatgpt", deleteConfirmationAlreadyOpen(hints)
+        ? "delete confirmation ownership is uncertain"
+        : "trusted delete shortcut did not open confirmation");
+      return finishOwnedDeleteConfirmation("chatgpt", confirmation, hints, 4200, attemptGuard);
     }
+    const attemptGuard = deleteAttemptRouteGuard(data);
+    pendingDeleteConfirmationLeases.delete("chatgpt");
+    if (!attemptGuard || !attemptGuard()) return deleteResult(false, "chatgpt", "stable delete attempt and route identity not found");
+    if (deleteConfirmationAlreadyOpen(hints)) return deleteResult(false, "chatgpt", "unverified delete confirmation is already open");
+    const confirmationBaseline = new Set(deleteDialogRoots(hints.dialog));
     const shortcutDispatched = dispatchDeleteKeyboardShortcut();
-    if (!shortcutDispatched) {
-      return data?.trustedKeySequenceRetried
-        ? deleteResult(false, "chatgpt", "delete shortcut dispatch failed")
-        : deleteResultWithTrustedDeleteShortcut("chatgpt", "delete shortcut dispatch failed");
+    if (shortcutDispatched) {
+      const confirmation = await waitForOwnedDeleteConfirmation(confirmationBaseline, hints, 2600, attemptGuard);
+      if (confirmation) return finishOwnedDeleteConfirmation("chatgpt", confirmation, hints, 4200, attemptGuard);
+      if (deleteConfirmationAlreadyOpen(hints)) return deleteResult(false, "chatgpt", "delete confirmation ownership is uncertain");
     }
-    const result = await clickDeleteConfirmIfAppears(2600, 4200);
-    if (result.confirmed) return deleteResult(true, "chatgpt");
-    if (result.appeared || deleteDialogRoots().length) {
-      return deleteResultWithTrustedConfirm("chatgpt", "delete shortcut opened confirmation but it did not close");
+    const reason = shortcutDispatched ? "delete shortcut did not open confirmation" : "delete shortcut dispatch failed";
+    if (deleteConfirmationAlreadyOpen(hints)) return deleteResult(false, "chatgpt", "delete confirmation ownership is uncertain");
+    if (!attemptGuard() || !armDeleteConfirmationLease("chatgpt", data, "shortcut-confirmation", confirmationBaseline)) {
+      return deleteResult(false, "chatgpt", `${reason}; trusted retry ownership unavailable`);
     }
-    return data?.trustedKeySequenceRetried
-      ? deleteResult(false, "chatgpt", "delete shortcut did not open confirmation")
-      : deleteResultWithTrustedDeleteShortcut("chatgpt", "delete shortcut did not open confirmation");
+    return deleteResultWithTrustedDeleteShortcut("chatgpt", reason);
   }
 
   const DELETE_MENU_ROOT_SELECTORS = [
@@ -90,8 +241,8 @@ export function createDeleteSitesCapability(deps = {}) {
     "[class*='menu' i]"
   ];
 
-  function menuRootsWithDelete(labels) {
-    const roots = visibleSelectorElements(DELETE_MENU_ROOT_SELECTORS)
+  function menuRootsWithDelete(labels, candidateSelectors = []) {
+    const roots = visibleSelectorElements([...DELETE_MENU_ROOT_SELECTORS, ...candidateSelectors])
       .filter((root) => {
         const value = deleteElementText(root);
         return deleteLabelMatches(value, labels) || /rename|pin|share|重命名|置顶|分享/i.test(value);
@@ -124,7 +275,7 @@ export function createDeleteSitesCapability(deps = {}) {
     return roots;
   }
 
-  function findDeleteMenuItem(root, labels) {
+  function findDeleteMenuItem(root, labels, candidateSelectors = []) {
     const candidates = [];
     const cancelLabels = ["Cancel", "取消"];
     const seen = new Set();
@@ -148,6 +299,9 @@ export function createDeleteSitesCapability(deps = {}) {
       });
     };
     for (const element of visibleDeleteCandidates(root)) add(element);
+    for (const selector of candidateSelectors) {
+      for (const element of qsa(selector, root, { all: true })) add(element, { extraScore: 260 });
+    }
     if (!candidates.length) {
       for (const element of qsa("[role='menuitem'],[role='option'],button,[role='button'],li,div,span", root, { all: true })) {
         if (!visible(element) || isDisabledElement(element)) continue;
@@ -158,10 +312,10 @@ export function createDeleteSitesCapability(deps = {}) {
     return candidates[0]?.element || null;
   }
 
-  function findOpenDeleteMenuItem(labels) {
+  function findOpenDeleteMenuItem(labels, menuRootSelectors = [], candidateSelectors = []) {
     const candidates = [];
     const seen = new Set();
-    const menuRoots = visibleSelectorElements(DELETE_MENU_ROOT_SELECTORS);
+    const menuRoots = visibleSelectorElements([...DELETE_MENU_ROOT_SELECTORS, ...menuRootSelectors]);
     const add = (element, extraScore = 0) => {
       if (!element || seen.has(element) || !visible(element) || isDisabledElement(element)) return;
       const value = deleteElementText(element);
@@ -183,6 +337,9 @@ export function createDeleteSitesCapability(deps = {}) {
       });
     };
     for (const root of menuRoots) {
+      for (const selector of candidateSelectors) {
+        for (const element of qsa(selector, root, { all: true })) add(element, 360);
+      }
       for (const element of qsa("[role='menuitem'],[role='option'],button,[role='button'],a[href],[tabindex]:not([tabindex='-1']),li,div,span", root, { all: true })) {
         add(element, 220);
       }
@@ -196,16 +353,21 @@ export function createDeleteSitesCapability(deps = {}) {
     return candidates[0]?.element || null;
   }
 
-  async function openTriggerAndClickDelete(trigger, labels, { timeoutMs = 3200, allowHiddenTrigger = false } = {}) {
+  async function openTriggerAndClickDelete(trigger, labels, { timeoutMs = 3200, allowHiddenTrigger = false, guard = null, hints = {} } = {}) {
     if (!trigger || (!visible(trigger) && !allowHiddenTrigger)) return false;
-    const existingRoot = menuRootsWithDelete(labels)[0] || null;
+    const guarded = () => typeof guard !== "function" || guard() === true;
+    if (!guarded()) return false;
+    const menuRootSelectors = Array.isArray(hints.menuRoot) ? hints.menuRoot : [];
+    const deleteSelectors = Array.isArray(hints.deleteCandidate) ? hints.deleteCandidate : [];
+    const existingRoot = menuRootsWithDelete(labels, menuRootSelectors)[0] || null;
     if (!existingRoot && !(allowHiddenTrigger ? deleteClickLayout(trigger) : deleteClick(trigger))) return false;
     await sleep(140);
     const deadline = Date.now() + Math.max(0, Number(timeoutMs) || 0);
     while (Date.now() <= deadline) {
-      const root = menuRootsWithDelete(labels)[0] || existingRoot;
-      const item = (root ? findDeleteMenuItem(root, labels) : null) || findOpenDeleteMenuItem(labels);
-      if (item && (deleteClick(item) || deleteClickLayout(item))) return true;
+      const root = menuRootsWithDelete(labels, menuRootSelectors)[0] || existingRoot;
+      const item = (root ? findDeleteMenuItem(root, labels, deleteSelectors) : null)
+        || findOpenDeleteMenuItem(labels, menuRootSelectors, deleteSelectors);
+      if (item && guarded() && (deleteClick(item) || deleteClickLayout(item))) return true;
       await sleep(120);
     }
     return false;
@@ -253,17 +415,34 @@ export function createDeleteSitesCapability(deps = {}) {
     return candidates[0]?.element || null;
   }
 
-  async function deleteGrokThread() {
+  async function deleteGrokThread(data = {}) {
+    const hints = officialHints(data);
     const labels = ["Delete Chat", "Delete chat", "Delete", "删除聊天", "删除"];
-    if (findDeleteConfirmButton() || deleteDialogRoots().length) {
+    const attemptGuard = grokDeleteAttemptRouteGuard(data);
+    if (!attemptGuard || !attemptGuard()) {
+      return deleteResult(false, "grok", "stable delete attempt and route identity not found");
+    }
+    if (deleteConfirmationAlreadyOpen(hints)) {
       return deleteResult(false, "grok", "unverified delete confirmation is already open");
     }
-    const trigger = topRightMenuTrigger({ labels: ["More", "More actions", "Menu", "Options", "更多", "菜单"] });
+    const trigger = topRightMenuTrigger({
+      labels: ["More", "More actions", "Menu", "Options", "更多", "菜单"],
+      selectors: officialSelectors(data, "menuTrigger")
+    });
     if (!trigger) return deleteResult(false, "grok", "conversation menu trigger not found");
-    if (!await openTriggerAndClickDelete(trigger, labels)) return deleteResult(false, "grok", "delete menu item not found");
-    await clickDeleteConfirmIfAppears(900, 5200);
-    if (findDeleteConfirmButton() || deleteDialogRoots().length) {
-      return deleteResult(false, "grok", "delete confirmation did not close");
+    const confirmationBaseline = new Set(deleteDialogRoots(hints.dialog));
+    if (!attemptGuard()) return deleteResult(false, "grok", "current conversation changed before delete activation");
+    const preDeleteGuard = () => attemptGuard() && !deleteConfirmationAlreadyOpen(hints);
+    if (!await openTriggerAndClickDelete(trigger, labels, { guard: preDeleteGuard, hints })) {
+      if (deleteConfirmationAlreadyOpen(hints)) return deleteResult(false, "grok", "unverified delete confirmation appeared before delete activation");
+      return deleteResult(false, "grok", "delete menu item not found");
+    }
+    const observation = await observeOptionalDeleteConfirmation(confirmationBaseline, hints, attemptGuard, 900);
+    if (observation.state === "owned") {
+      return finishOwnedDeleteConfirmation("grok", observation.ownership, hints, 5200, attemptGuard, false);
+    }
+    if (observation.state === "unowned") {
+      return deleteResult(false, "grok", "delete confirmation ownership is uncertain");
     }
     return deleteResult(true, "grok");
   }
@@ -398,9 +577,10 @@ export function createDeleteSitesCapability(deps = {}) {
     return false;
   }
 
-  function geminiDeleteConversationActionButton() {
+  function geminiDeleteConversationActionButton(data = {}) {
     const candidates = [];
-    for (const button of qsa(GEMINI_DELETE_CONVERSATION_ACTION_SELECTOR, document, { all: true })) {
+    const selector = [...officialSelectors(data, "menuTrigger"), GEMINI_DELETE_CONVERSATION_ACTION_SELECTOR].join(",");
+    for (const button of qsa(selector, document, { all: true })) {
       if (geminiDeleteConversationActionButtonExcluded(button)) continue;
       const dataTestId = String(button.getAttribute?.("data-test-id") || "").trim().toLowerCase();
       const ariaLabel = normalize(button.getAttribute?.("aria-label") || "").toLowerCase();
@@ -436,7 +616,7 @@ export function createDeleteSitesCapability(deps = {}) {
     return candidates[0]?.element || null;
   }
 
-  function geminiDeleteConversationMenuRoots(trigger = null) {
+  function geminiDeleteConversationMenuRoots(trigger = null, data = {}) {
     const roots = [];
     const add = (node) => {
       if (node && geminiDeleteConversationMenuRoot(node) && !roots.includes(node)) roots.push(node);
@@ -445,7 +625,8 @@ export function createDeleteSitesCapability(deps = {}) {
     if (controlsId) {
       try { add(document.getElementById(controlsId)); } catch {}
     }
-    qsa(GEMINI_DELETE_MENU_ROOT_SELECTOR, document, { all: true }).forEach(add);
+    const selector = [...officialSelectors(data, "menuRoot"), GEMINI_DELETE_MENU_ROOT_SELECTOR].join(",");
+    qsa(selector, document, { all: true }).forEach(add);
     return roots;
   }
 
@@ -458,10 +639,10 @@ export function createDeleteSitesCapability(deps = {}) {
     return geminiDeleteJslogId(node) === "186000";
   }
 
-  function findGeminiDeleteMenuItem(trigger = null) {
+  function findGeminiDeleteMenuItem(trigger = null, data = {}) {
     const candidates = [];
     const seen = new Set();
-    const roots = geminiDeleteConversationMenuRoots(trigger);
+    const roots = geminiDeleteConversationMenuRoots(trigger, data);
     const add = (node, root, extraScore = 0) => {
       if (!node || seen.has(node) || !geminiDeleteMenuItemMatches(node)) return;
       let target = deleteClickableElement(node) || node;
@@ -488,54 +669,94 @@ export function createDeleteSitesCapability(deps = {}) {
     };
     for (let index = roots.length - 1; index >= 0; index -= 1) {
       const root = roots[index];
+      for (const selector of officialSelectors(data, "deleteCandidate")) {
+        qsa(selector, root, { all: true }).forEach((node) => add(node, root, 520 + index));
+      }
       qsa(GEMINI_DELETE_MENU_ITEM_SELECTOR, root, { all: true }).forEach((node) => add(node, root, 240 + index));
     }
     candidates.sort((a, b) => b.score - a.score || b.right - a.right || a.top - b.top);
     return candidates[0]?.element || null;
   }
 
-  async function clickGeminiDeleteMenuItem(trigger) {
-    const menuReady = () => findGeminiDeleteMenuItem(trigger);
+  async function resolveGeminiDeleteMenuItem(trigger, data = {}) {
+    const menuReady = () => findGeminiDeleteMenuItem(trigger, data);
     let item = menuReady();
     if (!item) item = await deleteActivateUntil(trigger, menuReady, { settleMs: 220 });
     if (!item) return null;
     await sleep(120);
-    item = findGeminiDeleteMenuItem(trigger) || item;
-    return (deleteClick(item) || deleteClickLayout(item)) ? item : null;
+    return findGeminiDeleteMenuItem(trigger, data) || item;
+  }
+
+  async function activateGeminiDeleteItem(item, data, hints, attemptGuard) {
+    if (!item) return deleteResult(false, "gemini", "delete menu item not found");
+    if (typeof attemptGuard !== "function" || attemptGuard() !== true) {
+      return deleteResult(false, "gemini", "current conversation or delete attempt changed before delete activation");
+    }
+    if (deleteConfirmationAlreadyOpen(hints)) {
+      return deleteResult(false, "gemini", "unverified delete confirmation appeared before delete activation");
+    }
+    const confirmationBaseline = new Set(deleteDialogRoots(hints.dialog));
+    const activated = deleteClick(item) || deleteClickLayout(item);
+    if (activated) {
+      const confirmation = await waitForOwnedDeleteConfirmation(confirmationBaseline, hints, 3000, attemptGuard);
+      if (confirmation) return finishOwnedDeleteConfirmation("gemini", confirmation, hints, 6500, attemptGuard);
+      if (deleteConfirmationAlreadyOpen(hints)) return deleteResult(false, "gemini", "delete confirmation ownership is uncertain");
+    }
+    if (deleteConfirmationAlreadyOpen(hints)) return deleteResult(false, "gemini", "delete confirmation ownership is uncertain");
+    const stillOpenItem = findGeminiDeleteMenuItem(null, data);
+    if (!stillOpenItem) return deleteResult(false, "gemini", activated
+      ? "delete confirmation button not found"
+      : "delete menu item activation failed");
+    if (!attemptGuard() || !armDeleteConfirmationLease("gemini", data, "delete-confirmation", confirmationBaseline)) {
+      return deleteResult(false, "gemini", "delete menu item requires trusted input; trusted retry ownership unavailable");
+    }
+    return deleteResultWithTrustedMenuClick("gemini", "delete menu item did not open confirmation", stillOpenItem);
   }
 
   async function deleteGeminiThread(data = {}) {
-    if (findDeleteConfirmButton()) {
-      const confirmedExisting = await clickDeleteConfirmIfPresent(6500);
-      return confirmedExisting
-        ? deleteResult(true, "gemini")
-        : deleteResultWithTrustedConfirm("gemini", "delete confirmation did not close");
-    }
+    const hints = officialHints(data);
     if (data?.trustedMenuClickRetried) {
-      const openItem = await waitForModel(() => findGeminiDeleteMenuItem(), 3000, 90);
-      if (openItem) {
-        deleteClick(openItem) || deleteClickLayout(openItem);
-        const confirmedAfterTrustedMenu = await clickDeleteConfirmIfPresent(6500);
-        if (confirmedAfterTrustedMenu) return deleteResult(true, "gemini");
-        if (deleteDialogRoots().length) return deleteResultWithTrustedConfirm("gemini", "delete confirmation did not close");
-        if (findGeminiDeleteMenuItem()) return deleteResult(false, "gemini", "trusted delete menu click did not open confirmation");
+      const lease = consumeDeleteConfirmationLease("gemini", data);
+      if (!lease) return deleteResult(false, "gemini", "trusted menu click does not match the pending attempt");
+      const attemptGuard = deleteAttemptRouteGuard(data, lease.href);
+      if (!attemptGuard) return deleteResult(false, "gemini", "trusted menu click route ownership changed");
+      if (lease.phase === "delete-confirmation") {
+        const confirmation = deleteConfirmationOwnership(lease.baseline, hints, attemptGuard)
+          || await waitForOwnedDeleteConfirmation(lease.baseline, hints, 3000, attemptGuard);
+        if (!confirmation) return deleteResult(false, "gemini", deleteConfirmationAlreadyOpen(hints)
+          ? "delete confirmation ownership is uncertain"
+          : "trusted delete menu click did not open confirmation");
+        return finishOwnedDeleteConfirmation("gemini", confirmation, hints, 6500, attemptGuard);
       }
-      return deleteResult(false, "gemini", "trusted conversation menu click did not open delete menu");
+      if (lease.phase !== "conversation-menu") {
+        return deleteResult(false, "gemini", "trusted menu click phase is invalid");
+      }
+      if (deleteConfirmationAlreadyOpen(hints)) {
+        return deleteResult(false, "gemini", "unverified delete confirmation appeared before delete activation");
+      }
+      const openItem = await waitForModel(() => findGeminiDeleteMenuItem(null, data), 3000, 90);
+      return openItem
+        ? activateGeminiDeleteItem(openItem, data, hints, attemptGuard)
+        : deleteResult(false, "gemini", "trusted conversation menu click did not open delete menu");
     }
-    const trigger = geminiDeleteConversationActionButton();
+    const attemptGuard = deleteAttemptRouteGuard(data);
+    pendingDeleteConfirmationLeases.delete("gemini");
+    if (!attemptGuard || !attemptGuard()) return deleteResult(false, "gemini", "stable delete attempt and route identity not found");
+    if (deleteConfirmationAlreadyOpen(hints)) return deleteResult(false, "gemini", "unverified delete confirmation is already open");
+    const trigger = geminiDeleteConversationActionButton(data);
     if (!trigger) return deleteResult(false, "gemini", "conversation menu trigger not found");
-    const clickedItem = await clickGeminiDeleteMenuItem(trigger);
-    if (!clickedItem) return deleteResultWithTrustedMenuClick("gemini", "delete menu item not found", trigger);
-    const confirmed = await clickDeleteConfirmIfPresent(6500);
-    if (confirmed) return deleteResult(true, "gemini");
-    if (deleteDialogRoots().length) return deleteResultWithTrustedConfirm("gemini", "delete confirmation did not close");
-    const stillOpenItem = findGeminiDeleteMenuItem(trigger);
-    if (stillOpenItem) return deleteResultWithTrustedMenuClick("gemini", "delete menu item did not open confirmation", stillOpenItem);
-    return deleteResult(false, "gemini", "delete confirmation button not found");
+    const item = await resolveGeminiDeleteMenuItem(trigger, data);
+    if (item) return activateGeminiDeleteItem(item, data, hints, attemptGuard);
+    if (deleteConfirmationAlreadyOpen(hints)) return deleteResult(false, "gemini", "unverified delete confirmation appeared before delete activation");
+    if (!attemptGuard() || !armDeleteConfirmationLease("gemini", data, "conversation-menu", new Set(deleteDialogRoots(hints.dialog)))) {
+      return deleteResult(false, "gemini", "delete menu item not found; trusted retry ownership unavailable");
+    }
+    return deleteResultWithTrustedMenuClick("gemini", "delete menu item not found", trigger);
   }
 
-  function findNotionDeleteMenuTrigger() {
+  function findNotionDeleteMenuTrigger(data = {}) {
     const selectors = [
+      ...officialSelectors(data, "menuTrigger"),
       "button[aria-label*='Delete, rename, and more' i]",
       "[role='button'][aria-label*='Delete, rename, and more' i]",
       "button[aria-label*='delete, rename' i]",
@@ -598,7 +819,7 @@ export function createDeleteSitesCapability(deps = {}) {
     try { return document.getElementById(controlsId) || null; } catch { return null; }
   }
 
-  function notionDeleteMenuRoots(trigger = null) {
+  function notionDeleteMenuRoots(trigger = null, data = {}) {
     const roots = [];
     const seen = new Set();
     const confirmationRoots = deleteDialogRoots();
@@ -612,7 +833,7 @@ export function createDeleteSitesCapability(deps = {}) {
       roots.push(root);
     };
     add(notionDeleteLinkedMenuRoot(trigger));
-    visibleSelectorElements(NOTION_DELETE_MENU_ROOT_SELECTORS).forEach(add);
+    visibleSelectorElements([...NOTION_DELETE_MENU_ROOT_SELECTORS, ...officialSelectors(data, "menuRoot")]).forEach(add);
     return roots.sort((a, b) => modelElementArea(a) - modelElementArea(b));
   }
 
@@ -626,7 +847,7 @@ export function createDeleteSitesCapability(deps = {}) {
     return Boolean(pointTarget && (pointTarget === element || element.contains?.(pointTarget)));
   }
 
-  function findNotionDeleteMenuItem(root, trigger = null) {
+  function findNotionDeleteMenuItem(root, trigger = null, data = {}) {
     if (!root || !root.isConnected || !visible(root)) return null;
     const candidates = [];
     const seen = new Set();
@@ -648,6 +869,9 @@ export function createDeleteSitesCapability(deps = {}) {
         area: rect.width * rect.height
       });
     };
+    for (const selector of officialSelectors(data, "deleteCandidate")) {
+      for (const element of qsa(selector, root, { all: true })) add(element, 520);
+    }
     for (const element of qsa("[role='menuitem'],[role='option'],button,[role='button'],[tabindex]:not([tabindex='-1']),li,div,span", root, { all: true })) {
       add(element, 320);
     }
@@ -655,21 +879,21 @@ export function createDeleteSitesCapability(deps = {}) {
     return candidates[0]?.element || null;
   }
 
-  function notionDeleteMenuSession(trigger, baselineRoots = new Set()) {
+  function notionDeleteMenuSession(trigger, baselineRoots = new Set(), data = {}) {
     const linkedRoot = notionDeleteLinkedMenuRoot(trigger);
-    for (const root of notionDeleteMenuRoots(trigger)) {
+    for (const root of notionDeleteMenuRoots(trigger, data)) {
       if (root !== linkedRoot && baselineRoots.has(root)) continue;
-      const item = findNotionDeleteMenuItem(root, trigger);
+      const item = findNotionDeleteMenuItem(root, trigger, data);
       if (item) return { root, item };
     }
     return null;
   }
 
-  function refreshNotionDeleteMenuSession(session, trigger) {
+  function refreshNotionDeleteMenuSession(session, trigger, data = {}) {
     const root = session?.root || null;
     if (!root || !root.isConnected || !visible(root)) return null;
-    if (!notionDeleteMenuRoots(trigger).includes(root)) return null;
-    const item = findNotionDeleteMenuItem(root, trigger);
+    if (!notionDeleteMenuRoots(trigger, data).includes(root)) return null;
+    const item = findNotionDeleteMenuItem(root, trigger, data);
     return item ? { root, item } : null;
   }
 
@@ -692,51 +916,52 @@ export function createDeleteSitesCapability(deps = {}) {
     return () => Boolean(expectedId) && notionDeleteConversationId() === expectedId;
   }
 
-  async function openNotionDeleteMenu(trigger, routeStillCurrent) {
-    const baselineRoots = new Set(notionDeleteMenuRoots(trigger));
+  async function openNotionDeleteMenu(trigger, routeStillCurrent, data = {}) {
+    const baselineRoots = new Set(notionDeleteMenuRoots(trigger, data));
     if (!routeStillCurrent()) return null;
     const session = await deleteActivateUntil(
       trigger,
-      () => routeStillCurrent() && notionDeleteMenuSession(trigger, baselineRoots),
+      () => routeStillCurrent() && notionDeleteMenuSession(trigger, baselineRoots, data),
       { settleMs: 220 }
     );
     if (!session || !routeStillCurrent()) return null;
     await sleep(120);
-    return waitForModel(() => routeStillCurrent() && refreshNotionDeleteMenuSession(session, trigger), 1800, 80);
+    return waitForModel(() => routeStillCurrent() && refreshNotionDeleteMenuSession(session, trigger, data), 1800, 80);
   }
 
-  function notionDeleteConfirmationOwnership(baselineRoots = null) {
-    const button = findDeleteConfirmButton();
+  function notionDeleteConfirmationOwnership(baselineRoots = null, hints = {}) {
+    const button = findDeleteConfirmButton(hints);
     if (!button || !button.isConnected || !visible(button)) return null;
-    const root = deleteDialogRoots().find((candidate) => candidate === button || candidate.contains?.(button)) || null;
+    const root = deleteDialogRoots(hints.dialog).find((candidate) => candidate === button || candidate.contains?.(button)) || null;
     if (!root || !root.isConnected || !visible(root) || baselineRoots?.has(root)) return null;
     return { root, button };
   }
 
-  function notionDeleteConfirmationOwnershipIsCurrent(ownership, routeStillCurrent) {
+  function notionDeleteConfirmationOwnershipIsCurrent(ownership, routeStillCurrent, hints = {}) {
     const root = ownership?.root || null;
     const button = ownership?.button || null;
     if (!root || !button || !routeStillCurrent()) return false;
     if (!root.isConnected || !button.isConnected || !visible(root) || !visible(button) || !root.contains?.(button)) return false;
-    if (findDeleteConfirmButton() !== button) return false;
-    return deleteDialogRoots().some((candidate) => candidate === root);
+    if (findDeleteConfirmButton(hints) !== button) return false;
+    return deleteDialogRoots(hints.dialog).some((candidate) => candidate === root);
   }
 
-  async function waitForNotionDeleteMenuOutcome(session, trigger, routeStillCurrent, confirmationBaseline, timeoutMs = 1800) {
+  async function waitForNotionDeleteMenuOutcome(session, trigger, routeStillCurrent, confirmationBaseline, timeoutMs = 1800, data = {}) {
+    const hints = officialHints(data);
     const confirmation = await waitForModel(() => {
       if (!routeStillCurrent()) return null;
-      return notionDeleteConfirmationOwnership(confirmationBaseline);
+      return notionDeleteConfirmationOwnership(confirmationBaseline, hints);
     }, timeoutMs, 90);
     if (!routeStillCurrent()) return { state: "route-changed", item: null };
     if (confirmation) return { state: "confirmation", confirmation };
-    const currentSession = refreshNotionDeleteMenuSession(session, trigger);
+    const currentSession = refreshNotionDeleteMenuSession(session, trigger, data);
     return currentSession ? { state: "menu-open", session: currentSession } : { state: "uncertain" };
   }
 
-  async function finishNotionDeleteConfirmation(ownership, routeStillCurrent) {
-    const ownershipGuard = () => notionDeleteConfirmationOwnershipIsCurrent(ownership, routeStillCurrent);
+  async function finishNotionDeleteConfirmation(ownership, routeStillCurrent, hints = {}) {
+    const ownershipGuard = () => notionDeleteConfirmationOwnershipIsCurrent(ownership, routeStillCurrent, hints);
     if (!ownershipGuard()) return deleteResult(false, "notion", "delete confirmation ownership is uncertain");
-    const confirmed = await clickDeleteConfirmIfPresent(6500, ownershipGuard);
+    const confirmed = await clickDeleteConfirmIfPresent(6500, ownershipGuard, hints);
     if (confirmed) return deleteResult(true, "notion");
     if (!routeStillCurrent()) return deleteResult(false, "notion", "current conversation changed during delete confirmation");
     if (!ownershipGuard()) return deleteResult(false, "notion", "delete confirmation ownership changed");
@@ -744,37 +969,63 @@ export function createDeleteSitesCapability(deps = {}) {
   }
 
   async function deleteNotionThread(data = {}) {
+    const hints = officialHints(data);
+    if (!data?.trustedMenuClickRetried) pendingDeleteConfirmationLeases.delete("notion");
     const routeStillCurrent = notionDeleteRouteGuard(data);
     if (!routeStillCurrent()) {
       return deleteResult(false, "notion", "stable current conversation identity not found");
     }
     if (data?.trustedMenuClickRetried) {
-      const confirmation = notionDeleteConfirmationOwnership()
-        || await waitForModel(() => routeStillCurrent() && notionDeleteConfirmationOwnership(), 3000, 90);
+      const lease = consumeDeleteConfirmationLease("notion", data);
+      if (!lease || lease.phase !== "delete-confirmation") {
+        return deleteResult(false, "notion", "trusted delete menu click does not match the pending attempt");
+      }
+      const leasedRouteStillCurrent = deleteAttemptRouteGuard(data, lease.href);
+      if (!leasedRouteStillCurrent) {
+        return deleteResult(false, "notion", "trusted delete menu click route ownership changed");
+      }
+      if (visible(lease.metadata?.menuRoot) || visible(lease.metadata?.item)) {
+        return deleteResult(false, "notion", "trusted delete menu click did not activate the leased Delete item");
+      }
+      const confirmation = notionDeleteConfirmationOwnership(lease.baseline, hints)
+        || await waitForModel(() => leasedRouteStillCurrent() && notionDeleteConfirmationOwnership(lease.baseline, hints), 3000, 90);
       if (!routeStillCurrent()) return deleteResult(false, "notion", "current conversation changed during trusted delete menu click");
-      if (confirmation) return finishNotionDeleteConfirmation(confirmation, routeStillCurrent);
+      if (confirmation) return finishNotionDeleteConfirmation(confirmation, leasedRouteStillCurrent, hints);
+      if (findDeleteConfirmButton(hints) || deleteDialogRoots(hints.dialog).length) {
+        return deleteResult(false, "notion", "delete confirmation ownership is uncertain");
+      }
       return deleteResult(false, "notion", "trusted delete menu click did not open an owned confirmation");
     }
-    if (findDeleteConfirmButton() || deleteDialogRoots().length) {
+    if (findDeleteConfirmButton(hints) || deleteDialogRoots(hints.dialog).length) {
       return deleteResult(false, "notion", "unverified delete confirmation is already open");
     }
-    const trigger = findNotionDeleteMenuTrigger();
+    const trigger = findNotionDeleteMenuTrigger(data);
     if (!trigger) return deleteResult(false, "notion", "conversation menu trigger not found");
-    let session = await openNotionDeleteMenu(trigger, routeStillCurrent);
+    let session = await openNotionDeleteMenu(trigger, routeStillCurrent, data);
     if (!session) return deleteResult(false, "notion", routeStillCurrent() ? "owned delete menu item not found" : "current conversation changed before delete menu opened");
     await sleep(120);
-    session = refreshNotionDeleteMenuSession(session, trigger);
+    session = refreshNotionDeleteMenuSession(session, trigger, data);
     if (!session || !routeStillCurrent()) {
       return deleteResult(false, "notion", routeStillCurrent() ? "owned delete menu item changed before activation" : "current conversation changed before delete activation");
     }
-    if (findDeleteConfirmButton() || deleteDialogRoots().length) {
+    if (findDeleteConfirmButton(hints) || deleteDialogRoots(hints.dialog).length) {
       return deleteResult(false, "notion", "unverified delete confirmation appeared before delete activation");
     }
-    const confirmationBaseline = new Set(deleteDialogRoots());
+    const confirmationBaseline = new Set(deleteDialogRoots(hints.dialog));
     deleteClick(session.item) || deleteClickLayout(session.item);
-    const outcome = await waitForNotionDeleteMenuOutcome(session, trigger, routeStillCurrent, confirmationBaseline);
-    if (outcome.state === "confirmation") return finishNotionDeleteConfirmation(outcome.confirmation, routeStillCurrent);
+    const outcome = await waitForNotionDeleteMenuOutcome(session, trigger, routeStillCurrent, confirmationBaseline, 1800, data);
+    if (outcome.state === "confirmation") return finishNotionDeleteConfirmation(outcome.confirmation, routeStillCurrent, hints);
     if (outcome.state === "menu-open") {
+      if (
+        !routeStillCurrent()
+        || !armDeleteConfirmationLease("notion", data, "delete-confirmation", confirmationBaseline, {
+          trigger,
+          menuRoot: outcome.session.root,
+          item: outcome.session.item
+        })
+      ) {
+        return deleteResult(false, "notion", "delete menu item requires trusted input; trusted retry ownership unavailable");
+      }
       return deleteResultWithTrustedMenuClick("notion", "delete menu item did not open confirmation", outcome.session.item);
     }
     if (outcome.state === "route-changed") return deleteResult(false, "notion", "current conversation changed after delete activation");

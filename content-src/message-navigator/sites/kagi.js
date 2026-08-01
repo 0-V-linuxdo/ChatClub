@@ -185,9 +185,10 @@ export function createKagiAdapter() {
       ].join(","), { maxLength: 60000 });
       return dedupeItems(blocks.slice(0, 24).map((item, index) => ({
         ...item,
-        role: genericRole(item.element, config) || (index % 2 === 0 ? "user" : "assistant"),
+        role: genericRole(item.element, config)
+          || (config.strictOfficialRoles ? "" : (index % 2 === 0 ? "user" : "assistant")),
         text: compactText(item.text, config.summaryMaxChars)
-      })));
+      }))).filter((item) => item.role);
     }
   };
   return Object.freeze(adapter);

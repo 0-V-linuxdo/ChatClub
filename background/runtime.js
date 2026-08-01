@@ -1,7 +1,4 @@
 import { APP_NAME } from "../shared/constants.js";
-import { buildDynamicDnrRules } from "../shared/dnr.js";
-import { getAllChatApps } from "../shared/storage-schema.js";
-import { loadCustomConfig, loadOptions, saveOptions } from "../shared/storage-adapter.js";
 import { FRAME_COMMAND_SPECS } from "../shared/frame-commands.js";
 import { ALL_SHORTCUT_ACTIONS } from "../shared/shortcuts.js";
 import { normalizeContentRuntimeIdentity } from "../shared/content-runtime-identity.js";
@@ -35,6 +32,8 @@ import { createGrokCookieRuntime } from "./grok-cookie-runtime.js";
 import { createDebuggerSessionCoordinator } from "./debugger-session.js";
 import { createNotionFramePreflightRuntime } from "./notion-frame-preflight.js";
 import { createCustomUserscriptRuntime } from "./custom-userscript-runtime.js";
+import { createOfficialRulesRuntime } from "./official-rules-runtime.js";
+import { createStrictRuntimeConfigApplier } from "./runtime-config-application.js";
 import { createFunctionalAnomalyStore } from "./functional-anomaly-store.js";
 import { frameRouteError, normalizeFrameTransportError } from "./frame-command-errors.js";
 import { invokeActiveRuntimeMethod } from "./main-world-runtime.js";
@@ -47,7 +46,6 @@ import {
   injectContentBridge,
   relayContentFrameBinding
 } from "./content-registration.js";
-import { registerContentScripts } from "./content-script-registration.js";
 import {
   openableTabUrl,
   openExternalTab,
@@ -112,7 +110,6 @@ const notionFramePreflightRuntime = createNotionFramePreflightRuntime(chrome);
 const grokCookieRuntime = createGrokCookieRuntime(chrome, {
   registeredFrameContext, verifiedExtensionPageSender, withTabDebugger: debuggerSessionDependencies?.withTabDebugger
 });
-const customUserscriptRuntime = createCustomUserscriptRuntime(chrome);
 const functionalAnomalyStore = createFunctionalAnomalyStore(chrome);
 chrome.cookies?.onChanged?.addListener(grokCookieRuntime.handleCookieChange);
 
@@ -269,6 +266,7 @@ async function executeMainWorldFrameCommand(context, command, data = {}) {
 }
 
 async function sendSecureFrameCommand(message = {}, sender = {}) {
+  await officialRulesRuntime.configurationReady;
   const tabId = await verifiedExtensionTabId(message, sender);
   const context = await secureFrameContext(message.bridgeDocumentId);
   if (!context || context.tabId !== tabId) {
@@ -280,6 +278,13 @@ async function sendSecureFrameCommand(message = {}, sender = {}) {
   const command = String(message.command || "");
   if (!secureFrameCommands.has(command)) {
     throw frameRouteError("REMOTE_ERROR", `Secure frame command is not allowed: ${command}`, false);
+  }
+  if (command === "deleteThread") {
+    try {
+      await officialRulesRuntime.assertDestructiveOperationsAllowed();
+    } catch (error) {
+      throw frameRouteError("REMOTE_ERROR", error?.message || "Delete is disabled while configuration recovery is required", false);
+    }
   }
   const timeoutMs = Math.max(250, Math.min(60000, Number(message.timeoutMs) || 5000));
   let response;
@@ -358,33 +363,36 @@ async function verifySecureFrameContext(message = {}, sender = {}) {
 }
 
 async function dispatchTrustedClick(message = {}, sender = {}) {
+  await officialRulesRuntime.configurationReady;
+  await officialRulesRuntime.assertDestructiveOperationsAllowed();
   if (!("debugger" in chrome)) throw new Error("Trusted browser click is unavailable in this browser; complete the visible confirmation manually.");
   return trustedInput.dispatchTrustedClick(chrome, message, sender, debuggerSessionDependencies);
 }
 
 async function dispatchTrustedMouseMove(message = {}, sender = {}) {
+  await officialRulesRuntime.configurationReady;
+  await officialRulesRuntime.assertDestructiveOperationsAllowed();
   if (!("debugger" in chrome)) throw new Error("Trusted browser hover is unavailable in this browser; open the row menu manually and retry.");
   return trustedInput.dispatchTrustedMouseMove(chrome, message, sender, debuggerSessionDependencies);
 }
 
 async function dispatchTrustedKeySequence(message = {}, sender = {}) {
+  await officialRulesRuntime.configurationReady;
+  await officialRulesRuntime.assertDestructiveOperationsAllowed();
   if (!("debugger" in chrome)) throw new Error("Trusted browser key input is unavailable in this browser; finish the delete action manually.");
   return trustedInput.dispatchTrustedKeySequence(chrome, message, sender, debuggerSessionDependencies);
 }
 
 async function ensureContentBridge(message = {}, sender = {}) {
+  await officialRulesRuntime.configurationReady;
   const tabId = await verifiedExtensionTabId({ appTabId: message.tabId }, sender);
   return injectContentBridge(chrome, tabId, message);
 }
 
 async function requestContentFrameBinding(message = {}, sender = {}) {
+  await officialRulesRuntime.configurationReady;
   const tabId = await verifiedExtensionTabId({ appTabId: message.tabId }, sender);
   return relayContentFrameBinding(chrome, tabId, message);
-}
-
-async function currentChatApps() {
-  const customConfig = await loadCustomConfig();
-  return getAllChatApps(customConfig);
 }
 
 const knownExtensionPageTabIds = new Set();
@@ -459,110 +467,24 @@ async function currentExtensionPageTabIds(preferredTabIds = []) {
   return Array.from(knownExtensionPageTabIds).sort((a, b) => a - b);
 }
 
-function createDnrRuleUpdater(applyRules) {
-  if (typeof applyRules !== "function") throw new TypeError("DNR rule updater requires an apply function");
-  const pendingTabIds = new Set();
-  let pendingWaiters = [];
-  let running = false;
-  let scheduled = false;
-  const drain = async () => {
-    scheduled = false;
-    if (running) return;
-    running = true;
-    while (pendingWaiters.length) {
-      const tabIds = Array.from(pendingTabIds).sort((a, b) => a - b);
-      const waiters = pendingWaiters;
-      pendingTabIds.clear();
-      pendingWaiters = [];
-      try {
-        const result = await applyRules(tabIds);
-        for (const waiter of waiters) waiter.resolve(result);
-      } catch (error) {
-        for (const waiter of waiters) waiter.reject(error);
-      }
-    }
-    running = false;
-  };
-  return (preferredTabIds = []) => {
-    for (const tabId of normalizedPreferredTabIds(preferredTabIds)) pendingTabIds.add(tabId);
-    const result = new Promise((resolve, reject) => { pendingWaiters.push({ resolve, reject }); });
-    if (!running && !scheduled) {
-      scheduled = true;
-      queueMicrotask(drain);
-    }
-    return result;
-  };
-}
-
-async function replaceDnrRules(api, sessionRules, dynamicRules, warn = () => {}) {
-  const oldDynamicRules = await api.getDynamicRules();
-  const supportsSessionRules = typeof api.getSessionRules === "function"
-    && typeof api.updateSessionRules === "function";
-  if (!supportsSessionRules) {
-    await api.updateDynamicRules({
-      removeRuleIds: oldDynamicRules.map((rule) => rule.id),
-      addRules: dynamicRules
-    });
-    return "dynamic";
-  }
-  let oldSessionRules = [];
-  try {
-    oldSessionRules = await api.getSessionRules();
-    await api.updateSessionRules({
-      removeRuleIds: oldSessionRules.map((rule) => rule.id),
-      addRules: sessionRules
-    });
-  } catch (error) {
-    warn("Failed to update session DNR rules; falling back to dynamic rules", error);
-    if (oldSessionRules.length) {
-      try {
-        await api.updateSessionRules({
-          removeRuleIds: oldSessionRules.map((rule) => rule.id),
-          addRules: []
-        });
-      } catch (cleanupError) {
-        warn("Stale session DNR rules could not be removed before dynamic fallback", cleanupError);
-      }
-    }
-    await api.updateDynamicRules({
-      removeRuleIds: oldDynamicRules.map((rule) => rule.id),
-      addRules: dynamicRules
-    });
-    return "dynamic";
-  }
-  if (oldDynamicRules.length) {
-    try {
-      await api.updateDynamicRules({
-        removeRuleIds: oldDynamicRules.map((rule) => rule.id),
-        addRules: []
-      });
-    } catch (error) {
-      warn("Session DNR rules are active, but stale dynamic rules could not be removed", error);
-    }
-  }
-  return "session";
-}
-
-async function applyDnrRules(preferredTabIds = []) {
-  const chatApps = await currentChatApps();
-  const extensionHost = new URL(chrome.runtime.getURL("")).hostname;
-  const supportsSessionRules = typeof chrome.declarativeNetRequest.getSessionRules === "function"
-    && typeof chrome.declarativeNetRequest.updateSessionRules === "function";
-  const extensionTabIds = supportsSessionRules
-    ? await currentExtensionPageTabIds(preferredTabIds)
-    : [];
-  const baseSessionRules = buildDynamicDnrRules(chatApps, extensionHost, extensionTabIds);
-  // Dynamic rules cannot safely express ownership by a ChatClub tab. Keep only
-  // extension-initiated frame loading there instead of weakening ordinary tabs.
-  const dynamicRules = supportsSessionRules
-    ? buildDynamicDnrRules(chatApps, extensionHost, [])
-    : baseSessionRules;
-  return notionFramePreflightRuntime.withDnrMutation(() => replaceDnrRules(chrome.declarativeNetRequest,
-    [...baseSessionRules, ...notionFramePreflightRuntime.activeSessionRules()], dynamicRules,
-    (message, error) => console.warn(`[${APP_NAME}] ${message}`, error)));
-}
-
-const updateDnrRules = createDnrRuleUpdater(applyDnrRules);
+const runtimeConfigApplier = createStrictRuntimeConfigApplier(chrome, {
+  notionFramePreflightRuntime,
+  currentExtensionPageTabIds
+});
+const officialRulesRuntime = createOfficialRulesRuntime(chrome, {
+  applyConfiguration: runtimeConfigApplier.apply,
+  afterReset: (workspaceSessionGeneration) => (
+    rotateWorkspaceSessionGeneration(chrome, workspaceSessionGeneration)
+  )
+});
+const customUserscriptRuntime = createCustomUserscriptRuntime(chrome, {
+  loadOptions: officialRulesRuntime.loadOptions,
+  loadCustomConfig: officialRulesRuntime.loadCustomConfig
+});
+const updateDnrRules = async (preferredTabIds = []) => {
+  const applied = await officialRulesRuntime.reloadConfiguration({ preferredTabIds });
+  return String(applied?.mode || applied || "");
+};
 function forgetKnownExtensionPageTab(tabId) {
   if (!Number.isInteger(tabId)) return;
   const wasCandidate = candidateExtensionPageTabIds.delete(tabId);
@@ -575,13 +497,8 @@ function forgetKnownExtensionPageTab(tabId) {
   });
 }
 
-let runtimeConfigReloadChain = Promise.resolve();
-
 function reloadRuntimeConfig(preferredTabId = null) {
-  runtimeConfigReloadChain = runtimeConfigReloadChain
-    .catch(() => {})
-    .then(() => Promise.all([updateDnrRules(preferredTabId), registerContentScripts(chrome)]));
-  return runtimeConfigReloadChain;
+  return updateDnrRules(preferredTabId);
 }
 
 function prepareWorkspaceSessionLifecycleSafely(lifecycle, options = {}) {
@@ -596,14 +513,16 @@ chrome.runtime.onInstalled.addListener(async (details = {}) => {
   const reason = String(details.reason || "installed");
   const workspaceSessionReady = prepareWorkspaceSessionLifecycleSafely("install/update", { forceRecovery: reason === "update", reason, previousVersion: String(details.previousVersion || "") });
   await chrome.storage.local.remove(["clientId", "sessionData"]);
-  await loadOptions();
-  await reloadRuntimeConfig();
+  await officialRulesRuntime.handleInstalled();
   await workspaceSessionReady;
 });
 
 chrome.runtime.onStartup?.addListener(() => {
-  reloadRuntimeConfig().catch((error) => console.error(`[${APP_NAME}] startup reload failed`, error));
+  officialRulesRuntime.handleStartup().catch((error) => console.error(`[${APP_NAME}] startup official-rules setup failed`, error));
   prepareWorkspaceSessionLifecycleSafely("startup", { reason: "startup" });
+});
+chrome.alarms.onAlarm.addListener((alarm) => {
+  officialRulesRuntime.handleAlarm(alarm).catch((error) => console.error(`[${APP_NAME}] official-rules alarm failed`, error));
 });
 
 registerActionListener(chrome);
@@ -650,19 +569,19 @@ const backgroundRequestHandlers = [
   ...grokCookieRuntime.requestHandlers(REQUEST, { updateDnrRules: notionFramePreflightRuntime.dnrRuleUpdater(updateDnrRules) }),
   [REQUEST.CANCEL_NOTION_FRAME_LOAD, async (message, sender) => ({ cancelled: await notionFramePreflightRuntime.cancelFrameLoad(message, verifiedExtensionPageSender(sender)) })],
   [REQUEST.GET_CONFIG_INFO, async () => ({
-    options: await loadOptions(),
-    customConfig: await loadCustomConfig(),
+    options: await officialRulesRuntime.loadOptions(),
+    customConfig: await officialRulesRuntime.loadCustomConfig(),
     contentScripts: await chrome.scripting.getRegisteredContentScripts()
   })],
-  [REQUEST.RESET_CONFIG, async (_message, _sender, tabId) => {
-    await grokCookieRuntime.removeAllManagedPartitions(tabId);
-    await chrome.storage.local.clear();
-    const workspaceSessionGeneration = await rotateWorkspaceSessionGeneration(chrome);
-    const options = await saveOptions({});
-    await reloadRuntimeConfig(tabId);
-    return { options, workspaceSessionGeneration };
-  }],
-  ...customUserscriptRuntime.requestHandlers(REQUEST),
+  ...officialRulesRuntime.requestHandlers(REQUEST, {
+    beforeReset: (tabId) => grokCookieRuntime.removeAllManagedPartitions(tabId),
+    afterReset: (_tabId, workspaceSessionGeneration) => (
+      rotateWorkspaceSessionGeneration(chrome, workspaceSessionGeneration)
+    )
+  }),
+  ...customUserscriptRuntime.requestHandlers(REQUEST, {
+    assertDeleteAllowed: () => officialRulesRuntime.assertDestructiveOperationsAllowed()
+  }),
   [REQUEST.ENSURE_CONTENT_BRIDGE, (message, sender) => ensureContentBridge(message, sender)],
   [REQUEST.REQUEST_FRAME_BINDING, (message, sender) => requestContentFrameBinding(message, sender)],
   [REQUEST.DISPATCH_TRUSTED_CLICK, (message, sender) => dispatchTrustedClick(message, sender)],
@@ -697,4 +616,4 @@ const dispatchBackgroundRequest = createBackgroundRequestDispatcher(
 
 chrome.runtime.onMessage.addListener(createBackgroundRequestListener(dispatchBackgroundRequest));
 
-reloadRuntimeConfig().catch((error) => console.error(`[${APP_NAME}] initial reload failed`, error));
+officialRulesRuntime.configurationReady.catch((error) => console.error(`[${APP_NAME}] initial configuration failed`, error));

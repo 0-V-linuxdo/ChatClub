@@ -363,15 +363,16 @@ ${userscript}
     return { mode: "userScripts", runtimeConfig: topicDeleteUserscriptMetadata(storedConfig, source) };
   }
 
-  function requestHandlers(request) {
+  function requestHandlers(request, dependencies = {}) {
     return [
       [request.INSTALL_TOPIC_DELETE_USERSCRIPT, (message, sender) => installTopicDeleteUserscript(message.config, sender)],
       [request.EXECUTE_SUMMARY_USERSCRIPT, async (message, sender) => ({
         data: await executeSummaryUserscript(message.configId, sender)
       })],
-      [request.EXECUTE_TOPIC_DELETE_USERSCRIPT, async (message, sender) => ({
-        data: await executeTopicDeleteUserscript(message.configId, message.payload, sender)
-      })]
+      [request.EXECUTE_TOPIC_DELETE_USERSCRIPT, async (message, sender) => {
+        await dependencies.assertDeleteAllowed?.();
+        return { data: await executeTopicDeleteUserscript(message.configId, message.payload, sender) };
+      }]
     ];
   }
 

@@ -30,12 +30,25 @@ function flush() {
   assert.match(savePatchSource, /optionsPatchWriteTail\.catch\(\(\) => \{\}\)\.then\(write\)/);
 
   const saves = [];
+  let committedOptions = { themeMode: "light", modelPreferenceFailurePolicy: "send-current" };
   const context = vm.createContext({
     state: { options: { themeMode: "light", modelPreferenceFailurePolicy: "send-current" } },
-    saveOptions(options) {
-      const gate = deferred();
-      saves.push({ gate, options: structuredClone(options) });
-      return gate.promise;
+    configService: {
+      current() {
+        return { options: structuredClone(committedOptions) };
+      },
+      patchOptions(patch) {
+        const gate = deferred();
+        const options = { ...committedOptions, ...structuredClone(patch) };
+        saves.push({ gate, options });
+        return gate.promise.then((savedOptions) => {
+          committedOptions = structuredClone(savedOptions);
+          return { options: structuredClone(savedOptions) };
+        });
+      }
+    },
+    normalizeOptions(options) {
+      return structuredClone(options);
     },
     structuredClone
   });

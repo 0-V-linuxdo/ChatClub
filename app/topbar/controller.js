@@ -1,5 +1,4 @@
 import { normalizeTopbarPromptPlaceholderConfig } from "../../shared/storage-schema.js";
-import { saveOptions } from "../../shared/storage-adapter.js";
 import { normalizeTopbarLayout, topbarSettingsSectionForItem } from "../../shared/topbar.js";
 import { t } from "../../shared/i18n.js";
 import { claimTopmostPopoverEscape, toast } from "../../ui/dom.js";
@@ -11,7 +10,7 @@ import { createTopbarView } from "./view.js";
 const requireMethods = createControllerMethodValidator("Topbar");
 
 export function createTopbarController(dependencies = {}) {
-  const { state, composer, workspace, preferredModel, settingsSections, actions } = validateControllerContract(
+  const { state, composer, workspace, preferredModel, settingsSections, actions, saveOptions } = validateControllerContract(
     dependencies,
     "Topbar controller",
     {
@@ -20,7 +19,8 @@ export function createTopbarController(dependencies = {}) {
       workspace: "object",
       preferredModel: "object",
       settingsSections: "any",
-      actions: "object"
+      actions: "object",
+      saveOptions: "function"
     }
   );
   requireMethods(composer, "composer", ["closeActionsMenu", "focusInput", "render", "syncInputNode"]);

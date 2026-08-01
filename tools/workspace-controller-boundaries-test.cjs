@@ -84,7 +84,7 @@ const lineCount = (source) => source.split(/\r?\n/).length;
   assert.doesNotMatch(view, /delete chat\.initialHref/, "the read-only render owner must not mutate restored frame state");
   assert.doesNotMatch(view, /group\.chatApps\.push\(/, "the read-only render owner must not mutate workspace membership");
   assert.match(statePorts, /drag:[\s\S]*read: \["activeTabs", "groups"\]/);
-  assert.match(statePorts, /messageNavigator:[\s\S]*read: \["groups", "options"\]/);
+  assert.match(statePorts, /messageNavigator:[\s\S]*read: \["groups", "officialRulesActivationRevision", "options"\]/);
   assert.doesNotMatch(drag, /state\.options|state\.fullscreenGroupId/);
   assert.doesNotMatch(navigator, /state\.activeTabs|state\.frameLoadingInstanceIds/);
 

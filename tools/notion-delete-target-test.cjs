@@ -284,6 +284,57 @@ function standaloneRunner(source, value) {
     "standalone Notion delete state machine"
   );
   assert.doesNotMatch(notionSource, /openTriggerAndClickDelete\(/, "standalone Notion must not use the global contains-match menu helper");
+  const pendingDeleteConfirmationLeases = new Map();
+  const deleteAttemptIdentity = (payload = {}) => {
+    const attemptId = String(payload?.deleteAttemptId || "").trim();
+    const provider = String(payload?.expectedDeleteIdentity?.provider || "").trim().toLowerCase();
+    const id = String(payload?.expectedDeleteIdentity?.id || "").trim();
+    return attemptId && provider && id ? { attemptId, provider, id } : null;
+  };
+  const currentDeleteHref = () => String(value.location.href || "");
+  const deleteAttemptRouteGuard = (payload = {}, expectedHref = "") => {
+    const identity = deleteAttemptIdentity(payload);
+    const href = String(expectedHref || currentDeleteHref());
+    if (!identity || !href || currentDeleteHref() !== href) return null;
+    return () => {
+      const current = deleteAttemptIdentity(payload);
+      return Boolean(
+        current
+        && current.attemptId === identity.attemptId
+        && current.provider === identity.provider
+        && current.id === identity.id
+        && currentDeleteHref() === href
+      );
+    };
+  };
+  const armDeleteConfirmationLease = (site, payload, phase, baseline, metadata = {}) => {
+    const identity = deleteAttemptIdentity(payload);
+    const href = currentDeleteHref();
+    if (!identity || !href) return false;
+    pendingDeleteConfirmationLeases.set(site, {
+      ...identity,
+      href,
+      phase,
+      baseline,
+      metadata,
+      expiresAt: Date.now() + 20000
+    });
+    return true;
+  };
+  const consumeDeleteConfirmationLease = (site, payload) => {
+    const identity = deleteAttemptIdentity(payload);
+    const lease = pendingDeleteConfirmationLeases.get(site) || null;
+    pendingDeleteConfirmationLeases.delete(site);
+    return Boolean(
+      identity
+      && lease
+      && lease.attemptId === identity.attemptId
+      && lease.provider === identity.provider
+      && lease.id === identity.id
+      && lease.href === currentDeleteHref()
+      && Number(lease.expiresAt) >= Date.now()
+    ) ? lease : null;
+  };
   const factory = new Function(
     "compact",
     "visible",
@@ -306,6 +357,10 @@ function standaloneRunner(source, value) {
     "resultWithTrustedDeleteConfirm",
     "topRightMenuTrigger",
     "clickAt",
+    "pendingDeleteConfirmationLeases",
+    "armDeleteConfirmationLease",
+    "consumeDeleteConfirmationLease",
+    "deleteAttemptRouteGuard",
     `"use strict"; ${notionSource}; return { deleteNotion, findNotionDeleteMenuItem, notionDeleteLabelMatchesExact };`
   );
   const api = factory(
@@ -337,7 +392,11 @@ function standaloneRunner(source, value) {
       trustedClick: { nodeId: value.confirmButton.id }
     }),
     () => value.trigger,
-    value.activateDelete
+    value.activateDelete,
+    pendingDeleteConfirmationLeases,
+    armDeleteConfirmationLease,
+    consumeDeleteConfirmationLease,
+    deleteAttemptRouteGuard
   );
   return api;
 }
@@ -350,7 +409,10 @@ function standaloneRunner(source, value) {
   const { createDeleteSitesCapability } = await import(moduleUrl);
   const standaloneSource = read("build-src/topic-delete-userscript-engine-sites.js");
 
-  const expectedIdentity = { expectedDeleteIdentity: { provider: "notion", id: "thread-1" } };
+  const expectedIdentity = {
+    deleteAttemptId: "notion-attempt-1",
+    expectedDeleteIdentity: { provider: "notion", id: "thread-1" }
+  };
   const runners = [
     {
       name: "native",
@@ -406,7 +468,7 @@ function standaloneRunner(source, value) {
       value.state.menuOpen = true;
       const result = await runner.create(value).run({ ...expectedIdentity, trustedMenuClickRetried: true });
       assert.equal(result.ok, false);
-      assert.equal(result.reason, "trusted delete menu click did not open an owned confirmation");
+      assert.equal(result.reason, "trusted delete menu click does not match the pending attempt");
       assert.equal(value.state.triggerActivations, 0, `${runner.name}: trusted retry must not reopen the menu`);
       assert.equal(value.state.deleteActivations, 0, `${runner.name}: trusted retry must not repeat Delete`);
       assert.equal(result.needsTrustedMenuClick, undefined, `${runner.name}: trusted retry must not renew itself`);
@@ -457,10 +519,52 @@ function standaloneRunner(source, value) {
       const value = fixture();
       value.state.confirmationOpen = true;
       const result = await runner.create(value).run({ ...expectedIdentity, trustedMenuClickRetried: true });
-      assert.equal(result.ok, true, `${runner.name}: a correlated trusted-menu retry may finish its resulting confirmation`);
+      assert.equal(result.ok, false, `${runner.name}: a retry flag without an attempt lease must not adopt a pre-open confirmation`);
+      assert.equal(result.reason, "trusted delete menu click does not match the pending attempt");
       assert.equal(value.state.triggerActivations, 0);
       assert.equal(value.state.deleteActivations, 0);
+      assert.equal(value.state.confirmActivations, 0);
+    }
+
+    {
+      const value = fixture({ ignoreDeleteActivation: true });
+      const instance = runner.create(value);
+      const leased = await instance.run(expectedIdentity);
+      assert.equal(leased.needsTrustedMenuClick, true, `${runner.name}: the exact ignored Delete item must produce a retry lease`);
+      value.state.confirmationOpen = true;
+      const ambiguous = await instance.run({ ...expectedIdentity, trustedMenuClickRetried: true });
+      assert.equal(ambiguous.ok, false, `${runner.name}: a dialog appearing while the leased menu is still open must fail closed`);
+      assert.equal(ambiguous.reason, "trusted delete menu click did not activate the leased Delete item");
+      assert.equal(value.state.confirmActivations, 0);
+    }
+
+    {
+      const value = fixture({ ignoreDeleteActivation: true });
+      const instance = runner.create(value);
+      const leased = await instance.run(expectedIdentity);
+      assert.equal(leased.needsTrustedMenuClick, true);
+      value.state.menuOpen = false;
+      value.state.confirmationOpen = true;
+      const completed = await instance.run({ ...expectedIdentity, trustedMenuClickRetried: true });
+      assert.equal(completed.ok, true, `${runner.name}: a matching lease may finish only the newly opened confirmation`);
       assert.equal(value.state.confirmActivations, 1);
+    }
+
+    {
+      const value = fixture({ ignoreDeleteActivation: true });
+      const instance = runner.create(value);
+      const leased = await instance.run(expectedIdentity);
+      assert.equal(leased.needsTrustedMenuClick, true);
+      value.state.menuOpen = false;
+      value.state.confirmationOpen = true;
+      const staleAttempt = await instance.run({
+        ...expectedIdentity,
+        deleteAttemptId: "notion-attempt-2",
+        trustedMenuClickRetried: true
+      });
+      assert.equal(staleAttempt.ok, false, `${runner.name}: a different attempt must not consume the leased confirmation`);
+      assert.equal(staleAttempt.reason, "trusted delete menu click does not match the pending attempt");
+      assert.equal(value.state.confirmActivations, 0);
     }
 
     {

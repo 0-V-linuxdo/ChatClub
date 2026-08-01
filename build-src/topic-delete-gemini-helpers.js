@@ -709,7 +709,7 @@ export const GEMINI_DELETE_USERSCRIPT_HELPERS = String.raw`
     return trustedMenuClick ? { ...value, needsTrustedMenuClick: true, trustedMenuClick } : value;
   }
 
-  async function clickGeminiDeleteMenuItem(trigger) {
+  async function resolveGeminiDeleteMenuItem(trigger) {
     const menuReady = () => findGeminiDeleteMenuItem(trigger);
     let item = menuReady();
     if (!item && trigger) {
@@ -727,53 +727,78 @@ export const GEMINI_DELETE_USERSCRIPT_HELPERS = String.raw`
     }
     if (!item) return null;
     await sleep(120);
-    item = findGeminiDeleteMenuItem(trigger) || item;
-    return (geminiSimulateMenuClick(item) || clickAt(item)) ? item : null;
+    return findGeminiDeleteMenuItem(trigger) || item;
   }
 
-  async function tryGeminiDeleteFromTrigger(trigger) {
+  async function activateGeminiDeleteItem(item, payload = {}, attemptGuard = null) {
+    if (!item) return result(false, "delete menu item not found");
+    if (typeof attemptGuard !== "function" || attemptGuard() !== true) {
+      return result(false, "current conversation or delete attempt changed before delete activation");
+    }
+    if (deleteConfirmationAlreadyOpen()) return result(false, "unverified delete confirmation appeared before delete activation");
+    const confirmationBaseline = new Set(deleteDialogRoots());
+    const activated = geminiSimulateMenuClick(item) || clickAt(item);
+    if (activated) {
+      const confirmation = await waitForOwnedDeleteConfirmation(confirmationBaseline, 3000, attemptGuard);
+      if (confirmation) return finishOwnedDeleteConfirmation(confirmation, 6500, attemptGuard);
+      if (deleteConfirmationAlreadyOpen()) return result(false, "delete confirmation ownership is uncertain");
+    }
+    if (deleteConfirmationAlreadyOpen()) return result(false, "delete confirmation ownership is uncertain");
+    const stillOpenItem = findGeminiDeleteMenuItem();
+    if (!stillOpenItem) return result(false, activated ? "delete confirmation button not found" : "delete menu item activation failed");
+    if (!attemptGuard() || !armDeleteConfirmationLease("gemini", payload, "delete-confirmation", confirmationBaseline)) {
+      return result(false, "delete menu item requires trusted input; trusted retry ownership unavailable");
+    }
+    return resultWithGeminiTrustedMenuClick("delete menu item did not open confirmation", stillOpenItem);
+  }
+
+  async function tryGeminiDeleteFromTrigger(trigger, payload = {}, attemptGuard = null) {
     if (!trigger) return null;
-    const clickedItem = await clickGeminiDeleteMenuItem(trigger);
-    if (!clickedItem) return null;
-    const confirmed = await clickDeleteConfirmIfPresent(6500);
-    if (confirmed) return result(true);
-    if (deleteDialogRoots().length) return resultWithTrustedDeleteConfirm("delete confirmation did not close");
-    const stillOpenItem = findGeminiDeleteMenuItem(trigger) || findGeminiDeleteMenuItem();
-    if (stillOpenItem) return resultWithGeminiTrustedMenuClick("delete menu item did not open confirmation", stillOpenItem);
-    return result(false, "delete confirmation button not found");
+    const item = await resolveGeminiDeleteMenuItem(trigger);
+    return item ? activateGeminiDeleteItem(item, payload, attemptGuard) : null;
   }
 
   async function deleteGemini(payload = {}) {
-    if (findDeleteConfirmButton()) {
-      const confirmedExisting = await clickDeleteConfirmIfPresent(6500);
-      return confirmedExisting ? result(true) : resultWithTrustedDeleteConfirm("delete confirmation did not close");
-    }
     if (payload?.trustedMenuClickRetried) {
-      const openItem = await waitFor(() => findGeminiDeleteMenuItem(), 3000, 90);
-      if (openItem) {
-        geminiSimulateMenuClick(openItem) || clickAt(openItem);
-        const confirmedAfterTrustedMenu = await clickDeleteConfirmIfPresent(6500);
-        if (confirmedAfterTrustedMenu) return result(true);
-        if (deleteDialogRoots().length) return resultWithTrustedDeleteConfirm("delete confirmation did not close");
-        const stillOpenItem = findGeminiDeleteMenuItem();
-        if (stillOpenItem) return result(false, "trusted delete menu click did not open confirmation");
+      const lease = consumeDeleteConfirmationLease("gemini", payload);
+      if (!lease) return result(false, "trusted menu click does not match the pending attempt");
+      const attemptGuard = deleteAttemptRouteGuard(payload, lease.href);
+      if (!attemptGuard) return result(false, "trusted menu click route ownership changed");
+      if (lease.phase === "delete-confirmation") {
+        const confirmation = deleteConfirmationOwnership(lease.baseline, attemptGuard)
+          || await waitForOwnedDeleteConfirmation(lease.baseline, 3000, attemptGuard);
+        if (!confirmation) return result(false, deleteConfirmationAlreadyOpen()
+          ? "delete confirmation ownership is uncertain"
+          : "trusted delete menu click did not open confirmation");
+        return finishOwnedDeleteConfirmation(confirmation, 6500, attemptGuard);
       }
+      if (lease.phase !== "conversation-menu") return result(false, "trusted menu click phase is invalid");
+      if (deleteConfirmationAlreadyOpen()) return result(false, "unverified delete confirmation appeared before delete activation");
+      const openItem = await waitFor(() => findGeminiDeleteMenuItem(), 3000, 90);
+      return openItem
+        ? activateGeminiDeleteItem(openItem, payload, attemptGuard)
+        : result(false, "trusted conversation menu click did not open delete menu");
     }
+    const attemptGuard = deleteAttemptRouteGuard(payload);
+    pendingDeleteConfirmationLeases.delete("gemini");
+    if (!attemptGuard || !attemptGuard()) return result(false, "stable delete attempt and route identity not found");
+    if (deleteConfirmationAlreadyOpen()) return result(false, "unverified delete confirmation is already open");
     const topTrigger = geminiConversationActionButton();
-    if (!payload?.trustedMenuClickRetried && topTrigger) {
-      const topResult = await tryGeminiDeleteFromTrigger(topTrigger);
+    if (topTrigger) {
+      const topResult = await tryGeminiDeleteFromTrigger(topTrigger, payload, attemptGuard);
       if (topResult) return topResult;
     }
 
     const sidebarTarget = await geminiCurrentConversationMenuTarget(3600);
     const sidebarTrigger = sidebarTarget?.entry?.button || null;
     if (sidebarTrigger) {
-      const sidebarResult = await tryGeminiDeleteFromTrigger(sidebarTrigger);
+      const sidebarResult = await tryGeminiDeleteFromTrigger(sidebarTrigger, payload, attemptGuard);
       if (sidebarResult) return sidebarResult;
-      if (!payload?.trustedMenuClickRetried) {
-        return resultWithGeminiTrustedMenuClick("sidebar conversation menu did not open", sidebarTrigger);
+      if (deleteConfirmationAlreadyOpen()) return result(false, "unverified delete confirmation appeared before delete activation");
+      if (!attemptGuard() || !armDeleteConfirmationLease("gemini", payload, "conversation-menu", new Set(deleteDialogRoots()))) {
+        return result(false, "sidebar conversation menu requires trusted input; trusted retry ownership unavailable");
       }
-      return result(false, "trusted sidebar conversation menu click did not open delete menu");
+      return resultWithGeminiTrustedMenuClick("sidebar conversation menu did not open", sidebarTrigger);
     }
     if (sidebarTarget?.entry && !payload?.trustedHoverRetried) {
       return resultWithTrustedHover(
@@ -782,10 +807,11 @@ export const GEMINI_DELETE_USERSCRIPT_HELPERS = String.raw`
       );
     }
 
-    if (payload?.trustedMenuClickRetried) {
-      return result(false, sidebarTarget?.reason || "trusted conversation menu click did not open delete menu");
-    }
     if (topTrigger) {
+      if (deleteConfirmationAlreadyOpen()) return result(false, "unverified delete confirmation appeared before delete activation");
+      if (!attemptGuard() || !armDeleteConfirmationLease("gemini", payload, "conversation-menu", new Set(deleteDialogRoots()))) {
+        return result(false, "conversation menu requires trusted input; trusted retry ownership unavailable");
+      }
       return resultWithGeminiTrustedMenuClick(sidebarTarget?.reason || "delete menu item not found", topTrigger);
     }
     return result(false, sidebarTarget?.reason || "conversation menu trigger not found");

@@ -46,9 +46,53 @@ export function configMatchesHref(config, href) {
     return false;
   }
   const hosts = Array.isArray(config.hosts) ? config.hosts : [];
-  if (!hosts.some((host) => hostMatchesPattern(host, url.hostname))) return false;
+  const officialHttpsHosts = Array.isArray(config.officialRuleHttpsHosts)
+    ? config.officialRuleHttpsHosts
+    : [];
+  const officialHttpsMatch = officialHttpsHosts.some((host) => hostMatchesPattern(host, url.hostname));
+  if (officialHttpsMatch && url.protocol !== "https:") return false;
+  if (!officialHttpsMatch && !hosts.some((host) => hostMatchesPattern(host, url.hostname))) return false;
   const prefixes = Array.isArray(config.pathPrefixes) ? config.pathPrefixes.filter(Boolean) : [];
   return prefixes.length === 0 || prefixes.some((prefix) => url.pathname.startsWith(prefix));
+}
+
+export function officialRuleConfigMatchesHref(config, href) {
+  let url;
+  try {
+    url = new URL(href);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "https:" || url.username || url.password || url.port) return false;
+  const hostname = normalizeHost(url.hostname);
+  if (!hostname || hostname.startsWith("*.")) return false;
+  const hosts = Array.isArray(config?.officialRuleHosts) ? config.officialRuleHosts : [];
+  const exactHostMatch = hosts.some((host) => {
+    const candidate = normalizeHost(host);
+    return Boolean(candidate && !candidate.startsWith("*.") && candidate === hostname);
+  });
+  if (!exactHostMatch) return false;
+  const prefixes = Array.isArray(config?.officialRulePathPrefixes)
+    ? config.officialRulePathPrefixes.map((prefix) => String(prefix || "").trim()).filter(Boolean)
+    : [];
+  return prefixes.length === 0 || prefixes.some((prefix) => url.pathname.startsWith(prefix));
+}
+
+export function deleteConfigAuthorizedForHref(config, href) {
+  let url;
+  try {
+    url = new URL(href);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "https:" || url.username || url.password || url.port) return false;
+  const hostname = normalizeHost(url.hostname);
+  if (!hostname || hostname.startsWith("*.")) return false;
+  return (Array.isArray(config?.deleteAuthorizedHosts) ? config.deleteAuthorizedHosts : [])
+    .some((host) => {
+      const candidate = normalizeHost(host);
+      return Boolean(candidate && !candidate.startsWith("*.") && candidate === hostname);
+    });
 }
 
 export function findSummarySiteConfig(configs, href) {
@@ -82,6 +126,10 @@ export function uniqueMatchPatterns(chatApps) {
     if (own) patterns.add(own);
     for (const host of app.hosts || []) {
       for (const pattern of hostMatchPattern(host)) patterns.add(pattern);
+    }
+    for (const host of app.officialRuleHttpsHosts || []) {
+      const raw = normalizeHost(host);
+      if (raw && !raw.startsWith("*.")) patterns.add(`https://${raw}/*`);
     }
   }
   return Array.from(patterns).sort();

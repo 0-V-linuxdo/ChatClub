@@ -1,0 +1,390 @@
+const OFFICIAL_RULES_SETTINGS_STYLE_ID = "chatclub-official-rules-settings-style";
+
+const OFFICIAL_RULES_SETTINGS_CSS = `
+.official-rules-card {
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+}
+
+.official-rules-card[aria-busy="true"] {
+  cursor: progress;
+}
+
+.official-rules-heading,
+.official-rules-toolbar,
+.official-rules-component-heading,
+.official-rules-alias-heading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.official-rules-heading-copy {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.official-rules-heading-copy > .svg-icon {
+  width: 27px;
+  height: 27px;
+}
+
+.official-rules-heading h4,
+.official-rules-section h5 {
+  margin: 0;
+}
+
+.official-rules-heading p,
+.official-rules-section-copy,
+.official-rules-component-copy small,
+.official-rules-alias-copy small,
+.official-rules-confirmation p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.official-rules-status {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  padding: 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 760;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel-2);
+}
+
+.official-rules-status[data-state="ready"],
+.official-rules-status[data-state="up-to-date"],
+.official-rules-status[data-state="applied"] {
+  color: color-mix(in srgb, #15803d 78%, var(--text));
+  border-color: color-mix(in srgb, #16a34a 36%, var(--line));
+  background: color-mix(in srgb, #16a34a 10%, var(--panel));
+}
+
+.official-rules-status[data-state="candidate"],
+.official-rules-status[data-state="available"] {
+  color: color-mix(in srgb, #a16207 82%, var(--text));
+  border-color: color-mix(in srgb, #ca8a04 36%, var(--line));
+  background: color-mix(in srgb, #ca8a04 10%, var(--panel));
+}
+
+.official-rules-status[data-state="error"] {
+  color: color-mix(in srgb, #b91c1c 80%, var(--text));
+  border-color: color-mix(in srgb, #dc2626 36%, var(--line));
+  background: color-mix(in srgb, #dc2626 10%, var(--panel));
+}
+
+.official-rules-mode {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(92px, 1fr));
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+}
+
+.official-rules-mode button {
+  min-height: 32px;
+  padding: 0 12px;
+  color: var(--muted);
+  font-weight: 720;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+}
+
+.official-rules-mode button[aria-pressed="true"] {
+  color: var(--text);
+  background: var(--panel);
+  box-shadow: 0 1px 4px color-mix(in srgb, black 10%, transparent);
+}
+
+.official-rules-actions,
+.official-rules-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.official-rules-action {
+  display: inline-flex;
+  min-height: 36px;
+  gap: 7px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 720;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--panel) 88%, var(--panel-2));
+}
+
+.official-rules-action:hover:not(:disabled),
+.official-rules-action:focus-visible {
+  border-color: color-mix(in srgb, var(--primary) 48%, var(--line));
+  background: color-mix(in srgb, var(--primary) 12%, var(--panel));
+  outline: 0;
+}
+
+.official-rules-action.primary {
+  color: var(--primary-contrast, white);
+  border-color: var(--primary);
+  background: var(--primary);
+}
+
+.official-rules-action.danger {
+  color: color-mix(in srgb, #b91c1c 82%, var(--text));
+}
+
+.official-rules-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.official-rules-action .svg-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.official-rules-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--line);
+}
+
+.official-rules-detail {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  padding: 11px 12px;
+  background: var(--panel);
+}
+
+.official-rules-detail dt {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 740;
+}
+
+.official-rules-detail dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--text);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.official-rules-section {
+  display: grid;
+  gap: 10px;
+}
+
+.official-rules-candidate,
+.official-rules-error,
+.official-rules-empty {
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--panel-2) 64%, var(--panel));
+}
+
+.official-rules-release-notes {
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+}
+
+.official-rules-diff-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.official-rules-diff {
+  border: 1px solid color-mix(in srgb, var(--primary) 18%, var(--border));
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.official-rules-diff dl {
+  display: grid;
+  gap: 6px;
+  margin: 6px 0 0;
+}
+
+.official-rules-diff dl > div {
+  display: grid;
+  gap: 2px;
+}
+
+.official-rules-diff dt {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.official-rules-diff dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.official-rules-error {
+  color: color-mix(in srgb, #b91c1c 82%, var(--text));
+  border-color: color-mix(in srgb, #dc2626 34%, var(--line));
+  background: color-mix(in srgb, #dc2626 9%, var(--panel));
+}
+
+.official-rules-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.official-rules-chip {
+  padding: 3px 8px;
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 720;
+  border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--line));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 8%, var(--panel));
+}
+
+.official-rules-component-list,
+.official-rules-alias-list {
+  display: grid;
+  gap: 8px;
+}
+
+.official-rules-component,
+.official-rules-alias {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--panel-2) 54%, var(--panel));
+}
+
+.official-rules-component[data-changed="true"] {
+  border-color: color-mix(in srgb, var(--primary) 34%, var(--line));
+}
+
+.official-rules-component-copy,
+.official-rules-alias-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.official-rules-component-copy strong,
+.official-rules-alias-copy strong {
+  overflow-wrap: anywhere;
+}
+
+.official-rules-component-key {
+  width: fit-content;
+  color: var(--primary);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.official-rules-component-versions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 12px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.official-rules-override-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+}
+
+.official-rules-override-fields small {
+  margin: 0;
+}
+
+.official-rules-component-versions code,
+.official-rules-alias code {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.official-rules-alias-state {
+  width: fit-content;
+  padding: 2px 7px;
+  color: color-mix(in srgb, #a16207 82%, var(--text));
+  font-size: 11px;
+  font-weight: 760;
+  border-radius: 999px;
+  background: color-mix(in srgb, #ca8a04 12%, var(--panel));
+}
+
+.official-rules-alias-state[data-approved="true"] {
+  color: color-mix(in srgb, #15803d 78%, var(--text));
+  background: color-mix(in srgb, #16a34a 11%, var(--panel));
+}
+
+.official-rules-confirmation {
+  display: grid;
+  gap: 14px;
+}
+
+.official-rules-confirmation code {
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+@media (max-width: 820px) {
+  .official-rules-details {
+    grid-template-columns: 1fr;
+  }
+
+  .official-rules-component,
+  .official-rules-alias {
+    grid-template-columns: 1fr;
+  }
+
+  .official-rules-row-actions .official-rules-action {
+    flex: 1 1 140px;
+  }
+}
+`;
+
+export function installOfficialRulesSettingsStyles(targetDocument = document) {
+  const existing = targetDocument.getElementById?.(OFFICIAL_RULES_SETTINGS_STYLE_ID);
+  if (existing) return existing;
+  const style = targetDocument.createElement("style");
+  style.id = OFFICIAL_RULES_SETTINGS_STYLE_ID;
+  style.textContent = OFFICIAL_RULES_SETTINGS_CSS;
+  (targetDocument.head || targetDocument.documentElement).append(style);
+  return style;
+}

@@ -876,6 +876,134 @@ export const DELETE_USERSCRIPT_ENGINE_CORE = String.raw`
     }, serializableRect(box));
   }
 
+  const pendingDeleteConfirmationLeases = new Map();
+  function deleteAttemptIdentity(payload = {}) {
+    const attemptId = String(payload?.deleteAttemptId || "").trim();
+    const provider = String(payload?.expectedDeleteIdentity?.provider || "").trim().toLowerCase();
+    const id = String(payload?.expectedDeleteIdentity?.id || "").trim();
+    return attemptId && attemptId.length <= 256 && provider && id ? { attemptId, provider, id } : null;
+  }
+
+  function currentDeleteHref() {
+    try { return String(location.href || ""); } catch { return ""; }
+  }
+
+  function deleteAttemptRouteGuard(payload = {}, expectedHref = "") {
+    const identity = deleteAttemptIdentity(payload);
+    const href = String(expectedHref || currentDeleteHref());
+    if (!identity || !href || currentDeleteHref() !== href) return null;
+    return () => {
+      const current = deleteAttemptIdentity(payload);
+      return Boolean(
+        current
+        && current.attemptId === identity.attemptId
+        && current.provider === identity.provider
+        && current.id === identity.id
+        && currentDeleteHref() === href
+      );
+    };
+  }
+
+  function grokDeleteAttemptRouteGuard(payload = {}) {
+    const identity = deleteAttemptIdentity(payload);
+    let routeId = "";
+    try { routeId = new URL(String(location.href || "")).pathname.match(/^\/(?:c|chat)\/([^/?#]+)/i)?.[1] || ""; } catch {}
+    if (!identity || identity.provider !== "grok" || !routeId || identity.id !== routeId) return null;
+    return deleteAttemptRouteGuard(payload);
+  }
+
+  function armDeleteConfirmationLease(site, payload, phase, baseline, metadata = {}) {
+    const identity = deleteAttemptIdentity(payload);
+    const href = currentDeleteHref();
+    if (!identity || !href) return false;
+    pendingDeleteConfirmationLeases.set(site, { ...identity, href, phase, baseline, metadata, expiresAt: Date.now() + 20000 });
+    return true;
+  }
+
+  function consumeDeleteConfirmationLease(site, payload) {
+    const identity = deleteAttemptIdentity(payload);
+    const lease = pendingDeleteConfirmationLeases.get(site) || null;
+    pendingDeleteConfirmationLeases.delete(site);
+    return Boolean(
+      identity
+      && lease
+      && lease.attemptId === identity.attemptId
+      && lease.provider === identity.provider
+      && lease.id === identity.id
+      && lease.href === currentDeleteHref()
+      && Number(lease.expiresAt) >= Date.now()
+    ) ? lease : null;
+  }
+
+  function deleteConfirmationAlreadyOpen() {
+    return Boolean(findDeleteConfirmButton() || deleteDialogRoots().length);
+  }
+
+  function sameDeleteConfirmationRoot(left, right) {
+    return Boolean(left && right && (left === right || left.contains?.(right) || right.contains?.(left)));
+  }
+
+  function deleteConfirmationOwnership(baseline = new Set(), attemptGuard = null) {
+    if (typeof attemptGuard === "function" && attemptGuard() !== true) return null;
+    const roots = deleteDialogRoots();
+    const info = findDeleteConfirmButtonInfo();
+    const button = info?.node || null;
+    const root = info?.root || roots.find((candidate) => candidate === button || candidate.contains?.(button)) || null;
+    if (!button || !root || baseline?.has(root)) return null;
+    if ([...(baseline || [])].some((candidate) => sameDeleteConfirmationRoot(candidate, root))) return null;
+    if (!button.isConnected || !root.isConnected || !visible(button) || !visible(root) || !root.contains?.(button)) return null;
+    if (!roots.some((candidate) => candidate === root)) return null;
+    if (roots.some((candidate) => !sameDeleteConfirmationRoot(candidate, root))) return null;
+    return { root, button };
+  }
+
+  function deleteConfirmationOwnershipIsCurrent(ownership, attemptGuard = null) {
+    const root = ownership?.root || null;
+    const button = ownership?.button || null;
+    if (typeof attemptGuard === "function" && attemptGuard() !== true) return false;
+    if (!root || !button || !root.isConnected || !button.isConnected || !visible(root) || !visible(button)) return false;
+    if (!root.contains?.(button)) return false;
+    const roots = deleteDialogRoots();
+    const info = findDeleteConfirmButtonInfo();
+    const currentRoot = info?.root || roots.find((candidate) => candidate === info?.node || candidate.contains?.(info?.node)) || null;
+    return info?.node === button
+      && currentRoot === root
+      && roots.some((candidate) => candidate === root)
+      && roots.every((candidate) => sameDeleteConfirmationRoot(candidate, root));
+  }
+
+  function waitForOwnedDeleteConfirmation(baseline, timeoutMs = 2600, attemptGuard = null) {
+    return waitFor(() => deleteConfirmationOwnership(baseline, attemptGuard), timeoutMs, 80);
+  }
+
+  function deleteConfirmationObservation(baseline, attemptGuard = null) {
+    if (!deleteConfirmationAlreadyOpen()) return { state: "none", ownership: null };
+    const ownership = deleteConfirmationOwnership(baseline, attemptGuard);
+    return ownership
+      ? { state: "owned", ownership }
+      : { state: "unowned", ownership: null };
+  }
+
+  async function observeOptionalDeleteConfirmation(baseline, attemptGuard, timeoutMs = 900) {
+    const deadline = Date.now() + Math.max(0, Number(timeoutMs) || 0);
+    while (Date.now() <= deadline) {
+      const observation = deleteConfirmationObservation(baseline, attemptGuard);
+      if (observation.state !== "none") return observation;
+      await sleep(80);
+    }
+    return deleteConfirmationObservation(baseline, attemptGuard);
+  }
+
+  async function finishOwnedDeleteConfirmation(ownership, timeoutMs = 4200, attemptGuard = null, allowTrustedFallback = true) {
+    const guard = () => deleteConfirmationOwnershipIsCurrent(ownership, attemptGuard);
+    if (!guard()) return result(false, "delete confirmation ownership is uncertain");
+    const confirmed = await clickDeleteConfirmIfPresent(timeoutMs, guard);
+    if (confirmed) return result(true);
+    if (guard() && allowTrustedFallback) return resultWithTrustedDeleteConfirm("delete confirmation did not close");
+    if (guard()) return result(false, "delete confirmation did not close");
+    return result(false, "delete confirmation ownership changed");
+  }
+
   function deleteConfirmDialogClosed(root, button) {
     return !findDeleteConfirmButton() && !deleteDialogRoots().length;
   }

@@ -19,6 +19,26 @@
     "kind": "test-only",
     "reason": "Atomic runtime-generation transition tests execute the injected function directly in a VM context."
   },
+  "background/official-rules-channel.js#OFFICIAL_RULES_SIGNATURE_DOMAINS": {
+    "kind": "test-only",
+    "reason": "Cryptographic regressions assert the exact domain-separation labels shared with the offline signing vectors."
+  },
+  "background/official-rules-channel.js#officialRulesSignatureInput": {
+    "kind": "test-only",
+    "reason": "Cross-runtime signature-vector tests exercise the exact raw-byte and NUL-separated signing input contract."
+  },
+  "background/official-rules-channel.js#sha256Hex": {
+    "kind": "test-only",
+    "reason": "Signed-document and incremental-cache regressions independently derive payload hashes through the production helper."
+  },
+  "background/official-rules-repository.js#OFFICIAL_RULES_BLOB_PREFIX": {
+    "kind": "test-only",
+    "reason": "Repository recovery tests inspect and fault-inject the content-addressed blob namespace without exposing it to runtime consumers."
+  },
+  "background/official-rules-updater.js#createOfficialRulesFetchUrlPolicy": {
+    "kind": "test-only",
+    "reason": "Network-policy regressions directly exercise the fixed Pages and immutable Release URL allowlist fail-closed boundary."
+  },
   "background/grok-cookie-bridge.js#GROK_COOKIE_LEDGER_KEY": {
     "kind": "test-only",
     "reason": "Partitioned Cookie bridge tests inspect the ownership ledger key to verify persistence safety boundaries."
@@ -38,6 +58,22 @@
   "shared/constants.js#SUMMARY_SITE_CONFIG_VERSION": {
     "kind": "public-api",
     "reason": "Release tooling parses this declaration as a source-level version contract without importing browser modules."
+  },
+  "shared/official-rules-contract.js#inspectOfficialRulesCatalog": {
+    "kind": "test-only",
+    "reason": "Contract regressions inspect precise catalog rejection codes for missing, duplicate and unknown signed components."
+  },
+  "shared/official-rules-contract.js#inspectOfficialRulesChannel": {
+    "kind": "test-only",
+    "reason": "Contract regressions inspect precise channel rejection codes before normalized runtime parsing throws."
+  },
+  "shared/official-rules-contract.js#inspectOfficialRulesComponent": {
+    "kind": "test-only",
+    "reason": "Selector, host, path and compatibility regressions inspect precise fail-closed component rejection codes."
+  },
+  "shared/official-rules-contract.js#inspectOfficialRulesSignature": {
+    "kind": "test-only",
+    "reason": "Detached-signature envelope regressions inspect exact unknown-field, algorithm, size and encoding rejection codes."
   },
   "ui/dom.js#modal": {
     "kind": "test-only",

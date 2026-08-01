@@ -17,7 +17,6 @@ import {
   inspectIframeConfig,
   resolveChatFrameAttributeContract
 } from "../../shared/chat-frame-config.js";
-import { saveCustomConfig } from "../../shared/storage-adapter.js";
 import {
   button,
   confirmationModal,
@@ -48,6 +47,7 @@ export function createAppsSettingsSection(ctx) {
     state: "object",
     svgIcon: "function",
     notifyConfigReload: "function",
+    saveCustomConfig: "function",
     saveOptionsPatch: "function",
     reconcileAppCatalog: "function",
     syncSummaryPanel: "function",
@@ -60,6 +60,7 @@ export function createAppsSettingsSection(ctx) {
   );
   const svgIcon = requireControllerFunction(ctx, controllerName, "svgIcon");
   const notifyConfigReload = requireControllerFunction(ctx, controllerName, "notifyConfigReload");
+  const saveCustomConfig = requireControllerFunction(ctx, controllerName, "saveCustomConfig");
   const saveOptionsPatch = requireControllerFunction(ctx, controllerName, "saveOptionsPatch");
   const reconcileAppCatalog = requireControllerFunction(ctx, controllerName, "reconcileAppCatalog");
   const syncSummaryPanel = requireControllerFunction(ctx, controllerName, "syncSummaryPanel");

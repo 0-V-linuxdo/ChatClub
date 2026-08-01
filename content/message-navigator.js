@@ -18,7 +18,7 @@
   var EXTENSION_RUNTIME_RELAY_SOURCE = "chatclub:runtime-relay:2026.07.16.2";
   var FRAME_BINDING_POST_MESSAGE_SOURCE = `chatclub:frame-binding:${CONTENT_BRIDGE_VERSION}`;
   var SECURE_FRAME_COMMAND_SOURCE = "chatclub:frame-command:2026.07.16.2";
-  var DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.07.16.1";
+  var DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.08.01.1";
   var PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.16.2";
   var RUNTIME_REGISTRY_ABI_VERSION = 1;
   var RUNTIME_REGISTRY_KEY = `__CHATCLUB_RUNTIME_REGISTRY_V${RUNTIME_REGISTRY_ABI_VERSION}__`;
@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "16a1560c687d1744bb084e56b8bacb047fc943a69ebb6db76eb726249f8b2c80";
-  var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
-  var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "eac309ef4aa87580e0bee6a5bd68105dc4220f1ea0bac73a6c526550da823447";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.eac309ef4aa87580e0bee6a5bd68105dc4220f1ea0bac73a6c526550da823447";
-  var CONTENT_RUNTIME_MESSAGE_NAVIGATOR_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/message-navigator.js", "entryPath": "content-src/message-navigator.js", "sourceSha256": "81dd69edcf85a9a23286ddc15abac091db9dc186234a16542ebd79f6f6300ab8", "implementationSha256": "1b6e7b5d2f23d3e37e6490307a34108031fb4a4fef73fbe52d866e8cb7053d79", "implementationVersion": "2026.07.16.2+bundle.1b6e7b5d2f23d3e37e6490307a34108031fb4a4fef73fbe52d866e8cb7053d79" });
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "34a0f77846e859a48f105345f7be82bbe24f7b1aa7045fb26b254687029d6190";
+  var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
+  var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "d256e102cd1e6b2bdeff109a772ce01aef7a5879bb46b9e8ca88f2f7d6be2074";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.d256e102cd1e6b2bdeff109a772ce01aef7a5879bb46b9e8ca88f2f7d6be2074";
+  var CONTENT_RUNTIME_MESSAGE_NAVIGATOR_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/message-navigator.js", "entryPath": "content-src/message-navigator.js", "sourceSha256": "0f9e574c2c319aec1b7849d2f093e9d3131551a2adc60368b05eac9c32b01049", "implementationSha256": "47ed6dad27b48a0a3d2ba99512b722761ca4c6c64d0230fb82004e918c3eac27", "implementationVersion": "2026.07.16.2+bundle.47ed6dad27b48a0a3d2ba99512b722761ca4c6c64d0230fb82004e918c3eac27" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -882,7 +882,9 @@
     for (const button of buttons) {
       const ancestor = nearestTextAncestor(button, cleanupSelectors, { root, maxDepth: options.maxDepth || 10 });
       if (!ancestor) continue;
-      const role = genericRole(ancestor.element, config) || (items.length % 2 === 0 ? "user" : "assistant");
+      const explicitRole = genericRole(ancestor.element, config);
+      const role = explicitRole || (config.strictOfficialRoles ? "" : items.length % 2 === 0 ? "user" : "assistant");
+      if (!role) continue;
       const key = `${role}
 ${ancestor.text.toLowerCase().replace(/\s+/g, " ").slice(0, 500)}`;
       if (seen.has(key)) continue;
@@ -955,7 +957,9 @@ ${normalize(item.text).toLowerCase().slice(0, 260)}`;
   function adapterBaseItems(config, adapter = {}) {
     const cleanupSelectors = Array.isArray(config.textCleanupSelectors) ? config.textCleanupSelectors : [];
     return dedupeItems(adapterBaseQuery(config).map((element) => {
-      const role = adapter.role?.(element, config) || genericRole(element, config) || "assistant";
+      const explicitRole = adapter.role?.(element, config) || genericRole(element, config);
+      const role = explicitRole || (config.strictOfficialRoles ? "" : "assistant");
+      if (!role) return null;
       const target = adapter.target?.(element, config) || genericTarget(element);
       const textSource = adapter.summaryElement?.(element, config) || target || element;
       const rawValue = adapter.text?.(element, config, { role, target, textSource }) || cloneText(textSource, cleanupSelectors) || cloneText(element, cleanupSelectors);
@@ -967,7 +971,62 @@ ${normalize(item.text).toLowerCase().slice(0, 260)}`;
         role,
         text: compactText(rawValue, config.summaryMaxChars)
       };
-    }));
+    }).filter(Boolean));
+  }
+  function officialSelectorList(hints = {}, slot = "") {
+    return (Array.isArray(hints?.[slot]) ? hints[slot] : []).map((selector) => String(selector || "").trim()).filter(Boolean).slice(0, 8);
+  }
+  function selectorUnion(selectors = []) {
+    return selectors.filter(Boolean).join(",");
+  }
+  function officialRole(element, userSelector, assistantSelector) {
+    const matchesRole = (selector) => Boolean(selector) && (safeMatches(element, selector) || safeQsa(selector, element).length > 0);
+    const user = matchesRole(userSelector);
+    const assistant = matchesRole(assistantSelector);
+    if (user && assistant) return "";
+    if (user) return "user";
+    if (assistant) return "assistant";
+    return "";
+  }
+  function collectOfficialRuleItems(config = {}) {
+    const hints = config?.officialRuleHints;
+    if (!hints || typeof hints !== "object") return [];
+    const messageSelector = selectorUnion(officialSelectorList(hints, "message"));
+    const userSelector = selectorUnion(officialSelectorList(hints, "userRole"));
+    const assistantSelector = selectorUnion(officialSelectorList(hints, "assistantRole"));
+    const composerSelector = selectorUnion(officialSelectorList(hints, "composer"));
+    if (!messageSelector || !userSelector || !assistantSelector || !composerSelector) return [];
+    const rootSelector = selectorUnion(officialSelectorList(hints, "conversationRoot"));
+    const contentSelector = selectorUnion(officialSelectorList(hints, "content"));
+    const effectSelector = selectorUnion(officialSelectorList(hints, "effectTarget"));
+    const excludedSelector = selectorUnion([
+      ...officialSelectorList(hints, "exclude"),
+      composerSelector
+    ]);
+    const roots = rootSelector ? safeQsa(rootSelector).filter((element) => visible(element) && !inChromeScope(element)) : [pageRoot()];
+    const seen = /* @__PURE__ */ new Set();
+    const items = [];
+    for (const root of roots) {
+      for (const element of safeQsa(messageSelector, root).sort(elementOrder)) {
+        if (!visible(element) || inChromeScope(element) || seen.has(element)) continue;
+        if (excludedSelector && (safeMatches(element, excludedSelector) || safeClosest(element, excludedSelector))) continue;
+        const role = officialRole(element, userSelector, assistantSelector);
+        if (!role) continue;
+        const content = contentSelector && safeQsa(contentSelector, element).find(visible) || element;
+        const text = usefulTurnText(cloneText(content, officialSelectorList(hints, "exclude")), 5e4);
+        if (!text) continue;
+        seen.add(element);
+        items.push({
+          element,
+          target: content,
+          effectTarget: effectSelector && safeQsa(effectSelector, element).find(visible) || content,
+          role,
+          text: compactText(text, config.officialRuleSummaryMaxChars || config.summaryMaxChars),
+          officialStrict: true
+        });
+      }
+    }
+    return conversationLooksUseful(items) ? items : [];
   }
 
   // content-src/message-navigator/sites/chatgpt.js
@@ -996,9 +1055,9 @@ ${normalize(item.text).toLowerCase().slice(0, 260)}`;
     ].join(","));
     return dedupeItems(blocks.map((item, index) => ({
       ...item,
-      role: genericRole(item.element, config) || (index % 2 === 0 ? "user" : "assistant"),
+      role: genericRole(item.element, config) || (config.strictOfficialRoles ? "" : index % 2 === 0 ? "user" : "assistant"),
       text: compactText(item.text, config.summaryMaxChars)
-    })));
+    })).filter((item) => item.role));
   }
   function createChatGptAdapter() {
     const adapter = {
@@ -1616,9 +1675,9 @@ ${normalize(item.text).toLowerCase().slice(0, 260)}`;
         ].join(","), { maxLength: 6e4 });
         return dedupeItems(blocks.slice(0, 24).map((item, index) => ({
           ...item,
-          role: genericRole(item.element, config) || (index % 2 === 0 ? "user" : "assistant"),
+          role: genericRole(item.element, config) || (config.strictOfficialRoles ? "" : index % 2 === 0 ? "user" : "assistant"),
           text: compactText(item.text, config.summaryMaxChars)
-        })));
+        }))).filter((item) => item.role);
       }
     };
     return Object.freeze(adapter);
@@ -1971,6 +2030,50 @@ ${normalize(item.text).toLowerCase().slice(0, 260)}`;
     }
     for (const id of REQUIRED_ADAPTER_IDS) adapters[id] = Object.freeze(validateAdapter(id, adapters[id]));
     return Object.freeze(adapters);
+  }
+
+  // shared/url-match.js
+  function normalizeHost(host) {
+    const raw = String(host || "").trim().toLowerCase();
+    if (!raw || /\s|:\/\/|[/?#@]/.test(raw)) return "";
+    const wildcard = raw.startsWith("*.");
+    const candidate = wildcard ? raw.slice(2) : raw;
+    if (!candidate || candidate.includes("*") || !candidate.startsWith("[") && candidate.includes(":")) return "";
+    let hostname = "";
+    try {
+      const parsed = new URL(`http://${candidate}`);
+      if (parsed.username || parsed.password || parsed.port || parsed.pathname !== "/" || parsed.search || parsed.hash) return "";
+      hostname = parsed.hostname.toLowerCase().replace(/\.$/, "");
+    } catch {
+      return "";
+    }
+    if (!hostname || hostname.length > 253) return "";
+    const bracketedIpv6 = hostname.startsWith("[") && hostname.endsWith("]");
+    if (!bracketedIpv6) {
+      const labels = hostname.split(".");
+      if (labels.some((label) => !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label))) return "";
+    }
+    if (wildcard && (bracketedIpv6 || /^\d+(?:\.\d+){3}$/.test(hostname) || hostname === "localhost")) return "";
+    return wildcard ? `*.${hostname}` : hostname;
+  }
+  function officialRuleConfigMatchesHref(config, href) {
+    let url;
+    try {
+      url = new URL(href);
+    } catch {
+      return false;
+    }
+    if (url.protocol !== "https:" || url.username || url.password || url.port) return false;
+    const hostname = normalizeHost(url.hostname);
+    if (!hostname || hostname.startsWith("*.")) return false;
+    const hosts = Array.isArray(config?.officialRuleHosts) ? config.officialRuleHosts : [];
+    const exactHostMatch = hosts.some((host) => {
+      const candidate = normalizeHost(host);
+      return Boolean(candidate && !candidate.startsWith("*.") && candidate === hostname);
+    });
+    if (!exactHostMatch) return false;
+    const prefixes = Array.isArray(config?.officialRulePathPrefixes) ? config.officialRulePathPrefixes.map((prefix) => String(prefix || "").trim()).filter(Boolean) : [];
+    return prefixes.length === 0 || prefixes.some((prefix) => url.pathname.startsWith(prefix));
   }
 
   // content-src/message-navigator/scroll.js
@@ -2359,9 +2462,16 @@ ${normalize(item.text).toLowerCase().slice(0, 260)}`;
     }
     collect() {
       const adapter = this.adapters[this.config.adapter] || this.adapters.generic;
-      const items = adapter.collect?.(this.config) || this.adapters.generic.collect(this.config);
-      return dedupeItems(items).map((item) => {
-        const role = item.role === "user" || item.role === "thinking" ? item.role : "assistant";
+      const officialRuleInScope = officialRuleConfigMatchesHref(this.config, String(location.href || ""));
+      const officialHints = this.config?.officialRuleHints;
+      const officialStrictRoles = officialRuleInScope && Number(this.config.officialRuleRevision) > 0;
+      const officialCollectorAvailable = officialRuleInScope && ["message", "userRole", "assistantRole", "composer"].every((slot) => Array.isArray(officialHints?.[slot]) && officialHints[slot].some((selector) => String(selector || "").trim()));
+      const officialItems = officialCollectorAvailable ? collectOfficialRuleItems(this.config) : [];
+      const fallbackConfig = officialStrictRoles ? { ...this.config, strictOfficialRoles: true } : this.config;
+      const fallbackItems = adapter.collect?.(fallbackConfig) || this.adapters.generic.collect(fallbackConfig);
+      const items = conversationLooksUseful(officialItems) ? officialItems : dedupeItems(fallbackItems);
+      return items.map((item) => {
+        const role = ["user", "assistant", "thinking"].includes(item.role) ? item.role : officialStrictRoles ? "" : "assistant";
         const target = item.target || item.element;
         return {
           ...item,
@@ -2369,7 +2479,7 @@ ${normalize(item.text).toLowerCase().slice(0, 260)}`;
           effectTarget: resolveEffectTarget({ ...item, target, role }, this.config, adapter),
           role
         };
-      }).filter((item) => item.text && visible(item.target || item.element)).map((item, index) => ({
+      }).filter((item) => item.role && item.text && visible(item.target || item.element)).map((item, index) => ({
         ...item,
         id: `message-${index + 1}`,
         role: item.role

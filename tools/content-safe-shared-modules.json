@@ -7,5 +7,6 @@
   "shared/delete-completion.js",
   "shared/frame-commands.js",
   "shared/protocol.js",
-  "shared/shortcuts.js"
+  "shared/shortcuts.js",
+  "shared/url-match.js"
 ]

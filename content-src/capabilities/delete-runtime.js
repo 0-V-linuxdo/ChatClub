@@ -1,3 +1,8 @@
+import {
+  deleteConfigAuthorizedForHref,
+  officialRuleConfigMatchesHref
+} from "../../shared/url-match.js";
+
 export function createDeleteRuntimeCapability(deps = {}) {
   const {
     TOPIC_DELETE_FALLBACK_CONFIGS,
@@ -327,18 +332,24 @@ export function createDeleteRuntimeCapability(deps = {}) {
     if (config?.builtIn === false) return null;
     const siteId = topicDeleteNativeSiteId(config, payload);
     if (!siteId) return null;
+    const nativePayload = {
+      ...payload,
+      ...(config?.officialRuleHints && typeof config.officialRuleHints === "object"
+        ? { officialRuleHints: config.officialRuleHints }
+        : {})
+    };
     return async () => {
-      if (siteId === "chatgpt") return deleteChatGptThread(payload);
-      if (siteId === "claude") return deleteClaudeThread(payload);
-      if (siteId === "gemini") return deleteGeminiThread(payload);
-      if (siteId === "kagi") return deleteKagiThread();
+      if (siteId === "chatgpt") return deleteChatGptThread(nativePayload);
+      if (siteId === "claude") return deleteClaudeThread(nativePayload);
+      if (siteId === "gemini") return deleteGeminiThread(nativePayload);
+      if (siteId === "kagi") return deleteKagiThread(nativePayload);
       if (siteId === "grokMirror") {
-        const result = await deleteGrokThread(payload);
+        const result = await deleteGrokThread(nativePayload);
         return { ...result, site: "grokMirror" };
       }
-      if (siteId === "grok") return deleteGrokThread(payload);
-      if (siteId === "notion") return deleteNotionThread(payload);
-      if (siteId === "deepseek") return deleteDeepSeekThread(payload);
+      if (siteId === "grok") return deleteGrokThread(nativePayload);
+      if (siteId === "notion") return deleteNotionThread(nativePayload);
+      if (siteId === "deepseek") return deleteDeepSeekThread(nativePayload);
       return deleteResult(false, siteId || "topic-delete", "unsupported site");
     };
   }
@@ -450,12 +461,29 @@ export function createDeleteRuntimeCapability(deps = {}) {
       deleteAttemptId: invocation.attemptId,
       expectedDeleteIdentity: invocation.expectedIdentity
     };
-    if (incomingConfig?.enabled === false) {
-      return deleteResult(false, topicDeleteSiteName(incomingConfig, payload), "site disabled");
-    }
+    const officialRuleActive = officialRuleConfigMatchesHref(incomingConfig, String(location.href || ""));
     const config = incomingConfig
-      ? incomingConfig
+      ? {
+          ...incomingConfig,
+          officialRuleHints: officialRuleActive ? incomingConfig.officialRuleHints : {},
+          userscriptTimeoutMs: officialRuleActive
+            ? incomingConfig.officialRuleTimeoutMs || incomingConfig.userscriptTimeoutMs
+            : incomingConfig.userscriptTimeoutMs
+        }
       : topicDeleteFallbackConfig({}, payload);
+    if (config?.enabled === false) {
+      return deleteResult(false, topicDeleteSiteName(config, payload), "site disabled");
+    }
+    if (
+      config
+      && !topicDeleteUsesCustomUserscript(config)
+      && !deleteConfigAuthorizedForHref(config, String(location.href || ""))
+    ) {
+      return deleteResult(false, topicDeleteSiteName(config, payload), "delete target host is not authorized for the packaged runner", {
+        delivered: false,
+        preDelivery: true
+      });
+    }
     if (!topicDeleteUsesCustomUserscript(config) && config?.standaloneUserscript !== true && !String(config?.userscript || "").trim() && !topicDeleteNativeRunner(config, payload)) {
       return deleteResult(false, topicDeleteSiteName(config || {}, payload), "unsupported site or userscript missing");
     }
@@ -484,7 +512,7 @@ export function createDeleteRuntimeCapability(deps = {}) {
     }
     const siteId = topicDeleteNativeSiteId(config, payload);
     if (siteId === "deepseek") {
-      const validation = validateDeepSeekTrustedCoordinates(value);
+      const validation = validateDeepSeekTrustedCoordinates(value, config?.officialRuleHints || {});
       if (!validation.ok) return deleteResult(false, "deepseek", validation.reason);
       value = sanitizeDeepSeekTrustedResult(value, validation);
     }

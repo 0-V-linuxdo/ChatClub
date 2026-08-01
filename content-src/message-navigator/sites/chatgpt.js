@@ -51,9 +51,10 @@ function chatgptFallbackItems(config) {
   ].join(","));
   return dedupeItems(blocks.map((item, index) => ({
     ...item,
-    role: genericRole(item.element, config) || (index % 2 === 0 ? "user" : "assistant"),
+    role: genericRole(item.element, config)
+      || (config.strictOfficialRoles ? "" : (index % 2 === 0 ? "user" : "assistant")),
     text: compactText(item.text, config.summaryMaxChars)
-  })));
+  })).filter((item) => item.role));
 }
 
 export function createChatGptAdapter() {

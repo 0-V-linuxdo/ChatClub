@@ -3,8 +3,13 @@ import {
   MESSAGE_NAVIGATOR_ROOT_ID,
   MESSAGE_NAVIGATOR_STYLE_ID
 } from "./constants.js";
+import { officialRuleConfigMatchesHref } from "../../shared/url-match.js";
 import { visible } from "./dom-kernel.js";
-import { dedupeItems } from "./collection-kernel.js";
+import {
+  collectOfficialRuleItems,
+  conversationLooksUseful,
+  dedupeItems
+} from "./collection-kernel.js";
 import { fallbackEffectTarget, resolveEffectTarget } from "./effect-target.js";
 import {
   rolePrefix,
@@ -182,10 +187,24 @@ export class MessageNavigator {
 
   collect() {
     const adapter = this.adapters[this.config.adapter] || this.adapters.generic;
-    const items = adapter.collect?.(this.config) || this.adapters.generic.collect(this.config);
-    return dedupeItems(items)
+    const officialRuleInScope = officialRuleConfigMatchesHref(this.config, String(location.href || ""));
+    const officialHints = this.config?.officialRuleHints;
+    const officialStrictRoles = officialRuleInScope && Number(this.config.officialRuleRevision) > 0;
+    const officialCollectorAvailable = officialRuleInScope
+      && ["message", "userRole", "assistantRole", "composer"].every((slot) => (
+        Array.isArray(officialHints?.[slot]) && officialHints[slot].some((selector) => String(selector || "").trim())
+      ));
+    const officialItems = officialCollectorAvailable ? collectOfficialRuleItems(this.config) : [];
+    const fallbackConfig = officialStrictRoles ? { ...this.config, strictOfficialRoles: true } : this.config;
+    const fallbackItems = adapter.collect?.(fallbackConfig) || this.adapters.generic.collect(fallbackConfig);
+    const items = conversationLooksUseful(officialItems) ? officialItems : dedupeItems(fallbackItems);
+    return items
       .map((item) => {
-        const role = item.role === "user" || item.role === "thinking" ? item.role : "assistant";
+        const role = ["user", "assistant", "thinking"].includes(item.role)
+          ? item.role
+          : officialStrictRoles
+            ? ""
+            : "assistant";
         const target = item.target || item.element;
         return {
           ...item,
@@ -194,7 +213,7 @@ export class MessageNavigator {
           role
         };
       })
-      .filter((item) => item.text && visible(item.target || item.element))
+      .filter((item) => item.role && item.text && visible(item.target || item.element))
       .map((item, index) => ({
         ...item,
         id: `message-${index + 1}`,

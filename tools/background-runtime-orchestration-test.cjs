@@ -12,6 +12,7 @@ const grokRuntime = read("background/grok-cookie-runtime.js");
 const notionPreflight = read("background/notion-frame-preflight.js");
 const customUserscripts = read("background/custom-userscript-runtime.js");
 const registeredFrameTransport = read("background/registered-frame-transport.js");
+const runtimeConfigApplication = read("background/runtime-config-application.js");
 
 const runtimeLines = runtime.trim().split(/\r?\n/).length;
 assert.ok(runtimeLines <= 700, `background runtime assembly must remain at or below 700 lines; found ${runtimeLines}`);
@@ -38,13 +39,10 @@ assert.match(runtime, /Number\(details\?\.frameId\) === 0[\s\S]*?forgetSecureTab
 assert.match(runtime, /touchContext: secureFrameContextRegistry\.touch/);
 assert.match(runtime, /forgetContext: secureFrameContextRegistry\.forgetContext/);
 assert.match(runtime, /chrome\.runtime\.onMessage\.addListener\(createBackgroundRequestListener\(dispatchBackgroundRequest\)\)/);
-assert.match(runtime, /createDnrRuleUpdater\(applyDnrRules\)/);
-assert.match(runtime, /replaceDnrRules\(/);
-assert.match(runtime, /currentExtensionPageTabIds\(preferredTabIds\)/);
+assert.match(runtime, /import \{ createStrictRuntimeConfigApplier \} from "\.\/runtime-config-application\.js"/);
+assert.match(runtime, /createStrictRuntimeConfigApplier\(chrome,/);
+assert.match(runtime, /applyConfiguration: runtimeConfigApplier\.apply/);
 assert.match(runtime, /knownExtensionPageTabIds/);
-assert.match(runtime, /queueMicrotask\(drain\)/);
-assert.match(runtime, /buildDynamicDnrRules\(chatApps, extensionHost, extensionTabIds\)/);
-assert.match(runtime, /buildDynamicDnrRules\(chatApps, extensionHost, \[\]\)/);
 assert.doesNotMatch(runtime, /\bimport\s*\(/);
 assert.match(runtime, /runtimeIdentity: CONTENT_BRIDGE_RUNTIME_IDENTITY/);
 assert.match(runtime, /contentRuntimeIdentityForBundle\("content\/content\.js"\)/);
@@ -54,6 +52,20 @@ assert.match(runtime, /verifiedRegisteredFrameFallbackTarget/);
 assert.doesNotMatch(runtime, /documentIds\|unexpected property\|invalid value/);
 assert.match(registeredFrameTransport, /documentTargetUnsupported\(error\)/);
 assert.match(registeredFrameTransport, /await verifyFallbackTarget\(context\)/);
+
+assert.match(runtimeConfigApplication, /export function createStrictRuntimeConfigApplier/);
+assert.match(runtimeConfigApplication, /const beforeDnr = await dnrSnapshot\(dnr\)/);
+assert.match(runtimeConfigApplication, /const contentPreparation = await prepareContentScriptRegistration\(api,/);
+assert.match(runtimeConfigApplication, /currentExtensionPageTabIds\(preferredTabIds\)/);
+assert.match(runtimeConfigApplication, /buildDynamicDnrRules\(chatApps, extensionHost, extensionTabIds\)/);
+assert.match(runtimeConfigApplication, /buildDynamicDnrRules\(chatApps, extensionHost, \[\]\)/);
+assert.match(runtimeConfigApplication, /notionRuntime\.activeSessionRules\(\)/);
+assert.match(runtimeConfigApplication, /await contentPreparation\.commit\(\)/);
+assert.match(runtimeConfigApplication, /await notionRuntime\.withDnrMutation\(\(\) => restoreDnrSnapshot\(dnr, beforeDnr\)\)/);
+assert.match(runtimeConfigApplication, /await contentPreparation\.restore\(\)/);
+assert.match(runtimeConfigApplication, /Runtime configuration apply and strict restore both failed/);
+assert.match(runtimeConfigApplication, /const queued = tail\.catch\(\(\) => \{\}\)\.then\(\(\) => applyInternal\(configuration, context\)\)/);
+assert.match(runtimeConfigApplication, /tail = queued\.then\(\(\) => undefined, \(\) => undefined\)/);
 
 assert.match(secureContexts, /assertContentRuntimePackageBundleIdentity\([\s\S]*?"content\/content\.js"/);
 assert.match(secureContexts, /contentRuntimePackageBundleIdentityMatches\(runtimeIdentity, "content\/content\.js"\)/);
@@ -88,8 +100,11 @@ assert.ok(
 assert.match(grokRuntime, /request\.SYNC_GROK_SESSION_COOKIES/);
 assert.doesNotMatch(grokRuntime, /console\.(?:log|info|debug).*cookie/i);
 assert.match(runtime, /notionFramePreflightRuntime\.dnrRuleUpdater\(updateDnrRules\)/);
-assert.match(runtime, /notionFramePreflightRuntime\.activeSessionRules\(\)/);
-assert.match(runtime, /notionFramePreflightRuntime\.withDnrMutation/);
+assert.match(
+  runtime,
+  /const applied = await officialRulesRuntime\.reloadConfiguration\(\{ preferredTabIds \}\);[\s\S]*?return String\(applied\?\.mode \|\| applied \|\| ""\);/,
+  "Notion frame preflight must receive the applied DNR mode, not the whole configuration result"
+);
 assert.match(runtime, /REQUEST\.CANCEL_NOTION_FRAME_LOAD/);
 assert.match(notionPreflight, /extensionUrl\.startsWith\("chrome-extension:\/\/"\)/);
 assert.match(notionPreflight, /NOTION_FRAME_RULE_TIMEOUT_MS = 10_000/);

@@ -5,6 +5,10 @@ import {
   normalizeDeleteFrameHref,
   sameDeleteConversationIdentity
 } from "../../shared/delete-completion.js";
+import {
+  deleteConfigAuthorizedForHref,
+  officialRuleConfigMatchesHref
+} from "../../shared/url-match.js";
 import { validateControllerContract } from "../controller-contract.js";
 import { createFrameRequest } from "../frame-request.js";
 
@@ -25,6 +29,96 @@ function createDeleteAttemptId() {
     }
   } catch {}
   throw new Error("Delete failed: secure attempt randomness is unavailable");
+}
+
+const OFFICIAL_DELETE_SELECTOR_SLOTS = Object.freeze([
+  "scope",
+  "conversationLink",
+  "conversationRow",
+  "menuTrigger",
+  "menuRoot",
+  "deleteCandidate",
+  "dialog",
+  "confirmCandidate",
+  "completionLinks"
+]);
+
+function snapshotOfficialDeleteHints(value = {}) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return Object.freeze({});
+  const snapshot = {};
+  for (const slot of OFFICIAL_DELETE_SELECTOR_SLOTS) {
+    const selectors = (Array.isArray(value[slot]) ? value[slot] : [])
+      .map((selector) => String(selector || "").trim())
+      .filter(Boolean)
+      .slice(0, 8);
+    if (selectors.length) snapshot[slot] = Object.freeze(selectors);
+  }
+  return Object.freeze(snapshot);
+}
+
+function snapshotOfficialDeleteScope(value = {}, maximumLength = 512) {
+  return Object.freeze((Array.isArray(value) ? value : [])
+    .map((item) => String(item || "").trim().slice(0, maximumLength))
+    .filter(Boolean)
+    .slice(0, 64));
+}
+
+function boundedDeleteTimeoutMs(value, fallback = 15000) {
+  return Math.max(5000, Math.min(45000, Number(value) || Number(fallback) || 15000));
+}
+
+const DELETE_FRAME_PAYLOAD_TEXT_KEYS = Object.freeze([
+  "appId",
+  "appName",
+  "currentTitle",
+  "title"
+]);
+
+const DELETE_FRAME_PAYLOAD_RETRY_KEYS = Object.freeze([
+  "trustedHoverRetried",
+  "trustedMenuTriggerRetried",
+  "trustedMenuClickRetried",
+  "trustedKeySequencePreflight",
+  "trustedKeySequenceRetried"
+]);
+
+function boundedDeleteFrameText(value, maximumLength = 256) {
+  return String(value || "").trim().slice(0, Math.max(0, Number(maximumLength) || 0));
+}
+
+function snapshotDeleteFramePayload(value = {}) {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const snapshot = {};
+  for (const key of DELETE_FRAME_PAYLOAD_TEXT_KEYS) {
+    const text = boundedDeleteFrameText(source[key], key === "currentTitle" || key === "title" ? 2048 : 256);
+    if (text) snapshot[key] = text;
+  }
+  for (const key of DELETE_FRAME_PAYLOAD_RETRY_KEYS) {
+    if (source[key] === true) snapshot[key] = true;
+  }
+  return Object.freeze(snapshot);
+}
+
+function snapshotDeleteFrameConfig(value, officialRuleHints, timeoutMs, officialRuleActive = false) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const snapshot = {};
+  const id = boundedDeleteFrameText(value.id, 256);
+  const name = boundedDeleteFrameText(value.name, 256);
+  if (id) snapshot.id = id;
+  if (name) snapshot.name = name;
+  if (typeof value.builtIn === "boolean") snapshot.builtIn = value.builtIn;
+  if (typeof value.enabled === "boolean") snapshot.enabled = value.enabled;
+  if (value.sourceMode === "custom" || value.sourceMode === "builtIn") snapshot.sourceMode = value.sourceMode;
+  if (value.userscriptOverride === true) snapshot.userscriptOverride = true;
+  snapshot.userscriptTimeoutMs = boundedDeleteTimeoutMs(value.userscriptTimeoutMs, timeoutMs);
+  snapshot.deleteAuthorizedHosts = snapshotOfficialDeleteScope(value.deleteAuthorizedHosts, 253);
+  snapshot.officialRuleHints = officialRuleHints;
+  if (officialRuleActive) {
+    snapshot.officialRuleHosts = snapshotOfficialDeleteScope(value.officialRuleHosts, 253);
+    snapshot.officialRulePathPrefixes = snapshotOfficialDeleteScope(value.officialRulePathPrefixes);
+    snapshot.officialRuleTimeoutMs = boundedDeleteTimeoutMs(timeoutMs, snapshot.userscriptTimeoutMs);
+  }
+  return Object.freeze(snapshot);
 }
 
 function trustedAttemptMatches(instruction, expectedAttemptId, expectedDocumentId) {
@@ -397,6 +491,19 @@ export function createTopicDeleteRuntime(dependencies = {}) {
     const site = config?.id || payload.appId || "topic-delete";
     const ready = await prepareContentBridge(iframe);
     if (!ready.ok) return { ok: false, site, reason: ready.reason };
+    const customDelete = config?.builtIn === false
+      || config?.sourceMode === "custom"
+      || config?.userscriptOverride === true;
+    if (!customDelete && !deleteConfigAuthorizedForHref(config, ready.href)) {
+      return {
+        ok: false,
+        site,
+        reason: "delete target host is not authorized for the packaged runner",
+        delivered: false,
+        preDelivery: true
+      };
+    }
+    const firstCapture = !completion.captured;
     const captured = captureCompletionIdentity(completion, ready.href);
     if (!captured.ok) return { ok: false, site, reason: captured.reason };
     if (!completion.identity) {
@@ -406,18 +513,32 @@ export function createTopicDeleteRuntime(dependencies = {}) {
         reason: "delete target has no authenticated stable conversation identity"
       };
     }
-    const runtimeConfig = config ? { ...config } : null;
-    if (runtimeConfig) {
-      const source = String(runtimeConfig.customUserscript || runtimeConfig.userscript || "");
-      runtimeConfig.standaloneUserscript = /\/\/\s*==UserScript==[\s\S]*?\/\/\s*==\/UserScript==/.test(source);
-      delete runtimeConfig.userscript;
-      delete runtimeConfig.customUserscript;
+    if (firstCapture) {
+      const officialRuleActive = officialRuleConfigMatchesHref(config, ready.href);
+      completion.officialRuleHints = officialRuleActive
+        ? snapshotOfficialDeleteHints(config?.officialRuleHints)
+        : Object.freeze({});
+      completion.officialRuleActive = officialRuleActive;
+      completion.runtimeTimeoutMs = boundedDeleteTimeoutMs(
+        officialRuleActive ? config?.officialRuleTimeoutMs : timeoutMs,
+        timeoutMs
+      );
     }
-    const data = { payload, ...(runtimeConfig ? { config: runtimeConfig } : {}) };
+    const attemptTimeoutMs = boundedDeleteTimeoutMs(completion.runtimeTimeoutMs, timeoutMs);
+    const runtimeConfig = snapshotDeleteFrameConfig(
+      config,
+      completion.officialRuleHints,
+      attemptTimeoutMs,
+      completion.officialRuleActive === true
+    );
+    const data = {
+      payload: snapshotDeleteFramePayload(payload),
+      ...(runtimeConfig ? { config: runtimeConfig } : {})
+    };
     data.deleteAttemptId = completion.attemptId;
     data.expectedDeleteIdentity = completion.identity;
     try {
-      return await sendToContentFrame(iframe, "deleteThread", data, timeoutMs + 1000);
+      return await sendToContentFrame(iframe, "deleteThread", data, attemptTimeoutMs + 1000);
     } catch (error) {
       if (!recoverableBeforeDeleteDelivery(error)) throw error;
       framePort.invalidate(iframe, `deleteThread:${error.code}`, {
@@ -428,14 +549,15 @@ export function createTopicDeleteRuntime(dependencies = {}) {
       if (!repaired.ok) return { ok: false, site, reason: repaired.reason };
       const recaptured = captureCompletionIdentity(completion, repaired.href);
       if (!recaptured.ok) return { ok: false, site, reason: recaptured.reason };
-      return sendToContentFrame(iframe, "deleteThread", data, timeoutMs + 1000);
+      return sendToContentFrame(iframe, "deleteThread", data, attemptTimeoutMs + 1000);
     }
   }
 
   function confirmState(iframe, site, completion, timeoutMs = 1200) {
     return sendToContentFrame(iframe, "getDeleteConfirmState", {
       site,
-      identity: completion?.identity || null
+      identity: completion?.identity || null,
+      officialRuleHints: completion?.officialRuleHints || {}
     }, timeoutMs);
   }
 
@@ -715,7 +837,15 @@ async function readOnlyCompletionAudit(iframe, site, completion) {
 async function executeTopicDeleteNow(iframe, payload = {}, config = null, timeoutMs = 15000) {
   const attemptId = createDeleteAttemptId();
   payload = { ...payload, deleteAttemptId: attemptId };
-  const completion = { attemptId, captured: false, href: "", identity: null };
+  const completion = {
+    attemptId,
+    captured: false,
+    href: "",
+    identity: null,
+    officialRuleHints: Object.freeze({}),
+    officialRuleActive: false,
+    runtimeTimeoutMs: 0
+  };
   const trustedDeliveryState = { claudeDeleteDConsumed: false };
   let result;
   try {

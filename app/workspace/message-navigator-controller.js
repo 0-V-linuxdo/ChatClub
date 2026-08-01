@@ -133,9 +133,14 @@ export function createWorkspaceMessageNavigatorController(dependencies = {}) {
     if (!config || config.enabled === false || knownNoConversationPage(config, payload)) return null;
     return {
       enabled: true,
-      config,
+      activationRevision: Math.max(0, Number(state.officialRulesActivationRevision) || 0),
+      config: {
+        ...config,
+        officialRulesActivationRevision: Math.max(0, Number(state.officialRulesActivationRevision) || 0)
+      },
       currentHref,
       options: {
+        activationRevision: Math.max(0, Number(state.officialRulesActivationRevision) || 0),
         effectMode: state.options?.messageNavigatorEffectMode || "border",
         primaryColor: state.options?.primaryColor || "#1f7a5f"
       }
@@ -159,6 +164,7 @@ export function createWorkspaceMessageNavigatorController(dependencies = {}) {
       clearMessageNavigatorMenuOutsideClose();
       iframe.dataset.messageNavigatorEnabled = "0";
       iframe.dataset.messageNavigatorSiteId = "";
+      iframe.dataset.messageNavigatorActivationRevision = "";
       try { await setMessageNavigatorForFrame(iframe, false); } catch {}
       syncWorkspaceDom();
       closePopovers();
@@ -175,6 +181,7 @@ export function createWorkspaceMessageNavigatorController(dependencies = {}) {
       const result = await setMessageNavigatorForFrame(iframe, true, { ...payload, openMenu: true });
       iframe.dataset.messageNavigatorEnabled = "1";
       iframe.dataset.messageNavigatorSiteId = payload.config.id || "";
+      iframe.dataset.messageNavigatorActivationRevision = String(payload.activationRevision);
       syncWorkspaceDom();
       closePopovers();
       armMessageNavigatorMenuOutsideClose(iframe);
@@ -183,6 +190,7 @@ export function createWorkspaceMessageNavigatorController(dependencies = {}) {
       clearMessageNavigatorMenuOutsideClose();
       iframe.dataset.messageNavigatorEnabled = "0";
       iframe.dataset.messageNavigatorSiteId = "";
+      iframe.dataset.messageNavigatorActivationRevision = "";
       syncWorkspaceDom();
       closePopovers();
       const app = appById(iframe?.dataset?.appId || "") || {};
@@ -216,12 +224,14 @@ export function createWorkspaceMessageNavigatorController(dependencies = {}) {
     if (!payload) {
       iframe.dataset.messageNavigatorEnabled = "0";
       iframe.dataset.messageNavigatorSiteId = "";
+      iframe.dataset.messageNavigatorActivationRevision = "";
       syncWorkspaceDom();
       return;
     }
     try {
       await setMessageNavigatorForFrame(iframe, true, payload);
       iframe.dataset.messageNavigatorSiteId = payload.config.id || "";
+      iframe.dataset.messageNavigatorActivationRevision = String(payload.activationRevision);
       syncWorkspaceDom();
     } catch (error) {
       const app = appById(iframe?.dataset?.appId || "") || {};

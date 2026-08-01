@@ -30,6 +30,7 @@ const DEFAULT_BUILD_ENTRY_POINTS = Object.freeze([
   "build-src/topic-delete-userscript-sources.js"
 ]);
 const REQUIRED_APP_LAZY_BOUNDARIES = Object.freeze([
+  "app/official-rules/service.js",
   "app/pocket/controller.js",
   "app/settings/controller.js",
   "app/summary/controller.js"
@@ -788,13 +789,15 @@ if (verifyNativeEntryBudgets) {
     const bytes = sourceBytes(closure);
     for (const [field, value] of Object.entries({
       maxFiles: budget.maxFiles,
-      targetFiles: budget.targetFiles,
       maxSourceBytes: budget.maxSourceBytes,
       targetSourceBytes: budget.targetSourceBytes
     })) {
       if (!Number.isSafeInteger(value) || value <= 0) {
         fail(`${NATIVE_ENTRY_BUDGET_FILE}: ${label}.${field} must be a positive integer`);
       }
+    }
+    if (!Number.isSafeInteger(budget.targetFiles) || budget.targetFiles < 0) {
+      fail(`${NATIVE_ENTRY_BUDGET_FILE}: ${label}.targetFiles must be a non-negative integer`);
     }
     if (budget.targetFiles >= budget.maxFiles) {
       fail(`${NATIVE_ENTRY_BUDGET_FILE}: ${label}.targetFiles must be below maxFiles`);

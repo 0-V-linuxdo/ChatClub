@@ -97,9 +97,9 @@ function installDeleteCapability() {
     deleteResultWithTrustedDeleteShortcut: common.deleteResultWithTrustedDeleteShortcut,
     deleteResultWithTrustedMenuClick: common.deleteResultWithTrustedMenuClick,
     dispatchDeleteKeyboardShortcut: common.dispatchDeleteKeyboardShortcut,
-    clickDeleteConfirmIfAppears: common.clickDeleteConfirmIfAppears,
     clickDeleteConfirmIfPresent: common.clickDeleteConfirmIfPresent,
     findDeleteConfirmButton: common.findDeleteConfirmButton,
+    findDeleteConfirmButtonInfo: common.findDeleteConfirmButtonInfo,
     isDisabledElement: dom.isDisabledElement,
     modelElementArea: dom.modelElementArea,
     modelElementFromPoint: dom.modelElementFromPoint,
@@ -124,6 +124,8 @@ function installDeleteCapability() {
     deleteElementText: common.deleteElementText,
     deleteResult: common.deleteResult,
     findDeleteConfirmButton: common.findDeleteConfirmButton,
+    findDeleteConfirmButtonInfo: common.findDeleteConfirmButtonInfo,
+    deleteDialogRoots: common.deleteDialogRoots,
     clickDeleteConfirmIfPresent: common.clickDeleteConfirmIfPresent,
     layoutDeleteCandidates: common.layoutDeleteCandidates,
     serializableDeleteRect: common.serializableDeleteRect,
@@ -178,7 +180,8 @@ function installDeleteCapability() {
       deleteThread: runtime.deleteThread,
       getDeleteConfirmState: (data) => common.topicDeleteConfirmState(
         data?.site || "topic-delete",
-        data?.identity || null
+        data?.identity || null,
+        data?.officialRuleHints || {}
       )
     }
   });

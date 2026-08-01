@@ -171,14 +171,17 @@ function createFixture(createTopicDeleteRuntime, options = {}) {
         .filter((message) => message?.action === "ensureContentBridge")
         .length;
     },
-    async execute() {
+    async execute(payload = options.payload || { appId: "probe" }, config = options.config || {
+      id: "probe",
+      deleteAuthorizedHosts: [new URL(options.href || DEFAULT_HREF).hostname]
+    }, timeoutMs = options.timeoutMs || 5000) {
       extensionMessageHandler = options.extensionMessageHandler || null;
       try {
         return await runtime.executeTopicDelete(
           iframe,
-          { appId: "probe" },
-          { id: "probe" },
-          5000
+          payload,
+          config,
+          timeoutMs
         );
       } finally {
         extensionMessageHandler = null;
@@ -280,7 +283,7 @@ function createFixture(createTopicDeleteRuntime, options = {}) {
     );
     assert.deepEqual(deleteRequests[0].data.expectedDeleteIdentity, DEFAULT_IDENTITY);
     assert.deepEqual(deleteRequests[1].data.expectedDeleteIdentity, DEFAULT_IDENTITY);
-    assert.equal(deleteRequests[0].data.payload.deleteAttemptId, deleteRequests[0].data.deleteAttemptId);
+    assert.equal(deleteRequests[0].data.payload.deleteAttemptId, undefined, "attempt identity must exist only in the authenticated root envelope");
   }
 
   {
@@ -1297,6 +1300,137 @@ function createFixture(createTopicDeleteRuntime, options = {}) {
     await assert.rejects(fixture.execute(), /no authenticated stable conversation identity/);
     assert.equal(fixture.deleteCalls, 0, "an unsupported URL must fail before mutation");
     assert.equal(fixture.confirmCalls, 0, "an unsupported URL has no post-mutation completion to probe");
+  }
+
+  {
+    const scopedConfig = {
+      id: "deepseek",
+      name: "DeepSeek",
+      builtIn: true,
+      enabled: true,
+      sourceMode: "builtIn",
+      userscriptTimeoutMs: 15000,
+      deleteAuthorizedHosts: ["deepseek.com", "chat.deepseek.com"],
+      officialRuleTimeoutMs: 18000,
+      officialRuleHosts: ["deepseek.com"],
+      officialRulePathPrefixes: ["/a/chat"],
+      officialRuleHints: { menuTrigger: [".signed-trigger"] }
+    };
+    for (const href of [
+      "https://chat.deepseek.com/a/chat/s/topic-1",
+      "https://deepseek.com/chat/s/topic-1"
+    ]) {
+      const fixture = createFixture(createTopicDeleteRuntime, { href });
+      await fixture.execute({ appId: "deepseek" }, scopedConfig, 15000);
+      const request = fixture.requests.find(({ command }) => command === "deleteThread");
+      assert.deepEqual(request.data.config.officialRuleHints, {}, "out-of-scope Delete URLs must not receive signed selector hints");
+      assert.equal(request.data.config.userscriptTimeoutMs, 15000, "out-of-scope Delete URLs must retain the packaged timeout");
+      assert.equal(Object.hasOwn(request.data.config, "officialRuleHosts"), false);
+      assert.equal(Object.hasOwn(request.data.config, "officialRulePathPrefixes"), false);
+    }
+    const exactFixture = createFixture(createTopicDeleteRuntime, { href: "https://deepseek.com/a/chat/s/topic-1" });
+    await exactFixture.execute({ appId: "deepseek" }, scopedConfig, 15000);
+    const exactRequest = exactFixture.requests.find(({ command }) => command === "deleteThread");
+    assert.deepEqual(exactRequest.data.config.officialRuleHints, { menuTrigger: [".signed-trigger"] });
+    assert.equal(exactRequest.data.config.userscriptTimeoutMs, 15000, "the packaged timeout remains available for a late out-of-scope route");
+    assert.equal(exactRequest.data.config.officialRuleTimeoutMs, 18000);
+    assert.deepEqual(exactRequest.data.config.officialRuleHosts, ["deepseek.com"]);
+    assert.deepEqual(exactRequest.data.config.officialRulePathPrefixes, ["/a/chat"]);
+  }
+
+  {
+    const href = "https://new.chatgpt.com/c/topic-1";
+    const packagedConfig = {
+      id: "chatgpt",
+      name: "ChatGPT",
+      builtIn: true,
+      enabled: true,
+      sourceMode: "builtIn",
+      userscriptTimeoutMs: 15000,
+      hosts: ["chatgpt.com", "*.chatgpt.com"],
+      deleteAuthorizedHosts: ["chatgpt.com", "chat.openai.com"]
+    };
+    const blocked = createFixture(createTopicDeleteRuntime, { href });
+    await assert.rejects(blocked.execute({ appId: "ChatGPT" }, packagedConfig, 15000), /host is not authorized/);
+    assert.equal(blocked.deleteCalls, 0, "an appId and packaged wildcard must not start Delete on an unapproved alias");
+
+    const approved = createFixture(createTopicDeleteRuntime, { href });
+    await approved.execute({ appId: "ChatGPT" }, {
+      ...packagedConfig,
+      deleteAuthorizedHosts: [...packagedConfig.deleteAuthorizedHosts, "new.chatgpt.com"]
+    }, 15000);
+    assert.equal(approved.deleteCalls, 1, "a locally approved exact alias may reach the packaged runner");
+  }
+
+  {
+    const hintedSelectors = Array.from({ length: 10 }, (_, index) => `  .remote-trigger-${index}  `);
+    const fixture = createFixture(createTopicDeleteRuntime, { href: DEFAULT_HREF });
+    assert.deepEqual(await fixture.execute({
+      appId: "deepseek",
+      appName: "DeepSeek",
+      currentTitle: "Current topic",
+      title: "Fallback title",
+      trustedHoverRetried: true,
+      trustedMenuClickRetried: true,
+      trustedKeySequenceRetried: false,
+      currentHref: DEFAULT_HREF,
+      currentThreadHref: DEFAULT_HREF,
+      deleteAttemptId: "forged-nested-attempt",
+      conversation: "must not cross the frame boundary"
+    }, {
+      id: "deepseek",
+      name: "DeepSeek",
+      builtIn: true,
+      enabled: true,
+      sourceMode: "builtIn",
+      userscriptOverride: true,
+      userscript: "remote code must not cross the frame boundary",
+      customUserscript: "remote code must not cross the frame boundary",
+      hosts: ["example.test"],
+      pathPrefixes: ["/unsafe"],
+      deleteAuthorizedHosts: ["chat.deepseek.com"],
+      secret: "must not cross the frame boundary",
+      officialRuleHosts: ["chat.deepseek.com"],
+      officialRulePathPrefixes: ["/a/chat"],
+      officialRuleHints: {
+        menuTrigger: hintedSelectors,
+        dialog: ["  .remote-dialog  "],
+        forbiddenSlot: [".forbidden"]
+      }
+    }, 90000), { ok: true, site: "probe" });
+    const request = fixture.requests.find(({ command }) => command === "deleteThread");
+    assert.ok(request, "Delete must send one authenticated mutation envelope");
+    assert.deepEqual(Object.keys(request.data).sort(), ["config", "deleteAttemptId", "expectedDeleteIdentity", "payload"]);
+    assert.deepEqual(Object.keys(request.data.payload).sort(), [
+      "appId",
+      "appName",
+      "currentTitle",
+      "title",
+      "trustedHoverRetried",
+      "trustedMenuClickRetried"
+    ]);
+    assert.deepEqual(Object.keys(request.data.config).sort(), [
+      "builtIn",
+      "deleteAuthorizedHosts",
+      "enabled",
+      "id",
+      "name",
+      "officialRuleHints",
+      "officialRuleHosts",
+      "officialRulePathPrefixes",
+      "officialRuleTimeoutMs",
+      "sourceMode",
+      "userscriptOverride",
+      "userscriptTimeoutMs"
+    ]);
+    assert.equal(request.data.config.userscriptTimeoutMs, 45000, "the snapped content timeout must remain inside the packaged bound");
+    assert.equal(request.data.config.officialRuleTimeoutMs, 45000, "the signed timeout must remain inside the packaged bound");
+    assert.deepEqual(request.data.config.officialRuleHints, {
+      menuTrigger: hintedSelectors.slice(0, 8).map((selector) => selector.trim()),
+      dialog: [".remote-dialog"]
+    });
+    assert.deepEqual(request.data.expectedDeleteIdentity, DEFAULT_IDENTITY);
+    assert.match(request.data.deleteAttemptId, /^(?:[a-f0-9-]{36}|delete-[a-f0-9]{48})$/i);
   }
 
   assert.equal(

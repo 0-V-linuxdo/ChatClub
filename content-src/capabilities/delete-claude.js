@@ -58,6 +58,23 @@ export function createDeleteClaudeCapability(deps = {}) {
     return () => Boolean(expectedId) && claudeConversationIdFromHref() === expectedId;
   }
 
+  function claudeOfficialHints(data = {}) {
+    return data?.officialRuleHints && typeof data.officialRuleHints === "object" && !Array.isArray(data.officialRuleHints)
+      ? data.officialRuleHints
+      : {};
+  }
+
+  function claudeOfficialSelectors(hints = {}, slot = "") {
+    return (Array.isArray(hints?.[slot]) ? hints[slot] : [])
+      .map((selector) => String(selector || "").trim())
+      .filter(Boolean)
+      .slice(0, 8);
+  }
+
+  function claudeSelectorUnion(packaged, hints = {}, slot = "") {
+    return [packaged, ...claudeOfficialSelectors(hints, slot)].filter(Boolean).join(",");
+  }
+
   function claudeChatTitleRoot() {
     const roots = qsa(CLAUDE_CHAT_TITLE_ROOT_SELECTOR, document, { all: true }).filter((root) => {
       if (!root?.isConnected || !visible(root)) return false;
@@ -101,12 +118,13 @@ export function createDeleteClaudeCapability(deps = {}) {
     });
   }
 
-  function claudeConversationMenuTrigger() {
+  function claudeConversationMenuTrigger(hints = {}) {
     const root = claudeChatTitleRoot();
     if (!root) return null;
     const candidates = [];
     const seen = new Set();
-    for (const node of qsa("button[aria-label],[role='button'][aria-label]", root, { all: true })) {
+    const selector = claudeSelectorUnion("button[aria-label],[role='button'][aria-label]", hints, "menuTrigger");
+    for (const node of qsa(selector, root, { all: true })) {
       const label = String(node.getAttribute?.("aria-label") || "").trim();
       const title = claudeConversationTitleFromMenuLabel(label);
       if (!title) continue;
@@ -154,10 +172,10 @@ export function createDeleteClaudeCapability(deps = {}) {
     return roots.size === 1 ? [...roots][0] : null;
   }
 
-  function claudeDeleteMenuRoots(trigger = null) {
+  function claudeDeleteMenuRoots(trigger = null, hints = {}) {
     const roots = [];
     const seen = new Set();
-    const confirmationRoots = deleteDialogRoots();
+    const confirmationRoots = deleteDialogRoots(hints?.dialog);
     const add = (root) => {
       if (!root || root === trigger || seen.has(root) || !root.isConnected || !visible(root)) return;
       if (trigger && (root.contains?.(trigger) || trigger.contains?.(root))) return;
@@ -170,7 +188,15 @@ export function createDeleteClaudeCapability(deps = {}) {
     // Claude exposes multiple identical conversation menus (for example, title
     // and sidebar-row menus). Only the root explicitly controlled by the unique
     // current-title trigger is an authenticated target for this attempt.
-    add(claudeLinkedDeleteMenuRoot(trigger));
+    const linkedRoot = claudeLinkedDeleteMenuRoot(trigger);
+    add(linkedRoot);
+    for (const selector of claudeOfficialSelectors(hints, "menuRoot")) {
+      for (const candidate of qsa(selector, document, { all: true })) {
+        // A remote selector can only rediscover the root authenticated by the
+        // title trigger's aria-controls/aria-owns binding.
+        if (candidate === linkedRoot || linkedRoot?.contains?.(candidate)) add(linkedRoot);
+      }
+    }
     return roots.sort((a, b) => modelElementArea(a) - modelElementArea(b));
   }
 
@@ -253,11 +279,12 @@ export function createDeleteClaudeCapability(deps = {}) {
     return Boolean(pointTarget && (pointTarget === node || node.contains?.(pointTarget)));
   }
 
-  function findClaudeDeleteMenuItem(root, trigger = null) {
+  function findClaudeDeleteMenuItem(root, trigger = null, hints = {}) {
     if (!root || !root.isConnected || !visible(root)) return null;
     const candidates = [];
     const seen = new Set();
-    for (const node of qsa("[role='menuitem'],[role='option'],button,[role='button']", root, { all: true })) {
+    const selector = claudeSelectorUnion("[role='menuitem'],[role='option'],button,[role='button']", hints, "deleteCandidate");
+    for (const node of qsa(selector, root, { all: true })) {
       const target = deleteClickableElement(node);
       if (!target || target === root || target === trigger || seen.has(target) || !root.contains?.(target)) continue;
       if (!target.isConnected || !visible(target) || isDisabledElement(target)) continue;
@@ -287,11 +314,12 @@ export function createDeleteClaudeCapability(deps = {}) {
     });
   }
 
-  function findClaudeDeleteMenuShortcutItem(root, trigger = null) {
+  function findClaudeDeleteMenuShortcutItem(root, trigger = null, hints = {}) {
     if (!root || !root.isConnected || !visible(root)) return null;
     const candidates = [];
     const seen = new Set();
-    for (const node of qsa("[role='menuitem'],[role='option'],button,[role='button']", root, { all: true })) {
+    const selector = claudeSelectorUnion("[role='menuitem'],[role='option'],button,[role='button']", hints, "deleteCandidate");
+    for (const node of qsa(selector, root, { all: true })) {
       const target = deleteClickableElement(node);
       if (!target || target === root || target === trigger || seen.has(target) || !root.contains?.(target)) continue;
       if (!target.isConnected || !visible(target) || isDisabledElement(target)) continue;
@@ -305,23 +333,23 @@ export function createDeleteClaudeCapability(deps = {}) {
     return claudeDeleteMenuHasConversationFingerprint(root, candidates[0]) ? candidates[0] : null;
   }
 
-  function claudeOwnedDeleteMenuRoots(trigger = null) {
+  function claudeOwnedDeleteMenuRoots(trigger = null, hints = {}) {
     return new Set(
-      claudeDeleteMenuRoots(trigger).filter((root) => Boolean(findClaudeDeleteMenuItem(root, trigger)))
+      claudeDeleteMenuRoots(trigger, hints).filter((root) => Boolean(findClaudeDeleteMenuItem(root, trigger, hints)))
     );
   }
 
-  function claudeShortcutDeleteMenuRoots(trigger = null) {
+  function claudeShortcutDeleteMenuRoots(trigger = null, hints = {}) {
     return new Set(
-      claudeDeleteMenuRoots(trigger).filter((root) => Boolean(findClaudeDeleteMenuShortcutItem(root, trigger)))
+      claudeDeleteMenuRoots(trigger, hints).filter((root) => Boolean(findClaudeDeleteMenuShortcutItem(root, trigger, hints)))
     );
   }
 
-  function claudeDeleteMenuSession(trigger, baselineRoots = new Set()) {
+  function claudeDeleteMenuSession(trigger, baselineRoots = new Set(), hints = {}) {
     const sessionsByItem = new Map();
-    for (const root of claudeDeleteMenuRoots(trigger)) {
+    for (const root of claudeDeleteMenuRoots(trigger, hints)) {
       if (baselineRoots.has(root)) continue;
-      const item = findClaudeDeleteMenuItem(root, trigger);
+      const item = findClaudeDeleteMenuItem(root, trigger, hints);
       if (!item) continue;
       const existing = sessionsByItem.get(item);
       if (!existing || modelElementArea(root) < modelElementArea(existing.root)) sessionsByItem.set(item, { root, item });
@@ -330,11 +358,11 @@ export function createDeleteClaudeCapability(deps = {}) {
     return sessions.length === 1 ? sessions[0] : null;
   }
 
-  function claudeDeleteMenuShortcutSession(trigger, baselineRoots = new Set()) {
+  function claudeDeleteMenuShortcutSession(trigger, baselineRoots = new Set(), hints = {}) {
     const sessionsByItem = new Map();
-    for (const root of claudeDeleteMenuRoots(trigger)) {
+    for (const root of claudeDeleteMenuRoots(trigger, hints)) {
       if (baselineRoots.has(root)) continue;
-      const item = findClaudeDeleteMenuShortcutItem(root, trigger);
+      const item = findClaudeDeleteMenuShortcutItem(root, trigger, hints);
       if (!item) continue;
       const existing = sessionsByItem.get(item);
       if (!existing || modelElementArea(root) < modelElementArea(existing.root)) sessionsByItem.set(item, { root, item });
@@ -343,20 +371,20 @@ export function createDeleteClaudeCapability(deps = {}) {
     return sessions.length === 1 ? sessions[0] : null;
   }
 
-  function refreshClaudeDeleteMenuSession(session, trigger) {
+  function refreshClaudeDeleteMenuSession(session, trigger, hints = {}) {
     const root = session?.root || null;
     if (!root || !root.isConnected || !visible(root)) return null;
-    if (!claudeDeleteMenuRoots(trigger).includes(root)) return null;
-    const item = findClaudeDeleteMenuItem(root, trigger);
+    if (!claudeDeleteMenuRoots(trigger, hints).includes(root)) return null;
+    const item = findClaudeDeleteMenuItem(root, trigger, hints);
     return item ? { root, item } : null;
   }
 
-  function refreshClaudeDeleteMenuShortcutSession(session, trigger) {
+  function refreshClaudeDeleteMenuShortcutSession(session, trigger, hints = {}) {
     const root = session?.root || null;
     const expectedItem = session?.item || null;
     if (!root || !expectedItem || !root.isConnected || !visible(root)) return null;
-    if (!claudeDeleteMenuRoots(trigger).includes(root)) return null;
-    const item = findClaudeDeleteMenuShortcutItem(root, trigger);
+    if (!claudeDeleteMenuRoots(trigger, hints).includes(root)) return null;
+    const item = findClaudeDeleteMenuShortcutItem(root, trigger, hints);
     return item && item === expectedItem ? { root, item } : null;
   }
 
@@ -371,7 +399,7 @@ export function createDeleteClaudeCapability(deps = {}) {
     return Boolean(values.length) && values.every((value) => value === expectedLabel);
   }
 
-  function claudeDeleteConfirmationDetails(root) {
+  function claudeDeleteConfirmationDetails(root, hints = {}) {
     if (!root || !root.isConnected || !visible(root)) return null;
     const headings = qsa("h1,h2,h3,h4,[role='heading']", root, { all: true })
       .filter((node) => node?.isConnected && visible(node))
@@ -381,7 +409,8 @@ export function createDeleteClaudeCapability(deps = {}) {
     if (CLAUDE_WRONG_DELETE_TARGET_PATTERN.test(rootText) || !rootText.includes(CLAUDE_DELETE_CONFIRMATION_PROMPT)) return null;
     const actions = [];
     const seen = new Set();
-    for (const node of qsa("button,[role='button']", root, { all: true })) {
+    const selector = claudeSelectorUnion("button,[role='button']", hints, "confirmCandidate");
+    for (const node of qsa(selector, root, { all: true })) {
       const target = deleteClickableElement(node);
       if (!target || seen.has(target) || !root.contains?.(target)) continue;
       if (!target.isConnected || !visible(target) || isDisabledElement(target)) continue;
@@ -396,11 +425,11 @@ export function createDeleteClaudeCapability(deps = {}) {
     return { button: deleteButtons[0], cancelButton: cancelButtons[0] };
   }
 
-  function claudeDeleteConfirmationOwnerships(baselineRoots = new Set()) {
+  function claudeDeleteConfirmationOwnerships(baselineRoots = new Set(), hints = {}) {
     const ownedByButton = new Map();
-    for (const root of deleteDialogRoots()) {
+    for (const root of deleteDialogRoots(hints?.dialog)) {
       if (!root || baselineRoots.has(root) || !root.isConnected || !visible(root)) continue;
-      const details = claudeDeleteConfirmationDetails(root);
+      const details = claudeDeleteConfirmationDetails(root, hints);
       if (!details) continue;
       const { button, cancelButton } = details;
       const existing = ownedByButton.get(button);
@@ -431,7 +460,7 @@ export function createDeleteClaudeCapability(deps = {}) {
   function claudeLeaseOriginalMenuClosed(lease, routeStillCurrent) {
     if (!lease?.trigger || !lease?.menuRoot || !lease?.item) return false;
     if (!claudeLeaseCoreIsCurrent(lease, routeStillCurrent)) return false;
-    if (claudeConversationMenuTrigger() !== lease.trigger) return false;
+    if (claudeConversationMenuTrigger(lease.officialHints) !== lease.trigger) return false;
     const binding = claudeMenuBindingIds(lease.trigger);
     if (String(lease.trigger.getAttribute?.("aria-expanded") || "").trim().toLowerCase() !== "false") return false;
     if (binding.ids.length) {
@@ -462,7 +491,7 @@ export function createDeleteClaudeCapability(deps = {}) {
         ? lease.frozenConfirmation
         : null;
     }
-    const ownerships = claudeDeleteConfirmationOwnerships(lease?.confirmationBaseline);
+    const ownerships = claudeDeleteConfirmationOwnerships(lease?.confirmationBaseline, lease?.officialHints);
     if (ownerships.length > 1) {
       lease.confirmationAmbiguous = true;
       return null;
@@ -487,9 +516,9 @@ export function createDeleteClaudeCapability(deps = {}) {
     if (!root.contains?.(button) || !root.contains?.(cancelButton)) return false;
     if (!root.contains?.(document.activeElement || null)) return false;
     if (ownership.baselineRoots?.has(root)) return false;
-    const details = claudeDeleteConfirmationDetails(root);
+    const details = claudeDeleteConfirmationDetails(root, lease?.officialHints);
     if (!details || details.button !== button || details.cancelButton !== cancelButton) return false;
-    const currentOwnerships = claudeDeleteConfirmationOwnerships(ownership.baselineRoots);
+    const currentOwnerships = claudeDeleteConfirmationOwnerships(ownership.baselineRoots, lease?.officialHints);
     return currentOwnerships.length === 1
       && currentOwnerships[0].root === root
       && currentOwnerships[0].button === button
@@ -546,12 +575,12 @@ export function createDeleteClaudeCapability(deps = {}) {
         && exactPath
         && claudeTrustedDeleteLease === lease
         && claudeLeaseCoreIsCurrent(lease, routeStillCurrent)
-        && claudeConversationMenuTrigger() === lease.trigger
+        && claudeConversationMenuTrigger(lease.officialHints) === lease.trigger
         && claudeLinkedDeleteMenuRoot(lease.trigger) === lease.menuRoot
         && String(lease.trigger.getAttribute?.("aria-expanded") || "").trim().toLowerCase() === "true"
         && document.hasFocus?.()
         && document.activeElement === lease.item
-        && Boolean(refreshClaudeDeleteMenuShortcutSession({ root: lease.menuRoot, item: lease.item }, lease.trigger));
+        && Boolean(refreshClaudeDeleteMenuShortcutSession({ root: lease.menuRoot, item: lease.item }, lease.trigger, lease.officialHints));
       if (!valid) {
         state.invalid = true;
         return;
@@ -575,8 +604,8 @@ export function createDeleteClaudeCapability(deps = {}) {
     }
   }
 
-  function claudeHasNewDeleteConfirmation(baselineRoots = new Set()) {
-    return deleteDialogRoots().some((root) => !baselineRoots.has(root));
+  function claudeHasNewDeleteConfirmation(baselineRoots = new Set(), hints = {}) {
+    return deleteDialogRoots(hints?.dialog).some((root) => !baselineRoots.has(root));
   }
 
   function claudeTrustedMenuResult(reason, element, kind) {
@@ -646,7 +675,7 @@ export function createDeleteClaudeCapability(deps = {}) {
     }, timeoutMs, 90);
     if (!routeStillCurrent()) return { state: "route-changed" };
     if (confirmation) return { state: "confirmation", confirmation };
-    const session = refreshClaudeDeleteMenuSession({ root: lease.menuRoot, item: lease.item }, trigger);
+    const session = refreshClaudeDeleteMenuSession({ root: lease.menuRoot, item: lease.item }, trigger, lease.officialHints);
     return session && session.item === lease.item
       ? { state: "menu-open", session }
       : { state: "uncertain" };
@@ -666,12 +695,13 @@ export function createDeleteClaudeCapability(deps = {}) {
   }
 
   function leaseClaudeTrustedDeleteShortcut(data, session, routeStillCurrent, confirmationBaseline) {
-    const trigger = claudeConversationMenuTrigger();
-    const current = refreshClaudeDeleteMenuShortcutSession(session, trigger);
+    const hints = claudeOfficialHints(data);
+    const trigger = claudeConversationMenuTrigger(hints);
+    const current = refreshClaudeDeleteMenuShortcutSession(session, trigger, hints);
     if (!current || !routeStillCurrent()) {
       return deleteResult(false, "claude", "owned Claude delete shortcut changed before activation");
     }
-    if (claudeHasNewDeleteConfirmation(confirmationBaseline)) {
+    if (claudeHasNewDeleteConfirmation(confirmationBaseline, hints)) {
       return deleteResult(false, "claude", "unverified delete confirmation appeared before Delete D activation");
     }
     const menuBinding = claudeMenuBindingIds(trigger);
@@ -693,6 +723,7 @@ export function createDeleteClaudeCapability(deps = {}) {
       menuRoot: current.root,
       menuBindingKey: menuBinding.key,
       item: current.item,
+      officialHints: hints,
       confirmationBaseline,
       expiresAt: Date.now() + 12000
     };
@@ -701,13 +732,14 @@ export function createDeleteClaudeCapability(deps = {}) {
 
   function focusClaudeDeleteShortcutLease(lease, routeStillCurrent) {
     if (!lease?.trigger || !lease?.menuRoot || !lease?.item || !routeStillCurrent()) return null;
-    if (claudeConversationMenuTrigger() !== lease.trigger) return null;
+    if (claudeConversationMenuTrigger(lease.officialHints) !== lease.trigger) return null;
     if (claudeLinkedDeleteMenuRoot(lease.trigger) !== lease.menuRoot) return null;
     if (claudeMenuBindingIds(lease.trigger).key !== lease.menuBindingKey) return null;
     if (String(lease.trigger.getAttribute?.("aria-expanded") || "").trim().toLowerCase() !== "true") return null;
     const current = refreshClaudeDeleteMenuShortcutSession(
       { root: lease.menuRoot, item: lease.item },
-      lease.trigger
+      lease.trigger,
+      lease.officialHints
     );
     if (!current || current.item !== lease.item) return null;
     try {
@@ -715,7 +747,7 @@ export function createDeleteClaudeCapability(deps = {}) {
     } catch {
       return null;
     }
-    const focused = refreshClaudeDeleteMenuShortcutSession(current, lease.trigger);
+    const focused = refreshClaudeDeleteMenuShortcutSession(current, lease.trigger, lease.officialHints);
     if (!focused || focused.item !== lease.item || !routeStillCurrent()) return null;
     return document.hasFocus?.() && document.activeElement === focused.item ? focused : null;
   }
@@ -727,7 +759,7 @@ export function createDeleteClaudeCapability(deps = {}) {
     }
     lease.phase = "preflighting";
     claudeDisposeTrustedDeleteKeyObserver(lease);
-    if (claudeHasNewDeleteConfirmation(lease.confirmationBaseline)) {
+    if (claudeHasNewDeleteConfirmation(lease.confirmationBaseline, lease.officialHints)) {
       claudeReleaseActiveDeleteLease(lease);
       return deleteResult(false, "claude", "unverified delete confirmation appeared before trusted Delete D activation");
     }
@@ -736,7 +768,7 @@ export function createDeleteClaudeCapability(deps = {}) {
       claudeReleaseActiveDeleteLease(lease);
       return deleteResult(false, "claude", "trusted Claude Delete D shortcut could not establish exact menu focus");
     }
-    if (claudeHasNewDeleteConfirmation(lease.confirmationBaseline)) {
+    if (claudeHasNewDeleteConfirmation(lease.confirmationBaseline, lease.officialHints)) {
       claudeReleaseActiveDeleteLease(lease);
       return deleteResult(false, "claude", "unverified delete confirmation appeared while focusing trusted Delete D activation");
     }
@@ -759,8 +791,9 @@ export function createDeleteClaudeCapability(deps = {}) {
   }
 
   async function activateClaudeDeleteMenuItem(session, trigger, data, routeStillCurrent, confirmationBaseline) {
+    const hints = claudeOfficialHints(data);
     if (!session || !routeStillCurrent()) return deleteResult(false, "claude", "owned delete menu item changed before activation");
-    if (claudeHasNewDeleteConfirmation(confirmationBaseline)) {
+    if (claudeHasNewDeleteConfirmation(confirmationBaseline, hints)) {
       return deleteResult(false, "claude", "unverified delete confirmation appeared before delete activation");
     }
     const menuBinding = claudeMenuBindingIds(trigger);
@@ -781,6 +814,7 @@ export function createDeleteClaudeCapability(deps = {}) {
       menuRoot: session.root,
       menuBindingKey: menuBinding.key,
       item: session.item,
+      officialHints: hints,
       confirmationBaseline,
       frozenConfirmation: null,
       confirmationAmbiguous: false,
@@ -817,7 +851,7 @@ export function createDeleteClaudeCapability(deps = {}) {
     if (!claudeLeaseMatches(lease, data, "menu", routeStillCurrent)) {
       return deleteResult(false, "claude", "trusted conversation menu click has no owned activation lease");
     }
-    if (!lease.trigger?.isConnected || claudeConversationMenuTrigger() !== lease.trigger) {
+    if (!lease.trigger?.isConnected || claudeConversationMenuTrigger(lease.officialHints) !== lease.trigger) {
       return deleteResult(false, "claude", "trusted conversation menu trigger changed");
     }
     lease.phase = "opening-menu";
@@ -828,9 +862,9 @@ export function createDeleteClaudeCapability(deps = {}) {
           || lease.phase !== "opening-menu"
           || !claudeLeaseCoreIsCurrent(lease, routeStillCurrent)
         ) return null;
-        const shortcut = claudeDeleteMenuShortcutSession(lease.trigger, lease.shortcutMenuBaseline);
+        const shortcut = claudeDeleteMenuShortcutSession(lease.trigger, lease.shortcutMenuBaseline, lease.officialHints);
         if (shortcut) return { kind: "shortcut", session: shortcut };
-        const session = claudeDeleteMenuSession(lease.trigger, lease.ownedMenuBaseline);
+        const session = claudeDeleteMenuSession(lease.trigger, lease.ownedMenuBaseline, lease.officialHints);
         return session ? { kind: "item", session } : null;
       }, 3200, 90);
       if (claudeTrustedDeleteLease !== lease) {
@@ -869,6 +903,7 @@ export function createDeleteClaudeCapability(deps = {}) {
   }
 
   async function deleteClaudeThread(data = {}) {
+    const hints = claudeOfficialHints(data);
     const routeStillCurrent = claudeDeleteRouteGuard(data);
     if (!routeStillCurrent()) return deleteResult(false, "claude", "stable current conversation identity not found");
     if (data?.trustedKeySequencePreflight) return preflightClaudeTrustedDeleteShortcut(data, routeStillCurrent);
@@ -876,14 +911,14 @@ export function createDeleteClaudeCapability(deps = {}) {
     if (data?.trustedMenuTriggerRetried) return resumeClaudeTrustedMenuTrigger(data, routeStillCurrent);
     claudeDisposeTrustedDeleteKeyObserver(claudeTrustedDeleteLease);
     claudeTrustedDeleteLease = null;
-    if (findDeleteConfirmButton() || deleteDialogRoots().length) {
+    if (findDeleteConfirmButton(hints) || deleteDialogRoots(hints.dialog).length) {
       return deleteResult(false, "claude", "unverified delete confirmation is already open");
     }
-    const trigger = claudeConversationMenuTrigger();
+    const trigger = claudeConversationMenuTrigger(hints);
     if (!trigger) return deleteResult(false, "claude", "conversation menu trigger not found");
-    const ownedMenuBaseline = claudeOwnedDeleteMenuRoots(trigger);
-    const shortcutMenuBaseline = claudeShortcutDeleteMenuRoots(trigger);
-    const confirmationBaseline = new Set(deleteDialogRoots());
+    const ownedMenuBaseline = claudeOwnedDeleteMenuRoots(trigger, hints);
+    const shortcutMenuBaseline = claudeShortcutDeleteMenuRoots(trigger, hints);
+    const confirmationBaseline = new Set(deleteDialogRoots(hints.dialog));
     if (!routeStillCurrent()) return deleteResult(false, "claude", "current conversation changed before delete menu opened");
     const openingLease = {
       phase: "opening-menu",
@@ -891,6 +926,7 @@ export function createDeleteClaudeCapability(deps = {}) {
       routeId: claudeConversationIdFromHref(),
       documentRef: document,
       trigger,
+      officialHints: hints,
       ownedMenuBaseline,
       shortcutMenuBaseline,
       confirmationBaseline,
@@ -905,9 +941,9 @@ export function createDeleteClaudeCapability(deps = {}) {
           claudeTrustedDeleteLease !== openingLease
           || !claudeLeaseMatches(openingLease, data, "opening-menu", routeStillCurrent)
         ) return null;
-        const shortcut = claudeDeleteMenuShortcutSession(trigger, shortcutMenuBaseline);
+        const shortcut = claudeDeleteMenuShortcutSession(trigger, shortcutMenuBaseline, hints);
         if (shortcut) return { kind: "shortcut", session: shortcut };
-        const session = claudeDeleteMenuSession(trigger, ownedMenuBaseline);
+        const session = claudeDeleteMenuSession(trigger, ownedMenuBaseline, hints);
         return session ? { kind: "item", session } : null;
       }, 2400, 80);
       if (claudeTrustedDeleteLease !== openingLease) {
@@ -933,11 +969,11 @@ export function createDeleteClaudeCapability(deps = {}) {
       if (!claudeLeaseMatches(openingLease, data, "opening-menu", routeStillCurrent)) {
         return deleteResult(false, "claude", "initial conversation menu lease expired before delete activation");
       }
-      const currentSession = refreshClaudeDeleteMenuSession(activation.session, trigger);
+      const currentSession = refreshClaudeDeleteMenuSession(activation.session, trigger, hints);
       if (!currentSession || !routeStillCurrent()) {
         return deleteResult(false, "claude", routeStillCurrent() ? "owned delete menu item changed before activation" : "current conversation changed before delete activation");
       }
-      if (findDeleteConfirmButton() || deleteDialogRoots().length) {
+      if (findDeleteConfirmButton(hints) || deleteDialogRoots(hints.dialog).length) {
         return deleteResult(false, "claude", "unverified delete confirmation appeared before delete activation");
       }
       return activateClaudeDeleteMenuItem(currentSession, trigger, data, routeStillCurrent, confirmationBaseline);

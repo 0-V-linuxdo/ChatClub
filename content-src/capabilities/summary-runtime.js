@@ -1,3 +1,5 @@
+import { officialRuleConfigMatchesHref } from "../../shared/url-match.js";
+
 export function createSummaryCapability(deps = {}) {
   const {
     requestBackground,
@@ -24,6 +26,7 @@ export function createSummaryCapability(deps = {}) {
     extractNativeCopyConversation,
     extractTurns,
     userscriptFindCopyButtons,
+    collectOfficialSummaryMessages,
     contentRuntimeBundleIdentityMatches,
     SUMMARY_MAIN_RUNTIME_IDENTITY,
     SUMMARY_ISOLATED_RUNTIME_IDENTITY,
@@ -59,9 +62,6 @@ export function createSummaryCapability(deps = {}) {
   async function collectSummary(data) {
     assertSummaryTargetCurrent(data);
     const config = data?.config || {};
-    let registry = {};
-    try { registry = runtimes.require("summary-runners", CONTENT_BRIDGE_VERSION).scripts || {}; } catch {}
-    const packagedRunner = registry[config.id] || registry[config.userscriptFile];
     if (shouldUseCustomSummaryUserscript(config)) {
       const customResult = await executeCustomSummaryUserscript(config);
       const customMessages = merge(Array.isArray(customResult?.messages) ? customResult.messages : []);
@@ -70,6 +70,9 @@ export function createSummaryCapability(deps = {}) {
         rawMessageCount: Number(customResult?.rawMessageCount) || customMessages.length
       });
     }
+    let registry = {};
+    try { registry = runtimes.require("summary-runners", CONTENT_BRIDGE_VERSION).scripts || {}; } catch {}
+    const packagedRunner = registry[config.id] || registry[config.userscriptFile];
     if (config.userscriptRunMode !== "serial") {
       const pageResult = await pageSummaryRequest(config);
       const pageMessages = merge(Array.isArray(pageResult?.messages) ? pageResult.messages : []);
@@ -82,8 +85,26 @@ export function createSummaryCapability(deps = {}) {
     }
     const runner = packagedRunner;
     if (!runner) return finishSummaryCollection(data, { messages: [] });
+    const officialRuleActive = officialRuleConfigMatchesHref(config, String(location.href || ""));
     const api = {
       config,
+      collectOfficialCandidate: async () => {
+        if (!officialRuleActive) return null;
+        const collect = () => merge(collectOfficialSummaryMessages?.(config, {
+          qsa,
+          closest,
+          visible,
+          normalize
+        }) || []);
+        let messages = collect();
+        const waitMs = Math.max(0, Math.min(60000, Number(config.officialRuleWaitMs) || 0));
+        if (!hasUserAndAssistant(messages) && waitMs > 0) {
+          await sleep(waitMs);
+          assertSummaryTargetCurrent(data);
+          messages = collect();
+        }
+        return hasUserAndAssistant(messages) ? messages : null;
+      },
       sleep,
       normalize,
       qsa,

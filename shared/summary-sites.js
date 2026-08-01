@@ -2,59 +2,59 @@
 // and are fetched on demand by loadBuiltInSummarySource().
 export const SUMMARY_SITE_CONFIGS = Object.freeze([
   {
-    id: "chatgpt", name: "ChatGPT", configVersion: 54,
+    id: "chatgpt", name: "ChatGPT", configVersion: 55,
     hosts: ["chatgpt.com", "*.chatgpt.com", "chat.openai.com", "*.chat.openai.com"],
     userscriptRunMode: "pageWorldFirst",
     userscriptFile: "chatgpt.js", userscriptLength: 3193
   },
   {
-    id: "claude", name: "Claude", configVersion: 38,
+    id: "claude", name: "Claude", configVersion: 39,
     hosts: ["claude.ai", "*.claude.ai"], pathPrefixes: ["/chat", "/new"],
     userscriptFile: "claude.js", userscriptLength: 17802
   },
   {
-    id: "gemini", name: "Gemini", configVersion: 34,
+    id: "gemini", name: "Gemini", configVersion: 35,
     hosts: ["gemini.google.com", "*.gemini.google.com"],
     userscriptTimeoutMs: 20000, copyTimeoutMs: 1400,
     userscriptFile: "gemini.js", userscriptLength: 9017
   },
   {
-    id: "deepseek", name: "DeepSeek", configVersion: 62,
+    id: "deepseek", name: "DeepSeek", configVersion: 63,
     hosts: ["deepseek.com", "*.deepseek.com"],
     userscriptRunMode: "pageWorldFirst", userscriptTimeoutMs: 36000,
     copyTimeoutMs: 3600, userscriptFallbackDelayMs: 1000,
     userscriptFile: "deepseek.js", userscriptLength: 23179
   },
   {
-    id: "grok", name: "Grok", configVersion: 64,
+    id: "grok", name: "Grok", configVersion: 65,
     hosts: ["grok.com", "*.grok.com", "grok.x.ai", "*.grok.x.ai"],
     userscriptRunMode: "pageWorldFirst", userscriptTimeoutMs: 36000,
     copyTimeoutMs: 3600, userscriptFallbackDelayMs: 1000,
     userscriptFile: "grok.js", userscriptLength: 13420
   },
   {
-    id: "grok-dairoot", name: "Grok Mirror", configVersion: 70,
+    id: "grok-dairoot", name: "Grok Mirror", configVersion: 71,
     hosts: ["gk.dairoot.cn", "*.gk.dairoot.cn"],
     userscriptFile: "grok-dairoot.js", userscriptLength: 13420, userscriptRunMode: "pageWorldFirst",
     userscriptTimeoutMs: 36000, copyTimeoutMs: 3600, userscriptFallbackDelayMs: 1000
   },
   {
-    id: "kagi", name: "Kagi Assistant", configVersion: 65,
+    id: "kagi", name: "Kagi Assistant", configVersion: 66,
     hosts: ["assistant.kagi.com"], userscriptTimeoutMs: 32000, copyTimeoutMs: 3600,
     userscriptFile: "kagi.js", userscriptLength: 4231
   },
   {
-    id: "notion", name: "Notion", configVersion: 64,
+    id: "notion", name: "Notion", configVersion: 65,
     hosts: ["app.notion.com", "notion.so", "www.notion.so", "*.notion.so"], pathPrefixes: ["/chat", "/ai"],
     userscriptFile: "notion.js", userscriptLength: 6091
   },
   {
-    id: "lobehub", name: "LobeHub", configVersion: 48,
+    id: "lobehub", name: "LobeHub", configVersion: 49,
     hosts: ["app.lobehub.com", "*.lobehub.com"], pathPrefixes: ["/"], userscriptTimeoutMs: 36000,
     userscriptFile: "lobehub.js", userscriptLength: 14030
   },
   {
-    id: "typingmind", name: "TypingMind", configVersion: 47,
+    id: "typingmind", name: "TypingMind", configVersion: 48,
     hosts: ["setapp.typingcloud.com", "*.typingcloud.com"],
     userscriptFile: "typingmind.js", userscriptLength: 3232
   }

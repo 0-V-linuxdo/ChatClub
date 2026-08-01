@@ -130,6 +130,8 @@ function summaryRegistryModule(configs, runtimeVersion) {
   let output = "export function createSummaryRunnerRegistry() {\n  const scripts = Object.create(null);\n";
   for (const config of configs) {
     output += `  scripts[${JSON.stringify(config.id)}] = async function(api) {\n`;
+    output += "    const official = typeof api.collectOfficialCandidate === \"function\" ? await api.collectOfficialCandidate() : null;\n";
+    output += "    if (Array.isArray(official) && official.length) return official;\n";
     output += `${config.userscript}\n`;
     output += "  };\n";
     output += `  scripts[${JSON.stringify(config.userscriptFile)}] = scripts[${JSON.stringify(config.id)}];\n`;

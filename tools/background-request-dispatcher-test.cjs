@@ -222,6 +222,26 @@ const root = path.resolve(__dirname, "..");
     /undeclared error code: UNDECLARED/
   );
 
+  const resetAction = BACKGROUND_REQUEST_ACTIONS.RESET_CONFIG;
+  const resetSpec = BACKGROUND_REQUEST_SPECS[resetAction];
+  const resetDispatch = createBackgroundRequestDispatcher(
+    { [resetAction]: resetSpec },
+    [[resetAction, () => ({
+      snapshot: { revision: 2, activationRevision: 3, options: {}, customConfig: [] },
+      workspaceSessionGeneration: "workspace-reset-2",
+      committed: true,
+      cleanupWarnings: [{ label: "alarm-clear", message: "will retry" }]
+    })]],
+    { [resetSpec.authorize]: () => ({ extensionPage: true }) }
+  );
+  const resetClient = createBackgroundRequestClient((message) => resetDispatch(message, { id: "allowed" }));
+  const resetResponse = await resetClient(resetAction, {
+    expectedRevision: 1,
+    expectedActivationRevision: 2
+  });
+  assert.equal(resetResponse.committed, true);
+  assert.deepEqual(resetResponse.cleanupWarnings, [{ label: "alarm-clear", message: "will retry" }]);
+
   const runtime = fs.readFileSync(path.join(root, "background/runtime.js"), "utf8");
   assert.match(runtime, /createBackgroundRequestDispatcher\(/);
   assert.match(runtime, /onMessage\.addListener\(createBackgroundRequestListener\(dispatchBackgroundRequest\)\)/);

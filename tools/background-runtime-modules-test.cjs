@@ -74,6 +74,21 @@ const isContentRuntimeGenerationTransition = (details = {}) =>
     "chatclub-content",
     "chatclub-message-navigator"
   ], "message-navigator-only hosts must receive the same declared base graph as dynamic repair");
+  const officialHttpsOnlyTarget = {
+    id: "official-https-only",
+    name: "Official HTTPS Only",
+    url: "",
+    hosts: [],
+    officialRuleHttpsHosts: ["new.example.com"]
+  };
+  const officialHttpsOnlyRegistrations = registrationsRuntime.buildContentScriptRegistrations({
+    coreTargets: [officialHttpsOnlyTarget],
+    preloadTargets: [officialHttpsOnlyTarget],
+    messageNavigatorTargets: [officialHttpsOnlyTarget]
+  });
+  for (const registration of officialHttpsOnlyRegistrations) {
+    assert.deepEqual(registration.matches, ["https://new.example.com/*"]);
+  }
   const wildcardGrokTarget = { id: "grok-wildcard", name: "Grok", url: "", hosts: ["*.grok.com"] };
   const wildcardGrokRegistrations = registrationsRuntime.buildContentScriptRegistrations({
     coreTargets: [wildcardGrokTarget],
@@ -1241,6 +1256,63 @@ const isContentRuntimeGenerationTransition = (details = {}) =>
     assert.equal(rejectedCanonical, true);
     assert.equal(registered.length, 1);
     assert.deepEqual(registered[0].matches, previous.matches);
+  }
+
+  {
+    const configuration = (host) => ({
+      options: {
+        summarySiteConfigs: [{ id: "strict-summary", enabled: true, hosts: [host] }],
+        messageNavigatorSiteConfigs: [],
+        topicDeleteSiteConfigs: []
+      },
+      customConfig: []
+    });
+    const previousTarget = { id: "strict-summary", name: "strict-summary", url: "", hosts: ["old.example"] };
+    const previous = registrationsRuntime.buildContentScriptRegistrations({
+      coreTargets: [previousTarget],
+      preloadTargets: [previousTarget],
+      summaryTargets: [previousTarget],
+      sendTargets: [],
+      preferredModelTargets: [],
+      deleteTargets: [],
+      messageNavigatorTargets: []
+    });
+    let registered = structuredClone(previous);
+    let failedNonCore = false;
+    const api = {
+      scripting: {
+        getRegisteredContentScripts: async () => structuredClone(registered),
+        unregisterContentScripts: async ({ ids }) => {
+          registered = registered.filter((item) => !ids.includes(item.id));
+        },
+        registerContentScripts: async (items) => {
+          if (!failedNonCore && items.some((item) => (
+            item.id === "chatclub-summary-userscripts"
+            && item.matches.includes("https://new.example/*")
+          ))) {
+            failedNonCore = true;
+            throw new Error("simulated non-core registration failure");
+          }
+          registered.push(...structuredClone(items));
+        }
+      }
+    };
+    const originalWarn = console.warn;
+    console.warn = () => {};
+    try {
+      await assert.rejects(
+        registrationsRuntime.prepareContentScriptRegistration(api, configuration("new.example")),
+        /registration changed|registration is missing/
+      );
+    } finally {
+      console.warn = originalWarn;
+    }
+    assert.equal(failedNonCore, true, "strict preparation must surface non-core registration failures");
+    assert.deepEqual(
+      registered.sort((left, right) => left.id.localeCompare(right.id)),
+      structuredClone(previous).sort((left, right) => left.id.localeCompare(right.id)),
+      "strict preparation must restore the exact previous managed registration set"
+    );
   }
 
   {

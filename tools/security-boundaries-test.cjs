@@ -21,6 +21,18 @@ const dataModule = (source) => import(`data:text/javascript;base64,${Buffer.from
     urlMatch.normalizeHostList(["Example.com", "example.com", "https://invalid.example"]),
     ["example.com"]
   );
+  const officialAliasConfig = {
+    hosts: ["*.example.com"],
+    officialRuleHttpsHosts: ["new.example.com"]
+  };
+  assert.equal(urlMatch.configMatchesHref(officialAliasConfig, "https://new.example.com/chat"), true);
+  assert.equal(urlMatch.configMatchesHref(officialAliasConfig, "http://new.example.com/chat"), false);
+  assert.equal(urlMatch.configMatchesHref(officialAliasConfig, "http://old.example.com/chat"), true);
+  assert.deepEqual(
+    urlMatch.uniqueMatchPatterns([{ hosts: [], officialRuleHttpsHosts: ["new.example.com"] }]),
+    ["https://new.example.com/*"],
+    "an official alias must never create an HTTP content-script match"
+  );
 
   const stateModule = await import(pathToFileURL(path.join(root, "app/state.js")).href);
   const rootState = stateModule.createAppState();
@@ -134,7 +146,9 @@ const dataModule = (source) => import(`data:text/javascript;base64,${Buffer.from
   assert.match(summary, /sendToContentFrame\(iframe, "collectSummary"/);
   assert.match(summary, /expectedDocumentId: summaryReady\.registration\.documentId/);
   assert.match(summary, /expectedHref: base\.href/);
-  assert.match(topicDelete, /delete runtimeConfig\.userscript/);
+  assert.match(topicDelete, /snapshotDeleteFrameConfig\([\s\S]*?completion\.officialRuleHints,[\s\S]*?attemptTimeoutMs,[\s\S]*?completion\.officialRuleActive === true/);
+  assert.match(topicDelete, /payload: snapshotDeleteFramePayload\(payload\)/);
+  assert.doesNotMatch(topicDelete, /runtimeConfig\.userscript/);
   assert.match(topicDelete, /sendToContentFrame\(iframe, "deleteThread"/);
   assert.match(topicDelete, /String\(instruction\?\.documentId \|\| ""\) === documentId/);
   assert.match(topicDelete, /trustedBridgeDocumentId\(iframe\) !== expectedDocumentId/);

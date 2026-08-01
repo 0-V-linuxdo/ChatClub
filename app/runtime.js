@@ -28,13 +28,10 @@ import {
   normalizeTopbarPromptInputFontSize
 } from "../shared/storage-schema.js";
 import {
-  loadCustomConfig,
-  loadOptions,
   loadPocketHistory,
   loadPromptLibrary,
   loadPromptSendHistory,
   loadShortcutConfig,
-  saveOptions,
   savePocketHistory,
   storageGet,
   storageRemove,
@@ -63,6 +60,8 @@ import { FRAME_TOAST_POSITION_EVENT } from "../ui/frame-toast.js";
 import { installGlobalTooltips } from "../ui/tooltip.js";
 import { createSvgIcon } from "../ui/icons.js";
 import { createAppState, createFeatureStatePorts } from "./state.js";
+import { createAppConfigService } from "./config-service.js";
+import { consumeConfigResetCleanupWarning } from "./state/reset-cleanup-warning.js";
 
 const appRoot = document.getElementById("app");
 const isOptionsPage = document.body?.dataset.chatclubEntry === "options";
@@ -71,6 +70,7 @@ let appShellNode = null;
 let summaryEscapeDismissalPromise = null;
 const state = createAppState();
 const featureState = createFeatureStatePorts(state);
+const configService = createAppConfigService({ request: requestBackground });
 const functionalAnomalyController = createFunctionalAnomalyController({
   state: featureState.functionalAnomalies,
   requestBackground,
@@ -179,6 +179,7 @@ const topbarController = createTopbarController({
   workspace: workspaceBinding.port,
   preferredModel: topbarPreferredModelBinding.port,
   settingsSections: SETTINGS_SECTIONS,
+  saveOptions: saveOptionsState,
   actions: {
     deleteThread: deleteThreadOnFrames,
     formatShortcutTooltip: shortcutTooltip,
@@ -312,7 +313,7 @@ const workspaceController = createWorkspaceController({
   discoverDeclaredFaviconUrl,
   rememberFaviconUrl,
   recordFunctionalAnomaly,
-  saveOptions,
+  saveOptions: saveOptionsState,
   normalizeOptions,
   toast,
   render,
@@ -330,6 +331,7 @@ const workspaceController = createWorkspaceController({
 });
 workspaceBinding.bind(workspaceController);
 frameBridgeWorkspaceBinding.bind(workspaceController);
+configService.subscribe(applyConfigSnapshot);
 
 function lazyControllerError(label, error) {
   void recordFunctionalAnomaly({
@@ -386,7 +388,7 @@ function ensurePocketController() {
           createId,
           loadPocketHistory,
           savePocketHistory,
-          saveOptions,
+          saveOptions: saveOptionsState,
           openableTabUrl: workspaceController.openableTabUrl,
           loadPocketEntryInFrame: workspaceController.loadPocketEntryInFrame,
           restorePocketBatch: workspaceController.restorePocketBatch,
@@ -456,10 +458,19 @@ function ensureSummaryController() {
 function ensureSettingsController() {
   if (settingsController) return Promise.resolve(settingsController);
   if (!settingsControllerPromise) {
-    settingsControllerPromise = import("./settings/controller.js")
-      .then(({ createSettingsController }) => {
+    settingsControllerPromise = Promise.all([
+      import("./settings/controller.js"),
+      import("./official-rules/service.js")
+    ])
+      .then(([{ createSettingsController }, { createOfficialRulesService }]) => {
+        const officialRulesService = createOfficialRulesService({ request: requestBackground, configService });
         settingsController = createSettingsController({
           settingsSections: featureState.settingsSections,
+          officialRules: officialRulesService,
+          importConfigPatch,
+          resetConfig: resetConfigState,
+          reloadAfterConfigReset: () => window.location.reload(),
+          saveCustomConfig: saveCustomConfigState,
           saveOptionsPatch,
           svgIcon,
           syncPromptInputNode,
@@ -492,12 +503,70 @@ function ensureSettingsController() {
 
 let optionsPatchWriteTail = Promise.resolve();
 const pendingOptionsPatches = [];
+let messageNavigatorActivationSyncTail = Promise.resolve();
 
 function pendingOptionsPatchOverlay() {
   return pendingOptionsPatches.reduce(
     (overlay, entry) => Object.assign(overlay, entry.patch),
     {}
   );
+}
+
+function syncMessageNavigatorForActivation(activationRevision) {
+  const revision = Math.max(0, Number(activationRevision) || 0);
+  messageNavigatorActivationSyncTail = messageNavigatorActivationSyncTail.catch(() => {}).then(async () => {
+    const frames = workspaceController.currentFrames().filter((iframe) => (
+      iframe?.dataset?.messageNavigatorEnabled === "1"
+      && iframe.dataset.messageNavigatorActivationRevision !== String(revision)
+    ));
+    await Promise.allSettled(frames.map((iframe) => workspaceController.reapplyMessageNavigatorForFrame(iframe)));
+  });
+  return messageNavigatorActivationSyncTail;
+}
+
+function applyConfigSnapshot(snapshot = {}) {
+  if (!snapshot || typeof snapshot !== "object") return;
+  const wasLoaded = state.configSnapshotLoaded === true;
+  const previousActivationRevision = Math.max(0, Number(state.officialRulesActivationRevision) || 0);
+  state.configRevision = Math.max(0, Number(snapshot.revision) || 0);
+  state.officialRulesActivationRevision = Math.max(0, Number(snapshot.activationRevision) || 0);
+  state.storedOptions = snapshot.storedOptions && typeof snapshot.storedOptions === "object"
+    ? structuredClone(snapshot.storedOptions)
+    : structuredClone(snapshot.options || {});
+  state.options = {
+    ...normalizeOptions(snapshot.options || {}),
+    ...pendingOptionsPatchOverlay()
+  };
+  state.customConfig = Array.isArray(snapshot.customConfig) ? structuredClone(snapshot.customConfig) : [];
+  state.configSnapshotLoaded = true;
+  if (wasLoaded && previousActivationRevision !== state.officialRulesActivationRevision) {
+    void syncMessageNavigatorForActivation(state.officialRulesActivationRevision);
+  }
+}
+
+async function saveOptionsState(nextOptions = {}) {
+  const currentOptions = normalizeOptions(configService.current()?.options || {});
+  const normalizedNext = normalizeOptions(nextOptions);
+  const patch = Object.fromEntries(Object.entries(normalizedNext).filter(([key, value]) => (
+    JSON.stringify(value) !== JSON.stringify(currentOptions[key])
+  )));
+  if (!Object.keys(patch).length) return { ...normalizedNext, ...pendingOptionsPatchOverlay() };
+  const snapshot = await configService.patchOptions(patch);
+  return { ...normalizeOptions(snapshot.options), ...pendingOptionsPatchOverlay() };
+}
+
+async function saveCustomConfigState(customConfig = []) {
+  const snapshot = await configService.replaceCustomConfig(customConfig);
+  return structuredClone(snapshot.customConfig);
+}
+
+async function importConfigPatch(patch = {}) {
+  const result = await configService.importConfig(patch);
+  return result.saved;
+}
+
+function resetConfigState() {
+  return configService.resetConfig();
 }
 
 function saveOptionsPatch(patch = {}) {
@@ -507,15 +576,16 @@ function saveOptionsPatch(patch = {}) {
   state.options = { ...state.options, ...acceptedPatch };
   const write = async () => {
     try {
-      const savedOptions = await saveOptions({ ...state.options, ...acceptedPatch });
+      const snapshot = await configService.patchOptions(acceptedPatch);
       const entryIndex = pendingOptionsPatches.indexOf(entry);
       if (entryIndex >= 0) pendingOptionsPatches.splice(entryIndex, 1);
-      state.options = { ...savedOptions, ...pendingOptionsPatchOverlay() };
+      state.options = { ...normalizeOptions(snapshot.options), ...pendingOptionsPatchOverlay() };
       return state.options;
     } catch (error) {
       const entryIndex = pendingOptionsPatches.indexOf(entry);
       if (entryIndex >= 0) pendingOptionsPatches.splice(entryIndex, 1);
-      state.options = { ...state.options, ...pendingOptionsPatchOverlay() };
+      const canonical = error?.latestSnapshot?.options || configService.current()?.options || state.options;
+      state.options = { ...normalizeOptions(canonical), ...pendingOptionsPatchOverlay() };
       throw error;
     }
   };
@@ -988,8 +1058,7 @@ async function init() {
     console.warn("[ChatClub] Failed to load functional anomaly records", error);
   });
   const workspaceSessionSnapshotPromise = workspaceSessionStore.load().catch(() => null);
-  state.options = await loadOptions();
-  state.customConfig = await loadCustomConfig();
+  await configService.load();
   state.promptLibrary = await loadPromptLibrary();
   state.promptSendHistory = await loadPromptSendHistory();
   state.pocketEntries = await loadPocketHistory();
@@ -997,7 +1066,6 @@ async function init() {
   const workspaceSessionSnapshot = await workspaceSessionSnapshotPromise;
   userScriptsPermissionGranted = await permissionsContains({ permissions: ["userScripts"] }).catch(() => false);
   await faviconService.load();
-  state.options = normalizeOptions(state.options);
   await Promise.race([
     runtimeRequest({
       source: "chatclub",
@@ -1015,6 +1083,10 @@ async function init() {
     console.warn("[ChatClub] Runtime registration reconciliation failed; frame-level recovery remains enabled", error);
   });
   syncI18nLanguage();
+  const resetCleanupWarningCount = consumeConfigResetCleanupWarning();
+  if (resetCleanupWarningCount > 0) {
+    toast(t("toast.configResetCleanupWarning", { count: resetCleanupWarningCount }), "error");
+  }
   await initializeTopbarPromptPlaceholder();
   workspaceController.hydrateGroups(workspaceSessionSnapshot);
   installGlobalTooltips({

@@ -274,11 +274,14 @@ function currentBindings(stored = {}) {
   return records;
 }
 
-export function rotateWorkspaceSessionGeneration(api) {
+export function rotateWorkspaceSessionGeneration(api, targetGeneration = "") {
   return queueWorkspaceSession(async () => {
     const storage = localStorageArea(api);
     if (typeof storage?.set !== "function") throw new Error("Workspace session generation storage is unavailable");
-    const workspaceSessionGeneration = normalizeWorkspaceSessionGeneration(createWorkspaceSessionGeneration());
+    const target = String(targetGeneration || "").trim();
+    const workspaceSessionGeneration = normalizeWorkspaceSessionGeneration(
+      target || createWorkspaceSessionGeneration()
+    );
     await storage.set({ [WORKSPACE_SESSION_GENERATION_KEY]: workspaceSessionGeneration });
     return workspaceSessionGeneration;
   });

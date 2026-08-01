@@ -18,14 +18,14 @@ function descriptor(value) {
 // Metadata only. Standalone userscript bodies are generated into
 // topic-delete-userscripts/ and loaded only when explicitly requested.
 export const TOPIC_DELETE_SITE_CONFIGS = Object.freeze([
-  descriptor({ id: "chatgpt", name: "ChatGPT", appIds: ["ChatGPT"], hosts: ["chatgpt.com", "*.chatgpt.com", "chat.openai.com", "*.chat.openai.com"], pathPrefixes: [], scriptId: "chatgpt", scriptVersion: "2026.07.28.1", userscriptFile: "topic-delete-userscripts/chatgpt.user.js", userscriptLength: 90625, userscriptTimeoutMs: 15000 }),
-  descriptor({ id: "claude", name: "Claude", appIds: ["Claude"], hosts: ["claude.ai", "*.claude.ai"], pathPrefixes: ["/chat"], scriptId: "claude", scriptVersion: "2026.07.28.1", userscriptFile: "topic-delete-userscripts/claude.user.js", userscriptLength: 135903, userscriptTimeoutMs: 15000 }),
-  descriptor({ id: "gemini", name: "Gemini", appIds: ["Gemini"], hosts: ["gemini.google.com", "*.gemini.google.com"], pathPrefixes: ["/app"], scriptId: "gemini", scriptVersion: "2026.07.28.1", userscriptFile: "topic-delete-userscripts/gemini.user.js", userscriptLength: 127049, userscriptTimeoutMs: 24000 }),
-  descriptor({ id: "kagi", name: "Kagi Assistant", appIds: ["Kagi"], hosts: ["assistant.kagi.com"], pathPrefixes: [], scriptId: "kagi", scriptVersion: "2026.07.28.1", userscriptFile: "topic-delete-userscripts/kagi.user.js", userscriptLength: 90525, userscriptTimeoutMs: 15000 }),
-  descriptor({ id: "grok", name: "Grok", appIds: ["Grok"], hosts: ["grok.com", "*.grok.com", "grok.x.ai", "*.grok.x.ai"], pathPrefixes: ["/c/", "/chat/"], scriptId: "grok", scriptVersion: "2026.07.28.1", userscriptFile: "topic-delete-userscripts/grok.user.js", userscriptLength: 90594, userscriptTimeoutMs: 15000 }),
-  descriptor({ id: "grokMirror", name: "Grok Mirror", appIds: ["GrokMirror"], hosts: ["gk.dairoot.cn", "*.gk.dairoot.cn"], pathPrefixes: ["/c/", "/chat/"], scriptId: "grok-mirror", scriptVersion: "2026.07.28.1", userscriptFile: "topic-delete-userscripts/grok-mirror.user.js", userscriptLength: 90576, userscriptTimeoutMs: 15000 }),
-  descriptor({ id: "notion", name: "Notion AI", appIds: ["NotionAI"], hosts: ["app.notion.com", "notion.so", "www.notion.so", "*.notion.so"], pathPrefixes: [], scriptId: "notion", scriptVersion: "2026.07.28.1", userscriptFile: "topic-delete-userscripts/notion.user.js", userscriptLength: 90623, userscriptTimeoutMs: 15000 }),
-  descriptor({ id: "deepseek", name: "DeepSeek", appIds: ["DeepSeek"], hosts: ["deepseek.com", "*.deepseek.com"], pathPrefixes: ["/a/chat", "/chat"], scriptId: "deepseek", scriptVersion: "2026.07.28.1", userscriptFile: "topic-delete-userscripts/deepseek.user.js", userscriptLength: 90548, userscriptTimeoutMs: 36000 })
+  descriptor({ id: "chatgpt", name: "ChatGPT", appIds: ["ChatGPT"], hosts: ["chatgpt.com", "*.chatgpt.com", "chat.openai.com", "*.chat.openai.com"], deleteAuthorizedHosts: ["chatgpt.com", "chat.openai.com"], pathPrefixes: [], scriptId: "chatgpt", scriptVersion: "2026.08.01.2", userscriptFile: "topic-delete-userscripts/chatgpt.user.js", userscriptLength: 102842, userscriptTimeoutMs: 15000 }),
+  descriptor({ id: "claude", name: "Claude", appIds: ["Claude"], hosts: ["claude.ai", "*.claude.ai"], deleteAuthorizedHosts: ["claude.ai"], pathPrefixes: ["/chat"], scriptId: "claude", scriptVersion: "2026.08.01.2", userscriptFile: "topic-delete-userscripts/claude.user.js", userscriptLength: 148120, userscriptTimeoutMs: 15000 }),
+  descriptor({ id: "gemini", name: "Gemini", appIds: ["Gemini"], hosts: ["gemini.google.com", "*.gemini.google.com"], deleteAuthorizedHosts: ["gemini.google.com"], pathPrefixes: ["/app"], scriptId: "gemini", scriptVersion: "2026.08.01.2", userscriptFile: "topic-delete-userscripts/gemini.user.js", userscriptLength: 141686, userscriptTimeoutMs: 24000 }),
+  descriptor({ id: "kagi", name: "Kagi Assistant", appIds: ["Kagi"], hosts: ["assistant.kagi.com"], deleteAuthorizedHosts: ["assistant.kagi.com"], pathPrefixes: [], scriptId: "kagi", scriptVersion: "2026.08.01.2", userscriptFile: "topic-delete-userscripts/kagi.user.js", userscriptLength: 102742, userscriptTimeoutMs: 15000 }),
+  descriptor({ id: "grok", name: "Grok", appIds: ["Grok"], hosts: ["grok.com", "*.grok.com", "grok.x.ai", "*.grok.x.ai"], deleteAuthorizedHosts: ["grok.com", "grok.x.ai"], pathPrefixes: ["/c/", "/chat/"], scriptId: "grok", scriptVersion: "2026.08.01.2", userscriptFile: "topic-delete-userscripts/grok.user.js", userscriptLength: 102811, userscriptTimeoutMs: 15000 }),
+  descriptor({ id: "grokMirror", name: "Grok Mirror", appIds: ["GrokMirror"], hosts: ["gk.dairoot.cn", "*.gk.dairoot.cn"], deleteAuthorizedHosts: ["gk.dairoot.cn"], pathPrefixes: ["/c/", "/chat/"], scriptId: "grok-mirror", scriptVersion: "2026.08.01.2", userscriptFile: "topic-delete-userscripts/grok-mirror.user.js", userscriptLength: 102793, userscriptTimeoutMs: 15000 }),
+  descriptor({ id: "notion", name: "Notion AI", appIds: ["NotionAI"], hosts: ["app.notion.com", "notion.so", "www.notion.so", "*.notion.so"], deleteAuthorizedHosts: ["app.notion.com", "notion.so", "www.notion.so"], pathPrefixes: [], scriptId: "notion", scriptVersion: "2026.08.01.2", userscriptFile: "topic-delete-userscripts/notion.user.js", userscriptLength: 102840, userscriptTimeoutMs: 15000 }),
+  descriptor({ id: "deepseek", name: "DeepSeek", appIds: ["DeepSeek"], hosts: ["deepseek.com", "*.deepseek.com"], deleteAuthorizedHosts: ["deepseek.com", "chat.deepseek.com"], pathPrefixes: ["/a/chat", "/chat"], scriptId: "deepseek", scriptVersion: "2026.08.01.2", userscriptFile: "topic-delete-userscripts/deepseek.user.js", userscriptLength: 102765, userscriptTimeoutMs: 36000 })
 ]);
 
 function normalizeTopicDeleteSiteConfig(item = {}, fallback = {}, index = 0) {
@@ -42,6 +42,9 @@ function normalizeTopicDeleteSiteConfig(item = {}, fallback = {}, index = 0) {
     name: text(item.name || fallback.name, `Delete Site ${index + 1}`),
     appIds: uniqueStrings(item.appIds ?? fallback.appIds),
     hosts: normalizeHostList(item.hosts ?? fallback.hosts),
+    deleteAuthorizedHosts: builtIn
+      ? normalizeHostList(fallback.deleteAuthorizedHosts ?? fallback.hosts).filter((host) => !host.startsWith("*."))
+      : [],
     pathPrefixes: uniqueStrings(item.pathPrefixes ?? fallback.pathPrefixes),
     builtIn,
     enabled: item.enabled !== false,

@@ -17,6 +17,7 @@
 - 可配置：自定义平台、API Profile、Summary / Prompt 优化模板、快捷键、主题、语言、顶部栏和分组按钮。
 - iframe 权限管理：可按应用配置 `allow`、`sandbox`、Referrer Policy 和扩展属性；高风险授权需要显式确认，并支持恢复安全默认值。
 - 备份迁移：导入 / 导出配置、提示词库、发送历史和快捷键。
+- 官方增量规则：经用户授权后检查独立签名规则仓库，只下载变化的“站点 + 功能”组件；检查不会改动运行时，用户确认后才原子应用整批增量，并支持单组件或整批回退。
 
 > **兼容性说明：**“重载插件后恢复工作区”仅支持重载插件后不会关闭 ChatClub 插件标签页的浏览器。实测支持 Arc、Dia；不支持 Tabbit。
 
@@ -80,6 +81,8 @@ Chrome 数值版本固定使用 `YYYY.M.D.N` 四段格式：前三段对应本�
 运行时架构以浏览器原生 ESM 为主：协议常量、Frame command contract、按域拆分的后台请求契约和生成器保持单一来源；Firefox document background 与 Chromium service worker 复用同一个后台 runtime，后台消息统一经过带 sender 授权、payload/response 校验和完整性检查的静态 dispatcher；所有监听仍在模块求值阶段同步注册。storage schema 与浏览器 I/O adapter 分层；Settings、Summary、Pocket 按需导入；跨功能状态通过递归只读或显式可写的 feature port 访问。
 
 十个 classic content 入口由 esbuild 从 `content-src/` clean-room 重建并内嵌协议。稳定的 ABI broker key 负责跨版本接管；整体 generation identity、每个入口的依赖闭包 identity 与 bundle digest 共同完成跨 generation 的 `prepare → commit/abort` 原子切换，旧 generation 只有在新 generation 完整就绪后才会被清理。同 generation 的可选能力补装采用幂等 owner 与严格 readiness attestation：部分 Summary bundle 不会开放命令，补装重试也不会重复 listener。基础桥、发送、模型偏好、删除、Summary、Message Navigator 与 Grok Cookie 兼容层按站点和能力注册/修复，App 与 Background 共用同一注入计划；包体预算测试防止能力拆分退化为重复打包。`__CHATCLUB_*__` 全局另有 owner、realm、生命周期、清理和信任边界门禁。应用创建 iframe 前会核对注册，已加载 frame 也具备按 documentId 验证和有界恢复。extension page → iframe 命令统一通过 authenticated Frame RPC；自定义源码只由后台从 storage 读取并注入，不经过远程页面的通用 `postMessage` 通道。
+
+官方规则的稳定入口是 `https://0-v-linuxdo.github.io/ChatClub-rules/stable/channel.json`。远端只包含具有精确 schema 的 host、path、CSS 选择器候选和有界数值参数；runner、adapter、角色判断、删除动作、完成证明及全部安全逻辑始终随插件打包。channel、catalog 与每个组件均使用离线 ECDSA P-256/SHA-256 独立签名，下载缓存按 SHA-256 寻址。自动流程只能检查并缓存；候选中的所有变化组件全部验证成功后，仍须用户点击一次“应用全部更新”才能进入原子激活事务。详细商店审核说明见 `STORE_REVIEW_NOTES.md`。
 
 | 目录 | 作用 |
 | --- | --- |

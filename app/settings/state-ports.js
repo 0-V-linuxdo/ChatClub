@@ -113,7 +113,7 @@ const SETTINGS_SECTION_STATE_ACCESS = Object.freeze({
     "shortcutConfig", "shortcutDraftConfig", "shortcutRecordingAction", "shortcutSettingsTab"
   ], ["shortcutConfig", "shortcutDraftConfig", "shortcutRecordingAction", "shortcutSettingsTab"]),
   io: stateAccess([
-    "customConfig", "options", "pocketEntries", "promptLibrary", "promptSendHistory", "shortcutConfig"
+    "customConfig", "options", "pocketEntries", "promptLibrary", "promptSendHistory", "shortcutConfig", "storedOptions"
   ], ["customConfig", "options", "pocketEntries", "promptLibrary", "promptSendHistory", "shortcutConfig"]),
   functionalAnomalies: stateAccess(["functionalAnomalyRecords"]),
   about: stateAccess(),

@@ -2,6 +2,8 @@ import { CONTENT_PROTOCOL } from "../shared/protocol.js";
 import { CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY } from "../shared/content-runtime-version.generated.js";
 import { createContentRuntimeBundleIdentity } from "../shared/content-runtime-identity.js";
 import { createSummaryRunnerRegistry } from "chatclub:summary-registry";
+import { officialRuleConfigMatchesHref } from "../shared/url-match.js";
+import { collectOfficialSummaryMessages } from "./capabilities/summary-official-rules.js";
 import * as summaryRuntime from "./shared/summary-runtime.js";
 import { runtimeRegistry } from "./shared/runtime-registry-client.js";
 
@@ -63,8 +65,25 @@ function installSummaryMainRuntime() {
   }
 
   function summaryRuntimeApi(config = {}) {
+    const officialRuleActive = officialRuleConfigMatchesHref(config, String(location.href || ""));
     return {
       config,
+      collectOfficialCandidate: async () => {
+        if (!officialRuleActive) return null;
+        const collect = () => merge(collectOfficialSummaryMessages(config, {
+          qsa,
+          closest,
+          visible,
+          normalize
+        }) || []);
+        let messages = collect();
+        const waitMs = Math.max(0, Math.min(60000, Number(config.officialRuleWaitMs) || 0));
+        if (!hasUserAndAssistant(messages) && waitMs > 0) {
+          await sleep(waitMs);
+          messages = collect();
+        }
+        return hasUserAndAssistant(messages) ? messages : null;
+      },
       sleep,
       normalize,
       qsa,

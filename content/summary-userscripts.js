@@ -18,7 +18,7 @@
   var EXTENSION_RUNTIME_RELAY_SOURCE = "chatclub:runtime-relay:2026.07.16.2";
   var FRAME_BINDING_POST_MESSAGE_SOURCE = `chatclub:frame-binding:${CONTENT_BRIDGE_VERSION}`;
   var SECURE_FRAME_COMMAND_SOURCE = "chatclub:frame-command:2026.07.16.2";
-  var DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.07.16.1";
+  var DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.08.01.1";
   var PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.16.2";
   var RUNTIME_REGISTRY_ABI_VERSION = 1;
   var RUNTIME_REGISTRY_KEY = `__CHATCLUB_RUNTIME_REGISTRY_V${RUNTIME_REGISTRY_ABI_VERSION}__`;
@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "16a1560c687d1744bb084e56b8bacb047fc943a69ebb6db76eb726249f8b2c80";
-  var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
-  var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "eac309ef4aa87580e0bee6a5bd68105dc4220f1ea0bac73a6c526550da823447";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.eac309ef4aa87580e0bee6a5bd68105dc4220f1ea0bac73a6c526550da823447";
-  var CONTENT_RUNTIME_SUMMARY_ISOLATED_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts.js", "entryPath": "content-src/summary-userscripts.js", "sourceSha256": "3eef2c6d409565fbe527826ebb4a1dc04703ed17ffa3cd598f00c7cf4d8e3cdb", "implementationSha256": "35cbe8ed1077595f33f78d8c133f9f6eb037becf385fd96ee3771bf9456df848", "implementationVersion": "2026.07.16.2+bundle.35cbe8ed1077595f33f78d8c133f9f6eb037becf385fd96ee3771bf9456df848" });
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "34a0f77846e859a48f105345f7be82bbe24f7b1aa7045fb26b254687029d6190";
+  var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
+  var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "d256e102cd1e6b2bdeff109a772ce01aef7a5879bb46b9e8ca88f2f7d6be2074";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.d256e102cd1e6b2bdeff109a772ce01aef7a5879bb46b9e8ca88f2f7d6be2074";
+  var CONTENT_RUNTIME_SUMMARY_ISOLATED_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts.js", "entryPath": "content-src/summary-userscripts.js", "sourceSha256": "28a62393eaa23b678c0c61554b65a886bab5ceb83c1912ffe41a8f145f3e831f", "implementationSha256": "85498f9336b729f5d55d346baeb078e55d6db335ea7856cb9113f5ab38210643", "implementationVersion": "2026.07.16.2+bundle.85498f9336b729f5d55d346baeb078e55d6db335ea7856cb9113f5ab38210643" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -113,6 +113,8 @@
   function createSummaryRunnerRegistry() {
     const scripts = /* @__PURE__ */ Object.create(null);
     scripts["chatgpt"] = async function(api) {
+      const official = typeof api.collectOfficialCandidate === "function" ? await api.collectOfficialCandidate() : null;
+      if (Array.isArray(official) && official.length) return official;
       const opts = {
         copyButtonSelector: 'button[data-testid="copy-turn-action-button"],button[aria-label="Copy message"],button[aria-label="Copy response"]',
         maxButtons: 80
@@ -173,6 +175,8 @@
     };
     scripts["chatgpt.js"] = scripts["chatgpt"];
     scripts["claude"] = async function(api) {
+      const official = typeof api.collectOfficialCandidate === "function" ? await api.collectOfficialCandidate() : null;
+      if (Array.isArray(official) && official.length) return official;
       const normalize = (value) => api.normalize(String(value || ""));
       const qsa = (selector, root2 = document) => {
         try {
@@ -579,6 +583,8 @@
     };
     scripts["claude.js"] = scripts["claude"];
     scripts["gemini"] = async function(api) {
+      const official = typeof api.collectOfficialCandidate === "function" ? await api.collectOfficialCandidate() : null;
+      if (Array.isArray(official) && official.length) return official;
       const copyTimeoutMs = Math.max(500, Math.min(3e3, Number(api.config && api.config.copyTimeoutMs) || 1400));
       const retryCopyTimeoutMs = Math.max(copyTimeoutMs + 400, 1800);
       const root = api.qs('main,[role="main"]') || document.body;
@@ -760,6 +766,8 @@
     };
     scripts["gemini.js"] = scripts["gemini"];
     scripts["deepseek"] = async function(api) {
+      const official = typeof api.collectOfficialCandidate === "function" ? await api.collectOfficialCandidate() : null;
+      if (Array.isArray(official) && official.length) return official;
       const site = "deepseek";
       const root = api.qs('main,[role="main"]') || document.body || document.documentElement;
       const copyOptions = {
@@ -1226,6 +1234,8 @@
     };
     scripts["deepseek.js"] = scripts["deepseek"];
     scripts["grok"] = async function(api) {
+      const official = typeof api.collectOfficialCandidate === "function" ? await api.collectOfficialCandidate() : null;
+      if (Array.isArray(official) && official.length) return official;
       const root = api.qs('main,[role="main"]') || document.body || document.documentElement;
       const controlSelector = "button,[role=button]";
       const copyOptions = {
@@ -1503,6 +1513,8 @@
     };
     scripts["grok.js"] = scripts["grok"];
     scripts["grok-dairoot"] = async function(api) {
+      const official = typeof api.collectOfficialCandidate === "function" ? await api.collectOfficialCandidate() : null;
+      if (Array.isArray(official) && official.length) return official;
       const root = api.qs('main,[role="main"]') || document.body || document.documentElement;
       const controlSelector = "button,[role=button]";
       const copyOptions = {
@@ -1780,6 +1792,8 @@
     };
     scripts["grok-dairoot.js"] = scripts["grok-dairoot"];
     scripts["kagi"] = async function(api) {
+      const official = typeof api.collectOfficialCandidate === "function" ? await api.collectOfficialCandidate() : null;
+      if (Array.isArray(official) && official.length) return official;
       const normalize = (value) => api.normalize(String(value || ""));
       const root = api.qs('main,[role="main"]') || document.body || document.documentElement;
       const qsa = (selector, scope = document) => {
@@ -1887,6 +1901,8 @@
     };
     scripts["kagi.js"] = scripts["kagi"];
     scripts["notion"] = async function(api) {
+      const official = typeof api.collectOfficialCandidate === "function" ? await api.collectOfficialCandidate() : null;
+      if (Array.isArray(official) && official.length) return official;
       const normalize = (value) => api.normalize(String(value || ""));
       const qsa = (selector, root2 = document) => {
         try {
@@ -2021,6 +2037,8 @@
     };
     scripts["notion.js"] = scripts["notion"];
     scripts["lobehub"] = async function(api) {
+      const official = typeof api.collectOfficialCandidate === "function" ? await api.collectOfficialCandidate() : null;
+      if (Array.isArray(official) && official.length) return official;
       const normalizeMeta = (value) => api.normalize(String(value || ""));
       const cleanCopied = (value) => String(value || "").replace(/\r\n/g, "\n").replace(/\u00a0/g, " ").replace(/[\t ]+\n/g, "\n").replace(/\n[\t ]+/g, "\n").trim();
       const qsa = (selector, root = document) => {
@@ -2335,6 +2353,8 @@
     };
     scripts["lobehub.js"] = scripts["lobehub"];
     scripts["typingmind"] = async function(api) {
+      const official = typeof api.collectOfficialCandidate === "function" ? await api.collectOfficialCandidate() : null;
+      if (Array.isArray(official) && official.length) return official;
       const out = [];
       const seen = /* @__PURE__ */ new Set();
       const norm = (v) => api.normalize(String(v || ""));
@@ -2430,7 +2450,7 @@
       return api.merge(out);
     };
     scripts["typingmind.js"] = scripts["typingmind"];
-    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.eac309ef4aa87580e0bee6a5bd68105dc4220f1ea0bac73a6c526550da823447" });
+    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.d256e102cd1e6b2bdeff109a772ce01aef7a5879bb46b9e8ca88f2f7d6be2074" });
     return scripts;
   }
 

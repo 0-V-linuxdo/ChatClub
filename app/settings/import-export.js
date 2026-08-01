@@ -4,15 +4,12 @@ import {
   isStorageQuotaError,
   mergePocketHistory
 } from "../../shared/storage-schema.js";
-import { CONFIG_BUNDLE_KEYS, inspectImportedConfig } from "../../shared/storage-config-bundle.js";
-import {
-  exportStoredConfigBundle,
-  readPocketHistory,
-  saveImportedConfigPatch
-} from "../../shared/storage-adapter.js";
+import { CONFIG_BUNDLE_KEYS, exportConfigBundle, inspectImportedConfig } from "../../shared/storage-config-bundle.js";
+import { readPocketHistory } from "../../shared/storage-adapter.js";
 import { migrateLegacyScriptConfig } from "../../shared/script-config-migration.js";
 import { confirmationModal, el, toast } from "../../ui/dom.js";
 import { downloadText, readFileAsText } from "../../ui/file-io.js";
+import { persistConfigResetCleanupWarning } from "../state/reset-cleanup-warning.js";
 
 const IMPORT_EXPORT_ITEMS = Object.freeze([
   Object.freeze({ key: "options", labelKey: "io.item.options", descKey: "io.item.optionsDesc" }),
@@ -36,11 +33,74 @@ export function createImportExportSettings(ctx) {
     reconcileAppCatalog,
     syncI18nLanguage,
     render,
+    importConfigPatch,
+    resetConfig,
+    reloadAfterConfigReset,
     prepareForConfigImport = async () => {},
     prepareForConfigExport = prepareForConfigImport,
     afterConfigImport = async () => {},
     resetAfterConfigImport = () => {}
   } = ctx;
+  if (typeof importConfigPatch !== "function") throw new TypeError("Import/export settings requires importConfigPatch().");
+  if (typeof resetConfig !== "function") throw new TypeError("Import/export settings requires resetConfig().");
+  if (typeof reloadAfterConfigReset !== "function") throw new TypeError("Import/export settings requires reloadAfterConfigReset().");
+
+  function openFullResetDialog() {
+    let dialog;
+    let applying = false;
+    const close = (force = false) => {
+      if (applying && force !== true) return;
+      dialog?.remove();
+    };
+    const cancelButton = el("button", {
+      class: "button button-secondary",
+      type: "button",
+      onclick: () => close()
+    }, t("common.cancel"));
+    const confirmButton = el("button", {
+      class: "button button-danger",
+      type: "button",
+      onclick: apply
+    }, t("io.fullResetConfirm"));
+    const setApplying = (value) => {
+      applying = value;
+      cancelButton.disabled = value;
+      confirmButton.disabled = value;
+      dialog?.querySelector(".modal-header .icon-button")?.toggleAttribute("disabled", value);
+      dialog?.querySelector(".modal")?.setAttribute("aria-busy", String(value));
+    };
+    async function apply() {
+      if (applying) return;
+      setApplying(true);
+      try {
+        await prepareForConfigImport(CONFIG_BUNDLE_KEYS);
+        const result = await resetConfig();
+        toast(t("toast.configReset"), "success");
+        if (result?.committed === true && result.cleanupWarnings?.length) {
+          persistConfigResetCleanupWarning(result.cleanupWarnings);
+          toast(t("toast.configResetCleanupWarning", { count: result.cleanupWarnings.length }), "error");
+        }
+        close(true);
+        await Promise.resolve(reloadAfterConfigReset());
+      } catch (error) {
+        const reason = String(error?.message || "").trim();
+        toast(reason ? `${t("toast.configResetFailed")}：${reason}` : t("toast.configResetFailed"), "error");
+        setApplying(false);
+      }
+    }
+    dialog = confirmationModal(
+      t("io.fullResetTitle"),
+      el("div", { class: "io-full-reset-confirmation" },
+        el("p", {}, t("io.fullResetDesc")),
+        el("p", { class: "io-sensitive-warning" }, t("io.fullResetWatermark")),
+        el("div", { class: "settings-dialog-actions" }, cancelButton, confirmButton)
+      ),
+      close,
+      false,
+      t("common.close")
+    );
+    dialog.querySelector(".modal")?.classList.add("io-full-reset-modal");
+  }
 
   function itemValueCount(value) {
     if (Array.isArray(value)) return value.length;
@@ -235,7 +295,7 @@ export function createImportExportSettings(ctx) {
         ? imported.pocketHistory
         : mergePocketHistory(pocketExisting, imported.pocketHistory);
     }
-    const saved = await saveImportedConfigPatch(patch);
+    const saved = await importConfigPatch(patch);
     try {
       if (selected.has("pocketHistory")) {
         pocketStats = pocketMergeStats(pocketExisting, imported.pocketHistory, saved.pocketHistory || []);
@@ -524,7 +584,14 @@ export function createImportExportSettings(ctx) {
         exportButton.disabled = true;
         try {
           await prepareForConfigExport(selectedKeys);
-          const bundle = await exportStoredConfigBundle(selectedKeys, state);
+          const bundle = exportConfigBundle({
+            storedOptions: state.storedOptions || {},
+            customConfig: state.customConfig,
+            promptLibrary: state.promptLibrary,
+            promptSendHistory: state.promptSendHistory,
+            shortcutConfig: state.shortcutConfig,
+            pocketEntries: state.pocketEntries
+          }, selectedKeys);
           downloadText(`chatclub-config-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(bundle, null, 2));
         } catch (error) {
           toast(exportFailureMessage(error), "error");
@@ -555,6 +622,12 @@ export function createImportExportSettings(ctx) {
             type: "button",
             onclick: () => fileInput.click()
           }, svgIcon("fileUp"), el("span", {}, t("common.import"))),
+          el("button", {
+            class: "settings-config-button button-danger",
+            type: "button",
+            dataset: { configAction: "full-reset" },
+            onclick: openFullResetDialog
+          }, svgIcon("reset"), el("span", {}, t("io.fullReset"))),
           fileInput
         )
       )

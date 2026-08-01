@@ -18,7 +18,7 @@
   var EXTENSION_RUNTIME_RELAY_SOURCE = "chatclub:runtime-relay:2026.07.16.2";
   var FRAME_BINDING_POST_MESSAGE_SOURCE = `chatclub:frame-binding:${CONTENT_BRIDGE_VERSION}`;
   var SECURE_FRAME_COMMAND_SOURCE = "chatclub:frame-command:2026.07.16.2";
-  var DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.07.16.1";
+  var DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.08.01.1";
   var PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.16.2";
   var RUNTIME_REGISTRY_ABI_VERSION = 1;
   var RUNTIME_REGISTRY_KEY = `__CHATCLUB_RUNTIME_REGISTRY_V${RUNTIME_REGISTRY_ABI_VERSION}__`;
@@ -68,14 +68,14 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "16a1560c687d1744bb084e56b8bacb047fc943a69ebb6db76eb726249f8b2c80";
-  var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
-  var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "eac309ef4aa87580e0bee6a5bd68105dc4220f1ea0bac73a6c526550da823447";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.eac309ef4aa87580e0bee6a5bd68105dc4220f1ea0bac73a6c526550da823447";
-  var CONTENT_RUNTIME_SUMMARY_BRIDGE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-bridge.js", "entryPath": "content-src/content-summary-bridge.js", "sourceSha256": "2e258dc1888ef5ff0873a516adf5a159162a48f45dc96412ecf4da6159eb8c8d", "implementationSha256": "0a95609fa9c4f4e73e4e4eab00ebd193eca2e276cbcce715732a8eb430aed252", "implementationVersion": "2026.07.16.2+bundle.0a95609fa9c4f4e73e4e4eab00ebd193eca2e276cbcce715732a8eb430aed252" });
-  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "0af96ee2121c5cf69ee68e8a0c07c81126c5e1d7e570ce30d34c80b8889d5256", "implementationSha256": "05a0b354f2e3e92dbd2241d7f365a8d377e6a941499902e77d1f18f1772ab94b", "implementationVersion": "2026.07.16.2+bundle.05a0b354f2e3e92dbd2241d7f365a8d377e6a941499902e77d1f18f1772ab94b" });
-  var CONTENT_RUNTIME_SUMMARY_ISOLATED_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts.js", "entryPath": "content-src/summary-userscripts.js", "sourceSha256": "3eef2c6d409565fbe527826ebb4a1dc04703ed17ffa3cd598f00c7cf4d8e3cdb", "implementationSha256": "35cbe8ed1077595f33f78d8c133f9f6eb037becf385fd96ee3771bf9456df848", "implementationVersion": "2026.07.16.2+bundle.35cbe8ed1077595f33f78d8c133f9f6eb037becf385fd96ee3771bf9456df848" });
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "34a0f77846e859a48f105345f7be82bbe24f7b1aa7045fb26b254687029d6190";
+  var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
+  var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "d256e102cd1e6b2bdeff109a772ce01aef7a5879bb46b9e8ca88f2f7d6be2074";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.d256e102cd1e6b2bdeff109a772ce01aef7a5879bb46b9e8ca88f2f7d6be2074";
+  var CONTENT_RUNTIME_SUMMARY_BRIDGE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-bridge.js", "entryPath": "content-src/content-summary-bridge.js", "sourceSha256": "594a43a795edbdd9228475839c007eb546601be198f6dd30e61758cdf74b92b2", "implementationSha256": "9b467bec1e348be20f633f029dec53d7564e0c6fb261eac9269e45d5ac527c5e", "implementationVersion": "2026.07.16.2+bundle.9b467bec1e348be20f633f029dec53d7564e0c6fb261eac9269e45d5ac527c5e" });
+  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "90420c05f037bf5c00b0c27bf2776260a1980d2f38a01634ec499ee87c7e8306", "implementationSha256": "3abc59bf68b51653a8bc930d35c7e46e6ce3a9614f438090f3c318111b16adc5", "implementationVersion": "2026.07.16.2+bundle.3abc59bf68b51653a8bc930d35c7e46e6ce3a9614f438090f3c318111b16adc5" });
+  var CONTENT_RUNTIME_SUMMARY_ISOLATED_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts.js", "entryPath": "content-src/summary-userscripts.js", "sourceSha256": "28a62393eaa23b678c0c61554b65a886bab5ceb83c1912ffe41a8f145f3e831f", "implementationSha256": "85498f9336b729f5d55d346baeb078e55d6db335ea7856cb9113f5ab38210643", "implementationVersion": "2026.07.16.2+bundle.85498f9336b729f5d55d346baeb078e55d6db335ea7856cb9113f5ab38210643" });
 
   // shared/background-request-core.js
   var BACKGROUND_REQUEST_SOURCE = "chatclub";
@@ -1510,6 +1510,50 @@ ${value}`);
   }
   var requestBackground = createBackgroundRequestContractClient(sendExtensionRuntimeMessage);
 
+  // shared/url-match.js
+  function normalizeHost(host) {
+    const raw = String(host || "").trim().toLowerCase();
+    if (!raw || /\s|:\/\/|[/?#@]/.test(raw)) return "";
+    const wildcard = raw.startsWith("*.");
+    const candidate = wildcard ? raw.slice(2) : raw;
+    if (!candidate || candidate.includes("*") || !candidate.startsWith("[") && candidate.includes(":")) return "";
+    let hostname = "";
+    try {
+      const parsed = new URL(`http://${candidate}`);
+      if (parsed.username || parsed.password || parsed.port || parsed.pathname !== "/" || parsed.search || parsed.hash) return "";
+      hostname = parsed.hostname.toLowerCase().replace(/\.$/, "");
+    } catch {
+      return "";
+    }
+    if (!hostname || hostname.length > 253) return "";
+    const bracketedIpv6 = hostname.startsWith("[") && hostname.endsWith("]");
+    if (!bracketedIpv6) {
+      const labels = hostname.split(".");
+      if (labels.some((label) => !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label))) return "";
+    }
+    if (wildcard && (bracketedIpv6 || /^\d+(?:\.\d+){3}$/.test(hostname) || hostname === "localhost")) return "";
+    return wildcard ? `*.${hostname}` : hostname;
+  }
+  function officialRuleConfigMatchesHref(config, href) {
+    let url;
+    try {
+      url = new URL(href);
+    } catch {
+      return false;
+    }
+    if (url.protocol !== "https:" || url.username || url.password || url.port) return false;
+    const hostname = normalizeHost(url.hostname);
+    if (!hostname || hostname.startsWith("*.")) return false;
+    const hosts = Array.isArray(config?.officialRuleHosts) ? config.officialRuleHosts : [];
+    const exactHostMatch = hosts.some((host) => {
+      const candidate = normalizeHost(host);
+      return Boolean(candidate && !candidate.startsWith("*.") && candidate === hostname);
+    });
+    if (!exactHostMatch) return false;
+    const prefixes = Array.isArray(config?.officialRulePathPrefixes) ? config.officialRulePathPrefixes.map((prefix) => String(prefix || "").trim()).filter(Boolean) : [];
+    return prefixes.length === 0 || prefixes.some((prefix) => url.pathname.startsWith(prefix));
+  }
+
   // content-src/capabilities/summary-runtime.js
   function createSummaryCapability(deps = {}) {
     const {
@@ -1537,6 +1581,7 @@ ${value}`);
       extractNativeCopyConversation: extractNativeCopyConversation2,
       extractTurns: extractTurns2,
       userscriptFindCopyButtons: userscriptFindCopyButtons2,
+      collectOfficialSummaryMessages: collectOfficialSummaryMessages2,
       contentRuntimeBundleIdentityMatches: contentRuntimeBundleIdentityMatches2,
       SUMMARY_MAIN_RUNTIME_IDENTITY,
       SUMMARY_ISOLATED_RUNTIME_IDENTITY,
@@ -1568,12 +1613,6 @@ ${value}`);
     async function collectSummary(data) {
       assertSummaryTargetCurrent(data);
       const config = data?.config || {};
-      let registry = {};
-      try {
-        registry = runtimes.require("summary-runners", CONTENT_BRIDGE_VERSION2).scripts || {};
-      } catch {
-      }
-      const packagedRunner = registry[config.id] || registry[config.userscriptFile];
       if (shouldUseCustomSummaryUserscript(config)) {
         const customResult = await executeCustomSummaryUserscript(config);
         const customMessages = merge2(Array.isArray(customResult?.messages) ? customResult.messages : []);
@@ -1582,6 +1621,12 @@ ${value}`);
           rawMessageCount: Number(customResult?.rawMessageCount) || customMessages.length
         });
       }
+      let registry = {};
+      try {
+        registry = runtimes.require("summary-runners", CONTENT_BRIDGE_VERSION2).scripts || {};
+      } catch {
+      }
+      const packagedRunner = registry[config.id] || registry[config.userscriptFile];
       if (config.userscriptRunMode !== "serial") {
         const pageResult = await pageSummaryRequest2(config);
         const pageMessages = merge2(Array.isArray(pageResult?.messages) ? pageResult.messages : []);
@@ -1594,8 +1639,26 @@ ${value}`);
       }
       const runner = packagedRunner;
       if (!runner) return finishSummaryCollection(data, { messages: [] });
+      const officialRuleActive = officialRuleConfigMatchesHref(config, String(location.href || ""));
       const api = {
         config,
+        collectOfficialCandidate: async () => {
+          if (!officialRuleActive) return null;
+          const collect = () => merge2(collectOfficialSummaryMessages2?.(config, {
+            qsa: qsa2,
+            closest: closest2,
+            visible: visible2,
+            normalize: normalize2
+          }) || []);
+          let messages2 = collect();
+          const waitMs = Math.max(0, Math.min(6e4, Number(config.officialRuleWaitMs) || 0));
+          if (!hasUserAndAssistant2(messages2) && waitMs > 0) {
+            await sleep2(waitMs);
+            assertSummaryTargetCurrent(data);
+            messages2 = collect();
+          }
+          return hasUserAndAssistant2(messages2) ? messages2 : null;
+        },
         sleep: sleep2,
         normalize: normalize2,
         qsa: qsa2,
@@ -1650,6 +1713,131 @@ ${value}`);
     });
   }
 
+  // content-src/capabilities/summary-official-rules.js
+  var SUMMARY_OFFICIAL_MAX_TURNS = 1e3;
+  var SUMMARY_OFFICIAL_MAX_TEXT_LENGTH = 2 * 1024 * 1024;
+  var PACKAGED_SUMMARY_CHROME_SELECTORS = Object.freeze([
+    "button",
+    "[role='button']",
+    "[role='toolbar']",
+    "[role='menu']",
+    "[role='menuitem']",
+    "[aria-label*='copy' i]",
+    "[title*='copy' i]",
+    "[data-testid*='copy' i]",
+    ".code-buttons"
+  ]);
+  function selectorList(value) {
+    return (Array.isArray(value) ? value : []).map((selector) => String(selector || "").trim()).filter(Boolean).slice(0, 8);
+  }
+  function selectorUnion(value) {
+    return selectorList(value).join(",");
+  }
+  function safeMatches(element, selectors) {
+    const selector = selectorUnion(selectors);
+    if (!selector) return false;
+    try {
+      return Boolean(element?.matches?.(selector));
+    } catch {
+      return false;
+    }
+  }
+  function safeQuery(element, selectors) {
+    const selector = selectorUnion(selectors);
+    if (!selector) return false;
+    try {
+      return Boolean(element?.querySelector?.(selector));
+    } catch {
+      return false;
+    }
+  }
+  function roleForElement(element, hints = {}) {
+    const user = safeMatches(element, hints.userRoot) || safeQuery(element, hints.userRoot) || safeQuery(element, hints.userRoleSignal);
+    const assistant = safeMatches(element, hints.assistantRoot) || safeQuery(element, hints.assistantRoot) || safeQuery(element, hints.assistantRoleSignal);
+    if (user === assistant) return "";
+    return user ? "user" : "assistant";
+  }
+  function cloneText(element, cleanupSelectors, normalize2) {
+    let clone;
+    try {
+      clone = element?.cloneNode?.(true);
+    } catch {
+      return "";
+    }
+    if (!clone) return "";
+    const selector = selectorUnion(cleanupSelectors);
+    if (selector) {
+      try {
+        clone.querySelectorAll(selector).forEach((node) => node.remove());
+      } catch {
+        return "";
+      }
+    }
+    return normalize2(clone.innerText || clone.textContent || "");
+  }
+  function orderedUnique(elements = []) {
+    const seen = /* @__PURE__ */ new Set();
+    return elements.filter((element) => {
+      if (!element || seen.has(element)) return false;
+      seen.add(element);
+      return true;
+    }).sort((left, right) => {
+      try {
+        const position = left.compareDocumentPosition(right);
+        if (position & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
+        if (position & Node.DOCUMENT_POSITION_PRECEDING) return 1;
+      } catch {
+      }
+      return 0;
+    });
+  }
+  function messageRootsFromActions(root, hints, qsa2, closest2) {
+    const messageRootSelector = selectorUnion(hints.messageRoot);
+    if (!messageRootSelector) return [];
+    const actions = [
+      ...selectorList(hints.actionBar),
+      ...selectorList(hints.messageCopy)
+    ].flatMap((selector) => qsa2(selector, root).slice(0, SUMMARY_OFFICIAL_MAX_TURNS));
+    return actions.map((action) => closest2(action, messageRootSelector)).filter(Boolean);
+  }
+  function collectOfficialSummaryMessages(config = {}, deps = {}) {
+    const hints = config?.officialRuleHints;
+    if (!hints || typeof hints !== "object" || Array.isArray(hints)) return null;
+    const { qsa: qsa2, closest: closest2, visible: visible2, normalize: normalize2 } = deps;
+    if (![qsa2, closest2, visible2, normalize2].every((fn) => typeof fn === "function")) return null;
+    const documentRoot = globalThis.document;
+    if (!documentRoot) return null;
+    const conversationRoots = selectorList(hints.conversationRoot).flatMap((selector) => qsa2(selector, documentRoot, { all: false })).filter(visible2);
+    const root = conversationRoots[0] || documentRoot;
+    const directMessages = selectorList(hints.messageRoot).flatMap((selector) => qsa2(selector, root).slice(0, SUMMARY_OFFICIAL_MAX_TURNS));
+    const elements = orderedUnique([
+      ...directMessages,
+      ...messageRootsFromActions(root, hints, qsa2, closest2)
+    ]).filter(visible2).slice(0, SUMMARY_OFFICIAL_MAX_TURNS);
+    if (!elements.length) return null;
+    const cleanup = [
+      ...PACKAGED_SUMMARY_CHROME_SELECTORS,
+      ...selectorList(hints.cleanup),
+      ...selectorList(hints.actionBar),
+      ...selectorList(hints.messageCopy),
+      ...selectorList(hints.nestedCodeAction),
+      ...selectorList(hints.referenceAction)
+    ];
+    const messages = [];
+    let totalTextLength = 0;
+    for (const element of elements) {
+      const role = roleForElement(element, hints);
+      if (!role) continue;
+      const text2 = cloneText(element, cleanup, normalize2);
+      if (!text2) continue;
+      totalTextLength += text2.length;
+      if (totalTextLength > SUMMARY_OFFICIAL_MAX_TEXT_LENGTH) return null;
+      messages.push({ role, text: text2 });
+    }
+    if (!messages.some((message) => message.role === "user") || !messages.some((message) => message.role === "assistant")) return null;
+    return messages;
+  }
+
   // content-src/content-summary-bridge.js
   function installSummaryBridgeCapability() {
     const runtimes = runtimeRegistry(window);
@@ -1686,7 +1874,8 @@ ${value}`);
       contentRuntimeBundleIdentityMatches,
       SUMMARY_MAIN_RUNTIME_IDENTITY: mainRuntimeIdentity,
       SUMMARY_ISOLATED_RUNTIME_IDENTITY: isolatedRuntimeIdentity,
-      CONTENT_RUNTIME_IDENTITY: runtimeIdentity
+      CONTENT_RUNTIME_IDENTITY: runtimeIdentity,
+      collectOfficialSummaryMessages
     });
     installContentCapability(runtimes, {
       capability: "summary",

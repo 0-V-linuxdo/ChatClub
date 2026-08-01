@@ -128,6 +128,14 @@ function fixture({ local = {}, session = {}, tabs = [] } = {}) {
     assert.notEqual(rotated, generation);
     assert.equal((await prepareWorkspaceSessionLifecycle(store.api, { now: 1002 })).generation, rotated);
     assert.equal(store.local.values[WORKSPACE_SESSION_GENERATION_KEY], rotated, "prepare must preserve a rotated generation");
+    const fixedResetGeneration = "workspace-fixed-reset-target";
+    assert.equal(await rotateWorkspaceSessionGeneration(store.api, fixedResetGeneration), fixedResetGeneration);
+    assert.equal(await rotateWorkspaceSessionGeneration(store.api, fixedResetGeneration), fixedResetGeneration);
+    assert.equal(
+      store.local.values[WORKSPACE_SESSION_GENERATION_KEY],
+      fixedResetGeneration,
+      "repeated reset cleanup must write the same predetermined generation"
+    );
   }
 
   {

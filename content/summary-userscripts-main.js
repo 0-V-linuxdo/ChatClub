@@ -24,7 +24,7 @@
   var EXTENSION_RUNTIME_RELAY_SOURCE = "chatclub:runtime-relay:2026.07.16.2";
   var FRAME_BINDING_POST_MESSAGE_SOURCE = `chatclub:frame-binding:${CONTENT_BRIDGE_VERSION}`;
   var SECURE_FRAME_COMMAND_SOURCE = "chatclub:frame-command:2026.07.16.2";
-  var DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.07.16.1";
+  var DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.08.01.1";
   var PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.16.2";
   var RUNTIME_REGISTRY_ABI_VERSION = 1;
   var RUNTIME_REGISTRY_KEY = `__CHATCLUB_RUNTIME_REGISTRY_V${RUNTIME_REGISTRY_ABI_VERSION}__`;
@@ -74,12 +74,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "16a1560c687d1744bb084e56b8bacb047fc943a69ebb6db76eb726249f8b2c80";
-  var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
-  var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "eac309ef4aa87580e0bee6a5bd68105dc4220f1ea0bac73a6c526550da823447";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.eac309ef4aa87580e0bee6a5bd68105dc4220f1ea0bac73a6c526550da823447";
-  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "0af96ee2121c5cf69ee68e8a0c07c81126c5e1d7e570ce30d34c80b8889d5256", "implementationSha256": "05a0b354f2e3e92dbd2241d7f365a8d377e6a941499902e77d1f18f1772ab94b", "implementationVersion": "2026.07.16.2+bundle.05a0b354f2e3e92dbd2241d7f365a8d377e6a941499902e77d1f18f1772ab94b" });
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "34a0f77846e859a48f105345f7be82bbe24f7b1aa7045fb26b254687029d6190";
+  var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
+  var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "d256e102cd1e6b2bdeff109a772ce01aef7a5879bb46b9e8ca88f2f7d6be2074";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.d256e102cd1e6b2bdeff109a772ce01aef7a5879bb46b9e8ca88f2f7d6be2074";
+  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "90420c05f037bf5c00b0c27bf2776260a1980d2f38a01634ec499ee87c7e8306", "implementationSha256": "3abc59bf68b51653a8bc930d35c7e46e6ce3a9614f438090f3c318111b16adc5", "implementationVersion": "2026.07.16.2+bundle.3abc59bf68b51653a8bc930d35c7e46e6ce3a9614f438090f3c318111b16adc5" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -119,6 +119,8 @@
   function createSummaryRunnerRegistry() {
     const scripts = /* @__PURE__ */ Object.create(null);
     scripts["chatgpt"] = async function(api) {
+      const official = typeof api.collectOfficialCandidate === "function" ? await api.collectOfficialCandidate() : null;
+      if (Array.isArray(official) && official.length) return official;
       const opts = {
         copyButtonSelector: 'button[data-testid="copy-turn-action-button"],button[aria-label="Copy message"],button[aria-label="Copy response"]',
         maxButtons: 80
@@ -179,6 +181,8 @@
     };
     scripts["chatgpt.js"] = scripts["chatgpt"];
     scripts["claude"] = async function(api) {
+      const official = typeof api.collectOfficialCandidate === "function" ? await api.collectOfficialCandidate() : null;
+      if (Array.isArray(official) && official.length) return official;
       const normalize2 = (value) => api.normalize(String(value || ""));
       const qsa2 = (selector, root2 = document) => {
         try {
@@ -585,6 +589,8 @@
     };
     scripts["claude.js"] = scripts["claude"];
     scripts["gemini"] = async function(api) {
+      const official = typeof api.collectOfficialCandidate === "function" ? await api.collectOfficialCandidate() : null;
+      if (Array.isArray(official) && official.length) return official;
       const copyTimeoutMs = Math.max(500, Math.min(3e3, Number(api.config && api.config.copyTimeoutMs) || 1400));
       const retryCopyTimeoutMs = Math.max(copyTimeoutMs + 400, 1800);
       const root = api.qs('main,[role="main"]') || document.body;
@@ -766,6 +772,8 @@
     };
     scripts["gemini.js"] = scripts["gemini"];
     scripts["deepseek"] = async function(api) {
+      const official = typeof api.collectOfficialCandidate === "function" ? await api.collectOfficialCandidate() : null;
+      if (Array.isArray(official) && official.length) return official;
       const site = "deepseek";
       const root = api.qs('main,[role="main"]') || document.body || document.documentElement;
       const copyOptions = {
@@ -1232,6 +1240,8 @@
     };
     scripts["deepseek.js"] = scripts["deepseek"];
     scripts["grok"] = async function(api) {
+      const official = typeof api.collectOfficialCandidate === "function" ? await api.collectOfficialCandidate() : null;
+      if (Array.isArray(official) && official.length) return official;
       const root = api.qs('main,[role="main"]') || document.body || document.documentElement;
       const controlSelector = "button,[role=button]";
       const copyOptions = {
@@ -1509,6 +1519,8 @@
     };
     scripts["grok.js"] = scripts["grok"];
     scripts["grok-dairoot"] = async function(api) {
+      const official = typeof api.collectOfficialCandidate === "function" ? await api.collectOfficialCandidate() : null;
+      if (Array.isArray(official) && official.length) return official;
       const root = api.qs('main,[role="main"]') || document.body || document.documentElement;
       const controlSelector = "button,[role=button]";
       const copyOptions = {
@@ -1786,6 +1798,8 @@
     };
     scripts["grok-dairoot.js"] = scripts["grok-dairoot"];
     scripts["kagi"] = async function(api) {
+      const official = typeof api.collectOfficialCandidate === "function" ? await api.collectOfficialCandidate() : null;
+      if (Array.isArray(official) && official.length) return official;
       const normalize2 = (value) => api.normalize(String(value || ""));
       const root = api.qs('main,[role="main"]') || document.body || document.documentElement;
       const qsa2 = (selector, scope = document) => {
@@ -1893,6 +1907,8 @@
     };
     scripts["kagi.js"] = scripts["kagi"];
     scripts["notion"] = async function(api) {
+      const official = typeof api.collectOfficialCandidate === "function" ? await api.collectOfficialCandidate() : null;
+      if (Array.isArray(official) && official.length) return official;
       const normalize2 = (value) => api.normalize(String(value || ""));
       const qsa2 = (selector, root2 = document) => {
         try {
@@ -2027,6 +2043,8 @@
     };
     scripts["notion.js"] = scripts["notion"];
     scripts["lobehub"] = async function(api) {
+      const official = typeof api.collectOfficialCandidate === "function" ? await api.collectOfficialCandidate() : null;
+      if (Array.isArray(official) && official.length) return official;
       const normalizeMeta = (value) => api.normalize(String(value || ""));
       const cleanCopied = (value) => String(value || "").replace(/\r\n/g, "\n").replace(/\u00a0/g, " ").replace(/[\t ]+\n/g, "\n").replace(/\n[\t ]+/g, "\n").trim();
       const qsa2 = (selector, root = document) => {
@@ -2341,6 +2359,8 @@
     };
     scripts["lobehub.js"] = scripts["lobehub"];
     scripts["typingmind"] = async function(api) {
+      const official = typeof api.collectOfficialCandidate === "function" ? await api.collectOfficialCandidate() : null;
+      if (Array.isArray(official) && official.length) return official;
       const out = [];
       const seen = /* @__PURE__ */ new Set();
       const norm = (v) => api.normalize(String(v || ""));
@@ -2436,8 +2456,177 @@
       return api.merge(out);
     };
     scripts["typingmind.js"] = scripts["typingmind"];
-    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.eac309ef4aa87580e0bee6a5bd68105dc4220f1ea0bac73a6c526550da823447" });
+    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.d256e102cd1e6b2bdeff109a772ce01aef7a5879bb46b9e8ca88f2f7d6be2074" });
     return scripts;
+  }
+
+  // shared/url-match.js
+  function normalizeHost(host) {
+    const raw = String(host || "").trim().toLowerCase();
+    if (!raw || /\s|:\/\/|[/?#@]/.test(raw)) return "";
+    const wildcard = raw.startsWith("*.");
+    const candidate = wildcard ? raw.slice(2) : raw;
+    if (!candidate || candidate.includes("*") || !candidate.startsWith("[") && candidate.includes(":")) return "";
+    let hostname = "";
+    try {
+      const parsed = new URL(`http://${candidate}`);
+      if (parsed.username || parsed.password || parsed.port || parsed.pathname !== "/" || parsed.search || parsed.hash) return "";
+      hostname = parsed.hostname.toLowerCase().replace(/\.$/, "");
+    } catch {
+      return "";
+    }
+    if (!hostname || hostname.length > 253) return "";
+    const bracketedIpv6 = hostname.startsWith("[") && hostname.endsWith("]");
+    if (!bracketedIpv6) {
+      const labels = hostname.split(".");
+      if (labels.some((label) => !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label))) return "";
+    }
+    if (wildcard && (bracketedIpv6 || /^\d+(?:\.\d+){3}$/.test(hostname) || hostname === "localhost")) return "";
+    return wildcard ? `*.${hostname}` : hostname;
+  }
+  function officialRuleConfigMatchesHref(config, href) {
+    let url;
+    try {
+      url = new URL(href);
+    } catch {
+      return false;
+    }
+    if (url.protocol !== "https:" || url.username || url.password || url.port) return false;
+    const hostname = normalizeHost(url.hostname);
+    if (!hostname || hostname.startsWith("*.")) return false;
+    const hosts = Array.isArray(config?.officialRuleHosts) ? config.officialRuleHosts : [];
+    const exactHostMatch = hosts.some((host) => {
+      const candidate = normalizeHost(host);
+      return Boolean(candidate && !candidate.startsWith("*.") && candidate === hostname);
+    });
+    if (!exactHostMatch) return false;
+    const prefixes = Array.isArray(config?.officialRulePathPrefixes) ? config.officialRulePathPrefixes.map((prefix) => String(prefix || "").trim()).filter(Boolean) : [];
+    return prefixes.length === 0 || prefixes.some((prefix) => url.pathname.startsWith(prefix));
+  }
+
+  // content-src/capabilities/summary-official-rules.js
+  var SUMMARY_OFFICIAL_MAX_TURNS = 1e3;
+  var SUMMARY_OFFICIAL_MAX_TEXT_LENGTH = 2 * 1024 * 1024;
+  var PACKAGED_SUMMARY_CHROME_SELECTORS = Object.freeze([
+    "button",
+    "[role='button']",
+    "[role='toolbar']",
+    "[role='menu']",
+    "[role='menuitem']",
+    "[aria-label*='copy' i]",
+    "[title*='copy' i]",
+    "[data-testid*='copy' i]",
+    ".code-buttons"
+  ]);
+  function selectorList(value) {
+    return (Array.isArray(value) ? value : []).map((selector) => String(selector || "").trim()).filter(Boolean).slice(0, 8);
+  }
+  function selectorUnion(value) {
+    return selectorList(value).join(",");
+  }
+  function safeMatches(element, selectors) {
+    const selector = selectorUnion(selectors);
+    if (!selector) return false;
+    try {
+      return Boolean(element?.matches?.(selector));
+    } catch {
+      return false;
+    }
+  }
+  function safeQuery(element, selectors) {
+    const selector = selectorUnion(selectors);
+    if (!selector) return false;
+    try {
+      return Boolean(element?.querySelector?.(selector));
+    } catch {
+      return false;
+    }
+  }
+  function roleForElement(element, hints = {}) {
+    const user = safeMatches(element, hints.userRoot) || safeQuery(element, hints.userRoot) || safeQuery(element, hints.userRoleSignal);
+    const assistant = safeMatches(element, hints.assistantRoot) || safeQuery(element, hints.assistantRoot) || safeQuery(element, hints.assistantRoleSignal);
+    if (user === assistant) return "";
+    return user ? "user" : "assistant";
+  }
+  function cloneText(element, cleanupSelectors, normalize2) {
+    let clone;
+    try {
+      clone = element?.cloneNode?.(true);
+    } catch {
+      return "";
+    }
+    if (!clone) return "";
+    const selector = selectorUnion(cleanupSelectors);
+    if (selector) {
+      try {
+        clone.querySelectorAll(selector).forEach((node) => node.remove());
+      } catch {
+        return "";
+      }
+    }
+    return normalize2(clone.innerText || clone.textContent || "");
+  }
+  function orderedUnique(elements = []) {
+    const seen = /* @__PURE__ */ new Set();
+    return elements.filter((element) => {
+      if (!element || seen.has(element)) return false;
+      seen.add(element);
+      return true;
+    }).sort((left, right) => {
+      try {
+        const position = left.compareDocumentPosition(right);
+        if (position & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
+        if (position & Node.DOCUMENT_POSITION_PRECEDING) return 1;
+      } catch {
+      }
+      return 0;
+    });
+  }
+  function messageRootsFromActions(root, hints, qsa2, closest2) {
+    const messageRootSelector = selectorUnion(hints.messageRoot);
+    if (!messageRootSelector) return [];
+    const actions = [
+      ...selectorList(hints.actionBar),
+      ...selectorList(hints.messageCopy)
+    ].flatMap((selector) => qsa2(selector, root).slice(0, SUMMARY_OFFICIAL_MAX_TURNS));
+    return actions.map((action) => closest2(action, messageRootSelector)).filter(Boolean);
+  }
+  function collectOfficialSummaryMessages(config = {}, deps = {}) {
+    const hints = config?.officialRuleHints;
+    if (!hints || typeof hints !== "object" || Array.isArray(hints)) return null;
+    const { qsa: qsa2, closest: closest2, visible: visible2, normalize: normalize2 } = deps;
+    if (![qsa2, closest2, visible2, normalize2].every((fn) => typeof fn === "function")) return null;
+    const documentRoot = globalThis.document;
+    if (!documentRoot) return null;
+    const conversationRoots = selectorList(hints.conversationRoot).flatMap((selector) => qsa2(selector, documentRoot, { all: false })).filter(visible2);
+    const root = conversationRoots[0] || documentRoot;
+    const directMessages = selectorList(hints.messageRoot).flatMap((selector) => qsa2(selector, root).slice(0, SUMMARY_OFFICIAL_MAX_TURNS));
+    const elements = orderedUnique([
+      ...directMessages,
+      ...messageRootsFromActions(root, hints, qsa2, closest2)
+    ]).filter(visible2).slice(0, SUMMARY_OFFICIAL_MAX_TURNS);
+    if (!elements.length) return null;
+    const cleanup = [
+      ...PACKAGED_SUMMARY_CHROME_SELECTORS,
+      ...selectorList(hints.cleanup),
+      ...selectorList(hints.actionBar),
+      ...selectorList(hints.messageCopy),
+      ...selectorList(hints.nestedCodeAction),
+      ...selectorList(hints.referenceAction)
+    ];
+    const messages = [];
+    let totalTextLength = 0;
+    for (const element of elements) {
+      const role = roleForElement(element, hints);
+      if (!role) continue;
+      const text2 = cloneText(element, cleanup, normalize2);
+      if (!text2) continue;
+      totalTextLength += text2.length;
+      if (totalTextLength > SUMMARY_OFFICIAL_MAX_TEXT_LENGTH) return null;
+      messages.push({ role, text: text2 });
+    }
+    if (!messages.some((message) => message.role === "user") || !messages.some((message) => message.role === "assistant")) return null;
+    return messages;
   }
 
   // content-src/shared/summary-runtime.js
@@ -3381,8 +3570,25 @@ ${value}`);
       return bounded;
     }
     function summaryRuntimeApi(config = {}) {
+      const officialRuleActive = officialRuleConfigMatchesHref(config, String(location.href || ""));
       return {
         config,
+        collectOfficialCandidate: async () => {
+          if (!officialRuleActive) return null;
+          const collect = () => merge2(collectOfficialSummaryMessages(config, {
+            qsa: qsa2,
+            closest: closest2,
+            visible: visible2,
+            normalize: normalize2
+          }) || []);
+          let messages = collect();
+          const waitMs = Math.max(0, Math.min(6e4, Number(config.officialRuleWaitMs) || 0));
+          if (!hasUserAndAssistant2(messages) && waitMs > 0) {
+            await sleep2(waitMs);
+            messages = collect();
+          }
+          return hasUserAndAssistant2(messages) ? messages : null;
+        },
         sleep: sleep2,
         normalize: normalize2,
         qsa: qsa2,

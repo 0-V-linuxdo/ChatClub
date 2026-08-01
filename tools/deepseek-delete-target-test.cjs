@@ -51,7 +51,10 @@ for (const [name, source] of Object.entries(resolverSources)) {
   assert.match(source, /if \(!root\) return null/, `${name} must require a verified sidebar root`);
   assert.match(source, /if \(!(?:id|currentId)\) return null/, `${name} must require a stable route id`);
 }
-assert.match(sources.main, /const verifiedSidebarRoot = \(\) =>/, "MAIN must independently establish a sidebar root");
+assert.match(sources.main, /const verifiedSidebarRoot = \(hints = \{\}\) =>/, "MAIN must independently establish a sidebar root");
+assert.match(sources.main, /const hints = normalizedOfficialRuleHints\(data\?\.officialRuleHints\)/, "MAIN must normalize the snapped official hints itself");
+assert.match(sources.main, /url\.origin !== location\.origin/, "MAIN hinted links must remain exact same-origin routes");
+assert.match(sources.main, /url\.pathname\.match\(\/\^\\\/\(\?:a\\\/\)\?chat\\\/s\\\/\(\[\^\/\]\+\)\\\/\?\$\/i\)/, "MAIN route grammar must remain packaged and exact");
 assert.doesNotMatch(sources.native, /function deepSeekTopicRows\b/, "native title-scored rows must remain removed");
 assert.doesNotMatch(sources.standalone, /function deepSeekRows\b/, "standalone title-scored rows must remain removed");
 
@@ -97,6 +100,62 @@ for (const [name, resolve] of Object.entries({ main: mainResolver, native: nativ
   assert.equal(resolve([exact], "topic-1", null), null, `${name}: document-wide fallback is forbidden without a sidebar root`);
 }
 
+{
+  const remoteResolverSource = section(
+    sources.main,
+    "  const deepSeekTopicLinks",
+    "\n  let pendingTrustedDeleteAttempt",
+    "MAIN hinted resolver"
+  );
+  const body = {};
+  const scope = {
+    parentElement: body,
+    className: "remote-scope",
+    contains(node) { return node === exact; }
+  };
+  const exact = {
+    ...link("topic-1"),
+    parentElement: scope,
+    matches(selector) { return selector === "a[href]"; },
+    querySelectorAll() { return []; }
+  };
+  body.contains = (node) => node === scope || node === exact;
+  const documentFixture = { body };
+  const boxes = new Map([
+    [scope, { left: 10, right: 270, top: 0, bottom: 400, width: 260, height: 400 }],
+    [exact, { left: 20, right: 220, top: 40, bottom: 70, width: 200, height: 30 }]
+  ]);
+  const candidateNodes = (_packaged, hints, slot, rootNode = documentFixture) => {
+    if (slot === "scope" && hints?.scope?.includes(".remote-scope") && rootNode === documentFixture) return [scope];
+    if (slot === "conversationLink" && hints?.conversationLink?.includes(".remote-link") && (rootNode === documentFixture || rootNode === scope)) return [exact];
+    return [];
+  };
+  const remoteResolver = new Function(
+    "document",
+    "candidateNodes",
+    "all",
+    "visible",
+    "chatIdFromLink",
+    "rectOf",
+    "currentChatId",
+    "textOf",
+    `"use strict"; ${remoteResolverSource}; return { verifiedSidebarRoot, currentTopicLink };`
+  )(
+    documentFixture,
+    candidateNodes,
+    () => [],
+    () => true,
+    chatId,
+    (node) => boxes.get(node) || null,
+    () => "topic-1",
+    (node) => node === exact ? "Remote-only topic" : ""
+  );
+  assert.equal(remoteResolver.currentTopicLink(null, {}), null, "the packaged selector fixture intentionally cannot see the remote-only link");
+  const hints = { scope: [".remote-scope"], conversationLink: [".remote-link"] };
+  assert.equal(remoteResolver.verifiedSidebarRoot(hints), scope, "a signed scope hint may nominate a sidebar that still owns the exact route link");
+  assert.equal(remoteResolver.currentTopicLink(null, hints), exact, "MAIN must resolve a remote-only link through normalized candidate hints");
+}
+
 const deletionSections = {
   main: section(sources.main, "  const deleteThread = async", "\n  const messageListener", "MAIN delete flow"),
   native: section(sources.native, "  async function deleteDeepSeekThread", "\n  const TOPIC_DELETE_FALLBACK_CONFIGS", "native delete flow"),
@@ -105,9 +164,12 @@ const deletionSections = {
 
 for (const [name, source] of Object.entries(deletionSections)) {
   const rowIndex = Math.max(source.indexOf("currentTopicLink("), source.indexOf("findDeepSeekCurrentTopicRow("), source.indexOf("deepSeekCurrentRow("));
-  const headerIndex = Math.max(source.indexOf("findHeaderMoreButton()"), source.indexOf("deepSeekHeaderMenuButton("));
+  const headerIndex = Math.max(source.indexOf("findHeaderMoreButton()"), source.indexOf("findHeaderMoreButton(hints)"), source.indexOf("deepSeekHeaderMenuButton("));
   assert.ok(rowIndex >= 0 && headerIndex > rowIndex, `${name}: row flow must precede header fallback`);
   assert.match(source, /stable current conversation route is required/, `${name}: stable route is mandatory`);
+  if (name !== "main") {
+    assert.match(source, /delete target identity does not match the current route/, `${name}: payload target identity must exactly match the route before mutation`);
+  }
   assert.match(source, /routeStillCurrent/, `${name}: route must be revalidated after waits`);
   assert.match(source, /pendingTrustedDeleteAttempt|deepSeekPendingTrustedAttempt/, `${name}: trusted retry must use an owned lease`);
   assert.match(source, /unverified delete confirmation is already open/, `${name}: retry-entry confirmation must fail closed`);
@@ -352,9 +414,112 @@ const guardedOpenSource = section(
   });
   assert.equal(opened, false);
   assert.equal(destructiveClicks, 0, "route change after menu wait must cause zero explicit Delete activations");
-  assert.match(deletionSections.main, /!routeStillCurrent\(\) \|\| !activate\((?:existingMenuConfirm|confirmButton|headerConfirm)/, "MAIN must revalidate before confirm activation");
-  assert.match(deletionSections.native, /clickDeleteConfirmIfPresent\(6500, routeStillCurrent\)/, "native must guard confirm activation");
-  assert.match(deletionSections.standalone, /clickDeleteConfirmIfPresent\(6500, routeStillCurrent\)/, "standalone must guard confirm activation");
+  assert.match(sources.main, /deleteConfirmationOwnershipIsCurrent\(ownership, routeStillCurrent, hints\)[\s\S]*activate\(ownership\.button/, "MAIN must revalidate exact confirmation ownership before activation");
+  assert.match(deletionSections.main, /deleteConfirmationOwnership\(activation\.confirmationBaseline, hints\)/, "MAIN may confirm only a dialog created after its explicit Delete activation");
+  assert.match(deletionSections.native, /confirmationBaseline = new Set\(deleteDialogRoots\(hints\.dialog\)\)/, "native must snapshot dialog roots before every explicit Delete activation");
+  assert.match(deletionSections.native, /deepSeekConfirmationResult\(confirmationBaseline, hints, attemptStillCurrent/, "native may confirm only through the attempt-and-route-owned confirmation path");
+  assert.match(deletionSections.standalone, /confirmationBaseline = new Set\(deleteDialogRoots\(\)\)/, "standalone must snapshot dialog roots before every explicit Delete activation");
+  assert.match(deletionSections.standalone, /deepSeekConfirmationResult\(confirmationBaseline, attemptStillCurrent/, "standalone may confirm only through the attempt-and-route-owned confirmation path");
+
+  for (const mode of ["native", "standalone"]) {
+    const realButton = { isConnected: true };
+    const fakeButton = { isConnected: true };
+    const realRoot = {
+      isConnected: true,
+      contains(node) { return node === realButton; }
+    };
+    const fakeRoot = {
+      isConnected: true,
+      contains(node) { return node === fakeButton; }
+    };
+    const state = { roots: [realRoot, fakeRoot], button: realButton, root: realRoot };
+    let confirmationClicks = 0;
+    const guardedConfirm = async (_timeoutMs, guard) => {
+      state.roots = [realRoot, fakeRoot];
+      if (guard() === true) confirmationClicks += 1;
+      return false;
+    };
+    let helpers;
+    if (mode === "native") {
+      const helperSource = section(
+        sources.native,
+        "  function sameDeepSeekConfirmationRoot",
+        "\n  async function deleteDeepSeekThread",
+        "native DeepSeek confirmation ownership"
+      );
+      helpers = new Function(
+        "findDeleteConfirmButton",
+        "findDeleteConfirmButtonInfo",
+        "deleteDialogRoots",
+        "visible",
+        "sleep",
+        "clickDeleteConfirmIfPresent",
+        "deleteResult",
+        `"use strict"; ${helperSource}; return { deepSeekConfirmationResult };`
+      )(
+        () => state.button,
+        () => ({ element: state.button, root: state.root }),
+        () => state.roots,
+        () => true,
+        async () => {},
+        guardedConfirm,
+        (ok, site, reason = "") => ({ ok, site, reason })
+      );
+      const value = await helpers.deepSeekConfirmationResult(new Set(), {}, () => true);
+      assert.equal(value.ok, false, "native: concurrent fake dialog must fail closed");
+      assert.match(value.reason, /ownership is uncertain/);
+    } else {
+      const ownershipSource = section(
+        sources.standalone,
+        "  function sameDeleteConfirmationRoot",
+        "\n  function deleteConfirmDialogClosed",
+        "standalone confirmation ownership"
+      );
+      const deepSeekConfirmationSource = section(
+        sources.standalone,
+        "  async function waitForDeepSeekConfirmation",
+        "\n  async function deleteDeepSeek",
+        "standalone DeepSeek confirmation completion"
+      );
+      helpers = new Function(
+        "findDeleteConfirmButton",
+        "findDeleteConfirmButtonInfo",
+        "deleteDialogRoots",
+        "deleteConfirmationAlreadyOpen",
+        "visible",
+        "sleep",
+        "clickDeleteConfirmIfPresent",
+        "result",
+        "resultWithTrustedDeleteConfirm",
+        "waitFor",
+        `"use strict"; ${ownershipSource}\n${deepSeekConfirmationSource}; return { deepSeekConfirmationResult };`
+      )(
+        () => state.button,
+        () => ({ node: state.button, root: state.root }),
+        () => state.roots,
+        () => Boolean(state.button || state.roots.length),
+        () => true,
+        async () => {},
+        guardedConfirm,
+        (ok, reason = "") => ({ ok, site: "deepseek", reason }),
+        (reason) => ({ ok: false, site: "deepseek", reason }),
+        async (getter) => getter()
+      );
+      const value = await helpers.deepSeekConfirmationResult(new Set(), () => true);
+      assert.equal(value.ok, false, "standalone: concurrent fake dialog must fail closed");
+      assert.match(value.reason, /ownership is uncertain/);
+    }
+    assert.equal(confirmationClicks, 0, `${mode}: a concurrent fake dialog must never receive a confirm click`);
+    state.roots = [realRoot];
+    state.button = realButton;
+    state.root = realRoot;
+    const afterOwnership = mode === "native"
+      ? await helpers.deepSeekConfirmationResult(new Set(), {}, () => true)
+      : await helpers.deepSeekConfirmationResult(new Set(), () => true);
+    assert.equal(afterOwnership.ok, false, `${mode}: a fake dialog appearing after ownership acquisition must fail closed`);
+    assert.match(afterOwnership.reason, /ownership changed/);
+    assert.equal(confirmationClicks, 0, `${mode}: ownership must be revalidated immediately before the confirm click`);
+  }
   console.log("DeepSeek target, delivery, lease, coordinate, and TOCTOU safety: ok");
 })().catch((error) => {
   console.error(error?.stack || error);

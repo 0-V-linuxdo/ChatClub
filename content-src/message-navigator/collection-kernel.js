@@ -7,6 +7,7 @@ import {
   metaText,
   normalize,
   pageRoot,
+  safeClosest,
   safeMatches,
   safeQsa,
   uniqueElements,
@@ -57,7 +58,9 @@ function collectFromCopyButtons(config, options = {}) {
   for (const button of buttons) {
     const ancestor = nearestTextAncestor(button, cleanupSelectors, { root, maxDepth: options.maxDepth || 10 });
     if (!ancestor) continue;
-    const role = genericRole(ancestor.element, config) || (items.length % 2 === 0 ? "user" : "assistant");
+    const explicitRole = genericRole(ancestor.element, config);
+    const role = explicitRole || (config.strictOfficialRoles ? "" : (items.length % 2 === 0 ? "user" : "assistant"));
+    if (!role) continue;
     const key = `${role}\n${ancestor.text.toLowerCase().replace(/\s+/g, " ").slice(0, 500)}`;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -136,7 +139,9 @@ function adapterBaseQuery(config) {
 function adapterBaseItems(config, adapter = {}) {
   const cleanupSelectors = Array.isArray(config.textCleanupSelectors) ? config.textCleanupSelectors : [];
   return dedupeItems(adapterBaseQuery(config).map((element) => {
-    const role = adapter.role?.(element, config) || genericRole(element, config) || "assistant";
+    const explicitRole = adapter.role?.(element, config) || genericRole(element, config);
+    const role = explicitRole || (config.strictOfficialRoles ? "" : "assistant");
+    if (!role) return null;
     const target = adapter.target?.(element, config) || genericTarget(element);
     const textSource = adapter.summaryElement?.(element, config) || target || element;
     const rawValue = adapter.text?.(element, config, { role, target, textSource })
@@ -150,7 +155,72 @@ function adapterBaseItems(config, adapter = {}) {
       role,
       text: compactText(rawValue, config.summaryMaxChars)
     };
-  }));
+  }).filter(Boolean));
+}
+
+function officialSelectorList(hints = {}, slot = "") {
+  return (Array.isArray(hints?.[slot]) ? hints[slot] : [])
+    .map((selector) => String(selector || "").trim())
+    .filter(Boolean)
+    .slice(0, 8);
+}
+
+function selectorUnion(selectors = []) {
+  return selectors.filter(Boolean).join(",");
+}
+
+function officialRole(element, userSelector, assistantSelector) {
+  const matchesRole = (selector) => Boolean(selector)
+    && (safeMatches(element, selector) || safeQsa(selector, element).length > 0);
+  const user = matchesRole(userSelector);
+  const assistant = matchesRole(assistantSelector);
+  if (user && assistant) return "";
+  if (user) return "user";
+  if (assistant) return "assistant";
+  return "";
+}
+
+export function collectOfficialRuleItems(config = {}) {
+  const hints = config?.officialRuleHints;
+  if (!hints || typeof hints !== "object") return [];
+  const messageSelector = selectorUnion(officialSelectorList(hints, "message"));
+  const userSelector = selectorUnion(officialSelectorList(hints, "userRole"));
+  const assistantSelector = selectorUnion(officialSelectorList(hints, "assistantRole"));
+  const composerSelector = selectorUnion(officialSelectorList(hints, "composer"));
+  if (!messageSelector || !userSelector || !assistantSelector || !composerSelector) return [];
+  const rootSelector = selectorUnion(officialSelectorList(hints, "conversationRoot"));
+  const contentSelector = selectorUnion(officialSelectorList(hints, "content"));
+  const effectSelector = selectorUnion(officialSelectorList(hints, "effectTarget"));
+  const excludedSelector = selectorUnion([
+    ...officialSelectorList(hints, "exclude"),
+    composerSelector
+  ]);
+  const roots = rootSelector
+    ? safeQsa(rootSelector).filter((element) => visible(element) && !inChromeScope(element))
+    : [pageRoot()];
+  const seen = new Set();
+  const items = [];
+  for (const root of roots) {
+    for (const element of safeQsa(messageSelector, root).sort(elementOrder)) {
+      if (!visible(element) || inChromeScope(element) || seen.has(element)) continue;
+      if (excludedSelector && (safeMatches(element, excludedSelector) || safeClosest(element, excludedSelector))) continue;
+      const role = officialRole(element, userSelector, assistantSelector);
+      if (!role) continue;
+      const content = (contentSelector && safeQsa(contentSelector, element).find(visible)) || element;
+      const text = usefulTurnText(cloneText(content, officialSelectorList(hints, "exclude")), 50000);
+      if (!text) continue;
+      seen.add(element);
+      items.push({
+        element,
+        target: content,
+        effectTarget: (effectSelector && safeQsa(effectSelector, element).find(visible)) || content,
+        role,
+        text: compactText(text, config.officialRuleSummaryMaxChars || config.summaryMaxChars),
+        officialStrict: true
+      });
+    }
+  }
+  return conversationLooksUseful(items) ? items : [];
 }
 
 export {

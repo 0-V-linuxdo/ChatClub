@@ -1,0 +1,128 @@
+const SUMMARY_OFFICIAL_MAX_TURNS = 1000;
+const SUMMARY_OFFICIAL_MAX_TEXT_LENGTH = 2 * 1024 * 1024;
+const PACKAGED_SUMMARY_CHROME_SELECTORS = Object.freeze([
+  "button",
+  "[role='button']",
+  "[role='toolbar']",
+  "[role='menu']",
+  "[role='menuitem']",
+  "[aria-label*='copy' i]",
+  "[title*='copy' i]",
+  "[data-testid*='copy' i]",
+  ".code-buttons"
+]);
+
+function selectorList(value) {
+  return (Array.isArray(value) ? value : [])
+    .map((selector) => String(selector || "").trim())
+    .filter(Boolean)
+    .slice(0, 8);
+}
+
+function selectorUnion(value) {
+  return selectorList(value).join(",");
+}
+
+function safeMatches(element, selectors) {
+  const selector = selectorUnion(selectors);
+  if (!selector) return false;
+  try { return Boolean(element?.matches?.(selector)); } catch { return false; }
+}
+
+function safeQuery(element, selectors) {
+  const selector = selectorUnion(selectors);
+  if (!selector) return false;
+  try { return Boolean(element?.querySelector?.(selector)); } catch { return false; }
+}
+
+function roleForElement(element, hints = {}) {
+  const user = safeMatches(element, hints.userRoot)
+    || safeQuery(element, hints.userRoot)
+    || safeQuery(element, hints.userRoleSignal);
+  const assistant = safeMatches(element, hints.assistantRoot)
+    || safeQuery(element, hints.assistantRoot)
+    || safeQuery(element, hints.assistantRoleSignal);
+  if (user === assistant) return "";
+  return user ? "user" : "assistant";
+}
+
+function cloneText(element, cleanupSelectors, normalize) {
+  let clone;
+  try { clone = element?.cloneNode?.(true); } catch { return ""; }
+  if (!clone) return "";
+  const selector = selectorUnion(cleanupSelectors);
+  if (selector) {
+    try { clone.querySelectorAll(selector).forEach((node) => node.remove()); } catch { return ""; }
+  }
+  return normalize(clone.innerText || clone.textContent || "");
+}
+
+function orderedUnique(elements = []) {
+  const seen = new Set();
+  return elements.filter((element) => {
+    if (!element || seen.has(element)) return false;
+    seen.add(element);
+    return true;
+  }).sort((left, right) => {
+    try {
+      const position = left.compareDocumentPosition(right);
+      if (position & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
+      if (position & Node.DOCUMENT_POSITION_PRECEDING) return 1;
+    } catch {}
+    return 0;
+  });
+}
+
+function messageRootsFromActions(root, hints, qsa, closest) {
+  const messageRootSelector = selectorUnion(hints.messageRoot);
+  if (!messageRootSelector) return [];
+  const actions = [
+    ...selectorList(hints.actionBar),
+    ...selectorList(hints.messageCopy)
+  ].flatMap((selector) => qsa(selector, root).slice(0, SUMMARY_OFFICIAL_MAX_TURNS));
+  return actions.map((action) => closest(action, messageRootSelector)).filter(Boolean);
+}
+
+export function collectOfficialSummaryMessages(config = {}, deps = {}) {
+  const hints = config?.officialRuleHints;
+  if (!hints || typeof hints !== "object" || Array.isArray(hints)) return null;
+  const { qsa, closest, visible, normalize } = deps;
+  if (![qsa, closest, visible, normalize].every((fn) => typeof fn === "function")) return null;
+
+  const documentRoot = globalThis.document;
+  if (!documentRoot) return null;
+  const conversationRoots = selectorList(hints.conversationRoot)
+    .flatMap((selector) => qsa(selector, documentRoot, { all: false }))
+    .filter(visible);
+  const root = conversationRoots[0] || documentRoot;
+  const directMessages = selectorList(hints.messageRoot)
+    .flatMap((selector) => qsa(selector, root).slice(0, SUMMARY_OFFICIAL_MAX_TURNS));
+  const elements = orderedUnique([
+    ...directMessages,
+    ...messageRootsFromActions(root, hints, qsa, closest)
+  ]).filter(visible).slice(0, SUMMARY_OFFICIAL_MAX_TURNS);
+  if (!elements.length) return null;
+
+  const cleanup = [
+    ...PACKAGED_SUMMARY_CHROME_SELECTORS,
+    ...selectorList(hints.cleanup),
+    ...selectorList(hints.actionBar),
+    ...selectorList(hints.messageCopy),
+    ...selectorList(hints.nestedCodeAction),
+    ...selectorList(hints.referenceAction)
+  ];
+  const messages = [];
+  let totalTextLength = 0;
+  for (const element of elements) {
+    const role = roleForElement(element, hints);
+    if (!role) continue;
+    const text = cloneText(element, cleanup, normalize);
+    if (!text) continue;
+    totalTextLength += text.length;
+    if (totalTextLength > SUMMARY_OFFICIAL_MAX_TEXT_LENGTH) return null;
+    messages.push({ role, text });
+  }
+  if (!messages.some((message) => message.role === "user")
+    || !messages.some((message) => message.role === "assistant")) return null;
+  return messages;
+}

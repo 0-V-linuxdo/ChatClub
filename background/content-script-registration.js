@@ -2,7 +2,6 @@ import { APP_NAME } from "../shared/constants.js";
 import { contentScriptMatches } from "../shared/dnr.js";
 import { CONTENT_BUNDLES } from "../shared/frame-commands.js";
 import { getAllChatApps } from "../shared/storage-schema.js";
-import { loadCustomConfig, loadOptions } from "../shared/storage-adapter.js";
 
 const REGISTERED_CONTENT_SCRIPT_IDS = Object.freeze(Object.values(CONTENT_BUNDLES).map(({ id }) => id));
 const REGISTERED_CONTENT_SCRIPT_ID_SET = new Set(REGISTERED_CONTENT_SCRIPT_IDS);
@@ -14,39 +13,52 @@ const CORE_CONTENT_SCRIPT_ID_SET = new Set([
 
 function summaryCollectorContentTargets(options = {}) {
   return (options.summarySiteConfigs || [])
-    .filter((config) => config?.enabled !== false && Array.isArray(config.hosts) && config.hosts.length)
+    .filter((config) => config?.enabled !== false && (
+      (Array.isArray(config.hosts) && config.hosts.length)
+      || (Array.isArray(config.officialRuleHttpsHosts) && config.officialRuleHttpsHosts.length)
+    ))
     .map((config) => ({
       id: `summary-${config.id || config.name || "collector"}`,
       name: config.name || config.id || "Summary Collector",
       url: "",
-      hosts: config.hosts
+      hosts: config.hosts,
+      officialRuleHttpsHosts: config.officialRuleHttpsHosts
     }));
 }
 
 function topicDeleteContentTargets(options = {}) {
   return (options.topicDeleteSiteConfigs || [])
-    .filter((config) => config?.enabled !== false && Array.isArray(config.hosts) && config.hosts.length)
+    .filter((config) => config?.enabled !== false && (
+      (Array.isArray(config.hosts) && config.hosts.length)
+      || (Array.isArray(config.officialRuleHttpsHosts) && config.officialRuleHttpsHosts.length)
+    ))
     .map((config) => ({
       id: `topic-delete-${config.id || config.name || "site"}`,
       name: config.name || config.id || "Topic Delete Site",
       url: "",
-      hosts: config.hosts
+      hosts: config.hosts,
+      officialRuleHttpsHosts: config.officialRuleHttpsHosts
     }));
 }
 
 function messageNavigatorContentTargets(options = {}) {
   return (options.messageNavigatorSiteConfigs || [])
-    .filter((config) => config?.enabled !== false && Array.isArray(config.hosts) && config.hosts.length)
+    .filter((config) => config?.enabled !== false && (
+      (Array.isArray(config.hosts) && config.hosts.length)
+      || (Array.isArray(config.officialRuleHttpsHosts) && config.officialRuleHttpsHosts.length)
+    ))
     .map((config) => ({
       id: `message-navigator-${config.id || config.name || "site"}`,
       name: config.name || config.id || "Message Navigator Site",
       url: "",
-      hosts: config.hosts
+      hosts: config.hosts,
+      officialRuleHttpsHosts: config.officialRuleHttpsHosts
     }));
 }
 
-async function currentContentScriptTargetGroups() {
-  const [customConfig, options] = await Promise.all([loadCustomConfig(), loadOptions()]);
+function currentContentScriptTargetGroups(configuration = {}) {
+  const customConfig = Array.isArray(configuration.customConfig) ? configuration.customConfig : [];
+  const options = configuration.options && typeof configuration.options === "object" ? configuration.options : {};
   const chatTargets = getAllChatApps(customConfig);
   const summaryTargets = summaryCollectorContentTargets(options);
   const topicDeleteTargets = topicDeleteContentTargets(options);
@@ -66,6 +78,34 @@ async function currentContentScriptTargetGroups() {
     summaryTargets,
     messageNavigatorTargets
   };
+}
+
+function managedRegistrations(registrations = []) {
+  return registrations.filter((registration) => REGISTERED_CONTENT_SCRIPT_ID_SET.has(registration.id));
+}
+
+function restorableRegistration(registration = {}) {
+  const restored = {};
+  for (const key of [
+    "id", "matches", "excludeMatches", "js", "css", "allFrames", "matchOriginAsFallback",
+    "persistAcrossSessions", "runAt", "world"
+  ]) {
+    if (registration[key] !== undefined) restored[key] = registration[key];
+  }
+  return restored;
+}
+
+async function replaceManagedContentScripts(api, registrations = []) {
+  const current = managedRegistrations(await api.scripting.getRegisteredContentScripts());
+  if (current.length) await api.scripting.unregisterContentScripts({ ids: current.map(({ id }) => id) });
+  if (registrations.length) await registerContentScriptsVerified(api, registrations.map(restorableRegistration));
+  const after = managedRegistrations(await api.scripting.getRegisteredContentScripts());
+  assertRegisteredContentScriptFiles(registrations, after);
+  const expectedIds = new Set(registrations.map(({ id }) => id));
+  const stale = after.filter(({ id }) => !expectedIds.has(id));
+  if (stale.length || after.length !== registrations.length) {
+    throw new Error("content script registration set does not exactly match the prepared configuration");
+  }
 }
 
 function matchesForContentTargets(targets) {
@@ -225,7 +265,33 @@ export async function reconcileContentScripts(api, registrations = []) {
   }
 }
 
-export async function registerContentScripts(api) {
-  const groups = await currentContentScriptTargetGroups();
-  return reconcileContentScripts(api, buildContentScriptRegistrations(groups));
+export async function prepareContentScriptRegistration(api, configuration = {}) {
+  const before = managedRegistrations(await api.scripting.getRegisteredContentScripts()).map(restorableRegistration);
+  const desired = buildContentScriptRegistrations(currentContentScriptTargetGroups(configuration));
+  let settled = false;
+  try {
+    await reconcileContentScripts(api, desired);
+    const after = managedRegistrations(await api.scripting.getRegisteredContentScripts());
+    assertRegisteredContentScriptFiles(desired, after);
+    const expectedIds = new Set(desired.map(({ id }) => id));
+    if (after.length !== desired.length || after.some(({ id }) => !expectedIds.has(id))) {
+      throw new Error("content script registration preparation left an unexpected managed registration");
+    }
+  } catch (error) {
+    try {
+      await replaceManagedContentScripts(api, before);
+    } catch (restoreError) {
+      throw new AggregateError([error, restoreError], "Content registration preparation and restore both failed");
+    }
+    throw error;
+  }
+  return Object.freeze({
+    desired: Object.freeze(desired.map((registration) => Object.freeze({ ...registration }))),
+    async commit() { settled = true; },
+    async restore() {
+      if (settled) throw new Error("Committed content registration preparation cannot be restored");
+      await replaceManagedContentScripts(api, before);
+      settled = true;
+    }
+  });
 }

@@ -3,7 +3,11 @@ import { PROMPT_HISTORY_LIVE_CURSOR } from "../composer/history.js";
 export function createAppState() {
   return {
     options: null,
+    storedOptions: null,
     customConfig: [],
+    configRevision: 0,
+    configSnapshotLoaded: false,
+    officialRulesActivationRevision: 0,
     promptLibrary: [],
     promptSendHistory: [],
     promptHistoryCursor: PROMPT_HISTORY_LIVE_CURSOR,

@@ -10,7 +10,7 @@ const OWNER_ACCESS = Object.freeze({
     read: ["activeTabs", "customConfig", "frameLoadingInstanceIds", "fullscreenGroupId", "groups", "options", "temporaryLayoutPreset"],
     write: ["activeTabs", "frameLoadingInstanceIds", "fullscreenGroupId", "groups", "options", "temporaryLayoutPreset"]
   }),
-  messageNavigator: Object.freeze({ read: ["groups", "options"], write: [] }),
+  messageNavigator: Object.freeze({ read: ["groups", "officialRulesActivationRevision", "options"], write: [] }),
   pocket: Object.freeze({
     read: ["activeTabs", "fullscreenGroupId", "groups", "options", "temporaryLayoutPreset"],
     write: ["activeTabs", "fullscreenGroupId", "groups", "temporaryLayoutPreset"]

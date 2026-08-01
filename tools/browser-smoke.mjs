@@ -1147,7 +1147,7 @@ const pageProbe = `async (fixtureUrl) => {
       for (const item of before) item.iframe.removeEventListener("load", item.onload);
     }
   };
-  const lazyFiles = ["app/settings/controller.js", "app/summary/controller.js", "app/pocket/controller.js"];
+  const lazyFiles = ["app/official-rules/service.js", "app/settings/controller.js", "app/summary/controller.js", "app/pocket/controller.js"];
   const lazy = await Promise.all(lazyFiles.map(async (file) => {
     try {
       await import((globalThis.browser || globalThis.chrome).runtime.getURL(file));

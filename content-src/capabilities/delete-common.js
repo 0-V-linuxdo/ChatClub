@@ -103,6 +103,17 @@ export function createDeleteCommonCapability(deps = {}) {
   const DELETE_CONFIRM_CLICKABLE_SELECTOR = `${DELETE_CLICKABLE_SELECTOR},[class*='button' i],[class*='btn' i]`;
   const DELETE_CONFIRM_CANDIDATE_SELECTOR = `${DELETE_CLICKABLE_SELECTOR},[class*='button' i],[class*='btn' i]`;
 
+  function officialDeleteSelectors(value) {
+    return (Array.isArray(value) ? value : [])
+      .map((selector) => String(selector || "").trim())
+      .filter(Boolean)
+      .slice(0, 8);
+  }
+
+  function deleteSelectorUnion(packaged, official = []) {
+    return [packaged, ...officialDeleteSelectors(official)].filter(Boolean).join(",");
+  }
+
   function visibleDeleteCandidates(root = document, selector = DELETE_CLICKABLE_SELECTOR) {
     return qsa(selector, root, { all: true }).filter((element) => visible(element) && !isDisabledElement(element));
   }
@@ -245,7 +256,7 @@ export function createDeleteCommonCapability(deps = {}) {
     return deleteConfirmButtonMatches(candidate, root);
   }
 
-  function deleteDialogRoots() {
+  function deleteDialogRoots(officialSelectors = []) {
     const roots = visibleSelectorElements([
       "[role='alertdialog']",
       "[role='dialog']",
@@ -256,7 +267,8 @@ export function createDeleteCommonCapability(deps = {}) {
       "[data-state='open']",
       "[class*='modal' i]",
       "[class*='dialog' i]",
-      ".fixed"
+      ".fixed",
+      ...officialDeleteSelectors(officialSelectors)
     ]).filter((root) => {
       const value = deleteElementText(root);
       return deleteConfirmRootTextMatches(value);
@@ -328,7 +340,7 @@ export function createDeleteCommonCapability(deps = {}) {
     return roots.sort((a, b) => modelElementArea(a) - modelElementArea(b));
   }
 
-  function findDeleteConfirmButtonInfo() {
+  function findDeleteConfirmButtonInfo(officialHints = {}) {
     const candidates = [];
     const addCandidate = (element, root = null, extraScore = 0) => {
       const target = deleteClickableElement(element);
@@ -349,13 +361,14 @@ export function createDeleteCommonCapability(deps = {}) {
         area: rect.width * rect.height
       });
     };
-    for (const root of deleteDialogRoots()) {
-      for (const element of visibleDeleteCandidates(root, DELETE_CONFIRM_CLICKABLE_SELECTOR)) {
+    const candidateSelector = deleteSelectorUnion(DELETE_CONFIRM_CLICKABLE_SELECTOR, officialHints?.confirmCandidate);
+    for (const root of deleteDialogRoots(officialHints?.dialog)) {
+      for (const element of visibleDeleteCandidates(root, candidateSelector)) {
         addCandidate(element, root, 260);
       }
     }
     if (!candidates.length && qsa("div,section,[role='dialog'],[role='alertdialog'],dialog,[aria-modal='true'],mat-dialog-container,[class*='modal' i],[class*='dialog' i],h1,h2,h3,p,span", document, { all: true }).some((element) => visible(element) && deleteConfirmQuestionMatches(deleteElementText(element)))) {
-      const buttons = visibleDeleteCandidates(document, DELETE_CONFIRM_CLICKABLE_SELECTOR);
+      const buttons = visibleDeleteCandidates(document, candidateSelector);
       const cancelButtons = buttons.filter(deleteCancelButtonMatches);
       if (cancelButtons.length) {
         for (const element of buttons) {
@@ -377,8 +390,8 @@ export function createDeleteCommonCapability(deps = {}) {
     return candidates[0] || null;
   }
 
-  function findDeleteConfirmButton() {
-    return findDeleteConfirmButtonInfo()?.element || null;
+  function findDeleteConfirmButton(officialHints = {}) {
+    return findDeleteConfirmButtonInfo(officialHints)?.element || null;
   }
 
   function serializableDeleteRect(box) {
@@ -394,8 +407,8 @@ export function createDeleteCommonCapability(deps = {}) {
     };
   }
 
-  function deleteConfirmTrustedClick(site = "topic-delete", reason = "delete confirmation requires trusted browser input") {
-    const info = findDeleteConfirmButtonInfo();
+  function deleteConfirmTrustedClick(site = "topic-delete", reason = "delete confirmation requires trusted browser input", officialHints = {}) {
+    const info = findDeleteConfirmButtonInfo(officialHints);
     const button = info?.element || null;
     const box = modelRect(button);
     if (!button || !box) return null;
@@ -411,8 +424,8 @@ export function createDeleteCommonCapability(deps = {}) {
     };
   }
 
-  function deleteResultWithTrustedConfirm(site, reason) {
-    const trustedClick = deleteConfirmTrustedClick(site, reason);
+  function deleteResultWithTrustedConfirm(site, reason, officialHints = {}) {
+    const trustedClick = deleteConfirmTrustedClick(site, reason, officialHints);
     return deleteResult(false, site, reason, trustedClick ? { needsTrustedClick: true, trustedClick } : {});
   }
 
@@ -473,23 +486,34 @@ export function createDeleteCommonCapability(deps = {}) {
     return deleteResult(false, site, reason, trustedMenuClick ? { needsTrustedMenuClick: true, trustedMenuClick } : {});
   }
 
-  function topicDeleteConfirmState(site = "topic-delete", expectedIdentity = null) {
-    const trustedClick = deleteConfirmTrustedClick(site, "delete confirmation is still visible");
+  function deleteCompletionLinkHrefs(officialHints = {}) {
+    const links = new Set(qsa("a[href]", document, { all: true }));
+    for (const selector of officialDeleteSelectors(officialHints?.completionLinks)) {
+      for (const element of qsa(selector, document, { all: true })) {
+        if (element?.matches?.("a[href]")) links.add(element);
+        for (const link of qsa("a[href]", element, { all: true })) links.add(link);
+      }
+    }
+    return [...links].map((link) => String(link.href || link.getAttribute?.("href") || ""));
+  }
+
+  function topicDeleteConfirmState(site = "topic-delete", expectedIdentity = null, officialHints = {}) {
+    const trustedClick = deleteConfirmTrustedClick(site, "delete confirmation is still visible", officialHints);
     const target = deleteCompletionTargetState(
       expectedIdentity,
       location.href,
-      qsa("a[href]", document, { all: true }).map((link) => String(link.href || link.getAttribute?.("href") || ""))
+      deleteCompletionLinkHrefs(officialHints)
     );
     return {
       version: DELETE_COMPLETION_STATE_VERSION,
-      present: Boolean(trustedClick) || deleteDialogRoots().length > 0,
+      present: Boolean(trustedClick) || deleteDialogRoots(officialHints?.dialog).length > 0,
       target,
       trustedClick
     };
   }
 
-  function deleteConfirmDialogClosed() {
-    return !findDeleteConfirmButton() && !deleteDialogRoots().length;
+  function deleteConfirmDialogClosed(officialHints = {}) {
+    return !findDeleteConfirmButton(officialHints) && !deleteDialogRoots(officialHints?.dialog).length;
   }
 
   function dispatchDeleteConfirmKey(target, key = "Enter") {
@@ -563,37 +587,25 @@ export function createDeleteCommonCapability(deps = {}) {
     return clicked;
   }
 
-  async function clickDeleteConfirmIfPresent(timeoutMs = 4200, guard = null) {
+  async function clickDeleteConfirmIfPresent(timeoutMs = 4200, guard = null, officialHints = {}) {
     const deadline = Date.now() + Math.max(0, Number(timeoutMs) || 0);
     let clickedButton = null;
     let clickedAt = 0;
     while (Date.now() <= deadline) {
-      if (clickedButton && deleteConfirmDialogClosed()) return true;
-      const info = findDeleteConfirmButtonInfo();
+      if (clickedButton && deleteConfirmDialogClosed(officialHints)) return true;
+      const info = findDeleteConfirmButtonInfo(officialHints);
       const button = info?.element || null;
       if (button && typeof guard === "function" && guard() !== true) return false;
       if (button && (button !== clickedButton || Date.now() - clickedAt > 900) && clickDeleteConfirmButton(button, info.root || null)) {
         clickedButton = button;
         clickedAt = Date.now();
         await sleep(220);
-        if (deleteConfirmDialogClosed()) return true;
+        if (deleteConfirmDialogClosed(officialHints)) return true;
       }
       await sleep(120);
     }
-    if (clickedButton && deleteConfirmDialogClosed()) return true;
+    if (clickedButton && deleteConfirmDialogClosed(officialHints)) return true;
     return false;
-  }
-
-  async function clickDeleteConfirmIfAppears(appearTimeoutMs = 900, closeTimeoutMs = 4200) {
-    const deadline = Date.now() + Math.max(0, Number(appearTimeoutMs) || 0);
-    while (Date.now() <= deadline) {
-      if (findDeleteConfirmButton()) {
-        const confirmed = await clickDeleteConfirmIfPresent(closeTimeoutMs);
-        return { appeared: true, confirmed };
-      }
-      await sleep(80);
-    }
-    return { appeared: false, confirmed: false };
   }
 
   function dispatchDeleteKeyboardShortcut() {
@@ -641,12 +653,12 @@ export function createDeleteCommonCapability(deps = {}) {
     deleteClick,
     deleteActivateUntil,
     findDeleteConfirmButton,
+    findDeleteConfirmButtonInfo,
     deleteResultWithTrustedConfirm,
     deleteResultWithTrustedDeleteShortcut,
     deleteResultWithTrustedMenuClick,
     topicDeleteConfirmState,
     clickDeleteConfirmIfPresent,
-    clickDeleteConfirmIfAppears,
     dispatchDeleteKeyboardShortcut,
     DELETE_CANCEL_LABELS,
     deleteDialogRoots,

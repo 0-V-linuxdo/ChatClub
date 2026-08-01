@@ -49,7 +49,18 @@ export const BACKGROUND_REQUEST_ACTIONS = Object.freeze({
   SYNC_GROK_SESSION_COOKIES: SYNC_GROK_SESSION_COOKIES_REQUEST.action,
   ARM_GROK_MIRROR_ACCOUNT_SWITCH: ARM_GROK_MIRROR_ACCOUNT_SWITCH_REQUEST.action,
   GET_CONFIG_INFO: "getConfigInfo",
+  GET_CONFIG_SNAPSHOT: "getConfigSnapshot",
+  PATCH_CONFIG: "patchConfig",
+  IMPORT_CONFIG: "importConfig",
   RESET_CONFIG: "resetConfig",
+  GET_OFFICIAL_RULES_STATUS: "getOfficialRulesStatus",
+  SET_OFFICIAL_RULES_MODE: "setOfficialRulesMode",
+  CHECK_OFFICIAL_RULES_UPDATE: "checkOfficialRulesUpdate",
+  APPLY_OFFICIAL_RULES_UPDATE: "applyOfficialRulesUpdate",
+  ROLLBACK_OFFICIAL_COMPONENT: "rollbackOfficialComponent",
+  ROLLBACK_LAST_RULES_UPDATE: "rollbackLastRulesUpdate",
+  RESTORE_OFFICIAL_COMPONENT: "restoreOfficialComponent",
+  SET_OFFICIAL_DELETE_ALIAS_APPROVAL: "setOfficialDeleteAliasApproval",
   INSTALL_TOPIC_DELETE_USERSCRIPT: INSTALL_TOPIC_DELETE_USERSCRIPT_REQUEST.action,
   EXECUTE_SUMMARY_USERSCRIPT: EXECUTE_SUMMARY_USERSCRIPT_REQUEST.action,
   EXECUTE_TOPIC_DELETE_USERSCRIPT: EXECUTE_TOPIC_DELETE_USERSCRIPT_REQUEST.action,
@@ -127,9 +138,87 @@ export const BACKGROUND_REQUEST_SPECS = Object.freeze({
   [ACTION.GET_CONFIG_INFO]: extensionPage({
     response: contract({ options: "object", customConfig: "array", contentScripts: "array" })
   }),
+  [ACTION.GET_CONFIG_SNAPSHOT]: extensionPage({
+    response: contract({ snapshot: "object" })
+  }),
+  [ACTION.PATCH_CONFIG]: extensionPage({
+    mutates: true,
+    payload: contract({ expectedRevision: "integer", expectedActivationRevision: "integer", patch: "object" }),
+    response: contract({ snapshot: "object" }),
+    errorCodes: ["CONFIG_REVISION_CONFLICT", "ACTIVATION_REVISION_CONFLICT", "CONFIG_APPLY_FAILED", "INVALID_CONFIG_REQUEST"]
+  }),
+  [ACTION.IMPORT_CONFIG]: extensionPage({
+    mutates: true,
+    payload: contract({ expectedRevision: "integer", expectedActivationRevision: "integer", patch: "object" }),
+    response: contract({ snapshot: "object", saved: "object" }),
+    errorCodes: ["CONFIG_REVISION_CONFLICT", "ACTIVATION_REVISION_CONFLICT", "CONFIG_APPLY_FAILED", "INVALID_CONFIG_REQUEST"]
+  }),
   [ACTION.RESET_CONFIG]: extensionPage({
     mutates: true,
-    response: contract({ options: "object", workspaceSessionGeneration: "string" })
+    payload: contract({ expectedRevision: "integer", expectedActivationRevision: "integer" }),
+    response: contract({
+      snapshot: "object",
+      workspaceSessionGeneration: "string",
+      committed: "boolean",
+      cleanupWarnings: "array"
+    }),
+    errorCodes: ["CONFIG_REVISION_CONFLICT", "ACTIVATION_REVISION_CONFLICT", "CONFIG_RESET_FAILED"]
+  }),
+  [ACTION.GET_OFFICIAL_RULES_STATUS]: extensionPage({
+    response: contract({ status: "object" })
+  }),
+  [ACTION.SET_OFFICIAL_RULES_MODE]: extensionPage({
+    mutates: true,
+    payload: contract({ expectedRevision: "integer", mode: "string" }),
+    response: contract({ status: "object" }),
+    errorCodes: ["OFFICIAL_RULES_STATE_CONFLICT", "INVALID_OFFICIAL_RULES_REQUEST", "RECOVERY_REQUIRED"]
+  }),
+  [ACTION.CHECK_OFFICIAL_RULES_UPDATE]: extensionPage({
+    mutates: true,
+    payload: contract({ expectedRevision: "integer" }),
+    response: contract({ status: "object", result: "object" }),
+    errorCodes: ["OFFICIAL_RULES_STATE_CONFLICT", "OFFICIAL_RULES_UPDATE_FAILED", "RECOVERY_REQUIRED"]
+  }),
+  [ACTION.APPLY_OFFICIAL_RULES_UPDATE]: extensionPage({
+    mutates: true,
+    payload: contract({ expectedRevision: "integer" }, {
+      expectedActivationRevision: "integer",
+      approvedDeleteAliases: "array"
+    }),
+    response: contract({ status: "object", configSnapshot: "object" }),
+    errorCodes: ["OFFICIAL_RULES_STATE_CONFLICT", "ACTIVATION_REVISION_CONFLICT", "OFFICIAL_RULES_APPLY_FAILED", "INVALID_OFFICIAL_RULES_REQUEST", "RECOVERY_REQUIRED"]
+  }),
+  [ACTION.ROLLBACK_OFFICIAL_COMPONENT]: extensionPage({
+    mutates: true,
+    payload: contract({ expectedRevision: "integer", componentKey: "string" }, { expectedActivationRevision: "integer" }),
+    response: contract({ status: "object", configSnapshot: "object" }),
+    errorCodes: ["OFFICIAL_RULES_STATE_CONFLICT", "ACTIVATION_REVISION_CONFLICT", "OFFICIAL_RULES_APPLY_FAILED", "INVALID_OFFICIAL_RULES_REQUEST", "RECOVERY_REQUIRED"]
+  }),
+  [ACTION.ROLLBACK_LAST_RULES_UPDATE]: extensionPage({
+    mutates: true,
+    payload: contract({ expectedRevision: "integer" }, { expectedActivationRevision: "integer" }),
+    response: contract({ status: "object", configSnapshot: "object" }),
+    errorCodes: ["OFFICIAL_RULES_STATE_CONFLICT", "ACTIVATION_REVISION_CONFLICT", "OFFICIAL_RULES_APPLY_FAILED", "INVALID_OFFICIAL_RULES_REQUEST", "RECOVERY_REQUIRED"]
+  }),
+  [ACTION.RESTORE_OFFICIAL_COMPONENT]: extensionPage({
+    mutates: true,
+    payload: contract({ expectedRevision: "integer", componentKey: "string" }, { expectedActivationRevision: "integer" }),
+    response: contract({ status: "object", configSnapshot: "object" }),
+    errorCodes: ["OFFICIAL_RULES_STATE_CONFLICT", "ACTIVATION_REVISION_CONFLICT", "OFFICIAL_RULES_APPLY_FAILED", "INVALID_OFFICIAL_RULES_REQUEST", "RECOVERY_REQUIRED"]
+  }),
+  [ACTION.SET_OFFICIAL_DELETE_ALIAS_APPROVAL]: extensionPage({
+    mutates: true,
+    payload: contract(
+      {
+        expectedRevision: "integer",
+        expectedActivationRevision: "integer",
+        componentKey: "string",
+        host: "string",
+        approved: "boolean"
+      }
+    ),
+    response: contract({ status: "object", configSnapshot: "object" }),
+    errorCodes: ["OFFICIAL_RULES_STATE_CONFLICT", "ACTIVATION_REVISION_CONFLICT", "INVALID_OFFICIAL_RULES_REQUEST", "CONFIG_APPLY_FAILED", "RECOVERY_REQUIRED"]
   }),
   [ACTION.ENSURE_CONTENT_BRIDGE]: extensionPage({
     mutates: true,

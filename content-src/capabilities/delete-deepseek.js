@@ -33,16 +33,42 @@ export function createDeleteDeepSeekCapability(deps = {}) {
     findDeleteMenuItem,
     deleteClickLayout,
     findDeleteConfirmButton,
+    findDeleteConfirmButtonInfo,
+    deleteDialogRoots,
     clickDeleteConfirmIfPresent,
     DEEPSEEK_DELETE_SOURCE
   } = deps;
-  function deepSeekChatLinks(root = document) {
-    return qsa("a[href*='/chat/s/'],a[href*='/a/chat/s/']", root, { all: true })
+  function deepSeekOfficialSelectors(hints = {}, slot = "") {
+    return (Array.isArray(hints?.[slot]) ? hints[slot] : [])
+      .map((selector) => String(selector || "").trim())
+      .filter(Boolean)
+      .slice(0, 8);
+  }
+
+  function deepSeekSelectorUnion(packaged, hints = {}, slot = "") {
+    return [packaged, ...deepSeekOfficialSelectors(hints, slot)].filter(Boolean).join(",");
+  }
+
+  function deepSeekConversationLinkIsLocal(link) {
+    try {
+      const url = new URL(String(link?.href || link?.getAttribute?.("href") || ""), location.href);
+      return url.protocol === "https:"
+        && url.origin === location.origin
+        && /^\/(?:a\/)?chat\/s\/[^/?#]+\/?$/.test(url.pathname);
+    } catch {
+      return false;
+    }
+  }
+
+  function deepSeekChatLinks(root = document, hints = {}) {
+    const selector = deepSeekSelectorUnion("a[href*='/chat/s/'],a[href*='/a/chat/s/']", hints, "conversationLink");
+    return qsa(selector, root, { all: true })
+      .filter((link) => link?.matches?.("a[href]") && deepSeekConversationLinkIsLocal(link))
       .filter((link) => visible(link) && modelRect(link));
   }
 
-  function deepSeekSidebarRootFromLinks() {
-    const links = deepSeekChatLinks(document)
+  function deepSeekSidebarRootFromLinks(hints = {}) {
+    const links = deepSeekChatLinks(document, hints)
       .filter((link) => {
         const rect = modelRect(link);
         return rect && rect.left <= 470 && rect.width >= 100 && rect.height >= 20 && rect.height <= 96;
@@ -51,21 +77,34 @@ export function createDeleteDeepSeekCapability(deps = {}) {
     const currentId = deepSeekChatIdFromHref(location.href);
     const current = currentId ? links.find((link) => deepSeekChatIdFromHref(link.href || link.getAttribute?.("href")) === currentId) : null;
     const seeds = current ? [current] : links.slice(0, 4);
-    const scoreRoot = (root) => {
+    const scoreRoot = (root, officialScope = false) => {
       if (!root || !root.isConnected) return null;
       const rect = modelRect(root);
       if (!rect || rect.left > 560 || rect.width < 120 || rect.width > 620 || rect.height < 40) return null;
-      const rootLinks = deepSeekChatLinks(root).length;
+      const rootLinks = deepSeekChatLinks(root, hints).length;
       if (rootLinks < (current ? 1 : 2)) return null;
       const value = deleteElementText(root);
       const className = String(root.className || "");
       const hasHistoryText = /today|yesterday|pinned|new chat|今天|昨天|新聊天|置顶/i.test(value);
       const looksScrollable = /scroll|history|sidebar|sider/i.test(className);
-      if (!hasHistoryText && !looksScrollable && rootLinks < 3) return null;
-      return (looksScrollable ? 900 : 0) + Math.min(rootLinks, 12) * 80 + Math.min(rect.height, 900) * 0.02 - rect.left;
+      if (!officialScope && !hasHistoryText && !looksScrollable && rootLinks < 3) return null;
+      return (officialScope ? 180 : 0)
+        + (looksScrollable ? 900 : 0)
+        + Math.min(rootLinks, 12) * 80
+        + Math.min(rect.height, 900) * 0.02
+        - rect.left;
     };
     const candidates = [];
     const seen = new Set();
+    for (const selector of deepSeekOfficialSelectors(hints, "scope")) {
+      for (const root of qsa(selector, document, { all: true })) {
+        if (seen.has(root)) continue;
+        seen.add(root);
+        const score = scoreRoot(root, true);
+        if (score == null || (current && !root.contains?.(current))) continue;
+        candidates.push({ element: root, score: score + 120, area: modelElementArea(root) });
+      }
+    }
     for (const seed of seeds) {
       for (let node = seed; node && node !== document.body; node = node.parentElement) {
         if (seen.has(node)) continue;
@@ -79,8 +118,8 @@ export function createDeleteDeepSeekCapability(deps = {}) {
     return candidates[0]?.element || null;
   }
 
-  function deepSeekSidebarRoot() {
-    const linkRoot = deepSeekSidebarRootFromLinks();
+  function deepSeekSidebarRoot(hints = {}) {
+    const linkRoot = deepSeekSidebarRootFromLinks(hints);
     if (linkRoot) return linkRoot;
     return null;
   }
@@ -113,7 +152,7 @@ export function createDeleteDeepSeekCapability(deps = {}) {
     return buttons[indexFromLeft]?.element || buttons[0]?.element || null;
   }
 
-  async function clickDeepSeekSidebarToggleByPoint() {
+  async function clickDeepSeekSidebarToggleByPoint(hints = {}) {
     const points = [
       { x: 22, y: 28 },
       { x: 22, y: 44 },
@@ -129,16 +168,16 @@ export function createDeleteDeepSeekCapability(deps = {}) {
       if (!button || !rect || !visible(button) || isDisabledElement(button)) continue;
       if (rect.top > 96 || rect.left > 110 || rect.width > 80 || rect.height > 80) continue;
       if (!dispatchPointerActivation(button, point) && !nativeModelClick(button) && !modelDirectClick(button)) continue;
-      if (await waitForModel(deepSeekSidebarRoot, 1400, 100)) return true;
+      if (await waitForModel(() => deepSeekSidebarRoot(hints), 1400, 100)) return true;
     }
     return false;
   }
 
-  async function ensureDeepSeekSidebarOpen() {
-    if (deepSeekSidebarRoot()) return true;
+  async function ensureDeepSeekSidebarOpen(hints = {}) {
+    if (deepSeekSidebarRoot(hints)) return true;
     const toggle = findDeepSeekSidebarToggle();
-    if (toggle && deleteClick(toggle) && await waitForModel(deepSeekSidebarRoot, 3200, 120)) return true;
-    return clickDeepSeekSidebarToggleByPoint();
+    if (toggle && deleteClick(toggle) && await waitForModel(() => deepSeekSidebarRoot(hints), 3200, 120)) return true;
+    return clickDeepSeekSidebarToggleByPoint(hints);
   }
 
   function deepSeekTitleTokenFromValue(value) {
@@ -160,44 +199,56 @@ export function createDeleteDeepSeekCapability(deps = {}) {
       data.currentTitle,
       data.title
     ].map(deepSeekTitleTokenFromValue).filter(Boolean));
+    const official = data?.officialRuleHints && typeof data.officialRuleHints === "object" && !Array.isArray(data.officialRuleHints)
+      ? data.officialRuleHints
+      : {};
     return {
+      ...official,
       titleTokens: Array.from(titleTokens)
     };
   }
 
-  function findDeepSeekCurrentTopicRow(root) {
+  function findDeepSeekCurrentTopicRow(root, hints = {}) {
     if (!root) return null;
-    const links = deepSeekChatLinks(root);
+    const links = deepSeekChatLinks(root, hints);
     const currentId = deepSeekChatIdFromHref(location.href);
     if (!currentId) return null;
     return links.find((link) => deepSeekChatIdFromHref(link.href || link.getAttribute?.("href")) === currentId) || null;
   }
 
-  function deepSeekVisualTopicRow(row) {
+  function deepSeekVisualTopicRow(row, hints = {}) {
     const rowRect = modelRect(row);
     if (!row || !rowRect) return row;
     const rowText = deleteCompactToken(deleteElementText(row));
     let best = { element: row, score: 0 };
-    for (let node = row, depth = 0; node && node !== document.body && depth < 8; node = node.parentElement, depth += 1) {
+    const consider = (node, depth = 0, extraScore = 0) => {
       const rect = modelRect(node);
-      if (!rect || rect.left > 560 || rect.width < 110 || rect.width > 620 || rect.height < 28 || rect.height > 110) continue;
-      if (rect.top > rowRect.top + 10 || rect.bottom < rowRect.bottom - 10) continue;
+      if (!rect || rect.left > 560 || rect.width < 110 || rect.width > 620 || rect.height < 28 || rect.height > 110) return;
+      if (rect.top > rowRect.top + 10 || rect.bottom < rowRect.bottom - 10) return;
       const token = deleteCompactToken(deleteElementText(node));
-      if (rowText && token && !token.includes(rowText) && !rowText.includes(token)) continue;
+      if (rowText && token && !token.includes(rowText) && !rowText.includes(token)) return;
       const className = String(node.className || "");
       const active = /\b(active|selected|current)\b/i.test(className) || String(node.getAttribute?.("aria-current") || "").toLowerCase() === "page";
       const buttons = qsa("button,[role='button'],[aria-haspopup],[aria-expanded],[tabindex]:not([tabindex='-1'])", node, { all: true }).length;
-      const score = rect.width + (active ? 420 : 0) + Math.min(buttons, 3) * 90 - depth * 12;
+      const score = extraScore + rect.width + (active ? 420 : 0) + Math.min(buttons, 3) * 90 - depth * 12;
       if (score > best.score) best = { element: node, score };
+    };
+    for (const selector of deepSeekOfficialSelectors(hints, "conversationRow")) {
+      for (const candidate of qsa(selector, document, { all: true })) {
+        if (candidate === row || candidate.contains?.(row)) consider(candidate, 0, 120);
+      }
+    }
+    for (let node = row, depth = 0; node && node !== document.body && depth < 8; node = node.parentElement, depth += 1) {
+      consider(node, depth, 0);
     }
     return best.element || row;
   }
 
-  function deepSeekRowMenuRightEdge(row, visualRow = row) {
+  function deepSeekRowMenuRightEdge(row, visualRow = row, hints = {}) {
     const rowRect = modelRect(visualRow) || modelRect(row);
     if (!rowRect) return rowRect?.right || 0;
     const roots = [];
-    const sidebar = deepSeekSidebarRoot();
+    const sidebar = deepSeekSidebarRoot(hints);
     if (sidebar) roots.push(sidebar);
     for (let node = visualRow || row; node && node !== document.body && roots.length < 8; node = node.parentElement) roots.push(node);
     const candidates = roots
@@ -212,11 +263,11 @@ export function createDeleteDeepSeekCapability(deps = {}) {
     return Math.max(rowRect.right, ...candidates);
   }
 
-  function deepSeekTopicMenuRect(row) {
-    const visualRow = deepSeekVisualTopicRow(row);
+  function deepSeekTopicMenuRect(row, hints = {}) {
+    const visualRow = deepSeekVisualTopicRow(row, hints);
     const rowRect = modelRect(visualRow) || modelRect(row);
     if (!rowRect) return null;
-    const right = Math.max(rowRect.right, deepSeekRowMenuRightEdge(row, visualRow));
+    const right = Math.max(rowRect.right, deepSeekRowMenuRightEdge(row, visualRow, hints));
     return {
       left: rowRect.left,
       top: rowRect.top,
@@ -227,8 +278,8 @@ export function createDeleteDeepSeekCapability(deps = {}) {
     };
   }
 
-  function deepSeekTrustedMenuClick(row, trigger = null, reason = "topic menu trigger requires trusted browser input") {
-    const rowRect = deepSeekTopicMenuRect(row);
+  function deepSeekTrustedMenuClick(row, trigger = null, reason = "topic menu trigger requires trusted browser input", hints = {}) {
+    const rowRect = deepSeekTopicMenuRect(row, hints);
     const triggerClick = trustedMenuClickForElement(trigger, "deepseek", reason);
     if (!rowRect) return triggerClick;
     const y = rowRect.top + rowRect.height / 2;
@@ -258,14 +309,14 @@ export function createDeleteDeepSeekCapability(deps = {}) {
     return trustedMenuClick ? { ...trustedMenuClick, framePoints, hoverSettleMs: 360 } : null;
   }
 
-  function deleteResultWithDeepSeekTrustedMenuClick(reason, row, trigger = null) {
-    const trustedMenuClick = deepSeekTrustedMenuClick(row, trigger, reason);
+  function deleteResultWithDeepSeekTrustedMenuClick(reason, row, trigger = null, hints = {}) {
+    const trustedMenuClick = deepSeekTrustedMenuClick(row, trigger, reason, hints);
     return deleteResult(false, "deepseek", reason, trustedMenuClick ? { needsTrustedMenuClick: true, trustedMenuClick } : {});
   }
 
-  function deepSeekTrustedKeySequence(row, reason = "topic menu trigger requires keyboard focus") {
-    const rowRect = deepSeekTopicMenuRect(row);
-    const visualRect = modelRect(deepSeekVisualTopicRow(row)) || modelRect(row) || rowRect;
+  function deepSeekTrustedKeySequence(row, reason = "topic menu trigger requires keyboard focus", hints = {}) {
+    const rowRect = deepSeekTopicMenuRect(row, hints);
+    const visualRect = modelRect(deepSeekVisualTopicRow(row, hints)) || modelRect(row) || rowRect;
     if (!rowRect || !visualRect) return null;
     const focusX = Math.min(
       rowRect.right - 104,
@@ -290,9 +341,9 @@ export function createDeleteDeepSeekCapability(deps = {}) {
     };
   }
 
-  function deleteResultWithDeepSeekTrustedKeySequence(reason, row) {
-    const trustedKeySequence = deepSeekTrustedKeySequence(row, reason);
-    const trustedMenuClick = deepSeekTrustedMenuClick(row, null, reason);
+  function deleteResultWithDeepSeekTrustedKeySequence(reason, row, hints = {}) {
+    const trustedKeySequence = deepSeekTrustedKeySequence(row, reason, hints);
+    const trustedMenuClick = deepSeekTrustedMenuClick(row, null, reason, hints);
     return deleteResult(false, "deepseek", reason, {
       ...(trustedKeySequence ? { needsTrustedKeySequence: true, trustedKeySequence } : {}),
       ...(trustedMenuClick ? { needsTrustedMenuClick: true, trustedMenuClick } : {})
@@ -355,11 +406,13 @@ export function createDeleteDeepSeekCapability(deps = {}) {
       for (let scope = element, depth = 0; scope && scope !== document.body && depth < 5; scope = scope.parentElement, depth += 1) {
         const scopeRect = modelRect(scope);
         if (!scopeRect || scopeRect.top > 210 || scopeRect.height > 180 || scopeRect.width > 900) continue;
-        for (const button of layoutDeleteCandidates(scope, "button,[role='button'],[aria-haspopup],[aria-expanded],[tabindex]:not([tabindex='-1'])")) {
+        const triggerSelector = deepSeekSelectorUnion("button,[role='button'],[aria-haspopup],[aria-expanded],[tabindex]:not([tabindex='-1'])", hints, "menuTrigger");
+        for (const button of layoutDeleteCandidates(scope, triggerSelector)) {
           addButton(button, titleRect, 120 - depth * 12);
         }
       }
-      for (const button of qsa("button,[role='button'],[aria-haspopup],[aria-expanded],[tabindex]:not([tabindex='-1'])", document, { all: true })) {
+      const triggerSelector = deepSeekSelectorUnion("button,[role='button'],[aria-haspopup],[aria-expanded],[tabindex]:not([tabindex='-1'])", hints, "menuTrigger");
+      for (const button of qsa(triggerSelector, document, { all: true })) {
         addButton(button, titleRect, 0);
       }
     }
@@ -392,11 +445,11 @@ export function createDeleteDeepSeekCapability(deps = {}) {
     }
   }
 
-  function deepSeekTopicMoreButton(row) {
+  function deepSeekTopicMoreButton(row, hints = {}) {
     if (!row) return null;
     reveal(row);
-    const visualRow = deepSeekVisualTopicRow(row);
-    const rowRect = deepSeekTopicMenuRect(row);
+    const visualRow = deepSeekVisualTopicRow(row, hints);
+    const rowRect = deepSeekTopicMenuRect(row, hints);
     hoverDeepSeekTopicRow(visualRow || row);
     if (!rowRect) return null;
     const candidates = [];
@@ -435,7 +488,7 @@ export function createDeleteDeepSeekCapability(deps = {}) {
         if (!scopes.includes(node)) scopes.push(node);
       }
     }
-    const iconSelector = "button,[role='button'],[aria-haspopup],[tabindex]:not([tabindex='-1']),[class*='button' i],[class*='btn' i],svg,[class*='more' i],[class*='menu' i],[class*='option' i],[class*='action' i],[class*='ellipsis' i]";
+    const iconSelector = deepSeekSelectorUnion("button,[role='button'],[aria-haspopup],[tabindex]:not([tabindex='-1']),[class*='button' i],[class*='btn' i],svg,[class*='more' i],[class*='menu' i],[class*='option' i],[class*='action' i],[class*='ellipsis' i]", hints, "menuTrigger");
     for (const scope of scopes) {
       for (const button of layoutDeleteCandidates(scope, iconSelector)) add(button, "scope", 80);
     }
@@ -451,18 +504,21 @@ export function createDeleteDeepSeekCapability(deps = {}) {
     return candidates[0]?.element || null;
   }
 
-  async function openDeepSeekTriggerAndClickDelete(trigger, labels, { timeoutMs = 3200, allowHiddenTrigger = false, guard = null } = {}) {
+  async function openDeepSeekTriggerAndClickDelete(trigger, labels, { timeoutMs = 3200, allowHiddenTrigger = false, guard = null, hints = {} } = {}) {
     if (!trigger) return false;
     const guarded = () => typeof guard !== "function" || guard() === true;
     if (!guarded()) return false;
-    const menuReady = () => menuRootsWithDelete(labels)[0] || findOpenDeleteMenuItem(labels);
+    const menuRoots = deepSeekOfficialSelectors(hints, "menuRoot");
+    const deleteCandidates = deepSeekOfficialSelectors(hints, "deleteCandidate");
+    const menuReady = () => menuRootsWithDelete(labels, menuRoots)[0] || findOpenDeleteMenuItem(labels, menuRoots, deleteCandidates);
     if (menuReady()) return false;
     if (!await deleteActivateUntil(trigger, menuReady, { allowHidden: allowHiddenTrigger, settleMs: 220 })) return false;
     await sleep(140);
     const deadline = Date.now() + Math.max(0, Number(timeoutMs) || 0);
     while (Date.now() <= deadline) {
-      const root = menuRootsWithDelete(labels)[0] || null;
-      const item = (root ? findDeleteMenuItem(root, labels) : null) || findOpenDeleteMenuItem(labels);
+      const root = menuRootsWithDelete(labels, menuRoots)[0] || null;
+      const item = (root ? findDeleteMenuItem(root, labels, deleteCandidates) : null)
+        || findOpenDeleteMenuItem(labels, menuRoots, deleteCandidates);
       if (item && guarded() && (deleteClick(item) || deleteClickLayout(item))) return true;
       await sleep(120);
     }
@@ -505,12 +561,12 @@ export function createDeleteDeepSeekCapability(deps = {}) {
     return value;
   }
 
-  function validateDeepSeekTrustedCoordinates(value = {}) {
+  function validateDeepSeekTrustedCoordinates(value = {}, hints = {}) {
     const needsTrusted = value?.needsTrustedHover || value?.needsTrustedMenuClick || value?.needsTrustedKeySequence;
     if (!needsTrusted) return { ok: true, instructions: {} };
-    const root = deepSeekSidebarRoot();
-    const row = findDeepSeekCurrentTopicRow(root);
-    const rowRect = row ? deepSeekTopicMenuRect(row) : null;
+    const root = deepSeekSidebarRoot(hints);
+    const row = findDeepSeekCurrentTopicRow(root, hints);
+    const rowRect = row ? deepSeekTopicMenuRect(row, hints) : null;
     if (!root || !row || !rowRect) {
       return { ok: false, reason: "MAIN trusted-input result has no independently verified current sidebar row" };
     }
@@ -629,14 +685,14 @@ export function createDeleteDeepSeekCapability(deps = {}) {
     return { ...sanitized, ...(validation.instructions || {}) };
   }
 
-  function validateDeepSeekBridgeTrustedResult(bridged = {}, data = {}, currentRouteId = "") {
+  function validateDeepSeekBridgeTrustedResult(bridged = {}, data = {}, currentRouteId = "", hints = {}) {
     const needsTrusted = bridged?.needsTrustedHover || bridged?.needsTrustedMenuClick || bridged?.needsTrustedKeySequence;
     if (!needsTrusted) return { ok: true };
     const attemptId = normalize(data?.deleteAttemptId);
     if (!attemptId || normalize(bridged?.deleteAttemptId) !== attemptId || String(bridged?.routeId || "") !== currentRouteId) {
       return { ok: false, reason: "MAIN trusted-input result does not match the current attempt and route" };
     }
-    return validateDeepSeekTrustedCoordinates(bridged);
+    return validateDeepSeekTrustedCoordinates(bridged, hints);
   }
 
   function deepSeekBridgeFallbackDisposition(bridged = {}, retryRequested = false) {
@@ -646,38 +702,126 @@ export function createDeleteDeepSeekCapability(deps = {}) {
     return { useNativeFallback: true, reason };
   }
 
+  function sameDeepSeekConfirmationRoot(left, right) {
+    return Boolean(
+      left
+      && right
+      && (left === right || left.contains?.(right) || right.contains?.(left))
+    );
+  }
+
+  function deepSeekConfirmationAlreadyOpen(hints = {}) {
+    return Boolean(findDeleteConfirmButton(hints) || deleteDialogRoots(hints.dialog).length);
+  }
+
+  function deepSeekConfirmationOwnership(baseline = new Set(), hints = {}, attemptGuard = null) {
+    if (typeof attemptGuard === "function" && attemptGuard() !== true) return null;
+    const roots = deleteDialogRoots(hints.dialog);
+    const info = findDeleteConfirmButtonInfo(hints);
+    const button = info?.element || null;
+    const root = info?.root || roots.find((candidate) => candidate === button || candidate.contains?.(button)) || null;
+    if (!button || !root || baseline?.has(root)) return null;
+    if ([...(baseline || [])].some((candidate) => sameDeepSeekConfirmationRoot(candidate, root))) return null;
+    if (!button.isConnected || !root.isConnected || !visible(button) || !visible(root) || !root.contains?.(button)) return null;
+    if (!roots.some((candidate) => candidate === root)) return null;
+    if (roots.some((candidate) => !sameDeepSeekConfirmationRoot(candidate, root))) return null;
+    return { root, button };
+  }
+
+  function deepSeekConfirmationOwnershipIsCurrent(ownership, hints = {}, attemptGuard = null) {
+    const root = ownership?.root || null;
+    const button = ownership?.button || null;
+    if (typeof attemptGuard === "function" && attemptGuard() !== true) return false;
+    if (!root || !button || !root.isConnected || !button.isConnected || !visible(root) || !visible(button)) return false;
+    if (!root.contains?.(button)) return false;
+    const roots = deleteDialogRoots(hints.dialog);
+    const info = findDeleteConfirmButtonInfo(hints);
+    const currentRoot = info?.root || roots.find((candidate) => candidate === info?.element || candidate.contains?.(info?.element)) || null;
+    return info?.element === button
+      && currentRoot === root
+      && roots.some((candidate) => candidate === root)
+      && roots.every((candidate) => sameDeepSeekConfirmationRoot(candidate, root));
+  }
+
+  async function waitForDeepSeekConfirmation(baseline, hints, attemptGuard, timeoutMs = 3000) {
+    const deadline = Date.now() + Math.max(0, Number(timeoutMs) || 0);
+    while (Date.now() <= deadline) {
+      if (typeof attemptGuard === "function" && attemptGuard() !== true) return { state: "invalid", ownership: null };
+      if (deepSeekConfirmationAlreadyOpen(hints)) {
+        const ownership = deepSeekConfirmationOwnership(baseline, hints, attemptGuard);
+        return ownership
+          ? { state: "owned", ownership }
+          : { state: "unowned", ownership: null };
+      }
+      await sleep(80);
+    }
+    return { state: "none", ownership: null };
+  }
+
+  async function finishDeepSeekConfirmation(ownership, hints, attemptGuard) {
+    const ownershipGuard = () => deepSeekConfirmationOwnershipIsCurrent(ownership, hints, attemptGuard);
+    if (!ownershipGuard()) return deleteResult(false, "deepseek", "delete confirmation ownership is uncertain");
+    const confirmed = await clickDeleteConfirmIfPresent(6500, ownershipGuard, hints);
+    if (confirmed) return deleteResult(true, "deepseek");
+    return deleteResult(false, "deepseek", ownershipGuard()
+      ? "delete confirmation did not close"
+      : "delete confirmation ownership changed");
+  }
+
+  async function deepSeekConfirmationResult(baseline, hints, attemptGuard, fallbackReason = "delete confirmation button not found") {
+    const observation = await waitForDeepSeekConfirmation(baseline, hints, attemptGuard, 3000);
+    if (observation.state === "owned") return finishDeepSeekConfirmation(observation.ownership, hints, attemptGuard);
+    if (observation.state === "unowned") return deleteResult(false, "deepseek", "delete confirmation ownership is uncertain");
+    if (observation.state === "invalid") return deleteResult(false, "deepseek", "current conversation or delete attempt changed after delete activation");
+    return deleteResult(false, "deepseek", fallbackReason);
+  }
+
   async function deleteDeepSeekThread(data = {}) {
+    const hints = deepSeekDeleteHints(data);
     const currentRouteId = deepSeekChatIdFromHref(location.href);
     const attemptId = normalize(data?.deleteAttemptId);
     if (!currentRouteId) return deleteResult(false, "deepseek", "stable current conversation route is required");
     if (!attemptId) return deleteResult(false, "deepseek", "delete attempt identity is required");
+    if (String(data?.expectedDeleteIdentity?.provider || "").toLowerCase() !== "deepseek"
+      || String(data?.expectedDeleteIdentity?.id || "") !== currentRouteId) {
+      return deleteResult(false, "deepseek", "delete target identity does not match the current route");
+    }
     const routeStillCurrent = () => deepSeekChatIdFromHref(location.href) === currentRouteId;
+    const attemptStillCurrent = () => normalize(data?.deleteAttemptId) === attemptId && routeStillCurrent();
     const retryRequested = deepSeekTrustedRetryRequested(data);
     const nativeRetryOwned = retryRequested && deepSeekTrustedRetryOwned(data);
     if (!retryRequested) deepSeekPendingTrustedAttempt = null;
     if (nativeRetryOwned) deepSeekPendingTrustedAttempt = null;
-    await ensureDeepSeekSidebarOpen();
-    if (!routeStillCurrent()) {
-      return deleteResult(false, "deepseek", "current conversation changed while preparing deletion");
+    await ensureDeepSeekSidebarOpen(hints);
+    if (!attemptStillCurrent()) {
+      return deleteResult(false, "deepseek", "current conversation or delete attempt changed while preparing deletion");
     }
     const labels = ["Delete", "删除"];
-    if (findDeleteConfirmButton()) {
+    if (deepSeekConfirmationAlreadyOpen(hints)) {
       return deleteResult(false, "deepseek", "unverified delete confirmation is already open");
     }
     if (nativeRetryOwned) {
-      const deleteItem = await waitForModel(() => findOpenDeleteMenuItem(labels), 3200, 90);
+      const menuRoots = deepSeekOfficialSelectors(hints, "menuRoot");
+      const deleteCandidates = deepSeekOfficialSelectors(hints, "deleteCandidate");
+      const deleteItem = await waitForModel(
+        () => findOpenDeleteMenuItem(labels, menuRoots, deleteCandidates),
+        3200,
+        90
+      );
       if (deleteItem) {
-        if (!routeStillCurrent()) return deleteResult(false, "deepseek", "current conversation changed during trusted menu retry");
+        if (!attemptStillCurrent()) return deleteResult(false, "deepseek", "current conversation or delete attempt changed during trusted menu retry");
+        const confirmationBaseline = new Set(deleteDialogRoots(hints.dialog));
+        if (deepSeekConfirmationAlreadyOpen(hints)) {
+          return deleteResult(false, "deepseek", "unverified delete confirmation appeared before delete activation");
+        }
         if (!deleteClick(deleteItem) && !deleteClickLayout(deleteItem)) {
           return deleteResult(false, "deepseek", "explicit Delete action could not be safely activated");
         }
-        const confirmedAfterTrustedMenu = await clickDeleteConfirmIfPresent(6500, routeStillCurrent);
-        if (!confirmedAfterTrustedMenu) return deleteResult(false, "deepseek", "delete confirmation button not found");
-        return deleteResult(true, "deepseek");
+        return deepSeekConfirmationResult(confirmationBaseline, hints, attemptStillCurrent);
       }
       if (data?.trustedMenuClickRetried) {
         if (!routeStillCurrent()) return deleteResult(false, "deepseek", "current conversation changed during trusted menu retry");
-        if (findOpenDeleteMenuItem(labels) || findDeleteConfirmButton()) {
+        if (findOpenDeleteMenuItem(labels, menuRoots, deleteCandidates) || deepSeekConfirmationAlreadyOpen(hints)) {
           return deleteResult(false, "deepseek", "delete menu state is not clean; trusted retry was not renewed");
         }
         return armDeepSeekTrustedRetry(data, deleteResult(false, "deepseek", "trusted topic menu click did not open"));
@@ -687,7 +831,7 @@ export function createDeleteDeepSeekCapability(deps = {}) {
     let useNativeFallback = nativeRetryOwned;
     if (!useNativeFallback) {
       const bridged = await requestDeepSeekDeleteBridge(10500, data);
-      const trustedValidation = validateDeepSeekBridgeTrustedResult(bridged, data, currentRouteId);
+      const trustedValidation = validateDeepSeekBridgeTrustedResult(bridged, data, currentRouteId, hints);
       if (!trustedValidation.ok) return deleteResult(false, "deepseek", trustedValidation.reason);
       const safeBridged = sanitizeDeepSeekTrustedResult(bridged, trustedValidation);
       const hasTrustedBridgeInstruction = Boolean(
@@ -718,41 +862,56 @@ export function createDeleteDeepSeekCapability(deps = {}) {
     if (!routeStillCurrent()) {
       return deleteResult(false, "deepseek", "current conversation changed before native delete fallback");
     }
-    const root = deepSeekSidebarRoot();
-    const hints = deepSeekDeleteHints(data);
-    const row = findDeepSeekCurrentTopicRow(root);
+    const root = deepSeekSidebarRoot(hints);
+    const row = findDeepSeekCurrentTopicRow(root, hints);
     let rowFailureReason = bridgeReason || "current topic row not found";
     let moreButton = null;
     if (row) {
-      moreButton = await waitForModel(() => deepSeekTopicMoreButton(row), 1600, 100);
+      moreButton = await waitForModel(() => deepSeekTopicMoreButton(row, hints), 1600, 100);
       if (moreButton) {
-        if (await openDeepSeekTriggerAndClickDelete(moreButton, labels, { timeoutMs: 2600, allowHiddenTrigger: true, guard: routeStillCurrent })) {
-          const confirmed = await clickDeleteConfirmIfPresent(6500, routeStillCurrent);
-          if (!confirmed) return deleteResult(false, "deepseek", bridgeReason || "delete confirmation button not found");
-          return deleteResult(true, "deepseek");
+        if (deepSeekConfirmationAlreadyOpen(hints)) {
+          return deleteResult(false, "deepseek", "unverified delete confirmation appeared before delete activation");
         }
+        const confirmationBaseline = new Set(deleteDialogRoots(hints.dialog));
+        const preDeleteGuard = () => attemptStillCurrent() && !deepSeekConfirmationAlreadyOpen(hints);
+        if (await openDeepSeekTriggerAndClickDelete(moreButton, labels, { timeoutMs: 2600, allowHiddenTrigger: true, guard: preDeleteGuard, hints })) {
+          return deepSeekConfirmationResult(confirmationBaseline, hints, attemptStillCurrent, bridgeReason || "delete confirmation button not found");
+        }
+        if (deepSeekConfirmationAlreadyOpen(hints)) return deleteResult(false, "deepseek", "delete confirmation ownership is uncertain");
         rowFailureReason = bridgeReason || "delete menu item not found";
       } else {
         rowFailureReason = bridgeReason || "topic menu trigger not found";
       }
       closeDeepSeekTransientMenus();
     }
-    if (!routeStillCurrent()) return deleteResult(false, "deepseek", "current conversation changed before header delete fallback");
-    const headerButton = deepSeekHeaderMenuButton(hints);
-    if (headerButton && await openDeepSeekTriggerAndClickDelete(headerButton, labels, { timeoutMs: 2600, allowHiddenTrigger: true, guard: routeStillCurrent })) {
-      const confirmedFromHeader = await clickDeleteConfirmIfPresent(6500, routeStillCurrent);
-      if (!confirmedFromHeader) return deleteResult(false, "deepseek", bridgeReason || "delete confirmation button not found");
-      return deleteResult(true, "deepseek");
+    if (!attemptStillCurrent()) return deleteResult(false, "deepseek", "current conversation or delete attempt changed before header delete fallback");
+    if (deepSeekConfirmationAlreadyOpen(hints)) {
+      return deleteResult(false, "deepseek", "unverified delete confirmation appeared before header delete activation");
     }
+    const headerButton = deepSeekHeaderMenuButton(hints);
+    const headerConfirmationBaseline = new Set(deleteDialogRoots(hints.dialog));
+    const headerPreDeleteGuard = () => attemptStillCurrent() && !deepSeekConfirmationAlreadyOpen(hints);
+    if (headerButton && await openDeepSeekTriggerAndClickDelete(headerButton, labels, { timeoutMs: 2600, allowHiddenTrigger: true, guard: headerPreDeleteGuard, hints })) {
+      return deepSeekConfirmationResult(headerConfirmationBaseline, hints, attemptStillCurrent, bridgeReason || "delete confirmation button not found");
+    }
+    if (deepSeekConfirmationAlreadyOpen(hints)) return deleteResult(false, "deepseek", "delete confirmation ownership is uncertain");
     if (headerButton) closeDeepSeekTransientMenus();
     if (!row) return deleteResult(false, "deepseek", rowFailureReason);
-    const cleanBaseline = await waitForModel(() => !findOpenDeleteMenuItem(labels) && !findDeleteConfirmButton(), 700, 70);
+    const cleanBaseline = await waitForModel(
+      () => !findOpenDeleteMenuItem(
+        labels,
+        deepSeekOfficialSelectors(hints, "menuRoot"),
+        deepSeekOfficialSelectors(hints, "deleteCandidate")
+      ) && !deepSeekConfirmationAlreadyOpen(hints),
+      700,
+      70
+    );
     if (!cleanBaseline) return deleteResult(false, "deepseek", "delete menu state remained open; trusted retry was not leased");
     return armDeepSeekTrustedRetry(
       data,
       data?.trustedKeySequenceRetried
-        ? deleteResultWithDeepSeekTrustedMenuClick(rowFailureReason, row, moreButton)
-        : deleteResultWithDeepSeekTrustedKeySequence(rowFailureReason, row)
+        ? deleteResultWithDeepSeekTrustedMenuClick(rowFailureReason, row, moreButton, hints)
+        : deleteResultWithDeepSeekTrustedKeySequence(rowFailureReason, row, hints)
     );
   }
 
@@ -762,6 +921,7 @@ export function createDeleteDeepSeekCapability(deps = {}) {
       name: "ChatGPT",
       builtIn: true,
       enabled: true,
+      deleteAuthorizedHosts: Object.freeze(["chatgpt.com", "chat.openai.com"]),
       userscript: "",
       userscriptTimeoutMs: 15000
     }),
@@ -770,6 +930,7 @@ export function createDeleteDeepSeekCapability(deps = {}) {
       name: "Claude",
       builtIn: true,
       enabled: true,
+      deleteAuthorizedHosts: Object.freeze(["claude.ai"]),
       userscript: "",
       userscriptTimeoutMs: 15000
     }),
@@ -778,6 +939,7 @@ export function createDeleteDeepSeekCapability(deps = {}) {
       name: "Gemini",
       builtIn: true,
       enabled: true,
+      deleteAuthorizedHosts: Object.freeze(["gemini.google.com"]),
       userscript: "",
       userscriptTimeoutMs: 18000
     }),
@@ -786,6 +948,7 @@ export function createDeleteDeepSeekCapability(deps = {}) {
       name: "Kagi Assistant",
       builtIn: true,
       enabled: true,
+      deleteAuthorizedHosts: Object.freeze(["assistant.kagi.com"]),
       userscript: "",
       userscriptTimeoutMs: 15000
     }),
@@ -794,6 +957,7 @@ export function createDeleteDeepSeekCapability(deps = {}) {
       name: "Grok",
       builtIn: true,
       enabled: true,
+      deleteAuthorizedHosts: Object.freeze(["grok.com", "grok.x.ai"]),
       userscript: "",
       userscriptTimeoutMs: 15000
     }),
@@ -802,6 +966,7 @@ export function createDeleteDeepSeekCapability(deps = {}) {
       name: "Grok Mirror",
       builtIn: true,
       enabled: true,
+      deleteAuthorizedHosts: Object.freeze(["gk.dairoot.cn"]),
       userscript: "",
       userscriptTimeoutMs: 15000
     }),
@@ -810,6 +975,7 @@ export function createDeleteDeepSeekCapability(deps = {}) {
       name: "Notion AI",
       builtIn: true,
       enabled: true,
+      deleteAuthorizedHosts: Object.freeze(["app.notion.com", "notion.so", "www.notion.so"]),
       userscript: "",
       userscriptTimeoutMs: 15000
     }),
@@ -818,6 +984,7 @@ export function createDeleteDeepSeekCapability(deps = {}) {
       name: "DeepSeek",
       builtIn: true,
       enabled: true,
+      deleteAuthorizedHosts: Object.freeze(["deepseek.com", "chat.deepseek.com"]),
       userscript: "",
       userscriptTimeoutMs: 36000
     })

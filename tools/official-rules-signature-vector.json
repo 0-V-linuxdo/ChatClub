@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "kind": "component",
+  "raw": "eyJzY2hlbWFWZXJzaW9uIjoxLCJ2ZWN0b3IiOiJDaGF0Q2x1YiBvZmZpY2lhbCBydWxlcyB2MSJ9Cg",
+  "signingInput": "Q2hhdENsdWJPZmZpY2lhbFJ1bGVzL2NvbXBvbmVudC92MQB7InNjaGVtYVZlcnNpb24iOjEsInZlY3RvciI6IkNoYXRDbHViIG9mZmljaWFsIHJ1bGVzIHYxIn0K",
+  "publicJwk": {
+    "kty": "EC",
+    "x": "v3bNQSKNe6Tk7adsoawJ1cLHyanMMaUaZBEIF9uCPFc",
+    "y": "Dt6Yvoqe1VkI_Nv1f-axsaEOVTb4L1K_sU9c19sIaFc",
+    "crv": "P-256"
+  },
+  "signature": {
+    "schemaVersion": 1,
+    "keyId": "chatclub-rules-current-2026-08",
+    "algorithm": "ECDSA-P256-SHA256",
+    "signature": "CmUGejiS3k1XSy_e1R9LgazlUcNqhYFrVIysnpk1ETTMAHFKInz6TR5_7HFv9seDW2jLttOUSoDiOliVo0FTfQ"
+  }
+}

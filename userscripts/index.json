@@ -1,10 +1,10 @@
 {
-  "summarySiteConfigVersion": 74,
+  "summarySiteConfigVersion": 75,
   "configs": [
     {
       "id": "chatgpt",
       "name": "ChatGPT",
-      "configVersion": 54,
+      "configVersion": 55,
       "hosts": [
         "chatgpt.com",
         "*.chatgpt.com",
@@ -18,7 +18,7 @@
     {
       "id": "claude",
       "name": "Claude",
-      "configVersion": 38,
+      "configVersion": 39,
       "hosts": [
         "claude.ai",
         "*.claude.ai"
@@ -33,7 +33,7 @@
     {
       "id": "gemini",
       "name": "Gemini",
-      "configVersion": 34,
+      "configVersion": 35,
       "hosts": [
         "gemini.google.com",
         "*.gemini.google.com"
@@ -46,7 +46,7 @@
     {
       "id": "deepseek",
       "name": "DeepSeek",
-      "configVersion": 62,
+      "configVersion": 63,
       "hosts": [
         "deepseek.com",
         "*.deepseek.com"
@@ -61,7 +61,7 @@
     {
       "id": "grok",
       "name": "Grok",
-      "configVersion": 64,
+      "configVersion": 65,
       "hosts": [
         "grok.com",
         "*.grok.com",
@@ -78,7 +78,7 @@
     {
       "id": "grok-dairoot",
       "name": "Grok Mirror",
-      "configVersion": 70,
+      "configVersion": 71,
       "hosts": [
         "gk.dairoot.cn",
         "*.gk.dairoot.cn"
@@ -93,7 +93,7 @@
     {
       "id": "kagi",
       "name": "Kagi Assistant",
-      "configVersion": 65,
+      "configVersion": 66,
       "hosts": [
         "assistant.kagi.com"
       ],
@@ -105,7 +105,7 @@
     {
       "id": "notion",
       "name": "Notion",
-      "configVersion": 64,
+      "configVersion": 65,
       "hosts": [
         "app.notion.com",
         "notion.so",
@@ -122,7 +122,7 @@
     {
       "id": "lobehub",
       "name": "LobeHub",
-      "configVersion": 48,
+      "configVersion": 49,
       "hosts": [
         "app.lobehub.com",
         "*.lobehub.com"
@@ -137,7 +137,7 @@
     {
       "id": "typingmind",
       "name": "TypingMind",
-      "configVersion": 47,
+      "configVersion": 48,
       "hosts": [
         "setapp.typingcloud.com",
         "*.typingcloud.com"
