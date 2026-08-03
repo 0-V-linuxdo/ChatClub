@@ -22,7 +22,7 @@ const byteBudgets = Object.freeze({
   "content/content.js": 100_000,
   "content/send.js": 85_000,
   "content/summary-bridge.js": 92_000,
-  "content/preferred-model.js": 210_505,
+  "content/preferred-model.js": 210_598,
   // Exact post-generation cost of signed selector hints plus attempt/route-bound
   // confirmation ownership; keep destructive-action safety in one bundle.
   "content/delete.js": 265_645,
@@ -34,10 +34,10 @@ const byteBudgets = Object.freeze({
 });
 // Exact base-plus-capabilities closure after Delete gained signed hints and
 // attempt/route-bound confirmation ownership.
-const aggregateByteBudget = 728_111;
+const aggregateByteBudget = 728_204;
 // Exact all-bundle closure after the same destructive-action safety growth;
 // no headroom is carried across generated bundles.
-const allBundlesByteBudget = 1_411_825;
+const allBundlesByteBudget = 1_411_918;
 
 const bundleIdentities = Object.fromEntries(Object.keys(CONTENT_ENTRIES).map((outputPath) => [
   outputPath,

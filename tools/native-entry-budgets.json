@@ -17,7 +17,7 @@
     "background/firefox-background.js": {
       "maxFiles": 62,
       "targetFiles": 43,
-      "maxSourceBytes": 1505627,
+      "maxSourceBytes": 1505659,
       "targetSourceBytes": 900000,
       "reason": "The Firefox document-background entry packages the same signed official-rules verifier, strict declarative contracts, immutable component repository, anti-rollback state, manual atomic activation, crash and committed-reset cleanup recovery, and compensated content-registration/DNR coordinator as Chromium, together with generated content fallbacks, secure Frame RPC, one-sided Notion frame-load URL attestation, site-native Storage Access, Notion model handling and fail-closed Delete behavior when trusted input is unavailable; its larger exact static cost is tracked separately."
     }

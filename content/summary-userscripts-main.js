@@ -74,11 +74,11 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "34a0f77846e859a48f105345f7be82bbe24f7b1aa7045fb26b254687029d6190";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "2a418556f040706f4f700bc30c3f6e2170ebe486b27a354989887cd4f809c857";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "d256e102cd1e6b2bdeff109a772ce01aef7a5879bb46b9e8ca88f2f7d6be2074";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.d256e102cd1e6b2bdeff109a772ce01aef7a5879bb46b9e8ca88f2f7d6be2074";
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "f0df08746883d034bb95f090cb756a22a6a7998fd569675c8be97f816669deb4";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.f0df08746883d034bb95f090cb756a22a6a7998fd569675c8be97f816669deb4";
   var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "90420c05f037bf5c00b0c27bf2776260a1980d2f38a01634ec499ee87c7e8306", "implementationSha256": "3abc59bf68b51653a8bc930d35c7e46e6ce3a9614f438090f3c318111b16adc5", "implementationVersion": "2026.07.16.2+bundle.3abc59bf68b51653a8bc930d35c7e46e6ce3a9614f438090f3c318111b16adc5" });
 
   // shared/content-runtime-identity.js
@@ -2456,7 +2456,7 @@
       return api.merge(out);
     };
     scripts["typingmind.js"] = scripts["typingmind"];
-    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.d256e102cd1e6b2bdeff109a772ce01aef7a5879bb46b9e8ca88f2f7d6be2074" });
+    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.f0df08746883d034bb95f090cb756a22a6a7998fd569675c8be97f816669deb4" });
     return scripts;
   }
 

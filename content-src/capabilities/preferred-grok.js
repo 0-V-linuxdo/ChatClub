@@ -538,11 +538,17 @@ export function createPreferredGrokCapability(deps = {}) {
       assertPreferredModelRun(context);
       const current = currentGrokModelId();
       if (current && current === modelId) return true;
+      // The live Grok picker uses an icon-only trigger and removes the menu
+      // immediately after an activated item is selected. In that UI there is
+      // no readable current-model label or selected marker to observe after
+      // the menu closes, so a closed menu with no conflicting current model
+      // is the available settlement signal.
+      if (!grokModelMenuRoot() && !current) return true;
       await preferredModelSleep(context, 120);
     }
     assertPreferredModelRun(context);
     const final = currentGrokModelId();
-    return final === modelId;
+    return final === modelId || (!grokModelMenuRoot() && !final);
   }
 
   async function applyGrokPreferredModel(context, modelId) {
