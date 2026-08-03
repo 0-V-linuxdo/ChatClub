@@ -268,6 +268,25 @@ The production action-bar implementation was updated on 2026-07-15, and its synt
 
 These rules apply to the Grok Summary userscripts. Message Navigator has a separate DOM-targeting adapter and must not be assumed to satisfy these Summary invariants.
 
+## Notion iframe Authentication and Preflight
+
+The root cause of the 2026-08-03 Arc logout incident was route replay, not an iframe randomly deleting Cookies. ChatClub accepted an arbitrary observed Notion iframe location as restorable state, so `/logout` and other authentication routes could be saved in Workspace Session or Pocket state, preflighted, and assigned again after a reload or restore. Loading Notion's real logout route can invalidate the account session also used by the top-level Notion page.
+
+Two transport defects amplified the incident. The nonce-scoped response-header rule used a fixed ten-second timer that was unrelated to the real navigation, so a slow Notion Service Worker fallback could outlive its protection. Also, an in-memory timer is not a durable deadline in a Manifest V3 Service Worker: worker suspension, runtime-config replacement, rollback, or a failed compensating DNR removal could leave the physical session rule and its ownership ledger out of sync.
+
+- Treat persisted restoration and live navigation as separate policies. For the built-in Notion app, persist or restore only canonical `https://app.notion.com/ai` and `https://app.notion.com/chat?t={nonempty-id}`. Strip unrelated query/hash state, and map every other nonempty snapshot to `/ai`.
+- Never save, restore, assign, or preflight built-in Notion authentication and API paths, including encoded forms such as `/%6Cogout` and `/auth%2Fcallback`. Authentication-path detection must decode repeatedly and fail closed on malformed or residual escapes.
+- Do not apply the built-in restoration whitelist to an explicitly identified custom app. A legacy Pocket record without `appId` is ambiguous; for a host owned by built-in Notion, prefer the built-in entry and its safe fallback.
+- Live Notion `/chat`, `/ai` query/hash state, and non-authentication intermediate routes may remain observable during the current document. Only an actual built-in iframe `src` assignment must replace an authentication/API route with `/ai`.
+- A Notion preflight lease begins in `prepared` with a short watchdog, then moves to `navigating` only after the exact direct-child tab, frame, parent document, nonce, and URL are observed. Do not invent a future `documentId` for `webNavigation.onBeforeNavigate`; Chrome does not provide one there.
+- Release a navigating lease early only after `REGISTER_FRAME_CONTEXT` has authenticated the concrete sender document and its tab/frame plus nonce-bound URL. `onCommitted` or `onErrorOccurred` alone is not a proven correlation for concurrent provisional navigations in a reused `frameId`.
+- Persist the ownership ledger in `storage.session`, retain a local timer for prompt cleanup, and maintain a named repeating `chrome.alarms` wake-up while any lease is tracked. The five-minute navigation deadline is an orphan cap, not the normal success path.
+- Never forget ownership until physical DNR removal is confirmed. Expired or pending-removal leases must still block dynamic-rule fallback, and alarm creation, compensation, session-rule reads, replacement, and rollback must all fail closed on unknown state.
+- Runtime-config replacement and rollback must remove stale reserved rule IDs and merge only the current usable leases while holding the same Notion DNR mutation lock. A failed fresh session-rule read is unknown state and must not be treated as an empty rule set.
+- Regression coverage lives in `tools/chat-frame-config-test.cjs`, `tools/notion-workspace-route-safety-test.cjs`, `tools/workspace-session-state-test.cjs`, `tools/notion-frame-preflight-test.cjs`, and `tools/official-rules-runtime-test.cjs`. It must retain explicit `/logout`, encoded-auth, slow navigation, authenticated registration, MV3 restart/alarm, concurrent lease, failed compensation, and DNR rollback/fallback cases.
+
+Manual Arc acceptance requires reloading the unpacked extension first, restoring an old unsafe Notion snapshot to `/ai`, confirming that no `/logout` request is issued, rendering the embedded Notion page, and confirming that the existing top-level Notion login remains valid.
+
 ## Grok iframe Session Cookies
 
 The Chromium Cookie bridge is a narrowly scoped authentication compatibility path. Its implementation and synthetic regression tests were added on 2026-07-15; that does not constitute a fresh live-site authentication verification.

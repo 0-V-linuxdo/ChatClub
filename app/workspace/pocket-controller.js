@@ -1,4 +1,5 @@
 import { t } from "../../shared/i18n.js";
+import { restorableChatFrameHref } from "../../shared/chat-frame-config.js";
 import { appPickerHostKeys, normalizeAppPickerHost } from "./app-hosts.js";
 import { layoutGroupsFromWorkspace } from "./model.js";
 import { createControllerMethodValidator, validateControllerContract } from "../controller-contract.js";
@@ -68,7 +69,12 @@ export function createWorkspacePocketController(dependencies = {}) {
     const direct = directId ? appById(directId) : null;
     if (direct?.id === directId) return direct;
     const host = pocketHost(pocketEntryHref(entry));
-    return allApps().find((app) => appMatchesPocketHost(app, host)) || null;
+    const matches = allApps().filter((app) => appMatchesPocketHost(app, host));
+    const builtInNotion = matches.find((app) => (
+      String(app?.id || "") === "NotionAI"
+      && String(app?.chatAppSource || app?.source || "").toLowerCase() === "builtin"
+    ));
+    return builtInNotion || matches[0] || null;
   }
 
   function chatLocationForInstance(instanceId) {
@@ -116,10 +122,13 @@ export function createWorkspacePocketController(dependencies = {}) {
   }
 
   function loadPocketEntryInFrame(entry = {}) {
-    const href = pocketEntryHref(entry);
-    if (!href) return false;
+    const sourceHref = pocketEntryHref(entry);
+    if (!sourceHref) return false;
     const record = findPocketFrame(entry);
     if (!record?.iframe) return false;
+    const app = frameApp(record.iframe) || appForPocketEntry(entry);
+    const href = openableTabUrl(restorableChatFrameHref(app, sourceHref));
+    if (!href) return false;
     const instanceId = record.iframe.dataset.instanceId || "";
     if (record.group && instanceId) activateChatTab(record.group, instanceId);
     record.iframe.dataset.currentHref = href;
@@ -130,8 +139,9 @@ export function createWorkspacePocketController(dependencies = {}) {
   function pocketRestoreSources(entries = []) {
     const seen = new Set();
     return (entries || []).map((entry, index) => {
-      const href = pocketEntryHref(entry);
+      const sourceHref = pocketEntryHref(entry);
       const app = appForPocketEntry(entry);
+      const href = openableTabUrl(restorableChatFrameHref(app, sourceHref));
       if (!href || !app?.id) return null;
       const sourceId = String(entry.sourceId || entry.instanceId || `${app.id}\n${href}`);
       if (seen.has(sourceId)) return null;

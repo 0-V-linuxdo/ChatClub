@@ -1,6 +1,8 @@
 import { runtimeFrameId, runtimeRequest } from "../../shared/extension-api.js";
 import {
+  navigableChatFrameHref,
   notionFrameLoadTarget,
+  restorableChatFrameHref,
   resolveChatFrameAttributeContract,
   stripNotionFrameLoadNonce
 } from "../../shared/chat-frame-config.js";
@@ -77,6 +79,8 @@ export function createWorkspaceFrameController(dependencies = {}) {
   let frameLifecycleCallbackActive = false;
   const frameNavigationGenerations = new WeakMap();
   const openableFrameUrl = (value) => openableTabUrl(stripNotionFrameLoadNonce(value));
+  const navigableFrameUrl = (app, value) => openableTabUrl(navigableChatFrameHref(app, value));
+  const restorableFrameUrl = (app, value) => openableTabUrl(restorableChatFrameHref(app, value));
 
   function emitFrameLifecycleChange(event) {
     if (frameLifecycleCallbackActive) return;
@@ -97,18 +101,18 @@ export function createWorkspaceFrameController(dependencies = {}) {
     const chat = state.groups
       .flatMap((group) => group.chatApps || [])
       .find((candidate) => candidate.instanceId === instanceId);
-    const initialHref = openableFrameUrl(chat?.initialHref);
+    const initialHref = restorableFrameUrl(appById(chat?.appId), chat?.initialHref);
     if (initialHref) delete chat.initialHref;
     return initialHref;
   }
 
   function stageFrameInitialHref(instanceId, href) {
-    const initialHref = openableFrameUrl(href);
-    if (!initialHref) return false;
     const chat = state.groups
       .flatMap((group) => group.chatApps || [])
       .find((candidate) => candidate.instanceId === instanceId);
     if (!chat) return false;
+    const initialHref = restorableFrameUrl(appById(chat.appId), href);
+    if (!initialHref) return false;
     chat.initialHref = initialHref;
     return true;
   }
@@ -326,8 +330,8 @@ export function createWorkspaceFrameController(dependencies = {}) {
     return `ccn-${Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("")}`;
   }
 
-  function frameLoadPlan(value) {
-    const logicalUrl = openableFrameUrl(value);
+  function frameLoadPlan(value, app = null) {
+    const logicalUrl = navigableFrameUrl(app, value);
     let notionTarget = null;
     try {
       const parsed = new URL(logicalUrl);
@@ -522,7 +526,8 @@ export function createWorkspaceFrameController(dependencies = {}) {
 
   function assignFrameSrc(iframe, url) {
     if (!(iframe instanceof HTMLIFrameElement)) return false;
-    const plan = frameLoadPlan(url);
+    const app = frameApp(iframe) || appById(iframe.dataset.appId);
+    const plan = frameLoadPlan(url, app);
     if (!plan.logicalUrl) return false;
     if (iframe.isConnected && ensureFrameAttributeContract(iframe, plan.logicalUrl, { phase: "assign" })) return true;
     const generation = beginFrameNavigationGeneration(iframe);
@@ -558,7 +563,8 @@ export function createWorkspaceFrameController(dependencies = {}) {
 
   function setFrameSrcAfterPrepare(iframe, url, options = {}) {
     if (!(iframe instanceof HTMLIFrameElement)) return;
-    const plan = frameLoadPlan(url);
+    const app = frameApp(iframe) || appById(iframe.dataset.appId);
+    const plan = frameLoadPlan(url, app);
     if (!plan.logicalUrl) return;
     if (iframe?.isConnected && ensureFrameAttributeContract(iframe, plan.logicalUrl, { phase: "prepare" })) return;
     iframe.dataset.currentHref = plan.logicalUrl;
@@ -806,15 +812,17 @@ export function createWorkspaceFrameController(dependencies = {}) {
   async function refreshCurrentPage(chat) {
     const iframe = activeIframe(chat);
     if (!iframe) return false;
+    const app = frameApp(iframe) || appById(chat?.appId);
     const liveHref = await activeHref(chat);
     const href = openableFrameUrl(liveHref)
       || openableFrameUrl(iframe.dataset.currentHref)
       || openableFrameUrl(iframe.src || iframe.getAttribute?.("src"))
-      || openableFrameUrl(appById(chat?.appId).url);
-    if (!href) return false;
-    iframe.dataset.currentHref = href;
+      || openableFrameUrl(app?.url);
+    const targetHref = navigableFrameUrl(app, href);
+    if (!targetHref) return false;
+    iframe.dataset.currentHref = targetHref;
     rememberWorkspaceSession();
-    return assignFrameSrc(iframe, href);
+    return assignFrameSrc(iframe, targetHref);
   }
 
   function reloadChat(chat) {

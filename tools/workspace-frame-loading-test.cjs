@@ -13,7 +13,9 @@ const PARAM = "__chatclub_frame_load_nonce";
 (async () => {
   const { frameLoadingKindForTarget } = await import("../app/workspace/frame-loading.js");
   const {
+    navigableChatFrameHref,
     notionFrameLoadTarget,
+    restorableChatFrameHref,
     stripNotionFrameLoadNonce
   } = await import("../shared/chat-frame-config.js");
   const FRAME_LOADING_KIND_NEW_TOPIC = "new-topic";
@@ -128,7 +130,7 @@ const PARAM = "__chatclub_frame_load_nonce";
     grokCookieBridgeUrl: () => false,
     grokFramePreflightId: () => "",
     notionFrameLoadTarget,
-    openableFrameUrl: (value) => stripNotionFrameLoadNonce(value),
+    navigableFrameUrl: (app, value) => navigableChatFrameHref(app, value),
     crypto: {
       getRandomValues(bytes) {
         bytes.fill(0xab);
@@ -140,7 +142,8 @@ const PARAM = "__chatclub_frame_load_nonce";
     ${notionFramePreflightId}
     ${frameLoadPlan}
     ${preparedFrameNavigationUrl}
-    globalThis.planFrame = frameLoadPlan;
+    const notionApp = { id: "NotionAI", source: "builtin", url: "https://app.notion.com/ai" };
+    globalThis.planFrame = (value) => frameLoadPlan(value, notionApp);
     globalThis.preparedUrl = preparedFrameNavigationUrl;
   `, planContext);
   const notionPlan = planContext.planFrame("https://app.notion.com/ai#composer");
@@ -165,6 +168,16 @@ const PARAM = "__chatclub_frame_load_nonce";
     notionPlan.logicalUrl,
     "an unavailable bypass must navigate only once to the logical URL"
   );
+  const unsafeNotionPlan = planContext.planFrame("https://app.notion.com/logout");
+  assert.equal(unsafeNotionPlan.logicalUrl, "https://app.notion.com/ai");
+  assert.equal(unsafeNotionPlan.notionPreflight, true);
+  assert.ok(!unsafeNotionPlan.requestUrl.includes("/logout"));
+  const customNotionPlan = vm.runInContext(`frameLoadPlan(
+    "https://app.notion.com/custom?mode=custom#keep",
+    { id: "NotionAI", source: "custom", chatAppSource: "custom", url: "https://app.notion.com/custom" }
+  )`, planContext);
+  assert.equal(customNotionPlan.logicalUrl, "https://app.notion.com/custom?mode=custom#keep");
+  assert.equal(customNotionPlan.notionPreflight, true, "custom Notion UI routes must retain the exact-host preflight");
 
   {
     let resolvePreparation;
@@ -199,21 +212,27 @@ const PARAM = "__chatclub_frame_load_nonce";
 
   const sessionController = read("app/workspace/session-controller.js");
   const currentHrefForWorkspaceTab = functionSource(sessionController, "currentHrefForWorkspaceTab");
-  assert.match(currentHrefForWorkspaceTab, /stripNotionFrameLoadNonce/);
+  assert.match(currentHrefForWorkspaceTab, /restorableChatFrameHref/);
   {
     const rawHref = notionPlan.requestUrl;
     const iframe = { dataset: { currentHref: rawHref }, getAttribute: () => rawHref };
     const sessionContext = vm.createContext({
-      appById: () => ({ url: "https://app.notion.com/ai" }),
+      appById: () => ({ id: "NotionAI", source: "builtin", url: "https://app.notion.com/ai" }),
       frameForInstance: () => iframe,
       openableTabUrl: (value) => String(value || ""),
-      stripNotionFrameLoadNonce
+      restorableChatFrameHref
     });
     vm.runInContext(`${currentHrefForWorkspaceTab}\nglobalThis.currentHref = currentHrefForWorkspaceTab;`, sessionContext);
     assert.equal(
       sessionContext.currentHref({ instanceId: "notion-frame", appId: "NotionAI", initialHref: rawHref }),
-      notionPlan.logicalUrl,
-      "workspace storage.session capture must strip the transient nonce"
+      "https://app.notion.com/ai",
+      "workspace storage.session capture must strip the transient nonce and transient home state"
+    );
+    iframe.dataset.currentHref = "https://app.notion.com/logout";
+    assert.equal(
+      sessionContext.currentHref({ instanceId: "notion-frame", appId: "NotionAI" }),
+      "https://app.notion.com/ai",
+      "an unsafe live Notion route must be healed before workspace capture"
     );
   }
 

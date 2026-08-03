@@ -50,6 +50,76 @@ const assert = require("node:assert/strict");
   assert.equal(grokOutOfScope.attributes.sandbox, CHAT_FRAME_SANDBOX_TOKENS.join(" "));
   assert.equal("title" in grokOutOfScope.attributes, false);
 
+  const builtinNotion = { ...notion, source: "builtin", chatAppSource: "builtin" };
+  const customNotion = { ...notion, source: "custom", chatAppSource: "custom" };
+  assert.equal(frameConfig.restorableChatFrameHref(builtinNotion, ""), "");
+  assert.equal(frameConfig.restorableChatFrameHref(builtinNotion, "https://app.notion.com/ai/"), "https://app.notion.com/ai");
+  assert.equal(
+    frameConfig.restorableChatFrameHref(builtinNotion, "https://app.notion.com/ai?mode=new#composer"),
+    "https://app.notion.com/ai"
+  );
+  assert.equal(
+    frameConfig.restorableChatFrameHref(builtinNotion, "https://app.notion.com/chat?extra=1&t=thread-1#turn"),
+    "https://app.notion.com/chat?t=thread-1"
+  );
+  for (const href of [
+    "https://app.notion.com/logout",
+    "https://app.notion.com/login",
+    "https://app.notion.com/auth/callback",
+    "https://app.notion.com/api/v3/logout",
+    "https://app.notion.com/chat",
+    "https://app.notion.com/chat?t=",
+    "https://app.notion.com/chat?t=first&t=second",
+    "https://app.notion.com/chat?t=thread%20id",
+    "https://app.notion.com/chat?t=thread%0Aid",
+    `https://app.notion.com/chat?t=${"x".repeat(257)}`,
+    "http://app.notion.com/ai",
+    "https://user@app.notion.com/ai",
+    "https://app.notion.com:444/ai",
+    "https://www.notion.so/ai",
+    "https://app.notion.com.evil.test/ai"
+  ]) {
+    assert.equal(
+      frameConfig.restorableChatFrameHref(builtinNotion, href),
+      "https://app.notion.com/ai",
+      `${href} must fall back to the built-in Notion home`
+    );
+  }
+  assert.equal(
+    frameConfig.restorableChatFrameHref(customNotion, "https://app.notion.com/logout?custom=1#keep"),
+    "https://app.notion.com/logout?custom=1#keep",
+    "a custom app shadow must retain its own URL policy"
+  );
+  for (const href of [
+    "https://app.notion.com/chat",
+    "https://app.notion.com/ai?mode=new#composer",
+    "https://app.notion.com/custom?mode=live#keep",
+    "https://example.test/notion-live"
+  ]) {
+    assert.equal(
+      frameConfig.navigableChatFrameHref(builtinNotion, href),
+      href,
+      `${href} must retain its real-time navigation semantics`
+    );
+  }
+  for (const href of [
+    "https://app.notion.com/logout",
+    "https://app.notion.com/%6Cogout",
+    "https://app.notion.com/log%6fut",
+    "https://app.notion.com/auth%2Fcallback",
+    "https://app.notion.com/log-out"
+  ]) {
+    assert.equal(
+      frameConfig.navigableChatFrameHref(builtinNotion, href),
+      "https://app.notion.com/ai",
+      `${href} must not bypass the built-in Notion authentication-route guard`
+    );
+  }
+  assert.equal(
+    frameConfig.navigableChatFrameHref(customNotion, "https://app.notion.com/logout?custom=1"),
+    "https://app.notion.com/logout?custom=1"
+  );
+
   const visual = inspectIframeConfig({
     allow: { mode: "visual", features: ["camera", "microphone", "camera"] },
     sandbox: {

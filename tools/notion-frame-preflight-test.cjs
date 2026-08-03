@@ -13,6 +13,12 @@ const NONCE_B = `ccn-${"b".repeat(32)}`;
 const PARAM = "__chatclub_frame_load_nonce";
 const RULE_ID_MIN = 1_840_000_000;
 const plain = (value) => JSON.parse(JSON.stringify(value));
+const registeredSender = (tabId, frameId, url, documentId = `document-${tabId}-${frameId}`) => ({
+  tab: { id: tabId },
+  frameId,
+  documentId,
+  url
+});
 const flush = () => new Promise((resolve) => { setImmediate(resolve); });
 
 function fakeClock(start = 1_000) {
@@ -42,9 +48,42 @@ function fakeClock(start = 1_000) {
 
 function fakeApi(options = {}) {
   const rules = new Map((options.rules || []).map((rule) => [rule.id, plain(rule)]));
-  const calls = { debugger: 0, getSessionRules: 0, updates: [], inFlight: 0, maxInFlight: 0 };
+  const storageState = options.storageState || {};
+  const calls = {
+    debugger: 0,
+    alarmCreates: [],
+    alarmClears: [],
+    getSessionRules: 0,
+    storageGets: 0,
+    storageSets: [],
+    updates: [],
+    inFlight: 0,
+    maxInFlight: 0
+  };
   const api = {
     runtime: { getURL: () => options.extensionUrl || "chrome-extension://chatclub/" },
+    alarms: {
+      async create(name, details) {
+        if (typeof options.beforeAlarmCreate === "function") await options.beforeAlarmCreate(name, details);
+        calls.alarmCreates.push({ name, details: plain(details) });
+      },
+      async clear(name) {
+        calls.alarmClears.push(name);
+        return true;
+      }
+    },
+    storage: {
+      session: {
+        async get(key) {
+          calls.storageGets += 1;
+          return Object.hasOwn(storageState, key) ? { [key]: plain(storageState[key]) } : {};
+        },
+        async set(value) {
+          calls.storageSets.push(plain(value));
+          Object.assign(storageState, plain(value));
+        }
+      }
+    },
     debugger: {
       async getTargets() { calls.debugger += 1; throw new Error("Notion must never show a debugger banner"); },
       async attach() { calls.debugger += 1; throw new Error("Notion must never attach a debugger"); },
@@ -70,7 +109,9 @@ function fakeApi(options = {}) {
     }
   };
   if (options.sessionRules === false) delete api.declarativeNetRequest.getSessionRules;
-  return { api, calls, rules };
+  if (options.sessionStorage === false) delete api.storage.session;
+  if (options.alarms === false) delete api.alarms;
+  return { api, calls, rules, storageState };
 }
 
 (async () => {
@@ -112,6 +153,15 @@ function fakeApi(options = {}) {
     networkHref: `https://app.notion.com/ai?mode=new&${PARAM}=${NONCE_A}`,
     nonce: NONCE_A
   });
+  assert.equal(frameConfig.notionFrameLoadTarget("https://app.notion.com/logout", NONCE_A), null);
+  assert.equal(frameConfig.notionFrameLoadRequest(`https://app.notion.com/logout?${PARAM}=${NONCE_A}`, NONCE_A), null);
+  for (const href of [
+    "https://app.notion.com/%6Cogout",
+    "https://app.notion.com/log%6fut",
+    "https://app.notion.com/auth%2Fcallback"
+  ]) {
+    assert.equal(frameConfig.notionFrameLoadTarget(href, NONCE_A), null, `${href} must not be preflighted`);
+  }
 
   const ruleFixture = fakeApi();
   const ruleRuntime = notion.createNotionFramePreflightRuntime(ruleFixture.api, fakeClock());
@@ -147,6 +197,16 @@ function fakeApi(options = {}) {
     await ruleRuntime.prepareFrameLoad({ url: "https://app.notion.com/ai", preflightId: NONCE_A, tabId: 70 }),
     { applicable: false, armed: false, reason: "" }
   );
+  const updatesBeforeLogout = ruleFixture.calls.updates.length;
+  assert.deepEqual(
+    await ruleRuntime.prepareFrameLoad({
+      url: `https://app.notion.com/logout?${PARAM}=${NONCE_A}`,
+      preflightId: NONCE_A,
+      tabId: 70
+    }),
+    { applicable: false, armed: false, reason: "" }
+  );
+  assert.equal(ruleFixture.calls.updates.length, updatesBeforeLogout, "logout must never install a Notion response-header rule");
   const oversizedTarget = frameConfig.notionFrameLoadTarget(
     `https://app.notion.com/ai?q=${"x".repeat(2_000)}`,
     NONCE_A
@@ -181,6 +241,211 @@ function fakeApi(options = {}) {
   }
 
   {
+    const firstClock = fakeClock();
+    let failExpiredRemoval = false;
+    const fake = fakeApi({
+      beforeUpdate: async (details) => {
+        if (!failExpiredRemoval || !details.removeRuleIds?.length || details.addRules?.length) return;
+        failExpiredRemoval = false;
+        throw new Error("fixture alarm cleanup failed");
+      }
+    });
+    const firstRuntime = notion.createNotionFramePreflightRuntime(fake.api, firstClock);
+    await firstRuntime.prepareFrameLoad({ url: targetB.navigationHref, preflightId: NONCE_B, tabId: 715 });
+    await firstRuntime.beginNavigation({ tabId: 715, frameId: 15, parentFrameId: 0, url: targetB.navigationHref });
+    const leaseAlarm = fake.calls.alarmCreates.at(-1);
+    assert.ok(leaseAlarm?.name, "an active lease must have a durable MV3 wake-up alarm");
+    assert.equal(leaseAlarm.details.when, 1_000 + (5 * 60_000));
+    assert.equal(leaseAlarm.details.periodInMinutes, 0.5, "the wake-up alarm must retry after worker or DNR failures");
+    const restartedRuntime = notion.createNotionFramePreflightRuntime(fake.api, fakeClock(1_000 + (5 * 60_000) + 1));
+    failExpiredRemoval = true;
+    await assert.rejects(
+      restartedRuntime.handleAlarm({ name: leaseAlarm.name }),
+      /fixture alarm cleanup failed/
+    );
+    assert.equal(fake.rules.has(RULE_ID_MIN), true, "a failed alarm cleanup must retain the tracked rule for retry");
+    assert.equal(await restartedRuntime.handleAlarm({ name: leaseAlarm.name }), true);
+    assert.equal(restartedRuntime.activeSessionRules().length, 0, "an alarm wake-up must reap a lease after worker suspension");
+    assert.equal(fake.rules.has(RULE_ID_MIN), false);
+    assert.deepEqual(fake.storageState.chatclubNotionFramePreflightLeasesV1.leases, {});
+  }
+
+  {
+    const clock = fakeClock();
+    let failRemoval = false;
+    const fake = fakeApi({
+      beforeUpdate: async (details) => {
+        if (!failRemoval || !details.removeRuleIds?.length || details.addRules?.length) return;
+        failRemoval = false;
+        throw new Error("fixture lease removal failed");
+      }
+    });
+    const runtime = notion.createNotionFramePreflightRuntime(fake.api, clock);
+    await runtime.prepareFrameLoad({ url: targetA.navigationHref, preflightId: NONCE_A, tabId: 716 });
+    await runtime.beginNavigation({ tabId: 716, frameId: 16, parentFrameId: 0, url: targetA.navigationHref });
+    failRemoval = true;
+    assert.equal(await runtime.settleRegisteredFrame(registeredSender(716, 16, targetA.navigationHref)), 0);
+    assert.equal(fake.rules.has(RULE_ID_MIN), true, "a failed DNR removal must remain tracked");
+    assert.equal(runtime.activeSessionRules().length, 0);
+    assert.equal(runtime.hasActiveLeases(), true, "pending removal must remain part of the fail-closed ownership set");
+    const retryAlarm = fake.calls.alarmCreates.at(-1);
+    assert.equal(retryAlarm.details.when, clock.now(), "a failed removal must arm an immediate durable retry");
+    const restartedRuntime = notion.createNotionFramePreflightRuntime(fake.api, fakeClock(clock.now() + 1));
+    assert.equal(await restartedRuntime.handleAlarm({ name: retryAlarm.name }), true);
+    assert.equal(fake.rules.has(RULE_ID_MIN), false, "a worker restart must retry the tracked DNR removal");
+    assert.deepEqual(fake.storageState.chatclubNotionFramePreflightLeasesV1.leases, {});
+  }
+
+  {
+    const clock = fakeClock();
+    const fake = fakeApi();
+    const runtime = notion.createNotionFramePreflightRuntime(fake.api, clock);
+    assert.deepEqual(
+      await runtime.prepareFrameLoad(
+        { url: targetA.navigationHref, preflightId: NONCE_A, tabId: 711 },
+        { parentDocumentId: "parent-document-a" }
+      ),
+      { applicable: true, armed: true, reason: "" }
+    );
+    assert.equal(
+      await runtime.beginNavigation({
+        tabId: 711,
+        frameId: 0,
+        parentFrameId: -1,
+        parentDocumentId: "parent-document-a",
+        url: targetA.navigationHref
+      }),
+      false,
+      "the top frame must not claim a direct-child lease"
+    );
+    assert.equal(
+      await runtime.beginNavigation({
+        tabId: 711,
+        frameId: 9,
+        parentFrameId: 4,
+        parentDocumentId: "parent-document-a",
+        url: targetA.navigationHref
+      }),
+      false,
+      "a nested frame must not claim a direct-child lease"
+    );
+    assert.equal(
+      await runtime.beginNavigation({
+        tabId: 711,
+        frameId: 9,
+        parentFrameId: 0,
+        parentDocumentId: "another-parent-document",
+        url: targetA.navigationHref
+      }),
+      false,
+      "a different extension-page document must not claim the lease"
+    );
+    assert.equal(
+      await runtime.beginNavigation({
+        tabId: 711,
+        frameId: 9,
+        parentFrameId: 0,
+        parentDocumentId: "parent-document-a",
+        url: replayTargetA.navigationHref
+      }),
+      false,
+      "the same nonce on another Notion URL must not claim the lease"
+    );
+    assert.equal(
+      await runtime.beginNavigation({
+        tabId: 711,
+        frameId: 9,
+        parentFrameId: 0,
+        parentDocumentId: "parent-document-a",
+        url: targetA.navigationHref
+      }),
+      true
+    );
+    const ledger = fake.storageState.chatclubNotionFramePreflightLeasesV1;
+    assert.equal(ledger.version, 1);
+    assert.equal(ledger.leases[RULE_ID_MIN].phase, "navigating");
+    assert.equal(ledger.leases[RULE_ID_MIN].frameId, 9);
+    assert.equal([...clock.timers.values()][0].delay, 5 * 60_000, "a begun navigation must replace the prepared watchdog with an orphan cap");
+    const navigationDeadline = ledger.leases[RULE_ID_MIN].deadlineAt;
+    assert.equal(
+      await runtime.beginNavigation({
+        tabId: 711,
+        frameId: 9,
+        parentFrameId: 0,
+        parentDocumentId: "parent-document-a",
+        url: targetA.navigationHref
+      }),
+      true
+    );
+    assert.equal(
+      fake.storageState.chatclubNotionFramePreflightLeasesV1.leases[RULE_ID_MIN].deadlineAt,
+      navigationDeadline,
+      "a duplicate onBeforeNavigate must not extend the orphan cap indefinitely"
+    );
+    await clock.advance(10_001);
+    assert.equal(runtime.activeSessionRules().length, 1, "the original ten-second watchdog must not expire a slow SW fallback");
+    await runtime.settleRegisteredFrame(registeredSender(711, 8, targetA.navigationHref));
+    assert.equal(runtime.activeSessionRules().length, 1, "another registered frame must not settle the claimed direct child");
+    await runtime.settleRegisteredFrame(registeredSender(711, 9, "https://app.notion.com/ai?redirected=1"));
+    assert.equal(runtime.activeSessionRules().length, 1, "a different registered document URL must not settle the nonce lease");
+    await runtime.settleRegisteredFrame(registeredSender(711, 9, targetA.logicalHref));
+    assert.equal(runtime.activeSessionRules().length, 0, "the registered logical document must settle its nonce-bound frame lifecycle");
+    assert.deepEqual(fake.storageState.chatclubNotionFramePreflightLeasesV1.leases, {});
+  }
+
+  {
+    const firstClock = fakeClock();
+    const fake = fakeApi();
+    const firstRuntime = notion.createNotionFramePreflightRuntime(fake.api, firstClock);
+    await firstRuntime.prepareFrameLoad(
+      { url: targetA.navigationHref, preflightId: NONCE_A, tabId: 712 },
+      { parentDocumentId: "surviving-parent" }
+    );
+    await firstRuntime.beginNavigation({
+      tabId: 712,
+      frameId: 12,
+      parentFrameId: 0,
+      parentDocumentId: "surviving-parent",
+      url: targetA.navigationHref
+    });
+    const updatesBeforeRestart = fake.calls.updates.length;
+    const restartedClock = fakeClock(2_000);
+    const restartedRuntime = notion.createNotionFramePreflightRuntime(fake.api, restartedClock);
+    assert.equal(await restartedRuntime.initialize(), true);
+    assert.equal(restartedRuntime.activeSessionRules().length, 1, "a valid navigating ledger must survive MV3 worker restart");
+    assert.equal(fake.calls.updates.length, updatesBeforeRestart, "startup reconciliation must not delete a valid live rule");
+    await restartedClock.advance(20_000);
+    assert.equal(restartedRuntime.activeSessionRules().length, 1, "restored navigation must also outlive the original prepared watchdog");
+    await restartedRuntime.settleRegisteredFrame(registeredSender(712, 12, targetA.navigationHref));
+    assert.equal(restartedRuntime.activeSessionRules().length, 0);
+    assert.equal(fake.rules.has(RULE_ID_MIN), false);
+  }
+
+  {
+    const firstClock = fakeClock();
+    const fake = fakeApi();
+    const firstRuntime = notion.createNotionFramePreflightRuntime(fake.api, firstClock);
+    await firstRuntime.prepareFrameLoad({ url: targetA.navigationHref, preflightId: NONCE_A, tabId: 713 });
+    fake.rules.delete(RULE_ID_MIN);
+    const restartedRuntime = notion.createNotionFramePreflightRuntime(fake.api, fakeClock(2_000));
+    assert.equal(await restartedRuntime.initialize(), true);
+    assert.equal(restartedRuntime.activeSessionRules().length, 0, "a ledger without its exact DNR rule must not be guessed back into existence");
+    assert.deepEqual(fake.storageState.chatclubNotionFramePreflightLeasesV1.leases, {});
+    assert.equal(fake.rules.has(RULE_ID_MIN), false);
+  }
+
+  {
+    const clock = fakeClock();
+    const fake = fakeApi();
+    const runtime = notion.createNotionFramePreflightRuntime(fake.api, clock);
+    await runtime.prepareFrameLoad({ url: targetB.navigationHref, preflightId: NONCE_B, tabId: 714 });
+    await runtime.beginNavigation({ tabId: 714, frameId: 14, parentFrameId: 0, url: targetB.navigationHref });
+    await clock.advance(5 * 60_000);
+    assert.equal(runtime.activeSessionRules().length, 0, "a missing terminal event must still be bounded by the orphan cap");
+    assert.equal(fake.rules.has(RULE_ID_MIN), false);
+  }
+
+  {
     const clock = fakeClock();
     const fake = fakeApi();
     const runtime = notion.createNotionFramePreflightRuntime(fake.api, clock);
@@ -191,19 +456,29 @@ function fakeApi(options = {}) {
     assert.equal(fake.calls.maxInFlight, 1, "ephemeral DNR mutations must be serialized");
     const [firstRule, secondRule] = runtime.activeSessionRules();
     assert.notEqual(firstRule.id, secondRule.id);
-    runtime.settleNavigation({ tabId: 999, url: targetA.navigationHref });
-    runtime.settleNavigation({ tabId: 72, url: targetA.logicalHref });
-    runtime.settleNavigation({ tabId: 72, url: replayTargetA.navigationHref });
-    await flush();
-    assert.equal(runtime.activeSessionRules().length, 2, "wrong-tab, nonce-free, and same-nonce different-URL events must not release a lease");
-    runtime.settleNavigation({ tabId: 72, url: targetA.navigationHref });
-    await flush();
+    const ordinaryRule = { id: 91, action: { type: "block" }, condition: {} };
+    const staleReservedRule = { id: RULE_ID_MIN + 99, action: { type: "block" }, condition: {} };
+    assert.deepEqual(
+      runtime.sessionRulesWithActiveLeases([ordinaryRule, staleReservedRule]).map(({ id }) => id),
+      [ordinaryRule.id, firstRule.id, secondRule.id],
+      "DNR replace and rollback must drop stale reserved IDs and merge only the current leases"
+    );
+    assert.equal(runtime.hasActiveLeases(), true);
+    await runtime.settleRegisteredFrame(registeredSender(999, 7, targetA.navigationHref));
+    await runtime.settleRegisteredFrame(registeredSender(72, 7, targetA.logicalHref));
+    await runtime.settleRegisteredFrame(registeredSender(72, 7, replayTargetA.navigationHref));
+    assert.equal(runtime.activeSessionRules().length, 2, "a terminal event before the exact navigation begins must not release a lease");
+    assert.equal(await runtime.beginNavigation({ tabId: 72, frameId: 7, parentFrameId: 0, url: targetA.navigationHref }), true);
+    assert.equal(await runtime.beginNavigation({ tabId: 72, frameId: 8, parentFrameId: 0, url: targetB.navigationHref }), true);
+    await runtime.settleRegisteredFrame(registeredSender(72, 99, targetA.navigationHref));
+    assert.equal(runtime.activeSessionRules().length, 2, "another frame must not settle the claimed navigation");
+    await runtime.settleRegisteredFrame(registeredSender(72, 7, targetA.navigationHref));
     assert.deepEqual(runtime.activeSessionRules().map((item) => item.id), [secondRule.id]);
     assert.deepEqual(fake.calls.updates.at(-1), { removeRuleIds: [firstRule.id] });
     assert.equal(fake.rules.has(secondRule.id), true, "settling one nonce must not remove another concurrent rule");
-    runtime.handleTabRemoved(72);
-    await flush();
+    await runtime.handleTabRemoved(72);
     assert.equal(runtime.activeSessionRules().length, 0);
+    assert.equal(runtime.hasActiveLeases(), false);
     assert.deepEqual(fake.calls.updates.at(-1), { removeRuleIds: [secondRule.id] });
   }
 
@@ -222,6 +497,36 @@ function fakeApi(options = {}) {
     const updatesBeforePlain = fake.calls.updates.length;
     await update(73, { url: "https://grok.com/", preflightId: "grok" });
     assert.equal(fake.calls.updates.length, updatesBeforePlain, "non-Notion PREPARE must not install an ephemeral rule");
+  }
+
+  {
+    const clock = fakeClock();
+    const fake = fakeApi();
+    const runtime = notion.createNotionFramePreflightRuntime(fake.api, clock);
+    let continueBaseUpdate;
+    const baseUpdateGate = new Promise((resolve) => { continueBaseUpdate = resolve; });
+    let baseUpdateStarted;
+    const baseStarted = new Promise((resolve) => { baseUpdateStarted = resolve; });
+    const update = runtime.dnrRuleUpdater(async () => {
+      baseUpdateStarted();
+      await baseUpdateGate;
+      return "session";
+    });
+    const preparing = update(
+      730,
+      { url: targetA.navigationHref, preflightId: NONCE_A },
+      { documentId: "slow-base-parent" }
+    );
+    await baseStarted;
+    assert.equal(
+      await runtime.cancelFrameLoad({ url: targetA.navigationHref, preflightId: NONCE_A }, 730),
+      true
+    );
+    await clock.advance(10_001);
+    continueBaseUpdate();
+    await assert.rejects(preparing, /cancelled/);
+    assert.equal(fake.rules.size, 0, "a timed-out PREPARE must not arm after a slow base-rule refresh");
+    assert.deepEqual(fake.storageState.chatclubNotionFramePreflightLeasesV1.leases, {});
   }
 
   {
@@ -259,7 +564,39 @@ function fakeApi(options = {}) {
     assert.deepEqual(await preparing, { applicable: true, armed: false, reason: "cancelled" });
     assert.equal(await cancelling, true);
     assert.equal(runtime.activeSessionRules().length, 0);
-    assert.deepEqual(fake.calls.updates.at(-1), { removeRuleIds: [RULE_ID_MIN] });
+    assert.equal(fake.rules.has(RULE_ID_MIN), false, "a failed atomic install must not leave a rule behind");
+  }
+
+  {
+    const clock = fakeClock();
+    let failAlarmCreate = true;
+    let failCompensationRemoval = true;
+    const fake = fakeApi({
+      beforeAlarmCreate: async () => {
+        if (!failAlarmCreate) return;
+        failAlarmCreate = false;
+        throw new Error("fixture alarm creation failed");
+      },
+      beforeUpdate: async (details) => {
+        if (!failCompensationRemoval || !details.removeRuleIds?.length || details.addRules?.length) return;
+        failCompensationRemoval = false;
+        throw new Error("fixture compensation removal failed");
+      }
+    });
+    const runtime = notion.createNotionFramePreflightRuntime(fake.api, clock);
+    assert.deepEqual(
+      await runtime.prepareFrameLoad({ url: targetA.navigationHref, preflightId: NONCE_A, tabId: 733 }),
+      { applicable: true, armed: false, reason: "session-rule-install-failed" }
+    );
+    assert.equal(fake.rules.has(RULE_ID_MIN), true, "an unconfirmed compensation removal must retain physical-rule ownership");
+    assert.equal(runtime.activeSessionRules().length, 0, "a failed installation must never expose the retained rule for new loading");
+    assert.equal(runtime.hasActiveLeases(), true, "pending removal must continue to block dynamic fallback");
+    assert.ok(fake.storageState.chatclubNotionFramePreflightLeasesV1.leases[RULE_ID_MIN]);
+    assert.equal(fake.calls.alarmCreates.at(-1).details.periodInMinutes, 0.5);
+    await clock.advance(1_000);
+    assert.equal(fake.rules.has(RULE_ID_MIN), false, "the tracked local retry must finish compensation");
+    assert.equal(runtime.hasActiveLeases(), false);
+    assert.deepEqual(fake.storageState.chatclubNotionFramePreflightLeasesV1.leases, {});
   }
 
   {
@@ -300,7 +637,8 @@ function fakeApi(options = {}) {
       { applicable: true, armed: false, reason: "session-rule-install-failed" }
     );
     assert.equal(runtime.activeSessionRules().length, 0);
-    assert.deepEqual(fake.calls.updates.at(-1), { removeRuleIds: [RULE_ID_MIN] });
+    assert.equal(fake.rules.has(RULE_ID_MIN), false, "a failed atomic install must not leave a rule behind");
+    assert.deepEqual(fake.storageState.chatclubNotionFramePreflightLeasesV1.leases, {});
   }
 
   {

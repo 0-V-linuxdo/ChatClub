@@ -34,7 +34,7 @@ async function restoreDnrSnapshot(api, snapshot) {
   });
 }
 
-async function replaceDnrRules(api, sessionRules, dynamicRules, warn) {
+async function replaceDnrRules(api, sessionRules, dynamicRules, warn, options = {}) {
   const oldDynamicRules = await api.getDynamicRules();
   const supportsSessionRules = typeof api.getSessionRules === "function"
     && typeof api.updateSessionRules === "function";
@@ -45,14 +45,14 @@ async function replaceDnrRules(api, sessionRules, dynamicRules, warn) {
     });
     return "dynamic";
   }
-  let oldSessionRules = [];
+  const oldSessionRules = await api.getSessionRules();
   try {
-    oldSessionRules = await api.getSessionRules();
     await api.updateSessionRules({
       removeRuleIds: oldSessionRules.map(({ id }) => id),
       addRules: sessionRules
     });
   } catch (error) {
+    if (options.requireSessionRules === true) throw error;
     warn("Failed to update session DNR rules; falling back to dynamic rules", error);
     if (oldSessionRules.length) {
       try {
@@ -87,7 +87,12 @@ export function createStrictRuntimeConfigApplier(api, options = {}) {
   if (!dnr || typeof currentExtensionPageTabIds !== "function") {
     throw new TypeError("Strict runtime configuration applier requires DNR and extension-tab dependencies");
   }
-  if (!notionRuntime?.withDnrMutation || !notionRuntime?.activeSessionRules) {
+  if (
+    !notionRuntime?.initialize
+    || !notionRuntime?.withDnrMutation
+    || !notionRuntime?.hasActiveLeases
+    || !notionRuntime?.sessionRulesWithActiveLeases
+  ) {
     throw new TypeError("Strict runtime configuration applier requires the Notion frame preflight runtime");
   }
   const warn = typeof options.warn === "function"
@@ -101,6 +106,7 @@ export function createStrictRuntimeConfigApplier(api, options = {}) {
       : {};
     const customConfig = Array.isArray(configuration.customConfig) ? configuration.customConfig : [];
     const chatApps = getAllChatApps(customConfig);
+    await notionRuntime.initialize();
     const beforeDnr = await dnrSnapshot(dnr);
     const contentPreparation = await prepareContentScriptRegistration(api, {
       options: optionsValue,
@@ -117,16 +123,20 @@ export function createStrictRuntimeConfigApplier(api, options = {}) {
         : sessionRules;
       const mode = await notionRuntime.withDnrMutation(() => replaceDnrRules(
         dnr,
-        [...sessionRules, ...notionRuntime.activeSessionRules()],
+        notionRuntime.sessionRulesWithActiveLeases(sessionRules),
         dynamicRules,
-        warn
+        warn,
+        { requireSessionRules: notionRuntime.hasActiveLeases() }
       ));
       await contentPreparation.commit();
       return Object.freeze({ mode, contentScripts: contentPreparation.desired });
     } catch (error) {
       const restoreErrors = [];
       try {
-        await notionRuntime.withDnrMutation(() => restoreDnrSnapshot(dnr, beforeDnr));
+        await notionRuntime.withDnrMutation(() => restoreDnrSnapshot(dnr, {
+          ...beforeDnr,
+          sessionRules: notionRuntime.sessionRulesWithActiveLeases(beforeDnr.sessionRules)
+        }));
       } catch (restoreError) {
         restoreErrors.push(restoreError);
       }

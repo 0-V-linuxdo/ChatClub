@@ -36,6 +36,7 @@ assert.match(
 );
 assert.match(session, /generation: workspaceSessionStore\.generation\(\)/);
 assert.match(session, /currentHrefForTab: \(chat\) => currentHrefForWorkspaceTab\(chat, framesByInstanceId\)/);
+assert.match(session, /normalizeCurrentHref: \(appId, href\) => restorableChatFrameHref\(appById\(appId\), href\)/);
 assert.match(session, /workspaceSessionStore\.save\(snapshot\)/);
 assert.match(
   frame,
@@ -56,6 +57,16 @@ assert.match(
   pocket,
   /state\.temporaryLayoutPreset = \{[\s\S]*?state\.groups = groups;\s*state\.activeTabs = activeTabs;\s*rememberWorkspaceSession\(\);/,
   "temporary Pocket workspaces must be remembered before rendering"
+);
+assert.match(
+  pocket,
+  /loadPocketEntryInFrame[\s\S]*?restorableChatFrameHref\(app, sourceHref\)/,
+  "a Pocket entry must sanitize an unsafe built-in Notion route before frame assignment"
+);
+assert.match(
+  pocket,
+  /pocketRestoreSources[\s\S]*?restorableChatFrameHref\(app, sourceHref\)/,
+  "a restored Pocket workspace must sanitize an unsafe built-in Notion route before staging initialHref"
 );
 for (const [owner, source] of Object.entries({ layout, frame, pocket })) {
   assert.match(

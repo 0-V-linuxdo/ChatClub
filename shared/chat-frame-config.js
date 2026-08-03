@@ -691,6 +691,8 @@ export function resolveChatFrameAttributeContract(input = {}) {
 
 const NOTION_FRAME_LOAD_NONCE_PARAM = "__chatclub_frame_load_nonce";
 const NOTION_FRAME_LOAD_NONCE_PATTERN = /^ccn-[a-f0-9]{32}$/;
+const NOTION_FRAME_HOME_URL = "https://app.notion.com/ai";
+const NOTION_FRAME_THREAD_ID_MAX_LENGTH = 256;
 
 function normalizeNotionFrameLoadNonce(value) {
   const nonce = String(value || "");
@@ -711,6 +713,93 @@ function exactNotionAppUrl(value) {
   } catch {
     return null;
   }
+}
+
+function notionFrameThreadId(parsed) {
+  if (!parsed || parsed.searchParams.getAll("t").length !== 1) return "";
+  const threadId = String(parsed.searchParams.get("t") || "");
+  if (
+    !threadId
+    || threadId.length > NOTION_FRAME_THREAD_ID_MAX_LENGTH
+    || /[\s\u0000-\u001f\u007f]/.test(threadId)
+  ) return "";
+  return threadId;
+}
+
+function canonicalRestorableNotionFrameHref(value) {
+  const parsed = exactNotionAppUrl(stripNotionFrameLoadNonce(value));
+  if (!parsed) return "";
+  const path = (parsed.pathname || "/").replace(/\/+$/, "") || "/";
+  if (path === "/ai") return NOTION_FRAME_HOME_URL;
+  if (path !== "/chat") return "";
+  const threadId = notionFrameThreadId(parsed);
+  if (!threadId) return "";
+  const restored = new URL("https://app.notion.com/chat");
+  restored.searchParams.set("t", threadId);
+  return restored.href;
+}
+
+function builtInNotionFrameApp(app) {
+  if (String(app?.id || "") !== "NotionAI") return false;
+  const source = String(app?.chatAppSource || app?.source || "").toLowerCase();
+  return source === "builtin";
+}
+
+function notionAuthenticationRoute(parsed) {
+  if (!parsed) return false;
+  let path = String(parsed.pathname || "/");
+  for (let index = 0; index < 8; index += 1) {
+    let decoded = "";
+    try { decoded = decodeURIComponent(path); } catch { return true; }
+    if (decoded === path) break;
+    path = decoded;
+  }
+  if (/%[a-f0-9]{2}/i.test(path)) return true;
+  path = path.replace(/\\/g, "/").replace(/\/+$/, "") || "/";
+  return /^\/api(?:\/|$)/i.test(path)
+    || /(?:^|\/)(?:log-?in|log-?out|sign-?in|sign-?up|signup|auth|oauth|sso|callback)(?:\/|$)/i.test(path);
+}
+
+function notionFamilyUrl(value) {
+  try {
+    const parsed = new URL(String(value || ""));
+    const host = parsed.hostname.toLowerCase();
+    return host === "app.notion.com"
+      || host === "notion.so"
+      || host === "www.notion.so"
+      || host.endsWith(".notion.so")
+      ? parsed
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function notionFrameRouteIsPreflightable(value) {
+  const parsed = exactNotionAppUrl(stripNotionFrameLoadNonce(value));
+  return Boolean(parsed && !notionAuthenticationRoute(parsed));
+}
+
+export function navigableChatFrameHref(app, value) {
+  const source = stripNotionFrameLoadNonce(value);
+  if (!builtInNotionFrameApp(app) || !String(source || "").trim()) return source;
+  const parsed = notionFamilyUrl(source);
+  if (!parsed) return source;
+  if (
+    parsed.protocol !== "https:"
+    || parsed.username
+    || parsed.password
+    || parsed.port
+    || notionAuthenticationRoute(parsed)
+  ) return NOTION_FRAME_HOME_URL;
+  return source;
+}
+
+export function restorableChatFrameHref(app, value) {
+  const source = stripNotionFrameLoadNonce(value);
+  if (!builtInNotionFrameApp(app)) return source;
+  if (!String(source || "").trim()) return "";
+  return canonicalRestorableNotionFrameHref(source) || NOTION_FRAME_HOME_URL;
 }
 
 export function stripNotionFrameLoadNonce(value) {
@@ -748,7 +837,7 @@ export function notionFrameLoadTarget(value, nonceValue) {
   const nonce = normalizeNotionFrameLoadNonce(nonceValue);
   const logicalHref = stripNotionFrameLoadNonce(value);
   const parsed = exactNotionAppUrl(logicalHref);
-  if (!nonce || !parsed) return null;
+  if (!nonce || !parsed || !notionFrameRouteIsPreflightable(logicalHref)) return null;
   parsed.searchParams.set(NOTION_FRAME_LOAD_NONCE_PARAM, nonce);
   return Object.freeze({ logicalHref, navigationHref: parsed.href, nonce });
 }
@@ -760,6 +849,7 @@ export function notionFrameLoadRequest(value, nonceValue) {
   if (
     !nonce
     || !parsed
+    || !notionFrameRouteIsPreflightable(source)
     || parsed.href !== source
     || parsed.searchParams.getAll(NOTION_FRAME_LOAD_NONCE_PARAM).length !== 1
     || parsed.searchParams.get(NOTION_FRAME_LOAD_NONCE_PARAM) !== nonce

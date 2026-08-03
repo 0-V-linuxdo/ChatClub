@@ -28,6 +28,9 @@ for (const [factory, file] of [
 assert.doesNotMatch(runtime, /secureFrameContexts\s*=\s*new Map|grokFramePreflights\s*=\s*new Map|customSummaryExecutionQueues\s*=\s*new Map/);
 assert.match(runtime, /chrome\.cookies\?\.onChanged\?\.addListener\(grokCookieRuntime\.handleCookieChange\)/);
 assert.match(runtime, /chrome\.webNavigation\?\.onBeforeNavigate\?\.addListener/);
+assert.match(runtime, /notionFramePreflightRuntime\.beginNavigation\(details\)/);
+assert.match(runtime, /notionFramePreflightRuntime\.settleRegisteredFrame\(sender\)/);
+assert.match(runtime, /notionFramePreflightRuntime\.handleAlarm\(alarm\)/);
 assert.match(runtime, /chrome\.webNavigation\?\.onCommitted\?\.addListener/);
 assert.match(runtime, /registeredFrameContext\(tabId, frameId\)/);
 assert.match(runtime, /action: "frameNavigationTarget"/);
@@ -59,9 +62,15 @@ assert.match(runtimeConfigApplication, /const contentPreparation = await prepare
 assert.match(runtimeConfigApplication, /currentExtensionPageTabIds\(preferredTabIds\)/);
 assert.match(runtimeConfigApplication, /buildDynamicDnrRules\(chatApps, extensionHost, extensionTabIds\)/);
 assert.match(runtimeConfigApplication, /buildDynamicDnrRules\(chatApps, extensionHost, \[\]\)/);
-assert.match(runtimeConfigApplication, /notionRuntime\.activeSessionRules\(\)/);
+assert.match(runtimeConfigApplication, /notionRuntime\.sessionRulesWithActiveLeases\(sessionRules\)/);
+assert.match(runtimeConfigApplication, /requireSessionRules: notionRuntime\.hasActiveLeases\(\)/);
+assert.ok(
+  runtimeConfigApplication.indexOf("await notionRuntime.initialize()")
+    < runtimeConfigApplication.indexOf("const beforeDnr = await dnrSnapshot(dnr)"),
+  "the persisted Notion lease ledger must reconcile before the DNR snapshot"
+);
 assert.match(runtimeConfigApplication, /await contentPreparation\.commit\(\)/);
-assert.match(runtimeConfigApplication, /await notionRuntime\.withDnrMutation\(\(\) => restoreDnrSnapshot\(dnr, beforeDnr\)\)/);
+assert.match(runtimeConfigApplication, /sessionRules: notionRuntime\.sessionRulesWithActiveLeases\(beforeDnr\.sessionRules\)/);
 assert.match(runtimeConfigApplication, /await contentPreparation\.restore\(\)/);
 assert.match(runtimeConfigApplication, /Runtime configuration apply and strict restore both failed/);
 assert.match(runtimeConfigApplication, /const queued = tail\.catch\(\(\) => \{\}\)\.then\(\(\) => applyInternal\(configuration, context\)\)/);
@@ -91,11 +100,11 @@ assert.match(grokRuntime, /!senderDocumentId[\s\S]{0,120}!frameDocumentId[\s\S]{
 assert.match(grokRuntime, /grokCookieChangeOwnedByBridge\(changeInfo\)/);
 assert.match(grokRuntime, /releaseChangedGrokPartition\(api, changeInfo\)/);
 assert.match(grokRuntime, /request\.PREPARE_FRAME_LOAD/);
-assert.match(grokRuntime, /dependencies\.updateDnrRules\(tabId, message\)/);
+assert.match(grokRuntime, /deps\.updateDnrRules\(tabId, message, sender\)/);
 assert.ok(
-  notionPreflight.indexOf("await updateDnrRules(tabId)")
-    < notionPreflight.indexOf("await prepareFrameLoad({ ...message, tabId })"),
-  "document-only DNR rules must be ready before arming the exact Notion nonce rule"
+  notionPreflight.indexOf("registerPendingPreparation({ ...message, tabId }")
+    < notionPreflight.indexOf("await updateDnrRules(tabId)"),
+  "Notion cancellation must bind the pending attempt before a slow base-rule refresh"
 );
 assert.match(grokRuntime, /request\.SYNC_GROK_SESSION_COOKIES/);
 assert.doesNotMatch(grokRuntime, /console\.(?:log|info|debug).*cookie/i);
@@ -107,7 +116,11 @@ assert.match(
 );
 assert.match(runtime, /REQUEST\.CANCEL_NOTION_FRAME_LOAD/);
 assert.match(notionPreflight, /extensionUrl\.startsWith\("chrome-extension:\/\/"\)/);
-assert.match(notionPreflight, /NOTION_FRAME_RULE_TIMEOUT_MS = 10_000/);
+assert.match(notionPreflight, /NOTION_FRAME_PREPARED_TIMEOUT_MS = 10_000/);
+assert.match(notionPreflight, /NOTION_FRAME_NAVIGATION_TIMEOUT_MS = 5 \* 60_000/);
+assert.match(notionPreflight, /sessionStorage\.get\(NOTION_FRAME_LEASE_STORAGE_KEY\)/);
+assert.match(notionPreflight, /phase: "prepared"/);
+assert.match(notionPreflight, /entry\.phase = "navigating"/);
 assert.match(notionPreflight, /resourceTypes: \["xmlhttprequest", "other"\]/);
 assert.match(notionPreflight, /requestMethods: \["get"\]/);
 assert.match(notionPreflight, /initiatorDomains: \["app\.notion\.com"\]/);

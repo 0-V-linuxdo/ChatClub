@@ -1,6 +1,6 @@
 import { captureWorkspaceSnapshotV1, restoreWorkspaceSnapshotV1 } from "./session-state.js";
 import { validateControllerContract } from "../controller-contract.js";
-import { stripNotionFrameLoadNonce } from "../../shared/chat-frame-config.js";
+import { restorableChatFrameHref } from "../../shared/chat-frame-config.js";
 
 export function createWorkspaceSessionController(dependencies = {}) {
   const { state, services, registry, layout } = validateControllerContract(dependencies, "Workspace session controller", {
@@ -32,7 +32,8 @@ export function createWorkspaceSessionController(dependencies = {}) {
   function currentHrefForWorkspaceTab(chat, framesByInstanceId = null) {
     const instanceId = String(chat?.instanceId || "");
     const iframe = framesByInstanceId?.get(instanceId) || frameForInstance(instanceId);
-    const openableFrameUrl = (value) => openableTabUrl(stripNotionFrameLoadNonce(value));
+    const app = appById(chat?.appId);
+    const openableFrameUrl = (value) => openableTabUrl(restorableChatFrameHref(app, value));
     return openableFrameUrl(iframe?.dataset?.currentHref)
       || openableFrameUrl(chat?.initialHref)
       || openableFrameUrl(iframe?.getAttribute?.("src"))
@@ -63,6 +64,7 @@ export function createWorkspaceSessionController(dependencies = {}) {
       validAppIds: validChatAppIds(),
       validPresetIds: new Set(presets.map((preset) => preset.id)),
       fallbackPresetId: state.options?.activeLayoutPresetId || presets[0]?.id || "default",
+      normalizeCurrentHref: (appId, href) => restorableChatFrameHref(appById(appId), href),
       createGroupId,
       createFrameId,
       createLayoutId

@@ -265,6 +265,10 @@ const { functionSource } = require("./function-source.cjs");
   assert.match(chatFrameAttributes, /source: app\?\.chatAppSource \|\| app\?\.source/);
   assert.match(chatFrameAttributes, /options: state\.options/);
   const rememberFrameLocation = functionSource(frameController, "rememberFrameLocation");
+  const consumeFrameInitialHref = functionSource(frameController, "consumeFrameInitialHref");
+  const stageFrameInitialHref = functionSource(frameController, "stageFrameInitialHref");
+  assert.match(consumeFrameInitialHref, /restorableFrameUrl\(appById\(chat\?\.appId\), chat\?\.initialHref\)/);
+  assert.match(stageFrameInitialHref, /restorableFrameUrl\(appById\(chat\.appId\), href\)/);
   assert.match(rememberFrameLocation, /ensureFrameAttributeContract\(iframe, href/);
   assert.ok(
     rememberFrameLocation.indexOf("iframe.dataset.currentHref = href") < rememberFrameLocation.indexOf("ensureFrameAttributeContract"),

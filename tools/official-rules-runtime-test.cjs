@@ -1216,6 +1216,10 @@ const assert = require("node:assert/strict");
   };
   let dynamicRules = [];
   let sessionRules = [];
+  let failSessionDnrUpdate = false;
+  let failSessionDnrReadAt = 0;
+  let sessionDnrReadCount = 0;
+  let activeNotionLeaseRules = [];
   const replaceRules = (current, request) => {
     const removed = new Set(request.removeRuleIds || []);
     return [
@@ -1233,15 +1237,34 @@ const assert = require("node:assert/strict");
     scripting: strictScripting,
     declarativeNetRequest: {
       async getDynamicRules() { return structuredClone(dynamicRules); },
-      async getSessionRules() { return structuredClone(sessionRules); },
+      async getSessionRules() {
+        sessionDnrReadCount += 1;
+        if (sessionDnrReadCount === failSessionDnrReadAt) {
+          throw new Error("fixture session DNR read failed");
+        }
+        return structuredClone(sessionRules);
+      },
       async updateDynamicRules(request) { dynamicRules = replaceRules(dynamicRules, request); },
-      async updateSessionRules(request) { sessionRules = replaceRules(sessionRules, request); }
+      async updateSessionRules(request) {
+        if (failSessionDnrUpdate) {
+          failSessionDnrUpdate = false;
+          throw new Error("fixture session DNR replacement failed");
+        }
+        sessionRules = replaceRules(sessionRules, request);
+      }
     }
   };
   const strictApplier = createStrictRuntimeConfigApplier(strictApi, {
     notionFramePreflightRuntime: {
+      async initialize() { return true; },
       async withDnrMutation(task) { return task(); },
-      activeSessionRules() { return []; }
+      hasActiveLeases() { return activeNotionLeaseRules.length > 0; },
+      sessionRulesWithActiveLeases(rules = []) {
+        return [
+          ...(Array.isArray(rules) ? rules : []).filter(({ id }) => id < 1_840_000_000 || id > 1_840_065_535),
+          ...structuredClone(activeNotionLeaseRules)
+        ];
+      }
     },
     currentExtensionPageTabIds: async () => [],
     warn: () => {}
@@ -1341,6 +1364,45 @@ const assert = require("node:assert/strict");
     oldRegistrations,
     "content registration preparation must restore the exact old managed registration set"
   );
+
+  const activeNotionLease = {
+    id: 1_840_000_000,
+    priority: 1,
+    action: { type: "modifyHeaders", responseHeaders: [] },
+    condition: { regexFilter: "notion-lease", resourceTypes: ["xmlhttprequest"] }
+  };
+  activeNotionLeaseRules = [activeNotionLease];
+  sessionRules = [
+    ...sessionRules.filter(({ id }) => id !== activeNotionLease.id),
+    structuredClone(activeNotionLease)
+  ];
+  const dynamicBeforeLeaseFailure = structuredClone(dynamicRules);
+  failSessionDnrUpdate = true;
+  await assert.rejects(
+    strictApplier.apply({ options: {}, customConfig: [] }),
+    /fixture session DNR replacement failed/,
+    "an active Notion lease must prohibit a successful dynamic-rule fallback"
+  );
+  assert.deepEqual(
+    sessionRules.find(({ id }) => id === activeNotionLease.id),
+    activeNotionLease,
+    "rollback must merge the latest active Notion lease instead of dropping it"
+  );
+  assert.deepEqual(dynamicRules, dynamicBeforeLeaseFailure);
+  activeNotionLeaseRules = [];
+  sessionRules = sessionRules.filter(({ id }) => id !== activeNotionLease.id);
+
+  const sessionBeforeReadFailure = structuredClone(sessionRules);
+  const dynamicBeforeReadFailure = structuredClone(dynamicRules);
+  failSessionDnrReadAt = sessionDnrReadCount + 2;
+  await assert.rejects(
+    strictApplier.apply({ options: {}, customConfig: [] }),
+    /fixture session DNR read failed/,
+    "an unknown session-rule state must never be treated as an empty state for dynamic fallback"
+  );
+  assert.deepEqual(sessionRules, sessionBeforeReadFailure);
+  assert.deepEqual(dynamicRules, dynamicBeforeReadFailure);
+  failSessionDnrReadAt = 0;
 
   console.log("Official rules central runtime migration, sparse-v4 preservation, consent, check-only alarm, atomic multi-component rollback, strict registration compensation, and transition serialization tests passed.");
 })().catch((error) => {

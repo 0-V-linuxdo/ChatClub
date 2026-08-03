@@ -146,11 +146,11 @@ async function relayRegisteredFrameNavigation(details = {}, phase = "before") {
 }
 
 chrome.webNavigation?.onBeforeNavigate?.addListener((details) => {
+  notionFramePreflightRuntime.beginNavigation(details).catch(() => {});
   if (grokCookieRuntime.handleBeforeNavigate(details)) return;
   relayRegisteredFrameNavigation(details, "before").catch(() => {});
 });
 chrome.webNavigation?.onCommitted?.addListener((details) => {
-  notionFramePreflightRuntime.settleNavigation(details);
   const committedAt = Date.now();
   (async () => {
     const grokNavigationClaimed = grokCookieRuntime.handleCommittedNavigation(details);
@@ -172,11 +172,11 @@ chrome.webNavigation?.onCommitted?.addListener((details) => {
     }
   })().catch(() => {});
 });
-chrome.webNavigation?.onErrorOccurred?.addListener((details) => { notionFramePreflightRuntime.settleNavigation(details); grokCookieRuntime.handleNavigationError(details); });
+chrome.webNavigation?.onErrorOccurred?.addListener((details) => { grokCookieRuntime.handleNavigationError(details); });
 
 chrome.tabs?.onRemoved?.addListener((tabId, removeInfo) => {
   forgetKnownExtensionPageTab(tabId);
-  notionFramePreflightRuntime.handleTabRemoved(tabId);
+  notionFramePreflightRuntime.handleTabRemoved(tabId).catch(() => {});
   grokCookieRuntime.handleTabRemoved(tabId);
   forgetSecureTabContexts(tabId)
     .catch((error) => console.warn(`[${APP_NAME}] closed tab secure frame contexts could not be removed`, error));
@@ -522,11 +522,12 @@ chrome.runtime.onStartup?.addListener(() => {
   prepareWorkspaceSessionLifecycleSafely("startup", { reason: "startup" });
 });
 chrome.alarms.onAlarm.addListener((alarm) => {
+  notionFramePreflightRuntime.handleAlarm(alarm).catch(() => {});
   officialRulesRuntime.handleAlarm(alarm).catch((error) => console.error(`[${APP_NAME}] official-rules alarm failed`, error));
 });
 
 registerActionListener(chrome);
-notionFramePreflightRuntime.cleanupStaleSessionRules().catch(() => {});
+notionFramePreflightRuntime.initialize().catch(() => {});
 prepareWorkspaceSessionLifecycleSafely("runtime start", { reason: "runtime-start" });
 
 const REQUEST = BACKGROUND_REQUEST_ACTIONS;
@@ -541,6 +542,7 @@ const backgroundRequestHandlers = [
   )],
   [REQUEST.REGISTER_FRAME_CONTEXT, async (message, sender) => {
     const context = await registerSecureFrameContext(message, sender);
+    await notionFramePreflightRuntime.settleRegisteredFrame(sender).catch(() => 0);
     return {
       documentId: context.documentId,
       browserDocumentId: context.browserDocumentId,

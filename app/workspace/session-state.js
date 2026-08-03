@@ -72,17 +72,21 @@ function normalizeLayout(value, context = {}) {
   return { type: "preset", presetId };
 }
 
-function normalizedTab(value, validAppIds) {
+function normalizedTab(value, validAppIds, normalizeCurrentHref = null) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const appId = text(value.appId);
   if (!appId || (validAppIds && !validAppIds.has(appId))) return null;
+  const sourceHref = text(value.currentHref || value.href || value.url || value.initialHref);
+  const currentHref = typeof normalizeCurrentHref === "function"
+    ? httpUrl(normalizeCurrentHref(appId, sourceHref))
+    : httpUrl(sourceHref);
   return {
     appId,
-    currentHref: httpUrl(value.currentHref || value.href || value.url || value.initialHref)
+    currentHref
   };
 }
 
-function normalizeGroup(value, validAppIds) {
+function normalizeGroup(value, validAppIds, normalizeCurrentHref = null) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const sourceTabs = Array.isArray(value.tabs) ? value.tabs : [];
   if (!sourceTabs.length) return null;
@@ -91,7 +95,10 @@ function normalizeGroup(value, validAppIds) {
     sourceTabs.length - 1
   ));
   const retained = sourceTabs
-    .map((tab, originalIndex) => ({ tab: normalizedTab(tab, validAppIds), originalIndex }))
+    .map((tab, originalIndex) => ({
+      tab: normalizedTab(tab, validAppIds, normalizeCurrentHref),
+      originalIndex
+    }))
     .filter((entry) => entry.tab);
   if (!retained.length) return null;
   let activeIndex = retained.findIndex((entry) => entry.originalIndex === requestedActiveIndex);
@@ -103,10 +110,10 @@ function normalizeGroup(value, validAppIds) {
   };
 }
 
-function normalizedGroups(value, validAppIds) {
+function normalizedGroups(value, validAppIds, normalizeCurrentHref = null) {
   const records = [];
   for (const [originalIndex, group] of (Array.isArray(value) ? value : []).entries()) {
-    const normalized = normalizeGroup(group, validAppIds);
+    const normalized = normalizeGroup(group, validAppIds, normalizeCurrentHref);
     if (normalized) records.push({ originalIndex, group: normalized });
   }
   return records;
@@ -195,7 +202,7 @@ function normalizeWorkspaceSnapshotV1(value, context = {}) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   if (Number(value.schemaVersion) !== WORKSPACE_SESSION_SCHEMA_VERSION) return null;
   const validAppIds = idSet(context.validAppIds, own(context, "validAppIds"));
-  const records = normalizedGroups(value.groups, validAppIds);
+  const records = normalizedGroups(value.groups, validAppIds, context.normalizeCurrentHref);
   const requestedFullscreenIndex = integer(value.fullscreenGroupIndex, -1);
   const fullscreenGroupIndex = requestedFullscreenIndex >= 0
     ? records.findIndex((record) => record.originalIndex === requestedFullscreenIndex)

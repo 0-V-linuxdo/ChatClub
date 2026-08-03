@@ -9,7 +9,7 @@
   "background/grok-cookie-runtime.js": {
     "maxLines": 1740,
     "target": 1200,
-    "maxBytes": 66827,
+    "maxBytes": 66811,
     "targetBytes": 50000,
     "reason": "The Grok Cookie runtime co-locates exact registered-frame authorization, browser-specific partition discovery, parent-document-bound Mirror account-switch capture and recovery including Arc's omitted top-frame metadata fallback, a connect-only same-document gateway WebSocket readiness proof with bounded a=1/a=2/a=3 account rotation, Cookie-ledger cleanup, and fail-closed navigation handling so their shared attempt, frame, and top-document identities cannot drift across modules."
   },

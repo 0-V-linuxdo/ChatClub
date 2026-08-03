@@ -8,6 +8,7 @@ const assert = require("node:assert/strict");
     captureWorkspaceSnapshotV1,
     restoreWorkspaceSnapshotV1
   } = await import("../app/workspace/session-state.js");
+  const { restorableChatFrameHref } = await import("../shared/chat-frame-config.js");
 
   assert.equal(session.WORKSPACE_SESSION_SCHEMA_VERSION, 1);
   assert.equal(session.normalizeWorkspaceSessionGeneration("  generation-a  "), "generation-a");
@@ -176,6 +177,56 @@ const assert = require("node:assert/strict");
     "group-1": "frame-1-1"
   });
   assert.equal(restored.fullscreenGroupId, "group-1");
+
+  const notionApps = new Map([
+    ["NotionAI", { id: "NotionAI", source: "builtin", url: "https://app.notion.com/ai" }],
+    ["CustomNotion", { id: "CustomNotion", source: "custom", url: "https://app.notion.com/custom" }]
+  ]);
+  const restoredNotionRoutes = restoreWorkspaceSnapshotV1({
+    schemaVersion: 1,
+    generation: "generation-notion-route-safety",
+    layout: { type: "preset", presetId: "default" },
+    groups: [{
+      tabs: [
+        { appId: "NotionAI", currentHref: "https://app.notion.com/logout" },
+        { appId: "NotionAI", currentHref: "https://app.notion.com/chat?extra=1&t=thread-1#turn" },
+        { appId: "NotionAI", currentHref: "javascript:location='/logout'" },
+        { appId: "CustomNotion", currentHref: "https://app.notion.com/logout?custom=1" }
+      ],
+      activeIndex: 0
+    }],
+    fullscreenGroupIndex: null
+  }, {
+    validAppIds: [...notionApps.keys()],
+    validPresetIds: ["default"],
+    fallbackPresetId: "default",
+    normalizeCurrentHref: (appId, href) => restorableChatFrameHref(notionApps.get(appId), href),
+    createGroupId: () => "notion-route-group",
+    createFrameId: (_groupIndex, tabIndex) => `notion-route-frame-${tabIndex}`,
+    createLayoutId: () => "unused-layout"
+  });
+  assert.deepEqual(restoredNotionRoutes.groups[0].chatApps, [
+    {
+      appId: "NotionAI",
+      instanceId: "notion-route-frame-0",
+      initialHref: "https://app.notion.com/ai"
+    },
+    {
+      appId: "NotionAI",
+      instanceId: "notion-route-frame-1",
+      initialHref: "https://app.notion.com/chat?t=thread-1"
+    },
+    {
+      appId: "NotionAI",
+      instanceId: "notion-route-frame-2",
+      initialHref: "https://app.notion.com/ai"
+    },
+    {
+      appId: "CustomNotion",
+      instanceId: "notion-route-frame-3",
+      initialHref: "https://app.notion.com/logout?custom=1"
+    }
+  ]);
 
   const temporaryCapture = captureWorkspaceSnapshotV1({
     generation: "generation-temporary",

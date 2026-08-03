@@ -1697,8 +1697,8 @@ export function createGrokCookieRuntime(api, dependencies = {}) {
     });
   }
 
-  function requestHandlers(request, dependencies = {}) {
-    if (typeof dependencies.updateDnrRules !== "function") {
+  function requestHandlers(request, deps = {}) {
+    if (typeof deps.updateDnrRules !== "function") {
       throw new TypeError("Grok Cookie request handlers require updateDnrRules");
     }
     return [
@@ -1707,7 +1707,7 @@ export function createGrokCookieRuntime(api, dependencies = {}) {
         const id = registerFramePreflight(message, sender);
         try {
           const cookieBridge = prepareSessionCookies(message.url, sender).catch(() => publicResult());
-          await dependencies.updateDnrRules(tabId, message);
+          await deps.updateDnrRules(tabId, message, sender);
           return { grokCookieBridge: await cookieBridge };
         } finally {
           finishFramePreflight(id);
