@@ -416,16 +416,18 @@ export function createTopbarView(dependencies = {}) {
   function renderSettingsMenu({ editing, persistent, layout, rect, closeMenu, runItem } = {}) {
     const foldedItems = editor.foldedTopbarLayoutItems(layout)
       .filter((item) => item.type === "item" && item.id !== "settingsJumpMenu");
-    const foldedSettingsItemIds = new Set(foldedItems
-      .map((item) => topbarSettingsSectionForItem(item.id) ? item.id : "")
+    const foldedSettingsSectionIds = new Set(foldedItems
+      .map((item) => topbarSettingsSectionForItem(item.id))
       .filter(Boolean));
     const foldedButtons = foldedItems.map((item) => renderFoldedMenuButton(item, editing, runItem));
-    const settingsButtons = editing || foldedSettingsItemIds.size > 0 ? [] : settingsSections.map(([id, labelKey, , icon]) => {
-      return settingsMenuButton(t(labelKey), icon, () => {
-        closeMenu();
-        actions.openSettings(id);
-      }, "secondary", false, null, { tooltipId: `topbar.settings.${id}` });
-    });
+    const settingsButtons = editing ? [] : settingsSections
+      .filter(([id]) => !foldedSettingsSectionIds.has(id))
+      .map(([id, labelKey, , icon]) => {
+        return settingsMenuButton(t(labelKey), icon, () => {
+          closeMenu();
+          actions.openSettings(id);
+        }, "secondary", false, null, { tooltipId: `topbar.settings.${id}` });
+      });
     const editControls = editing ? [] : [
       settingsMenuButton(t("topbar.customize.enter"), "customizeTopbar", () => {
         closeMenu();

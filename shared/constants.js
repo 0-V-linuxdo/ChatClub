@@ -1,7 +1,7 @@
 import { DEFAULT_TOPBAR_LAYOUT } from "./topbar.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-08-02｜03:34:16」";
+export const APP_VERSION = "「2026-08-03｜14:19:51」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -266,6 +266,7 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
     id: "settings",
     labelKey: "tooltip.group.settings",
     targets: Object.freeze([
+      Object.freeze({ id: "settings.modal.fullscreen", labelKey: "chat.fullscreen" }),
       Object.freeze({ id: "settings.modal.close", labelKey: "common.close" }),
       Object.freeze({ id: "settings.profiles.promotion", labelKey: "profiles.openPromotionChannel" }),
       Object.freeze({ id: "settings.action.view", labelKey: "apps.viewDetails" }),

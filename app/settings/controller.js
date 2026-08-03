@@ -412,7 +412,35 @@ export function createSettingsController(ctx) {
     };
     closeActiveSettingsDialog = close;
     dialog = editorModal(t("settings.title"), host, close, true, t("common.close"));
-    dialog.querySelector(".modal")?.classList.add("settings-modal");
+    const settingsModal = dialog.querySelector(".modal");
+    settingsModal?.classList.add("settings-modal");
+    const modalHeader = settingsModal?.querySelector(".modal-header");
+    const closeButton = modalHeader?.querySelector(".icon-button");
+    let fullscreenButton = null;
+    const syncFullscreenButton = () => {
+      if (!settingsModal || !fullscreenButton) return;
+      const fullscreen = settingsModal.classList.contains("settings-modal-fullscreen");
+      const label = t(fullscreen ? "chat.exitFullscreen" : "chat.fullscreen");
+      fullscreenButton.setAttribute("aria-label", label);
+      fullscreenButton.setAttribute("data-tooltip", label);
+      fullscreenButton.replaceChildren(svgIcon(fullscreen ? "minimize" : "maximize"));
+    };
+    if (settingsModal && modalHeader && closeButton) {
+      fullscreenButton = el("button", {
+        class: "icon-button tooltip-trigger settings-window-button",
+        type: "button",
+        "data-tooltip-id": "settings.modal.fullscreen",
+        onclick: (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          settingsModal.classList.toggle("settings-modal-fullscreen");
+          syncFullscreenButton();
+        }
+      });
+      closeButton.classList.add("settings-window-button");
+      modalHeader.append(el("div", { class: "settings-window-actions" }, fullscreenButton, closeButton));
+      syncFullscreenButton();
+    }
     const modalTitle = dialog.querySelector(".modal-header h2");
     const modalSectionTitle = el("div", { class: "settings-modal-section-title" });
     const modalAppIcon = svgIcon("settings");
@@ -454,6 +482,7 @@ export function createSettingsController(ctx) {
       clear(modalSectionTitle);
       modalSectionTitle.append(el("h3", {}, section.label), el("p", {}, section.description));
       settingsNav.setAttribute("aria-label", t("settings.sections"));
+      syncFullscreenButton();
       settingsMain.dataset.settingsSectionId = active;
       for (const entry of settingsTabEntries) {
         entry.tab.classList.toggle("active", entry.id === active);

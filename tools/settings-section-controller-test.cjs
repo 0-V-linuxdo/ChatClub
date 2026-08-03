@@ -254,6 +254,9 @@ globalThis.document = { addEventListener() {} };
   const stateModule = await import(moduleUrl("app/state.js"));
   const settingsStateModule = await import(moduleUrl("app/settings/state-ports.js"));
   const settingsSectionsModule = await import(moduleUrl("app/settings/sections.js"));
+  const constantsModule = await import(moduleUrl("shared/constants.js"));
+  const storageSchemaModule = await import(moduleUrl("shared/storage-schema.js"));
+  const topbarModule = await import(moduleUrl("shared/topbar.js"));
   const appearanceModule = await import(moduleUrl("app/settings/appearance.js"));
   const summaryModule = await import(moduleUrl("app/settings/summary.js"));
   const optimizeModule = await import(moduleUrl("app/settings/optimize.js"));
@@ -312,6 +315,96 @@ globalThis.document = { addEventListener() {} };
     settingsSectionsModule.SETTINGS_SECTIONS.slice(6, 9).map(([id]) => id),
     ["topicDeletion", "rules", "optimize"],
     "Rules must appear directly after the three site-rule features"
+  );
+  const settingsSectionIds = settingsSectionsModule.SETTINGS_SECTIONS.map(([id]) => id);
+  const settingsTopbarItemIds = settingsSectionIds.map((id) => topbarModule.topbarSettingsItemForSection(id));
+  assert.equal(
+    settingsTopbarItemIds.every(Boolean),
+    true,
+    "Every Settings section must have a topbar Settings-menu item"
+  );
+  assert.equal(
+    new Set(settingsTopbarItemIds).size,
+    settingsSectionIds.length,
+    "Settings-menu item ids must be unique"
+  );
+  assert.equal(
+    new Set(topbarModule.TOPBAR_BUILTIN_ITEMS).size,
+    topbarModule.TOPBAR_BUILTIN_ITEMS.length,
+    "Topbar built-in item ids must remain globally unique"
+  );
+  for (let index = 0; index < settingsSectionsModule.SETTINGS_SECTIONS.length; index += 1) {
+    const [sectionId, labelKey, , icon] = settingsSectionsModule.SETTINGS_SECTIONS[index];
+    const itemId = settingsTopbarItemIds[index];
+    assert.equal(topbarModule.topbarSettingsSectionForItem(itemId), sectionId, `${sectionId} must round-trip through its topbar item`);
+    assert.equal(topbarModule.TOPBAR_BUILTIN_ITEMS.includes(itemId), true, `${itemId} must be a recognized built-in item`);
+    assert.equal(topbarModule.topbarItemLabelKey({ type: "item", id: itemId }), labelKey, `${itemId} must share the Settings label`);
+    assert.equal(topbarModule.topbarItemIcon({ type: "item", id: itemId }), icon, `${itemId} must share the Settings icon`);
+    assert.equal(
+      constantsModule.TOOLTIP_TARGET_IDS.includes(`topbar.settings.${sectionId}`),
+      true,
+      `${sectionId} must remain configurable in tooltip settings`
+    );
+    assert.equal(
+      topbarModule.DEFAULT_TOPBAR_LAYOUT.filter((entry) => entry.type === "item" && entry.id === itemId).length,
+      1,
+      `${itemId} must appear exactly once in the default layout`
+    );
+  }
+  assert.deepEqual(
+    topbarModule.DEFAULT_TOPBAR_LAYOUT
+      .map((entry) => topbarModule.topbarSettingsSectionForItem(entry.id))
+      .filter(Boolean),
+    settingsSectionIds,
+    "A new profile must show every Settings section in canonical order"
+  );
+  const newlyRegisteredItemIds = [
+    "settingsMessageNavigation",
+    "settingsRules",
+    "settingsFunctionalAnomalies"
+  ];
+  const historicalLayout = topbarModule.DEFAULT_TOPBAR_LAYOUT
+    .filter((entry) => !newlyRegisteredItemIds.includes(entry.id));
+  const migratedLayout = topbarModule.normalizeTopbarLayout(historicalLayout);
+  assert.deepEqual(
+    migratedLayout.slice(0, historicalLayout.length),
+    historicalLayout,
+    "Normalizing an existing topbar must preserve every saved item position"
+  );
+  assert.deepEqual(
+    migratedLayout.slice(historicalLayout.length).map((entry) => entry.id),
+    newlyRegisteredItemIds,
+    "New built-in Settings items must be appended after the saved user order"
+  );
+  assert.deepEqual(
+    topbarModule.normalizeTopbarLayout(JSON.parse(JSON.stringify(migratedLayout))),
+    migratedLayout,
+    "The appended Settings-menu order must remain idempotent after JSON serialization"
+  );
+  const historicalMenuIndex = historicalLayout.findIndex((entry) => entry.id === "settingsJumpMenu");
+  const shuffledHistoricalLayout = [
+    ...historicalLayout.slice(0, historicalMenuIndex + 1).filter((entry) => entry.id !== "summary"),
+    ...[...historicalLayout.slice(historicalMenuIndex + 1)].reverse(),
+    { type: "item", id: "summary" }
+  ];
+  const normalizedShuffledLayout = topbarModule.normalizeTopbarLayout(shuffledHistoricalLayout);
+  assert.deepEqual(
+    normalizedShuffledLayout.slice(0, shuffledHistoricalLayout.length),
+    shuffledHistoricalLayout,
+    "A shuffled user menu, including a folded non-Settings item, must retain its exact saved order"
+  );
+  assert.deepEqual(
+    normalizedShuffledLayout.slice(shuffledHistoricalLayout.length).map((entry) => entry.id),
+    newlyRegisteredItemIds,
+    "New Settings items must follow the complete shuffled user menu"
+  );
+  const storedOptions = storageSchemaModule.dehydrateOptions(
+    storageSchemaModule.normalizeOptions({ topbarLayout: shuffledHistoricalLayout })
+  );
+  assert.deepEqual(
+    storageSchemaModule.normalizeOptions(storedOptions).topbarLayout,
+    normalizedShuffledLayout,
+    "The shuffled and appended Settings-menu order must survive schema dehydration and rehydration"
   );
   assert.deepEqual(
     settingsStateModule.SETTINGS_OPTION_CAPABILITIES.apps.write,

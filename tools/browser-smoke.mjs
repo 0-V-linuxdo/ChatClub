@@ -9,6 +9,7 @@ import { createRequire } from "node:module";
 import { CONTENT_BUNDLES, contentInjectionPlan } from "../shared/frame-commands.js";
 import { CONTENT_BRIDGE_VERSION } from "../shared/protocol.js";
 import { assertNewWorkspaceTabResult, completeChromiumNewWorkspaceTabProbe, completeFirefoxNewWorkspaceTabProbe, newWorkspaceTabProbe, stableConfigInfoProbe } from "./browser-smoke-page-probes.mjs";
+import { verifyChromiumSettingsDialog, verifyChromiumSettingsMenu, verifyFirefoxSettingsDialog, verifyFirefoxSettingsMenu } from "./settings-browser-smoke.mjs";
 const require = createRequire(import.meta.url);
 const { materializePackagePlan, packagePlan } = require("./package-plan.cjs");
 const {
@@ -1124,7 +1125,7 @@ const pageProbe = `async (fixtureUrl) => {
       await quietWindow();
       const finalFrames = Array.from(document.querySelectorAll(".chat-frame"));
       const deletionFrames = frameStatus(finalFrames);
-      document.querySelector(".settings-modal .modal-header .icon-button")?.click();
+      document.querySelector('[data-tooltip-id="settings.modal.close"]')?.click();
       return {
         ok: true,
         gridSame: document.querySelector(".main-grid") === grid,
@@ -1261,15 +1262,13 @@ async function chromiumSmoke(extensionDirectory, temporaryRoot, fixtureUrl) {
     await page.goto(`chrome-extension://${extensionId}/options.html`, { waitUntil: "domcontentloaded", timeout: 20000 });
     await page.locator("#app .app-shell").waitFor({ state: "attached", timeout: 25000 });
     await page.locator(".settings-modal").waitFor({ state: "attached", timeout: 25000 });
-    assert(
-      await page.locator(".settings-modal .settings-tab.active").count() === 1,
-      "chromium: options page did not open one active Settings section"
-    );
+    await verifyChromiumSettingsDialog(page, assert);
     await page.goto(`chrome-extension://${extensionId}/chatClub.html`, { waitUntil: "domcontentloaded", timeout: 20000 });
     await page.locator(".chat-frame").nth(1).waitFor({ state: "attached", timeout: 25000 }).catch(async (error) => {
       const bodyText = await page.locator("body").innerText().catch(() => "");
       throw new Error(`${error.message}\npage errors: ${pageErrors.join(" | ") || "none"}\nbody: ${bodyText.slice(-2000)}`);
     });
+    await verifyChromiumSettingsMenu(page, assert);
     const workspaceSessionProbe = await chromiumWorkspaceSessionRecoveryProbe(context, page, fixtureUrl, pageErrors);
     page = workspaceSessionProbe.page;
     const result = await page.evaluate(`(${pageProbe})(${JSON.stringify(fixtureUrl)})`);
@@ -1351,12 +1350,10 @@ async function firefoxSmoke(extensionDirectory, fixtureUrl) {
     await driver.get(optionsUrl);
     await driver.wait(async () => driver.findElements(selenium.By.css("#app .app-shell")).then((items) => items.length > 0), 25000);
     await driver.wait(async () => driver.findElements(selenium.By.css(".settings-modal")).then((items) => items.length > 0), 25000);
-    assert(
-      await driver.findElements(selenium.By.css(".settings-modal .settings-tab.active")).then((items) => items.length) === 1,
-      "firefox: options page did not open one active Settings section"
-    );
+    await verifyFirefoxSettingsDialog(driver, assert);
     await driver.get(extensionUrl);
     await driver.wait(async () => driver.findElements(selenium.By.css("#app .app-shell")).then((items) => items.length > 0), 25000);
+    await verifyFirefoxSettingsMenu(driver, selenium.By, assert);
     const sourceHandle = await driver.getWindowHandle();
     const result = await driver.executeAsyncScript(`
       const done = arguments[arguments.length - 1];

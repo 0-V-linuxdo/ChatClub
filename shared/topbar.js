@@ -14,12 +14,15 @@ export const TOPBAR_BUILTIN_ITEMS = [
   "settingsApps",
   "settingsModels",
   "settingsSummary",
+  "settingsMessageNavigation",
   "settingsTopicDeletion",
+  "settingsRules",
   "settingsOptimize",
   "settingsPrompts",
   "settingsPromptHistory",
   "settingsShortcuts",
   "settingsIo",
+  "settingsFunctionalAnomalies",
   "settingsAbout"
 ];
 
@@ -29,12 +32,15 @@ const TOPBAR_SETTINGS_SECTION_ITEMS = {
   apps: "settingsApps",
   models: "settingsModels",
   summary: "settingsSummary",
+  messageNavigation: "settingsMessageNavigation",
   topicDeletion: "settingsTopicDeletion",
+  rules: "settingsRules",
   optimize: "settingsOptimize",
   prompts: "settingsPrompts",
   promptHistory: "settingsPromptHistory",
   shortcuts: "settingsShortcuts",
   io: "settingsIo",
+  functionalAnomalies: "settingsFunctionalAnomalies",
   about: "settingsAbout"
 };
 
@@ -63,12 +69,15 @@ export const DEFAULT_TOPBAR_LAYOUT = [
   { type: "item", id: "settingsApps" },
   { type: "item", id: "settingsModels" },
   { type: "item", id: "settingsSummary" },
+  { type: "item", id: "settingsMessageNavigation" },
   { type: "item", id: "settingsTopicDeletion" },
+  { type: "item", id: "settingsRules" },
   { type: "item", id: "settingsOptimize" },
   { type: "item", id: "settingsPrompts" },
   { type: "item", id: "settingsPromptHistory" },
   { type: "item", id: "settingsShortcuts" },
   { type: "item", id: "settingsIo" },
+  { type: "item", id: "settingsFunctionalAnomalies" },
   { type: "item", id: "settingsAbout" }
 ];
 
@@ -88,12 +97,15 @@ const TOPBAR_ITEM_META = {
   settingsApps: { labelKey: "settings.apps.title", icon: "apps" },
   settingsModels: { labelKey: "settings.models.title", icon: "model" },
   settingsSummary: { labelKey: "settings.summary.title", icon: "summary" },
+  settingsMessageNavigation: { labelKey: "settings.messageNavigation.title", icon: "navigator" },
   settingsTopicDeletion: { labelKey: "settings.topicDeletion.title", icon: "trash" },
+  settingsRules: { labelKey: "settings.rules.title", icon: "fileCog" },
   settingsOptimize: { labelKey: "settings.optimize.title", icon: "sparkles" },
   settingsPrompts: { labelKey: "settings.prompts.title", icon: "library" },
   settingsPromptHistory: { labelKey: "settings.promptHistory.title", icon: "history" },
   settingsShortcuts: { labelKey: "settings.shortcuts.title", icon: "keyboard" },
   settingsIo: { labelKey: "settings.io.title", icon: "transfer" },
+  settingsFunctionalAnomalies: { labelKey: "settings.functionalAnomalies.title", icon: "alert" },
   settingsAbout: { labelKey: "settings.about.title", icon: "info" },
   flex: { labelKey: "topbar.flexSpace", icon: "grip" }
 };
@@ -150,31 +162,12 @@ export function normalizeTopbarLayout(raw = DEFAULT_TOPBAR_LAYOUT) {
   }
   const missingSettingsIds = TOPBAR_SETTINGS_SECTION_ITEM_IDS.filter((id) => !seenItems.has(id));
   if (missingSettingsIds.length) {
-    let menuIndex = normalized.findIndex((entry) => entry.type === "item" && entry.id === "settingsJumpMenu");
-    if (menuIndex < 0) {
+    const hasSettingsMenu = normalized.some((entry) => entry.type === "item" && entry.id === "settingsJumpMenu");
+    if (!hasSettingsMenu) {
       normalized.push({ type: "item", id: "settingsJumpMenu" });
       seenItems.add("settingsJumpMenu");
-      menuIndex = normalized.length - 1;
     }
-    const settingsOrder = new Map(TOPBAR_SETTINGS_SECTION_ITEM_IDS.map((id, index) => [id, index]));
-    const missing = new Set(missingSettingsIds);
-    const mergedFolded = [];
-    const appendMissingBefore = (orderLimit) => {
-      for (const id of TOPBAR_SETTINGS_SECTION_ITEM_IDS) {
-        if (!missing.has(id)) continue;
-        if (settingsOrder.get(id) >= orderLimit) continue;
-        mergedFolded.push({ type: "item", id });
-        missing.delete(id);
-        seenItems.add(id);
-      }
-    };
-    for (const item of normalized.slice(menuIndex + 1)) {
-      const order = item.type === "item" ? settingsOrder.get(item.id) : undefined;
-      if (typeof order === "number") appendMissingBefore(order);
-      mergedFolded.push(item);
-    }
-    appendMissingBefore(Number.POSITIVE_INFINITY);
-    normalized.splice(menuIndex + 1, normalized.length - menuIndex - 1, ...mergedFolded);
+    normalized.push(...missingSettingsIds.map((id) => ({ type: "item", id })));
   }
   return normalized.length ? normalized : JSON.parse(JSON.stringify(DEFAULT_TOPBAR_LAYOUT));
 }

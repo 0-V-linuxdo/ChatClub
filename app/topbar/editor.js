@@ -68,33 +68,11 @@ export function createTopbarEditor(dependencies = {}) {
     const settingsIds = topbarSettingsSectionItemIds();
     const missingSettingsIds = settingsIds.filter((id) => !existing.has(id));
     if (!missingSettingsIds.length) return normalized;
-    let menuIndex = topbarLayoutMenuIndex(normalized);
     const base = [...normalized];
-    if (menuIndex < 0) {
+    if (topbarLayoutMenuIndex(base) < 0) {
       base.push({ type: "item", id: "settingsJumpMenu" });
-      menuIndex = base.length - 1;
     }
-    const settingsOrder = new Map(settingsIds.map((id, index) => [id, index]));
-    const missingSettings = new Set(missingSettingsIds);
-    const mergedFoldedItems = [];
-    const appendMissingBefore = (orderLimit) => {
-      for (const id of settingsIds) {
-        if (!missingSettings.has(id)) continue;
-        if (settingsOrder.get(id) >= orderLimit) continue;
-        mergedFoldedItems.push({ type: "item", id });
-        missingSettings.delete(id);
-      }
-    };
-    for (const item of base.slice(menuIndex + 1)) {
-      const order = item.type === "item" ? settingsOrder.get(item.id) : undefined;
-      if (typeof order === "number") appendMissingBefore(order);
-      mergedFoldedItems.push(item);
-    }
-    appendMissingBefore(Number.POSITIVE_INFINITY);
-    return [
-      ...base.slice(0, menuIndex + 1),
-      ...mergedFoldedItems
-    ];
+    return [...base, ...missingSettingsIds.map((id) => ({ type: "item", id }))];
   }
 
   function setTopbarEditLayoutDraft(layout) {
