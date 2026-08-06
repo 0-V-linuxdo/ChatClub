@@ -6,6 +6,7 @@
   "shared/default-shortcuts.js",
   "shared/delete-completion.js",
   "shared/frame-commands.js",
+  "shared/notion-efforts.js",
   "shared/protocol.js",
   "shared/shortcuts.js",
   "shared/url-match.js"

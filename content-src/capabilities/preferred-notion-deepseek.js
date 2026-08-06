@@ -2,6 +2,7 @@ import {
   createPreferredNotionSourcesCapability,
   NOTION_ALL_SOURCES_STATES
 } from "./preferred-notion-sources.js";
+import { createPreferredNotionEffortCapability } from "./preferred-notion-effort.js";
 
 export function createPreferredNotionDeepSeekCapability(deps = {}) {
   const {
@@ -708,6 +709,28 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
     return readiness || { current: false, modelId: notionTriggerModelId(trigger) };
   }
 
+  const notionEffort = createPreferredNotionEffortCapability({
+    modelTargets: NOTION_MODEL_TARGETS,
+    menuRootSelectors: NOTION_MODEL_MENU_ROOT_SELECTORS,
+    notionText,
+    notionTextKey,
+    notionElementTextEvidence,
+    visibleSelectorElements,
+    modelElementText,
+    modelRect,
+    modelElementArea,
+    visible,
+    isDisabledElement,
+    findNotionComposerRoot,
+    isControlNearMainComposer: isNotionModelTriggerNearMainComposer,
+    assertPreferredModelRun,
+    preferredModelActivate,
+    waitForPreferredModel,
+    preferredModelSleep,
+    dismissPreferredModelMenu,
+    preferredModelResult
+  });
+
   async function notionUnavailableModelResult(context, modelId, trigger) {
     const menuClosed = await closeNotionModelMenu(context, trigger);
     return preferredModelResult(context, true, "NotionAI", modelId, "", {
@@ -810,8 +833,9 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
     isNotionControlNearMainComposer: isNotionModelTriggerNearMainComposer
   });
 
-  async function applyNotionPreferencesTransaction(context, modelId, allSourcesState, sourcesLease) {
+  async function applyNotionPreferencesTransaction(context, modelId, effortId, allSourcesState, sourcesLease) {
     let modelOutcome = null;
+    let effortOutcome = null;
     let sourceOutcome = null;
     // Keep a missing Sources control safely retryable before any model click, then
     // traverse the visible Sources UI only once after the model has settled.
@@ -827,9 +851,13 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
     }
     if (modelId) {
       modelOutcome = await applyNotionPreferredModel(context, modelId);
-      if (modelOutcome.ok !== true || modelOutcome.unavailable === true || !allSourcesState) {
+      if (modelOutcome.ok !== true || modelOutcome.unavailable === true) {
         return modelOutcome;
       }
+    }
+    if (effortId) {
+      effortOutcome = await notionEffort.applyNotionPreferredEffort(context, modelId, effortId);
+      if (effortOutcome.ok !== true) return effortOutcome;
     }
     if (allSourcesState) {
       sourceOutcome = await notionSources.applyNotionAllSourcesPreference(
@@ -840,32 +868,45 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
       );
       if (sourceOutcome.ok !== true || !modelId) return sourceOutcome;
     }
+    if (!allSourcesState && !effortId) return modelOutcome;
     if (currentNotionModelId() !== modelId) {
       return preferredModelResult(context, false, "NotionAI", modelId, "model changed while applying sources", {
-        menuClosed: sourceOutcome.menuClosed,
+        menuClosed: sourceOutcome?.menuClosed ?? effortOutcome?.menuClosed ?? modelOutcome?.menuClosed,
+        effortId,
         allSourcesState
       });
     }
     await preferredModelSleep(context, 120);
     if (currentNotionModelId() !== modelId) {
       return preferredModelResult(context, false, "NotionAI", modelId, "model was not stable after applying sources", {
-        menuClosed: sourceOutcome.menuClosed,
+        menuClosed: sourceOutcome?.menuClosed ?? effortOutcome?.menuClosed ?? modelOutcome?.menuClosed,
+        effortId,
         allSourcesState
       });
     }
-    const changed = modelOutcome?.changed === true || sourceOutcome.changed === true;
+    if (effortId && notionEffort.currentNotionEffortId() !== effortId) {
+      return preferredModelResult(context, false, "NotionAI", modelId, "effort was not stable after applying", {
+        menuClosed: sourceOutcome?.menuClosed ?? effortOutcome?.menuClosed ?? modelOutcome?.menuClosed,
+        effortId,
+        allSourcesState
+      });
+    }
+    const changed = modelOutcome?.changed === true
+      || effortOutcome?.changed === true
+      || sourceOutcome?.changed === true;
     return preferredModelResult(context, true, "NotionAI", modelId, "", {
       changed,
       skipped: !changed,
-      menuClosed: sourceOutcome.menuClosed,
+      menuClosed: sourceOutcome?.menuClosed ?? effortOutcome?.menuClosed ?? modelOutcome?.menuClosed,
+      effortId,
       allSourcesState
     });
   }
 
-  function applyNotionPreferences(context, modelId, allSourcesState) {
+  function applyNotionPreferences(context, modelId, effortId, allSourcesState) {
     return notionSources.runNotionPreferenceOperation(
       context,
-      (sourcesLease) => applyNotionPreferencesTransaction(context, modelId, allSourcesState, sourcesLease)
+      (sourcesLease) => applyNotionPreferencesTransaction(context, modelId, effortId, allSourcesState, sourcesLease)
     );
   }
 
@@ -1022,6 +1063,7 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
       "Notion AI": "NotionAI"
     })[rawAppId] || rawAppId;
     const modelId = String(data.modelId || "").trim();
+    const rawEffortId = String(data.effortId || "").trim();
     const rawAllSourcesState = String(data.allSourcesState || "").trim();
     const allSourcesState = NOTION_ALL_SOURCES_STATES.includes(rawAllSourcesState) ? rawAllSourcesState : "";
     if (!appId) return preferredModelResult(context, true, "unknown", modelId, "", { skipped: true });
@@ -1029,13 +1071,19 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
       if (rawAllSourcesState && !allSourcesState) {
         return preferredModelResult(context, false, appId, modelId, "unknown all sources state");
       }
+      if (rawEffortId && !modelId) {
+        return preferredModelResult(context, false, appId, modelId, "effort requires a model", { effortId: rawEffortId });
+      }
       if (!modelId && !allSourcesState) {
         return preferredModelResult(context, true, appId, modelId, "", { skipped: true });
       }
       if (modelId && !NOTION_MODEL_TARGETS[modelId]) {
         return preferredModelResult(context, false, appId, modelId, "unknown model");
       }
-      return applyNotionPreferences(context, modelId, allSourcesState);
+      if (rawEffortId && !notionEffort.isSupported(modelId, rawEffortId)) {
+        return preferredModelResult(context, false, appId, modelId, "unknown effort for model", { effortId: rawEffortId });
+      }
+      return applyNotionPreferences(context, modelId, rawEffortId, allSourcesState);
     }
     if (!modelId) return preferredModelResult(context, true, appId, modelId, "", { skipped: true });
     if (appId === "Gemini") return applyGeminiPreferredModel(context, modelId, { thinkingLevel: data.thinkingLevel });

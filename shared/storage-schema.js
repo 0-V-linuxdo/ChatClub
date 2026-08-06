@@ -26,6 +26,7 @@ import {
   MODEL_PREFERENCE_TARGETS,
   NOTION_ALL_SOURCES_PREFERENCE_KEY,
   NOTION_ALL_SOURCES_PREFERENCE_VALUES,
+  NOTION_EFFORT_PREFERENCE_KEY,
   PROMPT_IMAGE_PASTE_STRATEGIES,
   PROMPT_IMAGE_PASTE_STRATEGY_SEQUENTIAL,
   SCRIPT_CONFIG_SCHEMA_VERSION,
@@ -39,6 +40,7 @@ import {
   TOPBAR_PROMPT_PLACEHOLDER_MAX_COUNT,
   TOPBAR_PROMPT_PLACEHOLDER_MAX_LEN
 } from "./constants.js";
+import { normalizeNotionEffortPreferences } from "./notion-efforts.js";
 import { SUMMARY_SITE_CONFIGS } from "./summary-sites.js";
 import {
   MESSAGE_NAVIGATOR_SITE_CONFIGS,
@@ -462,6 +464,9 @@ function normalizeModelPreferences(raw = {}) {
   normalized[NOTION_ALL_SOURCES_PREFERENCE_KEY] = NOTION_ALL_SOURCES_PREFERENCE_VALUES.includes(allSourcesPreference)
     ? allSourcesPreference
     : "";
+  normalized[NOTION_EFFORT_PREFERENCE_KEY] = normalizeNotionEffortPreferences(
+    source[NOTION_EFFORT_PREFERENCE_KEY]
+  );
   return normalized;
 }
 

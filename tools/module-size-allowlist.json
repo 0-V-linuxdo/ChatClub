@@ -1,8 +1,8 @@
 {
   "app/preferred-model/controller.js": {
-    "maxLines": 1396,
+    "maxLines": 1433,
     "target": 1200,
-    "maxBytes": 57253,
+    "maxBytes": 59043,
     "targetBytes": 50000,
     "reason": "The preferred-model controller keeps one document-bound apply record across an explicitly unavailable primary or typed closed-menu Notion settlement failure and its optional secondary attempt, including fresh run correlation, navigation-generation bridge recovery, delivery-aware retry safety, queued-send readiness, failure policy handoff, per-attempt Gemini and Notion desired state, and a bootstrap gate that defers lifecycle-triggered applies until restored frames settle."
   },
@@ -35,9 +35,9 @@
     "reason": "The official-rules runtime is the single background configuration writer and keeps revision-CAS patch/import/reset handling, v3-to-v4 migration, immutable snapshot composition, signed component activation, rollback pins, alias authorization, reset cleanup journaling and startup recovery behind one serialized coordinator so atomic commit, compensation and destructive-operation fail-closed state cannot diverge across modules."
   },
   "shared/i18n.js": {
-    "maxLines": 2209,
+    "maxLines": 2215,
     "target": 1500,
-    "maxBytes": 128926,
+    "maxBytes": 129278,
     "targetBytes": 82000,
     "reason": "Bilingual translation catalog data is kept co-located for key parity; the signed official-rules update-management and component-status views, consent, check, apply-all, compatibility, rollback, per-component source, confirmation and accessibility copy join the committed-reset cleanup warning, queued-send, preferred-model, prompt-handoff and platform-management labels under exact line and byte ratchets."
   },

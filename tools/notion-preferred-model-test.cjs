@@ -113,7 +113,11 @@ function createFixture({
   abortDuringTriggerHydration = false,
   modelMenuCloseFails = false,
   itemSelectionSettles = true,
-  liveModelPicker = false
+  liveModelPicker = false,
+  effortTriggerAvailable = false,
+  effortTriggerText = "Change effort, currently low",
+  effortItemLabel = "Medium",
+  effortSelectionSettles = true
 } = {}) {
   let triggerHydrationIndex = 0;
   const state = {
@@ -128,6 +132,11 @@ function createFixture({
     distractorClicks: 0,
     composerButtonClicks: 0,
     itemClicks: 0,
+    effortTriggerClicks: 0,
+    effortItemClicks: 0,
+    effortMenuOpen: false,
+    effortTriggerText,
+    effortSelectionSettles,
     itemAvailable,
     sequence: 0,
     activeRun: null
@@ -194,6 +203,37 @@ function createFixture({
     parentElement: composer,
     box: rect(850, 720, 44, 36)
   });
+  const effortMenu = element("notion-effort-menu", {
+    attributes: { role: "menu" },
+    text: `Effort\nLow\nMedium\nHigh`,
+    box: rect(500, 420, 260, 220)
+  });
+  const effortTrigger = element("notion-effort-trigger", {
+    tagName: "DIV",
+    attributes: {
+      "data-testid": "unified-chat-reasoning-effort-button",
+      "aria-controls": "notion-effort-menu",
+      "aria-label": effortTriggerText,
+      "aria-haspopup": "dialog",
+      role: "button"
+    },
+    text: "",
+    parentElement: composer,
+    box: rect(540, 700, 44, 32)
+  });
+  const effortItem = element("target-effort-item", {
+    tagName: "BUTTON",
+    attributes: { role: "menuitem" },
+    text: effortItemLabel,
+    parentElement: effortMenu,
+    box: rect(520, 470, 220, 42)
+  });
+  const effortItemLabelNode = element("target-effort-label", {
+    tagName: "SPAN",
+    text: effortItemLabel,
+    parentElement: effortItem,
+    box: rect(536, 478, 120, 20)
+  });
   const item = element("target-model-item", {
     tagName: liveModelPicker ? "DIV" : "BUTTON",
     attributes: liveModelPicker
@@ -250,11 +290,14 @@ function createFixture({
   const selectorText = (selectors) => (Array.isArray(selectors) ? selectors : [selectors]).join(" ");
   const visible = (node) => {
     if (node === menu) return state.menuOpen;
+    if (node === effortMenu) return state.effortMenuOpen;
     if (node === unrelatedMenu) return true;
     if (node === secondOpenedMenu) return state.menuOpen;
     if (node === item || node === itemLabel || node === decorativeMarker) return state.menuOpen && state.itemAvailable;
     if (node === duplicate || node === duplicateLabel) return state.menuOpen && state.itemAvailable;
     if (node === trigger || node === secondTrigger) return triggerAvailable;
+    if (node === effortTrigger) return effortTriggerAvailable;
+    if (node === effortItem || node === effortItemLabelNode) return state.effortMenuOpen;
     return Boolean(node);
   };
   const visibleSelectorElements = (selectors, queryRoot = global.document) => {
@@ -269,15 +312,24 @@ function createFixture({
         ? [item, itemLabel, duplicate, duplicateLabel, structuralTargetDuplicateNode].filter(Boolean)
         : [];
     }
+    if (queryRoot === effortMenu) {
+      return state.effortMenuOpen ? [effortItem, effortItemLabelNode] : [];
+    }
     if (queryRoot === item) {
       return state.menuOpen && state.itemAvailable ? [decorativeMarker].filter(Boolean) : [];
     }
     if (value.includes("role=\"menu\"") || value.includes("role=\"listbox\"") || value.includes("role=\"dialog\"") || value.includes("role='menu'")) {
       return [
         state.menuOpen ? menu : null,
+        state.effortMenuOpen ? effortMenu : null,
         unrelatedMenu,
         state.menuOpen ? secondOpenedMenu : null
       ].filter(Boolean);
+    }
+    if (
+      value.includes('[data-testid="unified-chat-reasoning-effort-button"]')
+    ) {
+      return effortTriggerAvailable ? [effortTrigger] : [];
     }
     if (
       value.includes('[data-testid="agent-chat-model-button"]')
@@ -374,6 +426,20 @@ function createFixture({
           state.composerButtonClicks += 1;
           return true;
         }
+        if (target === effortTrigger) {
+          state.effortTriggerClicks += 1;
+          state.effortMenuOpen = true;
+          return true;
+        }
+        if (target === effortItem) {
+          state.effortItemClicks += 1;
+          if (effortSelectionSettles) {
+            state.effortTriggerText = `Change effort, currently ${String(effortItemLabel || "").toLowerCase()}`;
+            effortTrigger.setAttribute("aria-label", state.effortTriggerText);
+          }
+          state.effortMenuOpen = false;
+          return true;
+        }
         assert.equal(target, item, "only the exact requested Notion model row may be activated");
         state.itemClicks += 1;
         if (itemSelectionSettles) setTriggerText(targetLabel);
@@ -412,7 +478,10 @@ function createFixture({
         state.sleepCalls += 1;
       },
       async dismissPreferredModelMenu(_context, getter) {
-        if (getter() && !modelMenuCloseFails) state.menuOpen = false;
+        if (getter() && !modelMenuCloseFails) {
+          state.menuOpen = false;
+          state.effortMenuOpen = false;
+        }
         if (targetBecomesCurrentOnDismiss) setTriggerText(targetLabel);
         return !getter();
       },
@@ -1782,6 +1851,57 @@ function createSourcesFixture({
       0,
       `${modelCase.id} must use an exact current/legacy model trigger without a document-wide scan`
     );
+  }
+
+  {
+    const fixture = createFixture({
+      triggerText: "Gemini 3.1 Pro",
+      effortTriggerAvailable: true,
+      effortTriggerText: "Change effort, currently low",
+      effortItemLabel: "Medium"
+    });
+    global.document.getElementById = (id) => {
+      if (id === "model-menu" && fixture.state.menuOpen) {
+        return fixture.dependencies.visibleSelectorElements('[role="menu"]')[0];
+      }
+      if (id === "notion-effort-menu" && fixture.state.effortMenuOpen) {
+        return fixture.dependencies.visibleSelectorElements('[role="menu"]')
+          .find((node) => node.id === "notion-effort-menu") || null;
+      }
+      return null;
+    };
+    const api = createPreferredNotionDeepSeekCapability(fixture.dependencies);
+    const result = await api.runPreferredModelApply({
+      appId: "NotionAI",
+      modelId: "gemini31pro",
+      effortId: "medium",
+      runId: "notion-effort-medium"
+    });
+    assert.equal(result.ok, true, "a model-specific Effort must be selectable");
+    assert.equal(result.effortId, "medium");
+    assert.equal(result.changed, true);
+    assert.equal(fixture.state.effortTriggerClicks, 1);
+    assert.equal(fixture.state.effortItemClicks, 1);
+    assert.equal(fixture.state.itemClicks, 0, "an already-selected model must not be clicked again");
+  }
+
+  {
+    const fixture = createFixture({
+      triggerText: "Gemini 3.1 Pro",
+      effortTriggerAvailable: true
+    });
+    global.document.getElementById = () => null;
+    const api = createPreferredNotionDeepSeekCapability(fixture.dependencies);
+    const result = await api.runPreferredModelApply({
+      appId: "NotionAI",
+      modelId: "gemini31pro",
+      effortId: "max",
+      runId: "notion-effort-reject-out-of-range"
+    });
+    assert.equal(result.ok, false, "an Effort outside the selected model range must fail closed");
+    assert.match(result.reason, /unknown effort for model/);
+    assert.equal(fixture.state.effortTriggerClicks, 0);
+    assert.equal(fixture.state.effortItemClicks, 0);
   }
 
   for (const modelCase of [

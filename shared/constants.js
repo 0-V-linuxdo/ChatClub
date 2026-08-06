@@ -1,7 +1,12 @@
 import { DEFAULT_TOPBAR_LAYOUT } from "./topbar.js";
+import {
+  DEFAULT_NOTION_EFFORT_PREFERENCES,
+  NOTION_EFFORT_TARGETS,
+  notionEffortTargetsForModel
+} from "./notion-efforts.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-08-06｜21:08:55」";
+export const APP_VERSION = "「2026-08-06｜23:27:31」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -46,6 +51,7 @@ export const DEFAULT_PROMOTION_API_PROFILES = [
 
 export const GEMINI_THINKING_LEVEL_PREFERENCE_KEY = "GeminiThinkingLevel";
 export const NOTION_ALL_SOURCES_PREFERENCE_KEY = "NotionAIAllSources";
+export const NOTION_EFFORT_PREFERENCE_KEY = "NotionAIEfforts";
 
 export const GEMINI_THINKING_LEVEL_TARGETS = Object.freeze([
   Object.freeze({ id: "standard", label: "Standard" }),
@@ -59,6 +65,12 @@ export const NOTION_ALL_SOURCES_PREFERENCE_VALUES = Object.freeze([
   "enabled",
   "disabled"
 ]);
+
+export {
+  DEFAULT_NOTION_EFFORT_PREFERENCES,
+  NOTION_EFFORT_TARGETS,
+  notionEffortTargetsForModel
+};
 
 export const MODEL_PREFERENCE_TARGETS = Object.freeze({
   Gemini: Object.freeze([
@@ -121,7 +133,8 @@ export const DEFAULT_MODEL_PREFERENCES = Object.freeze(
     ...Object.fromEntries(Object.values(MODEL_PREFERENCE_SECONDARY_KEYS).map((key) => [key, ""])),
     [MODEL_PREFERENCE_SECONDARY_ENABLED_KEY]: false,
     [GEMINI_THINKING_LEVEL_PREFERENCE_KEY]: DEFAULT_GEMINI_THINKING_LEVEL,
-    [NOTION_ALL_SOURCES_PREFERENCE_KEY]: ""
+    [NOTION_ALL_SOURCES_PREFERENCE_KEY]: "",
+    [NOTION_EFFORT_PREFERENCE_KEY]: DEFAULT_NOTION_EFFORT_PREFERENCES
   }
 );
 

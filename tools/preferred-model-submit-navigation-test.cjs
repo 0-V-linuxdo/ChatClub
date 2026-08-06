@@ -607,6 +607,14 @@ const notionPreferenceContext = vm.createContext({});
 vm.runInContext(`
   const NOTION_ALL_SOURCES_PREFERENCE_KEY = "NotionAIAllSources";
   const NOTION_ALL_SOURCES_PREFERENCE_VALUES = Object.freeze(["", "enabled", "disabled"]);
+  const NOTION_EFFORT_PREFERENCE_KEY = "NotionAIEfforts";
+  const NOTION_EFFORT_TARGETS_BY_MODEL = Object.freeze({
+    gpt54: Object.freeze(["medium", "high"]),
+    fable5: Object.freeze(["low", "medium", "high", "max"])
+  });
+  function notionEffortTargetsForModel(modelId) {
+    return NOTION_EFFORT_TARGETS_BY_MODEL[String(modelId || "")] || [];
+  }
   const DEFAULT_GEMINI_THINKING_LEVEL = "standard";
   const GEMINI_THINKING_LEVEL_PREFERENCE_KEY = "GeminiThinkingLevel";
   const GEMINI_THINKING_LEVEL_TARGETS = Object.freeze([{ id: "standard" }]);
@@ -631,6 +639,7 @@ vm.runInContext(`
   ${functionSource(preferredModelSource, "preferredSecondaryModelForApp")}
   ${functionSource(preferredModelSource, "preferredGeminiThinkingLevel")}
   ${functionSource(preferredModelSource, "preferredNotionAllSourcesState")}
+  ${functionSource(preferredModelSource, "preferredNotionEffortForModel")}
   ${functionSource(preferredModelSource, "preferredModelPayloadForApp")}
   ${frameKeySource}
   globalThis.state = preferredModelState;

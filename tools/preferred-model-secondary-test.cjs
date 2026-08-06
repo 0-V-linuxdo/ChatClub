@@ -36,7 +36,8 @@ globalThis.window = {
     GEMINI_THINKING_LEVEL_PREFERENCE_KEY,
     MODEL_PREFERENCE_SECONDARY_ENABLED_KEY,
     MODEL_PREFERENCE_SECONDARY_KEYS,
-    NOTION_ALL_SOURCES_PREFERENCE_KEY
+    NOTION_ALL_SOURCES_PREFERENCE_KEY,
+    NOTION_EFFORT_PREFERENCE_KEY
   } = await import(moduleUrl("shared/constants.js"));
 
   async function runScenario({ appId = "NotionAI", preferences = {}, respond }) {
@@ -130,7 +131,8 @@ globalThis.window = {
         NotionAI: "opus47",
         [MODEL_PREFERENCE_SECONDARY_ENABLED_KEY]: true,
         [MODEL_PREFERENCE_SECONDARY_KEYS.NotionAI]: "fable5",
-        [NOTION_ALL_SOURCES_PREFERENCE_KEY]: "enabled"
+        [NOTION_ALL_SOURCES_PREFERENCE_KEY]: "enabled",
+        [NOTION_EFFORT_PREFERENCE_KEY]: { opus47: "high", fable5: "max" }
       },
       respond: (_call, index) => index === 0
         ? explicitlyUnavailable
@@ -150,6 +152,11 @@ globalThis.window = {
     assert.ok(
       outcome.calls.every((call) => call.allSourcesState === "enabled"),
       "Notion All sources desired state must survive both model attempts"
+    );
+    assert.deepEqual(
+      outcome.calls.map((call) => call.effortId),
+      ["high", "max"],
+      "each Notion model attempt must receive its own model-specific Effort"
     );
     assert.ok(
       outcome.calls.every((call) => !("secondaryModelId" in call)),

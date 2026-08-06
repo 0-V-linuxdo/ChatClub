@@ -1,6 +1,7 @@
 import {
   DEFAULT_GEMINI_THINKING_LEVEL,
   DEFAULT_MODEL_PREFERENCE_ORDER,
+  DEFAULT_NOTION_EFFORT_PREFERENCES,
   DEFAULT_OPTIONS,
   GEMINI_THINKING_LEVEL_PREFERENCE_KEY,
   GEMINI_THINKING_LEVEL_TARGETS,
@@ -10,7 +11,10 @@ import {
   MODEL_PREFERENCE_SECONDARY_KEYS,
   MODEL_PREFERENCE_TARGETS,
   NOTION_ALL_SOURCES_PREFERENCE_KEY,
-  NOTION_ALL_SOURCES_PREFERENCE_VALUES
+  NOTION_ALL_SOURCES_PREFERENCE_VALUES,
+  NOTION_EFFORT_PREFERENCE_KEY,
+  NOTION_EFFORT_TARGETS,
+  notionEffortTargetsForModel
 } from "../../shared/constants.js";
 import { t } from "../../shared/i18n.js";
 import {
@@ -422,6 +426,53 @@ export function createModelsSettingsSection(ctx) {
     });
   }
 
+  function notionEffortPreferenceOptions(modelId) {
+    return [
+      { value: "", label: t("modelPreferences.none") },
+      ...notionEffortTargetsForModel(modelId).map((effortId) => ({
+        value: effortId,
+        label: NOTION_EFFORT_TARGETS[effortId]?.label || effortId
+      }))
+    ];
+  }
+
+  function notionEffortPreferenceField(modelId, slot) {
+    const config = draft();
+    const effortMap = {
+      ...DEFAULT_NOTION_EFFORT_PREFERENCES,
+      ...(config[NOTION_EFFORT_PREFERENCE_KEY] || {})
+    };
+    const effortIds = notionEffortTargetsForModel(modelId);
+    const value = effortIds.includes(effortMap[modelId]) ? effortMap[modelId] : "";
+    const control = select(value, notionEffortPreferenceOptions(modelId), {
+      class: "select model-preference-effort-select",
+      "aria-label": t("modelPreferences.effortFor", {
+        model: modelId ? (MODEL_PREFERENCE_TARGETS.NotionAI.find((target) => target.id === modelId)?.label || modelId) : t("modelPreferences.none")
+      }),
+      disabled: !modelId || effortIds.length === 0,
+      title: modelId && effortIds.length === 0 ? t("modelPreferences.effortUnavailable") : "",
+      dataset: {
+        modelPreferenceEffortSelectModelId: modelId,
+        modelPreferenceEffortSelectSlot: slot
+      }
+    });
+    control.value = value;
+    control.addEventListener("change", () => {
+      if (!modelId || !effortIds.includes(control.value) && control.value !== "") return;
+      const nextEfforts = {
+        ...DEFAULT_NOTION_EFFORT_PREFERENCES,
+        ...(draft()[NOTION_EFFORT_PREFERENCE_KEY] || {}),
+        [modelId]: control.value
+      };
+      queueAutoSave({ ...draft(), [NOTION_EFFORT_PREFERENCE_KEY]: nextEfforts });
+    });
+    return modelPreferenceRowField(
+      t("modelPreferences.effort"),
+      control,
+      `model-preference-effort-field model-preference-effort-${slot}-field`
+    );
+  }
+
   function additionalPreferenceField(appId) {
     if (appId === "Gemini") {
       return el("div", {
@@ -490,6 +541,7 @@ export function createModelsSettingsSection(ctx) {
     });
 
     let secondaryField = null;
+    let secondaryEffortField = null;
     if (secondaryModelsEnabled()) {
       const secondaryModelId = config[secondaryKey] === primaryModelId ? "" : config[secondaryKey] || "";
       const secondarySelect = select(
@@ -506,12 +558,14 @@ export function createModelsSettingsSection(ctx) {
       secondarySelect.value = secondaryModelId;
       secondarySelect.addEventListener("change", () => {
         queueAutoSave({ ...draft(), [secondaryKey]: secondarySelect.value });
+        redraw();
       });
       secondaryField = modelPreferenceRowField(
         t("modelPreferences.secondaryModel"),
         secondarySelect,
         "model-preference-secondary-field"
       );
+      if (appId === "NotionAI") secondaryEffortField = notionEffortPreferenceField(secondaryModelId, "secondary");
     }
 
     return el("div", { class: "model-preference-row-models" },
@@ -520,7 +574,9 @@ export function createModelsSettingsSection(ctx) {
         primarySelect,
         "model-preference-model-field"
       ),
-      secondaryField
+      appId === "NotionAI" ? notionEffortPreferenceField(primaryModelId, "primary") : null,
+      secondaryField,
+      secondaryEffortField
     );
   }
 

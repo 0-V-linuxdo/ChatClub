@@ -170,7 +170,8 @@ globalThis.document = {
     MODEL_PREFERENCE_SECONDARY_ENABLED_KEY,
     MODEL_PREFERENCE_SECONDARY_KEYS,
     MODEL_PREFERENCE_TARGETS,
-    NOTION_ALL_SOURCES_PREFERENCE_KEY
+    NOTION_ALL_SOURCES_PREFERENCE_KEY,
+    NOTION_EFFORT_PREFERENCE_KEY
   } = await import(moduleUrl("shared/constants.js"));
   const { dehydrateOptions, normalizeOptions } = await import(moduleUrl("shared/storage-schema.js"));
   const rootState = stateModule.createAppState();
@@ -461,10 +462,21 @@ globalThis.document = {
     "failure overrides must render in the failure-policy block, not the draggable model rows"
   );
   const renderedSelects = findNodes(pane, (node) => node.tagName === "SELECT");
-  assert.equal(renderedSelects.length, 4, "the preferred tab must keep exactly four model dropdowns");
+  assert.equal(renderedSelects.length, 5, "the preferred tab must keep four model dropdowns plus Notion Effort");
   assert.ok(
     renderedSelects.every((node) => Boolean(node.getAttribute("aria-label")?.trim())),
     "every preferred-model select must have an explicit accessible name"
+  );
+  const initialNotionEffort = findNode(
+    pane,
+    (node) => node.dataset?.modelPreferenceEffortSelectSlot === "primary"
+  );
+  assert.ok(initialNotionEffort, "Notion AI must expose a primary Effort selector");
+  assert.equal(initialNotionEffort.getAttribute("disabled"), "", "Effort must stay disabled until a model is selected");
+  assert.deepEqual(
+    initialNotionEffort.children.map((node) => node.getAttribute("value")),
+    [""],
+    "a model without Effort configuration must expose only the no-preference option"
   );
 
   secondaryToggle.checked = true;
@@ -543,6 +555,35 @@ globalThis.document = {
     "fable5",
     "a Settings redraw must retain the saved secondary model"
   );
+  saves.splice(0);
+  const configuredPrimaryEffort = findNode(
+    configuredPane,
+    (node) => node.dataset?.modelPreferenceEffortSelectSlot === "primary"
+  );
+  const configuredSecondaryEffort = findNode(
+    configuredPane,
+    (node) => node.dataset?.modelPreferenceEffortSelectSlot === "secondary"
+  );
+  assert.deepEqual(
+    configuredPrimaryEffort.children.map((node) => node.getAttribute("value")),
+    ["", "none", "low", "medium", "high", "max"],
+    "the selected primary model must expose its own Effort range"
+  );
+  assert.deepEqual(
+    configuredSecondaryEffort.children.map((node) => node.getAttribute("value")),
+    ["", "low", "medium", "high", "max"],
+    "the selected secondary model must expose its own Effort range"
+  );
+  configuredPrimaryEffort.value = "high";
+  configuredPrimaryEffort.dispatch("change");
+  assert.equal(saves.length, 1, "choosing a Notion Effort must start an autosave");
+  assert.equal(
+    saves[0].patch.modelPreferences[NOTION_EFFORT_PREFERENCE_KEY].opus47,
+    "high",
+    "Notion Effort must persist by model id"
+  );
+  saves[0].gate.resolve();
+  await waitUntil(() => !section.autosaveBusy(), "Notion Effort autosave did not settle");
   saves.splice(0);
 
   thinkingLevelRadios.forEach((node) => { node.checked = node.value === "extended"; });
@@ -889,6 +930,11 @@ globalThis.document = {
     "Thinking level must survive dehydration, serialization, and normalization"
   );
   assert.equal(
+    rehydratedOptions.modelPreferences[NOTION_EFFORT_PREFERENCE_KEY].opus47,
+    "",
+    "Clear must reset every stored Notion Effort preference"
+  );
+  assert.equal(
     normalizeOptions({
       ...storedOptions,
       modelPreferences: {
@@ -898,6 +944,28 @@ globalThis.document = {
     }).modelPreferences[NOTION_ALL_SOURCES_PREFERENCE_KEY],
     "",
     "unknown All sources values must normalize to no preference"
+  );
+  assert.equal(
+    normalizeOptions({
+      ...storedOptions,
+      modelPreferences: {
+        ...storedOptions.modelPreferences,
+        [NOTION_EFFORT_PREFERENCE_KEY]: { opus47: "xhigh" }
+      }
+    }).modelPreferences[NOTION_EFFORT_PREFERENCE_KEY].opus47,
+    "",
+    "an Effort outside the selected model range must normalize to no preference"
+  );
+  assert.equal(
+    normalizeOptions({
+      ...storedOptions,
+      modelPreferences: {
+        ...storedOptions.modelPreferences,
+        [NOTION_EFFORT_PREFERENCE_KEY]: { opus47: "high" }
+      }
+    }).modelPreferences[NOTION_EFFORT_PREFERENCE_KEY].opus47,
+    "high",
+    "a valid Effort must survive normalization for its selected model"
   );
   const normalizedSecondary = normalizeOptions({
     ...storedOptions,

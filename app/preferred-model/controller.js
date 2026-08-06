@@ -6,7 +6,10 @@ import {
   MODEL_PREFERENCE_SECONDARY_KEYS,
   MODEL_PREFERENCE_TARGETS,
   NOTION_ALL_SOURCES_PREFERENCE_KEY,
-  NOTION_ALL_SOURCES_PREFERENCE_VALUES
+  NOTION_ALL_SOURCES_PREFERENCE_VALUES,
+  NOTION_EFFORT_PREFERENCE_KEY,
+  NOTION_EFFORT_TARGETS,
+  notionEffortTargetsForModel
 } from "../../shared/constants.js";
 import { t } from "../../shared/i18n.js";
 import { createId } from "../../shared/storage-schema.js";
@@ -120,6 +123,15 @@ export function createPreferredModelController(dependencies = {}) {
     return NOTION_ALL_SOURCES_PREFERENCE_VALUES.includes(value) ? value : "";
   }
 
+  function preferredNotionEffortForModel(modelId) {
+    const preferences = preferredModelState.modelPreferenceDraft || preferredModelState.options?.modelPreferences || {};
+    const effortPreferences = preferences[NOTION_EFFORT_PREFERENCE_KEY];
+    const value = effortPreferences && typeof effortPreferences === "object" && !Array.isArray(effortPreferences)
+      ? String(effortPreferences[modelId] || "")
+      : "";
+    return notionEffortTargetsForModel(modelId).includes(value) ? value : "";
+  }
+
   function preferredModelApplyTimeoutMs(payload = {}) {
     return payload.appId === "NotionAI" && payload.allSourcesState
       ? NOTION_ALL_SOURCES_APPLY_TIMEOUT_MS
@@ -131,11 +143,17 @@ export function createPreferredModelController(dependencies = {}) {
     const modelId = preferredModelForApp(app);
     const secondaryModelId = modelId ? preferredSecondaryModelForApp(app, modelId) : "";
     const allSourcesState = appId === "NotionAI" ? preferredNotionAllSourcesState() : "";
+    const effortId = appId === "NotionAI" && modelId ? preferredNotionEffortForModel(modelId) : "";
+    const secondaryEffortId = appId === "NotionAI" && secondaryModelId
+      ? preferredNotionEffortForModel(secondaryModelId)
+      : "";
     if (!modelId && !allSourcesState) return null;
     return {
       appId,
       modelId,
       ...(secondaryModelId ? { secondaryModelId } : {}),
+      ...(effortId ? { effortId } : {}),
+      ...(secondaryEffortId ? { secondaryEffortId } : {}),
       ...(appId === "Gemini" && (modelId === "pro" || secondaryModelId === "pro")
         ? { thinkingLevel: preferredGeminiThinkingLevel() }
         : {}),
@@ -150,6 +168,19 @@ export function createPreferredModelController(dependencies = {}) {
       ...(runId ? { runId: String(runId) } : {})
     };
     delete attempt.secondaryModelId;
+    const requestedEffortId = attempt.appId === "NotionAI"
+      ? modelId === payload.modelId
+        ? payload.effortId
+        : modelId === payload.secondaryModelId
+          ? payload.secondaryEffortId
+          : ""
+      : "";
+    delete attempt.secondaryEffortId;
+    if (attempt.appId === "NotionAI" && attempt.modelId && requestedEffortId) {
+      attempt.effortId = requestedEffortId;
+    } else {
+      delete attempt.effortId;
+    }
     if (attempt.appId !== "Gemini" || attempt.modelId !== "pro") delete attempt.thinkingLevel;
     return attempt;
   }
@@ -179,6 +210,10 @@ export function createPreferredModelController(dependencies = {}) {
       );
       const sourceLabel = t("modelPreferences.allSources") + " · " + sourceStateLabel;
       label = payload.modelId ? label + " · " + sourceLabel : sourceLabel;
+    }
+    if (payload.appId === "NotionAI" && payload.effortId) {
+      const effort = NOTION_EFFORT_TARGETS[payload.effortId];
+      if (effort?.label) label += " · Effort: " + effort.label;
     }
     return label;
   }
@@ -520,9 +555,11 @@ export function createPreferredModelController(dependencies = {}) {
     if (!payload) return "";
     const thinkingLevel = payload.thinkingLevel ? ":" + payload.thinkingLevel : "";
     const secondaryModel = payload.secondaryModelId ? ":secondary=" + payload.secondaryModelId : "";
+    const effortId = payload.effortId ? ":effort=" + payload.effortId : "";
+    const secondaryEffortId = payload.secondaryEffortId ? ":secondary-effort=" + payload.secondaryEffortId : "";
     const allSourcesState = payload.allSourcesState ? ":sources=" + payload.allSourcesState : "";
     const documentId = String(iframe.dataset.preferredModelDocumentId || "");
-    return payload.appId + ":" + payload.modelId + thinkingLevel + secondaryModel + allSourcesState + ":" + documentId;
+    return payload.appId + ":" + payload.modelId + thinkingLevel + secondaryModel + effortId + secondaryEffortId + allSourcesState + ":" + documentId;
   }
 
   function preferredModelSubmissionRouteState(appId, value) {
