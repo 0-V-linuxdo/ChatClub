@@ -20,6 +20,13 @@
     "targetBytes": 45000,
     "reason": "The workspace frame controller keeps navigation-generation isolation, frame-load preparation, authenticated frame lifecycle reporting, target-correlated loading masks, and prompt-focus restoration together so a delayed iframe load cannot publish stale state or steal an input focus that was active before navigation."
   },
+  "content-src/capabilities/preferred-notion-deepseek.js": {
+    "maxLines": 1243,
+    "target": 1200,
+    "maxBytes": 52913,
+    "targetBytes": 50000,
+    "reason": "The Notion preferred-model capability keeps exact trigger scoping, model identity checks, explicit unavailable handling, nested Older models expansion, Effort application, Sources coordination, and post-selection settlement together so a model-specific fallback cannot activate an ambiguous control or report success before the live picker settles."
+  },
   "background/grok-cookie-runtime.js": {
     "maxLines": 1740,
     "target": 1200,

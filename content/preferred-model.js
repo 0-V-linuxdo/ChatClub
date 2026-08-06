@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "873ce11329da897e2be26309b7c9bef6a4c6fa9e07c773cad6025e08587334a5";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "83ba325b7f247b16f44dc735489f4c268180b378b5564cb574064325c89f737d";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "6a24914a6062c204823c6c96dd5a283fd1026328d13038dc196931ebcb07cc0f";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.6a24914a6062c204823c6c96dd5a283fd1026328d13038dc196931ebcb07cc0f";
-  var CONTENT_RUNTIME_PREFERRED_MODEL_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preferred-model.js", "entryPath": "content-src/content-preferred-model.js", "sourceSha256": "b3a4bd206279a569d99b96a85148ca554adb66631542671e5154c48a184ff132", "implementationSha256": "14a8d93316a9fc3cf73eb641d089e2e82bb0c3f7ae30bd24a97961df2da5b4de", "implementationVersion": "2026.07.16.2+bundle.14a8d93316a9fc3cf73eb641d089e2e82bb0c3f7ae30bd24a97961df2da5b4de" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "e4b5e5ae9cf5df4f02231f7cf3dbd5e054d36c684d5e825762d84946b298b798";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.e4b5e5ae9cf5df4f02231f7cf3dbd5e054d36c684d5e825762d84946b298b798";
+  var CONTENT_RUNTIME_PREFERRED_MODEL_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preferred-model.js", "entryPath": "content-src/content-preferred-model.js", "sourceSha256": "f0a5a75b27d20db5184c01659a040c39d983e9a851a447822c5fff2a7cef30bd", "implementationSha256": "a86a896fe9f3cbc33accb7d974a8af90efc26cd068b649cbe017037b1788d5f8", "implementationVersion": "2026.07.16.2+bundle.a86a896fe9f3cbc33accb7d974a8af90efc26cd068b649cbe017037b1788d5f8" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -3804,6 +3804,11 @@
       "button",
       '[tabindex]:not([tabindex="-1"])'
     ]);
+    const NOTION_OLDER_MODEL_SECTION_LABELS = Object.freeze([
+      "Older models",
+      "旧模型",
+      "旧版模型"
+    ]);
     const notionOwnedMenuRoots = /* @__PURE__ */ new WeakMap();
     function notionText(value) {
       return normalize2(value).toLowerCase().replace(/\s+/g, " ");
@@ -3872,6 +3877,11 @@
     }
     function notionModelIdsFromElement(element) {
       return notionModelIdsFromEvidence(notionElementTextEvidence(element));
+    }
+    function notionElementMatchesExactLabels(element, labels) {
+      const labelKeys = new Set((labels || []).map(notionTextKey).filter(Boolean));
+      if (!element || labelKeys.size === 0) return false;
+      return notionElementTextEvidence(element).some((evidence) => labelKeys.has(notionTextKey(evidence)));
     }
     function notionElementLooksLikeTarget(element, target) {
       if (!element || !target) return false;
@@ -4172,6 +4182,55 @@
       const rows = notionModelItemRows(root, modelId, { allowDisabled: true });
       return rows.length === 1 && notionModelRowIsDisabled(rows[0], root) ? rows[0] : null;
     }
+    function notionModelSearchRoots(root) {
+      const roots = [root, ...notionModelMenuRoots()];
+      const seen = /* @__PURE__ */ new Set();
+      return roots.filter((candidate) => {
+        if (!candidate || seen.has(candidate) || !visible2(candidate)) return false;
+        seen.add(candidate);
+        return true;
+      });
+    }
+    function findNotionModelItemAcrossRoots(root, modelId) {
+      const matches2 = [];
+      const seenItems = /* @__PURE__ */ new Set();
+      for (const candidate of notionModelSearchRoots(root)) {
+        const item = findNotionModelItem(candidate, modelId);
+        if (!item || seenItems.has(item)) continue;
+        seenItems.add(item);
+        matches2.push({ item, root: candidate });
+      }
+      return matches2.length === 1 ? matches2[0] : null;
+    }
+    function findNotionExactUnavailableModelItemAcrossRoots(root, modelId) {
+      const matches2 = [];
+      const seenItems = /* @__PURE__ */ new Set();
+      for (const candidate of notionModelSearchRoots(root)) {
+        const item = findNotionExactUnavailableModelItem(candidate, modelId);
+        if (!item || seenItems.has(item)) continue;
+        seenItems.add(item);
+        matches2.push({ item, root: candidate });
+      }
+      return matches2.length === 1 ? matches2[0] : null;
+    }
+    function findNotionOlderModelSection(root) {
+      const candidates = visibleSelectorElements(NOTION_MODEL_MENU_ITEM_SELECTORS, root).filter((element) => notionElementMatchesExactLabels(element, NOTION_OLDER_MODEL_SECTION_LABELS));
+      return candidates.length === 1 ? candidates[0] : null;
+    }
+    async function expandNotionOlderModelSection(context, root, modelId) {
+      assertPreferredModelRun(context);
+      if (findNotionModelItemAcrossRoots(root, modelId)) return true;
+      const section = findNotionOlderModelSection(root);
+      if (!section) return false;
+      const pointerActivate = typeof preferredModelPointerActivate === "function" ? preferredModelPointerActivate : preferredModelActivate;
+      if (!pointerActivate(context, section)) return false;
+      return Boolean(await waitForPreferredModel(
+        context,
+        () => findNotionModelItemAcrossRoots(root, modelId) || notionElementMatchesExactLabels(section, NOTION_OLDER_MODEL_SECTION_LABELS) && String(section.getAttribute?.("aria-expanded") || "").trim().toLowerCase() === "true",
+        NOTION_MODEL_ITEM_READY_WAIT_MS,
+        80
+      ));
+    }
     function notionElementHasSelectedState(element) {
       if (!element) return false;
       for (const attr of ["aria-checked", "aria-selected", "aria-current", "aria-pressed", "data-state", "data-selected", "data-active", "data-checked"]) {
@@ -4271,8 +4330,8 @@
       return waitForPreferredModel(context, () => {
         if (currentNotionModelId(trigger) === modelId) return { current: true, item: null };
         const activeRoot = notionModelMenuRoot(trigger);
-        const item = findNotionModelItem(activeRoot, modelId);
-        return item ? { current: false, item } : null;
+        const match = findNotionModelItemAcrossRoots(activeRoot, modelId);
+        return match ? { current: false, item: match.item } : null;
       }, NOTION_MODEL_ITEM_READY_WAIT_MS, 80);
     }
     function notionTriggerModelId(trigger) {
@@ -4359,8 +4418,11 @@
         const menuClosed2 = await closeNotionModelMenu(context, trigger);
         return preferredModelResult(context, true, "NotionAI", modelId, "", { skipped: true, menuClosed: menuClosed2 });
       }
-      const immediateItem = findNotionModelItem(root, modelId);
-      const immediateUnavailableItem = immediateItem ? null : findNotionExactUnavailableModelItem(root, modelId);
+      let immediateMatch = findNotionModelItemAcrossRoots(root, modelId);
+      if (!immediateMatch) await expandNotionOlderModelSection(context, root, modelId);
+      immediateMatch = immediateMatch || findNotionModelItemAcrossRoots(root, modelId);
+      const immediateItem = immediateMatch?.item || null;
+      const immediateUnavailableItem = immediateItem ? null : findNotionExactUnavailableModelItemAcrossRoots(root, modelId)?.item || null;
       if (immediateUnavailableItem) {
         return notionUnavailableModelResult(context, modelId, trigger);
       }
@@ -4371,7 +4433,7 @@
       }
       const item = readiness?.item || null;
       if (!item) {
-        const unavailableItem = findNotionExactUnavailableModelItem(notionModelMenuRoot(trigger), modelId);
+        const unavailableItem = findNotionExactUnavailableModelItemAcrossRoots(notionModelMenuRoot(trigger), modelId)?.item || null;
         if (unavailableItem) {
           return notionUnavailableModelResult(context, modelId, trigger);
         }

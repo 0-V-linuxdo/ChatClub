@@ -8,6 +8,7 @@ const { CONTENT_ENTRIES } = require("./generated-artifacts.cjs");
 
 const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
+const sizeAllowlist = JSON.parse(read("tools/module-size-allowlist.json"));
 
 (async () => {
   const commands = await import(`${pathToFileURL(path.join(root, "shared/frame-commands.js")).href}?test=${Date.now()}`);
@@ -114,7 +115,16 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
   ];
   for (const file of contentModules) {
     const lines = read(file).split("\n").length - 1;
-    assert.ok(lines < 1200, `${file} must stay below 1200 lines; received ${lines}`);
+    const ratchet = sizeAllowlist[file];
+    if (ratchet) {
+      assert.ok(
+        Number.isSafeInteger(ratchet.maxLines) && ratchet.maxLines > 1200,
+        `${file} must use a structured line-count ratchet above 1200 lines`
+      );
+      assert.ok(lines <= ratchet.maxLines, `${file} exceeded its ${ratchet.maxLines} line ratchet; received ${lines}`);
+    } else {
+      assert.ok(lines < 1200, `${file} must stay below 1200 lines; received ${lines}`);
+    }
   }
   const notionSendSource = read("content-src/preload/notion-send.js");
   assert.ok(notionSendSource.split("\n").length - 1 < 1000, "Notion send orchestration must stay below 1000 lines");

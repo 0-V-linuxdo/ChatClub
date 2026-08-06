@@ -107,6 +107,11 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
     "button",
     '[tabindex]:not([tabindex="-1"])'
   ]);
+  const NOTION_OLDER_MODEL_SECTION_LABELS = Object.freeze([
+    "Older models",
+    "旧模型",
+    "旧版模型"
+  ]);
   const notionOwnedMenuRoots = new WeakMap();
   function notionText(value) {
     return normalize(value).toLowerCase().replace(/\s+/g, " ");
@@ -183,6 +188,12 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
 
   function notionModelIdsFromElement(element) {
     return notionModelIdsFromEvidence(notionElementTextEvidence(element));
+  }
+
+  function notionElementMatchesExactLabels(element, labels) {
+    const labelKeys = new Set((labels || []).map(notionTextKey).filter(Boolean));
+    if (!element || labelKeys.size === 0) return false;
+    return notionElementTextEvidence(element).some((evidence) => labelKeys.has(notionTextKey(evidence)));
   }
 
   function notionElementLooksLikeTarget(element, target) {
@@ -564,6 +575,65 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
     return rows.length === 1 && notionModelRowIsDisabled(rows[0], root) ? rows[0] : null;
   }
 
+  function notionModelSearchRoots(root) {
+    const roots = [root, ...notionModelMenuRoots()];
+    const seen = new Set();
+    return roots.filter((candidate) => {
+      if (!candidate || seen.has(candidate) || !visible(candidate)) return false;
+      seen.add(candidate);
+      return true;
+    });
+  }
+
+  function findNotionModelItemAcrossRoots(root, modelId) {
+    const matches = [];
+    const seenItems = new Set();
+    for (const candidate of notionModelSearchRoots(root)) {
+      const item = findNotionModelItem(candidate, modelId);
+      if (!item || seenItems.has(item)) continue;
+      seenItems.add(item);
+      matches.push({ item, root: candidate });
+    }
+    return matches.length === 1 ? matches[0] : null;
+  }
+
+  function findNotionExactUnavailableModelItemAcrossRoots(root, modelId) {
+    const matches = [];
+    const seenItems = new Set();
+    for (const candidate of notionModelSearchRoots(root)) {
+      const item = findNotionExactUnavailableModelItem(candidate, modelId);
+      if (!item || seenItems.has(item)) continue;
+      seenItems.add(item);
+      matches.push({ item, root: candidate });
+    }
+    return matches.length === 1 ? matches[0] : null;
+  }
+
+  function findNotionOlderModelSection(root) {
+    const candidates = visibleSelectorElements(NOTION_MODEL_MENU_ITEM_SELECTORS, root)
+      .filter((element) => notionElementMatchesExactLabels(element, NOTION_OLDER_MODEL_SECTION_LABELS));
+    return candidates.length === 1 ? candidates[0] : null;
+  }
+
+  async function expandNotionOlderModelSection(context, root, modelId) {
+    assertPreferredModelRun(context);
+    if (findNotionModelItemAcrossRoots(root, modelId)) return true;
+    const section = findNotionOlderModelSection(root);
+    if (!section) return false;
+    const pointerActivate = typeof preferredModelPointerActivate === "function"
+      ? preferredModelPointerActivate
+      : preferredModelActivate;
+    if (!pointerActivate(context, section)) return false;
+    return Boolean(await waitForPreferredModel(
+      context,
+      () => findNotionModelItemAcrossRoots(root, modelId)
+        || notionElementMatchesExactLabels(section, NOTION_OLDER_MODEL_SECTION_LABELS)
+          && String(section.getAttribute?.("aria-expanded") || "").trim().toLowerCase() === "true",
+      NOTION_MODEL_ITEM_READY_WAIT_MS,
+      80
+    ));
+  }
+
   function notionElementHasSelectedState(element) {
     if (!element) return false;
     for (const attr of ["aria-checked", "aria-selected", "aria-current", "aria-pressed", "data-state", "data-selected", "data-active", "data-checked"]) {
@@ -671,8 +741,8 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
     return waitForPreferredModel(context, () => {
       if (currentNotionModelId(trigger) === modelId) return { current: true, item: null };
       const activeRoot = notionModelMenuRoot(trigger);
-      const item = findNotionModelItem(activeRoot, modelId);
-      return item ? { current: false, item } : null;
+      const match = findNotionModelItemAcrossRoots(activeRoot, modelId);
+      return match ? { current: false, item: match.item } : null;
     }, NOTION_MODEL_ITEM_READY_WAIT_MS, 80);
   }
 
@@ -768,10 +838,13 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
       const menuClosed = await closeNotionModelMenu(context, trigger);
       return preferredModelResult(context, true, "NotionAI", modelId, "", { skipped: true, menuClosed });
     }
-    const immediateItem = findNotionModelItem(root, modelId);
+    let immediateMatch = findNotionModelItemAcrossRoots(root, modelId);
+    if (!immediateMatch) await expandNotionOlderModelSection(context, root, modelId);
+    immediateMatch = immediateMatch || findNotionModelItemAcrossRoots(root, modelId);
+    const immediateItem = immediateMatch?.item || null;
     const immediateUnavailableItem = immediateItem
       ? null
-      : findNotionExactUnavailableModelItem(root, modelId);
+      : findNotionExactUnavailableModelItemAcrossRoots(root, modelId)?.item || null;
     if (immediateUnavailableItem) {
       return notionUnavailableModelResult(context, modelId, trigger);
     }
@@ -784,7 +857,7 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
     }
     const item = readiness?.item || null;
     if (!item) {
-      const unavailableItem = findNotionExactUnavailableModelItem(notionModelMenuRoot(trigger), modelId);
+      const unavailableItem = findNotionExactUnavailableModelItemAcrossRoots(notionModelMenuRoot(trigger), modelId)?.item || null;
       if (unavailableItem) {
         return notionUnavailableModelResult(context, modelId, trigger);
       }

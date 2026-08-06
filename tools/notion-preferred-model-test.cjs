@@ -117,7 +117,8 @@ function createFixture({
   effortTriggerAvailable = false,
   effortTriggerText = "Change effort, currently low",
   effortItemLabel = "Medium",
-  effortSelectionSettles = true
+  effortSelectionSettles = true,
+  olderModelsCollapsed = false
 } = {}) {
   let triggerHydrationIndex = 0;
   const state = {
@@ -138,14 +139,16 @@ function createFixture({
     effortTriggerText,
     effortSelectionSettles,
     itemAvailable,
+    olderModelsExpanded: !olderModelsCollapsed,
+    olderModelsClicks: 0,
     sequence: 0,
     activeRun: null
   };
   const menu = element("model-menu", {
     attributes: { role: liveModelPicker ? "dialog" : "menu" },
     text: liveModelPicker
-      ? `Auto\nFor your hardest tasks\n${targetLabel}`
-      : `Select a model\nAuto\n${targetLabel}`,
+      ? `Auto\nFor your hardest tasks\n${olderModelsCollapsed ? "Older models" : targetLabel}`
+      : `Select a model\nAuto\n${olderModelsCollapsed ? "Older models" : targetLabel}`,
     box: rect(620, 300, 320, 360)
   });
   const trigger = element("model-trigger", {
@@ -234,6 +237,19 @@ function createFixture({
     parentElement: effortItem,
     box: rect(536, 478, 120, 20)
   });
+  const olderModelsItem = olderModelsCollapsed ? element("older-models-item", {
+    tagName: "DIV",
+    attributes: { role: "menuitem", tabindex: "-1", "aria-haspopup": "dialog" },
+    text: "Older models",
+    parentElement: menu,
+    box: rect(640, 380, 280, 40)
+  }) : null;
+  if (olderModelsItem) {
+    const originalGetAttribute = olderModelsItem.getAttribute.bind(olderModelsItem);
+    olderModelsItem.getAttribute = (name) => name === "aria-expanded"
+      ? String(Boolean(state.olderModelsExpanded))
+      : originalGetAttribute(name);
+  }
   const item = element("target-model-item", {
     tagName: liveModelPicker ? "DIV" : "BUTTON",
     attributes: liveModelPicker
@@ -293,8 +309,13 @@ function createFixture({
     if (node === effortMenu) return state.effortMenuOpen;
     if (node === unrelatedMenu) return true;
     if (node === secondOpenedMenu) return state.menuOpen;
-    if (node === item || node === itemLabel || node === decorativeMarker) return state.menuOpen && state.itemAvailable;
-    if (node === duplicate || node === duplicateLabel) return state.menuOpen && state.itemAvailable;
+    if (node === olderModelsItem) return state.menuOpen;
+    if (node === item || node === itemLabel || node === decorativeMarker) {
+      return state.menuOpen && state.itemAvailable && (!olderModelsCollapsed || state.olderModelsExpanded);
+    }
+    if (node === duplicate || node === duplicateLabel) {
+      return state.menuOpen && state.itemAvailable && (!olderModelsCollapsed || state.olderModelsExpanded);
+    }
     if (node === trigger || node === secondTrigger) return triggerAvailable;
     if (node === effortTrigger) return effortTriggerAvailable;
     if (node === effortItem || node === effortItemLabelNode) return state.effortMenuOpen;
@@ -308,8 +329,9 @@ function createFixture({
       state.modelTriggerSelectorScans += 1;
     }
     if (queryRoot === menu) {
-      return state.menuOpen && state.itemAvailable
-        ? [item, itemLabel, duplicate, duplicateLabel, structuralTargetDuplicateNode].filter(Boolean)
+      return state.menuOpen
+        ? [olderModelsItem, item, itemLabel, duplicate, duplicateLabel, structuralTargetDuplicateNode]
+          .filter((node) => node && visible(node))
         : [];
     }
     if (queryRoot === effortMenu) {
@@ -397,6 +419,50 @@ function createFixture({
     error.preferredModelCancelled = true;
     throw error;
   };
+  const preferredModelActivate = (context, target) => {
+    assertPreferredModelRun(context);
+    context.interactionCount += 1;
+    if (target === trigger) {
+      state.triggerClicks += 1;
+      state.menuOpen = true;
+      return true;
+    }
+    if (target === secondTrigger) {
+      throw new Error("an ambiguous second exact Notion model trigger must never be activated");
+    }
+    if (target === distractor) {
+      state.distractorClicks += 1;
+      return true;
+    }
+    if (target === composerButton) {
+      state.composerButtonClicks += 1;
+      return true;
+    }
+    if (target === olderModelsItem) {
+      state.olderModelsClicks += 1;
+      state.olderModelsExpanded = true;
+      return true;
+    }
+    if (target === effortTrigger) {
+      state.effortTriggerClicks += 1;
+      state.effortMenuOpen = true;
+      return true;
+    }
+    if (target === effortItem) {
+      state.effortItemClicks += 1;
+      if (effortSelectionSettles) {
+        state.effortTriggerText = `Change effort, currently ${String(effortItemLabel || "").toLowerCase()}`;
+        effortTrigger.setAttribute("aria-label", state.effortTriggerText);
+      }
+      state.effortMenuOpen = false;
+      return true;
+    }
+    assert.equal(target, item, "only the exact requested Notion model row may be activated");
+    state.itemClicks += 1;
+    if (itemSelectionSettles) setTriggerText(targetLabel);
+    state.menuOpen = false;
+    return true;
+  };
   return {
     state,
     dependencies: {
@@ -407,45 +473,8 @@ function createFixture({
       visible,
       isDisabledElement: (node) => itemDisabled && (node === item || node === duplicate),
       assertPreferredModelRun,
-      preferredModelActivate(context, target) {
-        assertPreferredModelRun(context);
-        context.interactionCount += 1;
-        if (target === trigger) {
-          state.triggerClicks += 1;
-          state.menuOpen = true;
-          return true;
-        }
-        if (target === secondTrigger) {
-          throw new Error("an ambiguous second exact Notion model trigger must never be activated");
-        }
-        if (target === distractor) {
-          state.distractorClicks += 1;
-          return true;
-        }
-        if (target === composerButton) {
-          state.composerButtonClicks += 1;
-          return true;
-        }
-        if (target === effortTrigger) {
-          state.effortTriggerClicks += 1;
-          state.effortMenuOpen = true;
-          return true;
-        }
-        if (target === effortItem) {
-          state.effortItemClicks += 1;
-          if (effortSelectionSettles) {
-            state.effortTriggerText = `Change effort, currently ${String(effortItemLabel || "").toLowerCase()}`;
-            effortTrigger.setAttribute("aria-label", state.effortTriggerText);
-          }
-          state.effortMenuOpen = false;
-          return true;
-        }
-        assert.equal(target, item, "only the exact requested Notion model row may be activated");
-        state.itemClicks += 1;
-        if (itemSelectionSettles) setTriggerText(targetLabel);
-        state.menuOpen = false;
-        return true;
-      },
+      preferredModelActivate,
+      preferredModelPointerActivate: preferredModelActivate,
       async waitForPreferredModel(context, getter, timeoutMs, intervalMs) {
         assertPreferredModelRun(context);
         state.waitCalls.push({ timeoutMs, intervalMs });
@@ -1928,6 +1957,28 @@ function createSourcesFixture({
     assert.equal(fixture.state.triggerClicks, 1);
     assert.equal(fixture.state.itemClicks, 1);
     assert.ok(fixture.state.modelTriggerSelectorScans > 0, "the updated picker must use the new dialog-trigger selector");
+  }
+
+  {
+    const fixture = createFixture({
+      triggerText: "Auto",
+      targetLabel: "Gemini 3.1 Pro",
+      liveModelPicker: true,
+      composerAvailable: true,
+      olderModelsCollapsed: true
+    });
+    global.document.getElementById = () => null;
+    const api = createPreferredNotionDeepSeekCapability(fixture.dependencies);
+    const result = await api.runPreferredModelApply({
+      appId: "NotionAI",
+      modelId: "gemini31pro",
+      runId: "notion-older-model-picker"
+    });
+    assert.equal(result.ok, true, "Gemini 3.1 Pro must be selectable after expanding Older models");
+    assert.equal(result.changed, true);
+    assert.equal(fixture.state.olderModelsClicks, 1, "only the explicit Older models section may be expanded");
+    assert.equal(fixture.state.itemClicks, 1, "the expanded Gemini 3.1 Pro row must be activated once");
+    assert.equal(result.interactionCount, 3, "the trigger, section, and exact model row are the only activations");
   }
 
   for (const scenario of [
