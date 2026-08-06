@@ -478,6 +478,12 @@ export function createWorkspaceFrameController(dependencies = {}) {
     return iframe?.isConnected && frameNavigationGenerations.get(iframe) === generation;
   }
 
+  function scheduleFrameNavigationAfterLayout(iframe, generation, callback) {
+    const run = () => frameNavigationIsCurrent(iframe, generation) && callback();
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(run);
+    else setTimeout(run, 0);
+  }
+
   function armPromptFocusRestore(iframe, generation) {
     const prompt = document.querySelector(".prompt-input");
     if (!prompt?.isConnected || (document.activeElement !== prompt && !document.documentElement.dataset.p)) {
@@ -665,28 +671,33 @@ export function createWorkspaceFrameController(dependencies = {}) {
     const generation = beginFrameNavigationGeneration(iframe);
     beginFrameLoading(iframe, plan.logicalUrl, true);
     let assigned = false;
+    let assignmentScheduled = false;
     const assign = (navigationUrl = plan.logicalUrl) => {
-      if (assigned || !frameNavigationIsCurrent(iframe, generation)) return;
-      if (!options.replace && iframe.getAttribute("src")) {
-        delete iframe.dataset.frameLoadPending;
-        completeFrameLoading(iframe);
-        return;
-      }
-      assigned = true;
-      const setSrc = (preflight = {}) => {
-        if (!frameNavigationIsCurrent(iframe, generation)) return;
-        rememberBrowserFrameId(iframe);
-        const expiresAt = Date.now() + NAVIGATION_FOCUS_GUARD_LEASE_MS;
-        if (guard && (document.activeElement === document.querySelector(".prompt-input") || document.documentElement.dataset.p)) {
-          maintainFrameNavigationFocusGuard(iframe, generation, expiresAt, preflight);
+      if (assigned || assignmentScheduled || !frameNavigationIsCurrent(iframe, generation)) return;
+      assignmentScheduled = true;
+      scheduleFrameNavigationAfterLayout(iframe, generation, () => {
+        if (assigned || !frameNavigationIsCurrent(iframe, generation)) return;
+        if (!options.replace && iframe.getAttribute("src")) {
+          delete iframe.dataset.frameLoadPending;
+          completeFrameLoading(iframe);
+          return;
         }
-        delete iframe.dataset.frameLoadPending;
-        armPromptFocusRestore(iframe, generation);
-        iframe.setAttribute("src", navigationUrl);
-      };
-      const guard = prepareFrameNavigationFocusGuard(iframe, generation);
-      if (guard) guard.then(setSrc, setSrc);
-      else setSrc();
+        assigned = true;
+        const setSrc = (preflight = {}) => {
+          if (!frameNavigationIsCurrent(iframe, generation)) return;
+          rememberBrowserFrameId(iframe);
+          const expiresAt = Date.now() + NAVIGATION_FOCUS_GUARD_LEASE_MS;
+          if (guard && (document.activeElement === document.querySelector(".prompt-input") || document.documentElement.dataset.p)) {
+            maintainFrameNavigationFocusGuard(iframe, generation, expiresAt, preflight);
+          }
+          delete iframe.dataset.frameLoadPending;
+          armPromptFocusRestore(iframe, generation);
+          iframe.setAttribute("src", navigationUrl);
+        };
+        const guard = prepareFrameNavigationFocusGuard(iframe, generation);
+        if (guard) guard.then(setSrc, setSrc);
+        else setSrc();
+      });
     };
     const fallback = plan.grokPreflight ? setTimeout(() => {
       const guard = setTimeout(assign, 300);

@@ -101,6 +101,7 @@ const PARAM = "__chatclub_frame_load_nonce";
   const assignFrameSrc = functionSource(frameController, "assignFrameSrc");
   const reloadFrameDocument = functionSource(frameController, "reloadFrameDocument");
   const setFrameSrcAfterPrepare = functionSource(frameController, "setFrameSrcAfterPrepare");
+  const scheduleFrameNavigationAfterLayout = functionSource(frameController, "scheduleFrameNavigationAfterLayout");
   const preparePlannedFrameLoad = functionSource(frameController, "preparePlannedFrameLoad");
   const armPromptFocusRestore = functionSource(frameController, "armPromptFocusRestore");
   const restorePromptInputFocus = functionSource(frameController, "restorePromptInputFocus");
@@ -131,6 +132,18 @@ const PARAM = "__chatclub_frame_load_nonce";
     "poisoned-frame recovery must not probe the poisoned document before reloading it"
   );
   assert.match(setFrameSrcAfterPrepare, /beginFrameLoading\(iframe, plan\.logicalUrl, true\)/);
+  assert.match(scheduleFrameNavigationAfterLayout, /requestAnimationFrame/);
+  assert.match(scheduleFrameNavigationAfterLayout, /frameNavigationIsCurrent\(iframe, generation\)/);
+  assert.match(
+    setFrameSrcAfterPrepare,
+    /assignmentScheduled = false/,
+    "initial frame navigation must be scheduled only once while preflight and fallback settle"
+  );
+  assert.ok(
+    setFrameSrcAfterPrepare.indexOf("scheduleFrameNavigationAfterLayout")
+      < setFrameSrcAfterPrepare.indexOf("prepareFrameNavigationFocusGuard"),
+    "the first real URL must be assigned after the iframe has completed one layout frame"
+  );
   assert.match(assignFrameSrc, /armPromptFocusRestore\(iframe, generation\)/, "direct frame navigation must remember an active prompt before assigning src");
   assert.match(setFrameSrcAfterPrepare, /armPromptFocusRestore\(iframe, generation\)/, "prepared frame navigation must remember an active prompt before assigning src");
   assert.match(armPromptFocusRestore, /document\.activeElement !== prompt/);
