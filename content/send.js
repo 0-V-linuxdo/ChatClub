@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "ee854994bf408eb45ee70d4fc5431e2c65f1c67f0d58d1f1f4dc22f47a341276";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "35a5e261a673d8451dd2af0eb7525cdd7b4f3b86db35434b2a40c4e81f62cf0d";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "e8a55f974dfcd953a9af37500a244bfb26a4adfde84bb0f8f00b8ec12798ad77";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.e8a55f974dfcd953a9af37500a244bfb26a4adfde84bb0f8f00b8ec12798ad77";
-  var CONTENT_RUNTIME_SEND_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/send.js", "entryPath": "content-src/content-send.js", "sourceSha256": "3a6adadba49832353446f12ac3fc22a6eaaa1c5d8686061fac8a08c3dbfe0ac8", "implementationSha256": "626e6d801c2d71a5f1f44e735a283ac48db116848c1f73d4257ce9c8886a1ee6", "implementationVersion": "2026.07.16.2+bundle.626e6d801c2d71a5f1f44e735a283ac48db116848c1f73d4257ce9c8886a1ee6" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "db7e051adc537fdc4994a9494b4bd917e768bb28d720eac9b72d0c30238823a4";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.db7e051adc537fdc4994a9494b4bd917e768bb28d720eac9b72d0c30238823a4";
+  var CONTENT_RUNTIME_SEND_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/send.js", "entryPath": "content-src/content-send.js", "sourceSha256": "c743e0a53b16a8b596f78a2e1ad8cdb42754df322d58a49a159e4b714984f7e7", "implementationSha256": "c41650f0bea8a124f0f21c7c114a53367e8b6246768f28d5d78d1408fd472b1f", "implementationVersion": "2026.07.16.2+bundle.c41650f0bea8a124f0f21c7c114a53367e8b6246768f28d5d78d1408fd472b1f" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -442,13 +442,13 @@
       contentBridgeIsCurrent,
       markSubmissionNavigation
     } = deps;
-    function inputCandidates(selector) {
+    function inputCandidates(selector, allowTextInputFallback = true) {
       const selectors = [
         selector,
         "textarea",
         "div[contenteditable='true'][role='textbox']",
         "div[contenteditable='true']",
-        "input[type='text']"
+        ...allowTextInputFallback ? ["input[type='text']"] : []
       ].filter(Boolean);
       for (const sel of selectors) {
         const candidate = qsa2(sel).filter(visible2).sort((a, b) => b.getBoundingClientRect().bottom - a.getBoundingClientRect().bottom)[0];
@@ -1116,7 +1116,7 @@
         if (!cleared) {
           return { ok: false, input, reason: "Existing composer attachments could not be cleared" };
         }
-        input = inputCandidates(inputSelector) || input;
+        input = inputCandidates(inputSelector, !options.kagi) || input;
       }
       if (deadlineExpired(deadlineAt)) return { ok: false, input, reason: "Send deadline exceeded" };
       if (promptTextSnapshot(text2(input))) {
@@ -1124,7 +1124,7 @@
         if (!await sleepUntilDeadline(80, deadlineAt)) {
           return { ok: false, input, reason: "Send deadline exceeded" };
         }
-        input = inputCandidates(inputSelector) || input;
+        input = inputCandidates(inputSelector, !options.kagi) || input;
         if (promptTextSnapshot(text2(input))) {
           return { ok: false, input, reason: "Existing composer text could not be cleared" };
         }
@@ -1319,7 +1319,7 @@
           if (!await waitForPromptAttachmentsCleared(input, {}, 2500, deadlineAt)) {
             return { ok: false, reason: "Kagi attachments could not be cleared before retry" };
           }
-          input = inputCandidates(inputSelector) || input;
+          input = inputCandidates(inputSelector, false) || input;
           if (textValue.trim()) {
             await setInputValue(input, "");
             if (!await sleepUntilDeadline(120, deadlineAt)) return { ok: false, reason: "Send deadline exceeded" };
@@ -1484,7 +1484,11 @@
         const gemini = isGeminiSendTarget(data);
         const deadlineAt = sendDeadlineAt(data, Array.isArray(data?.images) && data.images.length ? 6e4 : 1e4);
         if (deadlineExpired(deadlineAt)) throw new Error("Send deadline exceeded");
-        let input = inputCandidates(data?.inputSelector);
+        let input = inputCandidates(data?.inputSelector, !kagi);
+        while (!input && !deadlineExpired(deadlineAt)) {
+          await sleepUntilDeadline(120, deadlineAt);
+          input = inputCandidates(data?.inputSelector, !kagi);
+        }
         if (!input) throw new Error("Input element not found");
         const files = promptImageFilesFromPayload(data?.images);
         const textValue = String(data.text || "");
@@ -1495,7 +1499,7 @@
           input,
           data?.inputSelector || "",
           deadlineAt,
-          { grok, gemini }
+          { grok, kagi, gemini }
         );
         if (!prepared.ok) throw new Error(prepared.reason || "Composer could not be prepared");
         input = prepared.input || input;
@@ -1504,7 +1508,7 @@
         if (files.length) {
           const attached = grok ? await attachGrokPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt, textValue) : kagi ? await attachKagiPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt, textValue) : geminiBatch ? await attachGeminiPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt, textValue) : batch ? await attachBatchPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt) : await attachPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt);
           if (!attached.ok) throw new Error(attached.reason || "Image insertion failed");
-          if (grok || kagi || geminiBatch) input = inputCandidates(data?.inputSelector) || attached.input || input;
+          if (grok || kagi || geminiBatch) input = inputCandidates(data?.inputSelector, !kagi) || attached.input || input;
         }
         if (deadlineExpired(deadlineAt)) throw new Error("Send deadline exceeded");
         const combinedPaste = files.length > 0 && (grok || kagi || geminiBatch);

@@ -17,9 +17,9 @@
     "background/firefox-background.js": {
       "maxFiles": 64,
       "targetFiles": 43,
-      "maxSourceBytes": 1552796,
+      "maxSourceBytes": 1552899,
       "targetSourceBytes": 900000,
-      "reason": "The Firefox document-background entry packages the same signed official-rules verifier, strict declarative contracts, immutable component repository, anti-rollback state, manual atomic activation, crash and committed-reset cleanup recovery, compensated content-registration/DNR coordination, and one-shot prompt-handoff ledger with adaptive payload cleanup as Chromium, together with marker-driven startup refresh of canonical content registrations, generated content fallbacks, secure Frame RPC, one-sided Notion frame-load URL attestation, site-native Storage Access, paired pointer/native Notion and Grok model activation, updated Notion dialog model-picker handling, typed Grok secondary fallback, and fail-closed Delete behavior when trusted input is unavailable; its larger exact static cost is tracked separately."
+      "reason": "The Firefox document-background entry packages the same signed official-rules verifier, strict declarative contracts, immutable component repository, anti-rollback state, manual atomic activation, crash and committed-reset cleanup recovery, compensated content-registration/DNR coordination, and one-shot prompt-handoff ledger with adaptive payload cleanup as Chromium, together with marker-driven startup refresh of canonical content registrations, generated content fallbacks including Kagi composer hydration with thread-search exclusion, secure Frame RPC, one-sided Notion frame-load URL attestation, site-native Storage Access, paired pointer/native Notion and Grok model activation, updated Notion dialog model-picker handling, typed Grok secondary fallback, and fail-closed Delete behavior when trusted input is unavailable; its larger exact static cost is tracked separately."
     }
   },
   "lazyBoundaries": {

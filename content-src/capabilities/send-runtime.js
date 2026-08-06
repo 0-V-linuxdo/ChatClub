@@ -15,13 +15,11 @@ export function createSendCapability(deps = {}) {
     contentBridgeIsCurrent,
     markSubmissionNavigation
   } = deps;
-  function inputCandidates(selector) {
+  function inputCandidates(selector, allowTextInputFallback = true) {
     const selectors = [
-      selector,
-      "textarea",
-      "div[contenteditable='true'][role='textbox']",
-      "div[contenteditable='true']",
-      "input[type='text']"
+      selector, "textarea",
+      "div[contenteditable='true'][role='textbox']", "div[contenteditable='true']",
+      ...(allowTextInputFallback ? ["input[type='text']"] : [])
     ].filter(Boolean);
     for (const sel of selectors) {
       const candidate = qsa(sel).filter(visible).sort((a, b) => b.getBoundingClientRect().bottom - a.getBoundingClientRect().bottom)[0];
@@ -613,9 +611,7 @@ export function createSendCapability(deps = {}) {
     return Math.max(0, value - Date.now());
   }
 
-  function deadlineExpired(deadlineAt) {
-    return remainingDeadlineMs(deadlineAt, 1) <= 0;
-  }
+  function deadlineExpired(deadlineAt) { return remainingDeadlineMs(deadlineAt, 1) <= 0; }
 
   async function sleepUntilDeadline(ms, deadlineAt) {
     const delay = Math.min(Math.max(0, Number(ms) || 0), remainingDeadlineMs(deadlineAt, ms));
@@ -720,7 +716,7 @@ export function createSendCapability(deps = {}) {
       if (!cleared) {
         return { ok: false, input, reason: "Existing composer attachments could not be cleared" };
       }
-      input = inputCandidates(inputSelector) || input;
+      input = inputCandidates(inputSelector, !options.kagi) || input;
     }
     if (deadlineExpired(deadlineAt)) return { ok: false, input, reason: "Send deadline exceeded" };
     if (promptTextSnapshot(text(input))) {
@@ -728,7 +724,7 @@ export function createSendCapability(deps = {}) {
       if (!await sleepUntilDeadline(80, deadlineAt)) {
         return { ok: false, input, reason: "Send deadline exceeded" };
       }
-      input = inputCandidates(inputSelector) || input;
+      input = inputCandidates(inputSelector, !options.kagi) || input;
       if (promptTextSnapshot(text(input))) {
         return { ok: false, input, reason: "Existing composer text could not be cleared" };
       }
@@ -941,7 +937,7 @@ export function createSendCapability(deps = {}) {
         if (!await waitForPromptAttachmentsCleared(input, {}, 2500, deadlineAt)) {
           return { ok: false, reason: "Kagi attachments could not be cleared before retry" };
         }
-        input = inputCandidates(inputSelector) || input;
+        input = inputCandidates(inputSelector, false) || input;
         if (textValue.trim()) {
           await setInputValue(input, "");
           if (!await sleepUntilDeadline(120, deadlineAt)) return { ok: false, reason: "Send deadline exceeded" };
@@ -1126,7 +1122,11 @@ export function createSendCapability(deps = {}) {
       const gemini = isGeminiSendTarget(data);
       const deadlineAt = sendDeadlineAt(data, Array.isArray(data?.images) && data.images.length ? 60000 : 10000);
       if (deadlineExpired(deadlineAt)) throw new Error("Send deadline exceeded");
-      let input = inputCandidates(data?.inputSelector);
+      let input = inputCandidates(data?.inputSelector, !kagi);
+      while (!input && !deadlineExpired(deadlineAt)) {
+        await sleepUntilDeadline(120, deadlineAt);
+        input = inputCandidates(data?.inputSelector, !kagi);
+      }
       if (!input) throw new Error("Input element not found");
       const files = promptImageFilesFromPayload(data?.images);
       const textValue = String(data.text || "");
@@ -1137,7 +1137,7 @@ export function createSendCapability(deps = {}) {
         input,
         data?.inputSelector || "",
         deadlineAt,
-        { grok, gemini }
+        { grok, kagi, gemini }
       );
       if (!prepared.ok) throw new Error(prepared.reason || "Composer could not be prepared");
       input = prepared.input || input;
@@ -1154,7 +1154,7 @@ export function createSendCapability(deps = {}) {
               ? await attachBatchPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt)
               : await attachPromptImagesWithRetries(input, files, data?.imageRetryCount ?? 3, data?.inputSelector || "", deadlineAt);
         if (!attached.ok) throw new Error(attached.reason || "Image insertion failed");
-        if (grok || kagi || geminiBatch) input = inputCandidates(data?.inputSelector) || attached.input || input;
+        if (grok || kagi || geminiBatch) input = inputCandidates(data?.inputSelector, !kagi) || attached.input || input;
       }
       if (deadlineExpired(deadlineAt)) throw new Error("Send deadline exceeded");
       const combinedPaste = files.length > 0 && (grok || kagi || geminiBatch);
