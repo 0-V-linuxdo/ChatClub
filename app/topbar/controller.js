@@ -190,6 +190,7 @@ export function createTopbarController(dependencies = {}) {
   }
 
   function sync(shell) {
+    if(shell===true){const n=document.querySelector(".prompt-input");if(n){n.placeholder=placeholderController.placeholder();composer.syncInputNode();return node;}return sync();}
     const targetShell = shell || node?.parentElement;
     if (!targetShell) return null;
     const restorePersistentSettingsMenu = Boolean(

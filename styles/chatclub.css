@@ -2333,6 +2333,13 @@ body.tab-gesture-active * {
   color: transparent;
 }
 
+.prompt-input:not(.prompt-input-expanded):focus {
+  z-index: 60;
+  background: transparent;
+  color: var(--text);
+  caret-color: var(--text);
+}
+
 .prompt-input:not(.prompt-input-expanded)::-webkit-scrollbar {
   display: none;
 }

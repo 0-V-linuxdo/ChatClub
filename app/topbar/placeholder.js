@@ -85,7 +85,7 @@ export function createTopbarPlaceholderController({ state, normalizeConfig, save
     timerKey = key;
     timer = setInterval(() => {
       applySelection({ advance: true });
-      syncTopbar();
+      syncTopbar(true);
     }, Math.max(1, config.intervalSec) * 1000);
   }
 
@@ -103,7 +103,7 @@ export function createTopbarPlaceholderController({ state, normalizeConfig, save
   function sync() {
     applySelection({ advance: false });
     restartTimer();
-    syncTopbar();
+    syncTopbar(true);
   }
 
   return Object.freeze({

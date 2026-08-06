@@ -32,6 +32,7 @@ const root = path.resolve(__dirname, "..");
       return value;
     },
     syncTopbar: () => { renders += 1; },
+    syncPlaceholder: () => { renders += 1; },
     translate: (key) => key
   });
   await controller.initialize();

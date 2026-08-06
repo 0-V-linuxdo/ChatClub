@@ -114,6 +114,8 @@ function responsiveBrandRules(kind) {
     /focusRemainsInPromptShell\(shell, event\.relatedTarget\)[\s\S]*prompt-input-expanded[\s\S]*collapseInput\(inputNode\)/,
     "expanded input must collapse only after focus leaves the entire Composer shell"
   );
+  assert.match(composer, /if\(n\.value!==state\.promptText\)n\.value=state\.promptText/, "placeholder refresh must not rewrite a focused input with the same draft value");
+  assert.match(composer, /if\(!value&&!state\.promptImages\.length\)[\s\S]*text\.textContent!==collapsed\.text[\s\S]*classList\.add\("prompt-collapsed-preview-empty"\)/, "placeholder refresh must update the empty preview text without rebuilding its DOM subtree");
   const promptMenu = functionSource(composer, "openActionsMenu");
   assert.match(promptMenu, /topbar\.closeSettingsMenu\(\)/, "Prompt Actions must dismiss only the Topbar menu owner");
   assert.match(promptMenu, /workspace\.closePopovers\(\)/, "Prompt Actions must dismiss the workspace popover owner through its port");

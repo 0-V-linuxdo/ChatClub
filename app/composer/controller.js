@@ -134,7 +134,7 @@ export function createComposerController(dependencies = {}) {
     if (!Array.isArray(state.promptImages) || !promptImagesEqual(current, normalized)) {
       state.promptImages = normalized;
     }
-    return normalized;
+    return normalized
   }
 
   function immutableDraftSnapshot(source = {}) {
@@ -273,7 +273,7 @@ export function createComposerController(dependencies = {}) {
     document.querySelectorAll(".prompt-shell").forEach((shell) => {
       shell.classList.toggle("prompt-shell-has-images", hasImages);
       const list = shell.querySelector(".prompt-image-preview-list");
-      if (!list) return;
+      if (!list) return; if(!hasImages&&list.hidden&&!list.childElementCount)return;
       list.replaceChildren(...images.map((image) => renderImagePreview(image)));
       list.hidden = !hasImages;
     });
@@ -286,7 +286,7 @@ export function createComposerController(dependencies = {}) {
     syncImagesPreview();
     const inputNode = syncInputNode({ focus });
     if (focus && inputNode) expandInput(inputNode);
-    return state.promptImages;
+    return state.promptImages
   }
 
   function removeImage(id) {
@@ -916,7 +916,7 @@ export function createComposerController(dependencies = {}) {
     syncPromptQueueStatus();
     syncImagesPreview();
     if (!preview) return;
-    const collapsed = promptCollapsedPreview(value, inputNode?.placeholder || currentPlaceholder);
+    const collapsed = promptCollapsedPreview(value, inputNode?.placeholder || currentPlaceholder); if(!value&&!state.promptImages.length){const text=preview.querySelector(".prompt-collapsed-preview-text");if(text){if(text.textContent!==collapsed.text)text.textContent=collapsed.text;preview.title=collapsed.title;preview.classList.add("prompt-collapsed-preview-empty");return;}}
     preview.replaceChildren(...renderCollapsedContent(collapsed, state.promptImages));
     preview.title = collapsed.title;
     preview.classList.toggle("prompt-collapsed-preview-empty", collapsed.empty);
@@ -1088,23 +1088,21 @@ export function createComposerController(dependencies = {}) {
     expandInput(event.target);
   }
 
-  function syncInputNode({ focus = false } = {}) {
-    reconcileDraftContent();
-    const inputNode = document.querySelector(".prompt-input");
-    if (!inputNode) return null;
-    inputNode.value = state.promptText;
-    syncCollapsedPreview(inputNode);
-    if (focus) {
-      inputNode.focus({ preventScroll: true });
-      expandInput(inputNode);
-      restoreSelectionSoon(inputNode);
+  function syncInputNode({focus=false,expand=focus}={}) {
+    reconcileDraftContent()
+    const n=document.querySelector(".prompt-input")
+    if(!n)return
+    if(n.value!==state.promptText)n.value=state.promptText
+    syncCollapsedPreview(n)
+    if(focus){
+      n.focus({preventScroll:true})
+      if(expand)expandInput(n);else collapseInput(n)
+      restoreSelectionSoon(n)
     }
-    return inputNode;
+    return n
   }
 
-  function focusInput() {
-    syncInputNode({ focus: true });
-  }
+  function focusInput(expand=true){syncInputNode({focus:true,expand})}
 
   function modelGateStatusIcon(applying) {
     if (applying) return el("span", { class: "prompt-model-gate-spinner", "aria-hidden": "true" });
@@ -1127,7 +1125,7 @@ export function createComposerController(dependencies = {}) {
       placeholder: currentPlaceholder,
       dataset: { modelGateState: gateState },
       onpointerdown: handlePointerDown,
-      onfocus: (event) => expandInput(event.target),
+      onfocus:e=>!document.documentElement.dataset.p&&expandInput(e.target),
       onblur: handleInputBlur,
       onclick: handleClick,
       onpaste: handlePaste,

@@ -644,7 +644,7 @@ export function createWorkspaceViewController(dependencies = {}) {
       ...Object.fromEntries((contract.entries || []).map(({ name, value }) => [name, value])),
       class: `chat-frame ${chat.instanceId === (state.activeTabs[group.id] || group.chatApps[0]?.instanceId) ? "active" : ""}`,
       dataset,
-      name: chatFrameName(app, frameBindingId),
+      name: chatFrameName(app, frameBindingId), inert: true, tabindex: "-1",
       onload: (event) => completeFrameLoading(event.currentTarget)
     };
     const iframe = el("iframe", attrs);

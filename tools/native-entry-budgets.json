@@ -3,7 +3,7 @@
     "app/main.js": {
       "maxFiles": 94,
       "targetFiles": 74,
-      "maxSourceBytes": 1044086,
+      "maxSourceBytes": 1044341,
       "targetSourceBytes": 750000,
       "reason": "The application initial-static closure includes the background-owned StoredOptionsV4 snapshot client with optimistic revision conflicts and sparse official overrides, bilingual official-rules view and safety copy, committed-reset cleanup warning recovery in core state, plus the pre-document browser-session restore guard, one-shot prompt handoff layout and page orchestration, per-frame send queue, DNR-ready iframe assignment, authenticated frame identity, navigation-generation-isolated content bridge recovery, same-target navigation de-duplication, opaque black new-topic masking, canonical Notion frame-load URL comparison, prompt-focus restoration after iframe navigation, measured image-plus-text composer sizing, Grok Cookie preflight, Notion navigation safeguards, model settlement, workspace reconciliation and persistent user settings; signed-rules controls remain behind explicit lazy boundaries while this shared runtime is held to its exact footprint."
     },
@@ -38,6 +38,14 @@
       "maxSourceBytes": 52862,
       "targetSourceBytes": 48000,
       "reason": "Pocket remains an explicit runtime-owned lazy controller and this budget tracks only modules added beyond the application initial-static closure."
+    },
+    "app/prompt-focus/controller.js": {
+      "owner": "app/runtime.js",
+      "maxFiles": 1,
+      "targetFiles": 0,
+      "maxSourceBytes": 3940,
+      "targetSourceBytes": 3200,
+      "reason": "The initial workspace prompt-focus guard stays behind a runtime-owned lazy boundary so loading isolation does not enlarge the application bootstrap closure."
     },
     "app/settings/controller.js": {
       "owner": "app/runtime.js",

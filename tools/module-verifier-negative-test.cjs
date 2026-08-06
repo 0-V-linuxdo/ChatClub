@@ -191,10 +191,11 @@ const nativeBudgetReason = "Native entry closures are held to their exact curren
 const lazyBudgetReason = "The lazy controller remains outside the initial graph and its exact incremental static footprint is ratcheted.";
 const nativeBudgetFiles = {
   "app/main.js": 'import "./runtime.js";\nimport { value } from "../shared/value.js";\nglobalThis.__fixtureAppValue = value;\n',
-  "app/runtime.js": 'void import("./official-rules/service.js");\nvoid import("./pocket/controller.js");\nvoid import("./settings/controller.js");\nvoid import("./summary/controller.js");\n',
+  "app/runtime.js": 'void import("./official-rules/service.js");\nvoid import("./pocket/controller.js");\nvoid import("./prompt-focus/controller.js");\nvoid import("./settings/controller.js");\nvoid import("./summary/controller.js");\n',
   "app/lazy-common.js": "export const lazyCommon = true;\n",
   "app/official-rules/service.js": 'import { lazyCommon } from "../lazy-common.js";\nglobalThis.__fixtureOfficialRules = lazyCommon;\n',
   "app/pocket/controller.js": 'import { lazyCommon } from "../lazy-common.js";\nglobalThis.__fixturePocket = lazyCommon;\n',
+  "app/prompt-focus/controller.js": 'import { lazyCommon } from "../lazy-common.js";\nglobalThis.__fixturePromptFocus = lazyCommon;\n',
   "app/settings/controller.js": 'import { lazyCommon } from "../lazy-common.js";\nglobalThis.__fixtureSettings = lazyCommon;\n',
   "app/summary/controller.js": 'import { lazyCommon } from "../lazy-common.js";\nglobalThis.__fixtureSummary = lazyCommon;\n'
 };
@@ -237,6 +238,7 @@ const exactNativeEntryBudgets = {
   lazyBoundaries: Object.fromEntries([
     "app/official-rules/service.js",
     "app/pocket/controller.js",
+    "app/prompt-focus/controller.js",
     "app/settings/controller.js",
     "app/summary/controller.js"
   ].map((target) => [target, {
@@ -254,7 +256,7 @@ const nativeBudgetResult = assertFixturePasses("native-entry-budget-exact", {
   verifyNativeEntryBudgets: true,
   nativeEntryBudgets: exactNativeEntryBudgets
 });
-assert.match(nativeBudgetResult.output, /3 initial-static entry closures and 4 lazy-boundary increments ratcheted/);
+assert.match(nativeBudgetResult.output, /3 initial-static entry closures and 5 lazy-boundary increments ratcheted/);
 
 const singleFileOfficialRulesSource = "globalThis.__fixtureOfficialRules = true;\n";
 const singleFileOfficialRulesBytes = Buffer.byteLength(singleFileOfficialRulesSource);

@@ -408,6 +408,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
 
   function beginFrameLoading(iframe, targetHref = "", pending = false) {
     if (!(iframe instanceof HTMLIFrameElement)) return false;
+    iframe.inert = true;
     const previousKind = String(iframe.dataset.frameLoadingKind || "");
     const previousMaskPhase = String(iframe.dataset.frameLoadingMaskPhase || "");
     const loadingKind = frameLoadingKindForTarget(
@@ -454,6 +455,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
     if (!(iframe instanceof HTMLIFrameElement)) return;
     rememberBrowserFrameId(iframe);
     if (iframe.dataset.frameLoadPending === "1") return;
+    iframe.inert = false;
     if (iframe.dataset.frameLoadingKind === "new-topic") {
       iframe.dataset.frameLoadingMaskPhase = "fade";
       syncFrameLoadingMask(iframe);
@@ -478,7 +480,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
 
   function armPromptFocusRestore(iframe, generation) {
     const prompt = document.querySelector(".prompt-input");
-    if (!prompt?.isConnected || document.activeElement !== prompt) {
+    if (!prompt?.isConnected || (document.activeElement !== prompt && !document.documentElement.dataset.p)) {
       delete iframe.dataset.promptFocusRestoreGeneration;
       return false;
     }
@@ -577,7 +579,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
     if (
       !(iframe instanceof HTMLIFrameElement)
       || !prompt?.isConnected
-      || document.activeElement !== prompt
+      || (document.activeElement !== prompt && !document.documentElement.dataset.p)
       || !iframe.contentWindow
     ) return null;
 
@@ -613,9 +615,6 @@ export function createWorkspaceFrameController(dependencies = {}) {
     if (samePendingNavigation && options.force !== true) return true;
     if (iframe.isConnected) {
       const frameReplaced = ensureFrameAttributeContract(iframe, plan.logicalUrl, { phase: "assign" });
-      // A forced reload must still assign a fresh navigation URL when the
-      // attribute contract already matches. The contract helper returns false
-      // in that case, which used to make poisoned-frame recovery a no-op.
       if (frameReplaced || options.force !== true) return true;
     }
     const generation = beginFrameNavigationGeneration(iframe);
@@ -623,7 +622,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
     const assign = (navigationUrl, preflight = {}) => {
       if (!frameNavigationIsCurrent(iframe, generation)) return;
       const expiresAt = Date.now() + NAVIGATION_FOCUS_GUARD_LEASE_MS;
-      if (guard && document.activeElement === document.querySelector(".prompt-input")) {
+      if (guard && (document.activeElement === document.querySelector(".prompt-input") || document.documentElement.dataset.p)) {
         maintainFrameNavigationFocusGuard(iframe, generation, expiresAt, preflight);
       }
       armPromptFocusRestore(iframe, generation);
@@ -678,12 +677,9 @@ export function createWorkspaceFrameController(dependencies = {}) {
         if (!frameNavigationIsCurrent(iframe, generation)) return;
         rememberBrowserFrameId(iframe);
         const expiresAt = Date.now() + NAVIGATION_FOCUS_GUARD_LEASE_MS;
-        if (guard && document.activeElement === document.querySelector(".prompt-input")) {
+        if (guard && (document.activeElement === document.querySelector(".prompt-input") || document.documentElement.dataset.p)) {
           maintainFrameNavigationFocusGuard(iframe, generation, expiresAt, preflight);
         }
-        // Keep the initial about:blank load suppressed until the real URL is
-        // assigned. Otherwise a long Grok Cookie preflight can publish a false
-        // loading=false edge before the direct child frame exists.
         delete iframe.dataset.frameLoadPending;
         armPromptFocusRestore(iframe, generation);
         iframe.setAttribute("src", navigationUrl);
@@ -692,9 +688,6 @@ export function createWorkspaceFrameController(dependencies = {}) {
       if (guard) guard.then(setSrc, setSrc);
       else setSrc();
     };
-    // Dia can take longer than a short UI timeout to wake the extension
-    // Service Worker. Never race a normal frame navigation ahead of the DNR
-    // response-header rules that make CSP/XFO-protected apps embeddable.
     const fallback = plan.grokPreflight ? setTimeout(() => {
       const guard = setTimeout(assign, 300);
       markGrokFramePreflightFallback(plan.logicalUrl, plan.preflightId).finally(() => {

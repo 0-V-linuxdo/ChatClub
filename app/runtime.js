@@ -64,9 +64,7 @@ const isOptionsPage = document.body?.dataset.chatclubEntry === "options";
 const browserSessionRestore = isOptionsPage
   ? Object.freeze({ reloadRequested: false })
   : prepareBrowserSessionRestore(window, document);
-const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, Math.max(0, Number(ms) || 0)); });
-const INITIAL_WORKSPACE_FRAME_RESTORE_TIMEOUT_MS = 45_000;
-const INITIAL_WORKSPACE_FRAME_RESTORE_POLL_MS = 50;
+const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, Math.max(0, Number(ms) || 0)); }), INITIAL_WORKSPACE_FRAME_RESTORE_TIMEOUT_MS = 45_000, INITIAL_WORKSPACE_FRAME_RESTORE_POLL_MS = 50;
 let appShellNode = null;
 let summaryEscapeDismissalPromise = null;
 const state = createAppState();
@@ -215,6 +213,7 @@ const syncTopbarPromptPlaceholder = topbarController.syncPlaceholder;
 const syncPromptInputNode = composerController.syncInputNode;
 const setPromptImages = composerController.setImages;
 const focusPromptInput = composerController.focusInput;
+const promptFocusPromise = import("./prompt-focus/controller.js").then(({ installPromptFocusController }) => installPromptFocusController());
 const closePromptActionsMenu = composerController.closeActionsMenu;
 const closeSettingsJumpMenu = topbarController.closeSettingsMenu;
 const enterTopbarEditMode = topbarController.enterEditMode;
@@ -1158,6 +1157,7 @@ async function init() {
   installShortcuts();
   frameBridgeController.install();
   installPreferredModelFrameCleanup();
+  await promptFocusPromise;
   render();
   const promptHandoffAdmission = workspacePromptHandoffController.admitInitialLaunch(promptHandoffLaunch);
   const skippedPromptTargets = promptHandoffLaunch.diagnostics?.skipped?.length || 0, promptHandoffReason = promptHandoffLaunch.diagnostics?.reason;
