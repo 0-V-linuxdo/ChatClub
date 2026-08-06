@@ -37,9 +37,9 @@ const byteBudgets = Object.freeze({
 // Exact base-plus-capabilities closure after Kagi gained bounded composer
 // hydration and excluded its thread-search text input from prompt candidates.
 const aggregateByteBudget = 757_982;
-// Exact all-bundle closure after the same Kagi prompt-candidate hardening; no
-// headroom is carried across generated bundles.
-const allBundlesByteBudget = 1_441_696;
+// Exact all-bundle closure after the Grok initial-layout guard was added to the
+// document-start preload; no headroom is carried across generated bundles.
+const allBundlesByteBudget = 1_445_434;
 
 const bundleIdentities = Object.fromEntries(Object.keys(CONTENT_ENTRIES).map((outputPath) => [
   outputPath,

@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "83ba325b7f247b16f44dc735489f4c268180b378b5564cb574064325c89f737d";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "e66523d447d225e24609db367336dc89c6220e49159fdfa601148c1ad2c50daf";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "e4b5e5ae9cf5df4f02231f7cf3dbd5e054d36c684d5e825762d84946b298b798";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.e4b5e5ae9cf5df4f02231f7cf3dbd5e054d36c684d5e825762d84946b298b798";
-  var CONTENT_RUNTIME_PRELOAD_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preload.js", "entryPath": "content-src/preload.js", "sourceSha256": "fd929382c9f12813e28a2fb663e5f1a8b6e36cdd1fc9ee88dbe3989fa49cdc89", "implementationSha256": "e73aac05b64fefb835b492a21fd721555dc7ab7f8dc8538cbb9a4a07d5a9df70", "implementationVersion": "2026.07.16.2+bundle.e73aac05b64fefb835b492a21fd721555dc7ab7f8dc8538cbb9a4a07d5a9df70" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "2d9de5b5cbd4fbdd9ef0d3a2bde30c98b40720f49e38ed504880d9766ca4998e";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.2d9de5b5cbd4fbdd9ef0d3a2bde30c98b40720f49e38ed504880d9766ca4998e";
+  var CONTENT_RUNTIME_PRELOAD_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preload.js", "entryPath": "content-src/preload.js", "sourceSha256": "8f1ceebfb66250ab0f812239f7991416886ac6191ab441ed8f51621da34b4224", "implementationSha256": "33165bcffb76187d687178dd1cb6e301b5b1322a73942f4f1f18b67965fe9489", "implementationVersion": "2026.07.16.2+bundle.33165bcffb76187d687178dd1cb6e301b5b1322a73942f4f1f18b67965fe9489" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -520,6 +520,128 @@
       return broker.beginGeneration(CONTENT_RUNTIME_IMPLEMENTATION_VERSION);
     }
     return broker.acquireGeneration(CONTENT_RUNTIME_IMPLEMENTATION_VERSION);
+  }
+
+  // content-src/preload/grok-initial-layout.js
+  var RUNTIME_NAME = "grok-initial-layout-guard";
+  var RUNTIME_VERSION = "2026.08.07.4";
+  var INITIAL_LAYOUT_WINDOW_MS = 2e4;
+  var MAX_INITIAL_SCROLL_OFFSET = 96;
+  var MAINVIEW_CLASS_TOKEN = "@container/mainview";
+  function installGrokInitialLayoutGuard(runtimes) {
+    const existing = runtimes.registration(RUNTIME_NAME);
+    if (existing?.version === RUNTIME_VERSION) return;
+    runtimes.invalidate(RUNTIME_NAME, `replaced by ${RUNTIME_VERSION}`);
+    let stopped = false;
+    let userInteracted = false;
+    let mainview = null;
+    let mutationObserver = null;
+    let scheduled = false;
+    let frameId = 0;
+    let retryTimer = 0;
+    let deadlineTimer = 0;
+    const deadlineAt = Date.now() + INITIAL_LAYOUT_WINDOW_MS;
+    const atGrokHome = () => {
+      try {
+        return new URL(String(location.href || "")).pathname === "/";
+      } catch {
+        return false;
+      }
+    };
+    const findMainview = () => {
+      if (mainview?.isConnected) return mainview;
+      mainview = null;
+      try {
+        for (const element of document.querySelectorAll("div[class]")) {
+          if (!String(element.className || "").includes(MAINVIEW_CLASS_TOKEN)) continue;
+          if (element.clientHeight <= 0 || element.scrollHeight <= 0) continue;
+          mainview = element;
+          break;
+        }
+      } catch {
+      }
+      return mainview;
+    };
+    const stop = () => {
+      if (stopped) return;
+      stopped = true;
+      if (frameId) cancelAnimationFrame(frameId);
+      if (retryTimer) clearTimeout(retryTimer);
+      if (deadlineTimer) clearTimeout(deadlineTimer);
+      frameId = 0;
+      retryTimer = 0;
+      deadlineTimer = 0;
+      try {
+        mutationObserver?.disconnect?.();
+      } catch {
+      }
+      mutationObserver = null;
+      for (const type of ["pointerdown", "wheel", "touchstart", "keydown"]) {
+        try {
+          window.removeEventListener(type, onTrustedInteraction, true);
+        } catch {
+        }
+      }
+    };
+    const onTrustedInteraction = (event) => {
+      if (event?.isTrusted !== true) return;
+      userInteracted = true;
+      stop();
+    };
+    function schedule() {
+      if (stopped || scheduled) return;
+      scheduled = true;
+      if (typeof requestAnimationFrame === "function") {
+        frameId = requestAnimationFrame(() => {
+          scheduled = false;
+          frameId = 0;
+          run();
+        });
+        return;
+      }
+      retryTimer = setTimeout(() => {
+        scheduled = false;
+        retryTimer = 0;
+        run();
+      }, 32);
+    }
+    function run() {
+      if (stopped || userInteracted || !atGrokHome() || Date.now() >= deadlineAt) {
+        stop();
+        return;
+      }
+      const view = findMainview();
+      if (view) {
+        const offset = Number(view.scrollTop) || 0;
+        if (offset > 0 && offset <= MAX_INITIAL_SCROLL_OFFSET) {
+          try {
+            view.scrollTop = 0;
+          } catch {
+          }
+        }
+      }
+      schedule();
+    }
+    for (const type of ["pointerdown", "wheel", "touchstart", "keydown"]) {
+      try {
+        window.addEventListener(type, onTrustedInteraction, true);
+      } catch {
+      }
+    }
+    try {
+      if (typeof MutationObserver === "function") {
+        mutationObserver = new MutationObserver(schedule);
+        mutationObserver.observe(document, { childList: true, subtree: true });
+      }
+    } catch {
+    }
+    deadlineTimer = setTimeout(stop, INITIAL_LAYOUT_WINDOW_MS + 100);
+    runtimes.register(RUNTIME_NAME, {
+      version: RUNTIME_VERSION,
+      api: Object.freeze({ version: RUNTIME_VERSION }),
+      dispose: stop
+    });
+    schedule();
   }
 
   // content-src/preload/grok-storage-access.js
@@ -4355,6 +4477,7 @@ ${node.nodeValue}`;
           installDeepSeekDeleteBridge(runtimes, DEEPSEEK_DELETE_SOURCE2);
         }
         if (framed && (host === "grok.com" || host.endsWith(".grok.com") || host === "grok.x.ai" || host.endsWith(".grok.x.ai") || host === "gk.dairoot.cn")) {
+          installGrokInitialLayoutGuard(runtimes);
           installGrokStorageAccessBridge(runtimes);
         }
         if (framed && (host === "claude.ai" || host.endsWith(".claude.ai"))) {
