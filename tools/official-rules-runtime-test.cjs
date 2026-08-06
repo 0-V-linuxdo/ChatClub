@@ -1204,7 +1204,10 @@ const assert = require("node:assert/strict");
           && (registration.matches || []).includes("https://integration.chatgpt.com/*")
       ))) {
         failNonCoreRegistration = false;
-        failedRegistrationId = CONTENT_BUNDLES.summaryIsolated.id;
+        failedRegistrationId = registrations.find((registration) => (
+          registration.id === CONTENT_BUNDLES.summaryIsolated.id
+          && (registration.matches || []).includes("https://integration.chatgpt.com/*")
+        ))?.id || "";
         throw new Error("fixture non-core Summary registration failed");
       }
       const addedIds = new Set(registrations.map(({ id }) => id));

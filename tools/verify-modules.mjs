@@ -133,7 +133,10 @@ function contextFor(file) {
 }
 
 function resolveRelative(owner, specifier) {
-  const target = path.posix.normalize(path.posix.join(path.posix.dirname(owner), specifier));
+  // Browser ESM entrypoints may carry a release cache-buster query. The
+  // repository graph is keyed by the underlying packaged file path.
+  const fileSpecifier = String(specifier || "").split(/[?#]/, 1)[0];
+  const target = path.posix.normalize(path.posix.join(path.posix.dirname(owner), fileSpecifier));
   if (target.startsWith("../") || path.posix.isAbsolute(target)) {
     fail(`${owner}: import escapes the repository: ${specifier}`);
     return null;

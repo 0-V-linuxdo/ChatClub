@@ -72,28 +72,25 @@ export function createPreferredNotionSourcesCapability(deps = {}) {
   const NOTION_SOURCES_MENU_CLOSE_WAIT_MS = 1500;
   const NOTION_SOURCES_STABLE_SAMPLES = 2;
   let notionSourcesOperationTail = Promise.resolve();
-
   const notionText = (value) => normalize(value).toLowerCase().replace(/\s+/g, " ");
-
-  function activateNotionSourcesElement(context, element) {
-    const activate = typeof preferredModelPointerActivate === "function"
+  function activateNotionSourcesElement(context, element, options = {}) {
+    const activate = options.pointer === false
+      ? preferredModelActivate
+      : typeof preferredModelPointerActivate === "function"
       ? preferredModelPointerActivate
       : preferredModelActivate;
     return activate(context, element);
   }
-
   function preferredModelTimeRemaining(context, requestedMs) {
     const requested = Math.max(0, Number(requestedMs) || 0);
     const deadlineAt = Math.max(0, Number(context?.deadlineAt) || 0);
     return deadlineAt > 0 ? Math.min(requested, Math.max(0, deadlineAt - Date.now())) : requested;
   }
-
   function waitForPreferredModelWithinDeadline(context, getter, timeoutMs, intervalMs) {
     const remaining = preferredModelTimeRemaining(context, timeoutMs);
     if (remaining <= 0) return Promise.resolve(null);
     return waitForPreferredModel(context, getter, remaining, intervalMs);
   }
-
   function notionTextLooksLikeMySourcesSeed(value) {
     const textValue = notionText(value);
     return Boolean(textValue && (
@@ -104,7 +101,6 @@ export function createPreferredNotionSourcesCapability(deps = {}) {
       textValue.includes("我的资源")
     ));
   }
-
   function notionTextContainsMySources(value) {
     const textValue = notionText(value);
     return Boolean(textValue && (
@@ -114,7 +110,6 @@ export function createPreferredNotionSourcesCapability(deps = {}) {
       textValue.includes("我的资源")
     ));
   }
-
   function notionTextLooksLikeAllSources(value) {
     const textValue = notionText(value);
     return Boolean(textValue && (
@@ -128,7 +123,6 @@ export function createPreferredNotionSourcesCapability(deps = {}) {
       textValue.includes("所有资料源")
     ));
   }
-
   function notionTextLooksLikeWebAccess(value) {
     const textValue = notionText(value);
     return Boolean(textValue && (
@@ -138,7 +132,6 @@ export function createPreferredNotionSourcesCapability(deps = {}) {
       textValue.includes("网络访问")
     ));
   }
-
   function notionSourcesDisclosureState(element) {
     if (!element) return null;
     const ariaExpanded = String(element.getAttribute?.("aria-expanded") || "").trim().toLowerCase();
@@ -195,14 +188,12 @@ export function createPreferredNotionSourcesCapability(deps = {}) {
     if (normalized.includes("answers only") || normalized.includes("plans first") || normalized.includes("think deeper")) score += 100;
     return score >= 160 ? score : -1;
   }
-
   function innermostIndependentElements(elements) {
     const unique = [...new Set(elements.filter(Boolean))];
     return unique.filter((element) => !unique.some((other) => (
       other !== element && element.contains?.(other)
     )));
   }
-
   function notionSourcesMenuRoots() {
     const roots = visibleSelectorElements(NOTION_SOURCES_MENU_ROOT_SELECTORS)
       .map((element) => ({ element, score: scoreNotionSourcesMenuRoot(element), area: modelElementArea(element) }))
@@ -693,7 +684,8 @@ export function createPreferredNotionSourcesCapability(deps = {}) {
     return overlays.length === 1 ? overlays[0] : null;
   }
 
-  function observeNotionAllSourcesState(binding) {
+  function observeNotionAllSourcesState(binding, options = {}) {
+    const allowBindingReplacement = options.allowBindingReplacement === true;
     const overlays = notionSourcesMenuRoots()
       .filter((root) => notionTextLooksLikeAllSources(modelElementText(root)));
     if (overlays.length > 1) return { state: null, reason: "all sources overlay is ambiguous" };
@@ -705,16 +697,16 @@ export function createPreferredNotionSourcesCapability(deps = {}) {
     const rowResult = singleNotionSourcesRow(overlay, notionTextLooksLikeAllSources);
     if (rowResult.ambiguous) return { state: null, reason: "all sources row is ambiguous" };
     if (!rowResult.row) return { state: null, reason: "all sources row not found" };
-    if (binding?.row && binding.row !== rowResult.row) {
+    if (binding?.row && binding.row !== rowResult.row && !allowBindingReplacement) {
       return { state: null, reason: "all sources row changed" };
     }
     const toggleResult = findNotionAllSourcesToggle(rowResult.row);
     if (toggleResult.ambiguous) return { state: null, reason: "all sources toggle is ambiguous", row: rowResult.row };
     if (!toggleResult.target) return { state: null, reason: "all sources toggle not found", row: rowResult.row };
-    if (binding?.target && binding.target !== toggleResult.target) {
+    if (binding?.target && binding.target !== toggleResult.target && !allowBindingReplacement) {
       return { state: null, reason: "all sources toggle changed", row: rowResult.row };
     }
-    if (binding?.anchor && binding.anchor !== toggleResult.anchor) {
+    if (binding?.anchor && binding.anchor !== toggleResult.anchor && !allowBindingReplacement) {
       return { state: null, reason: "all sources label changed", row: rowResult.row };
     }
     const state = notionToggleState(toggleResult.target);
@@ -735,23 +727,25 @@ export function createPreferredNotionSourcesCapability(deps = {}) {
       row: rowResult.row,
       target: toggleResult.target,
       activationTarget: toggleResult.activationTarget,
-      anchor: toggleResult.anchor
+      anchor: toggleResult.anchor,
+      rebound: allowBindingReplacement && Boolean(
+        binding?.row !== rowResult.row
+        || binding?.target !== toggleResult.target
+        || binding?.anchor !== toggleResult.anchor
+      )
     };
   }
-
-  async function waitNotionAllSourcesStable(context, desiredState, binding, timeoutMs = NOTION_SOURCES_SETTLE_WAIT_MS) {
+  async function waitNotionAllSourcesStable(context, desiredState, binding, timeoutMs = NOTION_SOURCES_SETTLE_WAIT_MS, options = {}) {
     let samples = 0;
-    return Boolean(await waitForPreferredModelWithinDeadline(context, () => {
-      const observation = observeNotionAllSourcesState(binding);
-      if (observation.state === desiredState) {
-        samples += 1;
-        return samples >= NOTION_SOURCES_STABLE_SAMPLES ? observation : null;
-      }
-      samples = 0;
-      return null;
-    }, timeoutMs, 120));
+    let currentBinding = binding;
+    return await waitForPreferredModelWithinDeadline(context, () => {
+      const observation = observeNotionAllSourcesState(currentBinding, options);
+      if (observation.state !== desiredState) { samples = 0; return null; }
+      if (options.allowBindingReplacement && observation.rebound) currentBinding = { ...currentBinding, ...observation };
+      if (++samples < NOTION_SOURCES_STABLE_SAMPLES) return null;
+      return true;
+    }, timeoutMs, 120);
   }
-
   async function openNotionSourcesMenu(context, trigger, lease) {
     const existing = findNotionSourcesMenuRoot(trigger, { exactOnly: true });
     lease.trigger = trigger;
@@ -1141,11 +1135,14 @@ export function createPreferredNotionSourcesCapability(deps = {}) {
       });
     }
     const changed = initial.state !== desiredState;
-    if (changed && (!initial.activationTarget || !activateNotionSourcesElement(context, initial.activationTarget))) {
+    if (changed && (!initial.activationTarget || !activateNotionSourcesElement(context, initial.activationTarget, { pointer: false }))) {
       const menuClosed = await closeNotionSourcesMenus(context, lease);
       assertPreferredModelRun(context);
       return preferredModelResult(context, false, "NotionAI", modelId, "all sources toggle could not be clicked", { menuClosed, allSourcesState });
     }
+    const stable = changed && await waitNotionAllSourcesStable(context, desiredState, opened, NOTION_SOURCES_SETTLE_WAIT_MS, {
+      allowBindingReplacement: true
+    });
     const menuClosed = await closeNotionSourcesMenusForResult(context, lease);
     assertPreferredModelRun(context);
     if (!menuClosed) {
@@ -1154,20 +1151,24 @@ export function createPreferredNotionSourcesCapability(deps = {}) {
         allSourcesState
       });
     }
+    if (!changed) return preferredModelResult(context, true, "NotionAI", modelId, "", { changed, skipped: true, menuClosed, allSourcesState });
     const settled = await notionMainSourceIndicator.waitNotionMainSourceState(
       context, desiredState, NOTION_SOURCES_SETTLE_WAIT_MS);
     assertPreferredModelRun(context);
-    return settled
-      ? preferredModelResult(context, true, "NotionAI", modelId, "", {
-        changed,
-        skipped: !changed,
-        menuClosed,
-        allSourcesState
-      })
-      : preferredModelResult(context, false, "NotionAI", modelId, "main sources indicator did not settle", {
-        menuClosed,
-        allSourcesState
-      });
+    if (settled) return preferredModelResult(context, true, "NotionAI", modelId, "", { changed, menuClosed, allSourcesState });
+    const mainProof = notionMainSourceIndicator.observeNotionMainSourceState();
+    if (stable && mainProof?.state === desiredState) return preferredModelResult(context, true, "NotionAI", modelId, "", { changed, menuClosed, allSourcesState });
+    if (
+      stable
+      && !desiredState
+      && mainState.state === true
+      && !mainState.indicator
+      && !mainState.proofElement
+    ) return preferredModelResult(context, true, "NotionAI", modelId, "", { changed, menuClosed, allSourcesState });
+    return preferredModelResult(context, false, "NotionAI", modelId, "main sources indicator did not settle", {
+      menuClosed,
+      allSourcesState
+    });
   }
   async function runNotionPreferenceOperation(context, operation) {
     const previous = notionSourcesOperationTail.catch(() => {});
@@ -1195,5 +1196,4 @@ export function createPreferredNotionSourcesCapability(deps = {}) {
     return outcome;
   }
 
-  return Object.freeze({ applyNotionAllSourcesPreference, preflightNotionAllSourcesTrigger, runNotionPreferenceOperation });
-}
+  return Object.freeze({ applyNotionAllSourcesPreference, preflightNotionAllSourcesTrigger, runNotionPreferenceOperation }); }

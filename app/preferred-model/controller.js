@@ -199,7 +199,14 @@ export function createPreferredModelController(dependencies = {}) {
 
   function preferredModelRetryDelay(record = {}, result = {}) {
     const interactionCount = Math.max(0, Number(result.interactionCount) || 0);
-    if (interactionCount > 0 || (result.retryable !== true && result.cancelled !== true)) return null;
+    const safePreselectionRetry = result.retryable === true
+      && result.retryableBeforeSelection === true
+      && result.selectionActivated !== true
+      && result.menuClosed === true;
+    if (
+      (interactionCount > 0 && !safePreselectionRetry)
+      || (result.retryable !== true && result.cancelled !== true)
+    ) return null;
     const nextAttempt = Math.max(0, Number(record.attempt) || 0) + 1;
     if (!Array.isArray(record.delays) || nextAttempt >= record.delays.length) return null;
     return Math.max(0, Number(record.delays[nextAttempt]) || 0);
@@ -1084,6 +1091,10 @@ export function createPreferredModelController(dependencies = {}) {
     const isFrame = typeof HTMLIFrameElement !== "undefined" && change instanceof HTMLIFrameElement;
     const event = isFrame ? { type: "workspace-sync", iframe: change } : (change || {});
     const iframe = event.iframe || null;
+    if (preferredModelGateBootstrapping && !(event.type === "loading" && event.loading)) {
+      syncPreferredModelInputGate();
+      return;
+    }
     if (event.type === "loading") {
       if (event.loading) {
         if (iframe) iframe.dataset.preferredModelNavigationInvalidated = "1";

@@ -20,7 +20,7 @@
   var SECURE_FRAME_COMMAND_SOURCE = "chatclub:frame-command:2026.07.16.2";
   var DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.08.01.1";
   var PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.16.2";
-  var RUNTIME_REGISTRY_ABI_VERSION = 1;
+  var RUNTIME_REGISTRY_ABI_VERSION = 2;
   var RUNTIME_REGISTRY_KEY = `__CHATCLUB_RUNTIME_REGISTRY_V${RUNTIME_REGISTRY_ABI_VERSION}__`;
   var RUNTIME_MIGRATION_STAGE_KEY = `__CHATCLUB_RUNTIME_MIGRATION_STAGE_V${RUNTIME_REGISTRY_ABI_VERSION}__`;
   var NAVIGATION_FOCUS_GUARD_RUNTIME = "navigation-focus-guard";
@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "2a418556f040706f4f700bc30c3f6e2170ebe486b27a354989887cd4f809c857";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "ee854994bf408eb45ee70d4fc5431e2c65f1c67f0d58d1f1f4dc22f47a341276";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "f0df08746883d034bb95f090cb756a22a6a7998fd569675c8be97f816669deb4";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.f0df08746883d034bb95f090cb756a22a6a7998fd569675c8be97f816669deb4";
-  var CONTENT_RUNTIME_PREFERRED_MODEL_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preferred-model.js", "entryPath": "content-src/content-preferred-model.js", "sourceSha256": "a108918ea3028f9b60584a84f36e34964f460c8a72c7c60ac1dc4687851d0e59", "implementationSha256": "860b1856224992c749c5990b2483912997fd8a42de834fdd3b3bd05c9b7e58d0", "implementationVersion": "2026.07.16.2+bundle.860b1856224992c749c5990b2483912997fd8a42de834fdd3b3bd05c9b7e58d0" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "e8a55f974dfcd953a9af37500a244bfb26a4adfde84bb0f8f00b8ec12798ad77";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.e8a55f974dfcd953a9af37500a244bfb26a4adfde84bb0f8f00b8ec12798ad77";
+  var CONTENT_RUNTIME_PREFERRED_MODEL_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preferred-model.js", "entryPath": "content-src/content-preferred-model.js", "sourceSha256": "a3830fd1f1afbaa121dae05fbf7beeb35b8464efb1d2803e6d703e522b1de3c6", "implementationSha256": "f92a106afa5b52c677cdef04f5074f63f5f6435e3b01e38747070b0ba5566919", "implementationVersion": "2026.07.16.2+bundle.f92a106afa5b52c677cdef04f5074f63f5f6435e3b01e38747070b0ba5566919" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -659,7 +659,9 @@
         } catch {
         }
       }
-      return dispatchPointerActivation(el, modelCenterPoint(el)) || nativeModelClick(el);
+      const pointerDispatched = dispatchPointerActivation(el, modelCenterPoint(el));
+      const nativeClicked = nativeModelClick(el);
+      return pointerDispatched || nativeClicked;
     }
     return Object.freeze({
       isDisabledElement,
@@ -900,6 +902,7 @@
       const skipped = Boolean(rawSkipped);
       const cancelled = Boolean(rawCancelled);
       const interactionCount = Math.max(0, Number(rawInteractionCount) || 0);
+      const safePreselectionRetry = extra?.retryableBeforeSelection === true && extra?.selectionActivated !== true && extra?.menuClosed === true;
       return {
         ...details,
         ok: Boolean(ok),
@@ -908,7 +911,7 @@
         skipped,
         changed: Boolean(rawChanged),
         cancelled,
-        retryable: Boolean(rawRetryable) && !cancelled && interactionCount === 0,
+        retryable: Boolean(rawRetryable) && !cancelled && (interactionCount === 0 || safePreselectionRetry),
         reason: String(reason || ""),
         runId: String(rawRunId || ""),
         interactionCount
@@ -2123,7 +2126,17 @@
       }
       const settled = await waitGrokModelSettled(context, modelId);
       const menuClosed = await dismissPreferredModelMenu(context, () => grokModelMenuRoot());
-      return settled ? preferredModelResult(context, true, "Grok", modelId, "", { changed: true, menuClosed }) : preferredModelResult(context, false, "Grok", modelId, "selection did not settle", { menuClosed });
+      return settled ? preferredModelResult(context, true, "Grok", modelId, "", { changed: true, menuClosed }) : preferredModelResult(context, false, "Grok", modelId, "selection did not settle", {
+        // A free Grok account can accept the activation gesture while
+        // silently refusing Expert/Heavy. Once the picker is closed, that is
+        // a typed, safe signal to try the configured secondary model (Fast).
+        // Keep the activation state explicit so the controller cannot confuse
+        // this with a pre-delivery or uncertain interaction failure.
+        fallbackEligible: menuClosed === true,
+        selectionActivated: true,
+        selectionUnsettled: true,
+        menuClosed
+      });
     }
     return Object.freeze({
       applyGrokPreferredModel
@@ -2135,6 +2148,24 @@
     '[data-testid="unified-chat-search-scope-button"]',
     '[role="button"][aria-haspopup="menu"]',
     'button[aria-haspopup="menu"]'
+  ]);
+  var NOTION_SOURCE_NON_INDICATOR_TEST_IDS = /* @__PURE__ */ new Set([
+    "unified-chat-plus-menu-button",
+    "unified-chat-start-recording-button",
+    "agent-send-message-button"
+  ]);
+  var NOTION_SOURCE_NON_INDICATOR_LABELS = /* @__PURE__ */ new Set([
+    "give context",
+    "add context",
+    "attach files",
+    "start voice recording",
+    "submit ai message",
+    "send message",
+    "添加上下文",
+    "附件",
+    "开始录音",
+    "提交 ai 消息",
+    "发送消息"
   ]);
   var NOTION_SOURCE_DISABLED_ICON_SELECTOR = 'svg.teamspaceSlashSmall[role="graphics-symbol"]';
   var NOTION_SOURCE_ENABLED_LABELS = /* @__PURE__ */ new Set([
@@ -2190,19 +2221,24 @@
       const label = notionSourceIndicatorLabel(element);
       return testId === "unified-chat-mode-menu-button" || label === "settings" || label === "设置";
     }
+    function notionSourceIndicatorIsNonSourceControl(element) {
+      const testId = notionText(element?.getAttribute?.("data-testid"));
+      if (NOTION_SOURCE_NON_INDICATOR_TEST_IDS.has(testId)) return true;
+      return NOTION_SOURCE_NON_INDICATOR_LABELS.has(notionSourceIndicatorLabel(element));
+    }
     function notionSourceIndicatorIsModelControl(element) {
       const testId = notionText(element?.getAttribute?.("data-testid"));
       const label = notionSourceIndicatorLabel(element);
       return testId === "unified-chat-model-button" || testId.includes("model") || /^(?:select |open )?models?$/.test(label) || /^(?:选择|打开)?模型$/.test(label);
     }
     function notionSourceIndicatorCandidates(composerRoot, composerRect) {
-      const candidates = visibleSelectorElements(NOTION_SOURCE_INDICATOR_SELECTORS).filter((element) => isNotionControlNearMainComposer(element, composerRoot, composerRect)).filter((element) => !notionSourceIndicatorIsSettings(element)).filter((element) => !notionSourceIndicatorIsModelControl(element));
+      const candidates = visibleSelectorElements(NOTION_SOURCE_INDICATOR_SELECTORS).filter((element) => isNotionControlNearMainComposer(element, composerRoot, composerRect)).filter((element) => !notionSourceIndicatorIsSettings(element)).filter((element) => !notionSourceIndicatorIsModelControl(element)).filter((element) => !notionSourceIndicatorIsNonSourceControl(element));
       return [...new Set(candidates)];
     }
     function notionSourceButtonForDisabledIcon(icon) {
       let node = icon?.parentElement || null;
       while (node && node.nodeType === 1) {
-        if (String(node.getAttribute?.("role") || "").toLowerCase() === "button" && String(node.getAttribute?.("aria-haspopup") || "").toLowerCase() === "menu") return node;
+        if (String(node.getAttribute?.("role") || "").toLowerCase() === "button" && (String(node.getAttribute?.("aria-haspopup") || "").toLowerCase() === "menu" || notionSourceIndicatorIsNonSourceControl(node))) return node;
         node = node.parentElement || null;
       }
       return null;
@@ -2221,7 +2257,9 @@
       }
       if (disabledIcons.length === 1) {
         const { icon, indicator: indicator2 } = disabledIcons[0];
-        if (candidates.length !== 1 || candidates[0] !== indicator2) {
+        const candidateMatches = candidates.length === 1 && candidates[0] === indicator2;
+        const explicitDisabledMarkerOwner = notionSourceIndicatorIsNonSourceControl(indicator2) && !notionSourceIndicatorIsSettings(indicator2) && !notionSourceIndicatorIsModelControl(indicator2);
+        if (!candidateMatches && !explicitDisabledMarkerOwner) {
           return { state: null, reason: "sources indicator is ambiguous" };
         }
         if (notionSourceStateFromLabel(notionSourceIndicatorLabel(indicator2)) === true) {
@@ -2249,6 +2287,7 @@
     function sameNotionSourceIndicator(first, second) {
       if (!first || !second || first.state !== second.state) return false;
       if (first.proofElement || second.proofElement) return first.proofElement === second.proofElement;
+      if (!first.indicator && !second.indicator) return true;
       return first.composer === second.composer && first.trigger === second.trigger;
     }
     async function waitNotionMainSourceState(context, desiredState = null, timeoutMs = 1e3) {
@@ -2351,8 +2390,8 @@
     const NOTION_SOURCES_STABLE_SAMPLES = 2;
     let notionSourcesOperationTail = Promise.resolve();
     const notionText = (value) => normalize2(value).toLowerCase().replace(/\s+/g, " ");
-    function activateNotionSourcesElement(context, element) {
-      const activate = typeof preferredModelPointerActivate === "function" ? preferredModelPointerActivate : preferredModelActivate;
+    function activateNotionSourcesElement(context, element, options = {}) {
+      const activate = options.pointer === false ? preferredModelActivate : typeof preferredModelPointerActivate === "function" ? preferredModelPointerActivate : preferredModelActivate;
       return activate(context, element);
     }
     function preferredModelTimeRemaining(context, requestedMs) {
@@ -2810,7 +2849,8 @@
       if (overlays.length === 1) lease.allSourcesOverlay = overlays[0];
       return overlays.length === 1 ? overlays[0] : null;
     }
-    function observeNotionAllSourcesState(binding) {
+    function observeNotionAllSourcesState(binding, options = {}) {
+      const allowBindingReplacement = options.allowBindingReplacement === true;
       const overlays = notionSourcesMenuRoots().filter((root) => notionTextLooksLikeAllSources(modelElementText(root)));
       if (overlays.length > 1) return { state: null, reason: "all sources overlay is ambiguous" };
       const overlay = overlays[0] || null;
@@ -2821,16 +2861,16 @@
       const rowResult = singleNotionSourcesRow(overlay, notionTextLooksLikeAllSources);
       if (rowResult.ambiguous) return { state: null, reason: "all sources row is ambiguous" };
       if (!rowResult.row) return { state: null, reason: "all sources row not found" };
-      if (binding?.row && binding.row !== rowResult.row) {
+      if (binding?.row && binding.row !== rowResult.row && !allowBindingReplacement) {
         return { state: null, reason: "all sources row changed" };
       }
       const toggleResult = findNotionAllSourcesToggle(rowResult.row);
       if (toggleResult.ambiguous) return { state: null, reason: "all sources toggle is ambiguous", row: rowResult.row };
       if (!toggleResult.target) return { state: null, reason: "all sources toggle not found", row: rowResult.row };
-      if (binding?.target && binding.target !== toggleResult.target) {
+      if (binding?.target && binding.target !== toggleResult.target && !allowBindingReplacement) {
         return { state: null, reason: "all sources toggle changed", row: rowResult.row };
       }
-      if (binding?.anchor && binding.anchor !== toggleResult.anchor) {
+      if (binding?.anchor && binding.anchor !== toggleResult.anchor && !allowBindingReplacement) {
         return { state: null, reason: "all sources label changed", row: rowResult.row };
       }
       const state = notionToggleState(toggleResult.target);
@@ -2846,20 +2886,25 @@
         row: rowResult.row,
         target: toggleResult.target,
         activationTarget: toggleResult.activationTarget,
-        anchor: toggleResult.anchor
+        anchor: toggleResult.anchor,
+        rebound: allowBindingReplacement && Boolean(
+          binding?.row !== rowResult.row || binding?.target !== toggleResult.target || binding?.anchor !== toggleResult.anchor
+        )
       };
     }
-    async function waitNotionAllSourcesStable(context, desiredState, binding, timeoutMs = NOTION_SOURCES_SETTLE_WAIT_MS) {
+    async function waitNotionAllSourcesStable(context, desiredState, binding, timeoutMs = NOTION_SOURCES_SETTLE_WAIT_MS, options = {}) {
       let samples = 0;
-      return Boolean(await waitForPreferredModelWithinDeadline(context, () => {
-        const observation = observeNotionAllSourcesState(binding);
-        if (observation.state === desiredState) {
-          samples += 1;
-          return samples >= NOTION_SOURCES_STABLE_SAMPLES ? observation : null;
+      let currentBinding = binding;
+      return await waitForPreferredModelWithinDeadline(context, () => {
+        const observation = observeNotionAllSourcesState(currentBinding, options);
+        if (observation.state !== desiredState) {
+          samples = 0;
+          return null;
         }
-        samples = 0;
-        return null;
-      }, timeoutMs, 120));
+        if (options.allowBindingReplacement && observation.rebound) currentBinding = { ...currentBinding, ...observation };
+        if (++samples < NOTION_SOURCES_STABLE_SAMPLES) return null;
+        return true;
+      }, timeoutMs, 120);
     }
     async function openNotionSourcesMenu(context, trigger, lease) {
       const existing = findNotionSourcesMenuRoot(trigger, { exactOnly: true });
@@ -3205,11 +3250,14 @@
         });
       }
       const changed = initial.state !== desiredState;
-      if (changed && (!initial.activationTarget || !activateNotionSourcesElement(context, initial.activationTarget))) {
+      if (changed && (!initial.activationTarget || !activateNotionSourcesElement(context, initial.activationTarget, { pointer: false }))) {
         const menuClosed2 = await closeNotionSourcesMenus(context, lease);
         assertPreferredModelRun(context);
         return preferredModelResult(context, false, "NotionAI", modelId, "all sources toggle could not be clicked", { menuClosed: menuClosed2, allSourcesState });
       }
+      const stable = changed && await waitNotionAllSourcesStable(context, desiredState, opened, NOTION_SOURCES_SETTLE_WAIT_MS, {
+        allowBindingReplacement: true
+      });
       const menuClosed = await closeNotionSourcesMenusForResult(context, lease);
       assertPreferredModelRun(context);
       if (!menuClosed) {
@@ -3218,18 +3266,18 @@
           allSourcesState
         });
       }
+      if (!changed) return preferredModelResult(context, true, "NotionAI", modelId, "", { changed, skipped: true, menuClosed, allSourcesState });
       const settled = await notionMainSourceIndicator.waitNotionMainSourceState(
         context,
         desiredState,
         NOTION_SOURCES_SETTLE_WAIT_MS
       );
       assertPreferredModelRun(context);
-      return settled ? preferredModelResult(context, true, "NotionAI", modelId, "", {
-        changed,
-        skipped: !changed,
-        menuClosed,
-        allSourcesState
-      }) : preferredModelResult(context, false, "NotionAI", modelId, "main sources indicator did not settle", {
+      if (settled) return preferredModelResult(context, true, "NotionAI", modelId, "", { changed, menuClosed, allSourcesState });
+      const mainProof = notionMainSourceIndicator.observeNotionMainSourceState();
+      if (stable && mainProof?.state === desiredState) return preferredModelResult(context, true, "NotionAI", modelId, "", { changed, menuClosed, allSourcesState });
+      if (stable && !desiredState && mainState.state === true && !mainState.indicator && !mainState.proofElement) return preferredModelResult(context, true, "NotionAI", modelId, "", { changed, menuClosed, allSourcesState });
+      return preferredModelResult(context, false, "NotionAI", modelId, "main sources indicator did not settle", {
         menuClosed,
         allSourcesState
       });
@@ -3304,8 +3352,8 @@
       sonnet5: Object.freeze({ id: "sonnet5", label: "Claude Sonnet 5", aliases: ["Sonnet 5"] }),
       opus47: Object.freeze({ id: "opus47", label: "Claude Opus 4.7", aliases: ["Opus 4.7"] }),
       opus48: Object.freeze({ id: "opus48", label: "Claude Opus 4.8", aliases: ["Opus 4.8"] }),
-      opus5: Object.freeze({ id: "opus5", label: "Claude Opus 5", aliases: ["Opus 5"] }),
-      fable5: Object.freeze({ id: "fable5", label: "Claude Fable 5", aliases: ["Fable 5"] }),
+      opus5: Object.freeze({ id: "opus5", label: "Claude Opus 5", aliases: ["Opus 5", "Opus 5 New", "Opus5New"] }),
+      fable5: Object.freeze({ id: "fable5", label: "Claude Fable 5", aliases: ["Fable 5", "Fable 5 Beta", "Fable5Beta"] }),
       gemini31pro: Object.freeze({ id: "gemini31pro", label: "Gemini 3.1 Pro", aliases: [] }),
       gemini35flash: Object.freeze({ id: "gemini35flash", label: "Gemini 3.5 Flash", aliases: [] }),
       gpt56sol: Object.freeze({ id: "gpt56sol", label: "GPT-5.6 Sol", aliases: ["GPT 5.6 Sol"] }),
@@ -3335,6 +3383,7 @@
       '[role="button"][aria-label*="模型" i]',
       '[role="button"][aria-haspopup="menu"]',
       '[role="button"][aria-haspopup="listbox"]',
+      '[role="button"][aria-haspopup="dialog"]',
       '[role="combobox"]',
       "button"
     ]);
@@ -3373,8 +3422,11 @@
     function notionText(value) {
       return normalize2(value).toLowerCase().replace(/\s+/g, " ");
     }
+    function notionTextKey(value) {
+      return notionText(value).replace(/[\s\u200b\u200c\u200d]+/g, "");
+    }
     function notionLabels(target) {
-      return [target?.label, ...target?.aliases || []].map(notionText).filter(Boolean);
+      return [target?.id, target?.label, ...target?.aliases || []].map(notionText).filter(Boolean);
     }
     function notionTextEvidence(value) {
       const evidence = /* @__PURE__ */ new Set();
@@ -3390,13 +3442,18 @@
     function notionTextLooksLikeTarget(value, target) {
       if (!target) return false;
       const labels = notionLabels(target);
-      return notionTextEvidence(value).some((candidate) => labels.includes(candidate));
+      const keys = new Set(labels.map(notionTextKey));
+      return notionTextEvidence(value).some((candidate) => labels.includes(candidate) || keys.has(notionTextKey(candidate)));
     }
     function notionModelIdsFromEvidence(evidence) {
       const ids = /* @__PURE__ */ new Set();
       for (const candidate of evidence) {
+        const candidateKey = notionTextKey(candidate);
         for (const [id, target] of Object.entries(NOTION_MODEL_TARGETS)) {
-          if (notionLabels(target).includes(candidate)) ids.add(id);
+          const labels = notionLabels(target);
+          if (labels.includes(candidate) || labels.some((label) => notionTextKey(label) === candidateKey)) {
+            ids.add(id);
+          }
         }
       }
       return ids;
@@ -3416,6 +3473,9 @@
         add(node.getAttribute?.("aria-label"));
         add(node.getAttribute?.("aria-valuetext"));
         add(node.getAttribute?.("title"));
+        add(node.getAttribute?.("data-model"));
+        add(node.getAttribute?.("data-model-id"));
+        add(node.getAttribute?.("data-model-key"));
         add(node.getAttribute?.("data-value"));
         add(node.getAttribute?.("value"));
         add(node.innerText || node.textContent || "");
@@ -3566,6 +3626,7 @@
       const normalized = notionText(textValue);
       let score = 0;
       if (normalized.includes("select a model")) score += 160;
+      if (normalized.includes("for your hardest tasks")) score += 160;
       if (normalized.includes("open models")) score += 80;
       score += Math.min(5, notionModelIdsFromElement(root).size) * 80;
       return score >= 160 ? score : -1;
@@ -3706,11 +3767,20 @@
       for (const element of visibleSelectorElements(NOTION_MODEL_MENU_ITEM_SELECTORS, root)) add(element);
       for (const element of visibleSelectorElements(["div", "span", "button"], root)) add(element);
       rows.sort((a, b) => scoreNotionModelItem(b, modelId, { allowDisabled }) - scoreNotionModelItem(a, modelId, { allowDisabled }));
-      return rows;
+      const semanticRows = rows.filter((row) => {
+        const role = String(row.getAttribute?.("role") || "").toLowerCase();
+        return role === "menuitem" || role === "menuitemradio" || role === "option";
+      });
+      return semanticRows.length > 0 ? semanticRows : rows;
     }
     function findNotionModelItem(root, modelId) {
       const rows = notionModelItemRows(root, modelId);
-      return rows.length === 1 ? rows[0] : null;
+      if (rows.length === 1) return rows[0];
+      const groupedPicker = notionText(modelElementText(root)).includes("for your hardest tasks");
+      if (groupedPicker && rows.length > 1 && rows.every((row) => notionModelIdsFromElement(row).size === 1 && notionModelIdsFromElement(row).has(modelId))) {
+        return rows[0];
+      }
+      return null;
     }
     function findNotionExactUnavailableModelItem(root, modelId) {
       const rows = notionModelItemRows(root, modelId, { allowDisabled: true });
@@ -3902,7 +3972,12 @@
         if (currentNotionModelId(trigger) === modelId) {
           return preferredModelResult(context, true, "NotionAI", modelId, "", { skipped: true, menuClosed: menuClosed2 });
         }
-        return preferredModelResult(context, false, "NotionAI", modelId, "target model item not found", { menuClosed: menuClosed2 });
+        return preferredModelResult(context, false, "NotionAI", modelId, "target model item not found", {
+          retryable: menuClosed2 === true,
+          retryableBeforeSelection: true,
+          selectionActivated: false,
+          menuClosed: menuClosed2
+        });
       }
       const clicked = preferredModelActivate(context, item);
       let settled = clicked ? await waitNotionModelSettled(context, modelId, trigger) : false;

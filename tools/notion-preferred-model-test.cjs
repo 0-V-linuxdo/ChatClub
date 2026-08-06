@@ -102,6 +102,7 @@ function createFixture({
   itemClass = "",
   itemDisabled = false,
   duplicateItem = false,
+  structuralTargetDuplicate = false,
   decorativeRightSvg = false,
   rightMarker = null,
   itemBecomesAvailableDuringWait = false,
@@ -111,7 +112,8 @@ function createFixture({
   onTriggerWait = null,
   abortDuringTriggerHydration = false,
   modelMenuCloseFails = false,
-  itemSelectionSettles = true
+  itemSelectionSettles = true,
+  liveModelPicker = false
 } = {}) {
   let triggerHydrationIndex = 0;
   const state = {
@@ -120,6 +122,7 @@ function createFixture({
     waitCalls: [],
     sleepCalls: 0,
     composerWideScans: 0,
+    modelTriggerSelectorScans: 0,
     triggerClicks: 0,
     distractorTriggerClicks: 0,
     distractorClicks: 0,
@@ -130,15 +133,19 @@ function createFixture({
     activeRun: null
   };
   const menu = element("model-menu", {
-    attributes: { role: "menu" },
-    text: `Select a model\nAuto\n${targetLabel}`,
+    attributes: { role: liveModelPicker ? "dialog" : "menu" },
+    text: liveModelPicker
+      ? `Auto\nFor your hardest tasks\n${targetLabel}`
+      : `Select a model\nAuto\n${targetLabel}`,
     box: rect(620, 300, 320, 360)
   });
   const trigger = element("model-trigger", {
     tagName: "DIV",
     attributes: {
-      "data-testid": triggerTestId,
-      "aria-controls": triggerControls,
+      ...(liveModelPicker ? {} : {
+        "data-testid": triggerTestId,
+        "aria-controls": triggerControls
+      }),
       "aria-haspopup": "dialog",
       role: "button"
     },
@@ -188,12 +195,14 @@ function createFixture({
     box: rect(850, 720, 44, 36)
   });
   const item = element("target-model-item", {
-    tagName: "BUTTON",
-    attributes: { role: "menuitem", "aria-label": targetLabel },
+    tagName: liveModelPicker ? "DIV" : "BUTTON",
+    attributes: liveModelPicker
+      ? { role: "menuitem" }
+      : { role: "menuitem", "aria-label": targetLabel },
     className: itemClass,
     text: itemDescription ? `${targetLabel}\nBeta\n${itemDescription}` : targetLabel,
     parentElement: menu,
-    box: rect(640, 420, 280, 40)
+    box: rect(640, 420, 280, liveModelPicker ? 28 : 40)
   });
   const itemLabel = element("target-model-label", {
     tagName: "SPAN",
@@ -211,17 +220,25 @@ function createFixture({
     box: rect(890, 430, 16, 16)
   }) : null;
   const duplicate = duplicateItem ? element("duplicate-target-model-item", {
-    tagName: "BUTTON",
-    attributes: { role: "menuitem", "aria-label": targetLabel },
+    tagName: liveModelPicker ? "DIV" : "BUTTON",
+    attributes: liveModelPicker
+      ? { role: "menuitem" }
+      : { role: "menuitem", "aria-label": targetLabel },
     text: targetLabel,
     parentElement: menu,
-    box: rect(640, 466, 280, 40)
+    box: rect(640, 466, 280, liveModelPicker ? 28 : 40)
   }) : null;
   const duplicateLabel = duplicate ? element("duplicate-target-model-label", {
     tagName: "SPAN",
     text: targetLabel,
     parentElement: duplicate,
     box: rect(660, 472, 160, 20)
+  }) : null;
+  const structuralTargetDuplicateNode = structuralTargetDuplicate ? element("structural-target-model-duplicate", {
+    tagName: "DIV",
+    text: targetLabel,
+    parentElement: menu,
+    box: rect(640, 514, 280, 40)
   }) : null;
 
   const setTriggerText = (value) => {
@@ -241,17 +258,21 @@ function createFixture({
     return Boolean(node);
   };
   const visibleSelectorElements = (selectors, queryRoot = global.document) => {
+    const selectorList = Array.isArray(selectors) ? selectors : [selectors];
     const value = selectorText(selectors);
     if (queryRoot === global.document && value.includes("div")) state.composerWideScans += 1;
+    if (queryRoot === global.document && value.includes('[role="button"][aria-haspopup="dialog"]')) {
+      state.modelTriggerSelectorScans += 1;
+    }
     if (queryRoot === menu) {
       return state.menuOpen && state.itemAvailable
-        ? [item, itemLabel, duplicate, duplicateLabel].filter(Boolean)
+        ? [item, itemLabel, duplicate, duplicateLabel, structuralTargetDuplicateNode].filter(Boolean)
         : [];
     }
     if (queryRoot === item) {
       return state.menuOpen && state.itemAvailable ? [decorativeMarker].filter(Boolean) : [];
     }
-    if (value.includes("role=\"menu\"") || value.includes("role=\"listbox\"") || value.includes("role='menu'")) {
+    if (value.includes("role=\"menu\"") || value.includes("role=\"listbox\"") || value.includes("role=\"dialog\"") || value.includes("role='menu'")) {
       return [
         state.menuOpen ? menu : null,
         unrelatedMenu,
@@ -262,7 +283,13 @@ function createFixture({
       value.includes('[data-testid="agent-chat-model-button"]')
       || value.includes('[data-testid="unified-chat-model-button"]')
     ) {
-      return triggerAvailable ? [trigger, secondTrigger].filter(Boolean) : [];
+      if (trigger.getAttribute("data-testid")) {
+        return triggerAvailable ? [trigger, secondTrigger].filter(Boolean) : [];
+      }
+      if (selectorList.length <= 2) return [];
+    }
+    if (value.includes('[role="button"][aria-haspopup="dialog"]')) {
+      return triggerAvailable ? [trigger] : [];
     }
     if (value.includes("textarea") && value.includes("contenteditable")) {
       return composerAvailable ? [composer] : [];
@@ -294,7 +321,15 @@ function createFixture({
     reason,
     runId: context.runId,
     interactionCount: context.interactionCount,
-    retryable: Boolean(extra.retryable) && context.interactionCount === 0
+    retryable: Boolean(extra.retryable)
+      && (
+        context.interactionCount === 0
+        || (
+          extra.retryableBeforeSelection === true
+          && extra.selectionActivated !== true
+          && extra.menuClosed === true
+        )
+      )
   });
   const abortActivePreferredModelRun = (reason, runId = "") => {
     const active = state.activeRun;
@@ -449,7 +484,9 @@ function createSourcesFixture({
   sourceTriggerMinWaitMsAfterModelSelection = 0,
   sourceToggleResetsModel = false,
   modelSelectionResetsSource = false,
+  pointerSourceToggleNoop = false,
   replaceAllSourcesChildrenAfterStateReads = 0,
+  replaceAllSourcesChildrenAfterToggle = false,
   replacementAllSourcesState = null,
   settingsControlsMode = "exact",
   directAllSources = false,
@@ -471,6 +508,9 @@ function createSourcesFixture({
   sourceIndicatorStateSequence = [],
   duplicateSourceIndicator = false,
   duplicateSourceDisabledIconAvailable = true,
+  nonSourceMenuControl = false,
+  contextMenuPopup = "menu",
+  disabledIconOnNonSourceControl = false,
   preopenSettings = false,
   preopenSettingsAfterIndicatorScans = 0,
   narrowComposer = false
@@ -485,6 +525,7 @@ function createSourcesFixture({
     mySourcesClicks: 0,
     mySourcesChildClicks: 0,
     toggleClicks: 0,
+    pointerSourceToggleClicks: 0,
     secondToggleClicks: 0,
     dismissCalls: 0,
     waitCalls: [],
@@ -632,6 +673,17 @@ function createSourcesFixture({
     parentElement: composer,
     box: narrowComposer ? rect(196, 700, 36, 36) : rect(786, 700, 36, 36)
   });
+  const contextMenuControl = element("notion-context-menu-control", {
+    tagName: "DIV",
+    attributes: {
+      "data-testid": "unified-chat-plus-menu-button",
+      role: "button",
+      "aria-label": "Give context",
+      "aria-haspopup": contextMenuPopup
+    },
+    parentElement: composer,
+    box: narrowComposer ? rect(48, 700, 36, 36) : rect(220, 700, 36, 36)
+  });
   const createSourceDisabledIcon = (id, parentElement) => {
     const icon = element(id, {
       tagName: "SVG",
@@ -643,6 +695,9 @@ function createSourcesFixture({
     return icon;
   };
   const sourceDisabledIcon = createSourceDisabledIcon("notion-source-disabled-icon", sourceIndicator);
+  const contextMenuDisabledIcon = disabledIconOnNonSourceControl
+    ? createSourceDisabledIcon("notion-context-menu-disabled-icon", contextMenuControl)
+    : null;
   const replacementSourceDisabledIcon = createSourceDisabledIcon(
     "notion-source-disabled-icon-replacement",
     replacementSourceIndicator
@@ -1018,8 +1073,12 @@ function createSourcesFixture({
     if (node === duplicateSourceIndicatorNode) {
       return sourceIndicatorRendered && duplicateSourceIndicator;
     }
+    if (node === contextMenuControl) return nonSourceMenuControl;
     if (node === sourceDisabledIcon) {
       return sourceDisabledIconAvailable && visible(sourceIndicator) && !state.sourceIndicatorEnabled;
+    }
+    if (node === contextMenuDisabledIcon) {
+      return sourceDisabledIconAvailable && visible(contextMenuControl) && !state.sourceIndicatorEnabled;
     }
     if (node === replacementSourceDisabledIcon) {
       const enabled = sourceIndicatorReplacementState === null
@@ -1122,6 +1181,7 @@ function createSourcesFixture({
       if (value.includes("teamspaceSlashSmall") || value.includes("graphics-symbol")) {
         scanSourceIndicator();
         add(sourceDisabledIcon);
+        add(contextMenuDisabledIcon);
         add(replacementSourceDisabledIcon);
         add(duplicateSourceDisabledIcon);
         return out;
@@ -1139,6 +1199,7 @@ function createSourcesFixture({
         add(sourceIndicator);
         add(replacementSourceIndicator);
         add(duplicateSourceIndicatorNode);
+        add(contextMenuControl);
         return out;
       }
       if (
@@ -1186,6 +1247,7 @@ function createSourcesFixture({
       scanSourceIndicator();
       if (value.includes("teamspaceSlashSmall") || value.includes("graphics-symbol")) {
         add(sourceDisabledIcon);
+        add(contextMenuDisabledIcon);
         add(replacementSourceDisabledIcon);
         add(duplicateSourceDisabledIcon);
       } else {
@@ -1193,8 +1255,10 @@ function createSourcesFixture({
         add(replacementSourceIndicator);
         add(duplicateSourceIndicatorNode);
       }
+      add(contextMenuControl);
     }
     if (queryRoot === sourceIndicator) add(sourceDisabledIcon);
+    if (queryRoot === contextMenuControl) add(contextMenuDisabledIcon);
     if (queryRoot === replacementSourceIndicator) add(replacementSourceDisabledIcon);
     if (queryRoot === duplicateSourceIndicatorNode) add(duplicateSourceDisabledIcon);
     if (queryRoot === settingsMenu) {
@@ -1350,6 +1414,7 @@ function createSourcesFixture({
       state.toggleClicks += 1;
       if (toggleChanges) state.allSourcesEnabled = !state.allSourcesEnabled;
       if (toggleChanges) scheduleSourceIndicatorState(state.allSourcesEnabled);
+      if (toggleChanges && replaceAllSourcesChildrenAfterToggle) state.childReplacementActive = true;
       if (sourceToggleResetsModel) setModelTriggerText("Auto");
       if (toggleClosesMenus) {
         state.settingsOpen = false;
@@ -1390,6 +1455,7 @@ function createSourcesFixture({
       sourceIndicator,
       replacementSourceIndicator,
       duplicateSourceIndicator: duplicateSourceIndicatorNode,
+      contextMenuControl,
       sourceDisabledIcon
     }),
     documentGetElementById(id) {
@@ -1436,7 +1502,15 @@ function createSourcesFixture({
       isDisabledElement: (node) => modelItemDisabled && node === modelItem,
       assertPreferredModelRun,
       preferredModelActivate: activate,
-      preferredModelPointerActivate: activate,
+      preferredModelPointerActivate(context, target) {
+        if (pointerSourceToggleNoop && (target === toggle || target === toggleTrack)) {
+          assertPreferredModelRun(context);
+          context.interactionCount += 1;
+          state.pointerSourceToggleClicks += 1;
+          return true;
+        }
+        return activate(context, target);
+      },
       async waitForPreferredModel(context, getter, timeoutMs, intervalMs) {
         assertPreferredModelRun(context);
         state.waitCalls.push({ timeoutMs, intervalMs });
@@ -1678,12 +1752,16 @@ function createSourcesFixture({
   );
 
   for (const modelCase of NOTION_MODEL_CASES) {
+    const liveMenuLabel = {
+      opus5: "Opus5New",
+      fable5: "Fable5Beta"
+    }[modelCase.id] || modelCase.menuLabel;
     const fixture = createFixture({
       triggerText: "Choose model",
       triggerTestId: modelCase.id === "sonnet5"
         ? "agent-chat-model-button"
         : "unified-chat-model-button",
-      targetLabel: modelCase.menuLabel,
+      targetLabel: liveMenuLabel,
       itemDescription: modelCase.id === "opus5" ? "Most capable reasoning model" : ""
     });
     global.document.getElementById = (id) => id === "model-menu" && fixture.state.menuOpen
@@ -1704,6 +1782,32 @@ function createSourcesFixture({
       0,
       `${modelCase.id} must use an exact current/legacy model trigger without a document-wide scan`
     );
+  }
+
+  for (const modelCase of [
+    { id: "fable5", menuLabel: "Fable5Beta" },
+    { id: "gpt56sol", menuLabel: "GPT-5.6Sol" },
+    { id: "kimi3", menuLabel: "KimiK3" }
+  ]) {
+    const fixture = createFixture({
+      triggerText: "Auto",
+      composerAvailable: true,
+      targetLabel: modelCase.menuLabel,
+      liveModelPicker: true,
+      duplicateItem: modelCase.id !== "fable5"
+    });
+    global.document.getElementById = () => null;
+    const api = createPreferredNotionDeepSeekCapability(fixture.dependencies);
+    const result = await api.runPreferredModelApply({
+      appId: "NotionAI",
+      modelId: modelCase.id,
+      runId: `notion-live-picker-${modelCase.id}`
+    });
+    assert.equal(result.ok, true, `${modelCase.id} must work with the updated dialog picker`);
+    assert.equal(result.changed, true);
+    assert.equal(fixture.state.triggerClicks, 1);
+    assert.equal(fixture.state.itemClicks, 1);
+    assert.ok(fixture.state.modelTriggerSelectorScans > 0, "the updated picker must use the new dialog-trigger selector");
   }
 
   for (const scenario of [
@@ -1747,9 +1851,58 @@ function createSourcesFixture({
       assert.equal(result.reason, "target model item not found");
       assert.notEqual(result.unavailable, true);
       assert.notEqual(result.fallbackEligible, true);
+      assert.equal(result.retryable, true, `${scenario.name} may retry after its owned menu is safely closed`);
+      assert.equal(result.retryableBeforeSelection, true);
+      assert.equal(result.selectionActivated, false);
+      assert.equal(result.menuClosed, true);
     }
     assert.equal(fixture.state.triggerClicks, 1, `${scenario.name} may open only the owned model menu`);
     assert.equal(fixture.state.itemClicks, 0, `${scenario.name} must not activate a model row`);
+  }
+
+  {
+    const fixture = createFixture({
+      triggerText: "Choose model",
+      targetLabel: "Fable 5",
+      structuralTargetDuplicate: true
+    });
+    global.document.getElementById = (id) => id === "model-menu" && fixture.state.menuOpen
+      ? fixture.dependencies.visibleSelectorElements('[role="menu"]')[0]
+      : null;
+    const api = createPreferredNotionDeepSeekCapability(fixture.dependencies);
+    const result = await api.runPreferredModelApply({
+      appId: "NotionAI",
+      modelId: "fable5",
+      runId: "notion-semantic-row-wins-over-structural-clone"
+    });
+    assert.equal(result.ok, true, "a semantic Fable 5 row must win over a duplicate structural label");
+    assert.equal(result.changed, true);
+    assert.equal(fixture.state.itemClicks, 1, "only the semantic Fable 5 row may be activated");
+  }
+
+  {
+    const fixture = createFixture({
+      triggerText: "Choose model",
+      targetLabel: "Fable 5",
+      itemAvailable: false,
+      itemBecomesAvailableDuringWait: false
+    });
+    global.document.getElementById = (id) => id === "model-menu" && fixture.state.menuOpen
+      ? fixture.dependencies.visibleSelectorElements('[role="menu"]')[0]
+      : null;
+    const api = createPreferredNotionDeepSeekCapability(fixture.dependencies);
+    const first = await api.runPreferredModelApply({
+      appId: "NotionAI",
+      modelId: "fable5",
+      runId: "notion-preselection-hydration-miss"
+    });
+    assert.equal(first.ok, false);
+    assert.equal(first.reason, "target model item not found");
+    assert.equal(first.retryable, true, "a missing Fable 5 row may retry before any selection");
+    assert.equal(first.retryableBeforeSelection, true);
+    assert.equal(first.selectionActivated, false);
+    assert.equal(first.menuClosed, true);
+    assert.equal(fixture.state.itemClicks, 0);
   }
 
   {
@@ -2182,6 +2335,74 @@ function createSourcesFixture({
     assert.equal(result.menuClosed, true);
   }
 
+  {
+    const { fixture, result } = await runSourcesFixture(
+      {
+        initialState: true,
+        sourceIndicatorAvailable: false,
+        nonSourceMenuControl: true
+      },
+      "enabled",
+      "notion-sources-ignores-give-context-menu"
+    );
+    assert.equal(result.ok, true, "Fable 5's Give context menu must not be mistaken for a Sources indicator");
+    assert.equal(result.skipped, true);
+    assert.equal(result.reason, "");
+    assert.equal(result.interactionCount, 0);
+    assert.equal(fixture.state.triggerClicks, 0);
+    assert.equal(fixture.state.mySourcesClicks, 0);
+    assert.equal(fixture.state.toggleClicks, 0);
+  }
+
+  {
+    const { fixture, result } = await runSourcesFixture(
+      {
+        initialState: false,
+        sourceIndicatorAvailable: false,
+        nonSourceMenuControl: true,
+        contextMenuPopup: "dialog",
+        disabledIconOnNonSourceControl: true
+      },
+      "disabled",
+      "notion-sources-disabled-icon-inside-give-context"
+    );
+    assert.equal(result.ok, true, "Fable 5's explicit Sources-off icon inside Give context must prove the disabled state");
+    assert.equal(result.skipped, true);
+    assert.equal(result.reason, "");
+    assert.equal(result.interactionCount, 0);
+    assert.equal(fixture.state.triggerClicks, 0);
+    assert.equal(fixture.state.mySourcesClicks, 0);
+    assert.equal(fixture.state.toggleClicks, 0);
+  }
+
+  {
+    const { fixture, result } = await runSourcesFixture(
+      { initialState: true, sourceIndicatorAvailable: false },
+      "disabled",
+      "notion-sources-fable5-disable-without-main-indicator"
+    );
+    assert.equal(result.ok, true, "Fable 5 must accept the owned All sources toggle proof when no main indicator is rendered");
+    assert.equal(result.changed, true);
+    assert.equal(fixture.state.allSourcesEnabled, false);
+    assert.equal(fixture.state.toggleClicks, 1);
+    assert.equal(fixture.state.triggerClicks, 2);
+    assert.equal(fixture.state.mySourcesClicks, 1);
+  }
+
+  {
+    const { fixture, result } = await runSourcesFixture(
+      { initialState: false, sourceIndicatorAvailable: false },
+      "disabled",
+      "notion-sources-fable5-already-disabled-without-main-indicator"
+    );
+    assert.equal(result.ok, true, "Fable 5 must accept a stable direct All sources disabled state without a main indicator");
+    assert.equal(result.skipped, true);
+    assert.equal(result.changed, false);
+    assert.equal(fixture.state.toggleClicks, 0, "an already-satisfied direct source state must not be toggled");
+    assert.equal(fixture.state.triggerClicks, 2);
+    assert.equal(fixture.state.mySourcesClicks, 1);
+  }
+
   for (const sourceIndicatorDisabledLabel of ["No sources", "Web search only"]) {
     const { fixture, result } = await runSourcesFixture(
       { initialState: false, sourceIndicatorDisabledLabel },
@@ -2401,6 +2622,18 @@ function createSourcesFixture({
     assert.equal(fixture.state.allSourcesEnabled, true);
     assert.equal(fixture.state.toggleClicks, 1, "the transparent semantic input must still cause exactly one setting change");
     assert.equal(result.interactionCount, 3);
+  }
+
+  {
+    const { fixture, result } = await runSourcesFixture(
+      { initialState: true, pointerSourceToggleNoop: true },
+      "disabled",
+      "notion-sources-native-toggle-activation"
+    );
+    assert.equal(result.ok, true, "the source switch must use native activation after Notion pointer events can replace its node");
+    assert.equal(result.changed, true);
+    assert.equal(fixture.state.toggleClicks, 1);
+    assert.equal(fixture.state.pointerSourceToggleClicks, 0, "the source switch must not use the pointer prelude");
   }
 
   {
@@ -2876,6 +3109,20 @@ function createSourcesFixture({
     assert.equal(fixture.state.toggleClicks, 0, "an unstable pre-write binding must never be activated");
     assert.equal(fixture.state.replacementToggleClicks, 0, "replacement menu controls must never be adopted after delivery uncertainty");
     assert.equal(fixture.state.triggerClicks, 2, "cleanup must close the sole Settings traversal without reopening it");
+  }
+
+  {
+    const { fixture, result } = await runSourcesFixture(
+      { initialState: true, replaceAllSourcesChildrenAfterToggle: true },
+      "disabled",
+      "notion-sources-menu-child-replacement-after-write"
+    );
+    assert.equal(result.ok, true, "a same-menu React replacement after the one source write must be rebound without replay");
+    assert.equal(result.changed, true);
+    assert.equal(fixture.state.allSourcesEnabled, false);
+    assert.equal(fixture.state.toggleClicks, 1);
+    assert.equal(fixture.state.replacementToggleClicks, 0, "post-write rebinding must never click the replacement toggle");
+    assert.equal(fixture.state.settingsOpen, false);
   }
 
   for (const scenario of [

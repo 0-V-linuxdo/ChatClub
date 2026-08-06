@@ -89,14 +89,14 @@ function responsiveBrandRules(kind) {
   const executeQueuedSend = functionSource(composer, "executeQueuedFrameSend");
   assert.equal((executeQueuedSend.match(/sendTextToFrame\(/g) || []).length, 1, "each queue execution must invoke the single-attempt sender once");
   assert.match(executeQueuedSend, /waitForPreferredModelSubmissionBarrier\(/, "same-frame FIFO must include the submission navigation barrier");
+  const admitSnapshot = functionSource(composer, "admitSnapshot");
+  assert.match(admitSnapshot, /frameSendQueue\.enqueue\(iframe,\s*\{/, "each admitted iframe must receive its own frozen queue job");
+  assert.match(admitSnapshot, /const admittedCount = entries\.filter\(\(entry\) => entry\.admitted\)\.length/, "snapshot admission must expose its admitted target count synchronously");
+  assert.match(admitSnapshot, /if \(admittedCount > 0\)[\s\S]*recordSendHistory\(text, images\)/, "one admitted snapshot must record history once rather than once per frame");
   const sendAll = functionSource(composer, "sendPromptToFrames");
-  assert.match(sendAll, /frameSendQueue\.enqueue\(iframe,\s*\{/, "each admitted iframe must receive its own frozen queue job");
-  assert.match(sendAll, /entries\.some\(\(entry\) => entry\.admitted\)/, "Composer must distinguish queue admission from immediate target skips");
-  assert.match(sendAll, /recordSendHistory\(text, images\)[\s\S]*clearInput\(\)[\s\S]*settlePromptSubmission\(entries, settlement\)/, "Composer must save and clear the admitted snapshot before asynchronous settlement");
-  assert.ok(
-    sendAll.indexOf("clearInput()") < sendAll.lastIndexOf("settlePromptSubmission(entries, settlement)"),
-    "a completed S1 must never perform the clear that could erase an already-entered S2"
-  );
+  assert.match(sendAll, /captureDraftSnapshot\(\)[\s\S]*admitSnapshot\(snapshot\)/, "ordinary send must reuse immutable snapshot admission");
+  assert.match(sendAll, /admission\.admittedCount > 0[\s\S]*clearDraftIfSnapshotCurrent\(snapshot\)/, "an admitted send must clear only the exact draft revision it captured");
+  assert.match(sendAll, /return admission\.settlement/, "ordinary send must retain its asynchronous settlement result");
   assert.doesNotMatch(composer, /promptSendInFlight/, "Composer must allow repeated submissions while earlier jobs remain queued");
   assert.doesNotMatch(
     composer,
@@ -131,12 +131,19 @@ function responsiveBrandRules(kind) {
   assert.match(topbarView, /function render\(/, "Topbar view must own normal and edit-mode rendering");
   assert.match(topbarView, /function renderSettingsMenu\(/, "Topbar view must own Settings menu rendering");
   assert.doesNotMatch(topbarView, /addEventListener\("keydown"/, "the view must not own dismissal listeners");
+  const brandLabel = functionSource(topbarView, "brandActionLabel");
+  assert.match(brandLabel, /composer\.hasDraft\(\)[\s\S]*topbar\.sendInNewTab[\s\S]*common\.openInNewTab/, "the Logo label must switch between opening and sending from the current draft state");
   const brandView = functionSource(topbarView, "renderBrand");
-  assert.match(brandView, /t\("common\.openInNewTab"\)/, "the Logo must announce its new-tab behavior");
+  assert.match(brandView, /const label = brandActionLabel\(\)/, "the Logo must use the dynamic new-tab action label");
   assert.match(brandView, /"aria-label": label[\s\S]*"data-tooltip": label[\s\S]*"data-tooltip-id": "topbar\.brand"/, "the Logo must retain its accessible name and tooltip contract");
-  assert.match(brandView, /actions\.openNewWorkspaceTab\(\)/, "the visible Logo must open a fresh ChatClub tab");
+  assert.match(brandView, /onclick: runBrandAction/, "the visible Logo must use the guarded new-tab action");
   assert.match(brandView, /el\("div", \{\}, APP_NAME\)/, "the wide Logo must retain the complete ChatClub title");
   assert.doesNotMatch(brandView, /openSettings\("about"\)/, "the visible Logo must no longer open About");
+  const guardedBrandAction = functionSource(topbarView, "runBrandAction");
+  assert.match(guardedBrandAction, /buttonNode\.disabled = true[\s\S]*aria-busy[\s\S]*await actions\.openNewWorkspaceTab\(\)[\s\S]*finally/, "the visible Logo must suppress repeated activation until the new-tab request settles");
+  const foldedBrand = functionSource(topbarView, "renderFoldedMenuButton");
+  assert.match(foldedBrand, /item\.id === "brand" \? brandActionLabel\(\)/, "the folded Logo menu must expose the same dynamic send/open label");
+  assert.match(topbar, /composer\.subscribeDraftChanges\(\(\) => view\.syncBrandState\(\)\)/, "Topbar must update mounted Logo labels as the Composer draft changes");
 
   const appShellCss = cssRuleBody(chatclubCss, /(?:^|\n)\.app-shell\s*\{/, "App shell");
   const topbarCss = cssRuleBody(chatclubCss, /(?:^|\n)\.topbar\s*\{/, "Topbar");
@@ -280,6 +287,9 @@ function responsiveBrandRules(kind) {
   );
   assert.match(chatclubCss, /\.prompt-model-gate-status\.tooltip-trigger\s*\{[\s\S]*?top:\s*5px;[\s\S]*?pointer-events:\s*auto;/, "the visual model status must stay in the top control row and remain interactive");
   assert.match(chatclubCss, /prompt-shell-expanded\.prompt-shell-has-images \.prompt-model-gate-status\s*\{[\s\S]*?top:\s*12px;/, "image mode must keep the model status in its top control row");
+  assert.match(chatclubCss, /\.prompt-shell\.prompt-shell-expanded\.prompt-shell-has-images\s*\{[\s\S]*?max-height:\s*360px;/, "image mode must allow the prompt shell to grow with multiline text");
+  assert.match(chatclubCss, /\.prompt-shell-has-images \.textarea\.prompt-input-expanded\s*\{[\s\S]*?max-height:\s*360px;[\s\S]*?overflow-y:\s*auto;/, "image mode must allow a capped textarea to scroll instead of clipping text");
+  assert.doesNotMatch(chatclubCss, /\.prompt-shell-has-images \.textarea\.prompt-input-expanded\s*\{[^}]*!important/, "image mode height must remain overridable by measured inline sizing");
   assert.doesNotMatch(chatclubCss, /\.prompt-model-gate-status[^\{]*\{[^}]*top:\s*calc\(100%/, "the model status must never float below Composer over an iframe");
   assert.match(chatclubCss, /\.prompt-model-gate-live\s*\{[\s\S]*?clip-path:\s*inset\(50%\);/, "the dedicated model live region must be visually hidden without the hidden attribute");
   for (const method of [

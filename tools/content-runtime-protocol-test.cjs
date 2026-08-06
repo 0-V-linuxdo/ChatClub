@@ -92,8 +92,8 @@ function bundledLiteral(source, name) {
     deleteTargets: [registrationTarget],
     messageNavigatorTargets: [registrationTarget]
   });
-  const registrationsById = new Map(registrations.map((registration) => [registration.id, registration]));
   assert.equal(registrations.length, Object.keys(frameCommands.CONTENT_BUNDLES).length);
+  const registrationsById = new Map(registrations.map((registration) => [registration.id, registration]));
   assert.equal(registrationsById.size, registrations.length, "canonical content registration ids must be unique");
   for (const bundle of Object.values(frameCommands.CONTENT_BUNDLES)) {
     const registration = registrationsById.get(bundle.id);

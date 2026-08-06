@@ -121,7 +121,7 @@ body {
   margin: 0;
   min-width: 980px;
   min-height: 100vh;
-  background: var(--bg);
+  background: var(--frame-loading-overlay-background, var(--bg));
   color: var(--text);
   font-size: 13px;
   overflow: hidden;
@@ -149,6 +149,37 @@ button { cursor: pointer; }
 
 .app-shell.topbar-editing-mode {
   grid-template-rows: auto minmax(0, 1fr);
+}
+
+.runtime-bootstrap-failure {
+  min-height: 100vh;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  padding: 32px;
+  background: var(--bg);
+  color: var(--text);
+  text-align: center;
+}
+
+.runtime-bootstrap-failure h1,
+.runtime-bootstrap-failure p {
+  margin: 0;
+}
+
+.runtime-bootstrap-failure p {
+  max-width: 720px;
+  color: var(--muted);
+}
+
+.runtime-bootstrap-failure button {
+  min-height: var(--settings-control-height);
+  padding: 0 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--settings-radius);
+  background: var(--primary);
+  color: #ffffff;
 }
 
 .topbar {
@@ -616,6 +647,8 @@ button { cursor: pointer; }
 
 .prompt-shell.prompt-shell-expanded.prompt-shell-has-images {
   height: 180px;
+  min-height: 180px;
+  max-height: 360px;
 }
 
 .prompt-collapsed-preview {
@@ -1028,7 +1061,7 @@ button { cursor: pointer; }
   display: block;
   height: 38px;
   min-height: 38px;
-  max-height: 180px;
+  max-height: 360px;
   position: absolute;
   inset: 0 auto auto 0;
   z-index: 31;
@@ -2113,7 +2146,7 @@ body.tab-gesture-active * {
   z-index: 2;
   pointer-events: none;
   opacity: 0;
-  background: rgba(0, 0, 0, var(--frame-loading-overlay-opacity));
+  background: var(--bg);
 }
 
 .chat-frame-loading-status {
@@ -2181,7 +2214,7 @@ body.tab-gesture-active * {
 }
 
 :root[data-theme="dark"] .chat-card.frame-loading .chat-frame-wrap::after {
-  opacity: 1;
+  opacity: var(--frame-loading-overlay-opacity);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -2190,7 +2223,29 @@ body.tab-gesture-active * {
   }
 
   :root:not([data-theme="light"]) .chat-card.frame-loading .chat-frame-wrap::after {
-    opacity: 1;
+    opacity: var(--frame-loading-overlay-opacity);
+  }
+}
+
+.chat-frame-wrap[data-frame-loading-mask="black"]::after {
+  /* Cover stale pixels with a real black frame, independent of the plugin theme. */
+  background: #000000 !important;
+  /* Keep the opaque start state, but let the fade animation override it. */
+  opacity: 1;
+}
+
+.chat-frame-wrap[data-frame-loading-mask="black"][data-frame-loading-mask-phase="fade"]::after {
+  animation: chat-frame-new-topic-mask-fade 900ms ease-out forwards;
+}
+
+@keyframes chat-frame-new-topic-mask-fade {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-frame-wrap[data-frame-loading-mask="black"][data-frame-loading-mask-phase="fade"]::after {
+    animation-duration: 1ms;
   }
 }
 
@@ -2219,16 +2274,15 @@ body.tab-gesture-active * {
 }
 
 .prompt-shell-has-images .textarea.prompt-input-expanded {
-  height: 180px !important;
+  height: 180px;
   min-height: 180px;
   padding: 102px 58px 52px 16px;
-  max-height: 180px;
-  overflow-y: hidden !important;
-  scrollbar-width: none;
+  max-height: 360px;
+  overflow-y: auto;
 }
 
 .prompt-shell-has-images .textarea.prompt-input-expanded::-webkit-scrollbar {
-  display: none;
+  width: 8px;
 }
 
 .prompt-shell-expanded.prompt-shell-has-images .prompt-actions-button.tooltip-trigger {

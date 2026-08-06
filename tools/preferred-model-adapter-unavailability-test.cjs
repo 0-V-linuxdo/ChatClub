@@ -87,7 +87,10 @@ async function runGrokScenario({ menuClosed = true, unavailable = true, itemPres
     assert.equal(result.ok, false);
     assert.equal(result.reason, "selection did not settle");
     assert.notEqual(result.unavailable, true);
-    assert.notEqual(result.fallbackEligible, true, "post-activation settlement failure must remain ineligible");
+    assert.equal(result.fallbackEligible, true, "a closed post-activation picker should allow the configured secondary");
+    assert.equal(result.selectionActivated, true);
+    assert.equal(result.selectionUnsettled, true);
+    assert.equal(result.menuClosed, true);
     assert.deepEqual(counts, { selectionActivations: 1, settlementWaits: 1, dismissals: 1 });
   }
 

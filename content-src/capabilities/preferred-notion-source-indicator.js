@@ -3,6 +3,24 @@ const NOTION_SOURCE_INDICATOR_SELECTORS = Object.freeze([
   '[role="button"][aria-haspopup="menu"]',
   'button[aria-haspopup="menu"]'
 ]);
+const NOTION_SOURCE_NON_INDICATOR_TEST_IDS = new Set([
+  "unified-chat-plus-menu-button",
+  "unified-chat-start-recording-button",
+  "agent-send-message-button"
+]);
+const NOTION_SOURCE_NON_INDICATOR_LABELS = new Set([
+  "give context",
+  "add context",
+  "attach files",
+  "start voice recording",
+  "submit ai message",
+  "send message",
+  "添加上下文",
+  "附件",
+  "开始录音",
+  "提交 ai 消息",
+  "发送消息"
+]);
 // Notion renders this locale-neutral icon only for its standard ai-knowledge (Sources off) state.
 // Its official scopeName values are All sources I can access / No sources / Web search only.
 const NOTION_SOURCE_DISABLED_ICON_SELECTOR = 'svg.teamspaceSlashSmall[role="graphics-symbol"]';
@@ -68,6 +86,12 @@ export function createPreferredNotionSourceIndicator(deps = {}) {
       || label === "设置";
   }
 
+  function notionSourceIndicatorIsNonSourceControl(element) {
+    const testId = notionText(element?.getAttribute?.("data-testid"));
+    if (NOTION_SOURCE_NON_INDICATOR_TEST_IDS.has(testId)) return true;
+    return NOTION_SOURCE_NON_INDICATOR_LABELS.has(notionSourceIndicatorLabel(element));
+  }
+
   function notionSourceIndicatorIsModelControl(element) {
     const testId = notionText(element?.getAttribute?.("data-testid"));
     const label = notionSourceIndicatorLabel(element);
@@ -81,7 +105,8 @@ export function createPreferredNotionSourceIndicator(deps = {}) {
     const candidates = visibleSelectorElements(NOTION_SOURCE_INDICATOR_SELECTORS)
       .filter((element) => isNotionControlNearMainComposer(element, composerRoot, composerRect))
       .filter((element) => !notionSourceIndicatorIsSettings(element))
-      .filter((element) => !notionSourceIndicatorIsModelControl(element));
+      .filter((element) => !notionSourceIndicatorIsModelControl(element))
+      .filter((element) => !notionSourceIndicatorIsNonSourceControl(element));
     return [...new Set(candidates)];
   }
 
@@ -90,7 +115,10 @@ export function createPreferredNotionSourceIndicator(deps = {}) {
     while (node && node.nodeType === 1) {
       if (
         String(node.getAttribute?.("role") || "").toLowerCase() === "button"
-        && String(node.getAttribute?.("aria-haspopup") || "").toLowerCase() === "menu"
+        && (
+          String(node.getAttribute?.("aria-haspopup") || "").toLowerCase() === "menu"
+          || notionSourceIndicatorIsNonSourceControl(node)
+        )
       ) return node;
       node = node.parentElement || null;
     }
@@ -116,7 +144,15 @@ export function createPreferredNotionSourceIndicator(deps = {}) {
     }
     if (disabledIcons.length === 1) {
       const { icon, indicator } = disabledIcons[0];
-      if (candidates.length !== 1 || candidates[0] !== indicator) {
+      const candidateMatches = candidates.length === 1 && candidates[0] === indicator;
+      // In Fable 5, Sources-off is rendered as an explicit slash icon inside
+      // the Give context control. Give context is intentionally excluded from
+      // the generic Sources candidates, so the icon itself must be the source
+      // proof when its owner is that known non-Sources control.
+      const explicitDisabledMarkerOwner = notionSourceIndicatorIsNonSourceControl(indicator)
+        && !notionSourceIndicatorIsSettings(indicator)
+        && !notionSourceIndicatorIsModelControl(indicator);
+      if (!candidateMatches && !explicitDisabledMarkerOwner) {
         return { state: null, reason: "sources indicator is ambiguous" };
       }
       if (notionSourceStateFromLabel(notionSourceIndicatorLabel(indicator)) === true) {
@@ -145,6 +181,11 @@ export function createPreferredNotionSourceIndicator(deps = {}) {
   function sameNotionSourceIndicator(first, second) {
     if (!first || !second || first.state !== second.state) return false;
     if (first.proofElement || second.proofElement) return first.proofElement === second.proofElement;
+    // Fable 5's current composer has no main Sources indicator when it is in
+    // Notion's default All Sources state.  Closing Settings can replace the
+    // composer subtree, so the absence proof must be sampled twice without
+    // requiring React to preserve the same wrapper node.
+    if (!first.indicator && !second.indicator) return true;
     return first.composer === second.composer && first.trigger === second.trigger;
   }
 

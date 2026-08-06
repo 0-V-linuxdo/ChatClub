@@ -36,6 +36,9 @@ export {
 export const BACKGROUND_REQUEST_ACTIONS = Object.freeze({
   CLAIM_WORKSPACE_SESSION_RECOVERY: "claimWorkspaceSessionRecovery",
   COMMIT_WORKSPACE_SESSION_RECOVERY: "commitWorkspaceSessionRecovery",
+  OPEN_WORKSPACE_TAB_WITH_PROMPT: "openWorkspaceTabWithPrompt",
+  CLAIM_WORKSPACE_PROMPT_HANDOFF: "claimWorkspacePromptHandoff",
+  SETTLE_WORKSPACE_PROMPT_HANDOFF: "settleWorkspacePromptHandoff",
   REGISTER_FRAME_CONTEXT: REGISTER_FRAME_CONTEXT_REQUEST.action,
   SEND_FRAME_COMMAND: "sendFrameCommand",
   VERIFY_FRAME_CONTEXT: "verifyFrameContext",
@@ -79,6 +82,18 @@ export const BACKGROUND_REQUEST_ACTIONS = Object.freeze({
 
 const ACTION = BACKGROUND_REQUEST_ACTIONS;
 const extensionPage = extensionPageRequest;
+const WORKSPACE_PROMPT_HANDOFF_ERROR_CODES = Object.freeze([
+  "HANDOFF_CLEANUP_FAILED",
+  "HANDOFF_DUPLICATE",
+  "HANDOFF_INVALID",
+  "HANDOFF_LIMIT",
+  "HANDOFF_NOT_CLAIMED",
+  "HANDOFF_PAYLOAD_MISSING",
+  "HANDOFF_SENDER_INVALID",
+  "HANDOFF_STORAGE_FAILED",
+  "HANDOFF_TAB_OPEN_FAILED",
+  "HANDOFF_TARGET_MISMATCH"
+]);
 const contentSpecs = Object.fromEntries(
   CONTENT_BACKGROUND_REQUEST_CONTRACTS.map(({ action, spec }) => [action, spec])
 );
@@ -106,6 +121,27 @@ export const BACKGROUND_REQUEST_SPECS = Object.freeze({
       workspaceSessionGeneration: "string"
     })
   }),
+  [ACTION.OPEN_WORKSPACE_TAB_WITH_PROMPT]: extensionPage({
+    mutates: true,
+    payload: contract({ handoffId: "string", locator: "object" }),
+    response: contract({ handoffId: "string", workspaceId: "string", tabId: "integer" }),
+    errorCodes: WORKSPACE_PROMPT_HANDOFF_ERROR_CODES
+  }),
+  [ACTION.CLAIM_WORKSPACE_PROMPT_HANDOFF]: extensionPage({
+    mutates: true,
+    payload: contract({ workspaceId: "string" }),
+    response: contract(
+      { claimed: "boolean" },
+      { handoffId: "string", claimId: "string", locator: "object" }
+    ),
+    errorCodes: WORKSPACE_PROMPT_HANDOFF_ERROR_CODES
+  }),
+  [ACTION.SETTLE_WORKSPACE_PROMPT_HANDOFF]: extensionPage({
+    mutates: true,
+    payload: contract({ workspaceId: "string", handoffId: "string", claimId: "string", admittedCount: "integer" }),
+    response: contract({ settled: "boolean", outcome: "string" }),
+    errorCodes: WORKSPACE_PROMPT_HANDOFF_ERROR_CODES
+  }),
   [ACTION.SEND_FRAME_COMMAND]: extensionPage({
     mutates: true,
     payload: contract(
@@ -119,7 +155,11 @@ export const BACKGROUND_REQUEST_SPECS = Object.freeze({
     payload: contract({ appTabId: "integer", bridgeDocumentId: "string" }),
     response: contract({ data: "object" })
   }),
-  [ACTION.RELOAD_CONFIGS]: extensionPage({ mutates: true, payload: contract({}, { data: "object" }) }),
+  [ACTION.RELOAD_CONFIGS]: extensionPage({
+    mutates: true,
+    payload: contract({}, { data: "object" }),
+    response: contract({ mode: "string", contentScriptsRefreshed: "boolean" })
+  }),
   [ACTION.PREPARE_FRAME_LOAD]: extensionPage({
     mutates: true,
     payload: contract({ url: "string" }, { preflightId: "string" }),

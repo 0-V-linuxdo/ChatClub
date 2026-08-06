@@ -93,17 +93,56 @@ const PARAM = "__chatclub_frame_load_nonce";
   const frameController = read("app/workspace/frame-controller.js");
   const beginFrameLoading = functionSource(frameController, "beginFrameLoading");
   const completeFrameLoading = functionSource(frameController, "completeFrameLoading");
+  const syncFrameLoadingMask = functionSource(frameController, "syncFrameLoadingMask");
   const frameLoadPlan = functionSource(frameController, "frameLoadPlan");
   const notionFramePreflightId = functionSource(frameController, "notionFramePreflightId");
   const preparedFrameNavigationUrl = functionSource(frameController, "preparedFrameNavigationUrl");
   const rememberFrameLocation = functionSource(frameController, "rememberFrameLocation");
   const assignFrameSrc = functionSource(frameController, "assignFrameSrc");
+  const reloadFrameDocument = functionSource(frameController, "reloadFrameDocument");
   const setFrameSrcAfterPrepare = functionSource(frameController, "setFrameSrcAfterPrepare");
   const preparePlannedFrameLoad = functionSource(frameController, "preparePlannedFrameLoad");
+  const armPromptFocusRestore = functionSource(frameController, "armPromptFocusRestore");
+  const restorePromptInputFocus = functionSource(frameController, "restorePromptInputFocus");
   const activeHref = functionSource(frameController, "activeHref");
-  assert.match(beginFrameLoading, /iframe\.dataset\.frameLoadingKind = frameLoadingKindForTarget/);
+  assert.match(beginFrameLoading, /const loadingKind = frameLoadingKindForTarget/);
+  assert.match(beginFrameLoading, /iframe\.dataset\.frameLoadingKind = loadingKind/);
+  assert.match(beginFrameLoading, /frameLoadingMaskPhase = "opaque"/);
+  assert.match(beginFrameLoading, /syncFrameLoadingMask\(iframe\)/);
+  assert.match(completeFrameLoading, /iframe\.dataset\.frameLoadingMaskPhase = "fade"/);
+  assert.match(completeFrameLoading, /syncFrameLoadingMask\(iframe\)/);
+  assert.match(completeFrameLoading, /if \(iframe\.dataset\.frameLoadingKind === "new-topic"\)/);
   assert.match(assignFrameSrc, /beginFrameLoading\(iframe, plan\.logicalUrl\)/);
+  assert.match(assignFrameSrc, /samePendingNavigation/);
+  assert.match(assignFrameSrc, /options\.force !== true/);
+  assert.match(assignFrameSrc, /const frameReplaced = ensureFrameAttributeContract/);
+  assert.match(
+    assignFrameSrc,
+    /if \(frameReplaced \|\| options\.force !== true\) return true/,
+    "forced poisoned-frame recovery must bypass a matching attribute contract"
+  );
+  assert.doesNotMatch(assignFrameSrc, /releaseFrameLoadingMask\(iframe\)/);
+  assert.match(reloadFrameDocument, /iframe\.dataset\.currentHref/);
+  assert.match(reloadFrameDocument, /return assignFrameSrc\(iframe, targetHref, \{ force: true \}\)/);
+  assert.match(reloadFrameDocument, /force: true/);
+  assert.doesNotMatch(
+    reloadFrameDocument,
+    /activeHref\(/,
+    "poisoned-frame recovery must not probe the poisoned document before reloading it"
+  );
   assert.match(setFrameSrcAfterPrepare, /beginFrameLoading\(iframe, plan\.logicalUrl, true\)/);
+  assert.match(assignFrameSrc, /armPromptFocusRestore\(iframe, generation\)/, "direct frame navigation must remember an active prompt before assigning src");
+  assert.match(setFrameSrcAfterPrepare, /armPromptFocusRestore\(iframe, generation\)/, "prepared frame navigation must remember an active prompt before assigning src");
+  assert.match(armPromptFocusRestore, /document\.activeElement !== prompt/);
+  assert.match(restorePromptInputFocus, /prompt\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(completeFrameLoading, /restorePromptInputFocus\(iframe\)/, "the real iframe load must restore focus to the prompt when it was active before navigation");
+  assert.match(setFrameSrcAfterPrepare, /const frameReplaced = ensureFrameAttributeContract/);
+  assert.match(
+    setFrameSrcAfterPrepare,
+    /if \(frameReplaced \|\| \(options\.force !== true && options\.replace !== true\)\) return/,
+    "forced replacement navigation must not be swallowed by the matching contract"
+  );
+  assert.doesNotMatch(setFrameSrcAfterPrepare, /releaseFrameLoadingMask\(iframe\)/);
   assert.match(rememberFrameLocation, /openableFrameUrl\(meta\.href \|\| meta\.url\)/);
   assert.match(activeHref, /return currentHref/);
   assert.match(preparePlannedFrameLoad, /Promise\.race\(\[request, deadline\]\)/);
@@ -264,13 +303,16 @@ const PARAM = "__chatclub_frame_load_nonce";
     appById: () => chatGpt,
     frameApp: () => chatGpt,
     frameIsLoading: () => loading,
+    frameNavigationTargets: new WeakMap(),
     frameLoadingKindForTarget,
     rememberBrowserFrameId() {},
     setFrameLoading(_iframe, next) { loading = next; },
     syncHeaderForFrameInstance() { syncCalls += 1; }
   });
   vm.runInContext(`
+    ${syncFrameLoadingMask}
     ${beginFrameLoading}
+    ${restorePromptInputFocus}
     ${completeFrameLoading}
     globalThis.begin = beginFrameLoading;
     globalThis.complete = completeFrameLoading;
@@ -292,6 +334,11 @@ const PARAM = "__chatclub_frame_load_nonce";
   assert.equal(iframe.dataset.frameLoadingKind, undefined, "the target kind must remain transient");
 
   const viewController = read("app/workspace/view-controller.js");
+  assert.match(
+    viewController,
+    /const frameWrap = el\("div", \{ class: "chat-frame-wrap" \}[\s\S]*?syncFrameLoadingMask\(activeFrame\)/,
+    "the new-topic mask must be synchronized after the detached frame wrapper is created"
+  );
   const frameLoadingStatusText = functionSource(viewController, "frameLoadingStatusText");
   const syncFrameLoadingStatus = functionSource(viewController, "syncFrameLoadingStatus");
   const replaceChatFrame = functionSource(viewController, "replaceChatFrame");
@@ -419,6 +466,24 @@ const PARAM = "__chatclub_frame_load_nonce";
     "the live status must not sit inside an aria-busy subtree"
   );
   const css = read("styles/chatclub.css");
+  assert.match(css, /background: var\(--bg\)/);
+  assert.match(css, /:root\[data-theme="dark"\] \.chat-card\.frame-loading \.chat-frame-wrap::after\s*\{\s*opacity: var\(--frame-loading-overlay-opacity\);/);
+  assert.match(css, /:root:not\(\[data-theme="light"\]\) \.chat-card\.frame-loading \.chat-frame-wrap::after\s*\{\s*opacity: var\(--frame-loading-overlay-opacity\);/);
+  assert.match(css, /\.chat-frame-wrap\[data-frame-loading-mask="black"\]::after/);
+  assert.match(css, /opacity: var\(--frame-loading-overlay-opacity\);/);
+  assert.match(
+    css,
+    /\.chat-frame-wrap\[data-frame-loading-mask="black"\]::after\s*\{[\s\S]*?background: #000000 !important;[\s\S]*?opacity: 1;/,
+    "the new-topic mask must start as an opaque black cover independent of the plugin theme"
+  );
+  assert.doesNotMatch(
+    css,
+    /\.chat-frame-wrap\[data-frame-loading-mask="black"\]::after\s*\{[\s\S]*?opacity: 1 !important;/,
+    "the opaque start state must not block the fade animation"
+  );
+  assert.match(css, /chat-frame-new-topic-mask-fade/);
+  assert.match(css, /from \{ opacity: 1; \}/);
+  assert.match(css, /to \{ opacity: 0; \}/);
   const statusCss = css.slice(css.indexOf(".chat-frame-loading-status"), css.indexOf(".chat-frame {"));
   assert.match(statusCss, /top: 50%/);
   assert.match(statusCss, /left: 50%/);

@@ -1,13 +1,7 @@
 import {
-  currentExtensionTab,
-  currentExtensionTabId,
-  permissionsContains,
-  permissionsRequest,
-  requestBackground,
-  runtimeGetUrl,
-  runtimeRequest
+  currentExtensionTab, currentExtensionTabId, extensionApi, permissionsContains,
+  permissionsRequest, requestBackground, runtimeGetUrl, runtimeRequest
 } from "../shared/extension-api.js";
-import { BACKGROUND_REQUEST_ACTIONS } from "../shared/background-requests.js";
 import { APP_VERSION } from "../shared/constants.js";
 import {
   FrameRuntimePort
@@ -48,6 +42,7 @@ import { createBindOnceControllerPort } from "./controller-port.js";
 import { createPreferredModelController } from "./preferred-model/controller.js";
 import { createTopbarController } from "./topbar/controller.js";
 import { createWorkspaceController } from "./workspace/controller.js";
+import { PROMPT_HANDOFF_LAUNCH_REASON, createWorkspacePromptHandoffController } from "./workspace/prompt-handoff-controller.js";
 import { createWorkspaceSessionStore } from "./workspace/session-store.js";
 import {
   createFunctionalAnomalyController,
@@ -62,10 +57,16 @@ import { createSvgIcon } from "../ui/icons.js";
 import { createAppState, createFeatureStatePorts } from "./state.js";
 import { createAppConfigService } from "./config-service.js";
 import { consumeConfigResetCleanupWarning } from "./state/reset-cleanup-warning.js";
+import { clearBrowserSessionRestoreReload, prepareBrowserSessionRestore } from "./workspace/browser-session-restore.js";
 
 const appRoot = document.getElementById("app");
 const isOptionsPage = document.body?.dataset.chatclubEntry === "options";
+const browserSessionRestore = isOptionsPage
+  ? Object.freeze({ reloadRequested: false })
+  : prepareBrowserSessionRestore(window, document);
 const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, Math.max(0, Number(ms) || 0)); });
+const INITIAL_WORKSPACE_FRAME_RESTORE_TIMEOUT_MS = 45_000;
+const INITIAL_WORKSPACE_FRAME_RESTORE_POLL_MS = 50;
 let appShellNode = null;
 let summaryEscapeDismissalPromise = null;
 const state = createAppState();
@@ -95,6 +96,7 @@ const frameBridgeWorkspaceBinding = createBindOnceControllerPort("Frame Bridge W
   "ensureFrameAttributeContract",
   "frameApp",
   "iframeForWindow",
+  "reloadFrameDocument",
   "reapplyMessageNavigatorForFrame",
   "refreshCurrentExtensionTabInfo",
   "rememberFrameLocation",
@@ -331,6 +333,13 @@ const workspaceController = createWorkspaceController({
 });
 workspaceBinding.bind(workspaceController);
 frameBridgeWorkspaceBinding.bind(workspaceController);
+const workspacePromptHandoffController = createWorkspacePromptHandoffController({
+  api: extensionApi(), requestBackground, composer: composerController, workspace: workspaceController,
+  appCatalog: allApps, workspaceGeneration: workspaceSessionStore.generation,
+  basePresetId: () => state.options?.activeLayoutPresetId || "", currentTabId: currentExtensionTabId,
+  isOptionsPage: isOptionsPage || browserSessionRestore.reloadRequested
+});
+workspacePromptHandoffController.install();
 configService.subscribe(applyConfigSnapshot);
 
 function lazyControllerError(label, error) {
@@ -686,15 +695,11 @@ function handleWorkspaceFrameLifecycleChange(change = {}) {
 
 async function openNewWorkspaceTab() {
   try {
-    await requestBackground(BACKGROUND_REQUEST_ACTIONS.OPEN_WORKSPACE_TAB, {});
+    await workspacePromptHandoffController.openNewWorkspaceTab();
   } catch (error) {
     toast(t("chat.unableToOpenTab"), "error");
-    void recordFunctionalAnomaly({
-      feature: "workspace",
-      operation: "openNewWorkspaceTab",
-      error,
-      message: error?.message || "Failed to open a new ChatClub tab"
-    });
+    void recordFunctionalAnomaly({ feature: "workspace", operation: "openNewWorkspaceTab", error,
+      message: error?.message || "Failed to open a new ChatClub tab" });
   }
 }
 
@@ -837,6 +842,48 @@ function render() {
   syncTopbar();
   workspaceController.syncWorkspaceIsland(shell);
   syncSummaryPanel();
+}
+
+function discardGuardedBrowserRestoreDom() {
+  if (!browserSessionRestore.guarded) return;
+  appShellNode = null;
+  appRoot?.replaceChildren();
+}
+
+function renderRuntimeBootstrapFailure(error) {
+  const detail = String(error?.message || error || "").trim();
+  appRoot?.replaceChildren(el("main", {
+    class: "runtime-bootstrap-failure",
+    role: "alert"
+  },
+  el("h1", {}, "ChatClub 正在重新建立运行时"),
+  el("p", {}, detail || "当前浏览器恢复了旧的扩展运行时，工作区暂时不会加载。"),
+  el("button", {
+    type: "button",
+    onclick: () => window.location.reload()
+  }, "重新加载 ChatClub")));
+}
+
+function initialWorkspaceFrameRestoreState() {
+  const loadingIds = new Set(state.frameLoadingInstanceIds || []);
+  const pendingFrames = workspaceController.currentFrames().filter((iframe) => (
+    loadingIds.has(String(iframe?.dataset?.instanceId || ""))
+  ));
+  return {
+    pendingFrames,
+    pendingInstanceIds: pendingFrames.map((iframe) => String(iframe.dataset.instanceId || ""))
+  };
+}
+
+async function waitForInitialWorkspaceFrameRestoration(timeoutMs = INITIAL_WORKSPACE_FRAME_RESTORE_TIMEOUT_MS) {
+  const deadline = Date.now() + Math.max(0, Number(timeoutMs) || 0);
+  while (true) {
+    const current = initialWorkspaceFrameRestoreState();
+    if (!current.pendingFrames.length) return { timedOut: false, pendingInstanceIds: [] };
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return { timedOut: true, pendingInstanceIds: current.pendingInstanceIds };
+    await sleep(Math.min(INITIAL_WORKSPACE_FRAME_RESTORE_POLL_MS, remaining));
+  }
 }
 
 function syncSummaryPanel() {
@@ -1054,6 +1101,9 @@ function installShortcuts() {
 }
 
 async function init() {
+  if (browserSessionRestore.reloadRequested) return;
+  discardGuardedBrowserRestoreDom();
+  clearBrowserSessionRestoreReload(window.sessionStorage);
   void functionalAnomalyController.refresh().catch((error) => {
     console.warn("[ChatClub] Failed to load functional anomaly records", error);
   });
@@ -1066,6 +1116,8 @@ async function init() {
   const workspaceSessionSnapshot = await workspaceSessionSnapshotPromise;
   userScriptsPermissionGranted = await permissionsContains({ permissions: ["userScripts"] }).catch(() => false);
   await faviconService.load();
+  let contentScriptsRefreshed = false;
+  let contentScriptsRefreshError = null;
   await Promise.race([
     runtimeRequest({
       source: "chatclub",
@@ -1073,7 +1125,12 @@ async function init() {
       data: { reason: "app-init" }
     }),
     sleep(8000).then(() => { throw new Error("runtime registration reconciliation timed out"); })
-  ]).catch((error) => {
+  ]).then((result) => {
+    if (result?.contentScriptsRefreshed !== true) throw new Error("background did not confirm a content-script registration refresh");
+    contentScriptsRefreshed = true;
+    return result;
+  }).catch((error) => {
+    contentScriptsRefreshError = error;
     void recordFunctionalAnomaly({
       feature: "runtime",
       operation: "reconcileRegistration",
@@ -1082,13 +1139,19 @@ async function init() {
     });
     console.warn("[ChatClub] Runtime registration reconciliation failed; frame-level recovery remains enabled", error);
   });
+  if (!contentScriptsRefreshed) {
+    console.warn("[ChatClub] Workspace bootstrap is waiting for a current content-script registration");
+    renderRuntimeBootstrapFailure(contentScriptsRefreshError);
+    return;
+  }
   syncI18nLanguage();
   const resetCleanupWarningCount = consumeConfigResetCleanupWarning();
   if (resetCleanupWarningCount > 0) {
     toast(t("toast.configResetCleanupWarning", { count: resetCleanupWarningCount }), "error");
   }
   await initializeTopbarPromptPlaceholder();
-  workspaceController.hydrateGroups(workspaceSessionSnapshot);
+  const promptHandoffLaunch = await workspacePromptHandoffController.prepareInitialLaunch();
+  promptHandoffLaunch.claimed && !promptHandoffLaunch.snapshot ? workspaceController.hydrateEmptyPromptHandoffWorkspace() : workspaceController.hydrateGroups(promptHandoffLaunch.snapshot || workspaceSessionSnapshot);
   installGlobalTooltips({
     getDisabledTooltipIds: () => state.options?.tooltipDisabledIds || []
   });
@@ -1096,10 +1159,28 @@ async function init() {
   frameBridgeController.install();
   installPreferredModelFrameCleanup();
   render();
+  const promptHandoffAdmission = workspacePromptHandoffController.admitInitialLaunch(promptHandoffLaunch);
+  const skippedPromptTargets = promptHandoffLaunch.diagnostics?.skipped?.length || 0, promptHandoffReason = promptHandoffLaunch.diagnostics?.reason;
+  if (skippedPromptTargets) toast(t("toast.promptHandoffTargetsSkipped", { count: skippedPromptTargets }), "info");
+  if ([PROMPT_HANDOFF_LAUNCH_REASON.CLAIM_FAILED, PROMPT_HANDOFF_LAUNCH_REASON.INVALID_CLAIM].includes(promptHandoffReason)) lazyControllerError("Prompt Handoff", new Error(t("toast.promptHandoffUnavailable"), { cause: promptHandoffLaunch.error }));
+  if (promptHandoffLaunch.claimed && promptHandoffReason === PROMPT_HANDOFF_LAUNCH_REASON.PAYLOAD_UNAVAILABLE) toast(t("toast.promptHandoffUnavailable"), "error");
+  else if (promptHandoffLaunch.claimed && promptHandoffAdmission.admittedCount === 0) toast(t("toast.promptHandoffNotAdmitted"), "error");
   if (isOptionsPage) {
     await ensureOptionsSettingsOpen();
     window.addEventListener("focus", ensureOptionsSettingsOpen);
     document.addEventListener("visibilitychange", ensureOptionsSettingsOpen);
+  }
+  const frameRestore = await waitForInitialWorkspaceFrameRestoration();
+  if (frameRestore.timedOut) {
+    const pending = frameRestore.pendingInstanceIds.filter(Boolean).join(", ");
+    const message = `Initial workspace frame restoration timed out${pending ? ` (${pending})` : ""}`;
+    void recordFunctionalAnomaly({
+      feature: "workspace",
+      operation: "restoreFrames",
+      error: new Error(message),
+      message
+    });
+    console.warn(`[ChatClub] ${message}; preferred-model bootstrapping will continue with per-frame recovery`);
   }
   applyPreferredModelsToFrames(null, { immediate: false });
   finishPreferredModelBootstrapping();

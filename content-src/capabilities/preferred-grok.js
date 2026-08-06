@@ -581,7 +581,17 @@ export function createPreferredGrokCapability(deps = {}) {
     const menuClosed = await dismissPreferredModelMenu(context, () => grokModelMenuRoot());
     return settled
       ? preferredModelResult(context, true, "Grok", modelId, "", { changed: true, menuClosed })
-      : preferredModelResult(context, false, "Grok", modelId, "selection did not settle", { menuClosed });
+      : preferredModelResult(context, false, "Grok", modelId, "selection did not settle", {
+        // A free Grok account can accept the activation gesture while
+        // silently refusing Expert/Heavy. Once the picker is closed, that is
+        // a typed, safe signal to try the configured secondary model (Fast).
+        // Keep the activation state explicit so the controller cannot confuse
+        // this with a pre-delivery or uncertain interaction failure.
+        fallbackEligible: menuClosed === true,
+        selectionActivated: true,
+        selectionUnsettled: true,
+        menuClosed
+      });
   }
   return Object.freeze({
     applyGrokPreferredModel

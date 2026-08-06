@@ -29,7 +29,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
   const firefoxFallbackLoader = read("background/firefox-content-fallback-loader.js");
   const firefoxFallbacks = read("background/firefox-content-fallbacks.generated.js");
   assert.match(firefoxSource, /import "\.\/firefox-content-fallback-loader\.js"/);
-  assert.match(firefoxSource, /import "\.\/service-worker\.js"/);
+  assert.match(firefoxSource, /import "\.\/service-worker\.js\?chatclub-runtime=/);
   assert.doesNotMatch(firefoxSource, /\bimport\s*\(/);
   assert.match(firefoxFallbackLoader, /FIREFOX_CONTENT_FALLBACKS/);
   assert.match(firefoxFallbackLoader, /__CHATCLUB_FIREFOX_CONTENT_FALLBACKS__/);

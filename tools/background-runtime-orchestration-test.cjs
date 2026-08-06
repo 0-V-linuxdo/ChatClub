@@ -36,6 +36,16 @@ assert.match(runtime, /registeredFrameContext\(tabId, frameId\)/);
 assert.match(runtime, /action: "frameNavigationTarget"/);
 assert.match(runtime, /Number\(details\.parentFrameId\) !== 0/);
 assert.match(runtime, /chrome\.tabs\?\.onRemoved\?\.addListener\(/);
+assert.match(
+  runtime,
+  /if \(changedUrl\) workspacePromptHandoffRuntime\.handleTabUpdated\(tabId, changedUrl\)/,
+  "prompt handoffs must only treat an explicit tab URL change as target navigation"
+);
+assert.doesNotMatch(
+  runtime,
+  /workspacePromptHandoffRuntime\.handleTabUpdated\(tabId, url\)/,
+  "status-only tab updates must not discard a prepared prompt handoff using a stale tab URL"
+);
 assert.match(runtime, /forgetSecureFrameContext\(Number\(details\.tabId\), Number\(details\.frameId\)/);
 assert.match(runtime, /forgetSecureTabContexts\(tabId\)/);
 assert.match(runtime, /Number\(details\?\.frameId\) === 0[\s\S]*?forgetSecureTabContexts/);
@@ -46,6 +56,26 @@ assert.match(runtime, /import \{ createStrictRuntimeConfigApplier \} from "\.\/r
 assert.match(runtime, /createStrictRuntimeConfigApplier\(chrome,/);
 assert.match(runtime, /applyConfiguration: runtimeConfigApplier\.apply/);
 assert.match(runtime, /knownExtensionPageTabIds/);
+assert.match(runtime, /let runtimeContentScriptsReady = false/);
+assert.match(runtime, /if \(runtimeContentScriptsReady\) return Promise\.resolve\(""\)/);
+assert.match(runtime, /reconcileRuntimeAtStartup\(\)/);
+assert.doesNotMatch(runtime, /void reconcileRuntimeAtStartup\(\)/, "startup reconciliation must not race app bootstrap");
+assert.doesNotMatch(
+  runtime,
+  /chrome\.tabs\?\.reload|tabs\.reload\(/,
+  "background startup must not reload an existing ChatClub page while its workspace is restoring"
+);
+assert.doesNotMatch(
+  runtime,
+  /REQUEST\.REGISTER_FRAME_CONTEXT, async \(message, sender\) => \{\s*await reconcileRuntimeAtStartup\(\)/,
+  "frame registration must not start a second startup reconciliation during document recovery"
+);
+assert.match(runtime, /REQUEST\.RELOAD_CONFIGS, async \(message, _sender, tabId\) => \{\s*const reason =/);
+assert.match(
+  runtime,
+  /REQUEST\.RELOAD_CONFIGS, async \(message, _sender, tabId\) => \{[\s\S]*?forceContentScriptRefresh\s*\n\s*\}\);[\s\S]*?contentScriptsRefreshed: forceContentScriptRefresh/,
+  "app initialization must refresh managed content registrations before restoring frames"
+);
 assert.doesNotMatch(runtime, /\bimport\s*\(/);
 assert.match(runtime, /runtimeIdentity: CONTENT_BRIDGE_RUNTIME_IDENTITY/);
 assert.match(runtime, /contentRuntimeIdentityForBundle\("content\/content\.js"\)/);
@@ -111,8 +141,18 @@ assert.doesNotMatch(grokRuntime, /console\.(?:log|info|debug).*cookie/i);
 assert.match(runtime, /notionFramePreflightRuntime\.dnrRuleUpdater\(updateDnrRules\)/);
 assert.match(
   runtime,
-  /const applied = await officialRulesRuntime\.reloadConfiguration\(\{ preferredTabIds \}\);[\s\S]*?return String\(applied\?\.mode \|\| applied \|\| ""\);/,
+  /const applied = await officialRulesRuntime\.reloadConfiguration\(\{[\s\S]*?preferredTabIds,[\s\S]*?forceContentScriptRefresh[\s\S]*?\}\);[\s\S]*?return String\(applied\?\.mode \|\| applied \|\| ""\);/,
   "Notion frame preflight must receive the applied DNR mode, not the whole configuration result"
+);
+assert.match(runtime, /CONTENT_SCRIPT_REGISTRATION_MARKER_KEY/);
+assert.match(runtime, /forceContentScriptRefresh: stored\?\.\[CONTENT_SCRIPT_REGISTRATION_MARKER_KEY\]/);
+assert.match(runtime, /content script registration freshness marker could not be saved/);
+assert.match(runtimeConfigApplication, /forceRefresh: context\.forceContentScriptRefresh === true/);
+assert.match(runtime, /function isStaleContentRuntimeRegistrationError\(error\)/);
+assert.match(
+  runtime,
+  /REGISTER_FRAME_CONTEXT, async \(message, sender\) => \{[\s\S]*?try \{[\s\S]*?registerSecureFrameContext\(message, sender\)[\s\S]*?isStaleContentRuntimeRegistrationError\(error\)[\s\S]*?updateDnrRules\(\[\], \{ forceContentScriptRefresh: true \}\)[\s\S]*?throw error;/,
+  "a stale frame runtime must force-refresh canonical content registrations before the document repair retry"
 );
 assert.match(runtime, /REQUEST\.CANCEL_NOTION_FRAME_LOAD/);
 assert.match(notionPreflight, /extensionUrl\.startsWith\("chrome-extension:\/\/"\)/);

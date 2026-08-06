@@ -127,7 +127,17 @@ const dataModule = (source) => import(`data:text/javascript;base64,${Buffer.from
   assert.match(main, /frameBindingChallenges\.isCurrent\(entry\)/);
   assert.match(main, /context\.frameId !== expectedFrameId/);
   assert.match(main, /message\.action === "frameNavigationTarget"/);
+  assert.match(
+    main,
+    /controller\.rememberFrameLocation\(iframe, \{ href \}\)/,
+    "authenticated browser navigation must update the workspace snapshot before the new document bridge is ready"
+  );
   assert.match(main, /controller\.ensureFrameAttributeContract\(iframe, href/);
+  assert.ok(
+    main.indexOf("controller.rememberFrameLocation(iframe, { href })")
+      < main.indexOf("controller.ensureFrameAttributeContract(iframe, href"),
+    "the navigation target must be persisted before frame replacement can discard the old iframe node"
+  );
   assert.match(
     main,
     /createBindOnceControllerPort\("Frame Bridge Workspace", \[[\s\S]*?"ensureFrameAttributeContract"[\s\S]*?\]\)/,

@@ -20,7 +20,7 @@
   var SECURE_FRAME_COMMAND_SOURCE = "chatclub:frame-command:2026.07.16.2";
   var DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.08.01.1";
   var PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.16.2";
-  var RUNTIME_REGISTRY_ABI_VERSION = 1;
+  var RUNTIME_REGISTRY_ABI_VERSION = 2;
   var RUNTIME_REGISTRY_KEY = `__CHATCLUB_RUNTIME_REGISTRY_V${RUNTIME_REGISTRY_ABI_VERSION}__`;
   var RUNTIME_MIGRATION_STAGE_KEY = `__CHATCLUB_RUNTIME_MIGRATION_STAGE_V${RUNTIME_REGISTRY_ABI_VERSION}__`;
   var NAVIGATION_FOCUS_GUARD_RUNTIME = "navigation-focus-guard";
@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "2a418556f040706f4f700bc30c3f6e2170ebe486b27a354989887cd4f809c857";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "ee854994bf408eb45ee70d4fc5431e2c65f1c67f0d58d1f1f4dc22f47a341276";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "f0df08746883d034bb95f090cb756a22a6a7998fd569675c8be97f816669deb4";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.f0df08746883d034bb95f090cb756a22a6a7998fd569675c8be97f816669deb4";
-  var CONTENT_RUNTIME_SUMMARY_ISOLATED_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts.js", "entryPath": "content-src/summary-userscripts.js", "sourceSha256": "28a62393eaa23b678c0c61554b65a886bab5ceb83c1912ffe41a8f145f3e831f", "implementationSha256": "85498f9336b729f5d55d346baeb078e55d6db335ea7856cb9113f5ab38210643", "implementationVersion": "2026.07.16.2+bundle.85498f9336b729f5d55d346baeb078e55d6db335ea7856cb9113f5ab38210643" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "e8a55f974dfcd953a9af37500a244bfb26a4adfde84bb0f8f00b8ec12798ad77";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.e8a55f974dfcd953a9af37500a244bfb26a4adfde84bb0f8f00b8ec12798ad77";
+  var CONTENT_RUNTIME_SUMMARY_ISOLATED_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts.js", "entryPath": "content-src/summary-userscripts.js", "sourceSha256": "29029270bf8c38cbb26ef1f55af140a615ea60275d0023334fec494d8db531e6", "implementationSha256": "09d65f8e9df238f2dc4da132c9a9735d1b022cf56759e5fa974ddddafd796e46", "implementationVersion": "2026.07.16.2+bundle.09d65f8e9df238f2dc4da132c9a9735d1b022cf56759e5fa974ddddafd796e46" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -2450,7 +2450,7 @@
       return api.merge(out);
     };
     scripts["typingmind.js"] = scripts["typingmind"];
-    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.f0df08746883d034bb95f090cb756a22a6a7998fd569675c8be97f816669deb4" });
+    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.e8a55f974dfcd953a9af37500a244bfb26a4adfde84bb0f8f00b8ec12798ad77" });
     return scripts;
   }
 

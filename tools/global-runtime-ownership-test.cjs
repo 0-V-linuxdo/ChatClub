@@ -40,7 +40,7 @@ function relativeImports(absolute) {
   return imports
     .map((entry) => entry.n)
     .filter((specifier) => typeof specifier === "string" && specifier.startsWith("."))
-    .map((specifier) => path.resolve(path.dirname(absolute), specifier))
+    .map((specifier) => path.resolve(path.dirname(absolute), String(specifier).split(/[?#]/, 1)[0]))
     .filter((candidate) => fs.statSync(candidate, { throwIfNoEntry: false })?.isFile());
 }
 

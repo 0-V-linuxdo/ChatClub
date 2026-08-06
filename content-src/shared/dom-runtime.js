@@ -223,7 +223,12 @@ export function createDomRuntime(deps = {}) {
     try { el.focus?.({ preventScroll: true }); } catch {
       try { el.focus?.(); } catch {}
     }
-    return dispatchPointerActivation(el, modelCenterPoint(el)) || nativeModelClick(el);
+    const pointerDispatched = dispatchPointerActivation(el, modelCenterPoint(el));
+    // Some React/Radix controls use the pointer sequence to reveal or focus
+    // the control, but only commit the action from the native click path.
+    // Short-circuiting on a successful dispatch leaves those controls closed.
+    const nativeClicked = nativeModelClick(el);
+    return pointerDispatched || nativeClicked;
   }
   return Object.freeze({
     isDisabledElement,

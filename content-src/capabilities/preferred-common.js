@@ -143,6 +143,14 @@ export function createPreferredCommonCapability(deps = {}) {
     const skipped = Boolean(rawSkipped);
     const cancelled = Boolean(rawCancelled);
     const interactionCount = Math.max(0, Number(rawInteractionCount) || 0);
+    // Opening and closing an owned model menu does not select a model. A
+    // hydration miss in that pre-selection phase may be retried, but only
+    // when the capability proves that its menu was closed and no selection
+    // activation occurred. Keep every other post-interaction failure
+    // terminal because replaying an uncertain site interaction is unsafe.
+    const safePreselectionRetry = extra?.retryableBeforeSelection === true
+      && extra?.selectionActivated !== true
+      && extra?.menuClosed === true;
     return {
       ...details,
       ok: Boolean(ok),
@@ -151,7 +159,9 @@ export function createPreferredCommonCapability(deps = {}) {
       skipped,
       changed: Boolean(rawChanged),
       cancelled,
-      retryable: Boolean(rawRetryable) && !cancelled && interactionCount === 0,
+      retryable: Boolean(rawRetryable)
+        && !cancelled
+        && (interactionCount === 0 || safePreselectionRetry),
       reason: String(reason || ""),
       runId: String(rawRunId || ""),
       interactionCount

@@ -81,7 +81,7 @@ const root = path.resolve(__dirname, "..");
     })
   });
   const upgraded = module.runtimeRegistry(superseded);
-  assert.equal(upgraded.abiVersion, 1);
+  assert.equal(upgraded.abiVersion, protocol.RUNTIME_REGISTRY_ABI_VERSION);
   assert.match(supersededReason, /migrated to content runtime generation/);
 
   const staleSourceRegistry = {};

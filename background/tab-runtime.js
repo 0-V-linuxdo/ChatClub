@@ -1,5 +1,6 @@
 import {
   createWorkspaceSessionId,
+  normalizeWorkspaceSessionId,
   workspaceSessionUrl
 } from "../shared/workspace-session.js";
 
@@ -93,8 +94,9 @@ export async function openExternalTab(api, url, sender, openerTab) {
   return tab;
 }
 
-export async function openWorkspaceTab(api, sender = {}, openerTab = null) {
-  const url = workspaceSessionUrl(api.runtime.getURL("chatClub.html"), createWorkspaceSessionId());
+export async function openWorkspaceTab(api, sender = {}, openerTab = null, options = {}) {
+  const workspaceId = normalizeWorkspaceSessionId(options.workspaceId) || createWorkspaceSessionId();
+  const url = workspaceSessionUrl(api.runtime.getURL("chatClub.html"), workspaceId);
   if (!url) throw new Error("Unable to create a workspace URL");
   const targetTab = await resolveTargetTab(api, sender, openerTab);
   let tab;

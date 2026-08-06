@@ -111,6 +111,8 @@ export function createStrictRuntimeConfigApplier(api, options = {}) {
     const contentPreparation = await prepareContentScriptRegistration(api, {
       options: optionsValue,
       customConfig
+    }, {
+      forceRefresh: context.forceContentScriptRefresh === true
     });
     try {
       const preferredTabIds = normalizedPreferredTabIds(context.preferredTabIds ?? context.preferredTabId);

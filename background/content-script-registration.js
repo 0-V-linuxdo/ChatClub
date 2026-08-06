@@ -265,12 +265,13 @@ export async function reconcileContentScripts(api, registrations = []) {
   }
 }
 
-export async function prepareContentScriptRegistration(api, configuration = {}) {
+export async function prepareContentScriptRegistration(api, configuration = {}, options = {}) {
   const before = managedRegistrations(await api.scripting.getRegisteredContentScripts()).map(restorableRegistration);
   const desired = buildContentScriptRegistrations(currentContentScriptTargetGroups(configuration));
   let settled = false;
   try {
-    await reconcileContentScripts(api, desired);
+    if (options.forceRefresh === true) await replaceManagedContentScripts(api, desired);
+    else await reconcileContentScripts(api, desired);
     const after = managedRegistrations(await api.scripting.getRegisteredContentScripts());
     assertRegisteredContentScriptFiles(desired, after);
     const expectedIds = new Set(desired.map(({ id }) => id));

@@ -230,6 +230,20 @@ export function createWorkspaceLayoutController(dependencies = {}) {
     return false;
   }
 
+  function hydrateEmptyPromptHandoffWorkspace() {
+    state.temporaryLayoutPreset = {
+      id: createLayoutId(),
+      name: "Prompt",
+      temporary: true,
+      pocketBatchId: "",
+      chatAppIdGroups: []
+    };
+    state.groups = [];
+    state.activeTabs = {};
+    state.fullscreenGroupId = null;
+    return true;
+  }
+
   function activeLayoutGroupsForOptions(options = state.options, customConfig = state.customConfig) {
     const presets = persistentLayoutPresets(options);
     const active = presets.find((preset) => preset.id === options?.activeLayoutPresetId) || presets[0];
@@ -307,6 +321,10 @@ export function createWorkspaceLayoutController(dependencies = {}) {
     );
     const affectedAppIds = new Set([...customDiff.affectedAppIds, ...iframeDiff.affectedAppIds]);
     const sourceChangedAppIds = new Set([...customDiff.sourceChangedAppIds, ...iframeDiff.sourceChangedAppIds]);
+    if (temporaryLayoutIsActive() && !(state.groups || []).length) {
+      syncWorkspaceDom();
+      return { groups: state.groups, activeTabs: state.activeTabs, changed: false };
+    }
     const validAppIds = validChatAppIds();
     const result = reconcileWorkspaceAppCatalog({
       groups: state.groups,
@@ -397,6 +415,7 @@ export function createWorkspaceLayoutController(dependencies = {}) {
     addGroup,
     addLayoutPreset,
     deleteLayoutPreset,
+    hydrateEmptyPromptHandoffWorkspace,
     hydrateGroups,
     hydrateImportedLayoutIfNeeded,
     layoutPresetSummary,

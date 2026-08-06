@@ -452,7 +452,12 @@
     try { el.focus?.({ preventScroll: true }); } catch {
       try { el.focus?.(); } catch {}
     }
-    return dispatchPointerActivation(el, centerPoint(el)) || nativeClick(el);
+    const pointerDispatched = dispatchPointerActivation(el, centerPoint(el));
+    // Keep the DevTools adapter in lockstep with the packaged runtime: some
+    // React/Radix controls use pointer events to focus or reveal the control,
+    // then commit the action from the native click handler.
+    const nativeClicked = nativeClick(el);
+    return pointerDispatched || nativeClicked;
   }
 
   function devtoolsListenerEvent(target, currentTarget) {
@@ -1908,9 +1913,16 @@
     const item = maybeItem || findGrokItem(root, modelId);
     if (!item) return result(false, "Grok", modelId, "target model item not found");
     if (!clickElement(item)) return result(false, "Grok", modelId, "target model item could not be clicked");
-    return (await waitGrokSettled(modelId))
-      ? result(true, "Grok", modelId)
-      : result(false, "Grok", modelId, "selection did not settle");
+    const settled = await waitGrokSettled(modelId);
+    const menuClosed = await closeFloatingMenuAndWait(() => grokMenuRoot(), 700);
+    return settled
+      ? result(true, "Grok", modelId, "", { menuClosed })
+      : result(false, "Grok", modelId, "selection did not settle", {
+        fallbackEligible: menuClosed === true,
+        selectionActivated: true,
+        selectionUnsettled: true,
+        menuClosed
+      });
   }
 
   const NOTION_MODEL_TARGETS = Object.freeze({
@@ -1919,8 +1931,8 @@
     sonnet5: Object.freeze({ id: "sonnet5", label: "Claude Sonnet 5", aliases: ["Sonnet 5"] }),
     opus47: Object.freeze({ id: "opus47", label: "Claude Opus 4.7", aliases: ["Opus 4.7"] }),
     opus48: Object.freeze({ id: "opus48", label: "Claude Opus 4.8", aliases: ["Opus 4.8"] }),
-    opus5: Object.freeze({ id: "opus5", label: "Claude Opus 5", aliases: ["Opus 5"] }),
-    fable5: Object.freeze({ id: "fable5", label: "Claude Fable 5", aliases: ["Fable 5"] }),
+    opus5: Object.freeze({ id: "opus5", label: "Claude Opus 5", aliases: ["Opus 5", "Opus 5 New", "Opus5New"] }),
+    fable5: Object.freeze({ id: "fable5", label: "Claude Fable 5", aliases: ["Fable 5", "Fable 5 Beta", "Fable5Beta"] }),
     gemini31pro: Object.freeze({ id: "gemini31pro", label: "Gemini 3.1 Pro", aliases: [] }),
     gemini35flash: Object.freeze({ id: "gemini35flash", label: "Gemini 3.5 Flash", aliases: [] }),
     gpt56sol: Object.freeze({ id: "gpt56sol", label: "GPT-5.6 Sol", aliases: ["GPT 5.6 Sol"] }),
@@ -1951,6 +1963,7 @@
     '[role="button"][aria-label*="模型" i]',
     '[role="button"][aria-haspopup="menu"]',
     '[role="button"][aria-haspopup="listbox"]',
+    '[role="button"][aria-haspopup="dialog"]',
     '[role="combobox"]',
     "button"
   ]);
@@ -1983,8 +1996,12 @@
     return normalize(value).toLowerCase().replace(/\s+/g, " ");
   }
 
+  function notionTextKey(value) {
+    return notionText(value).replace(/[\s\u200b\u200c\u200d]+/g, "");
+  }
+
   function notionLabels(target) {
-    return [target?.label, ...(target?.aliases || [])].map(notionText).filter(Boolean);
+    return [target?.id, target?.label, ...(target?.aliases || [])].map(notionText).filter(Boolean);
   }
 
   function notionTextEvidence(value) {
@@ -2002,14 +2019,21 @@
   function notionTextLooksLikeTarget(value, target) {
     if (!target) return false;
     const labels = notionLabels(target);
-    return notionTextEvidence(value).some((candidate) => labels.includes(candidate));
+    const keys = new Set(labels.map(notionTextKey));
+    return notionTextEvidence(value).some((candidate) => (
+      labels.includes(candidate) || keys.has(notionTextKey(candidate))
+    ));
   }
 
   function notionModelIdsFromEvidence(evidence) {
     const ids = new Set();
     for (const candidate of evidence) {
+      const candidateKey = notionTextKey(candidate);
       for (const [id, target] of Object.entries(NOTION_MODEL_TARGETS)) {
-        if (notionLabels(target).includes(candidate)) ids.add(id);
+        const labels = notionLabels(target);
+        if (labels.includes(candidate) || labels.some((label) => notionTextKey(label) === candidateKey)) {
+          ids.add(id);
+        }
       }
     }
     return ids;
@@ -2027,6 +2051,9 @@
       add(node.getAttribute?.("aria-label"));
       add(node.getAttribute?.("aria-valuetext"));
       add(node.getAttribute?.("title"));
+      add(node.getAttribute?.("data-model"));
+      add(node.getAttribute?.("data-model-id"));
+      add(node.getAttribute?.("data-model-key"));
       add(node.getAttribute?.("data-value"));
       add(node.getAttribute?.("value"));
       add(node.innerText || node.textContent || "");
@@ -2198,6 +2225,7 @@
     const normalized = notionText(textValue);
     let score = 0;
     if (normalized.includes("select a model")) score += 160;
+    if (normalized.includes("for your hardest tasks")) score += 160;
     if (normalized.includes("open models")) score += 80;
     score += Math.min(5, notionModelIdsFromElement(root).size) * 80;
     return score >= 160 ? score : -1;
@@ -2307,7 +2335,13 @@
     for (const element of visibleSelectorElements(NOTION_MODEL_MENU_ITEM_SELECTORS, root)) add(element);
     for (const element of visibleSelectorElements(["div", "span", "button"], root)) add(element);
     rows.sort((a, b) => scoreNotionItem(b, modelId) - scoreNotionItem(a, modelId));
-    return rows.length === 1 ? rows[0] : null;
+    if (rows.length === 1) return rows[0];
+    const groupedPicker = notionText(elementText(root)).includes("for your hardest tasks");
+    if (groupedPicker && rows.length > 1 && rows.every((row) => (
+      notionModelIdsFromElement(row).size === 1
+      && notionModelIdsFromElement(row).has(modelId)
+    ))) return rows[0];
+    return null;
   }
 
   function findNotionPointTarget(element, root, modelId) {

@@ -1301,8 +1301,8 @@ const isContentRuntimeGenerationTransition = (details = {}) =>
     console.warn = () => {};
     try {
       await assert.rejects(
-        registrationsRuntime.prepareContentScriptRegistration(api, configuration("new.example")),
-        /registration changed|registration is missing/
+        registrationsRuntime.prepareContentScriptRegistration(api, configuration("new.example"), { forceRefresh: true }),
+        /simulated non-core registration failure|registration changed|registration is missing/
       );
     } finally {
       console.warn = originalWarn;

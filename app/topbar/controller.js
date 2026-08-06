@@ -23,7 +23,14 @@ export function createTopbarController(dependencies = {}) {
       saveOptions: "function"
     }
   );
-  requireMethods(composer, "composer", ["closeActionsMenu", "focusInput", "render", "syncInputNode"]);
+  requireMethods(composer, "composer", [
+    "closeActionsMenu",
+    "focusInput",
+    "hasDraft",
+    "render",
+    "subscribeDraftChanges",
+    "syncInputNode"
+  ]);
   requireMethods(workspace, "workspace port", [
     "closePopovers",
     "closePopoversAnchoredWithin",
@@ -76,6 +83,7 @@ export function createTopbarController(dependencies = {}) {
       scheduleEnter: scheduleEnterEditMode
     }
   });
+  composer.subscribeDraftChanges(() => view.syncBrandState());
 
   function closeSettingsMenu() {
     if (settingsMenuReopenFrame) cancelAnimationFrame(settingsMenuReopenFrame);

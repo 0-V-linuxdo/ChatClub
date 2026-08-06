@@ -24,6 +24,7 @@ import {
 } from "../shared/content-runtime-version.generated.js";
 
 const CONTENT_BRIDGE_RUNTIME_IDENTITY = contentRuntimeIdentityForBundle("content/content.js");
+const CONTENT_SCRIPT_REGISTRATION_MARKER_KEY = "chatclubContentScriptRegistrationVersionV1";
 import { verifiedDirectChildFrameContext } from "./frame-injection.js";
 import { createAuthenticatedFrameRelay } from "./frame-relay.js";
 import { createSecureFrameContextRegistry } from "./secure-frame-contexts.js";
@@ -35,6 +36,7 @@ import { createCustomUserscriptRuntime } from "./custom-userscript-runtime.js";
 import { createOfficialRulesRuntime } from "./official-rules-runtime.js";
 import { createStrictRuntimeConfigApplier } from "./runtime-config-application.js";
 import { createFunctionalAnomalyStore } from "./functional-anomaly-store.js";
+import { createWorkspacePromptHandoffRuntime } from "./workspace-prompt-handoff.js";
 import { frameRouteError, normalizeFrameTransportError } from "./frame-command-errors.js";
 import { invokeActiveRuntimeMethod } from "./main-world-runtime.js";
 import {
@@ -61,7 +63,6 @@ import { withTimeout } from "./promise-timeout.js";
 import * as trustedInput from "./trusted-input.js";
 const chrome = globalThis.browser || globalThis.chrome;
 if (!chrome) throw new Error("[ChatClub] Extension API namespace is unavailable");
-
 const secureFrameCommands = new Set(Object.keys(FRAME_COMMAND_SPECS));
 const shortcutActions = new Set(ALL_SHORTCUT_ACTIONS);
 const secureFrameContextRegistry = createSecureFrameContextRegistry(chrome);
@@ -82,7 +83,6 @@ const authenticatedFrameRelay = createAuthenticatedFrameRelay({
   touchContext: secureFrameContextRegistry.touch,
   forgetContext: secureFrameContextRegistry.forgetContext
 });
-
 function extensionPageSender(sender = {}) {
   const extensionBase = chrome.runtime.getURL("");
   const senderUrl = String(sender?.url || "");
@@ -111,6 +111,7 @@ const grokCookieRuntime = createGrokCookieRuntime(chrome, {
   registeredFrameContext, verifiedExtensionPageSender, withTabDebugger: debuggerSessionDependencies?.withTabDebugger
 });
 const functionalAnomalyStore = createFunctionalAnomalyStore(chrome);
+const workspacePromptHandoffRuntime = createWorkspacePromptHandoffRuntime(chrome, { openWorkspaceTab });
 chrome.cookies?.onChanged?.addListener(grokCookieRuntime.handleCookieChange);
 
 async function relayRegisteredFrameNavigation(details = {}, phase = "before") {
@@ -177,6 +178,7 @@ chrome.webNavigation?.onErrorOccurred?.addListener((details) => { grokCookieRunt
 chrome.tabs?.onRemoved?.addListener((tabId, removeInfo) => {
   forgetKnownExtensionPageTab(tabId);
   notionFramePreflightRuntime.handleTabRemoved(tabId).catch(() => {});
+  workspacePromptHandoffRuntime.handleTabRemoved(tabId).catch(() => {});
   grokCookieRuntime.handleTabRemoved(tabId);
   forgetSecureTabContexts(tabId)
     .catch((error) => console.warn(`[${APP_NAME}] closed tab secure frame contexts could not be removed`, error));
@@ -187,6 +189,7 @@ chrome.tabs?.onUpdated?.addListener((tabId, changeInfo, tab) => {
   const changedUrl = String(changeInfo?.url || "");
   const url = changedUrl || String(tab?.url || "");
   if (!url) return;
+  if (changedUrl) workspacePromptHandoffRuntime.handleTabUpdated(tabId, changedUrl).catch(() => {});
   if (url.startsWith(chrome.runtime.getURL(""))) rememberKnownExtensionPageTab(tabId);
   else if (changedUrl || extensionPageTabTracked(tabId)) forgetKnownExtensionPageTab(tabId);
 });
@@ -481,10 +484,53 @@ const customUserscriptRuntime = createCustomUserscriptRuntime(chrome, {
   loadOptions: officialRulesRuntime.loadOptions,
   loadCustomConfig: officialRulesRuntime.loadCustomConfig
 });
-const updateDnrRules = async (preferredTabIds = []) => {
-  const applied = await officialRulesRuntime.reloadConfiguration({ preferredTabIds });
+let runtimeContentScriptsReady = false;
+const updateDnrRules = async (preferredTabIds = [], options = {}) => {
+  const forceContentScriptRefresh = options.forceContentScriptRefresh === true;
+  const applied = await officialRulesRuntime.reloadConfiguration({
+    preferredTabIds,
+    forceContentScriptRefresh
+  });
+  if (forceContentScriptRefresh) {
+    await chrome.storage.local.set({
+      [CONTENT_SCRIPT_REGISTRATION_MARKER_KEY]: CONTENT_RUNTIME_IMPLEMENTATION_VERSION
+    }).catch((error) => {
+      console.warn(`[${APP_NAME}] content script registration freshness marker could not be saved`, error);
+    });
+  }
+  runtimeContentScriptsReady = true;
   return String(applied?.mode || applied || "");
 };
+
+function isStaleContentRuntimeRegistrationError(error) {
+  return /secure frame runtime identity does not match packaged bundle content\/content\.js/i
+    .test(String(error?.message || error || ""));
+}
+
+let runtimeStartupReconciliation = null;
+
+function reconcileRuntimeAtStartup() {
+  if (runtimeContentScriptsReady) return Promise.resolve("");
+  if (!runtimeStartupReconciliation) {
+    runtimeStartupReconciliation = (async () => {
+      const stored = await chrome.storage.local.get(CONTENT_SCRIPT_REGISTRATION_MARKER_KEY);
+      // App bootstrap may have completed while the browser-startup pass was
+      // waiting on storage. Do not start a second registration replacement.
+      if (runtimeContentScriptsReady) return "";
+      return updateDnrRules([], {
+        forceContentScriptRefresh: stored?.[CONTENT_SCRIPT_REGISTRATION_MARKER_KEY]
+          !== CONTENT_RUNTIME_IMPLEMENTATION_VERSION
+      });
+    })()
+      .catch((error) => {
+        runtimeStartupReconciliation = null;
+        console.error(`[${APP_NAME}] startup runtime reconciliation failed`, error);
+        return "";
+      });
+  }
+  return runtimeStartupReconciliation;
+}
+
 function forgetKnownExtensionPageTab(tabId) {
   if (!Number.isInteger(tabId)) return;
   const wasCandidate = candidateExtensionPageTabIds.delete(tabId);
@@ -497,8 +543,8 @@ function forgetKnownExtensionPageTab(tabId) {
   });
 }
 
-function reloadRuntimeConfig(preferredTabId = null) {
-  return updateDnrRules(preferredTabId);
+function reloadRuntimeConfig(preferredTabId = null, options = {}) {
+  return updateDnrRules(preferredTabId, options);
 }
 
 function prepareWorkspaceSessionLifecycleSafely(lifecycle, options = {}) {
@@ -515,19 +561,26 @@ chrome.runtime.onInstalled.addListener(async (details = {}) => {
   await chrome.storage.local.remove(["clientId", "sessionData"]);
   await officialRulesRuntime.handleInstalled();
   await workspaceSessionReady;
+  await updateDnrRules([], { forceContentScriptRefresh: true }).catch((error) => {
+    console.error(`[${APP_NAME}] content runtime refresh after install/update failed`, error);
+  });
 });
 
 chrome.runtime.onStartup?.addListener(() => {
-  officialRulesRuntime.handleStartup().catch((error) => console.error(`[${APP_NAME}] startup official-rules setup failed`, error));
+  officialRulesRuntime.handleStartup()
+    .then(() => reconcileRuntimeAtStartup())
+    .catch((error) => console.error(`[${APP_NAME}] startup runtime setup failed`, error));
   prepareWorkspaceSessionLifecycleSafely("startup", { reason: "startup" });
 });
 chrome.alarms.onAlarm.addListener((alarm) => {
   notionFramePreflightRuntime.handleAlarm(alarm).catch(() => {});
+  workspacePromptHandoffRuntime.handleAlarm(alarm).catch(() => {});
   officialRulesRuntime.handleAlarm(alarm).catch((error) => console.error(`[${APP_NAME}] official-rules alarm failed`, error));
 });
 
 registerActionListener(chrome);
 notionFramePreflightRuntime.initialize().catch(() => {});
+workspacePromptHandoffRuntime.initialize().catch(() => {});
 prepareWorkspaceSessionLifecycleSafely("runtime start", { reason: "runtime-start" });
 
 const REQUEST = BACKGROUND_REQUEST_ACTIONS;
@@ -540,8 +593,17 @@ const backgroundRequestHandlers = [
   [REQUEST.COMMIT_WORKSPACE_SESSION_RECOVERY, (message, sender) => (
     commitWorkspaceSessionRecovery(chrome, message, sender)
   )],
+  ...workspacePromptHandoffRuntime.requestHandlers(REQUEST),
   [REQUEST.REGISTER_FRAME_CONTEXT, async (message, sender) => {
-    const context = await registerSecureFrameContext(message, sender);
+    let context;
+    try {
+      context = await registerSecureFrameContext(message, sender);
+    } catch (error) {
+      if (isStaleContentRuntimeRegistrationError(error)) {
+        await updateDnrRules([], { forceContentScriptRefresh: true });
+      }
+      throw error;
+    }
     await notionFramePreflightRuntime.settleRegisteredFrame(sender).catch(() => 0);
     return {
       documentId: context.documentId,
@@ -565,8 +627,25 @@ const backgroundRequestHandlers = [
   [REQUEST.RELAY_FRAME_LIFECYCLE, async (message, sender) => {
     await authenticatedFrameRelay.frameLifecycle(message, sender);
   }],
-  [REQUEST.RELOAD_CONFIGS, async (_message, _sender, tabId) => {
-    await reloadRuntimeConfig(tabId);
+  [REQUEST.RELOAD_CONFIGS, async (message, _sender, tabId) => {
+    const reason = String(message?.data?.reason || "").trim().toLowerCase();
+    const forceContentScriptRefresh = reason === "app-init";
+    // App bootstrap must own the first runtime reconciliation. The service
+    // worker can be waking from a browser restore at the same time; waiting
+    // for an unrelated best-effort startup pass used to let the extension
+    // page hydrate restored iframes before the managed registrations were
+    // replaced. That leaves the old content-runtime generation alive inside
+    // the restored frame and every model bridge call then fails.
+    const mode = await reloadRuntimeConfig(tabId, {
+      // The extension page waits for this request before hydrating/restoring
+      // frames. Rebuild managed registrations first so a browser restart never
+      // opens a restored document with the previous content-runtime generation.
+      forceContentScriptRefresh
+    });
+    return {
+      mode,
+      contentScriptsRefreshed: forceContentScriptRefresh
+    };
   }],
   ...grokCookieRuntime.requestHandlers(REQUEST, { updateDnrRules: notionFramePreflightRuntime.dnrRuleUpdater(updateDnrRules) }),
   [REQUEST.CANCEL_NOTION_FRAME_LOAD, async (message, sender) => ({ cancelled: await notionFramePreflightRuntime.cancelFrameLoad(message, verifiedExtensionPageSender(sender)) })],

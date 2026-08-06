@@ -78,6 +78,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
   let workspaceLifecycleFrames = [];
   let frameLifecycleCallbackActive = false;
   const frameNavigationGenerations = new WeakMap();
+  const frameNavigationTargets = new WeakMap();
   const openableFrameUrl = (value) => openableTabUrl(stripNotionFrameLoadNonce(value));
   const navigableFrameUrl = (app, value) => openableTabUrl(navigableChatFrameHref(app, value));
   const restorableFrameUrl = (app, value) => openableTabUrl(restorableChatFrameHref(app, value));
@@ -389,6 +390,18 @@ export function createWorkspaceFrameController(dependencies = {}) {
     return frameLoadingSet().has(String(instanceId || ""));
   }
 
+  function syncFrameLoadingMask(iframe) {
+    const frameWrap = iframe?.closest?.(".chat-frame-wrap");
+    if (!frameWrap?.dataset) return;
+    const activeFrame = frameWrap.querySelector?.(".chat-frame.active");
+    if (activeFrame?.dataset?.frameLoadingKind === "new-topic") {
+      frameWrap.dataset.frameLoadingMask = "black";
+      frameWrap.dataset.frameLoadingMaskPhase = activeFrame.dataset.frameLoadingMaskPhase || "opaque";
+    } else {
+      delete frameWrap.dataset.frameLoadingMask;
+      delete frameWrap.dataset.frameLoadingMaskPhase;
+    }
+  }
   function activeFrameIsLoading(group) {
     return frameIsLoading(activeChatForGroup(group)?.instanceId);
   }
@@ -396,15 +409,31 @@ export function createWorkspaceFrameController(dependencies = {}) {
   function beginFrameLoading(iframe, targetHref = "", pending = false) {
     if (!(iframe instanceof HTMLIFrameElement)) return false;
     const previousKind = String(iframe.dataset.frameLoadingKind || "");
-    iframe.dataset.frameLoadingKind = frameLoadingKindForTarget(
+    const previousMaskPhase = String(iframe.dataset.frameLoadingMaskPhase || "");
+    const loadingKind = frameLoadingKindForTarget(
       frameApp(iframe) || appById(iframe.dataset.appId),
       targetHref
     );
+    frameNavigationTargets.set(iframe, String(targetHref || ""));
+    iframe.dataset.frameLoadingKind = loadingKind;
+    if (loadingKind === "new-topic") {
+      iframe.dataset.frameLoadingMaskPhase = "opaque";
+      syncFrameLoadingMask(iframe);
+    } else {
+      delete iframe.dataset.frameLoadingMaskPhase;
+      syncFrameLoadingMask(iframe);
+    }
     if (pending) iframe.dataset.frameLoadPending = "1";
     else delete iframe.dataset.frameLoadPending;
     const alreadyLoading = frameIsLoading(iframe.dataset.instanceId);
     setFrameLoading(iframe, true);
-    if (alreadyLoading && previousKind !== iframe.dataset.frameLoadingKind) {
+    if (
+      alreadyLoading
+      && (
+        previousKind !== iframe.dataset.frameLoadingKind
+        || previousMaskPhase !== String(iframe.dataset.frameLoadingMaskPhase || "")
+      )
+    ) {
       syncHeaderForFrameInstance(iframe.dataset.instanceId);
     }
     return true;
@@ -425,8 +454,16 @@ export function createWorkspaceFrameController(dependencies = {}) {
     if (!(iframe instanceof HTMLIFrameElement)) return;
     rememberBrowserFrameId(iframe);
     if (iframe.dataset.frameLoadPending === "1") return;
-    delete iframe.dataset.frameLoadingKind;
+    if (iframe.dataset.frameLoadingKind === "new-topic") {
+      iframe.dataset.frameLoadingMaskPhase = "fade";
+      syncFrameLoadingMask(iframe);
+    } else {
+      delete iframe.dataset.frameLoadingKind;
+      delete iframe.dataset.frameLoadingMaskPhase;
+      syncFrameLoadingMask(iframe);
+    }
     setFrameLoading(iframe, false);
+    restorePromptInputFocus(iframe);
   }
 
   function beginFrameNavigationGeneration(iframe) {
@@ -437,6 +474,48 @@ export function createWorkspaceFrameController(dependencies = {}) {
 
   function frameNavigationIsCurrent(iframe, generation) {
     return iframe?.isConnected && frameNavigationGenerations.get(iframe) === generation;
+  }
+
+  function armPromptFocusRestore(iframe, generation) {
+    const prompt = document.querySelector(".prompt-input");
+    if (!prompt?.isConnected || document.activeElement !== prompt) {
+      delete iframe.dataset.promptFocusRestoreGeneration;
+      return false;
+    }
+    iframe.dataset.promptFocusRestoreGeneration = String(generation);
+    return true;
+  }
+
+  function restorePromptInputFocus(iframe) {
+    const generation = String(iframe?.dataset?.promptFocusRestoreGeneration || "");
+    if (!generation) return;
+    let attempts = 0;
+    const restore = () => {
+      if (!iframe?.isConnected || String(iframe.dataset.promptFocusRestoreGeneration || "") !== generation) return;
+      const prompt = document.querySelector(".prompt-input");
+      if (!prompt?.isConnected) {
+        delete iframe.dataset.promptFocusRestoreGeneration;
+        return;
+      }
+      const activeElement = document.activeElement;
+      if (activeElement && activeElement !== iframe && activeElement !== prompt && activeElement !== document.body) {
+        delete iframe.dataset.promptFocusRestoreGeneration;
+        return;
+      }
+      if (activeElement !== prompt) {
+        try { prompt.focus({ preventScroll: true }); } catch {
+          try { prompt.focus(); } catch {}
+        }
+      }
+      attempts += 1;
+      if (attempts >= 3) {
+        delete iframe.dataset.promptFocusRestoreGeneration;
+        return;
+      }
+      const schedule = typeof requestAnimationFrame === "function" ? requestAnimationFrame : setTimeout;
+      schedule(restore, 0);
+    };
+    restore();
   }
 
   function maintainFrameNavigationFocusGuard(iframe, generation, expiresAt, preflight = {}) {
@@ -524,12 +603,21 @@ export function createWorkspaceFrameController(dependencies = {}) {
     }
   }
 
-  function assignFrameSrc(iframe, url) {
+  function assignFrameSrc(iframe, url, options = {}) {
     if (!(iframe instanceof HTMLIFrameElement)) return false;
     const app = frameApp(iframe) || appById(iframe.dataset.appId);
     const plan = frameLoadPlan(url, app);
     if (!plan.logicalUrl) return false;
-    if (iframe.isConnected && ensureFrameAttributeContract(iframe, plan.logicalUrl, { phase: "assign" })) return true;
+    const samePendingNavigation = frameIsLoading(iframe.dataset.instanceId)
+      && frameNavigationTargets.get(iframe) === plan.logicalUrl;
+    if (samePendingNavigation && options.force !== true) return true;
+    if (iframe.isConnected) {
+      const frameReplaced = ensureFrameAttributeContract(iframe, plan.logicalUrl, { phase: "assign" });
+      // A forced reload must still assign a fresh navigation URL when the
+      // attribute contract already matches. The contract helper returns false
+      // in that case, which used to make poisoned-frame recovery a no-op.
+      if (frameReplaced || options.force !== true) return true;
+    }
     const generation = beginFrameNavigationGeneration(iframe);
     beginFrameLoading(iframe, plan.logicalUrl);
     const assign = (navigationUrl, preflight = {}) => {
@@ -538,6 +626,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
       if (guard && document.activeElement === document.querySelector(".prompt-input")) {
         maintainFrameNavigationFocusGuard(iframe, generation, expiresAt, preflight);
       }
+      armPromptFocusRestore(iframe, generation);
       iframe.src = navigationUrl;
     };
     let guard = null;
@@ -566,7 +655,13 @@ export function createWorkspaceFrameController(dependencies = {}) {
     const app = frameApp(iframe) || appById(iframe.dataset.appId);
     const plan = frameLoadPlan(url, app);
     if (!plan.logicalUrl) return;
-    if (iframe?.isConnected && ensureFrameAttributeContract(iframe, plan.logicalUrl, { phase: "prepare" })) return;
+    const samePendingNavigation = frameIsLoading(iframe.dataset.instanceId)
+      && frameNavigationTargets.get(iframe) === plan.logicalUrl;
+    if (samePendingNavigation && options.force !== true && options.replace !== true) return;
+    if (iframe?.isConnected) {
+      const frameReplaced = ensureFrameAttributeContract(iframe, plan.logicalUrl, { phase: "prepare" });
+      if (frameReplaced || (options.force !== true && options.replace !== true)) return;
+    }
     iframe.dataset.currentHref = plan.logicalUrl;
     const generation = beginFrameNavigationGeneration(iframe);
     beginFrameLoading(iframe, plan.logicalUrl, true);
@@ -590,6 +685,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
         // assigned. Otherwise a long Grok Cookie preflight can publish a false
         // loading=false edge before the direct child frame exists.
         delete iframe.dataset.frameLoadPending;
+        armPromptFocusRestore(iframe, generation);
         iframe.setAttribute("src", navigationUrl);
       };
       const guard = prepareFrameNavigationFocusGuard(iframe, generation);
@@ -682,6 +778,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
     card?.querySelectorAll(".chat-frame").forEach((frame) => {
       frame.classList.toggle("active", frame.dataset.instanceId === instanceId);
     });
+    syncFrameLoadingMask(card?.querySelector(".chat-frame.active"));
     if (card) syncTabGroupHeaderControls(card, group);
     if (previousInstanceId !== instanceId) {
       emitFrameLifecycleChange({
@@ -822,7 +919,26 @@ export function createWorkspaceFrameController(dependencies = {}) {
     if (!targetHref) return false;
     iframe.dataset.currentHref = targetHref;
     rememberWorkspaceSession();
-    return assignFrameSrc(iframe, targetHref);
+    return assignFrameSrc(iframe, targetHref, { force: true });
+  }
+
+  function reloadFrameDocument(iframe) {
+    if (!(iframe instanceof HTMLIFrameElement) || !iframe.isConnected) return false;
+    const instanceId = String(iframe.dataset.instanceId || "");
+    const chat = state.groups
+      .flatMap((group) => group.chatApps || [])
+      .find((candidate) => candidate.instanceId === instanceId);
+    if (!chat) return false;
+    const app = frameApp(iframe) || appById(chat.appId);
+    const href = openableFrameUrl(iframe.dataset.currentHref)
+      || openableFrameUrl(iframe.dataset.currentThreadHref)
+      || openableFrameUrl(iframe.src || iframe.getAttribute?.("src"))
+      || openableFrameUrl(app?.url);
+    const targetHref = navigableFrameUrl(app, href);
+    if (!targetHref) return false;
+    iframe.dataset.currentHref = targetHref;
+    rememberWorkspaceSession();
+    return assignFrameSrc(iframe, targetHref, { force: true });
   }
 
   function reloadChat(chat) {
@@ -835,7 +951,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
     delete iframe.dataset.currentThreadHref;
     delete iframe.dataset.currentTitle;
     rememberWorkspaceSession();
-    return assignFrameSrc(iframe, href);
+    return assignFrameSrc(iframe, href, { force: true });
   }
 
   async function startNewChatInFrame(iframe, fallbackChat = null) {
@@ -851,7 +967,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
     delete iframe.dataset.currentThreadHref;
     delete iframe.dataset.currentTitle;
     rememberWorkspaceSession();
-    return assignFrameSrc(iframe, href);
+    return assignFrameSrc(iframe, href, { force: true });
   }
 
   async function startNewChatInActiveTab(group) {
@@ -897,7 +1013,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
     delete iframe.dataset.currentThreadHref;
     delete iframe.dataset.currentTitle;
     rememberWorkspaceSession();
-    setFrameSrcAfterPrepare(iframe, href, { replace: true });
+    setFrameSrcAfterPrepare(iframe, href, { replace: true, force: true });
     return true;
   }
 
@@ -1108,6 +1224,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
     openChatInNewTab,
     openGoToUrlDialog,
     refreshCurrentPage,
+    reloadFrameDocument,
     reloadChat,
     removeChatGroup,
     rememberFrameLocation,
@@ -1117,6 +1234,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
     startNewChatInActiveTab,
     startNewChatInFrame,
     syncFrameFavicon,
+    syncFrameLoadingMask,
     syncFullscreenLayout,
     syncGroupTabOrder,
     toggleFullscreen,

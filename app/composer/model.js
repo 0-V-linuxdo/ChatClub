@@ -1,5 +1,7 @@
 const PROMPT_COLLAPSED_HEIGHT = 38;
-const PROMPT_IMAGE_EXPANDED_HEIGHT = 180;
+const PROMPT_TEXT_EXPANDED_MAX_HEIGHT = 180;
+const PROMPT_IMAGE_EXPANDED_MIN_HEIGHT = 180;
+const PROMPT_IMAGE_EXPANDED_MAX_HEIGHT = 360;
 
 function promptPreviewText(value = "") {
   return String(value || "").replace(/\s+/g, " ").trim();
@@ -14,8 +16,14 @@ export function promptCollapsedPreview(value = "", placeholder = "") {
   };
 }
 
-function promptExpandedMaxHeight(viewportHeight = 0) {
-  return Math.min(180, Math.max(88, Math.round(Number(viewportHeight || 0) * 0.36)));
+function promptExpandedMaxHeight(viewportHeight = 0, hasImages = false) {
+  if (hasImages) {
+    return Math.min(
+      PROMPT_IMAGE_EXPANDED_MAX_HEIGHT,
+      Math.max(PROMPT_IMAGE_EXPANDED_MIN_HEIGHT, Math.round(Number(viewportHeight || 0) * 0.55))
+    );
+  }
+  return Math.min(PROMPT_TEXT_EXPANDED_MAX_HEIGHT, Math.max(88, Math.round(Number(viewportHeight || 0) * 0.36)));
 }
 
 export function promptInputHeight(scrollHeight, viewportHeight, expanded, options = {}) {
@@ -25,16 +33,13 @@ export function promptInputHeight(scrollHeight, viewportHeight, expanded, option
       overflowY: "hidden"
     };
   }
-  if (options?.hasImages) {
-    return {
-      height: PROMPT_IMAGE_EXPANDED_HEIGHT,
-      overflowY: "hidden"
-    };
-  }
-  const maxHeight = promptExpandedMaxHeight(viewportHeight);
-  const height = Math.max(PROMPT_COLLAPSED_HEIGHT, Math.min(Number(scrollHeight || 0), maxHeight));
+  const hasImages = Boolean(options?.hasImages);
+  const minHeight = hasImages ? PROMPT_IMAGE_EXPANDED_MIN_HEIGHT : PROMPT_COLLAPSED_HEIGHT;
+  const maxHeight = promptExpandedMaxHeight(viewportHeight, hasImages);
+  const naturalHeight = Math.max(0, Number(scrollHeight || 0));
+  const height = Math.max(minHeight, Math.min(naturalHeight, maxHeight));
   return {
     height,
-    overflowY: Number(scrollHeight || 0) > maxHeight ? "auto" : "hidden"
+    overflowY: naturalHeight > maxHeight ? "auto" : "hidden"
   };
 }

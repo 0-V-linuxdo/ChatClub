@@ -35,6 +35,14 @@ const FRAME_SEND_PREDELIVERY_ERROR_CODES = new Set([
   "NOT_REGISTERED",
   "STALE_DOCUMENT"
 ]);
+const PROMPT_IMAGE_SNAPSHOT_FIELDS = Object.freeze([
+  "id",
+  "name",
+  "type",
+  "size",
+  "lastModified",
+  "dataUrl"
+]);
 
 function requirePort(port, label, methodNames) {
   if (!port || typeof port !== "object" || Array.isArray(port)) {
@@ -96,7 +104,11 @@ export function createComposerController(dependencies = {}) {
   requirePort(framePort, "frame", ["ensure", "request"]);
 
   const imageModel = createPromptImageModel({ createId });
+  const contentChangeListeners = new Set();
   let currentPlaceholder = "";
+  let draftRevision = 0;
+  let observedDraftText = String(state.promptText || "");
+  let observedDraftImages = canonicalDraftImages().map((image) => ({ ...image }));
   let promptHistoryWriteTail = Promise.resolve();
   const frameSendQueue = createFrameSendQueue({
     execute: executeQueuedFrameSend,
@@ -106,6 +118,84 @@ export function createComposerController(dependencies = {}) {
 
   function normalizeImages(images) {
     return imageModel.normalize(images);
+  }
+
+  function promptImagesEqual(left = [], right = []) {
+    if (left.length !== right.length) return false;
+    return left.every((image, index) => {
+      const other = right[index];
+      return PROMPT_IMAGE_SNAPSHOT_FIELDS.every((field) => image?.[field] === other?.[field]);
+    });
+  }
+
+  function canonicalDraftImages() {
+    const current = Array.isArray(state.promptImages) ? state.promptImages : [];
+    const normalized = normalizeImages(current);
+    if (!Array.isArray(state.promptImages) || !promptImagesEqual(current, normalized)) {
+      state.promptImages = normalized;
+    }
+    return normalized;
+  }
+
+  function immutableDraftSnapshot(source = {}) {
+    const images = Object.freeze(normalizeImages(source.images).map((image) => Object.freeze({ ...image })));
+    const revision = Number.isSafeInteger(source.revision) && source.revision >= 0
+      ? source.revision
+      : 0;
+    return Object.freeze({
+      text: String(source.text || ""),
+      images,
+      revision
+    });
+  }
+
+  function contentChangeStatus() {
+    return Object.freeze({
+      hasDraft: hasContent(observedDraftText, observedDraftImages),
+      revision: draftRevision
+    });
+  }
+
+  function notifyContentChange() {
+    const status = contentChangeStatus();
+    for (const listener of contentChangeListeners) {
+      try {
+        listener(status);
+      } catch {
+        // Draft observers are informational and must never break Composer input.
+      }
+    }
+  }
+
+  function reconcileDraftContent() {
+    const text = String(state.promptText || "");
+    const images = canonicalDraftImages();
+    if (text === observedDraftText && promptImagesEqual(images, observedDraftImages)) return false;
+    observedDraftText = text;
+    observedDraftImages = images.map((image) => ({ ...image }));
+    draftRevision += 1;
+    notifyContentChange();
+    return true;
+  }
+
+  function captureDraftSnapshot() {
+    reconcileDraftContent();
+    return immutableDraftSnapshot({
+      text: state.promptText,
+      images: state.promptImages,
+      revision: draftRevision
+    });
+  }
+
+  function hasDraft() {
+    const snapshot = captureDraftSnapshot();
+    return hasContent(snapshot.text, snapshot.images);
+  }
+
+  function subscribeDraftChanges(listener) {
+    if (typeof listener !== "function") throw new TypeError("Composer content-change subscriber must be a function.");
+    contentChangeListeners.add(listener);
+    return () => contentChangeListeners.delete(listener);
   }
 
   function resetHistoryNavigation() {
@@ -192,6 +282,7 @@ export function createComposerController(dependencies = {}) {
   function setImages(images, { focus = false } = {}) {
     state.promptImages = normalizeImages(images);
     resetHistoryNavigation();
+    reconcileDraftContent();
     syncImagesPreview();
     const inputNode = syncInputNode({ focus });
     if (focus && inputNode) expandInput(inputNode);
@@ -648,12 +739,19 @@ export function createComposerController(dependencies = {}) {
     return results;
   }
 
-  function sendPromptToFrames() {
-    const text = state.promptText.trim();
-    const images = normalizeImages(state.promptImages);
-    if (!hasContent(text, images)) return;
-    const frames = workspace.currentFrames();
-    if (!frames.length) return;
+  function admitSnapshot(snapshot, options = {}) {
+    const draft = immutableDraftSnapshot(snapshot);
+    const text = draft.text.trim();
+    const images = draft.images;
+    const requestedFrames = options.frames === undefined ? workspace.currentFrames() : options.frames;
+    const frames = Array.from(new Set(Array.from(requestedFrames || []).filter(Boolean)));
+    if (!hasContent(text, images) || !frames.length) {
+      return Object.freeze({
+        admittedCount: 0,
+        targetCount: frames.length,
+        settlement: Promise.resolve([])
+      });
+    }
     const sendId = createId("prompt-send");
     const sendKeyMode = activeShortcutProfile()?.sendKeyMode || "enter";
     const entries = frames.map((iframe) => {
@@ -691,15 +789,27 @@ export function createComposerController(dependencies = {}) {
         })
       };
     });
-    const settlement = Promise.allSettled(entries.map((entry) => entry.promise));
-    if (!entries.some((entry) => entry.admitted)) {
-      return settlePromptSubmission(entries, settlement);
+    const admittedCount = entries.filter((entry) => entry.admitted).length;
+    const settlement = settlePromptSubmission(entries, Promise.allSettled(entries.map((entry) => entry.promise)));
+    if (admittedCount > 0) {
+      void recordSendHistory(text, images).catch((error) => {
+        console.warn("[ChatClub] Failed to save prompt send history", error);
+      });
     }
-    void recordSendHistory(text, images).catch((error) => {
-      console.warn("[ChatClub] Failed to save prompt send history", error);
+    return Object.freeze({
+      admittedCount,
+      targetCount: entries.length,
+      settlement
     });
-    clearInput();
-    return settlePromptSubmission(entries, settlement);
+  }
+
+  function sendPromptToFrames() {
+    const snapshot = captureDraftSnapshot();
+    if (!hasContent(snapshot.text, snapshot.images)) return;
+    const admission = admitSnapshot(snapshot);
+    if (!admission.targetCount) return;
+    if (admission.admittedCount > 0) clearDraftIfSnapshotCurrent(snapshot);
+    return admission.settlement;
   }
 
   function submit(source = null) {
@@ -709,6 +819,7 @@ export function createComposerController(dependencies = {}) {
         || document.querySelector(".prompt-input");
     if (inputNode) {
       state.promptText = inputNode.value;
+      reconcileDraftContent();
       rememberSelection(inputNode);
       syncCollapsedPreview(inputNode);
     }
@@ -717,8 +828,9 @@ export function createComposerController(dependencies = {}) {
 
   function resizeInput(inputNode, expanded = inputNode.classList.contains("prompt-input-expanded")) {
     const hasImages = state.promptImages.length > 0;
+    const shell = inputNode.closest?.(".prompt-shell");
     let restoreTransition = null;
-    if (expanded && !hasImages) {
+    if (expanded) {
       restoreTransition = inputNode.style.transition;
       inputNode.style.transition = "none";
       inputNode.style.height = "0px";
@@ -727,6 +839,7 @@ export function createComposerController(dependencies = {}) {
     const sizing = promptInputHeight(inputNode.scrollHeight, window.innerHeight, expanded, { hasImages });
     inputNode.style.height = `${sizing.height}px`;
     inputNode.style.overflowY = sizing.overflowY;
+    if (shell) shell.style.height = `${sizing.height}px`;
     if (restoreTransition !== null) {
       void inputNode.offsetHeight;
       inputNode.style.transition = restoreTransition;
@@ -879,15 +992,47 @@ export function createComposerController(dependencies = {}) {
     rememberSelection(inputNode);
   }
 
-  function clearInput(event) {
-    event?.preventDefault?.();
-    event?.stopPropagation?.();
+  function clearDraft({ focus = true } = {}) {
     state.promptText = "";
     state.promptImages = [];
     state.promptSelection = { start: 0, end: 0, direction: "none" };
     resetHistoryNavigation();
-    const inputNode = syncInputNode({ focus: true }) || document.querySelector(".prompt-input");
+    reconcileDraftContent();
+    const inputNode = syncInputNode({ focus }) || document.querySelector(".prompt-input");
     try { inputNode?.setSelectionRange(0, 0, "none"); } catch {}
+  }
+
+  function clearDraftIfSnapshotCurrent(snapshot, options = {}) {
+    const expected = immutableDraftSnapshot(snapshot);
+    reconcileDraftContent();
+    if (
+      expected.revision !== draftRevision
+      || expected.text !== String(state.promptText || "")
+      || !promptImagesEqual(expected.images, normalizeImages(state.promptImages))
+    ) {
+      return false;
+    }
+    clearDraft(options);
+    return true;
+  }
+
+  function adoptDraftSnapshot(snapshot, { focus = false } = {}) {
+    const draft = immutableDraftSnapshot(snapshot);
+    state.promptText = draft.text;
+    state.promptImages = draft.images.map((image) => ({ ...image }));
+    const cursor = state.promptText.length;
+    state.promptSelection = { start: cursor, end: cursor, direction: "none" };
+    resetHistoryNavigation();
+    reconcileDraftContent();
+    const inputNode = syncInputNode({ focus });
+    try { inputNode?.setSelectionRange(cursor, cursor, "none"); } catch {}
+    return captureDraftSnapshot();
+  }
+
+  function clearInput(event) {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    clearDraft({ focus: true });
   }
 
   function applyHistoryNavigation(inputNode, result) {
@@ -897,6 +1042,7 @@ export function createComposerController(dependencies = {}) {
     state.promptHistoryDraft = result.draft;
     const cursor = state.promptText.length;
     state.promptSelection = { start: cursor, end: cursor, direction: "none" };
+    reconcileDraftContent();
     const syncedInput = syncInputNode({ focus: true }) || inputNode;
     try { syncedInput?.setSelectionRange(cursor, cursor, "none"); } catch {}
   }
@@ -936,12 +1082,14 @@ export function createComposerController(dependencies = {}) {
   function handleInput(event) {
     state.promptText = event.target.value;
     resetHistoryNavigation();
+    reconcileDraftContent();
     rememberSelection(event.target);
     syncCollapsedPreview(event.target);
     expandInput(event.target);
   }
 
   function syncInputNode({ focus = false } = {}) {
+    reconcileDraftContent();
     const inputNode = document.querySelector(".prompt-input");
     if (!inputNode) return null;
     inputNode.value = state.promptText;
@@ -1113,11 +1261,18 @@ export function createComposerController(dependencies = {}) {
   }
 
   return Object.freeze({
+    admitSnapshot,
+    adoptDraftSnapshot,
+    captureDraftSnapshot,
+    clearDraftIfSnapshotCurrent,
     render,
     syncInputNode,
     focusInput,
+    hasDraft,
     setImages,
     closeActionsMenu,
+    subscribeContentChange: subscribeDraftChanges,
+    subscribeDraftChanges,
     submit
   });
 }

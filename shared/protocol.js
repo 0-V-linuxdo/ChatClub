@@ -19,7 +19,11 @@ export const FRAME_BINDING_POST_MESSAGE_SOURCE = `chatclub:frame-binding:${CONTE
 export const SECURE_FRAME_COMMAND_SOURCE = "chatclub:frame-command:2026.07.16.2";
 const DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.08.01.1";
 export const PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.16.2";
-export const RUNTIME_REGISTRY_ABI_VERSION = 1;
+// A new broker ABI must use a new global key so a previously injected content
+// generation cannot continue mutating the current document while the updated
+// bundles are being installed.  The runtime registry migration path retires
+// the prior stable broker after the new generation commits.
+export const RUNTIME_REGISTRY_ABI_VERSION = 2;
 export const RUNTIME_REGISTRY_KEY = `__CHATCLUB_RUNTIME_REGISTRY_V${RUNTIME_REGISTRY_ABI_VERSION}__`;
 export const RUNTIME_MIGRATION_STAGE_KEY = `__CHATCLUB_RUNTIME_MIGRATION_STAGE_V${RUNTIME_REGISTRY_ABI_VERSION}__`;
 export const NAVIGATION_FOCUS_GUARD_RUNTIME = "navigation-focus-guard";

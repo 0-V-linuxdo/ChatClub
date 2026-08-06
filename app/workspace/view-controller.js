@@ -18,7 +18,6 @@ const APP_PICKER_CHINESE_IDS = [
   "HaiLuo", "NaMiSearch", "Qwen", "SenseChat", "YueWen", "HunYuan"
 ];
 const APP_PICKER_CHINESE_ID_SET = new Set(APP_PICKER_CHINESE_IDS);
-
 const requireMethods = createControllerMethodValidator("Workspace view", "port");
 
 export function createWorkspaceViewController(dependencies = {}) {
@@ -56,7 +55,7 @@ export function createWorkspaceViewController(dependencies = {}) {
     "deleteActiveThreadForGroup", "fullscreenShortcutLabel",
     "notifyWorkspaceFrameSync", "openChatInNewTab", "openGoToUrlDialog", "refreshCurrentPage", "reloadChat",
     "removeChatGroup", "setFrameSrcAfterPrepare", "stageFrameInitialHref", "startNewChatInActiveTab", "syncFullscreenLayout",
-    "syncGroupTabOrder", "toggleFullscreen", "topicDeleteCapabilityForFrame"
+    "syncFrameLoadingMask", "syncGroupTabOrder", "toggleFullscreen", "topicDeleteCapabilityForFrame"
   ]);
   requireMethods(layout, "layout", [
     "activeTemporaryLayoutPreset", "addAppToGroup", "addGroup", "addLayoutPreset", "deleteLayoutPreset", "layoutPresetSummary",
@@ -77,7 +76,7 @@ export function createWorkspaceViewController(dependencies = {}) {
     deleteActiveThreadForGroup, fullscreenShortcutLabel,
     notifyWorkspaceFrameSync, openChatInNewTab, openGoToUrlDialog, refreshCurrentPage, reloadChat,
     removeChatGroup, setFrameSrcAfterPrepare, stageFrameInitialHref, startNewChatInActiveTab, syncFullscreenLayout,
-    syncGroupTabOrder, toggleFullscreen, topicDeleteCapabilityForFrame
+    syncFrameLoadingMask, syncGroupTabOrder, toggleFullscreen, topicDeleteCapabilityForFrame
   } = frame;
   const {
     activeTemporaryLayoutPreset, addAppToGroup, addGroup, addLayoutPreset, deleteLayoutPreset, layoutPresetSummary,
@@ -756,13 +755,17 @@ export function createWorkspaceViewController(dependencies = {}) {
       compactIconButton(t("chat.more"), "more", (event) => openChatMenu(event.currentTarget, group), "", t("chat.more"), "left", "workspace.group.more")
     ];
   }
-
   function renderChatGroup(group, index, { chatApps = group.chatApps } = {}) {
     const isFullscreen = state.fullscreenGroupId === group.id;
     const frames = chatApps.map((chat) => renderChatFrame(group, chat));
     const isFrameLoading = activeFrameIsLoading(group);
     const activeFrame = frames.find((iframe) => iframe.classList.contains("active"));
     activeFrame?.setAttribute("aria-busy", String(isFrameLoading));
+    const frameWrap = el("div", { class: "chat-frame-wrap" },
+      frames,
+      renderFrameLoadingStatus(activeFrame, isFrameLoading)
+    );
+    syncFrameLoadingMask(activeFrame);
     return el("section", {
       class: `chat-card tab-group-buttons-custom ${isFullscreen ? "fullscreen" : ""} ${isFrameLoading ? "frame-loading" : ""}`.trim(),
       dataset: { groupId: group.id },
@@ -775,10 +778,7 @@ export function createWorkspaceViewController(dependencies = {}) {
         ),
         el("div", { class: "chat-actions" }, renderChatActionButtons(group))
       ),
-      el("div", { class: "chat-frame-wrap" },
-        frames,
-        renderFrameLoadingStatus(activeFrame, isFrameLoading)
-      )
+      frameWrap
     );
   }
 

@@ -43,7 +43,7 @@ function grokCookieRuntimeReady(registration = null) {
 }
 
 function contentFrameRepairIsPoisoned(reason) {
-  return /(?:content runtime generation\b[^\n]*(?:\bis aborted\b|\bis superseded\b|fail(?:ed)?[- ]closed)|content runtime broker is shut down)/i
+  return /(?:content runtime generation\b[^\n]*(?:\bis aborted\b|\bis superseded\b|fail(?:ed)?[- ]closed)|content runtime broker is shut down|content runtime bundle\b[^\n]*(?:missing|wrong identity)|secure frame runtime identity does not match packaged bundle|secure frame binding relay was not accepted|iframe content bridge did not become ready|packaged userscript injection frame is not the verified direct child document)/i
     .test(String(reason?.reason || reason?.message || reason || ""));
 }
 
@@ -123,7 +123,36 @@ export function createFrameBridgeController(dependencies = {}) {
     ) return null;
     iframe.dataset.browserFrameId = String(frameId);
     iframe.dataset.injectedBrowserDocumentId = browserDocumentId;
+    delete iframe.dataset.poisonedContentRuntimeReloadHref;
     return { ...registration, documentId };
+  }
+
+  function reloadPoisonedContentFrame(iframe, reason) {
+    if (!iframe?.isConnected) return false;
+    try {
+      const controller = workspaceController();
+      if (typeof controller.reloadFrameDocument !== "function") {
+        console.warn("[ChatClub] Cannot reload a poisoned content frame without a workspace reload method", reason);
+        return false;
+      }
+      const href = contentFrameHrefHints(iframe, controller.frameApp(iframe) || {})[0] || "";
+      if (!href || String(iframe.dataset.poisonedContentRuntimeReloadHref || "") === href) return false;
+      invalidatePreferredModelFrame(iframe, "poisoned-content-runtime", { clearDocumentId: true });
+      invalidateContentRuntimeCapabilityLedger(iframe);
+      const reloaded = controller.reloadFrameDocument(iframe);
+      if (!reloaded) return false;
+      const instanceId = String(iframe.dataset.instanceId || "");
+      const targetFrame = iframe.isConnected
+        ? iframe
+        : controller.currentFrames?.().find((frame) => String(frame?.dataset?.instanceId || "") === instanceId);
+      if (!targetFrame?.dataset) return false;
+      targetFrame.dataset.poisonedContentRuntimeReloadHref = href;
+      console.warn("[ChatClub] Reloaded iframe after poisoned content runtime", { href, reason });
+      return true;
+    } catch (error) {
+      console.warn("[ChatClub] Failed to reload iframe after poisoned content runtime", error);
+      return false;
+    }
   }
 
   function contentFramePreparationError(result = null) {
@@ -434,6 +463,12 @@ export function createFrameBridgeController(dependencies = {}) {
       async () => {
         if (!framePreparationIsCurrent(iframe, generation)) return cancelledFramePreparation();
         const result = await prepareContentFrameRuntimeUncached(iframe, options, generation);
+        if (
+          result?.ok === false
+          && result?.cancelled !== true
+          && contentFrameRepairIsPoisoned(result)
+          && reloadPoisonedContentFrame(iframe, result)
+        ) return cancelledFramePreparation();
         return framePreparationIsCurrent(iframe, generation) ? result : cancelledFramePreparation();
       }
     ).finally(() => {
@@ -463,6 +498,7 @@ export function createFrameBridgeController(dependencies = {}) {
       const retryOrWarn = (reason) => {
         if (repairGenerations.get(iframe) !== repairGeneration) return;
         if (contentFrameRepairIsPoisoned(reason)) {
+          if (reloadPoisonedContentFrame(iframe, reason)) return;
           console.warn("[ChatClub] Content frame bridge repair stopped at a poisoned runtime generation", reason);
           return;
         }
@@ -734,6 +770,12 @@ export function createFrameBridgeController(dependencies = {}) {
           const iframe = controller.iframeForWindow(sourceWindow);
           const href = String(message.data?.href || "");
           if (!iframe || !/^https?:\/\//i.test(href)) return;
+          // webNavigation fires before the new document can register the
+          // content bridge. Remember the authenticated target now so a
+          // restart during a SPA navigation does not restore the stale
+          // pre-navigation route. The workspace session owner applies the
+          // built-in Notion restoration policy before persisting it.
+          controller.rememberFrameLocation(iframe, { href });
           controller.ensureFrameAttributeContract(iframe, href, {
             phase: String(message.data?.phase || "navigation")
           });

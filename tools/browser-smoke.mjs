@@ -8,7 +8,18 @@ import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { CONTENT_BUNDLES, contentInjectionPlan } from "../shared/frame-commands.js";
 import { CONTENT_BRIDGE_VERSION } from "../shared/protocol.js";
-import { assertNewWorkspaceTabResult, completeChromiumNewWorkspaceTabProbe, completeFirefoxNewWorkspaceTabProbe, newWorkspaceTabProbe, stableConfigInfoProbe } from "./browser-smoke-page-probes.mjs";
+import {
+  assertNewWorkspaceTabResult,
+  assertPromptHandoffTabResult,
+  completeChromiumNewWorkspaceTabProbe,
+  completeChromiumPromptHandoffTabProbe,
+  completeFirefoxNewWorkspaceTabProbe,
+  completeFirefoxPromptHandoffTabProbe,
+  newWorkspaceTabProbe,
+  promptHandoffTabProbe,
+  readPromptHandoffSessionState,
+  stableConfigInfoProbe
+} from "./browser-smoke-page-probes.mjs";
 import { verifyChromiumSettingsDialog, verifyChromiumSettingsMenu, verifyFirefoxSettingsDialog, verifyFirefoxSettingsMenu } from "./settings-browser-smoke.mjs";
 const require = createRequire(import.meta.url);
 const { materializePackagePlan, packagePlan } = require("./package-plan.cjs");
@@ -56,6 +67,7 @@ function assertRuntimeResult(result, browserTarget, options = {}) {
   }
   assert(result.lazy?.every((entry) => entry.ok), `${browserTarget}: lazy module import failed: ${JSON.stringify(result.lazy)}`);
   assertNewWorkspaceTabResult(result?.newWorkspaceTab, browserTarget, assert);
+  assertPromptHandoffTabResult(result?.promptHandoffTab, browserTarget, assert);
   const trustedError = String(result.trusted?.error || result.trusted?.value?.error || "");
   if (browserTarget === "chromium") {
     assert(/invalid viewport coordinates/i.test(trustedError), `chromium: trusted-input helper did not reject negative coordinates: ${trustedError}`);
@@ -382,6 +394,8 @@ const pageProbe = `async (fixtureUrl) => {
     );
   });
   const newWorkspaceTabProbe = ${newWorkspaceTabProbe.toString()};
+  const promptHandoffTabProbe = ${promptHandoffTabProbe.toString()};
+  const readPromptHandoffSessionState = ${readPromptHandoffSessionState.toString()};
   const stableConfigInfoProbe = ${stableConfigInfoProbe.toString()};
   const loopbackContentHandshake = async () => {
     const api = globalThis.browser || globalThis.chrome;
@@ -1160,6 +1174,7 @@ const pageProbe = `async (fixtureUrl) => {
   const loopback = await loopbackContentHandshake();
   const customAppFrameRetention = await customAppFrameRetentionProbe();
   const newWorkspaceTab = await newWorkspaceTabProbe({ withTimeout });
+  const promptHandoffTab = await promptHandoffTabProbe({ withTimeout, readSessionState: readPromptHandoffSessionState });
   const trusted = await request({
     source: "chatclub",
     action: "dispatchTrustedClick",
@@ -1181,6 +1196,7 @@ const pageProbe = `async (fixtureUrl) => {
     loopback,
     customAppFrameRetention,
     newWorkspaceTab,
+    promptHandoffTab,
     trusted
   };
 }`;
@@ -1273,6 +1289,7 @@ async function chromiumSmoke(extensionDirectory, temporaryRoot, fixtureUrl) {
     page = workspaceSessionProbe.page;
     const result = await page.evaluate(`(${pageProbe})(${JSON.stringify(fixtureUrl)})`);
     await completeChromiumNewWorkspaceTabProbe(context, page, result.newWorkspaceTab);
+    await completeChromiumPromptHandoffTabProbe(context, page, result.promptHandoffTab);
     result.workspaceSession = workspaceSessionProbe.result;
     if (pageErrors.length) result.pageErrors = pageErrors;
     assertRuntimeResult(result, "chromium");
@@ -1361,6 +1378,7 @@ async function firefoxSmoke(extensionDirectory, fixtureUrl) {
     `);
     assert(!result?.probeError, `firefox: page probe failed: ${result?.probeError}`);
     await completeFirefoxNewWorkspaceTabProbe(driver, selenium.By, result.newWorkspaceTab, sourceHandle);
+    await completeFirefoxPromptHandoffTabProbe(driver, selenium.By, result.promptHandoffTab, sourceHandle);
     assertRuntimeResult(result, "firefox", {
       expectFirefoxFileFallback: browserVersion.split(".", 1)[0] === "136"
     });

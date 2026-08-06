@@ -429,6 +429,17 @@ function preferredModelStub() {
     ], { focus: true });
     assert.equal(state.promptImages.length, 2, `${gateState}: sizing fixture must contain two images`);
     assert.equal(input.style.height, "180px", `${gateState}: two images must keep the expanded image height`);
+    input.value = "截图说明第一行\n截图说明第二行\n截图说明第三行";
+    input.naturalScrollHeight = 224;
+    input.dispatch("input");
+    assert.equal(input.style.height, "224px", `${gateState}: image plus multiline text must grow beyond the image minimum`);
+    assert.equal(shell.style.height, "224px", `${gateState}: prompt shell must follow the expanded textarea height`);
+    assert.equal(input.style.overflowY, "hidden", `${gateState}: image text below the cap must not scroll prematurely`);
+    input.naturalScrollHeight = 420;
+    input.dispatch("input");
+    assert.equal(input.style.height, "360px", `${gateState}: long image text must use the viewport-safe image cap`);
+    assert.equal(input.style.overflowY, "auto", `${gateState}: capped image text must remain scrollable`);
+    input.naturalScrollHeight = 42;
     view.querySelector(".prompt-image-remove").dispatch("click");
     assert.equal(state.promptImages.length, 1, `${gateState}: removing one of two images must preserve the other`);
     assert.equal(input.style.height, "180px", `${gateState}: one remaining image must keep the 180px image layout`);

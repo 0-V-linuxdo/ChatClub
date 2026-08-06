@@ -21,7 +21,7 @@
   var SECURE_FRAME_COMMAND_SOURCE = "chatclub:frame-command:2026.07.16.2";
   var DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.08.01.1";
   var PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.16.2";
-  var RUNTIME_REGISTRY_ABI_VERSION = 1;
+  var RUNTIME_REGISTRY_ABI_VERSION = 2;
   var RUNTIME_REGISTRY_KEY = `__CHATCLUB_RUNTIME_REGISTRY_V${RUNTIME_REGISTRY_ABI_VERSION}__`;
   var RUNTIME_MIGRATION_STAGE_KEY = `__CHATCLUB_RUNTIME_MIGRATION_STAGE_V${RUNTIME_REGISTRY_ABI_VERSION}__`;
   var NAVIGATION_FOCUS_GUARD_RUNTIME = "navigation-focus-guard";
@@ -69,12 +69,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "2a418556f040706f4f700bc30c3f6e2170ebe486b27a354989887cd4f809c857";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "ee854994bf408eb45ee70d4fc5431e2c65f1c67f0d58d1f1f4dc22f47a341276";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "f0df08746883d034bb95f090cb756a22a6a7998fd569675c8be97f816669deb4";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.f0df08746883d034bb95f090cb756a22a6a7998fd569675c8be97f816669deb4";
-  var CONTENT_RUNTIME_GROK_COOKIE_BRIDGE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/grok-cookie-bridge.js", "entryPath": "content-src/grok-cookie-bridge.js", "sourceSha256": "51d95ba585e2b0b9aa83305d6f0723c849f745983758eddb26494b88204cf1de", "implementationSha256": "280bfd7d0e3809ff6ac536eb4e5cf1143018874635f26e12f2c44e0bc265503f", "implementationVersion": "2026.07.16.2+bundle.280bfd7d0e3809ff6ac536eb4e5cf1143018874635f26e12f2c44e0bc265503f" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "e8a55f974dfcd953a9af37500a244bfb26a4adfde84bb0f8f00b8ec12798ad77";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.e8a55f974dfcd953a9af37500a244bfb26a4adfde84bb0f8f00b8ec12798ad77";
+  var CONTENT_RUNTIME_GROK_COOKIE_BRIDGE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/grok-cookie-bridge.js", "entryPath": "content-src/grok-cookie-bridge.js", "sourceSha256": "735e84f5120a3070903bbc740804b05f0389ba2864a2f92e59ff687ae7e1a9d6", "implementationSha256": "5ef844efe34f172cd9990c7142b9d816b5c8ac3c06f50fd410ecde2165b21c18", "implementationVersion": "2026.07.16.2+bundle.5ef844efe34f172cd9990c7142b9d816b5c8ac3c06f50fd410ecde2165b21c18" });
 
   // shared/background-request-core.js
   var BACKGROUND_REQUEST_SOURCE = "chatclub";

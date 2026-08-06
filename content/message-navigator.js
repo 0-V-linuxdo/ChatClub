@@ -20,7 +20,7 @@
   var SECURE_FRAME_COMMAND_SOURCE = "chatclub:frame-command:2026.07.16.2";
   var DEEPSEEK_DELETE_SOURCE = "chatclub-deepseek-delete-thread:2026.08.01.1";
   var PAGE_SUMMARY_SOURCE = "chatclub-summary-userscript:2026.07.16.2";
-  var RUNTIME_REGISTRY_ABI_VERSION = 1;
+  var RUNTIME_REGISTRY_ABI_VERSION = 2;
   var RUNTIME_REGISTRY_KEY = `__CHATCLUB_RUNTIME_REGISTRY_V${RUNTIME_REGISTRY_ABI_VERSION}__`;
   var RUNTIME_MIGRATION_STAGE_KEY = `__CHATCLUB_RUNTIME_MIGRATION_STAGE_V${RUNTIME_REGISTRY_ABI_VERSION}__`;
   var NAVIGATION_FOCUS_GUARD_RUNTIME = "navigation-focus-guard";
@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "2a418556f040706f4f700bc30c3f6e2170ebe486b27a354989887cd4f809c857";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "ee854994bf408eb45ee70d4fc5431e2c65f1c67f0d58d1f1f4dc22f47a341276";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "f0df08746883d034bb95f090cb756a22a6a7998fd569675c8be97f816669deb4";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.f0df08746883d034bb95f090cb756a22a6a7998fd569675c8be97f816669deb4";
-  var CONTENT_RUNTIME_MESSAGE_NAVIGATOR_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/message-navigator.js", "entryPath": "content-src/message-navigator.js", "sourceSha256": "0f9e574c2c319aec1b7849d2f093e9d3131551a2adc60368b05eac9c32b01049", "implementationSha256": "47ed6dad27b48a0a3d2ba99512b722761ca4c6c64d0230fb82004e918c3eac27", "implementationVersion": "2026.07.16.2+bundle.47ed6dad27b48a0a3d2ba99512b722761ca4c6c64d0230fb82004e918c3eac27" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "e8a55f974dfcd953a9af37500a244bfb26a4adfde84bb0f8f00b8ec12798ad77";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.e8a55f974dfcd953a9af37500a244bfb26a4adfde84bb0f8f00b8ec12798ad77";
+  var CONTENT_RUNTIME_MESSAGE_NAVIGATOR_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/message-navigator.js", "entryPath": "content-src/message-navigator.js", "sourceSha256": "76a6a97eb1498e9be84d4f8544db320ac82c3aaa2caf00b8ca0709f8a6dc6add", "implementationSha256": "4470d7ff70a3999c15705c6eb5fbe63b7843ea7545261be0ad01821ef8a9cd8c", "implementationVersion": "2026.07.16.2+bundle.4470d7ff70a3999c15705c6eb5fbe63b7843ea7545261be0ad01821ef8a9cd8c" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {

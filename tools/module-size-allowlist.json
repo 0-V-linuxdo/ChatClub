@@ -1,10 +1,24 @@
 {
   "app/preferred-model/controller.js": {
-    "maxLines": 1385,
+    "maxLines": 1396,
     "target": 1200,
-    "maxBytes": 56868,
+    "maxBytes": 57253,
     "targetBytes": 50000,
-    "reason": "The preferred-model controller keeps one document-bound apply record across an explicitly unavailable primary or typed closed-menu Notion settlement failure and its optional secondary attempt, including fresh run correlation, navigation-generation bridge recovery, delivery-aware retry safety, queued-send readiness, failure policy handoff, and per-attempt Gemini and Notion desired state."
+    "reason": "The preferred-model controller keeps one document-bound apply record across an explicitly unavailable primary or typed closed-menu Notion settlement failure and its optional secondary attempt, including fresh run correlation, navigation-generation bridge recovery, delivery-aware retry safety, queued-send readiness, failure policy handoff, per-attempt Gemini and Notion desired state, and a bootstrap gate that defers lifecycle-triggered applies until restored frames settle."
+  },
+  "app/composer/controller.js": {
+    "maxLines": 1279,
+    "target": 1200,
+    "maxBytes": 47959,
+    "targetBytes": 45000,
+    "reason": "The Composer controller owns immutable text-and-image draft revisions, revision-conditional clearing, history de-duplication, and the shared document-bound admission queue used by both ordinary Send and one-shot new-workspace prompt handoff so delivery uncertainty and preferred-model preparation cannot diverge."
+  },
+  "app/workspace/frame-controller.js": {
+    "maxLines": 1244,
+    "target": 1200,
+    "maxBytes": 48787,
+    "targetBytes": 45000,
+    "reason": "The workspace frame controller keeps navigation-generation isolation, frame-load preparation, authenticated frame lifecycle reporting, target-correlated loading masks, and prompt-focus restoration together so a delayed iframe load cannot publish stale state or steal an input focus that was active before navigation."
   },
   "background/grok-cookie-runtime.js": {
     "maxLines": 1740,
@@ -21,17 +35,17 @@
     "reason": "The official-rules runtime is the single background configuration writer and keeps revision-CAS patch/import/reset handling, v3-to-v4 migration, immutable snapshot composition, signed component activation, rollback pins, alias authorization, reset cleanup journaling and startup recovery behind one serialized coordinator so atomic commit, compensation and destructive-operation fail-closed state cannot diverge across modules."
   },
   "shared/i18n.js": {
-    "maxLines": 2201,
+    "maxLines": 2209,
     "target": 1500,
-    "maxBytes": 128186,
+    "maxBytes": 128926,
     "targetBytes": 82000,
-    "reason": "Bilingual translation catalog data is kept co-located for key parity; the signed official-rules update-management and component-status views, consent, check, apply-all, compatibility, rollback, per-component source, confirmation and accessibility copy join the committed-reset cleanup warning, queued-send, preferred-model and platform-management labels under exact line and byte ratchets."
+    "reason": "Bilingual translation catalog data is kept co-located for key parity; the signed official-rules update-management and component-status views, consent, check, apply-all, compatibility, rollback, per-component source, confirmation and accessibility copy join the committed-reset cleanup warning, queued-send, preferred-model, prompt-handoff and platform-management labels under exact line and byte ratchets."
   },
   "tools/browser-smoke.mjs": {
-    "maxLines": 1393,
+    "maxLines": 1411,
     "target": 1200,
-    "maxBytes": 72556,
+    "maxBytes": 73313,
     "targetBytes": 60000,
-    "reason": "The cross-engine smoke exercises protected-header initial loading, target-correlated workspace-frame reset that ignores delayed initial-navigation events before retention baselines, owner-tab session rules, document-initiated iframe self-navigation, the authenticated binding handshake, explicit importability of every app lazy boundary including the signed official-rules service, complete Settings-menu and fullscreen-window probes, content-sized Apps headers, source-specific iframe list drag-handle shapes without a redundant source column, and compact iframe hover-help validation."
+    "reason": "The cross-engine smoke exercises protected-header initial loading, target-correlated workspace-frame reset that ignores delayed initial-navigation events before retention baselines, owner-tab session rules, document-initiated iframe self-navigation, the authenticated binding handshake, explicit importability of every app lazy boundary including the signed official-rules service, complete Settings-menu and fullscreen-window probes, content-sized Apps headers, source-specific iframe list drag-handle shapes without a redundant source column, compact iframe hover-help validation, and the one-shot prompt-handoff tab lifecycle with duplicate-click and cleanup assertions."
   }
 }

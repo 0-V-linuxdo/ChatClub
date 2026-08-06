@@ -880,6 +880,140 @@ function controllerDependencies({
     assert.equal(state.promptQueuedTargetCount, 0);
   }
 
+  {
+    const state = baseState();
+    const controller = createComposerController(controllerDependencies({
+      state,
+      frames: [],
+      appByFrame: new Map(),
+      preferredModel: preferredModelHarness({}, { state: "unconfigured" }).port,
+      framePort: { ensure: async () => {}, request: async () => ({ sent: true, deliveryState: "sent" }) },
+      savePromptSendHistory: async (next) => next,
+      toastCalls: []
+    }));
+    currentInput = fakeInput("");
+    const changes = [];
+    const unsubscribe = controller.subscribeDraftChanges((status) => changes.push(status));
+    const initial = controller.captureDraftSnapshot();
+    assert.equal(controller.hasDraft(), false);
+    assert.deepEqual(initial, { text: "", images: [], revision: 0 });
+    assert.equal(Object.isFrozen(initial), true, "draft snapshots must be immutable");
+    assert.equal(Object.isFrozen(initial.images), true, "draft image arrays must be immutable");
+
+    const sourceImage = image("handoff.png", "SEFORFJGRg==");
+    const adopted = controller.adoptDraftSnapshot({
+      text: "  staged prompt  ",
+      images: [sourceImage],
+      revision: 99
+    });
+    assert.equal(adopted.revision, 1, "adopting remote content must advance the target Composer's local revision");
+    assert.equal(controller.hasDraft(), true);
+    assert.equal(Object.isFrozen(adopted.images[0]), true, "each snapshotted image must be immutable");
+    sourceImage.name = "mutated-source.png";
+    assert.equal(state.promptImages[0].name, "handoff.png", "adoption must detach the target draft from the handoff object");
+    assert.deepEqual(changes, [{ hasDraft: true, revision: 1 }]);
+
+    controller.setImages([
+      ...state.promptImages,
+      image("second.png", "U0VDT05E")
+    ]);
+    const withSecondImage = controller.captureDraftSnapshot();
+    assert.equal(withSecondImage.revision, 2, "an image change must advance the draft revision");
+    assert.equal(controller.clearDraftIfSnapshotCurrent(adopted), false, "an older snapshot must not clear a newer image draft");
+
+    state.promptText = "newer typed draft";
+    controller.syncInputNode();
+    const newer = controller.captureDraftSnapshot();
+    assert.equal(newer.revision, 3, "an externally synchronized text change must advance the draft revision");
+    assert.equal(controller.clearDraftIfSnapshotCurrent(withSecondImage), false, "an older snapshot must not clear newer text");
+    assert.equal(controller.clearDraftIfSnapshotCurrent(newer), true, "the exact current snapshot may clear the draft");
+    assert.equal(controller.hasDraft(), false);
+    assert.equal(controller.captureDraftSnapshot().revision, 4, "clearing content must advance the draft revision");
+    assert.deepEqual(changes, [
+      { hasDraft: true, revision: 1 },
+      { hasDraft: true, revision: 2 },
+      { hasDraft: true, revision: 3 },
+      { hasDraft: false, revision: 4 }
+    ]);
+    unsubscribe();
+    controller.adoptDraftSnapshot({ text: "unobserved", images: [], revision: 100 });
+    assert.equal(changes.length, 4, "an unsubscribed content observer must receive no later revisions");
+  }
+
+  {
+    const activeFrame = { isConnected: true };
+    const targetFrameA = { isConnected: true };
+    const targetFrameB = { isConnected: true };
+    const app = { id: "ChatGPT", name: "ChatGPT" };
+    const appByFrame = new Map([
+      [activeFrame, app],
+      [targetFrameA, app],
+      [targetFrameB, app]
+    ]);
+    const ready = (suffix) => ({
+      state: "unconfigured",
+      appId: "ChatGPT",
+      frameKey: "",
+      runId: "",
+      documentId: `document-${suffix}`,
+      bridgeVersion: `bridge-${suffix}`
+    });
+    const model = preferredModelHarness(targetFrameA, ready("a"));
+    model.setReadiness(targetFrameB, ready("b"));
+    model.setReadiness(activeFrame, ready("active"));
+    const documentIds = new Map([
+      [targetFrameA, "document-a"],
+      [targetFrameB, "document-b"],
+      [activeFrame, "document-active"]
+    ]);
+    const requestCalls = [];
+    const historyWrites = [];
+    const state = baseState();
+    const controller = createComposerController(controllerDependencies({
+      state,
+      frames: [activeFrame],
+      appByFrame,
+      preferredModel: model.port,
+      framePort: {
+        async ensure(target) {
+          return { documentId: documentIds.get(target) };
+        },
+        async request(target, command, payload, options) {
+          requestCalls.push({ target, command, payload, options });
+          return { sent: true, deliveryState: "sent" };
+        }
+      },
+      savePromptSendHistory: async (next) => {
+        historyWrites.push(next);
+        return next;
+      },
+      toastCalls: []
+    }));
+    currentInput = fakeInput("");
+    const adopted = controller.adoptDraftSnapshot({
+      text: "  send after target load  ",
+      images: [image("target.png", "VEFSR0VU")],
+      revision: 42
+    });
+    const admission = controller.admitSnapshot(adopted, { frames: [targetFrameA, targetFrameB] });
+    assert.equal(Object.isFrozen(admission), true, "snapshot admission metadata must be immutable");
+    assert.equal(admission.admittedCount, 2, "target admission count must be available before settlement");
+    assert.equal(admission.targetCount, 2);
+    assert.equal(controller.clearDraftIfSnapshotCurrent(adopted), true, "an adopted handoff may clear after successful admission");
+    const settlement = await admission.settlement;
+    assert.ok(settlement.every((result) => result.status === "fulfilled"));
+    assert.deepEqual(
+      requestCalls.map((call) => call.target),
+      [targetFrameA, targetFrameB],
+      "explicit target frames must be used instead of the workspace's current frame list"
+    );
+    assert.ok(requestCalls.every((call) => call.payload.text === "send after target load"));
+    assert.equal(new Set(requestCalls.map((call) => call.payload.sendId)).size, 1, "one snapshot admission must share one send id");
+    await waitUntil(() => historyWrites.length === 1, "targeted snapshot admission did not record history");
+    assert.equal(historyWrites.length, 1, "one snapshot admission must record history only once across frames");
+    assert.equal(historyWrites[0][0].text, "send after target load");
+  }
+
   console.log("Composer queued-send behavior tests passed.");
 })().catch((error) => {
   console.error(error?.stack || error);

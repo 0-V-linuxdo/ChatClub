@@ -1602,9 +1602,20 @@ async function createPreservedRuntimeReloadFixture() {
   assert.match(frameBridge, /scheduleContentFrameRepair\(iframe, 120\)/);
   const repairSource = functionSource(frameBridge, "scheduleContentFrameRepair");
   const poisonedRepairSource = functionSource(frameBridge, "contentFrameRepairIsPoisoned");
+  const reloadPoisonedFrameSource = functionSource(frameBridge, "reloadPoisonedContentFrame");
   assert.match(poisonedRepairSource, /is aborted/);
   assert.match(poisonedRepairSource, /is superseded/);
+  assert.match(poisonedRepairSource, /wrong identity/);
+  assert.match(poisonedRepairSource, /secure frame runtime identity/);
+  assert.match(poisonedRepairSource, /secure frame binding relay was not accepted/);
+  assert.match(poisonedRepairSource, /iframe content bridge did not become ready/);
+  assert.match(poisonedRepairSource, /packaged userscript injection frame is not the verified direct child document/);
+  assert.match(reloadPoisonedFrameSource, /reloadFrameDocument/);
+  assert.match(reloadPoisonedFrameSource, /poisonedContentRuntimeReloadHref/);
+  assert.match(reloadPoisonedFrameSource, /currentFrames\?\.\(\)/);
   assert.match(repairSource, /contentFrameRepairIsPoisoned\(reason\)/);
+  assert.match(repairSource, /reloadPoisonedContentFrame\(iframe, reason\)/);
+  assert.match(frameBridge, /contentFrameRepairIsPoisoned\(result\)[\s\S]*?reloadPoisonedContentFrame\(iframe, result\)/);
   assert.match(repairSource, /CONTENT_FRAME_REPAIR_RETRY_DELAYS\[retryIndex\]/);
   assert.match(repairSource, /repairGenerations\.get\(iframe\) !== repairGeneration/);
   assert.match(repairSource, /scheduleContentFrameRepair\(iframe, nextDelay, retryIndex \+ 1, repairGeneration\)/);
@@ -1635,6 +1646,7 @@ async function createPreservedRuntimeReloadFixture() {
       iframe
     });
     context.preferredModelFrameIsLoading = () => false;
+    context.preferredModelGateBootstrapping = false;
     context.invalidatePreferredModelFrame = (target, reason, options) => {
       calls.invalidations.push({ target, reason, options });
       context.invalidateLedger(target);
@@ -1681,6 +1693,12 @@ async function createPreservedRuntimeReloadFixture() {
       { challenge: 1, repair: 1, apply: 1 },
       "the refreshed document must receive exactly one new repair and preferred-model apply schedule"
     );
+    context.preferredModelGateBootstrapping = true;
+    context.lifecycle({ type: "loading", loading: false, iframe });
+    assert.equal(calls.apply, 1, "initial bootstrapping must suppress a loading completion model apply");
+    context.lifecycle({ type: "workspace-sync", frames: [iframe], activeFrames: [iframe] });
+    assert.equal(calls.apply, 1, "initial bootstrapping must suppress workspace-sync model applies");
+    context.preferredModelGateBootstrapping = false;
   }
   const iframeLoadSource = functionSource(frameBridge, "installPreferredModelIframeLoadHandler");
   assert.match(iframeLoadSource, /scheduleContentFrameRepair\(iframe, 120\)/);
@@ -1734,11 +1752,13 @@ async function createPreservedRuntimeReloadFixture() {
   );
   const initSource = functionSource(main, "init", true);
   assert.ok(
-    initSource.indexOf('action: "reloadConfigs"') < initSource.indexOf("workspaceController.hydrateGroups(workspaceSessionSnapshot)"),
+    initSource.indexOf('action: "reloadConfigs"') < initSource.indexOf("workspaceController.hydrateGroups(promptHandoffLaunch.snapshot || workspaceSessionSnapshot)"),
     "the app must reconcile persisted registrations before creating iframe documents"
   );
   assert.match(workspace, /await sendToContentFrame\(iframe, "getLocationHref"/);
   assert.match(workspace, /async function refreshCurrentPage/);
+  assert.match(workspace, /function reloadFrameDocument\(iframe\)/);
+  assert.match(workspace, /reloadFrameDocument: frameController\.reloadFrameDocument/);
   assert.match(summary, /prepareContentFrameRuntime\(iframe, \{ summary: true \}\)/);
   assert.match(summary, /expectedDocumentId: summaryReady\.registration\.documentId/);
   assert.match(summary, /expectedHref: base\.href/);

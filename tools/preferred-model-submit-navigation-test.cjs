@@ -10,6 +10,10 @@ const mainSource = ["app/main.js", "app/runtime.js"]
   .map((file) => fs.readFileSync(path.join(root, file), "utf8"))
   .join("\n");
 const preferredModelSource = fs.readFileSync(path.join(root, "app/preferred-model/controller.js"), "utf8");
+const preferredCommonSource = fs.readFileSync(
+  path.join(root, "content-src/capabilities/preferred-common.js"),
+  "utf8"
+);
 const frameBridgeSource = fs.readFileSync(path.join(root, "app/frame-bridge/controller.js"), "utf8");
 const parentSource = `${mainSource}\n${frameBridgeSource}`;
 const contentSource = fs.readFileSync(path.join(root, "content/content.js"), "utf8");
@@ -90,6 +94,74 @@ assert.equal(
   retryContext.retryDelay(retryRecord, { retryable: true, interactionCount: 1 }),
   null,
   "even a retryable result must not replay after a site interaction"
+);
+assert.equal(
+  retryContext.retryDelay(retryRecord, {
+    retryable: true,
+    retryableBeforeSelection: true,
+    selectionActivated: false,
+    menuClosed: true,
+    interactionCount: 1
+  }),
+  700,
+  "an owned menu hydration miss may retry after opening and closing without selecting a model"
+);
+assert.equal(
+  retryContext.retryDelay(retryRecord, {
+    retryable: true,
+    retryableBeforeSelection: true,
+    selectionActivated: false,
+    menuClosed: false,
+    interactionCount: 1
+  }),
+  null,
+  "an unclosed menu must never be replayed as a pre-selection retry"
+);
+assert.equal(
+  retryContext.retryDelay(retryRecord, {
+    retryable: true,
+    retryableBeforeSelection: true,
+    selectionActivated: true,
+    menuClosed: true,
+    interactionCount: 1
+  }),
+  null,
+  "a pre-selection retry marker must not override proof that a model was activated"
+);
+
+const commonResultContext = vm.createContext({});
+vm.runInContext(
+  `${functionSource(preferredCommonSource, "modelResult")}; globalThis.modelResult = modelResult;`,
+  commonResultContext
+);
+const safePreselectionResult = commonResultContext.modelResult(
+  false,
+  "NotionAI",
+  "fable5",
+  "target model item not found",
+  {
+    retryable: true,
+    retryableBeforeSelection: true,
+    selectionActivated: false,
+    menuClosed: true,
+    interactionCount: 1
+  }
+);
+assert.equal(
+  safePreselectionResult.retryable,
+  true,
+  "the content result must preserve a safe retry after an owned menu closes before selection"
+);
+assert.equal(
+  commonResultContext.modelResult(false, "NotionAI", "fable5", "target model item not found", {
+    retryable: true,
+    retryableBeforeSelection: true,
+    selectionActivated: true,
+    menuClosed: true,
+    interactionCount: 1
+  }).retryable,
+  false,
+  "the content result must keep post-selection failures terminal"
 );
 
 const preferredModelRunSource = functionSource(preferredModelSource, "runPreferredModelRecord");
@@ -827,6 +899,7 @@ vm.runInContext(`
     ].filter(Boolean).join(" ");
   }
   ${functionSource(modelPreferenceConsoleSource, "notionText")}
+  ${functionSource(modelPreferenceConsoleSource, "notionTextKey")}
   ${functionSource(modelPreferenceConsoleSource, "notionLabels")}
   ${functionSource(modelPreferenceConsoleSource, "notionTextEvidence")}
   ${functionSource(modelPreferenceConsoleSource, "notionTextLooksLikeTarget")}
@@ -841,6 +914,7 @@ vm.runInContext(`
   }, NOTION_MODEL_TARGETS[id]);
 `, notionConsoleExactContext);
 assert.equal(notionConsoleExactContext.matchesText("GPT-5.4", "gpt54"), true);
+assert.equal(notionConsoleExactContext.matchesText("GPT54", "gpt54"), true, "Notion DevTools matching must normalize model-label whitespace");
 assert.equal(notionConsoleExactContext.matchesText("GPT-5.4 Mini", "gpt54"), false, "Notion DevTools matching must reject longer model names");
 assert.equal(notionConsoleExactContext.matchesText("GPT-5.4\nBeta", "gpt54"), true, "an exact independent text line may identify the model");
 assert.equal(notionConsoleExactContext.matchesElement("GPT-5.4", "gpt54"), true, "data-testid metadata must not hide an exact model label");
@@ -890,15 +964,15 @@ assert.equal(pointerSuccess.interactionCount, 1, "pointer-first activation must 
 assert.equal(pointerSuccess.shieldCount, 1, "pointer-first activation must arm the focus shield once");
 assert.deepEqual(
   pointerSuccess.calls.filter((call) => call === "pointer" || call === "native"),
-  ["pointer"],
-  "a successful pointer sequence must not be followed by a native click"
+  ["pointer", "native"],
+  "a successful pointer sequence must still be followed by a native click"
 );
 const pointerFallback = JSON.parse(JSON.stringify(preferredPointerContext.runPreferredPointer(false)));
 assert.equal(pointerFallback.interactionCount, 1, "native fallback must remain part of the same logical interaction");
 assert.deepEqual(
   pointerFallback.calls.filter((call) => call === "pointer" || call === "native"),
   ["pointer", "native"],
-  "native click must run only when pointer dispatch is unavailable"
+  "native click must remain part of pointer-first activation"
 );
 
 const devtoolsGrokOpenSource = functionSource(modelPreferenceConsoleSource, "openGrokMenu");
@@ -926,13 +1000,13 @@ vm.runInContext(`
 `, devtoolsPointerContext);
 assert.deepEqual(
   JSON.parse(JSON.stringify(devtoolsPointerContext.runDevtoolsPointer(true))).calls,
-  ["pointer"],
-  "the DevTools adapter must not native-click after successful pointer dispatch"
+  ["pointer", "native"],
+  "the DevTools adapter must still native-click after pointer dispatch"
 );
 assert.deepEqual(
   JSON.parse(JSON.stringify(devtoolsPointerContext.runDevtoolsPointer(false))).calls,
   ["pointer", "native"],
-  "the DevTools adapter must native-click only as a fallback"
+  "the DevTools adapter must keep native click after pointer dispatch"
 );
 
 const notionIndicatorContext = vm.createContext({});

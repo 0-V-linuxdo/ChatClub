@@ -26,7 +26,7 @@ export function createTopbarView(dependencies = {}) {
       editLifecycle: "object"
     }
   );
-  requireMethods(composer, "composer", ["render", "focusInput"]);
+  requireMethods(composer, "composer", ["render", "focusInput", "hasDraft"]);
   requireMethods(editor, "editor", [
     "activeTopbarEditLayout",
     "consumePaletteClickSuppression",
@@ -106,19 +106,40 @@ export function createTopbarView(dependencies = {}) {
     })[id] || "";
   }
 
+  function brandActionLabel() {
+    return composer.hasDraft() ? t("topbar.sendInNewTab") : t("common.openInNewTab");
+  }
+
+  async function runBrandAction(event) {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    const buttonNode = event?.currentTarget;
+    if (buttonNode?.disabled) return;
+    if (buttonNode) {
+      buttonNode.disabled = true;
+      buttonNode.setAttribute("aria-busy", "true");
+    }
+    try {
+      await actions.openNewWorkspaceTab();
+    } finally {
+      if (buttonNode?.isConnected) {
+        buttonNode.disabled = false;
+        buttonNode.removeAttribute("aria-busy");
+      }
+      syncBrandState();
+    }
+  }
+
   function renderBrand() {
-    const label = t("common.openInNewTab");
+    const label = brandActionLabel();
     return el("button", {
       class: `brand tooltip-trigger ${topbarItemClass("brand")}`,
       type: "button",
       "aria-label": label,
       "data-tooltip": label,
       "data-tooltip-id": "topbar.brand",
-      onclick: (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        actions.openNewWorkspaceTab();
-      }
+      dataset: { topbarBrandAction: "true" },
+      onclick: runBrandAction
     },
       el("img", { class: "brand-logo", src: "icons/logo.svg", alt: "", draggable: "false" }),
       el("div", {}, APP_NAME)
@@ -403,11 +424,12 @@ export function createTopbarView(dependencies = {}) {
   }
 
   function renderFoldedMenuButton(item, editing, runItem) {
-    const label = t(topbarItemLabelKey(item));
+    const label = item.id === "brand" ? brandActionLabel() : t(topbarItemLabelKey(item));
     const dragItem = editing && item.type === "item" ? { type: "item", id: item.id } : null;
     const buttonNode = settingsMenuButton(label, topbarItemIcon(item), (event) => runItem(item, event), "secondary", false, dragItem, {
       className: editing && item.type === "item" ? "topbar-settings-menu-button" : "",
-      tooltipId: tooltipIdForItem(item)
+      tooltipId: tooltipIdForItem(item),
+      dataset: item.id === "brand" ? { topbarBrandAction: "true" } : {}
     });
     if (!editing || item.type !== "item") return buttonNode;
     return el("div", { class: "topbar-settings-menu-slot", dataset: { topbarItemId: item.id } }, buttonNode);
@@ -461,5 +483,17 @@ export function createTopbarView(dependencies = {}) {
     return { backdrop, menu };
   }
 
-  return Object.freeze({ render, renderSettingsMenu });
+  function syncBrandState() {
+    const label = brandActionLabel();
+    document.querySelectorAll('[data-topbar-brand-action="true"]').forEach((buttonNode) => {
+      buttonNode.setAttribute("aria-label", label);
+      buttonNode.dataset.tooltip = label;
+      if (buttonNode.classList.contains("menu-button")) {
+        const labelNode = buttonNode.querySelector("span");
+        if (labelNode) labelNode.textContent = label;
+      }
+    });
+  }
+
+  return Object.freeze({ render, renderSettingsMenu, syncBrandState });
 }
