@@ -51,7 +51,7 @@
   "tools/browser-smoke.mjs": {
     "maxLines": 1445,
     "target": 1200,
-    "maxBytes": 75389,
+    "maxBytes": 75419,
     "targetBytes": 60000,
     "reason": "The cross-engine smoke exercises protected-header initial loading, target-correlated workspace-frame reset that ignores delayed initial-navigation events before retention baselines, owner-tab session rules, document-initiated iframe self-navigation, the authenticated binding handshake, explicit importability of every app lazy boundary including the signed official-rules service, complete Settings-menu and fullscreen-window probes, preferred-model overlay sizing and opacity across themes and narrow panels, accessible Workspace subtabs with focus and pending-color retention, content-sized Apps headers, source-specific iframe list drag-handle shapes without a redundant source column, compact iframe hover-help validation, and the one-shot prompt-handoff tab lifecycle with duplicate-click and cleanup assertions."
   }

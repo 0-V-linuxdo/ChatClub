@@ -344,7 +344,7 @@ async function chromiumWorkspaceSessionRecoveryProbe(context, page, fixtureUrl, 
   // the actual persistence boundary without mutating the installed extension.
   await activePage.close();
   activePage = await context.newPage();
-  activePage.on("pageerror", (error) => pageErrors.push(error.message));
+  activePage.on("pageerror", (error) => pageErrors.push(error.stack || error.message));
   await activePage.addInitScript((pageKey) => {
     globalThis.__chatclubSmokeInitialWorkspacePageValue = sessionStorage.getItem(pageKey);
   }, prepared.pageKey);
@@ -1304,7 +1304,7 @@ async function chromiumSmoke(extensionDirectory, temporaryRoot, fixtureUrl) {
     const extensionId = new URL(serviceWorker.url()).host;
     let page = await context.newPage();
     const pageErrors = [];
-    page.on("pageerror", (error) => pageErrors.push(error.message));
+    page.on("pageerror", (error) => pageErrors.push(error.stack || error.message));
     await page.goto(`chrome-extension://${extensionId}/options.html`, { waitUntil: "domcontentloaded", timeout: 20000 });
     await page.locator("#app .app-shell").waitFor({ state: "attached", timeout: 25000 });
     await page.locator(".settings-modal").waitFor({ state: "attached", timeout: 25000 });

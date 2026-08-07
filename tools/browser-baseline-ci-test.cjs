@@ -74,6 +74,11 @@ assert.match(
   /process\.env\.GITHUB_ACTIONS === "true"[\s\S]*::error title=Browser smoke failure::\$\{githubActionsErrorAnnotation\(renderedError\)\}/,
   "browser smoke failures must expose their full diagnostic as a GitHub Actions annotation"
 );
+assert.equal(
+  (smoke.match(/pageErrors\.push\(error\.stack \|\| error\.message\)/g) || []).length,
+  2,
+  "Chromium page errors must retain browser-side stacks across page recreation"
+);
 assert.match(smoke, /assertExpectedBrowserMajor\([\s\S]*?"chromium"/);
 assert.match(smoke, /startLoopbackFixture/);
 assert.match(smoke, /action: "ensureContentBridge"[\s\S]*?features: \["summary"\]/);
