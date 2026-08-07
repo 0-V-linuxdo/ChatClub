@@ -14,6 +14,7 @@ import {
   DEFAULT_MODEL_PREFERENCE_ORDER,
   DEFAULT_MODEL_PREFERENCES,
   DEFAULT_PROMOTION_API_PROFILES,
+  DEFAULT_TAB_CONTEXT_MENU_ORDER,
   DEFAULT_TAB_GROUP_BUTTON_ORDER,
   DEFAULT_TAB_GROUP_BUTTON_PLACEMENT,
   DEFAULT_OPTIONS,
@@ -32,6 +33,7 @@ import {
   SCRIPT_CONFIG_SCHEMA_VERSION,
   TAB_GROUP_BUTTON_ORDER_MIGRATION_VERSION,
   TAB_GROUP_HEADER_BUTTONS,
+  TAB_CONTEXT_MENU_ITEMS,
   TOOLTIP_TARGET_IDS,
   TOPBAR_PROMPT_INPUT_FONT_SIZE_MAX_PX,
   TOPBAR_PROMPT_INPUT_FONT_SIZE_MIN_PX,
@@ -305,6 +307,29 @@ export function normalizeTabGroupButtonOrder(value = []) {
     if (!ordered.includes(id)) ordered.push(id);
   }
   return ordered;
+}
+
+export function normalizeTabContextMenuOrder(value = undefined, fallback = DEFAULT_TAB_CONTEXT_MENU_ORDER) {
+  const valid = new Set(TAB_CONTEXT_MENU_ITEMS.map((item) => item.id));
+  const source = Array.isArray(value)
+    ? value
+    : Array.isArray(fallback)
+      ? fallback
+      : DEFAULT_TAB_CONTEXT_MENU_ORDER;
+  const ordered = normalizeTabGroupButtonOrderItems(source, valid);
+  for (const id of TAB_CONTEXT_MENU_ITEMS.map((item) => item.id)) {
+    if (!ordered.includes(id)) ordered.push(id);
+  }
+  return ordered;
+}
+
+export function normalizeTabContextMenuHiddenIds(value = []) {
+  const valid = new Set(TAB_CONTEXT_MENU_ITEMS.map((item) => item.id));
+  const hidden = [];
+  for (const id of Array.isArray(value) ? value : []) {
+    if (valid.has(id) && !hidden.includes(id)) hidden.push(id);
+  }
+  return hidden;
 }
 
 function inferCustomName(item, index) {
@@ -735,6 +760,8 @@ export function normalizeOptions(raw = {}) {
       storedTabGroupButtonOrderMigrationVersion,
       TAB_GROUP_BUTTON_ORDER_MIGRATION_VERSION
     ),
+    tabContextMenuOrder: normalizeTabContextMenuOrder(raw.tabContextMenuOrder, raw.tabGroupButtonOrder),
+    tabContextMenuHiddenIds: normalizeTabContextMenuHiddenIds(raw.tabContextMenuHiddenIds),
     tooltipDisabledIds: normalizeTooltipDisabledIds(raw.tooltipDisabledIds),
     topbarLayout: migrateDeleteThreadTopbarLayout(raw),
     topbarDeleteThreadMigrated: true,

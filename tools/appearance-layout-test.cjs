@@ -54,6 +54,21 @@ assert.match(
 );
 assert.match(
   stylesheetSource,
+  /\.appearance-workspace-pane > \.settings-inner-tabs \{[\s\S]*?width: fit-content;[\s\S]*?max-width: 100%;/,
+  "workspace subtabs must size to their content"
+);
+assert.match(
+  stylesheetSource,
+  /\.appearance-workspace-pane > \.settings-inner-tabs \{[\s\S]*?justify-self: start;/,
+  "workspace subtabs must align to the left edge"
+);
+assert.match(
+  stylesheetSource,
+  /\.appearance-tab-group-pane > \.settings-inner-tabs \{[\s\S]*?width: fit-content;[\s\S]*?max-width: 100%;/,
+  "Tab Group subtabs must size to their content"
+);
+assert.match(
+  stylesheetSource,
   /\.appearance-workspace-subpane\.is-overlays \.appearance-range-help \{\s*grid-column: 1 \/ -1;/,
   "overlay help must remain on its own row"
 );

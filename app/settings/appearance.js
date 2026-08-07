@@ -1,26 +1,20 @@
 import {
   DEFAULT_OPTIONS,
-  TAB_GROUP_HEADER_BUTTONS,
   TOOLTIP_TARGET_GROUPS
 } from "../../shared/constants.js";
 import { t } from "../../shared/i18n.js";
 import {
   normalizeFrameToastPosition,
-  normalizePrimaryColor,
-  normalizeTabGroupButtonOrder,
-  normalizeTabGroupButtonPlacement
+  normalizePrimaryColor
 } from "../../shared/storage-schema.js";
 import { el, input, select } from "../../ui/dom.js";
 import { FRAME_TOAST_POSITION_EVENT } from "../../ui/frame-toast.js";
-import { cleanupSettingsDragRows, createSettingsKit } from "./kit.js";
+import { createSettingsKit } from "./kit.js";
 import { createAppearanceAutosave } from "./appearance-autosave.js";
 import { createModelSelectionOverlayAppearanceControls } from "./appearance-model-selection-overlay.js";
+import { createAppearanceTabGroupController } from "./appearance-tab-group.js";
 import { createAppearanceTopbarController } from "./appearance-topbar.js";
 import { APPEARANCE_WORKSPACE_TAB_IDS, createAppearanceWorkspacePane } from "./appearance-workspace.js";
-import {
-  tabGroupButtonPlacementValue,
-  tabGroupButtonsModeForPlacement
-} from "./appearance-model.js";
 import { requireSettingsSectionStatePort } from "./section-contract.js";
 import { requireControllerContext, requireControllerFunction, validateControllerContract } from "../controller-contract.js";
 
@@ -49,9 +43,13 @@ export function createAppearanceSettingsSection(ctx) {
       "settingsAppearanceTab",
       "settingsAppearanceTopbarTab",
       "settingsAppearanceWorkspaceTab",
+      "settingsTabContextMenuDragId",
+      "settingsTabContextMenuHiddenIdsDraft",
+      "settingsTabContextMenuOrderDraft",
       "settingsTabGroupButtonDragId",
       "settingsTabGroupButtonOrderDraft",
       "settingsTabGroupButtonPlacementDraft",
+      "settingsTabGroupTab",
       "settingsTopbarPromptPlaceholderDraft",
       "settingsTopbarPromptPlaceholderDragIndex",
       "settingsTopbarPromptPlaceholderEditingIndex",
@@ -75,11 +73,9 @@ export function createAppearanceSettingsSection(ctx) {
   const closeSettingsDialog = requireControllerFunction(ctx, controllerName, "closeSettingsDialog");
   const {
     settingsBlock,
-    settingsDragHandle,
     settingsInnerTabs
   } = createSettingsKit({ svgIcon });
 
-  let activeTabGroupButtonDrag = null;
   let appearancePaneCleanup = () => {};
   const appearanceAutosave = createAppearanceAutosave({
     state,
@@ -102,193 +98,11 @@ export function createAppearanceSettingsSection(ctx) {
     enterTopbarEditMode,
     closeSettingsDialog
   });
-
-  function preventTabGroupButtonNativeDrag(event) {
-    if (!activeTabGroupButtonDrag) return;
-    event.preventDefault();
-    event.stopPropagation();
-  }
-
-  function tabGroupButtonDropTargetFromPoint(clientX, clientY) {
-    const pointTarget = document.elementFromPoint(clientX, clientY);
-    const targetFromZone = (zone) => {
-      const placement = tabGroupButtonPlacementValue(zone?.dataset?.placement);
-      const rows = Array.from(zone?.querySelectorAll?.(".tab-group-button-placement-row") || [])
-        .filter((row) => row.dataset?.buttonId && row.dataset.buttonId !== activeTabGroupButtonDrag?.item?.id);
-      for (const row of rows) {
-        const rect = row.getBoundingClientRect();
-        if (clientY < rect.top + rect.height / 2) {
-          return {
-            placement,
-            targetId: row.dataset.buttonId,
-            targetPosition: "before"
-          };
-        }
-      }
-      const lastRow = rows[rows.length - 1];
-      return {
-        placement,
-        targetId: lastRow?.dataset?.buttonId || "",
-        targetPosition: lastRow ? "after" : "end"
-      };
-    };
-    const zone = pointTarget?.closest?.(".tab-group-button-placement-zone");
-    if (zone?.dataset?.placement === "pinned" || zone?.dataset?.placement === "menu" || zone?.dataset?.placement === "hidden") {
-      return targetFromZone(zone);
-    }
-    const zones = Array.from(document.querySelectorAll(".tab-group-button-placement-zone"))
-      .filter((node) => node.dataset?.placement === "pinned" || node.dataset?.placement === "menu" || node.dataset?.placement === "hidden");
-    if (!zones.length) {
-      return {
-        placement: activeTabGroupButtonDrag?.targetPlacement || "pinned",
-        targetId: "",
-        targetPosition: "end"
-      };
-    }
-    const zoneRects = zones.map((node) => ({ node, rect: node.getBoundingClientRect() }));
-    const zonesAreSideBySide = zoneRects.some((entry, index) => zoneRects.some((other, otherIndex) => (
-      index !== otherIndex && Math.min(entry.rect.bottom, other.rect.bottom) > Math.max(entry.rect.top, other.rect.top)
-    )));
-    const distanceToRect = ({ rect }) => {
-      const dx = clientX < rect.left ? rect.left - clientX : clientX > rect.right ? clientX - rect.right : 0;
-      const dy = clientY < rect.top ? rect.top - clientY : clientY > rect.bottom ? clientY - rect.bottom : 0;
-      return zonesAreSideBySide ? dx * 4 + dy : dy * 4 + dx;
-    };
-    zoneRects.sort((a, b) => distanceToRect(a) - distanceToRect(b));
-    return targetFromZone(zoneRects[0]?.node || zones[0]);
-  }
-
-  function previewTabGroupButtonDrop(clientX, clientY) {
-    if (!activeTabGroupButtonDrag) return;
-    const { placement, targetId, targetPosition } = tabGroupButtonDropTargetFromPoint(clientX, clientY);
-    activeTabGroupButtonDrag.targetPlacement = placement;
-    activeTabGroupButtonDrag.targetId = targetId;
-    activeTabGroupButtonDrag.targetPosition = targetPosition;
-    document.querySelectorAll(".tab-group-button-placement-row").forEach((node) => {
-      node.classList.toggle("drop-before", node.dataset?.buttonId === targetId && targetPosition === "before");
-      node.classList.toggle("drop-after", node.dataset?.buttonId === targetId && targetPosition === "after");
-    });
-    document.querySelectorAll(".tab-group-button-placement-zone").forEach((node) => {
-      node.classList.toggle("drop-target", node.dataset?.placement === placement);
-    });
-  }
-
-  function cleanupTabGroupButtonDrag() {
-    const drag = activeTabGroupButtonDrag;
-    activeTabGroupButtonDrag = null;
-    state.settingsTabGroupButtonDragId = "";
-    document.body.classList.remove("settings-tab-group-button-dragging");
-    cleanupSettingsDragRows(".tab-group-button-placement-row");
-    document.querySelectorAll(".tab-group-button-placement-zone").forEach((node) => node.classList.remove("drop-target"));
-    document.removeEventListener("pointermove", handleTabGroupButtonPointerMove, true);
-    document.removeEventListener("pointerup", handleTabGroupButtonPointerUp, true);
-    document.removeEventListener("pointercancel", handleTabGroupButtonPointerUp, true);
-    document.removeEventListener("selectstart", preventTabGroupButtonNativeDrag, true);
-    document.removeEventListener("dragstart", preventTabGroupButtonNativeDrag, true);
-    document.removeEventListener("dragover", preventTabGroupButtonNativeDrag, true);
-    document.removeEventListener("drop", preventTabGroupButtonNativeDrag, true);
-    drag?.row?.releasePointerCapture?.(drag.pointerId);
-  }
-
-  function dropTabGroupButton() {
-    const drag = activeTabGroupButtonDrag;
-    if (!drag || !drag.started) {
-      cleanupTabGroupButtonDrag();
-      return;
-    }
-    const sourceId = drag.item.id;
-    const nextPlacement = normalizeTabGroupButtonPlacement(
-      {
-        ...state.settingsTabGroupButtonPlacementDraft,
-        [sourceId]: drag.targetPlacement
-      },
-      state.options.tabGroupButtonsMode
-    );
-    const currentOrder = normalizeTabGroupButtonOrder(state.settingsTabGroupButtonOrderDraft);
-    const withoutSource = currentOrder.filter((id) => id !== sourceId);
-    let insertIndex = withoutSource.length;
-    if (drag.targetId && drag.targetId !== sourceId) {
-      const targetIndex = withoutSource.indexOf(drag.targetId);
-      if (targetIndex >= 0) insertIndex = targetIndex + (drag.targetPosition === "after" ? 1 : 0);
-    } else {
-      const samePlacementIds = withoutSource.filter((id) => nextPlacement[id] === drag.targetPlacement);
-      if (samePlacementIds.length) {
-        insertIndex = withoutSource.indexOf(samePlacementIds[samePlacementIds.length - 1]) + 1;
-      } else if (drag.targetPlacement === "pinned") {
-        insertIndex = 0;
-      }
-    }
-    const nextOrder = [
-      ...withoutSource.slice(0, insertIndex),
-      sourceId,
-      ...withoutSource.slice(insertIndex)
-    ];
-    state.settingsTabGroupButtonPlacementDraft = nextPlacement;
-    state.settingsTabGroupButtonOrderDraft = normalizeTabGroupButtonOrder(nextOrder);
-    queueAppearanceAutoSave({
-      tabGroupButtonsMode: tabGroupButtonsModeForPlacement(nextPlacement),
-      tabGroupButtonPlacement: nextPlacement,
-      tabGroupButtonOrder: state.settingsTabGroupButtonOrderDraft
-    });
-    const redraw = drag.redraw;
-    cleanupTabGroupButtonDrag();
-    redraw?.();
-  }
-
-  function handleTabGroupButtonPointerMove(event) {
-    const drag = activeTabGroupButtonDrag;
-    if (!drag || event.pointerId !== drag.pointerId) return;
-    const distance = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY);
-    if (!drag.started && distance < 4) return;
-    event.preventDefault();
-    event.stopPropagation();
-    if (!drag.started) {
-      drag.started = true;
-      state.settingsTabGroupButtonDragId = drag.item.id;
-      drag.row?.classList.add("dragging");
-      document.body.classList.add("settings-tab-group-button-dragging");
-    }
-    previewTabGroupButtonDrop(event.clientX, event.clientY);
-  }
-
-  function handleTabGroupButtonPointerUp(event) {
-    const drag = activeTabGroupButtonDrag;
-    if (!drag || event.pointerId !== drag.pointerId) return;
-    event.preventDefault();
-    event.stopPropagation();
-    document.body.classList.remove("settings-tab-group-button-dragging");
-    dropTabGroupButton();
-  }
-
-  function startTabGroupButtonDrag(event, item, redraw) {
-    if (event.button !== 0) return;
-    cleanupTabGroupButtonDrag();
-    event.preventDefault();
-    event.stopPropagation();
-    globalThis.getSelection?.()?.removeAllRanges?.();
-    const row = event.currentTarget?.closest?.(".tab-group-button-placement-row") || event.currentTarget;
-    const currentPlacement = state.settingsTabGroupButtonPlacementDraft?.[item.id] || item.defaultPlacement || "pinned";
-    activeTabGroupButtonDrag = {
-      item,
-      row,
-      redraw,
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      targetPlacement: currentPlacement === "menu" ? "menu" : "pinned",
-      targetId: "",
-      targetPosition: "end",
-      started: false
-    };
-    row?.setPointerCapture?.(event.pointerId);
-    document.addEventListener("pointermove", handleTabGroupButtonPointerMove, true);
-    document.addEventListener("pointerup", handleTabGroupButtonPointerUp, true);
-    document.addEventListener("pointercancel", handleTabGroupButtonPointerUp, true);
-    document.addEventListener("selectstart", preventTabGroupButtonNativeDrag, true);
-    document.addEventListener("dragstart", preventTabGroupButtonNativeDrag, true);
-    document.addEventListener("dragover", preventTabGroupButtonNativeDrag, true);
-    document.addEventListener("drop", preventTabGroupButtonNativeDrag, true);
-  }
+  const appearanceTabGroup = createAppearanceTabGroupController({
+    state,
+    svgIcon,
+    queueAppearanceAutoSave
+  });
 
   function appearancePane(redraw = () => {}) {
     const appearanceCleanupCallbacks = [];
@@ -296,6 +110,7 @@ export function createAppearanceSettingsSection(ctx) {
     appearancePaneCleanup = () => {
       if (appearancePaneCleaned) return;
       appearancePaneCleaned = true;
+      appearanceTabGroup.cleanup();
       for (const cleanup of appearanceCleanupCallbacks.splice(0)) {
         try { cleanup(); } catch {}
       }
@@ -368,17 +183,6 @@ export function createAppearanceSettingsSection(ctx) {
     const selectionOverlayControls = createModelSelectionOverlayAppearanceControls({
       state, queueAppearanceAutoSave, syncPreferredModelSelectionOverlays, redraw
     });
-    if (!state.settingsTabGroupButtonPlacementDraft) {
-      state.settingsTabGroupButtonPlacementDraft = normalizeTabGroupButtonPlacement(
-        state.options.tabGroupButtonPlacement,
-        state.options.tabGroupButtonsMode
-      );
-    }
-    if (!state.settingsTabGroupButtonOrderDraft) {
-      state.settingsTabGroupButtonOrderDraft = normalizeTabGroupButtonOrder(state.options.tabGroupButtonOrder);
-    }
-    const tabGroupButtonPlacement = state.settingsTabGroupButtonPlacementDraft;
-    const tabGroupButtonOrder = state.settingsTabGroupButtonOrderDraft;
     const colorPicker = el("input", {
       class: "appearance-color-picker",
       type: "color",
@@ -805,82 +609,12 @@ export function createAppearanceSettingsSection(ctx) {
         redraw();
       }
     });
-    const tabGroupButtonLabel = (id) => ({
-      addApp: t("chat.addApp"),
-      newChat: t("topbar.newChat"),
-      refreshPage: t("chat.refreshPage"),
-      reload: t("chat.home"),
-      messageNavigator: t("chat.messageNavigator"),
-      deleteThread: t("chat.deleteThreadInGroup"),
-      fullscreen: t("chat.fullscreen"),
-      openInNewTab: t("common.openInNewTab"),
-      copyLink: t("common.copyLink"),
-      goToUrl: t("chat.goToUrl"),
-      removeGroup: t("chat.removeGroup"),
-      more: t("chat.more")
-    })[id] || id;
-    const tabGroupConfigurableButtons = () => TAB_GROUP_HEADER_BUTTONS.filter((item) => !item.requiredPinned);
-    const tabGroupButtonById = new Map(tabGroupConfigurableButtons().map((item) => [item.id, item]));
-    const orderedTabGroupConfigurableButtons = () => normalizeTabGroupButtonOrder(tabGroupButtonOrder)
-      .map((id) => tabGroupButtonById.get(id))
-      .filter(Boolean);
-    const tabGroupButtonsForPlacement = (placement) => orderedTabGroupConfigurableButtons()
-      .filter((item) => tabGroupButtonPlacementValue(tabGroupButtonPlacement[item.id] || item.defaultPlacement || "pinned") === placement);
-    const renderTabGroupPlacementRow = (item) => el("div", {
-      class: `tab-group-button-placement-row ${item.danger ? "is-danger" : ""}`.trim(),
-      dataset: { buttonId: item.id },
-      draggable: "false",
-      onpointerdown: (event) => startTabGroupButtonDrag(event, item, redraw),
-      ondragstart: preventTabGroupButtonNativeDrag,
-      ondragend: cleanupTabGroupButtonDrag
-    },
-      settingsDragHandle(tabGroupButtonLabel(item.id)),
-      el("span", { class: "tab-group-button-placement-icon", "aria-hidden": "true" }, svgIcon(item.icon)),
-      el("span", { class: "tab-group-button-placement-copy" },
-        el("strong", {}, tabGroupButtonLabel(item.id))
-      )
-    );
-    const tabGroupPlacementTitle = (placement) => placement === "menu"
-      ? el("span", { class: "tab-group-button-placement-title" }, svgIcon("more"), el("span", {}, t("chat.more")))
-      : placement === "hidden"
-        ? el("span", { class: "tab-group-button-placement-title" }, svgIcon("x"), el("span", {}, t("appearance.tabGroupButtonsHidden")))
-        : el("span", { class: "tab-group-button-placement-title" }, svgIcon("layout"), el("span", {}, t("appearance.tabGroupButtonsPinned")));
-    const tabGroupPlacementZone = (placement, items, emptyText) => el("section", {
-      class: `tab-group-button-placement-panel is-${placement}`,
-      "aria-label": placement === "menu"
-        ? t("chat.more")
-        : placement === "hidden"
-          ? t("appearance.tabGroupButtonsHidden")
-          : t("appearance.tabGroupButtonsPinned")
-    },
-      tabGroupPlacementTitle(placement),
-      el("div", {
-        class: `tab-group-button-placement-zone is-${placement}`,
-        "data-placement": placement,
-        ondragover: preventTabGroupButtonNativeDrag,
-        ondrop: preventTabGroupButtonNativeDrag
-      },
-        items.length
-          ? items.map(renderTabGroupPlacementRow)
-          : el("div", { class: "tab-group-button-placement-empty" }, emptyText)
-      )
-    );
-    const tabGroupBlock = () => settingsBlock(t("appearance.tabGroup"), t("appearance.tabGroupDesc"),
-      el("div", { class: "appearance-field-list" },
-        el("p", { class: "settings-muted-help" }, t("appearance.tabGroupButtonsHelp")),
-        el("div", { class: "tab-group-button-placement-list" },
-          tabGroupPlacementZone("pinned", tabGroupButtonsForPlacement("pinned"), t("appearance.tabGroupDropPinned")),
-          tabGroupPlacementZone("menu", tabGroupButtonsForPlacement("menu"), t("appearance.tabGroupDropMenu")),
-          tabGroupPlacementZone("hidden", tabGroupButtonsForPlacement("hidden"), t("appearance.tabGroupDropHidden"))
-        )
-      )
-    );
     const activeAppearancePane = state.settingsAppearanceTab === "frameToast"
       ? frameToastPositionBlock()
       : state.settingsAppearanceTab === "topbar"
         ? appearanceTopbar.pane(redraw)
         : state.settingsAppearanceTab === "tabGroup"
-          ? tabGroupBlock()
+          ? appearanceTabGroup.pane(redraw)
           : state.settingsAppearanceTab === "tooltips"
             ? tooltipBlock()
             : workspaceBlock();
@@ -925,11 +659,8 @@ export function createAppearanceSettingsSection(ctx) {
     state.settingsTopbarPromptPlaceholderDraft = "";
     state.settingsTopbarPromptPlaceholderEditingIndex = -1;
     state.settingsTopbarPromptPlaceholderDragIndex = "";
-    state.settingsTabGroupButtonPlacementDraft = null;
-    state.settingsTabGroupButtonOrderDraft = null;
-    state.settingsTabGroupButtonDragId = "";
+    appearanceTabGroup.reset();
     state.topbarEditLayoutDraft = null;
-    cleanupTabGroupButtonDrag();
     cleanupPane();
   }
 

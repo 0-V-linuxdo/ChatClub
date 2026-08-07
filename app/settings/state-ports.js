@@ -11,7 +11,8 @@ export const SETTINGS_OPTION_CAPABILITIES = Object.freeze({
   appearance: optionCapability([
     "colMaxCount", "frameLoadingOverlayOpacity", "frameToastPosition", "language",
     "modelPreferenceSelectionOverlayEnabled", "modelPreferenceSelectionOverlayOpacity", "primaryColor", "primaryColorCustom",
-    "tabGroupButtonOrder", "tabGroupButtonPlacement", "tabGroupButtonsMode", "themeMode", "tooltipDisabledIds",
+    "tabContextMenuHiddenIds", "tabContextMenuOrder", "tabGroupButtonOrder", "tabGroupButtonPlacement", "tabGroupButtonsMode",
+    "themeMode", "tooltipDisabledIds",
     "topbarPromptInputFontSize", "topbarPromptPlaceholderConfig"
   ]),
   profiles: optionCapability(["apiProfiles", "optimizeApiProfileId", "summaryApiProfileId"]),
@@ -59,13 +60,15 @@ const SETTINGS_STATE_SECTION_IDS = Object.freeze([
 const SETTINGS_SECTION_STATE_ACCESS = Object.freeze({
   appearance: stateAccess([
     "options", "settingsAppearancePrimaryColorDraft", "settingsAppearanceTab", "settingsAppearanceTopbarTab",
-    "settingsAppearanceWorkspaceTab", "settingsTabGroupButtonDragId",
-    "settingsTabGroupButtonOrderDraft", "settingsTabGroupButtonPlacementDraft", "settingsTopbarPromptPlaceholderDraft",
+    "settingsAppearanceWorkspaceTab", "settingsTabContextMenuDragId", "settingsTabContextMenuHiddenIdsDraft",
+    "settingsTabContextMenuOrderDraft", "settingsTabGroupButtonDragId", "settingsTabGroupButtonOrderDraft",
+    "settingsTabGroupButtonPlacementDraft", "settingsTabGroupTab", "settingsTopbarPromptPlaceholderDraft",
     "settingsTopbarPromptPlaceholderDragIndex", "settingsTopbarPromptPlaceholderEditingIndex", "topbarEditLayoutDraft"
   ], [
     "options", "settingsAppearancePrimaryColorDraft", "settingsAppearanceTab", "settingsAppearanceTopbarTab",
-    "settingsAppearanceWorkspaceTab", "settingsTabGroupButtonDragId",
-    "settingsTabGroupButtonOrderDraft", "settingsTabGroupButtonPlacementDraft", "settingsTopbarPromptPlaceholderDraft",
+    "settingsAppearanceWorkspaceTab", "settingsTabContextMenuDragId", "settingsTabContextMenuHiddenIdsDraft",
+    "settingsTabContextMenuOrderDraft", "settingsTabGroupButtonDragId", "settingsTabGroupButtonOrderDraft",
+    "settingsTabGroupButtonPlacementDraft", "settingsTabGroupTab", "settingsTopbarPromptPlaceholderDraft",
     "settingsTopbarPromptPlaceholderDragIndex", "settingsTopbarPromptPlaceholderEditingIndex", "topbarEditLayoutDraft"
   ], { options: settingsOptionAccess("appearance") }),
   profiles: stateAccess(

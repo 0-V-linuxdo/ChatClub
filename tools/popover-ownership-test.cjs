@@ -8,6 +8,7 @@ const root = path.resolve(__dirname, "..");
 const workspaceFile = path.join(root, "app/workspace/view-controller.js");
 const runtimeFile = path.join(root, "app/runtime.js");
 const workspaceSource = fs.readFileSync(workspaceFile, "utf8");
+const tabMenuSource = fs.readFileSync(path.join(root, "app/workspace/tab-context-menu.js"), "utf8");
 const runtimeSource = fs.readFileSync(runtimeFile, "utf8");
 const composerSource = fs.readFileSync(path.join(root, "app/composer/controller.js"), "utf8");
 const topbarControllerSource = fs.readFileSync(path.join(root, "app/topbar/controller.js"), "utf8");
@@ -225,7 +226,7 @@ for (const methodName of ["openAppPicker", "openLayoutMenu"]) {
   );
 }
 
-const chatMenuSource = functionSource(workspaceSource, "openChatMenu", "  ");
+const chatMenuSource = functionSource(tabMenuSource, "renderWorkspaceTabMenuItems");
 const goToUrlEntry = chatMenuSource.indexOf("goToUrl:");
 const nextChatMenuEntry = chatMenuSource.indexOf("newChat:", goToUrlEntry);
 assert.ok(goToUrlEntry >= 0 && nextChatMenuEntry > goToUrlEntry, "the chat-menu Go To URL entry must remain discoverable");

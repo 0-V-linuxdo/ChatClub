@@ -2750,6 +2750,19 @@ body.tab-gesture-active * {
   width: 100%;
 }
 
+.appearance-tab-group-pane {
+  display: grid;
+  gap: 14px;
+}
+
+.appearance-tab-group-pane > .settings-inner-tabs {
+  grid-auto-flow: initial;
+  grid-auto-columns: initial;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: fit-content;
+  max-width: 100%;
+}
+
 .settings-inner-tab {
   display: grid;
   gap: 2px;
@@ -2874,7 +2887,11 @@ body.tab-gesture-active * {
   justify-items: center;
 }
 
-.appearance-workspace-pane > .settings-inner-tabs,
+.appearance-workspace-pane > .settings-inner-tabs {
+  width: fit-content;
+  max-width: 100%;
+}
+
 .appearance-workspace-subpane {
   width: min(820px, 100%);
 }
@@ -2883,6 +2900,7 @@ body.tab-gesture-active * {
   grid-auto-flow: initial;
   grid-auto-columns: initial;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  justify-self: start;
 }
 
 .appearance-workspace-subpane {
@@ -3302,6 +3320,137 @@ body.settings-tab-group-button-dragging iframe {
   text-align: center;
 }
 
+.tab-context-menu-placement-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.tab-context-menu-placement-panel {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.tab-context-menu-placement-panel.is-visible .tab-group-button-placement-title {
+  color: var(--primary);
+}
+
+.tab-context-menu-placement-panel.is-hidden .tab-group-button-placement-title {
+  color: var(--danger);
+}
+
+.tab-context-menu-placement-zone {
+  min-height: 172px;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 6px;
+  border: 1px dashed color-mix(in srgb, var(--line) 72%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel-2) 24%, transparent);
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.tab-context-menu-placement-zone.is-visible {
+  border-color: color-mix(in srgb, var(--primary) 32%, var(--line));
+  background: color-mix(in srgb, var(--primary) 5%, transparent);
+}
+
+.tab-context-menu-placement-zone.is-hidden {
+  border-color: color-mix(in srgb, var(--danger) 32%, var(--line));
+  background: color-mix(in srgb, var(--danger) 5%, transparent);
+}
+
+.tab-context-menu-placement-zone.drop-target {
+  border-color: color-mix(in srgb, var(--primary) 62%, transparent);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+.tab-context-menu-placement-zone.is-hidden.drop-target {
+  border-color: color-mix(in srgb, var(--danger) 58%, transparent);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+
+.tab-context-menu-placement-row {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 22px 28px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel-2) 60%, transparent);
+  cursor: grab;
+  user-select: none;
+}
+
+.tab-context-menu-placement-row.drop-before::before,
+.tab-context-menu-placement-row.drop-after::after {
+  content: "";
+  position: absolute;
+  right: 10px;
+  left: 10px;
+  z-index: 2;
+  height: 3px;
+  background: var(--primary);
+  border-radius: 999px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);
+}
+
+.tab-context-menu-placement-row.drop-before::before { top: -6px; }
+.tab-context-menu-placement-row.drop-after::after { bottom: -6px; }
+
+.tab-context-menu-placement-row.dragging {
+  opacity: 0.55;
+  cursor: grabbing;
+}
+
+body.settings-tab-context-menu-dragging,
+body.settings-tab-context-menu-dragging * {
+  cursor: grabbing !important;
+  user-select: none !important;
+}
+
+body.settings-tab-context-menu-dragging iframe {
+  pointer-events: none;
+}
+
+.tab-context-menu-placement-row .settings-drag-handle {
+  color: var(--muted);
+}
+
+.tab-context-menu-placement-icon {
+  display: inline-grid;
+  place-items: center;
+  color: var(--primary);
+}
+
+.tab-context-menu-placement-icon .svg-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.tab-context-menu-placement-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.tab-context-menu-placement-copy strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.tab-context-menu-placement-row.is-danger .tab-context-menu-placement-icon {
+  color: var(--danger);
+}
+
 .appearance-color-control {
   display: grid;
   grid-template-columns: var(--settings-control-height) minmax(0, 220px) 32px minmax(0, 1fr);
@@ -3401,6 +3550,18 @@ body.settings-tab-group-button-dragging iframe {
   }
 
   .tab-group-button-placement-zone {
+    min-height: 92px;
+  }
+
+  .tab-context-menu-placement-list {
+    grid-template-columns: 1fr;
+  }
+
+  .appearance-tab-group-pane > .settings-inner-tabs {
+    grid-template-columns: 1fr;
+  }
+
+  .tab-context-menu-placement-zone {
     min-height: 92px;
   }
 }
@@ -8564,6 +8725,10 @@ body:has(.chat-card:not(.fullscreen-hidden) .chat-frame.active + .frame-submit-t
 .popover-menu .button-danger,
 .popover-menu .button-danger .svg-icon {
   color: var(--danger);
+}
+
+.popover-menu.tab-context-menu {
+  min-width: 214px;
 }
 
 .popover-menu.topbar-settings-popover {

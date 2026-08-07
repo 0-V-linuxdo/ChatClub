@@ -5,6 +5,7 @@ import { claimTopmostPopoverEscape, el } from "../../ui/dom.js";
 import { appPickerHostKeys } from "./app-hosts.js";
 import { workspaceGridColumnCount } from "./model.js";
 import { renderPreferredModelSelectionOverlay } from "./preferred-model-selection-overlay.js";
+import { renderWorkspaceTabMenuItems } from "./tab-context-menu.js";
 import { createControllerMethodValidator, validateControllerContract } from "../controller-contract.js";
 const LAYOUT_POPOVER_RIGHT_EXTENSION = 40;
 const APP_PICKER_INTERNATIONAL_IDS = [
@@ -551,6 +552,12 @@ export function createWorkspaceViewController(dependencies = {}) {
       const location = currentLocation();
       if (location?.group) activateChatTab(location.group, chat.instanceId);
     };
+    const openCurrentTabMenu = (event) => {
+      event?.preventDefault?.(); event?.stopPropagation?.();
+      const location = currentLocation();
+      if (!location?.group || !location.chat) return;
+      openChatMenu(event.currentTarget, location.group, { showAllActions: true, targetChat: location.chat });
+    };
     return el("div", {
       class: `tab ${chat.instanceId === active ? "active" : ""}`,
       role: "button",
@@ -559,15 +566,15 @@ export function createWorkspaceViewController(dependencies = {}) {
       title: name,
       dataset: { instanceId: chat.instanceId },
       onselectstart: (event) => {
-        event.preventDefault();
-        event.stopPropagation();
+        event.preventDefault(); event.stopPropagation();
       },
       onmousedown: (event) => {
-        if (event.target?.closest?.(".tab-close")) return;
+        if (event.button !== 0 || event.target?.closest?.(".tab-close")) return;
         event.preventDefault();
         event.stopPropagation();
       },
       onpointerdown: (event) => startTabPointerDrag(event, currentLocation()?.group?.id, chat.instanceId),
+      oncontextmenu: openCurrentTabMenu,
       onclick: (event) => {
         if (consumeSuppressedTabClick(chat.instanceId)) {
           event.preventDefault();
@@ -1082,7 +1089,7 @@ export function createWorkspaceViewController(dependencies = {}) {
     closeTrackedMessageNavigatorMenu();
   }
 
-  function openChatMenu(anchor, group) {
+  function openChatMenu(anchor, group, { showAllActions = false, targetChat = null } = {}) {
     if (anchor.classList.contains("workspace-popover-anchor") && document.querySelector(".workspace-popover-menu")) {
       closePopovers();
       return;
@@ -1091,54 +1098,37 @@ export function createWorkspaceViewController(dependencies = {}) {
     anchor.classList.add("popover-anchor", "workspace-popover-anchor");
     workspacePopoverAnchor = anchor;
     const rect = anchor.getBoundingClientRect();
-    const { fullscreenLabel, fullscreenTooltipLabel, icon: fullscreenIcon } = fullscreenButtonMeta(group);
-    const activeChat = activeChatForGroup(group);
-    const activeFrame = activeIframe(activeChat);
-    const activeFallback = { appId: activeChat?.appId || "" };
-    const messageNavigatorDisabled = !messageNavigatorFrameEnabled(activeFrame) && !messageNavigatorPayloadForFrame(activeFrame, "", activeFallback);
-    const deleteThreadDisabled = !topicDeleteCapabilityForFrame(activeFrame, activeFallback).available;
-    const menuButtonById = {
-      addApp: () => menuButton(t("chat.addApp"), "plus", () => openAppPicker(anchor, { group }), "secondary", false, t("chat.addApp"), "", "workspace.group.addApp"),
-      openInNewTab: () => menuButton(t("common.openInNewTab"), "external", () => openChatInNewTab(group), "secondary", false, t("common.openInNewTab"), "", "workspace.group.openInNewTab"),
-      copyLink: () => menuButton(t("common.copyLink"), "copy", () => copyActiveChatLink(group), "secondary", false, t("common.copyLink"), "", "workspace.group.copyLink"),
-      goToUrl: () => menuButton(t("chat.goToUrl"), "link", () => {
-        closePopovers();
-        openGoToUrlDialog(group);
-      }, "secondary", false, t("chat.goToUrl"), "", "workspace.group.goToUrl"),
-      newChat: () => menuButton(t("topbar.newChat"), "edit", async () => {
-        await startNewChatInActiveTab(group);
-        closePopovers();
-      }, "secondary", false, shortcutTooltip(t("topbar.newChat"), "newChat"), "left", "workspace.group.newChat"),
-      refreshPage: () => renderRefreshPageMenuButton(group),
-      reload: () => menuButton(t("chat.home"), "home", () => {
-        reloadChat(activeChatForGroup(group));
-        closePopovers();
-      }, "secondary", false, shortcutTooltip(t("chat.home"), "reloadChat"), "left", "workspace.group.reload"),
-      messageNavigator: () => menuButton(t("chat.messageNavigator"), "navigator", () => {
-        toggleMessageNavigator(group);
-      }, "secondary", messageNavigatorDisabled, shortcutTooltip(t("chat.messageNavigator"), "toggleMessageNavigator"), "left", "workspace.group.messageNavigator"),
-      deleteThread: () => menuButton(t("chat.deleteThreadInGroup"), "trash", () => {
-        deleteActiveThreadForGroup(group);
-      }, "danger", deleteThreadDisabled, t("chat.deleteThreadInGroup"), "left", "workspace.group.deleteThread"),
-      fullscreen: () => menuButton(fullscreenLabel, fullscreenIcon, () => {
-        toggleFullscreen(group.id);
-        closePopovers();
-      }, "secondary", false, fullscreenTooltipLabel, "left", "workspace.group.fullscreen"),
-      removeGroup: () => menuButton(t("chat.removeGroup"), "x", async () => {
-        await removeChatGroup(group);
-        closePopovers();
-      }, "danger", state.groups.length <= 1, shortcutTooltip(t("chat.removeGroup"), "closeChat"), "left", "workspace.group.remove")
-    };
-    const foldedMenuButtons = orderedTabGroupButtons()
-      .filter((item) => tabGroupButtonIsFolded(item.id))
-      .map((item) => ({ item, node: menuButtonById[item.id]?.() }))
-      .filter((entry) => entry.node);
-    const foldedHeaderButtons = foldedMenuButtons
-      .filter((entry) => !entry.item.danger)
-      .map((entry) => entry.node);
-    const foldedDangerButtons = foldedMenuButtons
-      .filter((entry) => entry.item.danger)
-      .map((entry) => entry.node);
+    const { menuHeaderButtons, menuDangerButtons } = renderWorkspaceTabMenuItems({
+      anchor,
+      group,
+      showAllActions,
+      targetChat,
+      state,
+      activeChatForGroup,
+      activeIframe,
+      activateChatTab,
+      fullscreenButtonMeta,
+      messageNavigatorFrameEnabled,
+      messageNavigatorPayloadForFrame,
+      topicDeleteCapabilityForFrame,
+      menuButton,
+      openAppPicker,
+      openChatInNewTab,
+      copyActiveChatLink,
+      openGoToUrlDialog,
+      startNewChatInActiveTab,
+      closePopovers,
+      shortcutTooltip,
+      renderRefreshPageMenuButton,
+      reloadChat,
+      toggleMessageNavigator,
+      deleteActiveThreadForGroup,
+      toggleFullscreen,
+      removeChatGroup,
+      closeTab,
+      orderedTabGroupButtons,
+      tabGroupButtonIsFolded
+    });
     const backdrop = el("div", {
       class: "popover-backdrop workspace-popover-backdrop",
       onpointerdown: (event) => {
@@ -1153,15 +1143,25 @@ export function createWorkspaceViewController(dependencies = {}) {
     const menu = el("div", {
       class: "popover-menu workspace-popover-menu",
       role: "menu",
-      style: { top: `${rect.bottom + 5}px`, right: `${Math.max(8, window.innerWidth - rect.right)}px` },
+      style: showAllActions
+        ? { top: `${rect.bottom + 5}px`, left: `${Math.max(8, rect.left)}px` }
+        : { top: `${rect.bottom + 5}px`, right: `${Math.max(8, window.innerWidth - rect.right)}px` },
       onpointerdown: (event) => event.stopPropagation(),
       onclick: (event) => event.stopPropagation()
     },
-      foldedHeaderButtons,
-      foldedHeaderButtons.length && foldedDangerButtons.length ? el("div", { class: "menu-separator" }) : null,
-      foldedDangerButtons
+      menuHeaderButtons,
+      menuHeaderButtons.length && menuDangerButtons.length ? el("div", { class: "menu-separator" }) : null,
+      menuDangerButtons
     );
+    menu.classList.toggle("tab-context-menu", showAllActions);
     document.body.append(backdrop, menu);
+    if (showAllActions) {
+      const menuRect = menu.getBoundingClientRect();
+      const maxLeft = Math.max(8, window.innerWidth - menuRect.width - 8);
+      const maxTop = Math.max(8, window.innerHeight - menuRect.height - 8);
+      menu.style.left = `${Math.min(Math.max(8, rect.left), maxLeft)}px`;
+      menu.style.top = `${Math.min(Math.max(8, rect.bottom + 5), maxTop)}px`;
+    }
     requestAnimationFrame(() => {
       document.addEventListener("pointerdown", closePopoverOnOutsideInteraction, true);
       document.addEventListener("focusin", closePopoverOnOutsideInteraction, true);

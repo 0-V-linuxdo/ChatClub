@@ -6,7 +6,7 @@ import {
 } from "./notion-efforts.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-08-07｜22:21:37」";
+export const APP_VERSION = "「2026-08-08｜00:20:54」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -164,6 +164,15 @@ export const TAB_GROUP_HEADER_BUTTONS = [
   { id: "removeGroup", icon: "x", section: "menu", defaultPlacement: "menu", danger: true },
   { id: "more", icon: "more", section: "anchor", requiredPinned: true, defaultPlacement: "pinned" }
 ];
+
+export const TAB_CONTEXT_MENU_ITEMS = Object.freeze([
+  ...TAB_GROUP_HEADER_BUTTONS.filter((item) => item.id !== "removeGroup" && item.id !== "more"),
+  { id: "closeTab", icon: "x", section: "context", danger: true }
+]);
+
+export const DEFAULT_TAB_CONTEXT_MENU_ORDER = Object.freeze(
+  TAB_CONTEXT_MENU_ITEMS.map((item) => item.id)
+);
 
 export const DEFAULT_TAB_GROUP_BUTTON_PLACEMENT = Object.freeze(
   Object.fromEntries(TAB_GROUP_HEADER_BUTTONS.map((item) => [item.id, item.defaultPlacement || "pinned"]))
@@ -353,6 +362,8 @@ export const DEFAULT_OPTIONS = {
   tabGroupButtonPlacement: DEFAULT_TAB_GROUP_BUTTON_PLACEMENT,
   tabGroupButtonOrder: DEFAULT_TAB_GROUP_BUTTON_ORDER,
   tabGroupButtonOrderMigrationVersion: TAB_GROUP_BUTTON_ORDER_MIGRATION_VERSION,
+  tabContextMenuOrder: DEFAULT_TAB_CONTEXT_MENU_ORDER,
+  tabContextMenuHiddenIds: [],
   topbarLayout: DEFAULT_TOPBAR_LAYOUT,
   topbarDeleteThreadMigrated: true,
   apiProfiles: [
