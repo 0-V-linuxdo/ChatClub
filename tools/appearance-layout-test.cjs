@@ -7,6 +7,7 @@ const vm = require("node:vm");
 
 const root = path.resolve(__dirname, "..");
 const controllerSource = fs.readFileSync(path.join(root, "app/settings/appearance.js"), "utf8");
+const workspaceSource = fs.readFileSync(path.join(root, "app/settings/appearance-workspace.js"), "utf8");
 const settingsKitSource = fs.readFileSync(path.join(root, "app/settings/kit.js"), "utf8");
 const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"), "utf8");
 const i18nSource = fs.readFileSync(path.join(root, "shared/i18n.js"), "utf8");
@@ -18,6 +19,51 @@ assert.doesNotMatch(controllerSource, /frameToastPositionPreset|frame-toast-posi
 assert.doesNotMatch(controllerSource, /frameToast(?:Top|Middle|Bottom|Center)/, "position preset definitions must be removed");
 assert.doesNotMatch(stylesheetSource, /frame-toast-position-preset/, "position preset CSS must be removed");
 assert.doesNotMatch(i18nSource, /appearance\.frameToast(?:Presets|Top|Middle|Bottom|Center)/, "position preset translations must be removed");
+assert.match(controllerSource, /APPEARANCE_WORKSPACE_TAB_IDS\.includes\(state\.settingsAppearanceWorkspaceTab\)/);
+assert.match(controllerSource, /activeId: state\.settingsAppearanceWorkspaceTab/);
+assert.match(controllerSource, /onSelect: \(id\) => \{\s*state\.settingsAppearanceWorkspaceTab = id;\s*redraw\(\);/);
+assert.doesNotMatch(
+  functionSource(controllerSource, "reset"),
+  /settingsAppearanceWorkspaceTab/,
+  "closing and reopening Settings must preserve the selected workspace subtab"
+);
+assert.match(workspaceSource, /Object\.freeze\(\["general", "color", "overlays"\]\)/);
+assert.match(workspaceSource, /tabs\.setAttribute\("aria-label", t\("appearance\.workspaceTabsLabel"\)\)/);
+assert.match(workspaceSource, /role: "tabpanel"/);
+assert.match(
+  workspaceSource,
+  /const generalBlock[\s\S]*appearance\.themeMode[\s\S]*appearance\.language[\s\S]*appearance\.maxColumns/,
+  "general workspace tab must own theme, language, and column controls"
+);
+assert.match(
+  workspaceSource,
+  /const colorBlock[\s\S]*appearance\.primaryColor[\s\S]*const overlaysBlock/,
+  "color workspace tab must own the primary color control"
+);
+assert.match(
+  workspaceSource,
+  /const overlaysBlock[\s\S]*appearance\.loadingOverlay[\s\S]*selectionOverlayControls\.toggleControl[\s\S]*appearance\.modelSelectionOverlayOpacity/,
+  "overlay workspace tab must own both loading and model-selection controls"
+);
+assert.doesNotMatch(controllerSource, /appearance-workspace-(?:layout|main|aside)/);
+assert.doesNotMatch(stylesheetSource, /\.appearance-workspace-(?:layout|main|aside)/);
+assert.match(
+  stylesheetSource,
+  /\.appearance-workspace-pane > \.settings-inner-tabs \{[\s\S]*?grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/,
+  "workspace subtabs must have three stable tracks"
+);
+assert.match(
+  stylesheetSource,
+  /\.appearance-workspace-subpane\.is-overlays \.appearance-range-help \{\s*grid-column: 1 \/ -1;/,
+  "overlay help must remain on its own row"
+);
+assert.match(
+  stylesheetSource,
+  /@media \(max-width: 620px\)[\s\S]*?\.appearance-workspace-pane > \.settings-inner-tabs \{\s*grid-template-columns: 1fr;[\s\S]*?\.appearance-workspace-pane \.settings-inner-tab span \{[\s\S]*?white-space: normal;/,
+  "narrow workspace tabs must stack without truncating their labels"
+);
+assert.match(controllerSource, /state\.settingsAppearancePrimaryColorDraft \|\| state\.options\.primaryColor/);
+assert.match(controllerSource, /state\.settingsAppearancePrimaryColorDraft = primaryColorDraft = normalized/);
 assert.match(
   controllerSource,
   /class: "frame-toast-position-readout"[\s\S]*t\("appearance\.frameToastDragHelp"\)[\s\S]*t\("appearance\.frameToastKeyboardHelp"\)/,

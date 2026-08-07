@@ -152,6 +152,254 @@ export async function stableConfigInfoProbe({ request, withTimeout, expectedIds 
   }), 15000, "stable dynamic content registration");
 }
 
+export async function appearanceWorkspaceSubtabsProbe({
+  quietWindow,
+  selectSettingsSection,
+  settingsButton,
+  waitForCondition
+}) {
+  const ids = ["general", "color", "overlays"];
+  const currentState = () => {
+    const pane = document.querySelector(".appearance-workspace-pane");
+    const tablist = pane?.querySelector(":scope > .settings-inner-tabs");
+    const tabs = ids.map((id) => tablist?.querySelector(`[data-appearance-workspace-tab-id="${id}"]`));
+    const panel = pane?.querySelector(".appearance-workspace-subpane");
+    const tablistRect = tablist?.getBoundingClientRect();
+    const tabRects = tabs.map((tab) => tab?.getBoundingClientRect());
+    return {
+      pane,
+      panel,
+      tablist,
+      tabs,
+      noHorizontalOverflow: Boolean(tablistRect && panel)
+        && tablist.scrollWidth <= tablist.clientWidth + 1
+        && panel.scrollWidth <= panel.clientWidth + 1,
+      stableTracks: tabRects.every((rect) => rect?.width > 0)
+        && Math.max(...tabRects.map((rect) => rect.width)) - Math.min(...tabRects.map((rect) => rect.width)) < 1
+    };
+  };
+  selectSettingsSection("appearance");
+  await waitForCondition(() => Boolean(currentState().pane), 3000, "Appearance workspace subtabs");
+  currentState().tabs[0]?.click();
+  await waitForCondition(() => currentState().panel?.classList.contains("is-general"), 3000, "General workspace subtab");
+  currentState().tabs[0]?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+  await waitForCondition(
+    () => currentState().panel?.classList.contains("is-color")
+      && document.activeElement?.dataset.appearanceWorkspaceTabId === "color",
+    3000,
+    "workspace subtab keyboard focus restoration"
+  );
+  const keyboardFocusRestored = true;
+  const visited = [];
+  for (const id of ids) {
+    currentState().tabs[ids.indexOf(id)]?.click();
+    await waitForCondition(
+      () => currentState().panel?.classList.contains(`is-${id}`),
+      3000,
+      `${id} workspace subtab`
+    );
+    const state = currentState();
+    visited.push({ id, noHorizontalOverflow: state.noHorizontalOverflow, stableTracks: state.stableTracks });
+  }
+  currentState().tabs[1]?.click();
+  await waitForCondition(() => currentState().panel?.classList.contains("is-color"), 3000, "Color workspace subtab");
+  const originalColor = document.querySelector(".appearance-color-text")?.value || "#1f7a5f";
+  const draftColor = originalColor.toLowerCase() === "#123456" ? "#654321" : "#123456";
+  const colorInput = document.querySelector(".appearance-color-text");
+  colorInput.value = draftColor;
+  colorInput.dispatchEvent(new Event("input", { bubbles: true }));
+  currentState().tabs[0]?.click();
+  currentState().tabs[1]?.click();
+  await waitForCondition(() => currentState().panel?.classList.contains("is-color"), 3000, "restored Color workspace subtab");
+  const colorDraftPreserved = document.querySelector(".appearance-color-text")?.value === draftColor;
+  const restoredColorInput = document.querySelector(".appearance-color-text");
+  restoredColorInput.value = originalColor;
+  restoredColorInput.dispatchEvent(new Event("input", { bubbles: true }));
+  currentState().tabs[2]?.click();
+  await waitForCondition(() => currentState().panel?.classList.contains("is-overlays"), 3000, "Overlays workspace subtab");
+  const overlayToggle = document.querySelector('.appearance-toggle-control input[role="switch"]');
+  const overlaySlider = document.querySelector('[aria-describedby="appearance-model-selection-overlay-opacity-help"]');
+  const describedText = (control) => document.getElementById(control?.getAttribute("aria-describedby") || "")
+    ?.textContent?.trim() || "";
+  const controlsDescribed = Boolean(describedText(overlayToggle))
+    && Boolean(describedText(overlaySlider))
+    && /%$/.test(overlaySlider?.getAttribute("aria-valuetext") || "");
+  document.querySelector('[data-tooltip-id="settings.modal.close"]')?.click();
+  await waitForCondition(() => !document.querySelector(".settings-modal"), 3000, "closed Settings modal");
+  settingsButton.click();
+  await waitForCondition(() => Boolean(currentState().pane), 3000, "reopened Appearance workspace subtabs");
+  await quietWindow();
+  const reopened = currentState();
+  return {
+    visited,
+    colorDraftPreserved,
+    controlsDescribed,
+    keyboardFocusRestored,
+    reopenedOnOverlays: reopened.panel?.classList.contains("is-overlays") === true
+      && reopened.tabs[2]?.getAttribute("aria-selected") === "true",
+    labeled: Boolean(reopened.tablist?.getAttribute("aria-label"))
+      && reopened.panel?.getAttribute("role") === "tabpanel"
+  };
+}
+
+export function preferredModelSelectionOverlayLayoutProbe() {
+  const source = document.querySelector(".preferred-model-selection-overlay");
+  if (!source) throw new Error("preferred-model overlay layout probe found no persistent overlay");
+  const root = document.documentElement;
+  const originalTheme = root.getAttribute("data-theme");
+  const originalOpacity = root.style.getPropertyValue("--preferred-model-selection-overlay-opacity");
+  const samples = [];
+  const opacitySamples = [];
+  try {
+    for (const theme of ["light", "dark"]) {
+      root.setAttribute("data-theme", theme);
+      for (const width of [1048, 260, 180]) {
+        const fixture = document.createElement("div");
+        fixture.className = "chat-frame-wrap";
+        Object.assign(fixture.style, {
+          position: "fixed",
+          left: "0",
+          top: "0",
+          width: width + "px",
+          height: "280px",
+          opacity: "0",
+          pointerEvents: "none",
+          zIndex: "-1000"
+        });
+        const frameStub = document.createElement("div");
+        frameStub.className = "chat-frame active";
+        const progressToast = document.createElement("div");
+        progressToast.className = "toast frame-submit-toast toast-info show frame-submit-toast-suppressed";
+        progressToast.setAttribute("aria-hidden", "true");
+        progressToast.textContent = "Selecting preferred model…";
+        const overlay = source.cloneNode(true);
+        overlay.hidden = false;
+        const text = overlay.querySelector(".preferred-model-selection-overlay-text");
+        const rows = [
+          ["status", "Automatically selecting"],
+          ["model", "Claude Example Model With A Deliberately Long Name…"],
+          ["thinking", "Thinking: Extended"],
+          ["all-sources", "All sources: Off"],
+          ["effort", "Effort: Max"]
+        ].map(([kind, value]) => {
+          const row = document.createElement("span");
+          row.className = "preferred-model-selection-overlay-line "
+            + (kind === "status"
+              ? "preferred-model-selection-overlay-line-status"
+              : kind === "model"
+                ? "preferred-model-selection-overlay-line-model"
+                : "preferred-model-selection-overlay-line-detail");
+          row.dataset.preferredModelSelectionLine = kind;
+          row.textContent = value;
+          return row;
+        });
+        text.replaceChildren(...rows);
+        fixture.append(frameStub, progressToast, overlay);
+        document.body.append(fixture);
+        const indicator = overlay.querySelector(".preferred-model-selection-overlay-indicator");
+        const spinner = overlay.querySelector(".preferred-model-selection-overlay-spinner");
+        const overlayRect = overlay.getBoundingClientRect();
+        const indicatorRect = indicator.getBoundingClientRect();
+        const rowRects = rows.map((row) => row.getBoundingClientRect());
+        const statusLineHeight = Number.parseFloat(getComputedStyle(rows[0]).lineHeight) || 0;
+        const modelLineHeight = Number.parseFloat(getComputedStyle(rows[1]).lineHeight) || 0;
+        const statusStyle = getComputedStyle(rows[0]);
+        const modelStyle = getComputedStyle(rows[1]);
+        const detailStyles = rows.slice(2).map((row) => getComputedStyle(row));
+        const suppressedToastStyle = getComputedStyle(progressToast);
+        const progressToastSuppressed = suppressedToastStyle.visibility === "hidden"
+          && suppressedToastStyle.display === "flex"
+          && progressToast.getAttribute("aria-hidden") === "true";
+        progressToast.classList.remove("frame-submit-toast-suppressed");
+        progressToast.removeAttribute("aria-hidden");
+        const restoredToastStyle = getComputedStyle(progressToast);
+        const resultToastRestored = restoredToastStyle.visibility !== "hidden"
+          && restoredToastStyle.display === "flex"
+          && progressToast.getAttribute("aria-hidden") === null;
+        const spinnerRect = spinner.getBoundingClientRect();
+        let naturalIndicatorWidth = 0;
+        if (width === 1048) {
+          rows[1].textContent = "Claude Fable 5…";
+          naturalIndicatorWidth = indicator.getBoundingClientRect().width;
+        }
+        samples.push({
+          theme,
+          width,
+          indicatorWidth: indicatorRect.width,
+          indicatorHeight: indicatorRect.height,
+          naturalIndicatorWidth,
+          insideFrame: indicatorRect.left >= overlayRect.left - 0.5
+            && indicatorRect.right <= overlayRect.right + 0.5
+            && indicatorRect.top >= overlayRect.top - 0.5
+            && indicatorRect.bottom <= overlayRect.bottom + 0.5,
+          compact: indicatorRect.width <= Math.min(520, Math.max(0, width - 32)) + 0.5,
+          noHorizontalOverflow: indicator.scrollWidth <= indicator.clientWidth + 1
+            && text.scrollWidth <= text.clientWidth + 1,
+          rowsOrdered: rowRects.every((rect, index) => index === 0 || rect.top >= rowRects[index - 1].bottom),
+          modelClamped: modelLineHeight > 0 && rowRects[1].height <= (modelLineHeight * 2) + 1,
+          spinnerAlignedToStatus: Math.abs(
+            (spinnerRect.top + (spinnerRect.height / 2))
+              - (rowRects[0].top + (statusLineHeight / 2))
+          ) <= 3,
+          appliedRowsShareEmphasis: detailStyles.every((style) => style.color === modelStyle.color
+            && style.fontSize === modelStyle.fontSize
+            && style.fontWeight === modelStyle.fontWeight
+            && style.lineHeight === modelStyle.lineHeight),
+          statusIsSubordinate: statusStyle.color !== modelStyle.color
+            || statusStyle.fontSize !== modelStyle.fontSize
+            || statusStyle.fontWeight !== modelStyle.fontWeight,
+          progressToastSuppressed,
+          resultToastRestored,
+          rowKinds: rows.map((row) => row.dataset.preferredModelSelectionLine),
+          textColor: getComputedStyle(indicator).color,
+          backgroundColor: getComputedStyle(indicator).backgroundColor
+        });
+        if (theme === "light" && width === 260) {
+          for (const opacity of [0, 0.7, 1]) {
+            root.style.setProperty("--preferred-model-selection-overlay-opacity", String(opacity));
+            opacitySamples.push({
+              requested: opacity,
+              backdrop: Number.parseFloat(getComputedStyle(overlay, "::before").opacity),
+              indicator: Number.parseFloat(getComputedStyle(indicator).opacity)
+            });
+          }
+        }
+        fixture.remove();
+      }
+    }
+  } finally {
+    if (originalTheme == null) root.removeAttribute("data-theme");
+    else root.setAttribute("data-theme", originalTheme);
+    if (originalOpacity) {
+      root.style.setProperty("--preferred-model-selection-overlay-opacity", originalOpacity);
+    } else {
+      root.style.removeProperty("--preferred-model-selection-overlay-opacity");
+    }
+  }
+  return {
+    ok: samples.length === 6
+      && samples.every((sample) => sample.insideFrame
+        && sample.compact
+        && sample.noHorizontalOverflow
+        && sample.rowsOrdered
+        && sample.modelClamped
+        && sample.spinnerAlignedToStatus
+        && sample.appliedRowsShareEmphasis
+        && sample.statusIsSubordinate
+        && sample.progressToastSuppressed
+        && sample.resultToastRestored
+        && (sample.width !== 1048 || (sample.naturalIndicatorWidth > 0 && sample.naturalIndicatorWidth < 460))
+        && sample.indicatorHeight > 0
+        && sample.textColor !== sample.backgroundColor
+        && JSON.stringify(sample.rowKinds) === JSON.stringify(["status", "model", "thinking", "all-sources", "effort"]))
+      && opacitySamples.length === 3
+      && opacitySamples.every((sample) => Math.abs(sample.backdrop - sample.requested) < 0.01
+        && sample.indicator === 1),
+    samples,
+    opacitySamples
+  };
+}
+
 export function assertNewWorkspaceTabResult(result, browserTarget, assert) {
   assert(result?.ok === true, `${browserTarget}: Logo did not create a new ChatClub tab`);
   assert(result.shellReady === true, `${browserTarget}: Logo-created ChatClub page did not initialize its app shell`);

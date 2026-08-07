@@ -4,8 +4,8 @@ import { normalizeTabGroupButtonOrder, normalizeTabGroupButtonPlacement } from "
 import { claimTopmostPopoverEscape, el } from "../../ui/dom.js";
 import { appPickerHostKeys } from "./app-hosts.js";
 import { workspaceGridColumnCount } from "./model.js";
+import { renderPreferredModelSelectionOverlay } from "./preferred-model-selection-overlay.js";
 import { createControllerMethodValidator, validateControllerContract } from "../controller-contract.js";
-
 const LAYOUT_POPOVER_RIGHT_EXTENSION = 40;
 const APP_PICKER_INTERNATIONAL_IDS = [
   "ChatGPT", "Claude", "Copilot", "CopilotGH", "Felo", "Gemini", "Genspark", "Grok", "Liner",
@@ -19,7 +19,6 @@ const APP_PICKER_CHINESE_IDS = [
 ];
 const APP_PICKER_CHINESE_ID_SET = new Set(APP_PICKER_CHINESE_IDS);
 const requireMethods = createControllerMethodValidator("Workspace view", "port");
-
 export function createWorkspaceViewController(dependencies = {}) {
   const { state, services, frame, layout, pocket, drag, navigator } = validateControllerContract(
     dependencies,
@@ -763,7 +762,8 @@ export function createWorkspaceViewController(dependencies = {}) {
     activeFrame?.setAttribute("aria-busy", String(isFrameLoading));
     const frameWrap = el("div", { class: "chat-frame-wrap" },
       frames,
-      renderFrameLoadingStatus(activeFrame, isFrameLoading)
+      renderFrameLoadingStatus(activeFrame, isFrameLoading),
+      renderPreferredModelSelectionOverlay()
     );
     syncFrameLoadingMask(activeFrame);
     return el("section", {

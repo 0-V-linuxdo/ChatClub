@@ -6,7 +6,7 @@ import {
 } from "./notion-efforts.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-08-07｜06:24:52」";
+export const APP_VERSION = "「2026-08-07｜20:40:06」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -333,6 +333,8 @@ export const DEFAULT_OPTIONS = {
   primaryColor: "#1f7a5f",
   primaryColorCustom: false,
   frameLoadingOverlayOpacity: 82,
+  modelPreferenceSelectionOverlayEnabled: true,
+  modelPreferenceSelectionOverlayOpacity: 70,
   frameToastPosition: DEFAULT_FRAME_TOAST_POSITION,
   pocketCardSize: DEFAULT_POCKET_CARD_SIZE,
   tooltipDisabledIds: [],

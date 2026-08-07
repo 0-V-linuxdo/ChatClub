@@ -121,6 +121,17 @@ export function normalizeFrameToastPosition(value = {}) {
   };
 }
 
+export function normalizeModelPreferenceSelectionOverlayOpacity(
+  value,
+  fallback = DEFAULT_OPTIONS.modelPreferenceSelectionOverlayOpacity
+) {
+  if (
+    (typeof value !== "number" && typeof value !== "string")
+    || (typeof value === "string" && !value.trim())
+  ) return fallback;
+  return boundedNumber(value, fallback, 0, 100);
+}
+
 function normalizeTooltipDisabledIds(value = []) {
   const validIds = new Set(TOOLTIP_TARGET_IDS);
   const ordered = [];
@@ -729,6 +740,12 @@ export function normalizeOptions(raw = {}) {
     topbarDeleteThreadMigrated: true,
     pocketCardSize: normalizePocketCardSize(raw.pocketCardSize),
     frameLoadingOverlayOpacity: boundedNumber(raw.frameLoadingOverlayOpacity, base.frameLoadingOverlayOpacity, 0, 100),
+    modelPreferenceSelectionOverlayEnabled: typeof raw.modelPreferenceSelectionOverlayEnabled === "boolean"
+      ? raw.modelPreferenceSelectionOverlayEnabled
+      : base.modelPreferenceSelectionOverlayEnabled,
+    modelPreferenceSelectionOverlayOpacity: normalizeModelPreferenceSelectionOverlayOpacity(
+      raw.modelPreferenceSelectionOverlayOpacity
+    ),
     frameToastPosition: normalizeFrameToastPosition(raw.frameToastPosition),
     ...primaryColorState,
     apiProfiles,

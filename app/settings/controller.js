@@ -70,6 +70,7 @@ export function createSettingsController(ctx) {
     syncTopbar: "function",
     syncTopbarPromptPlaceholder: "function",
     syncSummaryPanel: "function",
+    syncPreferredModelSelectionOverlays: "function",
     requestUserScriptsPermission: "function?",
     syncWorkspaceDom: "function",
     applyPreferredModels: "function",
@@ -96,6 +97,11 @@ export function createSettingsController(ctx) {
   const syncTopbar = requireControllerFunction(ctx, controllerName, "syncTopbar");
   const syncTopbarPromptPlaceholder = requireControllerFunction(ctx, controllerName, "syncTopbarPromptPlaceholder");
   const syncSummaryPanel = requireControllerFunction(ctx, controllerName, "syncSummaryPanel");
+  const syncPreferredModelSelectionOverlays = requireControllerFunction(
+    ctx,
+    controllerName,
+    "syncPreferredModelSelectionOverlays"
+  );
   const syncWorkspaceDom = requireControllerFunction(ctx, controllerName, "syncWorkspaceDom");
   const applyPreferredModels = requireControllerFunction(ctx, controllerName, "applyPreferredModels");
   const openTabUrl = requireControllerFunction(ctx, controllerName, "openTabUrl");
@@ -152,6 +158,7 @@ export function createSettingsController(ctx) {
     syncTopbarPromptPlaceholder,
     syncWorkspaceDom,
     syncSummaryPanel,
+    syncPreferredModelSelectionOverlays,
     enterTopbarEditMode,
     closeSettingsDialog: () => closeActiveSettingsDialog?.()
   });

@@ -52,6 +52,7 @@ export function createFrameToast(iframe, message, kind = "info", position = null
     return Object.freeze({
       update() {},
       dismiss() {},
+      setSuppressed() {},
       remove() {}
     });
   }
@@ -67,6 +68,9 @@ export function createFrameToast(iframe, message, kind = "info", position = null
   let layoutFrame = 0;
   let observer = null;
   let resizeObserver = null;
+  let suppressed = false;
+  let suppressionHadAriaHidden = false;
+  let suppressionAriaHidden = "";
   let targetPosition = normalizedFrameToastPosition(position || currentFrameToastPosition);
   const item = el("div", {
     class: `toast frame-submit-toast toast-${kind}`,
@@ -171,6 +175,24 @@ export function createFrameToast(iframe, message, kind = "info", position = null
     }, Math.max(0, Number(delayMs) || 0));
   }
 
+  function setSuppressed(nextSuppressed) {
+    const next = nextSuppressed === true;
+    if (next === suppressed || !item.isConnected) return;
+    suppressed = next;
+    item.classList.toggle("frame-submit-toast-suppressed", suppressed);
+    if (suppressed) {
+      suppressionHadAriaHidden = item.getAttribute("aria-hidden") !== null;
+      suppressionAriaHidden = item.getAttribute("aria-hidden") || "";
+      item.setAttribute("aria-hidden", "true");
+      return;
+    }
+    if (suppressionHadAriaHidden) item.setAttribute("aria-hidden", suppressionAriaHidden);
+    else item.removeAttribute("aria-hidden");
+    suppressionHadAriaHidden = false;
+    suppressionAriaHidden = "";
+    scheduleLayout();
+  }
+
   iframe.insertAdjacentElement("afterend", item);
   liveFrameToastPositionSetters.add(setPosition);
   liveFrameToastConnectivityChecks.add(checkConnectivity);
@@ -203,5 +225,5 @@ export function createFrameToast(iframe, message, kind = "info", position = null
     resizeObserver.observe(item);
   }
 
-  return Object.freeze({ update, dismiss, remove });
+  return Object.freeze({ update, dismiss, setSuppressed, remove });
 }

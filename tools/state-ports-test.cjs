@@ -68,8 +68,14 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
     "rules", "optimize", "prompts", "history", "shortcuts", "io", "functionalAnomalies", "about", "shell"
   ]);
 
+  assert.equal(settingsSections.appearance.settingsAppearancePrimaryColorDraft, "");
+  assert.equal(settingsSections.appearance.settingsAppearanceWorkspaceTab, "general");
+  settingsSections.appearance.settingsAppearancePrimaryColorDraft = "#123456";
+  assert.equal(rootState.settingsAppearancePrimaryColorDraft, "#123456");
   settingsSections.appearance.settingsAppearanceTab = "topbar";
   assert.equal(rootState.settingsAppearanceTab, "topbar");
+  settingsSections.appearance.settingsAppearanceWorkspaceTab = "overlays";
+  assert.equal(rootState.settingsAppearanceWorkspaceTab, "overlays");
   assert.throws(() => { settingsSections.appearance.customConfig; }, /settings\.appearance cannot read/);
   assert.throws(() => { settingsSections.appearance.options.modelPreferences; }, /settings\.appearance cannot read/);
   assert.throws(() => { settingsSections.appearance.options.modelPreferenceFailurePolicy; }, /settings\.appearance cannot read/);
@@ -82,6 +88,8 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
     };
   }, /settings\.appearance cannot mutate app state\.options\.modelPreferences/);
   assert.throws(() => { settingsSections.apps.settingsAppearanceTab = "workspace"; }, /settings\.apps cannot mutate/);
+  assert.throws(() => { settingsSections.apps.settingsAppearanceWorkspaceTab = "color"; }, /settings\.apps cannot mutate/);
+  assert.throws(() => { settingsSections.apps.settingsAppearancePrimaryColorDraft = "#ffffff"; }, /settings\.apps cannot mutate/);
   assert.throws(() => { settingsSections.summary.options.apiProfiles.push({ id: "profile-2" }); }, /read-only/);
   assert.throws(() => { settingsSections.about.options; }, /settings\.about cannot read/);
   assert.throws(() => { settingsSections.rules.options; }, /settings\.rules cannot read/);

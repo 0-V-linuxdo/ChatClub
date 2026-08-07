@@ -10,16 +10,13 @@ import {
   normalizeTabGroupButtonOrder,
   normalizeTabGroupButtonPlacement
 } from "../../shared/storage-schema.js";
-import {
-  el,
-  field,
-  input,
-  select
-} from "../../ui/dom.js";
+import { el, input, select } from "../../ui/dom.js";
 import { FRAME_TOAST_POSITION_EVENT } from "../../ui/frame-toast.js";
 import { cleanupSettingsDragRows, createSettingsKit } from "./kit.js";
 import { createAppearanceAutosave } from "./appearance-autosave.js";
+import { createModelSelectionOverlayAppearanceControls } from "./appearance-model-selection-overlay.js";
 import { createAppearanceTopbarController } from "./appearance-topbar.js";
+import { APPEARANCE_WORKSPACE_TAB_IDS, createAppearanceWorkspacePane } from "./appearance-workspace.js";
 import {
   tabGroupButtonPlacementValue,
   tabGroupButtonsModeForPlacement
@@ -39,6 +36,7 @@ export function createAppearanceSettingsSection(ctx) {
     syncTopbarPromptPlaceholder: "function",
     syncWorkspaceDom: "function",
     syncSummaryPanel: "function",
+    syncPreferredModelSelectionOverlays: "function",
     enterTopbarEditMode: "function",
     closeSettingsDialog: "function"
   });
@@ -47,8 +45,10 @@ export function createAppearanceSettingsSection(ctx) {
     controllerName,
     [
       "options",
+      "settingsAppearancePrimaryColorDraft",
       "settingsAppearanceTab",
       "settingsAppearanceTopbarTab",
+      "settingsAppearanceWorkspaceTab",
       "settingsTabGroupButtonDragId",
       "settingsTabGroupButtonOrderDraft",
       "settingsTabGroupButtonPlacementDraft",
@@ -66,6 +66,11 @@ export function createAppearanceSettingsSection(ctx) {
   const syncTopbarPromptPlaceholder = requireControllerFunction(ctx, controllerName, "syncTopbarPromptPlaceholder");
   const syncWorkspaceDom = requireControllerFunction(ctx, controllerName, "syncWorkspaceDom");
   const syncSummaryPanel = requireControllerFunction(ctx, controllerName, "syncSummaryPanel");
+  const syncPreferredModelSelectionOverlays = requireControllerFunction(
+    ctx,
+    controllerName,
+    "syncPreferredModelSelectionOverlays"
+  );
   const enterTopbarEditMode = requireControllerFunction(ctx, controllerName, "enterTopbarEditMode");
   const closeSettingsDialog = requireControllerFunction(ctx, controllerName, "closeSettingsDialog");
   const {
@@ -83,7 +88,8 @@ export function createAppearanceSettingsSection(ctx) {
     syncI18nLanguage,
     syncTopbar,
     syncWorkspaceDom,
-    syncSummaryPanel
+    syncSummaryPanel,
+    syncPreferredModelSelectionOverlays
   });
   const queueAppearanceAutoSave = appearanceAutosave.queue;
   const queueAppearanceColorSave = appearanceAutosave.queueColor;
@@ -295,10 +301,14 @@ export function createAppearanceSettingsSection(ctx) {
       }
       appearancePaneCleanup = () => {};
     };
-    let primaryColorDraft = normalizePrimaryColor(state.options.primaryColor);
+    let primaryColorDraft = normalizePrimaryColor(state.settingsAppearancePrimaryColorDraft || state.options.primaryColor);
+    state.settingsAppearancePrimaryColorDraft = primaryColorDraft;
     const colorHexPattern = /^#?[0-9a-f]{3}(?:[0-9a-f]{3})?$/i;
     const appearanceTabIds = new Set(["workspace", "frameToast", "topbar", "tabGroup", "tooltips"]);
     if (!appearanceTabIds.has(state.settingsAppearanceTab)) state.settingsAppearanceTab = "workspace";
+    if (!APPEARANCE_WORKSPACE_TAB_IDS.includes(state.settingsAppearanceWorkspaceTab)) {
+      state.settingsAppearanceWorkspaceTab = "general";
+    }
     const themeMode = select(state.options.themeMode || "system", [
       { value: "system", label: t("appearance.followSystem") },
       { value: "light", label: t("appearance.light") },
@@ -355,6 +365,9 @@ export function createAppearanceSettingsSection(ctx) {
     };
     overlayOpacitySlider.addEventListener("input", syncOverlayOpacity);
     overlayOpacitySlider.addEventListener("change", syncOverlayOpacity);
+    const selectionOverlayControls = createModelSelectionOverlayAppearanceControls({
+      state, queueAppearanceAutoSave, syncPreferredModelSelectionOverlays, redraw
+    });
     if (!state.settingsTabGroupButtonPlacementDraft) {
       state.settingsTabGroupButtonPlacementDraft = normalizeTabGroupButtonPlacement(
         state.options.tabGroupButtonPlacement,
@@ -389,7 +402,7 @@ export function createAppearanceSettingsSection(ctx) {
       const raw = String(value || "").trim();
       const normalized = normalizePrimaryColor(raw, primaryColorDraft);
       if (fromPicker || colorHexPattern.test(raw)) {
-        primaryColorDraft = normalized;
+        state.settingsAppearancePrimaryColorDraft = primaryColorDraft = normalized;
         colorPicker.value = normalized;
         colorText.value = normalized;
         colorPreview.style.setProperty("--appearance-color", normalized);
@@ -420,7 +433,6 @@ export function createAppearanceSettingsSection(ctx) {
       overlayOpacityValue,
       el("small", { class: "appearance-range-help" }, t("appearance.loadingOverlayHelp"))
     );
-    const appearanceRow = (node) => el("div", { class: "appearance-field-row" }, node);
     const frameToastPositionBlock = () => {
       let draft = normalizeFrameToastPosition(state.options.frameToastPosition);
       let commitSequence = 0;
@@ -784,19 +796,15 @@ export function createAppearanceSettingsSection(ctx) {
         ))
       )
     );
-    const workspaceBlock = () => settingsBlock(t("appearance.workspace"), t("appearance.workspaceDesc"),
-      el("div", { class: "appearance-workspace-layout" },
-        el("div", { class: "appearance-field-list appearance-workspace-main" },
-          appearanceRow(field(t("appearance.themeMode"), themeMode)),
-          appearanceRow(field(t("appearance.language"), language)),
-          appearanceRow(field(t("appearance.maxColumns"), columnCount))
-        ),
-        el("div", { class: "appearance-field-list appearance-workspace-aside" },
-          appearanceRow(field(t("appearance.primaryColor"), colorControl)),
-          appearanceRow(field(t("appearance.loadingOverlay"), overlayOpacityControl))
-        )
-      )
-    );
+    const workspaceBlock = () => createAppearanceWorkspacePane({
+      activeId: state.settingsAppearanceWorkspaceTab,
+      colorControl, columnCount, language, overlayOpacityControl, selectionOverlayControls,
+      settingsBlock, settingsInnerTabs, themeMode,
+      onSelect: (id) => {
+        state.settingsAppearanceWorkspaceTab = id;
+        redraw();
+      }
+    });
     const tabGroupButtonLabel = (id) => ({
       addApp: t("chat.addApp"),
       newChat: t("topbar.newChat"),
@@ -926,7 +934,7 @@ export function createAppearanceSettingsSection(ctx) {
   }
 
   return Object.freeze({
-    afterImport: syncTopbarPromptPlaceholder,
+    afterImport: () => { state.settingsAppearancePrimaryColorDraft = ""; syncTopbarPromptPlaceholder(); },
     autosaveBusy,
     autosaveFailed,
     clearAutosaveState,

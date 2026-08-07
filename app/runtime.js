@@ -3,9 +3,7 @@ import {
   permissionsRequest, requestBackground, runtimeGetUrl, runtimeRequest
 } from "../shared/extension-api.js";
 import { APP_VERSION } from "../shared/constants.js";
-import {
-  FrameRuntimePort
-} from "../shared/frame-rpc.js";
+import { FrameRuntimePort } from "../shared/frame-rpc.js";
 import { setLanguage, t } from "../shared/i18n.js";
 import {
   detectKeyboardPlatform,
@@ -17,6 +15,7 @@ import {
   createId,
   getAllChatApps,
   normalizeFrameToastPosition,
+  normalizeModelPreferenceSelectionOverlayOpacity,
   normalizeOptions,
   normalizePrimaryColor,
   normalizeTopbarPromptInputFontSize
@@ -206,7 +205,7 @@ const {
   applyPreferredModelsToFrames,
   finishBootstrapping: finishPreferredModelBootstrapping,
   handlePreferredModelFrameLifecycleChange,
-  installPreferredModelFrameCleanup
+  installPreferredModelFrameCleanup, syncPreferredModelSelectionOverlays
 } = preferredModelController;
 const initializeTopbarPromptPlaceholder = topbarController.initializePlaceholder;
 const syncTopbarPromptPlaceholder = topbarController.syncPlaceholder;
@@ -488,7 +487,7 @@ function ensureSettingsController() {
           syncTopbar,
           syncTopbarPromptPlaceholder,
           syncSummaryPanel,
-          syncWorkspaceDom: workspaceController.syncWorkspaceDom,
+          syncWorkspaceDom: workspaceController.syncWorkspaceDom, syncPreferredModelSelectionOverlays,
           applyPreferredModels: applyPreferredModelsToFrames,
           applyTheme,
           syncI18nLanguage,
@@ -602,7 +601,6 @@ function saveOptionsPatch(patch = {}) {
   return queued;
 }
 
-
 function menuButton(label, iconName, onClick, variant = "secondary", disabled = false, tooltipLabel = label, tooltipPlacement = "", tooltipId = "") {
   return createMenuButton({ label, icon: svgIcon(iconName), onClick, variant, disabled, tooltipLabel, tooltipPlacement, tooltipId });
 }
@@ -653,12 +651,14 @@ function inferAppName(app) {
   const isDark = mode === "dark" || (mode === "system" && window.matchMedia?.("(prefers-color-scheme: dark)")?.matches);
   const rawFrameLoadingOverlayOpacity = Number(state.options?.frameLoadingOverlayOpacity);
   const frameLoadingOverlayOpacity = Math.max(0, Math.min(100, Math.round(Number.isFinite(rawFrameLoadingOverlayOpacity) ? rawFrameLoadingOverlayOpacity : 82))) / 100;
+  const modelSelectionOverlayOpacity = normalizeModelPreferenceSelectionOverlayOpacity(state.options?.modelPreferenceSelectionOverlayOpacity) / 100;
   const frameToastPosition = normalizeFrameToastPosition(state.options?.frameToastPosition);
   const topbarPromptInputFontSize = normalizeTopbarPromptInputFontSize(state.options?.topbarPromptInputFontSize);
   document.documentElement.style.setProperty("--primary", primaryColor);
   document.documentElement.style.setProperty("--primary-2", `color-mix(in srgb, ${primaryColor} ${isDark ? "22%" : "14%"}, ${isDark ? "#020617" : "#ffffff"})`);
   document.documentElement.style.setProperty("--summary-panel-link", primaryColor);
   document.documentElement.style.setProperty("--frame-loading-overlay-opacity", String(frameLoadingOverlayOpacity));
+  document.documentElement.style.setProperty("--preferred-model-selection-overlay-opacity", String(modelSelectionOverlayOpacity));
   document.documentElement.style.setProperty("--topbar-prompt-input-font-size", `${topbarPromptInputFontSize}px`);
   document.documentElement.dataset.frameToastX = String(frameToastPosition.x);
   document.documentElement.dataset.frameToastY = String(frameToastPosition.y);

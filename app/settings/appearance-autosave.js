@@ -10,7 +10,8 @@ export function createAppearanceAutosave(dependencies = {}) {
     syncI18nLanguage,
     syncTopbar,
     syncWorkspaceDom,
-    syncSummaryPanel
+    syncSummaryPanel,
+    syncPreferredModelSelectionOverlays
   } = validateControllerContract(dependencies, "Appearance autosave", {
     state: "object",
     saveOptionsPatch: "function",
@@ -18,18 +19,35 @@ export function createAppearanceAutosave(dependencies = {}) {
     syncI18nLanguage: "function",
     syncTopbar: "function",
     syncWorkspaceDom: "function",
-    syncSummaryPanel: "function"
+    syncSummaryPanel: "function",
+    syncPreferredModelSelectionOverlays: "function"
   });
   let error = null;
   let running = false;
   let pending = null;
+  let pendingOptimisticPatch = null;
   let pendingRedraw = null;
+  let pendingRedrawOnError = null;
   let colorTimer = 0;
   let pendingColor = "";
+  const overlayKeys = new Set([
+    "modelPreferenceSelectionOverlayEnabled",
+    "modelPreferenceSelectionOverlayOpacity"
+  ]);
+
+  function applyOptimisticPatch(patch = {}) {
+    for (const [key, value] of Object.entries(patch)) state.options[key] = value;
+  }
 
   function queue(patch, options = {}) {
     pending = { ...(pending || {}), ...patch };
+    if (options.optimistic === true) {
+      pendingOptimisticPatch = { ...(pendingOptimisticPatch || {}), ...patch };
+      applyOptimisticPatch(patch);
+      options.onPreview?.();
+    }
     if (typeof options.redraw === "function") pendingRedraw = options.redraw;
+    if (typeof options.redrawOnError === "function") pendingRedrawOnError = options.redrawOnError;
     flush();
   }
 
@@ -37,30 +55,49 @@ export function createAppearanceAutosave(dependencies = {}) {
     if (running) return;
     running = true;
     let settleRedraw = null;
+    let settleRedrawOnError = null;
+    let settleOverlayTouched = false;
     try {
       while (pending) {
         const patch = pending;
         const redraw = pendingRedraw;
-        const frameToastPositionOnly = Object.keys(patch).every((key) => key === "frameToastPosition");
+        const redrawOnError = pendingRedrawOnError;
+        const patchKeys = Object.keys(patch);
+        const frameToastPositionOnly = patchKeys.every((key) => key === "frameToastPosition");
+        const overlayTouched = patchKeys.some((key) => overlayKeys.has(key));
+        const overlayOnly = patchKeys.every((key) => overlayKeys.has(key));
         settleRedraw = redraw;
+        settleRedrawOnError = redrawOnError;
+        settleOverlayTouched = overlayTouched;
         pending = null;
+        pendingOptimisticPatch = null;
         pendingRedraw = null;
+        pendingRedrawOnError = null;
         state.options = await saveOptionsPatch(patch);
+        if (pendingOptimisticPatch) applyOptimisticPatch(pendingOptimisticPatch);
         error = null;
         syncI18nLanguage();
         applyTheme();
-        if (!frameToastPositionOnly) {
+        if (!frameToastPositionOnly && !overlayOnly) {
           syncTopbar();
           syncWorkspaceDom();
           syncSummaryPanel();
         }
+        syncPreferredModelSelectionOverlays();
         redraw?.();
         settleRedraw = null;
+        settleRedrawOnError = null;
+        settleOverlayTouched = false;
       }
     } catch (cause) {
       error = cause;
       console.warn("[ChatClub] Failed to auto-save appearance settings", cause);
-      settleRedraw?.();
+      if (pendingOptimisticPatch) applyOptimisticPatch(pendingOptimisticPatch);
+      if (settleOverlayTouched) {
+        applyTheme();
+        syncPreferredModelSelectionOverlays();
+      }
+      (settleRedrawOnError || settleRedraw)?.();
       toast(t("toast.appearanceAutoSaveFailed"), "error");
     } finally {
       running = false;
@@ -99,7 +136,9 @@ export function createAppearanceAutosave(dependencies = {}) {
     pendingColor = "";
     error = null;
     pending = null;
+    pendingOptimisticPatch = null;
     pendingRedraw = null;
+    pendingRedrawOnError = null;
   }
 
   return Object.freeze({

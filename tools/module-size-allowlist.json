@@ -1,10 +1,10 @@
 {
   "app/preferred-model/controller.js": {
-    "maxLines": 1433,
+    "maxLines": 1428,
     "target": 1200,
-    "maxBytes": 59043,
+    "maxBytes": 58809,
     "targetBytes": 50000,
-    "reason": "The preferred-model controller keeps one document-bound apply record across an explicitly unavailable primary or typed closed-menu Notion settlement failure and its optional secondary attempt, including fresh run correlation, navigation-generation bridge recovery, delivery-aware retry safety, queued-send readiness, failure policy handoff, per-attempt Gemini and Notion desired state, and a bootstrap gate that defers lifecycle-triggered applies until restored frames settle."
+    "reason": "The preferred-model controller keeps one document-bound apply record across an explicitly unavailable primary or typed closed-menu Notion settlement failure and its optional secondary attempt, including fresh run correlation, navigation-generation bridge recovery, delivery-aware retry safety, queued-send readiness, failure policy handoff, per-attempt Gemini and Notion desired state, per-frame overlay and progress-Toast suppression synchronization, and a bootstrap gate that defers lifecycle-triggered applies until restored frames settle."
   },
   "app/composer/controller.js": {
     "maxLines": 1277,
@@ -42,17 +42,17 @@
     "reason": "The official-rules runtime is the single background configuration writer and keeps revision-CAS patch/import/reset handling, v3-to-v4 migration, immutable snapshot composition, signed component activation, rollback pins, alias authorization, reset cleanup journaling and startup recovery behind one serialized coordinator so atomic commit, compensation and destructive-operation fail-closed state cannot diverge across modules."
   },
   "shared/i18n.js": {
-    "maxLines": 2215,
+    "maxLines": 2253,
     "target": 1500,
-    "maxBytes": 129278,
+    "maxBytes": 131840,
     "targetBytes": 82000,
-    "reason": "Bilingual translation catalog data is kept co-located for key parity; the signed official-rules update-management and component-status views, consent, check, apply-all, compatibility, rollback, per-component source, confirmation and accessibility copy join the committed-reset cleanup warning, queued-send, preferred-model, prompt-handoff and platform-management labels under exact line and byte ratchets."
+    "reason": "Bilingual translation catalog data is kept co-located for key parity; the signed official-rules update-management and component-status views, consent, check, apply-all, compatibility, rollback, per-component source, confirmation and accessibility copy join the committed-reset cleanup warning, queued-send, preferred-model auto-selection overlay settings plus structured model, thinking, All Sources and Effort attempt labels, Workspace appearance subtabs, prompt-handoff and platform-management labels under exact line and byte ratchets."
   },
   "tools/browser-smoke.mjs": {
-    "maxLines": 1411,
+    "maxLines": 1435,
     "target": 1200,
-    "maxBytes": 73313,
+    "maxBytes": 74996,
     "targetBytes": 60000,
-    "reason": "The cross-engine smoke exercises protected-header initial loading, target-correlated workspace-frame reset that ignores delayed initial-navigation events before retention baselines, owner-tab session rules, document-initiated iframe self-navigation, the authenticated binding handshake, explicit importability of every app lazy boundary including the signed official-rules service, complete Settings-menu and fullscreen-window probes, content-sized Apps headers, source-specific iframe list drag-handle shapes without a redundant source column, compact iframe hover-help validation, and the one-shot prompt-handoff tab lifecycle with duplicate-click and cleanup assertions."
+    "reason": "The cross-engine smoke exercises protected-header initial loading, target-correlated workspace-frame reset that ignores delayed initial-navigation events before retention baselines, owner-tab session rules, document-initiated iframe self-navigation, the authenticated binding handshake, explicit importability of every app lazy boundary including the signed official-rules service, complete Settings-menu and fullscreen-window probes, preferred-model overlay sizing and opacity across themes and narrow panels, accessible Workspace subtabs with focus and pending-color retention, content-sized Apps headers, source-specific iframe list drag-handle shapes without a redundant source column, compact iframe hover-help validation, and the one-shot prompt-handoff tab lifecycle with duplicate-click and cleanup assertions."
   }
 }

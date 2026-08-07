@@ -78,8 +78,10 @@ globalThis.document = { addEventListener() {} };
 
   assert.deepEqual(stateKeys(appearanceSource), [
     "options",
+    "settingsAppearancePrimaryColorDraft",
     "settingsAppearanceTab",
     "settingsAppearanceTopbarTab",
+    "settingsAppearanceWorkspaceTab",
     "settingsTabGroupButtonDragId",
     "settingsTabGroupButtonOrderDraft",
     "settingsTabGroupButtonPlacementDraft",
@@ -284,6 +286,8 @@ globalThis.document = { addEventListener() {} };
     modelPreferenceFailurePolicy: "send-current",
     modelPreferenceOrder: [],
     modelPreferences: {},
+    modelPreferenceSelectionOverlayEnabled: true,
+    modelPreferenceSelectionOverlayOpacity: 70,
     optimizeApiProfileId: "api-1",
     optimizePromptTemplateId: "optimize-default",
     optimizePromptTemplates: [],
@@ -446,6 +450,7 @@ globalThis.document = { addEventListener() {} };
       syncTopbarPromptPlaceholder() {},
       syncWorkspaceDom() {},
       syncSummaryPanel() {},
+      syncPreferredModelSelectionOverlays() {},
       enterTopbarEditMode() {},
       closeSettingsDialog() {}
     }],

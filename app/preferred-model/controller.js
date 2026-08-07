@@ -8,7 +8,6 @@ import {
   NOTION_ALL_SOURCES_PREFERENCE_KEY,
   NOTION_ALL_SOURCES_PREFERENCE_VALUES,
   NOTION_EFFORT_PREFERENCE_KEY,
-  NOTION_EFFORT_TARGETS,
   notionEffortTargetsForModel
 } from "../../shared/constants.js";
 import { t } from "../../shared/i18n.js";
@@ -19,6 +18,7 @@ import { createSvgIcon } from "../../ui/icons.js";
 import { validateControllerContract } from "../controller-contract.js";
 import { createFrameRequest } from "../frame-request.js";
 import { waitForPreferredModelBridgePreparation } from "./bridge-preparation.js";
+import { createPreferredModelSelectionOverlayController, preferredModelTargetLabel } from "./selection-overlay-controller.js";
 
 const MODEL_PREFERENCE_APP_ID_ALIASES = Object.freeze({
   Gemini: "Gemini",
@@ -191,31 +191,6 @@ export function createPreferredModelController(dependencies = {}) {
     const override = String(options.modelPreferenceFailureOverrides?.[appId] || "inherit");
     if (override === "send-current" || override === "skip") return override;
     return options.modelPreferenceFailurePolicy === "skip" ? "skip" : "send-current";
-  }
-
-  function preferredModelTargetLabel(payload = {}) {
-    const target = (MODEL_PREFERENCE_TARGETS[payload.appId] || [])
-      .find((item) => item.id === payload.modelId);
-    const baseLabel = String(target?.label || payload.modelId || payload.appId || "");
-    let label = baseLabel;
-    if (payload.appId === "Gemini" && payload.modelId === "pro" && payload.thinkingLevel) {
-      const level = GEMINI_THINKING_LEVEL_TARGETS.find((item) => item.id === payload.thinkingLevel);
-      if (level?.label) label += " · " + level.label;
-    }
-    if (payload.appId === "NotionAI" && payload.allSourcesState) {
-      const sourceStateLabel = t(
-        payload.allSourcesState === "enabled"
-          ? "modelPreferences.allSourcesEnabled"
-          : "modelPreferences.allSourcesDisabled"
-      );
-      const sourceLabel = t("modelPreferences.allSources") + " · " + sourceStateLabel;
-      label = payload.modelId ? label + " · " + sourceLabel : sourceLabel;
-    }
-    if (payload.appId === "NotionAI" && payload.effortId) {
-      const effort = NOTION_EFFORT_TARGETS[payload.effortId];
-      if (effort?.label) label += " · Effort: " + effort.label;
-    }
-    return label;
   }
 
   function compactPreferredModelFailureReason(result = {}) {
@@ -480,6 +455,24 @@ export function createPreferredModelController(dependencies = {}) {
     liveNode.textContent = statusText;
   }
 
+  const preferredModelSelectionOverlayController = createPreferredModelSelectionOverlayController({
+    state: preferredModelState,
+    workspace,
+    appRoot,
+    frameReadiness: preferredModelFrameReadiness,
+    payloadForFrame: (iframe, readiness) => {
+      const record = preferredModelApplyRuns.get(iframe);
+      if (record?.key === readiness.frameKey) return record.payload;
+      return preferredModelPayloadForApp(activeWorkspace().frameApp(iframe) || {});
+    }
+  });
+
+  function syncPreferredModelSelectionOverlays() {
+    const visibleFrames = preferredModelSelectionOverlayController.sync();
+    for (const [iframe, record] of preferredModelApplyRuns) record.statusToast?.setSuppressed?.(visibleFrames.has(iframe));
+    return visibleFrames;
+  }
+
   function syncPreferredModelInputGate() {
     const next = preferredModelGateStatus();
     preferredModelState.preferredModelGateState = next.state;
@@ -494,6 +487,7 @@ export function createPreferredModelController(dependencies = {}) {
       iframe.dataset.preferredModelConfigured = readiness.state === "unconfigured" ? "false" : "true";
       iframe.dataset.preferredModelTarget = readiness.frameKey;
     }
+    syncPreferredModelSelectionOverlays();
 
     document.querySelectorAll(".prompt-shell").forEach((shell) => {
       const inputNode = shell.querySelector(".prompt-input");
@@ -1286,6 +1280,7 @@ export function createPreferredModelController(dependencies = {}) {
       const readyKey = record.fallbackAttempted
         ? "toast.frameSecondaryModelSwitchReady"
         : "toast.frameModelSwitchReady";
+      syncPreferredModelInputGate();
       record.statusToast?.update?.(
         finalResult.changed === true
           ? t(changedKey, { model })
@@ -1293,7 +1288,6 @@ export function createPreferredModelController(dependencies = {}) {
         "success"
       );
       record.statusToast?.dismiss?.(2000);
-      syncPreferredModelInputGate();
       return;
     }
     const retryDelay = preferredModelRetryDelay(record, result);
@@ -1315,6 +1309,7 @@ export function createPreferredModelController(dependencies = {}) {
           })
         })
       : compactPreferredModelFailureReason(finalResult);
+    syncPreferredModelInputGate();
     record.statusToast?.update?.(
       record.fallbackAttempted
         ? record.failureReason
@@ -1340,7 +1335,6 @@ export function createPreferredModelController(dependencies = {}) {
       record.payload.modelId,
       finalResult.reason || finalResult
     );
-    syncPreferredModelInputGate();
   }
 
   function schedulePreferredModelApplyToFrame(iframe, options = {}) {
@@ -1425,6 +1419,7 @@ export function createPreferredModelController(dependencies = {}) {
     preferredModelFrameReadinessIsCurrent,
     preferredModelFrameIsLoading,
     schedulePreferredModelApplyToFrame,
+    syncPreferredModelSelectionOverlays,
     syncPreferredModelInputGate,
     waitForPreferredModelFrame,
     waitForPreferredModelSubmissionBarrier
