@@ -47,6 +47,12 @@ function diagnostic(message) {
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
+function githubActionsErrorAnnotation(message) {
+  return String(message || "Browser smoke failed")
+    .replaceAll("%", "%25")
+    .replaceAll("\r", "%0D")
+    .replaceAll("\n", "%0A");
+}
 function assertRuntimeResult(result, browserTarget, options = {}) {
   const contentWindowIdentityIsStable = browserTarget !== "firefox";
   const assertRetainedFrame = (frame, operation) => {
@@ -1426,7 +1432,11 @@ try {
   if (target === "chromium") await chromiumSmoke(extensionDirectory, temporaryRoot, loopbackFixture.url);
   else await firefoxSmoke(extensionDirectory, loopbackFixture.url);
 } catch (error) {
-  console.error(error?.stack || error);
+  const renderedError = error?.stack || String(error);
+  console.error(renderedError);
+  if (process.env.GITHUB_ACTIONS === "true") {
+    console.error(`::error title=Browser smoke failure::${githubActionsErrorAnnotation(renderedError)}`);
+  }
   process.exitCode = 1;
 } finally {
   await loopbackFixture?.close().catch(() => {});

@@ -69,6 +69,11 @@ assert.deepEqual(
   "packaging must wait for every independently reported browser baseline"
 );
 assert.match(smoke, /normalizedExpectedMajor\(process\.env\.EXPECTED_CHROMIUM_MAJOR/);
+assert.match(
+  smoke,
+  /process\.env\.GITHUB_ACTIONS === "true"[\s\S]*::error title=Browser smoke failure::\$\{githubActionsErrorAnnotation\(renderedError\)\}/,
+  "browser smoke failures must expose their full diagnostic as a GitHub Actions annotation"
+);
 assert.match(smoke, /assertExpectedBrowserMajor\([\s\S]*?"chromium"/);
 assert.match(smoke, /startLoopbackFixture/);
 assert.match(smoke, /action: "ensureContentBridge"[\s\S]*?features: \["summary"\]/);
