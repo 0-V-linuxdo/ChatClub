@@ -267,6 +267,41 @@ assert.equal(
   false,
   "entering a Grok conversation from the home route must remain eligible for model reapplication"
 );
+assert.equal(
+  locationContext.conversationIdentity(
+    "NotionAI",
+    "https://app.notion.com/chat?t=thread-1&rid=response-1#answer"
+  ),
+  "app.notion.com/chat?t=thread-1",
+  "Notion conversation identity must keep the t thread id and ignore response URL state"
+);
+assert.equal(
+  locationContext.sameConversation(
+    "NotionAI",
+    "https://app.notion.com/chat?t=thread-1&rid=response-1",
+    "https://app.notion.com/chat?t=thread-1&rid=response-2"
+  ),
+  true,
+  "a Notion response URL change within one conversation must not restart model selection"
+);
+assert.equal(
+  locationContext.sameConversation(
+    "NotionAI",
+    "https://app.notion.com/chat?t=thread-1",
+    "https://app.notion.com/chat?t=thread-2"
+  ),
+  false,
+  "a Notion conversation change must remain eligible for model reapplication"
+);
+assert.equal(
+  locationContext.sameConversation(
+    "NotionAI",
+    "https://app.notion.com/ai",
+    "https://app.notion.com/chat?t=thread-1"
+  ),
+  false,
+  "entering a Notion conversation from the AI home route must remain eligible for model reapplication"
+);
 const preferredModelLifecycleSource = functionSource(
   preferredModelSource,
   "handlePreferredModelFrameLifecycleChange"
@@ -274,7 +309,7 @@ const preferredModelLifecycleSource = functionSource(
 assert.match(
   preferredModelLifecycleSource,
   /preferredModelLocationIsSameConversation\(\s*preferredModelAppId\(app\),\s*event\.previousHref,\s*event\.href\s*\)/,
-  "location handling must recognize same-conversation Grok URL changes before invalidating the run"
+  "location handling must recognize same-conversation Grok and Notion URL changes before invalidating the run"
 );
 
 const contentCorrelationContext = vm.createContext({

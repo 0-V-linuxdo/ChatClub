@@ -604,7 +604,6 @@ export function createPreferredModelController(dependencies = {}) {
   }
 
   function preferredModelConversationIdentity(appId, value) {
-    if (appId !== "Grok") return "";
     let url;
     try {
       url = new URL(String(value || ""));
@@ -612,6 +611,17 @@ export function createPreferredModelController(dependencies = {}) {
       return "";
     }
     const host = url.hostname.toLowerCase();
+    const path = (url.pathname || "/").replace(/\/+$/, "") || "/";
+    if (appId === "NotionAI") {
+      const notionHost = host === "app.notion.com"
+        || host === "notion.so"
+        || host === "www.notion.so"
+        || host.endsWith(".notion.so");
+      if (!notionHost || path !== "/chat" || url.searchParams.getAll("t").length !== 1) return "";
+      const threadId = String(url.searchParams.get("t") || "");
+      return threadId ? `${host}${path}?t=${encodeURIComponent(threadId)}` : "";
+    }
+    if (appId !== "Grok") return "";
     if (
       host !== "grok.com"
       && !host.endsWith(".grok.com")
@@ -620,7 +630,6 @@ export function createPreferredModelController(dependencies = {}) {
       && host !== "gk.dairoot.cn"
       && !host.endsWith(".gk.dairoot.cn")
     ) return "";
-    const path = (url.pathname || "/").replace(/\/+$/, "") || "/";
     if (!/^\/(?:c|chat)\/[^/?#]+/i.test(path)) return "";
     return host + path;
   }
