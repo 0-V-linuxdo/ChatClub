@@ -471,6 +471,16 @@ assert.match(
 );
 assert.match(
   tooltipSource,
+  /function triggerContainsRelatedTarget\(trigger, relatedTarget\) \{\s*return relatedTarget instanceof Node && trigger\.contains\(relatedTarget\);\s*\}/,
+  "tooltip exit handling must reject non-Node related targets before calling Node.contains"
+);
+assert.equal(
+  (tooltipSource.match(/triggerContainsRelatedTarget\(trigger, event\.relatedTarget\)/g) || []).length,
+  2,
+  "pointer and focus exit handling must share the non-Node related-target guard"
+);
+assert.match(
+  tooltipSource,
   /cleanupTrackedTriggers\(\);\s*if \(hoveredTrigger === trigger\)/,
   "focus exit must discard stale hovered tooltip fallbacks"
 );

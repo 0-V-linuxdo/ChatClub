@@ -180,6 +180,10 @@ function closestTrigger(target) {
   return target instanceof Element ? target.closest(".tooltip-trigger[data-tooltip]") : null;
 }
 
+function triggerContainsRelatedTarget(trigger, relatedTarget) {
+  return relatedTarget instanceof Node && trigger.contains(relatedTarget);
+}
+
 function syncTooltipPosition() {
   if (!reconcileTooltipState()) return;
   positionTooltip(activeTrigger);
@@ -218,7 +222,7 @@ export function installGlobalTooltips(options = {}) {
 
   document.addEventListener("pointerout", (event) => {
     const trigger = closestTrigger(event.target);
-    if (!trigger || trigger.contains(event.relatedTarget)) return;
+    if (!trigger || triggerContainsRelatedTarget(trigger, event.relatedTarget)) return;
     if (hoveredTrigger === trigger) hoveredTrigger = null;
     if (activeTrigger !== trigger) return;
     cleanupTrackedTriggers();
@@ -237,7 +241,7 @@ export function installGlobalTooltips(options = {}) {
 
   document.addEventListener("focusout", (event) => {
     const trigger = closestTrigger(event.target);
-    if (!trigger || trigger.contains(event.relatedTarget)) return;
+    if (!trigger || triggerContainsRelatedTarget(trigger, event.relatedTarget)) return;
     if (focusedTrigger === trigger) focusedTrigger = null;
     if (activeTrigger !== trigger) return;
     cleanupTrackedTriggers();
