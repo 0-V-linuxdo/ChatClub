@@ -38,11 +38,17 @@ const executableSource = focusControllerSource
   .replace("export function installPromptFocusController", "function installPromptFocusController")
   .concat("\nglobalThis.createPromptFocusController = createPromptFocusController;\n");
 
+class MockNode {}
+
 function makeContext({ options = false } = {}) {
-  const prompt = {
+  const prompt = Object.assign(new MockNode(), {
     isConnected: true,
-    contains(target) { return target === this; }
-  };
+    contains(target) {
+      if (!(target instanceof MockNode)) throw new TypeError("parameter 1 is not of type 'Node'");
+      return target === this || target.parentNode === this;
+    }
+  });
+  const promptChild = Object.assign(new MockNode(), { parentNode: prompt });
   const body = {};
   const documentElement = { dataset: {} };
   const listeners = new Map();
@@ -60,13 +66,14 @@ function makeContext({ options = false } = {}) {
     Date,
     document,
     globalThis: undefined,
+    Node: MockNode,
     setTimeout(callback) { timers.push(callback); return timers.length; },
     window,
     isOptionsPage: options
   });
   context.globalThis = context;
   vm.runInContext(executableSource, context);
-  return { context, document, listeners, prompt, body, timers, window };
+  return { context, document, listeners, prompt, promptChild, body, timers, window };
 }
 
 const workspace = makeContext();
@@ -83,7 +90,9 @@ controller.focusInitialPromptInput();
 assert.equal(focusCalls, 1, "workspace bootstrap must focus the top prompt");
 assert.equal(workspace.document.activeElement, workspace.prompt);
 
-const iframe = { classList: { contains(name) { return name === "chat-frame"; } } };
+const iframe = Object.assign(new MockNode(), {
+  classList: { contains(name) { return name === "chat-frame"; } }
+});
 workspace.document.activeElement = iframe;
 controller.focusInitialPromptInput();
 assert.equal(focusCalls, 2, "an automatic iframe focus must be pulled back to the prompt");
@@ -92,11 +101,16 @@ workspace.listeners.get("focusin")({ target: iframe });
 workspace.timers.shift()?.();
 assert.equal(focusCalls, 3, "a focus event from an iframe must be pulled back immediately");
 workspace.document.activeElement = workspace.prompt;
-workspace.listeners.get("focus")({ target: workspace.window });
+assert.doesNotThrow(
+  () => workspace.listeners.get("focus")({ target: workspace.window }),
+  "a non-Node Window focus target must not be passed to Node.contains"
+);
 workspace.timers.shift()?.();
 assert.equal(focusCalls, 4, "regaining the top-level window must restart prompt focus without waiting for an iframe event");
 
-workspace.listeners.get("pointerdown")({ isTrusted: true, type: "pointerdown", target: {} });
+workspace.listeners.get("pointerdown")({ isTrusted: true, type: "pointerdown", target: workspace.promptChild });
+assert.equal(workspace.document.documentElement.dataset.p, "1", "prompt descendants must retain the focus lock");
+workspace.listeners.get("pointerdown")({ isTrusted: true, type: "pointerdown", target: new MockNode() });
 assert.equal(workspace.document.documentElement.dataset.p, undefined, "trusted top-level interaction must release the lock");
 controller.focusInitialPromptInput();
 assert.equal(focusCalls, 4, "automatic focus restoration must stop after user interaction");

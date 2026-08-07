@@ -43,7 +43,7 @@
       "owner": "app/runtime.js",
       "maxFiles": 1,
       "targetFiles": 0,
-      "maxSourceBytes": 3940,
+      "maxSourceBytes": 3966,
       "targetSourceBytes": 3200,
       "reason": "The initial workspace prompt-focus guard stays behind a runtime-owned lazy boundary so loading isolation does not enlarge the application bootstrap closure."
     },

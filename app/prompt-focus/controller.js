@@ -33,7 +33,7 @@ function createPromptFocusController({ isOptionsPage = false, focusInput } = {})
   let lastFramePointerDownAt = 0;
   const isPromptTarget = (target) => {
     const prompt = promptNode();
-    return Boolean(prompt && (target === prompt || prompt.contains?.(target)));
+    return Boolean(prompt && (target === prompt || (target instanceof Node && prompt.contains(target))));
   };
   const release = () => {
     if (!pending) return;
