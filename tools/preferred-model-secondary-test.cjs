@@ -19,7 +19,8 @@ async function waitUntil(predicate, message) {
 const previousGlobals = {
   consoleWarn: console.warn,
   document: globalThis.document,
-  window: globalThis.window
+  window: globalThis.window,
+  sessionStorage: globalThis.sessionStorage
 };
 console.warn = () => {};
 globalThis.document = {
@@ -290,6 +291,155 @@ globalThis.window = {
       "extended",
       "Gemini thinking level must be computed for the actual secondary Pro attempt"
     );
+  }
+
+  async function runFallbackMemoryScenario(now) {
+    const calls = [];
+    const iframe = {
+      isConnected: true,
+      contentWindow: {},
+      dataset: {
+        instanceId: "instance-memory",
+        preferredModelDocumentId: "document-memory",
+        preferredModelContentBridgeVersion: "test-bridge",
+        contentRuntimeCapabilitiesDocumentId: "document-memory",
+        contentRuntimeCapabilities: "preferred-model"
+      },
+      closest() { return null; }
+    };
+    const app = { id: "NotionAI", name: "NotionAI", url: "https://notion.example/" };
+    const preferences = {
+      NotionAI: "opus47",
+      [MODEL_PREFERENCE_SECONDARY_ENABLED_KEY]: true,
+      [MODEL_PREFERENCE_SECONDARY_KEYS.NotionAI]: "fable5"
+    };
+    const state = {
+      frameLoadingInstanceIds: [],
+      modelPreferenceDraft: { ...preferences },
+      options: {
+        frameToastPosition: { x: 50, y: 50 },
+        modelPreferences: { ...preferences }
+      },
+      preferredModelGateFailedAppIds: [],
+      preferredModelGateFailedCount: 0,
+      preferredModelGatePendingCount: 0,
+      preferredModelGateReason: "",
+      preferredModelGateState: "bootstrapping"
+    };
+    const controller = createPreferredModelController({
+      state,
+      workspace: {
+        currentFrames: () => [iframe],
+        frameApp: (candidate) => candidate === iframe ? app : null
+      },
+      framePort: {
+        async request(candidate, command, data, options) {
+          assert.equal(candidate, iframe);
+          assert.equal(command, "applyPreferredModel");
+          assert.equal(options.expectedDocumentId, iframe.dataset.preferredModelDocumentId);
+          assert.equal(options.skipEnsure, true);
+          const call = { ...data };
+          calls.push(call);
+          const values = call.modelId === "opus47"
+            ? explicitlyUnavailable
+            : { ok: true, changed: true, interactionCount: 1, reason: "" };
+          return {
+            appId: call.appId,
+            modelId: call.modelId,
+            runId: call.runId,
+            ...values
+          };
+        }
+      },
+      appRoot: {},
+      verifiedCurrentContentFrameRegistration: async () => ({
+        documentId: iframe.dataset.preferredModelDocumentId
+      }),
+      prepareContentFrameRuntime: async () => ({ ok: false }),
+      recordFunctionalAnomaly: async () => {}
+    });
+
+    async function settleNextSelection() {
+      const record = controller.schedulePreferredModelApplyToFrame(iframe, { immediate: true });
+      assert.ok(record, "a remembered fallback scenario must create an apply record");
+      return waitUntil(() => {
+        const readiness = controller.preferredModelFrameReadiness(iframe);
+        return ["ready", "failed"].includes(readiness.state) ? readiness : null;
+      }, "remembered preferred-model selection did not settle");
+    }
+
+    controller.finishBootstrapping();
+    try {
+      const first = await settleNextSelection();
+      controller.invalidatePreferredModelFrame(iframe, "test-next-selection");
+      now.value += 4 * 60 * 1000;
+      const second = await settleNextSelection();
+      controller.invalidatePreferredModelFrame(iframe, "test-expired-selection");
+      now.value += 60 * 1000;
+      const third = await settleNextSelection();
+      return { calls, first, second, third };
+    } finally {
+      controller.invalidatePreferredModelFrame(iframe, "test-cleanup");
+    }
+  }
+
+  {
+    const previousDateNow = Date.now;
+    const now = { value: 1_000_000 };
+    Date.now = () => now.value;
+    try {
+      const outcome = await runFallbackMemoryScenario(now);
+      assert.equal(outcome.first.fallbackUsed, true);
+      assert.equal(outcome.second.fallbackUsed, true);
+      assert.equal(outcome.third.fallbackUsed, true);
+      assert.deepEqual(
+        outcome.calls.map((call) => call.modelId),
+        ["opus47", "fable5", "fable5", "opus47", "fable5"],
+        "a remembered fallback skips the primary model until the five-minute TTL expires"
+      );
+    } finally {
+      Date.now = previousDateNow;
+    }
+  }
+
+  {
+    const stored = new Map();
+    const previousDateNow = Date.now;
+    globalThis.sessionStorage = {
+      getItem(key) { return stored.get(String(key)) || null; },
+      setItem(key, value) { stored.set(String(key), String(value)); },
+      removeItem(key) { stored.delete(String(key)); }
+    };
+    Date.now = () => 2_000_000;
+    try {
+      const preferences = {
+        NotionAI: "opus47",
+        [MODEL_PREFERENCE_SECONDARY_ENABLED_KEY]: true,
+        [MODEL_PREFERENCE_SECONDARY_KEYS.NotionAI]: "fable5"
+      };
+      const first = await runScenario({
+        preferences,
+        respond: (_call, index) => index === 0
+          ? explicitlyUnavailable
+          : { ok: true, changed: true, interactionCount: 1, reason: "" }
+      });
+      const afterReload = await runScenario({
+        preferences,
+        respond: () => ({ ok: true, changed: true, interactionCount: 1, reason: "" })
+      });
+      assert.deepEqual(first.calls.map((call) => call.modelId), ["opus47", "fable5"]);
+      assert.deepEqual(
+        afterReload.calls.map((call) => call.modelId),
+        ["fable5"],
+        "the fallback memory must survive rebuilding the controller on plugin-page reload"
+      );
+      assert.equal(afterReload.readiness.requestedModelId, "opus47");
+      assert.equal(afterReload.readiness.appliedModelId, "fable5");
+    } finally {
+      Date.now = previousDateNow;
+      if (previousGlobals.sessionStorage === undefined) delete globalThis.sessionStorage;
+      else globalThis.sessionStorage = previousGlobals.sessionStorage;
+    }
   }
 
   console.log("preferred-model secondary fallback controller: ok");

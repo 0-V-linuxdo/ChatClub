@@ -1,10 +1,10 @@
 {
   "app/preferred-model/controller.js": {
-    "maxLines": 1487,
+    "maxLines": 1540,
     "target": 1200,
-    "maxBytes": 61079,
+    "maxBytes": 63622,
     "targetBytes": 50000,
-    "reason": "The preferred-model controller keeps one document-bound apply record across an explicitly unavailable primary or typed closed-menu Notion settlement failure and its optional secondary attempt, including fresh run correlation, navigation-generation bridge recovery, delivery-aware retry safety, queued-send readiness, failure policy handoff, per-attempt Gemini and Notion desired state, per-frame overlay and progress-Toast suppression synchronization, same-conversation Grok response URL changes, submission-owned Grok conversation creation routing, and a bootstrap gate that defers lifecycle-triggered applies until restored frames settle."
+    "reason": "The preferred-model controller keeps one document-bound apply record across an explicitly unavailable primary or typed closed-menu Notion settlement failure and its optional secondary attempt, including fresh run correlation, navigation-generation bridge recovery, delivery-aware retry safety, queued-send readiness, failure policy handoff, per-attempt Gemini and Notion desired state, per-frame overlay and progress-Toast suppression synchronization, same-conversation Grok response URL changes, submission-owned Grok conversation creation routing, session-scoped five-minute secondary fallback memory, pre-record overlay target resolution, and a bootstrap gate that defers lifecycle-triggered applies until restored frames settle."
   },
   "content-src/capabilities/send-runtime.js": {
     "maxLines": 1215,

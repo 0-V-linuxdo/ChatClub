@@ -38,6 +38,8 @@ const MODEL_PREFERENCE_APPLY_TIMEOUT_MS = 15000;
 const NOTION_ALL_SOURCES_APPLY_TIMEOUT_MS = 48000;
 const MODEL_PREFERENCE_CANCEL_TIMEOUT_MS = 1200;
 const MODEL_PREFERENCE_SUBMISSION_NAVIGATION_GRACE_MS = 15000;
+const PREFERRED_MODEL_FALLBACK_MEMORY_MS = 5 * 60 * 1000;
+const PREFERRED_MODEL_FALLBACK_MEMORY_STORAGE_KEY = "chatclub.preferred-model-fallback-memory";
 const FRAME_SUBMIT_ERROR_MAX_CHARS = 160;
 const PREFERRED_MODEL_PRE_DELIVERY_RETRY_CODES = Object.freeze([
   "NOT_REGISTERED",
@@ -76,6 +78,25 @@ export function createPreferredModelController(dependencies = {}) {
   const preferredModelSubmissionNavigations = new WeakMap();
   const preferredModelSubmissionNavigationFrames = new Set();
   const preferredModelSubmissionOutcomes = new WeakMap();
+  const preferredModelFallbackMemory = new Map();
+  function loadPreferredModelFallbackMemory() {
+    try {
+      const stored = JSON.parse(globalThis.sessionStorage?.getItem(PREFERRED_MODEL_FALLBACK_MEMORY_STORAGE_KEY) || "{}");
+      for (const [key, value] of Object.entries(stored || {})) {
+        const expiresAt = Number(value);
+        if (key && expiresAt > Date.now()) preferredModelFallbackMemory.set(key, { expiresAt });
+      }
+    } catch {}
+  }
+  function persistPreferredModelFallbackMemory() {
+    try {
+      globalThis.sessionStorage?.setItem(
+        PREFERRED_MODEL_FALLBACK_MEMORY_STORAGE_KEY,
+        JSON.stringify(Object.fromEntries([...preferredModelFallbackMemory].map(([key, value]) => [key, value.expiresAt])))
+      );
+    } catch {}
+  }
+  loadPreferredModelFallbackMemory();
   let preferredModelGateBootstrapping = true;
   let preferredModelFrameCleanupObserver = null;
 
@@ -159,6 +180,30 @@ export function createPreferredModelController(dependencies = {}) {
         : {}),
       ...(allSourcesState ? { allSourcesState } : {})
     };
+  }
+
+  const preferredModelFallbackMemoryKey = (payload = {}) =>
+    `${payload.appId || ""}:${payload.modelId || ""}:${payload.secondaryModelId || ""}`;
+
+  function rememberPreferredModelFallback(record, secondaryResult = {}) {
+    if (
+      !record
+      || !record.primaryResult
+      || record.fallbackMemoryUsed === true
+      || !preferredModelAttemptSucceeded(secondaryResult)
+    ) return;
+    preferredModelFallbackMemory.set(preferredModelFallbackMemoryKey(record.requestedPayload), {
+      expiresAt: Date.now() + PREFERRED_MODEL_FALLBACK_MEMORY_MS
+    });
+    persistPreferredModelFallbackMemory();
+  }
+
+  function preferredModelRememberedFallback(payload = {}) {
+    const key = preferredModelFallbackMemoryKey(payload);
+    const entry = preferredModelFallbackMemory.get(key);
+    if (entry?.expiresAt > Date.now()) return entry;
+    preferredModelFallbackMemory.delete(key);
+    return null;
   }
 
   function preferredModelAttemptPayload(payload = {}, modelId = payload.modelId, runId = "") {
@@ -463,7 +508,9 @@ export function createPreferredModelController(dependencies = {}) {
     payloadForFrame: (iframe, readiness) => {
       const record = preferredModelApplyRuns.get(iframe);
       if (record?.key === readiness.frameKey) return record.payload;
-      return preferredModelPayloadForApp(activeWorkspace().frameApp(iframe) || {});
+      const payload = preferredModelPayloadForApp(activeWorkspace().frameApp(iframe) || {});
+      const rememberedFallback = preferredModelRememberedFallback(payload);
+      return rememberedFallback ? preferredModelAttemptPayload(payload, payload.secondaryModelId) : payload;
     }
   });
 
@@ -1040,18 +1087,22 @@ export function createPreferredModelController(dependencies = {}) {
     const requestedPayload = { ...payload };
     const requestedModelId = String(requestedPayload.modelId || "");
     const secondaryModelId = String(requestedPayload.secondaryModelId || "");
+    const rememberedFallback = options.rememberedFallback;
+    const startWithSecondary = Boolean(rememberedFallback);
+    const initialModelId = startWithSecondary ? secondaryModelId : requestedModelId;
     const record = {
       iframe,
-      payload: preferredModelAttemptPayload(requestedPayload, requestedModelId),
+      payload: preferredModelAttemptPayload(requestedPayload, initialModelId, runId),
       requestedPayload,
       requestedModelId,
       secondaryModelId,
       key,
       delays,
       runId,
-      primaryRunId: runId,
-      stage: "primary",
-      fallbackAttempted: false,
+      primaryRunId: startWithSecondary ? "" : runId,
+      stage: startWithSecondary ? "secondary" : "primary",
+      fallbackAttempted: startWithSecondary,
+      fallbackMemoryUsed: startWithSecondary,
       primaryResult: null,
       attempt: Math.max(0, Number(options.attempt) || 0),
       timer: 0,
@@ -1326,6 +1377,7 @@ export function createPreferredModelController(dependencies = {}) {
       if (startPreferredModelSecondary(iframe, record, result)) return;
     }
     if (preferredModelAttemptSucceeded(result)) {
+      rememberPreferredModelFallback(record, result);
       const finalResult = preferredModelRecordResult(record, result);
       record.result = finalResult;
       record.success = true;
@@ -1445,7 +1497,8 @@ export function createPreferredModelController(dependencies = {}) {
       : (options.immediate
           ? MODEL_PREFERENCE_APPLY_RETRY_DELAYS
           : MODEL_PREFERENCE_READY_APPLY_RETRY_DELAYS);
-    const record = createPreferredModelRecord(iframe, payload, key, delays);
+    const rememberedFallback = preferredModelRememberedFallback(payload);
+    const record = createPreferredModelRecord(iframe, payload, key, delays, { rememberedFallback });
     preferredModelApplyRuns.set(iframe, record);
     schedulePreferredModelRecordRun(iframe, record, delays[0]);
     return record;

@@ -40,6 +40,11 @@ assert.match(
   /const visibleFrames = preferredModelSelectionOverlayController\.sync\(\);[\s\S]*?statusToast\?\.setSuppressed\?\.\(visibleFrames\.has\(iframe\)\)/,
   "only preferred-model records covered by a visible overlay may suppress their Toast"
 );
+assert.match(
+  preferredModelController,
+  /const payload = preferredModelPayloadForApp\(activeWorkspace\(\)\.frameApp\(iframe\) \|\| \{\}\);[\s\S]*?preferredModelRememberedFallback\(payload\)[\s\S]*?preferredModelAttemptPayload\(payload, payload\.secondaryModelId\)/,
+  "a remembered secondary model must own the first overlay frame before a new apply record exists"
+);
 assert.match(frameToast, /function setSuppressed\(nextSuppressed\)/);
 assert.match(frameToast, /item\.classList\.toggle\("frame-submit-toast-suppressed", suppressed\)/);
 assert.match(frameToast, /item\.setAttribute\("aria-hidden", "true"\)/);
