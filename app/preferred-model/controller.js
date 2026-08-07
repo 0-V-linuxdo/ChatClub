@@ -556,6 +556,34 @@ export function createPreferredModelController(dependencies = {}) {
     return payload.appId + ":" + payload.modelId + thinkingLevel + secondaryModel + effortId + secondaryEffortId + allSourcesState + ":" + documentId;
   }
 
+  function preferredModelConversationIdentity(appId, value) {
+    if (appId !== "Grok") return "";
+    let url;
+    try {
+      url = new URL(String(value || ""));
+    } catch {
+      return "";
+    }
+    const host = url.hostname.toLowerCase();
+    if (
+      host !== "grok.com"
+      && !host.endsWith(".grok.com")
+      && host !== "grok.x.ai"
+      && !host.endsWith(".grok.x.ai")
+      && host !== "gk.dairoot.cn"
+      && !host.endsWith(".gk.dairoot.cn")
+    ) return "";
+    const path = (url.pathname || "/").replace(/\/+$/, "") || "/";
+    if (!/^\/(?:c|chat)\/[^/?#]+/i.test(path)) return "";
+    return host + path;
+  }
+
+  function preferredModelLocationIsSameConversation(appId, previousHref, href) {
+    const previousIdentity = preferredModelConversationIdentity(appId, previousHref);
+    const nextIdentity = preferredModelConversationIdentity(appId, href);
+    return Boolean(previousIdentity && nextIdentity && previousIdentity === nextIdentity);
+  }
+
   function preferredModelSubmissionRouteState(appId, value) {
     let url;
     try {
@@ -583,6 +611,18 @@ export function createPreferredModelController(dependencies = {}) {
         const threadId = String(url.searchParams.get("t") || "");
         return threadId ? { host, phase: "terminal", threadId } : { host, phase: "intermediate" };
       }
+    }
+    if (appId === "Grok") {
+      const grokHost = host === "grok.com"
+        || host.endsWith(".grok.com")
+        || host === "grok.x.ai"
+        || host.endsWith(".grok.x.ai")
+        || host === "gk.dairoot.cn"
+        || host.endsWith(".gk.dairoot.cn");
+      if (!grokHost) return null;
+      if (path === "/") return { host, phase: "start" };
+      const threadMatch = /^\/(?:c|chat)\/([^/?#]+)/i.exec(path);
+      if (threadMatch) return { host, phase: "terminal", threadId: threadMatch[1] };
     }
     return null;
   }
@@ -737,7 +777,7 @@ export function createPreferredModelController(dependencies = {}) {
     }
     const app = activeWorkspace().frameApp(iframe) || {};
     const appId = preferredModelAppId(app);
-    if (appId !== "Gemini" && appId !== "NotionAI") return null;
+    if (appId !== "Gemini" && appId !== "NotionAI" && appId !== "Grok") return null;
     const documentId = String(iframe?.dataset?.preferredModelDocumentId || "");
     const bridgeVersion = String(iframe?.dataset?.preferredModelContentBridgeVersion || "");
     if (!documentId || !bridgeVersion) {
@@ -846,7 +886,7 @@ export function createPreferredModelController(dependencies = {}) {
     const nextRoute = preferredModelSubmissionRouteState(lease.appId, event.href);
     if (!nextRoute || nextRoute.host !== lease.initialHost) return reject();
     if (String(event.previousHref || "") !== lease.lastHref) return reject();
-    const allowedPhaseTransition = lease.appId === "Gemini"
+    const allowedPhaseTransition = lease.appId === "Gemini" || lease.appId === "Grok"
       ? (
           (lease.lastPhase === "start" && (nextRoute.phase === "start" || nextRoute.phase === "terminal"))
           || (lease.lastPhase === "terminal" && nextRoute.phase === "terminal")
@@ -1143,6 +1183,25 @@ export function createPreferredModelController(dependencies = {}) {
     }
     if (event.type === "location") {
       if (iframe?.isConnected) {
+        const app = activeWorkspace().frameApp(iframe) || {};
+        const sameConversation = preferredModelLocationIsSameConversation(
+          preferredModelAppId(app),
+          event.previousHref,
+          event.href
+        );
+        if (sameConversation) {
+          const currentKey = preferredModelFrameKey(iframe);
+          const existing = preferredModelApplyRuns.get(iframe);
+          const existingIsUsable = Boolean(
+            existing?.key === currentKey
+            && existing.cancelled !== true
+            && (existing.success || existing.terminal || existing.inFlight || existing.timer)
+          );
+          if (existingIsUsable) {
+            syncPreferredModelInputGate();
+            return;
+          }
+        }
         if (!preservePreferredModelForSubmissionNavigation(iframe, event)) {
           invalidatePreferredModelFrame(iframe, "location-changed");
           schedulePreferredModelApplyToFrame(iframe);

@@ -3882,6 +3882,22 @@ body.settings-tab-context-menu-dragging iframe {
   grid-template-columns: minmax(180px, .45fr) minmax(360px, 1fr) minmax(104px, auto);
 }
 
+.prompt-history-group {
+  min-width: 760px;
+  padding: 18px var(--settings-cell-pad-x) 8px;
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 760;
+  line-height: 1.35;
+  background: color-mix(in srgb, var(--panel-2) 28%, transparent);
+  border-top: 1px solid var(--line);
+}
+
+.settings-list-header + .prompt-history-group {
+  padding-top: 14px;
+  border-top: 0;
+}
+
 .functional-anomaly-list .settings-list-header,
 .functional-anomaly-row {
   min-width: 860px;

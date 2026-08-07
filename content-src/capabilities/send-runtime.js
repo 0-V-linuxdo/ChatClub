@@ -335,13 +335,24 @@ export function createSendCapability(deps = {}) {
       if (path === "/ai") return "required";
       if (path === "/chat") return url.searchParams.get("t") ? "not-required" : "required";
     }
+    if (appId === "Grok") {
+      const validHost = host === "grok.com"
+        || host.endsWith(".grok.com")
+        || host === "grok.x.ai"
+        || host.endsWith(".grok.x.ai")
+        || host === "gk.dairoot.cn"
+        || host.endsWith(".gk.dairoot.cn");
+      if (!validHost) return "unknown";
+      if (path === "/") return "required";
+      if (/^\/(?:c|chat)\/[^/?#]+/i.test(path)) return "not-required";
+    }
     return "unknown";
   }
 
   function submissionNavigationCorrelation(data, appId, marked, method) {
     const sendId = String(marked?.sendId || data?.sendId || "").trim();
     const initialHref = String(marked?.initialHref || location.href || "");
-    if (!sendId || !initialHref || (appId !== "Gemini" && appId !== "NotionAI")) return null;
+    if (!sendId || !initialHref || (appId !== "Gemini" && appId !== "NotionAI" && appId !== "Grok")) return null;
     return {
       sendId,
       appId,
@@ -1166,7 +1177,9 @@ export function createSendCapability(deps = {}) {
       if (submit) {
         if (!contentBridgeIsCurrent()) throw new Error("Send bridge was superseded before submit");
         const marked = markSubmissionNavigation(data, "button");
-        if (gemini) submissionNavigation = submissionNavigationCorrelation(data, "Gemini", marked, "button");
+        if (gemini || grok) {
+          submissionNavigation = submissionNavigationCorrelation(data, gemini ? "Gemini" : "Grok", marked, "button");
+        }
         deliveryState = "unknown";
         if (!clickPromptSubmit(submit)) throw new Error("Submit button activation failed");
         return { sent: true, deliveryState: "sent", method: "button", verified: false, ...(submissionNavigation ? { submissionNavigation } : {}) };
@@ -1176,7 +1189,9 @@ export function createSendCapability(deps = {}) {
       if (!contentBridgeIsCurrent()) throw new Error("Send bridge was superseded before submit");
       const keyInit = { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true };
       const marked = markSubmissionNavigation(data, "enter");
-      if (gemini) submissionNavigation = submissionNavigationCorrelation(data, "Gemini", marked, "enter");
+      if (gemini || grok) {
+        submissionNavigation = submissionNavigationCorrelation(data, gemini ? "Gemini" : "Grok", marked, "enter");
+      }
       deliveryState = "unknown";
       input.dispatchEvent(new KeyboardEvent("keydown", keyInit));
       input.dispatchEvent(new KeyboardEvent("keyup", keyInit));

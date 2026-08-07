@@ -1,4 +1,12 @@
 {
+  "app/settings/history.js#groupPromptHistory": {
+    "kind": "test-only",
+    "reason": "Prompt-history grouping regressions exercise deterministic calendar buckets and preserve order without exposing a runtime API."
+  },
+  "app/settings/history.js#promptHistoryGroupId": {
+    "kind": "test-only",
+    "reason": "Prompt-history boundary regressions directly verify local-date transitions at today, week, month and invalid-time edges."
+  },
   "background/content-registration.js#assertSuccessfulFrameInjection": {
     "kind": "test-only",
     "reason": "Focused injection regression tests exercise the fail-closed result validator as a named seam."

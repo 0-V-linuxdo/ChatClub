@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "e66523d447d225e24609db367336dc89c6220e49159fdfa601148c1ad2c50daf";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "fc10510777e0d145706178a809d87bf7a3438f0aa6bebb0a06c41fd7123085be";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "2d9de5b5cbd4fbdd9ef0d3a2bde30c98b40720f49e38ed504880d9766ca4998e";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.2d9de5b5cbd4fbdd9ef0d3a2bde30c98b40720f49e38ed504880d9766ca4998e";
-  var CONTENT_RUNTIME_SEND_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/send.js", "entryPath": "content-src/content-send.js", "sourceSha256": "c743e0a53b16a8b596f78a2e1ad8cdb42754df322d58a49a159e4b714984f7e7", "implementationSha256": "c41650f0bea8a124f0f21c7c114a53367e8b6246768f28d5d78d1408fd472b1f", "implementationVersion": "2026.07.16.2+bundle.c41650f0bea8a124f0f21c7c114a53367e8b6246768f28d5d78d1408fd472b1f" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "5f16ca8659bcc33e85312f7c717472be70ced875e19722c00cb8082443859397";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.5f16ca8659bcc33e85312f7c717472be70ced875e19722c00cb8082443859397";
+  var CONTENT_RUNTIME_SEND_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/send.js", "entryPath": "content-src/content-send.js", "sourceSha256": "e89b6a95033fb068f193096de5d4a10d2daa452d160646b1419ef146f8ce2de7", "implementationSha256": "1f59533345db93a409543236c701dc0d75bba13108761a9f2fdbbfe579a6c09d", "implementationVersion": "2026.07.16.2+bundle.1f59533345db93a409543236c701dc0d75bba13108761a9f2fdbbfe579a6c09d" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -741,12 +741,18 @@
         if (path === "/ai") return "required";
         if (path === "/chat") return url.searchParams.get("t") ? "not-required" : "required";
       }
+      if (appId === "Grok") {
+        const validHost = host === "grok.com" || host.endsWith(".grok.com") || host === "grok.x.ai" || host.endsWith(".grok.x.ai") || host === "gk.dairoot.cn" || host.endsWith(".gk.dairoot.cn");
+        if (!validHost) return "unknown";
+        if (path === "/") return "required";
+        if (/^\/(?:c|chat)\/[^/?#]+/i.test(path)) return "not-required";
+      }
       return "unknown";
     }
     function submissionNavigationCorrelation(data, appId, marked, method) {
       const sendId = String(marked?.sendId || data?.sendId || "").trim();
       const initialHref = String(marked?.initialHref || location.href || "");
-      if (!sendId || !initialHref || appId !== "Gemini" && appId !== "NotionAI") return null;
+      if (!sendId || !initialHref || appId !== "Gemini" && appId !== "NotionAI" && appId !== "Grok") return null;
       return {
         sendId,
         appId,
@@ -1520,7 +1526,9 @@
         if (submit) {
           if (!contentBridgeIsCurrent()) throw new Error("Send bridge was superseded before submit");
           const marked2 = markSubmissionNavigation(data, "button");
-          if (gemini) submissionNavigation = submissionNavigationCorrelation(data, "Gemini", marked2, "button");
+          if (gemini || grok) {
+            submissionNavigation = submissionNavigationCorrelation(data, gemini ? "Gemini" : "Grok", marked2, "button");
+          }
           deliveryState = "unknown";
           if (!clickPromptSubmit(submit)) throw new Error("Submit button activation failed");
           return { sent: true, deliveryState: "sent", method: "button", verified: false, ...submissionNavigation ? { submissionNavigation } : {} };
@@ -1530,7 +1538,9 @@
         if (!contentBridgeIsCurrent()) throw new Error("Send bridge was superseded before submit");
         const keyInit = { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true };
         const marked = markSubmissionNavigation(data, "enter");
-        if (gemini) submissionNavigation = submissionNavigationCorrelation(data, "Gemini", marked, "enter");
+        if (gemini || grok) {
+          submissionNavigation = submissionNavigationCorrelation(data, gemini ? "Gemini" : "Grok", marked, "enter");
+        }
         deliveryState = "unknown";
         input.dispatchEvent(new KeyboardEvent("keydown", keyInit));
         input.dispatchEvent(new KeyboardEvent("keyup", keyInit));

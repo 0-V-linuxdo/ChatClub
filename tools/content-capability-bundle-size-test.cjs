@@ -36,10 +36,12 @@ const byteBudgets = Object.freeze({
 });
 // Exact base-plus-capabilities closure after Kagi gained bounded composer
 // hydration and excluded its thread-search text input from prompt candidates.
-const aggregateByteBudget = 757_982;
+// Grok submission-owned route correlation adds the exact sendId/app route
+// payload to the shared send capability boundary.
+const aggregateByteBudget = 758_495;
 // Exact all-bundle closure after the Grok initial-layout guard was added to the
 // document-start preload; no headroom is carried across generated bundles.
-const allBundlesByteBudget = 1_445_434;
+const allBundlesByteBudget = 1_445_947;
 
 const bundleIdentities = Object.fromEntries(Object.keys(CONTENT_ENTRIES).map((outputPath) => [
   outputPath,

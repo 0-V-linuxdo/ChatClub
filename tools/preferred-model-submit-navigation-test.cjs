@@ -222,6 +222,60 @@ assert.deepEqual(routeState("NotionAI", "https://app.notion.com/ai"), { host: "a
 assert.deepEqual(routeState("NotionAI", "https://app.notion.com/chat"), { host: "app.notion.com", phase: "intermediate" });
 assert.deepEqual(routeState("NotionAI", "https://app.notion.com/chat?t=thread-1"), { host: "app.notion.com", phase: "terminal", threadId: "thread-1" });
 assert.equal(routeState("NotionAI", "https://app.notion.com/page/other"), null);
+assert.deepEqual(routeState("Grok", "https://grok.com/"), { host: "grok.com", phase: "start" });
+assert.deepEqual(routeState("Grok", "https://grok.com/c/thread-1?rid=response-1"), { host: "grok.com", phase: "terminal", threadId: "thread-1" });
+assert.deepEqual(routeState("Grok", "https://grok.com/chat/thread-1?rid=response-1"), { host: "grok.com", phase: "terminal", threadId: "thread-1" });
+assert.equal(routeState("Grok", "https://grok.com/settings"), null);
+
+const locationContext = vm.createContext({ URL });
+vm.runInContext(
+  `${functionSource(preferredModelSource, "preferredModelConversationIdentity")}
+   ${functionSource(preferredModelSource, "preferredModelLocationIsSameConversation")}
+   globalThis.conversationIdentity = preferredModelConversationIdentity;
+   globalThis.sameConversation = preferredModelLocationIsSameConversation;`,
+  locationContext
+);
+assert.equal(
+  locationContext.conversationIdentity("Grok", "https://grok.com/c/thread-1?rid=response-1"),
+  "grok.com/c/thread-1",
+  "Grok conversation identity must ignore response query parameters"
+);
+assert.equal(
+  locationContext.sameConversation(
+    "Grok",
+    "https://grok.com/c/thread-1?rid=response-1",
+    "https://grok.com/c/thread-1?rid=response-2"
+  ),
+  true,
+  "a Grok response URL change within one conversation must not restart model selection"
+);
+assert.equal(
+  locationContext.sameConversation(
+    "Grok",
+    "https://grok.com/c/thread-1?rid=response-1",
+    "https://grok.com/c/thread-2?rid=response-1"
+  ),
+  false,
+  "a Grok conversation change must remain eligible for model reapplication"
+);
+assert.equal(
+  locationContext.sameConversation(
+    "Grok",
+    "https://grok.com/",
+    "https://grok.com/c/thread-1?rid=response-1"
+  ),
+  false,
+  "entering a Grok conversation from the home route must remain eligible for model reapplication"
+);
+const preferredModelLifecycleSource = functionSource(
+  preferredModelSource,
+  "handlePreferredModelFrameLifecycleChange"
+);
+assert.match(
+  preferredModelLifecycleSource,
+  /preferredModelLocationIsSameConversation\(\s*preferredModelAppId\(app\),\s*event\.previousHref,\s*event\.href\s*\)/,
+  "location handling must recognize same-conversation Grok URL changes before invalidating the run"
+);
 
 const contentCorrelationContext = vm.createContext({
   URL,
@@ -247,6 +301,35 @@ const exactTerminalCorrelation = JSON.parse(JSON.stringify(contentCorrelationCon
   "enter"
 )));
 assert.equal(exactTerminalCorrelation.barrierState, "not-required");
+const grokCorrelationContext = vm.createContext({
+  URL,
+  location: { href: "https://grok.com/" }
+});
+vm.runInContext(`
+  ${functionSource(sendEntrySource, "submissionNavigationBarrierState")}
+  ${functionSource(sendEntrySource, "submissionNavigationCorrelation")}
+  globalThis.correlation = submissionNavigationCorrelation;
+`, grokCorrelationContext);
+assert.equal(
+  grokCorrelationContext.correlation(
+    { sendId: "send-grok" },
+    "Grok",
+    { sendId: "send-grok", initialHref: "https://grok.com/" },
+    "button"
+  ).barrierState,
+  "required",
+  "a Grok send from the home route must hold the model run through conversation creation"
+);
+assert.equal(
+  grokCorrelationContext.correlation(
+    { sendId: "send-grok" },
+    "Grok",
+    { sendId: "send-grok", initialHref: "https://grok.com/c/live-thread?rid=old" },
+    "enter"
+  ).barrierState,
+  "not-required",
+  "a Grok send inside an existing conversation must not create a route barrier"
+);
 
 const notionCorrelationContext = vm.createContext({ URL });
 vm.runInContext(`
@@ -510,6 +593,50 @@ async function runSubmissionLeaseTests() {
   }
 
   {
+    leaseContext.setAppId("Grok");
+    const initial = "https://grok.com/";
+    const terminal = "https://grok.com/c/thread-a?rid=response-a";
+    const fixture = navigationFixture("Grok", initial, "start");
+    const barrier = leaseContext.waitForBarrier(fixture.iframe, "send-1");
+    leaseContext.finish(fixture.iframe, "send-1", true, {
+      sendId: "send-1",
+      appId: "Grok",
+      initialHref: initial,
+      barrierState: "required",
+      method: "button"
+    });
+    assert.equal(
+      leaseContext.preserve(fixture.iframe, correlatedEvent(initial, terminal, {
+        appId: "Grok",
+        initialHref: initial
+      })),
+      true,
+      "Grok conversation creation must preserve the settled model run"
+    );
+    assert.equal(leaseContext.runs.get(fixture.iframe), fixture.record, "Grok submission routing must preserve the model run");
+    assert.equal((await barrier).state, "complete", "Grok terminal routing must resolve the submission barrier");
+    const sameThread = "https://grok.com/c/thread-a?rid=response-b";
+    assert.equal(
+      leaseContext.preserve(fixture.iframe, correlatedEvent(terminal, sameThread, {
+        kind: "replaceState",
+        appId: "Grok",
+        initialHref: initial
+      })),
+      true,
+      "Grok response-id changes must remain within the submitted conversation"
+    );
+    const otherThread = "https://grok.com/c/thread-b?rid=response-c";
+    assert.equal(
+      leaseContext.preserve(fixture.iframe, correlatedEvent(sameThread, otherThread, {
+        appId: "Grok",
+        initialHref: initial
+      })),
+      false,
+      "a different Grok conversation must invalidate the submission lease"
+    );
+  }
+
+  {
     const initial = "https://app.notion.com/ai";
     const intermediate = "https://app.notion.com/chat";
     const terminal = "https://app.notion.com/chat?t=thread-a";
@@ -768,8 +895,8 @@ assert.ok(
 );
 assert.match(
   sendTextSource,
-  /submissionNavigationCorrelation\(data, "Gemini", marked, "(?:button|enter)"\)/,
-  "Gemini send results must describe the exact content route captured at activation"
+  /submissionNavigationCorrelation\(data, gemini \? "Gemini" : "Grok", marked, "(?:button|enter)"\)/,
+  "Gemini and Grok send results must describe the exact content route captured at activation"
 );
 assert.match(
   notionSendSource,
