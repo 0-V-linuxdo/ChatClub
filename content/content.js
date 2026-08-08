@@ -75,6 +75,9 @@
         shortcuts: {
           focusInput: { disabled: false, command: false, control: false, option: true, shift: false, code: "KeyK" },
           openNewWorkspaceTab: { disabled: false, command: true, control: false, option: true, shift: true, code: "KeyN" },
+          openSettings: { disabled: false, command: true, control: false, option: true, shift: true, code: "KeyS" },
+          openAppPicker: { disabled: false, command: true, control: false, option: true, shift: true, code: "KeyA" },
+          openSettingsMenu: { disabled: false, command: true, control: false, option: true, shift: true, code: "KeyJ" },
           newChat: { disabled: false, command: true, control: false, option: false, shift: false, code: "KeyN" },
           newChatAll: { disabled: false, command: true, control: false, option: false, shift: true, code: "KeyN" },
           deleteThread: { disabled: false, command: false, control: false, option: true, shift: true, code: "KeyD" },
@@ -96,6 +99,9 @@
         shortcuts: {
           focusInput: { disabled: false, control: false, alt: true, shift: false, code: "KeyK" },
           openNewWorkspaceTab: { disabled: false, control: true, alt: true, shift: true, code: "KeyN" },
+          openSettings: { disabled: false, control: true, alt: true, shift: true, code: "KeyS" },
+          openAppPicker: { disabled: false, control: true, alt: true, shift: true, code: "KeyA" },
+          openSettingsMenu: { disabled: false, control: true, alt: true, shift: true, code: "KeyJ" },
           newChat: { disabled: false, control: true, alt: false, shift: false, code: "KeyN" },
           newChatAll: { disabled: false, control: true, alt: false, shift: true, code: "KeyN" },
           deleteThread: { disabled: false, control: false, alt: true, shift: true, code: "KeyD" },
@@ -397,12 +403,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "9ffb7a35d8e650f3e5fc29434a0fd75e8da68786326c4797add6e1fcb0d9df7c";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "6cfda4f9d513d670b5f216b19d3a2582dd46ce7e6439c669c168ad65ef806608";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "dfef774418641a5247007901d5cb34201a75bb7a7cf3a582a4bc1ac86882b6a7";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.dfef774418641a5247007901d5cb34201a75bb7a7cf3a582a4bc1ac86882b6a7";
-  var CONTENT_RUNTIME_CONTENT_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/content.js", "entryPath": "content-src/content.js", "sourceSha256": "79492c576afc7eb5778b51b0f3e42c49a4819b249b955f7788cb874740a91466", "implementationSha256": "666b3c6658adaceb7afd014bcccd407afd33527aa1332965930549303d7f7cd0", "implementationVersion": "2026.07.16.2+bundle.666b3c6658adaceb7afd014bcccd407afd33527aa1332965930549303d7f7cd0" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "71b436a8b4d58ad8bc1c06c799963675c7041d705799f31a3907342f85a173fa";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.71b436a8b4d58ad8bc1c06c799963675c7041d705799f31a3907342f85a173fa";
+  var CONTENT_RUNTIME_CONTENT_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/content.js", "entryPath": "content-src/content.js", "sourceSha256": "71bb748549dd9cecb7ade8131314e4315665c2906966d233bb6c8e95bc1a3a62", "implementationSha256": "e96fc7df151d8b3868c13f758dd62ff1b20a2300f86f59ea74ab80967b24188e", "implementationVersion": "2026.07.16.2+bundle.e96fc7df151d8b3868c13f758dd62ff1b20a2300f86f59ea74ab80967b24188e" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -445,6 +451,9 @@
   var ALL_SHORTCUT_ACTIONS = [
     "focusInput",
     "openNewWorkspaceTab",
+    "openSettings",
+    "openAppPicker",
+    "openSettingsMenu",
     "newChat",
     "newChatAll",
     "deleteThread",

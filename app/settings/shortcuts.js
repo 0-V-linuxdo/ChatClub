@@ -11,13 +11,28 @@ import {
   shortcutUsesDigitPattern
 } from "../../shared/shortcuts.js";
 import { saveShortcutConfig } from "../../shared/storage-adapter.js";
+import { TOPBAR_SHORTCUT_ACTIONS } from "../../shared/topbar.js";
 import { button, el, select, toast } from "../../ui/dom.js";
 
 const SHORTCUT_SETTING_GROUPS = [
   {
     titleKey: "shortcuts.topbarTitle",
     descriptionKey: "shortcuts.topbarDesc",
-    actions: ["focusInput", "openNewWorkspaceTab", "newChatAll", "deleteThread", "optimizePrompt", "openSummaryPanel", "openPocketPanel", "insertPrompt", "switchLayout", "switchPlatformTab"]
+    actions: [
+      TOPBAR_SHORTCUT_ACTIONS.composer,
+      TOPBAR_SHORTCUT_ACTIONS.brand,
+      TOPBAR_SHORTCUT_ACTIONS.settings,
+      TOPBAR_SHORTCUT_ACTIONS.newChat,
+      TOPBAR_SHORTCUT_ACTIONS.deleteThread,
+      TOPBAR_SHORTCUT_ACTIONS.summary,
+      TOPBAR_SHORTCUT_ACTIONS.pocket,
+      TOPBAR_SHORTCUT_ACTIONS.addGroup,
+      TOPBAR_SHORTCUT_ACTIONS.settingsJumpMenu,
+      "optimizePrompt",
+      "insertPrompt",
+      TOPBAR_SHORTCUT_ACTIONS.layout,
+      "switchPlatformTab"
+    ]
   },
   {
     titleKey: "shortcuts.chatTitle",
@@ -30,6 +45,9 @@ const SHORTCUT_PREVIEW_META = Object.freeze({
   sendMessage: { icon: "send", labelKey: "topbar.send", tooltipLabelKey: "topbar.sendTooltip", tooltipId: "topbar.send", showLabel: true, primary: true },
   focusInput: { icon: "keyboard", labelKey: "shortcut.focusInput.label" },
   openNewWorkspaceTab: { icon: "external", labelKey: "shortcut.openNewWorkspaceTab.label", showLabel: true },
+  openSettings: { icon: "settings", labelKey: "shortcut.openSettings.label", showLabel: true },
+  openAppPicker: { icon: "plus", labelKey: "shortcut.openAppPicker.label", showLabel: true },
+  openSettingsMenu: { icon: "moreTools", labelKey: "shortcut.openSettingsMenu.label", showLabel: true },
   newChatAll: { icon: "edit", labelKey: "topbar.newChat", tooltipLabelKey: "topbar.newChatAllTooltip", tooltipId: "topbar.newChat", showLabel: true },
   deleteThread: { icon: "trash", labelKey: "topbar.deleteThread", tooltipId: "topbar.deleteThread" },
   optimizePrompt: { icon: "sparkles", labelKey: "topbar.optimizePrompt", tooltipId: "topbar.optimizePrompt" },

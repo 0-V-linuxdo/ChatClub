@@ -136,6 +136,10 @@ function responsiveBrandRules(kind) {
   const brandLabel = functionSource(topbarView, "brandActionLabel");
   assert.match(brandLabel, /composer\.hasDraft\(\)[\s\S]*topbar\.sendInNewTab[\s\S]*common\.openInNewTab/, "the Logo label must switch between opening and sending from the current draft state");
   assert.match(brandLabel, /actions\.formatShortcutTooltip\(label,\s*"openNewWorkspaceTab"\)/, "the Logo label must expose the configured new-tab shortcut");
+  assert.match(topbarView, /function formatTopbarShortcut[\s\S]*TOPBAR_SHORTCUT_ACTIONS/, "topbar controls must share the canonical shortcut action mapping");
+  assert.match(functionSource(topbarView, "renderSettingsButton"), /formatTopbarShortcut\(t\("topbar\.settings"\),\s*"settings"\)/, "Settings must expose its configured shortcut");
+  assert.match(functionSource(topbarView, "renderSettingsMenuButton"), /formatTopbarShortcut\(t\("topbar\.settingsJumpMenu"\),\s*"settingsJumpMenu"\)/, "the tools menu must expose its configured shortcut");
+  assert.match(topbarView, /formatTopbarShortcut\(t\("topbar\.addGroup"\),\s*"addGroup"\)/, "Add Group must expose its configured shortcut");
   const brandView = functionSource(topbarView, "renderBrand");
   assert.match(brandView, /const label = brandActionLabel\(\)/, "the Logo must use the dynamic new-tab action label");
   assert.match(brandView, /"aria-label": label[\s\S]*"data-tooltip": label[\s\S]*"data-tooltip-id": "topbar\.brand"/, "the Logo must retain its accessible name and tooltip contract");

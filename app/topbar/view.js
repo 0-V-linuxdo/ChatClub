@@ -2,6 +2,7 @@ import { APP_NAME } from "../../shared/constants.js";
 import { t } from "../../shared/i18n.js";
 import {
   normalizeTopbarLayout,
+  TOPBAR_SHORTCUT_ACTIONS,
   topbarItemIcon,
   topbarItemLabelKey,
   topbarSettingsSectionForItem
@@ -58,6 +59,11 @@ export function createTopbarView(dependencies = {}) {
 
   function topbarItemClass(id) {
     return `topbar-item topbar-item-${id}`;
+  }
+
+  function formatTopbarShortcut(label, itemId) {
+    const action = TOPBAR_SHORTCUT_ACTIONS[itemId];
+    return action ? actions.formatShortcutTooltip(label, action) : label;
   }
 
   function actionButton(label, iconName, onClick, variant = "secondary", tooltipLabel = label, className = "", tooltipId = "") {
@@ -148,15 +154,17 @@ export function createTopbarView(dependencies = {}) {
   }
 
   function renderSettingsButton() {
+    const tooltipLabel = formatTopbarShortcut(t("topbar.settings"), "settings");
     return topIconButton(t("topbar.settings"), "settings", (event) => {
       event.preventDefault();
       event.stopPropagation();
       actions.openSettings();
-    }, t("topbar.settings"), "topbar.settings");
+    }, tooltipLabel, "topbar.settings");
   }
 
   function renderSettingsMenuButton() {
     let pointerHandled = false;
+    const tooltipLabel = formatTopbarShortcut(t("topbar.settingsJumpMenu"), "settingsJumpMenu");
     const openFromEvent = (event) => {
       if (!event?.currentTarget) return;
       event.preventDefault();
@@ -176,7 +184,7 @@ export function createTopbarView(dependencies = {}) {
         return;
       }
       openFromEvent(event);
-    }, t("topbar.settingsJumpMenu"), "topbar.settingsJumpMenu");
+    }, tooltipLabel, "topbar.settingsJumpMenu");
     buttonNode.addEventListener("pointerdown", (event) => {
       if (state.topbarEditMode || event.button !== 0) return;
       pointerHandled = true;
@@ -205,7 +213,7 @@ export function createTopbarView(dependencies = {}) {
       return actionButton(t("topbar.pocket"), "pocket", actions.openPocket, "secondary", actions.formatShortcutTooltip(t("topbar.pocket"), "openPocketPanel"), topbarItemClass("pocket"), "topbar.pocket");
     }
     if (item.id === "addGroup") {
-      return topIconButton(t("topbar.addGroup"), "plus", (event) => actions.openAppPicker(event.currentTarget), t("topbar.addGroup"), "topbar.addGroup");
+      return topIconButton(t("topbar.addGroup"), "plus", (event) => actions.openAppPicker(event.currentTarget), formatTopbarShortcut(t("topbar.addGroup"), "addGroup"), "topbar.addGroup");
     }
     if (item.id === "layout") {
       return topIconButton(t("topbar.switchLayout"), "layout", (event) => actions.openLayoutMenu(event.currentTarget), actions.formatShortcutTooltip(t("topbar.switchLayout"), "switchLayout"), "topbar.layout");
@@ -425,7 +433,7 @@ export function createTopbarView(dependencies = {}) {
   }
 
   function renderFoldedMenuButton(item, editing, runItem) {
-    const label = item.id === "brand" ? brandActionLabel() : t(topbarItemLabelKey(item));
+    const label = item.id === "brand" ? brandActionLabel() : formatTopbarShortcut(t(topbarItemLabelKey(item)), item.id);
     const dragItem = editing && item.type === "item" ? { type: "item", id: item.id } : null;
     const buttonNode = settingsMenuButton(label, topbarItemIcon(item), (event) => runItem(item, event), "secondary", false, dragItem, {
       className: editing && item.type === "item" ? "topbar-settings-menu-button" : "",

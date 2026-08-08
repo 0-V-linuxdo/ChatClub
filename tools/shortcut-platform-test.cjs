@@ -9,6 +9,7 @@ const root = path.resolve(__dirname, "..");
 const defaultShortcutsSource = fs.readFileSync(path.join(root, "shared/default-shortcuts.js"), "utf8");
 const i18nSource = fs.readFileSync(path.join(root, "shared/i18n.js"), "utf8");
 const shortcutsSource = fs.readFileSync(path.join(root, "shared/shortcuts.js"), "utf8");
+const topbarSource = fs.readFileSync(path.join(root, "shared/topbar.js"), "utf8");
 const storageConfigBundleSource = fs.readFileSync(path.join(root, "shared/storage-config-bundle.js"), "utf8");
 const protocolSource = fs.readFileSync(path.join(root, "shared/protocol.js"), "utf8");
 const contentBackgroundRequestsSource = fs.readFileSync(
@@ -395,6 +396,22 @@ assert.equal(
   shortcuts.matchShortcut(event({ code: "KeyN", ctrlKey: true, altKey: true, shiftKey: true }), sharedDefault, "windows")?.action,
   "openNewWorkspaceTab"
 );
+for (const [action, macShortcut, windowsShortcut, code] of [
+  ["openSettings", "⌘⌥⇧S", "Ctrl+Alt+Shift+S", "KeyS"],
+  ["openAppPicker", "⌘⌥⇧A", "Ctrl+Alt+Shift+A", "KeyA"],
+  ["openSettingsMenu", "⌘⌥⇧J", "Ctrl+Alt+Shift+J", "KeyJ"]
+]) {
+  assert.equal(shortcuts.formatShortcut(action, sharedDefault.profiles.mac.shortcuts[action], "", "mac"), macShortcut);
+  assert.equal(shortcuts.formatShortcut(action, sharedDefault.profiles.windows.shortcuts[action], "", "windows"), windowsShortcut);
+  assert.equal(
+    shortcuts.matchShortcut(event({ code, metaKey: true, altKey: true, shiftKey: true }), sharedDefault, "mac")?.action,
+    action
+  );
+  assert.equal(
+    shortcuts.matchShortcut(event({ code, ctrlKey: true, altKey: true, shiftKey: true }), sharedDefault, "windows")?.action,
+    action
+  );
+}
 
 // Enter sends only with the selected platform's exact mode and never while an
 // IME is composing.
@@ -443,6 +460,15 @@ assert.match(
   /active === "topbar"\s*\? \[shortcutInputSettingsBlock\(\), \.\.\.shortcutActionSettingsBlocks\(activeGroup, conflicts, redraw\)\]\s*: shortcutActionSettingsBlocks\(activeGroup, conflicts, redraw\)/,
   "Top Bar must render Send Message before the former Global shortcut list, while Chat Panel omits Send Message"
 );
+for (const itemId of ["settings", "addGroup", "settingsJumpMenu"]) {
+  assert.match(shortcutSettingsSource, new RegExp(`TOPBAR_SHORTCUT_ACTIONS\\.${itemId}`), `shortcut settings must include the ${itemId} topbar action`);
+}
+for (const [itemId, action] of [["settings", "openSettings"], ["addGroup", "openAppPicker"], ["settingsJumpMenu", "openSettingsMenu"]]) {
+  assert.match(topbarSource, new RegExp(`${itemId}: "${action}"`), `topbar ${itemId} must map to ${action}`);
+}
+assert.match(mainSource, /action === "openSettings"/);
+assert.match(mainSource, /action === "openAppPicker"/);
+assert.match(mainSource, /action === "openSettingsMenu"/);
 assert.doesNotMatch(shortcutSettingsSource, /class: "shortcut-info"/, "shortcut help must not use full-width info cards");
 assert.equal(
   (shortcutSettingsSource.match(/shortcutHelpTrigger\(/g) || []).length,

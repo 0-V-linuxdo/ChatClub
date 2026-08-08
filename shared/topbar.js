@@ -52,6 +52,19 @@ const TOPBAR_SETTINGS_SECTION_ITEM_IDS = Object.values(TOPBAR_SETTINGS_SECTION_I
 
 export const TOPBAR_REQUIRED_ITEMS = ["settings", "composer", "settingsJumpMenu"];
 
+export const TOPBAR_SHORTCUT_ACTIONS = Object.freeze({
+  brand: "openNewWorkspaceTab",
+  settings: "openSettings",
+  composer: "focusInput",
+  newChat: "newChatAll",
+  deleteThread: "deleteThread",
+  summary: "openSummaryPanel",
+  pocket: "openPocketPanel",
+  addGroup: "openAppPicker",
+  layout: "switchLayout",
+  settingsJumpMenu: "openSettingsMenu"
+});
+
 export const DEFAULT_TOPBAR_LAYOUT = [
   { type: "item", id: "brand" },
   { type: "item", id: "settings" },

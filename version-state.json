@@ -1,36 +1,36 @@
 {
   "schemaVersion": 4,
-  "appVersion": "「2026-08-09｜01:31:19」",
-  "manifestVersion": "2026.8.9.2",
+  "appVersion": "「2026-08-09｜03:17:44」",
+  "manifestVersion": "2026.8.9.3",
   "payloads": {
     "chromium": {
-      "appVersion": "「2026-08-09｜01:31:19」",
-      "sha256": "8572b3f15e98257290178943fbe81206a9f394e69b5ecb93f914d8ed06b82631"
+      "appVersion": "「2026-08-09｜03:17:44」",
+      "sha256": "e1dcd53dd63295798e872756ab8a4234527bbc96e322ad5c85b796aa7759f1d8"
     },
     "firefox": {
-      "appVersion": "「2026-08-09｜01:31:19」",
-      "sha256": "059e91f6652dc4516bd5cdfbc99d8e14850576693eb674708ff2155188bce38c"
+      "appVersion": "「2026-08-09｜03:17:44」",
+      "sha256": "f9ab4d60adf8118a1c75335e5f0b41f79c54b654225af9dc7a4944a7569264bd"
     }
   },
   "contentRuntime": {
     "sourceSchemaVersion": 1,
-    "sourceSha256": "9ffb7a35d8e650f3e5fc29434a0fd75e8da68786326c4797add6e1fcb0d9df7c",
+    "sourceSha256": "6cfda4f9d513d670b5f216b19d3a2582dd46ce7e6439c669c168ad65ef806608",
     "sourceFileCount": 78,
     "buildRecipeSchemaVersion": 1,
     "buildRecipeVersion": "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76",
     "buildRecipeSha256": "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76",
     "buildRecipeFileCount": 2,
     "protocolVersion": "2026.07.16.2",
-    "implementationSha256": "dfef774418641a5247007901d5cb34201a75bb7a7cf3a582a4bc1ac86882b6a7",
-    "implementationVersion": "2026.07.16.2+implementation.dfef774418641a5247007901d5cb34201a75bb7a7cf3a582a4bc1ac86882b6a7",
+    "implementationSha256": "71b436a8b4d58ad8bc1c06c799963675c7041d705799f31a3907342f85a173fa",
+    "implementationVersion": "2026.07.16.2+implementation.71b436a8b4d58ad8bc1c06c799963675c7041d705799f31a3907342f85a173fa",
     "bundles": {
       "content/content.js": {
         "entryPath": "content-src/content.js",
-        "sourceSha256": "79492c576afc7eb5778b51b0f3e42c49a4819b249b955f7788cb874740a91466",
+        "sourceSha256": "71bb748549dd9cecb7ade8131314e4315665c2906966d233bb6c8e95bc1a3a62",
         "sourceFileCount": 15,
         "virtualInputs": [],
-        "implementationSha256": "666b3c6658adaceb7afd014bcccd407afd33527aa1332965930549303d7f7cd0",
-        "implementationVersion": "2026.07.16.2+bundle.666b3c6658adaceb7afd014bcccd407afd33527aa1332965930549303d7f7cd0"
+        "implementationSha256": "e96fc7df151d8b3868c13f758dd62ff1b20a2300f86f59ea74ab80967b24188e",
+        "implementationVersion": "2026.07.16.2+bundle.e96fc7df151d8b3868c13f758dd62ff1b20a2300f86f59ea74ab80967b24188e"
       },
       "content/delete.js": {
         "entryPath": "content-src/content-delete.js",
@@ -200,8 +200,8 @@
     }
   },
   "floors": {
-    "appVersion": "「2026-08-09｜01:31:19」",
-    "manifestVersion": "2026.8.9.2",
+    "appVersion": "「2026-08-09｜03:17:44」",
+    "manifestVersion": "2026.8.9.3",
     "summaryConfigVersion": 75,
     "summarySites": {
       "chatgpt": 55,

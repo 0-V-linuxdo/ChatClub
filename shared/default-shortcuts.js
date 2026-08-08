@@ -6,6 +6,9 @@ export const DEFAULT_SHORTCUT_CONFIG = {
       shortcuts: {
         focusInput: { disabled: false, command: false, control: false, option: true, shift: false, code: "KeyK" },
         openNewWorkspaceTab: { disabled: false, command: true, control: false, option: true, shift: true, code: "KeyN" },
+        openSettings: { disabled: false, command: true, control: false, option: true, shift: true, code: "KeyS" },
+        openAppPicker: { disabled: false, command: true, control: false, option: true, shift: true, code: "KeyA" },
+        openSettingsMenu: { disabled: false, command: true, control: false, option: true, shift: true, code: "KeyJ" },
         newChat: { disabled: false, command: true, control: false, option: false, shift: false, code: "KeyN" },
         newChatAll: { disabled: false, command: true, control: false, option: false, shift: true, code: "KeyN" },
         deleteThread: { disabled: false, command: false, control: false, option: true, shift: true, code: "KeyD" },
@@ -27,6 +30,9 @@ export const DEFAULT_SHORTCUT_CONFIG = {
       shortcuts: {
         focusInput: { disabled: false, control: false, alt: true, shift: false, code: "KeyK" },
         openNewWorkspaceTab: { disabled: false, control: true, alt: true, shift: true, code: "KeyN" },
+        openSettings: { disabled: false, control: true, alt: true, shift: true, code: "KeyS" },
+        openAppPicker: { disabled: false, control: true, alt: true, shift: true, code: "KeyA" },
+        openSettingsMenu: { disabled: false, control: true, alt: true, shift: true, code: "KeyJ" },
         newChat: { disabled: false, control: true, alt: false, shift: false, code: "KeyN" },
         newChatAll: { disabled: false, control: true, alt: false, shift: true, code: "KeyN" },
         deleteThread: { disabled: false, control: false, alt: true, shift: true, code: "KeyD" },

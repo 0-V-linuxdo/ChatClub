@@ -189,6 +189,18 @@ export function createTopbarController(dependencies = {}) {
     if (anchor) openSettingsMenu(anchor, { forceOpen: true, editing: true });
   }
 
+  function runShortcutAction(action) {
+    if (action === "openSettings") {
+      actions.openSettings();
+      return;
+    }
+    const tooltipId = action === "openAppPicker" ? "topbar.addGroup" : "topbar.settingsJumpMenu";
+    const anchor = document.querySelector(`[data-tooltip-id="${tooltipId}"]`) || document.querySelector(".topbar");
+    if (!anchor) return;
+    if (action === "openAppPicker") workspace.openAppPicker(anchor, { mode: "group" });
+    else if (action === "openSettingsMenu") openSettingsMenu(anchor);
+  }
+
   function sync(shell) {
     if(shell===true){const n=document.querySelector(".prompt-input");if(n){n.placeholder=placeholderController.placeholder();composer.syncInputNode();return node;}return sync();}
     const targetShell = shell || node?.parentElement;
@@ -270,6 +282,7 @@ export function createTopbarController(dependencies = {}) {
     enterEditMode,
     initializePlaceholder: (...args) => placeholderController.initialize(...args),
     openSettingsMenu,
+    runShortcutAction,
     sync,
     syncPlaceholder: (...args) => placeholderController.sync(...args)
   });
