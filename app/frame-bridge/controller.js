@@ -819,6 +819,14 @@ export function createFrameBridgeController(dependencies = {}) {
     document.addEventListener("load", (event) => {
       const iframe = event.target;
       if (!(iframe instanceof HTMLIFrameElement) || !iframe.classList.contains("chat-frame")) return;
+      if (iframe.dataset.frameLoadPending === "1") {
+        // A newly inserted iframe emits an about:blank load before
+        // setFrameSrcAfterPrepare assigns its real URL. There is no content
+        // bridge to repair in that placeholder document; waiting for the
+        // real navigation also avoids reloading the frame from a premature
+        // poisoned-runtime diagnosis.
+        return;
+      }
       const navigationAlreadyInvalidated = iframe.dataset.preferredModelNavigationInvalidated === "1";
       const preparationGenerationBeforeLoad = framePreparationGeneration(iframe);
       delete iframe.dataset.preferredModelNavigationInvalidated;

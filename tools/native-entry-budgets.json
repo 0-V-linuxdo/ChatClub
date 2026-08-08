@@ -3,7 +3,7 @@
     "app/main.js": {
       "maxFiles": 97,
       "targetFiles": 74,
-      "maxSourceBytes": 1086748,
+      "maxSourceBytes": 1087159,
       "targetSourceBytes": 750000,
       "reason": "The application initial-static closure includes the background-owned StoredOptionsV4 snapshot client with optimistic revision conflicts and sparse official overrides, bilingual official-rules view and safety copy, committed-reset cleanup warning recovery in core state, plus the pre-document browser-session restore guard, one-shot prompt handoff layout and page orchestration, per-frame send queue, DNR-ready iframe assignment, authenticated frame identity, navigation-generation-isolated content bridge recovery, same-target navigation de-duplication, opaque black new-topic masking, canonical Notion frame-load URL comparison, prompt-focus restoration after iframe navigation, one post-layout frame before the first embedded navigation, measured image-plus-text composer sizing, Grok Cookie preflight, Notion navigation safeguards, model settlement with a per-panel interaction-blocking overlay, structured primary, secondary and add-on attempt rows, focus ownership and Toast collision avoidance, same-conversation Grok and Notion response URL preservation, five-minute session-scoped secondary fallback memory restored before the first overlay render, accessible Workspace appearance subtabs, workspace reconciliation, persistent user settings, owner-scoped iframe tab context menus with complete tab operations, and prompt-history date-group labels; signed-rules controls remain behind explicit lazy boundaries while this shared runtime is held to its exact footprint."
     },

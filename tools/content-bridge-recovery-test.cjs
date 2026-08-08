@@ -1700,7 +1700,61 @@ async function createPreservedRuntimeReloadFixture() {
     assert.equal(calls.apply, 1, "initial bootstrapping must suppress workspace-sync model applies");
     context.preferredModelGateBootstrapping = false;
   }
+  {
+    class TestIframe {}
+    const calls = { challenge: 0, repair: 0, apply: 0 };
+    let loadHandler = null;
+    const iframe = new TestIframe();
+    iframe.isConnected = true;
+    iframe.dataset = {
+      frameLoadPending: "1",
+      contentRuntimeCapabilitiesEpoch: "5",
+      preferredModelNavigationInvalidated: "1"
+    };
+    iframe.classList = { contains: (value) => value === "chat-frame" };
+    const context = vm.createContext({
+      HTMLIFrameElement: TestIframe,
+      document: {
+        addEventListener(type, handler, capture) {
+          assert.equal(type, "load");
+          assert.equal(capture, true);
+          loadHandler = handler;
+        }
+      },
+      frameBindingChallenges: {
+        invalidate(target) {
+          assert.equal(target, iframe);
+          calls.challenge += 1;
+        }
+      },
+      preferredModelFrameIsLoading: () => true,
+      invalidatePreferredModelFrame() {
+        throw new Error("pending about:blank must not invalidate preferred-model state");
+      },
+      scheduleContentFrameRepair() {
+        calls.repair += 1;
+      },
+      schedulePreferredModelApply() {
+        calls.apply += 1;
+      }
+    });
+    vm.runInContext(`
+      ${functionSource(frameBridge, "framePreparationGeneration")}
+      ${functionSource(frameBridge, "invalidateContentRuntimeCapabilityLedger")}
+      ${functionSource(frameBridge, "installPreferredModelIframeLoadHandler")}
+      installPreferredModelIframeLoadHandler();
+    `, context);
+    loadHandler({ target: iframe });
+    assert.deepEqual(
+      calls,
+      { challenge: 0, repair: 0, apply: 0 },
+      "the initial about:blank load must not start bridge repair or preferred-model setup"
+    );
+    assert.equal(iframe.dataset.frameLoadPending, "1");
+    assert.equal(iframe.dataset.preferredModelNavigationInvalidated, "1");
+  }
   const iframeLoadSource = functionSource(frameBridge, "installPreferredModelIframeLoadHandler");
+  assert.match(iframeLoadSource, /frameLoadPending === "1"/);
   assert.match(iframeLoadSource, /scheduleContentFrameRepair\(iframe, 120\)/);
   assert.match(
     iframeLoadSource,
