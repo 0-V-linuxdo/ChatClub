@@ -1009,7 +1009,7 @@ async function handleShortcutAction(action, matchObj = null, sourceWindow = null
   const group = activeGroupForShortcut(sourceWindow);
   const chat = group ? workspaceController.activeChatForGroup(group) : null;
   const digit = shortcutDigit(matchObj);
-  if (action === "focusInput") focusPromptInput();
+  if (action === "focusInput") focusPromptInput(); else if (action === "openNewWorkspaceTab") await openNewWorkspaceTab();
   else if (action === "newChat") {
     const started = await workspaceController.startNewChatForShortcut(sourceWindow);
     const error = settledOperationFailure({ status: "fulfilled", value: started }, "New chat did not start");

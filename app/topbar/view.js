@@ -107,7 +107,8 @@ export function createTopbarView(dependencies = {}) {
   }
 
   function brandActionLabel() {
-    return composer.hasDraft() ? t("topbar.sendInNewTab") : t("common.openInNewTab");
+    const label = composer.hasDraft() ? t("topbar.sendInNewTab") : t("common.openInNewTab");
+    return actions.formatShortcutTooltip(label, "openNewWorkspaceTab");
   }
 
   async function runBrandAction(event) {

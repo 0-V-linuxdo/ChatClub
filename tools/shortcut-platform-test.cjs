@@ -379,6 +379,22 @@ assert.equal(
   "Num 5"
 );
 assert.equal(shortcuts.formatShortcut("focusInput", { disabled: true }, "", "mac"), "Disabled");
+assert.equal(
+  shortcuts.formatShortcut("openNewWorkspaceTab", sharedDefault.profiles.mac.shortcuts.openNewWorkspaceTab, "", "mac"),
+  "⌘⌥⇧N"
+);
+assert.equal(
+  shortcuts.formatShortcut("openNewWorkspaceTab", sharedDefault.profiles.windows.shortcuts.openNewWorkspaceTab, "", "windows"),
+  "Ctrl+Alt+Shift+N"
+);
+assert.equal(
+  shortcuts.matchShortcut(event({ code: "KeyN", metaKey: true, altKey: true, shiftKey: true }), sharedDefault, "mac")?.action,
+  "openNewWorkspaceTab"
+);
+assert.equal(
+  shortcuts.matchShortcut(event({ code: "KeyN", ctrlKey: true, altKey: true, shiftKey: true }), sharedDefault, "windows")?.action,
+  "openNewWorkspaceTab"
+);
 
 // Enter sends only with the selected platform's exact mode and never while an
 // IME is composing.

@@ -17,7 +17,7 @@ const SHORTCUT_SETTING_GROUPS = [
   {
     titleKey: "shortcuts.topbarTitle",
     descriptionKey: "shortcuts.topbarDesc",
-    actions: ["focusInput", "newChatAll", "deleteThread", "optimizePrompt", "openSummaryPanel", "openPocketPanel", "insertPrompt", "switchLayout", "switchPlatformTab"]
+    actions: ["focusInput", "openNewWorkspaceTab", "newChatAll", "deleteThread", "optimizePrompt", "openSummaryPanel", "openPocketPanel", "insertPrompt", "switchLayout", "switchPlatformTab"]
   },
   {
     titleKey: "shortcuts.chatTitle",
@@ -29,6 +29,7 @@ const SHORTCUT_SETTING_GROUPS = [
 const SHORTCUT_PREVIEW_META = Object.freeze({
   sendMessage: { icon: "send", labelKey: "topbar.send", tooltipLabelKey: "topbar.sendTooltip", tooltipId: "topbar.send", showLabel: true, primary: true },
   focusInput: { icon: "keyboard", labelKey: "shortcut.focusInput.label" },
+  openNewWorkspaceTab: { icon: "external", labelKey: "shortcut.openNewWorkspaceTab.label", showLabel: true },
   newChatAll: { icon: "edit", labelKey: "topbar.newChat", tooltipLabelKey: "topbar.newChatAllTooltip", tooltipId: "topbar.newChat", showLabel: true },
   deleteThread: { icon: "trash", labelKey: "topbar.deleteThread", tooltipId: "topbar.deleteThread" },
   optimizePrompt: { icon: "sparkles", labelKey: "topbar.optimizePrompt", tooltipId: "topbar.optimizePrompt" },

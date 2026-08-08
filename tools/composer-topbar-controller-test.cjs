@@ -135,6 +135,7 @@ function responsiveBrandRules(kind) {
   assert.doesNotMatch(topbarView, /addEventListener\("keydown"/, "the view must not own dismissal listeners");
   const brandLabel = functionSource(topbarView, "brandActionLabel");
   assert.match(brandLabel, /composer\.hasDraft\(\)[\s\S]*topbar\.sendInNewTab[\s\S]*common\.openInNewTab/, "the Logo label must switch between opening and sending from the current draft state");
+  assert.match(brandLabel, /actions\.formatShortcutTooltip\(label,\s*"openNewWorkspaceTab"\)/, "the Logo label must expose the configured new-tab shortcut");
   const brandView = functionSource(topbarView, "renderBrand");
   assert.match(brandView, /const label = brandActionLabel\(\)/, "the Logo must use the dynamic new-tab action label");
   assert.match(brandView, /"aria-label": label[\s\S]*"data-tooltip": label[\s\S]*"data-tooltip-id": "topbar\.brand"/, "the Logo must retain its accessible name and tooltip contract");

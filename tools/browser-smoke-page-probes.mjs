@@ -88,7 +88,8 @@ export async function promptHandoffTabProbe({ withTimeout, readSessionState }) {
     frames.forEach((frame, index) => { frame.dataset.appId = `browser-smoke-missing-app-${index}`; });
     promptInput.value = prompt;
     promptInput.dispatchEvent(new Event("input", { bubbles: true }));
-    const dynamicLabel = brandButton.getAttribute("aria-label") === t("topbar.sendInNewTab");
+    const dynamicLabel = String(brandButton.getAttribute("aria-label") || "")
+      .startsWith(t("topbar.sendInNewTab"));
     brandButton.click();
     const duplicateGuarded = brandButton.disabled === true && brandButton.getAttribute("aria-busy") === "true";
     brandButton.click();
