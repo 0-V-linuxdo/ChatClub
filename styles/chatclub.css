@@ -152,6 +152,44 @@ button { cursor: pointer; }
   grid-template-rows: auto minmax(0, 1fr);
 }
 
+.app-shell.has-cleared-tabs-banner {
+  grid-template-rows: 51px auto minmax(0, 1fr);
+}
+
+.app-shell.topbar-editing-mode.has-cleared-tabs-banner {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
+.app-shell.fullscreen-mode.has-cleared-tabs-banner {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.app-shell.fullscreen-mode .workspace-cleared-tabs-banner {
+  display: none;
+}
+
+.workspace-cleared-tabs-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+}
+
+.workspace-cleared-tabs-banner-copy {
+  min-width: 0;
+}
+
+.workspace-cleared-tabs-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 .runtime-bootstrap-failure {
   min-height: 100vh;
   display: grid;

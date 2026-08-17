@@ -524,6 +524,100 @@ function preferredModelStub() {
     assert.equal(input.style.overflowY, "hidden", `${gateState}: clear must hide the empty input's scrollbar`);
   }
 
+  {
+    globalThis.document.body.replaceChildren();
+    globalThis.document.activeElement = null;
+    const frame = { isConnected: true };
+    const app = { id: "Notion", name: "Notion AI", url: "https://www.notion.so" };
+    const state = createState();
+    const controller = createComposerController({
+      state,
+      workspace: {
+        closePopovers() {},
+        currentFrames: () => [frame],
+        frameApp: () => app
+      },
+      preferredModel: {
+        ...preferredModelStub(),
+        preferredModelFrameReadiness: () => ({
+          state: "ready",
+          appId: "Notion",
+          frameKey: "frame-notion",
+          runId: "run-notion",
+          documentId: "document-notion",
+          bridgeVersion: "bridge-notion"
+        }),
+        waitForPreferredModelFrame: async () => ({
+          state: "ready",
+          appId: "Notion",
+          documentId: "document-notion"
+        }),
+        waitForPreferredModelSubmissionBarrier: async () => ({ state: "complete" })
+      },
+      topbar: { closeSettingsMenu() {} },
+      framePort: {
+        ensure: async () => ({ documentId: "document-notion" }),
+        request: async () => ({ sent: true, deliveryState: "sent" })
+      },
+      keyboardPlatform: "mac",
+      activeShortcutProfile: () => ({ sendKeyMode: "enter" }),
+      inferAppName: () => "Notion AI",
+      openPromptLibrary() {},
+      optimizePrompt() {},
+      recordFunctionalAnomaly() {},
+      savePromptSendHistory: async (next) => next,
+      toast() {},
+      createFrameToast: () => ({ dismiss() {}, remove() {}, update() {} })
+    });
+    const view = controller.render({
+      placeholder: "It always seems impossible until it is done."
+    });
+    globalThis.document.body.append(view);
+    const input = view.querySelector(".prompt-input");
+    const shell = view.querySelector(".prompt-shell");
+    const preview = view.querySelector(".prompt-collapsed-preview");
+    const outside = new FakeNode("button");
+    globalThis.document.body.append(outside);
+    controller.setImages([{
+      id: "sent-image",
+      name: "character.png",
+      type: "image/png",
+      size: 4,
+      lastModified: 1,
+      dataUrl: "data:image/png;base64,QUJDRA=="
+    }], { focus: true });
+    input.value = "图片中，是什么人物？";
+    input.selectionStart = input.selectionEnd = input.value.length;
+    input.dispatch("input");
+    assert.ok(preview.querySelector(".prompt-collapsed-preview-images"), "an image draft must render collapsed thumbs before send");
+    shell.dispatch("focusout", { target: input, relatedTarget: outside });
+    assert.equal(shell.classList.contains("prompt-shell-expanded"), false, "the image draft must collapse before send");
+    assert.ok(preview.querySelector(".prompt-collapsed-preview-images"), "collapsed send must still show the attached image");
+
+    const settlement = controller.submit(input);
+    assert.equal(state.promptText, "", "an admitted send must clear the draft text");
+    assert.deepEqual(state.promptImages, [], "an admitted send must clear the draft images");
+    assert.equal(input.value, "", "an admitted send must clear the visible textarea");
+    shell.dispatch("focusout", { target: input, relatedTarget: outside });
+    assert.equal(shell.classList.contains("prompt-shell-expanded"), false, "leaving Composer after send must collapse the empty input");
+    assert.equal(
+      preview.querySelector(".prompt-collapsed-preview-images"),
+      null,
+      "a successful send must not leave collapsed image thumbs in the empty topbar"
+    );
+    assert.equal(
+      nodeText(preview.querySelector(".prompt-collapsed-preview-text")),
+      "It always seems impossible until it is done.",
+      "the empty collapsed preview must show only the placeholder after send"
+    );
+    assert.equal(preview.classList.contains("prompt-collapsed-preview-empty"), true, "the collapsed preview must mark itself empty after send");
+    const imageList = view.querySelector(".prompt-image-preview-list");
+    assert.equal(imageList?.hidden, true, "the expanded image chip list must hide after send");
+    assert.equal(imageList?.children.length || 0, 0, "the expanded image chip list must be empty after send");
+    assert.equal(view.querySelector(".prompt-send-button")?.disabled, true, "send must disable itself after the draft is cleared");
+    await settlement;
+  }
+
   globalThis.document.body.replaceChildren();
   const syncState = createState();
   const syncComposer = createComposerController({

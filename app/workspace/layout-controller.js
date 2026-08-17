@@ -204,10 +204,8 @@ export function createWorkspaceLayoutController(dependencies = {}) {
   }
 
   function hydrateGroups(snapshot = null) {
-    if (restoreWorkspaceSession(snapshot)) {
-      rememberWorkspaceSession();
-      return true;
-    }
+    if (restoreWorkspaceSession(snapshot)) return true;
+    const persistDefaults = !snapshot;
     const preset = activePreset();
     const apps = allApps();
     const workspace = hydrateWorkspaceGroups({
@@ -226,7 +224,7 @@ export function createWorkspaceLayoutController(dependencies = {}) {
     state.groups = workspace.groups;
     state.activeTabs = workspace.activeTabs;
     state.fullscreenGroupId = null;
-    rememberWorkspaceSession();
+    if (persistDefaults) rememberWorkspaceSession();
     return false;
   }
 

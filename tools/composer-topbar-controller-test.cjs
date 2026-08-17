@@ -115,7 +115,8 @@ function responsiveBrandRules(kind) {
     "expanded input must collapse only after focus leaves the entire Composer shell"
   );
   assert.match(composer, /if\(n\.value!==state\.promptText\)n\.value=state\.promptText/, "placeholder refresh must not rewrite a focused input with the same draft value");
-  assert.match(composer, /if\(!value&&!state\.promptImages\.length\)[\s\S]*text\.textContent!==collapsed\.text[\s\S]*classList\.add\("prompt-collapsed-preview-empty"\)/, "placeholder refresh must update the empty preview text without rebuilding its DOM subtree");
+  assert.match(composer, /if\s*\(\s*!value\s*&&\s*!state\.promptImages\.length\s*\)[\s\S]*leftoverImages[\s\S]*text\.textContent\s*!==\s*collapsed\.text[\s\S]*classList\.add\("prompt-collapsed-preview-empty"\)/, "placeholder refresh must update the empty preview text without rebuilding its DOM subtree");
+  assert.match(composer, /leftoverImages = preview\.querySelector\("\.prompt-collapsed-preview-images"\)[\s\S]*if\s*\(\s*text\s*&&\s*!leftoverImages\s*\)/, "an empty preview refresh must rebuild when a prior send left image thumbs behind");
   const promptMenu = functionSource(composer, "openActionsMenu");
   assert.match(promptMenu, /topbar\.closeSettingsMenu\(\)/, "Prompt Actions must dismiss only the Topbar menu owner");
   assert.match(promptMenu, /workspace\.closePopovers\(\)/, "Prompt Actions must dismiss the workspace popover owner through its port");

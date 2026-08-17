@@ -1,4 +1,8 @@
 {
+  "app/workspace/cleared-tabs-controller.js#createWorkspaceClearedTabsController": {
+    "kind": "test-only",
+    "reason": "Banner restore/dismiss regressions inject remember/restore seams without going through the runtime attach helper."
+  },
   "app/settings/history.js#groupPromptHistory": {
     "kind": "test-only",
     "reason": "Prompt-history grouping regressions exercise deterministic calendar buckets and preserve order without exposing a runtime API."

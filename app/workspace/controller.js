@@ -100,6 +100,7 @@ export function createWorkspaceController(ctx = {}) {
   } = frameRegistry;
 
   const sessionBinding = createBindOnceControllerPort("Workspace session", [
+    "captureWorkspaceSession",
     "rememberWorkspaceSession",
     "restoreWorkspaceSession"
   ]);
@@ -355,6 +356,9 @@ export function createWorkspaceController(ctx = {}) {
     topicDeleteCapabilityForFrame: frameController.topicDeleteCapabilityForFrame,
     openableTabUrl,
     openTabUrl,
+    captureWorkspaceSession: sessionController.captureWorkspaceSession,
+    rememberWorkspaceSession: sessionController.rememberWorkspaceSession,
+    restoreWorkspaceSession: sessionController.restoreWorkspaceSession,
     hydrateEmptyPromptHandoffWorkspace: layoutController.hydrateEmptyPromptHandoffWorkspace,
     hydrateGroups: layoutController.hydrateGroups,
     hydrateImportedLayoutIfNeeded: layoutController.hydrateImportedLayoutIfNeeded,

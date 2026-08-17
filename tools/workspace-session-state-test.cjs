@@ -302,6 +302,31 @@ const assert = require("node:assert/strict");
     createFrameId: () => "unused-frame"
   }), null);
 
+  const unknownPreset = restoreWorkspaceSnapshotV1({
+    schemaVersion: 1,
+    generation: "generation-c",
+    layout: { type: "preset", presetId: "removed-layout" },
+    groups: [{ tabs: [{ appId: "ChatGPT", currentHref: "https://chatgpt.com/c/kept" }], activeIndex: 0 }],
+    fullscreenGroupIndex: 0
+  }, {
+    validAppIds: ["ChatGPT"],
+    fallbackPresetId: "default",
+    createGroupId: () => "kept-group",
+    createFrameId: () => "kept-frame"
+  });
+  assert.equal(unknownPreset.groups[0].chatApps[0].initialHref, "https://chatgpt.com/c/kept", "tab restore must keep conversation URLs when a layout preset is gone");
+
+  assert.equal(session.workspaceSnapshotIsNonEmpty({
+    groups: [{ tabs: [{ appId: "ChatGPT", currentHref: "https://chatgpt.com/" }] }]
+  }, { ChatGPT: "https://chatgpt.com/" }), false, "home-only tabs are empty");
+  assert.equal(session.workspaceSnapshotIsNonEmpty({
+    groups: [{ tabs: [{ appId: "ChatGPT", currentHref: "https://chatgpt.com/c/one" }] }]
+  }, { ChatGPT: "https://chatgpt.com/" }), true, "a conversation URL is non-empty");
+  assert.equal(session.workspaceSnapshotIsNonEmpty({
+    groups: [{ tabs: [{ appId: "Custom", currentHref: "https://example.com/chat/1" }] }]
+  }, {}), true, "an unknown app with a conversation URL is non-empty");
+  assert.equal(session.workspaceSnapshotIsNonEmpty({ groups: [{ tabs: [{ appId: "ChatGPT" }] }] }), false);
+
   console.log("workspace session snapshot state: ok");
 })().catch((error) => {
   console.error(error?.stack || error);

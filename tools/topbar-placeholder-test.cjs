@@ -44,8 +44,34 @@ const root = path.resolve(__dirname, "..");
   await controller.initialize();
   assert.equal(controller.placeholder(), "One");
   assert.equal(saves, 3);
+  await controller.initialize({ persist: false });
+  assert.equal(controller.placeholder(), "Two");
+  assert.equal(saves, 3);
+
+  const failing = createTopbarPlaceholderController({
+    state: {
+      options: {
+        topbarPromptPlaceholderConfig: {
+          mode: "refresh",
+          order: "sequence",
+          intervalSec: 5,
+          items: ["One", "Two"],
+          state: { index: -1, lastRandom: -1 }
+        }
+      }
+    },
+    normalizeConfig: (value) => ({ ...value, state: { ...(value.state || {}) } }),
+    saveOptions: async () => { throw Object.assign(new Error("Expected 330, received 331"), { code: "CONFIG_REVISION_CONFLICT" }); },
+    syncTopbar: () => {},
+    syncPlaceholder: () => {},
+    translate: (key) => key
+  });
+  await failing.initialize();
+  assert.equal(failing.placeholder(), "One");
+  failing.stop();
+
   controller.sync();
-  assert.equal(controller.placeholder(), "One");
+  assert.equal(controller.placeholder(), "Two");
   assert.equal(renders, 1);
   controller.stop();
 

@@ -32,17 +32,26 @@ assert.match(runtime, /function initialWorkspaceFrameRestoreState\(\)/);
 assert.match(runtime, /function waitForInitialWorkspaceFrameRestoration\(/);
 assert.match(runtime, /createWorkspaceSessionStore\(\{[\s\S]*?currentTab: currentExtensionTab[\s\S]*?currentTabId: currentExtensionTabId[\s\S]*?storageGet[\s\S]*?storageSet[\s\S]*?storageRemove[\s\S]*?\}\)/);
 assert.match(runtime, /action: "claimWorkspaceSessionRecovery"/, "a naked replacement page must claim before default hydration");
+assert.match(runtime, /workspaceClearedTabsController\.refresh\(\)/, "cleared ChatClub tabs must be listed after hydration");
+assert.match(runtime, /workspaceClearedTabsController\.syncBanner\(shell\)/, "the one-click restore banner must render with the workspace");
+assert.match(
+  runtime,
+  /initializeTopbarPromptPlaceholder\(\{\s*persist:\s*!workspaceSessionSnapshot\s*\}\)/,
+  "a restored workspace page must not persist a competing topbar placeholder write during init"
+);
+assert.doesNotMatch(runtime, /absorbIntoCurrent/, "restore must open a new browser tab for every cleared ChatClub page");
 assert.match(runtime, /action: "commitWorkspaceSessionRecovery"[\s\S]*?workspaceId,[\s\S]*?claimId/, "a restored claim must commit by workspace and claim ids");
 assert.match(runtime, /workspaceSessionStore,\s*\n\s*framePort:/, "the workspace controller must receive the per-page store");
 
 assert.match(
   layout,
-  /function hydrateGroups\(snapshot = null\) \{\s*if \(restoreWorkspaceSession\(snapshot\)\) \{\s*rememberWorkspaceSession\(\);\s*return true;/,
-  "restored state must be captured before ordinary default hydration can run"
+  /const persistDefaults = !snapshot;[\s\S]*if \(persistDefaults\) rememberWorkspaceSession\(\);/,
+  "a durable workspace snapshot must not be overwritten by default hydration"
 );
 assert.match(session, /generation: workspaceSessionStore\.generation\(\)/);
 assert.match(session, /currentHrefForTab: \(chat\) => currentHrefForWorkspaceTab\(chat, framesByInstanceId\)/);
 assert.match(session, /normalizeCurrentHref: \(appId, href\) => restorableChatFrameHref\(appById\(appId\), href\)/);
+assert.doesNotMatch(session, /validPresetIds/, "workspace-tab restore must apply conversation URLs even if a layout preset was removed");
 assert.match(session, /workspaceSessionStore\.save\(snapshot\)/);
 assert.match(
   frame,

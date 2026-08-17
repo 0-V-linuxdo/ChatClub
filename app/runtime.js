@@ -42,6 +42,7 @@ import { createPreferredModelController } from "./preferred-model/controller.js"
 import { createTopbarController } from "./topbar/controller.js";
 import { createWorkspaceController } from "./workspace/controller.js";
 import { PROMPT_HANDOFF_LAUNCH_REASON, createWorkspacePromptHandoffController } from "./workspace/prompt-handoff-controller.js";
+import { attachWorkspaceClearedTabsController } from "./workspace/cleared-tabs-controller.js";
 import { createWorkspaceSessionStore } from "./workspace/session-store.js";
 import {
   createFunctionalAnomalyController,
@@ -70,9 +71,7 @@ const state = createAppState();
 const featureState = createFeatureStatePorts(state);
 const configService = createAppConfigService({ request: requestBackground });
 const functionalAnomalyController = createFunctionalAnomalyController({
-  state: featureState.functionalAnomalies,
-  requestBackground,
-  appVersion: APP_VERSION,
+  state: featureState.functionalAnomalies, requestBackground, appVersion: APP_VERSION,
   surface: isOptionsPage ? "options" : "workspace"
 });
 const recordFunctionalAnomaly = functionalAnomalyController.record;
@@ -268,10 +267,7 @@ const appFaviconUrl = faviconService.app;
 const fallbackFaviconUrl = faviconService.fallback;
 
 const appContext = Object.freeze({
-  state: featureState.optimize,
-  svgIcon,
-  syncPromptInputNode,
-  recordFunctionalAnomaly
+  state: featureState.optimize, svgIcon, syncPromptInputNode, recordFunctionalAnomaly
 });
 const optimizeController = createOptimizeController(appContext);
 let pocketController = null;
@@ -331,6 +327,8 @@ const workspaceController = createWorkspaceController({
 });
 workspaceBinding.bind(workspaceController);
 frameBridgeWorkspaceBinding.bind(workspaceController);
+const workspaceClearedTabsController = attachWorkspaceClearedTabsController({
+  requestBackground, toast, render });
 const workspacePromptHandoffController = createWorkspacePromptHandoffController({
   api: extensionApi(), requestBackground, composer: composerController, workspace: workspaceController,
   appCatalog: allApps, workspaceGeneration: workspaceSessionStore.generation,
@@ -839,6 +837,7 @@ function render() {
   closeTransientOverlays();
   const shell = ensureAppShell();
   syncTopbar();
+  workspaceClearedTabsController.syncBanner(shell);
   workspaceController.syncWorkspaceIsland(shell);
   syncSummaryPanel();
 }
@@ -1147,9 +1146,10 @@ async function init() {
   if (resetCleanupWarningCount > 0) {
     toast(t("toast.configResetCleanupWarning", { count: resetCleanupWarningCount }), "error");
   }
-  await initializeTopbarPromptPlaceholder();
+  await initializeTopbarPromptPlaceholder({ persist: !workspaceSessionSnapshot });
   const promptHandoffLaunch = await workspacePromptHandoffController.prepareInitialLaunch();
   promptHandoffLaunch.claimed && !promptHandoffLaunch.snapshot ? workspaceController.hydrateEmptyPromptHandoffWorkspace() : workspaceController.hydrateGroups(promptHandoffLaunch.snapshot || workspaceSessionSnapshot);
+  await workspaceClearedTabsController.refresh().catch((error) => console.warn("[ChatClub] Cleared workspace tabs could not be listed", error));
   installGlobalTooltips({
     getDisabledTooltipIds: () => state.options?.tooltipDisabledIds || []
   });

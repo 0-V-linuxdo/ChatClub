@@ -1,6 +1,9 @@
+import { BUILTIN_CHAT_APPS, STORAGE_KEYS } from "../shared/constants.js";
 import {
   DEFAULT_WORKSPACE_SESSION_GENERATION,
   WORKSPACE_SESSION_BINDING_PREFIX,
+  WORKSPACE_SESSION_CLEARED_BY_BROWSER,
+  WORKSPACE_SESSION_CLOSED_BY_USER,
   WORKSPACE_SESSION_DETACHED_TTL_MS,
   WORKSPACE_SESSION_GENERATION_KEY,
   WORKSPACE_SESSION_RECENT_DETACH_MS,
@@ -9,6 +12,8 @@ import {
   WORKSPACE_SESSION_RECOVERY_VERSION,
   WORKSPACE_SESSION_RUNTIME_MARKER_KEY,
   WORKSPACE_SESSION_STORAGE_VERSION,
+  WORKSPACE_SESSION_USER_CLOSE_ALARM,
+  WORKSPACE_SESSION_USER_CLOSE_CONFIRM_MS,
   createWorkspaceSessionGeneration,
   createWorkspaceSessionId,
   normalizeWorkspaceSessionGeneration,
@@ -19,8 +24,10 @@ import {
   workspaceSessionMirrorKey,
   workspaceSessionMirrorTabId,
   workspaceSessionWorkspaceId,
-  workspaceSessionWorkspaceKey
+  workspaceSessionWorkspaceKey,
+  workspaceSnapshotIsNonEmpty
 } from "../shared/workspace-session.js";
+import { openWorkspaceTab } from "./tab-runtime.js";
 
 let workspaceSessionChain = Promise.resolve();
 
@@ -117,7 +124,8 @@ function stableWorkspaceRecord(key, value) {
     snapshot: cloneSnapshot(value.snapshot),
     owner: normalizedOwner(value.owner),
     updatedAt: finiteTime(value.updatedAt),
-    detachedAt: nullableTime(value.detachedAt)
+    detachedAt: nullableTime(value.detachedAt),
+    closedBy: value.closedBy === WORKSPACE_SESSION_CLOSED_BY_USER ? WORKSPACE_SESSION_CLOSED_BY_USER : ""
   };
 }
 
@@ -161,7 +169,11 @@ function recoveryRecord(value, generation, now) {
         workspaceId,
         windowId: Number.isInteger(candidate.windowId) ? candidate.windowId : null,
         index: Number.isInteger(candidate.index) && candidate.index >= 0 ? candidate.index : null,
+        pinned: candidate.pinned === true,
         source: candidate.source === "legacy" ? "legacy" : "stable",
+        clearedBy: candidate.clearedBy === WORKSPACE_SESSION_CLEARED_BY_BROWSER
+          ? WORKSPACE_SESSION_CLEARED_BY_BROWSER
+          : "",
         claimedAt: finiteTime(candidate.claimedAt),
         claimedTabId: positiveTabId(candidate.claimedTabId),
         claimId: String(candidate.claimId || ""),
@@ -211,7 +223,8 @@ function stableRecordForClaim(existing, workspaceId, generation, snapshot, tab, 
     snapshot: snapshot ?? existing?.snapshot ?? null,
     owner: meta,
     updatedAt: now,
-    detachedAt: null
+    detachedAt: null,
+    closedBy: ""
   };
 }
 
@@ -230,17 +243,108 @@ function bindingForClaim(workspaceId, generation, tab, now) {
   };
 }
 
-function recoveryCandidate(record, source = "stable") {
+function recoveryCandidate(record, source = "stable", clearedBy = "") {
   return {
     workspaceId: record.workspaceId,
     windowId: record.owner?.windowId ?? null,
     index: record.owner?.index ?? null,
+    pinned: record.owner?.pinned === true,
     source,
+    clearedBy: clearedBy === WORKSPACE_SESSION_CLEARED_BY_BROWSER
+      ? WORKSPACE_SESSION_CLEARED_BY_BROWSER
+      : "",
     claimedAt: 0,
     claimedTabId: null,
     claimId: "",
     committedAt: 0
   };
+}
+
+function workspaceRecordIsLive(record, live) {
+  if (!record) return false;
+  if (live.workspaceIds.has(record.workspaceId)) return true;
+  return record.owner.tabId !== null && live.tabIds.has(record.owner.tabId);
+}
+
+function homeHrefByAppIdFromStored(stored = {}) {
+  const homes = {};
+  for (const app of BUILTIN_CHAT_APPS) {
+    if (app?.id && app?.url) homes[app.id] = app.url;
+  }
+  const custom = stored?.[STORAGE_KEYS.customConfig];
+  if (Array.isArray(custom)) {
+    for (const app of custom) {
+      if (app?.id && app?.url && !homes[app.id]) homes[app.id] = app.url;
+    }
+  }
+  return homes;
+}
+
+function isBrowserClearedRecord(record, live, now, homeHrefByAppId, options = {}) {
+  if (!record || workspaceRecordIsLive(record, live)) return false;
+  if (record.closedBy === WORKSPACE_SESSION_CLOSED_BY_USER) return false;
+  if (!workspaceSnapshotIsNonEmpty(record.snapshot, homeHrefByAppId)) return false;
+  if (options.restartRecovery === true) return true;
+  if (record.detachedAt === null) return true;
+  return now - record.detachedAt <= WORKSPACE_SESSION_USER_CLOSE_CONFIRM_MS;
+}
+
+async function restorePlacement(api, item = {}, sender = {}) {
+  const windowId = Number.isInteger(item.windowId) ? item.windowId : null;
+  const index = Number.isInteger(item.index) && item.index >= 0 ? item.index : null;
+  const pinned = item.pinned === true;
+  if (windowId === null) {
+    const senderWindowId = Number.isInteger(sender?.tab?.windowId) ? sender.tab.windowId : null;
+    return { windowId: senderWindowId, index: null, pinned };
+  }
+  if (typeof api?.windows?.get !== "function") return { windowId, index, pinned };
+  try {
+    await api.windows.get(windowId);
+    return { windowId, index, pinned };
+  } catch {
+    const senderWindowId = Number.isInteger(sender?.tab?.windowId) ? sender.tab.windowId : null;
+    return { windowId: senderWindowId, index: null, pinned };
+  }
+}
+
+function retainWorkspaceOwner(existing, workspaceId, generation, tab, now) {
+  if (!existing?.snapshot) return null;
+  return {
+    ...existing,
+    storageVersion: WORKSPACE_SESSION_STORAGE_VERSION,
+    generation: existing.generation || generation,
+    workspaceId,
+    snapshot: existing.snapshot,
+    owner: tabMetadata(tab),
+    updatedAt: now,
+    detachedAt: null,
+    closedBy: ""
+  };
+}
+
+function claimToken() {
+  return `claim-${createWorkspaceSessionGeneration().replace(/^workspace-/, "")}`;
+}
+
+async function scheduleUserCloseConfirm(api, now) {
+  const alarms = api?.alarms;
+  if (typeof alarms?.create !== "function") return;
+  try {
+    await alarms.create(WORKSPACE_SESSION_USER_CLOSE_ALARM, {
+      when: now + WORKSPACE_SESSION_USER_CLOSE_CONFIRM_MS
+    });
+  } catch {}
+}
+
+function markClosedByUser(stableRecords, live, now, updates) {
+  for (const [workspaceId, record] of stableRecords) {
+    if (record.closedBy === WORKSPACE_SESSION_CLOSED_BY_USER || record.detachedAt === null) continue;
+    if (workspaceRecordIsLive(record, live)) continue;
+    if (now - record.detachedAt < WORKSPACE_SESSION_USER_CLOSE_CONFIRM_MS) continue;
+    const updated = { ...record, closedBy: WORKSPACE_SESSION_CLOSED_BY_USER };
+    stableRecords.set(workspaceId, updated);
+    updates[workspaceSessionWorkspaceKey(workspaceId)] = updated;
+  }
 }
 
 function mergeRecoveryCandidates(existing = [], incoming = []) {
@@ -258,6 +362,7 @@ function recoveryId(now) {
 function currentStableRecords(stored = {}) {
   const records = new Map();
   for (const [key, value] of Object.entries(stored)) {
+    if (!workspaceSessionWorkspaceId(key)) continue;
     const record = stableWorkspaceRecord(key, value);
     if (record) records.set(record.workspaceId, record);
   }
@@ -318,6 +423,7 @@ export function detachWorkspaceSessionMirror(api, tabId, removeInfo = {}, option
       });
     }
     await storage.remove(bindingKey);
+    await scheduleUserCloseConfirm(api, now);
     return { detached: Boolean(stable), workspaceId: binding.workspaceId, legacy: false };
   });
 }
@@ -390,14 +496,22 @@ export function prepareWorkspaceSessionLifecycle(api, options = {}) {
     }
 
     const forceRecovery = options.forceRecovery === true;
-    if (lifecycleRestart || forceRecovery) {
+    const restartRecovery = lifecycleRestart || forceRecovery;
+    if (!restartRecovery) markClosedByUser(stableRecords, live, now, updates);
+    if (restartRecovery) {
+      const homes = homeHrefByAppIdFromStored(stored);
       const incoming = [];
       for (const [workspaceId, record] of stableRecords) {
         if (expiredWorkspaceIds.has(workspaceId) || record.generation !== generation) continue;
-        if (live.workspaceIds.has(workspaceId)) continue;
-        if (record.owner.tabId !== null && live.tabIds.has(record.owner.tabId)) continue;
+        if (workspaceRecordIsLive(record, live)) continue;
         if (record.detachedAt !== null && now - record.detachedAt > WORKSPACE_SESSION_RECENT_DETACH_MS) continue;
-        incoming.push(recoveryCandidate(record));
+        incoming.push(recoveryCandidate(
+          record,
+          "stable",
+          isBrowserClearedRecord(record, live, now, homes, { restartRecovery: true })
+            ? WORKSPACE_SESSION_CLEARED_BY_BROWSER
+            : ""
+        ));
       }
 
       for (const [key, value] of Object.entries(stored || {})) {
@@ -411,7 +525,8 @@ export function prepareWorkspaceSessionLifecycle(api, options = {}) {
           snapshot: legacy.snapshot,
           owner: { tabId: legacy.tabId, windowId: null, index: null, pinned: false },
           updatedAt: now,
-          detachedAt: now
+          detachedAt: now,
+          closedBy: ""
         };
         stableRecords.set(workspaceId, stable);
         updates[workspaceSessionWorkspaceKey(workspaceId)] = stable;
@@ -472,7 +587,9 @@ export function claimWorkspaceSessionRecovery(api, request = {}, sender = {}, op
     let claimId = "";
     let recovery = recoveryRecord(stored?.[WORKSPACE_SESSION_RECOVERY_KEY], generation, now);
     if (!workspaceId && recovery) {
-      const available = recovery.candidates.filter((candidate) => !candidate.claimedAt);
+      const available = recovery.candidates.filter((candidate) => (
+        !candidate.claimedAt && candidate.clearedBy !== WORKSPACE_SESSION_CLEARED_BY_BROWSER
+      ));
       const sameWindow = meta.windowId === null
         ? []
         : available.filter((candidate) => candidate.windowId === meta.windowId);
@@ -603,6 +720,159 @@ export function commitWorkspaceSessionRecovery(api, request = {}, sender = {}, o
       workspaceId,
       claimId,
       workspaceSessionGeneration: generation
+    };
+  });
+}
+
+function clearedTabItem(candidate) {
+  return {
+    workspaceId: candidate.workspaceId,
+    windowId: candidate.windowId,
+    index: candidate.index,
+    pinned: candidate.pinned === true
+  };
+}
+
+function unclaimedBrowserCleared(recovery, live, stableRecords = new Map()) {
+  if (!recovery) return [];
+  return recovery.candidates.filter((candidate) => {
+    if (candidate.clearedBy !== WORKSPACE_SESSION_CLEARED_BY_BROWSER || candidate.claimedAt) return false;
+    if (live.workspaceIds.has(candidate.workspaceId)) return false;
+    const record = stableRecords.get(candidate.workspaceId);
+    return !record || !workspaceRecordIsLive(record, live);
+  });
+}
+
+function confirmUserClosedWorkspaceSessions(api, options = {}) {
+  return queueWorkspaceSession(async () => {
+    const storage = localStorageArea(api);
+    if (typeof storage?.get !== "function" || typeof storage?.set !== "function") {
+      return { confirmed: 0 };
+    }
+    if (typeof api?.tabs?.query !== "function") return { confirmed: 0 };
+    const now = finiteTime(options.now, Date.now());
+    const [stored, tabs] = await Promise.all([
+      storage.get(null),
+      api.tabs.query({})
+    ]);
+    if (!Array.isArray(tabs)) throw new TypeError("Browser tabs query returned an invalid result");
+    const live = liveTabState(tabs);
+    const stableRecords = currentStableRecords(stored);
+    const updates = {};
+    markClosedByUser(stableRecords, live, now, updates);
+    if (Object.keys(updates).length) await storage.set(updates);
+    return { confirmed: Object.keys(updates).length };
+  });
+}
+
+export function handleWorkspaceSessionAlarm(api, alarm, options = {}) {
+  if (String(alarm?.name || "") !== WORKSPACE_SESSION_USER_CLOSE_ALARM) return Promise.resolve(null);
+  return confirmUserClosedWorkspaceSessions(api, options);
+}
+
+export function listClearedWorkspaceTabs(api, options = {}) {
+  return queueWorkspaceSession(async () => {
+    const storage = localStorageArea(api);
+    if (typeof storage?.get !== "function") return { tabs: [] };
+    if (typeof api?.tabs?.query !== "function") throw new Error("Workspace session tab query is unavailable");
+    const now = finiteTime(options.now, Date.now());
+    const generation = await ensureGenerationInternal(storage);
+    const [stored, tabs] = await Promise.all([
+      storage.get(null),
+      api.tabs.query({})
+    ]);
+    if (!Array.isArray(tabs)) throw new TypeError("Browser tabs query returned an invalid result");
+    const live = liveTabState(tabs);
+    const recovery = recoveryRecord(stored?.[WORKSPACE_SESSION_RECOVERY_KEY], generation, now);
+    return {
+      tabs: unclaimedBrowserCleared(recovery, live, currentStableRecords(stored)).map(clearedTabItem)
+    };
+  });
+}
+
+export function dismissClearedWorkspaceTabs(api, options = {}) {
+  return queueWorkspaceSession(async () => {
+    const storage = localStorageArea(api);
+    if (typeof storage?.get !== "function" || typeof storage?.set !== "function" || typeof storage?.remove !== "function") {
+      throw new Error("Workspace session dismiss storage is unavailable");
+    }
+    const now = finiteTime(options.now, Date.now());
+    const generation = await ensureGenerationInternal(storage);
+    const stored = await storage.get(WORKSPACE_SESSION_RECOVERY_KEY);
+    const recovery = recoveryRecord(stored?.[WORKSPACE_SESSION_RECOVERY_KEY], generation, now);
+    if (!recovery) return { dismissed: 0, tabs: [] };
+    const remaining = recovery.candidates.filter((candidate) => (
+      candidate.clearedBy !== WORKSPACE_SESSION_CLEARED_BY_BROWSER || candidate.claimedAt
+    ));
+    const dismissed = recovery.candidates.length - remaining.length;
+    if (!remaining.length) await storage.remove(WORKSPACE_SESSION_RECOVERY_KEY);
+    else await storage.set({ [WORKSPACE_SESSION_RECOVERY_KEY]: { ...recovery, candidates: remaining } });
+    return { dismissed, tabs: [] };
+  });
+}
+
+export function restoreClearedWorkspaceTabs(api, _request = {}, sender = {}, options = {}) {
+  return queueWorkspaceSession(async () => {
+    const storage = localStorageArea(api);
+    if (typeof storage?.get !== "function" || typeof storage?.set !== "function") {
+      throw new Error("Workspace session restore storage is unavailable");
+    }
+    if (typeof api?.tabs?.query !== "function") throw new Error("Workspace session tab query is unavailable");
+    const now = finiteTime(options.now, Date.now());
+    const generation = await ensureGenerationInternal(storage);
+    const [stored, tabs] = await Promise.all([
+      storage.get(null),
+      api.tabs.query({})
+    ]);
+    if (!Array.isArray(tabs)) throw new TypeError("Browser tabs query returned an invalid result");
+    const live = liveTabState(tabs);
+    const recovery = recoveryRecord(stored?.[WORKSPACE_SESSION_RECOVERY_KEY], generation, now);
+    const items = unclaimedBrowserCleared(recovery, live, currentStableRecords(stored));
+    if (!items.length) {
+      return { restored: 0, absorbed: null, opened: [] };
+    }
+
+    const updates = {};
+    const opened = [];
+    const openedIds = new Set(live.workspaceIds);
+
+    for (const item of items) {
+      if (openedIds.has(item.workspaceId)) continue;
+      const placement = await restorePlacement(api, item, sender);
+      let tab = null;
+      try {
+        tab = await openWorkspaceTab(api, sender, null, { workspaceId: item.workspaceId, restore: placement });
+      } catch {
+        tab = null;
+      }
+      const openedTabId = positiveTabId(tab?.id);
+      if (openedTabId === null) continue;
+      const claimId = claimToken();
+      item.claimedAt = now;
+      item.claimedTabId = openedTabId;
+      item.claimId = claimId;
+      item.committedAt = now;
+      const stableKey = workspaceSessionWorkspaceKey(item.workspaceId);
+      const stable = stableWorkspaceRecord(stableKey, stored?.[stableKey])
+        || currentStableRecords({ ...stored, ...updates }).get(item.workspaceId);
+      const retained = retainWorkspaceOwner(stable, item.workspaceId, generation, tab, now);
+      if (retained) updates[stableKey] = retained;
+      updates[workspaceSessionBindingKey(openedTabId)] = bindingForClaim(
+        item.workspaceId,
+        generation,
+        tab,
+        now
+      );
+      opened.push({ workspaceId: item.workspaceId, tabId: openedTabId });
+      openedIds.add(item.workspaceId);
+    }
+
+    if (recovery) updates[WORKSPACE_SESSION_RECOVERY_KEY] = recovery;
+    if (Object.keys(updates).length) await storage.set(updates);
+    return {
+      restored: opened.length,
+      absorbed: null,
+      opened
     };
   });
 }

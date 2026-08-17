@@ -40,11 +40,11 @@ export function createWorkspaceSessionController(dependencies = {}) {
       || openableFrameUrl(appById(chat?.appId)?.url);
   }
 
-  function rememberWorkspaceSession() {
+  function captureWorkspaceSession() {
     if (!Array.isArray(state.groups) || !state.groups.length) return null;
     const framesByInstanceId = new Map(Array.from(document.querySelectorAll(".chat-frame"))
       .map((iframe) => [String(iframe.dataset.instanceId || ""), iframe]));
-    const snapshot = captureWorkspaceSnapshotV1({
+    return captureWorkspaceSnapshotV1({
       generation: workspaceSessionStore.generation(),
       options: state.options,
       temporaryLayoutPreset: state.temporaryLayoutPreset,
@@ -53,7 +53,11 @@ export function createWorkspaceSessionController(dependencies = {}) {
       fullscreenGroupId: state.fullscreenGroupId,
       currentHrefForTab: (chat) => currentHrefForWorkspaceTab(chat, framesByInstanceId)
     });
-    workspaceSessionStore.save(snapshot).catch(() => {});
+  }
+
+  function rememberWorkspaceSession() {
+    const snapshot = captureWorkspaceSession();
+    if (snapshot) workspaceSessionStore.save(snapshot).catch(() => {});
     return snapshot;
   }
 
@@ -62,7 +66,6 @@ export function createWorkspaceSessionController(dependencies = {}) {
     const presets = persistentLayoutPresets();
     const restored = restoreWorkspaceSnapshotV1(snapshot, {
       validAppIds: validChatAppIds(),
-      validPresetIds: new Set(presets.map((preset) => preset.id)),
       fallbackPresetId: state.options?.activeLayoutPresetId || presets[0]?.id || "default",
       normalizeCurrentHref: (appId, href) => restorableChatFrameHref(appById(appId), href),
       createGroupId,
@@ -81,5 +84,5 @@ export function createWorkspaceSessionController(dependencies = {}) {
     return true;
   }
 
-  return Object.freeze({ rememberWorkspaceSession, restoreWorkspaceSession });
+  return Object.freeze({ captureWorkspaceSession, rememberWorkspaceSession, restoreWorkspaceSession });
 }

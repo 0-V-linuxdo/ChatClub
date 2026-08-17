@@ -409,5 +409,9 @@ export function createWorkspaceSessionStore({
     return resolvedWorkspaceId || initialWorkspaceId;
   }
 
-  return Object.freeze({ load, save, clear, flush, generation, workspaceId });
+  function adopt(workspaceId) {
+    return installWorkspaceId(workspaceId);
+  }
+
+  return Object.freeze({ load, save, clear, flush, generation, workspaceId, adopt });
 }

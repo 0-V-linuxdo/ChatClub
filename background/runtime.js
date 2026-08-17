@@ -54,7 +54,7 @@ import {
   openWorkspaceTab,
   registerActionListener
 } from "./tab-runtime.js";
-import { claimWorkspaceSessionRecovery, commitWorkspaceSessionRecovery, detachWorkspaceSessionMirror, prepareWorkspaceSessionLifecycle, rotateWorkspaceSessionGeneration } from "./workspace-session.js";
+import { claimWorkspaceSessionRecovery, commitWorkspaceSessionRecovery, detachWorkspaceSessionMirror, dismissClearedWorkspaceTabs, handleWorkspaceSessionAlarm, listClearedWorkspaceTabs, prepareWorkspaceSessionLifecycle, restoreClearedWorkspaceTabs, rotateWorkspaceSessionGeneration } from "./workspace-session.js";
 import {
   createBackgroundRequestDispatcher,
   createBackgroundRequestListener
@@ -576,6 +576,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   notionFramePreflightRuntime.handleAlarm(alarm).catch(() => {});
   workspacePromptHandoffRuntime.handleAlarm(alarm).catch(() => {});
   officialRulesRuntime.handleAlarm(alarm).catch((error) => console.error(`[${APP_NAME}] official-rules alarm failed`, error));
+  handleWorkspaceSessionAlarm(chrome, alarm).catch((error) => console.warn(`[${APP_NAME}] workspace session user-close alarm failed`, error));
 });
 
 registerActionListener(chrome);
@@ -587,12 +588,11 @@ const REQUEST = BACKGROUND_REQUEST_ACTIONS;
 const AUTHORIZE = BACKGROUND_REQUEST_AUTHORIZERS;
 
 const backgroundRequestHandlers = [
-  [REQUEST.CLAIM_WORKSPACE_SESSION_RECOVERY, (message, sender) => (
-    claimWorkspaceSessionRecovery(chrome, message, sender)
-  )],
-  [REQUEST.COMMIT_WORKSPACE_SESSION_RECOVERY, (message, sender) => (
-    commitWorkspaceSessionRecovery(chrome, message, sender)
-  )],
+  [REQUEST.CLAIM_WORKSPACE_SESSION_RECOVERY, (message, sender) => claimWorkspaceSessionRecovery(chrome, message, sender)],
+  [REQUEST.COMMIT_WORKSPACE_SESSION_RECOVERY, (message, sender) => commitWorkspaceSessionRecovery(chrome, message, sender)],
+  [REQUEST.LIST_CLEARED_WORKSPACE_TABS, () => listClearedWorkspaceTabs(chrome)],
+  [REQUEST.RESTORE_CLEARED_WORKSPACE_TABS, (message, sender) => restoreClearedWorkspaceTabs(chrome, message, sender)],
+  [REQUEST.DISMISS_CLEARED_WORKSPACE_TABS, () => dismissClearedWorkspaceTabs(chrome)],
   ...workspacePromptHandoffRuntime.requestHandlers(REQUEST),
   [REQUEST.REGISTER_FRAME_CONTEXT, async (message, sender) => {
     let context;
@@ -672,8 +672,8 @@ const backgroundRequestHandlers = [
   [REQUEST.LIST_FUNCTIONAL_ANOMALIES, async () => ({ records: await functionalAnomalyStore.list() })],
   [REQUEST.REMOVE_FUNCTIONAL_ANOMALIES, async (message) => ({ records: await functionalAnomalyStore.remove(message.id) })],
   [REQUEST.CLEAR_FUNCTIONAL_ANOMALIES, async () => ({ records: await functionalAnomalyStore.clear() })],
-  [REQUEST.OPEN_WORKSPACE_TAB, async (_message, sender) => {
-    const tab = await openWorkspaceTab(chrome, sender);
+  [REQUEST.OPEN_WORKSPACE_TAB, async (message, sender) => {
+    const tab = await openWorkspaceTab(chrome, sender, null, { workspaceId: message.workspaceId });
     if (!Number.isInteger(tab?.id)) throw new Error("New workspace tab is unavailable");
     return { tabId: tab.id };
   }],

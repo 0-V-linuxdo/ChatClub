@@ -14,9 +14,9 @@
     "reason": "The send runtime keeps exact-once composer delivery, typed image hydration, site-specific submit preparation, and the send-owned navigation correlation needed to keep Grok conversation creation from restarting preferred-model selection after the message is delivered."
   },
   "app/composer/controller.js": {
-    "maxLines": 1277,
+    "maxLines": 1287,
     "target": 1200,
-    "maxBytes": 48306,
+    "maxBytes": 48495,
     "targetBytes": 45000,
     "reason": "The Composer controller owns immutable text-and-image draft revisions, revision-conditional clearing, history de-duplication, and the shared document-bound admission queue used by both ordinary Send and one-shot new-workspace prompt handoff so delivery uncertainty and preferred-model preparation cannot diverge."
   },
@@ -49,11 +49,11 @@
     "reason": "The official-rules runtime is the single background configuration writer and keeps revision-CAS patch/import/reset handling, v3-to-v4 migration, immutable snapshot composition, signed component activation, rollback pins, alias authorization, reset cleanup journaling and startup recovery behind one serialized coordinator so atomic commit, compensation and destructive-operation fail-closed state cannot diverge across modules."
   },
   "shared/i18n.js": {
-    "maxLines": 2299,
+    "maxLines": 2309,
     "target": 1500,
-    "maxBytes": 134831,
+    "maxBytes": 135492,
     "targetBytes": 82000,
-    "reason": "Bilingual translation catalog data is kept co-located for key parity; the signed official-rules update-management and component-status views, consent, check, apply-all, compatibility, rollback, per-component source, confirmation and accessibility copy join the committed-reset cleanup warning, queued-send, preferred-model auto-selection overlay settings plus structured model, thinking, All Sources and Effort attempt labels, Workspace appearance subtabs, nested Tab Group right-click menu settings, prompt-handoff, platform-management labels, iframe tab context-menu labels, and prompt-history date-group labels under exact line and byte ratchets."
+    "reason": "Bilingual translation catalog data is kept co-located for key parity; the signed official-rules update-management and component-status views, consent, check, apply-all, compatibility, rollback, per-component source, confirmation and accessibility copy join the committed-reset cleanup warning, queued-send, preferred-model auto-selection overlay settings plus structured model, thinking, All Sources and Effort attempt labels, Workspace appearance subtabs, nested Tab Group right-click menu settings, prompt-handoff, platform-management labels, iframe tab context-menu labels, prompt-history date-group labels, and cleared ChatClub-tab restore copy under exact line and byte ratchets."
   },
   "tools/browser-smoke.mjs": {
     "maxLines": 1445,

@@ -58,15 +58,22 @@ function fixture({ local = {}, session = {}, tabs = [] } = {}) {
     claimWorkspaceSessionRecovery,
     commitWorkspaceSessionRecovery,
     detachWorkspaceSessionMirror,
+    dismissClearedWorkspaceTabs,
+    handleWorkspaceSessionAlarm,
+    listClearedWorkspaceTabs,
     prepareWorkspaceSessionLifecycle,
+    restoreClearedWorkspaceTabs,
     rotateWorkspaceSessionGeneration
   } = background;
   const {
     DEFAULT_WORKSPACE_SESSION_GENERATION,
     WORKSPACE_SESSION_GENERATION_KEY,
+    WORKSPACE_SESSION_CLEARED_BY_BROWSER,
+    WORKSPACE_SESSION_CLOSED_BY_USER,
     WORKSPACE_SESSION_RECOVERY_KEY,
     WORKSPACE_SESSION_RUNTIME_MARKER_KEY,
     WORKSPACE_SESSION_STORAGE_VERSION,
+    WORKSPACE_SESSION_USER_CLOSE_ALARM,
     normalizeWorkspaceSessionId,
     workspaceSessionBindingKey,
     workspaceSessionIdFromUrl,
@@ -78,14 +85,24 @@ function fixture({ local = {}, session = {}, tabs = [] } = {}) {
   const workspaceA = "page-aaaaaaaaaaaa";
   const workspaceB = "page-bbbbbbbbbbbb";
   const snapshot = (marker) => ({ schemaVersion: 1, generation, marker });
-  const stable = (workspaceId, marker, owner, updatedAt, detachedAt = null) => ({
+  const usedSnapshot = (marker) => ({
+    schemaVersion: 1,
+    generation,
+    marker,
+    groups: [{
+      tabs: [{ appId: "ChatGPT", currentHref: "https://chatgpt.com/c/remembered" }],
+      activeIndex: 0
+    }]
+  });
+  const stable = (workspaceId, marker, owner, updatedAt, detachedAt = null, extras = {}) => ({
     storageVersion: WORKSPACE_SESSION_STORAGE_VERSION,
     generation,
     workspaceId,
-    snapshot: snapshot(marker),
+    snapshot: extras.snapshot || snapshot(marker),
     owner,
     updatedAt,
-    detachedAt
+    detachedAt,
+    ...(extras.closedBy ? { closedBy: extras.closedBy } : {})
   });
   {
     let listener = null;
@@ -292,6 +309,318 @@ function fixture({ local = {}, session = {}, tabs = [] } = {}) {
     });
     assert.equal(prepared.forced, true);
     assert.deepEqual(prepared.recovery.candidates.map((item) => item.workspaceId), [workspaceB], "a live tokenized page must be excluded from update recovery");
+    assert.equal(prepared.recovery.candidates[0].clearedBy, "", "an empty vanished workspace stays on the silent recovery path");
+  }
+
+  {
+    const now = 500000;
+    const tokenUrl = `chrome-extension://chatclub/chatClub.html#workspace=${workspaceA}`;
+    const store = fixture({
+      local: {
+        [WORKSPACE_SESSION_GENERATION_KEY]: generation,
+        [workspaceSessionWorkspaceKey(workspaceA)]: stable(
+          workspaceA,
+          "arc-kept",
+          { tabId: 11, windowId: 1, index: 0, pinned: false },
+          now - 1000,
+          null,
+          { snapshot: usedSnapshot("arc-kept") }
+        ),
+        [workspaceSessionWorkspaceKey(workspaceB)]: stable(
+          workspaceB,
+          "browser-cleared",
+          { tabId: 12, windowId: 1, index: 1, pinned: false },
+          now - 1000,
+          null,
+          { snapshot: usedSnapshot("browser-cleared") }
+        )
+      },
+      session: {
+        [WORKSPACE_SESSION_RUNTIME_MARKER_KEY]: {
+          version: WORKSPACE_SESSION_STORAGE_VERSION,
+          runtimeId: "runtime-cleared",
+          startedAt: now - 100
+        }
+      },
+      tabs: [{ id: 11, windowId: 1, index: 0, url: tokenUrl }]
+    });
+    const prepared = await prepareWorkspaceSessionLifecycle(store.api, {
+      now,
+      forceRecovery: true,
+      reason: "update"
+    });
+    assert.deepEqual(prepared.recovery.candidates.map((item) => item.workspaceId), [workspaceB]);
+    assert.equal(prepared.recovery.candidates[0].clearedBy, WORKSPACE_SESSION_CLEARED_BY_BROWSER);
+    const listed = await listClearedWorkspaceTabs(store.api, { now: now + 1 });
+    assert.deepEqual(listed.tabs.map((item) => item.workspaceId), [workspaceB]);
+    const autoClaim = await claimWorkspaceSessionRecovery(store.api, {}, {
+      url: "chrome-extension://chatclub/chatClub.html",
+      tab: { id: 13, windowId: 1, index: 2, pinned: false }
+    }, { now: now + 2 });
+    assert.equal(autoClaim.claimed, false, "browser-cleared workspaces must not be auto-claimed");
+  }
+
+  {
+    const now = 600000;
+    const store = fixture({
+      local: {
+        [WORKSPACE_SESSION_GENERATION_KEY]: generation,
+        [workspaceSessionWorkspaceKey(workspaceA)]: stable(
+          workspaceA,
+          "user-closed",
+          { tabId: 21, windowId: 1, index: 0, pinned: false },
+          now - 20_000,
+          now - ((2 * 60 * 1000) + 1000),
+          { snapshot: usedSnapshot("user-closed"), closedBy: WORKSPACE_SESSION_CLOSED_BY_USER }
+        )
+      },
+      session: {},
+      tabs: []
+    });
+    const prepared = await prepareWorkspaceSessionLifecycle(store.api, {
+      now,
+      forceRecovery: true,
+      reason: "update"
+    });
+    assert.deepEqual(prepared.recovery.candidates, [], "a user-closed workspace older than the recent-detach window must not recover");
+    const listed = await listClearedWorkspaceTabs(store.api, { now: now + 1 });
+    assert.deepEqual(listed.tabs, []);
+  }
+
+  {
+    const now = 700000;
+    const store = fixture({
+      local: {
+        [WORKSPACE_SESSION_GENERATION_KEY]: generation,
+        [workspaceSessionWorkspaceKey(workspaceA)]: stable(
+          workspaceA,
+          "recent-user-close",
+          { tabId: 31, windowId: 1, index: 0, pinned: false },
+          now - 20_000,
+          now - 12_000,
+          { snapshot: usedSnapshot("recent-user-close") }
+        )
+      },
+      session: {},
+      tabs: []
+    });
+    const prepared = await prepareWorkspaceSessionLifecycle(store.api, {
+      now,
+      forceRecovery: true,
+      reason: "update"
+    });
+    assert.equal(prepared.recovery.candidates.length, 1);
+    assert.equal(
+      prepared.recovery.candidates[0].clearedBy,
+      WORKSPACE_SESSION_CLEARED_BY_BROWSER,
+      "an update must not reclassify a just-closed ChatClub tab as a user close"
+    );
+    assert.notEqual(
+      store.local.values[workspaceSessionWorkspaceKey(workspaceA)].closedBy,
+      WORKSPACE_SESSION_CLOSED_BY_USER
+    );
+    const listed = await listClearedWorkspaceTabs(store.api, { now: now + 1 });
+    assert.deepEqual(listed.tabs.map((item) => item.workspaceId), [workspaceA]);
+  }
+
+  {
+    const now = 800000;
+    let nextTabId = 80;
+    const created = [];
+    const store = fixture({
+      local: {
+        [WORKSPACE_SESSION_GENERATION_KEY]: generation,
+        [workspaceSessionWorkspaceKey(workspaceA)]: stable(
+          workspaceA,
+          "restore-one",
+          { tabId: 41, windowId: 3, index: 2, pinned: true },
+          now - 1000,
+          now - 200,
+          { snapshot: usedSnapshot("restore-one") }
+        ),
+        [workspaceSessionWorkspaceKey(workspaceB)]: stable(
+          workspaceB,
+          "restore-two",
+          { tabId: 42, windowId: 3, index: 3, pinned: false },
+          now - 1000,
+          now - 200,
+          { snapshot: usedSnapshot("restore-two") }
+        )
+      },
+      session: {},
+      tabs: []
+    });
+    store.api.tabs.create = async (details) => {
+      created.push(details);
+      nextTabId += 1;
+      return { id: nextTabId, windowId: details.windowId, index: details.index, pinned: details.pinned === true };
+    };
+    store.api.tabs.update = async () => {};
+    store.api.windows = { update: async () => {} };
+    store.api.runtime = { getURL: (file) => `chrome-extension://chatclub/${file}` };
+    await prepareWorkspaceSessionLifecycle(store.api, { now, forceRecovery: true, reason: "update" });
+    const restored = await restoreClearedWorkspaceTabs(store.api, { absorbIntoCurrent: true }, {
+      url: "chrome-extension://chatclub/chatClub.html",
+      tab: { id: 90, windowId: 3, index: 4, pinned: false }
+    }, { now: now + 5 });
+    assert.equal(restored.restored, 2);
+    assert.equal(restored.absorbed, null);
+    assert.equal(restored.opened.length, 2);
+    assert.deepEqual(restored.opened.map((item) => item.workspaceId), [workspaceA, workspaceB]);
+    assert.equal(created.length, 2);
+    assert.match(created[0].url, new RegExp(`#workspace=${workspaceA}`));
+    assert.match(created[1].url, new RegExp(`#workspace=${workspaceB}`));
+    assert.equal(created[0].windowId, 3);
+    assert.equal(created[0].index, 2);
+    assert.equal(created[1].windowId, 3);
+    assert.equal(created[1].index, 3);
+    const after = await listClearedWorkspaceTabs(store.api, { now: now + 6 });
+    assert.deepEqual(after.tabs, []);
+  }
+
+  {
+    const now = 850000;
+    const workspaceC = "page-cccccccccccc";
+    const created = [];
+    const store = fixture({
+      local: {
+        [WORKSPACE_SESSION_GENERATION_KEY]: generation,
+        [workspaceSessionWorkspaceKey(workspaceA)]: stable(
+          workspaceA,
+          "first-closed",
+          { tabId: 71, windowId: 4, index: 0, pinned: false },
+          now - 20_000,
+          now - 12_000,
+          { snapshot: usedSnapshot("first-closed") }
+        ),
+        [workspaceSessionWorkspaceKey(workspaceB)]: stable(
+          workspaceB,
+          "still-bound",
+          { tabId: 72, windowId: 4, index: 1, pinned: false },
+          now - 1000,
+          null,
+          { snapshot: usedSnapshot("still-bound") }
+        ),
+        [workspaceSessionWorkspaceKey(workspaceC)]: stable(
+          workspaceC,
+          "also-bound",
+          { tabId: 73, windowId: 4, index: 2, pinned: false },
+          now - 1000,
+          null,
+          { snapshot: usedSnapshot("also-bound") }
+        ),
+        [workspaceSessionBindingKey(72)]: {
+          storageVersion: WORKSPACE_SESSION_STORAGE_VERSION,
+          generation,
+          workspaceId: workspaceB,
+          tabId: 72,
+          windowId: 4,
+          index: 1,
+          pinned: false,
+          updatedAt: now - 1000,
+          detachedAt: null
+        },
+        [workspaceSessionBindingKey(73)]: {
+          storageVersion: WORKSPACE_SESSION_STORAGE_VERSION,
+          generation,
+          workspaceId: workspaceC,
+          tabId: 73,
+          windowId: 4,
+          index: 2,
+          pinned: false,
+          updatedAt: now - 1000,
+          detachedAt: null
+        }
+      },
+      session: {},
+      tabs: []
+    });
+    store.api.tabs.create = async (details) => {
+      created.push(details);
+      return { id: 200 + created.length, windowId: 9, index: created.length, pinned: false };
+    };
+    store.api.tabs.update = async () => {};
+    store.api.windows = {
+      get: async () => { throw new Error("No window"); },
+      update: async () => {}
+    };
+    store.api.runtime = { getURL: (file) => `chrome-extension://chatclub/${file}` };
+    await prepareWorkspaceSessionLifecycle(store.api, { now, forceRecovery: true, reason: "update" });
+    const listed = await listClearedWorkspaceTabs(store.api, { now: now + 1 });
+    assert.deepEqual(
+      listed.tabs.map((item) => item.workspaceId).sort(),
+      [workspaceA, workspaceB, workspaceC],
+      "a delayed service-worker restart after reload must list every missing non-empty ChatClub tab"
+    );
+    const restored = await restoreClearedWorkspaceTabs(store.api, {}, {
+      url: "chrome-extension://chatclub/chatClub.html",
+      tab: { id: 90, windowId: 9, index: 0, pinned: false }
+    }, { now: now + 2 });
+    assert.equal(restored.restored, 3);
+    assert.equal(restored.absorbed, null);
+    assert.equal(restored.opened.length, 3);
+    assert.equal(created.length, 3);
+    assert.equal(created[0].windowId, 9, "a vanished window must fall back to the current ChatClub window");
+    assert.equal(created[1].windowId, 9);
+    assert.equal(
+      store.local.values[workspaceSessionWorkspaceKey(workspaceA)].snapshot.marker,
+      "first-closed",
+      "restore must retain the durable conversation snapshot"
+    );
+    assert.equal(store.local.values[workspaceSessionWorkspaceKey(workspaceB)].snapshot.marker, "still-bound");
+    assert.equal(store.local.values[workspaceSessionWorkspaceKey(workspaceC)].snapshot.marker, "also-bound");
+  }
+
+  {
+    const now = 900000;
+    const store = fixture({
+      local: {
+        [WORKSPACE_SESSION_GENERATION_KEY]: generation,
+        [workspaceSessionWorkspaceKey(workspaceA)]: stable(
+          workspaceA,
+          "dismiss",
+          { tabId: 51, windowId: 1, index: 0, pinned: false },
+          now - 1000,
+          now - 100,
+          { snapshot: usedSnapshot("dismiss") }
+        )
+      },
+      session: {},
+      tabs: []
+    });
+    await prepareWorkspaceSessionLifecycle(store.api, { now, forceRecovery: true, reason: "update" });
+    const dismissed = await dismissClearedWorkspaceTabs(store.api, { now: now + 1 });
+    assert.equal(dismissed.dismissed, 1);
+    const listed = await listClearedWorkspaceTabs(store.api, { now: now + 2 });
+    assert.deepEqual(listed.tabs, []);
+    assert.equal(workspaceSessionWorkspaceKey(workspaceA) in store.local.values, true, "dismiss must keep the snapshot");
+  }
+
+  {
+    const now = 1_000_000;
+    const store = fixture({
+      local: {
+        [WORKSPACE_SESSION_GENERATION_KEY]: generation,
+        [workspaceSessionWorkspaceKey(workspaceA)]: stable(
+          workspaceA,
+          "alarm-close",
+          { tabId: 61, windowId: 1, index: 0, pinned: false },
+          now - 20_000,
+          now - 12_000,
+          { snapshot: usedSnapshot("alarm-close") }
+        )
+      },
+      tabs: []
+    });
+    const confirmed = await handleWorkspaceSessionAlarm(store.api, { name: WORKSPACE_SESSION_USER_CLOSE_ALARM }, { now });
+    assert.equal(confirmed.confirmed, 1);
+    assert.equal(
+      store.local.values[workspaceSessionWorkspaceKey(workspaceA)].closedBy,
+      WORKSPACE_SESSION_CLOSED_BY_USER
+    );
+    assert.equal(await handleWorkspaceSessionAlarm(store.api, { name: "other" }, { now }), null);
+    const again = await handleWorkspaceSessionAlarm(store.api, { name: WORKSPACE_SESSION_USER_CLOSE_ALARM }, { now: now + 1 });
+    assert.equal(again.confirmed, 0);
   }
 
   {
@@ -302,6 +631,10 @@ function fixture({ local = {}, session = {}, tabs = [] } = {}) {
     assert.match(runtime, /prepareWorkspaceSessionLifecycleSafely\("runtime start"/);
     assert.match(runtime, /REQUEST\.CLAIM_WORKSPACE_SESSION_RECOVERY/);
     assert.match(runtime, /REQUEST\.COMMIT_WORKSPACE_SESSION_RECOVERY/);
+    assert.match(runtime, /REQUEST\.LIST_CLEARED_WORKSPACE_TABS/);
+    assert.match(runtime, /REQUEST\.RESTORE_CLEARED_WORKSPACE_TABS/);
+    assert.match(runtime, /REQUEST\.DISMISS_CLEARED_WORKSPACE_TABS/);
+    assert.match(runtime, /handleWorkspaceSessionAlarm\(chrome, alarm\)/);
     assert.match(runtime, /createBackgroundRequestDispatcher\(/);
     assert.doesNotMatch(runtime, /removeWorkspaceSessionMirror\(chrome, tabId\)/);
   }

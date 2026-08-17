@@ -89,13 +89,18 @@ export function createTopbarPlaceholderController({ state, normalizeConfig, save
     }, Math.max(1, config.intervalSec) * 1000);
   }
 
-  async function initialize() {
+  async function initialize(options = {}) {
+    const persist = options.persist !== false;
     const config = configValue();
     const shouldAdvance = config.mode === "refresh" && (config.items || []).length > 0;
     const result = applySelection({ advance: shouldAdvance });
-    if (shouldAdvance && result.changed) {
-      state.options = await saveOptions(state.options);
-      applySelection({ advance: false });
+    if (persist && shouldAdvance && result.changed) {
+      try {
+        state.options = await saveOptions(state.options);
+        applySelection({ advance: false });
+      } catch (error) {
+        console.warn("[ChatClub] Topbar prompt placeholder could not be persisted", error);
+      }
     }
     restartTimer();
   }

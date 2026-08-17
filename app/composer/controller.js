@@ -916,7 +916,17 @@ export function createComposerController(dependencies = {}) {
     syncPromptQueueStatus();
     syncImagesPreview();
     if (!preview) return;
-    const collapsed = promptCollapsedPreview(value, inputNode?.placeholder || currentPlaceholder); if(!value&&!state.promptImages.length){const text=preview.querySelector(".prompt-collapsed-preview-text");if(text){if(text.textContent!==collapsed.text)text.textContent=collapsed.text;preview.title=collapsed.title;preview.classList.add("prompt-collapsed-preview-empty");return;}}
+    const collapsed = promptCollapsedPreview(value, inputNode?.placeholder || currentPlaceholder);
+    if (!value && !state.promptImages.length) {
+      const text = preview.querySelector(".prompt-collapsed-preview-text");
+      const leftoverImages = preview.querySelector(".prompt-collapsed-preview-images");
+      if (text && !leftoverImages) {
+        if (text.textContent !== collapsed.text) text.textContent = collapsed.text;
+        preview.title = collapsed.title;
+        preview.classList.add("prompt-collapsed-preview-empty");
+        return;
+      }
+    }
     preview.replaceChildren(...renderCollapsedContent(collapsed, state.promptImages));
     preview.title = collapsed.title;
     preview.classList.toggle("prompt-collapsed-preview-empty", collapsed.empty);

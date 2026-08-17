@@ -94,17 +94,29 @@ export async function openExternalTab(api, url, sender, openerTab) {
   return tab;
 }
 
+function restoreTabCreateOptions(url, restore = {}) {
+  const createOptions = { url, active: true };
+  if (Number.isInteger(restore.windowId)) createOptions.windowId = restore.windowId;
+  if (Number.isInteger(restore.index) && restore.index >= 0) createOptions.index = restore.index;
+  if (restore.pinned === true) createOptions.pinned = true;
+  return createOptions;
+}
+
 export async function openWorkspaceTab(api, sender = {}, openerTab = null, options = {}) {
   const workspaceId = normalizeWorkspaceSessionId(options.workspaceId) || createWorkspaceSessionId();
   const url = workspaceSessionUrl(api.runtime.getURL("chatClub.html"), workspaceId);
   if (!url) throw new Error("Unable to create a workspace URL");
-  const targetTab = await resolveTargetTab(api, sender, openerTab);
-  let tab;
+  const restore = options.restore && typeof options.restore === "object" ? options.restore : null;
+  let tab = null;
   try {
-    tab = await api.tabs.create(workspaceTabCreateOptions(url, targetTab));
+    tab = restore
+      ? await api.tabs.create(restoreTabCreateOptions(url, restore))
+      : await api.tabs.create(workspaceTabCreateOptions(url, await resolveTargetTab(api, sender, openerTab)));
   } catch {
-    tab = await api.tabs.create({ url, active: true });
+    try { tab = await api.tabs.create({ url, active: true }); }
+    catch { tab = null; }
   }
+  if (!tab) return null;
   await focusCreatedTab(api, tab);
   return tab;
 }

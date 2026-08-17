@@ -20,6 +20,10 @@ const WORKSPACE_SESSION_URL_PARAM = "workspace";
 export const WORKSPACE_SESSION_RECOVERY_TTL_MS = 10 * 60 * 1000;
 export const WORKSPACE_SESSION_RECENT_DETACH_MS = 2 * 60 * 1000;
 export const WORKSPACE_SESSION_DETACHED_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export const WORKSPACE_SESSION_USER_CLOSE_CONFIRM_MS = 8 * 1000;
+export const WORKSPACE_SESSION_USER_CLOSE_ALARM = "chatclub-workspace-session-user-close";
+export const WORKSPACE_SESSION_CLOSED_BY_USER = "user";
+export const WORKSPACE_SESSION_CLEARED_BY_BROWSER = "browser";
 
 export function normalizeWorkspaceSessionGeneration(value) {
   const generation = typeof value === "string" ? value.trim() : "";
@@ -117,4 +121,41 @@ export function workspaceSessionMirrorTabId(key) {
   const suffix = value.slice(WORKSPACE_SESSION_MIRROR_PREFIX.length);
   if (!/^[1-9]\d*$/.test(suffix)) return null;
   return normalizedBrowserTabId(suffix);
+}
+
+function comparableHttpHref(value) {
+  try {
+    const url = new URL(String(value || ""));
+    if (url.protocol !== "http:" && url.protocol !== "https:") return "";
+    url.hash = "";
+    if (url.pathname.length > 1) url.pathname = url.pathname.replace(/\/+$/, "");
+    return url.href;
+  } catch {
+    return "";
+  }
+}
+
+function homeHrefLookup(homeHrefByAppId, appId) {
+  if (!homeHrefByAppId || !appId) return "";
+  if (homeHrefByAppId instanceof Map) return homeHrefByAppId.get(appId) || "";
+  if (typeof homeHrefByAppId === "object") return homeHrefByAppId[appId] || "";
+  return "";
+}
+
+/**
+ * A workspace is restorable as a cleared ChatClub tab only when at least one
+ * internal tab has left its app home for a restorable http(s) conversation.
+ */
+export function workspaceSnapshotIsNonEmpty(snapshot, homeHrefByAppId = {}) {
+  const groups = Array.isArray(snapshot?.groups) ? snapshot.groups : [];
+  for (const group of groups) {
+    const tabs = Array.isArray(group?.tabs) ? group.tabs : [];
+    for (const tab of tabs) {
+      const href = comparableHttpHref(tab?.currentHref);
+      if (!href) continue;
+      const home = comparableHttpHref(homeHrefLookup(homeHrefByAppId, tab?.appId));
+      if (!home || href !== home) return true;
+    }
+  }
+  return false;
 }
