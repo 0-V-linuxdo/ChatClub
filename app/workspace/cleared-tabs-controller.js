@@ -1,6 +1,5 @@
 import { t } from "../../shared/i18n.js";
-import { createActionButton } from "../../ui/components.js";
-import { el } from "../../ui/dom.js";
+import { button, el } from "../../ui/dom.js";
 
 export function attachWorkspaceClearedTabsController({
   requestBackground,
@@ -25,6 +24,22 @@ export function createWorkspaceClearedTabsController({
   let items = [];
   let busy = false;
 
+  function countVars(count) {
+    const n = Math.max(0, Number(count) || 0);
+    return { count: n, plural: n === 1 ? "" : "s", were: n === 1 ? "was" : "were" };
+  }
+
+  function bannerCopy(count) {
+    const marker = "\u0001";
+    const text = t("workspace.clearedTabs.banner", { ...countVars(count), count: marker });
+    const at = text.indexOf(marker);
+    return el("span", { class: "workspace-cleared-tabs-banner-copy" },
+      at < 0 ? text : text.slice(0, at),
+      el("strong", { class: "workspace-cleared-tabs-banner-count" }, String(count)),
+      at < 0 ? "" : text.slice(at + marker.length)
+    );
+  }
+
   function currentItems() {
     return items.slice();
   }
@@ -48,7 +63,7 @@ export function createWorkspaceClearedTabsController({
       setItems([]);
       render();
       const restored = Number(response?.restored) || 0;
-      if (restored > 0) toast(t("toast.clearedTabsRestored", { count: restored }), "success");
+      if (restored > 0) toast(t("toast.clearedTabsRestored", countVars(restored)), "success");
       return response || { restored: 0 };
     } catch (error) {
       toast(t("toast.clearedTabsRestoreFailed"), "error");
@@ -78,17 +93,10 @@ export function createWorkspaceClearedTabsController({
       class: "workspace-cleared-tabs-banner",
       role: "status"
     },
-    el("span", { class: "workspace-cleared-tabs-banner-copy" }, t("workspace.clearedTabs.banner", { count })),
+    bannerCopy(count),
     el("div", { class: "workspace-cleared-tabs-banner-actions" },
-      createActionButton({
-        label: t("workspace.clearedTabs.restore"),
-        variant: "primary",
-        onClick: () => { restore().catch(() => {}); }
-      }),
-      createActionButton({
-        label: t("workspace.clearedTabs.dismiss"),
-        onClick: () => { dismiss().catch(() => {}); }
-      })
+      button(t("workspace.clearedTabs.restore", countVars(count)), () => { restore().catch(() => {}); }, "primary"),
+      button(t("workspace.clearedTabs.dismiss"), () => { dismiss().catch(() => {}); }, "danger")
     ));
   }
 

@@ -132,11 +132,14 @@ button, input, textarea, select { font: inherit; }
 button { cursor: pointer; }
 
 .app-shell {
+  --workspace-tabs-sidebar-width: 240px;
+  --workspace-tabs-sidebar-top: 51px;
   height: 100vh;
   min-height: 100vh;
   display: grid;
   grid-template-rows: 51px minmax(0, 1fr);
   overflow: hidden;
+  position: relative;
   container: chatclub-topbar / inline-size;
 }
 
@@ -168,26 +171,162 @@ button { cursor: pointer; }
   display: none;
 }
 
+.app-shell.fullscreen-mode .workspace-tabs-sidebar {
+  display: none;
+}
+
 .workspace-cleared-tabs-banner {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px 16px;
   padding: 8px 16px;
   border-bottom: 1px solid var(--line);
   background: var(--panel);
   color: var(--text);
+  text-align: center;
 }
 
 .workspace-cleared-tabs-banner-copy {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.2em;
   min-width: 0;
+}
+
+.workspace-cleared-tabs-banner-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5em;
+  min-height: 1.5em;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
 .workspace-cleared-tabs-banner-actions {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   flex-shrink: 0;
+}
+
+.workspace-cleared-tabs-banner .button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 0 12px;
+}
+
+.workspace-cleared-tabs-banner .button-danger:hover {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.workspace-tabs-sidebar-toggle.is-open {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 14%, var(--panel));
+}
+
+.workspace-tabs-sidebar {
+  position: absolute;
+  top: var(--workspace-tabs-sidebar-top);
+  right: auto;
+  bottom: 0;
+  left: 0;
+  z-index: 15;
+  width: var(--workspace-tabs-sidebar-width);
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+  box-shadow: 16px 0 28px rgba(0, 0, 0, .18);
+  overflow: hidden;
+}
+
+.workspace-tabs-sidebar-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 14px 14px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.workspace-tabs-sidebar-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.workspace-tabs-sidebar-list {
+  min-height: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 8px 8px;
+  overflow: auto;
+}
+
+.workspace-tabs-sidebar-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.workspace-tabs-sidebar-item:hover,
+.workspace-tabs-sidebar-item:focus-visible {
+  background: color-mix(in srgb, var(--panel-2) 80%, var(--bg));
+}
+
+.workspace-tabs-sidebar-item.is-current {
+  border-color: color-mix(in srgb, var(--primary) 28%, var(--line));
+  background: color-mix(in srgb, var(--primary) 10%, var(--panel));
+}
+
+.workspace-tabs-sidebar-item-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-tabs-sidebar-item-current {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--primary);
+}
+
+.workspace-tabs-sidebar-empty {
+  padding: 16px 12px;
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .runtime-bootstrap-failure {

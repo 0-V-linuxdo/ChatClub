@@ -37,6 +37,8 @@ export const BACKGROUND_REQUEST_ACTIONS = Object.freeze({
   CLAIM_WORKSPACE_SESSION_RECOVERY: "claimWorkspaceSessionRecovery",
   COMMIT_WORKSPACE_SESSION_RECOVERY: "commitWorkspaceSessionRecovery",
   LIST_CLEARED_WORKSPACE_TABS: "listClearedWorkspaceTabs",
+  LIST_LIVE_WORKSPACE_TABS: "listLiveWorkspaceTabs",
+  FOCUS_WORKSPACE_TAB: "focusWorkspaceTab",
   RESTORE_CLEARED_WORKSPACE_TABS: "restoreClearedWorkspaceTabs",
   DISMISS_CLEARED_WORKSPACE_TABS: "dismissClearedWorkspaceTabs",
   OPEN_WORKSPACE_TAB_WITH_PROMPT: "openWorkspaceTabWithPrompt",
@@ -126,6 +128,14 @@ export const BACKGROUND_REQUEST_SPECS = Object.freeze({
   }),
   [ACTION.LIST_CLEARED_WORKSPACE_TABS]: extensionPage({
     response: contract({ tabs: "array" })
+  }),
+  [ACTION.LIST_LIVE_WORKSPACE_TABS]: extensionPage({
+    response: contract({ tabs: "array" })
+  }),
+  [ACTION.FOCUS_WORKSPACE_TAB]: extensionPage({
+    mutates: true,
+    payload: contract({ tabId: "integer" }),
+    response: contract({ focused: "boolean", tabId: "integer" }, { current: "boolean" })
   }),
   [ACTION.RESTORE_CLEARED_WORKSPACE_TABS]: extensionPage({
     mutates: true,

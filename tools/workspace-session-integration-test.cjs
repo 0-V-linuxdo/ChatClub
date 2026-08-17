@@ -34,6 +34,8 @@ assert.match(runtime, /createWorkspaceSessionStore\(\{[\s\S]*?currentTab: curren
 assert.match(runtime, /action: "claimWorkspaceSessionRecovery"/, "a naked replacement page must claim before default hydration");
 assert.match(runtime, /workspaceClearedTabsController\.refresh\(\)/, "cleared ChatClub tabs must be listed after hydration");
 assert.match(runtime, /workspaceClearedTabsController\.syncBanner\(shell\)/, "the one-click restore banner must render with the workspace");
+assert.match(runtime, /workspaceTabsSidebarController\.syncSidebar\(shell\)/, "the live ChatClub-tab sidebar must render with the workspace");
+assert.match(runtime, /attachWorkspaceTabsSidebarController\(/, "runtime must own the live ChatClub-tab sidebar");
 assert.match(
   runtime,
   /initializeTopbarPromptPlaceholder\(\{\s*persist:\s*!workspaceSessionSnapshot\s*\}\)/,

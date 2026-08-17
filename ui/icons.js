@@ -1,7 +1,7 @@
 const SVG_NS = "http://www.w3.org/2000/svg";
 const SIDEBAR_TOGGLE_ICON = [
-  ["rect", { x: "5", y: "5", width: "14", height: "14", rx: "1.6" }],
-  ["path", { d: "M10 5v14" }]
+  ["rect", { x: "3", y: "3", width: "18", height: "18", rx: "2" }],
+  ["path", { d: "M9 3v18" }]
 ];
 
 const ICONS = {

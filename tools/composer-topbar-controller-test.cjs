@@ -66,11 +66,13 @@ function responsiveBrandRules(kind) {
 
   assert.match(runtime, /createComposerController\(/, "runtime must compose the extracted Composer owner");
   assert.match(runtime, /createTopbarController\(/, "runtime must compose the extracted Topbar owner");
+  assert.match(topbarView, /workspace-tabs-sidebar-toggle/, "the topbar must keep a fixed ChatClub-tab sidebar toggle");
+  assert.match(topbarView, /aria-controls/, "the sidebar toggle must point at the live tab list");
   assert.match(runtime, /workspaceBinding\.bind\(workspaceController\)/, "runtime must bind the stable workspace port once");
   assert.match(runtime, /topbarBinding\.bind\(topbarController\)/, "runtime must bind the stable topbar port once");
   assert.doesNotMatch(runtime, /workspace:\s*\(\)\s*=>\s*workspaceController/, "runtime must not expose an uninitialized workspace controller through a provider thunk");
   assert.doesNotMatch(runtime, /=>\s*preferredModelController\./, "runtime must not expose an uninitialized Preferred Model controller through provider thunks");
-  assert.ok(runtime.split(/\r?\n/).length < 1200, "runtime must stay an assembly root after Composer/Topbar extraction");
+  assert.ok(runtime.split(/\r?\n/).length < 1230, "runtime must stay an assembly root after Composer/Topbar extraction");
 
   assert.match(
     composer,

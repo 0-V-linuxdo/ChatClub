@@ -48,12 +48,19 @@
     "targetBytes": 50000,
     "reason": "The official-rules runtime is the single background configuration writer and keeps revision-CAS patch/import/reset handling, v3-to-v4 migration, immutable snapshot composition, signed component activation, rollback pins, alias authorization, reset cleanup journaling and startup recovery behind one serialized coordinator so atomic commit, compensation and destructive-operation fail-closed state cannot diverge across modules."
   },
+  "app/runtime.js": {
+    "maxLines": 1208,
+    "target": 1200,
+    "maxBytes": 51525,
+    "targetBytes": 50000,
+    "reason": "The application assembly root now also wires the page-local ChatClub-tab sidebar toggle, live-tab refresh after hydration, and overlay-aware Escape dismissal beside the existing Composer, Topbar, workspace-session, and cleared-tab restore composition."
+  },
   "shared/i18n.js": {
-    "maxLines": 2309,
+    "maxLines": 2323,
     "target": 1500,
-    "maxBytes": 135492,
+    "maxBytes": 136226,
     "targetBytes": 82000,
-    "reason": "Bilingual translation catalog data is kept co-located for key parity; the signed official-rules update-management and component-status views, consent, check, apply-all, compatibility, rollback, per-component source, confirmation and accessibility copy join the committed-reset cleanup warning, queued-send, preferred-model auto-selection overlay settings plus structured model, thinking, All Sources and Effort attempt labels, Workspace appearance subtabs, nested Tab Group right-click menu settings, prompt-handoff, platform-management labels, iframe tab context-menu labels, prompt-history date-group labels, and cleared ChatClub-tab restore copy under exact line and byte ratchets."
+    "reason": "Bilingual translation catalog data is kept co-located for key parity; the signed official-rules update-management and component-status views, consent, check, apply-all, compatibility, rollback, per-component source, confirmation and accessibility copy join the committed-reset cleanup warning, queued-send, preferred-model auto-selection overlay settings plus structured model, thinking, All Sources and Effort attempt labels, Workspace appearance subtabs, nested Tab Group right-click menu settings, prompt-handoff, platform-management labels, iframe tab context-menu labels, prompt-history date-group labels, cleared ChatClub-tab restore copy, and the live ChatClub-tab sidebar labels under exact line and byte ratchets."
   },
   "tools/browser-smoke.mjs": {
     "maxLines": 1445,

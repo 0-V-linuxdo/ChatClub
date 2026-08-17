@@ -48,7 +48,9 @@ export function createTopbarView(dependencies = {}) {
     "openPocket",
     "openSettings",
     "openSettingsMenu",
-    "openSummary"
+    "openSummary",
+    "toggleWorkspaceTabsSidebar",
+    "isWorkspaceTabsSidebarOpen"
   ]);
   requireMethods(editLifecycle, "edit lifecycle", [
     "exit",
@@ -87,6 +89,22 @@ export function createTopbarView(dependencies = {}) {
       tooltipPlacement: "left",
       tooltipId
     });
+  }
+
+  function renderSidebarToggle() {
+    const open = actions.isWorkspaceTabsSidebarOpen() === true;
+    const label = open ? t("topbar.workspaceTabsCollapse") : t("topbar.workspaceTabs");
+    const button = createTopIconButton({
+      label,
+      icon: createSvgIcon(open ? "sidebarCollapse" : "sidebarExpand"),
+      onClick: () => actions.toggleWorkspaceTabsSidebar(),
+      tooltipLabel: label,
+      className: `workspace-tabs-sidebar-toggle${open ? " is-open" : ""}`,
+      tooltipId: "topbar.workspaceTabs"
+    });
+    button.setAttribute("aria-expanded", String(open));
+    button.setAttribute("aria-controls", "workspace-tabs-sidebar");
+    return button;
   }
 
   function renderFlexCells(extraClass = "") {
@@ -349,11 +367,12 @@ export function createTopbarView(dependencies = {}) {
     const composerNode = composer.render({ placeholder, gate: gateSnapshot() });
     if (!state.topbarEditMode) {
       const layout = editor.visibleTopbarLayoutItems(normalizeTopbarLayout(state.options?.topbarLayout));
-      return el("header", { class: "topbar" }, layout.map((item) => renderItem(item, composerNode)));
+      return el("header", { class: "topbar" }, renderSidebarToggle(), layout.map((item) => renderItem(item, composerNode)));
     }
     const layout = editor.visibleTopbarLayoutItems(editor.activeTopbarEditLayout());
     return el("div", { class: "topbar-customize-mode" },
       el("header", { class: "topbar topbar-editing" },
+        renderSidebarToggle(),
         el("div", { class: "topbar-editing-livebar" },
           el("div", {
             class: "topbar-editing-livebar-items",

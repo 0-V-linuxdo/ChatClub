@@ -6,9 +6,21 @@ const path = require("node:path");
 
 (async () => {
   const source = fs.readFileSync(path.join(__dirname, "../app/workspace/cleared-tabs-controller.js"), "utf8");
+  const css = fs.readFileSync(path.join(__dirname, "../styles/chatclub.css"), "utf8");
   assert.match(source, /class: "workspace-cleared-tabs-banner"/);
   assert.doesNotMatch(source, /absorbIntoCurrent/);
   assert.doesNotMatch(source, /currentWorkspaceIsEmpty/);
+  assert.doesNotMatch(source, /createActionButton/, "banner actions must keep visible labels outside the compact topbar action-button rules");
+  assert.match(source, /workspace\.clearedTabs\.dismiss/);
+  assert.match(source, /"danger"/, "Dismiss must use the danger button variant");
+  assert.match(css, /\.workspace-cleared-tabs-banner \.button-danger:hover\s*\{[^}]*background:\s*var\(--danger\)/, "Dismiss hover must turn red");
+  assert.match(source, /workspace-cleared-tabs-banner-count/, "the cleared-tab count must be a highlighted node");
+  assert.match(source, /plural: n === 1 \? "" : "s"/, "English banner copy must choose tab vs tabs");
+  assert.match(css, /\.workspace-cleared-tabs-banner\s*\{[^}]*justify-content:\s*center/, "banner copy and actions must sit in the center");
+  assert.match(css, /\.workspace-cleared-tabs-banner-count\s*\{[^}]*background:\s*var\(--primary\)/, "the count must use a filled badge, not colored text alone");
+  const i18n = fs.readFileSync(path.join(__dirname, "../shared/i18n.js"), "utf8");
+  assert.match(i18n, /workspace\.clearedTabs\.banner": "\{count\} ChatClub tab\{plural\} \{were\}/);
+  assert.doesNotMatch(i18n, /tab\(s\)/);
   const { createWorkspaceClearedTabsController } = await import("../app/workspace/cleared-tabs-controller.js");
 
   function controller(overrides = {}) {

@@ -39,14 +39,31 @@ function storageArea(initial = {}) {
 function fixture({ local = {}, session = {}, tabs = [] } = {}) {
   const localArea = storageArea(local);
   const sessionArea = storageArea(session);
+  const tabUpdates = [];
+  const windowUpdates = [];
   const api = {
+    runtime: { getURL: (file) => `chrome-extension://chatclub/${file}` },
     storage: { local: localArea.api, session: sessionArea.api },
-    tabs: { query: async () => tabs.map((tab) => ({ ...tab })) }
+    tabs: {
+      query: async () => tabs.map((tab) => ({ ...tab })),
+      get: async (tabId) => tabs.find((tab) => tab.id === tabId) || Promise.reject(new Error("missing tab")),
+      update: async (tabId, options) => {
+        tabUpdates.push({ tabId, options });
+        return { id: tabId, ...options };
+      }
+    },
+    windows: {
+      update: async (windowId, options) => {
+        windowUpdates.push({ windowId, options });
+      }
+    }
   };
   return {
     api,
     local: localArea,
-    session: sessionArea
+    session: sessionArea,
+    tabUpdates,
+    windowUpdates
   };
 }
 
@@ -61,6 +78,8 @@ function fixture({ local = {}, session = {}, tabs = [] } = {}) {
     dismissClearedWorkspaceTabs,
     handleWorkspaceSessionAlarm,
     listClearedWorkspaceTabs,
+    listLiveWorkspaceTabs,
+    focusWorkspaceTab,
     prepareWorkspaceSessionLifecycle,
     restoreClearedWorkspaceTabs,
     rotateWorkspaceSessionGeneration
@@ -624,6 +643,62 @@ function fixture({ local = {}, session = {}, tabs = [] } = {}) {
   }
 
   {
+    const now = 900000;
+    const store = fixture({
+      local: {
+        [WORKSPACE_SESSION_GENERATION_KEY]: generation,
+        [workspaceSessionWorkspaceKey(workspaceA)]: stable(
+          workspaceA,
+          "live-a",
+          { tabId: 11, windowId: 2, index: 3, pinned: false },
+          now,
+          null,
+          {
+            snapshot: {
+              schemaVersion: 1,
+              generation,
+              layout: { type: "temporary", name: "Pocket batch", presetId: "default" },
+              groups: [{ tabs: [{ appId: "ChatGPT" }, { appId: "Claude" }], activeIndex: 0 }]
+            }
+          }
+        )
+      },
+      tabs: [
+        { id: 21, windowId: 3, index: 1, title: "ChatClub", url: "chrome-extension://chatclub/options.html" },
+        { id: 12, windowId: 2, index: 1, title: "ChatClub", url: `chrome-extension://chatclub/chatClub.html#workspace=${workspaceB}` },
+        { id: 11, windowId: 2, index: 0, title: "ChatClub", url: `chrome-extension://chatclub/chatClub.html#workspace=${workspaceA}` },
+        { id: 31, windowId: 1, index: 0, title: "Example", url: "https://example.com/" },
+        { id: 13, windowId: 4, index: 0, title: "ChatClub", pendingUrl: "chrome-extension://chatclub/chatClub.html" }
+      ]
+    });
+    const listed = await listLiveWorkspaceTabs(store.api, {}, {
+      tab: { id: 11, url: `chrome-extension://chatclub/chatClub.html#workspace=${workspaceA}` }
+    });
+    assert.deepEqual(listed.tabs.map((item) => item.tabId), [11, 12, 13]);
+    assert.equal(listed.tabs[0].current, true);
+    assert.equal(listed.tabs[0].layoutName, "Pocket batch");
+    assert.deepEqual(listed.tabs[0].appIds, ["ChatGPT", "Claude"]);
+    assert.equal(listed.tabs[1].current, false);
+    assert.equal(listed.tabs[1].workspaceId, workspaceB);
+    assert.equal(listed.tabs[2].workspaceId, "");
+    const focused = await focusWorkspaceTab(store.api, { tabId: 12 }, { tab: { id: 11 } });
+    assert.deepEqual(focused, { focused: true, tabId: 12, current: false });
+    assert.deepEqual(store.tabUpdates, [{ tabId: 12, options: { active: true } }]);
+    assert.deepEqual(store.windowUpdates, [{ windowId: 2, options: { focused: true } }]);
+    const current = await focusWorkspaceTab(store.api, { tabId: 11 }, { tab: { id: 11 } });
+    assert.deepEqual(current, { focused: true, tabId: 11, current: true });
+    assert.equal(store.tabUpdates.length, 1, "focusing the current ChatClub tab must be a no-op");
+    await assert.rejects(
+      () => focusWorkspaceTab(store.api, { tabId: 21 }, { tab: { id: 11 } }),
+      /not a live ChatClub page/
+    );
+    await assert.rejects(
+      () => focusWorkspaceTab(store.api, { tabId: 31 }, { tab: { id: 11 } }),
+      /not a live ChatClub page/
+    );
+  }
+
+  {
     const runtime = fs.readFileSync(path.join(root, "background/runtime.js"), "utf8");
     assert.match(runtime, /detachWorkspaceSessionMirror\(chrome, tabId, removeInfo\)/);
     assert.match(runtime, /onInstalled\.addListener\(async \(details = \{\}\)/);
@@ -632,6 +707,8 @@ function fixture({ local = {}, session = {}, tabs = [] } = {}) {
     assert.match(runtime, /REQUEST\.CLAIM_WORKSPACE_SESSION_RECOVERY/);
     assert.match(runtime, /REQUEST\.COMMIT_WORKSPACE_SESSION_RECOVERY/);
     assert.match(runtime, /REQUEST\.LIST_CLEARED_WORKSPACE_TABS/);
+    assert.match(runtime, /REQUEST\.LIST_LIVE_WORKSPACE_TABS/);
+    assert.match(runtime, /REQUEST\.FOCUS_WORKSPACE_TAB/);
     assert.match(runtime, /REQUEST\.RESTORE_CLEARED_WORKSPACE_TABS/);
     assert.match(runtime, /REQUEST\.DISMISS_CLEARED_WORKSPACE_TABS/);
     assert.match(runtime, /handleWorkspaceSessionAlarm\(chrome, alarm\)/);

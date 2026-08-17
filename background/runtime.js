@@ -54,7 +54,7 @@ import {
   openWorkspaceTab,
   registerActionListener
 } from "./tab-runtime.js";
-import { claimWorkspaceSessionRecovery, commitWorkspaceSessionRecovery, detachWorkspaceSessionMirror, dismissClearedWorkspaceTabs, handleWorkspaceSessionAlarm, listClearedWorkspaceTabs, prepareWorkspaceSessionLifecycle, restoreClearedWorkspaceTabs, rotateWorkspaceSessionGeneration } from "./workspace-session.js";
+import { claimWorkspaceSessionRecovery, commitWorkspaceSessionRecovery, detachWorkspaceSessionMirror, dismissClearedWorkspaceTabs, focusWorkspaceTab, handleWorkspaceSessionAlarm, listClearedWorkspaceTabs, listLiveWorkspaceTabs, prepareWorkspaceSessionLifecycle, restoreClearedWorkspaceTabs, rotateWorkspaceSessionGeneration } from "./workspace-session.js";
 import {
   createBackgroundRequestDispatcher,
   createBackgroundRequestListener
@@ -590,8 +590,8 @@ const AUTHORIZE = BACKGROUND_REQUEST_AUTHORIZERS;
 const backgroundRequestHandlers = [
   [REQUEST.CLAIM_WORKSPACE_SESSION_RECOVERY, (message, sender) => claimWorkspaceSessionRecovery(chrome, message, sender)],
   [REQUEST.COMMIT_WORKSPACE_SESSION_RECOVERY, (message, sender) => commitWorkspaceSessionRecovery(chrome, message, sender)],
-  [REQUEST.LIST_CLEARED_WORKSPACE_TABS, () => listClearedWorkspaceTabs(chrome)],
-  [REQUEST.RESTORE_CLEARED_WORKSPACE_TABS, (message, sender) => restoreClearedWorkspaceTabs(chrome, message, sender)],
+  [REQUEST.LIST_CLEARED_WORKSPACE_TABS, () => listClearedWorkspaceTabs(chrome)], [REQUEST.LIST_LIVE_WORKSPACE_TABS, (_message, sender) => listLiveWorkspaceTabs(chrome, {}, sender)],
+  [REQUEST.FOCUS_WORKSPACE_TAB, (message, sender) => focusWorkspaceTab(chrome, message, sender)], [REQUEST.RESTORE_CLEARED_WORKSPACE_TABS, (message, sender) => restoreClearedWorkspaceTabs(chrome, message, sender)],
   [REQUEST.DISMISS_CLEARED_WORKSPACE_TABS, () => dismissClearedWorkspaceTabs(chrome)],
   ...workspacePromptHandoffRuntime.requestHandlers(REQUEST),
   [REQUEST.REGISTER_FRAME_CONTEXT, async (message, sender) => {

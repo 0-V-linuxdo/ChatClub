@@ -99,6 +99,75 @@ function liveTabState(tabs = []) {
   return { records, tabIds, workspaceIds };
 }
 
+function chatClubPageUrl(api) {
+  try {
+    return new URL(api.runtime.getURL("chatClub.html"));
+  } catch {
+    return null;
+  }
+}
+
+function tabHref(tab) {
+  return String(tab?.url || tab?.pendingUrl || "");
+}
+
+function isChatClubWorkspaceTab(api, tab) {
+  const href = tabHref(tab);
+  if (!href) return false;
+  try {
+    const url = new URL(href);
+    const page = chatClubPageUrl(api);
+    if (page) {
+      return url.protocol === page.protocol && url.host === page.host && url.pathname === page.pathname;
+    }
+    return /^(chrome|moz)-extension:$/.test(url.protocol) && /\/chatClub\.html$/i.test(url.pathname);
+  } catch {
+    return false;
+  }
+}
+
+function snapshotLayoutName(snapshot) {
+  return String(snapshot?.layout?.name || "").trim();
+}
+
+function snapshotAppIds(snapshot) {
+  const ids = [];
+  const seen = new Set();
+  for (const group of Array.isArray(snapshot?.groups) ? snapshot.groups : []) {
+    for (const entry of Array.isArray(group?.tabs) ? group.tabs : []) {
+      const appId = String(entry?.appId || "").trim();
+      if (!appId || seen.has(appId)) continue;
+      seen.add(appId);
+      ids.push(appId);
+    }
+  }
+  return ids;
+}
+
+function liveTabItem(tab, currentTabId, record) {
+  const tabId = positiveTabId(tab?.id);
+  const snapshot = record?.snapshot;
+  return {
+    tabId,
+    windowId: Number.isInteger(tab?.windowId) ? tab.windowId : null,
+    index: Number.isInteger(tab?.index) && tab.index >= 0 ? tab.index : null,
+    workspaceId: workspaceSessionIdFromUrl(tabHref(tab)) || "",
+    current: tabId !== null && tabId === currentTabId,
+    title: String(tab?.title || "").trim(),
+    layoutName: snapshotLayoutName(snapshot),
+    appIds: snapshotAppIds(snapshot)
+  };
+}
+
+function compareLiveTabs(left, right) {
+  const windowA = Number.isInteger(left.windowId) ? left.windowId : Number.MAX_SAFE_INTEGER;
+  const windowB = Number.isInteger(right.windowId) ? right.windowId : Number.MAX_SAFE_INTEGER;
+  if (windowA !== windowB) return windowA - windowB;
+  const indexA = Number.isInteger(left.index) ? left.index : Number.MAX_SAFE_INTEGER;
+  const indexB = Number.isInteger(right.index) ? right.index : Number.MAX_SAFE_INTEGER;
+  return indexA - indexB;
+}
+
 function normalizedGeneration(value) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -787,6 +856,49 @@ export function listClearedWorkspaceTabs(api, options = {}) {
     return {
       tabs: unclaimedBrowserCleared(recovery, live, currentStableRecords(stored)).map(clearedTabItem)
     };
+  });
+}
+
+export function listLiveWorkspaceTabs(api, _request = {}, sender = {}) {
+  return queueWorkspaceSession(async () => {
+    if (typeof api?.tabs?.query !== "function") throw new Error("Workspace session tab query is unavailable");
+    const storage = localStorageArea(api);
+    const [stored, tabs] = await Promise.all([
+      typeof storage?.get === "function" ? storage.get(null) : Promise.resolve({}),
+      api.tabs.query({})
+    ]);
+    if (!Array.isArray(tabs)) throw new TypeError("Browser tabs query returned an invalid result");
+    const stableRecords = currentStableRecords(stored || {});
+    const currentTabId = positiveTabId(sender?.tab?.id);
+    return {
+      tabs: tabs
+        .filter((tab) => isChatClubWorkspaceTab(api, tab))
+        .map((tab) => {
+          const workspaceId = workspaceSessionIdFromUrl(tabHref(tab));
+          return liveTabItem(tab, currentTabId, workspaceId ? stableRecords.get(workspaceId) : null);
+        })
+        .filter((item) => item.tabId !== null)
+        .sort(compareLiveTabs)
+    };
+  });
+}
+
+export function focusWorkspaceTab(api, request = {}, sender = {}) {
+  return queueWorkspaceSession(async () => {
+    const tabId = positiveTabId(request.tabId);
+    if (tabId === null) throw new Error("Workspace tab id is invalid");
+    if (typeof api?.tabs?.get !== "function") throw new Error("Workspace session tab lookup is unavailable");
+    const tab = await api.tabs.get(tabId).catch(() => null);
+    if (!tab || !isChatClubWorkspaceTab(api, tab)) {
+      throw new Error("Workspace tab is not a live ChatClub page");
+    }
+    const currentTabId = positiveTabId(sender?.tab?.id);
+    if (currentTabId === tabId) return { focused: true, tabId, current: true };
+    if (typeof api.tabs.update === "function") await api.tabs.update(tabId, { active: true });
+    if (Number.isInteger(tab.windowId) && typeof api.windows?.update === "function") {
+      await api.windows.update(tab.windowId, { focused: true });
+    }
+    return { focused: true, tabId, current: false };
   });
 }
 

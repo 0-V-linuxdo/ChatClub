@@ -43,6 +43,7 @@ import { createTopbarController } from "./topbar/controller.js";
 import { createWorkspaceController } from "./workspace/controller.js";
 import { PROMPT_HANDOFF_LAUNCH_REASON, createWorkspacePromptHandoffController } from "./workspace/prompt-handoff-controller.js";
 import { attachWorkspaceClearedTabsController } from "./workspace/cleared-tabs-controller.js";
+import { attachWorkspaceTabsSidebarController } from "./workspace/tabs-sidebar-controller.js";
 import { createWorkspaceSessionStore } from "./workspace/session-store.js";
 import {
   createFunctionalAnomalyController,
@@ -185,7 +186,9 @@ const topbarController = createTopbarController({
     openNewWorkspaceTab,
     openPocket: openPocketPanel,
     openSettings,
-    openSummary: openSummaryPanel
+    openSummary: openSummaryPanel,
+    toggleWorkspaceTabsSidebar,
+    isWorkspaceTabsSidebarOpen
   }
 });
 topbarBinding.bind(topbarController);
@@ -329,6 +332,12 @@ workspaceBinding.bind(workspaceController);
 frameBridgeWorkspaceBinding.bind(workspaceController);
 const workspaceClearedTabsController = attachWorkspaceClearedTabsController({
   requestBackground, toast, render });
+const workspaceTabsSidebarController = attachWorkspaceTabsSidebarController({
+  requestBackground, toast, render, inferAppName, appById, extensionApi, currentWorkspace: () => ({ layoutName: state.temporaryLayoutPreset?.name || "", groups: state.groups }),
+  canDismiss: () => !state.summaryOpen && !hasForegroundOverlay()
+});
+function toggleWorkspaceTabsSidebar() { workspaceTabsSidebarController.toggle(); }
+function isWorkspaceTabsSidebarOpen() { return workspaceTabsSidebarController.isOpen(); }
 const workspacePromptHandoffController = createWorkspacePromptHandoffController({
   api: extensionApi(), requestBackground, composer: composerController, workspace: workspaceController,
   appCatalog: allApps, workspaceGeneration: workspaceSessionStore.generation,
@@ -839,6 +848,7 @@ function render() {
   syncTopbar();
   workspaceClearedTabsController.syncBanner(shell);
   workspaceController.syncWorkspaceIsland(shell);
+  workspaceTabsSidebarController.syncSidebar(shell);
   syncSummaryPanel();
 }
 
@@ -1157,7 +1167,7 @@ async function init() {
   frameBridgeController.install();
   installPreferredModelFrameCleanup();
   await promptFocusPromise;
-  render();
+  render(); if (workspaceTabsSidebarController.isOpen()) await workspaceTabsSidebarController.refresh().then(() => workspaceTabsSidebarController.syncSidebar(ensureAppShell())).catch((error) => console.warn("[ChatClub] Live workspace tabs could not be listed", error));
   const promptHandoffAdmission = workspacePromptHandoffController.admitInitialLaunch(promptHandoffLaunch);
   const skippedPromptTargets = promptHandoffLaunch.diagnostics?.skipped?.length || 0, promptHandoffReason = promptHandoffLaunch.diagnostics?.reason;
   if (skippedPromptTargets) toast(t("toast.promptHandoffTargetsSkipped", { count: skippedPromptTargets }), "info");
