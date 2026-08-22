@@ -175,27 +175,40 @@ function snapshotAppIds(snapshot) {
 export function liveTabItem(api, tab, currentTabId, record) {
   const tabId = positiveTabId(tab?.id);
   const snapshot = record?.snapshot;
+  const owner = record?.owner || {};
   return {
     tabId,
-    windowId: Number.isInteger(tab?.windowId) ? tab.windowId : null,
-    index: Number.isInteger(tab?.index) && tab.index >= 0 ? tab.index : null,
-    workspaceId: workspaceIdForChatClubTab(api, tab),
+    windowId: Number.isInteger(tab?.windowId) ? tab.windowId : (Number.isInteger(owner.windowId) ? owner.windowId : null),
+    index: Number.isInteger(tab?.index) && tab.index >= 0 ? tab.index : (Number.isInteger(owner.index) && owner.index >= 0 ? owner.index : null),
+    workspaceId: record?.workspaceId || (tab ? workspaceIdForChatClubTab(api, tab) : ""),
     current: tabId !== null && tabId === currentTabId,
+    live: tabId !== null,
     title: String(tab?.title || "").trim(),
     layoutName: snapshotLayoutName(snapshot),
     appIds: snapshotAppIds(snapshot),
     topicTitle: String(snapshot?.topicTitle || "").trim(),
-    topicTitleCustom: snapshot?.topicTitleCustom === true
+    topicTitleCustom: snapshot?.topicTitleCustom === true,
+    detachedAt: record?.detachedAt ?? null
   };
 }
 
-export function compareLiveTabs(left, right) {
+function compareLiveTabs(left, right) {
   const windowA = Number.isInteger(left.windowId) ? left.windowId : Number.MAX_SAFE_INTEGER;
   const windowB = Number.isInteger(right.windowId) ? right.windowId : Number.MAX_SAFE_INTEGER;
   if (windowA !== windowB) return windowA - windowB;
   const indexA = Number.isInteger(left.index) ? left.index : Number.MAX_SAFE_INTEGER;
   const indexB = Number.isInteger(right.index) ? right.index : Number.MAX_SAFE_INTEGER;
   return indexA - indexB;
+}
+
+export function compareRememberedTabs(left, right) {
+  const leftLive = left?.live === true;
+  const rightLive = right?.live === true;
+  if (leftLive !== rightLive) return leftLive ? -1 : 1;
+  if (leftLive) return compareLiveTabs(left, right);
+  const detached = finiteTime(right?.detachedAt) - finiteTime(left?.detachedAt);
+  if (detached !== 0) return detached;
+  return String(left?.workspaceId || "").localeCompare(String(right?.workspaceId || ""));
 }
 
 export async function restorePlacement(api, item = {}, sender = {}) {

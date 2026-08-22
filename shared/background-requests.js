@@ -41,6 +41,7 @@ export const BACKGROUND_REQUEST_ACTIONS = Object.freeze({
   LIST_LIVE_WORKSPACE_TABS: "listLiveWorkspaceTabs",
   FOCUS_WORKSPACE_TAB: "focusWorkspaceTab",
   SET_WORKSPACE_TAB_TITLE: "setWorkspaceTabTitle",
+  FORGET_REMEMBERED_WORKSPACE_TAB: "forgetRememberedWorkspaceTab",
   RESTORE_CLEARED_WORKSPACE_TABS: "restoreClearedWorkspaceTabs",
   DISMISS_CLEARED_WORKSPACE_TABS: "dismissClearedWorkspaceTabs",
   OPEN_WORKSPACE_TAB_WITH_PROMPT: "openWorkspaceTabWithPrompt",
@@ -150,13 +151,17 @@ export const BACKGROUND_REQUEST_SPECS = Object.freeze({
   }),
   [ACTION.SET_WORKSPACE_TAB_TITLE]: extensionPage({
     mutates: true,
-    payload: contract({ tabId: "integer", title: "string" }, { custom: "boolean" }),
+    payload: contract({ title: "string" }, { tabId: "integer", workspaceId: "string", custom: "boolean" }),
     response: contract({
       updated: "boolean",
-      tabId: "integer",
       title: "string",
       custom: "boolean"
-    })
+    }, { tabId: "integer", workspaceId: "string" })
+  }),
+  [ACTION.FORGET_REMEMBERED_WORKSPACE_TAB]: extensionPage({
+    mutates: true,
+    payload: contract({ workspaceId: "string" }),
+    response: contract({ forgotten: "boolean", workspaceId: "string" }, { closed: "boolean", tabId: "integer" })
   }),
   [ACTION.RESTORE_CLEARED_WORKSPACE_TABS]: extensionPage({
     mutates: true,

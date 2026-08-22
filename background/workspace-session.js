@@ -22,7 +22,7 @@ import {
   workspaceSessionMirrorKey,
   workspaceSessionWorkspaceKey
 } from "../shared/workspace-session.js";
-import { clearedTabItem, focusWorkspaceTabOperation, listClearedWorkspaceTabsOperation, listLiveWorkspaceTabsOperation, recoveryEventWasRequested, requestedRecoveryEvents, setWorkspaceTabTitleOperation, unclaimedBrowserCleared } from "./workspace-tab-directory.js";
+import { clearedTabItem, focusWorkspaceTabOperation, forgetRememberedWorkspaceTabOperation, listClearedWorkspaceTabsOperation, listLiveWorkspaceTabsOperation, recoveryEventWasRequested, requestedRecoveryEvents, setWorkspaceTabTitleOperation, unclaimedBrowserCleared } from "./workspace-tab-directory.js";
 import { restoreClearedWorkspaceTabsOperation } from "./workspace-tab-restoration.js";
 import {
   bindingForClaim,
@@ -379,6 +379,7 @@ export function detachWorkspaceSessionMirror(api, tabId, removeInfo = {}, option
         ...stable.owner,
         windowId: Number.isInteger(removeInfo.windowId) ? removeInfo.windowId : stable.owner.windowId
       };
+      const alreadyDismissed = stable.resolution === WORKSPACE_SESSION_DISMISSED;
       updatedStable = {
         ...stable,
         storageVersion: WORKSPACE_SESSION_STORAGE_VERSION,
@@ -390,7 +391,7 @@ export function detachWorkspaceSessionMirror(api, tabId, removeInfo = {}, option
         detachedAt: now,
         detachedKind,
         detachedRuntimeId: detach.runtimeId,
-        resolution: "",
+        resolution: alreadyDismissed ? WORKSPACE_SESSION_DISMISSED : "",
         closedBy: ""
       };
     }
@@ -398,7 +399,7 @@ export function detachWorkspaceSessionMirror(api, tabId, removeInfo = {}, option
     const openingCandidate = recovery?.candidates.find((candidate) => (
       candidate.workspaceId === ownerRecord.workspaceId && candidate.claimedTabId === normalizedTabId
     ));
-    if (updatedStable) {
+    if (updatedStable && updatedStable.resolution !== WORKSPACE_SESSION_DISMISSED) {
       const candidate = openingCandidate || recovery?.candidates.find((item) => item.workspaceId === ownerRecord.workspaceId);
       if (candidate) rearmRecoveryCandidate(candidate);
       else {
@@ -406,6 +407,10 @@ export function detachWorkspaceSessionMirror(api, tabId, removeInfo = {}, option
           recoveryCandidate(updatedStable, "stable", WORKSPACE_SESSION_CLEARED_BY_BROWSER)
         ]);
       }
+    } else if (updatedStable && recovery) {
+      recovery.candidates = recovery.candidates.filter((candidate) => (
+        candidate.workspaceId !== ownerRecord.workspaceId
+      ));
     }
     const updates = {};
     if (updatedStable) updates[stableKey] = updatedStable;
@@ -1018,6 +1023,11 @@ export function listLiveWorkspaceTabs(api, _request = {}, sender = {}) {
 }
 export function setWorkspaceTabTitle(api, request = {}) {
   return queueWorkspaceSession(() => setWorkspaceTabTitleOperation(api, request));
+}
+export function forgetRememberedWorkspaceTab(api, request = {}, options = {}) {
+  return queueWorkspaceSession(() => (
+    forgetRememberedWorkspaceTabOperation(api, request, options, ensureGenerationInternal)
+  ));
 }
 export function focusWorkspaceTab(api, request = {}, sender = {}) {
   return queueWorkspaceSession(() => focusWorkspaceTabOperation(api, request, sender));

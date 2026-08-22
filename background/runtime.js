@@ -40,7 +40,7 @@ import {
 } from "./registered-frame-transport.js";
 import { injectContentBridge, relayContentFrameBinding } from "./content-registration.js";
 import { openableTabUrl, openExternalTab, openWorkspaceTab, registerActionListener } from "./tab-runtime.js";
-import { claimWorkspaceSessionRecovery, commitWorkspaceSessionRecovery, detachWorkspaceSessionMirror, dismissClearedWorkspaceTabs, focusWorkspaceTab, handleWorkspaceSessionAlarm, listClearedWorkspaceTabs, listLiveWorkspaceTabs, persistWorkspaceSessionSnapshot, prepareWorkspaceSessionLifecycle, registerWorkspaceSessionTab, restoreClearedWorkspaceTabs, rotateWorkspaceSessionGeneration, setWorkspaceTabTitle } from "./workspace-session.js";
+import { claimWorkspaceSessionRecovery, commitWorkspaceSessionRecovery, detachWorkspaceSessionMirror, dismissClearedWorkspaceTabs, focusWorkspaceTab, forgetRememberedWorkspaceTab, handleWorkspaceSessionAlarm, listClearedWorkspaceTabs, listLiveWorkspaceTabs, persistWorkspaceSessionSnapshot, prepareWorkspaceSessionLifecycle, registerWorkspaceSessionTab, restoreClearedWorkspaceTabs, rotateWorkspaceSessionGeneration, setWorkspaceTabTitle } from "./workspace-session.js";
 import { isChatClubWorkspaceTab } from "./workspace-session-helpers.js";
 import { createBackgroundRequestDispatcher, createBackgroundRequestListener } from "./request-dispatcher.js";
 import { withTimeout } from "./promise-timeout.js";
@@ -589,8 +589,9 @@ const backgroundRequestHandlers = [
   [REQUEST.CLAIM_WORKSPACE_SESSION_RECOVERY, (message, sender) => claimWorkspaceSessionRecovery(chrome, message, sender)],
   [REQUEST.COMMIT_WORKSPACE_SESSION_RECOVERY, (message, sender) => commitWorkspaceSessionRecovery(chrome, message, sender)],
   [REQUEST.PERSIST_WORKSPACE_SESSION, (message, sender) => persistWorkspaceSessionSnapshot(chrome, message, sender)],
-  [REQUEST.LIST_CLEARED_WORKSPACE_TABS, () => listClearedWorkspaceTabsAfterLifecycle()], [REQUEST.LIST_LIVE_WORKSPACE_TABS, (_message, sender) => listLiveWorkspaceTabs(chrome, {}, sender)],
-  [REQUEST.FOCUS_WORKSPACE_TAB, (message, sender) => focusWorkspaceTab(chrome, message, sender)], [REQUEST.SET_WORKSPACE_TAB_TITLE, (message) => setWorkspaceTabTitle(chrome, message)], [REQUEST.RESTORE_CLEARED_WORKSPACE_TABS, (message, sender) => restoreClearedWorkspaceTabs(chrome, message, sender)],
+  [REQUEST.LIST_CLEARED_WORKSPACE_TABS, () => listClearedWorkspaceTabsAfterLifecycle()],
+  [REQUEST.LIST_LIVE_WORKSPACE_TABS, async (_message, sender) => { await prepareWorkspaceSessionLifecycle(chrome, { reason: "list-remembered-workspace-tabs" }); return listLiveWorkspaceTabs(chrome, {}, sender); }],
+  [REQUEST.FOCUS_WORKSPACE_TAB, (message, sender) => focusWorkspaceTab(chrome, message, sender)], [REQUEST.SET_WORKSPACE_TAB_TITLE, (message) => setWorkspaceTabTitle(chrome, message)], [REQUEST.FORGET_REMEMBERED_WORKSPACE_TAB, (message) => forgetRememberedWorkspaceTab(chrome, message)], [REQUEST.RESTORE_CLEARED_WORKSPACE_TABS, (message, sender) => restoreClearedWorkspaceTabs(chrome, message, sender)],
   [REQUEST.DISMISS_CLEARED_WORKSPACE_TABS, (message) => dismissClearedWorkspaceTabs(chrome, message)],
   ...workspacePromptHandoffRuntime.requestHandlers(REQUEST),
   [REQUEST.REGISTER_FRAME_CONTEXT, async (message, sender) => {

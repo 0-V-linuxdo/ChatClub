@@ -8,6 +8,7 @@ import {
 } from "../../shared/chat-frame-config.js";
 import { t } from "../../shared/i18n.js";
 import { findTopicDeleteSiteConfig, topicDeleteTimeoutMs } from "../../shared/topic-delete-sites.js";
+import { conversationHrefFromLocation } from "../../shared/workspace-tab-memory.js";
 import { button, editorModal, el, field, input } from "../../ui/dom.js";
 import { frameLoadingKindForTarget } from "./frame-loading.js";
 import { removeChatFromGroup, removeGroupFromWorkspace } from "./model.js";
@@ -132,19 +133,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
   }
 
   function threadHrefFromLocation(value) {
-    const href = openableFrameUrl(value);
-    if (!href) return "";
-    try {
-      const url = new URL(href);
-      const host = url.hostname.toLowerCase();
-      const path = url.pathname || "";
-      if (/\/(?:a\/)?chat\/s\/[^/?#]+/i.test(path)) return href;
-      if ((host === "gemini.google.com" || host.endsWith(".gemini.google.com")) && /^\/app\/[^/?#]+/i.test(path)) return href;
-      if (host === "assistant.kagi.com" && /^\/chat\/[^/?#]+/i.test(path)) return href;
-      if ((host === "app.notion.com" || host.endsWith(".notion.com")) && path === "/chat" && url.searchParams.get("t")) return href;
-      if ((host === "grok.com" || host.endsWith(".grok.com") || host === "grok.x.ai" || host.endsWith(".grok.x.ai") || host === "gk.dairoot.cn" || host.endsWith(".gk.dairoot.cn")) && /^\/(?:c|chat)\//i.test(path)) return href;
-    } catch {}
-    return "";
+    return conversationHrefFromLocation(openableFrameUrl(value) || value);
   }
 
   function sameHost(host, roots = []) {

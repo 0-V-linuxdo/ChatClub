@@ -356,7 +356,7 @@ function event(type, properties = {}) {
       ["editorModal", 11],
       ["viewerModal", 4],
       ["taskModal", 1],
-      ["confirmationModal", 5]
+      ["confirmationModal", 6]
     ]);
 
     assert.equal(occurrences(allAppSource, /\bmodal\s*\(/g), 0, "app code must not call the raw modal helper");
@@ -371,7 +371,7 @@ function event(type, properties = {}) {
       wrapperNames.reduce((total, wrapperName) => (
         total + occurrences(allAppSource, new RegExp(`\\b${wrapperName}\\s*\\(`, "g"))
       ), 0),
-      21,
+      22,
       "all twenty-one app modal call sites must use a typed wrapper"
     );
 
@@ -401,6 +401,7 @@ function event(type, properties = {}) {
       ["app/prompt-library/controller.js", "openPromptLibraryEditor", "editorModal", "Prompt Library editor"],
       ["app/workspace/frame-controller.js", "openGoToUrlDialog", "editorModal", "Go To URL editor"],
       ["app/workspace/tabs-sidebar-controller.js", "openTitleEditor", "editorModal", "ChatClub tab title editor"],
+      ["app/workspace/tabs-sidebar-controller.js", "openDeleteConfirmation", "confirmationModal", "ChatClub tab delete confirmation"],
       ["app/settings/apps.js", "openBuiltInDetails", "viewerModal", "built-in platform details"],
       ["app/settings/functional-anomalies.js", "openDetails", "viewerModal", "functional anomaly details"],
       ["app/prompt-library/controller.js", "openPromptLibraryDialog", "viewerModal", "Prompt Library manager"],

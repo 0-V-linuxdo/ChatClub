@@ -33,8 +33,6 @@ function manualTimers() {
   );
   const timers = manualTimers();
   const shells = [];
-  const bannerShells = [];
-  let inventoryRefreshes = 0;
   let loadAttempts = 0;
   let reloads = 0;
   let clock = 0;
@@ -42,10 +40,6 @@ function manualTimers() {
   let frames = [{ dataset: { instanceId: "frame-a" } }];
   const controller = createWorkspaceBootstrapRecoveryController({
     appRoot: { replaceChildren: (shell) => { shells.push(shell); } },
-    clearedTabsController: {
-      syncBanner: (shell) => { bannerShells.push(shell); },
-      refresh: async () => { inventoryRefreshes += 1; return []; }
-    },
     createElement: (tag, attrs, ...children) => ({ tag, attrs, children, isConnected: true }),
     currentFrames: () => frames,
     frameLoadingInstanceIds: () => loadingIds,
@@ -68,8 +62,6 @@ function manualTimers() {
   const shell = controller.renderRuntimeBootstrapFailure(new Error("claim timed out"));
   await Promise.resolve();
   assert.equal(shells.at(-1), shell);
-  assert.equal(inventoryRefreshes, 1);
-  assert.deepEqual(bannerShells, [shell, shell]);
 
   controller.scheduleWorkspaceSessionLoadRecovery();
   assert.equal(timers.nextDelay(), 1000);
@@ -91,7 +83,6 @@ function manualTimers() {
   frames = [{ dataset: { instanceId: "frame-a" } }];
   const timeoutController = createWorkspaceBootstrapRecoveryController({
     appRoot: null,
-    clearedTabsController: { syncBanner() {}, refresh: async () => [] },
     createElement: () => ({}),
     currentFrames: () => frames,
     frameLoadingInstanceIds: () => loadingIds,

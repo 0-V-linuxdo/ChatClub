@@ -1,7 +1,16 @@
 import { t } from "../../shared/i18n.js";
 import { isGenericTopicTitle, sanitizeTopicTitle } from "../../shared/topic-title.js";
 import { workspaceSessionWorkspaceId } from "../../shared/workspace-session.js";
-import { button, editorModal as defaultEditorModal, el, field, iconButton, input, isDismissalEscape } from "../../ui/dom.js";
+import {
+  button,
+  confirmationModal as defaultConfirmationModal,
+  editorModal as defaultEditorModal,
+  el,
+  field,
+  iconButton,
+  input,
+  isDismissalEscape
+} from "../../ui/dom.js";
 import { createSvgIcon } from "../../ui/icons.js";
 
 const WORKSPACE_TABS_SIDEBAR_ID = "workspace-tabs-sidebar";
@@ -28,6 +37,10 @@ function positiveTabId(value) {
   return Number.isSafeInteger(tabId) && tabId > 0 ? tabId : null;
 }
 
+function workspaceIdValue(value) {
+  return String(value || "").trim();
+}
+
 function isGenericWorkspaceTabName(value) {
   return GENERIC_WORKSPACE_TAB_NAME.test(String(value || "").trim());
 }
@@ -49,14 +62,16 @@ function appIdsFromGroups(groups = []) {
 function normalizeItems(next = []) {
   return (Array.isArray(next) ? next : [])
     .map((item) => {
+      const workspaceId = workspaceIdValue(item?.workspaceId);
+      if (!workspaceId) return null;
       const tabId = positiveTabId(item?.tabId);
-      if (tabId === null) return null;
       return {
+        workspaceId,
         tabId,
         windowId: Number.isInteger(item.windowId) ? item.windowId : null,
         index: Number.isInteger(item.index) && item.index >= 0 ? item.index : null,
-        workspaceId: String(item.workspaceId || "").trim(),
         current: item.current === true,
+        live: item.live === true || tabId !== null,
         title: String(item.title || "").trim(),
         layoutName: String(item.layoutName || "").trim(),
         topicTitle: String(item.topicTitle || "").trim(),
@@ -84,6 +99,7 @@ export function createWorkspaceTabsSidebarController({
   canDismiss,
   document: ownerDocument = globalThis.document,
   editorModal = defaultEditorModal,
+  confirmationModal = defaultConfirmationModal,
   createIcon = createSvgIcon
 } = {}) {
   if (typeof requestBackground !== "function") {
@@ -117,6 +133,10 @@ export function createWorkspaceTabsSidebarController({
     open = next === true;
     storageSet(sessionStorage, WORKSPACE_TABS_SIDEBAR_OPEN_KEY, open ? "1" : "");
     return open;
+  }
+
+  function sameItem(left = {}, right = {}) {
+    return workspaceIdValue(left.workspaceId) === workspaceIdValue(right.workspaceId);
   }
 
   function itemLabel(item = {}, index = 0) {
@@ -166,11 +186,32 @@ export function createWorkspaceTabsSidebarController({
     return currentItems();
   }
 
+  async function activateTab(item = {}) {
+    const workspaceId = workspaceIdValue(item.workspaceId);
+    if (!workspaceId) return { focused: false };
+    const current = items.find((entry) => sameItem(entry, item)) || item;
+    if (current.current) return { focused: true, tabId: current.tabId, current: true };
+    if (current.live && current.tabId !== null) {
+      try {
+        return await requestBackground("focusWorkspaceTab", { tabId: current.tabId });
+      } catch (error) {
+        toast(t("toast.workspaceTabFocusFailed"), "error");
+        throw error;
+      }
+    }
+    try {
+      return await requestBackground("openWorkspaceTab", { workspaceId });
+    } catch (error) {
+      toast(t("toast.workspaceTabOpenFailed"), "error");
+      throw error;
+    }
+  }
+
   async function focusTab(tabId) {
     const normalized = positiveTabId(tabId);
     if (normalized === null) return { focused: false };
     const item = items.find((entry) => entry.tabId === normalized);
-    if (item?.current) return { focused: true, tabId: normalized, current: true };
+    if (item) return activateTab(item);
     try {
       return await requestBackground("focusWorkspaceTab", { tabId: normalized });
     } catch (error) {
@@ -180,25 +221,24 @@ export function createWorkspaceTabsSidebarController({
   }
 
   async function saveTabTitle(item = {}, title = "") {
+    const workspaceId = workspaceIdValue(item.workspaceId);
     const tabId = positiveTabId(item.tabId);
-    if (tabId === null) return { updated: false };
+    if (!workspaceId && tabId === null) return { updated: false };
     const next = sanitizeTopicTitle(title);
     if (item.current === true && typeof setCurrentTabTitle === "function") {
       setCurrentTabTitle(next);
       setItems(items.map((entry) => (
-        entry.tabId === tabId ? { ...entry, topicTitle: next, topicTitleCustom: true } : entry
+        sameItem(entry, item) ? { ...entry, topicTitle: next, topicTitleCustom: true } : entry
       )));
       if (lastShell?.isConnected) syncSidebar(lastShell);
-      return { updated: true, tabId, title: next, custom: true, current: true };
+      return { updated: true, workspaceId, tabId, title: next, custom: true, current: true };
     }
     try {
-      const response = await requestBackground("setWorkspaceTabTitle", {
-        tabId,
-        title: next,
-        custom: true
-      });
+      const payload = { title: next, custom: true, workspaceId };
+      if (tabId !== null) payload.tabId = tabId;
+      const response = await requestBackground("setWorkspaceTabTitle", payload);
       setItems(items.map((entry) => (
-        entry.tabId === tabId ? { ...entry, topicTitle: next, topicTitleCustom: true } : entry
+        sameItem(entry, item) ? { ...entry, topicTitle: next, topicTitleCustom: true } : entry
       )));
       if (lastShell?.isConnected) syncSidebar(lastShell);
       return response;
@@ -208,8 +248,22 @@ export function createWorkspaceTabsSidebarController({
     }
   }
 
+  async function forgetTab(item = {}) {
+    const workspaceId = workspaceIdValue(item.workspaceId);
+    if (!workspaceId) return { forgotten: false };
+    try {
+      const response = await requestBackground("forgetRememberedWorkspaceTab", { workspaceId });
+      setItems(items.filter((entry) => !sameItem(entry, item)));
+      if (lastShell?.isConnected) syncSidebar(lastShell);
+      return response;
+    } catch (error) {
+      toast(t("toast.workspaceTabDeleteFailed"), "error");
+      throw error;
+    }
+  }
+
   function openTitleEditor(item = {}) {
-    const titleInput = input(itemLabel(item, items.findIndex((entry) => entry.tabId === item.tabId)), {
+    const titleInput = input(itemLabel(item, items.findIndex((entry) => sameItem(entry, item))), {
       placeholder: t("workspace.tabs.editPlaceholder")
     });
     let dialog;
@@ -234,6 +288,45 @@ export function createWorkspaceTabsSidebarController({
     return dialog;
   }
 
+  function openDeleteConfirmation(item = {}) {
+    let dialog;
+    let applying = false;
+    const close = (force = false) => {
+      if (applying && force !== true) return;
+      dialog?.remove?.();
+    };
+    const cancelButton = button(t("common.cancel"), () => close());
+    const confirmButton = button(t("common.delete"), apply, "danger");
+    const setApplying = (value) => {
+      applying = value;
+      cancelButton.disabled = value;
+      confirmButton.disabled = value;
+      dialog?.querySelector?.(".modal-header .icon-button")?.toggleAttribute?.("disabled", value);
+      dialog?.querySelector?.(".modal")?.setAttribute?.("aria-busy", String(value));
+    };
+    async function apply() {
+      if (applying) return;
+      setApplying(true);
+      try {
+        await forgetTab(item);
+        close(true);
+      } catch {
+        setApplying(false);
+      }
+    }
+    dialog = confirmationModal(
+      t("workspace.tabs.deleteTitle"),
+      el("div", { class: "workspace-tabs-delete-confirmation" },
+        el("p", {}, t("workspace.tabs.deleteConfirm", { title: itemLabel(item, items.findIndex((entry) => sameItem(entry, item))) })),
+        el("div", { class: "settings-dialog-actions" }, cancelButton, confirmButton)
+      ),
+      close,
+      false,
+      t("common.close")
+    );
+    return dialog;
+  }
+
   function renderSidebar() {
     if (!open) return null;
     return el("aside", {
@@ -247,21 +340,23 @@ export function createWorkspaceTabsSidebarController({
     items.length
       ? el("div", { class: "workspace-tabs-sidebar-list", role: "list" },
         items.map((item, index) => el("div", {
-          class: `workspace-tabs-sidebar-item${item.current ? " is-current" : ""}`,
+          class: `workspace-tabs-sidebar-item${item.current ? " is-current" : ""}${item.live ? "" : " is-closed"}`,
           role: "listitem"
         },
         el("button", {
           class: "workspace-tabs-sidebar-item-focus",
           type: "button",
           "aria-current": item.current ? "page" : null,
-          onclick: () => { focusTab(item.tabId).catch(() => {}); }
+          onclick: () => { activateTab(item).catch(() => {}); }
         },
           el("span", { class: "workspace-tabs-sidebar-item-label" }, itemLabel(item, index))
         ),
         el("div", { class: "workspace-tabs-sidebar-item-meta" },
           item.current
             ? el("span", { class: "workspace-tabs-sidebar-item-current" }, t("workspace.tabs.current"))
-            : null,
+            : item.live
+              ? null
+              : el("span", { class: "workspace-tabs-sidebar-item-closed" }, t("workspace.tabs.closed")),
           iconButton(
             t("workspace.tabs.edit"),
             createIcon("edit"),
@@ -274,6 +369,19 @@ export function createWorkspaceTabsSidebarController({
             t("workspace.tabs.edit"),
             "",
             "workspace.tabs.edit"
+          ),
+          iconButton(
+            t("workspace.tabs.delete"),
+            createIcon("trash"),
+            (event) => {
+              event?.preventDefault?.();
+              event?.stopPropagation?.();
+              openDeleteConfirmation(item);
+            },
+            "workspace-tabs-sidebar-item-delete",
+            t("workspace.tabs.delete"),
+            "",
+            "workspace.tabs.delete"
           )
         )))
       )
@@ -406,8 +514,11 @@ export function createWorkspaceTabsSidebarController({
     setItems,
     refresh,
     focusTab,
+    activateTab,
     saveTabTitle,
+    forgetTab,
     openTitleEditor,
+    openDeleteConfirmation,
     toggle,
     close,
     setOpen,

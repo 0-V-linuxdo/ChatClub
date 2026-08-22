@@ -19,8 +19,6 @@ const initStart = runtime.indexOf("async function init()");
 const initEnd = runtime.indexOf("\n}\n\ninit().catch", initStart);
 const init = runtime.slice(initStart, initEnd);
 const loadIndex = init.indexOf("workspaceSessionStore.load()");
-const clearedTabsIndex = init.indexOf("clearedTabsController.refresh()");
-const recoveryShellIndex = init.indexOf("const recoveryShell = ensureAppShell()");
 const runtimeRefreshIndex = init.indexOf('action: "reloadConfigs"');
 const hydrateIndex = init.indexOf("workspaceController.hydrateGroups(promptHandoffLaunch.snapshot || workspaceSessionSnapshot)");
 const persistIndex = init.indexOf("workspaceController.persistWorkspaceSession()");
@@ -30,48 +28,29 @@ const preferredModelIndex = init.indexOf("applyPreferredModelsToFrames(null, { i
 
 assert.ok(initStart >= 0 && initEnd > initStart, "app init must remain discoverable");
 assert.ok(loadIndex >= 0, "workspace snapshot must start loading during bootstrap");
-assert.ok(recoveryShellIndex >= 0 && recoveryShellIndex < clearedTabsIndex,
-  "cleared-tab recovery must have a visible shell before inventory loading starts");
-assert.ok(clearedTabsIndex >= 0 && clearedTabsIndex < runtimeRefreshIndex,
-  "cleared-tab inventory must start independently before content-script reconciliation");
-assert.match(
-  init.slice(recoveryShellIndex, runtimeRefreshIndex),
-  /clearedTabsController\.refresh\(\)\.then\(\(tabs\)[\s\S]*?clearedTabsController\.syncBanner\(recoveryShell\)/,
-  "cleared-tab inventory must update the early shell without waiting for unrelated bootstrap work"
-);
 assert.ok(hydrateIndex > loadIndex, "workspace snapshot must load before hydration");
 assert.ok(persistIndex > hydrateIndex, "hydration must be durably persisted before the workspace becomes ready");
 assert.ok(renderIndex > persistIndex, "the first app render must wait for durable workspace persistence");
 assert.ok(restoreBarrierIndex > renderIndex, "the initial workspace must render before the restoration barrier starts");
 assert.ok(preferredModelIndex > restoreBarrierIndex, "preferred models must wait for initial frame restoration");
+assert.ok(runtimeRefreshIndex > loadIndex, "content-script reconciliation must start after snapshot loading begins");
 assert.match(bootstrapRecovery, /function initialWorkspaceFrameRestoreState\(\)/);
 assert.match(bootstrapRecovery, /function waitForInitialWorkspaceFrameRestoration\(/);
 assert.match(runtime, /createWorkspaceBootstrapRecoveryController\(\{/);
 assert.match(runtime, /createWorkspaceSessionStore\(\{[\s\S]*?currentTab: currentExtensionTab[\s\S]*?currentTabId: currentExtensionTabId[\s\S]*?persistWorkspaceSession:[\s\S]*?storageGet[\s\S]*?storageRemove[\s\S]*?\}\)/);
 assert.doesNotMatch(runtime.slice(runtime.indexOf("createWorkspaceSessionStore({"), runtime.indexOf("const workspaceController")), /\bstorageSet\b/, "stable workspace records must have one background writer");
 assert.match(runtime, /action: "claimWorkspaceSessionRecovery"/, "a naked replacement page must claim before default hydration");
-assert.match(runtime, /clearedTabsController\.refresh\(\)/, "cleared ChatClub tabs must be listed after hydration");
-assert.match(runtime, /clearedTabsController\.syncBanner\(shell\)/, "the one-click restore banner must render with the workspace");
-assert.match(runtime, /foregroundHost: \(\) => document\.querySelector\("\.settings-modal"\)/,
-  "Settings must surface recovery controls above its modal backdrop");
-assert.match(runtime, /openSettings[\s\S]*?clearedTabsController\.syncBanner\(ensureAppShell\(\)\)/,
-  "opening Settings with existing candidates must immediately mirror the recovery banner");
-assert.match(runtime, /onSettingsDialogClosed: \(\) => clearedTabsController\.syncBanner\(ensureAppShell\(\)\)/,
-  "closing Settings must immediately reactivate the base recovery banner");
+assert.doesNotMatch(runtime, /clearedTabsController/, "the restore banner must not remain in the page runtime");
+assert.doesNotMatch(runtime, /attachWorkspaceClearedTabsController/, "Tabs memory must replace the cleared-tab banner controller");
 assert.match(read("app/settings/controller.js"), /dialog\.remove\(\);\s*onSettingsDialogClosed\(\);/,
-  "the Settings close path must resynchronize recovery controls after removing the foreground host");
-assert.match(
-  bootstrapRecovery,
-  /clearedTabsController\.syncBanner\(shell\)[\s\S]*?clearedTabsController\.refresh\(\)[\s\S]*?clearedTabsController\.syncBanner\(shell\)/,
-  "runtime bootstrap failures must still provide a shell for the recovery banner"
-);
+  "the Settings close path must still notify its optional close hook");
 assert.match(
   runtime.slice(runtime.indexOf("init().catch")),
   /renderRuntimeBootstrapFailure\(error\)/,
-  "any uncaught bootstrap failure must retain the cleared-tab recovery surface"
+  "any uncaught bootstrap failure must retain the runtime recovery surface"
 );
-assert.match(runtime, /workspaceTabsSidebarController\.syncSidebar\(shell\)/, "the live ChatClub-tab sidebar must render with the workspace");
-assert.match(runtime, /attachWorkspaceTabsSidebarController\(/, "runtime must own the live ChatClub-tab sidebar");
+assert.match(runtime, /workspaceTabsSidebarController\.syncSidebar\(shell\)/, "the remembered ChatClub-tab sidebar must render with the workspace");
+assert.match(runtime, /attachWorkspaceTabsSidebarController\(/, "runtime must own the remembered ChatClub-tab sidebar");
 assert.match(
   runtime,
   /initializeTopbarPromptPlaceholder\(\{\s*persist:\s*!workspaceSessionSnapshot\s*\}\)/,

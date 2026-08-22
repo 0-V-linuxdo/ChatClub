@@ -118,11 +118,18 @@ globalThis.document = {
   assert.match(source, /isDismissalEscape/);
   assert.match(source, /workspaceSessionWorkspaceId/);
   assert.match(source, /syncPageTitle/);
+  assert.match(source, /confirmationModal/);
+  assert.match(source, /forgetRememberedWorkspaceTab/);
+  assert.match(source, /openWorkspaceTab/);
+  assert.match(source, /is-closed/);
   assert.match(css, /\.workspace-tabs-sidebar\s*\{[^}]*position:\s*absolute/, "the sidebar must overlay the workspace instead of taking iframe space");
   assert.match(css, /\.workspace-tabs-sidebar\s*\{[^}]*top:\s*var\(--workspace-tabs-sidebar-top\)/, "the sidebar must start below the topbar instead of covering it");
   assert.match(css, /\.workspace-tabs-sidebar-header\s*\{[^}]*padding:\s*14px/, "the sidebar header must keep top whitespace");
+  assert.match(css, /\.workspace-tabs-sidebar-item\.is-closed/, "closed remembered tabs must have a distinct style");
+  assert.match(css, /\.workspace-tabs-sidebar-item-delete:hover/, "the delete control must turn red on hover");
   assert.doesNotMatch(css, /\.workspace-tabs-sidebar\s*\{[^}]*inset:\s*0/, "the sidebar must not stretch under the topbar");
   assert.doesNotMatch(css, /\.app-shell\.has-workspace-tabs-sidebar\s*\{[^}]*grid-template-columns/, "opening the sidebar must not split the app-shell grid");
+  assert.doesNotMatch(css, /workspace-cleared-tabs-banner/, "the restore banner must not remain in the workspace chrome");
   assert.match(icons, /x: "3", y: "3", width: "18", height: "18", rx: "2"/);
   assert.match(icons, /d: "M9 3v18"/);
   const { createWorkspaceTabsSidebarController } = await import("../app/workspace/tabs-sidebar-controller.js");
@@ -150,6 +157,7 @@ globalThis.document = {
                 index: 0,
                 workspaceId: "page-aaaaaaaaaaaa",
                 current: true,
+                live: true,
                 layoutName: "Pocket batch",
                 appIds: ["ChatGPT"]
               },
@@ -159,14 +167,24 @@ globalThis.document = {
                 index: 1,
                 workspaceId: "page-bbbbbbbbbbbb",
                 current: false,
+                live: true,
                 appIds: ["Claude"]
+              },
+              {
+                workspaceId: "page-cccccccccccc",
+                current: false,
+                live: false,
+                topicTitle: "Closed research",
+                appIds: ["Grok"]
               }
             ]
           };
         }
         if (action === "focusWorkspaceTab") return { focused: true, tabId: payload.tabId, current: false };
+        if (action === "openWorkspaceTab") return { tabId: 99 };
+        if (action === "forgetRememberedWorkspaceTab") return { forgotten: true, workspaceId: payload.workspaceId, closed: false };
         if (action === "setWorkspaceTabTitle") {
-          return { updated: true, tabId: payload.tabId, title: payload.title, custom: payload.custom !== false };
+          return { updated: true, workspaceId: payload.workspaceId, tabId: payload.tabId, title: payload.title, custom: payload.custom !== false };
         }
         return {};
       },
@@ -203,13 +221,21 @@ globalThis.document = {
   {
     const fixture = controller();
     const listed = await fixture.api.refresh();
-    assert.equal(listed.length, 2);
+    assert.equal(listed.length, 3);
     const current = await fixture.api.focusTab(11);
     assert.deepEqual(current, { focused: true, tabId: 11, current: true });
     assert.equal(fixture.calls.at(-1).action, "listLiveWorkspaceTabs");
     await fixture.api.focusTab(12);
     assert.equal(fixture.calls.at(-1).action, "focusWorkspaceTab");
     assert.deepEqual(fixture.calls.at(-1).payload, { tabId: 12 });
+    const closed = listed[2];
+    await fixture.api.activateTab(closed);
+    assert.equal(fixture.calls.at(-1).action, "openWorkspaceTab");
+    assert.deepEqual(fixture.calls.at(-1).payload, { workspaceId: "page-cccccccccccc" });
+    await fixture.api.forgetTab(closed);
+    assert.equal(fixture.calls.at(-1).action, "forgetRememberedWorkspaceTab");
+    assert.deepEqual(fixture.calls.at(-1).payload, { workspaceId: "page-cccccccccccc" });
+    assert.equal(fixture.api.currentItems().length, 2);
   }
 
   {
@@ -251,6 +277,11 @@ globalThis.document = {
     assert.equal(fixture.api.itemLabel({ topicTitle: "Prompt", appIds: ["Claude"] }, 0), "Claude");
     const edit = descendants(sidebar).find((node) => String(node.className || "").includes("workspace-tabs-sidebar-item-edit"));
     assert.ok(edit, "each ChatClub tab row must expose an edit button");
+    const remove = descendants(sidebar).find((node) => String(node.className || "").includes("workspace-tabs-sidebar-item-delete"));
+    assert.ok(remove, "each ChatClub tab row must expose a delete button");
+    const closed = descendants(sidebar).find((node) => node.classList.contains("is-closed"));
+    assert.ok(closed, "a remembered closed ChatClub tab must stay visible");
+    assert.match(nodeText(closed), /Closed research|已关闭/);
     const focus = descendants(current).find((node) => node.classList.contains("workspace-tabs-sidebar-item-focus"));
     assert.ok(focus, "the row label must stay a separate focus control");
   }
@@ -319,7 +350,7 @@ globalThis.document = {
     fixture.api.setOpen(true);
     const sidebar = fixture.api.renderSidebar();
     const editButtons = descendants(sidebar).filter((node) => String(node.className || "").includes("workspace-tabs-sidebar-item-edit"));
-    assert.equal(editButtons.length, 2);
+    assert.equal(editButtons.length, 3);
     editButtons[0].click();
     assert.equal(editors.length, 1);
     assert.ok(!fixture.calls.some((call) => call.action === "focusWorkspaceTab"), "edit must not switch ChatClub tabs");
@@ -327,11 +358,40 @@ globalThis.document = {
     const renamed = await fixture.api.saveTabTitle(other, "  Custom Claude thread  ");
     assert.equal(renamed.updated, true);
     assert.equal(fixture.calls.at(-1).action, "setWorkspaceTabTitle");
-    assert.deepEqual(fixture.calls.at(-1).payload, { tabId: 12, title: "Custom Claude thread", custom: true });
+    assert.deepEqual(fixture.calls.at(-1).payload, {
+      tabId: 12,
+      workspaceId: "page-bbbbbbbbbbbb",
+      title: "Custom Claude thread",
+      custom: true
+    });
     const current = fixture.api.currentItems()[0];
     await fixture.api.saveTabTitle(current, "My research");
     assert.deepEqual(currentTitles, ["My research"]);
     assert.ok(!fixture.calls.some((call) => call.action === "setWorkspaceTabTitle" && call.payload.tabId === 11));
+  }
+
+  {
+    const confirmations = [];
+    const fixture = controller({
+      confirmationModal: (title, content, onClose) => {
+        confirmations.push({ title, content, onClose });
+        return {
+          remove() {},
+          querySelector() {
+            return { toggleAttribute() {}, setAttribute() {} };
+          }
+        };
+      }
+    });
+    await fixture.api.refresh();
+    fixture.api.setOpen(true);
+    const sidebar = fixture.api.renderSidebar();
+    const deleteButtons = descendants(sidebar).filter((node) => String(node.className || "").includes("workspace-tabs-sidebar-item-delete"));
+    assert.equal(deleteButtons.length, 3);
+    deleteButtons[2].click();
+    assert.equal(confirmations.length, 1);
+    assert.match(String(confirmations[0].title || ""), /Delete this ChatClub tab|删除此 ChatClub 标签页/);
+    assert.ok(!fixture.calls.some((call) => call.action === "forgetRememberedWorkspaceTab"), "delete must wait for confirmation");
   }
 
   console.log("workspace tabs sidebar: ok");

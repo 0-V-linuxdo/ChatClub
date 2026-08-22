@@ -4,7 +4,6 @@ const INITIAL_FRAME_RESTORE_POLL_MS = 50;
 
 export function createWorkspaceBootstrapRecoveryController({
   appRoot,
-  clearedTabsController,
   createElement,
   currentFrames,
   frameLoadingInstanceIds,
@@ -27,12 +26,6 @@ export function createWorkspaceBootstrapRecoveryController({
     createElement("p", {}, detail || "当前浏览器恢复了旧的扩展运行时，工作区暂时不会加载。"),
     createElement("button", { type: "button", onclick: reloadPage }, "重新加载 ChatClub")));
     appRoot?.replaceChildren(shell);
-    clearedTabsController.syncBanner(shell);
-    clearedTabsController.refresh().then(() => {
-      clearedTabsController.syncBanner(shell);
-    }).catch((refreshError) => {
-      console.warn("[ChatClub] Cleared workspace tabs could not be listed after bootstrap failure", refreshError);
-    });
     return shell;
   }
 

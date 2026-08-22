@@ -42,7 +42,6 @@ import { createPreferredModelController } from "./preferred-model/controller.js"
 import { createTopbarController } from "./topbar/controller.js";
 import { createWorkspaceController } from "./workspace/controller.js";
 import { PROMPT_HANDOFF_LAUNCH_REASON, createWorkspacePromptHandoffController } from "./workspace/prompt-handoff-controller.js";
-import { attachWorkspaceClearedTabsController } from "./workspace/cleared-tabs-controller.js";
 import { attachWorkspaceTabsSidebarController } from "./workspace/tabs-sidebar-controller.js";
 import { createWorkspaceTopicTitleController } from "./workspace/topic-title-controller.js";
 import { createWorkspaceSessionStore } from "./workspace/session-store.js";
@@ -339,8 +338,6 @@ workspaceTopicTitleController = createWorkspaceTopicTitleController({
   state, rememberWorkspaceSession: () => workspaceController.rememberWorkspaceSession(), render, extensionApi,
   workspaceId: () => workspaceSessionStore.workspaceId()
 });
-const clearedTabsController = attachWorkspaceClearedTabsController({
-  requestBackground, toast, render, extensionApi, foregroundHost: () => document.querySelector(".settings-modal") });
 const workspaceTabsSidebarController = attachWorkspaceTabsSidebarController({
   requestBackground, toast, render, inferAppName, appById, extensionApi,
   currentWorkspace: () => ({ layoutName: state.temporaryLayoutPreset?.name || "", groups: state.groups, topicTitle: state.topicTitle }),
@@ -352,7 +349,7 @@ const {
   scheduleWorkspaceSessionLoadRecovery,
   waitForInitialWorkspaceFrameRestoration
 } = createWorkspaceBootstrapRecoveryController({
-  appRoot, clearedTabsController, createElement: el,
+  appRoot, createElement: el,
   currentFrames: workspaceController.currentFrames,
   frameLoadingInstanceIds: () => state.frameLoadingInstanceIds,
   isOptionsPage, reloadPage: () => window.location.reload(), sessionStore: workspaceSessionStore, sleep
@@ -520,7 +517,6 @@ function ensureSettingsController() {
           applyTheme,
           syncI18nLanguage,
           requestUserScriptsPermission: requestUserScriptsAccess,
-          onSettingsDialogClosed: () => clearedTabsController.syncBanner(ensureAppShell()),
           functionalAnomalyLog: functionalAnomalyController,
           hydrateImportedLayoutIfNeeded: workspaceController.hydrateImportedLayoutIfNeeded,
           reconcileAppCatalog: workspaceController.reconcileAppCatalog,
@@ -868,7 +864,6 @@ function render() {
   closeTransientOverlays();
   const shell = ensureAppShell();
   syncTopbar();
-  clearedTabsController.syncBanner(shell);
   workspaceController.syncWorkspaceIsland(shell);
   workspaceTabsSidebarController.syncSidebar(shell);
   syncSummaryPanel();
@@ -900,7 +895,7 @@ async function openSummaryPanel() {
 async function openSettings(sectionId = "appearance") {
   try {
     const result = (await ensureSettingsController()).openSettings(sectionId);
-    clearedTabsController.syncBanner(ensureAppShell()); return result;
+    return result;
   } catch (error) {
     return lazyControllerError("Settings", error);
   }
@@ -1101,15 +1096,6 @@ async function init() {
   void functionalAnomalyController.refresh().catch((error) => {
     console.warn("[ChatClub] Failed to load functional anomaly records", error);
   });
-  const recoveryShell = ensureAppShell();
-  clearedTabsController.syncBanner(recoveryShell);
-  const clearedTabsRefreshPromise = clearedTabsController.refresh().then((tabs) => {
-    if (recoveryShell.isConnected) clearedTabsController.syncBanner(recoveryShell);
-    return tabs;
-  }).catch((error) => {
-    console.warn("[ChatClub] Cleared workspace tabs could not be listed", error);
-    return [];
-  });
   let workspaceLoadError = null;
   const workspaceSessionSnapshotPromise = workspaceSessionStore.load().catch((error) => {
     workspaceLoadError = error; return null;
@@ -1171,7 +1157,6 @@ async function init() {
     scheduleWorkspaceSessionLoadRecovery(); return;
   }
   workspaceTopicTitleController.install();
-  await clearedTabsRefreshPromise;
   installGlobalTooltips({
     getDisabledTooltipIds: () => state.options?.tooltipDisabledIds || []
   });

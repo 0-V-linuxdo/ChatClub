@@ -1,11 +1,7 @@
 {
-  "app/workspace/cleared-tabs-controller.js#createWorkspaceClearedTabsController": {
-    "kind": "test-only",
-    "reason": "Banner restore/dismiss regressions inject remember/restore seams without going through the runtime attach helper."
-  },
   "app/workspace/tabs-sidebar-controller.js#createWorkspaceTabsSidebarController": {
     "kind": "test-only",
-    "reason": "Live ChatClub-tab sidebar regressions inject storage, catalog, and overlay-dismissal seams without going through the runtime attach helper."
+    "reason": "Remembered ChatClub-tab sidebar regressions inject storage, catalog, overlay-dismissal, and delete-confirmation seams without going through the runtime attach helper."
   },
   "app/settings/history.js#groupPromptHistory": {
     "kind": "test-only",

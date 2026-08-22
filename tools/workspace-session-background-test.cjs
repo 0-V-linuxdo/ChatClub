@@ -57,6 +57,11 @@ function fixture({ local = {}, session = {}, tabs = [] } = {}) {
       update: async (tabId, options) => {
         tabUpdates.push({ tabId, options });
         return { id: tabId, ...options };
+      },
+      remove: async (tabId) => {
+        const index = liveTabs.findIndex((tab) => tab.id === tabId);
+        if (index < 0) throw new Error("missing tab");
+        liveTabs.splice(index, 1);
       }
     },
     windows: {
@@ -108,6 +113,7 @@ function deferredPromise() {
     commitWorkspaceSessionRecovery,
     detachWorkspaceSessionMirror,
     dismissClearedWorkspaceTabs,
+    forgetRememberedWorkspaceTab,
     handleWorkspaceSessionAlarm,
     listClearedWorkspaceTabs,
     listLiveWorkspaceTabs,
@@ -2995,30 +3001,62 @@ function deferredPromise() {
               schemaVersion: 1,
               generation,
               layout: { type: "temporary", name: "Pocket batch", presetId: "default" },
-              groups: [{ tabs: [{ appId: "ChatGPT" }, { appId: "Claude" }], activeIndex: 0 }]
+              groups: [{
+                tabs: [
+                  { appId: "ChatGPT", currentHref: "https://chatgpt.com/c/remembered" },
+                  { appId: "Claude", currentHref: "https://claude.ai/chat/abc" }
+                ],
+                activeIndex: 0
+              }]
+            }
+          }
+        ),
+        [workspaceSessionWorkspaceKey(workspaceB)]: stable(
+          workspaceB,
+          "closed-b",
+          { tabId: 12, windowId: 2, index: 1, pinned: false },
+          now - 50,
+          now - 40,
+          { snapshot: usedSnapshot("closed-b") }
+        ),
+        [workspaceSessionWorkspaceKey(workspaceC)]: stable(
+          workspaceC,
+          "empty-c",
+          { tabId: 14, windowId: 2, index: 2, pinned: false },
+          now,
+          null,
+          {
+            snapshot: {
+              schemaVersion: 1,
+              generation,
+              groups: [{ tabs: [{ appId: "ChatGPT", currentHref: "https://chatgpt.com/" }], activeIndex: 0 }]
             }
           }
         )
       },
       tabs: [
         { id: 21, windowId: 3, index: 1, title: "ChatClub", url: "chrome-extension://chatclub/options.html" },
-        { id: 12, windowId: 2, index: 1, title: "ChatClub", url: `chrome-extension://chatclub/chatClub.html#workspace=${workspaceB}` },
+        { id: 12, windowId: 2, index: 1, title: "ChatClub", url: "chrome-extension://chatclub/chatClub.html#workspace=page-dddddddddddd" },
         { id: 11, windowId: 2, index: 0, title: "ChatClub", url: `chrome-extension://chatclub/chatClub.html#workspace=${workspaceA}` },
         { id: 31, windowId: 1, index: 0, title: "Example", url: "https://example.com/" },
-        { id: 13, windowId: 4, index: 0, title: "ChatClub", pendingUrl: "chrome-extension://chatclub/chatClub.html" }
+        { id: 13, windowId: 4, index: 0, title: "ChatClub", pendingUrl: "chrome-extension://chatclub/chatClub.html" },
+        { id: 14, windowId: 2, index: 2, title: "ChatClub", url: `chrome-extension://chatclub/chatClub.html#workspace=${workspaceC}` }
       ]
     });
     const listed = await listLiveWorkspaceTabs(store.api, {}, {
       tab: { id: 11, url: `chrome-extension://chatclub/chatClub.html#workspace=${workspaceA}` }
     });
-    assert.deepEqual(listed.tabs.map((item) => item.tabId), [11, 12, 13]);
+    assert.deepEqual(listed.tabs.map((item) => item.workspaceId), [workspaceA, workspaceB]);
+    assert.equal(listed.tabs[0].tabId, 11);
     assert.equal(listed.tabs[0].current, true);
+    assert.equal(listed.tabs[0].live, true);
     assert.equal(listed.tabs[0].layoutName, "Pocket batch");
     assert.equal(listed.tabs[0].topicTitle, "");
     assert.deepEqual(listed.tabs[0].appIds, ["ChatGPT", "Claude"]);
     assert.equal(listed.tabs[1].current, false);
+    assert.equal(listed.tabs[1].live, false);
+    assert.equal(listed.tabs[1].tabId, null);
     assert.equal(listed.tabs[1].workspaceId, workspaceB);
-    assert.equal(listed.tabs[2].workspaceId, "");
     const focused = await focusWorkspaceTab(store.api, { tabId: 12 }, { tab: { id: 11 } });
     assert.deepEqual(focused, { focused: true, tabId: 12, current: false });
     assert.deepEqual(store.tabUpdates, [{ tabId: 12, options: { active: true } }]);
@@ -3035,12 +3073,29 @@ function deferredPromise() {
       /not a live ChatClub page/
     );
     const renamed = await setWorkspaceTabTitle(store.api, { tabId: 11, title: "Compare models", custom: true });
-    assert.deepEqual(renamed, { updated: true, tabId: 11, title: "Compare models", custom: true });
+    assert.deepEqual(renamed, {
+      updated: true,
+      workspaceId: workspaceA,
+      tabId: 11,
+      title: "Compare models",
+      custom: true
+    });
     const listedAgain = await listLiveWorkspaceTabs(store.api, {}, {
       tab: { id: 11, url: `chrome-extension://chatclub/chatClub.html#workspace=${workspaceA}` }
     });
     assert.equal(listedAgain.tabs[0].topicTitle, "Compare models");
     assert.equal(listedAgain.tabs[0].topicTitleCustom, true);
+    const forgottenClosed = await forgetRememberedWorkspaceTab(store.api, { workspaceId: workspaceB }, { now: now + 1 });
+    assert.deepEqual(forgottenClosed, { forgotten: true, workspaceId: workspaceB, closed: false });
+    const afterForget = await listLiveWorkspaceTabs(store.api, {}, {
+      tab: { id: 11, url: `chrome-extension://chatclub/chatClub.html#workspace=${workspaceA}` }
+    });
+    assert.deepEqual(afterForget.tabs.map((item) => item.workspaceId), [workspaceA]);
+    const forgottenLive = await forgetRememberedWorkspaceTab(store.api, { workspaceId: workspaceA }, { now: now + 2 });
+    assert.deepEqual(forgottenLive, { forgotten: true, workspaceId: workspaceA, closed: true, tabId: 11 });
+    assert.equal(store.liveTabs.some((tab) => tab.id === 11), false);
+    const afterLiveForget = await listLiveWorkspaceTabs(store.api, {}, { tab: { id: 12 } });
+    assert.deepEqual(afterLiveForget.tabs, []);
   }
 
   {
@@ -3065,6 +3120,12 @@ function deferredPromise() {
       "every inventory request must await lifecycle reconciliation and propagate its failure"
     );
     assert.match(runtime, /REQUEST\.LIST_LIVE_WORKSPACE_TABS/);
+    assert.match(
+      runtime,
+      /LIST_LIVE_WORKSPACE_TABS[\s\S]*?await prepareWorkspaceSessionLifecycle\(chrome,[\s\S]*?return listLiveWorkspaceTabs\(chrome/,
+      "remembered tab inventory must await lifecycle reconciliation"
+    );
+    assert.match(runtime, /REQUEST\.FORGET_REMEMBERED_WORKSPACE_TAB/);
     assert.match(runtime, /REQUEST\.FOCUS_WORKSPACE_TAB/);
     assert.match(runtime, /REQUEST\.SET_WORKSPACE_TAB_TITLE/);
     assert.match(runtime, /REQUEST\.RESTORE_CLEARED_WORKSPACE_TABS/);
