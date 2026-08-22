@@ -335,6 +335,7 @@ const root = path.resolve(__dirname, "..");
 
   const preloadSource = [
     "content-src/preload.js",
+    "content-src/preload/claude-iframe.js",
     "content-src/preload/deepseek-delete.js",
     "content-src/preload/grok-storage-access.js",
     "content-src/preload/native-copy.js",
@@ -348,6 +349,7 @@ const root = path.resolve(__dirname, "..");
   assert.match(preloadSource, /runtimeName = "native-copy-bridge"/);
   assert.match(preloadSource, /runtimeName = "grok-storage-access-bridge"/);
   assert.match(preloadSource, /runtimeName = "notion-send-bridge"/);
+  assert.match(preloadSource, /RUNTIME_NAME = "claude-iframe-compat"/);
   assert.match(preloadSource, /runtimes\.register\(runtimeName/);
   assert.match(preloadSource, /removeEventListener\("message", messageListener, true\)/);
   assert.match(preloadSource, /removeEventListener\("copy", copyEventCapture, true\)/);

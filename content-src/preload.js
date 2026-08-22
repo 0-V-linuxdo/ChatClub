@@ -2,6 +2,7 @@ import { CONTENT_PROTOCOL } from "../shared/protocol.js";
 import { CONTENT_RUNTIME_PRELOAD_BUNDLE_IDENTITY } from "../shared/content-runtime-version.generated.js";
 import { createContentRuntimeBundleIdentity } from "../shared/content-runtime-identity.js";
 import { runtimeRegistry } from "./shared/runtime-registry.js";
+import { installClaudeIframeCompat } from "./preload/claude-iframe.js";
 import { installGrokInitialLayoutGuard } from "./preload/grok-initial-layout.js";
 import { installGrokStorageAccessBridge } from "./preload/grok-storage-access.js";
 import { installNativeCopyBridge } from "./preload/native-copy.js";
@@ -834,10 +835,7 @@ function installPreload() {
       }
 
       if (framed && (host === "claude.ai" || host.endsWith(".claude.ai"))) {
-        try {
-          if (location.pathname === "/") location.replace(`/new${location.search}${location.hash}`);
-          Object.defineProperty(document, "referrer", { get: () => "" });
-        } catch {}
+        installClaudeIframeCompat(runtimes);
       }
 
       if (framed && (host === "app.notion.com" || host.endsWith(".notion.so"))) {

@@ -54,7 +54,7 @@ function bundledLiteral(source, name) {
 
   for (const file of selfContainedRuntimes) {
     const source = read(file);
-    assert.ok(source.startsWith("(() => {\n"), `${file} must be an IIFE`);
+    assert.match(source, /^(?:"use strict";\n)?\(\(\) => \{\n/, `${file} must be an IIFE`);
     assert.match(source, /\/\/ shared\/protocol\.js/);
     assert.doesNotMatch(source, /chatclub-generated-protocol|__CHATCLUB_PROTOCOL__|protocol bootstrap is unavailable/);
     assert.doesNotThrow(() => new vm.Script(source, { filename: file }), `${file} must parse with classic-script grammar`);
