@@ -353,7 +353,7 @@ function event(type, properties = {}) {
     const allAppSource = appSources.join("\n");
     const wrapperNames = ["editorModal", "viewerModal", "taskModal", "confirmationModal"];
     const expectedInventory = new Map([
-      ["editorModal", 11],
+      ["editorModal", 10],
       ["viewerModal", 4],
       ["taskModal", 1],
       ["confirmationModal", 6]
@@ -371,7 +371,7 @@ function event(type, properties = {}) {
       wrapperNames.reduce((total, wrapperName) => (
         total + occurrences(allAppSource, new RegExp(`\\b${wrapperName}\\s*\\(`, "g"))
       ), 0),
-      22,
+      21,
       "all twenty-one app modal call sites must use a typed wrapper"
     );
 
@@ -400,7 +400,6 @@ function event(type, properties = {}) {
       ["app/settings/topic-deletion.js", "openSiteEditor", "editorModal", "Delete Site editor"],
       ["app/prompt-library/controller.js", "openPromptLibraryEditor", "editorModal", "Prompt Library editor"],
       ["app/workspace/frame-controller.js", "openGoToUrlDialog", "editorModal", "Go To URL editor"],
-      ["app/workspace/tabs-sidebar-controller.js", "openTitleEditor", "editorModal", "ChatClub tab title editor"],
       ["app/workspace/tabs-sidebar-controller.js", "openDeleteConfirmation", "confirmationModal", "ChatClub tab delete confirmation"],
       ["app/settings/apps.js", "openBuiltInDetails", "viewerModal", "built-in platform details"],
       ["app/settings/functional-anomalies.js", "openDetails", "viewerModal", "functional anomaly details"],

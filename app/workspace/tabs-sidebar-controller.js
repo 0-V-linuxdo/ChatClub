@@ -4,9 +4,7 @@ import { workspaceSessionWorkspaceId } from "../../shared/workspace-session.js";
 import {
   button,
   confirmationModal as defaultConfirmationModal,
-  editorModal as defaultEditorModal,
   el,
-  field,
   iconButton,
   input,
   isDismissalEscape
@@ -120,7 +118,6 @@ export function createWorkspaceTabsSidebarController({
   closeCurrentTab,
   canDismiss,
   document: ownerDocument = globalThis.document,
-  editorModal = defaultEditorModal,
   confirmationModal = defaultConfirmationModal,
   createIcon = createSvgIcon
 } = {}) {
@@ -139,6 +136,8 @@ export function createWorkspaceTabsSidebarController({
   let escapeInstalled = false;
   let refreshTimer = 0;
   let resizeDrag = null;
+  let editingKey = "";
+  let editingDraft = "";
 
   function currentItems() {
     return items.slice();
@@ -172,6 +171,28 @@ export function createWorkspaceTabsSidebarController({
     const leftTab = positiveTabId(left.tabId);
     const rightTab = positiveTabId(right.tabId);
     return leftTab !== null && leftTab === rightTab;
+  }
+
+  function itemKey(item = {}) {
+    const workspaceId = workspaceIdValue(item.workspaceId);
+    if (workspaceId) return `w:${workspaceId}`;
+    const tabId = positiveTabId(item.tabId);
+    return tabId !== null ? `t:${tabId}` : "";
+  }
+
+  function isEditingItem(item = {}) {
+    const key = itemKey(item);
+    return Boolean(key) && key === editingKey;
+  }
+
+  function partitionedItems() {
+    const live = [];
+    const closed = [];
+    for (const item of items) {
+      if (item.live) live.push(item);
+      else closed.push(item);
+    }
+    return { live, closed };
   }
 
   function itemLabel(item = {}, index = 0) {
@@ -413,30 +434,97 @@ export function createWorkspaceTabsSidebarController({
     return response;
   }
 
-  function openTitleEditor(item = {}) {
-    const titleInput = input(itemLabel(item, items.findIndex((entry) => sameItem(entry, item))), {
-      placeholder: t("workspace.tabs.editPlaceholder")
+  function stopTitleEditor() {
+    editingKey = "";
+    editingDraft = "";
+  }
+
+  function focusTitleEditor(root) {
+    const field = root?.querySelector?.(".workspace-tabs-sidebar-item-editor");
+    try { field?.focus?.(); } catch {}
+    try { field?.select?.(); } catch {}
+  }
+
+  function renderTitleEditor(item = {}, index = 0) {
+    const initial = editingDraft || itemLabel(item, index);
+    const titleInput = input(initial, {
+      class: "input workspace-tabs-sidebar-item-editor",
+      type: "text",
+      placeholder: t("workspace.tabs.editPlaceholder"),
+      "aria-label": t("workspace.tabs.edit")
     });
-    let dialog;
-    const close = () => dialog?.remove?.();
-    const save = () => {
+    titleInput.value = initial;
+    const commit = () => {
+      stopTitleEditor();
       saveTabTitle(item, titleInput.value).catch(() => {});
-      close();
     };
-    dialog = editorModal(
-      t("workspace.tabs.editTitle"),
-      el("div", { class: "settings-editor-form" },
-        field(t("workspace.tabs.editLabel"), titleInput),
-        el("div", { class: "settings-dialog-actions" },
-          button(t("common.cancel"), close),
-          button(t("common.save"), save, "primary")
-        )
+    const cancel = () => {
+      stopTitleEditor();
+      if (lastShell?.isConnected) syncSidebar(lastShell);
+    };
+    titleInput.addEventListener("input", () => {
+      editingDraft = String(titleInput.value || "");
+    });
+    titleInput.addEventListener("keydown", (event) => {
+      if (event?.key === "Enter" && !event?.isComposing && event?.keyCode !== 229) {
+        event.preventDefault?.();
+        event.stopPropagation?.();
+        commit();
+      } else if (isDismissalEscape(event)) {
+        event.preventDefault?.();
+        event.stopPropagation?.();
+        cancel();
+      }
+    });
+    return el("div", {
+      class: "workspace-tabs-sidebar-item is-editing",
+      role: "listitem"
+    },
+      titleInput,
+      iconButton(
+        t("common.cancel"),
+        createIcon("x"),
+        (event) => {
+          event?.preventDefault?.();
+          event?.stopPropagation?.();
+          cancel();
+        },
+        "workspace-tabs-sidebar-item-edit-cancel",
+        t("common.cancel"),
+        "",
+        "common.cancel"
       ),
-      close,
-      false,
-      t("common.close")
+      iconButton(
+        t("common.save"),
+        createIcon("check"),
+        (event) => {
+          event?.preventDefault?.();
+          event?.stopPropagation?.();
+          commit();
+        },
+        "workspace-tabs-sidebar-item-edit-save",
+        t("common.save"),
+        "",
+        "common.save"
+      )
     );
-    return dialog;
+  }
+
+  function startTitleEditor(item = {}, row = null) {
+    const key = itemKey(item);
+    if (!key) return null;
+    const index = Math.max(0, items.findIndex((entry) => sameItem(entry, item)));
+    editingKey = key;
+    editingDraft = itemLabel(item, index);
+    const editor = renderTitleEditor(item, index);
+    if (row?.replaceWith) row.replaceWith(editor);
+    else if (lastShell?.isConnected) syncSidebar(lastShell);
+    focusTitleEditor(editor);
+    return editor;
+  }
+
+  function openTitleEditor(item = {}) {
+    return startTitleEditor(item);
   }
 
   function openDeleteConfirmation(item = {}) {
@@ -478,6 +566,70 @@ export function createWorkspaceTabsSidebarController({
     return dialog;
   }
 
+  function renderSidebarItem(item, index) {
+    if (isEditingItem(item)) return renderTitleEditor(item, index);
+    let row;
+    row = el("div", {
+      class: `workspace-tabs-sidebar-item${item.current ? " is-current" : ""}${item.live ? "" : " is-closed"}`,
+      role: "listitem"
+    },
+      el("button", {
+        class: "workspace-tabs-sidebar-item-focus",
+        type: "button",
+        "aria-current": item.current ? "page" : null,
+        onclick: () => { activateTab(item).catch(() => {}); }
+      },
+        el("span", { class: "workspace-tabs-sidebar-item-index" }, String(index + 1)),
+        el("span", { class: "workspace-tabs-sidebar-item-label" }, itemLabel(item, index))
+      ),
+      el("div", { class: "workspace-tabs-sidebar-item-actions" },
+        iconButton(
+          t("workspace.tabs.edit"),
+          createIcon("edit"),
+          (event) => {
+            event?.preventDefault?.();
+            event?.stopPropagation?.();
+            startTitleEditor(item, row);
+          },
+          "workspace-tabs-sidebar-item-edit",
+          t("workspace.tabs.edit"),
+          "",
+          "workspace.tabs.edit"
+        ),
+        iconButton(
+          t("workspace.tabs.delete"),
+          createIcon("trash"),
+          (event) => {
+            event?.preventDefault?.();
+            event?.stopPropagation?.();
+            openDeleteConfirmation(item);
+          },
+          "workspace-tabs-sidebar-item-delete",
+          t("workspace.tabs.delete"),
+          "",
+          "workspace.tabs.delete"
+        )
+      )
+    );
+    return row;
+  }
+
+  function renderSidebarList() {
+    const { live, closed } = partitionedItems();
+    const nodes = [];
+    let index = 0;
+    for (const item of live) nodes.push(renderSidebarItem(item, index++));
+    if (closed.length) {
+      nodes.push(el("div", {
+        class: "workspace-tabs-sidebar-divider",
+        role: "separator",
+        "aria-label": t("workspace.tabs.closed")
+      }, el("span", { class: "workspace-tabs-sidebar-divider-label" }, t("workspace.tabs.closed"))));
+      for (const item of closed) nodes.push(renderSidebarItem(item, index++));
+    }
+    return el("div", { class: "workspace-tabs-sidebar-list", role: "list" }, nodes);
+  }
+
   function renderSidebar() {
     if (!open) return null;
     return el("aside", {
@@ -488,52 +640,7 @@ export function createWorkspaceTabsSidebarController({
     },
     renderSidebarHeader(),
     items.length
-      ? el("div", { class: "workspace-tabs-sidebar-list", role: "list" },
-        items.map((item, index) => el("div", {
-          class: `workspace-tabs-sidebar-item${item.current ? " is-current" : ""}${item.live ? "" : " is-closed"}`,
-          role: "listitem"
-        },
-        el("button", {
-          class: "workspace-tabs-sidebar-item-focus",
-          type: "button",
-          "aria-current": item.current ? "page" : null,
-          onclick: () => { activateTab(item).catch(() => {}); }
-        },
-          el("span", { class: "workspace-tabs-sidebar-item-index" }, String(index + 1)),
-          el("span", { class: "workspace-tabs-sidebar-item-label" }, itemLabel(item, index))
-        ),
-        el("div", { class: "workspace-tabs-sidebar-item-meta" },
-          item.live
-            ? null
-            : el("span", { class: "workspace-tabs-sidebar-item-closed" }, t("workspace.tabs.closed")),
-          iconButton(
-            t("workspace.tabs.edit"),
-            createIcon("edit"),
-            (event) => {
-              event?.preventDefault?.();
-              event?.stopPropagation?.();
-              openTitleEditor(item);
-            },
-            "workspace-tabs-sidebar-item-edit",
-            t("workspace.tabs.edit"),
-            "",
-            "workspace.tabs.edit"
-          ),
-          iconButton(
-            t("workspace.tabs.delete"),
-            createIcon("trash"),
-            (event) => {
-              event?.preventDefault?.();
-              event?.stopPropagation?.();
-              openDeleteConfirmation(item);
-            },
-            "workspace-tabs-sidebar-item-delete",
-            t("workspace.tabs.delete"),
-            "",
-            "workspace.tabs.delete"
-          )
-        )))
-      )
+      ? renderSidebarList()
       : el("div", { class: "workspace-tabs-sidebar-empty" }, t("workspace.tabs.empty")),
     el("div", {
       class: "workspace-tabs-sidebar-resize",
@@ -633,6 +740,13 @@ export function createWorkspaceTabsSidebarController({
 
   function onEscapeKeydown(event) {
     if (!open || !isDismissalEscape(event)) return;
+    if (editingKey) {
+      event.preventDefault?.();
+      event.stopPropagation?.();
+      stopTitleEditor();
+      if (lastShell?.isConnected) syncSidebar(lastShell);
+      return;
+    }
     if (typeof canDismiss === "function" && !canDismiss()) return;
     event.preventDefault?.();
     event.stopPropagation?.();
@@ -676,6 +790,7 @@ export function createWorkspaceTabsSidebarController({
     bindResizeHandle(next);
     syncTabListeners(true);
     syncEscapeListener();
+    if (editingKey) focusTitleEditor(next);
     return next;
   }
 
@@ -696,6 +811,7 @@ export function createWorkspaceTabsSidebarController({
 
   function close() {
     if (!open) return false;
+    stopTitleEditor();
     setOpen(false);
     return true;
   }

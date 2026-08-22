@@ -14,6 +14,7 @@ class FakeNode {
     this.className = "";
     this.textContent = "";
     this.disabled = false;
+    this.value = "";
     this.style = {
       setProperty(name, value) { this[name] = String(value); }
     };
@@ -22,6 +23,16 @@ class FakeNode {
     this.listeners = Object.create(null);
     this.classList = {
       contains: (name) => String(this.className || "").split(/\s+/).includes(name),
+      add: (name) => {
+        const values = new Set(String(this.className || "").split(/\s+/).filter(Boolean));
+        values.add(name);
+        this.className = [...values].join(" ");
+      },
+      remove: (name) => {
+        const values = new Set(String(this.className || "").split(/\s+/).filter(Boolean));
+        values.delete(name);
+        this.className = [...values].join(" ");
+      },
       toggle: (name, force) => {
         const values = new Set(String(this.className || "").split(/\s+/).filter(Boolean));
         const enabled = force === undefined ? !values.has(name) : Boolean(force);
@@ -35,7 +46,12 @@ class FakeNode {
 
   setAttribute(name, value) {
     this.attributes[name] = String(value);
+    if (name === "value") this.value = String(value);
   }
+
+  focus() {}
+
+  select() {}
 
   addEventListener(name, listener) {
     const key = String(name || "");
@@ -136,8 +152,15 @@ globalThis.document = {
   assert.match(css, /\.workspace-tabs-sidebar-item-index/, "each tab name must show a sequence number");
   assert.match(css, /\.workspace-tabs-sidebar-resize/, "the sidebar must be resizable by dragging");
   assert.match(css, /@media \(hover: hover\)/, "rename and delete controls must wait for hover");
+  assert.match(css, /\.workspace-tabs-sidebar-item-actions\s*\{[^}]*position:\s*absolute/, "rename and delete must overlay the row instead of shrinking the title");
+  assert.match(css, /\.workspace-tabs-sidebar-divider/, "closed tabs must be separated by a divider");
+  assert.match(css, /\.workspace-tabs-sidebar-item\.is-editing/, "rename must edit the title on the row");
   assert.match(css, /\.workspace-tabs-sidebar-item\.is-closed/, "closed remembered tabs must have a distinct style");
   assert.match(css, /\.workspace-tabs-sidebar-item-delete:hover/, "the delete control must turn red on hover");
+  assert.doesNotMatch(source, /editorModal/, "rename must not open a modal");
+  assert.doesNotMatch(source, /workspace-tabs-sidebar-item-meta/);
+  assert.doesNotMatch(source, /workspace-tabs-sidebar-item-closed/);
+  assert.doesNotMatch(css, /\.workspace-tabs-sidebar-item-closed/, "closed tabs must not spend title space on a Closed badge");
   assert.doesNotMatch(css, /\.workspace-tabs-sidebar-item-current/, "current rows must not spend space on a Current badge");
   assert.doesNotMatch(source, /workspace-tabs-sidebar-item-current/);
   assert.doesNotMatch(css, /\.workspace-tabs-sidebar\s*\{[^}]*inset:\s*0/, "the sidebar must not stretch under the topbar");
@@ -327,9 +350,24 @@ globalThis.document = {
     assert.ok(edit, "each ChatClub tab row must expose an edit button");
     const remove = descendants(sidebar).find((node) => String(node.className || "").includes("workspace-tabs-sidebar-item-delete"));
     assert.ok(remove, "each ChatClub tab row must expose a delete button");
+    const actions = descendants(sidebar).find((node) => node.classList.contains("workspace-tabs-sidebar-item-actions"));
+    assert.ok(actions, "rename and delete must live in an overlay that does not shrink the title");
     const closed = descendants(sidebar).find((node) => node.classList.contains("is-closed"));
     assert.ok(closed, "a remembered closed ChatClub tab must stay visible");
-    assert.match(nodeText(closed), /Closed research|已关闭/);
+    assert.match(nodeText(closed), /Closed research/);
+    assert.equal(
+      descendants(closed).some((node) => node.classList.contains("workspace-tabs-sidebar-item-closed")),
+      false,
+      "closed rows must not keep a Closed badge on the title"
+    );
+    const divider = descendants(sidebar).find((node) => node.classList.contains("workspace-tabs-sidebar-divider"));
+    assert.ok(divider, "closed tabs must sit below a divider");
+    assert.match(nodeText(divider), /Closed|已关闭/);
+    const list = descendants(sidebar).find((node) => node.classList.contains("workspace-tabs-sidebar-list"));
+    const rowItems = (list?.children || []).filter((node) => node.classList.contains("workspace-tabs-sidebar-item"));
+    assert.equal(rowItems.at(-1), closed, "closed tabs must render after live tabs");
+    const dividerIndex = (list?.children || []).findIndex((node) => node.classList.contains("workspace-tabs-sidebar-divider"));
+    assert.equal(dividerIndex, 2, "the closed-tab divider must sit between live and closed rows");
     const focus = descendants(current).find((node) => node.classList.contains("workspace-tabs-sidebar-item-focus"));
     assert.ok(focus, "the row label must stay a separate focus control");
   }
@@ -385,13 +423,8 @@ globalThis.document = {
   }
 
   {
-    const editors = [];
     const currentTitles = [];
     const fixture = controller({
-      editorModal: (title, content, onClose) => {
-        editors.push({ title, content, onClose });
-        return { remove() {}, querySelector() { return null; } };
-      },
       setCurrentTabTitle: (title) => { currentTitles.push(title); }
     });
     await fixture.api.refresh();
@@ -400,8 +433,23 @@ globalThis.document = {
     const editButtons = descendants(sidebar).filter((node) => String(node.className || "").includes("workspace-tabs-sidebar-item-edit"));
     assert.equal(editButtons.length, 3);
     editButtons[0].click();
-    assert.equal(editors.length, 1);
+    const editor = descendants(sidebar).find((node) => node.classList.contains("workspace-tabs-sidebar-item-editor"));
+    assert.ok(editor, "rename must replace the row with an inline editor");
+    assert.ok(descendants(sidebar).some((node) => node.classList.contains("is-editing")));
+    assert.ok(
+      descendants(sidebar).some((node) => String(node.className || "").includes("workspace-tabs-sidebar-item-edit-cancel")),
+      "inline rename must expose a cancel control"
+    );
+    assert.ok(
+      descendants(sidebar).some((node) => String(node.className || "").includes("workspace-tabs-sidebar-item-edit-save")),
+      "inline rename must expose a save control"
+    );
     assert.ok(!fixture.calls.some((call) => call.action === "focusWorkspaceTab"), "edit must not switch ChatClub tabs");
+    editor.value = "My research";
+    const saveButton = descendants(sidebar).find((node) => String(node.className || "").includes("workspace-tabs-sidebar-item-edit-save"));
+    saveButton.click();
+    await Promise.resolve();
+    assert.deepEqual(currentTitles, ["My research"]);
     const other = fixture.api.currentItems()[1];
     const renamed = await fixture.api.saveTabTitle(other, "  Custom Claude thread  ");
     assert.equal(renamed.updated, true);
@@ -412,10 +460,6 @@ globalThis.document = {
       title: "Custom Claude thread",
       custom: true
     });
-    const current = fixture.api.currentItems()[0];
-    await fixture.api.saveTabTitle(current, "My research");
-    assert.deepEqual(currentTitles, ["My research"]);
-    assert.ok(!fixture.calls.some((call) => call.action === "setWorkspaceTabTitle" && call.payload.tabId === 11));
   }
 
   {
@@ -528,6 +572,81 @@ globalThis.document = {
     const handle = descendants(sidebar).find((node) => node.classList.contains("workspace-tabs-sidebar-resize"));
     assert.ok(handle, "sync must keep the drag handle");
     assert.equal(sidebar.style.width, "320px");
+  }
+
+  {
+    const fixture = controller({
+      requestBackground: async (action) => {
+        if (action === "listLiveWorkspaceTabs") {
+          return {
+            tabs: [
+              {
+                workspaceId: "page-closedclosedc",
+                current: false,
+                live: false,
+                topicTitle: "Archived notes",
+                appIds: ["Grok"]
+              },
+              {
+                tabId: 21,
+                windowId: 1,
+                index: 0,
+                workspaceId: "page-livelivelivel",
+                current: true,
+                live: true,
+                layoutName: "Live workspace",
+                appIds: ["ChatGPT"]
+              }
+            ]
+          };
+        }
+        return {};
+      }
+    });
+    await fixture.api.refresh();
+    fixture.api.setOpen(true);
+    const sidebar = fixture.api.renderSidebar();
+    const list = descendants(sidebar).find((node) => node.classList.contains("workspace-tabs-sidebar-list"));
+    const children = list?.children || [];
+    assert.equal(children[0]?.classList.contains("workspace-tabs-sidebar-item"), true);
+    assert.equal(children[0]?.classList.contains("is-closed"), false, "live tabs must stay above the divider");
+    assert.equal(children[1]?.classList.contains("workspace-tabs-sidebar-divider"), true);
+    assert.equal(children[2]?.classList.contains("is-closed"), true, "closed tabs must move below the divider even when remembered first");
+    assert.match(nodeText(children[2]), /Archived notes/);
+  }
+
+  {
+    const listeners = [];
+    const ownerDocument = {
+      addEventListener(name, listener, options) { listeners.push({ name, listener, options }); },
+      removeEventListener(name, listener) {
+        const index = listeners.findIndex((entry) => entry.name === name && entry.listener === listener);
+        if (index >= 0) listeners.splice(index, 1);
+      }
+    };
+    const fixture = controller({ document: ownerDocument });
+    const shell = Object.assign(new FakeNode("div"), { isConnected: true, className: "app-shell" });
+    const grid = Object.assign(new FakeNode("div"), { className: "main-grid", offsetTop: 51 });
+    shell.append(grid);
+    shell.querySelector = (selector) => shell.querySelectorAll(selector)[0] || null;
+    await fixture.api.refresh();
+    fixture.api.setOpen(true);
+    fixture.api.syncSidebar(shell);
+    const sidebar = descendants(shell).find((node) => node.classList.contains("workspace-tabs-sidebar"));
+    const edit = descendants(sidebar).find((node) => String(node.className || "").includes("workspace-tabs-sidebar-item-edit"));
+    edit.click();
+    assert.ok(
+      descendants(shell).some((node) => node.classList.contains("is-editing")),
+      "rename must keep the editor on the tab row"
+    );
+    const escape = listeners.find((entry) => entry.name === "keydown");
+    escape.listener({ key: "Escape", isComposing: false, keyCode: 27, preventDefault() {}, stopPropagation() {} });
+    assert.equal(fixture.api.isOpen(), true, "Escape must cancel inline rename before closing the sidebar");
+    assert.equal(
+      descendants(shell).some((node) => node.classList.contains("is-editing")),
+      false,
+      "Escape must leave the tab row"
+    );
   }
 
   console.log("workspace tabs sidebar: ok");
