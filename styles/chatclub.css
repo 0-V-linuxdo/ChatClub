@@ -196,18 +196,29 @@ button { cursor: pointer; }
   margin: 0;
   min-width: 0;
   flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 650;
   color: var(--text);
 }
 
 .workspace-tabs-sidebar-count {
   flex: 0 0 auto;
-  min-width: 1.25em;
-  font-size: 12px;
-  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.75em;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 16%, var(--panel));
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: var(--muted);
+  line-height: 1;
 }
 
 .workspace-tabs-sidebar-cleanup {
@@ -215,6 +226,14 @@ button { cursor: pointer; }
   width: 28px;
   height: 28px;
   margin-left: auto;
+  color: var(--muted);
+}
+
+.workspace-tabs-sidebar-cleanup:hover:not(:disabled),
+.workspace-tabs-sidebar-cleanup:focus-visible:not(:disabled) {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, var(--panel));
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--line));
 }
 
 .workspace-tabs-sidebar-cleanup:disabled {
@@ -293,12 +312,6 @@ button { cursor: pointer; }
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
-}
-
-.workspace-tabs-sidebar-item-current {
-  flex-shrink: 0;
-  font-size: 11px;
-  color: var(--primary);
 }
 
 .workspace-tabs-sidebar-item-closed {

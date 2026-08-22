@@ -503,11 +503,9 @@ export function createWorkspaceTabsSidebarController({
           el("span", { class: "workspace-tabs-sidebar-item-label" }, itemLabel(item, index))
         ),
         el("div", { class: "workspace-tabs-sidebar-item-meta" },
-          item.current
-            ? el("span", { class: "workspace-tabs-sidebar-item-current" }, t("workspace.tabs.current"))
-            : item.live
-              ? null
-              : el("span", { class: "workspace-tabs-sidebar-item-closed" }, t("workspace.tabs.closed")),
+          item.live
+            ? null
+            : el("span", { class: "workspace-tabs-sidebar-item-closed" }, t("workspace.tabs.closed")),
           iconButton(
             t("workspace.tabs.edit"),
             createIcon("edit"),
