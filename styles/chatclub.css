@@ -132,7 +132,7 @@ button, input, textarea, select { font: inherit; }
 button { cursor: pointer; }
 
 .app-shell {
-  --workspace-tabs-sidebar-width: 240px;
+  --workspace-tabs-sidebar-width: 320px;
   --workspace-tabs-sidebar-top: 51px;
   height: 100vh;
   min-height: 100vh;

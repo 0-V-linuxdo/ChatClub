@@ -116,6 +116,11 @@ assert.doesNotMatch(storageSchema, /\bchrome\.|storageLocal(?:Get|Set)/);
 assert.doesNotMatch(storageSchema, /exportConfigBundle|inspectImportedConfig|CONFIG_BUNDLE_KEYS/);
 assert.match(storageConfigBundle, /export function exportConfigBundle/);
 assert.match(storageConfigBundle, /export function inspectImportedConfig/);
+assert.doesNotMatch(
+  storageConfigBundle,
+  /workspace-tab-memory|delete-completion/,
+  "config bundle inspection must not pull workspace sanitizer into Settings lazy"
+);
 assert.match(storageAdapter, /from "\.\/extension-api\.js"/);
 assert.match(storageAdapter, /from "\.\/storage-schema\.js"/);
 assert.doesNotMatch(storageAdapter, /from "\.\/storage-config-bundle\.js"/);

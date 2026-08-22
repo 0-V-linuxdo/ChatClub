@@ -17,7 +17,8 @@ const IMPORT_EXPORT_ITEMS = Object.freeze([
   Object.freeze({ key: "promptLibrary", labelKey: "io.item.promptLibrary", descKey: "io.item.promptLibraryDesc" }),
   Object.freeze({ key: "promptSendHistory", labelKey: "io.item.promptSendHistory", descKey: "io.item.promptSendHistoryDesc" }),
   Object.freeze({ key: "shortcutConfig", labelKey: "io.item.shortcutConfig", descKey: "io.item.shortcutConfigDesc" }),
-  Object.freeze({ key: "pocketHistory", labelKey: "io.item.pocketHistory", descKey: "io.item.pocketHistoryDesc" })
+  Object.freeze({ key: "pocketHistory", labelKey: "io.item.pocketHistory", descKey: "io.item.pocketHistoryDesc" }),
+  Object.freeze({ key: "workspaceTabs", labelKey: "io.item.workspaceTabs", descKey: "io.item.workspaceTabsDesc" })
 ]);
 
 const IMPORT_EXPORT_ITEM_KEYS = IMPORT_EXPORT_ITEMS.map((item) => item.key);
@@ -39,7 +40,10 @@ export function createImportExportSettings(ctx) {
     prepareForConfigImport = async () => {},
     prepareForConfigExport = prepareForConfigImport,
     afterConfigImport = async () => {},
-    resetAfterConfigImport = () => {}
+    resetAfterConfigImport = () => {},
+    persistWorkspaceSession = async () => {},
+    refreshWorkspaceTabs = async () => {},
+    requestBackground = null
   } = ctx;
   if (typeof importConfigPatch !== "function") throw new TypeError("Import/export settings requires importConfigPatch().");
   if (typeof resetConfig !== "function") throw new TypeError("Import/export settings requires resetConfig().");
@@ -161,6 +165,7 @@ export function createImportExportSettings(ctx) {
     if (selected.has("options")) messages.push(t("io.sensitiveWarning.options"));
     if (selected.has("options") && importedOptionsHaveExecutableScripts(options)) messages.push(t("io.sensitiveWarning.scripts"));
     if (selected.has("pocketHistory")) messages.push(t("io.sensitiveWarning.pocket"));
+    if (selected.has("workspaceTabs")) messages.push(t("io.sensitiveWarning.workspaceTabs"));
     if (selected.has("promptLibrary") || selected.has("promptSendHistory")) messages.push(t("io.sensitiveWarning.prompts"));
     return messages;
   }
@@ -190,7 +195,7 @@ export function createImportExportSettings(ctx) {
     return existingKeys.filter((key) => !mergedKeys.has(key)).length;
   }
 
-  function importWarningMessages(imported, diagnostics, selectedKeys, pocketMode, pocketImportSize, pocketExistingEntries = state.pocketEntries || []) {
+  function importWarningMessages(imported, diagnostics, selectedKeys, pocketMode, pocketImportSize, pocketExistingEntries = state.pocketEntries || [], workspaceTabsMode = "merge") {
     const selected = selectedKeys instanceof Set ? selectedKeys : new Set(selectedKeys || []);
     const messages = [];
     if (selected.has("pocketHistory") && pocketImportSize >= POCKET_IMPORT_SIZE_WARNING_BYTES) {
@@ -207,7 +212,9 @@ export function createImportExportSettings(ctx) {
       if (selected.has(key) && dropped > 0) {
         messages.push(t("io.importDroppedItems", { label: importBlockLabel(key), count: dropped }));
       }
-      const emptyReplacement = EMPTY_REPLACE_IMPORT_KEYS.has(key) || (key === "pocketHistory" && pocketMode === "replace");
+      const emptyReplacement = EMPTY_REPLACE_IMPORT_KEYS.has(key)
+        || (key === "pocketHistory" && pocketMode === "replace")
+        || (key === "workspaceTabs" && workspaceTabsMode === "replace");
       if (selected.has(key) && emptyReplacement && importKeyIsEmptyArray(key, imported)) {
         messages.push(t("io.importEmptyReplaceWarning", { label: importBlockLabel(key) }));
       }
@@ -295,7 +302,14 @@ export function createImportExportSettings(ctx) {
         ? imported.pocketHistory
         : mergePocketHistory(pocketExisting, imported.pocketHistory);
     }
-    const saved = await importConfigPatch(patch);
+    const saved = Object.keys(patch).length ? await importConfigPatch(patch) : {};
+    if (selected.has("workspaceTabs")) {
+      if (typeof requestBackground !== "function") throw new Error(t("toast.importFailed"));
+      await requestBackground("importRememberedWorkspaceTabs", {
+        tabs: imported.workspaceTabs || [],
+        replace: (options.workspaceTabsMode || "merge") === "replace"
+      });
+    }
     try {
       if (selected.has("pocketHistory")) {
         pocketStats = pocketMergeStats(pocketExisting, imported.pocketHistory, saved.pocketHistory || []);
@@ -306,7 +320,8 @@ export function createImportExportSettings(ctx) {
       if ("promptSendHistory" in saved) state.promptSendHistory = saved.promptSendHistory;
       if ("shortcutConfig" in saved) state.shortcutConfig = saved.shortcutConfig;
       if ("pocketHistory" in saved) state.pocketEntries = saved.pocketHistory;
-      await notifyConfigReload();
+      if (selected.has("workspaceTabs")) await refreshWorkspaceTabs();
+      if (Object.keys(patch).length) await notifyConfigReload();
       const layoutHydrated = "options" in saved
         && hydrateImportedLayoutIfNeeded(previousOptions, previousCustomConfig);
       if (("customConfig" in saved || "options" in saved) && !layoutHydrated) {
@@ -385,10 +400,12 @@ export function createImportExportSettings(ctx) {
     }
     const selectedKeys = new Set(defaultImportKeys(imported));
     let pocketMode = "merge";
+    let workspaceTabsMode = "merge";
     let dialog = null;
     let confirmButton = null;
     let cancelButton = null;
     let pocketModePanel = null;
+    let workspaceTabsModePanel = null;
     let importWarnings = null;
     let importing = false;
     const importControls = [];
@@ -405,8 +422,9 @@ export function createImportExportSettings(ctx) {
       const headerCloseButton = dialog?.querySelector(".modal-header .icon-button");
       if (headerCloseButton) headerCloseButton.disabled = importing;
       if (pocketModePanel) pocketModePanel.hidden = !selectedKeys.has("pocketHistory");
+      if (workspaceTabsModePanel) workspaceTabsModePanel.hidden = !selectedKeys.has("workspaceTabs");
       if (importWarnings) {
-        const messages = importWarningMessages(imported, diagnostics, selectedKeys, pocketMode, pocketImportSize, pocketExistingEntries);
+        const messages = importWarningMessages(imported, diagnostics, selectedKeys, pocketMode, pocketImportSize, pocketExistingEntries, workspaceTabsMode);
         importWarnings.hidden = !messages.length;
         importWarnings.replaceChildren(...messages.map((message) => el("span", {}, message)));
       }
@@ -429,7 +447,7 @@ export function createImportExportSettings(ctx) {
       importing = true;
       updateState();
       try {
-        const ok = await applyImportedConfig(imported, [...selectedKeys], pocketMode, options);
+        const ok = await applyImportedConfig(imported, [...selectedKeys], pocketMode, { ...options, workspaceTabsMode });
         if (ok) {
           close({ force: true });
           return;
@@ -497,6 +515,38 @@ export function createImportExportSettings(ctx) {
         )
       )
     );
+    const workspaceTabsMergeInput = el("input", { type: "radio", name: "io-workspace-tabs-mode", value: "merge", checked: true });
+    const workspaceTabsReplaceInput = el("input", { type: "radio", name: "io-workspace-tabs-mode", value: "replace" });
+    importControls.push({ node: workspaceTabsMergeInput }, { node: workspaceTabsReplaceInput });
+    workspaceTabsMergeInput.addEventListener("change", () => {
+      if (workspaceTabsMergeInput.checked) {
+        workspaceTabsMode = "merge";
+        updateState();
+      }
+    });
+    workspaceTabsReplaceInput.addEventListener("change", () => {
+      if (workspaceTabsReplaceInput.checked) {
+        workspaceTabsMode = "replace";
+        updateState();
+      }
+    });
+    workspaceTabsModePanel = el("div", { class: "io-pocket-mode-panel" },
+      el("strong", {}, t("io.workspaceTabsModeTitle")),
+      el("label", { class: "io-radio-row" },
+        workspaceTabsMergeInput,
+        el("span", {},
+          el("strong", {}, t("io.workspaceTabsModeMerge")),
+          el("span", {}, t("io.workspaceTabsModeMergeDesc"))
+        )
+      ),
+      el("label", { class: "io-radio-row" },
+        workspaceTabsReplaceInput,
+        el("span", {},
+          el("strong", {}, t("io.workspaceTabsModeReplace")),
+          el("span", {}, t("io.workspaceTabsModeReplaceDesc"))
+        )
+      )
+    );
     importWarnings = el("div", { class: "io-sensitive-warning", hidden: true });
 
     confirmButton = el("button", {
@@ -515,6 +565,7 @@ export function createImportExportSettings(ctx) {
         el("p", { class: "io-dialog-lead" }, t("io.importConfirmDesc")),
         el("div", { class: "io-choice-list io-import-choice-list" }, rows),
         pocketModePanel,
+        workspaceTabsModePanel,
         importWarnings,
         el("div", { class: "settings-dialog-actions" },
           cancelButton,
@@ -584,13 +635,21 @@ export function createImportExportSettings(ctx) {
         exportButton.disabled = true;
         try {
           await prepareForConfigExport(selectedKeys);
+          let workspaceTabs = [];
+          if (selectedKeys.includes("workspaceTabs")) {
+            await persistWorkspaceSession();
+            if (typeof requestBackground !== "function") throw new Error(t("toast.exportFailed"));
+            const listed = await requestBackground("exportRememberedWorkspaceTabs");
+            workspaceTabs = Array.isArray(listed?.tabs) ? listed.tabs : [];
+          }
           const bundle = exportConfigBundle({
             storedOptions: state.storedOptions || {},
             customConfig: state.customConfig,
             promptLibrary: state.promptLibrary,
             promptSendHistory: state.promptSendHistory,
             shortcutConfig: state.shortcutConfig,
-            pocketEntries: state.pocketEntries
+            pocketEntries: state.pocketEntries,
+            workspaceTabs
           }, selectedKeys);
           downloadText(`chatclub-config-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(bundle, null, 2));
         } catch (error) {

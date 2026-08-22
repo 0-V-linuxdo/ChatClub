@@ -73,6 +73,9 @@ export function createSettingsController(ctx) {
     syncPreferredModelSelectionOverlays: "function",
     requestUserScriptsPermission: "function?",
     onSettingsDialogClosed: "function?",
+    persistWorkspaceSession: "function?",
+    refreshWorkspaceTabs: "function?",
+    requestBackground: "function?",
     syncWorkspaceDom: "function",
     applyPreferredModels: "function",
     openTabUrl: "function",
@@ -118,6 +121,15 @@ export function createSettingsController(ctx) {
   const requestUserScriptsPermission = typeof ctx.requestUserScriptsPermission === "function"
     ? ctx.requestUserScriptsPermission
     : async () => true;
+  const persistWorkspaceSession = typeof ctx.persistWorkspaceSession === "function"
+    ? ctx.persistWorkspaceSession
+    : async () => {};
+  const refreshWorkspaceTabs = typeof ctx.refreshWorkspaceTabs === "function"
+    ? ctx.refreshWorkspaceTabs
+    : async () => {};
+  const requestBackground = typeof ctx.requestBackground === "function"
+    ? ctx.requestBackground
+    : null;
   const settingsKit = createSettingsKit({ svgIcon });
   let closeActiveSettingsDialog = null;
 
@@ -328,7 +340,10 @@ export function createSettingsController(ctx) {
     prepareForConfigImport,
     prepareForConfigExport,
     afterConfigImport,
-    resetAfterConfigImport
+    resetAfterConfigImport,
+    persistWorkspaceSession,
+    refreshWorkspaceTabs,
+    requestBackground
   });
   const functionalAnomaliesSection = createFunctionalAnomaliesSettingsSection({
     state: settingsSections.functionalAnomalies,

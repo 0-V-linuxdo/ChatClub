@@ -113,8 +113,10 @@ function deferredPromise() {
     commitWorkspaceSessionRecovery,
     detachWorkspaceSessionMirror,
     dismissClearedWorkspaceTabs,
+    exportRememberedWorkspaceTabs,
     forgetRememberedWorkspaceTab,
     handleWorkspaceSessionAlarm,
+    importRememberedWorkspaceTabs,
     listClearedWorkspaceTabs,
     listLiveWorkspaceTabs,
     focusWorkspaceTab,
@@ -3099,6 +3101,88 @@ function deferredPromise() {
   }
 
   {
+    const now = 910000;
+    const conversation = (href, title = "") => ({
+      schemaVersion: 1,
+      generation,
+      layout: { type: "preset", presetId: "default" },
+      groups: [{ tabs: [{ appId: "ChatGPT", currentHref: href }], activeIndex: 0 }],
+      topicTitle: title,
+      topicTitleCustom: Boolean(title)
+    });
+    const store = fixture({
+      local: {
+        [WORKSPACE_SESSION_GENERATION_KEY]: generation,
+        [workspaceSessionWorkspaceKey(workspaceA)]: stable(
+          workspaceA,
+          "export-live",
+          { tabId: 41, windowId: 2, index: 0, pinned: false },
+          now,
+          null,
+          { snapshot: conversation("https://chatgpt.com/c/live-a", "Live A") }
+        ),
+        [workspaceSessionWorkspaceKey(workspaceB)]: stable(
+          workspaceB,
+          "export-closed",
+          { tabId: 42, windowId: 2, index: 1, pinned: false },
+          now - 20,
+          now - 10,
+          { snapshot: conversation("https://chatgpt.com/c/closed-b", "Closed B") }
+        ),
+        [workspaceSessionWorkspaceKey(workspaceC)]: stable(
+          workspaceC,
+          "export-empty",
+          { tabId: 43, windowId: 2, index: 2, pinned: false },
+          now,
+          null,
+          {
+            snapshot: {
+              schemaVersion: 1,
+              generation,
+              groups: [{ tabs: [{ appId: "ChatGPT", currentHref: "https://chatgpt.com/" }], activeIndex: 0 }]
+            }
+          }
+        )
+      },
+      tabs: [
+        { id: 41, windowId: 2, index: 0, title: "ChatClub", url: `chrome-extension://chatclub/chatClub.html#workspace=${workspaceA}` },
+        { id: 43, windowId: 2, index: 2, title: "ChatClub", url: `chrome-extension://chatclub/chatClub.html#workspace=${workspaceC}` }
+      ]
+    });
+    const exported = await exportRememberedWorkspaceTabs(store.api);
+    assert.deepEqual(exported.tabs.map((item) => item.title).sort(), ["Closed B", "Live A"]);
+    assert.equal(exported.tabs.every((item) => !Object.hasOwn(item, "workspaceId")), true);
+    assert.equal(exported.tabs.every((item) => !Object.hasOwn(item.snapshot, "generation")), true);
+    const duplicate = exported.tabs.find((item) => item.title === "Live A");
+    const incoming = {
+      title: "Imported E",
+      snapshot: conversation("https://chatgpt.com/c/imported-e", "Imported E")
+    };
+    const merged = await importRememberedWorkspaceTabs(store.api, {
+      tabs: [duplicate, incoming, { snapshot: { schemaVersion: 1, groups: [] } }]
+    }, { now: now + 1 });
+    assert.equal(merged.imported, 1);
+    assert.equal(merged.forgotten, 0);
+    assert.ok(merged.skipped >= 2);
+    const afterMerge = await listLiveWorkspaceTabs(store.api, {}, { tab: { id: 41 } });
+    assert.equal(afterMerge.tabs.length, 3);
+    assert.ok(afterMerge.tabs.some((item) => item.topicTitle === "Imported E" && item.live === false));
+    const replaced = await importRememberedWorkspaceTabs(store.api, {
+      tabs: [{
+        title: "Imported F",
+        snapshot: conversation("https://chatgpt.com/c/imported-f", "Imported F")
+      }],
+      replace: true
+    }, { now: now + 2 });
+    assert.equal(replaced.imported, 1);
+    assert.equal(replaced.forgotten, 2);
+    const afterReplace = await listLiveWorkspaceTabs(store.api, {}, { tab: { id: 41 } });
+    assert.deepEqual(afterReplace.tabs.map((item) => item.topicTitle).sort(), ["Imported F", "Live A"]);
+    assert.equal(afterReplace.tabs.find((item) => item.topicTitle === "Live A").live, true);
+    assert.equal(afterReplace.tabs.find((item) => item.topicTitle === "Imported F").live, false);
+  }
+
+  {
     const runtime = fs.readFileSync(path.join(root, "background/runtime.js"), "utf8");
     assert.match(runtime, /detachWorkspaceSessionMirror\(chrome, tabId, removeInfo\)/);
     assert.match(
@@ -3124,6 +3208,18 @@ function deferredPromise() {
       runtime,
       /LIST_LIVE_WORKSPACE_TABS[\s\S]*?await prepareWorkspaceSessionLifecycle\(chrome,[\s\S]*?return listLiveWorkspaceTabs\(chrome/,
       "remembered tab inventory must await lifecycle reconciliation"
+    );
+    assert.match(runtime, /REQUEST\.EXPORT_REMEMBERED_WORKSPACE_TABS/);
+    assert.match(
+      runtime,
+      /EXPORT_REMEMBERED_WORKSPACE_TABS[\s\S]*?await prepareWorkspaceSessionLifecycle\(chrome,[\s\S]*?return exportRememberedWorkspaceTabs\(chrome/,
+      "remembered tab export must await lifecycle reconciliation"
+    );
+    assert.match(runtime, /REQUEST\.IMPORT_REMEMBERED_WORKSPACE_TABS/);
+    assert.match(
+      runtime,
+      /IMPORT_REMEMBERED_WORKSPACE_TABS[\s\S]*?await prepareWorkspaceSessionLifecycle\(chrome,[\s\S]*?return importRememberedWorkspaceTabs\(chrome/,
+      "remembered tab import must await lifecycle reconciliation"
     );
     assert.match(runtime, /REQUEST\.FORGET_REMEMBERED_WORKSPACE_TAB/);
     assert.match(runtime, /REQUEST\.FOCUS_WORKSPACE_TAB/);

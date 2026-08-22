@@ -1,4 +1,5 @@
 import { deleteConversationIdentityFromHref } from "./delete-completion.js";
+import { WORKSPACE_SESSION_SCHEMA_VERSION } from "./workspace-session.js";
 
 const KNOWN_CHAT_HOSTS = Object.freeze([
   "chatgpt.com",
@@ -51,6 +52,18 @@ function isKnownEmptyConversationPage(url) {
   return false;
 }
 
+function plainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function text(value) {
+  return String(value ?? "").trim();
+}
+
+function httpUrl(value) {
+  return parsedHttpUrl(value)?.href || "";
+}
+
 export function conversationHrefFromLocation(value) {
   const url = parsedHttpUrl(value);
   if (!url) return "";
@@ -69,4 +82,94 @@ export function workspaceSnapshotHasConversation(snapshot) {
     }
   }
   return false;
+}
+
+function sanitizedTab(value) {
+  if (!plainObject(value)) return null;
+  const appId = text(value.appId);
+  if (!appId) return null;
+  return {
+    appId,
+    currentHref: httpUrl(value.currentHref || value.href || value.url || value.initialHref)
+  };
+}
+
+function sanitizedGroup(value) {
+  const tabs = (Array.isArray(value?.tabs) ? value.tabs : []).map(sanitizedTab).filter(Boolean);
+  if (!tabs.length) return null;
+  const requested = Number(value?.activeIndex);
+  const activeIndex = Number.isSafeInteger(requested)
+    ? Math.max(0, Math.min(requested, tabs.length - 1))
+    : 0;
+  return { tabs, activeIndex };
+}
+
+function sanitizedLayout(value) {
+  const source = plainObject(value) ? value : {};
+  const presetId = text(source.presetId || source.activeLayoutPresetId);
+  const temporary = source.type === "temporary"
+    || source.temporary === true
+    || Boolean(source.temporary && typeof source.temporary === "object");
+  if (!temporary) return { type: "preset", presetId };
+  const temp = plainObject(source.temporary) ? source.temporary : source;
+  return {
+    type: "temporary",
+    presetId,
+    name: text(temp.name),
+    pocketBatchId: text(temp.pocketBatchId)
+  };
+}
+
+export function sanitizeExportedWorkspaceTab(value) {
+  const source = plainObject(value) ? value : {};
+  const snapshotSource = plainObject(source.snapshot) ? source.snapshot : source;
+  if (Number(snapshotSource.schemaVersion) !== WORKSPACE_SESSION_SCHEMA_VERSION) return null;
+  const groups = (Array.isArray(snapshotSource.groups) ? snapshotSource.groups : [])
+    .map(sanitizedGroup)
+    .filter(Boolean);
+  const requestedFullscreen = Number(snapshotSource.fullscreenGroupIndex);
+  const snapshot = {
+    schemaVersion: WORKSPACE_SESSION_SCHEMA_VERSION,
+    layout: sanitizedLayout(snapshotSource.layout),
+    groups,
+    fullscreenGroupIndex: Number.isSafeInteger(requestedFullscreen)
+      && requestedFullscreen >= 0
+      && requestedFullscreen < groups.length
+      ? requestedFullscreen
+      : null,
+    topicTitle: text(snapshotSource.topicTitle || source.title),
+    topicTitleCustom: snapshotSource.topicTitleCustom === true || source.topicTitleCustom === true
+  };
+  if (!workspaceSnapshotHasConversation(snapshot)) return null;
+  return {
+    title: text(source.title || snapshot.topicTitle),
+    snapshot
+  };
+}
+
+export function inspectImportedWorkspaceTabs(raw) {
+  if (!Array.isArray(raw)) return { value: null, droppedCount: 0 };
+  if (!raw.length) return { value: [], droppedCount: 0 };
+  const value = [];
+  let droppedCount = 0;
+  for (const item of raw) {
+    const sanitized = sanitizeExportedWorkspaceTab(item);
+    if (sanitized) value.push(sanitized);
+    else droppedCount += 1;
+  }
+  return value.length ? { value, droppedCount } : { value: null, droppedCount };
+}
+
+export function workspaceTabFingerprint(item) {
+  const sanitized = sanitizeExportedWorkspaceTab(item);
+  if (!sanitized) return "";
+  try {
+    return JSON.stringify({
+      title: sanitized.title,
+      layout: sanitized.snapshot.layout,
+      groups: sanitized.snapshot.groups
+    });
+  } catch {
+    return "";
+  }
 }

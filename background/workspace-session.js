@@ -22,7 +22,7 @@ import {
   workspaceSessionMirrorKey,
   workspaceSessionWorkspaceKey
 } from "../shared/workspace-session.js";
-import { clearedTabItem, focusWorkspaceTabOperation, forgetRememberedWorkspaceTabOperation, listClearedWorkspaceTabsOperation, listLiveWorkspaceTabsOperation, recoveryEventWasRequested, requestedRecoveryEvents, setWorkspaceTabTitleOperation, unclaimedBrowserCleared } from "./workspace-tab-directory.js";
+import { clearedTabItem, exportRememberedWorkspaceTabsOperation, focusWorkspaceTabOperation, forgetRememberedWorkspaceTabOperation, importRememberedWorkspaceTabsOperation, listClearedWorkspaceTabsOperation, listLiveWorkspaceTabsOperation, recoveryEventWasRequested, requestedRecoveryEvents, setWorkspaceTabTitleOperation, unclaimedBrowserCleared } from "./workspace-tab-directory.js";
 import { restoreClearedWorkspaceTabsOperation } from "./workspace-tab-restoration.js";
 import {
   bindingForClaim,
@@ -1020,6 +1020,14 @@ export function listClearedWorkspaceTabs(api, options = {}) {
 }
 export function listLiveWorkspaceTabs(api, _request = {}, sender = {}) {
   return queueWorkspaceSession(() => listLiveWorkspaceTabsOperation(api, sender));
+}
+export function exportRememberedWorkspaceTabs(api) {
+  return queueWorkspaceSession(() => exportRememberedWorkspaceTabsOperation(api));
+}
+export function importRememberedWorkspaceTabs(api, request = {}, options = {}) {
+  return queueWorkspaceSession(() => (
+    importRememberedWorkspaceTabsOperation(api, request, options, ensureGenerationInternal)
+  ));
 }
 export function setWorkspaceTabTitle(api, request = {}) {
   return queueWorkspaceSession(() => setWorkspaceTabTitleOperation(api, request));

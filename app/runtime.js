@@ -521,7 +521,8 @@ function ensureSettingsController() {
           hydrateImportedLayoutIfNeeded: workspaceController.hydrateImportedLayoutIfNeeded,
           reconcileAppCatalog: workspaceController.reconcileAppCatalog,
           enterTopbarEditMode,
-          openTabUrl: workspaceController.openTabUrl
+          openTabUrl: workspaceController.openTabUrl, persistWorkspaceSession: () => workspaceController.persistWorkspaceSession(),
+          refreshWorkspaceTabs: () => workspaceTabsSidebarController.refresh(), requestBackground
         });
         return settingsController;
       })

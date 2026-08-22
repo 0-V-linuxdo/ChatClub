@@ -89,6 +89,26 @@ const assert = require("node:assert/strict");
   assert.ok(Array.isArray(legacy.data.options.summarySiteConfigs));
   assert.ok(legacy.data.options.summarySiteConfigs.length > 0);
 
+  const workspaceTabs = exportConfigBundle({
+    workspaceTabs: [{
+      title: "Compare",
+      snapshot: {
+        schemaVersion: 1,
+        groups: [{ tabs: [{ appId: "ChatGPT", currentHref: "https://chatgpt.com/c/a" }], activeIndex: 0 }]
+      }
+    }, { snapshot: { schemaVersion: 1 } }]
+  }, ["workspaceTabs"]);
+  assert.equal(workspaceTabs.workspaceTabs.length, 1);
+  const inspectedTabs = inspectImportedConfig({
+    schema: "chatclub.config.v1",
+    workspaceTabs: [
+      workspaceTabs.workspaceTabs[0],
+      { snapshot: { schemaVersion: 1 } }
+    ]
+  });
+  assert.equal(inspectedTabs.data.workspaceTabs.length, 1);
+  assert.equal(inspectedTabs.diagnostics.workspaceTabs.droppedCount, 1);
+
   console.log("official rules config bundle tests passed");
 })().catch((error) => {
   console.error(error);

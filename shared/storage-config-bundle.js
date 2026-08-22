@@ -24,7 +24,8 @@ export const CONFIG_BUNDLE_KEYS = Object.freeze([
   "promptLibrary",
   "promptSendHistory",
   "shortcutConfig",
-  "pocketHistory"
+  "pocketHistory",
+  "workspaceTabs"
 ]);
 
 const CONFIG_BUNDLE_KEY_SET = new Set(CONFIG_BUNDLE_KEYS);
@@ -177,6 +178,20 @@ function validImportedPocketHistoryItem(item) {
   return plainObject(item) && dedupePocketHistory([item]).length === 1;
 }
 
+function validImportedWorkspaceTabItem(item) {
+  return plainObject(item)
+    && plainObject(item.snapshot)
+    && Number(item.snapshot.schemaVersion) === 1
+    && Array.isArray(item.snapshot.groups)
+    && item.snapshot.groups.some((group) => (
+      Array.isArray(group?.tabs) && group.tabs.some((tab) => plainObject(tab) && String(tab.appId || "").trim())
+    ));
+}
+
+function normalizeImportedWorkspaceTabs(items = []) {
+  return jsonClone((Array.isArray(items) ? items : []).filter(validImportedWorkspaceTabItem));
+}
+
 function inspectImportedIframeConfigs(bundle = {}) {
   const invalid = [];
   const warnings = [];
@@ -244,6 +259,7 @@ export function exportConfigBundle(state = {}, selectedKeys = CONFIG_BUNDLE_KEYS
   if (selected.has("promptSendHistory")) bundle.promptSendHistory = normalizePromptSendHistory(source.promptSendHistory);
   if (selected.has("shortcutConfig")) bundle.shortcutConfig = normalizeShortcutConfig(source.shortcutConfig);
   if (selected.has("pocketHistory")) bundle.pocketHistory = dedupePocketHistory(source.pocketEntries || source.pocketHistory);
+  if (selected.has("workspaceTabs")) bundle.workspaceTabs = normalizeImportedWorkspaceTabs(source.workspaceTabs);
   return bundle;
 }
 
@@ -276,6 +292,9 @@ export function inspectImportedConfig(raw) {
   const pocketHistory = hasBundleArrayField(bundle, "pocketHistory")
     ? normalizeImportArrayFieldResult(bundle.pocketHistory, dedupePocketHistory, validImportedPocketHistoryItem)
     : null;
+  const workspaceTabs = hasBundleArrayField(bundle, "workspaceTabs")
+    ? normalizeImportArrayFieldResult(bundle.workspaceTabs, normalizeImportedWorkspaceTabs, validImportedWorkspaceTabItem)
+    : null;
   const storedOptionsV4 = hasBundleObjectField(bundle, "options")
     && bundle.options.optionsSchemaVersion === STORED_OPTIONS_SCHEMA_VERSION
     ? sanitizeStoredOptionsV4(bundle.options)
@@ -289,13 +308,15 @@ export function inspectImportedConfig(raw) {
       promptLibrary: promptLibrary?.value ?? null,
       promptSendHistory: promptSendHistory?.value ?? null,
       shortcutConfig: hasBundleNonEmptyObjectField(bundle, "shortcutConfig") ? normalizeShortcutConfig(bundle.shortcutConfig) : null,
-      pocketHistory: pocketHistory?.value ?? null
+      pocketHistory: pocketHistory?.value ?? null,
+      workspaceTabs: workspaceTabs?.value ?? null
     },
     diagnostics: {
       customConfig,
       promptLibrary,
       promptSendHistory,
       pocketHistory,
+      workspaceTabs,
       options: storedOptionsV4
         ? { droppedCount: storedOptionsV4.droppedFields.length, droppedFields: storedOptionsV4.droppedFields }
         : { droppedCount: 0, droppedFields: [] },

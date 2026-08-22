@@ -1,16 +1,24 @@
 import {
   WORKSPACE_SESSION_CLEARED_BY_BROWSER,
+  WORKSPACE_SESSION_DETACH_TAB,
   WORKSPACE_SESSION_DISMISSED,
   WORKSPACE_SESSION_RECOVERY_KEY,
   WORKSPACE_SESSION_RUNTIME_MARKER_KEY,
   WORKSPACE_SESSION_STORAGE_VERSION,
+  createWorkspaceSessionId,
   normalizeWorkspaceSessionId,
   workspaceSessionWorkspaceKey
 } from "../shared/workspace-session.js";
-import { workspaceSnapshotHasConversation } from "../shared/workspace-tab-memory.js";
+import {
+  inspectImportedWorkspaceTabs,
+  sanitizeExportedWorkspaceTab,
+  workspaceSnapshotHasConversation,
+  workspaceTabFingerprint
+} from "../shared/workspace-tab-memory.js";
 import {
   cloneSnapshot,
   compareRememberedTabs,
+  createRuntimeMarker,
   currentStableRecords,
   finiteTime,
   isChatClubWorkspaceTab,
@@ -241,4 +249,125 @@ export async function forgetRememberedWorkspaceTabOperation(api, request = {}, o
   const response = { forgotten: true, workspaceId, closed };
   if (closedTabId !== null) response.tabId = closedTabId;
   return response;
+}
+
+function rememberedFingerprints(records) {
+  const fingerprints = new Set();
+  for (const record of records.values()) {
+    if (!rememberedWorkspaceRecord(record)) continue;
+    const fingerprint = workspaceTabFingerprint({
+      title: record.snapshot?.topicTitle,
+      snapshot: record.snapshot
+    });
+    if (fingerprint) fingerprints.add(fingerprint);
+  }
+  return fingerprints;
+}
+
+function importedWorkspaceRecord(item, generation, now, runtimeId) {
+  const workspaceId = createWorkspaceSessionId();
+  const snapshot = { ...item.snapshot, generation, topicTitle: item.title || item.snapshot.topicTitle };
+  if (item.title) snapshot.topicTitle = item.title;
+  const detach = { at: now, kind: WORKSPACE_SESSION_DETACH_TAB, runtimeId };
+  return {
+    key: workspaceSessionWorkspaceKey(workspaceId),
+    record: {
+      storageVersion: WORKSPACE_SESSION_STORAGE_VERSION,
+      generation,
+      workspaceId,
+      snapshot,
+      owner: { tabId: null, windowId: null, index: null, pinned: false },
+      updatedAt: now,
+      detach,
+      detachedAt: now,
+      detachedKind: detach.kind,
+      detachedRuntimeId: runtimeId,
+      resolution: "",
+      closedBy: ""
+    }
+  };
+}
+
+export async function exportRememberedWorkspaceTabsOperation(api) {
+  const storage = localStorageArea(api);
+  if (typeof storage?.get !== "function") return { tabs: [] };
+  if (typeof api?.tabs?.query !== "function") throw new Error("Workspace session tab query is unavailable");
+  const [stored, tabs] = await Promise.all([storage.get(null), api.tabs.query({})]);
+  if (!Array.isArray(tabs)) throw new TypeError("Browser tabs query returned an invalid result");
+  const live = liveTabState(api, tabs);
+  const exported = [];
+  const seen = new Set();
+  for (const item of listRememberedWorkspaceTabs(api, stored || {}, live, null)) {
+    const record = currentStableRecords(stored || {}).get(item.workspaceId);
+    const sanitized = sanitizeExportedWorkspaceTab({
+      title: record?.snapshot?.topicTitle || item.topicTitle,
+      snapshot: record?.snapshot
+    });
+    if (!sanitized) continue;
+    const fingerprint = workspaceTabFingerprint(sanitized);
+    if (!fingerprint || seen.has(fingerprint)) continue;
+    seen.add(fingerprint);
+    exported.push(sanitized);
+  }
+  return { tabs: exported };
+}
+
+export async function importRememberedWorkspaceTabsOperation(api, request = {}, options = {}, ensureGeneration) {
+  const inspected = inspectImportedWorkspaceTabs(request.tabs);
+  const incoming = inspected.value || [];
+  const replace = request.replace === true;
+  const storage = localStorageArea(api);
+  if (typeof storage?.get !== "function" || typeof storage?.set !== "function") {
+    throw new Error("Workspace tab import storage is unavailable");
+  }
+  if (typeof api?.tabs?.query !== "function") throw new Error("Workspace session tab query is unavailable");
+  const now = finiteTime(options.now, Date.now());
+  const session = sessionStorageArea(api);
+  const [stored, tabs, markerStored] = await Promise.all([
+    storage.get(null),
+    api.tabs.query({}),
+    typeof session?.get === "function" ? session.get(WORKSPACE_SESSION_RUNTIME_MARKER_KEY) : Promise.resolve({})
+  ]);
+  if (!Array.isArray(tabs)) throw new TypeError("Browser tabs query returned an invalid result");
+  const generation = typeof ensureGeneration === "function" ? await ensureGeneration(storage) : "";
+  const live = liveTabState(api, tabs);
+  const stableRecords = currentStableRecords(stored || {});
+  const updates = {};
+  let forgotten = 0;
+  const remaining = new Map();
+  for (const [workspaceId, record] of stableRecords) {
+    if (replace && rememberedWorkspaceRecord(record) && !live.workspaceIds.has(workspaceId)) {
+      updates[workspaceSessionWorkspaceKey(workspaceId)] = {
+        ...record,
+        storageVersion: WORKSPACE_SESSION_STORAGE_VERSION,
+        sourceStorageVersion: WORKSPACE_SESSION_STORAGE_VERSION,
+        resolution: WORKSPACE_SESSION_DISMISSED,
+        closedBy: "",
+        updatedAt: Math.max(record.updatedAt, now)
+      };
+      forgotten += 1;
+      continue;
+    }
+    remaining.set(workspaceId, record);
+  }
+  const fingerprints = rememberedFingerprints(remaining);
+  let imported = 0;
+  let skipped = inspected.droppedCount;
+  const marker = runtimeMarker(markerStored?.[WORKSPACE_SESSION_RUNTIME_MARKER_KEY]) || createRuntimeMarker(now);
+  for (const item of incoming) {
+    const fingerprint = workspaceTabFingerprint(item);
+    if (!fingerprint || fingerprints.has(fingerprint)) {
+      skipped += 1;
+      continue;
+    }
+    fingerprints.add(fingerprint);
+    const next = importedWorkspaceRecord(item, generation, now, marker.runtimeId || "");
+    updates[next.key] = next.record;
+    imported += 1;
+  }
+  if (Object.keys(updates).length) await storage.set(updates);
+  if (marker && !runtimeMarker(markerStored?.[WORKSPACE_SESSION_RUNTIME_MARKER_KEY]) && typeof session?.set === "function") {
+    await session.set({ [WORKSPACE_SESSION_RUNTIME_MARKER_KEY]: marker });
+  }
+  return { imported, forgotten, skipped };
 }

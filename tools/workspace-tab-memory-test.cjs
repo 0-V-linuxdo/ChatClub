@@ -9,8 +9,16 @@ const root = path.resolve(__dirname, "..");
 (async () => {
   const {
     conversationHrefFromLocation,
-    workspaceSnapshotHasConversation
+    inspectImportedWorkspaceTabs,
+    sanitizeExportedWorkspaceTab,
+    workspaceSnapshotHasConversation,
+    workspaceTabFingerprint
   } = await import(pathToFileURL(path.join(root, "shared/workspace-tab-memory.js")).href);
+  const {
+    CONFIG_BUNDLE_KEYS,
+    exportConfigBundle,
+    inspectImportedConfig
+  } = await import(pathToFileURL(path.join(root, "shared/storage-config-bundle.js")).href);
 
   assert.equal(conversationHrefFromLocation("https://chatgpt.com/c/thread-1"), "https://chatgpt.com/c/thread-1");
   assert.equal(conversationHrefFromLocation("https://chatgpt.com/g/g-abc/c/thread-2"), "https://chatgpt.com/g/g-abc/c/thread-2");
@@ -42,6 +50,81 @@ const root = path.resolve(__dirname, "..");
   }), true);
   assert.equal(workspaceSnapshotHasConversation({ groups: [] }), false);
   assert.equal(workspaceSnapshotHasConversation(null), false);
+
+  const remembered = sanitizeExportedWorkspaceTab({
+    workspaceId: "page-secret",
+    title: "Compare models",
+    snapshot: {
+      schemaVersion: 1,
+      generation: "must-not-export",
+      layout: { type: "preset", presetId: "default", extra: true },
+      groups: [{
+        tabs: [{
+          appId: "ChatGPT",
+          currentHref: "https://chatgpt.com/c/remembered",
+          title: "stale"
+        }],
+        activeIndex: 0,
+        extra: true
+      }],
+      fullscreenGroupIndex: 0,
+      topicTitle: "Compare models",
+      topicTitleCustom: true
+    }
+  });
+  assert.equal(remembered.title, "Compare models");
+  assert.equal(Object.hasOwn(remembered, "workspaceId"), false);
+  assert.deepEqual(remembered.snapshot, {
+    schemaVersion: 1,
+    layout: { type: "preset", presetId: "default" },
+    groups: [{
+      tabs: [{ appId: "ChatGPT", currentHref: "https://chatgpt.com/c/remembered" }],
+      activeIndex: 0
+    }],
+    fullscreenGroupIndex: 0,
+    topicTitle: "Compare models",
+    topicTitleCustom: true
+  });
+  assert.equal(sanitizeExportedWorkspaceTab({
+    snapshot: {
+      schemaVersion: 1,
+      groups: [{ tabs: [{ appId: "ChatGPT", currentHref: "https://chatgpt.com/" }], activeIndex: 0 }]
+    }
+  }), null);
+  const inspected = inspectImportedWorkspaceTabs([
+    remembered,
+    { snapshot: { schemaVersion: 1, groups: [] } },
+    null
+  ]);
+  assert.equal(inspected.value.length, 1);
+  assert.equal(inspected.droppedCount, 2);
+  assert.equal(
+    workspaceTabFingerprint(remembered),
+    workspaceTabFingerprint({ title: remembered.title, snapshot: remembered.snapshot })
+  );
+  assert.notEqual(
+    workspaceTabFingerprint(remembered),
+    workspaceTabFingerprint({
+      title: remembered.title,
+      snapshot: {
+        ...remembered.snapshot,
+        groups: [{
+          tabs: [{ appId: "ChatGPT", currentHref: "https://chatgpt.com/c/other" }],
+          activeIndex: 0
+        }]
+      }
+    })
+  );
+
+  assert.ok(CONFIG_BUNDLE_KEYS.includes("workspaceTabs"));
+  const bundle = exportConfigBundle({ workspaceTabs: [remembered, { snapshot: { schemaVersion: 2 } }] }, ["workspaceTabs"]);
+  assert.equal(bundle.schema, "chatclub.config.v1");
+  assert.equal(bundle.workspaceTabs.length, 1);
+  assert.deepEqual(bundle.workspaceTabs[0].snapshot.groups[0].tabs[0].appId, "ChatGPT");
+  const imported = inspectImportedConfig(bundle);
+  assert.equal(imported.data.workspaceTabs.length, 1);
+  assert.equal(imported.diagnostics.workspaceTabs.droppedCount, 0);
+  assert.equal(inspectImportedConfig({ schema: "chatclub.config.v1" }).data.workspaceTabs, null);
 
   console.log("workspace tab memory: ok");
 })().catch((error) => {

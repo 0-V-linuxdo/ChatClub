@@ -255,11 +255,12 @@ async function settle(values = []) {
       },
       prepareForConfigImport: async (keys) => {
         prepareCalls += 1;
-        assert.equal(keys.length, 6);
+        assert.equal(keys.length, 7);
       }
     });
     const pane = settings.importExportPane(() => {});
     document.body.append(pane);
+    assert.match(pane.textContent, /ChatClub Tabs/, "Manage Config must offer remembered Tabs export");
     const resetButton = findNode(pane, (node) => node.dataset?.configAction === "full-reset");
     assert.ok(resetButton, "full reset must be available from Manage Config");
     await settle(resetButton.click());
