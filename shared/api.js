@@ -1,9 +1,14 @@
-import { API_PROFILE_ENDPOINT_DEFAULT, API_PROFILE_MODEL_DEFAULT } from "./constants.js";
+import { API_PROFILE_ENDPOINT_DEFAULT, API_PROFILE_MODEL_DEFAULT, TOPIC_TITLE_PROMPT_DEFAULT } from "./constants.js";
 import { normalizeApiOptions } from "./api-options.js";
+import { sanitizeTopicTitle } from "./topic-title.js";
 
 function resolveApiProfile(options, purpose) {
   const normalized = normalizeApiOptions(options || {});
-  const id = purpose === "summary" ? normalized.summaryApiProfileId : normalized.optimizeApiProfileId;
+  const id = purpose === "summary"
+    ? normalized.summaryApiProfileId
+    : purpose === "topicTitle"
+      ? normalized.topicTitleApiProfileId
+      : normalized.optimizeApiProfileId;
   return normalized.apiProfiles.find((profile) => profile.id === id) || normalized.apiProfiles[0] || {
     id: "default",
     name: "Default API",
@@ -188,4 +193,15 @@ export async function summarizeContexts(options, contexts, question = "") {
     { role: "system", content: template.prompt },
     { role: "user", content: userContent }
   ]);
+}
+
+export async function generateTopicTitle(options, input) {
+  const prompt = String(input || "").trim();
+  if (!prompt) return "";
+  const profile = resolveApiProfile(options, "topicTitle");
+  const content = await chatCompletion(profile, [
+    { role: "system", content: TOPIC_TITLE_PROMPT_DEFAULT },
+    { role: "user", content: prompt }
+  ]);
+  return sanitizeTopicTitle(content);
 }

@@ -410,7 +410,11 @@ function preferredPromotionProfileIndex(apiProfiles, promoted, selectedIds) {
 }
 
 function mergePromotionApiProfiles(apiProfiles, raw = {}, addMissing = false) {
-  const selectedIds = new Set([text(raw.optimizeApiProfileId), text(raw.summaryApiProfileId)].filter(Boolean));
+  const selectedIds = new Set([
+    text(raw.optimizeApiProfileId),
+    text(raw.summaryApiProfileId),
+    text(raw.topicTitleApiProfileId)
+  ].filter(Boolean));
   let next = [...apiProfiles];
   for (const promoted of DEFAULT_PROMOTION_API_PROFILES) {
     const preferredIndex = preferredPromotionProfileIndex(next, promoted, selectedIds);
@@ -726,6 +730,9 @@ export function normalizeOptions(raw = {}) {
   const summaryFallback = profileIds.has(base.summaryApiProfileId)
     ? base.summaryApiProfileId
     : fallbackProfileIds[1] || fallbackProfileIds[0] || apiProfiles[1]?.id || optimizeFallback;
+  const topicTitleFallback = profileIds.has(base.topicTitleApiProfileId)
+    ? base.topicTitleApiProfileId
+    : fallbackProfileIds[0] || apiProfiles[0]?.id || optimizeFallback;
 
   const optimizeDefault = base.optimizePromptTemplates[0];
   const summaryDefault = base.summaryPromptTemplates[0];
@@ -783,6 +790,7 @@ export function normalizeOptions(raw = {}) {
     apiPromotionChannelsVersion: Math.max(Number(raw.apiPromotionChannelsVersion) || 0, API_PROMOTION_CHANNELS_VERSION),
     optimizeApiProfileId: profileIds.has(raw.optimizeApiProfileId) ? raw.optimizeApiProfileId : optimizeFallback,
     summaryApiProfileId: profileIds.has(raw.summaryApiProfileId) ? raw.summaryApiProfileId : summaryFallback,
+    topicTitleApiProfileId: profileIds.has(raw.topicTitleApiProfileId) ? raw.topicTitleApiProfileId : topicTitleFallback,
     optimizePromptTemplates,
     optimizePromptTemplateId: optimizePromptTemplates.some((item) => item.id === raw.optimizePromptTemplateId)
       ? raw.optimizePromptTemplateId

@@ -42,6 +42,15 @@ const assert = require("node:assert/strict");
   assert.equal(new URL(identifiedUrl).searchParams.get("keep"), "1");
   assert.equal(new URLSearchParams(new URL(identifiedUrl).hash.slice(1)).get("panel"), "settings");
   assert.equal(session.workspaceSessionIdFromUrl("chrome-extension://example/chatClub.html#workspace=bad"), "");
+  const openingClaimId = "claim-1234567890ab";
+  const openingUrl = session.workspaceSessionOpeningClaimUrl(identifiedUrl, openingClaimId);
+  assert.equal(session.workspaceSessionOpeningClaimIdFromUrl(openingUrl), openingClaimId);
+  assert.equal(session.workspaceSessionIdFromUrl(openingUrl), workspaceId);
+  assert.equal(session.workspaceSessionOpeningClaimUrl(identifiedUrl, "bad"), "");
+  const strippedOpeningUrl = session.workspaceSessionUrlWithoutOpeningClaim(openingUrl);
+  assert.equal(session.workspaceSessionOpeningClaimIdFromUrl(strippedOpeningUrl), "");
+  assert.equal(session.workspaceSessionIdFromUrl(strippedOpeningUrl), workspaceId);
+  assert.equal(new URLSearchParams(new URL(strippedOpeningUrl).hash.slice(1)).get("panel"), "settings");
   assert.match(session.createWorkspaceSessionId(), /^page-[A-Za-z0-9_-]{12,128}$/);
   assert.notEqual(session.createWorkspaceSessionGeneration(), session.createWorkspaceSessionGeneration());
 
@@ -88,7 +97,9 @@ const assert = require("node:assert/strict");
         activeIndex: 0
       }
     ],
-    fullscreenGroupIndex: 1
+    fullscreenGroupIndex: 1,
+    topicTitle: "",
+    topicTitleCustom: false
   });
   const serializedCapture = JSON.stringify(captured);
   for (const runtimeId of [
@@ -316,16 +327,25 @@ const assert = require("node:assert/strict");
   });
   assert.equal(unknownPreset.groups[0].chatApps[0].initialHref, "https://chatgpt.com/c/kept", "tab restore must keep conversation URLs when a layout preset is gone");
 
-  assert.equal(session.workspaceSnapshotIsNonEmpty({
-    groups: [{ tabs: [{ appId: "ChatGPT", currentHref: "https://chatgpt.com/" }] }]
-  }, { ChatGPT: "https://chatgpt.com/" }), false, "home-only tabs are empty");
-  assert.equal(session.workspaceSnapshotIsNonEmpty({
-    groups: [{ tabs: [{ appId: "ChatGPT", currentHref: "https://chatgpt.com/c/one" }] }]
-  }, { ChatGPT: "https://chatgpt.com/" }), true, "a conversation URL is non-empty");
-  assert.equal(session.workspaceSnapshotIsNonEmpty({
-    groups: [{ tabs: [{ appId: "Custom", currentHref: "https://example.com/chat/1" }] }]
-  }, {}), true, "an unknown app with a conversation URL is non-empty");
-  assert.equal(session.workspaceSnapshotIsNonEmpty({ groups: [{ tabs: [{ appId: "ChatGPT" }] }] }), false);
+  const titledCapture = captureWorkspaceSnapshotV1({
+    generation: "generation-title",
+    options: { activeLayoutPresetId: "default" },
+    groups: [{ id: "runtime-title-group", chatApps: [{ appId: "ChatGPT", instanceId: "runtime-title-frame" }] }],
+    activeTabs: { "runtime-title-group": "runtime-title-frame" },
+    topicTitle: "  Compare Grok and Claude  ",
+    topicTitleCustom: true
+  });
+  assert.equal(titledCapture.topicTitle, "Compare Grok and Claude");
+  assert.equal(titledCapture.topicTitleCustom, true);
+  const titledRestore = restoreWorkspaceSnapshotV1(titledCapture, {
+    validAppIds: ["ChatGPT"],
+    validPresetIds: ["default"],
+    fallbackPresetId: "default",
+    createGroupId: () => "title-group",
+    createFrameId: () => "title-frame"
+  });
+  assert.equal(titledRestore.topicTitle, "Compare Grok and Claude");
+  assert.equal(titledRestore.topicTitleCustom, true);
 
   console.log("workspace session snapshot state: ok");
 })().catch((error) => {

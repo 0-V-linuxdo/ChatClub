@@ -72,6 +72,7 @@ export function createSettingsController(ctx) {
     syncSummaryPanel: "function",
     syncPreferredModelSelectionOverlays: "function",
     requestUserScriptsPermission: "function?",
+    onSettingsDialogClosed: "function?",
     syncWorkspaceDom: "function",
     applyPreferredModels: "function",
     openTabUrl: "function",
@@ -103,6 +104,9 @@ export function createSettingsController(ctx) {
     "syncPreferredModelSelectionOverlays"
   );
   const syncWorkspaceDom = requireControllerFunction(ctx, controllerName, "syncWorkspaceDom");
+  const onSettingsDialogClosed = typeof ctx.onSettingsDialogClosed === "function"
+    ? ctx.onSettingsDialogClosed
+    : () => {};
   const applyPreferredModels = requireControllerFunction(ctx, controllerName, "applyPreferredModels");
   const openTabUrl = requireControllerFunction(ctx, controllerName, "openTabUrl");
   const functionalAnomalyLog = requireControllerContext(ctx, controllerName, "functionalAnomalyLog");
@@ -416,6 +420,7 @@ export function createSettingsController(ctx) {
       resetDialogState();
       closeActiveSettingsDialog = null;
       dialog.remove();
+      onSettingsDialogClosed();
     };
     closeActiveSettingsDialog = close;
     dialog = editorModal(t("settings.title"), host, close, true, t("common.close"));

@@ -1,6 +1,8 @@
 import { t } from "../../shared/i18n.js";
+import { isGenericTopicTitle, sanitizeTopicTitle } from "../../shared/topic-title.js";
 import { workspaceSessionWorkspaceId } from "../../shared/workspace-session.js";
-import { el, isDismissalEscape } from "../../ui/dom.js";
+import { button, editorModal as defaultEditorModal, el, field, iconButton, input, isDismissalEscape } from "../../ui/dom.js";
+import { createSvgIcon } from "../../ui/icons.js";
 
 const WORKSPACE_TABS_SIDEBAR_ID = "workspace-tabs-sidebar";
 const WORKSPACE_TABS_SIDEBAR_OPEN_KEY = "chatclubWorkspaceTabsSidebarOpenV1";
@@ -57,6 +59,8 @@ function normalizeItems(next = []) {
         current: item.current === true,
         title: String(item.title || "").trim(),
         layoutName: String(item.layoutName || "").trim(),
+        topicTitle: String(item.topicTitle || "").trim(),
+        topicTitleCustom: item.topicTitleCustom === true,
         appIds: Array.isArray(item.appIds) ? item.appIds.map((id) => String(id || "").trim()).filter(Boolean) : []
       };
     })
@@ -74,10 +78,13 @@ export function createWorkspaceTabsSidebarController({
   inferAppName,
   appById,
   currentWorkspace,
+  setCurrentTabTitle,
   sessionStorage = globalThis.sessionStorage,
   extensionApi,
   canDismiss,
-  document: ownerDocument = globalThis.document
+  document: ownerDocument = globalThis.document,
+  editorModal = defaultEditorModal,
+  createIcon = createSvgIcon
 } = {}) {
   if (typeof requestBackground !== "function") {
     throw new TypeError("Workspace tabs sidebar requires requestBackground().");
@@ -113,6 +120,8 @@ export function createWorkspaceTabsSidebarController({
   }
 
   function itemLabel(item = {}, index = 0) {
+    const topicTitle = String(item.topicTitle || "").trim();
+    if (topicTitle && !isGenericTopicTitle(topicTitle) && !isGenericWorkspaceTabName(topicTitle)) return topicTitle;
     const layoutName = String(item.layoutName || "").trim();
     if (layoutName && !isGenericWorkspaceTabName(layoutName)) return layoutName;
     const names = (Array.isArray(item.appIds) ? item.appIds : []).map((appId) => {
@@ -138,6 +147,7 @@ export function createWorkspaceTabsSidebarController({
     const label = itemLabel({
       layoutName: current?.layoutName || "",
       appIds: Array.isArray(current?.appIds) ? current.appIds : appIdsFromGroups(current?.groups),
+      topicTitle: current?.topicTitle || "",
       title: ""
     }, 0);
     ownerDocument.title = isGenericWorkspaceTabName(label) ? "ChatClub" : label;
@@ -169,6 +179,61 @@ export function createWorkspaceTabsSidebarController({
     }
   }
 
+  async function saveTabTitle(item = {}, title = "") {
+    const tabId = positiveTabId(item.tabId);
+    if (tabId === null) return { updated: false };
+    const next = sanitizeTopicTitle(title);
+    if (item.current === true && typeof setCurrentTabTitle === "function") {
+      setCurrentTabTitle(next);
+      setItems(items.map((entry) => (
+        entry.tabId === tabId ? { ...entry, topicTitle: next, topicTitleCustom: true } : entry
+      )));
+      if (lastShell?.isConnected) syncSidebar(lastShell);
+      return { updated: true, tabId, title: next, custom: true, current: true };
+    }
+    try {
+      const response = await requestBackground("setWorkspaceTabTitle", {
+        tabId,
+        title: next,
+        custom: true
+      });
+      setItems(items.map((entry) => (
+        entry.tabId === tabId ? { ...entry, topicTitle: next, topicTitleCustom: true } : entry
+      )));
+      if (lastShell?.isConnected) syncSidebar(lastShell);
+      return response;
+    } catch (error) {
+      toast(t("toast.workspaceTabTitleFailed"), "error");
+      throw error;
+    }
+  }
+
+  function openTitleEditor(item = {}) {
+    const titleInput = input(itemLabel(item, items.findIndex((entry) => entry.tabId === item.tabId)), {
+      placeholder: t("workspace.tabs.editPlaceholder")
+    });
+    let dialog;
+    const close = () => dialog?.remove?.();
+    const save = () => {
+      saveTabTitle(item, titleInput.value).catch(() => {});
+      close();
+    };
+    dialog = editorModal(
+      t("workspace.tabs.editTitle"),
+      el("div", { class: "settings-editor-form" },
+        field(t("workspace.tabs.editLabel"), titleInput),
+        el("div", { class: "settings-dialog-actions" },
+          button(t("common.cancel"), close),
+          button(t("common.save"), save, "primary")
+        )
+      ),
+      close,
+      false,
+      t("common.close")
+    );
+    return dialog;
+  }
+
   function renderSidebar() {
     if (!open) return null;
     return el("aside", {
@@ -181,18 +246,36 @@ export function createWorkspaceTabsSidebarController({
     ),
     items.length
       ? el("div", { class: "workspace-tabs-sidebar-list", role: "list" },
-        items.map((item, index) => el("button", {
+        items.map((item, index) => el("div", {
           class: `workspace-tabs-sidebar-item${item.current ? " is-current" : ""}`,
+          role: "listitem"
+        },
+        el("button", {
+          class: "workspace-tabs-sidebar-item-focus",
           type: "button",
-          role: "listitem",
           "aria-current": item.current ? "page" : null,
           onclick: () => { focusTab(item.tabId).catch(() => {}); }
         },
-        el("span", { class: "workspace-tabs-sidebar-item-label" }, itemLabel(item, index)),
-        item.current
-          ? el("span", { class: "workspace-tabs-sidebar-item-current" }, t("workspace.tabs.current"))
-          : null
-        ))
+          el("span", { class: "workspace-tabs-sidebar-item-label" }, itemLabel(item, index))
+        ),
+        el("div", { class: "workspace-tabs-sidebar-item-meta" },
+          item.current
+            ? el("span", { class: "workspace-tabs-sidebar-item-current" }, t("workspace.tabs.current"))
+            : null,
+          iconButton(
+            t("workspace.tabs.edit"),
+            createIcon("edit"),
+            (event) => {
+              event?.preventDefault?.();
+              event?.stopPropagation?.();
+              openTitleEditor(item);
+            },
+            "workspace-tabs-sidebar-item-edit",
+            t("workspace.tabs.edit"),
+            "",
+            "workspace.tabs.edit"
+          )
+        )))
       )
       : el("div", { class: "workspace-tabs-sidebar-empty" }, t("workspace.tabs.empty")));
   }
@@ -323,6 +406,8 @@ export function createWorkspaceTabsSidebarController({
     setItems,
     refresh,
     focusTab,
+    saveTabTitle,
+    openTitleEditor,
     toggle,
     close,
     setOpen,

@@ -164,11 +164,7 @@ button { cursor: pointer; }
 }
 
 .app-shell.fullscreen-mode.has-cleared-tabs-banner {
-  grid-template-rows: minmax(0, 1fr);
-}
-
-.app-shell.fullscreen-mode .workspace-cleared-tabs-banner {
-  display: none;
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .app-shell.fullscreen-mode .workspace-tabs-sidebar {
@@ -296,18 +292,29 @@ button { cursor: pointer; }
   border-radius: 8px;
   background: transparent;
   color: var(--text);
-  text-align: left;
-  cursor: pointer;
 }
 
 .workspace-tabs-sidebar-item:hover,
-.workspace-tabs-sidebar-item:focus-visible {
+.workspace-tabs-sidebar-item:focus-within {
   background: color-mix(in srgb, var(--panel-2) 80%, var(--bg));
 }
 
 .workspace-tabs-sidebar-item.is-current {
   border-color: color-mix(in srgb, var(--primary) 28%, var(--line));
   background: color-mix(in srgb, var(--primary) 10%, var(--panel));
+}
+
+.workspace-tabs-sidebar-item-focus {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1 1 auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
 .workspace-tabs-sidebar-item-label {
@@ -317,10 +324,22 @@ button { cursor: pointer; }
   white-space: nowrap;
 }
 
+.workspace-tabs-sidebar-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 .workspace-tabs-sidebar-item-current {
   flex-shrink: 0;
   font-size: 11px;
   color: var(--primary);
+}
+
+.workspace-tabs-sidebar-item-edit {
+  width: 28px;
+  height: 28px;
 }
 
 .workspace-tabs-sidebar-empty {
@@ -329,8 +348,19 @@ button { cursor: pointer; }
   font-size: 13px;
 }
 
-.runtime-bootstrap-failure {
+.runtime-bootstrap-failure-shell {
   min-height: 100vh;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.runtime-bootstrap-failure-shell.has-cleared-tabs-banner {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.runtime-bootstrap-failure {
+  min-height: 0;
   display: grid;
   place-content: center;
   justify-items: center;
@@ -2701,6 +2731,10 @@ body.tab-gesture-active * {
   width: min(1180px, calc(100vw - 32px));
   height: min(760px, calc(100vh - 32px));
   max-height: calc(100vh - 32px);
+}
+
+.settings-modal.has-cleared-tabs-banner {
+  grid-template-rows: auto auto minmax(0, 1fr);
 }
 
 .modal.settings-modal.settings-modal-fullscreen {

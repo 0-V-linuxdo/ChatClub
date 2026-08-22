@@ -14,9 +14,9 @@
     "reason": "The send runtime keeps exact-once composer delivery, typed image hydration, site-specific submit preparation, and the send-owned navigation correlation needed to keep Grok conversation creation from restarting preferred-model selection after the message is delivered."
   },
   "app/composer/controller.js": {
-    "maxLines": 1287,
+    "maxLines": 1292,
     "target": 1200,
-    "maxBytes": 48495,
+    "maxBytes": 48690,
     "targetBytes": 45000,
     "reason": "The Composer controller owns immutable text-and-image draft revisions, revision-conditional clearing, history de-duplication, and the shared document-bound admission queue used by both ordinary Send and one-shot new-workspace prompt handoff so delivery uncertainty and preferred-model preparation cannot diverge."
   },
@@ -49,24 +49,24 @@
     "reason": "The official-rules runtime is the single background configuration writer and keeps revision-CAS patch/import/reset handling, v3-to-v4 migration, immutable snapshot composition, signed component activation, rollback pins, alias authorization, reset cleanup journaling and startup recovery behind one serialized coordinator so atomic commit, compensation and destructive-operation fail-closed state cannot diverge across modules."
   },
   "app/runtime.js": {
-    "maxLines": 1208,
+    "maxLines": 1220,
     "target": 1200,
-    "maxBytes": 51525,
+    "maxBytes": 52606,
     "targetBytes": 50000,
-    "reason": "The application assembly root now also wires the page-local ChatClub-tab sidebar toggle, live-tab refresh after hydration, and overlay-aware Escape dismissal beside the existing Composer, Topbar, workspace-session, and cleared-tab restore composition."
+    "reason": "The application assembly root now also wires topic-title generation after the first composer send, the page-local ChatClub-tab sidebar toggle, live-tab refresh after hydration, an inert workspace-session port for Settings, foreground recovery controls inside an already-open Settings modal with base-banner reactivation on close, and an early cleared-tab recovery shell with capped automatic ownership retry after workspace bootstrap failure beside the existing Composer, Topbar, workspace-session, and overlay-aware Escape dismissal composition."
   },
   "shared/i18n.js": {
-    "maxLines": 2323,
+    "maxLines": 2339,
     "target": 1500,
-    "maxBytes": 136226,
+    "maxBytes": 137156,
     "targetBytes": 82000,
-    "reason": "Bilingual translation catalog data is kept co-located for key parity; the signed official-rules update-management and component-status views, consent, check, apply-all, compatibility, rollback, per-component source, confirmation and accessibility copy join the committed-reset cleanup warning, queued-send, preferred-model auto-selection overlay settings plus structured model, thinking, All Sources and Effort attempt labels, Workspace appearance subtabs, nested Tab Group right-click menu settings, prompt-handoff, platform-management labels, iframe tab context-menu labels, prompt-history date-group labels, cleared ChatClub-tab restore copy, and the live ChatClub-tab sidebar labels under exact line and byte ratchets."
+    "reason": "Bilingual translation catalog data is kept co-located for key parity; the signed official-rules update-management and component-status views, consent, check, apply-all, compatibility, rollback, per-component source, confirmation and accessibility copy join the committed-reset cleanup warning, queued-send, preferred-model auto-selection overlay settings plus structured model, thinking, All Sources and Effort attempt labels, Workspace appearance subtabs, nested Tab Group right-click menu settings, prompt-handoff, platform-management labels, iframe tab context-menu labels, prompt-history date-group labels, durable cleared ChatClub-tab restore copy, live ChatClub-tab sidebar labels, and topic-title edit copy under exact line and byte ratchets."
   },
   "tools/browser-smoke.mjs": {
-    "maxLines": 1445,
+    "maxLines": 1440,
     "target": 1200,
-    "maxBytes": 75419,
+    "maxBytes": 75184,
     "targetBytes": 60000,
-    "reason": "The cross-engine smoke exercises protected-header initial loading, target-correlated workspace-frame reset that ignores delayed initial-navigation events before retention baselines, owner-tab session rules, document-initiated iframe self-navigation, the authenticated binding handshake, explicit importability of every app lazy boundary including the signed official-rules service, complete Settings-menu and fullscreen-window probes, preferred-model overlay sizing and opacity across themes and narrow panels, accessible Workspace subtabs with focus and pending-color retention, content-sized Apps headers, source-specific iframe list drag-handle shapes without a redundant source column, compact iframe hover-help validation, and the one-shot prompt-handoff tab lifecycle with duplicate-click and cleanup assertions."
+    "reason": "The cross-engine smoke exercises protected-header initial loading, target-correlated workspace-frame reset that ignores delayed initial-navigation events before retention baselines, owner-tab session rules, durable workspace reconstruction with failure-shell diagnostics, document-initiated iframe self-navigation, the authenticated binding handshake, explicit importability of every app lazy boundary including the signed official-rules service, complete Settings-menu and fullscreen-window probes, preferred-model overlay sizing and opacity across themes and narrow panels, accessible Workspace subtabs with focus and pending-color retention, content-sized Apps headers, source-specific iframe list drag-handle shapes without a redundant source column, compact iframe hover-help validation, and the one-shot prompt-handoff tab lifecycle with duplicate-click and cleanup assertions."
   }
 }

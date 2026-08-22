@@ -2,10 +2,7 @@ import { APP_NAME } from "../shared/constants.js";
 import { FRAME_COMMAND_SPECS } from "../shared/frame-commands.js";
 import { ALL_SHORTCUT_ACTIONS } from "../shared/shortcuts.js";
 import { normalizeContentRuntimeIdentity } from "../shared/content-runtime-identity.js";
-import {
-  contentRuntimeIdentityForBundle,
-  contentRuntimePackageBundleIdentityMatches
-} from "../shared/content-runtime-package-identity.js";
+import { contentRuntimeIdentityForBundle, contentRuntimePackageBundleIdentityMatches } from "../shared/content-runtime-package-identity.js";
 import {
   BACKGROUND_REQUEST_ACTIONS,
   BACKGROUND_REQUEST_AUTHORIZERS,
@@ -18,10 +15,7 @@ import {
   RUNTIME_REGISTRY_ABI_VERSION,
   SECURE_FRAME_COMMAND_SOURCE
 } from "../shared/protocol.js";
-import {
-  CONTENT_RUNTIME_IMPLEMENTATION_VERSION,
-  CONTENT_RUNTIME_REGISTRY_KEY
-} from "../shared/content-runtime-version.generated.js";
+import { CONTENT_RUNTIME_IMPLEMENTATION_VERSION, CONTENT_RUNTIME_REGISTRY_KEY } from "../shared/content-runtime-version.generated.js";
 
 const CONTENT_BRIDGE_RUNTIME_IDENTITY = contentRuntimeIdentityForBundle("content/content.js");
 const CONTENT_SCRIPT_REGISTRATION_MARKER_KEY = "chatclubContentScriptRegistrationVersionV1";
@@ -44,21 +38,11 @@ import {
   sendMessageToRegisteredFrame as sendRegisteredFrameMessage,
   verifiedRegisteredFrameFallbackTarget as verifyRegisteredFrameFallbackTarget
 } from "./registered-frame-transport.js";
-import {
-  injectContentBridge,
-  relayContentFrameBinding
-} from "./content-registration.js";
-import {
-  openableTabUrl,
-  openExternalTab,
-  openWorkspaceTab,
-  registerActionListener
-} from "./tab-runtime.js";
-import { claimWorkspaceSessionRecovery, commitWorkspaceSessionRecovery, detachWorkspaceSessionMirror, dismissClearedWorkspaceTabs, focusWorkspaceTab, handleWorkspaceSessionAlarm, listClearedWorkspaceTabs, listLiveWorkspaceTabs, prepareWorkspaceSessionLifecycle, restoreClearedWorkspaceTabs, rotateWorkspaceSessionGeneration } from "./workspace-session.js";
-import {
-  createBackgroundRequestDispatcher,
-  createBackgroundRequestListener
-} from "./request-dispatcher.js";
+import { injectContentBridge, relayContentFrameBinding } from "./content-registration.js";
+import { openableTabUrl, openExternalTab, openWorkspaceTab, registerActionListener } from "./tab-runtime.js";
+import { claimWorkspaceSessionRecovery, commitWorkspaceSessionRecovery, detachWorkspaceSessionMirror, dismissClearedWorkspaceTabs, focusWorkspaceTab, handleWorkspaceSessionAlarm, listClearedWorkspaceTabs, listLiveWorkspaceTabs, persistWorkspaceSessionSnapshot, prepareWorkspaceSessionLifecycle, registerWorkspaceSessionTab, restoreClearedWorkspaceTabs, rotateWorkspaceSessionGeneration, setWorkspaceTabTitle } from "./workspace-session.js";
+import { isChatClubWorkspaceTab } from "./workspace-session-helpers.js";
+import { createBackgroundRequestDispatcher, createBackgroundRequestListener } from "./request-dispatcher.js";
 import { withTimeout } from "./promise-timeout.js";
 import * as trustedInput from "./trusted-input.js";
 const chrome = globalThis.browser || globalThis.chrome;
@@ -185,13 +169,22 @@ chrome.tabs?.onRemoved?.addListener((tabId, removeInfo) => {
   detachWorkspaceSessionMirror(chrome, tabId, removeInfo)
     .catch((error) => console.warn(`[${APP_NAME}] closed tab workspace session mirror could not be detached`, error));
 });
+chrome.tabs?.onCreated?.addListener((tab) => registerWorkspaceSessionTab(chrome, tab)
+  .catch((error) => console.warn(`[${APP_NAME}] new workspace tab inventory could not be registered`, error)));
 chrome.tabs?.onUpdated?.addListener((tabId, changeInfo, tab) => {
   const changedUrl = String(changeInfo?.url || "");
   const url = changedUrl || String(tab?.url || "");
   if (!url) return;
+  const wasExtensionPage = extensionPageTabTracked(tabId);
   if (changedUrl) workspacePromptHandoffRuntime.handleTabUpdated(tabId, changedUrl).catch(() => {});
   if (url.startsWith(chrome.runtime.getURL(""))) rememberKnownExtensionPageTab(tabId);
-  else if (changedUrl || extensionPageTabTracked(tabId)) forgetKnownExtensionPageTab(tabId);
+  else if (changedUrl || wasExtensionPage) forgetKnownExtensionPageTab(tabId);
+  if (changedUrl && !isChatClubWorkspaceTab(chrome, { id: tabId, url: changedUrl })) {
+    detachWorkspaceSessionMirror(chrome, tabId, { windowId: tab?.windowId, isWindowClosing: false })
+      .catch((error) => console.warn(`[${APP_NAME}] navigated workspace session mirror could not be detached`, error));
+  }
+  if (changedUrl) registerWorkspaceSessionTab(chrome, { ...tab, id: tabId, url })
+    .catch((error) => console.warn(`[${APP_NAME}] updated workspace tab inventory could not be registered`, error));
 });
 
 async function verifiedExtensionTabId(message = {}, sender = {}) {
@@ -587,12 +580,18 @@ prepareWorkspaceSessionLifecycleSafely("runtime start", { reason: "runtime-start
 const REQUEST = BACKGROUND_REQUEST_ACTIONS;
 const AUTHORIZE = BACKGROUND_REQUEST_AUTHORIZERS;
 
+async function listClearedWorkspaceTabsAfterLifecycle() {
+  await prepareWorkspaceSessionLifecycle(chrome, { reason: "list-cleared-workspace-tabs" });
+  return listClearedWorkspaceTabs(chrome);
+}
+
 const backgroundRequestHandlers = [
   [REQUEST.CLAIM_WORKSPACE_SESSION_RECOVERY, (message, sender) => claimWorkspaceSessionRecovery(chrome, message, sender)],
   [REQUEST.COMMIT_WORKSPACE_SESSION_RECOVERY, (message, sender) => commitWorkspaceSessionRecovery(chrome, message, sender)],
-  [REQUEST.LIST_CLEARED_WORKSPACE_TABS, () => listClearedWorkspaceTabs(chrome)], [REQUEST.LIST_LIVE_WORKSPACE_TABS, (_message, sender) => listLiveWorkspaceTabs(chrome, {}, sender)],
-  [REQUEST.FOCUS_WORKSPACE_TAB, (message, sender) => focusWorkspaceTab(chrome, message, sender)], [REQUEST.RESTORE_CLEARED_WORKSPACE_TABS, (message, sender) => restoreClearedWorkspaceTabs(chrome, message, sender)],
-  [REQUEST.DISMISS_CLEARED_WORKSPACE_TABS, () => dismissClearedWorkspaceTabs(chrome)],
+  [REQUEST.PERSIST_WORKSPACE_SESSION, (message, sender) => persistWorkspaceSessionSnapshot(chrome, message, sender)],
+  [REQUEST.LIST_CLEARED_WORKSPACE_TABS, () => listClearedWorkspaceTabsAfterLifecycle()], [REQUEST.LIST_LIVE_WORKSPACE_TABS, (_message, sender) => listLiveWorkspaceTabs(chrome, {}, sender)],
+  [REQUEST.FOCUS_WORKSPACE_TAB, (message, sender) => focusWorkspaceTab(chrome, message, sender)], [REQUEST.SET_WORKSPACE_TAB_TITLE, (message) => setWorkspaceTabTitle(chrome, message)], [REQUEST.RESTORE_CLEARED_WORKSPACE_TABS, (message, sender) => restoreClearedWorkspaceTabs(chrome, message, sender)],
+  [REQUEST.DISMISS_CLEARED_WORKSPACE_TABS, (message) => dismissClearedWorkspaceTabs(chrome, message)],
   ...workspacePromptHandoffRuntime.requestHandlers(REQUEST),
   [REQUEST.REGISTER_FRAME_CONTEXT, async (message, sender) => {
     let context;

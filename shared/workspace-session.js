@@ -14,16 +14,21 @@ const WORKSPACE_SESSION_WORKSPACE_PREFIX = "chatclubWorkspaceSessionWorkspace:";
 export const WORKSPACE_SESSION_BINDING_PREFIX = "chatclubWorkspaceSessionBinding:";
 export const WORKSPACE_SESSION_RECOVERY_KEY = "chatclubWorkspaceSessionRecoveryV1";
 export const WORKSPACE_SESSION_RUNTIME_MARKER_KEY = "chatclubWorkspaceSessionRuntimeV1";
-export const WORKSPACE_SESSION_STORAGE_VERSION = 1;
-export const WORKSPACE_SESSION_RECOVERY_VERSION = 1;
+export const WORKSPACE_SESSION_STORAGE_VERSION = 2;
+export const WORKSPACE_SESSION_RECOVERY_VERSION = 2;
 const WORKSPACE_SESSION_URL_PARAM = "workspace";
-export const WORKSPACE_SESSION_RECOVERY_TTL_MS = 10 * 60 * 1000;
-export const WORKSPACE_SESSION_RECENT_DETACH_MS = 2 * 60 * 1000;
+const WORKSPACE_SESSION_OPENING_CLAIM_PARAM = "workspaceOpeningClaim";
 export const WORKSPACE_SESSION_DETACHED_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-export const WORKSPACE_SESSION_USER_CLOSE_CONFIRM_MS = 8 * 1000;
-export const WORKSPACE_SESSION_USER_CLOSE_ALARM = "chatclub-workspace-session-user-close";
+export const WORKSPACE_SESSION_OPENING_LEASE_MS = 90 * 1000;
+export const WORKSPACE_SESSION_TAB_OPEN_TIMEOUT_MS = 10 * 1000;
+export const WORKSPACE_SESSION_OPENING_CLAIM_TIMEOUT_MS = 20 * 1000;
+export const WORKSPACE_SESSION_RECOVERY_ALARM = "chatclub-workspace-session-recovery-lease";
 export const WORKSPACE_SESSION_CLOSED_BY_USER = "user";
 export const WORKSPACE_SESSION_CLEARED_BY_BROWSER = "browser";
+export const WORKSPACE_SESSION_DISMISSED = "dismissed";
+export const WORKSPACE_SESSION_DETACH_TAB = "tab";
+export const WORKSPACE_SESSION_DETACH_WINDOW = "window";
+export const WORKSPACE_SESSION_DETACH_BROWSER = "browser";
 
 export function normalizeWorkspaceSessionGeneration(value) {
   const generation = typeof value === "string" ? value.trim() : "";
@@ -51,6 +56,16 @@ export function createWorkspaceSessionId() {
   } catch {}
   const random = Math.random().toString(36).slice(2);
   return `page-${Date.now().toString(36)}-${random || "workspace"}`;
+}
+
+export function normalizeWorkspaceSessionClaimId(value) {
+  const claimId = typeof value === "string" ? value.trim() : "";
+  return /^claim-[A-Za-z0-9_-]{12,192}$/.test(claimId) ? claimId : "";
+}
+
+export function workspaceSessionLegacyWorkspaceId(tabId) {
+  const normalized = normalizedBrowserTabId(tabId);
+  return normalized === null ? "" : normalizeWorkspaceSessionId(`page-legacy-tab-${normalized}`);
 }
 
 export function workspaceSessionWorkspaceKey(workspaceId) {
@@ -104,6 +119,42 @@ export function workspaceSessionUrl(href, workspaceId) {
   }
 }
 
+export function workspaceSessionOpeningClaimIdFromUrl(href) {
+  try {
+    const url = new URL(String(href || ""));
+    const hashParams = new URLSearchParams(url.hash.replace(/^#/, ""));
+    return normalizeWorkspaceSessionClaimId(hashParams.get(WORKSPACE_SESSION_OPENING_CLAIM_PARAM));
+  } catch {
+    return "";
+  }
+}
+
+export function workspaceSessionOpeningClaimUrl(href, claimId) {
+  const normalized = normalizeWorkspaceSessionClaimId(claimId);
+  if (!normalized) return "";
+  try {
+    const url = new URL(String(href || ""));
+    const hashParams = new URLSearchParams(url.hash.replace(/^#/, ""));
+    hashParams.set(WORKSPACE_SESSION_OPENING_CLAIM_PARAM, normalized);
+    url.hash = hashParams.toString();
+    return url.href;
+  } catch {
+    return "";
+  }
+}
+
+export function workspaceSessionUrlWithoutOpeningClaim(href) {
+  try {
+    const url = new URL(String(href || ""));
+    const hashParams = new URLSearchParams(url.hash.replace(/^#/, ""));
+    hashParams.delete(WORKSPACE_SESSION_OPENING_CLAIM_PARAM);
+    url.hash = hashParams.toString();
+    return url.href;
+  } catch {
+    return "";
+  }
+}
+
 function normalizedBrowserTabId(value) {
   const tabId = typeof value === "number" ? value : Number(value);
   return Number.isSafeInteger(tabId) && tabId > 0 ? tabId : null;
@@ -121,41 +172,4 @@ export function workspaceSessionMirrorTabId(key) {
   const suffix = value.slice(WORKSPACE_SESSION_MIRROR_PREFIX.length);
   if (!/^[1-9]\d*$/.test(suffix)) return null;
   return normalizedBrowserTabId(suffix);
-}
-
-function comparableHttpHref(value) {
-  try {
-    const url = new URL(String(value || ""));
-    if (url.protocol !== "http:" && url.protocol !== "https:") return "";
-    url.hash = "";
-    if (url.pathname.length > 1) url.pathname = url.pathname.replace(/\/+$/, "");
-    return url.href;
-  } catch {
-    return "";
-  }
-}
-
-function homeHrefLookup(homeHrefByAppId, appId) {
-  if (!homeHrefByAppId || !appId) return "";
-  if (homeHrefByAppId instanceof Map) return homeHrefByAppId.get(appId) || "";
-  if (typeof homeHrefByAppId === "object") return homeHrefByAppId[appId] || "";
-  return "";
-}
-
-/**
- * A workspace is restorable as a cleared ChatClub tab only when at least one
- * internal tab has left its app home for a restorable http(s) conversation.
- */
-export function workspaceSnapshotIsNonEmpty(snapshot, homeHrefByAppId = {}) {
-  const groups = Array.isArray(snapshot?.groups) ? snapshot.groups : [];
-  for (const group of groups) {
-    const tabs = Array.isArray(group?.tabs) ? group.tabs : [];
-    for (const tab of tabs) {
-      const href = comparableHttpHref(tab?.currentHref);
-      if (!href) continue;
-      const home = comparableHttpHref(homeHrefLookup(homeHrefByAppId, tab?.appId));
-      if (!home || href !== home) return true;
-    }
-  }
-  return false;
 }

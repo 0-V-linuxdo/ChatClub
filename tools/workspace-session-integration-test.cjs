@@ -7,6 +7,8 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const runtime = read("app/runtime.js");
+const sessionStore = read("app/workspace/session-store.js");
+const bootstrapRecovery = read("app/workspace/bootstrap-recovery-controller.js");
 const workspace = read("app/workspace/controller.js");
 const session = read("app/workspace/session-controller.js");
 const layout = read("app/workspace/layout-controller.js");
@@ -17,23 +19,57 @@ const initStart = runtime.indexOf("async function init()");
 const initEnd = runtime.indexOf("\n}\n\ninit().catch", initStart);
 const init = runtime.slice(initStart, initEnd);
 const loadIndex = init.indexOf("workspaceSessionStore.load()");
+const clearedTabsIndex = init.indexOf("clearedTabsController.refresh()");
+const recoveryShellIndex = init.indexOf("const recoveryShell = ensureAppShell()");
+const runtimeRefreshIndex = init.indexOf('action: "reloadConfigs"');
 const hydrateIndex = init.indexOf("workspaceController.hydrateGroups(promptHandoffLaunch.snapshot || workspaceSessionSnapshot)");
+const persistIndex = init.indexOf("workspaceController.persistWorkspaceSession()");
 const renderIndex = init.lastIndexOf("\n  render();");
 const restoreBarrierIndex = init.indexOf("waitForInitialWorkspaceFrameRestoration()");
 const preferredModelIndex = init.indexOf("applyPreferredModelsToFrames(null, { immediate: false })");
 
 assert.ok(initStart >= 0 && initEnd > initStart, "app init must remain discoverable");
 assert.ok(loadIndex >= 0, "workspace snapshot must start loading during bootstrap");
+assert.ok(recoveryShellIndex >= 0 && recoveryShellIndex < clearedTabsIndex,
+  "cleared-tab recovery must have a visible shell before inventory loading starts");
+assert.ok(clearedTabsIndex >= 0 && clearedTabsIndex < runtimeRefreshIndex,
+  "cleared-tab inventory must start independently before content-script reconciliation");
+assert.match(
+  init.slice(recoveryShellIndex, runtimeRefreshIndex),
+  /clearedTabsController\.refresh\(\)\.then\(\(tabs\)[\s\S]*?clearedTabsController\.syncBanner\(recoveryShell\)/,
+  "cleared-tab inventory must update the early shell without waiting for unrelated bootstrap work"
+);
 assert.ok(hydrateIndex > loadIndex, "workspace snapshot must load before hydration");
-assert.ok(renderIndex > hydrateIndex, "restored hydration must finish before the first app render");
+assert.ok(persistIndex > hydrateIndex, "hydration must be durably persisted before the workspace becomes ready");
+assert.ok(renderIndex > persistIndex, "the first app render must wait for durable workspace persistence");
 assert.ok(restoreBarrierIndex > renderIndex, "the initial workspace must render before the restoration barrier starts");
 assert.ok(preferredModelIndex > restoreBarrierIndex, "preferred models must wait for initial frame restoration");
-assert.match(runtime, /function initialWorkspaceFrameRestoreState\(\)/);
-assert.match(runtime, /function waitForInitialWorkspaceFrameRestoration\(/);
-assert.match(runtime, /createWorkspaceSessionStore\(\{[\s\S]*?currentTab: currentExtensionTab[\s\S]*?currentTabId: currentExtensionTabId[\s\S]*?storageGet[\s\S]*?storageSet[\s\S]*?storageRemove[\s\S]*?\}\)/);
+assert.match(bootstrapRecovery, /function initialWorkspaceFrameRestoreState\(\)/);
+assert.match(bootstrapRecovery, /function waitForInitialWorkspaceFrameRestoration\(/);
+assert.match(runtime, /createWorkspaceBootstrapRecoveryController\(\{/);
+assert.match(runtime, /createWorkspaceSessionStore\(\{[\s\S]*?currentTab: currentExtensionTab[\s\S]*?currentTabId: currentExtensionTabId[\s\S]*?persistWorkspaceSession:[\s\S]*?storageGet[\s\S]*?storageRemove[\s\S]*?\}\)/);
+assert.doesNotMatch(runtime.slice(runtime.indexOf("createWorkspaceSessionStore({"), runtime.indexOf("const workspaceController")), /\bstorageSet\b/, "stable workspace records must have one background writer");
 assert.match(runtime, /action: "claimWorkspaceSessionRecovery"/, "a naked replacement page must claim before default hydration");
-assert.match(runtime, /workspaceClearedTabsController\.refresh\(\)/, "cleared ChatClub tabs must be listed after hydration");
-assert.match(runtime, /workspaceClearedTabsController\.syncBanner\(shell\)/, "the one-click restore banner must render with the workspace");
+assert.match(runtime, /clearedTabsController\.refresh\(\)/, "cleared ChatClub tabs must be listed after hydration");
+assert.match(runtime, /clearedTabsController\.syncBanner\(shell\)/, "the one-click restore banner must render with the workspace");
+assert.match(runtime, /foregroundHost: \(\) => document\.querySelector\("\.settings-modal"\)/,
+  "Settings must surface recovery controls above its modal backdrop");
+assert.match(runtime, /openSettings[\s\S]*?clearedTabsController\.syncBanner\(ensureAppShell\(\)\)/,
+  "opening Settings with existing candidates must immediately mirror the recovery banner");
+assert.match(runtime, /onSettingsDialogClosed: \(\) => clearedTabsController\.syncBanner\(ensureAppShell\(\)\)/,
+  "closing Settings must immediately reactivate the base recovery banner");
+assert.match(read("app/settings/controller.js"), /dialog\.remove\(\);\s*onSettingsDialogClosed\(\);/,
+  "the Settings close path must resynchronize recovery controls after removing the foreground host");
+assert.match(
+  bootstrapRecovery,
+  /clearedTabsController\.syncBanner\(shell\)[\s\S]*?clearedTabsController\.refresh\(\)[\s\S]*?clearedTabsController\.syncBanner\(shell\)/,
+  "runtime bootstrap failures must still provide a shell for the recovery banner"
+);
+assert.match(
+  runtime.slice(runtime.indexOf("init().catch")),
+  /renderRuntimeBootstrapFailure\(error\)/,
+  "any uncaught bootstrap failure must retain the cleared-tab recovery surface"
+);
 assert.match(runtime, /workspaceTabsSidebarController\.syncSidebar\(shell\)/, "the live ChatClub-tab sidebar must render with the workspace");
 assert.match(runtime, /attachWorkspaceTabsSidebarController\(/, "runtime must own the live ChatClub-tab sidebar");
 assert.match(
@@ -43,7 +79,42 @@ assert.match(
 );
 assert.doesNotMatch(runtime, /absorbIntoCurrent/, "restore must open a new browser tab for every cleared ChatClub page");
 assert.match(runtime, /action: "commitWorkspaceSessionRecovery"[\s\S]*?workspaceId,[\s\S]*?claimId/, "a restored claim must commit by workspace and claim ids");
+assert.match(
+  bootstrapRecovery,
+  /function scheduleWorkspaceSessionLoadRecovery\([\s\S]*?await sessionStore\.load\(\)[\s\S]*?reloadPage\(\)/,
+  "a failed workspace load must retry automatically and reload after ownership recovers"
+);
+const loadFailureStart = runtime.indexOf("const workspaceSessionSnapshotPromise = workspaceSessionStore.load().catch");
+const loadFailureRecovery = runtime.indexOf("scheduleWorkspaceSessionLoadRecovery(); return;", loadFailureStart);
+assert.ok(loadFailureStart >= 0 && loadFailureRecovery > loadFailureStart,
+  "workspace bootstrap failure must arm automatic session recovery");
+assert.match(runtime, /action: "persistWorkspaceSession"/, "workspace snapshots must be serialized through the background coordinator");
 assert.match(runtime, /workspaceSessionStore,\s*\n\s*framePort:/, "the workspace controller must receive the per-page store");
+assert.match(runtime, /createWorkspaceSessionStore\(\{\s*\n\s*disabled: isOptionsPage,/, "the options surface must not participate in workspace recovery persistence");
+
+const saveStart = sessionStore.indexOf("  function save(snapshot) {");
+const saveEnd = sessionStore.indexOf("\n  function clear() {", saveStart);
+assert.ok(saveStart >= 0 && saveEnd > saveStart, "workspace page save implementation must remain discoverable");
+const saveImplementation = sessionStore.slice(saveStart, saveEnd);
+assert.match(
+  saveImplementation,
+  /persistDirtySnapshot\(target\)/,
+  "page save must delegate its latest logical state to the retrying durable writer"
+);
+const dirtyPersistStart = sessionStore.indexOf("  async function persistDirtySnapshot(target) {");
+const dirtyPersistEnd = sessionStore.indexOf("\n  async function persistLoadedPageSnapshot", dirtyPersistStart);
+assert.ok(dirtyPersistStart >= 0 && dirtyPersistEnd > dirtyPersistStart,
+  "the retrying workspace writer must remain discoverable");
+assert.match(
+  sessionStore.slice(dirtyPersistStart, dirtyPersistEnd),
+  /persistWorkspace\(target\.workspaceId, normalizedSnapshot,/,
+  "the retrying workspace writer must serialize snapshots through the background coordinator"
+);
+assert.doesNotMatch(
+  saveImplementation,
+  /\bstorageSet\b/,
+  "page save must not become a second writer for stable snapshots or tab bindings"
+);
 
 assert.match(
   layout,

@@ -1,13 +1,15 @@
 import {
   DEFAULT_WORKSPACE_SESSION_GENERATION,
   WORKSPACE_SESSION_GENERATION_KEY,
+  WORKSPACE_SESSION_OPENING_CLAIM_TIMEOUT_MS,
   WORKSPACE_SESSION_PAGE_KEY,
-  WORKSPACE_SESSION_STORAGE_VERSION,
   createWorkspaceSessionId,
   normalizeWorkspaceSessionId,
-  workspaceSessionBindingKey,
+  workspaceSessionOpeningClaimIdFromUrl,
   workspaceSessionIdFromUrl,
+  workspaceSessionLegacyWorkspaceId,
   workspaceSessionMirrorKey,
+  workspaceSessionUrlWithoutOpeningClaim,
   workspaceSessionUrl,
   workspaceSessionWorkspaceKey
 } from "../../shared/workspace-session.js";
@@ -81,6 +83,7 @@ function envelopeJson(generation, workspaceId, snapshot) {
  * metadata and as a one-release legacy migration path.
  */
 export function createWorkspaceSessionStore({
+  disabled = false,
   sessionStorage = globalThis.sessionStorage,
   location = globalThis.location,
   history = globalThis.history,
@@ -88,13 +91,19 @@ export function createWorkspaceSessionStore({
   currentTabId = null,
   claimWorkspaceSession = null,
   commitWorkspaceSession = null,
+  persistWorkspaceSession = null,
   storageGet = null,
-  storageSet = null,
   storageRemove = null,
   createWorkspaceId = createWorkspaceSessionId,
-  now = () => Date.now()
+  requestTimeoutMs = 3000,
+  openingClaimRequestTimeoutMs = WORKSPACE_SESSION_OPENING_CLAIM_TIMEOUT_MS,
+  retryDelaysMs = [500, 1500, 5000, 10_000, 20_000],
+  scheduleTimeout = globalThis.setTimeout,
+  cancelTimeout = globalThis.clearTimeout
 } = {}) {
-  const initialWorkspaceId = workspaceSessionIdFromUrl(location?.href);
+  const inactive = disabled === true;
+  const initialWorkspaceId = inactive ? "" : workspaceSessionIdFromUrl(location?.href);
+  const initialOpeningClaimId = inactive ? "" : workspaceSessionOpeningClaimIdFromUrl(location?.href);
   let resolvedWorkspaceId = initialWorkspaceId;
   let resolvedGeneration = "";
   let generationRun = null;
@@ -105,6 +114,34 @@ export function createWorkspaceSessionStore({
   let pendingClaim = null;
   let operation = 0;
   let writeChain = Promise.resolve();
+  let dirtySnapshot = null;
+  let retryTimer = null;
+  let retryFailures = 0;
+  const STORAGE_ATTEMPTS = 3;
+  const REQUEST_TIMEOUT_MS = Math.max(50, Number(requestTimeoutMs) || 3000);
+  const OPENING_CLAIM_REQUEST_TIMEOUT_MS = Math.max(
+    REQUEST_TIMEOUT_MS,
+    Number(openingClaimRequestTimeoutMs) || WORKSPACE_SESSION_OPENING_CLAIM_TIMEOUT_MS
+  );
+  const RETRY_DELAYS_MS = (Array.isArray(retryDelaysMs) ? retryDelaysMs : [])
+    .map((value) => Math.max(0, Number(value) || 0));
+
+  async function requestWithDeadline(factory, label, timeoutMs = REQUEST_TIMEOUT_MS) {
+    if (typeof factory !== "function") throw new TypeError(`${label} is unavailable`);
+    if (typeof scheduleTimeout !== "function" || typeof cancelTimeout !== "function") return factory();
+    const deadlineMs = Math.max(50, Number(timeoutMs) || REQUEST_TIMEOUT_MS);
+    let timeoutId = null;
+    try {
+      return await Promise.race([
+        Promise.resolve().then(factory),
+        new Promise((_, reject) => {
+          timeoutId = scheduleTimeout(() => reject(new Error(`${label} timed out`)), deadlineMs);
+        })
+      ]);
+    } finally {
+      if (timeoutId !== null) cancelTimeout(timeoutId);
+    }
+  }
 
   function readPageValue() {
     try { return sessionStorage?.getItem?.(WORKSPACE_SESSION_PAGE_KEY) ?? null; }
@@ -113,8 +150,11 @@ export function createWorkspaceSessionStore({
 
   function removePageValue() {
     try {
-      sessionStorage?.removeItem?.(WORKSPACE_SESSION_PAGE_KEY);
-      return true;
+      if (typeof sessionStorage?.removeItem !== "function" || typeof sessionStorage?.getItem !== "function") {
+        return false;
+      }
+      sessionStorage.removeItem(WORKSPACE_SESSION_PAGE_KEY);
+      return sessionStorage.getItem(WORKSPACE_SESSION_PAGE_KEY) === null;
     } catch {
       return false;
     }
@@ -131,11 +171,12 @@ export function createWorkspaceSessionStore({
     }
   }
 
-  function installWorkspaceId(value) {
+  function installWorkspaceId(value, { removeOpeningClaim = false } = {}) {
     const workspaceId = normalizeWorkspaceSessionId(value);
     if (!workspaceId) return "";
     resolvedWorkspaceId = workspaceId;
-    const href = workspaceSessionUrl(location?.href, workspaceId);
+    let href = workspaceSessionUrl(location?.href, workspaceId);
+    if (removeOpeningClaim) href = workspaceSessionUrlWithoutOpeningClaim(href);
     if (href) {
       try { history?.replaceState?.(history?.state ?? null, "", href); }
       catch {}
@@ -153,28 +194,28 @@ export function createWorkspaceSessionStore({
 
   async function safeStorageGet(key) {
     if (typeof storageGet !== "function") return { ok: false, value: undefined };
-    try { return { ok: true, value: await storageGet(key) }; }
-    catch { return { ok: false, value: undefined }; }
-  }
-
-  async function safeStorageSet(key, value) {
-    if (typeof storageSet !== "function") return false;
-    try {
-      await storageSet(key, value);
-      return true;
-    } catch {
-      return false;
+    let error = null;
+    for (let attempt = 0; attempt < STORAGE_ATTEMPTS; attempt += 1) {
+      try {
+        return {
+          ok: true,
+          value: await requestWithDeadline(() => storageGet(key), "Workspace session storage read")
+        };
+      }
+      catch (caught) { error = caught; }
     }
+    return { ok: false, value: undefined, error };
   }
 
   async function safeStorageRemove(key) {
     if (!key || typeof storageRemove !== "function") return false;
-    try {
-      await storageRemove(key);
-      return true;
-    } catch {
-      return false;
+    for (let attempt = 0; attempt < STORAGE_ATTEMPTS; attempt += 1) {
+      try {
+        await storageRemove(key);
+        return true;
+      } catch {}
     }
+    return false;
   }
 
   function resolveGeneration({ refresh = false } = {}) {
@@ -182,6 +223,9 @@ export function createWorkspaceSessionStore({
     if (generationRun) return generationRun;
     const run = (async () => {
       const result = await safeStorageGet(WORKSPACE_SESSION_GENERATION_KEY);
+      if (!result.ok && typeof storageGet === "function") {
+        throw result.error || new Error("Workspace session generation could not be read");
+      }
       const generation = generationValue(result.value);
       resolvedGeneration = generation || DEFAULT_WORKSPACE_SESSION_GENERATION;
       return resolvedGeneration;
@@ -197,17 +241,28 @@ export function createWorkspaceSessionStore({
     if (tabResolved) return Promise.resolve(resolvedTab);
     if (tabRun) return tabRun;
     const run = (async () => {
-      let value = null;
-      try { value = typeof currentTab === "function" ? await currentTab() : currentTab; }
-      catch {}
-      let normalized = tabRecord(value);
-      if (normalized.tabId === null) {
-        try { value = typeof currentTabId === "function" ? await currentTabId() : currentTabId; }
-        catch { value = null; }
+      let normalized = tabRecord(null);
+      let lastError = null;
+      for (const [source, label] of [
+        [currentTab, "Workspace session current tab query"],
+        [currentTabId, "Workspace session current tab id query"]
+      ]) {
+        if (source === null || source === undefined) continue;
+        let value = source;
+        try {
+          if (typeof source === "function") value = await requestWithDeadline(source, label);
+        } catch (error) {
+          lastError = error;
+          continue;
+        }
         normalized = tabRecord(value);
+        if (normalized.tabId !== null) break;
+      }
+      if (normalized.tabId === null && lastError) {
+        throw new Error("Workspace session current browser tab could not be resolved", { cause: lastError });
       }
       resolvedTab = normalized;
-      tabResolved = true;
+      tabResolved = normalized.tabId !== null;
       return resolvedTab;
     })();
     tabRun = run.finally(() => { tabRun = null; });
@@ -223,73 +278,288 @@ export function createWorkspaceSessionStore({
     return queued;
   }
 
-  function ownerRecord(tab) {
+  async function claimTokenizedWorkspace() {
+    if (!initialWorkspaceId || typeof claimWorkspaceSession !== "function") return null;
+    let response;
+    try {
+      response = await requestWithDeadline(
+        () => claimWorkspaceSession({
+          workspaceId: initialWorkspaceId,
+          ...(initialOpeningClaimId ? { openingClaimId: initialOpeningClaimId } : {})
+        }),
+        "Workspace session ownership claim",
+        initialOpeningClaimId ? OPENING_CLAIM_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS
+      );
+    }
+    catch (error) { throw new Error("Workspace session ownership could not be claimed", { cause: error }); }
+    if (!plainObject(response) || response.claimed !== true) {
+      throw new Error("Workspace session ownership claim was rejected");
+    }
+    const returnedWorkspaceId = normalizeWorkspaceSessionId(response.workspaceId);
+    if (!returnedWorkspaceId) throw new Error("Workspace session ownership claim returned an invalid id");
+    const forked = response.forked === true;
+    if (returnedWorkspaceId !== initialWorkspaceId && !forked) {
+      throw new Error("Workspace session ownership claim returned a mismatched id");
+    }
+    const generation = generationValue(response.workspaceSessionGeneration);
+    if (generation) resolvedGeneration = generation;
+    const claimId = String(response.claimId || response.claimToken || "").trim();
+    if (response.recovered === true && !claimId) {
+      throw new Error("Workspace session ownership claim returned no lease id");
+    }
+    installWorkspaceId(returnedWorkspaceId, { removeOpeningClaim: Boolean(initialOpeningClaimId) });
+    if (claimId) pendingClaim = { workspaceId: returnedWorkspaceId, claimId };
     return {
-      tabId: tab?.tabId ?? null,
-      windowId: tab?.windowId ?? null,
-      index: tab?.index ?? null,
-      pinned: tab?.pinned === true
-    };
-  }
-
-  function stableRecord(workspaceId, generation, snapshot, tab, timestamp) {
-    return {
-      storageVersion: WORKSPACE_SESSION_STORAGE_VERSION,
+      forked,
       generation,
-      workspaceId,
-      snapshot,
-      owner: ownerRecord(tab),
-      updatedAt: timestamp,
-      detachedAt: null
-    };
-  }
-
-  function bindingRecord(workspaceId, generation, tab, timestamp) {
-    return {
-      storageVersion: WORKSPACE_SESSION_STORAGE_VERSION,
-      generation,
-      workspaceId,
-      ...ownerRecord(tab),
-      updatedAt: timestamp,
-      detachedAt: null
+      snapshot: snapshotRecord(response.snapshot),
+      workspaceId: returnedWorkspaceId
     };
   }
 
   async function claimNakedWorkspace() {
     if (initialWorkspaceId || typeof claimWorkspaceSession !== "function") return null;
     let response;
-    try { response = await claimWorkspaceSession({ workspaceId: "" }); }
-    catch { return null; }
-    if (!plainObject(response) || response.claimed !== true) return null;
+    try {
+      response = await requestWithDeadline(
+        () => claimWorkspaceSession({ workspaceId: "" }),
+        "Workspace session recovery claim"
+      );
+    }
+    catch (error) { throw new Error("Workspace session recovery could not be claimed", { cause: error }); }
+    if (!plainObject(response) || typeof response.claimed !== "boolean") {
+      throw new Error("Workspace session recovery claim returned an invalid response");
+    }
+    if (response.claimed !== true) return { claimed: false, snapshot: null, workspaceId: "" };
+    if (response.forked === true) throw new Error("Workspace session recovery claim unexpectedly forked");
     const workspaceId = normalizeWorkspaceSessionId(response.workspaceId);
-    if (!workspaceId) return null;
+    if (!workspaceId) throw new Error("Workspace session recovery claim returned an invalid id");
     const generation = generationValue(response.workspaceSessionGeneration);
     if (generation) resolvedGeneration = generation;
-    installWorkspaceId(workspaceId);
     const snapshot = snapshotRecord(response.snapshot);
-    pendingClaim = {
-      workspaceId,
-      claimId: String(response.claimId || response.claimToken || "").trim()
+    const claimId = String(response.claimId || response.claimToken || "").trim();
+    if (response.recovered === true && !claimId) {
+      throw new Error("Workspace session recovery claim returned no lease id");
+    }
+    installWorkspaceId(workspaceId);
+    if (claimId) pendingClaim = { workspaceId, claimId };
+    return {
+      claimed: true,
+      snapshot: snapshot ? snapshotWithGeneration(snapshot, resolvedGeneration || DEFAULT_WORKSPACE_SESSION_GENERATION) : null,
+      workspaceId
     };
-    return snapshot ? snapshotWithGeneration(snapshot, resolvedGeneration || DEFAULT_WORKSPACE_SESSION_GENERATION) : null;
+  }
+
+  async function claimLegacyPageWorkspace(workspaceId) {
+    if (!workspaceId || typeof claimWorkspaceSession !== "function") return null;
+    let response;
+    try {
+      response = await requestWithDeadline(
+        () => claimWorkspaceSession({ workspaceId }),
+        "Workspace session legacy ownership claim"
+      );
+    }
+    catch (error) { throw new Error("Workspace session legacy ownership could not be claimed", { cause: error }); }
+    if (!plainObject(response) || response.claimed !== true) {
+      throw new Error("Workspace session legacy ownership claim was rejected");
+    }
+    const returnedWorkspaceId = normalizeWorkspaceSessionId(response.workspaceId);
+    if (!returnedWorkspaceId) throw new Error("Workspace session legacy ownership claim returned an invalid id");
+    if (response.forked === true || returnedWorkspaceId !== workspaceId) {
+      throw new Error("Workspace session legacy ownership claim returned a mismatched id");
+    }
+    const generation = generationValue(response.workspaceSessionGeneration);
+    if (generation) resolvedGeneration = generation;
+    const claimId = String(response.claimId || response.claimToken || "").trim();
+    if (response.recovered === true && !claimId) {
+      throw new Error("Workspace session legacy ownership claim returned no lease id");
+    }
+    if (claimId) pendingClaim = { workspaceId, claimId };
+    return { generation, workspaceId };
+  }
+
+  async function commitPendingWorkspaceClaim(workspaceId, isCurrent = () => true) {
+    if (pendingClaim?.workspaceId !== workspaceId || typeof commitWorkspaceSession !== "function") return true;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      if (!isCurrent()) return false;
+      const claim = pendingClaim;
+      let response = null;
+      try {
+        response = await commitWorkspaceSession({ workspaceId, claimId: claim.claimId });
+      }
+      catch {}
+      if (plainObject(response) && response.committed === true) {
+        pendingClaim = null;
+        return true;
+      }
+      if (!isCurrent() || attempt > 0 || typeof claimWorkspaceSession !== "function") return false;
+      let reclaimed = null;
+      try {
+        reclaimed = await claimWorkspaceSession({ workspaceId });
+      }
+      catch { return false; }
+      const reclaimedWorkspaceId = normalizeWorkspaceSessionId(reclaimed?.workspaceId);
+      if (
+        !plainObject(reclaimed)
+        || reclaimed.claimed !== true
+        || reclaimed.forked === true
+        || reclaimedWorkspaceId !== workspaceId
+      ) return false;
+      const claimId = String(reclaimed.claimId || reclaimed.claimToken || "").trim();
+      if (reclaimed.recovered === true && !claimId) return false;
+      if (!claimId) {
+        pendingClaim = null;
+        return true;
+      }
+      pendingClaim = { workspaceId, claimId };
+    }
+    return false;
+  }
+
+  async function persistWorkspace(workspaceId, snapshot = null, clear = false, isCurrent = () => true) {
+    if (typeof persistWorkspaceSession !== "function") return false;
+    for (let attempt = 0; attempt < STORAGE_ATTEMPTS; attempt += 1) {
+      if (!isCurrent()) return false;
+      try {
+        const response = await persistWorkspaceSession({ workspaceId, snapshot, clear });
+        const returnedWorkspaceId = normalizeWorkspaceSessionId(response?.workspaceId);
+        if (
+          plainObject(response)
+          && response.persisted === true
+          && returnedWorkspaceId === workspaceId
+          && (!clear || response.cleared === true)
+        ) {
+          const generation = generationValue(response.workspaceSessionGeneration);
+          if (generation) resolvedGeneration = generation;
+          return true;
+        }
+      } catch {}
+    }
+    return false;
+  }
+
+  function cancelDirtyRetry() {
+    if (retryTimer !== null && typeof cancelTimeout === "function") cancelTimeout(retryTimer);
+    retryTimer = null;
+  }
+
+  function scheduleDirtyRetry(target) {
+    if (target !== dirtySnapshot || retryTimer !== null || !RETRY_DELAYS_MS.length) return;
+    const delay = RETRY_DELAYS_MS[Math.min(retryFailures - 1, RETRY_DELAYS_MS.length - 1)];
+    retryTimer = scheduleTimeout(() => {
+      retryTimer = null;
+      const current = dirtySnapshot;
+      if (!current) return;
+      enqueue(() => persistDirtySnapshot(current));
+    }, delay);
+    retryTimer?.unref?.();
+  }
+
+  function stageDirtyState(workspaceId, snapshot, { clear = false, pageRemoved = false } = {}) {
+    cancelDirtyRetry();
+    retryFailures = 0;
+    const target = { operation: ++operation, workspaceId, snapshot, clear, pageRemoved };
+    dirtySnapshot = target;
+    return target;
+  }
+
+  async function persistDirtySnapshot(target) {
+    if (target !== dirtySnapshot || target.operation !== operation) return false;
+    let persisted = false;
+    try {
+      const isCurrent = () => target === dirtySnapshot && target.operation === operation;
+      if (target.clear) {
+        if (!target.pageRemoved) target.pageRemoved = removePageValue();
+        if (!target.pageRemoved || !isCurrent()) return false;
+        if (
+          target.workspaceId
+          && !await persistWorkspace(target.workspaceId, null, true, isCurrent)
+        ) return false;
+        if (!isCurrent()) return false;
+        await clearLegacySource();
+        if (!isCurrent()) return false;
+        pendingClaim = null;
+        persisted = true;
+        return true;
+      }
+      const generation = await resolveGeneration();
+      if (target !== dirtySnapshot || target.operation !== operation) return false;
+      const normalizedSnapshot = snapshotWithGeneration(target.snapshot, generation);
+      writePageValue(normalizedSnapshot, generation, target.workspaceId);
+      if (!await persistWorkspace(target.workspaceId, normalizedSnapshot, false, isCurrent)) return false;
+      if (target !== dirtySnapshot || target.operation !== operation) return false;
+      await clearLegacySource();
+      if (target !== dirtySnapshot || target.operation !== operation) return false;
+      if (!await commitPendingWorkspaceClaim(target.workspaceId, isCurrent)) return false;
+      if (target !== dirtySnapshot || target.operation !== operation) return false;
+      persisted = true;
+      return true;
+    } finally {
+      if (target === dirtySnapshot && target.operation === operation) {
+        if (persisted) {
+          dirtySnapshot = null;
+          retryFailures = 0;
+          cancelDirtyRetry();
+        } else {
+          retryFailures += 1;
+          scheduleDirtyRetry(target);
+        }
+      }
+    }
+  }
+
+  async function persistLoadedPageSnapshot(workspaceId, snapshot) {
+    const target = stageDirtyState(workspaceId, snapshotRecord(snapshot));
+    if (!target.snapshot || !await enqueue(() => persistDirtySnapshot(target))) {
+      throw new Error("Workspace session page snapshot could not be persisted");
+    }
+    return snapshot;
   }
 
   async function load() {
+    if (inactive) return null;
+    const tokenClaim = await claimTokenizedWorkspace();
     const pageValue = readPageValue();
-    const targetGeneration = await resolveGeneration({ refresh: true });
+    const targetGeneration = tokenClaim?.generation || await resolveGeneration({ refresh: !resolvedGeneration });
     const page = envelopeRecord(pageValue, targetGeneration, initialWorkspaceId);
     if (page) {
-      const workspaceId = installWorkspaceId(page.workspaceId || initialWorkspaceId || ensureWorkspaceId());
-      const snapshot = snapshotWithGeneration(page.snapshot, targetGeneration);
-      writePageValue(snapshot, targetGeneration, workspaceId);
-      return snapshot;
+      let workspaceId = tokenClaim?.workspaceId || page.workspaceId || initialWorkspaceId;
+      let pageGeneration = targetGeneration;
+      if (!workspaceId) {
+        const tab = await resolveCurrentTab();
+        const legacyWorkspaceId = workspaceSessionLegacyWorkspaceId(tab.tabId);
+        if (legacyWorkspaceId) {
+          const legacyClaim = await claimLegacyPageWorkspace(legacyWorkspaceId);
+          workspaceId = legacyClaim?.workspaceId || legacyWorkspaceId;
+          if (legacyClaim?.generation && legacyClaim.generation !== targetGeneration) {
+            throw new Error("Workspace session generation changed during legacy migration");
+          }
+          pageGeneration = legacyClaim?.generation || targetGeneration;
+        } else if (typeof claimWorkspaceSession === "function") {
+          throw new Error("Workspace session legacy migration requires the current browser tab");
+        } else {
+          workspaceId = ensureWorkspaceId();
+        }
+      }
+      workspaceId = installWorkspaceId(workspaceId);
+      const snapshot = snapshotWithGeneration(page.snapshot, pageGeneration);
+      writePageValue(snapshot, pageGeneration, workspaceId);
+      return persistLoadedPageSnapshot(workspaceId, snapshot);
     }
     if (pageValue !== null) removePageValue();
 
     const urlWorkspaceId = resolvedWorkspaceId || initialWorkspaceId;
     if (urlWorkspaceId) {
       installWorkspaceId(urlWorkspaceId);
+      if (tokenClaim?.snapshot) {
+        const snapshot = snapshotWithGeneration(tokenClaim.snapshot, targetGeneration);
+        writePageValue(snapshot, targetGeneration, urlWorkspaceId);
+        return snapshot;
+      }
       const stableResult = await safeStorageGet(workspaceSessionWorkspaceKey(urlWorkspaceId));
+      if (!stableResult.ok && typeof storageGet === "function") {
+        throw stableResult.error || new Error("Workspace session snapshot could not be read");
+      }
       const stable = stableResult.ok
         ? envelopeRecord(stableResult.value, targetGeneration, urlWorkspaceId)
         : null;
@@ -301,24 +571,30 @@ export function createWorkspaceSessionStore({
       return null;
     }
 
+    const nakedClaim = await claimNakedWorkspace();
+    if (nakedClaim?.claimed) {
+      if (nakedClaim.snapshot) {
+        writePageValue(nakedClaim.snapshot, resolvedGeneration, nakedClaim.workspaceId);
+        return persistLoadedPageSnapshot(nakedClaim.workspaceId, nakedClaim.snapshot);
+      }
+      return null;
+    }
+
     const tab = await resolveCurrentTab();
     if (tab.tabId !== null) {
       const key = workspaceSessionMirrorKey(tab.tabId);
       const legacyResult = await safeStorageGet(key);
+      if (!legacyResult.ok && typeof storageGet === "function") {
+        throw legacyResult.error || new Error("Workspace session legacy snapshot could not be read");
+      }
       const legacy = legacyResult.ok ? envelopeRecord(legacyResult.value, targetGeneration) : null;
       if (legacy) {
         legacySourceKey = key;
-        const workspaceId = ensureWorkspaceId();
+        const workspaceId = installWorkspaceId(workspaceSessionLegacyWorkspaceId(tab.tabId) || ensureWorkspaceId());
         const snapshot = snapshotWithGeneration(legacy.snapshot, targetGeneration);
         writePageValue(snapshot, targetGeneration, workspaceId);
-        return snapshot;
+        return persistLoadedPageSnapshot(workspaceId, snapshot);
       }
-    }
-
-    const claimedSnapshot = await claimNakedWorkspace();
-    if (resolvedWorkspaceId) {
-      if (claimedSnapshot) writePageValue(claimedSnapshot, resolvedGeneration, resolvedWorkspaceId);
-      return claimedSnapshot;
     }
 
     ensureWorkspaceId();
@@ -331,74 +607,44 @@ export function createWorkspaceSessionStore({
   }
 
   function save(snapshot) {
+    if (inactive) return Promise.resolve(true);
     const record = snapshotRecord(snapshot);
     if (!record) return Promise.resolve(false);
     const workspaceId = ensureWorkspaceId();
     const synchronousGeneration = resolvedGeneration || DEFAULT_WORKSPACE_SESSION_GENERATION;
     const synchronousSnapshot = snapshotWithGeneration(record, synchronousGeneration);
-    const targetOperation = ++operation;
+    const target = stageDirtyState(workspaceId, record);
     writePageValue(synchronousSnapshot, synchronousGeneration, workspaceId);
-
-    return enqueue(async () => {
-      if (targetOperation !== operation) return false;
-      const generation = await resolveGeneration();
-      if (targetOperation !== operation) return false;
-      const normalizedSnapshot = snapshotWithGeneration(record, generation);
-      writePageValue(normalizedSnapshot, generation, workspaceId);
-      const tab = await resolveCurrentTab();
-      if (targetOperation !== operation) return false;
-      const timestamp = Number(now()) || Date.now();
-      const stableSaved = await safeStorageSet(
-        workspaceSessionWorkspaceKey(workspaceId),
-        stableRecord(workspaceId, generation, normalizedSnapshot, tab, timestamp)
-      );
-      if (!stableSaved || targetOperation !== operation) return false;
-      if (tab.tabId !== null) {
-        const bindingSaved = await safeStorageSet(
-          workspaceSessionBindingKey(tab.tabId),
-          bindingRecord(workspaceId, generation, tab, timestamp)
-        );
-        if (!bindingSaved || targetOperation !== operation) return false;
-      }
-      await clearLegacySource();
-      if (targetOperation !== operation) return false;
-      if (pendingClaim?.workspaceId === workspaceId && typeof commitWorkspaceSession === "function") {
-        let response;
-        try { response = await commitWorkspaceSession({ workspaceId, claimId: pendingClaim.claimId }); }
-        catch { return false; }
-        if (targetOperation !== operation) return false;
-        if (!plainObject(response) || response.committed !== false) pendingClaim = null;
-      }
-      return true;
-    });
+    return enqueue(() => persistDirtySnapshot(target));
   }
 
   function clear() {
-    const targetOperation = ++operation;
-    pendingClaim = null;
-    removePageValue();
-    return enqueue(async () => {
-      if (targetOperation !== operation) return false;
-      const workspaceId = resolvedWorkspaceId || initialWorkspaceId;
-      const tab = await resolveCurrentTab();
-      if (targetOperation !== operation) return false;
-      if (workspaceId) await safeStorageRemove(workspaceSessionWorkspaceKey(workspaceId));
-      if (tab.tabId !== null) {
-        await safeStorageRemove(workspaceSessionBindingKey(tab.tabId));
-        await safeStorageRemove(workspaceSessionMirrorKey(tab.tabId));
-      }
-      if (legacySourceKey) await safeStorageRemove(legacySourceKey);
-      legacySourceKey = "";
-      return targetOperation === operation;
+    if (inactive) return Promise.resolve(true);
+    const workspaceId = resolvedWorkspaceId || initialWorkspaceId;
+    const target = stageDirtyState(workspaceId, null, {
+      clear: true,
+      pageRemoved: removePageValue()
     });
+    return enqueue(() => persistDirtySnapshot(target));
   }
 
   async function flush() {
+    if (inactive) return true;
     while (true) {
       const pending = writeChain;
       await pending.catch(() => {});
-      if (pending === writeChain) return;
+      if (pending === writeChain) break;
     }
+    const target = dirtySnapshot;
+    if (!target) return true;
+    cancelDirtyRetry();
+    await enqueue(() => persistDirtySnapshot(target));
+    while (true) {
+      const pending = writeChain;
+      await pending.catch(() => {});
+      if (pending === writeChain) break;
+    }
+    return dirtySnapshot === null;
   }
 
   function generation() {
@@ -406,10 +652,12 @@ export function createWorkspaceSessionStore({
   }
 
   function workspaceId() {
+    if (inactive) return "";
     return resolvedWorkspaceId || initialWorkspaceId;
   }
 
   function adopt(workspaceId) {
+    if (inactive) return "";
     return installWorkspaceId(workspaceId);
   }
 

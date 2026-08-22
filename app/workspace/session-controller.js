@@ -51,6 +51,8 @@ export function createWorkspaceSessionController(dependencies = {}) {
       groups: state.groups,
       activeTabs: state.activeTabs,
       fullscreenGroupId: state.fullscreenGroupId,
+      topicTitle: state.topicTitle,
+      topicTitleCustom: state.topicTitleCustom,
       currentHrefForTab: (chat) => currentHrefForWorkspaceTab(chat, framesByInstanceId)
     });
   }
@@ -59,6 +61,11 @@ export function createWorkspaceSessionController(dependencies = {}) {
     const snapshot = captureWorkspaceSession();
     if (snapshot) workspaceSessionStore.save(snapshot).catch(() => {});
     return snapshot;
+  }
+
+  async function persistWorkspaceSession() {
+    const snapshot = captureWorkspaceSession();
+    return snapshot ? workspaceSessionStore.save(snapshot) : null;
   }
 
   function restoreWorkspaceSession(snapshot) {
@@ -81,8 +88,15 @@ export function createWorkspaceSessionController(dependencies = {}) {
     state.groups = restored.groups;
     state.activeTabs = restored.activeTabs;
     state.fullscreenGroupId = restored.fullscreenGroupId;
+    state.topicTitle = restored.topicTitle || "";
+    state.topicTitleCustom = restored.topicTitleCustom === true;
     return true;
   }
 
-  return Object.freeze({ captureWorkspaceSession, rememberWorkspaceSession, restoreWorkspaceSession });
+  return Object.freeze({
+    captureWorkspaceSession,
+    rememberWorkspaceSession,
+    persistWorkspaceSession,
+    restoreWorkspaceSession
+  });
 }

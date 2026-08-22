@@ -2,10 +2,12 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const { initSync, parse } = require("es-module-lexer");
 const { validNumericManifestVersion, verifyVersionState } = require("./version-state.cjs");
 
 const root = path.resolve(__dirname, "..");
 const errors = [];
+initSync();
 
 function read(relativePath) {
   return fs.readFileSync(path.join(root, relativePath), "utf8");
@@ -17,6 +19,26 @@ function readJson(relativePath) {
 
 function fail(message) {
   errors.push(message);
+}
+
+function staticImportsOf(source, target) {
+  const [imports] = parse(String(source || ""));
+  return imports
+    .filter((entry) => entry.d === -1 && typeof entry.n === "string")
+    .map((entry) => entry.n)
+    .filter((specifier) => specifier.split(/[?#]/, 1)[0] === target);
+}
+
+function verifyBackgroundCachebuster(owner, target, manifestVersion) {
+  const imports = staticImportsOf(read(owner), target);
+  if (imports.length !== 1) {
+    fail(`${owner} must contain exactly one static import of ${target} with a release cache-buster`);
+    return;
+  }
+  const expected = `${target}?chatclub-runtime=${manifestVersion}`;
+  if (imports[0] !== expected) {
+    fail(`${owner} background runtime import must equal ${expected}; found ${imports[0]}`);
+  }
 }
 
 const constants = read("shared/constants.js");
@@ -43,6 +65,9 @@ const chromeParts = chromeVersion.split(".");
 if (!validNumericManifestVersion(chromeVersion)) {
   fail("manifest.json version must be exactly four dot-separated integers from 0 to 65535 without leading zeroes");
 }
+
+verifyBackgroundCachebuster("background/service-worker.js", "./runtime.js", chromeVersion);
+verifyBackgroundCachebuster("background/firefox-background.js", "./service-worker.js", chromeVersion);
 
 if (versionMatch) {
   const [, year, month, day, hour, minute, second] = versionMatch;

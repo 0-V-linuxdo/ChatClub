@@ -190,7 +190,9 @@ export function captureWorkspaceSnapshotV1(source = {}) {
     generation: source.generation,
     layout: capturedLayout(source),
     groups,
-    fullscreenGroupIndex: fullscreenGroupIndex >= 0 ? fullscreenGroupIndex : null
+    fullscreenGroupIndex: fullscreenGroupIndex >= 0 ? fullscreenGroupIndex : null,
+    topicTitle: source.topicTitle,
+    topicTitleCustom: source.topicTitleCustom
   });
 }
 
@@ -212,7 +214,9 @@ function normalizeWorkspaceSnapshotV1(value, context = {}) {
     generation: normalizeWorkspaceSessionGeneration(value.generation),
     layout: normalizeLayout(value.layout, context),
     groups: records.map((record) => record.group),
-    fullscreenGroupIndex: fullscreenGroupIndex >= 0 ? fullscreenGroupIndex : null
+    fullscreenGroupIndex: fullscreenGroupIndex >= 0 ? fullscreenGroupIndex : null,
+    topicTitle: text(value.topicTitle),
+    topicTitleCustom: value.topicTitleCustom === true
   };
 }
 
@@ -311,6 +315,8 @@ export function restoreWorkspaceSnapshotV1(value, context = {}) {
     temporaryLayoutPreset,
     groups,
     activeTabs,
-    fullscreenGroupId
+    fullscreenGroupId,
+    topicTitle: snapshot.topicTitle,
+    topicTitleCustom: snapshot.topicTitleCustom === true
   };
 }

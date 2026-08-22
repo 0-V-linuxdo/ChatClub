@@ -20,8 +20,8 @@ const OWNER_ACCESS = Object.freeze({
     write: ["activeTabs"]
   }),
   session: Object.freeze({
-    read: ["activeTabs", "fullscreenGroupId", "groups", "options", "temporaryLayoutPreset"],
-    write: ["activeTabs", "fullscreenGroupId", "groups", "options", "temporaryLayoutPreset"]
+    read: ["activeTabs", "fullscreenGroupId", "groups", "options", "temporaryLayoutPreset", "topicTitle", "topicTitleCustom"],
+    write: ["activeTabs", "fullscreenGroupId", "groups", "options", "temporaryLayoutPreset", "topicTitle", "topicTitleCustom"]
   })
 });
 

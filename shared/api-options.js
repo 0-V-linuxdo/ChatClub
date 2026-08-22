@@ -44,10 +44,13 @@ export function normalizeApiOptions(value = {}) {
     ? source.optimizeApiProfileId : profiles[0]?.id || "";
   const summaryApiProfileId = profiles.some((item) => item.id === source.summaryApiProfileId)
     ? source.summaryApiProfileId : profiles[1]?.id || profiles[0]?.id || "";
+  const topicTitleApiProfileId = profiles.some((item) => item.id === source.topicTitleApiProfileId)
+    ? source.topicTitleApiProfileId : profiles[0]?.id || "";
   return {
     apiProfiles: profiles,
     optimizeApiProfileId,
     summaryApiProfileId,
+    topicTitleApiProfileId,
     optimizePromptTemplates: optimizeTemplates,
     optimizePromptTemplateId: optimizeTemplates.some((item) => item.id === source.optimizePromptTemplateId)
       ? source.optimizePromptTemplateId : optimizeTemplates[0]?.id || "",

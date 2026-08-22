@@ -1,7 +1,7 @@
 import { t } from "../../shared/i18n.js";
 import { API_PROFILE_MODEL_DEFAULT } from "../../shared/constants.js";
 import { createId } from "../../shared/storage-schema.js";
-import { button, editorModal, el, field, input, toast } from "../../ui/dom.js";
+import { button, editorModal, el, field, input, select, toast } from "../../ui/dom.js";
 import {
   cleanupSettingsDragRows,
   createSettingsKit,
@@ -50,6 +50,11 @@ export function createProfilesSettingsSection(ctx) {
       settingsPaneToolbar(t("profiles.manage"),
         settingsPrimaryAction(t("profiles.add"), "plus", () => openEditor(null, redraw))
       ),
+      field(t("profiles.topicTitleApi"), select(
+        state.options.topicTitleApiProfileId,
+        state.options.apiProfiles.map((profile) => ({ value: profile.id, label: profile.name || profile.id })),
+        { onchange: (event) => { void saveTopicTitleProfile(event.target.value, redraw); } }
+      )),
       settingsList(["", t("profiles.provider"), t("profiles.model"), t("profiles.usage"), t("profiles.actions")], rows, "settings-manager-list api-profile-list")
     );
   }
@@ -63,6 +68,7 @@ export function createProfilesSettingsSection(ctx) {
     const usages = [];
     if (state.options.optimizeApiProfileId === profile.id) usages.push(t("profiles.optimizeSettings"));
     if (state.options.summaryApiProfileId === profile.id) usages.push(t("profiles.summarySettings"));
+    if (state.options.topicTitleApiProfileId === profile.id) usages.push(t("profiles.topicTitleSettings"));
     if (!usages.length) usages.push(t("profiles.notAssigned"));
     return el("div", { class: "settings-usage-chips" },
       usages.map((usage) => el("span", {
@@ -142,11 +148,21 @@ export function createProfilesSettingsSection(ctx) {
         : fallbackId,
       summaryApiProfileId: profileIds.has(state.options.summaryApiProfileId)
         ? state.options.summaryApiProfileId
+        : fallbackId,
+      topicTitleApiProfileId: profileIds.has(state.options.topicTitleApiProfileId)
+        ? state.options.topicTitleApiProfileId
         : fallbackId
     });
     if (options.reloadRuntime !== false) await notifyConfigReload();
     redraw();
     if (message) toast(message, "success");
+  }
+
+  async function saveTopicTitleProfile(profileId, redraw) {
+    state.options = await saveOptionsPatch({ topicTitleApiProfileId: profileId });
+    await notifyConfigReload();
+    redraw();
+    toast(t("toast.topicTitleProfileSaved"), "success");
   }
 
   function openEditor(profile, redraw) {

@@ -16,6 +16,7 @@ class FakeNode {
     this.style = {};
     this.offsetTop = 0;
     this.isConnected = true;
+    this.listeners = Object.create(null);
     this.classList = {
       contains: (name) => String(this.className || "").split(/\s+/).includes(name),
       toggle: (name, force) => {
@@ -33,7 +34,16 @@ class FakeNode {
     this.attributes[name] = String(value);
   }
 
-  addEventListener() {}
+  addEventListener(name, listener) {
+    const key = String(name || "");
+    if (!this.listeners[key]) this.listeners[key] = [];
+    this.listeners[key].push(listener);
+  }
+
+  click(event = {}) {
+    const payload = { preventDefault() {}, stopPropagation() {}, ...event };
+    for (const listener of this.listeners.click || []) listener(payload);
+  }
 
   append(...children) {
     for (const child of children) {
@@ -92,6 +102,7 @@ const previousGlobals = {
 globalThis.Node = FakeNode;
 globalThis.document = {
   createElement: (tagName) => new FakeNode(tagName),
+  createElementNS: (_ns, tagName) => new FakeNode(tagName),
   createTextNode: (text) => Object.assign(new FakeNode("#text"), { textContent: String(text) }),
   addEventListener() {},
   removeEventListener() {}
@@ -154,6 +165,9 @@ globalThis.document = {
           };
         }
         if (action === "focusWorkspaceTab") return { focused: true, tabId: payload.tabId, current: false };
+        if (action === "setWorkspaceTabTitle") {
+          return { updated: true, tabId: payload.tabId, title: payload.title, custom: payload.custom !== false };
+        }
         return {};
       },
       toast: (message, kind) => { toasts.push({ message, kind }); },
@@ -229,6 +243,16 @@ globalThis.document = {
     assert.equal(fixture.api.itemLabel({ layoutName: "Pocket batch", appIds: ["Claude"] }, 0), "Pocket batch");
     assert.equal(fixture.api.itemLabel({ layoutName: "", appIds: [], title: "Grok · Notion AI" }, 0), "Grok · Notion AI");
     assert.equal(fixture.api.itemLabel({ layoutName: "", appIds: [], title: "ChatClub" }, 2), "ChatClub 3");
+    assert.equal(fixture.api.itemLabel({
+      topicTitle: "Compare models",
+      layoutName: "Pocket batch",
+      appIds: ["Claude"]
+    }, 0), "Compare models");
+    assert.equal(fixture.api.itemLabel({ topicTitle: "Prompt", appIds: ["Claude"] }, 0), "Claude");
+    const edit = descendants(sidebar).find((node) => String(node.className || "").includes("workspace-tabs-sidebar-item-edit"));
+    assert.ok(edit, "each ChatClub tab row must expose an edit button");
+    const focus = descendants(current).find((node) => node.classList.contains("workspace-tabs-sidebar-item-focus"));
+    assert.ok(focus, "the row label must stay a separate focus control");
   }
 
   {
@@ -247,6 +271,12 @@ globalThis.document = {
     fixture.api.setOpen(true);
     fixture.api.syncSidebar(shell);
     assert.equal(ownerDocument.title, "Grok · Notion AI", "the browser tab title must update after the workspace loads");
+    const titled = controller({
+      document: ownerDocument,
+      currentWorkspace: () => ({ layoutName: "Prompt", appIds: ["Grok"], topicTitle: "Compare models" })
+    });
+    titled.api.syncSidebar(shell);
+    assert.equal(ownerDocument.title, "Compare models");
     const sidebar = descendants(shell).find((node) => node.classList.contains("workspace-tabs-sidebar"));
     assert.equal(sidebar?.style?.top, "51px");
   }
@@ -273,6 +303,35 @@ globalThis.document = {
     fixture.setDismissable(true);
     escape.listener({ key: "Escape", isComposing: false, keyCode: 27, preventDefault() {}, stopPropagation() {} });
     assert.equal(fixture.api.isOpen(), false);
+  }
+
+  {
+    const editors = [];
+    const currentTitles = [];
+    const fixture = controller({
+      editorModal: (title, content, onClose) => {
+        editors.push({ title, content, onClose });
+        return { remove() {}, querySelector() { return null; } };
+      },
+      setCurrentTabTitle: (title) => { currentTitles.push(title); }
+    });
+    await fixture.api.refresh();
+    fixture.api.setOpen(true);
+    const sidebar = fixture.api.renderSidebar();
+    const editButtons = descendants(sidebar).filter((node) => String(node.className || "").includes("workspace-tabs-sidebar-item-edit"));
+    assert.equal(editButtons.length, 2);
+    editButtons[0].click();
+    assert.equal(editors.length, 1);
+    assert.ok(!fixture.calls.some((call) => call.action === "focusWorkspaceTab"), "edit must not switch ChatClub tabs");
+    const other = fixture.api.currentItems()[1];
+    const renamed = await fixture.api.saveTabTitle(other, "  Custom Claude thread  ");
+    assert.equal(renamed.updated, true);
+    assert.equal(fixture.calls.at(-1).action, "setWorkspaceTabTitle");
+    assert.deepEqual(fixture.calls.at(-1).payload, { tabId: 12, title: "Custom Claude thread", custom: true });
+    const current = fixture.api.currentItems()[0];
+    await fixture.api.saveTabTitle(current, "My research");
+    assert.deepEqual(currentTitles, ["My research"]);
+    assert.ok(!fixture.calls.some((call) => call.action === "setWorkspaceTabTitle" && call.payload.tabId === 11));
   }
 
   console.log("workspace tabs sidebar: ok");

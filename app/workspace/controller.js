@@ -102,6 +102,7 @@ export function createWorkspaceController(ctx = {}) {
   const sessionBinding = createBindOnceControllerPort("Workspace session", [
     "captureWorkspaceSession",
     "rememberWorkspaceSession",
+    "persistWorkspaceSession",
     "restoreWorkspaceSession"
   ]);
   const layoutBinding = createBindOnceControllerPort("Workspace layout", [
@@ -358,6 +359,7 @@ export function createWorkspaceController(ctx = {}) {
     openTabUrl,
     captureWorkspaceSession: sessionController.captureWorkspaceSession,
     rememberWorkspaceSession: sessionController.rememberWorkspaceSession,
+    persistWorkspaceSession: sessionController.persistWorkspaceSession,
     restoreWorkspaceSession: sessionController.restoreWorkspaceSession,
     hydrateEmptyPromptHandoffWorkspace: layoutController.hydrateEmptyPromptHandoffWorkspace,
     hydrateGroups: layoutController.hydrateGroups,

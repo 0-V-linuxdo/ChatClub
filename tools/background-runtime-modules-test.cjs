@@ -1396,6 +1396,35 @@ const isContentRuntimeGenerationTransition = (details = {}) =>
     assert.deepEqual(fallbackUpdates, [{ tabId: 41, details: { active: true } }]);
     assert.deepEqual(fallbackFocuses, [{ windowId: 8, details: { focused: true } }]);
 
+    const restoreCreates = [];
+    const restoreUpdates = [];
+    const restoreFocuses = [];
+    const restoreApi = {
+      runtime: api.runtime,
+      tabs: {
+        create: async (details) => {
+          restoreCreates.push(details);
+          throw new Error("simulated restore create failure");
+        },
+        update: async (tabId, details) => { restoreUpdates.push({ tabId, details }); }
+      },
+      windows: { update: async (windowId, details) => { restoreFocuses.push({ windowId, details }); } }
+    };
+    const failedRestore = await tabs.openWorkspaceTab(restoreApi, {}, null, {
+      workspaceId: "page-restore-contract",
+      openingClaimId: "claim-restore-contract",
+      restore: { windowId: 8, index: 1, pinned: true },
+      active: false,
+      focus: false,
+      allowCreateFallback: false
+    });
+    assert.equal(failedRestore, null);
+    assert.equal(restoreCreates.length, 1, "a failed restore create must not open a fallback tab");
+    assert.equal(restoreCreates[0].active, false);
+    assert.equal(restoreCreates[0].pinned, true);
+    assert.deepEqual(restoreUpdates, [], "a failed restore create must not activate any tab");
+    assert.deepEqual(restoreFocuses, [], "a failed restore create must not focus any window");
+
     assert.equal(tabs.openableTabUrl("javascript:alert(1)"), "");
     await tabs.openExternalTab(api, "https://example.com/", {}, { id: 3 });
     assert.deepEqual(created.shift(), {

@@ -36,9 +36,11 @@ export {
 export const BACKGROUND_REQUEST_ACTIONS = Object.freeze({
   CLAIM_WORKSPACE_SESSION_RECOVERY: "claimWorkspaceSessionRecovery",
   COMMIT_WORKSPACE_SESSION_RECOVERY: "commitWorkspaceSessionRecovery",
+  PERSIST_WORKSPACE_SESSION: "persistWorkspaceSession",
   LIST_CLEARED_WORKSPACE_TABS: "listClearedWorkspaceTabs",
   LIST_LIVE_WORKSPACE_TABS: "listLiveWorkspaceTabs",
   FOCUS_WORKSPACE_TAB: "focusWorkspaceTab",
+  SET_WORKSPACE_TAB_TITLE: "setWorkspaceTabTitle",
   RESTORE_CLEARED_WORKSPACE_TABS: "restoreClearedWorkspaceTabs",
   DISMISS_CLEARED_WORKSPACE_TABS: "dismissClearedWorkspaceTabs",
   OPEN_WORKSPACE_TAB_WITH_PROMPT: "openWorkspaceTabWithPrompt",
@@ -106,7 +108,7 @@ const contentSpecs = Object.fromEntries(
 export const BACKGROUND_REQUEST_SPECS = Object.freeze({
   [ACTION.CLAIM_WORKSPACE_SESSION_RECOVERY]: extensionPage({
     mutates: true,
-    payload: contract({}, { workspaceId: "string" }),
+    payload: contract({}, { workspaceId: "string", openingClaimId: "string" }),
     response: contract({
       claimed: "boolean",
       recovered: "boolean",
@@ -114,7 +116,7 @@ export const BACKGROUND_REQUEST_SPECS = Object.freeze({
       claimId: "string",
       workspaceSessionGeneration: "string",
       snapshot: "any"
-    })
+    }, { forked: "boolean" })
   }),
   [ACTION.COMMIT_WORKSPACE_SESSION_RECOVERY]: extensionPage({
     mutates: true,
@@ -125,6 +127,15 @@ export const BACKGROUND_REQUEST_SPECS = Object.freeze({
       claimId: "string",
       workspaceSessionGeneration: "string"
     })
+  }),
+  [ACTION.PERSIST_WORKSPACE_SESSION]: extensionPage({
+    mutates: true,
+    payload: contract({ workspaceId: "string" }, { snapshot: "object", clear: "boolean" }),
+    response: contract({
+      persisted: "boolean",
+      workspaceId: "string",
+      workspaceSessionGeneration: "string"
+    }, { cleared: "boolean" })
   }),
   [ACTION.LIST_CLEARED_WORKSPACE_TABS]: extensionPage({
     response: contract({ tabs: "array" })
@@ -137,17 +148,29 @@ export const BACKGROUND_REQUEST_SPECS = Object.freeze({
     payload: contract({ tabId: "integer" }),
     response: contract({ focused: "boolean", tabId: "integer" }, { current: "boolean" })
   }),
+  [ACTION.SET_WORKSPACE_TAB_TITLE]: extensionPage({
+    mutates: true,
+    payload: contract({ tabId: "integer", title: "string" }, { custom: "boolean" }),
+    response: contract({
+      updated: "boolean",
+      tabId: "integer",
+      title: "string",
+      custom: "boolean"
+    })
+  }),
   [ACTION.RESTORE_CLEARED_WORKSPACE_TABS]: extensionPage({
     mutates: true,
-    payload: contract({}, { absorbIntoCurrent: "boolean" }),
+    payload: contract({ candidates: "array" }, { absorbIntoCurrent: "boolean" }),
     response: contract({
       restored: "integer",
       absorbed: "any",
-      opened: "array"
+      opened: "array",
+      tabs: "array"
     })
   }),
   [ACTION.DISMISS_CLEARED_WORKSPACE_TABS]: extensionPage({
     mutates: true,
+    payload: contract({ candidates: "array" }),
     response: contract({ dismissed: "integer", tabs: "array" })
   }),
   [ACTION.OPEN_WORKSPACE_TAB_WITH_PROMPT]: extensionPage({

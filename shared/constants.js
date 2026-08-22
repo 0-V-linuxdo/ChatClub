@@ -6,7 +6,7 @@ import {
 } from "./notion-efforts.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-08-18｜04:08:43」";
+export const APP_VERSION = "「2026-08-23｜02:09:05」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -318,6 +318,15 @@ const SUMMARY_PANEL_PROMPT_DEFAULT = `Summarize the selected chat context. Keep 
 
 When the user asks a follow-up question, answer from the provided context first and clearly say when the context is insufficient.`;
 
+export const TOPIC_TITLE_PROMPT_DEFAULT = `You assign a short topic title to a chat tab.
+
+Rules:
+- Return only the title, nothing else.
+- Keep the user's language.
+- Use 3 to 12 words, or a short Chinese phrase.
+- No quotes, markdown, wrapping punctuation, or explanation.
+- Do not answer the user's request.`;
+
 export const TOPBAR_PROMPT_PLACEHOLDER_MAX_LEN = 100;
 export const TOPBAR_PROMPT_PLACEHOLDER_MAX_COUNT = 30;
 export const TOPBAR_PROMPT_PLACEHOLDER_INTERVAL_MIN_SEC = 1;
@@ -380,6 +389,7 @@ export const DEFAULT_OPTIONS = {
   apiProfileDefaultModelMigrationVersion: API_PROFILE_DEFAULT_MODEL_MIGRATION_VERSION,
   optimizeApiProfileId: "default-openai",
   summaryApiProfileId: "default-openai",
+  topicTitleApiProfileId: "default-openai",
   optimizePromptTemplateId: "optimize-default",
   optimizePromptTemplates: [
     {

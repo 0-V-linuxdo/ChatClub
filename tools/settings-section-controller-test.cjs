@@ -291,6 +291,7 @@ globalThis.document = { addEventListener() {} };
     primaryColor: "#6750a4",
     primaryColorCustom: false,
     summaryApiProfileId: "api-1",
+    topicTitleApiProfileId: "api-1",
     summaryPromptTemplateId: "summary-default",
     summaryPromptTemplates: [],
     summarySiteConfigs: [],

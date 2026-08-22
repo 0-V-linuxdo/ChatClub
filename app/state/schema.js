@@ -18,6 +18,8 @@ export function createAppState() {
     activeTabs: {},
     frameLoadingInstanceIds: [],
     temporaryLayoutPreset: null,
+    topicTitle: "",
+    topicTitleCustom: false,
     fullscreenGroupId: null,
     promptText: "",
     promptImages: [],

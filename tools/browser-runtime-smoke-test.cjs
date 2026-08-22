@@ -4,10 +4,22 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
+const { initSync, parse } = require("es-module-lexer");
 const { targetManifest } = require("./manifest-targets.cjs");
 
 const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
+initSync();
+
+function staticImportOf(source, target) {
+  const [records] = parse(String(source || ""));
+  const imports = records
+    .filter((entry) => entry.d === -1 && typeof entry.n === "string")
+    .map((entry) => entry.n)
+    .filter((specifier) => specifier.split(/[?#]/, 1)[0] === target);
+  assert.equal(imports.length, 1, `expected exactly one static import of ${target}`);
+  return imports[0];
+}
 
 (async () => {
   const manifest = JSON.parse(read("manifest.json"));
@@ -25,11 +37,21 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
   assert.ok(!Object.hasOwn(manifest, "options_page"));
   assert.ok(!Object.hasOwn(manifest, "web_accessible_resources"));
 
+  const serviceWorkerSource = read("background/service-worker.js");
   const firefoxSource = read("background/firefox-background.js");
   const firefoxFallbackLoader = read("background/firefox-content-fallback-loader.js");
   const firefoxFallbacks = read("background/firefox-content-fallbacks.generated.js");
+  assert.equal(
+    staticImportOf(serviceWorkerSource, "./runtime.js"),
+    `./runtime.js?chatclub-runtime=${manifest.version}`,
+    "the Chromium background runtime cachebuster must equal the numeric manifest version"
+  );
+  assert.equal(
+    staticImportOf(firefoxSource, "./service-worker.js"),
+    `./service-worker.js?chatclub-runtime=${manifest.version}`,
+    "the Firefox background runtime cachebuster must equal the numeric manifest version"
+  );
   assert.match(firefoxSource, /import "\.\/firefox-content-fallback-loader\.js"/);
-  assert.match(firefoxSource, /import "\.\/service-worker\.js\?chatclub-runtime=/);
   assert.doesNotMatch(firefoxSource, /\bimport\s*\(/);
   assert.match(firefoxFallbackLoader, /FIREFOX_CONTENT_FALLBACKS/);
   assert.match(firefoxFallbackLoader, /__CHATCLUB_FIREFOX_CONTENT_FALLBACKS__/);

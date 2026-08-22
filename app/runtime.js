@@ -44,6 +44,7 @@ import { createWorkspaceController } from "./workspace/controller.js";
 import { PROMPT_HANDOFF_LAUNCH_REASON, createWorkspacePromptHandoffController } from "./workspace/prompt-handoff-controller.js";
 import { attachWorkspaceClearedTabsController } from "./workspace/cleared-tabs-controller.js";
 import { attachWorkspaceTabsSidebarController } from "./workspace/tabs-sidebar-controller.js";
+import { createWorkspaceTopicTitleController } from "./workspace/topic-title-controller.js";
 import { createWorkspaceSessionStore } from "./workspace/session-store.js";
 import {
   createFunctionalAnomalyController,
@@ -59,13 +60,14 @@ import { createAppState, createFeatureStatePorts } from "./state.js";
 import { createAppConfigService } from "./config-service.js";
 import { consumeConfigResetCleanupWarning } from "./state/reset-cleanup-warning.js";
 import { clearBrowserSessionRestoreReload, prepareBrowserSessionRestore } from "./workspace/browser-session-restore.js";
+import { createWorkspaceBootstrapRecoveryController } from "./workspace/bootstrap-recovery-controller.js";
 
 const appRoot = document.getElementById("app");
 const isOptionsPage = document.body?.dataset.chatclubEntry === "options";
 const browserSessionRestore = isOptionsPage
   ? Object.freeze({ reloadRequested: false })
   : prepareBrowserSessionRestore(window, document);
-const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, Math.max(0, Number(ms) || 0)); }), INITIAL_WORKSPACE_FRAME_RESTORE_TIMEOUT_MS = 45_000, INITIAL_WORKSPACE_FRAME_RESTORE_POLL_MS = 50;
+const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, Math.max(0, Number(ms) || 0)); });
 let appShellNode = null;
 let summaryEscapeDismissalPromise = null;
 const state = createAppState();
@@ -147,6 +149,7 @@ const frameRuntimePort = new FrameRuntimePort({
 const sendToContentFrame = createFrameRequest(frameRuntimePort, "App runtime");
 const topicDeleteRuntime = createTopicDeleteRuntime({ framePort: frameRuntimePort });
 const executeTopicDelete = topicDeleteRuntime.executeTopicDelete;
+let workspaceTopicTitleController = null;
 const composerController = createComposerController({
   state: composerState,
   workspace: workspaceBinding.port,
@@ -158,7 +161,8 @@ const composerController = createComposerController({
   inferAppName,
   openPromptLibrary: openPromptLibraryDialog,
   optimizePrompt: optimizeCurrentPrompt,
-  recordFunctionalAnomaly
+  recordFunctionalAnomaly,
+  onPromptAdmitted: (text) => workspaceTopicTitleController?.maybeGenerateFromPrompt(text)
 });
 const preferredModelController = createPreferredModelController({
   state: preferredModelState,
@@ -280,12 +284,10 @@ let pocketControllerPromise = null;
 let summaryControllerPromise = null;
 let settingsControllerPromise = null;
 const workspaceSessionStore = createWorkspaceSessionStore({
-  currentTab: currentExtensionTab,
+  disabled: isOptionsPage, currentTab: currentExtensionTab,
   currentTabId: currentExtensionTabId,
-  claimWorkspaceSession: ({ workspaceId = "" } = {}) => runtimeRequest({
-    source: "chatclub",
-    action: "claimWorkspaceSessionRecovery",
-    ...(workspaceId ? { workspaceId } : {})
+  claimWorkspaceSession: (request = {}) => runtimeRequest({
+    source: "chatclub", action: "claimWorkspaceSessionRecovery", ...request
   }),
   commitWorkspaceSession: ({ workspaceId, claimId } = {}) => runtimeRequest({
     source: "chatclub",
@@ -293,8 +295,11 @@ const workspaceSessionStore = createWorkspaceSessionStore({
     workspaceId,
     ...(claimId ? { claimId } : {})
   }),
+  persistWorkspaceSession: ({ workspaceId, snapshot, clear = false } = {}) => runtimeRequest({
+    source: "chatclub", action: "persistWorkspaceSession", workspaceId,
+    ...(clear ? { clear: true } : { snapshot })
+  }),
   storageGet,
-  storageSet,
   storageRemove
 });
 const workspaceController = createWorkspaceController({
@@ -330,11 +335,27 @@ const workspaceController = createWorkspaceController({
 });
 workspaceBinding.bind(workspaceController);
 frameBridgeWorkspaceBinding.bind(workspaceController);
-const workspaceClearedTabsController = attachWorkspaceClearedTabsController({
-  requestBackground, toast, render });
+workspaceTopicTitleController = createWorkspaceTopicTitleController({
+  state, rememberWorkspaceSession: () => workspaceController.rememberWorkspaceSession(), render, extensionApi,
+  workspaceId: () => workspaceSessionStore.workspaceId()
+});
+const clearedTabsController = attachWorkspaceClearedTabsController({
+  requestBackground, toast, render, extensionApi, foregroundHost: () => document.querySelector(".settings-modal") });
 const workspaceTabsSidebarController = attachWorkspaceTabsSidebarController({
-  requestBackground, toast, render, inferAppName, appById, extensionApi, currentWorkspace: () => ({ layoutName: state.temporaryLayoutPreset?.name || "", groups: state.groups }),
+  requestBackground, toast, render, inferAppName, appById, extensionApi,
+  currentWorkspace: () => ({ layoutName: state.temporaryLayoutPreset?.name || "", groups: state.groups, topicTitle: state.topicTitle }),
+  setCurrentTabTitle: (title) => workspaceTopicTitleController.setCustomTitle(title),
   canDismiss: () => !state.summaryOpen && !hasForegroundOverlay()
+});
+const {
+  renderRuntimeBootstrapFailure,
+  scheduleWorkspaceSessionLoadRecovery,
+  waitForInitialWorkspaceFrameRestoration
+} = createWorkspaceBootstrapRecoveryController({
+  appRoot, clearedTabsController, createElement: el,
+  currentFrames: workspaceController.currentFrames,
+  frameLoadingInstanceIds: () => state.frameLoadingInstanceIds,
+  isOptionsPage, reloadPage: () => window.location.reload(), sessionStore: workspaceSessionStore, sleep
 });
 function toggleWorkspaceTabsSidebar() { workspaceTabsSidebarController.toggle(); }
 function isWorkspaceTabsSidebarOpen() { return workspaceTabsSidebarController.isOpen(); }
@@ -499,6 +520,7 @@ function ensureSettingsController() {
           applyTheme,
           syncI18nLanguage,
           requestUserScriptsPermission: requestUserScriptsAccess,
+          onSettingsDialogClosed: () => clearedTabsController.syncBanner(ensureAppShell()),
           functionalAnomalyLog: functionalAnomalyController,
           hydrateImportedLayoutIfNeeded: workspaceController.hydrateImportedLayoutIfNeeded,
           reconcileAppCatalog: workspaceController.reconcileAppCatalog,
@@ -846,7 +868,7 @@ function render() {
   closeTransientOverlays();
   const shell = ensureAppShell();
   syncTopbar();
-  workspaceClearedTabsController.syncBanner(shell);
+  clearedTabsController.syncBanner(shell);
   workspaceController.syncWorkspaceIsland(shell);
   workspaceTabsSidebarController.syncSidebar(shell);
   syncSummaryPanel();
@@ -856,42 +878,6 @@ function discardGuardedBrowserRestoreDom() {
   if (!browserSessionRestore.guarded) return;
   appShellNode = null;
   appRoot?.replaceChildren();
-}
-
-function renderRuntimeBootstrapFailure(error) {
-  const detail = String(error?.message || error || "").trim();
-  appRoot?.replaceChildren(el("main", {
-    class: "runtime-bootstrap-failure",
-    role: "alert"
-  },
-  el("h1", {}, "ChatClub 正在重新建立运行时"),
-  el("p", {}, detail || "当前浏览器恢复了旧的扩展运行时，工作区暂时不会加载。"),
-  el("button", {
-    type: "button",
-    onclick: () => window.location.reload()
-  }, "重新加载 ChatClub")));
-}
-
-function initialWorkspaceFrameRestoreState() {
-  const loadingIds = new Set(state.frameLoadingInstanceIds || []);
-  const pendingFrames = workspaceController.currentFrames().filter((iframe) => (
-    loadingIds.has(String(iframe?.dataset?.instanceId || ""))
-  ));
-  return {
-    pendingFrames,
-    pendingInstanceIds: pendingFrames.map((iframe) => String(iframe.dataset.instanceId || ""))
-  };
-}
-
-async function waitForInitialWorkspaceFrameRestoration(timeoutMs = INITIAL_WORKSPACE_FRAME_RESTORE_TIMEOUT_MS) {
-  const deadline = Date.now() + Math.max(0, Number(timeoutMs) || 0);
-  while (true) {
-    const current = initialWorkspaceFrameRestoreState();
-    if (!current.pendingFrames.length) return { timedOut: false, pendingInstanceIds: [] };
-    const remaining = deadline - Date.now();
-    if (remaining <= 0) return { timedOut: true, pendingInstanceIds: current.pendingInstanceIds };
-    await sleep(Math.min(INITIAL_WORKSPACE_FRAME_RESTORE_POLL_MS, remaining));
-  }
 }
 
 function syncSummaryPanel() {
@@ -913,7 +899,8 @@ async function openSummaryPanel() {
 
 async function openSettings(sectionId = "appearance") {
   try {
-    return (await ensureSettingsController()).openSettings(sectionId);
+    const result = (await ensureSettingsController()).openSettings(sectionId);
+    clearedTabsController.syncBanner(ensureAppShell()); return result;
   } catch (error) {
     return lazyControllerError("Settings", error);
   }
@@ -1114,7 +1101,19 @@ async function init() {
   void functionalAnomalyController.refresh().catch((error) => {
     console.warn("[ChatClub] Failed to load functional anomaly records", error);
   });
-  const workspaceSessionSnapshotPromise = workspaceSessionStore.load().catch(() => null);
+  const recoveryShell = ensureAppShell();
+  clearedTabsController.syncBanner(recoveryShell);
+  const clearedTabsRefreshPromise = clearedTabsController.refresh().then((tabs) => {
+    if (recoveryShell.isConnected) clearedTabsController.syncBanner(recoveryShell);
+    return tabs;
+  }).catch((error) => {
+    console.warn("[ChatClub] Cleared workspace tabs could not be listed", error);
+    return [];
+  });
+  let workspaceLoadError = null;
+  const workspaceSessionSnapshotPromise = workspaceSessionStore.load().catch((error) => {
+    workspaceLoadError = error; return null;
+  });
   await configService.load();
   state.promptLibrary = await loadPromptLibrary();
   state.promptSendHistory = await loadPromptSendHistory();
@@ -1151,6 +1150,12 @@ async function init() {
     renderRuntimeBootstrapFailure(contentScriptsRefreshError);
     return;
   }
+  if (workspaceLoadError) {
+    void recordFunctionalAnomaly({ feature: "workspace", operation: "loadSession", error: workspaceLoadError,
+      message: workspaceLoadError?.message || "Workspace session storage could not be read" });
+    renderRuntimeBootstrapFailure(workspaceLoadError);
+    scheduleWorkspaceSessionLoadRecovery(); return;
+  }
   syncI18nLanguage();
   const resetCleanupWarningCount = consumeConfigResetCleanupWarning();
   if (resetCleanupWarningCount > 0) {
@@ -1159,7 +1164,14 @@ async function init() {
   await initializeTopbarPromptPlaceholder({ persist: !workspaceSessionSnapshot });
   const promptHandoffLaunch = await workspacePromptHandoffController.prepareInitialLaunch();
   promptHandoffLaunch.claimed && !promptHandoffLaunch.snapshot ? workspaceController.hydrateEmptyPromptHandoffWorkspace() : workspaceController.hydrateGroups(promptHandoffLaunch.snapshot || workspaceSessionSnapshot);
-  await workspaceClearedTabsController.refresh().catch((error) => console.warn("[ChatClub] Cleared workspace tabs could not be listed", error));
+  if (await workspaceController.persistWorkspaceSession() === false) {
+    const error = new Error("Workspace session could not be persisted");
+    void recordFunctionalAnomaly({ feature: "workspace", operation: "persistSession", error, message: error.message });
+    renderRuntimeBootstrapFailure(error);
+    scheduleWorkspaceSessionLoadRecovery(); return;
+  }
+  workspaceTopicTitleController.install();
+  await clearedTabsRefreshPromise;
   installGlobalTooltips({
     getDisabledTooltipIds: () => state.options?.tooltipDisabledIds || []
   });
@@ -1203,5 +1215,5 @@ init().catch((error) => {
     message: error?.message || "ChatClub initialization failed"
   });
   console.error(error);
-  appRoot.append(el("pre", {}, error.stack || error.message || String(error)));
+  renderRuntimeBootstrapFailure(error);
 });

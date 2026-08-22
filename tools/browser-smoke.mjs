@@ -263,16 +263,6 @@ async function chromiumWorkspaceSessionRecoveryProbe(context, page, fixtureUrl, 
       })
     };
   });
-  const matchesExpected = ({ groups, fullscreen }, expected) => (
-    fullscreen === expected.fullscreenGroupIndex
-    && groups.length === expected.groups.length
-    && groups.every((group, groupIndex) => {
-      const wanted = expected.groups[groupIndex];
-      return group.activeIndex === wanted.activeIndex
-        && JSON.stringify(group.appIds) === JSON.stringify(wanted.appIds)
-        && JSON.stringify(group.hrefs) === JSON.stringify(wanted.hrefs);
-    })
-  );
   const waitForRestoredWorkspace = async () => {
     await activePage.locator("#app .app-shell").waitFor({ state: "attached", timeout: 25000 });
     await activePage.waitForFunction((expected) => {
@@ -294,9 +284,14 @@ async function chromiumWorkspaceSessionRecoveryProbe(context, page, fixtureUrl, 
             && JSON.stringify(group.appIds) === JSON.stringify(wanted.appIds)
             && JSON.stringify(group.hrefs) === JSON.stringify(wanted.hrefs);
         });
-    }, prepared.expected, { timeout: 25000 });
-    const current = await readWorkspace();
-    assert(matchesExpected(current, prepared.expected), `chromium: restored workspace mismatch: ${JSON.stringify(current)}`);
+    }, prepared.expected, { timeout: 25000 }).catch(async (error) => {
+      const [current, body, href] = await Promise.all([
+        readWorkspace().catch(() => null),
+        activePage.locator("body").innerText().catch(() => ""),
+        activePage.url()
+      ]);
+      throw new Error(`${error.message}\nworkspace: ${JSON.stringify(current)}\nhref: ${href}\npage errors: ${pageErrors.join(" | ") || "none"}\nbody: ${body.slice(-2000)}`);
+    });
   };
 
   await activePage.reload({ waitUntil: "domcontentloaded", timeout: 20000 });

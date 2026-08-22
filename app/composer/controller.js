@@ -69,6 +69,7 @@ export function createComposerController(dependencies = {}) {
     openPromptLibrary,
     optimizePrompt,
     recordFunctionalAnomaly,
+    onPromptAdmitted,
     frameSendPrepareTimeoutMs = FRAME_SEND_PREPARE_TIMEOUT_MS,
     savePromptSendHistory = defaultSavePromptSendHistory,
     toast = defaultToast,
@@ -85,6 +86,7 @@ export function createComposerController(dependencies = {}) {
     openPromptLibrary: "function",
     optimizePrompt: "function",
     recordFunctionalAnomaly: "function",
+    onPromptAdmitted: "function?",
     frameSendPrepareTimeoutMs: "number?",
     savePromptSendHistory: "function?",
     toast: "function?",
@@ -795,6 +797,9 @@ export function createComposerController(dependencies = {}) {
       void recordSendHistory(text, images).catch((error) => {
         console.warn("[ChatClub] Failed to save prompt send history", error);
       });
+      if (typeof onPromptAdmitted === "function" && text) {
+        void Promise.resolve(onPromptAdmitted(text)).catch(() => {});
+      }
     }
     return Object.freeze({
       admittedCount,
