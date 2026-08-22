@@ -321,6 +321,54 @@ export function createWorkspaceTabsSidebarController({
     }
   }
 
+  function otherLiveTabIds() {
+    return items
+      .filter((item) => item.live && item.current !== true)
+      .map((item) => positiveTabId(item.tabId))
+      .filter((tabId) => tabId !== null);
+  }
+
+  async function closeOtherLiveTabs() {
+    if (!otherLiveTabIds().length) return { closed: 0, tabIds: [] };
+    try {
+      const response = await requestBackground("closeOtherLiveWorkspaceTabs");
+      await refresh();
+      if (lastShell?.isConnected) syncSidebar(lastShell);
+      return response;
+    } catch (error) {
+      toast(t("toast.workspaceTabCloseOthersFailed"), "error");
+      throw error;
+    }
+  }
+
+  function renderSidebarHeader() {
+    const closeOthers = iconButton(
+      t("workspace.tabs.closeOthers"),
+      createIcon("broom"),
+      (event) => {
+        event?.preventDefault?.();
+        event?.stopPropagation?.();
+        closeOtherLiveTabs().catch(() => {});
+      },
+      "workspace-tabs-sidebar-cleanup",
+      t("workspace.tabs.closeOthers"),
+      "",
+      "workspace.tabs.closeOthers"
+    );
+    if (!otherLiveTabIds().length) {
+      closeOthers.disabled = true;
+      closeOthers.setAttribute?.("disabled", "");
+    }
+    return el("header", { class: "workspace-tabs-sidebar-header" },
+      el("span", {
+        class: "workspace-tabs-sidebar-count",
+        "aria-label": t("workspace.tabs.count", { count: items.length })
+      }, String(items.length)),
+      el("h2", { class: "workspace-tabs-sidebar-title" }, t("workspace.tabs.title")),
+      closeOthers
+    );
+  }
+
   function dropForgottenItem(item = {}) {
     const tabId = positiveTabId(item.tabId);
     setItems(items.filter((entry) => !sameItem(entry, item) && (tabId === null || entry.tabId !== tabId)));
@@ -438,13 +486,7 @@ export function createWorkspaceTabsSidebarController({
       "aria-label": t("workspace.tabs.title"),
       style: { width: `${sidebarWidth}px` }
     },
-    el("header", { class: "workspace-tabs-sidebar-header" },
-      el("h2", { class: "workspace-tabs-sidebar-title" }, t("workspace.tabs.title")),
-      el("span", {
-        class: "workspace-tabs-sidebar-count",
-        "aria-label": t("workspace.tabs.count", { count: items.length })
-      }, String(items.length))
-    ),
+    renderSidebarHeader(),
     items.length
       ? el("div", { class: "workspace-tabs-sidebar-list", role: "list" },
         items.map((item, index) => el("div", {
@@ -668,6 +710,7 @@ export function createWorkspaceTabsSidebarController({
     focusTab,
     activateTab,
     saveTabTitle,
+    closeOtherLiveTabs,
     forgetTab,
     openTitleEditor,
     openDeleteConfirmation,

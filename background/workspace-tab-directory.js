@@ -184,6 +184,30 @@ export async function focusWorkspaceTabOperation(api, request = {}, sender = {})
   return { focused: true, tabId, current: false };
 }
 
+export async function closeOtherLiveWorkspaceTabsOperation(api, sender = {}) {
+  const currentTabId = positiveTabId(sender?.tab?.id);
+  if (currentTabId === null) throw new Error("Workspace tab id is invalid");
+  if (typeof api?.tabs?.query !== "function") throw new Error("Workspace session tab query is unavailable");
+  if (typeof api?.tabs?.remove !== "function") throw new Error("Workspace session tab close is unavailable");
+  const tabs = await api.tabs.query({});
+  if (!Array.isArray(tabs)) throw new TypeError("Browser tabs query returned an invalid result");
+  const tabIds = [];
+  for (const tab of tabs) {
+    if (!isChatClubWorkspaceTab(api, tab)) continue;
+    const tabId = positiveTabId(tab?.id);
+    if (tabId === null || tabId === currentTabId) continue;
+    tabIds.push(tabId);
+  }
+  let closed = 0;
+  for (const tabId of tabIds) {
+    try {
+      await api.tabs.remove(tabId);
+      closed += 1;
+    } catch {}
+  }
+  return { closed, tabIds };
+}
+
 export async function forgetRememberedWorkspaceTabOperation(api, request = {}, options = {}, ensureGeneration) {
   const workspaceId = normalizeWorkspaceSessionId(request.workspaceId);
   const requestedTabId = positiveTabId(request.tabId);

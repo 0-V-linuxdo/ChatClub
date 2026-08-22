@@ -1,3 +1,4 @@
+"use strict";
 (() => {
   // shared/protocol.js
   var GENERIC_POST_MESSAGE_SOURCE = "chatclub";
@@ -68,11 +69,11 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "91caf592718289f689e5619e66bce179ca2066600db75ead4bc9adf69e1882aa";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "0639191de65a691d31b142452cead6ef1a8dba93b1af181448ddf8e4cb60a892";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "71dc7f661bd5f9179edab2efb5e43d307762197c2d632f31934e45aaa1319c01";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.71dc7f661bd5f9179edab2efb5e43d307762197c2d632f31934e45aaa1319c01";
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "599a638ab55a39f33f89130ba1b5e7fab63570955268420df29d942548a4e65d";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.599a638ab55a39f33f89130ba1b5e7fab63570955268420df29d942548a4e65d";
   var CONTENT_RUNTIME_SUMMARY_ISOLATED_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts.js", "entryPath": "content-src/summary-userscripts.js", "sourceSha256": "29029270bf8c38cbb26ef1f55af140a615ea60275d0023334fec494d8db531e6", "implementationSha256": "09d65f8e9df238f2dc4da132c9a9735d1b022cf56759e5fa974ddddafd796e46", "implementationVersion": "2026.07.16.2+bundle.09d65f8e9df238f2dc4da132c9a9735d1b022cf56759e5fa974ddddafd796e46" });
 
   // shared/content-runtime-identity.js
@@ -2450,7 +2451,7 @@
       return api.merge(out);
     };
     scripts["typingmind.js"] = scripts["typingmind"];
-    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.71dc7f661bd5f9179edab2efb5e43d307762197c2d632f31934e45aaa1319c01" });
+    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.599a638ab55a39f33f89130ba1b5e7fab63570955268420df29d942548a4e65d" });
     return scripts;
   }
 

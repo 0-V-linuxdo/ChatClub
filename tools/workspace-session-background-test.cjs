@@ -120,6 +120,7 @@ function deferredPromise() {
     listClearedWorkspaceTabs,
     listLiveWorkspaceTabs,
     focusWorkspaceTab,
+    closeOtherLiveWorkspaceTabs,
     persistWorkspaceSessionSnapshot,
     registerWorkspaceSessionTab,
     setWorkspaceTabTitle,
@@ -3131,6 +3132,56 @@ function deferredPromise() {
   }
 
   {
+    const now = 905000;
+    const store = fixture({
+      local: {
+        [WORKSPACE_SESSION_GENERATION_KEY]: generation,
+        [workspaceSessionWorkspaceKey(workspaceA)]: stable(
+          workspaceA,
+          "keep-current",
+          { tabId: 11, windowId: 2, index: 0, pinned: false },
+          now
+        ),
+        [workspaceSessionWorkspaceKey(workspaceB)]: stable(
+          workspaceB,
+          "close-live",
+          { tabId: 12, windowId: 2, index: 1, pinned: false },
+          now
+        ),
+        [workspaceSessionWorkspaceKey(workspaceC)]: stable(
+          workspaceC,
+          "already-closed",
+          { tabId: 13, windowId: 2, index: 2, pinned: false },
+          now - 50,
+          now - 40,
+          { snapshot: usedSnapshot("already-closed") }
+        )
+      },
+      tabs: [
+        { id: 11, windowId: 2, index: 0, title: "ChatClub", url: `chrome-extension://chatclub/chatClub.html#workspace=${workspaceA}` },
+        { id: 12, windowId: 2, index: 1, title: "ChatClub", url: `chrome-extension://chatclub/chatClub.html#workspace=${workspaceB}` },
+        { id: 21, windowId: 3, index: 0, title: "ChatClub", url: "chrome-extension://chatclub/options.html" },
+        { id: 31, windowId: 1, index: 0, title: "Example", url: "https://example.com/" }
+      ]
+    });
+    const closed = await closeOtherLiveWorkspaceTabs(store.api, {}, { tab: { id: 11 } });
+    assert.deepEqual(closed.tabIds, [12]);
+    assert.equal(closed.closed, 1);
+    assert.equal(store.liveTabs.some((tab) => tab.id === 11), true, "the current ChatClub tab must stay open");
+    assert.equal(store.liveTabs.some((tab) => tab.id === 12), false, "other live ChatClub tabs must close");
+    assert.equal(store.liveTabs.some((tab) => tab.id === 21), true, "the options page must not close");
+    assert.equal(store.liveTabs.some((tab) => tab.id === 31), true, "unrelated browser tabs must not close");
+    assert.ok(
+      store.local.values[workspaceSessionWorkspaceKey(workspaceB)],
+      "closing other ChatClub tabs must leave Tabs memory in place"
+    );
+    await assert.rejects(
+      () => closeOtherLiveWorkspaceTabs(store.api, {}, {}),
+      /Workspace tab id is invalid/
+    );
+  }
+
+  {
     const now = 910000;
     const conversation = (href, title = "") => ({
       schemaVersion: 1,
@@ -3253,6 +3304,7 @@ function deferredPromise() {
     );
     assert.match(runtime, /REQUEST\.FORGET_REMEMBERED_WORKSPACE_TAB/);
     assert.match(runtime, /REQUEST\.FOCUS_WORKSPACE_TAB/);
+    assert.match(runtime, /REQUEST\.CLOSE_OTHER_LIVE_WORKSPACE_TABS/);
     assert.match(runtime, /REQUEST\.SET_WORKSPACE_TAB_TITLE/);
     assert.match(runtime, /REQUEST\.RESTORE_CLEARED_WORKSPACE_TABS/);
     assert.match(runtime, /REQUEST\.DISMISS_CLEARED_WORKSPACE_TABS/);

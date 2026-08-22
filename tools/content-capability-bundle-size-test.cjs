@@ -34,14 +34,12 @@ const byteBudgets = Object.freeze({
   "content/summary-userscripts-main.js": 205_000,
   "content/summary-userscripts.js": 152_000
 });
-// Exact base-plus-capabilities closure after Kagi gained bounded composer
-// hydration and excluded its thread-search text input from prompt candidates.
-// Grok submission-owned route correlation adds the exact sendId/app route
-// payload to the shared send capability boundary.
-const aggregateByteBudget = 759_541;
-// Exact all-bundle closure after Claude iframe-compat (isInIframe store patch)
-// was added to the document-start preload; no headroom is carried across generated bundles.
-const allBundlesByteBudget = 1_459_225;
+// Exact base-plus-capabilities closure after the ChatClub Tabs sidebar toggle
+// joined the shared shortcut action inventory and Windows/Mac defaults.
+const aggregateByteBudget = 759_822;
+// Exact all-bundle closure after the ChatClub Tabs sidebar shortcut joined the
+// shared shortcut runtime; no headroom is carried across generated bundles.
+const allBundlesByteBudget = 1_459_506;
 
 const bundleIdentities = Object.fromEntries(Object.keys(CONTENT_ENTRIES).map((outputPath) => [
   outputPath,

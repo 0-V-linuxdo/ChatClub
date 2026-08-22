@@ -1,3 +1,4 @@
+"use strict";
 (() => {
   // shared/protocol.js
   var GENERIC_POST_MESSAGE_SOURCE = "chatclub";
@@ -75,6 +76,7 @@
         shortcuts: {
           focusInput: { disabled: false, command: false, control: false, option: true, shift: false, code: "KeyK" },
           openNewWorkspaceTab: { disabled: false, command: true, control: false, option: true, shift: true, code: "KeyN" },
+          toggleWorkspaceTabsSidebar: { disabled: false, command: true, control: false, option: false, shift: false, code: "KeyB" },
           openSettings: { disabled: false, command: true, control: false, option: true, shift: true, code: "KeyS" },
           openAppPicker: { disabled: false, command: true, control: false, option: true, shift: true, code: "KeyA" },
           openSettingsMenu: { disabled: false, command: true, control: false, option: true, shift: true, code: "KeyJ" },
@@ -99,6 +101,7 @@
         shortcuts: {
           focusInput: { disabled: false, control: false, alt: true, shift: false, code: "KeyK" },
           openNewWorkspaceTab: { disabled: false, control: true, alt: true, shift: true, code: "KeyN" },
+          toggleWorkspaceTabsSidebar: { disabled: false, control: true, alt: false, shift: false, code: "KeyB" },
           openSettings: { disabled: false, control: true, alt: true, shift: true, code: "KeyS" },
           openAppPicker: { disabled: false, control: true, alt: true, shift: true, code: "KeyA" },
           openSettingsMenu: { disabled: false, control: true, alt: true, shift: true, code: "KeyJ" },
@@ -403,12 +406,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "91caf592718289f689e5619e66bce179ca2066600db75ead4bc9adf69e1882aa";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "0639191de65a691d31b142452cead6ef1a8dba93b1af181448ddf8e4cb60a892";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "71dc7f661bd5f9179edab2efb5e43d307762197c2d632f31934e45aaa1319c01";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.71dc7f661bd5f9179edab2efb5e43d307762197c2d632f31934e45aaa1319c01";
-  var CONTENT_RUNTIME_CONTENT_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/content.js", "entryPath": "content-src/content.js", "sourceSha256": "71bb748549dd9cecb7ade8131314e4315665c2906966d233bb6c8e95bc1a3a62", "implementationSha256": "e96fc7df151d8b3868c13f758dd62ff1b20a2300f86f59ea74ab80967b24188e", "implementationVersion": "2026.07.16.2+bundle.e96fc7df151d8b3868c13f758dd62ff1b20a2300f86f59ea74ab80967b24188e" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "599a638ab55a39f33f89130ba1b5e7fab63570955268420df29d942548a4e65d";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.599a638ab55a39f33f89130ba1b5e7fab63570955268420df29d942548a4e65d";
+  var CONTENT_RUNTIME_CONTENT_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/content.js", "entryPath": "content-src/content.js", "sourceSha256": "b0ee3ff873062778f757905dd8ece0c27ebf375a5debe10f6eeb3fc601b00175", "implementationSha256": "38c362ed10ded3b42728c59ff651d7f8a2c8dab50d2426d506433acafad759bf", "implementationVersion": "2026.07.16.2+bundle.38c362ed10ded3b42728c59ff651d7f8a2c8dab50d2426d506433acafad759bf" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -451,6 +454,7 @@
   var ALL_SHORTCUT_ACTIONS = [
     "focusInput",
     "openNewWorkspaceTab",
+    "toggleWorkspaceTabsSidebar",
     "openSettings",
     "openAppPicker",
     "openSettingsMenu",

@@ -21,6 +21,7 @@ const SHORTCUT_SETTING_GROUPS = [
     actions: [
       TOPBAR_SHORTCUT_ACTIONS.composer,
       TOPBAR_SHORTCUT_ACTIONS.brand,
+      "toggleWorkspaceTabsSidebar",
       TOPBAR_SHORTCUT_ACTIONS.settings,
       TOPBAR_SHORTCUT_ACTIONS.newChat,
       TOPBAR_SHORTCUT_ACTIONS.deleteThread,
@@ -45,6 +46,7 @@ const SHORTCUT_PREVIEW_META = Object.freeze({
   sendMessage: { icon: "send", labelKey: "topbar.send", tooltipLabelKey: "topbar.sendTooltip", tooltipId: "topbar.send", showLabel: true, primary: true },
   focusInput: { icon: "keyboard", labelKey: "shortcut.focusInput.label" },
   openNewWorkspaceTab: { icon: "external", labelKey: "shortcut.openNewWorkspaceTab.label", showLabel: true },
+  toggleWorkspaceTabsSidebar: { icon: "sidebarExpand", labelKey: "shortcut.toggleWorkspaceTabsSidebar.label" },
   openSettings: { icon: "settings", labelKey: "shortcut.openSettings.label", showLabel: true },
   openAppPicker: { icon: "plus", labelKey: "shortcut.openAppPicker.label", showLabel: true },
   openSettingsMenu: { icon: "moreTools", labelKey: "shortcut.openSettingsMenu.label", showLabel: true },

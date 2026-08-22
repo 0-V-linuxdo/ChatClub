@@ -194,6 +194,8 @@ button { cursor: pointer; }
 
 .workspace-tabs-sidebar-title {
   margin: 0;
+  min-width: 0;
+  flex: 1 1 auto;
   font-size: 13px;
   font-weight: 600;
   color: var(--text);
@@ -206,6 +208,17 @@ button { cursor: pointer; }
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--muted);
+}
+
+.workspace-tabs-sidebar-cleanup {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  margin-left: auto;
+}
+
+.workspace-tabs-sidebar-cleanup:disabled {
+  opacity: .4;
 }
 
 .workspace-tabs-sidebar-list {

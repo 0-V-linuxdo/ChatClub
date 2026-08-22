@@ -6,6 +6,7 @@ export const DEFAULT_SHORTCUT_CONFIG = {
       shortcuts: {
         focusInput: { disabled: false, command: false, control: false, option: true, shift: false, code: "KeyK" },
         openNewWorkspaceTab: { disabled: false, command: true, control: false, option: true, shift: true, code: "KeyN" },
+        toggleWorkspaceTabsSidebar: { disabled: false, command: true, control: false, option: false, shift: false, code: "KeyB" },
         openSettings: { disabled: false, command: true, control: false, option: true, shift: true, code: "KeyS" },
         openAppPicker: { disabled: false, command: true, control: false, option: true, shift: true, code: "KeyA" },
         openSettingsMenu: { disabled: false, command: true, control: false, option: true, shift: true, code: "KeyJ" },
@@ -30,6 +31,7 @@ export const DEFAULT_SHORTCUT_CONFIG = {
       shortcuts: {
         focusInput: { disabled: false, control: false, alt: true, shift: false, code: "KeyK" },
         openNewWorkspaceTab: { disabled: false, control: true, alt: true, shift: true, code: "KeyN" },
+        toggleWorkspaceTabsSidebar: { disabled: false, control: true, alt: false, shift: false, code: "KeyB" },
         openSettings: { disabled: false, control: true, alt: true, shift: true, code: "KeyS" },
         openAppPicker: { disabled: false, control: true, alt: true, shift: true, code: "KeyA" },
         openSettingsMenu: { disabled: false, control: true, alt: true, shift: true, code: "KeyJ" },

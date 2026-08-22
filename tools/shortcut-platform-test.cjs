@@ -389,6 +389,22 @@ assert.equal(
   "Ctrl+Alt+Shift+N"
 );
 assert.equal(
+  shortcuts.formatShortcut("toggleWorkspaceTabsSidebar", sharedDefault.profiles.mac.shortcuts.toggleWorkspaceTabsSidebar, "", "mac"),
+  "⌘B"
+);
+assert.equal(
+  shortcuts.formatShortcut("toggleWorkspaceTabsSidebar", sharedDefault.profiles.windows.shortcuts.toggleWorkspaceTabsSidebar, "", "windows"),
+  "Ctrl+B"
+);
+assert.equal(
+  shortcuts.matchShortcut(event({ code: "KeyB", metaKey: true }), sharedDefault, "mac")?.action,
+  "toggleWorkspaceTabsSidebar"
+);
+assert.equal(
+  shortcuts.matchShortcut(event({ code: "KeyB", ctrlKey: true }), sharedDefault, "windows")?.action,
+  "toggleWorkspaceTabsSidebar"
+);
+assert.equal(
   shortcuts.matchShortcut(event({ code: "KeyN", metaKey: true, altKey: true, shiftKey: true }), sharedDefault, "mac")?.action,
   "openNewWorkspaceTab"
 );

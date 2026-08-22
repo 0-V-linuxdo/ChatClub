@@ -98,7 +98,7 @@ export function createTopbarView(dependencies = {}) {
       label,
       icon: createSvgIcon(open ? "sidebarCollapse" : "sidebarExpand"),
       onClick: () => actions.toggleWorkspaceTabsSidebar(),
-      tooltipLabel: label,
+      tooltipLabel: actions.formatShortcutTooltip(label, "toggleWorkspaceTabsSidebar"),
       className: `workspace-tabs-sidebar-toggle${open ? " is-open" : ""}`,
       tooltipId: "topbar.workspaceTabs"
     });

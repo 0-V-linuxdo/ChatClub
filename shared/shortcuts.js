@@ -7,6 +7,7 @@ const KEYBOARD_PLATFORM_WINDOWS = "windows";
 export const ALL_SHORTCUT_ACTIONS = [
   "focusInput",
   "openNewWorkspaceTab",
+  "toggleWorkspaceTabsSidebar",
   "openSettings",
   "openAppPicker",
   "openSettingsMenu",

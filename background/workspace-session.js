@@ -22,7 +22,7 @@ import {
   workspaceSessionMirrorKey,
   workspaceSessionWorkspaceKey
 } from "../shared/workspace-session.js";
-import { clearedTabItem, exportRememberedWorkspaceTabsOperation, focusWorkspaceTabOperation, forgetRememberedWorkspaceTabOperation, importRememberedWorkspaceTabsOperation, listClearedWorkspaceTabsOperation, listLiveWorkspaceTabsOperation, recoveryEventWasRequested, requestedRecoveryEvents, setWorkspaceTabTitleOperation, unclaimedBrowserCleared } from "./workspace-tab-directory.js";
+import { clearedTabItem, closeOtherLiveWorkspaceTabsOperation, exportRememberedWorkspaceTabsOperation, focusWorkspaceTabOperation, forgetRememberedWorkspaceTabOperation, importRememberedWorkspaceTabsOperation, listClearedWorkspaceTabsOperation, listLiveWorkspaceTabsOperation, recoveryEventWasRequested, requestedRecoveryEvents, setWorkspaceTabTitleOperation, unclaimedBrowserCleared } from "./workspace-tab-directory.js";
 import { restoreClearedWorkspaceTabsOperation } from "./workspace-tab-restoration.js";
 import {
   bindingForClaim,
@@ -1039,6 +1039,9 @@ export function forgetRememberedWorkspaceTab(api, request = {}, options = {}) {
 }
 export function focusWorkspaceTab(api, request = {}, sender = {}) {
   return queueWorkspaceSession(() => focusWorkspaceTabOperation(api, request, sender));
+}
+export function closeOtherLiveWorkspaceTabs(api, _request = {}, sender = {}) {
+  return queueWorkspaceSession(() => closeOtherLiveWorkspaceTabsOperation(api, sender));
 }
 export function dismissClearedWorkspaceTabs(api, request = {}, options = {}) {
   return queueWorkspaceSession(async () => {

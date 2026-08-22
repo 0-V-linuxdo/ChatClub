@@ -68,6 +68,12 @@ function responsiveBrandRules(kind) {
   assert.match(runtime, /createTopbarController\(/, "runtime must compose the extracted Topbar owner");
   assert.match(topbarView, /workspace-tabs-sidebar-toggle/, "the topbar must keep a fixed ChatClub-tab sidebar toggle");
   assert.match(topbarView, /aria-controls/, "the sidebar toggle must point at the live tab list");
+  assert.match(
+    topbarView,
+    /formatShortcutTooltip\(label,\s*"toggleWorkspaceTabsSidebar"\)/,
+    "the ChatClub Tabs toggle must expose the configured sidebar shortcut"
+  );
+  assert.match(runtime, /action === "toggleWorkspaceTabsSidebar"/, "Ctrl/Cmd+B must toggle the ChatClub Tabs sidebar");
   assert.match(runtime, /workspaceBinding\.bind\(workspaceController\)/, "runtime must bind the stable workspace port once");
   assert.match(runtime, /topbarBinding\.bind\(topbarController\)/, "runtime must bind the stable topbar port once");
   assert.doesNotMatch(runtime, /workspace:\s*\(\)\s*=>\s*workspaceController/, "runtime must not expose an uninitialized workspace controller through a provider thunk");
