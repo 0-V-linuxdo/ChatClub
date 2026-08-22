@@ -3048,17 +3048,26 @@ function deferredPromise() {
     const listed = await listLiveWorkspaceTabs(store.api, {}, {
       tab: { id: 11, url: `chrome-extension://chatclub/chatClub.html#workspace=${workspaceA}` }
     });
-    assert.deepEqual(listed.tabs.map((item) => item.workspaceId), [workspaceA, workspaceB]);
+    assert.deepEqual(listed.tabs.map((item) => item.workspaceId), [
+      workspaceA,
+      "page-dddddddddddd",
+      workspaceC,
+      workspaceB
+    ]);
     assert.equal(listed.tabs[0].tabId, 11);
     assert.equal(listed.tabs[0].current, true);
     assert.equal(listed.tabs[0].live, true);
     assert.equal(listed.tabs[0].layoutName, "Pocket batch");
     assert.equal(listed.tabs[0].topicTitle, "");
     assert.deepEqual(listed.tabs[0].appIds, ["ChatGPT", "Claude"]);
-    assert.equal(listed.tabs[1].current, false);
-    assert.equal(listed.tabs[1].live, false);
-    assert.equal(listed.tabs[1].tabId, null);
-    assert.equal(listed.tabs[1].workspaceId, workspaceB);
+    assert.equal(listed.tabs[1].live, true);
+    assert.equal(listed.tabs[1].workspaceId, "page-dddddddddddd");
+    assert.equal(listed.tabs[2].live, true);
+    assert.equal(listed.tabs[2].workspaceId, workspaceC);
+    assert.equal(listed.tabs[3].current, false);
+    assert.equal(listed.tabs[3].live, false);
+    assert.equal(listed.tabs[3].tabId, null);
+    assert.equal(listed.tabs[3].workspaceId, workspaceB);
     const focused = await focusWorkspaceTab(store.api, { tabId: 12 }, { tab: { id: 11 } });
     assert.deepEqual(focused, { focused: true, tabId: 12, current: false });
     assert.deepEqual(store.tabUpdates, [{ tabId: 12, options: { active: true } }]);
@@ -3092,10 +3101,31 @@ function deferredPromise() {
     const afterForget = await listLiveWorkspaceTabs(store.api, {}, {
       tab: { id: 11, url: `chrome-extension://chatclub/chatClub.html#workspace=${workspaceA}` }
     });
-    assert.deepEqual(afterForget.tabs.map((item) => item.workspaceId), [workspaceA]);
+    assert.deepEqual(afterForget.tabs.map((item) => item.workspaceId), [
+      workspaceA,
+      "page-dddddddddddd",
+      workspaceC
+    ]);
     const forgottenLive = await forgetRememberedWorkspaceTab(store.api, { workspaceId: workspaceA }, { now: now + 2 });
     assert.deepEqual(forgottenLive, { forgotten: true, workspaceId: workspaceA, closed: true, tabId: 11 });
     assert.equal(store.liveTabs.some((tab) => tab.id === 11), false);
+    const forgottenEmpty = await forgetRememberedWorkspaceTab(
+      store.api,
+      { workspaceId: workspaceC, tabId: 14 },
+      { now: now + 3 }
+    );
+    assert.equal(forgottenEmpty.forgotten, true);
+    assert.equal(forgottenEmpty.closed, true);
+    assert.equal(forgottenEmpty.tabId, 14);
+    assert.equal(store.liveTabs.some((tab) => tab.id === 14), false);
+    const forgottenCurrent = await forgetRememberedWorkspaceTab(
+      store.api,
+      { workspaceId: "page-dddddddddddd" },
+      { now: now + 4, sender: { tab: { id: 12 } } }
+    );
+    assert.equal(forgottenCurrent.closed, true);
+    await Promise.resolve();
+    assert.equal(store.liveTabs.some((tab) => tab.id === 12), false);
     const afterLiveForget = await listLiveWorkspaceTabs(store.api, {}, { tab: { id: 12 } });
     assert.deepEqual(afterLiveForget.tabs, []);
   }
@@ -3165,7 +3195,7 @@ function deferredPromise() {
     assert.equal(merged.forgotten, 0);
     assert.ok(merged.skipped >= 2);
     const afterMerge = await listLiveWorkspaceTabs(store.api, {}, { tab: { id: 41 } });
-    assert.equal(afterMerge.tabs.length, 3);
+    assert.equal(afterMerge.tabs.length, 4);
     assert.ok(afterMerge.tabs.some((item) => item.topicTitle === "Imported E" && item.live === false));
     const replaced = await importRememberedWorkspaceTabs(store.api, {
       tabs: [{
@@ -3177,7 +3207,7 @@ function deferredPromise() {
     assert.equal(replaced.imported, 1);
     assert.equal(replaced.forgotten, 2);
     const afterReplace = await listLiveWorkspaceTabs(store.api, {}, { tab: { id: 41 } });
-    assert.deepEqual(afterReplace.tabs.map((item) => item.topicTitle).sort(), ["Imported F", "Live A"]);
+    assert.deepEqual(afterReplace.tabs.map((item) => item.topicTitle).sort(), ["", "Imported F", "Live A"]);
     assert.equal(afterReplace.tabs.find((item) => item.topicTitle === "Live A").live, true);
     assert.equal(afterReplace.tabs.find((item) => item.topicTitle === "Imported F").live, false);
   }

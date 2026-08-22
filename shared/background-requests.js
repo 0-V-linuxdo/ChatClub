@@ -162,7 +162,7 @@ export const BACKGROUND_REQUEST_SPECS = Object.freeze({
   }),
   [ACTION.FORGET_REMEMBERED_WORKSPACE_TAB]: extensionPage({
     mutates: true,
-    payload: contract({ workspaceId: "string" }),
+    payload: contract({ workspaceId: "string" }, { tabId: "integer" }),
     response: contract({ forgotten: "boolean", workspaceId: "string" }, { closed: "boolean", tabId: "integer" })
   }),
   [ACTION.EXPORT_REMEMBERED_WORKSPACE_TABS]: extensionPage({

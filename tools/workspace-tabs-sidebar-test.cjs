@@ -13,7 +13,9 @@ class FakeNode {
     this.dataset = Object.create(null);
     this.className = "";
     this.textContent = "";
-    this.style = {};
+    this.style = {
+      setProperty(name, value) { this[name] = String(value); }
+    };
     this.offsetTop = 0;
     this.isConnected = true;
     this.listeners = Object.create(null);
@@ -44,6 +46,8 @@ class FakeNode {
     const payload = { preventDefault() {}, stopPropagation() {}, ...event };
     for (const listener of this.listeners.click || []) listener(payload);
   }
+
+  setPointerCapture() {}
 
   append(...children) {
     for (const child of children) {
@@ -125,6 +129,10 @@ globalThis.document = {
   assert.match(css, /\.workspace-tabs-sidebar\s*\{[^}]*position:\s*absolute/, "the sidebar must overlay the workspace instead of taking iframe space");
   assert.match(css, /\.workspace-tabs-sidebar\s*\{[^}]*top:\s*var\(--workspace-tabs-sidebar-top\)/, "the sidebar must start below the topbar instead of covering it");
   assert.match(css, /\.workspace-tabs-sidebar-header\s*\{[^}]*padding:\s*14px/, "the sidebar header must keep top whitespace");
+  assert.match(css, /\.workspace-tabs-sidebar-count/, "ChatClub Tabs must show the tab count");
+  assert.match(css, /\.workspace-tabs-sidebar-item-index/, "each tab name must show a sequence number");
+  assert.match(css, /\.workspace-tabs-sidebar-resize/, "the sidebar must be resizable by dragging");
+  assert.match(css, /@media \(hover: hover\)/, "rename and delete controls must wait for hover");
   assert.match(css, /\.workspace-tabs-sidebar-item\.is-closed/, "closed remembered tabs must have a distinct style");
   assert.match(css, /\.workspace-tabs-sidebar-item-delete:hover/, "the delete control must turn red on hover");
   assert.doesNotMatch(css, /\.workspace-tabs-sidebar\s*\{[^}]*inset:\s*0/, "the sidebar must not stretch under the topbar");
@@ -134,10 +142,16 @@ globalThis.document = {
   assert.match(icons, /d: "M9 3v18"/);
   const { createWorkspaceTabsSidebarController } = await import("../app/workspace/tabs-sidebar-controller.js");
   const memory = new Map();
+  const widthMemory = new Map();
   const sessionStorage = {
     getItem: (key) => memory.get(key) || null,
     setItem: (key, value) => { memory.set(key, String(value)); },
     removeItem: (key) => { memory.delete(key); }
+  };
+  const localStorage = {
+    getItem: (key) => widthMemory.get(key) || null,
+    setItem: (key, value) => { widthMemory.set(key, String(value)); },
+    removeItem: (key) => { widthMemory.delete(key); }
   };
 
   function controller(overrides = {}) {
@@ -193,6 +207,7 @@ globalThis.document = {
       inferAppName: (app) => app?.name || app?.id || "",
       appById: (id) => ({ id, name: id }),
       sessionStorage,
+      localStorage,
       canDismiss: () => dismissable,
       ...overrides
     });
@@ -262,6 +277,12 @@ globalThis.document = {
     const current = descendants(sidebar).find((node) => node.classList.contains("is-current"));
     assert.ok(current, "the current ChatClub tab must be marked in the list");
     assert.match(nodeText(current), /Pocket batch/);
+    const count = descendants(sidebar).find((node) => node.classList.contains("workspace-tabs-sidebar-count"));
+    assert.equal(nodeText(count), "3");
+    const indexes = descendants(sidebar).filter((node) => node.classList.contains("workspace-tabs-sidebar-item-index"));
+    assert.deepEqual(indexes.map((node) => nodeText(node)), ["1", "2", "3"]);
+    const resize = descendants(sidebar).find((node) => node.classList.contains("workspace-tabs-sidebar-resize"));
+    assert.ok(resize, "the sidebar must expose a drag handle");
     assert.equal(fixture.api.itemLabel({ layoutName: "", appIds: ["Claude"] }, 0), "Claude");
     assert.equal(fixture.api.itemLabel({ layoutName: "", appIds: [] }, 3), "ChatClub 4");
     assert.equal(fixture.api.itemLabel({ layoutName: "Prompt", appIds: ["Claude"] }, 0), "Claude", "placeholder Prompt must yield to loaded apps");
@@ -392,6 +413,79 @@ globalThis.document = {
     assert.equal(confirmations.length, 1);
     assert.match(String(confirmations[0].title || ""), /Delete this ChatClub tab|删除此 ChatClub 标签页/);
     assert.ok(!fixture.calls.some((call) => call.action === "forgetRememberedWorkspaceTab"), "delete must wait for confirmation");
+  }
+
+  {
+    const closedTabs = [];
+    const fixture = controller({
+      closeCurrentTab: async () => {
+        closedTabs.push(true);
+        return { closed: true, tabId: 11 };
+      }
+    });
+    await fixture.api.refresh();
+    const current = fixture.api.currentItems()[0];
+    const forgotten = await fixture.api.forgetTab(current);
+    assert.equal(forgotten.closed, true);
+    assert.equal(closedTabs.length, 1, "deleting the current ChatClub tab must close this browser tab");
+    assert.equal(fixture.api.currentItems().some((item) => item.current), false);
+  }
+
+  {
+    const closedTabs = [];
+    const forgetPayloads = [];
+    const fixture = controller({
+      closeCurrentTab: async () => {
+        closedTabs.push(true);
+        return { closed: true, tabId: 77 };
+      },
+      requestBackground: async (action, payload = {}) => {
+        if (action === "listLiveWorkspaceTabs") {
+          return {
+            tabs: [{
+              tabId: 77,
+              windowId: 1,
+              index: 0,
+              workspaceId: "page-emptyemptyempty",
+              current: true,
+              live: true,
+              appIds: ["Grok", "NotionAI", "Kagi"]
+            }]
+          };
+        }
+        if (action === "forgetRememberedWorkspaceTab") {
+          forgetPayloads.push(payload);
+          return { forgotten: true, workspaceId: payload.workspaceId, closed: true, tabId: payload.tabId };
+        }
+        return {};
+      }
+    });
+    await fixture.api.refresh();
+    fixture.api.setOpen(true);
+    const sidebar = fixture.api.renderSidebar();
+    const count = descendants(sidebar).find((node) => node.classList.contains("workspace-tabs-sidebar-count"));
+    assert.equal(nodeText(count), "1");
+    const emptyCurrent = fixture.api.currentItems()[0];
+    const forgotten = await fixture.api.forgetTab(emptyCurrent);
+    assert.equal(forgotten.closed, true);
+    assert.equal(closedTabs.length, 1);
+    assert.deepEqual(forgetPayloads.at(-1), {
+      workspaceId: "page-emptyemptyempty",
+      tabId: 77
+    });
+  }
+
+  {
+    const fixture = controller();
+    await fixture.api.refresh();
+    fixture.api.setOpen(true);
+    const shell = Object.assign(new FakeNode("div"), { isConnected: true, className: "app-shell" });
+    const grid = Object.assign(new FakeNode("div"), { className: "main-grid", offsetTop: 51 });
+    shell.append(grid);
+    const sidebar = fixture.api.syncSidebar(shell);
+    const handle = descendants(sidebar).find((node) => node.classList.contains("workspace-tabs-sidebar-resize"));
+    assert.ok(handle, "sync must keep the drag handle");
+    assert.equal(sidebar.style.width, "320px");
   }
 
   console.log("workspace tabs sidebar: ok");

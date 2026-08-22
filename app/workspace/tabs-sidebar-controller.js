@@ -15,7 +15,12 @@ import { createSvgIcon } from "../../ui/icons.js";
 
 const WORKSPACE_TABS_SIDEBAR_ID = "workspace-tabs-sidebar";
 const WORKSPACE_TABS_SIDEBAR_OPEN_KEY = "chatclubWorkspaceTabsSidebarOpenV1";
+const WORKSPACE_TABS_SIDEBAR_WIDTH_KEY = "chatclubWorkspaceTabsSidebarWidthV1";
+const SIDEBAR_WIDTH_MIN = 220;
+const SIDEBAR_WIDTH_MAX = 560;
+const SIDEBAR_WIDTH_DEFAULT = 320;
 const GENERIC_WORKSPACE_TAB_NAME = /^(?:chatclub(?:\s+\d+)?|prompt)$/i;
+const PAGE_CLOSING_ERROR = /message port closed|receiving end does not exist|no tab with id|tab was closed/i;
 
 function storageGet(storage, key) {
   try {
@@ -41,8 +46,23 @@ function workspaceIdValue(value) {
   return String(value || "").trim();
 }
 
+function clampSidebarWidth(value) {
+  const width = Number(value);
+  if (!Number.isFinite(width)) return SIDEBAR_WIDTH_DEFAULT;
+  return Math.min(SIDEBAR_WIDTH_MAX, Math.max(SIDEBAR_WIDTH_MIN, Math.round(width)));
+}
+
+function readSidebarWidth(storage) {
+  const raw = storageGet(storage, WORKSPACE_TABS_SIDEBAR_WIDTH_KEY);
+  return raw ? clampSidebarWidth(raw) : SIDEBAR_WIDTH_DEFAULT;
+}
+
 function isGenericWorkspaceTabName(value) {
   return GENERIC_WORKSPACE_TAB_NAME.test(String(value || "").trim());
+}
+
+function isPageClosingError(error) {
+  return PAGE_CLOSING_ERROR.test(String(error?.message || error || ""));
 }
 
 function appIdsFromGroups(groups = []) {
@@ -63,8 +83,8 @@ function normalizeItems(next = []) {
   return (Array.isArray(next) ? next : [])
     .map((item) => {
       const workspaceId = workspaceIdValue(item?.workspaceId);
-      if (!workspaceId) return null;
       const tabId = positiveTabId(item?.tabId);
+      if (!workspaceId && tabId === null) return null;
       return {
         workspaceId,
         tabId,
@@ -95,7 +115,9 @@ export function createWorkspaceTabsSidebarController({
   currentWorkspace,
   setCurrentTabTitle,
   sessionStorage = globalThis.sessionStorage,
+  localStorage = globalThis.localStorage,
   extensionApi,
+  closeCurrentTab,
   canDismiss,
   document: ownerDocument = globalThis.document,
   editorModal = defaultEditorModal,
@@ -110,11 +132,13 @@ export function createWorkspaceTabsSidebarController({
   }
 
   let open = storageGet(sessionStorage, WORKSPACE_TABS_SIDEBAR_OPEN_KEY) === "1";
+  let sidebarWidth = readSidebarWidth(localStorage);
   let items = [];
   let lastShell = null;
   let tabUnsubscribers = [];
   let escapeInstalled = false;
   let refreshTimer = 0;
+  let resizeDrag = null;
 
   function currentItems() {
     return items.slice();
@@ -135,8 +159,19 @@ export function createWorkspaceTabsSidebarController({
     return open;
   }
 
+  function persistWidth(next) {
+    sidebarWidth = clampSidebarWidth(next);
+    storageSet(localStorage, WORKSPACE_TABS_SIDEBAR_WIDTH_KEY, String(sidebarWidth));
+    return sidebarWidth;
+  }
+
   function sameItem(left = {}, right = {}) {
-    return workspaceIdValue(left.workspaceId) === workspaceIdValue(right.workspaceId);
+    const leftId = workspaceIdValue(left.workspaceId);
+    const rightId = workspaceIdValue(right.workspaceId);
+    if (leftId && rightId) return leftId === rightId;
+    const leftTab = positiveTabId(left.tabId);
+    const rightTab = positiveTabId(right.tabId);
+    return leftTab !== null && leftTab === rightTab;
   }
 
   function itemLabel(item = {}, index = 0) {
@@ -173,11 +208,49 @@ export function createWorkspaceTabsSidebarController({
     ownerDocument.title = isGenericWorkspaceTabName(label) ? "ChatClub" : label;
   }
 
+  function applySidebarWidth(shell, sidebar) {
+    const width = `${sidebarWidth}px`;
+    if (sidebar?.style) sidebar.style.width = width;
+    if (shell?.style?.setProperty) shell.style.setProperty("--workspace-tabs-sidebar-width", width);
+    else if (shell?.style) shell.style["--workspace-tabs-sidebar-width"] = width;
+    const handle = sidebar?.querySelector?.(".workspace-tabs-sidebar-resize");
+    handle?.setAttribute?.("aria-valuenow", String(sidebarWidth));
+  }
+
   function alignSidebar(shell, sidebar) {
     const grid = shell?.querySelector?.(".main-grid");
     if (!sidebar?.style || !grid) return;
     const top = Number(grid.offsetTop);
     sidebar.style.top = `${Number.isFinite(top) && top > 0 ? top : 51}px`;
+    applySidebarWidth(shell, sidebar);
+  }
+
+  function extensionSurface(name) {
+    try {
+      const api = typeof extensionApi === "function" ? extensionApi() : extensionApi;
+      return api?.[name] || null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function closeCurrentBrowserTab() {
+    if (typeof closeCurrentTab === "function") {
+      try { return await closeCurrentTab(); }
+      catch { return { closed: false }; }
+    }
+    const tabs = extensionSurface("tabs");
+    try {
+      const tab = await tabs?.getCurrent?.();
+      const tabId = positiveTabId(tab?.id);
+      if (tabId !== null && typeof tabs?.remove === "function") {
+        await tabs.remove(tabId);
+        return { closed: true, tabId };
+      }
+    } catch {}
+    try { ownerDocument?.defaultView?.close?.(); } catch {}
+    try { globalThis.close?.(); } catch {}
+    return { closed: false };
   }
 
   async function refresh() {
@@ -248,18 +321,48 @@ export function createWorkspaceTabsSidebarController({
     }
   }
 
+  function dropForgottenItem(item = {}) {
+    const tabId = positiveTabId(item.tabId);
+    setItems(items.filter((entry) => !sameItem(entry, item) && (tabId === null || entry.tabId !== tabId)));
+  }
+
   async function forgetTab(item = {}) {
     const workspaceId = workspaceIdValue(item.workspaceId);
-    if (!workspaceId) return { forgotten: false };
+    const tabId = positiveTabId(item.tabId);
+    const isCurrent = item.current === true;
+    if (!workspaceId && tabId === null && !isCurrent) return { forgotten: false };
+    let response = { forgotten: false, closed: false, workspaceId };
+    let forgetError = null;
     try {
-      const response = await requestBackground("forgetRememberedWorkspaceTab", { workspaceId });
-      setItems(items.filter((entry) => !sameItem(entry, item)));
-      if (lastShell?.isConnected) syncSidebar(lastShell);
-      return response;
+      if (workspaceId) {
+        const payload = { workspaceId };
+        if (tabId !== null) payload.tabId = tabId;
+        response = await requestBackground("forgetRememberedWorkspaceTab", payload);
+      }
     } catch (error) {
-      toast(t("toast.workspaceTabDeleteFailed"), "error");
-      throw error;
+      if (isPageClosingError(error)) {
+        response = { forgotten: true, closed: true, workspaceId, tabId };
+      } else {
+        forgetError = error;
+      }
     }
+    dropForgottenItem(item);
+    if (isCurrent) {
+      const closed = await closeCurrentBrowserTab();
+      if (closed?.closed || isPageClosingError(forgetError)) {
+        return { forgotten: true, closed: true, workspaceId, tabId };
+      }
+    }
+    if (lastShell?.isConnected) syncSidebar(lastShell);
+    if (forgetError) {
+      toast(t("toast.workspaceTabDeleteFailed"), "error");
+      throw forgetError;
+    }
+    if (isCurrent) {
+      toast(t("toast.workspaceTabDeleteFailed"), "error");
+      throw new Error("Unable to close the current ChatClub tab");
+    }
+    return response;
   }
 
   function openTitleEditor(item = {}) {
@@ -332,10 +435,15 @@ export function createWorkspaceTabsSidebarController({
     return el("aside", {
       id: WORKSPACE_TABS_SIDEBAR_ID,
       class: "workspace-tabs-sidebar",
-      "aria-label": t("workspace.tabs.title")
+      "aria-label": t("workspace.tabs.title"),
+      style: { width: `${sidebarWidth}px` }
     },
     el("header", { class: "workspace-tabs-sidebar-header" },
-      el("h2", { class: "workspace-tabs-sidebar-title" }, t("workspace.tabs.title"))
+      el("h2", { class: "workspace-tabs-sidebar-title" }, t("workspace.tabs.title")),
+      el("span", {
+        class: "workspace-tabs-sidebar-count",
+        "aria-label": t("workspace.tabs.count", { count: items.length })
+      }, String(items.length))
     ),
     items.length
       ? el("div", { class: "workspace-tabs-sidebar-list", role: "list" },
@@ -349,6 +457,7 @@ export function createWorkspaceTabsSidebarController({
           "aria-current": item.current ? "page" : null,
           onclick: () => { activateTab(item).catch(() => {}); }
         },
+          el("span", { class: "workspace-tabs-sidebar-item-index" }, String(index + 1)),
           el("span", { class: "workspace-tabs-sidebar-item-label" }, itemLabel(item, index))
         ),
         el("div", { class: "workspace-tabs-sidebar-item-meta" },
@@ -385,7 +494,57 @@ export function createWorkspaceTabsSidebarController({
           )
         )))
       )
-      : el("div", { class: "workspace-tabs-sidebar-empty" }, t("workspace.tabs.empty")));
+      : el("div", { class: "workspace-tabs-sidebar-empty" }, t("workspace.tabs.empty")),
+    el("div", {
+      class: "workspace-tabs-sidebar-resize",
+      role: "separator",
+      "aria-orientation": "vertical",
+      "aria-label": t("workspace.tabs.resize"),
+      "aria-valuemin": String(SIDEBAR_WIDTH_MIN),
+      "aria-valuemax": String(SIDEBAR_WIDTH_MAX),
+      "aria-valuenow": String(sidebarWidth)
+    }));
+  }
+
+  function endResize() {
+    if (!resizeDrag) return;
+    persistWidth(sidebarWidth);
+    resizeDrag = null;
+    lastShell?.classList?.remove?.("is-resizing-workspace-tabs-sidebar");
+    ownerDocument?.removeEventListener?.("pointermove", onResizePointerMove, true);
+    ownerDocument?.removeEventListener?.("pointerup", onResizePointerUp, true);
+    ownerDocument?.removeEventListener?.("pointercancel", onResizePointerUp, true);
+  }
+
+  function onResizePointerMove(event) {
+    if (!resizeDrag) return;
+    event?.preventDefault?.();
+    sidebarWidth = clampSidebarWidth(resizeDrag.startWidth + (Number(event?.clientX) - resizeDrag.startX));
+    const sidebar = lastShell?.querySelector?.(".workspace-tabs-sidebar");
+    applySidebarWidth(lastShell, sidebar);
+  }
+
+  function onResizePointerUp() {
+    endResize();
+  }
+
+  function bindResizeHandle(sidebar) {
+    const handle = sidebar?.querySelector?.(".workspace-tabs-sidebar-resize");
+    if (!handle?.addEventListener) return;
+    handle.addEventListener("pointerdown", (event) => {
+      if (event?.button != null && event.button !== 0) return;
+      event?.preventDefault?.();
+      event?.stopPropagation?.();
+      resizeDrag = {
+        startX: Number(event?.clientX) || 0,
+        startWidth: sidebarWidth
+      };
+      lastShell?.classList?.add?.("is-resizing-workspace-tabs-sidebar");
+      ownerDocument?.addEventListener?.("pointermove", onResizePointerMove, true);
+      ownerDocument?.addEventListener?.("pointerup", onResizePointerUp, true);
+      ownerDocument?.addEventListener?.("pointercancel", onResizePointerUp, true);
+      handle.setPointerCapture?.(event.pointerId);
+    });
   }
 
   function refreshAndSync() {
@@ -396,15 +555,6 @@ export function createWorkspaceTabsSidebarController({
         if (lastShell?.isConnected) syncSidebar(lastShell);
       }).catch(() => {});
     }, 80);
-  }
-
-  function extensionSurface(name) {
-    try {
-      const api = typeof extensionApi === "function" ? extensionApi() : extensionApi;
-      return api?.[name] || null;
-    } catch {
-      return null;
-    }
   }
 
   function onWorkspaceSessionChanged(changes, areaName) {
@@ -470,6 +620,7 @@ export function createWorkspaceTabsSidebarController({
     const next = renderSidebar();
     shell.classList.toggle("has-workspace-tabs-sidebar", Boolean(next));
     if (!next) {
+      endResize();
       existing?.remove();
       syncTabListeners(false);
       syncEscapeListener();
@@ -482,6 +633,7 @@ export function createWorkspaceTabsSidebarController({
       else shell.append(next);
     }
     alignSidebar(shell, next);
+    bindResizeHandle(next);
     syncTabListeners(true);
     syncEscapeListener();
     return next;
@@ -524,6 +676,7 @@ export function createWorkspaceTabsSidebarController({
     setOpen,
     renderSidebar,
     syncSidebar,
-    itemLabel
+    itemLabel,
+    sidebarWidth: () => sidebarWidth
   });
 }

@@ -186,6 +186,7 @@ button { cursor: pointer; }
   flex: 0 0 auto;
   display: flex;
   align-items: center;
+  gap: 8px;
   min-height: 44px;
   padding: 14px 14px 10px;
   border-bottom: 1px solid var(--line);
@@ -196,6 +197,15 @@ button { cursor: pointer; }
   font-size: 13px;
   font-weight: 600;
   color: var(--text);
+}
+
+.workspace-tabs-sidebar-count {
+  flex: 0 0 auto;
+  min-width: 1.25em;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
 }
 
 .workspace-tabs-sidebar-list {
@@ -249,6 +259,15 @@ button { cursor: pointer; }
   cursor: pointer;
 }
 
+.workspace-tabs-sidebar-item-index {
+  flex-shrink: 0;
+  min-width: 1.5em;
+  margin-right: 8px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
 .workspace-tabs-sidebar-item-label {
   min-width: 0;
   overflow: hidden;
@@ -281,9 +300,61 @@ button { cursor: pointer; }
   height: 28px;
 }
 
+@media (hover: hover) and (pointer: fine) {
+  .workspace-tabs-sidebar-item-edit,
+  .workspace-tabs-sidebar-item-delete {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .workspace-tabs-sidebar-item:hover .workspace-tabs-sidebar-item-edit,
+  .workspace-tabs-sidebar-item:hover .workspace-tabs-sidebar-item-delete,
+  .workspace-tabs-sidebar-item:focus-within .workspace-tabs-sidebar-item-edit,
+  .workspace-tabs-sidebar-item:focus-within .workspace-tabs-sidebar-item-delete {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
 .workspace-tabs-sidebar-item-delete:hover,
 .workspace-tabs-sidebar-item-delete:focus-visible {
   color: var(--danger);
+}
+
+.workspace-tabs-sidebar-resize {
+  position: absolute;
+  top: 0;
+  right: -5px;
+  bottom: 0;
+  z-index: 2;
+  width: 10px;
+  cursor: ew-resize;
+  touch-action: none;
+  background: transparent;
+}
+
+.workspace-tabs-sidebar-resize::after {
+  content: "";
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 4px;
+  width: 2px;
+  border-radius: 1px;
+  background: transparent;
+}
+
+.workspace-tabs-sidebar-resize:hover::after,
+.app-shell.is-resizing-workspace-tabs-sidebar .workspace-tabs-sidebar-resize::after {
+  background: var(--primary);
+}
+
+.app-shell.is-resizing-workspace-tabs-sidebar iframe {
+  pointer-events: none;
+}
+
+.app-shell.is-resizing-workspace-tabs-sidebar {
+  user-select: none;
 }
 
 .workspace-tabs-sidebar-empty {

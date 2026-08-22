@@ -84,7 +84,6 @@ function listRememberedWorkspaceTabs(api, stored, live, currentTabId) {
     const workspaceId = workspaceIdForChatClubTab(api, tab);
     if (!workspaceId) continue;
     const record = stableRecords.get(workspaceId);
-    if (!rememberedWorkspaceRecord(record)) continue;
     items.push(liveTabItem(api, tab, currentTabId, record));
     seen.add(workspaceId);
   }
@@ -187,7 +186,8 @@ export async function focusWorkspaceTabOperation(api, request = {}, sender = {})
 
 export async function forgetRememberedWorkspaceTabOperation(api, request = {}, options = {}, ensureGeneration) {
   const workspaceId = normalizeWorkspaceSessionId(request.workspaceId);
-  if (!workspaceId) throw new Error("Workspace tab is missing a workspace id");
+  const requestedTabId = positiveTabId(request.tabId);
+  if (!workspaceId && requestedTabId === null) throw new Error("Workspace tab is missing a workspace id");
   const storage = localStorageArea(api);
   if (typeof storage?.get !== "function" || typeof storage?.set !== "function") {
     throw new Error("Workspace session forget storage is unavailable");
@@ -203,42 +203,58 @@ export async function forgetRememberedWorkspaceTabOperation(api, request = {}, o
   ]);
   if (!Array.isArray(tabs)) throw new TypeError("Browser tabs query returned an invalid result");
   const live = liveTabState(api, tabs);
-  const stableKey = workspaceSessionWorkspaceKey(workspaceId);
-  const record = stableWorkspaceRecord(stableKey, stored?.[stableKey]);
-  if (!record) return { forgotten: false, workspaceId, closed: false };
-  const recovery = generation
-    ? recoveryRecord(stored?.[WORKSPACE_SESSION_RECOVERY_KEY], generation, now)
-    : null;
-  const remaining = (recovery?.candidates || []).filter((candidate) => candidate.workspaceId !== workspaceId);
-  const updates = {
-    [stableKey]: {
-      ...record,
-      storageVersion: WORKSPACE_SESSION_STORAGE_VERSION,
-      sourceStorageVersion: WORKSPACE_SESSION_STORAGE_VERSION,
-      resolution: WORKSPACE_SESSION_DISMISSED,
-      closedBy: "",
-      updatedAt: Math.max(record.updatedAt, now)
+  const resolvedWorkspaceId = workspaceId || live.workspaceByTabId.get(requestedTabId) || "";
+  const stableKey = resolvedWorkspaceId ? workspaceSessionWorkspaceKey(resolvedWorkspaceId) : "";
+  const record = stableKey ? stableWorkspaceRecord(stableKey, stored?.[stableKey]) : null;
+  const tabIdsToClose = new Set();
+  if (resolvedWorkspaceId) {
+    for (const tab of live.tabsByWorkspaceId.get(resolvedWorkspaceId) || []) {
+      const tabId = positiveTabId(tab?.id);
+      if (tabId !== null) tabIdsToClose.add(tabId);
     }
-  };
-  if (recovery) updates[WORKSPACE_SESSION_RECOVERY_KEY] = { ...recovery, candidates: remaining };
-  await storage.set(updates);
-  if (recovery && !remaining.length && typeof storage.remove === "function") {
-    await storage.remove(WORKSPACE_SESSION_RECOVERY_KEY);
   }
-  const marker = markerWithoutAtRiskWorkspace(
-    runtimeMarker(markerStored?.[WORKSPACE_SESSION_RUNTIME_MARKER_KEY]),
-    workspaceId
-  );
-  if (marker && typeof session?.set === "function") {
-    await session.set({ [WORKSPACE_SESSION_RUNTIME_MARKER_KEY]: marker });
+  if (requestedTabId !== null) {
+    const tab = tabs.find((item) => positiveTabId(item?.id) === requestedTabId);
+    if (tab && isChatClubWorkspaceTab(api, tab)) tabIdsToClose.add(requestedTabId);
   }
-  const liveTabs = live.tabsByWorkspaceId.get(workspaceId) || [];
+  if (record && stableKey) {
+    const recovery = generation
+      ? recoveryRecord(stored?.[WORKSPACE_SESSION_RECOVERY_KEY], generation, now)
+      : null;
+    const remaining = (recovery?.candidates || []).filter((candidate) => candidate.workspaceId !== resolvedWorkspaceId);
+    const updates = {
+      [stableKey]: {
+        ...record,
+        storageVersion: WORKSPACE_SESSION_STORAGE_VERSION,
+        sourceStorageVersion: WORKSPACE_SESSION_STORAGE_VERSION,
+        resolution: WORKSPACE_SESSION_DISMISSED,
+        closedBy: "",
+        updatedAt: Math.max(record.updatedAt, now)
+      }
+    };
+    if (recovery) updates[WORKSPACE_SESSION_RECOVERY_KEY] = { ...recovery, candidates: remaining };
+    await storage.set(updates);
+    if (recovery && !remaining.length && typeof storage.remove === "function") {
+      await storage.remove(WORKSPACE_SESSION_RECOVERY_KEY);
+    }
+    const marker = markerWithoutAtRiskWorkspace(
+      runtimeMarker(markerStored?.[WORKSPACE_SESSION_RUNTIME_MARKER_KEY]),
+      resolvedWorkspaceId
+    );
+    if (marker && typeof session?.set === "function") {
+      await session.set({ [WORKSPACE_SESSION_RUNTIME_MARKER_KEY]: marker });
+    }
+  }
+  const senderTabId = positiveTabId(options.sender?.tab?.id);
   let closed = false;
   let closedTabId = null;
+  const deferred = [];
   if (typeof api?.tabs?.remove === "function") {
-    for (const tab of liveTabs) {
-      const tabId = positiveTabId(tab?.id);
-      if (tabId === null) continue;
+    for (const tabId of tabIdsToClose) {
+      if (senderTabId !== null && tabId === senderTabId) {
+        deferred.push(tabId);
+        continue;
+      }
       try {
         await api.tabs.remove(tabId);
         closed = true;
@@ -246,7 +262,20 @@ export async function forgetRememberedWorkspaceTabOperation(api, request = {}, o
       } catch {}
     }
   }
-  const response = { forgotten: true, workspaceId, closed };
+  if (deferred.length) {
+    closed = true;
+    if (closedTabId === null) closedTabId = deferred[0];
+    queueMicrotask(() => {
+      for (const tabId of deferred) {
+        Promise.resolve(api.tabs.remove(tabId)).catch(() => {});
+      }
+    });
+  }
+  const response = {
+    forgotten: Boolean(record) || closed,
+    workspaceId: resolvedWorkspaceId || workspaceId,
+    closed
+  };
   if (closedTabId !== null) response.tabId = closedTabId;
   return response;
 }
