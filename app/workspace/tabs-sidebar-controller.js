@@ -10,13 +10,25 @@ import {
   isDismissalEscape
 } from "../../ui/dom.js";
 import { createSvgIcon } from "../../ui/icons.js";
+import {
+  forgetWorkspaceTabFullText,
+  itemMatchesTitleQuery,
+  loadRecordFullTextEnabled,
+  loadWorkspaceTabFullTextStore,
+  renderWorkspaceTabSearchField,
+  renderWorkspaceTabSearchHits,
+  workspaceIdsMatchingFullText
+} from "./tab-search.js";
 
 const WORKSPACE_TABS_SIDEBAR_ID = "workspace-tabs-sidebar";
 const WORKSPACE_TABS_SIDEBAR_OPEN_KEY = "chatclubWorkspaceTabsSidebarOpenV1";
 const WORKSPACE_TABS_SIDEBAR_WIDTH_KEY = "chatclubWorkspaceTabsSidebarWidthV1";
+const WORKSPACE_TABS_SIDEBAR_CLOSED_ORDER_KEY = "chatclubWorkspaceTabsClosedOrderV1";
+const WORKSPACE_TABS_SIDEBAR_PINNED_KEY = "chatclubWorkspaceTabsPinnedV1";
 const SIDEBAR_WIDTH_MIN = 220;
 const SIDEBAR_WIDTH_MAX = 560;
 const SIDEBAR_WIDTH_DEFAULT = 320;
+const TAB_DRAG_START_DISTANCE = 6;
 const GENERIC_WORKSPACE_TAB_NAME = /^(?:chatclub(?:\s+\d+)?|prompt)$/i;
 const PAGE_CLOSING_ERROR = /message port closed|receiving end does not exist|no tab with id|tab was closed/i;
 
@@ -42,6 +54,54 @@ function positiveTabId(value) {
 
 function workspaceIdValue(value) {
   return String(value || "").trim();
+}
+
+function readIdList(storage, key) {
+  try {
+    const raw = JSON.parse(storageGet(storage, key) || "[]");
+    return Array.isArray(raw) ? raw.map((value) => workspaceIdValue(value)).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+function applyClosedOrder(list = [], order = []) {
+  if (!order.length) return list;
+  const rank = new Map(order.map((id, index) => [id, index]));
+  const live = [];
+  const closed = [];
+  for (const item of list) {
+    if (item.live) live.push(item);
+    else closed.push(item);
+  }
+  closed.sort((left, right) => {
+    const leftRank = rank.has(left.workspaceId) ? rank.get(left.workspaceId) : Number.MAX_SAFE_INTEGER;
+    const rightRank = rank.has(right.workspaceId) ? rank.get(right.workspaceId) : Number.MAX_SAFE_INTEGER;
+    return leftRank - rightRank;
+  });
+  return [...live, ...closed];
+}
+
+function applyPinnedOrder(list = [], order = []) {
+  const rank = new Map(order.map((id, index) => [id, index]));
+  const live = [];
+  const closed = [];
+  for (const item of list) {
+    if (item.live) live.push(item);
+    else closed.push(item);
+  }
+  const split = (group) => {
+    const pinned = [];
+    const rest = [];
+    for (const item of group) {
+      const id = workspaceIdValue(item.workspaceId);
+      if (id && rank.has(id)) pinned.push({ ...item, pinned: true });
+      else rest.push({ ...item, pinned: false });
+    }
+    pinned.sort((left, right) => rank.get(left.workspaceId) - rank.get(right.workspaceId));
+    return [...pinned, ...rest];
+  };
+  return [...split(live), ...split(closed)];
 }
 
 function clampSidebarWidth(value) {
@@ -136,15 +196,26 @@ export function createWorkspaceTabsSidebarController({
   let escapeInstalled = false;
   let refreshTimer = 0;
   let resizeDrag = null;
+  let itemDrag = null;
+  let suppressActivate = false;
   let editingKey = "";
   let editingDraft = "";
+  let searchQuery = "";
+  let searchFocused = false;
+  let searchSelection = { start: 0, end: 0 };
+  let recordFullTextEnabled = false;
+  let fullTextStore = {};
+  let fullTextLoad = null;
 
   function currentItems() {
     return items.slice();
   }
 
   function setItems(next = []) {
-    items = normalizeItems(next);
+    items = applyPinnedOrder(
+      applyClosedOrder(normalizeItems(next), readIdList(localStorage, WORKSPACE_TABS_SIDEBAR_CLOSED_ORDER_KEY)),
+      readIdList(localStorage, WORKSPACE_TABS_SIDEBAR_PINNED_KEY)
+    );
     return currentItems();
   }
 
@@ -162,6 +233,51 @@ export function createWorkspaceTabsSidebarController({
     sidebarWidth = clampSidebarWidth(next);
     storageSet(localStorage, WORKSPACE_TABS_SIDEBAR_WIDTH_KEY, String(sidebarWidth));
     return sidebarWidth;
+  }
+
+  function persistIdList(key, ids) {
+    const unique = [];
+    const seen = new Set();
+    for (const id of ids) {
+      const value = workspaceIdValue(id);
+      if (!value || seen.has(value)) continue;
+      seen.add(value);
+      unique.push(value);
+    }
+    storageSet(localStorage, key, unique.length ? JSON.stringify(unique) : "");
+    return unique;
+  }
+
+  function persistClosedOrder(list = items) {
+    return persistIdList(
+      WORKSPACE_TABS_SIDEBAR_CLOSED_ORDER_KEY,
+      list.filter((item) => !item.live).map((item) => item.workspaceId)
+    );
+  }
+
+  function persistPinnedFromItems(list = items) {
+    const existing = readIdList(localStorage, WORKSPACE_TABS_SIDEBAR_PINNED_KEY);
+    const present = [];
+    const seen = new Set();
+    for (const item of list) {
+      const id = workspaceIdValue(item.workspaceId);
+      if (!id || !item.pinned || seen.has(id)) continue;
+      seen.add(id);
+      present.push(id);
+    }
+    for (const id of existing) {
+      if (!seen.has(id)) present.push(id);
+    }
+    return persistIdList(WORKSPACE_TABS_SIDEBAR_PINNED_KEY, present);
+  }
+
+  function dropPinnedId(item = {}) {
+    const id = workspaceIdValue(item.workspaceId);
+    if (!id) return;
+    persistIdList(
+      WORKSPACE_TABS_SIDEBAR_PINNED_KEY,
+      readIdList(localStorage, WORKSPACE_TABS_SIDEBAR_PINNED_KEY).filter((value) => value !== id)
+    );
   }
 
   function sameItem(left = {}, right = {}) {
@@ -185,14 +301,44 @@ export function createWorkspaceTabsSidebarController({
     return Boolean(key) && key === editingKey;
   }
 
+  function visibleItems() {
+    const query = searchQuery.trim();
+    if (!query) return items;
+    const fullTextIds = recordFullTextEnabled
+      ? new Set(workspaceIdsMatchingFullText(fullTextStore, query))
+      : new Set();
+    return items.filter((item, index) => (
+      itemMatchesTitleQuery(item, query, itemLabel(item, index))
+      || fullTextIds.has(workspaceIdValue(item.workspaceId))
+    ));
+  }
+
   function partitionedItems() {
     const live = [];
     const closed = [];
-    for (const item of items) {
+    for (const item of visibleItems()) {
       if (item.live) live.push(item);
       else closed.push(item);
     }
     return { live, closed };
+  }
+
+  async function refreshSearchContext() {
+    const query = searchQuery.trim();
+    const run = Promise.all([
+      loadRecordFullTextEnabled().catch(() => false),
+      loadWorkspaceTabFullTextStore().catch(() => ({}))
+    ]).then(([enabled, store]) => {
+      recordFullTextEnabled = enabled === true;
+      fullTextStore = store || {};
+      return { enabled: recordFullTextEnabled, store: fullTextStore, query };
+    });
+    fullTextLoad = run;
+    const result = await run;
+    if (fullTextLoad === run && lastShell?.isConnected && result.query === searchQuery.trim()) {
+      syncSidebar(lastShell);
+    }
+    return result;
   }
 
   function itemLabel(item = {}, index = 0) {
@@ -277,6 +423,7 @@ export function createWorkspaceTabsSidebarController({
   async function refresh() {
     const response = await requestBackground("listLiveWorkspaceTabs");
     setItems(response?.tabs);
+    refreshSearchContext().catch(() => {});
     return currentItems();
   }
 
@@ -362,10 +509,142 @@ export function createWorkspaceTabsSidebarController({
     }
   }
 
+  function liveMoveIndex(list = items) {
+    const indexes = list
+      .filter((item) => item.live)
+      .map((item) => item.index)
+      .filter((index) => Number.isInteger(index) && index >= 0);
+    return indexes.length ? Math.min(...indexes) : 0;
+  }
+
+  async function syncLiveWindowOrder(anchor = {}) {
+    const live = items.filter((item) => item.live);
+    const tabIds = live.map((item) => positiveTabId(item.tabId)).filter((tabId) => tabId !== null);
+    if (!tabIds.length) return { moved: 0, tabIds: [] };
+    const payload = { tabIds, index: liveMoveIndex(live) };
+    const windowId = Number.isInteger(anchor.windowId)
+      ? anchor.windowId
+      : live.find((item) => Number.isInteger(item.windowId))?.windowId;
+    if (Number.isInteger(windowId)) payload.windowId = windowId;
+    try {
+      return await requestBackground("moveLiveWorkspaceTabs", payload);
+    } catch (error) {
+      toast(t("toast.workspaceTabReorderFailed"), "error");
+      throw error;
+    }
+  }
+
+  function moveTab(item = {}, target = {}, place = "before") {
+    if (!item || !target || sameItem(item, target)) return currentItems();
+    if (Boolean(item.live) !== Boolean(target.live)) return currentItems();
+    if (Boolean(item.pinned) !== Boolean(target.pinned)) return currentItems();
+    const next = items.filter((entry) => !sameItem(entry, item));
+    const targetIndex = next.findIndex((entry) => sameItem(entry, target));
+    if (targetIndex < 0) return currentItems();
+    next.splice(place === "after" ? targetIndex + 1 : targetIndex, 0, item);
+    if (!item.live) persistClosedOrder(next);
+    if (item.pinned) persistPinnedFromItems(next);
+    items = applyPinnedOrder(
+      applyClosedOrder(next, readIdList(localStorage, WORKSPACE_TABS_SIDEBAR_CLOSED_ORDER_KEY)),
+      readIdList(localStorage, WORKSPACE_TABS_SIDEBAR_PINNED_KEY)
+    );
+    if (lastShell?.isConnected) syncSidebar(lastShell);
+    if (item.live) syncLiveWindowOrder(item).catch(() => {});
+    return currentItems();
+  }
+
+  function clearItemDropMarks(sidebar) {
+    const rows = sidebar?.querySelectorAll?.(".workspace-tabs-sidebar-item") || [];
+    for (const row of rows) {
+      row.classList?.remove?.("drop-before", "drop-after");
+    }
+  }
+
+  function endItemDrag() {
+    if (!itemDrag) return;
+    const sidebar = lastShell?.querySelector?.(".workspace-tabs-sidebar");
+    itemDrag.row?.classList?.remove?.("dragging");
+    clearItemDropMarks(sidebar);
+    lastShell?.classList?.remove?.("is-dragging-workspace-tabs-sidebar");
+    ownerDocument?.removeEventListener?.("pointermove", onItemPointerMove, true);
+    ownerDocument?.removeEventListener?.("pointerup", onItemPointerUp, true);
+    ownerDocument?.removeEventListener?.("pointercancel", onItemPointerUp, true);
+    itemDrag = null;
+  }
+
+  function dragIgnored(event) {
+    const className = ` ${event?.target?.className || ""} `;
+    return className.includes(" workspace-tabs-sidebar-item-actions ")
+      || className.includes(" workspace-tabs-sidebar-item-edit ")
+      || className.includes(" workspace-tabs-sidebar-item-delete ")
+      || className.includes(" workspace-tabs-sidebar-item-pin ")
+      || className.includes(" workspace-tabs-sidebar-item-editor ")
+      || className.includes(" workspace-tabs-sidebar-search-input ");
+  }
+
+  function onItemPointerMove(event) {
+    if (!itemDrag) return;
+    if (!itemDrag.active && Math.abs(Number(event?.clientY) - itemDrag.startY) < TAB_DRAG_START_DISTANCE) return;
+    if (!itemDrag.active) {
+      itemDrag.active = true;
+      itemDrag.row?.classList?.add?.("dragging");
+      lastShell?.classList?.add?.("is-dragging-workspace-tabs-sidebar");
+    }
+    event?.preventDefault?.();
+    const sidebar = lastShell?.querySelector?.(".workspace-tabs-sidebar");
+    const rows = [...(sidebar?.querySelectorAll?.(".workspace-tabs-sidebar-item") || [])];
+    clearItemDropMarks(sidebar);
+    itemDrag.target = null;
+    itemDrag.place = "before";
+    for (const row of rows) {
+      if (row === itemDrag.row) continue;
+      const rect = row.getBoundingClientRect?.();
+      if (!rect) continue;
+      const y = Number(event?.clientY);
+      if (y < rect.top || y > rect.bottom) continue;
+      const target = items.find((entry) => itemKey(entry) === row.dataset?.workspaceId
+        || workspaceIdValue(entry.workspaceId) === workspaceIdValue(row.dataset?.workspaceId));
+      if (!target) continue;
+      if (Boolean(target.live) !== Boolean(itemDrag.item.live)) continue;
+      if (Boolean(target.pinned) !== Boolean(itemDrag.item.pinned)) continue;
+      itemDrag.target = target;
+      itemDrag.place = y < rect.top + rect.height / 2 ? "before" : "after";
+      row.classList?.add?.(itemDrag.place === "before" ? "drop-before" : "drop-after");
+      break;
+    }
+  }
+
+  function onItemPointerUp() {
+    const drag = itemDrag;
+    endItemDrag();
+    if (!drag?.active || !drag.target) return;
+    suppressActivate = true;
+    moveTab(drag.item, drag.target, drag.place);
+  }
+
+  function bindItemDrag(row, item) {
+    if (!row?.addEventListener) return;
+    row.addEventListener("pointerdown", (event) => {
+      if (event?.button != null && event.button !== 0) return;
+      if (dragIgnored(event) || isEditingItem(item) || searchQuery.trim()) return;
+      itemDrag = {
+        item,
+        row,
+        startY: Number(event?.clientY) || 0,
+        active: false,
+        target: null,
+        place: "before"
+      };
+      ownerDocument?.addEventListener?.("pointermove", onItemPointerMove, true);
+      ownerDocument?.addEventListener?.("pointerup", onItemPointerUp, true);
+      ownerDocument?.addEventListener?.("pointercancel", onItemPointerUp, true);
+    });
+  }
+
   function renderSidebarHeader() {
     const closeOthers = iconButton(
       t("workspace.tabs.closeOthers"),
-      createIcon("broom"),
+      createIcon("copyMinus"),
       (event) => {
         event?.preventDefault?.();
         event?.stopPropagation?.();
@@ -390,8 +669,30 @@ export function createWorkspaceTabsSidebarController({
     );
   }
 
+  function itemSectionIndex(item = {}) {
+    const { live, closed } = partitionedItems();
+    const group = item.live ? live : closed;
+    return Math.max(0, group.findIndex((entry) => sameItem(entry, item)));
+  }
+
+  function togglePin(item = {}) {
+    const id = workspaceIdValue(item.workspaceId);
+    if (!id) return currentItems();
+    const ids = readIdList(localStorage, WORKSPACE_TABS_SIDEBAR_PINNED_KEY);
+    const index = ids.indexOf(id);
+    if (index >= 0) ids.splice(index, 1);
+    else ids.unshift(id);
+    persistIdList(WORKSPACE_TABS_SIDEBAR_PINNED_KEY, ids);
+    items = applyPinnedOrder(items, ids);
+    if (lastShell?.isConnected) syncSidebar(lastShell);
+    const moved = items.find((entry) => sameItem(entry, item));
+    if (moved?.live) syncLiveWindowOrder(moved).catch(() => {});
+    return currentItems();
+  }
+
   function dropForgottenItem(item = {}) {
     const tabId = positiveTabId(item.tabId);
+    dropPinnedId(item);
     setItems(items.filter((entry) => !sameItem(entry, item) && (tabId === null || entry.tabId !== tabId)));
   }
 
@@ -416,6 +717,11 @@ export function createWorkspaceTabsSidebarController({
       }
     }
     dropForgottenItem(item);
+    if (workspaceId) {
+      fullTextStore = { ...fullTextStore };
+      delete fullTextStore[workspaceId];
+      forgetWorkspaceTabFullText(workspaceId).catch(() => {});
+    }
     if (isCurrent) {
       const closed = await closeCurrentBrowserTab();
       if (closed?.closed || isPageClosingError(forgetError)) {
@@ -443,6 +749,13 @@ export function createWorkspaceTabsSidebarController({
     const field = root?.querySelector?.(".workspace-tabs-sidebar-item-editor");
     try { field?.focus?.(); } catch {}
     try { field?.select?.(); } catch {}
+  }
+
+  function focusSearchField(root) {
+    const field = root?.querySelector?.(".workspace-tabs-sidebar-search-input");
+    if (!field) return;
+    try { field.focus?.(); } catch {}
+    try { field.setSelectionRange?.(searchSelection.start, searchSelection.end); } catch {}
   }
 
   function renderTitleEditor(item = {}, index = 0) {
@@ -513,7 +826,7 @@ export function createWorkspaceTabsSidebarController({
   function startTitleEditor(item = {}, row = null) {
     const key = itemKey(item);
     if (!key) return null;
-    const index = Math.max(0, items.findIndex((entry) => sameItem(entry, item)));
+    const index = itemSectionIndex(item);
     editingKey = key;
     editingDraft = itemLabel(item, index);
     const editor = renderTitleEditor(item, index);
@@ -556,7 +869,7 @@ export function createWorkspaceTabsSidebarController({
     dialog = confirmationModal(
       t("workspace.tabs.deleteTitle"),
       el("div", { class: "workspace-tabs-delete-confirmation" },
-        el("p", {}, t("workspace.tabs.deleteConfirm", { title: itemLabel(item, items.findIndex((entry) => sameItem(entry, item))) })),
+        el("p", {}, t("workspace.tabs.deleteConfirm", { title: itemLabel(item, itemSectionIndex(item)) })),
         el("div", { class: "settings-dialog-actions" }, cancelButton, confirmButton)
       ),
       close,
@@ -568,21 +881,53 @@ export function createWorkspaceTabsSidebarController({
 
   function renderSidebarItem(item, index) {
     if (isEditingItem(item)) return renderTitleEditor(item, index);
+    const pinLabel = item.pinned ? t("workspace.tabs.unpin") : t("workspace.tabs.pin");
+    const pinButton = iconButton(
+      pinLabel,
+      createIcon("pin"),
+      (event) => {
+        event?.preventDefault?.();
+        event?.stopPropagation?.();
+        togglePin(item);
+      },
+      `workspace-tabs-sidebar-item-pin${item.pinned ? " is-pinned" : ""}`,
+      pinLabel,
+      "",
+      item.pinned ? "workspace.tabs.unpin" : "workspace.tabs.pin"
+    );
+    pinButton.setAttribute?.("aria-pressed", item.pinned ? "true" : "false");
     let row;
     row = el("div", {
-      class: `workspace-tabs-sidebar-item${item.current ? " is-current" : ""}${item.live ? "" : " is-closed"}`,
-      role: "listitem"
+      class: `workspace-tabs-sidebar-item${item.current ? " is-current" : ""}${item.live ? "" : " is-closed"}${item.pinned ? " is-pinned" : ""}`,
+      role: "listitem",
+      dataset: {
+        workspaceId: workspaceIdValue(item.workspaceId),
+        pinned: item.pinned ? "1" : ""
+      }
     },
       el("button", {
         class: "workspace-tabs-sidebar-item-focus",
         type: "button",
         "aria-current": item.current ? "page" : null,
-        onclick: () => { activateTab(item).catch(() => {}); }
+        onclick: () => {
+          if (suppressActivate) {
+            suppressActivate = false;
+            return;
+          }
+          activateTab(item).catch(() => {});
+        }
       },
         el("span", { class: "workspace-tabs-sidebar-item-index" }, String(index + 1)),
+        item.pinned
+          ? el("span", {
+            class: "workspace-tabs-sidebar-item-pin-mark",
+            "aria-hidden": "true"
+          }, createIcon("pin"))
+          : null,
         el("span", { class: "workspace-tabs-sidebar-item-label" }, itemLabel(item, index))
       ),
       el("div", { class: "workspace-tabs-sidebar-item-actions" },
+        pinButton,
         iconButton(
           t("workspace.tabs.edit"),
           createIcon("edit"),
@@ -611,27 +956,70 @@ export function createWorkspaceTabsSidebarController({
         )
       )
     );
+    bindItemDrag(row, item);
     return row;
   }
 
   function renderSidebarList() {
     const { live, closed } = partitionedItems();
     const nodes = [];
-    let index = 0;
-    for (const item of live) nodes.push(renderSidebarItem(item, index++));
+    live.forEach((item, index) => nodes.push(renderSidebarItem(item, index)));
     if (closed.length) {
       nodes.push(el("div", {
         class: "workspace-tabs-sidebar-divider",
         role: "separator",
         "aria-label": t("workspace.tabs.closed")
       }, el("span", { class: "workspace-tabs-sidebar-divider-label" }, t("workspace.tabs.closed"))));
-      for (const item of closed) nodes.push(renderSidebarItem(item, index++));
+      closed.forEach((item, index) => nodes.push(renderSidebarItem(item, index)));
+    }
+    if (!nodes.length) {
+      return el("div", { class: "workspace-tabs-sidebar-empty" },
+        searchQuery.trim() ? t("workspace.tabs.searchEmpty") : t("workspace.tabs.empty")
+      );
     }
     return el("div", { class: "workspace-tabs-sidebar-list", role: "list" }, nodes);
   }
 
+  function setSearchQuery(next) {
+    searchQuery = String(next || "");
+    if (lastShell?.isConnected) syncSidebar(lastShell);
+    if (searchQuery.trim()) refreshSearchContext().catch(() => {});
+  }
+
+  function renderSearchBar() {
+    return renderWorkspaceTabSearchField({
+      query: searchQuery,
+      fullTextEnabled: recordFullTextEnabled,
+      onInput: (value) => {
+        searchQuery = value;
+        const field = lastShell?.querySelector?.(".workspace-tabs-sidebar-search-input");
+        searchSelection = {
+          start: Number(field?.selectionStart) || value.length,
+          end: Number(field?.selectionEnd) || value.length
+        };
+        if (lastShell?.isConnected) syncSidebar(lastShell);
+        refreshSearchContext().catch(() => {});
+      },
+      onFocus: () => { searchFocused = true; },
+      onBlur: () => { searchFocused = false; }
+    });
+  }
+
   function renderSidebar() {
     if (!open) return null;
+    const query = searchQuery.trim();
+    const hits = query
+      ? renderWorkspaceTabSearchHits({
+        query,
+        store: fullTextStore,
+        items,
+        fullTextEnabled: recordFullTextEnabled,
+        onActivate: (hit) => {
+          const item = items.find((entry) => workspaceIdValue(entry.workspaceId) === workspaceIdValue(hit.workspaceId));
+          if (item) activateTab(item).catch(() => {});
+        }
+      })
+      : null;
     return el("aside", {
       id: WORKSPACE_TABS_SIDEBAR_ID,
       class: "workspace-tabs-sidebar",
@@ -639,9 +1027,11 @@ export function createWorkspaceTabsSidebarController({
       style: { width: `${sidebarWidth}px` }
     },
     renderSidebarHeader(),
-    items.length
+    renderSearchBar(),
+    items.length || query
       ? renderSidebarList()
       : el("div", { class: "workspace-tabs-sidebar-empty" }, t("workspace.tabs.empty")),
+    hits,
     el("div", {
       class: "workspace-tabs-sidebar-resize",
       role: "separator",
@@ -695,6 +1085,7 @@ export function createWorkspaceTabsSidebarController({
   }
 
   function refreshAndSync() {
+    if (itemDrag) return;
     if (refreshTimer) clearTimeout(refreshTimer);
     refreshTimer = setTimeout(() => {
       refreshTimer = 0;
@@ -707,6 +1098,9 @@ export function createWorkspaceTabsSidebarController({
   function onWorkspaceSessionChanged(changes, areaName) {
     if (areaName && areaName !== "local") return;
     const keys = changes && typeof changes === "object" ? Object.keys(changes) : [];
+    if (keys.includes("workspaceTabFullText") || keys.includes("options")) {
+      refreshSearchContext().catch(() => {});
+    }
     if (!keys.some((key) => workspaceSessionWorkspaceId(key))) return;
     refreshAndSync();
   }
@@ -730,6 +1124,9 @@ export function createWorkspaceTabsSidebarController({
     listenChrome(tabs?.onCreated);
     listenChrome(tabs?.onRemoved);
     listenChrome(tabs?.onUpdated);
+    listenChrome(tabs?.onMoved);
+    listenChrome(tabs?.onAttached);
+    listenChrome(tabs?.onDetached);
     listenChrome(tabs?.onActivated);
     listenChrome(extensionSurface("storage")?.onChanged, onWorkspaceSessionChanged);
     if (ownerDocument?.addEventListener) {
@@ -744,6 +1141,13 @@ export function createWorkspaceTabsSidebarController({
       event.preventDefault?.();
       event.stopPropagation?.();
       stopTitleEditor();
+      if (lastShell?.isConnected) syncSidebar(lastShell);
+      return;
+    }
+    if (searchQuery) {
+      event.preventDefault?.();
+      event.stopPropagation?.();
+      searchQuery = "";
       if (lastShell?.isConnected) syncSidebar(lastShell);
       return;
     }
@@ -791,6 +1195,7 @@ export function createWorkspaceTabsSidebarController({
     syncTabListeners(true);
     syncEscapeListener();
     if (editingKey) focusTitleEditor(next);
+    else if (searchFocused || searchQuery) focusSearchField(next);
     return next;
   }
 
@@ -809,9 +1214,21 @@ export function createWorkspaceTabsSidebarController({
     return setOpen(!open);
   }
 
+  function openSearch() {
+    searchFocused = true;
+    if (!open) return setOpen(true);
+    if (lastShell?.isConnected) {
+      focusSearchField(lastShell);
+      return open;
+    }
+    render();
+    return open;
+  }
+
   function close() {
     if (!open) return false;
     stopTitleEditor();
+    searchQuery = "";
     setOpen(false);
     return true;
   }
@@ -828,7 +1245,11 @@ export function createWorkspaceTabsSidebarController({
     forgetTab,
     openTitleEditor,
     openDeleteConfirmation,
+    moveTab,
+    togglePin,
+    setSearchQuery,
     toggle,
+    openSearch,
     close,
     setOpen,
     renderSidebar,

@@ -1,0 +1,177 @@
+import { normalizeWorkspaceSessionId } from "./workspace-session.js";
+
+const WORKSPACE_TAB_FULLTEXT_MAX_WORKSPACES = 80;
+const WORKSPACE_TAB_FULLTEXT_MAX_FRAMES = 12;
+const WORKSPACE_TAB_FULLTEXT_MAX_MESSAGES = 200;
+const WORKSPACE_TAB_FULLTEXT_MAX_MESSAGE_CHARS = 20000;
+
+function textValue(value) {
+  return String(value || "").trim();
+}
+
+function normalizeFullTextQuery(value) {
+  return textValue(value).toLowerCase();
+}
+
+export function matchesFullTextQuery(query, values = []) {
+  const needle = normalizeFullTextQuery(query);
+  if (!needle) return true;
+  return (Array.isArray(values) ? values : [values]).some((value) => (
+    textValue(value).toLowerCase().includes(needle)
+  ));
+}
+
+function normalizeFullTextMessage(message = {}) {
+  const role = message?.role === "assistant" ? "assistant" : message?.role === "user" ? "user" : "";
+  const text = clipText(message?.text || message?.content);
+  return role && text ? { role, text } : null;
+}
+
+export function pocketPairsFromMessages(messages = []) {
+  const entries = [];
+  let userMessage = "";
+  for (const raw of Array.isArray(messages) ? messages : []) {
+    const message = normalizeFullTextMessage(raw);
+    if (!message) continue;
+    if (message.role === "user") {
+      userMessage = message.text;
+      continue;
+    }
+    if (message.role === "assistant" && userMessage) {
+      entries.push({ userMessage, assistantMessage: message.text });
+      userMessage = "";
+    }
+  }
+  return entries;
+}
+
+export function framesFromSummaryPreviewItems(items = []) {
+  return (Array.isArray(items) ? items : []).flatMap((item, order) => {
+    if (item?.status && item.status !== "ok") return [];
+    const page = item?.page && typeof item.page === "object" ? item.page : item || {};
+    const messages = (Array.isArray(page.messages) ? page.messages : [])
+      .map((message) => normalizeFullTextMessage(message))
+      .filter(Boolean)
+      .slice(0, WORKSPACE_TAB_FULLTEXT_MAX_MESSAGES);
+    if (!messages.length) return [];
+    return [{
+      appId: textValue(item.siteId || item.appId || page.siteId),
+      instanceId: textValue(item.instanceId || page.instanceId),
+      href: textValue(page.href || item.href),
+      title: textValue(page.title || item.title || page.pageTitle),
+      appName: textValue(item.siteName || item.name || page.siteName || page.name),
+      messages,
+      order: Number.isInteger(item.order) ? item.order : order
+    }];
+  }).slice(0, WORKSPACE_TAB_FULLTEXT_MAX_FRAMES);
+}
+
+function clipText(value, max = WORKSPACE_TAB_FULLTEXT_MAX_MESSAGE_CHARS) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  return text.length > max ? text.slice(0, max) : text;
+}
+
+function normalizeFrame(frame = {}, order = 0) {
+  const messages = (Array.isArray(frame.messages) ? frame.messages : [])
+    .map((message) => normalizeFullTextMessage(message))
+    .filter(Boolean)
+    .slice(0, WORKSPACE_TAB_FULLTEXT_MAX_MESSAGES);
+  if (!messages.length) return null;
+  return {
+    appId: textValue(frame.appId),
+    instanceId: textValue(frame.instanceId),
+    href: textValue(frame.href),
+    title: textValue(frame.title),
+    appName: textValue(frame.appName),
+    messages,
+    order: Number.isInteger(frame.order) ? frame.order : order
+  };
+}
+
+function normalizeWorkspaceTabFullTextRecord(raw = {}) {
+  const workspaceId = normalizeWorkspaceSessionId(raw.workspaceId);
+  const frames = (Array.isArray(raw.frames) ? raw.frames : [])
+    .map((frame, order) => normalizeFrame(frame, order))
+    .filter(Boolean)
+    .slice(0, WORKSPACE_TAB_FULLTEXT_MAX_FRAMES);
+  if (!workspaceId || !frames.length) return null;
+  return {
+    workspaceId,
+    topicTitle: textValue(raw.topicTitle),
+    updatedAt: textValue(raw.updatedAt) || new Date().toISOString(),
+    frames
+  };
+}
+
+export function normalizeWorkspaceTabFullTextStore(raw) {
+  const source = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  const store = {};
+  for (const [key, value] of Object.entries(source)) {
+    const record = normalizeWorkspaceTabFullTextRecord({ ...value, workspaceId: value?.workspaceId || key });
+    if (record) store[record.workspaceId] = record;
+  }
+  return pruneWorkspaceTabFullTextStore(store);
+}
+
+export function pruneWorkspaceTabFullTextStore(store = {}) {
+  const records = Object.values(store && typeof store === "object" ? store : {})
+    .map((record) => normalizeWorkspaceTabFullTextRecord(record))
+    .filter(Boolean)
+    .sort((left, right) => String(right.updatedAt).localeCompare(String(left.updatedAt)));
+  return Object.fromEntries(
+    records.slice(0, WORKSPACE_TAB_FULLTEXT_MAX_WORKSPACES).map((record) => [record.workspaceId, record])
+  );
+}
+
+export function upsertWorkspaceTabFullText(store, record) {
+  const next = normalizeWorkspaceTabFullTextRecord(record);
+  if (!next) return normalizeWorkspaceTabFullTextStore(store);
+  return pruneWorkspaceTabFullTextStore({
+    ...normalizeWorkspaceTabFullTextStore(store),
+    [next.workspaceId]: next
+  });
+}
+
+export function removeWorkspaceTabFullText(store, workspaceId) {
+  const id = normalizeWorkspaceSessionId(workspaceId);
+  const current = normalizeWorkspaceTabFullTextStore(store);
+  if (!id || !Object.prototype.hasOwnProperty.call(current, id)) return current;
+  const next = { ...current };
+  delete next[id];
+  return next;
+}
+
+export function searchWorkspaceTabFullTextHits(store, query, items = []) {
+  const needle = normalizeFullTextQuery(query);
+  if (!needle) return [];
+  const labels = new Map(
+    (Array.isArray(items) ? items : []).map((item) => [normalizeWorkspaceSessionId(item.workspaceId), item])
+  );
+  const hits = [];
+  for (const record of Object.values(normalizeWorkspaceTabFullTextStore(store))) {
+    const item = labels.get(record.workspaceId);
+    for (const frame of record.frames) {
+      for (const pair of pocketPairsFromMessages(frame.messages)) {
+        if (!matchesFullTextQuery(needle, [pair.userMessage, pair.assistantMessage, frame.title, frame.appName])) {
+          continue;
+        }
+        hits.push({
+          workspaceId: record.workspaceId,
+          topicTitle: record.topicTitle,
+          live: item?.live === true,
+          title: item?.topicTitle || record.topicTitle || frame.title || frame.appName,
+          appName: frame.appName,
+          href: frame.href,
+          userMessage: pair.userMessage,
+          assistantMessage: pair.assistantMessage
+        });
+      }
+    }
+  }
+  return hits;
+}
+
+export function workspaceIdsMatchingFullText(store, query) {
+  return [...new Set(searchWorkspaceTabFullTextHits(store, query).map((hit) => hit.workspaceId))];
+}

@@ -64,7 +64,9 @@ class FakeNode {
     for (const listener of this.listeners.click || []) listener(payload);
   }
 
-  setPointerCapture() {}
+  getBoundingClientRect() {
+    return { top: 0, bottom: 36, left: 0, right: 240, height: 36, width: 240, x: 0, y: 0 };
+  }
 
   append(...children) {
     for (const child of children) {
@@ -142,19 +144,28 @@ globalThis.document = {
   assert.match(source, /confirmationModal/);
   assert.match(source, /forgetRememberedWorkspaceTab/);
   assert.match(source, /closeOtherLiveWorkspaceTabs/);
+  assert.match(source, /moveLiveWorkspaceTabs/);
   assert.match(source, /openWorkspaceTab/);
   assert.match(source, /is-closed/);
   assert.match(css, /\.workspace-tabs-sidebar\s*\{[^}]*position:\s*absolute/, "the sidebar must overlay the workspace instead of taking iframe space");
   assert.match(css, /\.workspace-tabs-sidebar\s*\{[^}]*top:\s*var\(--workspace-tabs-sidebar-top\)/, "the sidebar must start below the topbar instead of covering it");
   assert.match(css, /\.workspace-tabs-sidebar-header\s*\{[^}]*padding:\s*14px/, "the sidebar header must keep top whitespace");
   assert.match(css, /\.workspace-tabs-sidebar-count\s*\{[^}]*border-radius:\s*999px/, "the tab count must render as a pill");
+  assert.match(css, /\.workspace-tabs-sidebar-count\s*\{[^}]*background:\s*var\(--primary\)/, "the tab count must use a solid primary fill");
+  assert.match(css, /\.workspace-tabs-sidebar-count\s*\{[^}]*color:\s*var\(--bg\)/, "the tab count numeral must contrast against the primary fill");
   assert.match(css, /\.workspace-tabs-sidebar-cleanup/, "ChatClub Tabs must expose a close-others control");
+  assert.match(css, /\.workspace-tabs-sidebar-cleanup\s*\{[^}]*color:\s*var\(--text\)/, "the cleanup icon must use the primary text color");
   assert.match(css, /\.workspace-tabs-sidebar-item-index/, "each tab name must show a sequence number");
+  assert.match(css, /\.workspace-tabs-sidebar-item-pin/, "each tab row must expose a pin control");
+  assert.match(css, /\.workspace-tabs-sidebar-item-pin-mark/, "pinned tabs must keep a visible pin mark");
   assert.match(css, /\.workspace-tabs-sidebar-resize/, "the sidebar must be resizable by dragging");
   assert.match(css, /@media \(hover: hover\)/, "rename and delete controls must wait for hover");
   assert.match(css, /\.workspace-tabs-sidebar-item-actions\s*\{[^}]*position:\s*absolute/, "rename and delete must overlay the row instead of shrinking the title");
   assert.match(css, /\.workspace-tabs-sidebar-divider/, "closed tabs must be separated by a divider");
   assert.match(css, /\.workspace-tabs-sidebar-item\.is-editing/, "rename must edit the title on the row");
+  assert.match(css, /\.workspace-tabs-sidebar-item\.dragging/, "sidebar tabs must show a dragging state");
+  assert.match(css, /\.workspace-tabs-sidebar-item\.drop-before::before/, "sidebar tabs must show a drop-before line");
+  assert.match(css, /\.workspace-tabs-sidebar-item\.drop-after::after/, "sidebar tabs must show a drop-after line");
   assert.match(css, /\.workspace-tabs-sidebar-item\.is-closed/, "closed remembered tabs must have a distinct style");
   assert.match(css, /\.workspace-tabs-sidebar-item-delete:hover/, "the delete control must turn red on hover");
   assert.doesNotMatch(source, /editorModal/, "rename must not open a modal");
@@ -168,8 +179,27 @@ globalThis.document = {
   assert.doesNotMatch(css, /workspace-cleared-tabs-banner/, "the restore banner must not remain in the workspace chrome");
   assert.match(icons, /x: "3", y: "3", width: "18", height: "18", rx: "2"/);
   assert.match(icons, /d: "M9 3v18"/);
-  assert.match(icons, /d: "M12 2\.5v8\.5"/, "cleanup must use an upright broom handle");
+  assert.match(source, /createIcon\("copyMinus"\)/, "cleanup must use the stacked copy-minus glyph");
+  assert.doesNotMatch(source, /createIcon\("broom"\)/, "cleanup must not keep the broom icon");
+  assert.match(icons, /copyMinus:\s*\[/);
+  assert.match(icons, /x: "8", y: "8", width: "14", height: "14"/);
+  assert.match(icons, /d: "M12 15h6"/, "cleanup must use Lucide copy-minus (close extra copies)");
+  assert.match(icons, /d: "M4 16c-1\.1 0-2-\.9-2-2V4c0-1\.1\.9-2 2-2h10c1\.1 0 2 \.9 2 2"/);
   assert.doesNotMatch(icons, /m19\.4 2\.6-9\.2 9\.2/, "cleanup must not keep the share-like broom paths");
+  assert.doesNotMatch(icons, /d: "M12 2\.5v8\.5"/, "cleanup must not keep the broom handle");
+  assert.doesNotMatch(icons, /broom:/, "the unused broom glyph must be removed");
+  assert.match(icons, /pin:\s*\[/, "tabs must use the Lucide pin glyph");
+  assert.match(icons, /d: "M12 17v5"/, "the pin glyph must include the Lucide pin needle");
+  assert.match(source, /createIcon\("pin"\)/, "each tab row must expose a pin control");
+  assert.match(source, /WORKSPACE_TABS_SIDEBAR_PINNED_KEY/, "pinned tabs must persist independently of live order");
+  assert.match(source, /Boolean\(item\.pinned\) !== Boolean\(target\.pinned\)/, "pinned and unpinned tabs must not mix while dragging");
+  assert.match(source, /workspace-tabs-sidebar-search/, "ChatClub Tabs must expose a search field");
+  assert.match(source, /function openSearch\(/, "the topbar Search control must open and focus the sidebar search field");
+  assert.match(source, /setSearchQuery/, "title search must filter the sidebar list");
+  assert.match(source, /forgetWorkspaceTabFullText/, "deleting a tab must drop its recorded full text");
+  assert.match(css, /\.workspace-tabs-sidebar-search-input/, "the search field must be styled in the sidebar");
+  assert.match(css, /\.workspace-tabs-search-hit/, "full-text hits must reuse Pocket card chrome");
+  assert.match(icons, /search:\s*\[/, "the sidebar search field must use the Lucide search glyph");
   const { createWorkspaceTabsSidebarController } = await import("../app/workspace/tabs-sidebar-controller.js");
   const memory = new Map();
   const widthMemory = new Map();
@@ -228,6 +258,7 @@ globalThis.document = {
         if (action === "openWorkspaceTab") return { tabId: 99 };
         if (action === "forgetRememberedWorkspaceTab") return { forgotten: true, workspaceId: payload.workspaceId, closed: false };
         if (action === "closeOtherLiveWorkspaceTabs") return { closed: 2, tabIds: [12] };
+        if (action === "moveLiveWorkspaceTabs") return { moved: (payload.tabIds || []).length, tabIds: payload.tabIds || [], index: payload.index || 0 };
         if (action === "setWorkspaceTabTitle") {
           return { updated: true, workspaceId: payload.workspaceId, tabId: payload.tabId, title: payload.title, custom: payload.custom !== false };
         }
@@ -246,6 +277,7 @@ globalThis.document = {
       api,
       calls,
       toasts,
+      widthMemory,
       get renders() { return renders; },
       setDismissable(value) { dismissable = value; }
     };
@@ -330,7 +362,9 @@ globalThis.document = {
       "cleanup from the header must not delete Tabs memory"
     );
     const indexes = descendants(sidebar).filter((node) => node.classList.contains("workspace-tabs-sidebar-item-index"));
-    assert.deepEqual(indexes.map((node) => nodeText(node)), ["1", "2", "3"]);
+    assert.deepEqual(indexes.map((node) => nodeText(node)), ["1", "2", "1"], "live and closed tabs must number separately");
+    const pinButtons = descendants(sidebar).filter((node) => node.classList.contains("workspace-tabs-sidebar-item-pin"));
+    assert.equal(pinButtons.length, 3, "every ChatClub tab row must expose a pin control");
     const resize = descendants(sidebar).find((node) => node.classList.contains("workspace-tabs-sidebar-resize"));
     assert.ok(resize, "the sidebar must expose a drag handle");
     assert.equal(fixture.api.itemLabel({ layoutName: "", appIds: ["Claude"] }, 0), "Claude");
@@ -613,6 +647,110 @@ globalThis.document = {
     assert.equal(children[1]?.classList.contains("workspace-tabs-sidebar-divider"), true);
     assert.equal(children[2]?.classList.contains("is-closed"), true, "closed tabs must move below the divider even when remembered first");
     assert.match(nodeText(children[2]), /Archived notes/);
+    const indexes = descendants(sidebar).filter((node) => node.classList.contains("workspace-tabs-sidebar-item-index"));
+    assert.deepEqual(indexes.map((node) => nodeText(node)), ["1", "1"], "the closed section must restart at 1");
+  }
+
+  {
+    const fixture = controller();
+    await fixture.api.refresh();
+    const listed = fixture.api.currentItems();
+    const reordered = fixture.api.moveTab(listed[1], listed[0], "before");
+    assert.equal(reordered[0].workspaceId, "page-bbbbbbbbbbbb");
+    assert.equal(reordered[1].workspaceId, "page-aaaaaaaaaaaa");
+    assert.equal(reordered[2].workspaceId, "page-cccccccccccc", "closed tabs must stay below live tabs after a live reorder");
+    await Promise.resolve();
+    await Promise.resolve();
+    assert.ok(
+      fixture.calls.some((call) => call.action === "moveLiveWorkspaceTabs" && call.payload.tabIds[0] === 12),
+      "reordering live ChatClub tabs must move the matching browser tabs"
+    );
+  }
+
+  {
+    const fixture = controller({
+      requestBackground: async (action) => {
+        if (action === "listLiveWorkspaceTabs") {
+          return {
+            tabs: [
+              {
+                workspaceId: "page-closed-one",
+                current: false,
+                live: false,
+                topicTitle: "Old notes"
+              },
+              {
+                workspaceId: "page-closed-two",
+                current: false,
+                live: false,
+                topicTitle: "Older notes"
+              },
+              {
+                tabId: 11,
+                windowId: 1,
+                index: 0,
+                workspaceId: "page-live-one",
+                current: true,
+                live: true,
+                layoutName: "Pocket batch"
+              }
+            ]
+          };
+        }
+        if (action === "moveLiveWorkspaceTabs") {
+          throw new Error("closed tabs must not move browser tabs");
+        }
+        return {};
+      }
+    });
+    await fixture.api.refresh();
+    fixture.api.setOpen(true);
+    const listed = fixture.api.currentItems();
+    const closedA = listed.find((item) => item.workspaceId === "page-closed-one");
+    const closedB = listed.find((item) => item.workspaceId === "page-closed-two");
+    const after = fixture.api.moveTab(closedB, closedA, "before");
+    assert.deepEqual(after.filter((item) => !item.live).map((item) => item.workspaceId), [
+      "page-closed-two",
+      "page-closed-one"
+    ]);
+    assert.equal(after[0].live, true, "live tabs must stay above closed tabs");
+    assert.equal(fixture.widthMemory.get("chatclubWorkspaceTabsClosedOrderV1"), JSON.stringify([
+      "page-closed-two",
+      "page-closed-one"
+    ]));
+    const again = controller({
+      localStorage: {
+        getItem: (key) => fixture.widthMemory.get(key) || null,
+        setItem: (key, value) => { fixture.widthMemory.set(key, String(value)); },
+        removeItem: (key) => { fixture.widthMemory.delete(key); }
+      },
+      requestBackground: async (action) => {
+        if (action === "listLiveWorkspaceTabs") {
+          return {
+            tabs: [
+              {
+                workspaceId: "page-closed-one",
+                current: false,
+                live: false,
+                topicTitle: "Old notes"
+              },
+              {
+                workspaceId: "page-closed-two",
+                current: false,
+                live: false,
+                topicTitle: "Older notes"
+              }
+            ]
+          };
+        }
+        return {};
+      }
+    });
+    await again.api.refresh();
+    assert.deepEqual(again.api.currentItems().map((item) => item.workspaceId), [
+      "page-closed-two",
+      "page-closed-one"
+    ], "closed tab order must survive a later list refresh");
   }
 
   {
@@ -647,6 +785,202 @@ globalThis.document = {
       false,
       "Escape must leave the tab row"
     );
+  }
+
+  {
+    const fixture = controller();
+    fixture.widthMemory.delete("chatclubWorkspaceTabsPinnedV1");
+    await fixture.api.refresh();
+    fixture.api.setOpen(true);
+    const listed = fixture.api.currentItems();
+    const liveSecond = listed.find((item) => item.workspaceId === "page-bbbbbbbbbbbb");
+    const closed = listed.find((item) => item.workspaceId === "page-cccccccccccc");
+    const pinned = fixture.api.togglePin(liveSecond);
+    assert.equal(pinned[0].workspaceId, "page-bbbbbbbbbbbb", "pinning must move the tab to the top of its section");
+    assert.equal(pinned[0].pinned, true);
+    assert.equal(pinned[1].workspaceId, "page-aaaaaaaaaaaa");
+    assert.equal(pinned[1].pinned, false);
+    assert.equal(pinned[2].workspaceId, "page-cccccccccccc", "pinning a live tab must not jump the closed section");
+    assert.equal(fixture.widthMemory.get("chatclubWorkspaceTabsPinnedV1"), JSON.stringify(["page-bbbbbbbbbbbb"]));
+    const sidebar = fixture.api.renderSidebar();
+    const rows = (descendants(sidebar).find((node) => node.classList.contains("workspace-tabs-sidebar-list"))?.children || [])
+      .filter((node) => node.classList.contains("workspace-tabs-sidebar-item"));
+    assert.equal(rows[0].classList.contains("is-pinned"), true);
+    assert.equal(
+      descendants(rows[0]).some((node) => node.classList.contains("workspace-tabs-sidebar-item-pin-mark")),
+      true,
+      "pinned rows must keep a visible pin mark"
+    );
+    const indexes = descendants(sidebar).filter((node) => node.classList.contains("workspace-tabs-sidebar-item-index"));
+    assert.deepEqual(indexes.map((node) => nodeText(node)), ["1", "2", "1"]);
+    const pinnedClosed = fixture.api.togglePin(closed);
+    assert.equal(pinnedClosed[2].workspaceId, "page-cccccccccccc");
+    assert.equal(pinnedClosed[2].pinned, true);
+    assert.deepEqual(JSON.parse(fixture.widthMemory.get("chatclubWorkspaceTabsPinnedV1")), [
+      "page-cccccccccccc",
+      "page-bbbbbbbbbbbb"
+    ], "the newest pin must sit first in the pin list");
+    const unpinned = fixture.api.togglePin(liveSecond);
+    assert.equal(unpinned[0].workspaceId, "page-bbbbbbbbbbbb");
+    assert.equal(unpinned[0].pinned, false, "unpinning must keep the tab in its section without a pin");
+    assert.equal(unpinned.some((item) => item.workspaceId === "page-bbbbbbbbbbbb" && item.pinned), false);
+    assert.deepEqual(JSON.parse(fixture.widthMemory.get("chatclubWorkspaceTabsPinnedV1")), ["page-cccccccccccc"]);
+  }
+
+  {
+    const fixture = controller();
+    fixture.widthMemory.delete("chatclubWorkspaceTabsPinnedV1");
+    await fixture.api.refresh();
+    const listed = fixture.api.currentItems();
+    fixture.api.togglePin(listed[1]);
+    const after = fixture.api.currentItems();
+    const mixed = fixture.api.moveTab(after[1], after[0], "before");
+    assert.equal(mixed[0].workspaceId, "page-bbbbbbbbbbbb", "unpinned tabs must not drop onto pinned tabs");
+    assert.equal(mixed[0].pinned, true);
+    await fixture.api.forgetTab(mixed[0]);
+    assert.ok(
+      !fixture.widthMemory.get("chatclubWorkspaceTabsPinnedV1"),
+      "deleting a pinned tab must drop it from the pin list"
+    );
+  }
+
+  {
+    const fixture = controller({
+      requestBackground: async (action) => {
+        if (action === "listLiveWorkspaceTabs") {
+          return {
+            tabs: [
+              {
+                tabId: 31,
+                windowId: 1,
+                index: 0,
+                workspaceId: "page-live-one",
+                current: true,
+                live: true,
+                layoutName: "One"
+              },
+              {
+                tabId: 32,
+                windowId: 1,
+                index: 1,
+                workspaceId: "page-live-two",
+                current: false,
+                live: true,
+                layoutName: "Two"
+              },
+              {
+                workspaceId: "page-closed-one",
+                current: false,
+                live: false,
+                topicTitle: "Old notes"
+              },
+              {
+                workspaceId: "page-closed-two",
+                current: false,
+                live: false,
+                topicTitle: "Older notes"
+              }
+            ]
+          };
+        }
+        if (action === "moveLiveWorkspaceTabs") return { moved: 2, tabIds: [32, 31], index: 0 };
+        return {};
+      }
+    });
+    fixture.widthMemory.delete("chatclubWorkspaceTabsPinnedV1");
+    await fixture.api.refresh();
+    const listed = fixture.api.currentItems();
+    fixture.api.togglePin(listed.find((item) => item.workspaceId === "page-live-two"));
+    fixture.api.togglePin(listed.find((item) => item.workspaceId === "page-closed-two"));
+    const again = controller({
+      localStorage: {
+        getItem: (key) => fixture.widthMemory.get(key) || null,
+        setItem: (key, value) => { fixture.widthMemory.set(key, String(value)); },
+        removeItem: (key) => { fixture.widthMemory.delete(key); }
+      },
+      requestBackground: async (action) => {
+        if (action === "listLiveWorkspaceTabs") {
+          return {
+            tabs: [
+              {
+                tabId: 31,
+                windowId: 1,
+                index: 0,
+                workspaceId: "page-live-one",
+                current: true,
+                live: true,
+                layoutName: "One"
+              },
+              {
+                tabId: 32,
+                windowId: 1,
+                index: 1,
+                workspaceId: "page-live-two",
+                current: false,
+                live: true,
+                layoutName: "Two"
+              },
+              {
+                workspaceId: "page-closed-one",
+                current: false,
+                live: false,
+                topicTitle: "Old notes"
+              },
+              {
+                workspaceId: "page-closed-two",
+                current: false,
+                live: false,
+                topicTitle: "Older notes"
+              }
+            ]
+          };
+        }
+        return {};
+      }
+    });
+    await again.api.refresh();
+    again.api.setOpen(true);
+    const restored = again.api.currentItems();
+    assert.deepEqual(restored.map((item) => item.workspaceId), [
+      "page-live-two",
+      "page-live-one",
+      "page-closed-two",
+      "page-closed-one"
+    ], "pinned tabs must stay at the top of their own section after a later list refresh");
+    const sidebar = again.api.renderSidebar();
+    const indexes = descendants(sidebar).filter((node) => node.classList.contains("workspace-tabs-sidebar-item-index"));
+    assert.deepEqual(indexes.map((node) => nodeText(node)), ["1", "2", "1", "2"]);
+  }
+
+  {
+    const fixture = controller();
+    await fixture.api.refresh();
+    fixture.api.setOpen(true);
+    const sidebar = fixture.api.renderSidebar();
+    assert.ok(
+      descendants(sidebar).some((node) => node.classList.contains("workspace-tabs-sidebar-search-input")),
+      "the sidebar must keep a title search field"
+    );
+    fixture.api.setSearchQuery("Closed");
+    const filtered = fixture.api.renderSidebar();
+    const labels = descendants(filtered)
+      .filter((node) => node.classList.contains("workspace-tabs-sidebar-item-label"))
+      .map((node) => nodeText(node));
+    assert.deepEqual(labels, ["Closed research"]);
+    const indexes = descendants(filtered).filter((node) => node.classList.contains("workspace-tabs-sidebar-item-index"));
+    assert.deepEqual(indexes.map((node) => nodeText(node)), ["1"]);
+    fixture.api.setSearchQuery("no-such-tab");
+    const empty = fixture.api.renderSidebar();
+    assert.match(nodeText(empty), /No matching tabs|没有匹配的标签页/);
+  }
+
+  {
+    const fixture = controller();
+    await fixture.api.refresh();
+    fixture.api.setOpen(false);
+    assert.equal(fixture.api.isOpen(), false);
+    fixture.api.openSearch();
+    assert.equal(fixture.api.isOpen(), true, "Search must open the ChatClub Tabs sidebar");
   }
 
   console.log("workspace tabs sidebar: ok");

@@ -50,7 +50,8 @@ export function createTopbarView(dependencies = {}) {
     "openSettingsMenu",
     "openSummary",
     "toggleWorkspaceTabsSidebar",
-    "isWorkspaceTabsSidebarOpen"
+    "isWorkspaceTabsSidebarOpen",
+    "openWorkspaceTabsSearch"
   ]);
   requireMethods(editLifecycle, "edit lifecycle", [
     "exit",
@@ -126,6 +127,7 @@ export function createTopbarView(dependencies = {}) {
       pocket: "topbar.pocket",
       addGroup: "topbar.addGroup",
       layout: "topbar.layout",
+      search: "topbar.search",
       settingsJumpMenu: "topbar.settingsJumpMenu"
     })[id] || "";
   }
@@ -217,6 +219,17 @@ export function createTopbarView(dependencies = {}) {
     }
     if (item.id === "brand") return renderBrand();
     if (item.id === "settings") return renderSettingsButton();
+    if (item.id === "search") {
+      return createTopIconButton({
+        label: t("topbar.search"),
+        icon: createSvgIcon("search"),
+        onClick: () => actions.openWorkspaceTabsSearch(),
+        tooltipLabel: t("topbar.search"),
+        tooltipPlacement: "left",
+        tooltipId: "topbar.search",
+        className: topbarItemClass("search")
+      });
+    }
     if (item.id === "composer") return composerNode;
     if (item.id === "newChat") {
       return actionButton(t("topbar.newChat"), "edit", actions.newChat, "secondary", actions.formatShortcutTooltip(t("topbar.newChatAllTooltip"), "newChatAll"), "", "topbar.newChat");

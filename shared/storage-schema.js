@@ -477,6 +477,18 @@ function migrateDeleteThreadTopbarLayout(raw = {}) {
   ];
 }
 
+function migrateSearchTopbarLayout(raw = {}) {
+  const normalized = migrateDeleteThreadTopbarLayout(raw);
+  if (raw.topbarSearchMigrated === true || topbarLayoutHasItem(normalized, "search")) return normalized;
+  const composerIndex = normalized.findIndex((item) => item.type === "item" && item.id === "composer");
+  const insertIndex = composerIndex >= 0 ? composerIndex : normalized.length;
+  return [
+    ...normalized.slice(0, insertIndex),
+    { type: "item", id: "search" },
+    ...normalized.slice(insertIndex)
+  ];
+}
+
 function withoutPromotionApiProfiles(apiProfiles) {
   return apiProfiles.filter((profile) => !DEFAULT_PROMOTION_API_PROFILES.some((promoted) => profile.id === promoted.id));
 }
@@ -770,13 +782,17 @@ export function normalizeOptions(raw = {}) {
     tabContextMenuOrder: normalizeTabContextMenuOrder(raw.tabContextMenuOrder, raw.tabGroupButtonOrder),
     tabContextMenuHiddenIds: normalizeTabContextMenuHiddenIds(raw.tabContextMenuHiddenIds),
     tooltipDisabledIds: normalizeTooltipDisabledIds(raw.tooltipDisabledIds),
-    topbarLayout: migrateDeleteThreadTopbarLayout(raw),
+    topbarLayout: migrateSearchTopbarLayout(raw),
     topbarDeleteThreadMigrated: true,
+    topbarSearchMigrated: true,
     pocketCardSize: normalizePocketCardSize(raw.pocketCardSize),
     frameLoadingOverlayOpacity: boundedNumber(raw.frameLoadingOverlayOpacity, base.frameLoadingOverlayOpacity, 0, 100),
     modelPreferenceSelectionOverlayEnabled: typeof raw.modelPreferenceSelectionOverlayEnabled === "boolean"
       ? raw.modelPreferenceSelectionOverlayEnabled
       : base.modelPreferenceSelectionOverlayEnabled,
+    recordFullText: typeof raw.recordFullText === "boolean"
+      ? raw.recordFullText
+      : base.recordFullText,
     modelPreferenceSelectionOverlayOpacity: normalizeModelPreferenceSelectionOverlayOpacity(
       raw.modelPreferenceSelectionOverlayOpacity
     ),

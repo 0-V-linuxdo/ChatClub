@@ -7,6 +7,7 @@ import { el, iconButton, textarea } from "../../ui/dom.js";
 import { optionalControllerFunction, optionalControllerObject, requireControllerContext, requireControllerFunction, validateControllerContract } from "../controller-contract.js";
 import { createFrameRequest } from "../frame-request.js";
 import { renderMarkdown } from "./markdown.js";
+import { workspaceSessionIdFromUrl } from "../../shared/workspace-session.js";
 import {
   buildSummaryPreviewItem,
   normalizeSummaryPanelSize as normalizeSummaryPanelSizeModel,
@@ -57,7 +58,7 @@ export function createSummaryController(ctx) {
     findFrameForSummarySource: "function", highlightFrameForSummarySource: "function?", inferAppName: "function",
     effectiveFaviconUrl: "function", discoverDeclaredFaviconUrl: "function", rememberFaviconUrl: "function",
     browserFaviconUrl: "function", formatShortcut: "function?", pocketPort: "object?", framePort: "object",
-    recordFunctionalAnomaly: "function"
+    recordFunctionalAnomaly: "function", persistWorkspaceTabFullText: "function?"
   });
   const state = requireControllerContext(ctx, controllerName, "state");
   const svgIcon = requireControllerFunction(ctx, controllerName, "svgIcon");
@@ -80,6 +81,7 @@ export function createSummaryController(ctx) {
   const pocketPort = optionalControllerObject(ctx, "pocketPort");
   const saveSummaryPreviewToPocket = typeof pocketPort.save === "function" ? pocketPort.save : async () => {};
   const pocketEntriesFromSummaryPreview = typeof pocketPort.entries === "function" ? pocketPort.entries : () => [];
+  const persistWorkspaceTabFullText = optionalControllerFunction(ctx, "persistWorkspaceTabFullText", async () => ({ saved: false }));
   let summaryCollectionQueue = Promise.resolve();
 
   function recordSummaryFailure(operation, app = {}, meta = {}, error = null, message = "") {
@@ -885,10 +887,36 @@ export function createSummaryController(ctx) {
     }
   }
   
+  async function persistRecordedFullText(items = state.summaryPreviewItems) {
+    if (state.options?.recordFullText !== true) return { saved: false };
+    const workspaceId = workspaceSessionIdFromUrl(globalThis.location?.href || "");
+    if (!workspaceId) return { saved: false };
+    try {
+      return await persistWorkspaceTabFullText({
+        workspaceId,
+        topicTitle: String(state.options?.topicTitle || document.title || "").trim(),
+        items
+      });
+    } catch {
+      return { saved: false };
+    }
+  }
+
   async function withSummaryCollectionLock(task) {
     const run = summaryCollectionQueue.then(task, task);
     summaryCollectionQueue = run.catch(() => {});
     return run;
+  }
+
+  async function captureWorkspaceFullText() {
+    if (state.options?.recordFullText !== true) return { saved: false };
+    const frames = currentFrames();
+    if (!frames.length) return { saved: false };
+    const results = await Promise.all(frames.map((iframe, index) =>
+      withSummaryCollectionLock(() => collectFrameSummary(iframe, index))
+    ));
+    const items = results.map((result, index) => summaryPreviewItemFromResult(result, { index, order: index }));
+    return persistRecordedFullText(items);
   }
   
   async function collectSummary() {
@@ -916,6 +944,7 @@ export function createSummaryController(ctx) {
       state.summaryPreviewItems = results.map((result, index) => summaryPreviewItemFromResult(result, { index, order: index }));
       syncSummaryPreviewDerivedState();
       state.summaryStatus = state.summaryContexts.length ? t("summaryPanel.collectedConversations", { count: state.summaryContexts.length }) : t("summaryPanel.noStructuredContext");
+      persistRecordedFullText().catch(() => {});
     } catch (error) {
       state.summaryError = error.message || t("summaryPanel.previewFailed");
       state.summaryStatus = t("summaryPanel.previewFailed");
@@ -994,6 +1023,7 @@ export function createSummaryController(ctx) {
     sync: syncSummaryPanel,
     open: openSummaryPanel,
     toggleMaximized: toggleSummaryMaximized,
-    loadPanelSize: loadSummaryPanelSize
+    loadPanelSize: loadSummaryPanelSize,
+    captureWorkspaceFullText
   };
 }

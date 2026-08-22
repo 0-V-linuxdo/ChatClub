@@ -43,6 +43,7 @@ export const BACKGROUND_REQUEST_ACTIONS = Object.freeze({
   SET_WORKSPACE_TAB_TITLE: "setWorkspaceTabTitle",
   FORGET_REMEMBERED_WORKSPACE_TAB: "forgetRememberedWorkspaceTab",
   CLOSE_OTHER_LIVE_WORKSPACE_TABS: "closeOtherLiveWorkspaceTabs",
+  MOVE_LIVE_WORKSPACE_TABS: "moveLiveWorkspaceTabs",
   EXPORT_REMEMBERED_WORKSPACE_TABS: "exportRememberedWorkspaceTabs",
   IMPORT_REMEMBERED_WORKSPACE_TABS: "importRememberedWorkspaceTabs",
   RESTORE_CLEARED_WORKSPACE_TABS: "restoreClearedWorkspaceTabs",
@@ -169,6 +170,11 @@ export const BACKGROUND_REQUEST_SPECS = Object.freeze({
   [ACTION.CLOSE_OTHER_LIVE_WORKSPACE_TABS]: extensionPage({
     mutates: true,
     response: contract({ closed: "integer", tabIds: "array" })
+  }),
+  [ACTION.MOVE_LIVE_WORKSPACE_TABS]: extensionPage({
+    mutates: true,
+    payload: contract({ tabIds: "array", index: "integer" }, { windowId: "integer" }),
+    response: contract({ moved: "integer", tabIds: "array", index: "integer" })
   }),
   [ACTION.EXPORT_REMEMBERED_WORKSPACE_TABS]: extensionPage({
     response: contract({ tabs: "array" })

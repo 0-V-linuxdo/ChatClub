@@ -47,7 +47,8 @@ export function createTopbarController(dependencies = {}) {
     "openSettings",
     "openSummary",
     "toggleWorkspaceTabsSidebar",
-    "isWorkspaceTabsSidebarOpen"
+    "isWorkspaceTabsSidebarOpen",
+    "openWorkspaceTabsSearch"
   ]);
 
   let node = null;
@@ -118,6 +119,11 @@ export function createTopbarController(dependencies = {}) {
     if (item.id === "composer") {
       closeSettingsMenu();
       composer.focusInput();
+      return;
+    }
+    if (item.id === "search") {
+      closeSettingsMenu();
+      actions.openWorkspaceTabsSearch();
       return;
     }
     if (item.id === "newChat") {

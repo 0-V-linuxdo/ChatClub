@@ -22,7 +22,7 @@ import {
   workspaceSessionMirrorKey,
   workspaceSessionWorkspaceKey
 } from "../shared/workspace-session.js";
-import { clearedTabItem, closeOtherLiveWorkspaceTabsOperation, exportRememberedWorkspaceTabsOperation, focusWorkspaceTabOperation, forgetRememberedWorkspaceTabOperation, importRememberedWorkspaceTabsOperation, listClearedWorkspaceTabsOperation, listLiveWorkspaceTabsOperation, recoveryEventWasRequested, requestedRecoveryEvents, setWorkspaceTabTitleOperation, unclaimedBrowserCleared } from "./workspace-tab-directory.js";
+import { clearedTabItem, closeOtherLiveWorkspaceTabsOperation, exportRememberedWorkspaceTabsOperation, focusWorkspaceTabOperation, forgetRememberedWorkspaceTabOperation, importRememberedWorkspaceTabsOperation, listClearedWorkspaceTabsOperation, listLiveWorkspaceTabsOperation, moveLiveWorkspaceTabsOperation, recoveryEventWasRequested, requestedRecoveryEvents, setWorkspaceTabTitleOperation, unclaimedBrowserCleared } from "./workspace-tab-directory.js";
 import { restoreClearedWorkspaceTabsOperation } from "./workspace-tab-restoration.js";
 import {
   bindingForClaim,
@@ -1042,6 +1042,9 @@ export function focusWorkspaceTab(api, request = {}, sender = {}) {
 }
 export function closeOtherLiveWorkspaceTabs(api, _request = {}, sender = {}) {
   return queueWorkspaceSession(() => closeOtherLiveWorkspaceTabsOperation(api, sender));
+}
+export function moveLiveWorkspaceTabs(api, request = {}) {
+  return queueWorkspaceSession(() => moveLiveWorkspaceTabsOperation(api, request));
 }
 export function dismissClearedWorkspaceTabs(api, request = {}, options = {}) {
   return queueWorkspaceSession(async () => {

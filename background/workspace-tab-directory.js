@@ -33,6 +33,7 @@ import {
   stableWorkspaceRecord,
   workspaceIdForChatClubTab
 } from "./workspace-session-helpers.js";
+import { STORAGE_KEYS } from "../shared/constants.js";
 
 export function clearedTabItem(candidate) {
   return {
@@ -208,6 +209,32 @@ export async function closeOtherLiveWorkspaceTabsOperation(api, sender = {}) {
   return { closed, tabIds };
 }
 
+export async function moveLiveWorkspaceTabsOperation(api, request = {}) {
+  const tabIds = (Array.isArray(request.tabIds) ? request.tabIds : [])
+    .map((value) => positiveTabId(value))
+    .filter((tabId) => tabId !== null);
+  const index = Number(request.index);
+  if (!tabIds.length) return { moved: 0, tabIds: [], index: 0 };
+  if (!Number.isInteger(index) || index < 0) throw new Error("Workspace tab move index is invalid");
+  if (typeof api?.tabs?.query !== "function") throw new Error("Workspace session tab query is unavailable");
+  if (typeof api?.tabs?.move !== "function") throw new Error("Workspace session tab move is unavailable");
+  const tabs = await api.tabs.query({});
+  if (!Array.isArray(tabs)) throw new TypeError("Browser tabs query returned an invalid result");
+  const byId = new Map();
+  for (const tab of tabs) {
+    const tabId = positiveTabId(tab?.id);
+    if (tabId !== null) byId.set(tabId, tab);
+  }
+  for (const tabId of tabIds) {
+    const tab = byId.get(tabId);
+    if (!tab || !isChatClubWorkspaceTab(api, tab)) throw new Error("Workspace tab is not a live ChatClub page");
+  }
+  const options = { index };
+  if (Number.isInteger(request.windowId)) options.windowId = request.windowId;
+  await api.tabs.move(tabIds.length === 1 ? tabIds[0] : tabIds, options);
+  return { moved: tabIds.length, tabIds, index };
+}
+
 export async function forgetRememberedWorkspaceTabOperation(api, request = {}, options = {}, ensureGeneration) {
   const workspaceId = normalizeWorkspaceSessionId(request.workspaceId);
   const requestedTabId = positiveTabId(request.tabId);
@@ -268,6 +295,18 @@ export async function forgetRememberedWorkspaceTabOperation(api, request = {}, o
     if (marker && typeof session?.set === "function") {
       await session.set({ [WORKSPACE_SESSION_RUNTIME_MARKER_KEY]: marker });
     }
+  }
+  const fullTextStore = stored?.[STORAGE_KEYS.workspaceTabFullText];
+  if (
+    resolvedWorkspaceId
+    && fullTextStore
+    && typeof fullTextStore === "object"
+    && !Array.isArray(fullTextStore)
+    && Object.prototype.hasOwnProperty.call(fullTextStore, resolvedWorkspaceId)
+  ) {
+    const nextFullText = { ...fullTextStore };
+    delete nextFullText[resolvedWorkspaceId];
+    await storage.set({ [STORAGE_KEYS.workspaceTabFullText]: nextFullText });
   }
   const senderTabId = positiveTabId(options.sender?.tab?.id);
   let closed = false;

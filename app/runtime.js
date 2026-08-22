@@ -43,6 +43,7 @@ import { createTopbarController } from "./topbar/controller.js";
 import { createWorkspaceController } from "./workspace/controller.js";
 import { PROMPT_HANDOFF_LAUNCH_REASON, createWorkspacePromptHandoffController } from "./workspace/prompt-handoff-controller.js";
 import { attachWorkspaceTabsSidebarController } from "./workspace/tabs-sidebar-controller.js";
+import { persistWorkspaceTabFullTextFromPreview } from "./workspace/tab-search.js";
 import { createWorkspaceTopicTitleController } from "./workspace/topic-title-controller.js";
 import { createWorkspaceSessionStore } from "./workspace/session-store.js";
 import {
@@ -161,7 +162,12 @@ const composerController = createComposerController({
   openPromptLibrary: openPromptLibraryDialog,
   optimizePrompt: optimizeCurrentPrompt,
   recordFunctionalAnomaly,
-  onPromptAdmitted: (text) => workspaceTopicTitleController?.maybeGenerateFromPrompt(text)
+  onPromptAdmitted: (text) => {
+    workspaceTopicTitleController?.maybeGenerateFromPrompt(text);
+    if (state.options?.recordFullText === true) {
+      ensureSummaryController().then((summary) => summary?.captureWorkspaceFullText?.()).catch(() => {});
+    }
+  }
 });
 const preferredModelController = createPreferredModelController({
   state: preferredModelState,
@@ -191,7 +197,8 @@ const topbarController = createTopbarController({
     openSettings,
     openSummary: openSummaryPanel,
     toggleWorkspaceTabsSidebar,
-    isWorkspaceTabsSidebarOpen
+    isWorkspaceTabsSidebarOpen,
+    openWorkspaceTabsSearch
   }
 });
 topbarBinding.bind(topbarController);
@@ -356,6 +363,7 @@ const {
 });
 function toggleWorkspaceTabsSidebar() { workspaceTabsSidebarController.toggle(); }
 function isWorkspaceTabsSidebarOpen() { return workspaceTabsSidebarController.isOpen(); }
+function openWorkspaceTabsSearch() { workspaceTabsSidebarController.openSearch(); }
 const workspacePromptHandoffController = createWorkspacePromptHandoffController({
   api: extensionApi(), requestBackground, composer: composerController, workspace: workspaceController,
   appCatalog: allApps, workspaceGeneration: workspaceSessionStore.generation,
@@ -465,6 +473,7 @@ function ensureSummaryController() {
         framePort: frameRuntimePort,
         formatShortcut: formatActiveShortcut,
         recordFunctionalAnomaly,
+        persistWorkspaceTabFullText: persistWorkspaceTabFullTextFromPreview,
         pocketPort: {
           save: (...args) => ensurePocketController().then((pocket) => pocket.saveSummaryPreviewToPocket(...args)),
           entries: (...args) => pocketController?.pocketEntriesFromSummaryPreview(...args) || []

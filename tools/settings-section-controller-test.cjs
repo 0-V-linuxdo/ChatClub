@@ -408,6 +408,39 @@ globalThis.document = { addEventListener() {} };
     normalizedShuffledLayout,
     "The shuffled and appended Settings-menu order must survive schema dehydration and rehydration"
   );
+  const defaultItemIds = topbarModule.DEFAULT_TOPBAR_LAYOUT
+    .filter((entry) => entry.type === "item")
+    .map((entry) => entry.id);
+  assert.equal(
+    defaultItemIds[defaultItemIds.indexOf("composer") - 1],
+    "search",
+    "Search must sit immediately left of the prompt input in a new topbar"
+  );
+  assert.equal(topbarModule.TOPBAR_BUILTIN_ITEMS.includes("search"), true, "Search must be a recognized built-in item");
+  assert.equal(topbarModule.topbarItemIcon({ type: "item", id: "search" }), "search");
+  const historicalWithoutSearch = topbarModule.DEFAULT_TOPBAR_LAYOUT.filter((entry) => entry.id !== "search");
+  const migratedSearchLayout = storageSchemaModule.normalizeOptions({
+    topbarLayout: historicalWithoutSearch,
+    topbarDeleteThreadMigrated: true
+  }).topbarLayout;
+  const migratedSearchIds = migratedSearchLayout
+    .filter((entry) => entry.type === "item")
+    .map((entry) => entry.id);
+  assert.equal(
+    migratedSearchIds[migratedSearchIds.indexOf("composer") - 1],
+    "search",
+    "existing topbars missing Search must receive it immediately left of the prompt input"
+  );
+  const hiddenSearchLayout = storageSchemaModule.normalizeOptions({
+    topbarLayout: historicalWithoutSearch,
+    topbarDeleteThreadMigrated: true,
+    topbarSearchMigrated: true
+  }).topbarLayout;
+  assert.equal(
+    hiddenSearchLayout.some((entry) => entry.id === "search"),
+    false,
+    "a user who hid Search must not get it reinserted"
+  );
   assert.deepEqual(
     settingsStateModule.SETTINGS_OPTION_CAPABILITIES.apps.write,
     ["builtinChatAppOrder", "builtinChatAppIframeConfigs", "iframePermissionsSource"],

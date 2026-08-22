@@ -209,35 +209,126 @@ button { cursor: pointer; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 1.75em;
-  height: 20px;
-  padding: 0 7px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 8px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--primary) 16%, var(--panel));
-  color: var(--primary);
-  font-size: 11px;
-  font-weight: 700;
+  background: var(--primary);
+  color: var(--bg);
+  font-size: 12px;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
   line-height: 1;
+  letter-spacing: 0.01em;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 16%, transparent);
 }
 
 .workspace-tabs-sidebar-cleanup {
   flex: 0 0 auto;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
   margin-left: auto;
-  color: var(--muted);
+  color: var(--text);
+  background: var(--panel-2);
+  border-color: var(--line-strong);
+  border-radius: 9px;
+}
+
+.workspace-tabs-sidebar-cleanup .svg-icon {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.15;
 }
 
 .workspace-tabs-sidebar-cleanup:hover:not(:disabled),
 .workspace-tabs-sidebar-cleanup:focus-visible:not(:disabled) {
-  color: var(--primary);
-  background: color-mix(in srgb, var(--primary) 12%, var(--panel));
-  border-color: color-mix(in srgb, var(--primary) 40%, var(--line));
+  color: var(--bg);
+  background: var(--primary);
+  border-color: var(--primary);
 }
 
 .workspace-tabs-sidebar-cleanup:disabled {
-  opacity: .4;
+  color: var(--muted);
+  opacity: .42;
+}
+
+.workspace-tabs-sidebar-search {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 10px 10px;
+}
+
+.workspace-tabs-sidebar-search .svg-icon {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  color: var(--text);
+}
+
+.workspace-tabs-sidebar-search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.workspace-tabs-sidebar-search-input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.workspace-tabs-search-hint,
+.workspace-tabs-search-hits {
+  flex: 0 1 auto;
+  min-height: 0;
+  padding: 0 8px 12px;
+}
+
+.workspace-tabs-search-hint {
+  margin: 0 8px 12px;
+  padding: 10px 12px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.workspace-tabs-search-hit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  max-height: 42vh;
+  overflow: auto;
+  padding-top: 8px;
+}
+
+.workspace-tabs-search-hit {
+  height: auto;
+  max-height: none;
+  cursor: pointer;
+}
+
+.workspace-tabs-search-hit .pocket-message {
+  max-height: 140px;
+  overflow: auto;
+}
+
+.workspace-tabs-search-mark {
+  background: color-mix(in srgb, var(--primary) 32%, transparent);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 1px;
 }
 
 .workspace-tabs-sidebar-list {
@@ -263,6 +354,8 @@ button { cursor: pointer; }
   border-radius: 8px;
   background: transparent;
   color: var(--text);
+  cursor: grab;
+  touch-action: none;
 }
 
 .workspace-tabs-sidebar-item:hover,
@@ -286,6 +379,44 @@ button { cursor: pointer; }
   border-radius: 999px;
   border-color: color-mix(in srgb, var(--primary) 28%, var(--line));
   background: color-mix(in srgb, var(--panel-2) 88%, var(--bg));
+  cursor: text;
+  touch-action: auto;
+}
+
+.workspace-tabs-sidebar-item.dragging {
+  opacity: 0.45;
+  cursor: grabbing;
+}
+
+.workspace-tabs-sidebar-item.drop-before::before,
+.workspace-tabs-sidebar-item.drop-after::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 24%, transparent);
+  pointer-events: none;
+}
+
+.workspace-tabs-sidebar-item.drop-before::before {
+  top: -2px;
+}
+
+.workspace-tabs-sidebar-item.drop-after::after {
+  bottom: -2px;
+}
+
+.app-shell.is-dragging-workspace-tabs-sidebar iframe {
+  pointer-events: none;
+}
+
+.app-shell.is-dragging-workspace-tabs-sidebar,
+.app-shell.is-dragging-workspace-tabs-sidebar * {
+  cursor: grabbing;
+  user-select: none;
 }
 
 .workspace-tabs-sidebar-item-focus {
@@ -299,7 +430,7 @@ button { cursor: pointer; }
   background: transparent;
   color: inherit;
   text-align: left;
-  cursor: pointer;
+  cursor: grab;
 }
 
 .workspace-tabs-sidebar-item-index {
@@ -309,6 +440,28 @@ button { cursor: pointer; }
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   color: var(--muted);
+}
+
+.workspace-tabs-sidebar-item.is-pinned .workspace-tabs-sidebar-item-index {
+  color: var(--primary);
+  font-weight: 750;
+}
+
+.workspace-tabs-sidebar-item-pin-mark {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  margin-right: 6px;
+  color: var(--primary);
+}
+
+.workspace-tabs-sidebar-item-pin-mark .svg-icon {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2.2;
 }
 
 .workspace-tabs-sidebar-item-label {
@@ -321,8 +474,8 @@ button { cursor: pointer; }
 
 .workspace-tabs-sidebar-item:hover .workspace-tabs-sidebar-item-label,
 .workspace-tabs-sidebar-item:focus-within .workspace-tabs-sidebar-item-label {
-  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 64px), transparent);
-  mask-image: linear-gradient(to right, #000 calc(100% - 64px), transparent);
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 104px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 104px), transparent);
 }
 
 .workspace-tabs-sidebar-item-actions {
@@ -364,6 +517,7 @@ button { cursor: pointer; }
 
 .workspace-tabs-sidebar-item-edit,
 .workspace-tabs-sidebar-item-delete,
+.workspace-tabs-sidebar-item-pin,
 .workspace-tabs-sidebar-item-edit-cancel,
 .workspace-tabs-sidebar-item-edit-save {
   width: 28px;
@@ -387,6 +541,12 @@ button { cursor: pointer; }
 .workspace-tabs-sidebar-item-delete:hover,
 .workspace-tabs-sidebar-item-delete:focus-visible {
   color: var(--danger);
+}
+
+.workspace-tabs-sidebar-item-pin:hover,
+.workspace-tabs-sidebar-item-pin:focus-visible,
+.workspace-tabs-sidebar-item-pin.is-pinned {
+  color: var(--primary);
 }
 
 .workspace-tabs-sidebar-item-edit-cancel:hover,
@@ -2026,6 +2186,16 @@ button { cursor: pointer; }
 .topbar .top-icon-action:hover {
   border-color: var(--line);
   background: var(--panel-2);
+}
+
+.topbar .top-icon-action.topbar-item-search {
+  color: var(--text);
+}
+
+.topbar .top-icon-action.topbar-item-search .svg-icon {
+  width: 19px;
+  height: 19px;
+  stroke-width: 2.15;
 }
 
 .topbar .top-icon-action.tab-new-group-drop-target {

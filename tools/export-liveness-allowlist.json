@@ -3,6 +3,10 @@
     "kind": "test-only",
     "reason": "Remembered ChatClub-tab sidebar regressions inject storage, catalog, overlay-dismissal, and delete-confirmation seams without going through the runtime attach helper."
   },
+  "shared/workspace-tab-fulltext.js#pocketPairsFromMessages": {
+    "kind": "test-only",
+    "reason": "Full-text search regressions pair user/assistant turns without exposing the helper as a runtime API."
+  },
   "app/settings/history.js#groupPromptHistory": {
     "kind": "test-only",
     "reason": "Prompt-history grouping regressions exercise deterministic calendar buckets and preserve order without exposing a runtime API."

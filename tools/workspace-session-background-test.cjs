@@ -44,6 +44,7 @@ function fixture({ local = {}, session = {}, tabs = [] } = {}) {
   const liveTabs = tabs.map((tab) => ({ ...tab }));
   const alarms = [];
   const tabUpdates = [];
+  const tabMoves = [];
   const windowUpdates = [];
   const api = {
     runtime: { getURL: (file) => `chrome-extension://chatclub/${file}` },
@@ -57,6 +58,11 @@ function fixture({ local = {}, session = {}, tabs = [] } = {}) {
       update: async (tabId, options) => {
         tabUpdates.push({ tabId, options });
         return { id: tabId, ...options };
+      },
+      move: async (tabIdOrIds, options) => {
+        const tabIds = Array.isArray(tabIdOrIds) ? tabIdOrIds : [tabIdOrIds];
+        tabMoves.push({ tabIds, options: { ...options } });
+        return tabIds.map((tabId) => liveTabs.find((tab) => tab.id === tabId)).filter(Boolean);
       },
       remove: async (tabId) => {
         const index = liveTabs.findIndex((tab) => tab.id === tabId);
@@ -77,6 +83,7 @@ function fixture({ local = {}, session = {}, tabs = [] } = {}) {
     local: localArea,
     session: sessionArea,
     tabUpdates,
+    tabMoves,
     windowUpdates
   };
 }
@@ -121,6 +128,7 @@ function deferredPromise() {
     listLiveWorkspaceTabs,
     focusWorkspaceTab,
     closeOtherLiveWorkspaceTabs,
+    moveLiveWorkspaceTabs,
     persistWorkspaceSessionSnapshot,
     registerWorkspaceSessionTab,
     setWorkspaceTabTitle,
@@ -3035,7 +3043,31 @@ function deferredPromise() {
               groups: [{ tabs: [{ appId: "ChatGPT", currentHref: "https://chatgpt.com/" }], activeIndex: 0 }]
             }
           }
-        )
+        ),
+        workspaceTabFullText: {
+          [workspaceB]: {
+            workspaceId: workspaceB,
+            topicTitle: "closed-b",
+            frames: [{
+              appName: "Grok",
+              messages: [
+                { role: "user", text: "What is RAG?" },
+                { role: "assistant", text: "Retrieval-augmented generation." }
+              ]
+            }]
+          },
+          [workspaceA]: {
+            workspaceId: workspaceA,
+            topicTitle: "live-a",
+            frames: [{
+              appName: "ChatGPT",
+              messages: [
+                { role: "user", text: "Keep this" },
+                { role: "assistant", text: "Still here." }
+              ]
+            }]
+          }
+        }
       },
       tabs: [
         { id: 21, windowId: 3, index: 1, title: "ChatClub", url: "chrome-extension://chatclub/options.html" },
@@ -3099,6 +3131,12 @@ function deferredPromise() {
     assert.equal(listedAgain.tabs[0].topicTitleCustom, true);
     const forgottenClosed = await forgetRememberedWorkspaceTab(store.api, { workspaceId: workspaceB }, { now: now + 1 });
     assert.deepEqual(forgottenClosed, { forgotten: true, workspaceId: workspaceB, closed: false });
+    assert.equal(
+      store.local.values.workspaceTabFullText[workspaceB],
+      undefined,
+      "deleting a remembered tab must drop its recorded full text"
+    );
+    assert.equal(store.local.values.workspaceTabFullText[workspaceA].topicTitle, "live-a");
     const afterForget = await listLiveWorkspaceTabs(store.api, {}, {
       tab: { id: 11, url: `chrome-extension://chatclub/chatClub.html#workspace=${workspaceA}` }
     });
@@ -3178,6 +3216,27 @@ function deferredPromise() {
     await assert.rejects(
       () => closeOtherLiveWorkspaceTabs(store.api, {}, {}),
       /Workspace tab id is invalid/
+    );
+  }
+
+  {
+    const store = fixture({
+      tabs: [
+        { id: 11, windowId: 2, index: 0, title: "ChatClub", url: `chrome-extension://chatclub/chatClub.html#workspace=${workspaceA}` },
+        { id: 12, windowId: 2, index: 2, title: "ChatClub", url: `chrome-extension://chatclub/chatClub.html#workspace=${workspaceB}` },
+        { id: 31, windowId: 2, index: 1, title: "Example", url: "https://example.com/" }
+      ]
+    });
+    const moved = await moveLiveWorkspaceTabs(store.api, { tabIds: [12, 11], index: 0, windowId: 2 });
+    assert.deepEqual(moved, { moved: 2, tabIds: [12, 11], index: 0 });
+    assert.deepEqual(store.tabMoves, [{ tabIds: [12, 11], options: { index: 0, windowId: 2 } }]);
+    await assert.rejects(
+      () => moveLiveWorkspaceTabs(store.api, { tabIds: [31], index: 0 }),
+      /not a live ChatClub page/
+    );
+    await assert.rejects(
+      () => moveLiveWorkspaceTabs(store.api, { tabIds: [12], index: -1 }),
+      /Workspace tab move index is invalid/
     );
   }
 
@@ -3305,6 +3364,7 @@ function deferredPromise() {
     assert.match(runtime, /REQUEST\.FORGET_REMEMBERED_WORKSPACE_TAB/);
     assert.match(runtime, /REQUEST\.FOCUS_WORKSPACE_TAB/);
     assert.match(runtime, /REQUEST\.CLOSE_OTHER_LIVE_WORKSPACE_TABS/);
+    assert.match(runtime, /REQUEST\.MOVE_LIVE_WORKSPACE_TABS/);
     assert.match(runtime, /REQUEST\.SET_WORKSPACE_TAB_TITLE/);
     assert.match(runtime, /REQUEST\.RESTORE_CLEARED_WORKSPACE_TABS/);
     assert.match(runtime, /REQUEST\.DISMISS_CLEARED_WORKSPACE_TABS/);

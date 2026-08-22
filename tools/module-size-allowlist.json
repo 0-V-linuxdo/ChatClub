@@ -49,18 +49,25 @@
     "reason": "The official-rules runtime is the single background configuration writer and keeps revision-CAS patch/import/reset handling, v3-to-v4 migration, immutable snapshot composition, signed component activation, rollback pins, alias authorization, reset cleanup journaling and startup recovery behind one serialized coordinator so atomic commit, compensation and destructive-operation fail-closed state cannot diverge across modules."
   },
   "app/runtime.js": {
-    "maxLines": 1206,
+    "maxLines": 1215,
     "target": 1200,
-    "maxBytes": 51930,
+    "maxBytes": 52377,
     "targetBytes": 50000,
-    "reason": "The application assembly root now also wires topic-title generation after the first composer send, the page-local ChatClub-tab sidebar toggle including its Ctrl/Cmd+B shortcut, remembered-tab refresh after hydration, Settings-owned Tabs export/import callbacks, and an inert workspace-session port for Settings beside the existing Composer, Topbar, workspace-session, and overlay-aware Escape dismissal composition."
+    "reason": "The application assembly root now also wires topic-title generation after the first composer send, the page-local ChatClub-tab sidebar toggle including its Ctrl/Cmd+B shortcut, remembered-tab refresh after hydration, Settings-owned Tabs export/import callbacks, full-text tab capture after send, the topbar Search action that opens ChatClub Tabs, and an inert workspace-session port for Settings beside the existing Composer, Topbar, workspace-session, and overlay-aware Escape dismissal composition."
+  },
+  "app/workspace/tabs-sidebar-controller.js": {
+    "maxLines": 1261,
+    "target": 1200,
+    "maxBytes": 42767,
+    "targetBytes": 40000,
+    "reason": "The remembered ChatClub-tab sidebar owns live/closed partitioning, drag reorder, pin order, overlay rename/delete, close-others cleanup, and the Search field that the topbar Search control focuses."
   },
   "shared/i18n.js": {
-    "maxLines": 2367,
+    "maxLines": 2391,
     "target": 1500,
-    "maxBytes": 139242,
+    "maxBytes": 140806,
     "targetBytes": 82000,
-    "reason": "Bilingual translation catalog data is kept co-located for key parity; the signed official-rules update-management and component-status views, consent, check, apply-all, compatibility, rollback, per-component source, confirmation and accessibility copy join the committed-reset cleanup warning, queued-send, preferred-model auto-selection overlay settings plus structured model, thinking, All Sources and Effort attempt labels, Workspace appearance subtabs, nested Tab Group right-click menu settings, prompt-handoff, platform-management labels, iframe tab context-menu labels, prompt-history date-group labels, remembered ChatClub-tab sidebar labels including tab count, close-others cleanup and resize copy, Tabs export/import copy, topic-title edit copy, and the ChatClub Tabs sidebar shortcut under exact line and byte ratchets."
+    "reason": "Bilingual translation catalog data is kept co-located for key parity; the signed official-rules update-management and component-status views, consent, check, apply-all, compatibility, rollback, per-component source, confirmation and accessibility copy join the committed-reset cleanup warning, queued-send, preferred-model auto-selection overlay settings plus structured model, thinking, All Sources and Effort attempt labels, Workspace appearance subtabs, nested Tab Group right-click menu settings, prompt-handoff, platform-management labels, iframe tab context-menu labels, prompt-history date-group labels, remembered ChatClub-tab sidebar labels including tab count, close-others cleanup, pin/unpin and resize copy, Tabs export/import copy, topic-title edit copy, and the ChatClub Tabs sidebar shortcut under exact line and byte ratchets."
   },
   "tools/browser-smoke.mjs": {
     "maxLines": 1440,

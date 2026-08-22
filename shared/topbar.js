@@ -1,6 +1,7 @@
 export const TOPBAR_BUILTIN_ITEMS = [
   "brand",
   "settings",
+  "search",
   "composer",
   "newChat",
   "deleteThread",
@@ -68,6 +69,7 @@ export const TOPBAR_SHORTCUT_ACTIONS = Object.freeze({
 export const DEFAULT_TOPBAR_LAYOUT = [
   { type: "item", id: "brand" },
   { type: "item", id: "settings" },
+  { type: "item", id: "search" },
   { type: "item", id: "composer" },
   { type: "item", id: "newChat" },
   { type: "item", id: "deleteThread" },
@@ -97,6 +99,7 @@ export const DEFAULT_TOPBAR_LAYOUT = [
 const TOPBAR_ITEM_META = {
   brand: { labelKey: "common.openInNewTab", icon: "plus" },
   settings: { labelKey: "topbar.settings", icon: "settings" },
+  search: { labelKey: "topbar.search", icon: "search" },
   composer: { labelKey: "topbar.item.composer", icon: "edit" },
   newChat: { labelKey: "topbar.newChat", icon: "edit" },
   deleteThread: { labelKey: "topbar.deleteThread", icon: "trash" },

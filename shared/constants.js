@@ -6,7 +6,7 @@ import {
 } from "./notion-efforts.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-08-23｜06:08:15」";
+export const APP_VERSION = "「2026-08-23｜07:50:33」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -18,7 +18,8 @@ export const STORAGE_KEYS = {
   pocketHistory: "pocketHistory",
   shortcutConfig: "shortcutConfig",
   cachedConfig: "cachedConfig",
-  functionalAnomalies: "functionalAnomalies"
+  functionalAnomalies: "functionalAnomalies",
+  workspaceTabFullText: "workspaceTabFullText"
 };
 
 export const API_PROFILE_ENDPOINT_DEFAULT = "https://api.openai.com/v1/chat/completions";
@@ -196,6 +197,7 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
     targets: Object.freeze([
       Object.freeze({ id: "topbar.brand", labelKey: "common.openInNewTab" }),
       Object.freeze({ id: "topbar.settings", labelKey: "topbar.settings" }),
+      Object.freeze({ id: "topbar.search", labelKey: "topbar.search" }),
       Object.freeze({ id: "topbar.promptLibrary", labelKey: "topbar.promptLibrary" }),
       Object.freeze({ id: "topbar.clearPrompt", labelKey: "topbar.clearPrompt" }),
       Object.freeze({ id: "topbar.optimizePrompt", labelKey: "topbar.optimizePrompt" }),
@@ -375,6 +377,7 @@ export const DEFAULT_OPTIONS = {
   tabContextMenuHiddenIds: [],
   topbarLayout: DEFAULT_TOPBAR_LAYOUT,
   topbarDeleteThreadMigrated: true,
+  topbarSearchMigrated: true,
   apiProfiles: [
     {
       id: "default-openai",
@@ -415,6 +418,7 @@ export const DEFAULT_OPTIONS = {
   builtinChatAppIframeConfigs: {},
   iframePermissionsSource: "builtIn",
   messageNavigatorEffectMode: "border",
+  recordFullText: false,
   messageNavigatorSiteConfigs: [],
   summarySiteConfigs: [],
   topicDeleteSiteConfigs: []
