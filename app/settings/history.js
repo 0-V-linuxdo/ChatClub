@@ -1,4 +1,5 @@
 import { t } from "../../shared/i18n.js";
+import { dateGroupId, groupByDate, timestamp } from "../../shared/date-groups.js";
 import { savePromptSendHistory } from "../../shared/storage-adapter.js";
 import { el, toast } from "../../ui/dom.js";
 import { createSettingsKit } from "./kit.js";
@@ -9,47 +10,12 @@ import {
   validateControllerContract
 } from "../controller-contract.js";
 
-const PROMPT_HISTORY_GROUPS = Object.freeze([
-  Object.freeze({ id: "today", labelKey: "promptHistory.today" }),
-  Object.freeze({ id: "yesterday", labelKey: "promptHistory.yesterday" }),
-  Object.freeze({ id: "pastWeek", labelKey: "promptHistory.pastWeek" }),
-  Object.freeze({ id: "pastMonth", labelKey: "promptHistory.pastMonth" }),
-  Object.freeze({ id: "older", labelKey: "promptHistory.older" })
-]);
-const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
-
-function timestamp(value) {
-  const parsed = value instanceof Date
-    ? value.getTime()
-    : typeof value === "number" ? value : Date.parse(String(value ?? ""));
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function localCalendarDay(timestampValue) {
-  const date = new Date(timestampValue);
-  return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / MILLISECONDS_PER_DAY;
-}
-
 export function promptHistoryGroupId(createdAt, now = Date.now()) {
-  const createdTimestamp = timestamp(createdAt);
-  const nowTimestamp = timestamp(now);
-  if (createdTimestamp === null || nowTimestamp === null) return "older";
-  const daysAgo = localCalendarDay(nowTimestamp) - localCalendarDay(createdTimestamp);
-  if (daysAgo <= 0) return "today";
-  if (daysAgo === 1) return "yesterday";
-  if (daysAgo <= 7) return "pastWeek";
-  if (daysAgo <= 30) return "pastMonth";
-  return "older";
+  return dateGroupId(createdAt, now);
 }
 
 export function groupPromptHistory(history = [], now = Date.now()) {
-  const grouped = new Map(PROMPT_HISTORY_GROUPS.map(({ id }) => [id, []]));
-  for (const item of Array.isArray(history) ? history : []) {
-    grouped.get(promptHistoryGroupId(item?.createdAt, now))?.push(item);
-  }
-  return PROMPT_HISTORY_GROUPS
-    .map((group) => ({ ...group, items: grouped.get(group.id) }))
-    .filter((group) => group.items.length);
+  return groupByDate(history, (item) => item?.createdAt, now, "promptHistory");
 }
 
 export function createPromptHistorySettingsSection(ctx) {

@@ -1,9 +1,4 @@
 import { t } from "../../shared/i18n.js";
-import { TABS_SIDEBAR_HOVER_BUTTONS } from "../../shared/constants.js";
-import {
-  normalizeTabsSidebarButtonOrder,
-  normalizeTabsSidebarButtonPlacement
-} from "../../shared/storage-schema.js";
 import { isGenericTopicTitle, sanitizeTopicTitle } from "../../shared/topic-title.js";
 import { workspaceSessionWorkspaceId } from "../../shared/workspace-session.js";
 import { createMenuButton } from "../../ui/components.js";
@@ -26,12 +21,42 @@ import {
   renderWorkspaceTabSearchHits,
   workspaceIdsMatchingFullText
 } from "./tab-search.js";
+import {
+  createFolder,
+  deleteFolder,
+  moveFolder,
+  moveTabToFolder,
+  pruneFolderMembers,
+  readFolders,
+  removeTabFromFolder,
+  renameFolder,
+  serializeFolders,
+  toggleFolderCollapsed,
+  WORKSPACE_TABS_SIDEBAR_FOLDERS_KEY
+} from "./tabs-sidebar-folders.js";
+import {
+  createTabsSidebarHoverMenu,
+  renderTabsSidebarDivider,
+  renderTabsSidebarFolder,
+  renderTabsSidebarGroup,
+  renderTabsSidebarItem
+} from "./tabs-sidebar-item.js";
+import {
+  buildSidebarTree,
+  folderIdForItem,
+  normalizeTabsSidebarSortMode,
+  sortSidebarItems,
+  TABS_SIDEBAR_SORT_LABEL_KEYS,
+  TABS_SIDEBAR_SORT_MODES,
+  workspaceIdValue
+} from "./tabs-sidebar-sort.js";
 
 const WORKSPACE_TABS_SIDEBAR_ID = "workspace-tabs-sidebar";
 const WORKSPACE_TABS_SIDEBAR_OPEN_KEY = "chatclubWorkspaceTabsSidebarOpenV1";
 const WORKSPACE_TABS_SIDEBAR_WIDTH_KEY = "chatclubWorkspaceTabsSidebarWidthV1";
 const WORKSPACE_TABS_SIDEBAR_CLOSED_ORDER_KEY = "chatclubWorkspaceTabsClosedOrderV1";
 const WORKSPACE_TABS_SIDEBAR_PINNED_KEY = "chatclubWorkspaceTabsPinnedV1";
+const WORKSPACE_TABS_SIDEBAR_SORT_KEY = "chatclubWorkspaceTabsSidebarSortV1";
 const SIDEBAR_WIDTH_MIN = 220;
 const SIDEBAR_WIDTH_MAX = 560;
 const SIDEBAR_WIDTH_DEFAULT = 320;
@@ -59,10 +84,6 @@ function positiveTabId(value) {
   return Number.isSafeInteger(tabId) && tabId > 0 ? tabId : null;
 }
 
-function workspaceIdValue(value) {
-  return String(value || "").trim();
-}
-
 function readIdList(storage, key) {
   try {
     const raw = JSON.parse(storageGet(storage, key) || "[]");
@@ -70,45 +91,6 @@ function readIdList(storage, key) {
   } catch {
     return [];
   }
-}
-
-function applyClosedOrder(list = [], order = []) {
-  if (!order.length) return list;
-  const rank = new Map(order.map((id, index) => [id, index]));
-  const live = [];
-  const closed = [];
-  for (const item of list) {
-    if (item.live) live.push(item);
-    else closed.push(item);
-  }
-  closed.sort((left, right) => {
-    const leftRank = rank.has(left.workspaceId) ? rank.get(left.workspaceId) : Number.MAX_SAFE_INTEGER;
-    const rightRank = rank.has(right.workspaceId) ? rank.get(right.workspaceId) : Number.MAX_SAFE_INTEGER;
-    return leftRank - rightRank;
-  });
-  return [...live, ...closed];
-}
-
-function applyPinnedOrder(list = [], order = []) {
-  const rank = new Map(order.map((id, index) => [id, index]));
-  const live = [];
-  const closed = [];
-  for (const item of list) {
-    if (item.live) live.push(item);
-    else closed.push(item);
-  }
-  const split = (group) => {
-    const pinned = [];
-    const rest = [];
-    for (const item of group) {
-      const id = workspaceIdValue(item.workspaceId);
-      if (id && rank.has(id)) pinned.push({ ...item, pinned: true });
-      else rest.push({ ...item, pinned: false });
-    }
-    pinned.sort((left, right) => rank.get(left.workspaceId) - rank.get(right.workspaceId));
-    return [...pinned, ...rest];
-  };
-  return [...split(live), ...split(closed)];
 }
 
 function clampSidebarWidth(value) {
@@ -144,6 +126,11 @@ function appIdsFromGroups(groups = []) {
   return ids;
 }
 
+function finiteActivityTime(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : null;
+}
+
 function normalizeItems(next = []) {
   return (Array.isArray(next) ? next : [])
     .map((item) => {
@@ -161,7 +148,9 @@ function normalizeItems(next = []) {
         layoutName: String(item.layoutName || "").trim(),
         topicTitle: String(item.topicTitle || "").trim(),
         topicTitleCustom: item.topicTitleCustom === true,
-        appIds: Array.isArray(item.appIds) ? item.appIds.map((id) => String(id || "").trim()).filter(Boolean) : []
+        appIds: Array.isArray(item.appIds) ? item.appIds.map((id) => String(id || "").trim()).filter(Boolean) : [],
+        updatedAt: finiteActivityTime(item.updatedAt),
+        detachedAt: finiteActivityTime(item.detachedAt)
       };
     })
     .filter(Boolean);
@@ -199,6 +188,8 @@ export function createWorkspaceTabsSidebarController({
   let open = storageGet(sessionStorage, WORKSPACE_TABS_SIDEBAR_OPEN_KEY) === "1";
   let sidebarWidth = readSidebarWidth(localStorage);
   let items = [];
+  let folders = readFolders(localStorage, storageGet);
+  let sortMode = normalizeTabsSidebarSortMode(storageGet(localStorage, WORKSPACE_TABS_SIDEBAR_SORT_KEY));
   let lastShell = null;
   let tabUnsubscribers = [];
   let escapeInstalled = false;
@@ -215,17 +206,35 @@ export function createWorkspaceTabsSidebarController({
   let recordFullTextEnabled = false;
   let fullTextStore = {};
   let fullTextLoad = null;
-  let hoverMenuCleanup = null;
+  let sortMenuCleanup = null;
+
+  const hover = createTabsSidebarHoverMenu({
+    ownerDocument,
+    createIcon,
+    getOptions,
+    onPin: (item) => togglePin(item),
+    onEdit: (item, row) => startTitleEditor(item, row),
+    onDelete: (item) => openDeleteConfirmation(item)
+  });
 
   function currentItems() {
     return items.slice();
   }
 
+  function sortOptions() {
+    return {
+      mode: sortMode,
+      closedOrder: readIdList(localStorage, WORKSPACE_TABS_SIDEBAR_CLOSED_ORDER_KEY),
+      pinnedOrder: readIdList(localStorage, WORKSPACE_TABS_SIDEBAR_PINNED_KEY),
+      getLabel: (item) => itemLabel(item, 0)
+    };
+  }
+
   function setItems(next = []) {
-    items = applyPinnedOrder(
-      applyClosedOrder(normalizeItems(next), readIdList(localStorage, WORKSPACE_TABS_SIDEBAR_CLOSED_ORDER_KEY)),
-      readIdList(localStorage, WORKSPACE_TABS_SIDEBAR_PINNED_KEY)
-    );
+    const normalized = normalizeItems(next);
+    folders = pruneFolderMembers(folders, normalized.map((item) => item.workspaceId));
+    persistFolders();
+    items = sortSidebarItems(normalized, sortOptions());
     return currentItems();
   }
 
@@ -281,6 +290,17 @@ export function createWorkspaceTabsSidebarController({
     return persistIdList(WORKSPACE_TABS_SIDEBAR_PINNED_KEY, present);
   }
 
+  function persistFolders() {
+    storageSet(localStorage, WORKSPACE_TABS_SIDEBAR_FOLDERS_KEY, folders.length ? serializeFolders(folders) : "");
+    return folders;
+  }
+
+  function persistSortMode(next) {
+    sortMode = normalizeTabsSidebarSortMode(next);
+    storageSet(localStorage, WORKSPACE_TABS_SIDEBAR_SORT_KEY, sortMode);
+    return sortMode;
+  }
+
   function dropPinnedId(item = {}) {
     const id = workspaceIdValue(item.workspaceId);
     if (!id) return;
@@ -306,8 +326,18 @@ export function createWorkspaceTabsSidebarController({
     return tabId !== null ? `t:${tabId}` : "";
   }
 
+  function folderKey(folder = {}) {
+    const id = String(folder?.id || "").trim();
+    return id ? `f:${id}` : "";
+  }
+
   function isEditingItem(item = {}) {
     const key = itemKey(item);
+    return Boolean(key) && key === editingKey;
+  }
+
+  function isEditingFolder(folder = {}) {
+    const key = folderKey(folder);
     return Boolean(key) && key === editingKey;
   }
 
@@ -323,14 +353,18 @@ export function createWorkspaceTabsSidebarController({
     ));
   }
 
-  function partitionedItems() {
-    const live = [];
-    const closed = [];
-    for (const item of visibleItems()) {
-      if (item.live) live.push(item);
-      else closed.push(item);
-    }
-    return { live, closed };
+  function visibleFolders() {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return folders;
+    const visibleIds = new Set(visibleItems().map((item) => item.workspaceId));
+    return folders.filter((folder) => (
+      String(folder.name || "").toLowerCase().includes(query)
+      || folder.workspaceIds.some((id) => visibleIds.has(id))
+    )).map((folder) => ({
+      ...folder,
+      collapsed: false,
+      workspaceIds: folder.workspaceIds.filter((id) => visibleIds.has(id) || String(folder.name || "").toLowerCase().includes(query))
+    }));
   }
 
   async function refreshSearchContext() {
@@ -544,8 +578,49 @@ export function createWorkspaceTabsSidebarController({
     }
   }
 
+  function relayout(nextItems = items) {
+    items = sortSidebarItems(nextItems, sortOptions());
+    if (lastShell?.isConnected) syncSidebar(lastShell);
+    return currentItems();
+  }
+
   function moveTab(item = {}, target = {}, place = "before") {
-    if (!item || !target || sameItem(item, target)) return currentItems();
+    if (!item || !target) return currentItems();
+    if (place === "out") {
+      folders = removeTabFromFolder(folders, item.workspaceId);
+      persistFolders();
+      return relayout(items);
+    }
+    if (place === "into") {
+      const folderId = String(target.id || target.folderId || "").trim();
+      if (!folderId) return currentItems();
+      folders = moveTabToFolder(folders, item.workspaceId, folderId);
+      persistFolders();
+      return relayout(items);
+    }
+    if (sameItem(item, target)) return currentItems();
+    const sourceFolder = folderIdForItem(item, folders);
+    const targetFolder = folderIdForItem(target, folders);
+    if (sourceFolder !== targetFolder) {
+      folders = targetFolder
+        ? moveTabToFolder(folders, item.workspaceId, targetFolder, place, target.workspaceId)
+        : removeTabFromFolder(folders, item.workspaceId);
+      persistFolders();
+      if (sortMode === "open" && !targetFolder && Boolean(item.live) === Boolean(target.live)) {
+        const next = items.filter((entry) => !sameItem(entry, item));
+        const targetIndex = next.findIndex((entry) => sameItem(entry, target));
+        if (targetIndex >= 0) next.splice(place === "after" ? targetIndex + 1 : targetIndex, 0, item);
+        if (!item.live) persistClosedOrder(next);
+        return relayout(next);
+      }
+      return relayout(items);
+    }
+    if (sourceFolder) {
+      folders = moveTabToFolder(folders, item.workspaceId, sourceFolder, place, target.workspaceId);
+      persistFolders();
+      return relayout(items);
+    }
+    if (sortMode !== "open") return currentItems();
     if (Boolean(item.live) !== Boolean(target.live)) return currentItems();
     if (Boolean(item.pinned) !== Boolean(target.pinned)) return currentItems();
     const next = items.filter((entry) => !sameItem(entry, item));
@@ -554,20 +629,46 @@ export function createWorkspaceTabsSidebarController({
     next.splice(place === "after" ? targetIndex + 1 : targetIndex, 0, item);
     if (!item.live) persistClosedOrder(next);
     if (item.pinned) persistPinnedFromItems(next);
-    items = applyPinnedOrder(
-      applyClosedOrder(next, readIdList(localStorage, WORKSPACE_TABS_SIDEBAR_CLOSED_ORDER_KEY)),
-      readIdList(localStorage, WORKSPACE_TABS_SIDEBAR_PINNED_KEY)
-    );
-    if (lastShell?.isConnected) syncSidebar(lastShell);
+    const ordered = relayout(next);
     if (item.live) syncLiveWindowOrder(item).catch(() => {});
-    return currentItems();
+    return ordered;
+  }
+
+  function moveFolderRow(folder = {}, target = {}, place = "before") {
+    const folderId = String(folder?.id || "").trim();
+    const targetId = String(target?.id || "").trim();
+    if (!folderId || !targetId || folderId === targetId) return folders;
+    folders = moveFolder(folders, folderId, targetId, place);
+    persistFolders();
+    if (lastShell?.isConnected) syncSidebar(lastShell);
+    return folders;
   }
 
   function clearItemDropMarks(sidebar) {
-    const rows = sidebar?.querySelectorAll?.(".workspace-tabs-sidebar-item") || [];
+    const rows = [
+      ...(sidebar?.querySelectorAll?.(".workspace-tabs-sidebar-item") || []),
+      ...(sidebar?.querySelectorAll?.(".workspace-tabs-sidebar-folder") || []),
+      ...(sidebar?.querySelectorAll?.(".workspace-tabs-sidebar-group") || []),
+      ...(sidebar?.querySelectorAll?.(".workspace-tabs-sidebar-list") || [])
+    ];
     for (const row of rows) {
-      row.classList?.remove?.("drop-before", "drop-after");
+      row.classList?.remove?.("drop-before", "drop-after", "drop-into");
     }
+  }
+
+  function closeSortMenu() {
+    sortMenuCleanup?.();
+    sortMenuCleanup = null;
+    [".workspace-tabs-sidebar-sort-menu", ".workspace-tabs-sidebar-sort-backdrop"].forEach((selector) => {
+      ownerDocument?.querySelectorAll?.(selector)?.forEach?.((node) => node.remove?.());
+    });
+    ownerDocument?.querySelectorAll?.(".workspace-tabs-sidebar-sort")
+      ?.forEach?.((node) => node.setAttribute?.("aria-expanded", "false"));
+  }
+
+  function closeHoverMenu() {
+    hover.closeHoverMenu();
+    closeSortMenu();
   }
 
   function endItemDrag() {
@@ -590,7 +691,12 @@ export function createWorkspaceTabsSidebarController({
       || className.includes(" workspace-tabs-sidebar-item-pin ")
       || className.includes(" workspace-tabs-sidebar-item-more ")
       || className.includes(" workspace-tabs-sidebar-item-editor ")
-      || className.includes(" workspace-tabs-sidebar-search-input ");
+      || className.includes(" workspace-tabs-sidebar-search-input ")
+      || className.includes(" workspace-tabs-sidebar-folder-edit ")
+      || className.includes(" workspace-tabs-sidebar-folder-delete ")
+      || className.includes(" workspace-tabs-sidebar-folder-toggle ")
+      || className.includes(" workspace-tabs-sidebar-sort ")
+      || className.includes(" workspace-tabs-sidebar-new-folder ");
   }
 
   function onItemPointerMove(event) {
@@ -604,25 +710,62 @@ export function createWorkspaceTabsSidebarController({
     }
     event?.preventDefault?.();
     const sidebar = lastShell?.querySelector?.(".workspace-tabs-sidebar");
-    const rows = [...(sidebar?.querySelectorAll?.(".workspace-tabs-sidebar-item") || [])];
     clearItemDropMarks(sidebar);
     itemDrag.target = null;
     itemDrag.place = "before";
+    itemDrag.targetKind = "";
+    const y = Number(event?.clientY);
+    const foldersRows = [...(sidebar?.querySelectorAll?.(".workspace-tabs-sidebar-folder") || [])];
+    for (const row of foldersRows) {
+      if (row === itemDrag.row) continue;
+      const rect = row.getBoundingClientRect?.();
+      if (!rect || y < rect.top || y > rect.bottom) continue;
+      const folder = folders.find((entry) => entry.id === row.dataset?.folderId);
+      if (!folder) continue;
+      if (itemDrag.kind === "folder") {
+        itemDrag.target = folder;
+        itemDrag.targetKind = "folder";
+        itemDrag.place = y < rect.top + rect.height / 2 ? "before" : "after";
+        row.classList?.add?.(itemDrag.place === "before" ? "drop-before" : "drop-after");
+      } else {
+        itemDrag.target = folder;
+        itemDrag.targetKind = "folder";
+        itemDrag.place = "into";
+        row.classList?.add?.("drop-into");
+      }
+      return;
+    }
+    if (itemDrag.kind === "folder") return;
+    const rows = [...(sidebar?.querySelectorAll?.(".workspace-tabs-sidebar-item") || [])];
     for (const row of rows) {
       if (row === itemDrag.row) continue;
       const rect = row.getBoundingClientRect?.();
-      if (!rect) continue;
-      const y = Number(event?.clientY);
-      if (y < rect.top || y > rect.bottom) continue;
-      const target = items.find((entry) => itemKey(entry) === row.dataset?.workspaceId
-        || workspaceIdValue(entry.workspaceId) === workspaceIdValue(row.dataset?.workspaceId));
+      if (!rect || y < rect.top || y > rect.bottom) continue;
+      const target = items.find((entry) => workspaceIdValue(entry.workspaceId) === workspaceIdValue(row.dataset?.workspaceId));
       if (!target) continue;
-      if (Boolean(target.live) !== Boolean(itemDrag.item.live)) continue;
-      if (Boolean(target.pinned) !== Boolean(itemDrag.item.pinned)) continue;
       itemDrag.target = target;
+      itemDrag.targetKind = "tab";
       itemDrag.place = y < rect.top + rect.height / 2 ? "before" : "after";
       row.classList?.add?.(itemDrag.place === "before" ? "drop-before" : "drop-after");
-      break;
+      return;
+    }
+    const groups = [...(sidebar?.querySelectorAll?.(".workspace-tabs-sidebar-group") || [])];
+    for (const row of groups) {
+      const rect = row.getBoundingClientRect?.();
+      if (!rect || y < rect.top || y > rect.bottom) continue;
+      itemDrag.target = { id: "root" };
+      itemDrag.targetKind = "root";
+      itemDrag.place = "out";
+      row.classList?.add?.("drop-into");
+      return;
+    }
+    const list = sidebar?.querySelector?.(".workspace-tabs-sidebar-list");
+    const listRect = list?.getBoundingClientRect?.();
+    if (listRect && y >= listRect.top && y <= listRect.bottom && folderIdForItem(itemDrag.item, folders)) {
+      itemDrag.target = { id: "root" };
+      itemDrag.targetKind = "root";
+      itemDrag.place = "out";
+      list.classList?.add?.("drop-into");
     }
   }
 
@@ -631,20 +774,25 @@ export function createWorkspaceTabsSidebarController({
     endItemDrag();
     if (!drag?.active || !drag.target) return;
     suppressActivate = true;
-    moveTab(drag.item, drag.target, drag.place);
+    if (drag.kind === "folder") moveFolderRow(drag.item, drag.target, drag.place);
+    else moveTab(drag.item, drag.target, drag.place);
   }
 
-  function bindItemDrag(row, item) {
+  function bindItemDrag(row, item, kind = "tab") {
     if (!row?.addEventListener) return;
     row.addEventListener("pointerdown", (event) => {
       if (event?.button != null && event.button !== 0) return;
-      if (dragIgnored(event) || isEditingItem(item) || searchQuery.trim()) return;
+      if (dragIgnored(event) || searchQuery.trim()) return;
+      if (kind === "tab" && isEditingItem(item)) return;
+      if (kind === "folder" && isEditingFolder(item)) return;
       itemDrag = {
+        kind,
         item,
         row,
         startY: Number(event?.clientY) || 0,
         active: false,
         target: null,
+        targetKind: "",
         place: "before"
       };
       ownerDocument?.addEventListener?.("pointermove", onItemPointerMove, true);
@@ -653,37 +801,8 @@ export function createWorkspaceTabsSidebarController({
     });
   }
 
-  function renderSidebarHeader() {
-    const closeOthers = iconButton(
-      t("workspace.tabs.closeOthers"),
-      createIcon("copyMinus"),
-      (event) => {
-        event?.preventDefault?.();
-        event?.stopPropagation?.();
-        closeOtherLiveTabs().catch(() => {});
-      },
-      "workspace-tabs-sidebar-cleanup",
-      t("workspace.tabs.closeOthers"),
-      "",
-      "workspace.tabs.closeOthers"
-    );
-    if (!otherLiveTabIds().length) {
-      closeOthers.disabled = true;
-      closeOthers.setAttribute?.("disabled", "");
-    }
-    return el("header", { class: "workspace-tabs-sidebar-header" },
-      el("span", {
-        class: "workspace-tabs-sidebar-count",
-        "aria-label": t("workspace.tabs.count", { count: items.length })
-      }, String(items.length)),
-      el("h2", { class: "workspace-tabs-sidebar-title" }, t("workspace.tabs.title")),
-      closeOthers
-    );
-  }
-
   function itemSectionIndex(item = {}) {
-    const { live, closed } = partitionedItems();
-    const group = item.live ? live : closed;
+    const group = visibleItems();
     return Math.max(0, group.findIndex((entry) => sameItem(entry, item)));
   }
 
@@ -695,16 +814,17 @@ export function createWorkspaceTabsSidebarController({
     if (index >= 0) ids.splice(index, 1);
     else ids.unshift(id);
     persistIdList(WORKSPACE_TABS_SIDEBAR_PINNED_KEY, ids);
-    items = applyPinnedOrder(items, ids);
-    if (lastShell?.isConnected) syncSidebar(lastShell);
-    const moved = items.find((entry) => sameItem(entry, item));
-    if (moved?.live) syncLiveWindowOrder(moved).catch(() => {});
-    return currentItems();
+    const moved = relayout(items);
+    const next = moved.find((entry) => sameItem(entry, item));
+    if (next?.live) syncLiveWindowOrder(next).catch(() => {});
+    return moved;
   }
 
   function dropForgottenItem(item = {}) {
     const tabId = positiveTabId(item.tabId);
     dropPinnedId(item);
+    folders = removeTabFromFolder(folders, item.workspaceId);
+    persistFolders();
     setItems(items.filter((entry) => !sameItem(entry, item) && (tabId === null || entry.tabId !== tabId)));
   }
 
@@ -770,18 +890,20 @@ export function createWorkspaceTabsSidebarController({
     try { field.setSelectionRange?.(searchSelection.start, searchSelection.end); } catch {}
   }
 
-  function renderTitleEditor(item = {}, index = 0) {
-    const initial = editingDraft || itemLabel(item, index);
+  function renderTitleEditor(item = {}, index = 0, kind = "tab") {
+    const initial = editingDraft || (kind === "folder" ? (item.name || t("workspace.tabs.folderUntitled")) : itemLabel(item, index));
     const titleInput = input(initial, {
       class: "input workspace-tabs-sidebar-item-editor",
       type: "text",
-      placeholder: t("workspace.tabs.editPlaceholder"),
-      "aria-label": t("workspace.tabs.edit")
+      placeholder: kind === "folder" ? t("workspace.tabs.folderName") : t("workspace.tabs.editPlaceholder"),
+      "aria-label": kind === "folder" ? t("workspace.tabs.renameFolder") : t("workspace.tabs.edit")
     });
     titleInput.value = initial;
     const commit = () => {
+      const value = titleInput.value;
       stopTitleEditor();
-      saveTabTitle(item, titleInput.value).catch(() => {});
+      if (kind === "folder") saveFolderTitle(item, value);
+      else saveTabTitle(item, value).catch(() => {});
     };
     const cancel = () => {
       stopTitleEditor();
@@ -802,7 +924,7 @@ export function createWorkspaceTabsSidebarController({
       }
     });
     return el("div", {
-      class: "workspace-tabs-sidebar-item is-editing",
+      class: `workspace-tabs-sidebar-item is-editing${kind === "folder" ? " is-folder" : ""}`,
       role: "listitem"
     },
       titleInput,
@@ -841,18 +963,37 @@ export function createWorkspaceTabsSidebarController({
     const index = itemSectionIndex(item);
     editingKey = key;
     editingDraft = itemLabel(item, index);
-    const editor = renderTitleEditor(item, index);
+    const editor = renderTitleEditor(item, index, "tab");
     if (row?.replaceWith) row.replaceWith(editor);
     else if (lastShell?.isConnected) syncSidebar(lastShell);
     focusTitleEditor(editor);
     return editor;
   }
 
+  function startFolderEditor(folder = {}, row = null) {
+    const key = folderKey(folder);
+    if (!key) return null;
+    editingKey = key;
+    editingDraft = folder.name || t("workspace.tabs.folderUntitled");
+    const editor = renderTitleEditor(folder, 0, "folder");
+    if (row?.replaceWith) row.replaceWith(editor);
+    else if (lastShell?.isConnected) syncSidebar(lastShell);
+    focusTitleEditor(editor);
+    return editor;
+  }
+
+  function saveFolderTitle(folder, name) {
+    folders = renameFolder(folders, folder.id, name, t("workspace.tabs.folderUntitled"));
+    persistFolders();
+    if (lastShell?.isConnected) syncSidebar(lastShell);
+    return folders;
+  }
+
   function openTitleEditor(item = {}) {
     return startTitleEditor(item);
   }
 
-  function openDeleteConfirmation(item = {}) {
+  function openDeleteConfirmation(item = {}, kind = "tab") {
     let dialog;
     let applying = false;
     const close = (force = false) => {
@@ -872,16 +1013,27 @@ export function createWorkspaceTabsSidebarController({
       if (applying) return;
       setApplying(true);
       try {
+        if (kind === "folder") {
+          folders = deleteFolder(folders, item.id);
+          persistFolders();
+          relayout(items);
+          close(true);
+          return;
+        }
         await forgetTab(item);
         close(true);
       } catch {
         setApplying(false);
       }
     }
+    const title = kind === "folder" ? t("workspace.tabs.deleteFolder") : t("workspace.tabs.deleteTitle");
+    const message = kind === "folder"
+      ? t("workspace.tabs.deleteFolderConfirm", { title: item.name || t("workspace.tabs.folderUntitled") })
+      : t("workspace.tabs.deleteConfirm", { title: itemLabel(item, itemSectionIndex(item)) });
     dialog = confirmationModal(
-      t("workspace.tabs.deleteTitle"),
+      title,
       el("div", { class: "workspace-tabs-delete-confirmation" },
-        el("p", {}, t("workspace.tabs.deleteConfirm", { title: itemLabel(item, itemSectionIndex(item)) })),
+        el("p", {}, message),
         el("div", { class: "settings-dialog-actions" }, cancelButton, confirmButton)
       ),
       close,
@@ -891,257 +1043,189 @@ export function createWorkspaceTabsSidebarController({
     return dialog;
   }
 
-  function tabsSidebarHoverConfig() {
-    const options = typeof getOptions === "function" ? getOptions() : {};
-    const placement = normalizeTabsSidebarButtonPlacement(options?.tabsSidebarButtonPlacement);
-    const order = normalizeTabsSidebarButtonOrder(options?.tabsSidebarButtonOrder);
-    const byId = new Map(TABS_SIDEBAR_HOVER_BUTTONS.map((item) => [item.id, item]));
-    const ordered = order.map((id) => byId.get(id)).filter(Boolean);
-    return {
-      pinned: ordered.filter((item) => placement[item.id] === "pinned"),
-      folded: ordered.filter((item) => placement[item.id] === "menu")
-    };
+  function setSortMode(next) {
+    persistSortMode(next);
+    closeSortMenu();
+    return relayout(items);
   }
 
-  function hoverActionsWidth(count) {
-    if (!count) return "0px";
-    return `${count * 28 + Math.max(0, count - 1) * 2 + 16}px`;
-  }
-
-  function closeHoverMenu() {
-    hoverMenuCleanup?.();
-    hoverMenuCleanup = null;
-    const root = ownerDocument;
-    [".workspace-tabs-sidebar-hover-menu", ".workspace-tabs-sidebar-hover-backdrop"].forEach((selector) => {
-      root?.querySelectorAll?.(selector)?.forEach?.((node) => node.remove?.());
-    });
-    root?.querySelectorAll?.(".workspace-tabs-sidebar-item.is-menu-open")
-      ?.forEach?.((node) => node.classList?.remove?.("is-menu-open"));
-    root?.querySelectorAll?.(".workspace-tabs-sidebar-item-more")
-      ?.forEach?.((node) => node.setAttribute?.("aria-expanded", "false"));
-  }
-
-  function hoverMenuButton(id, item, row) {
-    const resolveRow = (event) => event?.currentTarget?.closest?.(".workspace-tabs-sidebar-item") || row;
-    if (id === "pin") {
-      const pinLabel = item.pinned ? t("workspace.tabs.unpin") : t("workspace.tabs.pin");
-      return createMenuButton({
-        label: pinLabel,
-        icon: createIcon("pin"),
-        onClick: () => {
-          closeHoverMenu();
-          togglePin(item);
-        },
-        tooltipLabel: pinLabel,
-        tooltipId: item.pinned ? "workspace.tabs.unpin" : "workspace.tabs.pin"
-      });
+  function addFolder(name = "") {
+    folders = createFolder(folders, name || t("workspace.tabs.folderUntitled"));
+    persistFolders();
+    const created = folders[folders.length - 1];
+    if (lastShell?.isConnected) {
+      syncSidebar(lastShell);
+      if (created) startFolderEditor(created);
     }
-    if (id === "edit") {
-      return createMenuButton({
-        label: t("workspace.tabs.edit"),
-        icon: createIcon("edit"),
-        onClick: (event) => {
-          closeHoverMenu();
-          startTitleEditor(item, resolveRow(event));
-        },
-        tooltipId: "workspace.tabs.edit"
-      });
-    }
-    if (id === "delete") {
-      return createMenuButton({
-        label: t("workspace.tabs.delete"),
-        icon: createIcon("trash"),
-        variant: "danger",
-        onClick: () => {
-          closeHoverMenu();
-          openDeleteConfirmation(item);
-        },
-        tooltipId: "workspace.tabs.delete"
-      });
-    }
-    return null;
+    return folders;
   }
 
-  function openHoverMenu(event, item, row) {
+  function openSortMenu(event) {
     event?.preventDefault?.();
     event?.stopPropagation?.();
     const anchor = event.currentTarget;
-    if (row?.classList?.contains?.("is-menu-open")) {
-      closeHoverMenu();
+    if (anchor?.getAttribute?.("aria-expanded") === "true") {
+      closeSortMenu();
       return;
     }
     closeHoverMenu();
-    const { folded } = tabsSidebarHoverConfig();
-    if (!folded.length) return;
-    row?.classList?.add?.("is-menu-open");
     anchor?.setAttribute?.("aria-expanded", "true");
     const rect = anchor.getBoundingClientRect?.() || { bottom: 0, right: 0 };
     const view = ownerDocument.defaultView || globalThis;
     const backdrop = el("div", {
-      class: "popover-backdrop workspace-tabs-sidebar-hover-backdrop",
+      class: "popover-backdrop workspace-tabs-sidebar-sort-backdrop",
       onpointerdown: (pointerEvent) => {
         pointerEvent.preventDefault();
-        closeHoverMenu();
+        closeSortMenu();
       }
     });
     const menu = el("div", {
-      class: "popover-menu workspace-tabs-sidebar-hover-menu",
+      class: "popover-menu workspace-tabs-sidebar-sort-menu",
       role: "menu",
       style: {
         top: `${Number(rect.bottom) + 5}px`,
-        right: `${Math.max(8, Number(view.innerWidth || 0) - Number(rect.right || 0))}px`
+        left: `${Math.max(8, Number(rect.left || 0))}px`
       },
-      onpointerdown: (pointerEvent) => pointerEvent.stopPropagation(),
-      onclick: (pointerEvent) => pointerEvent.stopPropagation()
-    }, folded.map((entry) => hoverMenuButton(entry.id, item, row)).filter(Boolean));
+      onpointerdown: (pointerEvent) => pointerEvent.stopPropagation()
+    }, TABS_SIDEBAR_SORT_MODES.map((mode) => createMenuButton({
+      label: t(TABS_SIDEBAR_SORT_LABEL_KEYS[mode]),
+      icon: mode === sortMode ? createIcon("check") : el("span", { class: "workspace-tabs-sidebar-sort-spacer" }),
+      onClick: () => setSortMode(mode),
+      tooltipId: TABS_SIDEBAR_SORT_LABEL_KEYS[mode]
+    })));
     (ownerDocument.body || ownerDocument.documentElement)?.append?.(backdrop, menu);
     const onOutside = (pointerEvent) => {
       const target = pointerEvent.target;
       if (menu.contains?.(target) || anchor.contains?.(target) || anchor === target) return;
-      closeHoverMenu();
+      closeSortMenu();
     };
     const onKeydown = (keyEvent) => {
-      if (!claimTopmostPopoverEscape(keyEvent, ".workspace-tabs-sidebar-hover-menu")) return;
-      closeHoverMenu();
+      if (!claimTopmostPopoverEscape(keyEvent, ".workspace-tabs-sidebar-sort-menu")) return;
+      closeSortMenu();
     };
-    const onViewport = () => closeHoverMenu();
     ownerDocument.addEventListener?.("pointerdown", onOutside, true);
-    ownerDocument.addEventListener?.("focusin", onOutside, true);
     ownerDocument.addEventListener?.("keydown", onKeydown, true);
-    view.addEventListener?.("resize", onViewport, true);
-    view.addEventListener?.("scroll", onViewport, true);
-    view.addEventListener?.("blur", onViewport, true);
-    hoverMenuCleanup = () => {
+    view.addEventListener?.("resize", closeSortMenu, true);
+    sortMenuCleanup = () => {
       ownerDocument.removeEventListener?.("pointerdown", onOutside, true);
-      ownerDocument.removeEventListener?.("focusin", onOutside, true);
       ownerDocument.removeEventListener?.("keydown", onKeydown, true);
-      view.removeEventListener?.("resize", onViewport, true);
-      view.removeEventListener?.("scroll", onViewport, true);
-      view.removeEventListener?.("blur", onViewport, true);
+      view.removeEventListener?.("resize", closeSortMenu, true);
     };
   }
 
-  function renderHoverAction(id, item) {
-    if (id === "pin") {
-      const pinLabel = item.pinned ? t("workspace.tabs.unpin") : t("workspace.tabs.pin");
-      const pinButton = iconButton(
-        pinLabel,
-        createIcon("pin"),
-        (event) => {
-          event?.preventDefault?.();
-          event?.stopPropagation?.();
-          togglePin(item);
-        },
-        `workspace-tabs-sidebar-item-pin${item.pinned ? " is-pinned" : ""}`,
-        pinLabel,
-        "",
-        item.pinned ? "workspace.tabs.unpin" : "workspace.tabs.pin"
-      );
-      pinButton.setAttribute?.("aria-pressed", item.pinned ? "true" : "false");
-      return pinButton;
+  function renderSidebarHeader() {
+    const closeOthers = iconButton(
+      t("workspace.tabs.closeOthers"),
+      createIcon("copyMinus"),
+      (event) => {
+        event?.preventDefault?.();
+        event?.stopPropagation?.();
+        closeOtherLiveTabs().catch(() => {});
+      },
+      "workspace-tabs-sidebar-cleanup",
+      t("workspace.tabs.closeOthers"),
+      "",
+      "workspace.tabs.closeOthers"
+    );
+    if (!otherLiveTabIds().length) {
+      closeOthers.disabled = true;
+      closeOthers.setAttribute?.("disabled", "");
     }
-    if (id === "edit") {
-      return iconButton(
-        t("workspace.tabs.edit"),
-        createIcon("edit"),
-        (event) => {
-          event?.preventDefault?.();
-          event?.stopPropagation?.();
-          startTitleEditor(item, event?.currentTarget?.closest?.(".workspace-tabs-sidebar-item"));
-        },
-        "workspace-tabs-sidebar-item-edit",
-        t("workspace.tabs.edit"),
-        "",
-        "workspace.tabs.edit"
-      );
-    }
-    if (id === "delete") {
-      return iconButton(
-        t("workspace.tabs.delete"),
-        createIcon("trash"),
-        (event) => {
-          event?.preventDefault?.();
-          event?.stopPropagation?.();
-          openDeleteConfirmation(item);
-        },
-        "workspace-tabs-sidebar-item-delete",
-        t("workspace.tabs.delete"),
-        "",
-        "workspace.tabs.delete"
-      );
-    }
-    return null;
+    const newFolder = iconButton(
+      t("workspace.tabs.newFolder"),
+      createIcon("folderPlus"),
+      (event) => {
+        event?.preventDefault?.();
+        event?.stopPropagation?.();
+        addFolder();
+      },
+      "workspace-tabs-sidebar-new-folder",
+      t("workspace.tabs.newFolder"),
+      "",
+      "workspace.tabs.newFolder"
+    );
+    const sortButton = iconButton(
+      t("workspace.tabs.sort"),
+      createIcon("arrowUpDown"),
+      openSortMenu,
+      "workspace-tabs-sidebar-sort",
+      t(TABS_SIDEBAR_SORT_LABEL_KEYS[sortMode]),
+      "",
+      "workspace.tabs.sort"
+    );
+    sortButton.setAttribute?.("aria-haspopup", "menu");
+    sortButton.setAttribute?.("aria-expanded", "false");
+    return el("header", { class: "workspace-tabs-sidebar-header" },
+      el("span", {
+        class: "workspace-tabs-sidebar-count",
+        "aria-label": t("workspace.tabs.count", { count: items.length })
+      }, String(items.length)),
+      el("h2", { class: "workspace-tabs-sidebar-title" }, t("workspace.tabs.title")),
+      el("div", { class: "workspace-tabs-sidebar-header-actions" }, newFolder, sortButton, closeOthers)
+    );
   }
 
-  function renderSidebarItem(item, index) {
-    if (isEditingItem(item)) return renderTitleEditor(item, index);
-    const { pinned, folded } = tabsSidebarHoverConfig();
-    const actionCount = pinned.length + (folded.length ? 1 : 0);
-    let row;
-    const actionNodes = pinned.map((entry) => renderHoverAction(entry.id, item)).filter(Boolean);
-    if (folded.length) {
-      const moreButton = iconButton(
-        t("chat.more"),
-        createIcon("more"),
-        (event) => openHoverMenu(event, item, event?.currentTarget?.closest?.(".workspace-tabs-sidebar-item") || row),
-        "workspace-tabs-sidebar-item-more",
-        t("chat.more"),
-        "",
-        "workspace.tabs.more"
-      );
-      moreButton.setAttribute?.("aria-expanded", "false");
-      moreButton.setAttribute?.("aria-haspopup", "menu");
-      actionNodes.push(moreButton);
+  function renderSidebarItem(item, index, nested = false) {
+    if (isEditingItem(item)) return renderTitleEditor(item, index, "tab");
+    const { actionCount, actionNodes, rowRef } = hover.renderItemActions(item);
+    return renderTabsSidebarItem({
+      item,
+      index,
+      label: itemLabel(item, index),
+      createIcon,
+      suppressActivate: () => {
+        if (!suppressActivate) return false;
+        suppressActivate = false;
+        return true;
+      },
+      activateTab,
+      bindItemDrag,
+      actionCount,
+      actionNodes,
+      rowRef,
+      nested
+    });
+  }
+
+  function renderFolderNode(node) {
+    const nodes = [];
+    if (isEditingFolder(node.folder)) {
+      nodes.push(renderTitleEditor(node.folder, 0, "folder"));
+      return nodes;
     }
-    row = el("div", {
-      class: `workspace-tabs-sidebar-item${item.current ? " is-current" : ""}${item.live ? "" : " is-closed"}${item.pinned ? " is-pinned" : ""}`,
-      role: "listitem",
-      dataset: {
-        workspaceId: workspaceIdValue(item.workspaceId),
-        pinned: item.pinned ? "1" : ""
+    nodes.push(renderTabsSidebarFolder({
+      folder: node.folder,
+      count: node.items.length,
+      createIcon,
+      onToggle: (folder) => {
+        folders = toggleFolderCollapsed(folders, folder.id);
+        persistFolders();
+        if (lastShell?.isConnected) syncSidebar(lastShell);
       },
-      style: actionCount ? { "--tabs-sidebar-actions-width": hoverActionsWidth(actionCount) } : null
-    },
-      el("button", {
-        class: "workspace-tabs-sidebar-item-focus",
-        type: "button",
-        "aria-current": item.current ? "page" : null,
-        onclick: () => {
-          if (suppressActivate) {
-            suppressActivate = false;
-            return;
-          }
-          activateTab(item).catch(() => {});
-        }
-      },
-        el("span", { class: "workspace-tabs-sidebar-item-index" }, String(index + 1)),
-        item.pinned
-          ? el("span", {
-            class: "workspace-tabs-sidebar-item-pin-mark",
-            "aria-hidden": "true"
-          }, createIcon("pin"))
-          : null,
-        el("span", { class: "workspace-tabs-sidebar-item-label" }, itemLabel(item, index))
-      ),
-      actionNodes.length
-        ? el("div", { class: "workspace-tabs-sidebar-item-actions" }, actionNodes)
-        : null
-    );
-    bindItemDrag(row, item);
-    return row;
+      onRename: (folder, row) => startFolderEditor(folder, row),
+      onDelete: (folder) => openDeleteConfirmation(folder, "folder"),
+      bindItemDrag
+    }));
+    if (!node.folder.collapsed) {
+      node.items.forEach((item, index) => nodes.push(renderSidebarItem(item, index, true)));
+    }
+    return nodes;
   }
 
   function renderSidebarList() {
-    const { live, closed } = partitionedItems();
+    const tree = buildSidebarTree({
+      items: visibleItems(),
+      folders: visibleFolders(),
+      ...sortOptions()
+    });
     const nodes = [];
-    live.forEach((item, index) => nodes.push(renderSidebarItem(item, index)));
-    if (closed.length) {
-      nodes.push(el("div", {
-        class: "workspace-tabs-sidebar-divider",
-        role: "separator",
-        "aria-label": t("workspace.tabs.closed")
-      }, el("span", { class: "workspace-tabs-sidebar-divider-label" }, t("workspace.tabs.closed"))));
-      closed.forEach((item, index) => nodes.push(renderSidebarItem(item, index)));
+    for (const node of tree) {
+      if (node.type === "folder") nodes.push(...renderFolderNode(node));
+      else if (node.type === "group") {
+        nodes.push(renderTabsSidebarGroup(node.labelKey));
+        node.items.forEach((item, index) => nodes.push(renderSidebarItem(item, index)));
+      } else if (node.type === "divider") nodes.push(renderTabsSidebarDivider(node.labelKey));
+      else if (node.type === "items") node.items.forEach((item, index) => nodes.push(renderSidebarItem(item, index)));
     }
     if (!nodes.length) {
       return el("div", { class: "workspace-tabs-sidebar-empty" },
@@ -1208,7 +1292,7 @@ export function createWorkspaceTabsSidebarController({
     },
     renderSidebarHeader(),
     renderSearchBar(),
-    items.length || query
+    items.length || query || folders.length
       ? renderSidebarList()
       : el("div", { class: "workspace-tabs-sidebar-empty" }, t("workspace.tabs.empty")),
     hits,
@@ -1317,7 +1401,11 @@ export function createWorkspaceTabsSidebarController({
 
   function onEscapeKeydown(event) {
     if (claimTopmostPopoverEscape(event, ".workspace-tabs-sidebar-hover-menu")) {
-      closeHoverMenu();
+      hover.closeHoverMenu();
+      return;
+    }
+    if (claimTopmostPopoverEscape(event, ".workspace-tabs-sidebar-sort-menu")) {
+      closeSortMenu();
       return;
     }
     if (!open || !isDismissalEscape(event)) return;
@@ -1436,6 +1524,10 @@ export function createWorkspaceTabsSidebarController({
     moveTab,
     togglePin,
     setSearchQuery,
+    setSortMode,
+    addFolder,
+    currentFolders: () => folders.slice(),
+    currentSortMode: () => sortMode,
     toggle,
     openSearch,
     close,

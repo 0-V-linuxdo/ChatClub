@@ -171,7 +171,12 @@ globalThis.document = {
 };
 
 (async () => {
-  const source = fs.readFileSync(path.join(__dirname, "../app/workspace/tabs-sidebar-controller.js"), "utf8");
+  const source = [
+    fs.readFileSync(path.join(__dirname, "../app/workspace/tabs-sidebar-controller.js"), "utf8"),
+    fs.readFileSync(path.join(__dirname, "../app/workspace/tabs-sidebar-item.js"), "utf8"),
+    fs.readFileSync(path.join(__dirname, "../app/workspace/tabs-sidebar-sort.js"), "utf8"),
+    fs.readFileSync(path.join(__dirname, "../app/workspace/tabs-sidebar-folders.js"), "utf8")
+  ].join("\n");
   const tabSearch = fs.readFileSync(path.join(__dirname, "../app/workspace/tab-search.js"), "utf8");
   const css = fs.readFileSync(path.join(__dirname, "../styles/chatclub.css"), "utf8");
   const icons = fs.readFileSync(path.join(__dirname, "../ui/icons.js"), "utf8");
@@ -194,7 +199,7 @@ globalThis.document = {
   assert.match(css, /\.workspace-tabs-sidebar-count\s*\{[^}]*background:\s*var\(--primary\)/, "the tab count must use a solid primary fill");
   assert.match(css, /\.workspace-tabs-sidebar-count\s*\{[^}]*color:\s*var\(--bg\)/, "the tab count numeral must contrast against the primary fill");
   assert.match(css, /\.workspace-tabs-sidebar-cleanup/, "ChatClub Tabs must expose a close-others control");
-  assert.match(css, /\.workspace-tabs-sidebar-cleanup\s*\{[^}]*color:\s*var\(--text\)/, "the cleanup icon must use the primary text color");
+  assert.match(css, /\.workspace-tabs-sidebar-cleanup[\s\S]{0,280}color:\s*var\(--text\)/, "the cleanup icon must use the primary text color");
   assert.match(css, /\.workspace-tabs-sidebar-item-index/, "each tab name must show a sequence number");
   assert.match(css, /\.workspace-tabs-sidebar-item-pin/, "each tab row must expose a pin control");
   assert.match(css, /\.workspace-tabs-sidebar-item-pin-mark/, "pinned tabs must keep a visible pin mark");
@@ -297,7 +302,8 @@ globalThis.document = {
                 current: true,
                 live: true,
                 layoutName: "Pocket batch",
-                appIds: ["ChatGPT"]
+                appIds: ["ChatGPT"],
+                updatedAt: Date.now()
               },
               {
                 tabId: 12,
@@ -306,14 +312,16 @@ globalThis.document = {
                 workspaceId: "page-bbbbbbbbbbbb",
                 current: false,
                 live: true,
-                appIds: ["Claude"]
+                appIds: ["Claude"],
+                updatedAt: Date.now() - (2 * 24 * 60 * 60 * 1000)
               },
               {
                 workspaceId: "page-cccccccccccc",
                 current: false,
                 live: false,
                 topicTitle: "Closed research",
-                appIds: ["Grok"]
+                appIds: ["Grok"],
+                detachedAt: Date.now() - (31 * 24 * 60 * 60 * 1000)
               }
             ]
           };
@@ -399,6 +407,7 @@ globalThis.document = {
   {
     const fixture = controller();
     await fixture.api.refresh();
+    fixture.api.setSortMode("open");
     fixture.api.setOpen(true);
     const sidebar = fixture.api.renderSidebar();
     const current = descendants(sidebar).find((node) => node.classList.contains("is-current"));
@@ -411,9 +420,11 @@ globalThis.document = {
     assert.ok(header, "the sidebar must render a header");
     assert.match(String(header.children[0]?.className || ""), /workspace-tabs-sidebar-count/, "tab count must sit to the left of ChatClub Tabs");
     assert.match(String(header.children[1]?.className || ""), /workspace-tabs-sidebar-title/);
-    assert.match(String(header.children[2]?.className || ""), /workspace-tabs-sidebar-cleanup/, "close-others must sit to the right of ChatClub Tabs");
+    assert.match(String(header.children[2]?.className || ""), /workspace-tabs-sidebar-header-actions/, "sort, folder and close-others must sit to the right of ChatClub Tabs");
     const cleanup = descendants(sidebar).find((node) => String(node.className || "").includes("workspace-tabs-sidebar-cleanup"));
     assert.ok(cleanup, "the header must expose a close-others control");
+    assert.ok(descendants(header).some((node) => String(node.className || "").includes("workspace-tabs-sidebar-sort")), "the header must expose a sort control");
+    assert.ok(descendants(header).some((node) => String(node.className || "").includes("workspace-tabs-sidebar-new-folder")), "the header must expose a new-folder control");
     assert.equal(cleanup.disabled, false);
     cleanup.click();
     await Promise.resolve();
@@ -707,6 +718,7 @@ globalThis.document = {
       }
     });
     await fixture.api.refresh();
+    fixture.api.setSortMode("open");
     fixture.api.setOpen(true);
     const sidebar = fixture.api.renderSidebar();
     const list = descendants(sidebar).find((node) => node.classList.contains("workspace-tabs-sidebar-list"));
@@ -723,6 +735,7 @@ globalThis.document = {
   {
     const fixture = controller();
     await fixture.api.refresh();
+    fixture.api.setSortMode("open");
     const listed = fixture.api.currentItems();
     const reordered = fixture.api.moveTab(listed[1], listed[0], "before");
     assert.equal(reordered[0].workspaceId, "page-bbbbbbbbbbbb");
@@ -773,6 +786,7 @@ globalThis.document = {
       }
     });
     await fixture.api.refresh();
+    fixture.api.setSortMode("open");
     fixture.api.setOpen(true);
     const listed = fixture.api.currentItems();
     const closedA = listed.find((item) => item.workspaceId === "page-closed-one");
@@ -860,6 +874,7 @@ globalThis.document = {
     const fixture = controller();
     fixture.widthMemory.delete("chatclubWorkspaceTabsPinnedV1");
     await fixture.api.refresh();
+    fixture.api.setSortMode("open");
     fixture.api.setOpen(true);
     const listed = fixture.api.currentItems();
     const liveSecond = listed.find((item) => item.workspaceId === "page-bbbbbbbbbbbb");
@@ -900,6 +915,7 @@ globalThis.document = {
     const fixture = controller();
     fixture.widthMemory.delete("chatclubWorkspaceTabsPinnedV1");
     await fixture.api.refresh();
+    fixture.api.setSortMode("open");
     const listed = fixture.api.currentItems();
     fixture.api.togglePin(listed[1]);
     const after = fixture.api.currentItems();
@@ -958,6 +974,7 @@ globalThis.document = {
     });
     fixture.widthMemory.delete("chatclubWorkspaceTabsPinnedV1");
     await fixture.api.refresh();
+    fixture.api.setSortMode("open");
     const listed = fixture.api.currentItems();
     fixture.api.togglePin(listed.find((item) => item.workspaceId === "page-live-two"));
     fixture.api.togglePin(listed.find((item) => item.workspaceId === "page-closed-two"));
@@ -1125,6 +1142,57 @@ globalThis.document = {
       0,
       "hidden hover buttons must disappear from the row and More"
     );
+  }
+
+  {
+    widthMemory.delete("chatclubWorkspaceTabsSidebarSortV1");
+    const fixture = controller();
+    await fixture.api.refresh();
+    assert.equal(fixture.api.currentSortMode(), "time", "ChatClub Tabs must default to time sort");
+    fixture.api.setOpen(true);
+    const byTime = fixture.api.renderSidebar();
+    assert.match(nodeText(byTime), /Today|今天/, "time sort must group recent tabs like prompt history");
+    assert.match(nodeText(byTime), /Older|更早/, "time sort must group older tabs like prompt history");
+    assert.ok(
+      descendants(byTime).some((node) => node.classList.contains("workspace-tabs-sidebar-group")),
+      "time sort must render date group headings"
+    );
+    assert.equal(
+      descendants(byTime).some((node) => node.classList.contains("workspace-tabs-sidebar-divider")),
+      false,
+      "time sort must not use the open/closed divider"
+    );
+    fixture.api.setSortMode("open");
+    assert.equal(fixture.widthMemory.get("chatclubWorkspaceTabsSidebarSortV1"), "open");
+    const byOpen = fixture.api.renderSidebar();
+    assert.ok(descendants(byOpen).some((node) => node.classList.contains("workspace-tabs-sidebar-divider")));
+    fixture.api.setSortMode("name");
+    const byName = fixture.api.renderSidebar();
+    const nameLabels = descendants(byName)
+      .filter((node) => node.classList.contains("workspace-tabs-sidebar-item-label"))
+      .map((node) => nodeText(node));
+    assert.deepEqual(nameLabels, [...nameLabels].sort((left, right) => left.localeCompare(right, undefined, { sensitivity: "base" })));
+  }
+
+  {
+    widthMemory.delete("chatclubWorkspaceTabsSidebarSortV1");
+    widthMemory.delete("chatclubWorkspaceTabsSidebarFoldersV1");
+    const fixture = controller();
+    await fixture.api.refresh();
+    fixture.api.setOpen(true);
+    const created = fixture.api.addFolder("Research");
+    assert.equal(created.at(-1).name, "Research");
+    const folderId = created.at(-1).id;
+    const listed = fixture.api.currentItems();
+    fixture.api.moveTab(listed[0], { id: folderId }, "into");
+    assert.equal(fixture.api.currentFolders()[0].workspaceIds[0], listed[0].workspaceId);
+    const nested = fixture.api.renderSidebar();
+    assert.ok(descendants(nested).some((node) => node.classList.contains("workspace-tabs-sidebar-folder")));
+    assert.ok(descendants(nested).some((node) => node.classList.contains("is-nested")));
+    fixture.api.moveTab(listed[0], { id: "root" }, "out");
+    assert.deepEqual(fixture.api.currentFolders()[0].workspaceIds, []);
+    const persisted = JSON.parse(fixture.widthMemory.get("chatclubWorkspaceTabsSidebarFoldersV1"));
+    assert.equal(persisted[0].name, "Research");
   }
 
   console.log("workspace tabs sidebar: ok");

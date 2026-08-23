@@ -188,6 +188,7 @@ export function liveTabItem(api, tab, currentTabId, record) {
     appIds: snapshotAppIds(snapshot),
     topicTitle: String(snapshot?.topicTitle || "").trim(),
     topicTitleCustom: snapshot?.topicTitleCustom === true,
+    updatedAt: record?.updatedAt ?? null,
     detachedAt: record?.detachedAt ?? null
   };
 }

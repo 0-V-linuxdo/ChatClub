@@ -20,7 +20,10 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   const statePortsSource = read("app/settings/state-ports.js");
   const constantsSource = read("shared/constants.js");
   const stylesheetSource = read("styles/chatclub.css");
-  const sidebarSource = read("app/workspace/tabs-sidebar-controller.js");
+  const sidebarSource = [
+    read("app/workspace/tabs-sidebar-controller.js"),
+    read("app/workspace/tabs-sidebar-item.js")
+  ].join("\n");
   const runtimeSource = read("app/runtime.js");
 
   assert.match(constantsSource, /TABS_SIDEBAR_HOVER_BUTTONS/);
