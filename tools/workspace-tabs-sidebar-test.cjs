@@ -20,6 +20,8 @@ class FakeNode {
     };
     this.offsetTop = 0;
     this.isConnected = true;
+    this.selectionStart = 0;
+    this.selectionEnd = 0;
     this.listeners = Object.create(null);
     this.classList = {
       contains: (name) => String(this.className || "").split(/\s+/).includes(name),
@@ -57,6 +59,13 @@ class FakeNode {
     const key = String(name || "");
     if (!this.listeners[key]) this.listeners[key] = [];
     this.listeners[key].push(listener);
+  }
+
+  dispatch(name, event = {}) {
+    const payload = { preventDefault() {}, stopPropagation() {}, target: this, ...event };
+    if (!payload.target) payload.target = this;
+    for (const listener of this.listeners[String(name || "")] || []) listener(payload);
+    return payload;
   }
 
   click(event = {}) {
@@ -206,6 +215,10 @@ globalThis.document = {
   assert.match(css, /\.workspace-tabs-sidebar-list\s*\{[^}]*padding:\s*4px 8px 8px/);
   assert.match(css, /\.workspace-tabs-sidebar-search \.workspace-tabs-sidebar-search-input/, "sidebar search styles must beat the global .input width");
   assert.match(tabSearch, /el\("label", \{ class: "workspace-tabs-sidebar-search"/);
+  assert.match(tabSearch, /compositionstart/, "the search field must keep IME composition attached to one input");
+  assert.match(tabSearch, /compositionend/, "committed IME text must refresh search after composition ends");
+  assert.match(tabSearch, /keyCode === 229/, "IME keydown must mark composition before the first composing input");
+  assert.match(source, /searchComposing/, "sidebar rebuilds must wait until IME composition ends");
   assert.doesNotMatch(tabSearch, /class: "input workspace-tabs-sidebar-search-input"/);
   assert.match(css, /\.workspace-tabs-search-hit/, "full-text hits must reuse Pocket card chrome");
   assert.match(icons, /search:\s*\[/, "the sidebar search field must use the Lucide search glyph");
@@ -981,6 +994,37 @@ globalThis.document = {
     fixture.api.setSearchQuery("no-such-tab");
     const empty = fixture.api.renderSidebar();
     assert.match(nodeText(empty), /No matching tabs|没有匹配的标签页/);
+  }
+
+  {
+    const fixture = controller();
+    await fixture.api.refresh();
+    fixture.api.setOpen(true);
+    const shell = Object.assign(new FakeNode("div"), { isConnected: true, className: "app-shell" });
+    const grid = Object.assign(new FakeNode("div"), { className: "main-grid" });
+    shell.append(grid);
+    fixture.api.syncSidebar(shell);
+    const sidebar = descendants(shell).find((node) => node.classList.contains("workspace-tabs-sidebar"));
+    const field = descendants(sidebar).find((node) => node.classList.contains("workspace-tabs-sidebar-search-input"));
+    assert.ok(field, "the connected sidebar must expose a live search input");
+    field.dispatch("keydown", { key: "a", keyCode: 229, isComposing: false });
+    field.value = "a";
+    field.dispatch("input", { isComposing: true });
+    const during = descendants(shell).find((node) => node.classList.contains("workspace-tabs-sidebar"));
+    const duringField = descendants(during).find((node) => node.classList.contains("workspace-tabs-sidebar-search-input"));
+    assert.equal(during, sidebar, "IME composition must not replace the sidebar");
+    assert.equal(duringField, field, "IME composition must keep the same search input node");
+    assert.equal(
+      descendants(during).filter((node) => node.classList.contains("workspace-tabs-sidebar-item-label")).length,
+      3,
+      "pinyin in composition must not filter tabs yet"
+    );
+    field.value = "阿";
+    field.dispatch("compositionend", { data: "阿" });
+    const committed = descendants(shell).find((node) => node.classList.contains("workspace-tabs-sidebar"));
+    const committedField = descendants(committed).find((node) => node.classList.contains("workspace-tabs-sidebar-search-input"));
+    assert.notEqual(committed, sidebar, "committed IME text may rebuild the filtered list");
+    assert.equal(committedField?.value, "阿");
   }
 
   {

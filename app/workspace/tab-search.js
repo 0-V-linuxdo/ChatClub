@@ -79,7 +79,7 @@ export function itemMatchesTitleQuery(item, query, label) {
   return matchesFullTextQuery(query, tabTitleSearchValues(item, label));
 }
 
-export function renderWorkspaceTabSearchField({ query, fullTextEnabled, onInput, onFocus, onBlur }) {
+export function renderWorkspaceTabSearchField({ query, fullTextEnabled, onInput, onFocus, onBlur, onCompositionStart, onCompositionEnd }) {
   const placeholder = fullTextEnabled
     ? t("workspace.tabs.searchPlaceholderFullText")
     : t("workspace.tabs.searchPlaceholder");
@@ -92,8 +92,15 @@ export function renderWorkspaceTabSearchField({ query, fullTextEnabled, onInput,
     spellcheck: "false"
   });
   field.value = query;
+  field.addEventListener("keydown", (event) => {
+    if (event?.isComposing || event?.keyCode === 229) onCompositionStart?.(event);
+  });
+  field.addEventListener("compositionstart", (event) => onCompositionStart?.(event));
+  field.addEventListener("compositionend", (event) => {
+    onCompositionEnd?.(String(event?.target?.value || ""), event);
+  });
   field.addEventListener("input", (event) => {
-    onInput(String(event?.target?.value || ""));
+    onInput(String(event?.target?.value || ""), event);
   });
   field.addEventListener("focus", () => onFocus?.());
   field.addEventListener("blur", () => onBlur?.());

@@ -203,6 +203,7 @@ export function createWorkspaceTabsSidebarController({
   let searchQuery = "";
   let searchFocused = false;
   let searchSelection = { start: 0, end: 0 };
+  let searchComposing = false;
   let recordFullTextEnabled = false;
   let fullTextStore = {};
   let fullTextLoad = null;
@@ -336,7 +337,7 @@ export function createWorkspaceTabsSidebarController({
     fullTextLoad = run;
     const result = await run;
     if (fullTextLoad === run && lastShell?.isConnected && result.query === searchQuery.trim()) {
-      syncSidebar(lastShell);
+      if (!searchComposing) syncSidebar(lastShell);
     }
     return result;
   }
@@ -981,24 +982,33 @@ export function createWorkspaceTabsSidebarController({
   }
 
   function setSearchQuery(next) {
+    searchComposing = false;
     searchQuery = String(next || "");
     if (lastShell?.isConnected) syncSidebar(lastShell);
     if (searchQuery.trim()) refreshSearchContext().catch(() => {});
+  }
+
+  function applySearchInput(value, composing) {
+    searchQuery = String(value || "");
+    const field = lastShell?.querySelector?.(".workspace-tabs-sidebar-search-input");
+    searchSelection = {
+      start: Number(field?.selectionStart) || searchQuery.length,
+      end: Number(field?.selectionEnd) || searchQuery.length
+    };
+    if (composing || searchComposing) return;
+    if (lastShell?.isConnected) syncSidebar(lastShell);
+    refreshSearchContext().catch(() => {});
   }
 
   function renderSearchBar() {
     return renderWorkspaceTabSearchField({
       query: searchQuery,
       fullTextEnabled: recordFullTextEnabled,
-      onInput: (value) => {
-        searchQuery = value;
-        const field = lastShell?.querySelector?.(".workspace-tabs-sidebar-search-input");
-        searchSelection = {
-          start: Number(field?.selectionStart) || value.length,
-          end: Number(field?.selectionEnd) || value.length
-        };
-        if (lastShell?.isConnected) syncSidebar(lastShell);
-        refreshSearchContext().catch(() => {});
+      onInput: (value, event) => applySearchInput(value, Boolean(event?.isComposing)),
+      onCompositionStart: () => { searchComposing = true; },
+      onCompositionEnd: (value) => {
+        searchComposing = false;
+        applySearchInput(value, false);
       },
       onFocus: () => { searchFocused = true; },
       onBlur: () => { searchFocused = false; }
@@ -1147,6 +1157,7 @@ export function createWorkspaceTabsSidebarController({
     if (searchQuery) {
       event.preventDefault?.();
       event.stopPropagation?.();
+      searchComposing = false;
       searchQuery = "";
       if (lastShell?.isConnected) syncSidebar(lastShell);
       return;
@@ -1174,6 +1185,7 @@ export function createWorkspaceTabsSidebarController({
     syncPageTitle();
     if (!shell?.isConnected) return null;
     lastShell = shell;
+    if (searchComposing) return shell.querySelector(".workspace-tabs-sidebar");
     const existing = shell.querySelector(".workspace-tabs-sidebar");
     const next = renderSidebar();
     shell.classList.toggle("has-workspace-tabs-sidebar", Boolean(next));
@@ -1228,6 +1240,7 @@ export function createWorkspaceTabsSidebarController({
   function close() {
     if (!open) return false;
     stopTitleEditor();
+    searchComposing = false;
     searchQuery = "";
     setOpen(false);
     return true;
