@@ -1,5 +1,5 @@
 const RUNTIME_NAME = "claude-iframe-compat";
-const RUNTIME_VERSION = "2026.08.23.2";
+const RUNTIME_VERSION = "2026.08.23.3";
 const SCAN_WINDOW_MS = 20_000;
 const SCAN_INTERVAL_MS = 250;
 const MAX_MODULE_IMPORTS = 40;
@@ -56,10 +56,6 @@ function patchClaudeIframeStore(store) {
   } catch {
     return false;
   }
-  try {
-    const setter = store.getState()?.setIsInIframe;
-    if (typeof setter === "function") setter(false);
-  } catch {}
   return storeMatchesIframeFlag(store, false);
 }
 
@@ -269,13 +265,18 @@ async function collectZustandLikeStores({
   importModule,
   baseHref = "",
   extraStores = [],
-  target
+  target,
+  seenHrefs
 } = {}) {
   const stores = new Set();
   for (const store of extraStores) {
     if (isZustandLikeStore(store)) stores.add(store);
   }
-  const hrefs = modulePreloadHrefs(documentLike, baseHref);
+  const hrefs = modulePreloadHrefs(documentLike, baseHref)
+    .filter((href) => !seenHrefs || !seenHrefs.has(href));
+  if (seenHrefs) {
+    for (const href of hrefs) seenHrefs.add(href);
+  }
   if (typeof importModule === "function") {
     await Promise.all(hrefs.map(async (href) => {
       try {
@@ -303,6 +304,13 @@ function watchStore(store, unsubscribers) {
     if (typeof unsubscribe === "function") unsubscribers.add(unsubscribe);
   } catch {}
   return storeMatchesIframeFlag(store, false) || storeHasIframeFlag(store);
+}
+
+function hasPatchedIframeStore(stores) {
+  for (const store of stores) {
+    if (storeMatchesIframeFlag(store, false)) return true;
+  }
+  return false;
 }
 
 export function installClaudeIframeCompat(runtimes, options = {}) {
@@ -346,25 +354,32 @@ export function installClaudeIframeCompat(runtimes, options = {}) {
   const spoof = installClaudeFrameSpoof(target);
 
   let stopped = false;
+  let scanning = true;
   let scanTimer = 0;
   let deadlineTimer = 0;
   let mutationObserver = null;
   const seenStores = new Set();
+  const seenHrefs = new Set();
   const unsubscribers = new Set();
   const deadlineAt = now() + SCAN_WINDOW_MS;
   const baseHref = (() => {
     try { return String(locationLike?.href || ""); } catch { return ""; }
   })();
 
-  const stop = () => {
-    if (stopped) return;
-    stopped = true;
+  const stopScan = () => {
+    scanning = false;
     if (scanTimer) clearTimer(scanTimer);
     if (deadlineTimer) clearTimer(deadlineTimer);
     scanTimer = 0;
     deadlineTimer = 0;
     try { mutationObserver?.disconnect?.(); } catch {}
     mutationObserver = null;
+  };
+
+  const stop = () => {
+    if (stopped) return;
+    stopped = true;
+    stopScan();
     for (const unsubscribe of unsubscribers) {
       try { unsubscribe(); } catch {}
     }
@@ -372,41 +387,46 @@ export function installClaudeIframeCompat(runtimes, options = {}) {
   };
 
   const scan = async () => {
-    if (stopped) return;
+    if (stopped || !scanning) return;
     const stores = await collectZustandLikeStores({
       document: documentLike,
       importModule,
       baseHref,
       extraStores,
-      target
+      target,
+      seenHrefs
     });
-    if (stopped) return;
+    if (stopped || !scanning) return;
     for (const store of stores) {
       if (seenStores.has(store)) continue;
       seenStores.add(store);
       watchStore(store, unsubscribers);
     }
-    if (!stopped && now() < deadlineAt) {
+    if (hasPatchedIframeStore(seenStores)) {
+      stopScan();
+      return;
+    }
+    if (!stopped && scanning && now() < deadlineAt) {
       scanTimer = setTimer(() => {
         scanTimer = 0;
         scan().catch(() => {});
       }, SCAN_INTERVAL_MS);
     } else {
-      stop();
+      stopScan();
     }
   };
 
   if (Observer && documentLike) {
     try {
       mutationObserver = new Observer(() => {
-        if (!stopped) scan().catch(() => {});
+        if (!stopped && scanning) scan().catch(() => {});
       });
       mutationObserver.observe(documentLike, { childList: true, subtree: true });
     } catch {
       mutationObserver = null;
     }
   }
-  deadlineTimer = setTimer(stop, SCAN_WINDOW_MS + 100);
+  deadlineTimer = setTimer(stopScan, SCAN_WINDOW_MS + 100);
   runtimes.register(RUNTIME_NAME, {
     version: RUNTIME_VERSION,
     api: Object.freeze({ ...api, spoof }),

@@ -69,12 +69,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "674feab5b9c1890117e5538df8386a0e9083d0f6e47de3755cc071a1a251a9b1";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "f1c9d50646d20bf899d7070db4400bcb59c6246bb13095031af04399c4465865";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "6deed2f81917af92ae677b79874676ba70bae47bca49faa71ba21dd467fd52f8";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.6deed2f81917af92ae677b79874676ba70bae47bca49faa71ba21dd467fd52f8";
-  var CONTENT_RUNTIME_PRELOAD_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preload.js", "entryPath": "content-src/preload.js", "sourceSha256": "615c03cc545250f4c718a1f5219e6f32000bfa837836d484965d1aeb7f7a03c3", "implementationSha256": "28783cdd10ddb4b7d93887ed126d8bf0f0a72384307394bacf88f2436f90b900", "implementationVersion": "2026.07.16.2+bundle.28783cdd10ddb4b7d93887ed126d8bf0f0a72384307394bacf88f2436f90b900" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "0e8273f16a20ca866ecb2d2f51bf3602a4fbf091a3c1d33daa73a117f2695cd5";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.0e8273f16a20ca866ecb2d2f51bf3602a4fbf091a3c1d33daa73a117f2695cd5";
+  var CONTENT_RUNTIME_PRELOAD_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preload.js", "entryPath": "content-src/preload.js", "sourceSha256": "3b162a9fdeedb2ec6b213080a072b3d711f9b9fc0b6015a2408849959a492b20", "implementationSha256": "e9cf5c34cca56226541e870ec166649f1dc9018f5079e2640a211152e5f81f17", "implementationVersion": "2026.07.16.2+bundle.e9cf5c34cca56226541e870ec166649f1dc9018f5079e2640a211152e5f81f17" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -525,7 +525,7 @@
 
   // content-src/preload/claude-iframe.js
   var RUNTIME_NAME = "claude-iframe-compat";
-  var RUNTIME_VERSION = "2026.08.23.2";
+  var RUNTIME_VERSION = "2026.08.23.3";
   var SCAN_WINDOW_MS = 2e4;
   var SCAN_INTERVAL_MS = 250;
   var MAX_MODULE_IMPORTS = 40;
@@ -576,11 +576,6 @@
       store.setState(IFRAME_PATCH);
     } catch {
       return false;
-    }
-    try {
-      const setter = store.getState()?.setIsInIframe;
-      if (typeof setter === "function") setter(false);
-    } catch {
     }
     return storeMatchesIframeFlag(store, false);
   }
@@ -799,13 +794,17 @@
     importModule,
     baseHref = "",
     extraStores = [],
-    target
+    target,
+    seenHrefs
   } = {}) {
     const stores = /* @__PURE__ */ new Set();
     for (const store of extraStores) {
       if (isZustandLikeStore(store)) stores.add(store);
     }
-    const hrefs = modulePreloadHrefs(documentLike, baseHref);
+    const hrefs = modulePreloadHrefs(documentLike, baseHref).filter((href) => !seenHrefs || !seenHrefs.has(href));
+    if (seenHrefs) {
+      for (const href of hrefs) seenHrefs.add(href);
+    }
     if (typeof importModule === "function") {
       await Promise.all(hrefs.map(async (href) => {
         try {
@@ -834,6 +833,12 @@
     } catch {
     }
     return storeMatchesIframeFlag(store, false) || storeHasIframeFlag(store);
+  }
+  function hasPatchedIframeStore(stores) {
+    for (const store of stores) {
+      if (storeMatchesIframeFlag(store, false)) return true;
+    }
+    return false;
   }
   function installClaudeIframeCompat(runtimes, options = {}) {
     const existing = runtimes.registration(RUNTIME_NAME);
@@ -867,10 +872,12 @@
     clearClaudeDocumentReferrer(documentLike);
     const spoof = installClaudeFrameSpoof(target);
     let stopped = false;
+    let scanning = true;
     let scanTimer = 0;
     let deadlineTimer = 0;
     let mutationObserver = null;
     const seenStores = /* @__PURE__ */ new Set();
+    const seenHrefs = /* @__PURE__ */ new Set();
     const unsubscribers = /* @__PURE__ */ new Set();
     const deadlineAt = now() + SCAN_WINDOW_MS;
     const baseHref = (() => {
@@ -880,9 +887,8 @@
         return "";
       }
     })();
-    const stop = () => {
-      if (stopped) return;
-      stopped = true;
+    const stopScan = () => {
+      scanning = false;
       if (scanTimer) clearTimer(scanTimer);
       if (deadlineTimer) clearTimer(deadlineTimer);
       scanTimer = 0;
@@ -892,6 +898,11 @@
       } catch {
       }
       mutationObserver = null;
+    };
+    const stop = () => {
+      if (stopped) return;
+      stopped = true;
+      stopScan();
       for (const unsubscribe of unsubscribers) {
         try {
           unsubscribe();
@@ -901,34 +912,39 @@
       unsubscribers.clear();
     };
     const scan = async () => {
-      if (stopped) return;
+      if (stopped || !scanning) return;
       const stores = await collectZustandLikeStores({
         document: documentLike,
         importModule,
         baseHref,
         extraStores,
-        target
+        target,
+        seenHrefs
       });
-      if (stopped) return;
+      if (stopped || !scanning) return;
       for (const store of stores) {
         if (seenStores.has(store)) continue;
         seenStores.add(store);
         watchStore(store, unsubscribers);
       }
-      if (!stopped && now() < deadlineAt) {
+      if (hasPatchedIframeStore(seenStores)) {
+        stopScan();
+        return;
+      }
+      if (!stopped && scanning && now() < deadlineAt) {
         scanTimer = setTimer(() => {
           scanTimer = 0;
           scan().catch(() => {
           });
         }, SCAN_INTERVAL_MS);
       } else {
-        stop();
+        stopScan();
       }
     };
     if (Observer && documentLike) {
       try {
         mutationObserver = new Observer(() => {
-          if (!stopped) scan().catch(() => {
+          if (!stopped && scanning) scan().catch(() => {
           });
         });
         mutationObserver.observe(documentLike, { childList: true, subtree: true });
@@ -936,7 +952,7 @@
         mutationObserver = null;
       }
     }
-    deadlineTimer = setTimer(stop, SCAN_WINDOW_MS + 100);
+    deadlineTimer = setTimer(stopScan, SCAN_WINDOW_MS + 100);
     runtimes.register(RUNTIME_NAME, {
       version: RUNTIME_VERSION,
       api: Object.freeze({ ...api, spoof }),

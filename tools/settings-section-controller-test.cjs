@@ -290,6 +290,7 @@ globalThis.document = { addEventListener() {} };
     optimizePromptTemplates: [],
     primaryColor: "#6750a4",
     primaryColorCustom: false,
+    recordFullText: false,
     summaryApiProfileId: "api-1",
     topicTitleApiProfileId: "api-1",
     summaryPromptTemplateId: "summary-default",

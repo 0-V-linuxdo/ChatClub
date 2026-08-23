@@ -69,11 +69,11 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "674feab5b9c1890117e5538df8386a0e9083d0f6e47de3755cc071a1a251a9b1";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "f1c9d50646d20bf899d7070db4400bcb59c6246bb13095031af04399c4465865";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "6deed2f81917af92ae677b79874676ba70bae47bca49faa71ba21dd467fd52f8";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.6deed2f81917af92ae677b79874676ba70bae47bca49faa71ba21dd467fd52f8";
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "0e8273f16a20ca866ecb2d2f51bf3602a4fbf091a3c1d33daa73a117f2695cd5";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.0e8273f16a20ca866ecb2d2f51bf3602a4fbf091a3c1d33daa73a117f2695cd5";
   var CONTENT_RUNTIME_SUMMARY_ISOLATED_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts.js", "entryPath": "content-src/summary-userscripts.js", "sourceSha256": "29029270bf8c38cbb26ef1f55af140a615ea60275d0023334fec494d8db531e6", "implementationSha256": "09d65f8e9df238f2dc4da132c9a9735d1b022cf56759e5fa974ddddafd796e46", "implementationVersion": "2026.07.16.2+bundle.09d65f8e9df238f2dc4da132c9a9735d1b022cf56759e5fa974ddddafd796e46" });
 
   // shared/content-runtime-identity.js
@@ -2451,7 +2451,7 @@
       return api.merge(out);
     };
     scripts["typingmind.js"] = scripts["typingmind"];
-    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.6deed2f81917af92ae677b79874676ba70bae47bca49faa71ba21dd467fd52f8" });
+    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.0e8273f16a20ca866ecb2d2f51bf3602a4fbf091a3c1d33daa73a117f2695cd5" });
     return scripts;
   }
 

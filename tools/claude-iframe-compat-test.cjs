@@ -12,7 +12,11 @@ const preload = fs.readFileSync(path.join(root, "content-src/preload.js"), "utf8
 assert.match(source, /isInIframe: true/, "Claude compat must target stores that report isInIframe");
 assert.match(source, /isInIframe: false/, "Claude compat must force isInIframe false");
 assert.match(source, /modulepreload/, "Claude compat must scan modulepreload exports for Zustand stores");
-assert.match(source, /setIsInIframe/, "Claude compat must also invoke Claude's setIsInIframe action when present");
+assert.doesNotMatch(
+  source,
+  /setIsInIframe/,
+  "Claude compat must patch with Zustand setState only; do not invoke Claude's setIsInIframe action"
+);
 assert.doesNotMatch(source, /\bimport\s*\(/, "content runtime must not contain a dynamic import token");
 assert.doesNotMatch(source, /parent\s*=\s*(?:window|target|self)/, "Claude compat must not overwrite window.parent");
 assert.match(preload, /installClaudeIframeCompat\(runtimes\)/, "Claude preload must install iframe compat");
@@ -57,6 +61,9 @@ function deferredTimers() {
       const timer = timers.get(id);
       timers.delete(id);
       timer?.callback?.();
+    },
+    fireAll() {
+      for (const id of [...timers.keys()]) this.fire(id);
     },
     get size() { return timers.size; }
   };
@@ -124,10 +131,11 @@ function runtimesBag() {
   });
 
   const timers = deferredTimers();
-  let observed = false;
+  let observeCalls = 0;
+  let disconnectCalls = 0;
   class FakeObserver {
-    observe() { observed = true; }
-    disconnect() { observed = false; }
+    observe() { observeCalls += 1; }
+    disconnect() { disconnectCalls += 1; }
   }
   const { runtimes, registrations } = runtimesBag();
   let setIsInIframeCalls = 0;
@@ -174,16 +182,22 @@ function runtimesBag() {
     "page-declared modulepreload must be imported even when cross-origin"
   );
   assert.equal(imported.includes("https://evil.example/pwn.js"), false, "undeclared cross-origin module scripts must not be loaded");
-  assert.ok(setIsInIframeCalls >= 1, "Claude setIsInIframe action must be invoked when present");
-  assert.equal(observed, true);
+  assert.equal(setIsInIframeCalls, 0, "Claude setIsInIframe action must not be invoked");
+  assert.ok(observeCalls >= 1, "scan must observe modulepreload insertion");
+  assert.ok(disconnectCalls >= 1, "successful patch must stop further module scans");
+  assert.equal(timers.size, 0, "successful patch must clear scan and deadline timers");
+
+  const importedAfterPatch = imported.length;
+  timers.fireAll();
+  for (let i = 0; i < 10; i += 1) await Promise.resolve();
+  assert.equal(imported.length, importedAfterPatch, "must not re-import modules after a successful patch");
 
   liveStore.setState({ isInIframe: true });
-  assert.equal(liveStore.getState().isInIframe, false, "subscribe must keep isInIframe false while the scan window is open");
+  assert.equal(liveStore.getState().isInIframe, false, "subscribe must keep isInIframe false after the store is patched");
 
   registrations[0].dispose();
   liveStore.setState({ isInIframe: true });
   assert.equal(liveStore.getState().isInIframe, true, "dispose must release store subscriptions");
-  assert.equal(observed, false);
   assert.equal(timers.size, 0, "dispose must clear scan and deadline timers");
 
   const topLevel = {};

@@ -24,6 +24,7 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
     modelPreferenceOrder: ["Gemini"],
     modelPreferences: { Gemini: "pro" },
     nested: { enabled: true },
+    recordFullText: false,
     summarySiteConfigs: [{ id: "second" }, { id: "first" }],
     themeMode: "system"
   };
@@ -81,6 +82,9 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   assert.throws(() => { settingsSections.appearance.options.modelPreferenceFailurePolicy; }, /settings\.appearance cannot read/);
   settingsSections.appearance.options.themeMode = "dark";
   assert.equal(rootState.options.themeMode, "dark");
+  assert.equal(settingsSections.appearance.options.recordFullText, false);
+  settingsSections.appearance.options.recordFullText = true;
+  assert.equal(rootState.options.recordFullText, true);
   assert.throws(() => {
     settingsSections.appearance.options = {
       ...rootState.options,
