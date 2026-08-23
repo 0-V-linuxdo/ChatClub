@@ -62,6 +62,30 @@ export function createSummarySettingsSection(ctx) {
     settingsKit
   });
 
+  function recordFullTextBlock(redraw) {
+    const enabled = state.options.recordFullText === true;
+    const toggle = el("input", {
+      type: "checkbox",
+      role: "switch",
+      checked: enabled,
+      "aria-label": t("summary.recordFullText")
+    });
+    toggle.addEventListener("change", async () => {
+      state.options = await saveOptionsPatch({ recordFullText: toggle.checked === true });
+      redraw();
+    });
+    return settingsBlock(
+      t("summary.recordFullText"),
+      t("summary.recordFullTextHelp"),
+      el("label", { class: "appearance-toggle-control" },
+        el("span", { class: "appearance-toggle-copy" },
+          el("strong", {}, t("common.enabled"))
+        ),
+        toggle
+      )
+    );
+  }
+
   function summaryPromptSettingsBlock(redraw, goToSection = () => {}) {
     return el("div", { class: "settings-template-pane" }, promptTemplates.blocks(redraw, goToSection));
   }
@@ -78,6 +102,7 @@ export function createSummarySettingsSection(ctx) {
   function summarySettingsPane(redraw, goToSection = () => {}) {
     const active = state.summarySettingsTab === "scripts" ? "scripts" : "ai";
     return el("div", { class: "settings-pane" },
+      recordFullTextBlock(redraw),
       settingsInnerTabs([
         ["ai", t("summary.aiTab"), t("summary.aiTabDesc")],
         ["scripts", t("summary.scriptsTab"), t("summary.scriptsTabDesc")]

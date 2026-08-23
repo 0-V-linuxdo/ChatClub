@@ -259,31 +259,64 @@ button { cursor: pointer; }
   align-items: center;
   gap: 8px;
   min-width: 0;
-  padding: 0 10px 10px;
+  height: 36px;
+  margin: 10px 8px 4px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--muted);
+  cursor: text;
+}
+
+.workspace-tabs-sidebar-search:focus-within {
+  border-color: var(--primary);
+  color: var(--text);
 }
 
 .workspace-tabs-sidebar-search .svg-icon {
   flex: 0 0 auto;
-  width: 16px;
-  height: 16px;
-  color: var(--text);
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.15;
 }
 
+.workspace-tabs-sidebar-search .workspace-tabs-sidebar-search-input,
 .workspace-tabs-sidebar-search-input {
   flex: 1 1 auto;
   min-width: 0;
-  height: 32px;
-  padding: 0 10px;
-  border-radius: 8px;
-  border: 1px solid var(--line);
-  background: var(--panel-2);
+  width: auto;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--text);
   font-size: 12px;
+  line-height: 34px;
+  box-shadow: none;
+  appearance: none;
+  -webkit-appearance: none;
 }
 
+.workspace-tabs-sidebar-search .workspace-tabs-sidebar-search-input:focus,
 .workspace-tabs-sidebar-search-input:focus {
   outline: none;
-  border-color: var(--primary);
+  border: 0;
+  box-shadow: none;
+}
+
+.workspace-tabs-sidebar-search .workspace-tabs-sidebar-search-input::placeholder {
+  color: var(--muted);
+}
+
+.workspace-tabs-sidebar-search .workspace-tabs-sidebar-search-input::-webkit-search-decoration,
+.workspace-tabs-sidebar-search .workspace-tabs-sidebar-search-input::-webkit-search-cancel-button,
+.workspace-tabs-sidebar-search .workspace-tabs-sidebar-search-input::-webkit-search-results-button,
+.workspace-tabs-sidebar-search .workspace-tabs-sidebar-search-input::-webkit-search-results-decoration {
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 .workspace-tabs-search-hint,
@@ -337,7 +370,7 @@ button { cursor: pointer; }
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 12px 8px 8px;
+  padding: 4px 8px 8px;
   overflow: auto;
 }
 

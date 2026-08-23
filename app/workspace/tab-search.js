@@ -80,15 +80,14 @@ export function itemMatchesTitleQuery(item, query, label) {
 }
 
 export function renderWorkspaceTabSearchField({ query, fullTextEnabled, onInput, onFocus, onBlur }) {
+  const placeholder = fullTextEnabled
+    ? t("workspace.tabs.searchPlaceholderFullText")
+    : t("workspace.tabs.searchPlaceholder");
   const field = input(query, {
-    class: "input workspace-tabs-sidebar-search-input",
+    class: "workspace-tabs-sidebar-search-input",
     type: "search",
-    placeholder: fullTextEnabled
-      ? t("workspace.tabs.searchPlaceholderFullText")
-      : t("workspace.tabs.searchPlaceholder"),
-    "aria-label": fullTextEnabled
-      ? t("workspace.tabs.searchPlaceholderFullText")
-      : t("workspace.tabs.searchPlaceholder"),
+    placeholder,
+    "aria-label": placeholder,
     autocomplete: "off",
     spellcheck: "false"
   });
@@ -98,7 +97,7 @@ export function renderWorkspaceTabSearchField({ query, fullTextEnabled, onInput,
   });
   field.addEventListener("focus", () => onFocus?.());
   field.addEventListener("blur", () => onBlur?.());
-  return el("div", { class: "workspace-tabs-sidebar-search" },
+  return el("label", { class: "workspace-tabs-sidebar-search" },
     createSvgIcon("search"),
     field
   );

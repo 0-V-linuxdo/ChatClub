@@ -183,28 +183,6 @@ export function createAppearanceSettingsSection(ctx) {
     const selectionOverlayControls = createModelSelectionOverlayAppearanceControls({
       state, queueAppearanceAutoSave, syncPreferredModelSelectionOverlays, redraw
     });
-    const recordFullTextEnabled = state.options.recordFullText === true;
-    const recordFullTextToggle = el("input", {
-      type: "checkbox",
-      role: "switch",
-      checked: recordFullTextEnabled,
-      "aria-label": t("appearance.recordFullText"),
-      "aria-describedby": "appearance-record-full-text-help"
-    });
-    recordFullTextToggle.checked = recordFullTextEnabled;
-    recordFullTextToggle.addEventListener("change", () => {
-      queueAppearanceAutoSave({ recordFullText: recordFullTextToggle.checked }, {
-        optimistic: true,
-        redrawOnError: redraw
-      });
-    });
-    const recordFullTextControl = el("label", { class: "appearance-toggle-control" },
-      el("span", { class: "appearance-toggle-copy" },
-        el("strong", {}, t("appearance.recordFullText")),
-        el("small", { id: "appearance-record-full-text-help" }, t("appearance.recordFullTextHelp"))
-      ),
-      recordFullTextToggle
-    );
     const colorPicker = el("input", {
       class: "appearance-color-picker",
       type: "color",
@@ -625,7 +603,7 @@ export function createAppearanceSettingsSection(ctx) {
     );
     const workspaceBlock = () => createAppearanceWorkspacePane({
       activeId: state.settingsAppearanceWorkspaceTab,
-      colorControl, columnCount, language, overlayOpacityControl, recordFullTextControl, selectionOverlayControls,
+      colorControl, columnCount, language, overlayOpacityControl, selectionOverlayControls,
       settingsBlock, settingsInnerTabs, themeMode,
       onSelect: (id) => {
         state.settingsAppearanceWorkspaceTab = id;

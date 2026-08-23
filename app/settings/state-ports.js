@@ -11,7 +11,7 @@ export const SETTINGS_OPTION_CAPABILITIES = Object.freeze({
   appearance: optionCapability([
     "colMaxCount", "frameLoadingOverlayOpacity", "frameToastPosition", "language",
     "modelPreferenceSelectionOverlayEnabled", "modelPreferenceSelectionOverlayOpacity", "primaryColor", "primaryColorCustom",
-    "recordFullText", "tabContextMenuHiddenIds", "tabContextMenuOrder", "tabGroupButtonOrder", "tabGroupButtonPlacement", "tabGroupButtonsMode",
+    "tabContextMenuHiddenIds", "tabContextMenuOrder", "tabGroupButtonOrder", "tabGroupButtonPlacement", "tabGroupButtonsMode",
     "themeMode", "tooltipDisabledIds",
     "topbarPromptInputFontSize", "topbarPromptPlaceholderConfig"
   ]),
@@ -21,8 +21,8 @@ export const SETTINGS_OPTION_CAPABILITIES = Object.freeze({
     "modelPreferenceFailureOverrides", "modelPreferenceFailurePolicy", "modelPreferenceOrder", "modelPreferences"
   ]),
   summary: optionCapability(
-    ["apiProfiles", "summaryApiProfileId", "summaryPromptTemplateId", "summaryPromptTemplates", "summarySiteConfigs"],
-    ["summaryApiProfileId", "summaryPromptTemplateId", "summaryPromptTemplates", "summarySiteConfigs"]
+    ["apiProfiles", "recordFullText", "summaryApiProfileId", "summaryPromptTemplateId", "summaryPromptTemplates", "summarySiteConfigs"],
+    ["recordFullText", "summaryApiProfileId", "summaryPromptTemplateId", "summaryPromptTemplates", "summarySiteConfigs"]
   ),
   messageNavigation: optionCapability(["messageNavigatorEffectMode", "messageNavigatorSiteConfigs"]),
   topicDeletion: optionCapability(["topicDeleteSiteConfigs"]),

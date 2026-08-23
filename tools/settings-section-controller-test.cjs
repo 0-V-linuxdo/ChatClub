@@ -97,6 +97,9 @@ globalThis.document = { addEventListener() {} };
   assert.deepEqual(stateKeys(promptTemplatesSource), ["options", "settingsPromptTemplateDragId"]);
   assert.match(optimizeSource, /\["options", "settingsPromptTemplateDragId"\]/);
   assert.match(summarySource, /createPromptTemplateSettings\(\{/);
+  assert.match(summarySource, /function recordFullTextBlock\(/);
+  assert.match(summarySource, /t\("summary\.recordFullText"\)/);
+  assert.doesNotMatch(appearanceSource, /recordFullText/);
   assert.match(optimizeSource, /createPromptTemplateSettings\(\{/);
   assert.deepEqual(stateKeys(messageSource), [
     "messageNavigatorSettingsTab",
@@ -476,6 +479,11 @@ globalThis.document = { addEventListener() {} };
     hiddenShareLayout.some((entry) => entry.id === "share"),
     false,
     "a user who hid Share must not get it reinserted"
+  );
+  assert.deepEqual(
+    settingsStateModule.SETTINGS_OPTION_CAPABILITIES.summary.write,
+    ["recordFullText", "summaryApiProfileId", "summaryPromptTemplateId", "summaryPromptTemplates", "summarySiteConfigs"],
+    "Summary settings must own full-text recording and collector/prompt config"
   );
   assert.deepEqual(
     settingsStateModule.SETTINGS_OPTION_CAPABILITIES.apps.write,

@@ -69,7 +69,6 @@ const descendants = (node) => [node, ...node.children.flatMap(descendants)];
       toggleControl: token("model-overlay-toggle"),
       opacityControl: token("model-overlay-opacity")
     },
-    recordFullTextControl: token("record-full-text"),
     themeMode: token("theme")
   };
   const settingsBlock = (title, description, ...children) => {
@@ -92,7 +91,7 @@ const descendants = (node) => [node, ...node.children.flatMap(descendants)];
     return tablist;
   };
   const expectedTokens = {
-    general: ["theme", "language", "columns", "record-full-text"],
+    general: ["theme", "language", "columns"],
     color: ["color"],
     overlays: ["loading-overlay", "model-overlay-toggle", "model-overlay-opacity"]
   };

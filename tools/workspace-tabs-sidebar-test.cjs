@@ -133,6 +133,7 @@ globalThis.document = {
 
 (async () => {
   const source = fs.readFileSync(path.join(__dirname, "../app/workspace/tabs-sidebar-controller.js"), "utf8");
+  const tabSearch = fs.readFileSync(path.join(__dirname, "../app/workspace/tab-search.js"), "utf8");
   const css = fs.readFileSync(path.join(__dirname, "../styles/chatclub.css"), "utf8");
   const icons = fs.readFileSync(path.join(__dirname, "../ui/icons.js"), "utf8");
   assert.match(source, /class: "workspace-tabs-sidebar"/);
@@ -198,6 +199,14 @@ globalThis.document = {
   assert.match(source, /setSearchQuery/, "title search must filter the sidebar list");
   assert.match(source, /forgetWorkspaceTabFullText/, "deleting a tab must drop its recorded full text");
   assert.match(css, /\.workspace-tabs-sidebar-search-input/, "the search field must be styled in the sidebar");
+  assert.match(css, /\.workspace-tabs-sidebar-search\s*\{[^}]*border:\s*1px solid/, "the search glyph must sit inside one bordered field");
+  assert.match(css, /\.workspace-tabs-sidebar-search\s*\{[^}]*height:\s*36px/, "the search field height must match tab rows");
+  assert.match(css, /\.workspace-tabs-sidebar-search\s*\{[^}]*margin:\s*10px 8px 4px/, "the search field must align with tab row width");
+  assert.match(css, /\.workspace-tabs-sidebar-item\s*\{[^}]*min-height:\s*36px/);
+  assert.match(css, /\.workspace-tabs-sidebar-list\s*\{[^}]*padding:\s*4px 8px 8px/);
+  assert.match(css, /\.workspace-tabs-sidebar-search \.workspace-tabs-sidebar-search-input/, "sidebar search styles must beat the global .input width");
+  assert.match(tabSearch, /el\("label", \{ class: "workspace-tabs-sidebar-search"/);
+  assert.doesNotMatch(tabSearch, /class: "input workspace-tabs-sidebar-search-input"/);
   assert.match(css, /\.workspace-tabs-search-hit/, "full-text hits must reuse Pocket card chrome");
   assert.match(icons, /search:\s*\[/, "the sidebar search field must use the Lucide search glyph");
   const { createWorkspaceTabsSidebarController } = await import("../app/workspace/tabs-sidebar-controller.js");

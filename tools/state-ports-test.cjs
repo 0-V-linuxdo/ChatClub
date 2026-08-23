@@ -82,8 +82,9 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   assert.throws(() => { settingsSections.appearance.options.modelPreferenceFailurePolicy; }, /settings\.appearance cannot read/);
   settingsSections.appearance.options.themeMode = "dark";
   assert.equal(rootState.options.themeMode, "dark");
-  assert.equal(settingsSections.appearance.options.recordFullText, false);
-  settingsSections.appearance.options.recordFullText = true;
+  assert.throws(() => { settingsSections.appearance.options.recordFullText; }, /settings\.appearance cannot read/);
+  assert.equal(settingsSections.summary.options.recordFullText, false);
+  settingsSections.summary.options.recordFullText = true;
   assert.equal(rootState.options.recordFullText, true);
   assert.throws(() => {
     settingsSections.appearance.options = {
