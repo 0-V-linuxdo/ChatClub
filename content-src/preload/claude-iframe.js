@@ -1,5 +1,5 @@
 const RUNTIME_NAME = "claude-iframe-compat";
-const RUNTIME_VERSION = "2026.08.23.1";
+const RUNTIME_VERSION = "2026.08.23.2";
 const SCAN_WINDOW_MS = 20_000;
 const SCAN_INTERVAL_MS = 250;
 const MAX_MODULE_IMPORTS = 40;
@@ -56,6 +56,10 @@ function patchClaudeIframeStore(store) {
   } catch {
     return false;
   }
+  try {
+    const setter = store.getState()?.setIsInIframe;
+    if (typeof setter === "function") setter(false);
+  } catch {}
   return storeMatchesIframeFlag(store, false);
 }
 
@@ -130,17 +134,34 @@ function installClaudeFrameSpoof(target) {
   return result;
 }
 
-function sameOriginHref(href, baseHref) {
+function httpModuleHref(href, baseHref) {
   try {
     const base = String(baseHref || "");
     const url = new URL(String(href || ""), base || undefined);
     if (!/^https?:$/i.test(url.protocol)) return "";
-    if (!base) return url.href;
-    const origin = new URL(base).origin;
-    return url.origin === origin ? url.href : "";
+    return url.href;
   } catch {
     return "";
   }
+}
+
+function sameOriginHref(href, baseHref) {
+  try {
+    const resolved = httpModuleHref(href, baseHref);
+    if (!resolved) return "";
+    const base = String(baseHref || "");
+    if (!base) return resolved;
+    return new URL(resolved).origin === new URL(base).origin ? resolved : "";
+  } catch {
+    return "";
+  }
+}
+
+function pushUniqueHref(hrefs, seen, href) {
+  if (!href || seen.has(href)) return false;
+  seen.add(href);
+  hrefs.push(href);
+  return hrefs.length >= MAX_MODULE_IMPORTS;
 }
 
 function modulePreloadHrefs(documentLike, baseHref) {
@@ -149,22 +170,15 @@ function modulePreloadHrefs(documentLike, baseHref) {
   try {
     const nodes = documentLike?.querySelectorAll?.('link[rel~="modulepreload"][href]') || [];
     for (const node of nodes) {
-      const href = sameOriginHref(node?.href || node?.getAttribute?.("href"), baseHref);
-      if (!href || seen.has(href)) continue;
-      seen.add(href);
-      hrefs.push(href);
-      if (hrefs.length >= MAX_MODULE_IMPORTS) break;
+      const href = httpModuleHref(node?.href || node?.getAttribute?.("href"), baseHref);
+      if (pushUniqueHref(hrefs, seen, href)) return hrefs;
     }
   } catch {}
   try {
-    if (hrefs.length >= MAX_MODULE_IMPORTS) return hrefs;
     const scripts = documentLike?.querySelectorAll?.('script[type="module"][src]') || [];
     for (const node of scripts) {
       const href = sameOriginHref(node?.src || node?.getAttribute?.("src"), baseHref);
-      if (!href || seen.has(href)) continue;
-      seen.add(href);
-      hrefs.push(href);
-      if (hrefs.length >= MAX_MODULE_IMPORTS) break;
+      if (pushUniqueHref(hrefs, seen, href)) return hrefs;
     }
   } catch {}
   return hrefs;

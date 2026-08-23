@@ -12,6 +12,7 @@ const preload = fs.readFileSync(path.join(root, "content-src/preload.js"), "utf8
 assert.match(source, /isInIframe: true/, "Claude compat must target stores that report isInIframe");
 assert.match(source, /isInIframe: false/, "Claude compat must force isInIframe false");
 assert.match(source, /modulepreload/, "Claude compat must scan modulepreload exports for Zustand stores");
+assert.match(source, /setIsInIframe/, "Claude compat must also invoke Claude's setIsInIframe action when present");
 assert.doesNotMatch(source, /\bimport\s*\(/, "content runtime must not contain a dynamic import token");
 assert.doesNotMatch(source, /parent\s*=\s*(?:window|target|self)/, "Claude compat must not overwrite window.parent");
 assert.match(preload, /installClaudeIframeCompat\(runtimes\)/, "Claude preload must install iframe compat");
@@ -20,7 +21,7 @@ assert.doesNotMatch(preload, /window\.parent\s*=\s*(?:window|self)/, "ChatClub p
 function createStore(initial) {
   let state = { ...initial };
   const listeners = new Set();
-  return {
+  const store = {
     getState() { return state; },
     setState(partial) {
       state = { ...state, ...(typeof partial === "function" ? partial(state) : partial) };
@@ -31,6 +32,12 @@ function createStore(initial) {
       return () => listeners.delete(listener);
     }
   };
+  if (Object.hasOwn(initial, "isInIframe")) {
+    state.setIsInIframe = (value) => {
+      store.setState({ isInIframe: value });
+    };
+  }
+  return store;
 }
 
 function deferredTimers() {
@@ -75,12 +82,18 @@ function runtimesBag() {
   const parentWindow = { id: "parent" };
   const imported = [];
   const moduleStore = createStore({ isInIframe: true, id: "module", theme: "dark" });
+  const cdnStore = createStore({ isInIframe: true, id: "cdn" });
   const liveStore = createStore({ isInIframe: true, id: "live" });
+  const cdnHref = "https://assets-proxy.anthropic.com/claude-ai/v2/assets/v1/shared-6.js";
+  const sameOriginHref = "https://claude.ai/assets/store.js";
   const documentWithModules = {
     referrer: "https://evil.example/",
     querySelectorAll(selector) {
       if (selector.includes("modulepreload")) {
-        return [{ href: "https://claude.ai/assets/store.js", getAttribute: () => "https://claude.ai/assets/store.js" }];
+        return [
+          { href: sameOriginHref, getAttribute: () => sameOriginHref },
+          { href: cdnHref, getAttribute: () => cdnHref }
+        ];
       }
       if (selector.includes('script[type="module"]')) {
         return [{ src: "https://evil.example/pwn.js", getAttribute: () => "https://evil.example/pwn.js" }];
@@ -117,6 +130,14 @@ function runtimesBag() {
     disconnect() { observed = false; }
   }
   const { runtimes, registrations } = runtimesBag();
+  let setIsInIframeCalls = 0;
+  const originalSetter = moduleStore.getState().setIsInIframe;
+  moduleStore.setState({
+    setIsInIframe(value) {
+      setIsInIframeCalls += 1;
+      originalSetter(value);
+    }
+  });
   installClaudeIframeCompat(runtimes, {
     window: child,
     document: documentWithModules,
@@ -124,6 +145,7 @@ function runtimesBag() {
     extraStores: [liveStore],
     importModule: async (href) => {
       imported.push(href);
+      if (href === cdnHref) return { Nc: cdnStore };
       return { uiStore: moduleStore };
     },
     MutationObserver: FakeObserver,
@@ -144,8 +166,15 @@ function runtimesBag() {
   assert.equal(locationLike.ancestorOrigins.length, 0);
   assert.equal(liveStore.getState().isInIframe, false);
   assert.equal(moduleStore.getState().isInIframe, false);
+  assert.equal(cdnStore.getState().isInIframe, false, "cross-origin modulepreload stores must be patched");
   assert.equal(moduleStore.getState().theme, "dark", "iframe patch must be a partial Zustand update");
-  assert.deepEqual(imported, ["https://claude.ai/assets/store.js"], "cross-origin module scripts must not be loaded");
+  assert.deepEqual(
+    imported,
+    [sameOriginHref, cdnHref],
+    "page-declared modulepreload must be imported even when cross-origin"
+  );
+  assert.equal(imported.includes("https://evil.example/pwn.js"), false, "undeclared cross-origin module scripts must not be loaded");
+  assert.ok(setIsInIframeCalls >= 1, "Claude setIsInIframe action must be invoked when present");
   assert.equal(observed, true);
 
   liveStore.setState({ isInIframe: true });

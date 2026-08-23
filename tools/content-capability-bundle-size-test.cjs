@@ -30,16 +30,16 @@ const byteBudgets = Object.freeze({
   "content/delete.js": 265_753,
   "content/grok-cookie-bridge.js": 50_000,
   "content/message-navigator.js": 140_000,
-  "content/preload.js": 213_573,
+  "content/preload.js": 213_890,
   "content/summary-userscripts-main.js": 205_000,
   "content/summary-userscripts.js": 152_000
 });
 // Exact base-plus-capabilities closure after the ChatClub Tabs sidebar toggle
 // joined the shared shortcut action inventory and Windows/Mac defaults.
 const aggregateByteBudget = 759_822;
-// Exact all-bundle closure after the ChatClub Tabs sidebar shortcut joined the
-// shared shortcut runtime; no headroom is carried across generated bundles.
-const allBundlesByteBudget = 1_459_506;
+// Exact all-bundle closure after Claude iframe-compat imports page-declared
+// cross-origin modulepreload stores; no headroom is carried across generated bundles.
+const allBundlesByteBudget = 1_459_823;
 
 const bundleIdentities = Object.fromEntries(Object.keys(CONTENT_ENTRIES).map((outputPath) => [
   outputPath,

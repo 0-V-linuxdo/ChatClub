@@ -69,12 +69,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "0639191de65a691d31b142452cead6ef1a8dba93b1af181448ddf8e4cb60a892";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "674feab5b9c1890117e5538df8386a0e9083d0f6e47de3755cc071a1a251a9b1";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "599a638ab55a39f33f89130ba1b5e7fab63570955268420df29d942548a4e65d";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.599a638ab55a39f33f89130ba1b5e7fab63570955268420df29d942548a4e65d";
-  var CONTENT_RUNTIME_PRELOAD_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preload.js", "entryPath": "content-src/preload.js", "sourceSha256": "9a65ec6d123b0a0b1ac32be55ebc6e658f591c0a3afd3360f82f74340c57c70e", "implementationSha256": "33823526c0d710cf65b5190b9dade3ba146d3dd22529ae47a1db7a7e70d59ae9", "implementationVersion": "2026.07.16.2+bundle.33823526c0d710cf65b5190b9dade3ba146d3dd22529ae47a1db7a7e70d59ae9" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "6deed2f81917af92ae677b79874676ba70bae47bca49faa71ba21dd467fd52f8";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.6deed2f81917af92ae677b79874676ba70bae47bca49faa71ba21dd467fd52f8";
+  var CONTENT_RUNTIME_PRELOAD_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preload.js", "entryPath": "content-src/preload.js", "sourceSha256": "615c03cc545250f4c718a1f5219e6f32000bfa837836d484965d1aeb7f7a03c3", "implementationSha256": "28783cdd10ddb4b7d93887ed126d8bf0f0a72384307394bacf88f2436f90b900", "implementationVersion": "2026.07.16.2+bundle.28783cdd10ddb4b7d93887ed126d8bf0f0a72384307394bacf88f2436f90b900" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -525,7 +525,7 @@
 
   // content-src/preload/claude-iframe.js
   var RUNTIME_NAME = "claude-iframe-compat";
-  var RUNTIME_VERSION = "2026.08.23.1";
+  var RUNTIME_VERSION = "2026.08.23.2";
   var SCAN_WINDOW_MS = 2e4;
   var SCAN_INTERVAL_MS = 250;
   var MAX_MODULE_IMPORTS = 40;
@@ -576,6 +576,11 @@
       store.setState(IFRAME_PATCH);
     } catch {
       return false;
+    }
+    try {
+      const setter = store.getState()?.setIsInIframe;
+      if (typeof setter === "function") setter(false);
+    } catch {
     }
     return storeMatchesIframeFlag(store, false);
   }
@@ -658,17 +663,32 @@
     }
     return result;
   }
-  function sameOriginHref(href, baseHref) {
+  function httpModuleHref(href, baseHref) {
     try {
       const base = String(baseHref || "");
       const url = new URL(String(href || ""), base || void 0);
       if (!/^https?:$/i.test(url.protocol)) return "";
-      if (!base) return url.href;
-      const origin = new URL(base).origin;
-      return url.origin === origin ? url.href : "";
+      return url.href;
     } catch {
       return "";
     }
+  }
+  function sameOriginHref(href, baseHref) {
+    try {
+      const resolved = httpModuleHref(href, baseHref);
+      if (!resolved) return "";
+      const base = String(baseHref || "");
+      if (!base) return resolved;
+      return new URL(resolved).origin === new URL(base).origin ? resolved : "";
+    } catch {
+      return "";
+    }
+  }
+  function pushUniqueHref(hrefs, seen, href) {
+    if (!href || seen.has(href)) return false;
+    seen.add(href);
+    hrefs.push(href);
+    return hrefs.length >= MAX_MODULE_IMPORTS;
   }
   function modulePreloadHrefs(documentLike, baseHref) {
     const hrefs = [];
@@ -676,23 +696,16 @@
     try {
       const nodes = documentLike?.querySelectorAll?.('link[rel~="modulepreload"][href]') || [];
       for (const node of nodes) {
-        const href = sameOriginHref(node?.href || node?.getAttribute?.("href"), baseHref);
-        if (!href || seen.has(href)) continue;
-        seen.add(href);
-        hrefs.push(href);
-        if (hrefs.length >= MAX_MODULE_IMPORTS) break;
+        const href = httpModuleHref(node?.href || node?.getAttribute?.("href"), baseHref);
+        if (pushUniqueHref(hrefs, seen, href)) return hrefs;
       }
     } catch {
     }
     try {
-      if (hrefs.length >= MAX_MODULE_IMPORTS) return hrefs;
       const scripts = documentLike?.querySelectorAll?.('script[type="module"][src]') || [];
       for (const node of scripts) {
         const href = sameOriginHref(node?.src || node?.getAttribute?.("src"), baseHref);
-        if (!href || seen.has(href)) continue;
-        seen.add(href);
-        hrefs.push(href);
-        if (hrefs.length >= MAX_MODULE_IMPORTS) break;
+        if (pushUniqueHref(hrefs, seen, href)) return hrefs;
       }
     } catch {
     }
