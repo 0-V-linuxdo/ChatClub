@@ -5,6 +5,7 @@ import { createOptimizeStatePort } from "./optimize/state-port.js";
 import { createPocketStatePort } from "./pocket/state-port.js";
 import { createPreferredModelStatePort } from "./preferred-model/state-port.js";
 import { createSettingsSectionStatePorts } from "./settings/state-ports.js";
+import { createShareStatePort } from "./share/state-port.js";
 import { createSummaryStatePort } from "./summary/state-port.js";
 import { createTopbarStatePort } from "./topbar/state-port.js";
 import { createWorkspaceStatePort } from "./workspace/state-port.js";
@@ -14,6 +15,7 @@ export { createAppState } from "./state/schema.js";
 const FEATURE_PORT_CREATORS = Object.freeze({
   workspace: createWorkspaceStatePort,
   summary: createSummaryStatePort,
+  share: createShareStatePort,
   pocket: createPocketStatePort,
   optimize: createOptimizeStatePort,
   composer: createComposerStatePort,

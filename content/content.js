@@ -1,4 +1,3 @@
-"use strict";
 (() => {
   // shared/protocol.js
   var GENERIC_POST_MESSAGE_SOURCE = "chatclub";
@@ -85,6 +84,7 @@
           deleteThread: { disabled: false, command: false, control: false, option: true, shift: true, code: "KeyD" },
           optimizePrompt: { disabled: false, command: false, control: false, option: true, shift: false, code: "KeyO" },
           openSummaryPanel: { disabled: false, command: false, control: false, option: true, shift: false, code: "KeyS" },
+          openSharePanel: { disabled: false, command: false, control: false, option: true, shift: true, code: "KeyS" },
           openPocketPanel: { disabled: false, command: true, control: false, option: false, shift: false, code: "KeyP" },
           toggleMessageNavigator: { disabled: false, command: true, control: false, option: false, shift: false, code: "KeyM" },
           closeChat: { disabled: false, command: false, control: false, option: true, shift: false, code: "KeyW" },
@@ -110,6 +110,7 @@
           deleteThread: { disabled: false, control: false, alt: true, shift: true, code: "KeyD" },
           optimizePrompt: { disabled: false, control: false, alt: true, shift: false, code: "KeyO" },
           openSummaryPanel: { disabled: false, control: false, alt: true, shift: false, code: "KeyS" },
+          openSharePanel: { disabled: false, control: false, alt: true, shift: true, code: "KeyS" },
           openPocketPanel: { disabled: false, control: true, alt: false, shift: false, code: "KeyP" },
           toggleMessageNavigator: { disabled: false, control: true, alt: false, shift: false, code: "KeyM" },
           closeChat: { disabled: false, control: false, alt: true, shift: false, code: "KeyW" },
@@ -406,12 +407,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "f1c9d50646d20bf899d7070db4400bcb59c6246bb13095031af04399c4465865";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "c54e51a9daf648c8555538467cb4e5378def92d3c62616455cf978736bfd3cba";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "0e8273f16a20ca866ecb2d2f51bf3602a4fbf091a3c1d33daa73a117f2695cd5";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.0e8273f16a20ca866ecb2d2f51bf3602a4fbf091a3c1d33daa73a117f2695cd5";
-  var CONTENT_RUNTIME_CONTENT_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/content.js", "entryPath": "content-src/content.js", "sourceSha256": "b0ee3ff873062778f757905dd8ece0c27ebf375a5debe10f6eeb3fc601b00175", "implementationSha256": "38c362ed10ded3b42728c59ff651d7f8a2c8dab50d2426d506433acafad759bf", "implementationVersion": "2026.07.16.2+bundle.38c362ed10ded3b42728c59ff651d7f8a2c8dab50d2426d506433acafad759bf" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "a50049dab4fb9160a5ca5feb8f9f501f768cbbf9e5f85a052fecb2465b15115b";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.a50049dab4fb9160a5ca5feb8f9f501f768cbbf9e5f85a052fecb2465b15115b";
+  var CONTENT_RUNTIME_CONTENT_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/content.js", "entryPath": "content-src/content.js", "sourceSha256": "7ac114c2d9f3e8e558156e9c1c09db7048ad3f79920c2779e502a88bef4f4546", "implementationSha256": "900d65664d86e11c81da1356c51033d2b082aeb8d19dbbde3746bc7edb123402", "implementationVersion": "2026.07.16.2+bundle.900d65664d86e11c81da1356c51033d2b082aeb8d19dbbde3746bc7edb123402" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -463,6 +464,7 @@
     "deleteThread",
     "optimizePrompt",
     "openSummaryPanel",
+    "openSharePanel",
     "openPocketPanel",
     "toggleMessageNavigator",
     "closeChat",
@@ -706,6 +708,161 @@
       title: normalize(document.title || ""),
       logoUrl: pageLogoUrl()
     };
+  }
+
+  // content-src/shared/capture-runtime.js
+  var CAPTURE_OVERLAP_PX = 2;
+  function number(value, fallback = 0) {
+    const next = Number(value);
+    return Number.isFinite(next) ? next : fallback;
+  }
+  function styleOf(node, win) {
+    try {
+      return win.getComputedStyle(node);
+    } catch {
+      return null;
+    }
+  }
+  function isScrollableOverflow(value) {
+    return value === "auto" || value === "scroll" || value === "overlay";
+  }
+  function createCaptureRuntime(targetWindow) {
+    if (!targetWindow?.document) throw new TypeError("Capture runtime requires a window");
+    let session = null;
+    function doc() {
+      return targetWindow.document;
+    }
+    function scrollingElement() {
+      const documentRef = doc();
+      return documentRef.scrollingElement || documentRef.documentElement || documentRef.body;
+    }
+    function findScrollRoot() {
+      const documentRef = doc();
+      const root = scrollingElement();
+      const viewportHeight = Math.max(1, Math.floor(number(targetWindow.innerHeight, root?.clientHeight)));
+      if (root && number(root.scrollHeight) > viewportHeight + 24) {
+        return { type: "window", node: root };
+      }
+      const viewportWidth = Math.max(1, Math.floor(number(targetWindow.innerWidth, root?.clientWidth)));
+      const candidates = documentRef.querySelectorAll("main, section, article, div, [role='log'], [role='main']");
+      let best = null;
+      let bestScore = 0;
+      for (const node of candidates) {
+        const style = styleOf(node, targetWindow);
+        if (!style || !isScrollableOverflow(style.overflowY)) continue;
+        const extra = number(node.scrollHeight) - number(node.clientHeight);
+        if (extra < 48) continue;
+        const rect = node.getBoundingClientRect?.() || { width: 0, height: 0 };
+        const visible = Math.max(0, number(rect.width)) * Math.max(0, number(rect.height));
+        const score = extra * Math.min(visible, viewportWidth * viewportHeight);
+        if (score > bestScore) {
+          bestScore = score;
+          best = node;
+        }
+      }
+      return best ? { type: "element", node: best } : { type: "window", node: root };
+    }
+    function metricsFor(root) {
+      const node = root?.node || scrollingElement();
+      const isWindow = root?.type !== "element";
+      const viewportHeight = Math.max(1, Math.floor(isWindow ? number(targetWindow.innerHeight, node?.clientHeight) : number(node?.clientHeight)));
+      const viewportWidth = Math.max(1, Math.floor(isWindow ? number(targetWindow.innerWidth, node?.clientWidth) : number(node?.clientWidth)));
+      const scrollHeight = Math.max(viewportHeight, Math.floor(number(node?.scrollHeight, viewportHeight)));
+      const scrollWidth = Math.max(viewportWidth, Math.floor(number(node?.scrollWidth, viewportWidth)));
+      const scrollY = Math.max(0, Math.floor(isWindow ? number(targetWindow.scrollY, node?.scrollTop) : number(node?.scrollTop)));
+      const scrollX = Math.max(0, Math.floor(isWindow ? number(targetWindow.scrollX, node?.scrollLeft) : number(node?.scrollLeft)));
+      const maxY = Math.max(0, scrollHeight - viewportHeight);
+      return {
+        viewportHeight,
+        viewportWidth,
+        scrollHeight,
+        scrollWidth,
+        scrollX,
+        scrollY,
+        maxY,
+        devicePixelRatio: number(targetWindow.devicePixelRatio, 1) || 1,
+        overlapPx: CAPTURE_OVERLAP_PX,
+        done: scrollY >= maxY - 1
+      };
+    }
+    function setScroll(root, x, y) {
+      if (root?.type === "element" && root.node) {
+        root.node.scrollLeft = x;
+        root.node.scrollTop = y;
+        return;
+      }
+      if (typeof targetWindow.scrollTo === "function") {
+        targetWindow.scrollTo(x, y);
+        return;
+      }
+      const node = root?.node || scrollingElement();
+      if (node) {
+        node.scrollLeft = x;
+        node.scrollTop = y;
+      }
+    }
+    function hideOverlays() {
+      const documentRef = doc();
+      const viewportHeight = Math.max(1, Math.floor(number(targetWindow.innerHeight)));
+      const viewportWidth = Math.max(1, Math.floor(number(targetWindow.innerWidth)));
+      const hidden = [];
+      const nodes = documentRef.querySelectorAll("body *");
+      for (const node of nodes) {
+        const style = styleOf(node, targetWindow);
+        if (!style) continue;
+        if (style.position !== "fixed" && style.position !== "sticky") continue;
+        const rect = node.getBoundingClientRect?.();
+        if (!rect || rect.width <= 1 || rect.height <= 1) continue;
+        if (rect.height >= viewportHeight * 0.86 && rect.width >= viewportWidth * 0.55) continue;
+        hidden.push({ node, visibility: node.style.visibility });
+        node.style.setProperty("visibility", "hidden", "important");
+      }
+      return hidden;
+    }
+    function restoreOverlays(hidden) {
+      for (const item of hidden || []) {
+        try {
+          if (!item?.node?.style) continue;
+          if (item.visibility) item.node.style.visibility = item.visibility;
+          else item.node.style.removeProperty("visibility");
+        } catch {
+        }
+      }
+    }
+    function captureStart() {
+      captureEnd();
+      const root = findScrollRoot();
+      const current = metricsFor(root);
+      session = {
+        root,
+        scrollX: current.scrollX,
+        scrollY: current.scrollY,
+        hidden: hideOverlays()
+      };
+      setScroll(root, 0, 0);
+      return metricsFor(root);
+    }
+    function triggerScroll() {
+      if (!session) return { ...metricsFor(findScrollRoot()), done: true };
+      const current = metricsFor(session.root);
+      const step = Math.max(1, current.viewportHeight - CAPTURE_OVERLAP_PX);
+      const nextY = Math.min(current.maxY, current.scrollY + step);
+      setScroll(session.root, current.scrollX, nextY);
+      return { ...metricsFor(session.root), done: nextY >= current.maxY || nextY === current.scrollY };
+    }
+    function captureEnd() {
+      if (!session) return { restored: false };
+      restoreOverlays(session.hidden);
+      setScroll(session.root, session.scrollX, session.scrollY);
+      session = null;
+      return { restored: true };
+    }
+    return Object.freeze({
+      captureStart,
+      triggerScroll,
+      captureEnd,
+      overlapPx: CAPTURE_OVERLAP_PX
+    });
   }
 
   // content-src/shared/content-document-identity.js
@@ -1340,6 +1497,9 @@
     getLocationHref: command({ timeoutMs: 1200, capability: "base" }),
     getPageMeta: command({ timeoutMs: 1800, capability: "base" }),
     getPageText: command({ timeoutMs: 2500, capability: "base" }),
+    captureStart: command({ timeoutMs: 1e4, mutating: true, capability: "base" }),
+    triggerScroll: command({ timeoutMs: 8e3, mutating: true, capability: "base" }),
+    captureEnd: command({ timeoutMs: 5e3, mutating: true, capability: "base" }),
     getSummaryRuntimeState: command({ timeoutMs: 1800, features: Object.freeze(["summary"]) }),
     collectSummary: command({ timeoutMs: 36e3, mutating: true, features: Object.freeze(["summary"]) }),
     sendText: command({ timeoutMs: 12e3, mutating: true, features: Object.freeze(["send"]) }),
@@ -1539,6 +1699,7 @@
     const MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE2 = PROTOCOL.MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE;
     const SUMMARY_POST_MESSAGE_SOURCE2 = PROTOCOL.SUMMARY_POST_MESSAGE_SOURCE;
     const { contentDocumentId, secureFrameToken, currentBrowserDocumentAttestationId, currentFrameBindingId } = createContentDocumentIdentity(window);
+    const captureRuntime = createCaptureRuntime(window);
     let contentLocationRevision = Math.max(0, Number(window.__CHATCLUB_CONTENT_LOCATION_REVISION__) || 0);
     const submissionNavigation = createSubmissionNavigationTracker(window);
     const markSubmissionNavigation = submissionNavigation.mark;
@@ -1817,7 +1978,10 @@
           ...pageMeta(),
           grokCookieRuntime: grokCookieRuntimeAttestation()
         }),
-        getPageText: () => normalize(document.body?.innerText || "")
+        getPageText: () => normalize(document.body?.innerText || ""),
+        captureStart: () => captureRuntime.captureStart(),
+        triggerScroll: () => captureRuntime.triggerScroll(),
+        captureEnd: () => captureRuntime.captureEnd()
       }
     });
     ensureSecureFrameRpc();

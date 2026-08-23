@@ -48,6 +48,7 @@ export function createTopbarView(dependencies = {}) {
     "openPocket",
     "openSettings",
     "openSettingsMenu",
+    "openShare",
     "openSummary",
     "toggleWorkspaceTabsSidebar",
     "isWorkspaceTabsSidebarOpen",
@@ -124,6 +125,7 @@ export function createTopbarView(dependencies = {}) {
       newChat: "topbar.newChat",
       deleteThread: "topbar.deleteThread",
       summary: "topbar.summary",
+      share: "topbar.share",
       pocket: "topbar.pocket",
       addGroup: "topbar.addGroup",
       layout: "topbar.layout",
@@ -239,6 +241,9 @@ export function createTopbarView(dependencies = {}) {
     }
     if (item.id === "summary") {
       return actionButton(t("topbar.summary"), "summary", actions.openSummary, "secondary", actions.formatShortcutTooltip(t("topbar.summary"), "openSummaryPanel"), "", "topbar.summary");
+    }
+    if (item.id === "share") {
+      return actionButton(t("topbar.share"), "share", actions.openShare, "secondary", actions.formatShortcutTooltip(t("topbar.share"), "openSharePanel"), "", "topbar.share");
     }
     if (item.id === "pocket") {
       return actionButton(t("topbar.pocket"), "pocket", actions.openPocket, "secondary", actions.formatShortcutTooltip(t("topbar.pocket"), "openPocketPanel"), topbarItemClass("pocket"), "topbar.pocket");

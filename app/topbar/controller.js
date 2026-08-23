@@ -45,6 +45,7 @@ export function createTopbarController(dependencies = {}) {
     "openNewWorkspaceTab",
     "openPocket",
     "openSettings",
+    "openShare",
     "openSummary",
     "toggleWorkspaceTabsSidebar",
     "isWorkspaceTabsSidebarOpen",

@@ -112,6 +112,7 @@ function appDomain(file) {
 
   const runtime = fs.readFileSync(path.join(root, "app/runtime.js"), "utf8");
   const summaryController = fs.readFileSync(path.join(root, "app/summary/controller.js"), "utf8");
+  const shareController = fs.readFileSync(path.join(root, "app/share/controller.js"), "utf8");
   const topbarEditor = fs.readFileSync(path.join(root, "app/topbar/editor.js"), "utf8");
   assert.match(runtime, /import \{ createAppState, createFeatureStatePorts \} from "\.\/state\.js"/);
   assert.match(runtime, /const featureState = createFeatureStatePorts\(state\)/);
@@ -122,6 +123,7 @@ function appDomain(file) {
     "./favicon/state-port.js",
     "./workspace/state-port.js",
     "./summary/state-port.js",
+    "./share/state-port.js",
     "./pocket/state-port.js",
     "./optimize/state-port.js",
     "./functional-anomalies/state-port.js",
@@ -132,6 +134,9 @@ function appDomain(file) {
   assert.ok(runtime.split(/\r?\n/).length < 2800, "App runtime must remain below the post-extraction consolidation ceiling");
   for (const field of ["sync", "open", "toggleMaximized", "loadPanelSize"]) {
     assert.match(summaryController, new RegExp(`^\\s{4}${field}:`, "m"), `Summary controller must expose ${field}`);
+  }
+  for (const field of ["sync", "open", "close", "toggleMaximized", "loadPanelSize"]) {
+    assert.match(shareController, new RegExp(`^\\s{4}${field}:`, "m"), `Share controller must expose ${field}`);
   }
   for (const field of [
     "render", "collect", "collectSource", "ask", "summarize", "summarySourceKey", "summarySourceOrder",
@@ -152,6 +157,9 @@ function appDomain(file) {
     ["app/optimize/controller.js", "createOptimizeController", ["openOptimizeCompareDialog"]],
     ["app/pocket/controller.js", "createPocketController", [
       "dedupePocketEntries", "normalizePocketMessage", "pocketEntriesFromMessages"
+    ]],
+    ["app/share/controller.js", "createShareController", [
+      "listShareFrames", "collectShareImage", "collectShareText", "runShare"
     ]],
     ["app/prompt-library/controller.js", "createPromptLibraryController", [
       "insertPromptFromLibrary", "openPromptLibraryEditor", "promptLibraryPromptList"

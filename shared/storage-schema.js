@@ -489,6 +489,19 @@ function migrateSearchTopbarLayout(raw = {}) {
   ];
 }
 
+function migrateShareTopbarLayout(raw = {}) {
+  const normalized = migrateSearchTopbarLayout(raw);
+  if (raw.topbarShareMigrated === true || topbarLayoutHasItem(normalized, "share")) return normalized;
+  const summaryIndex = normalized.findIndex((item) => item.type === "item" && item.id === "summary");
+  const pocketIndex = normalized.findIndex((item) => item.type === "item" && item.id === "pocket");
+  const insertIndex = summaryIndex >= 0 ? summaryIndex + 1 : pocketIndex >= 0 ? pocketIndex : normalized.length;
+  return [
+    ...normalized.slice(0, insertIndex),
+    { type: "item", id: "share" },
+    ...normalized.slice(insertIndex)
+  ];
+}
+
 function withoutPromotionApiProfiles(apiProfiles) {
   return apiProfiles.filter((profile) => !DEFAULT_PROMOTION_API_PROFILES.some((promoted) => profile.id === promoted.id));
 }
@@ -782,9 +795,10 @@ export function normalizeOptions(raw = {}) {
     tabContextMenuOrder: normalizeTabContextMenuOrder(raw.tabContextMenuOrder, raw.tabGroupButtonOrder),
     tabContextMenuHiddenIds: normalizeTabContextMenuHiddenIds(raw.tabContextMenuHiddenIds),
     tooltipDisabledIds: normalizeTooltipDisabledIds(raw.tooltipDisabledIds),
-    topbarLayout: migrateSearchTopbarLayout(raw),
+    topbarLayout: migrateShareTopbarLayout(raw),
     topbarDeleteThreadMigrated: true,
     topbarSearchMigrated: true,
+    topbarShareMigrated: true,
     pocketCardSize: normalizePocketCardSize(raw.pocketCardSize),
     frameLoadingOverlayOpacity: boundedNumber(raw.frameLoadingOverlayOpacity, base.frameLoadingOverlayOpacity, 0, 100),
     modelPreferenceSelectionOverlayEnabled: typeof raw.modelPreferenceSelectionOverlayEnabled === "boolean"

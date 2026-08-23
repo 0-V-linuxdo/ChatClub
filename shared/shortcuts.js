@@ -16,6 +16,7 @@ export const ALL_SHORTCUT_ACTIONS = [
   "deleteThread",
   "optimizePrompt",
   "openSummaryPanel",
+  "openSharePanel",
   "openPocketPanel",
   "toggleMessageNavigator",
   "closeChat",

@@ -195,6 +195,7 @@ const topbarController = createTopbarController({
     openNewWorkspaceTab,
     openPocket: openPocketPanel,
     openSettings,
+    openShare: openSharePanel,
     openSummary: openSummaryPanel,
     toggleWorkspaceTabsSidebar,
     isWorkspaceTabsSidebarOpen,
@@ -285,9 +286,11 @@ const appContext = Object.freeze({
 const optimizeController = createOptimizeController(appContext);
 let pocketController = null;
 let summaryController = null;
+let shareController = null;
 let settingsController = null;
 let pocketControllerPromise = null;
 let summaryControllerPromise = null;
+let shareControllerPromise = null;
 let settingsControllerPromise = null;
 const workspaceSessionStore = createWorkspaceSessionStore({
   disabled: isOptionsPage, currentTab: currentExtensionTab,
@@ -349,7 +352,7 @@ const workspaceTabsSidebarController = attachWorkspaceTabsSidebarController({
   requestBackground, toast, render, inferAppName, appById, extensionApi,
   currentWorkspace: () => ({ layoutName: state.temporaryLayoutPreset?.name || "", groups: state.groups, topicTitle: state.topicTitle }),
   setCurrentTabTitle: (title) => workspaceTopicTitleController.setCustomTitle(title),
-  canDismiss: () => !state.summaryOpen && !hasForegroundOverlay()
+  canDismiss: () => !state.summaryOpen && !state.shareOpen && !hasForegroundOverlay()
 });
 const {
   renderRuntimeBootstrapFailure,
@@ -494,6 +497,37 @@ function ensureSummaryController() {
     });
   }
   return summaryControllerPromise;
+}
+
+function ensureShareController() {
+  if (shareController) return Promise.resolve(shareController);
+  if (!shareControllerPromise) {
+    shareControllerPromise = import("./share/controller.js").then(async ({ createShareController }) => {
+      const controller = createShareController({
+        state: featureState.share,
+        svgIcon,
+        currentFrames: workspaceController.currentFrames,
+        frameApp: workspaceController.frameApp,
+        activateChatTab: workspaceController.activateChatTab,
+        activeChatForGroup: workspaceController.activeChatForGroup,
+        prepareContentFrameRuntime,
+        setFramePointerBlockedForOverlay: workspaceController.setFramePointerBlockedForOverlay,
+        inferAppName,
+        framePort: frameRuntimePort,
+        recordFunctionalAnomaly
+      });
+      if (!state.shareSize) {
+        try { state.shareSize = await controller.loadPanelSize(); }
+        catch (error) { console.warn("[ChatClub] Failed to restore Share panel size", error); }
+      }
+      shareController = controller;
+      return shareController;
+    }).catch((error) => {
+      shareControllerPromise = null;
+      throw error;
+    });
+  }
+  return shareControllerPromise;
 }
 
 function ensureSettingsController() {
@@ -877,6 +911,7 @@ function render() {
   workspaceController.syncWorkspaceIsland(shell);
   workspaceTabsSidebarController.syncSidebar(shell);
   syncSummaryPanel();
+  syncSharePanel();
 }
 
 function discardGuardedBrowserRestoreDom() {
@@ -889,6 +924,10 @@ function syncSummaryPanel() {
   return summaryController?.sync?.();
 }
 
+function syncSharePanel() {
+  return shareController?.sync?.();
+}
+
 async function openSummaryPanel() {
   const permissionAttempt = requestFeatureUserScriptsPermission("summary").catch((error) => {
     toast(error.message || String(error), "error");
@@ -899,6 +938,15 @@ async function openSummaryPanel() {
     return controller.open();
   } catch (error) {
     return lazyControllerError("Summary", error);
+  }
+}
+
+async function openSharePanel() {
+  try {
+    const controller = await ensureShareController();
+    return controller.open();
+  } catch (error) {
+    return lazyControllerError("Share", error);
   }
 }
 
@@ -1026,13 +1074,15 @@ async function handleShortcutAction(action, matchObj = null, sourceWindow = null
   else if (action === "deleteThread") await deleteThreadOnFrames();
   else if (action === "optimizePrompt") await optimizeCurrentPrompt();
   else if (action === "openSummaryPanel" || action === "openSummary") await openSummaryPanel();
+  else if (action === "openSharePanel") await openSharePanel();
   else if (action === "openPocketPanel") await openPocketPanel();
   else if (action === "toggleMessageNavigator") await workspaceController.toggleMessageNavigatorForShortcut(sourceWindow);
   else if (action === "closeChat" && group && chat) await workspaceController.closeTab(group, chat);
   else if (action === "refreshPage" && chat) await workspaceController.refreshCurrentPage(chat);
   else if (action === "reloadChat" && chat) workspaceController.reloadChat(chat);
   else if (action === "enterFullscreen") {
-    if (state.summaryOpen) (await ensureSummaryController()).toggleMaximized();
+    if (state.shareOpen) (await ensureShareController()).toggleMaximized();
+    else if (state.summaryOpen) (await ensureSummaryController()).toggleMaximized();
     else if (pocketController?.toggleOpenPocketPanelFullscreen?.()) {}
     else workspaceController.toggleFullscreen(group?.id || workspaceController.activeShortcutGroupId(sourceWindow));
   }
@@ -1052,23 +1102,37 @@ function closeSummaryFromEscape() {
   syncSummaryPanel();
 }
 
+function closeShareFromEscape() {
+  if (!state.shareOpen || hasForegroundOverlay()) return;
+  if (shareController?.close) shareController.close();
+  else {
+    state.shareOpen = false;
+    state.shareMaximized = false;
+    syncSharePanel();
+  }
+}
+
 function installShortcuts() {
   window.addEventListener("keydown", (event) => {
     if (state.shortcutRecordingAction) return;
     if (event.isComposing || event.keyCode === 229) return;
-    if (state.summaryOpen && event.key === "Escape") {
+    if ((state.shareOpen || state.summaryOpen) && event.key === "Escape") {
       if (!isDismissalEscape(event) || hasForegroundOverlay()) return;
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation?.();
+      const closePanel = () => {
+        if (state.shareOpen) closeShareFromEscape();
+        else closeSummaryFromEscape();
+      };
       if (workspaceController.hasTrackedMessageNavigatorMenu()) {
         if (!summaryEscapeDismissalPromise) {
           summaryEscapeDismissalPromise = workspaceController.dismissTrackedMessageNavigatorMenu()
             .then((consumed) => {
-              if (!consumed) closeSummaryFromEscape();
+              if (!consumed) closePanel();
             })
             .catch((error) => {
-              console.warn("[ChatClub] Summary Escape dismissal failed", error);
+              console.warn("[ChatClub] Panel Escape dismissal failed", error);
             })
             .finally(() => {
               summaryEscapeDismissalPromise = null;
@@ -1076,7 +1140,7 @@ function installShortcuts() {
         }
         return;
       }
-      closeSummaryFromEscape();
+      closePanel();
       return;
     }
     if (document.querySelector(".modal-backdrop")) return;

@@ -100,10 +100,10 @@ assert.match(closeSummarySource, /if\s*\(!state\.summaryOpen\s*\|\|\s*hasForegro
 assert.match(closeSummarySource, /state\.summaryOpen\s*=\s*false/, "the guarded Summary dismissal helper must close Summary");
 
 const shortcutsSource = functionSource(runtimeSource, "installShortcuts");
-const summaryBranchIndex = shortcutsSource.search(/if\s*\(\s*state\.summaryOpen\s*&&\s*event\.key\s*===\s*["']Escape["']\s*\)/);
+const summaryBranchIndex = shortcutsSource.search(/if\s*\(\s*\(state\.shareOpen\s*\|\|\s*state\.summaryOpen\)\s*&&\s*event\.key\s*===\s*["']Escape["']\s*\)/);
 const matchedShortcutIndex = shortcutsSource.indexOf("const matched", summaryBranchIndex);
 const globalCompositionGuardIndex = shortcutsSource.search(/if\s*\(event\.isComposing\s*\|\|\s*event\.keyCode\s*===\s*229\)\s*return/);
-assert.ok(summaryBranchIndex >= 0, "Summary Escape handling must remain discoverable");
+assert.ok(summaryBranchIndex >= 0, "Share/Summary Escape handling must remain discoverable");
 assert.ok(matchedShortcutIndex > summaryBranchIndex, "the Summary Escape branch must remain independently testable");
 assert.ok(
   globalCompositionGuardIndex >= 0 && globalCompositionGuardIndex < summaryBranchIndex,
@@ -114,7 +114,7 @@ const dismissalGuardIndex = summaryEscapeSource.indexOf("isDismissalEscape(event
 const foregroundIndex = summaryEscapeSource.indexOf("hasForegroundOverlay()");
 const preventDefaultIndex = summaryEscapeSource.indexOf("event.preventDefault()");
 const stopPropagationIndex = summaryEscapeSource.indexOf("event.stopPropagation()");
-const closeSummaryIndex = summaryEscapeSource.indexOf("closeSummaryFromEscape()");
+const closeSummaryIndex = summaryEscapeSource.indexOf("closePanel()");
 assert.ok(dismissalGuardIndex >= 0, "Summary Escape must use the shared IME-safe dismissal guard");
 assert.ok(foregroundIndex >= 0, "Summary Escape must respect a foreground modal or popover");
 assert.ok(closeSummaryIndex > dismissalGuardIndex, "the IME-safe dismissal guard must run before Summary dismissal");
@@ -123,7 +123,7 @@ assert.ok(preventDefaultIndex > foregroundIndex && preventDefaultIndex < closeSu
 assert.ok(stopPropagationIndex > foregroundIndex && stopPropagationIndex < closeSummaryIndex, "handled Summary Escape must stop propagation");
 assert.match(summaryEscapeSource, /workspaceController\.hasTrackedMessageNavigatorMenu\(\)/, "Summary Escape must detect a tracked iframe menu");
 assert.match(summaryEscapeSource, /workspaceController\.dismissTrackedMessageNavigatorMenu\(\)/, "Summary Escape must query and dismiss the iframe menu");
-assert.match(summaryEscapeSource, /if\s*\(!consumed\)\s*closeSummaryFromEscape\(\)/, "a false-positive iframe tracker must allow the same Escape to close Summary");
+assert.match(summaryEscapeSource, /if\s*\(!consumed\)\s*closePanel\(\)/, "a false-positive iframe tracker must allow the same Escape to close Share or Summary");
 
 for (const [ownerSource, functionName, selector] of [
   [composerSource, "closeActionsMenuOnKeydown", ".prompt-actions-popover"],

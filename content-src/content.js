@@ -16,6 +16,7 @@ import {
   normalizeShortcutConfig
 } from "../shared/shortcuts.js";
 import { normalize, pageMeta } from "./shared/summary-runtime.js";
+import { createCaptureRuntime } from "./shared/capture-runtime.js";
 import { createContentDocumentIdentity } from "./shared/content-document-identity.js";
 import { createSubmissionNavigationTracker } from "./shared/submission-navigation.js";
 import { runtimeRegistry } from "./shared/runtime-registry.js";
@@ -51,6 +52,7 @@ function installContentBridge() {
   const MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE = PROTOCOL.MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE;
   const SUMMARY_POST_MESSAGE_SOURCE = PROTOCOL.SUMMARY_POST_MESSAGE_SOURCE;
   const { contentDocumentId, secureFrameToken, currentBrowserDocumentAttestationId, currentFrameBindingId } = createContentDocumentIdentity(window);
+  const captureRuntime = createCaptureRuntime(window);
   let contentLocationRevision = Math.max(0, Number(window.__CHATCLUB_CONTENT_LOCATION_REVISION__) || 0);
   const submissionNavigation = createSubmissionNavigationTracker(window);
   const markSubmissionNavigation = submissionNavigation.mark;
@@ -350,7 +352,10 @@ function installContentBridge() {
         ...pageMeta(),
         grokCookieRuntime: grokCookieRuntimeAttestation()
       }),
-      getPageText: () => normalize(document.body?.innerText || "")
+      getPageText: () => normalize(document.body?.innerText || ""),
+      captureStart: () => captureRuntime.captureStart(),
+      triggerScroll: () => captureRuntime.triggerScroll(),
+      captureEnd: () => captureRuntime.captureEnd()
     }
   });
   ensureSecureFrameRpc();

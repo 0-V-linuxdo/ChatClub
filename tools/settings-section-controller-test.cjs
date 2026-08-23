@@ -442,6 +442,41 @@ globalThis.document = { addEventListener() {} };
     false,
     "a user who hid Search must not get it reinserted"
   );
+  assert.equal(topbarModule.TOPBAR_BUILTIN_ITEMS.includes("share"), true, "Share must be a recognized built-in item");
+  assert.equal(topbarModule.topbarItemIcon({ type: "item", id: "share" }), "share");
+  const defaultShareIds = topbarModule.DEFAULT_TOPBAR_LAYOUT
+    .filter((entry) => entry.type === "item")
+    .map((entry) => entry.id);
+  assert.equal(
+    defaultShareIds[defaultShareIds.indexOf("summary") + 1],
+    "share",
+    "Share must sit immediately after Summary in a new topbar"
+  );
+  const historicalWithoutShare = topbarModule.DEFAULT_TOPBAR_LAYOUT.filter((entry) => entry.id !== "share");
+  const migratedShareLayout = storageSchemaModule.normalizeOptions({
+    topbarLayout: historicalWithoutShare,
+    topbarDeleteThreadMigrated: true,
+    topbarSearchMigrated: true
+  }).topbarLayout;
+  const migratedShareIds = migratedShareLayout
+    .filter((entry) => entry.type === "item")
+    .map((entry) => entry.id);
+  assert.equal(
+    migratedShareIds[migratedShareIds.indexOf("summary") + 1],
+    "share",
+    "existing topbars missing Share must receive it immediately after Summary"
+  );
+  const hiddenShareLayout = storageSchemaModule.normalizeOptions({
+    topbarLayout: historicalWithoutShare,
+    topbarDeleteThreadMigrated: true,
+    topbarSearchMigrated: true,
+    topbarShareMigrated: true
+  }).topbarLayout;
+  assert.equal(
+    hiddenShareLayout.some((entry) => entry.id === "share"),
+    false,
+    "a user who hid Share must not get it reinserted"
+  );
   assert.deepEqual(
     settingsStateModule.SETTINGS_OPTION_CAPABILITIES.apps.write,
     ["builtinChatAppOrder", "builtinChatAppIframeConfigs", "iframePermissionsSource"],

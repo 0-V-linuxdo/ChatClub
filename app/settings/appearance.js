@@ -500,6 +500,7 @@ export function createAppearanceSettingsSection(ctx) {
       "topbar.newChat": "edit",
       "topbar.deleteThread": "trash",
       "topbar.summary": "summary",
+      "topbar.share": "share",
       "topbar.pocket": "pocket",
       "topbar.addGroup": "plus",
       "topbar.layout": "layout",

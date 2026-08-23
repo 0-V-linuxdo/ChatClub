@@ -106,6 +106,13 @@ export async function runtimeRequest(message) {
   return response;
 }
 
+export function tabsCaptureVisibleTab(windowIdOrOptions, options) {
+  if (options !== undefined) return callPromise(["tabs", "captureVisibleTab"], [windowIdOrOptions, options]);
+  if (windowIdOrOptions == null) return callPromise(["tabs", "captureVisibleTab"], []);
+  if (typeof windowIdOrOptions === "object") return callPromise(["tabs", "captureVisibleTab"], [windowIdOrOptions]);
+  return callPromise(["tabs", "captureVisibleTab"], [windowIdOrOptions]);
+}
+
 export function tabsCreate(options) {
   return callPromise(["tabs", "create"], [options]);
 }

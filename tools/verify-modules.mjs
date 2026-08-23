@@ -34,6 +34,7 @@ const REQUIRED_APP_LAZY_BOUNDARIES = Object.freeze([
   "app/pocket/controller.js",
   "app/prompt-focus/controller.js",
   "app/settings/controller.js",
+  "app/share/controller.js",
   "app/summary/controller.js"
 ]);
 const DEFAULT_AUTHOR_ESM_MAX_BYTES = 64 * 1024;

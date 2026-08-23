@@ -32,6 +32,9 @@ assert.match(optimize, /controller\.signal\.aborted[\s\S]{0,250}?recordFunctiona
 
 const summary = read("app/summary/controller.js");
 assert.match(summary, /feature:\s*"summary"/);
+const share = read("app/share/controller.js");
+assert.match(share, /feature:\s*"share"/);
+assert.match(share, /recordShareFailure\(normalizeShareFormat\(state\.shareFormat\) === SHARE_FORMAT_TEXT \? "collectText" : "captureImage"/);
 for (const operation of ["prepareCollector", "collectSource", "refreshSource", "generate"]) {
   assert.match(summary, new RegExp(`recordSummaryFailure\\("${operation}"`), `missing Summary ${operation} anomaly capture`);
 }

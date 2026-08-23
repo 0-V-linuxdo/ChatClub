@@ -6,7 +6,7 @@ import {
 } from "./notion-efforts.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-08-23｜08:16:44」";
+export const APP_VERSION = "「2026-08-23｜08:51:42」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -205,6 +205,7 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
       Object.freeze({ id: "topbar.newChat", labelKey: "topbar.newChatAllTooltip" }),
       Object.freeze({ id: "topbar.deleteThread", labelKey: "topbar.deleteThread" }),
       Object.freeze({ id: "topbar.summary", labelKey: "topbar.summary" }),
+      Object.freeze({ id: "topbar.share", labelKey: "topbar.share" }),
       Object.freeze({ id: "topbar.pocket", labelKey: "topbar.pocket" }),
       Object.freeze({ id: "topbar.addGroup", labelKey: "topbar.addGroup" }),
       Object.freeze({ id: "topbar.layout", labelKey: "topbar.switchLayout" }),
@@ -378,6 +379,7 @@ export const DEFAULT_OPTIONS = {
   topbarLayout: DEFAULT_TOPBAR_LAYOUT,
   topbarDeleteThreadMigrated: true,
   topbarSearchMigrated: true,
+  topbarShareMigrated: true,
   apiProfiles: [
     {
       id: "default-openai",

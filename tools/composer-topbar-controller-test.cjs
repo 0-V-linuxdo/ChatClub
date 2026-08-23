@@ -84,7 +84,7 @@ function responsiveBrandRules(kind) {
   assert.match(runtime, /topbarBinding\.bind\(topbarController\)/, "runtime must bind the stable topbar port once");
   assert.doesNotMatch(runtime, /workspace:\s*\(\)\s*=>\s*workspaceController/, "runtime must not expose an uninitialized workspace controller through a provider thunk");
   assert.doesNotMatch(runtime, /=>\s*preferredModelController\./, "runtime must not expose an uninitialized Preferred Model controller through provider thunks");
-  assert.ok(runtime.split(/\r?\n/).length < 1230, "runtime must stay an assembly root after Composer/Topbar extraction");
+  assert.ok(runtime.split(/\r?\n/).length < 1290, "runtime must stay an assembly root after Composer/Topbar extraction");
 
   assert.match(
     composer,

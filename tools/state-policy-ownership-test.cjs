@@ -19,6 +19,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
     "app/favicon/state-port.js",
     "app/workspace/state-port.js",
     "app/summary/state-port.js",
+    "app/share/state-port.js",
     "app/pocket/state-port.js",
     "app/optimize/state-port.js",
     "app/functional-anomalies/state-port.js",
