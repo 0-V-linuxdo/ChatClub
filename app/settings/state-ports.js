@@ -12,6 +12,7 @@ export const SETTINGS_OPTION_CAPABILITIES = Object.freeze({
     "colMaxCount", "frameLoadingOverlayOpacity", "frameToastPosition", "language",
     "modelPreferenceSelectionOverlayEnabled", "modelPreferenceSelectionOverlayOpacity", "primaryColor", "primaryColorCustom",
     "tabContextMenuHiddenIds", "tabContextMenuOrder", "tabGroupButtonOrder", "tabGroupButtonPlacement", "tabGroupButtonsMode",
+    "tabsSidebarButtonOrder", "tabsSidebarButtonPlacement",
     "themeMode", "tooltipDisabledIds",
     "topbarPromptInputFontSize", "topbarPromptPlaceholderConfig"
   ]),
@@ -62,13 +63,17 @@ const SETTINGS_SECTION_STATE_ACCESS = Object.freeze({
     "options", "settingsAppearancePrimaryColorDraft", "settingsAppearanceTab", "settingsAppearanceTopbarTab",
     "settingsAppearanceWorkspaceTab", "settingsTabContextMenuDragId", "settingsTabContextMenuHiddenIdsDraft",
     "settingsTabContextMenuOrderDraft", "settingsTabGroupButtonDragId", "settingsTabGroupButtonOrderDraft",
-    "settingsTabGroupButtonPlacementDraft", "settingsTabGroupTab", "settingsTopbarPromptPlaceholderDraft",
+    "settingsTabGroupButtonPlacementDraft", "settingsTabGroupTab", "settingsTabsSidebarButtonDragId",
+    "settingsTabsSidebarButtonOrderDraft", "settingsTabsSidebarButtonPlacementDraft",
+    "settingsTopbarPromptPlaceholderDraft",
     "settingsTopbarPromptPlaceholderDragIndex", "settingsTopbarPromptPlaceholderEditingIndex", "topbarEditLayoutDraft"
   ], [
     "options", "settingsAppearancePrimaryColorDraft", "settingsAppearanceTab", "settingsAppearanceTopbarTab",
     "settingsAppearanceWorkspaceTab", "settingsTabContextMenuDragId", "settingsTabContextMenuHiddenIdsDraft",
     "settingsTabContextMenuOrderDraft", "settingsTabGroupButtonDragId", "settingsTabGroupButtonOrderDraft",
-    "settingsTabGroupButtonPlacementDraft", "settingsTabGroupTab", "settingsTopbarPromptPlaceholderDraft",
+    "settingsTabGroupButtonPlacementDraft", "settingsTabGroupTab", "settingsTabsSidebarButtonDragId",
+    "settingsTabsSidebarButtonOrderDraft", "settingsTabsSidebarButtonPlacementDraft",
+    "settingsTopbarPromptPlaceholderDraft",
     "settingsTopbarPromptPlaceholderDragIndex", "settingsTopbarPromptPlaceholderEditingIndex", "topbarEditLayoutDraft"
   ], { options: settingsOptionAccess("appearance") }),
   profiles: stateAccess(

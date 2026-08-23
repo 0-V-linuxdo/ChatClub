@@ -1,8 +1,15 @@
 import { t } from "../../shared/i18n.js";
+import { TABS_SIDEBAR_HOVER_BUTTONS } from "../../shared/constants.js";
+import {
+  normalizeTabsSidebarButtonOrder,
+  normalizeTabsSidebarButtonPlacement
+} from "../../shared/storage-schema.js";
 import { isGenericTopicTitle, sanitizeTopicTitle } from "../../shared/topic-title.js";
 import { workspaceSessionWorkspaceId } from "../../shared/workspace-session.js";
+import { createMenuButton } from "../../ui/components.js";
 import {
   button,
+  claimTopmostPopoverEscape,
   confirmationModal as defaultConfirmationModal,
   el,
   iconButton,
@@ -177,6 +184,7 @@ export function createWorkspaceTabsSidebarController({
   extensionApi,
   closeCurrentTab,
   canDismiss,
+  getOptions = () => ({}),
   document: ownerDocument = globalThis.document,
   confirmationModal = defaultConfirmationModal,
   createIcon = createSvgIcon
@@ -207,6 +215,7 @@ export function createWorkspaceTabsSidebarController({
   let recordFullTextEnabled = false;
   let fullTextStore = {};
   let fullTextLoad = null;
+  let hoverMenuCleanup = null;
 
   function currentItems() {
     return items.slice();
@@ -579,6 +588,7 @@ export function createWorkspaceTabsSidebarController({
       || className.includes(" workspace-tabs-sidebar-item-edit ")
       || className.includes(" workspace-tabs-sidebar-item-delete ")
       || className.includes(" workspace-tabs-sidebar-item-pin ")
+      || className.includes(" workspace-tabs-sidebar-item-more ")
       || className.includes(" workspace-tabs-sidebar-item-editor ")
       || className.includes(" workspace-tabs-sidebar-search-input ");
   }
@@ -588,6 +598,7 @@ export function createWorkspaceTabsSidebarController({
     if (!itemDrag.active && Math.abs(Number(event?.clientY) - itemDrag.startY) < TAB_DRAG_START_DISTANCE) return;
     if (!itemDrag.active) {
       itemDrag.active = true;
+      closeHoverMenu();
       itemDrag.row?.classList?.add?.("dragging");
       lastShell?.classList?.add?.("is-dragging-workspace-tabs-sidebar");
     }
@@ -880,31 +891,216 @@ export function createWorkspaceTabsSidebarController({
     return dialog;
   }
 
+  function tabsSidebarHoverConfig() {
+    const options = typeof getOptions === "function" ? getOptions() : {};
+    const placement = normalizeTabsSidebarButtonPlacement(options?.tabsSidebarButtonPlacement);
+    const order = normalizeTabsSidebarButtonOrder(options?.tabsSidebarButtonOrder);
+    const byId = new Map(TABS_SIDEBAR_HOVER_BUTTONS.map((item) => [item.id, item]));
+    const ordered = order.map((id) => byId.get(id)).filter(Boolean);
+    return {
+      pinned: ordered.filter((item) => placement[item.id] === "pinned"),
+      folded: ordered.filter((item) => placement[item.id] === "menu")
+    };
+  }
+
+  function hoverActionsWidth(count) {
+    if (!count) return "0px";
+    return `${count * 28 + Math.max(0, count - 1) * 2 + 16}px`;
+  }
+
+  function closeHoverMenu() {
+    hoverMenuCleanup?.();
+    hoverMenuCleanup = null;
+    const root = ownerDocument;
+    [".workspace-tabs-sidebar-hover-menu", ".workspace-tabs-sidebar-hover-backdrop"].forEach((selector) => {
+      root?.querySelectorAll?.(selector)?.forEach?.((node) => node.remove?.());
+    });
+    root?.querySelectorAll?.(".workspace-tabs-sidebar-item.is-menu-open")
+      ?.forEach?.((node) => node.classList?.remove?.("is-menu-open"));
+    root?.querySelectorAll?.(".workspace-tabs-sidebar-item-more")
+      ?.forEach?.((node) => node.setAttribute?.("aria-expanded", "false"));
+  }
+
+  function hoverMenuButton(id, item, row) {
+    const resolveRow = (event) => event?.currentTarget?.closest?.(".workspace-tabs-sidebar-item") || row;
+    if (id === "pin") {
+      const pinLabel = item.pinned ? t("workspace.tabs.unpin") : t("workspace.tabs.pin");
+      return createMenuButton({
+        label: pinLabel,
+        icon: createIcon("pin"),
+        onClick: () => {
+          closeHoverMenu();
+          togglePin(item);
+        },
+        tooltipLabel: pinLabel,
+        tooltipId: item.pinned ? "workspace.tabs.unpin" : "workspace.tabs.pin"
+      });
+    }
+    if (id === "edit") {
+      return createMenuButton({
+        label: t("workspace.tabs.edit"),
+        icon: createIcon("edit"),
+        onClick: (event) => {
+          closeHoverMenu();
+          startTitleEditor(item, resolveRow(event));
+        },
+        tooltipId: "workspace.tabs.edit"
+      });
+    }
+    if (id === "delete") {
+      return createMenuButton({
+        label: t("workspace.tabs.delete"),
+        icon: createIcon("trash"),
+        variant: "danger",
+        onClick: () => {
+          closeHoverMenu();
+          openDeleteConfirmation(item);
+        },
+        tooltipId: "workspace.tabs.delete"
+      });
+    }
+    return null;
+  }
+
+  function openHoverMenu(event, item, row) {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    const anchor = event.currentTarget;
+    if (row?.classList?.contains?.("is-menu-open")) {
+      closeHoverMenu();
+      return;
+    }
+    closeHoverMenu();
+    const { folded } = tabsSidebarHoverConfig();
+    if (!folded.length) return;
+    row?.classList?.add?.("is-menu-open");
+    anchor?.setAttribute?.("aria-expanded", "true");
+    const rect = anchor.getBoundingClientRect?.() || { bottom: 0, right: 0 };
+    const view = ownerDocument.defaultView || globalThis;
+    const backdrop = el("div", {
+      class: "popover-backdrop workspace-tabs-sidebar-hover-backdrop",
+      onpointerdown: (pointerEvent) => {
+        pointerEvent.preventDefault();
+        closeHoverMenu();
+      }
+    });
+    const menu = el("div", {
+      class: "popover-menu workspace-tabs-sidebar-hover-menu",
+      role: "menu",
+      style: {
+        top: `${Number(rect.bottom) + 5}px`,
+        right: `${Math.max(8, Number(view.innerWidth || 0) - Number(rect.right || 0))}px`
+      },
+      onpointerdown: (pointerEvent) => pointerEvent.stopPropagation(),
+      onclick: (pointerEvent) => pointerEvent.stopPropagation()
+    }, folded.map((entry) => hoverMenuButton(entry.id, item, row)).filter(Boolean));
+    (ownerDocument.body || ownerDocument.documentElement)?.append?.(backdrop, menu);
+    const onOutside = (pointerEvent) => {
+      const target = pointerEvent.target;
+      if (menu.contains?.(target) || anchor.contains?.(target) || anchor === target) return;
+      closeHoverMenu();
+    };
+    const onKeydown = (keyEvent) => {
+      if (!claimTopmostPopoverEscape(keyEvent, ".workspace-tabs-sidebar-hover-menu")) return;
+      closeHoverMenu();
+    };
+    const onViewport = () => closeHoverMenu();
+    ownerDocument.addEventListener?.("pointerdown", onOutside, true);
+    ownerDocument.addEventListener?.("focusin", onOutside, true);
+    ownerDocument.addEventListener?.("keydown", onKeydown, true);
+    view.addEventListener?.("resize", onViewport, true);
+    view.addEventListener?.("scroll", onViewport, true);
+    view.addEventListener?.("blur", onViewport, true);
+    hoverMenuCleanup = () => {
+      ownerDocument.removeEventListener?.("pointerdown", onOutside, true);
+      ownerDocument.removeEventListener?.("focusin", onOutside, true);
+      ownerDocument.removeEventListener?.("keydown", onKeydown, true);
+      view.removeEventListener?.("resize", onViewport, true);
+      view.removeEventListener?.("scroll", onViewport, true);
+      view.removeEventListener?.("blur", onViewport, true);
+    };
+  }
+
+  function renderHoverAction(id, item) {
+    if (id === "pin") {
+      const pinLabel = item.pinned ? t("workspace.tabs.unpin") : t("workspace.tabs.pin");
+      const pinButton = iconButton(
+        pinLabel,
+        createIcon("pin"),
+        (event) => {
+          event?.preventDefault?.();
+          event?.stopPropagation?.();
+          togglePin(item);
+        },
+        `workspace-tabs-sidebar-item-pin${item.pinned ? " is-pinned" : ""}`,
+        pinLabel,
+        "",
+        item.pinned ? "workspace.tabs.unpin" : "workspace.tabs.pin"
+      );
+      pinButton.setAttribute?.("aria-pressed", item.pinned ? "true" : "false");
+      return pinButton;
+    }
+    if (id === "edit") {
+      return iconButton(
+        t("workspace.tabs.edit"),
+        createIcon("edit"),
+        (event) => {
+          event?.preventDefault?.();
+          event?.stopPropagation?.();
+          startTitleEditor(item, event?.currentTarget?.closest?.(".workspace-tabs-sidebar-item"));
+        },
+        "workspace-tabs-sidebar-item-edit",
+        t("workspace.tabs.edit"),
+        "",
+        "workspace.tabs.edit"
+      );
+    }
+    if (id === "delete") {
+      return iconButton(
+        t("workspace.tabs.delete"),
+        createIcon("trash"),
+        (event) => {
+          event?.preventDefault?.();
+          event?.stopPropagation?.();
+          openDeleteConfirmation(item);
+        },
+        "workspace-tabs-sidebar-item-delete",
+        t("workspace.tabs.delete"),
+        "",
+        "workspace.tabs.delete"
+      );
+    }
+    return null;
+  }
+
   function renderSidebarItem(item, index) {
     if (isEditingItem(item)) return renderTitleEditor(item, index);
-    const pinLabel = item.pinned ? t("workspace.tabs.unpin") : t("workspace.tabs.pin");
-    const pinButton = iconButton(
-      pinLabel,
-      createIcon("pin"),
-      (event) => {
-        event?.preventDefault?.();
-        event?.stopPropagation?.();
-        togglePin(item);
-      },
-      `workspace-tabs-sidebar-item-pin${item.pinned ? " is-pinned" : ""}`,
-      pinLabel,
-      "",
-      item.pinned ? "workspace.tabs.unpin" : "workspace.tabs.pin"
-    );
-    pinButton.setAttribute?.("aria-pressed", item.pinned ? "true" : "false");
+    const { pinned, folded } = tabsSidebarHoverConfig();
+    const actionCount = pinned.length + (folded.length ? 1 : 0);
     let row;
+    const actionNodes = pinned.map((entry) => renderHoverAction(entry.id, item)).filter(Boolean);
+    if (folded.length) {
+      const moreButton = iconButton(
+        t("chat.more"),
+        createIcon("more"),
+        (event) => openHoverMenu(event, item, event?.currentTarget?.closest?.(".workspace-tabs-sidebar-item") || row),
+        "workspace-tabs-sidebar-item-more",
+        t("chat.more"),
+        "",
+        "workspace.tabs.more"
+      );
+      moreButton.setAttribute?.("aria-expanded", "false");
+      moreButton.setAttribute?.("aria-haspopup", "menu");
+      actionNodes.push(moreButton);
+    }
     row = el("div", {
       class: `workspace-tabs-sidebar-item${item.current ? " is-current" : ""}${item.live ? "" : " is-closed"}${item.pinned ? " is-pinned" : ""}`,
       role: "listitem",
       dataset: {
         workspaceId: workspaceIdValue(item.workspaceId),
         pinned: item.pinned ? "1" : ""
-      }
+      },
+      style: actionCount ? { "--tabs-sidebar-actions-width": hoverActionsWidth(actionCount) } : null
     },
       el("button", {
         class: "workspace-tabs-sidebar-item-focus",
@@ -927,35 +1123,9 @@ export function createWorkspaceTabsSidebarController({
           : null,
         el("span", { class: "workspace-tabs-sidebar-item-label" }, itemLabel(item, index))
       ),
-      el("div", { class: "workspace-tabs-sidebar-item-actions" },
-        pinButton,
-        iconButton(
-          t("workspace.tabs.edit"),
-          createIcon("edit"),
-          (event) => {
-            event?.preventDefault?.();
-            event?.stopPropagation?.();
-            startTitleEditor(item, row);
-          },
-          "workspace-tabs-sidebar-item-edit",
-          t("workspace.tabs.edit"),
-          "",
-          "workspace.tabs.edit"
-        ),
-        iconButton(
-          t("workspace.tabs.delete"),
-          createIcon("trash"),
-          (event) => {
-            event?.preventDefault?.();
-            event?.stopPropagation?.();
-            openDeleteConfirmation(item);
-          },
-          "workspace-tabs-sidebar-item-delete",
-          t("workspace.tabs.delete"),
-          "",
-          "workspace.tabs.delete"
-        )
-      )
+      actionNodes.length
+        ? el("div", { class: "workspace-tabs-sidebar-item-actions" }, actionNodes)
+        : null
     );
     bindItemDrag(row, item);
     return row;
@@ -1146,6 +1316,10 @@ export function createWorkspaceTabsSidebarController({
   }
 
   function onEscapeKeydown(event) {
+    if (claimTopmostPopoverEscape(event, ".workspace-tabs-sidebar-hover-menu")) {
+      closeHoverMenu();
+      return;
+    }
     if (!open || !isDismissalEscape(event)) return;
     if (editingKey) {
       event.preventDefault?.();
@@ -1182,6 +1356,7 @@ export function createWorkspaceTabsSidebarController({
   }
 
   function syncSidebar(shell) {
+    closeHoverMenu();
     syncPageTitle();
     if (!shell?.isConnected) return null;
     lastShell = shell;

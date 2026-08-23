@@ -69,7 +69,7 @@ class FakeNode {
   }
 
   click(event = {}) {
-    const payload = { preventDefault() {}, stopPropagation() {}, ...event };
+    const payload = { preventDefault() {}, stopPropagation() {}, currentTarget: this, target: this, ...event };
     for (const listener of this.listeners.click || []) listener(payload);
   }
 
@@ -84,6 +84,26 @@ class FakeNode {
       node.parentNode = this;
       this.children.push(node);
     }
+  }
+
+  contains(node) {
+    if (node === this) return true;
+    return descendants(this).includes(node);
+  }
+
+  matches(selector) {
+    const className = String(selector || "").startsWith(".") ? selector.slice(1) : "";
+    return className ? this.classList.contains(className) : false;
+  }
+
+  closest(selector) {
+    const className = String(selector || "").startsWith(".") ? selector.slice(1) : "";
+    let node = this;
+    while (node) {
+      if (className && node.classList?.contains?.(className)) return node;
+      node = node.parentNode;
+    }
+    return null;
   }
 
   querySelector(selector) {
@@ -132,12 +152,22 @@ const previousGlobals = {
   document: globalThis.document
 };
 globalThis.Node = FakeNode;
+const documentBody = new FakeNode("body");
 globalThis.document = {
+  body: documentBody,
+  documentElement: documentBody,
   createElement: (tagName) => new FakeNode(tagName),
   createElementNS: (_ns, tagName) => new FakeNode(tagName),
   createTextNode: (text) => Object.assign(new FakeNode("#text"), { textContent: String(text) }),
   addEventListener() {},
-  removeEventListener() {}
+  removeEventListener() {},
+  querySelector(selector) {
+    return this.querySelectorAll(selector)[0] || null;
+  },
+  querySelectorAll(selector) {
+    const className = String(selector || "").startsWith(".") ? selector.slice(1).split(/[\s.]+/)[0] : "";
+    return descendants(documentBody).filter((node) => className && node.classList.contains(className));
+  }
 };
 
 (async () => {
@@ -170,6 +200,18 @@ globalThis.document = {
   assert.match(css, /\.workspace-tabs-sidebar-item-pin-mark/, "pinned tabs must keep a visible pin mark");
   assert.match(css, /\.workspace-tabs-sidebar-resize/, "the sidebar must be resizable by dragging");
   assert.match(css, /@media \(hover: hover\)/, "rename and delete controls must wait for hover");
+  assert.match(css, /\.workspace-tabs-sidebar-item-actions:focus-within/, "keyboard focus on an action may reveal hover buttons");
+  assert.doesNotMatch(
+    css,
+    /\.workspace-tabs-sidebar-item:focus-within \.workspace-tabs-sidebar-item-actions/,
+    "focusing the title must not reveal hover buttons"
+  );
+  assert.match(css, /\.workspace-tabs-sidebar-item:has\(:focus-visible\)/, "keyboard focus may highlight a row without a stuck hover overlay");
+  assert.match(css, /\.workspace-tabs-sidebar-item-more/, "folded hover buttons must use a more control");
+  assert.match(css, /\.workspace-tabs-sidebar-item\.is-menu-open \.workspace-tabs-sidebar-item-actions/, "the more menu must keep hover buttons visible while open");
+  assert.match(source, /openHoverMenu/, "folded buttons must open from the three-dot control");
+  assert.match(source, /workspace-tabs-sidebar-hover-menu/, "folded buttons must land in a popover");
+  assert.match(source, /getOptions/, "hover-button placement must read appearance options");
   assert.match(css, /\.workspace-tabs-sidebar-item-actions\s*\{[^}]*position:\s*absolute/, "rename and delete must overlay the row instead of shrinking the title");
   assert.match(css, /\.workspace-tabs-sidebar-divider/, "closed tabs must be separated by a divider");
   assert.match(css, /\.workspace-tabs-sidebar-item\.is-editing/, "rename must edit the title on the row");
@@ -387,6 +429,11 @@ globalThis.document = {
     assert.deepEqual(indexes.map((node) => nodeText(node)), ["1", "2", "1"], "live and closed tabs must number separately");
     const pinButtons = descendants(sidebar).filter((node) => node.classList.contains("workspace-tabs-sidebar-item-pin"));
     assert.equal(pinButtons.length, 3, "every ChatClub tab row must expose a pin control");
+    assert.equal(
+      descendants(sidebar).filter((node) => String(node.className || "").includes("workspace-tabs-sidebar-item-more")).length,
+      0,
+      "default hover buttons stay on the row without a More control"
+    );
     const resize = descendants(sidebar).find((node) => node.classList.contains("workspace-tabs-sidebar-resize"));
     assert.ok(resize, "the sidebar must expose a drag handle");
     assert.equal(fixture.api.itemLabel({ layoutName: "", appIds: ["Claude"] }, 0), "Claude");
@@ -1034,6 +1081,50 @@ globalThis.document = {
     assert.equal(fixture.api.isOpen(), false);
     fixture.api.openSearch();
     assert.equal(fixture.api.isOpen(), true, "Search must open the ChatClub Tabs sidebar");
+  }
+
+  {
+    const fixture = controller({
+      getOptions: () => ({
+        tabsSidebarButtonPlacement: { pin: "pinned", edit: "menu", delete: "menu", more: "pinned" },
+        tabsSidebarButtonOrder: ["pin", "edit", "delete"]
+      })
+    });
+    await fixture.api.refresh();
+    fixture.api.setOpen(true);
+    const sidebar = fixture.api.renderSidebar();
+    const pinButtons = descendants(sidebar).filter((node) => node.classList.contains("workspace-tabs-sidebar-item-pin"));
+    const editButtons = descendants(sidebar).filter((node) => String(node.className || "").includes("workspace-tabs-sidebar-item-edit"));
+    const deleteButtons = descendants(sidebar).filter((node) => String(node.className || "").includes("workspace-tabs-sidebar-item-delete"));
+    const moreButtons = descendants(sidebar).filter((node) => String(node.className || "").includes("workspace-tabs-sidebar-item-more"));
+    assert.equal(pinButtons.length, 3, "fixed hover buttons stay on the row");
+    assert.equal(editButtons.length, 0, "folded edit must leave the hover overlay");
+    assert.equal(deleteButtons.length, 0, "folded delete must leave the hover overlay");
+    assert.equal(moreButtons.length, 3, "folded buttons must expose a three-dot control on each row");
+    documentBody.children = [];
+    moreButtons[0].click({ currentTarget: moreButtons[0] });
+    const menu = descendants(documentBody).find((node) => node.classList.contains("workspace-tabs-sidebar-hover-menu"));
+    assert.ok(menu, "the three-dot control must open a popover");
+    assert.match(nodeText(menu), /Edit title|编辑标题/);
+    assert.match(nodeText(menu), /Delete tab|删除标签页/);
+    assert.doesNotMatch(nodeText(menu), /Pin to top|置顶/, "fixed pin must not also appear in More");
+  }
+
+  {
+    const fixture = controller({
+      getOptions: () => ({
+        tabsSidebarButtonPlacement: { pin: "hidden", edit: "hidden", delete: "hidden", more: "pinned" },
+        tabsSidebarButtonOrder: ["pin", "edit", "delete"]
+      })
+    });
+    await fixture.api.refresh();
+    fixture.api.setOpen(true);
+    const sidebar = fixture.api.renderSidebar();
+    assert.equal(
+      descendants(sidebar).filter((node) => node.classList.contains("workspace-tabs-sidebar-item-actions")).length,
+      0,
+      "hidden hover buttons must disappear from the row and More"
+    );
   }
 
   console.log("workspace tabs sidebar: ok");

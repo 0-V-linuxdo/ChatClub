@@ -17,6 +17,8 @@ import {
   DEFAULT_TAB_CONTEXT_MENU_ORDER,
   DEFAULT_TAB_GROUP_BUTTON_ORDER,
   DEFAULT_TAB_GROUP_BUTTON_PLACEMENT,
+  DEFAULT_TABS_SIDEBAR_BUTTON_ORDER,
+  DEFAULT_TABS_SIDEBAR_BUTTON_PLACEMENT,
   DEFAULT_OPTIONS,
   GEMINI_THINKING_LEVEL_PREFERENCE_KEY,
   GEMINI_THINKING_LEVEL_TARGETS,
@@ -33,6 +35,7 @@ import {
   SCRIPT_CONFIG_SCHEMA_VERSION,
   TAB_GROUP_BUTTON_ORDER_MIGRATION_VERSION,
   TAB_GROUP_HEADER_BUTTONS,
+  TABS_SIDEBAR_HOVER_BUTTONS,
   TAB_CONTEXT_MENU_ITEMS,
   TOOLTIP_TARGET_IDS,
   TOPBAR_PROMPT_INPUT_FONT_SIZE_MAX_PX,
@@ -330,6 +333,31 @@ export function normalizeTabContextMenuHiddenIds(value = []) {
     if (valid.has(id) && !hidden.includes(id)) hidden.push(id);
   }
   return hidden;
+}
+
+export function normalizeTabsSidebarButtonPlacement(value = {}) {
+  const raw = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  return Object.fromEntries(TABS_SIDEBAR_HOVER_BUTTONS.map((item) => {
+    if (item.requiredPinned) return [item.id, "pinned"];
+    const saved = raw[item.id];
+    const placement = saved === "menu" || saved === "pinned" || saved === "hidden"
+      ? saved
+      : DEFAULT_TABS_SIDEBAR_BUTTON_PLACEMENT[item.id] || "pinned";
+    return [item.id, placement === "menu" || placement === "hidden" ? placement : "pinned"];
+  }));
+}
+
+export function normalizeTabsSidebarButtonOrder(value = []) {
+  const configurableIds = TABS_SIDEBAR_HOVER_BUTTONS
+    .filter((item) => !item.requiredPinned)
+    .map((item) => item.id);
+  const valid = new Set(configurableIds);
+  const source = Array.isArray(value) ? value : DEFAULT_TABS_SIDEBAR_BUTTON_ORDER;
+  const ordered = normalizeTabGroupButtonOrderItems(source, valid);
+  for (const id of configurableIds) {
+    if (!ordered.includes(id)) ordered.push(id);
+  }
+  return ordered;
 }
 
 function inferCustomName(item, index) {
@@ -794,6 +822,8 @@ export function normalizeOptions(raw = {}) {
     ),
     tabContextMenuOrder: normalizeTabContextMenuOrder(raw.tabContextMenuOrder, raw.tabGroupButtonOrder),
     tabContextMenuHiddenIds: normalizeTabContextMenuHiddenIds(raw.tabContextMenuHiddenIds),
+    tabsSidebarButtonPlacement: normalizeTabsSidebarButtonPlacement(raw.tabsSidebarButtonPlacement),
+    tabsSidebarButtonOrder: normalizeTabsSidebarButtonOrder(raw.tabsSidebarButtonOrder),
     tooltipDisabledIds: normalizeTooltipDisabledIds(raw.tooltipDisabledIds),
     topbarLayout: migrateShareTopbarLayout(raw),
     topbarDeleteThreadMigrated: true,

@@ -1,10 +1,12 @@
-import { TAB_CONTEXT_MENU_ITEMS, TAB_GROUP_HEADER_BUTTONS } from "../../shared/constants.js";
+import { TAB_CONTEXT_MENU_ITEMS, TAB_GROUP_HEADER_BUTTONS, TABS_SIDEBAR_HOVER_BUTTONS } from "../../shared/constants.js";
 import { t } from "../../shared/i18n.js";
 import {
   normalizeTabContextMenuHiddenIds,
   normalizeTabContextMenuOrder,
   normalizeTabGroupButtonOrder,
-  normalizeTabGroupButtonPlacement
+  normalizeTabGroupButtonPlacement,
+  normalizeTabsSidebarButtonOrder,
+  normalizeTabsSidebarButtonPlacement
 } from "../../shared/storage-schema.js";
 import { el } from "../../ui/dom.js";
 import { cleanupSettingsDragRows, createSettingsKit } from "./kit.js";
@@ -14,7 +16,7 @@ import {
 } from "./appearance-model.js";
 import { validateControllerContract } from "../controller-contract.js";
 
-const TAB_GROUP_SETTINGS_TABS = Object.freeze(["buttons", "contextMenu"]);
+const TAB_GROUP_SETTINGS_TABS = Object.freeze(["buttons", "contextMenu", "tabsSidebar"]);
 
 export function createAppearanceTabGroupController(dependencies = {}) {
   const { state, svgIcon, queueAppearanceAutoSave } = validateControllerContract(
@@ -58,9 +60,18 @@ export function createAppearanceTabGroupController(dependencies = {}) {
     closeTab: t("chat.closeTab")
   })[id] || id;
 
+  const tabsSidebarButtonLabel = (id) => ({
+    pin: t("workspace.tabs.pin"),
+    edit: t("workspace.tabs.edit"),
+    delete: t("workspace.tabs.delete"),
+    more: t("chat.more")
+  })[id] || id;
+
   const tabGroupConfigurableButtons = () => TAB_GROUP_HEADER_BUTTONS.filter((item) => !item.requiredPinned);
   const tabGroupButtonById = new Map(tabGroupConfigurableButtons().map((item) => [item.id, item]));
   const tabContextMenuButtonById = new Map(TAB_CONTEXT_MENU_ITEMS.map((item) => [item.id, item]));
+  const tabsSidebarConfigurableButtons = () => TABS_SIDEBAR_HOVER_BUTTONS.filter((item) => !item.requiredPinned);
+  const tabsSidebarButtonById = new Map(tabsSidebarConfigurableButtons().map((item) => [item.id, item]));
 
   function ensureDrafts() {
     if (!state.settingsTabGroupButtonPlacementDraft) {
@@ -78,6 +89,14 @@ export function createAppearanceTabGroupController(dependencies = {}) {
     if (!Array.isArray(state.settingsTabContextMenuHiddenIdsDraft)) {
       state.settingsTabContextMenuHiddenIdsDraft = normalizeTabContextMenuHiddenIds(state.options.tabContextMenuHiddenIds);
     }
+    if (!state.settingsTabsSidebarButtonPlacementDraft) {
+      state.settingsTabsSidebarButtonPlacementDraft = normalizeTabsSidebarButtonPlacement(
+        state.options.tabsSidebarButtonPlacement
+      );
+    }
+    if (!Array.isArray(state.settingsTabsSidebarButtonOrderDraft)) {
+      state.settingsTabsSidebarButtonOrderDraft = normalizeTabsSidebarButtonOrder(state.options.tabsSidebarButtonOrder);
+    }
     if (!TAB_GROUP_SETTINGS_TABS.includes(state.settingsTabGroupTab)) state.settingsTabGroupTab = "buttons";
   }
 
@@ -90,6 +109,16 @@ export function createAppearanceTabGroupController(dependencies = {}) {
         draggingClass: "settings-tab-context-menu-dragging",
         dragStateKey: "settingsTabContextMenuDragId",
         currentPlacement: (item) => state.settingsTabContextMenuHiddenIdsDraft.includes(item.id) ? "hidden" : "visible"
+      };
+    }
+    if (kind === "tabsSidebar") {
+      return {
+        kind,
+        rowSelector: ".tab-group-button-placement-row",
+        zoneSelector: ".tab-group-button-placement-zone",
+        draggingClass: "settings-tab-group-button-dragging",
+        dragStateKey: "settingsTabsSidebarButtonDragId",
+        currentPlacement: (item) => state.settingsTabsSidebarButtonPlacementDraft[item.id] || item.defaultPlacement || "pinned"
       };
     }
     return {
@@ -171,6 +200,7 @@ export function createAppearanceTabGroupController(dependencies = {}) {
     activeDrag = null;
     state.settingsTabGroupButtonDragId = "";
     state.settingsTabContextMenuDragId = "";
+    state.settingsTabsSidebarButtonDragId = "";
     document.body.classList.remove("settings-tab-group-button-dragging", "settings-tab-context-menu-dragging");
     cleanupSettingsDragRows(".tab-group-button-placement-row, .tab-context-menu-placement-row");
     document.querySelectorAll(".tab-group-button-placement-zone, .tab-context-menu-placement-zone").forEach((node) => {
@@ -233,6 +263,25 @@ export function createAppearanceTabGroupController(dependencies = {}) {
       queueAppearanceAutoSave({
         tabContextMenuOrder: nextOrder,
         tabContextMenuHiddenIds: nextHiddenIds
+      });
+    } else if (drag.kind === "tabsSidebar") {
+      const nextPlacement = normalizeTabsSidebarButtonPlacement({
+        ...state.settingsTabsSidebarButtonPlacementDraft,
+        [sourceId]: drag.targetPlacement
+      });
+      const nextOrder = normalizeTabsSidebarButtonOrder(reorderItems(
+        normalizeTabsSidebarButtonOrder(state.settingsTabsSidebarButtonOrderDraft),
+        sourceId,
+        drag.targetId,
+        drag.targetPosition,
+        (id) => nextPlacement[id],
+        drag.targetPlacement
+      ));
+      state.settingsTabsSidebarButtonPlacementDraft = nextPlacement;
+      state.settingsTabsSidebarButtonOrderDraft = nextOrder;
+      queueAppearanceAutoSave({
+        tabsSidebarButtonPlacement: nextPlacement,
+        tabsSidebarButtonOrder: nextOrder
       });
     } else {
       const nextPlacement = normalizeTabGroupButtonPlacement(
@@ -321,7 +370,11 @@ export function createAppearanceTabGroupController(dependencies = {}) {
     const rowClass = contextMenu ? "tab-context-menu-placement-row" : "tab-group-button-placement-row";
     const iconClass = contextMenu ? "tab-context-menu-placement-icon" : "tab-group-button-placement-icon";
     const copyClass = contextMenu ? "tab-context-menu-placement-copy" : "tab-group-button-placement-copy";
-    const label = contextMenu ? tabContextMenuLabel(item.id) : tabGroupButtonLabel(item.id);
+    const label = contextMenu
+      ? tabContextMenuLabel(item.id)
+      : kind === "tabsSidebar"
+        ? tabsSidebarButtonLabel(item.id)
+        : tabGroupButtonLabel(item.id);
     return el("div", {
       class: `${rowClass} ${item.danger ? "is-danger" : ""}`.trim(),
       dataset: { buttonId: item.id },
@@ -401,20 +454,43 @@ export function createAppearanceTabGroupController(dependencies = {}) {
     );
   }
 
+  function tabsSidebarPane(redraw) {
+    const placement = state.settingsTabsSidebarButtonPlacementDraft;
+    const order = normalizeTabsSidebarButtonOrder(state.settingsTabsSidebarButtonOrderDraft);
+    const ordered = order.map((id) => tabsSidebarButtonById.get(id)).filter(Boolean);
+    const itemsFor = (value) => ordered.filter((item) => tabGroupButtonPlacementValue(placement[item.id] || item.defaultPlacement) === value);
+    return settingsBlock(t("appearance.tabsSidebar"), t("appearance.tabsSidebarDesc"),
+      el("div", { class: "appearance-field-list" },
+        el("p", { class: "settings-muted-help" }, t("appearance.tabsSidebarHelp")),
+        el("div", { class: "tab-group-button-placement-list" },
+          placementZone("pinned", itemsFor("pinned"), t("appearance.tabsSidebarDropPinned"), redraw, "tabsSidebar"),
+          placementZone("menu", itemsFor("menu"), t("appearance.tabsSidebarDropMenu"), redraw, "tabsSidebar"),
+          placementZone("hidden", itemsFor("hidden"), t("appearance.tabsSidebarDropHidden"), redraw, "tabsSidebar")
+        )
+      )
+    );
+  }
+
   function pane(redraw = () => {}) {
     ensureDrafts();
     const activeTab = state.settingsTabGroupTab;
     const innerTabs = settingsInnerTabs([
       ["buttons", t("appearance.tabGroup"), t("appearance.tabGroupTabDesc")],
-      ["contextMenu", t("appearance.tabContextMenu"), t("appearance.tabContextMenuTabDesc")]
+      ["contextMenu", t("appearance.tabContextMenu"), t("appearance.tabContextMenuTabDesc")],
+      ["tabsSidebar", t("appearance.tabsSidebar"), t("appearance.tabsSidebarTabDesc")]
     ], activeTab, (id) => {
       state.settingsTabGroupTab = id;
       redraw();
     });
     innerTabs.setAttribute("aria-label", t("appearance.tabGroupTabsLabel"));
+    const activePane = activeTab === "contextMenu"
+      ? tabContextMenuPane(redraw)
+      : activeTab === "tabsSidebar"
+        ? tabsSidebarPane(redraw)
+        : tabGroupButtonsPane(redraw);
     return el("div", { class: `appearance-tab-group-pane is-${activeTab}` },
       innerTabs,
-      activeTab === "contextMenu" ? tabContextMenuPane(redraw) : tabGroupButtonsPane(redraw)
+      activePane
     );
   }
 
@@ -426,6 +502,9 @@ export function createAppearanceTabGroupController(dependencies = {}) {
     state.settingsTabContextMenuOrderDraft = null;
     state.settingsTabContextMenuHiddenIdsDraft = null;
     state.settingsTabContextMenuDragId = "";
+    state.settingsTabsSidebarButtonPlacementDraft = null;
+    state.settingsTabsSidebarButtonOrderDraft = null;
+    state.settingsTabsSidebarButtonDragId = "";
     cleanupDrag();
   }
 

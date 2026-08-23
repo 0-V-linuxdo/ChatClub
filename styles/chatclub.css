@@ -392,7 +392,8 @@ button { cursor: pointer; }
 }
 
 .workspace-tabs-sidebar-item:hover,
-.workspace-tabs-sidebar-item:focus-within {
+.workspace-tabs-sidebar-item:has(:focus-visible),
+.workspace-tabs-sidebar-item.is-menu-open {
   background: color-mix(in srgb, var(--panel-2) 80%, var(--bg));
 }
 
@@ -505,12 +506,6 @@ button { cursor: pointer; }
   white-space: nowrap;
 }
 
-.workspace-tabs-sidebar-item:hover .workspace-tabs-sidebar-item-label,
-.workspace-tabs-sidebar-item:focus-within .workspace-tabs-sidebar-item-label {
-  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 104px), transparent);
-  mask-image: linear-gradient(to right, #000 calc(100% - 104px), transparent);
-}
-
 .workspace-tabs-sidebar-item-actions {
   position: absolute;
   top: 4px;
@@ -551,6 +546,7 @@ button { cursor: pointer; }
 .workspace-tabs-sidebar-item-edit,
 .workspace-tabs-sidebar-item-delete,
 .workspace-tabs-sidebar-item-pin,
+.workspace-tabs-sidebar-item-more,
 .workspace-tabs-sidebar-item-edit-cancel,
 .workspace-tabs-sidebar-item-edit-save {
   width: 28px;
@@ -565,9 +561,17 @@ button { cursor: pointer; }
   }
 
   .workspace-tabs-sidebar-item:hover .workspace-tabs-sidebar-item-actions,
-  .workspace-tabs-sidebar-item:focus-within .workspace-tabs-sidebar-item-actions {
+  .workspace-tabs-sidebar-item.is-menu-open .workspace-tabs-sidebar-item-actions,
+  .workspace-tabs-sidebar-item-actions:focus-within {
     opacity: 1;
     pointer-events: auto;
+  }
+
+  .workspace-tabs-sidebar-item:hover .workspace-tabs-sidebar-item-label,
+  .workspace-tabs-sidebar-item.is-menu-open .workspace-tabs-sidebar-item-label,
+  .workspace-tabs-sidebar-item:has(.workspace-tabs-sidebar-item-actions:focus-within) .workspace-tabs-sidebar-item-label {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - var(--tabs-sidebar-actions-width, 104px)), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - var(--tabs-sidebar-actions-width, 104px)), transparent);
   }
 }
 
@@ -3281,7 +3285,7 @@ body.tab-gesture-active * {
 .appearance-tab-group-pane > .settings-inner-tabs {
   grid-auto-flow: initial;
   grid-auto-columns: initial;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   width: fit-content;
   max-width: 100%;
 }
@@ -9264,6 +9268,10 @@ body:has(.chat-card:not(.fullscreen-hidden) .chat-frame.active + .frame-submit-t
 .popover-menu .button-danger,
 .popover-menu .button-danger .svg-icon {
   color: var(--danger);
+}
+
+.popover-menu.workspace-tabs-sidebar-hover-menu {
+  min-width: 168px;
 }
 
 .popover-menu.tab-context-menu {

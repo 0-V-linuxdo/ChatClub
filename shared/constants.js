@@ -6,7 +6,7 @@ import {
 } from "./notion-efforts.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-08-23｜21:41:06」";
+export const APP_VERSION = "「2026-08-23｜23:25:00」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -185,6 +185,21 @@ export const DEFAULT_TAB_GROUP_BUTTON_ORDER = Object.freeze(
 
 export const TAB_GROUP_BUTTON_ORDER_MIGRATION_VERSION = 1;
 
+export const TABS_SIDEBAR_HOVER_BUTTONS = Object.freeze([
+  { id: "pin", icon: "pin", defaultPlacement: "pinned" },
+  { id: "edit", icon: "edit", defaultPlacement: "pinned" },
+  { id: "delete", icon: "trash", defaultPlacement: "pinned", danger: true },
+  { id: "more", icon: "more", requiredPinned: true, defaultPlacement: "pinned" }
+]);
+
+export const DEFAULT_TABS_SIDEBAR_BUTTON_PLACEMENT = Object.freeze(
+  Object.fromEntries(TABS_SIDEBAR_HOVER_BUTTONS.map((item) => [item.id, item.defaultPlacement || "pinned"]))
+);
+
+export const DEFAULT_TABS_SIDEBAR_BUTTON_ORDER = Object.freeze(
+  TABS_SIDEBAR_HOVER_BUTTONS.filter((item) => !item.requiredPinned).map((item) => item.id)
+);
+
 export const DEFAULT_POCKET_CARD_SIZE = Object.freeze({
   width: 460,
   height: 560
@@ -247,6 +262,10 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
       Object.freeze({ id: "workspace.group.remove", labelKey: "chat.removeGroup" }),
       Object.freeze({ id: "workspace.group.more", labelKey: "chat.more" }),
       Object.freeze({ id: "workspace.tab.close", labelKey: "common.close" }),
+      Object.freeze({ id: "workspace.tabs.pin", labelKey: "workspace.tabs.pin" }),
+      Object.freeze({ id: "workspace.tabs.edit", labelKey: "workspace.tabs.edit" }),
+      Object.freeze({ id: "workspace.tabs.delete", labelKey: "workspace.tabs.delete" }),
+      Object.freeze({ id: "workspace.tabs.more", labelKey: "chat.more" }),
       Object.freeze({ id: "workspace.layout.add", labelKey: "layout.add" }),
       Object.freeze({ id: "workspace.layout.delete", labelKey: "layout.delete" })
     ])
@@ -376,6 +395,8 @@ export const DEFAULT_OPTIONS = {
   tabGroupButtonOrderMigrationVersion: TAB_GROUP_BUTTON_ORDER_MIGRATION_VERSION,
   tabContextMenuOrder: DEFAULT_TAB_CONTEXT_MENU_ORDER,
   tabContextMenuHiddenIds: [],
+  tabsSidebarButtonPlacement: DEFAULT_TABS_SIDEBAR_BUTTON_PLACEMENT,
+  tabsSidebarButtonOrder: DEFAULT_TABS_SIDEBAR_BUTTON_ORDER,
   topbarLayout: DEFAULT_TOPBAR_LAYOUT,
   topbarDeleteThreadMigrated: true,
   topbarSearchMigrated: true,

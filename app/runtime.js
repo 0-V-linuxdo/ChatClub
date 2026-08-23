@@ -352,7 +352,8 @@ const workspaceTabsSidebarController = attachWorkspaceTabsSidebarController({
   requestBackground, toast, render, inferAppName, appById, extensionApi,
   currentWorkspace: () => ({ layoutName: state.temporaryLayoutPreset?.name || "", groups: state.groups, topicTitle: state.topicTitle }),
   setCurrentTabTitle: (title) => workspaceTopicTitleController.setCustomTitle(title),
-  canDismiss: () => !state.summaryOpen && !state.shareOpen && !hasForegroundOverlay()
+  canDismiss: () => !state.summaryOpen && !state.shareOpen && !hasForegroundOverlay(),
+  getOptions: () => state.options
 });
 const {
   renderRuntimeBootstrapFailure,
@@ -555,7 +556,11 @@ function ensureSettingsController() {
           syncTopbar,
           syncTopbarPromptPlaceholder,
           syncSummaryPanel,
-          syncWorkspaceDom: workspaceController.syncWorkspaceDom, syncPreferredModelSelectionOverlays,
+          syncWorkspaceDom: () => {
+            workspaceController.syncWorkspaceDom();
+            const shell = appShellNode?.isConnected ? appShellNode : document.querySelector(".app-shell");
+            if (shell) workspaceTabsSidebarController.syncSidebar(shell);
+          }, syncPreferredModelSelectionOverlays,
           applyPreferredModels: applyPreferredModelsToFrames,
           applyTheme,
           syncI18nLanguage,
