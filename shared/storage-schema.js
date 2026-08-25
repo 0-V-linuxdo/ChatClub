@@ -385,6 +385,9 @@ function inferCustomName(item, index) {
     [/gemini\.google\.com$/, "Gemini"],
     [/(^|\.)deepseek\.com$/, "DeepSeek"],
     [/app\.notion\.com|notion\.so$/, "Notion AI"],
+    [/(^|\.)kimi\.ai$/, "Kimi.ai"],
+    [/(^|\.)kimi\.com$/, "Kimi"],
+    [/(^|\.)dola\.com$/, "Dola"],
     [/(^|\.)lobehub\.com$/, "LobeHub"],
     [/(^|\.)typingcloud\.com$/, "TypingMind"]
   ].find(([pattern]) => pattern.test(host))?.[1];

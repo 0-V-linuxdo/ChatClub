@@ -10,7 +10,8 @@ import { createControllerMethodValidator, validateControllerContract } from "../
 const LAYOUT_POPOVER_RIGHT_EXTENSION = 40;
 const APP_PICKER_INTERNATIONAL_IDS = [
   "ChatGPT", "Claude", "Copilot", "CopilotGH", "Felo", "Gemini", "Genspark", "Grok", "Liner",
-  "Meta", "Mistral", "Perplexity", "Poe", "QwenChat", "You", "Zai", "NotionAI", "Kagi", "TypingMind"
+  "Meta", "Mistral", "Perplexity", "Poe", "QwenChat", "You", "Zai", "NotionAI", "Kagi", "TypingMind",
+  "KimiAI", "Dola"
 ];
 const APP_PICKER_INTERNATIONAL_ID_SET = new Set(APP_PICKER_INTERNATIONAL_IDS);
 const APP_PICKER_FORCE_INTERNATIONAL_HOSTS = new Set(["assistant.kagi.com"]);

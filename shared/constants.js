@@ -6,7 +6,7 @@ import {
 } from "./notion-efforts.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-08-26｜00:46:00」";
+export const APP_VERSION = "「2026-08-26｜00:55:00」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -548,6 +548,16 @@ export const BUILTIN_CHAT_APPS = [
     name: "Kimi",
     provider: "Moonshot",
     url: "https://www.kimi.com/",
+    hosts: ["kimi.com", "www.kimi.com", "*.kimi.com"],
+    inputSelector: "textarea, [contenteditable='true']",
+    sendButtonSelector: "button[aria-label*='Send' i]"
+  },
+  {
+    id: "KimiAI",
+    name: "Kimi.ai",
+    provider: "Moonshot",
+    url: "https://www.kimi.ai/",
+    hosts: ["kimi.ai", "www.kimi.ai", "*.kimi.ai"],
     inputSelector: "textarea, [contenteditable='true']",
     sendButtonSelector: "button[aria-label*='Send' i]"
   },
@@ -556,6 +566,16 @@ export const BUILTIN_CHAT_APPS = [
     name: "DouBao",
     provider: "ByteDance",
     url: "https://www.doubao.com/",
+    hosts: ["doubao.com", "www.doubao.com", "*.doubao.com"],
+    inputSelector: "textarea, [contenteditable='true']",
+    sendButtonSelector: "button[aria-label*='Send' i]"
+  },
+  {
+    id: "Dola",
+    name: "Dola",
+    provider: "ByteDance",
+    url: "https://www.dola.com/chat/",
+    hosts: ["dola.com", "www.dola.com", "*.dola.com"],
     inputSelector: "textarea, [contenteditable='true']",
     sendButtonSelector: "button[aria-label*='Send' i]"
   },

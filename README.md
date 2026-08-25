@@ -36,7 +36,9 @@
 | Perplexity | https://www.perplexity.ai/ | ✓ |  |  |  |  |
 | Poe | https://poe.com/ | ✓ |  | ✓ |  |  |
 | Kimi | https://www.kimi.com/ | ✓ |  |  |  |  |
+| Kimi.ai | https://www.kimi.ai/ | ✓ |  |  |  |  |
 | DouBao | https://www.doubao.com/ | ✓ |  |  |  |  |
+| Dola | https://www.dola.com/chat/ | ✓ |  |  |  |  |
 | Qwen | https://chat.qwen.ai/ | ✓ |  |  |  |  |
 | TypingMind | https://setapp.typingcloud.com/ | ✓ | ✓ |  |  |  |
 | LobeHub | https://app.lobehub.com/ | ✓ | ✓ |  |  |  |
