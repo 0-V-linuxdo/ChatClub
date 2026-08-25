@@ -6,6 +6,7 @@
 - Work directly on `main`. Do not create, check out, publish, or leave behind any other branch, including `codex/*`, feature, release, temporary, or worktree branches.
 - Before changing files, switch to `main`, fetch `origin`, and update only with a fast-forward. If local and remote `main` have diverged, stop and ask the user instead of creating a reconciliation branch or force-pushing.
 - Push only `main` and never force-push it. A workflow that requires a pull-request branch needs an explicit user override of this policy.
+- GitHub SSH must use port 443 via `ssh.github.com`. Port 22 to `github.com` is blocked here; do not retry it or fall back to an interactive HTTPS username prompt.
 - If a non-`main` branch is created accidentally, integrate any intended work safely into `main`, then delete that branch locally and on `origin` before finishing.
 - At handoff, verify that the working tree is clean, `main` matches `origin/main`, and both local and remote branch inventories contain no branch other than `main`.
 
