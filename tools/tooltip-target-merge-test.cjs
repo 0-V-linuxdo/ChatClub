@@ -103,9 +103,56 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   assert.match(pinSource, /tooltipId: "workspace\.tabs\.pin"/);
   assert.doesNotMatch(pinSource, /"workspace\.tabs\.unpin" : "workspace\.tabs\.pin"/);
 
+  assert.equal(
+    TOOLTIP_TARGET_IDS.includes("topbar.workspaceTabs"),
+    true,
+    "the ChatClub Tabs sidebar toggle must be a settings tooltip target"
+  );
+  assert.deepEqual(
+    normalizeOptions({ tooltipDisabledIds: ["topbar.workspaceTabs"] }).tooltipDisabledIds,
+    ["topbar.workspaceTabs"],
+    "disabling the ChatClub Tabs sidebar toggle must survive option normalization"
+  );
+  const topbarViewSource = read("app/topbar/view.js");
+  assert.match(
+    topbarViewSource,
+    /tooltipId:\s*"topbar\.workspaceTabs"/,
+    "the live sidebar toggle must keep the settings-controlled tooltip id"
+  );
+  assert.match(
+    appearanceSource,
+    /"topbar\.workspaceTabs": "sidebarCollapse"/,
+    "Button Tips must preview the ChatClub Tabs sidebar toggle"
+  );
+  const shortcutSource = read("app/settings/shortcuts.js");
+  assert.match(
+    shortcutSource,
+    /toggleWorkspaceTabsSidebar:[\s\S]*tooltipId:\s*"topbar\.workspaceTabs"/,
+    "the shortcut preview for ChatClub Tabs must share the live sidebar tooltip id"
+  );
+
   const i18nSource = read("shared/i18n.js");
   assert.match(i18nSource, /"pocket\.sidebar": "Toggle sidebar"/);
   assert.match(i18nSource, /"pocket\.sidebar": "切换侧边栏"/);
+  assert.equal(
+    TOOLTIP_TARGET_IDS.includes("topbar.customize.cancel"),
+    false,
+    "the unused customize-cancel tooltip must not remain a settings target"
+  );
+  assert.doesNotMatch(appearanceSource, /"topbar\.customize\.cancel"/);
+
+  const { verifyTooltipTargets } = require("./verify-tooltip-targets.cjs");
+  const catalog = await verifyTooltipTargets();
+  assert.ok(catalog.liveCount > 0, "the catalog verifier must observe live tooltip ids");
+  assert.equal(catalog.catalogCount, TOOLTIP_TARGET_IDS.length);
+
+  const composerSource = read("app/composer/controller.js");
+  assert.match(composerSource, /"data-tooltip-id": "topbar\.promptActions"/);
+  assert.match(
+    composerSource,
+    /actionsMenuItem\(t\("topbar\.addPhotos"\), "paperclip", openImagePicker, "topbar\.addPhotos"\)/
+  );
+  assert.match(shortcutSource, /"data-tooltip-id": "settings\.shortcuts\.help"/);
 
   const tooltipSource = read("ui/tooltip.js");
   assert.match(tooltipSource, /"pocket\.collapseSidebar": "pocket\.sidebar"/);

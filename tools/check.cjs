@@ -46,3 +46,4 @@ run("tools/global-runtime-ownership-test.cjs");
 run("tools/generate-artifacts.cjs", ["--check"]);
 run("tools/verify-version.cjs");
 run("tools/verify-manifest.cjs");
+run("tools/verify-tooltip-targets.cjs");

@@ -251,9 +251,9 @@ export function createFunctionalAnomaliesSettingsSection(ctx) {
       el("span", { title: errorSummary(record) }, preview(errorSummary(record), 240))
     ),
     el("div", { class: "settings-row-action-group" },
-      settingsIconAction(t("functionalAnomalies.viewDetails"), "preview", () => openDetails(record)),
-      settingsIconAction(t("functionalAnomalies.copyOne"), "copy", () => copyRecords([record], "toast.functionalAnomalyCopied")),
-      settingsIconAction(t("common.delete"), "trash", () => removeRecord(record), "danger")
+      settingsIconAction(t("functionalAnomalies.viewDetails"), "preview", () => openDetails(record), "", false, "settings.action.view"),
+      settingsIconAction(t("functionalAnomalies.copyOne"), "copy", () => copyRecords([record], "toast.functionalAnomalyCopied"), "", false, "settings.action.copy"),
+      settingsIconAction(t("common.delete"), "trash", () => removeRecord(record), "danger", false, "settings.action.delete")
     ));
   }
 

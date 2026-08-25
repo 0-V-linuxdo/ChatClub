@@ -10,7 +10,7 @@ import {
 } from "./notion-efforts.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-08-26｜05:30:00」";
+export const APP_VERSION = "「2026-08-26｜05:39:00」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -214,12 +214,17 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
     id: "topbar",
     labelKey: "tooltip.group.topbar",
     targets: Object.freeze([
+      Object.freeze({ id: "topbar.workspaceTabs", labelKey: "topbar.workspaceTabs" }),
       Object.freeze({ id: "topbar.brand", labelKey: "common.openInNewTab" }),
       Object.freeze({ id: "topbar.settings", labelKey: "topbar.settings" }),
       Object.freeze({ id: "topbar.search", labelKey: "topbar.search" }),
+      Object.freeze({ id: "topbar.promptActions", labelKey: "topbar.promptActions" }),
       Object.freeze({ id: "topbar.promptLibrary", labelKey: "topbar.promptLibrary" }),
+      Object.freeze({ id: "topbar.addPhotos", labelKey: "topbar.addPhotos" }),
       Object.freeze({ id: "topbar.clearPrompt", labelKey: "topbar.clearPrompt" }),
+      Object.freeze({ id: "topbar.removeImage", labelKey: "topbar.removeImage" }),
       Object.freeze({ id: "topbar.optimizePrompt", labelKey: "topbar.optimizePrompt" }),
+      Object.freeze({ id: "topbar.modelGateStatus", labelKey: "topbar.modelGateStatus" }),
       Object.freeze({ id: "topbar.send", labelKey: "topbar.sendTooltip" }),
       Object.freeze({ id: "topbar.newChat", labelKey: "topbar.newChatAllTooltip" }),
       Object.freeze({ id: "topbar.deleteThread", labelKey: "topbar.deleteThread" }),
@@ -245,8 +250,7 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
       Object.freeze({ id: "topbar.settings.functionalAnomalies", labelKey: "settings.functionalAnomalies.title" }),
       Object.freeze({ id: "topbar.settings.about", labelKey: "settings.about.title" }),
       Object.freeze({ id: "topbar.customize.paletteItem", labelKey: "topbar.customize.item" }),
-      Object.freeze({ id: "topbar.customize.enter", labelKey: "topbar.customize.enter" }),
-      Object.freeze({ id: "topbar.customize.cancel", labelKey: "common.cancel" })
+      Object.freeze({ id: "topbar.customize.enter", labelKey: "topbar.customize.enter" })
     ])
   }),
   Object.freeze({
@@ -266,12 +270,22 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
       Object.freeze({ id: "workspace.group.remove", labelKey: "chat.removeGroup" }),
       Object.freeze({ id: "workspace.group.more", labelKey: "chat.more" }),
       Object.freeze({ id: "workspace.tab.close", labelKey: "common.close" }),
+      Object.freeze({ id: "workspace.tab.context.close", labelKey: "chat.closeTab" }),
       Object.freeze({ id: "workspace.tabs.pin", labelKey: "workspace.tabs.pin" }),
       Object.freeze({ id: "workspace.tabs.edit", labelKey: "workspace.tabs.edit" }),
       Object.freeze({ id: "workspace.tabs.delete", labelKey: "workspace.tabs.delete" }),
       Object.freeze({ id: "workspace.tabs.more", labelKey: "chat.more" }),
+      Object.freeze({ id: "workspace.tabs.closeOthers", labelKey: "workspace.tabs.closeOthers" }),
+      Object.freeze({ id: "workspace.tabs.newFolder", labelKey: "workspace.tabs.newFolder" }),
+      Object.freeze({ id: "workspace.tabs.sort", labelKey: "workspace.tabs.sort" }),
+      Object.freeze({ id: "workspace.tabs.sortTime", labelKey: "workspace.tabs.sortTime" }),
+      Object.freeze({ id: "workspace.tabs.sortOpen", labelKey: "workspace.tabs.sortOpen" }),
+      Object.freeze({ id: "workspace.tabs.sortName", labelKey: "workspace.tabs.sortName" }),
+      Object.freeze({ id: "workspace.tabs.renameFolder", labelKey: "workspace.tabs.renameFolder" }),
+      Object.freeze({ id: "workspace.tabs.deleteFolder", labelKey: "workspace.tabs.deleteFolder" }),
       Object.freeze({ id: "workspace.layout.add", labelKey: "layout.add" }),
-      Object.freeze({ id: "workspace.layout.delete", labelKey: "layout.delete" })
+      Object.freeze({ id: "workspace.layout.delete", labelKey: "layout.delete" }),
+      Object.freeze({ id: "appPicker.addCustom", labelKey: "appPicker.addCustom" })
     ])
   }),
   Object.freeze({
@@ -285,6 +299,19 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
       Object.freeze({ id: "summary.action.preview", labelKey: "summaryPanel.preview" }),
       Object.freeze({ id: "summary.action.summarize", labelKey: "summaryPanel.summarize" }),
       Object.freeze({ id: "summary.action.ask", labelKey: "summaryPanel.ask" })
+    ])
+  }),
+  Object.freeze({
+    id: "share",
+    labelKey: "tooltip.group.share",
+    targets: Object.freeze([
+      Object.freeze({ id: "share.window.fullscreen", labelKey: "sharePanel.maximize" }),
+      Object.freeze({ id: "share.window.close", labelKey: "common.close" }),
+      Object.freeze({ id: "share.action.capture", labelKey: "sharePanel.capture" }),
+      Object.freeze({ id: "share.action.stop", labelKey: "sharePanel.stop" }),
+      Object.freeze({ id: "share.action.copy", labelKey: "sharePanel.copy" }),
+      Object.freeze({ id: "share.action.download", labelKey: "sharePanel.download" }),
+      Object.freeze({ id: "share.action.open", labelKey: "sharePanel.open" })
     ])
   }),
   Object.freeze({
@@ -320,7 +347,15 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
       Object.freeze({ id: "settings.action.duplicate", labelKey: "profiles.duplicate" }),
       Object.freeze({ id: "settings.action.delete", labelKey: "common.delete" }),
       Object.freeze({ id: "settings.action.reset", labelKey: "common.reset" }),
-      Object.freeze({ id: "settings.shortcuts.record", labelKey: "shortcuts.record" })
+      Object.freeze({ id: "settings.action.insert", labelKey: "prompts.insert" }),
+      Object.freeze({ id: "settings.action.copy", labelKey: "settings.action.copy" }),
+      Object.freeze({ id: "settings.shortcuts.record", labelKey: "shortcuts.record" }),
+      Object.freeze({ id: "settings.shortcuts.help", labelKey: "settings.shortcuts.help" }),
+      Object.freeze({ id: "settings.apps.iframe.scopeHelp", labelKey: "apps.iframe.scopeHelp" }),
+      Object.freeze({ id: "settings.apps.iframe.edit", labelKey: "apps.iframe.edit" }),
+      Object.freeze({ id: "settings.apps.iframe.reset", labelKey: "apps.iframe.restoreDefault" }),
+      Object.freeze({ id: "settings.apps.iframe.removeAttribute", labelKey: "apps.iframe.removeAttribute" }),
+      Object.freeze({ id: "settings.models.allSources", labelKey: "modelPreferences.allSources" })
     ])
   })
 ]);

@@ -14,9 +14,9 @@
     "reason": "The send runtime keeps exact-once composer delivery, typed image hydration, site-specific submit preparation, and the send-owned navigation correlation needed to keep Grok conversation creation from restarting preferred-model selection after the message is delivered."
   },
   "app/composer/controller.js": {
-    "maxLines": 1297,
+    "maxLines": 1300,
     "target": 1200,
-    "maxBytes": 48910,
+    "maxBytes": 49111,
     "targetBytes": 45000,
     "reason": "The Composer controller owns immutable text-and-image draft revisions, revision-conditional clearing, history de-duplication, and the shared document-bound admission queue used by both ordinary Send and one-shot new-workspace prompt handoff so delivery uncertainty and preferred-model preparation cannot diverge."
   },
@@ -70,9 +70,9 @@
     "reason": "The configuration schema owns custom-platform URL https coercion and domain-catalog draft suggestions together with options normalization, dehydration, built-in catalog merges, and retired two-state tooltip-id aliases so imported and editor-authored custom apps cannot drift; Chinese Kimi host inference now labels the site Kimi.com so it stays distinct from Kimi.ai; Qwen.ai stays international while Qianwen.com is inferred as 千问."
   },
   "shared/i18n.js": {
-    "maxLines": 2549,
+    "maxLines": 2557,
     "target": 1500,
-    "maxBytes": 148748,
+    "maxBytes": 149097,
     "targetBytes": 82000,
     "reason": "Bilingual translation catalog data is kept co-located for key parity; the signed official-rules update-management and component-status views, consent, check, apply-all, compatibility, rollback, per-component source, confirmation and accessibility copy join the committed-reset cleanup warning, queued-send, preferred-model auto-selection overlay settings plus structured model, thinking, All Sources and Effort attempt labels, Workspace appearance subtabs, nested Tab Group right-click menu and ChatClub Tabs hover-button placement settings, prompt-handoff, platform-management labels including custom-platform domain autofill, iframe tab context-menu labels, prompt-history date-group labels, remembered ChatClub-tab sidebar labels including tab count, close-others cleanup, pin/unpin, More, sort modes, folder create/rename/delete, date-group headings and resize copy, Tabs export/import copy, topic-title edit copy, the ChatClub Tabs sidebar shortcut, shortcut-settings search copy, and Prompt History search copy under exact line and byte ratchets; Share panel and shortcut copy joins the bilingual catalog; English UI labels DouBao as 豆包（doubao） and Qianwen as 千问（qianwen）; Pocket sidebar and focus-mode tooltip rows share one settings target each."
   },

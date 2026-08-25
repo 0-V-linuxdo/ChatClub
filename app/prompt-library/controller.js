@@ -87,9 +87,9 @@ export function createPromptLibraryController(ctx) {
       el("strong", { class: "settings-main-cell" }, prompt.title || t("common.untitledPrompt")),
       el("span", { class: "prompt-library-preview" }, prompt.prompt || ""),
       el("div", { class: "settings-row-action-group" },
-        settingsIconAction(t("common.edit"), "edit", () => openPromptLibraryEditor(prompt, redraw)),
-        settingsIconAction(t("common.delete"), "trash", () => deletePromptLibraryItem(prompt, redraw), "danger"),
-        settingsIconAction(t("prompts.insert"), "insert", () => insertPromptFromLibrary(prompt, options.onUse))
+        settingsIconAction(t("common.edit"), "edit", () => openPromptLibraryEditor(prompt, redraw), "", false, "settings.action.edit"),
+        settingsIconAction(t("common.delete"), "trash", () => deletePromptLibraryItem(prompt, redraw), "danger", false, "settings.action.delete"),
+        settingsIconAction(t("prompts.insert"), "insert", () => insertPromptFromLibrary(prompt, options.onUse), "", false, "settings.action.insert")
       )
     );
   }

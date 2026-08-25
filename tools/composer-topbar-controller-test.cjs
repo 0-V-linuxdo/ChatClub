@@ -67,6 +67,7 @@ function responsiveBrandRules(kind) {
   assert.match(runtime, /createComposerController\(/, "runtime must compose the extracted Composer owner");
   assert.match(runtime, /createTopbarController\(/, "runtime must compose the extracted Topbar owner");
   assert.match(topbarView, /workspace-tabs-sidebar-toggle/, "the topbar must keep a fixed ChatClub-tab sidebar toggle");
+  assert.match(topbarView, /tooltipId:\s*"topbar\.workspaceTabs"/, "the ChatClub Tabs toggle must use a settings-controlled tooltip id");
   assert.match(topbarView, /aria-controls/, "the sidebar toggle must point at the live tab list");
   assert.match(
     topbarView,

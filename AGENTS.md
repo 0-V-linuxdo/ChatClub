@@ -170,6 +170,22 @@ For built-in entries merged with stored user configuration, preserve stored user
 
 The drag requirement does not apply to read-only or derived views, search/filter projections whose order is not persisted, lists with fixed semantic or protocol order, chronological histories, or controls that are not ordered lists.
 
+## Button Tips Catalog
+
+Settings → Appearance → Button Tips is the only disable list. Hover uses `data-tooltip-id` / `tooltipId`. `normalizeTooltipDisabledIds()` keeps only `TOOLTIP_TARGET_IDS`, after applying `TOOLTIP_DISABLED_ID_ALIASES`. A live id that is absent from `TOOLTIP_TARGET_GROUPS` still shows on hover, has no Settings toggle, and is discarded if the user saves a disable.
+
+This was the 2026-08-26 ChatClub Tabs failure: the topbar sidebar toggle used `topbar.workspaceTabs`, but that id was not in the catalog, so turning off Pocket's `pocket.sidebar` (or any other row) could not hide `ChatClub Tabs (^B)`.
+
+When adding or renaming a hover tip:
+
+1. Assign a stable id and register it in `shared/constants.js` `TOOLTIP_TARGET_GROUPS`.
+2. Keep the catalog `labelKey` in both `en` and `zh_CN`.
+3. Add a Button Tips preview icon in `app/settings/appearance.js`.
+4. Two-state controls share one surviving id. Retired ids belong in both `TOOLTIP_DISABLED_ID_ALIASES` and `ui/tooltip.js` `TOOLTIP_ID_ALIASES`.
+5. Do not use a bare i18n key as a tooltip id unless that same string is also a catalog id.
+
+`npm run check` runs `tools/verify-tooltip-targets.cjs`. It walks `app/` and `ui/` for live ids, including known dynamic expansions (`topbar.settings.${id}`, `settings.apps.iframe.${action}`, `TABS_SIDEBAR_SORT_LABEL_KEYS`), and fails when a live id is missing from the catalog, a catalog id cannot persist through option normalization, a preview icon is missing, or a catalog label is missing.
+
 ## Delete Sites Runtime Safety
 
 Unless explicitly labeled as implementation inventory, these are stable safety invariants rather than site-specific selector observations.

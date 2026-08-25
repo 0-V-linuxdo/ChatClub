@@ -257,8 +257,8 @@ export function createPromptHistorySettingsSection(ctx) {
         ) : null
       ),
       el("div", { class: "settings-row-action-group" },
-        settingsIconAction(t("promptHistory.insert"), "insert", () => insert(item)),
-        settingsIconAction(t("common.delete"), "trash", () => remove(item, redraw), "danger")
+        settingsIconAction(t("promptHistory.insert"), "insert", () => insert(item), "", false, "settings.action.insert"),
+        settingsIconAction(t("common.delete"), "trash", () => remove(item, redraw), "danger", false, "settings.action.delete")
       )
     );
   }

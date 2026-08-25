@@ -107,6 +107,10 @@
     "kind": "test-only",
     "reason": "Version-state fixtures build deterministic content-runtime snapshots through this focused seam."
   },
+  "tools/verify-tooltip-targets.cjs#verifyTooltipTargets": {
+    "kind": "test-only",
+    "reason": "The Button Tips catalog regression reuses the static verifier to prove live ids stay inside TOOLTIP_TARGET_GROUPS."
+  },
   "tools/version-state.cjs#deleteState": {
     "kind": "test-only",
     "reason": "Version-state fixtures build deterministic Delete-site snapshots through this focused seam."
