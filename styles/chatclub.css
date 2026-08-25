@@ -2077,6 +2077,12 @@ button { cursor: pointer; }
   display: none !important;
 }
 
+.tooltip-trigger.tooltip-suppressed::before,
+.tooltip-trigger.tooltip-suppressed::after {
+  display: none !important;
+  content: none !important;
+}
+
 .global-tooltip {
   --tooltip-bubble: color-mix(in srgb, var(--tooltip-bg, #4a4a4a) 92%, #000 8%);
   position: fixed;

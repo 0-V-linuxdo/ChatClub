@@ -65,7 +65,7 @@
   "shared/storage-schema.js": {
     "maxLines": 1322,
     "target": 1200,
-    "maxBytes": 53480,
+    "maxBytes": 53487,
     "targetBytes": 50000,
     "reason": "The configuration schema owns custom-platform URL https coercion and domain-catalog draft suggestions together with options normalization, dehydration, built-in catalog merges, and retired two-state tooltip-id aliases so imported and editor-authored custom apps cannot drift; Chinese Kimi host inference now labels the site Kimi.com so it stays distinct from Kimi.ai; Qwen.ai stays international while Qianwen.com is inferred as 千问."
   },

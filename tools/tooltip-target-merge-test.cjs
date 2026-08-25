@@ -15,7 +15,8 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   } = await import(moduleUrl("shared/constants.js"));
   const {
     dehydrateOptions,
-    normalizeOptions
+    normalizeOptions,
+    TOOLTIP_DISABLED_ID_ALIASES
   } = await import(moduleUrl("shared/storage-schema.js"));
 
   const retiredIds = [
@@ -31,6 +32,13 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   for (const id of mergedIds) {
     assert.equal(TOOLTIP_TARGET_IDS.includes(id), true, `${id} must remain a settings tooltip target`);
   }
+
+  assert.deepEqual(TOOLTIP_DISABLED_ID_ALIASES, {
+    "pocket.collapseSidebar": "pocket.sidebar",
+    "pocket.expandSidebar": "pocket.sidebar",
+    "pocket.exitFocusMode": "pocket.focusMode",
+    "workspace.tabs.unpin": "workspace.tabs.pin"
+  });
 
   assert.deepEqual(
     normalizeOptions({
@@ -72,6 +80,21 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
 
   const appearanceSource = read("app/settings/appearance.js");
   assert.match(appearanceSource, /"pocket\.sidebar": "sidebarCollapse"/);
+  assert.match(
+    appearanceSource,
+    /disabled \? "tooltip-preview-disabled" : "tooltip-trigger"/,
+    "disabled Button Tips previews must not remain tooltip triggers"
+  );
+  assert.match(
+    appearanceSource,
+    /"data-tooltip": disabled \? null : label/,
+    "disabled Button Tips previews must not keep hover text"
+  );
+  assert.match(
+    appearanceSource,
+    /"data-tooltip-id": disabled \? null : target\.id/,
+    "disabled Button Tips previews must drop the live tooltip id"
+  );
   assert.doesNotMatch(appearanceSource, /"pocket\.collapseSidebar"/);
   assert.doesNotMatch(appearanceSource, /"pocket\.expandSidebar"/);
   assert.doesNotMatch(appearanceSource, /"pocket\.exitFocusMode"/);
@@ -83,6 +106,24 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   const i18nSource = read("shared/i18n.js");
   assert.match(i18nSource, /"pocket\.sidebar": "Toggle sidebar"/);
   assert.match(i18nSource, /"pocket\.sidebar": "切换侧边栏"/);
+
+  const tooltipSource = read("ui/tooltip.js");
+  assert.match(tooltipSource, /"pocket\.collapseSidebar": "pocket\.sidebar"/);
+  assert.match(tooltipSource, /"pocket\.expandSidebar": "pocket\.sidebar"/);
+  assert.match(
+    tooltipSource,
+    /disabled\.has\(normalized\) \|\| disabled\.has\(canonicalTooltipId\(normalized\)\)/,
+    "live hover must honor both the saved id and retired two-state aliases"
+  );
+  assert.match(tooltipSource, /classList\.toggle\("tooltip-suppressed"/);
+  assert.match(tooltipSource, /syncSuppressedTooltipTriggers\(\);\s*reconcileTooltipState\(\)/);
+
+  const stylesheetSource = read("styles/chatclub.css");
+  assert.match(
+    stylesheetSource,
+    /\.tooltip-trigger\.tooltip-suppressed::before,\s*\.tooltip-trigger\.tooltip-suppressed::after \{/,
+    "suppressed triggers must not keep CSS hover fallbacks"
+  );
 
   console.log("tooltip target merge: ok");
 })().catch((error) => {

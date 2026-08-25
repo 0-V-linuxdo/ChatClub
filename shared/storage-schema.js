@@ -149,7 +149,7 @@ export function normalizeModelPreferenceSelectionOverlayOpacity(
   return boundedNumber(value, fallback, 0, 100);
 }
 
-const TOOLTIP_DISABLED_ID_ALIASES = Object.freeze({
+export const TOOLTIP_DISABLED_ID_ALIASES = Object.freeze({
   "pocket.collapseSidebar": "pocket.sidebar",
   "pocket.expandSidebar": "pocket.sidebar",
   "pocket.exitFocusMode": "pocket.focusMode",

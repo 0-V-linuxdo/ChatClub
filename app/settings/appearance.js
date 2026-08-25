@@ -548,12 +548,12 @@ export function createAppearanceSettingsSection(ctx) {
       const label = t(target.labelKey);
       const iconName = tooltipPreviewIcon(target.id);
       const sample = el("button", {
-        class: `tooltip-preview-button tooltip-trigger ${disabled ? "tooltip-preview-disabled" : ""} ${iconName === "brand" ? "tooltip-preview-brand" : ""}`.trim(),
+        class: `tooltip-preview-button ${disabled ? "tooltip-preview-disabled" : "tooltip-trigger"} ${iconName === "brand" ? "tooltip-preview-brand" : ""}`.trim(),
         type: "button",
         "aria-label": `${t("appearance.tooltipPreview")}: ${label}`,
-        "data-tooltip": label,
-        "data-tooltip-id": target.id,
-        "data-tooltip-placement": "left",
+        "data-tooltip": disabled ? null : label,
+        "data-tooltip-id": disabled ? null : target.id,
+        "data-tooltip-placement": disabled ? null : "left",
         onclick: (event) => {
           event.preventDefault();
           event.stopPropagation();

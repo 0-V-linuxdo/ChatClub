@@ -3,6 +3,12 @@ import { el, isDismissalEscape } from "./dom.js";
 const EDGE_GAP = 8;
 const POINTER_GAP = 10;
 const ARROW_MIN = 12;
+const TOOLTIP_ID_ALIASES = Object.freeze({
+  "pocket.collapseSidebar": "pocket.sidebar",
+  "pocket.expandSidebar": "pocket.sidebar",
+  "pocket.exitFocusMode": "pocket.focusMode",
+  "workspace.tabs.unpin": "workspace.tabs.pin"
+});
 
 let tooltipHost = null;
 let tooltipLabel = null;
@@ -41,9 +47,25 @@ function disabledTooltipIds() {
   }
 }
 
+function canonicalTooltipId(id) {
+  return TOOLTIP_ID_ALIASES[id] || id;
+}
+
+function isTooltipIdDisabled(id, disabled = disabledTooltipIds()) {
+  const normalized = String(id || "").trim();
+  return Boolean(normalized && (disabled.has(normalized) || disabled.has(canonicalTooltipId(normalized))));
+}
+
 function isTooltipSuppressed(trigger) {
-  const id = String(trigger?.getAttribute("data-tooltip-id") || "").trim();
-  return Boolean(id && disabledTooltipIds().has(id));
+  if (trigger?.classList?.contains("tooltip-suppressed")) return true;
+  return isTooltipIdDisabled(trigger?.getAttribute("data-tooltip-id"));
+}
+
+function syncSuppressedTooltipTriggers() {
+  const disabled = disabledTooltipIds();
+  for (const trigger of document.querySelectorAll(".tooltip-trigger[data-tooltip-id]")) {
+    trigger.classList.toggle("tooltip-suppressed", isTooltipIdDisabled(trigger.getAttribute("data-tooltip-id"), disabled));
+  }
 }
 
 function isUsableTooltipTrigger(trigger) {
@@ -173,6 +195,7 @@ function reconcileTooltipMutations(records = []) {
     records.length
     && records.every((record) => record.target === tooltipHost || tooltipHost?.contains?.(record.target))
   ) return;
+  syncSuppressedTooltipTriggers();
   reconcileTooltipState();
 }
 
@@ -190,6 +213,7 @@ function syncTooltipPosition() {
 }
 
 function notifyTooltipPreferencesChanged() {
+  syncSuppressedTooltipTriggers();
   reconcileTooltipState();
 }
 
@@ -276,4 +300,5 @@ export function installGlobalTooltips(options = {}) {
       ]
     });
   }
+  syncSuppressedTooltipTriggers();
 }
