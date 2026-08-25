@@ -600,6 +600,11 @@ assert.match(
   "shortcut search must filter Top Bar and Chat Panel groups from one query"
 );
 assert.match(shortcutSettingsSource, /class: "shortcut-search"/, "shortcut settings must expose a search field");
+assert.match(shortcutSettingsSource, /class: "shortcut-search-sizer"/, "shortcut search must size itself to the query or placeholder");
+assert.match(shortcutSettingsSource, /class: "shortcut-search-clear"/, "shortcut search must expose a one-click clear control");
+assert.match(shortcutSettingsSource, /size: "1"/, "shortcut search must not keep the browser's 20-character input floor");
+assert.match(shortcutSettingsSource, /t\("shortcuts\.searchClear"\)/);
+assert.match(shortcutSettingsSource, /clearShortcutSearch\(redraw\)/);
 assert.match(shortcutSettingsSource, /shortcutMatchesSearchQuery/);
 assert.match(shortcutSettingsSource, /shortcutSearchQueryFromKeyboardEvent/);
 assert.match(shortcutSettingsSource, /t\("shortcuts\.searchEmpty"\)/);
@@ -612,12 +617,14 @@ assert.ok(
   i18nSource.includes('"shortcuts.searchPlaceholder": "输入快捷键、字母或功能名"'),
   "Chinese shortcut search placeholder must mention typing a shortcut or letter"
 );
+assert.ok(i18nSource.includes('"shortcuts.searchClear": "Clear search"'));
+assert.ok(i18nSource.includes('"shortcuts.searchClear": "清除搜索"'));
 assert.ok(i18nSource.includes('"shortcuts.searchEmpty": "No matching shortcuts"'));
 assert.ok(i18nSource.includes('"shortcuts.searchEmpty": "没有匹配的快捷键"'));
 assert.match(
   stylesheetSource,
-  /\.shortcut-search[\s\S]*?\.shortcut-search-input/,
-  "shortcut search must have settings-pane styles"
+  /\.shortcut-search[\s\S]*?width: max-content;[\s\S]*?\.shortcut-search-sizer[\s\S]*?\.shortcut-search-clear/,
+  "shortcut search must shrink to its content and keep a clear control"
 );
 for (const itemId of ["settings", "addGroup", "settingsJumpMenu"]) {
   assert.match(shortcutSettingsSource, new RegExp(`TOPBAR_SHORTCUT_ACTIONS\\.${itemId}`), `shortcut settings must include the ${itemId} topbar action`);

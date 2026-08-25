@@ -282,25 +282,33 @@ export function createShortcutSettings(ctx) {
     redraw();
   }
 
+  function clearShortcutSearch(redraw) {
+    shortcutSearchQuery = "";
+    shortcutSearchSelection = { start: 0, end: 0 };
+    shortcutSearchFocused = true;
+    redraw();
+  }
+
   function shortcutSearchField(redraw) {
     const placeholder = t("shortcuts.searchPlaceholder");
-    const field = input(shortcutSearchQuery, {
+    const query = shortcutSearchQuery;
+    const searching = Boolean(String(query || "").trim());
+    const field = input(query, {
       class: "shortcut-search-input",
       type: "search",
+      size: "1",
       placeholder,
       "aria-label": placeholder,
       autocomplete: "off",
       spellcheck: "false"
     });
-    field.value = shortcutSearchQuery;
+    field.value = query;
     field.addEventListener("keydown", (event) => {
       if (event.isComposing || event.keyCode === 229) return;
       if (event.key === "Escape") {
-        if (!shortcutSearchQuery) return;
+        if (!query) return;
         event.preventDefault();
-        shortcutSearchQuery = "";
-        shortcutSearchSelection = { start: 0, end: 0 };
-        redraw();
+        clearShortcutSearch(redraw);
         return;
       }
       if (state.shortcutRecordingAction) return;
@@ -325,9 +333,32 @@ export function createShortcutSettings(ctx) {
     });
     field.addEventListener("focus", () => { shortcutSearchFocused = true; });
     field.addEventListener("blur", () => { shortcutSearchFocused = false; });
-    return el("label", { class: "shortcut-search" },
+    return el("div", {
+      class: "shortcut-search",
+      onclick: (event) => {
+        if (event.target.closest(".shortcut-search-clear")) return;
+        field.focus();
+      }
+    },
       svgIcon("search"),
-      field
+      el("span", { class: "shortcut-search-sizer", "aria-hidden": "true" }, query || placeholder),
+      field,
+      searching
+        ? el("button", {
+          class: "shortcut-search-clear",
+          type: "button",
+          "aria-label": t("shortcuts.searchClear"),
+          onpointerdown: (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          },
+          onclick: (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            clearShortcutSearch(redraw);
+          }
+        }, svgIcon("x"))
+        : null
     );
   }
 
