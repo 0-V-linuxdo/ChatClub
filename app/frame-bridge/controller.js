@@ -23,7 +23,10 @@ function exactGrokCookieRuntimeHost(value) {
   try {
     const url = new URL(String(value || ""));
     const host = url.hostname.toLowerCase();
-    return url.protocol === "https:" && CONTENT_BUNDLES.grokCookie.hosts.includes(host) ? host : "";
+    const requiredHosts = Array.isArray(CONTENT_BUNDLES.grokCookie.requiredHosts)
+      ? CONTENT_BUNDLES.grokCookie.requiredHosts
+      : CONTENT_BUNDLES.grokCookie.hosts;
+    return url.protocol === "https:" && requiredHosts.includes(host) ? host : "";
   } catch {
     return "";
   }

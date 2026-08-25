@@ -312,6 +312,23 @@ The observed failure signature was an empty embedded Grok conversation, no histo
 
 Manual live acceptance requires a clean managed-mirror state, an extension reload, rendered Grok history, and `/ws/mgw` completing with HTTP `101 Switching Protocols`. A rendered page shell alone is not proof.
 
+## Manus iframe Session Cookies
+
+Manus is a custom app. The 2026-08-26 Arc incident was the same Chromium partition split already documented for Grok, not a logout-route replay.
+
+- A working top-level `https://manus.im/app` tab does not prove that embedded Manus has the same session. The ChatClub iframe uses `chrome-extension://kplgajidbllaeekcfpcdcbocbhppbind` as its Cookie partition key.
+- Observed unpartitioned source Cookies: `session_id` on `.manus.im` and `login_success` on `manus.im`. Both were unspecified/`Lax` and not `Secure`, so they are not sent into the extension partition.
+- The ChatClub partition had Stripe/theme Cookies only. Missing `session_id` is the login-loss signature.
+- Mirror only `session_id` and `login_success` from the unpartitioned Manus jar onto the existing Chromium Cookie bridge profile `manus`.
+- Never modify or delete the unpartitioned source Cookies.
+- Force mirrored copies to `Secure` and `SameSite=None`, while preserving host/domain, path, HttpOnly, session/expiry, and cookie-store semantics.
+- Inject the Cookie bridge on `manus.im`, but do not put Manus in the required Grok ancillary attestation hosts. A missing first-paint attestation must not poison-reload the painted iframe.
+- Do not `location.reload()` after a Manus in-frame Cookie sync. Preflight owns the first navigation; only a marked preflight fallback may reload.
+- Do not invent a separate Manus bridge, debugger path, or Storage Access workaround. Reuse the Grok Cookie preflight, ledger, and tombstone machinery.
+- Do not apply the built-in Notion restoration whitelist to this custom app.
+
+Manual Arc acceptance requires reloading the unpacked extension first, confirming the top-level Manus tab stays signed in, and confirming the embedded Manus iframe renders the signed-in app instead of the login shell.
+
 ## Final Verification
 
 Before committing:

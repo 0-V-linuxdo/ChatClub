@@ -5,6 +5,7 @@ import {
   cookieStoreIdForTab,
   grokCookieProfileIdForCookie,
   grokCookieProfileIdForUrl,
+  grokCookieProfileReloadsAfterSync,
   grokCookieChangeOwnedByBridge,
   isGrokSessionUrl,
   isPartitionedGrokTargetChange,
@@ -269,6 +270,7 @@ export function createGrokCookieRuntime(api, dependencies = {}) {
   function firstPartyPartitionSite(profileId) {
     if (profileId === "grok") return "https://grok.com";
     if (profileId === "grokMirror") return "https://dairoot.cn";
+    if (profileId === "manus") return "https://manus.im";
     return "";
   }
 
@@ -302,6 +304,7 @@ export function createGrokCookieRuntime(api, dependencies = {}) {
   function partitionCookieProfileUrl(profileId) {
     if (profileId === "grok") return "https://grok.com/";
     if (profileId === "grokMirror") return "https://gk.dairoot.cn/";
+    if (profileId === "manus") return "https://manus.im/";
     return "";
   }
 
@@ -1720,7 +1723,13 @@ export function createGrokCookieRuntime(api, dependencies = {}) {
         if (message.bridgeVersion !== GROK_COOKIE_BRIDGE_VERSION) throw new Error("Grok Cookie bridge version is stale");
         const result = await syncForFrame(sender);
         const fallbackReload = consumeFallbackReload(sender?.tab?.id, result.profileId);
-        return { ...publicResult(result), reloadRequired: result.changed === true || fallbackReload };
+        return {
+          ...publicResult(result),
+          reloadRequired: (
+            result.changed === true
+            && grokCookieProfileReloadsAfterSync(result.profileId)
+          ) || fallbackReload
+        };
       }],
       [request.ARM_GROK_MIRROR_ACCOUNT_SWITCH, (message, sender) => armMirrorRandomLogin(message, sender)]
     ];

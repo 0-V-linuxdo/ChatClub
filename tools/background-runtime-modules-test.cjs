@@ -109,6 +109,16 @@ const isContentRuntimeGenerationTransition = (details = {}) =>
     ["http://gk.dairoot.cn/*", "https://gk.dairoot.cn/*"],
     "the Mirror ancillary must inject only into the exact configured gateway host"
   );
+  const manusTarget = { id: "custom-manus", name: "Manus", url: "https://manus.im/", hosts: ["manus.im"] };
+  const manusRegistrations = registrationsRuntime.buildContentScriptRegistrations({
+    coreTargets: [manusTarget],
+    preloadTargets: [manusTarget]
+  });
+  assert.deepEqual(
+    manusRegistrations.find((item) => item.id === "chatclub-grok-cookie-bridge")?.matches,
+    ["http://manus.im/*", "https://manus.im/*"],
+    "the Manus ancillary must inject only into the exact configured host"
+  );
 
   {
     const listeners = new Map();

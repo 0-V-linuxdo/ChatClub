@@ -23,9 +23,9 @@
   "app/workspace/frame-controller.js": {
     "maxLines": 1238,
     "target": 1200,
-    "maxBytes": 48319,
+    "maxBytes": 48342,
     "targetBytes": 45000,
-    "reason": "The workspace frame controller keeps navigation-generation isolation, frame-load preparation, authenticated frame lifecycle reporting, target-correlated loading masks, prompt-focus restoration, and one post-layout navigation frame together so a delayed iframe load cannot publish stale state, size an embedded responsive page against a pre-layout viewport, or steal an input focus that was active before navigation."
+    "reason": "The workspace frame controller keeps navigation-generation isolation, frame-load preparation, authenticated frame lifecycle reporting, target-correlated loading masks, prompt-focus restoration, and one post-layout navigation frame together so a delayed iframe load cannot publish stale state, size an embedded responsive page against a pre-layout viewport, or steal an input focus that was active before navigation. The Cookie preflight host list includes the exact Manus origin alongside Grok and Grok Mirror."
   },
   "content-src/capabilities/preferred-notion-deepseek.js": {
     "maxLines": 1243,
@@ -35,11 +35,11 @@
     "reason": "The Notion preferred-model capability keeps exact trigger scoping, model identity checks, explicit unavailable handling, nested Older models expansion, Effort application, Sources coordination, and post-selection settlement together so a model-specific fallback cannot activate an ambiguous control or report success before the live picker settles."
   },
   "background/grok-cookie-runtime.js": {
-    "maxLines": 1740,
+    "maxLines": 1749,
     "target": 1200,
-    "maxBytes": 66811,
+    "maxBytes": 67086,
     "targetBytes": 50000,
-    "reason": "The Grok Cookie runtime co-locates exact registered-frame authorization, browser-specific partition discovery, parent-document-bound Mirror account-switch capture and recovery including Arc's omitted top-frame metadata fallback, a connect-only same-document gateway WebSocket readiness proof with bounded a=1/a=2/a=3 account rotation, Cookie-ledger cleanup, and fail-closed navigation handling so their shared attempt, frame, and top-document identities cannot drift across modules."
+    "reason": "The Grok Cookie runtime co-locates exact registered-frame authorization, browser-specific partition discovery, parent-document-bound Mirror account-switch capture and recovery including Arc's omitted top-frame metadata fallback, a connect-only same-document gateway WebSocket readiness proof with bounded a=1/a=2/a=3 account rotation, Cookie-ledger cleanup, first-party and profile URL mapping for Grok, Grok Mirror, and Manus, and fail-closed navigation handling so their shared attempt, frame, and top-document identities cannot drift across modules."
   },
   "background/official-rules-runtime.js": {
     "maxLines": 1338,

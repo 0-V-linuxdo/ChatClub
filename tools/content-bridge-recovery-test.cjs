@@ -935,6 +935,21 @@ async function createPreservedRuntimeReloadFixture() {
   }
 
   {
+    const fixture = createVerifiedRegistrationFixture({
+      registration: {
+        href: "https://manus.im/app",
+        grokCookieRuntime: null
+      }
+    });
+    fixture.context.CONTENT_BUNDLES.grokCookie.hosts = ["grok.com", "gk.dairoot.cn", "manus.im"];
+    fixture.context.CONTENT_BUNDLES.grokCookie.requiredHosts = ["grok.com", "gk.dairoot.cn"];
+    assert.ok(
+      await fixture.context.verifyCurrent(fixture.iframe),
+      "Manus Cookie injection must not require the Grok ancillary attestation"
+    );
+  }
+
+  {
     const fixture = createApplyFixture({ registrations: [{ bridgeVersion: "current" }] });
     const result = await fixture.apply(fixture.iframe, fixture.record);
     assert.equal(result.ok, true);

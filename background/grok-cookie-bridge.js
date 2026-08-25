@@ -1,4 +1,5 @@
 export const GROK_SESSION_COOKIE_NAMES = Object.freeze(["sso", "sso-rw", "grok_device_id"]);
+export const MANUS_SESSION_COOKIE_NAMES = Object.freeze(["session_id", "login_success"]);
 export const GROK_COOKIE_LEDGER_KEY = "chatclubGrokCookieBridgeLedgerV1";
 
 const GROK_MIRROR_SESSION_COOKIE_NAMES = Object.freeze(["user-gateway-token"]);
@@ -18,6 +19,15 @@ const GROK_COOKIE_PROFILES = Object.freeze({
     names: GROK_MIRROR_SESSION_COOKIE_NAMES,
     sourceMustBeSecure: false,
     tombstoneNames: GROK_MIRROR_SESSION_COOKIE_NAMES
+  }),
+  manus: Object.freeze({
+    id: "manus",
+    host: "manus.im",
+    url: "https://manus.im/",
+    names: MANUS_SESSION_COOKIE_NAMES,
+    sourceMustBeSecure: false,
+    reloadAfterSync: false,
+    tombstoneNames: MANUS_SESSION_COOKIE_NAMES
   })
 });
 const DEFAULT_GROK_COOKIE_PROFILE = GROK_COOKIE_PROFILES.grok;
@@ -528,6 +538,11 @@ export function grokCookieProfileIdForUrl(value) {
 
 export function grokCookieProfileIdForCookie(cookie) {
   return cookieProfileForCookie(cookie)?.id || "";
+}
+
+export function grokCookieProfileReloadsAfterSync(profileId) {
+  const profile = cookieProfileForId(profileId);
+  return !profile || profile.reloadAfterSync !== false;
 }
 
 export function chromiumExtensionPartitionKey(runtime) {

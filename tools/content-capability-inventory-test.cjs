@@ -49,6 +49,15 @@ const sizeAllowlist = JSON.parse(read("tools/module-size-allowlist.json"));
     "content/preload.js",
     "content/content.js"
   ], "Grok Mirror ancillary repair must require the exact verified host");
+  assert.deepEqual(filesFor({ frameUrls: ["https://manus.im/app"] }), [
+    "content/preload.js",
+    "content/grok-cookie-bridge.js",
+    "content/content.js"
+  ]);
+  assert.deepEqual(filesFor({ frameUrls: ["https://sub.manus.im/app"] }), [
+    "content/preload.js",
+    "content/content.js"
+  ], "Manus ancillary repair must require the exact verified host");
   assert.deepEqual(filesFor({
     frameUrls: ["https://grok.com/chat/1"],
     features: ["delete", "summary", "delete"]

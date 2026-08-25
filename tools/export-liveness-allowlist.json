@@ -67,6 +67,10 @@
     "kind": "test-only",
     "reason": "Partitioned Cookie bridge tests assert the deliberately narrow authentication Cookie allowlist."
   },
+  "background/grok-cookie-bridge.js#MANUS_SESSION_COOKIE_NAMES": {
+    "kind": "test-only",
+    "reason": "Partitioned Cookie bridge tests assert the deliberately narrow Manus authentication Cookie allowlist."
+  },
   "content-src/message-navigator/adapters.js#REQUIRED_ADAPTER_IDS": {
     "kind": "test-only",
     "reason": "Adapter registry completeness tests compare the constructed registry with its fail-closed required identity set."

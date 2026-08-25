@@ -19,9 +19,15 @@ const load = (file) => import(`${pathToFileURL(path.join(root, file)).href}?test
   const cookieBridge = read("content-src/grok-cookie-bridge.js");
   const preload = read("content-src/preload.js");
 
-  assert.deepEqual(frameCommands.CONTENT_BUNDLES.grokCookie.hosts, ["grok.com", "gk.dairoot.cn"]);
+  assert.deepEqual(frameCommands.CONTENT_BUNDLES.grokCookie.hosts, ["grok.com", "gk.dairoot.cn", "manus.im"]);
+  assert.deepEqual(frameCommands.CONTENT_BUNDLES.grokCookie.requiredHosts, ["grok.com", "gk.dairoot.cn"]);
   assert.deepEqual(
     frameCommands.contentInjectionPlan({ frameUrl: "https://gk.dairoot.cn/chat/1", features: ["send"] })
+      .map(({ file }) => file),
+    ["content/preload.js", "content/grok-cookie-bridge.js", "content/content.js", "content/send.js"]
+  );
+  assert.deepEqual(
+    frameCommands.contentInjectionPlan({ frameUrl: "https://manus.im/app", features: ["send"] })
       .map(({ file }) => file),
     ["content/preload.js", "content/grok-cookie-bridge.js", "content/content.js", "content/send.js"]
   );
@@ -36,13 +42,22 @@ const load = (file) => import(`${pathToFileURL(path.join(root, file)).href}?test
     ${functionSource(workspaceFrameController, "grokCookieBridgeUrl")}
     globalThis.matchesPreflight = grokCookieBridgeUrl;
   `, preflightContext);
-  for (const url of ["https://grok.com/", "https://gk.dairoot.cn/", "https://gk.dairoot.cn/chat/1"]) {
+  for (const url of [
+    "https://grok.com/",
+    "https://gk.dairoot.cn/",
+    "https://gk.dairoot.cn/chat/1",
+    "https://manus.im/",
+    "https://manus.im/app"
+  ]) {
     assert.equal(preflightContext.matchesPreflight(url), true, `${url} must receive the Cookie preflight`);
   }
   for (const url of [
     "http://gk.dairoot.cn/",
     "https://sub.gk.dairoot.cn/",
     "https://gk.dairoot.cn.example/",
+    "http://manus.im/",
+    "https://sub.manus.im/",
+    "https://manus.im.example/",
     "not a url"
   ]) {
     assert.equal(preflightContext.matchesPreflight(url), false, `${url} must not receive the Cookie preflight`);
@@ -75,7 +90,7 @@ const load = (file) => import(`${pathToFileURL(path.join(root, file)).href}?test
   assert.match(mirror.sendButtonSelector, /Submit/);
   assert.match(mirror.sendButtonSelector, /提交/);
 
-  assert.match(cookieBridge, /new Set\(\["grok\.com", "gk\.dairoot\.cn"\]\)/);
+  assert.match(cookieBridge, /new Set\(\["grok\.com", "gk\.dairoot\.cn", "manus\.im"\]\)/);
   assert.match(preload, /host === "gk\.dairoot\.cn"/);
   assert.doesNotMatch(preload, /host\.endsWith\("\.gk\.dairoot\.cn"\)/);
 

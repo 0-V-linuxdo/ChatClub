@@ -17,7 +17,7 @@ function installGrokCookieBridge() {
   const INSTALLATION_KEY = "__CHATCLUB_GROK_COOKIE_BRIDGE_VERSION__";
   const RELOAD_MARKER = `chatclub:grok-cookie-bridge:reload:${INSTALLATION_VERSION}`;
   const MIRROR_ACCOUNT_SWITCH_ARM_TIMEOUT_MS = 9000;
-  const supportedHosts = new Set(["grok.com", "gk.dairoot.cn"]);
+  const supportedHosts = new Set(["grok.com", "gk.dairoot.cn", "manus.im"]);
   const extensionProtocol = (() => {
     try {
       const extensionApi = globalThis.browser || globalThis.chrome;

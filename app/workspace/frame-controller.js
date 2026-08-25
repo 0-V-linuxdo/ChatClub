@@ -303,7 +303,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
     try {
       const parsed = new URL(String(url || ""));
       const host = parsed.hostname.toLowerCase();
-      return parsed.protocol === "https:" && (host === "grok.com" || host === "gk.dairoot.cn");
+      return parsed.protocol === "https:" && (host === "grok.com" || host === "gk.dairoot.cn" || host === "manus.im");
     } catch {
       return false;
     }

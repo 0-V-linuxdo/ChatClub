@@ -54,6 +54,19 @@ function mirrorSourceCookie(value, overrides = {}) {
   });
 }
 
+function manusSourceCookie(name, value, overrides = {}) {
+  return sourceCookie(name, value, {
+    domain: name === "login_success" ? "manus.im" : ".manus.im",
+    hostOnly: name === "login_success",
+    secure: false,
+    httpOnly: false,
+    sameSite: "unspecified",
+    session: false,
+    expirationDate: 2200000000,
+    ...overrides
+  });
+}
+
 function fakeExtensionApi(sources = []) {
   const sourceByName = new Map(sources.map((cookie) => [cookie.name, { ...cookie }]));
   const targets = new Map();
@@ -541,13 +554,25 @@ async function releaseManagedCookie(bridge, { name, cause, value }) {
   const protocol = await dataModule(read("shared/protocol.js"));
 
   assert.deepEqual(bridge.GROK_SESSION_COOKIE_NAMES, ["sso", "sso-rw", "grok_device_id"]);
+  assert.deepEqual(bridge.MANUS_SESSION_COOKIE_NAMES, ["session_id", "login_success"]);
   assert.equal(bridge.isGrokSessionUrl("https://grok.com/c/123"), true);
   assert.equal(bridge.isGrokSessionUrl("https://gk.dairoot.cn/c/123"), true);
+  assert.equal(bridge.isGrokSessionUrl("https://manus.im/app"), true);
   assert.equal(bridge.grokCookieProfileIdForUrl("https://grok.com/c/123"), "grok");
   assert.equal(bridge.grokCookieProfileIdForUrl("https://gk.dairoot.cn/chat/123"), "grokMirror");
+  assert.equal(bridge.grokCookieProfileIdForUrl("https://manus.im/app"), "manus");
+  assert.equal(bridge.grokCookieProfileReloadsAfterSync("grok"), true);
+  assert.equal(bridge.grokCookieProfileReloadsAfterSync("grokMirror"), true);
+  assert.equal(bridge.grokCookieProfileReloadsAfterSync("manus"), false);
+  assert.equal(bridge.grokCookieProfileReloadsAfterSync(""), true);
   assert.equal(bridge.grokCookieProfileIdForCookie(sourceCookie("sso", "x")), "grok");
   assert.equal(bridge.grokCookieProfileIdForCookie(mirrorSourceCookie("x")), "grokMirror");
+  assert.equal(bridge.grokCookieProfileIdForCookie(manusSourceCookie("session_id", "x")), "manus");
+  assert.equal(bridge.grokCookieProfileIdForCookie(manusSourceCookie("login_success", "x")), "manus");
   assert.equal(bridge.isGrokSessionUrl("https://grok.x.ai/"), false);
+  assert.equal(bridge.isGrokSessionUrl("https://sub.manus.im/"), false);
+  assert.equal(bridge.isGrokSessionUrl("https://manus.im.evil.example/"), false);
+  assert.equal(bridge.isGrokSessionUrl("http://manus.im/"), false);
   assert.equal(bridge.isGrokSessionUrl("https://sub.gk.dairoot.cn/"), false);
   assert.equal(bridge.isGrokSessionUrl("https://gk.dairoot.cn.evil.example/"), false);
   assert.equal(bridge.isGrokSessionUrl("https://gk.dairoot.cn:8443/"), false);
@@ -642,6 +667,65 @@ async function releaseManagedCookie(bridge, { name, cause, value }) {
     })).changed,
     false,
     "Mirror sync must be idempotent"
+  );
+
+  const manusSecrets = {
+    session_id: "SENTINEL_MANUS_SESSION",
+    login_success: "SENTINEL_MANUS_LOGIN"
+  };
+  const manusApi = fakeExtensionApi([
+    manusSourceCookie("session_id", manusSecrets.session_id),
+    manusSourceCookie("login_success", manusSecrets.login_success)
+  ]);
+  const manusFirst = await bridge.syncGrokSessionCookies(manusApi, {
+    storeId: "0",
+    partitionKey,
+    frameUrl: "https://manus.im/app"
+  });
+  assert.deepEqual(manusFirst, { changed: true, created: 2, updated: 0, removed: 0, skipped: 0 });
+  assert.equal(manusApi.setCalls.length, 2);
+  assert.deepEqual(manusApi.setCalls.find((call) => call.name === "session_id"), {
+    url: "https://manus.im/",
+    name: "session_id",
+    value: manusSecrets.session_id,
+    path: "/",
+    secure: true,
+    httpOnly: false,
+    sameSite: "no_restriction",
+    partitionKey,
+    storeId: "0",
+    domain: ".manus.im",
+    expirationDate: 2200000000
+  });
+  assert.deepEqual(manusApi.setCalls.find((call) => call.name === "login_success"), {
+    url: "https://manus.im/",
+    name: "login_success",
+    value: manusSecrets.login_success,
+    path: "/",
+    secure: true,
+    httpOnly: false,
+    sameSite: "no_restriction",
+    partitionKey,
+    storeId: "0",
+    expirationDate: 2200000000
+  });
+  assert.equal(manusApi.sourceByName.get("session_id").secure, false, "source Cookie must remain untouched");
+  assert.equal(manusApi.sourceByName.get("session_id").sameSite, "unspecified", "source Cookie must remain untouched");
+  assert.equal(Object.values(manusSecrets).some((secret) => JSON.stringify(manusFirst).includes(secret)), false);
+  assert.equal(Object.values(manusSecrets).some((secret) => JSON.stringify(manusApi.stored).includes(secret)), false);
+  assert.equal(
+    manusApi.getCalls.filter((call) => !call.partitionKey).every((call) => call.url === "https://manus.im/"),
+    true,
+    "Manus sync must read only the Manus origin"
+  );
+  assert.equal(
+    (await bridge.syncGrokSessionCookies(manusApi, {
+      storeId: "0",
+      partitionKey,
+      frameUrl: "https://manus.im/app/library"
+    })).changed,
+    false,
+    "Manus sync must be idempotent"
   );
 
   const explicitLoginApi = fakeExtensionApi();
@@ -2014,6 +2098,47 @@ async function releaseManagedCookie(bridge, { name, cause, value }) {
   assert.equal(mirrorFrameResult.created, 1);
   assert.equal(mirrorFrameResult.reloadRequired, true);
   assert.deepEqual(mirrorFrameApi.setCalls.map((call) => call.name), ["user-gateway-token"]);
+
+  const manusFrameApi = fakeExtensionApi([
+    manusSourceCookie("session_id", "MANUS_FRAME_SESSION"),
+    manusSourceCookie("login_success", "MANUS_FRAME_LOGIN")
+  ]);
+  const manusFrameUrl = "https://manus.im/app";
+  manusFrameApi.frameDetails = {
+    tabId: 7,
+    frameId: 5,
+    parentFrameId: 0,
+    url: manusFrameUrl,
+    documentId: "manus-document"
+  };
+  manusFrameApi.framesByTab.set(7, [{
+    tabId: 7,
+    frameId: 0,
+    parentFrameId: -1,
+    url: `${EXTENSION_SITE}/index.html`,
+    documentId: "manus-extension-document"
+  }, manusFrameApi.frameDetails]);
+  const manusFrameRuntime = createRuntimeHandlers(manusFrameApi);
+  const manusFrameResult = await manusFrameRuntime.handlers.get(REQUEST.SYNC_GROK_SESSION_COOKIES)({
+    bridgeVersion: protocol.GROK_COOKIE_BRIDGE_VERSION
+  }, {
+    id: manusFrameApi.runtime.id,
+    tab: { id: 7, url: `${EXTENSION_SITE}/index.html` },
+    frameId: 5,
+    documentId: "manus-document",
+    url: manusFrameUrl
+  });
+  assert.equal(manusFrameResult.supported, true);
+  assert.equal(manusFrameResult.created, 2);
+  assert.equal(
+    manusFrameResult.reloadRequired,
+    false,
+    "Manus must not reload a painted iframe after the first Cookie sync"
+  );
+  assert.deepEqual(
+    manusFrameApi.setCalls.map((call) => call.name).sort(),
+    ["login_success", "session_id"]
+  );
 
   const staleTombstoneKey = { topLevelSite: EXTENSION_SITE };
   const staleTombstoneApi = fakeExtensionApi([mirrorSourceCookie("STALE_BEFORE_ROTATION")]);

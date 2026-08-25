@@ -407,12 +407,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "d9bc5a77fdc9e5b87c5816ff55e405868e2f9683084fbb8819ee6151f72959aa";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "b4d5d10d9b6d901ff45c4e0c1244ca4a6160747cbc6f209b3bc5cb9126e51914";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "d92836327b13430b0dac7c666e3cc6aa824bc78c844ea863f2bfd7b8457fa8b1";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.d92836327b13430b0dac7c666e3cc6aa824bc78c844ea863f2bfd7b8457fa8b1";
-  var CONTENT_RUNTIME_CONTENT_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/content.js", "entryPath": "content-src/content.js", "sourceSha256": "b2441877ff0b08e6983bfa76166bda1c93626250e3f11bc860070f5b186b3eb5", "implementationSha256": "239c5f2f14a58d3f7aadfc49fe9199f5269ce0bb182b9147d02562160c457799", "implementationVersion": "2026.07.16.2+bundle.239c5f2f14a58d3f7aadfc49fe9199f5269ce0bb182b9147d02562160c457799" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "551597662bc0bb9388e264ba0eb8acc70b1ced0c1ed9513f1751b0a74354fecb";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.551597662bc0bb9388e264ba0eb8acc70b1ced0c1ed9513f1751b0a74354fecb";
+  var CONTENT_RUNTIME_CONTENT_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/content.js", "entryPath": "content-src/content.js", "sourceSha256": "b31342491f19d7e09c956f0cc13cc30a17401e164182943e211ee6b33d175a8d", "implementationSha256": "6d3431b7b0d2c1e3dd2e950c66b3ddb9bf86484a905a28d4cf68ee70c983b271", "implementationVersion": "2026.07.16.2+bundle.6d3431b7b0d2c1e3dd2e950c66b3ddb9bf86484a905a28d4cf68ee70c983b271" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -1455,7 +1455,8 @@
       world: "ISOLATED",
       runAt: "document_idle",
       ...options,
-      ...options.hosts ? { hosts: Object.freeze([...options.hosts]) } : {}
+      ...options.hosts ? { hosts: Object.freeze([...options.hosts]) } : {},
+      ...options.requiredHosts ? { requiredHosts: Object.freeze([...options.requiredHosts]) } : {}
     });
   }
   var CONTENT_BUNDLES = Object.freeze({
@@ -1463,7 +1464,8 @@
     grokCookie: contentBundle({
       id: "chatclub-grok-cookie-bridge",
       file: "content/grok-cookie-bridge.js",
-      hosts: ["grok.com", "gk.dairoot.cn"],
+      hosts: ["grok.com", "gk.dairoot.cn", "manus.im"],
+      requiredHosts: ["grok.com", "gk.dairoot.cn"],
       runAt: "document_start"
     }),
     content: contentBundle({ id: "chatclub-content", file: "content/content.js" }),

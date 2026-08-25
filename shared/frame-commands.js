@@ -21,7 +21,8 @@ function contentBundle(options) {
     world: "ISOLATED",
     runAt: "document_idle",
     ...options,
-    ...(options.hosts ? { hosts: Object.freeze([...options.hosts]) } : {})
+    ...(options.hosts ? { hosts: Object.freeze([...options.hosts]) } : {}),
+    ...(options.requiredHosts ? { requiredHosts: Object.freeze([...options.requiredHosts]) } : {})
   });
 }
 
@@ -30,7 +31,8 @@ export const CONTENT_BUNDLES = Object.freeze({
   grokCookie: contentBundle({
     id: "chatclub-grok-cookie-bridge",
     file: "content/grok-cookie-bridge.js",
-    hosts: ["grok.com", "gk.dairoot.cn"],
+    hosts: ["grok.com", "gk.dairoot.cn", "manus.im"],
+    requiredHosts: ["grok.com", "gk.dairoot.cn"],
     runAt: "document_start"
   }),
   content: contentBundle({ id: "chatclub-content", file: "content/content.js" }),
