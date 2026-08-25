@@ -147,3 +147,22 @@ export function claimTopmostPopoverEscape(event, ownerSelector) {
   event.stopImmediatePropagation?.();
   return true;
 }
+
+export function isChatFrameNode(node) {
+  if (!node || node === document) return false;
+  if (typeof window !== "undefined" && node === window) return false;
+  return Boolean(node.classList?.contains?.("chat-frame") || node.closest?.(".chat-frame, .chat-frame-wrap"));
+}
+
+function frameOwnedWindowStillFocused() {
+  if (typeof document.hasFocus === "function" && document.hasFocus()) return true;
+  return isChatFrameNode(document.activeElement);
+}
+
+export function scheduleFrameOwnedBlurDismissal(isOpen, dismiss) {
+  const settle = typeof requestAnimationFrame === "function" ? requestAnimationFrame : (cb) => setTimeout(cb, 0);
+  settle(() => {
+    if (!isOpen() || frameOwnedWindowStillFocused()) return;
+    dismiss();
+  });
+}

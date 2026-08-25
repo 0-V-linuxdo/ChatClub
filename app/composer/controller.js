@@ -9,6 +9,7 @@ import { savePromptSendHistory as defaultSavePromptSendHistory } from "../../sha
 import {
   claimTopmostPopoverEscape,
   el,
+  scheduleFrameOwnedBlurDismissal,
   textarea,
   toast as defaultToast
 } from "../../ui/dom.js";
@@ -333,7 +334,11 @@ export function createComposerController(dependencies = {}) {
     document.removeEventListener("keydown", closeActionsMenuOnKeydown, true);
     window.removeEventListener("resize", closeActionsMenu, true);
     window.removeEventListener("scroll", closeActionsMenu, true);
-    window.removeEventListener("blur", closeActionsMenu, true);
+    window.removeEventListener("blur", closeActionsMenuOnWindowBlur, true);
+  }
+
+  function closeActionsMenuOnWindowBlur() {
+    scheduleFrameOwnedBlurDismissal(() => document.querySelector(".prompt-actions-popover"), closeActionsMenu);
   }
 
   function closeActionsMenuOnKeydown(event) {
@@ -402,7 +407,7 @@ export function createComposerController(dependencies = {}) {
     document.addEventListener("keydown", closeActionsMenuOnKeydown, true);
     window.addEventListener("resize", closeActionsMenu, true);
     window.addEventListener("scroll", closeActionsMenu, true);
-    window.addEventListener("blur", closeActionsMenu, true);
+    window.addEventListener("blur", closeActionsMenuOnWindowBlur, true);
   }
 
   function handleImageFileChange(event) {

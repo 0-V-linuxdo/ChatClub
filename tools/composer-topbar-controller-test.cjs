@@ -135,6 +135,11 @@ function responsiveBrandRules(kind) {
   assert.match(promptMenu, /topbar\.closeSettingsMenu\(\)/, "Prompt Actions must dismiss only the Topbar menu owner");
   assert.match(promptMenu, /workspace\.closePopovers\(\)/, "Prompt Actions must dismiss the workspace popover owner through its port");
   assert.match(functionSource(composer, "closeActionsMenuOnKeydown"), /claimTopmostPopoverEscape\(event,\s*"\.prompt-actions-popover"\)/, "Prompt Actions must claim only its topmost Escape");
+  assert.match(
+    functionSource(composer, "closeActionsMenuOnWindowBlur"),
+    /scheduleFrameOwnedBlurDismissal\(/,
+    "Prompt Actions must ignore iframe-owned window blur"
+  );
 
   const topbarSync = functionSource(topbar, "sync");
   assert.match(topbarSync, /composer\.closeActionsMenu\(\)/, "Topbar redraw must close the Composer-owned popover before anchor replacement");
@@ -142,6 +147,11 @@ function responsiveBrandRules(kind) {
   assert.match(topbarSync, /preferredModel\.syncPreferredModelInputGate\(\)/, "Topbar redraw must preserve the Preferred Model gate state");
   assert.match(functionSource(topbar, "saveEditLayout"), /editSavePending = true[\s\S]*finally[\s\S]*editSavePending = false/, "Topbar must guard every edit-save close path while persistence is pending");
   assert.match(functionSource(topbar, "closeSettingsMenuOnKeydown"), /claimTopmostPopoverEscape\(event,\s*"\.topbar-settings-popover"\)/, "Topbar Settings must claim only its topmost Escape");
+  assert.match(
+    functionSource(topbar, "closeSettingsMenuOnWindowBlur"),
+    /scheduleFrameOwnedBlurDismissal\(/,
+    "Topbar Settings must ignore iframe-owned window blur"
+  );
   const brandMenuAction = functionSource(topbar, "runMenuItem");
   assert.match(brandMenuAction, /item\.id === "brand"[\s\S]*actions\.openNewWorkspaceTab\(\)/, "a folded Logo item must open a fresh ChatClub tab");
   assert.doesNotMatch(brandMenuAction, /item\.id === "brand"[\s\S]{0,160}openSettings\("about"\)/, "a folded Logo item must no longer open About");

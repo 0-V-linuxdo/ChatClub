@@ -2669,7 +2669,8 @@ button { cursor: pointer; }
   cursor: grabbing;
 }
 
-body.tab-dragging iframe {
+body.tab-dragging iframe,
+body.workspace-popover-open iframe {
   pointer-events: none;
 }
 

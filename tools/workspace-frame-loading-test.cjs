@@ -150,6 +150,11 @@ const PARAM = "__chatclub_frame_load_nonce";
   assert.match(setFrameSrcAfterPrepare, /armPromptFocusRestore\(iframe, generation\)/, "prepared frame navigation must remember an active prompt before assigning src");
   assert.match(armPromptFocusRestore, /document\.activeElement !== prompt/);
   assert.match(restorePromptInputFocus, /prompt\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(
+    restorePromptInputFocus,
+    /workspace-popover-menu/,
+    "prompt restore must not steal focus while a workspace popover is open"
+  );
   assert.match(completeFrameLoading, /restorePromptInputFocus\(iframe\)/, "the real iframe load must restore focus to the prompt when it was active before navigation");
   assert.match(setFrameSrcAfterPrepare, /const frameReplaced = ensureFrameAttributeContract/);
   assert.match(
@@ -517,6 +522,11 @@ const PARAM = "__chatclub_frame_load_nonce";
     css,
     /\.chat-card\.frame-loading \.chat-frame-wrap::after\s*\{\s*pointer-events: auto;\s*cursor: wait;\s*touch-action: none;/,
     "the loading overlay must intercept hits over the iframe until loading completes"
+  );
+  assert.match(
+    css,
+    /body\.tab-dragging iframe,\s*body\.workspace-popover-open iframe\s*\{\s*pointer-events: none;/,
+    "an open workspace popover must keep iframes from receiving pointer events"
   );
   const defaultOverlayCss = css.slice(
     css.indexOf(".chat-frame-wrap::after"),

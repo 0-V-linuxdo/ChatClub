@@ -1,7 +1,7 @@
 import { TAB_GROUP_HEADER_BUTTONS } from "../../shared/constants.js";
 import { t } from "../../shared/i18n.js";
 import { normalizeTabGroupButtonOrder, normalizeTabGroupButtonPlacement } from "../../shared/storage-schema.js";
-import { claimTopmostPopoverEscape, el } from "../../ui/dom.js";
+import { claimTopmostPopoverEscape, el, isChatFrameNode, scheduleFrameOwnedBlurDismissal } from "../../ui/dom.js";
 import { appPickerHostKeys } from "./app-hosts.js";
 import { workspaceGridColumnCount } from "./model.js";
 import { renderPreferredModelSelectionOverlay } from "./preferred-model-selection-overlay.js";
@@ -925,14 +925,7 @@ export function createWorkspaceViewController(dependencies = {}) {
     );
     document.body.append(backdrop, picker);
     positionAppPicker(anchor, picker);
-    requestAnimationFrame(() => {
-      document.addEventListener("pointerdown", closePopoverOnOutsideInteraction, true);
-      document.addEventListener("focusin", closePopoverOnOutsideInteraction, true);
-    });
-    document.addEventListener("keydown", closePopoverOnKeydown, true);
-    window.addEventListener("resize", closePopovers, true);
-    window.addEventListener("scroll", closePopovers, true);
-    window.addEventListener("blur", closePopovers, true);
+    armWorkspacePopoverDismissal();
   }
 
   function layoutPresetIsActive(preset) {
@@ -1042,6 +1035,15 @@ export function createWorkspaceViewController(dependencies = {}) {
       }, "secondary", false, t("layout.add"), "", "workspace.layout.add")
     );
     document.body.append(backdrop, menu);
+    armWorkspacePopoverDismissal();
+  }
+
+  function closePopoverOnKeydown(event) {
+    if (claimTopmostPopoverEscape(event, ".workspace-popover-menu")) closePopovers();
+  }
+
+  function armWorkspacePopoverDismissal() {
+    document.body.classList.add("workspace-popover-open");
     requestAnimationFrame(() => {
       document.addEventListener("pointerdown", closePopoverOnOutsideInteraction, true);
       document.addEventListener("focusin", closePopoverOnOutsideInteraction, true);
@@ -1049,22 +1051,23 @@ export function createWorkspaceViewController(dependencies = {}) {
     document.addEventListener("keydown", closePopoverOnKeydown, true);
     window.addEventListener("resize", closePopovers, true);
     window.addEventListener("scroll", closePopovers, true);
-    window.addEventListener("blur", closePopovers, true);
+    window.addEventListener("blur", closePopoverOnWindowBlur, true);
   }
 
-  function closePopoverOnKeydown(event) {
-    if (claimTopmostPopoverEscape(event, ".workspace-popover-menu")) closePopovers();
+  function closePopoverOnWindowBlur() {
+    scheduleFrameOwnedBlurDismissal(() => document.querySelector(".workspace-popover-menu"), closePopovers);
   }
 
   function closePopoverOnOutsideInteraction(event) {
     const menu = document.querySelector(".workspace-popover-menu");
     const anchor = document.querySelector(".workspace-popover-anchor");
     const target = event.target;
-    if (menu?.contains(target) || anchor?.contains(target)) return;
+    if (menu?.contains(target) || anchor?.contains(target) || (event.type === "focusin" && isChatFrameNode(target))) return;
     closePopovers();
   }
 
   function closePopovers() {
+    document.body.classList.remove("workspace-popover-open");
     document.querySelectorAll(".workspace-popover-menu, .workspace-popover-backdrop").forEach((node) => node.remove());
     document.querySelectorAll(".workspace-popover-anchor").forEach((node) => {
       node.classList.remove("popover-anchor", "workspace-popover-anchor");
@@ -1076,7 +1079,7 @@ export function createWorkspaceViewController(dependencies = {}) {
     document.removeEventListener("keydown", closePopoverOnKeydown, true);
     window.removeEventListener("resize", closePopovers, true);
     window.removeEventListener("scroll", closePopovers, true);
-    window.removeEventListener("blur", closePopovers, true);
+    window.removeEventListener("blur", closePopoverOnWindowBlur, true);
   }
 
   function closePopoversAnchoredWithin(root) {
@@ -1162,14 +1165,7 @@ export function createWorkspaceViewController(dependencies = {}) {
       menu.style.left = `${Math.min(Math.max(8, rect.left), maxLeft)}px`;
       menu.style.top = `${Math.min(Math.max(8, rect.bottom + 5), maxTop)}px`;
     }
-    requestAnimationFrame(() => {
-      document.addEventListener("pointerdown", closePopoverOnOutsideInteraction, true);
-      document.addEventListener("focusin", closePopoverOnOutsideInteraction, true);
-    });
-    document.addEventListener("keydown", closePopoverOnKeydown, true);
-    window.addEventListener("resize", closePopovers, true);
-    window.addEventListener("scroll", closePopovers, true);
-    window.addEventListener("blur", closePopovers, true);
+    armWorkspacePopoverDismissal();
   }
 
   return Object.freeze({

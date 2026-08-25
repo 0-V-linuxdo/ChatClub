@@ -65,6 +65,40 @@ assert.match(
   /document\.querySelector\(\s*["']\.workspace-popover-anchor["']\s*\)/,
   "outside-interaction handling must inspect only the workspace-owned anchor"
 );
+assert.match(
+  outsideInteractionSource,
+  /event\.type === "focusin" && isChatFrameNode\(target\)/,
+  "iframe focusin during load must not count as an outside interaction"
+);
+
+for (const functionName of ["openAppPicker", "openLayoutMenu", "openChatMenu"]) {
+  const source = functionSource(workspaceSource, functionName, "  ");
+  assert.match(
+    source,
+    /armWorkspacePopoverDismissal\(\)/,
+    `${functionName} must share the iframe-safe dismissal contract`
+  );
+}
+
+const armDismissalSource = functionSource(workspaceSource, "armWorkspacePopoverDismissal", "  ");
+assert.match(
+  armDismissalSource,
+  /document\.body\.classList\.add\("workspace-popover-open"\)/,
+  "open workspace popovers must shield iframes from pointer hits"
+);
+assert.match(
+  armDismissalSource,
+  /window\.addEventListener\("blur", closePopoverOnWindowBlur, true\)/,
+  "window blur must use the iframe-aware closer"
+);
+assert.doesNotMatch(
+  armDismissalSource,
+  /window\.addEventListener\("blur", closePopovers/,
+  "raw window blur must not close workspace popovers while an iframe still owns focus"
+);
+
+const blurSource = functionSource(workspaceSource, "closePopoverOnWindowBlur", "  ");
+assert.match(blurSource, /scheduleFrameOwnedBlurDismissal\(/, "window blur must ignore nested iframe focus");
 
 const closePopoversSource = functionSource(workspaceSource, "closePopovers", "  ");
 assert.match(
@@ -76,6 +110,16 @@ assert.match(
   closePopoversSource,
   /querySelectorAll\(\s*["']\.workspace-popover-anchor["']\s*\)/,
   "closePopovers must clear only workspace-owned anchors"
+);
+assert.match(
+  closePopoversSource,
+  /classList\.remove\("workspace-popover-open"\)/,
+  "closing a workspace popover must drop the iframe pointer shield"
+);
+assert.match(
+  closePopoversSource,
+  /window\.removeEventListener\("blur", closePopoverOnWindowBlur, true\)/,
+  "closePopovers must unbind the iframe-aware window-blur closer"
 );
 for (const selector of literalDocumentSelectors(closePopoversSource)) {
   assert.match(selector, /^\.workspace-popover-/, "closePopovers selectors must remain workspace-owned");

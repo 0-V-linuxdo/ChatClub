@@ -486,6 +486,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
   function restorePromptInputFocus(iframe) {
     const generation = String(iframe?.dataset?.promptFocusRestoreGeneration || "");
     if (!generation) return;
+    if (document.querySelector(".workspace-popover-menu, .popover-menu")) { delete iframe.dataset.promptFocusRestoreGeneration; return; }
     let attempts = 0;
     const restore = () => {
       if (!iframe?.isConnected || String(iframe.dataset.promptFocusRestoreGeneration || "") !== generation) return;

@@ -1,7 +1,7 @@
 import { normalizeTopbarPromptPlaceholderConfig } from "../../shared/storage-schema.js";
 import { normalizeTopbarLayout, topbarSettingsSectionForItem } from "../../shared/topbar.js";
 import { t } from "../../shared/i18n.js";
-import { claimTopmostPopoverEscape, toast } from "../../ui/dom.js";
+import { claimTopmostPopoverEscape, scheduleFrameOwnedBlurDismissal, toast } from "../../ui/dom.js";
 import { createControllerMethodValidator, validateControllerContract } from "../controller-contract.js";
 import { createTopbarEditor } from "./editor.js";
 import { createTopbarPlaceholderController } from "./placeholder.js";
@@ -97,7 +97,11 @@ export function createTopbarController(dependencies = {}) {
     document.removeEventListener("keydown", closeSettingsMenuOnKeydown, true);
     window.removeEventListener("resize", closeSettingsMenu, true);
     window.removeEventListener("scroll", closeSettingsMenu, true);
-    window.removeEventListener("blur", closeSettingsMenu, true);
+    window.removeEventListener("blur", closeSettingsMenuOnWindowBlur, true);
+  }
+
+  function closeSettingsMenuOnWindowBlur() {
+    scheduleFrameOwnedBlurDismissal(() => document.querySelector(".topbar-settings-popover"), closeSettingsMenu);
   }
 
   function closeSettingsMenuOnKeydown(event) {
@@ -188,7 +192,7 @@ export function createTopbarController(dependencies = {}) {
     if (!persistent) {
       window.addEventListener("resize", closeSettingsMenu, true);
       window.addEventListener("scroll", closeSettingsMenu, true);
-      window.addEventListener("blur", closeSettingsMenu, true);
+      window.addEventListener("blur", closeSettingsMenuOnWindowBlur, true);
     }
   }
 
