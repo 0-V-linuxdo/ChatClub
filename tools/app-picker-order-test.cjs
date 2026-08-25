@@ -79,7 +79,7 @@ const root = path.resolve(__dirname, "..");
   assert.equal(t("appNames.DouBao"), "豆包（doubao）");
   assert.equal(t("appNames.Qianwen"), "千问（qianwen）");
   setLanguage("zh_CN");
-  assert.equal(t("appNames.DouBao"), "DouBao");
+  assert.equal(t("appNames.DouBao"), "豆包");
   assert.equal(t("appNames.Qianwen"), "千问");
   setLanguage("en");
 

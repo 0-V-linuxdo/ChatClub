@@ -1440,7 +1440,7 @@ const zh_CN = {
   "appPicker.aggregator": "聚合 AI",
   "appPicker.chinese": "中文 AI",
   "appPicker.addCustom": "添加",
-  "appNames.DouBao": "DouBao",
+  "appNames.DouBao": "豆包",
   "appNames.Qianwen": "千问",
 
   "layout.empty": "空布局",
