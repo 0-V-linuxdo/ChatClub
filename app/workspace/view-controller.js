@@ -9,12 +9,15 @@ import { renderWorkspaceTabMenuItems } from "./tab-context-menu.js";
 import { createControllerMethodValidator, validateControllerContract } from "../controller-contract.js";
 const LAYOUT_POPOVER_RIGHT_EXTENSION = 40;
 const APP_PICKER_INTERNATIONAL_IDS = [
-  "ChatGPT", "Claude", "Copilot", "CopilotGH", "Felo", "Gemini", "Genspark", "Grok", "Liner",
-  "Meta", "Mistral", "Perplexity", "Poe", "QwenChat", "You", "Zai", "NotionAI", "Kagi", "TypingMind",
-  "KimiAI", "Dola"
+  "ChatGPT", "Claude", "Copilot", "CopilotGH", "Gemini", "Grok", "Meta", "Mistral",
+  "Perplexity", "QwenChat", "Zai", "KimiAI", "Dola"
 ];
 const APP_PICKER_INTERNATIONAL_ID_SET = new Set(APP_PICKER_INTERNATIONAL_IDS);
-const APP_PICKER_FORCE_INTERNATIONAL_HOSTS = new Set(["assistant.kagi.com"]);
+const APP_PICKER_AGGREGATOR_IDS = [
+  "Felo", "Genspark", "Liner", "You", "Poe", "NotionAI", "Kagi", "TypingMind",
+  "GrokMirror", "LobeHub"
+];
+const APP_PICKER_AGGREGATOR_ID_SET = new Set(APP_PICKER_AGGREGATOR_IDS);
 const APP_PICKER_CHINESE_IDS = [
   "ChatGLM", "DeepSeek", "DouBao", "YiYan", "Kimi", "LingGuang", "LongCat", "MetaSo",
   "HaiLuo", "NaMiSearch", "Qwen", "SenseChat", "YueWen", "HunYuan"
@@ -148,13 +151,6 @@ export function createWorkspaceViewController(dependencies = {}) {
     return false;
   }
 
-  function isForcedInternationalApp(app) {
-    for (const key of appPickerHostKeys(app)) {
-      if (APP_PICKER_FORCE_INTERNATIONAL_HOSTS.has(key)) return true;
-    }
-    return false;
-  }
-
   function appPickerProvider(app) {
     const provider = String(app?.provider || "").trim();
     if (!provider || /^custom$/i.test(provider)) return "";
@@ -197,8 +193,8 @@ export function createWorkspaceViewController(dependencies = {}) {
     const apps = allApps();
     const customIds = customAppIds();
     const customApps = apps.filter((app) => !APP_PICKER_INTERNATIONAL_ID_SET.has(app.id)
+      && !APP_PICKER_AGGREGATOR_ID_SET.has(app.id)
       && !APP_PICKER_CHINESE_ID_SET.has(app.id)
-      && !isForcedInternationalApp(app)
       && (customIds.has(app.id) || /^custom$/i.test(app.provider || "")));
     const customSet = new Set(customApps.map((app) => app.id));
     const customHostKeys = new Set(customApps.flatMap((app) => Array.from(appPickerHostKeys(app))));
@@ -207,15 +203,16 @@ export function createWorkspaceViewController(dependencies = {}) {
       return apps.filter((app) => idSet.has(app.id) && !customSet.has(app.id) && !hasCustomAppEquivalent(app, customHostKeys));
     };
     const internationalApps = byKnownOrder(APP_PICKER_INTERNATIONAL_IDS);
+    const aggregatorApps = byKnownOrder(APP_PICKER_AGGREGATOR_IDS);
     const chineseApps = byKnownOrder(APP_PICKER_CHINESE_IDS);
-    const assigned = new Set([...customSet, ...internationalApps.map((app) => app.id), ...chineseApps.map((app) => app.id)]);
-    const extraInternationalApps = apps.filter((app) => !assigned.has(app.id)
+    const assigned = new Set([...customSet, ...[...internationalApps, ...aggregatorApps, ...chineseApps].map((app) => app.id)]);
+    const extraAggregatorApps = apps.filter((app) => !assigned.has(app.id)
       && !APP_PICKER_CHINESE_ID_SET.has(app.id)
-      && !isForcedInternationalApp(app)
       && !hasCustomAppEquivalent(app, customHostKeys));
     return [
       { id: "custom", title: t("appPicker.custom"), apps: customApps, custom: true },
-      { id: "international", title: t("appPicker.international"), apps: [...internationalApps, ...extraInternationalApps] },
+      { id: "international", title: t("appPicker.international"), apps: internationalApps },
+      { id: "aggregator", title: t("appPicker.aggregator"), apps: [...aggregatorApps, ...extraAggregatorApps] },
       { id: "chinese", title: t("appPicker.chinese"), apps: chineseApps }
     ];
   }
@@ -813,7 +810,7 @@ export function createWorkspaceViewController(dependencies = {}) {
     const rect = anchor.getBoundingClientRect();
     const width = window.innerWidth < 760
       ? Math.max(320, window.innerWidth - 16)
-      : Math.min(1460, Math.max(720, window.innerWidth - 32));
+      : Math.min(1680, Math.max(880, window.innerWidth - 32));
     const left = Math.max(8, Math.min(rect.left - 28, window.innerWidth - width - 8));
     const top = Math.max(8, Math.min(rect.bottom + 6, window.innerHeight - 88));
     picker.style.width = `${width}px`;

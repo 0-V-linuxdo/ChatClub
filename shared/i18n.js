@@ -187,6 +187,7 @@ const en = {
 
   "appPicker.custom": "Custom AI",
   "appPicker.international": "International AI",
+  "appPicker.aggregator": "Aggregator AI",
   "appPicker.chinese": "Chinese AI",
   "appPicker.addCustom": "Add",
 
@@ -1434,6 +1435,7 @@ const zh_CN = {
 
   "appPicker.custom": "自定义 AI",
   "appPicker.international": "国际 AI",
+  "appPicker.aggregator": "聚合 AI",
   "appPicker.chinese": "中文 AI",
   "appPicker.addCustom": "添加",
 

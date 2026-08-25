@@ -131,6 +131,8 @@ const load = (file) => import(`${pathToFileURL(path.join(root, file)).href}?test
   const appsSource = require("node:fs").readFileSync(path.join(root, "app/settings/apps.js"), "utf8");
   const viewSource = require("node:fs").readFileSync(path.join(root, "app/workspace/view-controller.js"), "utf8");
   assert.match(viewSource, /"KimiAI", "Dola"/);
+  assert.match(viewSource, /APP_PICKER_AGGREGATOR_IDS/);
+  assert.match(viewSource, /"GrokMirror", "LobeHub"/);
   assert.match(appsSource, /suggestCustomAppDraft\(/);
   assert.match(appsSource, /normalizeHttpUrl\(/);
   assert.match(appsSource, /applyUrlAutofill/);

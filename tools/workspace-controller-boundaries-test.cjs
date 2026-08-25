@@ -48,6 +48,10 @@ const lineCount = (source) => source.split(/\r?\n/).length;
   assert.match(view, /import \{ appPickerHostKeys \} from "\.\/app-hosts\.js"/);
   assert.doesNotMatch(pocket, /function appPickerHostKeys\(/);
   assert.doesNotMatch(view, /function appPickerHostKeys\(/);
+  assert.match(view, /APP_PICKER_AGGREGATOR_IDS/);
+  assert.match(view, /t\("appPicker\.aggregator"\)/);
+  assert.match(view, /id: "aggregator"/);
+  assert.doesNotMatch(view, /APP_PICKER_FORCE_INTERNATIONAL_HOSTS/);
 
   assert.match(drag, /validateControllerContract\(dependencies, "Workspace drag controller"/);
   assert.match(drag, /moveTabWithinGroup\(state\.groups, groupId, tabId, insertIndex\)/);
