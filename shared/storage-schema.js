@@ -55,7 +55,7 @@ import {
 import { normalizeShortcutConfig as normalizeShortcutShape } from "./shortcuts.js";
 import { TOPIC_DELETE_SITE_CONFIGS, mergeBuiltInTopicDeleteConfig } from "./topic-delete-sites.js";
 import { normalizeTopbarLayout } from "./topbar.js";
-import { normalizeHostList } from "./url-match.js";
+import { hostMatchesPattern, normalizeHost, normalizeHostList } from "./url-match.js";
 import { customUserscriptSource, isCustomUserscriptConfig } from "./userscript-config.js";
 import {
   normalizeBuiltinChatAppIframeConfigs,
@@ -80,8 +80,16 @@ function text(value, fallback = "") {
   return String(value ?? fallback).trim();
 }
 
-function normalizeHttpUrl(value) {
+function coerceHttpUrl(value) {
   const raw = text(value);
+  if (!raw) return "";
+  if (/^[a-z][a-z0-9+.-]*:/i.test(raw)) return raw;
+  if (raw.startsWith("//")) return `https:${raw}`;
+  return `https://${raw}`;
+}
+
+export function normalizeHttpUrl(value) {
+  const raw = coerceHttpUrl(value);
   if (!raw) return "";
   try {
     const parsed = new URL(raw);
@@ -384,6 +392,150 @@ function inferCustomName(item, index) {
     return inferred || (provider && !/^custom$/i.test(provider) ? provider : host || `Custom ${index + 1}`);
   }
   return rawName;
+}
+
+const DEFAULT_CUSTOM_APP_NAME = "Custom App";
+const DEFAULT_CUSTOM_APP_PROVIDER = "Custom";
+const DEFAULT_CUSTOM_INPUT_SELECTOR = "textarea, [contenteditable='true']";
+const DEFAULT_CUSTOM_SEND_SELECTOR = "button[aria-label*='Send' i], button[aria-label*='Submit' i], button[aria-label*='发送' i], button[aria-label*='提交' i]";
+const GENERIC_APP_SUBDOMAINS = new Set(["www", "www2", "app", "apps", "chat", "api", "m", "web"]);
+
+function hostnameFromHttpUrl(value) {
+  try {
+    return new URL(normalizeHttpUrl(value)).hostname.toLowerCase().replace(/\.$/, "");
+  } catch {
+    return "";
+  }
+}
+
+function hostLookupKeys(hostname) {
+  const normalized = normalizeHost(hostname) || String(hostname || "").trim().toLowerCase().replace(/\.$/, "");
+  if (!normalized) return [];
+  const bare = normalized.replace(/^www\./, "");
+  return [...new Set([normalized, bare, bare ? `www.${bare}` : ""].filter(Boolean))];
+}
+
+function chatAppHostPatterns(app = {}) {
+  const hosts = [];
+  for (const host of Array.isArray(app.hosts) ? app.hosts : []) {
+    const normalized = normalizeHost(host);
+    if (normalized) hosts.push(normalized);
+  }
+  const urlHost = hostnameFromHttpUrl(app.url);
+  if (urlHost) {
+    const normalized = normalizeHost(urlHost);
+    if (normalized) hosts.push(normalized);
+  }
+  return [...new Set(hosts)];
+}
+
+function displayNameFromHost(hostname) {
+  const host = String(hostname || "").trim().toLowerCase().replace(/^www\./, "");
+  if (!host) return "";
+  const labels = host.split(".").filter(Boolean);
+  if (!labels.length) return "";
+  let candidate = labels[0];
+  if (labels.length >= 3 && GENERIC_APP_SUBDOMAINS.has(candidate)) candidate = labels[1];
+  if (!candidate) return "";
+  return candidate.charAt(0).toUpperCase() + candidate.slice(1);
+}
+
+function preferredCatalogUrl(userHref, matched) {
+  if (!matched?.url) return userHref;
+  try {
+    const user = new URL(userHref);
+    const catalog = new URL(matched.url);
+    const userKeys = new Set(hostLookupKeys(user.hostname));
+    const sameHost = hostLookupKeys(catalog.hostname).some((key) => userKeys.has(key))
+      || chatAppHostPatterns(matched).some((pattern) => [...userKeys].some((key) => hostMatchesPattern(pattern, key)));
+    if (!sameHost) return userHref;
+    if ((user.pathname === "/" || user.pathname === "") && !user.search && !user.hash) return catalog.href;
+  } catch {}
+  return userHref;
+}
+
+function findChatAppByHref(value, catalog = BUILTIN_CHAT_APPS) {
+  const href = normalizeHttpUrl(value);
+  if (!href) return null;
+  const hostname = hostnameFromHttpUrl(href);
+  if (!hostname) return null;
+  const keys = hostLookupKeys(hostname);
+  return (Array.isArray(catalog) ? catalog : []).find((app) => {
+    return chatAppHostPatterns(app).some((pattern) => keys.some((key) => hostMatchesPattern(pattern, key)));
+  }) || null;
+}
+
+function fieldIsReplaceable(currentValue, autofilledValue, defaults = []) {
+  const raw = text(currentValue);
+  if (!raw) return true;
+  if (defaults.some((item) => text(item) === raw)) return true;
+  if (/^custom(?:\s+\d+)?$/i.test(raw) && defaults.includes(DEFAULT_CUSTOM_APP_NAME)) return true;
+  if (autofilledValue != null && text(autofilledValue) === raw) return true;
+  return false;
+}
+
+export function suggestCustomAppDraft(rawUrl, options = {}) {
+  const catalog = Array.isArray(options.catalog) ? options.catalog : BUILTIN_CHAT_APPS;
+  const current = options.current && typeof options.current === "object" ? options.current : {};
+  const autofilled = options.autofilled && typeof options.autofilled === "object" ? options.autofilled : {};
+  const url = normalizeHttpUrl(rawUrl);
+  if (!url) {
+    return {
+      ok: false,
+      url: "",
+      host: "",
+      matched: null,
+      kind: "",
+      values: {},
+      nextAutofilled: { ...autofilled }
+    };
+  }
+  const matched = findChatAppByHref(url, catalog);
+  const host = hostnameFromHttpUrl(url);
+  const bareHost = host.replace(/^www\./, "");
+  const resolvedUrl = preferredCatalogUrl(url, matched);
+  const proposed = matched
+    ? {
+      name: text(matched.name) || displayNameFromHost(host) || DEFAULT_CUSTOM_APP_NAME,
+      provider: text(matched.provider) || DEFAULT_CUSTOM_APP_PROVIDER,
+      url: resolvedUrl,
+      inputSelector: text(matched.inputSelector) || DEFAULT_CUSTOM_INPUT_SELECTOR,
+      sendButtonSelector: text(matched.sendButtonSelector) || DEFAULT_CUSTOM_SEND_SELECTOR,
+      imagePasteStrategy: normalizePromptImagePasteStrategy(matched.imagePasteStrategy),
+      hosts: chatAppHostPatterns(matched)
+    }
+    : {
+      name: displayNameFromHost(host) || DEFAULT_CUSTOM_APP_NAME,
+      provider: DEFAULT_CUSTOM_APP_PROVIDER,
+      url: resolvedUrl,
+      inputSelector: DEFAULT_CUSTOM_INPUT_SELECTOR,
+      sendButtonSelector: DEFAULT_CUSTOM_SEND_SELECTOR,
+      imagePasteStrategy: PROMPT_IMAGE_PASTE_STRATEGY_SEQUENTIAL,
+      hosts: bareHost ? [bareHost] : []
+    };
+  const values = { url: proposed.url, hosts: proposed.hosts };
+  const nextAutofilled = { ...autofilled, url: proposed.url, hosts: proposed.hosts };
+  const fields = [
+    ["name", [DEFAULT_CUSTOM_APP_NAME, bareHost, host]],
+    ["provider", [DEFAULT_CUSTOM_APP_PROVIDER]],
+    ["inputSelector", [DEFAULT_CUSTOM_INPUT_SELECTOR]],
+    ["sendButtonSelector", [DEFAULT_CUSTOM_SEND_SELECTOR]],
+    ["imagePasteStrategy", [PROMPT_IMAGE_PASTE_STRATEGY_SEQUENTIAL]]
+  ];
+  for (const [key, defaults] of fields) {
+    if (!fieldIsReplaceable(current[key], autofilled[key], defaults)) continue;
+    values[key] = proposed[key];
+    nextAutofilled[key] = proposed[key];
+  }
+  return {
+    ok: true,
+    url: proposed.url,
+    host: bareHost,
+    matched,
+    kind: matched ? "match" : "suggest",
+    values,
+    nextAutofilled
+  };
 }
 
 function normalizeProfile(profile, index) {

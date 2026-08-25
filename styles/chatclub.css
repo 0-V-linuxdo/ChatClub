@@ -7609,6 +7609,16 @@ body.settings-tab-context-menu-dragging iframe {
   font-size: 12px;
 }
 
+.settings-url-autofill-hint {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.settings-url-autofill-hint.is-matched {
+  color: var(--primary);
+}
+
 .settings-dialog-check {
   display: flex;
   align-items: center;

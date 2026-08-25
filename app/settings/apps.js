@@ -7,7 +7,9 @@ import { t } from "../../shared/i18n.js";
 import {
   createId,
   normalizeBuiltinChatAppOrder,
-  normalizePromptImagePasteStrategy
+  normalizeHttpUrl,
+  normalizePromptImagePasteStrategy,
+  suggestCustomAppDraft
 } from "../../shared/storage-schema.js";
 import {
   CHAT_FRAME_ALLOW_FEATURES,
@@ -961,12 +963,17 @@ export function createAppsSettingsSection(ctx) {
     cleanupSettingsDragRows(".custom-config-row, .iframe-permission-row[data-app-source='custom']");
   }
 
-  function normalizeCustomUrl(value) {
+  function customAppUrlLooksComplete(value) {
+    const raw = String(value || "").trim();
+    if (!raw || /^[a-z][a-z0-9+.-]*:/i.test(raw)) return false;
+    const href = normalizeHttpUrl(raw);
+    if (!href) return false;
     try {
-      const parsed = new URL(String(value || "").trim());
-      return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.href : "";
+      const labels = new URL(href).hostname.split(".").filter(Boolean);
+      const tld = labels.at(-1) || "";
+      return labels.length >= 2 && /^[a-z]{2,}$/i.test(tld);
     } catch {
-      return "";
+      return false;
     }
   }
 
@@ -1018,7 +1025,7 @@ export function createAppsSettingsSection(ctx) {
       id: createId("custom-app"),
       name: "Custom App",
       provider: "Custom",
-      url: "https://www.example.com/",
+      url: "",
       inputSelector: "",
       sendButtonSelector: "",
       imagePasteStrategy: PROMPT_IMAGE_PASTE_STRATEGY_SEQUENTIAL
@@ -1029,15 +1036,78 @@ export function createAppsSettingsSection(ctx) {
     const inputSelectorInput = input(draft.inputSelector, { placeholder: t("apps.inputSelector") });
     const sendSelectorInput = input(draft.sendButtonSelector, { placeholder: t("apps.sendButtonSelector") });
     const strategyInput = select(normalizePromptImagePasteStrategy(draft.imagePasteStrategy), imagePasteStrategyOptions());
+    const urlHint = el("small", { class: "settings-url-autofill-hint", hidden: true });
+    nameInput.dataset.customAppField = "name";
+    providerInput.dataset.customAppField = "provider";
+    urlInput.dataset.customAppField = "url";
+    urlInput.autocomplete = "url";
+    urlInput.spellcheck = false;
+    inputSelectorInput.dataset.customAppField = "inputSelector";
+    sendSelectorInput.dataset.customAppField = "sendButtonSelector";
+    strategyInput.dataset.customAppField = "imagePasteStrategy";
+    urlHint.dataset.customAppHint = "url";
+    let autofilled = {};
     let dialog;
     const close = () => dialog.remove();
+    const syncUrlHint = (suggestion) => {
+      if (!suggestion?.ok) {
+        urlHint.hidden = true;
+        urlHint.textContent = "";
+        urlHint.classList.remove("is-matched", "is-suggested");
+        return;
+      }
+      urlHint.hidden = false;
+      urlHint.classList.toggle("is-matched", suggestion.kind === "match");
+      urlHint.classList.toggle("is-suggested", suggestion.kind !== "match");
+      urlHint.textContent = suggestion.kind === "match"
+        ? t("apps.urlAutofillMatch", { name: suggestion.matched?.name || suggestion.values.name || suggestion.host })
+        : t("apps.urlAutofillSuggest", { host: suggestion.host });
+    };
+    const applyUrlAutofill = ({ rewriteUrl = false } = {}) => {
+      const suggestion = suggestCustomAppDraft(urlInput.value, {
+        catalog: BUILTIN_CHAT_APPS,
+        current: {
+          name: nameInput.value,
+          provider: providerInput.value,
+          inputSelector: inputSelectorInput.value,
+          sendButtonSelector: sendSelectorInput.value,
+          imagePasteStrategy: strategyInput.value
+        },
+        autofilled
+      });
+      if (!suggestion.ok) {
+        syncUrlHint(null);
+        return suggestion;
+      }
+      if (rewriteUrl && suggestion.url && suggestion.url !== urlInput.value) urlInput.value = suggestion.url;
+      if (Object.hasOwn(suggestion.values, "name")) nameInput.value = suggestion.values.name;
+      if (Object.hasOwn(suggestion.values, "provider")) providerInput.value = suggestion.values.provider;
+      if (Object.hasOwn(suggestion.values, "inputSelector")) inputSelectorInput.value = suggestion.values.inputSelector;
+      if (Object.hasOwn(suggestion.values, "sendButtonSelector")) {
+        sendSelectorInput.value = suggestion.values.sendButtonSelector;
+      }
+      if (Object.hasOwn(suggestion.values, "imagePasteStrategy")) {
+        strategyInput.value = suggestion.values.imagePasteStrategy;
+      }
+      if (Array.isArray(suggestion.values.hosts)) draft.hosts = suggestion.values.hosts;
+      autofilled = suggestion.nextAutofilled;
+      syncUrlHint(suggestion);
+      return suggestion;
+    };
+    urlInput.addEventListener("input", () => {
+      applyUrlAutofill({ rewriteUrl: customAppUrlLooksComplete(urlInput.value) });
+    });
+    urlInput.addEventListener("blur", () => {
+      applyUrlAutofill({ rewriteUrl: true });
+    });
     const save = async () => {
+      applyUrlAutofill({ rewriteUrl: true });
       const rawUrl = urlInput.value.trim();
       const nextApp = {
         ...draft,
         name: nameInput.value.trim(),
         provider: providerInput.value.trim() || "Custom",
-        url: normalizeCustomUrl(rawUrl),
+        url: normalizeHttpUrl(rawUrl),
         inputSelector: inputSelectorInput.value.trim(),
         sendButtonSelector: sendSelectorInput.value.trim(),
         imagePasteStrategy: normalizePromptImagePasteStrategy(strategyInput.value)
@@ -1061,7 +1131,11 @@ export function createAppsSettingsSection(ctx) {
         el("div", { class: "settings-dialog-grid" },
           field(t("apps.platformName"), nameInput),
           field(t("apps.provider"), providerInput),
-          field(t("apps.platformUrl"), urlInput),
+          el("label", { class: "field" },
+            el("span", {}, t("apps.platformUrl")),
+            urlInput,
+            urlHint
+          ),
           field(t("apps.inputSelector"), inputSelectorInput),
           field(t("apps.sendButtonSelector"), sendSelectorInput),
           field(t("apps.imagePasteStrategy"), strategyInput)

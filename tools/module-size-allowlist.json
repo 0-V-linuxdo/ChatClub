@@ -62,12 +62,19 @@
     "targetBytes": 40000,
     "reason": "The remembered ChatClub-tab sidebar owns live/closed partitioning, time/name/open sorting with prompt-history date groups, folder create/drag membership, drag reorder, pin order, overlay rename/delete, Appearance-owned hover-button Fixed/More/Hidden folding with an owner-scoped three-dot popover, close-others cleanup, and the Search field that the topbar Search control focuses."
   },
+  "shared/storage-schema.js": {
+    "maxLines": 1303,
+    "target": 1200,
+    "maxBytes": 52735,
+    "targetBytes": 50000,
+    "reason": "The configuration schema owns custom-platform URL https coercion and domain-catalog draft suggestions together with options normalization, dehydration, and built-in catalog merges so imported and editor-authored custom apps cannot drift."
+  },
   "shared/i18n.js": {
-    "maxLines": 2525,
+    "maxLines": 2529,
     "target": 1500,
-    "maxBytes": 147529,
+    "maxBytes": 147760,
     "targetBytes": 82000,
-    "reason": "Bilingual translation catalog data is kept co-located for key parity; the signed official-rules update-management and component-status views, consent, check, apply-all, compatibility, rollback, per-component source, confirmation and accessibility copy join the committed-reset cleanup warning, queued-send, preferred-model auto-selection overlay settings plus structured model, thinking, All Sources and Effort attempt labels, Workspace appearance subtabs, nested Tab Group right-click menu and ChatClub Tabs hover-button placement settings, prompt-handoff, platform-management labels, iframe tab context-menu labels, prompt-history date-group labels, remembered ChatClub-tab sidebar labels including tab count, close-others cleanup, pin/unpin, More, sort modes, folder create/rename/delete, date-group headings and resize copy, Tabs export/import copy, topic-title edit copy, and the ChatClub Tabs sidebar shortcut under exact line and byte ratchets; Share panel and shortcut copy joins the bilingual catalog."
+    "reason": "Bilingual translation catalog data is kept co-located for key parity; the signed official-rules update-management and component-status views, consent, check, apply-all, compatibility, rollback, per-component source, confirmation and accessibility copy join the committed-reset cleanup warning, queued-send, preferred-model auto-selection overlay settings plus structured model, thinking, All Sources and Effort attempt labels, Workspace appearance subtabs, nested Tab Group right-click menu and ChatClub Tabs hover-button placement settings, prompt-handoff, platform-management labels including custom-platform domain autofill, iframe tab context-menu labels, prompt-history date-group labels, remembered ChatClub-tab sidebar labels including tab count, close-others cleanup, pin/unpin, More, sort modes, folder create/rename/delete, date-group headings and resize copy, Tabs export/import copy, topic-title edit copy, and the ChatClub Tabs sidebar shortcut under exact line and byte ratchets; Share panel and shortcut copy joins the bilingual catalog."
   },
   "tools/browser-smoke.mjs": {
     "maxLines": 1440,
