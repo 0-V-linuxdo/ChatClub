@@ -13,7 +13,7 @@ export const DEFAULT_APP_PICKER_APP_ORDERS = Object.freeze(Object.fromEntries(
 
 export const APP_PICKER_INTERNATIONAL_IDS = Object.freeze([
   "ChatGPT", "Claude", "Copilot", "CopilotGH", "Gemini", "Grok", "Meta", "Mistral",
-  "Perplexity", "QwenChat", "Zai", "KimiAI", "Dola"
+  "Perplexity", "Qwen", "Zai", "KimiAI", "Dola"
 ]);
 
 export const APP_PICKER_AGGREGATOR_IDS = Object.freeze([
@@ -23,7 +23,7 @@ export const APP_PICKER_AGGREGATOR_IDS = Object.freeze([
 
 export const APP_PICKER_CHINESE_IDS = Object.freeze([
   "ChatGLM", "DeepSeek", "DouBao", "YiYan", "Kimi", "LingGuang", "LongCat", "MetaSo",
-  "HaiLuo", "NaMiSearch", "Qwen", "SenseChat", "YueWen", "HunYuan"
+  "HaiLuo", "NaMiSearch", "Qianwen", "SenseChat", "YueWen", "HunYuan"
 ]);
 
 function textId(value) {

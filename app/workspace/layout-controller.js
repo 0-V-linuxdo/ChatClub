@@ -97,7 +97,7 @@ export function createWorkspaceLayoutController(dependencies = {}) {
       ? state.options.language
       : navigator.language || "";
     const preferred = /^zh/i.test(language)
-      ? [["Kimi"], ["DouBao"], ["Qwen"]]
+      ? [["Kimi"], ["DouBao"], ["Qianwen"]]
       : [["ChatGPT"], ["Gemini"], ["Grok"]];
     const normalized = normalizeLayoutGroups(preferred);
     if (normalized.length) return normalized;

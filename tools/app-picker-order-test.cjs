@@ -25,7 +25,10 @@ const root = path.resolve(__dirname, "..");
   assert.ok(APP_PICKER_INTERNATIONAL_IDS.includes("Dola"));
   assert.ok(APP_PICKER_AGGREGATOR_IDS.includes("GrokMirror"));
   assert.ok(APP_PICKER_AGGREGATOR_IDS.includes("LobeHub"));
-  assert.ok(APP_PICKER_CHINESE_IDS.includes("Kimi"));
+  assert.ok(APP_PICKER_INTERNATIONAL_IDS.includes("Qwen"));
+  assert.equal(APP_PICKER_INTERNATIONAL_IDS.includes("QwenChat"), false);
+  assert.ok(APP_PICKER_CHINESE_IDS.includes("Qianwen"));
+  assert.equal(APP_PICKER_CHINESE_IDS.includes("Qwen"), false);
 
   assert.deepEqual(
     normalizeAppPickerSectionOrder(["chinese", "custom", "chinese", "unknown"]),

@@ -40,6 +40,7 @@
 | DouBao | https://www.doubao.com/ | ✓ |  |  |  |  |
 | Dola | https://www.dola.com/chat/ | ✓ |  |  |  |  |
 | Qwen | https://chat.qwen.ai/ | ✓ |  |  |  |  |
+| 千问 | https://www.qianwen.com/ | ✓ |  |  |  |  |
 | TypingMind | https://setapp.typingcloud.com/ | ✓ | ✓ |  |  |  |
 | LobeHub | https://app.lobehub.com/ | ✓ | ✓ |  |  |  |
 | AI Studio | https://aistudio.google.com/ |  |  | ✓ |  |  |

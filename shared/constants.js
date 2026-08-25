@@ -10,7 +10,7 @@ import {
 } from "./notion-efforts.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-08-26｜01:48:00」";
+export const APP_VERSION = "「2026-08-26｜02:00:00」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -590,8 +590,18 @@ export const BUILTIN_CHAT_APPS = [
     name: "Qwen",
     provider: "Alibaba",
     url: "https://chat.qwen.ai/",
+    hosts: ["chat.qwen.ai", "qwen.ai", "www.qwen.ai", "*.qwen.ai"],
     inputSelector: "textarea, [contenteditable='true']",
     sendButtonSelector: "button[aria-label*='Send' i]"
+  },
+  {
+    id: "Qianwen",
+    name: "千问",
+    provider: "Alibaba",
+    url: "https://www.qianwen.com/",
+    hosts: ["qianwen.com", "www.qianwen.com", "*.qianwen.com"],
+    inputSelector: "textarea, [contenteditable='true']",
+    sendButtonSelector: "button[aria-label*='Send' i], button[aria-label*='发送' i]"
   },
   {
     id: "TypingMind",

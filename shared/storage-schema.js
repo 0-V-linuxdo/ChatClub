@@ -392,6 +392,8 @@ function inferCustomName(item, index) {
     [/(^|\.)kimi\.ai$/, "Kimi.ai"],
     [/(^|\.)kimi\.com$/, "Kimi.com"],
     [/(^|\.)dola\.com$/, "Dola"],
+    [/(^|\.)qwen\.ai$/, "Qwen"],
+    [/(^|\.)qianwen\.com$/, "千问"],
     [/(^|\.)lobehub\.com$/, "LobeHub"],
     [/(^|\.)typingcloud\.com$/, "TypingMind"]
   ].find(([pattern]) => pattern.test(host))?.[1];

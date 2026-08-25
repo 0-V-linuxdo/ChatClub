@@ -710,6 +710,8 @@ function inferAppName(app) {
     [/(^|\.)kimi\.ai$/, "Kimi.ai"],
     [/(^|\.)kimi\.com$/, "Kimi.com"],
     [/(^|\.)dola\.com$/, "Dola"],
+    [/(^|\.)qwen\.ai$/, "Qwen"],
+    [/(^|\.)qianwen\.com$/, "千问"],
     [/(^|\.)lobehub\.com$/, "LobeHub"],
     [/(^|\.)typingcloud\.com$/, "TypingMind"]
   ];

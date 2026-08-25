@@ -20,13 +20,19 @@ const load = (file) => import(`${pathToFileURL(path.join(root, file)).href}?test
   const kimi = BUILTIN_CHAT_APPS.find((app) => app.id === "Kimi");
   const kimiAi = BUILTIN_CHAT_APPS.find((app) => app.id === "KimiAI");
   const dola = BUILTIN_CHAT_APPS.find((app) => app.id === "Dola");
-  assert.ok(chatgpt && claude && gemini && kimi && kimiAi && dola);
+  const qwen = BUILTIN_CHAT_APPS.find((app) => app.id === "Qwen");
+  const qianwen = BUILTIN_CHAT_APPS.find((app) => app.id === "Qianwen");
+  assert.ok(chatgpt && claude && gemini && kimi && kimiAi && dola && qwen && qianwen);
   assert.equal(kimi.url, "https://www.kimi.com/");
   assert.equal(kimiAi.url, "https://www.kimi.ai/");
   assert.equal(kimi.name, "Kimi.com");
   assert.equal(kimiAi.name, "Kimi.ai");
   assert.equal(dola.name, "Dola");
   assert.equal(dola.url, "https://www.dola.com/chat/");
+  assert.equal(qwen.name, "Qwen");
+  assert.equal(qwen.url, "https://chat.qwen.ai/");
+  assert.equal(qianwen.name, "千问");
+  assert.equal(qianwen.url, "https://www.qianwen.com/");
 
   assert.equal(normalizeHttpUrl("manus.im"), "https://manus.im/");
   assert.equal(normalizeHttpUrl("https://manus.im"), "https://manus.im/");
@@ -103,6 +109,20 @@ const load = (file) => import(`${pathToFileURL(path.join(root, file)).href}?test
   assert.equal(dolaMatch.values.url, dola.url);
   assert.equal(dolaMatch.values.provider, "ByteDance");
 
+  const qwenMatch = suggestCustomAppDraft("chat.qwen.ai", {
+    current: { name: "Custom App" }
+  });
+  assert.equal(qwenMatch.matched?.id, "Qwen");
+  assert.equal(qwenMatch.values.name, "Qwen");
+  assert.equal(qwenMatch.values.url, qwen.url);
+
+  const qianwenMatch = suggestCustomAppDraft("qianwen.com", {
+    current: { name: "Custom App" }
+  });
+  assert.equal(qianwenMatch.matched?.id, "Qianwen");
+  assert.equal(qianwenMatch.values.name, "千问");
+  assert.equal(qianwenMatch.values.url, qianwen.url);
+
   const preserved = suggestCustomAppDraft("manus.im", {
     current: { name: "My Agent", provider: "Custom", inputSelector: "textarea.mine" },
     autofilled: {}
@@ -135,6 +155,9 @@ const load = (file) => import(`${pathToFileURL(path.join(root, file)).href}?test
   const pickerSource = require("node:fs").readFileSync(path.join(root, "app/workspace/app-picker.js"), "utf8");
   const orderSource = require("node:fs").readFileSync(path.join(root, "shared/app-picker-order.js"), "utf8");
   assert.match(orderSource, /"KimiAI", "Dola"/);
+  assert.match(orderSource, /"Qwen", "Zai"/);
+  assert.match(orderSource, /"Qianwen"/);
+  assert.doesNotMatch(orderSource, /QwenChat/);
   assert.match(orderSource, /APP_PICKER_AGGREGATOR_IDS/);
   assert.match(orderSource, /"GrokMirror", "LobeHub"/);
   assert.match(pickerSource, /APP_PICKER_AGGREGATOR_IDS/);

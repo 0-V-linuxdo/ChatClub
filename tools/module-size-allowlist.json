@@ -49,11 +49,11 @@
     "reason": "The official-rules runtime is the single background configuration writer and keeps revision-CAS patch/import/reset handling, v3-to-v4 migration, immutable snapshot composition, signed component activation, rollback pins, alias authorization, reset cleanup journaling and startup recovery behind one serialized coordinator so atomic commit, compensation and destructive-operation fail-closed state cannot diverge across modules."
   },
   "app/runtime.js": {
-    "maxLines": 1287,
+    "maxLines": 1289,
     "target": 1200,
-    "maxBytes": 54865,
+    "maxBytes": 54937,
     "targetBytes": 50000,
-    "reason": "The application assembly root now also wires topic-title generation after the first composer send, the page-local ChatClub-tab sidebar toggle including its Ctrl/Cmd+B shortcut, remembered-tab refresh after hydration, Settings-owned Tabs export/import callbacks, full-text tab capture after send, the topbar Search action that opens ChatClub Tabs, Appearance options for ChatClub Tabs hover-button placement, and an inert workspace-session port for Settings beside the existing Composer, Topbar, workspace-session, and overlay-aware Escape dismissal composition; Share panel open/sync/Escape/fullscreen wiring joins the existing lazy Summary/Pocket assembly without pulling Share modules into the bootstrap graph; Chinese Kimi host inference now labels the site Kimi.com so it stays distinct from Kimi.ai."
+    "reason": "The application assembly root now also wires topic-title generation after the first composer send, the page-local ChatClub-tab sidebar toggle including its Ctrl/Cmd+B shortcut, remembered-tab refresh after hydration, Settings-owned Tabs export/import callbacks, full-text tab capture after send, the topbar Search action that opens ChatClub Tabs, Appearance options for ChatClub Tabs hover-button placement, and an inert workspace-session port for Settings beside the existing Composer, Topbar, workspace-session, and overlay-aware Escape dismissal composition; Share panel open/sync/Escape/fullscreen wiring joins the existing lazy Summary/Pocket assembly without pulling Share modules into the bootstrap graph; Chinese Kimi host inference now labels the site Kimi.com so it stays distinct from Kimi.ai; Qwen.ai stays international while Qianwen.com is inferred as 千问."
   },
   "app/workspace/tabs-sidebar-controller.js": {
     "maxLines": 1541,
@@ -63,11 +63,11 @@
     "reason": "The remembered ChatClub-tab sidebar owns live/closed partitioning, time/name/open sorting with prompt-history date groups, folder create/drag membership, drag reorder, pin order, overlay rename/delete, Appearance-owned hover-button Fixed/More/Hidden folding with an owner-scoped three-dot popover, close-others cleanup, and the Search field that the topbar Search control focuses."
   },
   "shared/storage-schema.js": {
-    "maxLines": 1312,
+    "maxLines": 1314,
     "target": 1200,
-    "maxBytes": 53111,
+    "maxBytes": 53183,
     "targetBytes": 50000,
-    "reason": "The configuration schema owns custom-platform URL https coercion and domain-catalog draft suggestions together with options normalization, dehydration, and built-in catalog merges so imported and editor-authored custom apps cannot drift; Chinese Kimi host inference now labels the site Kimi.com so it stays distinct from Kimi.ai."
+    "reason": "The configuration schema owns custom-platform URL https coercion and domain-catalog draft suggestions together with options normalization, dehydration, and built-in catalog merges so imported and editor-authored custom apps cannot drift; Chinese Kimi host inference now labels the site Kimi.com so it stays distinct from Kimi.ai; Qwen.ai stays international while Qianwen.com is inferred as 千问."
   },
   "shared/i18n.js": {
     "maxLines": 2531,
