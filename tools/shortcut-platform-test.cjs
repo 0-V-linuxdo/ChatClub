@@ -429,6 +429,124 @@ for (const [action, macShortcut, windowsShortcut, code] of [
   );
 }
 
+function searchFields(action, platform, extra = {}) {
+  const shortcut = sharedDefault.profiles[platform].shortcuts[action];
+  return {
+    action,
+    shortcut,
+    label: extra.label || action,
+    description: extra.description || "",
+    formatted: extra.formatted ?? shortcuts.formatShortcut(action, shortcut, "", platform),
+    extraTexts: extra.extraTexts || [],
+    platform
+  };
+}
+
+assert.equal(
+  shortcuts.shortcutMatchesSearchQuery("b", searchFields("toggleWorkspaceTabsSidebar", "windows")),
+  true,
+  "a letter must match the shortcut key"
+);
+assert.equal(
+  shortcuts.shortcutMatchesSearchQuery("b", searchFields("toggleWorkspaceTabsSidebar", "mac")),
+  true,
+  "a letter must match the Mac shortcut key"
+);
+assert.equal(
+  shortcuts.shortcutMatchesSearchQuery("c", searchFields("toggleWorkspaceTabsSidebar", "windows", {
+    label: "ChatClub Tabs"
+  })),
+  false,
+  "a latin letter must search the key, not every label that contains it"
+);
+assert.equal(
+  shortcuts.shortcutMatchesSearchQuery("侧", searchFields("toggleWorkspaceTabsSidebar", "windows", {
+    description: "展开或折叠 ChatClub 标签页侧边栏。"
+  })),
+  true,
+  "a single CJK character must still search names and descriptions"
+);
+assert.equal(
+  shortcuts.shortcutMatchesSearchQuery("ctrl+b", searchFields("toggleWorkspaceTabsSidebar", "windows")),
+  true
+);
+assert.equal(
+  shortcuts.shortcutMatchesSearchQuery("⌘b", searchFields("toggleWorkspaceTabsSidebar", "mac")),
+  true
+);
+assert.equal(
+  shortcuts.shortcutMatchesSearchQuery("cmd+b", searchFields("toggleWorkspaceTabsSidebar", "mac")),
+  true
+);
+assert.equal(
+  shortcuts.shortcutMatchesSearchQuery("k", searchFields("focusInput", "windows")),
+  true
+);
+assert.equal(
+  shortcuts.shortcutMatchesSearchQuery("alt+k", searchFields("focusInput", "windows")),
+  true
+);
+assert.equal(
+  shortcuts.shortcutMatchesSearchQuery("sidebar", searchFields("toggleWorkspaceTabsSidebar", "windows", {
+    description: "Show or hide the ChatClub Tabs sidebar."
+  })),
+  true,
+  "a name/description query must find the matching action"
+);
+assert.equal(
+  shortcuts.shortcutMatchesSearchQuery("侧边", searchFields("toggleWorkspaceTabsSidebar", "windows", {
+    description: "展开或折叠 ChatClub 标签页侧边栏。"
+  })),
+  true
+);
+assert.equal(
+  shortcuts.shortcutMatchesSearchQuery("alt+5", searchFields("insertPrompt", "windows")),
+  true,
+  "a captured digit chord must match the 1-9 pattern shortcut"
+);
+assert.equal(
+  shortcuts.shortcutMatchesSearchQuery("1", searchFields("insertPrompt", "mac")),
+  true
+);
+assert.equal(
+  shortcuts.shortcutMatchesSearchQuery("enter", {
+    action: "sendMessage",
+    shortcut: null,
+    label: "Send Message",
+    description: "Choose whether plain Enter or Ctrl+Enter sends",
+    formatted: "Enter",
+    extraTexts: ["Enter", "Ctrl+Enter"],
+    platform: "windows"
+  }),
+  true
+);
+assert.equal(
+  shortcuts.shortcutMatchesSearchQuery("n", searchFields("toggleWorkspaceTabsSidebar", "windows")),
+  false
+);
+assert.equal(
+  shortcuts.shortcutSearchQueryFromKeyboardEvent(event({ code: "KeyB", ctrlKey: true, key: "b" }), "windows"),
+  "Ctrl+B"
+);
+assert.equal(
+  shortcuts.shortcutSearchQueryFromKeyboardEvent(event({ code: "KeyB", metaKey: true, key: "b" }), "mac"),
+  "⌘B"
+);
+assert.equal(
+  shortcuts.shortcutSearchQueryFromKeyboardEvent(event({ code: "KeyB", key: "b" }), "windows"),
+  null,
+  "plain letters must type into the search field"
+);
+assert.equal(
+  shortcuts.shortcutSearchQueryFromKeyboardEvent(event({ code: "KeyC", ctrlKey: true, key: "c" }), "windows"),
+  null,
+  "native copy/paste chords must stay in the search field"
+);
+assert.equal(
+  shortcuts.shortcutSearchQueryFromKeyboardEvent(event({ code: "KeyK", altKey: true, key: "k" }), "windows"),
+  "Alt+K"
+);
+
 // Enter sends only with the selected platform's exact mode and never while an
 // IME is composing.
 assert.equal(shortcuts.matchesSendShortcut(event({ key: "Enter", code: "Enter" }), "enter", "mac"), true);
@@ -473,8 +591,33 @@ assert.doesNotMatch(shortcutSettingsSource, /\["input", t\("shortcuts\.inputTab"
 assert.doesNotMatch(shortcutSettingsSource, /\["global", t\("shortcuts\.globalTab"\)/);
 assert.match(
   shortcutSettingsSource,
-  /active === "topbar"\s*\? \[shortcutInputSettingsBlock\(\), \.\.\.shortcutActionSettingsBlocks\(activeGroup, conflicts, redraw\)\]\s*: shortcutActionSettingsBlocks\(activeGroup, conflicts, redraw\)/,
-  "Top Bar must render Send Message before the former Global shortcut list, while Chat Panel omits Send Message"
+  /const showSend = searching \? sendMessageMatchesSearch\(query\) : active === "topbar"/,
+  "search results may include Send Message from any tab; idle Top Bar still shows it and Chat Panel omits it"
+);
+assert.match(
+  shortcutSettingsSource,
+  /visibleShortcutGroups\(query\)/,
+  "shortcut search must filter Top Bar and Chat Panel groups from one query"
+);
+assert.match(shortcutSettingsSource, /class: "shortcut-search"/, "shortcut settings must expose a search field");
+assert.match(shortcutSettingsSource, /shortcutMatchesSearchQuery/);
+assert.match(shortcutSettingsSource, /shortcutSearchQueryFromKeyboardEvent/);
+assert.match(shortcutSettingsSource, /t\("shortcuts\.searchEmpty"\)/);
+assert.match(shortcutSettingsSource, /t\("shortcuts\.searchPlaceholder"\)/);
+assert.ok(
+  i18nSource.includes('"shortcuts.searchPlaceholder": "Type a shortcut, letter, or name"'),
+  "English shortcut search placeholder must mention typing a shortcut or letter"
+);
+assert.ok(
+  i18nSource.includes('"shortcuts.searchPlaceholder": "输入快捷键、字母或功能名"'),
+  "Chinese shortcut search placeholder must mention typing a shortcut or letter"
+);
+assert.ok(i18nSource.includes('"shortcuts.searchEmpty": "No matching shortcuts"'));
+assert.ok(i18nSource.includes('"shortcuts.searchEmpty": "没有匹配的快捷键"'));
+assert.match(
+  stylesheetSource,
+  /\.shortcut-search[\s\S]*?\.shortcut-search-input/,
+  "shortcut search must have settings-pane styles"
 );
 for (const itemId of ["settings", "addGroup", "settingsJumpMenu"]) {
   assert.match(shortcutSettingsSource, new RegExp(`TOPBAR_SHORTCUT_ACTIONS\\.${itemId}`), `shortcut settings must include the ${itemId} topbar action`);

@@ -407,12 +407,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "c54e51a9daf648c8555538467cb4e5378def92d3c62616455cf978736bfd3cba";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "d9bc5a77fdc9e5b87c5816ff55e405868e2f9683084fbb8819ee6151f72959aa";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "a50049dab4fb9160a5ca5feb8f9f501f768cbbf9e5f85a052fecb2465b15115b";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.a50049dab4fb9160a5ca5feb8f9f501f768cbbf9e5f85a052fecb2465b15115b";
-  var CONTENT_RUNTIME_CONTENT_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/content.js", "entryPath": "content-src/content.js", "sourceSha256": "7ac114c2d9f3e8e558156e9c1c09db7048ad3f79920c2779e502a88bef4f4546", "implementationSha256": "900d65664d86e11c81da1356c51033d2b082aeb8d19dbbde3746bc7edb123402", "implementationVersion": "2026.07.16.2+bundle.900d65664d86e11c81da1356c51033d2b082aeb8d19dbbde3746bc7edb123402" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "d92836327b13430b0dac7c666e3cc6aa824bc78c844ea863f2bfd7b8457fa8b1";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.d92836327b13430b0dac7c666e3cc6aa824bc78c844ea863f2bfd7b8457fa8b1";
+  var CONTENT_RUNTIME_CONTENT_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/content.js", "entryPath": "content-src/content.js", "sourceSha256": "b2441877ff0b08e6983bfa76166bda1c93626250e3f11bc860070f5b186b3eb5", "implementationSha256": "239c5f2f14a58d3f7aadfc49fe9199f5269ce0bb182b9147d02562160c457799", "implementationVersion": "2026.07.16.2+bundle.239c5f2f14a58d3f7aadfc49fe9199f5269ce0bb182b9147d02562160c457799" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {

@@ -3436,6 +3436,70 @@ body.tab-gesture-active * {
   min-width: 0;
 }
 
+.shortcut-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  width: 100%;
+  height: var(--settings-control-height);
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--settings-radius);
+  background: var(--panel-2);
+  color: var(--muted);
+  cursor: text;
+}
+
+.shortcut-search:focus-within {
+  border-color: color-mix(in srgb, var(--primary) 70%, var(--line));
+  color: var(--text);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 16%, transparent);
+}
+
+.shortcut-search .svg-icon {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.15;
+}
+
+.shortcut-search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 34px;
+  box-shadow: none;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.shortcut-search-input:focus {
+  outline: none;
+  border: 0;
+  box-shadow: none;
+}
+
+.shortcut-search-input::placeholder {
+  color: var(--muted);
+}
+
+.shortcut-search-input::-webkit-search-decoration,
+.shortcut-search-input::-webkit-search-cancel-button,
+.shortcut-search-input::-webkit-search-results-button,
+.shortcut-search-input::-webkit-search-results-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
 .settings-inner-tabs {
   display: inline-grid;
   grid-auto-flow: column;

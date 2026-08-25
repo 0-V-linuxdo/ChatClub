@@ -345,6 +345,123 @@ export function shortcutFromKeyboardEvent(event, action, platform = detectKeyboa
   return shortcut;
 }
 
+const NATIVE_SEARCH_CHORD_CODES = new Set(["KeyA", "KeyC", "KeyV", "KeyX", "KeyZ"]);
+
+function shortcutKeyToken(action, shortcut) {
+  if (!shortcut) return "";
+  if (shortcutUsesDigitPattern(action, shortcut)) return "1-9";
+  const code = String(shortcut.code || "");
+  if (code.startsWith("Key")) return code.slice(3).toLowerCase();
+  if (code.startsWith("Digit")) return code.slice(5).toLowerCase();
+  if (code.startsWith("Numpad")) return `num${code.slice(6).toLowerCase()}`;
+  return code.toLowerCase();
+}
+
+function shortcutModifierTokens(shortcut, platform) {
+  if (!shortcut) return [];
+  const mac = normalizeKeyboardPlatform(platform) === KEYBOARD_PLATFORM_MAC;
+  if (mac) {
+    return [
+      shortcut.command ? "cmd" : "",
+      shortcut.control ? "ctrl" : "",
+      shortcut.option ? "alt" : "",
+      shortcut.shift ? "shift" : ""
+    ].filter(Boolean);
+  }
+  return [
+    shortcut.control ? "ctrl" : "",
+    shortcut.alt ? "alt" : "",
+    shortcut.shift ? "shift" : ""
+  ].filter(Boolean);
+}
+
+function compactShortcutSearchText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/⌘/g, "cmd")
+    .replace(/⌃/g, "ctrl")
+    .replace(/⌥/g, "alt")
+    .replace(/⇧/g, "shift")
+    .replace(/command/g, "cmd")
+    .replace(/control/g, "ctrl")
+    .replace(/option/g, "alt")
+    .replace(/alternate/g, "alt")
+    .replace(/\bopt\b/g, "alt")
+    .replace(/meta/g, "cmd")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function shortcutComboMatchesQuery(compactNeedle, shortcut, action, platform) {
+  if (!compactNeedle || !shortcut) return false;
+  const mods = shortcutModifierTokens(shortcut, platform);
+  const compactMods = compactShortcutSearchText(mods.join(""));
+  const key = shortcutKeyToken(action, shortcut);
+  const compactCombo = `${compactMods}${compactShortcutSearchText(key)}`;
+  if (compactCombo === compactNeedle) return true;
+  if (compactMods && compactNeedle === compactMods) return true;
+  if (!shortcutUsesDigitPattern(action, shortcut)) return false;
+  const digitMatch = compactNeedle.match(/^([a-z]*)([1-9])$/);
+  if (digitMatch && digitMatch[1] === compactMods) return true;
+  return compactNeedle === `${compactMods}19`;
+}
+
+export function shortcutMatchesSearchQuery(query, fields = {}) {
+  const raw = String(query || "").trim();
+  if (!raw) return true;
+  const needle = raw.toLowerCase();
+  const compactNeedle = compactShortcutSearchText(raw);
+  const texts = [
+    fields.label,
+    fields.description,
+    ...(Array.isArray(fields.extraTexts) ? fields.extraTexts : [])
+  ].map((value) => String(value || "").toLowerCase());
+  const latinKeyQuery = needle.length === 1 && /^[a-z0-9]$/i.test(needle);
+  if (!latinKeyQuery && texts.some((text) => text.includes(needle))) return true;
+
+  const shortcut = fields.shortcut;
+  const formatted = String(fields.formatted || "");
+  const formattedLower = formatted.toLowerCase();
+  const key = shortcutKeyToken(fields.action, shortcut);
+  const compactKey = compactShortcutSearchText(key);
+
+  if (latinKeyQuery) {
+    if (compactKey === compactNeedle || compactKey.replace(/^num/, "") === compactNeedle) return true;
+    if (shortcutUsesDigitPattern(fields.action, shortcut) && /[1-9]/.test(needle)) return true;
+    const keyPart = formattedLower.includes("+")
+      ? formattedLower.split("+").pop()
+      : formattedLower;
+    const compactKeyPart = compactShortcutSearchText(keyPart);
+    return Boolean(compactNeedle && (compactKeyPart === compactNeedle || compactKeyPart.endsWith(compactNeedle)));
+  }
+
+  if (formattedLower.includes(needle)) return true;
+  const compactFormatted = compactShortcutSearchText(formatted);
+  if (compactNeedle && compactFormatted === compactNeedle) return true;
+  return shortcutComboMatchesQuery(compactNeedle, shortcut, fields.action, fields.platform);
+}
+
+function isNativeSearchChord(event, platform) {
+  if (!event || event.shiftKey || event.altKey) return false;
+  const mac = normalizeKeyboardPlatform(platform) === KEYBOARD_PLATFORM_MAC;
+  const primary = mac
+    ? Boolean(event.metaKey) && !event.ctrlKey
+    : Boolean(event.ctrlKey) && !event.metaKey;
+  return primary && NATIVE_SEARCH_CHORD_CODES.has(event.code);
+}
+
+export function shortcutSearchQueryFromKeyboardEvent(event, platform = detectKeyboardPlatform()) {
+  if (!event || event.isComposing || event.keyCode === 229) return null;
+  if (MODIFIER_CODES.has(event.code)) return null;
+  if (isNativeSearchChord(event, platform)) return null;
+  const hasModifier = normalizeKeyboardPlatform(platform) === KEYBOARD_PLATFORM_MAC
+    ? Boolean(event.metaKey || event.ctrlKey || event.altKey)
+    : Boolean(event.ctrlKey || event.altKey);
+  if (!hasModifier) return null;
+  const captured = shortcutFromKeyboardEvent(event, "focusInput", platform);
+  if (!captured) return null;
+  return formatShortcut("focusInput", captured, "", platform);
+}
+
 function shortcutSignatures(action, shortcut, platform) {
   if (!shortcut || shortcut.disabled) return [];
   const mac = normalizeKeyboardPlatform(platform) === KEYBOARD_PLATFORM_MAC;

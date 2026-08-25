@@ -7,12 +7,14 @@ import {
   replaceShortcutProfile,
   shortcutConflictActions,
   shortcutFromKeyboardEvent,
+  shortcutMatchesSearchQuery,
   shortcutProfile,
+  shortcutSearchQueryFromKeyboardEvent,
   shortcutUsesDigitPattern
 } from "../../shared/shortcuts.js";
 import { saveShortcutConfig } from "../../shared/storage-adapter.js";
 import { TOPBAR_SHORTCUT_ACTIONS } from "../../shared/topbar.js";
-import { button, el, select, toast } from "../../ui/dom.js";
+import { button, el, input, select, toast } from "../../ui/dom.js";
 
 const SHORTCUT_SETTING_GROUPS = [
   {
@@ -81,6 +83,7 @@ export function createShortcutSettings(ctx) {
   const {
     settingsActions,
     settingsBlock,
+    settingsEmptyRow,
     settingsIconAction,
     settingsInnerTabs,
     settingsList
@@ -89,6 +92,10 @@ export function createShortcutSettings(ctx) {
   let shortcutAutoSaveRunning = false;
   let shortcutAutoSavePending = null;
   let shortcutAutoSaveRedraw = null;
+  let shortcutSearchQuery = "";
+  let shortcutSearchFocused = false;
+  let shortcutSearchComposing = false;
+  let shortcutSearchSelection = { start: 0, end: 0 };
 
   function shortcutConfigKey(config) {
     return JSON.stringify(normalizeShortcutConfig(config));
@@ -173,6 +180,10 @@ export function createShortcutSettings(ctx) {
     shortcutAutoSaveRedraw = null;
     state.shortcutDraftConfig = null;
     state.shortcutRecordingAction = "";
+    shortcutSearchQuery = "";
+    shortcutSearchFocused = false;
+    shortcutSearchComposing = false;
+    shortcutSearchSelection = { start: 0, end: 0 };
   }
 
   function shortcutActionLabel(action) {
@@ -186,6 +197,138 @@ export function createShortcutSettings(ctx) {
   function formatShortcutDisplay(action, shortcut, slot = "") {
     const label = formatShortcut(action, shortcut, slot, keyboardPlatform);
     return label === "Disabled" ? t("common.disabled") : label;
+  }
+
+  function shortcutSearchFields(action) {
+    const shortcut = shortcutDraftProfile().shortcuts[action];
+    const live = shortcut ? { ...shortcut, disabled: false } : shortcut;
+    return {
+      action,
+      shortcut,
+      label: shortcutActionLabel(action),
+      description: shortcutActionDescription(action),
+      formatted: formatShortcut(action, live, "", keyboardPlatform),
+      extraTexts: shortcut?.disabled ? [t("common.disabled")] : [],
+      platform: keyboardPlatform
+    };
+  }
+
+  function shortcutActionMatchesSearch(action, query) {
+    return shortcutMatchesSearchQuery(query, shortcutSearchFields(action));
+  }
+
+  function sendMessageMatchesSearch(query) {
+    const profile = shortcutDraftProfile();
+    const modifier = keyboardPlatform === "mac" ? "⌘" : "Ctrl";
+    const formatted = profile.sendKeyMode === "mod-enter" ? `${modifier}+Enter` : "Enter";
+    return shortcutMatchesSearchQuery(query, {
+      action: "sendMessage",
+      shortcut: null,
+      label: t("shortcuts.sendMessage"),
+      description: t("shortcuts.sendMessageDesc", { modifier }),
+      formatted,
+      extraTexts: [
+        t("shortcuts.sendKey"),
+        t("shortcuts.enterSends"),
+        t("shortcuts.modEnterSends", { modifier }),
+        "Enter",
+        "Shift+Enter",
+        `${modifier}+Enter`
+      ],
+      platform: keyboardPlatform
+    });
+  }
+
+  function visibleShortcutGroups(query) {
+    const needle = String(query || "").trim();
+    if (!needle) {
+      const active = normalizeShortcutSettingsTab(state.shortcutSettingsTab);
+      return [active === "chat" ? SHORTCUT_SETTING_GROUPS[1] : SHORTCUT_SETTING_GROUPS[0]];
+    }
+    return SHORTCUT_SETTING_GROUPS.map((group) => ({
+      titleKey: group.titleKey,
+      descriptionKey: group.descriptionKey,
+      actions: group.actions.filter((action) => shortcutActionMatchesSearch(action, needle))
+    })).filter((group) => group.actions.length);
+  }
+
+  function restoreShortcutSearchField() {
+    requestAnimationFrame(() => {
+      if (state.shortcutRecordingAction) return;
+      const field = document.querySelector(".shortcut-search-input");
+      if (!field) return;
+      if (shortcutSearchFocused) field.focus();
+      try {
+        const start = Number(shortcutSearchSelection.start);
+        const end = Number(shortcutSearchSelection.end);
+        field.setSelectionRange(
+          Number.isFinite(start) ? start : field.value.length,
+          Number.isFinite(end) ? end : field.value.length
+        );
+      } catch {
+        /* selection restoration is best-effort after redraw */
+      }
+    });
+  }
+
+  function applyShortcutSearchQuery(value, { composing = false, redraw } = {}) {
+    shortcutSearchQuery = String(value || "");
+    const field = document.querySelector(".shortcut-search-input");
+    shortcutSearchSelection = {
+      start: Number(field?.selectionStart) || shortcutSearchQuery.length,
+      end: Number(field?.selectionEnd) || shortcutSearchQuery.length
+    };
+    if (composing || shortcutSearchComposing) return;
+    redraw();
+  }
+
+  function shortcutSearchField(redraw) {
+    const placeholder = t("shortcuts.searchPlaceholder");
+    const field = input(shortcutSearchQuery, {
+      class: "shortcut-search-input",
+      type: "search",
+      placeholder,
+      "aria-label": placeholder,
+      autocomplete: "off",
+      spellcheck: "false"
+    });
+    field.value = shortcutSearchQuery;
+    field.addEventListener("keydown", (event) => {
+      if (event.isComposing || event.keyCode === 229) return;
+      if (event.key === "Escape") {
+        if (!shortcutSearchQuery) return;
+        event.preventDefault();
+        shortcutSearchQuery = "";
+        shortcutSearchSelection = { start: 0, end: 0 };
+        redraw();
+        return;
+      }
+      if (state.shortcutRecordingAction) return;
+      const captured = shortcutSearchQueryFromKeyboardEvent(event, keyboardPlatform);
+      if (!captured) return;
+      event.preventDefault();
+      event.stopPropagation();
+      shortcutSearchQuery = captured;
+      shortcutSearchSelection = { start: captured.length, end: captured.length };
+      redraw();
+    });
+    field.addEventListener("compositionstart", () => { shortcutSearchComposing = true; });
+    field.addEventListener("compositionend", (event) => {
+      shortcutSearchComposing = false;
+      applyShortcutSearchQuery(String(event?.target?.value || ""), { redraw });
+    });
+    field.addEventListener("input", (event) => {
+      applyShortcutSearchQuery(String(event?.target?.value || ""), {
+        composing: Boolean(event?.isComposing),
+        redraw
+      });
+    });
+    field.addEventListener("focus", () => { shortcutSearchFocused = true; });
+    field.addEventListener("blur", () => { shortcutSearchFocused = false; });
+    return el("label", { class: "shortcut-search" },
+      svgIcon("search"),
+      field
+    );
   }
 
   function shortcutPreviewButton(action, disabled) {
@@ -396,10 +539,7 @@ export function createShortcutSettings(ctx) {
   }
 
   function shortcutActionSettingsBlocks(group, conflicts, redraw) {
-    return [
-      ...(conflicts.size ? [el("div", { class: "shortcut-conflict-banner" }, t("shortcuts.conflict"))] : []),
-      shortcutGroupBlock(group, conflicts, redraw)
-    ];
+    return [shortcutGroupBlock(group, conflicts, redraw)];
   }
 
   function shortcutsPane(redraw) {
@@ -407,13 +547,21 @@ export function createShortcutSettings(ctx) {
     state.shortcutSettingsTab = active;
     const draft = shortcutDraft();
     const conflicts = shortcutConflictActions(draft, keyboardPlatform);
-    const activeGroup = active === "chat" ? SHORTCUT_SETTING_GROUPS[1] : SHORTCUT_SETTING_GROUPS[0];
-    const activeBlocks = active === "topbar"
-      ? [shortcutInputSettingsBlock(), ...shortcutActionSettingsBlocks(activeGroup, conflicts, redraw)]
-      : shortcutActionSettingsBlocks(activeGroup, conflicts, redraw);
+    const query = shortcutSearchQuery;
+    const searching = Boolean(String(query || "").trim());
+    const groups = visibleShortcutGroups(query);
+    const showSend = searching ? sendMessageMatchesSearch(query) : active === "topbar";
+    const activeBlocks = [
+      ...(conflicts.size ? [el("div", { class: "shortcut-conflict-banner" }, t("shortcuts.conflict"))] : []),
+      ...(showSend ? [shortcutInputSettingsBlock()] : []),
+      ...groups.flatMap((group) => shortcutActionSettingsBlocks(group, conflicts, redraw)),
+      ...(searching && !showSend && !groups.length ? [settingsEmptyRow(t("shortcuts.searchEmpty"))] : [])
+    ];
     const platformLabel = t(keyboardPlatform === "mac" ? "shortcuts.platformMac" : "shortcuts.platformWindows");
     const platformHelp = t("shortcuts.platformDetected", { platform: platformLabel });
+    restoreShortcutSearchField();
     return el("div", { class: "settings-pane" },
+      shortcutSearchField(redraw),
       el("div", { class: "shortcut-tabs-row" },
         settingsInnerTabs([
           ["topbar", t("topbar.customize.title"), t("shortcuts.topbarTabDesc")],
