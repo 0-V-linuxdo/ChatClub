@@ -53,8 +53,8 @@ assert.match(
 );
 assert.match(
   redrawSource,
-  /class: "settings-modal-section-tools"[\s\S]*active === "shortcuts"[\s\S]*shortcutsHeaderSearch\(redraw\)[\s\S]*modalSectionTitle\.append\(el\("h3", \{\}, section\.label\), el\("p", \{\}, section\.description\), sectionTools\)/,
-  "Shortcuts must mount its search in the settings titlebar tools slot"
+  /class: "settings-modal-section-tools"[\s\S]*active === "shortcuts"[\s\S]*shortcutsHeaderSearch\(redraw\)[\s\S]*active === "promptHistory"[\s\S]*promptHistorySection\.headerSearch\(redraw\)[\s\S]*modalSectionTitle\.append\(el\("h3", \{\}, section\.label\), el\("p", \{\}, section\.description\), sectionTools\)/,
+  "Shortcuts and Prompt History must mount search in the settings titlebar tools slot"
 );
 assert.match(
   stylesSource,

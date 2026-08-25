@@ -1,7 +1,7 @@
 import { t } from "../../shared/i18n.js";
 import { dateGroupId, groupByDate, timestamp } from "../../shared/date-groups.js";
 import { savePromptSendHistory } from "../../shared/storage-adapter.js";
-import { el, toast } from "../../ui/dom.js";
+import { el, input, toast } from "../../ui/dom.js";
 import { createSettingsKit } from "./kit.js";
 import { requireSettingsSectionStatePort } from "./section-contract.js";
 import {
@@ -16,6 +16,14 @@ export function promptHistoryGroupId(createdAt, now = Date.now()) {
 
 export function groupPromptHistory(history = [], now = Date.now()) {
   return groupByDate(history, (item) => item?.createdAt, now, "promptHistory");
+}
+
+export function promptHistoryMatchesSearch(item, query, extraTexts = []) {
+  const needle = String(query || "").trim().toLowerCase();
+  if (!needle) return true;
+  const images = Array.isArray(item?.images) ? item.images : [];
+  return [item?.text, ...images.map((image) => image?.name), ...extraTexts]
+    .some((text) => String(text || "").toLowerCase().includes(needle));
 }
 
 export function createPromptHistorySettingsSection(ctx) {
@@ -42,6 +50,10 @@ export function createPromptHistorySettingsSection(ctx) {
     settingsPaneToolbar,
     settingsPrimaryAction
   } = createSettingsKit({ svgIcon });
+  let searchQuery = "";
+  let searchFocused = false;
+  let searchComposing = false;
+  let searchSelection = { start: 0, end: 0 };
 
   function items() {
     return Array.isArray(state.promptSendHistory) ? state.promptSendHistory : [];
@@ -62,6 +74,21 @@ export function createPromptHistorySettingsSection(ctx) {
     }
   }
 
+  function imageCountLabel(images) {
+    return images.length
+      ? t("promptHistory.imageCount", { count: images.length, plural: images.length === 1 ? "" : "s" })
+      : "";
+  }
+
+  function itemMatchesSearch(item, query) {
+    const images = Array.isArray(item?.images) ? item.images : [];
+    return promptHistoryMatchesSearch(item, query, [
+      dateLabel(item?.createdAt),
+      imageCountLabel(images),
+      item?.text ? "" : t("promptHistory.emptyPrompt")
+    ]);
+  }
+
   async function save(history, redraw, message) {
     state.promptSendHistory = await savePromptSendHistory(history);
     resetCursor();
@@ -72,6 +99,18 @@ export function createPromptHistorySettingsSection(ctx) {
   function resetCursor() {
     state.promptHistoryCursor = -1;
     state.promptHistoryDraft = "";
+  }
+
+  function resetSearch() {
+    searchQuery = "";
+    searchFocused = false;
+    searchComposing = false;
+    searchSelection = { start: 0, end: 0 };
+  }
+
+  function resetAfterImport() {
+    resetCursor();
+    resetSearch();
   }
 
   function insert(item) {
@@ -91,10 +130,7 @@ export function createPromptHistorySettingsSection(ctx) {
 
   async function remove(item, redraw) {
     const images = Array.isArray(item?.images) ? item.images : [];
-    const imageLabel = images.length
-      ? t("promptHistory.imageCount", { count: images.length, plural: images.length === 1 ? "" : "s" })
-      : "";
-    const label = preview(item?.text, 80) || imageLabel || t("promptHistory.thisPrompt");
+    const label = preview(item?.text, 80) || imageCountLabel(images) || t("promptHistory.thisPrompt");
     if (!window.confirm(t("promptHistory.deleteConfirm", { prompt: label }))) return;
     await save(items().filter((entry) => entry.id !== item.id), redraw, t("toast.promptHistoryDeleted"));
   }
@@ -104,21 +140,118 @@ export function createPromptHistorySettingsSection(ctx) {
     await save([], redraw, t("toast.promptHistoryCleared"));
   }
 
+  function restoreSearchField() {
+    requestAnimationFrame(() => {
+      const field = document.querySelector(".prompt-history-search-input");
+      if (!field) return;
+      if (searchFocused) field.focus();
+      try {
+        const start = Number(searchSelection.start);
+        const end = Number(searchSelection.end);
+        field.setSelectionRange(
+          Number.isFinite(start) ? start : field.value.length,
+          Number.isFinite(end) ? end : field.value.length
+        );
+      } catch {
+        /* selection restoration is best-effort after redraw */
+      }
+    });
+  }
+
+  function applySearchQuery(value, { composing = false, redraw } = {}) {
+    searchQuery = String(value || "");
+    const field = document.querySelector(".prompt-history-search-input");
+    searchSelection = {
+      start: Number(field?.selectionStart) || searchQuery.length,
+      end: Number(field?.selectionEnd) || searchQuery.length
+    };
+    if (composing || searchComposing) return;
+    redraw();
+  }
+
+  function clearSearch(redraw) {
+    searchQuery = "";
+    searchSelection = { start: 0, end: 0 };
+    searchFocused = true;
+    redraw();
+  }
+
+  function headerSearch(redraw) {
+    const placeholder = t("promptHistory.searchPlaceholder");
+    const query = searchQuery;
+    const searching = Boolean(String(query || "").trim());
+    const field = input(query, {
+      class: "shortcut-search-input prompt-history-search-input",
+      type: "search",
+      size: "1",
+      placeholder,
+      "aria-label": placeholder,
+      autocomplete: "off",
+      spellcheck: "false"
+    });
+    field.value = query;
+    restoreSearchField();
+    field.addEventListener("keydown", (event) => {
+      if (event.isComposing || event.keyCode === 229) return;
+      if (event.key !== "Escape" || !query) return;
+      event.preventDefault();
+      clearSearch(redraw);
+    });
+    field.addEventListener("compositionstart", () => { searchComposing = true; });
+    field.addEventListener("compositionend", (event) => {
+      searchComposing = false;
+      applySearchQuery(String(event?.target?.value || ""), { redraw });
+    });
+    field.addEventListener("input", (event) => {
+      applySearchQuery(String(event?.target?.value || ""), {
+        composing: Boolean(event?.isComposing),
+        redraw
+      });
+    });
+    field.addEventListener("focus", () => { searchFocused = true; });
+    field.addEventListener("blur", () => { searchFocused = false; });
+    return el("div", {
+      class: "shortcut-search prompt-history-search",
+      onclick: (event) => {
+        if (event.target.closest(".shortcut-search-clear")) return;
+        field.focus();
+      }
+    },
+      svgIcon("search"),
+      el("span", { class: "shortcut-search-sizer", "aria-hidden": "true" }, query || placeholder),
+      field,
+      searching
+        ? el("button", {
+          class: "shortcut-search-clear",
+          type: "button",
+          "aria-label": t("promptHistory.searchClear"),
+          onpointerdown: (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          },
+          onclick: (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            clearSearch(redraw);
+          }
+        }, svgIcon("x"))
+        : null
+    );
+  }
+
   function row(item, redraw) {
     const textPreview = preview(item.text, 420);
     const images = Array.isArray(item.images) ? item.images : [];
-    const imageCountLabel = images.length
-      ? t("promptHistory.imageCount", { count: images.length, plural: images.length === 1 ? "" : "s" })
-      : "";
+    const imageLabel = imageCountLabel(images);
     return el("div", { class: "ui-list-row settings-list-row prompt-history-row" },
       el("time", { class: "prompt-history-time", datetime: item.createdAt || "" }, dateLabel(item.createdAt)),
-      el("span", { class: "prompt-history-preview", title: item.text || imageCountLabel || "" },
-        textPreview || (images.length ? imageCountLabel : t("promptHistory.emptyPrompt")),
+      el("span", { class: "prompt-history-preview", title: item.text || imageLabel || "" },
+        textPreview || (images.length ? imageLabel : t("promptHistory.emptyPrompt")),
         images.length ? el("span", { class: "prompt-history-images" },
           images.slice(0, 4).map((image) => el("img", {
             src: image.dataUrl,
             alt: image.name || "",
-            title: image.name || imageCountLabel
+            title: image.name || imageLabel
           })),
           images.length > 4 ? el("span", { class: "prompt-history-image-more" }, `+${images.length - 4}`) : null
         ) : null
@@ -132,12 +265,15 @@ export function createPromptHistorySettingsSection(ctx) {
 
   function pane(redraw) {
     const history = items();
-    const rows = history.length
-      ? groupPromptHistory(history).flatMap((group) => [
+    const query = searchQuery;
+    const searching = Boolean(String(query || "").trim());
+    const visible = searching ? history.filter((item) => itemMatchesSearch(item, query)) : history;
+    const rows = visible.length
+      ? groupPromptHistory(visible).flatMap((group) => [
         el("div", { class: "prompt-history-group", role: "heading", "aria-level": "5" }, t(group.labelKey)),
         group.items.map((item) => row(item, redraw))
       ])
-      : settingsEmptyRow(t("promptHistory.noHistory"));
+      : settingsEmptyRow(t(searching ? "promptHistory.searchEmpty" : "promptHistory.noHistory"));
     return el("div", { class: "settings-pane" },
       settingsBlock(t("promptHistory.title"), t("promptHistory.desc"),
         settingsPaneToolbar(
@@ -149,5 +285,5 @@ export function createPromptHistorySettingsSection(ctx) {
     );
   }
 
-  return Object.freeze({ pane, resetAfterImport: resetCursor });
+  return Object.freeze({ headerSearch, pane, resetAfterImport });
 }

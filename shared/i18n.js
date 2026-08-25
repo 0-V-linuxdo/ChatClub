@@ -930,6 +930,9 @@ const en = {
   "promptHistory.unknownTime": "Unknown time",
   "promptHistory.deleteConfirm": "Delete \"{prompt}\" from history?",
   "promptHistory.clearConfirm": "Clear all prompt history?",
+  "promptHistory.searchPlaceholder": "Search prompts or image names",
+  "promptHistory.searchClear": "Clear search",
+  "promptHistory.searchEmpty": "No matching prompts",
 
   "pocket.title": "Pocket",
   "pocket.savedInfo": "Saved Preview conversations with valid user and assistant messages.",
@@ -2184,6 +2187,9 @@ const zh_CN = {
   "promptHistory.unknownTime": "未知时间",
   "promptHistory.deleteConfirm": "从历史记录中删除“{prompt}”？",
   "promptHistory.clearConfirm": "清空全部 prompt 历史记录？",
+  "promptHistory.searchPlaceholder": "搜索提示词或图片名",
+  "promptHistory.searchClear": "清除搜索",
+  "promptHistory.searchEmpty": "没有匹配的 prompt",
 
   "pocket.title": "Pocket",
   "pocket.savedInfo": "保存包含有效用户和助手消息的 Preview 对话。",

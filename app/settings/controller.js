@@ -510,6 +510,7 @@ export function createSettingsController(ctx) {
       clear(modalSectionTitle);
       const sectionTools = el("div", { class: "settings-modal-section-tools" });
       if (active === "shortcuts") sectionTools.append(shortcutsHeaderSearch(redraw));
+      else if (active === "promptHistory") sectionTools.append(promptHistorySection.headerSearch(redraw));
       modalSectionTitle.append(el("h3", {}, section.label), el("p", {}, section.description), sectionTools);
       settingsNav.setAttribute("aria-label", t("settings.sections"));
       syncFullscreenButton();
