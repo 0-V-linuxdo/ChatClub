@@ -832,14 +832,13 @@ export function createPocketController(ctx) {
     const panel = host?.closest?.(".modal.pocket-history-modal");
     const focusMode = pocketPanelIsFocusMode(panel);
     const label = focusMode ? t("pocket.exitFocusMode") : t("pocket.focusMode");
-    const tooltipId = focusMode ? "pocket.exitFocusMode" : "pocket.focusMode";
     return el("button", {
       class: "icon-button tooltip-trigger pocket-focus-mode-button",
       type: "button",
       "aria-label": label,
       "aria-pressed": focusMode ? "true" : "false",
       "data-tooltip": label,
-      "data-tooltip-id": tooltipId,
+      "data-tooltip-id": "pocket.focusMode",
       onclick: (event) => {
         event.preventDefault();
         togglePocketPanelFocusMode(host?.closest?.(".modal.pocket-history-modal"));
@@ -855,7 +854,7 @@ export function createPocketController(ctx) {
       type: "button",
       "aria-label": label,
       "data-tooltip": label,
-      "data-tooltip-id": "pocket.exitFocusMode",
+      "data-tooltip-id": "pocket.focusMode",
       onclick: (event) => {
         event.preventDefault();
         togglePocketPanelFocusMode(host?.closest?.(".modal.pocket-history-modal"));
@@ -873,7 +872,7 @@ export function createPocketController(ctx) {
       "aria-label": label,
       "aria-pressed": collapsed ? "true" : "false",
       "data-tooltip": label,
-      "data-tooltip-id": collapsed ? "pocket.expandSidebar" : "pocket.collapseSidebar",
+      "data-tooltip-id": "pocket.sidebar",
       onclick: (event) => {
         event.preventDefault();
         pocketSidebarCollapsed = !pocketSidebarCollapsed;

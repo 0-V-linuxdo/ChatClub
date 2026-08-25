@@ -1,0 +1,91 @@
+#!/usr/bin/env node
+
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const { pathToFileURL } = require("node:url");
+
+const root = path.resolve(__dirname, "..");
+const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
+const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
+
+(async () => {
+  const {
+    TOOLTIP_TARGET_IDS
+  } = await import(moduleUrl("shared/constants.js"));
+  const {
+    dehydrateOptions,
+    normalizeOptions
+  } = await import(moduleUrl("shared/storage-schema.js"));
+
+  const retiredIds = [
+    "pocket.collapseSidebar",
+    "pocket.expandSidebar",
+    "pocket.exitFocusMode",
+    "workspace.tabs.unpin"
+  ];
+  const mergedIds = ["pocket.sidebar", "pocket.focusMode", "workspace.tabs.pin"];
+  for (const id of retiredIds) {
+    assert.equal(TOOLTIP_TARGET_IDS.includes(id), false, `${id} must not remain a settings tooltip target`);
+  }
+  for (const id of mergedIds) {
+    assert.equal(TOOLTIP_TARGET_IDS.includes(id), true, `${id} must remain a settings tooltip target`);
+  }
+
+  assert.deepEqual(
+    normalizeOptions({
+      tooltipDisabledIds: [
+        "pocket.collapseSidebar",
+        "pocket.expandSidebar",
+        "pocket.exitFocusMode",
+        "workspace.tabs.unpin",
+        "pocket.actions"
+      ]
+    }).tooltipDisabledIds,
+    ["pocket.sidebar", "pocket.focusMode", "workspace.tabs.pin", "pocket.actions"],
+    "retired two-state tooltip ids must collapse onto the surviving control ids"
+  );
+  assert.deepEqual(
+    normalizeOptions({
+      tooltipDisabledIds: ["pocket.expandSidebar", "pocket.expandSidebar", "unknown.tooltip"]
+    }).tooltipDisabledIds,
+    ["pocket.sidebar"],
+    "duplicate aliases and unknown ids must not reappear after merge"
+  );
+
+  const persisted = dehydrateOptions(normalizeOptions({
+    tooltipDisabledIds: ["pocket.collapseSidebar", "pocket.exitFocusMode"]
+  }));
+  assert.deepEqual(persisted.tooltipDisabledIds, ["pocket.sidebar", "pocket.focusMode"]);
+  assert.deepEqual(
+    normalizeOptions(persisted).tooltipDisabledIds,
+    ["pocket.sidebar", "pocket.focusMode"],
+    "merged tooltip ids must round-trip through dehydration"
+  );
+
+  const pocketSource = read("app/pocket/controller.js");
+  assert.match(pocketSource, /"data-tooltip-id": "pocket\.sidebar"/);
+  assert.match(pocketSource, /"data-tooltip-id": "pocket\.focusMode"/);
+  assert.doesNotMatch(pocketSource, /"data-tooltip-id": collapsed \? "pocket\.expandSidebar"/);
+  assert.doesNotMatch(pocketSource, /"data-tooltip-id": "pocket\.exitFocusMode"/);
+  assert.doesNotMatch(pocketSource, /tooltipId = focusMode \? "pocket\.exitFocusMode"/);
+
+  const appearanceSource = read("app/settings/appearance.js");
+  assert.match(appearanceSource, /"pocket\.sidebar": "sidebarCollapse"/);
+  assert.doesNotMatch(appearanceSource, /"pocket\.collapseSidebar"/);
+  assert.doesNotMatch(appearanceSource, /"pocket\.expandSidebar"/);
+  assert.doesNotMatch(appearanceSource, /"pocket\.exitFocusMode"/);
+
+  const pinSource = read("app/workspace/tabs-sidebar-item.js");
+  assert.match(pinSource, /tooltipId: "workspace\.tabs\.pin"/);
+  assert.doesNotMatch(pinSource, /"workspace\.tabs\.unpin" : "workspace\.tabs\.pin"/);
+
+  const i18nSource = read("shared/i18n.js");
+  assert.match(i18nSource, /"pocket\.sidebar": "Toggle sidebar"/);
+  assert.match(i18nSource, /"pocket\.sidebar": "切换侧边栏"/);
+
+  console.log("tooltip target merge: ok");
+})().catch((error) => {
+  console.error(error?.stack || error);
+  process.exitCode = 1;
+});

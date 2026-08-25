@@ -63,7 +63,7 @@ export function createTabsSidebarHoverMenu({
           onPin(item);
         },
         tooltipLabel: pinLabel,
-        tooltipId: item.pinned ? "workspace.tabs.unpin" : "workspace.tabs.pin"
+        tooltipId: "workspace.tabs.pin"
       });
     }
     if (id === "edit") {
@@ -165,7 +165,7 @@ export function createTabsSidebarHoverMenu({
         `workspace-tabs-sidebar-item-pin${item.pinned ? " is-pinned" : ""}`,
         pinLabel,
         "",
-        item.pinned ? "workspace.tabs.unpin" : "workspace.tabs.pin"
+        "workspace.tabs.pin"
       );
       pinButton.setAttribute?.("aria-pressed", item.pinned ? "true" : "false");
       return pinButton;

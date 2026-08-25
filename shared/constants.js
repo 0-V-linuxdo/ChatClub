@@ -10,7 +10,7 @@ import {
 } from "./notion-efforts.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-08-26｜02:25:00」";
+export const APP_VERSION = "「2026-08-26｜02:40:00」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -297,9 +297,7 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
       Object.freeze({ id: "pocket.openChat", labelKey: "pocket.openChat" }),
       Object.freeze({ id: "pocket.actions", labelKey: "pocket.actions" }),
       Object.freeze({ id: "pocket.focusMode", labelKey: "pocket.focusMode" }),
-      Object.freeze({ id: "pocket.exitFocusMode", labelKey: "pocket.exitFocusMode" }),
-      Object.freeze({ id: "pocket.collapseSidebar", labelKey: "pocket.collapseSidebar" }),
-      Object.freeze({ id: "pocket.expandSidebar", labelKey: "pocket.expandSidebar" }),
+      Object.freeze({ id: "pocket.sidebar", labelKey: "pocket.sidebar" }),
       Object.freeze({ id: "pocket.deleteItem", labelKey: "pocket.deleteItem" })
     ])
   }),

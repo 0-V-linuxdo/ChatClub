@@ -149,11 +149,19 @@ export function normalizeModelPreferenceSelectionOverlayOpacity(
   return boundedNumber(value, fallback, 0, 100);
 }
 
+const TOOLTIP_DISABLED_ID_ALIASES = Object.freeze({
+  "pocket.collapseSidebar": "pocket.sidebar",
+  "pocket.expandSidebar": "pocket.sidebar",
+  "pocket.exitFocusMode": "pocket.focusMode",
+  "workspace.tabs.unpin": "workspace.tabs.pin"
+});
+
 function normalizeTooltipDisabledIds(value = []) {
   const validIds = new Set(TOOLTIP_TARGET_IDS);
   const ordered = [];
   for (const id of Array.isArray(value) ? value : []) {
-    const normalized = text(id);
+    const raw = text(id);
+    const normalized = TOOLTIP_DISABLED_ID_ALIASES[raw] || raw;
     if (!validIds.has(normalized) || ordered.includes(normalized)) continue;
     ordered.push(normalized);
   }
