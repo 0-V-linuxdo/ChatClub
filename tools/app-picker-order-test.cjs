@@ -57,7 +57,7 @@ const root = path.resolve(__dirname, "..");
     apps: [
       { id: "ChatGPT", name: "ChatGPT", provider: "OpenAI", url: "https://chatgpt.com/" },
       { id: "Poe", name: "Poe", provider: "Quora", url: "https://poe.com/" },
-      { id: "Kimi", name: "Kimi", provider: "Moonshot", url: "https://www.kimi.com/" },
+      { id: "Kimi", name: "Kimi.com", provider: "Moonshot", url: "https://www.kimi.com/" },
       { id: "custom-1", name: "Manus", provider: "Custom", url: "https://manus.im/" },
       { id: "GrokMirror", name: "Grok Mirror", provider: "dairoot", url: "https://gk.dairoot.cn/" }
     ],

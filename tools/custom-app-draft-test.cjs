@@ -23,6 +23,7 @@ const load = (file) => import(`${pathToFileURL(path.join(root, file)).href}?test
   assert.ok(chatgpt && claude && gemini && kimi && kimiAi && dola);
   assert.equal(kimi.url, "https://www.kimi.com/");
   assert.equal(kimiAi.url, "https://www.kimi.ai/");
+  assert.equal(kimi.name, "Kimi.com");
   assert.equal(kimiAi.name, "Kimi.ai");
   assert.equal(dola.name, "Dola");
   assert.equal(dola.url, "https://www.dola.com/chat/");
@@ -90,6 +91,7 @@ const load = (file) => import(`${pathToFileURL(path.join(root, file)).href}?test
     current: { name: "Custom App" }
   });
   assert.equal(kimiChina.matched?.id, "Kimi");
+  assert.equal(kimiChina.values.name, "Kimi.com");
   assert.equal(kimiChina.values.url, kimi.url);
 
   const dolaMatch = suggestCustomAppDraft("dola.com", {

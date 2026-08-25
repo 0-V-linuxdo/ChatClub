@@ -708,7 +708,7 @@ function inferAppName(app) {
     [/(^|\.)deepseek\.com$/, "DeepSeek"],
     [/app\.notion\.com|notion\.so$/, "Notion AI"],
     [/(^|\.)kimi\.ai$/, "Kimi.ai"],
-    [/(^|\.)kimi\.com$/, "Kimi"],
+    [/(^|\.)kimi\.com$/, "Kimi.com"],
     [/(^|\.)dola\.com$/, "Dola"],
     [/(^|\.)lobehub\.com$/, "LobeHub"],
     [/(^|\.)typingcloud\.com$/, "TypingMind"]

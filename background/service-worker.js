@@ -7,4 +7,4 @@
 // module graph for the unchanged URL. Without this marker, the manifest can
 // report the new version while the background still serves the previous
 // request dispatcher and content-runtime identity.
-import "./runtime.js?chatclub-runtime=2026.8.26.8";
+import "./runtime.js?chatclub-runtime=2026.8.26.9";

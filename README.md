@@ -35,7 +35,7 @@
 | Notion AI | https://app.notion.com/ai | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Perplexity | https://www.perplexity.ai/ | ✓ |  |  |  |  |
 | Poe | https://poe.com/ | ✓ |  | ✓ |  |  |
-| Kimi | https://www.kimi.com/ | ✓ |  |  |  |  |
+| Kimi.com | https://www.kimi.com/ | ✓ |  |  |  |  |
 | Kimi.ai | https://www.kimi.ai/ | ✓ |  |  |  |  |
 | DouBao | https://www.doubao.com/ | ✓ |  |  |  |  |
 | Dola | https://www.dola.com/chat/ | ✓ |  |  |  |  |
