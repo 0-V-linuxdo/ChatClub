@@ -204,7 +204,7 @@ export function renderAppPickerColumns({
     activeDrag.source.classList.add("dragging");
   }
 
-  async function onDragUp(event) {
+  async function onDragUp(_event) {
     const drag = activeDrag;
     if (!drag) return;
     const started = drag.started;
@@ -212,6 +212,7 @@ export function renderAppPickerColumns({
     const source = drag.source;
     stopDrag();
     if (started) {
+      source.dataset.pickerDragged = "true";
       await persistOrder?.({
         appPickerSectionOrder: nodeIds(columns, ".app-picker-column", "pickerSection"),
         appPickerAppOrders: Object.fromEntries(APP_PICKER_SECTION_IDS.map((id) => {
@@ -223,7 +224,6 @@ export function renderAppPickerColumns({
       return;
     }
     if (drag.kind === "app" && app) await selectApp({ currentTarget: source, preventDefault() {}, stopPropagation() {} }, app);
-    else event?.preventDefault?.();
   }
 
   function startDrag(event, kind, source, extra = {}) {
@@ -261,6 +261,15 @@ export function renderAppPickerColumns({
       draggable: "false",
       dataset: { appId: app.id },
       onpointerdown: (event) => startDrag(event, "app", event.currentTarget, { app }),
+      onclick: (event) => {
+        if (event.currentTarget.dataset.pickerDragged === "true") {
+          delete event.currentTarget.dataset.pickerDragged;
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+        selectApp(event, app);
+      },
       onkeydown: (event) => {
         if (event.key !== "Enter" && event.key !== " ") return;
         selectApp(event, app);
