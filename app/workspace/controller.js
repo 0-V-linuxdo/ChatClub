@@ -115,6 +115,7 @@ export function createWorkspaceController(ctx = {}) {
     "hydrateImportedLayoutIfNeeded",
     "layoutPresetSummary",
     "layoutShortcutLabel",
+    "persistAppPickerOrder",
     "persistLayout",
     "persistentLayoutPresets",
     "reconcileAppCatalog",

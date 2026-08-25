@@ -38,6 +38,18 @@ const lineCount = (source) => source.split(/\r?\n/).length;
   assert.match(workspace, /createWorkspaceViewController\(\{/);
   assert.match(workspace, /createWorkspaceOwnerStatePorts\(state\)/);
   assert.match(workspace, /createBindOnceControllerPort\("Workspace frame"/);
+  const quotedNames = (block) => [...String(block || "").matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+  const assertPortCoversView = (relationship, portName) => {
+    const required = quotedNames(view.match(new RegExp(`requireMethods\\(${relationship}, "[^"]+", \\[([\\s\\S]*?)\\]\\)`))?.[1]);
+    const port = new Set(quotedNames(workspace.match(new RegExp(`createBindOnceControllerPort\\("${portName}", \\[([\\s\\S]*?)\\]\\)`))?.[1]));
+    assert.ok(required.length, `view must require ${relationship} methods`);
+    for (const method of required) {
+      assert.ok(port.has(method), `${portName} port must expose view-required ${method}()`);
+    }
+  };
+  assertPortCoversView("layout", "Workspace layout");
+  assertPortCoversView("frame", "Workspace frame");
+  assertPortCoversView("pocket", "Workspace Pocket");
   assert.doesNotMatch(workspace, /function handleTabPointerMove\(/);
   assert.doesNotMatch(workspace, /function closeMessageNavigatorMenuOnParentKeydown\(/);
   assert.doesNotMatch(workspace, /let messageNavigatorMenuIframe/);
