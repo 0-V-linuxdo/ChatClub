@@ -602,6 +602,21 @@ assert.match(
 assert.match(shortcutSettingsSource, /class: "shortcut-search"/, "shortcut settings must expose a search field");
 assert.match(shortcutSettingsSource, /class: "shortcut-search-sizer"/, "shortcut search must size itself to the query or placeholder");
 assert.match(shortcutSettingsSource, /class: "shortcut-search-clear"/, "shortcut search must expose a one-click clear control");
+assert.match(
+  shortcutSettingsSource,
+  /function shortcutSearchField\(redraw\) \{[\s\S]*restoreShortcutSearchField\(\);/,
+  "shortcut search must restore caret state after header remounts"
+);
+assert.match(
+  shortcutSettingsSource,
+  /shortcutsHeaderSearch: shortcutSearchField/,
+  "shortcut settings must export the search field as a header control"
+);
+assert.doesNotMatch(
+  shortcutSettingsSource,
+  /return el\("div", \{ class: "settings-pane" \},\s*shortcutSearchField\(redraw\)/,
+  "shortcut search must not occupy the settings pane body"
+);
 assert.match(shortcutSettingsSource, /size: "1"/, "shortcut search must not keep the browser's 20-character input floor");
 assert.match(shortcutSettingsSource, /t\("shortcuts\.searchClear"\)/);
 assert.match(shortcutSettingsSource, /clearShortcutSearch\(redraw\)/);
@@ -625,6 +640,16 @@ assert.match(
   stylesheetSource,
   /\.shortcut-search[\s\S]*?width: max-content;[\s\S]*?\.shortcut-search-sizer[\s\S]*?\.shortcut-search-clear/,
   "shortcut search must shrink to its content and keep a clear control"
+);
+assert.match(
+  stylesheetSource,
+  /\.settings-modal-section-tools \.shortcut-search[\s\S]*?width: 100%;[\s\S]*?grid-template-columns: auto minmax\(0, 1fr\) auto;/,
+  "header-mounted shortcut search must fill the remaining settings titlebar"
+);
+assert.match(
+  stylesheetSource,
+  /\.settings-modal-section-tools:empty \{[\s\S]*?display: none;/,
+  "empty settings header tools must not reserve titlebar space"
 );
 for (const itemId of ["settings", "addGroup", "settingsJumpMenu"]) {
   assert.match(shortcutSettingsSource, new RegExp(`TOPBAR_SHORTCUT_ACTIONS\\.${itemId}`), `shortcut settings must include the ${itemId} topbar action`);

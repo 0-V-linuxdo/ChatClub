@@ -52,6 +52,16 @@ assert.match(
   "persistent navigation must still refresh translated labels"
 );
 assert.match(
+  redrawSource,
+  /class: "settings-modal-section-tools"[\s\S]*active === "shortcuts"[\s\S]*shortcutsHeaderSearch\(redraw\)[\s\S]*modalSectionTitle\.append\(el\("h3", \{\}, section\.label\), el\("p", \{\}, section\.description\), sectionTools\)/,
+  "Shortcuts must mount its search in the settings titlebar tools slot"
+);
+assert.match(
+  stylesSource,
+  /\.settings-modal-section-title\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, max-content\) minmax\(0, 1fr\);[\s\S]*\.settings-modal-section-tools\s*\{/,
+  "the Settings titlebar must keep section copy and tools on one row"
+);
+assert.match(
   renderSettingsMenuSource,
   /foldedSettingsSectionIds[\s\S]*settingsSections[\s\S]*\.filter\(\(\[id\]\) => !foldedSettingsSectionIds\.has\(id\)\)/,
   "the Settings menu must fill individual missing sections instead of suppressing the complete fallback list"

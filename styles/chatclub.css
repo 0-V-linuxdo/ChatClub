@@ -3330,21 +3330,31 @@ body.tab-gesture-active * {
 .settings-modal-section-title {
   min-width: 0;
   align-self: stretch;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding: 0 28px;
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-content: center;
+  column-gap: 16px;
+  row-gap: 3px;
+  padding: 0 12px 0 28px;
   border-left: 0;
 }
 
 .settings-modal-section-title h3 {
-  margin: 0 0 3px;
+  grid-column: 1;
+  grid-row: 1;
+  margin: 0;
   font-size: 18px;
   line-height: 1.18;
   font-weight: 760;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .settings-modal-section-title p {
+  grid-column: 1;
+  grid-row: 2;
   margin: 0;
   color: var(--muted);
   font-size: 12px;
@@ -3352,6 +3362,32 @@ body.tab-gesture-active * {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.settings-modal-section-tools {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  align-self: center;
+}
+
+.settings-modal-section-tools:empty {
+  display: none;
+}
+
+.settings-modal-section-tools .shortcut-search {
+  display: grid;
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  justify-self: stretch;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.settings-modal-section-tools .shortcut-search-sizer {
+  display: none;
 }
 
 .settings-tab small,
@@ -8295,7 +8331,8 @@ body.settings-tab-context-menu-dragging iframe {
   }
 
   .settings-modal-section-title {
-    padding: 0 18px;
+    column-gap: 12px;
+    padding: 0 10px 0 18px;
   }
 
   .settings-modal-section-title h3 {

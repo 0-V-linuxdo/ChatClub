@@ -259,6 +259,7 @@ export function createSettingsController(ctx) {
     prepareForConfigImport: prepareShortcutConfigImport,
     prepareForConfigExport: prepareShortcutConfigExport,
     resetAfterConfigImport: resetShortcutAfterConfigImport,
+    shortcutsHeaderSearch,
     shortcutsPane
   } = shortcutSettings;
 
@@ -507,7 +508,9 @@ export function createSettingsController(ctx) {
       appearanceSection.cleanupPane();
       const section = settingsSectionMeta(active);
       clear(modalSectionTitle);
-      modalSectionTitle.append(el("h3", {}, section.label), el("p", {}, section.description));
+      const sectionTools = el("div", { class: "settings-modal-section-tools" });
+      if (active === "shortcuts") sectionTools.append(shortcutsHeaderSearch(redraw));
+      modalSectionTitle.append(el("h3", {}, section.label), el("p", {}, section.description), sectionTools);
       settingsNav.setAttribute("aria-label", t("settings.sections"));
       syncFullscreenButton();
       settingsMain.dataset.settingsSectionId = active;

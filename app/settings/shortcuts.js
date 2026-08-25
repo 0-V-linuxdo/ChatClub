@@ -303,6 +303,7 @@ export function createShortcutSettings(ctx) {
       spellcheck: "false"
     });
     field.value = query;
+    restoreShortcutSearchField();
     field.addEventListener("keydown", (event) => {
       if (event.isComposing || event.keyCode === 229) return;
       if (event.key === "Escape") {
@@ -590,9 +591,7 @@ export function createShortcutSettings(ctx) {
     ];
     const platformLabel = t(keyboardPlatform === "mac" ? "shortcuts.platformMac" : "shortcuts.platformWindows");
     const platformHelp = t("shortcuts.platformDetected", { platform: platformLabel });
-    restoreShortcutSearchField();
     return el("div", { class: "settings-pane" },
-      shortcutSearchField(redraw),
       el("div", { class: "shortcut-tabs-row" },
         settingsInnerTabs([
           ["topbar", t("topbar.customize.title"), t("shortcuts.topbarTabDesc")],
@@ -613,6 +612,7 @@ export function createShortcutSettings(ctx) {
     prepareForConfigImport,
     prepareForConfigExport,
     resetAfterConfigImport,
+    shortcutsHeaderSearch: shortcutSearchField,
     shortcutsPane
   });
 }
