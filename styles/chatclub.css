@@ -3026,6 +3026,11 @@ body.tab-gesture-active * {
   background: #fff;
 }
 
+.chat-card.frame-loading .chat-frame,
+.chat-frame[inert] {
+  pointer-events: none;
+}
+
 .chat-frame.chat-frame-summary-highlight {
   outline: 3px solid var(--summary-frame-highlight);
   outline-offset: -3px;
@@ -3068,6 +3073,12 @@ body.tab-gesture-active * {
   :root:not([data-theme="light"]) .chat-card.frame-loading .chat-frame-wrap::after {
     opacity: var(--frame-loading-overlay-opacity);
   }
+}
+
+.chat-card.frame-loading .chat-frame-wrap::after {
+  pointer-events: auto;
+  cursor: wait;
+  touch-action: none;
 }
 
 .chat-frame-wrap[data-frame-loading-mask="black"]::after {

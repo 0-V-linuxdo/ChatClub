@@ -106,6 +106,8 @@ const PARAM = "__chatclub_frame_load_nonce";
   const armPromptFocusRestore = functionSource(frameController, "armPromptFocusRestore");
   const restorePromptInputFocus = functionSource(frameController, "restorePromptInputFocus");
   const activeHref = functionSource(frameController, "activeHref");
+  assert.match(beginFrameLoading, /iframe\.inert = true/);
+  assert.match(completeFrameLoading, /iframe\.inert = false/);
   assert.match(beginFrameLoading, /const loadingKind = frameLoadingKindForTarget/);
   assert.match(beginFrameLoading, /iframe\.dataset\.frameLoadingKind = loadingKind/);
   assert.match(beginFrameLoading, /frameLoadingMaskPhase = "opaque"/);
@@ -505,6 +507,26 @@ const PARAM = "__chatclub_frame_load_nonce";
     statusCss,
     /frame-loading-overlay-opacity/,
     "status visibility must not depend on the optional dark loading mask"
+  );
+  assert.match(
+    css,
+    /\.chat-card\.frame-loading \.chat-frame,\s*\.chat-frame\[inert\]\s*\{\s*pointer-events: none;/,
+    "loading iframes must not receive pointer events, matching the drag/resize shield"
+  );
+  assert.match(
+    css,
+    /\.chat-card\.frame-loading \.chat-frame-wrap::after\s*\{\s*pointer-events: auto;\s*cursor: wait;\s*touch-action: none;/,
+    "the loading overlay must intercept hits over the iframe until loading completes"
+  );
+  const defaultOverlayCss = css.slice(
+    css.indexOf(".chat-frame-wrap::after"),
+    css.indexOf(".chat-frame-loading-status")
+  );
+  assert.match(defaultOverlayCss, /pointer-events: none;/);
+  assert.doesNotMatch(
+    defaultOverlayCss,
+    /pointer-events: auto/,
+    "the resting overlay must not intercept pointer events after loading ends"
   );
 
   console.log("workspace frame loading status: ok");
