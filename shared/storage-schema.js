@@ -45,6 +45,10 @@ import {
   TOPBAR_PROMPT_PLACEHOLDER_MAX_COUNT,
   TOPBAR_PROMPT_PLACEHOLDER_MAX_LEN
 } from "./constants.js";
+import {
+  normalizeAppPickerAppOrders,
+  normalizeAppPickerSectionOrder
+} from "./app-picker-order.js";
 import { normalizeNotionEffortPreferences } from "./notion-efforts.js";
 import { SUMMARY_SITE_CONFIGS } from "./summary-sites.js";
 import {
@@ -979,6 +983,8 @@ export function normalizeOptions(raw = {}) {
     tabContextMenuHiddenIds: normalizeTabContextMenuHiddenIds(raw.tabContextMenuHiddenIds),
     tabsSidebarButtonPlacement: normalizeTabsSidebarButtonPlacement(raw.tabsSidebarButtonPlacement),
     tabsSidebarButtonOrder: normalizeTabsSidebarButtonOrder(raw.tabsSidebarButtonOrder),
+    appPickerSectionOrder: normalizeAppPickerSectionOrder(raw.appPickerSectionOrder),
+    appPickerAppOrders: normalizeAppPickerAppOrders(raw.appPickerAppOrders),
     tooltipDisabledIds: normalizeTooltipDisabledIds(raw.tooltipDisabledIds),
     topbarLayout: migrateShareTopbarLayout(raw),
     topbarDeleteThreadMigrated: true,

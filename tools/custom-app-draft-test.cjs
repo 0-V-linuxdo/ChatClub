@@ -130,9 +130,13 @@ const load = (file) => import(`${pathToFileURL(path.join(root, file)).href}?test
 
   const appsSource = require("node:fs").readFileSync(path.join(root, "app/settings/apps.js"), "utf8");
   const viewSource = require("node:fs").readFileSync(path.join(root, "app/workspace/view-controller.js"), "utf8");
-  assert.match(viewSource, /"KimiAI", "Dola"/);
-  assert.match(viewSource, /APP_PICKER_AGGREGATOR_IDS/);
-  assert.match(viewSource, /"GrokMirror", "LobeHub"/);
+  const pickerSource = require("node:fs").readFileSync(path.join(root, "app/workspace/app-picker.js"), "utf8");
+  const orderSource = require("node:fs").readFileSync(path.join(root, "shared/app-picker-order.js"), "utf8");
+  assert.match(orderSource, /"KimiAI", "Dola"/);
+  assert.match(orderSource, /APP_PICKER_AGGREGATOR_IDS/);
+  assert.match(orderSource, /"GrokMirror", "LobeHub"/);
+  assert.match(pickerSource, /APP_PICKER_AGGREGATOR_IDS/);
+  assert.match(viewSource, /renderAppPickerColumns\(/);
   assert.match(appsSource, /suggestCustomAppDraft\(/);
   assert.match(appsSource, /normalizeHttpUrl\(/);
   assert.match(appsSource, /applyUrlAutofill/);

@@ -2,27 +2,12 @@ import { TAB_GROUP_HEADER_BUTTONS } from "../../shared/constants.js";
 import { t } from "../../shared/i18n.js";
 import { normalizeTabGroupButtonOrder, normalizeTabGroupButtonPlacement } from "../../shared/storage-schema.js";
 import { claimTopmostPopoverEscape, el, isChatFrameNode, scheduleFrameOwnedBlurDismissal } from "../../ui/dom.js";
-import { appPickerHostKeys } from "./app-hosts.js";
+import { buildAppPickerSections, renderAppPickerColumns } from "./app-picker.js";
 import { workspaceGridColumnCount } from "./model.js";
 import { renderPreferredModelSelectionOverlay } from "./preferred-model-selection-overlay.js";
 import { renderWorkspaceTabMenuItems } from "./tab-context-menu.js";
 import { createControllerMethodValidator, validateControllerContract } from "../controller-contract.js";
 const LAYOUT_POPOVER_RIGHT_EXTENSION = 40;
-const APP_PICKER_INTERNATIONAL_IDS = [
-  "ChatGPT", "Claude", "Copilot", "CopilotGH", "Gemini", "Grok", "Meta", "Mistral",
-  "Perplexity", "QwenChat", "Zai", "KimiAI", "Dola"
-];
-const APP_PICKER_INTERNATIONAL_ID_SET = new Set(APP_PICKER_INTERNATIONAL_IDS);
-const APP_PICKER_AGGREGATOR_IDS = [
-  "Felo", "Genspark", "Liner", "You", "Poe", "NotionAI", "Kagi", "TypingMind",
-  "GrokMirror", "LobeHub"
-];
-const APP_PICKER_AGGREGATOR_ID_SET = new Set(APP_PICKER_AGGREGATOR_IDS);
-const APP_PICKER_CHINESE_IDS = [
-  "ChatGLM", "DeepSeek", "DouBao", "YiYan", "Kimi", "LingGuang", "LongCat", "MetaSo",
-  "HaiLuo", "NaMiSearch", "Qwen", "SenseChat", "YueWen", "HunYuan"
-];
-const APP_PICKER_CHINESE_ID_SET = new Set(APP_PICKER_CHINESE_IDS);
 const requireMethods = createControllerMethodValidator("Workspace view", "port");
 export function createWorkspaceViewController(dependencies = {}) {
   const { state, services, frame, layout, pocket, drag, navigator } = validateControllerContract(
@@ -63,7 +48,7 @@ export function createWorkspaceViewController(dependencies = {}) {
   ]);
   requireMethods(layout, "layout", [
     "activeTemporaryLayoutPreset", "addAppToGroup", "addGroup", "addLayoutPreset", "deleteLayoutPreset", "layoutPresetSummary",
-    "layoutShortcutLabel", "persistentLayoutPresets", "shortcutTooltip", "switchLayoutPreset"
+    "layoutShortcutLabel", "persistAppPickerOrder", "persistentLayoutPresets", "shortcutTooltip", "switchLayoutPreset"
   ]);
   requireMethods(pocket, "Pocket", ["chatLocationForInstance"]);
   requireMethods(drag, "drag", [
@@ -84,7 +69,7 @@ export function createWorkspaceViewController(dependencies = {}) {
   } = frame;
   const {
     activeTemporaryLayoutPreset, addAppToGroup, addGroup, addLayoutPreset, deleteLayoutPreset, layoutPresetSummary,
-    layoutShortcutLabel, persistentLayoutPresets, shortcutTooltip, switchLayoutPreset
+    layoutShortcutLabel, persistAppPickerOrder, persistentLayoutPresets, shortcutTooltip, switchLayoutPreset
   } = layout;
   const { chatLocationForInstance } = pocket;
   const { consumeSuppressedTabClick, startTabPointerDrag } = drag;
@@ -138,83 +123,6 @@ export function createWorkspaceViewController(dependencies = {}) {
     if (!group) return;
     const card = document.querySelector(`.chat-card[data-group-id="${group.id}"]`);
     if (card) syncTabGroupHeaderControls(card, group);
-  }
-
-  function customAppIds() {
-    return new Set((state.customConfig || []).map((app) => app?.id).filter(Boolean));
-  }
-
-  function hasCustomAppEquivalent(app, customHostKeys) {
-    for (const key of appPickerHostKeys(app)) {
-      if (customHostKeys.has(key)) return true;
-    }
-    return false;
-  }
-
-  function appPickerProvider(app) {
-    const provider = String(app?.provider || "").trim();
-    if (!provider || /^custom$/i.test(provider)) return "";
-    return provider;
-  }
-
-  function appPickerFaviconUrl(app) {
-    return appFaviconUrl(app) || fallbackFaviconUrl(app);
-  }
-
-  function renderAppPickerFavicon(app) {
-    const image = el("img", {
-      class: "app-picker-favicon",
-      src: appPickerFaviconUrl(app),
-      alt: "",
-      draggable: "false",
-      loading: "lazy",
-      decoding: "async",
-      referrerpolicy: "no-referrer",
-      onerror: (event) => {
-        const icon = event.currentTarget;
-        if (icon.dataset.browserFallback !== "1") {
-          const browserUrl = browserFaviconUrl(app.url);
-          icon.dataset.browserFallback = "1";
-          if (browserUrl && icon.src !== browserUrl) {
-            icon.src = browserUrl;
-            return;
-          }
-        }
-        if (icon.dataset.fallback === "1") return;
-        icon.dataset.fallback = "1";
-        icon.src = fallbackFaviconUrl(app);
-      }
-    });
-    image.title = inferAppName(app);
-    return image;
-  }
-
-  function appPickerSections() {
-    const apps = allApps();
-    const customIds = customAppIds();
-    const customApps = apps.filter((app) => !APP_PICKER_INTERNATIONAL_ID_SET.has(app.id)
-      && !APP_PICKER_AGGREGATOR_ID_SET.has(app.id)
-      && !APP_PICKER_CHINESE_ID_SET.has(app.id)
-      && (customIds.has(app.id) || /^custom$/i.test(app.provider || "")));
-    const customSet = new Set(customApps.map((app) => app.id));
-    const customHostKeys = new Set(customApps.flatMap((app) => Array.from(appPickerHostKeys(app))));
-    const byKnownOrder = (ids) => {
-      const idSet = new Set(ids);
-      return apps.filter((app) => idSet.has(app.id) && !customSet.has(app.id) && !hasCustomAppEquivalent(app, customHostKeys));
-    };
-    const internationalApps = byKnownOrder(APP_PICKER_INTERNATIONAL_IDS);
-    const aggregatorApps = byKnownOrder(APP_PICKER_AGGREGATOR_IDS);
-    const chineseApps = byKnownOrder(APP_PICKER_CHINESE_IDS);
-    const assigned = new Set([...customSet, ...[...internationalApps, ...aggregatorApps, ...chineseApps].map((app) => app.id)]);
-    const extraAggregatorApps = apps.filter((app) => !assigned.has(app.id)
-      && !APP_PICKER_CHINESE_ID_SET.has(app.id)
-      && !hasCustomAppEquivalent(app, customHostKeys));
-    return [
-      { id: "custom", title: t("appPicker.custom"), apps: customApps, custom: true },
-      { id: "international", title: t("appPicker.international"), apps: internationalApps },
-      { id: "aggregator", title: t("appPicker.aggregator"), apps: [...aggregatorApps, ...extraAggregatorApps] },
-      { id: "chinese", title: t("appPicker.chinese"), apps: chineseApps }
-    ];
   }
 
   function frameAttributeContractMatches(iframe, app, href = "") {
@@ -819,72 +727,6 @@ export function createWorkspaceViewController(dependencies = {}) {
     picker.style.maxHeight = `${Math.max(180, window.innerHeight - top - 12)}px`;
   }
 
-  async function selectAppFromPicker(event, app, onSelect) {
-    event?.preventDefault?.();
-    event?.stopPropagation?.();
-    const target = event?.currentTarget;
-    if (target?.dataset?.selecting === "true") return;
-    if (target?.dataset) target.dataset.selecting = "true";
-    await onSelect(app);
-  }
-
-  function renderAppPickerItem(app, custom, onSelect) {
-    const provider = appPickerProvider(app);
-    return el("button", {
-      class: "app-picker-item",
-      type: "button",
-      title: inferAppName(app),
-      onpointerdown: (event) => selectAppFromPicker(event, app, onSelect),
-      onclick: (event) => selectAppFromPicker(event, app, onSelect),
-      onkeydown: (event) => {
-        if (event.key !== "Enter" && event.key !== " ") return;
-        selectAppFromPicker(event, app, onSelect);
-      }
-    },
-      renderAppPickerFavicon(app),
-      el("span", { class: "app-picker-name" }, inferAppName(app)),
-      !custom && provider ? el("span", { class: "app-picker-provider" }, provider) : null
-    );
-  }
-
-  function openCustomAppEditorFromPicker(event) {
-    event?.preventDefault?.();
-    event?.stopPropagation?.();
-    const target = event?.currentTarget;
-    if (target?.dataset?.opening === "true") return;
-    if (target?.dataset) target.dataset.opening = "true";
-    closePopovers();
-    openCustomAppEditor?.();
-  }
-
-  function renderAppPickerHeading(section) {
-    const title = el("h3", { class: "app-picker-heading" }, section.title);
-    if (!section.custom || !openCustomAppEditor) return title;
-    return el("div", { class: "app-picker-heading-row" },
-      title,
-      el("button", {
-        class: "app-picker-add-button tooltip-trigger",
-        type: "button",
-        "aria-label": t("appPicker.addCustom"),
-        "data-tooltip": t("appPicker.addCustom"),
-        "data-tooltip-id": "appPicker.addCustom",
-        onpointerdown: openCustomAppEditorFromPicker,
-        onclick: openCustomAppEditorFromPicker
-      },
-        svgIcon("plus")
-      )
-    );
-  }
-
-  function renderAppPickerColumn(section, onSelect) {
-    return el("section", { class: `app-picker-column app-picker-${section.id}` },
-      renderAppPickerHeading(section),
-      el("div", { class: "app-picker-list" },
-        section.apps.map((app) => renderAppPickerItem(app, section.custom, onSelect))
-      )
-    );
-  }
-
   function openAppPicker(anchor, options = {}) {
     if (!anchor) return;
     if (anchor.classList.contains("workspace-popover-anchor") && document.querySelector(".workspace-popover-menu.app-picker-popover")) {
@@ -917,9 +759,22 @@ export function createWorkspaceViewController(dependencies = {}) {
       onpointerdown: (event) => event.stopPropagation(),
       onclick: (event) => event.stopPropagation()
     },
-      el("div", { class: "app-picker-columns" },
-        appPickerSections().map((section) => renderAppPickerColumn(section, onSelect))
-      )
+      renderAppPickerColumns({
+        sections: buildAppPickerSections({
+          apps: allApps(),
+          customConfig: state.customConfig,
+          options: state.options
+        }),
+        onSelect,
+        persistOrder: persistAppPickerOrder,
+        openCustomAppEditor,
+        closePopovers,
+        inferAppName,
+        appFaviconUrl,
+        browserFaviconUrl,
+        fallbackFaviconUrl,
+        svgIcon
+      })
     );
     document.body.append(backdrop, picker);
     positionAppPicker(anchor, picker);

@@ -9663,6 +9663,7 @@ body:has(.chat-card:not(.fullscreen-hidden) .chat-frame.active + .frame-submit-t
   justify-content: flex-start;
   gap: 9px;
   margin: 0 0 17px;
+  cursor: grab;
 }
 
 .app-picker-heading {
@@ -9671,6 +9672,7 @@ body:has(.chat-card:not(.fullscreen-hidden) .chat-frame.active + .frame-submit-t
   font-size: 17px;
   font-weight: 700;
   line-height: 1.2;
+  cursor: grab;
 }
 
 .app-picker-heading-row .app-picker-heading {
@@ -9724,12 +9726,14 @@ body:has(.chat-card:not(.fullscreen-hidden) .chat-frame.active + .frame-submit-t
   min-height: 26px;
   padding: 0;
   text-align: left;
-  cursor: pointer;
+  cursor: grab;
   border-radius: 5px;
   font: inherit;
   font-size: 16px;
   font-weight: 650;
   line-height: 1.2;
+  position: relative;
+  touch-action: none;
 }
 
 .app-picker-custom .app-picker-item {
@@ -9768,6 +9772,74 @@ body:has(.chat-card:not(.fullscreen-hidden) .chat-frame.active + .frame-submit-t
 .app-picker-item:hover .app-picker-provider,
 .app-picker-item:focus-visible .app-picker-provider {
   color: color-mix(in srgb, var(--text) 72%, transparent);
+}
+
+.app-picker-column,
+.app-picker-heading,
+.app-picker-item {
+  user-select: none;
+}
+
+.app-picker-column.dragging,
+.app-picker-item.dragging {
+  opacity: 0.55;
+  cursor: grabbing;
+}
+
+.app-picker-item.drop-before::before,
+.app-picker-item.drop-after::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 24%, transparent);
+}
+
+.app-picker-item.drop-before::before {
+  top: -8px;
+}
+
+.app-picker-item.drop-after::after {
+  bottom: -8px;
+}
+
+.app-picker-column.drop-before,
+.app-picker-column.drop-after {
+  position: relative;
+}
+
+.app-picker-column.drop-before::before,
+.app-picker-column.drop-after::after {
+  content: "";
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: 999px;
+  background: var(--primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 24%, transparent);
+}
+
+.app-picker-column.drop-before::before {
+  left: -10px;
+}
+
+.app-picker-column.drop-after::after {
+  right: -10px;
+}
+
+body.app-picker-dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+
+body.app-picker-dragging .app-picker-heading,
+body.app-picker-dragging .app-picker-heading-row,
+body.app-picker-dragging .app-picker-item {
+  cursor: grabbing;
 }
 
 @media (max-width: 1180px) {

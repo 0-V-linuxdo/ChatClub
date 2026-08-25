@@ -1,12 +1,16 @@
 import { DEFAULT_TOPBAR_LAYOUT } from "./topbar.js";
 import {
+  DEFAULT_APP_PICKER_APP_ORDERS,
+  DEFAULT_APP_PICKER_SECTION_ORDER
+} from "./app-picker-order.js";
+import {
   DEFAULT_NOTION_EFFORT_PREFERENCES,
   NOTION_EFFORT_TARGETS,
   notionEffortTargetsForModel
 } from "./notion-efforts.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-08-26｜01:12:00」";
+export const APP_VERSION = "「2026-08-26｜01:28:00」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -397,6 +401,8 @@ export const DEFAULT_OPTIONS = {
   tabContextMenuHiddenIds: [],
   tabsSidebarButtonPlacement: DEFAULT_TABS_SIDEBAR_BUTTON_PLACEMENT,
   tabsSidebarButtonOrder: DEFAULT_TABS_SIDEBAR_BUTTON_ORDER,
+  appPickerSectionOrder: DEFAULT_APP_PICKER_SECTION_ORDER,
+  appPickerAppOrders: DEFAULT_APP_PICKER_APP_ORDERS,
   topbarLayout: DEFAULT_TOPBAR_LAYOUT,
   topbarDeleteThreadMigrated: true,
   topbarSearchMigrated: true,

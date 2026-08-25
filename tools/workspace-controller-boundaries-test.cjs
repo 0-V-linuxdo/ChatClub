@@ -20,6 +20,7 @@ const lineCount = (source) => source.split(/\r?\n/).length;
   const session = read("app/workspace/session-controller.js");
   const statePorts = read("app/workspace/state-ports.js");
   const view = read("app/workspace/view-controller.js");
+  const picker = read("app/workspace/app-picker.js");
 
   assert.ok(lineCount(workspace) < 1200, "Workspace facade must remain assembly-only and need no size exception");
   assert.ok(lineCount(drag) > 250, "pointer drag coordinator must remain a substantive lifecycle boundary");
@@ -45,12 +46,13 @@ const lineCount = (source) => source.split(/\r?\n/).length;
   assert.doesNotMatch(workspace, /function restorePocketBatch\(/);
   assert.match(appHosts, /export function appPickerHostKeys\(app\)/);
   assert.match(pocket, /import \{ appPickerHostKeys, normalizeAppPickerHost \} from "\.\/app-hosts\.js"/);
-  assert.match(view, /import \{ appPickerHostKeys \} from "\.\/app-hosts\.js"/);
+  assert.match(picker, /import \{ appPickerHostKeys \} from "\.\/app-hosts\.js"/);
   assert.doesNotMatch(pocket, /function appPickerHostKeys\(/);
   assert.doesNotMatch(view, /function appPickerHostKeys\(/);
-  assert.match(view, /APP_PICKER_AGGREGATOR_IDS/);
-  assert.match(view, /t\("appPicker\.aggregator"\)/);
-  assert.match(view, /id: "aggregator"/);
+  assert.doesNotMatch(view, /APP_PICKER_AGGREGATOR_IDS/);
+  assert.match(view, /import \{ buildAppPickerSections, renderAppPickerColumns \} from "\.\/app-picker\.js"/);
+  assert.match(picker, /APP_PICKER_AGGREGATOR_IDS/);
+  assert.match(picker, /persistOrder/);
   assert.doesNotMatch(view, /APP_PICKER_FORCE_INTERNATIONAL_HOSTS/);
 
   assert.match(drag, /validateControllerContract\(dependencies, "Workspace drag controller"/);

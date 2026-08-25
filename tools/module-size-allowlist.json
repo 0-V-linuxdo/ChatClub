@@ -63,9 +63,9 @@
     "reason": "The remembered ChatClub-tab sidebar owns live/closed partitioning, time/name/open sorting with prompt-history date groups, folder create/drag membership, drag reorder, pin order, overlay rename/delete, Appearance-owned hover-button Fixed/More/Hidden folding with an owner-scoped three-dot popover, close-others cleanup, and the Search field that the topbar Search control focuses."
   },
   "shared/storage-schema.js": {
-    "maxLines": 1306,
+    "maxLines": 1312,
     "target": 1200,
-    "maxBytes": 52839,
+    "maxBytes": 53107,
     "targetBytes": 50000,
     "reason": "The configuration schema owns custom-platform URL https coercion and domain-catalog draft suggestions together with options normalization, dehydration, and built-in catalog merges so imported and editor-authored custom apps cannot drift."
   },

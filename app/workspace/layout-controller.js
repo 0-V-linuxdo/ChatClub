@@ -383,6 +383,17 @@ export function createWorkspaceLayoutController(dependencies = {}) {
     rememberWorkspaceSession();
   }
 
+  async function persistAppPickerOrder(patch = {}) {
+    try {
+      state.options = await saveOptions(normalizeOptions({
+        ...state.options,
+        ...patch
+      }));
+    } catch (error) {
+      console.warn("[ChatClub] Failed to save app picker order", error);
+    }
+  }
+
   async function addGroup(appId = allApps()[0]?.id) {
     if (!appId) return;
     const temporary = activeTemporaryLayoutPreset();
@@ -419,6 +430,7 @@ export function createWorkspaceLayoutController(dependencies = {}) {
     layoutPresetSummary,
     layoutShortcutLabel,
     persistLayout,
+    persistAppPickerOrder,
     persistentLayoutPresets,
     reconcileAppCatalog,
     shortcutLabel,
