@@ -43,6 +43,13 @@ import {
   validateControllerContract
 } from "../controller-contract.js";
 
+function displayAppName(app) {
+  const id = String(app?.id || "").trim();
+  const localized = (id === "DouBao" || id === "Qianwen") ? t(`appNames.${id}`) : "";
+  if (localized && localized !== `appNames.${id}`) return localized;
+  return String(app?.name || id || "").trim();
+}
+
 export function createAppsSettingsSection(ctx) {
   const controllerName = "Apps settings section";
   ctx = validateControllerContract(ctx, controllerName, {
@@ -170,7 +177,7 @@ export function createAppsSettingsSection(ctx) {
       ondrop: (event) => dropBuiltIn(event, app, redraw)
     },
       settingsDragHandle(t("apps.platformName")),
-      el("strong", { class: "settings-main-cell" }, app.name || app.id),
+      el("strong", { class: "settings-main-cell" }, displayAppName(app)),
       el("a", { class: "settings-url-link", href: app.url, target: "_blank", rel: "noreferrer" }, app.url),
       el("span", { class: "settings-strategy-cell" }, builtInImagePasteStrategyLabel(app)),
       el("div", { class: "settings-row-action-group" },
@@ -270,7 +277,7 @@ export function createAppsSettingsSection(ctx) {
       ondrop: (event) => builtIn ? dropBuiltIn(event, app, redraw) : dropCustom(event, app, redraw)
     },
       settingsDragHandle(t("apps.platformName")),
-      el("strong", { class: "settings-main-cell iframe-permission-app" }, app.name || app.id),
+      el("strong", { class: "settings-main-cell iframe-permission-app" }, displayAppName(app)),
       el("span", { class: "iframe-permission-hosts", title: iframeAppHostsText(app, "\n") }, iframeAppHostsText(app)),
       el("span", { class: "iframe-permission-summary", title: iframeAttributeSummary(app, source) }, iframeAttributeSummary(app, source)),
       el("span", { class: `iframe-permission-status ${overridden ? "is-overridden" : "is-default"}` },
@@ -770,7 +777,7 @@ export function createAppsSettingsSection(ctx) {
       el("div", { class: "settings-info-callout iframe-permission-editor-scope" },
         svgIcon("info"),
         el("div", {},
-          el("strong", {}, t("apps.iframe.editorScopeTitle", { name: app.name || app.id })),
+          el("strong", {}, t("apps.iframe.editorScopeTitle", { name: displayAppName(app) })),
           el("p", {}, t("apps.iframe.editorScopeBody", { hosts: iframeAppHostsText(app) }))
         )
       ),
@@ -840,7 +847,7 @@ export function createAppsSettingsSection(ctx) {
     );
     editor.addEventListener("input", updateEditor);
     editor.addEventListener("change", updateEditor);
-    dialog = editorModal(t("apps.iframe.editorTitle", { name: app.name || app.id }), editor, close, true, t("common.close"));
+    dialog = editorModal(t("apps.iframe.editorTitle", { name: displayAppName(app) }), editor, close, true, t("common.close"));
     dialog.querySelector(".modal")?.classList.add("iframe-permission-editor-modal");
     updateEditor();
   }
@@ -848,10 +855,10 @@ export function createAppsSettingsSection(ctx) {
   function openBuiltInDetails(app) {
     let dialog;
     const close = () => dialog?.remove();
-    dialog = viewerModal(t("apps.builtInDetailsTitle", { name: app.name || app.id }),
+    dialog = viewerModal(t("apps.builtInDetailsTitle", { name: displayAppName(app) }),
       el("div", { class: "settings-editor-form built-in-detail-form" },
         el("div", { class: "settings-dialog-grid built-in-detail-grid" },
-          detailField(t("apps.platformName"), detailValue(app.name || app.id)),
+          detailField(t("apps.platformName"), detailValue(displayAppName(app))),
           detailField(t("apps.provider"), detailValue(app.provider || t("apps.default"))),
           detailField(t("apps.platformUrl"),
             el("a", { class: "settings-detail-link", href: app.url, target: "_blank", rel: "noreferrer" }, app.url || t("apps.default"))
@@ -940,7 +947,7 @@ export function createAppsSettingsSection(ctx) {
       ondrop: (event) => dropCustom(event, app, redraw)
     },
       settingsDragHandle(t("apps.platformName")),
-      el("strong", { class: "settings-main-cell" }, app.name || app.id),
+      el("strong", { class: "settings-main-cell" }, displayAppName(app)),
       el("a", { class: "settings-url-link", href: app.url, target: "_blank", rel: "noreferrer" }, app.url),
       el("span", { class: "settings-strategy-cell" }, imagePasteStrategyLabel(app.imagePasteStrategy)),
       el("div", { class: "settings-row-action-group" },

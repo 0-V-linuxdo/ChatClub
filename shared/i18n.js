@@ -190,6 +190,8 @@ const en = {
   "appPicker.aggregator": "Aggregator AI",
   "appPicker.chinese": "Chinese AI",
   "appPicker.addCustom": "Add",
+  "appNames.DouBao": "豆包（doubao）",
+  "appNames.Qianwen": "千问（qianwen）",
 
   "layout.empty": "Empty Layout",
   "layout.add": "Add Layout",
@@ -1438,6 +1440,8 @@ const zh_CN = {
   "appPicker.aggregator": "聚合 AI",
   "appPicker.chinese": "中文 AI",
   "appPicker.addCustom": "添加",
+  "appNames.DouBao": "DouBao",
+  "appNames.Qianwen": "千问",
 
   "layout.empty": "空布局",
   "layout.add": "添加布局",

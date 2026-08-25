@@ -76,14 +76,22 @@ const root = path.resolve(__dirname, "..");
   assert.deepEqual(sections.find((section) => section.id === "aggregator").apps.map((app) => app.id), ["GrokMirror", "Poe"]);
   assert.equal(sections.find((section) => section.id === "custom").apps[0].id, "custom-1");
   assert.equal(t("appPicker.aggregator"), "Aggregator AI");
+  assert.equal(t("appNames.DouBao"), "豆包（doubao）");
+  assert.equal(t("appNames.Qianwen"), "千问（qianwen）");
+  setLanguage("zh_CN");
+  assert.equal(t("appNames.DouBao"), "DouBao");
+  assert.equal(t("appNames.Qianwen"), "千问");
+  setLanguage("en");
 
   const pickerSource = require("node:fs").readFileSync(path.join(root, "app/workspace/app-picker.js"), "utf8");
   const viewSource = require("node:fs").readFileSync(path.join(root, "app/workspace/view-controller.js"), "utf8");
+  const runtimeSource = require("node:fs").readFileSync(path.join(root, "app/runtime.js"), "utf8");
   assert.match(pickerSource, /startDrag\(/);
   assert.match(pickerSource, /persistOrder/);
   assert.match(viewSource, /persistAppPickerOrder/);
   assert.match(viewSource, /renderAppPickerColumns\(/);
   assert.doesNotMatch(viewSource, /APP_PICKER_AGGREGATOR_IDS/);
+  assert.match(runtimeSource, /t\(`appNames\.\$\{app\.id\}`\)/);
 
   console.log("app picker order and drag wiring: ok");
 })().catch((error) => {

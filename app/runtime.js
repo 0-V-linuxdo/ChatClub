@@ -692,7 +692,7 @@ function appById(id) {
 }
 
 function inferAppName(app) {
-  const name = String(app?.name || "").trim();
+  const name = String((app?.id === "DouBao" || app?.id === "Qianwen") && t(`appNames.${app.id}`) !== `appNames.${app.id}` ? t(`appNames.${app.id}`) : (app?.name || "")).trim();
   const provider = String(app?.provider || "").trim();
   const url = String(app?.url || "");
   const host = (() => {
