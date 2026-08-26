@@ -20,6 +20,7 @@ const SITE_LABELS = Object.freeze({
   kagi: "Kagi",
   lechat: "Le Chat",
   lobehub: "LobeHub",
+  manus: "Manus",
   notion: "Notion",
   poe: "Poe",
   typingmind: "TypingMind"
@@ -40,6 +41,7 @@ const SITE_GROUP_ORDER = Object.freeze([
   "notion",
   "lobehub",
   "typingmind",
+  "manus",
   "poe",
   "aiStudio",
   "lechat"

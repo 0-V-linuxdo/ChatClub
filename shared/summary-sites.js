@@ -57,6 +57,13 @@ export const SUMMARY_SITE_CONFIGS = Object.freeze([
     id: "typingmind", name: "TypingMind", configVersion: 48,
     hosts: ["setapp.typingcloud.com", "*.typingcloud.com"],
     userscriptFile: "typingmind.js", userscriptLength: 3232
+  },
+  {
+    id: "manus", name: "Manus", configVersion: 4,
+    hosts: ["manus.im"],
+    userscriptRunMode: "pageWorldFirst", userscriptTimeoutMs: 36000,
+    copyTimeoutMs: 3600, userscriptFallbackDelayMs: 1000,
+    userscriptFile: "manus.js", userscriptLength: 17971
   }
 ].map(Object.freeze));
 

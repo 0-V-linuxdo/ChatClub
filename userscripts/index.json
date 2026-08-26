@@ -1,5 +1,5 @@
 {
-  "summarySiteConfigVersion": 75,
+  "summarySiteConfigVersion": 79,
   "configs": [
     {
       "id": "chatgpt",
@@ -144,6 +144,20 @@
       ],
       "userscriptFile": "typingmind.js",
       "userscriptLength": 3232
+    },
+    {
+      "id": "manus",
+      "name": "Manus",
+      "configVersion": 4,
+      "hosts": [
+        "manus.im"
+      ],
+      "userscriptRunMode": "pageWorldFirst",
+      "userscriptTimeoutMs": 36000,
+      "copyTimeoutMs": 3600,
+      "userscriptFallbackDelayMs": 1000,
+      "userscriptFile": "manus.js",
+      "userscriptLength": 17971
     }
   ]
 }

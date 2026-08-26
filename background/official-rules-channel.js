@@ -171,10 +171,10 @@ export function officialRulesSignatureInput(kind, rawBytes) {
   return input;
 }
 
-function normalizePayload(kind, rawText) {
+function normalizePayload(kind, rawText, options = {}) {
   try {
     if (kind === "channel") return normalizeOfficialRulesChannel(rawText);
-    if (kind === "catalog") return normalizeOfficialRulesCatalog(rawText);
+    if (kind === "catalog") return normalizeOfficialRulesCatalog(rawText, options);
     if (kind === "component") return normalizeOfficialRulesComponent(rawText);
   } catch (error) {
     fail(error?.code || "INVALID_DOCUMENT", error?.message || `Invalid official-rules ${kind}`, { errors: error?.errors || [] });
@@ -225,7 +225,9 @@ export async function verifyOfficialRulesDocument(options = {}) {
     rawSize: rawBytes.byteLength,
     rawText,
     signatureText: typeof options.signatureText === "string" ? options.signatureText : JSON.stringify(options.signature),
-    value: normalizePayload(kind, rawText)
+    value: normalizePayload(kind, rawText, {
+      requireCompleteBaseline: options.requireCompleteBaseline
+    })
   });
 }
 

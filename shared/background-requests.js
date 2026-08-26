@@ -257,7 +257,8 @@ export const BACKGROUND_REQUEST_SPECS = Object.freeze({
     response: contract({ options: "object", customConfig: "array", contentScripts: "array" })
   }),
   [ACTION.GET_CONFIG_SNAPSHOT]: extensionPage({
-    response: contract({ snapshot: "object" })
+    response: contract({ snapshot: "object" }),
+    errorCodes: ["INVALID_OFFICIAL_RULES_CATALOG"]
   }),
   [ACTION.PATCH_CONFIG]: extensionPage({
     mutates: true,

@@ -68,14 +68,14 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "b4d5d10d9b6d901ff45c4e0c1244ca4a6160747cbc6f209b3bc5cb9126e51914";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "a86e76f8222fafe3b84acad94de8498e1fdfd5bf706113b4e2c96b607286e273";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "551597662bc0bb9388e264ba0eb8acc70b1ced0c1ed9513f1751b0a74354fecb";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.551597662bc0bb9388e264ba0eb8acc70b1ced0c1ed9513f1751b0a74354fecb";
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "cf5413f0f55c9e51b80b36349766b1cfee7cea44f8fe4589eaa4a5909d216d64";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.cf5413f0f55c9e51b80b36349766b1cfee7cea44f8fe4589eaa4a5909d216d64";
   var CONTENT_RUNTIME_SUMMARY_BRIDGE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-bridge.js", "entryPath": "content-src/content-summary-bridge.js", "sourceSha256": "166ae7c3c75f1e15c9b2d06a9a5ca8b76751a06b7d5ed42fdd39d00396eb5a5c", "implementationSha256": "15313d57fa6f6ebc8dbad96d94a134f82ddb45530b5ec84b1cbaa6038170dc07", "implementationVersion": "2026.07.16.2+bundle.15313d57fa6f6ebc8dbad96d94a134f82ddb45530b5ec84b1cbaa6038170dc07" });
-  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "d670e2c187d6e952aa37d87e720f61a16c1f8255008e28b72408e23649da02a4", "implementationSha256": "04f9ec458df112ac9b4eca0d8bb1efd6dd09b0fd10f9d14a95b4a129249da2f8", "implementationVersion": "2026.07.16.2+bundle.04f9ec458df112ac9b4eca0d8bb1efd6dd09b0fd10f9d14a95b4a129249da2f8" });
-  var CONTENT_RUNTIME_SUMMARY_ISOLATED_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts.js", "entryPath": "content-src/summary-userscripts.js", "sourceSha256": "29029270bf8c38cbb26ef1f55af140a615ea60275d0023334fec494d8db531e6", "implementationSha256": "09d65f8e9df238f2dc4da132c9a9735d1b022cf56759e5fa974ddddafd796e46", "implementationVersion": "2026.07.16.2+bundle.09d65f8e9df238f2dc4da132c9a9735d1b022cf56759e5fa974ddddafd796e46" });
+  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "32bb3520cf8a09fce12ecf512ab684a5fc7c6891c8415accd461d343713c311c", "implementationSha256": "d779d64a1bcb02a2e5ad4a8f447f3a632a47df7a595abb30938e43a9980c9151", "implementationVersion": "2026.07.16.2+bundle.d779d64a1bcb02a2e5ad4a8f447f3a632a47df7a595abb30938e43a9980c9151" });
+  var CONTENT_RUNTIME_SUMMARY_ISOLATED_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts.js", "entryPath": "content-src/summary-userscripts.js", "sourceSha256": "7e3203b26f2ae9765a8b667cf1ecf5f5e1325de1f87a41c7a7ebc2b123b8a876", "implementationSha256": "bea79a13e4ca45f718cb54e4d79c69523393296c159f13fd5e3d6f4055d633a2", "implementationVersion": "2026.07.16.2+bundle.bea79a13e4ca45f718cb54e4d79c69523393296c159f13fd5e3d6f4055d633a2" });
 
   // shared/background-request-core.js
   var BACKGROUND_REQUEST_SOURCE = "chatclub";

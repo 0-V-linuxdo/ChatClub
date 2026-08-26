@@ -510,6 +510,87 @@ const assert = require("node:assert/strict");
   assert.equal(gapCheck.status, "candidate");
   assert.equal(gapCheck.downloadedComponents.length, OFFICIAL_RULES_COMPONENT_KEYS.length);
 
+  const packagedRules = await import("../shared/official-rules-packaged.js");
+  const missingKey = "summary/manus";
+  assert.equal(OFFICIAL_RULES_COMPONENT_KEYS.includes(missingKey), true);
+  const legacyPointers = pointersV1.filter((pointer) => officialRulesComponentKey(pointer.feature, pointer.siteId) !== missingKey);
+  assert.equal(legacyPointers.length, OFFICIAL_RULES_COMPONENT_KEYS.length - 1);
+  const incompleteRelease = await buildRelease(41, legacyPointers, "rules-legacy-gap");
+  const incompleteStorage = new MemoryStorage();
+  const incompleteRepository = createOfficialRulesRepository({ storage: incompleteStorage, now: () => now });
+  await incompleteRepository.initializePackaged(packagedSnapshot(now));
+  const incompleteUpdater = createOfficialRulesUpdater({
+    repository: incompleteRepository,
+    channelUrl,
+    channelSignatureUrl,
+    channelKeyId: keyId,
+    channel: "stable",
+    keyring,
+    crypto: cryptoApi,
+    fetch: async (url) => {
+      if (url === channelUrl) return new Response(incompleteRelease.channelRaw, { status: 200 });
+      if (url === channelSignatureUrl) return new Response(incompleteRelease.channelSignature, { status: 200 });
+      if (assets.has(url)) return new Response(assets.get(url), { status: 200 });
+      return new Response("missing", { status: 404 });
+    },
+    now: () => now,
+    isCompatible: () => true
+  });
+  await assert.rejects(
+    incompleteUpdater.checkForUpdates({ force: true }),
+    (error) => error?.code === "CATALOG_COMPONENT_MISSING",
+    "a newly fetched catalog must still contain every packaged baseline key"
+  );
+
+  const channelHash = await sha256Hex(encode(incompleteRelease.channelRaw), cryptoApi);
+  await incompleteRepository.putBlob({
+    hash: channelHash,
+    kind: "channel",
+    rawText: incompleteRelease.channelRaw,
+    signatureText: incompleteRelease.channelSignature,
+    keyId,
+    verifiedAt: now
+  });
+  await incompleteRepository.putBlob({
+    hash: incompleteRelease.catalogRef.sha256,
+    kind: "catalog",
+    rawText: assets.get(incompleteRelease.catalogRef.url),
+    signatureText: assets.get(incompleteRelease.catalogRef.signatureUrl),
+    keyId,
+    verifiedAt: now
+  });
+  for (const pointer of legacyPointers) {
+    await incompleteRepository.putBlob({
+      hash: pointer.sha256,
+      kind: "component",
+      rawText: assets.get(pointer.url),
+      signatureText: assets.get(pointer.signatureUrl),
+      keyId,
+      verifiedAt: now
+    });
+  }
+  const storedGapSnapshot = {
+    source: "remote",
+    sequence: 41,
+    rulesVersion: metadata(41).rulesVersion,
+    keyId,
+    channelHash,
+    catalogHash: incompleteRelease.catalogRef.sha256,
+    officialTargets: Object.fromEntries(legacyPointers.map((pointer) => [
+      officialRulesComponentKey(pointer.feature, pointer.siteId),
+      pointer
+    ])),
+    createdAt: now
+  };
+  const materializedGap = await incompleteUpdater.materializeSnapshot(storedGapSnapshot);
+  assert.equal(Object.keys(materializedGap.components).length, OFFICIAL_RULES_COMPONENT_KEYS.length);
+  assert.deepEqual(
+    materializedGap.components[missingKey],
+    packagedRules.OFFICIAL_RULES_PACKAGED_COMPONENTS[missingKey],
+    "a stored catalog that predates a packaged site must fill that site from the local baseline"
+  );
+  assert.equal(materializedGap.components[missingKey].siteId, "manus");
+
   console.log("Official rules incremental downloads, pre-catalog suppression, cache guardrails, activation rollback, and one-shot alarm tests passed.");
 })().catch((error) => {
   console.error(error?.stack || error);

@@ -118,8 +118,8 @@ const assert = require("node:assert/strict");
     signature: Buffer.alloc(bytes).toString("base64url")
   });
 
-  assert.equal(OFFICIAL_RULES_BASELINE_COMPONENTS.length, 29);
-  assert.equal(officialRulesBaselineComponents("summary").length, 10);
+  assert.equal(OFFICIAL_RULES_BASELINE_COMPONENTS.length, 30);
+  assert.equal(officialRulesBaselineComponents("summary").length, 11);
   assert.equal(officialRulesBaselineComponents("messageNavigator").length, 11);
   assert.equal(officialRulesBaselineComponents("delete").length, 8);
   assert.equal(new Set(OFFICIAL_RULES_COMPONENT_KEYS).size, OFFICIAL_RULES_COMPONENT_KEYS.length);
@@ -231,6 +231,13 @@ const assert = require("node:assert/strict");
   const missingCatalog = catalog();
   missingCatalog.components.pop();
   assert.ok(inspectOfficialRulesCatalog(missingCatalog).errors.some(({ code }) => code === "component-missing"));
+  const storedGapCatalog = inspectOfficialRulesCatalog(missingCatalog, { requireCompleteBaseline: false });
+  assert.equal(storedGapCatalog.valid, true, "a stored catalog may omit newly packaged baseline keys");
+  assert.equal(storedGapCatalog.value.components.length, OFFICIAL_RULES_COMPONENT_KEYS.length - 1);
+  assert.ok(inspectOfficialRulesCatalog({ ...catalog(), components: [] }, { requireCompleteBaseline: false }).errors.some(({ code }) => code === "component-missing"));
+  const storedDuplicateCatalog = catalog();
+  storedDuplicateCatalog.components[1] = { ...storedDuplicateCatalog.components[0] };
+  assert.ok(inspectOfficialRulesCatalog(storedDuplicateCatalog, { requireCompleteBaseline: false }).errors.some(({ code }) => code === "component-duplicate"));
   const duplicateCatalog = catalog();
   duplicateCatalog.components[1] = { ...duplicateCatalog.components[0] };
   assert.ok(inspectOfficialRulesCatalog(duplicateCatalog).errors.some(({ code }) => code === "component-duplicate"));

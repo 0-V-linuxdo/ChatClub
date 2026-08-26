@@ -2,6 +2,7 @@ import {
   OFFICIAL_RULES_COMPONENT_KEYS,
   officialRulesComponentKey
 } from "../shared/official-rules-baseline.js";
+import { OFFICIAL_RULES_PACKAGED_COMPONENTS } from "../shared/official-rules-packaged.js";
 import {
   OFFICIAL_RULES_API_VERSION,
   OFFICIAL_RULES_CHANNEL_SIGNATURE_URL,
@@ -135,7 +136,8 @@ async function cachedDocument(repository, options, hash, kind, expected = {}) {
     crypto: options.crypto,
     expectedHash: hash,
     expectedKeyId: expected.keyId,
-    expectedSize: expected.size
+    expectedSize: expected.size,
+    requireCompleteBaseline: options.requireCompleteBaseline
   });
 }
 
@@ -166,8 +168,14 @@ export function createOfficialRulesUpdater(options = {}) {
   const isCompatible = typeof options.isCompatible === "function" ? options.isCompatible : () => true;
   let inFlightCheck = null;
 
-  async function fetchReference(reference, kind) {
-    const cached = await cachedDocument(repository, { keyring, crypto: cryptoApi }, reference.sha256, kind, reference);
+  async function fetchReference(reference, kind, verifyOptions = {}) {
+    const cached = await cachedDocument(
+      repository,
+      { keyring, crypto: cryptoApi, ...verifyOptions },
+      reference.sha256,
+      kind,
+      reference
+    );
     if (cached) return { document: cached, downloaded: false };
     const fetched = await fetchVerifiedOfficialRulesDocument({
       kind,
@@ -181,7 +189,8 @@ export function createOfficialRulesUpdater(options = {}) {
       fetch: fetchFn,
       allowUrl: urls.allowUrl,
       allowFinalUrl: urls.allowFinalUrl,
-      timeoutMs: options.assetTimeoutMs || options.timeoutMs || 20_000
+      timeoutMs: options.assetTimeoutMs || options.timeoutMs || 20_000,
+      ...verifyOptions
     });
     if (fetched.notModified || !fetched.document) fail("UNEXPECTED_NOT_MODIFIED", `Missing uncached ${kind} response`);
     return { document: await cacheDocument(repository, fetched.document, clock), downloaded: true };
@@ -245,7 +254,7 @@ export function createOfficialRulesUpdater(options = {}) {
       channelHash: channelDocument.rawHash
     });
 
-    const catalogResult = await fetchReference(channel.catalog, "catalog");
+    const catalogResult = await fetchReference(channel.catalog, "catalog", { requireCompleteBaseline: false });
     const catalog = catalogResult.document.value;
     assertMetadataMatches(channel, catalog);
 
@@ -331,7 +340,13 @@ export function createOfficialRulesUpdater(options = {}) {
     const channel = channelDocument.value;
     if (channel.sequence !== snapshot.sequence || channel.rulesVersion !== snapshot.rulesVersion) fail("SNAPSHOT_METADATA_MISMATCH", "Official-rules snapshot disagrees with its channel");
     if (channel.catalog.sha256 !== snapshot.catalogHash) fail("SNAPSHOT_CATALOG_MISMATCH", "Official-rules snapshot catalog does not match its channel");
-    const catalogDocument = await cachedDocument(repository, { keyring, crypto: cryptoApi }, snapshot.catalogHash, "catalog", channel.catalog);
+    const catalogDocument = await cachedDocument(
+      repository,
+      { keyring, crypto: cryptoApi, requireCompleteBaseline: false },
+      snapshot.catalogHash,
+      "catalog",
+      channel.catalog
+    );
     if (!catalogDocument) fail("MISSING_BLOB", "Official-rules snapshot is missing its catalog");
     const catalog = catalogDocument.value;
     assertMetadataMatches(channel, catalog);
@@ -339,7 +354,13 @@ export function createOfficialRulesUpdater(options = {}) {
     const components = {};
     for (const key of OFFICIAL_RULES_COMPONENT_KEYS) {
       const pointer = catalogTargets[key];
-      const target = snapshot.officialTargets[key];
+      const target = snapshot.officialTargets?.[key];
+      if (!pointer) {
+        const packaged = OFFICIAL_RULES_PACKAGED_COMPONENTS[key];
+        if (!packaged) fail("PACKAGED_COMPONENT_MISSING", `Packaged official-rules component ${key} is unavailable`);
+        components[key] = packaged;
+        continue;
+      }
       if (!samePointer(pointer, target)) fail("SNAPSHOT_COMPONENT_MISMATCH", `Official-rules snapshot target ${key} does not match the catalog`);
       const componentDocument = await cachedDocument(repository, { keyring, crypto: cryptoApi }, target.sha256, "component", target);
       if (!componentDocument) fail("MISSING_BLOB", `Official-rules snapshot is missing component ${key}`);

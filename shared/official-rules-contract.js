@@ -501,7 +501,8 @@ function componentPointer(value, path, errors) {
   return { ...identity, ...reference };
 }
 
-export function inspectOfficialRulesCatalog(raw) {
+export function inspectOfficialRulesCatalog(raw, options = {}) {
+  const requireCompleteBaseline = options.requireCompleteBaseline !== false;
   const errors = [];
   const value = documentInput(raw, OFFICIAL_RULES_LIMITS.catalogBytes, "Official rules catalog", errors);
   if (value === undefined) return result(null, errors);
@@ -525,11 +526,15 @@ export function inspectOfficialRulesCatalog(raw) {
     }
     pointerByKey.set(key, pointer);
   }
-  for (const key of OFFICIAL_RULES_COMPONENT_KEYS) {
-    if (!pointerByKey.has(key)) issue(errors, "$.components", "component-missing", `Catalog is missing component ${key}.`);
-  }
-  if (parsedPointers.length !== OFFICIAL_RULES_COMPONENT_KEYS.length) {
-    issue(errors, "$.components", "component-count-invalid", `Catalog must contain exactly ${OFFICIAL_RULES_COMPONENT_KEYS.length} component pointers.`);
+  if (requireCompleteBaseline) {
+    for (const key of OFFICIAL_RULES_COMPONENT_KEYS) {
+      if (!pointerByKey.has(key)) issue(errors, "$.components", "component-missing", `Catalog is missing component ${key}.`);
+    }
+    if (parsedPointers.length !== OFFICIAL_RULES_COMPONENT_KEYS.length) {
+      issue(errors, "$.components", "component-count-invalid", `Catalog must contain exactly ${OFFICIAL_RULES_COMPONENT_KEYS.length} component pointers.`);
+    }
+  } else if (Array.isArray(value?.components) && parsedPointers.length === 0) {
+    issue(errors, "$.components", "component-missing", "A stored official-rules catalog must retain at least one signed component pointer.");
   }
   const normalized = {
     ...metadata(value, "$", errors),
@@ -543,8 +548,8 @@ export function inspectOfficialRulesCatalog(raw) {
   return result(normalized, errors);
 }
 
-export function normalizeOfficialRulesCatalog(raw) {
-  return normalize(inspectOfficialRulesCatalog(raw), "INVALID_OFFICIAL_RULES_CATALOG", "Official rules catalog");
+export function normalizeOfficialRulesCatalog(raw, options = {}) {
+  return normalize(inspectOfficialRulesCatalog(raw, options), "INVALID_OFFICIAL_RULES_CATALOG", "Official rules catalog");
 }
 
 function selectorStructureValid(selector) {

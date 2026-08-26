@@ -23,6 +23,7 @@ function summarySourceId(source = {}) {
   if (text.includes("deepseek")) return "deepseek";
   if (text.includes("lobehub")) return "lobehub";
   if (text.includes("typingmind")) return "typingmind";
+  if (text.includes("manus")) return "manus";
   return "generic";
 }
 
@@ -39,6 +40,7 @@ export function summarySourceMeta(source = {}, helpers = {}) {
     deepseek: "DeepSeek",
     lobehub: "LobeHub",
     typingmind: "TypingMind",
+    manus: "Manus",
     generic: "Source"
   };
   const brand = labels[id] || labels.generic;
