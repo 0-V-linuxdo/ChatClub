@@ -59,11 +59,11 @@ export const SUMMARY_SITE_CONFIGS = Object.freeze([
     userscriptFile: "typingmind.js", userscriptLength: 3232
   },
   {
-    id: "manus", name: "Manus", configVersion: 4,
+    id: "manus", name: "Manus", configVersion: 6,
     hosts: ["manus.im"],
     userscriptRunMode: "pageWorldFirst", userscriptTimeoutMs: 36000,
     copyTimeoutMs: 3600, userscriptFallbackDelayMs: 1000,
-    userscriptFile: "manus.js", userscriptLength: 17971
+    userscriptFile: "manus.js", userscriptLength: 21440
   }
 ].map(Object.freeze));
 

@@ -10,7 +10,7 @@ import {
 } from "./notion-efforts.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-08-26｜17:08:00」";
+export const APP_VERSION = "「2026-08-26｜18:54:00」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -33,7 +33,7 @@ export const API_PROMOTION_CHANNELS_VERSION = 2;
 const API_PROFILE_ZERO_ZERO_ENDPOINT = "https://api.0-0.pro/v1/chat/completions";
 const API_PROFILE_ZERO_ZERO_MODEL = "gpt-5.5";
 const API_PROFILE_ZERO_ZERO_REGISTER_URL = "https://0-0.pro/register?ref=CSLPRL76";
-export const SUMMARY_SITE_CONFIG_VERSION = 79;
+export const SUMMARY_SITE_CONFIG_VERSION = 81;
 export const SCRIPT_CONFIG_SCHEMA_VERSION = 3;
 export const PROMPT_IMAGE_PASTE_STRATEGY_SEQUENTIAL = "sequential";
 export const PROMPT_IMAGE_PASTE_STRATEGY_BATCH = "batch";

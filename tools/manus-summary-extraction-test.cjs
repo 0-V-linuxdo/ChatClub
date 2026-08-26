@@ -410,7 +410,7 @@ async function executeRunner(buildFixture, { native } = {}) {
     { role: "user", text: prompt },
     { role: "assistant", text: answer }
   ]);
-  assert.deepEqual(happy.copied, ["manus-user-copy", "manus-assistant-copy"]);
+  assert.deepEqual(happy.copied, [], "visible user/assistant bubbles must be read without clicking Copy");
   assert.ok(!happy.copied.includes("manus-assistant-table-copy"), "nested table Copy must not be clicked");
 
   const nestedCode = await executeRunner(({ document, chat }) => {
@@ -431,6 +431,7 @@ async function executeRunner(buildFixture, { native } = {}) {
     const clone = control(document, "dup-user-copy-clone", "Copy", 188, 64, prompt);
     const userNode = element(document, "div", {
       id: "dup-user",
+      text: prompt,
       rect: { left: 60, top: 20, width: 900, height: 90 }
     }, [
       element(document, "p", { text: prompt }),
@@ -444,7 +445,7 @@ async function executeRunner(buildFixture, { native } = {}) {
     { role: "user", text: prompt },
     { role: "assistant", text: answer }
   ]);
-  assert.deepEqual(ownerDedup.copied, ["dup-user-copy", "dup-assistant-copy"]);
+  assert.deepEqual(ownerDedup.copied, [], "owner de-dup must not click Copy when bubbles already have both roles");
   assert.ok(!ownerDedup.copied.includes("dup-user-copy-clone"), "same-row Copy clone must not be clicked");
 
   const chinese = await executeRunner(({ document, chat }) => {
@@ -461,7 +462,7 @@ async function executeRunner(buildFixture, { native } = {}) {
     { role: "user", text: prompt },
     { role: "assistant", text: answer }
   ]);
-  assert.deepEqual(chinese.copied, ["zh-user-copy", "zh-assistant-copy"]);
+  assert.deepEqual(chinese.copied, [], "localized bubbles must be read without clicking Copy");
 
   const iconOnly = await executeRunner(({ document, chat }) => {
     const user = userTurn(document, "icon-user", 20, prompt, { iconOnly: true });
@@ -473,7 +474,7 @@ async function executeRunner(buildFixture, { native } = {}) {
     { role: "user", text: prompt },
     { role: "assistant", text: answer }
   ]);
-  assert.deepEqual(iconOnly.copied, ["icon-user-copy", "icon-assistant-copy"]);
+  assert.deepEqual(iconOnly.copied, [], "icon-only Copy bars must not be clicked when bubble text is already present");
 
   const duplicates = await executeRunner(({ document, chat }) => {
     const firstUser = userTurn(document, "repeat-user-1", 20, prompt);
@@ -489,12 +490,7 @@ async function executeRunner(buildFixture, { native } = {}) {
     { role: "user", text: prompt },
     { role: "assistant", text: answer }
   ]);
-  assert.deepEqual(duplicates.copied, [
-    "repeat-user-1-copy",
-    "repeat-assistant-1-copy",
-    "repeat-user-2-copy",
-    "repeat-assistant-2-copy"
-  ]);
+  assert.deepEqual(duplicates.copied, [], "repeated real turns must come from bubbles, not extra Copy clicks");
 
   const userOnly = await executeRunner(({ document, chat }) => {
     chat.innerText = prompt;
@@ -504,7 +500,7 @@ async function executeRunner(buildFixture, { native } = {}) {
     return { user };
   });
   assert.deepEqual(userOnly.result, [], "user-only Copy must fail closed");
-  assert.deepEqual(userOnly.copied, ["only-user-copy"]);
+  assert.deepEqual(userOnly.copied, [], "user-only extraction must not click Copy when the assistant turn is missing");
 
   const assistantOnlyClosed = await executeRunner(({ document, chat }) => {
     chat.innerText = "Task completed";
@@ -514,7 +510,7 @@ async function executeRunner(buildFixture, { native } = {}) {
     return { assistant };
   });
   assert.deepEqual(assistantOnlyClosed.result, [], "assistant-only Copy without a user DOM prompt must fail closed");
-  assert.deepEqual(assistantOnlyClosed.copied, ["only-assistant-copy"]);
+  assert.deepEqual(assistantOnlyClosed.copied, [], "assistant-only extraction must not click Copy when the user turn is missing");
 
   const assistantCopyDomUser = await executeRunner(({ document, chat }) => {
     chat.innerText = `${prompt}\n${answer}\nTask completed\nAsk Manus anything, no credits charged`;
@@ -527,7 +523,7 @@ async function executeRunner(buildFixture, { native } = {}) {
     { role: "user", text: prompt },
     { role: "assistant", text: answer }
   ]);
-  assert.deepEqual(assistantCopyDomUser.copied, ["fallback-assistant-copy"]);
+  assert.deepEqual(assistantCopyDomUser.copied, [], "DOM fallback must not click Copy after both roles are already present");
 
   const blank = await executeRunner(({ chat }) => {
     chat.innerText = "Ask Manus anything, no credits charged\nNew task";
@@ -542,15 +538,64 @@ async function executeRunner(buildFixture, { native } = {}) {
     chat.append(element(document, "div", { id: "lonely" }, [lonely]));
     return {};
   }, {
-    native: async () => ([
-      { role: "user", text: prompt },
-      { role: "assistant", text: answer }
-    ])
+    native: async () => {
+      throw new Error("extractNativeCopyConversation must not run for Manus");
+    }
   });
-  assert.deepEqual(nativeUsed.result, [
-    { role: "user", text: prompt },
-    { role: "assistant", text: answer }
+  assert.deepEqual(nativeUsed.result, [], "generic native Copy hover must not be used");
+  assert.ok(!nativeUsed.copied.includes("lonely-copy"), "unaccompanied Copy must not be clicked");
+
+  const extraButtons = await executeRunner(({ document, chat }) => {
+    const computer = control(document, "computer", "Manus's computer", 520, 40);
+    const suggestion = control(document, "suggestion", "如何制作一个具有高影响力的 pitch deck？", 80, 520);
+    const share = control(document, "share", "Share", 600, 40);
+    const user = userTurn(document, "safe-user", 20, sent);
+    const assistant = assistantTurn(document, "safe-assistant", 140, `${assistantLead}\n${answer}`, { table: true, tableText: "书名 | 年份" });
+    chat.append(computer, share, user.node, assistant.node, suggestion);
+    return { computer, suggestion, share, assistant };
+  });
+  assert.deepEqual(extraButtons.result, [
+    { role: "user", text: sent },
+    { role: "assistant", text: `${assistantLead}\n${answer}` }
   ]);
+  assert.deepEqual(extraButtons.copied, [], "live chats with readable bubbles must not click any page buttons");
+  assert.ok(!extraButtons.copied.includes("computer"), "Manus's computer must not be clicked");
+  assert.ok(!extraButtons.copied.includes("suggestion"), "follow-up suggestion chips must not be clicked");
+  assert.ok(!extraButtons.copied.includes("share"), "Share must not be clicked");
+  assert.ok(!extraButtons.copied.includes("safe-assistant-retry"), "Retry must not be clicked");
+  assert.ok(!extraButtons.copied.includes("safe-assistant-table-copy"), "nested table Copy must not be clicked");
+
+  const lastResortCopy = await executeRunner(({ document, chat }) => {
+    const computer = control(document, "lr-computer", "Manus's computer", 520, 40);
+    const suggestion = control(document, "lr-suggestion", "帮我写一份优秀的 pitch deck 结构大纲", 80, 360);
+    const userEdit = control(document, "lr-user-edit", "Edit", 100, 64);
+    const userCopy = control(document, "lr-user-copy", "Copy", 144, 64, sent);
+    const userNode = element(document, "div", {
+      id: "lr-user",
+      className: "manus-user-turn",
+      text: "",
+      rect: { left: 60, top: 20, width: 900, height: 90 }
+    }, [actionBar(document, "lr-user-actions", 64, [userCopy, userEdit])]);
+    const assistantCopy = control(document, "lr-assistant-copy", "Copy", 220, 260, `${assistantLead}\n${answer}`);
+    const assistantRetry = control(document, "lr-assistant-retry", "Retry", 260, 260);
+    const assistantNode = element(document, "div", {
+      id: "lr-assistant",
+      className: "manus-assistant-turn",
+      text: "",
+      rect: { left: 60, top: 140, width: 940, height: 280 }
+    }, [actionBar(document, "lr-assistant-actions", 260, [assistantCopy, assistantRetry], "Task completed")]);
+    chat.append(computer, userNode, assistantNode, suggestion);
+    return { userCopy, assistantCopy, computer, suggestion };
+  });
+  assert.deepEqual(lastResortCopy.result, [
+    { role: "user", text: sent },
+    { role: "assistant", text: `${assistantLead}\n${answer}` }
+  ]);
+  assert.deepEqual(lastResortCopy.copied, ["lr-user-copy", "lr-assistant-copy"]);
+  assert.notEqual(lastResortCopy.result[0]?.text, "Copy Edit", "Copy/Edit action labels must not become the USER turn");
+  assert.ok(!lastResortCopy.copied.includes("lr-computer"), "last-resort Copy must not open Manus's computer");
+  assert.ok(!lastResortCopy.copied.includes("lr-suggestion"), "last-resort Copy must not click follow-up chips");
+  assert.ok(!lastResortCopy.copied.includes("lr-assistant-retry"), "last-resort Copy must not click Retry");
 
   const bannerFallback = await executeRunner(({ document, chat }) => {
     document.title = `${prompt} - Manus`;
@@ -609,6 +654,10 @@ async function executeRunner(buildFixture, { native } = {}) {
     document.title = `${prompt} - Manus`;
     chat.innerText = `${prompt}\n${assistantLead}\n${answer}\nTask completed`;
     chat.textContent = chat.innerText;
+    chat.append(
+      control(document, "store-computer", "Manus's computer", 520, 40),
+      control(document, "store-copy", "Copy", 144, 64, prompt)
+    );
     chat.__reactFiber$test = {
       memoizedProps: {
         store: {
@@ -636,6 +685,84 @@ async function executeRunner(buildFixture, { native } = {}) {
     { role: "assistant", text: `${assistantLead}\n${answer}` }
   ]);
   assert.notEqual(storeTurns.result[0]?.text, prompt);
+  assert.deepEqual(storeTurns.copied, [], "store-backed turns must not click Copy or Manus's computer");
+
+  const asked = "decks 是什么？";
+  const decksAnswer = "这里的 decks 指的是一套演示文稿/幻灯片，通常就是 PowerPoint、Keynote 或 Google Slides 做成的“PPT”。";
+  const decksChromeUser = await executeRunner(({ document, chat }) => {
+    document.title = `${asked} - Manus`;
+    const user = userTurn(document, "decks-user", 20, asked);
+    const stamp = element(document, "div", {
+      id: "decks-stamp",
+      text: "Yesterday, 11:41 PM",
+      rect: { left: 820, top: 48, width: 160, height: 20 }
+    });
+    const rating = element(document, "div", {
+      id: "decks-rating",
+      text: "How was this result？",
+      rect: { left: 720, top: 400, width: 200, height: 24 }
+    });
+    const plan = element(document, "div", {
+      id: "decks-plan",
+      text: "向用户简明说明含义",
+      rect: { left: 80, top: 520, width: 220, height: 24 }
+    });
+    const assistant = assistantTurn(document, "decks-assistant", 140, decksAnswer);
+    chat.append(user.node, stamp, assistant.node, rating, plan);
+    return {};
+  });
+  assert.deepEqual(decksChromeUser.result, [
+    { role: "user", text: asked },
+    { role: "assistant", text: decksAnswer }
+  ]);
+  assert.equal(decksChromeUser.result[0]?.role, "user", "USER must come before ASSISTANT");
+  assert.doesNotMatch(decksChromeUser.result[0]?.text || "", /Yesterday|How was this result|向用户/);
+  assert.deepEqual(decksChromeUser.copied, []);
+
+  const assistantFirstStore = await executeRunner(({ document, chat }) => {
+    document.title = `${asked} - Manus`;
+    chat.__reactFiber$test = {
+      memoizedProps: {
+        store: {
+          getState() {
+            return {
+              websocket: {
+                ids: ["a1", "u1"],
+                entities: {
+                  a1: { type: "event", event: { id: "a1", type: "chat", sender: "assistant", content: decksAnswer } },
+                  u1: { type: "event", event: { id: "u1", type: "chat", sender: "user", content: `${asked}\nYesterday, 11:41 PM\nHow was this result？\n向用户简明说明含义` } }
+                }
+              }
+            };
+          }
+        }
+      },
+      child: null,
+      sibling: null,
+      stateNode: null
+    };
+    return {};
+  });
+  assert.deepEqual(assistantFirstStore.result, [
+    { role: "user", text: asked },
+    { role: "assistant", text: decksAnswer }
+  ]);
+  assert.deepEqual(assistantFirstStore.copied, []);
+
+  const liveUserInnerText = await executeRunner(({ document, chat }) => {
+    document.title = `${asked} - Manus`;
+    const user = userTurn(document, "bleed-user", 20, asked);
+    user.node.innerText = [asked, "Copy Edit", "Yesterday, 11:41 PM", "How was this result？"].join("\n");
+    user.node.textContent = user.node.innerText;
+    const assistant = assistantTurn(document, "bleed-assistant", 140, decksAnswer);
+    chat.append(user.node, assistant.node);
+    return {};
+  });
+  assert.deepEqual(liveUserInnerText.result, [
+    { role: "user", text: asked },
+    { role: "assistant", text: decksAnswer }
+  ]);
+  assert.deepEqual(liveUserInnerText.copied, []);
 
   console.log("Manus Summary extraction regression checks passed.");
 })().catch((error) => {

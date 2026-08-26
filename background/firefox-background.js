@@ -2,4 +2,4 @@
 // listener registration part of module evaluation, so primed events cannot
 // arrive before the shared background is ready.
 import "./firefox-content-fallback-loader.js";
-import "./service-worker.js?chatclub-runtime=2026.8.26.36";
+import "./service-worker.js?chatclub-runtime=2026.8.26.38";

@@ -1,5 +1,5 @@
 {
-  "summarySiteConfigVersion": 79,
+  "summarySiteConfigVersion": 81,
   "configs": [
     {
       "id": "chatgpt",
@@ -148,7 +148,7 @@
     {
       "id": "manus",
       "name": "Manus",
-      "configVersion": 4,
+      "configVersion": 6,
       "hosts": [
         "manus.im"
       ],
@@ -157,7 +157,7 @@
       "copyTimeoutMs": 3600,
       "userscriptFallbackDelayMs": 1000,
       "userscriptFile": "manus.js",
-      "userscriptLength": 17971
+      "userscriptLength": 21440
     }
   ]
 }

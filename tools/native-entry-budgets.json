@@ -17,7 +17,7 @@
     "background/firefox-background.js": {
       "maxFiles": 70,
       "targetFiles": 43,
-      "maxSourceBytes": 1728265,
+      "maxSourceBytes": 1732757,
       "targetSourceBytes": 900000,
       "reason": "The Firefox document-background entry packages the same signed official-rules verifier, strict declarative contracts, immutable component repository, anti-rollback state, manual atomic activation, crash and committed-reset cleanup recovery, compensated content-registration/DNR coordination, one-shot prompt-handoff ledger with adaptive payload cleanup and normalized preferred-model overlay options as Chromium, together with marker-driven startup refresh of canonical content registrations, generated content fallbacks including Claude iframe-compat (isInIframe store patch for page-declared cross-origin modulepreload) plus Kagi composer hydration with thread-search exclusion, secure Frame RPC, one-sided Notion frame-load URL attestation, site-native Storage Access, paired pointer/native Notion model activation including the explicit Older models submenu path, updated Notion dialog model-picker and Effort handling, typed Grok secondary fallback, fail-closed Delete behavior when trusted input is unavailable, and durable event-scoped classification, URL-authenticated opening leases, phased tab creation outside the workspace lock, remembered ChatClub-tab listing including empty live tabs, deferred current-tab close, close of other live ChatClub tabs without deleting Tabs memory, export and import of remembered Tabs, and focus of ChatClub workspace tabs; its larger exact static cost is tracked separately and now includes the Manus Summary userscript in generated content fallbacks plus stored-catalog gap-fill from packaged components."
     }

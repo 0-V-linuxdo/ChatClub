@@ -1,28 +1,28 @@
 {
   "schemaVersion": 4,
-  "appVersion": "「2026-08-26｜17:08:00」",
-  "manifestVersion": "2026.8.26.36",
+  "appVersion": "「2026-08-26｜18:54:00」",
+  "manifestVersion": "2026.8.26.38",
   "payloads": {
     "chromium": {
-      "appVersion": "「2026-08-26｜17:08:00」",
-      "sha256": "3262b6fd86aa1127d1315c54a948553c3482cf35c782b5f55b9d07480744c69e"
+      "appVersion": "「2026-08-26｜18:54:00」",
+      "sha256": "efef93204bbbe34c31b133ce4d12871648afc91e2676ced5f84650ac2781ad14"
     },
     "firefox": {
-      "appVersion": "「2026-08-26｜17:08:00」",
-      "sha256": "b0e87110661a6d835ac184644023fe8d4578a74c947eb9e83a627ff4983cb0d9"
+      "appVersion": "「2026-08-26｜18:54:00」",
+      "sha256": "d74c93bff40be9267dc9a30241e21f29dc0194b060dc9bd9f40ab7552ca25d97"
     }
   },
   "contentRuntime": {
     "sourceSchemaVersion": 1,
-    "sourceSha256": "a86e76f8222fafe3b84acad94de8498e1fdfd5bf706113b4e2c96b607286e273",
+    "sourceSha256": "17fbd531aa8097678f1f877f6d3387e88a3fdd420069942fa1e248bcf97cb959",
     "sourceFileCount": 81,
     "buildRecipeSchemaVersion": 1,
     "buildRecipeVersion": "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76",
     "buildRecipeSha256": "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76",
     "buildRecipeFileCount": 2,
     "protocolVersion": "2026.07.16.2",
-    "implementationSha256": "cf5413f0f55c9e51b80b36349766b1cfee7cea44f8fe4589eaa4a5909d216d64",
-    "implementationVersion": "2026.07.16.2+implementation.cf5413f0f55c9e51b80b36349766b1cfee7cea44f8fe4589eaa4a5909d216d64",
+    "implementationSha256": "0f2e1b4fe74da6c44291dbc9969f4668c21eab3efaa4650cf3d04f5120f4b46e",
+    "implementationVersion": "2026.07.16.2+implementation.0f2e1b4fe74da6c44291dbc9969f4668c21eab3efaa4650cf3d04f5120f4b46e",
     "bundles": {
       "content/content.js": {
         "entryPath": "content-src/content.js",
@@ -90,28 +90,28 @@
       },
       "content/summary-userscripts-main.js": {
         "entryPath": "content-src/summary-userscripts-main.js",
-        "sourceSha256": "32bb3520cf8a09fce12ecf512ab684a5fc7c6891c8415accd461d343713c311c",
+        "sourceSha256": "fc5a00753f9c5a1a2eac421bb4b9f8b7b292ec68bdb880daa4392b1fa93d6678",
         "sourceFileCount": 19,
         "virtualInputs": [
           "chatclub:summary-registry"
         ],
-        "implementationSha256": "d779d64a1bcb02a2e5ad4a8f447f3a632a47df7a595abb30938e43a9980c9151",
-        "implementationVersion": "2026.07.16.2+bundle.d779d64a1bcb02a2e5ad4a8f447f3a632a47df7a595abb30938e43a9980c9151"
+        "implementationSha256": "59a22ead9fd242d9a7c562a1134f7de5ed400527114db4bfcb55893bcb085b2a",
+        "implementationVersion": "2026.07.16.2+bundle.59a22ead9fd242d9a7c562a1134f7de5ed400527114db4bfcb55893bcb085b2a"
       },
       "content/summary-userscripts.js": {
         "entryPath": "content-src/summary-userscripts.js",
-        "sourceSha256": "7e3203b26f2ae9765a8b667cf1ecf5f5e1325de1f87a41c7a7ebc2b123b8a876",
+        "sourceSha256": "25a5235dd436277093044fabbb4d83ddedc548db58e5c526c228616f2d9e8ade",
         "sourceFileCount": 16,
         "virtualInputs": [
           "chatclub:summary-registry"
         ],
-        "implementationSha256": "bea79a13e4ca45f718cb54e4d79c69523393296c159f13fd5e3d6f4055d633a2",
-        "implementationVersion": "2026.07.16.2+bundle.bea79a13e4ca45f718cb54e4d79c69523393296c159f13fd5e3d6f4055d633a2"
+        "implementationSha256": "dd684c3b963c766ab17f3a8229695ce9b9555d68e407e47056f652159a02a90e",
+        "implementationVersion": "2026.07.16.2+bundle.dd684c3b963c766ab17f3a8229695ce9b9555d68e407e47056f652159a02a90e"
       }
     }
   },
   "summary": {
-    "configVersion": 79,
+    "configVersion": 81,
     "sites": {
       "chatgpt": {
         "file": "chatgpt.js",
@@ -155,8 +155,8 @@
       },
       "manus": {
         "file": "manus.js",
-        "configVersion": 4,
-        "sha256": "0789581ea335993a94d24381dcced9c8ee5a9585b48a516e4ba805a51f011e37"
+        "configVersion": 6,
+        "sha256": "6a84e88eb255949bcf49160ea52e29246cf8acd8777fad06924882ca684648d2"
       },
       "notion": {
         "file": "notion.js",
@@ -205,9 +205,9 @@
     }
   },
   "floors": {
-    "appVersion": "「2026-08-26｜17:08:00」",
-    "manifestVersion": "2026.8.26.36",
-    "summaryConfigVersion": 79,
+    "appVersion": "「2026-08-26｜18:54:00」",
+    "manifestVersion": "2026.8.26.38",
+    "summaryConfigVersion": 81,
     "summarySites": {
       "chatgpt": 55,
       "claude": 39,
@@ -217,7 +217,7 @@
       "grok-dairoot": 71,
       "kagi": 66,
       "lobehub": 49,
-      "manus": 4,
+      "manus": 6,
       "notion": 65,
       "typingmind": 48
     },

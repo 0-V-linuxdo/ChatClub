@@ -74,12 +74,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "a86e76f8222fafe3b84acad94de8498e1fdfd5bf706113b4e2c96b607286e273";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "17fbd531aa8097678f1f877f6d3387e88a3fdd420069942fa1e248bcf97cb959";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "cf5413f0f55c9e51b80b36349766b1cfee7cea44f8fe4589eaa4a5909d216d64";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.cf5413f0f55c9e51b80b36349766b1cfee7cea44f8fe4589eaa4a5909d216d64";
-  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "32bb3520cf8a09fce12ecf512ab684a5fc7c6891c8415accd461d343713c311c", "implementationSha256": "d779d64a1bcb02a2e5ad4a8f447f3a632a47df7a595abb30938e43a9980c9151", "implementationVersion": "2026.07.16.2+bundle.d779d64a1bcb02a2e5ad4a8f447f3a632a47df7a595abb30938e43a9980c9151" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "0f2e1b4fe74da6c44291dbc9969f4668c21eab3efaa4650cf3d04f5120f4b46e";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.0f2e1b4fe74da6c44291dbc9969f4668c21eab3efaa4650cf3d04f5120f4b46e";
+  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "fc5a00753f9c5a1a2eac421bb4b9f8b7b292ec68bdb880daa4392b1fa93d6678", "implementationSha256": "59a22ead9fd242d9a7c562a1134f7de5ed400527114db4bfcb55893bcb085b2a", "implementationVersion": "2026.07.16.2+bundle.59a22ead9fd242d9a7c562a1134f7de5ed400527114db4bfcb55893bcb085b2a" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -2554,21 +2554,23 @@
         return text2;
       };
       const chatRoot = () => qs2("#manus-chat-box") || qs2("#manus-agents-chat-view") || qs2("#manus-home-page-session-content") || qs2("main,[role=main]") || document.body || document.documentElement;
-      const pageChrome = (node) => Boolean(closest2(node, "nav,aside,footer,form,input,textarea,select,[contenteditable=true]"));
+      const computerChrome = (node) => /manus['’]?s computer|computer is inactive|manus desktop/i.test(actionSignature(node) || "") || /manus['’]?s computer|computer is inactive/i.test(normalize2(node && (node.innerText || node.textContent) || "").slice(0, 240));
+      const pageChrome = (node) => Boolean(closest2(node, "nav,aside,footer,form,input,textarea,select,[contenteditable=true]")) || computerChrome(node);
       const nestedCopyScope = (node) => Boolean(closest2(node, "pre,code,table,kbd,samp,[data-language],[data-code-block],[data-codeblock]"));
       const nestedCopy = (button) => /copy\s*(?:code|table|link|conversation|source|sources|citation|citations|url|address|key|secret|skill)|copy[-_ ]?(?:code|table|link|conversation|source|sources|citation|citations|url)|复制(?:代码|表格|链接|会话|来源|引用|地址)/i.test(actionSignature(button));
       const explicitCopy = (button) => /(?:^|\b)(copy|copied|clipboard)(?:\b|$)|复制|已复制|拷贝/.test(actionSignature(button));
       const looksCopyIcon = (button) => {
         const text2 = svgSignature2(button);
         if (!text2) return false;
-        return /copy|clipboard|lucide-copy|tabler-icon-copy|heroicons.*clipboard|mingcute.*copy/.test(text2);
+        return /copy|clipboard|lucide-copy|tabler-icon-copy|heroicons.*clipboard|mingcute.*copy/.test(text2) && !/computer|desktop|monitor|sandbox|folder|file|skill|star|share|upgrade/.test(text2);
       };
+      const forbiddenControl = (control) => /(?:^|\b)(computer|desktop|sandbox|monitor|terminal|files?|folder|attach|upload|skill|star|stars|rating|upgrade|share|follow[-_ ]?up|suggest(?:ion)?|play|pause|live|preview)(?:\b|$)|manus['’]?s computer|电脑|桌面|文件|附件|技能|分享|升级|播放/.test(actionSignature(control));
       const canonicalControl = (control) => {
         if (!control || !visible2(control) && !explicitCopy(control) && !looksCopyIcon(control)) return false;
         return !qsa2("button,[role=button]", control).some((child) => child !== control && (visible2(child) || explicitCopy(child) || looksCopyIcon(child)));
       };
       const messageCopyControl = (button) => {
-        if (!canonicalControl(button) || pageChrome(button) || nestedCopyScope(button) || nestedCopy(button)) return false;
+        if (!canonicalControl(button) || pageChrome(button) || nestedCopyScope(button) || nestedCopy(button) || forbiddenControl(button)) return false;
         return explicitCopy(button) || looksCopyIcon(button);
       };
       const assistantAction = (control) => /(?:^|\b)(retry|regenerate|task completed|how was this result)(?:\b|$)|重试|重新生成|任务已完成|这个结果/.test(actionSignature(control));
@@ -2589,6 +2591,11 @@
         if (eventNode && eventNode !== chatRoot()) return eventNode;
         return actionRow(button);
       };
+      const companionMessageCopy = (button) => {
+        if (!messageCopyControl(button)) return false;
+        const siblings = siblingActions(button);
+        return siblings.some(userAction) || siblings.some(assistantAction) || /task completed|任务已完成|how was this result|这个结果/.test(actionSignature(actionRow(button)));
+      };
       const roleOfCopy = (button) => {
         const owner = messageOwner(button);
         const signature = `${actionSignature(owner)} ${siblingActions(button).map(actionSignature).join(" ")}`;
@@ -2596,17 +2603,32 @@
         if (userAction(button) || siblingActions(button).some(userAction)) return "user";
         return "";
       };
+      const ACTION_CHROME_TOKEN = String.raw`copy(?:\s+link)?|copied|retry|edit|share|upgrade|task completed|how was this result|ask manus(?: anything(?:, no credits charged)?)?|new task|free plan|started working|working\.{0,3}|pending|queued|manus desktop|references|参考来源|任务已完成|这个结果怎么样|重试|编辑|复制|已复制|新任务|分享|升级`;
+      const actionChromeLine = new RegExp(`^(?:${ACTION_CHROME_TOKEN})(?:\\s+(?:${ACTION_CHROME_TOKEN}))*[?？]?$`, "i");
+      const looksAssistantPreamble = (value) => /^(?:收到[，,。 ]|i(?:['’]?ll| will) (?:search|look|check|retrieve|find)|let me (?:search|look|check)|i(?:['’]?m| am) (?:searching|looking))/i.test(String(value || "").trim());
       const chromeLine = (line) => {
         const value = String(line || "").trim();
         if (!value) return true;
-        if (/^(?:task completed|how was this result|ask manus(?: anything(?:, no credits charged)?)?|upgrade|share|new task|free plan|started working|working\.{0,3}|pending|queued|retry|edit|copy|copied|manus desktop|references|参考来源|任务已完成|这个结果怎么样|重试|编辑|复制|已复制|新任务)$/i.test(value)) return true;
+        if (actionChromeLine.test(value)) return true;
+        if (/^(?:yesterday|today|tomorrow|just now|[A-Z][a-z]+day),?\s+\d{1,2}:\d{2}(?:\s*[AP]M)?$/i.test(value)) return true;
+        if (/^\d{1,2}:\d{2}\s*[AP]M$/i.test(value)) return true;
+        if (/^(?:向用户|briefly explain|explain (?:the )?meaning)/i.test(value)) return true;
         if (/^manus(?:\s+\d+(?:\.\d+)?)?$/i.test(value)) return true;
         if (/^告?\s*manus(?:\s+\d+(?:\.\d+)?)?\b/i.test(value) && /\bis free\b/i.test(value)) return true;
         if (/\bis free for a limited time\b/i.test(value)) return true;
         if (/\bno credits charged\b/i.test(value)) return true;
         if (/this one['’]?s on manus/i.test(value)) return true;
         if (/^what can i do for you/i.test(value)) return true;
+        if (/manus['’]?s computer|computer is inactive/i.test(value)) return true;
         return false;
+      };
+      const filterUserText = (value) => useful(String(value || "").split(/\n+/).map((line) => normalize2(line)).filter((line) => line && !chromeLine(line) && !looksAssistantPreamble(line)).join("\n"));
+      const leadWithUser = (messages) => {
+        const list = Array.isArray(messages) ? messages.slice() : [];
+        const firstUser = list.findIndex((item) => item && item.role === "user");
+        if (firstUser <= 0) return list;
+        const [user] = list.splice(firstUser, 1);
+        return [user, ...list];
       };
       const composerLine = (line) => /^(?:ask manus(?: anything(?:, no credits charged)?)?|manus desktop)$/i.test(line);
       const sessionTitleText = () => useful(normalize2(document.title || "").replace(/^\s*manus\s*[|–—-]\s*/i, "").replace(/\s*[-|–—]\s*manus\b.*$/i, ""));
@@ -2616,22 +2638,23 @@
         return Boolean(title && text2 && (text2 === title || title.startsWith(text2) && text2.length >= 12));
       };
       const stripAssistantChrome = (value) => useful(normalize2(String(value || "").replace(/this one['’]?s on manus[^\n]*/ig, " ").replace(/[^\n]*\bno credits charged\b[^\n]*/ig, " ").replace(/[^\n]*\bis free for a limited time\b[^\n]*/ig, " ")));
-      const looksAssistantPreamble = (value) => /^(?:收到[，,。 ]|i(?:['’]?ll| will) (?:search|look|check|retrieve|find)|let me (?:search|look|check)|i(?:['’]?m| am) (?:searching|looking))/i.test(String(value || "").trim());
+      const clipAssistant = (value) => stripAssistantChrome(String(value || "").split(/\n(?:task completed|how was this result|you just got a free manus|任务已完成|这个结果怎么样)\b/i)[0]);
       const sanitizeConversation = (messages) => {
         const cleaned = [];
         for (const message of api.merge(messages || [])) {
           if (message.role === "user") {
-            const text2 = useful(message.text);
-            if (text2 && !chromeLine(text2) && !looksAssistantPreamble(text2)) cleaned.push({ role: "user", text: text2 });
+            const text2 = filterUserText(message.text);
+            if (text2 && !looksAssistantPreamble(text2)) cleaned.push({ role: "user", text: text2 });
             continue;
           }
-          const assistant = stripAssistantChrome(message.text);
+          const assistant = clipAssistant(message.text);
           if (assistant) cleaned.push({ role: "assistant", text: assistant });
         }
-        return structured(cleaned) ? api.merge(cleaned) : [];
+        const ordered = api.merge(leadWithUser(cleaned));
+        return structured(ordered) ? ordered : [];
       };
       const blankNewTask = (root2) => {
-        const buttons = qsa2("button,[role=button]", root2).filter(messageCopyControl);
+        const buttons = qsa2("button,[role=button]", root2).filter(companionMessageCopy);
         if (buttons.length) return false;
         const text2 = normalize2(root2 && (root2.innerText || root2.textContent) || "");
         return /ask manus|new task|message your task/i.test(text2) && !/task completed|任务已完成/i.test(text2) && text2.length < 1200;
@@ -2652,11 +2675,15 @@
         }
         await api.sleep(160);
       };
-      const copyTurns = async (root2) => {
-        const buttons = qsa2("button,[role=button]", root2).filter(messageCopyControl).sort(order).slice(0, 48);
+      const copyTurns = async (root2, have = {}) => {
+        const buttons = qsa2("button,[role=button]", root2).filter(companionMessageCopy).sort(order).slice(0, 8);
         const out = [];
         const seenOwners = /* @__PURE__ */ new Set();
+        const haveRole = { user: Boolean(have.user), assistant: Boolean(have.assistant) };
         for (const button of buttons) {
+          const role = roleOfCopy(button);
+          if (role !== "user" && role !== "assistant") continue;
+          if (haveRole[role]) continue;
           const owner = messageOwner(button);
           if (seenOwners.has(owner)) continue;
           seenOwners.add(owner);
@@ -2665,9 +2692,8 @@
           await api.sleep(120);
           const text2 = useful(await api.copy(button, copyOptions));
           if (!text2) continue;
-          const role = roleOfCopy(button);
-          if (role !== "user" && role !== "assistant") continue;
           out.push({ role, text: text2 });
+          haveRole[role] = true;
           await api.sleep(80);
         }
         return api.merge(out);
@@ -2683,7 +2709,12 @@
         }
         return useful(event.content || event.question || "");
       };
-      const skipUserEvent = (event) => /meeting-record|webdev-feature-confirm/.test(String(event && event.extData && event.extData.from || ""));
+      const skipUserEvent = (event) => /meeting-record|webdev-feature-confirm|plan|todo|agent-task|brief/.test(String(event && event.extData && event.extData.from || ""));
+      const eventTime = (event) => {
+        const value = event && (event.createdAt || event.timestamp || event.time || event.seq || event.sortIndex);
+        const n = Number(value);
+        return Number.isFinite(n) ? n : 0;
+      };
       const isUserChatEvent = (event) => event && event.type === "chat" && event.sender === "user" && !event.noRender && !event.userCanceled && !skipUserEvent(event);
       const isAssistantChatEvent = (event) => event && event.type === "chat" && event.sender === "assistant" && !event.noRender && !event.userCanceled && event.deliveryKind !== "opening" && event.deliveryKind !== "progress";
       const eventsFromState = (state) => {
@@ -2697,15 +2728,17 @@
           const event = row && row.type === "event" ? row.event : row;
           if (event && event.type === "chat") out.push(event);
         }
-        return out;
+        return out.sort((left, right) => eventTime(left) - eventTime(right));
       };
       const turnsFromEvents = (events) => {
         const out = [];
         for (const event of events || []) {
           const text2 = chatTextFromEvent(event);
           if (!text2) continue;
-          if (isUserChatEvent(event)) out.push({ role: "user", text: text2 });
-          else if (isAssistantChatEvent(event)) out.push({ role: "assistant", text: text2 });
+          if (isUserChatEvent(event)) {
+            const user = filterUserText(text2);
+            if (user) out.push({ role: "user", text: user });
+          } else if (isAssistantChatEvent(event)) out.push({ role: "assistant", text: clipAssistant(text2) });
         }
         return api.merge(out);
       };
@@ -2740,8 +2773,10 @@
         const takeEvent = (event) => {
           const text2 = chatTextFromEvent(event);
           if (!text2) return;
-          if (isUserChatEvent(event)) pushTurn({ role: "user", text: text2 });
-          else if (isAssistantChatEvent(event)) pushTurn({ role: "assistant", text: text2 });
+          if (isUserChatEvent(event)) {
+            const user = filterUserText(text2);
+            if (user) pushTurn({ role: "user", text: user });
+          } else if (isAssistantChatEvent(event)) pushTurn({ role: "assistant", text: clipAssistant(text2) });
         };
         let visited = 0;
         const visitFiber = (fiber, depth) => {
@@ -2760,28 +2795,43 @@
         return api.merge(out);
       };
       const looksUserBubble = (node, root2) => {
-        if (!node || node === root2 || pageChrome(node) || nestedCopyScope(node)) return false;
+        if (!node || node === root2 || pageChrome(node) || nestedCopyScope(node) || computerChrome(node)) return false;
         const cls = classText2(node).toLowerCase();
+        if (/message-actions|action-bar|action-buttons|toolbar/.test(cls)) return false;
+        const text2 = filterUserText(node.innerText || node.textContent);
+        if (!text2) return false;
         if (/\b(user|question|justify-end|ml-auto|ms-auto|self-end|items-end)\b/.test(cls)) return true;
         const buttons = qsa2("button,[role=button]", node);
+        if (buttons.some(forbiddenControl) || buttons.some(assistantAction)) return false;
         if (buttons.some(userAction) && !buttons.some(assistantAction)) return true;
         const rect = rectOf(node);
         const rootRect = rectOf(root2);
-        return Boolean(rect && rootRect && rect.width > 48 && rect.width < rootRect.width * 0.82 && rect.left - rootRect.left > rootRect.width * 0.28);
+        return Boolean(rect && rootRect && rect.width > 48 && rect.width < rootRect.width * 0.72 && rect.left - rootRect.left > rootRect.width * 0.38);
       };
-      const userBubbleTurns = (root2) => {
+      const looksAssistantBubble = (node, root2) => {
+        if (!node || node === root2 || pageChrome(node) || nestedCopyScope(node) || computerChrome(node)) return false;
+        const buttons = qsa2("button,[role=button]", node);
+        if (buttons.some(assistantAction) && !buttons.some(userAction)) return true;
+        const text2 = normalize2(node.innerText || node.textContent || "");
+        return /task completed|任务已完成/.test(text2) && (looksAssistantPreamble(text2) || text2.length > 40);
+      };
+      const bubbleTurns = (root2, role) => {
         const out = [];
         const seen = /* @__PURE__ */ new Set();
-        const nodes = qsa2("div,article,section,li,p,[data-event-id]", root2).filter((node) => looksUserBubble(node, root2)).sort(order).slice(0, 80);
+        const match = role === "user" ? looksUserBubble : looksAssistantBubble;
+        const nodes = qsa2("div,article,section,li,p,[data-event-id]", root2).filter((node) => match(node, root2)).sort(order).slice(0, 80);
         for (const node of nodes) {
-          if (nodes.some((other) => other !== node && other.contains && other.contains(node) && looksUserBubble(other, root2))) continue;
-          const text2 = useful(node.innerText || node.textContent);
-          if (!text2 || text2.length > 8e3 || chromeLine(text2) || looksAssistantPreamble(text2) || seen.has(text2)) continue;
-          seen.add(text2);
-          out.push({ role: "user", text: text2 });
+          if (nodes.some((other) => other !== node && other.contains && other.contains(node) && match(other, root2))) continue;
+          if (seen.has(node)) continue;
+          seen.add(node);
+          const raw = role === "assistant" ? clipAssistant(node.innerText || node.textContent) : filterUserText(node.innerText || node.textContent);
+          const text2 = useful(raw);
+          if (!text2 || text2.length > 8e3 || chromeLine(text2) || role === "user" && looksAssistantPreamble(text2)) continue;
+          out.push({ role, text: text2, node });
         }
         return out;
       };
+      const orderedTurns = (...groups) => groups.flat().filter((item) => item && item.node).sort((a, b) => order(a.node, b.node)).map(({ role, text: text2 }) => ({ role, text: text2 }));
       const domFallback = (root2, copiedAssistant = "") => {
         const raw = normalize2(root2 && (root2.innerText || root2.textContent) || "");
         if (!raw) return [];
@@ -2790,6 +2840,7 @@
           const line = normalize2(rawLine.replace(/^[-•]\s*/, ""));
           if (!line || line.length < 2) continue;
           if (composerLine(line) && lines.length) break;
+          if (/^(?:task completed|how was this result|任务已完成|这个结果怎么样)/i.test(line) && lines.length) break;
           if (chromeLine(line) || isSessionTitle(line)) continue;
           if (!lines.includes(line)) lines.push(line);
         }
@@ -2802,7 +2853,7 @@
         }
         if (userEnd < 1) return [];
         const user = useful(lines.slice(0, userEnd).join("\n"));
-        const assistant = useful(lines.slice(userEnd).join("\n"));
+        const assistant = clipAssistant(lines.slice(userEnd).join("\n"));
         if (!user || !assistant || user.length < 2 || assistant.length < 8) return [];
         if (user.toLowerCase() === assistant.toLowerCase()) return [];
         if (isSessionTitle(user) || looksAssistantPreamble(user)) return [];
@@ -2811,39 +2862,26 @@
       const combineTurns = (...groups) => sanitizeConversation(groups.flat().filter(Boolean));
       const root = chatRoot();
       if (blankNewTask(root)) return [];
-      await scrollConversationStart(root);
-      const copied = await copyTurns(root);
-      const copiedClean = sanitizeConversation(copied);
-      if (structured(copiedClean)) return copiedClean;
-      if (typeof api.extractNativeCopyConversation === "function") {
-        const native = await api.extractNativeCopyConversation(root);
-        const nativeClean = sanitizeConversation(native);
-        if (structured(nativeClean)) return nativeClean;
-      }
       const pageTurns = pageChatTurns(root);
       const pageClean = sanitizeConversation(pageTurns);
       if (structured(pageClean)) return pageClean;
-      const assistantOnly = copied.find((item) => item.role === "assistant")?.text || pageTurns.find((item) => item.role === "assistant")?.text || "";
-      const userOnly = copied.find((item) => item.role === "user")?.text || pageTurns.find((item) => item.role === "user")?.text || userBubbleTurns(root)[0]?.text || "";
-      if (userOnly && assistantOnly) {
-        const combined = combineTurns([{ role: "user", text: userOnly }, { role: "assistant", text: assistantOnly }]);
-        if (structured(combined)) return combined;
-      }
-      if (assistantOnly && !userOnly) {
-        const fromBubbles = userBubbleTurns(root);
-        const withBubbles = combineTurns(fromBubbles, [{ role: "assistant", text: assistantOnly }]);
-        if (structured(withBubbles)) return withBubbles;
-        const fallback = sanitizeConversation(domFallback(root, assistantOnly));
-        if (structured(fallback)) return fallback;
-      }
-      if (userOnly && !assistantOnly) {
-        const fallback = sanitizeConversation(domFallback(root));
-        if (structured(fallback)) return fallback;
-      }
-      return sanitizeConversation(domFallback(root, assistantOnly));
+      const userTurns = bubbleTurns(root, "user");
+      const assistantTurns = bubbleTurns(root, "assistant");
+      const bubbles = combineTurns(orderedTurns(userTurns, assistantTurns));
+      if (structured(bubbles)) return bubbles;
+      const mixed = combineTurns(pageTurns, orderedTurns(userTurns, assistantTurns));
+      if (structured(mixed)) return mixed;
+      const fromDom = sanitizeConversation(domFallback(root, pageTurns.find((item) => item.role === "assistant")?.text || assistantTurns[0]?.text || ""));
+      if (structured(fromDom)) return fromDom;
+      await scrollConversationStart(root);
+      const copied = await copyTurns(root, {
+        user: userTurns.length > 0 || pageTurns.some((item) => item.role === "user"),
+        assistant: assistantTurns.length > 0 || pageTurns.some((item) => item.role === "assistant")
+      });
+      return sanitizeConversation([...orderedTurns(userTurns, assistantTurns), ...pageTurns, ...copied]);
     };
     scripts["manus.js"] = scripts["manus"];
-    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.cf5413f0f55c9e51b80b36349766b1cfee7cea44f8fe4589eaa4a5909d216d64" });
+    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.0f2e1b4fe74da6c44291dbc9969f4668c21eab3efaa4650cf3d04f5120f4b46e" });
     return scripts;
   }
 
