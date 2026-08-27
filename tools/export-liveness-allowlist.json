@@ -7,10 +7,6 @@
     "kind": "test-only",
     "reason": "Remembered ChatClub-tab sidebar regressions inject storage, catalog, overlay-dismissal, and delete-confirmation seams without going through the runtime attach helper."
   },
-  "shared/workspace-tab-fulltext.js#pocketPairsFromMessages": {
-    "kind": "test-only",
-    "reason": "Full-text search regressions pair user/assistant turns without exposing the helper as a runtime API."
-  },
   "app/history/model.js#promptHistoryGroupId": {
     "kind": "test-only",
     "reason": "Prompt-history boundary regressions directly verify local-date transitions at today, week, month and invalid-time edges."

@@ -1,12 +1,20 @@
 import { t } from "../../shared/i18n.js";
 import { savePromptSendHistory } from "../../shared/storage-adapter.js";
-import { createSettingsIconAction, createSettingsList } from "../../ui/components.js";
+import { createSettingsIconAction } from "../../ui/components.js";
 import { clear, el, input, toast, viewerModal } from "../../ui/dom.js";
-import { requireControllerContext, requireControllerFunction, validateControllerContract } from "../controller-contract.js";
+import {
+  optionalControllerObject,
+  requireControllerContext,
+  requireControllerFunction,
+  validateControllerContract
+} from "../controller-contract.js";
 import {
   groupPromptHistory,
   promptHistoryImageCountLabel,
   promptHistoryItemMatchesSearch,
+  promptHistoryMessageKey,
+  promptHistoryPocketPages,
+  promptHistoryPocketSaved,
   promptHistoryPreview,
   promptHistoryTimeLabel
 } from "./model.js";
@@ -17,16 +25,35 @@ export function createHistoryController(ctx) {
     state: "object",
     svgIcon: "function",
     setPromptImages: "function",
-    syncPromptInputNode: "function"
+    syncPromptInputNode: "function",
+    pocketPort: "object?",
+    conversationPort: "object?"
   });
   const state = requireControllerContext(ctx, controllerName, "state");
   const svgIcon = requireControllerFunction(ctx, controllerName, "svgIcon");
   const setPromptImages = requireControllerFunction(ctx, controllerName, "setPromptImages");
   const syncPromptInputNode = requireControllerFunction(ctx, controllerName, "syncPromptInputNode");
+  const pocketPort = optionalControllerObject(ctx, "pocketPort");
+  const conversationPort = optionalControllerObject(ctx, "conversationPort");
+  const savePagesToPocket = typeof pocketPort.savePages === "function"
+    ? pocketPort.savePages
+    : async () => ({ saved: false, count: 0 });
+  const loadPocketEntries = typeof pocketPort.loadEntries === "function"
+    ? pocketPort.loadEntries
+    : async () => [];
+  const loadFullTextStore = typeof conversationPort.loadFullText === "function"
+    ? conversationPort.loadFullText
+    : async () => ({});
+  const collectLivePreviewItems = typeof conversationPort.collectLive === "function"
+    ? conversationPort.collectLive
+    : async () => [];
   let searchQuery = "";
   let searchFocused = false;
   let searchComposing = false;
   let searchSelection = { start: 0, end: 0 };
+  let activeItemId = "";
+  let pocketEntries = [];
+  let pocketBusy = false;
   let historyCurrentRedraw = null;
 
   function items() {
@@ -43,6 +70,15 @@ export function createHistoryController(ctx) {
     searchFocused = false;
     searchComposing = false;
     searchSelection = { start: 0, end: 0 };
+  }
+
+  async function refreshPocketEntries() {
+    try {
+      pocketEntries = await loadPocketEntries();
+    } catch {
+      pocketEntries = [];
+    }
+    return pocketEntries;
   }
 
   async function save(history, redraw, message) {
@@ -72,12 +108,38 @@ export function createHistoryController(ctx) {
     const images = Array.isArray(item?.images) ? item.images : [];
     const label = promptHistoryPreview(item?.text, 80) || promptHistoryImageCountLabel(images) || t("promptHistory.thisPrompt");
     if (!window.confirm(t("promptHistory.deleteConfirm", { prompt: label }))) return;
+    if (activeItemId === item.id) activeItemId = "";
     await save(items().filter((entry) => entry.id !== item.id), redraw, t("toast.promptHistoryDeleted"));
   }
 
   async function clearHistory(redraw) {
     if (!items().length || !window.confirm(t("promptHistory.clearConfirm"))) return;
+    activeItemId = "";
     await save([], redraw, t("toast.promptHistoryCleared"));
+  }
+
+  async function saveItemToPocket(item, redraw) {
+    if (pocketBusy || !promptHistoryMessageKey(item?.text)) return;
+    pocketBusy = true;
+    redraw();
+    try {
+      let pages = promptHistoryPocketPages(item, { store: await loadFullTextStore() });
+      if (!pages.length) {
+        pages = promptHistoryPocketPages(item, { previewItems: await collectLivePreviewItems() });
+      }
+      if (!pages.length) {
+        toast(t("toast.historyPocketEmpty"), "error");
+        return;
+      }
+      const result = await savePagesToPocket(pages);
+      if (result?.saved) await refreshPocketEntries();
+    } catch (error) {
+      console.warn("[ChatClub] Failed to save History item to Pocket", error);
+      toast(t("toast.noValidPocketContent"), "error");
+    } finally {
+      pocketBusy = false;
+      redraw();
+    }
   }
 
   function restoreSearchField(host) {
@@ -190,27 +252,99 @@ export function createHistoryController(ctx) {
     });
   }
 
-  function row(item, redraw, close) {
-    const textPreview = promptHistoryPreview(item.text, 420);
+  function resolveActiveItem(visible) {
+    const selected = visible.find((item) => item.id === activeItemId);
+    if (selected) return selected;
+    activeItemId = visible[0]?.id || "";
+    return visible[0] || null;
+  }
+
+  function sidebarItem(item, active, redraw) {
     const images = Array.isArray(item.images) ? item.images : [];
     const imageLabel = promptHistoryImageCountLabel(images);
-    return el("div", { class: "ui-list-row settings-list-row prompt-history-row" },
-      el("time", { class: "prompt-history-time", datetime: item.createdAt || "" }, promptHistoryTimeLabel(item.createdAt)),
-      el("span", { class: "prompt-history-preview", title: item.text || imageLabel || "" },
-        textPreview || (images.length ? imageLabel : t("promptHistory.emptyPrompt")),
-        images.length ? el("span", { class: "prompt-history-images" },
-          images.slice(0, 4).map((image) => el("img", {
-            src: image.dataUrl,
-            alt: image.name || "",
-            title: image.name || imageLabel
-          })),
-          images.length > 4 ? el("span", { class: "prompt-history-image-more" }, `+${images.length - 4}`) : null
-        ) : null
+    const preview = promptHistoryPreview(item.text, 80) || imageLabel || t("promptHistory.emptyPrompt");
+    const pocketSaved = promptHistoryPocketSaved(item, pocketEntries);
+    return el("button", {
+      class: `prompt-history-sidebar-item${active ? " active" : ""}`,
+      type: "button",
+      "aria-current": active ? "true" : null,
+      onclick: () => {
+        if (activeItemId === item.id) return;
+        activeItemId = item.id;
+        redraw();
+      }
+    },
+      el("span", { class: "prompt-history-sidebar-item-top" },
+        el("span", { class: "prompt-history-sidebar-preview" }, preview),
+        pocketSaved
+          ? el("span", {
+            class: "prompt-history-pocket-badge",
+            title: t("promptHistory.savedToPocket"),
+            "aria-label": t("promptHistory.savedToPocket")
+          }, svgIcon("pocket"))
+          : null
       ),
-      el("div", { class: "settings-row-action-group" },
-        rowAction(t("promptHistory.insert"), "insert", () => insert(item, close), "", "settings.action.insert"),
-        rowAction(t("common.delete"), "trash", () => remove(item, redraw), "danger", "settings.action.delete")
-      )
+      el("time", { class: "prompt-history-sidebar-time", datetime: item.createdAt || "" }, promptHistoryTimeLabel(item.createdAt))
+    );
+  }
+
+  function sidebar(visible, activeItem, redraw) {
+    const searching = Boolean(String(searchQuery || "").trim());
+    return el("aside", {
+      class: "prompt-history-sidebar",
+      "aria-label": t("promptHistory.sidebar")
+    },
+      visible.length
+        ? el("div", { class: "prompt-history-sidebar-list", role: "list" },
+          groupPromptHistory(visible).flatMap((group) => [
+            el("div", { class: "prompt-history-group", role: "heading", "aria-level": "5" }, t(group.labelKey)),
+            ...group.items.map((item) => el("div", { class: "prompt-history-sidebar-list-item", role: "listitem" },
+              sidebarItem(item, item.id === activeItem?.id, redraw)
+            ))
+          ])
+        )
+        : el("div", { class: "prompt-history-sidebar-empty" }, t(searching ? "promptHistory.searchEmpty" : "promptHistory.noHistory"))
+    );
+  }
+
+  function detailImages(images, imageLabel) {
+    if (!images.length) return null;
+    return el("span", { class: "prompt-history-images" },
+      images.slice(0, 8).map((image) => el("img", {
+        src: image.dataUrl,
+        alt: image.name || "",
+        title: image.name || imageLabel
+      })),
+      images.length > 8 ? el("span", { class: "prompt-history-image-more" }, `+${images.length - 8}`) : null
+    );
+  }
+
+  function detail(item, redraw, close) {
+    const images = Array.isArray(item.images) ? item.images : [];
+    const imageLabel = promptHistoryImageCountLabel(images);
+    const canPocket = Boolean(promptHistoryMessageKey(item.text)) && !pocketBusy;
+    return el("article", { class: "prompt-history-detail" },
+      el("header", { class: "prompt-history-detail-header" },
+        el("div", { class: "prompt-history-detail-meta" },
+          el("time", { datetime: item.createdAt || "" }, promptHistoryTimeLabel(item.createdAt)),
+          imageLabel ? el("span", {}, imageLabel) : null
+        ),
+        el("div", { class: "prompt-history-detail-actions" },
+          el("button", {
+            class: "button button-secondary prompt-history-pocket-button tooltip-trigger",
+            type: "button",
+            "aria-label": t("promptHistory.saveToPocket"),
+            "data-tooltip": t("promptHistory.saveToPocket"),
+            "data-tooltip-id": "history.action.pocket",
+            disabled: !canPocket,
+            onclick: () => saveItemToPocket(item, redraw)
+          }, svgIcon("pocket"), el("span", {}, t("promptHistory.saveToPocket"))),
+          rowAction(t("promptHistory.insert"), "insert", () => insert(item, close), "", "settings.action.insert"),
+          rowAction(t("common.delete"), "trash", () => remove(item, redraw), "danger", "settings.action.delete")
+        )
+      ),
+      el("pre", { class: "prompt-history-detail-text" }, item.text || t("promptHistory.emptyPrompt")),
+      detailImages(images, imageLabel)
     );
   }
 
@@ -219,12 +353,7 @@ export function createHistoryController(ctx) {
     const query = searchQuery;
     const searching = Boolean(String(query || "").trim());
     const visible = searching ? history.filter((item) => promptHistoryItemMatchesSearch(item, query)) : history;
-    const rows = visible.length
-      ? groupPromptHistory(visible).flatMap((group) => [
-        el("div", { class: "prompt-history-group", role: "heading", "aria-level": "5" }, t(group.labelKey)),
-        group.items.map((item) => row(item, redraw, close))
-      ])
-      : el("div", { class: "ui-empty-state settings-empty-row" }, t(searching ? "promptHistory.searchEmpty" : "promptHistory.noHistory"));
+    const activeItem = resolveActiveItem(visible);
     clear(host);
     host.append(
       el("div", { class: "prompt-history-panel-toolbar" },
@@ -237,12 +366,13 @@ export function createHistoryController(ctx) {
           }, svgIcon("trash"), el("span", {}, t("promptHistory.clear")))
           : null
       ),
-      el("div", { class: "prompt-history-panel-body" },
-        createSettingsList({
-          headers: [t("promptHistory.time"), t("promptHistory.prompt"), t("profiles.actions")],
-          rows,
-          className: "prompt-history-list prompt-history-panel-list"
-        })
+      el("div", { class: "prompt-history-shell" },
+        sidebar(visible, activeItem, redraw),
+        el("main", { class: "prompt-history-main" },
+          activeItem
+            ? detail(activeItem, redraw, close)
+            : el("div", { class: "ui-empty-state prompt-history-main-empty" }, t(searching ? "promptHistory.searchEmpty" : "promptHistory.noHistory"))
+        )
       )
     );
   }
@@ -260,6 +390,7 @@ export function createHistoryController(ctx) {
     const existing = document.querySelector(".modal.prompt-history-modal");
     if (existing) return existing.closest(".modal-backdrop") || existing.parentElement;
     resetSearch();
+    activeItemId = "";
     const host = el("div", { class: "ui-dialog prompt-history-dialog" });
     let dialog;
     const close = () => {
@@ -273,6 +404,7 @@ export function createHistoryController(ctx) {
     const panel = dialog.querySelector(".modal");
     panel?.classList.add("prompt-history-modal");
     installHistoryPanelHeader(panel);
+    refreshPocketEntries().then(redraw).catch(() => redraw());
     redraw();
     return dialog;
   }

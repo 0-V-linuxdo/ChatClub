@@ -136,32 +136,47 @@ export function createPocketController(ctx) {
     return entries;
   }
 
-  function pocketEntriesFromSummaryPreview(items = state.summaryPreviewItems) {
+  function pocketEntriesFromPages(pages = []) {
     const batch = { batchId: createId("pocket-batch"), batchCreatedAt: new Date().toISOString() };
     const workspaceMeta = workspacePocketMetaByInstanceId();
-    return (items || []).flatMap((item, order) => {
-      if (summaryPreviewStatus(item.status) !== "ok") return [];
-      const page = summaryPreviewPage(item);
-      const messages = Array.isArray(page.messages) ? page.messages : [];
+    return (pages || []).flatMap((page, order) => {
+      const messages = Array.isArray(page?.messages) ? page.messages : [];
       if (!messages.length) return [];
       const context = pocketSourceContext(page, batch, workspaceMeta, order);
       return pocketEntriesFromMessages(messages, page, summarySourceMeta(page, { effectiveFaviconUrl }), context);
     });
   }
 
+  function pocketPreviewPages(items = state.summaryPreviewItems) {
+    return (items || []).flatMap((item) => {
+      if (summaryPreviewStatus(item.status) !== "ok") return [];
+      const page = summaryPreviewPage(item);
+      return Array.isArray(page?.messages) && page.messages.length ? [page] : [];
+    });
+  }
+
+  function pocketEntriesFromSummaryPreview(items = state.summaryPreviewItems) {
+    return pocketEntriesFromPages(pocketPreviewPages(items));
+  }
+
   function dedupePocketEntries(entries) {
     return dedupePocketHistory(entries);
   }
 
-  async function saveSummaryPreviewToPocket() {
-    const entries = pocketEntriesFromSummaryPreview();
+  async function savePagesToPocket(pages = []) {
+    const entries = pocketEntriesFromPages(pages);
     if (!entries.length) {
       toast(t("toast.noValidPocketContent"), "error");
-      return;
+      return { saved: false, count: 0 };
     }
     const stored = await loadPocketHistory();
     state.pocketEntries = await savePocketHistory(dedupePocketEntries([...entries, ...stored]));
     toast(t("toast.pocketSaved", { count: entries.length, plural: entries.length === 1 ? "" : "s" }), "success");
+    return { saved: true, count: entries.length };
+  }
+
+  async function saveSummaryPreviewToPocket() {
+    return savePagesToPocket(pocketPreviewPages());
   }
 
   function formatPocketTime(value) {
@@ -1075,6 +1090,7 @@ export function createPocketController(ctx) {
   return {
     openPocketPanel,
     pocketEntriesFromSummaryPreview,
+    savePagesToPocket,
     saveSummaryPreviewToPocket,
     toggleOpenPocketPanelFullscreen
   };

@@ -1,5 +1,9 @@
 import { t } from "../../shared/i18n.js";
 import { dateGroupId, groupByDate, timestamp } from "../../shared/date-groups.js";
+import {
+  framesFromSummaryPreviewItems,
+  pocketPairsFromMessages
+} from "../../shared/workspace-tab-fulltext.js";
 
 export function promptHistoryGroupId(createdAt, now = Date.now()) {
   return dateGroupId(createdAt, now);
@@ -49,4 +53,74 @@ function promptHistorySearchExtraTexts(item) {
 
 export function promptHistoryItemMatchesSearch(item, query) {
   return promptHistoryMatchesSearch(item, query, promptHistorySearchExtraTexts(item));
+}
+
+export function promptHistoryMessageKey(text = "") {
+  return String(text || "").replace(/\r\n?/g, "\n").trim();
+}
+
+export function promptHistoryPocketSaved(item, pocketEntries = []) {
+  const key = promptHistoryMessageKey(item?.text);
+  if (!key) return false;
+  return (Array.isArray(pocketEntries) ? pocketEntries : []).some(
+    (entry) => promptHistoryMessageKey(entry?.userMessage) === key
+  );
+}
+
+function matchingFrames(item, frames = []) {
+  const key = promptHistoryMessageKey(item?.text);
+  if (!key) return [];
+  return (Array.isArray(frames) ? frames : []).flatMap((frame) => {
+    const matching = pocketPairsFromMessages(frame?.messages).filter(
+      (pair) => promptHistoryMessageKey(pair.userMessage) === key
+    );
+    if (!matching.length) return [];
+    return [{
+      ...frame,
+      messages: matching.flatMap((pair) => [
+        { role: "user", text: pair.userMessage },
+        { role: "assistant", text: pair.assistantMessage }
+      ])
+    }];
+  });
+}
+
+function framesMatchingPromptHistory(item, store = {}) {
+  const records = store && typeof store === "object" && !Array.isArray(store) ? Object.values(store) : [];
+  return matchingFrames(item, records.flatMap((record) => (record?.frames || []).map((frame) => ({
+    ...frame,
+    title: frame.title || record.topicTitle
+  }))));
+}
+
+function previewItemsMatchingPromptHistory(item, previewItems = []) {
+  return matchingFrames(item, framesFromSummaryPreviewItems(previewItems));
+}
+
+function frameToPocketPage(frame = {}) {
+  return {
+    href: frame.href,
+    url: frame.href,
+    title: frame.title,
+    pageTitle: frame.title,
+    siteName: frame.appName,
+    name: frame.appName,
+    appId: frame.appId,
+    instanceId: frame.instanceId,
+    messages: frame.messages
+  };
+}
+
+export function promptHistoryPocketPages(item, sources = {}) {
+  const pages = [
+    ...framesMatchingPromptHistory(item, sources.store),
+    ...previewItemsMatchingPromptHistory(item, sources.previewItems)
+  ].map(frameToPocketPage);
+  const seen = new Set();
+  return pages.filter((page) => {
+    const key = [page.href, ...(Array.isArray(page.messages) ? page.messages.map((message) => message.text) : [])].join("\n");
+    if (!page.href || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }

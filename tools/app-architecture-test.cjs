@@ -157,10 +157,10 @@ function appDomain(file) {
     ["app/composer/images.js", "createPromptImageModel", ["normalizeEntry"]],
     ["app/optimize/controller.js", "createOptimizeController", ["openOptimizeCompareDialog"]],
     ["app/pocket/controller.js", "createPocketController", [
-      "dedupePocketEntries", "normalizePocketMessage", "pocketEntriesFromMessages"
+      "dedupePocketEntries", "normalizePocketMessage", "pocketEntriesFromMessages", "pocketEntriesFromPages"
     ]],
     ["app/history/controller.js", "createHistoryController", [
-      "insert", "remove", "clearHistory", "headerSearch", "renderHistory"
+      "insert", "remove", "clearHistory", "headerSearch", "renderHistory", "saveItemToPocket", "sidebar"
     ]],
     ["app/share/controller.js", "createShareController", [
       "listShareFrames", "collectShareImage", "collectShareText", "runShare"

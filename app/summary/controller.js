@@ -908,14 +908,19 @@ export function createSummaryController(ctx) {
     return run;
   }
 
-  async function captureWorkspaceFullText() {
-    if (state.options?.recordFullText !== true) return { saved: false };
+  async function collectWorkspacePreviewItems() {
     const frames = currentFrames();
-    if (!frames.length) return { saved: false };
+    if (!frames.length) return [];
     const results = await Promise.all(frames.map((iframe, index) =>
       withSummaryCollectionLock(() => collectFrameSummary(iframe, index))
     ));
-    const items = results.map((result, index) => summaryPreviewItemFromResult(result, { index, order: index }));
+    return results.map((result, index) => summaryPreviewItemFromResult(result, { index, order: index }));
+  }
+
+  async function captureWorkspaceFullText() {
+    if (state.options?.recordFullText !== true) return { saved: false };
+    const items = await collectWorkspacePreviewItems();
+    if (!items.length) return { saved: false };
     return persistRecordedFullText(items);
   }
   
@@ -1024,6 +1029,7 @@ export function createSummaryController(ctx) {
     open: openSummaryPanel,
     toggleMaximized: toggleSummaryMaximized,
     loadPanelSize: loadSummaryPanelSize,
-    captureWorkspaceFullText
+    captureWorkspaceFullText,
+    collectWorkspacePreviewItems
   };
 }

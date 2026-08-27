@@ -562,6 +562,7 @@ export function createAppearanceSettingsSection(ctx) {
       "pocket.focusMode": "focusMode",
       "pocket.sidebar": "sidebarCollapse",
       "pocket.deleteItem": "trash",
+      "history.action.pocket": "pocket",
       "optimize.retry": "reload",
       "settings.modal.fullscreen": "maximize",
       "settings.modal.close": "x",

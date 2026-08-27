@@ -43,7 +43,7 @@ import { createTopbarController } from "./topbar/controller.js";
 import { createWorkspaceController } from "./workspace/controller.js";
 import { PROMPT_HANDOFF_LAUNCH_REASON, createWorkspacePromptHandoffController } from "./workspace/prompt-handoff-controller.js";
 import { attachWorkspaceTabsSidebarController } from "./workspace/tabs-sidebar-controller.js";
-import { persistWorkspaceTabFullTextFromPreview } from "./workspace/tab-search.js";
+import { loadWorkspaceTabFullTextStore, persistWorkspaceTabFullTextFromPreview } from "./workspace/tab-search.js";
 import { createWorkspaceTopicTitleController } from "./workspace/topic-title-controller.js";
 import { createWorkspaceSessionStore } from "./workspace/session-store.js";
 import {
@@ -464,7 +464,15 @@ function ensureHistoryController() {
           state: featureState.history,
           svgIcon,
           setPromptImages,
-          syncPromptInputNode
+          syncPromptInputNode,
+          pocketPort: {
+            savePages: (...args) => ensurePocketController().then((pocket) => pocket.savePagesToPocket(...args)),
+            loadEntries: () => loadPocketHistory()
+          },
+          conversationPort: {
+            loadFullText: () => loadWorkspaceTabFullTextStore(),
+            collectLive: () => ensureSummaryController().then((summary) => summary.collectWorkspacePreviewItems())
+          }
         });
         return historyController;
       })
