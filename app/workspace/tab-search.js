@@ -3,6 +3,7 @@ import { t } from "../../shared/i18n.js";
 import {
   framesFromSummaryPreviewItems,
   matchesFullTextQuery,
+  mergeWorkspaceTabFullTextFrames,
   normalizeWorkspaceTabFullTextStore,
   pruneWorkspaceTabFullTextStore,
   removeWorkspaceTabFullText,
@@ -44,13 +45,15 @@ async function saveWorkspaceTabFullTextStore(store) {
 }
 
 export async function persistWorkspaceTabFullTextFromPreview({ workspaceId, topicTitle, items } = {}) {
-  const frames = framesFromSummaryPreviewItems(items);
+  const incoming = framesFromSummaryPreviewItems(items);
   const id = String(workspaceId || "").trim();
-  if (!id || !frames.length) return { saved: false };
+  if (!id || !incoming.length) return { saved: false };
   const store = await loadWorkspaceTabFullTextStore();
+  const current = store[id];
+  const frames = mergeWorkspaceTabFullTextFrames(current?.frames, incoming);
   const next = upsertWorkspaceTabFullText(store, {
     workspaceId: id,
-    topicTitle,
+    topicTitle: String(topicTitle || current?.topicTitle || "").trim(),
     frames,
     updatedAt: new Date().toISOString()
   });

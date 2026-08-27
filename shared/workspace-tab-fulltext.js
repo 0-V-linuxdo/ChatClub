@@ -45,6 +45,52 @@ export function pocketPairsFromMessages(messages = []) {
   return entries;
 }
 
+function frameIdentityKey(frame = {}) {
+  const instanceId = textValue(frame.instanceId);
+  if (instanceId) return `id:${instanceId}`;
+  const href = textValue(frame.href);
+  return href ? `href:${href}` : "";
+}
+
+export function mergeWorkspaceTabFullTextFrames(existing = [], incoming = []) {
+  const current = (Array.isArray(existing) ? existing : [])
+    .map((frame, order) => normalizeFrame(frame, order))
+    .filter(Boolean);
+  const next = (Array.isArray(incoming) ? incoming : [])
+    .map((frame, order) => normalizeFrame(frame, order))
+    .filter(Boolean);
+  if (!next.length) return current.slice(0, WORKSPACE_TAB_FULLTEXT_MAX_FRAMES);
+  const indexByKey = new Map();
+  const merged = current.map((frame, index) => {
+    const key = frameIdentityKey(frame);
+    if (key) indexByKey.set(key, index);
+    return frame;
+  });
+  for (const frame of next) {
+    const key = frameIdentityKey(frame);
+    const index = key ? indexByKey.get(key) : undefined;
+    if (index != null) {
+      merged[index] = { ...frame, order: merged[index].order };
+      continue;
+    }
+    if (key) indexByKey.set(key, merged.length);
+    merged.push({ ...frame, order: merged.length });
+  }
+  return merged
+    .map((frame, order) => ({ ...frame, order }))
+    .slice(0, WORKSPACE_TAB_FULLTEXT_MAX_FRAMES);
+}
+
+export function fullTextMessagesMatchPrompt(messages, prompt) {
+  const needle = textValue(prompt).replace(/\s+/g, " ");
+  if (!needle) return false;
+  return pocketPairsFromMessages(messages).some((pair) => {
+    if (!textValue(pair.assistantMessage)) return false;
+    const user = textValue(pair.userMessage).replace(/\s+/g, " ");
+    return user === needle || user.includes(needle);
+  });
+}
+
 export function framesFromSummaryPreviewItems(items = []) {
   return (Array.isArray(items) ? items : []).flatMap((item, order) => {
     if (item?.status && item.status !== "ok") return [];

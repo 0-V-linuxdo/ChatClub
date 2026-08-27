@@ -15,7 +15,7 @@ import {
   normalizeKeyboardPlatform,
   normalizeShortcutConfig
 } from "../shared/shortcuts.js";
-import { normalize, pageMeta } from "./shared/summary-runtime.js";
+import { conversationFingerprint, normalize, pageMeta } from "./shared/summary-runtime.js";
 import { createCaptureRuntime } from "./shared/capture-runtime.js";
 import { createContentDocumentIdentity } from "./shared/content-document-identity.js";
 import { createSubmissionNavigationTracker } from "./shared/submission-navigation.js";
@@ -353,6 +353,7 @@ function installContentBridge() {
         grokCookieRuntime: grokCookieRuntimeAttestation()
       }),
       getPageText: () => normalize(document.body?.innerText || ""),
+      getConversationFingerprint: (data) => conversationFingerprint(contentDocumentId, data),
       captureStart: () => captureRuntime.captureStart(),
       triggerScroll: () => captureRuntime.triggerScroll(),
       captureEnd: () => captureRuntime.captureEnd()

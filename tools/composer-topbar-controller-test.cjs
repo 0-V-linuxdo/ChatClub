@@ -86,6 +86,8 @@ function responsiveBrandRules(kind) {
   assert.doesNotMatch(runtime, /workspace:\s*\(\)\s*=>\s*workspaceController/, "runtime must not expose an uninitialized workspace controller through a provider thunk");
   assert.doesNotMatch(runtime, /=>\s*preferredModelController\./, "runtime must not expose an uninitialized Preferred Model controller through provider thunks");
   assert.ok(runtime.split(/\r?\n/).length < 1331, "runtime must stay an assembly root after Composer/Topbar extraction");
+  assert.match(runtime, /scheduleIdleFullTextCapture\?\.\(text\)/, "send admission must schedule per-frame idle full-text capture");
+  assert.doesNotMatch(runtime, /captureWorkspaceFullText/, "send admission must not collect full text immediately");
 
   assert.match(
     composer,

@@ -111,6 +111,7 @@ export const FRAME_COMMAND_SPECS = Object.freeze({
   getLocationHref: command({ timeoutMs: 1200, capability: "base" }),
   getPageMeta: command({ timeoutMs: 1800, capability: "base" }),
   getPageText: command({ timeoutMs: 2500, capability: "base" }),
+  getConversationFingerprint: command({ timeoutMs: 1500, capability: "base" }),
   captureStart: command({ timeoutMs: 10000, mutating: true, capability: "base" }),
   triggerScroll: command({ timeoutMs: 8000, mutating: true, capability: "base" }),
   captureEnd: command({ timeoutMs: 5000, mutating: true, capability: "base" }),

@@ -95,6 +95,10 @@
     "kind": "test-only",
     "reason": "Detached-signature envelope regressions inspect exact unknown-field, algorithm, size and encoding rejection codes."
   },
+  "app/summary/idle-capture.js#conversationFingerprintSignature": {
+    "kind": "test-only",
+    "reason": "Idle full-text capture regressions assert the fingerprint signature ignores clocks and other extra fields so streaming probes can still go idle."
+  },
   "ui/dom.js#modal": {
     "kind": "test-only",
     "reason": "The backward-compatible modal primitive remains directly exercised by the overlay dismissal policy regression."

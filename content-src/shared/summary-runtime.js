@@ -107,6 +107,54 @@ function pageMeta() {
   };
 }
 
+function fingerprintHash(value) {
+  const text = String(value || "");
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+function conversationRoot() {
+  const ranked = [
+    '[role="log"]',
+    '[data-testid="conversation-turns"]',
+    '[data-testid="conversation"]',
+    "main",
+    '[role="main"]'
+  ];
+  let best = null;
+  let bestLength = 0;
+  for (const selector of ranked) {
+    for (const node of qsa(selector)) {
+      const length = String(node?.innerText || "").length;
+      if (length > bestLength) {
+        best = node;
+        bestLength = length;
+      }
+    }
+    if (best && bestLength >= 80) return best;
+  }
+  return best || document.body;
+}
+
+function conversationFingerprint(documentId = "", data = {}) {
+  const root = conversationRoot();
+  const raw = normalize(root?.innerText || document.body?.innerText || "");
+  const prompt = normalize(data?.prompt || "").replace(/\s+/g, " ");
+  const haystack = raw.replace(/\s+/g, " ");
+  return {
+    href: location.href,
+    documentId: String(documentId || ""),
+    childCount: Number(root?.childElementCount || 0),
+    textLength: raw.length,
+    tailHash: fingerprintHash(raw.slice(-240)),
+    containsPrompt: Boolean(prompt && haystack.includes(prompt))
+  };
+}
+
 function copyLooksUseful(value) {
   const next = cleanCaptured(value);
   return Boolean(next
@@ -897,6 +945,7 @@ export {
   reveal,
   merge,
   pageMeta,
+  conversationFingerprint,
   hasUserAndAssistant,
   classText,
   buttonText,

@@ -409,12 +409,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "891c68f459a89d20e10610aaae009b60500f28e780e90624087f8f106f16dd6e";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "e3eb5923e1fcc6683335e8276a88aab376ced15a17632bd66613b41f21d701aa";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "6514e444a255eeebcdabaa23e2307a250a24e97842fa08a74d7c5fbd78b9a96e";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.6514e444a255eeebcdabaa23e2307a250a24e97842fa08a74d7c5fbd78b9a96e";
-  var CONTENT_RUNTIME_CONTENT_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/content.js", "entryPath": "content-src/content.js", "sourceSha256": "32d2007e2ea9c65afe85f7c58fc9347e98f0e5d58e8d9af8626ff78745580235", "implementationSha256": "e5b984a0c8be69910c4888663a775261cad91ef83b4e3c15d0470d0e178b54c8", "implementationVersion": "2026.07.16.2+bundle.e5b984a0c8be69910c4888663a775261cad91ef83b4e3c15d0470d0e178b54c8" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "4722210c86bb0e4dba05d7d3444d031461749fc46e6f22bee653feddd9f36e5b";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.4722210c86bb0e4dba05d7d3444d031461749fc46e6f22bee653feddd9f36e5b";
+  var CONTENT_RUNTIME_CONTENT_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/content.js", "entryPath": "content-src/content.js", "sourceSha256": "0d2c3ffc77a04a57f588f6f20c5cc97a6609158b4510e0e953578c90a2fd3cb3", "implementationSha256": "1ababf72ad4d33edee3fe71731517d39602a5b1b2981e908f4088c25a158d101", "implementationVersion": "2026.07.16.2+bundle.1ababf72ad4d33edee3fe71731517d39602a5b1b2981e908f4088c25a158d101" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -710,6 +710,51 @@
       href: location.href,
       title: normalize(document.title || ""),
       logoUrl: pageLogoUrl()
+    };
+  }
+  function fingerprintHash(value) {
+    const text = String(value || "");
+    let hash = 2166136261;
+    for (let index = 0; index < text.length; index += 1) {
+      hash ^= text.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(16).padStart(8, "0");
+  }
+  function conversationRoot() {
+    const ranked = [
+      '[role="log"]',
+      '[data-testid="conversation-turns"]',
+      '[data-testid="conversation"]',
+      "main",
+      '[role="main"]'
+    ];
+    let best = null;
+    let bestLength = 0;
+    for (const selector of ranked) {
+      for (const node of qsa(selector)) {
+        const length = String(node?.innerText || "").length;
+        if (length > bestLength) {
+          best = node;
+          bestLength = length;
+        }
+      }
+      if (best && bestLength >= 80) return best;
+    }
+    return best || document.body;
+  }
+  function conversationFingerprint(documentId = "", data = {}) {
+    const root = conversationRoot();
+    const raw = normalize(root?.innerText || document.body?.innerText || "");
+    const prompt = normalize(data?.prompt || "").replace(/\s+/g, " ");
+    const haystack = raw.replace(/\s+/g, " ");
+    return {
+      href: location.href,
+      documentId: String(documentId || ""),
+      childCount: Number(root?.childElementCount || 0),
+      textLength: raw.length,
+      tailHash: fingerprintHash(raw.slice(-240)),
+      containsPrompt: Boolean(prompt && haystack.includes(prompt))
     };
   }
 
@@ -1502,6 +1547,7 @@
     getLocationHref: command({ timeoutMs: 1200, capability: "base" }),
     getPageMeta: command({ timeoutMs: 1800, capability: "base" }),
     getPageText: command({ timeoutMs: 2500, capability: "base" }),
+    getConversationFingerprint: command({ timeoutMs: 1500, capability: "base" }),
     captureStart: command({ timeoutMs: 1e4, mutating: true, capability: "base" }),
     triggerScroll: command({ timeoutMs: 8e3, mutating: true, capability: "base" }),
     captureEnd: command({ timeoutMs: 5e3, mutating: true, capability: "base" }),
@@ -1984,6 +2030,7 @@
           grokCookieRuntime: grokCookieRuntimeAttestation()
         }),
         getPageText: () => normalize(document.body?.innerText || ""),
+        getConversationFingerprint: (data) => conversationFingerprint(contentDocumentId, data),
         captureStart: () => captureRuntime.captureStart(),
         triggerScroll: () => captureRuntime.triggerScroll(),
         captureEnd: () => captureRuntime.captureEnd()

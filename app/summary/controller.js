@@ -8,6 +8,8 @@ import { optionalControllerFunction, optionalControllerObject, requireController
 import { createFrameRequest } from "../frame-request.js";
 import { renderMarkdown } from "./markdown.js";
 import { workspaceSessionIdFromUrl } from "../../shared/workspace-session.js";
+import { fullTextMessagesMatchPrompt } from "../../shared/workspace-tab-fulltext.js";
+import { createIdleFullTextCaptureScheduler, IDLE_FULLTEXT_CAPTURE_DEFAULTS } from "./idle-capture.js";
 import {
   buildSummaryPreviewItem,
   normalizeSummaryPanelSize as normalizeSummaryPanelSizeModel,
@@ -768,7 +770,7 @@ export function createSummaryController(ctx) {
     };
   }
   
-  async function collectFrameSummary(iframe, index = 0) {
+  async function collectFrameSummary(iframe, index = 0, { recordFailures = true } = {}) {
     const app = frameApp(iframe);
     // Probe the already-registered content bridge before deciding that a page
     // is blank. This both discovers Firefox-safe declared favicons for skipped
@@ -785,7 +787,7 @@ export function createSummaryController(ctx) {
 
     const resolveSiteContext = () => {
       if (base.href.startsWith("chrome-error://")) {
-        recordSummaryFailure("loadSource", app, base, null, t("summaryPanel.browserError"));
+        if (recordFailures) recordSummaryFailure("loadSource", app, base, null, t("summaryPanel.browserError"));
         return { failure: { diagnostic: diagnostic("error", t("summaryPanel.browserError")) } };
       }
       const config = findSummarySiteConfig(state.options.summarySiteConfigs, base.href);
@@ -805,7 +807,7 @@ export function createSummaryController(ctx) {
     const coreReady = await prepareContentFrameRuntime(iframe);
     if (!coreReady?.ok) {
       const message = coreReady?.reason || t("summaryPanel.collectionFailed");
-      recordSummaryFailure("prepareCollector", app, base, coreReady, message);
+      if (recordFailures) recordSummaryFailure("prepareCollector", app, base, coreReady, message);
       return { diagnostic: diagnostic("error", message) };
     }
     base = await summaryFrameMeta(iframe, app, index);
@@ -815,7 +817,7 @@ export function createSummaryController(ctx) {
     const summaryReady = await prepareContentFrameRuntime(iframe, { summary: true });
     if (!summaryReady?.ok) {
       const message = summaryReady?.reason || t("summaryPanel.collectionFailed");
-      recordSummaryFailure("prepareSummaryCollector", app, { ...base, ...siteContext.fields }, summaryReady, message);
+      if (recordFailures) recordSummaryFailure("prepareSummaryCollector", app, { ...base, ...siteContext.fields }, summaryReady, message);
       return {
         diagnostic: diagnostic(
           "error",
@@ -882,7 +884,7 @@ export function createSummaryController(ctx) {
       };
     } catch (error) {
       const message = error.message || t("summaryPanel.collectionFailed");
-      recordSummaryFailure("collectSource", app, { ...base, ...siteFields }, error, message);
+      if (recordFailures) recordSummaryFailure("collectSource", app, { ...base, ...siteFields }, error, message);
       return { diagnostic: diagnostic("error", message, siteFields) };
     }
   }
@@ -894,7 +896,7 @@ export function createSummaryController(ctx) {
     try {
       return await persistWorkspaceTabFullText({
         workspaceId,
-        topicTitle: String(state.options?.topicTitle || document.title || "").trim(),
+        topicTitle: String(state.topicTitle || document.title || "").trim(),
         items
       });
     } catch {
@@ -917,11 +919,51 @@ export function createSummaryController(ctx) {
     return results.map((result, index) => summaryPreviewItemFromResult(result, { index, order: index }));
   }
 
-  async function captureWorkspaceFullText() {
-    if (state.options?.recordFullText !== true) return { saved: false };
-    const items = await collectWorkspacePreviewItems();
-    if (!items.length) return { saved: false };
-    return persistRecordedFullText(items);
+  function resolveIdleCaptureFrame(frame) {
+    const frames = currentFrames();
+    const key = String(frame?.key || frame?.instanceId || frame?.iframe?.dataset?.instanceId || "");
+    if (key) {
+      const live = frames.find((iframe) => String(iframe.dataset.instanceId || "") === key);
+      if (live) return live;
+    }
+    const node = frame?.iframe || frame;
+    return frames.includes(node) ? node : null;
+  }
+
+  const idleFullTextCapture = createIdleFullTextCaptureScheduler({
+    idleMs: IDLE_FULLTEXT_CAPTURE_DEFAULTS.idleMs,
+    pollMs: IDLE_FULLTEXT_CAPTURE_DEFAULTS.pollMs,
+    maxAttempts: IDLE_FULLTEXT_CAPTURE_DEFAULTS.maxAttempts,
+    wallMs: IDLE_FULLTEXT_CAPTURE_DEFAULTS.wallMs,
+    isEnabled: () => state.options?.recordFullText === true,
+    listFrames: () => currentFrames().map((iframe) => ({
+      key: String(iframe.dataset.instanceId || ""),
+      iframe
+    })),
+    frameExists: (frame) => Boolean(resolveIdleCaptureFrame(frame)),
+    getFingerprint: async (frame, prompt) => {
+      const iframe = resolveIdleCaptureFrame(frame);
+      if (!iframe) return null;
+      return sendToContentFrame(iframe, "getConversationFingerprint", { prompt }, { timeoutMs: 1500, skipEnsure: true });
+    },
+    collectFrame: async (frame) => {
+      const iframe = resolveIdleCaptureFrame(frame);
+      if (!iframe) return null;
+      const index = Math.max(0, currentFrames().indexOf(iframe));
+      const result = await withSummaryCollectionLock(() => collectFrameSummary(iframe, index, { recordFailures: false }));
+      return summaryPreviewItemFromResult(result, {
+        index,
+        order: index,
+        instanceId: iframe.dataset.instanceId || ""
+      });
+    },
+    itemMatchesPrompt: (item, prompt) => fullTextMessagesMatchPrompt(item?.page?.messages, prompt),
+    persistItem: async (item) => persistRecordedFullText([item])
+  });
+
+  function scheduleIdleFullTextCapture(prompt) {
+    if (state.options?.recordFullText !== true) return { scheduled: false };
+    return idleFullTextCapture.schedule(prompt);
   }
   
   async function collectSummary() {
@@ -1029,7 +1071,7 @@ export function createSummaryController(ctx) {
     open: openSummaryPanel,
     toggleMaximized: toggleSummaryMaximized,
     loadPanelSize: loadSummaryPanelSize,
-    captureWorkspaceFullText,
+    scheduleIdleFullTextCapture,
     collectWorkspacePreviewItems
   };
 }

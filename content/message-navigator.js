@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "891c68f459a89d20e10610aaae009b60500f28e780e90624087f8f106f16dd6e";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "e3eb5923e1fcc6683335e8276a88aab376ced15a17632bd66613b41f21d701aa";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "6514e444a255eeebcdabaa23e2307a250a24e97842fa08a74d7c5fbd78b9a96e";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.6514e444a255eeebcdabaa23e2307a250a24e97842fa08a74d7c5fbd78b9a96e";
-  var CONTENT_RUNTIME_MESSAGE_NAVIGATOR_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/message-navigator.js", "entryPath": "content-src/message-navigator.js", "sourceSha256": "29d145e731b48e7c00d427ed3671b471d0d29269252bda943e2e61e86d5ff495", "implementationSha256": "55459d325790f27e2abad54f92c892ea42f58ca8facd096c3cf87aea4708e4fb", "implementationVersion": "2026.07.16.2+bundle.55459d325790f27e2abad54f92c892ea42f58ca8facd096c3cf87aea4708e4fb" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "4722210c86bb0e4dba05d7d3444d031461749fc46e6f22bee653feddd9f36e5b";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.4722210c86bb0e4dba05d7d3444d031461749fc46e6f22bee653feddd9f36e5b";
+  var CONTENT_RUNTIME_MESSAGE_NAVIGATOR_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/message-navigator.js", "entryPath": "content-src/message-navigator.js", "sourceSha256": "9c818240832a982785312298d83cdb5ab3e918cce9d1dd90c0faa14bbae095ea", "implementationSha256": "ac377ff7ac7cd416221033427a651d8320d1f6f09c0633db2cfb29060ee8d3e1", "implementationVersion": "2026.07.16.2+bundle.ac377ff7ac7cd416221033427a651d8320d1f6f09c0633db2cfb29060ee8d3e1" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -184,6 +184,7 @@
     getLocationHref: command({ timeoutMs: 1200, capability: "base" }),
     getPageMeta: command({ timeoutMs: 1800, capability: "base" }),
     getPageText: command({ timeoutMs: 2500, capability: "base" }),
+    getConversationFingerprint: command({ timeoutMs: 1500, capability: "base" }),
     captureStart: command({ timeoutMs: 1e4, mutating: true, capability: "base" }),
     triggerScroll: command({ timeoutMs: 8e3, mutating: true, capability: "base" }),
     captureEnd: command({ timeoutMs: 5e3, mutating: true, capability: "base" }),

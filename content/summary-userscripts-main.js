@@ -74,12 +74,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "891c68f459a89d20e10610aaae009b60500f28e780e90624087f8f106f16dd6e";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "e3eb5923e1fcc6683335e8276a88aab376ced15a17632bd66613b41f21d701aa";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "6514e444a255eeebcdabaa23e2307a250a24e97842fa08a74d7c5fbd78b9a96e";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.6514e444a255eeebcdabaa23e2307a250a24e97842fa08a74d7c5fbd78b9a96e";
-  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "fc5a00753f9c5a1a2eac421bb4b9f8b7b292ec68bdb880daa4392b1fa93d6678", "implementationSha256": "59a22ead9fd242d9a7c562a1134f7de5ed400527114db4bfcb55893bcb085b2a", "implementationVersion": "2026.07.16.2+bundle.59a22ead9fd242d9a7c562a1134f7de5ed400527114db4bfcb55893bcb085b2a" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "4722210c86bb0e4dba05d7d3444d031461749fc46e6f22bee653feddd9f36e5b";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.4722210c86bb0e4dba05d7d3444d031461749fc46e6f22bee653feddd9f36e5b";
+  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "bf1b2b0e659e8ca3cc18acd2dfae78625bb476282eb570792d2d44f147b89421", "implementationSha256": "bdd17d152a0eae0f4879c6706902ff3347f3cca802cb489fd5775762d7e32d85", "implementationVersion": "2026.07.16.2+bundle.bdd17d152a0eae0f4879c6706902ff3347f3cca802cb489fd5775762d7e32d85" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -2881,7 +2881,7 @@
       return sanitizeConversation([...orderedTurns(userTurns, assistantTurns), ...pageTurns, ...copied]);
     };
     scripts["manus.js"] = scripts["manus"];
-    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.6514e444a255eeebcdabaa23e2307a250a24e97842fa08a74d7c5fbd78b9a96e" });
+    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.4722210c86bb0e4dba05d7d3444d031461749fc46e6f22bee653feddd9f36e5b" });
     return scripts;
   }
 
@@ -3061,6 +3061,7 @@
     buttonText: () => buttonText,
     classText: () => classText,
     closest: () => closest,
+    conversationFingerprint: () => conversationFingerprint,
     copy: () => copy,
     copyFirst: () => copyFirst,
     extractCopySequence: () => extractCopySequence,
@@ -3185,6 +3186,51 @@ ${value}`);
       href: location.href,
       title: normalize(document.title || ""),
       logoUrl: pageLogoUrl()
+    };
+  }
+  function fingerprintHash(value) {
+    const text2 = String(value || "");
+    let hash = 2166136261;
+    for (let index = 0; index < text2.length; index += 1) {
+      hash ^= text2.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(16).padStart(8, "0");
+  }
+  function conversationRoot() {
+    const ranked = [
+      '[role="log"]',
+      '[data-testid="conversation-turns"]',
+      '[data-testid="conversation"]',
+      "main",
+      '[role="main"]'
+    ];
+    let best = null;
+    let bestLength = 0;
+    for (const selector of ranked) {
+      for (const node of qsa(selector)) {
+        const length = String(node?.innerText || "").length;
+        if (length > bestLength) {
+          best = node;
+          bestLength = length;
+        }
+      }
+      if (best && bestLength >= 80) return best;
+    }
+    return best || document.body;
+  }
+  function conversationFingerprint(documentId = "", data = {}) {
+    const root = conversationRoot();
+    const raw = normalize(root?.innerText || document.body?.innerText || "");
+    const prompt = normalize(data?.prompt || "").replace(/\s+/g, " ");
+    const haystack = raw.replace(/\s+/g, " ");
+    return {
+      href: location.href,
+      documentId: String(documentId || ""),
+      childCount: Number(root?.childElementCount || 0),
+      textLength: raw.length,
+      tailHash: fingerprintHash(raw.slice(-240)),
+      containsPrompt: Boolean(prompt && haystack.includes(prompt))
     };
   }
   function copyLooksUseful(value) {

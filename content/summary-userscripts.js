@@ -68,11 +68,11 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "891c68f459a89d20e10610aaae009b60500f28e780e90624087f8f106f16dd6e";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "e3eb5923e1fcc6683335e8276a88aab376ced15a17632bd66613b41f21d701aa";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "6514e444a255eeebcdabaa23e2307a250a24e97842fa08a74d7c5fbd78b9a96e";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.6514e444a255eeebcdabaa23e2307a250a24e97842fa08a74d7c5fbd78b9a96e";
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "4722210c86bb0e4dba05d7d3444d031461749fc46e6f22bee653feddd9f36e5b";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.4722210c86bb0e4dba05d7d3444d031461749fc46e6f22bee653feddd9f36e5b";
   var CONTENT_RUNTIME_SUMMARY_ISOLATED_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts.js", "entryPath": "content-src/summary-userscripts.js", "sourceSha256": "25a5235dd436277093044fabbb4d83ddedc548db58e5c526c228616f2d9e8ade", "implementationSha256": "dd684c3b963c766ab17f3a8229695ce9b9555d68e407e47056f652159a02a90e", "implementationVersion": "2026.07.16.2+bundle.dd684c3b963c766ab17f3a8229695ce9b9555d68e407e47056f652159a02a90e" });
 
   // shared/content-runtime-identity.js
@@ -2875,7 +2875,7 @@
       return sanitizeConversation([...orderedTurns(userTurns, assistantTurns), ...pageTurns, ...copied]);
     };
     scripts["manus.js"] = scripts["manus"];
-    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.6514e444a255eeebcdabaa23e2307a250a24e97842fa08a74d7c5fbd78b9a96e" });
+    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.4722210c86bb0e4dba05d7d3444d031461749fc46e6f22bee653feddd9f36e5b" });
     return scripts;
   }
 

@@ -9,7 +9,9 @@ const root = path.resolve(__dirname, "..");
 (async () => {
   const {
     framesFromSummaryPreviewItems,
+    fullTextMessagesMatchPrompt,
     matchesFullTextQuery,
+    mergeWorkspaceTabFullTextFrames,
     normalizeWorkspaceTabFullTextStore,
     pocketPairsFromMessages,
     removeWorkspaceTabFullText,
@@ -58,6 +60,50 @@ const root = path.resolve(__dirname, "..");
   store = removeWorkspaceTabFullText(store, workspaceId);
   assert.deepEqual(store, {});
   assert.deepEqual(normalizeWorkspaceTabFullTextStore({ bogus: true }), {});
+
+  const prompt = "Compare ChatGPT and Claude";
+  assert.equal(fullTextMessagesMatchPrompt([{ role: "user", text: prompt }], prompt), false, "a user turn without an assistant pair must not match");
+  assert.equal(fullTextMessagesMatchPrompt([
+    { role: "user", text: prompt },
+    { role: "assistant", text: "Claude is stronger at long documents." }
+  ], prompt), true);
+  assert.equal(fullTextMessagesMatchPrompt([
+    { role: "user", text: `Title\n${prompt}` },
+    { role: "assistant", text: "done" }
+  ], prompt), true, "extracted USER text may wrap the sent prompt");
+  assert.equal(fullTextMessagesMatchPrompt([
+    { role: "user", text: prompt },
+    { role: "assistant", text: "done" }
+  ], "unrelated prompt"), false);
+
+  const merged = mergeWorkspaceTabFullTextFrames([
+    {
+      instanceId: "chatgpt-1",
+      href: "https://chatgpt.com/c/1",
+      appName: "ChatGPT",
+      messages: [{ role: "user", text: "old" }, { role: "assistant", text: "reply" }]
+    }
+  ], [
+    {
+      instanceId: "claude-1",
+      href: "https://claude.ai/chat/2",
+      appName: "Claude",
+      messages: [{ role: "user", text: prompt }, { role: "assistant", text: "later frame" }]
+    }
+  ]);
+  assert.equal(merged.length, 2, "a later iframe must merge instead of replacing earlier frames");
+  assert.equal(merged[0].instanceId, "chatgpt-1");
+  assert.equal(merged[1].instanceId, "claude-1");
+
+  const replaced = mergeWorkspaceTabFullTextFrames(merged, [{
+    instanceId: "chatgpt-1",
+    href: "https://chatgpt.com/c/1",
+    appName: "ChatGPT",
+    messages: [{ role: "user", text: prompt }, { role: "assistant", text: "updated" }]
+  }]);
+  assert.equal(replaced.length, 2);
+  assert.equal(replaced[0].messages[1].text, "updated");
+  assert.equal(replaced[1].instanceId, "claude-1");
 
   console.log("workspace tab full text: ok");
 })().catch((error) => {

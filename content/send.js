@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "891c68f459a89d20e10610aaae009b60500f28e780e90624087f8f106f16dd6e";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "e3eb5923e1fcc6683335e8276a88aab376ced15a17632bd66613b41f21d701aa";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "6514e444a255eeebcdabaa23e2307a250a24e97842fa08a74d7c5fbd78b9a96e";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.6514e444a255eeebcdabaa23e2307a250a24e97842fa08a74d7c5fbd78b9a96e";
-  var CONTENT_RUNTIME_SEND_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/send.js", "entryPath": "content-src/content-send.js", "sourceSha256": "37afb104ad53d3e6bf49d51c9a6295e66772a31da99138aad23cbfc7141b6fac", "implementationSha256": "aca781f0d19012aa0855f42bff45fae25beec09f726c9342848e48e46d423ed8", "implementationVersion": "2026.07.16.2+bundle.aca781f0d19012aa0855f42bff45fae25beec09f726c9342848e48e46d423ed8" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "4722210c86bb0e4dba05d7d3444d031461749fc46e6f22bee653feddd9f36e5b";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.4722210c86bb0e4dba05d7d3444d031461749fc46e6f22bee653feddd9f36e5b";
+  var CONTENT_RUNTIME_SEND_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/send.js", "entryPath": "content-src/content-send.js", "sourceSha256": "4fddd1b671cb138f9c4ec10ce3f30c055920b363f79e1cdca8f8d5532459e59b", "implementationSha256": "7e51e0b2cfbf41317bcc06c987b3ce59562907959b890613b8792a8f7ef42937", "implementationVersion": "2026.07.16.2+bundle.7e51e0b2cfbf41317bcc06c987b3ce59562907959b890613b8792a8f7ef42937" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -305,6 +305,7 @@
     getLocationHref: command({ timeoutMs: 1200, capability: "base" }),
     getPageMeta: command({ timeoutMs: 1800, capability: "base" }),
     getPageText: command({ timeoutMs: 2500, capability: "base" }),
+    getConversationFingerprint: command({ timeoutMs: 1500, capability: "base" }),
     captureStart: command({ timeoutMs: 1e4, mutating: true, capability: "base" }),
     triggerScroll: command({ timeoutMs: 8e3, mutating: true, capability: "base" }),
     captureEnd: command({ timeoutMs: 5e3, mutating: true, capability: "base" }),

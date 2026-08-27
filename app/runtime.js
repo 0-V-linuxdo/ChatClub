@@ -165,7 +165,7 @@ const composerController = createComposerController({
   onPromptAdmitted: (text) => {
     workspaceTopicTitleController?.maybeGenerateFromPrompt(text);
     if (state.options?.recordFullText === true) {
-      ensureSummaryController().then((summary) => summary?.captureWorkspaceFullText?.()).catch(() => {});
+      ensureSummaryController().then((summary) => summary?.scheduleIdleFullTextCapture?.(text)).catch(() => {});
     }
   }
 });
