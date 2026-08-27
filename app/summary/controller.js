@@ -8,7 +8,7 @@ import { optionalControllerFunction, optionalControllerObject, requireController
 import { createFrameRequest } from "../frame-request.js";
 import { renderMarkdown } from "./markdown.js";
 import { workspaceSessionIdFromUrl } from "../../shared/workspace-session.js";
-import { fullTextMessagesMatchPrompt } from "../../shared/workspace-tab-fulltext.js";
+import { fullTextMessagesHavePair, fullTextMessagesMatchPrompt } from "../../shared/workspace-tab-fulltext.js";
 import { createIdleFullTextCaptureScheduler, IDLE_FULLTEXT_CAPTURE_DEFAULTS } from "./idle-capture.js";
 import {
   buildSummaryPreviewItem,
@@ -957,13 +957,28 @@ export function createSummaryController(ctx) {
         instanceId: iframe.dataset.instanceId || ""
       });
     },
-    itemMatchesPrompt: (item, prompt) => fullTextMessagesMatchPrompt(item?.page?.messages, prompt),
+    itemMatchesPrompt: (item, prompt) => (
+      String(prompt || "").trim()
+        ? fullTextMessagesMatchPrompt(item?.page?.messages, prompt)
+        : fullTextMessagesHavePair(item?.page?.messages)
+    ),
     persistItem: async (item) => persistRecordedFullText([item])
   });
 
   function scheduleIdleFullTextCapture(prompt) {
     if (state.options?.recordFullText !== true) return { scheduled: false };
     return idleFullTextCapture.schedule(prompt);
+  }
+
+  function scheduleExistingIdleFullTextCapture() {
+    if (state.options?.recordFullText !== true) return { scheduled: false };
+    return idleFullTextCapture.schedule("", { existing: true });
+  }
+
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") scheduleExistingIdleFullTextCapture();
+    });
   }
   
   async function collectSummary() {
@@ -1072,6 +1087,7 @@ export function createSummaryController(ctx) {
     toggleMaximized: toggleSummaryMaximized,
     loadPanelSize: loadSummaryPanelSize,
     scheduleIdleFullTextCapture,
+    scheduleExistingIdleFullTextCapture,
     collectWorkspacePreviewItems
   };
 }

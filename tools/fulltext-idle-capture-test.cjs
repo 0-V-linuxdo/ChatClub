@@ -77,12 +77,19 @@ function previewItem(instanceId, prompt, assistant) {
 
   const runtime = read("app/runtime.js");
   assert.match(runtime, /scheduleIdleFullTextCapture\?\.\(text\)/);
+  assert.match(runtime, /scheduleExistingIdleFullTextCapture/);
+  assert.ok(
+    runtime.indexOf("waitForInitialWorkspaceFrameRestoration") < runtime.indexOf("scheduleExistingIdleFullTextCapture"),
+    "restored workspaces must schedule idle capture after frames are ready"
+  );
   assert.doesNotMatch(runtime, /captureWorkspaceFullText/);
   const summary = read("app/summary/controller.js");
   assert.match(summary, /createIdleFullTextCaptureScheduler\(/);
   assert.match(summary, /getConversationFingerprint/);
   assert.match(summary, /recordFailures:\s*false/);
   assert.match(summary, /state\.topicTitle/);
+  assert.match(summary, /visibilitychange/);
+  assert.match(summary, /scheduleExistingIdleFullTextCapture/);
   assert.doesNotMatch(summary, /state\.options\?\.topicTitle/);
   const content = read("content-src/content.js");
   assert.match(content, /getConversationFingerprint:\s*\(data\)\s*=>\s*conversationFingerprint\(contentDocumentId,\s*data\)/);
@@ -92,7 +99,7 @@ function previewItem(instanceId, prompt, assistant) {
     createIdleFullTextCaptureScheduler,
     IDLE_FULLTEXT_CAPTURE_DEFAULTS
   } = idleModule;
-  const { fullTextMessagesMatchPrompt } = fullTextModule;
+  const { fullTextMessagesHavePair, fullTextMessagesMatchPrompt } = fullTextModule;
 
   assert.equal(IDLE_FULLTEXT_CAPTURE_DEFAULTS.idleMs, 30_000);
   assert.equal(IDLE_FULLTEXT_CAPTURE_DEFAULTS.maxAttempts, 3);
@@ -269,6 +276,99 @@ function previewItem(instanceId, prompt, assistant) {
     await done;
     assert.equal(collects.length, 1);
     assert.equal(collects[0] >= 5_000, true, "a fingerprint change must restart the 30s idle window");
+  }
+
+  function existingMatcher(item, text) {
+    return String(text || "").trim()
+      ? fullTextMessagesMatchPrompt(item?.page?.messages, text)
+      : fullTextMessagesHavePair(item?.page?.messages);
+  }
+
+  {
+    const clock = createFakeClock();
+    const persisted = [];
+    const scheduler = createIdleFullTextCaptureScheduler({
+      now: clock.now,
+      sleep: clock.sleep,
+      idleMs: 5_000,
+      pollMs: 1_000,
+      maxAttempts: 3,
+      wallMs: 60_000,
+      listFrames: () => [{ key: "one" }],
+      getFingerprint: async () => ({
+        documentId: "one",
+        href: "https://chatgpt.com/c/1",
+        childCount: 2,
+        textLength: 40,
+        tailHash: "idle",
+        containsPrompt: false
+      }),
+      collectFrame: async () => previewItem("one", "older question", "older answer"),
+      itemMatchesPrompt: existingMatcher,
+      persistItem: async (item) => { persisted.push(item.instanceId); }
+    });
+    const done = scheduler.schedule("", { existing: true });
+    await waitForSleep(clock);
+    await clock.advance(5_000);
+    await done;
+    assert.deepEqual(persisted, ["one"], "an already-idle iframe must persist without a new send");
+  }
+
+  {
+    const clock = createFakeClock();
+    const collected = [];
+    const scheduler = createIdleFullTextCaptureScheduler({
+      now: clock.now,
+      sleep: clock.sleep,
+      idleMs: 5_000,
+      pollMs: 1_000,
+      maxAttempts: 3,
+      wallMs: 60_000,
+      listFrames: () => [{ key: "one" }],
+      getFingerprint: async () => ({ documentId: "one", href: "https://x", childCount: 1, textLength: 8, tailHash: "a", containsPrompt: true }),
+      collectFrame: async (_frame, text) => {
+        collected.push(text || "existing");
+        return previewItem("one", text || "older question", "reply");
+      },
+      itemMatchesPrompt: existingMatcher,
+      persistItem: async () => {}
+    });
+    const send = scheduler.schedule(prompt);
+    await waitForSleep(clock);
+    const skipped = await scheduler.schedule("", { existing: true });
+    assert.equal(skipped.scheduled, false, "opening a workspace must not cancel an in-flight send capture");
+    assert.equal(scheduler.isRunning(), true);
+    await clock.advance(5_000);
+    await send;
+    assert.deepEqual(collected, [prompt]);
+  }
+
+  {
+    const clock = createFakeClock();
+    const collected = [];
+    const scheduler = createIdleFullTextCaptureScheduler({
+      now: clock.now,
+      sleep: clock.sleep,
+      idleMs: 5_000,
+      pollMs: 1_000,
+      maxAttempts: 3,
+      wallMs: 60_000,
+      listFrames: () => [{ key: "one" }],
+      getFingerprint: async () => ({ documentId: "one", href: "https://x", childCount: 1, textLength: 8, tailHash: "a", containsPrompt: true }),
+      collectFrame: async (_frame, text) => {
+        collected.push(text || "existing");
+        return previewItem("one", text || prompt, "reply");
+      },
+      itemMatchesPrompt: existingMatcher,
+      persistItem: async () => {}
+    });
+    const existing = scheduler.schedule("", { existing: true });
+    await waitForSleep(clock);
+    const send = scheduler.schedule(prompt);
+    await waitForSleep(clock);
+    await clock.advance(5_000);
+    await Promise.all([existing, send]);
+    assert.deepEqual(collected, [prompt], "a new send must cancel existing-tab idle capture");
   }
 
   console.log("fulltext idle capture: ok");

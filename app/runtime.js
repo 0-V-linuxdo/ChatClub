@@ -1315,6 +1315,9 @@ async function init() {
   }
   applyPreferredModelsToFrames(null, { immediate: false });
   finishPreferredModelBootstrapping();
+  if (state.options?.recordFullText === true) {
+    ensureSummaryController().then((summary) => summary?.scheduleExistingIdleFullTextCapture?.()).catch(() => {});
+  }
 }
 
 init().catch((error) => {

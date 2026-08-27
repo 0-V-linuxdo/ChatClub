@@ -9,6 +9,7 @@ const root = path.resolve(__dirname, "..");
 (async () => {
   const {
     framesFromSummaryPreviewItems,
+    fullTextMessagesHavePair,
     fullTextMessagesMatchPrompt,
     matchesFullTextQuery,
     mergeWorkspaceTabFullTextFrames,
@@ -62,6 +63,11 @@ const root = path.resolve(__dirname, "..");
   assert.deepEqual(normalizeWorkspaceTabFullTextStore({ bogus: true }), {});
 
   const prompt = "Compare ChatGPT and Claude";
+  assert.equal(fullTextMessagesHavePair([{ role: "user", text: prompt }]), false);
+  assert.equal(fullTextMessagesHavePair([
+    { role: "user", text: prompt },
+    { role: "assistant", text: "Claude is stronger at long documents." }
+  ]), true);
   assert.equal(fullTextMessagesMatchPrompt([{ role: "user", text: prompt }], prompt), false, "a user turn without an assistant pair must not match");
   assert.equal(fullTextMessagesMatchPrompt([
     { role: "user", text: prompt },

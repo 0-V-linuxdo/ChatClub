@@ -41,21 +41,46 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
   const frameExists = typeof options.frameExists === "function" ? options.frameExists : () => true;
 
   let generation = 0;
+  let activeKind = "";
 
   function cancel() {
     generation += 1;
+    activeKind = "";
   }
 
-  async function schedule(prompt) {
-    const text = String(prompt || "").trim();
-    generation += 1;
-    const runId = generation;
-    if (!text || !isEnabled()) return { scheduled: false, runId };
+  function isRunning() {
+    return activeKind === "send" || activeKind === "existing";
+  }
+
+  async function listCaptureFrames() {
     const listed = listFrames();
     const frames = listed && typeof listed.then === "function" ? await listed : listed;
-    const list = Array.isArray(frames) ? frames : [];
-    await Promise.all(list.map((frame) => captureFrame({ frame, prompt: text, runId, startedAt: now() })));
-    return { scheduled: true, runId };
+    return Array.isArray(frames) ? frames : [];
+  }
+
+  async function schedule(prompt = "", options = {}) {
+    const existing = options.existing === true;
+    const text = String(prompt || "").trim();
+    if (!existing && !text) return { scheduled: false, runId: generation };
+    if (!isEnabled()) return { scheduled: false, runId: generation };
+    if (existing && isRunning()) return { scheduled: false, runId: generation };
+    generation += 1;
+    const runId = generation;
+    const kind = existing ? "existing" : "send";
+    activeKind = kind;
+    try {
+      const list = await listCaptureFrames();
+      await Promise.all(list.map((frame) => captureFrame({
+        frame,
+        prompt: text,
+        existing,
+        runId,
+        startedAt: now()
+      })));
+      return { scheduled: true, runId };
+    } finally {
+      if (generation === runId) activeKind = "";
+    }
   }
 
   async function collectOnce({ frame, prompt, runId, attempts }) {
@@ -77,7 +102,7 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
     return { status: "saved", attempts };
   }
 
-  async function captureFrame({ frame, prompt, runId, startedAt }) {
+  async function captureFrame({ frame, prompt, runId, startedAt, existing = false }) {
     let lastSignature = "";
     let idleSince = startedAt;
     let attempts = 0;
@@ -109,7 +134,7 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
       }
       if (fingerprint?.containsPrompt === true) sawPrompt = true;
 
-      const canCollect = sawPrompt || sawChange;
+      const canCollect = existing ? sawFingerprint : (sawPrompt || sawChange);
       const idle = canCollect && sawFingerprint && (now() - idleSince >= idleMs);
       if ((idle || wallHit) && attempts < maxAttempts) {
         attempts += 1;
@@ -138,5 +163,5 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
     return { status: "cancelled", attempts };
   }
 
-  return Object.freeze({ schedule, cancel });
+  return Object.freeze({ schedule, cancel, isRunning });
 }

@@ -81,6 +81,12 @@ export function mergeWorkspaceTabFullTextFrames(existing = [], incoming = []) {
     .slice(0, WORKSPACE_TAB_FULLTEXT_MAX_FRAMES);
 }
 
+export function fullTextMessagesHavePair(messages) {
+  return pocketPairsFromMessages(messages).some((pair) => (
+    textValue(pair.userMessage) && textValue(pair.assistantMessage)
+  ));
+}
+
 export function fullTextMessagesMatchPrompt(messages, prompt) {
   const needle = textValue(prompt).replace(/\s+/g, " ");
   if (!needle) return false;
