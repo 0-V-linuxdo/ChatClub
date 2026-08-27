@@ -34,12 +34,12 @@ const byteBudgets = Object.freeze({
   "content/summary-userscripts-main.js": 210_391,
   "content/summary-userscripts.js": 156_212
 });
-// Exact base-plus-capabilities closure after Share capture commands joined
-// the base content runtime and frame-command inventory.
-const aggregateByteBudget = 768_571;
+// Exact base-plus-capabilities closure after the topbar History viewer shortcut
+// joined the shared shortcut inventory shipped in the base content runtime.
+const aggregateByteBudget = 768_820;
 // Exact all-bundle closure after Manus chrome filtering and USER-first ordering
 // joined the generated isolated and MAIN-world Summary registries.
-const allBundlesByteBudget = 1_518_774;
+const allBundlesByteBudget = 1_519_023;
 
 const bundleIdentities = Object.fromEntries(Object.keys(CONTENT_ENTRIES).map((outputPath) => [
   outputPath,

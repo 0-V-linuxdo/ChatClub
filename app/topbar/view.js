@@ -46,6 +46,7 @@ export function createTopbarView(dependencies = {}) {
     "openLayoutMenu",
     "openNewWorkspaceTab",
     "openPocket",
+    "openHistory",
     "openSettings",
     "openSettingsMenu",
     "openShare",
@@ -127,6 +128,7 @@ export function createTopbarView(dependencies = {}) {
       summary: "topbar.summary",
       share: "topbar.share",
       pocket: "topbar.pocket",
+      history: "topbar.history",
       addGroup: "topbar.addGroup",
       layout: "topbar.layout",
       search: "topbar.search",
@@ -247,6 +249,9 @@ export function createTopbarView(dependencies = {}) {
     }
     if (item.id === "pocket") {
       return actionButton(t("topbar.pocket"), "pocket", actions.openPocket, "secondary", actions.formatShortcutTooltip(t("topbar.pocket"), "openPocketPanel"), topbarItemClass("pocket"), "topbar.pocket");
+    }
+    if (item.id === "history") {
+      return actionButton(t("topbar.history"), "history", actions.openHistory, "secondary", actions.formatShortcutTooltip(t("topbar.history"), "openHistoryPanel"), topbarItemClass("history"), "topbar.history");
     }
     if (item.id === "addGroup") {
       return topIconButton(t("topbar.addGroup"), "plus", (event) => actions.openAppPicker(event.currentTarget), formatTopbarShortcut(t("topbar.addGroup"), "addGroup"), "topbar.addGroup");

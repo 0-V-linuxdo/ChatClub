@@ -31,6 +31,7 @@ const DEFAULT_BUILD_ENTRY_POINTS = Object.freeze([
 ]);
 const REQUIRED_APP_LAZY_BOUNDARIES = Object.freeze([
   "app/official-rules/service.js",
+  "app/history/controller.js",
   "app/pocket/controller.js",
   "app/prompt-focus/controller.js",
   "app/settings/controller.js",

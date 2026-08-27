@@ -99,7 +99,7 @@ function appDomain(file) {
 
   const additionalDomainEdges = Object.freeze({
     pocket: new Set(["summary"]),
-    settings: new Set(["prompt-library"])
+    settings: new Set(["prompt-library", "history"])
   });
   for (const [owner, dependencies] of graph) {
     const from = appDomain(owner);
@@ -125,6 +125,7 @@ function appDomain(file) {
     "./summary/state-port.js",
     "./share/state-port.js",
     "./pocket/state-port.js",
+    "./history/state-port.js",
     "./optimize/state-port.js",
     "./functional-anomalies/state-port.js",
     "./settings/state-ports.js"
@@ -157,6 +158,9 @@ function appDomain(file) {
     ["app/optimize/controller.js", "createOptimizeController", ["openOptimizeCompareDialog"]],
     ["app/pocket/controller.js", "createPocketController", [
       "dedupePocketEntries", "normalizePocketMessage", "pocketEntriesFromMessages"
+    ]],
+    ["app/history/controller.js", "createHistoryController", [
+      "insert", "remove", "clearHistory", "headerSearch", "renderHistory"
     ]],
     ["app/share/controller.js", "createShareController", [
       "listShareFrames", "collectShareImage", "collectShareText", "runShare"

@@ -490,6 +490,7 @@ export function createAppearanceSettingsSection(ctx) {
       "topbar.summary": "summary",
       "topbar.share": "share",
       "topbar.pocket": "pocket",
+      "topbar.history": "history",
       "topbar.addGroup": "plus",
       "topbar.layout": "layout",
       "topbar.settingsJumpMenu": "moreTools",
@@ -598,7 +599,7 @@ export function createAppearanceSettingsSection(ctx) {
         iconName === "brand"
           ? [el("img", { class: "tooltip-preview-brand-logo", src: "icons/logo.svg", alt: "", draggable: "false" }), el("span", {}, "ChatClub")]
           : svgIcon(iconName),
-        ["topbar.send", "topbar.newChat", "topbar.summary", "topbar.pocket", "summary.action.summarize", "summary.action.ask"].includes(target.id)
+        ["topbar.send", "topbar.newChat", "topbar.summary", "topbar.pocket", "topbar.history", "summary.action.summarize", "summary.action.ask"].includes(target.id)
           ? el("span", {}, label)
           : null
       );

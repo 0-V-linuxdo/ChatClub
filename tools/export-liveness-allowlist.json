@@ -11,15 +11,11 @@
     "kind": "test-only",
     "reason": "Full-text search regressions pair user/assistant turns without exposing the helper as a runtime API."
   },
-  "app/settings/history.js#groupPromptHistory": {
-    "kind": "test-only",
-    "reason": "Prompt-history grouping regressions exercise deterministic calendar buckets and preserve order without exposing a runtime API."
-  },
-  "app/settings/history.js#promptHistoryGroupId": {
+  "app/history/model.js#promptHistoryGroupId": {
     "kind": "test-only",
     "reason": "Prompt-history boundary regressions directly verify local-date transitions at today, week, month and invalid-time edges."
   },
-  "app/settings/history.js#promptHistoryMatchesSearch": {
+  "app/history/model.js#promptHistoryMatchesSearch": {
     "kind": "test-only",
     "reason": "Prompt-history search regressions verify text, image-name, and extra label matching without exposing a runtime API."
   },

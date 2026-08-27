@@ -44,6 +44,7 @@ export function createTopbarController(dependencies = {}) {
     "newChat",
     "openNewWorkspaceTab",
     "openPocket",
+    "openHistory",
     "openSettings",
     "openShare",
     "openSummary",
@@ -146,9 +147,19 @@ export function createTopbarController(dependencies = {}) {
       actions.openSummary();
       return;
     }
+    if (item.id === "share") {
+      closeSettingsMenu();
+      actions.openShare();
+      return;
+    }
     if (item.id === "pocket") {
       closeSettingsMenu();
       actions.openPocket();
+      return;
+    }
+    if (item.id === "history") {
+      closeSettingsMenu();
+      actions.openHistory();
       return;
     }
     if (item.id === "addGroup") {

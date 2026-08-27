@@ -487,6 +487,44 @@ globalThis.document = { addEventListener() {} };
     false,
     "a user who hid Share must not get it reinserted"
   );
+  assert.equal(topbarModule.TOPBAR_BUILTIN_ITEMS.includes("history"), true, "History must be a recognized built-in item");
+  assert.equal(topbarModule.topbarItemIcon({ type: "item", id: "history" }), "history");
+  assert.equal(topbarModule.TOPBAR_SHORTCUT_ACTIONS.history, "openHistoryPanel");
+  const defaultHistoryIds = topbarModule.DEFAULT_TOPBAR_LAYOUT
+    .filter((entry) => entry.type === "item")
+    .map((entry) => entry.id);
+  assert.equal(
+    defaultHistoryIds[defaultHistoryIds.indexOf("pocket") + 1],
+    "history",
+    "History must sit immediately after Pocket in a new topbar"
+  );
+  const historicalWithoutHistory = topbarModule.DEFAULT_TOPBAR_LAYOUT.filter((entry) => entry.id !== "history");
+  const migratedHistoryLayout = storageSchemaModule.normalizeOptions({
+    topbarLayout: historicalWithoutHistory,
+    topbarDeleteThreadMigrated: true,
+    topbarSearchMigrated: true,
+    topbarShareMigrated: true
+  }).topbarLayout;
+  const migratedHistoryIds = migratedHistoryLayout
+    .filter((entry) => entry.type === "item")
+    .map((entry) => entry.id);
+  assert.equal(
+    migratedHistoryIds[migratedHistoryIds.indexOf("pocket") + 1],
+    "history",
+    "existing topbars missing History must receive it immediately after Pocket"
+  );
+  const hiddenHistoryLayout = storageSchemaModule.normalizeOptions({
+    topbarLayout: historicalWithoutHistory,
+    topbarDeleteThreadMigrated: true,
+    topbarSearchMigrated: true,
+    topbarShareMigrated: true,
+    topbarHistoryMigrated: true
+  }).topbarLayout;
+  assert.equal(
+    hiddenHistoryLayout.some((entry) => entry.id === "history"),
+    false,
+    "a user who hid History must not get it reinserted"
+  );
   assert.deepEqual(
     settingsStateModule.SETTINGS_OPTION_CAPABILITIES.summary.write,
     ["recordFullText", "summaryApiProfileId", "summaryPromptTemplateId", "summaryPromptTemplates", "summarySiteConfigs"],

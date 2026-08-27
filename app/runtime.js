@@ -194,6 +194,7 @@ const topbarController = createTopbarController({
     newChat: newChatOnFrames,
     openNewWorkspaceTab,
     openPocket: openPocketPanel,
+    openHistory: openHistoryPanel,
     openSettings,
     openShare: openSharePanel,
     openSummary: openSummaryPanel,
@@ -285,10 +286,12 @@ const appContext = Object.freeze({
 });
 const optimizeController = createOptimizeController(appContext);
 let pocketController = null;
+let historyController = null;
 let summaryController = null;
 let shareController = null;
 let settingsController = null;
 let pocketControllerPromise = null;
+let historyControllerPromise = null;
 let summaryControllerPromise = null;
 let shareControllerPromise = null;
 let settingsControllerPromise = null;
@@ -450,6 +453,27 @@ function ensurePocketController() {
       });
   }
   return pocketControllerPromise;
+}
+
+function ensureHistoryController() {
+  if (historyController) return Promise.resolve(historyController);
+  if (!historyControllerPromise) {
+    historyControllerPromise = import("./history/controller.js")
+      .then(({ createHistoryController }) => {
+        historyController = createHistoryController({
+          state: featureState.history,
+          svgIcon,
+          setPromptImages,
+          syncPromptInputNode
+        });
+        return historyController;
+      })
+      .catch((error) => {
+        historyControllerPromise = null;
+        throw error;
+      });
+  }
+  return historyControllerPromise;
 }
 
 function ensureSummaryController() {
@@ -1014,6 +1038,14 @@ async function openPocketPanel() {
   }
 }
 
+async function openHistoryPanel() {
+  try {
+    return (await ensureHistoryController()).openHistoryPanel();
+  } catch (error) {
+    return lazyControllerError("History", error);
+  }
+}
+
 function shortcutDigit(matchObj) {
   const raw = matchObj?.digit ?? matchObj?.[1] ?? "";
   const digit = Number.parseInt(raw, 10);
@@ -1086,6 +1118,7 @@ async function handleShortcutAction(action, matchObj = null, sourceWindow = null
   else if (action === "openSummaryPanel" || action === "openSummary") await openSummaryPanel();
   else if (action === "openSharePanel") await openSharePanel();
   else if (action === "openPocketPanel") await openPocketPanel();
+  else if (action === "openHistoryPanel") await openHistoryPanel();
   else if (action === "toggleMessageNavigator") await workspaceController.toggleMessageNavigatorForShortcut(sourceWindow);
   else if (action === "closeChat" && group && chat) await workspaceController.closeTab(group, chat);
   else if (action === "refreshPage" && chat) await workspaceController.refreshCurrentPage(chat);

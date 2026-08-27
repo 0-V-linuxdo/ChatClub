@@ -354,7 +354,7 @@ function event(type, properties = {}) {
     const wrapperNames = ["editorModal", "viewerModal", "taskModal", "confirmationModal"];
     const expectedInventory = new Map([
       ["editorModal", 10],
-      ["viewerModal", 4],
+      ["viewerModal", 5],
       ["taskModal", 1],
       ["confirmationModal", 6]
     ]);
@@ -371,8 +371,8 @@ function event(type, properties = {}) {
       wrapperNames.reduce((total, wrapperName) => (
         total + occurrences(allAppSource, new RegExp(`\\b${wrapperName}\\s*\\(`, "g"))
       ), 0),
-      21,
-      "all twenty-one app modal call sites must use a typed wrapper"
+      22,
+      "all twenty-two app modal call sites must use a typed wrapper"
     );
 
     for (let index = 0; index < appFiles.length; index += 1) {
@@ -405,6 +405,7 @@ function event(type, properties = {}) {
       ["app/settings/functional-anomalies.js", "openDetails", "viewerModal", "functional anomaly details"],
       ["app/prompt-library/controller.js", "openPromptLibraryDialog", "viewerModal", "Prompt Library manager"],
       ["app/pocket/controller.js", "openPocketPanel", "viewerModal", "Pocket history viewer"],
+      ["app/history/controller.js", "openHistoryPanel", "viewerModal", "Prompt History viewer"],
       ["app/optimize/controller.js", "openOptimizeCompareDialog", "taskModal", "prompt optimization task"],
       ["app/settings/import-export.js", "openFullResetDialog", "confirmationModal", "full reset confirmation"],
       ["app/settings/import-export.js", "openImportConfirmDialog", "confirmationModal", "import confirmation"],

@@ -699,6 +699,18 @@ function migrateShareTopbarLayout(raw = {}) {
   ];
 }
 
+function migrateHistoryTopbarLayout(raw = {}) {
+  const normalized = migrateShareTopbarLayout(raw);
+  if (raw.topbarHistoryMigrated === true || topbarLayoutHasItem(normalized, "history")) return normalized;
+  const pocketIndex = normalized.findIndex((item) => item.type === "item" && item.id === "pocket");
+  const insertIndex = pocketIndex >= 0 ? pocketIndex + 1 : normalized.length;
+  return [
+    ...normalized.slice(0, insertIndex),
+    { type: "item", id: "history" },
+    ...normalized.slice(insertIndex)
+  ];
+}
+
 function withoutPromotionApiProfiles(apiProfiles) {
   return apiProfiles.filter((profile) => !DEFAULT_PROMOTION_API_PROFILES.some((promoted) => profile.id === promoted.id));
 }
@@ -996,10 +1008,11 @@ export function normalizeOptions(raw = {}) {
     appPickerSectionOrder: normalizeAppPickerSectionOrder(raw.appPickerSectionOrder),
     appPickerAppOrders: normalizeAppPickerAppOrders(raw.appPickerAppOrders),
     tooltipDisabledIds: normalizeTooltipDisabledIds(raw.tooltipDisabledIds),
-    topbarLayout: migrateShareTopbarLayout(raw),
+    topbarLayout: migrateHistoryTopbarLayout(raw),
     topbarDeleteThreadMigrated: true,
     topbarSearchMigrated: true,
     topbarShareMigrated: true,
+    topbarHistoryMigrated: true,
     pocketCardSize: normalizePocketCardSize(raw.pocketCardSize),
     frameLoadingOverlayOpacity: boundedNumber(raw.frameLoadingOverlayOpacity, base.frameLoadingOverlayOpacity, 0, 100),
     modelPreferenceSelectionOverlayEnabled: typeof raw.modelPreferenceSelectionOverlayEnabled === "boolean"

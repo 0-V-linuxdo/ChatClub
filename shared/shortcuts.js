@@ -18,6 +18,7 @@ export const ALL_SHORTCUT_ACTIONS = [
   "openSummaryPanel",
   "openSharePanel",
   "openPocketPanel",
+  "openHistoryPanel",
   "toggleMessageNavigator",
   "closeChat",
   "refreshPage",

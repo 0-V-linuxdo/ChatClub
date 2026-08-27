@@ -1,6 +1,7 @@
 import { createComposerStatePort } from "./composer/state-port.js";
 import { createFaviconStatePort } from "./favicon/state-port.js";
 import { createFunctionalAnomalyStatePort } from "./functional-anomalies/state-port.js";
+import { createHistoryStatePort } from "./history/state-port.js";
 import { createOptimizeStatePort } from "./optimize/state-port.js";
 import { createPocketStatePort } from "./pocket/state-port.js";
 import { createPreferredModelStatePort } from "./preferred-model/state-port.js";
@@ -17,6 +18,7 @@ const FEATURE_PORT_CREATORS = Object.freeze({
   summary: createSummaryStatePort,
   share: createShareStatePort,
   pocket: createPocketStatePort,
+  history: createHistoryStatePort,
   optimize: createOptimizeStatePort,
   composer: createComposerStatePort,
   preferredModel: createPreferredModelStatePort,

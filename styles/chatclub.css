@@ -5181,6 +5181,75 @@ body.settings-tab-context-menu-dragging iframe {
   padding: 18px;
 }
 
+.modal.prompt-history-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(920px, calc(100vw - 40px));
+  height: min(720px, calc(100vh - 40px));
+}
+
+.prompt-history-modal .modal-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.prompt-history-modal-title-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  color: var(--primary);
+}
+
+.prompt-history-modal-title-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.prompt-history-modal .modal-header h2 {
+  flex: 1;
+  min-width: 0;
+}
+
+.modal.prompt-history-modal .modal-body {
+  min-height: 0;
+  display: grid;
+  overflow: hidden;
+  padding: 0;
+}
+
+.prompt-history-dialog {
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.prompt-history-panel-toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.prompt-history-panel-search {
+  flex: 1;
+  min-width: 0;
+}
+
+.prompt-history-panel-clear {
+  flex: 0 0 auto;
+}
+
+.prompt-history-panel-body {
+  min-height: 0;
+  overflow: auto;
+}
+
 .modal.pocket-history-modal {
   --pocket-sidebar-column-width: 260px;
   position: fixed;

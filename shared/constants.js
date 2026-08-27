@@ -10,7 +10,7 @@ import {
 } from "./notion-efforts.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-08-26｜18:54:00」";
+export const APP_VERSION = "「2026-08-28｜05:35:50」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -231,6 +231,7 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
       Object.freeze({ id: "topbar.summary", labelKey: "topbar.summary" }),
       Object.freeze({ id: "topbar.share", labelKey: "topbar.share" }),
       Object.freeze({ id: "topbar.pocket", labelKey: "topbar.pocket" }),
+      Object.freeze({ id: "topbar.history", labelKey: "topbar.history" }),
       Object.freeze({ id: "topbar.addGroup", labelKey: "topbar.addGroup" }),
       Object.freeze({ id: "topbar.layout", labelKey: "topbar.switchLayout" }),
       Object.freeze({ id: "topbar.settingsJumpMenu", labelKey: "topbar.settingsJumpMenu" }),
@@ -440,6 +441,7 @@ export const DEFAULT_OPTIONS = {
   topbarDeleteThreadMigrated: true,
   topbarSearchMigrated: true,
   topbarShareMigrated: true,
+  topbarHistoryMigrated: true,
   apiProfiles: [
     {
       id: "default-openai",

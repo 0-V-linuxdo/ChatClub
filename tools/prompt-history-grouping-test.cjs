@@ -8,11 +8,13 @@ const { pathToFileURL } = require("node:url");
 const root = path.resolve(__dirname, "..");
 const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
 const historySource = fs.readFileSync(path.join(root, "app/settings/history.js"), "utf8");
+const modelSource = fs.readFileSync(path.join(root, "app/history/model.js"), "utf8");
+const panelSource = fs.readFileSync(path.join(root, "app/history/controller.js"), "utf8");
 const controllerSource = fs.readFileSync(path.join(root, "app/settings/controller.js"), "utf8");
 const i18nSource = fs.readFileSync(path.join(root, "shared/i18n.js"), "utf8");
 
 (async () => {
-  const { groupPromptHistory, promptHistoryGroupId, promptHistoryMatchesSearch } = await import(moduleUrl("app/settings/history.js"));
+  const { groupPromptHistory, promptHistoryGroupId, promptHistoryMatchesSearch } = await import(moduleUrl("app/history/model.js"));
   const now = new Date(2026, 7, 8, 12, 0, 0).getTime();
   const dateDaysAgo = (daysAgo, hour = 12) => new Date(2026, 7, 8 - daysAgo, hour, 0, 0).toISOString();
 
@@ -63,13 +65,17 @@ const i18nSource = fs.readFileSync(path.join(root, "shared/i18n.js"), "utf8");
   assert.match(historySource, /class: "shortcut-search prompt-history-search"/);
   assert.match(historySource, /class: "shortcut-search-input prompt-history-search-input"/);
   assert.match(historySource, /headerSearch, pane, resetAfterImport/);
-  assert.match(historySource, /searching \? history\.filter\(\(item\) => itemMatchesSearch\(item, query\)\) : history/);
+  assert.match(historySource, /searching \? history\.filter\(\(item\) => promptHistoryItemMatchesSearch\(item, query\)\) : history/);
   assert.match(historySource, /searching \? "promptHistory\.searchEmpty" : "promptHistory\.noHistory"/);
   assert.match(
     controllerSource,
     /active === "promptHistory"[\s\S]*promptHistorySection\.headerSearch\(redraw\)/,
     "Prompt History search must mount in the settings titlebar"
   );
+  assert.match(modelSource, /export function groupPromptHistory/);
+  assert.match(panelSource, /viewerModal\(t\("promptHistory\.title"\)/);
+  assert.match(panelSource, /function openHistoryPanel/);
+  assert.match(panelSource, /class: "ui-dialog prompt-history-dialog"/);
   assert.ok(i18nSource.includes('"promptHistory.searchPlaceholder": "Search prompts or image names"'));
   assert.ok(i18nSource.includes('"promptHistory.searchPlaceholder": "搜索提示词或图片名"'));
   assert.ok(i18nSource.includes('"promptHistory.searchClear": "Clear search"'));

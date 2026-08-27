@@ -86,6 +86,7 @@
           openSummaryPanel: { disabled: false, command: false, control: false, option: true, shift: false, code: "KeyS" },
           openSharePanel: { disabled: false, command: false, control: false, option: true, shift: true, code: "KeyS" },
           openPocketPanel: { disabled: false, command: true, control: false, option: false, shift: false, code: "KeyP" },
+          openHistoryPanel: { disabled: false, command: false, control: false, option: true, shift: true, code: "KeyH" },
           toggleMessageNavigator: { disabled: false, command: true, control: false, option: false, shift: false, code: "KeyM" },
           closeChat: { disabled: false, command: false, control: false, option: true, shift: false, code: "KeyW" },
           refreshPage: { disabled: false, command: true, control: false, option: false, shift: false, code: "KeyR" },
@@ -112,6 +113,7 @@
           openSummaryPanel: { disabled: false, control: false, alt: true, shift: false, code: "KeyS" },
           openSharePanel: { disabled: false, control: false, alt: true, shift: true, code: "KeyS" },
           openPocketPanel: { disabled: false, control: true, alt: false, shift: false, code: "KeyP" },
+          openHistoryPanel: { disabled: false, control: false, alt: true, shift: true, code: "KeyH" },
           toggleMessageNavigator: { disabled: false, control: true, alt: false, shift: false, code: "KeyM" },
           closeChat: { disabled: false, control: false, alt: true, shift: false, code: "KeyW" },
           refreshPage: { disabled: false, control: true, alt: false, shift: false, code: "KeyR" },
@@ -407,12 +409,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "17fbd531aa8097678f1f877f6d3387e88a3fdd420069942fa1e248bcf97cb959";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "891c68f459a89d20e10610aaae009b60500f28e780e90624087f8f106f16dd6e";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "0f2e1b4fe74da6c44291dbc9969f4668c21eab3efaa4650cf3d04f5120f4b46e";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.0f2e1b4fe74da6c44291dbc9969f4668c21eab3efaa4650cf3d04f5120f4b46e";
-  var CONTENT_RUNTIME_CONTENT_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/content.js", "entryPath": "content-src/content.js", "sourceSha256": "b31342491f19d7e09c956f0cc13cc30a17401e164182943e211ee6b33d175a8d", "implementationSha256": "6d3431b7b0d2c1e3dd2e950c66b3ddb9bf86484a905a28d4cf68ee70c983b271", "implementationVersion": "2026.07.16.2+bundle.6d3431b7b0d2c1e3dd2e950c66b3ddb9bf86484a905a28d4cf68ee70c983b271" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "6514e444a255eeebcdabaa23e2307a250a24e97842fa08a74d7c5fbd78b9a96e";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.6514e444a255eeebcdabaa23e2307a250a24e97842fa08a74d7c5fbd78b9a96e";
+  var CONTENT_RUNTIME_CONTENT_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/content.js", "entryPath": "content-src/content.js", "sourceSha256": "32d2007e2ea9c65afe85f7c58fc9347e98f0e5d58e8d9af8626ff78745580235", "implementationSha256": "e5b984a0c8be69910c4888663a775261cad91ef83b4e3c15d0470d0e178b54c8", "implementationVersion": "2026.07.16.2+bundle.e5b984a0c8be69910c4888663a775261cad91ef83b4e3c15d0470d0e178b54c8" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -466,6 +468,7 @@
     "openSummaryPanel",
     "openSharePanel",
     "openPocketPanel",
+    "openHistoryPanel",
     "toggleMessageNavigator",
     "closeChat",
     "refreshPage",
