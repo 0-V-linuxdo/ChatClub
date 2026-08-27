@@ -54,6 +54,7 @@ export function createHistoryController(ctx) {
   let activeItemId = "";
   let pocketEntries = [];
   let pocketBusy = false;
+  let fullTextStore = {};
   let historyCurrentRedraw = null;
 
   function items() {
@@ -79,6 +80,15 @@ export function createHistoryController(ctx) {
       pocketEntries = [];
     }
     return pocketEntries;
+  }
+
+  async function refreshFullTextStore() {
+    try {
+      fullTextStore = await loadFullTextStore();
+    } catch {
+      fullTextStore = {};
+    }
+    return fullTextStore;
   }
 
   async function save(history, redraw, message) {
@@ -271,7 +281,7 @@ export function createHistoryController(ctx) {
       onclick: () => {
         if (activeItemId === item.id) return;
         activeItemId = item.id;
-        redraw();
+        refreshFullTextStore().then(redraw).catch(() => redraw());
       }
     },
       el("span", { class: "prompt-history-sidebar-item-top" },
@@ -319,10 +329,44 @@ export function createHistoryController(ctx) {
     );
   }
 
+  function conversationTurn(message = {}) {
+    const role = message.role === "assistant" ? "assistant" : "user";
+    return el("section", { class: `prompt-history-turn prompt-history-turn-${role}` },
+      el("div", { class: "prompt-history-turn-label" }, t(role === "assistant" ? "common.assistant" : "common.user")),
+      el("pre", { class: "prompt-history-turn-text" }, message.text || "")
+    );
+  }
+
+  function conversationFrame(page = {}) {
+    const messages = Array.isArray(page.messages) ? page.messages : [];
+    const label = page.siteName || page.name || page.title || "";
+    return el("section", { class: "prompt-history-conversation" },
+      label || page.href
+        ? el("header", { class: "prompt-history-conversation-head" },
+          label ? el("strong", {}, label) : null,
+          page.href ? el("span", { class: "prompt-history-conversation-url" }, page.href) : null
+        )
+        : null,
+      el("div", { class: "prompt-history-conversation-turns" },
+        messages.map((message) => conversationTurn(message))
+      )
+    );
+  }
+
+  function syncHistoryModalTitle(item) {
+    const title = document.querySelector(".prompt-history-modal .modal-header h2");
+    if (!title) return;
+    const fallback = t("promptHistory.title");
+    const preview = promptHistoryPreview(item?.text, 72);
+    title.textContent = preview || fallback;
+    title.title = preview ? String(item?.text || "").replace(/\s+/g, " ").trim() : fallback;
+  }
+
   function detail(item, redraw, close) {
     const images = Array.isArray(item.images) ? item.images : [];
     const imageLabel = promptHistoryImageCountLabel(images);
     const canPocket = Boolean(promptHistoryMessageKey(item.text)) && !pocketBusy;
+    const pages = promptHistoryPocketPages(item, { store: fullTextStore });
     return el("article", { class: "prompt-history-detail" },
       el("header", { class: "prompt-history-detail-header" },
         el("div", { class: "prompt-history-detail-meta" },
@@ -343,7 +387,9 @@ export function createHistoryController(ctx) {
           rowAction(t("common.delete"), "trash", () => remove(item, redraw), "danger", "settings.action.delete")
         )
       ),
-      el("pre", { class: "prompt-history-detail-text" }, item.text || t("promptHistory.emptyPrompt")),
+      pages.length
+        ? el("div", { class: "prompt-history-conversations" }, pages.map((page) => conversationFrame(page)))
+        : el("pre", { class: "prompt-history-detail-text" }, item.text || t("promptHistory.emptyPrompt")),
       detailImages(images, imageLabel)
     );
   }
@@ -354,6 +400,7 @@ export function createHistoryController(ctx) {
     const searching = Boolean(String(query || "").trim());
     const visible = searching ? history.filter((item) => promptHistoryItemMatchesSearch(item, query)) : history;
     const activeItem = resolveActiveItem(visible);
+    syncHistoryModalTitle(activeItem);
     clear(host);
     host.append(
       el("div", { class: "prompt-history-panel-toolbar" },
@@ -404,7 +451,7 @@ export function createHistoryController(ctx) {
     const panel = dialog.querySelector(".modal");
     panel?.classList.add("prompt-history-modal");
     installHistoryPanelHeader(panel);
-    refreshPocketEntries().then(redraw).catch(() => redraw());
+    Promise.all([refreshPocketEntries(), refreshFullTextStore()]).then(redraw).catch(() => redraw());
     redraw();
     return dialog;
   }

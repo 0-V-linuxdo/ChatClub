@@ -13,6 +13,7 @@ const panelSource = fs.readFileSync(path.join(root, "app/history/controller.js")
 const runtimeSource = fs.readFileSync(path.join(root, "app/runtime.js"), "utf8");
 const controllerSource = fs.readFileSync(path.join(root, "app/settings/controller.js"), "utf8");
 const i18nSource = fs.readFileSync(path.join(root, "shared/i18n.js"), "utf8");
+const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"), "utf8");
 
 (async () => {
   const {
@@ -117,6 +118,34 @@ const i18nSource = fs.readFileSync(path.join(root, "shared/i18n.js"), "utf8");
   ]);
   assert.equal(promptHistoryPocketPages({ text: "missing" }, { store: {}, previewItems: [] }).length, 0);
 
+  const wrappedPages = promptHistoryPocketPages({ text: "搜索：科幻作家 七月\n出版的小说/小说集" }, {
+    store: {
+      ws2: {
+        workspaceId: "ws2",
+        topicTitle: "July novels",
+        frames: [{
+          href: "https://chatgpt.com/c/wrap",
+          title: "ChatGPT",
+          appName: "ChatGPT",
+          messages: [
+            { role: "user", text: "请根据下面的问题回答。\n搜索：科幻作家 七月 出版的小说/小说集" },
+            { role: "assistant", text: "七月出版过《...'s小说集。" }
+          ]
+        }]
+      }
+    }
+  });
+  assert.equal(wrappedPages.length, 1, "History must show stored turns even when the USER wrap includes the sent prompt");
+  assert.deepEqual(wrappedPages[0].messages.map((message) => message.role), ["user", "assistant"]);
+  assert.equal(
+    promptHistoryPocketSaved(
+      { text: "搜索：科幻作家 七月\n出版的小说/小说集" },
+      [{ userMessage: "请根据下面的问题回答。\n搜索：科幻作家 七月 出版的小说/小说集" }]
+    ),
+    false,
+    "sidebar pocket badge must stay exact USER match"
+  );
+
   assert.match(historySource, /class: "shortcut-search prompt-history-search"/);
   assert.match(historySource, /class: "shortcut-search-input prompt-history-search-input"/);
   assert.match(historySource, /headerSearch, pane, resetAfterImport/);
@@ -135,6 +164,20 @@ const i18nSource = fs.readFileSync(path.join(root, "shared/i18n.js"), "utf8");
   assert.match(panelSource, /class: "prompt-history-pocket-badge"/);
   assert.match(panelSource, /"data-tooltip-id": "history\.action\.pocket"/);
   assert.match(panelSource, /function saveItemToPocket/);
+  assert.match(panelSource, /function refreshFullTextStore/);
+  assert.match(panelSource, /function syncHistoryModalTitle/);
+  assert.match(panelSource, /Promise\.all\(\[refreshPocketEntries\(\), refreshFullTextStore\(\)\]\)/);
+  assert.match(panelSource, /class: "prompt-history-conversations"/);
+  assert.match(panelSource, /class: `prompt-history-turn prompt-history-turn-\$\{role\}`/);
+  assert.match(panelSource, /promptHistoryPreview\(item\?\.text, 72\)/);
+  assert.match(panelSource, /promptHistoryPocketPages\(item, \{ store: fullTextStore \}\)/);
+  assert.match(stylesheetSource, /\.prompt-history-conversations\s*\{/);
+  assert.match(stylesheetSource, /\.prompt-history-turn-text\s*\{/);
+  assert.match(
+    stylesheetSource,
+    /\.prompt-history-modal \.modal-header h2 \{[\s\S]*?text-overflow:\s*ellipsis/,
+    "History modal title must ellipsize the selected prompt"
+  );
   assert.match(runtimeSource, /savePages: \(\.\.\.args\) => ensurePocketController\(\)\.then\(\(pocket\) => pocket\.savePagesToPocket/);
   assert.match(runtimeSource, /collectLive: \(\) => ensureSummaryController\(\)\.then\(\(summary\) => summary\.collectWorkspacePreviewItems/);
   assert.ok(i18nSource.includes('"promptHistory.searchPlaceholder": "Search prompts or image names"'));

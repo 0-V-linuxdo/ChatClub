@@ -59,6 +59,17 @@ export function promptHistoryMessageKey(text = "") {
   return String(text || "").replace(/\r\n?/g, "\n").trim();
 }
 
+function compactHistoryText(value) {
+  return promptHistoryMessageKey(value).replace(/\s+/g, " ");
+}
+
+function promptHistoryPairMatches(pair, item) {
+  const needle = compactHistoryText(item?.text);
+  const user = compactHistoryText(pair?.userMessage);
+  if (!needle || !user) return false;
+  return user === needle || user.includes(needle);
+}
+
 export function promptHistoryPocketSaved(item, pocketEntries = []) {
   const key = promptHistoryMessageKey(item?.text);
   if (!key) return false;
@@ -72,7 +83,7 @@ function matchingFrames(item, frames = []) {
   if (!key) return [];
   return (Array.isArray(frames) ? frames : []).flatMap((frame) => {
     const matching = pocketPairsFromMessages(frame?.messages).filter(
-      (pair) => promptHistoryMessageKey(pair.userMessage) === key
+      (pair) => promptHistoryPairMatches(pair, item)
     );
     if (!matching.length) return [];
     return [{

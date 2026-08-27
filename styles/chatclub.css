@@ -5213,6 +5213,9 @@ body.settings-tab-context-menu-dragging iframe {
 .prompt-history-modal .modal-header h2 {
   flex: 1;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .modal.prompt-history-modal .modal-body {
@@ -5439,6 +5442,85 @@ body.settings-tab-context-menu-dragging iframe {
   color: var(--text);
   font: inherit;
   line-height: 1.5;
+}
+
+.prompt-history-conversations {
+  min-width: 0;
+  display: grid;
+  gap: 14px;
+}
+
+.prompt-history-conversation {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--panel-2) 86%, var(--bg));
+}
+
+.prompt-history-conversation-head {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.prompt-history-conversation-head strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 720;
+}
+
+.prompt-history-conversation-url {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.prompt-history-conversation-turns {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.prompt-history-turn {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.prompt-history-turn-label {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.prompt-history-turn-text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font: inherit;
+  line-height: 1.5;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.prompt-history-turn-assistant .prompt-history-turn-text {
+  background: color-mix(in srgb, var(--primary) 8%, var(--bg));
 }
 
 @media (max-width: 760px) {
