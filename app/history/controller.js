@@ -13,6 +13,7 @@ import {
   promptHistoryImageCountLabel,
   promptHistoryItemMatchesSearch,
   promptHistoryMessageKey,
+  promptHistoryConversationPages,
   promptHistoryPocketPages,
   promptHistoryPocketSaved,
   promptHistoryPreview,
@@ -55,6 +56,8 @@ export function createHistoryController(ctx) {
   let pocketEntries = [];
   let pocketBusy = false;
   let fullTextStore = {};
+  let livePreviewItems = [];
+  let livePreviewTried = false;
   let historyCurrentRedraw = null;
 
   function items() {
@@ -89,6 +92,28 @@ export function createHistoryController(ctx) {
       fullTextStore = {};
     }
     return fullTextStore;
+  }
+
+  function conversationPages(item) {
+    return promptHistoryConversationPages(item, {
+      store: fullTextStore,
+      previewItems: livePreviewItems
+    });
+  }
+
+  async function refreshConversationSources(redraw) {
+    await refreshFullTextStore();
+    redraw();
+    const history = items();
+    const active = history.find((entry) => entry.id === activeItemId) || history[0] || null;
+    if (livePreviewTried || !active || conversationPages(active).length) return;
+    livePreviewTried = true;
+    try {
+      livePreviewItems = await collectLivePreviewItems();
+    } catch {
+      livePreviewItems = [];
+    }
+    redraw();
   }
 
   async function save(history, redraw, message) {
@@ -279,9 +304,8 @@ export function createHistoryController(ctx) {
       type: "button",
       "aria-current": active ? "true" : null,
       onclick: () => {
-        if (activeItemId === item.id) return;
         activeItemId = item.id;
-        refreshFullTextStore().then(redraw).catch(() => redraw());
+        refreshConversationSources(redraw).catch(() => redraw());
       }
     },
       el("span", { class: "prompt-history-sidebar-item-top" },
@@ -366,7 +390,7 @@ export function createHistoryController(ctx) {
     const images = Array.isArray(item.images) ? item.images : [];
     const imageLabel = promptHistoryImageCountLabel(images);
     const canPocket = Boolean(promptHistoryMessageKey(item.text)) && !pocketBusy;
-    const pages = promptHistoryPocketPages(item, { store: fullTextStore });
+    const pages = conversationPages(item);
     return el("article", { class: "prompt-history-detail" },
       el("header", { class: "prompt-history-detail-header" },
         el("div", { class: "prompt-history-detail-meta" },
@@ -438,6 +462,8 @@ export function createHistoryController(ctx) {
     if (existing) return existing.closest(".modal-backdrop") || existing.parentElement;
     resetSearch();
     activeItemId = "";
+    livePreviewItems = [];
+    livePreviewTried = false;
     const host = el("div", { class: "ui-dialog prompt-history-dialog" });
     let dialog;
     const close = () => {
@@ -451,7 +477,10 @@ export function createHistoryController(ctx) {
     const panel = dialog.querySelector(".modal");
     panel?.classList.add("prompt-history-modal");
     installHistoryPanelHeader(panel);
-    Promise.all([refreshPocketEntries(), refreshFullTextStore()]).then(redraw).catch(() => redraw());
+    Promise.all([
+      refreshPocketEntries().then(redraw).catch(() => {}),
+      refreshConversationSources(redraw)
+    ]).catch(() => redraw());
     redraw();
     return dialog;
   }

@@ -160,7 +160,8 @@ function appDomain(file) {
       "dedupePocketEntries", "normalizePocketMessage", "pocketEntriesFromMessages", "pocketEntriesFromPages"
     ]],
     ["app/history/controller.js", "createHistoryController", [
-      "insert", "remove", "clearHistory", "headerSearch", "renderHistory", "saveItemToPocket", "sidebar"
+      "insert", "remove", "clearHistory", "headerSearch", "renderHistory", "saveItemToPocket", "sidebar",
+      "refreshConversationSources", "conversationPages", "conversationTurn", "conversationFrame"
     ]],
     ["app/share/controller.js", "createShareController", [
       "listShareFrames", "collectShareImage", "collectShareText", "runShare"

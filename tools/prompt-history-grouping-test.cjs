@@ -21,6 +21,7 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
     promptHistoryGroupId,
     promptHistoryMatchesSearch,
     promptHistoryMessageKey,
+    promptHistoryConversationPages,
     promptHistoryPocketPages,
     promptHistoryPocketSaved
   } = await import(moduleUrl("app/history/model.js"));
@@ -146,6 +147,56 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
     "sidebar pocket badge must stay exact USER match"
   );
 
+  const truncatedPages = promptHistoryConversationPages({ text: "搜索：科幻作家 七月\n出版的小说/小说集" }, {
+    store: {
+      ws3: {
+        workspaceId: "ws3",
+        frames: [{
+          href: "https://kimi.com/c/1",
+          appName: "Kimi",
+          messages: [
+            { role: "user", text: "搜索：科幻作家 七月" },
+            { role: "assistant", text: "七月的代表作包括《…" }
+          ]
+        }]
+      }
+    }
+  });
+  assert.equal(truncatedPages.length, 1, "History must show stored turns when a captured USER is a prefix of the sent prompt");
+  assert.equal(truncatedPages[0].messages[1].text, "七月的代表作包括《…");
+  const hrefLess = promptHistoryConversationPages({ text: "Explain closures" }, {
+    store: {
+      ws4: {
+        workspaceId: "ws4",
+        frames: [{
+          appName: "ChatGPT",
+          instanceId: "gpt-1",
+          messages: [
+            { role: "user", text: "Explain closures" },
+            { role: "assistant", text: "A function that remembers its scope." }
+          ]
+        }]
+      }
+    }
+  });
+  assert.equal(hrefLess.length, 1, "History detail must render stored turns even when the frame has no href");
+  assert.equal(hrefLess[0].messages[1].text, "A function that remembers its scope.");
+  assert.equal(promptHistoryPocketPages({ text: "Explain closures" }, {
+    store: {
+      ws4: {
+        workspaceId: "ws4",
+        frames: [{
+          appName: "ChatGPT",
+          instanceId: "gpt-1",
+          messages: [
+            { role: "user", text: "Explain closures" },
+            { role: "assistant", text: "A function that remembers its scope." }
+          ]
+        }]
+      }
+    }
+  }).length, 0, "href-less frames must not be saved to Pocket");
+
   assert.match(historySource, /class: "shortcut-search prompt-history-search"/);
   assert.match(historySource, /class: "shortcut-search-input prompt-history-search-input"/);
   assert.match(historySource, /headerSearch, pane, resetAfterImport/);
@@ -165,12 +216,16 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   assert.match(panelSource, /"data-tooltip-id": "history\.action\.pocket"/);
   assert.match(panelSource, /function saveItemToPocket/);
   assert.match(panelSource, /function refreshFullTextStore/);
+  assert.match(panelSource, /function refreshConversationSources/);
   assert.match(panelSource, /function syncHistoryModalTitle/);
-  assert.match(panelSource, /Promise\.all\(\[refreshPocketEntries\(\), refreshFullTextStore\(\)\]\)/);
+  assert.match(panelSource, /livePreviewTried/);
+  assert.match(panelSource, /promptHistoryConversationPages/);
+  assert.match(panelSource, /collectLivePreviewItems\(\)/);
+  assert.match(panelSource, /refreshConversationSources\(redraw\)/);
   assert.match(panelSource, /class: "prompt-history-conversations"/);
   assert.match(panelSource, /class: `prompt-history-turn prompt-history-turn-\$\{role\}`/);
   assert.match(panelSource, /promptHistoryPreview\(item\?\.text, 72\)/);
-  assert.match(panelSource, /promptHistoryPocketPages\(item, \{ store: fullTextStore \}\)/);
+  assert.match(panelSource, /conversationPages\(item\)/);
   assert.match(stylesheetSource, /\.prompt-history-conversations\s*\{/);
   assert.match(stylesheetSource, /\.prompt-history-turn-text\s*\{/);
   assert.match(

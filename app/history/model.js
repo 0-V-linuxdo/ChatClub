@@ -63,11 +63,33 @@ function compactHistoryText(value) {
   return promptHistoryMessageKey(value).replace(/\s+/g, " ");
 }
 
+function promptHistoryTextOverlaps(left, right) {
+  const a = compactHistoryText(left);
+  const b = compactHistoryText(right);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const shorter = a.length <= b.length ? a : b;
+  const longer = a.length <= b.length ? b : a;
+  return shorter.length >= 8 && longer.includes(shorter);
+}
+
 function promptHistoryPairMatches(pair, item) {
-  const needle = compactHistoryText(item?.text);
-  const user = compactHistoryText(pair?.userMessage);
-  if (!needle || !user) return false;
-  return user === needle || user.includes(needle);
+  return promptHistoryTextOverlaps(pair?.userMessage, item?.text);
+}
+
+function matchingMessages(item, messages = []) {
+  const matching = pocketPairsFromMessages(messages).filter((pair) => promptHistoryPairMatches(pair, item));
+  if (matching.length) {
+    return matching.flatMap((pair) => [
+      { role: "user", text: pair.userMessage },
+      { role: "assistant", text: pair.assistantMessage }
+    ]);
+  }
+  return (Array.isArray(messages) ? messages : []).flatMap((message) => {
+    const role = message?.role === "assistant" ? "assistant" : message?.role === "user" ? "user" : "";
+    const text = String(message?.text || message?.content || "");
+    return role && promptHistoryTextOverlaps(text, item?.text) ? [{ role, text }] : [];
+  });
 }
 
 export function promptHistoryPocketSaved(item, pocketEntries = []) {
@@ -79,20 +101,10 @@ export function promptHistoryPocketSaved(item, pocketEntries = []) {
 }
 
 function matchingFrames(item, frames = []) {
-  const key = promptHistoryMessageKey(item?.text);
-  if (!key) return [];
+  if (!promptHistoryMessageKey(item?.text)) return [];
   return (Array.isArray(frames) ? frames : []).flatMap((frame) => {
-    const matching = pocketPairsFromMessages(frame?.messages).filter(
-      (pair) => promptHistoryPairMatches(pair, item)
-    );
-    if (!matching.length) return [];
-    return [{
-      ...frame,
-      messages: matching.flatMap((pair) => [
-        { role: "user", text: pair.userMessage },
-        { role: "assistant", text: pair.assistantMessage }
-      ])
-    }];
+    const messages = matchingMessages(item, frame?.messages);
+    return messages.length ? [{ ...frame, messages }] : [];
   });
 }
 
@@ -122,16 +134,25 @@ function frameToPocketPage(frame = {}) {
   };
 }
 
-export function promptHistoryPocketPages(item, sources = {}) {
-  const pages = [
-    ...framesMatchingPromptHistory(item, sources.store),
-    ...previewItemsMatchingPromptHistory(item, sources.previewItems)
-  ].map(frameToPocketPage);
+function uniqueConversationPages(pages = []) {
   const seen = new Set();
   return pages.filter((page) => {
-    const key = [page.href, ...(Array.isArray(page.messages) ? page.messages.map((message) => message.text) : [])].join("\n");
-    if (!page.href || seen.has(key)) return false;
+    const messages = Array.isArray(page.messages) ? page.messages : [];
+    if (!messages.length) return false;
+    const key = [page.href || page.instanceId || page.siteName, ...messages.map((message) => message.text)].join("\n");
+    if (seen.has(key)) return false;
     seen.add(key);
     return true;
   });
+}
+
+export function promptHistoryConversationPages(item, sources = {}) {
+  return uniqueConversationPages([
+    ...framesMatchingPromptHistory(item, sources.store),
+    ...previewItemsMatchingPromptHistory(item, sources.previewItems)
+  ].map(frameToPocketPage));
+}
+
+export function promptHistoryPocketPages(item, sources = {}) {
+  return promptHistoryConversationPages(item, sources).filter((page) => page.href);
 }
