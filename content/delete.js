@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "d23252f289d23d3cf235eee27027e6e3f225d4977736972e7061044bbc540e2c";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "9c12ed5f61f7ea38e50aae01b55bd3169263e3123cdc26b2812be7dd71522316";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "2909b674a8ce1a87bf2d99b5676a83567c85f0b9400c2df1092143350fece852";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.2909b674a8ce1a87bf2d99b5676a83567c85f0b9400c2df1092143350fece852";
-  var CONTENT_RUNTIME_DELETE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/delete.js", "entryPath": "content-src/content-delete.js", "sourceSha256": "bd8925a98b2db3a858d3e37d2b8c7eb66436caec5b67d3210e7f8f6a384fd3b8", "implementationSha256": "f652ca4e69d92d2e4cfc3902da80b89854ba0e5d28abc19e3986ff9225f45c70", "implementationVersion": "2026.07.16.2+bundle.f652ca4e69d92d2e4cfc3902da80b89854ba0e5d28abc19e3986ff9225f45c70" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "12e282568814849ec381d16b1650d7316039a3790021226b89c53edb25f03cfa";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.12e282568814849ec381d16b1650d7316039a3790021226b89c53edb25f03cfa";
+  var CONTENT_RUNTIME_DELETE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/delete.js", "entryPath": "content-src/content-delete.js", "sourceSha256": "23f2eddf95089170dcbf0d98bf933d0156ba728fcfb6f24847daaf6786e9bf38", "implementationSha256": "6c2f59d9d4b403dfdb862379bab6d326e2889d71f7a9b628c500882d189355ce", "implementationVersion": "2026.07.16.2+bundle.6c2f59d9d4b403dfdb862379bab6d326e2889d71f7a9b628c500882d189355ce" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {

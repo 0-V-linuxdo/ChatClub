@@ -21,7 +21,8 @@ const root = path.resolve(__dirname, "..");
     removeWorkspaceTabFullText,
     searchWorkspaceTabFullTextHits,
     upsertWorkspaceTabFullText,
-    workspaceIdsMatchingFullText
+    workspaceIdsMatchingFullText,
+    workspaceTabFullTextFramesEqual
   } = await import(pathToFileURL(path.join(root, "shared/workspace-tab-fulltext.js")).href);
 
   const workspaceId = "page-abcdefghijkl";
@@ -132,6 +133,18 @@ const root = path.resolve(__dirname, "..");
   assert.equal(replaced.length, 2);
   assert.equal(replaced[0].messages[1].text, "updated");
   assert.equal(replaced[1].instanceId, "claude-1");
+  assert.equal(workspaceTabFullTextFramesEqual(merged, merged), true);
+  assert.equal(workspaceTabFullTextFramesEqual(merged, replaced), false, "updated messages must not compare equal");
+  assert.equal(
+    workspaceTabFullTextFramesEqual(replaced, mergeWorkspaceTabFullTextFrames(replaced, [{
+      instanceId: "chatgpt-1",
+      href: "https://chatgpt.com/c/1",
+      appName: "ChatGPT",
+      messages: [{ role: "user", text: prompt }, { role: "assistant", text: "updated" }]
+    }])),
+    true,
+    "re-merging the same messages must be a no-op for persist"
+  );
 
   console.log("workspace tab full text: ok");
 })().catch((error) => {

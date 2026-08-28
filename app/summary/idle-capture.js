@@ -10,8 +10,9 @@ export function conversationFingerprintSignature(fingerprint) {
   return [
     String(fingerprint.documentId || ""),
     String(fingerprint.href || ""),
-    String(fingerprint.childCount ?? ""),
-    String(fingerprint.textLength ?? ""),
+    String(fingerprint.turnCount ?? ""),
+    String(fingerprint.userChars ?? ""),
+    String(fingerprint.assistantChars ?? ""),
     String(fingerprint.tailHash || "")
   ].join("\n");
 }
@@ -19,6 +20,10 @@ export function conversationFingerprintSignature(fingerprint) {
 function positiveInteger(value, fallback) {
   const next = Number(value);
   return Number.isFinite(next) && next > 0 ? next : fallback;
+}
+
+function frameCaptureKey(frame) {
+  return String(frame?.key || frame?.instanceId || "").trim();
 }
 
 export function createIdleFullTextCaptureScheduler(options = {}) {
@@ -39,6 +44,7 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
     : () => false;
   const isEnabled = typeof options.isEnabled === "function" ? options.isEnabled : () => true;
   const frameExists = typeof options.frameExists === "function" ? options.frameExists : () => true;
+  const savedSignatures = new Map();
 
   let generation = 0;
   let activeKind = "";
@@ -50,6 +56,23 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
 
   function isRunning() {
     return activeKind === "send" || activeKind === "existing";
+  }
+
+  function savedSignatureFor(frame) {
+    const key = frameCaptureKey(frame);
+    return key ? String(savedSignatures.get(key) || "") : "";
+  }
+
+  async function rememberSavedSignature(frame, prompt, fallback = "") {
+    const key = frameCaptureKey(frame);
+    if (!key) return;
+    let signature = String(fallback || "");
+    try {
+      signature = conversationFingerprintSignature(await getFingerprint(frame, prompt)) || signature;
+    } catch {
+      /* keep fallback */
+    }
+    if (signature) savedSignatures.set(key, signature);
   }
 
   async function listCaptureFrames() {
@@ -128,6 +151,9 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
       if (runId !== generation) return { status: "cancelled", attempts };
 
       if (signature) {
+        if (existing && signature === savedSignatureFor(frame)) {
+          return { status: "unchanged", attempts };
+        }
         if (sawFingerprint && signature !== lastSignature) sawChange = true;
         if (!sawFingerprint || signature !== lastSignature) idleSince = now();
         lastSignature = signature;
@@ -140,7 +166,11 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
       if ((idle || wallHit) && attempts < maxAttempts) {
         attempts += 1;
         const result = await collectOnce({ frame, prompt, runId, attempts });
-        if (result.status === "saved" || result.status === "cancelled") return result;
+        if (result.status === "saved") {
+          await rememberSavedSignature(frame, prompt, lastSignature);
+          return result;
+        }
+        if (result.status === "cancelled") return result;
         idleSince = now();
         if (wallHit || attempts >= maxAttempts) {
           return wallHit ? { status: result.status === "unmatched" ? "expired" : result.status, attempts } : { status: "exhausted", attempts };
@@ -154,7 +184,11 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
         if (attempts < maxAttempts) {
           attempts += 1;
           const result = await collectOnce({ frame, prompt, runId, attempts });
-          if (result.status === "saved" || result.status === "cancelled") return result;
+          if (result.status === "saved") {
+            await rememberSavedSignature(frame, prompt, lastSignature);
+            return result;
+          }
+          if (result.status === "cancelled") return result;
           return { status: "expired", attempts };
         }
         return { status: "expired", attempts };

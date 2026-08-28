@@ -141,6 +141,28 @@ export function framesFromSummaryPreviewItems(items = []) {
   }).slice(0, WORKSPACE_TAB_FULLTEXT_MAX_FRAMES);
 }
 
+export function workspaceTabFullTextFramesEqual(left = [], right = []) {
+  const a = (Array.isArray(left) ? left : [])
+    .map((frame, order) => normalizeFrame(frame, order))
+    .filter(Boolean);
+  const b = (Array.isArray(right) ? right : [])
+    .map((frame, order) => normalizeFrame(frame, order))
+    .filter(Boolean);
+  if (a.length !== b.length) return false;
+  for (let index = 0; index < a.length; index += 1) {
+    if (frameIdentityKey(a[index]) !== frameIdentityKey(b[index])) return false;
+    if (textValue(a[index].href) !== textValue(b[index].href)) return false;
+    const leftMessages = a[index].messages;
+    const rightMessages = b[index].messages;
+    if (leftMessages.length !== rightMessages.length) return false;
+    for (let messageIndex = 0; messageIndex < leftMessages.length; messageIndex += 1) {
+      if (leftMessages[messageIndex].role !== rightMessages[messageIndex].role) return false;
+      if (leftMessages[messageIndex].text !== rightMessages[messageIndex].text) return false;
+    }
+  }
+  return true;
+}
+
 function clipText(value, max = WORKSPACE_TAB_FULLTEXT_MAX_MESSAGE_CHARS) {
   const text = String(value || "").trim();
   if (!text) return "";

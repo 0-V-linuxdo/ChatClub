@@ -147,8 +147,9 @@ export function createHistoryController(ctx) {
     const history = items();
     const active = history.find((entry) => entry.id === activeItemId) || history[0] || null;
     const hasPages = Boolean(active && conversationPages(active).length);
-    if (options.retryLive && !hasPages && !livePreviewPending) livePreviewTried = false;
-    const shouldCollect = !livePreviewTried && !livePreviewPending && active && !hasPages;
+    const hasLiveSnapshot = Array.isArray(livePreviewItems) && livePreviewItems.length > 0;
+    if (options.retryLive && !hasPages && !hasLiveSnapshot && !livePreviewPending) livePreviewTried = false;
+    const shouldCollect = !livePreviewTried && !livePreviewPending && active && !hasPages && !hasLiveSnapshot;
     if (shouldCollect) {
       livePreviewTried = true;
       livePreviewPending = true;

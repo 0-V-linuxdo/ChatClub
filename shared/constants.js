@@ -10,7 +10,7 @@ import {
 } from "./notion-efforts.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-08-28｜23:45:47」";
+export const APP_VERSION = "「2026-08-29｜00:17:13」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 

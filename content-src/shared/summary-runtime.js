@@ -117,41 +117,96 @@ function fingerprintHash(value) {
   return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
-function conversationRoot() {
-  const ranked = [
-    '[role="log"]',
-    '[data-testid="conversation-turns"]',
-    '[data-testid="conversation"]',
-    "main",
-    '[role="main"]'
-  ];
-  let best = null;
-  let bestLength = 0;
-  for (const selector of ranked) {
-    for (const node of qsa(selector)) {
-      const length = String(node?.innerText || "").length;
-      if (length > bestLength) {
-        best = node;
-        bestLength = length;
-      }
+function conversationHref() {
+  try {
+    const url = new URL(location.href);
+    const path = `${url.origin}${url.pathname}`;
+    const hash = String(url.hash || "").replace(/^#/, "");
+    if (hash && !/[=&]/.test(hash) && hash.length >= 8 && hash.length <= 120) {
+      return `${path}#${hash}`;
     }
-    if (best && bestLength >= 80) return best;
+    return path;
+  } catch {
+    return String(location.href || "").replace(/[?#].*$/, "");
   }
-  return best || document.body;
+}
+
+function conversationTurnRole(el) {
+  const attr = String(el?.getAttribute?.("data-message-author-role") || "").toLowerCase();
+  if (attr === "user" || attr === "assistant") return attr;
+  const testid = String(el?.getAttribute?.("data-testid") || "").toLowerCase();
+  if (/\buser\b/.test(testid) && !/\bassistant\b/.test(testid)) return "user";
+  if (/\b(assistant|bot|model|ai)\b/.test(testid)) return "assistant";
+  const tag = String(el?.tagName || "").toLowerCase();
+  if (tag === "user-query") return "user";
+  if (tag === "model-response") return "assistant";
+  const cls = classText(el).toLowerCase();
+  if (/(?:^|[\s_-])user-query(?:$|[\s_-])|ds-user/.test(cls) && !/assistant|model-response|ds-assistant/.test(cls)) return "user";
+  if (/font-claude-response|model-response|ds-assistant/.test(cls)) return "assistant";
+  return userscriptRole(el) || "";
+}
+
+function conversationTurnText(el) {
+  if (!el) return "";
+  try {
+    const clone = el.cloneNode(true);
+    clone.querySelectorAll?.("button,svg,script,style,noscript,time,nav,header,footer,form,input,textarea,select,[contenteditable='true']")
+      .forEach((node) => node.remove());
+    return normalize(clone.innerText || clone.textContent || "").replace(/\s+/g, " ");
+  } catch {
+    return normalize(el.innerText || el.textContent || "").replace(/\s+/g, " ");
+  }
+}
+
+function conversationTurnNodes() {
+  const selectors = [
+    "[data-message-author-role]",
+    "[data-testid='user-message'], [data-testid='assistant-message'], .font-claude-response",
+    "[data-testid='conversation-turn'], article[data-testid*='conversation-turn']",
+    "user-query, model-response, .user-query, .model-response",
+    ".ds-message",
+    ".chat_bubble[role='article']",
+    "[data-testid='message']",
+    "article[data-testid*='conversation']"
+  ];
+  const nodes = [];
+  for (const selector of selectors) {
+    for (const node of qsa(selector).filter(visible)) {
+      if (internalTool(node)) continue;
+      if (nodes.some((existing) => existing === node || existing.contains?.(node) || node.contains?.(existing))) continue;
+      nodes.push(node);
+    }
+    if (nodes.length >= 2) break;
+  }
+  return nodes.sort(elementOrder);
 }
 
 function conversationFingerprint(documentId = "", data = {}) {
-  const root = conversationRoot();
-  const raw = normalize(root?.innerText || document.body?.innerText || "");
+  const turns = conversationTurnNodes();
   const prompt = normalize(data?.prompt || "").replace(/\s+/g, " ");
-  const haystack = raw.replace(/\s+/g, " ");
+  let userChars = 0;
+  let assistantChars = 0;
+  let lastText = "";
+  const haystackParts = [];
+  for (const turn of turns) {
+    const role = conversationTurnRole(turn);
+    const value = conversationTurnText(turn);
+    if (!value) continue;
+    haystackParts.push(value);
+    if (role === "user") userChars += value.length;
+    else if (role === "assistant") assistantChars += value.length;
+    lastText = value;
+  }
+  const haystack = haystackParts.join(" ");
+  const promptHaystack = haystack || normalize(document.body?.innerText || "").replace(/\s+/g, " ");
   return {
-    href: location.href,
+    href: conversationHref(),
     documentId: String(documentId || ""),
-    childCount: Number(root?.childElementCount || 0),
-    textLength: raw.length,
-    tailHash: fingerprintHash(raw.slice(-240)),
-    containsPrompt: Boolean(prompt && haystack.includes(prompt))
+    turnCount: turns.length,
+    userChars,
+    assistantChars,
+    tailHash: fingerprintHash(lastText.slice(-500)),
+    containsPrompt: Boolean(prompt && promptHaystack.includes(prompt))
   };
 }
 

@@ -371,6 +371,8 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   assert.match(panelSource, /livePreviewTried/);
   assert.match(panelSource, /livePreviewPending/);
   assert.match(panelSource, /retryLive/);
+  assert.match(panelSource, /hasLiveSnapshot/);
+  assert.match(panelSource, /!hasPages && !hasLiveSnapshot/);
   assert.match(panelSource, /promptHistoryConversationPages/);
   assert.match(panelSource, /collectLivePreviewItems\(\)/);
   assert.match(panelSource, /refreshConversationSources\(redraw\)/);
@@ -441,6 +443,7 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   );
   assert.match(runtimeSource, /savePages: \(\.\.\.args\) => ensurePocketController\(\)\.then\(\(pocket\) => pocket\.savePagesToPocket/);
   assert.match(runtimeSource, /collectLive: \(\) => ensureSummaryController\(\)\.then\(\(summary\) => summary\.collectWorkspacePreviewItems/);
+  assert.match(runtimeSource, /result\?\.saved && result\.unchanged !== true/);
   assert.match(runtimeSource, /historyController\?\.notifyFullTextChanged/);
   assert.match(
     runtimeSource,

@@ -74,12 +74,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "d23252f289d23d3cf235eee27027e6e3f225d4977736972e7061044bbc540e2c";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "9c12ed5f61f7ea38e50aae01b55bd3169263e3123cdc26b2812be7dd71522316";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "2909b674a8ce1a87bf2d99b5676a83567c85f0b9400c2df1092143350fece852";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.2909b674a8ce1a87bf2d99b5676a83567c85f0b9400c2df1092143350fece852";
-  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "bf1b2b0e659e8ca3cc18acd2dfae78625bb476282eb570792d2d44f147b89421", "implementationSha256": "bdd17d152a0eae0f4879c6706902ff3347f3cca802cb489fd5775762d7e32d85", "implementationVersion": "2026.07.16.2+bundle.bdd17d152a0eae0f4879c6706902ff3347f3cca802cb489fd5775762d7e32d85" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "12e282568814849ec381d16b1650d7316039a3790021226b89c53edb25f03cfa";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.12e282568814849ec381d16b1650d7316039a3790021226b89c53edb25f03cfa";
+  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "d6970f7f70410169eca51c8e120b93fde89c136c8ad6a327ee0f0597fc0187b6", "implementationSha256": "ed47fe458434c00a0c6fd2e84e4edc11dbf3b73e04e40341ea02fbd25a367b56", "implementationVersion": "2026.07.16.2+bundle.ed47fe458434c00a0c6fd2e84e4edc11dbf3b73e04e40341ea02fbd25a367b56" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -2881,7 +2881,7 @@
       return sanitizeConversation([...orderedTurns(userTurns, assistantTurns), ...pageTurns, ...copied]);
     };
     scripts["manus.js"] = scripts["manus"];
-    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.2909b674a8ce1a87bf2d99b5676a83567c85f0b9400c2df1092143350fece852" });
+    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.12e282568814849ec381d16b1650d7316039a3790021226b89c53edb25f03cfa" });
     return scripts;
   }
 
@@ -3197,40 +3197,91 @@ ${value}`);
     }
     return (hash >>> 0).toString(16).padStart(8, "0");
   }
-  function conversationRoot() {
-    const ranked = [
-      '[role="log"]',
-      '[data-testid="conversation-turns"]',
-      '[data-testid="conversation"]',
-      "main",
-      '[role="main"]'
-    ];
-    let best = null;
-    let bestLength = 0;
-    for (const selector of ranked) {
-      for (const node of qsa(selector)) {
-        const length = String(node?.innerText || "").length;
-        if (length > bestLength) {
-          best = node;
-          bestLength = length;
-        }
+  function conversationHref() {
+    try {
+      const url = new URL(location.href);
+      const path = `${url.origin}${url.pathname}`;
+      const hash = String(url.hash || "").replace(/^#/, "");
+      if (hash && !/[=&]/.test(hash) && hash.length >= 8 && hash.length <= 120) {
+        return `${path}#${hash}`;
       }
-      if (best && bestLength >= 80) return best;
+      return path;
+    } catch {
+      return String(location.href || "").replace(/[?#].*$/, "");
     }
-    return best || document.body;
+  }
+  function conversationTurnRole(el) {
+    const attr = String(el?.getAttribute?.("data-message-author-role") || "").toLowerCase();
+    if (attr === "user" || attr === "assistant") return attr;
+    const testid = String(el?.getAttribute?.("data-testid") || "").toLowerCase();
+    if (/\buser\b/.test(testid) && !/\bassistant\b/.test(testid)) return "user";
+    if (/\b(assistant|bot|model|ai)\b/.test(testid)) return "assistant";
+    const tag = String(el?.tagName || "").toLowerCase();
+    if (tag === "user-query") return "user";
+    if (tag === "model-response") return "assistant";
+    const cls = classText(el).toLowerCase();
+    if (/(?:^|[\s_-])user-query(?:$|[\s_-])|ds-user/.test(cls) && !/assistant|model-response|ds-assistant/.test(cls)) return "user";
+    if (/font-claude-response|model-response|ds-assistant/.test(cls)) return "assistant";
+    return userscriptRole(el) || "";
+  }
+  function conversationTurnText(el) {
+    if (!el) return "";
+    try {
+      const clone = el.cloneNode(true);
+      clone.querySelectorAll?.("button,svg,script,style,noscript,time,nav,header,footer,form,input,textarea,select,[contenteditable='true']").forEach((node) => node.remove());
+      return normalize(clone.innerText || clone.textContent || "").replace(/\s+/g, " ");
+    } catch {
+      return normalize(el.innerText || el.textContent || "").replace(/\s+/g, " ");
+    }
+  }
+  function conversationTurnNodes() {
+    const selectors = [
+      "[data-message-author-role]",
+      "[data-testid='user-message'], [data-testid='assistant-message'], .font-claude-response",
+      "[data-testid='conversation-turn'], article[data-testid*='conversation-turn']",
+      "user-query, model-response, .user-query, .model-response",
+      ".ds-message",
+      ".chat_bubble[role='article']",
+      "[data-testid='message']",
+      "article[data-testid*='conversation']"
+    ];
+    const nodes = [];
+    for (const selector of selectors) {
+      for (const node of qsa(selector).filter(visible)) {
+        if (internalTool(node)) continue;
+        if (nodes.some((existing) => existing === node || existing.contains?.(node) || node.contains?.(existing))) continue;
+        nodes.push(node);
+      }
+      if (nodes.length >= 2) break;
+    }
+    return nodes.sort(elementOrder);
   }
   function conversationFingerprint(documentId = "", data = {}) {
-    const root = conversationRoot();
-    const raw = normalize(root?.innerText || document.body?.innerText || "");
+    const turns = conversationTurnNodes();
     const prompt = normalize(data?.prompt || "").replace(/\s+/g, " ");
-    const haystack = raw.replace(/\s+/g, " ");
+    let userChars = 0;
+    let assistantChars = 0;
+    let lastText = "";
+    const haystackParts = [];
+    for (const turn of turns) {
+      const role = conversationTurnRole(turn);
+      const value = conversationTurnText(turn);
+      if (!value) continue;
+      haystackParts.push(value);
+      if (role === "user") userChars += value.length;
+      else if (role === "assistant") assistantChars += value.length;
+      lastText = value;
+    }
+    const haystack = haystackParts.join(" ");
+    const promptHaystack = haystack || normalize(document.body?.innerText || "").replace(/\s+/g, " ");
     return {
-      href: location.href,
+      href: conversationHref(),
       documentId: String(documentId || ""),
-      childCount: Number(root?.childElementCount || 0),
-      textLength: raw.length,
-      tailHash: fingerprintHash(raw.slice(-240)),
-      containsPrompt: Boolean(prompt && haystack.includes(prompt))
+      turnCount: turns.length,
+      userChars,
+      assistantChars,
+      tailHash: fingerprintHash(lastText.slice(-500)),
+      containsPrompt: Boolean(prompt && promptHaystack.includes(prompt))
     };
   }
   function copyLooksUseful(value) {

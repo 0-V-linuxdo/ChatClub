@@ -36,6 +36,7 @@ export class MessageNavigator {
     this.config = null;
     this.options = {};
     this.messages = [];
+    this.messagesSignature = "";
     this.idToMessage = new Map();
     this.root = null;
     this.indicator = null;
@@ -171,7 +172,12 @@ export class MessageNavigator {
   }
 
   observe() {
-    this.observer = new MutationObserver(() => this.scheduleBuild(360));
+    this.observer = new MutationObserver((records = []) => {
+      if (this.root && records.length && records.every((record) => (
+        record.target === this.root || this.root.contains(record.target)
+      ))) return;
+      this.scheduleBuild(360);
+    });
     try { this.observer.observe(document.body || document.documentElement, { childList: true, subtree: true }); } catch {}
     window.addEventListener("scroll", this.boundScroll, true);
     window.addEventListener("resize", this.boundResize, true);
@@ -221,9 +227,22 @@ export class MessageNavigator {
       }));
   }
 
+  messageListSignature(items = []) {
+    return (Array.isArray(items) ? items : [])
+      .map((item) => `${item.role || ""}\n${item.text || ""}`)
+      .join("\n\n");
+  }
+
   build() {
     if (!this.enabled || !this.root?.isConnected) return;
-    this.messages = this.collect();
+    const messages = this.collect();
+    const signature = this.messageListSignature(messages);
+    if (signature === this.messagesSignature && this.messages.length === messages.length) {
+      this.updateActive();
+      return;
+    }
+    this.messagesSignature = signature;
+    this.messages = messages;
     this.idToMessage = new Map(this.messages.map((item) => [item.id, item]));
     this.render();
     this.updateActive();
@@ -414,6 +433,7 @@ export class MessageNavigator {
     this.indicator = null;
     this.menu = null;
     this.messages = [];
+    this.messagesSignature = "";
     this.jumpToken += 1;
     this.idToMessage.clear();
     document.getElementById(STYLE_ID)?.remove();

@@ -128,12 +128,32 @@ function previewItem(instanceId, prompt, assistant) {
   assert.equal(IDLE_FULLTEXT_CAPTURE_DEFAULTS.idleMs, 30_000);
   assert.equal(IDLE_FULLTEXT_CAPTURE_DEFAULTS.maxAttempts, 3);
   assert.equal(
-    conversationFingerprintSignature({ documentId: "d", href: "https://x", childCount: 4, textLength: 12, tailHash: "ab", now: 99 }),
-    "d\nhttps://x\n4\n12\nab",
-    "idle signatures must ignore clocks and other extra fields"
+    conversationFingerprintSignature({
+      documentId: "d",
+      href: "https://x",
+      turnCount: 4,
+      userChars: 12,
+      assistantChars: 9,
+      tailHash: "ab",
+      now: 99,
+      childCount: 88,
+      textLength: 240
+    }),
+    "d\nhttps://x\n4\n12\n9\nab",
+    "idle signatures must ignore clocks, chrome counts, and other extra fields"
   );
 
   const prompt = "Explain ChatClub idle capture";
+  const fingerprintOf = (overrides = {}) => ({
+    documentId: "one",
+    href: "https://x",
+    turnCount: 2,
+    userChars: 10,
+    assistantChars: 20,
+    tailHash: "a",
+    containsPrompt: true,
+    ...overrides
+  });
 
   {
     const clock = createFakeClock();
@@ -416,9 +436,123 @@ function previewItem(instanceId, prompt, assistant) {
     assert.equal(collects.length, 3, "an empty persist result must keep retrying instead of pretending the write succeeded");
   }
 
+  {
+    const clock = createFakeClock();
+    const collects = [];
+    let probe = 0;
+    const scheduler = createIdleFullTextCaptureScheduler({
+      now: clock.now,
+      sleep: clock.sleep,
+      idleMs: 4_000,
+      pollMs: 1_000,
+      maxAttempts: 3,
+      wallMs: 60_000,
+      listFrames: () => [{ key: "one" }],
+      getFingerprint: async () => {
+        probe += 1;
+        return fingerprintOf({
+          childCount: probe,
+          textLength: probe * 17,
+          now: clock.now()
+        });
+      },
+      collectFrame: async () => {
+        collects.push(clock.now());
+        return previewItem("one", prompt, "reply");
+      },
+      itemMatchesPrompt: (item, text) => fullTextMessagesMatchPrompt(item?.page?.messages, text),
+      persistItem: async () => {}
+    });
+    const done = scheduler.schedule(prompt);
+    await waitForSleep(clock);
+    await settleCapture(clock, done);
+    assert.equal(collects.length, 1, "composer and timestamp chrome must not restart the idle window");
+    assert.equal(collects[0] >= 4_000, true);
+  }
+
+  {
+    const clock = createFakeClock();
+    const collects = [];
+    const persisted = [];
+    const scheduler = createIdleFullTextCaptureScheduler({
+      now: clock.now,
+      sleep: clock.sleep,
+      idleMs: 5_000,
+      pollMs: 1_000,
+      maxAttempts: 3,
+      wallMs: 60_000,
+      listFrames: () => [{ key: "one" }],
+      getFingerprint: async () => fingerprintOf({
+        href: "https://chatgpt.com/c/1",
+        containsPrompt: false
+      }),
+      collectFrame: async () => {
+        collects.push(clock.now());
+        return previewItem("one", "older question", "older answer");
+      },
+      itemMatchesPrompt: existingMatcher,
+      persistItem: async (item) => { persisted.push(item.instanceId); }
+    });
+    const first = scheduler.schedule("", { existing: true });
+    await waitForSleep(clock);
+    await settleCapture(clock, first);
+    assert.deepEqual(persisted, ["one"]);
+    assert.equal(collects.length, 1, "an idle iframe must collect at most once");
+    const second = await scheduler.schedule("", { existing: true });
+    assert.equal(second.scheduled, true);
+    assert.equal(collects.length, 1, "a later existing capture must skip a saved signature without collecting");
+  }
+
+  {
+    const clock = createFakeClock();
+    const collects = [];
+    const scheduler = createIdleFullTextCaptureScheduler({
+      now: clock.now,
+      sleep: clock.sleep,
+      idleMs: 5_000,
+      pollMs: 1_000,
+      maxAttempts: 3,
+      wallMs: 60_000,
+      listFrames: () => [{ key: "one" }],
+      getFingerprint: async () => fingerprintOf(),
+      collectFrame: async (_frame, text) => {
+        collects.push(text || "existing");
+        return previewItem("one", text || prompt, "reply");
+      },
+      itemMatchesPrompt: existingMatcher,
+      persistItem: async () => {}
+    });
+    const existing = scheduler.schedule("", { existing: true });
+    await waitForSleep(clock);
+    await settleCapture(clock, existing);
+    assert.deepEqual(collects, ["existing"]);
+    const send = scheduler.schedule(prompt);
+    await waitForSleep(clock);
+    await settleCapture(clock, send);
+    assert.deepEqual(collects, ["existing", prompt], "a send must still wait for idle and collect after a saved existing snapshot");
+  }
+
   const idleSource = read("app/summary/idle-capture.js");
   assert.match(idleSource, /persisted === false \|\| persisted\?\.saved === false/);
+  assert.match(idleSource, /status: "unchanged"/);
+  assert.match(idleSource, /savedSignatures/);
+  assert.match(runtime, /result\?\.saved && result\.unchanged !== true/);
   assert.match(runtime, /historyController\?\.notifyFullTextChanged/);
+  const tabSearch = read("app/workspace/tab-search.js");
+  assert.match(tabSearch, /workspaceTabFullTextFramesEqual/);
+  assert.match(tabSearch, /unchanged:\s*true/);
+  const summaryRuntime = read("content-src/shared/summary-runtime.js");
+  assert.match(summaryRuntime, /turnCount:\s*turns\.length/);
+  assert.match(summaryRuntime, /function conversationHref/);
+  assert.match(summaryRuntime, /function conversationTurnNodes/);
+  assert.doesNotMatch(summaryRuntime, /function conversationRoot/);
+  assert.doesNotMatch(summaryRuntime, /childCount:/);
+  const historySource = read("app/history/controller.js");
+  assert.match(historySource, /hasLiveSnapshot/);
+  assert.match(historySource, /!hasPages && !hasLiveSnapshot/);
+  const navigatorEngine = read("content-src/message-navigator/engine.js");
+  assert.match(navigatorEngine, /messagesSignature/);
+  assert.match(navigatorEngine, /record\.target === this\.root \|\| this\.root\.contains\(record\.target\)/);
 
   console.log("fulltext idle capture: ok");
 })().catch((error) => {

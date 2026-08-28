@@ -8,7 +8,8 @@ import {
   pruneWorkspaceTabFullTextStore,
   removeWorkspaceTabFullText,
   searchWorkspaceTabFullTextHits,
-  upsertWorkspaceTabFullText
+  upsertWorkspaceTabFullText,
+  workspaceTabFullTextFramesEqual
 } from "../../shared/workspace-tab-fulltext.js";
 import { isStorageQuotaError } from "../../shared/storage-schema.js";
 import { storageGet, storageSet } from "../../shared/storage-adapter.js";
@@ -51,9 +52,17 @@ export async function persistWorkspaceTabFullTextFromPreview({ workspaceId, topi
   const store = await loadWorkspaceTabFullTextStore();
   const current = store[id];
   const frames = mergeWorkspaceTabFullTextFrames(current?.frames, incoming);
+  const nextTitle = String(topicTitle || current?.topicTitle || "").trim();
+  if (
+    current
+    && nextTitle === String(current.topicTitle || "").trim()
+    && workspaceTabFullTextFramesEqual(current.frames, frames)
+  ) {
+    return { saved: true, unchanged: true, workspaceId: id };
+  }
   const next = upsertWorkspaceTabFullText(store, {
     workspaceId: id,
-    topicTitle: String(topicTitle || current?.topicTitle || "").trim(),
+    topicTitle: nextTitle,
     frames,
     updatedAt: new Date().toISOString()
   });

@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "d23252f289d23d3cf235eee27027e6e3f225d4977736972e7061044bbc540e2c";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "9c12ed5f61f7ea38e50aae01b55bd3169263e3123cdc26b2812be7dd71522316";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "2909b674a8ce1a87bf2d99b5676a83567c85f0b9400c2df1092143350fece852";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.2909b674a8ce1a87bf2d99b5676a83567c85f0b9400c2df1092143350fece852";
-  var CONTENT_RUNTIME_MESSAGE_NAVIGATOR_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/message-navigator.js", "entryPath": "content-src/message-navigator.js", "sourceSha256": "9c818240832a982785312298d83cdb5ab3e918cce9d1dd90c0faa14bbae095ea", "implementationSha256": "ac377ff7ac7cd416221033427a651d8320d1f6f09c0633db2cfb29060ee8d3e1", "implementationVersion": "2026.07.16.2+bundle.ac377ff7ac7cd416221033427a651d8320d1f6f09c0633db2cfb29060ee8d3e1" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "12e282568814849ec381d16b1650d7316039a3790021226b89c53edb25f03cfa";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.12e282568814849ec381d16b1650d7316039a3790021226b89c53edb25f03cfa";
+  var CONTENT_RUNTIME_MESSAGE_NAVIGATOR_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/message-navigator.js", "entryPath": "content-src/message-navigator.js", "sourceSha256": "b0b57befdf5149fafc7e0c09bbe962df0645d2dedad104d7debb4c9373b48a08", "implementationSha256": "808b0b1c393d595f99189708e65a9ad3c2cb9ae2c144a3105adea94eb86a484a", "implementationVersion": "2026.07.16.2+bundle.808b0b1c393d595f99189708e65a9ad3c2cb9ae2c144a3105adea94eb86a484a" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -2326,6 +2326,7 @@ ${normalize(item.text).toLowerCase().slice(0, 260)}`;
       this.config = null;
       this.options = {};
       this.messages = [];
+      this.messagesSignature = "";
       this.idToMessage = /* @__PURE__ */ new Map();
       this.root = null;
       this.indicator = null;
@@ -2451,7 +2452,10 @@ ${normalize(item.text).toLowerCase().slice(0, 260)}`;
       this.closeMenu();
     }
     observe() {
-      this.observer = new MutationObserver(() => this.scheduleBuild(360));
+      this.observer = new MutationObserver((records = []) => {
+        if (this.root && records.length && records.every((record) => record.target === this.root || this.root.contains(record.target))) return;
+        this.scheduleBuild(360);
+      });
       try {
         this.observer.observe(document.body || document.documentElement, { childList: true, subtree: true });
       } catch {
@@ -2491,9 +2495,20 @@ ${normalize(item.text).toLowerCase().slice(0, 260)}`;
         role: item.role
       }));
     }
+    messageListSignature(items = []) {
+      return (Array.isArray(items) ? items : []).map((item) => `${item.role || ""}
+${item.text || ""}`).join("\n\n");
+    }
     build() {
       if (!this.enabled || !this.root?.isConnected) return;
-      this.messages = this.collect();
+      const messages = this.collect();
+      const signature = this.messageListSignature(messages);
+      if (signature === this.messagesSignature && this.messages.length === messages.length) {
+        this.updateActive();
+        return;
+      }
+      this.messagesSignature = signature;
+      this.messages = messages;
       this.idToMessage = new Map(this.messages.map((item) => [item.id, item]));
       this.render();
       this.updateActive();
@@ -2683,6 +2698,7 @@ ${normalize(item.text).toLowerCase().slice(0, 260)}`;
       this.indicator = null;
       this.menu = null;
       this.messages = [];
+      this.messagesSignature = "";
       this.jumpToken += 1;
       this.idToMessage.clear();
       document.getElementById(STYLE_ID)?.remove();

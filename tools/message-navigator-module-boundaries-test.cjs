@@ -227,6 +227,9 @@ function fixtureElement(role, text, order) {
       /officialStrictRoles\s*\?\s*""\s*:\s*"assistant"/,
       "official-rule fallback must reject unknown roles instead of defaulting them to assistant"
     );
+    assert.match(engineSource, /this\.messagesSignature/);
+    assert.match(engineSource, /record\.target === this\.root \|\| this\.root\.contains\(record\.target\)/);
+    assert.match(engineSource, /signature === this\.messagesSignature && this\.messages\.length === messages\.length/);
     assert.match(read("content-src/message-navigator/sites/grok.js"), /function grokDomItems/);
     assert.match(read("content-src/message-navigator/sites/notion.js"), /function notionDomFallbackItems/);
     assert.match(read("content-src/message-navigator/sites/kagi.js"), /function kagiDomFallbackItems/);

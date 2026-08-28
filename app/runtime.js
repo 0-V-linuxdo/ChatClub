@@ -535,7 +535,7 @@ function ensureSummaryController() {
         recordFunctionalAnomaly,
         persistWorkspaceTabFullText: async (payload) => {
           const result = await persistWorkspaceTabFullTextFromPreview(payload);
-          if (result?.saved) historyController?.notifyFullTextChanged?.();
+          if (result?.saved && result.unchanged !== true) historyController?.notifyFullTextChanged?.();
           return result;
         },
         pocketPort: {

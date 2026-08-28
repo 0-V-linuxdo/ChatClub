@@ -409,12 +409,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "d23252f289d23d3cf235eee27027e6e3f225d4977736972e7061044bbc540e2c";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "9c12ed5f61f7ea38e50aae01b55bd3169263e3123cdc26b2812be7dd71522316";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "2909b674a8ce1a87bf2d99b5676a83567c85f0b9400c2df1092143350fece852";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.2909b674a8ce1a87bf2d99b5676a83567c85f0b9400c2df1092143350fece852";
-  var CONTENT_RUNTIME_CONTENT_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/content.js", "entryPath": "content-src/content.js", "sourceSha256": "c5ac6698dad7bdb71f3d143b391149d62afc931705f8d0c9a492b5e86a10e9aa", "implementationSha256": "e24cd24e06e4767368b6415f071567f3ce65ab27f18af6e5f32b53244c3f91fd", "implementationVersion": "2026.07.16.2+bundle.e24cd24e06e4767368b6415f071567f3ce65ab27f18af6e5f32b53244c3f91fd" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "12e282568814849ec381d16b1650d7316039a3790021226b89c53edb25f03cfa";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.12e282568814849ec381d16b1650d7316039a3790021226b89c53edb25f03cfa";
+  var CONTENT_RUNTIME_CONTENT_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/content.js", "entryPath": "content-src/content.js", "sourceSha256": "42c7da5f6f6cb902fec03d024cf214510542fa27e44108810e4404207afb1667", "implementationSha256": "e621ce55f8d8bf88a17b5ba9012ab5734ba6cdd06c0ddfc44019948619dd17aa", "implementationVersion": "2026.07.16.2+bundle.e621ce55f8d8bf88a17b5ba9012ab5734ba6cdd06c0ddfc44019948619dd17aa" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -676,12 +676,35 @@
 
   // content-src/shared/summary-runtime.js
   var normalize = (value) => String(value || "").replace(/\u00a0/g, " ").replace(/\r\n?/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  function visible(el) {
+    if (!el?.getBoundingClientRect) return false;
+    const rect = el.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return false;
+    const style = getComputedStyle(el);
+    return style.display !== "none" && style.visibility !== "hidden" && Number(style.opacity) !== 0;
+  }
   function qsa(selector, root = document, options = {}) {
     try {
       const result = Array.from(root.querySelectorAll(selector));
       return options.all === false ? result.slice(0, 1) : result;
     } catch {
       return [];
+    }
+  }
+  function closest(el, selector) {
+    try {
+      return el?.closest?.(selector) || null;
+    } catch {
+      return null;
+    }
+  }
+  function toRegex(value) {
+    if (!value) return null;
+    if (value instanceof RegExp) return value;
+    try {
+      return new RegExp(String(value), "i");
+    } catch {
+      return null;
     }
   }
   function pageLogoUrl() {
@@ -721,41 +744,147 @@
     }
     return (hash >>> 0).toString(16).padStart(8, "0");
   }
-  function conversationRoot() {
-    const ranked = [
-      '[role="log"]',
-      '[data-testid="conversation-turns"]',
-      '[data-testid="conversation"]',
-      "main",
-      '[role="main"]'
-    ];
-    let best = null;
-    let bestLength = 0;
-    for (const selector of ranked) {
-      for (const node of qsa(selector)) {
-        const length = String(node?.innerText || "").length;
-        if (length > bestLength) {
-          best = node;
-          bestLength = length;
-        }
+  function conversationHref() {
+    try {
+      const url = new URL(location.href);
+      const path = `${url.origin}${url.pathname}`;
+      const hash = String(url.hash || "").replace(/^#/, "");
+      if (hash && !/[=&]/.test(hash) && hash.length >= 8 && hash.length <= 120) {
+        return `${path}#${hash}`;
       }
-      if (best && bestLength >= 80) return best;
+      return path;
+    } catch {
+      return String(location.href || "").replace(/[?#].*$/, "");
     }
-    return best || document.body;
+  }
+  function conversationTurnRole(el) {
+    const attr = String(el?.getAttribute?.("data-message-author-role") || "").toLowerCase();
+    if (attr === "user" || attr === "assistant") return attr;
+    const testid = String(el?.getAttribute?.("data-testid") || "").toLowerCase();
+    if (/\buser\b/.test(testid) && !/\bassistant\b/.test(testid)) return "user";
+    if (/\b(assistant|bot|model|ai)\b/.test(testid)) return "assistant";
+    const tag = String(el?.tagName || "").toLowerCase();
+    if (tag === "user-query") return "user";
+    if (tag === "model-response") return "assistant";
+    const cls = classText(el).toLowerCase();
+    if (/(?:^|[\s_-])user-query(?:$|[\s_-])|ds-user/.test(cls) && !/assistant|model-response|ds-assistant/.test(cls)) return "user";
+    if (/font-claude-response|model-response|ds-assistant/.test(cls)) return "assistant";
+    return userscriptRole(el) || "";
+  }
+  function conversationTurnText(el) {
+    if (!el) return "";
+    try {
+      const clone = el.cloneNode(true);
+      clone.querySelectorAll?.("button,svg,script,style,noscript,time,nav,header,footer,form,input,textarea,select,[contenteditable='true']").forEach((node) => node.remove());
+      return normalize(clone.innerText || clone.textContent || "").replace(/\s+/g, " ");
+    } catch {
+      return normalize(el.innerText || el.textContent || "").replace(/\s+/g, " ");
+    }
+  }
+  function conversationTurnNodes() {
+    const selectors = [
+      "[data-message-author-role]",
+      "[data-testid='user-message'], [data-testid='assistant-message'], .font-claude-response",
+      "[data-testid='conversation-turn'], article[data-testid*='conversation-turn']",
+      "user-query, model-response, .user-query, .model-response",
+      ".ds-message",
+      ".chat_bubble[role='article']",
+      "[data-testid='message']",
+      "article[data-testid*='conversation']"
+    ];
+    const nodes = [];
+    for (const selector of selectors) {
+      for (const node of qsa(selector).filter(visible)) {
+        if (internalTool(node)) continue;
+        if (nodes.some((existing) => existing === node || existing.contains?.(node) || node.contains?.(existing))) continue;
+        nodes.push(node);
+      }
+      if (nodes.length >= 2) break;
+    }
+    return nodes.sort(elementOrder);
   }
   function conversationFingerprint(documentId = "", data = {}) {
-    const root = conversationRoot();
-    const raw = normalize(root?.innerText || document.body?.innerText || "");
+    const turns = conversationTurnNodes();
     const prompt = normalize(data?.prompt || "").replace(/\s+/g, " ");
-    const haystack = raw.replace(/\s+/g, " ");
+    let userChars = 0;
+    let assistantChars = 0;
+    let lastText = "";
+    const haystackParts = [];
+    for (const turn of turns) {
+      const role = conversationTurnRole(turn);
+      const value = conversationTurnText(turn);
+      if (!value) continue;
+      haystackParts.push(value);
+      if (role === "user") userChars += value.length;
+      else if (role === "assistant") assistantChars += value.length;
+      lastText = value;
+    }
+    const haystack = haystackParts.join(" ");
+    const promptHaystack = haystack || normalize(document.body?.innerText || "").replace(/\s+/g, " ");
     return {
-      href: location.href,
+      href: conversationHref(),
       documentId: String(documentId || ""),
-      childCount: Number(root?.childElementCount || 0),
-      textLength: raw.length,
-      tailHash: fingerprintHash(raw.slice(-240)),
-      containsPrompt: Boolean(prompt && haystack.includes(prompt))
+      turnCount: turns.length,
+      userChars,
+      assistantChars,
+      tailHash: fingerprintHash(lastText.slice(-500)),
+      containsPrompt: Boolean(prompt && promptHaystack.includes(prompt))
     };
+  }
+  function elementOrder(a, b) {
+    try {
+      if (a === b) return 0;
+      const pos = a.compareDocumentPosition(b);
+      return pos & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : pos & Node.DOCUMENT_POSITION_PRECEDING ? 1 : 0;
+    } catch {
+      return 0;
+    }
+  }
+  function classText(el) {
+    const value = el?.getAttribute?.("class") || el?.className || "";
+    return typeof value === "string" ? value : value?.baseVal || "";
+  }
+  function buttonText(el) {
+    if (!el) return "";
+    const labelledBy = String(el.getAttribute?.("aria-labelledby") || "").split(/\s+/).map((id) => id && document.getElementById(id)).filter(Boolean).map((node) => node.innerText || node.textContent || "").join(" ");
+    return normalize([
+      el.getAttribute?.("aria-label"),
+      labelledBy,
+      el.getAttribute?.("aria-description"),
+      el.getAttribute?.("title"),
+      el.getAttribute?.("data-tooltip"),
+      el.getAttribute?.("data-testid"),
+      el.getAttribute?.("data-test-id"),
+      el.innerText || el.textContent || ""
+    ].filter(Boolean).join(" "));
+  }
+  function userscriptMeta(el) {
+    if (!el) return "";
+    return normalize([
+      el.tagName,
+      classText(el),
+      el.getAttribute?.("role"),
+      buttonText(el),
+      el.getAttribute?.("data-message-author-role")
+    ].filter(Boolean).join(" "));
+  }
+  function internalTool(el) {
+    return Boolean(closest(el, "nav,header,footer,aside,form,input,textarea,select,[contenteditable=true],pre,code,table,kbd,samp,[data-language]"));
+  }
+  function userscriptRole(el, options = {}) {
+    const nodes = [el, closest(el, "[data-message-author-role]")].filter(Boolean);
+    let value = "";
+    const attr = String(options.roleAttribute || "").trim();
+    if (attr) {
+      for (const node of nodes) value += `${node.getAttribute?.(attr) || ""} `;
+    }
+    value += nodes.map(userscriptMeta).join(" ");
+    const userPattern = toRegex(options.userRolePattern);
+    const assistantPattern = toRegex(options.assistantRolePattern);
+    if (userPattern?.test(value)) return "user";
+    if (assistantPattern?.test(value)) return "assistant";
+    const role = String(closest(el, "[data-message-author-role]")?.getAttribute?.("data-message-author-role") || "").toLowerCase();
+    return role === "user" || role === "assistant" ? role : null;
   }
 
   // content-src/shared/capture-runtime.js
@@ -827,8 +956,8 @@
         const extra = number(node.scrollHeight) - number(node.clientHeight);
         if (extra < 48) continue;
         const rect = node.getBoundingClientRect?.() || { width: 0, height: 0 };
-        const visible = Math.max(0, number(rect.width)) * Math.max(0, number(rect.height));
-        const score = extra * Math.min(visible, viewportWidth * viewportHeight);
+        const visible2 = Math.max(0, number(rect.width)) * Math.max(0, number(rect.height));
+        const score = extra * Math.min(visible2, viewportWidth * viewportHeight);
         if (score > bestScore) {
           bestScore = score;
           best = node;
