@@ -417,7 +417,7 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
       { siteName: "Notion" },
       { siteName: "Kagi Assistant" }
     ]),
-    "[3]: Grok, Notion, Kagi Assistant"
+    "[3]: Grok · Notion · Kagi Assistant"
   );
   assert.equal(promptHistorySourceMeta([{ title: "Grok" }, { title: "Grok" }]), "[2]: Grok");
   assert.equal(promptHistorySourceMeta([{}, {}]), "[2]");

@@ -53,7 +53,7 @@ export function promptHistorySourceMeta(pages = []) {
   }
   const count = Math.max(list.length, names.length);
   if (!count) return "";
-  const sources = names.join(", ");
+  const sources = names.join(" · ");
   return sources ? t("pocket.groupSources", { count, sources }) : t("pocket.groupCards", { count });
 }
 

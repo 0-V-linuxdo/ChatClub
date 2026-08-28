@@ -653,7 +653,7 @@ export function createPocketController(ctx) {
       if (!name || names.includes(name)) continue;
       names.push(name);
     }
-    return names.join(", ");
+    return names.join(" · ");
   }
 
   function pocketBatchMeta(batch = {}) {
