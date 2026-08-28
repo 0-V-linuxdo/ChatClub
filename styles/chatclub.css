@@ -5310,6 +5310,8 @@ body.settings-tab-context-menu-dragging iframe {
 .modal.prompt-history-modal {
   --prompt-history-sidebar-column-width: 260px;
   --prompt-history-card-width: 460px;
+  --pocket-card-width: 460px;
+  --pocket-card-height: 560px;
   position: fixed;
   top: 50%;
   left: 50%;
@@ -5318,63 +5320,166 @@ body.settings-tab-context-menu-dragging iframe {
   height: min(720px, calc(100vh - 40px));
 }
 
+.modal.prompt-history-modal::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(16px + var(--prompt-history-sidebar-column-width));
+  z-index: 3;
+  width: 1px;
+  background: var(--line);
+  pointer-events: none;
+}
+
 .prompt-history-modal .modal-header {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(220px, var(--prompt-history-sidebar-column-width)) minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 14px;
+}
+
+.prompt-history-header-sidebar {
+  grid-column: 1;
+  align-self: stretch;
+  min-width: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
+  padding-right: 14px;
 }
 
 .prompt-history-modal-title-icon {
+  flex: 0 0 auto;
   display: inline-grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  width: 30px;
+  height: 30px;
   color: var(--primary);
 }
 
 .prompt-history-modal-title-icon svg {
-  width: 18px;
-  height: 18px;
+  width: 21px;
+  height: 21px;
+}
+
+.prompt-history-sidebar-chrome-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .prompt-history-modal .modal-header h2 {
-  flex: 0 1 240px;
-  min-width: 80px;
+  display: none;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.prompt-history-header-tools {
-  flex: 1 1 auto;
+.prompt-history-header-titlebar {
+  grid-column: 2;
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
-.prompt-history-header-tools .prompt-history-panel-search {
-  flex: 1 1 auto;
+.prompt-history-header-title {
+  flex: 0 1 min(280px, 32vw);
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.prompt-history-header-title strong,
+.prompt-history-header-title span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prompt-history-header-title strong {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 760;
+}
+
+.prompt-history-header-title span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.prompt-history-header-titlebar .prompt-history-panel-search {
+  flex: 1 1 160px;
   min-width: 0;
   width: 100%;
   max-width: none;
+  height: 30px;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
 }
 
-.prompt-history-header-tools .shortcut-search-sizer {
+.prompt-history-header-titlebar .shortcut-search-sizer {
   display: none;
+}
+
+.prompt-history-header-titlebar .shortcut-search-sizer,
+.prompt-history-header-titlebar .shortcut-search-input {
+  line-height: 30px;
+}
+
+.prompt-history-header-actions {
+  flex: 0 0 auto;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .prompt-history-panel-clear {
   flex: 0 0 auto;
 }
 
+.prompt-history-window-actions {
+  grid-column: 3;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.prompt-history-window-button {
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--text);
+}
+
+.prompt-history-window-button .svg-icon {
+  width: 17px;
+  height: 17px;
+}
+
+.prompt-history-window-button:hover {
+  background: var(--panel-2);
+  border-color: var(--line);
+}
+
 .modal.prompt-history-modal .modal-body {
   min-height: 0;
   display: grid;
   overflow: hidden;
-  padding: 0;
 }
 
 .prompt-history-dialog {
@@ -5387,8 +5492,10 @@ body.settings-tab-context-menu-dragging iframe {
 .prompt-history-shell {
   min-width: 0;
   min-height: 0;
+  height: 100%;
   display: grid;
-  grid-template-columns: minmax(200px, var(--prompt-history-sidebar-column-width)) minmax(0, 1fr);
+  grid-template-columns: minmax(220px, var(--prompt-history-sidebar-column-width)) minmax(0, 1fr);
+  gap: 14px;
 }
 
 .prompt-history-sidebar {
@@ -5396,8 +5503,7 @@ body.settings-tab-context-menu-dragging iframe {
   min-height: 0;
   display: grid;
   grid-template-rows: minmax(0, 1fr);
-  padding: 12px;
-  border-right: 1px solid var(--line);
+  padding-right: 14px;
 }
 
 .prompt-history-sidebar-list {
@@ -5405,7 +5511,7 @@ body.settings-tab-context-menu-dragging iframe {
   min-height: 0;
   display: grid;
   align-content: start;
-  gap: 6px;
+  gap: 8px;
   overflow-y: auto;
   padding-right: 2px;
   scrollbar-width: thin;
@@ -5553,7 +5659,6 @@ body.settings-tab-context-menu-dragging iframe {
   display: grid;
   grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
-  padding: 16px;
 }
 
 .prompt-history-detail {
@@ -5561,34 +5666,9 @@ body.settings-tab-context-menu-dragging iframe {
   min-height: 0;
   height: 100%;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) auto;
   align-content: stretch;
-  gap: 14px;
-}
-
-.prompt-history-detail-header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.prompt-history-detail-meta {
-  min-width: 0;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.prompt-history-detail-actions {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
+  gap: 12px;
 }
 
 .prompt-history-pocket-button {
@@ -5652,103 +5732,47 @@ body.settings-tab-context-menu-dragging iframe {
   scrollbar-width: thin;
 }
 
+.prompt-history-conversations > .pocket-entry,
 .prompt-history-conversation {
   flex: 0 0 min(var(--prompt-history-card-width, 460px), 100%);
-  min-width: 0;
-  min-height: 0;
-  height: 100%;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 12px;
-  padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--panel) 90%, var(--bg));
 }
 
-.prompt-history-conversation-head {
-  min-width: 0;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  column-gap: 8px;
-  row-gap: 5px;
-}
-
-.prompt-history-conversation-head strong {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 720;
-}
-
-.prompt-history-conversation-url {
-  grid-column: 1 / -1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 1.35;
-}
-
-.prompt-history-conversation-turns {
-  min-width: 0;
-  min-height: 0;
-  display: grid;
-  align-content: start;
-  gap: 10px;
-  overflow: auto;
-  scrollbar-width: thin;
-}
-
-.prompt-history-turn {
-  min-width: 0;
-  display: grid;
-  gap: 6px;
-}
-
-.prompt-history-turn-label {
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 750;
-  letter-spacing: .04em;
-  text-transform: uppercase;
+.prompt-history-conversation-favicons {
+  margin-top: 0;
 }
 
 .prompt-history-turn-text {
   margin: 0;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  color: var(--text);
-  font: inherit;
-  line-height: 1.5;
-  padding: 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--bg);
-}
-
-.prompt-history-turn-assistant .prompt-history-turn-text {
-  background: color-mix(in srgb, var(--primary) 8%, var(--bg));
 }
 
 @media (max-width: 760px) {
-  .prompt-history-modal .modal-header h2 {
-    flex-basis: 120px;
+  .modal.prompt-history-modal::before {
+    display: none;
+  }
+
+  .prompt-history-modal .modal-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 10px;
+  }
+
+  .prompt-history-header-sidebar {
+    grid-column: 1 / -1;
+    padding-right: 0;
+  }
+
+  .prompt-history-header-titlebar {
+    grid-column: 1 / -1;
+    flex-wrap: wrap;
   }
 
   .prompt-history-shell {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(180px, 36%) minmax(0, 1fr);
+    gap: 0;
   }
 
   .prompt-history-sidebar {
-    border-right: 0;
+    padding-right: 0;
     border-bottom: 1px solid var(--line);
   }
 }

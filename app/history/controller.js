@@ -426,64 +426,70 @@ export function createHistoryController(ctx) {
 
   function conversationTurn(message = {}) {
     const role = message.role === "assistant" ? "assistant" : "user";
-    return el("section", { class: `prompt-history-turn prompt-history-turn-${role}` },
-      el("div", { class: "prompt-history-turn-label" }, t(role === "assistant" ? "common.assistant" : "common.user")),
-      el("pre", { class: "prompt-history-turn-text" }, message.text || "")
+    return el("section", { class: `pocket-message pocket-message-${role} prompt-history-turn prompt-history-turn-${role}` },
+      el("div", { class: "pocket-message-head prompt-history-turn-head" },
+        el("span", { class: "pocket-message-label prompt-history-turn-label" }, t(role === "assistant" ? "common.assistant" : "common.user"))
+      ),
+      el("p", { class: "pocket-message-body pocket-message-plain prompt-history-turn-text" }, message.text || "")
     );
   }
 
   function conversationFrame(page = {}) {
     const messages = Array.isArray(page.messages) ? page.messages : [];
     const label = page.siteName || page.name || page.title || "";
-    return el("section", { class: "prompt-history-conversation" },
+    const assistantOnly = messages.length === 1 && messages[0]?.role === "assistant";
+    return el("article", { class: `ui-card pocket-entry prompt-history-conversation${assistantOnly ? " pocket-entry-assistant-only" : ""}` },
       label || page.href
-        ? el("header", { class: "prompt-history-conversation-head" },
-          pageFavicons([page], "prompt-history-conversation-favicons"),
-          label ? el("strong", {}, label) : null,
-          page.href ? el("span", { class: "prompt-history-conversation-url" }, page.href) : null
+        ? el("header", { class: "pocket-entry-header prompt-history-conversation-head" },
+          el("div", { class: "pocket-entry-titleblock" },
+            el("div", { class: "pocket-entry-title" },
+              pageFavicons([page], "prompt-history-conversation-favicons"),
+              label ? el("strong", {}, label) : null
+            ),
+            page.href ? el("span", { class: "pocket-entry-url prompt-history-conversation-url", title: page.href }, page.href) : null
+          )
         )
         : null,
-      el("div", { class: "prompt-history-conversation-turns" },
+      el("div", { class: "pocket-message-grid prompt-history-conversation-turns" },
         messages.map((message) => conversationTurn(message))
       )
     );
   }
 
-  function syncHistoryModalTitle(item) {
-    const title = document.querySelector(".prompt-history-modal .modal-header h2");
-    if (!title) return;
-    const fallback = t("promptHistory.title");
-    const preview = promptHistoryPreview(item?.text, 72);
-    title.textContent = preview || fallback;
-    title.title = preview ? String(item?.text || "").replace(/\s+/g, " ").trim() : fallback;
+  function historyHeaderActions(item, redraw, close) {
+    const actions = [];
+    if (item) {
+      const canPocket = Boolean(promptHistoryMessageKey(item.text)) && !pocketBusy;
+      actions.push(
+        el("button", {
+          class: "button button-secondary prompt-history-pocket-button tooltip-trigger",
+          type: "button",
+          "aria-label": t("promptHistory.saveToPocket"),
+          "data-tooltip": t("promptHistory.saveToPocket"),
+          "data-tooltip-id": "history.action.pocket",
+          disabled: !canPocket,
+          onclick: () => saveItemToPocket(item, redraw)
+        }, svgIcon(pocketDisplayIcon()), el("span", {}, t("promptHistory.saveToPocket"))),
+        rowAction(t("promptHistory.insert"), "insert", () => insert(item, close), "", "settings.action.insert"),
+        rowAction(t("common.delete"), "trash", () => remove(item, redraw), "danger", "settings.action.delete")
+      );
+    }
+    if (items().length) {
+      actions.push(el("button", {
+        class: "button button-secondary prompt-history-panel-clear",
+        type: "button",
+        onclick: () => clearHistory(redraw)
+      }, svgIcon("trash"), el("span", {}, t("promptHistory.clear"))));
+    }
+    return actions.length ? el("div", { class: "prompt-history-header-actions" }, ...actions) : null;
   }
 
-  function detail(item, redraw, close) {
+  function detail(item) {
     const images = Array.isArray(item.images) ? item.images : [];
     const imageLabel = promptHistoryImageCountLabel(images);
-    const canPocket = Boolean(promptHistoryMessageKey(item.text)) && !pocketBusy;
     const pages = conversationPages(item);
     const loading = !pages.length && (livePreviewPending || !livePreviewTried);
     return el("article", { class: "prompt-history-detail" },
-      el("header", { class: "prompt-history-detail-header" },
-        el("div", { class: "prompt-history-detail-meta" },
-          el("time", { datetime: item.createdAt || "" }, promptHistoryTimeLabel(item.createdAt)),
-          imageLabel ? el("span", {}, imageLabel) : null
-        ),
-        el("div", { class: "prompt-history-detail-actions" },
-          el("button", {
-            class: "button button-secondary prompt-history-pocket-button tooltip-trigger",
-            type: "button",
-            "aria-label": t("promptHistory.saveToPocket"),
-            "data-tooltip": t("promptHistory.saveToPocket"),
-            "data-tooltip-id": "history.action.pocket",
-            disabled: !canPocket,
-            onclick: () => saveItemToPocket(item, redraw)
-          }, svgIcon(pocketDisplayIcon()), el("span", {}, t("promptHistory.saveToPocket"))),
-          rowAction(t("promptHistory.insert"), "insert", () => insert(item, close), "", "settings.action.insert"),
-          rowAction(t("common.delete"), "trash", () => remove(item, redraw), "danger", "settings.action.delete")
-        )
-      ),
       pages.length
         ? el("div", { class: "prompt-history-conversations" }, pages.map((page) => conversationFrame(page)))
         : el("div", {
@@ -503,15 +509,14 @@ export function createHistoryController(ctx) {
     const searching = Boolean(String(query || "").trim());
     const visible = searching ? history.filter((item) => promptHistoryItemMatchesSearch(item, query)) : history;
     const activeItem = resolveActiveItem(visible);
-    syncHistoryModalTitle(activeItem);
-    syncHistoryModalHeader(redraw);
+    syncHistoryModalHeader(activeItem, redraw, close);
     clear(host);
     host.append(
       el("div", { class: "prompt-history-shell" },
         sidebar(visible, activeItem, redraw),
         el("main", { class: "prompt-history-main" },
           activeItem
-            ? detail(activeItem, redraw, close)
+            ? detail(activeItem)
             : el("div", { class: "ui-empty-state prompt-history-main-empty" }, t(searching ? "promptHistory.searchEmpty" : "promptHistory.noHistory"))
         )
       )
@@ -523,28 +528,33 @@ export function createHistoryController(ctx) {
     const title = header?.querySelector("h2");
     const closeButton = header?.querySelector(".icon-button");
     if (!header || !title || !closeButton) return;
-    if (!header.querySelector(".prompt-history-modal-title-icon")) {
-      title.before(el("span", { class: "prompt-history-modal-title-icon", "aria-hidden": "true" }, svgIcon("history")));
-    }
-    if (!header.querySelector(".prompt-history-header-tools")) {
-      closeButton.before(el("div", { class: "prompt-history-header-tools" }));
-    }
+    if (header.querySelector(".prompt-history-header-sidebar")) return;
+    title.before(el("div", { class: "prompt-history-header-sidebar" },
+      el("span", { class: "prompt-history-modal-title-icon", "aria-hidden": "true" }, svgIcon("history")),
+      el("strong", { class: "prompt-history-sidebar-chrome-title" }, t("promptHistory.title"))
+    ));
+    closeButton.classList.add("prompt-history-window-button");
     closeButton.replaceChildren(svgIcon("x"));
+    header.append(
+      el("div", { class: "prompt-history-header-titlebar" }),
+      el("div", { class: "prompt-history-window-actions" }, closeButton)
+    );
   }
 
-  function syncHistoryModalHeader(redraw) {
-    const tools = document.querySelector(".prompt-history-modal .prompt-history-header-tools");
-    if (!tools) return;
-    clear(tools);
-    tools.append(
+  function syncHistoryModalHeader(activeItem, redraw, close) {
+    const titlebar = document.querySelector(".prompt-history-modal .prompt-history-header-titlebar");
+    if (!titlebar) return;
+    const preview = promptHistoryPreview(activeItem?.text, 72);
+    const titleText = preview || t("promptHistory.title");
+    const fullText = preview ? String(activeItem?.text || "").replace(/\s+/g, " ").trim() : titleText;
+    clear(titlebar);
+    titlebar.append(
+      el("div", { class: "prompt-history-header-title" },
+        el("strong", { title: fullText }, titleText),
+        activeItem?.createdAt ? el("span", {}, promptHistoryTimeLabel(activeItem.createdAt)) : null
+      ),
       headerSearch(redraw),
-      items().length
-        ? el("button", {
-          class: "button button-secondary prompt-history-panel-clear",
-          type: "button",
-          onclick: () => clearHistory(redraw)
-        }, svgIcon("trash"), el("span", {}, t("promptHistory.clear")))
-        : null
+      historyHeaderActions(activeItem, redraw, close)
     );
   }
 
