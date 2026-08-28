@@ -98,6 +98,20 @@ Prompt Library is a composer-anchored `viewerModal`: keep `viewerModal`, set `--
 
 Confirmation/task primary actions stay visible in `.modal-footer`, hoisted out of `.modal-body`. `.settings-dialog-actions` remains a legacy alias. Do not invent a new overlay family for that.
 
+## Component Tokens
+
+Page chrome besides overlays uses the forest-green 8px system through tokens on `:root` in `styles/chatclub.css`. Keep aliases declared so `applyTheme()` can keep setting only `--primary` / `--primary-2`.
+
+- `--accent` / `--link` → `--primary`; `--soft` → `--primary-2`
+- Status: `--success`, `--warning`, `--warning-fill`, `--info`, `--danger`, `--danger-soft`, `--on-primary`
+- `--focus-ring` for `:focus-visible`; `--drop-indicator` for insert carets (do not reintroduce `#0a84ff`)
+- Shell: `--topbar-height: 51px`; `--workspace-z-sidebar` / `--workspace-z-topbar` / `--workspace-z-topbar-edit` / `--workspace-z-topbar-controls`
+- Type: `--font-family` is system-ui. Do not load Inter. `--font-size` 13px / `--font-size-sm` 12px / `--font-size-xs` 11px / `--font-size-md` 15px. Spacing `--space-1`…`--space-4` is the 4px scale
+- CSS `::before` / `::after` tooltips stay `display: none`; `ui/tooltip.js` owns hover copy
+- Do not change `--overlay-*` numeric values; Overlay Chrome Contract owns those
+
+Acceptance: `tools/component-tokens-test.cjs`.
+
 ## New Chat Workspace Preserve
 
 New Chat must not overwrite the current conversation workspace in place. The 2026-08-29 failure was that the live page kept the old workspace id while the conversation href was replaced, so clicking the original Tabs row was a no-op.

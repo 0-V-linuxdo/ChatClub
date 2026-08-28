@@ -197,7 +197,7 @@ globalThis.document = {
   assert.match(css, /\.workspace-tabs-sidebar-header\s*\{[^}]*padding:\s*14px/, "the sidebar header must keep top whitespace");
   assert.match(css, /\.workspace-tabs-sidebar-count\s*\{[^}]*border-radius:\s*999px/, "the tab count must render as a pill");
   assert.match(css, /\.workspace-tabs-sidebar-count\s*\{[^}]*background:\s*var\(--primary\)/, "the tab count must use a solid primary fill");
-  assert.match(css, /\.workspace-tabs-sidebar-count\s*\{[^}]*color:\s*var\(--bg\)/, "the tab count numeral must contrast against the primary fill");
+  assert.match(css, /\.workspace-tabs-sidebar-count\s*\{[^}]*color:\s*var\(--on-primary\)/, "the tab count numeral must contrast against the primary fill");
   assert.match(css, /\.workspace-tabs-sidebar-cleanup/, "ChatClub Tabs must expose a close-others control");
   assert.match(css, /\.workspace-tabs-sidebar-cleanup[\s\S]{0,280}color:\s*var\(--text\)/, "the cleanup icon must use the primary text color");
   assert.match(css, /\.workspace-tabs-sidebar-item-index/, "each tab name must show a sequence number");

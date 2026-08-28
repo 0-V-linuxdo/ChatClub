@@ -67,22 +67,22 @@ const OFFICIAL_RULES_SETTINGS_CSS = `
 .official-rules-status[data-state="ready"],
 .official-rules-status[data-state="up-to-date"],
 .official-rules-status[data-state="applied"] {
-  color: color-mix(in srgb, #15803d 78%, var(--text));
-  border-color: color-mix(in srgb, #16a34a 36%, var(--line));
-  background: color-mix(in srgb, #16a34a 10%, var(--panel));
+  color: color-mix(in srgb, var(--success) 78%, var(--text));
+  border-color: color-mix(in srgb, var(--success) 36%, var(--line));
+  background: color-mix(in srgb, var(--success) 10%, var(--panel));
 }
 
 .official-rules-status[data-state="candidate"],
 .official-rules-status[data-state="available"] {
-  color: color-mix(in srgb, #a16207 82%, var(--text));
-  border-color: color-mix(in srgb, #ca8a04 36%, var(--line));
-  background: color-mix(in srgb, #ca8a04 10%, var(--panel));
+  color: color-mix(in srgb, var(--warning) 82%, var(--text));
+  border-color: color-mix(in srgb, var(--warning-fill) 36%, var(--line));
+  background: color-mix(in srgb, var(--warning-fill) 10%, var(--panel));
 }
 
 .official-rules-status[data-state="error"] {
-  color: color-mix(in srgb, #b91c1c 80%, var(--text));
-  border-color: color-mix(in srgb, #dc2626 36%, var(--line));
-  background: color-mix(in srgb, #dc2626 10%, var(--panel));
+  color: color-mix(in srgb, var(--danger) 80%, var(--text));
+  border-color: color-mix(in srgb, var(--danger) 36%, var(--line));
+  background: color-mix(in srgb, var(--danger) 10%, var(--panel));
 }
 
 .official-rules-tabs {
@@ -212,13 +212,13 @@ const OFFICIAL_RULES_SETTINGS_CSS = `
 }
 
 .official-rules-action.primary {
-  color: var(--primary-contrast, white);
+  color: var(--on-primary);
   border-color: var(--primary);
   background: var(--primary);
 }
 
 .official-rules-action.danger {
-  color: color-mix(in srgb, #b91c1c 82%, var(--text));
+  color: color-mix(in srgb, var(--danger) 82%, var(--text));
 }
 
 .official-rules-action:disabled {
@@ -345,9 +345,9 @@ const OFFICIAL_RULES_SETTINGS_CSS = `
 }
 
 .official-rules-error {
-  color: color-mix(in srgb, #b91c1c 82%, var(--text));
-  border-color: color-mix(in srgb, #dc2626 34%, var(--line));
-  background: color-mix(in srgb, #dc2626 9%, var(--panel));
+  color: color-mix(in srgb, var(--danger) 82%, var(--text));
+  border-color: color-mix(in srgb, var(--danger) 34%, var(--line));
+  background: color-mix(in srgb, var(--danger) 9%, var(--panel));
 }
 
 .official-rules-chip-list {
@@ -542,16 +542,16 @@ const OFFICIAL_RULES_SETTINGS_CSS = `
 .official-rules-alias-state {
   width: fit-content;
   padding: 2px 7px;
-  color: color-mix(in srgb, #a16207 82%, var(--text));
+  color: color-mix(in srgb, var(--warning) 82%, var(--text));
   font-size: 11px;
   font-weight: 760;
   border-radius: 999px;
-  background: color-mix(in srgb, #ca8a04 12%, var(--panel));
+  background: color-mix(in srgb, var(--warning-fill) 12%, var(--panel));
 }
 
 .official-rules-alias-state[data-approved="true"] {
-  color: color-mix(in srgb, #15803d 78%, var(--text));
-  background: color-mix(in srgb, #16a34a 11%, var(--panel));
+  color: color-mix(in srgb, var(--success) 78%, var(--text));
+  background: color-mix(in srgb, var(--success) 11%, var(--panel));
 }
 
 .official-rules-confirmation {

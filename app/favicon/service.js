@@ -163,7 +163,7 @@ export function createFaviconService(dependencies) {
   function fallback(app) {
     const label = inferAppName(app).replace(/\s+/g, "").slice(0, 2).toUpperCase() || "AI";
     const hue = Array.from(String(app?.id || app?.url || label)).reduce((sum, char) => sum + char.charCodeAt(0), 0) % 360;
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="hsl(${hue} 48% 36%)"/><text x="16" y="21" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="12" font-weight="800" fill="white">${label}</text></svg>`;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="hsl(${hue} 48% 36%)"/><text x="16" y="21" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" font-weight="800" fill="white">${label}</text></svg>`;
     return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
   }
 
