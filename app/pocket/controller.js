@@ -653,16 +653,13 @@ export function createPocketController(ctx) {
       if (!name || names.includes(name)) continue;
       names.push(name);
     }
-    const visible = names.slice(0, 3);
-    const extra = names.length - visible.length;
-    return extra > 0 ? `${visible.join(", ")} +${extra}` : visible.join(", ");
+    return names.join(", ");
   }
 
   function pocketBatchMeta(batch = {}) {
     const count = (batch.entries || []).length;
     const sources = pocketBatchSourceSummary(batch);
-    const vars = { count, plural: count === 1 ? "" : "s", sources };
-    return sources ? t("pocket.groupSources", vars) : t("pocket.groupCards", vars);
+    return sources ? t("pocket.groupSources", { count, sources }) : t("pocket.groupCards", { count });
   }
 
   function pocketUserMessageKey(text = "") {

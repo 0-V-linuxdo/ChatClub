@@ -6267,12 +6267,12 @@ body.settings-tab-context-menu-dragging iframe {
     position: absolute;
     left: 0;
     right: auto;
-    top: auto;
-    bottom: calc(100% + 6px);
+    top: calc(100% + 6px);
+    bottom: auto;
     z-index: 6;
     box-sizing: border-box;
     width: max-content;
-    max-width: calc(100% - 20px);
+    max-width: 100%;
     padding: 5px 8px;
     border: 1px solid var(--line);
     border-radius: 8px;
@@ -6284,7 +6284,7 @@ body.settings-tab-context-menu-dragging iframe {
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
-    transform: translateY(3px);
+    transform: translateY(-3px);
     transition: opacity 0.12s ease, transform 0.12s ease, visibility 0.12s ease;
   }
 

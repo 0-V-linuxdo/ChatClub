@@ -979,8 +979,8 @@ const en = {
   "pocket.restoreBatch": "Restore group",
   "pocket.cardWidth": "Card width",
   "pocket.cardHeight": "Card height",
-  "pocket.groupCards": "{count} card{plural}",
-  "pocket.groupSources": "{count} card{plural} · {sources}",
+  "pocket.groupCards": "[{count}]",
+  "pocket.groupSources": "[{count}]: {sources}",
   "pocket.deleteItem": "Delete pocket item",
 
   "shortcuts.inputTab": "Input",
@@ -2269,8 +2269,8 @@ const zh_CN = {
   "pocket.restoreBatch": "一键恢复",
   "pocket.cardWidth": "卡片宽度",
   "pocket.cardHeight": "卡片高度",
-  "pocket.groupCards": "{count} 张卡片",
-  "pocket.groupSources": "{count} 张卡片 · {sources}",
+  "pocket.groupCards": "[{count}]",
+  "pocket.groupSources": "[{count}]: {sources}",
   "pocket.deleteItem": "删除收藏项",
 
   "shortcuts.inputTab": "输入",

@@ -61,9 +61,10 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   assert.match(stylesheetSource, /\.pocket-group-time \{[\s\S]*?text-align:\s*right/);
   assert.match(
     stylesheetSource,
-    /@media \(hover: hover\) and \(pointer: fine\) \{[\s\S]*?\.pocket-group-button:has\(\.chat-favicon-stack:hover\) \.pocket-group-meta/,
-    "Pocket source names stay hidden until the favicon stack is hovered"
+    /@media \(hover: hover\) and \(pointer: fine\) \{[\s\S]*?\.pocket-group-button:has\(\.chat-favicon-stack\) \.pocket-group-meta[\s\S]*?top:\s*calc\(100% \+ 6px\)/,
+    "Pocket source names stay hidden until the favicon stack is hovered and open below the timestamp row"
   );
+  assert.match(pocketSource, /t\("pocket.groupSources", \{ count, sources \}\)/);
   assert.match(stylesheetSource, /\.chat-favicon-stack/);
 
   i18n.setLanguage("zh_CN");

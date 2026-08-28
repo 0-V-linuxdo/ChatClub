@@ -53,11 +53,8 @@ export function promptHistorySourceMeta(pages = []) {
   }
   const count = Math.max(list.length, names.length);
   if (!count) return "";
-  const visible = names.slice(0, 3);
-  const extra = names.length - visible.length;
-  const sources = extra > 0 ? `${visible.join(", ")} +${extra}` : visible.join(", ");
-  const vars = { count, plural: count === 1 ? "" : "s", sources };
-  return sources ? t("pocket.groupSources", vars) : t("pocket.groupCards", vars);
+  const sources = names.join(", ");
+  return sources ? t("pocket.groupSources", { count, sources }) : t("pocket.groupCards", { count });
 }
 
 function promptHistorySearchExtraTexts(item) {

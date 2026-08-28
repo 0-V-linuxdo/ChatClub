@@ -25,7 +25,8 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
     promptHistoryConversationEntries,
     promptHistoryEntryClusters,
     promptHistoryPocketPages,
-    promptHistoryPocketSaved
+    promptHistoryPocketSaved,
+    promptHistorySourceMeta
   } = await import(moduleUrl("app/history/model.js"));
   const now = new Date(2026, 7, 8, 12, 0, 0).getTime();
   const dateDaysAgo = (daysAgo, hour = 12) => new Date(2026, 7, 8 - daysAgo, hour, 0, 0).toISOString();
@@ -410,6 +411,21 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
     "History favicons must not share the title row"
   );
   assert.match(modelSource, /export function promptHistorySourceMeta/);
+  assert.equal(
+    promptHistorySourceMeta([
+      { siteName: "Grok" },
+      { siteName: "Notion" },
+      { siteName: "Kagi Assistant" }
+    ]),
+    "[3]: Grok, Notion, Kagi Assistant"
+  );
+  assert.equal(promptHistorySourceMeta([{ title: "Grok" }, { title: "Grok" }]), "[2]: Grok");
+  assert.equal(promptHistorySourceMeta([{}, {}]), "[2]");
+  assert.match(
+    i18nSource,
+    /"pocket.groupSources": "\[\{count\}\]: \{sources\}"/,
+    "Source hint uses [count]: names in both locales"
+  );
   assert.match(panelSource, /entry\.appName\s*\n\s*\? el\("span", \{ class: "pocket-entry-source"/);
   assert.match(panelSource, /toggleHistoryPanelFocusMode/);
   assert.match(panelSource, /pocket\.cardHeight/);
@@ -448,8 +464,8 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   assert.match(stylesheetSource, /\.prompt-history-sidebar-time \{[\s\S]*?text-align:\s*right/);
   assert.match(
     stylesheetSource,
-    /@media \(hover: hover\) and \(pointer: fine\) \{[\s\S]*?\.prompt-history-sidebar-item:has\(\.chat-favicon-stack:hover\) \.prompt-history-sidebar-meta/,
-    "History source names stay hidden until the favicon stack is hovered"
+    /@media \(hover: hover\) and \(pointer: fine\) \{[\s\S]*?\.prompt-history-sidebar-item:has\(\.chat-favicon-stack\) \.prompt-history-sidebar-meta \{[\s\S]*?top:\s*calc\(100% \+ 6px\)/,
+    "History source names stay hidden until the favicon stack is hovered and open below the timestamp row"
   );
   assert.match(stylesheetSource, /\.chat-favicon-stack/);
   assert.match(stylesheetSource, /\.prompt-history-turn-text\s*\{/);
