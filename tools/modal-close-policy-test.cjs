@@ -157,6 +157,11 @@ class FakeDocument extends FakeNode {
     this.listeners.set(type, listeners);
   }
 
+  removeEventListener(type, listener) {
+    const listeners = this.listeners.get(type) || [];
+    this.listeners.set(type, listeners.filter((entry) => entry !== listener));
+  }
+
   dispatchEvent(event) {
     if (!event?.type) throw new TypeError("Fake events require a type");
     if (event.target == null) event.target = this;
@@ -275,6 +280,11 @@ function event(type, properties = {}) {
     const viewerPanel = viewerFixture.dialog.querySelector(".modal");
     const viewerBody = viewerFixture.dialog.querySelector(".modal-body");
     assert.ok(viewerPanel && viewerBody, "the viewer modal must render its panel and body");
+    assert.equal(viewerPanel.getAttribute("role"), "dialog", "typed modals must expose the dialog role");
+    assert.equal(viewerPanel.getAttribute("aria-modal"), "true", "typed modals must expose aria-modal");
+    const viewerTitleId = viewerPanel.getAttribute("aria-labelledby");
+    assert.ok(viewerTitleId, "typed modals must label the dialog from the title");
+    assert.equal(viewerPanel.querySelector("h2")?.getAttribute("id"), viewerTitleId, "aria-labelledby must point at the visible title");
     viewerPanel.click();
     viewerBody.click();
     document.dispatchEvent(event("keydown", { key: "Escape", target: viewerBody }));

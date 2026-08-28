@@ -31,6 +31,7 @@
   --overlay-z-panel: 70;
   --overlay-z-panel-raised: 71;
   --overlay-z-modal: 80;
+  --overlay-z-modal-nested: 81;
   --overlay-z-popover-backdrop: 99;
   --overlay-z-popover: 100;
   --overlay-z-toast: 120;
@@ -41,6 +42,10 @@
   --overlay-shadow: var(--shadow);
   --overlay-close-size: 30px;
   --overlay-gutter: 40px;
+  --overlay-gutter-panel: 32px;
+  --overlay-gutter-tight: 16px;
+  --overlay-header-height: 46px;
+  --overlay-backdrop: rgba(13, 19, 17, 0.36);
   --overlay-motion: 160ms ease;
   --overlay-width: min(720px, calc(100vw - var(--overlay-gutter)));
   --overlay-width-compact: min(560px, calc(100vw - var(--overlay-gutter)));
@@ -102,6 +107,7 @@
   --toast-bg: rgba(17, 22, 20, 0.96);
   --toast-text: #e8efeb;
   --toast-border: rgba(255, 255, 255, 0.12);
+  --overlay-backdrop: rgba(8, 12, 11, 0.55);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -136,6 +142,7 @@
     --toast-bg: rgba(17, 22, 20, 0.96);
     --toast-text: #e8efeb;
     --toast-border: rgba(255, 255, 255, 0.12);
+    --overlay-backdrop: rgba(8, 12, 11, 0.55);
   }
 }
 
@@ -2117,7 +2124,7 @@ button { cursor: pointer; }
   position: fixed;
   left: 0;
   top: 0;
-  max-width: min(320px, calc(100vw - 16px));
+  max-width: min(320px, calc(100vw - var(--overlay-gutter-tight)));
   z-index: var(--overlay-z-tooltip);
   pointer-events: none;
   opacity: 0;
@@ -3304,19 +3311,8 @@ body.tab-gesture-active * {
   --settings-cell-pad-x: 12px;
   --settings-header-height: 42px;
   width: var(--overlay-width-workspace);
-  height: min(760px, calc(100vh - 32px));
-  max-height: calc(100vh - 32px);
-}
-
-.modal.settings-modal.settings-modal-fullscreen {
-  position: fixed;
-  inset: 0;
-  width: auto;
-  height: auto;
-  max-width: none;
-  max-height: none;
-  border-radius: 0;
-  box-shadow: none;
+  height: min(760px, calc(100vh - var(--overlay-gutter-panel)));
+  max-height: calc(100vh - var(--overlay-gutter-panel));
 }
 
 .settings-modal .modal-header {
@@ -5885,20 +5881,6 @@ body.settings-tab-context-menu-dragging iframe {
   width: var(--overlay-width-workspace);
 }
 
-.modal.pocket-history-modal.pocket-history-modal-fullscreen,
-.modal.pocket-history-modal.pocket-history-modal-focus,
-.modal.prompt-history-modal.prompt-history-modal-fullscreen,
-.modal.prompt-history-modal.prompt-history-modal-focus {
-  inset: 0;
-  width: auto;
-  height: auto;
-  max-width: none;
-  max-height: none;
-  border-radius: 0;
-  box-shadow: none;
-  transform: none;
-}
-
 .modal.pocket-history-modal::before {
   content: "";
   position: absolute;
@@ -6488,8 +6470,7 @@ body.settings-tab-context-menu-dragging iframe {
   bottom: 0;
 }
 
-.pocket-history-modal-fullscreen .pocket-panel-resize-handle,
-.prompt-history-modal-fullscreen .pocket-panel-resize-handle {
+.overlay-surface-fullscreen .pocket-panel-resize-handle {
   display: none;
 }
 
@@ -8619,6 +8600,12 @@ body.settings-tab-context-menu-dragging iframe {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  margin-top: 8px;
+  padding-top: 10px;
+  background: var(--panel);
 }
 
 .settings-manage-card {
@@ -9190,6 +9177,18 @@ body.settings-tab-context-menu-dragging iframe {
   box-shadow: var(--overlay-shadow);
 }
 
+.overlay-surface-fullscreen {
+  position: fixed;
+  inset: 0;
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  border-radius: 0;
+  box-shadow: none;
+  transform: none;
+}
+
 .overlay-window-button,
 .settings-window-button,
 .pocket-window-button,
@@ -9234,16 +9233,29 @@ body.settings-tab-context-menu-dragging iframe {
   .popover-menu {
     animation: none;
   }
+
+  .toast,
+  .toast.show,
+  .frame-submit-toast,
+  .global-tooltip,
+  .global-tooltip.is-visible {
+    transform: none;
+    transition: opacity var(--overlay-motion);
+  }
 }
 
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(13, 19, 17, 0.36);
+  background: var(--overlay-backdrop);
   display: grid;
   place-items: center;
   z-index: var(--overlay-z-modal);
   animation: overlay-fade-in var(--overlay-motion);
+}
+
+.modal-backdrop ~ .modal-backdrop {
+  z-index: var(--overlay-z-modal-nested);
 }
 
 .prompt-library-backdrop {
@@ -9256,10 +9268,6 @@ body.settings-tab-context-menu-dragging iframe {
   max-height: calc(100vh - var(--overlay-gutter));
   display: grid;
   grid-template-rows: auto 1fr;
-  background: var(--panel);
-  border: var(--overlay-border);
-  border-radius: var(--overlay-radius);
-  box-shadow: var(--overlay-shadow);
   overflow: hidden;
 }
 
@@ -9273,6 +9281,7 @@ body.settings-tab-context-menu-dragging iframe {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  min-height: var(--overlay-header-height);
   padding: 14px 16px;
   border-bottom: 1px solid var(--line);
 }
@@ -9457,10 +9466,10 @@ body.settings-tab-context-menu-dragging iframe {
   position: fixed;
   left: 50%;
   top: 52px;
-  width: var(--summary-panel-width, min(900px, calc(100vw - 32px)));
-  min-width: min(420px, calc(100vw - 32px));
-  max-width: calc(100vw - 32px);
-  height: var(--summary-panel-height, min(860px, calc(100vh - 32px)));
+  width: var(--summary-panel-width, min(900px, calc(100vw - var(--overlay-gutter-panel))));
+  min-width: min(420px, calc(100vw - var(--overlay-gutter-panel)));
+  max-width: calc(100vw - var(--overlay-gutter-panel));
+  height: var(--summary-panel-height, min(860px, calc(100vh - var(--overlay-gutter-panel))));
   max-height: calc(100vh - 4px);
   transform: translateX(-50%);
   background: var(--summary-panel-bg);
@@ -10358,8 +10367,8 @@ body:has(.chat-card:not(.fullscreen-hidden) .chat-frame.active + .frame-submit-t
   position: fixed;
   z-index: var(--overlay-z-popover);
   min-width: 184px;
-  max-width: min(260px, calc(100vw - 16px));
-  max-height: calc(100vh - 16px);
+  max-width: min(260px, calc(100vw - var(--overlay-gutter-tight)));
+  max-height: calc(100vh - var(--overlay-gutter-tight));
   overflow: auto;
   display: grid;
   gap: 2px;
@@ -10495,7 +10504,7 @@ body:has(.chat-card:not(.fullscreen-hidden) .chat-frame.active + .frame-submit-t
 
 .popover-menu.layout-popover {
   width: 282px;
-  max-width: min(282px, calc(100vw - 16px));
+  max-width: min(282px, calc(100vw - var(--overlay-gutter-tight)));
   gap: 3px;
   padding: 7px;
   border-radius: 10px;
@@ -10582,8 +10591,8 @@ body:has(.chat-card:not(.fullscreen-hidden) .chat-frame.active + .frame-submit-t
 }
 
 .popover-menu.app-picker-popover {
-  min-width: min(880px, calc(100vw - 16px));
-  max-width: calc(100vw - 16px);
+  min-width: min(880px, calc(100vw - var(--overlay-gutter-tight)));
+  max-width: calc(100vw - var(--overlay-gutter-tight));
   padding: 24px 30px 26px;
   display: block;
   overflow: auto;
@@ -10820,9 +10829,9 @@ body.app-picker-dragging .app-picker-item {
   position: fixed;
   left: 50%;
   top: 64px;
-  width: var(--share-panel-width, min(720px, calc(100vw - 32px)));
-  min-width: min(420px, calc(100vw - 32px));
-  max-width: calc(100vw - 32px);
+  width: var(--share-panel-width, min(720px, calc(100vw - var(--overlay-gutter-panel))));
+  min-width: min(420px, calc(100vw - var(--overlay-gutter-panel)));
+  max-width: calc(100vw - var(--overlay-gutter-panel));
   height: var(--share-panel-height, min(720px, calc(100vh - 48px)));
   max-height: calc(100vh - 4px);
   transform: translateX(-50%);

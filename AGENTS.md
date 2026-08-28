@@ -84,11 +84,15 @@ Page stack, low → high, via CSS tokens in `styles/chatclub.css`:
 
 Frame-local stack inside `.chat-frame-wrap`: `--overlay-z-frame-loading`, `--overlay-z-frame-status`, `--overlay-z-frame-toast`. Do not lift frame overlays onto the page stack.
 
-Chrome tokens: `--overlay-radius` (= `--ui-radius`), `--overlay-border` / `--overlay-border-color`, `--overlay-shadow`, `--overlay-close-size`, `--overlay-width` / `--overlay-width-compact` / `--overlay-width-wide` / `--overlay-width-task` / `--overlay-width-workspace`. Surfaces use `.overlay-surface`. Window close/maximize controls use `.overlay-window-button`.
+Chrome tokens: `--overlay-radius` (= `--ui-radius`), `--overlay-border` / `--overlay-border-color`, `--overlay-shadow`, `--overlay-close-size`, `--overlay-width` / `--overlay-width-compact` / `--overlay-width-wide` / `--overlay-width-task` / `--overlay-width-workspace`, `--overlay-gutter` (40, typed-modal viewport inset), `--overlay-gutter-panel` (32, persistent Summary/Share and Settings resting height), `--overlay-gutter-tight` (16, popovers/tooltips), `--overlay-backdrop`, `--overlay-z-modal-nested`, `--overlay-header-height`. Surfaces use `.overlay-surface`. Window close/maximize controls use `.overlay-window-button`. Fill-viewport geometry uses `.overlay-surface-fullscreen` (inset 0, radius 0, no shadow); do not copy that recipe into a third fullscreen class.
 
-Motion: `--overlay-motion` opacity fade on transient overlays (modal backdrop, popover). Do not animate `transform` on positioned panels, and do not replay enter motion on persistent-panel redraws.
+Motion: `--overlay-motion` opacity fade on transient overlays (modal backdrop, popover). Do not animate `transform` on positioned panels, and do not replay enter motion on persistent-panel redraws. Toast/tooltip enter displacement must disable under `prefers-reduced-motion`. Layout `transform` used only to center a persistent panel is allowed; enter-motion transform is not.
 
-Do not migrate to native `<dialog>` without an overlay-policy audit. Overlay Dismissal Policy above is closed: do not add one-off close flags. History may share Pocket focus/fullscreen/resize/restore window chrome; that shared viewer-window chrome is allowed and is not drift. Do not grow a third window-chrome dialect at either call site.
+Typed `modal()` must stay a `div`/`section` overlay: `role="dialog"`, `aria-modal="true"`, `aria-labelledby` on the title, scroll lock while open, Tab containment, and focus return on close. Do not add Escape-to-close here — Overlay Dismissal Policy owns that. Nested typed modals stack with `--overlay-z-modal-nested` and stay below popovers.
+
+Do not migrate to native `<dialog>` without an overlay-policy audit. Overlay Dismissal Policy above is closed: do not add one-off close flags. History may share Pocket focus/fullscreen/resize/restore window chrome through `ui/viewer-window.js`; that shared viewer-window chrome is allowed and is not drift. Do not grow a third window-chrome dialect at either call site. Settings fullscreen is an editor special case: it may consume `.overlay-surface-fullscreen` geometry only, and must not grow remember/restore, focus mode, or resize handles.
+
+Confirmation/task primary actions stay visible: `.settings-dialog-actions` is the footer primitive inside `.modal-body` until a dedicated `.modal-footer` exists. Do not invent a new overlay family for that.
 
 ## New Chat Workspace Preserve
 

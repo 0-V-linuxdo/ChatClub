@@ -447,7 +447,7 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
     /\.prompt-history-conversations\s*\{[\s\S]*?display:\s*flex/,
     "History conversation cards must sit in a Pocket-style horizontal row"
   );
-  assert.match(stylesheetSource, /prompt-history-modal-fullscreen/);
+  assert.match(stylesheetSource, /overlay-surface-fullscreen/);
   assert.match(stylesheetSource, /prompt-history-shell-focus/);
   assert.match(stylesheetSource, /\.prompt-history-main:has\(\.pocket-active-header\)/);
   assert.match(stylesheetSource, /--prompt-history-card-width:\s*460px/);

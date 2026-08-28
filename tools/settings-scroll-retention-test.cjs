@@ -73,7 +73,7 @@ assert.doesNotMatch(
 );
 assert.match(
   openSettingsSource,
-  /data-tooltip-id": "settings\.modal\.fullscreen"[\s\S]*classList\.toggle\("settings-modal-fullscreen"\)[\s\S]*syncFullscreenButton\(\)/,
+  /data-tooltip-id": "settings\.modal\.fullscreen"[\s\S]*classList\.toggle\("overlay-surface-fullscreen"\)[\s\S]*syncFullscreenButton\(\)/,
   "Settings must expose a fullscreen toggle that updates in place"
 );
 assert.match(
@@ -84,9 +84,10 @@ assert.match(
 assert.doesNotMatch(openSettingsSource, /aria-pressed/, "a dynamically named fullscreen action must not also expose toggle-button pressed state");
 assert.match(
   stylesSource,
-  /\.modal\.settings-modal\.settings-modal-fullscreen\s*\{[\s\S]*position:\s*fixed;[\s\S]*inset:\s*0;[\s\S]*max-width:\s*none;[\s\S]*max-height:\s*none;[\s\S]*border-radius:\s*0;/,
+  /\.overlay-surface-fullscreen\s*\{[\s\S]*position:\s*fixed;[\s\S]*inset:\s*0;[\s\S]*max-width:\s*none;[\s\S]*max-height:\s*none;[\s\S]*border-radius:\s*0;/,
   "fullscreen Settings must fill the viewport without window chrome"
 );
+assert.doesNotMatch(openSettingsSource, /createViewerWindowChrome/, "Settings fullscreen must stay an editor special case without viewer-window restore");
 assert.match(constantsSource, /id: "settings\.modal\.fullscreen", labelKey: "chat\.fullscreen"/);
 assert.match(appearanceSource, /"settings\.modal\.fullscreen": "maximize"/);
 

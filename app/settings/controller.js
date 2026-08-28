@@ -447,7 +447,7 @@ export function createSettingsController(ctx) {
     let fullscreenButton = null;
     const syncFullscreenButton = () => {
       if (!settingsModal || !fullscreenButton) return;
-      const fullscreen = settingsModal.classList.contains("settings-modal-fullscreen");
+      const fullscreen = settingsModal.classList.contains("overlay-surface-fullscreen");
       const label = t(fullscreen ? "chat.exitFullscreen" : "chat.fullscreen");
       fullscreenButton.setAttribute("aria-label", label);
       fullscreenButton.setAttribute("data-tooltip", label);
@@ -461,7 +461,7 @@ export function createSettingsController(ctx) {
         onclick: (event) => {
           event.preventDefault();
           event.stopPropagation();
-          settingsModal.classList.toggle("settings-modal-fullscreen");
+          settingsModal.classList.toggle("overlay-surface-fullscreen");
           syncFullscreenButton();
         }
       });

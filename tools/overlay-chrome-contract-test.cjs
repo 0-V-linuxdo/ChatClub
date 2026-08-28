@@ -21,6 +21,7 @@ const tokens = {
   "--overlay-z-panel": "70",
   "--overlay-z-panel-raised": "71",
   "--overlay-z-modal": "80",
+  "--overlay-z-modal-nested": "81",
   "--overlay-z-popover-backdrop": "99",
   "--overlay-z-popover": "100",
   "--overlay-z-toast": "120",
@@ -28,6 +29,9 @@ const tokens = {
   "--overlay-radius": "var(--ui-radius)",
   "--overlay-close-size": "30px",
   "--overlay-motion": "160ms ease",
+  "--overlay-gutter-panel": "32px",
+  "--overlay-gutter-tight": "16px",
+  "--overlay-header-height": "46px",
   "--overlay-width": "min(720px, calc(100vw - var(--overlay-gutter)))",
   "--overlay-width-compact": "min(560px, calc(100vw - var(--overlay-gutter)))",
   "--overlay-width-wide": "min(1120px, calc(100vw - var(--overlay-gutter)))",
@@ -47,13 +51,16 @@ assert.match(rootBlock, /--overlay-border-color:/);
 assert.match(rootBlock, /--overlay-border:/);
 assert.match(rootBlock, /--overlay-shadow:\s*var\(--shadow\);/);
 assert.match(rootBlock, /--overlay-gutter:\s*40px;/);
+assert.match(rootBlock, /--overlay-backdrop:/);
 assert.match(rootBlock, /--summary-panel-border:\s*var\(--overlay-border-color\);/);
 
 assert.match(agents, /## Overlay Chrome Contract/);
 assert.match(agents, /## Overlay Dismissal Policy/);
 assert.match(agents, /Do not migrate to native `<dialog>`/);
 assert.match(agents, /overlay-surface/);
-assert.match(agents, /overlay-window-button/);
+assert.match(agents, /overlay-surface-fullscreen/);
+assert.match(agents, /ui\/viewer-window\.js/);
+assert.match(agents, /Settings fullscreen is an editor special case/);
 
 const families = [
   [".modal-backdrop", "--overlay-z-modal"],
@@ -76,13 +83,32 @@ for (const [selector, token] of families) {
   assert.match(block, new RegExp(`z-index:\\s*var\\(${token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\);`), `${selector} must consume ${token}`);
 }
 
-for (const selector of [".modal", ".summary-panel", ".share-panel", ".popover-menu", ".toast", ".overlay-surface"]) {
+for (const selector of [".summary-panel", ".share-panel", ".popover-menu", ".toast", ".overlay-surface"]) {
   const start = css.indexOf(`\n${selector} {`);
   assert.ok(start >= 0, `${selector} chrome must exist`);
   const end = css.indexOf("\n}", start);
   const block = css.slice(start, end + 2);
   assert.match(block, /border-radius:\s*var\(--overlay-radius\);/, `${selector} must share overlay radius`);
 }
+
+const modalStart = css.indexOf("\n.modal {");
+assert.ok(modalStart >= 0, ".modal chrome must exist");
+const modalBlock = css.slice(modalStart, css.indexOf("\n}", modalStart) + 2);
+assert.match(modalBlock, /max-height:\s*calc\(100vh - var\(--overlay-gutter\)\);/);
+assert.doesNotMatch(modalBlock, /border-radius:/, ".modal must inherit radius from overlay-surface");
+assert.doesNotMatch(modalBlock, /background:/, ".modal must inherit surface fill from overlay-surface");
+
+const fullscreenStart = css.indexOf("\n.overlay-surface-fullscreen {");
+assert.ok(fullscreenStart >= 0, "shared fill-viewport class must exist");
+const fullscreenBlock = css.slice(fullscreenStart, css.indexOf("\n}", fullscreenStart) + 2);
+assert.match(fullscreenBlock, /inset:\s*0;/);
+assert.match(fullscreenBlock, /border-radius:\s*0;/);
+assert.match(fullscreenBlock, /box-shadow:\s*none;/);
+assert.doesNotMatch(css, /\.settings-modal-fullscreen/);
+assert.match(css, /\.modal-backdrop\s*~\s*\.modal-backdrop\s*\{[^}]*z-index:\s*var\(--overlay-z-modal-nested\);/s);
+assert.match(css, /\.summary-panel \{[^}]*max-width:\s*calc\(100vw - var\(--overlay-gutter-panel\)\);/s);
+assert.match(css, /\.popover-menu \{[^}]*max-width:\s*min\(260px, calc\(100vw - var\(--overlay-gutter-tight\)\)\);/s);
+assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?\.toast,\s*\n\s*\.toast\.show,/);
 
 assert.match(css, /\.overlay-window-button,\s*\n\.settings-window-button,/);
 assert.match(css, /width:\s*var\(--overlay-close-size\);/);
@@ -113,6 +139,9 @@ assert.match(
   /const MODAL_TYPE_CONFIG = Object\.freeze\(\{\s*viewer: Object\.freeze\(\{ dismissOnBackdrop: true \}\),\s*editor: Object\.freeze\(\{ dismissOnBackdrop: false \}\),\s*task: Object\.freeze\(\{ dismissOnBackdrop: false \}\),\s*confirmation: Object\.freeze\(\{ dismissOnBackdrop: false \}\)\s*\}\);/s
 );
 assert.match(dom, /class: `modal overlay-surface \$\{wide \? "modal-wide" : ""\}`/);
+assert.match(dom, /role: "dialog"/);
+assert.match(dom, /"aria-modal": "true"/);
+assert.match(dom, /"aria-labelledby": titleId/);
 assert.match(dom, /iconButton\(closeLabel, "×", onClose, "overlay-window-button"/);
 assert.doesNotMatch(dom, /HTMLDialogElement|showModal\(|<dialog/);
 
@@ -140,7 +169,15 @@ assert.match(read("app/summary/controller.js"), /summary-window-button overlay-w
 assert.match(read("app/share/controller.js"), /share-window-button overlay-window-button/);
 assert.match(read("app/settings/controller.js"), /settings-window-button overlay-window-button/);
 assert.match(read("app/pocket/controller.js"), /pocket-window-button overlay-window-button/);
-assert.match(read("app/history/controller.js"), /overlay-window-button/);
+assert.match(read("app/pocket/controller.js"), /createViewerWindowChrome/);
+assert.match(read("app/history/controller.js"), /createViewerWindowChrome/);
+assert.match(read("app/history/controller.js"), /from "\.\.\/\.\.\/ui\/viewer-window\.js"/);
+assert.doesNotMatch(read("app/settings/controller.js"), /viewer-window/);
+assert.match(read("app/settings/controller.js"), /classList\.toggle\("overlay-surface-fullscreen"\)/);
+assert.doesNotMatch(read("app/settings/controller.js"), /localStorage\.setItem\("chatclub\./);
+assert.match(read("ui/viewer-window.js"), /const OVERLAY_SURFACE_FULLSCREEN_CLASS = "overlay-surface-fullscreen"/);
+assert.match(read("ui/viewer-window.js"), /const VIEWER_WINDOW_FULLSCREEN_TOOLTIP_ID = "pocket\.fullscreen"/);
+assert.doesNotMatch(read("ui/viewer-window.js"), /HTMLDialogElement|showModal\(|<dialog/);
 assert.match(read("app/workspace/view-controller.js"), /popover-menu overlay-surface/);
 
 console.log("overlay chrome contract: ok");

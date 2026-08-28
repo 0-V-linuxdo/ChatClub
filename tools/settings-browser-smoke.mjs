@@ -57,7 +57,7 @@ function settingsFullscreenProbe() {
   const initialLabel = button?.getAttribute("aria-label") || "";
   const activeBefore = activeSection();
   button?.click();
-  const entered = Boolean(panel?.classList.contains("settings-modal-fullscreen"));
+  const entered = Boolean(panel?.classList.contains("overlay-surface-fullscreen"));
   const fullLabel = button?.getAttribute("aria-label") || "";
   const fullRect = panel ? rect(panel) : {};
   const activeFullscreen = activeSection();
@@ -81,7 +81,7 @@ function settingsFullscreenProbe() {
     draftStableFullscreen,
     scrollBefore,
     scrollFullscreen,
-    restored: Boolean(panel && !panel.classList.contains("settings-modal-fullscreen")),
+    restored: Boolean(panel && !panel.classList.contains("overlay-surface-fullscreen")),
     restoredLabel: button?.getAttribute("aria-label") || "",
     restoredRect: panel ? rect(panel) : {},
     activeRestored: activeSection(),

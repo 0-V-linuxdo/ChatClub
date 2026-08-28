@@ -94,23 +94,115 @@ const MODAL_TYPE_CONFIG = Object.freeze({
   confirmation: Object.freeze({ dismissOnBackdrop: false })
 });
 
+let modalTitleSeq = 0;
+const openModals = [];
+
+function modalFocusables(root) {
+  if (!root?.querySelectorAll) return [];
+  try {
+    return [...root.querySelectorAll("button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])")]
+      .filter((node) => node.getAttribute?.("disabled") == null && node.getAttribute?.("aria-hidden") !== "true");
+  } catch {
+    return [];
+  }
+}
+
+function syncModalScrollLock() {
+  const body = document.body;
+  if (!body?.style) return;
+  if (openModals.length) {
+    if (body.dataset.overlayScrollLock == null) {
+      body.dataset.overlayScrollLock = body.style.overflow || "";
+      body.style.overflow = "hidden";
+    }
+  } else if (body.dataset.overlayScrollLock != null) {
+    body.style.overflow = body.dataset.overlayScrollLock;
+    delete body.dataset.overlayScrollLock;
+  }
+}
+
+function trapOpenModalKeydown(event) {
+  const top = openModals[openModals.length - 1];
+  if (!top || event?.key !== "Tab") return;
+  const nodes = modalFocusables(top.panel);
+  if (!nodes.length) {
+    event.preventDefault?.();
+    top.panel.focus?.();
+    return;
+  }
+  const first = nodes[0];
+  const last = nodes[nodes.length - 1];
+  const active = document.activeElement;
+  const inside = typeof top.panel.contains === "function" ? top.panel.contains(active) : true;
+  if (event.shiftKey && (active === first || !inside)) {
+    event.preventDefault?.();
+    last.focus?.();
+  } else if (!event.shiftKey && (active === last || !inside)) {
+    event.preventDefault?.();
+    first.focus?.();
+  }
+}
+
+function registerOpenModal(backdrop, panel) {
+  const restoreFocusTo = document.activeElement;
+  const record = { backdrop, panel, restoreFocusTo };
+  openModals.push(record);
+  if (openModals.length === 1 && typeof document.addEventListener === "function") {
+    document.addEventListener("keydown", trapOpenModalKeydown, true);
+  }
+  syncModalScrollLock();
+  const removeBackdrop = typeof backdrop.remove === "function" ? backdrop.remove.bind(backdrop) : () => {};
+  backdrop.remove = (...args) => {
+    const index = openModals.indexOf(record);
+    if (index >= 0) openModals.splice(index, 1);
+    if (!openModals.length) document.removeEventListener?.("keydown", trapOpenModalKeydown, true);
+    syncModalScrollLock();
+    removeBackdrop(...args);
+    const next = openModals[openModals.length - 1];
+    const active = document.activeElement;
+    const activeGone = !active || active === document.body || (typeof document.body?.contains === "function" && !document.body.contains(active));
+    try {
+      if (next?.panel?.focus && (activeGone || (typeof record.panel.contains === "function" && record.panel.contains(active)))) {
+        next.panel.focus();
+      } else if (restoreFocusTo?.focus && activeGone) {
+        restoreFocusTo.focus();
+      }
+    } catch {}
+  };
+  const focusPanel = () => {
+    try {
+      panel.focus?.();
+    } catch {}
+  };
+  if (typeof queueMicrotask === "function") queueMicrotask(focusPanel);
+  else focusPanel();
+}
+
 export function modal(title, content, onClose, wide = false, closeLabel = "Close", options = {}) {
   const modalType = Object.hasOwn(MODAL_TYPE_CONFIG, options.type) ? options.type : "legacy";
   const dismissOnBackdrop = typeof options.dismissOnBackdrop === "boolean"
     ? options.dismissOnBackdrop
     : modalType === "legacy" || MODAL_TYPE_CONFIG[modalType].dismissOnBackdrop;
+  const titleId = `overlay-modal-title-${++modalTitleSeq}`;
   const backdrop = el("div", { class: "modal-backdrop", dataset: { modalType }, onclick: (event) => {
     if (dismissOnBackdrop && event.target === backdrop) onClose();
   }});
-  const panel = el("section", { class: `modal overlay-surface ${wide ? "modal-wide" : ""}`.trim() },
+  const panel = el("section", {
+    class: `modal overlay-surface ${wide ? "modal-wide" : ""}`.trim(),
+    role: "dialog",
+    "aria-modal": "true",
+    "aria-labelledby": titleId,
+    tabindex: "-1"
+  },
     el("header", { class: "modal-header" },
-      el("h2", {}, title),
+      el("h2", { id: titleId }, title),
       iconButton(closeLabel, "×", onClose, "overlay-window-button", closeLabel, "", "settings.modal.close")
     ),
     el("div", { class: "modal-body" }, content)
   );
   backdrop.append(panel);
   document.body.append(backdrop);
+  registerOpenModal(backdrop, panel);
   return backdrop;
 }
 

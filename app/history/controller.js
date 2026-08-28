@@ -3,6 +3,7 @@ import { savePromptSendHistory } from "../../shared/storage-adapter.js";
 import { normalizePocketCardSize, normalizePocketIcon } from "../../shared/storage-schema.js";
 import { createSettingsIconAction } from "../../ui/components.js";
 import { clear, el, input, toast, viewerModal } from "../../ui/dom.js";
+import { createViewerWindowChrome } from "../../ui/viewer-window.js";
 import {
   optionalControllerObject,
   requireControllerContext,
@@ -96,6 +97,18 @@ export function createHistoryController(ctx) {
   let livePreviewPending = false;
   let workspacePreviewPinned = false;
   let historyCurrentRedraw = null;
+  const viewerWindow = createViewerWindowChrome({
+    fullscreenClass: HISTORY_PANEL_FULLSCREEN_CLASS,
+    focusClass: HISTORY_PANEL_FOCUS_CLASS,
+    sizeKey: HISTORY_PANEL_SIZE_KEY,
+    minWidth: HISTORY_PANEL_MIN_WIDTH,
+    minHeight: HISTORY_PANEL_MIN_HEIGHT,
+    buttonClass: "icon-button tooltip-trigger pocket-window-button prompt-history-window-button overlay-window-button",
+    t,
+    svgIcon,
+    onChange: () => historyCurrentRedraw?.(),
+    onPointerBlock: (blocked) => setFramePointerBlockedForOverlay(blocked, "history")
+  });
   let historyCardSizeSaveTimer = 0;
   let historyActionsExpanded = false;
   let historySidebarCollapsed = false;
@@ -412,214 +425,28 @@ export function createHistoryController(ctx) {
     );
   }
 
-  function historyPanelMaxWidth() {
-    return Math.max(320, window.innerWidth - 32);
-  }
-
-  function historyPanelMaxHeight() {
-    return Math.max(280, window.innerHeight - 32);
-  }
-
-  function clampHistoryPanelSize(value) {
-    if (!value || typeof value !== "object") return null;
-    const width = Number(value.width);
-    const height = Number(value.height);
-    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return null;
-    const maxWidth = historyPanelMaxWidth();
-    const maxHeight = historyPanelMaxHeight();
-    const next = {
-      width: Math.round(Math.min(maxWidth, Math.max(Math.min(HISTORY_PANEL_MIN_WIDTH, maxWidth), width))),
-      height: Math.round(Math.min(maxHeight, Math.max(Math.min(HISTORY_PANEL_MIN_HEIGHT, maxHeight), height)))
-    };
-    const left = Number(value.left);
-    const top = Number(value.top);
-    if (Number.isFinite(left) && Number.isFinite(top)) {
-      next.left = Math.round(Math.min(Math.max(8, left), Math.max(8, window.innerWidth - next.width - 8)));
-      next.top = Math.round(Math.min(Math.max(8, top), Math.max(8, window.innerHeight - next.height - 8)));
-    }
-    return next;
-  }
-
-  function readHistoryPanelSize() {
-    try {
-      return clampHistoryPanelSize(JSON.parse(localStorage.getItem(HISTORY_PANEL_SIZE_KEY) || "null"));
-    } catch {}
-    return null;
-  }
-
-  function historyPanelIsFullscreen(panel) {
-    return Boolean(panel?.classList?.contains(HISTORY_PANEL_FULLSCREEN_CLASS));
-  }
-
   function historyPanelIsFocusMode(panel) {
-    return Boolean(panel?.classList?.contains(HISTORY_PANEL_FOCUS_CLASS));
+    return viewerWindow.isFocusMode(panel);
   }
 
-  function clearHistoryPanelInlineGeometry(panel) {
-    if (!panel) return;
-    ["width", "height", "left", "top", "transform", "--pocket-panel-width", "--pocket-panel-height"].forEach((property) => {
-      panel.style.removeProperty(property);
-    });
+  function toggleHistoryPanelFocusMode(panel) {
+    viewerWindow.toggleFocusMode(panel);
   }
 
-  function applyHistoryPanelSize(panel) {
-    const size = readHistoryPanelSize();
-    if (!panel || !size) return;
-    panel.style.setProperty("--pocket-panel-width", `${size.width}px`);
-    panel.style.setProperty("--pocket-panel-height", `${size.height}px`);
-    panel.style.width = "var(--pocket-panel-width)";
-    panel.style.height = "var(--pocket-panel-height)";
-    if (Number.isFinite(size.left) && Number.isFinite(size.top)) {
-      panel.style.left = `${size.left}px`;
-      panel.style.top = `${size.top}px`;
-      panel.style.transform = "none";
-    }
-  }
-
-  function rememberHistoryPanelGeometry(panel) {
-    if (!panel || historyPanelIsFullscreen(panel)) return;
-    const rect = panel.getBoundingClientRect();
-    const size = clampHistoryPanelSize({
-      width: rect.width,
-      height: rect.height,
-      left: rect.left,
-      top: rect.top
-    });
-    if (!size) return;
-    try { localStorage.setItem(HISTORY_PANEL_SIZE_KEY, JSON.stringify(size)); } catch {}
-  }
-
-  function syncHistoryFullscreenButton(button, panel) {
-    if (!button || !panel) return;
-    const fullscreen = historyPanelIsFullscreen(panel);
-    const label = fullscreen ? t("chat.exitFullscreen") : t("chat.fullscreen");
-    button.setAttribute("aria-label", label);
-    button.setAttribute("data-tooltip", label);
-    button.replaceChildren(svgIcon(fullscreen ? "minimize" : "maximize"));
-  }
-
-  function toggleHistoryPanelFullscreen(panel, button) {
-    if (!panel) return;
-    if (historyPanelIsFullscreen(panel)) {
-      panel.classList.remove(HISTORY_PANEL_FOCUS_CLASS);
-      panel.classList.remove(HISTORY_PANEL_FULLSCREEN_CLASS);
-      applyHistoryPanelSize(panel);
-    } else {
-      rememberHistoryPanelGeometry(panel);
-      panel.classList.add(HISTORY_PANEL_FULLSCREEN_CLASS);
-      panel.classList.remove(HISTORY_PANEL_FOCUS_CLASS);
-      clearHistoryPanelInlineGeometry(panel);
-    }
-    syncHistoryFullscreenButton(button, panel);
-    historyCurrentRedraw?.();
+  function historyFullscreenButton(panel) {
+    return viewerWindow.fullscreenButton(panel);
   }
 
   function toggleOpenHistoryPanelFullscreen() {
     const panel = document.querySelector(".modal.prompt-history-modal");
     if (!panel) return false;
-    toggleHistoryPanelFullscreen(panel, panel.querySelector('[data-tooltip-id="pocket.fullscreen"]'));
+    const button = panel.querySelector('[data-tooltip-id="pocket.fullscreen"]');
+    viewerWindow.toggleFullscreen(panel, button);
     return true;
   }
 
-  function toggleHistoryPanelFocusMode(panel) {
-    if (!panel) return;
-    const fullscreenButton = panel.querySelector('[data-tooltip-id="pocket.fullscreen"]');
-    if (historyPanelIsFocusMode(panel)) {
-      panel.classList.remove(HISTORY_PANEL_FOCUS_CLASS);
-      panel.classList.remove(HISTORY_PANEL_FULLSCREEN_CLASS);
-      applyHistoryPanelSize(panel);
-    } else {
-      if (!historyPanelIsFullscreen(panel)) rememberHistoryPanelGeometry(panel);
-      panel.classList.add(HISTORY_PANEL_FULLSCREEN_CLASS);
-      panel.classList.add(HISTORY_PANEL_FOCUS_CLASS);
-      clearHistoryPanelInlineGeometry(panel);
-    }
-    syncHistoryFullscreenButton(fullscreenButton, panel);
-    historyCurrentRedraw?.();
-  }
-
-  function historyFullscreenButton(panel) {
-    const button = el("button", {
-      class: "icon-button tooltip-trigger pocket-window-button prompt-history-window-button overlay-window-button",
-      type: "button",
-      "aria-label": t("chat.fullscreen"),
-      "data-tooltip": t("chat.fullscreen"),
-      "data-tooltip-id": "pocket.fullscreen",
-      onclick: (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        toggleHistoryPanelFullscreen(panel, button);
-      }
-    }, svgIcon("maximize"));
-    return button;
-  }
-
   function attachHistoryPanelResize(panel) {
-    if (!panel) return;
-    applyHistoryPanelSize(panel);
-    panel.append(
-      el("div", { class: "pocket-panel-resize-handle pocket-panel-resize-handle-left", dataset: { direction: "left" }, "aria-hidden": "true" }),
-      el("div", { class: "pocket-panel-resize-handle pocket-panel-resize-handle-right", dataset: { direction: "right" }, "aria-hidden": "true" }),
-      el("div", { class: "pocket-panel-resize-handle pocket-panel-resize-handle-top", dataset: { direction: "top" }, "aria-hidden": "true" }),
-      el("div", { class: "pocket-panel-resize-handle pocket-panel-resize-handle-bottom", dataset: { direction: "bottom" }, "aria-hidden": "true" })
-    );
-    let resize = null;
-    const minWidth = () => Math.min(HISTORY_PANEL_MIN_WIDTH, historyPanelMaxWidth());
-    const minHeight = () => Math.min(HISTORY_PANEL_MIN_HEIGHT, historyPanelMaxHeight());
-    for (const handle of panel.querySelectorAll(".pocket-panel-resize-handle")) {
-      handle.addEventListener("pointerdown", (event) => {
-        if (historyPanelIsFullscreen(panel)) return;
-        event.preventDefault();
-        event.stopPropagation();
-        const rect = panel.getBoundingClientRect();
-        panel.style.left = `${rect.left}px`;
-        panel.style.top = `${rect.top}px`;
-        panel.style.width = `${rect.width}px`;
-        panel.style.height = `${rect.height}px`;
-        panel.style.transform = "none";
-        resize = {
-          direction: handle.dataset.direction,
-          x: event.clientX,
-          y: event.clientY,
-          left: rect.left,
-          top: rect.top,
-          right: rect.right,
-          bottom: rect.bottom,
-          width: rect.width,
-          height: rect.height
-        };
-        panel.classList.add("pocket-panel-resizing");
-        setFramePointerBlockedForOverlay(true, "history");
-        handle.setPointerCapture?.(event.pointerId);
-      });
-    }
-    const finishResize = () => {
-      if (!resize) return;
-      rememberHistoryPanelGeometry(panel);
-      panel.classList.remove("pocket-panel-resizing");
-      setFramePointerBlockedForOverlay(false, "history");
-      resize = null;
-    };
-    panel.addEventListener("pointermove", (event) => {
-      if (!resize || historyPanelIsFullscreen(panel)) return;
-      const dx = event.clientX - resize.x;
-      const dy = event.clientY - resize.y;
-      if (resize.direction === "left") {
-        const width = Math.min(historyPanelMaxWidth(), Math.max(minWidth(), resize.width - dx));
-        panel.style.left = `${Math.max(8, resize.right - width)}px`;
-        panel.style.width = `${width}px`;
-      } else if (resize.direction === "right") {
-        panel.style.width = `${Math.min(historyPanelMaxWidth(), Math.max(minWidth(), resize.width + dx))}px`;
-      } else if (resize.direction === "top") {
-        const height = Math.min(historyPanelMaxHeight(), Math.max(minHeight(), resize.height - dy));
-        panel.style.top = `${Math.max(8, resize.bottom - height)}px`;
-        panel.style.height = `${height}px`;
-      } else if (resize.direction === "bottom") {
-        panel.style.height = `${Math.min(historyPanelMaxHeight(), Math.max(minHeight(), resize.height + dy))}px`;
-      }
-    });
-    panel.addEventListener("pointerup", finishResize);
-    panel.addEventListener("pointercancel", finishResize);
+    viewerWindow.attachResize(panel);
   }
 
   function loadHistoryEntry(entry) {

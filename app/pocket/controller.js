@@ -2,6 +2,7 @@ import { t } from "../../shared/i18n.js";
 import { dedupePocketHistory, normalizePocketCardSize, normalizePocketIcon } from "../../shared/storage-schema.js";
 import { pocketChromeLabelKey } from "../../shared/topbar.js";
 import { clear, el, toast, viewerModal } from "../../ui/dom.js";
+import { createViewerWindowChrome } from "../../ui/viewer-window.js";
 import { requireControllerContext, requireControllerFunction, validateControllerContract } from "../controller-contract.js";
 import { renderMarkdown } from "../summary/markdown.js";
 import {
@@ -48,6 +49,18 @@ export function createPocketController(ctx) {
   let pocketActionsExpanded = false;
   let pocketSidebarCollapsed = false;
   let pocketCurrentRedraw = null;
+  const viewerWindow = createViewerWindowChrome({
+    fullscreenClass: POCKET_PANEL_FULLSCREEN_CLASS,
+    focusClass: POCKET_PANEL_FOCUS_CLASS,
+    sizeKey: POCKET_PANEL_SIZE_KEY,
+    minWidth: POCKET_PANEL_MIN_WIDTH,
+    minHeight: POCKET_PANEL_MIN_HEIGHT,
+    buttonClass: "icon-button tooltip-trigger pocket-window-button overlay-window-button",
+    t,
+    svgIcon,
+    onChange: () => pocketCurrentRedraw?.(),
+    onPointerBlock: (blocked) => setFramePointerBlockedForOverlay(blocked, "pocket")
+  });
 
   const POCKET_CARD_SIZE_LIMITS = Object.freeze({
     width: Object.freeze({ min: 360, max: 760, step: 20 }),
@@ -308,169 +321,16 @@ export function createPocketController(ctx) {
     } catch {}
   }
 
-  function pocketPanelMaxWidth() {
-    return Math.max(320, window.innerWidth - 32);
-  }
-
-  function pocketPanelMaxHeight() {
-    return Math.max(280, window.innerHeight - 32);
-  }
-
-  function pocketPanelMinWidth() {
-    return Math.min(POCKET_PANEL_MIN_WIDTH, pocketPanelMaxWidth());
-  }
-
-  function pocketPanelMinHeight() {
-    return Math.min(POCKET_PANEL_MIN_HEIGHT, pocketPanelMaxHeight());
-  }
-
-  function clampPocketPanelWidth(value) {
-    return Math.min(pocketPanelMaxWidth(), Math.max(pocketPanelMinWidth(), value));
-  }
-
-  function clampPocketPanelHeight(value) {
-    return Math.min(pocketPanelMaxHeight(), Math.max(pocketPanelMinHeight(), value));
-  }
-
-  function normalizePocketPanelSize(value) {
-    if (!value || typeof value !== "object") return null;
-    const width = Number(value.width);
-    const height = Number(value.height);
-    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return null;
-    const normalizedWidth = Math.round(clampPocketPanelWidth(width));
-    const normalizedHeight = Math.round(clampPocketPanelHeight(height));
-    const normalized = {
-      width: normalizedWidth,
-      height: normalizedHeight
-    };
-    const left = Number(value.left);
-    const top = Number(value.top);
-    if (Number.isFinite(left) && Number.isFinite(top)) {
-      normalized.left = Math.round(Math.min(Math.max(8, left), Math.max(8, window.innerWidth - normalizedWidth - 8)));
-      normalized.top = Math.round(Math.min(Math.max(8, top), Math.max(8, window.innerHeight - normalizedHeight - 8)));
-    }
-    return normalized;
-  }
-
-  function readPocketPanelSize() {
-    try {
-      return normalizePocketPanelSize(JSON.parse(localStorage.getItem(POCKET_PANEL_SIZE_KEY) || "null"));
-    } catch {}
-    return null;
-  }
-
-  function capturePocketPanelGeometry(panel) {
-    if (!panel) return null;
-    if (pocketPanelIsFullscreen(panel)) return null;
-    const rect = panel.getBoundingClientRect();
-    if (!Number.isFinite(rect.width) || !Number.isFinite(rect.height) || rect.width <= 0 || rect.height <= 0) return null;
-    return normalizePocketPanelSize({
-      width: rect.width,
-      height: rect.height,
-      left: rect.left,
-      top: rect.top
-    });
-  }
-
-  function rememberPocketPanelGeometry(panel) {
-    const size = capturePocketPanelGeometry(panel);
-    if (!size) return;
-    try { localStorage.setItem(POCKET_PANEL_SIZE_KEY, JSON.stringify(size)); } catch {}
-  }
-
-  function applyPocketPanelSize(panel) {
-    const size = readPocketPanelSize();
-    if (!panel || !size) return;
-    panel.style.setProperty("--pocket-panel-width", `${size.width}px`);
-    panel.style.setProperty("--pocket-panel-height", `${size.height}px`);
-    panel.style.width = "var(--pocket-panel-width)";
-    panel.style.height = "var(--pocket-panel-height)";
-    if (Number.isFinite(size.left) && Number.isFinite(size.top)) {
-      panel.style.left = `${size.left}px`;
-      panel.style.top = `${size.top}px`;
-      panel.style.transform = "none";
-    }
-  }
-
-  function pocketPanelIsFullscreen(panel) {
-    return Boolean(panel?.classList?.contains(POCKET_PANEL_FULLSCREEN_CLASS));
-  }
-
   function pocketPanelIsFocusMode(panel) {
-    return Boolean(panel?.classList?.contains(POCKET_PANEL_FOCUS_CLASS));
-  }
-
-  function clearPocketPanelInlineGeometry(panel) {
-    if (!panel) return;
-    ["width", "height", "left", "top", "transform", "--pocket-panel-width", "--pocket-panel-height"].forEach((property) => {
-      panel.style.removeProperty(property);
-    });
-  }
-
-  function syncPocketFullscreenButton(button, panel) {
-    if (!button || !panel) return;
-    const fullscreen = pocketPanelIsFullscreen(panel);
-    const label = fullscreen ? t("chat.exitFullscreen") : t("chat.fullscreen");
-    button.setAttribute("aria-label", label);
-    button.setAttribute("data-tooltip", label);
-    button.replaceChildren(svgIcon(fullscreen ? "minimize" : "maximize"));
-  }
-
-  function togglePocketPanelFullscreen(panel, button) {
-    if (!panel) return;
-    if (pocketPanelIsFullscreen(panel)) {
-      panel.classList.remove(POCKET_PANEL_FOCUS_CLASS);
-      panel.classList.remove(POCKET_PANEL_FULLSCREEN_CLASS);
-      applyPocketPanelSize(panel);
-    } else {
-      rememberPocketPanelGeometry(panel);
-      panel.classList.add(POCKET_PANEL_FULLSCREEN_CLASS);
-      panel.classList.remove(POCKET_PANEL_FOCUS_CLASS);
-      clearPocketPanelInlineGeometry(panel);
-    }
-    syncPocketFullscreenButton(button, panel);
-    pocketCurrentRedraw?.();
+    return viewerWindow.isFocusMode(panel);
   }
 
   function togglePocketPanelFocusMode(panel) {
-    if (!panel) return;
-    const fullscreenButton = panel.querySelector('[data-tooltip-id="pocket.fullscreen"]');
-    if (pocketPanelIsFocusMode(panel)) {
-      panel.classList.remove(POCKET_PANEL_FOCUS_CLASS);
-      panel.classList.remove(POCKET_PANEL_FULLSCREEN_CLASS);
-      applyPocketPanelSize(panel);
-    } else {
-      if (!pocketPanelIsFullscreen(panel)) rememberPocketPanelGeometry(panel);
-      panel.classList.add(POCKET_PANEL_FULLSCREEN_CLASS);
-      panel.classList.add(POCKET_PANEL_FOCUS_CLASS);
-      clearPocketPanelInlineGeometry(panel);
-    }
-    syncPocketFullscreenButton(fullscreenButton, panel);
-    pocketCurrentRedraw?.();
-  }
-
-  function toggleOpenPocketPanelFullscreen() {
-    const panel = document.querySelector(".modal.pocket-history-modal");
-    if (!panel) return false;
-    const button = panel.querySelector('[data-tooltip-id="pocket.fullscreen"]');
-    togglePocketPanelFullscreen(panel, button);
-    return true;
+    viewerWindow.toggleFocusMode(panel);
   }
 
   function pocketFullscreenButton(panel) {
-    const button = el("button", {
-      class: "icon-button tooltip-trigger pocket-window-button overlay-window-button",
-      type: "button",
-      "aria-label": t("chat.fullscreen"),
-      "data-tooltip": t("chat.fullscreen"),
-      "data-tooltip-id": "pocket.fullscreen",
-      onclick: (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        togglePocketPanelFullscreen(panel, button);
-      }
-    }, svgIcon("maximize"));
-    return button;
+    return viewerWindow.fullscreenButton(panel);
   }
 
   function installPocketPanelHeaderActions(panel) {
@@ -505,85 +365,16 @@ export function createPocketController(ctx) {
     );
   }
 
-  function setPocketIframePointerBlocked(blocked) {
-    setFramePointerBlockedForOverlay(blocked, "pocket");
-  }
-
-  function makePocketResizable(panel) {
-    let resize = null;
-    const handles = panel.querySelectorAll(".pocket-panel-resize-handle");
-    for (const handle of handles) {
-      handle.addEventListener("pointerdown", (event) => {
-        if (pocketPanelIsFullscreen(panel)) return;
-        event.preventDefault();
-        event.stopPropagation();
-        const rect = panel.getBoundingClientRect();
-        panel.style.left = `${rect.left}px`;
-        panel.style.top = `${rect.top}px`;
-        panel.style.width = `${rect.width}px`;
-        panel.style.height = `${rect.height}px`;
-        panel.style.transform = "none";
-        resize = {
-          direction: handle.dataset.direction,
-          x: event.clientX,
-          y: event.clientY,
-          left: rect.left,
-          top: rect.top,
-          right: rect.right,
-          bottom: rect.bottom,
-          width: rect.width,
-          height: rect.height
-        };
-        panel.classList.add("pocket-panel-resizing");
-        setPocketIframePointerBlocked(true);
-        handle.setPointerCapture?.(event.pointerId);
-      });
-    }
-    const finishResize = () => {
-      if (!resize) return;
-      rememberPocketPanelGeometry(panel);
-      panel.classList.remove("pocket-panel-resizing");
-      setPocketIframePointerBlocked(false);
-      resize = null;
-    };
-    panel.addEventListener("pointermove", (event) => {
-      if (!resize || pocketPanelIsFullscreen(panel)) return;
-      const minWidth = pocketPanelMinWidth();
-      const minHeight = pocketPanelMinHeight();
-      const dx = event.clientX - resize.x;
-      const dy = event.clientY - resize.y;
-      if (resize.direction === "left") {
-        const maxWidth = Math.min(pocketPanelMaxWidth(), Math.max(minWidth, resize.right - 8));
-        const width = Math.min(maxWidth, Math.max(minWidth, resize.width - dx));
-        panel.style.left = `${Math.max(8, resize.right - width)}px`;
-        panel.style.width = `${width}px`;
-      } else if (resize.direction === "right") {
-        const maxWidth = Math.min(pocketPanelMaxWidth(), Math.max(minWidth, window.innerWidth - resize.left - 8));
-        panel.style.width = `${Math.min(maxWidth, Math.max(minWidth, resize.width + dx))}px`;
-      } else if (resize.direction === "top") {
-        const maxHeight = Math.min(pocketPanelMaxHeight(), Math.max(minHeight, resize.bottom - 8));
-        const height = Math.min(maxHeight, Math.max(minHeight, resize.height - dy));
-        panel.style.top = `${Math.max(8, resize.bottom - height)}px`;
-        panel.style.height = `${height}px`;
-      } else if (resize.direction === "bottom") {
-        const maxHeight = Math.min(pocketPanelMaxHeight(), Math.max(minHeight, window.innerHeight - resize.top - 8));
-        panel.style.height = `${Math.min(maxHeight, Math.max(minHeight, resize.height + dy))}px`;
-      }
-    });
-    panel.addEventListener("pointerup", finishResize);
-    panel.addEventListener("pointercancel", finishResize);
+  function toggleOpenPocketPanelFullscreen() {
+    const panel = document.querySelector(".modal.pocket-history-modal");
+    if (!panel) return false;
+    const button = panel.querySelector('[data-tooltip-id="pocket.fullscreen"]');
+    viewerWindow.toggleFullscreen(panel, button);
+    return true;
   }
 
   function attachPocketPanelResize(panel) {
-    if (!panel) return;
-    applyPocketPanelSize(panel);
-    panel.append(
-      el("div", { class: "pocket-panel-resize-handle pocket-panel-resize-handle-left", dataset: { direction: "left" }, "aria-hidden": "true" }),
-      el("div", { class: "pocket-panel-resize-handle pocket-panel-resize-handle-right", dataset: { direction: "right" }, "aria-hidden": "true" }),
-      el("div", { class: "pocket-panel-resize-handle pocket-panel-resize-handle-top", dataset: { direction: "top" }, "aria-hidden": "true" }),
-      el("div", { class: "pocket-panel-resize-handle pocket-panel-resize-handle-bottom", dataset: { direction: "bottom" }, "aria-hidden": "true" })
-    );
-    makePocketResizable(panel);
+    viewerWindow.attachResize(panel);
   }
 
   function pocketSortNumber(value, fallback = 0) {
