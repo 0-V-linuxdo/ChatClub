@@ -147,12 +147,12 @@ assert.match(overlayCss, /\.preferred-model-selection-overlay-line\s*\{[^}]*disp
 assert.match(overlayCss, /\.preferred-model-selection-overlay-line-primary\s*\{[^}]*-webkit-line-clamp: 2;/s);
 assert.match(
   overlayCss,
-  /\.preferred-model-selection-overlay-line-status\s*\{[^}]*color: var\(--muted\);[^}]*font-size: 12px;[^}]*font-weight: 500;/s
+  /\.preferred-model-selection-overlay-line-status\s*\{[^}]*color: var\(--muted\);[^}]*font-size: 12px;[^}]*font-weight: var\(--font-weight-normal\);/s
 );
 assert.match(overlayCss, /\.preferred-model-selection-overlay-line-model\s*\{[^}]*-webkit-line-clamp: 2;/s);
 assert.match(
   overlayCss,
-  /\.preferred-model-selection-overlay-line-detail\s*\{[^}]*color: var\(--text\);[^}]*font-size: 14px;[^}]*font-weight: 600;[^}]*line-height: 1\.4;/s,
+  /\.preferred-model-selection-overlay-line-detail\s*\{[^}]*color: var\(--text\);[^}]*font-size: 14px;[^}]*font-weight: var\(--font-weight-medium\);[^}]*line-height: 1\.4;/s,
   "every applied setting row should share the model row's visual emphasis"
 );
 assert.match(overlayCss, /@keyframes preferred-model-selection-overlay-attention/);

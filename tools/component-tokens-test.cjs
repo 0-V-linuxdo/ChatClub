@@ -35,7 +35,14 @@ const tokens = {
   "--workspace-z-sidebar": "15",
   "--workspace-z-topbar": "20",
   "--workspace-z-topbar-edit": "30",
-  "--workspace-z-topbar-controls": "101"
+  "--workspace-z-topbar-controls": "101",
+  "--font-weight-normal": "500",
+  "--font-weight-medium": "600",
+  "--font-weight-semibold": "650",
+  "--font-weight-bold": "760",
+  "--font-weight-heavy": "800",
+  "--disabled-opacity": "0.48",
+  "--target-min": "24px"
 };
 
 for (const [name, value] of Object.entries(tokens)) {
@@ -90,6 +97,18 @@ assert.match(css, /\.share-option-group \{[^}]*gap:\s*var\(--space-2\);/);
 assert.match(css, /\.pocket-empty \.svg-icon \{[^}]*color:\s*var\(--primary\);/s);
 assert.match(css, /body \{[^}]*font-family:\s*var\(--font-family\);[^}]*font-size:\s*var\(--font-size\);/s);
 
+assert.doesNotMatch(css, /border-radius:\s*7px/, "controls must consume --ui-radius");
+assert.doesNotMatch(css, /#ef4444/i, "share error color must not fall back to Tailwind red");
+assert.doesNotMatch(css, /font-weight:\s*(560|580|720|740|750|780)\b/, "outlier font-weights must collapse onto the type scale");
+assert.doesNotMatch(officialRules, /var\(--border\)/, "official-rules CSS must not use undeclared --border");
+assert.match(css, /\.tab-close \{[^}]*width:\s*var\(--target-min\);/s);
+assert.match(css, /\.prompt-image-remove \{[^}]*width:\s*var\(--target-min\);/s);
+assert.match(css, /\.input, \.textarea, \.select \{[^}]*border-radius:\s*var\(--ui-radius\);/s);
+assert.match(css, /\.ui-list,\s*\n\.settings-list \{/);
+assert.match(css, /\.pocket-empty \{[^}]*border-radius:\s*var\(--ui-radius\);/s);
+assert.match(officialRules, /outline:\s*2px solid var\(--focus-ring\);/);
+assert.match(officialRules, /border-radius:\s*var\(--ui-radius\)/);
+
 assert.match(runtime, /setProperty\("--primary"/);
 assert.match(runtime, /setProperty\("--primary-2"/);
 assert.doesNotMatch(runtime, /setProperty\("--accent"/);
@@ -98,6 +117,8 @@ assert.match(agents, /## Component Tokens/);
 assert.match(agents, /tools\/component-tokens-test\.cjs/);
 assert.match(agents, /Do not load Inter/);
 assert.match(agents, /do not reintroduce `#0a84ff`/);
+assert.match(agents, /--target-min: 24px/);
+assert.match(agents, /do not reintroduce 560–780 outliers/);
 assert.match(agents, /## Overlay Chrome Contract/);
 
 console.log("component tokens: ok");

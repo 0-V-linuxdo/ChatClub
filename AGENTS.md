@@ -106,7 +106,9 @@ Page chrome besides overlays uses the forest-green 8px system through tokens on 
 - Status: `--success`, `--warning`, `--warning-fill`, `--info`, `--danger`, `--danger-soft`, `--on-primary`
 - `--focus-ring` for `:focus-visible`; `--drop-indicator` for insert carets (do not reintroduce `#0a84ff`)
 - Shell: `--topbar-height: 51px`; `--workspace-z-sidebar` / `--workspace-z-topbar` / `--workspace-z-topbar-edit` / `--workspace-z-topbar-controls`
-- Type: `--font-family` is system-ui. Do not load Inter. `--font-size` 13px / `--font-size-sm` 12px / `--font-size-xs` 11px / `--font-size-md` 15px. Spacing `--space-1`…`--space-4` is the 4px scale
+- Type: `--font-family` is system-ui. Do not load Inter. `--font-size` 13px / `--font-size-sm` 12px / `--font-size-xs` 11px / `--font-size-md` 15px. Spacing `--space-1`…`--space-4` is the 4px scale. Weight is `--font-weight-normal` 500 / `--font-weight-medium` 600 / `--font-weight-semibold` 650 / `--font-weight-bold` 760 / `--font-weight-heavy` 800 — do not reintroduce 560–780 outliers
+- Control: `--disabled-opacity: 0.48`; `--target-min: 24px` for WCAG 2.5.8 pointer targets. Inputs, chips, and list rows use `--ui-radius`, not 7px
+- `.ui-list` and `.settings-list` share one base rule. Official-rules injected CSS consumes the same tokens (`--line`, not an undeclared `--border`)
 - CSS `::before` / `::after` tooltips stay `display: none`; `ui/tooltip.js` owns hover copy
 - Do not change `--overlay-*` numeric values; Overlay Chrome Contract owns those
 
