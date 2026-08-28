@@ -32,6 +32,13 @@ Manual compatibility observation recorded 2026-07-16; the exact browser version 
 - Tabbit closes that tab on extension reload, so workspace restoration across extension reload is not supported there.
 - This reload behavior has not been recorded for every other manual target; verify it in the affected browser when changing workspace recovery.
 
+Unpacked-extension reload vs Remove, recorded 2026-08-28 while verifying Prompt History in Arc:
+
+- Prefer the extensions-page Reload (and, if needed, disable/enable) so `chrome.storage` survives. Prompt History, Record Full Text / `workspaceTabFullText`, Pocket, and other local extension settings live under Arc `Local Extension Settings/kplgajidbllaeekcfpcdcbocbhppbind`.
+- The details-page Reload control can leave Chromium serving the previous unpacked `manifest.json` `version` / `version_name`. That is not proof the on-disk files were not written.
+- Do not Remove the unpacked extension and Load unpacked again just to force a manifest reread when those records must be kept. Remove wipes that `Local Extension Settings` directory even if Load unpacked restores the same id `kplgajidbllaeekcfpcdcbocbhppbind`. Old Prompt History and full-text captures will not come back.
+- Load unpacked must select the ChatClub repository root, the folder that contains `manifest.json`. Selecting a parent such as `Cursor Workspace`, or another unpacked dist, fails with `Could not load manifest` / `Failed to load extension`.
+
 ### Automated engine baselines
 
 The automated baselines are separate from the manual branded-browser matrix:
