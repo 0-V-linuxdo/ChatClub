@@ -401,8 +401,8 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   assert.match(panelSource, /omitTitle:\s*true/);
   assert.match(
     panelSource,
-    /class: "prompt-history-sidebar-item-top"[\s\S]*?prompt-history-sidebar-preview[\s\S]*?\),\s*el\("time", \{ class: "prompt-history-sidebar-time"/,
-    "History time stays on its own row under the title"
+    /class: "prompt-history-sidebar-item-top"[\s\S]*?prompt-history-sidebar-preview[\s\S]*?class: "prompt-history-sidebar-item-foot"[\s\S]*?prompt-history-sidebar-time[\s\S]*?prompt-history-sidebar-pocket/,
+    "History title uses the full row; Pocket sits to the right of the timestamp"
   );
   assert.doesNotMatch(
     panelSource,
@@ -443,6 +443,8 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   );
   assert.match(stylesheetSource, /\.prompt-history-header-title strong \{[\s\S]*?text-overflow:\s*ellipsis/);
   assert.match(stylesheetSource, /\.prompt-history-sidebar-pocket/);
+  assert.match(stylesheetSource, /\.prompt-history-sidebar-item \{[\s\S]*?display:\s*grid/);
+  assert.match(stylesheetSource, /\.prompt-history-sidebar-item-foot \{[\s\S]*?display:\s*flex/);
   assert.match(stylesheetSource, /\.prompt-history-sidebar-time \{[\s\S]*?text-align:\s*right/);
   assert.match(
     stylesheetSource,

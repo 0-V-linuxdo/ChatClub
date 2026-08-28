@@ -715,30 +715,32 @@ export function createHistoryController(ctx) {
         el("span", { class: "prompt-history-sidebar-item-top" },
           conversationFavicons(item, "prompt-history-sidebar-favicons"),
           el("span", { class: "prompt-history-sidebar-preview" }, preview)
-        ),
-        el("time", { class: "prompt-history-sidebar-time", datetime: item.createdAt || "" }, promptHistoryTimeLabel(item.createdAt)),
-        sourceMeta ? el("span", { class: "prompt-history-sidebar-meta" }, sourceMeta) : null
+        )
       ),
-      pocketSaved
-        ? el("span", {
-          class: "prompt-history-pocket-badge",
-          title: pocketLabel,
-          "aria-label": pocketLabel
-        }, svgIcon(pocketDisplayIcon()))
-        : el("button", {
-          class: "icon-button tooltip-trigger prompt-history-sidebar-pocket",
-          type: "button",
-          "aria-label": pocketLabel,
-          "data-tooltip": pocketLabel,
-          "data-tooltip-id": "history.action.pocket",
-          disabled: pocketBusy || !promptHistoryMessageKey(item?.text),
-          onclick: (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            activeItemId = item.id;
-            saveItemToPocket(item, redraw);
-          }
-        }, svgIcon(pocketDisplayIcon()))
+      el("div", { class: "prompt-history-sidebar-item-foot" },
+        el("time", { class: "prompt-history-sidebar-time", datetime: item.createdAt || "" }, promptHistoryTimeLabel(item.createdAt)),
+        pocketSaved
+          ? el("span", {
+            class: "prompt-history-pocket-badge",
+            title: pocketLabel,
+            "aria-label": pocketLabel
+          }, svgIcon(pocketDisplayIcon()))
+          : el("button", {
+            class: "icon-button tooltip-trigger prompt-history-sidebar-pocket",
+            type: "button",
+            "aria-label": pocketLabel,
+            "data-tooltip": pocketLabel,
+            "data-tooltip-id": "history.action.pocket",
+            disabled: pocketBusy || !promptHistoryMessageKey(item?.text),
+            onclick: (event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              activeItemId = item.id;
+              saveItemToPocket(item, redraw);
+            }
+          }, svgIcon(pocketDisplayIcon()))
+      ),
+      sourceMeta ? el("span", { class: "prompt-history-sidebar-meta" }, sourceMeta) : null
     );
   }
 
