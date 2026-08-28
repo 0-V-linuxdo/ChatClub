@@ -5444,6 +5444,31 @@ body.settings-tab-context-menu-dragging iframe {
   line-height: 1.5;
 }
 
+.prompt-history-detail-fallback {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.prompt-history-detail-status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.prompt-history-detail-fallback.is-loading .prompt-history-detail-status {
+  color: var(--text);
+}
+
+.prompt-history-detail-fallback .prompt-history-detail-text {
+  padding: 10px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--muted);
+}
+
 .prompt-history-conversations {
   min-width: 0;
   display: grid;

@@ -94,7 +94,8 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
     if (runId !== generation) return { status: "cancelled", attempts };
     if (!itemMatchesPrompt(item, prompt)) return { status: "unmatched", attempts };
     try {
-      await persistItem(item, prompt);
+      const persisted = await persistItem(item, prompt);
+      if (persisted === false || persisted?.saved === false) return { status: "persist-error", attempts };
     } catch {
       return { status: "persist-error", attempts };
     }

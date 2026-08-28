@@ -58,6 +58,7 @@ export function createHistoryController(ctx) {
   let fullTextStore = {};
   let livePreviewItems = [];
   let livePreviewTried = false;
+  let livePreviewPending = false;
   let historyCurrentRedraw = null;
 
   function items() {
@@ -101,19 +102,32 @@ export function createHistoryController(ctx) {
     });
   }
 
-  async function refreshConversationSources(redraw) {
+  async function refreshConversationSources(redraw, options = {}) {
     await refreshFullTextStore();
-    redraw();
     const history = items();
     const active = history.find((entry) => entry.id === activeItemId) || history[0] || null;
-    if (livePreviewTried || !active || conversationPages(active).length) return;
-    livePreviewTried = true;
+    const hasPages = Boolean(active && conversationPages(active).length);
+    if (options.retryLive && !hasPages && !livePreviewPending) livePreviewTried = false;
+    const shouldCollect = !livePreviewTried && !livePreviewPending && active && !hasPages;
+    if (shouldCollect) {
+      livePreviewTried = true;
+      livePreviewPending = true;
+    }
+    redraw();
+    if (!shouldCollect) return;
     try {
       livePreviewItems = await collectLivePreviewItems();
     } catch {
       livePreviewItems = [];
+    } finally {
+      livePreviewPending = false;
     }
     redraw();
+  }
+
+  function refreshOpenHistory(options) {
+    if (!historyCurrentRedraw) return;
+    refreshConversationSources(historyCurrentRedraw, options).catch(() => historyCurrentRedraw());
   }
 
   async function save(history, redraw, message) {
@@ -391,6 +405,7 @@ export function createHistoryController(ctx) {
     const imageLabel = promptHistoryImageCountLabel(images);
     const canPocket = Boolean(promptHistoryMessageKey(item.text)) && !pocketBusy;
     const pages = conversationPages(item);
+    const loading = !pages.length && (livePreviewPending || !livePreviewTried);
     return el("article", { class: "prompt-history-detail" },
       el("header", { class: "prompt-history-detail-header" },
         el("div", { class: "prompt-history-detail-meta" },
@@ -413,7 +428,13 @@ export function createHistoryController(ctx) {
       ),
       pages.length
         ? el("div", { class: "prompt-history-conversations" }, pages.map((page) => conversationFrame(page)))
-        : el("pre", { class: "prompt-history-detail-text" }, item.text || t("promptHistory.emptyPrompt")),
+        : el("div", {
+          class: `prompt-history-detail-fallback${loading ? " is-loading" : ""}`,
+          "aria-busy": loading ? "true" : null
+        },
+          el("p", { class: "prompt-history-detail-status" }, t(loading ? "promptHistory.conversationLoading" : "promptHistory.conversationEmpty")),
+          el("pre", { class: "prompt-history-detail-text" }, item.text || t("promptHistory.emptyPrompt"))
+        ),
       detailImages(images, imageLabel)
     );
   }
@@ -459,11 +480,15 @@ export function createHistoryController(ctx) {
 
   function openHistoryPanel() {
     const existing = document.querySelector(".modal.prompt-history-modal");
-    if (existing) return existing.closest(".modal-backdrop") || existing.parentElement;
+    if (existing) {
+      refreshOpenHistory({ retryLive: true });
+      return existing.closest(".modal-backdrop") || existing.parentElement;
+    }
     resetSearch();
     activeItemId = "";
     livePreviewItems = [];
     livePreviewTried = false;
+    livePreviewPending = false;
     const host = el("div", { class: "ui-dialog prompt-history-dialog" });
     let dialog;
     const close = () => {
@@ -485,7 +510,12 @@ export function createHistoryController(ctx) {
     return dialog;
   }
 
+  function notifyFullTextChanged() {
+    refreshOpenHistory({ retryLive: true });
+  }
+
   return {
-    openHistoryPanel
+    openHistoryPanel,
+    notifyFullTextChanged
   };
 }

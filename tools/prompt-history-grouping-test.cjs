@@ -197,6 +197,25 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
     }
   }).length, 0, "href-less frames must not be saved to Pocket");
 
+  const assistantPages = promptHistoryConversationPages({ text: "Explain closures" }, {
+    store: {
+      ws5: {
+        workspaceId: "ws5",
+        frames: [{
+          href: "https://chatgpt.com/c/5",
+          appName: "ChatGPT",
+          messages: [
+            { role: "user", text: "Please help with this homework." },
+            { role: "assistant", text: "Sure. Explain closures: a function that remembers its scope." }
+          ]
+        }]
+      }
+    }
+  });
+  assert.equal(assistantPages.length, 1, "History must show stored turns when the prompt appears in the assistant reply");
+  assert.equal(assistantPages[0].messages[0].text, "Please help with this homework.");
+  assert.equal(assistantPages[0].messages[1].text, "Sure. Explain closures: a function that remembers its scope.");
+
   assert.match(historySource, /class: "shortcut-search prompt-history-search"/);
   assert.match(historySource, /class: "shortcut-search-input prompt-history-search-input"/);
   assert.match(historySource, /headerSearch, pane, resetAfterImport/);
@@ -218,16 +237,30 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   assert.match(panelSource, /function refreshFullTextStore/);
   assert.match(panelSource, /function refreshConversationSources/);
   assert.match(panelSource, /function syncHistoryModalTitle/);
+  assert.match(panelSource, /function refreshOpenHistory/);
+  assert.match(panelSource, /function notifyFullTextChanged/);
   assert.match(panelSource, /livePreviewTried/);
+  assert.match(panelSource, /livePreviewPending/);
+  assert.match(panelSource, /retryLive/);
   assert.match(panelSource, /promptHistoryConversationPages/);
   assert.match(panelSource, /collectLivePreviewItems\(\)/);
   assert.match(panelSource, /refreshConversationSources\(redraw\)/);
+  assert.match(panelSource, /refreshOpenHistory\(\{ retryLive: true \}\)/);
   assert.match(panelSource, /class: "prompt-history-conversations"/);
   assert.match(panelSource, /class: `prompt-history-turn prompt-history-turn-\$\{role\}`/);
   assert.match(panelSource, /promptHistoryPreview\(item\?\.text, 72\)/);
   assert.match(panelSource, /conversationPages\(item\)/);
-  assert.match(stylesheetSource, /\.prompt-history-conversations\s*\{/);
+  assert.match(panelSource, /promptHistory\.conversationLoading/);
+  assert.match(panelSource, /promptHistory\.conversationEmpty/);
+  assert.match(panelSource, /prompt-history-detail-fallback/);
+  assert.match(modelSource, /matchesFullTextQuery/);
+  assert.match(
+    stylesheetSource,
+    /\.prompt-history-conversations\s*\{/
+  );
   assert.match(stylesheetSource, /\.prompt-history-turn-text\s*\{/);
+  assert.match(stylesheetSource, /\.prompt-history-detail-fallback\s*\{/);
+  assert.match(stylesheetSource, /\.prompt-history-detail-status\s*\{/);
   assert.match(
     stylesheetSource,
     /\.prompt-history-modal \.modal-header h2 \{[\s\S]*?text-overflow:\s*ellipsis/,
@@ -235,6 +268,7 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   );
   assert.match(runtimeSource, /savePages: \(\.\.\.args\) => ensurePocketController\(\)\.then\(\(pocket\) => pocket\.savePagesToPocket/);
   assert.match(runtimeSource, /collectLive: \(\) => ensureSummaryController\(\)\.then\(\(summary\) => summary\.collectWorkspacePreviewItems/);
+  assert.match(runtimeSource, /historyController\?\.notifyFullTextChanged/);
   assert.ok(i18nSource.includes('"promptHistory.searchPlaceholder": "Search prompts or image names"'));
   assert.ok(i18nSource.includes('"promptHistory.searchPlaceholder": "搜索提示词或图片名"'));
   assert.ok(i18nSource.includes('"promptHistory.searchClear": "Clear search"'));
@@ -245,6 +279,10 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   assert.ok(i18nSource.includes('"promptHistory.saveToPocket": "保存到 Pocket"'));
   assert.ok(i18nSource.includes('"promptHistory.savedToPocket": "Saved to Pocket"'));
   assert.ok(i18nSource.includes('"promptHistory.savedToPocket": "已保存到 Pocket"'));
+  assert.ok(i18nSource.includes('"promptHistory.conversationLoading": "Collecting the matching conversation…"'));
+  assert.ok(i18nSource.includes('"promptHistory.conversationLoading": "正在采集匹配的对话…"'));
+  assert.ok(i18nSource.includes('"promptHistory.conversationEmpty": "No matching conversation. Open the chats or enable Record Full Text, then try again."'));
+  assert.ok(i18nSource.includes('"promptHistory.conversationEmpty": "没有匹配的对话。打开对应聊天，或开启全文记录后再试。"'));
   assert.ok(i18nSource.includes('"toast.historyPocketEmpty": "No matching conversation to save. Open the chats or enable Record Full Text, then try again."'));
   assert.ok(i18nSource.includes('"toast.historyPocketEmpty": "没有可保存的对话。打开对应聊天，或开启全文记录后再试。"'));
 

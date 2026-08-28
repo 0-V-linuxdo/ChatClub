@@ -33,6 +33,7 @@ function createFakeClock() {
         for (const item of due) item.resolve();
         await Promise.resolve();
         await Promise.resolve();
+        await Promise.resolve();
       }
       nowMs = target;
     },
@@ -48,6 +49,29 @@ async function waitForSleep(clock) {
     await Promise.resolve();
   }
   throw new Error("idle capture scheduler did not park on sleep");
+}
+
+async function settleCapture(clock, done, maxMs = 60_000, step = 1_000) {
+  const started = clock.now();
+  let settled = false;
+  const tracked = Promise.resolve(done).then(
+    (value) => {
+      settled = true;
+      return value;
+    },
+    (error) => {
+      settled = true;
+      throw error;
+    }
+  );
+  while (!settled && clock.now() - started < maxMs) {
+    if (clock.pendingCount) await clock.advance(step);
+    else await new Promise((resolve) => { setTimeout(resolve, 0); });
+  }
+  if (!settled) {
+    throw new Error(`idle capture scheduler did not finish by ${clock.now()}`);
+  }
+  return tracked;
 }
 
 function previewItem(instanceId, prompt, assistant) {
@@ -159,6 +183,8 @@ function previewItem(instanceId, prompt, assistant) {
     assert.equal(collects.some((entry) => entry.key === "fast"), true);
     fingerprints.slow = { ...fingerprints.slow, textLength: 80, tailHash: "stable", containsPrompt: true };
     await clock.advance(30_000);
+    if (!persisted.includes("slow")) await clock.advance(30_000);
+    if (!persisted.includes("slow")) await clock.advance(60_000);
     await done;
     assert.deepEqual(persisted, ["fast", "slow"], "the slower iframe must persist later on its own idle window");
   }
@@ -213,8 +239,7 @@ function previewItem(instanceId, prompt, assistant) {
     });
     const done = scheduler.schedule(prompt);
     await waitForSleep(clock);
-    for (let index = 0; index < 20; index += 1) await clock.advance(1_000);
-    await done;
+    await settleCapture(clock, done);
     assert.equal(collects.length, 3);
     assert.equal(collects[0] >= 4_000, true);
   }
@@ -240,8 +265,7 @@ function previewItem(instanceId, prompt, assistant) {
     });
     const done = scheduler.schedule(prompt);
     await waitForSleep(clock);
-    await clock.advance(8_000);
-    await done;
+    await settleCapture(clock, done);
     assert.equal(collected, true, "the wall cap must still attempt one last collect");
   }
 
@@ -272,8 +296,7 @@ function previewItem(instanceId, prompt, assistant) {
     });
     const done = scheduler.schedule(prompt);
     await waitForSleep(clock);
-    for (let index = 0; index < 12; index += 1) await clock.advance(1_000);
-    await done;
+    await settleCapture(clock, done);
     assert.equal(collects.length, 1);
     assert.equal(collects[0] >= 5_000, true, "a fingerprint change must restart the 30s idle window");
   }
@@ -309,8 +332,7 @@ function previewItem(instanceId, prompt, assistant) {
     });
     const done = scheduler.schedule("", { existing: true });
     await waitForSleep(clock);
-    await clock.advance(5_000);
-    await done;
+    await settleCapture(clock, done);
     assert.deepEqual(persisted, ["one"], "an already-idle iframe must persist without a new send");
   }
 
@@ -338,8 +360,7 @@ function previewItem(instanceId, prompt, assistant) {
     const skipped = await scheduler.schedule("", { existing: true });
     assert.equal(skipped.scheduled, false, "opening a workspace must not cancel an in-flight send capture");
     assert.equal(scheduler.isRunning(), true);
-    await clock.advance(5_000);
-    await send;
+    await settleCapture(clock, send);
     assert.deepEqual(collected, [prompt]);
   }
 
@@ -366,10 +387,38 @@ function previewItem(instanceId, prompt, assistant) {
     await waitForSleep(clock);
     const send = scheduler.schedule(prompt);
     await waitForSleep(clock);
-    await clock.advance(5_000);
-    await Promise.all([existing, send]);
+    await settleCapture(clock, Promise.all([existing, send]));
     assert.deepEqual(collected, [prompt], "a new send must cancel existing-tab idle capture");
   }
+
+  {
+    const clock = createFakeClock();
+    const collects = [];
+    const scheduler = createIdleFullTextCaptureScheduler({
+      now: clock.now,
+      sleep: clock.sleep,
+      idleMs: 4_000,
+      pollMs: 1_000,
+      maxAttempts: 3,
+      wallMs: 60_000,
+      listFrames: () => [{ key: "one" }],
+      getFingerprint: async () => ({ documentId: "one", href: "https://x", childCount: 1, textLength: 8, tailHash: "a", containsPrompt: true }),
+      collectFrame: async () => {
+        collects.push(clock.now());
+        return previewItem("one", prompt, "reply");
+      },
+      itemMatchesPrompt: (item, text) => fullTextMessagesMatchPrompt(item?.page?.messages, text),
+      persistItem: async () => ({ saved: false })
+    });
+    const done = scheduler.schedule(prompt);
+    await waitForSleep(clock);
+    await settleCapture(clock, done);
+    assert.equal(collects.length, 3, "an empty persist result must keep retrying instead of pretending the write succeeded");
+  }
+
+  const idleSource = read("app/summary/idle-capture.js");
+  assert.match(idleSource, /persisted === false \|\| persisted\?\.saved === false/);
+  assert.match(runtime, /historyController\?\.notifyFullTextChanged/);
 
   console.log("fulltext idle capture: ok");
 })().catch((error) => {

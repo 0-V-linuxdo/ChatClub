@@ -942,6 +942,8 @@ const en = {
   "promptHistory.saveToPocket": "Save to Pocket",
   "promptHistory.savedToPocket": "Saved to Pocket",
   "promptHistory.sidebar": "Prompt history",
+  "promptHistory.conversationLoading": "Collecting the matching conversation…",
+  "promptHistory.conversationEmpty": "No matching conversation. Open the chats or enable Record Full Text, then try again.",
 
   "pocket.title": "Pocket",
   "pocket.savedInfo": "Saved Preview conversations with valid user and assistant messages.",
@@ -2214,6 +2216,8 @@ const zh_CN = {
   "promptHistory.saveToPocket": "保存到 Pocket",
   "promptHistory.savedToPocket": "已保存到 Pocket",
   "promptHistory.sidebar": "Prompt 历史",
+  "promptHistory.conversationLoading": "正在采集匹配的对话…",
+  "promptHistory.conversationEmpty": "没有匹配的对话。打开对应聊天，或开启全文记录后再试。",
 
   "pocket.title": "Pocket",
   "pocket.savedInfo": "保存包含有效用户和助手消息的 Preview 对话。",

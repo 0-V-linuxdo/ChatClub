@@ -509,7 +509,11 @@ function ensureSummaryController() {
         framePort: frameRuntimePort,
         formatShortcut: formatActiveShortcut,
         recordFunctionalAnomaly,
-        persistWorkspaceTabFullText: persistWorkspaceTabFullTextFromPreview,
+        persistWorkspaceTabFullText: async (payload) => {
+          const result = await persistWorkspaceTabFullTextFromPreview(payload);
+          if (result?.saved) historyController?.notifyFullTextChanged?.();
+          return result;
+        },
         pocketPort: {
           save: (...args) => ensurePocketController().then((pocket) => pocket.saveSummaryPreviewToPocket(...args)),
           entries: (...args) => pocketController?.pocketEntriesFromSummaryPreview(...args) || []

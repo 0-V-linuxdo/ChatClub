@@ -2,6 +2,7 @@ import { t } from "../../shared/i18n.js";
 import { dateGroupId, groupByDate, timestamp } from "../../shared/date-groups.js";
 import {
   framesFromSummaryPreviewItems,
+  matchesFullTextQuery,
   pocketPairsFromMessages
 } from "../../shared/workspace-tab-fulltext.js";
 
@@ -74,7 +75,9 @@ function promptHistoryTextOverlaps(left, right) {
 }
 
 function promptHistoryPairMatches(pair, item) {
-  return promptHistoryTextOverlaps(pair?.userMessage, item?.text);
+  if (promptHistoryTextOverlaps(pair?.userMessage, item?.text)) return true;
+  const text = promptHistoryMessageKey(item?.text);
+  return Boolean(text) && matchesFullTextQuery(text, [pair?.userMessage, pair?.assistantMessage]);
 }
 
 function matchingMessages(item, messages = []) {
