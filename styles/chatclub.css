@@ -5473,10 +5473,6 @@ body.settings-tab-context-menu-dragging iframe {
   gap: 8px;
 }
 
-.prompt-history-panel-clear {
-  flex: 0 0 auto;
-}
-
 .prompt-history-window-actions {
   grid-column: 3;
   margin-left: auto;

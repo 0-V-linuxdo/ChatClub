@@ -337,6 +337,8 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   );
   assert.match(modelSource, /export function groupPromptHistory/);
   assert.match(panelSource, /viewerModal\(t\("promptHistory\.title"\)/);
+  assert.doesNotMatch(panelSource, /prompt-history-panel-clear/);
+  assert.doesNotMatch(panelSource, /function clearHistory\(/);
   assert.match(panelSource, /function openHistoryPanel/);
   assert.match(panelSource, /class: "ui-dialog prompt-history-dialog"/);
   assert.match(panelSource, /class: "prompt-history-sidebar"/);

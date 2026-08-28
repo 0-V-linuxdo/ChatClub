@@ -72,7 +72,7 @@
   "shared/i18n.js": {
     "maxLines": 2615,
     "target": 1500,
-    "maxBytes": 153003,
+    "maxBytes": 152957,
     "targetBytes": 82000,
     "reason": "Bilingual translation catalog data is kept co-located for key parity; the signed official-rules update-management and component-status views, consent, check, apply-all, compatibility, rollback, per-component source, confirmation and accessibility copy join the committed-reset cleanup warning, queued-send, preferred-model auto-selection overlay settings plus structured model, thinking, All Sources and Effort attempt labels, Workspace appearance subtabs, nested Tab Group right-click menu and ChatClub Tabs hover-button placement settings, prompt-handoff, platform-management labels including custom-platform domain autofill, iframe tab context-menu labels, prompt-history date-group labels, remembered ChatClub-tab sidebar labels including tab count, close-others cleanup, pin/unpin, More, sort modes, folder create/rename/delete, date-group headings and resize copy, Tabs export/import copy, topic-title edit copy, the ChatClub Tabs sidebar shortcut, shortcut-settings search copy, and Prompt History search, loading, and unmatched-conversation copy under exact line and byte ratchets; Share panel and shortcut copy joins the bilingual catalog; the topbar History button and openHistoryPanel shortcut copy join the bilingual catalog; right-click Pocket/History workspace-save toasts join the bilingual catalog; English UI labels DouBao as 豆包（doubao） and Qianwen as 千问（qianwen）; Pocket sidebar and focus-mode tooltip rows share one settings target each; Chinese Pocket chrome defaults to 收藏 with a switchable star/Pocket icon; History workspace-save distinguishes added versus refreshed prompts."
   },

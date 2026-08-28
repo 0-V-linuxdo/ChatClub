@@ -201,12 +201,6 @@ export function createHistoryController(ctx) {
     await save(items().filter((entry) => entry.id !== item.id), redraw, t("toast.promptHistoryDeleted"));
   }
 
-  async function clearHistory(redraw) {
-    if (!items().length || !window.confirm(t("promptHistory.clearConfirm"))) return;
-    activeItemId = "";
-    await save([], redraw, t("toast.promptHistoryCleared"));
-  }
-
   async function saveItemToPocket(item, redraw) {
     if (pocketBusy || !promptHistoryMessageKey(item?.text)) return;
     pocketBusy = true;
@@ -897,13 +891,6 @@ export function createHistoryController(ctx) {
         rowAction(t("promptHistory.insert"), "insert", () => insert(item, close), "", "settings.action.insert"),
         rowAction(t("common.delete"), "trash", () => remove(item, redraw), "danger", "settings.action.delete")
       );
-    }
-    if (items().length) {
-      actions.push(el("button", {
-        class: "button button-secondary prompt-history-panel-clear",
-        type: "button",
-        onclick: () => clearHistory(redraw)
-      }, svgIcon("trash"), el("span", {}, t("promptHistory.clear"))));
     }
     const toggleLabel = historyActionsExpanded ? t("pocket.hideActions") : t("pocket.showActions");
     actions.push(el("button", {

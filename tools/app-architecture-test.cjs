@@ -161,7 +161,7 @@ function appDomain(file) {
       "dedupePocketEntries", "normalizePocketMessage", "pocketEntriesFromMessages", "pocketEntriesFromPages"
     ]],
     ["app/history/controller.js", "createHistoryController", [
-      "insert", "remove", "clearHistory", "headerSearch", "renderHistory", "saveItemToPocket", "sidebar",
+      "insert", "remove", "headerSearch", "renderHistory", "saveItemToPocket", "sidebar",
       "refreshConversationSources", "conversationPages", "conversationTurn", "historyEntryFavicon",
       "historyEntryRow", "historyEntryCluster", "historyLogoUrl", "googleFaviconUrl",
       "applyWorkspacePreview", "syncHistoryModalHeader", "installHistoryPanelHeader", "historyHeaderActions",
