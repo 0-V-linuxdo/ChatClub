@@ -88,7 +88,7 @@ function previewItem({ href, user, assistant, status = "ok", appName = "ChatGPT"
       setHistory: (next) => { history.value = next; },
       workspaceId: () => workspaceId,
       topicTitle: () => "Live desk",
-      notifyHistory: () => { calls.push("notifyHistory"); },
+      notifyHistory: (payload) => { calls.push({ notifyHistory: payload }); },
       toast: (message, kind) => { calls.push({ toast: message, kind }); },
       t: (key, vars = {}) => `${key}:${vars.count ?? ""}`,
       ...overrides
@@ -133,8 +133,13 @@ function previewItem({ href, user, assistant, status = "ok", appName = "ChatGPT"
     assert.equal(result.count, 1);
     assert.equal(history.value[0].text, "Explain closures");
     assert.equal(calls.find((call) => call.persistFullText).persistFullText.workspaceId, workspaceId);
-    assert.ok(calls.includes("notifyHistory"));
+    const notified = calls.find((call) => call.notifyHistory);
+    assert.equal(notified.notifyHistory.persistSaved, true);
+    assert.equal(notified.notifyHistory.items.length, 1);
+    assert.equal(notified.notifyHistory.incomingIds.length, 1);
+    assert.equal(notified.notifyHistory.incomingIds[0], history.value[0].id);
     assert.equal(calls.find((call) => call.toast)?.kind, "success");
+    assert.equal(calls.find((call) => call.toast)?.toast, "toast.historyWorkspaceSaved:1");
   }
 
   {
@@ -146,7 +151,9 @@ function previewItem({ href, user, assistant, status = "ok", appName = "ChatGPT"
     assert.equal(result.saved, true, "History upsert is success even when persist reports saved:false");
     assert.equal(result.persisted, false, "persist {saved:false} must not be treated as persist success");
     assert.equal(history.value[0].text, "Explain closures");
-    assert.equal(calls.filter((call) => call === "notifyHistory").length, 1);
+    assert.equal(calls.filter((call) => call.notifyHistory).length, 1);
+    assert.equal(calls.find((call) => call.notifyHistory).notifyHistory.persistSaved, false);
+    assert.equal(calls.find((call) => call.notifyHistory).notifyHistory.items.length, 1);
   }
 
   {
@@ -156,6 +163,8 @@ function previewItem({ href, user, assistant, status = "ok", appName = "ChatGPT"
     assert.equal(result.source, "fulltext");
     assert.equal(history.value[0].text, "Stored prompt");
     assert.equal(calls.some((call) => call.persistFullText), false, "fallback History must not re-persist stored full text");
+    assert.equal(calls.find((call) => call.notifyHistory).notifyHistory.persistSaved, false);
+    assert.equal(calls.find((call) => call.notifyHistory).notifyHistory.incomingIds[0], history.value[0].id);
   }
 
   {
@@ -170,6 +179,7 @@ function previewItem({ href, user, assistant, status = "ok", appName = "ChatGPT"
     assert.equal(result.saved, false, "persist without user/assistant pairs is not a History save");
     assert.equal(result.persisted, true);
     assert.equal(calls.find((call) => call.toast)?.kind, "error");
+    assert.equal(calls.some((call) => call.notifyHistory), false, "orphan persist must not notify History");
   }
 
   {
@@ -216,6 +226,55 @@ function previewItem({ href, user, assistant, status = "ok", appName = "ChatGPT"
     assert.equal(history.value[1].text, "First");
   }
 
+  {
+    const existingHistory = [{
+      id: "prompt-history-existing",
+      text: "Explain closures",
+      images: [],
+      createdAt: "2026-01-01T00:00:00.000Z"
+    }];
+    const { calls, history, controller } = harness({
+      liveItems: [liveItem],
+      history: existingHistory
+    });
+    const result = await controller.saveToHistory();
+    assert.equal(result.saved, true);
+    assert.equal(result.added, 0);
+    assert.equal(calls.some((call) => call.savePromptSendHistory), false, "identical USER text must refresh without rewriting History rows");
+    assert.equal(history.value[0].id, "prompt-history-existing");
+    assert.equal(calls.find((call) => call.toast)?.toast, "toast.historyWorkspaceRefreshed:1");
+    assert.deepEqual(calls.find((call) => call.notifyHistory).notifyHistory.incomingIds, ["prompt-history-existing"]);
+  }
+
+  {
+    const existingHistory = [{
+      id: "prompt-history-existing",
+      text: "First",
+      images: [],
+      createdAt: "2026-01-01T00:00:00.000Z"
+    }];
+    const mixedTurns = previewItem({
+      href: "https://chatgpt.com/c/mixed",
+      user: "First",
+      assistant: "A"
+    });
+    mixedTurns.page.messages.push(
+      { role: "user", text: "Second" },
+      { role: "assistant", text: "B" }
+    );
+    const { calls, history, controller } = harness({
+      liveItems: [mixedTurns],
+      history: existingHistory
+    });
+    const result = await controller.saveToHistory();
+    assert.equal(result.saved, true);
+    assert.equal(result.added, 1);
+    assert.equal(history.value[0].text, "Second");
+    assert.equal(history.value[1].id, "prompt-history-existing");
+    assert.equal(calls.find((call) => call.toast)?.toast, "toast.historyWorkspaceSaved:1", "mixed add+refresh must toast the added count");
+    assert.equal(calls.find((call) => call.notifyHistory).notifyHistory.incomingIds[0], history.value[0].id);
+  }
+
   assert.match(quickSaveSource, /pocketPagesFromPreviewItems/);
   assert.match(quickSaveSource, /pocketPagesFromWorkspaceFullText/);
   assert.match(quickSaveSource, /persistFullText/);
@@ -245,12 +304,22 @@ function previewItem({ href, user, assistant, status = "ok", appName = "ChatGPT"
   assert.match(functionSource(topbarView, "renderFoldedMenuButton"), /savePocketFromWorkspace/);
   assert.match(functionSource(topbarView, "renderFoldedMenuButton"), /saveHistoryFromWorkspace/);
   assert.match(functionSource(topbarView, "settingsMenuButton"), /oncontextmenu/);
+  assert.match(
+    functionSource(runtimeSource, "topbarWorkspaceQuickSave"),
+    /notifyHistory:\s*\(payload\)\s*=>\s*ensureHistoryController\(\)\.then\(\(history\) => history\?\.notifyWorkspaceSaved\?\.\(payload\)\)\.catch\(\(\) => \{\}\)/
+  );
+  assert.doesNotMatch(
+    functionSource(runtimeSource, "topbarWorkspaceQuickSave"),
+    /historyController\?\.notifyFullTextChanged/
+  );
   assert.ok(i18nSource.includes('"toast.workspacePocketEmpty": "No conversation to save. Wait for the chats to load, then try again."'));
   assert.ok(i18nSource.includes('"toast.workspacePocketEmpty": "没有可保存的对话。等聊天加载完成后再试。"'));
   assert.ok(i18nSource.includes('"toast.workspaceHistoryEmpty": "No conversation to save. Wait for the chats to load, then try again."'));
   assert.ok(i18nSource.includes('"toast.workspaceHistoryEmpty": "没有可保存的对话。等聊天加载完成后再试。"'));
   assert.ok(i18nSource.includes('"toast.historyWorkspaceSaved": "Saved {count} prompt{plural} to History"'));
   assert.ok(i18nSource.includes('"toast.historyWorkspaceSaved": "已保存 {count} 条 Prompt 到历史记录"'));
+  assert.ok(i18nSource.includes('"toast.historyWorkspaceRefreshed": "Refreshed {count} prompt{plural} in History"'));
+  assert.ok(i18nSource.includes('"toast.historyWorkspaceRefreshed": "已刷新历史记录中的 {count} 条 Prompt"'));
 
   console.log("topbar workspace quick save: ok");
 })().catch((error) => {

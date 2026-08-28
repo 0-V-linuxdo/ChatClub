@@ -1088,7 +1088,7 @@ function topbarWorkspaceQuickSave() {
     setHistory: (history) => { state.promptSendHistory = history; },
     workspaceId: () => workspaceSessionStore.workspaceId(),
     topicTitle: () => String(state.topicTitle || "").trim(),
-    notifyHistory: () => historyController?.notifyFullTextChanged?.(),
+    notifyHistory: (payload) => ensureHistoryController().then((history) => history?.notifyWorkspaceSaved?.(payload)).catch(() => {}),
     toast,
     t
   });

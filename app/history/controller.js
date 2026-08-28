@@ -67,6 +67,7 @@ export function createHistoryController(ctx) {
   let livePreviewItems = [];
   let livePreviewTried = false;
   let livePreviewPending = false;
+  let workspacePreviewPinned = false;
   let historyCurrentRedraw = null;
 
   function items() {
@@ -537,15 +538,19 @@ export function createHistoryController(ctx) {
 
   function openHistoryPanel() {
     const existing = document.querySelector(".modal.prompt-history-modal");
+    const pinned = workspacePreviewPinned;
+    workspacePreviewPinned = false;
     if (existing) {
-      refreshOpenHistory({ retryLive: true });
+      refreshOpenHistory({ retryLive: !pinned });
       return existing.closest(".modal-backdrop") || existing.parentElement;
     }
     resetSearch();
-    activeItemId = "";
-    livePreviewItems = [];
-    livePreviewTried = false;
-    livePreviewPending = false;
+    if (!pinned) {
+      activeItemId = "";
+      livePreviewItems = [];
+      livePreviewTried = false;
+      livePreviewPending = false;
+    }
     const host = el("div", { class: "ui-dialog prompt-history-dialog" });
     let dialog;
     const close = () => {
@@ -571,8 +576,34 @@ export function createHistoryController(ctx) {
     refreshOpenHistory({ retryLive: true });
   }
 
+  function applyWorkspacePreview(payload = {}) {
+    const previewItems = Array.isArray(payload.items) ? payload.items : [];
+    if (previewItems.length) {
+      livePreviewItems = previewItems;
+      livePreviewTried = true;
+      livePreviewPending = false;
+    }
+    const incomingIds = Array.isArray(payload.incomingIds) ? payload.incomingIds : [];
+    const history = items();
+    activeItemId = incomingIds.find((id) => history.some((entry) => entry.id === id)) || history[0]?.id || "";
+    workspacePreviewPinned = true;
+  }
+
+  function notifyWorkspaceSaved(payload = {}) {
+    applyWorkspacePreview(payload);
+    if (!historyCurrentRedraw) return;
+    workspacePreviewPinned = false;
+    const redraw = historyCurrentRedraw;
+    if (payload.persistSaved) {
+      refreshFullTextStore().then(redraw).catch(() => redraw());
+      return;
+    }
+    redraw();
+  }
+
   return {
     openHistoryPanel,
-    notifyFullTextChanged
+    notifyFullTextChanged,
+    notifyWorkspaceSaved
   };
 }

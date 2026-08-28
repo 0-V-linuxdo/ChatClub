@@ -38,6 +38,19 @@ function historyEntriesFromPairs(pairs = []) {
   );
 }
 
+function historyText(item) {
+  return String(item?.text || "");
+}
+
+function incomingHistoryIds(history, incoming) {
+  const byText = new Map();
+  for (const item of asList(history)) {
+    const key = historyText(item);
+    if (key && !byText.has(key)) byText.set(key, item.id);
+  }
+  return asList(incoming).map((entry) => byText.get(historyText(entry))).filter(Boolean);
+}
+
 export function createTopbarWorkspaceQuickSave(dependencies = {}) {
   const collectLive = typeof dependencies.collectLive === "function" ? dependencies.collectLive : async () => [];
   const loadFullText = typeof dependencies.loadFullText === "function" ? dependencies.loadFullText : async () => ({});
@@ -139,7 +152,6 @@ export function createTopbarWorkspaceQuickSave(dependencies = {}) {
           }
         }
         const persistSaved = persisted?.saved === true;
-        if (persistSaved) notifyHistory();
         let pairs = pairsFromPreviewItems(items);
         let source = "live";
         if (!pairs.length) {
@@ -151,19 +163,37 @@ export function createTopbarWorkspaceQuickSave(dependencies = {}) {
           toast(t("toast.workspaceHistoryEmpty"), "error");
           return { saved: false, persisted: persistSaved, count: 0, source };
         }
-        const savedHistory = await savePromptSendHistory(
-          normalizePromptSendHistory([...incoming, ...asList(getHistory())])
-        );
+        const existing = asList(getHistory());
+        const existingTexts = new Set(existing.map(historyText).filter(Boolean));
+        const added = incoming.filter((entry) => !existingTexts.has(historyText(entry)));
+        let savedHistory = existing;
+        if (added.length) {
+          savedHistory = await savePromptSendHistory(
+            normalizePromptSendHistory([...added, ...existing])
+          );
+        }
         setHistory(savedHistory);
-        notifyHistory();
-        toast(t("toast.historyWorkspaceSaved", {
-          count: incoming.length,
-          plural: incoming.length === 1 ? "" : "s"
-        }), "success");
+        notifyHistory({
+          items,
+          incomingIds: incomingHistoryIds(savedHistory, incoming),
+          persistSaved
+        });
+        if (added.length) {
+          toast(t("toast.historyWorkspaceSaved", {
+            count: added.length,
+            plural: added.length === 1 ? "" : "s"
+          }), "success");
+        } else {
+          toast(t("toast.historyWorkspaceRefreshed", {
+            count: incoming.length,
+            plural: incoming.length === 1 ? "" : "s"
+          }), "success");
+        }
         return {
           saved: true,
           persisted: persistSaved,
           count: incoming.length,
+          added: added.length,
           source
         };
       } catch (error) {

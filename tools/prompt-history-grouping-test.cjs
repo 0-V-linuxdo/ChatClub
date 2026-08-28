@@ -270,6 +270,13 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   assert.match(panelSource, /function syncHistoryModalTitle/);
   assert.match(panelSource, /function refreshOpenHistory/);
   assert.match(panelSource, /function notifyFullTextChanged/);
+  assert.match(panelSource, /function applyWorkspacePreview/);
+  assert.match(panelSource, /function notifyWorkspaceSaved/);
+  assert.match(panelSource, /workspacePreviewPinned/);
+  assert.match(panelSource, /refreshOpenHistory\(\{ retryLive: !pinned \}\)/);
+  assert.match(panelSource, /if \(!pinned\) \{\s*activeItemId = ""/);
+  assert.match(panelSource, /livePreviewItems = previewItems/);
+  assert.match(panelSource, /incomingIds\.find\(\(id\) => history\.some\(\(entry\) => entry\.id === id\)\)/);
   assert.match(panelSource, /livePreviewTried/);
   assert.match(panelSource, /livePreviewPending/);
   assert.match(panelSource, /retryLive/);
@@ -304,6 +311,14 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   assert.match(runtimeSource, /savePages: \(\.\.\.args\) => ensurePocketController\(\)\.then\(\(pocket\) => pocket\.savePagesToPocket/);
   assert.match(runtimeSource, /collectLive: \(\) => ensureSummaryController\(\)\.then\(\(summary\) => summary\.collectWorkspacePreviewItems/);
   assert.match(runtimeSource, /historyController\?\.notifyFullTextChanged/);
+  assert.match(
+    runtimeSource,
+    /notifyHistory:\s*\(payload\)\s*=>\s*ensureHistoryController\(\)\.then\(\(history\) => history\?\.notifyWorkspaceSaved\?\.\(payload\)\)/
+  );
+  assert.doesNotMatch(
+    runtimeSource,
+    /notifyHistory:\s*\(\)\s*=>\s*historyController\?\.notifyFullTextChanged/
+  );
   assert.ok(i18nSource.includes('"promptHistory.searchPlaceholder": "Search prompts or image names"'));
   assert.ok(i18nSource.includes('"promptHistory.searchPlaceholder": "搜索提示词或图片名"'));
   assert.ok(i18nSource.includes('"promptHistory.searchClear": "Clear search"'));
