@@ -10,6 +10,10 @@ import {
   validateControllerContract
 } from "../controller-contract.js";
 import {
+  uniqueChatFaviconSources,
+  renderChatFaviconStack
+} from "../../ui/favicon.js";
+import {
   groupPromptHistory,
   promptHistoryImageCountLabel,
   promptHistoryItemMatchesSearch,
@@ -29,7 +33,8 @@ export function createHistoryController(ctx) {
     setPromptImages: "function",
     syncPromptInputNode: "function",
     pocketPort: "object?",
-    conversationPort: "object?"
+    conversationPort: "object?",
+    faviconPort: "object?"
   });
   const state = requireControllerContext(ctx, controllerName, "state");
   const svgIcon = requireControllerFunction(ctx, controllerName, "svgIcon");
@@ -37,6 +42,7 @@ export function createHistoryController(ctx) {
   const syncPromptInputNode = requireControllerFunction(ctx, controllerName, "syncPromptInputNode");
   const pocketPort = optionalControllerObject(ctx, "pocketPort");
   const conversationPort = optionalControllerObject(ctx, "conversationPort");
+  const faviconPort = optionalControllerObject(ctx, "faviconPort");
   const pocketDisplayIcon = () => normalizePocketIcon(state.options?.pocketIcon);
   const savePagesToPocket = typeof pocketPort.savePages === "function"
     ? pocketPort.savePages
@@ -304,6 +310,34 @@ export function createHistoryController(ctx) {
     });
   }
 
+  function pageFaviconSources(pages = []) {
+    return uniqueChatFaviconSources(pages, (page) => {
+      const appId = String(page?.appId || "").trim();
+      const app = appId && typeof faviconPort.appById === "function" ? faviconPort.appById(appId) : null;
+      return {
+        href: page?.href || page?.url || "",
+        logoUrl: page?.logoUrl || "",
+        app,
+        appId,
+        title: page?.siteName || page?.name || page?.title || ""
+      };
+    });
+  }
+
+  function pageFavicons(pages = [], stackClass = "") {
+    return renderChatFaviconStack(pageFaviconSources(pages), {
+      appFaviconUrl: faviconPort.app,
+      browserFaviconUrl: faviconPort.browser,
+      fallbackFaviconUrl: faviconPort.fallback,
+      effectiveFaviconUrl: faviconPort.effective,
+      stackClass
+    });
+  }
+
+  function conversationFavicons(item, stackClass = "") {
+    return pageFavicons(conversationPages(item), stackClass);
+  }
+
   function resolveActiveItem(visible) {
     const selected = visible.find((item) => item.id === activeItemId);
     if (selected) return selected;
@@ -316,26 +350,45 @@ export function createHistoryController(ctx) {
     const imageLabel = promptHistoryImageCountLabel(images);
     const preview = promptHistoryPreview(item.text, 80) || imageLabel || t("promptHistory.emptyPrompt");
     const pocketSaved = promptHistoryPocketSaved(item, pocketEntries);
-    return el("button", {
-      class: `prompt-history-sidebar-item${active ? " active" : ""}`,
-      type: "button",
-      "aria-current": active ? "true" : null,
-      onclick: () => {
-        activeItemId = item.id;
-        refreshConversationSources(redraw).catch(() => redraw());
-      }
+    const pocketLabel = pocketSaved ? t("promptHistory.savedToPocket") : t("promptHistory.saveToPocket");
+    return el("div", {
+      class: `prompt-history-sidebar-item${active ? " active" : ""}`
     },
-      el("span", { class: "prompt-history-sidebar-item-top" },
-        el("span", { class: "prompt-history-sidebar-preview" }, preview),
-        pocketSaved
-          ? el("span", {
-            class: "prompt-history-pocket-badge",
-            title: t("promptHistory.savedToPocket"),
-            "aria-label": t("promptHistory.savedToPocket")
-          }, svgIcon(pocketDisplayIcon()))
-          : null
+      el("button", {
+        class: "prompt-history-sidebar-item-focus",
+        type: "button",
+        "aria-current": active ? "true" : null,
+        onclick: () => {
+          activeItemId = item.id;
+          refreshConversationSources(redraw).catch(() => redraw());
+        }
+      },
+        el("span", { class: "prompt-history-sidebar-item-top" },
+          conversationFavicons(item, "prompt-history-sidebar-favicons"),
+          el("span", { class: "prompt-history-sidebar-preview" }, preview)
+        ),
+        el("time", { class: "prompt-history-sidebar-time", datetime: item.createdAt || "" }, promptHistoryTimeLabel(item.createdAt))
       ),
-      el("time", { class: "prompt-history-sidebar-time", datetime: item.createdAt || "" }, promptHistoryTimeLabel(item.createdAt))
+      pocketSaved
+        ? el("span", {
+          class: "prompt-history-pocket-badge",
+          title: pocketLabel,
+          "aria-label": pocketLabel
+        }, svgIcon(pocketDisplayIcon()))
+        : el("button", {
+          class: "icon-button tooltip-trigger prompt-history-sidebar-pocket",
+          type: "button",
+          "aria-label": pocketLabel,
+          "data-tooltip": pocketLabel,
+          "data-tooltip-id": "history.action.pocket",
+          disabled: pocketBusy || !promptHistoryMessageKey(item?.text),
+          onclick: (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            activeItemId = item.id;
+            saveItemToPocket(item, redraw);
+          }
+        }, svgIcon(pocketDisplayIcon()))
     );
   }
 
@@ -384,6 +437,7 @@ export function createHistoryController(ctx) {
     return el("section", { class: "prompt-history-conversation" },
       label || page.href
         ? el("header", { class: "prompt-history-conversation-head" },
+          pageFavicons([page], "prompt-history-conversation-favicons"),
           label ? el("strong", {}, label) : null,
           page.href ? el("span", { class: "prompt-history-conversation-url" }, page.href) : null
         )

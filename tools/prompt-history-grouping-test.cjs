@@ -259,7 +259,11 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   assert.match(panelSource, /class: "ui-dialog prompt-history-dialog"/);
   assert.match(panelSource, /class: "prompt-history-sidebar"/);
   assert.match(panelSource, /class: "prompt-history-pocket-badge"/);
+  assert.match(panelSource, /prompt-history-sidebar-pocket/);
   assert.match(panelSource, /"data-tooltip-id": "history\.action\.pocket"/);
+  assert.match(panelSource, /conversationFavicons/);
+  assert.match(panelSource, /pageFavicons/);
+  assert.match(panelSource, /from "\.\.\/\.\.\/ui\/favicon\.js"/);
   assert.match(panelSource, /function saveItemToPocket/);
   assert.match(panelSource, /function refreshFullTextStore/);
   assert.match(panelSource, /function refreshConversationSources/);
@@ -287,6 +291,8 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
     stylesheetSource,
     /\.prompt-history-conversations\s*\{/
   );
+  assert.match(stylesheetSource, /\.prompt-history-sidebar-pocket/);
+  assert.match(stylesheetSource, /\.chat-favicon-stack/);
   assert.match(stylesheetSource, /\.prompt-history-turn-text\s*\{/);
   assert.match(stylesheetSource, /\.prompt-history-detail-fallback\s*\{/);
   assert.match(stylesheetSource, /\.prompt-history-detail-status\s*\{/);

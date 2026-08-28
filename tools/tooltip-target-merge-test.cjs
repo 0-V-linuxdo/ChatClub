@@ -104,6 +104,7 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
 
   const pinSource = read("app/workspace/tabs-sidebar-item.js");
   assert.match(pinSource, /tooltipId: "workspace\.tabs\.pin"/);
+  assert.match(pinSource, /tooltipId: "workspace\.tabs\.pocket"/);
   assert.doesNotMatch(pinSource, /"workspace\.tabs\.unpin" : "workspace\.tabs\.pin"/);
 
   assert.equal(

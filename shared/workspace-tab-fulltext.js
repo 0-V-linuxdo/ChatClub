@@ -249,3 +249,29 @@ export function searchWorkspaceTabFullTextHits(store, query, items = []) {
 export function workspaceIdsMatchingFullText(store, query) {
   return [...new Set(searchWorkspaceTabFullTextHits(store, query).map((hit) => hit.workspaceId))];
 }
+
+function frameToPocketPage(frame = {}) {
+  const href = textValue(frame.href);
+  if (!href || !fullTextMessagesHavePair(frame.messages)) return null;
+  return {
+    href,
+    url: href,
+    title: frame.title,
+    pageTitle: frame.title,
+    siteName: frame.appName,
+    name: frame.appName,
+    appId: frame.appId,
+    instanceId: frame.instanceId,
+    messages: frame.messages
+  };
+}
+
+export function pocketPagesFromWorkspaceFullText(store, workspaceId) {
+  const id = normalizeWorkspaceSessionId(workspaceId);
+  const record = id ? normalizeWorkspaceTabFullTextStore(store)[id] : null;
+  return (record?.frames || []).map((frame) => frameToPocketPage(frame)).filter(Boolean);
+}
+
+export function pocketPagesFromPreviewItems(items = []) {
+  return framesFromSummaryPreviewItems(items).map((frame) => frameToPocketPage(frame)).filter(Boolean);
+}

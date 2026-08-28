@@ -31,6 +31,12 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   assert.match(iconsSource, /\bstar:\s*\{/);
   assert.match(appearanceSource, /pocketIconControl/);
   assert.match(appearanceSource, /appearance-pocket-icon-options/);
+  const pocketSource = fs.readFileSync(path.join(root, "app/pocket/controller.js"), "utf8");
+  const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"), "utf8");
+  assert.match(pocketSource, /pocket-group-favicons/);
+  assert.match(pocketSource, /from "\.\.\/\.\.\/ui\/favicon\.js"/);
+  assert.match(stylesheetSource, /\.pocket-group-head/);
+  assert.match(stylesheetSource, /\.chat-favicon-stack/);
 
   i18n.setLanguage("zh_CN");
   assert.equal(i18n.t("topbar.pocket"), "收藏");

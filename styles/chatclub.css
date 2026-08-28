@@ -638,10 +638,14 @@ button { cursor: pointer; }
 .workspace-tabs-sidebar-item-index {
   flex-shrink: 0;
   min-width: 1.5em;
-  margin-right: 8px;
+  margin-right: 6px;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   color: var(--muted);
+}
+
+.workspace-tabs-sidebar-item-favicons {
+  margin-right: 6px;
 }
 
 .workspace-tabs-sidebar-item.is-pinned .workspace-tabs-sidebar-item-index {
@@ -714,6 +718,7 @@ button { cursor: pointer; }
 .workspace-tabs-sidebar-item-edit,
 .workspace-tabs-sidebar-item-delete,
 .workspace-tabs-sidebar-item-pin,
+.workspace-tabs-sidebar-item-pocket,
 .workspace-tabs-sidebar-item-more,
 .workspace-tabs-sidebar-item-edit-cancel,
 .workspace-tabs-sidebar-item-edit-save {
@@ -750,7 +755,9 @@ button { cursor: pointer; }
 
 .workspace-tabs-sidebar-item-pin:hover,
 .workspace-tabs-sidebar-item-pin:focus-visible,
-.workspace-tabs-sidebar-item-pin.is-pinned {
+.workspace-tabs-sidebar-item-pin.is-pinned,
+.workspace-tabs-sidebar-item-pocket:hover,
+.workspace-tabs-sidebar-item-pocket:focus-visible {
   color: var(--primary);
 }
 
@@ -2641,6 +2648,46 @@ button { cursor: pointer; }
 
 .tab-favicon[hidden] {
   display: none;
+}
+
+.chat-favicon-stack {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.chat-favicon-stack-item {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  object-fit: contain;
+  background: var(--panel);
+  box-shadow: 0 0 0 1px var(--bg);
+  flex: 0 0 auto;
+}
+
+.chat-favicon-stack-item + .chat-favicon-stack-item,
+.chat-favicon-stack-item + .chat-favicon-stack-more {
+  margin-left: -6px;
+}
+
+.chat-favicon-stack-item[hidden] {
+  display: none;
+}
+
+.chat-favicon-stack-more {
+  display: inline-grid;
+  place-items: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--panel-2) 88%, var(--bg));
+  box-shadow: 0 0 0 1px var(--bg);
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 750;
+  line-height: 1;
 }
 
 .tab-label {
@@ -5385,20 +5432,20 @@ body.settings-tab-context-menu-dragging iframe {
   appearance: none;
   width: 100%;
   min-width: 0;
-  display: grid;
+  display: flex;
+  align-items: flex-start;
   gap: 4px;
   padding: 10px;
   border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
   color: var(--muted);
-  cursor: pointer;
   font: inherit;
-  text-align: left;
 }
 
 .prompt-history-sidebar-item:hover,
-.prompt-history-sidebar-item:focus-visible {
+.prompt-history-sidebar-item:focus-visible,
+.prompt-history-sidebar-item:has(:focus-visible) {
   border-color: var(--line);
   background: color-mix(in srgb, var(--panel-2) 86%, var(--bg));
   color: var(--text);
@@ -5410,11 +5457,31 @@ body.settings-tab-context-menu-dragging iframe {
   color: var(--text);
 }
 
+.prompt-history-sidebar-item-focus {
+  appearance: none;
+  min-width: 0;
+  flex: 1 1 auto;
+  display: grid;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
 .prompt-history-sidebar-item-top {
   min-width: 0;
   display: flex;
   align-items: flex-start;
   gap: 8px;
+}
+
+.prompt-history-sidebar-favicons,
+.prompt-history-conversation-favicons {
+  margin-top: 2px;
 }
 
 .prompt-history-sidebar-preview {
@@ -5430,19 +5497,26 @@ body.settings-tab-context-menu-dragging iframe {
   -webkit-box-orient: vertical;
 }
 
-.prompt-history-pocket-badge {
+.prompt-history-pocket-badge,
+.prompt-history-sidebar-pocket {
   flex: 0 0 auto;
   display: inline-grid;
   place-items: center;
-  width: 18px;
-  height: 18px;
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
   color: var(--primary);
 }
 
 .prompt-history-pocket-badge svg,
-.prompt-history-pocket-badge .svg-icon {
+.prompt-history-pocket-badge .svg-icon,
+.prompt-history-sidebar-pocket .svg-icon {
   width: 14px;
   height: 14px;
+}
+
+.prompt-history-sidebar-pocket:disabled {
+  opacity: 0.45;
 }
 
 .prompt-history-sidebar-time {
@@ -5573,8 +5647,10 @@ body.settings-tab-context-menu-dragging iframe {
 
 .prompt-history-conversation-head {
   min-width: 0;
-  display: grid;
-  gap: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
 }
 
 .prompt-history-conversation-head strong {
@@ -5989,6 +6065,17 @@ body.settings-tab-context-menu-dragging iframe {
   border-color: color-mix(in srgb, var(--primary) 48%, var(--line));
   background: color-mix(in srgb, var(--primary) 14%, var(--panel));
   color: var(--text);
+}
+
+.pocket-group-head {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.pocket-group-favicons {
+  margin-top: 2px;
 }
 
 .pocket-group-question {

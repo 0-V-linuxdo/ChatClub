@@ -10,7 +10,7 @@ import {
 } from "./notion-efforts.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-08-28｜15:16:40」";
+export const APP_VERSION = "「2026-08-28｜15:36:20」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -191,6 +191,7 @@ export const TAB_GROUP_BUTTON_ORDER_MIGRATION_VERSION = 1;
 
 export const TABS_SIDEBAR_HOVER_BUTTONS = Object.freeze([
   { id: "pin", icon: "pin", defaultPlacement: "pinned" },
+  { id: "pocket", icon: "star", defaultPlacement: "pinned" },
   { id: "edit", icon: "edit", defaultPlacement: "pinned" },
   { id: "delete", icon: "trash", defaultPlacement: "pinned", danger: true },
   { id: "more", icon: "more", requiredPinned: true, defaultPlacement: "pinned" }
@@ -274,6 +275,7 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
       Object.freeze({ id: "workspace.tab.close", labelKey: "common.close" }),
       Object.freeze({ id: "workspace.tab.context.close", labelKey: "chat.closeTab" }),
       Object.freeze({ id: "workspace.tabs.pin", labelKey: "workspace.tabs.pin" }),
+      Object.freeze({ id: "workspace.tabs.pocket", labelKey: "workspace.tabs.pocket" }),
       Object.freeze({ id: "workspace.tabs.edit", labelKey: "workspace.tabs.edit" }),
       Object.freeze({ id: "workspace.tabs.delete", labelKey: "workspace.tabs.delete" }),
       Object.freeze({ id: "workspace.tabs.more", labelKey: "chat.more" }),

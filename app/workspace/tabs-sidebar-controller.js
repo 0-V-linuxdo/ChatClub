@@ -1,6 +1,10 @@
 import { t } from "../../shared/i18n.js";
 import { isGenericTopicTitle, sanitizeTopicTitle } from "../../shared/topic-title.js";
 import { workspaceSessionWorkspaceId } from "../../shared/workspace-session.js";
+import {
+  pocketPagesFromPreviewItems,
+  pocketPagesFromWorkspaceFullText
+} from "../../shared/workspace-tab-fulltext.js";
 import { createMenuButton } from "../../ui/components.js";
 import {
   button,
@@ -41,6 +45,10 @@ import {
   renderTabsSidebarGroup,
   renderTabsSidebarItem
 } from "./tabs-sidebar-item.js";
+import {
+  uniqueChatFaviconSources,
+  renderChatFaviconStack
+} from "../../ui/favicon.js";
 import {
   buildSidebarTree,
   folderIdForItem,
@@ -177,6 +185,12 @@ export function createWorkspaceTabsSidebarController({
   closeCurrentTab,
   canDismiss,
   getOptions = () => ({}),
+  appFaviconUrl,
+  browserFaviconUrl,
+  fallbackFaviconUrl,
+  effectiveFaviconUrl,
+  savePagesToPocket,
+  collectLivePreview,
   document: ownerDocument = globalThis.document,
   confirmationModal = defaultConfirmationModal,
   createIcon = createSvgIcon
@@ -210,12 +224,14 @@ export function createWorkspaceTabsSidebarController({
   let fullTextStore = {};
   let fullTextLoad = null;
   let sortMenuCleanup = null;
+  let pocketBusy = false;
 
   const hover = createTabsSidebarHoverMenu({
     ownerDocument,
     createIcon,
     getOptions,
     onPin: (item) => togglePin(item),
+    onPocket: (item) => saveTabToPocket(item).catch(() => {}),
     onEdit: (item, row) => startTitleEditor(item, row),
     onDelete: (item) => openDeleteConfirmation(item)
   });
@@ -533,6 +549,51 @@ export function createWorkspaceTabsSidebarController({
     } catch (error) {
       toast(t("toast.workspaceTabTitleFailed"), "error");
       throw error;
+    }
+  }
+
+  function itemFaviconSources(item = {}) {
+    const ids = Array.isArray(item.appIds) ? item.appIds : [];
+    return uniqueChatFaviconSources(ids, (appId) => {
+      const app = typeof appById === "function" ? appById(appId) : { id: appId };
+      const title = typeof inferAppName === "function"
+        ? String(inferAppName(app) || "").trim() || appId
+        : appId;
+      return { app, appId, href: app?.url || "", title };
+    });
+  }
+
+  function itemFavicons(item = {}) {
+    return renderChatFaviconStack(itemFaviconSources(item), {
+      appFaviconUrl,
+      browserFaviconUrl,
+      fallbackFaviconUrl,
+      effectiveFaviconUrl,
+      stackClass: "workspace-tabs-sidebar-item-favicons"
+    });
+  }
+
+  async function saveTabToPocket(item = {}) {
+    if (pocketBusy || typeof savePagesToPocket !== "function") return { saved: false, count: 0 };
+    const workspaceId = workspaceIdValue(item.workspaceId);
+    if (!workspaceId) return { saved: false, count: 0 };
+    pocketBusy = true;
+    try {
+      let pages = pocketPagesFromWorkspaceFullText(fullTextStore, workspaceId);
+      if (!pages.length && item.current === true && typeof collectLivePreview === "function") {
+        pages = pocketPagesFromPreviewItems(await collectLivePreview());
+      }
+      if (!pages.length) {
+        toast(t("toast.tabsPocketEmpty"), "error");
+        return { saved: false, count: 0 };
+      }
+      return await savePagesToPocket(pages);
+    } catch (error) {
+      console.warn("[ChatClub] Failed to save ChatClub tab to Pocket", error);
+      toast(t("toast.noValidPocketContent"), "error");
+      return { saved: false, count: 0 };
+    } finally {
+      pocketBusy = false;
     }
   }
 
@@ -1175,6 +1236,7 @@ export function createWorkspaceTabsSidebarController({
       item,
       index,
       label: itemLabel(item, index),
+      favicons: itemFavicons(item),
       createIcon,
       suppressActivate: () => {
         if (!suppressActivate) return false;
@@ -1522,6 +1584,7 @@ export function createWorkspaceTabsSidebarController({
     saveTabTitle,
     closeOtherLiveTabs,
     forgetTab,
+    saveTabToPocket,
     openTitleEditor,
     openDeleteConfirmation,
     moveTab,

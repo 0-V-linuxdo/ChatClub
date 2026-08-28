@@ -339,7 +339,31 @@ globalThis.document = {
       toast: (message, kind) => { toasts.push({ message, kind }); },
       render: () => { renders += 1; },
       inferAppName: (app) => app?.name || app?.id || "",
-      appById: (id) => ({ id, name: id }),
+      appById: (id) => ({ id, name: id, url: `https://${String(id || "app").toLowerCase()}.example/` }),
+      appFaviconUrl: (app) => app?.url ? `${app.url}favicon.ico` : "",
+      fallbackFaviconUrl: (app) => `data:fallback/${app?.id || "app"}`,
+      browserFaviconUrl: () => "",
+      effectiveFaviconUrl: (href, logoUrl) => logoUrl || href || "",
+      savePagesToPocket: async (pages) => {
+        calls.push({ action: "savePagesToPocket", payload: { pages } });
+        return { saved: true, count: (pages || []).length };
+      },
+      collectLivePreview: async () => {
+        calls.push({ action: "collectLivePreview" });
+        return [{
+          status: "ok",
+          siteName: "ChatGPT",
+          href: "https://chatgpt.com/c/1",
+          page: {
+            href: "https://chatgpt.com/c/1",
+            title: "ChatGPT",
+            messages: [
+              { role: "user", text: "Hello" },
+              { role: "assistant", text: "Hi" }
+            ]
+          }
+        }];
+      },
       sessionStorage,
       localStorage,
       canDismiss: () => dismissable,
@@ -440,6 +464,10 @@ globalThis.document = {
     assert.deepEqual(indexes.map((node) => nodeText(node)), ["1", "2", "1"], "live and closed tabs must number separately");
     const pinButtons = descendants(sidebar).filter((node) => node.classList.contains("workspace-tabs-sidebar-item-pin"));
     assert.equal(pinButtons.length, 3, "every ChatClub tab row must expose a pin control");
+    const pocketButtons = descendants(sidebar).filter((node) => String(node.className || "").includes("workspace-tabs-sidebar-item-pocket"));
+    assert.equal(pocketButtons.length, 3, "every ChatClub tab row must expose a save-to-Pocket control");
+    const favicons = descendants(sidebar).filter((node) => node.classList.contains("chat-favicon-stack"));
+    assert.equal(favicons.length, 3, "every ChatClub tab row must show chat favicons");
     assert.equal(
       descendants(sidebar).filter((node) => String(node.className || "").includes("workspace-tabs-sidebar-item-more")).length,
       0,
@@ -1130,8 +1158,8 @@ globalThis.document = {
   {
     const fixture = controller({
       getOptions: () => ({
-        tabsSidebarButtonPlacement: { pin: "hidden", edit: "hidden", delete: "hidden", more: "pinned" },
-        tabsSidebarButtonOrder: ["pin", "edit", "delete"]
+        tabsSidebarButtonPlacement: { pin: "hidden", edit: "hidden", delete: "hidden", pocket: "hidden", more: "pinned" },
+        tabsSidebarButtonOrder: ["pin", "edit", "delete", "pocket"]
       })
     });
     await fixture.api.refresh();
@@ -1177,6 +1205,25 @@ globalThis.document = {
       .filter((node) => node.classList.contains("workspace-tabs-sidebar-item-label"))
       .map((node) => nodeText(node));
     assert.deepEqual(nameLabels, [...nameLabels].sort((left, right) => left.localeCompare(right, undefined, { sensitivity: "base" })));
+  }
+
+  {
+    const fixture = controller();
+    await fixture.api.refresh();
+    fixture.api.setOpen(true);
+    const sidebar = fixture.api.renderSidebar();
+    const pocketButton = descendants(sidebar).find((node) => String(node.className || "").includes("workspace-tabs-sidebar-item-pocket"));
+    assert.ok(pocketButton, "ChatClub Tabs must expose one-click Pocket");
+    const current = fixture.api.currentItems().find((item) => item.current);
+    const result = await fixture.api.saveTabToPocket(current);
+    assert.equal(result.saved, true);
+    assert.ok(
+      fixture.calls.some((call) => call.action === "collectLivePreview"),
+      "the current tab must collect live conversation turns when full text is empty"
+    );
+    const saved = fixture.calls.find((call) => call.action === "savePagesToPocket");
+    assert.ok(saved, "one-click Pocket must save conversation pages");
+    assert.equal(saved.payload.pages[0].href, "https://chatgpt.com/c/1");
   }
 
   {

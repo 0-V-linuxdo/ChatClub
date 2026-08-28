@@ -1,6 +1,7 @@
 import { t } from "../../shared/i18n.js";
 import { TABS_SIDEBAR_HOVER_BUTTONS } from "../../shared/constants.js";
 import {
+  normalizePocketIcon,
   normalizeTabsSidebarButtonOrder,
   normalizeTabsSidebarButtonPlacement
 } from "../../shared/storage-schema.js";
@@ -34,6 +35,7 @@ export function createTabsSidebarHoverMenu({
   createIcon,
   getOptions,
   onPin,
+  onPocket,
   onEdit,
   onDelete
 }) {
@@ -51,6 +53,10 @@ export function createTabsSidebarHoverMenu({
       ?.forEach?.((node) => node.setAttribute?.("aria-expanded", "false"));
   }
 
+  function pocketIconName() {
+    return normalizePocketIcon(typeof getOptions === "function" ? getOptions()?.pocketIcon : "");
+  }
+
   function hoverMenuButton(id, item, row) {
     const resolveRow = (event) => event?.currentTarget?.closest?.(".workspace-tabs-sidebar-item") || row;
     if (id === "pin") {
@@ -64,6 +70,17 @@ export function createTabsSidebarHoverMenu({
         },
         tooltipLabel: pinLabel,
         tooltipId: "workspace.tabs.pin"
+      });
+    }
+    if (id === "pocket") {
+      return createMenuButton({
+        label: t("workspace.tabs.pocket"),
+        icon: createIcon(pocketIconName()),
+        onClick: () => {
+          closeHoverMenu();
+          onPocket(item);
+        },
+        tooltipId: "workspace.tabs.pocket"
       });
     }
     if (id === "edit") {
@@ -170,6 +187,21 @@ export function createTabsSidebarHoverMenu({
       pinButton.setAttribute?.("aria-pressed", item.pinned ? "true" : "false");
       return pinButton;
     }
+    if (id === "pocket") {
+      return iconButton(
+        t("workspace.tabs.pocket"),
+        createIcon(pocketIconName()),
+        (event) => {
+          event?.preventDefault?.();
+          event?.stopPropagation?.();
+          onPocket(item);
+        },
+        "workspace-tabs-sidebar-item-pocket",
+        t("workspace.tabs.pocket"),
+        "",
+        "workspace.tabs.pocket"
+      );
+    }
     if (id === "edit") {
       return iconButton(
         t("workspace.tabs.edit"),
@@ -239,6 +271,7 @@ export function renderTabsSidebarItem({
   item,
   index,
   label,
+  favicons = null,
   createIcon,
   suppressActivate,
   activateTab,
@@ -274,6 +307,7 @@ export function renderTabsSidebarItem({
       }
     },
       el("span", { class: "workspace-tabs-sidebar-item-index" }, String(index + 1)),
+      favicons,
       item.pinned
         ? el("span", {
           class: "workspace-tabs-sidebar-item-pin-mark",

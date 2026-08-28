@@ -4,6 +4,10 @@ import { clear, el, toast, viewerModal } from "../../ui/dom.js";
 import { requireControllerContext, requireControllerFunction, validateControllerContract } from "../controller-contract.js";
 import { renderMarkdown } from "../summary/markdown.js";
 import {
+  uniqueChatFaviconSources,
+  renderChatFaviconStack
+} from "../../ui/favicon.js";
+import {
   summaryPreviewPage,
   summaryPreviewStatus,
   summarySourceMeta
@@ -850,6 +854,18 @@ export function createPocketController(ctx) {
 
   function pocketSidebarItem(batch, activeBatch, redraw) {
     const active = batch.id === activeBatch?.id;
+    const favicons = renderChatFaviconStack(
+      uniqueChatFaviconSources(batch.entries || [], (entry) => ({
+        href: entry.chatUrl,
+        logoUrl: entry.logoUrl,
+        appId: entry.appId,
+        title: entry.appName || entry.title
+      })),
+      {
+        effectiveFaviconUrl,
+        stackClass: "pocket-group-favicons"
+      }
+    );
     return el("button", {
       class: `pocket-group-button${active ? " active" : ""}`,
       type: "button",
@@ -861,7 +877,10 @@ export function createPocketController(ctx) {
         redraw();
       }
     },
-      el("span", { class: "pocket-group-question" }, pocketBatchQuestion(batch)),
+      el("span", { class: "pocket-group-head" },
+        favicons,
+        el("span", { class: "pocket-group-question" }, pocketBatchQuestion(batch))
+      ),
       el("span", { class: "pocket-group-time" }, pocketBatchTitle(batch)),
       el("span", { class: "pocket-group-meta" }, pocketBatchMeta(batch))
     );

@@ -6,7 +6,8 @@ import {
   normalizeTabGroupButtonOrder,
   normalizeTabGroupButtonPlacement,
   normalizeTabsSidebarButtonOrder,
-  normalizeTabsSidebarButtonPlacement
+  normalizeTabsSidebarButtonPlacement,
+  normalizePocketIcon
 } from "../../shared/storage-schema.js";
 import { el } from "../../ui/dom.js";
 import { cleanupSettingsDragRows, createSettingsKit } from "./kit.js";
@@ -62,6 +63,7 @@ export function createAppearanceTabGroupController(dependencies = {}) {
 
   const tabsSidebarButtonLabel = (id) => ({
     pin: t("workspace.tabs.pin"),
+    pocket: t("workspace.tabs.pocket"),
     edit: t("workspace.tabs.edit"),
     delete: t("workspace.tabs.delete"),
     more: t("chat.more")
@@ -384,7 +386,9 @@ export function createAppearanceTabGroupController(dependencies = {}) {
       ondragend: cleanupDrag
     },
       settingsDragHandle(label),
-      el("span", { class: iconClass, "aria-hidden": "true" }, svgIcon(item.icon)),
+      el("span", { class: iconClass, "aria-hidden": "true" }, svgIcon(
+        item.id === "pocket" ? normalizePocketIcon(state.options?.pocketIcon) : item.icon
+      )),
       el("span", { class: copyClass }, el("strong", {}, label))
     );
   }

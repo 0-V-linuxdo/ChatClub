@@ -15,6 +15,8 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   assert.match(i18nSource, /"appearance\.tabsSidebar": "ChatClub 标签页"/);
   assert.match(i18nSource, /"workspace\.tabs\.more": "More"/);
   assert.match(i18nSource, /"workspace\.tabs\.more": "更多"/);
+  assert.match(i18nSource, /"workspace\.tabs\.pocket": "Save to Pocket"/);
+  assert.match(i18nSource, /"workspace\.tabs\.pocket": "保存到收藏"/);
   const appearanceSource = read("app/settings/appearance.js");
   const tabGroupSource = read("app/settings/appearance-tab-group.js");
   const statePortsSource = read("app/settings/state-ports.js");
@@ -28,6 +30,7 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
 
   assert.match(constantsSource, /TABS_SIDEBAR_HOVER_BUTTONS/);
   assert.match(constantsSource, /id: "pin"/);
+  assert.match(constantsSource, /id: "pocket"/);
   assert.match(constantsSource, /id: "edit"/);
   assert.match(constantsSource, /id: "delete"/);
   assert.match(constantsSource, /id: "more"[\s\S]*requiredPinned: true/);
@@ -69,10 +72,10 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   } = await import(moduleUrl("shared/constants.js"));
 
   assert.deepEqual(normalizeTabsSidebarButtonOrder(), [...DEFAULT_TABS_SIDEBAR_BUTTON_ORDER]);
-  assert.deepEqual(normalizeTabsSidebarButtonOrder(["delete", "pin", "edit", "pin", "more"]), ["delete", "pin", "edit"]);
+  assert.deepEqual(normalizeTabsSidebarButtonOrder(["delete", "pin", "edit", "pin", "more"]), ["delete", "pin", "edit", "pocket"]);
   assert.deepEqual(
     normalizeTabsSidebarButtonPlacement({ pin: "menu", edit: "hidden", delete: "nope", more: "hidden" }),
-    { pin: "menu", edit: "hidden", delete: "pinned", more: "pinned" }
+    { pin: "menu", pocket: "pinned", edit: "hidden", delete: "pinned", more: "pinned" }
   );
   const normalized = normalizeOptions({
     tabsSidebarButtonPlacement: { pin: "menu", edit: "menu" },

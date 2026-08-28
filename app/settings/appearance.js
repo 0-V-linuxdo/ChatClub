@@ -564,6 +564,7 @@ export function createAppearanceSettingsSection(ctx) {
       "workspace.tab.close": "x",
       "workspace.tab.context.close": "x",
       "workspace.tabs.pin": "pin",
+      "workspace.tabs.pocket": selectedPocketIcon,
       "workspace.tabs.edit": "edit",
       "workspace.tabs.delete": "trash",
       "workspace.tabs.more": "more",

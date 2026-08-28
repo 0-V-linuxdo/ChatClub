@@ -15,6 +15,8 @@ const root = path.resolve(__dirname, "..");
     matchesFullTextQuery,
     mergeWorkspaceTabFullTextFrames,
     normalizeWorkspaceTabFullTextStore,
+    pocketPagesFromPreviewItems,
+    pocketPagesFromWorkspaceFullText,
     pocketPairsFromMessages,
     removeWorkspaceTabFullText,
     searchWorkspaceTabFullTextHits,
@@ -51,6 +53,15 @@ const root = path.resolve(__dirname, "..");
     frames
   });
   assert.equal(store[workspaceId].frames[0].appName, "ChatGPT");
+  const pocketPages = pocketPagesFromWorkspaceFullText(store, workspaceId);
+  assert.equal(pocketPages.length, 1);
+  assert.equal(pocketPages[0].href, "https://chatgpt.com/c/1");
+  assert.equal(pocketPagesFromPreviewItems([{
+    status: "ok",
+    appId: "ChatGPT",
+    href: "https://chatgpt.com/c/1",
+    page: { href: "https://chatgpt.com/c/1", messages }
+  }])[0].appId, "ChatGPT");
   assert.equal(matchesFullTextQuery("claude", ["Claude is stronger at long documents."]), true);
   assert.deepEqual(workspaceIdsMatchingFullText(store, "long documents"), [workspaceId]);
   const hits = searchWorkspaceTabFullTextHits(store, "Claude", [

@@ -356,7 +356,13 @@ const workspaceTabsSidebarController = attachWorkspaceTabsSidebarController({
   currentWorkspace: () => ({ layoutName: state.temporaryLayoutPreset?.name || "", groups: state.groups, topicTitle: state.topicTitle }),
   setCurrentTabTitle: (title) => workspaceTopicTitleController.setCustomTitle(title),
   canDismiss: () => !state.summaryOpen && !state.shareOpen && !hasForegroundOverlay(),
-  getOptions: () => state.options
+  getOptions: () => state.options,
+  appFaviconUrl,
+  browserFaviconUrl,
+  fallbackFaviconUrl,
+  effectiveFaviconUrl,
+  savePagesToPocket: (...args) => ensurePocketController().then((pocket) => pocket.savePagesToPocket(...args)),
+  collectLivePreview: () => ensureSummaryController().then((summary) => summary.collectWorkspacePreviewItems())
 });
 const {
   renderRuntimeBootstrapFailure,
@@ -473,6 +479,13 @@ function ensureHistoryController() {
           conversationPort: {
             loadFullText: () => loadWorkspaceTabFullTextStore(),
             collectLive: () => ensureSummaryController().then((summary) => summary.collectWorkspacePreviewItems())
+          },
+          faviconPort: {
+            app: appFaviconUrl,
+            browser: browserFaviconUrl,
+            fallback: fallbackFaviconUrl,
+            effective: effectiveFaviconUrl,
+            appById
           }
         });
         return historyController;
