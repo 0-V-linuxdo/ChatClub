@@ -912,7 +912,7 @@ export function createHistoryController(ctx) {
     return el("div", { class: "prompt-history-header-actions" }, ...actions);
   }
 
-  function detail(item, host) {
+  function detail(item) {
     const images = Array.isArray(item.images) ? item.images : [];
     const imageLabel = promptHistoryImageCountLabel(images);
     const entries = promptHistoryConversationEntries(item, {
@@ -922,11 +922,7 @@ export function createHistoryController(ctx) {
     });
     const clusters = promptHistoryEntryClusters(entries);
     const loading = !entries.length && (livePreviewPending || !livePreviewTried);
-    const size = applyHistoryCardSize(host);
     return el("article", { class: "prompt-history-detail" },
-      historyActionsExpanded
-        ? el("section", { class: "pocket-active-header" }, historySizeControls(host, size))
-        : null,
       entries.length
         ? el("div", { class: "prompt-history-conversation-clusters" }, clusters.map((cluster) => historyEntryCluster(cluster)))
         : el("div", {
@@ -960,8 +956,13 @@ export function createHistoryController(ctx) {
       },
         focusMode || sidebarCollapsed ? null : sidebar(visible, activeItem, redraw),
         el("main", { class: "prompt-history-main" },
+          historyActionsExpanded && activeItem
+            ? el("section", { class: "pocket-active-header" },
+              el("div", { class: "pocket-actions-panel" }, historySizeControls(host, applyHistoryCardSize(host)))
+            )
+            : null,
           activeItem
-            ? detail(activeItem, host)
+            ? detail(activeItem)
             : el("div", { class: "ui-empty-state prompt-history-main-empty" }, t(searching ? "promptHistory.searchEmpty" : "promptHistory.noHistory"))
         )
       )

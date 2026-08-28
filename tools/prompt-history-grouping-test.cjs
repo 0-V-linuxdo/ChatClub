@@ -392,6 +392,7 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   assert.match(panelSource, /toggleHistoryPanelFullscreen/);
   assert.match(panelSource, /toggleHistoryPanelFocusMode/);
   assert.match(panelSource, /pocket\.cardHeight/);
+  assert.match(panelSource, /pocket-actions-panel/);
   assert.match(panelSource, /prompt-history-modal-fullscreen/);
   assert.match(panelSource, /prompt-history-modal-focus/);
   assert.match(panelSource, /promptHistoryConversationEntries/);
@@ -411,6 +412,7 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   );
   assert.match(stylesheetSource, /prompt-history-modal-fullscreen/);
   assert.match(stylesheetSource, /prompt-history-shell-focus/);
+  assert.match(stylesheetSource, /\.prompt-history-main:has\(\.pocket-active-header\)/);
   assert.match(stylesheetSource, /--prompt-history-card-width:\s*460px/);
   assert.match(stylesheetSource, /\.prompt-history-header-titlebar\s*\{/);
   assert.match(
