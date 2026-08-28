@@ -248,7 +248,8 @@ export function createTopbarView(dependencies = {}) {
       return actionButton(t("topbar.share"), "share", actions.openShare, "secondary", actions.formatShortcutTooltip(t("topbar.share"), "openSharePanel"), "", "topbar.share");
     }
     if (item.id === "pocket") {
-      return actionButton(t("topbar.pocket"), topbarItemIcon(item, state.options), actions.openPocket, "secondary", actions.formatShortcutTooltip(t("topbar.pocket"), "openPocketPanel"), topbarItemClass("pocket"), "topbar.pocket");
+      const pocketLabel = t(topbarItemLabelKey(item, state.options));
+      return actionButton(pocketLabel, topbarItemIcon(item, state.options), actions.openPocket, "secondary", actions.formatShortcutTooltip(pocketLabel, "openPocketPanel"), topbarItemClass("pocket"), "topbar.pocket");
     }
     if (item.id === "history") {
       return actionButton(t("topbar.history"), "history", actions.openHistory, "secondary", actions.formatShortcutTooltip(t("topbar.history"), "openHistoryPanel"), topbarItemClass("history"), "topbar.history");
@@ -262,7 +263,7 @@ export function createTopbarView(dependencies = {}) {
     if (item.id === "settingsJumpMenu") return renderSettingsMenuButton();
     const settingsSectionId = topbarSettingsSectionForItem(item.id);
     if (settingsSectionId) {
-      const label = t(topbarItemLabelKey(item));
+      const label = t(topbarItemLabelKey(item, state.options));
       return topIconButton(label, topbarItemIcon(item, state.options), (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -273,7 +274,7 @@ export function createTopbarView(dependencies = {}) {
   }
 
   function itemLabel(item) {
-    return item?.type === "flex" ? t("topbar.flexSpace") : t(topbarItemLabelKey(item));
+    return item?.type === "flex" ? t("topbar.flexSpace") : t(topbarItemLabelKey(item, state.options));
   }
 
   function renderPaletteItem(item, flexTemplate = false) {
@@ -475,7 +476,7 @@ export function createTopbarView(dependencies = {}) {
   }
 
   function renderFoldedMenuButton(item, editing, runItem) {
-    const label = item.id === "brand" ? brandActionLabel() : formatTopbarShortcut(t(topbarItemLabelKey(item)), item.id);
+    const label = item.id === "brand" ? brandActionLabel() : formatTopbarShortcut(t(topbarItemLabelKey(item, state.options)), item.id);
     const dragItem = editing && item.type === "item" ? { type: "item", id: item.id } : null;
     const buttonNode = settingsMenuButton(label, topbarItemIcon(item, state.options), (event) => runItem(item, event), "secondary", false, dragItem, {
       className: editing && item.type === "item" ? "topbar-settings-menu-button" : "",

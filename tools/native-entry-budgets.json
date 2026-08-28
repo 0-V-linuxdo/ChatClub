@@ -3,21 +3,21 @@
     "app/main.js": {
       "maxFiles": 113,
       "targetFiles": 74,
-      "maxSourceBytes": 1290269,
+      "maxSourceBytes": 1290687,
       "targetSourceBytes": 750000,
       "reason": "The application initial-static closure includes the background-owned StoredOptionsV4 snapshot client with optimistic revision conflicts and sparse official overrides, bilingual official-rules view and safety copy, committed-reset cleanup warning recovery in core state, plus the pre-document browser-session restore guard, URL-bound opening-claim handoff, one-shot prompt handoff layout and page orchestration, per-frame send queue, DNR-ready iframe assignment, authenticated frame identity, navigation-generation-isolated content bridge recovery, same-target navigation de-duplication, opaque black new-topic masking, canonical Notion frame-load URL comparison, prompt-focus restoration after iframe navigation, one post-layout frame before the first embedded navigation, measured image-plus-text composer sizing, Grok Cookie preflight, Notion navigation safeguards, model settlement with a per-panel interaction-blocking overlay, structured primary, secondary and add-on attempt rows, focus ownership and Toast collision avoidance, same-conversation Grok and Notion response URL preservation, five-minute session-scoped secondary fallback memory restored before the first overlay render, accessible Workspace appearance subtabs, workspace reconciliation, persistent user settings with timeout-bound coalesced retry, owner-scoped iframe tab context menus with complete tab operations, prompt-history date-group labels, the page-local remembered ChatClub-tab sidebar with empty current-tab close, drag-resize, left-side tab count, header close-others cleanup, overlay rename/delete with Appearance-owned hover-button folding, last-viewed/edited/created plus name/open sorting with prompt-history date groups, folder create and drag membership, closed-tab divider, on-row title editing, 1-based indexes, remembered Tabs export sanitizer, and first-send topic-title generation; signed-rules controls remain behind explicit lazy boundaries while this shared runtime is held to its exact footprint; Share panel state-port joins the initial-static closure while the Share controller stays lazy; History panel state-port joins the initial-static closure while the History controller stays lazy; English UI labels DouBao as 豆包（doubao） and Qianwen as 千问（qianwen）; the shared Summary catalog now includes the Manus message-extraction site; GET_CONFIG_SNAPSHOT declares INVALID_OFFICIAL_RULES_CATALOG; Prompt History matching now NFKC-normalizes extracted USER turns so live and stored conversations still match after punctuation or CJK spacing drift."
     },
     "background/service-worker.js": {
       "maxFiles": 67,
       "targetFiles": 40,
-      "maxSourceBytes": 966422,
+      "maxSourceBytes": 966653,
       "targetSourceBytes": 360000,
       "reason": "The Chromium service-worker initial-static closure owns signed channel verification with pinned recovery keys, strict declarative schema and host policy, content-addressed component storage, anti-rollback watermarks, opt-in one-shot alarms, atomic apply/rollback and committed-reset cleanup journals, generation-aware snapshot coordination and exact content-registration/DNR compensation, alongside its authenticated Frame RPC, one-shot prompt-handoff ledger and adaptive payload cleanup, normalized preferred-model overlay options in the stored snapshot, marker-driven startup refresh of canonical content registrations, one-sided Notion frame-load URL attestation, Grok Cookie, debugger and Notion navigation safety runtimes, plus durable event-scoped classification, URL-authenticated opening leases, phased tab creation outside the workspace lock, remembered ChatClub-tab listing including empty live tabs, deferred current-tab close, close of other live ChatClub tabs without deleting Tabs memory, export and import of remembered Tabs, and focus of ChatClub workspace tabs; the combined security boundary is held to this exact footprint, including the Manus Summary catalog entry in packaged official-rules baselines and stored-catalog gap-fill from packaged components when ChatClub-rules has not published the new key."
     },
     "background/firefox-background.js": {
       "maxFiles": 70,
       "targetFiles": 43,
-      "maxSourceBytes": 1740500,
+      "maxSourceBytes": 1740731,
       "targetSourceBytes": 900000,
       "reason": "The Firefox document-background entry packages the same signed official-rules verifier, strict declarative contracts, immutable component repository, anti-rollback state, manual atomic activation, crash and committed-reset cleanup recovery, compensated content-registration/DNR coordination, one-shot prompt-handoff ledger with adaptive payload cleanup and normalized preferred-model overlay options as Chromium, together with marker-driven startup refresh of canonical content registrations, generated content fallbacks including Claude iframe-compat (isInIframe store patch for page-declared cross-origin modulepreload) plus Kagi composer hydration with thread-search exclusion, secure Frame RPC, one-sided Notion frame-load URL attestation, site-native Storage Access, paired pointer/native Notion model activation including the explicit Older models submenu path, updated Notion dialog model-picker and Effort handling, typed Grok secondary fallback, fail-closed Delete behavior when trusted input is unavailable, and durable event-scoped classification, URL-authenticated opening leases, phased tab creation outside the workspace lock, remembered ChatClub-tab listing including empty live tabs, deferred current-tab close, close of other live ChatClub tabs without deleting Tabs memory, export and import of remembered Tabs, and focus of ChatClub workspace tabs; its larger exact static cost is tracked separately and now includes the Manus Summary userscript in generated content fallbacks plus stored-catalog gap-fill from packaged components."
     }
@@ -43,7 +43,7 @@
       "owner": "app/runtime.js",
       "maxFiles": 3,
       "targetFiles": 2,
-      "maxSourceBytes": 54913,
+      "maxSourceBytes": 55069,
       "targetSourceBytes": 40000,
       "reason": "Pocket remains an explicit runtime-owned lazy controller with a switchable star/Pocket identity icon, and this budget tracks only modules added beyond the application initial-static closure."
     },
@@ -59,7 +59,7 @@
       "owner": "app/runtime.js",
       "maxFiles": 29,
       "targetFiles": 18,
-      "maxSourceBytes": 391993,
+      "maxSourceBytes": 392229,
       "targetSourceBytes": 250000,
       "reason": "Settings remains an explicit runtime-owned lazy controller; its exact incremental closure includes background-owned import/reset coordination with durable committed-reset cleanup warnings, signed official-rules consent and status composition with cached-card language synchronization, apply-all and rollback entry points, sparse override clearing, platform and iframe source ordering, model controls, custom Summary/Delete permission notices, accessible General, Color and Overlays Workspace subtabs with pending-color retention, nested Tab Group, right-click menu, and ChatClub Tabs hover-button Fixed/More/Hidden settings with independent drag ordering and visibility, preferred-model overlay enablement and opacity with overlay-only synchronization, the focused topbar input setting, prompt-history date grouping, remembered ChatClub Tabs export/import, the ChatClub Tabs sidebar shortcut, header-mounted shortcut-settings and Prompt History search, the extracted Prompt History grouping model shared with the topbar History viewer including NFKC-tolerant conversation matching, and accessible viewport-filling window controls; English UI labels DouBao as 豆包（doubao） and Qianwen as 千问（qianwen）."
     },
@@ -75,7 +75,7 @@
       "owner": "app/runtime.js",
       "maxFiles": 4,
       "targetFiles": 2,
-      "maxSourceBytes": 67424,
+      "maxSourceBytes": 67501,
       "targetSourceBytes": 48000,
       "reason": "Summary remains an explicit runtime-owned lazy controller and this budget tracks only modules added beyond the application initial-static closure, including per-frame idle full-text capture after send or workspace restore, fail-closed per-iframe collection so one throwing frame cannot discard the others, persist of History live collects when Record Full Text is on, and the Manus Summary catalog and source label."
     }

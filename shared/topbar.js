@@ -196,8 +196,14 @@ export function normalizeTopbarLayout(raw = DEFAULT_TOPBAR_LAYOUT) {
   return normalized.length ? normalized : JSON.parse(JSON.stringify(DEFAULT_TOPBAR_LAYOUT));
 }
 
-export function topbarItemLabelKey(item) {
-  return TOPBAR_ITEM_META[item?.type === "flex" ? "flex" : item?.id]?.labelKey || "topbar.item.unknown";
+export function topbarItemLabelKey(item, options = {}) {
+  const id = item?.type === "flex" ? "flex" : item?.id;
+  if (id === "pocket") return pocketChromeLabelKey(options);
+  return TOPBAR_ITEM_META[id]?.labelKey || "topbar.item.unknown";
+}
+
+export function pocketChromeLabelKey(options = {}) {
+  return options.pocketIcon === "pocket" ? "topbar.pocketBrand" : "topbar.pocket";
 }
 
 export function topbarItemIcon(item, options = {}) {

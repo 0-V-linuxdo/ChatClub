@@ -8,6 +8,7 @@ import {
   normalizePocketIcon,
   normalizePrimaryColor
 } from "../../shared/storage-schema.js";
+import { pocketChromeLabelKey } from "../../shared/topbar.js";
 import { el, input, select } from "../../ui/dom.js";
 import { FRAME_TOAST_POSITION_EVENT } from "../../ui/frame-toast.js";
 import { createSettingsKit } from "./kit.js";
@@ -622,8 +623,11 @@ export function createAppearanceSettingsSection(ctx) {
       "settings.apps.iframe.removeAttribute": "trash",
       "settings.models.allSources": "info"
     })[targetId] || "settings";
+    const tooltipLabelKey = (target) => (
+      target.id === "topbar.pocket" ? pocketChromeLabelKey(state.options) : target.labelKey
+    );
     const tooltipPreviewButton = (target, disabled) => {
-      const label = t(target.labelKey);
+      const label = t(tooltipLabelKey(target));
       const iconName = tooltipPreviewIcon(target.id);
       const sample = el("button", {
         class: `tooltip-preview-button ${disabled ? "tooltip-preview-disabled" : "tooltip-trigger"} ${iconName === "brand" ? "tooltip-preview-brand" : ""}`.trim(),
@@ -652,7 +656,7 @@ export function createAppearanceSettingsSection(ctx) {
         type: "checkbox",
         role: "switch",
         checked: !disabled,
-        "aria-label": `${t(target.labelKey)} ${disabled ? t("common.disabled") : t("common.enabled")}`,
+        "aria-label": `${t(tooltipLabelKey(target))} ${disabled ? t("common.disabled") : t("common.enabled")}`,
         onchange: async (event) => {
           await saveTooltipToggle(target.id, event.target.checked, event.target);
           redraw();
@@ -660,13 +664,13 @@ export function createAppearanceSettingsSection(ctx) {
       });
       return el("div", { class: "tooltip-toggle-row" },
         el("span", { class: "tooltip-toggle-copy" },
-          el("strong", {}, t(target.labelKey)),
+          el("strong", {}, t(tooltipLabelKey(target))),
           el("small", {}, target.id)
         ),
         tooltipPreviewButton(target, disabled),
         el("label", { class: "tooltip-toggle-switch" },
           checkbox,
-          el("span", {}, t(target.labelKey))
+          el("span", {}, t(tooltipLabelKey(target)))
         )
       );
     };

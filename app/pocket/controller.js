@@ -1,5 +1,6 @@
 import { t } from "../../shared/i18n.js";
 import { dedupePocketHistory, normalizePocketCardSize, normalizePocketIcon } from "../../shared/storage-schema.js";
+import { pocketChromeLabelKey } from "../../shared/topbar.js";
 import { clear, el, toast, viewerModal } from "../../ui/dom.js";
 import { requireControllerContext, requireControllerFunction, validateControllerContract } from "../controller-contract.js";
 import { renderMarkdown } from "../summary/markdown.js";
@@ -202,6 +203,10 @@ export function createPocketController(ctx) {
 
   function pocketDisplayIcon() {
     return normalizePocketIcon(state.options?.pocketIcon);
+  }
+
+  function pocketChromeLabel() {
+    return t(pocketChromeLabelKey(state.options));
   }
 
   async function cyclePocketIcon() {
@@ -942,7 +947,7 @@ export function createPocketController(ctx) {
   function pocketSidebar(batches, activeBatch, redraw) {
     return el("aside", {
       class: "pocket-sidebar",
-      "aria-label": t("pocket.groups")
+      "aria-label": pocketChromeLabel()
     },
       batches.length
         ? el("div", { class: "pocket-sidebar-list", role: "list" },
@@ -1005,7 +1010,7 @@ export function createPocketController(ctx) {
     titlebar.hidden = false;
     titlebar.removeAttribute("hidden");
     titlebar.append(
-      el("strong", {}, t("pocket.groups")),
+      el("strong", {}, pocketChromeLabel()),
       el("div", { class: "pocket-sidebar-titlebar-actions" },
         pocketSidebarCollapseButton(redraw),
         pocketFocusModeButton(host, redraw)
@@ -1126,7 +1131,7 @@ export function createPocketController(ctx) {
       state.pocketEntries = history;
       redraw();
     }).catch(() => redraw());
-    const dialog = viewerModal(t("pocket.title"), host, () => {
+    const dialog = viewerModal(pocketChromeLabel(), host, () => {
       if (pocketCurrentRedraw === redraw) pocketCurrentRedraw = null;
       dialog.remove();
     }, true, t("common.close"));

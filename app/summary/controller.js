@@ -2,6 +2,7 @@ import { summarizeContexts } from "../../shared/api.js";
 import { t } from "../../shared/i18n.js";
 import { storageGet, storageSet } from "../../shared/storage-adapter.js";
 import { normalizePocketIcon } from "../../shared/storage-schema.js";
+import { pocketChromeLabelKey } from "../../shared/topbar.js";
 import { findSummarySiteConfig } from "../../shared/url-match.js";
 import { createActionButton } from "../../ui/components.js";
 import { el, iconButton, textarea } from "../../ui/dom.js";
@@ -559,7 +560,7 @@ export function createSummaryController(ctx) {
             }
           }),
           el("div", { class: "summary-panel-actions" },
-            summaryActionButton(t("summaryPanel.pocket"), saveSummaryPreviewToPocket, "secondary", state.summaryBusy || !pocketEntriesFromSummaryPreview().length, "pocket", "summary.action.pocket"),
+            summaryActionButton(t(pocketChromeLabelKey(state.options)), saveSummaryPreviewToPocket, "secondary", state.summaryBusy || !pocketEntriesFromSummaryPreview().length, "pocket", "summary.action.pocket"),
             summaryActionButton(t("summaryPanel.preview"), collectSummary, "secondary", state.summaryBusy, "preview", "summary.action.preview"),
             summaryActionButton(t("summaryPanel.summarize"), summarizeSummary, "secondary", state.summaryBusy, "summary", "summary.action.summarize"),
             summaryActionButton(t("summaryPanel.ask"), askSummary, "primary", state.summaryBusy || !hasQuestion, "send", "summary.action.ask")
