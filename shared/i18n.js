@@ -952,6 +952,8 @@ const en = {
   "promptHistory.sidebar": "Prompt history",
   "promptHistory.conversationLoading": "Collecting the matching conversation…",
   "promptHistory.conversationEmpty": "No matching conversation. Open the chats or enable Record Full Text, then try again.",
+  "promptHistory.emptyTitle": "Prompt History is empty",
+  "promptHistory.emptyDesc": "Sent prompts appear here. Open a prompt to review matching site conversations.",
 
   "pocket.title": "Favorites",
   "pocket.switchIcon": "Switch icon",
@@ -2240,6 +2242,8 @@ const zh_CN = {
   "promptHistory.sidebar": "Prompt 历史",
   "promptHistory.conversationLoading": "正在采集匹配的对话…",
   "promptHistory.conversationEmpty": "没有匹配的对话。打开对应聊天，或开启全文记录后再试。",
+  "promptHistory.emptyTitle": "还没有 Prompt 历史",
+  "promptHistory.emptyDesc": "发送过的 prompt 会显示在这里。打开一条即可查看匹配的站点对话。",
 
   "pocket.title": "收藏",
   "pocket.switchIcon": "切换图标",

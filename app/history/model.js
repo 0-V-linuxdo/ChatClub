@@ -43,6 +43,23 @@ export function promptHistoryImageCountLabel(images = []) {
     : "";
 }
 
+export function promptHistorySourceMeta(pages = []) {
+  const list = Array.isArray(pages) ? pages : [];
+  const names = [];
+  for (const page of list) {
+    const name = String(page?.siteName || page?.name || page?.title || "").replace(/\s+/g, " ").trim();
+    if (!name || names.includes(name)) continue;
+    names.push(name);
+  }
+  const count = Math.max(list.length, names.length);
+  if (!count) return "";
+  const visible = names.slice(0, 3);
+  const extra = names.length - visible.length;
+  const sources = extra > 0 ? `${visible.join(", ")} +${extra}` : visible.join(", ");
+  const vars = { count, plural: count === 1 ? "" : "s", sources };
+  return sources ? t("pocket.groupSources", vars) : t("pocket.groupCards", vars);
+}
+
 function promptHistorySearchExtraTexts(item) {
   const images = Array.isArray(item?.images) ? item.images : [];
   return [

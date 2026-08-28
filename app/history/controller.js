@@ -25,7 +25,8 @@ import {
   promptHistoryPocketPages,
   promptHistoryPocketSaved,
   promptHistoryPreview,
-  promptHistoryTimeLabel
+  promptHistoryTimeLabel,
+  promptHistorySourceMeta
 } from "./model.js";
 
 const HISTORY_PANEL_SIZE_KEY = "chatclub.historyPanelSize.v1";
@@ -518,6 +519,13 @@ export function createHistoryController(ctx) {
     historyCurrentRedraw?.();
   }
 
+  function toggleOpenHistoryPanelFullscreen() {
+    const panel = document.querySelector(".modal.prompt-history-modal");
+    if (!panel) return false;
+    toggleHistoryPanelFullscreen(panel, panel.querySelector('[data-tooltip-id="pocket.fullscreen"]'));
+    return true;
+  }
+
   function toggleHistoryPanelFocusMode(panel) {
     if (!panel) return;
     const fullscreenButton = panel.querySelector('[data-tooltip-id="pocket.fullscreen"]');
@@ -695,6 +703,7 @@ export function createHistoryController(ctx) {
     const preview = promptHistoryPreview(item.text, 80) || imageLabel || t("promptHistory.emptyPrompt");
     const pocketSaved = promptHistoryPocketSaved(item, pocketEntries);
     const pocketLabel = pocketSaved ? t("promptHistory.savedToPocket") : t("promptHistory.saveToPocket");
+    const sourceMeta = promptHistorySourceMeta(conversationPages(item));
     return el("div", {
       class: `prompt-history-sidebar-item${active ? " active" : ""}`
     },
@@ -711,7 +720,8 @@ export function createHistoryController(ctx) {
           conversationFavicons(item, "prompt-history-sidebar-favicons"),
           el("span", { class: "prompt-history-sidebar-preview" }, preview)
         ),
-        el("time", { class: "prompt-history-sidebar-time", datetime: item.createdAt || "" }, promptHistoryTimeLabel(item.createdAt))
+        el("time", { class: "prompt-history-sidebar-time", datetime: item.createdAt || "" }, promptHistoryTimeLabel(item.createdAt)),
+        sourceMeta ? el("span", { class: "prompt-history-sidebar-meta" }, sourceMeta) : null
       ),
       pocketSaved
         ? el("span", {
@@ -751,7 +761,7 @@ export function createHistoryController(ctx) {
             ))
           ])
         )
-        : el("div", { class: "prompt-history-sidebar-empty" }, t(searching ? "promptHistory.searchEmpty" : "promptHistory.noHistory"))
+        : el("div", { class: "prompt-history-sidebar-empty pocket-sidebar-empty" }, t(searching ? "promptHistory.searchEmpty" : "promptHistory.noHistory"))
     );
   }
 
@@ -837,7 +847,7 @@ export function createHistoryController(ctx) {
             : null
         ),
         el("div", { class: "pocket-entry-meta" },
-          entry.appName && entry.appName !== title
+          entry.appName
             ? el("span", { class: "pocket-entry-source" }, entry.appName)
             : null,
           entry.chatUrl
@@ -963,7 +973,11 @@ export function createHistoryController(ctx) {
             : null,
           activeItem
             ? detail(activeItem)
-            : el("div", { class: "ui-empty-state prompt-history-main-empty" }, t(searching ? "promptHistory.searchEmpty" : "promptHistory.noHistory"))
+            : el("div", { class: "ui-empty-state pocket-empty prompt-history-main-empty" },
+              svgIcon("history"),
+              el("strong", {}, t(searching ? "promptHistory.searchEmpty" : "promptHistory.emptyTitle")),
+              searching ? null : el("span", {}, t("promptHistory.emptyDesc"))
+            )
         )
       )
     );
@@ -1162,6 +1176,7 @@ export function createHistoryController(ctx) {
   return {
     openHistoryPanel,
     notifyFullTextChanged,
-    notifyWorkspaceSaved
+    notifyWorkspaceSaved,
+    toggleOpenHistoryPanelFullscreen
   };
 }

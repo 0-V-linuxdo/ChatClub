@@ -5672,15 +5672,31 @@ body.settings-tab-context-menu-dragging iframe {
   line-height: 1.35;
 }
 
+.prompt-history-sidebar-meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
 .prompt-history-sidebar-empty,
 .prompt-history-main-empty {
   min-height: 140px;
   display: grid;
   place-items: center;
+  align-content: center;
+  gap: 8px;
   padding: 16px;
   color: var(--muted);
   font-size: 13px;
   text-align: center;
+}
+
+.prompt-history-main-empty.pocket-empty {
+  min-height: 220px;
 }
 
 .prompt-history-sidebar-empty {

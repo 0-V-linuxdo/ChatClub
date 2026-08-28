@@ -1189,6 +1189,7 @@ async function handleShortcutAction(action, matchObj = null, sourceWindow = null
   else if (action === "enterFullscreen") {
     if (state.shareOpen) (await ensureShareController()).toggleMaximized();
     else if (state.summaryOpen) (await ensureSummaryController()).toggleMaximized();
+    else if (historyController?.toggleOpenHistoryPanelFullscreen?.()) {}
     else if (pocketController?.toggleOpenPocketPanelFullscreen?.()) {}
     else workspaceController.toggleFullscreen(group?.id || workspaceController.activeShortcutGroupId(sourceWindow));
   }

@@ -389,7 +389,13 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   assert.match(panelSource, /loadHistoryEntry/);
   assert.match(panelSource, /el\("button", \{\s*class: "pocket-entry-url prompt-history-conversation-url"/);
   assert.match(panelSource, /attachHistoryPanelResize/);
-  assert.match(panelSource, /toggleHistoryPanelFullscreen/);
+  assert.match(panelSource, /toggleOpenHistoryPanelFullscreen/);
+  assert.match(panelSource, /promptHistory\.emptyTitle/);
+  assert.match(panelSource, /pocket-empty prompt-history-main-empty/);
+  assert.match(panelSource, /pocket-sidebar-empty/);
+  assert.match(panelSource, /prompt-history-sidebar-meta/);
+  assert.match(modelSource, /export function promptHistorySourceMeta/);
+  assert.match(panelSource, /entry\.appName\s*\n\s*\? el\("span", \{ class: "pocket-entry-source"/);
   assert.match(panelSource, /toggleHistoryPanelFocusMode/);
   assert.match(panelSource, /pocket\.cardHeight/);
   assert.match(panelSource, /pocket-actions-panel/);
