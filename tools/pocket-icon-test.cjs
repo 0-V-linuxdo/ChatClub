@@ -46,17 +46,18 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   assert.match(pocketSource, /omitTitle:\s*true/);
   assert.match(
     pocketSource,
-    /el\("span", \{ class: "pocket-group-head" \},[\s\S]*?pocket-group-question[\s\S]*?\),\s*el\("span", \{ class: "pocket-group-time"/,
-    "Pocket time stays on its own row under the title"
+    /class: "pocket-group-head"[\s\S]*?pocket-group-question[\s\S]*?class: "pocket-group-foot"[\s\S]*?favicons,[\s\S]*?pocket-group-time/,
+    "Pocket favicons sit on the timestamp row, left of the time"
   );
   assert.doesNotMatch(
     pocketSource,
-    /class: "pocket-group-head"[\s\S]*?pocket-group-time[\s\S]*?pocket-group-question/,
-    "Pocket time must not share the title row"
+    /class: "pocket-group-head"[\s\S]*?pocket-group-favicons[\s\S]*?pocket-group-question/,
+    "Pocket favicons must not share the title row"
   );
   assert.match(pocketSource, /sourceMeta \? el\("span", \{ class: "pocket-group-meta" \}, sourceMeta\)/);
   assert.match(pocketSource, /from "\.\.\/\.\.\/ui\/favicon\.js"/);
   assert.match(stylesheetSource, /\.pocket-group-head/);
+  assert.match(stylesheetSource, /\.pocket-group-foot \{[\s\S]*?display:\s*flex/);
   assert.match(stylesheetSource, /\.pocket-group-time \{[\s\S]*?text-align:\s*right/);
   assert.match(
     stylesheetSource,

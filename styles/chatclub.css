@@ -5612,19 +5612,15 @@ body.settings-tab-context-menu-dragging iframe {
 
 .prompt-history-sidebar-item-top {
   min-width: 0;
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
 }
 
 .prompt-history-sidebar-favicons,
 .prompt-history-conversation-favicons {
-  margin-top: 2px;
+  flex: 0 0 auto;
 }
 
 .prompt-history-sidebar-preview {
   min-width: 0;
-  flex: 1 1 auto;
   color: currentColor;
   font-size: 13px;
   font-weight: 720;
@@ -5660,9 +5656,9 @@ body.settings-tab-context-menu-dragging iframe {
 .prompt-history-sidebar-item-foot {
   min-width: 0;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-end;
-  gap: 2px;
+  gap: 8px;
 }
 
 .prompt-history-sidebar-time {
@@ -5678,6 +5674,7 @@ body.settings-tab-context-menu-dragging iframe {
 }
 
 .prompt-history-sidebar-meta {
+  flex: 1 1 100%;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -6206,18 +6203,10 @@ body.settings-tab-context-menu-dragging iframe {
 
 .pocket-group-head {
   min-width: 0;
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-}
-
-.pocket-group-favicons {
-  margin-top: 2px;
 }
 
 .pocket-group-question {
   min-width: 0;
-  flex: 1 1 auto;
   color: currentColor;
   font-size: 13px;
   font-weight: 720;
@@ -6226,6 +6215,18 @@ body.settings-tab-context-menu-dragging iframe {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+}
+
+.pocket-group-foot {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.pocket-group-favicons {
+  flex: 0 0 auto;
 }
 
 .pocket-group-time,
@@ -6239,11 +6240,13 @@ body.settings-tab-context-menu-dragging iframe {
 }
 
 .pocket-group-time {
+  flex: 1 1 auto;
   color: color-mix(in srgb, var(--text) 68%, var(--muted));
   text-align: right;
 }
 
 .pocket-group-meta {
+  flex: 1 1 100%;
   min-width: 0;
   color: var(--muted);
 }
@@ -6254,11 +6257,18 @@ body.settings-tab-context-menu-dragging iframe {
     position: relative;
   }
 
+  .pocket-group-button:has(.chat-favicon-stack) .pocket-group-foot,
+  .prompt-history-sidebar-item:has(.chat-favicon-stack) .prompt-history-sidebar-item-foot {
+    position: relative;
+  }
+
   .pocket-group-button:has(.chat-favicon-stack) .pocket-group-meta,
   .prompt-history-sidebar-item:has(.chat-favicon-stack) .prompt-history-sidebar-meta {
     position: absolute;
-    left: 10px;
-    top: 34px;
+    left: 0;
+    right: auto;
+    top: auto;
+    bottom: calc(100% + 6px);
     z-index: 6;
     box-sizing: border-box;
     width: max-content;
@@ -6274,7 +6284,7 @@ body.settings-tab-context-menu-dragging iframe {
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
-    transform: translateY(-3px);
+    transform: translateY(3px);
     transition: opacity 0.12s ease, transform 0.12s ease, visibility 0.12s ease;
   }
 

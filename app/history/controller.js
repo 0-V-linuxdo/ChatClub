@@ -713,11 +713,11 @@ export function createHistoryController(ctx) {
         }
       },
         el("span", { class: "prompt-history-sidebar-item-top" },
-          conversationFavicons(item, "prompt-history-sidebar-favicons"),
           el("span", { class: "prompt-history-sidebar-preview" }, preview)
         )
       ),
       el("div", { class: "prompt-history-sidebar-item-foot" },
+        conversationFavicons(item, "prompt-history-sidebar-favicons"),
         el("time", { class: "prompt-history-sidebar-time", datetime: item.createdAt || "" }, promptHistoryTimeLabel(item.createdAt)),
         pocketSaved
           ? el("span", {
@@ -738,9 +738,9 @@ export function createHistoryController(ctx) {
               activeItemId = item.id;
               saveItemToPocket(item, redraw);
             }
-          }, svgIcon(pocketDisplayIcon()))
-      ),
-      sourceMeta ? el("span", { class: "prompt-history-sidebar-meta" }, sourceMeta) : null
+          }, svgIcon(pocketDisplayIcon())),
+        sourceMeta ? el("span", { class: "prompt-history-sidebar-meta" }, sourceMeta) : null
+      )
     );
   }
 

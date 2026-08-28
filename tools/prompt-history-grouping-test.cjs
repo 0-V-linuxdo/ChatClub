@@ -401,13 +401,13 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   assert.match(panelSource, /omitTitle:\s*true/);
   assert.match(
     panelSource,
-    /class: "prompt-history-sidebar-item-top"[\s\S]*?prompt-history-sidebar-preview[\s\S]*?class: "prompt-history-sidebar-item-foot"[\s\S]*?prompt-history-sidebar-time[\s\S]*?prompt-history-sidebar-pocket/,
-    "History title uses the full row; Pocket sits to the right of the timestamp"
+    /class: "prompt-history-sidebar-item-top"[\s\S]*?prompt-history-sidebar-preview[\s\S]*?class: "prompt-history-sidebar-item-foot"[\s\S]*?prompt-history-sidebar-favicons[\s\S]*?prompt-history-sidebar-time[\s\S]*?prompt-history-sidebar-pocket/,
+    "History title uses the full row; favicons sit left of the timestamp"
   );
   assert.doesNotMatch(
     panelSource,
-    /class: "prompt-history-sidebar-item-top"[\s\S]*?prompt-history-sidebar-time[\s\S]*?prompt-history-sidebar-preview/,
-    "History time must not share the title row"
+    /class: "prompt-history-sidebar-item-top"[\s\S]*?prompt-history-sidebar-favicons[\s\S]*?prompt-history-sidebar-preview/,
+    "History favicons must not share the title row"
   );
   assert.match(modelSource, /export function promptHistorySourceMeta/);
   assert.match(panelSource, /entry\.appName\s*\n\s*\? el\("span", \{ class: "pocket-entry-source"/);
