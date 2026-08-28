@@ -59,7 +59,7 @@
       "owner": "app/runtime.js",
       "maxFiles": 29,
       "targetFiles": 18,
-      "maxSourceBytes": 392069,
+      "maxSourceBytes": 391993,
       "targetSourceBytes": 250000,
       "reason": "Settings remains an explicit runtime-owned lazy controller; its exact incremental closure includes background-owned import/reset coordination with durable committed-reset cleanup warnings, signed official-rules consent and status composition with cached-card language synchronization, apply-all and rollback entry points, sparse override clearing, platform and iframe source ordering, model controls, custom Summary/Delete permission notices, accessible General, Color and Overlays Workspace subtabs with pending-color retention, nested Tab Group, right-click menu, and ChatClub Tabs hover-button Fixed/More/Hidden settings with independent drag ordering and visibility, preferred-model overlay enablement and opacity with overlay-only synchronization, the focused topbar input setting, prompt-history date grouping, remembered ChatClub Tabs export/import, the ChatClub Tabs sidebar shortcut, header-mounted shortcut-settings and Prompt History search, the extracted Prompt History grouping model shared with the topbar History viewer including NFKC-tolerant conversation matching, and accessible viewport-filling window controls; English UI labels DouBao as 豆包（doubao） and Qianwen as 千问（qianwen）."
     },

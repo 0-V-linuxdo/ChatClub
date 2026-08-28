@@ -181,13 +181,11 @@ export function createAppearanceSettingsSection(ctx) {
       );
     };
     const pocketIconControl = el("div", {
-      class: "appearance-pocket-icon-field",
+      class: "field appearance-pocket-icon-field",
+      title: t("appearance.pocketIconDesc"),
       dataset: { token: "pocket-icon" }
     },
-      el("div", { class: "appearance-pocket-icon-copy" },
-        el("strong", {}, t("appearance.pocketIcon")),
-        el("small", {}, t("appearance.pocketIconDesc"))
-      ),
+      el("span", {}, t("appearance.pocketIcon")),
       el("div", {
         class: "appearance-pocket-icon-options",
         role: "radiogroup",

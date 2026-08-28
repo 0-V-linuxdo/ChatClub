@@ -3747,89 +3747,82 @@ body.tab-gesture-active * {
 }
 
 .appearance-pocket-icon-field {
-  display: grid;
-  gap: 10px;
   min-width: 0;
-}
-
-.appearance-pocket-icon-copy {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
-.appearance-pocket-icon-copy strong {
-  color: var(--text);
-  font-size: 13px;
-}
-
-.appearance-pocket-icon-copy small {
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.45;
 }
 
 .appearance-pocket-icon-options {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
   min-width: 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--line) 84%, transparent);
+  border-radius: var(--settings-radius, 8px);
+  background: color-mix(in srgb, var(--panel) 88%, var(--panel-2));
 }
 
 .appearance-pocket-icon-option {
   position: relative;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
-  min-height: 88px;
-  padding: 12px 10px;
-  border: 1px solid color-mix(in srgb, var(--line) 84%, transparent);
-  border-radius: var(--settings-radius, 8px);
-  background: color-mix(in srgb, var(--panel-2) 58%, transparent);
+  min-height: var(--settings-control-height, 36px);
+  padding: 0 8px;
+  color: var(--muted);
   cursor: pointer;
+}
+
+.appearance-pocket-icon-option + .appearance-pocket-icon-option {
+  border-left: 1px solid color-mix(in srgb, var(--line) 84%, transparent);
 }
 
 .appearance-pocket-icon-option input {
   position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  margin: 0;
   opacity: 0;
-  pointer-events: none;
+  cursor: pointer;
 }
 
 .appearance-pocket-icon-option-mark {
   display: inline-grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
-  color: var(--text);
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  color: inherit;
 }
 
 .appearance-pocket-icon-option-mark .svg-icon {
-  width: 24px;
-  height: 24px;
+  width: 16px;
+  height: 16px;
 }
 
 .appearance-pocket-icon-option-label {
-  color: var(--text);
+  color: inherit;
   font-size: 12px;
+  font-weight: 700;
+  line-height: 1.15;
 }
 
 .appearance-pocket-icon-option:hover {
-  border-color: color-mix(in srgb, var(--primary) 42%, var(--line));
-  background: color-mix(in srgb, var(--panel-2) 78%, transparent);
+  color: var(--text);
+  background: color-mix(in srgb, var(--panel-2) 82%, var(--panel));
 }
 
 .appearance-pocket-icon-option.is-selected {
-  border-color: var(--primary);
-  background: color-mix(in srgb, var(--primary) 12%, var(--panel));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 35%, transparent);
+  color: var(--text);
+  background: color-mix(in srgb, var(--primary) 22%, var(--panel));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 36%, transparent);
 }
 
 .appearance-pocket-icon-option input:focus-visible + .appearance-pocket-icon-option-mark {
   outline: 2px solid var(--primary);
-  outline-offset: 3px;
+  outline-offset: 2px;
 }
 
 .appearance-toggle-control {
