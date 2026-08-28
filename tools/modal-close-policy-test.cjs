@@ -259,7 +259,7 @@ function event(type, properties = {}) {
       const primaryButton = button("Save", close, "primary");
       const content = el("div", { class: "settings-editor-form" },
         el("input", { value: "unsaved draft" }),
-        el("div", { class: "settings-dialog-actions" }, cancelButton, primaryButton)
+        el("div", { class: "modal-footer" }, cancelButton, primaryButton)
       );
       dialog = factory("Platform", content, close, false, "Close");
       return {
@@ -317,6 +317,20 @@ function event(type, properties = {}) {
       );
       fixture.dialog.remove();
     }
+
+    const confirmationCopy = el("p", {}, "This cannot be undone.");
+    const confirmationFixture = createFixture((title, content, onClose, wide, closeLabel) => (
+      confirmationModal(title, el("div", {}, confirmationCopy, content), onClose, wide, closeLabel)
+    ));
+    const confirmationPanel = confirmationFixture.dialog.querySelector(".modal");
+    assert.equal(confirmationPanel.getAttribute("role"), "alertdialog", "confirmation modals must use alertdialog");
+    const confirmationDescId = confirmationPanel.getAttribute("aria-describedby");
+    assert.ok(confirmationDescId, "confirmation modals must describe the prompt");
+    assert.equal(confirmationCopy.getAttribute("id"), confirmationDescId, "aria-describedby must point at the confirmation copy");
+    const hoistedFooter = confirmationPanel.querySelector(".modal-footer");
+    assert.ok(hoistedFooter, "modal footer must exist");
+    assert.equal(hoistedFooter.parentNode, confirmationPanel, "modal footer must hoist out of the body");
+    confirmationFixture.dialog.remove();
 
     for (const [type, factory] of [["viewer", viewerModal], ...restrictedFactories]) {
       for (const [label, control] of [

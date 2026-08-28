@@ -7,7 +7,7 @@ const { pathToFileURL } = require("node:url");
 const root = path.resolve(__dirname, "..");
 const AUTHOR_ROOTS = Object.freeze(["app", "ui"]);
 const TOOLTIP_ID_PATTERN = /[a-z][a-zA-Z0-9]*(?:\.[a-zA-Z0-9]+)+/;
-const LIVE_TOOLTIP_ID = /^(?:topbar|workspace|summary|share|pocket|optimize|settings|appPicker)\./;
+const LIVE_TOOLTIP_ID = /^(?:topbar|workspace|summary|share|pocket|history|viewer|optimize|settings|appPicker)\./;
 const LITERAL_TOOLTIP_ID = new RegExp(`(?:${[
   String.raw`"data-tooltip-id"\s*:\s*"`,
   String.raw`setAttribute\(\s*"data-tooltip-id"\s*,\s*"`,

@@ -103,7 +103,7 @@ export function createHistoryController(ctx) {
     sizeKey: HISTORY_PANEL_SIZE_KEY,
     minWidth: HISTORY_PANEL_MIN_WIDTH,
     minHeight: HISTORY_PANEL_MIN_HEIGHT,
-    buttonClass: "icon-button tooltip-trigger pocket-window-button prompt-history-window-button overlay-window-button",
+    buttonClass: "icon-button tooltip-trigger prompt-history-window-button overlay-window-button",
     t,
     svgIcon,
     onChange: () => historyCurrentRedraw?.(),
@@ -440,7 +440,7 @@ export function createHistoryController(ctx) {
   function toggleOpenHistoryPanelFullscreen() {
     const panel = document.querySelector(".modal.prompt-history-modal");
     if (!panel) return false;
-    const button = panel.querySelector('[data-tooltip-id="pocket.fullscreen"]');
+    const button = panel.querySelector('[data-tooltip-id="viewer.fullscreen"]');
     viewerWindow.toggleFullscreen(panel, button);
     return true;
   }
@@ -813,7 +813,7 @@ export function createHistoryController(ctx) {
       el("span", { class: "prompt-history-modal-title-icon", "aria-hidden": "true" }, svgIcon("history")),
       el("div", { class: "pocket-sidebar-titlebar prompt-history-sidebar-titlebar" })
     ));
-    closeButton.classList.add("prompt-history-window-button", "pocket-window-button", "overlay-window-button");
+    closeButton.classList.add("prompt-history-window-button", "overlay-window-button");
     closeButton.replaceChildren(svgIcon("x"));
     header.append(
       el("div", { class: "prompt-history-header-titlebar" }),
@@ -891,7 +891,7 @@ export function createHistoryController(ctx) {
     titlebar.removeAttribute("hidden");
     const label = t("pocket.exitFocusMode");
     titlebar.append(
-      el("span", { class: "pocket-focus-pocket-icon prompt-history-modal-title-icon", "aria-hidden": "true" }, svgIcon("history")),
+      el("span", { class: "prompt-history-modal-title-icon", "aria-hidden": "true" }, svgIcon("history")),
       el("button", {
         class: "icon-button tooltip-trigger pocket-exit-focus-button",
         type: "button",

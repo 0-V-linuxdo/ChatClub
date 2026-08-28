@@ -206,7 +206,7 @@ export function createProfilesSettingsSection(ctx) {
           field(t("profiles.endpoint"), endpointInput),
           field(t("profiles.apiKey"), keyInput)
         ),
-        el("div", { class: "settings-dialog-actions" },
+        el("div", { class: "modal-footer" },
           button(t("common.cancel"), close),
           button(editing ? t("profiles.save") : t("profiles.add"), save, "primary")
         )

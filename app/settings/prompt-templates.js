@@ -144,7 +144,7 @@ export function createPromptTemplateSettings(ctx) {
           field(t("promptTemplates.name"), titleInput),
           field(t("promptTemplates.prompt"), promptInput)
         ),
-        el("div", { class: "settings-dialog-actions" },
+        el("div", { class: "modal-footer" },
           button(t("common.cancel"), close),
           button(editing ? t("promptTemplates.save") : t("promptTemplates.add"), save, "primary")
         )

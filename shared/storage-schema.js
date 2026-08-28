@@ -158,6 +158,7 @@ export const TOOLTIP_DISABLED_ID_ALIASES = Object.freeze({
   "pocket.collapseSidebar": "pocket.sidebar",
   "pocket.expandSidebar": "pocket.sidebar",
   "pocket.exitFocusMode": "pocket.focusMode",
+  "pocket.fullscreen": "viewer.fullscreen",
   "workspace.tabs.unpin": "workspace.tabs.pin",
   "workspace.tabs.sortTime": "workspace.tabs.sortViewed"
 });

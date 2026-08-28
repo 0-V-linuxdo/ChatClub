@@ -205,7 +205,7 @@ export function createPromptLibraryController(ctx) {
       el("div", { class: "settings-editor-form prompt-library-editor" },
         countedField(t("prompts.promptTitle"), titleInput, 100),
         countedField(t("prompts.promptContent"), promptInput, 2000),
-        el("div", { class: "settings-dialog-actions" },
+        el("div", { class: "modal-footer" },
           button(t("common.cancel"), close),
           button(t("common.ok"), save, "primary")
         )

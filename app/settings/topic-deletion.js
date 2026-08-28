@@ -286,7 +286,7 @@ export function createTopicDeletionSettingsSection(ctx) {
         ),
         permissionNotice,
         field(t("topicDeletion.site.userscript"), userscriptInput),
-        el("div", { class: "settings-dialog-actions" },
+        el("div", { class: "modal-footer" },
           button(t("topicDeletion.site.copyUserscript"), () => copyUserscript(userscriptInput.value)),
           builtIn ? button(t("topicDeletion.site.editCopy"), () => {
             currentSourceMode = "custom";

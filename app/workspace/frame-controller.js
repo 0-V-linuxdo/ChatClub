@@ -1056,7 +1056,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
       onsubmit: submit
     },
       field(t("chat.goToUrlField"), urlInput),
-      el("div", { class: "settings-dialog-actions" }, cancelButton, submitButton)
+      el("div", { class: "modal-footer" }, cancelButton, submitButton)
     );
     dialog = editorModal(t("chat.goToUrl"), form, close, false, t("common.close"));
     dialog.querySelector(".modal")?.classList.add("go-to-url-modal");

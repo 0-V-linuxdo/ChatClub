@@ -1,7 +1,7 @@
 import { el } from "./dom.js";
 
 const OVERLAY_SURFACE_FULLSCREEN_CLASS = "overlay-surface-fullscreen";
-const VIEWER_WINDOW_FULLSCREEN_TOOLTIP_ID = "pocket.fullscreen";
+const VIEWER_WINDOW_FULLSCREEN_TOOLTIP_ID = "viewer.fullscreen";
 
 const VIEWER_WINDOW_EDGE = 8;
 
@@ -11,9 +11,9 @@ export function createViewerWindowChrome(options = {}) {
   const sizeKey = String(options.sizeKey || "");
   const minWidth = Number(options.minWidth) || 720;
   const minHeight = Number(options.minHeight) || 420;
-  const widthVar = options.widthVar || "--pocket-panel-width";
-  const heightVar = options.heightVar || "--pocket-panel-height";
-  const buttonClass = options.buttonClass || "icon-button tooltip-trigger pocket-window-button overlay-window-button";
+  const widthVar = options.widthVar || "--overlay-viewer-width";
+  const heightVar = options.heightVar || "--overlay-viewer-height";
+  const buttonClass = options.buttonClass || "icon-button tooltip-trigger overlay-window-button";
   const t = options.t;
   const svgIcon = options.svgIcon;
   const onChange = typeof options.onChange === "function" ? options.onChange : () => {};
@@ -156,7 +156,7 @@ export function createViewerWindowChrome(options = {}) {
       type: "button",
       "aria-label": t("chat.fullscreen"),
       "data-tooltip": t("chat.fullscreen"),
-      "data-tooltip-id": "pocket.fullscreen",
+      "data-tooltip-id": "viewer.fullscreen",
       onclick: (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -166,17 +166,25 @@ export function createViewerWindowChrome(options = {}) {
     return button;
   }
 
+  function resizeHandle(direction) {
+    return el("div", {
+      class: `overlay-viewer-resize-handle overlay-viewer-resize-handle-${direction} pocket-panel-resize-handle pocket-panel-resize-handle-${direction}`,
+      dataset: { direction },
+      "aria-hidden": "true"
+    });
+  }
+
   function attachResize(panel) {
     if (!panel) return;
     applySize(panel);
     panel.append(
-      el("div", { class: "pocket-panel-resize-handle pocket-panel-resize-handle-left", dataset: { direction: "left" }, "aria-hidden": "true" }),
-      el("div", { class: "pocket-panel-resize-handle pocket-panel-resize-handle-right", dataset: { direction: "right" }, "aria-hidden": "true" }),
-      el("div", { class: "pocket-panel-resize-handle pocket-panel-resize-handle-top", dataset: { direction: "top" }, "aria-hidden": "true" }),
-      el("div", { class: "pocket-panel-resize-handle pocket-panel-resize-handle-bottom", dataset: { direction: "bottom" }, "aria-hidden": "true" })
+      resizeHandle("left"),
+      resizeHandle("right"),
+      resizeHandle("top"),
+      resizeHandle("bottom")
     );
     let resize = null;
-    for (const handle of panel.querySelectorAll(".pocket-panel-resize-handle")) {
+    for (const handle of panel.querySelectorAll(".overlay-viewer-resize-handle")) {
       handle.addEventListener("pointerdown", (event) => {
         if (isFullscreen(panel)) return;
         event.preventDefault();
@@ -198,7 +206,7 @@ export function createViewerWindowChrome(options = {}) {
           width: rect.width,
           height: rect.height
         };
-        panel.classList.add("pocket-panel-resizing");
+        panel.classList.add("overlay-viewer-resizing", "pocket-panel-resizing");
         onPointerBlock(true);
         handle.setPointerCapture?.(event.pointerId);
       });
@@ -206,7 +214,7 @@ export function createViewerWindowChrome(options = {}) {
     const finishResize = () => {
       if (!resize) return;
       rememberGeometry(panel);
-      panel.classList.remove("pocket-panel-resizing");
+      panel.classList.remove("overlay-viewer-resizing", "pocket-panel-resizing");
       onPointerBlock(false);
       resize = null;
     };

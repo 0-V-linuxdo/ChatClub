@@ -38,6 +38,7 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
     "pocket.collapseSidebar": "pocket.sidebar",
     "pocket.expandSidebar": "pocket.sidebar",
     "pocket.exitFocusMode": "pocket.focusMode",
+    "pocket.fullscreen": "viewer.fullscreen",
     "workspace.tabs.unpin": "workspace.tabs.pin",
     "workspace.tabs.sortTime": "workspace.tabs.sortViewed"
   });
@@ -62,6 +63,14 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
     }).tooltipDisabledIds,
     ["pocket.sidebar"],
     "duplicate aliases and unknown ids must not reappear after merge"
+  );
+
+  assert.equal(TOOLTIP_TARGET_IDS.includes("pocket.fullscreen"), false, "pocket.fullscreen must retire onto the shared viewer control");
+  assert.equal(TOOLTIP_TARGET_IDS.includes("viewer.fullscreen"), true, "viewer.fullscreen must remain a settings tooltip target");
+  assert.deepEqual(
+    normalizeOptions({ tooltipDisabledIds: ["pocket.fullscreen"] }).tooltipDisabledIds,
+    ["viewer.fullscreen"],
+    "saved Pocket fullscreen disables must collapse onto viewer.fullscreen"
   );
 
   const persisted = dehydrateOptions(normalizeOptions({
@@ -161,6 +170,7 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   const tooltipSource = read("ui/tooltip.js");
   assert.match(tooltipSource, /"pocket\.collapseSidebar": "pocket\.sidebar"/);
   assert.match(tooltipSource, /"pocket\.expandSidebar": "pocket\.sidebar"/);
+  assert.match(tooltipSource, /"pocket\.fullscreen": "viewer\.fullscreen"/);
   assert.match(
     tooltipSource,
     /disabled\.has\(normalized\) \|\| disabled\.has\(canonicalTooltipId\(normalized\)\)/,

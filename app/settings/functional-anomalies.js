@@ -152,7 +152,7 @@ export function createFunctionalAnomaliesSettingsSection(ctx) {
         el("dl", { class: "functional-anomaly-detail-list" }, fields),
         el("p", { class: "functional-anomaly-privacy" }, t("functionalAnomalies.exportPrivacy")),
         el("pre", { class: "functional-anomaly-export-preview" }, functionalAnomalyLog.exportText([record])),
-        el("div", { class: "settings-dialog-actions" },
+        el("div", { class: "modal-footer" },
           button(t("functionalAnomalies.copyOne"), () => copyRecords([record], "toast.functionalAnomalyCopied")),
           button(t("common.close"), close, "primary")
         )
@@ -196,7 +196,7 @@ export function createFunctionalAnomaliesSettingsSection(ctx) {
       title,
       el("div", { class: "functional-anomaly-confirmation" },
         el("p", {}, body),
-        el("div", { class: "settings-dialog-actions" }, cancelButton, confirmButton)
+        el("div", { class: "modal-footer" }, cancelButton, confirmButton)
       ),
       close,
       false,

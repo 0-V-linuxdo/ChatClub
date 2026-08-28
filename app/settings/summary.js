@@ -306,7 +306,7 @@ export function createSummarySettingsSection(ctx) {
         ),
         permissionNotice,
         field(t("summary.collector.userscript"), userscriptInput),
-        el("div", { class: "settings-dialog-actions" },
+        el("div", { class: "modal-footer" },
           builtIn ? button(t("summary.collector.editCopy"), () => {
             sourceMode = "custom";
             userscriptInput.readOnly = false;

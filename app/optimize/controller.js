@@ -155,7 +155,7 @@ export function createOptimizeController(ctx) {
           errorMessage
         )
       ),
-      el("div", { class: "settings-dialog-actions optimize-compare-actions" },
+      el("div", { class: "modal-footer optimize-compare-actions" },
         button(t("optimize.keepOriginal"), close),
         applyButton
       )

@@ -32,6 +32,8 @@ const tokens = {
   "--overlay-gutter-panel": "32px",
   "--overlay-gutter-tight": "16px",
   "--overlay-header-height": "46px",
+  "--overlay-panel-offset": "52px",
+  "--overlay-panel-offset-raised": "64px",
   "--overlay-width": "min(720px, calc(100vw - var(--overlay-gutter)))",
   "--overlay-width-compact": "min(560px, calc(100vw - var(--overlay-gutter)))",
   "--overlay-width-wide": "min(1120px, calc(100vw - var(--overlay-gutter)))",
@@ -105,7 +107,13 @@ assert.match(fullscreenBlock, /inset:\s*0;/);
 assert.match(fullscreenBlock, /border-radius:\s*0;/);
 assert.match(fullscreenBlock, /box-shadow:\s*none;/);
 assert.doesNotMatch(css, /\.settings-modal-fullscreen/);
-assert.match(css, /\.modal-backdrop\s*~\s*\.modal-backdrop\s*\{[^}]*z-index:\s*var\(--overlay-z-modal-nested\);/s);
+assert.match(css, /\.modal-backdrop\s*~\s*\.modal-backdrop\s*\{[^}]*z-index:\s*var\(--overlay-z-modal-nested\);[^}]*background:\s*transparent;/s);
+assert.match(css, /\.summary-panel \{[^}]*top:\s*var\(--overlay-panel-offset\);/s);
+assert.match(css, /\.share-panel \{[^}]*top:\s*var\(--overlay-panel-offset-raised\);/s);
+assert.match(css, /\.settings-modal \.modal-header \{[^}]*min-height:\s*var\(--overlay-header-height\);/s);
+assert.match(css, /\.modal-footer \{/);
+assert.match(css, /\.modal > \.modal-footer \{/);
+assert.match(css, /@media \(prefers-reduced-transparency: reduce\) \{[\s\S]*?\.toast,/);
 assert.match(css, /\.summary-panel \{[^}]*max-width:\s*calc\(100vw - var\(--overlay-gutter-panel\)\);/s);
 assert.match(css, /\.popover-menu \{[^}]*max-width:\s*min\(260px, calc\(100vw - var\(--overlay-gutter-tight\)\)\);/s);
 assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?\.toast,\s*\n\s*\.toast\.show,/);
@@ -139,9 +147,13 @@ assert.match(
   /const MODAL_TYPE_CONFIG = Object\.freeze\(\{\s*viewer: Object\.freeze\(\{ dismissOnBackdrop: true \}\),\s*editor: Object\.freeze\(\{ dismissOnBackdrop: false \}\),\s*task: Object\.freeze\(\{ dismissOnBackdrop: false \}\),\s*confirmation: Object\.freeze\(\{ dismissOnBackdrop: false \}\)\s*\}\);/s
 );
 assert.match(dom, /class: `modal overlay-surface \$\{wide \? "modal-wide" : ""\}`/);
-assert.match(dom, /role: "dialog"/);
+assert.match(dom, /role: modalType === "confirmation" \? "alertdialog" : "dialog"/);
 assert.match(dom, /"aria-modal": "true"/);
 assert.match(dom, /"aria-labelledby": titleId/);
+assert.match(dom, /bindModalDescription\(panel, body, modalType\)/);
+assert.match(dom, /hoistModalFooter\(panel, body\)/);
+assert.match(dom, /role: isError \? "alert" : "status"/);
+assert.match(dom, /export function ensureToastHost\(\)/);
 assert.match(dom, /iconButton\(closeLabel, "×", onClose, "overlay-window-button"/);
 assert.doesNotMatch(dom, /HTMLDialogElement|showModal\(|<dialog/);
 
@@ -176,8 +188,18 @@ assert.doesNotMatch(read("app/settings/controller.js"), /viewer-window/);
 assert.match(read("app/settings/controller.js"), /classList\.toggle\("overlay-surface-fullscreen"\)/);
 assert.doesNotMatch(read("app/settings/controller.js"), /localStorage\.setItem\("chatclub\./);
 assert.match(read("ui/viewer-window.js"), /const OVERLAY_SURFACE_FULLSCREEN_CLASS = "overlay-surface-fullscreen"/);
-assert.match(read("ui/viewer-window.js"), /const VIEWER_WINDOW_FULLSCREEN_TOOLTIP_ID = "pocket\.fullscreen"/);
+assert.match(read("ui/viewer-window.js"), /const VIEWER_WINDOW_FULLSCREEN_TOOLTIP_ID = "viewer\.fullscreen"/);
+assert.match(read("ui/viewer-window.js"), /options\.widthVar \|\| "--overlay-viewer-width"/);
+assert.match(read("ui/viewer-window.js"), /overlay-viewer-resize-handle/);
 assert.doesNotMatch(read("ui/viewer-window.js"), /HTMLDialogElement|showModal\(|<dialog/);
+assert.match(read("app/pocket/controller.js"), /widthVar: "--pocket-panel-width"/);
+assert.doesNotMatch(read("app/history/controller.js"), /pocket-window-button/);
+assert.match(css, /\.prompt-history-modal-focus \[data-tooltip-id="viewer\.fullscreen"\]/);
+assert.match(css, /\.pocket-history-modal-focus \[data-tooltip-id="viewer\.fullscreen"\]/);
+assert.doesNotMatch(css, /\[data-tooltip-id="pocket\.fullscreen"\]/);
+assert.match(read("ui/frame-toast.js"), /role: kind === "error" \? "alert" : "status"/);
+assert.match(read("ui/tooltip.js"), /"pocket\.fullscreen": "viewer\.fullscreen"/);
+assert.match(read("ui/tooltip.js"), /aria-describedby/);
 assert.match(read("app/workspace/view-controller.js"), /popover-menu overlay-surface/);
 
 console.log("overlay chrome contract: ok");

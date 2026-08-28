@@ -97,7 +97,7 @@ export function createImportExportSettings(ctx) {
       el("div", { class: "io-full-reset-confirmation" },
         el("p", {}, t("io.fullResetDesc")),
         el("p", { class: "io-sensitive-warning" }, t("io.fullResetWatermark")),
-        el("div", { class: "settings-dialog-actions" }, cancelButton, confirmButton)
+        el("div", { class: "modal-footer" }, cancelButton, confirmButton)
       ),
       close,
       false,
@@ -567,7 +567,7 @@ export function createImportExportSettings(ctx) {
         pocketModePanel,
         workspaceTabsModePanel,
         importWarnings,
-        el("div", { class: "settings-dialog-actions" },
+        el("div", { class: "modal-footer" },
           cancelButton,
           confirmButton
         )

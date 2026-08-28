@@ -47,6 +47,8 @@
   --overlay-header-height: 46px;
   --overlay-backdrop: rgba(13, 19, 17, 0.36);
   --overlay-motion: 160ms ease;
+  --overlay-panel-offset: 52px;
+  --overlay-panel-offset-raised: 64px;
   --overlay-width: min(720px, calc(100vw - var(--overlay-gutter)));
   --overlay-width-compact: min(560px, calc(100vw - var(--overlay-gutter)));
   --overlay-width-wide: min(1120px, calc(100vw - var(--overlay-gutter)));
@@ -3317,7 +3319,7 @@ body.tab-gesture-active * {
 
 .settings-modal .modal-header {
   padding: 0;
-  min-height: 60px;
+  min-height: var(--overlay-header-height);
   background: color-mix(in srgb, var(--panel) 88%, var(--panel-2));
   align-items: stretch;
   gap: 0;
@@ -3369,6 +3371,7 @@ body.tab-gesture-active * {
   grid-template-columns: var(--settings-sidebar-width) minmax(0, 1fr);
   align-items: center;
   min-width: 0;
+  min-height: 60px;
 }
 
 .settings-modal-app-title {
@@ -4572,7 +4575,8 @@ body.settings-tab-context-menu-dragging iframe {
 }
 
 .settings-actions .button,
-.settings-dialog-actions .button {
+.settings-dialog-actions .button,
+.modal-footer .button {
   min-height: var(--settings-control-height);
   border-radius: var(--settings-radius);
   font-weight: 720;
@@ -5362,7 +5366,7 @@ body.settings-tab-context-menu-dragging iframe {
   display: none;
 }
 
-.prompt-history-modal-focus [data-tooltip-id="pocket.fullscreen"] {
+.prompt-history-modal-focus [data-tooltip-id="viewer.fullscreen"] {
   display: none !important;
 }
 
@@ -6041,7 +6045,7 @@ body.settings-tab-context-menu-dragging iframe {
   display: none !important;
 }
 
-.pocket-history-modal-focus [data-tooltip-id="pocket.fullscreen"] {
+.pocket-history-modal-focus [data-tooltip-id="viewer.fullscreen"] {
   display: none !important;
 }
 
@@ -6435,7 +6439,8 @@ body.settings-tab-context-menu-dragging iframe {
   text-align: right;
 }
 
-.pocket-panel-resize-handle {
+.pocket-panel-resize-handle,
+.overlay-viewer-resize-handle {
   position: absolute;
   z-index: 2;
   touch-action: none;
@@ -6444,38 +6449,49 @@ body.settings-tab-context-menu-dragging iframe {
 }
 
 .pocket-panel-resize-handle-left,
-.pocket-panel-resize-handle-right {
+.pocket-panel-resize-handle-right,
+.overlay-viewer-resize-handle-left,
+.overlay-viewer-resize-handle-right {
   top: 0;
   bottom: 0;
   width: 12px;
   cursor: ew-resize;
 }
 
-.pocket-panel-resize-handle-left { left: 0; }
-.pocket-panel-resize-handle-right { right: 0; }
+.pocket-panel-resize-handle-left,
+.overlay-viewer-resize-handle-left { left: 0; }
+.pocket-panel-resize-handle-right,
+.overlay-viewer-resize-handle-right { right: 0; }
 
 .pocket-panel-resize-handle-top,
-.pocket-panel-resize-handle-bottom {
+.pocket-panel-resize-handle-bottom,
+.overlay-viewer-resize-handle-top,
+.overlay-viewer-resize-handle-bottom {
   left: 0;
   right: 0;
   height: 12px;
   cursor: ns-resize;
 }
 
-.pocket-panel-resize-handle-top {
+.pocket-panel-resize-handle-top,
+.overlay-viewer-resize-handle-top {
   top: 0;
 }
 
-.pocket-panel-resize-handle-bottom {
+.pocket-panel-resize-handle-bottom,
+.overlay-viewer-resize-handle-bottom {
   bottom: 0;
 }
 
-.overlay-surface-fullscreen .pocket-panel-resize-handle {
+.overlay-surface-fullscreen .pocket-panel-resize-handle,
+.overlay-surface-fullscreen .overlay-viewer-resize-handle {
   display: none;
 }
 
 .pocket-panel-resizing,
-.pocket-panel-resizing * {
+.pocket-panel-resizing *,
+.overlay-viewer-resizing,
+.overlay-viewer-resizing * {
   user-select: none !important;
 }
 
@@ -8596,7 +8612,8 @@ body.settings-tab-context-menu-dragging iframe {
   pointer-events: none;
 }
 
-.settings-dialog-actions {
+.settings-dialog-actions,
+.modal-footer {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
@@ -8606,6 +8623,13 @@ body.settings-tab-context-menu-dragging iframe {
   margin-top: 8px;
   padding-top: 10px;
   background: var(--panel);
+}
+
+.modal > .modal-footer {
+  position: static;
+  margin: 0;
+  padding: 10px 16px 16px;
+  border-top: 1px solid var(--line);
 }
 
 .settings-manage-card {
@@ -9256,6 +9280,7 @@ body.settings-tab-context-menu-dragging iframe {
 
 .modal-backdrop ~ .modal-backdrop {
   z-index: var(--overlay-z-modal-nested);
+  background: transparent;
 }
 
 .prompt-library-backdrop {
@@ -9267,7 +9292,7 @@ body.settings-tab-context-menu-dragging iframe {
   width: var(--overlay-width);
   max-height: calc(100vh - var(--overlay-gutter));
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto 1fr auto;
   overflow: hidden;
 }
 
@@ -9465,7 +9490,7 @@ body.settings-tab-context-menu-dragging iframe {
   box-sizing: border-box;
   position: fixed;
   left: 50%;
-  top: 52px;
+  top: var(--overlay-panel-offset);
   width: var(--summary-panel-width, min(900px, calc(100vw - var(--overlay-gutter-panel))));
   min-width: min(420px, calc(100vw - var(--overlay-gutter-panel)));
   max-width: calc(100vw - var(--overlay-gutter-panel));
@@ -10274,6 +10299,15 @@ body.settings-tab-context-menu-dragging iframe {
   transform: translateY(0);
 }
 
+@media (prefers-reduced-transparency: reduce) {
+  .toast,
+  .frame-submit-toast {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: var(--panel);
+  }
+}
+
 .frame-submit-toast {
   position: absolute;
   right: 12px;
@@ -10828,7 +10862,7 @@ body.app-picker-dragging .app-picker-item {
   box-sizing: border-box;
   position: fixed;
   left: 50%;
-  top: 64px;
+  top: var(--overlay-panel-offset-raised);
   width: var(--share-panel-width, min(720px, calc(100vw - var(--overlay-gutter-panel))));
   min-width: min(420px, calc(100vw - var(--overlay-gutter-panel)));
   max-width: calc(100vw - var(--overlay-gutter-panel));

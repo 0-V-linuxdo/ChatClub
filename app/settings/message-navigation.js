@@ -323,7 +323,7 @@ export function createMessageNavigationSettingsSection(ctx) {
           field(t("messageNavigator.site.assistantSelector"), assistantSelectorInput),
           field(t("messageNavigator.site.cleanupSelectors"), cleanupInput)
         ),
-        el("div", { class: "settings-dialog-actions" },
+        el("div", { class: "modal-footer" },
           builtIn ? button(t("messageNavigator.site.resetBuiltIn"), async () => {
             await resetSite(config, redraw);
             close();

@@ -591,7 +591,7 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
       title,
       el("div", { class: "official-rules-confirmation" },
         typeof body === "string" ? el("p", {}, body) : body,
-        el("div", { class: "settings-dialog-actions" }, cancelButton, confirmButton)
+        el("div", { class: "modal-footer" }, cancelButton, confirmButton)
       ),
       close,
       false,

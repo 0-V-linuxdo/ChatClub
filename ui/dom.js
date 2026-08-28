@@ -72,13 +72,23 @@ export function clear(node) {
   return node;
 }
 
-export function toast(message, kind = "info") {
+export function ensureToastHost() {
   let host = document.querySelector(".toast-host");
-  if (!host) {
-    host = el("div", { class: "toast-host" });
-    document.body.append(host);
-  }
-  const item = el("div", { class: `toast toast-${kind}` }, message);
+  if (host) return host;
+  host = el("div", { class: "toast-host" });
+  document.body.append(host);
+  return host;
+}
+
+export function toast(message, kind = "info") {
+  const host = ensureToastHost();
+  const isError = kind === "error";
+  const item = el("div", {
+    class: `toast toast-${kind}`,
+    role: isError ? "alert" : "status",
+    "aria-live": isError ? "assertive" : "polite",
+    "aria-atomic": "true"
+  }, message);
   host.append(item);
   setTimeout(() => item.classList.add("show"), 20);
   setTimeout(() => {
@@ -95,6 +105,7 @@ const MODAL_TYPE_CONFIG = Object.freeze({
 });
 
 let modalTitleSeq = 0;
+let modalDescSeq = 0;
 const openModals = [];
 
 function modalFocusables(root) {
@@ -143,7 +154,7 @@ function trapOpenModalKeydown(event) {
   }
 }
 
-function registerOpenModal(backdrop, panel) {
+function registerOpenModal(backdrop, panel, focusNode = panel) {
   const restoreFocusTo = document.activeElement;
   const record = { backdrop, panel, restoreFocusTo };
   openModals.push(record);
@@ -169,13 +180,47 @@ function registerOpenModal(backdrop, panel) {
       }
     } catch {}
   };
+  const focusTarget = focusNode || panel;
   const focusPanel = () => {
     try {
-      panel.focus?.();
+      focusTarget.focus?.();
     } catch {}
   };
   if (typeof queueMicrotask === "function") queueMicrotask(focusPanel);
   else focusPanel();
+}
+
+function hasClass(node, className) {
+  return Boolean(node?.className && String(node.className).split(/\s+/).includes(className));
+}
+
+function hoistModalFooter(panel, body) {
+  if (!body?.querySelector || !panel?.append) return null;
+  const footer = body.querySelector(".modal-footer") || body.querySelector(".settings-dialog-actions");
+  if (!footer || footer.parentNode === panel) return footer || null;
+  if (!hasClass(footer, "modal-footer")) {
+    footer.className = `${footer.className || ""} modal-footer`.trim();
+  }
+  panel.append(footer);
+  return footer;
+}
+
+function bindModalDescription(panel, body, modalType) {
+  if (modalType !== "confirmation" || !body?.querySelector || !panel?.setAttribute) return;
+  const description = body.querySelector("[data-overlay-description]") || body.querySelector("p");
+  if (!description) return;
+  if (!description.getAttribute?.("id")) description.setAttribute("id", `overlay-modal-desc-${++modalDescSeq}`);
+  panel.setAttribute("aria-describedby", description.getAttribute("id"));
+}
+
+function confirmationFocusTarget(panel) {
+  const footer = panel?.querySelector?.(".modal-footer");
+  const nodes = modalFocusables(footer || null);
+  const safe = nodes.find((node) => {
+    const className = String(node.className || "");
+    return !/\bbutton-primary\b/.test(className) && !/\bbutton-danger\b/.test(className);
+  });
+  return safe || nodes[0] || panel;
 }
 
 export function modal(title, content, onClose, wide = false, closeLabel = "Close", options = {}) {
@@ -187,9 +232,10 @@ export function modal(title, content, onClose, wide = false, closeLabel = "Close
   const backdrop = el("div", { class: "modal-backdrop", dataset: { modalType }, onclick: (event) => {
     if (dismissOnBackdrop && event.target === backdrop) onClose();
   }});
+  const body = el("div", { class: "modal-body" }, content);
   const panel = el("section", {
     class: `modal overlay-surface ${wide ? "modal-wide" : ""}`.trim(),
-    role: "dialog",
+    role: modalType === "confirmation" ? "alertdialog" : "dialog",
     "aria-modal": "true",
     "aria-labelledby": titleId,
     tabindex: "-1"
@@ -198,11 +244,17 @@ export function modal(title, content, onClose, wide = false, closeLabel = "Close
       el("h2", { id: titleId }, title),
       iconButton(closeLabel, "×", onClose, "overlay-window-button", closeLabel, "", "settings.modal.close")
     ),
-    el("div", { class: "modal-body" }, content)
+    body
   );
+  hoistModalFooter(panel, body);
+  bindModalDescription(panel, body, modalType);
   backdrop.append(panel);
   document.body.append(backdrop);
-  registerOpenModal(backdrop, panel);
+  registerOpenModal(
+    backdrop,
+    panel,
+    modalType === "confirmation" ? confirmationFocusTarget(panel) : panel
+  );
   return backdrop;
 }
 

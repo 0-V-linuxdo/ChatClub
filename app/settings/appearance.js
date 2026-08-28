@@ -594,7 +594,7 @@ export function createAppearanceSettingsSection(ctx) {
       "share.action.copy": "copy",
       "share.action.download": "fileDown",
       "share.action.open": "external",
-      "pocket.fullscreen": "maximize",
+      "viewer.fullscreen": "maximize",
       "pocket.copyUserMessage": "copy",
       "pocket.copyAssistantMessage": "copy",
       "pocket.openChat": "external",

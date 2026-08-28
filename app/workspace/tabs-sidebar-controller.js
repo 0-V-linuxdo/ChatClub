@@ -1098,7 +1098,7 @@ export function createWorkspaceTabsSidebarController({
       title,
       el("div", { class: "workspace-tabs-delete-confirmation" },
         el("p", {}, message),
-        el("div", { class: "settings-dialog-actions" }, cancelButton, confirmButton)
+        el("div", { class: "modal-footer" }, cancelButton, confirmButton)
       ),
       close,
       false,

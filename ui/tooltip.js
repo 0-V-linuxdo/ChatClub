@@ -3,10 +3,12 @@ import { el, isDismissalEscape } from "./dom.js";
 const EDGE_GAP = 8;
 const POINTER_GAP = 10;
 const ARROW_MIN = 12;
+const GLOBAL_TOOLTIP_ID = "chatclub-global-tooltip";
 const TOOLTIP_ID_ALIASES = Object.freeze({
   "pocket.collapseSidebar": "pocket.sidebar",
   "pocket.expandSidebar": "pocket.sidebar",
   "pocket.exitFocusMode": "pocket.focusMode",
+  "pocket.fullscreen": "viewer.fullscreen",
   "workspace.tabs.unpin": "workspace.tabs.pin",
   "workspace.tabs.sortTime": "workspace.tabs.sortViewed"
 });
@@ -24,7 +26,12 @@ let disabledIdsProvider = () => [];
 function ensureTooltipHost() {
   if (tooltipHost) return tooltipHost;
   tooltipLabel = el("div", { class: "global-tooltip-label" });
-  tooltipHost = el("div", { class: "global-tooltip", role: "tooltip", "aria-hidden": "true" },
+  tooltipHost = el("div", {
+    class: "global-tooltip",
+    id: GLOBAL_TOOLTIP_ID,
+    role: "tooltip",
+    "aria-hidden": "true"
+  },
     tooltipLabel,
     el("div", { class: "global-tooltip-arrow", "aria-hidden": "true" })
   );
@@ -104,6 +111,41 @@ function cleanupTrackedTriggers() {
   if (!isKeyboardFocusedTooltipTrigger(focusedTrigger)) focusedTrigger = null;
 }
 
+function tokenList(value) {
+  return String(value || "").split(/\s+/).filter(Boolean);
+}
+
+function syncTooltipDescribedby(trigger, host, text) {
+  if (!trigger || !host?.id) return;
+  const label = String(trigger.getAttribute("aria-label") || "").trim();
+  if (!text || text === label) {
+    clearTooltipDescribedby(trigger);
+    return;
+  }
+  const current = tokenList(trigger.getAttribute("aria-describedby"));
+  if (!trigger.dataset.tooltipDescribedbyOwned && current.length && !current.includes(host.id)) {
+    trigger.dataset.tooltipDescribedbyPrev = current.join(" ");
+  }
+  trigger.dataset.tooltipDescribedbyOwned = "true";
+  if (!current.includes(host.id)) current.push(host.id);
+  trigger.setAttribute("aria-describedby", current.join(" "));
+}
+
+function clearTooltipDescribedby(trigger) {
+  if (!trigger || trigger.dataset.tooltipDescribedbyOwned !== "true") return;
+  const hostId = tooltipHost?.id;
+  const current = tokenList(trigger.getAttribute("aria-describedby"));
+  const prev = tokenList(trigger.dataset.tooltipDescribedbyPrev);
+  delete trigger.dataset.tooltipDescribedbyOwned;
+  delete trigger.dataset.tooltipDescribedbyPrev;
+  const rest = current.filter((id) => id && id !== hostId);
+  for (const id of prev) {
+    if (id && !rest.includes(id)) rest.unshift(id);
+  }
+  if (rest.length) trigger.setAttribute("aria-describedby", rest.join(" "));
+  else trigger.removeAttribute("aria-describedby");
+}
+
 function positionTooltip(trigger) {
   const host = ensureTooltipHost();
   const placement = trigger.getAttribute("data-tooltip-placement") || "center";
@@ -141,8 +183,9 @@ function showTooltip(trigger) {
     if (activeTrigger === trigger) hideTooltip(trigger);
     return false;
   }
-  if (activeTrigger !== trigger && activeTrigger?.classList.contains("tooltip-open")) {
-    activeTrigger.classList.remove("tooltip-open");
+  if (activeTrigger !== trigger && activeTrigger) {
+    if (activeTrigger.classList.contains("tooltip-open")) activeTrigger.classList.remove("tooltip-open");
+    clearTooltipDescribedby(activeTrigger);
   }
   activeTrigger = trigger;
   const host = ensureTooltipHost();
@@ -151,6 +194,7 @@ function showTooltip(trigger) {
   if (!host.classList.contains("is-visible")) host.classList.add("is-visible");
   if (host.getAttribute("aria-hidden") !== "false") host.setAttribute("aria-hidden", "false");
   if (!trigger.classList.contains("tooltip-open")) trigger.classList.add("tooltip-open");
+  syncTooltipDescribedby(trigger, host, text);
   requestAnimationFrame(() => {
     if (activeTrigger !== trigger) return;
     if (!isUsableTooltipTrigger(trigger)) {
@@ -165,6 +209,7 @@ function showTooltip(trigger) {
 function hideTooltip(trigger = activeTrigger) {
   if (trigger?.classList.contains("tooltip-open")) trigger.classList.remove("tooltip-open");
   if (trigger && trigger !== activeTrigger) return;
+  clearTooltipDescribedby(trigger);
   activeTrigger = null;
   if (!tooltipHost) return;
   if (tooltipHost.classList.contains("is-visible") || tooltipHost.classList.contains("is-wrapping")) {

@@ -54,7 +54,7 @@ import {
 } from "./functional-anomalies/controller.js";
 import { SETTINGS_SECTIONS } from "./settings/sections.js";
 import { createCompactIconButton, createMenuButton } from "../ui/components.js";
-import { el, isDismissalEscape, toast } from "../ui/dom.js";
+import { el, ensureToastHost, isDismissalEscape, toast } from "../ui/dom.js";
 import { FRAME_TOAST_POSITION_EVENT } from "../ui/frame-toast.js";
 import { installGlobalTooltips } from "../ui/tooltip.js";
 import { createSvgIcon } from "../ui/icons.js";
@@ -1323,6 +1323,7 @@ async function init() {
     scheduleWorkspaceSessionLoadRecovery(); return;
   }
   syncI18nLanguage();
+  ensureToastHost();
   const resetCleanupWarningCount = consumeConfigResetCleanupWarning();
   if (resetCleanupWarningCount > 0) {
     toast(t("toast.configResetCleanupWarning", { count: resetCleanupWarningCount }), "error");

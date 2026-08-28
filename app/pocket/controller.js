@@ -55,6 +55,8 @@ export function createPocketController(ctx) {
     sizeKey: POCKET_PANEL_SIZE_KEY,
     minWidth: POCKET_PANEL_MIN_WIDTH,
     minHeight: POCKET_PANEL_MIN_HEIGHT,
+    widthVar: "--pocket-panel-width",
+    heightVar: "--pocket-panel-height",
     buttonClass: "icon-button tooltip-trigger pocket-window-button overlay-window-button",
     t,
     svgIcon,
@@ -368,7 +370,7 @@ export function createPocketController(ctx) {
   function toggleOpenPocketPanelFullscreen() {
     const panel = document.querySelector(".modal.pocket-history-modal");
     if (!panel) return false;
-    const button = panel.querySelector('[data-tooltip-id="pocket.fullscreen"]');
+    const button = panel.querySelector('[data-tooltip-id="viewer.fullscreen"]');
     viewerWindow.toggleFullscreen(panel, button);
     return true;
   }

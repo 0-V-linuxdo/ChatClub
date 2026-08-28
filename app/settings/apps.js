@@ -518,7 +518,7 @@ export function createAppsSettingsSection(ctx) {
         el("ul", { class: "iframe-permission-risk-list" },
           riskKeys.map((risk) => el("li", {}, el("code", {}, risk)))
         ),
-        el("div", { class: "settings-dialog-actions" }, cancelButton, confirmButton)
+        el("div", { class: "modal-footer" }, cancelButton, confirmButton)
       ),
       close,
       false,
@@ -843,7 +843,7 @@ export function createAppsSettingsSection(ctx) {
         previewCode
       ),
       el("p", { class: "iframe-permission-boundary-note" }, t("apps.iframe.permissionBoundary")),
-      el("div", { class: "settings-dialog-actions" }, cancelButton, saveButton)
+      el("div", { class: "modal-footer" }, cancelButton, saveButton)
     );
     editor.addEventListener("input", updateEditor);
     editor.addEventListener("change", updateEditor);
@@ -868,7 +868,7 @@ export function createAppsSettingsSection(ctx) {
           detailField(t("apps.sendButtonSelector"), detailCode(app.sendButtonSelector)),
           detailField(t("apps.imagePasteStrategy"), detailValue(builtInImagePasteStrategyLabel(app)))
         ),
-        el("div", { class: "settings-dialog-actions" }, button(t("common.close"), close, "primary"))
+        el("div", { class: "modal-footer" }, button(t("common.close"), close, "primary"))
       ),
       close,
       false,
@@ -1147,7 +1147,7 @@ export function createAppsSettingsSection(ctx) {
           field(t("apps.sendButtonSelector"), sendSelectorInput),
           field(t("apps.imagePasteStrategy"), strategyInput)
         ),
-        el("div", { class: "settings-dialog-actions" },
+        el("div", { class: "modal-footer" },
           button(t("common.cancel"), close),
           button(editing ? t("apps.save") : t("apps.addTitle"), save, "primary")
         )
