@@ -206,7 +206,7 @@ export function createTopbarController(dependencies = {}) {
     });
     if (rendered.backdrop) document.body.append(rendered.backdrop);
     document.body.append(rendered.menu);
-    bindLinearMenuKeyboard(rendered.menu);
+    bindLinearMenuKeyboard(rendered.menu, { dismiss: closeSettingsMenu, trigger: anchor });
     document.addEventListener("keydown", closeSettingsMenuOnKeydown, true);
     if (!persistent) {
       window.addEventListener("resize", closeSettingsMenu, true);

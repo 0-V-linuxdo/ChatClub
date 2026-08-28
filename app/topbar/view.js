@@ -563,7 +563,7 @@ export function createTopbarView(dependencies = {}) {
     });
     const menu = el("div", {
       class: `popover-menu overlay-surface topbar-settings-popover ${editing ? "is-editing" : ""}`,
-      role: "menu",
+      role: "menu", "aria-label": t("topbar.settingsJumpMenu"),
       style: { top: `${rect.bottom + 5}px`, right: `${Math.max(8, window.innerWidth - rect.right)}px` },
       onpointerdown: (event) => event.stopPropagation(),
       onclick: (event) => event.stopPropagation()

@@ -135,6 +135,7 @@ export function createTabsSidebarHoverMenu({
     const menu = el("div", {
       class: "popover-menu overlay-surface workspace-tabs-sidebar-hover-menu",
       role: "menu",
+      "aria-label": t("workspace.tabs.more"),
       style: {
         top: `${Number(rect.bottom) + 5}px`,
         right: `${Math.max(8, Number(view.innerWidth || 0) - Number(rect.right || 0))}px`
@@ -143,7 +144,7 @@ export function createTabsSidebarHoverMenu({
       onclick: (pointerEvent) => pointerEvent.stopPropagation()
     }, folded.map((entry) => hoverMenuButton(entry.id, item, row)).filter(Boolean));
     (ownerDocument.body || ownerDocument.documentElement)?.append?.(backdrop, menu);
-    bindLinearMenuKeyboard(menu);
+    bindLinearMenuKeyboard(menu, { dismiss: closeHoverMenu, trigger: anchor });
     const onOutside = (pointerEvent) => {
       const target = pointerEvent.target;
       if (menu.contains?.(target) || anchor.contains?.(target) || anchor === target) return;

@@ -790,45 +790,47 @@ export function createWorkspaceViewController(dependencies = {}) {
     const temporary = Boolean(preset?.temporary);
     const active = layoutPresetIsActive(preset);
     const shortcut = temporary ? "" : layoutShortcutLabel(index);
+    const selectPreset = () => {
+      if (temporary) {
+        closePopovers();
+        return;
+      }
+      switchLayoutPreset(preset.id).catch((error) => {
+        console.warn("[ChatClub] Failed to switch layout", error);
+      });
+    };
     return el("div", {
       class: `layout-preset-item${active ? " active" : ""}${temporary ? " temporary" : ""}`.trim(),
-      role: "menuitem",
-      tabindex: "0",
-      title: layoutPresetSummary(preset),
-      onpointerdown: (event) => {
-        if (event.button !== 0 || event.target?.closest?.(".layout-preset-delete")) return;
-        event.preventDefault();
-        event.stopPropagation();
-        if (temporary) {
-          closePopovers();
-          return;
-        }
-        switchLayoutPreset(preset.id).catch((error) => {
-          console.warn("[ChatClub] Failed to switch layout", error);
-        });
-      },
-      onclick: (event) => {
-        if (event.target?.closest?.(".layout-preset-delete")) return;
-        event.preventDefault();
-        event.stopPropagation();
-      },
-      onkeydown: (event) => {
-        if (event.key !== "Enter" && event.key !== " ") return;
-        event.preventDefault();
-        if (temporary) {
-          closePopovers();
-          return;
-        }
-        switchLayoutPreset(preset.id).catch((error) => {
-          console.warn("[ChatClub] Failed to switch layout", error);
-        });
-      }
+      role: "none"
     },
-      el("span", { class: "layout-preset-summary" }, layoutPresetSummary(preset)),
-      shortcut ? el("span", { class: "layout-preset-shortcut" }, shortcut) : null,
+      el("div", {
+        class: "layout-preset-choice",
+        role: "menuitem",
+        tabindex: "0",
+        title: layoutPresetSummary(preset),
+        onpointerdown: (event) => {
+          if (event.button !== 0) return;
+          event.preventDefault();
+          event.stopPropagation();
+          selectPreset();
+        },
+        onclick: (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+        },
+        onkeydown: (event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          selectPreset();
+        }
+      },
+        el("span", { class: "layout-preset-summary" }, layoutPresetSummary(preset)),
+        shortcut ? el("span", { class: "layout-preset-shortcut" }, shortcut) : null
+      ),
       el("button", {
         class: "icon-button layout-preset-delete compact-icon tooltip-trigger",
         type: "button",
+        role: "menuitem",
         "aria-label": t("layout.delete"),
         "data-tooltip": t("layout.delete"),
         "data-tooltip-id": "workspace.layout.delete",
@@ -873,6 +875,7 @@ export function createWorkspaceViewController(dependencies = {}) {
     const menu = el("div", {
       class: "popover-menu overlay-surface workspace-popover-menu layout-popover",
       role: "menu",
+      "aria-label": t("topbar.switchLayout"),
       style: { top: `${top}px`, right: `${right}px` },
       onpointerdown: (event) => event.stopPropagation(),
       onclick: (event) => event.stopPropagation()
@@ -890,7 +893,7 @@ export function createWorkspaceViewController(dependencies = {}) {
       }, "secondary", false, t("layout.add"), "", "workspace.layout.add")
     );
     document.body.append(backdrop, menu);
-    bindLinearMenuKeyboard(menu);
+    bindLinearMenuKeyboard(menu, { dismiss: closePopovers, trigger: anchor });
     armWorkspacePopoverDismissal();
   }
 
@@ -1008,6 +1011,7 @@ export function createWorkspaceViewController(dependencies = {}) {
     const menu = el("div", {
       class: "popover-menu overlay-surface workspace-popover-menu",
       role: "menu",
+      "aria-label": t("appearance.tabContextMenu"),
       style: showAllActions
         ? { top: `${rect.bottom + 5}px`, left: `${Math.max(8, rect.left)}px` }
         : { top: `${rect.bottom + 5}px`, right: `${Math.max(8, window.innerWidth - rect.right)}px` },
@@ -1027,7 +1031,7 @@ export function createWorkspaceViewController(dependencies = {}) {
       menu.style.left = `${Math.min(Math.max(8, rect.left), maxLeft)}px`;
       menu.style.top = `${Math.min(Math.max(8, rect.bottom + 5), maxTop)}px`;
     }
-    bindLinearMenuKeyboard(menu);
+    bindLinearMenuKeyboard(menu, { dismiss: closePopovers, trigger: anchor });
     armWorkspacePopoverDismissal();
   }
 

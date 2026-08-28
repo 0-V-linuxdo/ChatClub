@@ -1146,7 +1146,7 @@ export function createWorkspaceTabsSidebarController({
     });
     const menu = el("div", {
       class: "popover-menu overlay-surface workspace-tabs-sidebar-sort-menu",
-      role: "menu",
+      role: "menu", "aria-label": t("workspace.tabs.sort"),
       style: {
         top: `${Number(rect.bottom) + 5}px`,
         left: `${Math.max(8, Number(rect.left || 0))}px`
@@ -1159,7 +1159,7 @@ export function createWorkspaceTabsSidebarController({
       tooltipId: TABS_SIDEBAR_SORT_LABEL_KEYS[mode]
     })));
     (ownerDocument.body || ownerDocument.documentElement)?.append?.(backdrop, menu);
-    bindLinearMenuKeyboard(menu);
+    bindLinearMenuKeyboard(menu, { dismiss: closeSortMenu, trigger: anchor });
     const onOutside = (pointerEvent) => {
       const target = pointerEvent.target;
       if (menu.contains?.(target) || anchor.contains?.(target) || anchor === target) return;

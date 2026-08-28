@@ -76,10 +76,40 @@ export function clear(node) {
 
 export function ensureToastHost() {
   let host = document.querySelector(".toast-host");
-  if (host) return host;
-  host = el("div", { class: "toast-host", "aria-live": "polite" });
-  document.body.append(host);
+  if (!host) {
+    host = el("div", { class: "toast-host" });
+    document.body.append(host);
+  }
+  host.removeAttribute?.("aria-live");
+  ensureToastLive(host, "info");
+  ensureToastLive(host, "error");
   return host;
+}
+
+function ensureToastLive(host, kind) {
+  const isError = kind === "error";
+  const selector = isError ? ".toast-live-assertive" : ".toast-live-polite";
+  let live = host.querySelector?.(selector);
+  if (live) return live;
+  live = el("div", {
+    class: isError ? "toast-live toast-live-assertive" : "toast-live toast-live-polite",
+    role: isError ? "alert" : "status",
+    "aria-live": isError ? "assertive" : "polite",
+    "aria-atomic": "true"
+  });
+  host.append(live);
+  return live;
+}
+
+function announceToast(message, kind) {
+  const live = ensureToastLive(ensureToastHost(), kind);
+  const text = String(message ?? "");
+  live.textContent = "";
+  const write = () => {
+    live.textContent = text;
+  };
+  if (typeof queueMicrotask === "function") queueMicrotask(write);
+  else write();
 }
 
 const TOAST_STAY_MS = Object.freeze({ short: 1600, default: 3200, long: 32000 });
@@ -97,13 +127,8 @@ export function toastDurationMs(kind = "info") {
 
 export function toast(message, kind = "info") {
   const host = ensureToastHost();
-  const isError = kind === "error";
-  const item = el("div", {
-    class: `toast toast-${kind}`,
-    role: isError ? "alert" : "status",
-    "aria-live": isError ? "assertive" : "polite",
-    "aria-atomic": "true"
-  }, message);
+  announceToast(message, kind);
+  const item = el("div", { class: `toast toast-${kind}` }, message);
   host.append(item);
   const duration = toastDurationMs(kind);
   let hideTimer = 0;
@@ -142,6 +167,35 @@ function modalFocusables(root) {
       .filter((node) => node.getAttribute?.("disabled") == null && node.getAttribute?.("aria-hidden") !== "true");
   } catch {
     return [];
+  }
+}
+
+function setNodeInert(node, value) {
+  if (!node) return;
+  try { node.inert = Boolean(value); } catch {}
+  if (value) {
+    node.setAttribute?.("inert", "");
+    return;
+  }
+  if (typeof node.removeAttribute === "function") node.removeAttribute("inert");
+  else node.attributes?.delete?.("inert");
+}
+
+function isModalInertExempt(node, liveBackdrop) {
+  if (!node || node === liveBackdrop) return true;
+  const className = String(node.className || "");
+  if (/\btoast-host\b/.test(className) || /\bglobal-tooltip\b/.test(className)) return true;
+  return node.id === "chatclub-global-tooltip" || node.getAttribute?.("id") === "chatclub-global-tooltip";
+}
+
+function syncModalBackgroundInert() {
+  const body = document.body;
+  const children = body?.children;
+  if (!children) return;
+  const liveBackdrop = openModals[openModals.length - 1]?.backdrop;
+  const active = openModals.length > 0;
+  for (const child of children) {
+    setNodeInert(child, active && !isModalInertExempt(child, liveBackdrop));
   }
 }
 
@@ -189,6 +243,7 @@ function registerOpenModal(backdrop, panel, focusNode = panel) {
     document.addEventListener("keydown", trapOpenModalKeydown, true);
   }
   syncModalScrollLock();
+  syncModalBackgroundInert();
   const removeBackdrop = typeof backdrop.remove === "function" ? backdrop.remove.bind(backdrop) : () => {};
   backdrop.remove = (...args) => {
     const index = openModals.indexOf(record);
@@ -196,6 +251,7 @@ function registerOpenModal(backdrop, panel, focusNode = panel) {
     if (!openModals.length) document.removeEventListener?.("keydown", trapOpenModalKeydown, true);
     syncModalScrollLock();
     removeBackdrop(...args);
+    syncModalBackgroundInert();
     const next = openModals[openModals.length - 1];
     const active = document.activeElement;
     const activeGone = !active || active === document.body || (typeof document.body?.contains === "function" && !document.body.contains(active));
@@ -310,7 +366,7 @@ export function confirmationModal(title, content, onClose, wide = false, closeLa
   return typedModal("confirmation", title, content, onClose, wide, closeLabel);
 }
 
-export function bindLinearMenuKeyboard(menu) {
+export function bindLinearMenuKeyboard(menu, options = {}) {
   if (!menu?.addEventListener) return menu;
   const items = () => [...(menu.querySelectorAll?.('[role="menuitem"]') || [])]
     .filter((node) => node.getAttribute?.("disabled") == null && node.getAttribute?.("aria-disabled") !== "true");
@@ -328,6 +384,14 @@ export function bindLinearMenuKeyboard(menu) {
   setCurrent(0);
   menu.addEventListener("keydown", (event) => {
     if (event.isComposing || event.keyCode === 229) return;
+    if (event.key === "Tab" && typeof options.dismiss === "function") {
+      event.preventDefault();
+      event.stopPropagation();
+      const trigger = options.trigger;
+      options.dismiss();
+      focusAdjacentTabStop(trigger, event.shiftKey ? -1 : 1);
+      return;
+    }
     const nodes = items();
     if (!nodes.length) return;
     const active = event.target;
@@ -352,6 +416,25 @@ export function bindLinearMenuKeyboard(menu) {
     }
   });
   return menu;
+}
+
+function focusAdjacentTabStop(from, direction) {
+  if (!from || typeof document.querySelectorAll !== "function") return;
+  let nodes = [];
+  try {
+    nodes = [...document.querySelectorAll("button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])")]
+      .filter((node) => node.getAttribute?.("disabled") == null
+        && node.getAttribute?.("aria-hidden") !== "true"
+        && !node.inert
+        && node.getAttribute?.("inert") == null);
+  } catch {
+    return;
+  }
+  if (!nodes.length) return;
+  const index = nodes.indexOf(from);
+  const start = index >= 0 ? index : 0;
+  const next = nodes[(start + direction + nodes.length) % nodes.length];
+  try { next?.focus?.(); } catch {}
 }
 
 export function isDismissalEscape(event) {

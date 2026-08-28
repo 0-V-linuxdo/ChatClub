@@ -1,15 +1,15 @@
 {
   "schemaVersion": 4,
-  "appVersion": "「2026-08-29｜06:15:05」",
-  "manifestVersion": "2026.8.29.23",
+  "appVersion": "「2026-08-29｜06:40:28」",
+  "manifestVersion": "2026.8.29.24",
   "payloads": {
     "chromium": {
-      "appVersion": "「2026-08-29｜06:15:05」",
-      "sha256": "d43598dc291603397066b7ec12212b683de120a71a034aa694db63f7fd7169d5"
+      "appVersion": "「2026-08-29｜06:40:28」",
+      "sha256": "600f52031f9419033447d560a75b53f738ea41773e188e4c3356176b75372b7f"
     },
     "firefox": {
-      "appVersion": "「2026-08-29｜06:15:05」",
-      "sha256": "3f4b82cde86bafdfaffa108c96e15cac42f62ac3bc5f3bce31d718b534824778"
+      "appVersion": "「2026-08-29｜06:40:28」",
+      "sha256": "4a73b0a3cd182b73566712d0ac8520dea31dfb2457a5df08ba6d76e63855681e"
     }
   },
   "contentRuntime": {
@@ -205,8 +205,8 @@
     }
   },
   "floors": {
-    "appVersion": "「2026-08-29｜06:15:05」",
-    "manifestVersion": "2026.8.29.23",
+    "appVersion": "「2026-08-29｜06:40:28」",
+    "manifestVersion": "2026.8.29.24",
     "summaryConfigVersion": 81,
     "summarySites": {
       "chatgpt": 55,

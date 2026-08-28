@@ -403,7 +403,7 @@ export function createComposerController(dependencies = {}) {
     });
     const menu = el("div", {
       class: "popover-menu overlay-surface prompt-actions-popover",
-      role: "menu",
+      role: "menu", "aria-label": t("topbar.promptActions"),
       style: { top: `${top}px`, left: `${left}px` },
       onpointerdown: (menuEvent) => menuEvent.stopPropagation(),
       onclick: (menuEvent) => menuEvent.stopPropagation()
@@ -413,7 +413,7 @@ export function createComposerController(dependencies = {}) {
       actionsMenuItem(t("topbar.optimizePrompt"), "sparkles", optimizePrompt, "topbar.optimizePrompt")
     );
     document.body.append(backdrop, menu);
-    bindLinearMenuKeyboard(menu);
+    bindLinearMenuKeyboard(menu, { dismiss: closeActionsMenu, trigger: anchor });
     document.addEventListener("keydown", closeActionsMenuOnKeydown, true);
     window.addEventListener("resize", closeActionsMenu, true);
     window.addEventListener("scroll", closeActionsMenu, true);
