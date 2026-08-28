@@ -168,7 +168,7 @@ export function createViewerWindowChrome(options = {}) {
 
   function resizeHandle(direction) {
     return el("div", {
-      class: `overlay-viewer-resize-handle overlay-viewer-resize-handle-${direction} pocket-panel-resize-handle pocket-panel-resize-handle-${direction}`,
+      class: `overlay-viewer-resize-handle overlay-viewer-resize-handle-${direction}`,
       dataset: { direction },
       "aria-hidden": "true"
     });
@@ -206,7 +206,7 @@ export function createViewerWindowChrome(options = {}) {
           width: rect.width,
           height: rect.height
         };
-        panel.classList.add("overlay-viewer-resizing", "pocket-panel-resizing");
+        panel.classList.add("overlay-viewer-resizing");
         onPointerBlock(true);
         handle.setPointerCapture?.(event.pointerId);
       });
@@ -214,7 +214,7 @@ export function createViewerWindowChrome(options = {}) {
     const finishResize = () => {
       if (!resize) return;
       rememberGeometry(panel);
-      panel.classList.remove("overlay-viewer-resizing", "pocket-panel-resizing");
+      panel.classList.remove("overlay-viewer-resizing");
       onPointerBlock(false);
       resize = null;
     };

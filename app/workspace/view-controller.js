@@ -736,6 +736,7 @@ export function createWorkspaceViewController(dependencies = {}) {
     closePopovers();
     anchor.classList.add("popover-anchor", "workspace-popover-anchor");
     workspacePopoverAnchor = anchor;
+    anchor.setAttribute("aria-expanded", "true");
     const { group, mode } = options;
     const onSelect = async (app) => {
       closePopovers();
@@ -755,7 +756,6 @@ export function createWorkspaceViewController(dependencies = {}) {
     });
     const picker = el("div", {
       class: "popover-menu overlay-surface workspace-popover-menu app-picker-popover",
-      role: "menu",
       onpointerdown: (event) => event.stopPropagation(),
       onclick: (event) => event.stopPropagation()
     },
@@ -854,6 +854,8 @@ export function createWorkspaceViewController(dependencies = {}) {
     closePopovers();
     anchor.classList.add("popover-anchor", "workspace-popover-anchor");
     workspacePopoverAnchor = anchor;
+    anchor.setAttribute("aria-haspopup", "menu");
+    anchor.setAttribute("aria-expanded", "true");
     const rect = anchor.getBoundingClientRect();
     const right = Math.max(8, window.innerWidth - rect.right - LAYOUT_POPOVER_RIGHT_EXTENSION);
     const top = Math.min(rect.bottom + 7, window.innerHeight - 8);
@@ -924,7 +926,11 @@ export function createWorkspaceViewController(dependencies = {}) {
     document.querySelectorAll(".workspace-popover-menu, .workspace-popover-backdrop").forEach((node) => node.remove());
     document.querySelectorAll(".workspace-popover-anchor").forEach((node) => {
       node.classList.remove("popover-anchor", "workspace-popover-anchor");
+      if (node.getAttribute?.("aria-expanded") === "true") node.setAttribute("aria-expanded", "false");
     });
+    if (workspacePopoverAnchor?.getAttribute?.("aria-expanded") === "true") {
+      workspacePopoverAnchor.setAttribute("aria-expanded", "false");
+    }
     workspacePopoverAnchor?.classList?.remove("popover-anchor", "workspace-popover-anchor");
     workspacePopoverAnchor = null;
     document.removeEventListener("pointerdown", closePopoverOnOutsideInteraction, true);
@@ -953,6 +959,8 @@ export function createWorkspaceViewController(dependencies = {}) {
     closePopovers();
     anchor.classList.add("popover-anchor", "workspace-popover-anchor");
     workspacePopoverAnchor = anchor;
+    anchor.setAttribute("aria-haspopup", "menu");
+    anchor.setAttribute("aria-expanded", "true");
     const rect = anchor.getBoundingClientRect();
     const { menuHeaderButtons, menuDangerButtons } = renderWorkspaceTabMenuItems({
       anchor,

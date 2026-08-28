@@ -90,11 +90,23 @@ export function toast(message, kind = "info") {
     "aria-atomic": "true"
   }, message);
   host.append(item);
+  const duration = isError ? 6400 : 3200;
+  let hideTimer = 0;
+  const scheduleHide = (delay) => {
+    if (hideTimer) clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => {
+      hideTimer = 0;
+      item.classList.remove("show");
+      setTimeout(() => item.remove(), 240);
+    }, delay);
+  };
+  item.addEventListener("mouseenter", () => {
+    if (hideTimer) clearTimeout(hideTimer);
+    hideTimer = 0;
+  });
+  item.addEventListener("mouseleave", () => scheduleHide(duration));
   setTimeout(() => item.classList.add("show"), 20);
-  setTimeout(() => {
-    item.classList.remove("show");
-    setTimeout(() => item.remove(), 240);
-  }, 3200);
+  scheduleHide(duration);
 }
 
 const MODAL_TYPE_CONFIG = Object.freeze({
@@ -234,7 +246,7 @@ export function modal(title, content, onClose, wide = false, closeLabel = "Close
   }});
   const body = el("div", { class: "modal-body" }, content);
   const panel = el("section", {
-    class: `modal overlay-surface ${wide ? "modal-wide" : ""}`.trim(),
+    class: `modal overlay-surface ${wide ? "modal-wide" : ""} ${modalType === "confirmation" ? "modal-alertdialog" : ""}`.trim(),
     role: modalType === "confirmation" ? "alertdialog" : "dialog",
     "aria-modal": "true",
     "aria-labelledby": titleId,

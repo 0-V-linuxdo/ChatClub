@@ -114,11 +114,20 @@ assert.match(css, /\.settings-modal \.modal-header \{[^}]*min-height:\s*var\(--o
 assert.match(css, /\.modal-footer \{/);
 assert.match(css, /\.modal > \.modal-footer \{/);
 assert.match(css, /@media \(prefers-reduced-transparency: reduce\) \{[\s\S]*?\.toast,/);
+assert.match(css, /@media \(prefers-reduced-transparency: reduce\) \{[\s\S]*?\.prompt-image-remove,/);
+assert.match(css, /@media \(prefers-reduced-transparency: reduce\) \{[\s\S]*?\.frame-toast-position-sample/);
+assert.match(css, /\.overlay-panel-resize-handle,/);
+assert.match(css, /\.overlay-panel-resize-handle-left,[\s\S]*?width:\s*12px;/);
+assert.doesNotMatch(css, /\.share-panel-resize-handle-left,[\s\S]*?width:\s*8px;/);
+assert.match(css, /\.prompt-library-modal \{[^}]*width:\s*var\(--overlay-width-wide\);/s);
+assert.match(css, /\.prompt-library-modal \{[^}]*top:\s*var\(--prompt-library-top, var\(--overlay-panel-offset\)\);/s);
+assert.match(css, /\.modal\.modal-alertdialog \.modal-header h2 \{[^}]*color:\s*var\(--danger\);/s);
 assert.match(css, /\.summary-panel \{[^}]*max-width:\s*calc\(100vw - var\(--overlay-gutter-panel\)\);/s);
 assert.match(css, /\.popover-menu \{[^}]*max-width:\s*min\(260px, calc\(100vw - var\(--overlay-gutter-tight\)\)\);/s);
 assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?\.toast,\s*\n\s*\.toast\.show,/);
 
-assert.match(css, /\.overlay-window-button,\s*\n\.settings-window-button,/);
+assert.match(css, /\.overlay-window-button \{/);
+assert.doesNotMatch(css, /\.overlay-window-button,\s*\n\.settings-window-button,/);
 assert.match(css, /width:\s*var\(--overlay-close-size\);/);
 assert.doesNotMatch(
   css.slice(css.indexOf(".summary-panel {"), css.indexOf(".summary-panel.maximized")),
@@ -146,7 +155,7 @@ assert.match(
   dom,
   /const MODAL_TYPE_CONFIG = Object\.freeze\(\{\s*viewer: Object\.freeze\(\{ dismissOnBackdrop: true \}\),\s*editor: Object\.freeze\(\{ dismissOnBackdrop: false \}\),\s*task: Object\.freeze\(\{ dismissOnBackdrop: false \}\),\s*confirmation: Object\.freeze\(\{ dismissOnBackdrop: false \}\)\s*\}\);/s
 );
-assert.match(dom, /class: `modal overlay-surface \$\{wide \? "modal-wide" : ""\}`/);
+assert.match(dom, /class: `modal overlay-surface \$\{wide \? "modal-wide" : ""\} \$\{modalType === "confirmation" \? "modal-alertdialog" : ""\}`/);
 assert.match(dom, /role: modalType === "confirmation" \? "alertdialog" : "dialog"/);
 assert.match(dom, /"aria-modal": "true"/);
 assert.match(dom, /"aria-labelledby": titleId/);
@@ -191,6 +200,17 @@ assert.match(read("ui/viewer-window.js"), /const OVERLAY_SURFACE_FULLSCREEN_CLAS
 assert.match(read("ui/viewer-window.js"), /const VIEWER_WINDOW_FULLSCREEN_TOOLTIP_ID = "viewer\.fullscreen"/);
 assert.match(read("ui/viewer-window.js"), /options\.widthVar \|\| "--overlay-viewer-width"/);
 assert.match(read("ui/viewer-window.js"), /overlay-viewer-resize-handle/);
+assert.doesNotMatch(read("ui/viewer-window.js"), /pocket-panel-resize-handle/);
+assert.match(read("app/summary/controller.js"), /overlay-panel-resize-handle overlay-panel-resize-handle-left/);
+assert.match(read("app/share/controller.js"), /overlay-panel-resize-handle overlay-panel-resize-handle-left/);
+assert.match(agents, /History detail content may reuse Pocket/);
+assert.match(agents, /Prompt Library is a composer-anchored/);
+assert.match(agents, /Linear action menus may use `role="menu"`/);
+assert.match(read("chatClub.html"), /class="toast-host"/);
+assert.match(read("options.html"), /class="toast-host"/);
+assert.match(dom, /item\.addEventListener\("mouseenter"/);
+assert.match(read("app/composer/controller.js"), /"aria-haspopup": "menu"/);
+assert.doesNotMatch(read("app/workspace/view-controller.js"), /app-picker-popover",\s*\n\s*role: "menu"/);
 assert.doesNotMatch(read("ui/viewer-window.js"), /HTMLDialogElement|showModal\(|<dialog/);
 assert.match(read("app/pocket/controller.js"), /widthVar: "--pocket-panel-width"/);
 assert.doesNotMatch(read("app/history/controller.js"), /pocket-window-button/);

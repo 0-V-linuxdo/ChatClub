@@ -358,9 +358,9 @@ export function createShareController(ctx) {
           : null,
         el("main", { class: "share-panel-preview" }, renderPreview(format, hasPreview))
       ),
-      !state.shareMaximized ? el("div", { class: "share-panel-resize-handle share-panel-resize-handle-left", dataset: { direction: "left" }, "aria-hidden": "true" }) : null,
-      !state.shareMaximized ? el("div", { class: "share-panel-resize-handle share-panel-resize-handle-right", dataset: { direction: "right" }, "aria-hidden": "true" }) : null,
-      !state.shareMaximized ? el("div", { class: "share-panel-resize-handle share-panel-resize-handle-bottom", dataset: { direction: "bottom" }, "aria-hidden": "true" }) : null
+      !state.shareMaximized ? el("div", { class: "overlay-panel-resize-handle overlay-panel-resize-handle-left share-panel-resize-handle share-panel-resize-handle-left", dataset: { direction: "left" }, "aria-hidden": "true" }) : null,
+      !state.shareMaximized ? el("div", { class: "overlay-panel-resize-handle overlay-panel-resize-handle-right share-panel-resize-handle share-panel-resize-handle-right", dataset: { direction: "right" }, "aria-hidden": "true" }) : null,
+      !state.shareMaximized ? el("div", { class: "overlay-panel-resize-handle overlay-panel-resize-handle-bottom share-panel-resize-handle share-panel-resize-handle-bottom", dataset: { direction: "bottom" }, "aria-hidden": "true" }) : null
     );
     makeDraggable(panel, ".share-panel-header");
     makeShareResizable(panel);
@@ -418,7 +418,7 @@ export function createShareController(ctx) {
 
   function makeShareResizable(panel) {
     let resize = null;
-    for (const handle of panel.querySelectorAll(".share-panel-resize-handle")) {
+    for (const handle of panel.querySelectorAll(".overlay-panel-resize-handle")) {
       handle.addEventListener("pointerdown", (event) => {
         if (state.shareMaximized) return;
         event.preventDefault();

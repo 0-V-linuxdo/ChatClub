@@ -330,7 +330,10 @@ export function createComposerController(dependencies = {}) {
 
   function closeActionsMenu() {
     document.querySelectorAll(".prompt-actions-backdrop, .prompt-actions-popover").forEach((node) => node.remove());
-    document.querySelectorAll(".prompt-actions-button-active").forEach((node) => node.classList.remove("prompt-actions-button-active"));
+    document.querySelectorAll(".prompt-actions-button-active").forEach((node) => {
+      node.classList.remove("prompt-actions-button-active");
+      node.setAttribute("aria-expanded", "false");
+    });
     document.removeEventListener("keydown", closeActionsMenuOnKeydown, true);
     window.removeEventListener("resize", closeActionsMenu, true);
     window.removeEventListener("scroll", closeActionsMenu, true);
@@ -380,6 +383,8 @@ export function createComposerController(dependencies = {}) {
     topbar.closeSettingsMenu();
     workspace.closePopovers();
     anchor.classList.add("prompt-actions-button-active");
+    anchor.setAttribute("aria-haspopup", "menu");
+    anchor.setAttribute("aria-expanded", "true");
     const rect = anchor.getBoundingClientRect();
     const menuWidth = 236;
     const left = Math.max(8, Math.min(rect.left, window.innerWidth - menuWidth - 8));
@@ -1189,6 +1194,8 @@ export function createComposerController(dependencies = {}) {
           class: "prompt-actions-button compact-icon tooltip-trigger",
           type: "button",
           "aria-label": t("topbar.promptActions"),
+          "aria-haspopup": "menu",
+          "aria-expanded": "false",
           "data-tooltip": t("topbar.promptActions"),
           "data-tooltip-id": "topbar.promptActions",
           onclick: openActionsMenu,

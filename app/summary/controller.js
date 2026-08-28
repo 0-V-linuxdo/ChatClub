@@ -571,9 +571,9 @@ export function createSummaryController(ctx) {
           state.summaryView === "summary" ? renderSummaryResult() : renderSummaryPreview()
         )
       ),
-      !state.summaryMaximized ? el("div", { class: "summary-panel-resize-handle summary-panel-resize-handle-left", dataset: { direction: "left" }, "aria-hidden": "true" }) : null,
-      !state.summaryMaximized ? el("div", { class: "summary-panel-resize-handle summary-panel-resize-handle-right", dataset: { direction: "right" }, "aria-hidden": "true" }) : null,
-      !state.summaryMaximized ? el("div", { class: "summary-panel-resize-handle summary-panel-resize-handle-bottom", dataset: { direction: "bottom" }, "aria-hidden": "true" }) : null
+      !state.summaryMaximized ? el("div", { class: "overlay-panel-resize-handle overlay-panel-resize-handle-left summary-panel-resize-handle summary-panel-resize-handle-left", dataset: { direction: "left" }, "aria-hidden": "true" }) : null,
+      !state.summaryMaximized ? el("div", { class: "overlay-panel-resize-handle overlay-panel-resize-handle-right summary-panel-resize-handle summary-panel-resize-handle-right", dataset: { direction: "right" }, "aria-hidden": "true" }) : null,
+      !state.summaryMaximized ? el("div", { class: "overlay-panel-resize-handle overlay-panel-resize-handle-bottom summary-panel-resize-handle summary-panel-resize-handle-bottom", dataset: { direction: "bottom" }, "aria-hidden": "true" }) : null
     );
     makeDraggable(panel, ".summary-panel-header");
     makeSummaryResizable(panel);
@@ -627,7 +627,7 @@ export function createSummaryController(ctx) {
   
   function makeSummaryResizable(panel) {
     let resize = null;
-    const handles = panel.querySelectorAll(".summary-panel-resize-handle");
+    const handles = panel.querySelectorAll(".overlay-panel-resize-handle");
     for (const handle of handles) {
       handle.addEventListener("pointerdown", (event) => {
         event.preventDefault();
