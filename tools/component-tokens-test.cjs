@@ -47,6 +47,7 @@ const tokens = {
   "--control-pressed": "color-mix(in srgb, var(--primary) 16%, var(--panel))",
   "--control-selected": "color-mix(in srgb, var(--primary-2) 76%, var(--panel))",
   "--ui-compact-height": "var(--settings-action-size)",
+  "--ui-chrome-height": "34px",
   "--toast-text": "var(--text)"
 };
 
@@ -115,6 +116,14 @@ assert.match(css, /\.ui-row-action \.svg-icon \{[^}]*width:\s*16px;/s);
 assert.match(css, /\n\.share-panel-empty \{\s*\n\s*padding:\s*18px;[^}]*border:\s*1px dashed var\(--line\);/s);
 assert.match(css, /\.settings-empty-row \{[^}]*border:\s*1px dashed var\(--line\);/s);
 assert.match(css, /\.settings-tab\.active \{[^}]*background:\s*var\(--control-selected\);/s);
+assert.match(css, /\.settings-tab:hover \{[^}]*background:\s*var\(--control-hover\);/s);
+assert.match(css, /\.ui-list-row:hover,\s*\n\.settings-list-row:hover \{[^}]*background:\s*var\(--control-hover\);/s);
+assert.match(css, /\.settings-inner-tab:hover \{[^}]*background:\s*var\(--control-hover\);/s);
+assert.match(css, /\.summary-action-button \{[^}]*height:\s*var\(--ui-chrome-height\);/s);
+assert.match(css, /\.workspace-tabs-sidebar-search \.workspace-tabs-sidebar-search-input,\s*\n\.workspace-tabs-sidebar-search-input \{[^}]*line-height:\s*var\(--ui-control-height\);/s);
+assert.match(css, /\.tooltip-preview-brand-logo \{[^}]*border-radius:\s*var\(--ui-radius\);/s);
+assert.doesNotMatch(css, /font-size:\s*17px/, "headings must consume the type scale");
+assert.match(officialRules, /\.official-rules-tab:hover \{[^}]*background:\s*var\(--control-hover\);/s);
 assert.match(css, /\.popover-menu \.button \{[^}]*min-height:\s*var\(--ui-compact-height\);/s);
 assert.match(officialRules, /border-radius:\s*calc\(var\(--ui-radius\) \+ 2px\)/);
 assert.match(officialRules, /background:\s*var\(--control-selected\)/);
@@ -141,7 +150,10 @@ assert.match(agents, /do not reintroduce `#0a84ff`/);
 assert.match(agents, /--target-min: 24px/);
 assert.match(agents, /do not reintroduce 560–780 outliers/);
 assert.match(agents, /--ui-compact-height/);
+assert.match(agents, /--ui-chrome-height/);
 assert.match(agents, /--control-selected/);
+assert.match(agents, /not declared-only/);
+assert.match(agents, /heading `17px`/);
 assert.match(agents, /## Overlay Chrome Contract/);
 
 console.log("component tokens: ok");

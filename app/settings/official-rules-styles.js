@@ -113,7 +113,7 @@ const OFFICIAL_RULES_SETTINGS_CSS = `
 
 .official-rules-tab:hover {
   color: var(--text);
-  background: color-mix(in srgb, var(--primary-2) 28%, transparent);
+  background: var(--control-hover);
 }
 
 .official-rules-tab:focus-visible {

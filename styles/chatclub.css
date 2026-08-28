@@ -54,6 +54,7 @@
   --ui-control-height: var(--settings-control-height);
   --ui-action-size: var(--settings-action-size);
   --ui-compact-height: var(--settings-action-size);
+  --ui-chrome-height: 34px;
   --ui-row-height: var(--settings-row-height);
   --ui-cell-pad-x: var(--settings-cell-pad-x);
   --ui-header-height: var(--settings-header-height);
@@ -408,7 +409,7 @@ button { cursor: pointer; }
   background: transparent;
   color: var(--text);
   font-size: 12px;
-  line-height: 34px;
+  line-height: var(--ui-control-height);
   box-shadow: none;
   appearance: none;
   -webkit-appearance: none;
@@ -1128,7 +1129,7 @@ button { cursor: pointer; }
   width: 20px;
   height: 24px;
   border: 1px solid color-mix(in srgb, var(--primary) 48%, var(--line));
-  border-radius: 5px;
+  border-radius: var(--ui-radius);
   background: color-mix(in srgb, var(--primary) 10%, var(--panel));
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 8%, transparent);
   transition: border-color .12s ease, background-color .12s ease;
@@ -2327,7 +2328,7 @@ button { cursor: pointer; }
 
 .ui-list-row:hover,
 .settings-list-row:hover {
-  background: color-mix(in srgb, var(--panel-2) 68%, transparent);
+  background: var(--control-hover);
 }
 
 .ui-list-row > *,
@@ -3499,7 +3500,7 @@ body.tab-gesture-active * {
 
 .settings-tab:hover {
   color: var(--text);
-  background: color-mix(in srgb, var(--primary-2) 28%, transparent);
+  background: var(--control-hover);
   border-color: color-mix(in srgb, var(--line-strong) 65%, transparent);
 }
 
@@ -3592,7 +3593,7 @@ body.tab-gesture-active * {
   grid-row: 1;
   min-width: 6ch;
   font-size: 12px;
-  line-height: 34px;
+  line-height: var(--ui-control-height);
 }
 
 .shortcut-search-sizer {
@@ -3713,7 +3714,7 @@ body.tab-gesture-active * {
 
 .settings-inner-tab:hover {
   color: var(--text);
-  background: color-mix(in srgb, var(--primary-2) 28%, transparent);
+  background: var(--control-hover);
 }
 
 .settings-inner-tab.active {
@@ -5171,7 +5172,7 @@ body.settings-tab-context-menu-dragging iframe {
   width: 20px;
   height: 20px;
   flex: 0 0 auto;
-  border-radius: 5px;
+  border-radius: var(--ui-radius);
 }
 
 .tooltip-preview-button > span {
@@ -8671,7 +8672,7 @@ body.settings-tab-context-menu-dragging iframe {
 
 .settings-manage-title h4 {
   margin: 0 0 4px;
-  font-size: 17px;
+  font-size: var(--font-size-md);
 }
 
 .settings-manage-title p {
@@ -9119,7 +9120,7 @@ body.settings-tab-context-menu-dragging iframe {
   }
 
   .settings-modal-section-title h3 {
-    font-size: 17px;
+    font-size: var(--font-size-md);
   }
 
   .settings-shell {
@@ -9645,8 +9646,8 @@ body.settings-tab-context-menu-dragging iframe {
   max-width: 100%;
   min-width: 0;
   flex: 0 1 auto;
-  height: 34px;
-  min-height: 34px;
+  height: var(--ui-chrome-height);
+  min-height: var(--ui-chrome-height);
   padding: 0 clamp(9px, 1.35vw, 13px);
   font-size: 13px;
   font-weight: var(--font-weight-semibold);
@@ -9721,7 +9722,7 @@ body.settings-tab-context-menu-dragging iframe {
 @media (max-width: 480px) {
   .summary-action-button {
     flex: 0 0 auto;
-    width: 34px;
+    width: var(--ui-chrome-height);
     padding: 0;
   }
 
@@ -9742,7 +9743,7 @@ body.settings-tab-context-menu-dragging iframe {
   display: flex;
   align-items: flex-end;
   gap: 42px;
-  min-height: 34px;
+  min-height: var(--ui-chrome-height);
   border-bottom: 1px solid color-mix(in srgb, var(--summary-panel-result-border) 70%, var(--primary) 30%);
 }
 
@@ -9753,7 +9754,7 @@ body.settings-tab-context-menu-dragging iframe {
   border-radius: 0;
   background: transparent;
   color: var(--summary-panel-title);
-  min-height: 34px;
+  min-height: var(--ui-chrome-height);
   padding: 0 2px;
   font-size: 14px;
   font-weight: var(--font-weight-bold);
@@ -10677,7 +10678,7 @@ body:has(.chat-card:not(.fullscreen-hidden) .chat-frame.active + .frame-submit-t
 .app-picker-heading {
   margin: 0 0 17px;
   color: color-mix(in srgb, var(--muted) 72%, transparent);
-  font-size: 17px;
+  font-size: var(--font-size-md);
   font-weight: var(--font-weight-bold);
   line-height: 1.2;
   cursor: grab;
