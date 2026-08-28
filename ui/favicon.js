@@ -43,7 +43,7 @@ function renderChatFavicon(source = {}, deps = {}) {
     class: deps.className || "chat-favicon",
     src: initial,
     alt: "",
-    title: source.title || "",
+    title: deps.omitTitle ? "" : (source.title || ""),
     draggable: "false",
     loading: "lazy",
     decoding: "async",

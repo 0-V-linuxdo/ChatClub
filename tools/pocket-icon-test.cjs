@@ -43,8 +43,17 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   assert.match(stylesheetSource, /\.appearance-pocket-icon-option \{[\s\S]*?min-height: var\(--settings-control-height, 36px\)/);
   assert.doesNotMatch(stylesheetSource, /\.appearance-pocket-icon-option \{[\s\S]*?min-height: 88px/);
   assert.match(pocketSource, /pocket-group-favicons/);
+  assert.match(pocketSource, /omitTitle:\s*true/);
+  assert.match(pocketSource, /el\("span", \{ class: "pocket-group-time" \}/);
+  assert.match(pocketSource, /sourceMeta \? el\("span", \{ class: "pocket-group-meta" \}, sourceMeta\)/);
   assert.match(pocketSource, /from "\.\.\/\.\.\/ui\/favicon\.js"/);
   assert.match(stylesheetSource, /\.pocket-group-head/);
+  assert.match(stylesheetSource, /\.pocket-group-time \{[\s\S]*?text-align:\s*right/);
+  assert.match(
+    stylesheetSource,
+    /@media \(hover: hover\) and \(pointer: fine\) \{[\s\S]*?\.pocket-group-button:has\(\.chat-favicon-stack:hover\) \.pocket-group-meta/,
+    "Pocket source names stay hidden until the favicon stack is hovered"
+  );
   assert.match(stylesheetSource, /\.chat-favicon-stack/);
 
   i18n.setLanguage("zh_CN");

@@ -398,6 +398,11 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   assert.match(panelSource, /pocket-empty prompt-history-main-empty/);
   assert.match(panelSource, /pocket-sidebar-empty/);
   assert.match(panelSource, /prompt-history-sidebar-meta/);
+  assert.match(panelSource, /omitTitle:\s*true/);
+  assert.match(
+    panelSource,
+    /el\("time", \{ class: "prompt-history-sidebar-time", datetime: item\.createdAt \|\| "" \}, promptHistoryTimeLabel\(item\.createdAt\)\)/
+  );
   assert.match(modelSource, /export function promptHistorySourceMeta/);
   assert.match(panelSource, /entry\.appName\s*\n\s*\? el\("span", \{ class: "pocket-entry-source"/);
   assert.match(panelSource, /toggleHistoryPanelFocusMode/);
@@ -432,6 +437,12 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   );
   assert.match(stylesheetSource, /\.prompt-history-header-title strong \{[\s\S]*?text-overflow:\s*ellipsis/);
   assert.match(stylesheetSource, /\.prompt-history-sidebar-pocket/);
+  assert.match(stylesheetSource, /\.prompt-history-sidebar-time \{[\s\S]*?text-align:\s*right/);
+  assert.match(
+    stylesheetSource,
+    /@media \(hover: hover\) and \(pointer: fine\) \{[\s\S]*?\.prompt-history-sidebar-item:has\(\.chat-favicon-stack:hover\) \.prompt-history-sidebar-meta/,
+    "History source names stay hidden until the favicon stack is hovered"
+  );
   assert.match(stylesheetSource, /\.chat-favicon-stack/);
   assert.match(stylesheetSource, /\.prompt-history-turn-text\s*\{/);
   assert.match(stylesheetSource, /\.prompt-history-detail-fallback\s*\{/);

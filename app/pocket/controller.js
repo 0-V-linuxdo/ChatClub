@@ -860,6 +860,7 @@ export function createPocketController(ctx) {
 
   function pocketSidebarItem(batch, activeBatch, redraw) {
     const active = batch.id === activeBatch?.id;
+    const sourceMeta = pocketBatchMeta(batch);
     const favicons = renderChatFaviconStack(
       uniqueChatFaviconSources(batch.entries || [], (entry) => ({
         href: entry.chatUrl,
@@ -869,6 +870,7 @@ export function createPocketController(ctx) {
       })),
       {
         effectiveFaviconUrl,
+        omitTitle: true,
         stackClass: "pocket-group-favicons"
       }
     );
@@ -885,10 +887,10 @@ export function createPocketController(ctx) {
     },
       el("span", { class: "pocket-group-head" },
         favicons,
-        el("span", { class: "pocket-group-question" }, pocketBatchQuestion(batch))
+        el("span", { class: "pocket-group-question" }, pocketBatchQuestion(batch)),
+        el("span", { class: "pocket-group-time" }, pocketBatchTitle(batch))
       ),
-      el("span", { class: "pocket-group-time" }, pocketBatchTitle(batch)),
-      el("span", { class: "pocket-group-meta" }, pocketBatchMeta(batch))
+      sourceMeta ? el("span", { class: "pocket-group-meta" }, sourceMeta) : null
     );
   }
 

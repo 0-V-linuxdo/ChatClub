@@ -73,6 +73,13 @@ globalThis.document = {
   assert.match(String(stack.className), /chat-favicon-stack/);
   assert.equal(stack.children.filter((child) => child.tagName === "img").length, 3);
   assert.equal(stack.children[0].src, "https://chatgpt.com/favicon.ico");
+  assert.equal(stack.children[0].attributes.title, "ChatGPT");
+
+  const untitled = renderChatFaviconStack(
+    [{ href: "https://chatgpt.com/", title: "ChatGPT" }],
+    { effectiveFaviconUrl: (href) => href, omitTitle: true }
+  );
+  assert.equal(untitled.children[0].attributes.title, "");
 
   console.log("sidebar favicons: ok");
 })().then(() => {

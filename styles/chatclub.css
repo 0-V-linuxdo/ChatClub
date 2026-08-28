@@ -5636,6 +5636,24 @@ body.settings-tab-context-menu-dragging iframe {
   -webkit-box-orient: vertical;
 }
 
+.prompt-history-sidebar-favicons,
+.prompt-history-conversation-favicons {
+  margin-top: 2px;
+}
+
+.prompt-history-sidebar-preview {
+  min-width: 0;
+  flex: 1 1 auto;
+  color: currentColor;
+  font-size: 13px;
+  font-weight: 720;
+  line-height: 1.35;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
 .prompt-history-pocket-badge,
 .prompt-history-sidebar-pocket {
   flex: 0 0 auto;
@@ -5659,13 +5677,17 @@ body.settings-tab-context-menu-dragging iframe {
 }
 
 .prompt-history-sidebar-time {
-  min-width: 0;
+  flex: 0 0 auto;
+  margin-left: auto;
+  margin-top: 2px;
+  max-width: 46%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: color-mix(in srgb, var(--text) 68%, var(--muted));
   font-size: 11px;
   line-height: 1.35;
+  text-align: right;
 }
 
 .prompt-history-sidebar-meta {
@@ -6208,6 +6230,7 @@ body.settings-tab-context-menu-dragging iframe {
 
 .pocket-group-question {
   min-width: 0;
+  flex: 1 1 auto;
   color: currentColor;
   font-size: 13px;
   font-weight: 720;
@@ -6220,7 +6243,6 @@ body.settings-tab-context-menu-dragging iframe {
 
 .pocket-group-time,
 .pocket-group-meta {
-  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -6229,11 +6251,60 @@ body.settings-tab-context-menu-dragging iframe {
 }
 
 .pocket-group-time {
+  flex: 0 0 auto;
+  margin-left: auto;
+  margin-top: 2px;
+  max-width: 46%;
   color: color-mix(in srgb, var(--text) 68%, var(--muted));
+  text-align: right;
 }
 
 .pocket-group-meta {
+  min-width: 0;
   color: var(--muted);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .pocket-group-button:has(.chat-favicon-stack),
+  .prompt-history-sidebar-item:has(.chat-favicon-stack) {
+    position: relative;
+  }
+
+  .pocket-group-button:has(.chat-favicon-stack) .pocket-group-meta,
+  .prompt-history-sidebar-item:has(.chat-favicon-stack) .prompt-history-sidebar-meta {
+    position: absolute;
+    left: 10px;
+    top: 34px;
+    z-index: 6;
+    box-sizing: border-box;
+    width: max-content;
+    max-width: calc(100% - 20px);
+    padding: 5px 8px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--panel) 96%, var(--bg));
+    box-shadow: 0 10px 28px color-mix(in srgb, #000 22%, transparent);
+    overflow: visible;
+    text-overflow: unset;
+    white-space: normal;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateY(-3px);
+    transition: opacity 0.12s ease, transform 0.12s ease, visibility 0.12s ease;
+  }
+
+  .pocket-group-button:has(.chat-favicon-stack:hover),
+  .prompt-history-sidebar-item:has(.chat-favicon-stack:hover) {
+    z-index: 3;
+  }
+
+  .pocket-group-button:has(.chat-favicon-stack:hover) .pocket-group-meta,
+  .prompt-history-sidebar-item:has(.chat-favicon-stack:hover) .prompt-history-sidebar-meta {
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+  }
 }
 
 .pocket-sidebar-empty {
