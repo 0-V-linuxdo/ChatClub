@@ -256,7 +256,7 @@ globalThis.document = {
   assert.match(source, /forgetWorkspaceTabFullText/, "deleting a tab must drop its recorded full text");
   assert.match(css, /\.workspace-tabs-sidebar-search-input/, "the search field must be styled in the sidebar");
   assert.match(css, /\.workspace-tabs-sidebar-search\s*\{[^}]*border:\s*1px solid/, "the search glyph must sit inside one bordered field");
-  assert.match(css, /\.workspace-tabs-sidebar-search\s*\{[^}]*height:\s*36px/, "the search field height must match tab rows");
+  assert.match(css, /\.workspace-tabs-sidebar-search\s*\{[^}]*height:\s*var\(--ui-control-height\)/, "the search field height must match tab rows");
   assert.match(css, /\.workspace-tabs-sidebar-search\s*\{[^}]*margin:\s*10px 8px 4px/, "the search field must align with tab row width");
   assert.match(css, /\.workspace-tabs-sidebar-item\s*\{[^}]*min-height:\s*36px/);
   assert.match(css, /\.workspace-tabs-sidebar-list\s*\{[^}]*padding:\s*4px 8px 8px/);

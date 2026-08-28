@@ -107,7 +107,11 @@ Page chrome besides overlays uses the forest-green 8px system through tokens on 
 - `--focus-ring` for `:focus-visible`; `--drop-indicator` for insert carets (do not reintroduce `#0a84ff`)
 - Shell: `--topbar-height: 51px`; `--workspace-z-sidebar` / `--workspace-z-topbar` / `--workspace-z-topbar-edit` / `--workspace-z-topbar-controls`
 - Type: `--font-family` is system-ui. Do not load Inter. `--font-size` 13px / `--font-size-sm` 12px / `--font-size-xs` 11px / `--font-size-md` 15px. Spacing `--space-1`…`--space-4` is the 4px scale. Weight is `--font-weight-normal` 500 / `--font-weight-medium` 600 / `--font-weight-semibold` 650 / `--font-weight-bold` 760 / `--font-weight-heavy` 800 — do not reintroduce 560–780 outliers
-- Control: `--disabled-opacity: 0.48`; `--target-min: 24px` for WCAG 2.5.8 pointer targets. Inputs, chips, and list rows use `--ui-radius`, not 7px
+- Control: `--disabled-opacity: 0.48`; `--target-min: 24px` for WCAG 2.5.8 pointer targets. Inputs, chips, and list rows use `--ui-radius`, not 7px or a literal `8px`. Compact tools use `--ui-compact-height` (32); do not collapse topbar 38 into that scale
+- Control states: `--control-hover` → `--hover`; `--control-pressed` and `--control-selected` for segmented/list/sidebar press and selected fills. `--toast-text` follows `--text`
+- Search fields share one `:focus-within` ring (`.workspace-tabs-sidebar-search`, `.shortcut-search`). Official-rules tabs consume the inner-tabs track (`calc(var(--ui-radius) + 2px)`) and `--control-selected`
+- Empty states (`.ui-empty-state`, `.pocket-empty`, `.share-panel-empty`, `.settings-empty-row`, `.official-rules-empty`) use dashed `--line` + `--ui-radius`. Do not add a third card system or empty-state illustrations
+- Sticky chrome: list/sidebar rows keep `scroll-margin-top` against `--topbar-height` (WCAG 2.4.11). Do not change overlay z-index to work around this
 - `.ui-list` and `.settings-list` share one base rule. Official-rules injected CSS consumes the same tokens (`--line`, not an undeclared `--border`)
 - CSS `::before` / `::after` tooltips stay `display: none`; `ui/tooltip.js` owns hover copy
 - Do not change `--overlay-*` numeric values; Overlay Chrome Contract owns those

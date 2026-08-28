@@ -798,7 +798,7 @@ globalThis.document = {
     "compact segmented controls must use the full available width"
   );
   assert.match(modelStyles, /\.model-preference-segmented-heading\s*\{[^}]*display:\s*inline-flex/s);
-  assert.match(modelStyles, /\.model-preference-segmented-info\s*\{[^}]*border-radius:\s*5px/s);
+  assert.match(modelStyles, /\.model-preference-segmented-info\s*\{[^}]*border-radius:\s*var\(--ui-radius\)/s);
   assert.match(modelStyles, /\.model-preference-segmented-info:focus-visible\s*\{[^}]*box-shadow:/s);
   assert.doesNotMatch(modelStyles, /model-thinking-toggle/);
   assert.doesNotMatch(modelStyles, /model-preference-all-sources-(?:control|heading|title|info|segments|option)/);

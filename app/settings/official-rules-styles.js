@@ -93,7 +93,7 @@ const OFFICIAL_RULES_SETTINGS_CSS = `
   box-sizing: border-box;
   padding: 4px;
   border: 1px solid var(--line);
-  border-radius: var(--ui-radius);
+  border-radius: calc(var(--ui-radius) + 2px);
   background: color-mix(in srgb, var(--panel-2) 60%, transparent);
 }
 
@@ -124,7 +124,7 @@ const OFFICIAL_RULES_SETTINGS_CSS = `
 .official-rules-tab[aria-selected="true"] {
   color: var(--text);
   border-color: color-mix(in srgb, var(--primary) 52%, var(--line));
-  background: color-mix(in srgb, var(--primary-2) 70%, var(--panel));
+  background: var(--control-selected);
   box-shadow: 0 1px 0 color-mix(in srgb, white 8%, transparent) inset;
 }
 
@@ -277,6 +277,12 @@ const OFFICIAL_RULES_SETTINGS_CSS = `
   border: 1px solid var(--line);
   border-radius: var(--ui-radius);
   background: color-mix(in srgb, var(--panel-2) 64%, var(--panel));
+}
+
+.official-rules-empty {
+  text-align: center;
+  border-style: dashed;
+  background: color-mix(in srgb, var(--panel) 86%, var(--bg));
 }
 
 .official-rules-release-notes {

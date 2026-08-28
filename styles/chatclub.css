@@ -20,6 +20,9 @@
   --soft: var(--primary-2);
   --link: var(--primary);
   --hover: color-mix(in srgb, var(--primary) 9%, var(--panel));
+  --control-hover: var(--hover);
+  --control-pressed: color-mix(in srgb, var(--primary) 16%, var(--panel));
+  --control-selected: color-mix(in srgb, var(--primary-2) 76%, var(--panel));
   --shadow: 0 16px 40px rgba(24, 36, 32, 0.16);
   --focus-ring: color-mix(in srgb, var(--primary) 54%, transparent);
   --drop-indicator: var(--primary);
@@ -50,6 +53,7 @@
   --ui-radius: var(--settings-radius);
   --ui-control-height: var(--settings-control-height);
   --ui-action-size: var(--settings-action-size);
+  --ui-compact-height: var(--settings-action-size);
   --ui-row-height: var(--settings-row-height);
   --ui-cell-pad-x: var(--settings-cell-pad-x);
   --ui-header-height: var(--settings-header-height);
@@ -107,7 +111,7 @@
   --workspace-z-topbar-controls: 101;
   --settings-modal-app-icon: #000000;
   --toast-bg: rgba(255, 255, 255, 0.96);
-  --toast-text: #17201c;
+  --toast-text: var(--text);
   --toast-border: rgba(23, 32, 28, 0.14);
   --tooltip-bg: #4a4a4a;
   --tooltip-text: #ffffff;
@@ -158,7 +162,6 @@
   --summary-panel-code-text: var(--text);
   --settings-modal-app-icon: #ffffff;
   --toast-bg: rgba(17, 22, 20, 0.96);
-  --toast-text: #e8efeb;
   --toast-border: rgba(255, 255, 255, 0.12);
   --overlay-backdrop: rgba(8, 12, 11, 0.55);
 }
@@ -205,7 +208,6 @@
     --summary-panel-code-text: var(--text);
     --settings-modal-app-icon: #ffffff;
     --toast-bg: rgba(17, 22, 20, 0.96);
-    --toast-text: #e8efeb;
     --toast-border: rgba(255, 255, 255, 0.12);
     --overlay-backdrop: rgba(8, 12, 11, 0.55);
   }
@@ -330,9 +332,9 @@ button { cursor: pointer; }
 .workspace-tabs-sidebar-sort,
 .workspace-tabs-sidebar-new-folder {
   flex: 0 0 auto;
-  width: 32px;
-  height: 32px;
-  min-height: 32px;
+  width: var(--ui-compact-height);
+  height: var(--ui-compact-height);
+  min-height: var(--ui-compact-height);
   color: var(--text);
   background: var(--panel-2);
   border-color: var(--line-strong);
@@ -360,7 +362,7 @@ button { cursor: pointer; }
 
 .workspace-tabs-sidebar-cleanup:disabled {
   color: var(--muted);
-  opacity: .42;
+  opacity: var(--disabled-opacity);
 }
 
 .workspace-tabs-sidebar-search {
@@ -369,7 +371,7 @@ button { cursor: pointer; }
   align-items: center;
   gap: 8px;
   min-width: 0;
-  height: 36px;
+  height: var(--ui-control-height);
   margin: 10px 8px 4px;
   padding: 0 10px;
   border: 1px solid var(--line);
@@ -379,7 +381,8 @@ button { cursor: pointer; }
   cursor: text;
 }
 
-.workspace-tabs-sidebar-search:focus-within {
+.workspace-tabs-sidebar-search:focus-within,
+.shortcut-search:focus-within {
   border-color: color-mix(in srgb, var(--primary) 70%, var(--line));
   color: var(--text);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 16%, transparent);
@@ -441,7 +444,7 @@ button { cursor: pointer; }
   margin: 0 8px 12px;
   padding: 10px 12px;
   border: 1px dashed var(--line);
-  border-radius: 8px;
+  border-radius: var(--ui-radius);
   color: var(--muted);
   font-size: 12px;
   line-height: 1.45;
@@ -495,7 +498,7 @@ button { cursor: pointer; }
   min-height: 36px;
   padding: 8px 10px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--ui-radius);
   background: transparent;
   color: var(--text);
   cursor: grab;
@@ -506,6 +509,10 @@ button { cursor: pointer; }
 .workspace-tabs-sidebar-item:has(:focus-visible),
 .workspace-tabs-sidebar-item.is-menu-open {
   background: color-mix(in srgb, var(--panel-2) 80%, var(--bg));
+}
+
+.workspace-tabs-sidebar-item:active:not(.is-current):not(.is-editing):not(.dragging) {
+  background: var(--control-pressed);
 }
 
 .workspace-tabs-sidebar-item.is-current {
@@ -572,7 +579,7 @@ button { cursor: pointer; }
 .workspace-tabs-sidebar-group.drop-into,
 .workspace-tabs-sidebar-list.drop-into {
   box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--primary) 55%, transparent);
-  border-radius: 8px;
+  border-radius: var(--ui-radius);
 }
 
 .workspace-tabs-sidebar-folder {
@@ -585,7 +592,7 @@ button { cursor: pointer; }
   min-height: 36px;
   padding: 6px 8px 6px 6px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--ui-radius);
   background: color-mix(in srgb, var(--panel-2) 55%, transparent);
   color: var(--text);
   cursor: grab;
@@ -1068,7 +1075,7 @@ button { cursor: pointer; }
   min-height: 72px;
   padding: 8px 6px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--ui-radius);
   background: transparent;
   color: var(--text);
   cursor: grab;
@@ -1139,7 +1146,7 @@ button { cursor: pointer; }
   min-height: 72px;
   padding: 8px 10px;
   border: 1px dashed color-mix(in srgb, var(--line) 82%, transparent);
-  border-radius: 8px;
+  border-radius: var(--ui-radius);
   color: var(--muted);
   font-size: 12px;
 }
@@ -1381,7 +1388,7 @@ button { cursor: pointer; }
   overflow: hidden;
   white-space: nowrap;
   cursor: pointer;
-  border-radius: 8px;
+  border-radius: var(--ui-radius);
   text-align: left;
   transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
 }
@@ -1478,7 +1485,7 @@ button { cursor: pointer; }
   height: 24px;
   min-width: 24px;
   border: 1px solid color-mix(in srgb, var(--line) 78%, var(--text) 22%);
-  border-radius: 5px;
+  border-radius: var(--ui-radius);
   background: var(--soft);
 }
 
@@ -1571,8 +1578,8 @@ button { cursor: pointer; }
 }
 
 .prompt-send-button .svg-icon {
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
 }
 
 .prompt-send-queue-badge {
@@ -1749,7 +1756,7 @@ button { cursor: pointer; }
   width: 100%;
   height: 100%;
   display: block;
-  border-radius: 10px;
+  border-radius: var(--ui-radius);
   object-fit: cover;
   background: var(--soft);
   border: 1px solid color-mix(in srgb, var(--line) 88%, var(--text) 12%);
@@ -2110,7 +2117,7 @@ button { cursor: pointer; }
 }
 
 .global-tooltip {
-  --tooltip-bubble: color-mix(in srgb, var(--tooltip-bg, #4a4a4a) 92%, #000 8%);
+  --tooltip-bubble: color-mix(in srgb, var(--tooltip-bg) 92%, #000 8%);
   position: fixed;
   left: 0;
   top: 0;
@@ -2133,11 +2140,11 @@ button { cursor: pointer; }
 .global-tooltip-label {
   max-width: inherit;
   padding: 8px 12px;
-  border: 1px solid color-mix(in srgb, var(--tooltip-bg, #4a4a4a) 78%, #fff 22%);
+  border: 1px solid color-mix(in srgb, var(--tooltip-bg) 78%, #fff 22%);
   border-radius: var(--overlay-radius);
   background: var(--tooltip-bubble);
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.34);
-  color: var(--tooltip-text, #ffffff);
+  color: var(--tooltip-text);
   font-size: 12px;
   font-weight: var(--font-weight-semibold);
   line-height: 1.2;
@@ -2358,8 +2365,18 @@ button { cursor: pointer; }
 }
 
 .ui-row-action .svg-icon {
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
+}
+
+.workspace-tabs-sidebar-item,
+.workspace-tabs-sidebar-folder,
+.prompt-history-sidebar-item,
+.settings-tab,
+.ui-list-row,
+.settings-list-row {
+  scroll-margin-top: calc(var(--topbar-height) + var(--space-2));
+  scroll-margin-bottom: 72px;
 }
 
 .ui-empty-state {
@@ -3247,8 +3264,8 @@ body.tab-gesture-active * {
 }
 
 .prompt-shell-expanded.prompt-shell-has-images .prompt-send-button.tooltip-trigger .svg-icon {
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
 }
 
 .prompt-input:not(.prompt-input-expanded) {
@@ -3477,7 +3494,7 @@ body.tab-gesture-active * {
   text-align: left;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--ui-radius);
 }
 
 .settings-tab:hover {
@@ -3488,13 +3505,13 @@ body.tab-gesture-active * {
 
 .settings-tab.active {
   color: var(--text);
-  background: color-mix(in srgb, var(--primary-2) 76%, var(--panel));
+  background: var(--control-selected);
   border-color: color-mix(in srgb, var(--primary) 58%, var(--line));
 }
 
 .settings-tab .svg-icon {
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
   color: var(--primary);
 }
 
@@ -3553,19 +3570,13 @@ body.tab-gesture-active * {
   width: max-content;
   max-width: 100%;
   min-width: 0;
-  height: var(--settings-control-height);
+  height: var(--ui-control-height);
   padding: 0 6px 0 10px;
   border: 1px solid var(--line);
-  border-radius: var(--settings-radius);
+  border-radius: var(--ui-radius);
   background: var(--panel-2);
   color: var(--muted);
   cursor: text;
-}
-
-.shortcut-search:focus-within {
-  border-color: color-mix(in srgb, var(--primary) 70%, var(--line));
-  color: var(--text);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 16%, transparent);
 }
 
 .shortcut-search .svg-icon {
@@ -3707,7 +3718,7 @@ body.tab-gesture-active * {
 
 .settings-inner-tab.active {
   color: var(--text);
-  background: color-mix(in srgb, var(--primary-2) 70%, var(--panel));
+  background: var(--control-selected);
   border-color: color-mix(in srgb, var(--primary) 52%, var(--line));
   box-shadow: 0 1px 0 color-mix(in srgb, white 8%, transparent) inset;
 }
@@ -4057,7 +4068,7 @@ body.tab-gesture-active * {
   white-space: nowrap;
   text-overflow: ellipsis;
   border: 1px solid color-mix(in srgb, var(--primary) 48%, var(--toast-border));
-  border-radius: 8px;
+  border-radius: var(--ui-radius);
   background: var(--toast-bg);
   box-shadow: var(--shadow);
   backdrop-filter: blur(12px);
@@ -4198,7 +4209,7 @@ body.tab-gesture-active * {
   gap: 8px;
   padding: 6px;
   border: 1px dashed color-mix(in srgb, var(--line) 72%, transparent);
-  border-radius: 8px;
+  border-radius: var(--ui-radius);
   background: color-mix(in srgb, var(--panel-2) 24%, transparent);
   transition: border-color 120ms ease, background 120ms ease;
 }
@@ -4232,7 +4243,7 @@ body.tab-gesture-active * {
   align-items: center;
   padding: 10px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--ui-radius);
   background: color-mix(in srgb, var(--panel-2) 60%, transparent);
   cursor: grab;
   user-select: none;
@@ -4318,7 +4329,7 @@ body.settings-tab-group-button-dragging iframe {
   place-items: center;
   padding: 10px 12px;
   border: 1px dashed var(--line);
-  border-radius: 8px;
+  border-radius: var(--ui-radius);
   color: var(--muted);
   font-size: 12px;
   text-align: center;
@@ -4352,7 +4363,7 @@ body.settings-tab-group-button-dragging iframe {
   gap: 8px;
   padding: 6px;
   border: 1px dashed color-mix(in srgb, var(--line) 72%, transparent);
-  border-radius: 8px;
+  border-radius: var(--ui-radius);
   background: color-mix(in srgb, var(--panel-2) 24%, transparent);
   transition: border-color 120ms ease, background 120ms ease;
 }
@@ -4386,7 +4397,7 @@ body.settings-tab-group-button-dragging iframe {
   align-items: center;
   padding: 10px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--ui-radius);
   background: color-mix(in srgb, var(--panel-2) 60%, transparent);
   cursor: grab;
   user-select: none;
@@ -5113,7 +5124,7 @@ body.settings-tab-context-menu-dragging iframe {
   gap: var(--space-2);
   min-width: 38px;
   max-width: 100%;
-  height: 32px;
+  height: var(--ui-compact-height);
   padding: 0 10px;
   overflow: hidden;
   color: var(--text);
@@ -5232,7 +5243,7 @@ body.settings-tab-context-menu-dragging iframe {
 .prompt-history-image-more {
   width: 24px;
   height: 24px;
-  border-radius: 5px;
+  border-radius: var(--ui-radius);
   border: 1px solid var(--line);
   background: var(--soft);
   object-fit: cover;
@@ -5459,8 +5470,8 @@ body.settings-tab-context-menu-dragging iframe {
 }
 
 .prompt-history-window-button .svg-icon {
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
 }
 
 .prompt-history-window-button:hover {
@@ -5542,7 +5553,7 @@ body.settings-tab-context-menu-dragging iframe {
   gap: 4px;
   padding: 10px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--ui-radius);
   background: transparent;
   color: var(--muted);
   font: inherit;
@@ -5670,7 +5681,7 @@ body.settings-tab-context-menu-dragging iframe {
 
 .prompt-history-sidebar-empty {
   border: 1px dashed var(--line);
-  border-radius: 8px;
+  border-radius: var(--ui-radius);
 }
 
 .prompt-history-main {
@@ -5743,7 +5754,7 @@ body.settings-tab-context-menu-dragging iframe {
 .prompt-history-detail-fallback .prompt-history-detail-text {
   padding: 10px;
   border: 1px dashed var(--line);
-  border-radius: 8px;
+  border-radius: var(--ui-radius);
   background: var(--bg);
   color: var(--muted);
 }
@@ -5914,7 +5925,7 @@ body.settings-tab-context-menu-dragging iframe {
   height: 30px;
   padding: 0;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--ui-radius);
   background: transparent;
   color: var(--primary);
   cursor: pointer;
@@ -6114,7 +6125,7 @@ body.settings-tab-context-menu-dragging iframe {
   gap: 5px;
   padding: 10px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--ui-radius);
   background: transparent;
   color: var(--muted);
   cursor: pointer;
@@ -6209,7 +6220,7 @@ body.settings-tab-context-menu-dragging iframe {
     max-width: 100%;
     padding: 5px 8px;
     border: 1px solid var(--line);
-    border-radius: 8px;
+    border-radius: var(--ui-radius);
     background: color-mix(in srgb, var(--panel) 96%, var(--bg));
     box-shadow: 0 10px 28px color-mix(in srgb, #000 22%, transparent);
     overflow: visible;
@@ -6241,7 +6252,7 @@ body.settings-tab-context-menu-dragging iframe {
   place-items: center;
   padding: 16px;
   border: 1px dashed var(--line);
-  border-radius: 8px;
+  border-radius: var(--ui-radius);
   color: var(--muted);
   font-size: 13px;
   text-align: center;
@@ -6310,7 +6321,7 @@ body.settings-tab-context-menu-dragging iframe {
 
 .pocket-action-toggle {
   flex: 0 0 auto;
-  min-height: 32px;
+  min-height: var(--ui-compact-height);
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
@@ -6331,7 +6342,7 @@ body.settings-tab-context-menu-dragging iframe {
   gap: 12px;
   padding: 10px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--ui-radius);
   background: color-mix(in srgb, var(--panel) 88%, var(--bg));
 }
 
@@ -6549,7 +6560,7 @@ body.settings-tab-context-menu-dragging iframe {
   height: 100%;
   padding: 14px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--ui-radius);
   background: color-mix(in srgb, var(--panel) 90%, var(--bg));
 }
 
@@ -6670,7 +6681,7 @@ body.settings-tab-context-menu-dragging iframe {
   gap: 6px;
   padding: 10px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--ui-radius);
   background: var(--bg);
 }
 
@@ -7580,7 +7591,7 @@ body.settings-tab-context-menu-dragging iframe {
   padding: 0;
   color: var(--muted);
   border: 0;
-  border-radius: 5px;
+  border-radius: var(--ui-radius);
   background: transparent;
   cursor: help;
   outline: none;
@@ -8025,8 +8036,13 @@ body.settings-tab-context-menu-dragging iframe {
   display: grid;
   place-items: center;
   min-height: 96px;
+  padding: 16px;
   color: var(--muted);
   font-size: 13px;
+  text-align: center;
+  border: 1px dashed var(--line);
+  border-radius: var(--ui-radius);
+  background: color-mix(in srgb, var(--panel) 86%, var(--bg));
 }
 
 .summary-collector-list .settings-list-header,
@@ -8151,8 +8167,8 @@ body.settings-tab-context-menu-dragging iframe {
 }
 
 .settings-row-icon-action .svg-icon {
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
 }
 
 .settings-check {
@@ -8569,7 +8585,7 @@ body.settings-tab-context-menu-dragging iframe {
   color: color-mix(in srgb, var(--text) 88%, var(--muted));
   background: color-mix(in srgb, var(--primary) 13%, var(--panel-2));
   border: 1px solid color-mix(in srgb, var(--primary) 42%, var(--line));
-  border-radius: 8px;
+  border-radius: var(--ui-radius);
 }
 
 .settings-info-callout .svg-icon {
@@ -8841,7 +8857,7 @@ body.settings-tab-context-menu-dragging iframe {
   font-size: 12px;
   line-height: 1.35;
   border: 1px solid color-mix(in srgb, var(--warning) 36%, var(--line));
-  border-radius: 8px;
+  border-radius: var(--ui-radius);
   background: color-mix(in srgb, var(--warning) 12%, var(--panel));
 }
 
@@ -8866,7 +8882,7 @@ body.settings-tab-context-menu-dragging iframe {
   min-height: 46px;
   padding: 9px 11px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--ui-radius);
   background: color-mix(in srgb, var(--panel) 76%, transparent);
 }
 
@@ -8931,7 +8947,7 @@ body.settings-tab-context-menu-dragging iframe {
   gap: 8px;
   padding: 11px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--ui-radius);
   background: color-mix(in srgb, var(--panel-2) 56%, transparent);
 }
 
@@ -9221,8 +9237,8 @@ body.settings-tab-context-menu-dragging iframe {
 }
 
 .overlay-window-button .svg-icon {
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
 }
 
 .overlay-window-button:hover {
@@ -9352,7 +9368,7 @@ body.settings-tab-context-menu-dragging iframe {
   grid-template-rows: auto minmax(280px, 42vh) auto;
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--ui-radius);
   background: color-mix(in srgb, var(--panel-2) 74%, var(--panel));
 }
 
@@ -9597,7 +9613,7 @@ body.settings-tab-context-menu-dragging iframe {
   min-height: 64px;
   max-height: 104px;
   resize: none;
-  border-radius: 10px;
+  border-radius: var(--overlay-radius);
   padding: 10px 12px;
   line-height: 1.45;
   background: var(--summary-panel-input-bg);
@@ -9634,7 +9650,7 @@ body.settings-tab-context-menu-dragging iframe {
   padding: 0 clamp(9px, 1.35vw, 13px);
   font-size: 13px;
   font-weight: var(--font-weight-semibold);
-  border-radius: 8px;
+  border-radius: var(--ui-radius);
   background: color-mix(in srgb, var(--primary) 16%, var(--summary-panel-card-bg));
   border-color: color-mix(in srgb, var(--primary) 36%, var(--summary-panel-result-border));
   color: var(--summary-panel-title);
@@ -9757,7 +9773,7 @@ body.settings-tab-context-menu-dragging iframe {
 .summary-status-card,
 .summary-preview-page {
   border: 1px solid var(--summary-panel-result-border);
-  border-radius: 8px;
+  border-radius: var(--ui-radius);
   background: var(--summary-panel-result-bg);
 }
 
@@ -9839,7 +9855,7 @@ body.settings-tab-context-menu-dragging iframe {
   scrollbar-gutter: stable;
   padding: 12px 8px 12px 12px;
   border: 1px solid var(--summary-panel-result-border);
-  border-radius: 10px;
+  border-radius: var(--overlay-radius);
   background: var(--summary-panel-result-bg);
 }
 
@@ -9852,7 +9868,7 @@ body.settings-tab-context-menu-dragging iframe {
 
 .summary-panel-notice {
   border: 1px solid var(--summary-panel-result-border);
-  border-radius: 8px;
+  border-radius: var(--ui-radius);
   padding: 10px 12px;
   color: var(--summary-panel-muted);
   background: color-mix(in srgb, var(--summary-panel-card-bg) 78%, transparent);
@@ -10181,7 +10197,7 @@ body.settings-tab-context-menu-dragging iframe {
   margin: 0.9em 0;
   padding: 12px;
   overflow: auto;
-  border-radius: 8px;
+  border-radius: var(--ui-radius);
   background: var(--summary-panel-code-bg);
   color: var(--summary-panel-code-text);
   scrollbar-gutter: stable;
@@ -10408,7 +10424,7 @@ body:has(.chat-card:not(.fullscreen-hidden) .chat-frame.active + .frame-submit-t
 
 .popover-menu .button {
   justify-content: flex-start;
-  min-height: 32px;
+  min-height: var(--ui-compact-height);
   border: 0;
   border-radius: 6px;
   font-size: 13px;
@@ -10533,7 +10549,7 @@ body:has(.chat-card:not(.fullscreen-hidden) .chat-frame.active + .frame-submit-t
   max-width: min(282px, calc(100vw - var(--overlay-gutter-tight)));
   gap: 3px;
   padding: 7px;
-  border-radius: 10px;
+  border-radius: var(--overlay-radius);
   background: color-mix(in srgb, var(--panel) 92%, #222 8%);
   border-color: color-mix(in srgb, var(--line) 74%, transparent);
 }
@@ -10592,7 +10608,7 @@ body:has(.chat-card:not(.fullscreen-hidden) .chat-frame.active + .frame-submit-t
   min-width: 24px;
   height: 24px;
   min-height: 24px;
-  border-radius: 5px;
+  border-radius: var(--ui-radius);
   visibility: hidden;
   opacity: 0;
   transition: background-color 0.14s ease, color 0.14s ease, opacity 0.14s ease;
@@ -10718,7 +10734,7 @@ body:has(.chat-card:not(.fullscreen-hidden) .chat-frame.active + .frame-submit-t
   padding: 0;
   text-align: left;
   cursor: grab;
-  border-radius: 5px;
+  border-radius: var(--ui-radius);
   font: inherit;
   font-size: 16px;
   font-weight: var(--font-weight-semibold);
@@ -10971,7 +10987,7 @@ body.app-picker-dragging .app-picker-item {
   overflow: auto;
   padding: 8px;
   border: 1px solid color-mix(in srgb, var(--summary-panel-result-border) 70%, transparent);
-  border-radius: 10px;
+  border-radius: var(--overlay-radius);
 }
 .share-frame-item {
   display: grid;
@@ -10995,7 +11011,7 @@ body.app-picker-dragging .app-picker-item {
   min-height: 0;
   overflow: auto;
   border: 1px solid color-mix(in srgb, var(--summary-panel-result-border) 70%, transparent);
-  border-radius: 10px;
+  border-radius: var(--overlay-radius);
   background: color-mix(in srgb, var(--summary-panel-bg) 92%, black);
 }
 .share-panel-image {
@@ -11011,7 +11027,17 @@ body.app-picker-dragging .app-picker-item {
   resize: none;
   background: transparent;
 }
-.share-panel-empty { padding: 18px; }
+.share-panel-empty {
+  padding: 18px;
+  text-align: center;
+  border: 1px dashed var(--line);
+  border-radius: var(--ui-radius);
+  background: color-mix(in srgb, var(--panel) 86%, var(--bg));
+}
+
+.share-panel-empty strong {
+  color: var(--text);
+}
 body.share-capturing .share-panel,
 body.share-capturing .summary-panel,
 body.share-capturing .toast,

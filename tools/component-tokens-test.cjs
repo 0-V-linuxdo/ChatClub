@@ -42,7 +42,12 @@ const tokens = {
   "--font-weight-bold": "760",
   "--font-weight-heavy": "800",
   "--disabled-opacity": "0.48",
-  "--target-min": "24px"
+  "--target-min": "24px",
+  "--control-hover": "var(--hover)",
+  "--control-pressed": "color-mix(in srgb, var(--primary) 16%, var(--panel))",
+  "--control-selected": "color-mix(in srgb, var(--primary-2) 76%, var(--panel))",
+  "--ui-compact-height": "var(--settings-action-size)",
+  "--toast-text": "var(--text)"
 };
 
 for (const [name, value] of Object.entries(tokens)) {
@@ -98,6 +103,22 @@ assert.match(css, /\.pocket-empty \.svg-icon \{[^}]*color:\s*var\(--primary\);/s
 assert.match(css, /body \{[^}]*font-family:\s*var\(--font-family\);[^}]*font-size:\s*var\(--font-size\);/s);
 
 assert.doesNotMatch(css, /border-radius:\s*7px/, "controls must consume --ui-radius");
+assert.doesNotMatch(css, /border-radius:\s*8px/, "page chrome must not write literal 8px radii");
+assert.doesNotMatch(css, /border-radius:\s*10px/, "chips and overlay surfaces must not keep a 10px radius dialect");
+assert.doesNotMatch(css, /var\(--tooltip-bg,\s*#4a4a4a\)/, "tooltip tokens must not fall back to hex");
+assert.match(
+  css,
+  /\.workspace-tabs-sidebar-search:focus-within,\s*\n\.shortcut-search:focus-within \{/
+);
+assert.match(css, /scroll-margin-top:\s*calc\(var\(--topbar-height\) \+ var\(--space-2\)\)/);
+assert.match(css, /\.ui-row-action \.svg-icon \{[^}]*width:\s*16px;/s);
+assert.match(css, /\n\.share-panel-empty \{\s*\n\s*padding:\s*18px;[^}]*border:\s*1px dashed var\(--line\);/s);
+assert.match(css, /\.settings-empty-row \{[^}]*border:\s*1px dashed var\(--line\);/s);
+assert.match(css, /\.settings-tab\.active \{[^}]*background:\s*var\(--control-selected\);/s);
+assert.match(css, /\.popover-menu \.button \{[^}]*min-height:\s*var\(--ui-compact-height\);/s);
+assert.match(officialRules, /border-radius:\s*calc\(var\(--ui-radius\) \+ 2px\)/);
+assert.match(officialRules, /background:\s*var\(--control-selected\)/);
+assert.match(officialRules, /\n\.official-rules-empty \{\s*\n\s*text-align:\s*center;\s*\n\s*border-style:\s*dashed;/);
 assert.doesNotMatch(css, /#ef4444/i, "share error color must not fall back to Tailwind red");
 assert.doesNotMatch(css, /font-weight:\s*(560|580|720|740|750|780)\b/, "outlier font-weights must collapse onto the type scale");
 assert.doesNotMatch(officialRules, /var\(--border\)/, "official-rules CSS must not use undeclared --border");
@@ -119,6 +140,8 @@ assert.match(agents, /Do not load Inter/);
 assert.match(agents, /do not reintroduce `#0a84ff`/);
 assert.match(agents, /--target-min: 24px/);
 assert.match(agents, /do not reintroduce 560–780 outliers/);
+assert.match(agents, /--ui-compact-height/);
+assert.match(agents, /--control-selected/);
 assert.match(agents, /## Overlay Chrome Contract/);
 
 console.log("component tokens: ok");
