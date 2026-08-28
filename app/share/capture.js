@@ -6,9 +6,12 @@ import {
   SHARE_CAPTURE_WAIT_MS,
   SHARE_IMAGE_GAP,
   SHARE_IMAGE_HEADER_HEIGHT,
-  composeImageStackLayout,
+  SHARE_IMAGE_LAYOUT_STACK,
+  composeImageLayout,
+  normalizeShareImageLayout,
   shareOutputMaxWidth,
-  stitchLayout
+  stitchLayout,
+  stitchSkipTop
 } from "./model.js";
 
 const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, Math.max(0, Number(ms) || 0)); });
@@ -53,7 +56,7 @@ function iframeCropRect(iframe) {
 
 async function captureVisibleDataUrl() {
   const tab = await currentExtensionTab();
-  const options = { format: "jpeg", quality: 70 };
+  const options = { format: "png" };
   if (Number.isInteger(tab?.windowId)) return tabsCaptureVisibleTab(tab.windowId, options);
   return tabsCaptureVisibleTab(options);
 }
@@ -73,12 +76,69 @@ function cropToRect(image, rect) {
   return canvas;
 }
 
+function rowSignature(canvas, y) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return 0;
+  const row = Math.min(canvas.height - 1, Math.max(0, Math.round(y)));
+  const { data, width } = ctx.getImageData(0, row, canvas.width, 1);
+  let hash = 0;
+  const step = Math.max(4, Math.floor(width / 80));
+  for (let x = 0; x < width; x += step) {
+    const index = x * 4;
+    hash = (hash * 33 + data[index] + data[index + 1] + data[index + 2]) | 0;
+  }
+  return hash;
+}
+
+function matchOverlapSkip(previous, next, metricSkip) {
+  const maxSkip = Math.max(1, next.height - 1);
+  const guess = Math.min(maxSkip, Math.max(0, Math.round(Number(metricSkip) || 0)));
+  if (!previous?.getContext || !next?.getContext) return guess;
+  try {
+    const window = Math.min(80, Math.max(12, Math.floor(next.height * 0.12)));
+    const from = Math.max(0, guess - window);
+    const to = Math.min(maxSkip, guess + window);
+    const sampleCount = 4;
+    let best = guess;
+    let bestScore = Infinity;
+    for (let skip = from; skip <= to; skip += 1) {
+      if (skip <= 0) continue;
+      let score = 0;
+      for (let sample = 0; sample < sampleCount; sample += 1) {
+        const offset = Math.floor(((sample + 0.5) / sampleCount) * skip);
+        score += Math.abs(
+          rowSignature(previous, previous.height - skip + offset) - rowSignature(next, offset)
+        );
+      }
+      if (score < bestScore) {
+        bestScore = score;
+        best = skip;
+      }
+    }
+    return best;
+  } catch {
+    return guess;
+  }
+}
+
 function stitchCanvases(slices, maxWidth, overlapPx = SHARE_CAPTURE_OVERLAP_PX) {
-  const layout = stitchLayout({
-    slices: slices.map((slice) => ({ width: slice.width, height: slice.height })),
-    overlapPx,
-    maxWidth
+  const prepared = slices.map((slice, index) => {
+    const metricSkip = stitchSkipTop({
+      index,
+      height: slice.canvas.height,
+      prevScrollY: slices[index - 1]?.scrollY,
+      scrollY: slice.scrollY,
+      viewportHeight: slice.viewportHeight || slices[index - 1]?.viewportHeight,
+      overlapPx
+    });
+    const skipTop = index === 0 ? 0 : matchOverlapSkip(slices[index - 1].canvas, slice.canvas, metricSkip);
+    return {
+      width: slice.canvas.width,
+      height: slice.canvas.height,
+      skipTop
+    };
   });
+  const layout = stitchLayout({ slices: prepared, overlapPx, maxWidth });
   const canvas = document.createElement("canvas");
   canvas.width = layout.width;
   canvas.height = layout.height;
@@ -86,14 +146,14 @@ function stitchCanvases(slices, maxWidth, overlapPx = SHARE_CAPTURE_OVERLAP_PX) 
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   layout.sliceDraws.forEach((draw, index) => {
-    const slice = slices[index];
-    const sourceSkip = slice.height * (draw.skipTop / Math.max(1, draw.height + draw.skipTop));
+    const slice = slices[index].canvas;
+    const sourceSkip = Math.min(slice.height - 1, Math.max(0, Math.round(draw.sourceSkip || 0)));
     ctx.drawImage(
       slice,
       0,
-      Math.min(slice.height - 1, Math.round(sourceSkip)),
+      sourceSkip,
       slice.width,
-      Math.max(1, slice.height - Math.round(sourceSkip)),
+      Math.max(1, slice.height - sourceSkip),
       0,
       draw.y,
       layout.width,
@@ -103,13 +163,14 @@ function stitchCanvases(slices, maxWidth, overlapPx = SHARE_CAPTURE_OVERLAP_PX) 
   return canvas;
 }
 
-function stackCanvases(frames) {
-  const layout = composeImageStackLayout({
+function composeCanvases(frames, direction = SHARE_IMAGE_LAYOUT_STACK) {
+  const layout = composeImageLayout({
     frames: frames.map((frame) => ({
       width: frame.canvas.width,
       height: frame.canvas.height,
       header: frame.header
     })),
+    direction: normalizeShareImageLayout(direction),
     gap: SHARE_IMAGE_GAP,
     headerHeight: SHARE_IMAGE_HEADER_HEIGHT
   });
@@ -123,11 +184,11 @@ function stackCanvases(frames) {
     const frame = frames[index];
     if (draw.headerHeight > 0) {
       ctx.fillStyle = "#111827";
-      ctx.fillRect(0, draw.y, layout.width, draw.headerHeight);
+      ctx.fillRect(draw.x, draw.y, draw.width, draw.headerHeight);
       ctx.fillStyle = "#f9fafb";
       ctx.font = `${Math.max(12, Math.round(draw.headerHeight * 0.42))}px ui-sans-serif, system-ui, sans-serif`;
       ctx.textBaseline = "middle";
-      ctx.fillText(frame.header || "", 16, draw.y + draw.headerHeight / 2, layout.width - 32);
+      ctx.fillText(frame.header || "", draw.x + 16, draw.y + draw.headerHeight / 2, Math.max(1, draw.width - 32));
     }
     ctx.drawImage(
       frame.canvas,
@@ -135,9 +196,9 @@ function stackCanvases(frames) {
       0,
       frame.canvas.width,
       frame.canvas.height,
-      0,
+      draw.x,
       draw.y + draw.headerHeight,
-      layout.width,
+      draw.width,
       draw.height
     );
   });
@@ -158,7 +219,8 @@ export async function captureFrameImage({
     const start = await sendCommand(iframe, "captureStart");
     started = true;
     const slices = [];
-    let done = Boolean(start?.done);
+    let metrics = start || {};
+    let done = Boolean(metrics.done);
     for (let index = 0; index < SHARE_CAPTURE_MAX_SLICES; index += 1) {
       throwIfAborted(signal);
       onStatus?.(index + 1);
@@ -167,13 +229,21 @@ export async function captureFrameImage({
       const rect = iframeCropRect(iframe);
       const dataUrl = await captureVisibleDataUrl();
       const image = await loadImage(dataUrl);
-      slices.push(cropToRect(image, rect));
+      slices.push({
+        canvas: cropToRect(image, rect),
+        scrollY: Number(metrics.scrollY) || 0,
+        viewportHeight: Number(metrics.viewportHeight) || rect.height
+      });
       if (done || index === SHARE_CAPTURE_MAX_SLICES - 1) break;
-      const scrolled = await sendCommand(iframe, "triggerScroll");
-      done = Boolean(scrolled?.done);
+      metrics = await sendCommand(iframe, "triggerScroll") || {};
+      done = Boolean(metrics.done);
     }
     if (!slices.length) throw new Error("No screenshot slices were captured");
-    return stitchCanvases(slices, shareOutputMaxWidth(iframeCropRect(iframe).width), Number(start?.overlapPx) || SHARE_CAPTURE_OVERLAP_PX);
+    return stitchCanvases(
+      slices,
+      shareOutputMaxWidth(iframeCropRect(iframe).width),
+      Number(start?.overlapPx) || SHARE_CAPTURE_OVERLAP_PX
+    );
   } finally {
     if (started) {
       try { await sendCommand(iframe, "captureEnd"); } catch {}
@@ -181,11 +251,11 @@ export async function captureFrameImage({
   }
 }
 
-export function composeCapturedImages(frames = []) {
+export function composeCapturedImages(frames = [], { layout } = {}) {
   const usable = (Array.isArray(frames) ? frames : []).filter((frame) => frame?.canvas);
   if (!usable.length) throw new Error("No screenshot was captured");
   if (usable.length === 1) return usable[0].canvas;
-  return stackCanvases(usable);
+  return composeCanvases(usable, layout);
 }
 
 export async function canvasToJpegBlob(canvas) {

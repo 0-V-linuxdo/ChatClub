@@ -38,6 +38,14 @@ const load = (file) => import(`${pathToFileURL(path.join(root, file)).href}?test
   assert.match(text, /hello/);
   assert.match(text, /---/);
   assert.match(text, /missing/);
+  const turns = model.composeShareText([{
+    name: "ChatGPT",
+    messages: [{ role: "user", text: "hi" }, { role: "assistant", text: "hello there" }]
+  }]);
+  assert.match(turns, /USER:\nhi/);
+  assert.match(turns, /ASSISTANT:\nhello there/);
+  assert.equal(model.normalizeShareImageLayout("row"), "row");
+  assert.equal(model.normalizeShareImageLayout("other"), "stack");
   assert.match(model.shareFilename("text", new Date("2026-08-23T01:02:03.000Z")), /\.txt$/);
   assert.match(model.shareFilename("image", new Date("2026-08-23T01:02:03.000Z")), /\.jpg$/);
   const layout = model.stitchLayout({
@@ -48,6 +56,34 @@ const load = (file) => import(`${pathToFileURL(path.join(root, file)).href}?test
   assert.equal(layout.width, 1000);
   assert.equal(layout.sliceDraws.length, 2);
   assert.ok(layout.sliceDraws[1].skipTop > 0);
+  const metricLayout = model.stitchLayout({
+    slices: [
+      { width: 1000, height: 800, scrollY: 0, viewportHeight: 800 },
+      { width: 1000, height: 800, scrollY: 50, viewportHeight: 800 }
+    ],
+    maxWidth: 1000
+  });
+  assert.equal(metricLayout.sliceDraws[1].sourceSkip, 750);
+  assert.equal(metricLayout.sliceDraws[1].height, 50);
+  const row = model.composeImageLayout({
+    frames: [
+      { width: 400, height: 200, header: "A" },
+      { width: 300, height: 250, header: "B" }
+    ],
+    direction: "row"
+  });
+  assert.equal(row.direction, "row");
+  assert.equal(row.draws.length, 2);
+  assert.ok(row.draws[1].x > row.draws[0].x);
+  assert.equal(row.draws[0].y, 0);
+  const stack = model.composeImageLayout({
+    frames: [
+      { width: 400, height: 200, header: "A" },
+      { width: 300, height: 250, header: "B" }
+    ]
+  });
+  assert.equal(stack.direction, "stack");
+  assert.ok(stack.draws[1].y > stack.draws[0].y);
   console.log("share model: ok");
 })().catch((error) => {
   console.error(error?.stack || error);

@@ -409,12 +409,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "e3eb5923e1fcc6683335e8276a88aab376ced15a17632bd66613b41f21d701aa";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "d23252f289d23d3cf235eee27027e6e3f225d4977736972e7061044bbc540e2c";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "4722210c86bb0e4dba05d7d3444d031461749fc46e6f22bee653feddd9f36e5b";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.4722210c86bb0e4dba05d7d3444d031461749fc46e6f22bee653feddd9f36e5b";
-  var CONTENT_RUNTIME_CONTENT_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/content.js", "entryPath": "content-src/content.js", "sourceSha256": "0d2c3ffc77a04a57f588f6f20c5cc97a6609158b4510e0e953578c90a2fd3cb3", "implementationSha256": "1ababf72ad4d33edee3fe71731517d39602a5b1b2981e908f4088c25a158d101", "implementationVersion": "2026.07.16.2+bundle.1ababf72ad4d33edee3fe71731517d39602a5b1b2981e908f4088c25a158d101" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "2909b674a8ce1a87bf2d99b5676a83567c85f0b9400c2df1092143350fece852";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.2909b674a8ce1a87bf2d99b5676a83567c85f0b9400c2df1092143350fece852";
+  var CONTENT_RUNTIME_CONTENT_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/content.js", "entryPath": "content-src/content.js", "sourceSha256": "c5ac6698dad7bdb71f3d143b391149d62afc931705f8d0c9a492b5e86a10e9aa", "implementationSha256": "e24cd24e06e4767368b6415f071567f3ce65ab27f18af6e5f32b53244c3f91fd", "implementationVersion": "2026.07.16.2+bundle.e24cd24e06e4767368b6415f071567f3ce65ab27f18af6e5f32b53244c3f91fd" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -759,7 +759,7 @@
   }
 
   // content-src/shared/capture-runtime.js
-  var CAPTURE_OVERLAP_PX = 2;
+  var CAPTURE_OVERLAP_PX = 64;
   function number(value, fallback = 0) {
     const next = Number(value);
     return Number.isFinite(next) ? next : fallback;
@@ -773,6 +773,32 @@
   }
   function isScrollableOverflow(value) {
     return value === "auto" || value === "scroll" || value === "overlay";
+  }
+  function boxOf(node) {
+    const rect = node.getBoundingClientRect?.();
+    if (!rect) return null;
+    const width = Math.max(0, number(rect.width));
+    const height = Math.max(0, number(rect.height));
+    if (width <= 1 || height <= 1) return null;
+    const top = number(rect.top);
+    const left = number(rect.left);
+    return {
+      width,
+      height,
+      top,
+      left,
+      bottom: Number.isFinite(Number(rect.bottom)) ? number(rect.bottom) : top + height,
+      right: Number.isFinite(Number(rect.right)) ? number(rect.right) : left + width
+    };
+  }
+  function isThinChrome(box, viewportWidth, viewportHeight) {
+    const thinBar = box.height <= Math.max(48, viewportHeight * 0.22);
+    const thinRail = box.width <= Math.max(72, viewportWidth * 0.28);
+    const nearTop = box.top <= 8;
+    const nearBottom = box.bottom >= viewportHeight - 8;
+    const nearLeft = box.left <= 8;
+    const nearRight = box.right >= viewportWidth - 8;
+    return thinBar && (nearTop || nearBottom) || thinRail && (nearLeft || nearRight);
   }
   function createCaptureRuntime(targetWindow) {
     if (!targetWindow?.document) throw new TypeError("Capture runtime requires a window");
@@ -857,11 +883,11 @@
       const nodes = documentRef.querySelectorAll("body *");
       for (const node of nodes) {
         const style = styleOf(node, targetWindow);
-        if (!style) continue;
-        if (style.position !== "fixed" && style.position !== "sticky") continue;
-        const rect = node.getBoundingClientRect?.();
-        if (!rect || rect.width <= 1 || rect.height <= 1) continue;
-        if (rect.height >= viewportHeight * 0.86 && rect.width >= viewportWidth * 0.55) continue;
+        if (!style || style.position !== "fixed") continue;
+        const box = boxOf(node);
+        if (!box) continue;
+        if (box.height >= viewportHeight * 0.86 && box.width >= viewportWidth * 0.55) continue;
+        if (!isThinChrome(box, viewportWidth, viewportHeight)) continue;
         hidden.push({ node, visibility: node.style.visibility });
         node.style.setProperty("visibility", "hidden", "important");
       }

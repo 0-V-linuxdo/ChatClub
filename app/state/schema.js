@@ -56,6 +56,7 @@ export function createAppState() {
     shareStatus: "",
     shareError: "",
     shareFormat: "image",
+    shareImageLayout: "stack",
     shareScope: "current",
     shareSelectedKeys: [],
     sharePreviewText: "",

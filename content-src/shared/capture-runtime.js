@@ -1,4 +1,4 @@
-const CAPTURE_OVERLAP_PX = 2;
+const CAPTURE_OVERLAP_PX = 64;
 
 function number(value, fallback = 0) {
   const next = Number(value);
@@ -15,6 +15,34 @@ function styleOf(node, win) {
 
 function isScrollableOverflow(value) {
   return value === "auto" || value === "scroll" || value === "overlay";
+}
+
+function boxOf(node) {
+  const rect = node.getBoundingClientRect?.();
+  if (!rect) return null;
+  const width = Math.max(0, number(rect.width));
+  const height = Math.max(0, number(rect.height));
+  if (width <= 1 || height <= 1) return null;
+  const top = number(rect.top);
+  const left = number(rect.left);
+  return {
+    width,
+    height,
+    top,
+    left,
+    bottom: Number.isFinite(Number(rect.bottom)) ? number(rect.bottom) : top + height,
+    right: Number.isFinite(Number(rect.right)) ? number(rect.right) : left + width
+  };
+}
+
+function isThinChrome(box, viewportWidth, viewportHeight) {
+  const thinBar = box.height <= Math.max(48, viewportHeight * 0.22);
+  const thinRail = box.width <= Math.max(72, viewportWidth * 0.28);
+  const nearTop = box.top <= 8;
+  const nearBottom = box.bottom >= viewportHeight - 8;
+  const nearLeft = box.left <= 8;
+  const nearRight = box.right >= viewportWidth - 8;
+  return (thinBar && (nearTop || nearBottom)) || (thinRail && (nearLeft || nearRight));
 }
 
 export function createCaptureRuntime(targetWindow) {
@@ -114,11 +142,11 @@ export function createCaptureRuntime(targetWindow) {
     const nodes = documentRef.querySelectorAll("body *");
     for (const node of nodes) {
       const style = styleOf(node, targetWindow);
-      if (!style) continue;
-      if (style.position !== "fixed" && style.position !== "sticky") continue;
-      const rect = node.getBoundingClientRect?.();
-      if (!rect || rect.width <= 1 || rect.height <= 1) continue;
-      if (rect.height >= viewportHeight * 0.86 && rect.width >= viewportWidth * 0.55) continue;
+      if (!style || style.position !== "fixed") continue;
+      const box = boxOf(node);
+      if (!box) continue;
+      if (box.height >= viewportHeight * 0.86 && box.width >= viewportWidth * 0.55) continue;
+      if (!isThinChrome(box, viewportWidth, viewportHeight)) continue;
       hidden.push({ node, visibility: node.style.visibility });
       node.style.setProperty("visibility", "hidden", "important");
     }

@@ -1,5 +1,6 @@
 import { t } from "../../shared/i18n.js";
 import { storageGet, storageSet } from "../../shared/storage-adapter.js";
+import { findSummarySiteConfig } from "../../shared/url-match.js";
 import { createActionButton } from "../../ui/components.js";
 import { el, iconButton, toast } from "../../ui/dom.js";
 import { requireControllerContext, requireControllerFunction, validateControllerContract } from "../controller-contract.js";
@@ -20,6 +21,8 @@ import {
 import {
   SHARE_FORMAT_IMAGE,
   SHARE_FORMAT_TEXT,
+  SHARE_IMAGE_LAYOUT_ROW,
+  SHARE_IMAGE_LAYOUT_STACK,
   SHARE_PANEL_MIN_HEIGHT,
   SHARE_PANEL_MIN_WIDTH,
   SHARE_SCOPE_ALL,
@@ -27,6 +30,7 @@ import {
   SHARE_SCOPE_SELECTED,
   composeShareText,
   normalizeShareFormat,
+  normalizeShareImageLayout,
   normalizeSharePanelSize,
   normalizeShareScope,
   resolveShareTargets,
@@ -144,6 +148,7 @@ export function createShareController(ctx) {
     state.shareOpen = true;
     state.shareFormat = normalizeShareFormat(state.shareFormat);
     state.shareScope = normalizeShareScope(state.shareScope);
+    state.shareImageLayout = normalizeShareImageLayout(state.shareImageLayout);
     if (!Array.isArray(state.shareSelectedKeys) || !state.shareSelectedKeys.length) {
       state.shareSelectedKeys = listShareFrames().filter((frame) => frame.visible).map((frame) => frame.key);
     }
@@ -173,7 +178,9 @@ export function createShareController(ctx) {
   }
 
   function captureSharePanelGeometry(panel) {
+    if (!panel || state.shareMaximized || panel.classList.contains("share-panel-maximized") || panel.classList.contains("maximized")) return;
     const rect = panel.getBoundingClientRect();
+    if (!Number.isFinite(rect.width) || !Number.isFinite(rect.height) || rect.width <= 0 || rect.height <= 0) return;
     state.shareSize = normalizeSharePanelSize({
       width: rect.width,
       height: rect.height,
@@ -184,7 +191,7 @@ export function createShareController(ctx) {
 
   function rememberSharePanelGeometry(panel) {
     captureSharePanelGeometry(panel);
-    storageSet({ [SHARE_PANEL_SIZE_KEY]: state.shareSize }).catch(() => {});
+    if (state.shareSize) storageSet({ [SHARE_PANEL_SIZE_KEY]: state.shareSize }).catch(() => {});
   }
 
   function sharePanelMaxWidth() {
@@ -196,6 +203,7 @@ export function createShareController(ctx) {
   }
 
   function sharePanelSizeStyle() {
+    if (state.shareMaximized) return {};
     const size = normalizeSharePanelSize(state.shareSize || {});
     const width = Math.min(Math.max(SHARE_PANEL_MIN_WIDTH, size.width), sharePanelMaxWidth());
     const height = Math.min(Math.max(SHARE_PANEL_MIN_HEIGHT, size.height), sharePanelMaxHeight());
@@ -242,6 +250,7 @@ export function createShareController(ctx) {
   function renderSharePanel() {
     const format = normalizeShareFormat(state.shareFormat);
     const scope = normalizeShareScope(state.shareScope);
+    const layout = normalizeShareImageLayout(state.shareImageLayout);
     const frames = listShareFrames();
     const hasPreview = format === SHARE_FORMAT_TEXT ? Boolean(state.sharePreviewText) : Boolean(state.sharePreviewUrl);
     const panel = el("section", {
@@ -301,6 +310,19 @@ export function createShareController(ctx) {
               })
             )
           ),
+          format === SHARE_FORMAT_IMAGE ? el("div", { class: "share-panel-row" },
+            el("span", { class: "share-panel-label" }, t("sharePanel.layout")),
+            el("div", { class: "share-option-group" },
+              optionButton(t("sharePanel.layoutStack"), layout === SHARE_IMAGE_LAYOUT_STACK, () => {
+                state.shareImageLayout = SHARE_IMAGE_LAYOUT_STACK;
+                syncSharePanel();
+              }),
+              optionButton(t("sharePanel.layoutRow"), layout === SHARE_IMAGE_LAYOUT_ROW, () => {
+                state.shareImageLayout = SHARE_IMAGE_LAYOUT_ROW;
+                syncSharePanel();
+              })
+            )
+          ) : null,
           scope === SHARE_SCOPE_SELECTED ? el("div", { class: "share-frame-list" },
             frames.length ? frames.map((frame) => el("label", { class: "share-frame-item" },
               el("input", {
@@ -369,7 +391,7 @@ export function createShareController(ctx) {
       drag = null;
     };
     handle.addEventListener("pointerdown", (event) => {
-      if (event.target.closest("button")) return;
+      if (state.shareMaximized || event.target.closest("button")) return;
       const rect = panel.getBoundingClientRect();
       panel.style.left = `${rect.left}px`;
       panel.style.top = `${rect.top}px`;
@@ -398,6 +420,7 @@ export function createShareController(ctx) {
     let resize = null;
     for (const handle of panel.querySelectorAll(".share-panel-resize-handle")) {
       handle.addEventListener("pointerdown", (event) => {
+        if (state.shareMaximized) return;
         event.preventDefault();
         event.stopPropagation();
         const rect = panel.getBoundingClientRect();
@@ -526,6 +549,36 @@ export function createShareController(ctx) {
     }
   }
 
+  async function collectSharePageText(iframe) {
+    const text = await sendToContentFrame(iframe, "getPageText", {}, 2500).catch(() => "");
+    const value = String(text || "").trim();
+    return value ? [{ role: "page", text: value }] : [];
+  }
+
+  async function collectShareMessages(iframe, href) {
+    const config = findSummarySiteConfig(state.options?.summarySiteConfigs, href);
+    if (!config) return collectSharePageText(iframe);
+    const summaryReady = await prepareContentFrameRuntime(iframe, { summary: true });
+    if (!summaryReady?.ok) return collectSharePageText(iframe);
+    const hasSummaryRunner = Boolean(
+      config.userscriptFile
+      || ((config.sourceMode === "custom" || config.builtIn === false) && String(config.customUserscript || "").trim())
+    );
+    if (hasSummaryRunner) {
+      const runtimeConfig = { ...config };
+      delete runtimeConfig.userscript;
+      delete runtimeConfig.customUserscript;
+      const result = await sendToContentFrame(iframe, "collectSummary", {
+        config: runtimeConfig,
+        expectedDocumentId: summaryReady.registration?.documentId,
+        expectedHref: href
+      }, config.userscriptTimeoutMs || 36000);
+      const messages = Array.isArray(result?.messages) ? result.messages : [];
+      if (messages.length) return messages;
+    }
+    return collectSharePageText(iframe);
+  }
+
   async function collectShareText(targets, signal) {
     state.shareStatus = t("sharePanel.collectingText");
     syncSharePanel();
@@ -541,12 +594,12 @@ export function createShareController(ctx) {
       try {
         await prepareContentFrameRuntime(target.iframe);
         const meta = await sendToContentFrame(target.iframe, "getPageMeta").catch(() => ({}));
-        const text = await sendToContentFrame(target.iframe, "getPageText");
+        const href = meta?.href || target.href;
         sections.push({
           name: target.name,
           title: meta?.title || "",
-          href: meta?.href || target.href,
-          text: String(text || "")
+          href,
+          messages: await collectShareMessages(target.iframe, href)
         });
       } catch (error) {
         sections.push({
@@ -580,7 +633,7 @@ export function createShareController(ctx) {
       captured.push({ canvas, header: target.name });
     }
     throwIfAborted(signal);
-    const composed = composeCapturedImages(captured);
+    const composed = composeCapturedImages(captured, { layout: state.shareImageLayout });
     const blob = await canvasToJpegBlob(composed);
     clearPreview();
     previewCanvas = composed;

@@ -156,6 +156,11 @@ const dataModule = (source) => import(`data:text/javascript;base64,${Buffer.from
   assert.match(summary, /sendToContentFrame\(iframe, "collectSummary"/);
   assert.match(summary, /expectedDocumentId: summaryReady\.registration\.documentId/);
   assert.match(summary, /expectedHref: base\.href/);
+  const share = read("app/share/controller.js");
+  assert.match(share, /sendToContentFrame\(iframe, "collectSummary"/);
+  assert.match(share, /delete runtimeConfig\.userscript/);
+  assert.match(share, /prepareContentFrameRuntime\(iframe, \{ summary: true \}\)/);
+  assert.match(share, /if \(state\.shareMaximized\) return \{\}/);
   assert.match(topicDelete, /snapshotDeleteFrameConfig\([\s\S]*?completion\.officialRuleHints,[\s\S]*?attemptTimeoutMs,[\s\S]*?completion\.officialRuleActive === true/);
   assert.match(topicDelete, /payload: snapshotDeleteFramePayload\(payload\)/);
   assert.doesNotMatch(topicDelete, /runtimeConfig\.userscript/);

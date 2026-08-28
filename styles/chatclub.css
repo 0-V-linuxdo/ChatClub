@@ -10395,6 +10395,8 @@ body.app-picker-dragging .app-picker-item {
   inset: 12px;
   width: auto;
   height: auto;
+  max-width: none;
+  max-height: none;
   transform: none;
 }
 

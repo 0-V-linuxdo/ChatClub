@@ -36,10 +36,10 @@ const byteBudgets = Object.freeze({
 });
 // Exact base-plus-capabilities closure after per-frame idle full-text fingerprint
 // joined the shared frame-command inventory shipped in the base content runtime.
-const aggregateByteBudget = 770_810;
+const aggregateByteBudget = 771_817;
 // Exact all-bundle closure after the idle-capture fingerprint command joined the
 // generated content bundles that inline FRAME_COMMAND_SPECS.
-const allBundlesByteBudget = 1_522_642;
+const allBundlesByteBudget = 1_523_649;
 
 const bundleIdentities = Object.fromEntries(Object.keys(CONTENT_ENTRIES).map((outputPath) => [
   outputPath,
