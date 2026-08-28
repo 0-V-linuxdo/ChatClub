@@ -1,3 +1,5 @@
+import { createSvgIcon } from "./icons.js";
+
 export function el(tag, props = {}, ...children) {
   const node = document.createElement(tag);
   for (const [key, value] of Object.entries(props || {})) {
@@ -75,9 +77,22 @@ export function clear(node) {
 export function ensureToastHost() {
   let host = document.querySelector(".toast-host");
   if (host) return host;
-  host = el("div", { class: "toast-host" });
+  host = el("div", { class: "toast-host", "aria-live": "polite" });
   document.body.append(host);
   return host;
+}
+
+const TOAST_STAY_MS = Object.freeze({ short: 1600, default: 3200, long: 32000 });
+let currentToastStay = "default";
+
+export function setToastStay(value) {
+  currentToastStay = value === "short" || value === "long" ? value : "default";
+  return currentToastStay;
+}
+
+export function toastDurationMs(kind = "info") {
+  const base = TOAST_STAY_MS[currentToastStay] || TOAST_STAY_MS.default;
+  return kind === "error" ? base * 2 : base;
 }
 
 export function toast(message, kind = "info") {
@@ -90,7 +105,7 @@ export function toast(message, kind = "info") {
     "aria-atomic": "true"
   }, message);
   host.append(item);
-  const duration = isError ? 6400 : 3200;
+  const duration = toastDurationMs(kind);
   let hideTimer = 0;
   const scheduleHide = (delay) => {
     if (hideTimer) clearTimeout(hideTimer);
@@ -253,7 +268,12 @@ export function modal(title, content, onClose, wide = false, closeLabel = "Close
     tabindex: "-1"
   },
     el("header", { class: "modal-header" },
-      el("h2", { id: titleId }, title),
+      el("h2", { id: titleId },
+        modalType === "confirmation" && typeof document.createElementNS === "function"
+          ? createSvgIcon("alert")
+          : null,
+        title
+      ),
       iconButton(closeLabel, "×", onClose, "overlay-window-button", closeLabel, "", "settings.modal.close")
     ),
     body
@@ -288,6 +308,50 @@ export function taskModal(title, content, onClose, wide = false, closeLabel = "C
 
 export function confirmationModal(title, content, onClose, wide = false, closeLabel = "Close") {
   return typedModal("confirmation", title, content, onClose, wide, closeLabel);
+}
+
+export function bindLinearMenuKeyboard(menu) {
+  if (!menu?.addEventListener) return menu;
+  const items = () => [...(menu.querySelectorAll?.('[role="menuitem"]') || [])]
+    .filter((node) => node.getAttribute?.("disabled") == null && node.getAttribute?.("aria-disabled") !== "true");
+  const setCurrent = (index, { focus = true } = {}) => {
+    const nodes = items();
+    if (!nodes.length) return;
+    const next = ((index % nodes.length) + nodes.length) % nodes.length;
+    nodes.forEach((node, i) => {
+      node.tabIndex = i === next ? 0 : -1;
+    });
+    if (focus) {
+      try { nodes[next].focus?.(); } catch {}
+    }
+  };
+  setCurrent(0);
+  menu.addEventListener("keydown", (event) => {
+    if (event.isComposing || event.keyCode === 229) return;
+    const nodes = items();
+    if (!nodes.length) return;
+    const active = event.target;
+    const current = nodes.findIndex((node) => node === active || node.contains?.(active));
+    const index = current < 0 ? 0 : current;
+    if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+      event.preventDefault();
+      event.stopPropagation();
+      setCurrent(index + 1);
+    } else if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+      event.preventDefault();
+      event.stopPropagation();
+      setCurrent(index - 1);
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      event.stopPropagation();
+      setCurrent(0);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      event.stopPropagation();
+      setCurrent(nodes.length - 1);
+    }
+  });
+  return menu;
 }
 
 export function isDismissalEscape(event) {

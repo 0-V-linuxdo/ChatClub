@@ -1,7 +1,7 @@
 import { TAB_GROUP_HEADER_BUTTONS } from "../../shared/constants.js";
 import { t } from "../../shared/i18n.js";
 import { normalizeTabGroupButtonOrder, normalizeTabGroupButtonPlacement } from "../../shared/storage-schema.js";
-import { claimTopmostPopoverEscape, el, isChatFrameNode, scheduleFrameOwnedBlurDismissal } from "../../ui/dom.js";
+import { bindLinearMenuKeyboard, claimTopmostPopoverEscape, el, isChatFrameNode, scheduleFrameOwnedBlurDismissal } from "../../ui/dom.js";
 import { buildAppPickerSections, renderAppPickerColumns } from "./app-picker.js";
 import { workspaceGridColumnCount } from "./model.js";
 import { renderPreferredModelSelectionOverlay } from "./preferred-model-selection-overlay.js";
@@ -890,6 +890,7 @@ export function createWorkspaceViewController(dependencies = {}) {
       }, "secondary", false, t("layout.add"), "", "workspace.layout.add")
     );
     document.body.append(backdrop, menu);
+    bindLinearMenuKeyboard(menu);
     armWorkspacePopoverDismissal();
   }
 
@@ -1026,6 +1027,7 @@ export function createWorkspaceViewController(dependencies = {}) {
       menu.style.left = `${Math.min(Math.max(8, rect.left), maxLeft)}px`;
       menu.style.top = `${Math.min(Math.max(8, rect.bottom + 5), maxTop)}px`;
     }
+    bindLinearMenuKeyboard(menu);
     armWorkspacePopoverDismissal();
   }
 

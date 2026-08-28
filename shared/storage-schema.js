@@ -9,6 +9,8 @@ import {
   DEFAULT_POCKET_CARD_SIZE,
   DEFAULT_POCKET_ICON,
   DEFAULT_FRAME_TOAST_POSITION,
+  DEFAULT_TOAST_STAY,
+  TOAST_STAY_MODES,
   DEFAULT_GEMINI_THINKING_LEVEL,
   DEFAULT_MODEL_PREFERENCE_FAILURE_OVERRIDES,
   DEFAULT_MODEL_PREFERENCE_FAILURE_POLICY,
@@ -141,6 +143,11 @@ export function normalizeFrameToastPosition(value = {}) {
     x: coordinate(source.x, DEFAULT_FRAME_TOAST_POSITION.x),
     y: coordinate(source.y, DEFAULT_FRAME_TOAST_POSITION.y)
   };
+}
+
+export function normalizeToastStay(value, fallback = DEFAULT_TOAST_STAY) {
+  if (TOAST_STAY_MODES.includes(value)) return value;
+  return TOAST_STAY_MODES.includes(fallback) ? fallback : DEFAULT_TOAST_STAY;
 }
 
 export function normalizeModelPreferenceSelectionOverlayOpacity(
@@ -1033,6 +1040,7 @@ export function normalizeOptions(raw = {}) {
       raw.modelPreferenceSelectionOverlayOpacity
     ),
     frameToastPosition: normalizeFrameToastPosition(raw.frameToastPosition),
+    toastStay: normalizeToastStay(raw.toastStay),
     ...primaryColorState,
     apiProfiles,
     apiProfileDefaultModelMigrationVersion: Math.max(

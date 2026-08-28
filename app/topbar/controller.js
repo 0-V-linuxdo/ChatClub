@@ -1,7 +1,7 @@
 import { normalizeTopbarPromptPlaceholderConfig } from "../../shared/storage-schema.js";
 import { normalizeTopbarLayout, topbarSettingsSectionForItem } from "../../shared/topbar.js";
 import { t } from "../../shared/i18n.js";
-import { claimTopmostPopoverEscape, scheduleFrameOwnedBlurDismissal, toast } from "../../ui/dom.js";
+import { bindLinearMenuKeyboard, claimTopmostPopoverEscape, scheduleFrameOwnedBlurDismissal, toast } from "../../ui/dom.js";
 import { createControllerMethodValidator, validateControllerContract } from "../controller-contract.js";
 import { createTopbarEditor } from "./editor.js";
 import { createTopbarPlaceholderController } from "./placeholder.js";
@@ -96,7 +96,10 @@ export function createTopbarController(dependencies = {}) {
     if (settingsMenuReopenFrame) cancelAnimationFrame(settingsMenuReopenFrame);
     settingsMenuReopenFrame = 0;
     document.querySelectorAll(".topbar-settings-backdrop, .topbar-settings-popover").forEach((item) => item.remove());
-    document.querySelectorAll(".topbar-settings-anchor").forEach((item) => item.classList.remove("topbar-settings-anchor"));
+    document.querySelectorAll(".topbar-settings-anchor").forEach((item) => {
+      item.classList.remove("topbar-settings-anchor");
+      if (item.getAttribute?.("aria-expanded") === "true") item.setAttribute("aria-expanded", "false");
+    });
     document.removeEventListener("keydown", closeSettingsMenuOnKeydown, true);
     window.removeEventListener("resize", closeSettingsMenu, true);
     window.removeEventListener("scroll", closeSettingsMenu, true);
@@ -188,6 +191,8 @@ export function createTopbarController(dependencies = {}) {
     composer.closeActionsMenu();
     workspace.closePopovers();
     anchor.classList.add("topbar-settings-anchor");
+    anchor.setAttribute("aria-haspopup", "menu");
+    anchor.setAttribute("aria-expanded", "true");
     const layout = editing
       ? editor.ensureTopbarSettingsMenuItems(editor.activeTopbarEditLayout())
       : editor.ensureTopbarSettingsMenuItems(state.options?.topbarLayout);
@@ -201,6 +206,7 @@ export function createTopbarController(dependencies = {}) {
     });
     if (rendered.backdrop) document.body.append(rendered.backdrop);
     document.body.append(rendered.menu);
+    bindLinearMenuKeyboard(rendered.menu);
     document.addEventListener("keydown", closeSettingsMenuOnKeydown, true);
     if (!persistent) {
       window.addEventListener("resize", closeSettingsMenu, true);

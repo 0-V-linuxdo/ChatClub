@@ -6,7 +6,8 @@ import { t } from "../../shared/i18n.js";
 import {
   normalizeFrameToastPosition,
   normalizePocketIcon,
-  normalizePrimaryColor
+  normalizePrimaryColor,
+  normalizeToastStay
 } from "../../shared/storage-schema.js";
 import { pocketChromeLabelKey } from "../../shared/topbar.js";
 import { el, input, select } from "../../ui/dom.js";
@@ -482,20 +483,32 @@ export function createAppearanceSettingsSection(ctx) {
         }
       });
       syncDraftUi();
-      return settingsBlock("", "",
-        el("div", { class: "frame-toast-position-editor" },
-          el("div", { class: "frame-toast-position-preview-column" },
-            preview
-          ),
-          el("div", { class: "frame-toast-position-details" },
-            el("div", { class: "frame-toast-position-copy" },
-              el("h4", {}, t("appearance.frameToastPosition")),
-              el("p", {}, t("appearance.frameToastPositionDesc"))
+      const toastStay = select(normalizeToastStay(state.options.toastStay), [
+        { value: "short", label: t("appearance.toastStayShort") },
+        { value: "default", label: t("appearance.toastStayDefault") },
+        { value: "long", label: t("appearance.toastStayLong") }
+      ], {
+        onchange: () => {
+          queueAppearanceAutoSave({ toastStay: normalizeToastStay(toastStay.value) });
+        }
+      });
+      return el("div", { class: "appearance-frame-toast-pane" },
+        settingsBlock(t("appearance.toastStay"), t("appearance.toastStayDesc"), toastStay),
+        settingsBlock("", "",
+          el("div", { class: "frame-toast-position-editor" },
+            el("div", { class: "frame-toast-position-preview-column" },
+              preview
             ),
-            el("div", { class: "frame-toast-position-readout" },
-              coordinates,
-              el("small", {}, t("appearance.frameToastDragHelp")),
-              el("small", {}, t("appearance.frameToastKeyboardHelp"))
+            el("div", { class: "frame-toast-position-details" },
+              el("div", { class: "frame-toast-position-copy" },
+                el("h4", {}, t("appearance.frameToastPosition")),
+                el("p", {}, t("appearance.frameToastPositionDesc"))
+              ),
+              el("div", { class: "frame-toast-position-readout" },
+                coordinates,
+                el("small", {}, t("appearance.frameToastDragHelp")),
+                el("small", {}, t("appearance.frameToastKeyboardHelp"))
+              )
             )
           )
         )

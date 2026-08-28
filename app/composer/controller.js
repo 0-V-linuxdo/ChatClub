@@ -7,6 +7,7 @@ import {
 } from "../../shared/storage-schema.js";
 import { savePromptSendHistory as defaultSavePromptSendHistory } from "../../shared/storage-adapter.js";
 import {
+  bindLinearMenuKeyboard,
   claimTopmostPopoverEscape,
   el,
   scheduleFrameOwnedBlurDismissal,
@@ -412,6 +413,7 @@ export function createComposerController(dependencies = {}) {
       actionsMenuItem(t("topbar.optimizePrompt"), "sparkles", optimizePrompt, "topbar.optimizePrompt")
     );
     document.body.append(backdrop, menu);
+    bindLinearMenuKeyboard(menu);
     document.addEventListener("keydown", closeActionsMenuOnKeydown, true);
     window.addEventListener("resize", closeActionsMenu, true);
     window.addEventListener("scroll", closeActionsMenu, true);
@@ -656,7 +658,7 @@ export function createComposerController(dependencies = {}) {
         "error",
         state.options?.frameToastPosition
       );
-      skippedToast.dismiss(5000);
+      skippedToast.dismiss();
       throw modelPreferenceSkipError(readiness);
     };
     rejectSkippedModelFailure();
@@ -695,12 +697,12 @@ export function createComposerController(dependencies = {}) {
         usingCurrentModel ? t("toast.frameModelFailureSubmittedCurrent") : t("toast.frameSubmitSuccess"),
         "success"
       );
-      statusToast.dismiss(2000);
+      statusToast.dismiss();
       return { ...result, usedCurrentModel: usingCurrentModel };
     } catch (error) {
       invalidateFrameAfterKnownPreDeliveryFailure(iframe, error);
       statusToast.update(t("toast.frameSubmitFailed", { reason: compactFrameSubmitReason(error) }), "error");
-      statusToast.dismiss(5000);
+      statusToast.dismiss();
       throw error;
     }
   }
@@ -788,7 +790,7 @@ export function createComposerController(dependencies = {}) {
           "error",
           state.options?.frameToastPosition
         );
-        skippedToast.dismiss(5000);
+        skippedToast.dismiss();
         return { target, admitted: false, promise: Promise.reject(modelPreferenceSkipError(readiness)) };
       }
       return {

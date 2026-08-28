@@ -1407,7 +1407,7 @@ export function createPreferredModelController(dependencies = {}) {
           : t(readyKey, { model }),
         "success"
       );
-      record.statusToast?.dismiss?.(2000);
+      record.statusToast?.dismiss?.();
       return;
     }
     const retryDelay = preferredModelRetryDelay(record, result);
@@ -1436,7 +1436,7 @@ export function createPreferredModelController(dependencies = {}) {
         : t("toast.frameModelSwitchFailed", { reason: record.failureReason }),
       "error"
     );
-    record.statusToast?.dismiss?.(5000);
+    record.statusToast?.dismiss?.();
     if (!record.cancelled) {
       const app = workspace.frameApp(iframe) || {};
       void recordFunctionalAnomaly({

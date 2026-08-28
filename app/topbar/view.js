@@ -222,6 +222,8 @@ export function createTopbarView(dependencies = {}) {
       }
       openFromEvent(event);
     }, tooltipLabel, "topbar.settingsJumpMenu");
+    buttonNode.setAttribute("aria-haspopup", "menu");
+    buttonNode.setAttribute("aria-expanded", "false");
     buttonNode.addEventListener("pointerdown", (event) => {
       if (state.topbarEditMode || event.button !== 0) return;
       pointerHandled = true;
@@ -469,6 +471,7 @@ export function createTopbarView(dependencies = {}) {
     return el("button", {
       class: `button button-${variant} menu-button tooltip-trigger ${dragItem ? "menu-button-draggable" : ""}${extraClass}`.trim(),
       type: "button",
+      role: "menuitem",
       "aria-label": label,
       "data-tooltip": label,
       "data-tooltip-id": options.tooltipId || null,
@@ -559,7 +562,7 @@ export function createTopbarView(dependencies = {}) {
       }
     });
     const menu = el("div", {
-      class: `popover-menu topbar-settings-popover ${editing ? "is-editing" : ""}`,
+      class: `popover-menu overlay-surface topbar-settings-popover ${editing ? "is-editing" : ""}`,
       role: "menu",
       style: { top: `${rect.bottom + 5}px`, right: `${Math.max(8, window.innerWidth - rect.right)}px` },
       onpointerdown: (event) => event.stopPropagation(),

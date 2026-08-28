@@ -182,7 +182,7 @@ assert.doesNotMatch(
 );
 assert.match(
   preferredModelRunSource,
-  /record\.terminal = true;[\s\S]*record\.failureReason = record\.fallbackAttempted[\s\S]*compactPreferredModelFailureReason\(finalResult\);[\s\S]*record\.statusToast\?\.dismiss\?\.\(5000\)/,
+  /record\.terminal = true;[\s\S]*record\.failureReason = record\.fallbackAttempted[\s\S]*compactPreferredModelFailureReason\(finalResult\);[\s\S]*record\.statusToast\?\.dismiss\?\.\(\)/,
   "non-retryable or exhausted cancellations must reach an error-toast terminal state"
 );
 const preferredModelScheduleSource = functionSource(preferredModelSource, "schedulePreferredModelApplyToFrame");

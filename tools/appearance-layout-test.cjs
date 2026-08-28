@@ -117,6 +117,11 @@ assert.match(
   "the title and description must render above the coordinate help in the right column"
 );
 assert.match(
+  controllerSource,
+  /appearance\.toastStayShort[\s\S]*t\("appearance\.toastStay"\), t\("appearance\.toastStayDesc"\)/,
+  "Site Toast pane must expose duration before the position editor"
+);
+assert.match(
   settingsKitSource,
   /title \|\| description\s*\? el\("div", \{ class: "ui-card-header settings-block-header" \}/,
   "settings blocks without title copy must not leave an empty header"

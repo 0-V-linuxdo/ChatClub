@@ -10,7 +10,7 @@ import {
 } from "./notion-efforts.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-08-29｜05:47:05」";
+export const APP_VERSION = "「2026-08-29｜06:15:05」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -407,6 +407,8 @@ export const TOPBAR_PROMPT_PLACEHOLDER_INTERVAL_MAX_SEC = 3600;
 export const TOPBAR_PROMPT_INPUT_FONT_SIZE_MIN_PX = 13;
 export const TOPBAR_PROMPT_INPUT_FONT_SIZE_MAX_PX = 18;
 export const DEFAULT_FRAME_TOAST_POSITION = Object.freeze({ x: 100, y: 100 });
+export const TOAST_STAY_MODES = Object.freeze(["short", "default", "long"]);
+export const DEFAULT_TOAST_STAY = "default";
 
 export const DEFAULT_OPTIONS = {
   scriptConfigSchemaVersion: SCRIPT_CONFIG_SCHEMA_VERSION,
@@ -427,6 +429,7 @@ export const DEFAULT_OPTIONS = {
   modelPreferenceSelectionOverlayEnabled: true,
   modelPreferenceSelectionOverlayOpacity: 70,
   frameToastPosition: DEFAULT_FRAME_TOAST_POSITION,
+  toastStay: DEFAULT_TOAST_STAY,
   pocketCardSize: DEFAULT_POCKET_CARD_SIZE,
   pocketIcon: DEFAULT_POCKET_ICON,
   tooltipDisabledIds: [],

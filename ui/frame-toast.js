@@ -1,5 +1,5 @@
 import { FRAME_TOAST_POSITION_EVENT } from "../shared/protocol.js";
-import { el } from "./dom.js";
+import { el, toastDurationMs } from "./dom.js";
 
 export { FRAME_TOAST_POSITION_EVENT };
 
@@ -71,6 +71,8 @@ export function createFrameToast(iframe, message, kind = "info", position = null
   let suppressed = false;
   let suppressionHadAriaHidden = false;
   let suppressionAriaHidden = "";
+  let currentKind = kind;
+  let pendingHideDelay = null;
   let targetPosition = normalizedFrameToastPosition(position || currentFrameToastPosition);
   const item = el("div", {
     class: `toast frame-submit-toast toast-${kind}`,
@@ -148,10 +150,12 @@ export function createFrameToast(iframe, message, kind = "info", position = null
 
   function update(nextMessage, nextKind = "info") {
     clearTimers();
+    pendingHideDelay = null;
     if (!frameWrap.isConnected || !iframe.isConnected || !item.isConnected) {
       remove();
       return;
     }
+    currentKind = nextKind;
     item.textContent = String(nextMessage || "");
     item.classList.remove("toast-info", "toast-success", "toast-error");
     item.classList.add(`toast-${nextKind}`);
@@ -161,18 +165,23 @@ export function createFrameToast(iframe, message, kind = "info", position = null
     scheduleLayout();
   }
 
-  function dismiss(delayMs = 0) {
-    if (!item.isConnected) {
-      remove();
-      return;
-    }
+  function scheduleHide(delay) {
     if (dismissTimer) clearTimeout(dismissTimer);
     if (removeTimer) clearTimeout(removeTimer);
     dismissTimer = setTimeout(() => {
       dismissTimer = 0;
       item.classList.remove("show");
       removeTimer = setTimeout(remove, 240);
-    }, Math.max(0, Number(delayMs) || 0));
+    }, Math.max(0, Number(delay) || 0));
+  }
+
+  function dismiss(delayMs) {
+    if (!item.isConnected) {
+      remove();
+      return;
+    }
+    pendingHideDelay = delayMs == null ? toastDurationMs(currentKind) : Math.max(0, Number(delayMs) || 0);
+    scheduleHide(pendingHideDelay);
   }
 
   function setSuppressed(nextSuppressed) {
@@ -198,6 +207,16 @@ export function createFrameToast(iframe, message, kind = "info", position = null
   liveFrameToastConnectivityChecks.add(checkConnectivity);
   syncFrameToastConnectivityObserver();
   layout();
+  item.addEventListener("mouseenter", () => {
+    if (dismissTimer) clearTimeout(dismissTimer);
+    if (removeTimer) clearTimeout(removeTimer);
+    dismissTimer = 0;
+    removeTimer = 0;
+  });
+  item.addEventListener("mouseleave", () => {
+    if (pendingHideDelay == null) return;
+    scheduleHide(pendingHideDelay);
+  });
   showTimer = setTimeout(() => {
     showTimer = 0;
     if (item.isConnected) {

@@ -6439,7 +6439,6 @@ body.settings-tab-context-menu-dragging iframe {
   text-align: right;
 }
 
-.pocket-panel-resize-handle,
 .overlay-viewer-resize-handle {
   position: absolute;
   z-index: 2;
@@ -6448,8 +6447,6 @@ body.settings-tab-context-menu-dragging iframe {
   background: transparent;
 }
 
-.pocket-panel-resize-handle-left,
-.pocket-panel-resize-handle-right,
 .overlay-viewer-resize-handle-left,
 .overlay-viewer-resize-handle-right {
   top: 0;
@@ -6458,13 +6455,9 @@ body.settings-tab-context-menu-dragging iframe {
   cursor: ew-resize;
 }
 
-.pocket-panel-resize-handle-left,
 .overlay-viewer-resize-handle-left { left: 0; }
-.pocket-panel-resize-handle-right,
 .overlay-viewer-resize-handle-right { right: 0; }
 
-.pocket-panel-resize-handle-top,
-.pocket-panel-resize-handle-bottom,
 .overlay-viewer-resize-handle-top,
 .overlay-viewer-resize-handle-bottom {
   left: 0;
@@ -6473,23 +6466,18 @@ body.settings-tab-context-menu-dragging iframe {
   cursor: ns-resize;
 }
 
-.pocket-panel-resize-handle-top,
 .overlay-viewer-resize-handle-top {
   top: 0;
 }
 
-.pocket-panel-resize-handle-bottom,
 .overlay-viewer-resize-handle-bottom {
   bottom: 0;
 }
 
-.overlay-surface-fullscreen .pocket-panel-resize-handle,
 .overlay-surface-fullscreen .overlay-viewer-resize-handle {
   display: none;
 }
 
-.pocket-panel-resizing,
-.pocket-panel-resizing *,
 .overlay-viewer-resizing,
 .overlay-viewer-resizing * {
   user-select: none !important;
@@ -9360,7 +9348,16 @@ body.settings-tab-context-menu-dragging iframe {
 }
 
 .modal.modal-alertdialog .modal-header h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   color: var(--danger);
+}
+
+.modal.modal-alertdialog .modal-header h2 .svg-icon {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
 }
 
 .modal-body {
@@ -10347,6 +10344,10 @@ body.settings-tab-context-menu-dragging iframe {
 
 .chat-frame.active + .frame-submit-toast {
   display: flex;
+}
+
+.frame-submit-toast.show {
+  pointer-events: auto;
 }
 
 .chat-frame.active + .frame-submit-toast.frame-submit-toast-suppressed {

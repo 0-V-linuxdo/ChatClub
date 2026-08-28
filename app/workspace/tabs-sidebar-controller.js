@@ -7,6 +7,7 @@ import {
 } from "../../shared/workspace-tab-fulltext.js";
 import { createMenuButton } from "../../ui/components.js";
 import {
+  bindLinearMenuKeyboard,
   button,
   claimTopmostPopoverEscape,
   confirmationModal as defaultConfirmationModal,
@@ -1158,6 +1159,7 @@ export function createWorkspaceTabsSidebarController({
       tooltipId: TABS_SIDEBAR_SORT_LABEL_KEYS[mode]
     })));
     (ownerDocument.body || ownerDocument.documentElement)?.append?.(backdrop, menu);
+    bindLinearMenuKeyboard(menu);
     const onOutside = (pointerEvent) => {
       const target = pointerEvent.target;
       if (menu.contains?.(target) || anchor.contains?.(target) || anchor === target) return;

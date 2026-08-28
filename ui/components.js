@@ -32,6 +32,8 @@ export function createMenuButton({ label, icon, onClick, variant = "secondary", 
   };
   return el("button", {
     class: `button button-${variant} menu-button tooltip-trigger`,
+    type: "button",
+    role: "menuitem",
     "aria-label": label,
     "data-tooltip": tooltipLabel,
     "data-tooltip-placement": tooltipPlacement || null,

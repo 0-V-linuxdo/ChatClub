@@ -7,6 +7,7 @@ import {
 } from "../../shared/storage-schema.js";
 import { createMenuButton } from "../../ui/components.js";
 import {
+  bindLinearMenuKeyboard,
   claimTopmostPopoverEscape,
   el,
   iconButton
@@ -142,6 +143,7 @@ export function createTabsSidebarHoverMenu({
       onclick: (pointerEvent) => pointerEvent.stopPropagation()
     }, folded.map((entry) => hoverMenuButton(entry.id, item, row)).filter(Boolean));
     (ownerDocument.body || ownerDocument.documentElement)?.append?.(backdrop, menu);
+    bindLinearMenuKeyboard(menu);
     const onOutside = (pointerEvent) => {
       const target = pointerEvent.target;
       if (menu.contains?.(target) || anchor.contains?.(target) || anchor === target) return;

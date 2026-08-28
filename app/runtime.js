@@ -54,7 +54,7 @@ import {
 } from "./functional-anomalies/controller.js";
 import { SETTINGS_SECTIONS } from "./settings/sections.js";
 import { createCompactIconButton, createMenuButton } from "../ui/components.js";
-import { el, ensureToastHost, isDismissalEscape, toast } from "../ui/dom.js";
+import { el, ensureToastHost, isDismissalEscape, setToastStay, toast } from "../ui/dom.js";
 import { FRAME_TOAST_POSITION_EVENT } from "../ui/frame-toast.js";
 import { installGlobalTooltips } from "../ui/tooltip.js";
 import { createSvgIcon } from "../ui/icons.js";
@@ -801,7 +801,7 @@ function inferAppName(app) {
   document.documentElement.style.setProperty("--topbar-prompt-input-font-size", `${topbarPromptInputFontSize}px`);
   document.documentElement.dataset.frameToastX = String(frameToastPosition.x);
   document.documentElement.dataset.frameToastY = String(frameToastPosition.y);
-  document.dispatchEvent(new CustomEvent(FRAME_TOAST_POSITION_EVENT, { detail: frameToastPosition }));
+  setToastStay(state.options?.toastStay); document.dispatchEvent(new CustomEvent(FRAME_TOAST_POSITION_EVENT, { detail: frameToastPosition }));
 }
 
 async function notifyConfigReload() {
