@@ -325,61 +325,6 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   assert.equal(mergedClusters[0].entries.length, 2);
   assert.equal(mergedClusters[0].userMessage, "介绍一下： the rational male 系列");
 
-  const whatsNew = { text: "What's new" };
-  const whatsNewStored = {
-    href: "https://grok.com/c/whats-new",
-    title: "What's new",
-    appName: "Grok",
-    messages: [
-      { role: "user", text: "What's new" },
-      { role: "assistant", text: "I currently don't have any previously saved memory of you." },
-      { role: "user", text: "Follow up" },
-      { role: "assistant", text: "Here's What's new in the product this week." }
-    ]
-  };
-  const whatsNewEntries = promptHistoryConversationEntries(whatsNew, {
-    store: {
-      wsGrok: {
-        workspaceId: "wsGrok",
-        frames: [whatsNewStored]
-      }
-    },
-    previewItems: [{
-      status: "ok",
-      href: "https://grok.com/c/whats-new",
-      title: "What's new",
-      appName: "Grok",
-      messages: [{ role: "user", text: "What's new" }]
-    }]
-  });
-  assert.equal(whatsNewEntries.length, 1, "History must not add an empty live card next to a stored Grok conversation");
-  assert.equal(whatsNewEntries[0].assistantMessage, "I currently don't have any previously saved memory of you.");
-  assert.equal(
-    promptHistoryConversationEntries(whatsNew, {
-      previewItems: [{
-        status: "ok",
-        href: "https://grok.com/c/empty",
-        title: "What's new",
-        appName: "Grok",
-        messages: [
-          { role: "user", text: "What's new" },
-          { role: "assistant", text: "   " }
-        ]
-      }]
-    }).length,
-    1,
-    "a USER-only capture may still render, but empty assistant text must not invent a second card"
-  );
-  assert.deepEqual(
-    promptHistoryEntryClusters([
-      { userMessage: "What's new", assistantMessage: "I currently don't have any previously saved memory of you." },
-      { userMessage: "", assistantMessage: "" },
-      { userMessage: "   ", assistantMessage: "\n" }
-    ]).map((cluster) => cluster.entries.map((entry) => entry.assistantMessage)),
-    [["I currently don't have any previously saved memory of you."]],
-    "empty History turns must not become blank conversation cards"
-  );
-
   assert.match(historySource, /class: "shortcut-search prompt-history-search"/);
   assert.match(historySource, /class: "shortcut-search-input prompt-history-search-input"/);
   assert.match(historySource, /headerSearch, pane, resetAfterImport/);
@@ -433,9 +378,7 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   assert.match(panelSource, /refreshConversationSources\(redraw\)/);
   assert.match(panelSource, /refreshOpenHistory\(\{ retryLive: true \}\)/);
   assert.match(panelSource, /class: "pocket-batch-row prompt-history-conversations"/);
-  assert.match(panelSource, /if \(!text\.trim\(\)\) return null;/);
-  assert.doesNotMatch(panelSource, /role !== "assistant"\) return null/);
-  assert.match(panelSource, /if \(!userTurn && !assistantTurn\) return null;/);
+  assert.match(panelSource, /class: `pocket-message pocket-message-\$\{role\} prompt-history-turn prompt-history-turn-\$\{role\}`/);
   assert.match(panelSource, /promptHistoryPreview\(activeItem\?\.text, 72\)/);
   assert.match(panelSource, /ui-card pocket-entry prompt-history-conversation/);
   assert.match(panelSource, /pocket-shared-user-message/);

@@ -775,7 +775,7 @@ export function createHistoryController(ctx) {
   function conversationTurn(message = {}) {
     const role = message.role === "assistant" ? "assistant" : "user";
     const text = String(message.text || "");
-    if (!text.trim()) return null;
+    if (!text.trim() && role !== "assistant") return null;
     const copyLabel = role === "assistant" ? t("pocket.copyAssistantMessage") : t("pocket.copyUserMessage");
     return el("section", { class: `pocket-message pocket-message-${role} prompt-history-turn prompt-history-turn-${role}` },
       el("div", { class: "pocket-message-head prompt-history-turn-head" },
@@ -821,9 +821,6 @@ export function createHistoryController(ctx) {
 
   function historyEntryRow(entry, options = {}) {
     const assistantOnly = Boolean(options.assistantOnly);
-    const userTurn = assistantOnly ? null : conversationTurn({ role: "user", text: entry.userMessage });
-    const assistantTurn = conversationTurn({ role: "assistant", text: entry.assistantMessage });
-    if (!userTurn && !assistantTurn) return null;
     const title = entry.title || entry.appName || t("pocket.savedChat");
     return el("article", { class: `ui-card pocket-entry prompt-history-conversation${assistantOnly ? " pocket-entry-assistant-only" : ""}` },
       el("header", { class: "pocket-entry-header prompt-history-conversation-head" },
@@ -857,18 +854,14 @@ export function createHistoryController(ctx) {
         )
       ),
       el("div", { class: "pocket-message-grid prompt-history-conversation-turns" },
-        userTurn,
-        assistantTurn
+        assistantOnly ? null : conversationTurn({ role: "user", text: entry.userMessage }),
+        conversationTurn({ role: "assistant", text: entry.assistantMessage })
       )
     );
   }
 
   function historyEntryCluster(cluster) {
-    const rows = cluster.entries
-      .map((entry) => historyEntryRow(entry, { assistantOnly: cluster.merged }))
-      .filter(Boolean);
-    if (!rows.length) return null;
-    const entryCount = Math.max(1, rows.length);
+    const entryCount = Math.max(1, cluster.entries.length);
     return el("section", {
       class: `pocket-entry-cluster prompt-history-conversation-cluster${cluster.merged ? " pocket-entry-cluster-merged" : ""}`,
       dataset: { entryCount }
@@ -876,7 +869,9 @@ export function createHistoryController(ctx) {
       cluster.merged
         ? el("div", { class: "pocket-shared-user-message" }, conversationTurn({ role: "user", text: cluster.userMessage }))
         : null,
-      el("div", { class: "pocket-batch-row prompt-history-conversations" }, rows)
+      el("div", { class: "pocket-batch-row prompt-history-conversations" },
+        cluster.entries.map((entry) => historyEntryRow(entry, { assistantOnly: cluster.merged }))
+      )
     );
   }
 
@@ -927,7 +922,7 @@ export function createHistoryController(ctx) {
     const loading = !entries.length && (livePreviewPending || !livePreviewTried);
     return el("article", { class: "prompt-history-detail" },
       entries.length
-        ? el("div", { class: "prompt-history-conversation-clusters" }, clusters.map((cluster) => historyEntryCluster(cluster)).filter(Boolean))
+        ? el("div", { class: "prompt-history-conversation-clusters" }, clusters.map((cluster) => historyEntryCluster(cluster)))
         : el("div", {
           class: `prompt-history-detail-fallback${loading ? " is-loading" : ""}`,
           "aria-busy": loading ? "true" : null

@@ -77,21 +77,13 @@ export function promptHistoryMessageKey(text = "") {
   return String(text || "").replace(/\r\n?/g, "\n").trim();
 }
 
-function promptHistoryPairMatchesUser(pair, item) {
-  return fullTextTextsOverlap(pair?.userMessage, item?.text);
-}
-
 function promptHistoryPairMatches(pair, item) {
-  return promptHistoryPairMatchesUser(pair, item)
+  return fullTextTextsOverlap(pair?.userMessage, item?.text)
     || fullTextTextsOverlap(pair?.assistantMessage, item?.text);
 }
 
 function matchingMessages(item, messages = []) {
-  const pairs = pocketPairsFromMessages(messages);
-  const userMatches = pairs.filter((pair) => promptHistoryPairMatchesUser(pair, item));
-  const matching = userMatches.length
-    ? userMatches
-    : pairs.filter((pair) => promptHistoryPairMatches(pair, item));
+  const matching = pocketPairsFromMessages(messages).filter((pair) => promptHistoryPairMatches(pair, item));
   if (matching.length) {
     return matching.flatMap((pair) => [
       { role: "user", text: pair.userMessage },
@@ -100,8 +92,8 @@ function matchingMessages(item, messages = []) {
   }
   return (Array.isArray(messages) ? messages : []).flatMap((message) => {
     const role = message?.role === "assistant" ? "assistant" : message?.role === "user" ? "user" : "";
-    const text = String(message?.text || message?.content || "").trim();
-    return role && text && fullTextTextsOverlap(text, item?.text) ? [{ role, text }] : [];
+    const text = String(message?.text || message?.content || "");
+    return role && fullTextTextsOverlap(text, item?.text) ? [{ role, text }] : [];
   });
 }
 
@@ -163,66 +155,25 @@ function frameToPocketPage(frame = {}) {
   };
 }
 
-function pageIdentityKey(page = {}) {
-  const href = String(page.href || page.url || "").trim();
-  if (href) return `href:${href}`;
-  const instanceId = String(page.instanceId || "").trim();
-  return instanceId ? `id:${instanceId}` : "";
-}
-
-function pageMessageScore(page = {}) {
-  const messages = Array.isArray(page.messages) ? page.messages : [];
-  let score = 0;
-  for (const message of messages) {
-    score += 1 + String(message?.text || "").trim().length;
-  }
-  return score;
-}
-
-function adoptConversationPage(existing, page) {
-  if (!existing.logoUrl && page.logoUrl) existing.logoUrl = page.logoUrl;
-  if (!existing.appId && page.appId) existing.appId = page.appId;
-  if (!existing.href && (page.href || page.url)) {
-    existing.href = page.href || page.url;
-    existing.url = page.url || page.href;
-  }
-  if (!existing.title && page.title) existing.title = page.title;
-  if (!existing.appName && page.appName) existing.appName = page.appName;
-  if (pageMessageScore(page) <= pageMessageScore(existing)) return;
-  existing.messages = page.messages;
-  if (page.title) existing.title = page.title;
-  if (page.pageTitle) existing.pageTitle = page.pageTitle;
-  if (page.logoUrl) existing.logoUrl = page.logoUrl;
-  if (page.appName) existing.appName = page.appName;
-  if (page.siteName) existing.siteName = page.siteName;
-}
-
 function uniqueConversationPages(pages = []) {
-  const seenIdentity = new Map();
-  const seenContent = new Map();
+  const seen = new Map();
   const result = [];
   for (const page of pages) {
     const messages = Array.isArray(page.messages) ? page.messages : [];
     if (!messages.length) continue;
-    const identity = pageIdentityKey(page);
-    if (identity) {
-      const existing = seenIdentity.get(identity);
-      if (existing) {
-        adoptConversationPage(existing, page);
-        continue;
-      }
-      seenIdentity.set(identity, page);
-      result.push(page);
-      continue;
-    }
-    const key = [page.siteName || page.name, ...messages.map((message) => message.text)].join("\n");
-    const existing = seenContent.get(key);
+    const key = [page.href || page.instanceId || page.siteName, ...messages.map((message) => message.text)].join("\n");
+    const existing = seen.get(key);
     if (!existing) {
-      seenContent.set(key, page);
+      seen.set(key, page);
       result.push(page);
       continue;
     }
-    adoptConversationPage(existing, page);
+    if (!existing.logoUrl && page.logoUrl) existing.logoUrl = page.logoUrl;
+    if (!existing.appId && page.appId) existing.appId = page.appId;
+    if (!existing.href && page.href) {
+      existing.href = page.href;
+      existing.url = page.url || page.href;
+    }
   }
   return result;
 }
@@ -249,9 +200,7 @@ function pageToHistoryEntries(page = {}) {
     logoUrl: page.logoUrl || "",
     instanceId: page.instanceId || ""
   };
-  const pairs = pocketPairsFromMessages(messages).filter((pair) => (
-    promptHistoryMessageKey(pair.userMessage) || promptHistoryMessageKey(pair.assistantMessage)
-  ));
+  const pairs = pocketPairsFromMessages(messages);
   if (pairs.length) {
     return pairs.map((pair) => ({
       ...meta,
@@ -259,8 +208,8 @@ function pageToHistoryEntries(page = {}) {
       assistantMessage: pair.assistantMessage
     }));
   }
-  const user = messages.find((message) => message.role === "user" && promptHistoryMessageKey(message.text));
-  const assistant = messages.find((message) => message.role === "assistant" && promptHistoryMessageKey(message.text));
+  const user = messages.find((message) => message.role === "user");
+  const assistant = messages.find((message) => message.role === "assistant");
   if (!user && !assistant) return [];
   return [{
     ...meta,
@@ -274,9 +223,7 @@ export function promptHistoryConversationEntries(item, sources = {}) {
 }
 
 export function promptHistoryEntryClusters(entries = []) {
-  const list = (Array.isArray(entries) ? entries : []).filter((entry) => (
-    promptHistoryMessageKey(entry?.userMessage) || promptHistoryMessageKey(entry?.assistantMessage)
-  ));
+  const list = Array.isArray(entries) ? entries : [];
   const entriesByMessage = new Map();
   for (const entry of list) {
     const messageKey = promptHistoryMessageKey(entry?.userMessage);
