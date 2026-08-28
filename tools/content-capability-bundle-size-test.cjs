@@ -19,7 +19,7 @@ const coreCapabilityOutputs = [
 ];
 const measuredOutputs = Object.keys(CONTENT_ENTRIES).sort();
 const byteBudgets = Object.freeze({
-  "content/content.js": 104_915,
+  "content/content.js": 104_929,
   "content/send.js": 85_000,
   "content/summary-bridge.js": 92_000,
   // Per-model Notion Effort menus and nested model pickers add the bounded
@@ -31,15 +31,15 @@ const byteBudgets = Object.freeze({
   "content/grok-cookie-bridge.js": 50_000,
   "content/message-navigator.js": 140_000,
   "content/preload.js": 214_385,
-  "content/summary-userscripts-main.js": 214_527,
+  "content/summary-userscripts-main.js": 214_541,
   "content/summary-userscripts.js": 156_226
 });
 // Exact base-plus-capabilities closure after conversation-turn idle fingerprints
 // replaced main/body chrome probes in the shared summary runtime.
-const aggregateByteBudget = 777_380;
+const aggregateByteBudget = 777_450;
 // Exact all-bundle closure after conversation-turn idle fingerprints joined the
 // generated content bundles that inline FRAME_COMMAND_SPECS.
-const allBundlesByteBudget = 1_532_492;
+const allBundlesByteBudget = 1_532_632;
 
 const bundleIdentities = Object.fromEntries(Object.keys(CONTENT_ENTRIES).map((outputPath) => [
   outputPath,

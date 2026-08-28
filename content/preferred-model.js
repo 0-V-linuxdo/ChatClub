@@ -1,3 +1,4 @@
+"use strict";
 (() => {
   // shared/protocol.js
   var GENERIC_POST_MESSAGE_SOURCE = "chatclub";
