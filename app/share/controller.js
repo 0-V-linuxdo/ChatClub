@@ -254,7 +254,7 @@ export function createShareController(ctx) {
     const frames = listShareFrames();
     const hasPreview = format === SHARE_FORMAT_TEXT ? Boolean(state.sharePreviewText) : Boolean(state.sharePreviewUrl);
     const panel = el("section", {
-      class: `share-panel${state.shareMaximized ? " share-panel-maximized maximized" : ""}`,
+      class: `share-panel overlay-surface${state.shareMaximized ? " share-panel-maximized maximized" : ""}`,
       style: sharePanelSizeStyle()
     },
       el("div", { class: "share-panel-surface" },
@@ -268,12 +268,12 @@ export function createShareController(ctx) {
               state.shareMaximized ? t("sharePanel.restore") : t("sharePanel.maximize"),
               svgIcon(state.shareMaximized ? "minimize" : "maximize"),
               toggleShareMaximized,
-              "share-window-button",
+              "share-window-button overlay-window-button",
               state.shareMaximized ? t("sharePanel.restore") : t("sharePanel.maximize"),
               "",
               "share.window.fullscreen"
             ),
-            iconButton(t("common.close"), svgIcon("x"), closeSharePanel, "share-window-button", t("common.close"), "", "share.window.close")
+            iconButton(t("common.close"), svgIcon("x"), closeSharePanel, "share-window-button overlay-window-button", t("common.close"), "", "share.window.close")
           )
         ),
         el("div", { class: "share-panel-controls" },

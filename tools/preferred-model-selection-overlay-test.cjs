@@ -123,7 +123,7 @@ const overlayCss = css.slice(overlayCssStart, overlayCssEnd);
 
 assert.match(overlayCss, /position: absolute;/);
 assert.match(overlayCss, /inset: 0;/);
-assert.match(overlayCss, /z-index: 3;/);
+assert.match(overlayCss, /z-index: var\(--overlay-z-frame-status\);/);
 assert.match(overlayCss, /grid-template-columns: minmax\(0, 1fr\);/);
 assert.match(overlayCss, /pointer-events: auto;/);
 assert.match(overlayCss, /touch-action: none;/);
@@ -141,7 +141,7 @@ const indicatorCss = overlayCss.slice(
 assert.doesNotMatch(indicatorCss, /preferred-model-selection-overlay-opacity/);
 assert.match(indicatorCss, /translate: var\(--preferred-model-selection-overlay-offset-x/);
 assert.match(indicatorCss, /max-width: min\(100%, 520px\);/);
-assert.match(indicatorCss, /border-radius: 8px;/);
+assert.match(indicatorCss, /border-radius: var\(--overlay-radius\);/);
 assert.match(overlayCss, /\.preferred-model-selection-overlay-text\s*\{[^}]*display: flex;[^}]*flex-direction: column;/s);
 assert.match(overlayCss, /\.preferred-model-selection-overlay-line\s*\{[^}]*display: block;/s);
 assert.match(overlayCss, /\.preferred-model-selection-overlay-line-primary\s*\{[^}]*-webkit-line-clamp: 2;/s);
@@ -163,9 +163,9 @@ assert.match(
 );
 
 const loadingOverlayCss = css.slice(css.indexOf(".chat-frame-wrap::after"), css.indexOf(".chat-frame-loading-status"));
-assert.match(loadingOverlayCss, /z-index: 2;/);
+assert.match(loadingOverlayCss, /z-index: var\(--overlay-z-frame-loading\);/);
 const frameToastCss = css.slice(css.indexOf(".frame-submit-toast {"), css.indexOf(".chat-frame.active + .frame-submit-toast"));
-assert.match(frameToastCss, /z-index: 4;/);
+assert.match(frameToastCss, /z-index: var\(--overlay-z-frame-toast\);/);
 assert.match(
   css,
   /\.chat-frame\.active \+ \.frame-submit-toast\.frame-submit-toast-suppressed\s*\{[^}]*visibility: hidden;/s,

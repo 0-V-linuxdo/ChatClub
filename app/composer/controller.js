@@ -396,7 +396,7 @@ export function createComposerController(dependencies = {}) {
       }
     });
     const menu = el("div", {
-      class: "popover-menu prompt-actions-popover",
+      class: "popover-menu overlay-surface prompt-actions-popover",
       role: "menu",
       style: { top: `${top}px`, left: `${left}px` },
       onpointerdown: (menuEvent) => menuEvent.stopPropagation(),

@@ -61,6 +61,28 @@ Classify overlays by interaction type instead of adding one-off close flags at c
 - Persistent non-modal panels, such as Summary, may close through their own close action or Escape only while no modal or popover is in front of them; outside clicks do not dismiss them.
 - Escape affects only the topmost eligible overlay. A foreground modal or popover must prevent a background panel from closing, and composition events (`isComposing` or key code 229) must not trigger dismissal.
 
+## Overlay Chrome Contract
+
+The popup problem is not “not modern enough.” The same forest-green 8px system grew private frames, radii, close buttons, widths, and z-indexes across six overlay families. Keep one chrome contract; do not grow another at a call site.
+
+Families: typed modals (`editorModal` / `viewerModal` / `taskModal` / `confirmationModal`), persistent panels (Summary / Share), popovers, toasts (page + in-frame), frame overlays, global tooltip.
+
+Page stack, low → high, via CSS tokens in `styles/chatclub.css`:
+
+- persistent panels: `--overlay-z-panel` (Summary), `--overlay-z-panel-raised` (Share)
+- typed modals: `--overlay-z-modal`
+- popovers: `--overlay-z-popover-backdrop`, `--overlay-z-popover`
+- toasts: `--overlay-z-toast`
+- global tooltip: `--overlay-z-tooltip`
+
+Frame-local stack inside `.chat-frame-wrap`: `--overlay-z-frame-loading`, `--overlay-z-frame-status`, `--overlay-z-frame-toast`. Do not lift frame overlays onto the page stack.
+
+Chrome tokens: `--overlay-radius` (= `--ui-radius`), `--overlay-border` / `--overlay-border-color`, `--overlay-shadow`, `--overlay-close-size`, `--overlay-width` / `--overlay-width-compact` / `--overlay-width-wide` / `--overlay-width-task` / `--overlay-width-workspace`. Surfaces use `.overlay-surface`. Window close/maximize controls use `.overlay-window-button`.
+
+Motion: `--overlay-motion` opacity fade on transient overlays (modal backdrop, popover). Do not animate `transform` on positioned panels, and do not replay enter motion on persistent-panel redraws.
+
+Do not migrate to native `<dialog>` without an overlay-policy audit. Overlay Dismissal Policy above is closed: do not add one-off close flags. History must not copy Pocket focus/fullscreen/resize/restore behavior.
+
 ## Release Versioning
 
 Use Node.js 22 or 24 for generation, verification, and packaging. The repository `.nvmrc` pins Node 24; run `nvm use` and confirm `node --version` before `npm ci` or release-related scripts. `package.json` permits 22.x or 24.x. Generation, static verification, Node regression tests, package verification, local CI, GitHub CI, and release packaging all reject unsupported majors.

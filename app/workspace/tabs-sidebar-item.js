@@ -132,7 +132,7 @@ export function createTabsSidebarHoverMenu({
       }
     });
     const menu = el("div", {
-      class: "popover-menu workspace-tabs-sidebar-hover-menu",
+      class: "popover-menu overlay-surface workspace-tabs-sidebar-hover-menu",
       role: "menu",
       style: {
         top: `${Number(rect.bottom) + 5}px`,

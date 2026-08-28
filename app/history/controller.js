@@ -540,7 +540,7 @@ export function createHistoryController(ctx) {
 
   function historyFullscreenButton(panel) {
     const button = el("button", {
-      class: "icon-button tooltip-trigger pocket-window-button prompt-history-window-button",
+      class: "icon-button tooltip-trigger pocket-window-button prompt-history-window-button overlay-window-button",
       type: "button",
       "aria-label": t("chat.fullscreen"),
       "data-tooltip": t("chat.fullscreen"),
@@ -986,7 +986,7 @@ export function createHistoryController(ctx) {
       el("span", { class: "prompt-history-modal-title-icon", "aria-hidden": "true" }, svgIcon("history")),
       el("div", { class: "pocket-sidebar-titlebar prompt-history-sidebar-titlebar" })
     ));
-    closeButton.classList.add("prompt-history-window-button", "pocket-window-button");
+    closeButton.classList.add("prompt-history-window-button", "pocket-window-button", "overlay-window-button");
     closeButton.replaceChildren(svgIcon("x"));
     header.append(
       el("div", { class: "prompt-history-header-titlebar" }),

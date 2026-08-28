@@ -1144,7 +1144,7 @@ export function createWorkspaceTabsSidebarController({
       }
     });
     const menu = el("div", {
-      class: "popover-menu workspace-tabs-sidebar-sort-menu",
+      class: "popover-menu overlay-surface workspace-tabs-sidebar-sort-menu",
       role: "menu",
       style: {
         top: `${Number(rect.bottom) + 5}px`,

@@ -754,7 +754,7 @@ export function createWorkspaceViewController(dependencies = {}) {
       }
     });
     const picker = el("div", {
-      class: "popover-menu workspace-popover-menu app-picker-popover",
+      class: "popover-menu overlay-surface workspace-popover-menu app-picker-popover",
       role: "menu",
       onpointerdown: (event) => event.stopPropagation(),
       onclick: (event) => event.stopPropagation()
@@ -869,7 +869,7 @@ export function createWorkspaceViewController(dependencies = {}) {
       }
     });
     const menu = el("div", {
-      class: "popover-menu workspace-popover-menu layout-popover",
+      class: "popover-menu overlay-surface workspace-popover-menu layout-popover",
       role: "menu",
       style: { top: `${top}px`, right: `${right}px` },
       onpointerdown: (event) => event.stopPropagation(),
@@ -997,7 +997,7 @@ export function createWorkspaceViewController(dependencies = {}) {
       }
     });
     const menu = el("div", {
-      class: "popover-menu workspace-popover-menu",
+      class: "popover-menu overlay-surface workspace-popover-menu",
       role: "menu",
       style: showAllActions
         ? { top: `${rect.bottom + 5}px`, left: `${Math.max(8, rect.left)}px` }

@@ -459,7 +459,7 @@ export function createPocketController(ctx) {
 
   function pocketFullscreenButton(panel) {
     const button = el("button", {
-      class: "icon-button tooltip-trigger pocket-window-button",
+      class: "icon-button tooltip-trigger pocket-window-button overlay-window-button",
       type: "button",
       "aria-label": t("chat.fullscreen"),
       "data-tooltip": t("chat.fullscreen"),
@@ -494,7 +494,7 @@ export function createPocketController(ctx) {
       }, svgIcon(pocketDisplayIcon())),
       el("div", { class: "pocket-sidebar-titlebar", hidden: true })
     ));
-    closeButton.classList.add("pocket-window-button");
+    closeButton.classList.add("pocket-window-button", "overlay-window-button");
     closeButton.replaceChildren(svgIcon("x"));
     header.append(
       el("div", { class: "pocket-focus-titlebar", hidden: true }),

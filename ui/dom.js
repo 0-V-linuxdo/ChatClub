@@ -102,10 +102,10 @@ export function modal(title, content, onClose, wide = false, closeLabel = "Close
   const backdrop = el("div", { class: "modal-backdrop", dataset: { modalType }, onclick: (event) => {
     if (dismissOnBackdrop && event.target === backdrop) onClose();
   }});
-  const panel = el("section", { class: `modal ${wide ? "modal-wide" : ""}` },
+  const panel = el("section", { class: `modal overlay-surface ${wide ? "modal-wide" : ""}`.trim() },
     el("header", { class: "modal-header" },
       el("h2", {}, title),
-      iconButton(closeLabel, "×", onClose, "", closeLabel, "", "settings.modal.close")
+      iconButton(closeLabel, "×", onClose, "overlay-window-button", closeLabel, "", "settings.modal.close")
     ),
     el("div", { class: "modal-body" }, content)
   );

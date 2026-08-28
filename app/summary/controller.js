@@ -526,7 +526,7 @@ export function createSummaryController(ctx) {
       else await summarizeSummary();
     };
     const panel = el("section", {
-      class: `summary-panel ${state.summaryMaximized ? "summary-panel-maximized maximized" : ""}`,
+      class: `summary-panel overlay-surface ${state.summaryMaximized ? "summary-panel-maximized maximized" : ""}`,
       style: summaryPanelSizeStyle()
     },
       el("div", { class: "summary-panel-surface" },
@@ -536,11 +536,11 @@ export function createSummaryController(ctx) {
             el("strong", {}, t("summaryPanel.title"))
           ),
           el("div", { class: "summary-panel-window-actions" },
-            iconButton(summaryFullscreenLabel(), svgIcon(state.summaryMaximized ? "minimize" : "maximize"), toggleSummaryMaximized, "summary-window-button", summaryFullscreenLabel(), "", "summary.window.fullscreen"),
+            iconButton(summaryFullscreenLabel(), svgIcon(state.summaryMaximized ? "minimize" : "maximize"), toggleSummaryMaximized, "summary-window-button overlay-window-button", summaryFullscreenLabel(), "", "summary.window.fullscreen"),
             iconButton(t("common.close"), svgIcon("x"), () => {
               state.summaryOpen = false;
               syncSummaryPanel();
-            }, "summary-window-button", t("common.close"), "", "summary.window.close")
+            }, "summary-window-button overlay-window-button", t("common.close"), "", "summary.window.close")
           )
         ),
         el("div", { class: "summary-panel-query" },

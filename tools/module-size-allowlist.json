@@ -16,9 +16,9 @@
   "app/composer/controller.js": {
     "maxLines": 1300,
     "target": 1200,
-    "maxBytes": 49111,
+    "maxBytes": 49127,
     "targetBytes": 45000,
-    "reason": "The Composer controller owns immutable text-and-image draft revisions, revision-conditional clearing, history de-duplication, and the shared document-bound admission queue used by both ordinary Send and one-shot new-workspace prompt handoff so delivery uncertainty and preferred-model preparation cannot diverge."
+    "reason": "The Composer controller owns immutable text-and-image draft revisions, revision-conditional clearing, history de-duplication, and the shared document-bound admission queue used by both ordinary Send and one-shot new-workspace prompt handoff so delivery uncertainty and preferred-model preparation cannot diverge; prompt-actions popover chrome now uses the shared overlay-surface contract."
   },
   "app/workspace/frame-controller.js": {
     "maxLines": 1241,
@@ -58,7 +58,7 @@
   "app/workspace/tabs-sidebar-controller.js": {
     "maxLines": 1607,
     "target": 1200,
-    "maxBytes": 56130,
+    "maxBytes": 56146,
     "targetBytes": 40000,
     "reason": "The remembered ChatClub-tab sidebar owns live/closed partitioning, last-viewed/edited/created plus name/open sorting with prompt-history date groups, folder create/drag membership, drag reorder, pin order, overlay rename/delete, Appearance-owned hover-button Fixed/More/Hidden folding with an owner-scoped three-dot popover, close-others cleanup, the Search field that the topbar Search control focuses, stacked chat favicons from remembered app IDs, and one-click Pocket from stored or live conversation turns."
   },

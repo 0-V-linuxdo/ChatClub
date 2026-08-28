@@ -455,7 +455,7 @@ export function createSettingsController(ctx) {
     };
     if (settingsModal && modalHeader && closeButton) {
       fullscreenButton = el("button", {
-        class: "icon-button tooltip-trigger settings-window-button",
+        class: "icon-button tooltip-trigger settings-window-button overlay-window-button",
         type: "button",
         "data-tooltip-id": "settings.modal.fullscreen",
         onclick: (event) => {
@@ -465,7 +465,7 @@ export function createSettingsController(ctx) {
           syncFullscreenButton();
         }
       });
-      closeButton.classList.add("settings-window-button");
+      closeButton.classList.add("settings-window-button", "overlay-window-button");
       modalHeader.append(el("div", { class: "settings-window-actions" }, fullscreenButton, closeButton));
       syncFullscreenButton();
     }
