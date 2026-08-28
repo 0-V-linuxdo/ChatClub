@@ -9,6 +9,31 @@ function textValue(value) {
   return String(value || "").trim();
 }
 
+const FULLTEXT_OVERLAP_MIN_CHARS = 8;
+
+function normalizeFullTextMatchText(value) {
+  const text = String(value || "").replace(/\r\n?/g, "\n").trim();
+  if (!text) return "";
+  try {
+    return text.normalize("NFKC").replace(/\s+/g, " ").trim();
+  } catch {
+    return text.replace(/\s+/g, " ").trim();
+  }
+}
+
+export function fullTextTextsOverlap(left, right) {
+  const a = normalizeFullTextMatchText(left);
+  const b = normalizeFullTextMatchText(right);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const compactA = a.replace(/\s+/g, "");
+  const compactB = b.replace(/\s+/g, "");
+  if (compactA === compactB) return true;
+  const includes = (short, long) => short.length >= FULLTEXT_OVERLAP_MIN_CHARS && long.includes(short);
+  if (a.length <= b.length ? includes(a, b) : includes(b, a)) return true;
+  return compactA.length <= compactB.length ? includes(compactA, compactB) : includes(compactB, compactA);
+}
+
 function normalizeFullTextQuery(value) {
   return textValue(value).toLowerCase();
 }
@@ -88,13 +113,10 @@ export function fullTextMessagesHavePair(messages) {
 }
 
 export function fullTextMessagesMatchPrompt(messages, prompt) {
-  const needle = textValue(prompt).replace(/\s+/g, " ");
-  if (!needle) return false;
-  return pocketPairsFromMessages(messages).some((pair) => {
-    if (!textValue(pair.assistantMessage)) return false;
-    const user = textValue(pair.userMessage).replace(/\s+/g, " ");
-    return user === needle || user.includes(needle);
-  });
+  if (!normalizeFullTextMatchText(prompt)) return false;
+  return pocketPairsFromMessages(messages).some((pair) => (
+    Boolean(textValue(pair.assistantMessage)) && fullTextTextsOverlap(pair.userMessage, prompt)
+  ));
 }
 
 export function framesFromSummaryPreviewItems(items = []) {

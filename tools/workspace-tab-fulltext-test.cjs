@@ -11,6 +11,7 @@ const root = path.resolve(__dirname, "..");
     framesFromSummaryPreviewItems,
     fullTextMessagesHavePair,
     fullTextMessagesMatchPrompt,
+    fullTextTextsOverlap,
     matchesFullTextQuery,
     mergeWorkspaceTabFullTextFrames,
     normalizeWorkspaceTabFullTextStore,
@@ -63,6 +64,7 @@ const root = path.resolve(__dirname, "..");
   assert.deepEqual(normalizeWorkspaceTabFullTextStore({ bogus: true }), {});
 
   const prompt = "Compare ChatGPT and Claude";
+  assert.equal(fullTextTextsOverlap("搜索：科幻作家 七月 \n出版的小说/小说集", "搜索:科幻作家七月出版的小说/小说集"), true);
   assert.equal(fullTextMessagesHavePair([{ role: "user", text: prompt }]), false);
   assert.equal(fullTextMessagesHavePair([
     { role: "user", text: prompt },
@@ -77,6 +79,14 @@ const root = path.resolve(__dirname, "..");
     { role: "user", text: `Title\n${prompt}` },
     { role: "assistant", text: "done" }
   ], prompt), true, "extracted USER text may wrap the sent prompt");
+  assert.equal(fullTextMessagesMatchPrompt([
+    { role: "user", text: "Compare ChatGPT" },
+    { role: "assistant", text: "done" }
+  ], prompt), true, "a truncated USER prefix must still match idle capture");
+  assert.equal(fullTextMessagesMatchPrompt([
+    { role: "user", text: "搜索:科幻作家七月出版的小说/小说集" },
+    { role: "assistant", text: "七月的代表作包括《…" }
+  ], "搜索：科幻作家 七月 \n出版的小说/小说集"), true, "NFKC punctuation and CJK spacing must not block idle capture");
   assert.equal(fullTextMessagesMatchPrompt([
     { role: "user", text: prompt },
     { role: "assistant", text: "done" }

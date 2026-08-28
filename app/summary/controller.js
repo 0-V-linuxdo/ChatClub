@@ -910,13 +910,28 @@ export function createSummaryController(ctx) {
     return run;
   }
 
+  async function collectLockedFrameSummary(iframe, index = 0, options = {}) {
+    return withSummaryCollectionLock(async () => {
+      try {
+        return await collectFrameSummary(iframe, index, options);
+      } catch (error) {
+        const app = frameApp(iframe);
+        let base = { key: `iframe-${index + 1}`, order: index };
+        try { base = summaryFrameBase(iframe, app, index); } catch { /* keep fallback identity */ }
+        const message = error?.message || t("summaryPanel.collectionFailed");
+        if (options.recordFailures !== false) recordSummaryFailure("collectSource", app, base, error, message);
+        return { diagnostic: { ...base, key: base.key || `iframe-${index + 1}`, status: "error", message } };
+      }
+    });
+  }
+
   async function collectWorkspacePreviewItems() {
     const frames = currentFrames();
     if (!frames.length) return [];
-    const results = await Promise.all(frames.map((iframe, index) =>
-      withSummaryCollectionLock(() => collectFrameSummary(iframe, index))
-    ));
-    return results.map((result, index) => summaryPreviewItemFromResult(result, { index, order: index }));
+    const results = await Promise.all(frames.map((iframe, index) => collectLockedFrameSummary(iframe, index)));
+    const items = results.map((result, index) => summaryPreviewItemFromResult(result, { index, order: index }));
+    await persistRecordedFullText(items).catch(() => {});
+    return items;
   }
 
   function resolveIdleCaptureFrame(frame) {
@@ -950,7 +965,7 @@ export function createSummaryController(ctx) {
       const iframe = resolveIdleCaptureFrame(frame);
       if (!iframe) return null;
       const index = Math.max(0, currentFrames().indexOf(iframe));
-      const result = await withSummaryCollectionLock(() => collectFrameSummary(iframe, index, { recordFailures: false }));
+      const result = await collectLockedFrameSummary(iframe, index, { recordFailures: false });
       return summaryPreviewItemFromResult(result, {
         index,
         order: index,
@@ -999,9 +1014,7 @@ export function createSummaryController(ctx) {
     try {
       const frames = currentFrames();
       if (!frames.length) throw new Error(t("summaryPanel.noIframe"));
-      const results = await Promise.all(frames.map((iframe, index) =>
-        withSummaryCollectionLock(() => collectFrameSummary(iframe, index))
-      ));
+      const results = await Promise.all(frames.map((iframe, index) => collectLockedFrameSummary(iframe, index)));
       state.summaryLoadingPhase = "build";
       state.summaryPreviewItems = results.map((result, index) => summaryPreviewItemFromResult(result, { index, order: index }));
       syncSummaryPreviewDerivedState();
@@ -1037,7 +1050,7 @@ export function createSummaryController(ctx) {
     syncSummaryPanel();
     try {
       const frameIndex = currentFrames().indexOf(iframe);
-      const result = await withSummaryCollectionLock(() => collectFrameSummary(iframe, frameIndex >= 0 ? frameIndex : summarySourceOrder(item)));
+      const result = await collectLockedFrameSummary(iframe, frameIndex >= 0 ? frameIndex : summarySourceOrder(item));
       const nextItem = summaryPreviewItemFromResult(result, item);
       state.summaryPreviewItems = state.summaryPreviewItems.map((entry) => summarySourceKey(entry) === key ? nextItem : entry);
       syncSummaryPreviewDerivedState();

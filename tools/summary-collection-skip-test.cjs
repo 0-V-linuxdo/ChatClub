@@ -57,4 +57,14 @@ assert.ok(
   "live metadata and favicon discovery must precede a skip, which must precede runtime repair"
 );
 
+assert.match(source, /async function collectLockedFrameSummary/);
+assert.match(source, /collectWorkspacePreviewItems[\s\S]*collectLockedFrameSummary\(iframe, index\)/);
+assert.match(source, /collectSummary[\s\S]*collectLockedFrameSummary\(iframe, index\)/);
+assert.match(source, /await persistRecordedFullText\(items\)/);
+assert.doesNotMatch(
+  functionSource(source, "collectWorkspacePreviewItems", true),
+  /withSummaryCollectionLock\(\(\) => collectFrameSummary/,
+  "History live collection must isolate a throwing iframe instead of failing the whole batch"
+);
+
 console.log("Summary pre-runtime skip routing checks passed.");

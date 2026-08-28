@@ -98,7 +98,8 @@ export function createHistoryController(ctx) {
   function conversationPages(item) {
     return promptHistoryConversationPages(item, {
       store: fullTextStore,
-      previewItems: livePreviewItems
+      previewItems: livePreviewItems,
+      pocketEntries
     });
   }
 

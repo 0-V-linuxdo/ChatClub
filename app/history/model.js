@@ -2,7 +2,7 @@ import { t } from "../../shared/i18n.js";
 import { dateGroupId, groupByDate, timestamp } from "../../shared/date-groups.js";
 import {
   framesFromSummaryPreviewItems,
-  matchesFullTextQuery,
+  fullTextTextsOverlap,
   pocketPairsFromMessages
 } from "../../shared/workspace-tab-fulltext.js";
 
@@ -60,24 +60,9 @@ export function promptHistoryMessageKey(text = "") {
   return String(text || "").replace(/\r\n?/g, "\n").trim();
 }
 
-function compactHistoryText(value) {
-  return promptHistoryMessageKey(value).replace(/\s+/g, " ");
-}
-
-function promptHistoryTextOverlaps(left, right) {
-  const a = compactHistoryText(left);
-  const b = compactHistoryText(right);
-  if (!a || !b) return false;
-  if (a === b) return true;
-  const shorter = a.length <= b.length ? a : b;
-  const longer = a.length <= b.length ? b : a;
-  return shorter.length >= 8 && longer.includes(shorter);
-}
-
 function promptHistoryPairMatches(pair, item) {
-  if (promptHistoryTextOverlaps(pair?.userMessage, item?.text)) return true;
-  const text = promptHistoryMessageKey(item?.text);
-  return Boolean(text) && matchesFullTextQuery(text, [pair?.userMessage, pair?.assistantMessage]);
+  return fullTextTextsOverlap(pair?.userMessage, item?.text)
+    || fullTextTextsOverlap(pair?.assistantMessage, item?.text);
 }
 
 function matchingMessages(item, messages = []) {
@@ -91,7 +76,7 @@ function matchingMessages(item, messages = []) {
   return (Array.isArray(messages) ? messages : []).flatMap((message) => {
     const role = message?.role === "assistant" ? "assistant" : message?.role === "user" ? "user" : "";
     const text = String(message?.text || message?.content || "");
-    return role && promptHistoryTextOverlaps(text, item?.text) ? [{ role, text }] : [];
+    return role && fullTextTextsOverlap(text, item?.text) ? [{ role, text }] : [];
   });
 }
 
@@ -123,6 +108,20 @@ function previewItemsMatchingPromptHistory(item, previewItems = []) {
   return matchingFrames(item, framesFromSummaryPreviewItems(previewItems));
 }
 
+function pocketFramesMatchingPromptHistory(item, pocketEntries = []) {
+  return matchingFrames(item, (Array.isArray(pocketEntries) ? pocketEntries : []).map((entry) => ({
+    href: entry?.chatUrl || entry?.href || "",
+    title: entry?.title || "",
+    appName: entry?.appName || "",
+    appId: entry?.appId || "",
+    instanceId: entry?.instanceId || "",
+    messages: [
+      { role: "user", text: entry?.userMessage },
+      { role: "assistant", text: entry?.assistantMessage }
+    ]
+  })));
+}
+
 function frameToPocketPage(frame = {}) {
   return {
     href: frame.href,
@@ -152,7 +151,8 @@ function uniqueConversationPages(pages = []) {
 export function promptHistoryConversationPages(item, sources = {}) {
   return uniqueConversationPages([
     ...framesMatchingPromptHistory(item, sources.store),
-    ...previewItemsMatchingPromptHistory(item, sources.previewItems)
+    ...previewItemsMatchingPromptHistory(item, sources.previewItems),
+    ...pocketFramesMatchingPromptHistory(item, sources.pocketEntries)
   ].map(frameToPocketPage));
 }
 

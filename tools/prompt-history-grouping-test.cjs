@@ -164,6 +164,33 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   });
   assert.equal(truncatedPages.length, 1, "History must show stored turns when a captured USER is a prefix of the sent prompt");
   assert.equal(truncatedPages[0].messages[1].text, "七月的代表作包括《…");
+  const punctuatedPages = promptHistoryConversationPages({ text: "搜索：科幻作家 七月 \n出版的小说/小说集" }, {
+    store: {
+      wsPunct: {
+        workspaceId: "wsPunct",
+        frames: [{
+          href: "https://kagi.com/c/punct",
+          appName: "Kagi Assistant",
+          messages: [
+            { role: "user", text: "搜索:科幻作家七月出版的小说/小说集" },
+            { role: "assistant", text: "七月出版过短篇集。" }
+          ]
+        }]
+      }
+    }
+  });
+  assert.equal(punctuatedPages.length, 1, "History must match extracted USER turns after NFKC punctuation and CJK spacing");
+  const pocketPages = promptHistoryConversationPages({ text: "搜索：科幻作家 七月 \n出版的小说/小说集" }, {
+    pocketEntries: [{
+      chatUrl: "https://grok.com/c/pocket",
+      appName: "Grok",
+      userMessage: "搜索:科幻作家七月出版的小说/小说集",
+      assistantMessage: "来自 Pocket 的回复。"
+    }]
+  });
+  assert.equal(pocketPages.length, 1, "History must show matching Pocket turns when live/full-text sources are empty");
+  assert.equal(pocketPages[0].href, "https://grok.com/c/pocket");
+  assert.equal(pocketPages[0].messages[1].text, "来自 Pocket 的回复。");
   const hrefLess = promptHistoryConversationPages({ text: "Explain closures" }, {
     store: {
       ws4: {
@@ -253,7 +280,9 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   assert.match(panelSource, /promptHistory\.conversationLoading/);
   assert.match(panelSource, /promptHistory\.conversationEmpty/);
   assert.match(panelSource, /prompt-history-detail-fallback/);
-  assert.match(modelSource, /matchesFullTextQuery/);
+  assert.match(modelSource, /fullTextTextsOverlap/);
+  assert.match(modelSource, /pocketFramesMatchingPromptHistory/);
+  assert.match(panelSource, /pocketEntries/);
   assert.match(
     stylesheetSource,
     /\.prompt-history-conversations\s*\{/
