@@ -139,15 +139,26 @@ function frameToPocketPage(frame = {}) {
 }
 
 function uniqueConversationPages(pages = []) {
-  const seen = new Set();
-  return pages.filter((page) => {
+  const seen = new Map();
+  const result = [];
+  for (const page of pages) {
     const messages = Array.isArray(page.messages) ? page.messages : [];
-    if (!messages.length) return false;
+    if (!messages.length) continue;
     const key = [page.href || page.instanceId || page.siteName, ...messages.map((message) => message.text)].join("\n");
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+    const existing = seen.get(key);
+    if (!existing) {
+      seen.set(key, page);
+      result.push(page);
+      continue;
+    }
+    if (!existing.logoUrl && page.logoUrl) existing.logoUrl = page.logoUrl;
+    if (!existing.appId && page.appId) existing.appId = page.appId;
+    if (!existing.href && page.href) {
+      existing.href = page.href;
+      existing.url = page.url || page.href;
+    }
+  }
+  return result;
 }
 
 export function promptHistoryConversationPages(item, sources = {}) {

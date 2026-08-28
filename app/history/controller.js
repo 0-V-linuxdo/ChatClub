@@ -13,6 +13,7 @@ import {
   uniqueChatFaviconSources,
   renderChatFaviconStack
 } from "../../ui/favicon.js";
+import { renderMarkdown } from "../summary/markdown.js";
 import {
   groupPromptHistory,
   promptHistoryImageCountLabel,
@@ -313,15 +314,37 @@ export function createHistoryController(ctx) {
     });
   }
 
+  function googleFaviconUrl(href = "") {
+    try {
+      const page = new URL(String(href || ""));
+      if (page.protocol !== "http:" && page.protocol !== "https:") return "";
+      const iconUrl = new URL("https://www.google.com/s2/favicons");
+      iconUrl.searchParams.set("domain", page.hostname);
+      iconUrl.searchParams.set("sz", "64");
+      return iconUrl.href;
+    } catch {
+      return "";
+    }
+  }
+
+  function historyLogoUrl(href = "", logoUrl = "") {
+    const stored = String(logoUrl || "").trim();
+    if (stored && !stored.includes("/_favicon/")) return stored;
+    const pageHref = String(href || "").trim();
+    const effective = typeof faviconPort.effective === "function"
+      ? String(faviconPort.effective(pageHref, stored) || "").trim()
+      : "";
+    if (effective && !effective.includes("/_favicon/")) return effective;
+    return googleFaviconUrl(pageHref) || effective || stored;
+  }
+
   function pageFaviconSources(pages = []) {
     return uniqueChatFaviconSources(pages, (page) => {
-      const appId = String(page?.appId || "").trim();
-      const app = appId && typeof faviconPort.appById === "function" ? faviconPort.appById(appId) : null;
+      const href = page?.href || page?.url || "";
       return {
-        href: page?.href || page?.url || "",
-        logoUrl: page?.logoUrl || "",
-        app,
-        appId,
+        href,
+        logoUrl: historyLogoUrl(href, page?.logoUrl || ""),
+        appId: page?.appId || href,
         title: page?.siteName || page?.name || page?.title || ""
       };
     });
@@ -329,9 +352,6 @@ export function createHistoryController(ctx) {
 
   function pageFavicons(pages = [], stackClass = "") {
     return renderChatFaviconStack(pageFaviconSources(pages), {
-      appFaviconUrl: faviconPort.app,
-      browserFaviconUrl: faviconPort.browser,
-      fallbackFaviconUrl: faviconPort.fallback,
       effectiveFaviconUrl: faviconPort.effective,
       stackClass
     });
@@ -434,15 +454,15 @@ export function createHistoryController(ctx) {
       el("div", { class: "pocket-message-head prompt-history-turn-head" },
         el("span", { class: "pocket-message-label prompt-history-turn-label" }, t(role === "assistant" ? "common.assistant" : "common.user"))
       ),
-      el("p", { class: "pocket-message-body pocket-message-plain prompt-history-turn-text" }, text)
+      role === "assistant"
+        ? el("div", { class: "pocket-message-body pocket-message-markdown summary-preview-text-markdown prompt-history-turn-text" }, renderMarkdown(text))
+        : el("p", { class: "pocket-message-body pocket-message-plain prompt-history-turn-text" }, text)
     );
   }
 
   function historyEntryFavicon(entry = {}) {
     const chatUrl = String(entry.chatUrl || "");
-    const stored = String(entry.logoUrl || "").trim();
-    const resolved = stored
-      || (typeof faviconPort.effective === "function" ? String(faviconPort.effective(chatUrl, stored) || "").trim() : "");
+    const resolved = historyLogoUrl(chatUrl, entry.logoUrl || "");
     if (!resolved) return null;
     return el("img", {
       class: "pocket-entry-favicon",
@@ -453,16 +473,14 @@ export function createHistoryController(ctx) {
       referrerpolicy: "no-referrer",
       onerror: (event) => {
         const image = event.currentTarget;
-        if (image.dataset.fallback === "1") {
+        if (image.dataset.google === "1") {
           image.hidden = true;
           return;
         }
-        image.dataset.fallback = "1";
-        const fallbackUrl = typeof faviconPort.effective === "function"
-          ? String(faviconPort.effective(chatUrl, "") || "").trim()
-          : "";
-        if (fallbackUrl && image.src !== fallbackUrl) {
-          image.src = fallbackUrl;
+        image.dataset.google = "1";
+        const googleUrl = googleFaviconUrl(chatUrl);
+        if (googleUrl && image.src !== googleUrl) {
+          image.src = googleUrl;
           return;
         }
         image.hidden = true;

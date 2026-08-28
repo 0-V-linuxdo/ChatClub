@@ -261,6 +261,34 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   });
   assert.equal(liveLogoPages[0].logoUrl, "https://grok.com/favicon.ico", "History pages must keep the live site favicon");
 
+  const storedThenLiveLogo = promptHistoryConversationPages({ text: "介绍一下： the rational male 系列" }, {
+    store: {
+      wsLogo: {
+        workspaceId: "wsLogo",
+        frames: [{
+          href: "https://grok.com/c/1",
+          appName: "Grok",
+          messages: [{ role: "user", text: "介绍一下： the rational male 系列" }]
+        }]
+      }
+    },
+    previewItems: [{
+      status: "ok",
+      href: "https://grok.com/c/1",
+      page: {
+        href: "https://grok.com/c/1",
+        logoUrl: "https://grok.com/favicon.ico",
+        messages: [{ role: "user", text: "介绍一下： the rational male 系列" }]
+      }
+    }]
+  });
+  assert.equal(storedThenLiveLogo.length, 1);
+  assert.equal(
+    storedThenLiveLogo[0].logoUrl,
+    "https://grok.com/favicon.ico",
+    "History must keep the live site favicon when a stored frame of the same chat has none"
+  );
+
   const mergedClusters = promptHistoryEntryClusters(promptHistoryConversationEntries(
     { text: "介绍一下： the rational male 系列" },
     {
@@ -352,6 +380,10 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   assert.match(panelSource, /pocket-shared-user-message/);
   assert.match(panelSource, /pocket-entry-cluster-merged/);
   assert.match(panelSource, /class: "pocket-entry-favicon"/);
+  assert.match(panelSource, /renderMarkdown/);
+  assert.match(panelSource, /pocket-message-markdown summary-preview-text-markdown/);
+  assert.match(panelSource, /www\.google\.com\/s2\/favicons/);
+  assert.doesNotMatch(panelSource, /faviconPort\.appById/);
   assert.match(panelSource, /promptHistoryConversationEntries/);
   assert.match(panelSource, /promptHistoryEntryClusters/);
   assert.doesNotMatch(panelSource, /pageFavicons\(\[page\]/);

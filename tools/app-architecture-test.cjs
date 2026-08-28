@@ -99,6 +99,7 @@ function appDomain(file) {
 
   const additionalDomainEdges = Object.freeze({
     pocket: new Set(["summary"]),
+    history: new Set(["summary"]),
     settings: new Set(["prompt-library", "history"])
   });
   for (const [owner, dependencies] of graph) {
@@ -162,7 +163,7 @@ function appDomain(file) {
     ["app/history/controller.js", "createHistoryController", [
       "insert", "remove", "clearHistory", "headerSearch", "renderHistory", "saveItemToPocket", "sidebar",
       "refreshConversationSources", "conversationPages", "conversationTurn", "historyEntryFavicon",
-      "historyEntryRow", "historyEntryCluster",
+      "historyEntryRow", "historyEntryCluster", "historyLogoUrl", "googleFaviconUrl",
       "applyWorkspacePreview", "syncHistoryModalHeader", "installHistoryPanelHeader", "historyHeaderActions"
     ]],
     ["app/share/controller.js", "createShareController", [

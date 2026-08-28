@@ -33,11 +33,11 @@
     },
     "app/history/controller.js": {
       "owner": "app/runtime.js",
-      "maxFiles": 2,
+      "maxFiles": 3,
       "targetFiles": 1,
-      "maxSourceBytes": 34741,
+      "maxSourceBytes": 40806,
       "targetSourceBytes": 16000,
-      "reason": "Prompt History remains an explicit runtime-owned lazy controller; the viewer now includes a Pocket-style sidebar, save-to-Pocket action, saved-only Pocket badge, stored, live, or Pocket conversation turns with NFKC-tolerant matching, a selected-prompt modal title, persist-driven redraw of an already-open panel, and distinct loading versus unmatched conversation copy, and this budget tracks only modules added beyond the application initial-static closure; workspace-save injects the captured live turns and selects the matching prompt so a right-click refresh is visible in a closed or already-open viewer; the History viewer uses Pocket-aligned header columns, titlebar search, site favicons, and merged USER clusters across horizontal conversation cards."
+      "reason": "Prompt History remains an explicit runtime-owned lazy controller; the viewer now includes a Pocket-style sidebar, save-to-Pocket action, saved-only Pocket badge, stored, live, or Pocket conversation turns with NFKC-tolerant matching, a selected-prompt modal title, persist-driven redraw of an already-open panel, and distinct loading versus unmatched conversation copy, and this budget tracks only modules added beyond the application initial-static closure; workspace-save injects the captured live turns and selects the matching prompt so a right-click refresh is visible in a closed or already-open viewer; the History viewer uses Pocket-aligned header columns, titlebar search, site favicons via declared or Google icons instead of chrome _favicon_ placeholders, merged USER clusters, and Summary markdown rendering for assistant turns."
     },
     "app/pocket/controller.js": {
       "owner": "app/runtime.js",
@@ -59,7 +59,7 @@
       "owner": "app/runtime.js",
       "maxFiles": 29,
       "targetFiles": 18,
-      "maxSourceBytes": 394570,
+      "maxSourceBytes": 394922,
       "targetSourceBytes": 250000,
       "reason": "Settings remains an explicit runtime-owned lazy controller; its exact incremental closure includes background-owned import/reset coordination with durable committed-reset cleanup warnings, signed official-rules consent and status composition with cached-card language synchronization, apply-all and rollback entry points, sparse override clearing, platform and iframe source ordering, model controls, custom Summary/Delete permission notices, accessible General, Color and Overlays Workspace subtabs with pending-color retention, nested Tab Group, right-click menu, and ChatClub Tabs hover-button Fixed/More/Hidden settings with independent drag ordering and visibility, preferred-model overlay enablement and opacity with overlay-only synchronization, the focused topbar input setting, prompt-history date grouping, remembered ChatClub Tabs export/import, the ChatClub Tabs sidebar shortcut, header-mounted shortcut-settings and Prompt History search, the extracted Prompt History grouping model shared with the topbar History viewer including NFKC-tolerant conversation matching, Pocket-style USER clustering, and accessible viewport-filling window controls; English UI labels DouBao as 豆包（doubao） and Qianwen as 千问（qianwen）."
     },
