@@ -1,5 +1,5 @@
 import { t } from "../../shared/i18n.js";
-import { dedupePocketHistory, normalizePocketCardSize } from "../../shared/storage-schema.js";
+import { dedupePocketHistory, normalizePocketCardSize, normalizePocketIcon } from "../../shared/storage-schema.js";
 import { clear, el, toast, viewerModal } from "../../ui/dom.js";
 import { requireControllerContext, requireControllerFunction, validateControllerContract } from "../controller-contract.js";
 import { renderMarkdown } from "../summary/markdown.js";
@@ -23,7 +23,8 @@ export function createPocketController(ctx) {
     state: "object", createId: "function", loadPocketHistory: "function", savePocketHistory: "function",
     saveOptions: "function", openableTabUrl: "function", loadPocketEntryInFrame: "function",
     restorePocketBatch: "function", setFramePointerBlockedForOverlay: "function",
-    effectiveFaviconUrl: "function", compactIconButton: "function", svgIcon: "function"
+    effectiveFaviconUrl: "function", compactIconButton: "function", svgIcon: "function",
+    syncTopbar: "function?"
   });
   const state = requireControllerContext(ctx, controllerName, "state");
   const createId = requireControllerFunction(ctx, controllerName, "createId");
@@ -37,6 +38,7 @@ export function createPocketController(ctx) {
   const effectiveFaviconUrl = requireControllerFunction(ctx, controllerName, "effectiveFaviconUrl");
   const compactIconButton = requireControllerFunction(ctx, controllerName, "compactIconButton");
   const svgIcon = requireControllerFunction(ctx, controllerName, "svgIcon");
+  const syncTopbar = typeof ctx.syncTopbar === "function" ? ctx.syncTopbar : null;
   let pocketCardSizeSaveTimer = 0;
   let pocketActionsExpanded = false;
   let pocketSidebarCollapsed = false;
@@ -192,6 +194,17 @@ export function createPocketController(ctx) {
 
   function pocketCardSize() {
     return normalizePocketCardSize(state.options?.pocketCardSize);
+  }
+
+  function pocketDisplayIcon() {
+    return normalizePocketIcon(state.options?.pocketIcon);
+  }
+
+  async function cyclePocketIcon() {
+    const next = pocketDisplayIcon() === "pocket" ? "star" : "pocket";
+    state.options = await saveOptions({ ...state.options, pocketIcon: next });
+    syncTopbar?.();
+    pocketCurrentRedraw?.();
   }
 
   function syncPocketClusterWidths(host, size = pocketCardSize()) {
@@ -457,7 +470,18 @@ export function createPocketController(ctx) {
     if (!header || !closeButton || !title) return;
     title.before(el("div", { class: "pocket-focus-leftbar", hidden: true }));
     title.before(el("div", { class: "pocket-header-sidebar" },
-      el("span", { class: "pocket-modal-title-icon", "aria-hidden": "true" }, svgIcon("pocket")),
+      el("button", {
+        class: "pocket-modal-title-icon tooltip-trigger",
+        type: "button",
+        "aria-label": t("pocket.switchIcon"),
+        "data-tooltip": t("pocket.switchIcon"),
+        "data-tooltip-id": "pocket.switchIcon",
+        onclick: (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          cyclePocketIcon();
+        }
+      }, svgIcon(pocketDisplayIcon())),
       el("div", { class: "pocket-sidebar-titlebar", hidden: true })
     ));
     closeButton.classList.add("pocket-window-button");
@@ -703,7 +727,7 @@ export function createPocketController(ctx) {
 
   function pocketEntryFavicon(entry) {
     const logoUrl = entry.logoUrl || effectiveFaviconUrl(entry.chatUrl || "");
-    if (!logoUrl) return svgIcon("pocket");
+    if (!logoUrl) return svgIcon(pocketDisplayIcon());
     return el("img", {
       class: "pocket-entry-favicon",
       src: logoUrl,
@@ -970,6 +994,12 @@ export function createPocketController(ctx) {
     );
   }
 
+  function syncPocketTitleIcon(panel) {
+    const button = panel?.querySelector(".pocket-modal-title-icon");
+    if (!button) return;
+    button.replaceChildren(svgIcon(pocketDisplayIcon()));
+  }
+
   function syncPocketFocusLeftbar(panel, host, redraw) {
     const titlebar = panel?.querySelector(".pocket-focus-leftbar");
     if (!titlebar) return;
@@ -982,7 +1012,7 @@ export function createPocketController(ctx) {
     titlebar.hidden = false;
     titlebar.removeAttribute("hidden");
     titlebar.append(
-      el("span", { class: "pocket-focus-pocket-icon", "aria-hidden": "true" }, svgIcon("pocket")),
+      el("span", { class: "pocket-focus-pocket-icon", "aria-hidden": "true" }, svgIcon(pocketDisplayIcon())),
       pocketExitFocusModeButton(host, redraw)
     );
   }
@@ -1033,7 +1063,7 @@ export function createPocketController(ctx) {
     if (!activeBatch) {
       return el("main", { class: "pocket-main pocket-main-empty" },
         el("div", { class: "ui-empty-state pocket-empty" },
-          svgIcon("pocket"),
+          svgIcon(pocketDisplayIcon()),
           el("strong", {}, t("pocket.emptyTitle")),
           el("span", {}, t("pocket.emptyDesc"))
         )
@@ -1055,6 +1085,7 @@ export function createPocketController(ctx) {
     const focusMode = pocketPanelIsFocusMode(panel);
     const sidebarCollapsed = !focusMode && pocketSidebarCollapsed;
     panel?.classList?.toggle("pocket-history-modal-sidebar-collapsed", sidebarCollapsed);
+    syncPocketTitleIcon(panel);
     syncPocketFocusLeftbar(panel, host, redraw);
     syncPocketSidebarTitlebar(panel, host, redraw);
     syncPocketFocusTitlebar(panel, host, activeBatch, redraw);

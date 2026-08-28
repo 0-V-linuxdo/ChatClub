@@ -305,9 +305,9 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   assert.ok(i18nSource.includes('"promptHistory.searchEmpty": "No matching prompts"'));
   assert.ok(i18nSource.includes('"promptHistory.searchEmpty": "没有匹配的 prompt"'));
   assert.ok(i18nSource.includes('"promptHistory.saveToPocket": "Save to Pocket"'));
-  assert.ok(i18nSource.includes('"promptHistory.saveToPocket": "保存到 Pocket"'));
+  assert.ok(i18nSource.includes('"promptHistory.saveToPocket": "保存到收藏"'));
   assert.ok(i18nSource.includes('"promptHistory.savedToPocket": "Saved to Pocket"'));
-  assert.ok(i18nSource.includes('"promptHistory.savedToPocket": "已保存到 Pocket"'));
+  assert.ok(i18nSource.includes('"promptHistory.savedToPocket": "已保存到收藏"'));
   assert.ok(i18nSource.includes('"promptHistory.conversationLoading": "Collecting the matching conversation…"'));
   assert.ok(i18nSource.includes('"promptHistory.conversationLoading": "正在采集匹配的对话…"'));
   assert.ok(i18nSource.includes('"promptHistory.conversationEmpty": "No matching conversation. Open the chats or enable Record Full Text, then try again."'));

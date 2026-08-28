@@ -7,6 +7,7 @@ import {
   API_PROFILE_MODEL_DEFAULT,
   BUILTIN_CHAT_APPS,
   DEFAULT_POCKET_CARD_SIZE,
+  DEFAULT_POCKET_ICON,
   DEFAULT_FRAME_TOAST_POSITION,
   DEFAULT_GEMINI_THINKING_LEVEL,
   DEFAULT_MODEL_PREFERENCE_FAILURE_OVERRIDES,
@@ -123,6 +124,10 @@ export function normalizePocketCardSize(value = {}) {
     width: boundedNumber(source.width, DEFAULT_POCKET_CARD_SIZE.width, 360, 760),
     height: boundedNumber(source.height, DEFAULT_POCKET_CARD_SIZE.height, 420, 820)
   };
+}
+
+export function normalizePocketIcon(value, fallback = DEFAULT_POCKET_ICON) {
+  return value === "pocket" || value === "star" ? value : fallback === "pocket" ? "pocket" : "star";
 }
 
 export function normalizeFrameToastPosition(value = {}) {
@@ -1015,6 +1020,7 @@ export function normalizeOptions(raw = {}) {
     topbarShareMigrated: true,
     topbarHistoryMigrated: true,
     pocketCardSize: normalizePocketCardSize(raw.pocketCardSize),
+    pocketIcon: normalizePocketIcon(raw.pocketIcon),
     frameLoadingOverlayOpacity: boundedNumber(raw.frameLoadingOverlayOpacity, base.frameLoadingOverlayOpacity, 0, 100),
     modelPreferenceSelectionOverlayEnabled: typeof raw.modelPreferenceSelectionOverlayEnabled === "boolean"
       ? raw.modelPreferenceSelectionOverlayEnabled

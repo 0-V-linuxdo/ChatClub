@@ -5,6 +5,7 @@ import {
 import { t } from "../../shared/i18n.js";
 import {
   normalizeFrameToastPosition,
+  normalizePocketIcon,
   normalizePrimaryColor
 } from "../../shared/storage-schema.js";
 import { el, input, select } from "../../ui/dom.js";
@@ -159,6 +160,43 @@ export function createAppearanceSettingsSection(ctx) {
         queueAppearanceAutoSave({ colMaxCount: nextColumnCount });
       }
     });
+    const selectedPocketIcon = normalizePocketIcon(state.options.pocketIcon);
+    const pocketIconOption = (iconName, label) => {
+      const selected = selectedPocketIcon === iconName;
+      return el("label", {
+        class: `appearance-pocket-icon-option${selected ? " is-selected" : ""}`
+      },
+        el("input", {
+          type: "radio",
+          name: "appearance-pocket-icon",
+          value: iconName,
+          checked: selected,
+          "aria-label": label,
+          onchange: () => {
+            queueAppearanceAutoSave({ pocketIcon: iconName }, { redraw });
+          }
+        }),
+        el("span", { class: "appearance-pocket-icon-option-mark", "aria-hidden": "true" }, svgIcon(iconName)),
+        el("span", { class: "appearance-pocket-icon-option-label" }, label)
+      );
+    };
+    const pocketIconControl = el("div", {
+      class: "appearance-pocket-icon-field",
+      dataset: { token: "pocket-icon" }
+    },
+      el("div", { class: "appearance-pocket-icon-copy" },
+        el("strong", {}, t("appearance.pocketIcon")),
+        el("small", {}, t("appearance.pocketIconDesc"))
+      ),
+      el("div", {
+        class: "appearance-pocket-icon-options",
+        role: "radiogroup",
+        "aria-label": t("appearance.pocketIcon")
+      },
+        pocketIconOption("star", t("appearance.pocketIconStar")),
+        pocketIconOption("pocket", t("appearance.pocketIconPocket"))
+      )
+    );
     const normalizePercent = (value, fallback = DEFAULT_OPTIONS.frameLoadingOverlayOpacity) => {
       const number = Number(value);
       return Math.max(0, Math.min(100, Math.round(Number.isFinite(number) ? number : fallback)));
@@ -489,7 +527,7 @@ export function createAppearanceSettingsSection(ctx) {
       "topbar.deleteThread": "trash",
       "topbar.summary": "summary",
       "topbar.share": "share",
-      "topbar.pocket": "pocket",
+      "topbar.pocket": selectedPocketIcon,
       "topbar.history": "history",
       "topbar.addGroup": "plus",
       "topbar.layout": "layout",
@@ -545,7 +583,7 @@ export function createAppearanceSettingsSection(ctx) {
       "summary.window.fullscreen": "maximize",
       "summary.window.close": "x",
       "summary.source.refresh": "reload",
-      "summary.action.pocket": "pocket",
+      "summary.action.pocket": selectedPocketIcon,
       "summary.action.preview": "preview",
       "summary.action.summarize": "summary",
       "summary.action.ask": "send",
@@ -564,7 +602,8 @@ export function createAppearanceSettingsSection(ctx) {
       "pocket.focusMode": "focusMode",
       "pocket.sidebar": "sidebarCollapse",
       "pocket.deleteItem": "trash",
-      "history.action.pocket": "pocket",
+      "pocket.switchIcon": selectedPocketIcon,
+      "history.action.pocket": selectedPocketIcon,
       "optimize.retry": "reload",
       "settings.modal.fullscreen": "maximize",
       "settings.modal.close": "x",
@@ -644,7 +683,7 @@ export function createAppearanceSettingsSection(ctx) {
     );
     const workspaceBlock = () => createAppearanceWorkspacePane({
       activeId: state.settingsAppearanceWorkspaceTab,
-      colorControl, columnCount, language, overlayOpacityControl, selectionOverlayControls,
+      colorControl, columnCount, language, overlayOpacityControl, pocketIconControl, selectionOverlayControls,
       settingsBlock, settingsInnerTabs, themeMode,
       onSelect: (id) => {
         state.settingsAppearanceWorkspaceTab = id;

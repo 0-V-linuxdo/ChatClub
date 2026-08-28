@@ -111,7 +111,7 @@ const TOPBAR_ITEM_META = {
   deleteThread: { labelKey: "topbar.deleteThread", icon: "trash" },
   summary: { labelKey: "topbar.summary", icon: "summary" },
   share: { labelKey: "topbar.share", icon: "share" },
-  pocket: { labelKey: "topbar.pocket", icon: "pocket" },
+  pocket: { labelKey: "topbar.pocket", icon: "star" },
   history: { labelKey: "topbar.history", icon: "history" },
   addGroup: { labelKey: "topbar.addGroup", icon: "plus" },
   layout: { labelKey: "topbar.switchLayout", icon: "layout" },
@@ -200,8 +200,10 @@ export function topbarItemLabelKey(item) {
   return TOPBAR_ITEM_META[item?.type === "flex" ? "flex" : item?.id]?.labelKey || "topbar.item.unknown";
 }
 
-export function topbarItemIcon(item) {
-  return TOPBAR_ITEM_META[item?.type === "flex" ? "flex" : item?.id]?.icon || "menu";
+export function topbarItemIcon(item, options = {}) {
+  const id = item?.type === "flex" ? "flex" : item?.id;
+  if (id === "pocket") return options.pocketIcon === "pocket" ? "pocket" : "star";
+  return TOPBAR_ITEM_META[id]?.icon || "menu";
 }
 
 export function topbarSettingsItemForSection(sectionId) {

@@ -10,7 +10,7 @@ import {
 } from "./notion-efforts.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-08-28｜14:50:20」";
+export const APP_VERSION = "「2026-08-28｜15:16:40」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -208,6 +208,7 @@ export const DEFAULT_POCKET_CARD_SIZE = Object.freeze({
   width: 460,
   height: 560
 });
+export const DEFAULT_POCKET_ICON = "star";
 
 export const TOOLTIP_TARGET_GROUPS = Object.freeze([
   Object.freeze({
@@ -328,7 +329,8 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
       Object.freeze({ id: "pocket.actions", labelKey: "pocket.actions" }),
       Object.freeze({ id: "pocket.focusMode", labelKey: "pocket.focusMode" }),
       Object.freeze({ id: "pocket.sidebar", labelKey: "pocket.sidebar" }),
-      Object.freeze({ id: "pocket.deleteItem", labelKey: "pocket.deleteItem" })
+      Object.freeze({ id: "pocket.deleteItem", labelKey: "pocket.deleteItem" }),
+      Object.freeze({ id: "pocket.switchIcon", labelKey: "pocket.switchIcon" })
     ])
   }),
   Object.freeze({
@@ -424,6 +426,7 @@ export const DEFAULT_OPTIONS = {
   modelPreferenceSelectionOverlayOpacity: 70,
   frameToastPosition: DEFAULT_FRAME_TOAST_POSITION,
   pocketCardSize: DEFAULT_POCKET_CARD_SIZE,
+  pocketIcon: DEFAULT_POCKET_ICON,
   tooltipDisabledIds: [],
   topbarPromptInputFontSize: 15,
   topbarPromptPlaceholderConfig: {

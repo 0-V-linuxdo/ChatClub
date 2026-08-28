@@ -442,7 +442,8 @@ function ensurePocketController() {
           setFramePointerBlockedForOverlay: workspaceController.setFramePointerBlockedForOverlay,
           effectiveFaviconUrl,
           compactIconButton,
-          svgIcon
+          svgIcon,
+          syncTopbar
         });
         summaryController?.sync?.();
         return pocketController;

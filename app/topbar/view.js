@@ -248,7 +248,7 @@ export function createTopbarView(dependencies = {}) {
       return actionButton(t("topbar.share"), "share", actions.openShare, "secondary", actions.formatShortcutTooltip(t("topbar.share"), "openSharePanel"), "", "topbar.share");
     }
     if (item.id === "pocket") {
-      return actionButton(t("topbar.pocket"), "pocket", actions.openPocket, "secondary", actions.formatShortcutTooltip(t("topbar.pocket"), "openPocketPanel"), topbarItemClass("pocket"), "topbar.pocket");
+      return actionButton(t("topbar.pocket"), topbarItemIcon(item, state.options), actions.openPocket, "secondary", actions.formatShortcutTooltip(t("topbar.pocket"), "openPocketPanel"), topbarItemClass("pocket"), "topbar.pocket");
     }
     if (item.id === "history") {
       return actionButton(t("topbar.history"), "history", actions.openHistory, "secondary", actions.formatShortcutTooltip(t("topbar.history"), "openHistoryPanel"), topbarItemClass("history"), "topbar.history");
@@ -263,7 +263,7 @@ export function createTopbarView(dependencies = {}) {
     const settingsSectionId = topbarSettingsSectionForItem(item.id);
     if (settingsSectionId) {
       const label = t(topbarItemLabelKey(item));
-      return topIconButton(label, topbarItemIcon(item), (event) => {
+      return topIconButton(label, topbarItemIcon(item, state.options), (event) => {
         event.preventDefault();
         event.stopPropagation();
         actions.openSettings(settingsSectionId);
@@ -305,7 +305,7 @@ export function createTopbarView(dependencies = {}) {
       ondragover: editor.preventNativeDrag,
       ondrop: editor.preventNativeDrag
     },
-      flexTemplate ? renderFlexCells("topbar-palette-flex-preview") : createSvgIcon(topbarItemIcon(item)),
+      flexTemplate ? renderFlexCells("topbar-palette-flex-preview") : createSvgIcon(topbarItemIcon(item, state.options)),
       el("span", { class: "topbar-palette-item-label" }, label)
     );
   }
@@ -477,7 +477,7 @@ export function createTopbarView(dependencies = {}) {
   function renderFoldedMenuButton(item, editing, runItem) {
     const label = item.id === "brand" ? brandActionLabel() : formatTopbarShortcut(t(topbarItemLabelKey(item)), item.id);
     const dragItem = editing && item.type === "item" ? { type: "item", id: item.id } : null;
-    const buttonNode = settingsMenuButton(label, topbarItemIcon(item), (event) => runItem(item, event), "secondary", false, dragItem, {
+    const buttonNode = settingsMenuButton(label, topbarItemIcon(item, state.options), (event) => runItem(item, event), "secondary", false, dragItem, {
       className: editing && item.type === "item" ? "topbar-settings-menu-button" : "",
       tooltipId: tooltipIdForItem(item),
       dataset: item.id === "brand" ? { topbarBrandAction: "true" } : {}

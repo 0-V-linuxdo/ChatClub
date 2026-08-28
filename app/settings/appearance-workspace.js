@@ -12,6 +12,7 @@ export function createAppearanceWorkspacePane({
   language,
   onSelect,
   overlayOpacityControl,
+  pocketIconControl,
   selectionOverlayControls,
   settingsBlock,
   settingsInnerTabs,
@@ -24,7 +25,8 @@ export function createAppearanceWorkspacePane({
     el("div", { class: "appearance-field-list" },
       appearanceRow(field(t("appearance.themeMode"), themeMode)),
       appearanceRow(field(t("appearance.language"), language)),
-      appearanceRow(field(t("appearance.maxColumns"), columnCount))
+      appearanceRow(field(t("appearance.maxColumns"), columnCount)),
+      appearanceRow(pocketIconControl)
     )
   );
   const colorBlock = () => settingsBlock(

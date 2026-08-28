@@ -1,6 +1,7 @@
 import { summarizeContexts } from "../../shared/api.js";
 import { t } from "../../shared/i18n.js";
 import { storageGet, storageSet } from "../../shared/storage-adapter.js";
+import { normalizePocketIcon } from "../../shared/storage-schema.js";
 import { findSummarySiteConfig } from "../../shared/url-match.js";
 import { createActionButton } from "../../ui/components.js";
 import { el, iconButton, textarea } from "../../ui/dom.js";
@@ -85,6 +86,7 @@ export function createSummaryController(ctx) {
   const pocketEntriesFromSummaryPreview = typeof pocketPort.entries === "function" ? pocketPort.entries : () => [];
   const persistWorkspaceTabFullText = optionalControllerFunction(ctx, "persistWorkspaceTabFullText", async () => ({ saved: false }));
   let summaryCollectionQueue = Promise.resolve();
+  const pocketDisplayIcon = () => normalizePocketIcon(state.options?.pocketIcon);
 
   function recordSummaryFailure(operation, app = {}, meta = {}, error = null, message = "") {
     const hasAppIdentity = Boolean(app?.id || app?.name || app?.provider || app?.url);
@@ -418,9 +420,10 @@ export function createSummaryController(ctx) {
   }
   
   function summaryActionButton(label, onClick, variant = "secondary", disabled = false, iconName = "", tooltipId = "") {
+    const resolvedIcon = iconName === "pocket" ? pocketDisplayIcon() : iconName;
     const action = createActionButton({
       label,
-      icon: iconName ? svgIcon(iconName) : null,
+      icon: resolvedIcon ? svgIcon(resolvedIcon) : null,
       onClick,
       variant,
       className: `summary-action-button ${iconName ? `summary-action-button-${iconName}` : ""}`.trim(),

@@ -3699,6 +3699,92 @@ body.tab-gesture-active * {
   min-width: 0;
 }
 
+.appearance-pocket-icon-field {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.appearance-pocket-icon-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.appearance-pocket-icon-copy strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.appearance-pocket-icon-copy small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.appearance-pocket-icon-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+
+.appearance-pocket-icon-option {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 88px;
+  padding: 12px 10px;
+  border: 1px solid color-mix(in srgb, var(--line) 84%, transparent);
+  border-radius: var(--settings-radius, 8px);
+  background: color-mix(in srgb, var(--panel-2) 58%, transparent);
+  cursor: pointer;
+}
+
+.appearance-pocket-icon-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.appearance-pocket-icon-option-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  color: var(--text);
+}
+
+.appearance-pocket-icon-option-mark .svg-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.appearance-pocket-icon-option-label {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.appearance-pocket-icon-option:hover {
+  border-color: color-mix(in srgb, var(--primary) 42%, var(--line));
+  background: color-mix(in srgb, var(--panel-2) 78%, transparent);
+}
+
+.appearance-pocket-icon-option.is-selected {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, var(--panel));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 35%, transparent);
+}
+
+.appearance-pocket-icon-option input:focus-visible + .appearance-pocket-icon-option-mark {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+}
+
 .appearance-toggle-control {
   display: flex;
   align-items: center;
@@ -5663,7 +5749,16 @@ body.settings-tab-context-menu-dragging iframe {
   place-items: center;
   width: 30px;
   height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
   color: var(--primary);
+  cursor: pointer;
+}
+
+.pocket-modal-title-icon:hover {
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
 }
 
 .pocket-modal-title-icon .svg-icon {

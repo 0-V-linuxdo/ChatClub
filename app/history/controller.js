@@ -1,5 +1,6 @@
 import { t } from "../../shared/i18n.js";
 import { savePromptSendHistory } from "../../shared/storage-adapter.js";
+import { normalizePocketIcon } from "../../shared/storage-schema.js";
 import { createSettingsIconAction } from "../../ui/components.js";
 import { clear, el, input, toast, viewerModal } from "../../ui/dom.js";
 import {
@@ -36,6 +37,7 @@ export function createHistoryController(ctx) {
   const syncPromptInputNode = requireControllerFunction(ctx, controllerName, "syncPromptInputNode");
   const pocketPort = optionalControllerObject(ctx, "pocketPort");
   const conversationPort = optionalControllerObject(ctx, "conversationPort");
+  const pocketDisplayIcon = () => normalizePocketIcon(state.options?.pocketIcon);
   const savePagesToPocket = typeof pocketPort.savePages === "function"
     ? pocketPort.savePages
     : async () => ({ saved: false, count: 0 });
@@ -330,7 +332,7 @@ export function createHistoryController(ctx) {
             class: "prompt-history-pocket-badge",
             title: t("promptHistory.savedToPocket"),
             "aria-label": t("promptHistory.savedToPocket")
-          }, svgIcon("pocket"))
+          }, svgIcon(pocketDisplayIcon()))
           : null
       ),
       el("time", { class: "prompt-history-sidebar-time", datetime: item.createdAt || "" }, promptHistoryTimeLabel(item.createdAt))
@@ -422,7 +424,7 @@ export function createHistoryController(ctx) {
             "data-tooltip-id": "history.action.pocket",
             disabled: !canPocket,
             onclick: () => saveItemToPocket(item, redraw)
-          }, svgIcon("pocket"), el("span", {}, t("promptHistory.saveToPocket"))),
+          }, svgIcon(pocketDisplayIcon()), el("span", {}, t("promptHistory.saveToPocket"))),
           rowAction(t("promptHistory.insert"), "insert", () => insert(item, close), "", "settings.action.insert"),
           rowAction(t("common.delete"), "trash", () => remove(item, redraw), "danger", "settings.action.delete")
         )

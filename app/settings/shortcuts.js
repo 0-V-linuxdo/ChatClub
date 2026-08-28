@@ -59,7 +59,7 @@ const SHORTCUT_PREVIEW_META = Object.freeze({
   optimizePrompt: { icon: "sparkles", labelKey: "topbar.optimizePrompt", tooltipId: "topbar.optimizePrompt" },
   openSummaryPanel: { icon: "summary", labelKey: "topbar.summary", tooltipId: "topbar.summary", showLabel: true },
   openSharePanel: { icon: "share", labelKey: "topbar.share", tooltipId: "topbar.share", showLabel: true },
-  openPocketPanel: { icon: "pocket", labelKey: "topbar.pocket", tooltipId: "topbar.pocket", showLabel: true },
+  openPocketPanel: { icon: "star", labelKey: "topbar.pocket", tooltipId: "topbar.pocket", showLabel: true },
   openHistoryPanel: { icon: "history", labelKey: "topbar.history", tooltipId: "topbar.history", showLabel: true },
   insertPrompt: { icon: "insert", labelKey: "shortcut.insertPrompt.label", showSlot: true },
   switchLayout: { icon: "layout", labelKey: "topbar.switchLayout", tooltipId: "topbar.layout", showSlot: true },
