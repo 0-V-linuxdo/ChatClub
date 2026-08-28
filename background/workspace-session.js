@@ -316,7 +316,8 @@ export function persistWorkspaceSessionSnapshot(api, request = {}, sender = {}, 
       generation,
       durableSnapshot,
       tab,
-      now
+      now,
+      { edited: true }
     );
     updates[bindingKey] = bindingForClaim(workspaceId, generation, tab, now);
     let removeEmptyRecovery = false;
@@ -1018,8 +1019,8 @@ export function handleWorkspaceSessionAlarm(api, alarm, options = {}) {
 export function listClearedWorkspaceTabs(api, options = {}) {
   return queueWorkspaceSession(() => listClearedWorkspaceTabsOperation(api, options, ensureGenerationInternal));
 }
-export function listLiveWorkspaceTabs(api, _request = {}, sender = {}) {
-  return queueWorkspaceSession(() => listLiveWorkspaceTabsOperation(api, sender));
+export function listLiveWorkspaceTabs(api, _request = {}, sender = {}, options = {}) {
+  return queueWorkspaceSession(() => listLiveWorkspaceTabsOperation(api, sender, options));
 }
 export function exportRememberedWorkspaceTabs(api) {
   return queueWorkspaceSession(() => exportRememberedWorkspaceTabsOperation(api));

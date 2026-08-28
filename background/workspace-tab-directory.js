@@ -31,7 +31,8 @@ import {
   runtimeMarker,
   sessionStorageArea,
   stableWorkspaceRecord,
-  workspaceIdForChatClubTab
+  workspaceIdForChatClubTab,
+  workspaceRecordTimes
 } from "./workspace-session-helpers.js";
 import { STORAGE_KEYS } from "../shared/constants.js";
 
@@ -76,6 +77,22 @@ function rememberedWorkspaceRecord(record) {
   );
 }
 
+async function touchWorkspaceViewedAt(api, workspaceId, now) {
+  const normalized = normalizeWorkspaceSessionId(workspaceId);
+  if (!normalized) return null;
+  const storage = localStorageArea(api);
+  if (typeof storage?.get !== "function" || typeof storage?.set !== "function") return null;
+  const key = workspaceSessionWorkspaceKey(normalized);
+  const stored = await storage.get(key);
+  const record = stableWorkspaceRecord(key, stored?.[key]);
+  if (!record) return null;
+  const times = workspaceRecordTimes(record, now, { viewed: true });
+  if (times.viewedAt === record.viewedAt) return record;
+  const next = { ...record, ...times };
+  await storage.set({ [key]: next });
+  return next;
+}
+
 function listRememberedWorkspaceTabs(api, stored, live, currentTabId) {
   const stableRecords = currentStableRecords(stored || {});
   const items = [];
@@ -109,9 +126,10 @@ export async function listClearedWorkspaceTabsOperation(api, options, ensureGene
   return { tabs: unclaimedBrowserCleared(recovery, live, currentStableRecords(stored)).map(clearedTabItem) };
 }
 
-export async function listLiveWorkspaceTabsOperation(api, sender = {}) {
+export async function listLiveWorkspaceTabsOperation(api, sender = {}, options = {}) {
   if (typeof api?.tabs?.query !== "function") throw new Error("Workspace session tab query is unavailable");
   const storage = localStorageArea(api);
+  const now = finiteTime(options.now, Date.now());
   const [stored, tabs] = await Promise.all([
     typeof storage?.get === "function" ? storage.get(null) : Promise.resolve({}),
     api.tabs.query({})
@@ -119,7 +137,18 @@ export async function listLiveWorkspaceTabsOperation(api, sender = {}) {
   if (!Array.isArray(tabs)) throw new TypeError("Browser tabs query returned an invalid result");
   const live = liveTabState(api, tabs);
   const currentTabId = positiveTabId(sender?.tab?.id);
-  return { tabs: listRememberedWorkspaceTabs(api, stored || {}, live, currentTabId) };
+  let nextStored = stored || {};
+  if (sender?.tab?.active === true && currentTabId !== null) {
+    const workspaceId = live.workspaceByTabId.get(currentTabId) || "";
+    const touched = await touchWorkspaceViewedAt(api, workspaceId, now);
+    if (touched) {
+      nextStored = {
+        ...nextStored,
+        [workspaceSessionWorkspaceKey(touched.workspaceId)]: touched
+      };
+    }
+  }
+  return { tabs: listRememberedWorkspaceTabs(api, nextStored, live, currentTabId) };
 }
 
 function titleSnapshotUpdate(record, title, custom) {
@@ -127,11 +156,12 @@ function titleSnapshotUpdate(record, title, custom) {
   if (!snapshot) throw new Error("Workspace session snapshot is unavailable");
   snapshot.topicTitle = String(title || "").trim();
   snapshot.topicTitleCustom = custom !== false;
+  const now = Date.now();
   return {
     record: {
       ...record,
       snapshot,
-      updatedAt: Date.now(),
+      ...workspaceRecordTimes(record, now, { viewed: true, edited: true }),
       storageVersion: WORKSPACE_SESSION_STORAGE_VERSION
     },
     snapshot
@@ -177,11 +207,15 @@ export async function focusWorkspaceTabOperation(api, request = {}, sender = {})
   const tab = await api.tabs.get(tabId).catch(() => null);
   if (!tab || !isChatClubWorkspaceTab(api, tab)) throw new Error("Workspace tab is not a live ChatClub page");
   const currentTabId = positiveTabId(sender?.tab?.id);
-  if (currentTabId === tabId) return { focused: true, tabId, current: true };
+  if (currentTabId === tabId) {
+    await touchWorkspaceViewedAt(api, workspaceIdForChatClubTab(api, tab), Date.now());
+    return { focused: true, tabId, current: true };
+  }
   if (typeof api.tabs.update === "function") await api.tabs.update(tabId, { active: true });
   if (Number.isInteger(tab.windowId) && typeof api.windows?.update === "function") {
     await api.windows.update(tab.windowId, { focused: true });
   }
+  await touchWorkspaceViewedAt(api, workspaceIdForChatClubTab(api, tab), Date.now());
   return { focused: true, tabId, current: false };
 }
 
@@ -369,7 +403,7 @@ function importedWorkspaceRecord(item, generation, now, runtimeId) {
       workspaceId,
       snapshot,
       owner: { tabId: null, windowId: null, index: null, pinned: false },
-      updatedAt: now,
+      ...workspaceRecordTimes(null, now),
       detach,
       detachedAt: now,
       detachedKind: detach.kind,

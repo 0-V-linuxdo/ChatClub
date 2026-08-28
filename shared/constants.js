@@ -10,7 +10,7 @@ import {
 } from "./notion-efforts.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-08-28｜11:18:16」";
+export const APP_VERSION = "「2026-08-28｜14:50:20」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -279,7 +279,9 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
       Object.freeze({ id: "workspace.tabs.closeOthers", labelKey: "workspace.tabs.closeOthers" }),
       Object.freeze({ id: "workspace.tabs.newFolder", labelKey: "workspace.tabs.newFolder" }),
       Object.freeze({ id: "workspace.tabs.sort", labelKey: "workspace.tabs.sort" }),
-      Object.freeze({ id: "workspace.tabs.sortTime", labelKey: "workspace.tabs.sortTime" }),
+      Object.freeze({ id: "workspace.tabs.sortViewed", labelKey: "workspace.tabs.sortViewed" }),
+      Object.freeze({ id: "workspace.tabs.sortEdited", labelKey: "workspace.tabs.sortEdited" }),
+      Object.freeze({ id: "workspace.tabs.sortCreated", labelKey: "workspace.tabs.sortCreated" }),
       Object.freeze({ id: "workspace.tabs.sortOpen", labelKey: "workspace.tabs.sortOpen" }),
       Object.freeze({ id: "workspace.tabs.sortName", labelKey: "workspace.tabs.sortName" }),
       Object.freeze({ id: "workspace.tabs.renameFolder", labelKey: "workspace.tabs.renameFolder" }),

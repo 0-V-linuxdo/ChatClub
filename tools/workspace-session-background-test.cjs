@@ -3108,6 +3108,10 @@ function deferredPromise() {
     const current = await focusWorkspaceTab(store.api, { tabId: 11 }, { tab: { id: 11 } });
     assert.deepEqual(current, { focused: true, tabId: 11, current: true });
     assert.equal(store.tabUpdates.length, 1, "focusing the current ChatClub tab must be a no-op");
+    assert.ok(
+      store.local.values[workspaceSessionWorkspaceKey(workspaceA)].viewedAt >= now,
+      "focusing a ChatClub tab must stamp last-viewed time"
+    );
     await assert.rejects(
       () => focusWorkspaceTab(store.api, { tabId: 21 }, { tab: { id: 11 } }),
       /not a live ChatClub page/
@@ -3129,6 +3133,10 @@ function deferredPromise() {
     });
     assert.equal(listedAgain.tabs[0].topicTitle, "Compare models");
     assert.equal(listedAgain.tabs[0].topicTitleCustom, true);
+    assert.ok(
+      listedAgain.tabs[0].editedAt >= now,
+      "renaming a ChatClub tab must stamp last-edited time"
+    );
     const forgottenClosed = await forgetRememberedWorkspaceTab(store.api, { workspaceId: workspaceB }, { now: now + 1 });
     assert.deepEqual(forgottenClosed, { forgotten: true, workspaceId: workspaceB, closed: false });
     assert.equal(

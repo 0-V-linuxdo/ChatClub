@@ -1148,20 +1148,25 @@ globalThis.document = {
     widthMemory.delete("chatclubWorkspaceTabsSidebarSortV1");
     const fixture = controller();
     await fixture.api.refresh();
-    assert.equal(fixture.api.currentSortMode(), "time", "ChatClub Tabs must default to time sort");
+    assert.equal(fixture.api.currentSortMode(), "viewed", "ChatClub Tabs must default to last-viewed sort");
     fixture.api.setOpen(true);
     const byTime = fixture.api.renderSidebar();
-    assert.match(nodeText(byTime), /Today|今天/, "time sort must group recent tabs like prompt history");
-    assert.match(nodeText(byTime), /Older|更早/, "time sort must group older tabs like prompt history");
+    assert.match(nodeText(byTime), /Today|今天/, "last-viewed sort must group recent tabs like prompt history");
+    assert.match(nodeText(byTime), /Older|更早/, "last-viewed sort must group older tabs like prompt history");
     assert.ok(
       descendants(byTime).some((node) => node.classList.contains("workspace-tabs-sidebar-group")),
-      "time sort must render date group headings"
+      "last-viewed sort must render date group headings"
     );
     assert.equal(
       descendants(byTime).some((node) => node.classList.contains("workspace-tabs-sidebar-divider")),
       false,
-      "time sort must not use the open/closed divider"
+      "last-viewed sort must not use the open/closed divider"
     );
+    fixture.api.setSortMode("edited");
+    assert.equal(fixture.widthMemory.get("chatclubWorkspaceTabsSidebarSortV1"), "edited");
+    assert.ok(descendants(fixture.api.renderSidebar()).some((node) => node.classList.contains("workspace-tabs-sidebar-group")));
+    fixture.api.setSortMode("created");
+    assert.equal(fixture.api.currentSortMode(), "created");
     fixture.api.setSortMode("open");
     assert.equal(fixture.widthMemory.get("chatclubWorkspaceTabsSidebarSortV1"), "open");
     const byOpen = fixture.api.renderSidebar();

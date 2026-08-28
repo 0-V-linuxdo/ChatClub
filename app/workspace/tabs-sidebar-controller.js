@@ -149,6 +149,9 @@ function normalizeItems(next = []) {
         topicTitle: String(item.topicTitle || "").trim(),
         topicTitleCustom: item.topicTitleCustom === true,
         appIds: Array.isArray(item.appIds) ? item.appIds.map((id) => String(id || "").trim()).filter(Boolean) : [],
+        createdAt: finiteActivityTime(item.createdAt),
+        viewedAt: finiteActivityTime(item.viewedAt),
+        editedAt: finiteActivityTime(item.editedAt),
         updatedAt: finiteActivityTime(item.updatedAt),
         detachedAt: finiteActivityTime(item.detachedAt)
       };

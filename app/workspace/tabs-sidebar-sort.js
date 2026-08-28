@@ -1,23 +1,31 @@
 import { dateGroupId, groupByDate, timestamp } from "../../shared/date-groups.js";
 
-export const TABS_SIDEBAR_SORT_MODES = Object.freeze(["time", "open", "name"]);
-const DEFAULT_TABS_SIDEBAR_SORT_MODE = "time";
+const TABS_SIDEBAR_SORT_MODE_ALIASES = Object.freeze({ time: "viewed" });
+export const TABS_SIDEBAR_SORT_MODES = Object.freeze(["viewed", "edited", "created", "open", "name"]);
+const DEFAULT_TABS_SIDEBAR_SORT_MODE = "viewed";
 export const TABS_SIDEBAR_SORT_LABEL_KEYS = Object.freeze({
-  time: "workspace.tabs.sortTime",
+  viewed: "workspace.tabs.sortViewed",
+  edited: "workspace.tabs.sortEdited",
+  created: "workspace.tabs.sortCreated",
   open: "workspace.tabs.sortOpen",
   name: "workspace.tabs.sortName"
 });
 
 export function normalizeTabsSidebarSortMode(value) {
-  return TABS_SIDEBAR_SORT_MODES.includes(value) ? value : DEFAULT_TABS_SIDEBAR_SORT_MODE;
+  const aliased = TABS_SIDEBAR_SORT_MODE_ALIASES[value] || value;
+  return TABS_SIDEBAR_SORT_MODES.includes(aliased) ? aliased : DEFAULT_TABS_SIDEBAR_SORT_MODE;
 }
 
 export function workspaceIdValue(value) {
   return String(value || "").trim();
 }
 
-function tabActivityTime(item = {}) {
-  return timestamp(item.updatedAt) ?? timestamp(item.detachedAt);
+function tabSortTime(item = {}, mode) {
+  const sortMode = normalizeTabsSidebarSortMode(mode);
+  const fallback = timestamp(item.updatedAt) ?? timestamp(item.detachedAt);
+  if (sortMode === "created") return timestamp(item.createdAt) ?? fallback;
+  if (sortMode === "edited") return timestamp(item.editedAt) ?? fallback;
+  return timestamp(item.viewedAt) ?? fallback;
 }
 
 function applyClosedOrder(list = [], order = []) {
@@ -80,8 +88,8 @@ function compareByName(left, right, getLabel) {
   return workspaceIdValue(left?.workspaceId).localeCompare(workspaceIdValue(right?.workspaceId));
 }
 
-function compareByTime(left, right) {
-  const delta = (tabActivityTime(right) || 0) - (tabActivityTime(left) || 0);
+function compareByTime(left, right, mode) {
+  const delta = (tabSortTime(right, mode) || 0) - (tabSortTime(left, mode) || 0);
   if (delta) return delta;
   return workspaceIdValue(left?.workspaceId).localeCompare(workspaceIdValue(right?.workspaceId));
 }
@@ -100,8 +108,8 @@ function sortTabGroup(list = [], mode, getLabel, now = Date.now()) {
     items.sort((left, right) => compareByName(left, right, getLabel));
     return items;
   }
-  items.sort((left, right) => compareByTime(left, right)
-    || dateGroupId(tabActivityTime(left), now).localeCompare(dateGroupId(tabActivityTime(right), now)));
+  items.sort((left, right) => compareByTime(left, right, sortMode)
+    || dateGroupId(tabSortTime(left, sortMode), now).localeCompare(dateGroupId(tabSortTime(right, sortMode), now)));
   return items;
 }
 
@@ -185,7 +193,7 @@ export function buildSidebarTree({
     if (unfoldered.length) nodes.push({ type: "items", id: "named", items: unfoldered });
     return nodes;
   }
-  for (const group of groupByDate(unfoldered, tabActivityTime, now, "workspace.tabs")) {
+  for (const group of groupByDate(unfoldered, (item) => tabSortTime(item, sortMode), now, "workspace.tabs")) {
     nodes.push({ type: "group", id: group.id, labelKey: group.labelKey, items: group.items });
   }
   return nodes;

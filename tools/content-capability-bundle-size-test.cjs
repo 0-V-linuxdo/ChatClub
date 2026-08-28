@@ -24,22 +24,22 @@ const byteBudgets = Object.freeze({
   "content/summary-bridge.js": 92_000,
   // Per-model Notion Effort menus and nested model pickers add the bounded
   // trigger/menu/settlement capability to the preferred-model content boundary.
-  "content/preferred-model.js": 240_470,
+  "content/preferred-model.js": 240_484,
   // Exact post-generation cost of signed selector hints plus attempt/route-bound
   // confirmation ownership; keep destructive-action safety in one bundle.
-  "content/delete.js": 266_233,
+  "content/delete.js": 266_247,
   "content/grok-cookie-bridge.js": 50_000,
   "content/message-navigator.js": 140_000,
-  "content/preload.js": 214_371,
-  "content/summary-userscripts-main.js": 211_938,
-  "content/summary-userscripts.js": 156_212
+  "content/preload.js": 214_385,
+  "content/summary-userscripts-main.js": 211_952,
+  "content/summary-userscripts.js": 156_226
 });
 // Exact base-plus-capabilities closure after per-frame idle full-text fingerprint
 // joined the shared frame-command inventory shipped in the base content runtime.
-const aggregateByteBudget = 771_817;
+const aggregateByteBudget = 771_887;
 // Exact all-bundle closure after the idle-capture fingerprint command joined the
 // generated content bundles that inline FRAME_COMMAND_SPECS.
-const allBundlesByteBudget = 1_523_649;
+const allBundlesByteBudget = 1_523_789;
 
 const bundleIdentities = Object.fromEntries(Object.keys(CONTENT_ENTRIES).map((outputPath) => [
   outputPath,

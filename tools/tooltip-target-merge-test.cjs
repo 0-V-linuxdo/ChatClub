@@ -23,9 +23,10 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
     "pocket.collapseSidebar",
     "pocket.expandSidebar",
     "pocket.exitFocusMode",
-    "workspace.tabs.unpin"
+    "workspace.tabs.unpin",
+    "workspace.tabs.sortTime"
   ];
-  const mergedIds = ["pocket.sidebar", "pocket.focusMode", "workspace.tabs.pin"];
+  const mergedIds = ["pocket.sidebar", "pocket.focusMode", "workspace.tabs.pin", "workspace.tabs.sortViewed"];
   for (const id of retiredIds) {
     assert.equal(TOOLTIP_TARGET_IDS.includes(id), false, `${id} must not remain a settings tooltip target`);
   }
@@ -37,7 +38,8 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
     "pocket.collapseSidebar": "pocket.sidebar",
     "pocket.expandSidebar": "pocket.sidebar",
     "pocket.exitFocusMode": "pocket.focusMode",
-    "workspace.tabs.unpin": "workspace.tabs.pin"
+    "workspace.tabs.unpin": "workspace.tabs.pin",
+    "workspace.tabs.sortTime": "workspace.tabs.sortViewed"
   });
 
   assert.deepEqual(
@@ -47,10 +49,11 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
         "pocket.expandSidebar",
         "pocket.exitFocusMode",
         "workspace.tabs.unpin",
+        "workspace.tabs.sortTime",
         "pocket.actions"
       ]
     }).tooltipDisabledIds,
-    ["pocket.sidebar", "pocket.focusMode", "workspace.tabs.pin", "pocket.actions"],
+    ["pocket.sidebar", "pocket.focusMode", "workspace.tabs.pin", "workspace.tabs.sortViewed", "pocket.actions"],
     "retired two-state tooltip ids must collapse onto the surviving control ids"
   );
   assert.deepEqual(

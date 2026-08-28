@@ -172,6 +172,21 @@ function snapshotAppIds(snapshot) {
   return ids;
 }
 
+export function workspaceRecordTimes(existing, now, { viewed = false, edited = false } = {}) {
+  const hasExisting = Boolean(existing);
+  const fallback = hasExisting ? finiteTime(existing.updatedAt, now) : now;
+  const createdAt = hasExisting ? finiteTime(existing.createdAt, fallback) : now;
+  let viewedAt = hasExisting ? finiteTime(existing.viewedAt, fallback) : now;
+  let editedAt = hasExisting ? finiteTime(existing.editedAt, fallback) : now;
+  let updatedAt = fallback;
+  if (viewed) viewedAt = Math.max(viewedAt, now);
+  if (edited) {
+    editedAt = Math.max(editedAt, now);
+    updatedAt = Math.max(updatedAt, now);
+  }
+  return { createdAt, viewedAt, editedAt, updatedAt };
+}
+
 export function liveTabItem(api, tab, currentTabId, record) {
   const tabId = positiveTabId(tab?.id);
   const snapshot = record?.snapshot;
@@ -188,6 +203,9 @@ export function liveTabItem(api, tab, currentTabId, record) {
     appIds: snapshotAppIds(snapshot),
     topicTitle: String(snapshot?.topicTitle || "").trim(),
     topicTitleCustom: snapshot?.topicTitleCustom === true,
+    createdAt: record?.createdAt ?? null,
+    viewedAt: record?.viewedAt ?? null,
+    editedAt: record?.editedAt ?? null,
     updatedAt: record?.updatedAt ?? null,
     detachedAt: record?.detachedAt ?? null
   };
@@ -274,6 +292,9 @@ export function stableWorkspaceRecord(key, value) {
     workspaceId,
     snapshot: cloneSnapshot(value.snapshot),
     owner: normalizedOwner(value.owner),
+    createdAt: finiteTime(value.createdAt, finiteTime(value.updatedAt)),
+    viewedAt: finiteTime(value.viewedAt, finiteTime(value.updatedAt)),
+    editedAt: finiteTime(value.editedAt, finiteTime(value.updatedAt)),
     updatedAt: finiteTime(value.updatedAt),
     detach,
     detachedAt: detach?.at ?? null,
@@ -393,15 +414,19 @@ export function runtimeMarker(value) {
   } : null;
 }
 
-export function stableRecordForClaim(existing, workspaceId, generation, snapshot, tab, now) {
+export function stableRecordForClaim(existing, workspaceId, generation, snapshot, tab, now, options = {}) {
   const meta = tabMetadata(tab);
+  const times = workspaceRecordTimes(existing, now, {
+    viewed: options.viewed !== false,
+    edited: options.edited === true
+  });
   return {
     storageVersion: WORKSPACE_SESSION_STORAGE_VERSION,
     generation,
     workspaceId,
     snapshot: snapshot ?? existing?.snapshot ?? null,
     owner: meta,
-    updatedAt: now,
+    ...times,
     detach: null,
     detachedAt: null,
     detachedKind: "",
@@ -459,7 +484,7 @@ export function retainWorkspaceOwner(existing, workspaceId, generation, tab, now
     workspaceId,
     snapshot: existing.snapshot,
     owner: tabMetadata(tab),
-    updatedAt: now,
+    ...workspaceRecordTimes(existing, now, { viewed: true }),
     detach: null,
     detachedAt: null,
     detachedKind: "",

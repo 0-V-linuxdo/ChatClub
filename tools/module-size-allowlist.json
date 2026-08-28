@@ -56,23 +56,23 @@
     "reason": "The application assembly root now also wires topic-title generation after the first composer send, the page-local ChatClub-tab sidebar toggle including its Ctrl/Cmd+B shortcut, remembered-tab refresh after hydration, Settings-owned Tabs export/import callbacks, per-frame idle full-text capture after send and after workspace restore, persist-driven redraw of an already-open History viewer, the topbar Search action that opens ChatClub Tabs, Appearance options for ChatClub Tabs hover-button placement, and an inert workspace-session port for Settings beside the existing Composer, Topbar, workspace-session, and overlay-aware Escape dismissal composition; Share panel open/sync/Escape/fullscreen wiring joins the existing lazy Summary/Pocket assembly without pulling Share modules into the bootstrap graph; the topbar History action lazily opens the Prompt History viewer without pulling History modules into the bootstrap graph; History save-to-Pocket uses runtime-owned Pocket and conversation ports so the History lazy boundary does not import those controllers; Chinese Kimi host inference now labels the site Kimi.com so it stays distinct from Kimi.ai; Qwen.ai stays international while Qianwen.com is inferred as 千问; English UI labels DouBao as 豆包（doubao） and Qianwen as 千问（qianwen） because those products are China-only."
   },
   "app/workspace/tabs-sidebar-controller.js": {
-    "maxLines": 1541,
+    "maxLines": 1544,
     "target": 1200,
-    "maxBytes": 53794,
+    "maxBytes": 53955,
     "targetBytes": 40000,
-    "reason": "The remembered ChatClub-tab sidebar owns live/closed partitioning, time/name/open sorting with prompt-history date groups, folder create/drag membership, drag reorder, pin order, overlay rename/delete, Appearance-owned hover-button Fixed/More/Hidden folding with an owner-scoped three-dot popover, close-others cleanup, and the Search field that the topbar Search control focuses."
+    "reason": "The remembered ChatClub-tab sidebar owns live/closed partitioning, last-viewed/edited/created plus name/open sorting with prompt-history date groups, folder create/drag membership, drag reorder, pin order, overlay rename/delete, Appearance-owned hover-button Fixed/More/Hidden folding with an owner-scoped three-dot popover, close-others cleanup, and the Search field that the topbar Search control focuses."
   },
   "shared/storage-schema.js": {
-    "maxLines": 1335,
+    "maxLines": 1336,
     "target": 1200,
-    "maxBytes": 54041,
+    "maxBytes": 54099,
     "targetBytes": 50000,
     "reason": "The configuration schema owns custom-platform URL https coercion and domain-catalog draft suggestions together with options normalization, dehydration, built-in catalog merges, and retired two-state tooltip-id aliases so imported and editor-authored custom apps cannot drift; Chinese Kimi host inference now labels the site Kimi.com so it stays distinct from Kimi.ai; Qwen.ai stays international while Qianwen.com is inferred as 千问; a one-shot History topbar migration appends the viewer button after Pocket unless the user already hid it."
   },
   "shared/i18n.js": {
-    "maxLines": 2583,
+    "maxLines": 2587,
     "target": 1500,
-    "maxBytes": 150780,
+    "maxBytes": 150980,
     "targetBytes": 82000,
     "reason": "Bilingual translation catalog data is kept co-located for key parity; the signed official-rules update-management and component-status views, consent, check, apply-all, compatibility, rollback, per-component source, confirmation and accessibility copy join the committed-reset cleanup warning, queued-send, preferred-model auto-selection overlay settings plus structured model, thinking, All Sources and Effort attempt labels, Workspace appearance subtabs, nested Tab Group right-click menu and ChatClub Tabs hover-button placement settings, prompt-handoff, platform-management labels including custom-platform domain autofill, iframe tab context-menu labels, prompt-history date-group labels, remembered ChatClub-tab sidebar labels including tab count, close-others cleanup, pin/unpin, More, sort modes, folder create/rename/delete, date-group headings and resize copy, Tabs export/import copy, topic-title edit copy, the ChatClub Tabs sidebar shortcut, shortcut-settings search copy, and Prompt History search, loading, and unmatched-conversation copy under exact line and byte ratchets; Share panel and shortcut copy joins the bilingual catalog; the topbar History button and openHistoryPanel shortcut copy join the bilingual catalog; English UI labels DouBao as 豆包（doubao） and Qianwen as 千问（qianwen）; Pocket sidebar and focus-mode tooltip rows share one settings target each."
   },
