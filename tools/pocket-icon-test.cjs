@@ -44,7 +44,16 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   assert.doesNotMatch(stylesheetSource, /\.appearance-pocket-icon-option \{[\s\S]*?min-height: 88px/);
   assert.match(pocketSource, /pocket-group-favicons/);
   assert.match(pocketSource, /omitTitle:\s*true/);
-  assert.match(pocketSource, /el\("span", \{ class: "pocket-group-time" \}/);
+  assert.match(
+    pocketSource,
+    /el\("span", \{ class: "pocket-group-head" \},[\s\S]*?pocket-group-question[\s\S]*?\),\s*el\("span", \{ class: "pocket-group-time"/,
+    "Pocket time stays on its own row under the title"
+  );
+  assert.doesNotMatch(
+    pocketSource,
+    /class: "pocket-group-head"[\s\S]*?pocket-group-time[\s\S]*?pocket-group-question/,
+    "Pocket time must not share the title row"
+  );
   assert.match(pocketSource, /sourceMeta \? el\("span", \{ class: "pocket-group-meta" \}, sourceMeta\)/);
   assert.match(pocketSource, /from "\.\.\/\.\.\/ui\/favicon\.js"/);
   assert.match(stylesheetSource, /\.pocket-group-head/);

@@ -5636,24 +5636,6 @@ body.settings-tab-context-menu-dragging iframe {
   -webkit-box-orient: vertical;
 }
 
-.prompt-history-sidebar-favicons,
-.prompt-history-conversation-favicons {
-  margin-top: 2px;
-}
-
-.prompt-history-sidebar-preview {
-  min-width: 0;
-  flex: 1 1 auto;
-  color: currentColor;
-  font-size: 13px;
-  font-weight: 720;
-  line-height: 1.35;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-
 .prompt-history-pocket-badge,
 .prompt-history-sidebar-pocket {
   flex: 0 0 auto;
@@ -5677,10 +5659,7 @@ body.settings-tab-context-menu-dragging iframe {
 }
 
 .prompt-history-sidebar-time {
-  flex: 0 0 auto;
-  margin-left: auto;
-  margin-top: 2px;
-  max-width: 46%;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -6243,6 +6222,7 @@ body.settings-tab-context-menu-dragging iframe {
 
 .pocket-group-time,
 .pocket-group-meta {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -6251,10 +6231,6 @@ body.settings-tab-context-menu-dragging iframe {
 }
 
 .pocket-group-time {
-  flex: 0 0 auto;
-  margin-left: auto;
-  margin-top: 2px;
-  max-width: 46%;
   color: color-mix(in srgb, var(--text) 68%, var(--muted));
   text-align: right;
 }

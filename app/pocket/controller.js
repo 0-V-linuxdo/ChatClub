@@ -887,9 +887,9 @@ export function createPocketController(ctx) {
     },
       el("span", { class: "pocket-group-head" },
         favicons,
-        el("span", { class: "pocket-group-question" }, pocketBatchQuestion(batch)),
-        el("span", { class: "pocket-group-time" }, pocketBatchTitle(batch))
+        el("span", { class: "pocket-group-question" }, pocketBatchQuestion(batch))
       ),
+      el("span", { class: "pocket-group-time" }, pocketBatchTitle(batch)),
       sourceMeta ? el("span", { class: "pocket-group-meta" }, sourceMeta) : null
     );
   }

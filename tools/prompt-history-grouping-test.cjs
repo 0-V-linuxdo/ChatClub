@@ -401,7 +401,13 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   assert.match(panelSource, /omitTitle:\s*true/);
   assert.match(
     panelSource,
-    /el\("time", \{ class: "prompt-history-sidebar-time", datetime: item\.createdAt \|\| "" \}, promptHistoryTimeLabel\(item\.createdAt\)\)/
+    /class: "prompt-history-sidebar-item-top"[\s\S]*?prompt-history-sidebar-preview[\s\S]*?\),\s*el\("time", \{ class: "prompt-history-sidebar-time"/,
+    "History time stays on its own row under the title"
+  );
+  assert.doesNotMatch(
+    panelSource,
+    /class: "prompt-history-sidebar-item-top"[\s\S]*?prompt-history-sidebar-time[\s\S]*?prompt-history-sidebar-preview/,
+    "History time must not share the title row"
   );
   assert.match(modelSource, /export function promptHistorySourceMeta/);
   assert.match(panelSource, /entry\.appName\s*\n\s*\? el\("span", \{ class: "pocket-entry-source"/);

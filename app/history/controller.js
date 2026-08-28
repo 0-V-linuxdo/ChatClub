@@ -714,9 +714,9 @@ export function createHistoryController(ctx) {
       },
         el("span", { class: "prompt-history-sidebar-item-top" },
           conversationFavicons(item, "prompt-history-sidebar-favicons"),
-          el("span", { class: "prompt-history-sidebar-preview" }, preview),
-          el("time", { class: "prompt-history-sidebar-time", datetime: item.createdAt || "" }, promptHistoryTimeLabel(item.createdAt))
+          el("span", { class: "prompt-history-sidebar-preview" }, preview)
         ),
+        el("time", { class: "prompt-history-sidebar-time", datetime: item.createdAt || "" }, promptHistoryTimeLabel(item.createdAt)),
         sourceMeta ? el("span", { class: "prompt-history-sidebar-meta" }, sourceMeta) : null
       ),
       pocketSaved
