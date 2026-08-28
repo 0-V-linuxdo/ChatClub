@@ -45,6 +45,8 @@ export function createTopbarController(dependencies = {}) {
     "openNewWorkspaceTab",
     "openPocket",
     "openHistory",
+    "savePocketFromWorkspace",
+    "saveHistoryFromWorkspace",
     "openSettings",
     "openShare",
     "openSummary",

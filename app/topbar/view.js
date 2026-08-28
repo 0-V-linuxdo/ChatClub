@@ -47,6 +47,8 @@ export function createTopbarView(dependencies = {}) {
     "openNewWorkspaceTab",
     "openPocket",
     "openHistory",
+    "savePocketFromWorkspace",
+    "saveHistoryFromWorkspace",
     "openSettings",
     "openSettingsMenu",
     "openShare",
@@ -69,6 +71,17 @@ export function createTopbarView(dependencies = {}) {
   function formatTopbarShortcut(label, itemId) {
     const action = TOPBAR_SHORTCUT_ACTIONS[itemId];
     return action ? actions.formatShortcutTooltip(label, action) : label;
+  }
+
+  function bindWorkspaceQuickSave(button, save) {
+    if (!button || typeof save !== "function") return button;
+    button.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (state.topbarEditMode) return;
+      save(event);
+    });
+    return button;
   }
 
   function actionButton(label, iconName, onClick, variant = "secondary", tooltipLabel = label, className = "", tooltipId = "") {
@@ -249,10 +262,16 @@ export function createTopbarView(dependencies = {}) {
     }
     if (item.id === "pocket") {
       const pocketLabel = t(topbarItemLabelKey(item, state.options));
-      return actionButton(pocketLabel, topbarItemIcon(item, state.options), actions.openPocket, "secondary", actions.formatShortcutTooltip(pocketLabel, "openPocketPanel"), topbarItemClass("pocket"), "topbar.pocket");
+      return bindWorkspaceQuickSave(
+        actionButton(pocketLabel, topbarItemIcon(item, state.options), actions.openPocket, "secondary", actions.formatShortcutTooltip(pocketLabel, "openPocketPanel"), topbarItemClass("pocket"), "topbar.pocket"),
+        actions.savePocketFromWorkspace
+      );
     }
     if (item.id === "history") {
-      return actionButton(t("topbar.history"), "history", actions.openHistory, "secondary", actions.formatShortcutTooltip(t("topbar.history"), "openHistoryPanel"), topbarItemClass("history"), "topbar.history");
+      return bindWorkspaceQuickSave(
+        actionButton(t("topbar.history"), "history", actions.openHistory, "secondary", actions.formatShortcutTooltip(t("topbar.history"), "openHistoryPanel"), topbarItemClass("history"), "topbar.history"),
+        actions.saveHistoryFromWorkspace
+      );
     }
     if (item.id === "addGroup") {
       return topIconButton(t("topbar.addGroup"), "plus", (event) => actions.openAppPicker(event.currentTarget), formatTopbarShortcut(t("topbar.addGroup"), "addGroup"), "topbar.addGroup");
@@ -471,17 +490,37 @@ export function createTopbarView(dependencies = {}) {
         }
         run(event);
       },
+      oncontextmenu: typeof options.onContextMenu === "function"
+        ? (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (state.topbarEditMode) return;
+            options.onContextMenu(event);
+          }
+        : undefined,
       ...editModeDragProps
     }, createSvgIcon(iconName), el("span", {}, label));
   }
 
-  function renderFoldedMenuButton(item, editing, runItem) {
+  function renderFoldedMenuButton(item, editing, runItem, closeMenu) {
     const label = item.id === "brand" ? brandActionLabel() : formatTopbarShortcut(t(topbarItemLabelKey(item, state.options)), item.id);
     const dragItem = editing && item.type === "item" ? { type: "item", id: item.id } : null;
+    const quickSave = item.id === "pocket"
+      ? (event) => {
+          closeMenu?.();
+          actions.savePocketFromWorkspace(event);
+        }
+      : item.id === "history"
+        ? (event) => {
+            closeMenu?.();
+            actions.saveHistoryFromWorkspace(event);
+          }
+        : null;
     const buttonNode = settingsMenuButton(label, topbarItemIcon(item, state.options), (event) => runItem(item, event), "secondary", false, dragItem, {
       className: editing && item.type === "item" ? "topbar-settings-menu-button" : "",
       tooltipId: tooltipIdForItem(item),
-      dataset: item.id === "brand" ? { topbarBrandAction: "true" } : {}
+      dataset: item.id === "brand" ? { topbarBrandAction: "true" } : {},
+      onContextMenu: quickSave
     });
     if (!editing || item.type !== "item") return buttonNode;
     return el("div", { class: "topbar-settings-menu-slot", dataset: { topbarItemId: item.id } }, buttonNode);
@@ -493,7 +532,7 @@ export function createTopbarView(dependencies = {}) {
     const foldedSettingsSectionIds = new Set(foldedItems
       .map((item) => topbarSettingsSectionForItem(item.id))
       .filter(Boolean));
-    const foldedButtons = foldedItems.map((item) => renderFoldedMenuButton(item, editing, runItem));
+    const foldedButtons = foldedItems.map((item) => renderFoldedMenuButton(item, editing, runItem, closeMenu));
     const settingsButtons = editing ? [] : settingsSections
       .filter(([id]) => !foldedSettingsSectionIds.has(id))
       .map(([id, labelKey, , icon]) => {

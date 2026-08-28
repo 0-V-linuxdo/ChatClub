@@ -24,6 +24,7 @@ import {
   loadPocketHistory,
   loadPromptLibrary,
   loadPromptSendHistory,
+  savePromptSendHistory,
   loadShortcutConfig,
   savePocketHistory,
   storageGet,
@@ -40,6 +41,7 @@ import { createComposerController } from "./composer/controller.js";
 import { createBindOnceControllerPort } from "./controller-port.js";
 import { createPreferredModelController } from "./preferred-model/controller.js";
 import { createTopbarController } from "./topbar/controller.js";
+import { createTopbarWorkspaceQuickSave } from "./topbar/workspace-quick-save.js";
 import { createWorkspaceController } from "./workspace/controller.js";
 import { PROMPT_HANDOFF_LAUNCH_REASON, createWorkspacePromptHandoffController } from "./workspace/prompt-handoff-controller.js";
 import { attachWorkspaceTabsSidebarController } from "./workspace/tabs-sidebar-controller.js";
@@ -195,6 +197,8 @@ const topbarController = createTopbarController({
     openNewWorkspaceTab,
     openPocket: openPocketPanel,
     openHistory: openHistoryPanel,
+    savePocketFromWorkspace,
+    saveHistoryFromWorkspace,
     openSettings,
     openShare: openSharePanel,
     openSummary: openSummaryPanel,
@@ -1070,6 +1074,33 @@ async function openHistoryPanel() {
   } catch (error) {
     return lazyControllerError("History", error);
   }
+}
+
+let topbarWorkspaceQuickSaveController = null;
+function topbarWorkspaceQuickSave() {
+  topbarWorkspaceQuickSaveController ||= createTopbarWorkspaceQuickSave({
+    collectLive: () => ensureSummaryController().then((summary) => summary.collectWorkspacePreviewItems()),
+    loadFullText: loadWorkspaceTabFullTextStore,
+    savePagesToPocket: (...args) => ensurePocketController().then((pocket) => pocket.savePagesToPocket(...args)),
+    persistFullText: persistWorkspaceTabFullTextFromPreview,
+    savePromptSendHistory,
+    getHistory: () => state.promptSendHistory,
+    setHistory: (history) => { state.promptSendHistory = history; },
+    workspaceId: () => workspaceSessionStore.workspaceId(),
+    topicTitle: () => String(state.topicTitle || "").trim(),
+    notifyHistory: () => historyController?.notifyFullTextChanged?.(),
+    toast,
+    t
+  });
+  return topbarWorkspaceQuickSaveController;
+}
+
+async function savePocketFromWorkspace(event) {
+  return topbarWorkspaceQuickSave().saveToPocket(event);
+}
+
+async function saveHistoryFromWorkspace(event) {
+  return topbarWorkspaceQuickSave().saveToHistory(event);
 }
 
 function shortcutDigit(matchObj) {
