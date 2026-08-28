@@ -35,9 +35,9 @@
       "owner": "app/runtime.js",
       "maxFiles": 2,
       "targetFiles": 1,
-      "maxSourceBytes": 28638,
+      "maxSourceBytes": 29037,
       "targetSourceBytes": 16000,
-      "reason": "Prompt History remains an explicit runtime-owned lazy controller; the viewer now includes a Pocket-style sidebar, save-to-Pocket action, saved-only Pocket badge, stored, live, or Pocket conversation turns with NFKC-tolerant matching, a selected-prompt modal title, persist-driven redraw of an already-open panel, and distinct loading versus unmatched conversation copy, and this budget tracks only modules added beyond the application initial-static closure; workspace-save injects the captured live turns and selects the matching prompt so a right-click refresh is visible in a closed or already-open viewer."
+      "reason": "Prompt History remains an explicit runtime-owned lazy controller; the viewer now includes a Pocket-style sidebar, save-to-Pocket action, saved-only Pocket badge, stored, live, or Pocket conversation turns with NFKC-tolerant matching, a selected-prompt modal title, persist-driven redraw of an already-open panel, and distinct loading versus unmatched conversation copy, and this budget tracks only modules added beyond the application initial-static closure; workspace-save injects the captured live turns and selects the matching prompt so a right-click refresh is visible in a closed or already-open viewer; the History viewer mounts search in the modal titlebar and lays site conversation cards in a Pocket-style horizontal row."
     },
     "app/pocket/controller.js": {
       "owner": "app/runtime.js",

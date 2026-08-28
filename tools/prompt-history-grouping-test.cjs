@@ -268,6 +268,12 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   assert.match(panelSource, /function refreshFullTextStore/);
   assert.match(panelSource, /function refreshConversationSources/);
   assert.match(panelSource, /function syncHistoryModalTitle/);
+  assert.match(panelSource, /function syncHistoryModalHeader/);
+  assert.match(panelSource, /class: "prompt-history-header-tools"/);
+  assert.match(panelSource, /headerSearch\(redraw\)/);
+  assert.doesNotMatch(panelSource, /headerSearch\(host/);
+  assert.doesNotMatch(panelSource, /prompt-history-panel-toolbar/);
+  assert.match(panelSource, /document\.querySelector\("\.prompt-history-modal \.prompt-history-panel-search-input"\)/);
   assert.match(panelSource, /function refreshOpenHistory/);
   assert.match(panelSource, /function notifyFullTextChanged/);
   assert.match(panelSource, /function applyWorkspacePreview/);
@@ -296,8 +302,11 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   assert.match(panelSource, /pocketEntries/);
   assert.match(
     stylesheetSource,
-    /\.prompt-history-conversations\s*\{/
+    /\.prompt-history-conversations\s*\{[\s\S]*?display:\s*flex/,
+    "History conversation cards must sit in a Pocket-style horizontal row"
   );
+  assert.match(stylesheetSource, /--prompt-history-card-width:\s*460px/);
+  assert.match(stylesheetSource, /\.prompt-history-header-tools\s*\{/);
   assert.match(stylesheetSource, /\.prompt-history-sidebar-pocket/);
   assert.match(stylesheetSource, /\.chat-favicon-stack/);
   assert.match(stylesheetSource, /\.prompt-history-turn-text\s*\{/);

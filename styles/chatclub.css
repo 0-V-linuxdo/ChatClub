@@ -5309,11 +5309,12 @@ body.settings-tab-context-menu-dragging iframe {
 
 .modal.prompt-history-modal {
   --prompt-history-sidebar-column-width: 260px;
+  --prompt-history-card-width: 460px;
   position: fixed;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: min(1080px, calc(100vw - 40px));
+  width: min(1180px, calc(100vw - 40px));
   height: min(720px, calc(100vh - 40px));
 }
 
@@ -5337,11 +5338,36 @@ body.settings-tab-context-menu-dragging iframe {
 }
 
 .prompt-history-modal .modal-header h2 {
-  flex: 1;
-  min-width: 0;
+  flex: 0 1 240px;
+  min-width: 80px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.prompt-history-header-tools {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.prompt-history-header-tools .prompt-history-panel-search {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  max-width: none;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.prompt-history-header-tools .shortcut-search-sizer {
+  display: none;
+}
+
+.prompt-history-panel-clear {
+  flex: 0 0 auto;
 }
 
 .modal.prompt-history-modal .modal-body {
@@ -5355,24 +5381,7 @@ body.settings-tab-context-menu-dragging iframe {
   min-height: 0;
   height: 100%;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-}
-
-.prompt-history-panel-toolbar {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--line);
-}
-
-.prompt-history-panel-search {
-  flex: 1;
-  min-width: 0;
-}
-
-.prompt-history-panel-clear {
-  flex: 0 0 auto;
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .prompt-history-shell {
@@ -5541,14 +5550,19 @@ body.settings-tab-context-menu-dragging iframe {
 .prompt-history-main {
   min-width: 0;
   min-height: 0;
-  overflow: auto;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  overflow: hidden;
   padding: 16px;
 }
 
 .prompt-history-detail {
   min-width: 0;
+  min-height: 0;
+  height: 100%;
   display: grid;
-  align-content: start;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  align-content: stretch;
   gap: 14px;
 }
 
@@ -5599,7 +5613,10 @@ body.settings-tab-context-menu-dragging iframe {
 
 .prompt-history-detail-fallback {
   min-width: 0;
+  min-height: 0;
+  overflow: auto;
   display: grid;
+  align-content: start;
   gap: 10px;
 }
 
@@ -5624,26 +5641,38 @@ body.settings-tab-context-menu-dragging iframe {
 
 .prompt-history-conversations {
   min-width: 0;
-  display: grid;
-  gap: 14px;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
 }
 
 .prompt-history-conversation {
+  flex: 0 0 min(var(--prompt-history-card-width, 460px), 100%);
   min-width: 0;
+  min-height: 0;
+  height: 100%;
   display: grid;
-  gap: 10px;
-  padding: 12px;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+  padding: 14px;
   border: 1px solid var(--line);
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--panel-2) 86%, var(--bg));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 90%, var(--bg));
 }
 
 .prompt-history-conversation-head {
   min-width: 0;
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
+  column-gap: 8px;
+  row-gap: 5px;
 }
 
 .prompt-history-conversation-head strong {
@@ -5657,6 +5686,7 @@ body.settings-tab-context-menu-dragging iframe {
 }
 
 .prompt-history-conversation-url {
+  grid-column: 1 / -1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -5668,8 +5698,12 @@ body.settings-tab-context-menu-dragging iframe {
 
 .prompt-history-conversation-turns {
   min-width: 0;
+  min-height: 0;
   display: grid;
+  align-content: start;
   gap: 10px;
+  overflow: auto;
+  scrollbar-width: thin;
 }
 
 .prompt-history-turn {
@@ -5704,6 +5738,10 @@ body.settings-tab-context-menu-dragging iframe {
 }
 
 @media (max-width: 760px) {
+  .prompt-history-modal .modal-header h2 {
+    flex-basis: 120px;
+  }
+
   .prompt-history-shell {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(180px, 36%) minmax(0, 1fr);

@@ -201,9 +201,9 @@ export function createHistoryController(ctx) {
     }
   }
 
-  function restoreSearchField(host) {
+  function restoreSearchField() {
     requestAnimationFrame(() => {
-      const field = host?.querySelector?.(".prompt-history-panel-search-input");
+      const field = document.querySelector(".prompt-history-modal .prompt-history-panel-search-input");
       if (!field) return;
       if (searchFocused) field.focus();
       try {
@@ -219,9 +219,9 @@ export function createHistoryController(ctx) {
     });
   }
 
-  function applySearchQuery(host, value, { composing = false, redraw } = {}) {
+  function applySearchQuery(value, { composing = false, redraw } = {}) {
     searchQuery = String(value || "");
-    const field = host?.querySelector?.(".prompt-history-panel-search-input");
+    const field = document.querySelector(".prompt-history-modal .prompt-history-panel-search-input");
     searchSelection = {
       start: Number(field?.selectionStart) || searchQuery.length,
       end: Number(field?.selectionEnd) || searchQuery.length
@@ -237,7 +237,7 @@ export function createHistoryController(ctx) {
     redraw();
   }
 
-  function headerSearch(host, redraw) {
+  function headerSearch(redraw) {
     const placeholder = t("promptHistory.searchPlaceholder");
     const query = searchQuery;
     const searching = Boolean(String(query || "").trim());
@@ -251,7 +251,7 @@ export function createHistoryController(ctx) {
       spellcheck: "false"
     });
     field.value = query;
-    restoreSearchField(host);
+    restoreSearchField();
     field.addEventListener("keydown", (event) => {
       if (event.isComposing || event.keyCode === 229) return;
       if (event.key !== "Escape" || !query) return;
@@ -262,10 +262,10 @@ export function createHistoryController(ctx) {
     field.addEventListener("compositionstart", () => { searchComposing = true; });
     field.addEventListener("compositionend", (event) => {
       searchComposing = false;
-      applySearchQuery(host, String(event?.target?.value || ""), { redraw });
+      applySearchQuery(String(event?.target?.value || ""), { redraw });
     });
     field.addEventListener("input", (event) => {
-      applySearchQuery(host, String(event?.target?.value || ""), {
+      applySearchQuery(String(event?.target?.value || ""), {
         composing: Boolean(event?.isComposing),
         redraw
       });
@@ -504,18 +504,9 @@ export function createHistoryController(ctx) {
     const visible = searching ? history.filter((item) => promptHistoryItemMatchesSearch(item, query)) : history;
     const activeItem = resolveActiveItem(visible);
     syncHistoryModalTitle(activeItem);
+    syncHistoryModalHeader(redraw);
     clear(host);
     host.append(
-      el("div", { class: "prompt-history-panel-toolbar" },
-        headerSearch(host, redraw),
-        history.length
-          ? el("button", {
-            class: "button button-secondary prompt-history-panel-clear",
-            type: "button",
-            onclick: () => clearHistory(redraw)
-          }, svgIcon("trash"), el("span", {}, t("promptHistory.clear")))
-          : null
-      ),
       el("div", { class: "prompt-history-shell" },
         sidebar(visible, activeItem, redraw),
         el("main", { class: "prompt-history-main" },
@@ -532,8 +523,29 @@ export function createHistoryController(ctx) {
     const title = header?.querySelector("h2");
     const closeButton = header?.querySelector(".icon-button");
     if (!header || !title || !closeButton) return;
-    title.before(el("span", { class: "prompt-history-modal-title-icon", "aria-hidden": "true" }, svgIcon("history")));
+    if (!header.querySelector(".prompt-history-modal-title-icon")) {
+      title.before(el("span", { class: "prompt-history-modal-title-icon", "aria-hidden": "true" }, svgIcon("history")));
+    }
+    if (!header.querySelector(".prompt-history-header-tools")) {
+      closeButton.before(el("div", { class: "prompt-history-header-tools" }));
+    }
     closeButton.replaceChildren(svgIcon("x"));
+  }
+
+  function syncHistoryModalHeader(redraw) {
+    const tools = document.querySelector(".prompt-history-modal .prompt-history-header-tools");
+    if (!tools) return;
+    clear(tools);
+    tools.append(
+      headerSearch(redraw),
+      items().length
+        ? el("button", {
+          class: "button button-secondary prompt-history-panel-clear",
+          type: "button",
+          onclick: () => clearHistory(redraw)
+        }, svgIcon("trash"), el("span", {}, t("promptHistory.clear")))
+        : null
+    );
   }
 
   function openHistoryPanel() {
