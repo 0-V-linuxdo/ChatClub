@@ -1,10 +1,16 @@
 #!/usr/bin/env node
 
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 
 const root = path.resolve(__dirname, "..");
+const agents = fs.readFileSync(path.join(root, "AGENTS.md"), "utf8");
+assert.match(agents, /## New Chat Workspace Preserve/);
+assert.match(agents, /preserveCurrentWorkspaceForNewChat/);
+assert.match(agents, /replaceState/);
+assert.match(agents, /listLiveWorkspaceTabs/);
 
 (async () => {
   const { createWorkspaceSessionController } = await import(

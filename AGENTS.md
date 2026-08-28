@@ -90,6 +90,17 @@ Motion: `--overlay-motion` opacity fade on transient overlays (modal backdrop, p
 
 Do not migrate to native `<dialog>` without an overlay-policy audit. Overlay Dismissal Policy above is closed: do not add one-off close flags. History must not copy Pocket focus/fullscreen/resize/restore behavior.
 
+## New Chat Workspace Preserve
+
+New Chat must not overwrite the current conversation workspace in place. The 2026-08-29 failure was that the live page kept the old workspace id while the conversation href was replaced, so clicking the original Tabs row was a no-op.
+
+- Call `preserveCurrentWorkspaceForNewChat` before `startNewChatInFrame`. Preserve only when the leaving hrefs are conversations and the captured snapshot still has a conversation. Home/root URLs skip preserve.
+- Persist the snapshot under the current workspace id, then `flush()`. Adopt a new workspace session id onto the live page only after that flush succeeds. Clear `topicTitle` / `topicTitleCustom` on the rebound page. If flush or adopt fails, leave the old id in place.
+- Background persist of the rebound workspace must detach the previous workspace as a remembered Tabs row, not as crash recovery. `tab.url` still showing the old `#workspace=` hash after `replaceState` must not block that detach.
+- `listLiveWorkspaceTabs` must still list the frozen conversation so the original sidebar row can reopen it. Do not put the frozen row on the recovery path, and do not copy Pocket window chrome onto it.
+
+Acceptance: `tools/workspace-new-chat-preserve-test.cjs`.
+
 ## Release Versioning
 
 Use Node.js 22 or 24 for generation, verification, and packaging. The repository `.nvmrc` pins Node 24; run `nvm use` and confirm `node --version` before `npm ci` or release-related scripts. `package.json` permits 22.x or 24.x. Generation, static verification, Node regression tests, package verification, local CI, GitHub CI, and release packaging all reject unsupported majors.
