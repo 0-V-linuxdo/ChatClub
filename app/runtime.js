@@ -474,8 +474,10 @@ function ensureHistoryController() {
         historyController = createHistoryController({
           state: featureState.history,
           svgIcon,
+          compactIconButton,
           setPromptImages,
           syncPromptInputNode,
+          saveOptions: saveOptionsState,
           pocketPort: {
             savePages: (...args) => ensurePocketController().then((pocket) => pocket.savePagesToPocket(...args)),
             loadEntries: () => loadPocketHistory()
@@ -490,6 +492,10 @@ function ensureHistoryController() {
             fallback: fallbackFaviconUrl,
             effective: effectiveFaviconUrl,
             appById
+          },
+          workspacePort: {
+            loadEntry: workspaceController.loadPocketEntryInFrame,
+            setFramePointerBlocked: workspaceController.setFramePointerBlockedForOverlay
           }
         });
         return historyController;

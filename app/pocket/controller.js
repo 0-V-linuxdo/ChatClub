@@ -289,7 +289,8 @@ export function createPocketController(ctx) {
 
   function pocketSizeControls(host, size) {
     return el("div", { class: "pocket-size-controls" },
-      pocketSizeControl(host, "width", t("pocket.cardWidth"), size.width)
+      pocketSizeControl(host, "width", t("pocket.cardWidth"), size.width),
+      pocketSizeControl(host, "height", t("pocket.cardHeight"), size.height)
     );
   }
 

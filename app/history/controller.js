@@ -1,6 +1,6 @@
 import { t } from "../../shared/i18n.js";
 import { savePromptSendHistory } from "../../shared/storage-adapter.js";
-import { normalizePocketIcon } from "../../shared/storage-schema.js";
+import { normalizePocketCardSize, normalizePocketIcon } from "../../shared/storage-schema.js";
 import { createSettingsIconAction } from "../../ui/components.js";
 import { clear, el, input, toast, viewerModal } from "../../ui/dom.js";
 import {
@@ -28,24 +28,47 @@ import {
   promptHistoryTimeLabel
 } from "./model.js";
 
+const HISTORY_PANEL_SIZE_KEY = "chatclub.historyPanelSize.v1";
+const HISTORY_PANEL_MIN_WIDTH = 720;
+const HISTORY_PANEL_MIN_HEIGHT = 420;
+const HISTORY_PANEL_FULLSCREEN_CLASS = "prompt-history-modal-fullscreen";
+const HISTORY_PANEL_FOCUS_CLASS = "prompt-history-modal-focus";
+const HISTORY_CARD_GAP = 12;
+const HISTORY_CARD_SIZE_LIMITS = Object.freeze({
+  width: Object.freeze({ min: 360, max: 760, step: 20 }),
+  height: Object.freeze({ min: 420, max: 820, step: 20 })
+});
+
 export function createHistoryController(ctx) {
   const controllerName = "History controller";
   ctx = validateControllerContract(ctx, controllerName, {
     state: "object",
     svgIcon: "function",
+    compactIconButton: "function",
     setPromptImages: "function",
     syncPromptInputNode: "function",
+    saveOptions: "function?",
     pocketPort: "object?",
     conversationPort: "object?",
-    faviconPort: "object?"
+    faviconPort: "object?",
+    workspacePort: "object?"
   });
   const state = requireControllerContext(ctx, controllerName, "state");
   const svgIcon = requireControllerFunction(ctx, controllerName, "svgIcon");
+  const compactIconButton = requireControllerFunction(ctx, controllerName, "compactIconButton");
   const setPromptImages = requireControllerFunction(ctx, controllerName, "setPromptImages");
   const syncPromptInputNode = requireControllerFunction(ctx, controllerName, "syncPromptInputNode");
+  const saveOptions = typeof ctx.saveOptions === "function" ? ctx.saveOptions : async (options) => options;
   const pocketPort = optionalControllerObject(ctx, "pocketPort");
   const conversationPort = optionalControllerObject(ctx, "conversationPort");
   const faviconPort = optionalControllerObject(ctx, "faviconPort");
+  const workspacePort = optionalControllerObject(ctx, "workspacePort");
+  const loadPocketEntryInFrame = typeof workspacePort.loadEntry === "function"
+    ? workspacePort.loadEntry
+    : () => false;
+  const setFramePointerBlockedForOverlay = typeof workspacePort.setFramePointerBlocked === "function"
+    ? workspacePort.setFramePointerBlocked
+    : () => {};
   const pocketDisplayIcon = () => normalizePocketIcon(state.options?.pocketIcon);
   const savePagesToPocket = typeof pocketPort.savePages === "function"
     ? pocketPort.savePages
@@ -72,6 +95,9 @@ export function createHistoryController(ctx) {
   let livePreviewPending = false;
   let workspacePreviewPinned = false;
   let historyCurrentRedraw = null;
+  let historyCardSizeSaveTimer = 0;
+  let historyActionsExpanded = false;
+  let historySidebarCollapsed = false;
 
   function items() {
     return Array.isArray(state.promptSendHistory) ? state.promptSendHistory : [];
@@ -314,6 +340,301 @@ export function createHistoryController(ctx) {
     });
   }
 
+  function historyCardSize() {
+    return normalizePocketCardSize(state.options?.pocketCardSize);
+  }
+
+  function applyHistoryCardSize(host, size = historyCardSize()) {
+    host?.style?.setProperty("--pocket-card-width", `${size.width}px`);
+    host?.style?.setProperty("--pocket-card-height", `${size.height}px`);
+    host?.style?.setProperty("--prompt-history-card-width", `${size.width}px`);
+    host?.querySelectorAll?.(".pocket-entry-cluster[data-entry-count]").forEach((cluster) => {
+      const count = Math.max(1, Number(cluster.dataset.entryCount) || 1);
+      cluster.style.setProperty("--pocket-cluster-row-width", `${Math.round((count * size.width) + ((count - 1) * HISTORY_CARD_GAP))}px`);
+    });
+    return size;
+  }
+
+  function scheduleHistoryCardSizeSave(size) {
+    clearTimeout(historyCardSizeSaveTimer);
+    historyCardSizeSaveTimer = setTimeout(async () => {
+      try {
+        state.options = await saveOptions({ ...state.options, pocketCardSize: size });
+      } catch (error) {
+        console.warn("[ChatClub] Failed to save History card size", error);
+      }
+    }, 180);
+  }
+
+  function updateHistoryCardSize(host, patch, options = {}) {
+    const size = normalizePocketCardSize({ ...historyCardSize(), ...patch });
+    state.options = { ...state.options, pocketCardSize: size };
+    applyHistoryCardSize(host, size);
+    if (options.immediate) {
+      clearTimeout(historyCardSizeSaveTimer);
+      historyCardSizeSaveTimer = 0;
+      saveOptions({ ...state.options, pocketCardSize: size }).then((next) => {
+        state.options = next;
+      }).catch((error) => console.warn("[ChatClub] Failed to save History card size", error));
+    } else {
+      scheduleHistoryCardSizeSave(size);
+    }
+    return size;
+  }
+
+  function historySizeControl(host, field, label, value) {
+    const limit = HISTORY_CARD_SIZE_LIMITS[field];
+    const output = el("span", { class: "pocket-size-value" }, `${value}px`);
+    const slider = el("input", {
+      class: "pocket-size-slider",
+      type: "range",
+      min: limit.min,
+      max: limit.max,
+      step: limit.step,
+      value,
+      "aria-label": label,
+      oninput: (event) => {
+        const next = updateHistoryCardSize(host, { [field]: event.currentTarget.value });
+        output.textContent = `${next[field]}px`;
+      },
+      onchange: (event) => {
+        const next = updateHistoryCardSize(host, { [field]: event.currentTarget.value }, { immediate: true });
+        output.textContent = `${next[field]}px`;
+      }
+    });
+    return el("label", { class: "pocket-size-control" },
+      el("span", { class: "pocket-size-label" }, label),
+      slider,
+      output
+    );
+  }
+
+  function historySizeControls(host, size) {
+    return el("div", { class: "pocket-size-controls" },
+      historySizeControl(host, "width", t("pocket.cardWidth"), size.width),
+      historySizeControl(host, "height", t("pocket.cardHeight"), size.height)
+    );
+  }
+
+  function historyPanelMaxWidth() {
+    return Math.max(320, window.innerWidth - 32);
+  }
+
+  function historyPanelMaxHeight() {
+    return Math.max(280, window.innerHeight - 32);
+  }
+
+  function clampHistoryPanelSize(value) {
+    if (!value || typeof value !== "object") return null;
+    const width = Number(value.width);
+    const height = Number(value.height);
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return null;
+    const maxWidth = historyPanelMaxWidth();
+    const maxHeight = historyPanelMaxHeight();
+    const next = {
+      width: Math.round(Math.min(maxWidth, Math.max(Math.min(HISTORY_PANEL_MIN_WIDTH, maxWidth), width))),
+      height: Math.round(Math.min(maxHeight, Math.max(Math.min(HISTORY_PANEL_MIN_HEIGHT, maxHeight), height)))
+    };
+    const left = Number(value.left);
+    const top = Number(value.top);
+    if (Number.isFinite(left) && Number.isFinite(top)) {
+      next.left = Math.round(Math.min(Math.max(8, left), Math.max(8, window.innerWidth - next.width - 8)));
+      next.top = Math.round(Math.min(Math.max(8, top), Math.max(8, window.innerHeight - next.height - 8)));
+    }
+    return next;
+  }
+
+  function readHistoryPanelSize() {
+    try {
+      return clampHistoryPanelSize(JSON.parse(localStorage.getItem(HISTORY_PANEL_SIZE_KEY) || "null"));
+    } catch {}
+    return null;
+  }
+
+  function historyPanelIsFullscreen(panel) {
+    return Boolean(panel?.classList?.contains(HISTORY_PANEL_FULLSCREEN_CLASS));
+  }
+
+  function historyPanelIsFocusMode(panel) {
+    return Boolean(panel?.classList?.contains(HISTORY_PANEL_FOCUS_CLASS));
+  }
+
+  function clearHistoryPanelInlineGeometry(panel) {
+    if (!panel) return;
+    ["width", "height", "left", "top", "transform", "--pocket-panel-width", "--pocket-panel-height"].forEach((property) => {
+      panel.style.removeProperty(property);
+    });
+  }
+
+  function applyHistoryPanelSize(panel) {
+    const size = readHistoryPanelSize();
+    if (!panel || !size) return;
+    panel.style.setProperty("--pocket-panel-width", `${size.width}px`);
+    panel.style.setProperty("--pocket-panel-height", `${size.height}px`);
+    panel.style.width = "var(--pocket-panel-width)";
+    panel.style.height = "var(--pocket-panel-height)";
+    if (Number.isFinite(size.left) && Number.isFinite(size.top)) {
+      panel.style.left = `${size.left}px`;
+      panel.style.top = `${size.top}px`;
+      panel.style.transform = "none";
+    }
+  }
+
+  function rememberHistoryPanelGeometry(panel) {
+    if (!panel || historyPanelIsFullscreen(panel)) return;
+    const rect = panel.getBoundingClientRect();
+    const size = clampHistoryPanelSize({
+      width: rect.width,
+      height: rect.height,
+      left: rect.left,
+      top: rect.top
+    });
+    if (!size) return;
+    try { localStorage.setItem(HISTORY_PANEL_SIZE_KEY, JSON.stringify(size)); } catch {}
+  }
+
+  function syncHistoryFullscreenButton(button, panel) {
+    if (!button || !panel) return;
+    const fullscreen = historyPanelIsFullscreen(panel);
+    const label = fullscreen ? t("chat.exitFullscreen") : t("chat.fullscreen");
+    button.setAttribute("aria-label", label);
+    button.setAttribute("data-tooltip", label);
+    button.replaceChildren(svgIcon(fullscreen ? "minimize" : "maximize"));
+  }
+
+  function toggleHistoryPanelFullscreen(panel, button) {
+    if (!panel) return;
+    if (historyPanelIsFullscreen(panel)) {
+      panel.classList.remove(HISTORY_PANEL_FOCUS_CLASS);
+      panel.classList.remove(HISTORY_PANEL_FULLSCREEN_CLASS);
+      applyHistoryPanelSize(panel);
+    } else {
+      rememberHistoryPanelGeometry(panel);
+      panel.classList.add(HISTORY_PANEL_FULLSCREEN_CLASS);
+      panel.classList.remove(HISTORY_PANEL_FOCUS_CLASS);
+      clearHistoryPanelInlineGeometry(panel);
+    }
+    syncHistoryFullscreenButton(button, panel);
+    historyCurrentRedraw?.();
+  }
+
+  function toggleHistoryPanelFocusMode(panel) {
+    if (!panel) return;
+    const fullscreenButton = panel.querySelector('[data-tooltip-id="pocket.fullscreen"]');
+    if (historyPanelIsFocusMode(panel)) {
+      panel.classList.remove(HISTORY_PANEL_FOCUS_CLASS);
+      panel.classList.remove(HISTORY_PANEL_FULLSCREEN_CLASS);
+      applyHistoryPanelSize(panel);
+    } else {
+      if (!historyPanelIsFullscreen(panel)) rememberHistoryPanelGeometry(panel);
+      panel.classList.add(HISTORY_PANEL_FULLSCREEN_CLASS);
+      panel.classList.add(HISTORY_PANEL_FOCUS_CLASS);
+      clearHistoryPanelInlineGeometry(panel);
+    }
+    syncHistoryFullscreenButton(fullscreenButton, panel);
+    historyCurrentRedraw?.();
+  }
+
+  function historyFullscreenButton(panel) {
+    const button = el("button", {
+      class: "icon-button tooltip-trigger pocket-window-button prompt-history-window-button",
+      type: "button",
+      "aria-label": t("chat.fullscreen"),
+      "data-tooltip": t("chat.fullscreen"),
+      "data-tooltip-id": "pocket.fullscreen",
+      onclick: (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        toggleHistoryPanelFullscreen(panel, button);
+      }
+    }, svgIcon("maximize"));
+    return button;
+  }
+
+  function attachHistoryPanelResize(panel) {
+    if (!panel) return;
+    applyHistoryPanelSize(panel);
+    panel.append(
+      el("div", { class: "pocket-panel-resize-handle pocket-panel-resize-handle-left", dataset: { direction: "left" }, "aria-hidden": "true" }),
+      el("div", { class: "pocket-panel-resize-handle pocket-panel-resize-handle-right", dataset: { direction: "right" }, "aria-hidden": "true" }),
+      el("div", { class: "pocket-panel-resize-handle pocket-panel-resize-handle-top", dataset: { direction: "top" }, "aria-hidden": "true" }),
+      el("div", { class: "pocket-panel-resize-handle pocket-panel-resize-handle-bottom", dataset: { direction: "bottom" }, "aria-hidden": "true" })
+    );
+    let resize = null;
+    const minWidth = () => Math.min(HISTORY_PANEL_MIN_WIDTH, historyPanelMaxWidth());
+    const minHeight = () => Math.min(HISTORY_PANEL_MIN_HEIGHT, historyPanelMaxHeight());
+    for (const handle of panel.querySelectorAll(".pocket-panel-resize-handle")) {
+      handle.addEventListener("pointerdown", (event) => {
+        if (historyPanelIsFullscreen(panel)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const rect = panel.getBoundingClientRect();
+        panel.style.left = `${rect.left}px`;
+        panel.style.top = `${rect.top}px`;
+        panel.style.width = `${rect.width}px`;
+        panel.style.height = `${rect.height}px`;
+        panel.style.transform = "none";
+        resize = {
+          direction: handle.dataset.direction,
+          x: event.clientX,
+          y: event.clientY,
+          left: rect.left,
+          top: rect.top,
+          right: rect.right,
+          bottom: rect.bottom,
+          width: rect.width,
+          height: rect.height
+        };
+        panel.classList.add("pocket-panel-resizing");
+        setFramePointerBlockedForOverlay(true, "history");
+        handle.setPointerCapture?.(event.pointerId);
+      });
+    }
+    const finishResize = () => {
+      if (!resize) return;
+      rememberHistoryPanelGeometry(panel);
+      panel.classList.remove("pocket-panel-resizing");
+      setFramePointerBlockedForOverlay(false, "history");
+      resize = null;
+    };
+    panel.addEventListener("pointermove", (event) => {
+      if (!resize || historyPanelIsFullscreen(panel)) return;
+      const dx = event.clientX - resize.x;
+      const dy = event.clientY - resize.y;
+      if (resize.direction === "left") {
+        const width = Math.min(historyPanelMaxWidth(), Math.max(minWidth(), resize.width - dx));
+        panel.style.left = `${Math.max(8, resize.right - width)}px`;
+        panel.style.width = `${width}px`;
+      } else if (resize.direction === "right") {
+        panel.style.width = `${Math.min(historyPanelMaxWidth(), Math.max(minWidth(), resize.width + dx))}px`;
+      } else if (resize.direction === "top") {
+        const height = Math.min(historyPanelMaxHeight(), Math.max(minHeight(), resize.height - dy));
+        panel.style.top = `${Math.max(8, resize.bottom - height)}px`;
+        panel.style.height = `${height}px`;
+      } else if (resize.direction === "bottom") {
+        panel.style.height = `${Math.min(historyPanelMaxHeight(), Math.max(minHeight(), resize.height + dy))}px`;
+      }
+    });
+    panel.addEventListener("pointerup", finishResize);
+    panel.addEventListener("pointercancel", finishResize);
+  }
+
+  function loadHistoryEntry(entry) {
+    const loaded = loadPocketEntryInFrame(entry);
+    if (!loaded) toast(t("toast.pocketLoadFailed"), "error");
+    return loaded;
+  }
+
+  async function copyHistoryMessage(text) {
+    try {
+      await navigator.clipboard.writeText(String(text || ""));
+      toast(t("toast.pocketCopied"), "success");
+    } catch (error) {
+      console.warn("[ChatClub] Failed to copy History message", error);
+      toast(t("toast.copyFailed"), "error");
+    }
+  }
+
   function googleFaviconUrl(href = "") {
     try {
       const page = new URL(String(href || ""));
@@ -449,10 +770,15 @@ export function createHistoryController(ctx) {
   function conversationTurn(message = {}) {
     const role = message.role === "assistant" ? "assistant" : "user";
     const text = String(message.text || "");
-    if (!text.trim()) return null;
+    if (!text.trim() && role !== "assistant") return null;
+    const copyLabel = role === "assistant" ? t("pocket.copyAssistantMessage") : t("pocket.copyUserMessage");
     return el("section", { class: `pocket-message pocket-message-${role} prompt-history-turn prompt-history-turn-${role}` },
       el("div", { class: "pocket-message-head prompt-history-turn-head" },
-        el("span", { class: "pocket-message-label prompt-history-turn-label" }, t(role === "assistant" ? "common.assistant" : "common.user"))
+        el("span", { class: "pocket-message-label prompt-history-turn-label" }, t(role === "assistant" ? "common.assistant" : "common.user")),
+        compactIconButton(copyLabel, "copy", (event) => {
+          event.preventDefault();
+          copyHistoryMessage(text);
+        }, "pocket-message-copy", copyLabel, "", role === "assistant" ? "pocket.copyAssistantMessage" : "pocket.copyUserMessage")
       ),
       role === "assistant"
         ? el("div", { class: "pocket-message-body pocket-message-markdown summary-preview-text-markdown prompt-history-turn-text" }, renderMarkdown(text))
@@ -463,7 +789,7 @@ export function createHistoryController(ctx) {
   function historyEntryFavicon(entry = {}) {
     const chatUrl = String(entry.chatUrl || "");
     const resolved = historyLogoUrl(chatUrl, entry.logoUrl || "");
-    if (!resolved) return null;
+    if (!resolved) return svgIcon("history");
     return el("img", {
       class: "pocket-entry-favicon",
       src: resolved,
@@ -490,22 +816,38 @@ export function createHistoryController(ctx) {
 
   function historyEntryRow(entry, options = {}) {
     const assistantOnly = Boolean(options.assistantOnly);
-    const title = entry.title || entry.appName || "";
+    const title = entry.title || entry.appName || t("pocket.savedChat");
     return el("article", { class: `ui-card pocket-entry prompt-history-conversation${assistantOnly ? " pocket-entry-assistant-only" : ""}` },
-      title || entry.chatUrl
-        ? el("header", { class: "pocket-entry-header prompt-history-conversation-head" },
-          el("div", { class: "pocket-entry-titleblock" },
-            el("div", { class: "pocket-entry-title" },
-              historyEntryFavicon(entry),
-              title ? el("strong", {}, title) : null
-            ),
-            entry.chatUrl ? el("span", { class: "pocket-entry-url prompt-history-conversation-url", title: entry.chatUrl }, entry.chatUrl) : null
+      el("header", { class: "pocket-entry-header prompt-history-conversation-head" },
+        el("div", { class: "pocket-entry-titleblock" },
+          el("div", { class: "pocket-entry-title" },
+            historyEntryFavicon(entry),
+            el("strong", {}, title)
           ),
+          entry.chatUrl
+            ? el("button", {
+              class: "pocket-entry-url prompt-history-conversation-url",
+              type: "button",
+              title: entry.chatUrl,
+              onclick: (event) => {
+                event.preventDefault();
+                loadHistoryEntry(entry);
+              }
+            }, entry.chatUrl)
+            : null
+        ),
+        el("div", { class: "pocket-entry-meta" },
           entry.appName && entry.appName !== title
-            ? el("div", { class: "pocket-entry-meta" }, el("span", { class: "pocket-entry-source" }, entry.appName))
+            ? el("span", { class: "pocket-entry-source" }, entry.appName)
+            : null,
+          entry.chatUrl
+            ? compactIconButton(t("pocket.openChat"), "insert", (event) => {
+              event.preventDefault();
+              loadHistoryEntry(entry);
+            }, "pocket-entry-action", t("pocket.openChat"), "", "pocket.openChat")
             : null
         )
-        : null,
+      ),
       el("div", { class: "pocket-message-grid prompt-history-conversation-turns" },
         assistantOnly ? null : conversationTurn({ role: "user", text: entry.userMessage }),
         conversationTurn({ role: "assistant", text: entry.assistantMessage })
@@ -526,15 +868,6 @@ export function createHistoryController(ctx) {
         cluster.entries.map((entry) => historyEntryRow(entry, { assistantOnly: cluster.merged }))
       )
     );
-  }
-
-  function syncHistoryClusterWidths(host) {
-    const width = 460;
-    const gap = 12;
-    host?.querySelectorAll?.(".pocket-entry-cluster[data-entry-count]").forEach((cluster) => {
-      const count = Math.max(1, Number(cluster.dataset.entryCount) || 1);
-      cluster.style.setProperty("--pocket-cluster-row-width", `${Math.round((count * width) + ((count - 1) * gap))}px`);
-    });
   }
 
   function historyHeaderActions(item, redraw, close) {
@@ -562,10 +895,24 @@ export function createHistoryController(ctx) {
         onclick: () => clearHistory(redraw)
       }, svgIcon("trash"), el("span", {}, t("promptHistory.clear"))));
     }
-    return actions.length ? el("div", { class: "prompt-history-header-actions" }, ...actions) : null;
+    const toggleLabel = historyActionsExpanded ? t("pocket.hideActions") : t("pocket.showActions");
+    actions.push(el("button", {
+      class: "button button-secondary pocket-action-toggle tooltip-trigger",
+      type: "button",
+      "aria-label": toggleLabel,
+      "aria-expanded": historyActionsExpanded ? "true" : "false",
+      "data-tooltip": toggleLabel,
+      "data-tooltip-id": "pocket.actions",
+      onclick: (event) => {
+        event.preventDefault();
+        historyActionsExpanded = !historyActionsExpanded;
+        redraw();
+      }
+    }, svgIcon("menu"), el("span", {}, t("pocket.actions"))));
+    return el("div", { class: "prompt-history-header-actions" }, ...actions);
   }
 
-  function detail(item) {
+  function detail(item, host) {
     const images = Array.isArray(item.images) ? item.images : [];
     const imageLabel = promptHistoryImageCountLabel(images);
     const entries = promptHistoryConversationEntries(item, {
@@ -575,7 +922,11 @@ export function createHistoryController(ctx) {
     });
     const clusters = promptHistoryEntryClusters(entries);
     const loading = !entries.length && (livePreviewPending || !livePreviewTried);
+    const size = applyHistoryCardSize(host);
     return el("article", { class: "prompt-history-detail" },
+      historyActionsExpanded
+        ? el("section", { class: "pocket-active-header" }, historySizeControls(host, size))
+        : null,
       entries.length
         ? el("div", { class: "prompt-history-conversation-clusters" }, clusters.map((cluster) => historyEntryCluster(cluster)))
         : el("div", {
@@ -595,19 +946,27 @@ export function createHistoryController(ctx) {
     const searching = Boolean(String(query || "").trim());
     const visible = searching ? history.filter((item) => promptHistoryItemMatchesSearch(item, query)) : history;
     const activeItem = resolveActiveItem(visible);
+    const panel = host.closest?.(".modal.prompt-history-modal");
+    const focusMode = historyPanelIsFocusMode(panel);
+    const sidebarCollapsed = !focusMode && historySidebarCollapsed;
+    panel?.classList?.toggle("prompt-history-modal-sidebar-collapsed", sidebarCollapsed);
+    syncHistorySidebarTitlebar(panel, host, redraw);
+    syncHistoryFocusLeftbar(panel, host, redraw);
     syncHistoryModalHeader(activeItem, redraw, close);
     clear(host);
     host.append(
-      el("div", { class: "prompt-history-shell" },
-        sidebar(visible, activeItem, redraw),
+      el("div", {
+        class: `prompt-history-shell${focusMode ? " prompt-history-shell-focus" : ""}${sidebarCollapsed ? " prompt-history-shell-sidebar-collapsed" : ""}`
+      },
+        focusMode || sidebarCollapsed ? null : sidebar(visible, activeItem, redraw),
         el("main", { class: "prompt-history-main" },
           activeItem
-            ? detail(activeItem)
+            ? detail(activeItem, host)
             : el("div", { class: "ui-empty-state prompt-history-main-empty" }, t(searching ? "promptHistory.searchEmpty" : "promptHistory.noHistory"))
         )
       )
     );
-    syncHistoryClusterWidths(host);
+    applyHistoryCardSize(host);
   }
 
   function installHistoryPanelHeader(panel) {
@@ -616,15 +975,102 @@ export function createHistoryController(ctx) {
     const closeButton = header?.querySelector(".icon-button");
     if (!header || !title || !closeButton) return;
     if (header.querySelector(".prompt-history-header-sidebar")) return;
+    title.before(el("div", { class: "pocket-focus-leftbar prompt-history-focus-leftbar", hidden: true }));
     title.before(el("div", { class: "prompt-history-header-sidebar" },
       el("span", { class: "prompt-history-modal-title-icon", "aria-hidden": "true" }, svgIcon("history")),
-      el("strong", { class: "prompt-history-sidebar-chrome-title" }, t("promptHistory.title"))
+      el("div", { class: "pocket-sidebar-titlebar prompt-history-sidebar-titlebar" })
     ));
-    closeButton.classList.add("prompt-history-window-button");
+    closeButton.classList.add("prompt-history-window-button", "pocket-window-button");
     closeButton.replaceChildren(svgIcon("x"));
     header.append(
       el("div", { class: "prompt-history-header-titlebar" }),
-      el("div", { class: "prompt-history-window-actions" }, closeButton)
+      el("div", { class: "prompt-history-window-actions" }, historyFullscreenButton(panel), closeButton)
+    );
+  }
+
+  function historyFocusModeButton(host, redraw) {
+    const panel = host?.closest?.(".modal.prompt-history-modal");
+    const focusMode = historyPanelIsFocusMode(panel);
+    const label = focusMode ? t("pocket.exitFocusMode") : t("pocket.focusMode");
+    return el("button", {
+      class: "icon-button tooltip-trigger pocket-focus-mode-button",
+      type: "button",
+      "aria-label": label,
+      "aria-pressed": focusMode ? "true" : "false",
+      "data-tooltip": label,
+      "data-tooltip-id": "pocket.focusMode",
+      onclick: (event) => {
+        event.preventDefault();
+        toggleHistoryPanelFocusMode(host?.closest?.(".modal.prompt-history-modal"));
+        redraw();
+      }
+    }, svgIcon("focusMode"));
+  }
+
+  function historySidebarCollapseButton(redraw) {
+    const collapsed = historySidebarCollapsed;
+    const label = collapsed ? t("pocket.expandSidebar") : t("pocket.collapseSidebar");
+    return el("button", {
+      class: `icon-button tooltip-trigger pocket-sidebar-collapse-button ${collapsed ? "pocket-sidebar-collapse-button-expand" : "pocket-sidebar-collapse-button-collapse"}`,
+      type: "button",
+      "aria-label": label,
+      "aria-pressed": collapsed ? "true" : "false",
+      "data-tooltip": label,
+      "data-tooltip-id": "pocket.sidebar",
+      onclick: (event) => {
+        event.preventDefault();
+        historySidebarCollapsed = !historySidebarCollapsed;
+        redraw();
+      }
+    }, svgIcon(collapsed ? "sidebarExpand" : "sidebarCollapse"));
+  }
+
+  function syncHistorySidebarTitlebar(panel, host, redraw) {
+    const titlebar = panel?.querySelector(".prompt-history-sidebar-titlebar");
+    if (!titlebar) return;
+    clear(titlebar);
+    if (historyPanelIsFocusMode(panel)) {
+      titlebar.hidden = true;
+      titlebar.setAttribute("hidden", "");
+      return;
+    }
+    titlebar.hidden = false;
+    titlebar.removeAttribute("hidden");
+    titlebar.append(
+      el("strong", { class: "prompt-history-sidebar-chrome-title" }, t("promptHistory.title")),
+      el("div", { class: "pocket-sidebar-titlebar-actions" },
+        historySidebarCollapseButton(redraw),
+        historyFocusModeButton(host, redraw)
+      )
+    );
+  }
+
+  function syncHistoryFocusLeftbar(panel, host, redraw) {
+    const titlebar = panel?.querySelector(".prompt-history-focus-leftbar");
+    if (!titlebar) return;
+    clear(titlebar);
+    if (!historyPanelIsFocusMode(panel)) {
+      titlebar.hidden = true;
+      titlebar.setAttribute("hidden", "");
+      return;
+    }
+    titlebar.hidden = false;
+    titlebar.removeAttribute("hidden");
+    const label = t("pocket.exitFocusMode");
+    titlebar.append(
+      el("span", { class: "pocket-focus-pocket-icon prompt-history-modal-title-icon", "aria-hidden": "true" }, svgIcon("history")),
+      el("button", {
+        class: "icon-button tooltip-trigger pocket-exit-focus-button",
+        type: "button",
+        "aria-label": label,
+        "data-tooltip": label,
+        "data-tooltip-id": "pocket.focusMode",
+        onclick: (event) => {
+          event.preventDefault();
+          toggleHistoryPanelFocusMode(host?.closest?.(".modal.prompt-history-modal"));
+          redraw();
+        }
+      }, svgIcon("insert"))
     );
   }
 
@@ -653,6 +1099,7 @@ export function createHistoryController(ctx) {
       refreshOpenHistory({ retryLive: !pinned });
       return existing.closest(".modal-backdrop") || existing.parentElement;
     }
+    historyActionsExpanded = false;
     resetSearch();
     if (!pinned) {
       activeItemId = "";
@@ -673,6 +1120,7 @@ export function createHistoryController(ctx) {
     const panel = dialog.querySelector(".modal");
     panel?.classList.add("prompt-history-modal");
     installHistoryPanelHeader(panel);
+    attachHistoryPanelResize(panel);
     Promise.all([
       refreshPocketEntries().then(redraw).catch(() => {}),
       refreshConversationSources(redraw)

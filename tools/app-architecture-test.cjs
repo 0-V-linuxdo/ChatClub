@@ -164,7 +164,9 @@ function appDomain(file) {
       "insert", "remove", "clearHistory", "headerSearch", "renderHistory", "saveItemToPocket", "sidebar",
       "refreshConversationSources", "conversationPages", "conversationTurn", "historyEntryFavicon",
       "historyEntryRow", "historyEntryCluster", "historyLogoUrl", "googleFaviconUrl",
-      "applyWorkspacePreview", "syncHistoryModalHeader", "installHistoryPanelHeader", "historyHeaderActions"
+      "applyWorkspacePreview", "syncHistoryModalHeader", "installHistoryPanelHeader", "historyHeaderActions",
+      "attachHistoryPanelResize", "toggleHistoryPanelFullscreen", "toggleHistoryPanelFocusMode",
+      "historySizeControls", "loadHistoryEntry", "copyHistoryMessage"
     ]],
     ["app/share/controller.js", "createShareController", [
       "listShareFrames", "collectShareImage", "collectShareText", "runShare"

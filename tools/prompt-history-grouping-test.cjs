@@ -384,6 +384,16 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   assert.match(panelSource, /pocket-message-markdown summary-preview-text-markdown/);
   assert.match(panelSource, /www\.google\.com\/s2\/favicons/);
   assert.doesNotMatch(panelSource, /faviconPort\.appById/);
+  assert.match(panelSource, /pocket-message-copy/);
+  assert.match(panelSource, /copyHistoryMessage/);
+  assert.match(panelSource, /loadHistoryEntry/);
+  assert.match(panelSource, /el\("button", \{\s*class: "pocket-entry-url prompt-history-conversation-url"/);
+  assert.match(panelSource, /attachHistoryPanelResize/);
+  assert.match(panelSource, /toggleHistoryPanelFullscreen/);
+  assert.match(panelSource, /toggleHistoryPanelFocusMode/);
+  assert.match(panelSource, /pocket\.cardHeight/);
+  assert.match(panelSource, /prompt-history-modal-fullscreen/);
+  assert.match(panelSource, /prompt-history-modal-focus/);
   assert.match(panelSource, /promptHistoryConversationEntries/);
   assert.match(panelSource, /promptHistoryEntryClusters/);
   assert.doesNotMatch(panelSource, /pageFavicons\(\[page\]/);
@@ -399,6 +409,8 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
     /\.prompt-history-conversations\s*\{[\s\S]*?display:\s*flex/,
     "History conversation cards must sit in a Pocket-style horizontal row"
   );
+  assert.match(stylesheetSource, /prompt-history-modal-fullscreen/);
+  assert.match(stylesheetSource, /prompt-history-shell-focus/);
   assert.match(stylesheetSource, /--prompt-history-card-width:\s*460px/);
   assert.match(stylesheetSource, /\.prompt-history-header-titlebar\s*\{/);
   assert.match(
