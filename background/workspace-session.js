@@ -33,6 +33,7 @@ import {
   createRuntimeMarker,
   currentBindings,
   currentStableRecords,
+  detachedRememberedWorkspaceRecord,
   finiteTime,
   isChatClubWorkspaceTab,
   legacyMirrorRecord,
@@ -46,9 +47,11 @@ import {
   rearmRecoveryCandidate,
   recoveryCandidate,
   recoveryRecord,
+  rememberDisplacedWorkspaceWithoutRecovery,
   runtimeMarker,
   scheduleRecoveryLeaseAlarm,
   sessionStorageArea,
+  shouldDetachReplacedWorkspaceBinding,
   stableRecordForClaim,
   stableWorkspaceRecord,
   tabMetadata,
@@ -199,7 +202,11 @@ export function persistWorkspaceSessionSnapshot(api, request = {}, sender = {}, 
     ]);
     if (!Array.isArray(tabs)) throw new TypeError("Browser tabs query returned an invalid result");
     const live = liveTabState(api, tabs);
-    if (live.workspaceByTabId.get(meta.tabId) !== workspaceId) {
+    const liveWorkspaceId = live.workspaceByTabId.get(meta.tabId);
+    if (
+      liveWorkspaceId !== workspaceId
+      && !(live.workspaceByTabId.has(meta.tabId) && urlWorkspaceId === workspaceId)
+    ) {
       throw new Error("Workspace session persistence requires the exact live workspace tab");
     }
     const stableKey = workspaceSessionWorkspaceKey(workspaceId);
@@ -263,24 +270,21 @@ export function persistWorkspaceSessionSnapshot(api, request = {}, sender = {}, 
           marker = markerWithAtRiskWorkspaces(marker, [workspaceId]);
         }
       }
-      if (!adoptsProvisionalLegacy && previousStable?.owner.tabId === meta.tabId && !live.workspaceIds.has(currentBinding.workspaceId)) {
-        const detach = { at: now, kind: WORKSPACE_SESSION_DETACH_BROWSER, runtimeId: marker.runtimeId };
-        const displaced = {
-          ...previousStable,
-          storageVersion: WORKSPACE_SESSION_STORAGE_VERSION,
-          sourceStorageVersion: WORKSPACE_SESSION_STORAGE_VERSION,
-          updatedAt: Math.max(previousStable.updatedAt, now),
-          detach,
-          detachedAt: now,
-          detachedKind: detach.kind,
-          detachedRuntimeId: detach.runtimeId,
-          resolution: "",
-          closedBy: ""
-        };
+      if (!adoptsProvisionalLegacy && shouldDetachReplacedWorkspaceBinding({
+        previousStable,
+        currentBindingWorkspaceId: currentBinding.workspaceId,
+        tabId: meta.tabId,
+        live,
+        senderWorkspaceId: urlWorkspaceId,
+        nextWorkspaceId: workspaceId
+      })) {
+        const displaced = detachedRememberedWorkspaceRecord(previousStable, now, marker);
         updates[previousStableKey] = displaced;
-        recovery = createRecovery(marker, generation, now, "binding-replaced", recovery, [
-          recoveryCandidate(displaced, "stable", WORKSPACE_SESSION_CLEARED_BY_BROWSER)
-        ]);
+        if (!rememberDisplacedWorkspaceWithoutRecovery(previousStable)) {
+          recovery = createRecovery(marker, generation, now, "binding-replaced", recovery, [
+            recoveryCandidate(displaced, "stable", WORKSPACE_SESSION_CLEARED_BY_BROWSER)
+          ]);
+        }
       }
     }
     if (!adoptedLegacyWorkspaceId && recovery) {
@@ -860,24 +864,21 @@ export function claimWorkspaceSessionRecovery(api, request = {}, sender = {}, op
       }
       const previousStableKey = workspaceSessionWorkspaceKey(currentBinding.workspaceId);
       const previousStable = stableWorkspaceRecord(previousStableKey, stored?.[previousStableKey]);
-      if (previousStable?.owner.tabId === meta.tabId && !live.workspaceIds.has(currentBinding.workspaceId)) {
-        const detach = { at: now, kind: WORKSPACE_SESSION_DETACH_BROWSER, runtimeId: marker?.runtimeId || "" };
-        const displaced = {
-          ...previousStable,
-          storageVersion: WORKSPACE_SESSION_STORAGE_VERSION,
-          sourceStorageVersion: WORKSPACE_SESSION_STORAGE_VERSION,
-          updatedAt: Math.max(previousStable.updatedAt, now),
-          detach,
-          detachedAt: now,
-          detachedKind: detach.kind,
-          detachedRuntimeId: detach.runtimeId,
-          resolution: "",
-          closedBy: ""
-        };
+      if (previousStable?.owner.tabId === meta.tabId && shouldDetachReplacedWorkspaceBinding({
+        previousStable,
+        currentBindingWorkspaceId: currentBinding.workspaceId,
+        tabId: meta.tabId,
+        live,
+        senderWorkspaceId: urlWorkspaceId,
+        nextWorkspaceId: workspaceId
+      })) {
+        const displaced = detachedRememberedWorkspaceRecord(previousStable, now, marker);
         displacedUpdates[previousStableKey] = displaced;
-        recovery = createRecovery(marker, generation, now, "binding-replaced", recovery, [
-          recoveryCandidate(displaced, "stable", WORKSPACE_SESSION_CLEARED_BY_BROWSER)
-        ]);
+        if (!rememberDisplacedWorkspaceWithoutRecovery(previousStable)) {
+          recovery = createRecovery(marker, generation, now, "binding-replaced", recovery, [
+            recoveryCandidate(displaced, "stable", WORKSPACE_SESSION_CLEARED_BY_BROWSER)
+          ]);
+        }
       }
     }
     if (previousOwnerTabId !== null && previousOwnerTabId !== meta.tabId) {

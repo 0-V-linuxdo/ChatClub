@@ -1,6 +1,11 @@
 import { captureWorkspaceSnapshotV1, restoreWorkspaceSnapshotV1 } from "./session-state.js";
 import { validateControllerContract } from "../controller-contract.js";
 import { restorableChatFrameHref } from "../../shared/chat-frame-config.js";
+import { createWorkspaceSessionId } from "../../shared/workspace-session.js";
+import {
+  conversationHrefFromLocation,
+  workspaceSnapshotHasConversation
+} from "../../shared/workspace-tab-memory.js";
 
 export function createWorkspaceSessionController(dependencies = {}) {
   const { state, services, registry, layout } = validateControllerContract(dependencies, "Workspace session controller", {
@@ -25,8 +30,14 @@ export function createWorkspaceSessionController(dependencies = {}) {
   }
   const { persistentLayoutPresets, validChatAppIds } = layout;
   const { frameForInstance } = registry;
-  if (typeof workspaceSessionStore?.save !== "function" || typeof workspaceSessionStore?.generation !== "function") {
-    throw new TypeError("Workspace session controller requires workspaceSessionStore.save/generation.");
+  if (
+    typeof workspaceSessionStore?.save !== "function"
+    || typeof workspaceSessionStore?.generation !== "function"
+    || typeof workspaceSessionStore?.flush !== "function"
+    || typeof workspaceSessionStore?.adopt !== "function"
+    || typeof workspaceSessionStore?.workspaceId !== "function"
+  ) {
+    throw new TypeError("Workspace session controller requires workspaceSessionStore.save/generation/flush/adopt/workspaceId.");
   }
 
   function currentHrefForWorkspaceTab(chat, framesByInstanceId = null) {
@@ -93,10 +104,34 @@ export function createWorkspaceSessionController(dependencies = {}) {
     return true;
   }
 
+  function leavingConversationHrefs(hrefs) {
+    return (Array.isArray(hrefs) ? hrefs : []).filter((href) => conversationHrefFromLocation(href));
+  }
+
+  async function preserveCurrentWorkspaceForNewChat(hrefs = []) {
+    const fromWorkspaceId = workspaceSessionStore.workspaceId() || "";
+    try {
+      if (!leavingConversationHrefs(hrefs).length) return { preserved: false, workspaceId: fromWorkspaceId };
+      const snapshot = captureWorkspaceSession();
+      if (!workspaceSnapshotHasConversation(snapshot)) return { preserved: false, workspaceId: fromWorkspaceId };
+      if (!fromWorkspaceId) return { preserved: false, workspaceId: "" };
+      await persistWorkspaceSession();
+      if (!await workspaceSessionStore.flush()) return { preserved: false, workspaceId: fromWorkspaceId };
+      const workspaceId = workspaceSessionStore.adopt(createWorkspaceSessionId());
+      if (!workspaceId || workspaceId === fromWorkspaceId) return { preserved: false, workspaceId: fromWorkspaceId };
+      state.topicTitle = "";
+      state.topicTitleCustom = false;
+      return { preserved: true, fromWorkspaceId, workspaceId };
+    } catch {
+      return { preserved: false, workspaceId: fromWorkspaceId };
+    }
+  }
+
   return Object.freeze({
     captureWorkspaceSession,
     rememberWorkspaceSession,
     persistWorkspaceSession,
+    preserveCurrentWorkspaceForNewChat,
     restoreWorkspaceSession
   });
 }

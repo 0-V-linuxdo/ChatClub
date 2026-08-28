@@ -2480,10 +2480,10 @@ function deferredPromise() {
     );
     assert.equal(claimed.workspaceId, workspaceB);
     assert.equal(store.local.values[workspaceSessionWorkspaceKey(workspaceA)].detachedKind, WORKSPACE_SESSION_DETACH_BROWSER);
-    assert.deepEqual(
-      store.local.values[WORKSPACE_SESSION_RECOVERY_KEY].candidates.map((item) => item.workspaceId),
-      [workspaceA],
-      "reusing a tab binding for B must preserve A as browser-cleared recovery work"
+    assert.equal(
+      WORKSPACE_SESSION_RECOVERY_KEY in store.local.values,
+      false,
+      "reusing a tab binding for B must keep A's conversation as a remembered tab instead of crash recovery"
     );
     const ownershipWrite = store.local.calls.set.findLast((update) => (
       update[workspaceSessionBindingKey(pageTab.id)]?.workspaceId === workspaceB
@@ -2493,9 +2493,10 @@ function deferredPromise() {
       ownershipWrite[workspaceSessionWorkspaceKey(workspaceA)],
       "A's detach record must share the ownership-switch transaction"
     );
-    assert.ok(
-      ownershipWrite[WORKSPACE_SESSION_RECOVERY_KEY],
-      "A's recovery candidate must share the ownership-switch transaction"
+    assert.equal(
+      Object.hasOwn(ownershipWrite, WORKSPACE_SESSION_RECOVERY_KEY),
+      false,
+      "a displaced conversation workspace must not enqueue browser-cleared recovery"
     );
     assert.deepEqual(
       new Set(store.session.values[WORKSPACE_SESSION_RUNTIME_MARKER_KEY].atRiskWorkspaceIds),

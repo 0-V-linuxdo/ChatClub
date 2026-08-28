@@ -53,7 +53,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
     svgIcon
   } = services;
   requireMethods(registry, "registry", ["frameApp", "frameForInstance"]);
-  requireMethods(session, "session", ["rememberWorkspaceSession"]);
+  requireMethods(session, "session", ["preserveCurrentWorkspaceForNewChat", "rememberWorkspaceSession"]);
   requireMethods(layout, "layout", ["persistLayout", "shortcutLabel"]);
   requireMethods(view, "view", [
     "closePopovers",
@@ -65,7 +65,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
     "syncTabGroupHeaderControls"
   ]);
   const { frameApp, frameForInstance } = registry;
-  const { rememberWorkspaceSession } = session;
+  const { preserveCurrentWorkspaceForNewChat, rememberWorkspaceSession } = session;
   const { persistLayout, shortcutLabel } = layout;
   const {
     closePopovers,
@@ -968,6 +968,9 @@ export function createWorkspaceFrameController(dependencies = {}) {
     const chat = activeChatForGroup(group);
     const iframe = activeIframe(chat);
     if (!chat || !iframe) return false;
+    await preserveCurrentWorkspaceForNewChat([
+      iframe.dataset.currentHref || iframe.src || iframe.getAttribute?.("src") || ""
+    ]);
     return startNewChatInFrame(iframe, chat);
   }
 

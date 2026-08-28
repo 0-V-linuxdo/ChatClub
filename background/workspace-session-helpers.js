@@ -1,3 +1,4 @@
+import { workspaceSnapshotHasConversation } from "../shared/workspace-tab-memory.js";
 import {
   WORKSPACE_SESSION_BINDING_PREFIX,
   WORKSPACE_SESSION_CLEARED_BY_BROWSER,
@@ -126,6 +127,50 @@ export function liveTabState(api, tabs = []) {
     tabsByWorkspaceId.set(workspaceId, owners);
   }
   return { records, workspaceIds, workspaceByTabId, tabsByWorkspaceId };
+}
+
+export function shouldDetachReplacedWorkspaceBinding({
+  previousStable,
+  currentBindingWorkspaceId,
+  tabId,
+  live,
+  senderWorkspaceId,
+  nextWorkspaceId
+} = {}) {
+  if (previousStable?.owner?.tabId !== tabId) return false;
+  const oldId = currentBindingWorkspaceId;
+  if (!oldId || oldId === nextWorkspaceId) return false;
+  const otherLiveOwners = (live?.tabsByWorkspaceId?.get(oldId) || [])
+    .some((item) => positiveTabId(item?.id) !== tabId);
+  if (otherLiveOwners) return false;
+  const liveIdOnThisTab = live?.workspaceByTabId?.get(tabId);
+  if (liveIdOnThisTab !== oldId) return true;
+  return Boolean(senderWorkspaceId && senderWorkspaceId === nextWorkspaceId);
+}
+
+export function detachedRememberedWorkspaceRecord(record, now, marker) {
+  if (!record) return null;
+  const detach = {
+    at: now,
+    kind: WORKSPACE_SESSION_DETACH_BROWSER,
+    runtimeId: String(marker?.runtimeId || "")
+  };
+  return {
+    ...record,
+    storageVersion: WORKSPACE_SESSION_STORAGE_VERSION,
+    sourceStorageVersion: WORKSPACE_SESSION_STORAGE_VERSION,
+    updatedAt: Math.max(Number(record.updatedAt) || 0, now),
+    detach,
+    detachedAt: now,
+    detachedKind: detach.kind,
+    detachedRuntimeId: detach.runtimeId,
+    resolution: "",
+    closedBy: ""
+  };
+}
+
+export function rememberDisplacedWorkspaceWithoutRecovery(record) {
+  return workspaceSnapshotHasConversation(record?.snapshot);
 }
 
 function chatClubPageUrl(api) {

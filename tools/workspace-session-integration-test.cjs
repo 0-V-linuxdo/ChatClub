@@ -105,6 +105,19 @@ assert.match(session, /currentHrefForTab: \(chat\) => currentHrefForWorkspaceTab
 assert.match(session, /normalizeCurrentHref: \(appId, href\) => restorableChatFrameHref\(appById\(appId\), href\)/);
 assert.doesNotMatch(session, /validPresetIds/, "workspace-tab restore must apply conversation URLs even if a layout preset was removed");
 assert.match(session, /workspaceSessionStore\.save\(snapshot\)/);
+assert.match(session, /async function preserveCurrentWorkspaceForNewChat\(/);
+assert.match(session, /workspaceSessionStore\.adopt\(createWorkspaceSessionId\(\)\)/);
+assert.match(session, /state\.topicTitleCustom = false/);
+assert.match(
+  frame,
+  /await preserveCurrentWorkspaceForNewChat\(\[\s*iframe\.dataset\.currentHref/,
+  "starting a new chat in the active tab must freeze the current workspace before navigation"
+);
+assert.match(
+  runtime,
+  /await workspaceController\.preserveCurrentWorkspaceForNewChat\(\s*frames\.map\(/,
+  "new chat on every frame must freeze the current workspace once"
+);
 assert.match(
   frame,
   /state\.activeTabs\[group\.id\] = instanceId;\s*rememberWorkspaceSession\(\);/,
