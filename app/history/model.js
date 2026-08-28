@@ -115,6 +115,7 @@ function pocketFramesMatchingPromptHistory(item, pocketEntries = []) {
     appName: entry?.appName || "",
     appId: entry?.appId || "",
     instanceId: entry?.instanceId || "",
+    logoUrl: entry?.logoUrl || "",
     messages: [
       { role: "user", text: entry?.userMessage },
       { role: "assistant", text: entry?.assistantMessage }
@@ -132,6 +133,7 @@ function frameToPocketPage(frame = {}) {
     name: frame.appName,
     appId: frame.appId,
     instanceId: frame.instanceId,
+    logoUrl: frame.logoUrl,
     messages: frame.messages
   };
 }
@@ -158,4 +160,78 @@ export function promptHistoryConversationPages(item, sources = {}) {
 
 export function promptHistoryPocketPages(item, sources = {}) {
   return promptHistoryConversationPages(item, sources).filter((page) => page.href);
+}
+
+function pageToHistoryEntries(page = {}) {
+  const messages = Array.isArray(page.messages) ? page.messages : [];
+  const meta = {
+    title: page.title || page.pageTitle || page.siteName || page.name || "",
+    appName: page.siteName || page.name || "",
+    appId: page.appId || "",
+    chatUrl: page.href || page.url || "",
+    logoUrl: page.logoUrl || "",
+    instanceId: page.instanceId || ""
+  };
+  const pairs = pocketPairsFromMessages(messages);
+  if (pairs.length) {
+    return pairs.map((pair) => ({
+      ...meta,
+      userMessage: pair.userMessage,
+      assistantMessage: pair.assistantMessage
+    }));
+  }
+  const user = messages.find((message) => message.role === "user");
+  const assistant = messages.find((message) => message.role === "assistant");
+  if (!user && !assistant) return [];
+  return [{
+    ...meta,
+    userMessage: user?.text || "",
+    assistantMessage: assistant?.text || ""
+  }];
+}
+
+export function promptHistoryConversationEntries(item, sources = {}) {
+  return promptHistoryConversationPages(item, sources).flatMap(pageToHistoryEntries);
+}
+
+export function promptHistoryEntryClusters(entries = []) {
+  const list = Array.isArray(entries) ? entries : [];
+  const entriesByMessage = new Map();
+  for (const entry of list) {
+    const messageKey = promptHistoryMessageKey(entry?.userMessage);
+    if (!messageKey) continue;
+    let group = entriesByMessage.get(messageKey);
+    if (!group) {
+      group = [];
+      entriesByMessage.set(messageKey, group);
+    }
+    group.push(entry);
+  }
+  const clusters = [];
+  const emitted = new Set();
+  let loose = [];
+  const flush = () => {
+    if (!loose.length) return;
+    clusters.push({ merged: false, entries: loose });
+    loose = [];
+  };
+  for (const entry of list) {
+    const messageKey = promptHistoryMessageKey(entry?.userMessage);
+    const group = messageKey ? entriesByMessage.get(messageKey) || [] : [];
+    if (messageKey && group.length > 1) {
+      if (emitted.has(messageKey)) continue;
+      flush();
+      emitted.add(messageKey);
+      clusters.push({
+        key: messageKey,
+        userMessage: group[0]?.userMessage || entry.userMessage,
+        entries: group,
+        merged: true
+      });
+      continue;
+    }
+    loose.push(entry);
+  }
+  flush();
+  return clusters;
 }

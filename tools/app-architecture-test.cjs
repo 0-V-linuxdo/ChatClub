@@ -161,7 +161,8 @@ function appDomain(file) {
     ]],
     ["app/history/controller.js", "createHistoryController", [
       "insert", "remove", "clearHistory", "headerSearch", "renderHistory", "saveItemToPocket", "sidebar",
-      "refreshConversationSources", "conversationPages", "conversationTurn", "conversationFrame",
+      "refreshConversationSources", "conversationPages", "conversationTurn", "historyEntryFavicon",
+      "historyEntryRow", "historyEntryCluster",
       "applyWorkspacePreview", "syncHistoryModalHeader", "installHistoryPanelHeader", "historyHeaderActions"
     ]],
     ["app/share/controller.js", "createShareController", [

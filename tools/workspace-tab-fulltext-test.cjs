@@ -40,12 +40,13 @@ const root = path.resolve(__dirname, "..");
       siteName: "ChatGPT",
       title: "Research",
       href: "https://chatgpt.com/c/1",
-      page: { messages, href: "https://chatgpt.com/c/1", title: "Research" }
+      page: { messages, href: "https://chatgpt.com/c/1", title: "Research", logoUrl: "https://chatgpt.com/favicon.ico" }
     },
     { status: "failed", page: { messages: [{ role: "user", text: "skip" }] } }
   ]);
   assert.equal(frames.length, 1);
   assert.equal(frames[0].messages.length, 3);
+  assert.equal(frames[0].logoUrl, "https://chatgpt.com/favicon.ico");
 
   let store = upsertWorkspaceTabFullText({}, {
     workspaceId,

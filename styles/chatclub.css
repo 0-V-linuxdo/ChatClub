@@ -5719,6 +5719,16 @@ body.settings-tab-context-menu-dragging iframe {
   color: var(--muted);
 }
 
+.prompt-history-conversation-clusters {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-auto-rows: minmax(0, 1fr);
+  gap: 12px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
 .prompt-history-conversations {
   min-width: 0;
   min-height: 0;

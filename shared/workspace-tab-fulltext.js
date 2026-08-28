@@ -134,6 +134,7 @@ export function framesFromSummaryPreviewItems(items = []) {
       href: textValue(page.href || item.href),
       title: textValue(page.title || item.title || page.pageTitle),
       appName: textValue(item.siteName || item.name || page.siteName || page.name),
+      logoUrl: textValue(page.logoUrl || item.logoUrl),
       messages,
       order: Number.isInteger(item.order) ? item.order : order
     }];
@@ -158,6 +159,7 @@ function normalizeFrame(frame = {}, order = 0) {
     href: textValue(frame.href),
     title: textValue(frame.title),
     appName: textValue(frame.appName),
+    logoUrl: textValue(frame.logoUrl),
     messages,
     order: Number.isInteger(frame.order) ? frame.order : order
   };
@@ -262,6 +264,7 @@ function frameToPocketPage(frame = {}) {
     name: frame.appName,
     appId: frame.appId,
     instanceId: frame.instanceId,
+    logoUrl: frame.logoUrl,
     messages: frame.messages
   };
 }

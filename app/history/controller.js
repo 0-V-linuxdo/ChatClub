@@ -19,6 +19,8 @@ import {
   promptHistoryItemMatchesSearch,
   promptHistoryMessageKey,
   promptHistoryConversationPages,
+  promptHistoryConversationEntries,
+  promptHistoryEntryClusters,
   promptHistoryPocketPages,
   promptHistoryPocketSaved,
   promptHistoryPreview,
@@ -426,34 +428,95 @@ export function createHistoryController(ctx) {
 
   function conversationTurn(message = {}) {
     const role = message.role === "assistant" ? "assistant" : "user";
+    const text = String(message.text || "");
+    if (!text.trim()) return null;
     return el("section", { class: `pocket-message pocket-message-${role} prompt-history-turn prompt-history-turn-${role}` },
       el("div", { class: "pocket-message-head prompt-history-turn-head" },
         el("span", { class: "pocket-message-label prompt-history-turn-label" }, t(role === "assistant" ? "common.assistant" : "common.user"))
       ),
-      el("p", { class: "pocket-message-body pocket-message-plain prompt-history-turn-text" }, message.text || "")
+      el("p", { class: "pocket-message-body pocket-message-plain prompt-history-turn-text" }, text)
     );
   }
 
-  function conversationFrame(page = {}) {
-    const messages = Array.isArray(page.messages) ? page.messages : [];
-    const label = page.siteName || page.name || page.title || "";
-    const assistantOnly = messages.length === 1 && messages[0]?.role === "assistant";
+  function historyEntryFavicon(entry = {}) {
+    const chatUrl = String(entry.chatUrl || "");
+    const stored = String(entry.logoUrl || "").trim();
+    const resolved = stored
+      || (typeof faviconPort.effective === "function" ? String(faviconPort.effective(chatUrl, stored) || "").trim() : "");
+    if (!resolved) return null;
+    return el("img", {
+      class: "pocket-entry-favicon",
+      src: resolved,
+      alt: "",
+      loading: "lazy",
+      decoding: "async",
+      referrerpolicy: "no-referrer",
+      onerror: (event) => {
+        const image = event.currentTarget;
+        if (image.dataset.fallback === "1") {
+          image.hidden = true;
+          return;
+        }
+        image.dataset.fallback = "1";
+        const fallbackUrl = typeof faviconPort.effective === "function"
+          ? String(faviconPort.effective(chatUrl, "") || "").trim()
+          : "";
+        if (fallbackUrl && image.src !== fallbackUrl) {
+          image.src = fallbackUrl;
+          return;
+        }
+        image.hidden = true;
+      }
+    });
+  }
+
+  function historyEntryRow(entry, options = {}) {
+    const assistantOnly = Boolean(options.assistantOnly);
+    const title = entry.title || entry.appName || "";
     return el("article", { class: `ui-card pocket-entry prompt-history-conversation${assistantOnly ? " pocket-entry-assistant-only" : ""}` },
-      label || page.href
+      title || entry.chatUrl
         ? el("header", { class: "pocket-entry-header prompt-history-conversation-head" },
           el("div", { class: "pocket-entry-titleblock" },
             el("div", { class: "pocket-entry-title" },
-              pageFavicons([page], "prompt-history-conversation-favicons"),
-              label ? el("strong", {}, label) : null
+              historyEntryFavicon(entry),
+              title ? el("strong", {}, title) : null
             ),
-            page.href ? el("span", { class: "pocket-entry-url prompt-history-conversation-url", title: page.href }, page.href) : null
-          )
+            entry.chatUrl ? el("span", { class: "pocket-entry-url prompt-history-conversation-url", title: entry.chatUrl }, entry.chatUrl) : null
+          ),
+          entry.appName && entry.appName !== title
+            ? el("div", { class: "pocket-entry-meta" }, el("span", { class: "pocket-entry-source" }, entry.appName))
+            : null
         )
         : null,
       el("div", { class: "pocket-message-grid prompt-history-conversation-turns" },
-        messages.map((message) => conversationTurn(message))
+        assistantOnly ? null : conversationTurn({ role: "user", text: entry.userMessage }),
+        conversationTurn({ role: "assistant", text: entry.assistantMessage })
       )
     );
+  }
+
+  function historyEntryCluster(cluster) {
+    const entryCount = Math.max(1, cluster.entries.length);
+    return el("section", {
+      class: `pocket-entry-cluster prompt-history-conversation-cluster${cluster.merged ? " pocket-entry-cluster-merged" : ""}`,
+      dataset: { entryCount }
+    },
+      cluster.merged
+        ? el("div", { class: "pocket-shared-user-message" }, conversationTurn({ role: "user", text: cluster.userMessage }))
+        : null,
+      el("div", { class: "pocket-batch-row prompt-history-conversations" },
+        cluster.entries.map((entry) => historyEntryRow(entry, { assistantOnly: cluster.merged }))
+      )
+    );
+  }
+
+  function syncHistoryClusterWidths(host) {
+    const width = 460;
+    const gap = 12;
+    host?.querySelectorAll?.(".pocket-entry-cluster[data-entry-count]").forEach((cluster) => {
+      const count = Math.max(1, Number(cluster.dataset.entryCount) || 1);
+      cluster.style.setProperty("--pocket-cluster-row-width", `${Math.round((count * width) + ((count - 1) * gap))}px`);
+    });
   }
 
   function historyHeaderActions(item, redraw, close) {
@@ -487,11 +550,16 @@ export function createHistoryController(ctx) {
   function detail(item) {
     const images = Array.isArray(item.images) ? item.images : [];
     const imageLabel = promptHistoryImageCountLabel(images);
-    const pages = conversationPages(item);
-    const loading = !pages.length && (livePreviewPending || !livePreviewTried);
+    const entries = promptHistoryConversationEntries(item, {
+      store: fullTextStore,
+      previewItems: livePreviewItems,
+      pocketEntries
+    });
+    const clusters = promptHistoryEntryClusters(entries);
+    const loading = !entries.length && (livePreviewPending || !livePreviewTried);
     return el("article", { class: "prompt-history-detail" },
-      pages.length
-        ? el("div", { class: "prompt-history-conversations" }, pages.map((page) => conversationFrame(page)))
+      entries.length
+        ? el("div", { class: "prompt-history-conversation-clusters" }, clusters.map((cluster) => historyEntryCluster(cluster)))
         : el("div", {
           class: `prompt-history-detail-fallback${loading ? " is-loading" : ""}`,
           "aria-busy": loading ? "true" : null
@@ -521,6 +589,7 @@ export function createHistoryController(ctx) {
         )
       )
     );
+    syncHistoryClusterWidths(host);
   }
 
   function installHistoryPanelHeader(panel) {

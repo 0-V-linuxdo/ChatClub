@@ -22,6 +22,8 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
     promptHistoryMatchesSearch,
     promptHistoryMessageKey,
     promptHistoryConversationPages,
+    promptHistoryConversationEntries,
+    promptHistoryEntryClusters,
     promptHistoryPocketPages,
     promptHistoryPocketSaved
   } = await import(moduleUrl("app/history/model.js"));
@@ -243,6 +245,58 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   assert.equal(assistantPages[0].messages[0].text, "Please help with this homework.");
   assert.equal(assistantPages[0].messages[1].text, "Sure. Explain closures: a function that remembers its scope.");
 
+  const liveLogoPages = promptHistoryConversationPages({ text: "介绍一下： the rational male 系列" }, {
+    previewItems: [{
+      status: "ok",
+      siteName: "Grok",
+      href: "https://grok.com/c/1",
+      logoUrl: "https://grok.com/favicon.ico",
+      page: {
+        href: "https://grok.com/c/1",
+        title: "Grok",
+        logoUrl: "https://grok.com/favicon.ico",
+        messages: [{ role: "user", text: "介绍一下： the rational male 系列" }]
+      }
+    }]
+  });
+  assert.equal(liveLogoPages[0].logoUrl, "https://grok.com/favicon.ico", "History pages must keep the live site favicon");
+
+  const mergedClusters = promptHistoryEntryClusters(promptHistoryConversationEntries(
+    { text: "介绍一下： the rational male 系列" },
+    {
+      previewItems: [
+        {
+          status: "ok",
+          siteName: "Grok",
+          href: "https://grok.com/c/1",
+          logoUrl: "https://grok.com/favicon.ico",
+          page: {
+            href: "https://grok.com/c/1",
+            siteName: "Grok",
+            logoUrl: "https://grok.com/favicon.ico",
+            messages: [{ role: "user", text: "介绍一下： the rational male 系列" }]
+          }
+        },
+        {
+          status: "ok",
+          siteName: "Notion",
+          href: "https://app.notion.com/chat/2",
+          logoUrl: "https://www.notion.so/images/favicon.ico",
+          page: {
+            href: "https://app.notion.com/chat/2",
+            siteName: "Notion",
+            logoUrl: "https://www.notion.so/images/favicon.ico",
+            messages: [{ role: "user", text: "介绍一下： the rational male 系列" }]
+          }
+        }
+      ]
+    }
+  ));
+  assert.equal(mergedClusters.length, 1, "History must merge the same USER prompt across site cards");
+  assert.equal(mergedClusters[0].merged, true);
+  assert.equal(mergedClusters[0].entries.length, 2);
+  assert.equal(mergedClusters[0].userMessage, "介绍一下： the rational male 系列");
+
   assert.match(historySource, /class: "shortcut-search prompt-history-search"/);
   assert.match(historySource, /class: "shortcut-search-input prompt-history-search-input"/);
   assert.match(historySource, /headerSearch, pane, resetAfterImport/);
@@ -291,10 +345,16 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   assert.match(panelSource, /collectLivePreviewItems\(\)/);
   assert.match(panelSource, /refreshConversationSources\(redraw\)/);
   assert.match(panelSource, /refreshOpenHistory\(\{ retryLive: true \}\)/);
-  assert.match(panelSource, /class: "prompt-history-conversations"/);
+  assert.match(panelSource, /class: "pocket-batch-row prompt-history-conversations"/);
   assert.match(panelSource, /class: `pocket-message pocket-message-\$\{role\} prompt-history-turn prompt-history-turn-\$\{role\}`/);
   assert.match(panelSource, /promptHistoryPreview\(activeItem\?\.text, 72\)/);
   assert.match(panelSource, /ui-card pocket-entry prompt-history-conversation/);
+  assert.match(panelSource, /pocket-shared-user-message/);
+  assert.match(panelSource, /pocket-entry-cluster-merged/);
+  assert.match(panelSource, /class: "pocket-entry-favicon"/);
+  assert.match(panelSource, /promptHistoryConversationEntries/);
+  assert.match(panelSource, /promptHistoryEntryClusters/);
+  assert.doesNotMatch(panelSource, /pageFavicons\(\[page\]/);
   assert.match(panelSource, /conversationPages\(item\)/);
   assert.match(panelSource, /promptHistory\.conversationLoading/);
   assert.match(panelSource, /promptHistory\.conversationEmpty/);
