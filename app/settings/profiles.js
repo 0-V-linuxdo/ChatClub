@@ -248,6 +248,7 @@ export function createProfilesSettingsSection(ctx) {
       confirmLabel: t("common.delete"),
       cancelLabel: t("common.cancel"),
       closeLabel: t("common.close"),
+      tone: "neutral",
       onConfirm: () => saveProfiles(
         state.options.apiProfiles.filter((item) => item.id !== profile.id),
         redraw,

@@ -140,6 +140,23 @@ assert.match(
   css,
   /\.modal\.modal-alertdialog \.modal-footer \.button-danger \{[^}]*background:\s*var\(--danger\);[^}]*color:\s*var\(--on-primary\);/s
 );
+assert.match(
+  css,
+  /\.modal\.modal-alertdialog \.modal-footer \.button-danger:hover:not\(:disabled\),[\s\S]*?background:\s*var\(--danger-hover\);/s
+);
+assert.match(
+  css,
+  /\.modal\.modal-alertdialog \.modal-footer \.button-danger:active:not\(:disabled\) \{[^}]*background:\s*var\(--danger-active\);/s
+);
+assert.match(css, /\.overlay-confirm-ack-box \{[^}]*min-height:\s*var\(--target-min\);/s);
+assert.match(css, /\.modal\.modal-alertdialog \.modal-footer \.button\.is-applying::before \{/);
+assert.match(css, /\.modal\.modal-alertdialog\[data-overlay-tone="danger"\] \.overlay-window-button:hover,/);
+assert.match(dom, /function confirmationIcon/);
+assert.match(dom, /createSvgIcon\(tone === "warning" \? "info" : "alert"\)/);
+assert.match(dom, /acknowledge = ""/);
+assert.match(dom, /busyLabel = ""/);
+assert.match(agents, /acknowledge/);
+assert.match(agents, /`--danger-hover`/);
 assert.match(agents, /Confirmation surfaces consume `--overlay-width-compact`/);
 assert.match(agents, /`--on-primary` label/);
 assert.match(css, /\.summary-panel \{[^}]*max-width:\s*calc\(100vw - var\(--overlay-gutter-panel\)\);/s);
@@ -245,7 +262,6 @@ assert.match(dom, /item\.addEventListener\("mouseenter"/);
 assert.match(dom, /export function bindLinearMenuKeyboard/);
 assert.match(dom, /export function setToastStay/);
 assert.match(dom, /export function toastDurationMs/);
-assert.match(dom, /createSvgIcon\("alert"\)/);
 assert.match(css, /\.frame-submit-toast\.show \{[^}]*pointer-events:\s*auto;/s);
 assert.doesNotMatch(css, /\.pocket-panel-resize-handle/);
 assert.match(read("ui/components.js"), /role: "menuitem"/);

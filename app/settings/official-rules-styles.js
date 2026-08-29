@@ -560,11 +560,6 @@ const OFFICIAL_RULES_SETTINGS_CSS = `
   background: color-mix(in srgb, var(--success) 11%, var(--panel));
 }
 
-.official-rules-confirmation {
-  display: grid;
-  gap: var(--space-3);
-}
-
 .official-rules-confirmation code {
   overflow-wrap: anywhere;
   user-select: all;

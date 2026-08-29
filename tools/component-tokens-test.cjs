@@ -55,7 +55,9 @@ const tokens = {
   "--ui-radius-nested": "6px",
   "--ui-radius-pill": "999px",
   "--ui-accessory-height": "28px",
-  "--toast-text": "var(--text)"
+  "--toast-text": "var(--text)",
+  "--danger-hover": "color-mix(in srgb, var(--danger) 78%, black)",
+  "--danger-active": "color-mix(in srgb, var(--danger) 64%, black)"
 };
 
 for (const [name, value] of Object.entries(tokens)) {
@@ -217,6 +219,7 @@ assert.match(css, /\.popover-menu \.button \{[^}]*border-radius:\s*var\(--ui-rad
 assert.doesNotMatch(css, /(?<!-)font-size:\s*15px/, "15px titles must consume --font-size-md");
 assert.match(css, /\.settings-block-header h4 \{[^}]*font-size:\s*var\(--font-size-md\);/s);
 assert.match(css, /\.settings-check \{[^}]*min-height:\s*var\(--target-min\);/s);
+assert.match(css, /\.overlay-confirm-ack-box \{[^}]*min-height:\s*var\(--target-min\);/s);
 assert.match(css, /\.tooltip-toggle-switch \{[^}]*min-height:\s*var\(--target-min\);/s);
 assert.match(officialRules, /\.official-rules-mode button\[aria-pressed="true"\] \{[^}]*background:\s*var\(--control-selected\);/s);
 assert.match(officialRules, /\.official-rules-site-summary:hover \{[^}]*background:\s*var\(--control-hover\);/s);

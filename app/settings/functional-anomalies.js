@@ -164,14 +164,14 @@ export function createFunctionalAnomaliesSettingsSection(ctx) {
     dialog.querySelector(".modal")?.classList.add("functional-anomaly-detail-modal");
   }
 
-  function openMutationConfirmation({ title, body, confirmLabel, mutate, successKey }) {
+  function openMutationConfirmation({ title, body, confirmLabel, mutate, successKey, tone = "danger" }) {
     openConfirmationAction({
       title,
       body,
       confirmLabel,
       cancelLabel: t("common.cancel"),
       closeLabel: t("common.close"),
-      className: "functional-anomaly-confirmation",
+      tone,
       onConfirm: async () => {
         await mutate();
         toast(t(successKey), "success");
@@ -184,6 +184,7 @@ export function createFunctionalAnomaliesSettingsSection(ctx) {
       title: t("functionalAnomalies.deleteTitle"),
       body: t("functionalAnomalies.deleteConfirm", { feature: recordTitle(record), operation: recordOperation(record) }),
       confirmLabel: t("common.delete"),
+      tone: "neutral",
       mutate: () => functionalAnomalyLog.remove(record.id),
       successKey: "toast.functionalAnomalyDeleted"
     });

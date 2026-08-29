@@ -7,7 +7,7 @@ import {
 import { CONFIG_BUNDLE_KEYS, exportConfigBundle, inspectImportedConfig } from "../../shared/storage-config-bundle.js";
 import { readPocketHistory } from "../../shared/storage-adapter.js";
 import { migrateLegacyScriptConfig } from "../../shared/script-config-migration.js";
-import { confirmationModal, editorModal, el, toast } from "../../ui/dom.js";
+import { editorModal, el, openConfirmationAction, toast } from "../../ui/dom.js";
 import { downloadText, readFileAsText } from "../../ui/file-io.js";
 import { persistConfigResetCleanupWarning } from "../state/reset-cleanup-warning.js";
 
@@ -50,70 +50,33 @@ export function createImportExportSettings(ctx) {
   if (typeof reloadAfterConfigReset !== "function") throw new TypeError("Import/export settings requires reloadAfterConfigReset().");
 
   function openFullResetDialog() {
-    let dialog;
-    let applying = false;
-    const close = (force = false) => {
-      if (applying && force !== true) return;
-      dialog?.remove();
-    };
-    const cancelButton = el("button", {
-      class: "button button-secondary",
-      type: "button",
-      onclick: () => close()
-    }, t("common.cancel"));
-    const confirmButton = el("button", {
-      class: "button button-danger",
-      type: "button",
-      disabled: true,
-      onclick: apply
-    }, t("io.fullResetConfirm"));
-    const acknowledgeInput = el("input", { type: "checkbox" });
-    acknowledgeInput.addEventListener("change", () => {
-      if (!applying) confirmButton.disabled = !acknowledgeInput.checked;
-    });
-    const setApplying = (value) => {
-      applying = value;
-      cancelButton.disabled = value;
-      confirmButton.disabled = value || !acknowledgeInput.checked;
-      acknowledgeInput.disabled = value;
-      dialog?.querySelector(".modal-header .icon-button")?.toggleAttribute("disabled", value);
-      dialog?.querySelector(".modal")?.setAttribute("aria-busy", String(value));
-    };
-    async function apply() {
-      if (applying || !acknowledgeInput.checked) return;
-      setApplying(true);
-      try {
-        await prepareForConfigImport(CONFIG_BUNDLE_KEYS);
-        const result = await resetConfig();
-        toast(t("toast.configReset"), "success");
-        if (result?.committed === true && result.cleanupWarnings?.length) {
-          persistConfigResetCleanupWarning(result.cleanupWarnings);
-          toast(t("toast.configResetCleanupWarning", { count: result.cleanupWarnings.length }), "error");
-        }
-        close(true);
-        await Promise.resolve(reloadAfterConfigReset());
-      } catch (error) {
-        const reason = String(error?.message || "").trim();
-        toast(reason ? `${t("toast.configResetFailed")}：${reason}` : t("toast.configResetFailed"), "error");
-        setApplying(false);
-      }
-    }
-    dialog = confirmationModal(
-      t("io.fullResetTitle"),
-      el("div", { class: "overlay-confirmation io-full-reset-confirmation" },
+    openConfirmationAction({
+      title: t("io.fullResetTitle"),
+      body: el("div", {},
         el("p", {}, t("io.fullResetDesc")),
-        el("p", { class: "overlay-warning-card io-sensitive-warning" }, t("io.fullResetWatermark")),
-        el("label", { class: "overlay-confirm-ack" },
-          acknowledgeInput,
-          el("span", {}, t("io.fullResetAcknowledge"))
-        ),
-        el("div", { class: "modal-footer" }, cancelButton, confirmButton)
+        el("p", { class: "overlay-warning-card io-sensitive-warning" }, t("io.fullResetWatermark"))
       ),
-      close,
-      false,
-      t("common.close")
-    );
-    dialog.querySelector(".modal")?.classList.add("io-full-reset-modal");
+      confirmLabel: t("io.fullResetConfirm"),
+      cancelLabel: t("common.cancel"),
+      closeLabel: t("common.close"),
+      acknowledge: t("io.fullResetAcknowledge"),
+      busyLabel: t("common.applying"),
+      onConfirm: async () => {
+        try {
+          await prepareForConfigImport(CONFIG_BUNDLE_KEYS);
+          const result = await resetConfig();
+          toast(t("toast.configReset"), "success");
+          if (result?.committed === true && result.cleanupWarnings?.length) {
+            persistConfigResetCleanupWarning(result.cleanupWarnings);
+            toast(t("toast.configResetCleanupWarning", { count: result.cleanupWarnings.length }), "error");
+          }
+        } catch (error) {
+          const reason = String(error?.message || "").trim();
+          throw new Error(reason ? `${t("toast.configResetFailed")}：${reason}` : t("toast.configResetFailed"));
+        }
+        await Promise.resolve(reloadAfterConfigReset());
+      }
+    });
   }
 
   function itemValueCount(value) {

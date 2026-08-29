@@ -602,12 +602,12 @@ let i18n = null;
 
     findAction(card, "rollback:summary/chatgpt").click();
     let dialog = activeConfirmation(document);
-    await settleEvent(findButton(dialog, "确认回退").click());
+    await settleEvent(findButton(dialog, "回退").click());
     assert.deepEqual(calls.shift(), ["rollbackComponent", "summary/chatgpt"]);
 
     findAction(card, "restore:delete/deepseek").click();
     dialog = activeConfirmation(document);
-    await settleEvent(findButton(dialog, "确认恢复").click());
+    await settleEvent(findButton(dialog, "恢复").click());
     assert.deepEqual(calls.shift(), ["restoreComponent", "delete/deepseek"]);
 
     await settleEvent(findRulesTab(card, "updates").click());
@@ -644,7 +644,7 @@ let i18n = null;
     assert.equal(dialog.dataset.modalType, "confirmation");
     assert.match(dialog.textContent, /全部变更组件/);
     assert.match(dialog.textContent, /不能部分选择/);
-    const applyConfirmation = findButton(dialog, "确认应用");
+    const applyConfirmation = findButton(dialog, "应用更新");
     const cancelConfirmation = findButton(dialog, "取消");
     const applyEvent = applyConfirmation.click();
     await new Promise((resolve) => { setImmediate(resolve); });
@@ -662,7 +662,7 @@ let i18n = null;
 
     findAction(card, "rollback-last").click();
     dialog = activeConfirmation(document);
-    await settleEvent(findButton(dialog, "确认回退").click());
+    await settleEvent(findButton(dialog, "回退").click());
     assert.deepEqual(calls.shift(), ["rollbackLast"]);
 
     findAction(card, "alias:delete/deepseek:new.example.test").click();

@@ -1115,7 +1115,7 @@ export function createWorkspaceTabsSidebarController({
       confirmLabel: t("common.delete"),
       cancelLabel: t("common.cancel"),
       closeLabel: t("common.close"),
-      className: "workspace-tabs-delete-confirmation",
+      tone: "neutral",
       onConfirm: async () => {
         if (kind === "folder") {
           folders = deleteFolder(folders, item.id);

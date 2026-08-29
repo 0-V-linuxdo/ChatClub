@@ -631,7 +631,7 @@ globalThis.document = {
     assert.equal(deleteButtons.length, 3);
     deleteButtons[2].click();
     assert.equal(confirmations.length, 1);
-    assert.match(String(confirmations[0].title || ""), /Delete this ChatClub tab|删除此 ChatClub 标签页/);
+    assert.match(String(confirmations[0].title || ""), /Delete ChatClub tab|删除 ChatClub 标签页/);
     assert.ok(!fixture.calls.some((call) => call.action === "forgetRememberedWorkspaceTab"), "delete must wait for confirmation");
   }
 

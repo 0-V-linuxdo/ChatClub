@@ -141,6 +141,7 @@ export function createAppearanceTopbarController(dependencies = {}) {
       confirmLabel: t("common.delete"),
       cancelLabel: t("common.cancel"),
       closeLabel: t("common.close"),
+      tone: "neutral",
       onConfirm: () => {
         resetTopbarPromptPlaceholderEditor();
         return saveTopbarPromptPlaceholderConfig(

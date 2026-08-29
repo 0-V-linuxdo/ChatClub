@@ -97,6 +97,7 @@ export function createPromptHistorySettingsSection(ctx) {
       confirmLabel: t("common.delete"),
       cancelLabel: t("common.cancel"),
       closeLabel: t("common.close"),
+      tone: "neutral",
       onConfirm: () => save(items().filter((entry) => entry.id !== item.id), redraw, t("toast.promptHistoryDeleted"))
     });
   }

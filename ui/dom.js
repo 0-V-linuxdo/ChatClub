@@ -162,6 +162,20 @@ function confirmationTone(value) {
   return CONFIRMATION_TONES.includes(value) ? value : "danger";
 }
 
+function confirmationIcon(tone) {
+  if (tone === "neutral" || typeof document.createElementNS !== "function") return null;
+  return createSvgIcon(tone === "warning" ? "info" : "alert");
+}
+
+function stampClass(node, className, on) {
+  if (!node) return;
+  const current = String(node.className || "").split(/\s+/).filter(Boolean);
+  const next = on
+    ? current.includes(className) ? current : [...current, className]
+    : current.filter((name) => name !== className);
+  node.className = next.join(" ");
+}
+
 let modalTitleSeq = 0;
 let modalDescSeq = 0;
 const openModals = [];
@@ -254,14 +268,18 @@ function registerOpenModal(backdrop, panel, focusNode = panel) {
   backdrop.remove = (...args) => {
     const index = openModals.indexOf(record);
     if (index >= 0) openModals.splice(index, 1);
-    if (!openModals.length) document.removeEventListener?.("keydown", trapOpenModalKeydown, true);
-    syncModalScrollLock();
-    removeBackdrop(...args);
-    syncModalBackgroundInert();
-    const next = openModals[openModals.length - 1];
-    const active = document.activeElement;
-    const activeGone = !active || active === document.body || (typeof document.body?.contains === "function" && !document.body.contains(active));
     try {
+      if (!openModals.length) document.removeEventListener?.("keydown", trapOpenModalKeydown, true);
+      syncModalScrollLock();
+    } catch {
+      /* page may already be unloading */
+    }
+    removeBackdrop(...args);
+    try {
+      syncModalBackgroundInert();
+      const next = openModals[openModals.length - 1];
+      const active = document.activeElement;
+      const activeGone = !active || active === document.body || (typeof document.body?.contains === "function" && !document.body.contains(active));
       if (next?.panel?.focus && (activeGone || (typeof record.panel.contains === "function" && record.panel.contains(active)))) {
         next.panel.focus();
       } else if (restoreFocusTo?.focus && activeGone) {
@@ -296,7 +314,9 @@ function hoistModalFooter(panel, body) {
 
 function bindModalDescription(panel, body, modalType) {
   if (modalType !== "confirmation" || !body?.querySelector || !panel?.setAttribute) return;
-  const description = body.querySelector("[data-overlay-description]") || body.querySelector("p");
+  const description = body.querySelector("[data-overlay-description]")
+    || body.querySelector(".overlay-confirmation")
+    || body.querySelector("p");
   if (!description) return;
   if (!description.getAttribute?.("id")) description.setAttribute("id", `overlay-modal-desc-${++modalDescSeq}`);
   panel.setAttribute("aria-describedby", description.getAttribute("id"));
@@ -333,8 +353,8 @@ export function modal(title, content, onClose, wide = false, closeLabel = "Close
   },
     el("header", { class: "modal-header" },
       el("h2", { id: titleId },
-        modalType === "confirmation" && tone !== "neutral" && typeof document.createElementNS === "function"
-          ? createSvgIcon("alert")
+        modalType === "confirmation"
+          ? confirmationIcon(tone)
           : null,
         title
       ),
@@ -387,6 +407,8 @@ export function openConfirmationAction({
   variant = "danger",
   tone = "danger",
   className = "",
+  acknowledge = "",
+  busyLabel = "",
   onConfirm
 } = {}) {
   let dialog;
@@ -395,33 +417,58 @@ export function openConfirmationAction({
     if (applying && force !== true) return;
     dialog?.remove?.();
   };
+  const acknowledgeLabel = String(acknowledge || "").trim();
+  const acknowledgeInput = acknowledgeLabel ? el("input", { type: "checkbox" }) : null;
   const cancelButton = button(cancelLabel, () => close());
   const confirmButton = button(confirmLabel, apply, variant);
+  if (acknowledgeInput) {
+    confirmButton.disabled = true;
+    acknowledgeInput.addEventListener("change", () => {
+      if (!applying) confirmButton.disabled = !acknowledgeInput.checked;
+    });
+  }
   const setApplying = (value) => {
     applying = value;
     cancelButton.disabled = value;
-    confirmButton.disabled = value;
+    confirmButton.disabled = value || Boolean(acknowledgeInput && !acknowledgeInput.checked);
+    if (acknowledgeInput) acknowledgeInput.disabled = value;
     const header = dialog?.querySelector?.(".modal-header");
     header?.querySelector?.(".icon-button")?.toggleAttribute?.("disabled", value);
-    dialog?.querySelector?.(".modal")?.setAttribute?.("aria-busy", String(value));
+    const panel = dialog?.querySelector?.(".modal");
+    panel?.setAttribute?.("aria-busy", String(value));
+    stampClass(confirmButton, "is-applying", value);
+    if (busyLabel) confirmButton.textContent = value ? busyLabel : confirmLabel;
   };
   async function apply() {
-    if (applying) return;
+    if (applying || (acknowledgeInput && !acknowledgeInput.checked)) return;
     setApplying(true);
     try {
       await onConfirm?.();
-      close(true);
     } catch (error) {
       setApplying(false);
       const reason = String(error?.message || error || "").trim();
-      if (reason) toast(reason, "error");
+      if (reason) {
+        try { toast(reason, "error"); } catch { /* page may already be unloading */ }
+      }
+      return;
+    }
+    try {
+      close(true);
+    } catch {
+      /* caller may have already navigated away */
     }
   }
   const bodyNode = typeof body === "string" || body == null ? el("p", {}, body || "") : body;
   dialog = confirmationModal(
     title,
-    el("div", { class: `overlay-confirmation ${className || ""}`.trim() },
+    el("div", { class: `overlay-confirmation ${className || ""}`.trim(), "data-overlay-description": true },
       bodyNode,
+      acknowledgeInput
+        ? el("label", { class: "overlay-confirm-ack" },
+          el("span", { class: "overlay-confirm-ack-box" }, acknowledgeInput),
+          el("span", {}, acknowledgeLabel)
+        )
+        : null,
       el("div", { class: "modal-footer" }, cancelButton, confirmButton)
     ),
     close,

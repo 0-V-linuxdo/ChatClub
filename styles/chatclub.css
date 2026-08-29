@@ -12,6 +12,8 @@
   --on-primary: #ffffff;
   --danger: #b42318;
   --danger-soft: #ff8f83;
+  --danger-hover: color-mix(in srgb, var(--danger) 78%, black);
+  --danger-active: color-mix(in srgb, var(--danger) 64%, black);
   --success: #15803d;
   --warning: #a16207;
   --warning-fill: #ca8a04;
@@ -4940,7 +4942,6 @@ body.settings-tab-context-menu-dragging iframe {
 }
 
 .functional-anomalies-settings-pane .functional-anomaly-privacy p,
-.functional-anomaly-confirmation p,
 .functional-anomaly-detail > .functional-anomaly-privacy {
   margin: 0;
   font-size: var(--font-size);
@@ -5081,11 +5082,6 @@ body.settings-tab-context-menu-dragging iframe {
   background: color-mix(in srgb, var(--panel-2) 74%, transparent);
   border: 1px solid var(--line);
   border-radius: var(--settings-radius);
-}
-
-.functional-anomaly-confirmation {
-  display: grid;
-  gap: var(--space-3);
 }
 
 .topbar-layout-hint {
@@ -9324,6 +9320,18 @@ body.settings-tab-context-menu-dragging iframe {
   border-color: color-mix(in srgb, var(--primary) 46%, var(--line));
 }
 
+.modal.modal-alertdialog[data-overlay-tone="danger"] .overlay-window-button:hover,
+.modal.modal-alertdialog[data-overlay-tone="danger"] .overlay-window-button:focus-visible {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 46%, var(--line));
+}
+
+.modal.modal-alertdialog[data-overlay-tone="warning"] .overlay-window-button:hover,
+.modal.modal-alertdialog[data-overlay-tone="warning"] .overlay-window-button:focus-visible {
+  background: color-mix(in srgb, var(--warning) 14%, transparent);
+  border-color: color-mix(in srgb, var(--warning) 46%, var(--line));
+}
+
 .overlay-window-button:focus-visible,
 .popover-menu .button:focus-visible,
 .layout-preset-choice:focus-visible {
@@ -9472,20 +9480,30 @@ body.settings-tab-context-menu-dragging iframe {
 
 .overlay-confirm-ack {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--space-2);
   margin: 0;
+  min-height: var(--target-min);
   color: var(--text);
   font-size: var(--font-size-sm);
   line-height: 1.45;
   cursor: pointer;
 }
 
-.overlay-confirm-ack input {
+.overlay-confirm-ack-box {
+  display: inline-grid;
+  place-items: center;
   flex: 0 0 auto;
+  width: var(--target-min);
+  height: var(--target-min);
+  min-width: var(--target-min);
+  min-height: var(--target-min);
+}
+
+.overlay-confirm-ack input {
   width: 16px;
   height: 16px;
-  margin: 2px 0 0;
+  margin: 0;
   accent-color: var(--danger);
 }
 
@@ -9497,15 +9515,33 @@ body.settings-tab-context-menu-dragging iframe {
 
 .modal.modal-alertdialog .modal-footer .button-danger:hover:not(:disabled),
 .modal.modal-alertdialog .modal-footer .button-danger:focus-visible:not(:disabled) {
-  background: color-mix(in srgb, var(--danger) 78%, #1a0504);
-  border-color: color-mix(in srgb, var(--danger) 78%, #1a0504);
+  background: var(--danger-hover);
+  border-color: var(--danger-hover);
   color: var(--on-primary);
 }
 
 .modal.modal-alertdialog .modal-footer .button-danger:active:not(:disabled) {
-  background: color-mix(in srgb, var(--danger) 64%, #1a0504);
-  border-color: color-mix(in srgb, var(--danger) 64%, #1a0504);
+  background: var(--danger-active);
+  border-color: var(--danger-active);
   color: var(--on-primary);
+}
+
+.modal.modal-alertdialog .modal-footer .button.is-applying::before {
+  content: "";
+  box-sizing: border-box;
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+  border: 2px solid color-mix(in srgb, currentColor 26%, transparent);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: prompt-model-gate-spin 720ms linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal.modal-alertdialog .modal-footer .button.is-applying::before {
+    animation: none;
+  }
 }
 
 .modal-body {

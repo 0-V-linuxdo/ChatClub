@@ -187,6 +187,7 @@ export function createPromptTemplateSettings(ctx) {
       confirmLabel: t("common.delete"),
       cancelLabel: t("common.cancel"),
       closeLabel: t("common.close"),
+      tone: "neutral",
       onConfirm: () => {
         const templates = promptTemplateList(kind).filter((item) => item.id !== template.id);
         const activeId = state.options[meta.activeKey] === template.id ? (templates[0]?.id || meta.defaultId) : state.options[meta.activeKey];

@@ -21,7 +21,6 @@ import {
 } from "../../shared/chat-frame-config.js";
 import {
   button,
-  confirmationModal,
   editorModal,
   el,
   field,
@@ -510,50 +509,28 @@ export function createAppsSettingsSection(ctx) {
   }
 
   function openIframeRiskConfirmation(riskKeys, onConfirm) {
-    let dialog;
-    let applying = false;
-    const cancelButton = button(t("common.cancel"), () => close());
-    const confirmButton = button(t("apps.iframe.confirmRiskSave"), apply, "danger");
-    confirmButton.dataset.iframeAction = "confirm-risk";
-    const close = (force = false) => {
-      if (applying && !force) return;
-      dialog?.remove();
-    };
-    const setApplying = (value) => {
-      applying = value;
-      cancelButton.disabled = value;
-      confirmButton.disabled = value;
-      dialog?.querySelector(".modal-header .icon-button")?.toggleAttribute("disabled", value);
-      dialog?.querySelector(".modal")?.setAttribute("aria-busy", String(value));
-    };
-    async function apply() {
-      if (applying) return;
-      setApplying(true);
-      try {
-        await onConfirm();
-        close(true);
-      } catch (error) {
-        setApplying(false);
-        toast(error?.message || String(error), "error");
-      }
-    }
-    dialog = confirmationModal(t("apps.iframe.riskConfirmTitle"),
-      el("div", { class: "overlay-confirmation settings-editor-form iframe-permission-risk-confirm" },
+    const dialog = openConfirmationAction({
+      title: t("apps.iframe.riskConfirmTitle"),
+      body: el("div", { class: "settings-editor-form iframe-permission-risk-confirm" },
         el("div", { class: "overlay-warning-card iframe-permission-risk-warning" },
           el("strong", {}, t("apps.iframe.riskConfirmLead")),
           el("p", {}, t("apps.iframe.riskConfirmBody"))
         ),
         el("ul", { class: "iframe-permission-risk-list" },
           riskKeys.map((risk) => el("li", {}, el("code", {}, risk)))
-        ),
-        el("div", { class: "modal-footer" }, cancelButton, confirmButton)
+        )
       ),
-      close,
-      false,
-      t("common.close"),
-      { tone: "warning" }
-    );
-    dialog.querySelector(".modal")?.classList.add("iframe-permission-risk-modal");
+      confirmLabel: t("apps.iframe.confirmRiskSave"),
+      cancelLabel: t("common.cancel"),
+      closeLabel: t("common.close"),
+      variant: "danger",
+      tone: "warning",
+      busyLabel: t("common.applying"),
+      onConfirm
+    });
+    const confirmButton = dialog?.querySelector?.(".button-danger");
+    if (confirmButton?.dataset) confirmButton.dataset.iframeAction = "confirm-risk";
+    dialog?.querySelector?.(".modal")?.classList?.add?.("iframe-permission-risk-modal");
   }
 
   function openIframePermissionEditor(app, source, redraw) {
@@ -1204,6 +1181,7 @@ export function createAppsSettingsSection(ctx) {
       confirmLabel: t("common.delete"),
       cancelLabel: t("common.cancel"),
       closeLabel: t("common.close"),
+      tone: "neutral",
       onConfirm: () => saveCustomList(
         state.customConfig.filter((item) => item.id !== app.id),
         redraw,

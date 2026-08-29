@@ -216,6 +216,7 @@ export function createHistoryController(ctx) {
       confirmLabel: t("common.delete"),
       cancelLabel: t("common.cancel"),
       closeLabel: t("common.close"),
+      tone: "neutral",
       onConfirm: () => {
         if (activeItemId === item.id) activeItemId = "";
         return save(items().filter((entry) => entry.id !== item.id), redraw, t("toast.promptHistoryDeleted"));

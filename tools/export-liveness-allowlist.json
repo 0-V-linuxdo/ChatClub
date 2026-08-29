@@ -102,5 +102,9 @@
   "ui/dom.js#modal": {
     "kind": "test-only",
     "reason": "The backward-compatible modal primitive remains directly exercised by the overlay dismissal policy regression."
+  },
+  "ui/dom.js#confirmationModal": {
+    "kind": "test-only",
+    "reason": "App confirmations now go through openConfirmationAction; confirmationModal stays exported as the typed family primitive and is still opened by that helper plus overlay-inventory regressions."
   }
 }

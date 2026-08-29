@@ -68,6 +68,8 @@ class FakeElement extends FakeNode {
     this.attributes = new Map();
     this.dataset = {};
     this.listeners = new Map();
+    this.checked = false;
+    this.disabled = false;
     this.style = {
       setProperty: (name, value) => {
         this.style[name] = String(value);
@@ -86,10 +88,21 @@ class FakeElement extends FakeNode {
 
   setAttribute(name, value) {
     this.attributes.set(String(name), String(value));
+    if (name === "disabled") this.disabled = true;
   }
 
   getAttribute(name) {
     return this.attributes.has(String(name)) ? this.attributes.get(String(name)) : null;
+  }
+
+  toggleAttribute(name, force) {
+    const enabled = force === undefined ? !this.attributes.has(name) : Boolean(force);
+    if (enabled) this.setAttribute(name, "");
+    else {
+      this.attributes.delete(name);
+      if (name === "disabled") this.disabled = false;
+    }
+    return enabled;
   }
 
   addEventListener(type, listener) {
@@ -112,6 +125,11 @@ class FakeElement extends FakeNode {
   }
 
   click() {
+    if (this.disabled) return;
+    if (this.tagName === "INPUT" && this.getAttribute("type") === "checkbox") {
+      this.checked = !this.checked;
+      this.dispatchEvent({ type: "change", bubbles: true, target: this });
+    }
     this.dispatchEvent({ type: "click", bubbles: true, target: this });
   }
 
@@ -444,6 +462,32 @@ function event(type, properties = {}) {
     for (let i = 0; i < 20 && busyFixture.isConnected; i += 1) await Promise.resolve();
     assert.equal(busyFixture.isConnected, false, "a settled in-flight confirm must force-close");
 
+    let acknowledged = 0;
+    const ackFixture = openConfirmationAction({
+      title: "Reset all ChatClub data",
+      body: "This clears local data.",
+      confirmLabel: "Reset Everything",
+      cancelLabel: "Cancel",
+      closeLabel: "Close",
+      acknowledge: "I understand this will erase all local ChatClub data.",
+      onConfirm: async () => {
+        acknowledged += 1;
+      }
+    });
+    const ackPanel = ackFixture.querySelector(".modal");
+    const ackBody = ackFixture.querySelector(".overlay-confirmation");
+    assert.equal(ackPanel.getAttribute("aria-describedby"), ackBody.getAttribute("id"), "helper bodies must describe the whole confirmation root");
+    const ackConfirm = ackFixture.querySelector(".button-danger");
+    assert.equal(ackConfirm.disabled, true, "acknowledge confirms stay disabled until checked");
+    ackConfirm.click();
+    assert.equal(acknowledged, 0, "unchecked acknowledge must not run the confirm action");
+    ackFixture.querySelector("input").click();
+    assert.equal(ackConfirm.disabled, false, "checking acknowledge must enable the danger action");
+    ackConfirm.click();
+    for (let i = 0; i < 20 && ackFixture.isConnected; i += 1) await Promise.resolve();
+    assert.equal(acknowledged, 1, "checked acknowledge must run the confirm action");
+    assert.equal(ackFixture.isConnected, false, "a successful acknowledged confirm must close");
+
     for (const [type, factory] of [["viewer", viewerModal], ...restrictedFactories]) {
       for (const [label, control] of [
         ["top close button", (fixture) => fixture.dialog.querySelector('[aria-label="Close"]')],
@@ -492,8 +536,8 @@ function event(type, properties = {}) {
       ["editorModal", 11],
       ["viewerModal", 5],
       ["taskModal", 1],
-      ["confirmationModal", 2],
-      ["openConfirmationAction", 16]
+      ["confirmationModal", 0],
+      ["openConfirmationAction", 18]
     ]);
 
     assert.equal(occurrences(allAppSource, /\bmodal\s*\(/g), 0, "app code must not call the raw modal helper");
@@ -545,9 +589,9 @@ function event(type, properties = {}) {
       ["app/pocket/controller.js", "openPocketPanel", "viewerModal", "Pocket history viewer"],
       ["app/history/controller.js", "openHistoryPanel", "viewerModal", "Prompt History viewer"],
       ["app/optimize/controller.js", "openOptimizeCompareDialog", "taskModal", "prompt optimization task"],
-      ["app/settings/import-export.js", "openFullResetDialog", "confirmationModal", "full reset confirmation"],
+      ["app/settings/import-export.js", "openFullResetDialog", "openConfirmationAction", "full reset confirmation"],
       ["app/settings/import-export.js", "openImportConfirmDialog", "editorModal", "import confirmation"],
-      ["app/settings/apps.js", "openIframeRiskConfirmation", "confirmationModal", "iframe risk confirmation"],
+      ["app/settings/apps.js", "openIframeRiskConfirmation", "openConfirmationAction", "iframe risk confirmation"],
       ["app/settings/functional-anomalies.js", "openMutationConfirmation", "openConfirmationAction", "functional anomaly mutation confirmation"],
       ["app/settings/official-rules.js", "openConfirmation", "openConfirmationAction", "official rules mutation confirmation"],
       ["app/settings/apps.js", "removeCustom", "openConfirmationAction", "custom platform delete confirmation"],
@@ -638,18 +682,23 @@ function event(type, properties = {}) {
     );
     assert.match(
       fullResetSource,
-      /io\.fullResetAcknowledge/,
+      /openConfirmationAction\s*\(/,
+      "full reset must use openConfirmationAction instead of a hand-rolled confirmationModal"
+    );
+    assert.match(
+      fullResetSource,
+      /acknowledge:\s*t\("io.fullResetAcknowledge"\)/,
       "full reset must require an explicit acknowledgement before the danger action"
     );
     assert.match(
       fullResetSource,
-      /overlay-confirm-ack/,
-      "full reset acknowledgement must use the shared confirmation ack skin"
+      /io\.fullResetAcknowledge/,
+      "full reset acknowledgement copy must stay on the helper call"
     );
-    assert.match(
+    assert.doesNotMatch(
       fullResetSource,
-      /if \(applying \|\| !acknowledgeInput\.checked\) return/,
-      "full reset must reject confirm until the acknowledgement is checked"
+      /confirmationModal\s*\(/,
+      "full reset must not open confirmationModal directly"
     );
 
     const functionalAnomalyConfirmationSource = directFunctionSource(
