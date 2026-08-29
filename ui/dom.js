@@ -156,6 +156,12 @@ const MODAL_TYPE_CONFIG = Object.freeze({
   confirmation: Object.freeze({ dismissOnBackdrop: false })
 });
 
+const CONFIRMATION_TONES = Object.freeze(["danger", "warning", "neutral"]);
+
+function confirmationTone(value) {
+  return CONFIRMATION_TONES.includes(value) ? value : "danger";
+}
+
 let modalTitleSeq = 0;
 let modalDescSeq = 0;
 const openModals = [];
@@ -311,6 +317,7 @@ export function modal(title, content, onClose, wide = false, closeLabel = "Close
   const dismissOnBackdrop = typeof options.dismissOnBackdrop === "boolean"
     ? options.dismissOnBackdrop
     : modalType === "legacy" || MODAL_TYPE_CONFIG[modalType].dismissOnBackdrop;
+  const tone = modalType === "confirmation" ? confirmationTone(options.tone) : "";
   const titleId = `overlay-modal-title-${++modalTitleSeq}`;
   const backdrop = el("div", { class: "modal-backdrop", dataset: { modalType }, onclick: (event) => {
     if (dismissOnBackdrop && event.target === backdrop) onClose();
@@ -321,11 +328,12 @@ export function modal(title, content, onClose, wide = false, closeLabel = "Close
     role: modalType === "confirmation" ? "alertdialog" : "dialog",
     "aria-modal": "true",
     "aria-labelledby": titleId,
-    tabindex: "-1"
+    tabindex: "-1",
+    dataset: tone ? { overlayTone: tone } : undefined
   },
     el("header", { class: "modal-header" },
       el("h2", { id: titleId },
-        modalType === "confirmation" && typeof document.createElementNS === "function"
+        modalType === "confirmation" && tone !== "neutral" && typeof document.createElementNS === "function"
           ? createSvgIcon("alert")
           : null,
         title
@@ -334,6 +342,10 @@ export function modal(title, content, onClose, wide = false, closeLabel = "Close
     ),
     body
   );
+  if (tone) {
+    panel.setAttribute("data-overlay-tone", tone);
+    panel.className = `${panel.className} modal-tone-${tone}`.trim();
+  }
   hoistModalFooter(panel, body);
   bindModalDescription(panel, body, modalType);
   backdrop.append(panel);
@@ -362,8 +374,8 @@ export function taskModal(title, content, onClose, wide = false, closeLabel = "C
   return typedModal("task", title, content, onClose, wide, closeLabel);
 }
 
-export function confirmationModal(title, content, onClose, wide = false, closeLabel = "Close") {
-  return typedModal("confirmation", title, content, onClose, wide, closeLabel);
+export function confirmationModal(title, content, onClose, wide = false, closeLabel = "Close", options = {}) {
+  return modal(title, content, onClose, wide, closeLabel, { type: "confirmation", tone: options.tone });
 }
 
 export function openConfirmationAction({
@@ -373,6 +385,7 @@ export function openConfirmationAction({
   cancelLabel,
   closeLabel,
   variant = "danger",
+  tone = "danger",
   className = "",
   onConfirm
 } = {}) {
@@ -388,7 +401,8 @@ export function openConfirmationAction({
     applying = value;
     cancelButton.disabled = value;
     confirmButton.disabled = value;
-    dialog?.querySelector?.(".modal-header .icon-button")?.toggleAttribute?.("disabled", value);
+    const header = dialog?.querySelector?.(".modal-header");
+    header?.querySelector?.(".icon-button")?.toggleAttribute?.("disabled", value);
     dialog?.querySelector?.(".modal")?.setAttribute?.("aria-busy", String(value));
   };
   async function apply() {
@@ -412,7 +426,8 @@ export function openConfirmationAction({
     ),
     close,
     false,
-    closeLabel
+    closeLabel,
+    { tone }
   );
   return dialog;
 }

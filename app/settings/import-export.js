@@ -7,7 +7,7 @@ import {
 import { CONFIG_BUNDLE_KEYS, exportConfigBundle, inspectImportedConfig } from "../../shared/storage-config-bundle.js";
 import { readPocketHistory } from "../../shared/storage-adapter.js";
 import { migrateLegacyScriptConfig } from "../../shared/script-config-migration.js";
-import { confirmationModal, el, toast } from "../../ui/dom.js";
+import { confirmationModal, editorModal, el, toast } from "../../ui/dom.js";
 import { downloadText, readFileAsText } from "../../ui/file-io.js";
 import { persistConfigResetCleanupWarning } from "../state/reset-cleanup-warning.js";
 
@@ -64,17 +64,23 @@ export function createImportExportSettings(ctx) {
     const confirmButton = el("button", {
       class: "button button-danger",
       type: "button",
+      disabled: true,
       onclick: apply
     }, t("io.fullResetConfirm"));
+    const acknowledgeInput = el("input", { type: "checkbox" });
+    acknowledgeInput.addEventListener("change", () => {
+      if (!applying) confirmButton.disabled = !acknowledgeInput.checked;
+    });
     const setApplying = (value) => {
       applying = value;
       cancelButton.disabled = value;
-      confirmButton.disabled = value;
+      confirmButton.disabled = value || !acknowledgeInput.checked;
+      acknowledgeInput.disabled = value;
       dialog?.querySelector(".modal-header .icon-button")?.toggleAttribute("disabled", value);
       dialog?.querySelector(".modal")?.setAttribute("aria-busy", String(value));
     };
     async function apply() {
-      if (applying) return;
+      if (applying || !acknowledgeInput.checked) return;
       setApplying(true);
       try {
         await prepareForConfigImport(CONFIG_BUNDLE_KEYS);
@@ -94,9 +100,13 @@ export function createImportExportSettings(ctx) {
     }
     dialog = confirmationModal(
       t("io.fullResetTitle"),
-      el("div", { class: "io-full-reset-confirmation" },
+      el("div", { class: "overlay-confirmation io-full-reset-confirmation" },
         el("p", {}, t("io.fullResetDesc")),
-        el("p", { class: "io-sensitive-warning" }, t("io.fullResetWatermark")),
+        el("p", { class: "overlay-warning-card io-sensitive-warning" }, t("io.fullResetWatermark")),
+        el("label", { class: "overlay-confirm-ack" },
+          acknowledgeInput,
+          el("span", {}, t("io.fullResetAcknowledge"))
+        ),
         el("div", { class: "modal-footer" }, cancelButton, confirmButton)
       ),
       close,
@@ -547,7 +557,7 @@ export function createImportExportSettings(ctx) {
         )
       )
     );
-    importWarnings = el("div", { class: "io-sensitive-warning", hidden: true });
+    importWarnings = el("div", { class: "overlay-warning-card io-sensitive-warning", hidden: true });
 
     confirmButton = el("button", {
       class: "button button-primary",
@@ -560,7 +570,7 @@ export function createImportExportSettings(ctx) {
       onclick: close
     }, t("common.cancel"));
 
-    dialog = confirmationModal(t("io.importConfirmTitle"),
+    dialog = editorModal(t("io.importConfirmTitle"),
       el("div", { class: "ui-dialog io-import-dialog" },
         el("p", { class: "io-dialog-lead" }, t("io.importConfirmDesc")),
         el("div", { class: "io-choice-list io-import-choice-list" }, rows),

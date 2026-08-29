@@ -125,8 +125,17 @@ assert.doesNotMatch(css, /\.share-panel-resize-handle-left,[\s\S]*?width:\s*8px;
 assert.match(css, /\.prompt-library-modal \{[^}]*width:\s*var\(--overlay-width-wide\);/s);
 assert.match(css, /\.prompt-library-modal \{[^}]*top:\s*var\(--prompt-library-top, var\(--overlay-panel-offset\)\);/s);
 assert.match(css, /\.modal\.modal-alertdialog \.modal-header h2 \{[^}]*color:\s*var\(--danger\);/s);
+assert.match(css, /\.modal\.modal-alertdialog\[data-overlay-tone="warning"\] \.modal-header h2 \{[^}]*color:\s*var\(--warning\);/s);
+assert.match(css, /\.modal\.modal-alertdialog\[data-overlay-tone="neutral"\] \.modal-header h2 \{[^}]*color:\s*var\(--text\);/s);
 assert.match(css, /\.modal\.modal-alertdialog \{[^}]*width:\s*var\(--overlay-width-compact\);/s);
 assert.match(css, /\.overlay-confirmation \{[^}]*display:\s*grid;/s);
+assert.match(css, /\.overlay-warning-card,\s*\n\.io-sensitive-warning \{/);
+assert.match(css, /\.overlay-confirm-ack \{/);
+assert.match(agents, /data-overlay-tone/);
+assert.match(agents, /overlay-warning-card/);
+assert.match(dom, /function confirmationTone/);
+assert.match(dom, /CONFIRMATION_TONES/);
+assert.match(dom, /tone = "danger"/);
 assert.match(
   css,
   /\.modal\.modal-alertdialog \.modal-footer \.button-danger \{[^}]*background:\s*var\(--danger\);[^}]*color:\s*var\(--on-primary\);/s

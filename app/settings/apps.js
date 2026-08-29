@@ -538,8 +538,8 @@ export function createAppsSettingsSection(ctx) {
       }
     }
     dialog = confirmationModal(t("apps.iframe.riskConfirmTitle"),
-      el("div", { class: "settings-editor-form iframe-permission-risk-confirm" },
-        el("div", { class: "iframe-permission-risk-warning" },
+      el("div", { class: "overlay-confirmation settings-editor-form iframe-permission-risk-confirm" },
+        el("div", { class: "overlay-warning-card iframe-permission-risk-warning" },
           el("strong", {}, t("apps.iframe.riskConfirmLead")),
           el("p", {}, t("apps.iframe.riskConfirmBody"))
         ),
@@ -550,7 +550,8 @@ export function createAppsSettingsSection(ctx) {
       ),
       close,
       false,
-      t("common.close")
+      t("common.close"),
+      { tone: "warning" }
     );
     dialog.querySelector(".modal")?.classList.add("iframe-permission-risk-modal");
   }

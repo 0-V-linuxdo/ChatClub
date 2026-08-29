@@ -5085,7 +5085,7 @@ body.settings-tab-context-menu-dragging iframe {
 
 .functional-anomaly-confirmation {
   display: grid;
-  gap: 18px;
+  gap: var(--space-3);
 }
 
 .topbar-layout-hint {
@@ -8945,25 +8945,6 @@ body.settings-tab-context-menu-dragging iframe {
   }
 }
 
-.io-sensitive-warning {
-  margin: -6px 0 0;
-  padding: 9px 11px;
-  color: color-mix(in srgb, var(--warning) 76%, var(--text));
-  font-size: var(--font-size-sm);
-  line-height: 1.35;
-  border: 1px solid color-mix(in srgb, var(--warning) 36%, var(--line));
-  border-radius: var(--ui-radius);
-  background: color-mix(in srgb, var(--warning) 12%, var(--panel));
-}
-
-.io-sensitive-warning span {
-  display: block;
-}
-
-.io-sensitive-warning span + span {
-  margin-top: 3px;
-}
-
 .io-choice-list {
   display: grid;
   gap: var(--space-2);
@@ -9025,7 +9006,7 @@ body.settings-tab-context-menu-dragging iframe {
 }
 
 .io-import-modal {
-  max-width: var(--overlay-width-compact);
+  width: var(--overlay-width);
 }
 
 .io-import-dialog {
@@ -9430,6 +9411,18 @@ body.settings-tab-context-menu-dragging iframe {
   color: var(--danger);
 }
 
+.modal.modal-alertdialog[data-overlay-tone="warning"] .modal-header h2 {
+  color: var(--warning);
+}
+
+.modal.modal-alertdialog[data-overlay-tone="neutral"] .modal-header h2 {
+  color: var(--text);
+}
+
+.modal.modal-alertdialog[data-overlay-tone="neutral"] .modal-header h2 .svg-icon {
+  display: none;
+}
+
 .modal.modal-alertdialog .modal-header h2 .svg-icon {
   flex: 0 0 auto;
   width: 20px;
@@ -9455,6 +9448,47 @@ body.settings-tab-context-menu-dragging iframe {
   gap: var(--space-3);
 }
 
+.overlay-warning-card,
+.io-sensitive-warning {
+  margin: -6px 0 0;
+  padding: 9px 11px;
+  color: color-mix(in srgb, var(--warning) 76%, var(--text));
+  font-size: var(--font-size-sm);
+  line-height: 1.35;
+  border: 1px solid color-mix(in srgb, var(--warning) 36%, var(--line));
+  border-radius: var(--ui-radius);
+  background: color-mix(in srgb, var(--warning) 12%, var(--panel));
+}
+
+.overlay-warning-card span,
+.io-sensitive-warning span {
+  display: block;
+}
+
+.overlay-warning-card span + span,
+.io-sensitive-warning span + span {
+  margin-top: 3px;
+}
+
+.overlay-confirm-ack {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--text);
+  font-size: var(--font-size-sm);
+  line-height: 1.45;
+  cursor: pointer;
+}
+
+.overlay-confirm-ack input {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  accent-color: var(--danger);
+}
+
 .modal.modal-alertdialog .modal-footer .button-danger {
   background: var(--danger);
   border-color: var(--danger);
@@ -9463,8 +9497,14 @@ body.settings-tab-context-menu-dragging iframe {
 
 .modal.modal-alertdialog .modal-footer .button-danger:hover:not(:disabled),
 .modal.modal-alertdialog .modal-footer .button-danger:focus-visible:not(:disabled) {
-  background: var(--danger);
-  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 78%, #1a0504);
+  border-color: color-mix(in srgb, var(--danger) 78%, #1a0504);
+  color: var(--on-primary);
+}
+
+.modal.modal-alertdialog .modal-footer .button-danger:active:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 64%, #1a0504);
+  border-color: color-mix(in srgb, var(--danger) 64%, #1a0504);
   color: var(--on-primary);
 }
 

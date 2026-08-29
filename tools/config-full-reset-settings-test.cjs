@@ -16,6 +16,7 @@ class FakeNode {
     this.dataset = {};
     this.listeners = new Map();
     this.disabled = false;
+    this.checked = false;
     this._text = "";
     this._classes = new Set();
     this.style = { setProperty() {} };
@@ -67,6 +68,11 @@ class FakeNode {
   }
   click() {
     if (this.disabled) return [];
+    if (this.tagName === "INPUT" && this.getAttribute("type") === "checkbox") {
+      this.checked = !this.checked;
+      const changeEvent = { target: this, currentTarget: this, preventDefault() {}, stopPropagation() {} };
+      (this.listeners.get("change") || []).forEach((listener) => listener(changeEvent));
+    }
     const event = { target: this, currentTarget: this, preventDefault() {}, stopPropagation() {} };
     return (this.listeners.get("click") || []).map((listener) => listener(event));
   }
@@ -272,6 +278,12 @@ async function settle(values = []) {
     const confirm = findNode(dialog, (node) => node.tagName === "BUTTON" && node.textContent === "Reset Everything");
     const cancel = findNode(dialog, (node) => node.tagName === "BUTTON" && node.textContent === "Cancel");
     const close = findNode(dialog, (node) => node.classList?.contains("icon-button"));
+    const acknowledge = findNode(dialog, (node) => node.tagName === "INPUT" && node.getAttribute("type") === "checkbox");
+    assert.ok(acknowledge, "full reset must require an acknowledgement checkbox");
+    assert.match(dialog.textContent, /I understand this will erase all local ChatClub data/);
+    assert.equal(confirm.disabled, true, "full reset confirm must stay disabled until acknowledged");
+    acknowledge.click();
+    assert.equal(confirm.disabled, false, "checking acknowledgement must enable the danger action");
     const applying = confirm.click();
     await new Promise((resolve) => { setImmediate(resolve); });
     assert.equal(resetCalls, 1);

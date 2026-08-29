@@ -270,10 +270,8 @@ function activeConfirmation(document) {
   return findNode(document.body, (node) => node.dataset?.modalType === "confirmation");
 }
 
-assert.match(moduleSource, /confirmationModal\(/, "rule mutations must use the confirmation modal primitive");
-assert.doesNotMatch(moduleSource, /\bmodal\(/, "the raw modal primitive must not be used");
-assert.match(moduleSource, /if \(applying && force !== true\) return;/, "applying confirmations must guard close paths");
-assert.match(moduleSource, /header\?\.querySelector\("\.icon-button"\)\?\.toggleAttribute\("disabled", value\)/);
+assert.match(moduleSource, /openConfirmationAction\(/, "rule mutations must use openConfirmationAction");
+assert.doesNotMatch(moduleSource, /confirmationModal\(/, "official rules must not hand-roll confirmationModal");
 assert.match(stylesSource, /\.official-rules-card/);
 assert.match(stylesSource, /\.official-rules-site-summary/);
 assert.match(stylesSource, /@media \(max-width: 820px\)/);

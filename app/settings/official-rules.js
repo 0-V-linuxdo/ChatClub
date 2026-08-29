@@ -1,4 +1,4 @@
-import { button, confirmationModal, el, toast } from "../../ui/dom.js";
+import { el, openConfirmationAction, toast } from "../../ui/dom.js";
 import { t } from "../../shared/i18n.js";
 import { installOfficialRulesSettingsStyles } from "./official-rules-styles.js";
 
@@ -579,41 +579,23 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
     try { return JSON.stringify(value); } catch { return clean(value, copy.noValue); }
   }
 
-  function openConfirmation({ title, body, confirmLabel, variant = "primary", actionKey, task, successMessage }) {
-    let dialog;
-    let applying = false;
-    const close = (force = false) => {
-      if (applying && force !== true) return;
-      dialog?.remove();
-    };
-    const cancelButton = button(copy.cancel, () => close());
-    const confirmButton = button(confirmLabel, apply, variant);
-    const setApplying = (value) => {
-      applying = value;
-      cancelButton.disabled = value;
-      confirmButton.disabled = value;
-      const header = dialog?.querySelector(".modal-header");
-      header?.querySelector(".icon-button")?.toggleAttribute("disabled", value);
-      dialog?.querySelector(".modal")?.setAttribute("aria-busy", String(value));
-    };
-    async function apply() {
-      if (applying) return;
-      setApplying(true);
-      const ok = await perform(actionKey, task, successMessage);
-      if (ok) close(true);
-      else setApplying(false);
-    }
-    dialog = confirmationModal(
+  function openConfirmation({ title, body, confirmLabel, variant = "primary", tone, actionKey, task, successMessage }) {
+    const resolvedTone = tone || (variant === "danger" ? "danger" : "neutral");
+    const dialog = openConfirmationAction({
       title,
-      el("div", { class: "official-rules-confirmation" },
-        typeof body === "string" ? el("p", {}, body) : body,
-        el("div", { class: "modal-footer" }, cancelButton, confirmButton)
-      ),
-      close,
-      false,
-      copy.close
-    );
-    dialog.querySelector(".modal")?.classList.add("official-rules-confirmation-modal");
+      body,
+      confirmLabel,
+      cancelLabel: copy.cancel,
+      closeLabel: copy.close,
+      variant,
+      tone: resolvedTone,
+      className: "official-rules-confirmation",
+      onConfirm: async () => {
+        const ok = await perform(actionKey, task, successMessage);
+        if (!ok) throw new Error("");
+      }
+    });
+    dialog?.querySelector?.(".modal")?.classList?.add?.("official-rules-confirmation-modal");
   }
 
   function applyCandidate() {
@@ -627,6 +609,7 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
           : null
       ),
       confirmLabel: copy.confirmApply,
+      tone: "neutral",
       actionKey: "apply",
       task: () => officialRules.applyCandidate({ approvedDeleteAliases: aliases }),
       successMessage: copy.applied
@@ -639,6 +622,7 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
       body: copy.rollbackLastBody,
       confirmLabel: copy.confirmRollback,
       variant: "danger",
+      tone: "danger",
       actionKey: "rollback-last",
       task: () => officialRules.rollbackLast(),
       successMessage: copy.rolledBack
@@ -655,6 +639,7 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
       ),
       confirmLabel: rollback ? copy.confirmRollback : copy.confirmRestore,
       variant: rollback ? "danger" : "primary",
+      tone: rollback ? "danger" : "neutral",
       actionKey: `${kind}:${component.componentKey}`,
       task: () => rollback
         ? officialRules.rollbackComponent(component.componentKey)
@@ -717,6 +702,7 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
       ),
       confirmLabel: approve ? copy.approveAlias : copy.revokeAlias,
       variant: approve ? "danger" : "secondary",
+      tone: approve ? "danger" : "neutral",
       actionKey: `alias:${alias.componentKey}:${alias.host}`,
       task: () => officialRules.setDeleteAliasApproval({
         componentKey: alias.componentKey,

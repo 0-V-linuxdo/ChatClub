@@ -347,6 +347,8 @@ function event(type, properties = {}) {
     const actionPanel = actionFixture.querySelector(".modal");
     assert.equal(actionPanel.getAttribute("role"), "alertdialog", "openConfirmationAction must open confirmationModal");
     assert.equal(actionPanel.className.includes("modal-alertdialog"), true, "openConfirmationAction must keep confirmation chrome");
+    assert.equal(actionPanel.dataset.overlayTone, "danger", "openConfirmationAction defaults to danger tone");
+    assert.equal(actionPanel.className.includes("modal-tone-danger"), true, "openConfirmationAction must stamp danger tone chrome");
     actionFixture.click();
     document.dispatchEvent(event("keydown", { key: "Escape", target: actionPanel }));
     assert.equal(actionFixture.isConnected, true, "openConfirmationAction must ignore backdrop and Escape");
@@ -355,6 +357,36 @@ function event(type, properties = {}) {
     for (let i = 0; i < 20 && actionFixture.isConnected; i += 1) await Promise.resolve();
     assert.equal(confirmed, 1, "the confirm action must run exactly once");
     assert.equal(actionFixture.isConnected, false, "a successful confirm must close the dialog");
+
+    const warningFixture = openConfirmationAction({
+      title: "Import will replace Pocket",
+      body: "Replace current Pocket content?",
+      confirmLabel: "Replace",
+      cancelLabel: "Cancel",
+      closeLabel: "Close",
+      variant: "primary",
+      tone: "warning",
+      onConfirm: async () => {}
+    });
+    const warningPanel = warningFixture.querySelector(".modal");
+    assert.equal(warningPanel.dataset.overlayTone, "warning", "openConfirmationAction must honor warning tone");
+    assert.equal(warningPanel.className.includes("modal-tone-warning"), true, "warning confirmations must stamp warning chrome");
+    warningFixture.remove();
+
+    const neutralFixture = openConfirmationAction({
+      title: "Apply official rules update",
+      body: "Apply this release atomically.",
+      confirmLabel: "Apply",
+      cancelLabel: "Cancel",
+      closeLabel: "Close",
+      variant: "primary",
+      tone: "neutral",
+      onConfirm: async () => {}
+    });
+    const neutralPanel = neutralFixture.querySelector(".modal");
+    assert.equal(neutralPanel.dataset.overlayTone, "neutral", "openConfirmationAction must honor neutral tone");
+    assert.equal(neutralPanel.className.includes("modal-tone-neutral"), true, "neutral confirmations must stamp neutral chrome");
+    neutralFixture.remove();
 
     let cancelled = 0;
     const cancelFixture = openConfirmationAction({
@@ -457,11 +489,11 @@ function event(type, properties = {}) {
     const allAppSource = appSources.join("\n");
     const wrapperNames = ["editorModal", "viewerModal", "taskModal", "confirmationModal", "openConfirmationAction"];
     const expectedInventory = new Map([
-      ["editorModal", 10],
+      ["editorModal", 11],
       ["viewerModal", 5],
       ["taskModal", 1],
-      ["confirmationModal", 4],
-      ["openConfirmationAction", 15]
+      ["confirmationModal", 2],
+      ["openConfirmationAction", 16]
     ]);
 
     assert.equal(occurrences(allAppSource, /\bmodal\s*\(/g), 0, "app code must not call the raw modal helper");
@@ -514,10 +546,10 @@ function event(type, properties = {}) {
       ["app/history/controller.js", "openHistoryPanel", "viewerModal", "Prompt History viewer"],
       ["app/optimize/controller.js", "openOptimizeCompareDialog", "taskModal", "prompt optimization task"],
       ["app/settings/import-export.js", "openFullResetDialog", "confirmationModal", "full reset confirmation"],
-      ["app/settings/import-export.js", "openImportConfirmDialog", "confirmationModal", "import confirmation"],
+      ["app/settings/import-export.js", "openImportConfirmDialog", "editorModal", "import confirmation"],
       ["app/settings/apps.js", "openIframeRiskConfirmation", "confirmationModal", "iframe risk confirmation"],
       ["app/settings/functional-anomalies.js", "openMutationConfirmation", "openConfirmationAction", "functional anomaly mutation confirmation"],
-      ["app/settings/official-rules.js", "openConfirmation", "confirmationModal", "official rules mutation confirmation"],
+      ["app/settings/official-rules.js", "openConfirmation", "openConfirmationAction", "official rules mutation confirmation"],
       ["app/settings/apps.js", "removeCustom", "openConfirmationAction", "custom platform delete confirmation"],
       ["app/settings/profiles.js", "remove", "openConfirmationAction", "API profile delete confirmation"],
       ["app/settings/prompt-templates.js", "deletePromptTemplate", "openConfirmationAction", "prompt template delete confirmation"],
@@ -598,6 +630,26 @@ function event(type, properties = {}) {
       importDialogSource,
       /if\s*\(error\?\.importCommitted\)\s*\{[\s\S]*?toast\(t\(["']toast\.importCommittedRefreshFailed["']\),\s*["']error["']\)[\s\S]*?close\(\s*\{\s*force\s*:\s*true\s*\}\s*\)[\s\S]*?return\s*;/,
       "a post-commit refresh failure must close instead of presenting the import as safely retryable"
+    );
+
+    const fullResetSource = directFunctionSource(
+      path.join(root, "app/settings/import-export.js"),
+      "openFullResetDialog"
+    );
+    assert.match(
+      fullResetSource,
+      /io\.fullResetAcknowledge/,
+      "full reset must require an explicit acknowledgement before the danger action"
+    );
+    assert.match(
+      fullResetSource,
+      /overlay-confirm-ack/,
+      "full reset acknowledgement must use the shared confirmation ack skin"
+    );
+    assert.match(
+      fullResetSource,
+      /if \(applying \|\| !acknowledgeInput\.checked\) return/,
+      "full reset must reject confirm until the acknowledgement is checked"
     );
 
     const functionalAnomalyConfirmationSource = directFunctionSource(

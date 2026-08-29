@@ -562,7 +562,7 @@ const OFFICIAL_RULES_SETTINGS_CSS = `
 
 .official-rules-confirmation {
   display: grid;
-  gap: 14px;
+  gap: var(--space-3);
 }
 
 .official-rules-confirmation code {
