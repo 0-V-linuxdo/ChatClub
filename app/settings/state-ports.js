@@ -92,8 +92,8 @@ const SETTINGS_SECTION_STATE_ACCESS = Object.freeze({
     { options: settingsOptionAccess("models") }
   ),
   summary: stateAccess([
-    "options", "settingsPromptTemplateDragId", "summaryCollectorDragId", "summaryCollectorEditingId", "summarySettingsTab"
-  ], ["options", "settingsPromptTemplateDragId", "summaryCollectorDragId", "summaryCollectorEditingId", "summarySettingsTab"], {
+    "options", "settingsPromptTemplateDragId", "summaryCollectorDragId", "summaryCollectorEditingId", "summaryCollectorLastRun", "summarySettingsTab"
+  ], ["options", "settingsPromptTemplateDragId", "summaryCollectorDragId", "summaryCollectorEditingId", "summaryCollectorLastRun", "summarySettingsTab"], {
     options: settingsOptionAccess("summary")
   }),
   messageNavigation: stateAccess([

@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "9c12ed5f61f7ea38e50aae01b55bd3169263e3123cdc26b2812be7dd71522316";
-  var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "12e282568814849ec381d16b1650d7316039a3790021226b89c53edb25f03cfa";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.12e282568814849ec381d16b1650d7316039a3790021226b89c53edb25f03cfa";
-  var CONTENT_RUNTIME_PREFERRED_MODEL_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preferred-model.js", "entryPath": "content-src/content-preferred-model.js", "sourceSha256": "cc45fd14cfd1f7343e92b85b1bce58e96f8268e1d07c43205d94350574f3c0ea", "implementationSha256": "c7a1119cfbf3bb19f9bcecd2fb1781c2011d8e8bf497382be530d769e599c9dd", "implementationVersion": "2026.07.16.2+bundle.c7a1119cfbf3bb19f9bcecd2fb1781c2011d8e8bf497382be530d769e599c9dd" });
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "8f47841f8f83c720d5fca3f15d04d133b1bae243a40603f9b5087d8270d08cb8";
+  var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
+  var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "0a283853c2456cc798107c7f6dc3fb8b8aeb7a9e3de13f998567e9406a90f75c";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.0a283853c2456cc798107c7f6dc3fb8b8aeb7a9e3de13f998567e9406a90f75c";
+  var CONTENT_RUNTIME_PREFERRED_MODEL_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preferred-model.js", "entryPath": "content-src/content-preferred-model.js", "sourceSha256": "cc45fd14cfd1f7343e92b85b1bce58e96f8268e1d07c43205d94350574f3c0ea", "implementationSha256": "35718ea345a97f33cd42983f21dd26ee380b7e7fa6a7ec2526b4dd81ecfc5565", "implementationVersion": "2026.07.16.2+bundle.35718ea345a97f33cd42983f21dd26ee380b7e7fa6a7ec2526b4dd81ecfc5565" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {

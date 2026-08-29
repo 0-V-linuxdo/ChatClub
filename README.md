@@ -34,7 +34,7 @@
 | Kagi Assistant | https://assistant.kagi.com/ | ✓ | ✓ | ✓ | ✓ |  |
 | Notion AI | https://app.notion.com/ai | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Perplexity | https://www.perplexity.ai/ | ✓ |  |  |  |  |
-| Poe | https://poe.com/ | ✓ |  | ✓ |  |  |
+| Poe | https://poe.com/ | ✓ | ✓ | ✓ |  |  |
 | Kimi.com | https://www.kimi.com/ | ✓ |  |  |  |  |
 | Kimi.ai | https://www.kimi.ai/ | ✓ |  |  |  |  |
 | DouBao | https://www.doubao.com/ | ✓ |  |  |  |  |
@@ -43,8 +43,8 @@
 | 千问 | https://www.qianwen.com/ | ✓ |  |  |  |  |
 | TypingMind | https://setapp.typingcloud.com/ | ✓ | ✓ |  |  |  |
 | LobeHub | https://app.lobehub.com/ | ✓ | ✓ |  |  |  |
-| AI Studio | https://aistudio.google.com/ |  |  | ✓ |  |  |
-| LeChat | https://chat.mistral.ai/ |  |  | ✓ |  |  |
+| AI Studio | https://aistudio.google.com/ |  | ✓ | ✓ |  |  |
+| LeChat | https://chat.mistral.ai/ |  | ✓ | ✓ |  |  |
 
 ## 安装
 

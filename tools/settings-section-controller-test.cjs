@@ -91,6 +91,7 @@ globalThis.document = { addEventListener() {} };
     "options",
     "summaryCollectorDragId",
     "summaryCollectorEditingId",
+    "summaryCollectorLastRun",
     "summarySettingsTab"
   ]);
   assert.deepEqual(stateKeys(optimizeSource), []);

@@ -1,6 +1,7 @@
 import { t } from "../../shared/i18n.js";
 import { storageGet, storageSet } from "../../shared/storage-adapter.js";
 import { findSummarySiteConfig } from "../../shared/url-match.js";
+import { summaryConfigHasCollector } from "../../shared/summary-sites.js";
 import { createActionButton } from "../../ui/components.js";
 import { el, iconButton, toast } from "../../ui/dom.js";
 import { requireControllerContext, requireControllerFunction, validateControllerContract } from "../controller-contract.js";
@@ -560,10 +561,7 @@ export function createShareController(ctx) {
     if (!config) return collectSharePageText(iframe);
     const summaryReady = await prepareContentFrameRuntime(iframe, { summary: true });
     if (!summaryReady?.ok) return collectSharePageText(iframe);
-    const hasSummaryRunner = Boolean(
-      config.userscriptFile
-      || ((config.sourceMode === "custom" || config.builtIn === false) && String(config.customUserscript || "").trim())
-    );
+    const hasSummaryRunner = summaryConfigHasCollector(config);
     if (hasSummaryRunner) {
       const runtimeConfig = { ...config };
       delete runtimeConfig.userscript;

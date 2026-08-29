@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "9c12ed5f61f7ea38e50aae01b55bd3169263e3123cdc26b2812be7dd71522316";
-  var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "12e282568814849ec381d16b1650d7316039a3790021226b89c53edb25f03cfa";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.12e282568814849ec381d16b1650d7316039a3790021226b89c53edb25f03cfa";
-  var CONTENT_RUNTIME_SUMMARY_ISOLATED_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts.js", "entryPath": "content-src/summary-userscripts.js", "sourceSha256": "25a5235dd436277093044fabbb4d83ddedc548db58e5c526c228616f2d9e8ade", "implementationSha256": "dd684c3b963c766ab17f3a8229695ce9b9555d68e407e47056f652159a02a90e", "implementationVersion": "2026.07.16.2+bundle.dd684c3b963c766ab17f3a8229695ce9b9555d68e407e47056f652159a02a90e" });
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "8f47841f8f83c720d5fca3f15d04d133b1bae243a40603f9b5087d8270d08cb8";
+  var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
+  var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "0a283853c2456cc798107c7f6dc3fb8b8aeb7a9e3de13f998567e9406a90f75c";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.0a283853c2456cc798107c7f6dc3fb8b8aeb7a9e3de13f998567e9406a90f75c";
+  var CONTENT_RUNTIME_SUMMARY_ISOLATED_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts.js", "entryPath": "content-src/summary-userscripts.js", "sourceSha256": "0a16816753b74928fa8d15f3d12dcb95c35d17c270f6c025462ec82571903556", "implementationSha256": "8acee7417ee2b5e86ec53050e42eca0d0415b0858cfa470b794297af576305c8", "implementationVersion": "2026.07.16.2+bundle.8acee7417ee2b5e86ec53050e42eca0d0415b0858cfa470b794297af576305c8" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -113,8 +113,6 @@
   function createSummaryRunnerRegistry() {
     const scripts = /* @__PURE__ */ Object.create(null);
     scripts["chatgpt"] = async function(api) {
-      const official = typeof api.collectOfficialCandidate === "function" ? await api.collectOfficialCandidate() : null;
-      if (Array.isArray(official) && official.length) return official;
       const opts = {
         copyButtonSelector: 'button[data-testid="copy-turn-action-button"],button[aria-label="Copy message"],button[aria-label="Copy response"]',
         maxButtons: 80
@@ -175,8 +173,6 @@
     };
     scripts["chatgpt.js"] = scripts["chatgpt"];
     scripts["claude"] = async function(api) {
-      const official = typeof api.collectOfficialCandidate === "function" ? await api.collectOfficialCandidate() : null;
-      if (Array.isArray(official) && official.length) return official;
       const normalize = (value) => api.normalize(String(value || ""));
       const qsa = (selector, root2 = document) => {
         try {
@@ -583,8 +579,6 @@
     };
     scripts["claude.js"] = scripts["claude"];
     scripts["gemini"] = async function(api) {
-      const official = typeof api.collectOfficialCandidate === "function" ? await api.collectOfficialCandidate() : null;
-      if (Array.isArray(official) && official.length) return official;
       const copyTimeoutMs = Math.max(500, Math.min(3e3, Number(api.config && api.config.copyTimeoutMs) || 1400));
       const retryCopyTimeoutMs = Math.max(copyTimeoutMs + 400, 1800);
       const root = api.qs('main,[role="main"]') || document.body;
@@ -766,8 +760,6 @@
     };
     scripts["gemini.js"] = scripts["gemini"];
     scripts["deepseek"] = async function(api) {
-      const official = typeof api.collectOfficialCandidate === "function" ? await api.collectOfficialCandidate() : null;
-      if (Array.isArray(official) && official.length) return official;
       const site = "deepseek";
       const root = api.qs('main,[role="main"]') || document.body || document.documentElement;
       const copyOptions = {
@@ -1234,8 +1226,6 @@
     };
     scripts["deepseek.js"] = scripts["deepseek"];
     scripts["grok"] = async function(api) {
-      const official = typeof api.collectOfficialCandidate === "function" ? await api.collectOfficialCandidate() : null;
-      if (Array.isArray(official) && official.length) return official;
       const root = api.qs('main,[role="main"]') || document.body || document.documentElement;
       const controlSelector = "button,[role=button]";
       const copyOptions = {
@@ -1513,8 +1503,6 @@
     };
     scripts["grok.js"] = scripts["grok"];
     scripts["grok-dairoot"] = async function(api) {
-      const official = typeof api.collectOfficialCandidate === "function" ? await api.collectOfficialCandidate() : null;
-      if (Array.isArray(official) && official.length) return official;
       const root = api.qs('main,[role="main"]') || document.body || document.documentElement;
       const controlSelector = "button,[role=button]";
       const copyOptions = {
@@ -1792,8 +1780,6 @@
     };
     scripts["grok-dairoot.js"] = scripts["grok-dairoot"];
     scripts["kagi"] = async function(api) {
-      const official = typeof api.collectOfficialCandidate === "function" ? await api.collectOfficialCandidate() : null;
-      if (Array.isArray(official) && official.length) return official;
       const normalize = (value) => api.normalize(String(value || ""));
       const root = api.qs('main,[role="main"]') || document.body || document.documentElement;
       const qsa = (selector, scope = document) => {
@@ -1901,8 +1887,6 @@
     };
     scripts["kagi.js"] = scripts["kagi"];
     scripts["notion"] = async function(api) {
-      const official = typeof api.collectOfficialCandidate === "function" ? await api.collectOfficialCandidate() : null;
-      if (Array.isArray(official) && official.length) return official;
       const normalize = (value) => api.normalize(String(value || ""));
       const qsa = (selector, root2 = document) => {
         try {
@@ -2037,8 +2021,6 @@
     };
     scripts["notion.js"] = scripts["notion"];
     scripts["lobehub"] = async function(api) {
-      const official = typeof api.collectOfficialCandidate === "function" ? await api.collectOfficialCandidate() : null;
-      if (Array.isArray(official) && official.length) return official;
       const normalizeMeta = (value) => api.normalize(String(value || ""));
       const cleanCopied = (value) => String(value || "").replace(/\r\n/g, "\n").replace(/\u00a0/g, " ").replace(/[\t ]+\n/g, "\n").replace(/\n[\t ]+/g, "\n").trim();
       const qsa = (selector, root = document) => {
@@ -2353,8 +2335,6 @@
     };
     scripts["lobehub.js"] = scripts["lobehub"];
     scripts["typingmind"] = async function(api) {
-      const official = typeof api.collectOfficialCandidate === "function" ? await api.collectOfficialCandidate() : null;
-      if (Array.isArray(official) && official.length) return official;
       const out = [];
       const seen = /* @__PURE__ */ new Set();
       const norm = (v) => api.normalize(String(v || ""));
@@ -2451,8 +2431,6 @@
     };
     scripts["typingmind.js"] = scripts["typingmind"];
     scripts["manus"] = async function(api) {
-      const official = typeof api.collectOfficialCandidate === "function" ? await api.collectOfficialCandidate() : null;
-      if (Array.isArray(official) && official.length) return official;
       const copyOptions = {
         resetClipboardBeforeCopy: true,
         acceptUnchangedClipboard: false,
@@ -2875,7 +2853,19 @@
       return sanitizeConversation([...orderedTurns(userTurns, assistantTurns), ...pageTurns, ...copied]);
     };
     scripts["manus.js"] = scripts["manus"];
-    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.12e282568814849ec381d16b1650d7316039a3790021226b89c53edb25f03cfa" });
+    scripts["poe"] = async function(api) {
+      return [];
+    };
+    scripts["poe.js"] = scripts["poe"];
+    scripts["aiStudio"] = async function(api) {
+      return [];
+    };
+    scripts["ai-studio.js"] = scripts["aiStudio"];
+    scripts["lechat"] = async function(api) {
+      return [];
+    };
+    scripts["lechat.js"] = scripts["lechat"];
+    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.0a283853c2456cc798107c7f6dc3fb8b8aeb7a9e3de13f998567e9406a90f75c" });
     return scripts;
   }
 

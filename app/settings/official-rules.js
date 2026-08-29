@@ -64,7 +64,7 @@ const OFFICIAL_RULES_COPY_FIELDS = Object.freeze([
   "revokeAliasBody", "checked", "modeSaved", "applied", "rolledBack", "componentRolledBack",
   "componentRestored", "aliasApproved", "aliasRevoked", "overrideCleared", "statusIdle", "statusChecking",
   "statusApplying", "statusAvailable", "statusReady", "statusExtensionUpdateRequired", "statusRecoveryRequired",
-  "statusError", "dateLocale", "labelSeparator"
+  "statusError", "dateLocale", "labelSeparator", "testCurrentTab", "testCurrentTabUnsupported"
 ]);
 
 const FEATURE_I18N_KEYS = Object.freeze({
@@ -394,6 +394,7 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
   if (typeof dependencies.svgIcon !== "function") throw new TypeError("Official rules settings requires svgIcon().");
   const svgIcon = dependencies.svgIcon;
   const notify = typeof dependencies.notify === "function" ? dependencies.notify : toast;
+  const testCurrentTab = typeof dependencies.testCurrentTab === "function" ? dependencies.testCurrentTab : null;
   const copyOverrides = record(dependencies.copy);
   let copy = officialRulesCopy(copyOverrides);
   installOfficialRulesSettingsStyles();
@@ -411,6 +412,7 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
   let unsubscribe = () => {};
   let activeRulesTab = "updates";
   const siteDisclosureState = new Map();
+  const componentProbeResults = new Map();
 
   function icon(name) {
     try { return svgIcon(name); } catch { return null; }
@@ -655,6 +657,30 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
     );
   }
 
+  async function probeComponent(component) {
+    if (!testCurrentTab || component.feature !== "summary") {
+      notify(copy.testCurrentTabUnsupported, "error");
+      return;
+    }
+    try {
+      const result = await testCurrentTab(component.componentKey);
+      if (result?.ok) {
+        const label = `${copy.testCurrentTab}: ${Number(result.turnCount) || 0}`;
+        componentProbeResults.set(component.componentKey, label);
+        notify(label, "success");
+      } else {
+        const error = result?.error === "unsupported"
+          ? copy.testCurrentTabUnsupported
+          : (result?.error || copy.statusError);
+        componentProbeResults.set(component.componentKey, error);
+        notify(error, "error");
+      }
+      render();
+    } catch (error) {
+      notify(error?.message || String(error), "error");
+    }
+  }
+
   function aliasAction(alias) {
     const approve = !alias.approved;
     openConfirmation({
@@ -704,10 +730,19 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
         component.candidateVersion
           ? el("span", {}, `${copy.candidateVersion} `, el("code", {}, component.candidateVersion))
           : null,
-        component.changed ? el("span", { class: "official-rules-chip" }, copy.changed) : null
+        component.changed ? el("span", { class: "official-rules-chip" }, copy.changed) : null,
+        componentProbeResults.get(component.componentKey)
+          ? el("small", { class: "official-rules-probe-result" }, componentProbeResults.get(component.componentKey))
+          : null
       )
     ),
     el("div", { class: "official-rules-row-actions" },
+      testCurrentTab && component.feature === "summary"
+        ? actionButton(copy.testCurrentTab, "preview", () => probeComponent(component), {
+          action: `test:${component.componentKey}`,
+          disabled: Boolean(busy)
+        })
+        : null,
       actionButton(copy.clearOverride, "reset", () => clearComponentOverride(component), {
         action: `clear-override:${component.componentKey}`,
         disabled: Boolean(busy) || current.phase === "recovery-required" || !component.canClearOverride

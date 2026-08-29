@@ -624,7 +624,7 @@ function ensureSettingsController() {
           applyPreferredModels: applyPreferredModelsToFrames,
           applyTheme,
           syncI18nLanguage,
-          requestUserScriptsPermission: requestUserScriptsAccess,
+          requestUserScriptsPermission: requestUserScriptsAccess, probeSummaryCollector: async (config) => (await ensureSummaryController()).probeCollectorOnActiveFrame(config),
           functionalAnomalyLog: functionalAnomalyController,
           hydrateImportedLayoutIfNeeded: workspaceController.hydrateImportedLayoutIfNeeded,
           reconcileAppCatalog: workspaceController.reconcileAppCatalog,

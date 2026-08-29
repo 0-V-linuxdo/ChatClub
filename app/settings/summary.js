@@ -27,7 +27,8 @@ export function createSummarySettingsSection(ctx) {
     svgIcon: "function",
     notifyConfigReload: "function",
     saveOptionsPatch: "function",
-    ensureUserScriptsPermission: "function"
+    ensureUserScriptsPermission: "function",
+    probeSummaryCollector: "function?"
   });
   const state = requireSettingsSectionStatePort(
     requireControllerContext(ctx, controllerName, "state"),
@@ -37,6 +38,7 @@ export function createSummarySettingsSection(ctx) {
       "settingsPromptTemplateDragId",
       "summaryCollectorDragId",
       "summaryCollectorEditingId",
+      "summaryCollectorLastRun",
       "summarySettingsTab"
     ]
   );
@@ -44,6 +46,7 @@ export function createSummarySettingsSection(ctx) {
   const notifyConfigReload = requireControllerFunction(ctx, controllerName, "notifyConfigReload");
   const saveOptionsPatch = requireControllerFunction(ctx, controllerName, "saveOptionsPatch");
   const ensureUserScriptsPermission = requireControllerFunction(ctx, controllerName, "ensureUserScriptsPermission");
+  const probeSummaryCollector = typeof ctx.probeSummaryCollector === "function" ? ctx.probeSummaryCollector : null;
   const settingsKit = createSettingsKit({ svgIcon });
   const {
     settingsBlock,
@@ -149,6 +152,13 @@ export function createSummarySettingsSection(ctx) {
       : t("summary.collector.builtInAutoUpdate");
   }
 
+  function formatCollectorLastRun(run) {
+    if (!run) return t("summary.collector.lastRunNone");
+    if (run.ok) return t("summary.collector.probeOk", { count: Number(run.turnCount) || 0 });
+    if (run.error === "no-frame") return t("summary.collector.noActiveFrame");
+    return t("summary.collector.probeFail", { error: run.error || t("common.failed") });
+  }
+
   function summaryCollectorRunModeLabel(mode) {
     return mode === "pageWorldFirst" ? t("summary.collector.pageWorldFirst") : t("summary.collector.serialBridge");
   }
@@ -234,6 +244,45 @@ export function createSummarySettingsSection(ctx) {
     syncSourceModeUi();
     let dialog;
     const close = () => dialog.remove();
+    const lastRunNode = el("small", {
+      class: "summary-collector-last-run",
+      "aria-live": "polite"
+    }, formatCollectorLastRun(
+      state.summaryCollectorLastRun?.collectorId === (config?.id || draft.id)
+        ? state.summaryCollectorLastRun
+        : null
+    ));
+    const probeCurrentTab = probeSummaryCollector
+      ? async () => {
+        const timeout = Math.max(5000, Math.min(45000, Number(timeoutInput.value) || 24000));
+        const copyTimeout = copyTimeoutInput.value.trim()
+          ? Math.max(300, Math.min(10000, Number(copyTimeoutInput.value) || 0))
+          : undefined;
+        const probeConfig = {
+          ...draft,
+          name: nameInput.value.trim() || draft.name,
+          enabled: enabledInput.checked,
+          builtIn: Boolean(builtIn),
+          hosts: linesFromText(hostsInput.value),
+          pathPrefixes: linesFromText(pathInput.value),
+          fallbackMode: messagePullSelect.value,
+          userscriptRunMode: runModeSelect.value,
+          userscriptTimeoutMs: timeout,
+          sourceMode,
+          ...(sourceMode === "custom" ? { customUserscript: userscriptInput.value } : {}),
+          ...(copyTimeout ? { copyTimeoutMs: copyTimeout } : {})
+        };
+        const result = await probeSummaryCollector(probeConfig);
+        state.summaryCollectorLastRun = {
+          collectorId: config?.id || draft.id,
+          ...result,
+          at: Date.now()
+        };
+        lastRunNode.textContent = formatCollectorLastRun(state.summaryCollectorLastRun);
+        if (result?.ok) toast(t("summary.collector.probeOk", { count: Number(result.turnCount) || 0 }), "success");
+        else toast(formatCollectorLastRun(state.summaryCollectorLastRun), "error");
+      }
+      : null;
     const save = async () => {
       const hosts = linesFromText(hostsInput.value);
       const userscript = userscriptInput.value;
@@ -301,7 +350,11 @@ export function createSummarySettingsSection(ctx) {
           el("div", {},
             el("strong", {}, t("summary.collector.infoTitle")),
             el("p", {}, t("summary.collector.infoBody")),
-            sourceLabelNode
+            sourceLabelNode,
+            el("div", { class: "summary-collector-last-run-row" },
+              el("strong", {}, t("summary.collector.lastRun")),
+              lastRunNode
+            )
           )
         ),
         permissionNotice,
@@ -317,6 +370,7 @@ export function createSummarySettingsSection(ctx) {
             await resetSummaryCollector(config, redraw);
             close();
           }) : null,
+          probeCurrentTab ? button(t("summary.collector.probe"), probeCurrentTab) : null,
           button(t("common.cancel"), close),
           button(editing ? t("common.save") : t("common.add"), save, "primary")
         )
@@ -430,6 +484,13 @@ export function createSummarySettingsSection(ctx) {
         field(t("summary.collector.runMode"), el("div", { class: "summary-script-meta" },
           el("span", {}, summaryCollectorRunModeLabel(config.userscriptRunMode)),
           el("small", {}, t("summary.collector.timeoutMs", { count: config.userscriptTimeoutMs || 24000 }))
+        )),
+        field(t("summary.collector.lastRun"), el("small", {},
+          formatCollectorLastRun(
+            state.summaryCollectorLastRun?.collectorId === config.id
+              ? state.summaryCollectorLastRun
+              : null
+          )
         ))
       )
     );

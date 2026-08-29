@@ -1,5 +1,5 @@
 {
-  "summarySiteConfigVersion": 81,
+  "summarySiteConfigVersion": 82,
   "configs": [
     {
       "id": "chatgpt",
@@ -158,6 +158,37 @@
       "userscriptFallbackDelayMs": 1000,
       "userscriptFile": "manus.js",
       "userscriptLength": 21440
+    },
+    {
+      "id": "poe",
+      "name": "Poe",
+      "configVersion": 1,
+      "hosts": [
+        "poe.com",
+        "*.poe.com"
+      ],
+      "userscriptFile": "poe.js",
+      "userscriptLength": 10
+    },
+    {
+      "id": "aiStudio",
+      "name": "AI Studio",
+      "configVersion": 1,
+      "hosts": [
+        "aistudio.google.com"
+      ],
+      "userscriptFile": "ai-studio.js",
+      "userscriptLength": 10
+    },
+    {
+      "id": "lechat",
+      "name": "LeChat",
+      "configVersion": 1,
+      "hosts": [
+        "chat.mistral.ai"
+      ],
+      "userscriptFile": "lechat.js",
+      "userscriptLength": 10
     }
   ]
 }

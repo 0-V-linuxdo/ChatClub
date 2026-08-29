@@ -4,6 +4,7 @@ import { storageGet, storageSet } from "../../shared/storage-adapter.js";
 import { normalizePocketIcon } from "../../shared/storage-schema.js";
 import { pocketChromeLabelKey } from "../../shared/topbar.js";
 import { findSummarySiteConfig } from "../../shared/url-match.js";
+import { summaryConfigHasCollector } from "../../shared/summary-sites.js";
 import { createActionButton } from "../../ui/components.js";
 import { el, iconButton, textarea } from "../../ui/dom.js";
 import { optionalControllerFunction, optionalControllerObject, requireControllerContext, requireControllerFunction, validateControllerContract } from "../controller-contract.js";
@@ -838,10 +839,7 @@ export function createSummaryController(ctx) {
   
     try {
       let messages = [];
-      const hasSummaryRunner = Boolean(
-        siteConfig?.userscriptFile
-        || ((siteConfig?.sourceMode === "custom" || siteConfig?.builtIn === false) && String(siteConfig?.customUserscript || "").trim())
-      );
+      const hasSummaryRunner = summaryConfigHasCollector(siteConfig);
       if (hasSummaryRunner) {
         const runtimeConfig = { ...siteConfig };
         delete runtimeConfig.userscript;
@@ -1096,6 +1094,55 @@ export function createSummaryController(ctx) {
       syncSummaryPanel();
     }
   }
+
+  async function probeCollectorOnActiveFrame(config = {}) {
+    const frames = currentFrames();
+    const iframe = frames.find((frame) => frame?.classList?.contains("active")) || frames[0] || null;
+    if (!iframe) {
+      return { ok: false, error: "no-frame", turnCount: 0, stage: "none", href: "" };
+    }
+    const app = frameApp(iframe);
+    const base = await summaryFrameMeta(iframe, app, 0);
+    const href = String(base?.href || iframe.dataset?.currentHref || iframe.src || "");
+    const summaryReady = await prepareContentFrameRuntime(iframe, { summary: true });
+    if (!summaryReady?.ok) {
+      return {
+        ok: false,
+        href,
+        turnCount: 0,
+        stage: "none",
+        error: summaryReady?.reason || t("summaryPanel.collectionFailed")
+      };
+    }
+    const runtimeConfig = { ...config };
+    delete runtimeConfig.userscript;
+    delete runtimeConfig.customUserscript;
+    try {
+      const result = await sendToContentFrame(iframe, "collectSummary", {
+        config: runtimeConfig,
+        expectedDocumentId: summaryReady.registration?.documentId,
+        expectedHref: href
+      }, config.userscriptTimeoutMs || 36000);
+      const messages = Array.isArray(result?.messages) ? result.messages : [];
+      const hasPair = messages.some((item) => item?.role === "user") && messages.some((item) => item?.role === "assistant");
+      return {
+        ok: hasPair,
+        href,
+        turnCount: messages.length,
+        stage: result?.stage || (hasPair ? "isolatedJs" : "none"),
+        error: hasPair ? "" : (messages.length ? "no-pair" : "empty")
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        href,
+        turnCount: 0,
+        stage: "none",
+        error: error?.message || String(error)
+      };
+    }
+  }
+
   
 
   return {
@@ -1105,6 +1152,7 @@ export function createSummaryController(ctx) {
     loadPanelSize: loadSummaryPanelSize,
     scheduleIdleFullTextCapture,
     scheduleExistingIdleFullTextCapture,
-    collectWorkspacePreviewItems
+    collectWorkspacePreviewItems,
+    probeCollectorOnActiveFrame
   };
 }

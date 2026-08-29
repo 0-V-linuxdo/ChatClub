@@ -64,6 +64,21 @@ export const SUMMARY_SITE_CONFIGS = Object.freeze([
     userscriptRunMode: "pageWorldFirst", userscriptTimeoutMs: 36000,
     copyTimeoutMs: 3600, userscriptFallbackDelayMs: 1000,
     userscriptFile: "manus.js", userscriptLength: 21440
+  },
+  {
+    id: "poe", name: "Poe", configVersion: 1,
+    hosts: ["poe.com", "*.poe.com"],
+    userscriptFile: "poe.js", userscriptLength: 10
+  },
+  {
+    id: "aiStudio", name: "AI Studio", configVersion: 1,
+    hosts: ["aistudio.google.com"],
+    userscriptFile: "ai-studio.js", userscriptLength: 10
+  },
+  {
+    id: "lechat", name: "LeChat", configVersion: 1,
+    hosts: ["chat.mistral.ai"],
+    userscriptFile: "lechat.js", userscriptLength: 10
   }
 ].map(Object.freeze));
 
@@ -95,4 +110,17 @@ export async function loadBuiltInSummarySource(idOrFile, options = {}) {
     throw new Error(`${descriptor.userscriptFile}: expected ${descriptor.userscriptLength} bytes, received ${body.length}`);
   }
   return body;
+}
+
+export function summaryConfigHasCollector(config = {}) {
+  if (!config || typeof config !== "object") return false;
+  if (String(config.userscriptFile || "").trim()) return true;
+  if ((config.sourceMode === "custom" || config.builtIn === false) && String(config.customUserscript || "").trim()) {
+    return true;
+  }
+  const hints = config.officialRuleHints;
+  if (!hints || typeof hints !== "object" || Array.isArray(hints)) return false;
+  return Object.values(hints).some((value) => (
+    Array.isArray(value) && value.some((item) => String(item || "").trim())
+  ));
 }

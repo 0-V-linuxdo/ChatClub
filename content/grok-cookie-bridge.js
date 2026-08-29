@@ -69,12 +69,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "9c12ed5f61f7ea38e50aae01b55bd3169263e3123cdc26b2812be7dd71522316";
-  var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "12e282568814849ec381d16b1650d7316039a3790021226b89c53edb25f03cfa";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.12e282568814849ec381d16b1650d7316039a3790021226b89c53edb25f03cfa";
-  var CONTENT_RUNTIME_GROK_COOKIE_BRIDGE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/grok-cookie-bridge.js", "entryPath": "content-src/grok-cookie-bridge.js", "sourceSha256": "7ef3781174d8283684d0a9c96d51040e09081b9cbeb77c31d9fa25a8c49c54df", "implementationSha256": "2ee4a4814f003c0cef22300f2bb3141ce4e5c89859ccc1bdd2d0297ad58f9b73", "implementationVersion": "2026.07.16.2+bundle.2ee4a4814f003c0cef22300f2bb3141ce4e5c89859ccc1bdd2d0297ad58f9b73" });
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "8f47841f8f83c720d5fca3f15d04d133b1bae243a40603f9b5087d8270d08cb8";
+  var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
+  var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "0a283853c2456cc798107c7f6dc3fb8b8aeb7a9e3de13f998567e9406a90f75c";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.0a283853c2456cc798107c7f6dc3fb8b8aeb7a9e3de13f998567e9406a90f75c";
+  var CONTENT_RUNTIME_GROK_COOKIE_BRIDGE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/grok-cookie-bridge.js", "entryPath": "content-src/grok-cookie-bridge.js", "sourceSha256": "7ef3781174d8283684d0a9c96d51040e09081b9cbeb77c31d9fa25a8c49c54df", "implementationSha256": "ff5a80de7da514784e03834b29e23c90d7d044f804fefc142ffc9cb3f58cdd5f", "implementationVersion": "2026.07.16.2+bundle.ff5a80de7da514784e03834b29e23c90d7d044f804fefc142ffc9cb3f58cdd5f" });
 
   // shared/background-request-core.js
   var BACKGROUND_REQUEST_SOURCE = "chatclub";

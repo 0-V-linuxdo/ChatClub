@@ -128,6 +128,90 @@ const assert = require("node:assert/strict");
     globalThis.location.href = "https://chatgpt.com/new/thread";
     assert.deepEqual((await scopedCapability.collectSummary({ config: scopedConfig })).messages, officialMessages);
     assert.equal(officialCalls, 1, "exact signed HTTPS host and path may use official Summary hints");
+
+    officialCalls = 0;
+    let pageCalls = 0;
+    let runnerCalls = 0;
+    const pipelineCapability = createSummaryCapability({
+      contentDocumentId: "fixture-document",
+      runtimes: {
+        require() {
+          return {
+            scripts: {
+              chatgpt: async () => {
+                runnerCalls += 1;
+                return packagedMessages;
+              }
+            }
+          };
+        }
+      },
+      CONTENT_BRIDGE_VERSION: "fixture",
+      merge: (items) => items,
+      hasUserAndAssistant: (items) => items.some((item) => item.role === "user") && items.some((item) => item.role === "assistant"),
+      collectOfficialSummaryMessages: () => {
+        officialCalls += 1;
+        return officialMessages;
+      },
+      pageSummaryRequest: async () => {
+        pageCalls += 1;
+        return { messages: packagedMessages };
+      },
+      qsa: () => [],
+      closest: () => null,
+      visible: () => true,
+      normalize: (value) => String(value || ""),
+      sleep: async () => {}
+    });
+    const pageWorldConfig = { ...scopedConfig, userscriptRunMode: "pageWorldFirst" };
+    const officialFirst = await pipelineCapability.collectSummary({ config: pageWorldConfig });
+    assert.deepEqual(officialFirst.messages, officialMessages, "JSON-first pipeline must return official turns before page-world JS");
+    assert.equal(officialFirst.stage, "official");
+    assert.equal(pageCalls, 0, "pageWorldFirst must not run when official JSON already collected a conversation");
+    assert.equal(runnerCalls, 0, "packaged JS must not run when official JSON already collected a conversation");
+    assert.equal(officialCalls, 1, "official JSON is a pipeline stage, not a runner helper");
+
+    officialCalls = 0;
+    const noRunnerCapability = createSummaryCapability({
+      contentDocumentId: "fixture-document",
+      runtimes: { require() { return { scripts: {} }; } },
+      CONTENT_BRIDGE_VERSION: "fixture",
+      merge: (items) => items,
+      hasUserAndAssistant: (items) => items.some((item) => item.role === "user") && items.some((item) => item.role === "assistant"),
+      collectOfficialSummaryMessages: () => {
+        officialCalls += 1;
+        return officialMessages;
+      },
+      pageSummaryRequest: async () => {
+        throw new Error("page-world JS must not run for an official-only collector");
+      },
+      qsa: () => [],
+      closest: () => null,
+      visible: () => true,
+      normalize: (value) => String(value || ""),
+      sleep: async () => {}
+    });
+    const officialOnly = await noRunnerCapability.collectSummary({
+      config: { ...scopedConfig, userscriptRunMode: "serial" }
+    });
+    assert.deepEqual(officialOnly.messages, officialMessages, "official JSON must collect without a packaged runner");
+    assert.equal(officialOnly.stage, "official");
+    assert.equal(officialCalls, 1);
+
+    const { summaryConfigHasCollector } = await import("../shared/summary-sites.js");
+    assert.equal(summaryConfigHasCollector({ userscriptFile: "poe.js" }), true);
+    assert.equal(summaryConfigHasCollector({
+      officialRuleHints: { messageRoot: [".message"], userRoot: [".user"], assistantRoot: [".assistant"] }
+    }), true, "filled official slots are a collector even without a userscript file");
+    assert.equal(summaryConfigHasCollector({
+      officialRuleHints: { messageRoot: [], userRoot: [], assistantRoot: [] }
+    }), false, "empty packaged official slots are not a collector by themselves");
+    assert.equal(summaryConfigHasCollector({
+      builtIn: false,
+      sourceMode: "custom",
+      customUserscript: "return [];"
+    }), true);
+
     console.log("official Summary selector hints remain strict, role-safe, and DOM-identity based: ok");
   } finally {
     if (previous.document === undefined) delete globalThis.document;

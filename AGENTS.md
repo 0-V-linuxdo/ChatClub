@@ -198,6 +198,16 @@ The per-file Summary header is descriptive only. Do not treat a legacy `global c
 
 Do not patch only an embedded generated copy.
 
+## Summary Collection Pipeline
+
+Isolated `collectSummary` is JSON-first, then JS. Do not move official signed selectors back inside packaged runner wrappers.
+
+1. Custom source (`sourceMode: "custom"`, `builtIn: false`, or `userscriptOverride`) still wins and skips official JSON.
+2. Official signed selector hints run next (`officialRuleConfigMatchesHref` + `collectOfficialSummaryMessages`), including `officialRuleWaitMs`.
+3. `pageWorldFirst` MAIN JS, then isolated packaged JS.
+
+Packaged `userscripts/*.js` stay JS-only. `api.collectOfficialCandidate` remains for custom authors. A site with a userscript file, custom body, or filled official slots is a collector (`summaryConfigHasCollector`). Empty packaged selector arrays are not. Settings Probe current tab / official-rules Test on current tab dry-run `collectSummary` on the active frame without opening Summary.
+
 ### Built-in Delete Site behavior
 
 Normal built-in execution prefers the native runner. Standalone userscripts are independent userscript/custom/compatibility assets, not the normal built-in execution path.

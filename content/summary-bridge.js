@@ -68,14 +68,14 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "9c12ed5f61f7ea38e50aae01b55bd3169263e3123cdc26b2812be7dd71522316";
-  var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "47d871506813d2066becb2ac4b8e101df80e418ad697eadddf5e577fcc1a3a76";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "12e282568814849ec381d16b1650d7316039a3790021226b89c53edb25f03cfa";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.12e282568814849ec381d16b1650d7316039a3790021226b89c53edb25f03cfa";
-  var CONTENT_RUNTIME_SUMMARY_BRIDGE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-bridge.js", "entryPath": "content-src/content-summary-bridge.js", "sourceSha256": "0e6f9ed09d644cf9f03621cbec7d0ed4e94e0e025328344e8003a57ee274c3ff", "implementationSha256": "10ae4e81468bd43e10d0f8041fd7ffc27a55a259456cd1131bcf4b861f63695d", "implementationVersion": "2026.07.16.2+bundle.10ae4e81468bd43e10d0f8041fd7ffc27a55a259456cd1131bcf4b861f63695d" });
-  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "d6970f7f70410169eca51c8e120b93fde89c136c8ad6a327ee0f0597fc0187b6", "implementationSha256": "ed47fe458434c00a0c6fd2e84e4edc11dbf3b73e04e40341ea02fbd25a367b56", "implementationVersion": "2026.07.16.2+bundle.ed47fe458434c00a0c6fd2e84e4edc11dbf3b73e04e40341ea02fbd25a367b56" });
-  var CONTENT_RUNTIME_SUMMARY_ISOLATED_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts.js", "entryPath": "content-src/summary-userscripts.js", "sourceSha256": "25a5235dd436277093044fabbb4d83ddedc548db58e5c526c228616f2d9e8ade", "implementationSha256": "dd684c3b963c766ab17f3a8229695ce9b9555d68e407e47056f652159a02a90e", "implementationVersion": "2026.07.16.2+bundle.dd684c3b963c766ab17f3a8229695ce9b9555d68e407e47056f652159a02a90e" });
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "8f47841f8f83c720d5fca3f15d04d133b1bae243a40603f9b5087d8270d08cb8";
+  var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
+  var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "0a283853c2456cc798107c7f6dc3fb8b8aeb7a9e3de13f998567e9406a90f75c";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.0a283853c2456cc798107c7f6dc3fb8b8aeb7a9e3de13f998567e9406a90f75c";
+  var CONTENT_RUNTIME_SUMMARY_BRIDGE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-bridge.js", "entryPath": "content-src/content-summary-bridge.js", "sourceSha256": "932d2c3857ec32ca37e1c533d9a6438ca188325e9d79e8abd4e7d2e85458cbf1", "implementationSha256": "9b35fd140ba0deff67d80e8b6a75cfec471f4e793d108261e77dfccd88bf659b", "implementationVersion": "2026.07.16.2+bundle.9b35fd140ba0deff67d80e8b6a75cfec471f4e793d108261e77dfccd88bf659b" });
+  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "350ab339301df9784ebd69d73407924adebd503a1fe920abca03c53d806040e3", "implementationSha256": "33ccab0040bad02079a5b863b2499987ab52351ee60ed6ead0e2d760babd77bb", "implementationVersion": "2026.07.16.2+bundle.33ccab0040bad02079a5b863b2499987ab52351ee60ed6ead0e2d760babd77bb" });
+  var CONTENT_RUNTIME_SUMMARY_ISOLATED_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts.js", "entryPath": "content-src/summary-userscripts.js", "sourceSha256": "0a16816753b74928fa8d15f3d12dcb95c35d17c270f6c025462ec82571903556", "implementationSha256": "8acee7417ee2b5e86ec53050e42eca0d0415b0858cfa470b794297af576305c8", "implementationVersion": "2026.07.16.2+bundle.8acee7417ee2b5e86ec53050e42eca0d0415b0858cfa470b794297af576305c8" });
 
   // shared/background-request-core.js
   var BACKGROUND_REQUEST_SOURCE = "chatclub";
@@ -1616,55 +1616,27 @@ ${value}`);
       assertSummaryTargetCurrent(data);
       return result;
     }
-    async function collectSummary(data) {
-      assertSummaryTargetCurrent(data);
-      const config = data?.config || {};
-      if (shouldUseCustomSummaryUserscript(config)) {
-        const customResult = await executeCustomSummaryUserscript(config);
-        const customMessages = merge2(Array.isArray(customResult?.messages) ? customResult.messages : []);
-        return finishSummaryCollection(data, {
-          messages: hasUserAndAssistant2(customMessages) ? customMessages : [],
-          rawMessageCount: Number(customResult?.rawMessageCount) || customMessages.length
-        });
+    async function collectOfficialStage(config, data, { wait = true } = {}) {
+      if (!officialRuleConfigMatchesHref(config, String(location.href || ""))) return null;
+      const collect = () => merge2(collectOfficialSummaryMessages2?.(config, {
+        qsa: qsa2,
+        closest: closest2,
+        visible: visible2,
+        normalize: normalize2
+      }) || []);
+      let messages = collect();
+      const waitMs = wait ? Math.max(0, Math.min(6e4, Number(config.officialRuleWaitMs) || 0)) : 0;
+      if (!hasUserAndAssistant2(messages) && waitMs > 0 && typeof sleep2 === "function") {
+        await sleep2(waitMs);
+        assertSummaryTargetCurrent(data);
+        messages = collect();
       }
-      let registry = {};
-      try {
-        registry = runtimes.require("summary-runners", CONTENT_BRIDGE_VERSION2).scripts || {};
-      } catch {
-      }
-      const packagedRunner = registry[config.id] || registry[config.userscriptFile];
-      if (config.userscriptRunMode !== "serial") {
-        const pageResult = await pageSummaryRequest2(config);
-        const pageMessages = merge2(Array.isArray(pageResult?.messages) ? pageResult.messages : []);
-        if (hasUserAndAssistant2(pageMessages)) {
-          return finishSummaryCollection(data, {
-            messages: pageMessages,
-            rawMessageCount: Number(pageResult.rawMessageCount) || pageMessages.length
-          });
-        }
-      }
-      const runner = packagedRunner;
-      if (!runner) return finishSummaryCollection(data, { messages: [] });
-      const officialRuleActive = officialRuleConfigMatchesHref(config, String(location.href || ""));
-      const api = {
+      return hasUserAndAssistant2(messages) ? messages : null;
+    }
+    function summaryRunnerApi(config, data) {
+      return {
         config,
-        collectOfficialCandidate: async () => {
-          if (!officialRuleActive) return null;
-          const collect = () => merge2(collectOfficialSummaryMessages2?.(config, {
-            qsa: qsa2,
-            closest: closest2,
-            visible: visible2,
-            normalize: normalize2
-          }) || []);
-          let messages2 = collect();
-          const waitMs = Math.max(0, Math.min(6e4, Number(config.officialRuleWaitMs) || 0));
-          if (!hasUserAndAssistant2(messages2) && waitMs > 0) {
-            await sleep2(waitMs);
-            assertSummaryTargetCurrent(data);
-            messages2 = collect();
-          }
-          return hasUserAndAssistant2(messages2) ? messages2 : null;
-        },
+        collectOfficialCandidate: async () => collectOfficialStage(config, data, { wait: false }),
         sleep: sleep2,
         normalize: normalize2,
         qsa: qsa2,
@@ -1684,11 +1656,52 @@ ${value}`);
         extractTurns: extractTurns2,
         findCopyButtons: userscriptFindCopyButtons2
       };
-      const result = await runner(api);
+    }
+    async function collectSummary(data) {
+      assertSummaryTargetCurrent(data);
+      const config = data?.config || {};
+      if (shouldUseCustomSummaryUserscript(config)) {
+        const customResult = await executeCustomSummaryUserscript(config);
+        const customMessages = merge2(Array.isArray(customResult?.messages) ? customResult.messages : []);
+        return finishSummaryCollection(data, {
+          messages: hasUserAndAssistant2(customMessages) ? customMessages : [],
+          rawMessageCount: Number(customResult?.rawMessageCount) || customMessages.length,
+          stage: "custom"
+        });
+      }
+      const officialMessages = await collectOfficialStage(config, data, { wait: true });
+      if (officialMessages) {
+        return finishSummaryCollection(data, {
+          messages: officialMessages,
+          rawMessageCount: officialMessages.length,
+          stage: "official"
+        });
+      }
+      let registry = {};
+      try {
+        registry = runtimes.require("summary-runners", CONTENT_BRIDGE_VERSION2).scripts || {};
+      } catch {
+      }
+      const packagedRunner = registry[config.id] || registry[config.userscriptFile];
+      if (config.userscriptRunMode !== "serial") {
+        const pageResult = await pageSummaryRequest2(config);
+        const pageMessages = merge2(Array.isArray(pageResult?.messages) ? pageResult.messages : []);
+        if (hasUserAndAssistant2(pageMessages)) {
+          return finishSummaryCollection(data, {
+            messages: pageMessages,
+            rawMessageCount: Number(pageResult.rawMessageCount) || pageMessages.length,
+            stage: pageResult?.stage || "pageWorld"
+          });
+        }
+      }
+      const runner = packagedRunner;
+      if (!runner) return finishSummaryCollection(data, { messages: [], rawMessageCount: 0, stage: "none" });
+      const result = await runner(summaryRunnerApi(config, data));
       const messages = merge2(Array.isArray(result) ? result : result?.messages || []);
       return finishSummaryCollection(data, {
         messages: hasUserAndAssistant2(messages) ? messages : [],
-        rawMessageCount: messages.length
+        rawMessageCount: messages.length,
+        stage: "isolatedJs"
       });
     }
     async function getSummaryRuntimeState() {

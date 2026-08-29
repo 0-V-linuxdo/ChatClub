@@ -118,13 +118,16 @@ const assert = require("node:assert/strict");
     signature: Buffer.alloc(bytes).toString("base64url")
   });
 
-  assert.equal(OFFICIAL_RULES_BASELINE_COMPONENTS.length, 30);
-  assert.equal(officialRulesBaselineComponents("summary").length, 11);
+  assert.equal(OFFICIAL_RULES_BASELINE_COMPONENTS.length, 33);
+  assert.equal(officialRulesBaselineComponents("summary").length, 14);
   assert.equal(officialRulesBaselineComponents("messageNavigator").length, 11);
   assert.equal(officialRulesBaselineComponents("delete").length, 8);
   assert.equal(new Set(OFFICIAL_RULES_COMPONENT_KEYS).size, OFFICIAL_RULES_COMPONENT_KEYS.length);
   assert.equal(officialRulesComponentKey("summary", "chatgpt"), "summary/chatgpt");
   assert.equal(findOfficialRulesBaselineComponent("summary", "chatgpt")?.siteId, "chatgpt");
+  assert.equal(findOfficialRulesBaselineComponent("summary", "poe")?.siteId, "poe");
+  assert.equal(findOfficialRulesBaselineComponent("summary", "aiStudio")?.siteId, "aiStudio");
+  assert.equal(findOfficialRulesBaselineComponent("summary", "lechat")?.siteId, "lechat");
   assert.equal(officialRulesComponentProfile("messageNavigator", "grokMirror"), "grok");
   assert.equal(officialRulesComponentProfile("delete", "grokMirror"), "grok-mirror");
   assert.equal(officialRulesComponentProfile("summary", "missing"), "");

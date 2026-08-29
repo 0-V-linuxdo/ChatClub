@@ -37,6 +37,11 @@ const { assertContainedOutputPath } = require("./repository-files.cjs");
 const root = path.resolve(__dirname, "..");
 const generatorSource = fs.readFileSync(path.join(root, "tools/generate-artifacts.cjs"), "utf8");
 assert.match(generatorSource, /assertContainedOutputPath\(base, relativePath\)/);
+assert.doesNotMatch(
+  generatorSource,
+  /collectOfficialCandidate/,
+  "packaged Summary runners must stay JS-only; official JSON is a collectSummary pipeline stage"
+);
 
 assert.equal(Object.keys(CONTENT_ENTRIES).length, 10);
 assert.equal(Object.keys(TOPIC_DELETE_OUTPUTS).length, 8);

@@ -31,15 +31,15 @@ const byteBudgets = Object.freeze({
   "content/grok-cookie-bridge.js": 50_000,
   "content/message-navigator.js": 140_000,
   "content/preload.js": 214_385,
-  "content/summary-userscripts-main.js": 214_541,
-  "content/summary-userscripts.js": 156_226
+  "content/summary-userscripts-main.js": 215_370,
+  "content/summary-userscripts.js": 156_558
 });
-// Exact base-plus-capabilities closure after conversation-turn idle fingerprints
-// replaced main/body chrome probes in the shared summary runtime.
-const aggregateByteBudget = 777_450;
-// Exact all-bundle closure after conversation-turn idle fingerprints joined the
-// generated content bundles that inline FRAME_COMMAND_SPECS.
-const allBundlesByteBudget = 1_532_632;
+// Exact base-plus-capabilities closure after JSON-first official collection
+// joined the isolated Summary pipeline without packaged runner wrappers.
+const aggregateByteBudget = 777_951;
+// Exact all-bundle closure after Poe/AI Studio/LeChat official-slot stubs
+// joined the generated Summary registries.
+const allBundlesByteBudget = 1_534_252;
 
 const bundleIdentities = Object.fromEntries(Object.keys(CONTENT_ENTRIES).map((outputPath) => [
   outputPath,

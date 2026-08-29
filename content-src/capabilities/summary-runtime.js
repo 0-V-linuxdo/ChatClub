@@ -59,52 +59,28 @@ export function createSummaryCapability(deps = {}) {
     return result;
   }
 
-  async function collectSummary(data) {
-    assertSummaryTargetCurrent(data);
-    const config = data?.config || {};
-    if (shouldUseCustomSummaryUserscript(config)) {
-      const customResult = await executeCustomSummaryUserscript(config);
-      const customMessages = merge(Array.isArray(customResult?.messages) ? customResult.messages : []);
-      return finishSummaryCollection(data, {
-        messages: hasUserAndAssistant(customMessages) ? customMessages : [],
-        rawMessageCount: Number(customResult?.rawMessageCount) || customMessages.length
-      });
+  async function collectOfficialStage(config, data, { wait = true } = {}) {
+    if (!officialRuleConfigMatchesHref(config, String(location.href || ""))) return null;
+    const collect = () => merge(collectOfficialSummaryMessages?.(config, {
+      qsa,
+      closest,
+      visible,
+      normalize
+    }) || []);
+    let messages = collect();
+    const waitMs = wait ? Math.max(0, Math.min(60000, Number(config.officialRuleWaitMs) || 0)) : 0;
+    if (!hasUserAndAssistant(messages) && waitMs > 0 && typeof sleep === "function") {
+      await sleep(waitMs);
+      assertSummaryTargetCurrent(data);
+      messages = collect();
     }
-    let registry = {};
-    try { registry = runtimes.require("summary-runners", CONTENT_BRIDGE_VERSION).scripts || {}; } catch {}
-    const packagedRunner = registry[config.id] || registry[config.userscriptFile];
-    if (config.userscriptRunMode !== "serial") {
-      const pageResult = await pageSummaryRequest(config);
-      const pageMessages = merge(Array.isArray(pageResult?.messages) ? pageResult.messages : []);
-      if (hasUserAndAssistant(pageMessages)) {
-        return finishSummaryCollection(data, {
-          messages: pageMessages,
-          rawMessageCount: Number(pageResult.rawMessageCount) || pageMessages.length
-        });
-      }
-    }
-    const runner = packagedRunner;
-    if (!runner) return finishSummaryCollection(data, { messages: [] });
-    const officialRuleActive = officialRuleConfigMatchesHref(config, String(location.href || ""));
-    const api = {
+    return hasUserAndAssistant(messages) ? messages : null;
+  }
+
+  function summaryRunnerApi(config, data) {
+    return {
       config,
-      collectOfficialCandidate: async () => {
-        if (!officialRuleActive) return null;
-        const collect = () => merge(collectOfficialSummaryMessages?.(config, {
-          qsa,
-          closest,
-          visible,
-          normalize
-        }) || []);
-        let messages = collect();
-        const waitMs = Math.max(0, Math.min(60000, Number(config.officialRuleWaitMs) || 0));
-        if (!hasUserAndAssistant(messages) && waitMs > 0) {
-          await sleep(waitMs);
-          assertSummaryTargetCurrent(data);
-          messages = collect();
-        }
-        return hasUserAndAssistant(messages) ? messages : null;
-      },
+      collectOfficialCandidate: async () => collectOfficialStage(config, data, { wait: false }),
       sleep,
       normalize,
       qsa,
@@ -124,11 +100,50 @@ export function createSummaryCapability(deps = {}) {
       extractTurns,
       findCopyButtons: userscriptFindCopyButtons
     };
-    const result = await runner(api);
+  }
+
+  async function collectSummary(data) {
+    assertSummaryTargetCurrent(data);
+    const config = data?.config || {};
+    if (shouldUseCustomSummaryUserscript(config)) {
+      const customResult = await executeCustomSummaryUserscript(config);
+      const customMessages = merge(Array.isArray(customResult?.messages) ? customResult.messages : []);
+      return finishSummaryCollection(data, {
+        messages: hasUserAndAssistant(customMessages) ? customMessages : [],
+        rawMessageCount: Number(customResult?.rawMessageCount) || customMessages.length,
+        stage: "custom"
+      });
+    }
+    const officialMessages = await collectOfficialStage(config, data, { wait: true });
+    if (officialMessages) {
+      return finishSummaryCollection(data, {
+        messages: officialMessages,
+        rawMessageCount: officialMessages.length,
+        stage: "official"
+      });
+    }
+    let registry = {};
+    try { registry = runtimes.require("summary-runners", CONTENT_BRIDGE_VERSION).scripts || {}; } catch {}
+    const packagedRunner = registry[config.id] || registry[config.userscriptFile];
+    if (config.userscriptRunMode !== "serial") {
+      const pageResult = await pageSummaryRequest(config);
+      const pageMessages = merge(Array.isArray(pageResult?.messages) ? pageResult.messages : []);
+      if (hasUserAndAssistant(pageMessages)) {
+        return finishSummaryCollection(data, {
+          messages: pageMessages,
+          rawMessageCount: Number(pageResult.rawMessageCount) || pageMessages.length,
+          stage: pageResult?.stage || "pageWorld"
+        });
+      }
+    }
+    const runner = packagedRunner;
+    if (!runner) return finishSummaryCollection(data, { messages: [], rawMessageCount: 0, stage: "none" });
+    const result = await runner(summaryRunnerApi(config, data));
     const messages = merge(Array.isArray(result) ? result : result?.messages || []);
     return finishSummaryCollection(data, {
       messages: hasUserAndAssistant(messages) ? messages : [],
-      rawMessageCount: messages.length
+      rawMessageCount: messages.length,
+      stage: "isolatedJs"
     });
   }
 

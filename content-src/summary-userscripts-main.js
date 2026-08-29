@@ -64,26 +64,27 @@ function installSummaryMainRuntime() {
     return bounded;
   }
 
+  async function collectOfficialStage(config, { wait = true } = {}) {
+    if (!officialRuleConfigMatchesHref(config, String(location.href || ""))) return null;
+    const collect = () => merge(collectOfficialSummaryMessages(config, {
+      qsa,
+      closest,
+      visible,
+      normalize
+    }) || []);
+    let messages = collect();
+    const waitMs = wait ? Math.max(0, Math.min(60000, Number(config.officialRuleWaitMs) || 0)) : 0;
+    if (!hasUserAndAssistant(messages) && waitMs > 0) {
+      await sleep(waitMs);
+      messages = collect();
+    }
+    return hasUserAndAssistant(messages) ? messages : null;
+  }
+
   function summaryRuntimeApi(config = {}) {
-    const officialRuleActive = officialRuleConfigMatchesHref(config, String(location.href || ""));
     return {
       config,
-      collectOfficialCandidate: async () => {
-        if (!officialRuleActive) return null;
-        const collect = () => merge(collectOfficialSummaryMessages(config, {
-          qsa,
-          closest,
-          visible,
-          normalize
-        }) || []);
-        let messages = collect();
-        const waitMs = Math.max(0, Math.min(60000, Number(config.officialRuleWaitMs) || 0));
-        if (!hasUserAndAssistant(messages) && waitMs > 0) {
-          await sleep(waitMs);
-          messages = collect();
-        }
-        return hasUserAndAssistant(messages) ? messages : null;
-      },
+      collectOfficialCandidate: async () => collectOfficialStage(config, { wait: true }),
       sleep,
       normalize,
       qsa,
@@ -122,10 +123,20 @@ function installSummaryMainRuntime() {
 
   async function collectSummary(data) {
     const config = data?.config || {};
+    const officialMessages = await collectOfficialStage(config, { wait: false });
+    if (officialMessages) {
+      const messages = boundedSummaryRunnerMessages(officialMessages);
+      return {
+        messages: hasUserAndAssistant(messages) ? messages : [],
+        rawMessageCount: officialMessages.length,
+        stage: "official"
+      };
+    }
     const registry = summaryRunners.scripts;
     const runner = registry[config.id] || registry[config.userscriptFile];
-    if (!runner) return { messages: [] };
-    return runSummaryRunner(config, runner);
+    if (!runner) return { messages: [], stage: "none" };
+    const result = await runSummaryRunner(config, runner);
+    return { ...result, stage: result?.messages?.length ? "pageWorld" : "none" };
   }
 
 

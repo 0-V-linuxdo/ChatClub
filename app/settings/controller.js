@@ -73,6 +73,7 @@ export function createSettingsController(ctx) {
     syncSummaryPanel: "function",
     syncPreferredModelSelectionOverlays: "function",
     requestUserScriptsPermission: "function?",
+    probeSummaryCollector: "function?",
     onSettingsDialogClosed: "function?",
     persistWorkspaceSession: "function?",
     refreshWorkspaceTabs: "function?",
@@ -122,6 +123,17 @@ export function createSettingsController(ctx) {
   const requestUserScriptsPermission = typeof ctx.requestUserScriptsPermission === "function"
     ? ctx.requestUserScriptsPermission
     : async () => true;
+  const probeSummaryCollector = typeof ctx.probeSummaryCollector === "function"
+    ? ctx.probeSummaryCollector
+    : null;
+  async function testOfficialRuleOnCurrentTab(componentKey) {
+    if (!probeSummaryCollector) return { ok: false, error: "unsupported" };
+    const [feature, siteId] = String(componentKey || "").split("/");
+    if (feature !== "summary" || !siteId) return { ok: false, error: "unsupported" };
+    const config = (settingsSections.summary?.options?.summarySiteConfigs || []).find((item) => item.id === siteId);
+    if (!config) return { ok: false, error: "no-config" };
+    return probeSummaryCollector(config);
+  }
   const persistWorkspaceSession = typeof ctx.persistWorkspaceSession === "function"
     ? ctx.persistWorkspaceSession
     : async () => {};
@@ -208,7 +220,8 @@ export function createSettingsController(ctx) {
     svgIcon,
     notifyConfigReload,
     saveOptionsPatch: sectionOptionsPatch("Summary settings section", SECTION_OPTION_KEYS.summary),
-    ensureUserScriptsPermission
+    ensureUserScriptsPermission,
+    ...(probeSummaryCollector ? { probeSummaryCollector } : {})
   });
   const messageNavigationSection = createMessageNavigationSettingsSection({
     state: settingsSections.messageNavigation,
@@ -373,7 +386,11 @@ export function createSettingsController(ctx) {
     if (!officialRulesSettingsPromise) {
       officialRulesSettingsPromise = import("./official-rules.js")
         .then(({ createOfficialRulesSettingsCard }) => {
-          officialRulesSettings = createOfficialRulesSettingsCard({ officialRules, svgIcon });
+          officialRulesSettings = createOfficialRulesSettingsCard({
+            officialRules,
+            svgIcon,
+            ...(probeSummaryCollector ? { testCurrentTab: testOfficialRuleOnCurrentTab } : {})
+          });
           redraw?.();
           return officialRulesSettings;
         })
