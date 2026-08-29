@@ -98,6 +98,14 @@ assert.match(
   /\.workspace-tabs-sidebar-count \{[^}]*min-width:\s*24px;[^}]*height:\s*24px;[^}]*color:\s*var\(--on-primary\);/s
 );
 assert.match(css, /\.button-primary \{[^}]*color:\s*var\(--on-primary\);/s);
+assert.match(
+  css,
+  /\.modal\.modal-alertdialog \.modal-footer \.button-danger \{[^}]*background:\s*var\(--danger\);[^}]*color:\s*var\(--on-primary\);/s
+);
+assert.match(
+  css,
+  /\.button-danger:hover:not\(:disabled\),[\s\S]*?border-color:\s*color-mix\(in srgb, var\(--danger\) 42%, var\(--line\)\);/
+);
 assert.match(css, /\.button:focus-visible,/);
 assert.match(css, /outline:\s*2px solid var\(--focus-ring\);/);
 assert.match(

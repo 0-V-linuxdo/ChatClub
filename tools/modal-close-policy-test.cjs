@@ -460,8 +460,8 @@ function event(type, properties = {}) {
       ["editorModal", 10],
       ["viewerModal", 5],
       ["taskModal", 1],
-      ["confirmationModal", 6],
-      ["openConfirmationAction", 13]
+      ["confirmationModal", 4],
+      ["openConfirmationAction", 15]
     ]);
 
     assert.equal(occurrences(allAppSource, /\bmodal\s*\(/g), 0, "app code must not call the raw modal helper");
@@ -506,7 +506,7 @@ function event(type, properties = {}) {
       ["app/settings/topic-deletion.js", "openSiteEditor", "editorModal", "Delete Site editor"],
       ["app/prompt-library/controller.js", "openPromptLibraryEditor", "editorModal", "Prompt Library editor"],
       ["app/workspace/frame-controller.js", "openGoToUrlDialog", "editorModal", "Go To URL editor"],
-      ["app/workspace/tabs-sidebar-controller.js", "openDeleteConfirmation", "confirmationModal", "ChatClub tab delete confirmation"],
+      ["app/workspace/tabs-sidebar-controller.js", "openDeleteConfirmation", "openConfirmationAction", "ChatClub tab delete confirmation"],
       ["app/settings/apps.js", "openBuiltInDetails", "viewerModal", "built-in platform details"],
       ["app/settings/functional-anomalies.js", "openDetails", "viewerModal", "functional anomaly details"],
       ["app/prompt-library/controller.js", "openPromptLibraryDialog", "viewerModal", "Prompt Library manager"],
@@ -516,7 +516,7 @@ function event(type, properties = {}) {
       ["app/settings/import-export.js", "openFullResetDialog", "confirmationModal", "full reset confirmation"],
       ["app/settings/import-export.js", "openImportConfirmDialog", "confirmationModal", "import confirmation"],
       ["app/settings/apps.js", "openIframeRiskConfirmation", "confirmationModal", "iframe risk confirmation"],
-      ["app/settings/functional-anomalies.js", "openMutationConfirmation", "confirmationModal", "functional anomaly mutation confirmation"],
+      ["app/settings/functional-anomalies.js", "openMutationConfirmation", "openConfirmationAction", "functional anomaly mutation confirmation"],
       ["app/settings/official-rules.js", "openConfirmation", "confirmationModal", "official rules mutation confirmation"],
       ["app/settings/apps.js", "removeCustom", "openConfirmationAction", "custom platform delete confirmation"],
       ["app/settings/profiles.js", "remove", "openConfirmationAction", "API profile delete confirmation"],
@@ -606,33 +606,23 @@ function event(type, properties = {}) {
     );
     assert.match(
       functionalAnomalyConfirmationSource,
-      /if\s*\(applying\s*&&\s*force\s*!==\s*true\)\s*return\s*;/,
-      "functional anomaly mutations must reject ordinary top-close and Cancel attempts while busy"
+      /openConfirmationAction\s*\(/,
+      "functional anomaly mutations must use openConfirmationAction instead of a hand-rolled confirmationModal"
     );
     assert.match(
       functionalAnomalyConfirmationSource,
-      /cancelButton\.disabled\s*=\s*value\s*;/,
-      "functional anomaly mutation Cancel must be disabled while busy"
+      /await mutate\(\)/,
+      "functional anomaly mutation confirmations must run the mutation through onConfirm"
     );
     assert.match(
       functionalAnomalyConfirmationSource,
-      /confirmButton\.disabled\s*=\s*value\s*;/,
-      "functional anomaly mutation confirmation must be disabled while busy"
+      /toast\(t\(successKey\),\s*"success"\)/,
+      "successful functional anomaly mutations must keep their success toast"
     );
-    assert.match(
+    assert.doesNotMatch(
       functionalAnomalyConfirmationSource,
-      /querySelector\("\.modal-header \.icon-button"\)\?\.toggleAttribute\("disabled",\s*value\)/,
-      "functional anomaly mutation modal X must be disabled while busy"
-    );
-    assert.match(
-      functionalAnomalyConfirmationSource,
-      /await mutate\(\);[\s\S]*?close\(true\)\s*;/,
-      "functional anomaly mutation confirmations must force-close only after success"
-    );
-    assert.match(
-      functionalAnomalyConfirmationSource,
-      /catch\s*\(error\)\s*\{[\s\S]*?setApplying\(false\)\s*;/,
-      "failed functional anomaly mutations must restore modal controls"
+      /confirmationModal\s*\(/,
+      "functional anomaly mutations must not open confirmationModal directly"
     );
 
     const applyImportSource = directFunctionSource(

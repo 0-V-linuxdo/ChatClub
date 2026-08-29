@@ -2105,6 +2105,11 @@ button { cursor: pointer; }
   border-color: var(--primary);
 }
 
+.button-danger:hover:not(:disabled),
+.button-danger:focus-visible:not(:disabled) {
+  border-color: color-mix(in srgb, var(--danger) 42%, var(--line));
+}
+
 .button:disabled,
 .icon-button:disabled {
   cursor: not-allowed;
@@ -7323,7 +7328,7 @@ body.settings-tab-context-menu-dragging iframe {
 }
 
 .iframe-permission-risk-modal {
-  width: min(620px, calc(100vw - 40px));
+  width: var(--overlay-width-compact);
 }
 
 .iframe-permission-risk-list {
@@ -8994,7 +8999,7 @@ body.settings-tab-context-menu-dragging iframe {
 }
 
 .io-import-modal {
-  max-width: 620px;
+  max-width: var(--overlay-width-compact);
 }
 
 .io-import-dialog {
@@ -9374,6 +9379,10 @@ body.settings-tab-context-menu-dragging iframe {
   width: var(--overlay-width-compact);
 }
 
+.modal.modal-alertdialog {
+  width: var(--overlay-width-compact);
+}
+
 .modal-header {
   display: flex;
   justify-content: space-between;
@@ -9399,6 +9408,38 @@ body.settings-tab-context-menu-dragging iframe {
   flex: 0 0 auto;
   width: 20px;
   height: 20px;
+}
+
+.modal.modal-alertdialog .modal-header {
+  border-bottom: none;
+}
+
+.modal.modal-alertdialog .modal-body {
+  padding-top: 0;
+}
+
+.modal.modal-alertdialog .modal-body p {
+  margin: 0;
+  font-size: var(--font-size);
+  line-height: 1.5;
+}
+
+.overlay-confirmation {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.modal.modal-alertdialog .modal-footer .button-danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: var(--on-primary);
+}
+
+.modal.modal-alertdialog .modal-footer .button-danger:hover:not(:disabled),
+.modal.modal-alertdialog .modal-footer .button-danger:focus-visible:not(:disabled) {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: var(--on-primary);
 }
 
 .modal-body {

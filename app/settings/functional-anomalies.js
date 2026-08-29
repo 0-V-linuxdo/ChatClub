@@ -1,5 +1,5 @@
 import { t } from "../../shared/i18n.js";
-import { button, confirmationModal, el, toast, viewerModal } from "../../ui/dom.js";
+import { button, el, openConfirmationAction, toast, viewerModal } from "../../ui/dom.js";
 import { createSettingsKit } from "./kit.js";
 import { requireSettingsSectionStatePort } from "./section-contract.js";
 import {
@@ -165,44 +165,18 @@ export function createFunctionalAnomaliesSettingsSection(ctx) {
   }
 
   function openMutationConfirmation({ title, body, confirmLabel, mutate, successKey }) {
-    let dialog;
-    let applying = false;
-    const close = (force = false) => {
-      if (applying && force !== true) return;
-      dialog?.remove();
-    };
-    const cancelButton = button(t("common.cancel"), () => close());
-    const confirmButton = button(confirmLabel, apply, "danger");
-    const setApplying = (value) => {
-      applying = value;
-      cancelButton.disabled = value;
-      confirmButton.disabled = value;
-      dialog?.querySelector(".modal-header .icon-button")?.toggleAttribute("disabled", value);
-      dialog?.querySelector(".modal")?.setAttribute("aria-busy", String(value));
-    };
-    async function apply() {
-      if (applying) return;
-      setApplying(true);
-      try {
+    openConfirmationAction({
+      title,
+      body,
+      confirmLabel,
+      cancelLabel: t("common.cancel"),
+      closeLabel: t("common.close"),
+      className: "functional-anomaly-confirmation",
+      onConfirm: async () => {
         await mutate();
         toast(t(successKey), "success");
-        close(true);
-      } catch (error) {
-        setApplying(false);
-        toast(error?.message || String(error), "error");
       }
-    }
-    dialog = confirmationModal(
-      title,
-      el("div", { class: "functional-anomaly-confirmation" },
-        el("p", {}, body),
-        el("div", { class: "modal-footer" }, cancelButton, confirmButton)
-      ),
-      close,
-      false,
-      t("common.close")
-    );
-    dialog.querySelector(".modal")?.classList.add("functional-anomaly-confirmation-modal");
+    });
   }
 
   function removeRecord(record) {

@@ -125,6 +125,14 @@ assert.doesNotMatch(css, /\.share-panel-resize-handle-left,[\s\S]*?width:\s*8px;
 assert.match(css, /\.prompt-library-modal \{[^}]*width:\s*var\(--overlay-width-wide\);/s);
 assert.match(css, /\.prompt-library-modal \{[^}]*top:\s*var\(--prompt-library-top, var\(--overlay-panel-offset\)\);/s);
 assert.match(css, /\.modal\.modal-alertdialog \.modal-header h2 \{[^}]*color:\s*var\(--danger\);/s);
+assert.match(css, /\.modal\.modal-alertdialog \{[^}]*width:\s*var\(--overlay-width-compact\);/s);
+assert.match(css, /\.overlay-confirmation \{[^}]*display:\s*grid;/s);
+assert.match(
+  css,
+  /\.modal\.modal-alertdialog \.modal-footer \.button-danger \{[^}]*background:\s*var\(--danger\);[^}]*color:\s*var\(--on-primary\);/s
+);
+assert.match(agents, /Confirmation surfaces consume `--overlay-width-compact`/);
+assert.match(agents, /`--on-primary` label/);
 assert.match(css, /\.summary-panel \{[^}]*max-width:\s*calc\(100vw - var\(--overlay-gutter-panel\)\);/s);
 assert.match(css, /\.popover-menu \{[^}]*max-width:\s*min\(260px, calc\(100vw - var\(--overlay-gutter-tight\)\)\);/s);
 assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?\.toast,\s*\n\s*\.toast\.show,/);

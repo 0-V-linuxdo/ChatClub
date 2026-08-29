@@ -8,13 +8,12 @@ import {
 import { createMenuButton } from "../../ui/components.js";
 import {
   bindLinearMenuKeyboard,
-  button,
   claimTopmostPopoverEscape,
-  confirmationModal as defaultConfirmationModal,
   el,
   iconButton,
   input,
-  isDismissalEscape
+  isDismissalEscape,
+  openConfirmationAction as defaultOpenConfirmationAction
 } from "../../ui/dom.js";
 import { createSvgIcon } from "../../ui/icons.js";
 import {
@@ -193,7 +192,7 @@ export function createWorkspaceTabsSidebarController({
   savePagesToPocket,
   collectLivePreview,
   document: ownerDocument = globalThis.document,
-  confirmationModal = defaultConfirmationModal,
+  openConfirmationAction = defaultOpenConfirmationAction,
   createIcon = createSvgIcon
 } = {}) {
   if (typeof requestBackground !== "function") {
@@ -1104,53 +1103,27 @@ export function createWorkspaceTabsSidebarController({
   }
 
   function openDeleteConfirmation(item = {}, kind = "tab") {
-    let dialog;
-    let applying = false;
-    const close = (force = false) => {
-      if (applying && force !== true) return;
-      dialog?.remove?.();
-    };
-    const cancelButton = button(t("common.cancel"), () => close());
-    const confirmButton = button(t("common.delete"), apply, "danger");
-    const setApplying = (value) => {
-      applying = value;
-      cancelButton.disabled = value;
-      confirmButton.disabled = value;
-      dialog?.querySelector?.(".modal-header .icon-button")?.toggleAttribute?.("disabled", value);
-      dialog?.querySelector?.(".modal")?.setAttribute?.("aria-busy", String(value));
-    };
-    async function apply() {
-      if (applying) return;
-      setApplying(true);
-      try {
-        if (kind === "folder") {
-          folders = deleteFolder(folders, item.id);
-          persistFolders();
-          relayout(items);
-          close(true);
-          return;
-        }
-        await forgetTab(item);
-        close(true);
-      } catch {
-        setApplying(false);
-      }
-    }
     const title = kind === "folder" ? t("workspace.tabs.deleteFolder") : t("workspace.tabs.deleteTitle");
     const message = kind === "folder"
       ? t("workspace.tabs.deleteFolderConfirm", { title: item.name || t("workspace.tabs.folderUntitled") })
       : t("workspace.tabs.deleteConfirm", { title: itemLabel(item, itemSectionIndex(item)) });
-    dialog = confirmationModal(
+    return openConfirmationAction({
       title,
-      el("div", { class: "workspace-tabs-delete-confirmation" },
-        el("p", {}, message),
-        el("div", { class: "modal-footer" }, cancelButton, confirmButton)
-      ),
-      close,
-      false,
-      t("common.close")
-    );
-    return dialog;
+      body: message,
+      confirmLabel: t("common.delete"),
+      cancelLabel: t("common.cancel"),
+      closeLabel: t("common.close"),
+      className: "workspace-tabs-delete-confirmation",
+      onConfirm: async () => {
+        if (kind === "folder") {
+          folders = deleteFolder(folders, item.id);
+          persistFolders();
+          relayout(items);
+          return;
+        }
+        await forgetTab(item);
+      }
+    });
   }
 
   function setSortMode(next) {

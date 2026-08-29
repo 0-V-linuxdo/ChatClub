@@ -186,7 +186,8 @@ globalThis.document = {
   assert.match(source, /isDismissalEscape/);
   assert.match(source, /workspaceSessionWorkspaceId/);
   assert.match(source, /syncPageTitle/);
-  assert.match(source, /confirmationModal/);
+  assert.match(source, /openConfirmationAction/);
+  assert.doesNotMatch(source, /confirmationModal/, "ChatClub tab delete must use openConfirmationAction instead of a hand-rolled confirmationModal");
   assert.match(source, /forgetRememberedWorkspaceTab/);
   assert.match(source, /closeOtherLiveWorkspaceTabs/);
   assert.match(source, /moveLiveWorkspaceTabs/);
@@ -607,8 +608,8 @@ globalThis.document = {
   {
     const confirmations = [];
     const fixture = controller({
-      confirmationModal: (title, content, onClose) => {
-        confirmations.push({ title, content, onClose });
+      openConfirmationAction: (options = {}) => {
+        confirmations.push(options);
         return {
           remove() {},
           querySelector() {
