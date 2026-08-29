@@ -195,7 +195,7 @@ globalThis.document = {
   assert.match(css, /\.workspace-tabs-sidebar\s*\{[^}]*position:\s*absolute/, "the sidebar must overlay the workspace instead of taking iframe space");
   assert.match(css, /\.workspace-tabs-sidebar\s*\{[^}]*top:\s*var\(--workspace-tabs-sidebar-top\)/, "the sidebar must start below the topbar instead of covering it");
   assert.match(css, /\.workspace-tabs-sidebar-header\s*\{[^}]*padding:\s*14px/, "the sidebar header must keep top whitespace");
-  assert.match(css, /\.workspace-tabs-sidebar-count\s*\{[^}]*border-radius:\s*999px/, "the tab count must render as a pill");
+  assert.match(css, /\.workspace-tabs-sidebar-count\s*\{[^}]*border-radius:\s*var\(--ui-radius-pill\)/, "the tab count must render as a pill");
   assert.match(css, /\.workspace-tabs-sidebar-count\s*\{[^}]*background:\s*var\(--primary\)/, "the tab count must use a solid primary fill");
   assert.match(css, /\.workspace-tabs-sidebar-count\s*\{[^}]*color:\s*var\(--on-primary\)/, "the tab count numeral must contrast against the primary fill");
   assert.match(css, /\.workspace-tabs-sidebar-cleanup/, "ChatClub Tabs must expose a close-others control");
@@ -257,9 +257,9 @@ globalThis.document = {
   assert.match(css, /\.workspace-tabs-sidebar-search-input/, "the search field must be styled in the sidebar");
   assert.match(css, /\.workspace-tabs-sidebar-search\s*\{[^}]*border:\s*1px solid/, "the search glyph must sit inside one bordered field");
   assert.match(css, /\.workspace-tabs-sidebar-search\s*\{[^}]*height:\s*var\(--ui-control-height\)/, "the search field height must match tab rows");
-  assert.match(css, /\.workspace-tabs-sidebar-search\s*\{[^}]*margin:\s*10px 8px 4px/, "the search field must align with tab row width");
+  assert.match(css, /\.workspace-tabs-sidebar-search\s*\{[^}]*margin:\s*10px var\(--space-2\) var\(--space-1\)/, "the search field must align with tab row width");
   assert.match(css, /\.workspace-tabs-sidebar-item\s*\{[^}]*min-height:\s*36px/);
-  assert.match(css, /\.workspace-tabs-sidebar-list\s*\{[^}]*padding:\s*4px 8px 8px/);
+  assert.match(css, /\.workspace-tabs-sidebar-list\s*\{[^}]*padding:\s*var\(--space-1\) var\(--space-2\) var\(--space-2\)/);
   assert.match(css, /\.workspace-tabs-sidebar-search \.workspace-tabs-sidebar-search-input/, "sidebar search styles must beat the global .input width");
   assert.match(tabSearch, /el\("label", \{ class: "workspace-tabs-sidebar-search"/);
   assert.match(tabSearch, /compositionstart/, "the search field must keep IME composition attached to one input");

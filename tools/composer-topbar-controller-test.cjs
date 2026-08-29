@@ -186,7 +186,7 @@ function responsiveBrandRules(kind) {
   assert.match(appShellCss, /container:\s*chatclub-topbar \/ inline-size;/, "the viewport-sized app shell must own the named topbar container");
   assert.doesNotMatch(appShellCss, /\b(?:padding|border)(?:-(?:inline|left|right|width)[\w-]*)?\s*:/, "the container owner must not subtract inline padding or borders from the viewport breakpoint");
   assert.doesNotMatch(topbarCss, /container(?:-name|-type)?:\s*chatclub-topbar\b/, "the padded Topbar must not own its responsive inline-size container");
-  assert.match(topbarCss, /padding:\s*6px 8px;/, "Topbar padding must remain independent from the viewport-aligned container boundary");
+  assert.match(topbarCss, /padding:\s*6px var\(--space-2\);/, "Topbar padding must remain independent from the viewport-aligned container boundary");
   assert.equal((chatclubCss.match(/container:\s*chatclub-topbar \/ inline-size;/g) || []).length, 1, "the topbar container must have one viewport-aligned owner");
 
   assert.match(
@@ -195,7 +195,7 @@ function responsiveBrandRules(kind) {
     "the wide brand must reserve its full title width and never flex-shrink"
   );
   assert.doesNotMatch(chatclubCss, /\.brand > div\s*\{[^}]*text-overflow:\s*ellipsis;/, "the wide ChatClub title must never enter an ellipsis state");
-  assert.match(chatclubCss, /\.brand-logo\s*\{[^}]*width:\s*28px;[^}]*height:\s*28px;[^}]*flex:\s*0 0 auto;/, "the brand logo must remain a complete 28px square");
+  assert.match(chatclubCss, /\.brand-logo\s*\{[^}]*width:\s*var\(--ui-accessory-height\);[^}]*height:\s*var\(--ui-accessory-height\);[^}]*flex:\s*0 0 auto;/, "the brand logo must remain a complete 28px square");
   for (const kind of ["viewport", "container"]) {
     const rules = responsiveBrandRules(kind);
     assert.equal(rules.length, 1, `${kind} sizing must have one authoritative brand breakpoint`);
@@ -303,7 +303,7 @@ function responsiveBrandRules(kind) {
   );
   assert.match(
     chatclubCss,
-    /@container chatclub-composer \(max-width:\s*420px\)\s*\{[\s\S]*?--prompt-model-gate-width:\s*28px;[\s\S]*?\.prompt-model-gate-status-text\s*\{[\s\S]*?display:\s*none;/,
+    /@container chatclub-composer \(max-width:\s*420px\)\s*\{[\s\S]*?--prompt-model-gate-width:\s*var\(--ui-accessory-height\);[\s\S]*?\.prompt-model-gate-status-text\s*\{[\s\S]*?display:\s*none;/,
     "Composer widths up to and including 420px must expose an icon-only model badge"
   );
   assert.match(

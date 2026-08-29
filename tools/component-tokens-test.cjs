@@ -53,6 +53,8 @@ const tokens = {
   "--ui-radius-xs": "4px",
   "--ui-radius-tab": "5px",
   "--ui-radius-nested": "6px",
+  "--ui-radius-pill": "999px",
+  "--ui-accessory-height": "28px",
   "--toast-text": "var(--text)"
 };
 
@@ -168,6 +170,8 @@ assert.match(agents, /heading `17px`/);
 assert.match(agents, /--ui-radius-xs/);
 assert.match(agents, /--ui-radius-tab/);
 assert.match(agents, /--ui-radius-nested/);
+assert.match(agents, /--ui-radius-pill/);
+assert.match(agents, /--ui-accessory-height/);
 assert.match(agents, /Send hover mixes `--on-primary`, not `#ffffff`/);
 assert.match(agents, /## Overlay Chrome Contract/);
 
@@ -208,5 +212,20 @@ assert.match(css, /\.settings-check \{[^}]*min-height:\s*var\(--target-min\);/s)
 assert.match(css, /\.tooltip-toggle-switch \{[^}]*min-height:\s*var\(--target-min\);/s);
 assert.match(officialRules, /\.official-rules-mode button\[aria-pressed="true"\] \{[^}]*background:\s*var\(--control-selected\);/s);
 assert.match(officialRules, /\.official-rules-site-summary:hover \{[^}]*background:\s*var\(--control-hover\);/s);
+
+assert.doesNotMatch(css, /border-radius:\s*999px/, "pills must consume --ui-radius-pill");
+assert.doesNotMatch(officialRules, /border-radius:\s*999px/, "official-rules pills must consume --ui-radius-pill");
+assert.doesNotMatch(css, /(?<!-)font-size:\s*11px/, "11px must consume --font-size-xs");
+assert.doesNotMatch(css, /(?<!-)font-size:\s*12px/, "12px must consume --font-size-sm");
+assert.doesNotMatch(css, /(?<!-)font-size:\s*13px/, "13px must consume --font-size");
+assert.doesNotMatch(officialRules, /(?<!-)font-size:\s*11px/);
+assert.doesNotMatch(officialRules, /(?<!-)font-size:\s*12px/);
+assert.doesNotMatch(officialRules, /(?<!-)font-size:\s*13px/);
+assert.match(css, /\.workspace-tabs-sidebar-count \{[^}]*border-radius:\s*var\(--ui-radius-pill\);/s);
+assert.match(css, /\.prompt-actions-button \{[^}]*width:\s*var\(--ui-accessory-height\);/s);
+assert.match(officialRules, /border-radius:\s*var\(--ui-radius-pill\)/);
+assert.doesNotMatch(css, /^\s*(?:min-|max-)?(?:width|height):\s*28px/m, "28px accessories must consume --ui-accessory-height");
+assert.match(css, /\.workspace-tabs-sidebar-count \{[^}]*padding:\s*0 var\(--space-2\);/s);
+assert.match(officialRules, /\.official-rules-status \{[^}]*min-height:\s*var\(--ui-accessory-height\);/s);
 
 console.log("component tokens: ok");
