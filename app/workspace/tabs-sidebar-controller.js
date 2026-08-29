@@ -1202,7 +1202,7 @@ export function createWorkspaceTabsSidebarController({
   function renderSidebarHeader() {
     const closeOthers = iconButton(
       t("workspace.tabs.closeOthers"),
-      createIcon("broom"),
+      createIcon("copyMinus"),
       (event) => {
         event?.preventDefault?.();
         event?.stopPropagation?.();
@@ -1292,7 +1292,7 @@ export function createWorkspaceTabsSidebarController({
 
   function renderSidebarItem(item, index, nested = false) {
     if (isEditingItem(item)) return renderTitleEditor(item, index, "tab");
-    const { actionCount, actionNodes, pinNode, rowRef } = hover.renderItemActions(item);
+    const { actionCount, actionNodes, rowRef } = hover.renderItemActions(item);
     return renderTabsSidebarItem({
       item,
       index,
@@ -1308,7 +1308,6 @@ export function createWorkspaceTabsSidebarController({
       bindItemDrag,
       actionCount,
       actionNodes,
-      pinNode,
       rowRef,
       nested
     });

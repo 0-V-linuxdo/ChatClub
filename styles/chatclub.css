@@ -793,23 +793,6 @@ button { cursor: pointer; }
   font-weight: var(--font-weight-bold);
 }
 
-.workspace-tabs-sidebar-item-pin-slot {
-  position: absolute;
-  left: 10px;
-  top: 50%;
-  z-index: 2;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--ui-accessory-height);
-  height: var(--ui-accessory-height);
-  transform: translateY(-50%);
-}
-
-.workspace-tabs-sidebar-item:has(.workspace-tabs-sidebar-item-pin-slot) .workspace-tabs-sidebar-item-index {
-  opacity: 0;
-}
-
 .workspace-tabs-sidebar-item-pin-mark {
   flex-shrink: 0;
   display: inline-flex;
@@ -904,30 +887,6 @@ button { cursor: pointer; }
   .workspace-tabs-sidebar-item:has(.workspace-tabs-sidebar-item-actions:focus-within) .workspace-tabs-sidebar-item-label {
     -webkit-mask-image: linear-gradient(to right, #000 calc(100% - var(--tabs-sidebar-actions-width, 104px)), transparent);
     mask-image: linear-gradient(to right, #000 calc(100% - var(--tabs-sidebar-actions-width, 104px)), transparent);
-  }
-
-  .workspace-tabs-sidebar-item:not(.is-pinned) .workspace-tabs-sidebar-item-pin-slot {
-    opacity: 0;
-    pointer-events: none;
-  }
-
-  .workspace-tabs-sidebar-item:hover .workspace-tabs-sidebar-item-pin-slot,
-  .workspace-tabs-sidebar-item:has(:focus-visible) .workspace-tabs-sidebar-item-pin-slot,
-  .workspace-tabs-sidebar-item.is-menu-open .workspace-tabs-sidebar-item-pin-slot,
-  .workspace-tabs-sidebar-item.is-pinned .workspace-tabs-sidebar-item-pin-slot {
-    opacity: 1;
-    pointer-events: auto;
-  }
-
-  .workspace-tabs-sidebar-item:not(.is-pinned):not(:hover):not(:has(:focus-visible)):not(.is-menu-open) .workspace-tabs-sidebar-item-index {
-    opacity: 1;
-  }
-
-  .workspace-tabs-sidebar-item:hover .workspace-tabs-sidebar-item-index,
-  .workspace-tabs-sidebar-item:has(:focus-visible) .workspace-tabs-sidebar-item-index,
-  .workspace-tabs-sidebar-item.is-menu-open .workspace-tabs-sidebar-item-index,
-  .workspace-tabs-sidebar-item.is-pinned .workspace-tabs-sidebar-item-index {
-    opacity: 0;
   }
 }
 
