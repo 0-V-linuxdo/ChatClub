@@ -161,6 +161,16 @@ export function createSummarySettingsSection(ctx) {
   const SUMMARY_COLLECTOR_LAST_RUN_KEY = "chatclub.summaryCollectorLastRun.v1";
   let lastRunHydrated = false;
 
+  function normalizeSlotHits(slots) {
+    if (!slots || typeof slots !== "object" || Array.isArray(slots)) return null;
+    const next = {};
+    for (const [slot, value] of Object.entries(slots)) {
+      const count = Math.max(0, Number(value) || 0);
+      if (slot && count) next[slot] = count;
+    }
+    return Object.keys(next).length ? next : null;
+  }
+
   function normalizeOfficialHits(hits) {
     if (!hits || typeof hits !== "object" || Array.isArray(hits)) return null;
     return {
@@ -170,7 +180,9 @@ export function createSummarySettingsSection(ctx) {
       user: Math.max(0, Number(hits.user) || 0),
       assistant: Math.max(0, Number(hits.assistant) || 0),
       droppedNoRole: Math.max(0, Number(hits.droppedNoRole) || 0),
-      droppedNoText: Math.max(0, Number(hits.droppedNoText) || 0)
+      droppedNoText: Math.max(0, Number(hits.droppedNoText) || 0),
+      slots: normalizeSlotHits(hits.slots),
+      miss: String(hits.miss || "")
     };
   }
 
@@ -246,10 +258,22 @@ export function createSummarySettingsSection(ctx) {
     return label === key ? String(stage || "none") : label;
   }
 
+  function formatCollectorMiss(miss) {
+    const code = String(miss || "");
+    if (!code) return "";
+    const key = `summary.collector.miss.${code}`;
+    const label = t(key);
+    return label === key ? code : label;
+  }
+
   function formatOfficialHits(hits) {
     const normalized = normalizeOfficialHits(hits);
     if (!normalized) return "";
-    return t("summary.collector.hits", {
+    const miss = formatCollectorMiss(normalized.miss);
+    if (normalized.miss === "out-of-scope" || normalized.miss === "no-hints" || normalized.miss === "empty-slots") {
+      return miss;
+    }
+    const base = t("summary.collector.hits", {
       roots: normalized.conversationRoots,
       messages: normalized.messageRoots,
       user: normalized.user,
@@ -257,10 +281,17 @@ export function createSummarySettingsSection(ctx) {
       droppedRole: normalized.droppedNoRole,
       droppedText: normalized.droppedNoText
     });
+    const slotParts = normalized.slots
+      ? Object.entries(normalized.slots).map(([slot, count]) => `${slot}:${count}`).join(" ")
+      : "";
+    const slots = slotParts ? t("summary.collector.slots", { slots: slotParts }) : "";
+    return [base, miss, slots].filter(Boolean).join(" · ");
   }
 
   function formatCollectorLastRun(run) {
     if (!run) return t("summary.collector.lastRunNone");
+    if (run.error === "user-scripts-toggle-off") return t("userscripts.permissionStatusToggleOff");
+    if (run.error === "user-scripts-missing") return t("userscripts.permissionStatusMissing");
     const stage = formatCollectorStage(run.stage);
     const wait = Number(run.waitMsApplied) > 0 ? t("summary.collector.waitMs", { ms: run.waitMsApplied }) : "";
     const hits = formatOfficialHits(run.officialHits);
@@ -287,6 +318,21 @@ export function createSummarySettingsSection(ctx) {
           : t("userscripts.permissionStatusToggleOff"),
       hideRequest: permission
     };
+  }
+
+  async function remapCustomProbeResult(config, result) {
+    const next = result && typeof result === "object" ? result : { ok: false, error: "empty" };
+    if (summaryCollectorSourceMode(config) !== "custom" || next.ok) return next;
+    const error = String(next.error || "empty");
+    if (error !== "empty" && error !== "no-pair" && !/userScripts|Allow User Scripts|Developer Mode/i.test(error)) {
+      return next;
+    }
+    if (typeof userScriptsPermissionContains !== "function") return next;
+    let status = false;
+    try { status = await userScriptsPermissionContains(); } catch { status = false; }
+    const copy = userScriptsPermissionStatusCopy(status);
+    if (copy.available) return next;
+    return { ...next, error: copy.permission ? "user-scripts-toggle-off" : "user-scripts-missing" };
   }
 
   function summaryCollectorRunModeLabel(mode) {
@@ -417,7 +463,7 @@ export function createSummarySettingsSection(ctx) {
           ...(sourceMode === "custom" ? { customUserscript: userscriptInput.value } : {}),
           ...(copyTimeout ? { copyTimeoutMs: copyTimeout } : {})
         };
-        const result = await probeSummaryCollector(probeConfig);
+        const result = await remapCustomProbeResult(probeConfig, await probeSummaryCollector(probeConfig));
         await persistCollectorLastRun({
           collectorId: config?.id || draft.id,
           ...result,

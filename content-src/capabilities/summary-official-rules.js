@@ -11,6 +11,14 @@ const PACKAGED_SUMMARY_CHROME_SELECTORS = Object.freeze([
   "[data-testid*='copy' i]",
   ".code-buttons"
 ]);
+const COLLECTABLE_SLOTS = Object.freeze(["conversationRoot", "messageRoot", "actionBar", "messageCopy"]);
+const SLOT_HIT_KEYS = Object.freeze([
+  ...COLLECTABLE_SLOTS,
+  "userRoot",
+  "assistantRoot",
+  "userRoleSignal",
+  "assistantRoleSignal"
+]);
 
 function selectorList(value) {
   return (Array.isArray(value) ? value : [])
@@ -83,15 +91,37 @@ function messageRootsFromActions(root, hints, qsa, closest) {
   return actions.map((action) => closest(action, messageRootSelector)).filter(Boolean);
 }
 
+function countSlot(hints, slot, root, qsa, opts) {
+  return selectorList(hints?.[slot]).reduce((count, selector) => (
+    count + (qsa(selector, root, opts) || []).length
+  ), 0);
+}
+
+function officialSummaryMissHits(miss = "") {
+  return {
+    conversationRoots: 0,
+    messageRoots: 0,
+    classified: 0,
+    user: 0,
+    assistant: 0,
+    droppedNoRole: 0,
+    droppedNoText: 0,
+    slots: {},
+    miss: String(miss || "")
+  };
+}
+
 export function inspectOfficialSummaryCollection(config = {}, deps = {}) {
-  const empty = Object.freeze({ messages: null, hits: null });
+  const fail = (miss) => ({ messages: null, hits: officialSummaryMissHits(miss) });
   const hints = config?.officialRuleHints;
-  if (!hints || typeof hints !== "object" || Array.isArray(hints)) return empty;
+  if (!hints || typeof hints !== "object" || Array.isArray(hints)) return fail("no-hints");
   const { qsa, closest, visible, normalize } = deps;
-  if (![qsa, closest, visible, normalize].every((fn) => typeof fn === "function")) return empty;
+  if (![qsa, closest, visible, normalize].every((fn) => typeof fn === "function")) return fail("no-hints");
 
   const documentRoot = globalThis.document;
-  if (!documentRoot) return empty;
+  if (!documentRoot) return fail("no-hints");
+  if (!COLLECTABLE_SLOTS.some((slot) => selectorList(hints[slot]).length)) return fail("empty-slots");
+
   const conversationRoots = selectorList(hints.conversationRoot)
     .flatMap((selector) => qsa(selector, documentRoot, { all: false }))
     .filter(visible);
@@ -102,14 +132,19 @@ export function inspectOfficialSummaryCollection(config = {}, deps = {}) {
     ...directMessages,
     ...messageRootsFromActions(root, hints, qsa, closest)
   ]).filter(visible).slice(0, SUMMARY_OFFICIAL_MAX_TURNS);
+  const slots = Object.fromEntries(SLOT_HIT_KEYS.map((slot) => [
+    slot,
+    slot === "conversationRoot"
+      ? conversationRoots.length
+      : slot === "messageRoot"
+        ? directMessages.length
+        : countSlot(hints, slot, root, qsa)
+  ]));
   const hits = {
+    ...officialSummaryMissHits(elements.length ? "" : "no-message-roots"),
     conversationRoots: conversationRoots.length,
     messageRoots: elements.length,
-    classified: 0,
-    user: 0,
-    assistant: 0,
-    droppedNoRole: 0,
-    droppedNoText: 0
+    slots
   };
   if (!elements.length) return { messages: null, hits };
 
@@ -136,14 +171,17 @@ export function inspectOfficialSummaryCollection(config = {}, deps = {}) {
     }
     totalTextLength += text.length;
     if (totalTextLength > SUMMARY_OFFICIAL_MAX_TEXT_LENGTH) {
+      hits.miss = "oversize";
       return { messages: null, hits };
     }
     hits.classified += 1;
     hits[role] += 1;
     messages.push({ role, text });
   }
-  if (!messages.some((message) => message.role === "user")
-    || !messages.some((message) => message.role === "assistant")) {
+  const hasUser = messages.some((message) => message.role === "user");
+  const hasAssistant = messages.some((message) => message.role === "assistant");
+  if (!hasUser || !hasAssistant) {
+    hits.miss = !hasUser && !hasAssistant ? "no-pair" : (hasUser ? "no-assistant" : "no-user");
     return { messages: null, hits };
   }
   return { messages, hits };

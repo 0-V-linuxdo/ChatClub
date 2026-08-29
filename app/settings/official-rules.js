@@ -681,8 +681,12 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
       const stage = String(result?.stage || "none");
       const hits = result?.officialHits;
       const waitMs = Math.max(0, Number(result?.waitMsApplied) || 0);
+      const miss = hits?.miss ? ` · miss ${hits.miss}` : "";
+      const slotHits = hits?.slots && typeof hits.slots === "object" && !Array.isArray(hits.slots)
+        ? Object.entries(hits.slots).filter(([, count]) => Number(count) > 0).map(([slot, count]) => `${slot}:${count}`).join(" ")
+        : "";
       const hitText = hits
-        ? ` · roots ${Number(hits.conversationRoots) || 0}/${Number(hits.messageRoots) || 0} u${Number(hits.user) || 0}/a${Number(hits.assistant) || 0} drop ${Number(hits.droppedNoRole) || 0}/${Number(hits.droppedNoText) || 0}`
+        ? ` · roots ${Number(hits.conversationRoots) || 0}/${Number(hits.messageRoots) || 0} u${Number(hits.user) || 0}/a${Number(hits.assistant) || 0} drop ${Number(hits.droppedNoRole) || 0}/${Number(hits.droppedNoText) || 0}${miss}${slotHits ? ` · ${slotHits}` : ""}`
         : "";
       const waitText = waitMs > 0 ? ` · wait ${waitMs}ms` : "";
       if (result?.ok) {

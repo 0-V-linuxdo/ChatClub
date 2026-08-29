@@ -66,7 +66,14 @@ function installSummaryMainRuntime() {
 
   async function collectOfficialStage(config, { wait = true } = {}) {
     if (!officialRuleConfigMatchesHref(config, String(location.href || ""))) {
-      return { messages: null, hits: null, waitMsApplied: 0 };
+      return {
+        messages: null,
+        hits: {
+          conversationRoots: 0, messageRoots: 0, classified: 0, user: 0, assistant: 0,
+          droppedNoRole: 0, droppedNoText: 0, slots: {}, miss: "out-of-scope"
+        },
+        waitMsApplied: 0
+      };
     }
     const inspectOnce = () => inspectOfficialSummaryCollection(config, {
       qsa,

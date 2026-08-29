@@ -74,12 +74,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "d11645278ba9707c736b1180a000c5addc3befb49e3a7a74a8c7c5dfaae04463";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "7e04ec4b7c1e5e40303d30ef7ac70a070806fb762a0674739b6a35c975bde4fd";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "a899ca8d3ba7da8a116d20159061fa9f7ee1228f3c6897641f9bdb5d88554bda";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.a899ca8d3ba7da8a116d20159061fa9f7ee1228f3c6897641f9bdb5d88554bda";
-  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "ee14fa8dd0899398ea4acfa174273c1accb78bf7a0e5267d444e0c458c2aa8f5", "implementationSha256": "50d63cbd0fce800cd543a41e30045204da64d76b06510ab14b3ae42a22b9ca09", "implementationVersion": "2026.07.16.2+bundle.50d63cbd0fce800cd543a41e30045204da64d76b06510ab14b3ae42a22b9ca09" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "53d2aba5509ac48a9c065776c126387fd0cfcd55993bb9f1734702226177caa3";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.53d2aba5509ac48a9c065776c126387fd0cfcd55993bb9f1734702226177caa3";
+  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "c94102760a935df831bab1a915dc81149793c918af440321c3c65b599dd81bd8", "implementationSha256": "642596a41692455c9afb54dc5143e916404717183e8e7e7ed3121b538c8cc2dc", "implementationVersion": "2026.07.16.2+bundle.642596a41692455c9afb54dc5143e916404717183e8e7e7ed3121b538c8cc2dc" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -2899,7 +2899,7 @@
       return [];
     };
     scripts["qianwen.js"] = scripts["qianwen"];
-    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.a899ca8d3ba7da8a116d20159061fa9f7ee1228f3c6897641f9bdb5d88554bda" });
+    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.53d2aba5509ac48a9c065776c126387fd0cfcd55993bb9f1734702226177caa3" });
     return scripts;
   }
 
@@ -2960,6 +2960,14 @@
     "[title*='copy' i]",
     "[data-testid*='copy' i]",
     ".code-buttons"
+  ]);
+  var COLLECTABLE_SLOTS = Object.freeze(["conversationRoot", "messageRoot", "actionBar", "messageCopy"]);
+  var SLOT_HIT_KEYS = Object.freeze([
+    ...COLLECTABLE_SLOTS,
+    "userRoot",
+    "assistantRoot",
+    "userRoleSignal",
+    "assistantRoleSignal"
   ]);
   function selectorList(value) {
     return (Array.isArray(value) ? value : []).map((selector) => String(selector || "").trim()).filter(Boolean).slice(0, 8);
@@ -3034,14 +3042,31 @@
     ].flatMap((selector) => qsa2(selector, root).slice(0, SUMMARY_OFFICIAL_MAX_TURNS));
     return actions.map((action) => closest2(action, messageRootSelector)).filter(Boolean);
   }
+  function countSlot(hints, slot, root, qsa2, opts) {
+    return selectorList(hints?.[slot]).reduce((count, selector) => count + (qsa2(selector, root, opts) || []).length, 0);
+  }
+  function officialSummaryMissHits(miss = "") {
+    return {
+      conversationRoots: 0,
+      messageRoots: 0,
+      classified: 0,
+      user: 0,
+      assistant: 0,
+      droppedNoRole: 0,
+      droppedNoText: 0,
+      slots: {},
+      miss: String(miss || "")
+    };
+  }
   function inspectOfficialSummaryCollection(config = {}, deps = {}) {
-    const empty = Object.freeze({ messages: null, hits: null });
+    const fail = (miss) => ({ messages: null, hits: officialSummaryMissHits(miss) });
     const hints = config?.officialRuleHints;
-    if (!hints || typeof hints !== "object" || Array.isArray(hints)) return empty;
+    if (!hints || typeof hints !== "object" || Array.isArray(hints)) return fail("no-hints");
     const { qsa: qsa2, closest: closest2, visible: visible2, normalize: normalize2 } = deps;
-    if (![qsa2, closest2, visible2, normalize2].every((fn) => typeof fn === "function")) return empty;
+    if (![qsa2, closest2, visible2, normalize2].every((fn) => typeof fn === "function")) return fail("no-hints");
     const documentRoot = globalThis.document;
-    if (!documentRoot) return empty;
+    if (!documentRoot) return fail("no-hints");
+    if (!COLLECTABLE_SLOTS.some((slot) => selectorList(hints[slot]).length)) return fail("empty-slots");
     const conversationRoots = selectorList(hints.conversationRoot).flatMap((selector) => qsa2(selector, documentRoot, { all: false })).filter(visible2);
     const root = conversationRoots[0] || documentRoot;
     const directMessages = selectorList(hints.messageRoot).flatMap((selector) => qsa2(selector, root).slice(0, SUMMARY_OFFICIAL_MAX_TURNS));
@@ -3049,14 +3074,15 @@
       ...directMessages,
       ...messageRootsFromActions(root, hints, qsa2, closest2)
     ]).filter(visible2).slice(0, SUMMARY_OFFICIAL_MAX_TURNS);
+    const slots = Object.fromEntries(SLOT_HIT_KEYS.map((slot) => [
+      slot,
+      slot === "conversationRoot" ? conversationRoots.length : slot === "messageRoot" ? directMessages.length : countSlot(hints, slot, root, qsa2)
+    ]));
     const hits = {
+      ...officialSummaryMissHits(elements.length ? "" : "no-message-roots"),
       conversationRoots: conversationRoots.length,
       messageRoots: elements.length,
-      classified: 0,
-      user: 0,
-      assistant: 0,
-      droppedNoRole: 0,
-      droppedNoText: 0
+      slots
     };
     if (!elements.length) return { messages: null, hits };
     const cleanup = [
@@ -3082,13 +3108,17 @@
       }
       totalTextLength += text2.length;
       if (totalTextLength > SUMMARY_OFFICIAL_MAX_TEXT_LENGTH) {
+        hits.miss = "oversize";
         return { messages: null, hits };
       }
       hits.classified += 1;
       hits[role] += 1;
       messages.push({ role, text: text2 });
     }
-    if (!messages.some((message) => message.role === "user") || !messages.some((message) => message.role === "assistant")) {
+    const hasUser = messages.some((message) => message.role === "user");
+    const hasAssistant = messages.some((message) => message.role === "assistant");
+    if (!hasUser || !hasAssistant) {
+      hits.miss = !hasUser && !hasAssistant ? "no-pair" : hasUser ? "no-assistant" : "no-user";
       return { messages: null, hits };
     }
     return { messages, hits };
@@ -4133,7 +4163,21 @@ ${value}`);
     }
     async function collectOfficialStage(config, { wait = true } = {}) {
       if (!officialRuleConfigMatchesHref(config, String(location.href || ""))) {
-        return { messages: null, hits: null, waitMsApplied: 0 };
+        return {
+          messages: null,
+          hits: {
+            conversationRoots: 0,
+            messageRoots: 0,
+            classified: 0,
+            user: 0,
+            assistant: 0,
+            droppedNoRole: 0,
+            droppedNoText: 0,
+            slots: {},
+            miss: "out-of-scope"
+          },
+          waitMsApplied: 0
+        };
       }
       const inspectOnce = () => inspectOfficialSummaryCollection(config, {
         qsa: qsa2,

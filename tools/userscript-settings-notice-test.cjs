@@ -471,7 +471,9 @@ globalThis.fetch = async (sourceUrl) => ({
       stage: "official",
       officialHits: {
         conversationRoots: 1, messageRoots: 4, classified: 4, user: 2, assistant: 2,
-        droppedNoRole: 1, droppedNoText: 2
+        droppedNoRole: 1, droppedNoText: 2,
+        slots: { conversationRoot: 1, messageRoot: 4, userRoot: 2, assistantRoot: 2 },
+        miss: ""
       },
       waitMsApplied: 900,
       href: "https://chatgpt.com/",
@@ -528,15 +530,18 @@ globalThis.fetch = async (sourceUrl) => ({
   let lastRunNode = findNode(modalRoot(), (node) => node.classList?.contains("summary-collector-last-run"));
   assert.match(lastRunNode.textContent, /Collected 4 turns/);
   assert.match(lastRunNode.textContent, /dropped role 1\/text 2/);
+  assert.match(lastRunNode.textContent, /slots conversationRoot:1 messageRoot:4/);
   closeModalFixture();
 
   await settleEvent(findNode(customRow, (node) => node.getAttribute?.("aria-label") === "Edit").dispatch("click"));
   await waitUntil(modalRoot, "custom collector editor must open for probe");
   await settleEvent(buttonWithText(modalRoot(), "Probe current tab").dispatch("click"));
   await waitUntil(
-    () => findNode(modalRoot(), (node) => node.classList?.contains("summary-collector-last-run"))?.textContent.includes("Probe failed: empty"),
-    "custom collector last-run must persist its own probe"
+    () => findNode(modalRoot(), (node) => node.classList?.contains("summary-collector-last-run"))?.textContent.includes("Allow User Scripts"),
+    "custom collector last-run must remap empty probes to Allow User Scripts status when the toggle is off"
   );
+  lastRunNode = findNode(modalRoot(), (node) => node.classList?.contains("summary-collector-last-run"));
+  assert.match(lastRunNode.textContent, /chrome:\/\/extensions/);
   closeModalFixture();
 
   await settleEvent(findNode(chatgptRow, (node) => node.getAttribute?.("aria-label") === "Edit").dispatch("click"));
@@ -547,12 +552,14 @@ globalThis.fetch = async (sourceUrl) => ({
   );
   lastRunNode = findNode(modalRoot(), (node) => node.classList?.contains("summary-collector-last-run"));
   assert.match(lastRunNode.textContent, /wait 900ms/);
+  assert.match(lastRunNode.textContent, /slots conversationRoot:1 messageRoot:4/);
   closeModalFixture();
 
   const storedMap = lastRunStore["chatclub.summaryCollectorLastRun.v1"];
   assert.equal(storedMap.chatgpt.turnCount, 4);
-  assert.equal(storedMap["custom-summary"].error, "empty");
+  assert.equal(storedMap["custom-summary"].error, "user-scripts-toggle-off");
   assert.equal(storedMap.chatgpt.waitMsApplied, 900);
+  assert.equal(storedMap.chatgpt.officialHits.slots.messageRoot, 4);
 
   mapState.summaryCollectorLastRun = {};
   const hydrateSection = summaryModule.createSummarySettingsSection({

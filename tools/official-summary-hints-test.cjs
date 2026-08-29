@@ -58,6 +58,10 @@ const path = require("node:path");
     assert.equal(inspection.hits.classified, 3);
     assert.equal(inspection.hits.user, 1);
     assert.equal(inspection.hits.assistant, 2);
+    assert.equal(inspection.hits.miss, "");
+    assert.equal(inspection.hits.slots.messageRoot, 3);
+    assert.equal(inspection.hits.slots.conversationRoot, 1);
+    assert.equal(inspection.hits.slots.userRoot, 0, "role slots count qsa hits, not matches() classification");
     assert.deepEqual(collectOfficialSummaryMessages(base, deps), inspection.messages);
     assert.equal(collectOfficialSummaryMessages({
       ...base,
@@ -69,6 +73,17 @@ const path = require("node:path");
     }, deps);
     assert.equal(overlapHits.messages, null);
     assert.equal(overlapHits.hits.droppedNoRole, 3);
+    assert.equal(overlapHits.hits.miss, "no-pair");
+    assert.equal(inspectOfficialSummaryCollection({}, deps).hits.miss, "no-hints");
+    assert.equal(inspectOfficialSummaryCollection({
+      officialRuleHints: { ...base.officialRuleHints, conversationRoot: [], messageRoot: [], actionBar: [], messageCopy: [] }
+    }, deps).hits.miss, "empty-slots");
+    const missingAssistant = inspectOfficialSummaryCollection({
+      ...base,
+      officialRuleHints: { ...base.officialRuleHints, assistantRoot: [".missing"] }
+    }, deps);
+    assert.equal(missingAssistant.messages, null);
+    assert.equal(missingAssistant.hits.miss, "no-assistant");
     assert.equal(collectOfficialSummaryMessages({
       ...base,
       officialRuleHints: { ...base.officialRuleHints, assistantRoot: [".missing"] }
@@ -136,7 +151,9 @@ const path = require("node:path");
       officialRuleWaitMs: 60000
     };
     globalThis.location = { href: "https://sibling.chatgpt.com/new/thread" };
-    assert.deepEqual((await scopedCapability.collectSummary({ config: scopedConfig })).messages, packagedMessages);
+    const sibling = await scopedCapability.collectSummary({ config: scopedConfig });
+    assert.deepEqual(sibling.messages, packagedMessages);
+    assert.equal(sibling.officialHits?.miss, "out-of-scope", "out-of-scope probes must report official miss instead of a generic empty hit");
     globalThis.location.href = "https://chatgpt.com/old/thread";
     assert.deepEqual((await scopedCapability.collectSummary({ config: scopedConfig })).messages, packagedMessages);
     assert.equal(officialCalls, 0, "out-of-scope Summary URLs must not query signed selector hints or wait parameters");
@@ -289,6 +306,8 @@ const path = require("node:path");
     assert.match(summarySettingsSource, /chatclub\.summaryCollectorLastRun\.v1/);
     assert.match(summarySettingsSource, /normalizeCollectorLastRunMap/);
     assert.match(summarySettingsSource, /waitMsApplied/);
+    assert.match(summarySettingsSource, /remapCustomProbeResult/);
+    assert.match(summarySettingsSource, /user-scripts-toggle-off/);
     assert.doesNotMatch(summarySettingsSource, /chrome:\/\//);
     assert.doesNotMatch(fs.readFileSync(path.join(__dirname, "../app/settings/topic-deletion.js"), "utf8"), /chrome:\/\//);
     const extensionApiSource = fs.readFileSync(path.join(__dirname, "../shared/extension-api.js"), "utf8");
