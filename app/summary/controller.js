@@ -1099,7 +1099,7 @@ export function createSummaryController(ctx) {
     const frames = currentFrames();
     const iframe = frames.find((frame) => frame?.classList?.contains("active")) || frames[0] || null;
     if (!iframe) {
-      return { ok: false, error: "no-frame", turnCount: 0, stage: "none", href: "" };
+      return { ok: false, error: "no-frame", turnCount: 0, stage: "none", officialHits: null, href: "" };
     }
     const app = frameApp(iframe);
     const base = await summaryFrameMeta(iframe, app, 0);
@@ -1111,6 +1111,7 @@ export function createSummaryController(ctx) {
         href,
         turnCount: 0,
         stage: "none",
+        officialHits: null,
         error: summaryReady?.reason || t("summaryPanel.collectionFailed")
       };
     }
@@ -1130,6 +1131,7 @@ export function createSummaryController(ctx) {
         href,
         turnCount: messages.length,
         stage: result?.stage || (hasPair ? "isolatedJs" : "none"),
+        officialHits: result?.officialHits || null,
         error: hasPair ? "" : (messages.length ? "no-pair" : "empty")
       };
     } catch (error) {
@@ -1138,6 +1140,7 @@ export function createSummaryController(ctx) {
         href,
         turnCount: 0,
         stage: "none",
+        officialHits: null,
         error: error?.message || String(error)
       };
     }

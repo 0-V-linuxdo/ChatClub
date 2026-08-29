@@ -13,16 +13,23 @@ const SITE_LABELS = Object.freeze({
   chatgpt: "ChatGPT",
   claude: "Claude",
   deepseek: "DeepSeek",
+  dola: "Dola",
+  doubao: "DouBao",
   gemini: "Gemini",
   grok: "Grok",
   "grok-dairoot": "Grok Mirror",
   grokMirror: "Grok Mirror",
   kagi: "Kagi",
+  kimi: "Kimi.com",
+  kimiAi: "Kimi.ai",
   lechat: "Le Chat",
   lobehub: "LobeHub",
   manus: "Manus",
   notion: "Notion",
+  perplexity: "Perplexity",
   poe: "Poe",
+  qianwen: "Qianwen",
+  qwen: "Qwen",
   typingmind: "TypingMind"
 });
 
@@ -44,7 +51,14 @@ const SITE_GROUP_ORDER = Object.freeze([
   "manus",
   "poe",
   "aiStudio",
-  "lechat"
+  "lechat",
+  "perplexity",
+  "kimi",
+  "kimiAi",
+  "doubao",
+  "dola",
+  "qwen",
+  "qianwen"
 ]);
 
 const FEATURE_ORDER = Object.freeze(["summary", "messageNavigator", "delete"]);
@@ -664,16 +678,22 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
     }
     try {
       const result = await testCurrentTab(component.componentKey);
+      const stage = String(result?.stage || "none");
+      const hits = result?.officialHits;
+      const hitText = hits
+        ? ` · roots ${Number(hits.conversationRoots) || 0}/${Number(hits.messageRoots) || 0} u${Number(hits.user) || 0}/a${Number(hits.assistant) || 0}`
+        : "";
       if (result?.ok) {
-        const label = `${copy.testCurrentTab}: ${Number(result.turnCount) || 0}`;
+        const label = `${copy.testCurrentTab}: ${Number(result.turnCount) || 0} · ${stage}${hitText}`;
         componentProbeResults.set(component.componentKey, label);
         notify(label, "success");
       } else {
         const error = result?.error === "unsupported"
           ? copy.testCurrentTabUnsupported
           : (result?.error || copy.statusError);
-        componentProbeResults.set(component.componentKey, error);
-        notify(error, "error");
+        const label = `${error} · ${stage}${hitText}`;
+        componentProbeResults.set(component.componentKey, label);
+        notify(label, "error");
       }
       render();
     } catch (error) {

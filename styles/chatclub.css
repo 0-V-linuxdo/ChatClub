@@ -8636,6 +8636,10 @@ body.settings-tab-context-menu-dragging iframe {
   display: none;
 }
 
+.settings-userscript-permission-notice .button {
+  margin-top: var(--space-2);
+}
+
 .settings-info-callout {
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr);

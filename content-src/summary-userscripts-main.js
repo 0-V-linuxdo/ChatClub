@@ -3,7 +3,7 @@ import { CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY } from "../shared/content-
 import { createContentRuntimeBundleIdentity } from "../shared/content-runtime-identity.js";
 import { createSummaryRunnerRegistry } from "chatclub:summary-registry";
 import { officialRuleConfigMatchesHref } from "../shared/url-match.js";
-import { collectOfficialSummaryMessages } from "./capabilities/summary-official-rules.js";
+import { inspectOfficialSummaryCollection } from "./capabilities/summary-official-rules.js";
 import * as summaryRuntime from "./shared/summary-runtime.js";
 import { runtimeRegistry } from "./shared/runtime-registry-client.js";
 
@@ -65,26 +65,31 @@ function installSummaryMainRuntime() {
   }
 
   async function collectOfficialStage(config, { wait = true } = {}) {
-    if (!officialRuleConfigMatchesHref(config, String(location.href || ""))) return null;
-    const collect = () => merge(collectOfficialSummaryMessages(config, {
+    if (!officialRuleConfigMatchesHref(config, String(location.href || ""))) {
+      return { messages: null, hits: null };
+    }
+    const inspectOnce = () => inspectOfficialSummaryCollection(config, {
       qsa,
       closest,
       visible,
       normalize
-    }) || []);
-    let messages = collect();
+    });
+    let inspection = inspectOnce();
     const waitMs = wait ? Math.max(0, Math.min(60000, Number(config.officialRuleWaitMs) || 0)) : 0;
-    if (!hasUserAndAssistant(messages) && waitMs > 0) {
+    if (!hasUserAndAssistant(inspection.messages || []) && waitMs > 0) {
       await sleep(waitMs);
-      messages = collect();
+      inspection = inspectOnce();
     }
-    return hasUserAndAssistant(messages) ? messages : null;
+    return {
+      messages: hasUserAndAssistant(inspection.messages || []) ? merge(inspection.messages) : null,
+      hits: inspection.hits
+    };
   }
 
   function summaryRuntimeApi(config = {}) {
     return {
       config,
-      collectOfficialCandidate: async () => collectOfficialStage(config, { wait: true }),
+      collectOfficialCandidate: async () => (await collectOfficialStage(config, { wait: true })).messages,
       sleep,
       normalize,
       qsa,
@@ -123,20 +128,25 @@ function installSummaryMainRuntime() {
 
   async function collectSummary(data) {
     const config = data?.config || {};
-    const officialMessages = await collectOfficialStage(config, { wait: false });
-    if (officialMessages) {
-      const messages = boundedSummaryRunnerMessages(officialMessages);
+    const official = await collectOfficialStage(config, { wait: false });
+    if (official.messages) {
+      const messages = boundedSummaryRunnerMessages(official.messages);
       return {
         messages: hasUserAndAssistant(messages) ? messages : [],
-        rawMessageCount: officialMessages.length,
-        stage: "official"
+        rawMessageCount: official.messages.length,
+        stage: "official",
+        officialHits: official.hits
       };
     }
     const registry = summaryRunners.scripts;
     const runner = registry[config.id] || registry[config.userscriptFile];
-    if (!runner) return { messages: [], stage: "none" };
+    if (!runner) return { messages: [], stage: "none", officialHits: official.hits };
     const result = await runSummaryRunner(config, runner);
-    return { ...result, stage: result?.messages?.length ? "pageWorld" : "none" };
+    return {
+      ...result,
+      stage: result?.messages?.length ? "pageWorld" : "none",
+      officialHits: official.hits
+    };
   }
 
 

@@ -83,14 +83,15 @@ function messageRootsFromActions(root, hints, qsa, closest) {
   return actions.map((action) => closest(action, messageRootSelector)).filter(Boolean);
 }
 
-export function collectOfficialSummaryMessages(config = {}, deps = {}) {
+export function inspectOfficialSummaryCollection(config = {}, deps = {}) {
+  const empty = Object.freeze({ messages: null, hits: null });
   const hints = config?.officialRuleHints;
-  if (!hints || typeof hints !== "object" || Array.isArray(hints)) return null;
+  if (!hints || typeof hints !== "object" || Array.isArray(hints)) return empty;
   const { qsa, closest, visible, normalize } = deps;
-  if (![qsa, closest, visible, normalize].every((fn) => typeof fn === "function")) return null;
+  if (![qsa, closest, visible, normalize].every((fn) => typeof fn === "function")) return empty;
 
   const documentRoot = globalThis.document;
-  if (!documentRoot) return null;
+  if (!documentRoot) return empty;
   const conversationRoots = selectorList(hints.conversationRoot)
     .flatMap((selector) => qsa(selector, documentRoot, { all: false }))
     .filter(visible);
@@ -101,7 +102,16 @@ export function collectOfficialSummaryMessages(config = {}, deps = {}) {
     ...directMessages,
     ...messageRootsFromActions(root, hints, qsa, closest)
   ]).filter(visible).slice(0, SUMMARY_OFFICIAL_MAX_TURNS);
-  if (!elements.length) return null;
+  const hits = {
+    conversationRoots: conversationRoots.length,
+    messageRoots: elements.length,
+    classified: 0,
+    user: 0,
+    assistant: 0,
+    droppedNoRole: 0,
+    droppedNoText: 0
+  };
+  if (!elements.length) return { messages: null, hits };
 
   const cleanup = [
     ...PACKAGED_SUMMARY_CHROME_SELECTORS,
@@ -115,14 +125,30 @@ export function collectOfficialSummaryMessages(config = {}, deps = {}) {
   let totalTextLength = 0;
   for (const element of elements) {
     const role = roleForElement(element, hints);
-    if (!role) continue;
+    if (!role) {
+      hits.droppedNoRole += 1;
+      continue;
+    }
     const text = cloneText(element, cleanup, normalize);
-    if (!text) continue;
+    if (!text) {
+      hits.droppedNoText += 1;
+      continue;
+    }
     totalTextLength += text.length;
-    if (totalTextLength > SUMMARY_OFFICIAL_MAX_TEXT_LENGTH) return null;
+    if (totalTextLength > SUMMARY_OFFICIAL_MAX_TEXT_LENGTH) {
+      return { messages: null, hits };
+    }
+    hits.classified += 1;
+    hits[role] += 1;
     messages.push({ role, text });
   }
   if (!messages.some((message) => message.role === "user")
-    || !messages.some((message) => message.role === "assistant")) return null;
-  return messages;
+    || !messages.some((message) => message.role === "assistant")) {
+    return { messages: null, hits };
+  }
+  return { messages, hits };
+}
+
+export function collectOfficialSummaryMessages(config = {}, deps = {}) {
+  return inspectOfficialSummaryCollection(config, deps).messages;
 }

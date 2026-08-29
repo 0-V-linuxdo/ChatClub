@@ -1,5 +1,5 @@
 {
-  "summarySiteConfigVersion": 82,
+  "summarySiteConfigVersion": 83,
   "configs": [
     {
       "id": "chatgpt",
@@ -188,6 +188,90 @@
         "chat.mistral.ai"
       ],
       "userscriptFile": "lechat.js",
+      "userscriptLength": 10
+    },
+    {
+      "id": "perplexity",
+      "name": "Perplexity",
+      "configVersion": 1,
+      "hosts": [
+        "perplexity.ai",
+        "*.perplexity.ai"
+      ],
+      "userscriptFile": "perplexity.js",
+      "userscriptLength": 10
+    },
+    {
+      "id": "kimi",
+      "name": "Kimi.com",
+      "configVersion": 1,
+      "hosts": [
+        "kimi.com",
+        "www.kimi.com",
+        "*.kimi.com"
+      ],
+      "userscriptFile": "kimi.js",
+      "userscriptLength": 10
+    },
+    {
+      "id": "kimiAi",
+      "name": "Kimi.ai",
+      "configVersion": 1,
+      "hosts": [
+        "kimi.ai",
+        "www.kimi.ai",
+        "*.kimi.ai"
+      ],
+      "userscriptFile": "kimi-ai.js",
+      "userscriptLength": 10
+    },
+    {
+      "id": "doubao",
+      "name": "DouBao",
+      "configVersion": 1,
+      "hosts": [
+        "doubao.com",
+        "www.doubao.com",
+        "*.doubao.com"
+      ],
+      "userscriptFile": "doubao.js",
+      "userscriptLength": 10
+    },
+    {
+      "id": "dola",
+      "name": "Dola",
+      "configVersion": 1,
+      "hosts": [
+        "dola.com",
+        "www.dola.com",
+        "*.dola.com"
+      ],
+      "userscriptFile": "dola.js",
+      "userscriptLength": 10
+    },
+    {
+      "id": "qwen",
+      "name": "Qwen",
+      "configVersion": 1,
+      "hosts": [
+        "chat.qwen.ai",
+        "qwen.ai",
+        "www.qwen.ai",
+        "*.qwen.ai"
+      ],
+      "userscriptFile": "qwen.js",
+      "userscriptLength": 10
+    },
+    {
+      "id": "qianwen",
+      "name": "千问",
+      "configVersion": 1,
+      "hosts": [
+        "qianwen.com",
+        "www.qianwen.com",
+        "*.qianwen.com"
+      ],
+      "userscriptFile": "qianwen.js",
       "userscriptLength": 10
     }
   ]

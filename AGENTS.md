@@ -208,6 +208,15 @@ Isolated `collectSummary` is JSON-first, then JS. Do not move official signed se
 
 Packaged `userscripts/*.js` stay JS-only. `api.collectOfficialCandidate` remains for custom authors. A site with a userscript file, custom body, or filled official slots is a collector (`summaryConfigHasCollector`). Empty packaged selector arrays are not. Settings Probe current tab / official-rules Test on current tab dry-run `collectSummary` on the active frame without opening Summary.
 
+`officialRuleWaitMs` is applied at four call sites and must not be flipped:
+
+1. Isolated pipeline `collectOfficialStage(..., { wait: true })` so late DOM can settle.
+2. Isolated `collectOfficialCandidate` uses `{ wait: false }`; isolated already waited.
+3. MAIN pipeline `collectOfficialStage(..., { wait: false })`; isolated already waited.
+4. MAIN `collectOfficialCandidate` uses `{ wait: true }` so MAIN-world authors calling the helper independently still honor `officialRuleWaitMs`.
+
+Probe results include `stage` and `officialHits` even when official JSON misses and JS wins. Persist last-run under `chrome.storage.local` key `chatclub.summaryCollectorLastRun.v1`, not `options`.
+
 ### Built-in Delete Site behavior
 
 Normal built-in execution prefers the native runner. Standalone userscripts are independent userscript/custom/compatibility assets, not the normal built-in execution path.

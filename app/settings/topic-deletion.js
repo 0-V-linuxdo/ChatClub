@@ -30,7 +30,8 @@ export function createTopicDeletionSettingsSection(ctx) {
     svgIcon: "function",
     notifyConfigReload: "function",
     saveOptionsPatch: "function",
-    ensureUserScriptsPermission: "function"
+    ensureUserScriptsPermission: "function",
+    userScriptsPermissionContains: "function?"
   });
   const state = requireSettingsSectionStatePort(
     requireControllerContext(ctx, controllerName, "state"),
@@ -41,6 +42,9 @@ export function createTopicDeletionSettingsSection(ctx) {
   const notifyConfigReload = requireControllerFunction(ctx, controllerName, "notifyConfigReload");
   const saveOptionsPatch = requireControllerFunction(ctx, controllerName, "saveOptionsPatch");
   const ensureUserScriptsPermission = requireControllerFunction(ctx, controllerName, "ensureUserScriptsPermission");
+  const userScriptsPermissionContains = typeof ctx.userScriptsPermissionContains === "function"
+    ? ctx.userScriptsPermissionContains
+    : null;
   const {
     settingsBlock,
     settingsReorderHandle,
@@ -202,6 +206,12 @@ export function createTopicDeletionSettingsSection(ctx) {
     const sourceLabelNode = builtIn
       ? el("small", { dataset: { userscriptSourceLabel: "topic-deletion" } })
       : null;
+    const permissionStatus = el("small", { dataset: { userscriptPermissionStatus: "topic-deletion" } });
+    const permissionRequest = button(t("userscripts.permissionRequest"), async () => {
+      await ensureUserScriptsPermission();
+      await refreshPermissionStatus();
+    });
+    permissionRequest.dataset.userscriptPermissionRequest = "topic-deletion";
     const permissionNotice = el("div", {
       class: "settings-info-callout settings-userscript-permission-notice",
       role: "note",
@@ -211,14 +221,27 @@ export function createTopicDeletionSettingsSection(ctx) {
       svgIcon("alert"),
       el("div", {},
         el("strong", {}, t("userscripts.permissionNoticeTitle")),
-        el("p", {}, t("userscripts.permissionNoticeBody"))
+        el("p", {}, t("userscripts.permissionNoticeBody")),
+        permissionStatus,
+        permissionRequest
       )
     );
+    async function refreshPermissionStatus() {
+      let granted = false;
+      if (typeof userScriptsPermissionContains === "function") {
+        try { granted = await userScriptsPermissionContains(); } catch { granted = false; }
+      }
+      permissionStatus.textContent = granted
+        ? t("userscripts.permissionStatusGranted")
+        : t("userscripts.permissionStatusMissing");
+      permissionRequest.hidden = granted;
+    }
     const syncSourceModeUi = () => {
       permissionNotice.hidden = currentSourceMode !== "custom";
       if (sourceLabelNode) {
         sourceLabelNode.textContent = sourceLabel({ ...draft, sourceMode: currentSourceMode });
       }
+      if (currentSourceMode === "custom") void refreshPermissionStatus();
     };
     syncSourceModeUi();
     let dialog;

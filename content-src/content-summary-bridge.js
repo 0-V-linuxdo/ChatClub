@@ -35,7 +35,7 @@ import { runtimeRegistry } from "./shared/runtime-registry-client.js";
 import { installContentCapability } from "./shared/command-router.js";
 import { requestBackground } from "./shared/extension-runtime.js";
 import { createSummaryCapability } from "./capabilities/summary-runtime.js";
-import { collectOfficialSummaryMessages } from "./capabilities/summary-official-rules.js";
+import { collectOfficialSummaryMessages, inspectOfficialSummaryCollection } from "./capabilities/summary-official-rules.js";
 
 function installSummaryBridgeCapability() {
   const runtimes = runtimeRegistry(window);
@@ -73,7 +73,8 @@ function installSummaryBridgeCapability() {
     SUMMARY_MAIN_RUNTIME_IDENTITY: mainRuntimeIdentity,
     SUMMARY_ISOLATED_RUNTIME_IDENTITY: isolatedRuntimeIdentity,
     CONTENT_RUNTIME_IDENTITY: runtimeIdentity,
-    collectOfficialSummaryMessages
+    collectOfficialSummaryMessages,
+    inspectOfficialSummaryCollection
   });
   installContentCapability(runtimes, {
     capability: "summary",

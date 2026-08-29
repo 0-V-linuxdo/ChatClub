@@ -74,12 +74,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "8f47841f8f83c720d5fca3f15d04d133b1bae243a40603f9b5087d8270d08cb8";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "e6f4af96a2e4a26e27bf6835a2fe1fe94197ed37a71412ff4759ec49a9acc893";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "0a283853c2456cc798107c7f6dc3fb8b8aeb7a9e3de13f998567e9406a90f75c";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.0a283853c2456cc798107c7f6dc3fb8b8aeb7a9e3de13f998567e9406a90f75c";
-  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "350ab339301df9784ebd69d73407924adebd503a1fe920abca03c53d806040e3", "implementationSha256": "33ccab0040bad02079a5b863b2499987ab52351ee60ed6ead0e2d760babd77bb", "implementationVersion": "2026.07.16.2+bundle.33ccab0040bad02079a5b863b2499987ab52351ee60ed6ead0e2d760babd77bb" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "ff856eafe3d407b2ecedd684ee0cc3e8c78bc3406d38d194f1f5a05c433e545f";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.ff856eafe3d407b2ecedd684ee0cc3e8c78bc3406d38d194f1f5a05c433e545f";
+  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "2eadf4a23d7736ef141f0c678e4d0248d02f44832fb32f6f79f9f453caad821b", "implementationSha256": "f1bcddaebfdf9e719010d67f854c129a8067233767fdb3b740220523ae4caa69", "implementationVersion": "2026.07.16.2+bundle.f1bcddaebfdf9e719010d67f854c129a8067233767fdb3b740220523ae4caa69" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -2871,7 +2871,35 @@
       return [];
     };
     scripts["lechat.js"] = scripts["lechat"];
-    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.0a283853c2456cc798107c7f6dc3fb8b8aeb7a9e3de13f998567e9406a90f75c" });
+    scripts["perplexity"] = async function(api) {
+      return [];
+    };
+    scripts["perplexity.js"] = scripts["perplexity"];
+    scripts["kimi"] = async function(api) {
+      return [];
+    };
+    scripts["kimi.js"] = scripts["kimi"];
+    scripts["kimiAi"] = async function(api) {
+      return [];
+    };
+    scripts["kimi-ai.js"] = scripts["kimiAi"];
+    scripts["doubao"] = async function(api) {
+      return [];
+    };
+    scripts["doubao.js"] = scripts["doubao"];
+    scripts["dola"] = async function(api) {
+      return [];
+    };
+    scripts["dola.js"] = scripts["dola"];
+    scripts["qwen"] = async function(api) {
+      return [];
+    };
+    scripts["qwen.js"] = scripts["qwen"];
+    scripts["qianwen"] = async function(api) {
+      return [];
+    };
+    scripts["qianwen.js"] = scripts["qianwen"];
+    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.ff856eafe3d407b2ecedd684ee0cc3e8c78bc3406d38d194f1f5a05c433e545f" });
     return scripts;
   }
 
@@ -3006,13 +3034,14 @@
     ].flatMap((selector) => qsa2(selector, root).slice(0, SUMMARY_OFFICIAL_MAX_TURNS));
     return actions.map((action) => closest2(action, messageRootSelector)).filter(Boolean);
   }
-  function collectOfficialSummaryMessages(config = {}, deps = {}) {
+  function inspectOfficialSummaryCollection(config = {}, deps = {}) {
+    const empty = Object.freeze({ messages: null, hits: null });
     const hints = config?.officialRuleHints;
-    if (!hints || typeof hints !== "object" || Array.isArray(hints)) return null;
+    if (!hints || typeof hints !== "object" || Array.isArray(hints)) return empty;
     const { qsa: qsa2, closest: closest2, visible: visible2, normalize: normalize2 } = deps;
-    if (![qsa2, closest2, visible2, normalize2].every((fn) => typeof fn === "function")) return null;
+    if (![qsa2, closest2, visible2, normalize2].every((fn) => typeof fn === "function")) return empty;
     const documentRoot = globalThis.document;
-    if (!documentRoot) return null;
+    if (!documentRoot) return empty;
     const conversationRoots = selectorList(hints.conversationRoot).flatMap((selector) => qsa2(selector, documentRoot, { all: false })).filter(visible2);
     const root = conversationRoots[0] || documentRoot;
     const directMessages = selectorList(hints.messageRoot).flatMap((selector) => qsa2(selector, root).slice(0, SUMMARY_OFFICIAL_MAX_TURNS));
@@ -3020,7 +3049,16 @@
       ...directMessages,
       ...messageRootsFromActions(root, hints, qsa2, closest2)
     ]).filter(visible2).slice(0, SUMMARY_OFFICIAL_MAX_TURNS);
-    if (!elements.length) return null;
+    const hits = {
+      conversationRoots: conversationRoots.length,
+      messageRoots: elements.length,
+      classified: 0,
+      user: 0,
+      assistant: 0,
+      droppedNoRole: 0,
+      droppedNoText: 0
+    };
+    if (!elements.length) return { messages: null, hits };
     const cleanup = [
       ...PACKAGED_SUMMARY_CHROME_SELECTORS,
       ...selectorList(hints.cleanup),
@@ -3033,15 +3071,27 @@
     let totalTextLength = 0;
     for (const element of elements) {
       const role = roleForElement(element, hints);
-      if (!role) continue;
+      if (!role) {
+        hits.droppedNoRole += 1;
+        continue;
+      }
       const text2 = cloneText(element, cleanup, normalize2);
-      if (!text2) continue;
+      if (!text2) {
+        hits.droppedNoText += 1;
+        continue;
+      }
       totalTextLength += text2.length;
-      if (totalTextLength > SUMMARY_OFFICIAL_MAX_TEXT_LENGTH) return null;
+      if (totalTextLength > SUMMARY_OFFICIAL_MAX_TEXT_LENGTH) {
+        return { messages: null, hits };
+      }
+      hits.classified += 1;
+      hits[role] += 1;
       messages.push({ role, text: text2 });
     }
-    if (!messages.some((message) => message.role === "user") || !messages.some((message) => message.role === "assistant")) return null;
-    return messages;
+    if (!messages.some((message) => message.role === "user") || !messages.some((message) => message.role === "assistant")) {
+      return { messages: null, hits };
+    }
+    return { messages, hits };
   }
 
   // content-src/shared/summary-runtime.js
@@ -4082,25 +4132,30 @@ ${value}`);
       return bounded;
     }
     async function collectOfficialStage(config, { wait = true } = {}) {
-      if (!officialRuleConfigMatchesHref(config, String(location.href || ""))) return null;
-      const collect = () => merge2(collectOfficialSummaryMessages(config, {
+      if (!officialRuleConfigMatchesHref(config, String(location.href || ""))) {
+        return { messages: null, hits: null };
+      }
+      const inspectOnce = () => inspectOfficialSummaryCollection(config, {
         qsa: qsa2,
         closest: closest2,
         visible: visible2,
         normalize: normalize2
-      }) || []);
-      let messages = collect();
+      });
+      let inspection = inspectOnce();
       const waitMs = wait ? Math.max(0, Math.min(6e4, Number(config.officialRuleWaitMs) || 0)) : 0;
-      if (!hasUserAndAssistant2(messages) && waitMs > 0) {
+      if (!hasUserAndAssistant2(inspection.messages || []) && waitMs > 0) {
         await sleep2(waitMs);
-        messages = collect();
+        inspection = inspectOnce();
       }
-      return hasUserAndAssistant2(messages) ? messages : null;
+      return {
+        messages: hasUserAndAssistant2(inspection.messages || []) ? merge2(inspection.messages) : null,
+        hits: inspection.hits
+      };
     }
     function summaryRuntimeApi(config = {}) {
       return {
         config,
-        collectOfficialCandidate: async () => collectOfficialStage(config, { wait: true }),
+        collectOfficialCandidate: async () => (await collectOfficialStage(config, { wait: true })).messages,
         sleep: sleep2,
         normalize: normalize2,
         qsa: qsa2,
@@ -4133,20 +4188,25 @@ ${value}`);
     const customSummaryExecutor = (config, runner) => runSummaryRunner(config || {}, runner);
     async function collectSummary(data) {
       const config = data?.config || {};
-      const officialMessages = await collectOfficialStage(config, { wait: false });
-      if (officialMessages) {
-        const messages = boundedSummaryRunnerMessages(officialMessages);
+      const official = await collectOfficialStage(config, { wait: false });
+      if (official.messages) {
+        const messages = boundedSummaryRunnerMessages(official.messages);
         return {
           messages: hasUserAndAssistant2(messages) ? messages : [],
-          rawMessageCount: officialMessages.length,
-          stage: "official"
+          rawMessageCount: official.messages.length,
+          stage: "official",
+          officialHits: official.hits
         };
       }
       const registry = summaryRunners.scripts;
       const runner = registry[config.id] || registry[config.userscriptFile];
-      if (!runner) return { messages: [], stage: "none" };
+      if (!runner) return { messages: [], stage: "none", officialHits: official.hits };
       const result = await runSummaryRunner(config, runner);
-      return { ...result, stage: result?.messages?.length ? "pageWorld" : "none" };
+      return {
+        ...result,
+        stage: result?.messages?.length ? "pageWorld" : "none",
+        officialHits: official.hits
+      };
     }
     {
       const onSummaryPageMessage = async (event) => {

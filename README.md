@@ -33,14 +33,14 @@
 | DeepSeek | https://chat.deepseek.com/ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Kagi Assistant | https://assistant.kagi.com/ | ✓ | ✓ | ✓ | ✓ |  |
 | Notion AI | https://app.notion.com/ai | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Perplexity | https://www.perplexity.ai/ | ✓ |  |  |  |  |
+| Perplexity | https://www.perplexity.ai/ | ✓ | ✓ |  |  |  |
 | Poe | https://poe.com/ | ✓ | ✓ | ✓ |  |  |
-| Kimi.com | https://www.kimi.com/ | ✓ |  |  |  |  |
-| Kimi.ai | https://www.kimi.ai/ | ✓ |  |  |  |  |
-| DouBao | https://www.doubao.com/ | ✓ |  |  |  |  |
-| Dola | https://www.dola.com/chat/ | ✓ |  |  |  |  |
-| Qwen | https://chat.qwen.ai/ | ✓ |  |  |  |  |
-| 千问 | https://www.qianwen.com/ | ✓ |  |  |  |  |
+| Kimi.com | https://www.kimi.com/ | ✓ | ✓ |  |  |  |
+| Kimi.ai | https://www.kimi.ai/ | ✓ | ✓ |  |  |  |
+| DouBao | https://www.doubao.com/ | ✓ | ✓ |  |  |  |
+| Dola | https://www.dola.com/chat/ | ✓ | ✓ |  |  |  |
+| Qwen | https://chat.qwen.ai/ | ✓ | ✓ |  |  |  |
+| 千问 | https://www.qianwen.com/ | ✓ | ✓ |  |  |  |
 | TypingMind | https://setapp.typingcloud.com/ | ✓ | ✓ |  |  |  |
 | LobeHub | https://app.lobehub.com/ | ✓ | ✓ |  |  |  |
 | AI Studio | https://aistudio.google.com/ |  | ✓ | ✓ |  |  |

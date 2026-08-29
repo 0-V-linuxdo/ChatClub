@@ -73,6 +73,7 @@ export function createSettingsController(ctx) {
     syncSummaryPanel: "function",
     syncPreferredModelSelectionOverlays: "function",
     requestUserScriptsPermission: "function?",
+    userScriptsPermissionContains: "function?",
     probeSummaryCollector: "function?",
     onSettingsDialogClosed: "function?",
     persistWorkspaceSession: "function?",
@@ -123,6 +124,9 @@ export function createSettingsController(ctx) {
   const requestUserScriptsPermission = typeof ctx.requestUserScriptsPermission === "function"
     ? ctx.requestUserScriptsPermission
     : async () => true;
+  const userScriptsPermissionContains = typeof ctx.userScriptsPermissionContains === "function"
+    ? ctx.userScriptsPermissionContains
+    : null;
   const probeSummaryCollector = typeof ctx.probeSummaryCollector === "function"
     ? ctx.probeSummaryCollector
     : null;
@@ -221,6 +225,7 @@ export function createSettingsController(ctx) {
     notifyConfigReload,
     saveOptionsPatch: sectionOptionsPatch("Summary settings section", SECTION_OPTION_KEYS.summary),
     ensureUserScriptsPermission,
+    ...(userScriptsPermissionContains ? { userScriptsPermissionContains } : {}),
     ...(probeSummaryCollector ? { probeSummaryCollector } : {})
   });
   const messageNavigationSection = createMessageNavigationSettingsSection({
@@ -234,7 +239,8 @@ export function createSettingsController(ctx) {
     svgIcon,
     notifyConfigReload,
     saveOptionsPatch: sectionOptionsPatch("Topic deletion settings section", SECTION_OPTION_KEYS.topicDeletion),
-    ensureUserScriptsPermission
+    ensureUserScriptsPermission,
+    ...(userScriptsPermissionContains ? { userScriptsPermissionContains } : {})
   });
   const optimizeSection = createOptimizeSettingsSection({
     state: settingsSections.optimize,

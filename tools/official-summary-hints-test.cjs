@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 
 (async () => {
   const previous = { document: globalThis.document, Node: globalThis.Node, location: globalThis.location };
@@ -28,7 +30,7 @@ const assert = require("node:assert/strict");
   const messages = [user, assistant, repeatedAssistant];
   globalThis.document = documentRoot;
   try {
-    const { collectOfficialSummaryMessages } = await import("../content-src/capabilities/summary-official-rules.js");
+    const { collectOfficialSummaryMessages, inspectOfficialSummaryCollection } = await import("../content-src/capabilities/summary-official-rules.js");
     const qsa = (selector, root) => {
       if (root === documentRoot && selector === ".conversation") return [conversation];
       if (root === conversation && selector === ".message") return messages;
@@ -45,15 +47,28 @@ const assert = require("node:assert/strict");
       }
     };
     const deps = { qsa, closest: () => null, visible: () => true, normalize: (value) => String(value || "").trim() };
-    assert.deepEqual(collectOfficialSummaryMessages(base, deps), [
+    const inspection = inspectOfficialSummaryCollection(base, deps);
+    assert.deepEqual(inspection.messages, [
       { role: "user", text: "same visible text" },
       { role: "assistant", text: "same visible text" },
       { role: "assistant", text: "same visible text" }
     ], "remote hints must classify by explicit role and preserve distinct repeated turns");
+    assert.equal(inspection.hits.conversationRoots, 1);
+    assert.equal(inspection.hits.messageRoots, 3);
+    assert.equal(inspection.hits.classified, 3);
+    assert.equal(inspection.hits.user, 1);
+    assert.equal(inspection.hits.assistant, 2);
+    assert.deepEqual(collectOfficialSummaryMessages(base, deps), inspection.messages);
     assert.equal(collectOfficialSummaryMessages({
       ...base,
       officialRuleHints: { ...base.officialRuleHints, userRoot: [".overlap"], assistantRoot: [".overlap"] }
     }, deps), null, "overlapping roles must fail closed");
+    const overlapHits = inspectOfficialSummaryCollection({
+      ...base,
+      officialRuleHints: { ...base.officialRuleHints, userRoot: [".overlap"], assistantRoot: [".overlap"] }
+    }, deps);
+    assert.equal(overlapHits.messages, null);
+    assert.equal(overlapHits.hits.droppedNoRole, 3);
     assert.equal(collectOfficialSummaryMessages({
       ...base,
       officialRuleHints: { ...base.officialRuleHints, assistantRoot: [".missing"] }
@@ -167,6 +182,7 @@ const assert = require("node:assert/strict");
     const officialFirst = await pipelineCapability.collectSummary({ config: pageWorldConfig });
     assert.deepEqual(officialFirst.messages, officialMessages, "JSON-first pipeline must return official turns before page-world JS");
     assert.equal(officialFirst.stage, "official");
+    assert.equal(officialFirst.officialHits, null, "legacy collector fallback may omit hits");
     assert.equal(pageCalls, 0, "pageWorldFirst must not run when official JSON already collected a conversation");
     assert.equal(runnerCalls, 0, "packaged JS must not run when official JSON already collected a conversation");
     assert.equal(officialCalls, 1, "official JSON is a pipeline stage, not a runner helper");
@@ -198,8 +214,55 @@ const assert = require("node:assert/strict");
     assert.equal(officialOnly.stage, "official");
     assert.equal(officialCalls, 1);
 
-    const { summaryConfigHasCollector } = await import("../shared/summary-sites.js");
+    const missedHits = {
+      conversationRoots: 1,
+      messageRoots: 0,
+      classified: 0,
+      user: 0,
+      assistant: 0,
+      droppedNoRole: 0,
+      droppedNoText: 0
+    };
+    let waitSleeps = 0;
+    let waitOfficialCalls = 0;
+    const waitCapability = createSummaryCapability({
+      contentDocumentId: "fixture-document",
+      runtimes: {
+        require() {
+          return {
+            scripts: {
+              chatgpt: async (api) => (await api.collectOfficialCandidate()) || packagedMessages
+            }
+          };
+        }
+      },
+      CONTENT_BRIDGE_VERSION: "fixture",
+      merge: (items) => items,
+      hasUserAndAssistant: (items) => items.some((item) => item.role === "user") && items.some((item) => item.role === "assistant"),
+      inspectOfficialSummaryCollection: () => {
+        waitOfficialCalls += 1;
+        return { messages: null, hits: missedHits };
+      },
+      qsa: () => [],
+      closest: () => null,
+      visible: () => true,
+      normalize: (value) => String(value || ""),
+      sleep: async () => { waitSleeps += 1; }
+    });
+    const waited = await waitCapability.collectSummary({ config: { ...scopedConfig, userscriptRunMode: "serial" } });
+    assert.deepEqual(waited.messages, packagedMessages, "JS must still collect after official JSON misses");
+    assert.equal(waited.stage, "isolatedJs");
+    assert.deepEqual(waited.officialHits, missedHits, "probe must keep official hits when JS wins");
+    assert.equal(waitSleeps, 1, "isolated pipeline must wait once for officialRuleWaitMs");
+    assert.equal(waitOfficialCalls, 3, "pipeline wait plus non-waiting candidate must inspect official JSON three times");
+
+    const { summaryConfigHasCollector, SUMMARY_SITE_CONFIGS } = await import("../shared/summary-sites.js");
     assert.equal(summaryConfigHasCollector({ userscriptFile: "poe.js" }), true);
+    for (const id of ["perplexity", "kimi", "kimiAi", "doubao", "dola", "qwen", "qianwen"]) {
+      const site = SUMMARY_SITE_CONFIGS.find((item) => item.id === id);
+      assert.equal(site?.userscriptLength, 10, `${id} must ship as an official-slot stub`);
+      assert.equal(summaryConfigHasCollector(site), true);
+    }
     assert.equal(summaryConfigHasCollector({
       officialRuleHints: { messageRoot: [".message"], userRoot: [".user"], assistantRoot: [".assistant"] }
     }), true, "filled official slots are a collector even without a userscript file");
@@ -211,6 +274,17 @@ const assert = require("node:assert/strict");
       sourceMode: "custom",
       customUserscript: "return [];"
     }), true);
+
+    const isolatedSource = fs.readFileSync(path.join(__dirname, "../content-src/capabilities/summary-runtime.js"), "utf8");
+    const mainSource = fs.readFileSync(path.join(__dirname, "../content-src/summary-userscripts-main.js"), "utf8");
+    assert.match(isolatedSource, /const official = await collectOfficialStage\(config, data, \{ wait: true \}\)/);
+    assert.match(isolatedSource, /collectOfficialCandidate: async \(\) => \(await collectOfficialStage\(config, data, \{ wait: false \}\)\)\.messages/);
+    assert.match(mainSource, /const official = await collectOfficialStage\(config, \{ wait: false \}\)/);
+    assert.match(mainSource, /collectOfficialCandidate: async \(\) => \(await collectOfficialStage\(config, \{ wait: true \}\)\)\.messages/);
+    const summarySettingsSource = fs.readFileSync(path.join(__dirname, "../app/settings/summary.js"), "utf8");
+    assert.match(summarySettingsSource, /chatclub\.summaryCollectorLastRun\.v1/);
+    assert.doesNotMatch(summarySettingsSource, /chrome:\/\//);
+    assert.doesNotMatch(fs.readFileSync(path.join(__dirname, "../app/settings/topic-deletion.js"), "utf8"), /chrome:\/\//);
 
     console.log("official Summary selector hints remain strict, role-safe, and DOM-identity based: ok");
   } finally {

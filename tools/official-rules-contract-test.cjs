@@ -118,8 +118,8 @@ const assert = require("node:assert/strict");
     signature: Buffer.alloc(bytes).toString("base64url")
   });
 
-  assert.equal(OFFICIAL_RULES_BASELINE_COMPONENTS.length, 33);
-  assert.equal(officialRulesBaselineComponents("summary").length, 14);
+  assert.equal(OFFICIAL_RULES_BASELINE_COMPONENTS.length, 40);
+  assert.equal(officialRulesBaselineComponents("summary").length, 21);
   assert.equal(officialRulesBaselineComponents("messageNavigator").length, 11);
   assert.equal(officialRulesBaselineComponents("delete").length, 8);
   assert.equal(new Set(OFFICIAL_RULES_COMPONENT_KEYS).size, OFFICIAL_RULES_COMPONENT_KEYS.length);
@@ -128,6 +128,13 @@ const assert = require("node:assert/strict");
   assert.equal(findOfficialRulesBaselineComponent("summary", "poe")?.siteId, "poe");
   assert.equal(findOfficialRulesBaselineComponent("summary", "aiStudio")?.siteId, "aiStudio");
   assert.equal(findOfficialRulesBaselineComponent("summary", "lechat")?.siteId, "lechat");
+  assert.equal(findOfficialRulesBaselineComponent("summary", "perplexity")?.siteId, "perplexity");
+  assert.equal(findOfficialRulesBaselineComponent("summary", "kimi")?.siteId, "kimi");
+  assert.equal(findOfficialRulesBaselineComponent("summary", "kimiAi")?.siteId, "kimiAi");
+  assert.equal(findOfficialRulesBaselineComponent("summary", "doubao")?.siteId, "doubao");
+  assert.equal(findOfficialRulesBaselineComponent("summary", "dola")?.siteId, "dola");
+  assert.equal(findOfficialRulesBaselineComponent("summary", "qwen")?.siteId, "qwen");
+  assert.equal(findOfficialRulesBaselineComponent("summary", "qianwen")?.siteId, "qianwen");
   assert.equal(officialRulesComponentProfile("messageNavigator", "grokMirror"), "grok");
   assert.equal(officialRulesComponentProfile("delete", "grokMirror"), "grok-mirror");
   assert.equal(officialRulesComponentProfile("summary", "missing"), "");

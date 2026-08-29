@@ -416,10 +416,10 @@ function featureNeedsUserScripts(feature, configs = null) {
 }
 
 async function requestFeatureUserScriptsPermission(feature, configs = null) {
-  if (!featureNeedsUserScripts(feature, configs) || userScriptsPermissionGranted) return true;
-  return requestUserScriptsAccess();
+  return !featureNeedsUserScripts(feature, configs) || userScriptsPermissionGranted || requestUserScriptsAccess();
 }
 
+const refreshUserScriptsPermission = async () => (userScriptsPermissionGranted = await permissionsContains({ permissions: ["userScripts"] }).catch(() => false));
 async function requestUserScriptsAccess() {
   if (userScriptsPermissionGranted) return true;
   let granted = false;
@@ -624,7 +624,7 @@ function ensureSettingsController() {
           applyPreferredModels: applyPreferredModelsToFrames,
           applyTheme,
           syncI18nLanguage,
-          requestUserScriptsPermission: requestUserScriptsAccess, probeSummaryCollector: async (config) => (await ensureSummaryController()).probeCollectorOnActiveFrame(config),
+          requestUserScriptsPermission: requestUserScriptsAccess, userScriptsPermissionContains: refreshUserScriptsPermission, probeSummaryCollector: async (config) => (await ensureSummaryController()).probeCollectorOnActiveFrame(config),
           functionalAnomalyLog: functionalAnomalyController,
           hydrateImportedLayoutIfNeeded: workspaceController.hydrateImportedLayoutIfNeeded,
           reconcileAppCatalog: workspaceController.reconcileAppCatalog,
@@ -1286,7 +1286,7 @@ async function init() {
   state.pocketEntries = await loadPocketHistory();
   state.shortcutConfig = await loadShortcutConfig();
   const workspaceSessionSnapshot = await workspaceSessionSnapshotPromise;
-  userScriptsPermissionGranted = await permissionsContains({ permissions: ["userScripts"] }).catch(() => false);
+  await refreshUserScriptsPermission();
   await faviconService.load();
   let contentScriptsRefreshed = false;
   let contentScriptsRefreshError = null;

@@ -1,6 +1,7 @@
 import { SUMMARY_SITE_CONFIGS, loadBuiltInSummarySource } from "../../shared/summary-sites.js";
 import { t } from "../../shared/i18n.js";
 import { createId } from "../../shared/storage-schema.js";
+import { storageGet, storageSet } from "../../shared/storage-adapter.js";
 import {
   button,
   editorModal,
@@ -28,7 +29,8 @@ export function createSummarySettingsSection(ctx) {
     notifyConfigReload: "function",
     saveOptionsPatch: "function",
     ensureUserScriptsPermission: "function",
-    probeSummaryCollector: "function?"
+    probeSummaryCollector: "function?",
+    userScriptsPermissionContains: "function?"
   });
   const state = requireSettingsSectionStatePort(
     requireControllerContext(ctx, controllerName, "state"),
@@ -47,6 +49,9 @@ export function createSummarySettingsSection(ctx) {
   const saveOptionsPatch = requireControllerFunction(ctx, controllerName, "saveOptionsPatch");
   const ensureUserScriptsPermission = requireControllerFunction(ctx, controllerName, "ensureUserScriptsPermission");
   const probeSummaryCollector = typeof ctx.probeSummaryCollector === "function" ? ctx.probeSummaryCollector : null;
+  const userScriptsPermissionContains = typeof ctx.userScriptsPermissionContains === "function"
+    ? ctx.userScriptsPermissionContains
+    : null;
   const settingsKit = createSettingsKit({ svgIcon });
   const {
     settingsBlock,
@@ -103,6 +108,7 @@ export function createSummarySettingsSection(ctx) {
   }
 
   function summarySettingsPane(redraw, goToSection = () => {}) {
+    void loadCollectorLastRun().then((loaded) => { if (loaded) redraw(); });
     const active = state.summarySettingsTab === "scripts" ? "scripts" : "ai";
     return el("div", { class: "settings-pane" },
       recordFullTextBlock(redraw),
@@ -152,11 +158,87 @@ export function createSummarySettingsSection(ctx) {
       : t("summary.collector.builtInAutoUpdate");
   }
 
+  const SUMMARY_COLLECTOR_LAST_RUN_KEY = "chatclub.summaryCollectorLastRun.v1";
+  let lastRunHydrated = false;
+
+  function normalizeOfficialHits(hits) {
+    if (!hits || typeof hits !== "object" || Array.isArray(hits)) return null;
+    return {
+      conversationRoots: Math.max(0, Number(hits.conversationRoots) || 0),
+      messageRoots: Math.max(0, Number(hits.messageRoots) || 0),
+      classified: Math.max(0, Number(hits.classified) || 0),
+      user: Math.max(0, Number(hits.user) || 0),
+      assistant: Math.max(0, Number(hits.assistant) || 0),
+      droppedNoRole: Math.max(0, Number(hits.droppedNoRole) || 0),
+      droppedNoText: Math.max(0, Number(hits.droppedNoText) || 0)
+    };
+  }
+
+  function normalizeCollectorLastRun(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+    const collectorId = String(value.collectorId || "").trim();
+    if (!collectorId) return null;
+    return {
+      collectorId,
+      ok: value.ok === true,
+      turnCount: Math.max(0, Number(value.turnCount) || 0),
+      stage: String(value.stage || "none"),
+      officialHits: normalizeOfficialHits(value.officialHits),
+      error: String(value.error || ""),
+      href: String(value.href || ""),
+      at: Number(value.at) || 0
+    };
+  }
+
+  async function loadCollectorLastRun() {
+    if (lastRunHydrated) return false;
+    lastRunHydrated = true;
+    try {
+      const stored = normalizeCollectorLastRun(await storageGet(SUMMARY_COLLECTOR_LAST_RUN_KEY));
+      if (stored && !state.summaryCollectorLastRun) {
+        state.summaryCollectorLastRun = stored;
+        return true;
+      }
+    } catch {}
+    return false;
+  }
+
+  async function persistCollectorLastRun(run) {
+    const normalized = normalizeCollectorLastRun(run);
+    state.summaryCollectorLastRun = normalized;
+    if (!normalized) return;
+    try { await storageSet(SUMMARY_COLLECTOR_LAST_RUN_KEY, normalized); } catch {}
+  }
+
+  function formatCollectorStage(stage) {
+    const key = `summary.collector.stage.${String(stage || "none")}`;
+    const label = t(key);
+    return label === key ? String(stage || "none") : label;
+  }
+
+  function formatOfficialHits(hits) {
+    const normalized = normalizeOfficialHits(hits);
+    if (!normalized) return "";
+    return t("summary.collector.hits", {
+      roots: normalized.conversationRoots,
+      messages: normalized.messageRoots,
+      user: normalized.user,
+      assistant: normalized.assistant
+    });
+  }
+
   function formatCollectorLastRun(run) {
     if (!run) return t("summary.collector.lastRunNone");
-    if (run.ok) return t("summary.collector.probeOk", { count: Number(run.turnCount) || 0 });
+    const stage = formatCollectorStage(run.stage);
+    const hits = formatOfficialHits(run.officialHits);
+    const detail = [stage, hits].filter(Boolean).join(" · ");
+    if (run.ok) {
+      const base = t("summary.collector.probeOk", { count: Number(run.turnCount) || 0 });
+      return detail ? `${base} · ${detail}` : base;
+    }
     if (run.error === "no-frame") return t("summary.collector.noActiveFrame");
-    return t("summary.collector.probeFail", { error: run.error || t("common.failed") });
+    const fail = t("summary.collector.probeFail", { error: run.error || t("common.failed") });
+    return detail ? `${fail} · ${detail}` : fail;
   }
 
   function summaryCollectorRunModeLabel(mode) {
@@ -223,6 +305,12 @@ export function createSummarySettingsSection(ctx) {
     const sourceLabelNode = builtIn
       ? el("small", { dataset: { userscriptSourceLabel: "summary" } })
       : null;
+    const permissionStatus = el("small", { dataset: { userscriptPermissionStatus: "summary" } });
+    const permissionRequest = button(t("userscripts.permissionRequest"), async () => {
+      await ensureUserScriptsPermission();
+      await refreshPermissionStatus();
+    });
+    permissionRequest.dataset.userscriptPermissionRequest = "summary";
     const permissionNotice = el("div", {
       class: "settings-info-callout settings-userscript-permission-notice",
       role: "note",
@@ -232,18 +320,32 @@ export function createSummarySettingsSection(ctx) {
       svgIcon("alert"),
       el("div", {},
         el("strong", {}, t("userscripts.permissionNoticeTitle")),
-        el("p", {}, t("userscripts.permissionNoticeBody"))
+        el("p", {}, t("userscripts.permissionNoticeBody")),
+        permissionStatus,
+        permissionRequest
       )
     );
+    async function refreshPermissionStatus() {
+      let granted = false;
+      if (typeof userScriptsPermissionContains === "function") {
+        try { granted = await userScriptsPermissionContains(); } catch { granted = false; }
+      }
+      permissionStatus.textContent = granted
+        ? t("userscripts.permissionStatusGranted")
+        : t("userscripts.permissionStatusMissing");
+      permissionRequest.hidden = granted;
+    }
     const syncSourceModeUi = () => {
       permissionNotice.hidden = sourceMode !== "custom";
       if (sourceLabelNode) {
         sourceLabelNode.textContent = summaryCollectorSourceLabel({ ...draft, sourceMode });
       }
+      if (sourceMode === "custom") void refreshPermissionStatus();
     };
     syncSourceModeUi();
     let dialog;
     const close = () => dialog.remove();
+    void loadCollectorLastRun();
     const lastRunNode = el("small", {
       class: "summary-collector-last-run",
       "aria-live": "polite"
@@ -273,11 +375,11 @@ export function createSummarySettingsSection(ctx) {
           ...(copyTimeout ? { copyTimeoutMs: copyTimeout } : {})
         };
         const result = await probeSummaryCollector(probeConfig);
-        state.summaryCollectorLastRun = {
+        await persistCollectorLastRun({
           collectorId: config?.id || draft.id,
           ...result,
           at: Date.now()
-        };
+        });
         lastRunNode.textContent = formatCollectorLastRun(state.summaryCollectorLastRun);
         if (result?.ok) toast(t("summary.collector.probeOk", { count: Number(result.turnCount) || 0 }), "success");
         else toast(formatCollectorLastRun(state.summaryCollectorLastRun), "error");

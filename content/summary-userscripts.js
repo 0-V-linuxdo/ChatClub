@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "8f47841f8f83c720d5fca3f15d04d133b1bae243a40603f9b5087d8270d08cb8";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "e6f4af96a2e4a26e27bf6835a2fe1fe94197ed37a71412ff4759ec49a9acc893";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "0a283853c2456cc798107c7f6dc3fb8b8aeb7a9e3de13f998567e9406a90f75c";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.0a283853c2456cc798107c7f6dc3fb8b8aeb7a9e3de13f998567e9406a90f75c";
-  var CONTENT_RUNTIME_SUMMARY_ISOLATED_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts.js", "entryPath": "content-src/summary-userscripts.js", "sourceSha256": "0a16816753b74928fa8d15f3d12dcb95c35d17c270f6c025462ec82571903556", "implementationSha256": "8acee7417ee2b5e86ec53050e42eca0d0415b0858cfa470b794297af576305c8", "implementationVersion": "2026.07.16.2+bundle.8acee7417ee2b5e86ec53050e42eca0d0415b0858cfa470b794297af576305c8" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "ff856eafe3d407b2ecedd684ee0cc3e8c78bc3406d38d194f1f5a05c433e545f";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.ff856eafe3d407b2ecedd684ee0cc3e8c78bc3406d38d194f1f5a05c433e545f";
+  var CONTENT_RUNTIME_SUMMARY_ISOLATED_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts.js", "entryPath": "content-src/summary-userscripts.js", "sourceSha256": "8f43e67ae6390a0de15c167427516661996917651ce1bba84e6d9c39b544f1e3", "implementationSha256": "77a9a2c0483960480a730fac8313033aee8f3a8bdf1955311486ef9c5485f2b2", "implementationVersion": "2026.07.16.2+bundle.77a9a2c0483960480a730fac8313033aee8f3a8bdf1955311486ef9c5485f2b2" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -2865,7 +2865,35 @@
       return [];
     };
     scripts["lechat.js"] = scripts["lechat"];
-    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.0a283853c2456cc798107c7f6dc3fb8b8aeb7a9e3de13f998567e9406a90f75c" });
+    scripts["perplexity"] = async function(api) {
+      return [];
+    };
+    scripts["perplexity.js"] = scripts["perplexity"];
+    scripts["kimi"] = async function(api) {
+      return [];
+    };
+    scripts["kimi.js"] = scripts["kimi"];
+    scripts["kimiAi"] = async function(api) {
+      return [];
+    };
+    scripts["kimi-ai.js"] = scripts["kimiAi"];
+    scripts["doubao"] = async function(api) {
+      return [];
+    };
+    scripts["doubao.js"] = scripts["doubao"];
+    scripts["dola"] = async function(api) {
+      return [];
+    };
+    scripts["dola.js"] = scripts["dola"];
+    scripts["qwen"] = async function(api) {
+      return [];
+    };
+    scripts["qwen.js"] = scripts["qwen"];
+    scripts["qianwen"] = async function(api) {
+      return [];
+    };
+    scripts["qianwen.js"] = scripts["qianwen"];
+    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.ff856eafe3d407b2ecedd684ee0cc3e8c78bc3406d38d194f1f5a05c433e545f" });
     return scripts;
   }
 

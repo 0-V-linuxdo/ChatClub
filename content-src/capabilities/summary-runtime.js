@@ -27,6 +27,7 @@ export function createSummaryCapability(deps = {}) {
     extractTurns,
     userscriptFindCopyButtons,
     collectOfficialSummaryMessages,
+    inspectOfficialSummaryCollection,
     contentRuntimeBundleIdentityMatches,
     SUMMARY_MAIN_RUNTIME_IDENTITY,
     SUMMARY_ISOLATED_RUNTIME_IDENTITY,
@@ -60,27 +61,49 @@ export function createSummaryCapability(deps = {}) {
   }
 
   async function collectOfficialStage(config, data, { wait = true } = {}) {
-    if (!officialRuleConfigMatchesHref(config, String(location.href || ""))) return null;
-    const collect = () => merge(collectOfficialSummaryMessages?.(config, {
-      qsa,
-      closest,
-      visible,
-      normalize
-    }) || []);
-    let messages = collect();
+    if (!officialRuleConfigMatchesHref(config, String(location.href || ""))) {
+      return { messages: null, hits: null };
+    }
+    const inspectOnce = () => {
+      if (typeof inspectOfficialSummaryCollection === "function") {
+        const inspection = inspectOfficialSummaryCollection(config, {
+          qsa,
+          closest,
+          visible,
+          normalize
+        });
+        return {
+          messages: merge(inspection?.messages || []),
+          hits: inspection?.hits || null
+        };
+      }
+      return {
+        messages: merge(collectOfficialSummaryMessages?.(config, {
+          qsa,
+          closest,
+          visible,
+          normalize
+        }) || []),
+        hits: null
+      };
+    };
+    let inspection = inspectOnce();
     const waitMs = wait ? Math.max(0, Math.min(60000, Number(config.officialRuleWaitMs) || 0)) : 0;
-    if (!hasUserAndAssistant(messages) && waitMs > 0 && typeof sleep === "function") {
+    if (!hasUserAndAssistant(inspection.messages) && waitMs > 0 && typeof sleep === "function") {
       await sleep(waitMs);
       assertSummaryTargetCurrent(data);
-      messages = collect();
+      inspection = inspectOnce();
     }
-    return hasUserAndAssistant(messages) ? messages : null;
+    return {
+      messages: hasUserAndAssistant(inspection.messages) ? inspection.messages : null,
+      hits: inspection.hits
+    };
   }
 
   function summaryRunnerApi(config, data) {
     return {
       config,
-      collectOfficialCandidate: async () => collectOfficialStage(config, data, { wait: false }),
+      collectOfficialCandidate: async () => (await collectOfficialStage(config, data, { wait: false })).messages,
       sleep,
       normalize,
       qsa,
@@ -111,15 +134,17 @@ export function createSummaryCapability(deps = {}) {
       return finishSummaryCollection(data, {
         messages: hasUserAndAssistant(customMessages) ? customMessages : [],
         rawMessageCount: Number(customResult?.rawMessageCount) || customMessages.length,
-        stage: "custom"
+        stage: "custom",
+        officialHits: null
       });
     }
-    const officialMessages = await collectOfficialStage(config, data, { wait: true });
-    if (officialMessages) {
+    const official = await collectOfficialStage(config, data, { wait: true });
+    if (official.messages) {
       return finishSummaryCollection(data, {
-        messages: officialMessages,
-        rawMessageCount: officialMessages.length,
-        stage: "official"
+        messages: official.messages,
+        rawMessageCount: official.messages.length,
+        stage: "official",
+        officialHits: official.hits
       });
     }
     let registry = {};
@@ -132,18 +157,27 @@ export function createSummaryCapability(deps = {}) {
         return finishSummaryCollection(data, {
           messages: pageMessages,
           rawMessageCount: Number(pageResult.rawMessageCount) || pageMessages.length,
-          stage: pageResult?.stage || "pageWorld"
+          stage: pageResult?.stage || "pageWorld",
+          officialHits: official.hits
         });
       }
     }
     const runner = packagedRunner;
-    if (!runner) return finishSummaryCollection(data, { messages: [], rawMessageCount: 0, stage: "none" });
+    if (!runner) {
+      return finishSummaryCollection(data, {
+        messages: [],
+        rawMessageCount: 0,
+        stage: "none",
+        officialHits: official.hits
+      });
+    }
     const result = await runner(summaryRunnerApi(config, data));
     const messages = merge(Array.isArray(result) ? result : result?.messages || []);
     return finishSummaryCollection(data, {
       messages: hasUserAndAssistant(messages) ? messages : [],
       rawMessageCount: messages.length,
-      stage: "isolatedJs"
+      stage: "isolatedJs",
+      officialHits: official.hits
     });
   }
 

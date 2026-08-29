@@ -219,6 +219,11 @@ globalThis.fetch = async (sourceUrl) => ({
     /\.settings-userscript-permission-notice\[hidden\]\s*\{\s*display:\s*none;\s*\}/,
     "the callout grid style must not override hidden permission notices"
   );
+  const summarySource = fs.readFileSync(path.join(root, "app/settings/summary.js"), "utf8");
+  const topicSource = fs.readFileSync(path.join(root, "app/settings/topic-deletion.js"), "utf8");
+  assert.match(summarySource, /chatclub\.summaryCollectorLastRun\.v1/);
+  assert.doesNotMatch(summarySource, /chrome:\/\//);
+  assert.doesNotMatch(topicSource, /chrome:\/\//);
   const i18n = await import(moduleUrl("shared/i18n.js"));
   const stateModule = await import(moduleUrl("app/state.js"));
   const summaryModule = await import(moduleUrl("app/settings/summary.js"));
@@ -322,6 +327,15 @@ globalThis.fetch = async (sourceUrl) => ({
   await settleEvent(findNode(customSummaryRow, (node) => node.getAttribute?.("aria-label") === "Edit").dispatch("click"));
   notice = findNode(modalRoot(), (node) => node.dataset?.userscriptPermissionNotice === "summary");
   assert.equal(notice.hidden, false, "an existing custom Summary script must show the permission notice");
+  await waitUntil(
+    () => findNode(notice, (node) => node.dataset?.userscriptPermissionStatus === "summary")?.textContent
+      === "User Scripts permission is not granted.",
+    "custom Summary editor must show live permission status"
+  );
+  const summaryRequest = findNode(notice, (node) => node.dataset?.userscriptPermissionRequest === "summary");
+  assert.ok(summaryRequest, "custom Summary editor must offer a permission request button");
+  assert.equal(summaryRequest.hidden, false);
+  assert.doesNotMatch(notice.textContent, /chrome:\/\//);
   await settleEvent(buttonWithText(modalRoot(), "Save").dispatch("click"));
   assert.equal(summaryPermissionChecks, 2, "Summary save and re-enable must both keep permission checks");
   assert.equal(summarySaves, 0, "denied Summary permission must prevent persistence");
@@ -376,6 +390,13 @@ globalThis.fetch = async (sourceUrl) => ({
   await settleEvent(findNode(customTopicRow, (node) => node.getAttribute?.("aria-label") === "Edit").dispatch("click"));
   notice = findNode(modalRoot(), (node) => node.dataset?.userscriptPermissionNotice === "topic-deletion");
   assert.equal(notice.hidden, false, "an existing custom Delete Site script must show the permission notice");
+  await waitUntil(
+    () => findNode(notice, (node) => node.dataset?.userscriptPermissionStatus === "topic-deletion")?.textContent
+      === "User Scripts permission is not granted.",
+    "custom Delete Site editor must show live permission status"
+  );
+  assert.ok(findNode(notice, (node) => node.dataset?.userscriptPermissionRequest === "topic-deletion"));
+  assert.doesNotMatch(notice.textContent, /chrome:\/\//);
   await settleEvent(buttonWithText(modalRoot(), "Save").dispatch("click"));
   assert.equal(topicPermissionChecks, 2, "Delete Site save and re-enable must both keep permission checks");
   assert.equal(topicSaves, 0, "denied Delete Site permission must prevent persistence");
