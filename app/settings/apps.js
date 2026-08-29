@@ -34,7 +34,8 @@ import {
 import {
   cleanupSettingsDragRows,
   createSettingsKit,
-  moveListItem
+  moveListItem,
+  moveListItemByDelta
 } from "./kit.js";
 import { requireSettingsSectionStatePort } from "./section-contract.js";
 import {
@@ -75,7 +76,7 @@ export function createAppsSettingsSection(ctx) {
   const syncSummaryPanel = requireControllerFunction(ctx, controllerName, "syncSummaryPanel");
   const syncWorkspaceDom = requireControllerFunction(ctx, controllerName, "syncWorkspaceDom");
   const {
-    settingsDragHandle,
+    settingsReorderHandle,
     settingsEmptyRow,
     settingsIconAction,
     settingsInnerTabs,
@@ -176,7 +177,17 @@ export function createAppsSettingsSection(ctx) {
       ondragleave: (event) => event.currentTarget.classList.remove("drop-before", "drop-after"),
       ondrop: (event) => dropBuiltIn(event, app, redraw)
     },
-      settingsDragHandle(t("apps.platformName")),
+      settingsReorderHandle(t("apps.platformName"), {
+        ids: orderedBuiltInApps().map((item) => item.id),
+        id: app.id,
+        onMove: async (delta) => {
+          const builtinChatAppOrder = moveListItemByDelta(orderedBuiltInApps().map((item) => ({ id: item.id })), app.id, delta).map((item) => item.id);
+          state.options = await saveOptionsPatch({ builtinChatAppOrder });
+          syncWorkspaceDom();
+          redraw?.();
+          toast(t("toast.builtinAppOrderSaved"), "success");
+        }
+      }),
       el("strong", { class: "settings-main-cell" }, displayAppName(app)),
       el("a", { class: "settings-url-link", href: app.url, target: "_blank", rel: "noreferrer" }, app.url),
       el("span", { class: "settings-strategy-cell" }, builtInImagePasteStrategyLabel(app)),
@@ -276,8 +287,24 @@ export function createAppsSettingsSection(ctx) {
       ondragleave: (event) => event.currentTarget.classList.remove("drop-before", "drop-after"),
       ondrop: (event) => builtIn ? dropBuiltIn(event, app, redraw) : dropCustom(event, app, redraw)
     },
-      settingsDragHandle(t("apps.platformName")),
-      el("strong", { class: "settings-main-cell iframe-permission-app" }, displayAppName(app)),
+      settingsReorderHandle(t("apps.platformName"), {
+        ids: (builtIn ? orderedBuiltInApps() : state.customConfig).map((item) => item.id),
+        id: app.id,
+        onMove: async (delta) => {
+          if (builtIn) {
+            const builtinChatAppOrder = moveListItemByDelta(orderedBuiltInApps().map((item) => ({ id: item.id })), app.id, delta).map((item) => item.id);
+            state.options = await saveOptionsPatch({ builtinChatAppOrder });
+            syncWorkspaceDom();
+            redraw?.();
+            toast(t("toast.builtinAppOrderSaved"), "success");
+            return;
+          }
+          await saveCustomList(moveListItemByDelta(state.customConfig, app.id, delta), redraw, t("toast.customConfigOrderSaved"), {
+            syncWorkspace: false,
+            reloadRuntime: false
+          });
+        }
+      }),
       el("span", { class: "iframe-permission-hosts", title: iframeAppHostsText(app, "\n") }, iframeAppHostsText(app)),
       el("span", { class: "iframe-permission-summary", title: iframeAttributeSummary(app, source) }, iframeAttributeSummary(app, source)),
       el("span", { class: `iframe-permission-status ${overridden ? "is-overridden" : "is-default"}` },
@@ -946,7 +973,16 @@ export function createAppsSettingsSection(ctx) {
       ondragleave: (event) => event.currentTarget.classList.remove("drop-before", "drop-after"),
       ondrop: (event) => dropCustom(event, app, redraw)
     },
-      settingsDragHandle(t("apps.platformName")),
+      settingsReorderHandle(t("apps.platformName"), {
+        ids: state.customConfig.map((item) => item.id),
+        id: app.id,
+        onMove: (delta) => {
+          saveCustomList(moveListItemByDelta(state.customConfig, app.id, delta), redraw, t("toast.customConfigOrderSaved"), {
+            syncWorkspace: false,
+            reloadRuntime: false
+          });
+        }
+      }),
       el("strong", { class: "settings-main-cell" }, displayAppName(app)),
       el("a", { class: "settings-url-link", href: app.url, target: "_blank", rel: "noreferrer" }, app.url),
       el("span", { class: "settings-strategy-cell" }, imagePasteStrategyLabel(app.imagePasteStrategy)),

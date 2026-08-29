@@ -19,6 +19,8 @@ const en = {
   "common.untitledPrompt": "Untitled Prompt",
   "common.user": "User",
   "common.assistant": "Assistant",
+  "common.moveUp": "Move up",
+  "common.moveDown": "Move down",
 
   "topbar.promptPlaceholder": "Message all active chats",
   "topbar.promptLibrary": "Prompt Library",
@@ -1314,6 +1316,8 @@ const zh_CN = {
   "common.untitledPrompt": "未命名提示词",
   "common.user": "用户",
   "common.assistant": "助手",
+  "common.moveUp": "上移",
+  "common.moveDown": "下移",
 
   "topbar.promptPlaceholder": "发送到所有活动聊天",
   "topbar.promptLibrary": "提示词库",

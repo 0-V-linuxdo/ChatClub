@@ -13,7 +13,8 @@ import {
 import {
   cleanupSettingsDragRows,
   createSettingsKit,
-  moveListItem
+  moveListItem,
+  moveListItemByDelta
 } from "./kit.js";
 import {
   requireControllerContext,
@@ -42,7 +43,7 @@ export function createTopicDeletionSettingsSection(ctx) {
   const ensureUserScriptsPermission = requireControllerFunction(ctx, controllerName, "ensureUserScriptsPermission");
   const {
     settingsBlock,
-    settingsDragHandle,
+    settingsReorderHandle,
     settingsIconAction,
     settingsList,
     settingsListDropPlacement,
@@ -335,7 +336,13 @@ export function createTopicDeletionSettingsSection(ctx) {
       ondragleave: (event) => event.currentTarget.classList.remove("drop-before", "drop-after"),
       ondrop: (event) => dropSite(event, config, redraw)
     },
-      settingsDragHandle(t("topicDeletion.site.drag")),
+      settingsReorderHandle(t("topicDeletion.site.drag"), {
+        ids: (state.options.topicDeleteSiteConfigs || []).map((item) => item.id),
+        id: config.id,
+        onMove: (delta) => {
+          saveSites(moveListItemByDelta(state.options.topicDeleteSiteConfigs || [], config.id, delta), redraw);
+        }
+      }),
       el("div", { class: "topic-delete-name" },
         el("strong", {}, config.name || config.id),
         builtIn ? el("span", { class: "summary-collector-star", title: t("topicDeletion.site.builtIn"), "aria-label": t("topicDeletion.site.builtIn") }, "★") : null

@@ -2,7 +2,7 @@ import { DEFAULT_OPTIONS } from "../../shared/constants.js";
 import { t } from "../../shared/i18n.js";
 import { createId } from "../../shared/storage-schema.js";
 import { button, editorModal, el, field, input, select, textarea, toast } from "../../ui/dom.js";
-import { cleanupSettingsDragRows, moveListItem } from "./kit.js";
+import { cleanupSettingsDragRows, moveListItem, moveListItemByDelta } from "./kit.js";
 import {
   requireControllerContext,
   requireControllerFunction,
@@ -25,7 +25,7 @@ export function createPromptTemplateSettings(ctx) {
   const saveOptionsPatch = requireControllerFunction(ctx, controllerName, "saveOptionsPatch");
   const {
     settingsBlock,
-    settingsDragHandle,
+    settingsReorderHandle,
     settingsEmptyRow,
     settingsIconAction,
     settingsList,
@@ -201,7 +201,20 @@ export function createPromptTemplateSettings(ctx) {
       ondragleave: (event) => event.currentTarget.classList.remove("drop-before", "drop-after"),
       ondrop: (event) => dropPromptTemplate(event, kind, template, redraw)
     },
-      settingsDragHandle(t("promptTemplates.title")),
+      settingsReorderHandle(t("promptTemplates.title"), {
+        ids: promptTemplateList(kind).map((item) => item.id),
+        id: template.id,
+        onMove: (delta) => {
+          savePromptTemplateState(
+            kind,
+            moveListItemByDelta(promptTemplateList(kind), template.id, delta),
+            state.options[promptTemplateMeta(kind).activeKey],
+            redraw,
+            t("toast.promptTemplateOrderSaved"),
+            { reloadRuntime: false }
+          );
+        }
+      }),
       el("div", { class: "prompt-template-name" },
         el("strong", {}, promptTemplateLabel(template)),
         template.builtIn ? el("span", { class: "summary-collector-star", title: t("promptTemplates.builtIn"), "aria-label": t("promptTemplates.builtIn") }, "★") : null

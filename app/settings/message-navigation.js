@@ -18,7 +18,8 @@ import {
 import {
   cleanupSettingsDragRows,
   createSettingsKit,
-  moveListItem
+  moveListItem,
+  moveListItemByDelta
 } from "./kit.js";
 import {
   requireControllerContext,
@@ -45,7 +46,7 @@ export function createMessageNavigationSettingsSection(ctx) {
   const saveOptionsPatch = requireControllerFunction(ctx, controllerName, "saveOptionsPatch");
   const {
     settingsBlock,
-    settingsDragHandle,
+    settingsReorderHandle,
     settingsIconAction,
     settingsInnerTabs,
     settingsList,
@@ -370,7 +371,13 @@ export function createMessageNavigationSettingsSection(ctx) {
       ondragleave: (event) => event.currentTarget.classList.remove("drop-before", "drop-after"),
       ondrop: (event) => dropSite(event, config, redraw)
     },
-      settingsDragHandle(t("messageNavigator.site.drag")),
+      settingsReorderHandle(t("messageNavigator.site.drag"), {
+        ids: (state.options.messageNavigatorSiteConfigs || []).map((item) => item.id),
+        id: config.id,
+        onMove: (delta) => {
+          saveSites(moveListItemByDelta(state.options.messageNavigatorSiteConfigs || [], config.id, delta), redraw);
+        }
+      }),
       el("div", { class: "message-navigator-name" },
         el("strong", {}, config.name || config.id),
         builtIn ? el("span", { class: "summary-collector-star", title: t("messageNavigator.site.builtIn"), "aria-label": t("messageNavigator.site.builtIn") }, "★") : null

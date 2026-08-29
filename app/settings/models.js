@@ -26,7 +26,8 @@ import { button, el, field, select, toast } from "../../ui/dom.js";
 import {
   cleanupSettingsDragRows,
   createSettingsKit,
-  moveListItem
+  moveListItem,
+  moveListItemByDelta
 } from "./kit.js";
 import { requireSettingsSectionStatePort } from "./section-contract.js";
 import {
@@ -63,7 +64,7 @@ export function createModelsSettingsSection(ctx) {
   const {
     settingsActions,
     settingsBlock,
-    settingsDragHandle,
+    settingsReorderHandle,
     settingsInnerTabs,
     settingsList,
     settingsListDropPlacement,
@@ -599,7 +600,17 @@ export function createModelsSettingsSection(ctx) {
       ondragleave: (event) => event.currentTarget.classList.remove("drop-before", "drop-after"),
       ondrop: (event) => drop(event, appId, redraw)
     },
-      settingsDragHandle(t("modelPreferences.drag")),
+      settingsReorderHandle(t("modelPreferences.drag"), {
+        ids: preferenceOrder(),
+        id: appId,
+        onMove: (delta) => {
+          const modelPreferenceOrder = moveListItemByDelta(preferenceOrder().map((id) => ({ id })), appId, delta).map((item) => item.id);
+          preferenceOrderDraft = modelPreferenceOrder;
+          state.options.modelPreferenceOrder = modelPreferenceOrder;
+          queueOptionsAutoSave({ modelPreferenceOrder });
+          redraw();
+        }
+      }),
       el("strong", { class: "settings-main-cell" }, platform),
       modelFields(appId, platform, redraw),
       additionalPreferenceField(appId)

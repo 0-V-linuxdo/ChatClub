@@ -14,6 +14,7 @@ import {
   cleanupSettingsDragRows,
   createSettingsKit,
   moveListItem,
+  moveListItemByDelta,
   settingsSectionMeta
 } from "./kit.js";
 import { createMessageNavigationSettingsSection } from "./message-navigation.js";
@@ -247,13 +248,15 @@ export function createSettingsController(ctx) {
     syncPromptInputNode,
     settingsActions: settingsKit.settingsActions,
     settingsDragHandle: settingsKit.settingsDragHandle,
+    settingsReorderHandle: settingsKit.settingsReorderHandle,
     settingsEmptyRow: settingsKit.settingsEmptyRow,
     settingsIconAction: settingsKit.settingsIconAction,
     settingsList: settingsKit.settingsList,
     settingsListDropPlacement: settingsKit.settingsListDropPlacement,
     settingsPrimaryAction: settingsKit.settingsPrimaryAction,
     cleanupSettingsDragRows,
-    moveListItem
+    moveListItem,
+    moveListItemByDelta
   });
   const {
     prepareForConfigImport: prepareShortcutConfigImport,

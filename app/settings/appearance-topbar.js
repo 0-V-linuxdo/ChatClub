@@ -58,7 +58,7 @@ export function createAppearanceTopbarController(dependencies = {}) {
   } = contract;
   const {
     settingsBlock,
-    settingsDragHandle,
+    settingsReorderHandle,
     settingsEmptyRow,
     settingsIconAction,
     settingsInnerTabs,
@@ -273,7 +273,22 @@ export function createAppearanceTopbarController(dependencies = {}) {
       ondragleave: (event) => event.currentTarget.classList.remove("drop-before", "drop-after"),
       ondrop: (event) => dropTopbarPromptPlaceholder(event, index, redraw)
     },
-      settingsDragHandle(t("topbar.placeholder.drag")),
+      settingsReorderHandle(t("topbar.placeholder.drag"), {
+        ids: topbarPromptPlaceholderConfigValue().items.map((_, itemIndex) => String(itemIndex)),
+        id: String(index),
+        onMove: (delta) => {
+          const config = topbarPromptPlaceholderConfigValue();
+          const targetIndex = index + delta;
+          if (targetIndex < 0 || targetIndex >= config.items.length) return;
+          const items = moveTopbarPromptPlaceholderItems(
+            config.items,
+            index,
+            targetIndex,
+            delta > 0 ? "after" : "before"
+          );
+          saveTopbarPromptPlaceholderConfig({ ...config, items }, redraw, t("toast.topbarPlaceholderOrderSaved"));
+        }
+      }),
       el("span", { class: "topbar-placeholder-row-text", title: textValue }, textValue),
       el("div", { class: "settings-row-action-group" },
         settingsIconAction(t("common.edit"), "edit", () => editTopbarPromptPlaceholderItem(index, redraw), "", false, "settings.action.edit"),

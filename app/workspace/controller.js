@@ -112,6 +112,7 @@ export function createWorkspaceController(ctx = {}) {
     "addGroup",
     "addLayoutPreset",
     "deleteLayoutPreset",
+    "moveLayoutPreset",
     "hydrateGroups",
     "hydrateImportedLayoutIfNeeded",
     "layoutPresetSummary",

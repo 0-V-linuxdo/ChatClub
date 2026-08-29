@@ -5,7 +5,8 @@ import { button, editorModal, el, field, input, select, toast } from "../../ui/d
 import {
   cleanupSettingsDragRows,
   createSettingsKit,
-  moveListItem
+  moveListItem,
+  moveListItemByDelta
 } from "./kit.js";
 import { requireSettingsSectionStatePort } from "./section-contract.js";
 import {
@@ -33,7 +34,7 @@ export function createProfilesSettingsSection(ctx) {
   const saveOptionsPatch = requireControllerFunction(ctx, controllerName, "saveOptionsPatch");
   const openTabUrl = requireControllerFunction(ctx, controllerName, "openTabUrl");
   const {
-    settingsDragHandle,
+    settingsReorderHandle,
     settingsEmptyRow,
     settingsIconAction,
     settingsList,
@@ -88,7 +89,13 @@ export function createProfilesSettingsSection(ctx) {
       ondragleave: (event) => event.currentTarget.classList.remove("drop-before", "drop-after"),
       ondrop: (event) => drop(event, profile, redraw)
     },
-      settingsDragHandle(t("profiles.provider")),
+      settingsReorderHandle(t("profiles.provider"), {
+        ids: state.options.apiProfiles.map((item) => item.id),
+        id: profile.id,
+        onMove: (delta) => {
+          saveProfiles(moveListItemByDelta(state.options.apiProfiles, profile.id, delta), redraw, t("toast.apiProfileOrderSaved"), { reloadRuntime: false });
+        }
+      }),
       el("strong", { class: "settings-main-cell" }, profile.name || profile.id),
       el("span", { class: "settings-muted-cell" }, profile.model || t("profiles.noModel")),
       usageChips(profile),

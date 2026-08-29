@@ -1,4 +1,5 @@
 import { t } from "../../shared/i18n.js";
+import { moveOrderedIdsByDelta } from "../../shared/app-picker-order.js";
 import { resolveChatFrameAttributeContract } from "../../shared/chat-frame-config.js";
 import { getAllChatApps } from "../../shared/storage-schema.js";
 import {
@@ -178,6 +179,20 @@ export function createWorkspaceLayoutController(dependencies = {}) {
       activeLayoutPresetId: preset.id
     });
     hydrateGroups();
+    closePopovers();
+    render();
+  }
+
+  async function moveLayoutPreset(presetId, delta = 0) {
+    if (activeTemporaryLayoutPreset()?.id === presetId) return;
+    const layoutPresets = persistentLayoutPresets();
+    const nextIds = moveOrderedIdsByDelta(layoutPresets.map((preset) => preset.id), presetId, delta);
+    if (nextIds.join("\0") === layoutPresets.map((preset) => preset.id).join("\0")) return;
+    const byId = new Map(layoutPresets.map((preset) => [preset.id, preset]));
+    await saveLayoutOptions({
+      ...state.options,
+      layoutPresets: nextIds.map((id) => byId.get(id)).filter(Boolean)
+    });
     closePopovers();
     render();
   }
@@ -424,6 +439,7 @@ export function createWorkspaceLayoutController(dependencies = {}) {
     addGroup,
     addLayoutPreset,
     deleteLayoutPreset,
+    moveLayoutPreset,
     hydrateEmptyPromptHandoffWorkspace,
     hydrateGroups,
     hydrateImportedLayoutIfNeeded,

@@ -1166,9 +1166,40 @@ globalThis.document = {
     fixture.api.setOpen(true);
     const sidebar = fixture.api.renderSidebar();
     assert.equal(
-      descendants(sidebar).filter((node) => node.classList.contains("workspace-tabs-sidebar-item-actions")).length,
+      descendants(sidebar).filter((node) => node.classList.contains("workspace-tabs-sidebar-item-pin")).length,
       0,
-      "hidden hover buttons must disappear from the row and More"
+      "hidden pin must leave the hover overlay"
+    );
+    assert.equal(
+      descendants(sidebar).filter((node) => String(node.className || "").includes("workspace-tabs-sidebar-item-edit")).length,
+      0,
+      "hidden edit must leave the hover overlay"
+    );
+    assert.equal(
+      descendants(sidebar).filter((node) => String(node.className || "").includes("workspace-tabs-sidebar-item-delete")).length,
+      0,
+      "hidden delete must leave the hover overlay"
+    );
+    assert.equal(
+      descendants(sidebar).filter((node) => String(node.className || "").includes("workspace-tabs-sidebar-item-pocket")).length,
+      0,
+      "hidden Pocket must leave the hover overlay"
+    );
+    assert.equal(
+      descendants(sidebar).filter((node) => String(node.className || "").includes("workspace-tabs-sidebar-item-more")).length,
+      0,
+      "hidden hover buttons must not expose a More control"
+    );
+    const leftover = descendants(sidebar)
+      .filter((node) => node.classList.contains("workspace-tabs-sidebar-item-actions"))
+      .flatMap((node) => node.children || []);
+    assert.ok(
+      leftover.every((child) => {
+        const className = String(child.className || "");
+        return className.includes("workspace-tabs-sidebar-item-move-up")
+          || className.includes("workspace-tabs-sidebar-item-move-down");
+      }),
+      "hidden hover buttons must leave only clickable Move up / Move down"
     );
   }
 

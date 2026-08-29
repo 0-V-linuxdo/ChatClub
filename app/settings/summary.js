@@ -11,7 +11,7 @@ import {
   textarea,
   toast
 } from "../../ui/dom.js";
-import { createSettingsKit } from "./kit.js";
+import { createSettingsKit, moveListItemByDelta } from "./kit.js";
 import { linesFromText, requireSettingsSectionStatePort } from "./section-contract.js";
 import { createPromptTemplateSettings } from "./prompt-templates.js";
 import {
@@ -47,7 +47,7 @@ export function createSummarySettingsSection(ctx) {
   const settingsKit = createSettingsKit({ svgIcon });
   const {
     settingsBlock,
-    settingsDragHandle,
+    settingsReorderHandle,
     settingsIconAction,
     settingsInnerTabs,
     settingsList,
@@ -354,7 +354,13 @@ export function createSummarySettingsSection(ctx) {
       ondragleave: (event) => event.currentTarget.classList.remove("drop-before", "drop-after"),
       ondrop: (event) => dropSummaryCollector(event, config, redraw)
     },
-      settingsDragHandle(t("summary.collector.drag")),
+      settingsReorderHandle(t("summary.collector.drag"), {
+        ids: state.options.summarySiteConfigs.map((item) => item.id),
+        id: config.id,
+        onMove: (delta) => {
+          saveSummaryCollectors(moveListItemByDelta(state.options.summarySiteConfigs, config.id, delta), redraw, { reloadRuntime: false });
+        }
+      }),
       el("div", { class: "summary-collector-name" },
         el("strong", {}, config.name || config.id),
         builtIn ? el("span", { class: "summary-collector-star", title: t("summary.collector.builtIn"), "aria-label": t("summary.collector.builtIn") }, "★") : null

@@ -151,7 +151,7 @@ globalThis.document = { addEventListener() {} };
   assert.match(iframePermissionHelpTrigger, /t\("apps\.iframe\.scopeHelp"\)/);
   const iframePermissionRow = functionSource(appsSource, "iframePermissionRow");
   assert.match(iframePermissionRow, /draggable:\s*"true"/);
-  assert.match(iframePermissionRow, /settingsDragHandle\(t\("apps\.platformName"\)\)/);
+  assert.match(iframePermissionRow, /settingsReorderHandle\(t\("apps\.platformName"\)/);
   assert.match(iframePermissionRow, /startBuiltInDrag\(event, app\)[\s\S]*startCustomDrag\(event, app\)/);
   assert.doesNotMatch(iframePermissionRow, /iframe-permission-source/);
   const iframePermissionGroup = functionSource(appsSource, "iframePermissionGroup");

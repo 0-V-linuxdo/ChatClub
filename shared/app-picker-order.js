@@ -80,6 +80,21 @@ export function applyStoredOrder(items = [], storedIds = []) {
   return ordered;
 }
 
+export function moveOrderedIdsByDelta(ids, sourceId, delta = 0) {
+  const source = textId(sourceId);
+  const list = Array.isArray(ids) ? ids.map(textId).filter(Boolean) : [];
+  const step = Number(delta);
+  const index = list.indexOf(source);
+  const nextIndex = index + step;
+  if (!source || !Number.isInteger(step) || !step || index < 0 || nextIndex < 0 || nextIndex >= list.length) {
+    return list;
+  }
+  const next = list.slice();
+  const [item] = next.splice(index, 1);
+  next.splice(nextIndex, 0, item);
+  return next;
+}
+
 export function moveOrderedIds(ids, sourceId, targetId, placement) {
   const source = textId(sourceId);
   const target = textId(targetId);

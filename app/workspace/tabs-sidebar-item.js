@@ -19,6 +19,39 @@ function hoverActionsWidth(count) {
   return `${count * 28 + Math.max(0, count - 1) * 2 + 16}px`;
 }
 
+function renderMoveButtons({
+  target,
+  createIcon,
+  onMove,
+  canMove,
+  upClass,
+  downClass
+}) {
+  if (typeof onMove !== "function") return [];
+  const canMoveUp = typeof canMove === "function" ? canMove(target, -1) : true;
+  const canMoveDown = typeof canMove === "function" ? canMove(target, 1) : true;
+  if (!canMoveUp && !canMoveDown) return [];
+  const bind = (labelKey, iconName, delta, className, enabled) => {
+    const node = iconButton(
+      t(labelKey),
+      createIcon(iconName),
+      (event) => {
+        event?.preventDefault?.();
+        event?.stopPropagation?.();
+        onMove(target, delta);
+      },
+      className,
+      t(labelKey)
+    );
+    node.disabled = !enabled;
+    return node;
+  };
+  return [
+    bind("common.moveUp", "chevronUp", -1, upClass, canMoveUp),
+    bind("common.moveDown", "chevronDown", 1, downClass, canMoveDown)
+  ];
+}
+
 function tabsSidebarHoverConfig(getOptions) {
   const options = typeof getOptions === "function" ? getOptions() : {};
   const placement = normalizeTabsSidebarButtonPlacement(options?.tabsSidebarButtonPlacement);
@@ -38,7 +71,9 @@ export function createTabsSidebarHoverMenu({
   onPin,
   onPocket,
   onEdit,
-  onDelete
+  onDelete,
+  onMove,
+  canMove
 }) {
   let hoverMenuCleanup = null;
 
@@ -241,7 +276,17 @@ export function createTabsSidebarHoverMenu({
   function renderItemActions(item) {
     const { pinned, folded } = tabsSidebarHoverConfig(getOptions);
     const rowRef = { row: null };
-    const actionNodes = pinned.map((entry) => renderHoverAction(entry.id, item)).filter(Boolean);
+    const actionNodes = [
+      ...pinned.map((entry) => renderHoverAction(entry.id, item)).filter(Boolean),
+      ...renderMoveButtons({
+        target: item,
+        createIcon,
+        onMove,
+        canMove,
+        upClass: "workspace-tabs-sidebar-item-move-up",
+        downClass: "workspace-tabs-sidebar-item-move-down"
+      })
+    ];
     if (folded.length) {
       const moreButton = iconButton(
         t("chat.more"),
@@ -261,7 +306,7 @@ export function createTabsSidebarHoverMenu({
       actionNodes.push(moreButton);
     }
     return {
-      actionCount: pinned.length + (folded.length ? 1 : 0),
+      actionCount: actionNodes.length,
       actionNodes,
       rowRef
     };
@@ -352,6 +397,8 @@ export function renderTabsSidebarFolder({
   onToggle,
   onRename,
   onDelete,
+  onMove,
+  canMove,
   bindItemDrag
 }) {
   const name = folder.name || t("workspace.tabs.folderUntitled");
@@ -379,6 +426,14 @@ export function renderTabsSidebarFolder({
       el("span", { class: "workspace-tabs-sidebar-folder-count" }, String(count))
     ),
     el("div", { class: "workspace-tabs-sidebar-item-actions workspace-tabs-sidebar-folder-actions" },
+      ...renderMoveButtons({
+        target: folder,
+        createIcon,
+        onMove,
+        canMove,
+        upClass: "workspace-tabs-sidebar-folder-move-up",
+        downClass: "workspace-tabs-sidebar-folder-move-down"
+      }),
       iconButton(
         t("workspace.tabs.renameFolder"),
         createIcon("edit"),

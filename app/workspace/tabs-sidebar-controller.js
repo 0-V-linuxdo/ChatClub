@@ -234,7 +234,9 @@ export function createWorkspaceTabsSidebarController({
     onPin: (item) => togglePin(item),
     onPocket: (item) => saveTabToPocket(item).catch(() => {}),
     onEdit: (item, row) => startTitleEditor(item, row),
-    onDelete: (item) => openDeleteConfirmation(item)
+    onDelete: (item) => openDeleteConfirmation(item),
+    canMove: (item, delta) => canMoveByDelta(item, delta, "tab"),
+    onMove: (item, delta) => moveByDelta(item, delta, "tab")
   });
 
   function currentItems() {
@@ -709,6 +711,45 @@ export function createWorkspaceTabsSidebarController({
     return folders;
   }
 
+  function reorderPeers(item = {}, kind = "tab") {
+    if (kind === "folder") return folders.slice();
+    const sourceFolder = folderIdForItem(item, folders);
+    return items.filter((entry) => {
+      if (folderIdForItem(entry, folders) !== sourceFolder) return false;
+      if (sourceFolder) return true;
+      if (sortMode !== "open") return false;
+      if (Boolean(entry.live) !== Boolean(item.live)) return false;
+      if (Boolean(entry.pinned) !== Boolean(item.pinned)) return false;
+      return true;
+    });
+  }
+
+  function canMoveByDelta(item = {}, delta = 0, kind = "tab") {
+    const peers = reorderPeers(item, kind);
+    const id = kind === "folder" ? String(item?.id || "") : workspaceIdValue(item.workspaceId);
+    const index = peers.findIndex((entry) => (
+      kind === "folder"
+        ? String(entry?.id || "") === id
+        : workspaceIdValue(entry.workspaceId) === id
+    ));
+    const next = index + Number(delta);
+    return index >= 0 && next >= 0 && next < peers.length;
+  }
+
+  function moveByDelta(item = {}, delta = 0, kind = "tab") {
+    const peers = reorderPeers(item, kind);
+    const id = kind === "folder" ? String(item?.id || "") : workspaceIdValue(item.workspaceId);
+    const index = peers.findIndex((entry) => (
+      kind === "folder"
+        ? String(entry?.id || "") === id
+        : workspaceIdValue(entry.workspaceId) === id
+    ));
+    const target = peers[index + Number(delta)];
+    if (!target) return kind === "folder" ? folders : currentItems();
+    const place = Number(delta) > 0 ? "after" : "before";
+    return kind === "folder" ? moveFolderRow(item, target, place) : moveTab(item, target, place);
+  }
+
   function clearItemDropMarks(sidebar) {
     const rows = [
       ...(sidebar?.querySelectorAll?.(".workspace-tabs-sidebar-item") || []),
@@ -755,10 +796,14 @@ export function createWorkspaceTabsSidebarController({
       || className.includes(" workspace-tabs-sidebar-item-delete ")
       || className.includes(" workspace-tabs-sidebar-item-pin ")
       || className.includes(" workspace-tabs-sidebar-item-more ")
+      || className.includes(" workspace-tabs-sidebar-item-move-up ")
+      || className.includes(" workspace-tabs-sidebar-item-move-down ")
       || className.includes(" workspace-tabs-sidebar-item-editor ")
       || className.includes(" workspace-tabs-sidebar-search-input ")
       || className.includes(" workspace-tabs-sidebar-folder-edit ")
       || className.includes(" workspace-tabs-sidebar-folder-delete ")
+      || className.includes(" workspace-tabs-sidebar-folder-move-up ")
+      || className.includes(" workspace-tabs-sidebar-folder-move-down ")
       || className.includes(" workspace-tabs-sidebar-folder-toggle ")
       || className.includes(" workspace-tabs-sidebar-sort ")
       || className.includes(" workspace-tabs-sidebar-new-folder ");
@@ -1271,6 +1316,8 @@ export function createWorkspaceTabsSidebarController({
       },
       onRename: (folder, row) => startFolderEditor(folder, row),
       onDelete: (folder) => openDeleteConfirmation(folder, "folder"),
+      canMove: (folder, delta) => canMoveByDelta(folder, delta, "folder"),
+      onMove: (folder, delta) => moveByDelta(folder, delta, "folder"),
       bindItemDrag
     }));
     if (!node.folder.collapsed) {
@@ -1590,6 +1637,8 @@ export function createWorkspaceTabsSidebarController({
     openTitleEditor,
     openDeleteConfirmation,
     moveTab,
+    moveByDelta,
+    moveFolderRow,
     togglePin,
     setSearchQuery,
     setSortMode,

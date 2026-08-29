@@ -2,6 +2,7 @@ import { TAB_GROUP_HEADER_BUTTONS } from "../../shared/constants.js";
 import { t } from "../../shared/i18n.js";
 import { normalizeTabGroupButtonOrder, normalizeTabGroupButtonPlacement } from "../../shared/storage-schema.js";
 import { bindLinearMenuKeyboard, claimTopmostPopoverEscape, el, isChatFrameNode, scheduleFrameOwnedBlurDismissal } from "../../ui/dom.js";
+import { createReorderButtons } from "../../ui/components.js";
 import { buildAppPickerSections, renderAppPickerColumns } from "./app-picker.js";
 import { workspaceGridColumnCount } from "./model.js";
 import { renderPreferredModelSelectionOverlay } from "./preferred-model-selection-overlay.js";
@@ -47,7 +48,7 @@ export function createWorkspaceViewController(dependencies = {}) {
     "syncFrameLoadingMask", "syncGroupTabOrder", "toggleFullscreen", "topicDeleteCapabilityForFrame"
   ]);
   requireMethods(layout, "layout", [
-    "activeTemporaryLayoutPreset", "addAppToGroup", "addGroup", "addLayoutPreset", "deleteLayoutPreset", "layoutPresetSummary",
+    "activeTemporaryLayoutPreset", "addAppToGroup", "addGroup", "addLayoutPreset", "deleteLayoutPreset", "moveLayoutPreset", "layoutPresetSummary",
     "layoutShortcutLabel", "persistAppPickerOrder", "persistentLayoutPresets", "shortcutTooltip", "switchLayoutPreset"
   ]);
   requireMethods(pocket, "Pocket", ["chatLocationForInstance"]);
@@ -68,7 +69,7 @@ export function createWorkspaceViewController(dependencies = {}) {
     syncFrameLoadingMask, syncGroupTabOrder, toggleFullscreen, topicDeleteCapabilityForFrame
   } = frame;
   const {
-    activeTemporaryLayoutPreset, addAppToGroup, addGroup, addLayoutPreset, deleteLayoutPreset, layoutPresetSummary,
+    activeTemporaryLayoutPreset, addAppToGroup, addGroup, addLayoutPreset, deleteLayoutPreset, moveLayoutPreset, layoutPresetSummary,
     layoutShortcutLabel, persistAppPickerOrder, persistentLayoutPresets, shortcutTooltip, switchLayoutPreset
   } = layout;
   const { chatLocationForInstance } = pocket;
@@ -827,6 +828,24 @@ export function createWorkspaceViewController(dependencies = {}) {
         el("span", { class: "layout-preset-summary" }, layoutPresetSummary(preset)),
         shortcut ? el("span", { class: "layout-preset-shortcut" }, shortcut) : null
       ),
+      temporary ? null : createReorderButtons({
+        upLabel: t("common.moveUp"),
+        downLabel: t("common.moveDown"),
+        upIcon: svgIcon("chevronUp"),
+        downIcon: svgIcon("chevronDown"),
+        canMoveUp: index > 0,
+        canMoveDown: index >= 0 && index < persistentLayoutPresets().length - 1,
+        onMoveUp: () => {
+          moveLayoutPreset(preset.id, -1).catch((error) => {
+            console.warn("[ChatClub] Failed to move layout", error);
+          });
+        },
+        onMoveDown: () => {
+          moveLayoutPreset(preset.id, 1).catch((error) => {
+            console.warn("[ChatClub] Failed to move layout", error);
+          });
+        }
+      }),
       el("button", {
         class: "icon-button layout-preset-delete compact-icon tooltip-trigger",
         type: "button",

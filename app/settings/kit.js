@@ -1,5 +1,6 @@
 import { t } from "../../shared/i18n.js";
-import { createSettingsIconAction, createSettingsList } from "../../ui/components.js";
+import { moveOrderedIdsByDelta } from "../../shared/app-picker-order.js";
+import { createReorderButtons, createSettingsIconAction, createSettingsList } from "../../ui/components.js";
 import { el } from "../../ui/dom.js";
 import { SETTINGS_SECTIONS } from "./sections.js";
 export { SETTINGS_SECTIONS } from "./sections.js";
@@ -18,6 +19,15 @@ export function moveListItem(items, sourceId, targetId, placement) {
   if (targetIndex < 0) return items;
   const insertIndex = targetIndex + (placement === "after" ? 1 : 0);
   return [...withoutSource.slice(0, insertIndex), source, ...withoutSource.slice(insertIndex)];
+}
+
+export function moveListItemByDelta(items, sourceId, delta = 0) {
+  const list = Array.isArray(items) ? items.slice() : [];
+  const ids = list.map((item) => String(item?.id || ""));
+  const nextIds = moveOrderedIdsByDelta(ids, sourceId, delta);
+  if (nextIds.join("\0") === ids.join("\0")) return list;
+  const byId = new Map(list.map((item) => [String(item?.id || ""), item]));
+  return nextIds.map((id) => byId.get(id)).filter(Boolean);
 }
 
 export function cleanupSettingsDragRows(selector) {
@@ -92,6 +102,25 @@ export function createSettingsKit({ svgIcon }) {
     return el("span", { class: "settings-drag-handle", title: label, "aria-label": label }, svgIcon("grip"));
   }
 
+  function settingsReorderHandle(label, { ids = [], id = "", onMove } = {}) {
+    const list = Array.isArray(ids) ? ids.map((value) => String(value || "")).filter(Boolean) : [];
+    const key = String(id || "");
+    const index = list.indexOf(key);
+    return el("div", { class: "settings-reorder" },
+      settingsDragHandle(label),
+      createReorderButtons({
+        upLabel: t("common.moveUp"),
+        downLabel: t("common.moveDown"),
+        upIcon: svgIcon("chevronUp"),
+        downIcon: svgIcon("chevronDown"),
+        canMoveUp: index > 0,
+        canMoveDown: index >= 0 && index < list.length - 1,
+        onMoveUp: () => onMove?.(-1),
+        onMoveDown: () => onMove?.(1)
+      })
+    );
+  }
+
   function settingsEmptyRow(message) {
     return el("div", { class: "ui-empty-state settings-empty-row" }, message);
   }
@@ -114,6 +143,7 @@ export function createSettingsKit({ svgIcon }) {
     settingsActions,
     settingsBlock,
     settingsDragHandle,
+    settingsReorderHandle,
     settingsEmptyRow,
     settingsIconAction,
     settingsInnerTabs,

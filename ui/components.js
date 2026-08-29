@@ -79,3 +79,47 @@ export function createSettingsIconAction({ label, icon, onClick, className = "",
     onclick: onClick
   }, icon);
 }
+
+export function createReorderButtons({
+  upLabel,
+  downLabel,
+  upIcon,
+  downIcon,
+  onMoveUp,
+  onMoveDown,
+  canMoveUp = true,
+  canMoveDown = true,
+  className = ""
+} = {}) {
+  const bind = (label, icon, onClick, disabled) => {
+    const node = createCompactIconButton({
+      label,
+      icon,
+      onClick: (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (disabled) return;
+        onClick?.(event);
+      },
+      className: "ui-reorder-button"
+    });
+    node.type = "button";
+    node.disabled = Boolean(disabled);
+    node.draggable = false;
+    node.addEventListener("pointerdown", (event) => {
+      event.stopPropagation();
+    });
+    node.addEventListener("dragstart", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    return node;
+  };
+  return el("div", {
+    class: `ui-reorder ${className}`.trim(),
+    onpointerdown: (event) => event.stopPropagation()
+  },
+    bind(upLabel, upIcon, onMoveUp, !canMoveUp),
+    bind(downLabel, downIcon, onMoveDown, !canMoveDown)
+  );
+}

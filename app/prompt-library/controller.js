@@ -8,14 +8,15 @@ export function createPromptLibraryController(ctx) {
     savePromptLibrary,
     syncPromptInputNode,
     settingsActions,
-    settingsDragHandle,
+    settingsReorderHandle,
     settingsEmptyRow,
     settingsIconAction,
     settingsList,
     settingsListDropPlacement,
     settingsPrimaryAction,
     cleanupSettingsDragRows,
-    moveListItem
+    moveListItem,
+    moveListItemByDelta
   } = ctx;
 
   function reset() {
@@ -83,7 +84,16 @@ export function createPromptLibraryController(ctx) {
       ondrop: (event) => dropPromptLibraryItem(event, prompt, redraw),
       ondragend: cleanupPromptLibraryDrag
     },
-      settingsDragHandle(t("prompts.title")),
+      settingsReorderHandle(t("prompts.title"), {
+        ids: state.promptLibrary.map((item) => item.id),
+        id: prompt.id,
+        onMove: async (delta) => {
+          const prompts = moveListItemByDelta(state.promptLibrary, prompt.id, delta);
+          state.promptLibrary = await savePromptLibrary(prompts);
+          redraw();
+          toast(t("toast.promptOrderSaved"), "success");
+        }
+      }),
       el("strong", { class: "settings-main-cell" }, prompt.title || t("common.untitledPrompt")),
       el("span", { class: "prompt-library-preview" }, prompt.prompt || ""),
       el("div", { class: "settings-row-action-group" },

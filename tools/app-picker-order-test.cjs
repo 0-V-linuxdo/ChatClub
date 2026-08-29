@@ -14,6 +14,7 @@ const root = path.resolve(__dirname, "..");
     APP_PICKER_SECTION_IDS,
     applyStoredOrder,
     moveOrderedIds,
+    moveOrderedIdsByDelta,
     normalizeAppPickerAppOrders,
     normalizeAppPickerSectionOrder
   } = await import(pathToFileURL(path.join(root, "shared/app-picker-order.js")).href);
@@ -54,6 +55,9 @@ const root = path.resolve(__dirname, "..");
   assert.deepEqual(stored.map((item) => item.id), ["c", "a", "b"]);
   assert.deepEqual(moveOrderedIds(["a", "b", "c"], "a", "c", "after"), ["b", "c", "a"]);
   assert.deepEqual(moveOrderedIds(["a", "b", "c"], "c", "a", "before"), ["c", "a", "b"]);
+  assert.deepEqual(moveOrderedIdsByDelta(["a", "b", "c"], "b", -1), ["b", "a", "c"]);
+  assert.deepEqual(moveOrderedIdsByDelta(["a", "b", "c"], "a", 1), ["b", "a", "c"]);
+  assert.deepEqual(moveOrderedIdsByDelta(["a", "b", "c"], "a", -1), ["a", "b", "c"]);
 
   setLanguage("en");
   const sections = buildAppPickerSections({

@@ -32,6 +32,7 @@ const tokens = {
   "--font-size-sm": "12px",
   "--font-size-xs": "11px",
   "--font-size-md": "15px",
+  "--font-size-display": "18px",
   "--workspace-z-sidebar": "15",
   "--workspace-z-topbar": "20",
   "--workspace-z-topbar-edit": "30",
@@ -48,6 +49,7 @@ const tokens = {
   "--control-selected": "color-mix(in srgb, var(--primary-2) 76%, var(--panel))",
   "--ui-compact-height": "var(--settings-action-size)",
   "--ui-chrome-height": "34px",
+  "--ui-reorder-cluster": "calc(var(--settings-control-height) + (var(--target-min) * 2) + 8px)",
   "--toast-text": "var(--text)"
 };
 
@@ -97,7 +99,7 @@ assert.match(
   css,
   /\.tooltip-trigger::before,\s*\n\.tooltip-trigger::after \{\s*\n\s*display:\s*none !important;/
 );
-assert.match(css, /\.layout-preset-item \{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) 24px;/s);
+assert.match(css, /\.layout-preset-item \{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto 24px;/s);
 assert.match(css, /\.layout-preset-delete\.compact-icon \{[^}]*width:\s*24px;/s);
 assert.match(css, /\.share-option-group \{[^}]*gap:\s*var\(--space-2\);/);
 assert.match(css, /\.pocket-empty \.svg-icon \{[^}]*color:\s*var\(--primary\);/s);
@@ -119,7 +121,10 @@ assert.match(css, /\.settings-tab\.active \{[^}]*background:\s*var\(--control-se
 assert.match(css, /\.settings-tab:hover \{[^}]*background:\s*var\(--control-hover\);/s);
 assert.match(css, /\.ui-list-row:hover,\s*\n\.settings-list-row:hover \{[^}]*background:\s*var\(--control-hover\);/s);
 assert.match(css, /\.settings-inner-tab:hover \{[^}]*background:\s*var\(--control-hover\);/s);
-assert.match(css, /\.summary-action-button \{[^}]*height:\s*var\(--ui-chrome-height\);/s);
+assert.match(css, /\.summary-panel-header \{[^}]*min-height:\s*var\(--ui-chrome-height\);/s);
+assert.match(css, /\.share-panel-header \{[^}]*min-height:\s*var\(--ui-chrome-height\);/s);
+assert.match(css, /\.model-preference-row \{[^}]*grid-template-columns:\s*var\(--ui-reorder-cluster\)/s);
+assert.doesNotMatch(css, /font-size:\s*18px/, "display titles must consume --font-size-display");
 assert.match(css, /\.workspace-tabs-sidebar-search \.workspace-tabs-sidebar-search-input,\s*\n\.workspace-tabs-sidebar-search-input \{[^}]*line-height:\s*var\(--ui-control-height\);/s);
 assert.match(css, /\.tooltip-preview-brand-logo \{[^}]*border-radius:\s*var\(--ui-radius\);/s);
 assert.doesNotMatch(css, /font-size:\s*17px/, "headings must consume the type scale");
@@ -151,6 +156,9 @@ assert.match(agents, /--target-min: 24px/);
 assert.match(agents, /do not reintroduce 560–780 outliers/);
 assert.match(agents, /--ui-compact-height/);
 assert.match(agents, /--ui-chrome-height/);
+assert.match(agents, /--ui-reorder-cluster/);
+assert.match(agents, /--font-size-display/);
+assert.match(agents, /WCAG 2\.5\.7/);
 assert.match(agents, /--control-selected/);
 assert.match(agents, /not declared-only/);
 assert.match(agents, /heading `17px`/);

@@ -307,8 +307,11 @@ globalThis.document = {
     "the model list must keep drag, platform, model, and additional-option columns"
   );
   assert.ok(
-    modelRows.every((node) => node.children[0]?.classList?.contains("settings-drag-handle")),
-    "every configurable model row must keep a leading drag handle"
+    modelRows.every((node) => (
+      node.children[0]?.classList?.contains("settings-reorder")
+      && Boolean(node.querySelector(".settings-drag-handle"))
+    )),
+    "every configurable model row must keep a leading drag handle with click reorder"
   );
   assert.equal(modelHeader?.children.length, 4, "the model-list header must match the four row columns");
   assert.ok(
@@ -758,13 +761,13 @@ globalThis.document = {
   assert.match(modelStyles, /\.model-preference-failure-grid\s*\{[^}]*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s);
   assert.match(
     modelStyles,
-    /\.model-preference-list \.settings-list-header,\s*\.model-preference-row\s*\{[^}]*grid-template-columns:\s*52px\s+minmax\(140px,\s*180px\)\s+repeat\(2,\s*minmax\(220px,\s*1fr\)\);/s,
+    /\.model-preference-list \.settings-list-header,\s*\.model-preference-row\s*\{[^}]*grid-template-columns:\s*var\(--ui-reorder-cluster\)\s+minmax\(140px,\s*180px\)\s+repeat\(2,\s*minmax\(220px,\s*1fr\)\);/s,
     "the wide model list must give the model and additional-option columns equal flexible tracks"
   );
   assert.match(modelStyles, /@container model-preferences \(max-width:\s*700px\)/);
   assert.match(modelStyles, /@container[\s\S]*\.model-preference-failure-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
   assert.match(modelStyles, /@container[\s\S]*\.model-preference-list\s*\{[^}]*display:\s*grid[^}]*overflow:\s*visible/s);
-  assert.match(modelStyles, /@container[\s\S]*\.model-preference-row\s*\{[^}]*grid-template-columns:\s*24px\s+minmax\(0,\s*1fr\)/);
+  assert.match(modelStyles, /@container[\s\S]*\.model-preference-row\s*\{[^}]*grid-template-columns:\s*var\(--ui-reorder-cluster\)\s+minmax\(0,\s*1fr\)/);
   assert.match(
     modelStyles,
     /@container[\s\S]*\.model-preference-row-has-thinking,\s*\.model-preference-row-has-additional\s*\{[^}]*"drag thinking"/s,

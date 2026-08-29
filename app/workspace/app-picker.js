@@ -6,9 +6,11 @@ import {
   APP_PICKER_SECTION_IDS,
   applyStoredOrder,
   moveOrderedIds,
+  moveOrderedIdsByDelta,
   normalizeAppPickerAppOrders,
   normalizeAppPickerSectionOrder
 } from "../../shared/app-picker-order.js";
+import { createReorderButtons } from "../../ui/components.js";
 import { el } from "../../ui/dom.js";
 import { appPickerHostKeys } from "./app-hosts.js";
 
@@ -169,7 +171,7 @@ export function renderAppPickerColumns({
     if (activeDrag.kind === "section") {
       return hover?.closest?.(".app-picker-column") || null;
     }
-    const item = hover?.closest?.(".app-picker-item");
+    const item = hover?.closest?.(".app-picker-item-row");
     if (!item || item.closest(".app-picker-column") !== activeDrag.source.closest(".app-picker-column")) return null;
     return item;
   }
@@ -213,17 +215,15 @@ export function renderAppPickerColumns({
     stopDrag();
     if (started) {
       source.dataset.pickerDragged = "true";
-      await persistOrder?.({
-        appPickerSectionOrder: nodeIds(columns, ".app-picker-column", "pickerSection"),
-        appPickerAppOrders: Object.fromEntries(APP_PICKER_SECTION_IDS.map((id) => {
-          const column = Array.from(columns.querySelectorAll(".app-picker-column"))
-            .find((node) => node.dataset.pickerSection === id);
-          return [id, nodeIds(column, ".app-picker-item", "appId")];
-        }))
-      });
+      await persistCurrentOrder();
       return;
     }
-    if (drag.kind === "app" && app) await selectApp({ currentTarget: source, preventDefault() {}, stopPropagation() {} }, app);
+    if (drag.kind === "app" && app) {
+      const trigger = source.matches?.(".app-picker-item")
+        ? source
+        : (source.querySelector?.(".app-picker-item") || source);
+      await selectApp({ currentTarget: trigger, preventDefault() {}, stopPropagation() {} }, app);
+    }
   }
 
   function startDrag(event, kind, source, extra = {}) {
@@ -239,9 +239,9 @@ export function renderAppPickerColumns({
       source,
       sourceId: source.dataset[kind === "section" ? "pickerSection" : "appId"],
       idKey: kind === "section" ? "pickerSection" : "appId",
-      selector: kind === "section" ? ".app-picker-column" : ".app-picker-item",
+      selector: kind === "section" ? ".app-picker-column" : ".app-picker-item-row",
       parent,
-      ids: () => nodeIds(parent, kind === "section" ? ".app-picker-column" : ".app-picker-item", kind === "section" ? "pickerSection" : "appId"),
+      ids: () => nodeIds(parent, kind === "section" ? ".app-picker-column" : ".app-picker-item-row", kind === "section" ? "pickerSection" : "appId"),
       startX: event.clientX,
       startY: event.clientY,
       started: false,
@@ -252,46 +252,108 @@ export function renderAppPickerColumns({
     document.addEventListener("pointercancel", onDragUp, true);
   }
 
-  function renderItem(app, custom) {
+  async function persistCurrentOrder() {
+    await persistOrder?.({
+      appPickerSectionOrder: nodeIds(columns, ".app-picker-column", "pickerSection"),
+      appPickerAppOrders: Object.fromEntries(APP_PICKER_SECTION_IDS.map((id) => {
+        const column = Array.from(columns.querySelectorAll(".app-picker-column"))
+          .find((node) => node.dataset.pickerSection === id);
+        return [id, nodeIds(column, ".app-picker-item-row", "appId")];
+      }))
+    });
+  }
+
+  async function moveByDelta(kind, source, delta) {
+    const parent = kind === "section" ? columns : source.closest(".app-picker-list");
+    if (!parent) return;
+    const selector = kind === "section" ? ".app-picker-column" : ".app-picker-item-row";
+    const idKey = kind === "section" ? "pickerSection" : "appId";
+    const next = moveOrderedIdsByDelta(nodeIds(parent, selector, idKey), source.dataset[idKey], delta);
+    applyNodeOrder(parent, selector, idKey, next);
+    const ids = nodeIds(parent, selector, idKey);
+    for (const node of parent.querySelectorAll(selector)) {
+      const index = ids.indexOf(node.dataset[idKey]);
+      const cluster = kind === "section"
+        ? node.querySelector(".app-picker-heading-row")
+        : node;
+      const buttons = cluster?.querySelectorAll(".ui-reorder-button") || [];
+      if (buttons[0]) buttons[0].disabled = index <= 0;
+      if (buttons[1]) buttons[1].disabled = index < 0 || index >= ids.length - 1;
+    }
+    await persistCurrentOrder();
+  }
+
+  function pickerReorder(sourceNode, kind, ids) {
+    const key = kind === "section" ? "pickerSection" : "appId";
+    const index = ids.indexOf(sourceNode.dataset[key]);
+    return createReorderButtons({
+      upLabel: t("common.moveUp"),
+      downLabel: t("common.moveDown"),
+      upIcon: svgIcon("chevronUp"),
+      downIcon: svgIcon("chevronDown"),
+      canMoveUp: index > 0,
+      canMoveDown: index >= 0 && index < ids.length - 1,
+      onMoveUp: () => moveByDelta(kind, sourceNode, -1),
+      onMoveDown: () => moveByDelta(kind, sourceNode, 1)
+    });
+  }
+
+  function renderItem(app, custom, sectionApps = []) {
     const provider = appPickerProvider(app);
-    return el("button", {
-      class: "app-picker-item",
-      type: "button",
-      title: inferAppName(app),
-      draggable: "false",
+    const ids = sectionApps.map((item) => item.id);
+    const row = el("div", {
+      class: "app-picker-item-row",
       dataset: { appId: app.id },
-      onpointerdown: (event) => startDrag(event, "app", event.currentTarget, { app }),
-      onclick: (event) => {
-        if (event.currentTarget.dataset.pickerDragged === "true") {
-          delete event.currentTarget.dataset.pickerDragged;
-          event.preventDefault();
-          event.stopPropagation();
-          return;
-        }
-        selectApp(event, app);
-      },
-      onkeydown: (event) => {
-        if (event.key !== "Enter" && event.key !== " ") return;
-        selectApp(event, app);
+      onpointerdown: (event) => {
+        if (event.target?.closest?.(".ui-reorder")) return;
+        startDrag(event, "app", event.currentTarget, { app });
       }
-    },
-      renderFavicon(app),
-      el("span", { class: "app-picker-name" }, inferAppName(app)),
-      !custom && provider ? el("span", { class: "app-picker-provider" }, provider) : null
+    });
+    row.append(
+      el("button", {
+        class: "app-picker-item",
+        type: "button",
+        title: inferAppName(app),
+        draggable: "false",
+        dataset: { appId: app.id },
+        onclick: (event) => {
+          if (row.dataset.pickerDragged === "true") {
+            delete row.dataset.pickerDragged;
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+          }
+          selectApp(event, app);
+        },
+        onkeydown: (event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          selectApp(event, app);
+        }
+      },
+        renderFavicon(app),
+        el("span", { class: "app-picker-name" }, inferAppName(app)),
+        !custom && provider ? el("span", { class: "app-picker-provider" }, provider) : null
+      ),
+      pickerReorder(row, "app", ids)
     );
+    return row;
   }
 
   function renderHeading(section) {
+    const columnIds = sections.map((item) => item.id);
     const title = el("h3", {
       class: "app-picker-heading",
       onpointerdown: (event) => {
         startDrag(event, "section", event.currentTarget.closest(".app-picker-column"));
       }
     }, section.title);
-    if (!section.custom || !openCustomAppEditor) return title;
-    return el("div", { class: "app-picker-heading-row" },
-      title,
-      el("button", {
+    const heading = el("div", {
+      class: "app-picker-heading-row",
+      dataset: { pickerSection: section.id }
+    }, title);
+    heading.append(pickerReorder(heading, "section", columnIds));
+    if (section.custom && openCustomAppEditor) {
+      heading.append(el("button", {
         class: "app-picker-add-button tooltip-trigger",
         type: "button",
         "aria-label": t("appPicker.addCustom"),
@@ -301,8 +363,9 @@ export function renderAppPickerColumns({
         onclick: openCustomEditor
       },
         svgIcon("plus")
-      )
-    );
+      ));
+    }
+    return heading;
   }
 
   function renderColumn(section) {
@@ -312,7 +375,7 @@ export function renderAppPickerColumns({
     },
       renderHeading(section),
       el("div", { class: "app-picker-list" },
-        section.apps.map((app) => renderItem(app, section.custom))
+        section.apps.map((app) => renderItem(app, section.custom, section.apps))
       )
     );
   }
