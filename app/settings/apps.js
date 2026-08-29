@@ -26,6 +26,7 @@ import {
   el,
   field,
   input,
+  openConfirmationAction,
   select,
   textarea,
   toast,
@@ -1195,13 +1196,19 @@ export function createAppsSettingsSection(ctx) {
     dialog.querySelector(".modal")?.classList.add("settings-editor-modal");
   }
 
-  async function removeCustom(app, redraw) {
-    if (!window.confirm(t("apps.deleteConfirm", { name: app.name || "this custom platform" }))) return;
-    await saveCustomList(
-      state.customConfig.filter((item) => item.id !== app.id),
-      redraw,
-      t("toast.customPlatformDeleted")
-    );
+  function removeCustom(app, redraw) {
+    openConfirmationAction({
+      title: t("apps.deleteTitle"),
+      body: t("apps.deleteConfirm", { name: app.name || "this custom platform" }),
+      confirmLabel: t("common.delete"),
+      cancelLabel: t("common.cancel"),
+      closeLabel: t("common.close"),
+      onConfirm: () => saveCustomList(
+        state.customConfig.filter((item) => item.id !== app.id),
+        redraw,
+        t("toast.customPlatformDeleted")
+      )
+    });
   }
 
   return Object.freeze({ pane, reset, openCustomAppEditor: openCustomEditor });

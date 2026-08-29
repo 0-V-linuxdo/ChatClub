@@ -9,7 +9,7 @@ import {
 import { t } from "../../shared/i18n.js";
 import { findTopicDeleteSiteConfig, topicDeleteTimeoutMs } from "../../shared/topic-delete-sites.js";
 import { conversationHrefFromLocation } from "../../shared/workspace-tab-memory.js";
-import { button, editorModal, el, field, input } from "../../ui/dom.js";
+import { button, editorModal, el, field, input, openConfirmationAction } from "../../ui/dom.js";
 import { frameLoadingKindForTarget } from "./frame-loading.js";
 import { removeChatFromGroup, removeGroupFromWorkspace } from "./model.js";
 import { createControllerMethodValidator, validateControllerContract } from "../controller-contract.js";
@@ -1161,7 +1161,38 @@ export function createWorkspaceFrameController(dependencies = {}) {
       closePopovers();
       return;
     }
-    if (!window.confirm(t("topbar.deleteThreadConfirm", { count: 1, plural: "" }))) return;
+    closePopovers();
+    openConfirmationAction({
+      title: t("topbar.deleteThreadTitle"),
+      body: t("topbar.deleteThreadConfirm", { count: 1, plural: "" }),
+      confirmLabel: t("topbar.deleteThread"),
+      cancelLabel: t("common.cancel"),
+      closeLabel: t("common.close"),
+      onConfirm: () => finishDeleteActiveThreadForGroup({
+        app,
+        chat,
+        deleteSiteConfig,
+        earlyPermission,
+        href,
+        iframe,
+        initialNeedsPermission,
+        payload,
+        permissionResult
+      })
+    });
+  }
+
+  async function finishDeleteActiveThreadForGroup({
+    app,
+    chat,
+    deleteSiteConfig,
+    earlyPermission,
+    href,
+    iframe,
+    initialNeedsPermission,
+    payload,
+    permissionResult
+  }) {
     const needsPermission = Boolean(
       deleteSiteConfig
       && (deleteSiteConfig.sourceMode === "custom" || deleteSiteConfig.builtIn === false)

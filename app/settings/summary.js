@@ -8,6 +8,7 @@ import {
   el,
   field,
   input,
+  openConfirmationAction,
   select,
   textarea,
   toast
@@ -709,13 +710,22 @@ export function createSummarySettingsSection(ctx) {
     toast(t("toast.collectorReset"), "success");
   }
 
-  async function deleteSummaryCollector(config, redraw) {
+  function deleteSummaryCollector(config, redraw) {
     if (summaryBuiltInDefault(config)) return;
-    if (!window.confirm(t("summary.collector.deleteConfirm", { name: config.name || config.id }))) return;
-    const configs = state.options.summarySiteConfigs.filter((item) => item.id !== config.id);
-    state.summaryCollectorEditingId = "";
-    await saveSummaryCollectors(configs, redraw);
-    toast(t("toast.summaryCollectorDeleted"), "success");
+    openConfirmationAction({
+      title: t("summary.collector.deleteTitle"),
+      body: t("summary.collector.deleteConfirm", { name: config.name || config.id }),
+      confirmLabel: t("common.delete"),
+      cancelLabel: t("common.cancel"),
+      closeLabel: t("common.close"),
+      onConfirm: () => {
+        const configs = state.options.summarySiteConfigs.filter((item) => item.id !== config.id);
+        state.summaryCollectorEditingId = "";
+        return saveSummaryCollectors(configs, redraw).then(() => {
+          toast(t("toast.summaryCollectorDeleted"), "success");
+        });
+      }
+    });
   }
 
   function startSummaryCollectorDrag(event, config) {

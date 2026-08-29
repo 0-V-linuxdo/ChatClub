@@ -1,7 +1,7 @@
 import { DEFAULT_OPTIONS } from "../../shared/constants.js";
 import { t } from "../../shared/i18n.js";
 import { createId } from "../../shared/storage-schema.js";
-import { button, editorModal, el, field, input, select, textarea, toast } from "../../ui/dom.js";
+import { button, editorModal, el, field, input, openConfirmationAction, select, textarea, toast } from "../../ui/dom.js";
 import { cleanupSettingsDragRows, moveListItem, moveListItemByDelta } from "./kit.js";
 import {
   requireControllerContext,
@@ -178,13 +178,21 @@ export function createPromptTemplateSettings(ctx) {
     await savePromptTemplateState(kind, templates, defaultTemplate.id, redraw, t("toast.promptTemplateReset"));
   }
 
-  async function deletePromptTemplate(kind, template, redraw) {
+  function deletePromptTemplate(kind, template, redraw) {
     const meta = promptTemplateMeta(kind);
     if (template.builtIn) return;
-    if (!window.confirm(t("promptTemplates.deleteConfirm", { name: promptTemplateLabel(template) || t("promptTemplates.fallbackName") }))) return;
-    const templates = promptTemplateList(kind).filter((item) => item.id !== template.id);
-    const activeId = state.options[meta.activeKey] === template.id ? (templates[0]?.id || meta.defaultId) : state.options[meta.activeKey];
-    await savePromptTemplateState(kind, templates, activeId, redraw, t("toast.promptTemplateDeleted"));
+    openConfirmationAction({
+      title: t("promptTemplates.deleteTitle"),
+      body: t("promptTemplates.deleteConfirm", { name: promptTemplateLabel(template) || t("promptTemplates.fallbackName") }),
+      confirmLabel: t("common.delete"),
+      cancelLabel: t("common.cancel"),
+      closeLabel: t("common.close"),
+      onConfirm: () => {
+        const templates = promptTemplateList(kind).filter((item) => item.id !== template.id);
+        const activeId = state.options[meta.activeKey] === template.id ? (templates[0]?.id || meta.defaultId) : state.options[meta.activeKey];
+        return savePromptTemplateState(kind, templates, activeId, redraw, t("toast.promptTemplateDeleted"));
+      }
+    });
   }
 
   function promptTemplateRow(kind, template, redraw) {

@@ -49,6 +49,12 @@ function read(relativePath) {
   return fs.readFileSync(path.join(root, relativePath), "utf8");
 }
 
+function canonicalizeGeneratedIife(source) {
+  // esbuild 0.28.1 IIFE output may prefix `"use strict";` depending on the
+  // host binary. Keep committed bundles in the historical no-prologue shape.
+  return String(source || "").replace(/^"use strict";\n/, "");
+}
+
 function expectedFile(relativePath, expected, base = root) {
   const absolutePath = assertContainedOutputPath(base, relativePath);
   const entry = fs.lstatSync(absolutePath, { throwIfNoEntry: false });
@@ -216,7 +222,7 @@ async function buildContent(configs, protocol) {
         write: true,
         logLevel: "silent"
       });
-      const output = fs.readFileSync(temporaryOutput, "utf8");
+      const output = canonicalizeGeneratedIife(fs.readFileSync(temporaryOutput, "utf8"));
       if (/\bimport\s*\(/.test(output)) throw new Error(`${outputPath}: runtime dynamic import is forbidden`);
       if (/\beval\s*\(|\bnew\s+Function\s*\(/.test(output)) throw new Error(`${outputPath}: eval/Function is forbidden`);
       builtContent.set(outputPath, output);
@@ -244,11 +250,12 @@ async function buildContent(configs, protocol) {
         legalComments: sourceMaps ? "inline" : "none",
         logLevel: "silent"
       });
-      if (/\bimport\s*\(/.test(transformed.code)) throw new Error(`${outputPath}: Firefox fallback contains dynamic import`);
-      if (/\beval\s*\(|\bnew\s+Function\s*\(/.test(transformed.code)) throw new Error(`${outputPath}: Firefox fallback contains eval/Function`);
+      const fallbackCode = canonicalizeGeneratedIife(transformed.code).replace(/^"use strict";/, "");
+      if (/\bimport\s*\(/.test(fallbackCode)) throw new Error(`${outputPath}: Firefox fallback contains dynamic import`);
+      if (/\beval\s*\(|\bnew\s+Function\s*\(/.test(fallbackCode)) throw new Error(`${outputPath}: Firefox fallback contains eval/Function`);
       const name = `chatclubFirefoxContentFallback${fallbackEntries.length + 1}`;
       const sourceUrl = sourceMaps ? `\n//# sourceURL=chatclub:///${outputPath}?firefox-fallback` : "";
-      fallbackEntries.push(`  ${JSON.stringify(outputPath)}: function ${name}() {\n${transformed.code.trim()}${sourceUrl}\n  }`);
+      fallbackEntries.push(`  ${JSON.stringify(outputPath)}: function ${name}() {\n${fallbackCode.trim()}${sourceUrl}\n  }`);
     }
     expectedFile(
       FIREFOX_CONTENT_FALLBACK_OUTPUT,

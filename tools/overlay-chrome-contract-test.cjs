@@ -59,6 +59,9 @@ assert.match(rootBlock, /--summary-panel-border:\s*var\(--overlay-border-color\)
 assert.match(agents, /## Overlay Chrome Contract/);
 assert.match(agents, /## Overlay Dismissal Policy/);
 assert.match(agents, /Do not migrate to native `<dialog>`/);
+assert.match(agents, /openConfirmationAction/);
+assert.match(agents, /window\.confirm/);
+assert.match(dom, /export function openConfirmationAction/);
 assert.match(agents, /overlay-surface/);
 assert.match(agents, /overlay-surface-fullscreen/);
 assert.match(agents, /ui\/viewer-window\.js/);

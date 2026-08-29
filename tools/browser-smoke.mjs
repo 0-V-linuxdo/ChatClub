@@ -1145,19 +1145,19 @@ const pageProbe = `async (fixtureUrl) => {
       customRow = customSettingsRow();
       const deleteButton = customRow.querySelector('[data-tooltip-id="settings.action.delete"]');
       if (!deleteButton) throw new Error("custom app retention probe found no delete action");
-      const originalConfirm = window.confirm;
-      window.confirm = () => true;
-      try {
-        deleteButton.click();
-        await waitForCondition(
-          () => !Array.from(document.querySelectorAll(".custom-config-row"))
-            .some((row) => row.dataset.customAppId === customApp.id),
-          15000,
-          "custom app deletion"
-        );
-      } finally {
-        window.confirm = originalConfirm;
-      }
+      deleteButton.click();
+      await waitForCondition(
+        () => document.querySelector(".modal.modal-alertdialog .button-danger"),
+        5000,
+        "custom app delete confirmation"
+      );
+      document.querySelector(".modal.modal-alertdialog .button-danger").click();
+      await waitForCondition(
+        () => !Array.from(document.querySelectorAll(".custom-config-row"))
+          .some((row) => row.dataset.customAppId === customApp.id),
+        15000,
+        "custom app deletion"
+      );
       await quietWindow();
       const finalFrames = Array.from(document.querySelectorAll(".chat-frame"));
       const deletionFrames = frameStatus(finalFrames);

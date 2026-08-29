@@ -25,7 +25,7 @@ const lineCount = (source) => source.split(/\r?\n/).length;
   assert.ok(lineCount(workspace) < 1200, "Workspace facade must remain assembly-only and need no size exception");
   assert.ok(lineCount(drag) > 250, "pointer drag coordinator must remain a substantive lifecycle boundary");
   assert.ok(lineCount(navigator) > 180, "Message Navigator controller must remain a substantive lifecycle boundary");
-  assert.ok(lineCount(frame) > 700 && lineCount(frame) < 1250, "frame lifecycle/navigation must remain a substantive bounded owner");
+  assert.ok(lineCount(frame) > 700 && lineCount(frame) < 1280, "frame lifecycle/navigation must remain a substantive bounded owner");
   assert.ok(lineCount(layout) > 250, "layout/catalog reconciliation must remain a substantive owner");
   assert.ok(lineCount(view) > 700 && lineCount(view) < 1200, "Workspace rendering and menus must remain a bounded owner");
   assert.ok(lineCount(pocket) > 150, "Pocket restore must remain a substantive owner");

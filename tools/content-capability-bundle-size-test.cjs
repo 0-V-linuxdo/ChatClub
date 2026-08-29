@@ -31,15 +31,15 @@ const byteBudgets = Object.freeze({
   "content/grok-cookie-bridge.js": 50_000,
   "content/message-navigator.js": 140_000,
   "content/preload.js": 214_385,
-  "content/summary-userscripts-main.js": 218_865,
-  "content/summary-userscripts.js": 157_368
+  "content/summary-userscripts-main.js": 218_879,
+  "content/summary-userscripts.js": 157_382
 });
 // Exact base-plus-capabilities closure after JSON-first official collection
 // joined the isolated Summary pipeline without packaged runner wrappers.
-const aggregateByteBudget = 781_615;
+const aggregateByteBudget = 781_685;
 // Exact all-bundle closure after workspace official-slot stubs
 // joined the generated Summary registries.
-const allBundlesByteBudget = 1_542_221;
+const allBundlesByteBudget = 1_542_361;
 
 const bundleIdentities = Object.fromEntries(Object.keys(CONTENT_ENTRIES).map((outputPath) => [
   outputPath,

@@ -1,6 +1,6 @@
 import { t } from "../../shared/i18n.js";
 import { savePromptSendHistory } from "../../shared/storage-adapter.js";
-import { el, input, toast } from "../../ui/dom.js";
+import { el, input, openConfirmationAction, toast } from "../../ui/dom.js";
 import { createSettingsKit } from "./kit.js";
 import { requireSettingsSectionStatePort } from "./section-contract.js";
 import {
@@ -88,16 +88,29 @@ export function createPromptHistorySettingsSection(ctx) {
     toast(t("toast.promptHistoryInserted"), "success");
   }
 
-  async function remove(item, redraw) {
+  function remove(item, redraw) {
     const images = Array.isArray(item?.images) ? item.images : [];
     const label = promptHistoryPreview(item?.text, 80) || promptHistoryImageCountLabel(images) || t("promptHistory.thisPrompt");
-    if (!window.confirm(t("promptHistory.deleteConfirm", { prompt: label }))) return;
-    await save(items().filter((entry) => entry.id !== item.id), redraw, t("toast.promptHistoryDeleted"));
+    openConfirmationAction({
+      title: t("promptHistory.deleteTitle"),
+      body: t("promptHistory.deleteConfirm", { prompt: label }),
+      confirmLabel: t("common.delete"),
+      cancelLabel: t("common.cancel"),
+      closeLabel: t("common.close"),
+      onConfirm: () => save(items().filter((entry) => entry.id !== item.id), redraw, t("toast.promptHistoryDeleted"))
+    });
   }
 
-  async function clear(redraw) {
-    if (!items().length || !window.confirm(t("promptHistory.clearConfirm"))) return;
-    await save([], redraw, t("toast.promptHistoryCleared"));
+  function clear(redraw) {
+    if (!items().length) return;
+    openConfirmationAction({
+      title: t("promptHistory.clearTitle"),
+      body: t("promptHistory.clearConfirm"),
+      confirmLabel: t("promptHistory.clear"),
+      cancelLabel: t("common.cancel"),
+      closeLabel: t("common.close"),
+      onConfirm: () => save([], redraw, t("toast.promptHistoryCleared"))
+    });
   }
 
   function restoreSearchField() {

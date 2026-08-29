@@ -198,11 +198,11 @@ function javaScriptFilesUnder(directory) {
 
 function directFunctionSource(file, functionName) {
   const source = fs.readFileSync(file, "utf8");
-  const startPattern = new RegExp(`^  (?:async\\s+)?function\\s+${functionName}\\s*\\(`, "m");
+  const startPattern = new RegExp(`^(?:  )?(?:async\\s+)?function\\s+${functionName}\\s*\\(`, "m");
   const match = startPattern.exec(source);
   assert.ok(match, `${path.relative(root, file)} must keep ${functionName} discoverable`);
   const remainderStart = match.index + match[0].length;
-  const nextFunction = /^  (?:async\s+)?function\s+[A-Za-z_$][\w$]*\s*\(/m.exec(source.slice(remainderStart));
+  const nextFunction = /^(?:  )?(?:async\s+)?function\s+[A-Za-z_$][\w$]*\s*\(/m.exec(source.slice(remainderStart));
   const end = nextFunction ? remainderStart + nextFunction.index : source.length;
   return source.slice(match.index, end);
 }
@@ -244,6 +244,7 @@ function event(type, properties = {}) {
       el,
       modal,
       isDismissalEscape,
+      openConfirmationAction,
       taskModal,
       viewerModal
     } = await import(moduleUrl);
@@ -332,6 +333,85 @@ function event(type, properties = {}) {
     assert.equal(hoistedFooter.parentNode, confirmationPanel, "modal footer must hoist out of the body");
     confirmationFixture.dialog.remove();
 
+    let confirmed = 0;
+    const actionFixture = openConfirmationAction({
+      title: "Delete custom platform",
+      body: "Delete Demo?",
+      confirmLabel: "Delete",
+      cancelLabel: "Cancel",
+      closeLabel: "Close",
+      onConfirm: async () => {
+        confirmed += 1;
+      }
+    });
+    const actionPanel = actionFixture.querySelector(".modal");
+    assert.equal(actionPanel.getAttribute("role"), "alertdialog", "openConfirmationAction must open confirmationModal");
+    assert.equal(actionPanel.className.includes("modal-alertdialog"), true, "openConfirmationAction must keep confirmation chrome");
+    actionFixture.click();
+    document.dispatchEvent(event("keydown", { key: "Escape", target: actionPanel }));
+    assert.equal(actionFixture.isConnected, true, "openConfirmationAction must ignore backdrop and Escape");
+    assert.equal(confirmed, 0, "ignored dismissal must not run the confirm action");
+    actionFixture.querySelector(".button-danger").click();
+    for (let i = 0; i < 20 && actionFixture.isConnected; i += 1) await Promise.resolve();
+    assert.equal(confirmed, 1, "the confirm action must run exactly once");
+    assert.equal(actionFixture.isConnected, false, "a successful confirm must close the dialog");
+
+    let cancelled = 0;
+    const cancelFixture = openConfirmationAction({
+      title: "Delete custom platform",
+      body: "Delete Demo?",
+      confirmLabel: "Delete",
+      cancelLabel: "Cancel",
+      closeLabel: "Close",
+      onConfirm: async () => {
+        cancelled += 1;
+      }
+    });
+    cancelFixture.querySelector(".button-secondary").click();
+    assert.equal(cancelled, 0, "Cancel must not run the confirm action");
+    assert.equal(cancelFixture.isConnected, false, "Cancel must close the themed confirmation");
+
+    let closed = 0;
+    const closeFixture = openConfirmationAction({
+      title: "Delete custom platform",
+      body: "Delete Demo?",
+      confirmLabel: "Delete",
+      cancelLabel: "Cancel",
+      closeLabel: "Close",
+      onConfirm: async () => {
+        closed += 1;
+      }
+    });
+    closeFixture.querySelector('[aria-label="Close"]').click();
+    assert.equal(closed, 0, "the header close action must not run the confirm action");
+    assert.equal(closeFixture.isConnected, false, "the header close action must close the themed confirmation");
+
+    let releaseBusy;
+    const busyPending = new Promise((resolve) => {
+      releaseBusy = resolve;
+    });
+    let busyConfirmed = 0;
+    const busyFixture = openConfirmationAction({
+      title: "Delete custom platform",
+      body: "Delete Demo?",
+      confirmLabel: "Delete",
+      cancelLabel: "Cancel",
+      closeLabel: "Close",
+      onConfirm: async () => {
+        busyConfirmed += 1;
+        await busyPending;
+      }
+    });
+    busyFixture.querySelector(".button-danger").click();
+    for (let i = 0; i < 20 && busyConfirmed === 0; i += 1) await Promise.resolve();
+    assert.equal(busyConfirmed, 1, "an in-flight confirm must start before later close attempts");
+    busyFixture.querySelector(".button-secondary").click();
+    busyFixture.querySelector('[aria-label="Close"]').click();
+    assert.equal(busyFixture.isConnected, true, "an in-flight confirmation must reject Cancel and top-close");
+    releaseBusy();
+    for (let i = 0; i < 20 && busyFixture.isConnected; i += 1) await Promise.resolve();
+    assert.equal(busyFixture.isConnected, false, "a settled in-flight confirm must force-close");
+
     for (const [type, factory] of [["viewer", viewerModal], ...restrictedFactories]) {
       for (const [label, control] of [
         ["top close button", (fixture) => fixture.dialog.querySelector('[aria-label="Close"]')],
@@ -375,15 +455,17 @@ function event(type, properties = {}) {
     const appFiles = javaScriptFilesUnder(appDirectory);
     const appSources = appFiles.map((file) => fs.readFileSync(file, "utf8"));
     const allAppSource = appSources.join("\n");
-    const wrapperNames = ["editorModal", "viewerModal", "taskModal", "confirmationModal"];
+    const wrapperNames = ["editorModal", "viewerModal", "taskModal", "confirmationModal", "openConfirmationAction"];
     const expectedInventory = new Map([
       ["editorModal", 10],
       ["viewerModal", 5],
       ["taskModal", 1],
-      ["confirmationModal", 6]
+      ["confirmationModal", 6],
+      ["openConfirmationAction", 13]
     ]);
 
     assert.equal(occurrences(allAppSource, /\bmodal\s*\(/g), 0, "app code must not call the raw modal helper");
+    assert.equal(occurrences(allAppSource, /\bwindow\.confirm\s*\(/g), 0, "app code must not use unthemed window.confirm");
     for (const [wrapperName, expected] of expectedInventory) {
       assert.equal(
         occurrences(allAppSource, new RegExp(`\\b${wrapperName}\\s*\\(`, "g")),
@@ -395,8 +477,8 @@ function event(type, properties = {}) {
       wrapperNames.reduce((total, wrapperName) => (
         total + occurrences(allAppSource, new RegExp(`\\b${wrapperName}\\s*\\(`, "g"))
       ), 0),
-      22,
-      "all twenty-two app modal call sites must use a typed wrapper"
+      35,
+      "all thirty-five app overlay call sites must use a typed wrapper or openConfirmationAction"
     );
 
     for (let index = 0; index < appFiles.length; index += 1) {
@@ -435,7 +517,20 @@ function event(type, properties = {}) {
       ["app/settings/import-export.js", "openImportConfirmDialog", "confirmationModal", "import confirmation"],
       ["app/settings/apps.js", "openIframeRiskConfirmation", "confirmationModal", "iframe risk confirmation"],
       ["app/settings/functional-anomalies.js", "openMutationConfirmation", "confirmationModal", "functional anomaly mutation confirmation"],
-      ["app/settings/official-rules.js", "openConfirmation", "confirmationModal", "official rules mutation confirmation"]
+      ["app/settings/official-rules.js", "openConfirmation", "confirmationModal", "official rules mutation confirmation"],
+      ["app/settings/apps.js", "removeCustom", "openConfirmationAction", "custom platform delete confirmation"],
+      ["app/settings/profiles.js", "remove", "openConfirmationAction", "API profile delete confirmation"],
+      ["app/settings/prompt-templates.js", "deletePromptTemplate", "openConfirmationAction", "prompt template delete confirmation"],
+      ["app/settings/summary.js", "deleteSummaryCollector", "openConfirmationAction", "Summary collector delete confirmation"],
+      ["app/settings/message-navigation.js", "deleteSite", "openConfirmationAction", "Message Navigator site delete confirmation"],
+      ["app/settings/topic-deletion.js", "deleteSite", "openConfirmationAction", "Delete Site delete confirmation"],
+      ["app/settings/history.js", "remove", "openConfirmationAction", "Settings history item delete confirmation"],
+      ["app/settings/history.js", "clear", "openConfirmationAction", "Settings history clear confirmation"],
+      ["app/settings/appearance-topbar.js", "deleteTopbarPromptPlaceholderItem", "openConfirmationAction", "topbar placeholder delete confirmation"],
+      ["app/history/controller.js", "remove", "openConfirmationAction", "Prompt History item delete confirmation"],
+      ["app/prompt-library/controller.js", "deletePromptLibraryItem", "openConfirmationAction", "Prompt Library delete confirmation"],
+      ["app/runtime.js", "deleteThreadOnFrames", "openConfirmationAction", "topbar delete-all-topics confirmation"],
+      ["app/workspace/frame-controller.js", "deleteActiveThreadForGroup", "openConfirmationAction", "in-group delete-topic confirmation"]
     ];
 
     for (const [relativeFile, functionName, expectedWrapper, label] of callSites) {

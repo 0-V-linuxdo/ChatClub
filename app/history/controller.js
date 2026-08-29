@@ -2,7 +2,7 @@ import { t } from "../../shared/i18n.js";
 import { savePromptSendHistory } from "../../shared/storage-adapter.js";
 import { normalizePocketCardSize, normalizePocketIcon } from "../../shared/storage-schema.js";
 import { createSettingsIconAction } from "../../ui/components.js";
-import { clear, el, input, toast, viewerModal } from "../../ui/dom.js";
+import { clear, el, input, openConfirmationAction, toast, viewerModal } from "../../ui/dom.js";
 import { createViewerWindowChrome } from "../../ui/viewer-window.js";
 import {
   optionalControllerObject,
@@ -207,12 +207,20 @@ export function createHistoryController(ctx) {
     close?.();
   }
 
-  async function remove(item, redraw) {
+  function remove(item, redraw) {
     const images = Array.isArray(item?.images) ? item.images : [];
     const label = promptHistoryPreview(item?.text, 80) || promptHistoryImageCountLabel(images) || t("promptHistory.thisPrompt");
-    if (!window.confirm(t("promptHistory.deleteConfirm", { prompt: label }))) return;
-    if (activeItemId === item.id) activeItemId = "";
-    await save(items().filter((entry) => entry.id !== item.id), redraw, t("toast.promptHistoryDeleted"));
+    openConfirmationAction({
+      title: t("promptHistory.deleteTitle"),
+      body: t("promptHistory.deleteConfirm", { prompt: label }),
+      confirmLabel: t("common.delete"),
+      cancelLabel: t("common.cancel"),
+      closeLabel: t("common.close"),
+      onConfirm: () => {
+        if (activeItemId === item.id) activeItemId = "";
+        return save(items().filter((entry) => entry.id !== item.id), redraw, t("toast.promptHistoryDeleted"));
+      }
+    });
   }
 
   async function saveItemToPocket(item, redraw) {

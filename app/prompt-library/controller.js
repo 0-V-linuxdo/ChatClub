@@ -1,5 +1,5 @@
 import { t } from "../../shared/i18n.js";
-import { button, clear, editorModal, el, field, input, textarea, toast, viewerModal } from "../../ui/dom.js";
+import { button, clear, editorModal, el, field, input, openConfirmationAction, textarea, toast, viewerModal } from "../../ui/dom.js";
 
 export function createPromptLibraryController(ctx) {
   const {
@@ -227,11 +227,19 @@ export function createPromptLibraryController(ctx) {
     dialog.querySelector(".modal")?.classList.add("settings-editor-modal", "prompt-library-editor-modal");
   }
 
-  async function deletePromptLibraryItem(prompt, redraw) {
-    if (!window.confirm(t("prompts.deleteConfirm", { name: prompt.title || t("common.untitledPrompt") }))) return;
-    state.promptLibrary = await savePromptLibrary(state.promptLibrary.filter((item) => item.id !== prompt.id));
-    redraw();
-    toast(t("toast.promptDeleted"), "success");
+  function deletePromptLibraryItem(prompt, redraw) {
+    openConfirmationAction({
+      title: t("prompts.deleteTitle"),
+      body: t("prompts.deleteConfirm", { name: prompt.title || t("common.untitledPrompt") }),
+      confirmLabel: t("common.delete"),
+      cancelLabel: t("common.cancel"),
+      closeLabel: t("common.close"),
+      onConfirm: async () => {
+        state.promptLibrary = await savePromptLibrary(state.promptLibrary.filter((item) => item.id !== prompt.id));
+        redraw();
+        toast(t("toast.promptDeleted"), "success");
+      }
+    });
   }
 
   return {

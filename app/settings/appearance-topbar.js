@@ -12,7 +12,7 @@ import {
   normalizeTopbarPromptPlaceholderConfig,
   normalizeTopbarPromptPlaceholderText
 } from "../../shared/storage-schema.js";
-import { button, el, field, input, select, toast } from "../../ui/dom.js";
+import { button, el, field, input, openConfirmationAction, select, toast } from "../../ui/dom.js";
 import { validateControllerContract } from "../controller-contract.js";
 import { cleanupSettingsDragRows, createSettingsKit } from "./kit.js";
 import {
@@ -131,17 +131,25 @@ export function createAppearanceTopbarController(dependencies = {}) {
     redraw();
   }
 
-  async function deleteTopbarPromptPlaceholderItem(index, redraw) {
+  function deleteTopbarPromptPlaceholderItem(index, redraw) {
     const config = topbarPromptPlaceholderConfigValue();
     if (index < 0 || index >= config.items.length) return;
     const label = topbarPromptPlaceholderPreview(config.items[index], 80) || t("topbar.placeholder.thisItem");
-    if (!window.confirm(t("topbar.placeholder.deleteConfirm", { text: label }))) return;
-    resetTopbarPromptPlaceholderEditor();
-    await saveTopbarPromptPlaceholderConfig(
-      { ...config, items: config.items.filter((_, itemIndex) => itemIndex !== index) },
-      redraw,
-      t("toast.topbarPlaceholderDeleted")
-    );
+    openConfirmationAction({
+      title: t("topbar.placeholder.deleteTitle"),
+      body: t("topbar.placeholder.deleteConfirm", { text: label }),
+      confirmLabel: t("common.delete"),
+      cancelLabel: t("common.cancel"),
+      closeLabel: t("common.close"),
+      onConfirm: () => {
+        resetTopbarPromptPlaceholderEditor();
+        return saveTopbarPromptPlaceholderConfig(
+          { ...config, items: config.items.filter((_, itemIndex) => itemIndex !== index) },
+          redraw,
+          t("toast.topbarPlaceholderDeleted")
+        );
+      }
+    });
   }
 
   function startTopbarPromptPlaceholderDrag(event, index) {

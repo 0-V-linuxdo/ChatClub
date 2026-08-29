@@ -11,6 +11,7 @@ import {
   el,
   field,
   input,
+  openConfirmationAction,
   select,
   textarea,
   toast
@@ -458,13 +459,22 @@ export function createMessageNavigationSettingsSection(ctx) {
     toast(t("toast.messageNavigatorSiteReset"), "success");
   }
 
-  async function deleteSite(config, redraw) {
+  function deleteSite(config, redraw) {
     if (builtInDefault(config)) return;
-    if (!window.confirm(t("messageNavigator.site.deleteConfirm", { name: config.name || config.id }))) return;
-    const configs = (state.options.messageNavigatorSiteConfigs || []).filter((item) => item.id !== config.id);
-    state.messageNavigatorSiteExpandedId = "";
-    await saveSites(configs, redraw);
-    toast(t("toast.messageNavigatorSiteDeleted"), "success");
+    openConfirmationAction({
+      title: t("messageNavigator.site.deleteTitle"),
+      body: t("messageNavigator.site.deleteConfirm", { name: config.name || config.id }),
+      confirmLabel: t("common.delete"),
+      cancelLabel: t("common.cancel"),
+      closeLabel: t("common.close"),
+      onConfirm: () => {
+        const configs = (state.options.messageNavigatorSiteConfigs || []).filter((item) => item.id !== config.id);
+        state.messageNavigatorSiteExpandedId = "";
+        return saveSites(configs, redraw).then(() => {
+          toast(t("toast.messageNavigatorSiteDeleted"), "success");
+        });
+      }
+    });
   }
 
   return Object.freeze({ pane, reset });

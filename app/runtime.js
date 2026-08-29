@@ -54,7 +54,7 @@ import {
 } from "./functional-anomalies/controller.js";
 import { SETTINGS_SECTIONS } from "./settings/sections.js";
 import { createCompactIconButton, createMenuButton } from "../ui/components.js";
-import { el, ensureToastHost, isDismissalEscape, setToastStay, toast } from "../ui/dom.js";
+import { el, ensureToastHost, isDismissalEscape, openConfirmationAction, setToastStay, toast } from "../ui/dom.js";
 import { FRAME_TOAST_POSITION_EVENT } from "../ui/frame-toast.js";
 import { installGlobalTooltips } from "../ui/tooltip.js";
 import { createSvgIcon } from "../ui/icons.js";
@@ -897,7 +897,18 @@ async function deleteThreadOnFrames() {
     return;
   }
   const count = activeTargets.length;
-  if (!window.confirm(t("topbar.deleteThreadConfirm", { count, plural: count === 1 ? "" : "s" }))) return;
+  closeTransientOverlays();
+  openConfirmationAction({
+    title: t("topbar.deleteThreadTitle"),
+    body: t("topbar.deleteThreadConfirm", { count, plural: count === 1 ? "" : "s" }),
+    confirmLabel: t("topbar.deleteThread"),
+    cancelLabel: t("common.cancel"),
+    closeLabel: t("common.close"),
+    onConfirm: () => finishDeleteThreadOnFrames(activeTargets, permissionAttempt, skippedCount)
+  });
+}
+
+async function finishDeleteThreadOnFrames(activeTargets, permissionAttempt, skippedCount) {
   const permissionGranted = await permissionAttempt;
   const runnableTargets = permissionGranted
     ? activeTargets

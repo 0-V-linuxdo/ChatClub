@@ -1,7 +1,7 @@
 import { t } from "../../shared/i18n.js";
 import { API_PROFILE_MODEL_DEFAULT } from "../../shared/constants.js";
 import { createId } from "../../shared/storage-schema.js";
-import { button, editorModal, el, field, input, select, toast } from "../../ui/dom.js";
+import { button, editorModal, el, field, input, openConfirmationAction, select, toast } from "../../ui/dom.js";
 import {
   cleanupSettingsDragRows,
   createSettingsKit,
@@ -237,17 +237,23 @@ export function createProfilesSettingsSection(ctx) {
     await saveProfiles(apiProfiles, redraw, t("toast.apiProfileDuplicated"));
   }
 
-  async function remove(profile, redraw) {
+  function remove(profile, redraw) {
     if (state.options.apiProfiles.length <= 1) {
       toast(t("profiles.keepOne"), "error");
       return;
     }
-    if (!window.confirm(t("profiles.deleteConfirm", { name: profile.name || "this API profile" }))) return;
-    await saveProfiles(
-      state.options.apiProfiles.filter((item) => item.id !== profile.id),
-      redraw,
-      t("toast.apiProfileDeleted")
-    );
+    openConfirmationAction({
+      title: t("profiles.deleteTitle"),
+      body: t("profiles.deleteConfirm", { name: profile.name || "this API profile" }),
+      confirmLabel: t("common.delete"),
+      cancelLabel: t("common.cancel"),
+      closeLabel: t("common.close"),
+      onConfirm: () => saveProfiles(
+        state.options.apiProfiles.filter((item) => item.id !== profile.id),
+        redraw,
+        t("toast.apiProfileDeleted")
+      )
+    });
   }
 
   return Object.freeze({ pane, reset });

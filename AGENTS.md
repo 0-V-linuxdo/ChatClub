@@ -61,6 +61,7 @@ Run the relevant `npm run smoke:chromium` or `npm run smoke:firefox` invocation 
 Classify overlays by interaction type instead of adding one-off close flags at call sites.
 
 - Application code must use `editorModal`, `taskModal`, `confirmationModal`, or `viewerModal`. Keep the raw `modal()` helper only as a backward-compatible UI primitive and for its own regression tests.
+- Simple destructive confirms that only need a title, body, and footer actions may call `openConfirmationAction`. That helper is not a fifth overlay family: it always opens `confirmationModal`. Do not use `window.confirm` or native `<dialog>`.
 - Editors, tasks, and confirmations must ignore backdrop clicks and Escape. They close only through their visible header/footer actions or after a successful primary action.
 - Viewers may close from the backdrop as well as their visible close actions because they do not own unsaved input or in-flight work.
 - While a task or confirmation is applying a mutation, guard every close path and disable its close controls until the operation settles. Programmatic success may force the final close.

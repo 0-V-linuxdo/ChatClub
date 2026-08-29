@@ -366,6 +366,57 @@ export function confirmationModal(title, content, onClose, wide = false, closeLa
   return typedModal("confirmation", title, content, onClose, wide, closeLabel);
 }
 
+export function openConfirmationAction({
+  title,
+  body,
+  confirmLabel,
+  cancelLabel,
+  closeLabel,
+  variant = "danger",
+  className = "",
+  onConfirm
+} = {}) {
+  let dialog;
+  let applying = false;
+  const close = (force = false) => {
+    if (applying && force !== true) return;
+    dialog?.remove?.();
+  };
+  const cancelButton = button(cancelLabel, () => close());
+  const confirmButton = button(confirmLabel, apply, variant);
+  const setApplying = (value) => {
+    applying = value;
+    cancelButton.disabled = value;
+    confirmButton.disabled = value;
+    dialog?.querySelector?.(".modal-header .icon-button")?.toggleAttribute?.("disabled", value);
+    dialog?.querySelector?.(".modal")?.setAttribute?.("aria-busy", String(value));
+  };
+  async function apply() {
+    if (applying) return;
+    setApplying(true);
+    try {
+      await onConfirm?.();
+      close(true);
+    } catch (error) {
+      setApplying(false);
+      const reason = String(error?.message || error || "").trim();
+      if (reason) toast(reason, "error");
+    }
+  }
+  const bodyNode = typeof body === "string" || body == null ? el("p", {}, body || "") : body;
+  dialog = confirmationModal(
+    title,
+    el("div", { class: `overlay-confirmation ${className || ""}`.trim() },
+      bodyNode,
+      el("div", { class: "modal-footer" }, cancelButton, confirmButton)
+    ),
+    close,
+    false,
+    closeLabel
+  );
+  return dialog;
+}
+
 export function bindLinearMenuKeyboard(menu, options = {}) {
   if (!menu?.addEventListener) return menu;
   const items = () => [...(menu.querySelectorAll?.('[role="menuitem"]') || [])]

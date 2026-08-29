@@ -7,6 +7,7 @@ import {
   el,
   field,
   input,
+  openConfirmationAction,
   textarea,
   toast
 } from "../../ui/dom.js";
@@ -464,13 +465,22 @@ export function createTopicDeletionSettingsSection(ctx) {
     toast(t("toast.topicDeleteSiteReset"), "success");
   }
 
-  async function deleteSite(config, redraw) {
+  function deleteSite(config, redraw) {
     if (builtInDefault(config)) return;
-    if (!window.confirm(t("topicDeletion.site.deleteConfirm", { name: config.name || config.id }))) return;
-    const configs = (state.options.topicDeleteSiteConfigs || []).filter((item) => item.id !== config.id);
-    state.topicDeleteSiteExpandedId = "";
-    await saveSites(configs, redraw);
-    toast(t("toast.topicDeleteSiteDeleted"), "success");
+    openConfirmationAction({
+      title: t("topicDeletion.site.deleteTitle"),
+      body: t("topicDeletion.site.deleteConfirm", { name: config.name || config.id }),
+      confirmLabel: t("common.delete"),
+      cancelLabel: t("common.cancel"),
+      closeLabel: t("common.close"),
+      onConfirm: () => {
+        const configs = (state.options.topicDeleteSiteConfigs || []).filter((item) => item.id !== config.id);
+        state.topicDeleteSiteExpandedId = "";
+        return saveSites(configs, redraw).then(() => {
+          toast(t("toast.topicDeleteSiteDeleted"), "success");
+        });
+      }
+    });
   }
 
   return Object.freeze({ pane });
