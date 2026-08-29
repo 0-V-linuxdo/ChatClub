@@ -177,7 +177,7 @@ const OFFICIAL_RULES_SETTINGS_CSS = `
 
 .official-rules-mode button[aria-pressed="true"] {
   color: var(--text);
-  background: var(--panel);
+  background: var(--control-selected);
   box-shadow: 0 1px 4px color-mix(in srgb, black 10%, transparent);
 }
 
@@ -420,7 +420,7 @@ const OFFICIAL_RULES_SETTINGS_CSS = `
 }
 
 .official-rules-site-summary:hover {
-  background: color-mix(in srgb, var(--primary) 6%, transparent);
+  background: var(--control-hover);
 }
 
 .official-rules-site-summary:focus-visible {

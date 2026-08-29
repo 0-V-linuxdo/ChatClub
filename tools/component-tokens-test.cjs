@@ -50,6 +50,9 @@ const tokens = {
   "--ui-compact-height": "var(--settings-action-size)",
   "--ui-chrome-height": "34px",
   "--ui-reorder-cluster": "calc(var(--settings-control-height) + (var(--target-min) * 2) + 8px)",
+  "--ui-radius-xs": "4px",
+  "--ui-radius-tab": "5px",
+  "--ui-radius-nested": "6px",
   "--toast-text": "var(--text)"
 };
 
@@ -162,6 +165,48 @@ assert.match(agents, /WCAG 2\.5\.7/);
 assert.match(agents, /--control-selected/);
 assert.match(agents, /not declared-only/);
 assert.match(agents, /heading `17px`/);
+assert.match(agents, /--ui-radius-xs/);
+assert.match(agents, /--ui-radius-tab/);
+assert.match(agents, /--ui-radius-nested/);
+assert.match(agents, /Send hover mixes `--on-primary`, not `#ffffff`/);
 assert.match(agents, /## Overlay Chrome Contract/);
+
+assert.match(css, /\.workspace-tabs-sidebar-item:hover,[\s\S]*?background:\s*var\(--control-hover\);/);
+assert.match(css, /\.workspace-tabs-sidebar-folder:hover,[\s\S]*?background:\s*var\(--control-hover\);/);
+assert.match(css, /\.compact-icon:hover \{[^}]*background:\s*var\(--control-hover\);/s);
+assert.match(css, /\.popover-menu \.button:hover \{[^}]*background:\s*var\(--control-hover\);/s);
+assert.match(css, /\.pocket-group-button:hover,[\s\S]*?background:\s*var\(--control-hover\);/);
+assert.match(
+  css,
+  /\.prompt-send-button:hover \{[^}]*var\(--on-primary\)[^}]*var\(--on-primary\)[^}]*var\(--on-primary\)/s
+);
+assert.doesNotMatch(
+  css,
+  /\.prompt-send-button:hover \{[^}]*#ffffff/s,
+  "send hover must mix --on-primary instead of #ffffff"
+);
+assert.match(
+  css,
+  /\.workspace-tabs-sidebar-item-delete:hover,[\s\S]*?background:\s*color-mix\(in srgb, var\(--danger\) 13%, transparent\);/
+);
+assert.match(css, /\.tab:focus-visible,/);
+assert.match(css, /\.settings-tab:focus-visible,/);
+assert.match(css, /\.settings-inner-tab:focus-visible,/);
+assert.match(css, /\.workspace-tabs-sidebar-folder-toggle:focus-visible,/);
+assert.match(css, /\.prompt-history-sidebar-item:focus-visible,/);
+assert.match(css, /\.pocket-group-button:focus-visible,/);
+assert.match(css, /\.share-option:focus-visible \{/);
+assert.doesNotMatch(css, /border-radius:\s*4px/, "favicons must consume --ui-radius-xs");
+assert.doesNotMatch(css, /border-radius:\s*5px/, "tab corners must consume --ui-radius-tab");
+assert.doesNotMatch(css, /border-radius:\s*6px/, "nested chrome must consume --ui-radius-nested");
+assert.match(css, /\.tab \{[^}]*border-radius:\s*var\(--ui-radius-tab\) var\(--ui-radius-tab\) 0 0;/s);
+assert.match(css, /\.tab-favicon \{[^}]*border-radius:\s*var\(--ui-radius-xs\);/s);
+assert.match(css, /\.popover-menu \.button \{[^}]*border-radius:\s*var\(--ui-radius-nested\);/s);
+assert.doesNotMatch(css, /(?<!-)font-size:\s*15px/, "15px titles must consume --font-size-md");
+assert.match(css, /\.settings-block-header h4 \{[^}]*font-size:\s*var\(--font-size-md\);/s);
+assert.match(css, /\.settings-check \{[^}]*min-height:\s*var\(--target-min\);/s);
+assert.match(css, /\.tooltip-toggle-switch \{[^}]*min-height:\s*var\(--target-min\);/s);
+assert.match(officialRules, /\.official-rules-mode button\[aria-pressed="true"\] \{[^}]*background:\s*var\(--control-selected\);/s);
+assert.match(officialRules, /\.official-rules-site-summary:hover \{[^}]*background:\s*var\(--control-hover\);/s);
 
 console.log("component tokens: ok");
