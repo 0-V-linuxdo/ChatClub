@@ -328,17 +328,37 @@ button { cursor: pointer; }
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 16%, transparent);
 }
 
-.workspace-tabs-sidebar-header-actions {
+.workspace-tabs-sidebar-header-actions,
+.workspace-tabs-sidebar-toolbar {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.workspace-tabs-sidebar-header-actions {
   gap: 6px;
   margin-left: auto;
 }
 
+.workspace-tabs-sidebar-header > .workspace-tabs-sidebar-cleanup {
+  margin-left: auto;
+}
+
+.workspace-tabs-sidebar-toolbar {
+  padding: 10px var(--space-2) var(--space-1);
+}
+
+.workspace-tabs-sidebar-toolbar.is-searching {
+  gap: var(--space-1);
+}
+
 .workspace-tabs-sidebar-cleanup,
 .workspace-tabs-sidebar-sort,
-.workspace-tabs-sidebar-new-folder {
+.workspace-tabs-sidebar-new-folder,
+.workspace-tabs-sidebar-search-toggle,
+.workspace-tabs-sidebar-search-close {
   flex: 0 0 auto;
   width: var(--ui-compact-height);
   height: var(--ui-compact-height);
@@ -351,7 +371,9 @@ button { cursor: pointer; }
 
 .workspace-tabs-sidebar-cleanup .svg-icon,
 .workspace-tabs-sidebar-sort .svg-icon,
-.workspace-tabs-sidebar-new-folder .svg-icon {
+.workspace-tabs-sidebar-new-folder .svg-icon,
+.workspace-tabs-sidebar-search-toggle .svg-icon,
+.workspace-tabs-sidebar-search-close .svg-icon {
   width: 18px;
   height: 18px;
   stroke-width: 2.15;
@@ -362,7 +384,11 @@ button { cursor: pointer; }
 .workspace-tabs-sidebar-sort:hover:not(:disabled),
 .workspace-tabs-sidebar-sort:focus-visible:not(:disabled),
 .workspace-tabs-sidebar-new-folder:hover:not(:disabled),
-.workspace-tabs-sidebar-new-folder:focus-visible:not(:disabled) {
+.workspace-tabs-sidebar-new-folder:focus-visible:not(:disabled),
+.workspace-tabs-sidebar-search-toggle:hover:not(:disabled),
+.workspace-tabs-sidebar-search-toggle:focus-visible:not(:disabled),
+.workspace-tabs-sidebar-search-close:hover:not(:disabled),
+.workspace-tabs-sidebar-search-close:focus-visible:not(:disabled) {
   color: var(--bg);
   background: var(--primary);
   border-color: var(--primary);
@@ -374,13 +400,13 @@ button { cursor: pointer; }
 }
 
 .workspace-tabs-sidebar-search {
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
   gap: var(--space-2);
   min-width: 0;
   height: var(--ui-control-height);
-  margin: 10px var(--space-2) var(--space-1);
+  margin: 0;
   padding: 0 10px;
   border: 1px solid var(--line);
   border-radius: var(--ui-radius);
@@ -767,6 +793,23 @@ button { cursor: pointer; }
   font-weight: var(--font-weight-bold);
 }
 
+.workspace-tabs-sidebar-item-pin-slot {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ui-accessory-height);
+  height: var(--ui-accessory-height);
+  transform: translateY(-50%);
+}
+
+.workspace-tabs-sidebar-item:has(.workspace-tabs-sidebar-item-pin-slot) .workspace-tabs-sidebar-item-index {
+  opacity: 0;
+}
+
 .workspace-tabs-sidebar-item-pin-mark {
   flex-shrink: 0;
   display: inline-flex;
@@ -861,6 +904,30 @@ button { cursor: pointer; }
   .workspace-tabs-sidebar-item:has(.workspace-tabs-sidebar-item-actions:focus-within) .workspace-tabs-sidebar-item-label {
     -webkit-mask-image: linear-gradient(to right, #000 calc(100% - var(--tabs-sidebar-actions-width, 104px)), transparent);
     mask-image: linear-gradient(to right, #000 calc(100% - var(--tabs-sidebar-actions-width, 104px)), transparent);
+  }
+
+  .workspace-tabs-sidebar-item:not(.is-pinned) .workspace-tabs-sidebar-item-pin-slot {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .workspace-tabs-sidebar-item:hover .workspace-tabs-sidebar-item-pin-slot,
+  .workspace-tabs-sidebar-item:has(:focus-visible) .workspace-tabs-sidebar-item-pin-slot,
+  .workspace-tabs-sidebar-item.is-menu-open .workspace-tabs-sidebar-item-pin-slot,
+  .workspace-tabs-sidebar-item.is-pinned .workspace-tabs-sidebar-item-pin-slot {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .workspace-tabs-sidebar-item:not(.is-pinned):not(:hover):not(:has(:focus-visible)):not(.is-menu-open) .workspace-tabs-sidebar-item-index {
+    opacity: 1;
+  }
+
+  .workspace-tabs-sidebar-item:hover .workspace-tabs-sidebar-item-index,
+  .workspace-tabs-sidebar-item:has(:focus-visible) .workspace-tabs-sidebar-item-index,
+  .workspace-tabs-sidebar-item.is-menu-open .workspace-tabs-sidebar-item-index,
+  .workspace-tabs-sidebar-item.is-pinned .workspace-tabs-sidebar-item-index {
+    opacity: 0;
   }
 }
 

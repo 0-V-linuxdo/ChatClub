@@ -276,8 +276,11 @@ export function createTabsSidebarHoverMenu({
   function renderItemActions(item) {
     const { pinned, folded } = tabsSidebarHoverConfig(getOptions);
     const rowRef = { row: null };
+    const pinNode = pinned.some((entry) => entry.id === "pin")
+      ? renderHoverAction("pin", item)
+      : null;
     const actionNodes = [
-      ...pinned.map((entry) => renderHoverAction(entry.id, item)).filter(Boolean),
+      ...pinned.filter((entry) => entry.id !== "pin").map((entry) => renderHoverAction(entry.id, item)).filter(Boolean),
       ...renderMoveButtons({
         target: item,
         createIcon,
@@ -308,11 +311,33 @@ export function createTabsSidebarHoverMenu({
     return {
       actionCount: actionNodes.length,
       actionNodes,
+      pinNode,
       rowRef
     };
   }
 
   return Object.freeze({ closeHoverMenu, openHoverMenu, renderItemActions });
+}
+
+export function renderTabsSidebarHeader({ count, countLabel, title, cleanup }) {
+  return el("header", { class: "workspace-tabs-sidebar-header" },
+    el("span", {
+      class: "workspace-tabs-sidebar-count",
+      "aria-label": countLabel
+    }, String(count)),
+    el("h2", { class: "workspace-tabs-sidebar-title" }, title),
+    cleanup
+  );
+}
+
+export function renderTabsSidebarToolbar(nodes = []) {
+  const children = (Array.isArray(nodes) ? nodes : [nodes]).filter(Boolean);
+  return el("div", {
+    class: [
+      "workspace-tabs-sidebar-toolbar",
+      children.length <= 2 ? "is-searching" : ""
+    ].filter(Boolean).join(" ")
+  }, children);
 }
 
 export function renderTabsSidebarItem({
@@ -326,6 +351,7 @@ export function renderTabsSidebarItem({
   bindItemDrag,
   actionCount,
   actionNodes,
+  pinNode = null,
   rowRef,
   nested = false
 }) {
@@ -345,6 +371,9 @@ export function renderTabsSidebarItem({
     },
     style: actionCount ? { "--tabs-sidebar-actions-width": hoverActionsWidth(actionCount) } : null
   },
+    pinNode
+      ? el("div", { class: "workspace-tabs-sidebar-item-pin-slot" }, pinNode)
+      : null,
     el("button", {
       class: "workspace-tabs-sidebar-item-focus",
       type: "button",
@@ -356,7 +385,7 @@ export function renderTabsSidebarItem({
     },
       el("span", { class: "workspace-tabs-sidebar-item-index" }, String(index + 1)),
       favicons,
-      item.pinned
+      item.pinned && !pinNode
         ? el("span", {
           class: "workspace-tabs-sidebar-item-pin-mark",
           "aria-hidden": "true"

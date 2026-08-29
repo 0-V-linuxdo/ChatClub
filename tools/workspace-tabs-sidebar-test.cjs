@@ -203,7 +203,8 @@ globalThis.document = {
   assert.match(css, /\.workspace-tabs-sidebar-cleanup[\s\S]{0,280}color:\s*var\(--text\)/, "the cleanup icon must use the primary text color");
   assert.match(css, /\.workspace-tabs-sidebar-item-index/, "each tab name must show a sequence number");
   assert.match(css, /\.workspace-tabs-sidebar-item-pin/, "each tab row must expose a pin control");
-  assert.match(css, /\.workspace-tabs-sidebar-item-pin-mark/, "pinned tabs must keep a visible pin mark");
+  assert.match(css, /\.workspace-tabs-sidebar-item-pin-slot/, "visible pin controls sit on the left of the row");
+  assert.match(css, /\.workspace-tabs-sidebar-item-pin-mark/, "folded or hidden pin still keeps a mark on pinned rows");
   assert.match(css, /\.workspace-tabs-sidebar-resize/, "the sidebar must be resizable by dragging");
   assert.match(css, /@media \(hover: hover\)/, "rename and delete controls must wait for hover");
   assert.match(css, /\.workspace-tabs-sidebar-item-actions:focus-within/, "keyboard focus on an action may reveal hover buttons");
@@ -237,28 +238,25 @@ globalThis.document = {
   assert.doesNotMatch(css, /workspace-cleared-tabs-banner/, "the restore banner must not remain in the workspace chrome");
   assert.match(icons, /x: "3", y: "3", width: "18", height: "18", rx: "2"/);
   assert.match(icons, /d: "M9 3v18"/);
-  assert.match(source, /createIcon\("copyMinus"\)/, "cleanup must use the stacked copy-minus glyph");
-  assert.doesNotMatch(source, /createIcon\("broom"\)/, "cleanup must not keep the broom icon");
-  assert.match(icons, /copyMinus:\s*\[/);
-  assert.match(icons, /x: "8", y: "8", width: "14", height: "14"/);
-  assert.match(icons, /d: "M12 15h6"/, "cleanup must use Lucide copy-minus (close extra copies)");
-  assert.match(icons, /d: "M4 16c-1\.1 0-2-\.9-2-2V4c0-1\.1\.9-2 2-2h10c1\.1 0 2 \.9 2 2"/);
-  assert.doesNotMatch(icons, /m19\.4 2\.6-9\.2 9\.2/, "cleanup must not keep the share-like broom paths");
-  assert.doesNotMatch(icons, /d: "M12 2\.5v8\.5"/, "cleanup must not keep the broom handle");
-  assert.doesNotMatch(icons, /broom:/, "the unused broom glyph must be removed");
+  assert.match(source, /createIcon\("broom"\)/, "cleanup must use the broom glyph");
+  assert.doesNotMatch(source, /createIcon\("copyMinus"\)/, "cleanup must not keep the copy-minus glyph");
+  assert.match(icons, /broom:/, "the broom glyph must be registered");
+  assert.match(icons, /d: "M12 2\.5v8\.5"/, "cleanup must keep the broom handle");
+  assert.doesNotMatch(icons, /copyMinus:/, "the unused copy-minus glyph must be removed");
   assert.match(icons, /pin:\s*\[/, "tabs must use the Lucide pin glyph");
   assert.match(icons, /d: "M12 17v5"/, "the pin glyph must include the Lucide pin needle");
   assert.match(source, /createIcon\("pin"\)/, "each tab row must expose a pin control");
   assert.match(source, /WORKSPACE_TABS_SIDEBAR_PINNED_KEY/, "pinned tabs must persist independently of live order");
   assert.match(source, /Boolean\(item\.pinned\) !== Boolean\(target\.pinned\)/, "pinned and unpinned tabs must not mix while dragging");
-  assert.match(source, /workspace-tabs-sidebar-search/, "ChatClub Tabs must expose a search field");
+  assert.match(source, /workspace-tabs-sidebar-search/, "ChatClub Tabs must expose a search control");
+  assert.match(source, /workspace-tabs-sidebar-search-toggle/, "collapsed search must be an icon button");
   assert.match(source, /function openSearch\(/, "the topbar Search control must open and focus the sidebar search field");
   assert.match(source, /setSearchQuery/, "title search must filter the sidebar list");
   assert.match(source, /forgetWorkspaceTabFullText/, "deleting a tab must drop its recorded full text");
   assert.match(css, /\.workspace-tabs-sidebar-search-input/, "the search field must be styled in the sidebar");
   assert.match(css, /\.workspace-tabs-sidebar-search\s*\{[^}]*border:\s*1px solid/, "the search glyph must sit inside one bordered field");
   assert.match(css, /\.workspace-tabs-sidebar-search\s*\{[^}]*height:\s*var\(--ui-control-height\)/, "the search field height must match tab rows");
-  assert.match(css, /\.workspace-tabs-sidebar-search\s*\{[^}]*margin:\s*10px var\(--space-2\) var\(--space-1\)/, "the search field must align with tab row width");
+  assert.match(css, /\.workspace-tabs-sidebar-toolbar\s*\{[^}]*padding:\s*10px var\(--space-2\) var\(--space-1\)/, "the toolbar must align with tab row width");
   assert.match(css, /\.workspace-tabs-sidebar-item\s*\{[^}]*min-height:\s*36px/);
   assert.match(css, /\.workspace-tabs-sidebar-list\s*\{[^}]*padding:\s*var\(--space-1\) var\(--space-2\) var\(--space-2\)/);
   assert.match(css, /\.workspace-tabs-sidebar-search \.workspace-tabs-sidebar-search-input/, "sidebar search styles must beat the global .input width");
@@ -445,11 +443,16 @@ globalThis.document = {
     assert.ok(header, "the sidebar must render a header");
     assert.match(String(header.children[0]?.className || ""), /workspace-tabs-sidebar-count/, "tab count must sit to the left of ChatClub Tabs");
     assert.match(String(header.children[1]?.className || ""), /workspace-tabs-sidebar-title/);
-    assert.match(String(header.children[2]?.className || ""), /workspace-tabs-sidebar-header-actions/, "sort, folder and close-others must sit to the right of ChatClub Tabs");
+    assert.match(String(header.children[2]?.className || ""), /workspace-tabs-sidebar-cleanup/, "close-others must sit to the right of ChatClub Tabs");
     const cleanup = descendants(sidebar).find((node) => String(node.className || "").includes("workspace-tabs-sidebar-cleanup"));
     assert.ok(cleanup, "the header must expose a close-others control");
-    assert.ok(descendants(header).some((node) => String(node.className || "").includes("workspace-tabs-sidebar-sort")), "the header must expose a sort control");
-    assert.ok(descendants(header).some((node) => String(node.className || "").includes("workspace-tabs-sidebar-new-folder")), "the header must expose a new-folder control");
+    assert.ok(!descendants(header).some((node) => String(node.className || "").includes("workspace-tabs-sidebar-sort")), "sort must leave the title row");
+    assert.ok(!descendants(header).some((node) => String(node.className || "").includes("workspace-tabs-sidebar-new-folder")), "new-folder must leave the title row");
+    const toolbar = descendants(sidebar).find((node) => node.classList.contains("workspace-tabs-sidebar-toolbar"));
+    assert.ok(toolbar, "the sidebar must render a toolbar under the title");
+    assert.ok(descendants(toolbar).some((node) => String(node.className || "").includes("workspace-tabs-sidebar-sort")), "the toolbar must expose a sort control");
+    assert.ok(descendants(toolbar).some((node) => String(node.className || "").includes("workspace-tabs-sidebar-new-folder")), "the toolbar must expose a new-folder control");
+    assert.ok(descendants(toolbar).some((node) => String(node.className || "").includes("workspace-tabs-sidebar-search-toggle")), "collapsed search must sit in the toolbar");
     assert.equal(cleanup.disabled, false);
     cleanup.click();
     await Promise.resolve();
@@ -465,6 +468,16 @@ globalThis.document = {
     assert.deepEqual(indexes.map((node) => nodeText(node)), ["1", "2", "1"], "live and closed tabs must number separately");
     const pinButtons = descendants(sidebar).filter((node) => node.classList.contains("workspace-tabs-sidebar-item-pin"));
     assert.equal(pinButtons.length, 3, "every ChatClub tab row must expose a pin control");
+    assert.equal(
+      descendants(sidebar).filter((node) => node.classList.contains("workspace-tabs-sidebar-item-pin-slot")).length,
+      3,
+      "default pin controls sit in the left slot"
+    );
+    assert.equal(
+      pinButtons.some((node) => String(node.parentNode?.className || "").includes("workspace-tabs-sidebar-item-actions")),
+      false,
+      "left pin must leave the right hover overlay"
+    );
     const pocketButtons = descendants(sidebar).filter((node) => String(node.className || "").includes("workspace-tabs-sidebar-item-pocket"));
     assert.equal(pocketButtons.length, 3, "every ChatClub tab row must expose a save-to-Pocket control");
     const favicons = descendants(sidebar).filter((node) => node.classList.contains("chat-favicon-stack"));
@@ -920,9 +933,9 @@ globalThis.document = {
       .filter((node) => node.classList.contains("workspace-tabs-sidebar-item"));
     assert.equal(rows[0].classList.contains("is-pinned"), true);
     assert.equal(
-      descendants(rows[0]).some((node) => node.classList.contains("workspace-tabs-sidebar-item-pin-mark")),
+      descendants(rows[0]).some((node) => String(node.className || "").includes("workspace-tabs-sidebar-item-pin") && String(node.className || "").includes("is-pinned")),
       true,
-      "pinned rows must keep a visible pin mark"
+      "pinned rows must keep a visible left pin control"
     );
     const indexes = descendants(sidebar).filter((node) => node.classList.contains("workspace-tabs-sidebar-item-index"));
     assert.deepEqual(indexes.map((node) => nodeText(node)), ["1", "2", "1"]);
@@ -1073,8 +1086,13 @@ globalThis.document = {
     fixture.api.setOpen(true);
     const sidebar = fixture.api.renderSidebar();
     assert.ok(
+      descendants(sidebar).some((node) => String(node.className || "").includes("workspace-tabs-sidebar-search-toggle")),
+      "the sidebar must keep a collapsed search button"
+    );
+    assert.equal(
       descendants(sidebar).some((node) => node.classList.contains("workspace-tabs-sidebar-search-input")),
-      "the sidebar must keep a title search field"
+      false,
+      "the search field must stay collapsed until opened"
     );
     fixture.api.setSearchQuery("Closed");
     const filtered = fixture.api.renderSidebar();
@@ -1097,9 +1115,10 @@ globalThis.document = {
     const grid = Object.assign(new FakeNode("div"), { className: "main-grid" });
     shell.append(grid);
     fixture.api.syncSidebar(shell);
+    fixture.api.openSearch();
     const sidebar = descendants(shell).find((node) => node.classList.contains("workspace-tabs-sidebar"));
     const field = descendants(sidebar).find((node) => node.classList.contains("workspace-tabs-sidebar-search-input"));
-    assert.ok(field, "the connected sidebar must expose a live search input");
+    assert.ok(field, "opening search must expose a live search input");
     field.dispatch("keydown", { key: "a", keyCode: 229, isComposing: false });
     field.value = "a";
     field.dispatch("input", { isComposing: true });
@@ -1127,6 +1146,11 @@ globalThis.document = {
     assert.equal(fixture.api.isOpen(), false);
     fixture.api.openSearch();
     assert.equal(fixture.api.isOpen(), true, "Search must open the ChatClub Tabs sidebar");
+    const opened = fixture.api.renderSidebar();
+    assert.ok(
+      descendants(opened).some((node) => node.classList.contains("workspace-tabs-sidebar-search-input")),
+      "Search must expand the title search field"
+    );
   }
 
   {
