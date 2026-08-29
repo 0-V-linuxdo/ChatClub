@@ -215,7 +215,9 @@ Packaged `userscripts/*.js` stay JS-only. `api.collectOfficialCandidate` remains
 3. MAIN pipeline `collectOfficialStage(..., { wait: false })`; isolated already waited.
 4. MAIN `collectOfficialCandidate` uses `{ wait: true }` so MAIN-world authors calling the helper independently still honor `officialRuleWaitMs`.
 
-Probe results include `stage` and `officialHits` even when official JSON misses and JS wins. Persist last-run under `chrome.storage.local` key `chatclub.summaryCollectorLastRun.v1`, not `options`.
+Probe results include `stage`, `officialHits` (including `droppedNoRole` / `droppedNoText`), and `waitMsApplied` even when official JSON misses and JS wins. Persist last-run as a per-collector map under `chrome.storage.local` key `chatclub.summaryCollectorLastRun.v1`, not `options`; migrate a legacy single record on read. Catalog copy must distinguish working collectors from official-slot placeholders (`userscriptLength === 10`); do not treat those stubs as ChatGPT-class collectors.
+
+Custom User Scripts status uses `permissions.contains({ permissions: ["userScripts"] })` for the optional-permission bit and `userScripts.getScripts()` as the true availability probe (Chrome 138+ Allow User Scripts). `permissions.contains` alone is not that toggle. Do not open `chrome://` URLs; copy may mention `chrome://extensions` as plain text.
 
 ### Built-in Delete Site behavior
 

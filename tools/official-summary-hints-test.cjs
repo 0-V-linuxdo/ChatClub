@@ -183,6 +183,7 @@ const path = require("node:path");
     assert.deepEqual(officialFirst.messages, officialMessages, "JSON-first pipeline must return official turns before page-world JS");
     assert.equal(officialFirst.stage, "official");
     assert.equal(officialFirst.officialHits, null, "legacy collector fallback may omit hits");
+    assert.equal(officialFirst.waitMsApplied, 0, "successful first inspect must not apply officialRuleWaitMs");
     assert.equal(pageCalls, 0, "pageWorldFirst must not run when official JSON already collected a conversation");
     assert.equal(runnerCalls, 0, "packaged JS must not run when official JSON already collected a conversation");
     assert.equal(officialCalls, 1, "official JSON is a pipeline stage, not a runner helper");
@@ -253,16 +254,19 @@ const path = require("node:path");
     assert.deepEqual(waited.messages, packagedMessages, "JS must still collect after official JSON misses");
     assert.equal(waited.stage, "isolatedJs");
     assert.deepEqual(waited.officialHits, missedHits, "probe must keep official hits when JS wins");
+    assert.equal(waited.waitMsApplied, 60000, "isolated pipeline must report the applied officialRuleWaitMs");
     assert.equal(waitSleeps, 1, "isolated pipeline must wait once for officialRuleWaitMs");
     assert.equal(waitOfficialCalls, 3, "pipeline wait plus non-waiting candidate must inspect official JSON three times");
 
-    const { summaryConfigHasCollector, SUMMARY_SITE_CONFIGS } = await import("../shared/summary-sites.js");
+    const { summaryConfigHasCollector, summaryConfigIsOfficialSlotStub, SUMMARY_SITE_CONFIGS } = await import("../shared/summary-sites.js");
     assert.equal(summaryConfigHasCollector({ userscriptFile: "poe.js" }), true);
-    for (const id of ["perplexity", "kimi", "kimiAi", "doubao", "dola", "qwen", "qianwen"]) {
+    for (const id of ["perplexity", "kimi", "kimiAi", "doubao", "dola", "qwen", "qianwen", "poe", "aiStudio", "lechat"]) {
       const site = SUMMARY_SITE_CONFIGS.find((item) => item.id === id);
       assert.equal(site?.userscriptLength, 10, `${id} must ship as an official-slot stub`);
       assert.equal(summaryConfigHasCollector(site), true);
+      assert.equal(summaryConfigIsOfficialSlotStub(site), true, `${id} catalog copy must stay an official-slot placeholder`);
     }
+    assert.equal(summaryConfigIsOfficialSlotStub(SUMMARY_SITE_CONFIGS.find((item) => item.id === "chatgpt")), false);
     assert.equal(summaryConfigHasCollector({
       officialRuleHints: { messageRoot: [".message"], userRoot: [".user"], assistantRoot: [".assistant"] }
     }), true, "filled official slots are a collector even without a userscript file");
@@ -283,8 +287,14 @@ const path = require("node:path");
     assert.match(mainSource, /collectOfficialCandidate: async \(\) => \(await collectOfficialStage\(config, \{ wait: true \}\)\)\.messages/);
     const summarySettingsSource = fs.readFileSync(path.join(__dirname, "../app/settings/summary.js"), "utf8");
     assert.match(summarySettingsSource, /chatclub\.summaryCollectorLastRun\.v1/);
+    assert.match(summarySettingsSource, /normalizeCollectorLastRunMap/);
+    assert.match(summarySettingsSource, /waitMsApplied/);
     assert.doesNotMatch(summarySettingsSource, /chrome:\/\//);
     assert.doesNotMatch(fs.readFileSync(path.join(__dirname, "../app/settings/topic-deletion.js"), "utf8"), /chrome:\/\//);
+    const extensionApiSource = fs.readFileSync(path.join(__dirname, "../shared/extension-api.js"), "utf8");
+    assert.match(extensionApiSource, /export async function userScriptsAvailability/);
+    assert.match(extensionApiSource, /\["userScripts", "getScripts"\]/);
+    assert.match(fs.readFileSync(path.join(__dirname, "../app/runtime.js"), "utf8"), /refreshUserScriptsPermission[\s\S]*userScriptsAvailability/);
 
     console.log("official Summary selector hints remain strict, role-safe, and DOM-identity based: ok");
   } finally {

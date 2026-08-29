@@ -1,4 +1,4 @@
-import { SUMMARY_SITE_CONFIGS, loadBuiltInSummarySource } from "../../shared/summary-sites.js";
+import { SUMMARY_SITE_CONFIGS, loadBuiltInSummarySource, summaryConfigIsOfficialSlotStub } from "../../shared/summary-sites.js";
 import { t } from "../../shared/i18n.js";
 import { createId } from "../../shared/storage-schema.js";
 import { storageGet, storageSet } from "../../shared/storage-adapter.js";
@@ -153,9 +153,9 @@ export function createSummarySettingsSection(ctx) {
   }
 
   function summaryCollectorSourceLabel(config) {
-    return summaryCollectorSourceMode(config) === "custom"
-      ? t("summary.collector.customNoAutoUpdate")
-      : t("summary.collector.builtInAutoUpdate");
+    if (summaryCollectorSourceMode(config) === "custom") return t("summary.collector.customNoAutoUpdate");
+    if (summaryConfigIsOfficialSlotStub(config)) return t("summary.collector.officialSlot");
+    return t("summary.collector.builtInAutoUpdate");
   }
 
   const SUMMARY_COLLECTOR_LAST_RUN_KEY = "chatclub.summaryCollectorLastRun.v1";
@@ -184,30 +184,60 @@ export function createSummarySettingsSection(ctx) {
       turnCount: Math.max(0, Number(value.turnCount) || 0),
       stage: String(value.stage || "none"),
       officialHits: normalizeOfficialHits(value.officialHits),
+      waitMsApplied: Math.max(0, Number(value.waitMsApplied) || 0),
       error: String(value.error || ""),
       href: String(value.href || ""),
       at: Number(value.at) || 0
     };
   }
 
+  function isCollectorLastRunRecord(value) {
+    return Boolean(normalizeCollectorLastRun(value)) && !Object.values(value || {}).some((item) => (
+      item && typeof item === "object" && !Array.isArray(item) && item !== value.officialHits && normalizeCollectorLastRun(item)
+    ));
+  }
+
+  function normalizeCollectorLastRunMap(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+    if (isCollectorLastRunRecord(value)) {
+      const run = normalizeCollectorLastRun(value);
+      return run ? { [run.collectorId]: run } : {};
+    }
+    const map = {};
+    for (const [key, item] of Object.entries(value)) {
+      const run = normalizeCollectorLastRun(item && typeof item === "object" && !Array.isArray(item)
+        ? { ...item, collectorId: item.collectorId || key }
+        : null);
+      if (run) map[run.collectorId] = run;
+    }
+    return map;
+  }
+
+  function lastRunForCollector(id) {
+    const map = normalizeCollectorLastRunMap(state.summaryCollectorLastRun);
+    return map[String(id || "")] || null;
+  }
+
   async function loadCollectorLastRun() {
     if (lastRunHydrated) return false;
     lastRunHydrated = true;
     try {
-      const stored = normalizeCollectorLastRun(await storageGet(SUMMARY_COLLECTOR_LAST_RUN_KEY));
-      if (stored && !state.summaryCollectorLastRun) {
-        state.summaryCollectorLastRun = stored;
-        return true;
-      }
+      const stored = normalizeCollectorLastRunMap(await storageGet(SUMMARY_COLLECTOR_LAST_RUN_KEY));
+      const current = normalizeCollectorLastRunMap(state.summaryCollectorLastRun);
+      const next = { ...stored, ...current };
+      state.summaryCollectorLastRun = next;
+      return Object.keys(stored).length > 0;
     } catch {}
     return false;
   }
 
   async function persistCollectorLastRun(run) {
     const normalized = normalizeCollectorLastRun(run);
-    state.summaryCollectorLastRun = normalized;
+    const map = { ...normalizeCollectorLastRunMap(state.summaryCollectorLastRun) };
+    if (normalized) map[normalized.collectorId] = normalized;
+    state.summaryCollectorLastRun = map;
     if (!normalized) return;
-    try { await storageSet(SUMMARY_COLLECTOR_LAST_RUN_KEY, normalized); } catch {}
+    try { await storageSet(SUMMARY_COLLECTOR_LAST_RUN_KEY, map); } catch {}
   }
 
   function formatCollectorStage(stage) {
@@ -223,15 +253,18 @@ export function createSummarySettingsSection(ctx) {
       roots: normalized.conversationRoots,
       messages: normalized.messageRoots,
       user: normalized.user,
-      assistant: normalized.assistant
+      assistant: normalized.assistant,
+      droppedRole: normalized.droppedNoRole,
+      droppedText: normalized.droppedNoText
     });
   }
 
   function formatCollectorLastRun(run) {
     if (!run) return t("summary.collector.lastRunNone");
     const stage = formatCollectorStage(run.stage);
+    const wait = Number(run.waitMsApplied) > 0 ? t("summary.collector.waitMs", { ms: run.waitMsApplied }) : "";
     const hits = formatOfficialHits(run.officialHits);
-    const detail = [stage, hits].filter(Boolean).join(" · ");
+    const detail = [stage, wait, hits].filter(Boolean).join(" · ");
     if (run.ok) {
       const base = t("summary.collector.probeOk", { count: Number(run.turnCount) || 0 });
       return detail ? `${base} · ${detail}` : base;
@@ -239,6 +272,21 @@ export function createSummarySettingsSection(ctx) {
     if (run.error === "no-frame") return t("summary.collector.noActiveFrame");
     const fail = t("summary.collector.probeFail", { error: run.error || t("common.failed") });
     return detail ? `${fail} · ${detail}` : fail;
+  }
+
+  function userScriptsPermissionStatusCopy(status) {
+    const permission = status && typeof status === "object" ? status.permission === true : status === true;
+    const available = status && typeof status === "object" ? status.available === true : permission;
+    return {
+      permission,
+      available,
+      text: !permission
+        ? t("userscripts.permissionStatusMissing")
+        : available
+          ? t("userscripts.permissionStatusAvailable")
+          : t("userscripts.permissionStatusToggleOff"),
+      hideRequest: permission
+    };
   }
 
   function summaryCollectorRunModeLabel(mode) {
@@ -326,14 +374,13 @@ export function createSummarySettingsSection(ctx) {
       )
     );
     async function refreshPermissionStatus() {
-      let granted = false;
+      let status = false;
       if (typeof userScriptsPermissionContains === "function") {
-        try { granted = await userScriptsPermissionContains(); } catch { granted = false; }
+        try { status = await userScriptsPermissionContains(); } catch { status = false; }
       }
-      permissionStatus.textContent = granted
-        ? t("userscripts.permissionStatusGranted")
-        : t("userscripts.permissionStatusMissing");
-      permissionRequest.hidden = granted;
+      const copy = userScriptsPermissionStatusCopy(status);
+      permissionStatus.textContent = copy.text;
+      permissionRequest.hidden = copy.hideRequest;
     }
     const syncSourceModeUi = () => {
       permissionNotice.hidden = sourceMode !== "custom";
@@ -349,11 +396,7 @@ export function createSummarySettingsSection(ctx) {
     const lastRunNode = el("small", {
       class: "summary-collector-last-run",
       "aria-live": "polite"
-    }, formatCollectorLastRun(
-      state.summaryCollectorLastRun?.collectorId === (config?.id || draft.id)
-        ? state.summaryCollectorLastRun
-        : null
-    ));
+    }, formatCollectorLastRun(lastRunForCollector(config?.id || draft.id)));
     const probeCurrentTab = probeSummaryCollector
       ? async () => {
         const timeout = Math.max(5000, Math.min(45000, Number(timeoutInput.value) || 24000));
@@ -380,9 +423,9 @@ export function createSummarySettingsSection(ctx) {
           ...result,
           at: Date.now()
         });
-        lastRunNode.textContent = formatCollectorLastRun(state.summaryCollectorLastRun);
+        lastRunNode.textContent = formatCollectorLastRun(lastRunForCollector(config?.id || draft.id));
         if (result?.ok) toast(t("summary.collector.probeOk", { count: Number(result.turnCount) || 0 }), "success");
-        else toast(formatCollectorLastRun(state.summaryCollectorLastRun), "error");
+        else toast(formatCollectorLastRun(lastRunForCollector(config?.id || draft.id)), "error");
       }
       : null;
     const save = async () => {
@@ -588,11 +631,7 @@ export function createSummarySettingsSection(ctx) {
           el("small", {}, t("summary.collector.timeoutMs", { count: config.userscriptTimeoutMs || 24000 }))
         )),
         field(t("summary.collector.lastRun"), el("small", {},
-          formatCollectorLastRun(
-            state.summaryCollectorLastRun?.collectorId === config.id
-              ? state.summaryCollectorLastRun
-              : null
-          )
+          formatCollectorLastRun(lastRunForCollector(config.id))
         ))
       )
     );

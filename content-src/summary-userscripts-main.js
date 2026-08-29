@@ -66,7 +66,7 @@ function installSummaryMainRuntime() {
 
   async function collectOfficialStage(config, { wait = true } = {}) {
     if (!officialRuleConfigMatchesHref(config, String(location.href || ""))) {
-      return { messages: null, hits: null };
+      return { messages: null, hits: null, waitMsApplied: 0 };
     }
     const inspectOnce = () => inspectOfficialSummaryCollection(config, {
       qsa,
@@ -76,13 +76,16 @@ function installSummaryMainRuntime() {
     });
     let inspection = inspectOnce();
     const waitMs = wait ? Math.max(0, Math.min(60000, Number(config.officialRuleWaitMs) || 0)) : 0;
+    let waitMsApplied = 0;
     if (!hasUserAndAssistant(inspection.messages || []) && waitMs > 0) {
       await sleep(waitMs);
+      waitMsApplied = waitMs;
       inspection = inspectOnce();
     }
     return {
       messages: hasUserAndAssistant(inspection.messages || []) ? merge(inspection.messages) : null,
-      hits: inspection.hits
+      hits: inspection.hits,
+      waitMsApplied
     };
   }
 
@@ -135,17 +138,19 @@ function installSummaryMainRuntime() {
         messages: hasUserAndAssistant(messages) ? messages : [],
         rawMessageCount: official.messages.length,
         stage: "official",
-        officialHits: official.hits
+        officialHits: official.hits,
+        waitMsApplied: official.waitMsApplied || 0
       };
     }
     const registry = summaryRunners.scripts;
     const runner = registry[config.id] || registry[config.userscriptFile];
-    if (!runner) return { messages: [], stage: "none", officialHits: official.hits };
+    if (!runner) return { messages: [], stage: "none", officialHits: official.hits, waitMsApplied: official.waitMsApplied || 0 };
     const result = await runSummaryRunner(config, runner);
     return {
       ...result,
       stage: result?.messages?.length ? "pageWorld" : "none",
-      officialHits: official.hits
+      officialHits: official.hits,
+      waitMsApplied: official.waitMsApplied || 0
     };
   }
 

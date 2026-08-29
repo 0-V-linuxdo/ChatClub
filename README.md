@@ -33,18 +33,20 @@
 | DeepSeek | https://chat.deepseek.com/ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Kagi Assistant | https://assistant.kagi.com/ | ✓ | ✓ | ✓ | ✓ |  |
 | Notion AI | https://app.notion.com/ai | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Perplexity | https://www.perplexity.ai/ | ✓ | ✓ |  |  |  |
-| Poe | https://poe.com/ | ✓ | ✓ | ✓ |  |  |
-| Kimi.com | https://www.kimi.com/ | ✓ | ✓ |  |  |  |
-| Kimi.ai | https://www.kimi.ai/ | ✓ | ✓ |  |  |  |
-| DouBao | https://www.doubao.com/ | ✓ | ✓ |  |  |  |
-| Dola | https://www.dola.com/chat/ | ✓ | ✓ |  |  |  |
-| Qwen | https://chat.qwen.ai/ | ✓ | ✓ |  |  |  |
-| 千问 | https://www.qianwen.com/ | ✓ | ✓ |  |  |  |
+| Perplexity | https://www.perplexity.ai/ | ✓ | slot |  |  |  |
+| Poe | https://poe.com/ | ✓ | slot | ✓ |  |  |
+| Kimi.com | https://www.kimi.com/ | ✓ | slot |  |  |  |
+| Kimi.ai | https://www.kimi.ai/ | ✓ | slot |  |  |  |
+| DouBao | https://www.doubao.com/ | ✓ | slot |  |  |  |
+| Dola | https://www.dola.com/chat/ | ✓ | slot |  |  |  |
+| Qwen | https://chat.qwen.ai/ | ✓ | slot |  |  |  |
+| 千问 | https://www.qianwen.com/ | ✓ | slot |  |  |  |
 | TypingMind | https://setapp.typingcloud.com/ | ✓ | ✓ |  |  |  |
 | LobeHub | https://app.lobehub.com/ | ✓ | ✓ |  |  |  |
-| AI Studio | https://aistudio.google.com/ |  | ✓ | ✓ |  |  |
-| LeChat | https://chat.mistral.ai/ |  | ✓ | ✓ |  |  |
+| AI Studio | https://aistudio.google.com/ |  | slot | ✓ |  |  |
+| LeChat | https://chat.mistral.ai/ |  | slot | ✓ |  |  |
+
+> Summary 列中的 `✓` 表示已有可采集的内置脚本；`slot` 表示工作区站点已预留官方规则槽位，尚无 ChatGPT 级采集器。填入签名选择器或自定义脚本后才会真正采集。
 
 ## 安装
 

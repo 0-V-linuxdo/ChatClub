@@ -144,3 +144,19 @@ export function permissionsContains(permissions) {
 export function permissionsRequest(permissions) {
   return callPromise(["permissions", "request"], [permissions]);
 }
+
+export async function userScriptsAvailability() {
+  const permission = await permissionsContains({ permissions: ["userScripts"] }).catch(() => false);
+  if (!permission) return { permission: false, available: false };
+  const scripts = rootApi()?.userScripts;
+  if (typeof scripts?.getScripts !== "function") {
+    return { permission: true, available: typeof scripts?.execute === "function" };
+  }
+  try {
+    await callPromise(["userScripts", "getScripts"], []);
+    return { permission: true, available: true };
+  } catch {
+    return { permission: true, available: false };
+  }
+}
+

@@ -62,7 +62,7 @@ export function createSummaryCapability(deps = {}) {
 
   async function collectOfficialStage(config, data, { wait = true } = {}) {
     if (!officialRuleConfigMatchesHref(config, String(location.href || ""))) {
-      return { messages: null, hits: null };
+      return { messages: null, hits: null, waitMsApplied: 0 };
     }
     const inspectOnce = () => {
       if (typeof inspectOfficialSummaryCollection === "function") {
@@ -89,14 +89,17 @@ export function createSummaryCapability(deps = {}) {
     };
     let inspection = inspectOnce();
     const waitMs = wait ? Math.max(0, Math.min(60000, Number(config.officialRuleWaitMs) || 0)) : 0;
+    let waitMsApplied = 0;
     if (!hasUserAndAssistant(inspection.messages) && waitMs > 0 && typeof sleep === "function") {
       await sleep(waitMs);
+      waitMsApplied = waitMs;
       assertSummaryTargetCurrent(data);
       inspection = inspectOnce();
     }
     return {
       messages: hasUserAndAssistant(inspection.messages) ? inspection.messages : null,
-      hits: inspection.hits
+      hits: inspection.hits,
+      waitMsApplied
     };
   }
 
@@ -135,7 +138,8 @@ export function createSummaryCapability(deps = {}) {
         messages: hasUserAndAssistant(customMessages) ? customMessages : [],
         rawMessageCount: Number(customResult?.rawMessageCount) || customMessages.length,
         stage: "custom",
-        officialHits: null
+        officialHits: null,
+        waitMsApplied: 0
       });
     }
     const official = await collectOfficialStage(config, data, { wait: true });
@@ -144,7 +148,8 @@ export function createSummaryCapability(deps = {}) {
         messages: official.messages,
         rawMessageCount: official.messages.length,
         stage: "official",
-        officialHits: official.hits
+        officialHits: official.hits,
+        waitMsApplied: official.waitMsApplied || 0
       });
     }
     let registry = {};
@@ -158,7 +163,8 @@ export function createSummaryCapability(deps = {}) {
           messages: pageMessages,
           rawMessageCount: Number(pageResult.rawMessageCount) || pageMessages.length,
           stage: pageResult?.stage || "pageWorld",
-          officialHits: official.hits
+          officialHits: official.hits,
+          waitMsApplied: official.waitMsApplied || 0
         });
       }
     }
@@ -168,7 +174,8 @@ export function createSummaryCapability(deps = {}) {
         messages: [],
         rawMessageCount: 0,
         stage: "none",
-        officialHits: official.hits
+        officialHits: official.hits,
+        waitMsApplied: official.waitMsApplied || 0
       });
     }
     const result = await runner(summaryRunnerApi(config, data));
@@ -177,7 +184,8 @@ export function createSummaryCapability(deps = {}) {
       messages: hasUserAndAssistant(messages) ? messages : [],
       rawMessageCount: messages.length,
       stage: "isolatedJs",
-      officialHits: official.hits
+      officialHits: official.hits,
+      waitMsApplied: official.waitMsApplied || 0
     });
   }
 

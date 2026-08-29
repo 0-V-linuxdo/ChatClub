@@ -1,6 +1,6 @@
 import {
   currentExtensionTab, currentExtensionTabId, extensionApi, permissionsContains,
-  permissionsRequest, requestBackground, runtimeGetUrl, runtimeRequest
+  permissionsRequest, requestBackground, runtimeGetUrl, runtimeRequest, userScriptsAvailability
 } from "../shared/extension-api.js";
 import { APP_VERSION } from "../shared/constants.js";
 import { FrameRuntimePort } from "../shared/frame-rpc.js";
@@ -624,7 +624,7 @@ function ensureSettingsController() {
           applyPreferredModels: applyPreferredModelsToFrames,
           applyTheme,
           syncI18nLanguage,
-          requestUserScriptsPermission: requestUserScriptsAccess, userScriptsPermissionContains: refreshUserScriptsPermission, probeSummaryCollector: async (config) => (await ensureSummaryController()).probeCollectorOnActiveFrame(config),
+          requestUserScriptsPermission: requestUserScriptsAccess, userScriptsPermissionContains: async () => { await refreshUserScriptsPermission(); return userScriptsAvailability(); }, probeSummaryCollector: async (config) => (await ensureSummaryController()).probeCollectorOnActiveFrame(config),
           functionalAnomalyLog: functionalAnomalyController,
           hydrateImportedLayoutIfNeeded: workspaceController.hydrateImportedLayoutIfNeeded,
           reconcileAppCatalog: workspaceController.reconcileAppCatalog,

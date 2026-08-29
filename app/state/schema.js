@@ -68,7 +68,7 @@ export function createAppState() {
     shortcutSettingsTab: "topbar",
     summaryCollectorEditingId: "",
     summaryCollectorDragId: "",
-    summaryCollectorLastRun: null,
+    summaryCollectorLastRun: {},
     messageNavigatorSiteExpandedId: "",
     messageNavigatorSettingsTab: "effects",
     topicDeleteSiteExpandedId: "",

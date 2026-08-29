@@ -68,13 +68,13 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "e6f4af96a2e4a26e27bf6835a2fe1fe94197ed37a71412ff4759ec49a9acc893";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "d11645278ba9707c736b1180a000c5addc3befb49e3a7a74a8c7c5dfaae04463";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "706f283ebb19bfaab1044a06a9e200ec6aab7abd869cdf431401f3991b789180";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "ff856eafe3d407b2ecedd684ee0cc3e8c78bc3406d38d194f1f5a05c433e545f";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.ff856eafe3d407b2ecedd684ee0cc3e8c78bc3406d38d194f1f5a05c433e545f";
-  var CONTENT_RUNTIME_SUMMARY_BRIDGE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-bridge.js", "entryPath": "content-src/content-summary-bridge.js", "sourceSha256": "0c182b2c3a8780ec43a795f96a2a5690acb1d157186ca447b740135c6ddd9808", "implementationSha256": "ad362108d4b9ceca1183ada503cb7899ab679b741294a4c60962d1d94111da45", "implementationVersion": "2026.07.16.2+bundle.ad362108d4b9ceca1183ada503cb7899ab679b741294a4c60962d1d94111da45" });
-  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "2eadf4a23d7736ef141f0c678e4d0248d02f44832fb32f6f79f9f453caad821b", "implementationSha256": "f1bcddaebfdf9e719010d67f854c129a8067233767fdb3b740220523ae4caa69", "implementationVersion": "2026.07.16.2+bundle.f1bcddaebfdf9e719010d67f854c129a8067233767fdb3b740220523ae4caa69" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "a899ca8d3ba7da8a116d20159061fa9f7ee1228f3c6897641f9bdb5d88554bda";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.a899ca8d3ba7da8a116d20159061fa9f7ee1228f3c6897641f9bdb5d88554bda";
+  var CONTENT_RUNTIME_SUMMARY_BRIDGE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-bridge.js", "entryPath": "content-src/content-summary-bridge.js", "sourceSha256": "1fcc0c6e495bff94339157afaed2b7dc69e835943575c8fb3f856ddeddc074f8", "implementationSha256": "18cd16a91e66a4ee0f47424d8fd52f1cbbafa81fe385999c64ebf43544f11149", "implementationVersion": "2026.07.16.2+bundle.18cd16a91e66a4ee0f47424d8fd52f1cbbafa81fe385999c64ebf43544f11149" });
+  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "ee14fa8dd0899398ea4acfa174273c1accb78bf7a0e5267d444e0c458c2aa8f5", "implementationSha256": "50d63cbd0fce800cd543a41e30045204da64d76b06510ab14b3ae42a22b9ca09", "implementationVersion": "2026.07.16.2+bundle.50d63cbd0fce800cd543a41e30045204da64d76b06510ab14b3ae42a22b9ca09" });
   var CONTENT_RUNTIME_SUMMARY_ISOLATED_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts.js", "entryPath": "content-src/summary-userscripts.js", "sourceSha256": "8f43e67ae6390a0de15c167427516661996917651ce1bba84e6d9c39b544f1e3", "implementationSha256": "77a9a2c0483960480a730fac8313033aee8f3a8bdf1955311486ef9c5485f2b2", "implementationVersion": "2026.07.16.2+bundle.77a9a2c0483960480a730fac8313033aee8f3a8bdf1955311486ef9c5485f2b2" });
 
   // shared/background-request-core.js
@@ -1619,7 +1619,7 @@ ${value}`);
     }
     async function collectOfficialStage(config, data, { wait = true } = {}) {
       if (!officialRuleConfigMatchesHref(config, String(location.href || ""))) {
-        return { messages: null, hits: null };
+        return { messages: null, hits: null, waitMsApplied: 0 };
       }
       const inspectOnce = () => {
         if (typeof inspectOfficialSummaryCollection2 === "function") {
@@ -1646,14 +1646,17 @@ ${value}`);
       };
       let inspection = inspectOnce();
       const waitMs = wait ? Math.max(0, Math.min(6e4, Number(config.officialRuleWaitMs) || 0)) : 0;
+      let waitMsApplied = 0;
       if (!hasUserAndAssistant2(inspection.messages) && waitMs > 0 && typeof sleep2 === "function") {
         await sleep2(waitMs);
+        waitMsApplied = waitMs;
         assertSummaryTargetCurrent(data);
         inspection = inspectOnce();
       }
       return {
         messages: hasUserAndAssistant2(inspection.messages) ? inspection.messages : null,
-        hits: inspection.hits
+        hits: inspection.hits,
+        waitMsApplied
       };
     }
     function summaryRunnerApi(config, data) {
@@ -1690,7 +1693,8 @@ ${value}`);
           messages: hasUserAndAssistant2(customMessages) ? customMessages : [],
           rawMessageCount: Number(customResult?.rawMessageCount) || customMessages.length,
           stage: "custom",
-          officialHits: null
+          officialHits: null,
+          waitMsApplied: 0
         });
       }
       const official = await collectOfficialStage(config, data, { wait: true });
@@ -1699,7 +1703,8 @@ ${value}`);
           messages: official.messages,
           rawMessageCount: official.messages.length,
           stage: "official",
-          officialHits: official.hits
+          officialHits: official.hits,
+          waitMsApplied: official.waitMsApplied || 0
         });
       }
       let registry = {};
@@ -1716,7 +1721,8 @@ ${value}`);
             messages: pageMessages,
             rawMessageCount: Number(pageResult.rawMessageCount) || pageMessages.length,
             stage: pageResult?.stage || "pageWorld",
-            officialHits: official.hits
+            officialHits: official.hits,
+            waitMsApplied: official.waitMsApplied || 0
           });
         }
       }
@@ -1726,7 +1732,8 @@ ${value}`);
           messages: [],
           rawMessageCount: 0,
           stage: "none",
-          officialHits: official.hits
+          officialHits: official.hits,
+          waitMsApplied: official.waitMsApplied || 0
         });
       }
       const result = await runner(summaryRunnerApi(config, data));
@@ -1735,7 +1742,8 @@ ${value}`);
         messages: hasUserAndAssistant2(messages) ? messages : [],
         rawMessageCount: messages.length,
         stage: "isolatedJs",
-        officialHits: official.hits
+        officialHits: official.hits,
+        waitMsApplied: official.waitMsApplied || 0
       });
     }
     async function getSummaryRuntimeState() {

@@ -680,18 +680,20 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
       const result = await testCurrentTab(component.componentKey);
       const stage = String(result?.stage || "none");
       const hits = result?.officialHits;
+      const waitMs = Math.max(0, Number(result?.waitMsApplied) || 0);
       const hitText = hits
-        ? ` · roots ${Number(hits.conversationRoots) || 0}/${Number(hits.messageRoots) || 0} u${Number(hits.user) || 0}/a${Number(hits.assistant) || 0}`
+        ? ` · roots ${Number(hits.conversationRoots) || 0}/${Number(hits.messageRoots) || 0} u${Number(hits.user) || 0}/a${Number(hits.assistant) || 0} drop ${Number(hits.droppedNoRole) || 0}/${Number(hits.droppedNoText) || 0}`
         : "";
+      const waitText = waitMs > 0 ? ` · wait ${waitMs}ms` : "";
       if (result?.ok) {
-        const label = `${copy.testCurrentTab}: ${Number(result.turnCount) || 0} · ${stage}${hitText}`;
+        const label = `${copy.testCurrentTab}: ${Number(result.turnCount) || 0} · ${stage}${hitText}${waitText}`;
         componentProbeResults.set(component.componentKey, label);
         notify(label, "success");
       } else {
         const error = result?.error === "unsupported"
           ? copy.testCurrentTabUnsupported
           : (result?.error || copy.statusError);
-        const label = `${error} · ${stage}${hitText}`;
+        const label = `${error} · ${stage}${hitText}${waitText}`;
         componentProbeResults.set(component.componentKey, label);
         notify(label, "error");
       }

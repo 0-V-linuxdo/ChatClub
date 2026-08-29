@@ -152,6 +152,7 @@ class FakeNode {
 }
 
 function findNode(rootNode, predicate) {
+  if (!rootNode) return null;
   if (predicate(rootNode)) return rootNode;
   for (const child of rootNode.children || []) {
     const match = findNode(child, predicate);
@@ -408,6 +409,192 @@ globalThis.fetch = async (sourceUrl) => ({
   scriptEditor = findNode(modalRoot(), (node) => node.classList?.contains("settings-code-textarea"));
   assert.equal(notice.hidden, false, "a new custom Delete Site script must show the permission notice");
   assert.equal(scriptEditor.readOnly, false);
+  closeModalFixture();
+
+  const poe = SUMMARY_SITE_CONFIGS.find((item) => item.id === "poe");
+  assert.ok(poe);
+  const { summaryConfigIsOfficialSlotStub } = await import(moduleUrl("shared/summary-sites.js"));
+  assert.equal(summaryConfigIsOfficialSlotStub(poe), true);
+  assert.equal(summaryConfigIsOfficialSlotStub(SUMMARY_SITE_CONFIGS[0]), false);
+  assert.equal(summaryConfigIsOfficialSlotStub({ ...poe, sourceMode: "custom", builtIn: false, customUserscript: "return [];" }), false);
+  assert.equal(i18n.t("summary.collector.officialSlot"), "Official-slot placeholder (not a ChatGPT-class collector).");
+  assert.match(summarySource, /summaryConfigIsOfficialSlotStub/);
+  assert.match(i18n.t("summary.collectors.desc"), /Official-slot placeholders/);
+  assert.match(i18n.t("userscripts.permissionStatusToggleOff"), /chrome:\/\/extensions/);
+  assert.doesNotMatch(summarySource, /chrome:\/\//);
+  assert.doesNotMatch(topicSource, /chrome:\/\//);
+
+  const lastRunStore = {};
+  const previousChrome = globalThis.chrome;
+  globalThis.chrome = {
+    runtime: {},
+    storage: {
+      local: {
+        get(key, cb) {
+          const name = typeof key === "string" ? key : Object.keys(key || {})[0];
+          cb(name && name in lastRunStore ? { [name]: lastRunStore[name] } : {});
+        },
+        set(value, cb) {
+          Object.assign(lastRunStore, value);
+          cb?.();
+        }
+      }
+    },
+    permissions: {
+      contains(_query, cb) { cb(true); }
+    },
+    userScripts: {
+      getScripts(filter, cb) {
+        const done = typeof filter === "function" ? filter : cb;
+        done?.([]);
+      }
+    }
+  };
+  const { userScriptsAvailability } = await import(moduleUrl("shared/extension-api.js"));
+  assert.deepEqual(await userScriptsAvailability(), { permission: true, available: true });
+  globalThis.chrome.userScripts.getScripts = (filter, cb) => {
+    globalThis.chrome.runtime.lastError = { message: "User Scripts API is unavailable" };
+    const done = typeof filter === "function" ? filter : cb;
+    done?.();
+  };
+  assert.deepEqual(await userScriptsAvailability(), { permission: true, available: false });
+  delete globalThis.chrome.runtime.lastError;
+  globalThis.chrome.userScripts = { execute() {} };
+  assert.deepEqual(await userScriptsAvailability(), { permission: true, available: true });
+  globalThis.chrome.permissions.contains = (_query, cb) => cb(false);
+  assert.deepEqual(await userScriptsAvailability(), { permission: false, available: false });
+
+  const probeById = {
+    chatgpt: {
+      ok: true,
+      turnCount: 4,
+      stage: "official",
+      officialHits: {
+        conversationRoots: 1, messageRoots: 4, classified: 4, user: 2, assistant: 2,
+        droppedNoRole: 1, droppedNoText: 2
+      },
+      waitMsApplied: 900,
+      href: "https://chatgpt.com/",
+      error: ""
+    },
+    "custom-summary": {
+      ok: false,
+      turnCount: 0,
+      stage: "custom",
+      officialHits: null,
+      waitMsApplied: 0,
+      href: "https://example.test/",
+      error: "empty"
+    }
+  };
+  const mapState = stateModule.createAppState();
+  mapState.summarySettingsTab = "scripts";
+  mapState.options = rootState.options;
+  const mapPorts = stateModule.createFeatureStatePorts(mapState).settingsSections;
+  const mapSection = summaryModule.createSummarySettingsSection({
+    state: mapPorts.summary,
+    svgIcon,
+    notifyConfigReload: async () => {},
+    saveOptionsPatch: async () => mapState.options,
+    ensureUserScriptsPermission: async () => true,
+    probeSummaryCollector: async (config) => probeById[config.id] || probeById["custom-summary"],
+    userScriptsPermissionContains: async () => ({ permission: true, available: false })
+  });
+  const mapPane = mapSection.pane(() => {});
+  globalThis.document.body.replaceChildren(mapPane);
+
+  const customRow = findNode(mapPane, (node) => node.dataset?.collectorId === "custom-summary");
+  await settleEvent(findNode(customRow, (node) => node.getAttribute?.("aria-label") === "Edit").dispatch("click"));
+  notice = findNode(modalRoot(), (node) => node.dataset?.userscriptPermissionNotice === "summary");
+  await waitUntil(
+    () => findNode(notice, (node) => node.dataset?.userscriptPermissionStatus === "summary")?.textContent
+      === i18n.t("userscripts.permissionStatusToggleOff"),
+    "custom Summary editor must distinguish Allow User Scripts toggle-off from missing permission"
+  );
+  const toggleStatus = findNode(notice, (node) => node.dataset?.userscriptPermissionStatus === "summary");
+  assert.match(toggleStatus.textContent, /chrome:\/\/extensions/);
+  assert.equal(findNode(notice, (node) => node.dataset?.userscriptPermissionRequest === "summary").hidden, true);
+  assert.equal(findNode(notice, (node) => node.getAttribute?.("href")?.startsWith("chrome://")), null);
+  closeModalFixture();
+
+  const chatgptRow = findNode(mapPane, (node) => node.dataset?.collectorId === "chatgpt");
+  await settleEvent(findNode(chatgptRow, (node) => node.getAttribute?.("aria-label") === "Edit").dispatch("click"));
+  await waitUntil(modalRoot, "ChatGPT editor must open for probe");
+  await settleEvent(buttonWithText(modalRoot(), "Probe current tab").dispatch("click"));
+  await waitUntil(
+    () => findNode(modalRoot(), (node) => node.classList?.contains("summary-collector-last-run"))?.textContent.includes("wait 900ms"),
+    "ChatGPT last-run must include applied waitMs and dropped hits"
+  );
+  let lastRunNode = findNode(modalRoot(), (node) => node.classList?.contains("summary-collector-last-run"));
+  assert.match(lastRunNode.textContent, /Collected 4 turns/);
+  assert.match(lastRunNode.textContent, /dropped role 1\/text 2/);
+  closeModalFixture();
+
+  await settleEvent(findNode(customRow, (node) => node.getAttribute?.("aria-label") === "Edit").dispatch("click"));
+  await waitUntil(modalRoot, "custom collector editor must open for probe");
+  await settleEvent(buttonWithText(modalRoot(), "Probe current tab").dispatch("click"));
+  await waitUntil(
+    () => findNode(modalRoot(), (node) => node.classList?.contains("summary-collector-last-run"))?.textContent.includes("Probe failed: empty"),
+    "custom collector last-run must persist its own probe"
+  );
+  closeModalFixture();
+
+  await settleEvent(findNode(chatgptRow, (node) => node.getAttribute?.("aria-label") === "Edit").dispatch("click"));
+  await waitUntil(modalRoot, "ChatGPT editor must reopen with its own last-run");
+  await waitUntil(
+    () => findNode(modalRoot(), (node) => node.classList?.contains("summary-collector-last-run"))?.textContent.includes("Collected 4 turns"),
+    "probing another collector must not overwrite ChatGPT last-run"
+  );
+  lastRunNode = findNode(modalRoot(), (node) => node.classList?.contains("summary-collector-last-run"));
+  assert.match(lastRunNode.textContent, /wait 900ms/);
+  closeModalFixture();
+
+  const storedMap = lastRunStore["chatclub.summaryCollectorLastRun.v1"];
+  assert.equal(storedMap.chatgpt.turnCount, 4);
+  assert.equal(storedMap["custom-summary"].error, "empty");
+  assert.equal(storedMap.chatgpt.waitMsApplied, 900);
+
+  mapState.summaryCollectorLastRun = {};
+  const hydrateSection = summaryModule.createSummarySettingsSection({
+    state: mapPorts.summary,
+    svgIcon,
+    notifyConfigReload: async () => {},
+    saveOptionsPatch: async () => mapState.options,
+    ensureUserScriptsPermission: async () => true,
+    probeSummaryCollector: async () => probeById.chatgpt
+  });
+  hydrateSection.pane(() => {});
+  await waitUntil(
+    () => mapState.summaryCollectorLastRun?.chatgpt?.turnCount === 4,
+    "last-run hydrate must restore the per-collector map"
+  );
+  lastRunStore["chatclub.summaryCollectorLastRun.v1"] = {
+    collectorId: "chatgpt",
+    ok: true,
+    turnCount: 7,
+    stage: "isolatedJs",
+    officialHits: null,
+    waitMsApplied: 0,
+    error: "",
+    href: "https://chatgpt.com/",
+    at: 1
+  };
+  mapState.summaryCollectorLastRun = {};
+  const migrateSection = summaryModule.createSummarySettingsSection({
+    state: mapPorts.summary,
+    svgIcon,
+    notifyConfigReload: async () => {},
+    saveOptionsPatch: async () => mapState.options,
+    ensureUserScriptsPermission: async () => true
+  });
+  migrateSection.pane(() => {});
+  await waitUntil(
+    () => mapState.summaryCollectorLastRun?.chatgpt?.turnCount === 7,
+    "legacy single last-run records must migrate into the per-collector map"
+  );
+
+  if (previousChrome === undefined) delete globalThis.chrome;
+  else globalThis.chrome = previousChrome;
 
   console.log("userscript settings notice tests passed");
 })().finally(() => {

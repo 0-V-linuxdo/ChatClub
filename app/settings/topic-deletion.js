@@ -227,14 +227,18 @@ export function createTopicDeletionSettingsSection(ctx) {
       )
     );
     async function refreshPermissionStatus() {
-      let granted = false;
+      let status = false;
       if (typeof userScriptsPermissionContains === "function") {
-        try { granted = await userScriptsPermissionContains(); } catch { granted = false; }
+        try { status = await userScriptsPermissionContains(); } catch { status = false; }
       }
-      permissionStatus.textContent = granted
-        ? t("userscripts.permissionStatusGranted")
-        : t("userscripts.permissionStatusMissing");
-      permissionRequest.hidden = granted;
+      const permission = status && typeof status === "object" ? status.permission === true : status === true;
+      const available = status && typeof status === "object" ? status.available === true : permission;
+      permissionStatus.textContent = !permission
+        ? t("userscripts.permissionStatusMissing")
+        : available
+          ? t("userscripts.permissionStatusAvailable")
+          : t("userscripts.permissionStatusToggleOff");
+      permissionRequest.hidden = permission;
     }
     const syncSourceModeUi = () => {
       permissionNotice.hidden = currentSourceMode !== "custom";

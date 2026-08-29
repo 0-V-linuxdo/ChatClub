@@ -159,3 +159,11 @@ export function summaryConfigHasCollector(config = {}) {
     Array.isArray(value) && value.some((item) => String(item || "").trim())
   ));
 }
+
+export function summaryConfigIsOfficialSlotStub(config = {}) {
+  if (!config || typeof config !== "object") return false;
+  if ((config.sourceMode === "custom" || config.builtIn === false) && String(config.customUserscript || "").trim()) {
+    return false;
+  }
+  return Number(config.userscriptLength) === 10 && Boolean(String(config.userscriptFile || "").trim());
+}
