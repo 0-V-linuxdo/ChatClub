@@ -43,9 +43,7 @@ import {
   renderTabsSidebarDivider,
   renderTabsSidebarFolder,
   renderTabsSidebarGroup,
-  renderTabsSidebarHeader,
-  renderTabsSidebarItem,
-  renderTabsSidebarToolbar
+  renderTabsSidebarItem
 } from "./tabs-sidebar-item.js";
 import {
   uniqueChatFaviconSources,
@@ -1215,23 +1213,6 @@ export function createWorkspaceTabsSidebarController({
       closeOthers.disabled = true;
       closeOthers.setAttribute?.("disabled", "");
     }
-    return renderTabsSidebarHeader({
-      count: items.length,
-      countLabel: t("workspace.tabs.count", { count: items.length }),
-      title: t("workspace.tabs.title"),
-      cleanup: closeOthers
-    });
-  }
-
-  function closeSearch() {
-    searchComposing = false;
-    searchFocused = false;
-    searchQuery = "";
-    searchSelection = { start: 0, end: 0 };
-    if (lastShell?.isConnected) syncSidebar(lastShell);
-  }
-
-  function renderToolbar() {
     const newFolder = iconButton(
       t("workspace.tabs.newFolder"),
       createIcon("folderPlus"),
@@ -1256,36 +1237,14 @@ export function createWorkspaceTabsSidebarController({
     );
     sortButton.setAttribute?.("aria-haspopup", "menu");
     sortButton.setAttribute?.("aria-expanded", "false");
-    if (searchFocused || searchQuery) {
-      const searchClose = iconButton(
-        t("common.close"),
-        createIcon("x"),
-        (event) => {
-          event?.preventDefault?.();
-          event?.stopPropagation?.();
-          closeSearch();
-        },
-        "workspace-tabs-sidebar-search-close",
-        t("common.close")
-      );
-      searchClose.addEventListener?.("pointerdown", (event) => event?.preventDefault?.());
-      return renderTabsSidebarToolbar([renderSearchBar(), searchClose]);
-    }
-    const searchToggle = iconButton(
-      t("workspace.tabs.search"),
-      createIcon("search"),
-      (event) => {
-        event?.preventDefault?.();
-        event?.stopPropagation?.();
-        searchFocused = true;
-        if (lastShell?.isConnected) syncSidebar(lastShell);
-      },
-      "workspace-tabs-sidebar-search-toggle",
-      t("workspace.tabs.search"),
-      "",
-      "workspace.tabs.search"
+    return el("header", { class: "workspace-tabs-sidebar-header" },
+      el("span", {
+        class: "workspace-tabs-sidebar-count",
+        "aria-label": t("workspace.tabs.count", { count: items.length })
+      }, String(items.length)),
+      el("h2", { class: "workspace-tabs-sidebar-title" }, t("workspace.tabs.title")),
+      el("div", { class: "workspace-tabs-sidebar-header-actions" }, newFolder, sortButton, closeOthers)
     );
-    return renderTabsSidebarToolbar([searchToggle, sortButton, newFolder]);
   }
 
   function renderSidebarItem(item, index, nested = false) {
@@ -1391,10 +1350,7 @@ export function createWorkspaceTabsSidebarController({
         applySearchInput(value, false);
       },
       onFocus: () => { searchFocused = true; },
-      onBlur: () => {
-        searchFocused = false;
-        if (!searchQuery.trim() && lastShell?.isConnected) syncSidebar(lastShell);
-      }
+      onBlur: () => { searchFocused = false; }
     });
   }
 
@@ -1420,7 +1376,7 @@ export function createWorkspaceTabsSidebarController({
       style: { width: `${sidebarWidth}px` }
     },
     renderSidebarHeader(),
-    renderToolbar(),
+    renderSearchBar(),
     items.length || query || folders.length
       ? renderSidebarList()
       : el("div", { class: "workspace-tabs-sidebar-empty" }, t("workspace.tabs.empty")),
@@ -1622,8 +1578,7 @@ export function createWorkspaceTabsSidebarController({
     searchFocused = true;
     if (!open) return setOpen(true);
     if (lastShell?.isConnected) {
-      if (!lastShell.querySelector?.(".workspace-tabs-sidebar-search-input")) syncSidebar(lastShell);
-      else focusSearchField(lastShell);
+      focusSearchField(lastShell);
       return open;
     }
     render();

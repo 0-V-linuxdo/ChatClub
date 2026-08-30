@@ -334,37 +334,17 @@ button { cursor: pointer; }
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 16%, transparent);
 }
 
-.workspace-tabs-sidebar-header-actions,
-.workspace-tabs-sidebar-toolbar {
+.workspace-tabs-sidebar-header-actions {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
-}
-
-.workspace-tabs-sidebar-header-actions {
   gap: 6px;
   margin-left: auto;
 }
 
-.workspace-tabs-sidebar-header > .workspace-tabs-sidebar-cleanup {
-  margin-left: auto;
-}
-
-.workspace-tabs-sidebar-toolbar {
-  padding: 10px var(--space-2) var(--space-1);
-}
-
-.workspace-tabs-sidebar-toolbar.is-searching {
-  gap: var(--space-1);
-}
-
 .workspace-tabs-sidebar-cleanup,
 .workspace-tabs-sidebar-sort,
-.workspace-tabs-sidebar-new-folder,
-.workspace-tabs-sidebar-search-toggle,
-.workspace-tabs-sidebar-search-close {
+.workspace-tabs-sidebar-new-folder {
   flex: 0 0 auto;
   width: var(--ui-compact-height);
   height: var(--ui-compact-height);
@@ -377,9 +357,7 @@ button { cursor: pointer; }
 
 .workspace-tabs-sidebar-cleanup .svg-icon,
 .workspace-tabs-sidebar-sort .svg-icon,
-.workspace-tabs-sidebar-new-folder .svg-icon,
-.workspace-tabs-sidebar-search-toggle .svg-icon,
-.workspace-tabs-sidebar-search-close .svg-icon {
+.workspace-tabs-sidebar-new-folder .svg-icon {
   width: 18px;
   height: 18px;
   stroke-width: 2.15;
@@ -390,11 +368,7 @@ button { cursor: pointer; }
 .workspace-tabs-sidebar-sort:hover:not(:disabled),
 .workspace-tabs-sidebar-sort:focus-visible:not(:disabled),
 .workspace-tabs-sidebar-new-folder:hover:not(:disabled),
-.workspace-tabs-sidebar-new-folder:focus-visible:not(:disabled),
-.workspace-tabs-sidebar-search-toggle:hover:not(:disabled),
-.workspace-tabs-sidebar-search-toggle:focus-visible:not(:disabled),
-.workspace-tabs-sidebar-search-close:hover:not(:disabled),
-.workspace-tabs-sidebar-search-close:focus-visible:not(:disabled) {
+.workspace-tabs-sidebar-new-folder:focus-visible:not(:disabled) {
   color: var(--bg);
   background: var(--primary);
   border-color: var(--primary);
@@ -406,13 +380,13 @@ button { cursor: pointer; }
 }
 
 .workspace-tabs-sidebar-search {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: var(--space-2);
   min-width: 0;
   height: var(--ui-control-height);
-  margin: 0;
+  margin: 10px var(--space-2) var(--space-1);
   padding: 0 10px;
   border: 1px solid var(--line);
   border-radius: var(--ui-radius);

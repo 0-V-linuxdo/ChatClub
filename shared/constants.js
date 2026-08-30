@@ -10,7 +10,7 @@ import {
 } from "./notion-efforts.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-08-30｜08:05:51」";
+export const APP_VERSION = "「2026-08-30｜23:17:35」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -280,7 +280,6 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
       Object.freeze({ id: "workspace.tabs.delete", labelKey: "workspace.tabs.delete" }),
       Object.freeze({ id: "workspace.tabs.more", labelKey: "chat.more" }),
       Object.freeze({ id: "workspace.tabs.closeOthers", labelKey: "workspace.tabs.closeOthers" }),
-      Object.freeze({ id: "workspace.tabs.search", labelKey: "workspace.tabs.search" }),
       Object.freeze({ id: "workspace.tabs.newFolder", labelKey: "workspace.tabs.newFolder" }),
       Object.freeze({ id: "workspace.tabs.sort", labelKey: "workspace.tabs.sort" }),
       Object.freeze({ id: "workspace.tabs.sortViewed", labelKey: "workspace.tabs.sortViewed" }),

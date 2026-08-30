@@ -581,7 +581,6 @@ export function createAppearanceSettingsSection(ctx) {
       "workspace.tabs.delete": "trash",
       "workspace.tabs.more": "more",
       "workspace.tabs.closeOthers": "copyMinus",
-      "workspace.tabs.search": "search",
       "workspace.tabs.newFolder": "folderPlus",
       "workspace.tabs.sort": "arrowUpDown",
       "workspace.tabs.sortViewed": "arrowUpDown",

@@ -315,27 +315,6 @@ export function createTabsSidebarHoverMenu({
   return Object.freeze({ closeHoverMenu, openHoverMenu, renderItemActions });
 }
 
-export function renderTabsSidebarHeader({ count, countLabel, title, cleanup }) {
-  return el("header", { class: "workspace-tabs-sidebar-header" },
-    el("span", {
-      class: "workspace-tabs-sidebar-count",
-      "aria-label": countLabel
-    }, String(count)),
-    el("h2", { class: "workspace-tabs-sidebar-title" }, title),
-    cleanup
-  );
-}
-
-export function renderTabsSidebarToolbar(nodes = []) {
-  const children = (Array.isArray(nodes) ? nodes : [nodes]).filter(Boolean);
-  return el("div", {
-    class: [
-      "workspace-tabs-sidebar-toolbar",
-      children.length <= 2 ? "is-searching" : ""
-    ].filter(Boolean).join(" ")
-  }, children);
-}
-
 export function renderTabsSidebarItem({
   item,
   index,

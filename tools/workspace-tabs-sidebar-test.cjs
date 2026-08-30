@@ -251,15 +251,14 @@ globalThis.document = {
   assert.match(source, /createIcon\("pin"\)/, "each tab row must expose a pin control");
   assert.match(source, /WORKSPACE_TABS_SIDEBAR_PINNED_KEY/, "pinned tabs must persist independently of live order");
   assert.match(source, /Boolean\(item\.pinned\) !== Boolean\(target\.pinned\)/, "pinned and unpinned tabs must not mix while dragging");
-  assert.match(source, /workspace-tabs-sidebar-search/, "ChatClub Tabs must expose a search control");
-  assert.match(source, /workspace-tabs-sidebar-search-toggle/, "collapsed search must be an icon button");
+  assert.match(source, /workspace-tabs-sidebar-search/, "ChatClub Tabs must expose a search field");
   assert.match(source, /function openSearch\(/, "the topbar Search control must open and focus the sidebar search field");
   assert.match(source, /setSearchQuery/, "title search must filter the sidebar list");
   assert.match(source, /forgetWorkspaceTabFullText/, "deleting a tab must drop its recorded full text");
   assert.match(css, /\.workspace-tabs-sidebar-search-input/, "the search field must be styled in the sidebar");
   assert.match(css, /\.workspace-tabs-sidebar-search\s*\{[^}]*border:\s*1px solid/, "the search glyph must sit inside one bordered field");
   assert.match(css, /\.workspace-tabs-sidebar-search\s*\{[^}]*height:\s*var\(--ui-control-height\)/, "the search field height must match tab rows");
-  assert.match(css, /\.workspace-tabs-sidebar-toolbar\s*\{[^}]*padding:\s*10px var\(--space-2\) var\(--space-1\)/, "the toolbar must align with tab row width");
+  assert.match(css, /\.workspace-tabs-sidebar-search\s*\{[^}]*margin:\s*10px var\(--space-2\) var\(--space-1\)/, "the search field must align with tab row width");
   assert.match(css, /\.workspace-tabs-sidebar-item\s*\{[^}]*min-height:\s*36px/);
   assert.match(css, /\.workspace-tabs-sidebar-list\s*\{[^}]*padding:\s*var\(--space-1\) var\(--space-2\) var\(--space-2\)/);
   assert.match(css, /\.workspace-tabs-sidebar-search \.workspace-tabs-sidebar-search-input/, "sidebar search styles must beat the global .input width");
@@ -446,16 +445,11 @@ globalThis.document = {
     assert.ok(header, "the sidebar must render a header");
     assert.match(String(header.children[0]?.className || ""), /workspace-tabs-sidebar-count/, "tab count must sit to the left of ChatClub Tabs");
     assert.match(String(header.children[1]?.className || ""), /workspace-tabs-sidebar-title/);
-    assert.match(String(header.children[2]?.className || ""), /workspace-tabs-sidebar-cleanup/, "close-others must sit to the right of ChatClub Tabs");
+    assert.match(String(header.children[2]?.className || ""), /workspace-tabs-sidebar-header-actions/, "sort, folder and close-others must sit to the right of ChatClub Tabs");
     const cleanup = descendants(sidebar).find((node) => String(node.className || "").includes("workspace-tabs-sidebar-cleanup"));
     assert.ok(cleanup, "the header must expose a close-others control");
-    assert.ok(!descendants(header).some((node) => String(node.className || "").includes("workspace-tabs-sidebar-sort")), "sort must leave the title row");
-    assert.ok(!descendants(header).some((node) => String(node.className || "").includes("workspace-tabs-sidebar-new-folder")), "new-folder must leave the title row");
-    const toolbar = descendants(sidebar).find((node) => node.classList.contains("workspace-tabs-sidebar-toolbar"));
-    assert.ok(toolbar, "the sidebar must render a toolbar under the title");
-    assert.ok(descendants(toolbar).some((node) => String(node.className || "").includes("workspace-tabs-sidebar-sort")), "the toolbar must expose a sort control");
-    assert.ok(descendants(toolbar).some((node) => String(node.className || "").includes("workspace-tabs-sidebar-new-folder")), "the toolbar must expose a new-folder control");
-    assert.ok(descendants(toolbar).some((node) => String(node.className || "").includes("workspace-tabs-sidebar-search-toggle")), "collapsed search must sit in the toolbar");
+    assert.ok(descendants(header).some((node) => String(node.className || "").includes("workspace-tabs-sidebar-sort")), "the header must expose a sort control");
+    assert.ok(descendants(header).some((node) => String(node.className || "").includes("workspace-tabs-sidebar-new-folder")), "the header must expose a new-folder control");
     assert.equal(cleanup.disabled, false);
     cleanup.click();
     await Promise.resolve();
@@ -1079,13 +1073,8 @@ globalThis.document = {
     fixture.api.setOpen(true);
     const sidebar = fixture.api.renderSidebar();
     assert.ok(
-      descendants(sidebar).some((node) => String(node.className || "").includes("workspace-tabs-sidebar-search-toggle")),
-      "the sidebar must keep a collapsed search button"
-    );
-    assert.equal(
       descendants(sidebar).some((node) => node.classList.contains("workspace-tabs-sidebar-search-input")),
-      false,
-      "the search field must stay collapsed until opened"
+      "the sidebar must keep a title search field"
     );
     fixture.api.setSearchQuery("Closed");
     const filtered = fixture.api.renderSidebar();
@@ -1108,10 +1097,9 @@ globalThis.document = {
     const grid = Object.assign(new FakeNode("div"), { className: "main-grid" });
     shell.append(grid);
     fixture.api.syncSidebar(shell);
-    fixture.api.openSearch();
     const sidebar = descendants(shell).find((node) => node.classList.contains("workspace-tabs-sidebar"));
     const field = descendants(sidebar).find((node) => node.classList.contains("workspace-tabs-sidebar-search-input"));
-    assert.ok(field, "opening search must expose a live search input");
+    assert.ok(field, "the connected sidebar must expose a live search input");
     field.dispatch("keydown", { key: "a", keyCode: 229, isComposing: false });
     field.value = "a";
     field.dispatch("input", { isComposing: true });
@@ -1139,11 +1127,6 @@ globalThis.document = {
     assert.equal(fixture.api.isOpen(), false);
     fixture.api.openSearch();
     assert.equal(fixture.api.isOpen(), true, "Search must open the ChatClub Tabs sidebar");
-    const opened = fixture.api.renderSidebar();
-    assert.ok(
-      descendants(opened).some((node) => node.classList.contains("workspace-tabs-sidebar-search-input")),
-      "Search must expand the title search field"
-    );
   }
 
   {
