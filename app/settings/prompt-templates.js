@@ -182,8 +182,8 @@ export function createPromptTemplateSettings(ctx) {
     const meta = promptTemplateMeta(kind);
     if (template.builtIn) return;
     openConfirmationAction({
-      title: t("promptTemplates.deleteTitle"),
-      body: t("promptTemplates.deleteConfirm", { name: promptTemplateLabel(template) || t("promptTemplates.fallbackName") }),
+      title: t("promptTemplates.deleteTitle", { name: promptTemplateLabel(template) || t("promptTemplates.fallbackName") }),
+      body: t("promptTemplates.deleteConfirm"),
       confirmLabel: t("common.delete"),
       cancelLabel: t("common.cancel"),
       closeLabel: t("common.close"),

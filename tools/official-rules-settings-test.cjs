@@ -272,6 +272,9 @@ function activeConfirmation(document) {
 
 assert.match(moduleSource, /openConfirmationAction\(/, "rule mutations must use openConfirmationAction");
 assert.doesNotMatch(moduleSource, /confirmationModal\(/, "official rules must not hand-roll confirmationModal");
+assert.match(moduleSource, /busyLabel:\s*t\("common.applying"\)/, "rule mutations must show applying busy copy");
+assert.match(moduleSource, /tone: approve \? "warning" : "neutral"/, "authorizing a Delete Sites domain must use warning tone");
+assert.doesNotMatch(moduleSource, /official-rules-confirmation-modal/, "official rules must not stamp a private confirmation modal class");
 assert.match(stylesSource, /\.official-rules-card/);
 assert.match(stylesSource, /\.official-rules-site-summary/);
 assert.match(stylesSource, /@media \(max-width: 820px\)/);

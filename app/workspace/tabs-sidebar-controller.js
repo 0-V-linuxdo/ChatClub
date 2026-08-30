@@ -1105,19 +1105,17 @@ export function createWorkspaceTabsSidebarController({
   }
 
   function openDeleteConfirmation(item = {}, kind = "tab") {
-    const title = kind === "folder" ? t("workspace.tabs.deleteFolder") : t("workspace.tabs.deleteTitle");
-    const message = kind === "folder"
-      ? t("workspace.tabs.deleteFolderConfirm", { title: item.name || t("workspace.tabs.folderUntitled") })
-      : t("workspace.tabs.deleteConfirm", { title: itemLabel(item, itemSectionIndex(item)) });
+    const folder = kind === "folder";
+    const label = folder ? (item.name || t("workspace.tabs.folderUntitled")) : itemLabel(item, itemSectionIndex(item));
     return openConfirmationAction({
-      title,
-      body: message,
+      title: folder ? t("workspace.tabs.deleteFolderTitle", { title: label }) : t("workspace.tabs.deleteTitle", { title: label }),
+      body: folder ? t("workspace.tabs.deleteFolderConfirm") : t("workspace.tabs.deleteConfirm"),
       confirmLabel: t("common.delete"),
       cancelLabel: t("common.cancel"),
       closeLabel: t("common.close"),
       tone: "neutral",
       onConfirm: async () => {
-        if (kind === "folder") {
+        if (folder) {
           folders = deleteFolder(folders, item.id);
           persistFolders();
           relayout(items);

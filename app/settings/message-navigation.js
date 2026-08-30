@@ -462,8 +462,8 @@ export function createMessageNavigationSettingsSection(ctx) {
   function deleteSite(config, redraw) {
     if (builtInDefault(config)) return;
     openConfirmationAction({
-      title: t("messageNavigator.site.deleteTitle"),
-      body: t("messageNavigator.site.deleteConfirm", { name: config.name || config.id }),
+      title: t("messageNavigator.site.deleteTitle", { name: config.name || config.id }),
+      body: t("messageNavigator.site.deleteConfirm"),
       confirmLabel: t("common.delete"),
       cancelLabel: t("common.cancel"),
       closeLabel: t("common.close"),

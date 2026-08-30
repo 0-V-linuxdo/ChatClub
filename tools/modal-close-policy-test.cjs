@@ -70,6 +70,22 @@ class FakeElement extends FakeNode {
     this.listeners = new Map();
     this.checked = false;
     this.disabled = false;
+    this.classList = {
+      add: (name) => {
+        const parts = String(this.className || "").split(/\s+/).filter(Boolean);
+        if (!parts.includes(name)) this.className = [...parts, name].join(" ");
+      },
+      remove: (name) => {
+        this.className = String(this.className || "").split(/\s+/).filter((part) => part && part !== name).join(" ");
+      },
+      contains: (name) => String(this.className || "").split(/\s+/).includes(name),
+      toggle: (name, force) => {
+        const on = force === undefined ? !this.classList.contains(name) : Boolean(force);
+        if (on) this.classList.add(name);
+        else this.classList.remove(name);
+        return on;
+      }
+    };
     this.style = {
       setProperty: (name, value) => {
         this.style[name] = String(value);
@@ -147,6 +163,16 @@ class FakeElement extends FakeNode {
 
   querySelector(selector) {
     return this.querySelectorAll(selector)[0] || null;
+  }
+
+  get textContent() {
+    return this.children.map((child) => child.textContent || "").join("");
+  }
+
+  set textContent(value) {
+    this.children = [];
+    const text = String(value ?? "");
+    if (text) this.append(new FakeTextNode(this.ownerDocument, text));
   }
 }
 
@@ -264,6 +290,7 @@ function event(type, properties = {}) {
       isDismissalEscape,
       openConfirmationAction,
       taskModal,
+      toast,
       viewerModal
     } = await import(moduleUrl);
 
@@ -389,6 +416,7 @@ function event(type, properties = {}) {
     const warningPanel = warningFixture.querySelector(".modal");
     assert.equal(warningPanel.dataset.overlayTone, "warning", "openConfirmationAction must honor warning tone");
     assert.equal(warningPanel.className.includes("modal-tone-warning"), true, "warning confirmations must stamp warning chrome");
+    assert.equal(warningPanel.getAttribute("role"), "alertdialog", "warning confirmations stay alertdialog");
     warningFixture.remove();
 
     const neutralFixture = openConfirmationAction({
@@ -404,6 +432,8 @@ function event(type, properties = {}) {
     const neutralPanel = neutralFixture.querySelector(".modal");
     assert.equal(neutralPanel.dataset.overlayTone, "neutral", "openConfirmationAction must honor neutral tone");
     assert.equal(neutralPanel.className.includes("modal-tone-neutral"), true, "neutral confirmations must stamp neutral chrome");
+    assert.equal(neutralPanel.getAttribute("role"), "dialog", "neutral confirmations must use dialog");
+    assert.equal(neutralPanel.className.includes("modal-alertdialog"), true, "neutral confirmations keep confirmation chrome");
     neutralFixture.remove();
 
     let cancelled = 0;
@@ -488,6 +518,22 @@ function event(type, properties = {}) {
     assert.equal(acknowledged, 1, "checked acknowledge must run the confirm action");
     assert.equal(ackFixture.isConnected, false, "a successful acknowledged confirm must close");
 
+    let undone = 0;
+    toast("Prompt history item deleted", "info", {
+      actionLabel: "Undo",
+      onAction: () => {
+        undone += 1;
+      }
+    });
+    const toastItem = document.body.querySelector(".toast-actionable") || document.querySelector(".toast-actionable");
+    assert.ok(toastItem, "actionable toasts must render a visual item");
+    const toastAction = toastItem.querySelector(".toast-action");
+    assert.equal(toastAction?.textContent, "Undo", "actionable toasts must expose the action label");
+    toastAction.click();
+    assert.equal(undone, 1, "toast undo must run the action once");
+    toastAction.click();
+    assert.equal(undone, 1, "toast undo must ignore a second click");
+
     for (const [type, factory] of [["viewer", viewerModal], ...restrictedFactories]) {
       for (const [label, control] of [
         ["top close button", (fixture) => fixture.dialog.querySelector('[aria-label="Close"]')],
@@ -537,7 +583,7 @@ function event(type, properties = {}) {
       ["viewerModal", 5],
       ["taskModal", 1],
       ["confirmationModal", 0],
-      ["openConfirmationAction", 18]
+      ["openConfirmationAction", 15]
     ]);
 
     assert.equal(occurrences(allAppSource, /\bmodal\s*\(/g), 0, "app code must not call the raw modal helper");
@@ -553,8 +599,8 @@ function event(type, properties = {}) {
       wrapperNames.reduce((total, wrapperName) => (
         total + occurrences(allAppSource, new RegExp(`\\b${wrapperName}\\s*\\(`, "g"))
       ), 0),
-      35,
-      "all thirty-five app overlay call sites must use a typed wrapper or openConfirmationAction"
+      32,
+      "all thirty-two app overlay call sites must use a typed wrapper or openConfirmationAction"
     );
 
     for (let index = 0; index < appFiles.length; index += 1) {
@@ -600,10 +646,7 @@ function event(type, properties = {}) {
       ["app/settings/summary.js", "deleteSummaryCollector", "openConfirmationAction", "Summary collector delete confirmation"],
       ["app/settings/message-navigation.js", "deleteSite", "openConfirmationAction", "Message Navigator site delete confirmation"],
       ["app/settings/topic-deletion.js", "deleteSite", "openConfirmationAction", "Delete Site delete confirmation"],
-      ["app/settings/history.js", "remove", "openConfirmationAction", "Settings history item delete confirmation"],
       ["app/settings/history.js", "clear", "openConfirmationAction", "Settings history clear confirmation"],
-      ["app/settings/appearance-topbar.js", "deleteTopbarPromptPlaceholderItem", "openConfirmationAction", "topbar placeholder delete confirmation"],
-      ["app/history/controller.js", "remove", "openConfirmationAction", "Prompt History item delete confirmation"],
       ["app/prompt-library/controller.js", "deletePromptLibraryItem", "openConfirmationAction", "Prompt Library delete confirmation"],
       ["app/runtime.js", "deleteThreadOnFrames", "openConfirmationAction", "topbar delete-all-topics confirmation"],
       ["app/workspace/frame-controller.js", "deleteActiveThreadForGroup", "openConfirmationAction", "in-group delete-topic confirmation"]
@@ -725,6 +768,47 @@ function event(type, properties = {}) {
       /confirmationModal\s*\(/,
       "functional anomaly mutations must not open confirmationModal directly"
     );
+
+    const deleteThreadSource = directFunctionSource(path.join(root, "app/runtime.js"), "deleteThreadOnFrames");
+    assert.match(
+      deleteThreadSource,
+      /acknowledge:\s*t\("topbar.deleteThreadAcknowledge"\)/,
+      "delete-all-topics must require acknowledgement"
+    );
+    assert.match(
+      deleteThreadSource,
+      /busyLabel:\s*t\("common.applying"\)/,
+      "delete-all-topics must show applying busy copy"
+    );
+
+    const inGroupDeleteSource = directFunctionSource(path.join(root, "app/workspace/frame-controller.js"), "deleteActiveThreadForGroup");
+    assert.match(
+      inGroupDeleteSource,
+      /acknowledge:\s*t\("topbar.deleteThreadAcknowledge"\)/,
+      "in-group topic delete must require acknowledgement"
+    );
+    assert.match(
+      inGroupDeleteSource,
+      /busyLabel:\s*t\("common.applying"\)/,
+      "in-group topic delete must show applying busy copy"
+    );
+
+    const officialRulesSource = fs.readFileSync(path.join(root, "app/settings/official-rules.js"), "utf8");
+    assert.match(officialRulesSource, /busyLabel:\s*t\("common.applying"\)/, "official-rules mutations must show applying busy copy");
+    assert.match(officialRulesSource, /tone: approve \? "warning" : "neutral"/, "authorizing a Delete Sites domain must use warning tone");
+    assert.doesNotMatch(officialRulesSource, /official-rules-confirmation-modal/, "official-rules must not stamp a private confirmation modal class");
+
+    const historySettingsRemove = directFunctionSource(path.join(root, "app/settings/history.js"), "remove");
+    assert.doesNotMatch(historySettingsRemove, /openConfirmationAction/, "Settings history item delete must use an undo toast");
+    assert.match(historySettingsRemove, /actionLabel:\s*t\("common.undo"\)/, "Settings history item delete must offer undo");
+
+    const historyViewerRemove = directFunctionSource(path.join(root, "app/history/controller.js"), "remove");
+    assert.doesNotMatch(historyViewerRemove, /openConfirmationAction/, "Prompt History item delete must use an undo toast");
+    assert.match(historyViewerRemove, /actionLabel:\s*t\("common.undo"\)/, "Prompt History item delete must offer undo");
+
+    const placeholderDelete = directFunctionSource(path.join(root, "app/settings/appearance-topbar.js"), "deleteTopbarPromptPlaceholderItem");
+    assert.doesNotMatch(placeholderDelete, /openConfirmationAction/, "topbar placeholder delete must use an undo toast");
+    assert.match(placeholderDelete, /actionLabel:\s*t\("common.undo"\)/, "topbar placeholder delete must offer undo");
 
     const applyImportSource = directFunctionSource(
       path.join(root, "app/settings/import-export.js"),

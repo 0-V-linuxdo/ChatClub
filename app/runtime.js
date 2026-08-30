@@ -902,8 +902,8 @@ async function deleteThreadOnFrames() {
     title: t("topbar.deleteThreadTitle"),
     body: t("topbar.deleteThreadConfirm", { count, plural: count === 1 ? "" : "s" }),
     confirmLabel: t("topbar.deleteThread"),
-    cancelLabel: t("common.cancel"),
-    closeLabel: t("common.close"),
+    cancelLabel: t("common.cancel"), closeLabel: t("common.close"),
+    acknowledge: t("topbar.deleteThreadAcknowledge"), busyLabel: t("common.applying"),
     onConfirm: () => finishDeleteThreadOnFrames(activeTargets, permissionAttempt, skippedCount)
   });
 }

@@ -243,8 +243,8 @@ export function createProfilesSettingsSection(ctx) {
       return;
     }
     openConfirmationAction({
-      title: t("profiles.deleteTitle"),
-      body: t("profiles.deleteConfirm", { name: profile.name || "this API profile" }),
+      title: t("profiles.deleteTitle", { name: profile.name || "this API profile" }),
+      body: t("profiles.deleteConfirm"),
       confirmLabel: t("common.delete"),
       cancelLabel: t("common.cancel"),
       closeLabel: t("common.close"),

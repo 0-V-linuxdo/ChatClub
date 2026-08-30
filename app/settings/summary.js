@@ -713,8 +713,8 @@ export function createSummarySettingsSection(ctx) {
   function deleteSummaryCollector(config, redraw) {
     if (summaryBuiltInDefault(config)) return;
     openConfirmationAction({
-      title: t("summary.collector.deleteTitle"),
-      body: t("summary.collector.deleteConfirm", { name: config.name || config.id }),
+      title: t("summary.collector.deleteTitle", { name: config.name || config.id }),
+      body: t("summary.collector.deleteConfirm"),
       confirmLabel: t("common.delete"),
       cancelLabel: t("common.cancel"),
       closeLabel: t("common.close"),

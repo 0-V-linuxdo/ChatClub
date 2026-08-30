@@ -530,7 +530,6 @@ export function createAppsSettingsSection(ctx) {
     });
     const confirmButton = dialog?.querySelector?.(".button-danger");
     if (confirmButton?.dataset) confirmButton.dataset.iframeAction = "confirm-risk";
-    dialog?.querySelector?.(".modal")?.classList?.add?.("iframe-permission-risk-modal");
   }
 
   function openIframePermissionEditor(app, source, redraw) {
@@ -1176,8 +1175,8 @@ export function createAppsSettingsSection(ctx) {
 
   function removeCustom(app, redraw) {
     openConfirmationAction({
-      title: t("apps.deleteTitle"),
-      body: t("apps.deleteConfirm", { name: app.name || "this custom platform" }),
+      title: t("apps.deleteTitle", { name: app.name || "this custom platform" }),
+      body: t("apps.deleteConfirm"),
       confirmLabel: t("common.delete"),
       cancelLabel: t("common.cancel"),
       closeLabel: t("common.close"),

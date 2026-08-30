@@ -12,7 +12,7 @@ import {
   normalizeTopbarPromptPlaceholderConfig,
   normalizeTopbarPromptPlaceholderText
 } from "../../shared/storage-schema.js";
-import { button, el, field, input, openConfirmationAction, select, toast } from "../../ui/dom.js";
+import { button, el, field, input, select, toast } from "../../ui/dom.js";
 import { validateControllerContract } from "../controller-contract.js";
 import { cleanupSettingsDragRows, createSettingsKit } from "./kit.js";
 import {
@@ -134,22 +134,25 @@ export function createAppearanceTopbarController(dependencies = {}) {
   function deleteTopbarPromptPlaceholderItem(index, redraw) {
     const config = topbarPromptPlaceholderConfigValue();
     if (index < 0 || index >= config.items.length) return;
-    const label = topbarPromptPlaceholderPreview(config.items[index], 80) || t("topbar.placeholder.thisItem");
-    openConfirmationAction({
-      title: t("topbar.placeholder.deleteTitle"),
-      body: t("topbar.placeholder.deleteConfirm", { text: label }),
-      confirmLabel: t("common.delete"),
-      cancelLabel: t("common.cancel"),
-      closeLabel: t("common.close"),
-      tone: "neutral",
-      onConfirm: () => {
-        resetTopbarPromptPlaceholderEditor();
-        return saveTopbarPromptPlaceholderConfig(
-          { ...config, items: config.items.filter((_, itemIndex) => itemIndex !== index) },
-          redraw,
-          t("toast.topbarPlaceholderDeleted")
-        );
-      }
+    const removed = config.items[index];
+    const label = topbarPromptPlaceholderPreview(removed, 80) || t("topbar.placeholder.thisItem");
+    resetTopbarPromptPlaceholderEditor();
+    return saveTopbarPromptPlaceholderConfig(
+      { ...config, items: config.items.filter((_, itemIndex) => itemIndex !== index) },
+      redraw
+    ).then(() => {
+      toast(t("toast.topbarPlaceholderDeleted", { text: label }), "info", {
+        actionLabel: t("common.undo"),
+        onAction: () => {
+          const current = topbarPromptPlaceholderConfigValue();
+          const items = [...current.items];
+          items.splice(Math.min(index, items.length), 0, removed);
+          return saveTopbarPromptPlaceholderConfig({ ...current, items }, redraw, t("toast.topbarPlaceholderRestored"));
+        }
+      });
+    }).catch((error) => {
+      const reason = String(error?.message || error || "").trim();
+      if (reason) toast(reason, "error");
     });
   }
 

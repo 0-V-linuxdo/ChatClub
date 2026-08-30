@@ -125,19 +125,36 @@ export function toastDurationMs(kind = "info") {
   return kind === "error" ? base * 2 : base;
 }
 
-export function toast(message, kind = "info") {
+export function toast(message, kind = "info", options = {}) {
+  const actionLabel = String(options?.actionLabel || "").trim();
+  const onAction = typeof options?.onAction === "function" ? options.onAction : null;
+  const actionable = Boolean(actionLabel && onAction);
   const host = ensureToastHost();
   announceToast(message, kind);
-  const item = el("div", { class: `toast toast-${kind}` }, message);
+  const actionButton = actionable
+    ? el("button", { class: "toast-action", type: "button" }, actionLabel)
+    : null;
+  const item = el(
+    "div",
+    { class: `toast toast-${kind}${actionable ? " toast-actionable" : ""}` },
+    actionable ? el("span", { class: "toast-message" }, message) : message,
+    actionButton
+  );
   host.append(item);
-  const duration = toastDurationMs(kind);
+  const duration = toastDurationMs(kind === "error" || actionable ? "error" : kind);
   let hideTimer = 0;
+  let acted = false;
+  const hide = () => {
+    if (hideTimer) clearTimeout(hideTimer);
+    hideTimer = 0;
+    item.classList.remove("show");
+    setTimeout(() => item.remove(), 240);
+  };
   const scheduleHide = (delay) => {
     if (hideTimer) clearTimeout(hideTimer);
     hideTimer = setTimeout(() => {
       hideTimer = 0;
-      item.classList.remove("show");
-      setTimeout(() => item.remove(), 240);
+      hide();
     }, delay);
   };
   item.addEventListener("mouseenter", () => {
@@ -145,6 +162,21 @@ export function toast(message, kind = "info") {
     hideTimer = 0;
   });
   item.addEventListener("mouseleave", () => scheduleHide(duration));
+  if (actionButton) {
+    actionButton.addEventListener("click", (event) => {
+      event?.preventDefault?.();
+      event?.stopPropagation?.();
+      if (acted) return;
+      acted = true;
+      hide();
+      try { onAction(); } catch (error) {
+        const reason = String(error?.message || error || "").trim();
+        if (reason) {
+          try { toast(reason, "error"); } catch { /* page may already be unloading */ }
+        }
+      }
+    });
+  }
   setTimeout(() => item.classList.add("show"), 20);
   scheduleHide(duration);
 }
@@ -164,7 +196,7 @@ function confirmationTone(value) {
 
 function confirmationIcon(tone) {
   if (tone === "neutral" || typeof document.createElementNS !== "function") return null;
-  return createSvgIcon(tone === "warning" ? "info" : "alert");
+  return createSvgIcon("alert");
 }
 
 function stampClass(node, className, on) {
@@ -345,7 +377,7 @@ export function modal(title, content, onClose, wide = false, closeLabel = "Close
   const body = el("div", { class: "modal-body" }, content);
   const panel = el("section", {
     class: `modal overlay-surface ${wide ? "modal-wide" : ""} ${modalType === "confirmation" ? "modal-alertdialog" : ""}`.trim(),
-    role: modalType === "confirmation" ? "alertdialog" : "dialog",
+    role: modalType === "confirmation" && tone !== "neutral" ? "alertdialog" : "dialog",
     "aria-modal": "true",
     "aria-labelledby": titleId,
     tabindex: "-1",

@@ -138,21 +138,21 @@ assert.match(dom, /CONFIRMATION_TONES/);
 assert.match(dom, /tone = "danger"/);
 assert.match(
   css,
-  /\.modal\.modal-alertdialog \.modal-footer \.button-danger \{[^}]*background:\s*var\(--danger\);[^}]*color:\s*var\(--on-primary\);/s
+  /\.modal\.modal-alertdialog:not\(\[data-overlay-tone="neutral"\]\) \.modal-footer \.button-danger \{[^}]*background:\s*var\(--danger\);[^}]*color:\s*var\(--on-primary\);/s
 );
 assert.match(
   css,
-  /\.modal\.modal-alertdialog \.modal-footer \.button-danger:hover:not\(:disabled\),[\s\S]*?background:\s*var\(--danger-hover\);/s
+  /\.modal\.modal-alertdialog:not\(\[data-overlay-tone="neutral"\]\) \.modal-footer \.button-danger:hover:not\(:disabled\),[\s\S]*?background:\s*var\(--danger-hover\);/s
 );
 assert.match(
   css,
-  /\.modal\.modal-alertdialog \.modal-footer \.button-danger:active:not\(:disabled\) \{[^}]*background:\s*var\(--danger-active\);/s
+  /\.modal\.modal-alertdialog:not\(\[data-overlay-tone="neutral"\]\) \.modal-footer \.button-danger:active:not\(:disabled\) \{[^}]*background:\s*var\(--danger-active\);/s
 );
 assert.match(css, /\.overlay-confirm-ack-box \{[^}]*min-height:\s*var\(--target-min\);/s);
 assert.match(css, /\.modal\.modal-alertdialog \.modal-footer \.button\.is-applying::before \{/);
 assert.match(css, /\.modal\.modal-alertdialog\[data-overlay-tone="danger"\] \.overlay-window-button:hover,/);
 assert.match(dom, /function confirmationIcon/);
-assert.match(dom, /createSvgIcon\(tone === "warning" \? "info" : "alert"\)/);
+assert.match(dom, /createSvgIcon\("alert"\)/);
 assert.match(dom, /acknowledge = ""/);
 assert.match(dom, /busyLabel = ""/);
 assert.match(agents, /acknowledge/);
@@ -193,7 +193,7 @@ assert.match(
   /const MODAL_TYPE_CONFIG = Object\.freeze\(\{\s*viewer: Object\.freeze\(\{ dismissOnBackdrop: true \}\),\s*editor: Object\.freeze\(\{ dismissOnBackdrop: false \}\),\s*task: Object\.freeze\(\{ dismissOnBackdrop: false \}\),\s*confirmation: Object\.freeze\(\{ dismissOnBackdrop: false \}\)\s*\}\);/s
 );
 assert.match(dom, /class: `modal overlay-surface \$\{wide \? "modal-wide" : ""\} \$\{modalType === "confirmation" \? "modal-alertdialog" : ""\}`/);
-assert.match(dom, /role: modalType === "confirmation" \? "alertdialog" : "dialog"/);
+assert.match(dom, /role: modalType === "confirmation" && tone !== "neutral" \? "alertdialog" : "dialog"/);
 assert.match(dom, /"aria-modal": "true"/);
 assert.match(dom, /"aria-labelledby": titleId/);
 assert.match(dom, /bindModalDescription\(panel, body, modalType\)/);
@@ -278,6 +278,21 @@ assert.match(read("app/topbar/view.js"), /"aria-label": t\("topbar\.settingsJump
 assert.match(read("app/workspace/view-controller.js"), /layout-preset-choice/);
 assert.match(read("app/workspace/view-controller.js"), /role: "none"/);
 assert.match(dom, /event\.key === "Tab"/);
+assert.match(agents, /tone="neutral"` keeps `role="dialog"`/);
+assert.match(agents, /both may place the existing `alert` icon/);
+assert.match(agents, /fills `--danger` with `--on-primary` label for danger and warning tones only/);
+assert.match(agents, /Dark theme may mix those tokens against black/);
+assert.match(agents, /undo toast/);
+assert.match(agents, /actionLabel/);
+assert.match(read("ui/icons.js"), /svg\.setAttribute\("aria-hidden", "true"\)/);
+assert.match(css, /:root\[data-theme="dark"\] \{[\s\S]*?--danger-hover:\s*color-mix\(in srgb, var\(--danger\) 88%, black\);/);
+assert.match(css, /\.toast-action \{/);
+assert.match(css, /\.toast\.toast-actionable \{/);
+assert.match(dom, /actionLabel/);
+assert.match(dom, /toast-actionable/);
+assert.doesNotMatch(css, /\.iframe-permission-risk-modal \{/);
+assert.doesNotMatch(read("app/settings/official-rules.js"), /official-rules-confirmation-modal/);
+assert.doesNotMatch(read("app/settings/apps.js"), /iframe-permission-risk-modal/);
 assert.match(css, /\.overlay-window-button:focus-visible/);
 assert.match(css, /\.popover-menu \.button:focus-visible/);
 assert.match(css, /\.global-tooltip-label \{[^}]*border-radius:\s*var\(--overlay-radius\);/s);

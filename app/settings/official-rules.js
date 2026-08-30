@@ -590,12 +590,13 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
       variant,
       tone: resolvedTone,
       className: "official-rules-confirmation",
+      busyLabel: t("common.applying"),
       onConfirm: async () => {
         const ok = await perform(actionKey, task, successMessage);
         if (!ok) throw new Error("");
       }
     });
-    dialog?.querySelector?.(".modal")?.classList?.add?.("official-rules-confirmation-modal");
+    return dialog;
   }
 
   function applyCandidate() {
@@ -697,12 +698,12 @@ export function createOfficialRulesSettingsCard(dependencies = {}) {
     openConfirmation({
       title: approve ? copy.approveAliasTitle : copy.revokeAliasTitle,
       body: el("div", {},
-        el("p", {}, approve ? copy.approveAliasBody : copy.revokeAliasBody),
+        el("p", approve ? { class: "overlay-warning-card" } : {}, approve ? copy.approveAliasBody : copy.revokeAliasBody),
         el("code", {}, alias.host)
       ),
       confirmLabel: approve ? copy.approveAlias : copy.revokeAlias,
       variant: approve ? "danger" : "secondary",
-      tone: approve ? "danger" : "neutral",
+      tone: approve ? "warning" : "neutral",
       actionKey: `alias:${alias.componentKey}:${alias.host}`,
       task: () => officialRules.setDeleteAliasApproval({
         componentKey: alias.componentKey,

@@ -2,7 +2,7 @@ import { t } from "../../shared/i18n.js";
 import { savePromptSendHistory } from "../../shared/storage-adapter.js";
 import { normalizePocketCardSize, normalizePocketIcon } from "../../shared/storage-schema.js";
 import { createSettingsIconAction } from "../../ui/components.js";
-import { clear, el, input, openConfirmationAction, toast, viewerModal } from "../../ui/dom.js";
+import { clear, el, input, toast, viewerModal } from "../../ui/dom.js";
 import { createViewerWindowChrome } from "../../ui/viewer-window.js";
 import {
   optionalControllerObject,
@@ -208,20 +208,27 @@ export function createHistoryController(ctx) {
   }
 
   function remove(item, redraw) {
-    const images = Array.isArray(item?.images) ? item.images : [];
-    const label = promptHistoryPreview(item?.text, 80) || promptHistoryImageCountLabel(images) || t("promptHistory.thisPrompt");
-    openConfirmationAction({
-      title: t("promptHistory.deleteTitle"),
-      body: t("promptHistory.deleteConfirm", { prompt: label }),
-      confirmLabel: t("common.delete"),
-      cancelLabel: t("common.cancel"),
-      closeLabel: t("common.close"),
-      tone: "neutral",
-      onConfirm: () => {
-        if (activeItemId === item.id) activeItemId = "";
-        return save(items().filter((entry) => entry.id !== item.id), redraw, t("toast.promptHistoryDeleted"));
-      }
-    });
+    const previous = items();
+    const index = previous.findIndex((entry) => entry.id === item.id);
+    if (index < 0) return;
+    if (activeItemId === item.id) activeItemId = "";
+    return save(previous.filter((entry) => entry.id !== item.id), redraw)
+      .then(() => {
+        toast(t("toast.promptHistoryDeleted"), "info", {
+          actionLabel: t("common.undo"),
+          onAction: () => {
+            const current = items();
+            if (current.some((entry) => entry.id === item.id)) return;
+            const restored = [...current];
+            restored.splice(Math.min(index, restored.length), 0, item);
+            return save(restored, redraw, t("toast.promptHistoryRestored"));
+          }
+        });
+      })
+      .catch((error) => {
+        const reason = String(error?.message || error || "").trim();
+        if (reason) toast(reason, "error");
+      });
   }
 
   async function saveItemToPocket(item, redraw) {

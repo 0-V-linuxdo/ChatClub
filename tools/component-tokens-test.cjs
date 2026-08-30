@@ -102,7 +102,7 @@ assert.match(
 assert.match(css, /\.button-primary \{[^}]*color:\s*var\(--on-primary\);/s);
 assert.match(
   css,
-  /\.modal\.modal-alertdialog \.modal-footer \.button-danger \{[^}]*background:\s*var\(--danger\);[^}]*color:\s*var\(--on-primary\);/s
+  /\.modal\.modal-alertdialog:not\(\[data-overlay-tone="neutral"\]\) \.modal-footer \.button-danger \{[^}]*background:\s*var\(--danger\);[^}]*color:\s*var\(--on-primary\);/s
 );
 assert.match(
   css,
@@ -114,7 +114,8 @@ assert.match(
   css,
   /\.tooltip-trigger::before,\s*\n\.tooltip-trigger::after \{\s*\n\s*display:\s*none !important;/
 );
-assert.match(css, /\.layout-preset-item \{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto 24px;/s);
+assert.match(css, /:root\[data-theme="dark"\] \{[\s\S]*?--danger-hover:\s*color-mix\(in srgb, var\(--danger\) 88%, black\);/);
+assert.match(css, /:root\[data-theme="dark"\] \{[\s\S]*?--danger-active:\s*color-mix\(in srgb, var\(--danger\) 76%, black\);/);
 assert.match(css, /\.layout-preset-delete\.compact-icon \{[^}]*width:\s*24px;/s);
 assert.match(css, /\.share-option-group \{[^}]*gap:\s*var\(--space-2\);/);
 assert.match(css, /\.pocket-empty \.svg-icon \{[^}]*color:\s*var\(--primary\);/s);

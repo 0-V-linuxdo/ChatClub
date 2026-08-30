@@ -229,8 +229,8 @@ export function createPromptLibraryController(ctx) {
 
   function deletePromptLibraryItem(prompt, redraw) {
     openConfirmationAction({
-      title: t("prompts.deleteTitle"),
-      body: t("prompts.deleteConfirm", { name: prompt.title || t("common.untitledPrompt") }),
+      title: t("prompts.deleteTitle", { name: prompt.title || t("common.untitledPrompt") }),
+      body: t("prompts.deleteConfirm"),
       confirmLabel: t("common.delete"),
       cancelLabel: t("common.cancel"),
       closeLabel: t("common.close"),

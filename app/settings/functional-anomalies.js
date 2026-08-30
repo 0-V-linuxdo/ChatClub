@@ -181,8 +181,8 @@ export function createFunctionalAnomaliesSettingsSection(ctx) {
 
   function removeRecord(record) {
     openMutationConfirmation({
-      title: t("functionalAnomalies.deleteTitle"),
-      body: t("functionalAnomalies.deleteConfirm", { feature: recordTitle(record), operation: recordOperation(record) }),
+      title: t("functionalAnomalies.deleteTitle", { feature: recordTitle(record), operation: recordOperation(record) }),
+      body: t("functionalAnomalies.deleteConfirm"),
       confirmLabel: t("common.delete"),
       tone: "neutral",
       mutate: () => functionalAnomalyLog.remove(record.id),

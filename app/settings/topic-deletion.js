@@ -468,8 +468,8 @@ export function createTopicDeletionSettingsSection(ctx) {
   function deleteSite(config, redraw) {
     if (builtInDefault(config)) return;
     openConfirmationAction({
-      title: t("topicDeletion.site.deleteTitle"),
-      body: t("topicDeletion.site.deleteConfirm", { name: config.name || config.id }),
+      title: t("topicDeletion.site.deleteTitle", { name: config.name || config.id }),
+      body: t("topicDeletion.site.deleteConfirm"),
       confirmLabel: t("common.delete"),
       cancelLabel: t("common.cancel"),
       closeLabel: t("common.close"),
