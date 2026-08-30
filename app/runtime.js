@@ -366,7 +366,7 @@ const workspaceTabsSidebarController = attachWorkspaceTabsSidebarController({
   fallbackFaviconUrl,
   effectiveFaviconUrl,
   savePagesToPocket: (...args) => ensurePocketController().then((pocket) => pocket.savePagesToPocket(...args)),
-  collectLivePreview: () => ensureSummaryController().then((summary) => summary.collectWorkspacePreviewItems())
+  collectLivePreview: () => ensureSummaryController().then((summary) => summary.collectWorkspacePreviewItems()), openWorkspaceHistory: (payload) => ensureHistoryController().then((history) => history?.openWorkspaceConversation?.(payload)).catch(() => {})
 });
 const {
   renderRuntimeBootstrapFailure,

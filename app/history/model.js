@@ -219,6 +219,42 @@ export function promptHistoryConversationEntries(item, sources = {}) {
   return promptHistoryConversationPages(item, sources).flatMap(pageToHistoryEntries);
 }
 
+const WORKSPACE_PREVIEW_HISTORY_PREFIX = "workspace-preview:";
+
+export function workspacePreviewHistoryItemId(workspaceId) {
+  const id = String(workspaceId || "").trim();
+  return id ? `${WORKSPACE_PREVIEW_HISTORY_PREFIX}${id}` : "";
+}
+
+export function isWorkspacePreviewHistoryItem(item) {
+  return String(item?.id || "").startsWith(WORKSPACE_PREVIEW_HISTORY_PREFIX);
+}
+
+export function workspacePreviewHistoryItem({ workspaceId, topicTitle, updatedAt } = {}) {
+  const id = workspacePreviewHistoryItemId(workspaceId);
+  if (!id) return null;
+  return {
+    id,
+    text: String(topicTitle || "").trim(),
+    createdAt: String(updatedAt || "").trim() || new Date().toISOString(),
+    images: []
+  };
+}
+
+export function promptHistoryItemMatchesWorkspace(item, record) {
+  if (!promptHistoryMessageKey(item?.text)) return false;
+  const frames = Array.isArray(record?.frames) ? record.frames : [];
+  return frames.some((frame) => matchingMessages(item, frame?.messages).length > 0);
+}
+
+export function workspaceConversationPages(record) {
+  return uniqueConversationPages((Array.isArray(record?.frames) ? record.frames : []).map(frameToPocketPage));
+}
+
+export function workspaceConversationEntries(record) {
+  return workspaceConversationPages(record).flatMap(pageToHistoryEntries);
+}
+
 export function promptHistoryEntryClusters(entries = []) {
   const list = Array.isArray(entries) ? entries : [];
   const entriesByMessage = new Map();

@@ -2,12 +2,13 @@ import { STORAGE_KEYS } from "../../shared/constants.js";
 import { t } from "../../shared/i18n.js";
 import {
   framesFromSummaryPreviewItems,
+  leftoverWorkspaceTabFullTextHits,
   matchesFullTextQuery,
   mergeWorkspaceTabFullTextFrames,
   normalizeWorkspaceTabFullTextStore,
   pruneWorkspaceTabFullTextStore,
   removeWorkspaceTabFullText,
-  searchWorkspaceTabFullTextHits,
+  uniqueWorkspaceTabFullTextHits,
   upsertWorkspaceTabFullText,
   workspaceTabFullTextFramesEqual
 } from "../../shared/workspace-tab-fulltext.js";
@@ -141,17 +142,8 @@ function highlightQuery(text, query) {
   return nodes.length ? nodes : [value];
 }
 
-function searchHitMessage(role, text, query) {
-  const assistant = role === "assistant";
-  return el("section", { class: `pocket-message pocket-message-${role}` },
-    el("div", { class: "pocket-message-head" },
-      el("span", { class: "pocket-message-label" }, assistant ? t("common.assistant") : t("common.user"))
-    ),
-    el("p", { class: "pocket-message-body pocket-message-plain" }, ...highlightQuery(text, query))
-  );
-}
-
 function searchHitCard(hit, query, onActivate) {
+  const sources = Array.isArray(hit.appNames) ? hit.appNames.filter(Boolean) : [];
   return el("article", {
     class: "ui-card pocket-entry workspace-tabs-search-hit",
     onclick: () => onActivate?.(hit)
@@ -160,16 +152,11 @@ function searchHitCard(hit, query, onActivate) {
       el("div", { class: "pocket-entry-titleblock" },
         el("div", { class: "pocket-entry-title" },
           el("strong", {}, ...highlightQuery(hit.title || hit.appName || t("workspace.tabs.untitled", { index: 1 }), query))
-        ),
-        hit.href ? el("div", { class: "pocket-entry-url" }, hit.href) : null
+        )
       ),
-      hit.appName ? el("div", { class: "pocket-entry-meta" },
-        el("span", { class: "pocket-entry-source" }, hit.appName)
+      sources.length ? el("div", { class: "pocket-entry-meta" },
+        el("span", { class: "pocket-entry-source" }, sources.join(" · "))
       ) : null
-    ),
-    el("div", { class: "pocket-message-grid" },
-      searchHitMessage("user", hit.userMessage, query),
-      searchHitMessage("assistant", hit.assistantMessage, query)
     )
   );
 }
@@ -180,16 +167,18 @@ export function renderWorkspaceTabSearchHits({ query, store, items, fullTextEnab
   if (!fullTextEnabled) {
     return el("div", { class: "workspace-tabs-search-hint" }, t("workspace.tabs.fullTextDisabled"));
   }
-  const hits = searchWorkspaceTabFullTextHits(store, needle, items);
-  if (!hits.length) {
-    return el("div", { class: "workspace-tabs-search-hint" }, t("workspace.tabs.fullTextEmpty"));
+  const leftover = leftoverWorkspaceTabFullTextHits(store, needle, items);
+  if (!leftover.length) {
+    return uniqueWorkspaceTabFullTextHits(store, needle, items).length
+      ? null
+      : el("div", { class: "workspace-tabs-search-hint" }, t("workspace.tabs.fullTextEmpty"));
   }
   return el("section", { class: "workspace-tabs-search-hits", "aria-label": t("workspace.tabs.fullTextHits") },
     el("div", { class: "workspace-tabs-sidebar-divider", role: "separator" },
       el("span", { class: "workspace-tabs-sidebar-divider-label" }, t("workspace.tabs.fullTextHits"))
     ),
     el("div", { class: "workspace-tabs-search-hit-list" },
-      hits.map((hit) => searchHitCard(hit, needle, onActivate))
+      leftover.map((hit) => searchHitCard(hit, needle, onActivate))
     )
   );
 }

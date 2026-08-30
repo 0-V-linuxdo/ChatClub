@@ -20,6 +20,8 @@ const root = path.resolve(__dirname, "..");
     pocketPairsFromMessages,
     removeWorkspaceTabFullText,
     searchWorkspaceTabFullTextHits,
+    uniqueWorkspaceTabFullTextHits,
+    leftoverWorkspaceTabFullTextHits,
     upsertWorkspaceTabFullText,
     workspaceIdsMatchingFullText,
     workspaceTabFullTextFramesEqual
@@ -145,6 +147,74 @@ const root = path.resolve(__dirname, "..");
     true,
     "re-merging the same messages must be a no-op for persist"
   );
+
+  const rationalTitle = "the rational male 系列";
+  const rationalStore = upsertWorkspaceTabFullText({}, {
+    workspaceId: "page-rationalone1",
+    topicTitle: rationalTitle,
+    frames: [
+      {
+        appName: "Grok",
+        title: rationalTitle,
+        href: "https://grok.com/c/1",
+        messages: [
+          { role: "user", text: "介绍一下： the rational male 系列" },
+          { role: "assistant", text: "Grok 回复。" }
+        ]
+      },
+      {
+        appName: "Notion AI",
+        title: rationalTitle,
+        href: "https://notion.so/chat/2",
+        messages: [
+          { role: "user", text: "介绍一下： the rational male 系列" },
+          { role: "assistant", text: "Notion 回复。" },
+          { role: "user", text: "继续" },
+          { role: "assistant", text: "Notion 第二轮。" }
+        ]
+      },
+      {
+        appName: "Kagi Assistant",
+        title: rationalTitle,
+        href: "https://kagi.com/assistant/3",
+        messages: [
+          { role: "user", text: "介绍一下： the rational male 系列" },
+          { role: "assistant", text: "Kagi 回复。" }
+        ]
+      }
+    ]
+  });
+  const pairHits = searchWorkspaceTabFullTextHits(rationalStore, "rational");
+  assert.ok(pairHits.length > 1, "pair search still matches every overlapping turn");
+  const uniqueHits = uniqueWorkspaceTabFullTextHits(rationalStore, "rational");
+  assert.equal(uniqueHits.length, 1, "one chat must appear at most once");
+  assert.equal(uniqueHits[0].workspaceId, "page-rationalone1");
+  assert.deepEqual(uniqueHits[0].appNames, ["Grok", "Notion AI", "Kagi Assistant"]);
+  assert.equal(
+    leftoverWorkspaceTabFullTextHits(rationalStore, "rational", [{ workspaceId: "page-rationalone1" }]).length,
+    0,
+    "Full text leftover must omit workspaces already listed in TODAY"
+  );
+
+  const second = upsertWorkspaceTabFullText(rationalStore, {
+    workspaceId: "page-rationaltwo1",
+    topicTitle: rationalTitle,
+    frames: [{
+      appName: "ChatGPT",
+      title: rationalTitle,
+      href: "https://chatgpt.com/c/9",
+      messages: [
+        { role: "user", text: "the rational male" },
+        { role: "assistant", text: "another desk" }
+      ]
+    }]
+  });
+  const twoChats = uniqueWorkspaceTabFullTextHits(second, "rational");
+  assert.equal(twoChats.length, 2, "different workspaceId values with the same title stay two rows");
+  assert.deepEqual(twoChats.map((hit) => hit.workspaceId).sort(), ["page-rationalone1", "page-rationaltwo1"]);
+  const leftover = leftoverWorkspaceTabFullTextHits(second, "rational", [{ workspaceId: "page-rationalone1" }]);
+  assert.equal(leftover.length, 1);
+  assert.equal(leftover[0].workspaceId, "page-rationaltwo1");
 
   console.log("workspace tab full text: ok");
 })().catch((error) => {

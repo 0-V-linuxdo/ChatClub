@@ -26,7 +26,13 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
     promptHistoryEntryClusters,
     promptHistoryPocketPages,
     promptHistoryPocketSaved,
-    promptHistorySourceMeta
+    promptHistorySourceMeta,
+    promptHistoryItemMatchesWorkspace,
+    workspaceConversationEntries,
+    workspaceConversationPages,
+    workspacePreviewHistoryItem,
+    workspacePreviewHistoryItemId,
+    isWorkspacePreviewHistoryItem
   } = await import(moduleUrl("app/history/model.js"));
   const now = new Date(2026, 7, 8, 12, 0, 0).getTime();
   const dateDaysAgo = (daysAgo, hour = 12) => new Date(2026, 7, 8 - daysAgo, hour, 0, 0).toISOString();
@@ -326,6 +332,40 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   assert.equal(mergedClusters[0].entries.length, 2);
   assert.equal(mergedClusters[0].userMessage, "介绍一下： the rational male 系列");
 
+  const workspaceRecord = {
+    workspaceId: "page-rationalone",
+    topicTitle: "the rational male 系列",
+    updatedAt: "2026-08-30T12:00:00.000Z",
+    frames: [
+      {
+        href: "https://grok.com/c/1",
+        appName: "Grok",
+        title: "the rational male 系列",
+        messages: [
+          { role: "user", text: "介绍一下： the rational male 系列" },
+          { role: "assistant", text: "Grok 回复。" }
+        ]
+      },
+      {
+        href: "https://kagi.com/assistant/3",
+        appName: "Kagi Assistant",
+        title: "the rational male 系列",
+        messages: [
+          { role: "user", text: "另一问" },
+          { role: "assistant", text: "Kagi 回复。" }
+        ]
+      }
+    ]
+  };
+  const previewItem = workspacePreviewHistoryItem(workspaceRecord);
+  assert.equal(previewItem.id, workspacePreviewHistoryItemId("page-rationalone"));
+  assert.equal(isWorkspacePreviewHistoryItem(previewItem), true);
+  assert.equal(promptHistoryItemMatchesWorkspace({ text: "介绍一下： the rational male 系列" }, workspaceRecord), true);
+  assert.equal(promptHistoryItemMatchesWorkspace({ text: "unrelated prompt" }, workspaceRecord), false);
+  const workspacePages = workspaceConversationPages(workspaceRecord);
+  assert.equal(workspacePages.length, 2, "workspace preview must show every frame, not only prompt matches");
+  assert.equal(workspaceConversationEntries(workspaceRecord).length, 2);
+
   assert.match(historySource, /class: "shortcut-search prompt-history-search"/);
   assert.match(historySource, /class: "shortcut-search-input prompt-history-search-input"/);
   assert.match(historySource, /headerSearch, pane, resetAfterImport/);
@@ -364,6 +404,17 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   assert.match(panelSource, /function notifyFullTextChanged/);
   assert.match(panelSource, /function applyWorkspacePreview/);
   assert.match(panelSource, /function notifyWorkspaceSaved/);
+  assert.match(panelSource, /function openWorkspaceConversation/);
+  assert.match(panelSource, /pinnedWorkspaceId/);
+  assert.match(panelSource, /workspacePreviewHistoryItemId/);
+  assert.match(panelSource, /isWorkspacePreviewHistoryItem/);
+  assert.match(panelSource, /promptHistoryItemMatchesWorkspace/);
+  assert.match(panelSource, /workspaceConversationPages/);
+  assert.match(modelSource, /export function workspacePreviewHistoryItem/);
+  assert.match(modelSource, /export function promptHistoryItemMatchesWorkspace/);
+  assert.match(modelSource, /export function workspaceConversationPages/);
+  assert.match(runtimeSource, /openWorkspaceConversation/);
+  assert.match(runtimeSource, /openWorkspaceHistory:/);
   assert.match(panelSource, /workspacePreviewPinned/);
   assert.match(panelSource, /refreshOpenHistory\(\{ retryLive: !pinned \}\)/);
   assert.match(panelSource, /if \(!pinned\) \{\s*activeItemId = ""/);

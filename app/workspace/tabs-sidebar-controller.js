@@ -193,7 +193,8 @@ export function createWorkspaceTabsSidebarController({
   collectLivePreview,
   document: ownerDocument = globalThis.document,
   openConfirmationAction = defaultOpenConfirmationAction,
-  createIcon = createSvgIcon
+  createIcon = createSvgIcon,
+  openWorkspaceHistory
 } = {}) {
   if (typeof requestBackground !== "function") {
     throw new TypeError("Workspace tabs sidebar requires requestBackground().");
@@ -490,6 +491,16 @@ export function createWorkspaceTabsSidebarController({
     setItems(response?.tabs);
     refreshSearchContext().catch(() => {});
     return currentItems();
+  }
+
+  function previewSearchWorkspace(item = {}) {
+    const workspaceId = workspaceIdValue(item.workspaceId);
+    if (!searchQuery.trim() || !workspaceId || typeof openWorkspaceHistory !== "function") return false;
+    openWorkspaceHistory({
+      workspaceId,
+      topicTitle: String(item.topicTitle || item.title || "").trim() || itemLabel(item)
+    });
+    return true;
   }
 
   async function activateTab(item = {}) {
@@ -1261,7 +1272,7 @@ export function createWorkspaceTabsSidebarController({
         suppressActivate = false;
         return true;
       },
-      activateTab,
+      activateTab: (item) => previewSearchWorkspace(item) ? Promise.resolve() : activateTab(item),
       bindItemDrag,
       actionCount,
       actionNodes,
@@ -1364,6 +1375,7 @@ export function createWorkspaceTabsSidebarController({
         items,
         fullTextEnabled: recordFullTextEnabled,
         onActivate: (hit) => {
+          if (previewSearchWorkspace(hit)) return;
           const item = items.find((entry) => workspaceIdValue(entry.workspaceId) === workspaceIdValue(hit.workspaceId));
           if (item) activateTab(item).catch(() => {});
         }

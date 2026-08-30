@@ -269,6 +269,11 @@ globalThis.document = {
   assert.match(source, /searchComposing/, "sidebar rebuilds must wait until IME composition ends");
   assert.doesNotMatch(tabSearch, /class: "input workspace-tabs-sidebar-search-input"/);
   assert.match(css, /\.workspace-tabs-search-hit/, "full-text hits must reuse Pocket card chrome");
+  assert.match(tabSearch, /leftoverWorkspaceTabFullTextHits/, "Full text leftover must group by workspaceId");
+  assert.match(tabSearch, /uniqueWorkspaceTabFullTextHits/);
+  assert.doesNotMatch(tabSearch, /pocket-message-grid/, "search hit cards must not repeat pair bodies");
+  assert.match(source, /openWorkspaceHistory/, "search activation must open the existing History viewer");
+  assert.match(source, /function previewSearchWorkspace/);
   assert.match(icons, /search:\s*\[/, "the sidebar search field must use the Lucide search glyph");
   const { createWorkspaceTabsSidebarController } = await import("../app/workspace/tabs-sidebar-controller.js");
   const memory = new Map();
@@ -1087,6 +1092,28 @@ globalThis.document = {
     fixture.api.setSearchQuery("no-such-tab");
     const empty = fixture.api.renderSidebar();
     assert.match(nodeText(empty), /No matching tabs|没有匹配的标签页/);
+  }
+
+  {
+    const previews = [];
+    const fixture = controller({
+      openWorkspaceHistory: (payload) => { previews.push(payload); }
+    });
+    await fixture.api.refresh();
+    fixture.api.setOpen(true);
+    fixture.api.setSearchQuery("Closed");
+    const sidebar = fixture.api.renderSidebar();
+    const row = descendants(sidebar).find((node) => node.classList.contains("workspace-tabs-sidebar-item-focus"));
+    assert.ok(row, "filtered search results must keep an activatable tab row");
+    row.click();
+    assert.equal(
+      fixture.calls.filter((call) => call.action === "focusWorkspaceTab" || call.action === "openWorkspaceTab").length,
+      0,
+      "clicking a search result must not activate the live tab"
+    );
+    assert.equal(previews.length, 1, "clicking a search result must pin History to that workspace");
+    assert.equal(previews[0].workspaceId, "page-cccccccccccc");
+    assert.equal(previews[0].topicTitle, "Closed research");
   }
 
   {

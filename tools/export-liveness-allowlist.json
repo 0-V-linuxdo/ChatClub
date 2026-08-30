@@ -3,6 +3,10 @@
     "kind": "test-only",
     "reason": "Tooltip-id alias regressions import the canonical retired-id map so persistence and live hover suppression cannot drift."
   },
+  "shared/workspace-tab-fulltext.js#searchWorkspaceTabFullTextHits": {
+    "kind": "test-only",
+    "reason": "Pair-grain full-text search remains the engine under unique workspace grouping, and regressions assert it still matches every overlapping turn."
+  },
   "app/workspace/tabs-sidebar-controller.js#createWorkspaceTabsSidebarController": {
     "kind": "test-only",
     "reason": "Remembered ChatClub-tab sidebar regressions inject storage, catalog, overlay-dismissal, and delete-confirmation seams without going through the runtime attach helper."

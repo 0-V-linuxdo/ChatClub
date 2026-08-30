@@ -17,8 +17,10 @@ import {
 import { renderMarkdown } from "../summary/markdown.js";
 import {
   groupPromptHistory,
+  isWorkspacePreviewHistoryItem,
   promptHistoryImageCountLabel,
   promptHistoryItemMatchesSearch,
+  promptHistoryItemMatchesWorkspace,
   promptHistoryMessageKey,
   promptHistoryConversationPages,
   promptHistoryConversationEntries,
@@ -27,7 +29,11 @@ import {
   promptHistoryPocketSaved,
   promptHistoryPreview,
   promptHistoryTimeLabel,
-  promptHistorySourceMeta
+  promptHistorySourceMeta,
+  workspaceConversationEntries,
+  workspaceConversationPages,
+  workspacePreviewHistoryItem,
+  workspacePreviewHistoryItemId
 } from "./model.js";
 
 const HISTORY_PANEL_SIZE_KEY = "chatclub.historyPanelSize.v1";
@@ -96,6 +102,8 @@ export function createHistoryController(ctx) {
   let livePreviewTried = false;
   let livePreviewPending = false;
   let workspacePreviewPinned = false;
+  let pinnedWorkspaceId = "";
+  let pinnedTopicTitle = "";
   let historyCurrentRedraw = null;
   const viewerWindow = createViewerWindowChrome({
     fullscreenClass: HISTORY_PANEL_FULLSCREEN_CLASS,
@@ -147,8 +155,37 @@ export function createHistoryController(ctx) {
     return fullTextStore;
   }
 
+  function pinnedRecord() {
+    if (!pinnedWorkspaceId) return null;
+    return fullTextStore?.[pinnedWorkspaceId] || {
+      workspaceId: pinnedWorkspaceId,
+      topicTitle: pinnedTopicTitle,
+      frames: []
+    };
+  }
+
+  function pinnedPreviewItem() {
+    if (!pinnedWorkspaceId) return null;
+    const record = pinnedRecord();
+    return workspacePreviewHistoryItem({
+      workspaceId: pinnedWorkspaceId,
+      topicTitle: pinnedTopicTitle || record?.topicTitle || "",
+      updatedAt: record?.updatedAt
+    });
+  }
+
   function conversationPages(item) {
+    if (isWorkspacePreviewHistoryItem(item)) return workspaceConversationPages(pinnedRecord());
     return promptHistoryConversationPages(item, {
+      store: fullTextStore,
+      previewItems: livePreviewItems,
+      pocketEntries
+    });
+  }
+
+  function conversationEntries(item) {
+    if (isWorkspacePreviewHistoryItem(item)) return workspaceConversationEntries(pinnedRecord());
+    return promptHistoryConversationEntries(item, {
       store: fullTextStore,
       previewItems: livePreviewItems,
       pocketEntries
@@ -158,11 +195,12 @@ export function createHistoryController(ctx) {
   async function refreshConversationSources(redraw, options = {}) {
     await refreshFullTextStore();
     const history = items();
-    const active = history.find((entry) => entry.id === activeItemId) || history[0] || null;
+    const preview = isWorkspacePreviewHistoryItem({ id: activeItemId }) ? pinnedPreviewItem() : null;
+    const active = preview || history.find((entry) => entry.id === activeItemId) || history[0] || null;
     const hasPages = Boolean(active && conversationPages(active).length);
     const hasLiveSnapshot = Array.isArray(livePreviewItems) && livePreviewItems.length > 0;
     if (options.retryLive && !hasPages && !hasLiveSnapshot && !livePreviewPending) livePreviewTried = false;
-    const shouldCollect = !livePreviewTried && !livePreviewPending && active && !hasPages && !hasLiveSnapshot;
+    const shouldCollect = !pinnedWorkspaceId && !livePreviewTried && !livePreviewPending && active && !hasPages && !hasLiveSnapshot;
     if (shouldCollect) {
       livePreviewTried = true;
       livePreviewPending = true;
@@ -208,6 +246,7 @@ export function createHistoryController(ctx) {
   }
 
   function remove(item, redraw) {
+    if (isWorkspacePreviewHistoryItem(item)) return;
     const previous = items();
     const index = previous.findIndex((entry) => entry.id === item.id);
     if (index < 0) return;
@@ -723,7 +762,7 @@ export function createHistoryController(ctx) {
 
   function historyHeaderActions(item, redraw, close) {
     const actions = [];
-    if (item) {
+    if (item && !isWorkspacePreviewHistoryItem(item)) {
       const canPocket = Boolean(promptHistoryMessageKey(item.text)) && !pocketBusy;
       actions.push(
         el("button", {
@@ -759,11 +798,7 @@ export function createHistoryController(ctx) {
   function detail(item) {
     const images = Array.isArray(item.images) ? item.images : [];
     const imageLabel = promptHistoryImageCountLabel(images);
-    const entries = promptHistoryConversationEntries(item, {
-      store: fullTextStore,
-      previewItems: livePreviewItems,
-      pocketEntries
-    });
+    const entries = conversationEntries(item);
     const clusters = promptHistoryEntryClusters(entries);
     const loading = !entries.length && (livePreviewPending || !livePreviewTried);
     return el("article", { class: "prompt-history-detail" },
@@ -784,7 +819,16 @@ export function createHistoryController(ctx) {
     const history = items();
     const query = searchQuery;
     const searching = Boolean(String(query || "").trim());
-    const visible = searching ? history.filter((item) => promptHistoryItemMatchesSearch(item, query)) : history;
+    const preview = pinnedPreviewItem();
+    let visible = pinnedWorkspaceId
+      ? history.filter((item) => promptHistoryItemMatchesWorkspace(item, pinnedRecord()))
+      : history;
+    if (preview) visible = [preview, ...visible];
+    if (searching) {
+      visible = visible.filter((item) => (
+        isWorkspacePreviewHistoryItem(item) || promptHistoryItemMatchesSearch(item, query)
+      ));
+    }
     const activeItem = resolveActiveItem(visible);
     const panel = host.closest?.(".modal.prompt-history-modal");
     const focusMode = historyPanelIsFocusMode(panel);
@@ -959,6 +1003,8 @@ export function createHistoryController(ctx) {
     const host = el("div", { class: "ui-dialog prompt-history-dialog" });
     let dialog;
     const close = () => {
+      pinnedWorkspaceId = "";
+      pinnedTopicTitle = "";
       if (historyCurrentRedraw === redraw) historyCurrentRedraw = null;
       dialog?.remove();
     };
@@ -1007,8 +1053,20 @@ export function createHistoryController(ctx) {
     redraw();
   }
 
+  function openWorkspaceConversation(payload = {}) {
+    const workspaceId = String(payload.workspaceId || "").trim();
+    if (!workspaceId) return openHistoryPanel();
+    pinnedWorkspaceId = workspaceId;
+    pinnedTopicTitle = String(payload.topicTitle || "").trim();
+    activeItemId = workspacePreviewHistoryItemId(workspaceId);
+    resetSearch();
+    workspacePreviewPinned = true;
+    return openHistoryPanel();
+  }
+
   return {
     openHistoryPanel,
+    openWorkspaceConversation,
     notifyFullTextChanged,
     notifyWorkspaceSaved,
     toggleOpenHistoryPanelFullscreen

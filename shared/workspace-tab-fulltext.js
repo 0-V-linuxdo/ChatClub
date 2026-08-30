@@ -270,6 +270,36 @@ export function searchWorkspaceTabFullTextHits(store, query, items = []) {
   return hits;
 }
 
+export function uniqueWorkspaceTabFullTextHits(store, query, items = []) {
+  const grouped = new Map();
+  for (const hit of searchWorkspaceTabFullTextHits(store, query, items)) {
+    let entry = grouped.get(hit.workspaceId);
+    if (!entry) {
+      entry = {
+        workspaceId: hit.workspaceId,
+        topicTitle: hit.topicTitle,
+        live: hit.live === true,
+        title: hit.title,
+        appNames: []
+      };
+      grouped.set(hit.workspaceId, entry);
+    }
+    const appName = textValue(hit.appName);
+    if (appName && !entry.appNames.includes(appName)) entry.appNames.push(appName);
+  }
+  return [...grouped.values()];
+}
+
+export function leftoverWorkspaceTabFullTextHits(store, query, items = []) {
+  const present = new Set(
+    (Array.isArray(items) ? items : [])
+      .map((item) => normalizeWorkspaceSessionId(item?.workspaceId))
+      .filter(Boolean)
+  );
+  return uniqueWorkspaceTabFullTextHits(store, query, items)
+    .filter((hit) => !present.has(hit.workspaceId));
+}
+
 export function workspaceIdsMatchingFullText(store, query) {
   return [...new Set(searchWorkspaceTabFullTextHits(store, query).map((hit) => hit.workspaceId))];
 }
