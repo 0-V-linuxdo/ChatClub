@@ -50,15 +50,38 @@ function token(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
-function chatClubWorkspaceId(api, href, options = {}) {
+function chatClubPageHref(api, href) {
   try {
     const actualHref = new URL(String(href || "")).href;
     const baseHref = api.runtime.getURL("chatClub.html");
     const actual = new URL(actualHref);
     const base = new URL(baseHref);
     if (actual.origin !== base.origin || actual.pathname !== base.pathname) return "";
+    return actualHref;
+  } catch {
+    return "";
+  }
+}
+
+function chatClubResourceKey(api, href) {
+  const pageHref = chatClubPageHref(api, href);
+  if (!pageHref) return "";
+  try {
+    const url = new URL(pageHref);
+    url.hash = "";
+    return url.href;
+  } catch {
+    return "";
+  }
+}
+
+function chatClubWorkspaceId(api, href, options = {}) {
+  try {
+    const actualHref = chatClubPageHref(api, href);
+    if (!actualHref) return "";
     const workspaceId = workspaceSessionIdFromUrl(actualHref);
     if (!workspaceId) return "";
+    const baseHref = api.runtime.getURL("chatClub.html");
     return options.canonical !== true || workspaceSessionUrl(baseHref, workspaceId) === actualHref
       ? workspaceId
       : "";
@@ -75,18 +98,39 @@ function normalizedHref(value) {
   }
 }
 
-function senderDocumentMatchesTab(senderHref, tabHref) {
-  if (!senderHref || !tabHref) return false;
-  if (senderHref === tabHref) return true;
-  try {
-    const senderUrl = new URL(senderHref);
-    if (senderUrl.hash) return false;
-    const tabUrl = new URL(tabHref);
-    tabUrl.hash = "";
-    return senderUrl.href === tabUrl.href;
-  } catch {
-    return false;
+function senderDocumentMatchesTab(api, senderHref, tabHref) {
+  const senderKey = chatClubResourceKey(api, senderHref);
+  const tabKey = chatClubResourceKey(api, tabHref);
+  return Boolean(senderKey && senderKey === tabKey);
+}
+
+function resolveSenderWorkspaceId(api, senderHref, tabHref, options = {}) {
+  const fromSender = chatClubWorkspaceId(api, senderHref, { canonical: false });
+  const fromTab = chatClubWorkspaceId(api, tabHref, { canonical: false });
+  if (options.canonical === true) {
+    const baseHref = api.runtime.getURL("chatClub.html");
+    const senderPage = chatClubPageHref(api, senderHref);
+    if (senderPage) {
+      try {
+        if (new URL(senderPage).hash) {
+          return fromSender && workspaceSessionUrl(baseHref, fromSender) === senderPage
+            ? fromSender
+            : "";
+        }
+      } catch {
+        return "";
+      }
+    }
+    return fromTab && workspaceSessionUrl(baseHref, fromTab) === normalizedHref(tabHref)
+      ? fromTab
+      : "";
   }
+  return fromSender || fromTab;
+}
+
+function senderDocumentMatchesLive(api, senderHref, senderTabHref, liveHref) {
+  return senderDocumentMatchesTab(api, senderHref, liveHref)
+    || senderDocumentMatchesTab(api, senderTabHref, liveHref);
 }
 
 function storedRecord(value, current) {
@@ -350,22 +394,21 @@ export function createWorkspacePromptHandoffRuntime(api, dependencies = {}) {
     if (tabId === null) throw handoffError("HANDOFF_SENDER_INVALID", "Workspace prompt handoff requires a ChatClub tab");
     const senderHref = normalizedHref(sender?.url);
     const senderTabHref = normalizedHref(sender?.tab?.url);
-    const senderWorkspaceId = chatClubWorkspaceId(api, senderTabHref, options);
-    if (!senderWorkspaceId || !senderDocumentMatchesTab(senderHref, senderTabHref)) {
+    if (!senderDocumentMatchesTab(api, senderHref, senderTabHref)) {
+      throw handoffError("HANDOFF_SENDER_INVALID", "Workspace prompt handoff sender URL is invalid");
+    }
+    const senderWorkspaceId = resolveSenderWorkspaceId(api, senderHref, senderTabHref, options);
+    if (!senderWorkspaceId) {
       throw handoffError("HANDOFF_SENDER_INVALID", "Workspace prompt handoff sender URL is invalid");
     }
     const liveTab = await api.tabs.get(tabId).catch(() => null);
     const liveHref = normalizedHref(liveTab?.url || liveTab?.pendingUrl);
     const rawPendingHref = String(liveTab?.pendingUrl || "");
     const pendingHref = rawPendingHref ? normalizedHref(rawPendingHref) : "";
-    const liveWorkspaceId = chatClubWorkspaceId(api, liveHref, options);
-    const pendingWorkspaceId = pendingHref ? chatClubWorkspaceId(api, pendingHref, options) : "";
-    if (
-      !liveWorkspaceId
-      || liveWorkspaceId !== senderWorkspaceId
-      || liveHref !== senderTabHref
-      || (rawPendingHref && (pendingHref !== liveHref || pendingWorkspaceId !== senderWorkspaceId))
-    ) {
+    if (!senderDocumentMatchesLive(api, senderHref, senderTabHref, liveHref)) {
+      throw handoffError("HANDOFF_SENDER_INVALID", "Workspace prompt handoff tab URL changed");
+    }
+    if (rawPendingHref && !senderDocumentMatchesLive(api, senderHref, senderTabHref, pendingHref)) {
       throw handoffError("HANDOFF_SENDER_INVALID", "Workspace prompt handoff tab URL changed");
     }
     const expected = normalizeWorkspaceSessionId(expectedWorkspaceId);

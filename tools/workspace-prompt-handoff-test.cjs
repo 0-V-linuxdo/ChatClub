@@ -261,6 +261,63 @@ function createApi(sessionStorage, options = {}) {
   }
 
   {
+    let current = 12_000;
+    const sourceWorkspaceId = "page-replacestate-source-1234";
+    const previousWorkspaceId = "page-replacestate-stale-1234";
+    const session = createSessionStorage();
+    const idb = createIndexedDbBackend();
+    const nakedTab = {
+      id: 31,
+      windowId: 1,
+      index: 2,
+      url: "chrome-extension://chatclub/chatClub.html"
+    };
+    const staleTab = {
+      id: 32,
+      windowId: 1,
+      index: 3,
+      url: workspaceUrl(previousWorkspaceId)
+    };
+    const api = createApi(session, { tabs: [[nakedTab.id, nakedTab], [staleTab.id, staleTab]] });
+    const store = shared.createWorkspacePromptPayloadStore(api, { indexedDbBackend: idb, now: () => current });
+    let nextTabId = 40;
+    const runtime = background.createWorkspacePromptHandoffRuntime(api, {
+      payloadStore: store,
+      now: () => current,
+      createWorkspaceId: () => "page-replacestate-target-1234",
+      openWorkspaceTab: async (_api, _sender, _opener, options) => {
+        const tab = { id: nextTabId++, windowId: 1, index: 4, url: workspaceUrl(options.workspaceId) };
+        api.tabsById.set(tab.id, tab);
+        return tab;
+      }
+    });
+
+    const nakedHandoffId = "prompt-handoff-replacestate-naked";
+    const nakedLocator = await store.put(nakedHandoffId, payload("naked tab url"));
+    const nakedOpened = await runtime.open(
+      { handoffId: nakedHandoffId, locator: nakedLocator },
+      { id: "chatclub", url: workspaceUrl(sourceWorkspaceId), tab: nakedTab }
+    );
+    assert.equal(
+      nakedOpened.workspaceId,
+      "page-replacestate-target-1234",
+      "replaceState hash on the document must open when Tab.url is still bare chatClub.html"
+    );
+
+    const staleHandoffId = "prompt-handoff-replacestate-stale";
+    const staleLocator = await store.put(staleHandoffId, payload("stale tab hash"));
+    const staleOpened = await runtime.open(
+      { handoffId: staleHandoffId, locator: staleLocator },
+      { id: "chatclub", url: workspaceUrl(sourceWorkspaceId), tab: staleTab }
+    );
+    assert.equal(
+      staleOpened.workspaceId,
+      "page-replacestate-target-1234",
+      "replaceState hash on the document must win over a stale Tab.url workspace id"
+    );
+  }
+
+  {
     let current = 5_000;
     const session = createSessionStorage({ rejectGetAllCount: 1 });
     const idb = createIndexedDbBackend({ rejectListCount: 1 });
