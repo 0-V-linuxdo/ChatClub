@@ -186,12 +186,16 @@ globalThis.document = {
   assert.match(source, /isDismissalEscape/);
   assert.match(source, /workspaceSessionWorkspaceId/);
   assert.match(source, /syncPageTitle/);
+  assert.match(source, /!item\.live && title/, "live ChatClub tabs must not reuse a stale browser tab title");
+  assert.match(source, /workspace\.tabs\.newTab/, "an empty current tab must be labeled New Tab");
   assert.match(source, /openConfirmationAction/);
   assert.doesNotMatch(source, /confirmationModal/, "ChatClub tab delete must use openConfirmationAction instead of a hand-rolled confirmationModal");
   assert.match(source, /forgetRememberedWorkspaceTab/);
   assert.match(source, /closeOtherLiveWorkspaceTabs/);
   assert.match(source, /moveLiveWorkspaceTabs/);
   assert.match(source, /openWorkspaceTab/);
+  assert.match(source, /staleLiveTabError/);
+  assert.match(source, /openWorkspaceFromSidebar/);
   assert.match(source, /is-closed/);
   assert.match(css, /\.workspace-tabs-sidebar\s*\{[^}]*position:\s*absolute/, "the sidebar must overlay the workspace instead of taking iframe space");
   assert.match(css, /\.workspace-tabs-sidebar\s*\{[^}]*top:\s*var\(--workspace-tabs-sidebar-top\)/, "the sidebar must start below the topbar instead of covering it");
@@ -420,6 +424,39 @@ globalThis.document = {
 
   {
     const fixture = controller({
+      requestBackground: async (action, payload = {}) => {
+        fixture.calls.push({ action, payload });
+        if (action === "listLiveWorkspaceTabs") {
+          return {
+            tabs: [{
+              tabId: 12,
+              windowId: 1,
+              index: 1,
+              workspaceId: "page-bbbbbbbbbbbb",
+              current: false,
+              live: true,
+              appIds: ["Claude"]
+            }]
+          };
+        }
+        if (action === "focusWorkspaceTab") throw new Error("Workspace tab is not a live ChatClub page");
+        if (action === "openWorkspaceTab") return { tabId: 99, focused: true };
+        throw new Error(`unexpected ${action}`);
+      }
+    });
+    await fixture.api.refresh();
+    const opened = await fixture.api.activateTab(fixture.api.currentItems()[0]);
+    assert.deepEqual(opened, { tabId: 99, focused: true });
+    assert.equal(
+      fixture.calls.some((call) => call.action === "focusWorkspaceTab"),
+      true
+    );
+    assert.equal(fixture.calls.at(-1).action, "openWorkspaceTab");
+    assert.deepEqual(fixture.calls.at(-1).payload, { workspaceId: "page-bbbbbbbbbbbb" });
+  }
+
+  {
+    const fixture = controller({
       requestBackground: async (action) => {
         if (action === "listLiveWorkspaceTabs") return { tabs: [] };
         throw new Error("missing tab");
@@ -442,7 +479,7 @@ globalThis.document = {
     const sidebar = fixture.api.renderSidebar();
     const current = descendants(sidebar).find((node) => node.classList.contains("is-current"));
     assert.ok(current, "the current ChatClub tab must be marked in the list");
-    assert.match(nodeText(current), /Pocket batch/);
+    assert.match(nodeText(current), /New Tab/, "the current untitled ChatClub tab must use New Tab");
     assert.doesNotMatch(nodeText(current), /\bCurrent\b|当前/, "current rows must not show a Current badge");
     const count = descendants(sidebar).find((node) => node.classList.contains("workspace-tabs-sidebar-count"));
     assert.equal(nodeText(count), "3");
@@ -487,6 +524,25 @@ globalThis.document = {
     assert.equal(fixture.api.itemLabel({ layoutName: "Prompt", appIds: [] }, 0), "ChatClub 1");
     assert.equal(fixture.api.itemLabel({ layoutName: "Pocket batch", appIds: ["Claude"] }, 0), "Pocket batch");
     assert.equal(fixture.api.itemLabel({ layoutName: "", appIds: [], title: "Grok · Notion AI" }, 0), "Grok · Notion AI");
+    assert.equal(fixture.api.itemLabel({
+      live: true,
+      topicTitle: "",
+      layoutName: "",
+      appIds: ["Grok", "Notion AI"],
+      title: "the rational male 系列"
+    }, 0), "Grok · Notion AI", "a rebound live tab must not reuse a stale browser tab title");
+    assert.equal(fixture.api.itemLabel({
+      current: true,
+      topicTitle: "",
+      layoutName: "Restore group",
+      appIds: ["Grok", "Notion AI"],
+      title: "the rational male 系列"
+    }, 0), "New Tab", "an empty current tab must be New Tab, not Restore group or leftover conversation names");
+    assert.equal(fixture.api.itemLabel({
+      current: true,
+      topicTitle: "Compare models",
+      layoutName: "Restore group"
+    }, 0), "Compare models");
     assert.equal(fixture.api.itemLabel({ layoutName: "", appIds: [], title: "ChatClub" }, 2), "ChatClub 3");
     assert.equal(fixture.api.itemLabel({
       topicTitle: "Compare models",
@@ -535,7 +591,7 @@ globalThis.document = {
     shell.append(grid);
     fixture.api.setOpen(true);
     fixture.api.syncSidebar(shell);
-    assert.equal(ownerDocument.title, "Grok · Notion AI", "the browser tab title must update after the workspace loads");
+    assert.equal(ownerDocument.title, "New Tab", "an untitled current workspace must use New Tab as the browser tab title");
     const titled = controller({
       document: ownerDocument,
       currentWorkspace: () => ({ layoutName: "Prompt", appIds: ["Grok"], topicTitle: "Compare models" })
@@ -544,6 +600,45 @@ globalThis.document = {
     assert.equal(ownerDocument.title, "Compare models");
     const sidebar = descendants(shell).find((node) => node.classList.contains("workspace-tabs-sidebar"));
     assert.equal(sidebar?.style?.top, "51px");
+  }
+
+  {
+    const fixture = controller({
+      currentWorkspace: () => ({
+        layoutName: "",
+        topicTitle: "",
+        groups: [
+          { chatApps: [{ appId: "Grok" }] },
+          { chatApps: [{ appId: "Notion AI" }] },
+          { chatApps: [{ appId: "Kagi" }] }
+        ]
+      }),
+      requestBackground: async (action) => {
+        if (action === "listLiveWorkspaceTabs") {
+          return {
+            tabs: [{
+              tabId: 11,
+              workspaceId: "page-newempty0001",
+              current: true,
+              live: true,
+              topicTitle: "",
+              layoutName: "",
+              appIds: [],
+              title: "the rational male 系列"
+            }]
+          };
+        }
+        return {};
+      }
+    });
+    await fixture.api.refresh();
+    fixture.api.setOpen(true);
+    const sidebar = fixture.api.renderSidebar();
+    const current = descendants(sidebar).find((node) => node.classList.contains("is-current"));
+    assert.ok(current, "the rebound New Chat row must remain current");
+    assert.match(nodeText(current), /New Tab/, "an empty live workspace must be named New Tab");
+    assert.doesNotMatch(nodeText(current), /ChatClub 1/, "New Chat must not fall back to untitled ChatClub 1");
+    assert.doesNotMatch(nodeText(current), /Restore group|rational male/, "New Chat must not reuse Restore group or the previous conversation name");
   }
 
   {

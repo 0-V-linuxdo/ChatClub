@@ -8,9 +8,10 @@ import {
   NOTION_EFFORT_TARGETS,
   notionEffortTargetsForModel
 } from "./notion-efforts.js";
+import { NOTION_MODEL_PREFERENCE_TARGETS } from "./notion-models.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-09-05｜11:28:18」";
+export const APP_VERSION = "「2026-09-06｜03:11:01」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -33,7 +34,7 @@ export const API_PROMOTION_CHANNELS_VERSION = 2;
 const API_PROFILE_ZERO_ZERO_ENDPOINT = "https://api.0-0.pro/v1/chat/completions";
 const API_PROFILE_ZERO_ZERO_MODEL = "gpt-5.5";
 const API_PROFILE_ZERO_ZERO_REGISTER_URL = "https://0-0.pro/register?ref=CSLPRL76";
-export const SUMMARY_SITE_CONFIG_VERSION = 83;
+export const SUMMARY_SITE_CONFIG_VERSION = 92;
 export const SCRIPT_CONFIG_SCHEMA_VERSION = 3;
 export const PROMPT_IMAGE_PASTE_STRATEGY_SEQUENTIAL = "sequential";
 export const PROMPT_IMAGE_PASTE_STRATEGY_BATCH = "batch";
@@ -98,31 +99,7 @@ export const MODEL_PREFERENCE_TARGETS = Object.freeze({
     Object.freeze({ id: "expert", label: "Expert" }),
     Object.freeze({ id: "vision", label: "Vision" })
   ]),
-  NotionAI: Object.freeze([
-    Object.freeze({ id: "", label: "" }),
-    Object.freeze({ id: "auto", label: "Auto" }),
-    Object.freeze({ id: "sonnet46", label: "Claude Sonnet 4.6" }),
-    Object.freeze({ id: "sonnet5", label: "Claude Sonnet 5" }),
-    Object.freeze({ id: "opus47", label: "Claude Opus 4.7" }),
-    Object.freeze({ id: "opus48", label: "Claude Opus 4.8" }),
-    Object.freeze({ id: "opus5", label: "Claude Opus 5" }),
-    Object.freeze({ id: "fable5", label: "Claude Fable 5" }),
-    Object.freeze({ id: "gemini31pro", label: "Gemini 3.1 Pro" }),
-    Object.freeze({ id: "gemini35flash", label: "Gemini 3.5 Flash" }),
-    Object.freeze({ id: "gpt56sol", label: "GPT-5.6 Sol" }),
-    Object.freeze({ id: "gpt56terra", label: "GPT-5.6 Terra" }),
-    Object.freeze({ id: "gpt52", label: "GPT-5.2" }),
-    Object.freeze({ id: "gpt54", label: "GPT-5.4" }),
-    Object.freeze({ id: "gpt55", label: "GPT-5.5" }),
-    Object.freeze({ id: "grok43", label: "Grok 4.3" }),
-    Object.freeze({ id: "grok45", label: "Grok 4.5" }),
-    Object.freeze({ id: "grokBuild01", label: "Grok Build 0.1" }),
-    Object.freeze({ id: "kimi26", label: "Kimi K2.6" }),
-    Object.freeze({ id: "kimi27code", label: "Kimi K2.7 Code" }),
-    Object.freeze({ id: "kimi3", label: "Kimi K3" }),
-    Object.freeze({ id: "deepseekV4Pro", label: "DeepSeek V4 Pro" }),
-    Object.freeze({ id: "glm52", label: "GLM 5.2" })
-  ])
+  NotionAI: NOTION_MODEL_PREFERENCE_TARGETS
 });
 
 export const MODEL_PREFERENCE_SECONDARY_ENABLED_KEY = "SecondaryModelEnabled";

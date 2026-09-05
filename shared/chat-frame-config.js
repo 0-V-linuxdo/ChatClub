@@ -823,14 +823,40 @@ export function stripValidNotionFrameLoadNonce(value) {
   return parsed.href;
 }
 
+function grokFrameDocumentHost(hostname) {
+  const host = String(hostname || "").toLowerCase();
+  return host === "grok.com"
+    || host.endsWith(".grok.com")
+    || host === "grok.x.ai"
+    || host.endsWith(".grok.x.ai")
+    || host === "gk.dairoot.cn"
+    || host.endsWith(".gk.dairoot.cn");
+}
+
+function canonicalGrokFrameDocumentUrl(value) {
+  try {
+    const url = new URL(String(value || ""));
+    if (!/^https?:$/.test(url.protocol) || !grokFrameDocumentHost(url.hostname)) return "";
+    if (url.searchParams.has("rid")) url.searchParams.delete("rid");
+    return url.href;
+  } catch {
+    return "";
+  }
+}
+
 export function frameDocumentUrlsMatch(first, second) {
   const left = String(first || "");
   const right = String(second || "");
   if (left === right) return true;
   const leftLogical = stripValidNotionFrameLoadNonce(left);
   const rightLogical = stripValidNotionFrameLoadNonce(right);
-  return leftLogical === rightLogical
-    && (leftLogical !== left) !== (rightLogical !== right);
+  if (
+    leftLogical === rightLogical
+    && (leftLogical !== left) !== (rightLogical !== right)
+  ) return true;
+  const leftGrok = canonicalGrokFrameDocumentUrl(left);
+  const rightGrok = canonicalGrokFrameDocumentUrl(right);
+  return Boolean(leftGrok && rightGrok && leftGrok === rightGrok);
 }
 
 export function notionFrameLoadTarget(value, nonceValue) {

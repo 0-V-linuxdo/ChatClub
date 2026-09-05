@@ -455,6 +455,94 @@ async function frameIdsMatchingBinding(api, tabId, frameIds, bindingId) {
   return matches;
 }
 
+export async function relayIsolatedWorldFrameBinding(
+  bindingChallenge,
+  bindingGeneration,
+  bindingId,
+  browserDocumentId
+) {
+  try {
+    const extensionApi = globalThis.browser || globalThis.chrome;
+    // eslint-disable-next-line chatclub-realm/no-cross-realm-global -- serialized ISOLATED-world relay shares the content bundle's DOM-global owner.
+    const target = globalThis.window || globalThis;
+    const sendRuntimeMessage = (message) => {
+      const promiseRuntime = globalThis.browser?.runtime;
+      if (promiseRuntime?.sendMessage) return promiseRuntime.sendMessage(message);
+      return new Promise((resolve, reject) => {
+        if (!extensionApi?.runtime?.sendMessage) {
+          reject(new Error("Extension runtime messaging is unavailable"));
+          return;
+        }
+        extensionApi.runtime.sendMessage(message, (response) => {
+          const runtimeError = extensionApi.runtime.lastError?.message;
+          if (runtimeError) reject(new Error(runtimeError));
+          else resolve(response);
+        });
+      });
+    };
+    const bridgeDocumentId = String(target.__CHATCLUB_CONTENT_DOCUMENT_ID__ || "");
+    const secureFrameToken = String(target.__CHATCLUB_SECURE_FRAME_TOKEN__ || "");
+    const runtimeIdentity = target.__CHATCLUB_CONTENT_RUNTIME_IDENTITY__;
+    const bridgeVersion = String(
+      target.__CHATCLUB_CONTENT_PROTOCOL_VERSION__
+      || target.__CHATCLUB_CONTENT_BRIDGE_VERSION__
+      || ""
+    );
+    const attestationState = target.__CHATCLUB_BROWSER_DOCUMENT_ATTESTATION_STATE__;
+    const attestation = String(attestationState?.id || "");
+    if (
+      !bridgeDocumentId
+      || !browserDocumentId
+      || !runtimeIdentity
+      || typeof runtimeIdentity !== "object"
+      || !extensionApi?.runtime?.sendMessage
+    ) {
+      return { success: false, error: "Injected content frame registration is unavailable" };
+    }
+    if (/^legacy:/i.test(browserDocumentId) && (attestationState?.dirty || attestation !== browserDocumentId)) {
+      return { success: false, error: "Injected browser document attestation changed" };
+    }
+    const registration = await sendRuntimeMessage({
+      source: "chatclub",
+      action: "registerFrameContext",
+      bridgeDocumentId,
+      browserDocumentId: /^legacy:/i.test(browserDocumentId) ? browserDocumentId : attestation,
+      secureFrameToken,
+      frameBindingId: bindingId,
+      bridgeVersion,
+      runtimeIdentity
+    });
+    if (!registration?.success) {
+      return { success: false, error: String(registration?.error || "Secure frame registration failed") };
+    }
+    let lastError = "Secure frame binding relay was not accepted";
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      try {
+        const response = await sendRuntimeMessage({
+          source: "chatclub",
+          action: "relayFrameBinding",
+          bridgeDocumentId,
+          browserDocumentId,
+          challenge: bindingChallenge,
+          generation: bindingGeneration,
+          frameBindingId: bindingId
+        });
+        if (response?.success) return { success: true, bridgeDocumentId };
+        lastError = String(response?.error || lastError);
+      } catch (error) {
+        lastError = String(error?.message || error || lastError);
+      }
+      await new Promise((resolve) => { setTimeout(resolve, 80); });
+    }
+    return { success: false, error: lastError };
+  } catch (error) {
+    return {
+      success: false,
+      error: String(error?.message || error || "Secure frame binding relay failed")
+    };
+  }
+}
+
 async function relayInjectedFrameBinding(api, tabId, frameId, challenge, generation, frameBindingId, expectedDocumentId = "") {
   const matching = await executeFrameInjection(
     api,
@@ -465,71 +553,15 @@ async function relayInjectedFrameBinding(api, tabId, frameId, challenge, generat
     {
     target: { tabId, frameIds: [frameId] },
     world: "ISOLATED",
-    func: async (bindingChallenge, bindingGeneration, bindingId, browserDocumentId) => {
-      const extensionApi = globalThis.browser || globalThis.chrome;
-      // eslint-disable-next-line chatclub-realm/no-cross-realm-global -- serialized ISOLATED-world relay shares the content bundle's DOM-global owner.
-      const target = globalThis.window || globalThis;
-      const bridgeDocumentId = String(target.__CHATCLUB_CONTENT_DOCUMENT_ID__ || "");
-      const secureFrameToken = String(target.__CHATCLUB_SECURE_FRAME_TOKEN__ || "");
-      const runtimeIdentity = target.__CHATCLUB_CONTENT_RUNTIME_IDENTITY__;
-      const bridgeVersion = String(
-        target.__CHATCLUB_CONTENT_PROTOCOL_VERSION__
-        || target.__CHATCLUB_CONTENT_BRIDGE_VERSION__
-        || ""
-      );
-      const attestationState = target.__CHATCLUB_BROWSER_DOCUMENT_ATTESTATION_STATE__;
-      const attestation = String(attestationState?.id || "");
-      if (
-        !bridgeDocumentId
-        || !browserDocumentId
-        || !runtimeIdentity
-        || typeof runtimeIdentity !== "object"
-        || !extensionApi?.runtime?.sendMessage
-      ) {
-        throw new Error("Injected content frame registration is unavailable");
-      }
-      if (/^legacy:/i.test(browserDocumentId) && (attestationState?.dirty || attestation !== browserDocumentId)) {
-        throw new Error("Injected browser document attestation changed");
-      }
-      const registration = await extensionApi.runtime.sendMessage({
-        source: "chatclub",
-        action: "registerFrameContext",
-        bridgeDocumentId,
-        browserDocumentId: /^legacy:/i.test(browserDocumentId) ? browserDocumentId : attestation,
-        secureFrameToken,
-        frameBindingId: bindingId,
-        bridgeVersion,
-        runtimeIdentity
-      });
-      if (!registration?.success) throw new Error(registration?.error || "Secure frame registration failed");
-      let lastError = "Secure frame binding relay was not accepted";
-      for (let attempt = 0; attempt < 20; attempt += 1) {
-        try {
-          const response = await extensionApi.runtime.sendMessage({
-            source: "chatclub",
-            action: "relayFrameBinding",
-            bridgeDocumentId,
-            browserDocumentId,
-            challenge: bindingChallenge,
-            generation: bindingGeneration,
-            frameBindingId: bindingId
-          });
-          if (response?.success) return { success: true, bridgeDocumentId };
-          lastError = String(response?.error || lastError);
-        } catch (error) {
-          lastError = String(error?.message || error || lastError);
-        }
-        await new Promise((resolve) => { setTimeout(resolve, 50); });
-      }
-      throw new Error(lastError);
-    },
+    func: relayIsolatedWorldFrameBinding,
     args: [challenge, Number(generation), String(frameBindingId || ""), String(expectedDocumentId || "")]
     }
   );
-  if (!matching.some((entry) => entry?.result?.success === true)) {
-    throw new Error("Secure frame binding relay returned no successful result");
-  }
-  return matching.browserDocumentId;
+  if (matching.some((entry) => entry?.result?.success === true)) return matching.browserDocumentId;
+  const detail = matching
+    .map((entry) => String(entry?.result?.error || injectionErrorMessage(entry?.error) || "").trim())
+    .find(Boolean);
+  throw new Error(detail || "Secure frame binding relay returned no successful result");
 }
 
 function exactFrameIdentity(frames, hints, options = {}) {

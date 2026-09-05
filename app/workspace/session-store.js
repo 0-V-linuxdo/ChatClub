@@ -13,6 +13,7 @@ import {
   workspaceSessionUrl,
   workspaceSessionWorkspaceKey
 } from "../../shared/workspace-session.js";
+import { snapshotWithRetainedConversation, workspaceSnapshotIsRememberable } from "../../shared/workspace-tab-memory.js";
 
 function plainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -117,6 +118,7 @@ export function createWorkspaceSessionStore({
   let dirtySnapshot = null;
   let retryTimer = null;
   let retryFailures = 0;
+  let lastDurableSnapshot = null;
   const STORAGE_ATTEMPTS = 3;
   const REQUEST_TIMEOUT_MS = Math.max(50, Number(requestTimeoutMs) || 3000);
   const OPENING_CLAIM_REQUEST_TIMEOUT_MS = Math.max(
@@ -298,7 +300,7 @@ export function createWorkspaceSessionStore({
     const returnedWorkspaceId = normalizeWorkspaceSessionId(response.workspaceId);
     if (!returnedWorkspaceId) throw new Error("Workspace session ownership claim returned an invalid id");
     const forked = response.forked === true;
-    if (returnedWorkspaceId !== initialWorkspaceId && !forked) {
+    if (returnedWorkspaceId !== initialWorkspaceId && !forked && response.reboundFromStaleUrl !== true) {
       throw new Error("Workspace session ownership claim returned a mismatched id");
     }
     const generation = generationValue(response.workspaceSessionGeneration);
@@ -542,7 +544,11 @@ export function createWorkspaceSessionStore({
         }
       }
       workspaceId = installWorkspaceId(workspaceId);
-      const snapshot = snapshotWithGeneration(page.snapshot, pageGeneration);
+      const snapshot = snapshotWithGeneration(
+        snapshotWithRetainedConversation(tokenClaim?.snapshot, page.snapshot) || page.snapshot,
+        pageGeneration
+      );
+      lastDurableSnapshot = snapshotRecord(snapshot);
       writePageValue(snapshot, pageGeneration, workspaceId);
       return persistLoadedPageSnapshot(workspaceId, snapshot);
     }
@@ -553,6 +559,7 @@ export function createWorkspaceSessionStore({
       installWorkspaceId(urlWorkspaceId);
       if (tokenClaim?.snapshot) {
         const snapshot = snapshotWithGeneration(tokenClaim.snapshot, targetGeneration);
+        lastDurableSnapshot = snapshotRecord(snapshot);
         writePageValue(snapshot, targetGeneration, urlWorkspaceId);
         return snapshot;
       }
@@ -565,6 +572,7 @@ export function createWorkspaceSessionStore({
         : null;
       if (stable) {
         const snapshot = snapshotWithGeneration(stable.snapshot, targetGeneration);
+        lastDurableSnapshot = snapshotRecord(snapshot);
         writePageValue(snapshot, targetGeneration, urlWorkspaceId);
         return snapshot;
       }
@@ -575,6 +583,7 @@ export function createWorkspaceSessionStore({
     if (nakedClaim?.claimed) {
       if (nakedClaim.snapshot) {
         writePageValue(nakedClaim.snapshot, resolvedGeneration, nakedClaim.workspaceId);
+        lastDurableSnapshot = snapshotRecord(nakedClaim.snapshot);
         return persistLoadedPageSnapshot(nakedClaim.workspaceId, nakedClaim.snapshot);
       }
       return null;
@@ -593,6 +602,7 @@ export function createWorkspaceSessionStore({
         const workspaceId = installWorkspaceId(workspaceSessionLegacyWorkspaceId(tab.tabId) || ensureWorkspaceId());
         const snapshot = snapshotWithGeneration(legacy.snapshot, targetGeneration);
         writePageValue(snapshot, targetGeneration, workspaceId);
+        lastDurableSnapshot = snapshotRecord(snapshot);
         return persistLoadedPageSnapshot(workspaceId, snapshot);
       }
     }
@@ -610,16 +620,19 @@ export function createWorkspaceSessionStore({
     if (inactive) return Promise.resolve(true);
     const record = snapshotRecord(snapshot);
     if (!record) return Promise.resolve(false);
+    const retained = snapshotRecord(snapshotWithRetainedConversation(lastDurableSnapshot, record)) || record;
+    if (workspaceSnapshotIsRememberable(retained)) lastDurableSnapshot = retained;
     const workspaceId = ensureWorkspaceId();
     const synchronousGeneration = resolvedGeneration || DEFAULT_WORKSPACE_SESSION_GENERATION;
-    const synchronousSnapshot = snapshotWithGeneration(record, synchronousGeneration);
-    const target = stageDirtyState(workspaceId, record);
+    const synchronousSnapshot = snapshotWithGeneration(retained, synchronousGeneration);
+    const target = stageDirtyState(workspaceId, retained);
     writePageValue(synchronousSnapshot, synchronousGeneration, workspaceId);
     return enqueue(() => persistDirtySnapshot(target));
   }
 
   function clear() {
     if (inactive) return Promise.resolve(true);
+    lastDurableSnapshot = null;
     const workspaceId = resolvedWorkspaceId || initialWorkspaceId;
     const target = stageDirtyState(workspaceId, null, {
       clear: true,
@@ -656,10 +669,20 @@ export function createWorkspaceSessionStore({
     return resolvedWorkspaceId || initialWorkspaceId;
   }
 
+  function durableSnapshot() {
+    if (inactive || !plainObject(lastDurableSnapshot)) return null;
+    try {
+      return JSON.parse(JSON.stringify(lastDurableSnapshot));
+    } catch {
+      return null;
+    }
+  }
+
   function adopt(workspaceId) {
     if (inactive) return "";
+    lastDurableSnapshot = null;
     return installWorkspaceId(workspaceId);
   }
 
-  return Object.freeze({ load, save, clear, flush, generation, workspaceId, adopt });
+  return Object.freeze({ load, save, clear, flush, generation, workspaceId, adopt, durableSnapshot });
 }

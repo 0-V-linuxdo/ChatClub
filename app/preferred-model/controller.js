@@ -12,6 +12,7 @@ import {
 } from "../../shared/constants.js";
 import { t } from "../../shared/i18n.js";
 import { createId } from "../../shared/storage-schema.js";
+import { preferredModelApplyIdentity } from "../../shared/model-preference-selection.js";
 import { el } from "../../ui/dom.js";
 import { createFrameToast } from "../../ui/frame-toast.js";
 import { createSvgIcon } from "../../ui/icons.js";
@@ -112,22 +113,27 @@ export function createPreferredModelController(dependencies = {}) {
       || String(app?.id || "");
   }
 
-  function preferredModelForApp(app) {
+  function preferredApplyIdentityForApp(app, secondary = false) {
     const appId = preferredModelAppId(app);
     const preferences = preferredModelState.modelPreferenceDraft || preferredModelState.options?.modelPreferences || {};
-    const modelId = String(preferences[appId] || "");
-    if (!modelId) return "";
-    return (MODEL_PREFERENCE_TARGETS[appId] || []).some((target) => target.id === modelId) ? modelId : "";
+    const raw = secondary
+      ? preferences[MODEL_PREFERENCE_SECONDARY_KEYS[appId]]
+      : preferences[appId];
+    return preferredModelApplyIdentity(raw, MODEL_PREFERENCE_TARGETS[appId] || [], {
+      allowCustom: appId === "NotionAI"
+    });
+  }
+
+  function preferredModelForApp(app) {
+    return preferredApplyIdentityForApp(app).modelId;
   }
 
   function preferredSecondaryModelForApp(app, primaryModelId = preferredModelForApp(app)) {
-    const appId = preferredModelAppId(app);
     const preferences = preferredModelState.modelPreferenceDraft || preferredModelState.options?.modelPreferences || {};
     if (preferences[MODEL_PREFERENCE_SECONDARY_ENABLED_KEY] !== true) return "";
-    const preferenceKey = MODEL_PREFERENCE_SECONDARY_KEYS[appId];
-    const modelId = String(preferenceKey ? preferences[preferenceKey] || "" : "");
-    if (!modelId || modelId === primaryModelId) return "";
-    return (MODEL_PREFERENCE_TARGETS[appId] || []).some((target) => target.id === modelId) ? modelId : "";
+    const identity = preferredApplyIdentityForApp(app, true);
+    if (!identity.modelId || identity.modelId === primaryModelId) return "";
+    return identity.modelId;
   }
 
   function preferredGeminiThinkingLevel() {
@@ -161,8 +167,10 @@ export function createPreferredModelController(dependencies = {}) {
 
   function preferredModelPayloadForApp(app) {
     const appId = preferredModelAppId(app);
-    const modelId = preferredModelForApp(app);
-    const secondaryModelId = modelId ? preferredSecondaryModelForApp(app, modelId) : "";
+    const primary = preferredApplyIdentityForApp(app);
+    const modelId = primary.modelId;
+    const secondaryModelId = preferredSecondaryModelForApp(app, modelId);
+    const secondaryIdentity = secondaryModelId ? preferredApplyIdentityForApp(app, true) : { modelId: "", modelLabel: "" };
     const allSourcesState = appId === "NotionAI" ? preferredNotionAllSourcesState() : "";
     const effortId = appId === "NotionAI" && modelId ? preferredNotionEffortForModel(modelId) : "";
     const secondaryEffortId = appId === "NotionAI" && secondaryModelId
@@ -172,7 +180,9 @@ export function createPreferredModelController(dependencies = {}) {
     return {
       appId,
       modelId,
+      ...(primary.modelLabel ? { modelLabel: primary.modelLabel } : {}),
       ...(secondaryModelId ? { secondaryModelId } : {}),
+      ...(secondaryModelId && secondaryIdentity.modelLabel ? { secondaryModelLabel: secondaryIdentity.modelLabel } : {}),
       ...(effortId ? { effortId } : {}),
       ...(secondaryEffortId ? { secondaryEffortId } : {}),
       ...(appId === "Gemini" && (modelId === "pro" || secondaryModelId === "pro")
@@ -213,6 +223,7 @@ export function createPreferredModelController(dependencies = {}) {
       ...(runId ? { runId: String(runId) } : {})
     };
     delete attempt.secondaryModelId;
+    delete attempt.secondaryModelLabel;
     const requestedEffortId = attempt.appId === "NotionAI"
       ? modelId === payload.modelId
         ? payload.effortId
@@ -221,6 +232,14 @@ export function createPreferredModelController(dependencies = {}) {
           : ""
       : "";
     delete attempt.secondaryEffortId;
+    if (modelId && modelId === payload.secondaryModelId) {
+      if (payload.secondaryModelLabel) attempt.modelLabel = payload.secondaryModelLabel;
+      else delete attempt.modelLabel;
+    } else if (payload.modelLabel) {
+      attempt.modelLabel = payload.modelLabel;
+    } else {
+      delete attempt.modelLabel;
+    }
     if (attempt.appId === "NotionAI" && attempt.modelId && requestedEffortId) {
       attempt.effortId = requestedEffortId;
     } else {

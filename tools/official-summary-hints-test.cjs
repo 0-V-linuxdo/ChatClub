@@ -298,7 +298,9 @@ const path = require("node:path");
 
     const isolatedSource = fs.readFileSync(path.join(__dirname, "../content-src/capabilities/summary-runtime.js"), "utf8");
     const mainSource = fs.readFileSync(path.join(__dirname, "../content-src/summary-userscripts-main.js"), "utf8");
-    assert.match(isolatedSource, /const official = await collectOfficialStage\(config, data, \{ wait: true \}\)/);
+    assert.match(isolatedSource, /const official = await collectOfficialStage\(config, data, \{ wait: !idleFullText \}\)/);
+    assert.match(isolatedSource, /const idleFullText = config\.idleFullText === true;/);
+    assert.match(isolatedSource, /!idleFullText && config\.userscriptRunMode !== "serial"/);
     assert.match(isolatedSource, /collectOfficialCandidate: async \(\) => \(await collectOfficialStage\(config, data, \{ wait: false \}\)\)\.messages/);
     assert.match(mainSource, /const official = await collectOfficialStage\(config, \{ wait: false \}\)/);
     assert.match(mainSource, /collectOfficialCandidate: async \(\) => \(await collectOfficialStage\(config, \{ wait: true \}\)\)\.messages/);

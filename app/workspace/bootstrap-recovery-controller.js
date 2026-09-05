@@ -17,7 +17,9 @@ export function createWorkspaceBootstrapRecoveryController({
   let sessionLoadRetryTimer = null;
 
   function renderRuntimeBootstrapFailure(error) {
-    const detail = String(error?.message || error || "").trim();
+    const message = String(error?.message || error || "").trim();
+    const cause = String(error?.cause?.message || "").trim();
+    const detail = cause && cause !== message ? `${message}: ${cause}` : message;
     const shell = createElement("div", { class: "runtime-bootstrap-failure-shell" }, createElement("main", {
       class: "runtime-bootstrap-failure",
       role: "alert"

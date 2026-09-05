@@ -127,6 +127,30 @@ function previewItem(instanceId, prompt, assistant) {
 
   assert.equal(IDLE_FULLTEXT_CAPTURE_DEFAULTS.idleMs, 30_000);
   assert.equal(IDLE_FULLTEXT_CAPTURE_DEFAULTS.maxAttempts, 3);
+  assert.equal(IDLE_FULLTEXT_CAPTURE_DEFAULTS.collectTimeoutMs, 60_000);
+  assert.match(summary, /timeoutMs:\s*IDLE_FULLTEXT_CAPTURE_DEFAULTS\.collectTimeoutMs/);
+  assert.match(summary, /idleFullText:\s*true/);
+  assert.match(summary, /idleFullText \? \{ \.\.\.runtimeConfig, idleFullText: true \} : runtimeConfig/);
+  assert.match(read("content-src/capabilities/summary-runtime.js"), /idleFullText === true/);
+  assert.match(read("content-src/capabilities/summary-runtime.js"), /wait: !idleFullText/);
+  assert.match(read("content-src/capabilities/summary-runtime.js"), /!idleFullText && config\.userscriptRunMode !== "serial"/);
+  assert.match(read("app/workspace/tab-search.js"), /fullTextMessagesHavePair\(frame\.messages\)/);
+  assert.match(read("userscripts/grok.js"), /messageActions\(\)/);
+  assert.match(read("userscripts/grok.js"), /copyActions\.slice\(-8\)/);
+  assert.match(read("userscripts/grok.js"), /copyActions\.slice\(-2\)/);
+  assert.match(read("userscripts/grok-dairoot.js"), /copyActions\.slice\(-8\)/);
+  assert.match(read("userscripts/grok-dairoot.js"), /copyActions\.slice\(-2\)/);
+  assert.match(read("userscripts/kagi.js"), /actions\.slice\(-2\)/);
+  assert.match(read("userscripts/kagi.js"), /actions\.slice\(0, 24\)/);
+  assert.match(read("userscripts/notion.js"), /idleFullText \? 2 : 8/);
+  assert.match(read("userscripts/notion.js"), /collectPromptRange/);
+  assert.doesNotMatch(
+    read("userscripts/notion.js"),
+    /idleFullText\) \{\n  const fallback = notionDomTextFallback/,
+    "idle Notion collection must not skip Copy in favor of a one-line DOM fallback"
+  );
+  assert.doesNotMatch(read("userscripts/grok.js"), /slice\(-24\)/);
+  assert.doesNotMatch(read("userscripts/notion.js"), /slice\(-24\)/);
   assert.equal(
     conversationFingerprintSignature({
       documentId: "d",
@@ -139,8 +163,8 @@ function previewItem(instanceId, prompt, assistant) {
       childCount: 88,
       textLength: 240
     }),
-    "d\nhttps://x\n4\n12\n9\nab",
-    "idle signatures must ignore clocks, chrome counts, and other extra fields"
+    "d\nhttps://x\n4\n12\n9\nab\n0",
+    "idle signatures must ignore clocks, chrome counts, and other extra fields, but include generating"
   );
 
   const prompt = "Explain ChatClub idle capture";
@@ -252,15 +276,17 @@ function previewItem(instanceId, prompt, assistant) {
       getFingerprint: async () => ({ documentId: "one", href: "https://x", childCount: 1, textLength: 8, tailHash: "a", containsPrompt: true }),
       collectFrame: async () => {
         collects.push(clock.now());
-        return previewItem("one", prompt);
+        return collects.length >= 4
+          ? previewItem("one", prompt, "late reply")
+          : previewItem("one", prompt);
       },
       itemMatchesPrompt: (item, text) => fullTextMessagesMatchPrompt(item?.page?.messages, text),
-      persistItem: async () => { throw new Error("must not persist unmatched snapshots"); }
+      persistItem: async () => {}
     });
     const done = scheduler.schedule(prompt);
     await waitForSleep(clock);
     await settleCapture(clock, done);
-    assert.equal(collects.length, 3);
+    assert.equal(collects.length, 4, "unmatched collects must keep waiting for a long reply instead of exhausting");
     assert.equal(collects[0] >= 4_000, true);
   }
 
@@ -532,10 +558,221 @@ function previewItem(instanceId, prompt, assistant) {
     assert.deepEqual(collects, ["existing", prompt], "a send must still wait for idle and collect after a saved existing snapshot");
   }
 
+  {
+    const clock = createFakeClock();
+    let generating = true;
+    const collects = [];
+    const scheduler = createIdleFullTextCaptureScheduler({
+      now: clock.now,
+      sleep: clock.sleep,
+      idleMs: 4_000,
+      pollMs: 1_000,
+      maxAttempts: 3,
+      wallMs: 60_000,
+      listFrames: () => [{ key: "one" }],
+      getFingerprint: async () => fingerprintOf({ generating, tailHash: "stable" }),
+      collectFrame: async () => {
+        collects.push(clock.now());
+        return previewItem("one", prompt, "reply");
+      },
+      itemMatchesPrompt: (item, text) => fullTextMessagesMatchPrompt(item?.page?.messages, text),
+      persistItem: async () => {}
+    });
+    const done = scheduler.schedule(prompt);
+    await waitForSleep(clock);
+    await clock.advance(45_000);
+    assert.equal(collects.length, 0, "thinking pauses must not collect while generating");
+    generating = false;
+    await settleCapture(clock, done);
+    assert.equal(collects.length, 1);
+    assert.equal(collects[0] >= 49_000, true, "the idle window must start only after generating ends");
+  }
+
+  {
+    const clock = createFakeClock();
+    let collected = false;
+    const scheduler = createIdleFullTextCaptureScheduler({
+      now: clock.now,
+      sleep: clock.sleep,
+      idleMs: 30_000,
+      pollMs: 1_000,
+      maxAttempts: 3,
+      wallMs: 8_000,
+      generatingWallMs: 8_000,
+      listFrames: () => [{ key: "one" }],
+      getFingerprint: async () => fingerprintOf({ generating: true, containsPrompt: true }),
+      collectFrame: async () => {
+        collected = true;
+        return previewItem("one", prompt, "partial");
+      },
+      itemMatchesPrompt: (item, text) => fullTextMessagesMatchPrompt(item?.page?.messages, text),
+      persistItem: async () => {}
+    });
+    const done = scheduler.schedule(prompt);
+    await waitForSleep(clock);
+    await settleCapture(clock, done);
+    assert.equal(collected, false, "the generating wall must not persist a still-generating reply");
+  }
+
+  {
+    const clock = createFakeClock();
+    let generating = true;
+    const collects = [];
+    const scheduler = createIdleFullTextCaptureScheduler({
+      now: clock.now,
+      sleep: clock.sleep,
+      idleMs: 4_000,
+      pollMs: 1_000,
+      maxAttempts: 3,
+      wallMs: 8_000,
+      generatingWallMs: 60_000,
+      listFrames: () => [{ key: "one" }],
+      getFingerprint: async () => fingerprintOf({ generating, containsPrompt: true, tailHash: generating ? "think" : "done" }),
+      collectFrame: async () => {
+        collects.push(clock.now());
+        return previewItem("one", prompt, "late reply");
+      },
+      itemMatchesPrompt: (item, text) => fullTextMessagesMatchPrompt(item?.page?.messages, text),
+      persistItem: async () => {}
+    });
+    const done = scheduler.schedule(prompt);
+    await waitForSleep(clock);
+    await clock.advance(20_000);
+    assert.equal(collects.length, 0, "a long-thinking iframe must keep waiting past the idle wall");
+    generating = false;
+    await settleCapture(clock, done);
+    assert.equal(collects.length, 1);
+    assert.equal(collects[0] >= 20_000, true, "a long-thinking iframe must collect only after generating ends");
+  }
+
+  {
+    const clock = createFakeClock();
+    const collects = [];
+    const scheduler = createIdleFullTextCaptureScheduler({
+      now: clock.now,
+      sleep: clock.sleep,
+      idleMs: 4_000,
+      pollMs: 1_000,
+      maxAttempts: 3,
+      wallMs: 8_000,
+      generatingWallMs: 40_000,
+      listFrames: () => [{ key: "one" }],
+      getFingerprint: async () => fingerprintOf({ containsPrompt: true, tailHash: "prompt" }),
+      collectFrame: async () => {
+        collects.push(clock.now());
+        return clock.now() >= 12_000
+          ? previewItem("one", prompt, "late fable reply")
+          : previewItem("one", prompt);
+      },
+      itemMatchesPrompt: (item, text) => fullTextMessagesMatchPrompt(item?.page?.messages, text),
+      persistItem: async () => {}
+    });
+    const done = scheduler.schedule(prompt);
+    await waitForSleep(clock);
+    await clock.advance(10_000);
+    assert.equal(collects.some((at) => at <= 8_000), true);
+    assert.equal(collects.every((at) => at < 12_000) || collects[collects.length - 1] < 12_000, true);
+    await settleCapture(clock, done);
+    assert.equal(collects.at(-1) >= 12_000, true, "an unmatched send must keep waiting past the idle wall for a long reply");
+  }
+
+  {
+    const clock = createFakeClock();
+    let collected = false;
+    const scheduler = createIdleFullTextCaptureScheduler({
+      now: clock.now,
+      sleep: clock.sleep,
+      idleMs: 4_000,
+      pollMs: 1_000,
+      maxAttempts: 3,
+      wallMs: 8_000,
+      generatingWallMs: 12_000,
+      listFrames: () => [{ key: "one" }],
+      getFingerprint: async () => {
+        throw new Error("fingerprint timeout");
+      },
+      collectFrame: async () => {
+        collected = true;
+        return previewItem("one", prompt, "partial");
+      },
+      itemMatchesPrompt: (item, text) => fullTextMessagesMatchPrompt(item?.page?.messages, text),
+      persistItem: async () => {}
+    });
+    const done = scheduler.schedule(prompt);
+    await waitForSleep(clock);
+    await settleCapture(clock, done);
+    assert.equal(collected, false, "a failed fingerprint probe must not collect a long-running iframe");
+  }
+
+  {
+    const clock = createFakeClock();
+    let generating = true;
+    let failProbe = false;
+    const collects = [];
+    const scheduler = createIdleFullTextCaptureScheduler({
+      now: clock.now,
+      sleep: clock.sleep,
+      idleMs: 4_000,
+      pollMs: 1_000,
+      maxAttempts: 3,
+      wallMs: 60_000,
+      listFrames: () => [{ key: "one" }],
+      getFingerprint: async () => {
+        if (failProbe) throw new Error("fingerprint timeout");
+        return fingerprintOf({ generating, tailHash: generating ? "think" : "done" });
+      },
+      collectFrame: async () => {
+        collects.push(clock.now());
+        return previewItem("one", prompt, "reply");
+      },
+      itemMatchesPrompt: (item, text) => fullTextMessagesMatchPrompt(item?.page?.messages, text),
+      persistItem: async () => {}
+    });
+    const done = scheduler.schedule(prompt);
+    await waitForSleep(clock);
+    await clock.advance(6_000);
+    generating = false;
+    await clock.advance(2_000);
+    failProbe = true;
+    await settleCapture(clock, done);
+    assert.equal(collects.length, 1, "a finished iframe must still collect if later fingerprint probes time out");
+  }
+
+  {
+    const clock = createFakeClock();
+    const collects = [];
+    const scheduler = createIdleFullTextCaptureScheduler({
+      now: clock.now,
+      sleep: clock.sleep,
+      idleMs: 4_000,
+      pollMs: 1_000,
+      maxAttempts: 3,
+      wallMs: 60_000,
+      listFrames: () => [{ key: "one" }],
+      getFingerprint: async () => fingerprintOf(),
+      collectFrame: async () => {
+        collects.push(clock.now());
+        return previewItem("one", prompt, "reply");
+      },
+      itemMatchesPrompt: (item, text) => fullTextMessagesMatchPrompt(item?.page?.messages, text),
+      persistItem: async () => {}
+    });
+    const first = scheduler.schedule(prompt);
+    await waitForSleep(clock);
+    await settleCapture(clock, first);
+    assert.equal(collects.length, 1);
+    const second = scheduler.schedule(prompt);
+    await waitForSleep(clock);
+    await settleCapture(clock, second);
+    assert.equal(collects.length, 1, "a later send of the same idle snapshot must not click Copy again");
+  }
+
   const idleSource = read("app/summary/idle-capture.js");
   assert.match(idleSource, /persisted === false \|\| persisted\?\.saved === false/);
   assert.match(idleSource, /status: "unchanged"/);
   assert.match(idleSource, /savedSignatures/);
+  assert.match(idleSource, /alreadySavedIdleSnapshot/);
+  assert.match(idleSource, /lastKnownGenerating/);
   assert.match(runtime, /result\?\.saved && result\.unchanged !== true/);
   assert.match(runtime, /historyController\?\.notifyFullTextChanged/);
   const tabSearch = read("app/workspace/tab-search.js");
@@ -545,6 +782,34 @@ function previewItem(instanceId, prompt, assistant) {
   assert.match(summaryRuntime, /turnCount:\s*turns\.length/);
   assert.match(summaryRuntime, /function conversationHref/);
   assert.match(summaryRuntime, /function conversationTurnNodes/);
+  assert.match(summaryRuntime, /generating:\s*conversationComposerIsGenerating\(\)/);
+  assert.match(summaryRuntime, /function conversationToolActivityIsActive/);
+  assert.match(summaryRuntime, /loading web page/);
+  assert.match(summaryRuntime, /searching the web/);
+  const toolActivity = summaryRuntime.match(/function conversationToolActivityFromLines\(lines\) \{[\s\S]*?\n\}/);
+  assert.ok(toolActivity, "conversationToolActivityFromLines must exist");
+  assert.doesNotMatch(toolActivity[0], /aria-busy/, "leftover aria-busy chrome must not keep a finished reply generating");
+  assert.match(summaryRuntime, /function conversationSampleRoot/);
+  assert.match(summaryRuntime, /conversationSampleRoot\(\)\?\.textContent/);
+  assert.match(summaryRuntime, /crafting\|noodling\|contemplating/);
+  assert.doesNotMatch(
+    summaryRuntime.slice(
+      summaryRuntime.indexOf("function lastAssistantTurnIsStreaming"),
+      summaryRuntime.indexOf("function conversationIsGenerating")
+    ),
+    /querySelector/,
+    "nested leftover aria-busy must not keep a finished Fable turn generating"
+  );
+  assert.match(summaryRuntime, /function shouldRefuseLiveAssistantCopy/);
+  assert.match(idleSource, /fingerprintIsGenerating/);
+  assert.match(idleSource, /generating && generatingCapHit/);
+  assert.match(idleSource, /generatingWallMs/);
+  assert.match(idleSource, /waitingForReply/);
+  assert.match(idleSource, /probeFailed/);
+  assert.equal(IDLE_FULLTEXT_CAPTURE_DEFAULTS.generatingWallMs, 45 * 60 * 1000);
+  assert.match(summary, /generatingWallMs:\s*IDLE_FULLTEXT_CAPTURE_DEFAULTS\.generatingWallMs/);
+  assert.match(read("userscripts/notion.js"), /copyLimit = idleFullText \? 2 : 8/);
+  assert.match(summary, /timeoutMs:\s*8000,\s*skipEnsure:\s*false/);
   assert.doesNotMatch(summaryRuntime, /function conversationRoot/);
   assert.doesNotMatch(summaryRuntime, /childCount:/);
   const historySource = read("app/history/controller.js");

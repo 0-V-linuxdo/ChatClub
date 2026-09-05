@@ -74,24 +74,16 @@ export function promptHistoryMessageKey(text = "") {
   return String(text || "").replace(/\r\n?/g, "\n").trim();
 }
 
-function promptHistoryPairMatches(pair, item) {
-  return fullTextTextsOverlap(pair?.userMessage, item?.text)
-    || fullTextTextsOverlap(pair?.assistantMessage, item?.text);
-}
-
 function matchingMessages(item, messages = []) {
-  const matching = pocketPairsFromMessages(messages).filter((pair) => promptHistoryPairMatches(pair, item));
-  if (matching.length) {
-    return matching.flatMap((pair) => [
-      { role: "user", text: pair.userMessage },
-      { role: "assistant", text: pair.assistantMessage }
-    ]);
-  }
-  return (Array.isArray(messages) ? messages : []).flatMap((message) => {
-    const role = message?.role === "assistant" ? "assistant" : message?.role === "user" ? "user" : "";
-    const text = String(message?.text || message?.content || "");
-    return role && fullTextTextsOverlap(text, item?.text) ? [{ role, text }] : [];
-  });
+  const pairs = pocketPairsFromMessages(messages);
+  const userHits = pairs.filter((pair) => fullTextTextsOverlap(pair?.userMessage, item?.text));
+  const matching = userHits.length
+    ? userHits
+    : pairs.filter((pair) => fullTextTextsOverlap(pair?.assistantMessage, item?.text));
+  return matching.flatMap((pair) => [
+    { role: "user", text: pair.userMessage },
+    { role: "assistant", text: pair.assistantMessage }
+  ]);
 }
 
 export function promptHistoryPocketSaved(item, pocketEntries = []) {
@@ -152,21 +144,46 @@ function frameToPocketPage(frame = {}) {
   };
 }
 
+function conversationPageIdentity(page = {}) {
+  const href = String(page.href || page.url || "").trim();
+  if (href) return `href:${href}`;
+  const instanceId = String(page.instanceId || "").trim();
+  if (instanceId) return `id:${instanceId}`;
+  const name = String(page.siteName || page.name || "").trim();
+  return name ? `name:${name}` : "";
+}
+
+function conversationPageWeight(page = {}) {
+  return (Array.isArray(page.messages) ? page.messages : [])
+    .reduce((sum, message) => sum + String(message?.text || "").length, 0);
+}
+
 function uniqueConversationPages(pages = []) {
   const seen = new Map();
   const result = [];
   for (const page of pages) {
     const messages = Array.isArray(page.messages) ? page.messages : [];
     if (!messages.length) continue;
-    const key = [page.href || page.instanceId || page.siteName, ...messages.map((message) => message.text)].join("\n");
+    const key = conversationPageIdentity(page);
+    if (!key) {
+      result.push(page);
+      continue;
+    }
     const existing = seen.get(key);
     if (!existing) {
       seen.set(key, page);
       result.push(page);
       continue;
     }
+    if (conversationPageWeight(page) > conversationPageWeight(existing)) {
+      existing.messages = page.messages;
+      if (page.title) existing.title = page.title;
+      if (page.pageTitle) existing.pageTitle = page.pageTitle;
+    }
     if (!existing.logoUrl && page.logoUrl) existing.logoUrl = page.logoUrl;
     if (!existing.appId && page.appId) existing.appId = page.appId;
+    if (!existing.siteName && page.siteName) existing.siteName = page.siteName;
+    if (!existing.name && page.name) existing.name = page.name;
     if (!existing.href && page.href) {
       existing.href = page.href;
       existing.url = page.url || page.href;
@@ -198,21 +215,11 @@ function pageToHistoryEntries(page = {}) {
     instanceId: page.instanceId || ""
   };
   const pairs = pocketPairsFromMessages(messages);
-  if (pairs.length) {
-    return pairs.map((pair) => ({
-      ...meta,
-      userMessage: pair.userMessage,
-      assistantMessage: pair.assistantMessage
-    }));
-  }
-  const user = messages.find((message) => message.role === "user");
-  const assistant = messages.find((message) => message.role === "assistant");
-  if (!user && !assistant) return [];
-  return [{
+  return pairs.map((pair) => ({
     ...meta,
-    userMessage: user?.text || "",
-    assistantMessage: assistant?.text || ""
-  }];
+    userMessage: pair.userMessage,
+    assistantMessage: pair.assistantMessage
+  }));
 }
 
 export function promptHistoryConversationEntries(item, sources = {}) {
@@ -255,43 +262,54 @@ export function workspaceConversationEntries(record) {
   return workspaceConversationPages(record).flatMap(pageToHistoryEntries);
 }
 
+function longestUserMessage(entries = []) {
+  return (Array.isArray(entries) ? entries : []).reduce((best, entry) => {
+    const text = String(entry?.userMessage || "");
+    return text.length > String(best || "").length ? text : best;
+  }, "");
+}
+
 export function promptHistoryEntryClusters(entries = []) {
   const list = Array.isArray(entries) ? entries : [];
-  const entriesByMessage = new Map();
-  for (const entry of list) {
-    const messageKey = promptHistoryMessageKey(entry?.userMessage);
-    if (!messageKey) continue;
-    let group = entriesByMessage.get(messageKey);
-    if (!group) {
-      group = [];
-      entriesByMessage.set(messageKey, group);
-    }
-    group.push(entry);
-  }
+  const used = new Set();
   const clusters = [];
-  const emitted = new Set();
   let loose = [];
   const flush = () => {
     if (!loose.length) return;
     clusters.push({ merged: false, entries: loose });
     loose = [];
   };
-  for (const entry of list) {
-    const messageKey = promptHistoryMessageKey(entry?.userMessage);
-    const group = messageKey ? entriesByMessage.get(messageKey) || [] : [];
-    if (messageKey && group.length > 1) {
-      if (emitted.has(messageKey)) continue;
+  for (let index = 0; index < list.length; index += 1) {
+    if (used.has(index)) continue;
+    const seed = list[index];
+    const seedKey = promptHistoryMessageKey(seed?.userMessage);
+    if (!seedKey) {
       flush();
-      emitted.add(messageKey);
+      clusters.push({ merged: false, entries: [seed] });
+      used.add(index);
+      continue;
+    }
+    const group = [seed];
+    const groupIndexes = [index];
+    for (let next = index + 1; next < list.length; next += 1) {
+      if (used.has(next)) continue;
+      if (!fullTextTextsOverlap(seed.userMessage, list[next]?.userMessage)) continue;
+      group.push(list[next]);
+      groupIndexes.push(next);
+    }
+    if (group.length > 1) {
+      flush();
+      groupIndexes.forEach((groupIndex) => used.add(groupIndex));
       clusters.push({
-        key: messageKey,
-        userMessage: group[0]?.userMessage || entry.userMessage,
+        key: seedKey,
+        userMessage: longestUserMessage(group),
         entries: group,
         merged: true
       });
       continue;
     }
-    loose.push(entry);
+    used.add(index);
+    loose.push(seed);
   }
   flush();
   return clusters;

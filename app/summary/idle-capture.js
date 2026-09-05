@@ -2,7 +2,11 @@ export const IDLE_FULLTEXT_CAPTURE_DEFAULTS = Object.freeze({
   idleMs: 30_000,
   pollMs: 2_500,
   maxAttempts: 3,
-  wallMs: 9 * 60 * 1000
+  wallMs: 9 * 60 * 1000,
+  generatingWallMs: 45 * 60 * 1000,
+  // Frame RPC clamps command timeouts at 60s. Last-N copy collection must finish
+  // inside this window so idle persist is not killed mid-Copy.
+  collectTimeoutMs: 60_000
 });
 
 export function conversationFingerprintSignature(fingerprint) {
@@ -13,8 +17,13 @@ export function conversationFingerprintSignature(fingerprint) {
     String(fingerprint.turnCount ?? ""),
     String(fingerprint.userChars ?? ""),
     String(fingerprint.assistantChars ?? ""),
-    String(fingerprint.tailHash || "")
+    String(fingerprint.tailHash || ""),
+    fingerprint.generating === true ? "1" : "0"
   ].join("\n");
+}
+
+function fingerprintIsGenerating(fingerprint) {
+  return fingerprint?.generating === true;
 }
 
 function positiveInteger(value, fallback) {
@@ -31,6 +40,10 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
   const pollMs = positiveInteger(options.pollMs, IDLE_FULLTEXT_CAPTURE_DEFAULTS.pollMs);
   const maxAttempts = Math.max(1, Math.min(10, Math.floor(positiveInteger(options.maxAttempts, IDLE_FULLTEXT_CAPTURE_DEFAULTS.maxAttempts))));
   const wallMs = positiveInteger(options.wallMs, IDLE_FULLTEXT_CAPTURE_DEFAULTS.wallMs);
+  const generatingWallMs = Math.max(
+    wallMs,
+    positiveInteger(options.generatingWallMs, IDLE_FULLTEXT_CAPTURE_DEFAULTS.generatingWallMs)
+  );
   const now = typeof options.now === "function" ? options.now : () => Date.now();
   const sleep = typeof options.sleep === "function"
     ? options.sleep
@@ -58,9 +71,30 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
     return activeKind === "send" || activeKind === "existing";
   }
 
-  function savedSignatureFor(frame) {
+  function savedRecordFor(frame) {
     const key = frameCaptureKey(frame);
-    return key ? String(savedSignatures.get(key) || "") : "";
+    if (!key) return null;
+    const record = savedSignatures.get(key);
+    if (!record) return null;
+    if (typeof record === "string") return { signature: record, prompt: "" };
+    return {
+      signature: String(record.signature || ""),
+      prompt: String(record.prompt || "")
+    };
+  }
+
+  function savedSignatureFor(frame) {
+    return String(savedRecordFor(frame)?.signature || "");
+  }
+
+  function savedPromptFor(frame) {
+    return String(savedRecordFor(frame)?.prompt || "");
+  }
+
+  function alreadySavedIdleSnapshot(frame, prompt, signature) {
+    if (!signature || signature !== savedSignatureFor(frame)) return false;
+    const text = String(prompt || "");
+    return !text || savedPromptFor(frame) === text;
   }
 
   async function rememberSavedSignature(frame, prompt, fallback = "") {
@@ -72,7 +106,7 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
     } catch {
       /* keep fallback */
     }
-    if (signature) savedSignatures.set(key, signature);
+    if (signature) savedSignatures.set(key, { signature, prompt: String(prompt || "") });
   }
 
   async function listCaptureFrames() {
@@ -133,55 +167,83 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
     let sawFingerprint = false;
     let sawChange = false;
     let sawPrompt = false;
+    let lastKnownGenerating;
 
     while (runId === generation) {
       if (!isEnabled()) return { status: "disabled", attempts };
       if (frameExists(frame) !== true) return { status: "gone", attempts };
 
       const elapsed = now() - startedAt;
-      const wallHit = elapsed >= wallMs;
+      const generatingCapHit = elapsed >= generatingWallMs;
       let fingerprint = null;
       let signature = "";
+      let probeFailed = false;
       try {
         fingerprint = await getFingerprint(frame, prompt);
         signature = conversationFingerprintSignature(fingerprint);
+        probeFailed = !fingerprint;
       } catch {
         signature = "";
+        probeFailed = true;
       }
       if (runId !== generation) return { status: "cancelled", attempts };
 
+      const generating = probeFailed
+        ? lastKnownGenerating !== false
+        : fingerprintIsGenerating(fingerprint);
+      if (!probeFailed) lastKnownGenerating = generating;
       if (signature) {
-        if (existing && signature === savedSignatureFor(frame)) {
+        if (existing && !generating && signature === savedSignatureFor(frame)) {
           return { status: "unchanged", attempts };
         }
         if (sawFingerprint && signature !== lastSignature) sawChange = true;
-        if (!sawFingerprint || signature !== lastSignature) idleSince = now();
+        if (!sawFingerprint || signature !== lastSignature || generating) idleSince = now();
         lastSignature = signature;
         sawFingerprint = true;
+      } else if (probeFailed && lastKnownGenerating !== false) {
+        idleSince = now();
       }
       if (fingerprint?.containsPrompt === true) sawPrompt = true;
 
+      const waitingForReply = !existing && (sawPrompt || sawChange);
+      const wallHit = !generatingCapHit && !waitingForReply && elapsed >= wallMs;
       const canCollect = existing ? sawFingerprint : (sawPrompt || sawChange);
-      const idle = canCollect && sawFingerprint && (now() - idleSince >= idleMs);
-      if ((idle || wallHit) && attempts < maxAttempts) {
-        attempts += 1;
-        const result = await collectOnce({ frame, prompt, runId, attempts });
+      const idle = !generating && canCollect && sawFingerprint && (now() - idleSince >= idleMs);
+      if (generating && generatingCapHit) {
+        return { status: "expired", attempts };
+      }
+      if (!generating && (idle || wallHit) && attempts < maxAttempts) {
+        if (alreadySavedIdleSnapshot(frame, prompt, lastSignature || signature)) {
+          return { status: "unchanged", attempts };
+        }
+        const result = await collectOnce({ frame, prompt, runId, attempts: attempts + 1 });
         if (result.status === "saved") {
           await rememberSavedSignature(frame, prompt, lastSignature);
-          return result;
+          return { ...result, attempts: attempts + 1 };
         }
         if (result.status === "cancelled") return result;
         idleSince = now();
+        if (result.status === "unmatched" && (!wallHit || waitingForReply) && (now() - startedAt) < generatingWallMs) {
+          const remainingIdle = generatingWallMs - (now() - startedAt);
+          if (remainingIdle <= 0) return { status: "expired", attempts };
+          await sleep(Math.min(pollMs, remainingIdle));
+          continue;
+        }
+        attempts += 1;
         if (wallHit || attempts >= maxAttempts) {
           return wallHit ? { status: result.status === "unmatched" ? "expired" : result.status, attempts } : { status: "exhausted", attempts };
         }
-      } else if (wallHit) {
+      } else if (!generating && wallHit) {
         return { status: "expired", attempts };
       }
 
-      const remaining = wallMs - (now() - startedAt);
+      const remaining = ((generating || waitingForReply) ? generatingWallMs : wallMs) - (now() - startedAt);
       if (remaining <= 0) {
+        if (generating) return { status: "expired", attempts };
         if (attempts < maxAttempts) {
+          if (alreadySavedIdleSnapshot(frame, prompt, lastSignature || signature)) {
+            return { status: "unchanged", attempts };
+          }
           attempts += 1;
           const result = await collectOnce({ frame, prompt, runId, attempts });
           if (result.status === "saved") {

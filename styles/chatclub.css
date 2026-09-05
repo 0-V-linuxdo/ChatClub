@@ -7579,11 +7579,22 @@ body.settings-tab-context-menu-dragging iframe {
 }
 
 .model-preference-model-select,
+.model-preference-custom-wrap,
 .model-preference-segmented-control {
   min-width: 0;
   width: 100%;
   max-width: none;
   justify-self: stretch;
+}
+
+.model-preference-custom-wrap {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.model-preference-custom-label {
+  min-height: var(--ui-compact-height);
+  width: 100%;
 }
 
 .model-preference-segmented-control {
@@ -7812,6 +7823,7 @@ body.settings-tab-context-menu-dragging iframe {
   }
 
   .model-preference-model-select,
+  .model-preference-custom-wrap,
   .model-preference-segmented-control {
     max-width: none;
   }

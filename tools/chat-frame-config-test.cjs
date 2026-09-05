@@ -10,7 +10,8 @@ const assert = require("node:assert/strict");
     iframeConfigRiskKeys,
     inspectIframeConfig,
     normalizeIframeConfig,
-    resolveChatFrameAttributeContract
+    resolveChatFrameAttributeContract,
+    frameDocumentUrlsMatch
   } = frameConfig;
   const {
     getAllChatApps,
@@ -312,6 +313,25 @@ const assert = require("node:assert/strict");
   assert.equal("iframeConfig" in inspectedImport.data.customConfig[0], false);
   assert.equal(inspectedImport.data.customConfig[1].iframeConfig.sandbox.mode, "omit");
   assert.deepEqual(Object.keys(inspectedImport.data.options.builtinChatAppIframeConfigs), ["Claude"]);
+
+  const grokConversation = "https://grok.com/c/thread-1";
+  const grokResponseA = "https://grok.com/c/thread-1?rid=response-1";
+  const grokResponseB = "https://grok.com/c/thread-1?rid=response-2";
+  assert.equal(frameDocumentUrlsMatch(grokConversation, grokResponseA), true);
+  assert.equal(frameDocumentUrlsMatch(grokResponseA, grokResponseB), true);
+  assert.equal(frameDocumentUrlsMatch("https://grok.com/chat/thread-1?rid=a", "https://grok.com/chat/thread-1?rid=b"), true);
+  assert.equal(frameDocumentUrlsMatch("https://gk.dairoot.cn/c/thread-1?rid=a", "https://gk.dairoot.cn/c/thread-1?rid=b"), true);
+  assert.equal(frameDocumentUrlsMatch("https://grok.x.ai/c/thread-1?rid=a", "https://grok.x.ai/c/thread-1?rid=b"), true);
+  assert.equal(
+    frameDocumentUrlsMatch(grokResponseA, "https://grok.com/c/thread-2?rid=response-1"),
+    false,
+    "a Grok conversation change must not match across rid-only comparison"
+  );
+  assert.equal(
+    frameDocumentUrlsMatch("https://example.com/c/thread-1?rid=a", "https://example.com/c/thread-1?rid=b"),
+    false,
+    "rid-only matching is limited to Grok hosts"
+  );
 
   console.log("chat frame config: ok");
 })().catch((error) => {

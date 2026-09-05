@@ -334,6 +334,7 @@ function createSummaryPrepareFixture(options = {}) {
     }
   });
   vm.runInContext(`
+    const CONTENT_FRAME_REGISTRATION_WAIT_MS = 8000;
     ${functionSource(frameBridge, "exactGrokCookieRuntimeHost")}
     ${functionSource(frameBridge, "grokCookieRuntimeReady")}
     ${functionSource(frameBridge, "mergedContentRuntimeCapabilities")}
@@ -1607,7 +1608,13 @@ async function createPreservedRuntimeReloadFixture() {
   assert.match(bindingRequestSource, /expectedBindingId/);
   assert.match(bindingRequestSource, /if \(!exactFrameTarget\.expectedFrameId\)/);
   assert.match(bindingRequestSource, /contentWindow\?\.postMessage/);
+  assert.match(bindingRequestSource, /postParentFrameBinding/);
   assert.match(bindingRequestSource, /action: "requestFrameBinding"/);
+  assert.ok(
+    bindingRequestSource.indexOf("secure frame binding relay failed")
+      < bindingRequestSource.lastIndexOf("return postParentFrameBinding()"),
+    "an exact-frame executeScript binding failure must still ask the live content bridge to bind via parent postMessage"
+  );
   const authenticatedBindingSource = functionSource(frameBridge, "acceptAuthenticatedFrameBinding", true);
   assert.match(authenticatedBindingSource, /context\.tabId !== tabId/);
   assert.match(authenticatedBindingSource, /frameBindingChallenges\.claim\(message\.challenge, message\.generation\)/);
@@ -1623,8 +1630,15 @@ async function createPreservedRuntimeReloadFixture() {
   assert.match(poisonedRepairSource, /wrong identity/);
   assert.match(poisonedRepairSource, /secure frame runtime identity/);
   assert.match(poisonedRepairSource, /secure frame binding relay was not accepted/);
-  assert.match(poisonedRepairSource, /iframe content bridge did not become ready/);
+  assert.doesNotMatch(
+    poisonedRepairSource,
+    /iframe content bridge did not become ready/,
+    "a registration wait timeout must retry without reloading a painted iframe"
+  );
+  assert.doesNotMatch(poisonedRepairSource, /grok cookie runtime is not ready/);
   assert.match(poisonedRepairSource, /packaged userscript injection frame is not the verified direct child document/);
+  assert.match(frameBridge, /CONTENT_FRAME_REGISTRATION_WAIT_MS = 8000/);
+  assert.match(frameBridge, /grok cookie runtime is not ready/);
   assert.match(reloadPoisonedFrameSource, /reloadFrameDocument/);
   assert.match(reloadPoisonedFrameSource, /poisonedContentRuntimeReloadHref/);
   assert.match(reloadPoisonedFrameSource, /currentFrames\?\.\(\)/);

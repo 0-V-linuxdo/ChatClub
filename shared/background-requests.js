@@ -121,7 +121,7 @@ export const BACKGROUND_REQUEST_SPECS = Object.freeze({
       claimId: "string",
       workspaceSessionGeneration: "string",
       snapshot: "any"
-    }, { forked: "boolean" })
+    }, { forked: "boolean", reboundFromStaleUrl: "boolean" })
   }),
   [ACTION.COMMIT_WORKSPACE_SESSION_RECOVERY]: extensionPage({
     mutates: true,

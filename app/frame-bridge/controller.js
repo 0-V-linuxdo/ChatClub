@@ -16,6 +16,7 @@ import { validateControllerContract } from "../controller-contract.js";
 import { createFrameBindingChallengeRegistry } from "./frame-binding.js";
 
 const CONTENT_FRAME_REPAIR_RETRY_DELAYS = Object.freeze([350, 900, 1800, 3600, 7200]);
+const CONTENT_FRAME_REGISTRATION_WAIT_MS = 8000;
 const GROK_COOKIE_RUNTIME_IDENTITY = contentRuntimeIdentityForBundle(CONTENT_BUNDLES.grokCookie.file);
 const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, Math.max(0, Number(ms) || 0)); });
 
@@ -46,7 +47,7 @@ function grokCookieRuntimeReady(registration = null) {
 }
 
 function contentFrameRepairIsPoisoned(reason) {
-  return /(?:content runtime generation\b[^\n]*(?:\bis aborted\b|\bis superseded\b|fail(?:ed)?[- ]closed)|content runtime broker is shut down|content runtime bundle\b[^\n]*(?:missing|wrong identity)|secure frame runtime identity does not match packaged bundle|secure frame binding relay was not accepted|iframe content bridge did not become ready|packaged userscript injection frame is not the verified direct child document)/i
+  return /(?:content runtime generation\b[^\n]*(?:\bis aborted\b|\bis superseded\b|fail(?:ed)?[- ]closed)|content runtime broker is shut down|content runtime bundle\b[^\n]*(?:missing|wrong identity)|secure frame runtime identity does not match packaged bundle|secure frame binding relay was not accepted|packaged userscript injection frame is not the verified direct child document)/i
     .test(String(reason?.reason || reason?.message || reason || ""));
 }
 
@@ -217,7 +218,7 @@ export function createFrameBridgeController(dependencies = {}) {
 
   async function waitForCurrentContentFrameRegistration(
     iframe,
-    timeoutMs = 2600,
+    timeoutMs = CONTENT_FRAME_REGISTRATION_WAIT_MS,
     ownerIsCurrent = () => true
   ) {
     const deadline = Date.now() + Math.max(250, Number(timeoutMs) || 0);
@@ -361,11 +362,11 @@ export function createFrameBridgeController(dependencies = {}) {
     if (!preparationIsCurrent()) return cancelled();
     registration = await waitForCurrentContentFrameRegistration(
       iframe,
-      2600,
+      CONTENT_FRAME_REGISTRATION_WAIT_MS,
       preparationIsCurrent
     );
     if (!preparationIsCurrent()) return cancelled();
-    if (!registration || !grokCookieRuntimeReady(registration)) {
+    if (!registration) {
       const relayError = String(frameBindingRelayErrors.get(iframe) || "").trim();
       return {
         ok: false,
@@ -373,6 +374,15 @@ export function createFrameBridgeController(dependencies = {}) {
           || relayError
           || "iframe content bridge did not become ready",
         installed,
+        summary
+      };
+    }
+    if (!grokCookieRuntimeReady(registration)) {
+      return {
+        ok: false,
+        reason: "grok cookie runtime is not ready",
+        installed,
+        registration,
         summary
       };
     }
@@ -549,18 +559,21 @@ export function createFrameBridgeController(dependencies = {}) {
       const exactFrameTarget = Number.isSafeInteger(expectedFrameId) && expectedFrameId > 0
         ? { expectedFrameId }
         : {};
+      const postParentFrameBinding = () => {
+        iframe.contentWindow?.postMessage({
+          source: FRAME_BINDING_POST_MESSAGE_SOURCE,
+          type: "request",
+          action: "bindFrame",
+          challenge: entry.challenge,
+          generation: entry.generation,
+          expectedBindingId,
+          browserDocumentId: expectedBrowserDocumentId
+        }, "*");
+        return true;
+      };
       if (!exactFrameTarget.expectedFrameId) {
         try {
-          iframe.contentWindow?.postMessage({
-            source: FRAME_BINDING_POST_MESSAGE_SOURCE,
-            type: "request",
-            action: "bindFrame",
-            challenge: entry.challenge,
-            generation: entry.generation,
-            expectedBindingId,
-            browserDocumentId: expectedBrowserDocumentId
-          }, "*");
-          return true;
+          return postParentFrameBinding();
         } catch {
           return false;
         }
@@ -583,14 +596,20 @@ export function createFrameBridgeController(dependencies = {}) {
           bindingGeneration: entry.generation
         });
         const relayed = result?.bindingRelayed === true;
-        if (relayed) frameBindingRelayErrors.delete(iframe);
-        else frameBindingRelayErrors.set(iframe, "secure frame binding relay was not accepted");
-        return relayed;
+        if (relayed) {
+          frameBindingRelayErrors.delete(iframe);
+          return true;
+        }
+        frameBindingRelayErrors.set(iframe, "secure frame binding relay was not accepted");
       } catch (error) {
         frameBindingRelayErrors.set(
           iframe,
           String(error?.message || error || "secure frame binding relay failed")
         );
+      }
+      try {
+        return postParentFrameBinding();
+      } catch {
         return false;
       }
     })().finally(() => {

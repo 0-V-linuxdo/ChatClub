@@ -22,7 +22,7 @@ import {
   normalizeModelPreferenceFailurePolicy,
   normalizeModelPreferenceOrder
 } from "../../shared/storage-schema.js";
-import { button, el, field, select, toast } from "../../ui/dom.js";
+import { button, el, field, input, select, toast } from "../../ui/dom.js";
 import {
   cleanupSettingsDragRows,
   createSettingsKit,
@@ -30,6 +30,16 @@ import {
   moveListItemByDelta
 } from "./kit.js";
 import { requireSettingsSectionStatePort } from "./section-contract.js";
+import {
+  MODEL_PREFERENCE_CUSTOM_KIND,
+  MODEL_PREFERENCE_CUSTOM_SELECT_VALUE,
+  MODEL_PREFERENCE_LABEL_MAX_CHARS,
+  customModelPreferenceId,
+  isModelPreferenceLabel,
+  modelPreferenceIdentityKey,
+  modelPreferenceSelectValue,
+  normalizeModelPreferenceValue
+} from "../../shared/model-preference-selection.js";
 import {
   requireControllerContext,
   requireControllerFunction,
@@ -78,6 +88,7 @@ export function createModelsSettingsSection(ctx) {
   let failureOverridesDraft = null;
   let preferenceOrderDraft = null;
   let dragId = "";
+  const customSelectOpen = new Set();
 
   function preferenceKey(config) {
     return JSON.stringify({ ...DEFAULT_OPTIONS.modelPreferences, ...(config || {}) });
@@ -184,6 +195,40 @@ export function createModelsSettingsSection(ctx) {
         value: target.id,
         label: target.id ? target.label : t("modelPreferences.none")
       }));
+  }
+
+  function preferenceStorageKey(appId, slot) {
+    return slot === "secondary" ? secondaryModelKey(appId) : appId;
+  }
+
+  function commitModelPreference(appId, slot, rawValue, redraw) {
+    const key = preferenceStorageKey(appId, slot);
+    customSelectOpen.delete(key);
+    const value = normalizeModelPreferenceValue(rawValue, MODEL_PREFERENCE_TARGETS[appId] || [], {
+      allowCustom: appId === "NotionAI"
+    });
+    const next = { ...draft(), [key]: value };
+    const secondaryKey = secondaryModelKey(appId);
+    if (
+      secondaryKey
+      && modelPreferenceIdentityKey(next[appId])
+      && modelPreferenceIdentityKey(next[appId]) === modelPreferenceIdentityKey(next[secondaryKey])
+    ) {
+      next[secondaryKey] = "";
+    }
+    queueAutoSave(next);
+    redraw();
+  }
+
+  function notionEffortModelId(stored) {
+    if (isModelPreferenceLabel(stored)) return customModelPreferenceId(stored.label);
+    return String(stored || "");
+  }
+
+  function notionEffortModelLabel(stored) {
+    if (isModelPreferenceLabel(stored)) return stored.label;
+    const modelId = String(stored || "");
+    return MODEL_PREFERENCE_TARGETS.NotionAI.find((target) => target.id === modelId)?.label || modelId;
   }
 
   function secondaryModelsEnabled() {
@@ -437,7 +482,7 @@ export function createModelsSettingsSection(ctx) {
     ];
   }
 
-  function notionEffortPreferenceField(modelId, slot) {
+  function notionEffortPreferenceField(modelId, slot, displayLabel = "") {
     const config = draft();
     const effortMap = {
       ...DEFAULT_NOTION_EFFORT_PREFERENCES,
@@ -448,7 +493,9 @@ export function createModelsSettingsSection(ctx) {
     const control = select(value, notionEffortPreferenceOptions(modelId), {
       class: "select model-preference-effort-select",
       "aria-label": t("modelPreferences.effortFor", {
-        model: modelId ? (MODEL_PREFERENCE_TARGETS.NotionAI.find((target) => target.id === modelId)?.label || modelId) : t("modelPreferences.none")
+        model: displayLabel || (modelId
+          ? (MODEL_PREFERENCE_TARGETS.NotionAI.find((target) => target.id === modelId)?.label || modelId)
+          : t("modelPreferences.none"))
       }),
       disabled: !modelId || effortIds.length === 0,
       title: modelId && effortIds.length === 0 ? t("modelPreferences.effortUnavailable") : "",
@@ -524,58 +571,149 @@ export function createModelsSettingsSection(ctx) {
     );
   }
 
+  function notionModelPicker(appId, platform, slot, stored, excludedModelId, disabled, title, redraw) {
+    const key = preferenceStorageKey(appId, slot);
+    const selectValue = modelPreferenceSelectValue(stored, customSelectOpen.has(key));
+    const options = [
+      ...preferenceOptions(appId, excludedModelId),
+      { value: MODEL_PREFERENCE_CUSTOM_SELECT_VALUE, label: t("modelPreferences.customName") }
+    ];
+    const control = select(selectValue, options, {
+      class: "select model-preference-model-select",
+      "aria-label": t(slot === "secondary"
+        ? "modelPreferences.secondaryModelFor"
+        : "modelPreferences.preferredModelFor", { platform }),
+      disabled,
+      title: title || "",
+      dataset: slot === "secondary"
+        ? { modelPreferenceSecondarySelectAppId: appId }
+        : { modelPreferenceSelectAppId: appId }
+    });
+    control.value = selectValue;
+    control.addEventListener("change", () => {
+      if (control.value === MODEL_PREFERENCE_CUSTOM_SELECT_VALUE) {
+        customSelectOpen.add(key);
+        redraw();
+        return;
+      }
+      commitModelPreference(appId, slot, control.value, redraw);
+    });
+    const wrap = el("div", { class: "model-preference-custom-wrap" }, control);
+    if (selectValue === MODEL_PREFERENCE_CUSTOM_SELECT_VALUE) {
+      const labelInput = input(isModelPreferenceLabel(stored) ? stored.label : "", {
+        class: "input model-preference-custom-label",
+        maxlength: String(MODEL_PREFERENCE_LABEL_MAX_CHARS),
+        spellcheck: "false",
+        autocomplete: "off",
+        placeholder: t("modelPreferences.customNamePlaceholder"),
+        "aria-label": t("modelPreferences.customNameFor", { platform }),
+        disabled,
+        dataset: {
+          modelPreferenceCustomLabelAppId: appId,
+          modelPreferenceCustomLabelSlot: slot
+        }
+      });
+      const commitLabel = () => {
+        commitModelPreference(
+          appId,
+          slot,
+          { kind: MODEL_PREFERENCE_CUSTOM_KIND, label: labelInput.value },
+          redraw
+        );
+      };
+      labelInput.addEventListener("change", commitLabel);
+      labelInput.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter") return;
+        event.preventDefault();
+        commitLabel();
+      });
+      wrap.append(labelInput);
+    }
+    return wrap;
+  }
+
   function modelFields(appId, platform, redraw) {
     const config = draft();
-    const secondaryKey = secondaryModelKey(appId);
-    const primaryModelId = config[appId] || "";
-    const primarySelect = select(primaryModelId, preferenceOptions(appId), {
-      class: "select model-preference-model-select",
-      "aria-label": t("modelPreferences.preferredModelFor", { platform }),
-      dataset: { modelPreferenceSelectAppId: appId }
-    });
-    primarySelect.value = primaryModelId;
-    primarySelect.addEventListener("change", () => {
-      const next = { ...draft(), [appId]: primarySelect.value };
-      if (secondaryKey && next[secondaryKey] === primarySelect.value) next[secondaryKey] = "";
-      queueAutoSave(next);
-      redraw();
-    });
+    const primaryStored = config[appId] || "";
+    const primaryIdentity = modelPreferenceIdentityKey(primaryStored);
+    const primaryCatalogId = typeof primaryStored === "string" ? primaryStored : "";
+    const primaryControl = appId === "NotionAI"
+      ? notionModelPicker(appId, platform, "primary", primaryStored, "", false, "", redraw)
+      : (() => {
+        const primarySelect = select(primaryCatalogId, preferenceOptions(appId), {
+          class: "select model-preference-model-select",
+          "aria-label": t("modelPreferences.preferredModelFor", { platform }),
+          dataset: { modelPreferenceSelectAppId: appId }
+        });
+        primarySelect.value = primaryCatalogId;
+        primarySelect.addEventListener("change", () => {
+          commitModelPreference(appId, "primary", primarySelect.value, redraw);
+        });
+        return primarySelect;
+      })();
 
     let secondaryField = null;
     let secondaryEffortField = null;
     if (secondaryModelsEnabled()) {
-      const secondaryModelId = config[secondaryKey] === primaryModelId ? "" : config[secondaryKey] || "";
-      const secondarySelect = select(
-        secondaryModelId,
-        preferenceOptions(appId, primaryModelId),
-        {
-          class: "select model-preference-model-select model-preference-secondary-select",
-          "aria-label": t("modelPreferences.secondaryModelFor", { platform }),
-          disabled: !primaryModelId,
-          title: primaryModelId ? "" : t("modelPreferences.secondaryRequiresPrimary"),
-          dataset: { modelPreferenceSecondarySelectAppId: appId }
-        }
-      );
-      secondarySelect.value = secondaryModelId;
-      secondarySelect.addEventListener("change", () => {
-        queueAutoSave({ ...draft(), [secondaryKey]: secondarySelect.value });
-        redraw();
-      });
+      const secondaryStored = modelPreferenceIdentityKey(config[secondaryModelKey(appId)]) === primaryIdentity
+        ? ""
+        : config[secondaryModelKey(appId)] || "";
+      const secondaryControl = appId === "NotionAI"
+        ? notionModelPicker(
+          appId,
+          platform,
+          "secondary",
+          secondaryStored,
+          primaryCatalogId,
+          !primaryIdentity,
+          primaryIdentity ? "" : t("modelPreferences.secondaryRequiresPrimary"),
+          redraw
+        )
+        : (() => {
+          const secondarySelect = select(
+            String(secondaryStored || ""),
+            preferenceOptions(appId, primaryCatalogId),
+            {
+              class: "select model-preference-model-select model-preference-secondary-select",
+              "aria-label": t("modelPreferences.secondaryModelFor", { platform }),
+              disabled: !primaryIdentity,
+              title: primaryIdentity ? "" : t("modelPreferences.secondaryRequiresPrimary"),
+              dataset: { modelPreferenceSecondarySelectAppId: appId }
+            }
+          );
+          secondarySelect.value = String(secondaryStored || "");
+          secondarySelect.addEventListener("change", () => {
+            commitModelPreference(appId, "secondary", secondarySelect.value, redraw);
+          });
+          return secondarySelect;
+        })();
       secondaryField = modelPreferenceRowField(
         t("modelPreferences.secondaryModel"),
-        secondarySelect,
+        secondaryControl,
         "model-preference-secondary-field"
       );
-      if (appId === "NotionAI") secondaryEffortField = notionEffortPreferenceField(secondaryModelId, "secondary");
+      if (appId === "NotionAI") {
+        secondaryEffortField = notionEffortPreferenceField(
+          notionEffortModelId(secondaryStored),
+          "secondary",
+          notionEffortModelLabel(secondaryStored)
+        );
+      }
     }
 
     return el("div", { class: "model-preference-row-models" },
       modelPreferenceRowField(
         t("modelPreferences.preferredModel"),
-        primarySelect,
+        primaryControl,
         "model-preference-model-field"
       ),
-      appId === "NotionAI" ? notionEffortPreferenceField(primaryModelId, "primary") : null,
+      appId === "NotionAI"
+        ? notionEffortPreferenceField(
+          notionEffortModelId(primaryStored),
+          "primary",
+          notionEffortModelLabel(primaryStored)
+        )
+        : null,
       secondaryField,
       secondaryEffortField
     );
@@ -618,6 +756,7 @@ export function createModelsSettingsSection(ctx) {
   }
 
   function clearDraft(redraw) {
+    customSelectOpen.clear();
     state.modelPreferenceDraft = { ...DEFAULT_OPTIONS.modelPreferences };
     queueAutoSave(state.modelPreferenceDraft, { redraw });
     redraw();
@@ -697,6 +836,7 @@ export function createModelsSettingsSection(ctx) {
 
   function resetAfterImport() {
     clearAutosaveState();
+    customSelectOpen.clear();
     state.modelPreferenceDraft = null;
     failurePolicyDraft = "";
     failureOverridesDraft = null;
@@ -706,6 +846,7 @@ export function createModelsSettingsSection(ctx) {
 
   function close() {
     if (!autosaveBusy() && !autosaveFailed()) {
+      customSelectOpen.clear();
       state.modelPreferenceDraft = null;
       failurePolicyDraft = "";
       failureOverridesDraft = null;

@@ -12,7 +12,7 @@ import {
 import {
   inspectImportedWorkspaceTabs,
   sanitizeExportedWorkspaceTab,
-  workspaceSnapshotHasConversation,
+  workspaceSnapshotIsRememberable,
   workspaceTabFingerprint
 } from "../shared/workspace-tab-memory.js";
 import {
@@ -73,7 +73,7 @@ function rememberedWorkspaceRecord(record) {
   return Boolean(
     record
     && record.resolution !== WORKSPACE_SESSION_DISMISSED
-    && workspaceSnapshotHasConversation(record.snapshot)
+    && workspaceSnapshotIsRememberable(record.snapshot)
   );
 }
 
@@ -97,12 +97,18 @@ function listRememberedWorkspaceTabs(api, stored, live, currentTabId) {
   const stableRecords = currentStableRecords(stored || {});
   const items = [];
   const seen = new Set();
+  const liveTabByWorkspaceId = new Map();
   for (const tab of Array.isArray(live.records) ? live.records : []) {
     if (!isChatClubWorkspaceTab(api, tab)) continue;
-    const workspaceId = workspaceIdForChatClubTab(api, tab);
+    const tabId = positiveTabId(tab?.id);
+    const workspaceId = tabId !== null ? (live.workspaceByTabId.get(tabId) || "") : "";
     if (!workspaceId) continue;
+    const existing = liveTabByWorkspaceId.get(workspaceId);
+    if (!existing || tabId === currentTabId) liveTabByWorkspaceId.set(workspaceId, tab);
+  }
+  for (const [workspaceId, tab] of liveTabByWorkspaceId) {
     const record = stableRecords.get(workspaceId);
-    items.push(liveTabItem(api, tab, currentTabId, record));
+    items.push(liveTabItem(api, tab, currentTabId, record || { workspaceId }));
     seen.add(workspaceId);
   }
   for (const record of stableRecords.values()) {
@@ -121,7 +127,7 @@ export async function listClearedWorkspaceTabsOperation(api, options, ensureGene
   const generation = await ensureGeneration(storage);
   const [stored, tabs] = await Promise.all([storage.get(null), api.tabs.query({})]);
   if (!Array.isArray(tabs)) throw new TypeError("Browser tabs query returned an invalid result");
-  const live = liveTabState(api, tabs);
+  const live = liveTabState(api, tabs, stored);
   const recovery = recoveryRecord(stored?.[WORKSPACE_SESSION_RECOVERY_KEY], generation, now);
   return { tabs: unclaimedBrowserCleared(recovery, live, currentStableRecords(stored)).map(clearedTabItem) };
 }
@@ -135,7 +141,7 @@ export async function listLiveWorkspaceTabsOperation(api, sender = {}, options =
     api.tabs.query({})
   ]);
   if (!Array.isArray(tabs)) throw new TypeError("Browser tabs query returned an invalid result");
-  const live = liveTabState(api, tabs);
+  const live = liveTabState(api, tabs, stored);
   const currentTabId = positiveTabId(sender?.tab?.id);
   let nextStored = stored || {};
   if (sender?.tab?.active === true && currentTabId !== null) {
@@ -176,17 +182,17 @@ export async function setWorkspaceTabTitleOperation(api, request = {}) {
     throw new Error("Workspace session title storage is unavailable");
   }
 
+  const storedAll = await storage.get(null);
   let workspaceId = requestedWorkspaceId;
   if (tabId !== null) {
     if (typeof api?.tabs?.get !== "function") throw new Error("Workspace session tab lookup is unavailable");
     const tab = await api.tabs.get(tabId).catch(() => null);
     if (!tab || !isChatClubWorkspaceTab(api, tab)) throw new Error("Workspace tab is not a live ChatClub page");
-    workspaceId = workspaceIdForChatClubTab(api, tab) || workspaceId;
+    workspaceId = liveTabState(api, [tab], storedAll).workspaceByTabId.get(tabId) || workspaceId;
   }
   if (!workspaceId) throw new Error("Workspace tab is missing a workspace id");
   const key = workspaceSessionWorkspaceKey(workspaceId);
-  const stored = await storage.get(key);
-  const record = stableWorkspaceRecord(key, stored?.[key]);
+  const record = stableWorkspaceRecord(key, storedAll?.[key]);
   if (!record?.snapshot) throw new Error("Workspace session snapshot is unavailable");
   const { record: nextRecord, snapshot } = titleSnapshotUpdate(record, request.title, request.custom);
   await storage.set({ [key]: nextRecord });
@@ -204,18 +210,40 @@ export async function focusWorkspaceTabOperation(api, request = {}, sender = {})
   const tabId = positiveTabId(request.tabId);
   if (tabId === null) throw new Error("Workspace tab id is invalid");
   if (typeof api?.tabs?.get !== "function") throw new Error("Workspace session tab lookup is unavailable");
-  const tab = await api.tabs.get(tabId).catch(() => null);
+  let tab = await api.tabs.get(tabId).catch(() => null);
   if (!tab || !isChatClubWorkspaceTab(api, tab)) throw new Error("Workspace tab is not a live ChatClub page");
   const currentTabId = positiveTabId(sender?.tab?.id);
+  const storage = localStorageArea(api);
+  const stored = typeof storage?.get === "function" ? await storage.get(null) : {};
+  const workspaceId = liveTabState(api, [tab], stored).workspaceByTabId.get(tabId)
+    || workspaceIdForChatClubTab(api, tab);
   if (currentTabId === tabId) {
-    await touchWorkspaceViewedAt(api, workspaceIdForChatClubTab(api, tab), Date.now());
+    await touchWorkspaceViewedAt(api, workspaceId, Date.now());
     return { focused: true, tabId, current: true };
   }
-  if (typeof api.tabs.update === "function") await api.tabs.update(tabId, { active: true });
-  if (Number.isInteger(tab.windowId) && typeof api.windows?.update === "function") {
-    await api.windows.update(tab.windowId, { focused: true });
+  const senderWindowId = Number.isInteger(sender?.tab?.windowId) ? sender.tab.windowId : null;
+  const senderIndex = Number.isInteger(sender?.tab?.index) && sender.tab.index >= 0
+    ? sender.tab.index
+    : null;
+  if (
+    senderWindowId !== null
+    && Number.isInteger(tab.windowId)
+    && tab.windowId !== senderWindowId
+    && typeof api.tabs.move === "function"
+  ) {
+    const moveOptions = { windowId: senderWindowId };
+    if (senderIndex !== null) moveOptions.index = senderIndex + 1;
+    try {
+      await api.tabs.move(tabId, moveOptions);
+      tab = await api.tabs.get(tabId).catch(() => tab);
+    } catch {}
   }
-  await touchWorkspaceViewedAt(api, workspaceIdForChatClubTab(api, tab), Date.now());
+  if (typeof api.tabs.update === "function") await api.tabs.update(tabId, { active: true });
+  const focusedWindowId = Number.isInteger(tab.windowId) ? tab.windowId : senderWindowId;
+  if (Number.isInteger(focusedWindowId) && typeof api.windows?.update === "function") {
+    await api.windows.update(focusedWindowId, { focused: true });
+  }
+  await touchWorkspaceViewedAt(api, workspaceId, Date.now());
   return { focused: true, tabId, current: false };
 }
 
@@ -287,7 +315,7 @@ export async function forgetRememberedWorkspaceTabOperation(api, request = {}, o
     typeof session?.get === "function" ? session.get(WORKSPACE_SESSION_RUNTIME_MARKER_KEY) : Promise.resolve({})
   ]);
   if (!Array.isArray(tabs)) throw new TypeError("Browser tabs query returned an invalid result");
-  const live = liveTabState(api, tabs);
+  const live = liveTabState(api, tabs, stored);
   const resolvedWorkspaceId = workspaceId || live.workspaceByTabId.get(requestedTabId) || "";
   const stableKey = resolvedWorkspaceId ? workspaceSessionWorkspaceKey(resolvedWorkspaceId) : "";
   const record = stableKey ? stableWorkspaceRecord(stableKey, stored?.[stableKey]) : null;
@@ -420,7 +448,7 @@ export async function exportRememberedWorkspaceTabsOperation(api) {
   if (typeof api?.tabs?.query !== "function") throw new Error("Workspace session tab query is unavailable");
   const [stored, tabs] = await Promise.all([storage.get(null), api.tabs.query({})]);
   if (!Array.isArray(tabs)) throw new TypeError("Browser tabs query returned an invalid result");
-  const live = liveTabState(api, tabs);
+  const live = liveTabState(api, tabs, stored);
   const exported = [];
   const seen = new Set();
   for (const item of listRememberedWorkspaceTabs(api, stored || {}, live, null)) {
@@ -456,7 +484,7 @@ export async function importRememberedWorkspaceTabsOperation(api, request = {}, 
   ]);
   if (!Array.isArray(tabs)) throw new TypeError("Browser tabs query returned an invalid result");
   const generation = typeof ensureGeneration === "function" ? await ensureGeneration(storage) : "";
-  const live = liveTabState(api, tabs);
+  const live = liveTabState(api, tabs, stored);
   const stableRecords = currentStableRecords(stored || {});
   const updates = {};
   let forgotten = 0;

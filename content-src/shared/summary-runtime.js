@@ -49,6 +49,20 @@ function reveal(el) {
   } catch {}
 }
 
+function mergeSameRoleText(previous, next) {
+  const prev = normalize(previous);
+  const value = normalize(next);
+  if (!value) return prev;
+  if (!prev) return value;
+  if (prev === value) return prev;
+  const compactPrev = compareText(prev);
+  const compactNext = compareText(value);
+  if (compactPrev === compactNext) return prev.length >= value.length ? prev : value;
+  if (compactNext.length >= 8 && compactPrev.includes(compactNext)) return prev;
+  if (compactPrev.length >= 8 && compactNext.includes(compactPrev)) return value;
+  return normalize(`${prev}\n\n${value}`);
+}
+
 function merge(messages) {
   const out = [];
   for (const message of messages || []) {
@@ -56,7 +70,7 @@ function merge(messages) {
     const value = cleanCaptured(message?.text || message?.content || "");
     if (!value) continue;
     const previous = out[out.length - 1];
-    if (previous && previous.role === role) previous.text = normalize(`${previous.text}\n\n${value}`);
+    if (previous && previous.role === role) previous.text = mergeSameRoleText(previous.text, value);
     else out.push({ role, text: value });
   }
   return out;
@@ -146,18 +160,6 @@ function conversationTurnRole(el) {
   return userscriptRole(el) || "";
 }
 
-function conversationTurnText(el) {
-  if (!el) return "";
-  try {
-    const clone = el.cloneNode(true);
-    clone.querySelectorAll?.("button,svg,script,style,noscript,time,nav,header,footer,form,input,textarea,select,[contenteditable='true']")
-      .forEach((node) => node.remove());
-    return normalize(clone.innerText || clone.textContent || "").replace(/\s+/g, " ");
-  } catch {
-    return normalize(el.innerText || el.textContent || "").replace(/\s+/g, " ");
-  }
-}
-
 function conversationTurnNodes() {
   const selectors = [
     "[data-message-author-role]",
@@ -181,32 +183,184 @@ function conversationTurnNodes() {
   return nodes.sort(elementOrder);
 }
 
+function lastAssistantTurnNode() {
+  const turns = conversationTurnNodes();
+  for (let index = turns.length - 1; index >= 0; index -= 1) {
+    if (conversationTurnRole(turns[index]) === "assistant") return turns[index];
+  }
+  return null;
+}
+
+function controlLayoutVisible(el) {
+  if (!el?.getBoundingClientRect) return false;
+  const rect = el.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return false;
+  try {
+    const style = getComputedStyle(el);
+    return style.display !== "none" && style.visibility !== "hidden";
+  } catch {
+    return true;
+  }
+}
+
+function controlLooksLikeStopGenerating(el) {
+  if (!el) return false;
+  const testid = String(el.getAttribute?.("data-testid") || el.getAttribute?.("data-test-id") || "");
+  if (/(?:^|[\s_-])(?:stop-button|stop-generating|stop_generation|composer-stop|fruitjuice-stop-button)(?:$|[\s_-])/i.test(testid)) return true;
+  const aria = normalize(el.getAttribute?.("aria-label") || el.getAttribute?.("title") || "");
+  if (/\bstop(?:\s+(?:generating|streaming|response|ai(?:\s+message)?))?\b|\bcancel(?:\s+(?:generating|response|ai))?\b|停止(?:生成|回答|回复|AI)?/i.test(aria)) return true;
+  const value = normalize(el.innerText || el.textContent || "");
+  return Boolean(value && value.length <= 24 && /^(?:stop(?:\s+(?:generating|streaming|ai))?|停止(?:生成|AI)?)$/i.test(value));
+}
+
+function liveBusyStatusLine(value) {
+  const text = normalize(value).replace(/\s+/g, " ");
+  if (!text || text.length > 180) return false;
+  if (/^loading web page:?/i.test(text)) return true;
+  if (/^searching the web(?:\s*[.。…]*)?$/i.test(text)) return true;
+  if (/^正在(?:读取|打开|加载|访问)(?:网页|页面|网站)?/i.test(text)) return true;
+  if (/^(?:thinking|preparing|crafting|noodling|contemplating)(?:\s*[.。…>]*)?$/i.test(text)) return true;
+  if (/^(?:思考中|准备中|正在思考|正在准备|正在撰写)(?:\s*[.。…>]*)?$/.test(text)) return true;
+  return false;
+}
+
+function completedToolStatusLine(value) {
+  const text = normalize(value).replace(/\s+/g, " ");
+  if (!text || text.length > 180) return false;
+  if (/^loaded web page:?/i.test(text)) return true;
+  if (/^searched the web(?:\s*[.。…]*)?$/i.test(text)) return true;
+  return false;
+}
+
+function conversationSampleRoot() {
+  return qs("#notion-app") || qs("main,[role=main]") || document.body;
+}
+
+function conversationLineSample() {
+  let raw = "";
+  try {
+    raw = String(conversationSampleRoot()?.textContent || "");
+  } catch {}
+  if (raw.length > 96_000) raw = `${raw.slice(0, 12_000)}\n${raw.slice(-36_000)}`;
+  const lines = [];
+  for (const part of raw.split(/\n+/)) {
+    const line = normalize(part).replace(/\s+/g, " ");
+    if (line) lines.push(line);
+  }
+  return lines;
+}
+
+function conversationToolActivityFromLines(lines) {
+  // Finished Fable replies keep historical "Loading web page:" traces above the
+  // answer. Scanning the last 48 lines treated those as live research and blocked
+  // idle capture. The live status (and the Allow-once trust dialog) sits in the
+  // tail; completed Loaded/Searched lines in that tail cancel an earlier match.
+  let live = false;
+  for (const line of (Array.isArray(lines) ? lines : []).slice(-12)) {
+    if (completedToolStatusLine(line)) {
+      live = false;
+      continue;
+    }
+    if (liveBusyStatusLine(line)) live = true;
+  }
+  return live;
+}
+
+function conversationToolActivityIsActive() {
+  try {
+    return conversationToolActivityFromLines(conversationLineSample());
+  } catch {}
+  return false;
+}
+
+function nodeLooksLikeStreamingTurn(el) {
+  if (!el) return false;
+  if (String(el.getAttribute?.("aria-busy") || "").toLowerCase() === "true") return true;
+  if (String(el.getAttribute?.("data-is-streaming") || "").toLowerCase() === "true") return true;
+  const bits = `${classText(el)} ${el.getAttribute?.("data-testid") || ""}`.toLowerCase();
+  return /\b(?:result-streaming|is-streaming)\b/.test(bits);
+}
+
+function conversationComposerIsGenerating() {
+  const selectors = [
+    "button[data-testid='stop-button']",
+    "button[data-testid='stop-generating']",
+    "button[data-testid='composer-stop-button']",
+    "button[data-testid='fruitjuice-stop-button']",
+    "button[data-testid*='stop-button' i]",
+    "button[aria-label*='stop' i]",
+    "button[title*='stop' i]",
+    "button[aria-label*='停止' i]",
+    "[role='button'][data-testid='stop-button']",
+    "[role='button'][aria-label*='stop' i]",
+    "[role='button'][aria-label*='停止' i]"
+  ].join(",");
+  try {
+    for (const el of qsa(selectors)) {
+      if (controlLayoutVisible(el) && controlLooksLikeStopGenerating(el)) return true;
+    }
+  } catch {}
+  return false;
+}
+
+function lastAssistantTurnIsStreaming(turn) {
+  if (!turn) return false;
+  return nodeLooksLikeStreamingTurn(turn);
+}
+
+function conversationIsGenerating() {
+  if (conversationComposerIsGenerating()) return true;
+  if (conversationToolActivityIsActive()) return true;
+  return lastAssistantTurnIsStreaming(lastAssistantTurnNode());
+}
+
+function nodeBelongsToTurn(node, turn) {
+  if (!node || !turn) return false;
+  return node === turn || Boolean(turn.contains?.(node) || node.contains?.(turn));
+}
+
+function shouldRefuseLiveAssistantCopy(node) {
+  if (!conversationIsGenerating()) return false;
+  const last = lastAssistantTurnNode();
+  if (!last) return true;
+  if (nodeBelongsToTurn(node, last)) return true;
+  const article = closest(node, "article,[data-testid^='conversation-turn'],[data-testid*='conversation-turn']");
+  return Boolean(article && (article === last || article.contains?.(last) || last.contains?.(article)));
+}
+
 function conversationFingerprint(documentId = "", data = {}) {
   const turns = conversationTurnNodes();
   const prompt = normalize(data?.prompt || "").replace(/\s+/g, " ");
+  const lines = conversationLineSample();
   let userChars = 0;
   let assistantChars = 0;
   let lastText = "";
   const haystackParts = [];
   for (const turn of turns) {
     const role = conversationTurnRole(turn);
-    const value = conversationTurnText(turn);
+    const value = normalize(turn?.textContent || turn?.innerText || "").replace(/\s+/g, " ");
     if (!value) continue;
     haystackParts.push(value);
     if (role === "user") userChars += value.length;
     else if (role === "assistant") assistantChars += value.length;
     lastText = value;
   }
+  const tail = lines.slice(-8).join("\n");
+  if (!lastText) lastText = tail;
+  if (!assistantChars) assistantChars = tail.length;
   const haystack = haystackParts.join(" ");
-  const promptHaystack = haystack || normalize(document.body?.innerText || "").replace(/\s+/g, " ");
+  const promptHaystack = haystack || [...lines.slice(0, 48), ...lines.slice(-80)].join(" ");
   return {
     href: conversationHref(),
     documentId: String(documentId || ""),
-    turnCount: turns.length,
+    turnCount: turns.length || Math.min(lines.length, 999),
     userChars,
     assistantChars,
     tailHash: fingerprintHash(lastText.slice(-500)),
-    containsPrompt: Boolean(prompt && promptHaystack.includes(prompt))
+    containsPrompt: Boolean(prompt && promptHaystack.includes(prompt)),
+    generating: conversationComposerIsGenerating()
+      || conversationToolActivityFromLines(lines)
+      || lastAssistantTurnIsStreaming(lastAssistantTurnNode())
   };
 }
 
@@ -531,6 +685,7 @@ function activateElement(button) {
 
 async function copy(button, options = {}) {
   if (!button) return "";
+  if (shouldRefuseLiveAssistantCopy(button)) return "";
   const copyTimeoutMs = Math.max(300, Math.min(10000, Number(options.copyTimeoutMs || options.timeoutMs) || 2600));
   const copyPollMs = Math.max(20, Math.min(150, Number(options.copyPollMs) || 50));
   const copyCaptureGraceMs = Math.max(80, Math.min(800, Number(options.copyCaptureGraceMs) || 240));
@@ -666,6 +821,7 @@ async function extractTurns(options = {}) {
   for (const turn of turns.sort(elementOrder)) {
     let role = userscriptRole(turn, options) || fallbackRole(roleIndex, options);
     if (role !== "user" && role !== "assistant") continue;
+    if (shouldRefuseLiveAssistantCopy(turn)) continue;
     reveal(turn);
     await sleep(80);
     const expected = text(turn);
@@ -700,6 +856,7 @@ async function extractCopySequence(options = {}) {
   const accept = async (button, roleHint) => {
     const role = roleHint || userscriptRole(button, options) || fallbackRole(roleIndex, options);
     if (role !== "user" && role !== "assistant") return false;
+    if (shouldRefuseLiveAssistantCopy(button)) return false;
     const value = userscriptCopyAccepted(await copy(button, options), "", { ...options, matchMode: "anyUseful" });
     if (!value) return false;
     pushMessage(out, role, value, seen);
@@ -737,8 +894,19 @@ function nodeTextForCopy(node) {
   }
 }
 
+function messageCopyLabel(el) {
+  const label = buttonText(el);
+  return /\bcopy\s+(?:response|answer|text|message|prompt)\b|复制(?:回复|回答|响应|文本|消息|提示词|问题)/i.test(label);
+}
+
 function internalCopyScope(el) {
-  return Boolean(closest(el, "nav,header,footer,aside,form,input,textarea,select,[contenteditable=true],pre,code,table,kbd,samp,[data-language]"));
+  if (closest(el, "nav,header,footer,aside,form,input,textarea,select,[contenteditable=true],pre,code,kbd,samp,[data-language]")) return true;
+  if (!closest(el, "table")) return false;
+  if (messageCopyLabel(el) || isNativeCopyButton(el) || userscriptLooksLikeCopyIcon(el)) {
+    const meta = userscriptMeta(el);
+    return /(?:copy\s*(?:code|table|link)|copy[-_ ]?(?:code|table|link)|复制表格)/i.test(meta);
+  }
+  return true;
 }
 
 function copyButtonRole(button, options = {}) {
@@ -905,6 +1073,7 @@ function hoverCopyMessageAnchors(root = document.body) {
 }
 
 async function extractHoverNativeCopyConversation(root = document.body) {
+  if (conversationIsGenerating()) return null;
   const options = {
     copyButtonSelector: "button,[role=button],[role=menuitem],[role=menuitemcheckbox],[role=menuitemradio],div[tabindex],span[role=button]",
     copyButtonPattern: "copy|copied|clipboard|复制|已复制|拷贝",
@@ -926,6 +1095,7 @@ async function extractHoverNativeCopyConversation(root = document.body) {
     const role = hoverCopyAnchorRole(anchor, roleIndex);
     const expected = nodeTextForCopy(anchor);
     if (role !== "user" && role !== "assistant") continue;
+    if (shouldRefuseLiveAssistantCopy(anchor)) continue;
     reveal(anchor);
     await sleep(180);
     for (const button of hoverCopyCandidateButtons(anchor, options).slice(0, 14)) {
@@ -946,6 +1116,7 @@ async function extractHoverNativeCopyConversation(root = document.body) {
 }
 
 async function extractNativeCopyConversation(root = document.body) {
+  if (conversationIsGenerating()) return null;
   let buttons = conversationCopyButtons(root || document.body);
   if (buttons.length < 2) {
     const hovered = await extractHoverNativeCopyConversation(root || document.body);
@@ -1001,6 +1172,7 @@ export {
   merge,
   pageMeta,
   conversationFingerprint,
+  conversationIsGenerating,
   hasUserAndAssistant,
   classText,
   buttonText,

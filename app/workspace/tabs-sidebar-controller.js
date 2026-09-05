@@ -248,7 +248,7 @@ export function createWorkspaceTabsSidebarController({
       mode: sortMode,
       closedOrder: readIdList(localStorage, WORKSPACE_TABS_SIDEBAR_CLOSED_ORDER_KEY),
       pinnedOrder: readIdList(localStorage, WORKSPACE_TABS_SIDEBAR_PINNED_KEY),
-      getLabel: (item) => itemLabel(item, 0)
+      getLabel: (item) => itemDisplayLabel(item, 0)
     };
   }
 
@@ -365,14 +365,14 @@ export function createWorkspaceTabsSidebarController({
 
   function visibleItems() {
     const query = searchQuery.trim();
-    if (!query) return items;
+    if (!query) return items.map(overlayCurrentWorkspace);
     const fullTextIds = recordFullTextEnabled
       ? new Set(workspaceIdsMatchingFullText(fullTextStore, query))
       : new Set();
     return items.filter((item, index) => (
-      itemMatchesTitleQuery(item, query, itemLabel(item, index))
+      itemMatchesTitleQuery(item, query, itemDisplayLabel(item, index))
       || fullTextIds.has(workspaceIdValue(item.workspaceId))
-    ));
+    )).map(overlayCurrentWorkspace);
   }
 
   function visibleFolders() {
@@ -407,9 +407,30 @@ export function createWorkspaceTabsSidebarController({
     return result;
   }
 
+  function overlayCurrentWorkspace(item = {}) {
+    if (item?.current !== true || typeof currentWorkspace !== "function") return item;
+    let current = null;
+    try { current = currentWorkspace(); } catch { return item; }
+    if (!current || typeof current !== "object") return item;
+    const appIds = Array.isArray(current.appIds) && current.appIds.length
+      ? current.appIds.map((id) => String(id || "").trim()).filter(Boolean)
+      : appIdsFromGroups(current.groups);
+    return {
+      ...item,
+      topicTitle: String(current.topicTitle || "").trim(),
+      layoutName: String(current.layoutName || "").trim(),
+      appIds: appIds.length ? appIds : item.appIds
+    };
+  }
+
+  function itemDisplayLabel(item = {}, index = 0) {
+    return itemLabel(overlayCurrentWorkspace(item), index);
+  }
+
   function itemLabel(item = {}, index = 0) {
     const topicTitle = String(item.topicTitle || "").trim();
     if (topicTitle && !isGenericTopicTitle(topicTitle) && !isGenericWorkspaceTabName(topicTitle)) return topicTitle;
+    if (item.current === true) return t("workspace.tabs.newTab");
     const layoutName = String(item.layoutName || "").trim();
     if (layoutName && !isGenericWorkspaceTabName(layoutName)) return layoutName;
     const names = (Array.isArray(item.appIds) ? item.appIds : []).map((appId) => {
@@ -423,7 +444,7 @@ export function createWorkspaceTabsSidebarController({
     const unique = [...new Set(names)];
     if (unique.length) return unique.join(" · ");
     const title = String(item.title || "").trim();
-    if (title && !isGenericWorkspaceTabName(title)) return title;
+    if (!item.live && title && !isGenericWorkspaceTabName(title)) return title;
     return t("workspace.tabs.untitled", { index: index + 1 });
   }
 
@@ -433,6 +454,7 @@ export function createWorkspaceTabsSidebarController({
     try { current = currentWorkspace(); }
     catch { current = null; }
     const label = itemLabel({
+      current: true,
       layoutName: current?.layoutName || "",
       appIds: Array.isArray(current?.appIds) ? current.appIds : appIdsFromGroups(current?.groups),
       topicTitle: current?.topicTitle || "",
@@ -498,9 +520,35 @@ export function createWorkspaceTabsSidebarController({
     if (!searchQuery.trim() || !workspaceId || typeof openWorkspaceHistory !== "function") return false;
     openWorkspaceHistory({
       workspaceId,
-      topicTitle: String(item.topicTitle || item.title || "").trim() || itemLabel(item)
+      topicTitle: String(item.topicTitle || "").trim() || itemDisplayLabel(item)
     });
     return true;
+  }
+
+  async function requestSidebarBackground(action, payload = {}, retries = 1) {
+    try {
+      return await requestBackground(action, payload);
+    } catch (error) {
+      if (retries > 0 && isPageClosingError(error)) {
+        await new Promise((resolve) => { setTimeout(resolve, 80); });
+        return requestSidebarBackground(action, payload, retries - 1);
+      }
+      throw error;
+    }
+  }
+
+  function staleLiveTabError(error) {
+    return isPageClosingError(error)
+      || /not a live ChatClub page|tab id is invalid/i.test(String(error?.message || error || ""));
+  }
+
+  async function openWorkspaceFromSidebar(workspaceId) {
+    try {
+      return await requestSidebarBackground("openWorkspaceTab", { workspaceId });
+    } catch (error) {
+      toast(t("toast.workspaceTabOpenFailed"), "error");
+      throw error;
+    }
   }
 
   async function activateTab(item = {}) {
@@ -510,18 +558,17 @@ export function createWorkspaceTabsSidebarController({
     if (current.current) return { focused: true, tabId: current.tabId, current: true };
     if (current.live && current.tabId !== null) {
       try {
-        return await requestBackground("focusWorkspaceTab", { tabId: current.tabId });
+        return await requestSidebarBackground("focusWorkspaceTab", { tabId: current.tabId });
       } catch (error) {
+        if (staleLiveTabError(error)) {
+          try { await refresh(); } catch {}
+          return openWorkspaceFromSidebar(workspaceId);
+        }
         toast(t("toast.workspaceTabFocusFailed"), "error");
         throw error;
       }
     }
-    try {
-      return await requestBackground("openWorkspaceTab", { workspaceId });
-    } catch (error) {
-      toast(t("toast.workspaceTabOpenFailed"), "error");
-      throw error;
-    }
+    return openWorkspaceFromSidebar(workspaceId);
   }
 
   async function focusTab(tabId) {
@@ -1011,7 +1058,7 @@ export function createWorkspaceTabsSidebarController({
   }
 
   function renderTitleEditor(item = {}, index = 0, kind = "tab") {
-    const initial = editingDraft || (kind === "folder" ? (item.name || t("workspace.tabs.folderUntitled")) : itemLabel(item, index));
+    const initial = editingDraft || (kind === "folder" ? (item.name || t("workspace.tabs.folderUntitled")) : itemDisplayLabel(item, index));
     const titleInput = input(initial, {
       class: "input workspace-tabs-sidebar-item-editor",
       type: "text",
@@ -1082,7 +1129,7 @@ export function createWorkspaceTabsSidebarController({
     if (!key) return null;
     const index = itemSectionIndex(item);
     editingKey = key;
-    editingDraft = itemLabel(item, index);
+    editingDraft = itemDisplayLabel(item, index);
     const editor = renderTitleEditor(item, index, "tab");
     if (row?.replaceWith) row.replaceWith(editor);
     else if (lastShell?.isConnected) syncSidebar(lastShell);
@@ -1115,7 +1162,7 @@ export function createWorkspaceTabsSidebarController({
 
   function openDeleteConfirmation(item = {}, kind = "tab") {
     const folder = kind === "folder";
-    const label = folder ? (item.name || t("workspace.tabs.folderUntitled")) : itemLabel(item, itemSectionIndex(item));
+    const label = folder ? (item.name || t("workspace.tabs.folderUntitled")) : itemDisplayLabel(item, itemSectionIndex(item));
     return openConfirmationAction({
       title: folder ? t("workspace.tabs.deleteFolderTitle", { title: label }) : t("workspace.tabs.deleteTitle", { title: label }),
       body: folder ? t("workspace.tabs.deleteFolderConfirm") : t("workspace.tabs.deleteConfirm"),
@@ -1264,8 +1311,8 @@ export function createWorkspaceTabsSidebarController({
     return renderTabsSidebarItem({
       item,
       index,
-      label: itemLabel(item, index),
-      favicons: itemFavicons(item),
+      label: itemDisplayLabel(item, index),
+      favicons: itemFavicons(overlayCurrentWorkspace(item)),
       createIcon,
       suppressActivate: () => {
         if (!suppressActivate) return false;

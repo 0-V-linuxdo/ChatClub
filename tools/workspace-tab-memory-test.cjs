@@ -10,8 +10,11 @@ const root = path.resolve(__dirname, "..");
   const {
     conversationHrefFromLocation,
     inspectImportedWorkspaceTabs,
+    preferredWorkspaceTabHref,
     sanitizeExportedWorkspaceTab,
+    snapshotWithRetainedConversation,
     workspaceSnapshotHasConversation,
+    workspaceSnapshotIsRememberable,
     workspaceTabFingerprint
   } = await import(pathToFileURL(path.join(root, "shared/workspace-tab-memory.js")).href);
   const {
@@ -28,6 +31,9 @@ const root = path.resolve(__dirname, "..");
   assert.equal(conversationHrefFromLocation("https://gemini.google.com/app/xyz"), "https://gemini.google.com/app/xyz");
   assert.equal(conversationHrefFromLocation("https://gemini.google.com/app"), "");
   assert.equal(conversationHrefFromLocation("https://assistant.kagi.com/chat/1"), "https://assistant.kagi.com/chat/1");
+  assert.equal(conversationHrefFromLocation("https://assistant.kagi.com/c/star-wars"), "https://assistant.kagi.com/c/star-wars");
+  assert.equal(preferredWorkspaceTabHref(["https://grok.com/", "https://grok.com/c/abc"]), "https://grok.com/c/abc");
+  assert.equal(preferredWorkspaceTabHref(["https://app.notion.com/ai"]), "https://app.notion.com/ai");
   assert.equal(conversationHrefFromLocation("https://app.notion.com/chat?t=topic-1"), "https://app.notion.com/chat?t=topic-1");
   assert.equal(conversationHrefFromLocation("https://app.notion.com/ai"), "");
   assert.equal(conversationHrefFromLocation("https://grok.com/c/abc"), "https://grok.com/c/abc");
@@ -39,6 +45,22 @@ const root = path.resolve(__dirname, "..");
   assert.equal(workspaceSnapshotHasConversation({
     groups: [{ tabs: [{ appId: "ChatGPT", currentHref: "https://chatgpt.com/" }] }]
   }), false);
+  const conversationSnapshot = {
+    topicTitle: "Star Wars 小说",
+    groups: [{ tabs: [{ appId: "Grok", currentHref: "https://grok.com/c/abc" }], activeIndex: 0 }]
+  };
+  const homeSnapshot = {
+    topicTitle: "",
+    groups: [{ tabs: [{ appId: "Grok", currentHref: "https://grok.com/" }], activeIndex: 0 }]
+  };
+  assert.equal(workspaceSnapshotHasConversation(conversationSnapshot), true);
+  const retained = snapshotWithRetainedConversation(conversationSnapshot, homeSnapshot);
+  assert.equal(retained.topicTitle, "");
+  assert.equal(retained.groups[0].tabs[0].currentHref, "https://grok.com/c/abc");
+  assert.equal(
+    snapshotWithRetainedConversation(homeSnapshot, conversationSnapshot).groups[0].tabs[0].currentHref,
+    "https://grok.com/c/abc"
+  );
   assert.equal(workspaceSnapshotHasConversation({
     groups: [{ tabs: [{ appId: "ChatGPT", currentHref: "https://chatgpt.com/c/remembered" }] }]
   }), true);
@@ -50,6 +72,39 @@ const root = path.resolve(__dirname, "..");
   }), true);
   assert.equal(workspaceSnapshotHasConversation({ groups: [] }), false);
   assert.equal(workspaceSnapshotHasConversation(null), false);
+  assert.equal(workspaceSnapshotIsRememberable({
+    topicTitle: "星球大战 小说推荐",
+    groups: [{ tabs: [{ appId: "ChatGPT", currentHref: "https://chatgpt.com/" }] }]
+  }), true);
+  assert.equal(workspaceSnapshotIsRememberable(homeSnapshot), false);
+  assert.equal(workspaceSnapshotIsRememberable({ topicTitle: "ChatClub 2", groups: [] }), false);
+
+  const mixedIncoming = {
+    topicTitle: "深入搜索: Star Wars 小说",
+    groups: [{
+      tabs: [
+        { appId: "Notion", currentHref: "https://app.notion.com/ai" },
+        { appId: "Grok", currentHref: "https://grok.com/c/live" },
+        { appId: "Kagi", currentHref: "https://assistant.kagi.com/" }
+      ],
+      activeIndex: 0
+    }]
+  };
+  const mixedExisting = {
+    topicTitle: "深入搜索: Star Wars 小说",
+    groups: [{
+      tabs: [
+        { appId: "Notion", currentHref: "https://app.notion.com/chat?t=star-wars" },
+        { appId: "Grok", currentHref: "https://grok.com/c/old" },
+        { appId: "Kagi", currentHref: "https://assistant.kagi.com/c/star-wars" }
+      ],
+      activeIndex: 0
+    }]
+  };
+  const mixed = snapshotWithRetainedConversation(mixedExisting, mixedIncoming);
+  assert.equal(mixed.groups[0].tabs[0].currentHref, "https://app.notion.com/chat?t=star-wars");
+  assert.equal(mixed.groups[0].tabs[1].currentHref, "https://grok.com/c/live");
+  assert.equal(mixed.groups[0].tabs[2].currentHref, "https://assistant.kagi.com/c/star-wars");
 
   const remembered = sanitizeExportedWorkspaceTab({
     workspaceId: "page-secret",

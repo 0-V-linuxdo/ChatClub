@@ -4,7 +4,10 @@ import { restorableChatFrameHref } from "../../shared/chat-frame-config.js";
 import { createWorkspaceSessionId } from "../../shared/workspace-session.js";
 import {
   conversationHrefFromLocation,
-  workspaceSnapshotHasConversation
+  preferredWorkspaceTabHref,
+  snapshotWithRetainedConversation,
+  workspaceSnapshotHasConversation,
+  workspaceSnapshotIsRememberable
 } from "../../shared/workspace-tab-memory.js";
 
 export function createWorkspaceSessionController(dependencies = {}) {
@@ -45,10 +48,14 @@ export function createWorkspaceSessionController(dependencies = {}) {
     const iframe = framesByInstanceId?.get(instanceId) || frameForInstance(instanceId);
     const app = appById(chat?.appId);
     const openableFrameUrl = (value) => openableTabUrl(restorableChatFrameHref(app, value));
-    return openableFrameUrl(iframe?.dataset?.currentHref)
-      || openableFrameUrl(chat?.initialHref)
-      || openableFrameUrl(iframe?.getAttribute?.("src"))
-      || openableFrameUrl(appById(chat?.appId)?.url);
+    return preferredWorkspaceTabHref([
+      iframe?.dataset?.currentHref,
+      iframe?.dataset?.currentThreadHref,
+      chat?.initialHref,
+      iframe?.getAttribute?.("src"),
+      iframe?.src,
+      app?.url
+    ].map((value) => openableFrameUrl(value)));
   }
 
   function captureWorkspaceSession() {
@@ -70,7 +77,13 @@ export function createWorkspaceSessionController(dependencies = {}) {
 
   function rememberWorkspaceSession() {
     const snapshot = captureWorkspaceSession();
-    if (snapshot) workspaceSessionStore.save(snapshot).catch(() => {});
+    if (!snapshot) return snapshot;
+    const pending = workspaceSessionStore.save(snapshot).catch(() => false);
+    if (workspaceSnapshotIsRememberable(snapshot)) {
+      pending.then((ok) => {
+        if (ok !== true) return workspaceSessionStore.flush();
+      }).catch(() => {});
+    }
     return snapshot;
   }
 
@@ -108,19 +121,39 @@ export function createWorkspaceSessionController(dependencies = {}) {
     return (Array.isArray(hrefs) ? hrefs : []).filter((href) => conversationHrefFromLocation(href));
   }
 
+  function snapshotForNewChatPreserve(live) {
+    const durable = typeof workspaceSessionStore.durableSnapshot === "function"
+      ? workspaceSessionStore.durableSnapshot()
+      : null;
+    const snapshot = snapshotWithRetainedConversation(durable, live) || live;
+    if (!snapshot) return null;
+    const durableTitle = String(durable?.topicTitle || "").trim();
+    if (!String(snapshot.topicTitle || "").trim() && durableTitle) {
+      snapshot.topicTitle = durableTitle;
+      snapshot.topicTitleCustom = durable?.topicTitleCustom === true;
+    }
+    return snapshot;
+  }
+
   async function preserveCurrentWorkspaceForNewChat(hrefs = []) {
     const fromWorkspaceId = workspaceSessionStore.workspaceId() || "";
     try {
-      if (!leavingConversationHrefs(hrefs).length) return { preserved: false, workspaceId: fromWorkspaceId };
-      const snapshot = captureWorkspaceSession();
-      if (!workspaceSnapshotHasConversation(snapshot)) return { preserved: false, workspaceId: fromWorkspaceId };
+      const snapshot = snapshotForNewChatPreserve(captureWorkspaceSession());
+      if (!leavingConversationHrefs(hrefs).length && !workspaceSnapshotHasConversation(snapshot)) {
+        return { preserved: false, workspaceId: fromWorkspaceId };
+      }
+      if (!workspaceSnapshotHasConversation(snapshot)) {
+        return { preserved: false, workspaceId: fromWorkspaceId };
+      }
       if (!fromWorkspaceId) return { preserved: false, workspaceId: "" };
-      await persistWorkspaceSession();
+      if (!await workspaceSessionStore.save(snapshot)) return { preserved: false, workspaceId: fromWorkspaceId };
       if (!await workspaceSessionStore.flush()) return { preserved: false, workspaceId: fromWorkspaceId };
       const workspaceId = workspaceSessionStore.adopt(createWorkspaceSessionId());
       if (!workspaceId || workspaceId === fromWorkspaceId) return { preserved: false, workspaceId: fromWorkspaceId };
       state.topicTitle = "";
       state.topicTitleCustom = false;
+      try { await persistWorkspaceSession(); } catch {}
+      try { await workspaceSessionStore.flush(); } catch {}
       return { preserved: true, fromWorkspaceId, workspaceId };
     } catch {
       return { preserved: false, workspaceId: fromWorkspaceId };

@@ -100,6 +100,20 @@ const assert = require("node:assert/strict");
   }
 
   {
+    const state = { options: {}, topicTitle: "the rational male 系列", topicTitleCustom: false };
+    const api = createWorkspaceTopicTitleController({
+      state,
+      rememberWorkspaceSession() {},
+      render() {},
+      generateTopicTitle: async () => "Late auto title"
+    });
+    assert.equal(api.syncFromSnapshot({ topicTitle: "", topicTitleCustom: false }), true);
+    assert.equal(state.topicTitle, "");
+    assert.equal(state.topicTitleCustom, false);
+    assert.equal(await api.maybeGenerateFromPrompt("a later prompt"), "Late auto title");
+  }
+
+  {
     const state = { options: {}, topicTitle: "", topicTitleCustom: false };
     const api = createWorkspaceTopicTitleController({
       state,

@@ -1,3 +1,5 @@
+import { isModelPreferenceCustomId } from "./model-preference-selection.js";
+
 const EMPTY_NOTION_EFFORT_TARGETS = Object.freeze([]);
 
 export const NOTION_EFFORT_TARGETS = Object.freeze({
@@ -18,6 +20,7 @@ const NOTION_EFFORT_TARGETS_BY_MODEL = Object.freeze({
   opus48: Object.freeze(["none", "low", "medium", "high", "max"]),
   opus5: Object.freeze(["none", "low", "medium", "high", "max"]),
   fable5: Object.freeze(["low", "medium", "high", "max"]),
+  fable51: Object.freeze(["low", "medium", "high", "max"]),
   gemini31pro: Object.freeze(["low", "medium"]),
   gemini35flash: Object.freeze(["low", "medium", "high"]),
   gpt56sol: Object.freeze(["none", "low", "medium", "high", "xhigh", "max"]),
@@ -25,6 +28,7 @@ const NOTION_EFFORT_TARGETS_BY_MODEL = Object.freeze({
   gpt52: Object.freeze(["medium", "high"]),
   gpt54: Object.freeze(["medium", "high"]),
   gpt55: Object.freeze(["medium", "high"]),
+  gpt6astra: EMPTY_NOTION_EFFORT_TARGETS,
   grok43: Object.freeze(["low", "medium", "high"]),
   grok45: Object.freeze(["low", "medium", "high"]),
   grokBuild01: EMPTY_NOTION_EFFORT_TARGETS,
@@ -40,15 +44,26 @@ export const DEFAULT_NOTION_EFFORT_PREFERENCES = Object.freeze(
 );
 
 export function notionEffortTargetsForModel(modelId) {
-  return NOTION_EFFORT_TARGETS_BY_MODEL[String(modelId || "")] || EMPTY_NOTION_EFFORT_TARGETS;
+  const known = NOTION_EFFORT_TARGETS_BY_MODEL[String(modelId || "")];
+  if (known) return known;
+  if (isModelPreferenceCustomId(modelId)) {
+    return Object.freeze(Object.keys(NOTION_EFFORT_TARGETS));
+  }
+  return EMPTY_NOTION_EFFORT_TARGETS;
 }
 
 export function normalizeNotionEffortPreferences(raw = {}) {
   const source = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
   const normalized = { ...DEFAULT_NOTION_EFFORT_PREFERENCES };
+  const allowedEffortIds = new Set(Object.keys(NOTION_EFFORT_TARGETS));
   for (const [modelId, targets] of Object.entries(NOTION_EFFORT_TARGETS_BY_MODEL)) {
     const value = String(source[modelId] ?? "").trim();
     normalized[modelId] = targets.includes(value) ? value : "";
+  }
+  for (const [modelId, value] of Object.entries(source)) {
+    if (!isModelPreferenceCustomId(modelId)) continue;
+    const effortId = String(value ?? "").trim();
+    if (allowedEffortIds.has(effortId)) normalized[modelId] = effortId;
   }
   return normalized;
 }

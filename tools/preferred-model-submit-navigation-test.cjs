@@ -789,6 +789,12 @@ vm.runInContext(`
       { id: "fable5", label: "Fable 5" }
     ])
   });
+  function preferredModelApplyIdentity(raw, targets = []) {
+    const value = String(raw || "");
+    const allowed = new Set((targets || []).map((target) => target.id).filter(Boolean));
+    allowed.add("");
+    return allowed.has(value) ? { modelId: value, modelLabel: "" } : { modelId: "", modelLabel: "" };
+  }
   const preferredModelState = {
     options: { modelPreferences: {} },
     modelPreferenceDraft: null
@@ -797,6 +803,7 @@ vm.runInContext(`
   const workspace = { frameApp: () => ({ id: "NotionAI" }) };
   function activeWorkspace() { return workspace; }
   ${functionSource(preferredModelSource, "preferredModelAppId")}
+  ${functionSource(preferredModelSource, "preferredApplyIdentityForApp")}
   ${functionSource(preferredModelSource, "preferredModelForApp")}
   ${functionSource(preferredModelSource, "preferredSecondaryModelForApp")}
   ${functionSource(preferredModelSource, "preferredGeminiThinkingLevel")}
@@ -1001,6 +1008,7 @@ const expectedNotionConsoleModels = [
   ["opus48", "Opus 4.8"],
   ["opus5", "Opus 5"],
   ["fable5", "Fable 5"],
+  ["fable51", "Fable 5.1 Beta"],
   ["gemini31pro", "Gemini 3.1 Pro"],
   ["gemini35flash", "Gemini 3.5 Flash"],
   ["gpt56sol", "GPT-5.6 Sol"],
@@ -1008,6 +1016,7 @@ const expectedNotionConsoleModels = [
   ["gpt52", "GPT-5.2"],
   ["gpt54", "GPT-5.4"],
   ["gpt55", "GPT-5.5"],
+  ["gpt6astra", "GPT-6 Astra"],
   ["grok43", "Grok 4.3"],
   ["grok45", "Grok 4.5"],
   ["grokBuild01", "Grok Build 0.1"],
@@ -1032,14 +1041,24 @@ const parseNotionRuntimeTargets = (block) => [...block.matchAll(
   aliases: JSON.parse(`[${match[4]}]`)
 }));
 const consoleNotionRuntimeTargets = parseNotionRuntimeTargets(consoleNotionRuntimeBlock);
-const packagedNotionRuntimeBlock = preferredCapabilitySource.match(
-  /const NOTION_MODEL_TARGETS = Object\.freeze\(\{([\s\S]*?)\n  \}\);/
-)?.[1] || "";
-const packagedNotionRuntimeTargets = parseNotionRuntimeTargets(packagedNotionRuntimeBlock);
+const packagedNotionModelsSource = fs.readFileSync(path.join(root, "shared/notion-models.js"), "utf8");
+const packagedNotionRuntimeTargets = [...packagedNotionModelsSource.matchAll(
+  /^\s+(\w+): target\("([^"]+)", "([^"]+)"(?:, (\[.*?\]))?\)/gm
+)].map((match) => ({
+  key: match[1],
+  id: match[2],
+  label: match[3],
+  aliases: JSON.parse(match[4] || "[]")
+}));
+assert.match(
+  preferredCapabilitySource,
+  /from "\.\.\/\.\.\/shared\/notion-models\.js"/,
+  "the packaged Notion runtime must consume the shared model catalog"
+);
 assert.deepEqual(
   consoleNotionTargetIds,
   expectedNotionConsoleModels.map(([id]) => id),
-  "the Notion DevTools adapter must expose all 21 current models plus Auto"
+  "the Notion DevTools adapter must expose all current models plus Auto"
 );
 assert.deepEqual(
   consoleNotionRuntimeTargets.map(({ id }) => id),

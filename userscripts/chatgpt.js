@@ -1,6 +1,6 @@
 // Built-in Summary userscript: ChatGPT (chatgpt)
 // Source: Mod/assets/chunk-7dbf4e81.js :: SUMMARY_SITE_CONFIG_DEFAULTS
-// Config version: 54; global config version: 60
+// Config version: 56; global config version: 84
 // Hosts: chatgpt.com, *.chatgpt.com, chat.openai.com, *.chat.openai.com
 // Path prefixes: (none)
 // Run mode: pageWorldFirst; timeout: 24000
@@ -63,8 +63,11 @@ const turns = api.qsa('[data-message-author-role]', document, { all: true })
   .map(node => ({ node, role: String(node.getAttribute('data-message-author-role') || '').toLowerCase() }))
   .filter(turn => turn.role === 'user' || turn.role === 'assistant')
   .filter((turn, index, list) => !list.some((other, otherIndex) => otherIndex !== index && other.role === turn.role && other.node !== turn.node && other.node.contains && other.node.contains(turn.node)));
+const generating = typeof api.conversationIsGenerating === 'function' && api.conversationIsGenerating();
+const lastAssistantNode = [...turns].reverse().find(turn => turn.role === 'assistant')?.node;
 const out = [];
 for (const turn of turns) {
+  if (generating && turn.role === 'assistant' && turn.node === lastAssistantNode) continue;
   const scope = turnScope(turn.node);
   const text = await copyForTurn(scope, turn.role);
   if (text) out.push({ role: turn.role, text });

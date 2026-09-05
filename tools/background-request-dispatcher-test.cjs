@@ -86,6 +86,11 @@ const root = path.resolve(__dirname, "..");
     assert.ok(spec.response?.required && spec.response?.optional, `${action} response contract`);
     assert.equal(spec.error?.envelope, backgroundRequestErrorContract, `${action} error contract`);
   }
+  assert.equal(
+    BACKGROUND_REQUEST_SPECS[BACKGROUND_REQUEST_ACTIONS.CLAIM_WORKSPACE_SESSION_RECOVERY].response.optional.reboundFromStaleUrl,
+    "boolean",
+    "claim must declare reboundFromStaleUrl so a lagged New Chat hash does not fail closed at the page contract"
+  );
 
   const testError = (codes = []) => Object.freeze({
     envelope: backgroundRequestErrorContract,

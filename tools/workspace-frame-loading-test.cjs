@@ -18,6 +18,7 @@ const PARAM = "__chatclub_frame_load_nonce";
     restorableChatFrameHref,
     stripNotionFrameLoadNonce
   } = await import("../shared/chat-frame-config.js");
+  const { preferredWorkspaceTabHref } = await import("../shared/workspace-tab-memory.js");
   const FRAME_LOADING_KIND_NEW_TOPIC = "new-topic";
   const FRAME_LOADING_KIND_RESTORING = "restoring";
   const { setLanguage, t } = await import("../shared/i18n.js");
@@ -279,7 +280,8 @@ const PARAM = "__chatclub_frame_load_nonce";
       appById: () => ({ id: "NotionAI", source: "builtin", url: "https://app.notion.com/ai" }),
       frameForInstance: () => iframe,
       openableTabUrl: (value) => String(value || ""),
-      restorableChatFrameHref
+      restorableChatFrameHref,
+      preferredWorkspaceTabHref
     });
     vm.runInContext(`${currentHrefForWorkspaceTab}\nglobalThis.currentHref = currentHrefForWorkspaceTab;`, sessionContext);
     assert.equal(

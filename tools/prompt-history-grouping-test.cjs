@@ -262,7 +262,10 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
         href: "https://grok.com/c/1",
         title: "Grok",
         logoUrl: "https://grok.com/favicon.ico",
-        messages: [{ role: "user", text: "介绍一下： the rational male 系列" }]
+        messages: [
+          { role: "user", text: "介绍一下： the rational male 系列" },
+          { role: "assistant", text: "Grok 回复。" }
+        ]
       }
     }]
   });
@@ -275,7 +278,10 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
         frames: [{
           href: "https://grok.com/c/1",
           appName: "Grok",
-          messages: [{ role: "user", text: "介绍一下： the rational male 系列" }]
+          messages: [
+            { role: "user", text: "介绍一下： the rational male 系列" },
+            { role: "assistant", text: "Grok 回复。" }
+          ]
         }]
       }
     },
@@ -285,7 +291,10 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
       page: {
         href: "https://grok.com/c/1",
         logoUrl: "https://grok.com/favicon.ico",
-        messages: [{ role: "user", text: "介绍一下： the rational male 系列" }]
+        messages: [
+          { role: "user", text: "介绍一下： the rational male 系列" },
+          { role: "assistant", text: "Grok 回复。" }
+        ]
       }
     }]
   });
@@ -309,7 +318,10 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
             href: "https://grok.com/c/1",
             siteName: "Grok",
             logoUrl: "https://grok.com/favicon.ico",
-            messages: [{ role: "user", text: "介绍一下： the rational male 系列" }]
+            messages: [
+              { role: "user", text: "介绍一下： the rational male 系列" },
+              { role: "assistant", text: "Grok 回复。" }
+            ]
           }
         },
         {
@@ -321,7 +333,10 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
             href: "https://app.notion.com/chat/2",
             siteName: "Notion",
             logoUrl: "https://www.notion.so/images/favicon.ico",
-            messages: [{ role: "user", text: "介绍一下： the rational male 系列" }]
+            messages: [
+              { role: "user", text: "介绍一下： the rational male 系列" },
+              { role: "assistant", text: "Notion 回复。" }
+            ]
           }
         }
       ]
@@ -331,6 +346,108 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   assert.equal(mergedClusters[0].merged, true);
   assert.equal(mergedClusters[0].entries.length, 2);
   assert.equal(mergedClusters[0].userMessage, "介绍一下： the rational male 系列");
+
+  const kagiDuplicatePages = promptHistoryConversationPages({ text: prompt.text }, {
+    store: {
+      wsKagi: {
+        workspaceId: "wsKagi",
+        frames: [{
+          instanceId: "kagi-old",
+          href: "https://assistant.kagi.com/c/star-wars",
+          appName: "Kagi Assistant",
+          messages: [
+            { role: "user", text: prompt.text },
+            { role: "assistant", text: "Kagi 回复。" }
+          ]
+        }, {
+          instanceId: "kagi-new",
+          href: "https://assistant.kagi.com/c/star-wars",
+          appName: "Kagi Assistant",
+          messages: [
+            { role: "user", text: prompt.text },
+            { role: "assistant", text: "Kagi 回复。" }
+          ]
+        }]
+      }
+    }
+  });
+  assert.equal(kagiDuplicatePages.length, 1, "History must keep one Kagi page for the same conversation href");
+
+  const overlappingClusters = promptHistoryEntryClusters(promptHistoryConversationEntries(
+    { text: "深入搜索:\nStar Wars 小说\n\n要求：根据读者评价，给出推荐！" },
+    {
+      previewItems: [
+        {
+          status: "ok",
+          siteName: "Grok",
+          href: "https://grok.com/c/1",
+          page: {
+            href: "https://grok.com/c/1",
+            siteName: "Grok",
+            messages: [
+              { role: "user", text: "深入搜索:\nStar Wars 小说\n\n要求：根据读者评价，给出推荐！" },
+              { role: "assistant", text: "Grok 回复。" }
+            ]
+          }
+        },
+        {
+          status: "ok",
+          siteName: "Kagi Assistant",
+          href: "https://assistant.kagi.com/c/2",
+          page: {
+            href: "https://assistant.kagi.com/c/2",
+            siteName: "Kagi Assistant",
+            messages: [
+              { role: "user", text: "深入搜索: Star Wars 小说 要求：根据读者评价，给出推荐！" },
+              { role: "assistant", text: "Kagi 回复。" }
+            ]
+          }
+        }
+      ]
+    }
+  ));
+  assert.equal(overlappingClusters.length, 1, "History must merge Grok and Kagi cards whose USER copies overlap");
+  assert.equal(overlappingClusters[0].merged, true);
+  assert.equal(overlappingClusters[0].entries.length, 2);
+
+  const notionStarWarsPages = promptHistoryConversationPages({
+    text: "深入搜索:\nStar Wars 小说\n\n要求：根据读者评价，给出推荐！"
+  }, {
+    store: {
+      wsNotion: {
+        workspaceId: "wsNotion",
+        frames: [{
+          href: "https://app.notion.com/chat?t=star-wars",
+          appName: "Notion",
+          messages: [
+            { role: "user", text: "深入搜索:\nStar Wars 小说\n要求：根据读者评价，给出推荐！" },
+            { role: "assistant", text: "星球大战小说推荐" }
+          ]
+        }]
+      }
+    }
+  });
+  assert.equal(notionStarWarsPages.length, 1, "History must match a Notion multi-line USER copy to the sent prompt");
+
+  assert.equal(
+    promptHistoryConversationEntries(
+      { text: "ZXQIDLE1406 星球大战 小说" },
+      {
+        store: {
+          wsOrphan: {
+            workspaceId: "wsOrphan",
+            frames: [{
+              href: "https://app.notion.com/chat/orphan",
+              appName: "Notion",
+              messages: [{ role: "user", text: "ZXQIDLE1406 星球大战 小说" }]
+            }]
+          }
+        }
+      }
+    ).length,
+    0,
+    "History must not render an empty assistant turn when capture only stored the user prompt"
+  );
 
   const workspaceRecord = {
     workspaceId: "page-rationalone",

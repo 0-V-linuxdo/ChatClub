@@ -35,6 +35,7 @@ const root = path.resolve(__dirname, "..");
     ["https://chatgpt.com/g/gpt-1/c/chat-1", { provider: "chatgpt", id: "chat-1" }],
     ["https://gemini.google.com/app/thread-1", { provider: "gemini", id: "thread-1" }],
     ["https://assistant.kagi.com/chat/thread-1", { provider: "kagi", id: "thread-1" }],
+    ["https://assistant.kagi.com/c/star-wars", { provider: "kagi", id: "star-wars" }],
     ["https://app.notion.com/chat?t=thread-1", { provider: "notion", id: "thread-1" }],
     ["https://grok.com/c/thread-1", { provider: "grok", id: "thread-1" }],
     ["https://gk.dairoot.cn/chat/thread-1", { provider: "grok", id: "thread-1" }],

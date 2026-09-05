@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "7e04ec4b7c1e5e40303d30ef7ac70a070806fb762a0674739b6a35c975bde4fd";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "b873a2370e8adf0f4e0a3a136caac4f5467511b93004eb12181838b1dd8d5e26";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "9c3a6aaf01f5ad28aa370ace60c40d0b50904d4aa8ecd013ba0aaa17342f3308";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.9c3a6aaf01f5ad28aa370ace60c40d0b50904d4aa8ecd013ba0aaa17342f3308";
-  var CONTENT_RUNTIME_PREFERRED_MODEL_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preferred-model.js", "entryPath": "content-src/content-preferred-model.js", "sourceSha256": "cc45fd14cfd1f7343e92b85b1bce58e96f8268e1d07c43205d94350574f3c0ea", "implementationSha256": "90fb1d04468b598d7a9d169235b837be0f3567bf38bd01efa79c4f734cf29ebe", "implementationVersion": "2026.07.16.2+bundle.90fb1d04468b598d7a9d169235b837be0f3567bf38bd01efa79c4f734cf29ebe" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "a8302e940d2221a2bc32ce748029285b4b73093d38f3d74b73e60093ee0190fa";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.a8302e940d2221a2bc32ce748029285b4b73093d38f3d74b73e60093ee0190fa";
+  var CONTENT_RUNTIME_PREFERRED_MODEL_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preferred-model.js", "entryPath": "content-src/content-preferred-model.js", "sourceSha256": "b467b3051c99fb23f58ed020835321dddd575c1fa2d9cde6450d2856ac59d146", "implementationSha256": "2093624a2ac8c8dd44cee0072445aaec0aeb99a709f9b43ff145f87466d135be", "implementationVersion": "2026.07.16.2+bundle.2093624a2ac8c8dd44cee0072445aaec0aeb99a709f9b43ff145f87466d135be" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -180,7 +180,7 @@
     cryptoApi.getRandomValues(bytes);
     return Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
   }
-  function browserDocumentAttestationState(target, cryptoApi) {
+  function browserDocumentAttestationState(target2, cryptoApi) {
     const key = "__CHATCLUB_BROWSER_DOCUMENT_ATTESTATION_STATE__";
     const pattern = /^legacy:[a-f0-9]{64}$/i;
     const rotate = (state2) => {
@@ -188,14 +188,14 @@
       state2.epoch = Number.isSafeInteger(state2.epoch) && state2.epoch > 0 && state2.epoch < Number.MAX_SAFE_INTEGER ? state2.epoch + 1 : 1;
       state2.dirty = false;
     };
-    let state = target[key];
+    let state = target2[key];
     if (state) {
-      const descriptor = Object.getOwnPropertyDescriptor(target, key);
+      const descriptor = Object.getOwnPropertyDescriptor(target2, key);
       if (!descriptor || descriptor.configurable || descriptor.writable || descriptor.value !== state || typeof state !== "object" || !pattern.test(String(state.id || "")) || !Number.isSafeInteger(state.epoch) || state.epoch <= 0 || typeof state.dirty !== "boolean" || typeof state.lifecycleInstalled !== "boolean") throw new Error("Browser document attestation state is invalid");
     } else {
       state = { id: "", epoch: 0, dirty: false, lifecycleInstalled: false };
       rotate(state);
-      Object.defineProperty(target, key, {
+      Object.defineProperty(target2, key, {
         configurable: false,
         enumerable: false,
         writable: false,
@@ -204,39 +204,39 @@
     }
     if (!state.lifecycleInstalled) {
       state.lifecycleInstalled = true;
-      target.addEventListener("pagehide", () => {
+      target2.addEventListener("pagehide", () => {
         state.dirty = true;
       }, { capture: true });
-      target.addEventListener("pageshow", () => {
+      target2.addEventListener("pageshow", () => {
         if (state.dirty) rotate(state);
       }, { capture: true });
     }
     return { state, rotate };
   }
-  function createContentDocumentIdentity(target = globalThis) {
-    const cryptoApi = target.crypto || globalThis.crypto;
+  function createContentDocumentIdentity(target2 = globalThis) {
+    const cryptoApi = target2.crypto || globalThis.crypto;
     if (!cryptoApi?.getRandomValues) throw new Error("Secure randomness is unavailable");
-    const contentDocumentId = target.__CHATCLUB_CONTENT_DOCUMENT_ID__ || `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
-    target.__CHATCLUB_CONTENT_DOCUMENT_ID__ = contentDocumentId;
-    const secureFrameToken = target.__CHATCLUB_SECURE_FRAME_TOKEN__ || randomHex(cryptoApi, 16);
-    target.__CHATCLUB_SECURE_FRAME_TOKEN__ = secureFrameToken;
-    const attestation = browserDocumentAttestationState(target, cryptoApi);
+    const contentDocumentId = target2.__CHATCLUB_CONTENT_DOCUMENT_ID__ || `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+    target2.__CHATCLUB_CONTENT_DOCUMENT_ID__ = contentDocumentId;
+    const secureFrameToken = target2.__CHATCLUB_SECURE_FRAME_TOKEN__ || randomHex(cryptoApi, 16);
+    target2.__CHATCLUB_SECURE_FRAME_TOKEN__ = secureFrameToken;
+    const attestation = browserDocumentAttestationState(target2, cryptoApi);
     const currentBrowserDocumentAttestationId = ({ allowDirty = false } = {}) => {
       const { state, rotate } = attestation;
       if (state.dirty && !allowDirty) rotate(state);
       return String(state.id || "");
     };
-    const SearchParams = target.URLSearchParams || globalThis.URLSearchParams;
+    const SearchParams = target2.URLSearchParams || globalThis.URLSearchParams;
     const initialFrameBindingId = (() => {
       try {
-        const values = new SearchParams(String(target.name || "")).getAll("chatclub_frame_binding");
+        const values = new SearchParams(String(target2.name || "")).getAll("chatclub_frame_binding");
         return values.length === 1 && /^[a-f0-9]{64}$/i.test(values[0]) ? values[0] : "";
       } catch {
         return "";
       }
     })();
     const currentFrameBindingId = () => {
-      const bootstrap = String(target.__CHATCLUB_FRAME_BINDING_ID__ || "");
+      const bootstrap = String(target2.__CHATCLUB_FRAME_BINDING_ID__ || "");
       if (bootstrap) return /^[a-f0-9]{64}$/i.test(bootstrap) ? bootstrap : "";
       return initialFrameBindingId;
     };
@@ -249,8 +249,8 @@
   }
 
   // content-src/shared/runtime-registry-client.js
-  function runtimeRegistry(target = globalThis) {
-    const broker = target[RUNTIME_REGISTRY_KEY];
+  function runtimeRegistry(target2 = globalThis) {
+    const broker = target2[RUNTIME_REGISTRY_KEY];
     if (!broker || broker.abiVersion !== RUNTIME_REGISTRY_ABI_VERSION || typeof broker.beginGeneration !== "function") {
       throw new Error("Content base runtime broker must be installed before optional capabilities");
     }
@@ -555,10 +555,10 @@
     function modelActivationTargets(el) {
       const targets = [];
       const seen = /* @__PURE__ */ new Set();
-      const add = (target) => {
-        if (!target || seen.has(target)) return;
-        seen.add(target);
-        targets.push(target);
+      const add = (target2) => {
+        if (!target2 || seen.has(target2)) return;
+        seen.add(target2);
+        targets.push(target2);
       };
       const point = modelCenterPoint(el);
       const pointTarget = modelElementFromPoint(point, el);
@@ -570,16 +570,16 @@
       add(el);
       add(modelCustomActivationAncestor(el));
       add(modelClickableAncestor(el));
-      return targets.filter((target) => visible2(target) && !isDisabledElement(target));
+      return targets.filter((target2) => visible2(target2) && !isDisabledElement(target2));
     }
-    function dispatchPointerActivation(target, point) {
-      if (!target || !point) return false;
-      const PointerEventCtor = modelEventConstructor("PointerEvent", target);
-      const MouseEventCtor = modelEventConstructor("MouseEvent", target);
+    function dispatchPointerActivation(target2, point) {
+      if (!target2 || !point) return false;
+      const PointerEventCtor = modelEventConstructor("PointerEvent", target2);
+      const MouseEventCtor = modelEventConstructor("MouseEvent", target2);
       if (typeof PointerEventCtor !== "function" && typeof MouseEventCtor !== "function") return false;
       const clientX = Number(point.x) || 1;
       const clientY = Number(point.y) || 1;
-      const view = modelEventView(target);
+      const view = modelEventView(target2);
       const common = {
         bubbles: true,
         cancelable: true,
@@ -607,17 +607,17 @@
       let dispatched = false;
       for (const plan of plans) {
         try {
-          target.dispatchEvent(new plan.ctor(plan.type, plan.opts));
+          target2.dispatchEvent(new plan.ctor(plan.type, plan.opts));
           dispatched = true;
         } catch {
         }
       }
       return dispatched;
     }
-    function nativeModelClick(target) {
-      if (!target || typeof target.click !== "function") return false;
+    function nativeModelClick(target2) {
+      if (!target2 || typeof target2.click !== "function") return false;
       try {
-        target.click();
+        target2.click();
         return true;
       } catch {
         return false;
@@ -631,17 +631,17 @@
       }
       const point = modelCenterPoint(el);
       let clicked = false;
-      for (const target of modelActivationTargets(el)) {
+      for (const target2 of modelActivationTargets(el)) {
         try {
-          target.focus?.({ preventScroll: true });
+          target2.focus?.({ preventScroll: true });
         } catch {
           try {
-            target.focus?.();
+            target2.focus?.();
           } catch {
           }
         }
-        clicked = dispatchPointerActivation(target, point || modelCenterPoint(target)) || clicked;
-        clicked = nativeModelClick(target) || clicked;
+        clicked = dispatchPointerActivation(target2, point || modelCenterPoint(target2)) || clicked;
+        clicked = nativeModelClick(target2) || clicked;
         if (clicked) return true;
       }
       try {
@@ -715,25 +715,25 @@
       if (token === "false") return false;
       return null;
     }
-    function preferredModelActivate(context, target) {
+    function preferredModelActivate(context, target2) {
       assertPreferredModelRun(context);
-      if (!target || !visible2(target) || isDisabledElement2(target) || typeof target.click !== "function") return false;
+      if (!target2 || !visible2(target2) || isDisabledElement2(target2) || typeof target2.click !== "function") return false;
       armPreferredModelFocusShield(context);
       try {
-        target.scrollIntoView?.({ block: "center", inline: "nearest" });
+        target2.scrollIntoView?.({ block: "center", inline: "nearest" });
       } catch {
       }
       assertPreferredModelRun(context);
       context.interactionCount += 1;
-      return nativeModelClick(target);
+      return nativeModelClick(target2);
     }
-    function preferredModelPointerActivate(context, target) {
+    function preferredModelPointerActivate(context, target2) {
       assertPreferredModelRun(context);
-      if (!target || !visible2(target) || isDisabledElement2(target)) return false;
+      if (!target2 || !visible2(target2) || isDisabledElement2(target2)) return false;
       armPreferredModelFocusShield(context);
       assertPreferredModelRun(context);
       context.interactionCount += 1;
-      return modelDirectClick(target);
+      return modelDirectClick(target2);
     }
     return Object.freeze({
       firstVisibleBySelectors: dom.firstVisibleBySelectors,
@@ -1702,19 +1702,19 @@
       "[role='button'][aria-haspopup='true']"
     ]);
     function grokModelIdFromText(value) {
-      for (const [targetId, target] of Object.entries(GROK_MODEL_TARGETS)) {
-        if (grokTextLooksLikeTarget(value, target)) return targetId;
+      for (const [targetId, target2] of Object.entries(GROK_MODEL_TARGETS)) {
+        if (grokTextLooksLikeTarget(value, target2)) return targetId;
       }
       return "";
     }
-    function grokTextLooksLikeTarget(value, target) {
-      if (!target) return false;
+    function grokTextLooksLikeTarget(value, target2) {
+      if (!target2) return false;
       const parts = String(value || "").split(/\n+/).map((part) => part.trim()).filter(Boolean);
       const values = parts.length ? parts : [String(value || "")];
       for (const part of values) {
         const token = alnumModelToken(part);
         if (!token) continue;
-        for (const alias of target.aliases || []) {
+        for (const alias of target2.aliases || []) {
           const aliasToken = alnumModelToken(alias);
           if (token === aliasToken || token.startsWith(aliasToken) || aliasToken.startsWith(token) || token.includes(aliasToken)) return true;
         }
@@ -1722,7 +1722,7 @@
       return false;
     }
     function countGrokModelTargets(value) {
-      return Object.values(GROK_MODEL_TARGETS).reduce((count, target) => count + (grokTextLooksLikeTarget(value, target) ? 1 : 0), 0);
+      return Object.values(GROK_MODEL_TARGETS).reduce((count, target2) => count + (grokTextLooksLikeTarget(value, target2) ? 1 : 0), 0);
     }
     function grokModelMenuItemRow(element, root, matchesSpec = null) {
       const rootArea = modelElementArea(root);
@@ -1815,9 +1815,9 @@
       }
       return opacity;
     }
-    function grokModelLabelElements(item, target) {
-      if (!item || !target) return [];
-      const aliases = (target.aliases || []).map(alnumModelToken).filter(Boolean);
+    function grokModelLabelElements(item, target2) {
+      if (!item || !target2) return [];
+      const aliases = (target2.aliases || []).map(alnumModelToken).filter(Boolean);
       const elements = [item, ...qsa2("*", item).slice(0, 80)];
       return elements.filter((element) => {
         const own = alnumModelToken(modelDirectText(element));
@@ -1842,8 +1842,8 @@
       return alpha * opacity < 0.72 || maxChannel < 190;
     }
     function grokModelItemLooksUnavailable(item, modelId) {
-      const target = GROK_MODEL_TARGETS[modelId] || null;
-      if (!item || !target) return false;
+      const target2 = GROK_MODEL_TARGETS[modelId] || null;
+      if (!item || !target2) return false;
       if (isDisabledElement2(item)) return true;
       for (let node = item, depth = 0; node && node.nodeType === 1 && depth < 5; node = node.parentElement, depth += 1) {
         if (isDisabledElement2(node)) return true;
@@ -1861,7 +1861,7 @@
         }
         if (node.getAttribute?.("role") === "menu" || node.getAttribute?.("role") === "listbox") break;
       }
-      const labels = grokModelLabelElements(item, target);
+      const labels = grokModelLabelElements(item, target2);
       return labels.length > 0 && labels.every((element) => grokModelElementLooksMuted(element, item));
     }
     function grokTextStartsWithAlias(value, alias) {
@@ -2077,15 +2077,15 @@
       return grokModelIdFromText(modelElementText(selected));
     }
     function findGrokModelItem(root, modelId, options = {}) {
-      const target = GROK_MODEL_TARGETS[modelId];
-      if (!target) return null;
-      const matchesTarget = (element) => grokTextLooksLikeTarget(modelElementText(element), target);
+      const target2 = GROK_MODEL_TARGETS[modelId];
+      if (!target2) return null;
+      const matchesTarget = (element) => grokTextLooksLikeTarget(modelElementText(element), target2);
       for (const item of grokItemCandidates(root)) {
         if (!options.includeUnavailable && grokModelItemLooksUnavailable(item, modelId)) continue;
         const itemText = grokModelItemText(item);
         if (grokModelIdFromText(itemText) === modelId) return item;
         if (matchesTarget(item)) return item;
-        for (const alias of target.aliases || []) {
+        for (const alias of target2.aliases || []) {
           if (grokTextStartsWithAlias(itemText, alias)) return item;
         }
       }
@@ -2727,20 +2727,20 @@
       const innermost = innermostIndependentElements(candidates);
       return innermost.length === 1 ? innermost[0] : null;
     }
-    function notionToggleActivationTarget(target, row) {
-      if (!target || !row) return null;
-      if (visible2(target) && !isDisabledElement2(target) && notionElementAcceptsPointerInput(target)) return target;
-      const targetRect = notionRawRect(target);
+    function notionToggleActivationTarget(target2, row) {
+      if (!target2 || !row) return null;
+      if (visible2(target2) && !isDisabledElement2(target2) && notionElementAcceptsPointerInput(target2)) return target2;
+      const targetRect = notionRawRect(target2);
       if (!targetRect) return null;
       const proxies = [];
-      let node = target.parentElement || null;
+      let node = target2.parentElement || null;
       while (node && node.nodeType === 1 && node !== row && row.contains?.(node)) {
         const nodeRect = notionRawRect(node);
         const widthLimit = Math.max(targetRect.width + 8, targetRect.width * 1.75);
         const heightLimit = Math.max(targetRect.height + 8, targetRect.height * 1.75);
         const centerDeltaX = nodeRect ? Math.abs(nodeRect.left + nodeRect.width / 2 - (targetRect.left + targetRect.width / 2)) : Number.MAX_SAFE_INTEGER;
         const centerDeltaY = nodeRect ? Math.abs(nodeRect.top + nodeRect.height / 2 - (targetRect.top + targetRect.height / 2)) : Number.MAX_SAFE_INTEGER;
-        if (visible2(node) && !isDisabledElement2(node) && notionElementAcceptsPointerInput(node) && nodeRect && notionRectsShareVisualRow(node, target) && nodeRect.width <= widthLimit && nodeRect.height <= heightLimit && centerDeltaX <= Math.max(4, targetRect.width * 0.25) && centerDeltaY <= Math.max(4, targetRect.height * 0.25)) proxies.push(node);
+        if (visible2(node) && !isDisabledElement2(node) && notionElementAcceptsPointerInput(node) && nodeRect && notionRectsShareVisualRow(node, target2) && nodeRect.width <= widthLimit && nodeRect.height <= heightLimit && centerDeltaX <= Math.max(4, targetRect.width * 0.25) && centerDeltaY <= Math.max(4, targetRect.height * 0.25)) proxies.push(node);
         node = node.parentElement || null;
       }
       const innermost = innermostIndependentElements(proxies);
@@ -2760,10 +2760,10 @@
       const anchor = labelAnchor || notionAllSourcesLabelAnchor(row);
       const unique = [...new Set(candidates)].filter((element) => notionToggleIsEligible(element)).filter((element) => anchor && notionRectsShareVisualRow(element, anchor));
       const leaves = unique.filter((element) => !unique.some((other) => other !== element && element.contains?.(other)));
-      const target = leaves.length === 1 ? leaves[0] : null;
+      const target2 = leaves.length === 1 ? leaves[0] : null;
       return {
-        target,
-        activationTarget: target ? notionToggleActivationTarget(target, row) : null,
+        target: target2,
+        activationTarget: target2 ? notionToggleActivationTarget(target2, row) : null,
         anchor,
         ambiguous: leaves.length > 1
       };
@@ -2947,10 +2947,10 @@
       const rect = modelRect(row);
       const targets = [];
       const seen = /* @__PURE__ */ new Set();
-      const add = (target) => {
-        if (!target || seen.has(target) || !visible2(target) || isDisabledElement2(target) || target !== row && !row.contains?.(target) || root && target !== root && !root.contains?.(target)) return;
-        seen.add(target);
-        targets.push(target);
+      const add = (target2) => {
+        if (!target2 || seen.has(target2) || !visible2(target2) || isDisabledElement2(target2) || target2 !== row && !row.contains?.(target2) || root && target2 !== root && !root.contains?.(target2)) return;
+        seen.add(target2);
+        targets.push(target2);
       };
       if (rect && rect.width > 0 && rect.height > 0) {
         for (const ratio of [0.18, 0.52, 0.88]) {
@@ -2986,9 +2986,9 @@
         if (current.overlay && overlaysBeforeActivation.has(current.overlay)) return null;
         return current.row || current.ambiguous ? current : null;
       };
-      const target = notionMySourcesActivationTargets(row, root)[0] || null;
-      if (!target || !activateNotionSourcesElement(context, target)) return null;
-      lease.mySourcesTarget = target;
+      const target2 = notionMySourcesActivationTargets(row, root)[0] || null;
+      if (!target2 || !activateNotionSourcesElement(context, target2)) return null;
+      lease.mySourcesTarget = target2;
       lease.submenuActivated = true;
       const result = await waitForPreferredModelWithinDeadline(
         context,
@@ -3050,9 +3050,9 @@
       const result = await activateNotionMySourcesRow(context, mySources.row, root, lease);
       return result ? { ...result, trigger, menusOwned: true } : { row: null, ambiguous: false, reason: "my sources row could not be opened", trigger, menusOwned: true };
     }
-    function dispatchNotionSourcesEscapeEvent(target) {
-      const KeyboardEventCtor = modelEventConstructor?.("KeyboardEvent", target) || null;
-      if (!target || typeof KeyboardEventCtor !== "function") return false;
+    function dispatchNotionSourcesEscapeEvent(target2) {
+      const KeyboardEventCtor = modelEventConstructor?.("KeyboardEvent", target2) || null;
+      if (!target2 || typeof KeyboardEventCtor !== "function") return false;
       const options = {
         key: "Escape",
         code: "Escape",
@@ -3065,7 +3065,7 @@
       let dispatched = false;
       for (const type of ["keydown", "keyup"]) {
         try {
-          target.dispatchEvent?.(new KeyboardEventCtor(type, options));
+          target2.dispatchEvent?.(new KeyboardEventCtor(type, options));
           dispatched = true;
         } catch {
         }
@@ -3321,6 +3321,23 @@
     return Object.freeze({ applyNotionAllSourcesPreference, preflightNotionAllSourcesTrigger, runNotionPreferenceOperation });
   }
 
+  // shared/model-preference-selection.js
+  var MODEL_PREFERENCE_LABEL_MAX_CHARS = 80;
+  var MODEL_PREFERENCE_CUSTOM_ID_PREFIX = "label:";
+  function modelPreferenceTextKey(value) {
+    return String(value || "").trim().toLowerCase().replace(/[\s\u200b\u200c\u200d]+/g, "");
+  }
+  function isModelPreferenceCustomId(modelId) {
+    return String(modelId || "").startsWith(MODEL_PREFERENCE_CUSTOM_ID_PREFIX);
+  }
+  function customModelPreferenceId(label) {
+    const key = modelPreferenceTextKey(valueLabel(label));
+    return key ? `${MODEL_PREFERENCE_CUSTOM_ID_PREFIX}${key}` : "";
+  }
+  function valueLabel(value) {
+    return String(value || "").trim();
+  }
+
   // shared/notion-efforts.js
   var EMPTY_NOTION_EFFORT_TARGETS = Object.freeze([]);
   var NOTION_EFFORT_TARGETS = Object.freeze({
@@ -3340,6 +3357,7 @@
     opus48: Object.freeze(["none", "low", "medium", "high", "max"]),
     opus5: Object.freeze(["none", "low", "medium", "high", "max"]),
     fable5: Object.freeze(["low", "medium", "high", "max"]),
+    fable51: Object.freeze(["low", "medium", "high", "max"]),
     gemini31pro: Object.freeze(["low", "medium"]),
     gemini35flash: Object.freeze(["low", "medium", "high"]),
     gpt56sol: Object.freeze(["none", "low", "medium", "high", "xhigh", "max"]),
@@ -3347,6 +3365,7 @@
     gpt52: Object.freeze(["medium", "high"]),
     gpt54: Object.freeze(["medium", "high"]),
     gpt55: Object.freeze(["medium", "high"]),
+    gpt6astra: EMPTY_NOTION_EFFORT_TARGETS,
     grok43: Object.freeze(["low", "medium", "high"]),
     grok45: Object.freeze(["low", "medium", "high"]),
     grokBuild01: EMPTY_NOTION_EFFORT_TARGETS,
@@ -3360,7 +3379,12 @@
     Object.fromEntries(Object.keys(NOTION_EFFORT_TARGETS_BY_MODEL).map((modelId) => [modelId, ""]))
   );
   function notionEffortTargetsForModel(modelId) {
-    return NOTION_EFFORT_TARGETS_BY_MODEL[String(modelId || "")] || EMPTY_NOTION_EFFORT_TARGETS;
+    const known = NOTION_EFFORT_TARGETS_BY_MODEL[String(modelId || "")];
+    if (known) return known;
+    if (isModelPreferenceCustomId(modelId)) {
+      return Object.freeze(Object.keys(NOTION_EFFORT_TARGETS));
+    }
+    return EMPTY_NOTION_EFFORT_TARGETS;
   }
 
   // content-src/capabilities/preferred-notion-effort.js
@@ -3417,7 +3441,7 @@
     function notionEffortIdFromText(value) {
       const normalized = notionText(value).replace(/\bdefault\b/g, " ").replace(/\s+/g, " ").trim();
       if (!normalized) return "";
-      const candidates = Object.values(NOTION_EFFORT_TARGETS).flatMap((target) => [target.id, target.label, ...target.aliases || []].map((label) => ({ id: target.id, label: notionText(label) }))).filter((candidate) => candidate.label).sort((a, b) => b.label.length - a.label.length);
+      const candidates = Object.values(NOTION_EFFORT_TARGETS).flatMap((target2) => [target2.id, target2.label, ...target2.aliases || []].map((label) => ({ id: target2.id, label: notionText(label) }))).filter((candidate) => candidate.label).sort((a, b) => b.label.length - a.label.length);
       return candidates.find((candidate) => normalized === candidate.label || notionTextKey(normalized) === notionTextKey(candidate.label) || normalized.includes(candidate.label))?.id || "";
     }
     function notionEffortIdFromElement(element) {
@@ -3428,9 +3452,9 @@
       }
       return "";
     }
-    function notionElementLooksLikeEffortTarget(element, target) {
-      if (!element || !target) return false;
-      return notionElementTextEvidence(element).some((evidence) => notionEffortIdFromText(evidence) === target.id);
+    function notionElementLooksLikeEffortTarget(element, target2) {
+      if (!element || !target2) return false;
+      return notionElementTextEvidence(element).some((evidence) => notionEffortIdFromText(evidence) === target2.id);
     }
     function scoreNotionEffortTrigger(element, options = {}) {
       if (!element || !visible2(element) || !options.allowDisabled && isDisabledElement2(element)) return -1;
@@ -3478,8 +3502,8 @@
       if (!root || !visible2(root)) return -1;
       const normalized = notionText(modelElementText(root));
       let score = normalized.includes("effort") ? 360 : 0;
-      for (const target of Object.values(NOTION_EFFORT_TARGETS)) {
-        if (notionElementLooksLikeEffortTarget(root, target)) score += 70;
+      for (const target2 of Object.values(NOTION_EFFORT_TARGETS)) {
+        if (notionElementLooksLikeEffortTarget(root, target2)) score += 70;
       }
       return score >= 360 ? score : -1;
     }
@@ -3532,7 +3556,7 @@
     }
     function notionEffortMenuItemRow(element, root, effortId, options = {}) {
       const allowDisabled = options.allowDisabled === true;
-      const target = NOTION_EFFORT_TARGETS[effortId];
+      const target2 = NOTION_EFFORT_TARGETS[effortId];
       const rootArea = modelElementArea(root);
       const rootRect = modelRect(root);
       let bestRoleRow = null;
@@ -3545,7 +3569,7 @@
           continue;
         }
         if (!allowDisabled && isDisabledElement2(node)) return null;
-        if (!notionElementLooksLikeEffortTarget(node, target)) {
+        if (!notionElementLooksLikeEffortTarget(node, target2)) {
           node = node.parentElement || null;
           continue;
         }
@@ -3567,11 +3591,11 @@
     }
     function scoreNotionEffortItem(element, effortId, options = {}) {
       const allowDisabled = options.allowDisabled === true;
-      const target = NOTION_EFFORT_TARGETS[effortId];
-      if (!element || !target || !visible2(element) || !allowDisabled && isDisabledElement2(element)) {
+      const target2 = NOTION_EFFORT_TARGETS[effortId];
+      if (!element || !target2 || !visible2(element) || !allowDisabled && isDisabledElement2(element)) {
         return Number.NEGATIVE_INFINITY;
       }
-      if (!notionElementLooksLikeEffortTarget(element, target)) return Number.NEGATIVE_INFINITY;
+      if (!notionElementLooksLikeEffortTarget(element, target2)) return Number.NEGATIVE_INFINITY;
       let score = 880;
       const role = String(element.getAttribute?.("role") || "").toLowerCase();
       const tag = String(element.tagName || "").toLowerCase();
@@ -3586,11 +3610,11 @@
     function notionEffortItemRows(root, effortId, options = {}) {
       if (!root || !NOTION_EFFORT_TARGETS[effortId]) return [];
       const allowDisabled = options.allowDisabled === true;
-      const target = NOTION_EFFORT_TARGETS[effortId];
+      const target2 = NOTION_EFFORT_TARGETS[effortId];
       const seenRows = /* @__PURE__ */ new Set();
       const rows = [];
       const add = (element) => {
-        if (!element || !notionElementLooksLikeEffortTarget(element, target)) return;
+        if (!element || !notionElementLooksLikeEffortTarget(element, target2)) return;
         const row = notionEffortMenuItemRow(element, root, effortId, { allowDisabled });
         if (!row || seenRows.has(row) || !root.contains?.(row)) return;
         if (!allowDisabled && isDisabledElement2(row)) return;
@@ -3635,7 +3659,7 @@
       return notionEffortIdFromElement(trigger || findNotionEffortControl()) === effortId;
     }
     async function applyNotionPreferredEffort(context, modelId, effortId) {
-      if (!modelTargets[modelId]) {
+      if (!modelTargets[modelId] && !isModelPreferenceCustomId(modelId)) {
         return preferredModelResult(context, false, "NotionAI", modelId, "unknown model", { effortId });
       }
       if (!notionEffortTargetsForModel(modelId).includes(effortId)) {
@@ -3702,8 +3726,93 @@
       applyNotionPreferredEffort,
       currentNotionEffortId: () => notionEffortIdFromElement(findNotionEffortControl({ allowDisabled: true })),
       isSupported: (modelId, effortId) => Boolean(
-        modelTargets[modelId] && notionEffortTargetsForModel(modelId).includes(effortId)
+        (modelTargets[modelId] || isModelPreferenceCustomId(modelId)) && notionEffortTargetsForModel(modelId).includes(effortId)
       )
+    });
+  }
+
+  // shared/notion-models.js
+  function target(id, label, aliases = []) {
+    return Object.freeze({
+      id,
+      label,
+      aliases: Object.freeze([...aliases])
+    });
+  }
+  var NOTION_MODEL_TARGETS = Object.freeze({
+    auto: target("auto", "Auto", ["Automatic"]),
+    sonnet46: target("sonnet46", "Claude Sonnet 4.6", ["Sonnet 4.6"]),
+    sonnet5: target("sonnet5", "Claude Sonnet 5", ["Sonnet 5"]),
+    opus47: target("opus47", "Claude Opus 4.7", ["Opus 4.7"]),
+    opus48: target("opus48", "Claude Opus 4.8", ["Opus 4.8"]),
+    opus5: target("opus5", "Claude Opus 5", ["Opus 5", "Opus 5 New", "Opus5New"]),
+    fable5: target("fable5", "Claude Fable 5", ["Fable 5", "Fable 5 Beta", "Fable5Beta"]),
+    fable51: target("fable51", "Claude Fable 5.1", ["Fable 5.1", "Fable 5.1 Beta", "Fable5.1Beta"]),
+    gemini31pro: target("gemini31pro", "Gemini 3.1 Pro"),
+    gemini35flash: target("gemini35flash", "Gemini 3.5 Flash"),
+    gpt56sol: target("gpt56sol", "GPT-5.6 Sol", ["GPT 5.6 Sol"]),
+    gpt56terra: target("gpt56terra", "GPT-5.6 Terra", ["GPT 5.6 Terra"]),
+    gpt52: target("gpt52", "GPT-5.2", ["GPT 5.2"]),
+    gpt54: target("gpt54", "GPT-5.4", ["GPT 5.4"]),
+    gpt55: target("gpt55", "GPT-5.5", ["GPT 5.5"]),
+    gpt6astra: target("gpt6astra", "GPT-6 Astra", ["GPT 6 Astra", "GPT-6Astra"]),
+    grok43: target("grok43", "Grok 4.3"),
+    grok45: target("grok45", "Grok 4.5"),
+    grokBuild01: target("grokBuild01", "Grok Build 0.1", ["Grok Build 01"]),
+    kimi26: target("kimi26", "Kimi K2.6"),
+    kimi27code: target("kimi27code", "Kimi K2.7 Code"),
+    kimi3: target("kimi3", "Kimi K3"),
+    deepseekV4Pro: target("deepseekV4Pro", "DeepSeek V4 Pro"),
+    glm52: target("glm52", "GLM 5.2", ["GLM-5.2"])
+  });
+  var NOTION_MODEL_PREFERENCE_TARGETS = Object.freeze([
+    Object.freeze({ id: "", label: "" }),
+    ...Object.values(NOTION_MODEL_TARGETS).map((item) => Object.freeze({
+      id: item.id,
+      label: item.label,
+      aliases: item.aliases
+    }))
+  ]);
+  function resolveNotionShippedModelId(label) {
+    const key = modelPreferenceTextKey(label);
+    if (!key) return "";
+    for (const item of Object.values(NOTION_MODEL_TARGETS)) {
+      const labels = [item.id, item.label, ...item.aliases || []];
+      if (labels.some((candidate) => modelPreferenceTextKey(candidate) === key)) return item.id;
+    }
+    return "";
+  }
+  function resolveNotionApplyTarget(modelId, modelLabel = "") {
+    const requestedId = String(modelId || "").trim();
+    const label = String(modelLabel || "").trim().slice(0, MODEL_PREFERENCE_LABEL_MAX_CHARS);
+    const shippedId = NOTION_MODEL_TARGETS[requestedId] ? requestedId : resolveNotionShippedModelId(label);
+    if (shippedId) {
+      return Object.freeze({
+        id: shippedId,
+        known: true,
+        custom: false,
+        targets: NOTION_MODEL_TARGETS
+      });
+    }
+    if (!label) {
+      return Object.freeze({
+        id: requestedId,
+        known: false,
+        custom: false,
+        targets: NOTION_MODEL_TARGETS
+      });
+    }
+    const customId = customModelPreferenceId(label);
+    const custom = Object.freeze({
+      id: customId,
+      label,
+      aliases: Object.freeze([])
+    });
+    return Object.freeze({
+      id: customId,
+      known: true,
+      custom: true,
+      targets: Object.freeze({ ...NOTION_MODEL_TARGETS, [customId]: custom })
     });
   }
 
@@ -3738,30 +3847,10 @@
       releasePreferredModelBridgeRun,
       modelResult
     } = deps;
-    const NOTION_MODEL_TARGETS = Object.freeze({
-      auto: Object.freeze({ id: "auto", label: "Auto", aliases: ["Automatic"] }),
-      sonnet46: Object.freeze({ id: "sonnet46", label: "Claude Sonnet 4.6", aliases: ["Sonnet 4.6"] }),
-      sonnet5: Object.freeze({ id: "sonnet5", label: "Claude Sonnet 5", aliases: ["Sonnet 5"] }),
-      opus47: Object.freeze({ id: "opus47", label: "Claude Opus 4.7", aliases: ["Opus 4.7"] }),
-      opus48: Object.freeze({ id: "opus48", label: "Claude Opus 4.8", aliases: ["Opus 4.8"] }),
-      opus5: Object.freeze({ id: "opus5", label: "Claude Opus 5", aliases: ["Opus 5", "Opus 5 New", "Opus5New"] }),
-      fable5: Object.freeze({ id: "fable5", label: "Claude Fable 5", aliases: ["Fable 5", "Fable 5 Beta", "Fable5Beta"] }),
-      gemini31pro: Object.freeze({ id: "gemini31pro", label: "Gemini 3.1 Pro", aliases: [] }),
-      gemini35flash: Object.freeze({ id: "gemini35flash", label: "Gemini 3.5 Flash", aliases: [] }),
-      gpt56sol: Object.freeze({ id: "gpt56sol", label: "GPT-5.6 Sol", aliases: ["GPT 5.6 Sol"] }),
-      gpt56terra: Object.freeze({ id: "gpt56terra", label: "GPT-5.6 Terra", aliases: ["GPT 5.6 Terra"] }),
-      gpt52: Object.freeze({ id: "gpt52", label: "GPT-5.2", aliases: ["GPT 5.2"] }),
-      gpt54: Object.freeze({ id: "gpt54", label: "GPT-5.4", aliases: ["GPT 5.4"] }),
-      gpt55: Object.freeze({ id: "gpt55", label: "GPT-5.5", aliases: ["GPT 5.5"] }),
-      grok43: Object.freeze({ id: "grok43", label: "Grok 4.3", aliases: [] }),
-      grok45: Object.freeze({ id: "grok45", label: "Grok 4.5", aliases: [] }),
-      grokBuild01: Object.freeze({ id: "grokBuild01", label: "Grok Build 0.1", aliases: ["Grok Build 01"] }),
-      kimi26: Object.freeze({ id: "kimi26", label: "Kimi K2.6", aliases: [] }),
-      kimi27code: Object.freeze({ id: "kimi27code", label: "Kimi K2.7 Code", aliases: [] }),
-      kimi3: Object.freeze({ id: "kimi3", label: "Kimi K3", aliases: [] }),
-      deepseekV4Pro: Object.freeze({ id: "deepseekV4Pro", label: "DeepSeek V4 Pro", aliases: [] }),
-      glm52: Object.freeze({ id: "glm52", label: "GLM 5.2", aliases: ["GLM-5.2"] })
-    });
+    let applyNotionModelTargets = NOTION_MODEL_TARGETS;
+    function notionModelTargets() {
+      return applyNotionModelTargets;
+    }
     const NOTION_MODEL_TRIGGER_SELECTORS = Object.freeze([
       '[data-testid="unified-chat-model-button"]',
       '[data-testid*="model" i]',
@@ -3822,8 +3911,8 @@
     function notionTextKey(value) {
       return notionText(value).replace(/[\s\u200b\u200c\u200d]+/g, "");
     }
-    function notionLabels(target) {
-      return [target?.id, target?.label, ...target?.aliases || []].map(notionText).filter(Boolean);
+    function notionLabels(target2) {
+      return [target2?.id, target2?.label, ...target2?.aliases || []].map(notionText).filter(Boolean);
     }
     function notionTextEvidence(value) {
       const evidence = /* @__PURE__ */ new Set();
@@ -3836,9 +3925,9 @@
       for (const line of raw.split(/[\r\n\u2028\u2029]+/)) add(line);
       return [...evidence];
     }
-    function notionTextLooksLikeTarget(value, target) {
-      if (!target) return false;
-      const labels = notionLabels(target);
+    function notionTextLooksLikeTarget(value, target2) {
+      if (!target2) return false;
+      const labels = notionLabels(target2);
       const keys = new Set(labels.map(notionTextKey));
       return notionTextEvidence(value).some((candidate) => labels.includes(candidate) || keys.has(notionTextKey(candidate)));
     }
@@ -3846,8 +3935,8 @@
       const ids = /* @__PURE__ */ new Set();
       for (const candidate of evidence) {
         const candidateKey = notionTextKey(candidate);
-        for (const [id, target] of Object.entries(NOTION_MODEL_TARGETS)) {
-          const labels = notionLabels(target);
+        for (const [id, target2] of Object.entries(notionModelTargets())) {
+          const labels = notionLabels(target2);
           if (labels.includes(candidate) || labels.some((label) => notionTextKey(label) === candidateKey)) {
             ids.add(id);
           }
@@ -3889,9 +3978,9 @@
       if (!element || labelKeys.size === 0) return false;
       return notionElementTextEvidence(element).some((evidence) => labelKeys.has(notionTextKey(evidence)));
     }
-    function notionElementLooksLikeTarget(element, target) {
-      if (!element || !target) return false;
-      return notionElementTextEvidence(element).some((candidate) => notionTextLooksLikeTarget(candidate, target));
+    function notionElementLooksLikeTarget(element, target2) {
+      if (!element || !target2) return false;
+      return notionElementTextEvidence(element).some((candidate) => notionTextLooksLikeTarget(candidate, target2));
     }
     function notionModelIdFromElement(element) {
       const ids = notionModelIdsFromElement(element);
@@ -4124,8 +4213,8 @@
       if (!element || !visible2(element) || !allowDisabled && isDisabledElement2(element)) {
         return Number.NEGATIVE_INFINITY;
       }
-      const target = NOTION_MODEL_TARGETS[modelId];
-      if (!target || !notionElementLooksLikeTarget(element, target)) return Number.NEGATIVE_INFINITY;
+      const target2 = notionModelTargets()[modelId];
+      if (!target2 || !notionElementLooksLikeTarget(element, target2)) return Number.NEGATIVE_INFINITY;
       let score = 0;
       const role = String(element.getAttribute?.("role") || "").toLowerCase();
       const tag = String(element.tagName || "").toLowerCase();
@@ -4150,13 +4239,13 @@
       return false;
     }
     function notionModelItemRows(root, modelId, options = {}) {
-      if (!root || !NOTION_MODEL_TARGETS[modelId]) return [];
+      if (!root || !notionModelTargets()[modelId]) return [];
       const allowDisabled = options.allowDisabled === true;
-      const target = NOTION_MODEL_TARGETS[modelId];
+      const target2 = notionModelTargets()[modelId];
       const seenRows = /* @__PURE__ */ new Set();
       const rows = [];
       const add = (element) => {
-        if (!element || !notionElementLooksLikeTarget(element, target)) return;
+        if (!element || !notionElementLooksLikeTarget(element, target2)) return;
         const row = notionMenuItemRow(element, root, modelId, { allowDisabled });
         if (!row || seenRows.has(row) || !root.contains?.(row)) return;
         if (!allowDisabled && notionModelRowIsDisabled(row, root)) return;
@@ -4399,7 +4488,7 @@
       });
     }
     async function applyNotionPreferredModel(context, modelId) {
-      if (!NOTION_MODEL_TARGETS[modelId]) return preferredModelResult(context, false, "NotionAI", modelId, "unknown model");
+      if (!notionModelTargets()[modelId]) return preferredModelResult(context, false, "NotionAI", modelId, "unknown model");
       if (currentNotionModelId() === modelId) {
         const menuClosed2 = await closeNotionModelMenu(context);
         return preferredModelResult(context, true, "NotionAI", modelId, "", { skipped: true, menuClosed: menuClosed2 });
@@ -4656,8 +4745,8 @@
       return matches2[0]?.element || null;
     }
     function clickDeepSeekMode(context, element) {
-      const target = deepSeekModeClickableElement(element);
-      return preferredModelActivate(context, target);
+      const target2 = deepSeekModeClickableElement(element);
+      return preferredModelActivate(context, target2);
     }
     async function waitDeepSeekModeSettled(context, modeId) {
       const deadline = Date.now() + 2500;
@@ -4674,9 +4763,9 @@
       await waitForPreferredModel(context, () => currentDeepSeekModeId() || (deepSeekModeCandidates().length ? "ready" : ""), 1e4, 150);
       const current = currentDeepSeekModeId();
       if (current === modeId) return preferredModelResult(context, true, "DeepSeek", modeId, "", { skipped: true });
-      const target = await waitForPreferredModel(context, () => findDeepSeekModeTarget(modeId), 1e4, 150);
-      if (!target) return preferredModelResult(context, false, "DeepSeek", modeId, "target mode not found", { retryable: true });
-      if (!clickDeepSeekMode(context, target)) return preferredModelResult(context, false, "DeepSeek", modeId, "target mode could not be clicked");
+      const target2 = await waitForPreferredModel(context, () => findDeepSeekModeTarget(modeId), 1e4, 150);
+      if (!target2) return preferredModelResult(context, false, "DeepSeek", modeId, "target mode not found", { retryable: true });
+      if (!clickDeepSeekMode(context, target2)) return preferredModelResult(context, false, "DeepSeek", modeId, "target mode could not be clicked");
       return await waitDeepSeekModeSettled(context, modeId) ? preferredModelResult(context, true, "DeepSeek", modeId, "", { changed: true }) : preferredModelResult(context, false, "DeepSeek", modeId, "selection did not settle", { current: currentDeepSeekModeId() });
     }
     async function applyPreferredModel(context, data = {}) {
@@ -4694,22 +4783,30 @@
       const allSourcesState = NOTION_ALL_SOURCES_STATES.includes(rawAllSourcesState) ? rawAllSourcesState : "";
       if (!appId) return preferredModelResult(context, true, "unknown", modelId, "", { skipped: true });
       if (appId === "NotionAI") {
-        if (rawAllSourcesState && !allSourcesState) {
-          return preferredModelResult(context, false, appId, modelId, "unknown all sources state");
+        const modelLabel = String(data.modelLabel || "").trim();
+        const resolved = resolveNotionApplyTarget(modelId, modelLabel);
+        applyNotionModelTargets = resolved.targets;
+        try {
+          if (rawAllSourcesState && !allSourcesState) {
+            return preferredModelResult(context, false, appId, modelId, "unknown all sources state");
+          }
+          if (rawEffortId && !resolved.id) {
+            return preferredModelResult(context, false, appId, modelId, "effort requires a model", { effortId: rawEffortId });
+          }
+          if (!resolved.id && !allSourcesState) {
+            return preferredModelResult(context, true, appId, modelId, "", { skipped: true });
+          }
+          if ((modelId || modelLabel) && !resolved.known) {
+            return preferredModelResult(context, false, appId, modelId, "unknown model");
+          }
+          const applyId = resolved.known ? resolved.id : "";
+          if (rawEffortId && !notionEffort.isSupported(applyId, rawEffortId)) {
+            return preferredModelResult(context, false, appId, applyId, "unknown effort for model", { effortId: rawEffortId });
+          }
+          return await applyNotionPreferences(context, applyId, rawEffortId, allSourcesState);
+        } finally {
+          applyNotionModelTargets = NOTION_MODEL_TARGETS;
         }
-        if (rawEffortId && !modelId) {
-          return preferredModelResult(context, false, appId, modelId, "effort requires a model", { effortId: rawEffortId });
-        }
-        if (!modelId && !allSourcesState) {
-          return preferredModelResult(context, true, appId, modelId, "", { skipped: true });
-        }
-        if (modelId && !NOTION_MODEL_TARGETS[modelId]) {
-          return preferredModelResult(context, false, appId, modelId, "unknown model");
-        }
-        if (rawEffortId && !notionEffort.isSupported(modelId, rawEffortId)) {
-          return preferredModelResult(context, false, appId, modelId, "unknown effort for model", { effortId: rawEffortId });
-        }
-        return applyNotionPreferences(context, modelId, rawEffortId, allSourcesState);
       }
       if (!modelId) return preferredModelResult(context, true, appId, modelId, "", { skipped: true });
       if (appId === "Gemini") return applyGeminiPreferredModel(context, modelId, { thinkingLevel: data.thinkingLevel });

@@ -12,6 +12,7 @@ import {
 import {
   buttonText,
   closest,
+  conversationIsGenerating,
   copy,
   copyFirst,
   extractCopySequence,
@@ -51,6 +52,7 @@ function installSummaryBridgeCapability() {
     copyFirst,
     extractCopySequence,
     extractNativeCopyConversation,
+    conversationIsGenerating,
     extractTurns,
     hasUserAndAssistant,
     merge,

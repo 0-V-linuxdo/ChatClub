@@ -775,7 +775,7 @@ export function createSummaryController(ctx) {
     };
   }
   
-  async function collectFrameSummary(iframe, index = 0, { recordFailures = true } = {}) {
+  async function collectFrameSummary(iframe, index = 0, { recordFailures = true, timeoutMs, idleFullText = false } = {}) {
     const app = frameApp(iframe);
     // Probe the already-registered content bridge before deciding that a page
     // is blank. This both discovers Firefox-safe declared favicons for skipped
@@ -845,10 +845,10 @@ export function createSummaryController(ctx) {
         delete runtimeConfig.userscript;
         delete runtimeConfig.customUserscript;
         const result = await sendToContentFrame(iframe, "collectSummary", {
-          config: runtimeConfig,
+          config: idleFullText ? { ...runtimeConfig, idleFullText: true } : runtimeConfig,
           expectedDocumentId: summaryReady.registration.documentId,
           expectedHref: base.href
-        }, siteConfig.userscriptTimeoutMs || 36000);
+        }, timeoutMs || siteConfig.userscriptTimeoutMs || 36000);
         messages = result?.messages || [];
         if (!messages.length && result?.rawMessageCount) {
           return {
@@ -952,6 +952,7 @@ export function createSummaryController(ctx) {
     pollMs: IDLE_FULLTEXT_CAPTURE_DEFAULTS.pollMs,
     maxAttempts: IDLE_FULLTEXT_CAPTURE_DEFAULTS.maxAttempts,
     wallMs: IDLE_FULLTEXT_CAPTURE_DEFAULTS.wallMs,
+    generatingWallMs: IDLE_FULLTEXT_CAPTURE_DEFAULTS.generatingWallMs,
     isEnabled: () => state.options?.recordFullText === true,
     listFrames: () => currentFrames().map((iframe) => ({
       key: String(iframe.dataset.instanceId || ""),
@@ -961,13 +962,17 @@ export function createSummaryController(ctx) {
     getFingerprint: async (frame, prompt) => {
       const iframe = resolveIdleCaptureFrame(frame);
       if (!iframe) return null;
-      return sendToContentFrame(iframe, "getConversationFingerprint", { prompt }, { timeoutMs: 1500, skipEnsure: true });
+      return sendToContentFrame(iframe, "getConversationFingerprint", { prompt }, { timeoutMs: 8000, skipEnsure: false });
     },
     collectFrame: async (frame) => {
       const iframe = resolveIdleCaptureFrame(frame);
       if (!iframe) return null;
       const index = Math.max(0, currentFrames().indexOf(iframe));
-      const result = await collectLockedFrameSummary(iframe, index, { recordFailures: false });
+      const result = await collectLockedFrameSummary(iframe, index, {
+        recordFailures: false,
+        timeoutMs: IDLE_FULLTEXT_CAPTURE_DEFAULTS.collectTimeoutMs,
+        idleFullText: true
+      });
       return summaryPreviewItemFromResult(result, {
         index,
         order: index,

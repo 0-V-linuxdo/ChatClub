@@ -15,6 +15,7 @@ const NOTION_MODEL_CASES = Object.freeze([
   Object.freeze({ id: "opus48", settingsLabel: "Claude Opus 4.8", menuLabel: "Opus 4.8" }),
   Object.freeze({ id: "opus5", settingsLabel: "Claude Opus 5", menuLabel: "Opus 5" }),
   Object.freeze({ id: "fable5", settingsLabel: "Claude Fable 5", menuLabel: "Fable 5" }),
+  Object.freeze({ id: "fable51", settingsLabel: "Claude Fable 5.1", menuLabel: "Fable 5.1 Beta" }),
   Object.freeze({ id: "gemini31pro", settingsLabel: "Gemini 3.1 Pro", menuLabel: "Gemini 3.1 Pro" }),
   Object.freeze({ id: "gemini35flash", settingsLabel: "Gemini 3.5 Flash", menuLabel: "Gemini 3.5 Flash" }),
   Object.freeze({ id: "gpt56sol", settingsLabel: "GPT-5.6 Sol", menuLabel: "GPT-5.6 Sol" }),
@@ -22,6 +23,7 @@ const NOTION_MODEL_CASES = Object.freeze([
   Object.freeze({ id: "gpt52", settingsLabel: "GPT-5.2", menuLabel: "GPT-5.2" }),
   Object.freeze({ id: "gpt54", settingsLabel: "GPT-5.4", menuLabel: "GPT-5.4" }),
   Object.freeze({ id: "gpt55", settingsLabel: "GPT-5.5", menuLabel: "GPT-5.5" }),
+  Object.freeze({ id: "gpt6astra", settingsLabel: "GPT-6 Astra", menuLabel: "GPT-6 Astra" }),
   Object.freeze({ id: "grok43", settingsLabel: "Grok 4.3", menuLabel: "Grok 4.3" }),
   Object.freeze({ id: "grok45", settingsLabel: "Grok 4.5", menuLabel: "Grok 4.5" }),
   Object.freeze({ id: "grokBuild01", settingsLabel: "Grok Build 0.1", menuLabel: "Grok Build 0.1" }),
@@ -1694,17 +1696,15 @@ function createSourcesFixture({
   const { MODEL_PREFERENCE_TARGETS } = await import(
     `${pathToFileURL(path.join(root, "shared/constants.js")).href}?test=${Date.now()}`
   );
+  const { NOTION_MODEL_TARGETS } = await import(
+    `${pathToFileURL(path.join(root, "shared/notion-models.js")).href}?test=${Date.now()}`
+  );
 
-  const runtimeTargetsBlock = source.match(
-    /const NOTION_MODEL_TARGETS = Object\.freeze\(\{([\s\S]*?)\n  \}\);/
-  )?.[1] || "";
-  const runtimeTargets = [...runtimeTargetsBlock.matchAll(
-    /^\s+(\w+): Object\.freeze\(\{ id: "([^"]+)", label: "([^"]+)", aliases: \[([^\]]*)\] \}\),?$/gm
-  )].map((match) => ({
-    key: match[1],
-    id: match[2],
-    label: match[3],
-    aliases: JSON.parse(`[${match[4]}]`)
+  const runtimeTargets = Object.values(NOTION_MODEL_TARGETS).map((target) => ({
+    key: target.id,
+    id: target.id,
+    label: target.label,
+    aliases: [...(target.aliases || [])]
   }));
   const consoleTargetsBlock = consoleProbeSource.match(
     /const NOTION_MODEL_TARGETS = Object\.freeze\(\{([\s\S]*?)\n  \}\);/
@@ -1712,10 +1712,11 @@ function createSourcesFixture({
   const consoleTargetIds = [...consoleTargetsBlock.matchAll(
     /^\s+(\w+): Object\.freeze\(\{ id: "([^"]+)", label: "([^"]+)", aliases: \[([^\]]*)\] \}\),?$/gm
   )].map((match) => match[2]);
+  assert.match(source, /from "\.\.\/\.\.\/shared\/notion-models\.js"/, "Notion runtime must consume the shared model catalog");
   assert.equal(runtimeTargets.length, NOTION_MODEL_CASES.length, "every current Notion model must have one runtime target");
   assert.ok(runtimeTargets.every((target) => target.key === target.id), "runtime Notion target keys and stable ids must stay identical");
   assert.deepEqual(
-    MODEL_PREFERENCE_TARGETS.NotionAI.filter((target) => target.id),
+    MODEL_PREFERENCE_TARGETS.NotionAI.filter((target) => target.id).map(({ id, label }) => ({ id, label })),
     NOTION_MODEL_CASES.map(({ id, settingsLabel: label }) => ({ id, label })),
     "Settings must expose the complete Arc-observed Notion model catalog with stable ids"
   );
@@ -1880,6 +1881,126 @@ function createSourcesFixture({
       0,
       `${modelCase.id} must use an exact current/legacy model trigger without a document-wide scan`
     );
+  }
+
+  {
+    const fixture = createFixture({
+      triggerText: "Choose model",
+      targetLabel: "GPT-7 Nova"
+    });
+    global.document.getElementById = (id) => id === "model-menu" && fixture.state.menuOpen
+      ? fixture.dependencies.visibleSelectorElements('[role="menu"]')[0]
+      : null;
+    const api = createPreferredNotionDeepSeekCapability(fixture.dependencies);
+    const result = await api.runPreferredModelApply({
+      appId: "NotionAI",
+      modelLabel: "GPT-7 Nova",
+      runId: "notion-custom-label-apply"
+    });
+    assert.equal(result.ok, true, "an exact custom picker label must apply without a shipped id");
+    assert.equal(result.modelId, "label:gpt-7nova");
+    assert.equal(result.changed, true);
+    assert.equal(fixture.state.itemClicks, 1);
+  }
+
+  {
+    const fixture = createFixture({
+      triggerText: "Choose model",
+      targetLabel: "Fable 5.1 Beta"
+    });
+    global.document.getElementById = (id) => id === "model-menu" && fixture.state.menuOpen
+      ? fixture.dependencies.visibleSelectorElements('[role="menu"]')[0]
+      : null;
+    const api = createPreferredNotionDeepSeekCapability(fixture.dependencies);
+    const result = await api.runPreferredModelApply({
+      appId: "NotionAI",
+      modelId: "fable5",
+      runId: "notion-fable5-must-not-steal-fable51"
+    });
+    assert.equal(result.ok, false, "Fable 5 must not click Fable 5.1 Beta");
+    assert.equal(result.reason, "target model item not found");
+    assert.equal(fixture.state.itemClicks, 0);
+  }
+
+  {
+    const fixture = createFixture({
+      triggerText: "Choose model",
+      targetLabel: "Fable 5.1 Beta"
+    });
+    global.document.getElementById = (id) => id === "model-menu" && fixture.state.menuOpen
+      ? fixture.dependencies.visibleSelectorElements('[role="menu"]')[0]
+      : null;
+    const api = createPreferredNotionDeepSeekCapability(fixture.dependencies);
+    const result = await api.runPreferredModelApply({
+      appId: "NotionAI",
+      modelLabel: "Fable 5.1 Beta",
+      runId: "notion-custom-label-coerces-to-shipped"
+    });
+    assert.equal(result.ok, true, "a custom label that matches a shipped alias must use that shipped id");
+    assert.equal(result.modelId, "fable51");
+    assert.equal(fixture.state.itemClicks, 1);
+  }
+
+  {
+    const fixture = createFixture({
+      triggerText: "Choose model",
+      targetLabel: "GPT-7 Nova",
+      duplicateItem: true
+    });
+    global.document.getElementById = (id) => id === "model-menu" && fixture.state.menuOpen
+      ? fixture.dependencies.visibleSelectorElements('[role="menu"]')[0]
+      : null;
+    const api = createPreferredNotionDeepSeekCapability(fixture.dependencies);
+    const result = await api.runPreferredModelApply({
+      appId: "NotionAI",
+      modelId: "label:gpt-7nova",
+      modelLabel: "GPT-7 Nova",
+      runId: "notion-custom-label-ambiguous"
+    });
+    assert.equal(result.ok, false, "duplicate exact custom-name rows must fail closed");
+    assert.equal(result.reason, "target model item not found");
+    assert.equal(fixture.state.itemClicks, 0);
+  }
+
+  {
+    const fixture = createFixture({
+      triggerText: "Choose model",
+      targetLabel: "GPT-7 Nova",
+      itemAvailable: false
+    });
+    global.document.getElementById = (id) => id === "model-menu" && fixture.state.menuOpen
+      ? fixture.dependencies.visibleSelectorElements('[role="menu"]')[0]
+      : null;
+    const api = createPreferredNotionDeepSeekCapability(fixture.dependencies);
+    const result = await api.runPreferredModelApply({
+      appId: "NotionAI",
+      modelId: "label:gpt-7nova",
+      modelLabel: "GPT-7 Nova",
+      runId: "notion-custom-label-missing"
+    });
+    assert.equal(result.ok, false, "a custom name with no exact picker row must fail closed");
+    assert.equal(result.reason, "target model item not found");
+    assert.equal(fixture.state.itemClicks, 0);
+  }
+
+  {
+    const fixture = createFixture({
+      triggerText: "Choose model",
+      targetLabel: "GPT-7 Nova"
+    });
+    global.document.getElementById = (id) => id === "model-menu" && fixture.state.menuOpen
+      ? fixture.dependencies.visibleSelectorElements('[role="menu"]')[0]
+      : null;
+    const api = createPreferredNotionDeepSeekCapability(fixture.dependencies);
+    const result = await api.runPreferredModelApply({
+      appId: "NotionAI",
+      modelId: "label:gpt-7nova",
+      runId: "notion-custom-id-without-label"
+    });
+    assert.equal(result.ok, false, "a custom apply id without the exact picker label must fail closed");
+    assert.equal(result.reason, "unknown model");
+    assert.equal(fixture.state.itemClicks, 0);
+    assert.equal(fixture.state.triggerClicks, 0);
   }
 
   {

@@ -261,7 +261,9 @@ const copyActionText = async (action, lastUser = "") => {
 
 const out = [];
 let lastUser = "";
-for (const action of messageActions().slice(-24)) {
+const copyActions = messageActions();
+const selectedActions = (api.config && api.config.idleFullText === true) ? copyActions.slice(-2) : copyActions.slice(-8);
+for (const action of selectedActions) {
   const text = await copyActionText(action, action.role === "assistant" ? lastUser : "");
   if (!text) continue;
   out.push({ role: action.role, text });

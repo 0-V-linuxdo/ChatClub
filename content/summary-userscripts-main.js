@@ -74,12 +74,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "7e04ec4b7c1e5e40303d30ef7ac70a070806fb762a0674739b6a35c975bde4fd";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "b873a2370e8adf0f4e0a3a136caac4f5467511b93004eb12181838b1dd8d5e26";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "9c3a6aaf01f5ad28aa370ace60c40d0b50904d4aa8ecd013ba0aaa17342f3308";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.9c3a6aaf01f5ad28aa370ace60c40d0b50904d4aa8ecd013ba0aaa17342f3308";
-  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "c94102760a935df831bab1a915dc81149793c918af440321c3c65b599dd81bd8", "implementationSha256": "00fb24ff92ed83e4c8ae4174ff66f268d3c9f7349fe680e722d558bbf25c1cd6", "implementationVersion": "2026.07.16.2+bundle.00fb24ff92ed83e4c8ae4174ff66f268d3c9f7349fe680e722d558bbf25c1cd6" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "a8302e940d2221a2bc32ce748029285b4b73093d38f3d74b73e60093ee0190fa";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.a8302e940d2221a2bc32ce748029285b4b73093d38f3d74b73e60093ee0190fa";
+  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "260dbd9069bf4634ae2f1d377c9fc64c00aeed2592b4eddeb902b289683431c0", "implementationSha256": "44b11b9d5c4b4b0e0612eb86640227348b1bfb8b8a8e81690fbaf5b64352ebb3", "implementationVersion": "2026.07.16.2+bundle.44b11b9d5c4b4b0e0612eb86640227348b1bfb8b8a8e81690fbaf5b64352ebb3" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -167,8 +167,11 @@
         return "";
       };
       const turns = api.qsa("[data-message-author-role]", document, { all: true }).filter(api.visible).map((node) => ({ node, role: String(node.getAttribute("data-message-author-role") || "").toLowerCase() })).filter((turn) => turn.role === "user" || turn.role === "assistant").filter((turn, index, list) => !list.some((other, otherIndex) => otherIndex !== index && other.role === turn.role && other.node !== turn.node && other.node.contains && other.node.contains(turn.node)));
+      const generating = typeof api.conversationIsGenerating === "function" && api.conversationIsGenerating();
+      const lastAssistantNode = [...turns].reverse().find((turn) => turn.role === "assistant")?.node;
       const out = [];
       for (const turn of turns) {
+        if (generating && turn.role === "assistant" && turn.node === lastAssistantNode) continue;
         const scope = turnScope(turn.node);
         const text2 = await copyForTurn(scope, turn.role);
         if (text2) out.push({ role: turn.role, text: text2 });
@@ -1496,7 +1499,9 @@
       };
       const out = [];
       let lastUser = "";
-      for (const action of messageActions().slice(-24)) {
+      const copyActions = messageActions();
+      const selectedActions = api.config && api.config.idleFullText === true ? copyActions.slice(-2) : copyActions.slice(-8);
+      for (const action of selectedActions) {
         const text2 = await copyActionText(action, action.role === "assistant" ? lastUser : "");
         if (!text2) continue;
         out.push({ role: action.role, text: text2 });
@@ -1773,7 +1778,9 @@
       };
       const out = [];
       let lastUser = "";
-      for (const action of messageActions().slice(-24)) {
+      const copyActions = messageActions();
+      const selectedActions = api.config && api.config.idleFullText === true ? copyActions.slice(-2) : copyActions.slice(-8);
+      for (const action of selectedActions) {
         const text2 = await copyActionText(action, action.role === "assistant" ? lastUser : "");
         if (!text2) continue;
         out.push({ role: action.role, text: text2 });
@@ -1874,7 +1881,8 @@
         actions.push({ button, owner });
       }
       const out = [];
-      for (const [index, action] of actions.slice(0, 24).entries()) {
+      const selectedActions = api.config && api.config.idleFullText === true ? actions.slice(-2) : actions.slice(0, 24);
+      for (const [index, action] of selectedActions.entries()) {
         const { button, owner } = action;
         const role = messageRole(owner, index);
         const text2 = useful(await api.copy(button, {
@@ -1944,7 +1952,7 @@
         if (/\bcopy\s+(?:text|message|prompt)\b|复制(?:文本|消息|提示词|问题)/i.test(label)) return "user";
         return "";
       };
-      const isCopyTurnButton = (button) => layoutVisible(button) && roleOfButton(button) && !closest2(button, "nav,aside,header,footer,form,input,textarea,select,[contenteditable=true],pre,code,table,kbd,samp,[data-language]");
+      const isCopyTurnButton = (button) => layoutVisible(button) && roleOfButton(button) && !closest2(button, "nav,aside,header,footer,form,input,textarea,select,[contenteditable=true],pre,code,kbd,samp,[data-language]");
       const useful = (value) => {
         const text2 = normalize2(value).replace(/^(?:Copied to clipboard|Response copied to clipboard|Right click and copy the link above)\.?$/i, "").trim();
         if (!text2 || /^(?:copy|copied|copy text|copy response|复制|已复制)$/i.test(text2)) return "";
@@ -1956,8 +1964,47 @@
       const isChromeLine = (line) => /^(?:Notion AI|\/|history|Delete, rename, and more…?|Give context|Settings|Gemini\s+\d|Do anything with AI\.{0,3}|Ask anything|Response copied to clipboard|Copied to clipboard|Loading\.?)$/i.test(line);
       const isComposerLine = (line) => /^(?:Do anything with AI\.{0,3}|Ask anything|Give context|Settings|Gemini\s+\d|Start voice recording|Submit AI message|Response copied to clipboard|Copied to clipboard)$/i.test(line);
       const isMetaLine = (line) => /^(?:\d+\s*steps?|Today|Yesterday|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+\d{1,2}(?:,\s*\d{4})?)$/i.test(line);
+      const isResearchLogLine = (line) => /^(?:\d+\s*steps?|thought|noodling|contemplating|found\s+\d+\s+results?|searched the web|searching the web|loaded (?:skills tools|data-analysis skill|research skill)|(?:loaded|loading) web page:)/i.test(line);
       const trimPromptMeta = (line) => cleanLine(line).replace(/\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+\d{1,2}(?:,\s*\d{4})?$/i, "").replace(/\s+(?:Today|Yesterday)$/i, "").trim();
-      const likelyPrompt = (line) => /[?？]$|^(?:介绍|搜索|请|帮|写|总结|解释|翻译|生成|分析|列出|查找|Tell|What|How|Why|Please|Search|Summarize|Explain|Write)\b/i.test(line);
+      const likelyPrompt = (line) => /[?？]$|^(?:介绍|搜索|深入搜索|请|帮|写|总结|解释|翻译|生成|分析|列出|查找)/i.test(line) || /^(?:Tell|What|How|Why|Please|Search|Summarize|Explain|Write)\b/i.test(line);
+      const isPromptBoundaryLine = (line) => isChromeLine(line) || isMetaLine(line) || isResearchLogLine(line) || isComposerLine(line) || /^\d+\s*steps?$/i.test(line);
+      const isPromptFieldLine = (line) => /^(?:要求|需要|目标|补充|约束)(?:[:：\s]|$)/i.test(line) || /^(?:Task|Request|Requirement|Goal|Constraint)\b/i.test(line);
+      const isAssistantBodyLine = (line) => /^#{1,6}\s/.test(line) || line.length > 280 && !likelyPrompt(line);
+      const joinPromptLines = (lines, start, end) => {
+        const parts = [];
+        for (let index = start; index < end; index += 1) {
+          const part = trimPromptMeta(lines[index]);
+          if (part) parts.push(part);
+        }
+        return normalize2(parts.join("\n"));
+      };
+      const collectPromptRange = (lines, likelyIndex, stepIndex) => {
+        if (stepIndex > 0) {
+          let last2 = stepIndex - 1;
+          while (last2 >= 0 && isPromptBoundaryLine(lines[last2])) last2 -= 1;
+          if (last2 < 0) return { user: "", start: -1, end: 0 };
+          let first = last2;
+          while (first > 0) {
+            const previous = lines[first - 1];
+            if (isPromptBoundaryLine(previous) || isAssistantBodyLine(previous)) break;
+            if (last2 - (first - 1) >= 8) break;
+            first -= 1;
+          }
+          return { user: joinPromptLines(lines, first, last2 + 1), start: first, end: last2 + 1 };
+        }
+        if (likelyIndex < 0 || likelyIndex >= lines.length - 1) return { user: "", start: -1, end: 0 };
+        let last = likelyIndex;
+        for (let index = likelyIndex + 1; index < Math.min(lines.length, likelyIndex + 8); index += 1) {
+          if (isPromptBoundaryLine(lines[index]) || isAssistantBodyLine(lines[index])) break;
+          const previous = lines[index - 1];
+          const continuation = /[:：]$/.test(previous) || isPromptFieldLine(lines[index]) || likelyPrompt(lines[index]);
+          if (!continuation && last === likelyIndex && !/[:：]$/.test(lines[likelyIndex])) break;
+          if (!continuation && last > likelyIndex) break;
+          last = index;
+          if (isPromptFieldLine(lines[index]) || /[?？]$/.test(lines[index])) break;
+        }
+        return { user: joinPromptLines(lines, likelyIndex, last + 1), start: likelyIndex, end: last + 1 };
+      };
       const notionDomTextFallback = () => {
         const raw = normalize2(api.text(root) || root.innerText || root.textContent || "");
         if (!raw) return [];
@@ -1970,35 +2017,31 @@
           if (!lines.includes(line)) lines.push(line);
         }
         const stepIndex = lines.findIndex((line) => /^\d+\s*steps?$/i.test(line));
-        let promptIndex = -1;
-        if (stepIndex > 0) {
-          for (let index = stepIndex - 1; index >= 0; index -= 1) {
-            if (!isMetaLine(lines[index]) && !isChromeLine(lines[index])) {
-              promptIndex = index;
-              break;
-            }
-          }
-        }
-        if (promptIndex < 0) {
-          promptIndex = lines.findIndex((line, index) => index < lines.length - 1 && likelyPrompt(line));
-        }
-        if (promptIndex < 0 || promptIndex >= lines.length - 1) return [];
-        const user = trimPromptMeta(lines[promptIndex]);
-        let answerStart = stepIndex >= 0 ? stepIndex + 1 : promptIndex + 1;
-        while (answerStart < lines.length && isChromeLine(lines[answerStart])) answerStart += 1;
-        const assistant = normalize2(lines.slice(answerStart).filter((line) => line !== lines[promptIndex] && line !== user && !isChromeLine(line)).join("\n"));
-        if (user.length < 2 || assistant.length < 20) return [];
+        const likelyIndex = lines.findIndex((line, index) => index < lines.length - 1 && likelyPrompt(line));
+        const collected = collectPromptRange(lines, likelyIndex, stepIndex);
+        if (collected.user.length < 2) return [];
+        let answerStart = stepIndex >= 0 ? stepIndex + 1 : collected.end;
+        while (answerStart < lines.length && isPromptBoundaryLine(lines[answerStart])) answerStart += 1;
+        const promptParts = collected.user.split("\n");
+        const assistant = normalize2(lines.slice(answerStart).filter((line) => line !== collected.user && !promptParts.includes(line) && !isChromeLine(line) && !isResearchLogLine(line) && !isMetaLine(line)).join("\n"));
+        if (assistant.length < 20) return [];
         return [
-          { role: "user", content: user },
+          { role: "user", content: collected.user },
           { role: "assistant", content: assistant }
         ];
       };
+      if (typeof api.conversationIsGenerating === "function" && api.conversationIsGenerating()) return [];
+      const generating = typeof api.conversationIsGenerating === "function" && api.conversationIsGenerating();
+      const idleFullText = api.config && api.config.idleFullText === true;
       const turns = [];
       const seen = /* @__PURE__ */ new Set();
-      const buttons = qsa2("button,[role=button]", root).filter(isCopyTurnButton).sort(order).slice(0, 48);
-      for (const button of buttons) {
+      const buttons = qsa2("button,[role=button]", root).filter(isCopyTurnButton).sort(order);
+      const copyLimit = idleFullText ? 2 : 8;
+      const selectedButtons = buttons.length > copyLimit ? buttons.slice(-copyLimit) : buttons;
+      for (const button of selectedButtons) {
         const role = roleOfButton(button);
         if (role !== "user" && role !== "assistant") continue;
+        if (generating && role === "assistant") continue;
         api.reveal(button);
         await api.sleep(120);
         const text2 = useful(await api.copy(button, {
@@ -2019,10 +2062,12 @@
       }
       const merged = api.merge(turns);
       if (structured(merged)) return merged;
+      if (generating) return [];
       if (typeof api.extractNativeCopyConversation === "function") {
         const copied = await api.extractNativeCopyConversation(root);
         if (structured(copied)) return copied;
       }
+      if (typeof api.conversationIsGenerating === "function" && api.conversationIsGenerating()) return [];
       return notionDomTextFallback();
     };
     scripts["notion.js"] = scripts["notion"];
@@ -2899,7 +2944,7 @@
       return [];
     };
     scripts["qianwen.js"] = scripts["qianwen"];
-    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.9c3a6aaf01f5ad28aa370ace60c40d0b50904d4aa8ecd013ba0aaa17342f3308" });
+    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.a8302e940d2221a2bc32ce748029285b4b73093d38f3d74b73e60093ee0190fa" });
     return scripts;
   }
 
@@ -3132,6 +3177,7 @@
     classText: () => classText,
     closest: () => closest,
     conversationFingerprint: () => conversationFingerprint,
+    conversationIsGenerating: () => conversationIsGenerating,
     copy: () => copy,
     copyFirst: () => copyFirst,
     extractCopySequence: () => extractCopySequence,
@@ -3201,6 +3247,21 @@
     } catch {
     }
   }
+  function mergeSameRoleText(previous, next) {
+    const prev = normalize(previous);
+    const value = normalize(next);
+    if (!value) return prev;
+    if (!prev) return value;
+    if (prev === value) return prev;
+    const compactPrev = compareText(prev);
+    const compactNext = compareText(value);
+    if (compactPrev === compactNext) return prev.length >= value.length ? prev : value;
+    if (compactNext.length >= 8 && compactPrev.includes(compactNext)) return prev;
+    if (compactPrev.length >= 8 && compactNext.includes(compactPrev)) return value;
+    return normalize(`${prev}
+
+${value}`);
+  }
   function merge(messages) {
     const out = [];
     for (const message of messages || []) {
@@ -3208,9 +3269,7 @@
       const value = cleanCaptured(message?.text || message?.content || "");
       if (!value) continue;
       const previous = out[out.length - 1];
-      if (previous && previous.role === role) previous.text = normalize(`${previous.text}
-
-${value}`);
+      if (previous && previous.role === role) previous.text = mergeSameRoleText(previous.text, value);
       else out.push({ role, text: value });
     }
     return out;
@@ -3294,16 +3353,6 @@ ${value}`);
     if (/font-claude-response|model-response|ds-assistant/.test(cls)) return "assistant";
     return userscriptRole(el) || "";
   }
-  function conversationTurnText(el) {
-    if (!el) return "";
-    try {
-      const clone = el.cloneNode(true);
-      clone.querySelectorAll?.("button,svg,script,style,noscript,time,nav,header,footer,form,input,textarea,select,[contenteditable='true']").forEach((node) => node.remove());
-      return normalize(clone.innerText || clone.textContent || "").replace(/\s+/g, " ");
-    } catch {
-      return normalize(el.innerText || el.textContent || "").replace(/\s+/g, " ");
-    }
-  }
   function conversationTurnNodes() {
     const selectors = [
       "[data-message-author-role]",
@@ -3326,32 +3375,167 @@ ${value}`);
     }
     return nodes.sort(elementOrder);
   }
+  function lastAssistantTurnNode() {
+    const turns = conversationTurnNodes();
+    for (let index = turns.length - 1; index >= 0; index -= 1) {
+      if (conversationTurnRole(turns[index]) === "assistant") return turns[index];
+    }
+    return null;
+  }
+  function controlLayoutVisible(el) {
+    if (!el?.getBoundingClientRect) return false;
+    const rect = el.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return false;
+    try {
+      const style = getComputedStyle(el);
+      return style.display !== "none" && style.visibility !== "hidden";
+    } catch {
+      return true;
+    }
+  }
+  function controlLooksLikeStopGenerating(el) {
+    if (!el) return false;
+    const testid = String(el.getAttribute?.("data-testid") || el.getAttribute?.("data-test-id") || "");
+    if (/(?:^|[\s_-])(?:stop-button|stop-generating|stop_generation|composer-stop|fruitjuice-stop-button)(?:$|[\s_-])/i.test(testid)) return true;
+    const aria = normalize(el.getAttribute?.("aria-label") || el.getAttribute?.("title") || "");
+    if (/\bstop(?:\s+(?:generating|streaming|response|ai(?:\s+message)?))?\b|\bcancel(?:\s+(?:generating|response|ai))?\b|停止(?:生成|回答|回复|AI)?/i.test(aria)) return true;
+    const value = normalize(el.innerText || el.textContent || "");
+    return Boolean(value && value.length <= 24 && /^(?:stop(?:\s+(?:generating|streaming|ai))?|停止(?:生成|AI)?)$/i.test(value));
+  }
+  function liveBusyStatusLine(value) {
+    const text2 = normalize(value).replace(/\s+/g, " ");
+    if (!text2 || text2.length > 180) return false;
+    if (/^loading web page:?/i.test(text2)) return true;
+    if (/^searching the web(?:\s*[.。…]*)?$/i.test(text2)) return true;
+    if (/^正在(?:读取|打开|加载|访问)(?:网页|页面|网站)?/i.test(text2)) return true;
+    if (/^(?:thinking|preparing|crafting|noodling|contemplating)(?:\s*[.。…>]*)?$/i.test(text2)) return true;
+    if (/^(?:思考中|准备中|正在思考|正在准备|正在撰写)(?:\s*[.。…>]*)?$/.test(text2)) return true;
+    return false;
+  }
+  function completedToolStatusLine(value) {
+    const text2 = normalize(value).replace(/\s+/g, " ");
+    if (!text2 || text2.length > 180) return false;
+    if (/^loaded web page:?/i.test(text2)) return true;
+    if (/^searched the web(?:\s*[.。…]*)?$/i.test(text2)) return true;
+    return false;
+  }
+  function conversationSampleRoot() {
+    return qs("#notion-app") || qs("main,[role=main]") || document.body;
+  }
+  function conversationLineSample() {
+    let raw = "";
+    try {
+      raw = String(conversationSampleRoot()?.textContent || "");
+    } catch {
+    }
+    if (raw.length > 96e3) raw = `${raw.slice(0, 12e3)}
+${raw.slice(-36e3)}`;
+    const lines = [];
+    for (const part of raw.split(/\n+/)) {
+      const line = normalize(part).replace(/\s+/g, " ");
+      if (line) lines.push(line);
+    }
+    return lines;
+  }
+  function conversationToolActivityFromLines(lines) {
+    let live = false;
+    for (const line of (Array.isArray(lines) ? lines : []).slice(-12)) {
+      if (completedToolStatusLine(line)) {
+        live = false;
+        continue;
+      }
+      if (liveBusyStatusLine(line)) live = true;
+    }
+    return live;
+  }
+  function conversationToolActivityIsActive() {
+    try {
+      return conversationToolActivityFromLines(conversationLineSample());
+    } catch {
+    }
+    return false;
+  }
+  function nodeLooksLikeStreamingTurn(el) {
+    if (!el) return false;
+    if (String(el.getAttribute?.("aria-busy") || "").toLowerCase() === "true") return true;
+    if (String(el.getAttribute?.("data-is-streaming") || "").toLowerCase() === "true") return true;
+    const bits = `${classText(el)} ${el.getAttribute?.("data-testid") || ""}`.toLowerCase();
+    return /\b(?:result-streaming|is-streaming)\b/.test(bits);
+  }
+  function conversationComposerIsGenerating() {
+    const selectors = [
+      "button[data-testid='stop-button']",
+      "button[data-testid='stop-generating']",
+      "button[data-testid='composer-stop-button']",
+      "button[data-testid='fruitjuice-stop-button']",
+      "button[data-testid*='stop-button' i]",
+      "button[aria-label*='stop' i]",
+      "button[title*='stop' i]",
+      "button[aria-label*='停止' i]",
+      "[role='button'][data-testid='stop-button']",
+      "[role='button'][aria-label*='stop' i]",
+      "[role='button'][aria-label*='停止' i]"
+    ].join(",");
+    try {
+      for (const el of qsa(selectors)) {
+        if (controlLayoutVisible(el) && controlLooksLikeStopGenerating(el)) return true;
+      }
+    } catch {
+    }
+    return false;
+  }
+  function lastAssistantTurnIsStreaming(turn) {
+    if (!turn) return false;
+    return nodeLooksLikeStreamingTurn(turn);
+  }
+  function conversationIsGenerating() {
+    if (conversationComposerIsGenerating()) return true;
+    if (conversationToolActivityIsActive()) return true;
+    return lastAssistantTurnIsStreaming(lastAssistantTurnNode());
+  }
+  function nodeBelongsToTurn(node, turn) {
+    if (!node || !turn) return false;
+    return node === turn || Boolean(turn.contains?.(node) || node.contains?.(turn));
+  }
+  function shouldRefuseLiveAssistantCopy(node) {
+    if (!conversationIsGenerating()) return false;
+    const last = lastAssistantTurnNode();
+    if (!last) return true;
+    if (nodeBelongsToTurn(node, last)) return true;
+    const article = closest(node, "article,[data-testid^='conversation-turn'],[data-testid*='conversation-turn']");
+    return Boolean(article && (article === last || article.contains?.(last) || last.contains?.(article)));
+  }
   function conversationFingerprint(documentId = "", data = {}) {
     const turns = conversationTurnNodes();
     const prompt = normalize(data?.prompt || "").replace(/\s+/g, " ");
+    const lines = conversationLineSample();
     let userChars = 0;
     let assistantChars = 0;
     let lastText = "";
     const haystackParts = [];
     for (const turn of turns) {
       const role = conversationTurnRole(turn);
-      const value = conversationTurnText(turn);
+      const value = normalize(turn?.textContent || turn?.innerText || "").replace(/\s+/g, " ");
       if (!value) continue;
       haystackParts.push(value);
       if (role === "user") userChars += value.length;
       else if (role === "assistant") assistantChars += value.length;
       lastText = value;
     }
+    const tail = lines.slice(-8).join("\n");
+    if (!lastText) lastText = tail;
+    if (!assistantChars) assistantChars = tail.length;
     const haystack = haystackParts.join(" ");
-    const promptHaystack = haystack || normalize(document.body?.innerText || "").replace(/\s+/g, " ");
+    const promptHaystack = haystack || [...lines.slice(0, 48), ...lines.slice(-80)].join(" ");
     return {
       href: conversationHref(),
       documentId: String(documentId || ""),
-      turnCount: turns.length,
+      turnCount: turns.length || Math.min(lines.length, 999),
       userChars,
       assistantChars,
       tailHash: fingerprintHash(lastText.slice(-500)),
-      containsPrompt: Boolean(prompt && promptHaystack.includes(prompt))
+      containsPrompt: Boolean(prompt && promptHaystack.includes(prompt)),
+      generating: conversationComposerIsGenerating() || conversationToolActivityFromLines(lines) || lastAssistantTurnIsStreaming(lastAssistantTurnNode())
     };
   }
   function copyLooksUseful(value) {
@@ -3643,6 +3827,7 @@ ${value}`);
   }
   async function copy(button, options = {}) {
     if (!button) return "";
+    if (shouldRefuseLiveAssistantCopy(button)) return "";
     const copyTimeoutMs = Math.max(300, Math.min(1e4, Number(options.copyTimeoutMs || options.timeoutMs) || 2600));
     const copyPollMs = Math.max(20, Math.min(150, Number(options.copyPollMs) || 50));
     const copyCaptureGraceMs = Math.max(80, Math.min(800, Number(options.copyCaptureGraceMs) || 240));
@@ -3786,6 +3971,7 @@ ${value}`);
     for (const turn of turns.sort(elementOrder)) {
       let role = userscriptRole(turn, options) || fallbackRole(roleIndex, options);
       if (role !== "user" && role !== "assistant") continue;
+      if (shouldRefuseLiveAssistantCopy(turn)) continue;
       reveal(turn);
       await sleep(80);
       const expected = text(turn);
@@ -3819,6 +4005,7 @@ ${value}`);
     const accept = async (button, roleHint) => {
       const role = roleHint || userscriptRole(button, options) || fallbackRole(roleIndex, options);
       if (role !== "user" && role !== "assistant") return false;
+      if (shouldRefuseLiveAssistantCopy(button)) return false;
       const value = userscriptCopyAccepted(await copy(button, options), "", { ...options, matchMode: "anyUseful" });
       if (!value) return false;
       pushMessage(out, role, value, seen);
@@ -3857,8 +4044,18 @@ ${value}`);
       return text(node);
     }
   }
+  function messageCopyLabel(el) {
+    const label = buttonText(el);
+    return /\bcopy\s+(?:response|answer|text|message|prompt)\b|复制(?:回复|回答|响应|文本|消息|提示词|问题)/i.test(label);
+  }
   function internalCopyScope(el) {
-    return Boolean(closest(el, "nav,header,footer,aside,form,input,textarea,select,[contenteditable=true],pre,code,table,kbd,samp,[data-language]"));
+    if (closest(el, "nav,header,footer,aside,form,input,textarea,select,[contenteditable=true],pre,code,kbd,samp,[data-language]")) return true;
+    if (!closest(el, "table")) return false;
+    if (messageCopyLabel(el) || isNativeCopyButton(el) || userscriptLooksLikeCopyIcon(el)) {
+      const meta = userscriptMeta(el);
+      return /(?:copy\s*(?:code|table|link)|copy[-_ ]?(?:code|table|link)|复制表格)/i.test(meta);
+    }
+    return true;
   }
   function copyButtonRole(button, options = {}) {
     const roleNode = closest(button, "[data-message-author-role]");
@@ -4012,6 +4209,7 @@ ${value}`);
     }).filter((node, index, list) => !list.slice(0, index).some((prev) => nativeCopyDedup(cachedText(prev), cachedText(node))));
   }
   async function extractHoverNativeCopyConversation(root = document.body) {
+    if (conversationIsGenerating()) return null;
     const options = {
       copyButtonSelector: "button,[role=button],[role=menuitem],[role=menuitemcheckbox],[role=menuitemradio],div[tabindex],span[role=button]",
       copyButtonPattern: "copy|copied|clipboard|复制|已复制|拷贝",
@@ -4033,6 +4231,7 @@ ${value}`);
       const role = hoverCopyAnchorRole(anchor, roleIndex);
       const expected = nodeTextForCopy(anchor);
       if (role !== "user" && role !== "assistant") continue;
+      if (shouldRefuseLiveAssistantCopy(anchor)) continue;
       reveal(anchor);
       await sleep(180);
       for (const button of hoverCopyCandidateButtons(anchor, options).slice(0, 14)) {
@@ -4052,6 +4251,7 @@ ${value}`);
     return hasUserAndAssistant(messages) ? messages : null;
   }
   async function extractNativeCopyConversation(root = document.body) {
+    if (conversationIsGenerating()) return null;
     let buttons = conversationCopyButtons(root || document.body);
     if (buttons.length < 2) {
       const hovered = await extractHoverNativeCopyConversation(root || document.body);
@@ -4134,7 +4334,8 @@ ${value}`);
       extractCopySequence: extractCopySequence2,
       extractNativeCopyConversation: extractNativeCopyConversation2,
       extractTurns: extractTurns2,
-      userscriptFindCopyButtons: userscriptFindCopyButtons2
+      userscriptFindCopyButtons: userscriptFindCopyButtons2,
+      conversationIsGenerating: conversationIsGenerating2
     } = summary_runtime_exports;
     try {
       runtimes.require("summary-page", PROTOCOL.CONTENT_BRIDGE_VERSION);
@@ -4220,7 +4421,8 @@ ${value}`);
         extractDeepSeekNativeCopyMessages: extractNativeCopyConversation2,
         extractGrokNativeCopyMessages: extractNativeCopyConversation2,
         extractTurns: extractTurns2,
-        findCopyButtons: userscriptFindCopyButtons2
+        findCopyButtons: userscriptFindCopyButtons2,
+        conversationIsGenerating: conversationIsGenerating2
       };
     }
     async function runSummaryRunner(config, runner) {
@@ -4235,6 +4437,15 @@ ${value}`);
     const customSummaryExecutor = (config, runner) => runSummaryRunner(config || {}, runner);
     async function collectSummary(data) {
       const config = data?.config || {};
+      if (conversationIsGenerating2()) {
+        return {
+          messages: [],
+          rawMessageCount: 0,
+          stage: "generating",
+          officialHits: null,
+          waitMsApplied: 0
+        };
+      }
       const official = await collectOfficialStage(config, { wait: false });
       if (official.messages) {
         const messages = boundedSummaryRunnerMessages(official.messages);

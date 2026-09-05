@@ -2,6 +2,7 @@ import { STORAGE_KEYS } from "../../shared/constants.js";
 import { t } from "../../shared/i18n.js";
 import {
   framesFromSummaryPreviewItems,
+  fullTextMessagesHavePair,
   leftoverWorkspaceTabFullTextHits,
   matchesFullTextQuery,
   mergeWorkspaceTabFullTextFrames,
@@ -47,7 +48,8 @@ async function saveWorkspaceTabFullTextStore(store) {
 }
 
 export async function persistWorkspaceTabFullTextFromPreview({ workspaceId, topicTitle, items } = {}) {
-  const incoming = framesFromSummaryPreviewItems(items);
+  const incoming = framesFromSummaryPreviewItems(items)
+    .filter((frame) => fullTextMessagesHavePair(frame.messages));
   const id = String(workspaceId || "").trim();
   if (!id || !incoming.length) return { saved: false };
   const store = await loadWorkspaceTabFullTextStore();

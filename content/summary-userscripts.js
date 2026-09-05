@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "7e04ec4b7c1e5e40303d30ef7ac70a070806fb762a0674739b6a35c975bde4fd";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "b873a2370e8adf0f4e0a3a136caac4f5467511b93004eb12181838b1dd8d5e26";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "9c3a6aaf01f5ad28aa370ace60c40d0b50904d4aa8ecd013ba0aaa17342f3308";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.9c3a6aaf01f5ad28aa370ace60c40d0b50904d4aa8ecd013ba0aaa17342f3308";
-  var CONTENT_RUNTIME_SUMMARY_ISOLATED_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts.js", "entryPath": "content-src/summary-userscripts.js", "sourceSha256": "8f43e67ae6390a0de15c167427516661996917651ce1bba84e6d9c39b544f1e3", "implementationSha256": "a163048bdf201289ec08ecc6206e2cae41f2dc5def6bfb53d021a9fd09fab21a", "implementationVersion": "2026.07.16.2+bundle.a163048bdf201289ec08ecc6206e2cae41f2dc5def6bfb53d021a9fd09fab21a" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "a8302e940d2221a2bc32ce748029285b4b73093d38f3d74b73e60093ee0190fa";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.a8302e940d2221a2bc32ce748029285b4b73093d38f3d74b73e60093ee0190fa";
+  var CONTENT_RUNTIME_SUMMARY_ISOLATED_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts.js", "entryPath": "content-src/summary-userscripts.js", "sourceSha256": "ff2ac89dfde2b3f166263b3cabe8c0431cdab734fbecd1a415e4b206a3979999", "implementationSha256": "631a85054a94c9e68d7be4c467845f71d783082758611771fa0b3d7e125abe04", "implementationVersion": "2026.07.16.2+bundle.631a85054a94c9e68d7be4c467845f71d783082758611771fa0b3d7e125abe04" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -161,8 +161,11 @@
         return "";
       };
       const turns = api.qsa("[data-message-author-role]", document, { all: true }).filter(api.visible).map((node) => ({ node, role: String(node.getAttribute("data-message-author-role") || "").toLowerCase() })).filter((turn) => turn.role === "user" || turn.role === "assistant").filter((turn, index, list) => !list.some((other, otherIndex) => otherIndex !== index && other.role === turn.role && other.node !== turn.node && other.node.contains && other.node.contains(turn.node)));
+      const generating = typeof api.conversationIsGenerating === "function" && api.conversationIsGenerating();
+      const lastAssistantNode = [...turns].reverse().find((turn) => turn.role === "assistant")?.node;
       const out = [];
       for (const turn of turns) {
+        if (generating && turn.role === "assistant" && turn.node === lastAssistantNode) continue;
         const scope = turnScope(turn.node);
         const text = await copyForTurn(scope, turn.role);
         if (text) out.push({ role: turn.role, text });
@@ -1490,7 +1493,9 @@
       };
       const out = [];
       let lastUser = "";
-      for (const action of messageActions().slice(-24)) {
+      const copyActions = messageActions();
+      const selectedActions = api.config && api.config.idleFullText === true ? copyActions.slice(-2) : copyActions.slice(-8);
+      for (const action of selectedActions) {
         const text = await copyActionText(action, action.role === "assistant" ? lastUser : "");
         if (!text) continue;
         out.push({ role: action.role, text });
@@ -1767,7 +1772,9 @@
       };
       const out = [];
       let lastUser = "";
-      for (const action of messageActions().slice(-24)) {
+      const copyActions = messageActions();
+      const selectedActions = api.config && api.config.idleFullText === true ? copyActions.slice(-2) : copyActions.slice(-8);
+      for (const action of selectedActions) {
         const text = await copyActionText(action, action.role === "assistant" ? lastUser : "");
         if (!text) continue;
         out.push({ role: action.role, text });
@@ -1868,7 +1875,8 @@
         actions.push({ button, owner });
       }
       const out = [];
-      for (const [index, action] of actions.slice(0, 24).entries()) {
+      const selectedActions = api.config && api.config.idleFullText === true ? actions.slice(-2) : actions.slice(0, 24);
+      for (const [index, action] of selectedActions.entries()) {
         const { button, owner } = action;
         const role = messageRole(owner, index);
         const text = useful(await api.copy(button, {
@@ -1938,7 +1946,7 @@
         if (/\bcopy\s+(?:text|message|prompt)\b|复制(?:文本|消息|提示词|问题)/i.test(label)) return "user";
         return "";
       };
-      const isCopyTurnButton = (button) => layoutVisible(button) && roleOfButton(button) && !closest(button, "nav,aside,header,footer,form,input,textarea,select,[contenteditable=true],pre,code,table,kbd,samp,[data-language]");
+      const isCopyTurnButton = (button) => layoutVisible(button) && roleOfButton(button) && !closest(button, "nav,aside,header,footer,form,input,textarea,select,[contenteditable=true],pre,code,kbd,samp,[data-language]");
       const useful = (value) => {
         const text = normalize(value).replace(/^(?:Copied to clipboard|Response copied to clipboard|Right click and copy the link above)\.?$/i, "").trim();
         if (!text || /^(?:copy|copied|copy text|copy response|复制|已复制)$/i.test(text)) return "";
@@ -1950,8 +1958,47 @@
       const isChromeLine = (line) => /^(?:Notion AI|\/|history|Delete, rename, and more…?|Give context|Settings|Gemini\s+\d|Do anything with AI\.{0,3}|Ask anything|Response copied to clipboard|Copied to clipboard|Loading\.?)$/i.test(line);
       const isComposerLine = (line) => /^(?:Do anything with AI\.{0,3}|Ask anything|Give context|Settings|Gemini\s+\d|Start voice recording|Submit AI message|Response copied to clipboard|Copied to clipboard)$/i.test(line);
       const isMetaLine = (line) => /^(?:\d+\s*steps?|Today|Yesterday|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+\d{1,2}(?:,\s*\d{4})?)$/i.test(line);
+      const isResearchLogLine = (line) => /^(?:\d+\s*steps?|thought|noodling|contemplating|found\s+\d+\s+results?|searched the web|searching the web|loaded (?:skills tools|data-analysis skill|research skill)|(?:loaded|loading) web page:)/i.test(line);
       const trimPromptMeta = (line) => cleanLine(line).replace(/\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+\d{1,2}(?:,\s*\d{4})?$/i, "").replace(/\s+(?:Today|Yesterday)$/i, "").trim();
-      const likelyPrompt = (line) => /[?？]$|^(?:介绍|搜索|请|帮|写|总结|解释|翻译|生成|分析|列出|查找|Tell|What|How|Why|Please|Search|Summarize|Explain|Write)\b/i.test(line);
+      const likelyPrompt = (line) => /[?？]$|^(?:介绍|搜索|深入搜索|请|帮|写|总结|解释|翻译|生成|分析|列出|查找)/i.test(line) || /^(?:Tell|What|How|Why|Please|Search|Summarize|Explain|Write)\b/i.test(line);
+      const isPromptBoundaryLine = (line) => isChromeLine(line) || isMetaLine(line) || isResearchLogLine(line) || isComposerLine(line) || /^\d+\s*steps?$/i.test(line);
+      const isPromptFieldLine = (line) => /^(?:要求|需要|目标|补充|约束)(?:[:：\s]|$)/i.test(line) || /^(?:Task|Request|Requirement|Goal|Constraint)\b/i.test(line);
+      const isAssistantBodyLine = (line) => /^#{1,6}\s/.test(line) || line.length > 280 && !likelyPrompt(line);
+      const joinPromptLines = (lines, start, end) => {
+        const parts = [];
+        for (let index = start; index < end; index += 1) {
+          const part = trimPromptMeta(lines[index]);
+          if (part) parts.push(part);
+        }
+        return normalize(parts.join("\n"));
+      };
+      const collectPromptRange = (lines, likelyIndex, stepIndex) => {
+        if (stepIndex > 0) {
+          let last2 = stepIndex - 1;
+          while (last2 >= 0 && isPromptBoundaryLine(lines[last2])) last2 -= 1;
+          if (last2 < 0) return { user: "", start: -1, end: 0 };
+          let first = last2;
+          while (first > 0) {
+            const previous = lines[first - 1];
+            if (isPromptBoundaryLine(previous) || isAssistantBodyLine(previous)) break;
+            if (last2 - (first - 1) >= 8) break;
+            first -= 1;
+          }
+          return { user: joinPromptLines(lines, first, last2 + 1), start: first, end: last2 + 1 };
+        }
+        if (likelyIndex < 0 || likelyIndex >= lines.length - 1) return { user: "", start: -1, end: 0 };
+        let last = likelyIndex;
+        for (let index = likelyIndex + 1; index < Math.min(lines.length, likelyIndex + 8); index += 1) {
+          if (isPromptBoundaryLine(lines[index]) || isAssistantBodyLine(lines[index])) break;
+          const previous = lines[index - 1];
+          const continuation = /[:：]$/.test(previous) || isPromptFieldLine(lines[index]) || likelyPrompt(lines[index]);
+          if (!continuation && last === likelyIndex && !/[:：]$/.test(lines[likelyIndex])) break;
+          if (!continuation && last > likelyIndex) break;
+          last = index;
+          if (isPromptFieldLine(lines[index]) || /[?？]$/.test(lines[index])) break;
+        }
+        return { user: joinPromptLines(lines, likelyIndex, last + 1), start: likelyIndex, end: last + 1 };
+      };
       const notionDomTextFallback = () => {
         const raw = normalize(api.text(root) || root.innerText || root.textContent || "");
         if (!raw) return [];
@@ -1964,35 +2011,31 @@
           if (!lines.includes(line)) lines.push(line);
         }
         const stepIndex = lines.findIndex((line) => /^\d+\s*steps?$/i.test(line));
-        let promptIndex = -1;
-        if (stepIndex > 0) {
-          for (let index = stepIndex - 1; index >= 0; index -= 1) {
-            if (!isMetaLine(lines[index]) && !isChromeLine(lines[index])) {
-              promptIndex = index;
-              break;
-            }
-          }
-        }
-        if (promptIndex < 0) {
-          promptIndex = lines.findIndex((line, index) => index < lines.length - 1 && likelyPrompt(line));
-        }
-        if (promptIndex < 0 || promptIndex >= lines.length - 1) return [];
-        const user = trimPromptMeta(lines[promptIndex]);
-        let answerStart = stepIndex >= 0 ? stepIndex + 1 : promptIndex + 1;
-        while (answerStart < lines.length && isChromeLine(lines[answerStart])) answerStart += 1;
-        const assistant = normalize(lines.slice(answerStart).filter((line) => line !== lines[promptIndex] && line !== user && !isChromeLine(line)).join("\n"));
-        if (user.length < 2 || assistant.length < 20) return [];
+        const likelyIndex = lines.findIndex((line, index) => index < lines.length - 1 && likelyPrompt(line));
+        const collected = collectPromptRange(lines, likelyIndex, stepIndex);
+        if (collected.user.length < 2) return [];
+        let answerStart = stepIndex >= 0 ? stepIndex + 1 : collected.end;
+        while (answerStart < lines.length && isPromptBoundaryLine(lines[answerStart])) answerStart += 1;
+        const promptParts = collected.user.split("\n");
+        const assistant = normalize(lines.slice(answerStart).filter((line) => line !== collected.user && !promptParts.includes(line) && !isChromeLine(line) && !isResearchLogLine(line) && !isMetaLine(line)).join("\n"));
+        if (assistant.length < 20) return [];
         return [
-          { role: "user", content: user },
+          { role: "user", content: collected.user },
           { role: "assistant", content: assistant }
         ];
       };
+      if (typeof api.conversationIsGenerating === "function" && api.conversationIsGenerating()) return [];
+      const generating = typeof api.conversationIsGenerating === "function" && api.conversationIsGenerating();
+      const idleFullText = api.config && api.config.idleFullText === true;
       const turns = [];
       const seen = /* @__PURE__ */ new Set();
-      const buttons = qsa("button,[role=button]", root).filter(isCopyTurnButton).sort(order).slice(0, 48);
-      for (const button of buttons) {
+      const buttons = qsa("button,[role=button]", root).filter(isCopyTurnButton).sort(order);
+      const copyLimit = idleFullText ? 2 : 8;
+      const selectedButtons = buttons.length > copyLimit ? buttons.slice(-copyLimit) : buttons;
+      for (const button of selectedButtons) {
         const role = roleOfButton(button);
         if (role !== "user" && role !== "assistant") continue;
+        if (generating && role === "assistant") continue;
         api.reveal(button);
         await api.sleep(120);
         const text = useful(await api.copy(button, {
@@ -2013,10 +2056,12 @@
       }
       const merged = api.merge(turns);
       if (structured(merged)) return merged;
+      if (generating) return [];
       if (typeof api.extractNativeCopyConversation === "function") {
         const copied = await api.extractNativeCopyConversation(root);
         if (structured(copied)) return copied;
       }
+      if (typeof api.conversationIsGenerating === "function" && api.conversationIsGenerating()) return [];
       return notionDomTextFallback();
     };
     scripts["notion.js"] = scripts["notion"];
@@ -2893,7 +2938,7 @@
       return [];
     };
     scripts["qianwen.js"] = scripts["qianwen"];
-    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.9c3a6aaf01f5ad28aa370ace60c40d0b50904d4aa8ecd013ba0aaa17342f3308" });
+    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.a8302e940d2221a2bc32ce748029285b4b73093d38f3d74b73e60093ee0190fa" });
     return scripts;
   }
 

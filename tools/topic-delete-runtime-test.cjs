@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 
@@ -193,6 +194,11 @@ function createFixture(createTopicDeleteRuntime, options = {}) {
 (async () => {
   const moduleUrl = pathToFileURL(path.join(root, "app/topic-delete/runtime.js")).href;
   const { createTopicDeleteRuntime } = await import(moduleUrl);
+  const runtimeSource = fs.readFileSync(path.join(root, "app/topic-delete/runtime.js"), "utf8");
+  assert.match(runtimeSource, /async function pingContentBridge\(iframe, timeoutMs = 1800\)/);
+  assert.match(runtimeSource, /const existing = await pingContentBridge\(iframe, 1800\)/);
+  assert.match(runtimeSource, /const retry = await pingContentBridge\(iframe, 2400\)/);
+  assert.match(runtimeSource, /const recovered = await pingContentBridge\(iframe, 1800\)/);
 
   assert.throws(
     () => createTopicDeleteRuntime({ framePort: { async request() {} } }),

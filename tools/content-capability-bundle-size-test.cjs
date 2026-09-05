@@ -19,27 +19,27 @@ const coreCapabilityOutputs = [
 ];
 const measuredOutputs = Object.keys(CONTENT_ENTRIES).sort();
 const byteBudgets = Object.freeze({
-  "content/content.js": 104_929,
+  "content/content.js": 109_641,
   "content/send.js": 85_000,
-  "content/summary-bridge.js": 92_000,
-  // Per-model Notion Effort menus and nested model pickers add the bounded
-  // trigger/menu/settlement capability to the preferred-model content boundary.
-  "content/preferred-model.js": 240_484,
+  "content/summary-bridge.js": 99_653,
+  // Shared Notion catalog plus exact custom picker-name apply stay inside the
+  // preferred-model content boundary instead of a second selector dialect.
+  "content/preferred-model.js": 243_389,
   // Exact post-generation cost of signed selector hints plus attempt/route-bound
   // confirmation ownership; keep destructive-action safety in one bundle.
   "content/delete.js": 266_247,
   "content/grok-cookie-bridge.js": 50_000,
   "content/message-navigator.js": 140_000,
   "content/preload.js": 214_385,
-  "content/summary-userscripts-main.js": 218_879,
-  "content/summary-userscripts.js": 157_382
+  "content/summary-userscripts-main.js": 229_945,
+  "content/summary-userscripts.js": 161_108
 });
 // Exact base-plus-capabilities closure after JSON-first official collection
 // joined the isolated Summary pipeline without packaged runner wrappers.
-const aggregateByteBudget = 781_685;
+const aggregateByteBudget = 798_441;
 // Exact all-bundle closure after workspace official-slot stubs
 // joined the generated Summary registries.
-const allBundlesByteBudget = 1_542_361;
+const allBundlesByteBudget = 1_573_867;
 
 const bundleIdentities = Object.fromEntries(Object.keys(CONTENT_ENTRIES).map((outputPath) => [
   outputPath,

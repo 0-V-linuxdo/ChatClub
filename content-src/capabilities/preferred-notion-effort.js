@@ -2,6 +2,7 @@ import {
   NOTION_EFFORT_TARGETS,
   notionEffortTargetsForModel
 } from "../../shared/notion-efforts.js";
+import { isModelPreferenceCustomId } from "../../shared/model-preference-selection.js";
 
 export function createPreferredNotionEffortCapability(deps = {}) {
   const {
@@ -323,7 +324,7 @@ export function createPreferredNotionEffortCapability(deps = {}) {
   }
 
   async function applyNotionPreferredEffort(context, modelId, effortId) {
-    if (!modelTargets[modelId]) {
+    if (!modelTargets[modelId] && !isModelPreferenceCustomId(modelId)) {
       return preferredModelResult(context, false, "NotionAI", modelId, "unknown model", { effortId });
     }
     if (!notionEffortTargetsForModel(modelId).includes(effortId)) {
@@ -394,7 +395,8 @@ export function createPreferredNotionEffortCapability(deps = {}) {
     applyNotionPreferredEffort,
     currentNotionEffortId: () => notionEffortIdFromElement(findNotionEffortControl({ allowDisabled: true })),
     isSupported: (modelId, effortId) => Boolean(
-      modelTargets[modelId] && notionEffortTargetsForModel(modelId).includes(effortId)
+      (modelTargets[modelId] || isModelPreferenceCustomId(modelId))
+      && notionEffortTargetsForModel(modelId).includes(effortId)
     )
   });
 }

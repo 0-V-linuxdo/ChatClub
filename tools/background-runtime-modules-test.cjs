@@ -1023,8 +1023,14 @@ const isContentRuntimeGenerationTransition = (details = {}) =>
     assert.deepEqual(bridgeExecutions.at(-2).args, [bindingId]);
     const relay = bridgeExecutions.at(-1);
     assert.equal(typeof relay.func, "function");
+    assert.equal(relay.func, content.relayIsolatedWorldFrameBinding);
     assert.equal(relay.world, "ISOLATED");
     assert.deepEqual(relay.args, [challenge, 3, bindingId, "browser-document-7"]);
+    const relaySource = content.relayIsolatedWorldFrameBinding.toString();
+    assert.match(relaySource, /globalThis.browser\?\.runtime/);
+    assert.match(relaySource, /extensionApi.runtime.sendMessage\(message, \(response\)/);
+    assert.match(relaySource, /attempt < 40/);
+    assert.match(relaySource, /setTimeout\(resolve, 80\)/);
 
     executions.length = 0;
     const retried = await content.relayContentFrameBinding(api, 31, {
@@ -1038,6 +1044,91 @@ const isContentRuntimeGenerationTransition = (details = {}) =>
     assert.equal(executions.length, 2);
     assert.deepEqual(executions[0].args, [bindingId]);
     assert.deepEqual(executions[1].args, [challenge, 4, bindingId, "browser-document-7"]);
+  }
+
+  {
+    const bindingId = "b".repeat(64);
+    const challenge = "c".repeat(64);
+    await assert.rejects(
+      content.relayContentFrameBinding({
+        webNavigation: {
+          getAllFrames: async () => [
+            { frameId: 7, parentFrameId: 0, url: "https://grok.com/c/thread-1?rid=response-1" }
+          ]
+        },
+        scripting: {
+          executeScript: async (details) => {
+            if (isBrowserDocumentProbe(details)) return browserDocumentProbeResult(details);
+            if (Array.isArray(details.args) && details.args.length === 4) {
+              return [{
+                frameId: details.target.frameIds[0],
+                documentId: "browser-document-7",
+                result: {
+                  success: false,
+                  error: "Secure frame registration does not match a direct child document"
+                }
+              }];
+            }
+            return [{
+              frameId: details.target.frameIds[0],
+              documentId: "browser-document-7",
+              result: { success: true }
+            }];
+          }
+        }
+      }, 31, {
+        hrefs: ["https://grok.com/c/thread-1?rid=response-1"],
+        expectedFrameId: 7,
+        expectedBindingId: bindingId,
+        browserDocumentId: "browser-document-7",
+        bindingChallenge: challenge,
+        bindingGeneration: 1
+      }),
+      /Secure frame registration does not match a direct child document/,
+      "an isolated-world binding relay must surface the in-frame registration failure instead of a generic empty result"
+    );
+  }
+
+  {
+    const messages = [];
+    const runtimeIdentity = Object.freeze({
+      implementationVersion: "runtime-current",
+      bundle: Object.freeze({ outputPath: "content/content.js" })
+    });
+    const isolated = vm.createContext({
+      chrome: {
+        runtime: {
+          lastError: undefined,
+          sendMessage(message, callback) {
+            messages.push({ action: message.action, hasCallback: typeof callback === "function" });
+            if (typeof callback !== "function") {
+              throw new Error("Chrome isolated-world relay must use callback sendMessage");
+            }
+            callback({ success: true });
+          }
+        }
+      },
+      setTimeout,
+      window: {
+        __CHATCLUB_CONTENT_DOCUMENT_ID__: "content-document-7",
+        __CHATCLUB_SECURE_FRAME_TOKEN__: "a".repeat(32),
+        __CHATCLUB_CONTENT_RUNTIME_IDENTITY__: runtimeIdentity,
+        __CHATCLUB_CONTENT_PROTOCOL_VERSION__: "2026.07.16.2",
+        __CHATCLUB_BROWSER_DOCUMENT_ATTESTATION_STATE__: {
+          id: LEGACY_BROWSER_DOCUMENT_ID,
+          dirty: false
+        }
+      }
+    });
+    vm.runInContext("Object.setPrototypeOf(globalThis, window)", isolated);
+    const relayed = await vm.runInContext(
+      `(${content.relayIsolatedWorldFrameBinding.toString()})(${JSON.stringify("c".repeat(64))}, 1, ${JSON.stringify("b".repeat(64))}, "browser-document-7")`,
+      isolated
+    );
+    assert.equal(relayed?.success, true);
+    assert.equal(relayed?.bridgeDocumentId, "content-document-7");
+    assert.deepEqual(messages.map((entry) => entry.action), ["registerFrameContext", "relayFrameBinding"]);
+    assert.equal(messages.every((entry) => entry.hasCallback), true);
   }
 
   {

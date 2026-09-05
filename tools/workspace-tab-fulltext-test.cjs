@@ -106,6 +106,23 @@ const root = path.resolve(__dirname, "..");
     { role: "user", text: prompt },
     { role: "assistant", text: "done" }
   ], "unrelated prompt"), false);
+  assert.equal(fullTextMessagesMatchPrompt([
+    { role: "user", text: prompt },
+    { role: "assistant", text: "historical complete" },
+    { role: "user", text: "a newer prompt" },
+    { role: "assistant", text: "partial" }
+  ], prompt), false, "a historical pair must not count as the current send");
+  assert.equal(fullTextMessagesMatchPrompt([
+    { role: "user", text: "older question" },
+    { role: "assistant", text: "older answer" },
+    { role: "user", text: prompt },
+    { role: "assistant", text: "current answer" }
+  ], prompt), true, "only the latest prompt/assistant pair may complete a send capture");
+  assert.equal(fullTextMessagesMatchPrompt([
+    { role: "user", text: prompt },
+    { role: "assistant", text: "historical complete" },
+    { role: "user", text: prompt }
+  ], prompt), false, "skipping the live last assistant must not match via an older pair");
 
   const merged = mergeWorkspaceTabFullTextFrames([
     {
@@ -133,7 +150,9 @@ const root = path.resolve(__dirname, "..");
     messages: [{ role: "user", text: prompt }, { role: "assistant", text: "updated" }]
   }]);
   assert.equal(replaced.length, 2);
-  assert.equal(replaced[0].messages[1].text, "updated");
+  assert.equal(replaced[0].messages.length, 4, "a later turn on the same conversation href must append instead of wiping history");
+  assert.equal(replaced[0].messages[1].text, "reply");
+  assert.equal(replaced[0].messages[3].text, "updated");
   assert.equal(replaced[1].instanceId, "claude-1");
   assert.equal(workspaceTabFullTextFramesEqual(merged, merged), true);
   assert.equal(workspaceTabFullTextFramesEqual(merged, replaced), false, "updated messages must not compare equal");
@@ -147,6 +166,37 @@ const root = path.resolve(__dirname, "..");
     true,
     "re-merging the same messages must be a no-op for persist"
   );
+
+  const reloaded = mergeWorkspaceTabFullTextFrames(replaced, [{
+    instanceId: "chatgpt-after-reload",
+    href: "https://chatgpt.com/c/1",
+    appName: "ChatGPT",
+    messages: [{ role: "user", text: prompt }, { role: "assistant", text: "updated" }]
+  }]);
+  assert.equal(reloaded.length, 2, "a new iframe instanceId after reload must not duplicate the same conversation href");
+  assert.equal(reloaded[0].instanceId, "chatgpt-after-reload");
+  assert.equal(reloaded[0].messages.length, 4);
+
+  const lastTwo = mergeWorkspaceTabFullTextFrames([{
+    instanceId: "kagi-old",
+    href: "https://assistant.kagi.com/c/star-wars",
+    appName: "Kagi Assistant",
+    messages: [
+      { role: "user", text: "older kagi turn" },
+      { role: "assistant", text: "older kagi answer" },
+      { role: "user", text: prompt },
+      { role: "assistant", text: "kagi star wars" }
+    ]
+  }], [{
+    instanceId: "kagi-new",
+    href: "https://assistant.kagi.com/c/star-wars",
+    appName: "Kagi Assistant",
+    messages: [{ role: "user", text: prompt }, { role: "assistant", text: "kagi star wars" }]
+  }]);
+  assert.equal(lastTwo.length, 1, "idle last-2 must merge onto the existing Kagi conversation");
+  assert.equal(lastTwo[0].messages.length, 4, "idle last-2 must not wipe earlier Kagi turns");
+  assert.equal(lastTwo[0].messages[1].text, "older kagi answer");
+  assert.equal(lastTwo[0].messages[3].text, "kagi star wars");
 
   const rationalTitle = "the rational male 系列";
   const rationalStore = upsertWorkspaceTabFullText({}, {
@@ -215,6 +265,26 @@ const root = path.resolve(__dirname, "..");
   const leftover = leftoverWorkspaceTabFullTextHits(second, "rational", [{ workspaceId: "page-rationalone1" }]);
   assert.equal(leftover.length, 1);
   assert.equal(leftover[0].workspaceId, "page-rationaltwo1");
+
+  const unpairedStore = upsertWorkspaceTabFullText({}, {
+    workspaceId: "page-unpairedzxq1",
+    topicTitle: "ZXQIDLE1406",
+    frames: [{
+      appName: "Notion",
+      href: "https://app.notion.com/chat/orphan",
+      messages: [{ role: "user", text: "ZXQIDLE1406 星球大战 小说" }]
+    }]
+  });
+  assert.deepEqual(
+    workspaceIdsMatchingFullText(unpairedStore, "ZXQIDLE1406"),
+    [],
+    "user-only full-text must not become a Tabs search hit"
+  );
+  assert.equal(
+    leftoverWorkspaceTabFullTextHits(unpairedStore, "ZXQIDLE1406").length,
+    0,
+    "user-only full-text must not appear as a leftover tab"
+  );
 
   console.log("workspace tab full text: ok");
 })().catch((error) => {

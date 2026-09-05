@@ -351,6 +351,17 @@ const workspaceController = createWorkspaceController({
 });
 workspaceBinding.bind(workspaceController);
 frameBridgeWorkspaceBinding.bind(workspaceController);
+function persistWorkspaceSessionForUnload() {
+  if (isOptionsPage) return;
+  try { workspaceController.rememberWorkspaceSession(); } catch {}
+  try { void workspaceSessionStore.flush(); } catch {}
+}
+if (!isOptionsPage) {
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") persistWorkspaceSessionForUnload();
+  });
+  window.addEventListener("pagehide", persistWorkspaceSessionForUnload);
+}
 workspaceTopicTitleController = createWorkspaceTopicTitleController({
   state, rememberWorkspaceSession: () => workspaceController.rememberWorkspaceSession(), render, extensionApi,
   workspaceId: () => workspaceSessionStore.workspaceId()

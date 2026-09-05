@@ -62,7 +62,7 @@ export function deleteConversationIdentityFromHref(value, baseHref = undefined) 
     return match ? identity("gemini", match[1]) : null;
   }
   if (host === "assistant.kagi.com") {
-    match = /^\/chat\/([^/?#]+)/i.exec(path);
+    match = /^\/(?:c|chat)\/([^/?#]+)/i.exec(path);
     return match ? identity("kagi", match[1]) : null;
   }
   if (hostMatches(host, ["app.notion.com", "notion.so"]) && /^\/chat\/?$/i.test(path)) {

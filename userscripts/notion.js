@@ -1,6 +1,6 @@
 // Built-in Summary userscript: Notion (notion)
 // Source: Mod/assets/chunk-7dbf4e81.js :: SUMMARY_SITE_CONFIG_DEFAULTS
-// Config version: 64; global config version: 62
+// Config version: 73; global config version: 92
 // Hosts: app.notion.com, notion.so, www.notion.so, *.notion.so
 // Path prefixes: /chat, /ai
 // Run mode: default; timeout: default
@@ -49,7 +49,7 @@ const roleOfButton = button => {
   if (/\bcopy\s+(?:text|message|prompt)\b|复制(?:文本|消息|提示词|问题)/i.test(label)) return "user";
   return "";
 };
-const isCopyTurnButton = button => layoutVisible(button) && roleOfButton(button) && !closest(button, "nav,aside,header,footer,form,input,textarea,select,[contenteditable=true],pre,code,table,kbd,samp,[data-language]");
+const isCopyTurnButton = button => layoutVisible(button) && roleOfButton(button) && !closest(button, "nav,aside,header,footer,form,input,textarea,select,[contenteditable=true],pre,code,kbd,samp,[data-language]");
 const useful = value => {
   const text = normalize(value).replace(/^(?:Copied to clipboard|Response copied to clipboard|Right click and copy the link above)\.?$/i, "").trim();
   if (!text || /^(?:copy|copied|copy text|copy response|复制|已复制)$/i.test(text)) return "";
@@ -66,11 +66,52 @@ const cleanLine = value => normalize(value)
 const isChromeLine = line => /^(?:Notion AI|\/|history|Delete, rename, and more…?|Give context|Settings|Gemini\s+\d|Do anything with AI\.{0,3}|Ask anything|Response copied to clipboard|Copied to clipboard|Loading\.?)$/i.test(line);
 const isComposerLine = line => /^(?:Do anything with AI\.{0,3}|Ask anything|Give context|Settings|Gemini\s+\d|Start voice recording|Submit AI message|Response copied to clipboard|Copied to clipboard)$/i.test(line);
 const isMetaLine = line => /^(?:\d+\s*steps?|Today|Yesterday|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+\d{1,2}(?:,\s*\d{4})?)$/i.test(line);
+const isResearchLogLine = line => /^(?:\d+\s*steps?|thought|noodling|contemplating|found\s+\d+\s+results?|searched the web|searching the web|loaded (?:skills tools|data-analysis skill|research skill)|(?:loaded|loading) web page:)/i.test(line);
 const trimPromptMeta = line => cleanLine(line)
   .replace(/\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+\d{1,2}(?:,\s*\d{4})?$/i, "")
   .replace(/\s+(?:Today|Yesterday)$/i, "")
   .trim();
-const likelyPrompt = line => /[?？]$|^(?:介绍|搜索|请|帮|写|总结|解释|翻译|生成|分析|列出|查找|Tell|What|How|Why|Please|Search|Summarize|Explain|Write)\b/i.test(line);
+const likelyPrompt = line => /[?？]$|^(?:介绍|搜索|深入搜索|请|帮|写|总结|解释|翻译|生成|分析|列出|查找)/i.test(line) || /^(?:Tell|What|How|Why|Please|Search|Summarize|Explain|Write)\b/i.test(line);
+const isPromptBoundaryLine = line => isChromeLine(line) || isMetaLine(line) || isResearchLogLine(line) || isComposerLine(line) || /^\d+\s*steps?$/i.test(line);
+const isPromptFieldLine = line => /^(?:要求|需要|目标|补充|约束)(?:[:：\s]|$)/i.test(line) || /^(?:Task|Request|Requirement|Goal|Constraint)\b/i.test(line);
+const isAssistantBodyLine = line => /^#{1,6}\s/.test(line) || (line.length > 280 && !likelyPrompt(line));
+const joinPromptLines = (lines, start, end) => {
+  const parts = [];
+  for (let index = start; index < end; index += 1) {
+    const part = trimPromptMeta(lines[index]);
+    if (part) parts.push(part);
+  }
+  return normalize(parts.join("\n"));
+};
+const collectPromptRange = (lines, likelyIndex, stepIndex) => {
+  if (stepIndex > 0) {
+    let last = stepIndex - 1;
+    while (last >= 0 && isPromptBoundaryLine(lines[last])) last -= 1;
+    if (last < 0) return { user: "", start: -1, end: 0 };
+    let first = last;
+    while (first > 0) {
+      const previous = lines[first - 1];
+      if (isPromptBoundaryLine(previous) || isAssistantBodyLine(previous)) break;
+      if (last - (first - 1) >= 8) break;
+      first -= 1;
+    }
+    return { user: joinPromptLines(lines, first, last + 1), start: first, end: last + 1 };
+  }
+  if (likelyIndex < 0 || likelyIndex >= lines.length - 1) return { user: "", start: -1, end: 0 };
+  let last = likelyIndex;
+  for (let index = likelyIndex + 1; index < Math.min(lines.length, likelyIndex + 8); index += 1) {
+    if (isPromptBoundaryLine(lines[index]) || isAssistantBodyLine(lines[index])) break;
+    const previous = lines[index - 1];
+    const continuation = /[:：]$/.test(previous)
+      || isPromptFieldLine(lines[index])
+      || likelyPrompt(lines[index]);
+    if (!continuation && last === likelyIndex && !/[:：]$/.test(lines[likelyIndex])) break;
+    if (!continuation && last > likelyIndex) break;
+    last = index;
+    if (isPromptFieldLine(lines[index]) || /[?？]$/.test(lines[index])) break;
+  }
+  return { user: joinPromptLines(lines, likelyIndex, last + 1), start: likelyIndex, end: last + 1 };
+};
 const notionDomTextFallback = () => {
   const raw = normalize(api.text(root) || root.innerText || root.textContent || "");
   if (!raw) return [];
@@ -83,37 +124,33 @@ const notionDomTextFallback = () => {
     if (!lines.includes(line)) lines.push(line);
   }
   const stepIndex = lines.findIndex(line => /^\d+\s*steps?$/i.test(line));
-  let promptIndex = -1;
-  if (stepIndex > 0) {
-    for (let index = stepIndex - 1; index >= 0; index -= 1) {
-      if (!isMetaLine(lines[index]) && !isChromeLine(lines[index])) {
-        promptIndex = index;
-        break;
-      }
-    }
-  }
-  if (promptIndex < 0) {
-    promptIndex = lines.findIndex((line, index) => index < lines.length - 1 && likelyPrompt(line));
-  }
-  if (promptIndex < 0 || promptIndex >= lines.length - 1) return [];
-  const user = trimPromptMeta(lines[promptIndex]);
-  let answerStart = stepIndex >= 0 ? stepIndex + 1 : promptIndex + 1;
-  while (answerStart < lines.length && isChromeLine(lines[answerStart])) answerStart += 1;
+  const likelyIndex = lines.findIndex((line, index) => index < lines.length - 1 && likelyPrompt(line));
+  const collected = collectPromptRange(lines, likelyIndex, stepIndex);
+  if (collected.user.length < 2) return [];
+  let answerStart = stepIndex >= 0 ? stepIndex + 1 : collected.end;
+  while (answerStart < lines.length && isPromptBoundaryLine(lines[answerStart])) answerStart += 1;
+  const promptParts = collected.user.split("\n");
   const assistant = normalize(lines.slice(answerStart)
-    .filter(line => line !== lines[promptIndex] && line !== user && !isChromeLine(line))
+    .filter(line => line !== collected.user && !promptParts.includes(line) && !isChromeLine(line) && !isResearchLogLine(line) && !isMetaLine(line))
     .join("\n"));
-  if (user.length < 2 || assistant.length < 20) return [];
+  if (assistant.length < 20) return [];
   return [
-    { role: "user", content: user },
+    { role: "user", content: collected.user },
     { role: "assistant", content: assistant }
   ];
 };
+if (typeof api.conversationIsGenerating === "function" && api.conversationIsGenerating()) return [];
+const generating = typeof api.conversationIsGenerating === "function" && api.conversationIsGenerating();
+const idleFullText = api.config && api.config.idleFullText === true;
 const turns = [];
 const seen = new Set();
-const buttons = qsa("button,[role=button]", root).filter(isCopyTurnButton).sort(order).slice(0, 48);
-for (const button of buttons) {
+const buttons = qsa("button,[role=button]", root).filter(isCopyTurnButton).sort(order);
+const copyLimit = idleFullText ? 2 : 8;
+const selectedButtons = buttons.length > copyLimit ? buttons.slice(-copyLimit) : buttons;
+for (const button of selectedButtons) {
   const role = roleOfButton(button);
   if (role !== "user" && role !== "assistant") continue;
+  if (generating && role === "assistant") continue;
   api.reveal(button);
   await api.sleep(120);
   const text = useful(await api.copy(button, {
@@ -134,8 +171,10 @@ for (const button of buttons) {
 }
 const merged = api.merge(turns);
 if (structured(merged)) return merged;
+if (generating) return [];
 if (typeof api.extractNativeCopyConversation === "function") {
   const copied = await api.extractNativeCopyConversation(root);
   if (structured(copied)) return copied;
 }
+if (typeof api.conversationIsGenerating === "function" && api.conversationIsGenerating()) return [];
 return notionDomTextFallback();

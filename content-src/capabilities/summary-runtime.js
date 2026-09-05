@@ -26,6 +26,7 @@ export function createSummaryCapability(deps = {}) {
     extractNativeCopyConversation,
     extractTurns,
     userscriptFindCopyButtons,
+    conversationIsGenerating = () => false,
     collectOfficialSummaryMessages,
     inspectOfficialSummaryCollection,
     contentRuntimeBundleIdentityMatches,
@@ -131,7 +132,8 @@ export function createSummaryCapability(deps = {}) {
       extractDeepSeekNativeCopyMessages: extractNativeCopyConversation,
       extractGrokNativeCopyMessages: extractNativeCopyConversation,
       extractTurns,
-      findCopyButtons: userscriptFindCopyButtons
+      findCopyButtons: userscriptFindCopyButtons,
+      conversationIsGenerating
     };
   }
 
@@ -149,7 +151,17 @@ export function createSummaryCapability(deps = {}) {
         waitMsApplied: 0
       });
     }
-    const official = await collectOfficialStage(config, data, { wait: true });
+    if (conversationIsGenerating()) {
+      return finishSummaryCollection(data, {
+        messages: [],
+        rawMessageCount: 0,
+        stage: "generating",
+        officialHits: null,
+        waitMsApplied: 0
+      });
+    }
+    const idleFullText = config.idleFullText === true;
+    const official = await collectOfficialStage(config, data, { wait: !idleFullText });
     if (official.messages) {
       return finishSummaryCollection(data, {
         messages: official.messages,
@@ -162,7 +174,7 @@ export function createSummaryCapability(deps = {}) {
     let registry = {};
     try { registry = runtimes.require("summary-runners", CONTENT_BRIDGE_VERSION).scripts || {}; } catch {}
     const packagedRunner = registry[config.id] || registry[config.userscriptFile];
-    if (config.userscriptRunMode !== "serial") {
+    if (!idleFullText && config.userscriptRunMode !== "serial") {
       const pageResult = await pageSummaryRequest(config);
       const pageMessages = merge(Array.isArray(pageResult?.messages) ? pageResult.messages : []);
       if (hasUserAndAssistant(pageMessages)) {

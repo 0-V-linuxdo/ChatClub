@@ -273,6 +273,7 @@ globalThis.document = {
     ["opus48", "Claude Opus 4.8"],
     ["opus5", "Claude Opus 5"],
     ["fable5", "Claude Fable 5"],
+    ["fable51", "Claude Fable 5.1"],
     ["gemini31pro", "Gemini 3.1 Pro"],
     ["gemini35flash", "Gemini 3.5 Flash"],
     ["gpt56sol", "GPT-5.6 Sol"],
@@ -280,6 +281,7 @@ globalThis.document = {
     ["gpt52", "GPT-5.2"],
     ["gpt54", "GPT-5.4"],
     ["gpt55", "GPT-5.5"],
+    ["gpt6astra", "GPT-6 Astra"],
     ["grok43", "Grok 4.3"],
     ["grok45", "Grok 4.5"],
     ["grokBuild01", "Grok Build 0.1"],
@@ -299,8 +301,8 @@ globalThis.document = {
       node.getAttribute("value"),
       index === 0 ? "" : node.textContent
     ]),
-    expectedNotionModels,
-    "the rendered Notion model select must expose every current model in canonical order"
+    [...expectedNotionModels, ["__custom__", "Custom name"]],
+    "the rendered Notion model select must expose every current model plus a custom-name option"
   );
   assert.ok(
     modelRows.every((node) => node.children.length === 4),
@@ -792,12 +794,12 @@ globalThis.document = {
   assert.match(modelStyles, /\.model-preference-segmented-option input:focus-visible \+ \.model-preference-segmented-option-label/);
   assert.match(
     modelStyles,
-    /\.model-preference-model-select,\s*\.model-preference-segmented-control\s*\{[^}]*width:\s*100%[^}]*max-width:\s*none/s,
+    /\.model-preference-model-select,\s*\.model-preference-custom-wrap,\s*\.model-preference-segmented-control\s*\{[^}]*width:\s*100%[^}]*max-width:\s*none/s,
     "the model select and additional preference must fill their equal desktop columns"
   );
   assert.match(
     modelStyles,
-    /@container[\s\S]*\.model-preference-model-select,\s*\.model-preference-segmented-control\s*\{[^}]*max-width:\s*none/s,
+    /@container[\s\S]*\.model-preference-model-select,\s*\.model-preference-custom-wrap,\s*\.model-preference-segmented-control\s*\{[^}]*max-width:\s*none/s,
     "compact segmented controls must use the full available width"
   );
   assert.match(modelStyles, /\.model-preference-segmented-heading\s*\{[^}]*display:\s*inline-flex/s);
@@ -917,6 +919,73 @@ globalThis.document = {
     applyPreferredModelCalls,
     appliesBeforeReorderedTab,
     "failure-strategy changes must not retrigger preferred-model selection"
+  );
+
+  saves.splice(0);
+  findNode(
+    reorderedFailurePane,
+    (node) => node.dataset?.modelPreferenceTabId === "preferred"
+  ).dispatch("click");
+  const customPane = section.pane(() => { redrawCalls += 1; });
+  const customSelect = findNode(
+    customPane,
+    (node) => node.dataset?.modelPreferenceSelectAppId === "NotionAI"
+  );
+  customSelect.value = "__custom__";
+  customSelect.dispatch("change");
+  assert.equal(saves.length, 0, "opening Custom name must not persist an empty model");
+  const customNamedPane = section.pane(() => { redrawCalls += 1; });
+  const customInput = findNode(
+    customNamedPane,
+    (node) => node.dataset?.modelPreferenceCustomLabelAppId === "NotionAI"
+      && node.dataset?.modelPreferenceCustomLabelSlot === "primary"
+  );
+  assert.ok(customInput, "Custom name must expose an exact picker-name field");
+  customInput.value = "GPT-7 Nova";
+  customInput.dispatch("change");
+  assert.equal(saves.length, 1, "an exact custom picker name must start an autosave");
+  assert.deepEqual(
+    saves[0].patch.modelPreferences.NotionAI,
+    { kind: "label", label: "GPT-7 Nova" }
+  );
+  saves[0].gate.resolve();
+  await waitUntil(() => !section.autosaveBusy(), "custom-name autosave did not settle");
+  assert.deepEqual(
+    ports.preferredModel.options.modelPreferences.NotionAI,
+    { kind: "label", label: "GPT-7 Nova" }
+  );
+
+  saves.splice(0);
+  const coercePane = section.pane(() => { redrawCalls += 1; });
+  const coerceInput = findNode(
+    coercePane,
+    (node) => node.dataset?.modelPreferenceCustomLabelAppId === "NotionAI"
+      && node.dataset?.modelPreferenceCustomLabelSlot === "primary"
+  );
+  assert.equal(coerceInput.value, "GPT-7 Nova");
+  coerceInput.value = "Fable 5.1 Beta";
+  coerceInput.dispatch("change");
+  assert.equal(saves.length, 1, "a custom name that matches a shipped alias must persist that id");
+  assert.equal(saves[0].patch.modelPreferences.NotionAI, "fable51");
+  saves[0].gate.resolve();
+  await waitUntil(() => !section.autosaveBusy(), "custom-name coerce autosave did not settle");
+  assert.equal(ports.preferredModel.options.modelPreferences.NotionAI, "fable51");
+  const coercedPane = section.pane(() => { redrawCalls += 1; });
+  assert.equal(
+    findNode(
+      coercedPane,
+      (node) => node.dataset?.modelPreferenceSelectAppId === "NotionAI"
+    )?.value,
+    "fable51",
+    "a coerced custom name must return to the shipped catalog option"
+  );
+  assert.equal(
+    findNode(
+      coercedPane,
+      (node) => node.dataset?.modelPreferenceCustomLabelAppId === "NotionAI"
+    ),
+    null,
+    "a coerced custom name must hide the exact-name field"
   );
 
   section.close();

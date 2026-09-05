@@ -82,7 +82,8 @@ for (const button of buttons) {
   actions.push({ button, owner });
 }
 const out = [];
-for (const [index, action] of actions.slice(0, 24).entries()) {
+const selectedActions = (api.config && api.config.idleFullText === true) ? actions.slice(-2) : actions.slice(0, 24);
+for (const [index, action] of selectedActions.entries()) {
   const { button, owner } = action;
   const role = messageRole(owner, index);
   const text = useful(await api.copy(button, {

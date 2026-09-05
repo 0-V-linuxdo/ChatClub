@@ -540,6 +540,67 @@ function manualTimers() {
     );
   }
 
+  // A stale page envelope of home URLs must not overwrite a durable
+  // conversation snapshot during load or a later empty capture.
+  {
+    const workspaceId = "page-keepconvo123";
+    const conversation = {
+      schemaVersion: 1,
+      generation,
+      topicTitle: "Star Wars 小说",
+      groups: [{ tabs: [{ appId: "Grok", currentHref: "https://grok.com/c/star-wars" }], activeIndex: 0 }]
+    };
+    const home = {
+      schemaVersion: 1,
+      generation,
+      topicTitle: "",
+      groups: [{ tabs: [{ appId: "Grok", currentHref: "https://grok.com/" }], activeIndex: 0 }]
+    };
+    const context = pageContext(workspaceSessionUrl("chrome-extension://chatclub/chatClub.html", workspaceId));
+    const page = memorySessionStorage({
+      [WORKSPACE_SESSION_PAGE_KEY]: pageEnvelope(generation, home, workspaceId)
+    });
+    const local = memoryLocalStorage({ [WORKSPACE_SESSION_GENERATION_KEY]: generation });
+    const store = createWorkspaceSessionStore(dependencies(local, page, context, {
+      currentTabId: async () => 808,
+      claimWorkspaceSession: async ({ workspaceId: requestedWorkspaceId }) => ({
+        claimed: true,
+        forked: false,
+        workspaceId: requestedWorkspaceId,
+        workspaceSessionGeneration: generation,
+        snapshot: conversation
+      })
+    }));
+    const loaded = await store.load();
+    assert.equal(loaded.groups[0].tabs[0].currentHref, "https://grok.com/c/star-wars");
+    assert.equal(store.durableSnapshot().groups[0].tabs[0].currentHref, "https://grok.com/c/star-wars");
+    assert.equal(
+      JSON.parse(page.value(WORKSPACE_SESSION_PAGE_KEY)).snapshot.groups[0].tabs[0].currentHref,
+      "https://grok.com/c/star-wars"
+    );
+    await store.save(home);
+    await store.flush();
+    assert.equal(
+      local.value(workspaceSessionWorkspaceKey(workspaceId)).snapshot.groups[0].tabs[0].currentHref,
+      "https://grok.com/c/star-wars",
+      "an empty capture after reload must not erase the durable conversation"
+    );
+    const reboundId = "page-newchatre123";
+    assert.equal(store.adopt(reboundId), reboundId);
+    assert.equal(store.durableSnapshot(), null);
+    await store.save(home);
+    await store.flush();
+    assert.equal(
+      local.value(workspaceSessionWorkspaceKey(reboundId)).snapshot.groups[0].tabs[0].currentHref,
+      "https://grok.com/",
+      "New Chat must still persist the rebound workspace as an empty page"
+    );
+    assert.equal(
+      local.value(workspaceSessionWorkspaceKey(workspaceId)).snapshot.groups[0].tabs[0].currentHref,
+      "https://grok.com/c/star-wars"
+    );
+  }
+
   // A naked page must not turn a failed or malformed coordinator response into
   // a fresh random workspace while its exact legacy mirror is still durable.
   for (const [label, claimWorkspaceSession, expected] of [

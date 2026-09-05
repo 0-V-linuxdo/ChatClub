@@ -70,11 +70,76 @@ export function pocketPairsFromMessages(messages = []) {
   return entries;
 }
 
+function stableConversationHref(value) {
+  try {
+    const url = new URL(String(value || ""));
+    if (!/^https?:$/.test(url.protocol)) return "";
+    const path = (url.pathname || "/").replace(/\/+$/, "") || "/";
+    const host = url.hostname.toLowerCase();
+    if (path === "/" || path === "/ai" || path === "/new") return "";
+    if ((host === "gemini.google.com" || host === "bard.google.com") && path === "/app") return "";
+    if (
+      (host === "app.notion.com" || host === "notion.so" || host.endsWith(".notion.so"))
+      && path === "/chat"
+      && !url.searchParams.get("t")
+    ) {
+      return "";
+    }
+    return url.href;
+  } catch {
+    return "";
+  }
+}
+
 function frameIdentityKey(frame = {}) {
+  const href = stableConversationHref(frame.href);
+  if (href) return `href:${href}`;
   const instanceId = textValue(frame.instanceId);
   if (instanceId) return `id:${instanceId}`;
-  const href = textValue(frame.href);
-  return href ? `href:${href}` : "";
+  const fallbackHref = textValue(frame.href);
+  return fallbackHref ? `href:${fallbackHref}` : "";
+}
+
+function pairsOverlap(left, right) {
+  return fullTextTextsOverlap(left?.userMessage, right?.userMessage);
+}
+
+function mergeFrameMessages(existingMessages, incomingMessages) {
+  const existing = (Array.isArray(existingMessages) ? existingMessages : [])
+    .map((message) => normalizeFullTextMessage(message))
+    .filter(Boolean);
+  const incoming = (Array.isArray(incomingMessages) ? incomingMessages : [])
+    .map((message) => normalizeFullTextMessage(message))
+    .filter(Boolean);
+  if (!incoming.length) return existing.slice(0, WORKSPACE_TAB_FULLTEXT_MAX_MESSAGES);
+  if (!existing.length) return incoming.slice(0, WORKSPACE_TAB_FULLTEXT_MAX_MESSAGES);
+  const existingPairs = pocketPairsFromMessages(existing);
+  const incomingPairs = pocketPairsFromMessages(incoming);
+  if (!incomingPairs.length) return existing.slice(0, WORKSPACE_TAB_FULLTEXT_MAX_MESSAGES);
+  if (!existingPairs.length) return incoming.slice(0, WORKSPACE_TAB_FULLTEXT_MAX_MESSAGES);
+  const existingCovered = existingPairs.every((pair) => incomingPairs.some((other) => pairsOverlap(pair, other)));
+  if (existingCovered && incomingPairs.length >= existingPairs.length) {
+    return incoming.slice(0, WORKSPACE_TAB_FULLTEXT_MAX_MESSAGES);
+  }
+  const mergedPairs = existingPairs.map((pair) => {
+    const match = incomingPairs.find((other) => pairsOverlap(pair, other));
+    if (!match) return pair;
+    return {
+      userMessage: match.userMessage.length >= pair.userMessage.length ? match.userMessage : pair.userMessage,
+      assistantMessage: match.assistantMessage.length >= pair.assistantMessage.length
+        ? match.assistantMessage
+        : pair.assistantMessage
+    };
+  });
+  for (const incomingPair of incomingPairs) {
+    if (!mergedPairs.some((pair) => pairsOverlap(pair, incomingPair))) mergedPairs.push(incomingPair);
+  }
+  return mergedPairs
+    .flatMap((pair) => [
+      { role: "user", text: pair.userMessage },
+      { role: "assistant", text: pair.assistantMessage }
+    ])
+    .slice(0, WORKSPACE_TAB_FULLTEXT_MAX_MESSAGES);
 }
 
 export function mergeWorkspaceTabFullTextFrames(existing = [], incoming = []) {
@@ -95,7 +160,11 @@ export function mergeWorkspaceTabFullTextFrames(existing = [], incoming = []) {
     const key = frameIdentityKey(frame);
     const index = key ? indexByKey.get(key) : undefined;
     if (index != null) {
-      merged[index] = { ...frame, order: merged[index].order };
+      merged[index] = {
+        ...frame,
+        messages: mergeFrameMessages(merged[index].messages, frame.messages),
+        order: merged[index].order
+      };
       continue;
     }
     if (key) indexByKey.set(key, merged.length);
@@ -114,9 +183,22 @@ export function fullTextMessagesHavePair(messages) {
 
 export function fullTextMessagesMatchPrompt(messages, prompt) {
   if (!normalizeFullTextMatchText(prompt)) return false;
-  return pocketPairsFromMessages(messages).some((pair) => (
-    Boolean(textValue(pair.assistantMessage)) && fullTextTextsOverlap(pair.userMessage, prompt)
-  ));
+  const turns = [];
+  for (const raw of Array.isArray(messages) ? messages : []) {
+    const message = normalizeFullTextMessage(raw);
+    if (message) turns.push(message);
+  }
+  if (!turns.length) return false;
+  const last = turns[turns.length - 1];
+  if (last.role !== "assistant" || !textValue(last.text)) return false;
+  let lastUser = null;
+  for (let index = turns.length - 2; index >= 0; index -= 1) {
+    if (turns[index].role === "user") {
+      lastUser = turns[index];
+      break;
+    }
+  }
+  return Boolean(lastUser && fullTextTextsOverlap(lastUser.text, prompt));
 }
 
 export function framesFromSummaryPreviewItems(items = []) {

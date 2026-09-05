@@ -8,6 +8,7 @@ import { t } from "../../shared/i18n.js";
 const PREFERRED_MODEL_SELECTION_OVERLAY_SAFE_INSET = 12;
 
 function preferredModelBaseTargetLabel(payload = {}) {
+  if (payload.modelLabel) return String(payload.modelLabel);
   const target = (MODEL_PREFERENCE_TARGETS[payload.appId] || [])
     .find((item) => item.id === payload.modelId);
   return String(target?.label || payload.modelId || payload.appId || "");

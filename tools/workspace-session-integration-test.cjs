@@ -106,8 +106,37 @@ assert.match(session, /normalizeCurrentHref: \(appId, href\) => restorableChatFr
 assert.doesNotMatch(session, /validPresetIds/, "workspace-tab restore must apply conversation URLs even if a layout preset was removed");
 assert.match(session, /workspaceSessionStore\.save\(snapshot\)/);
 assert.match(session, /async function preserveCurrentWorkspaceForNewChat\(/);
+assert.match(session, /snapshotWithRetainedConversation/);
+assert.match(session, /preferredWorkspaceTabHref/);
+assert.match(sessionStore, /function durableSnapshot\(/);
 assert.match(session, /workspaceSessionStore\.adopt\(createWorkspaceSessionId\(\)\)/);
 assert.match(session, /state\.topicTitleCustom = false/);
+assert.match(
+  session,
+  /function rememberWorkspaceSession\(\) \{[\s\S]*workspaceSnapshotIsRememberable\(snapshot\)[\s\S]*workspaceSessionStore\.flush\(\)/,
+  "a titled or conversation snapshot must flush if the fire-and-forget save did not finish"
+);
+assert.match(
+  session,
+  /await persistWorkspaceSession\(\);[\s\S]*await workspaceSessionStore\.flush\(\)[\s\S]*preserved: true/,
+  "the rebound New Chat workspace must flush after dropping topicTitle"
+);
+assert.match(
+  runtime,
+  /function persistWorkspaceSessionForUnload\([\s\S]*rememberWorkspaceSession\(\)[\s\S]*workspaceSessionStore\.flush\(\)/,
+  "hiding or unloading the ChatClub page must flush the latest workspace snapshot"
+);
+assert.match(runtime, /addEventListener\("pagehide", persistWorkspaceSessionForUnload\)/);
+assert.match(
+  runtime,
+  /visibilityState === "hidden"\) persistWorkspaceSessionForUnload\(\)/,
+  "switching away from ChatClub must flush Tabs memory before an extension reload"
+);
+assert.match(
+  workspace,
+  /preserveCurrentWorkspaceForNewChat: async \(hrefs\) => \{[\s\S]*?result\?\.preserved\) render\(\)/,
+  "a rebound New Chat workspace must refresh the page title after dropping topicTitle"
+);
 assert.match(
   frame,
   /await preserveCurrentWorkspaceForNewChat\(\[\s*iframe\.dataset\.currentHref/,

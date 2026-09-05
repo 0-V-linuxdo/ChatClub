@@ -363,7 +363,11 @@ export function createWorkspaceController(ctx = {}) {
     captureWorkspaceSession: sessionController.captureWorkspaceSession,
     rememberWorkspaceSession: sessionController.rememberWorkspaceSession,
     persistWorkspaceSession: sessionController.persistWorkspaceSession,
-    preserveCurrentWorkspaceForNewChat: sessionController.preserveCurrentWorkspaceForNewChat,
+    preserveCurrentWorkspaceForNewChat: async (hrefs) => {
+      const result = await sessionController.preserveCurrentWorkspaceForNewChat(hrefs);
+      if (result?.preserved) render();
+      return result;
+    },
     restoreWorkspaceSession: sessionController.restoreWorkspaceSession,
     hydrateEmptyPromptHandoffWorkspace: layoutController.hydrateEmptyPromptHandoffWorkspace,
     hydrateGroups: layoutController.hydrateGroups,

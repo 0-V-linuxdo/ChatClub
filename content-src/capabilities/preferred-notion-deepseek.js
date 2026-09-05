@@ -3,6 +3,7 @@ import {
   NOTION_ALL_SOURCES_STATES
 } from "./preferred-notion-sources.js";
 import { createPreferredNotionEffortCapability } from "./preferred-notion-effort.js";
+import { NOTION_MODEL_TARGETS, resolveNotionApplyTarget } from "../../shared/notion-models.js";
 
 export function createPreferredNotionDeepSeekCapability(deps = {}) {
   const {
@@ -34,30 +35,10 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
     releasePreferredModelBridgeRun,
     modelResult
   } = deps;
-  const NOTION_MODEL_TARGETS = Object.freeze({
-    auto: Object.freeze({ id: "auto", label: "Auto", aliases: ["Automatic"] }),
-    sonnet46: Object.freeze({ id: "sonnet46", label: "Claude Sonnet 4.6", aliases: ["Sonnet 4.6"] }),
-    sonnet5: Object.freeze({ id: "sonnet5", label: "Claude Sonnet 5", aliases: ["Sonnet 5"] }),
-    opus47: Object.freeze({ id: "opus47", label: "Claude Opus 4.7", aliases: ["Opus 4.7"] }),
-    opus48: Object.freeze({ id: "opus48", label: "Claude Opus 4.8", aliases: ["Opus 4.8"] }),
-    opus5: Object.freeze({ id: "opus5", label: "Claude Opus 5", aliases: ["Opus 5", "Opus 5 New", "Opus5New"] }),
-    fable5: Object.freeze({ id: "fable5", label: "Claude Fable 5", aliases: ["Fable 5", "Fable 5 Beta", "Fable5Beta"] }),
-    gemini31pro: Object.freeze({ id: "gemini31pro", label: "Gemini 3.1 Pro", aliases: [] }),
-    gemini35flash: Object.freeze({ id: "gemini35flash", label: "Gemini 3.5 Flash", aliases: [] }),
-    gpt56sol: Object.freeze({ id: "gpt56sol", label: "GPT-5.6 Sol", aliases: ["GPT 5.6 Sol"] }),
-    gpt56terra: Object.freeze({ id: "gpt56terra", label: "GPT-5.6 Terra", aliases: ["GPT 5.6 Terra"] }),
-    gpt52: Object.freeze({ id: "gpt52", label: "GPT-5.2", aliases: ["GPT 5.2"] }),
-    gpt54: Object.freeze({ id: "gpt54", label: "GPT-5.4", aliases: ["GPT 5.4"] }),
-    gpt55: Object.freeze({ id: "gpt55", label: "GPT-5.5", aliases: ["GPT 5.5"] }),
-    grok43: Object.freeze({ id: "grok43", label: "Grok 4.3", aliases: [] }),
-    grok45: Object.freeze({ id: "grok45", label: "Grok 4.5", aliases: [] }),
-    grokBuild01: Object.freeze({ id: "grokBuild01", label: "Grok Build 0.1", aliases: ["Grok Build 01"] }),
-    kimi26: Object.freeze({ id: "kimi26", label: "Kimi K2.6", aliases: [] }),
-    kimi27code: Object.freeze({ id: "kimi27code", label: "Kimi K2.7 Code", aliases: [] }),
-    kimi3: Object.freeze({ id: "kimi3", label: "Kimi K3", aliases: [] }),
-    deepseekV4Pro: Object.freeze({ id: "deepseekV4Pro", label: "DeepSeek V4 Pro", aliases: [] }),
-    glm52: Object.freeze({ id: "glm52", label: "GLM 5.2", aliases: ["GLM-5.2"] })
-  });
+  let applyNotionModelTargets = NOTION_MODEL_TARGETS;
+  function notionModelTargets() {
+    return applyNotionModelTargets;
+  }
 
   const NOTION_MODEL_TRIGGER_SELECTORS = Object.freeze([
     '[data-testid="unified-chat-model-button"]',
@@ -152,7 +133,7 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
     const ids = new Set();
     for (const candidate of evidence) {
       const candidateKey = notionTextKey(candidate);
-      for (const [id, target] of Object.entries(NOTION_MODEL_TARGETS)) {
+      for (const [id, target] of Object.entries(notionModelTargets())) {
         const labels = notionLabels(target);
         if (labels.includes(candidate) || labels.some((label) => notionTextKey(label) === candidateKey)) {
           ids.add(id);
@@ -490,7 +471,7 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
     if (!element || !visible(element) || (!allowDisabled && isDisabledElement(element))) {
       return Number.NEGATIVE_INFINITY;
     }
-    const target = NOTION_MODEL_TARGETS[modelId];
+    const target = notionModelTargets()[modelId];
     if (!target || !notionElementLooksLikeTarget(element, target)) return Number.NEGATIVE_INFINITY;
     let score = 0;
     const role = String(element.getAttribute?.("role") || "").toLowerCase();
@@ -518,9 +499,9 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
   }
 
   function notionModelItemRows(root, modelId, options = {}) {
-    if (!root || !NOTION_MODEL_TARGETS[modelId]) return [];
+    if (!root || !notionModelTargets()[modelId]) return [];
     const allowDisabled = options.allowDisabled === true;
-    const target = NOTION_MODEL_TARGETS[modelId];
+    const target = notionModelTargets()[modelId];
     const seenRows = new Set();
     const rows = [];
     const add = (element) => {
@@ -813,7 +794,7 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
   }
 
   async function applyNotionPreferredModel(context, modelId) {
-    if (!NOTION_MODEL_TARGETS[modelId]) return preferredModelResult(context, false, "NotionAI", modelId, "unknown model");
+    if (!notionModelTargets()[modelId]) return preferredModelResult(context, false, "NotionAI", modelId, "unknown model");
     if (currentNotionModelId() === modelId) {
       const menuClosed = await closeNotionModelMenu(context);
       return preferredModelResult(context, true, "NotionAI", modelId, "", { skipped: true, menuClosed });
@@ -1141,22 +1122,30 @@ export function createPreferredNotionDeepSeekCapability(deps = {}) {
     const allSourcesState = NOTION_ALL_SOURCES_STATES.includes(rawAllSourcesState) ? rawAllSourcesState : "";
     if (!appId) return preferredModelResult(context, true, "unknown", modelId, "", { skipped: true });
     if (appId === "NotionAI") {
-      if (rawAllSourcesState && !allSourcesState) {
-        return preferredModelResult(context, false, appId, modelId, "unknown all sources state");
+      const modelLabel = String(data.modelLabel || "").trim();
+      const resolved = resolveNotionApplyTarget(modelId, modelLabel);
+      applyNotionModelTargets = resolved.targets;
+      try {
+        if (rawAllSourcesState && !allSourcesState) {
+          return preferredModelResult(context, false, appId, modelId, "unknown all sources state");
+        }
+        if (rawEffortId && !resolved.id) {
+          return preferredModelResult(context, false, appId, modelId, "effort requires a model", { effortId: rawEffortId });
+        }
+        if (!resolved.id && !allSourcesState) {
+          return preferredModelResult(context, true, appId, modelId, "", { skipped: true });
+        }
+        if ((modelId || modelLabel) && !resolved.known) {
+          return preferredModelResult(context, false, appId, modelId, "unknown model");
+        }
+        const applyId = resolved.known ? resolved.id : "";
+        if (rawEffortId && !notionEffort.isSupported(applyId, rawEffortId)) {
+          return preferredModelResult(context, false, appId, applyId, "unknown effort for model", { effortId: rawEffortId });
+        }
+        return await applyNotionPreferences(context, applyId, rawEffortId, allSourcesState);
+      } finally {
+        applyNotionModelTargets = NOTION_MODEL_TARGETS;
       }
-      if (rawEffortId && !modelId) {
-        return preferredModelResult(context, false, appId, modelId, "effort requires a model", { effortId: rawEffortId });
-      }
-      if (!modelId && !allSourcesState) {
-        return preferredModelResult(context, true, appId, modelId, "", { skipped: true });
-      }
-      if (modelId && !NOTION_MODEL_TARGETS[modelId]) {
-        return preferredModelResult(context, false, appId, modelId, "unknown model");
-      }
-      if (rawEffortId && !notionEffort.isSupported(modelId, rawEffortId)) {
-        return preferredModelResult(context, false, appId, modelId, "unknown effort for model", { effortId: rawEffortId });
-      }
-      return applyNotionPreferences(context, modelId, rawEffortId, allSourcesState);
     }
     if (!modelId) return preferredModelResult(context, true, appId, modelId, "", { skipped: true });
     if (appId === "Gemini") return applyGeminiPreferredModel(context, modelId, { thinkingLevel: data.thinkingLevel });

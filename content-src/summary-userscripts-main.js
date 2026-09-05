@@ -34,7 +34,8 @@ function installSummaryMainRuntime() {
     extractCopySequence,
     extractNativeCopyConversation,
     extractTurns,
-    userscriptFindCopyButtons
+    userscriptFindCopyButtons,
+    conversationIsGenerating
   } = summaryRuntime;
 
   try {
@@ -117,7 +118,8 @@ function installSummaryMainRuntime() {
       extractDeepSeekNativeCopyMessages: extractNativeCopyConversation,
       extractGrokNativeCopyMessages: extractNativeCopyConversation,
       extractTurns,
-      findCopyButtons: userscriptFindCopyButtons
+      findCopyButtons: userscriptFindCopyButtons,
+      conversationIsGenerating
     };
   }
 
@@ -138,6 +140,15 @@ function installSummaryMainRuntime() {
 
   async function collectSummary(data) {
     const config = data?.config || {};
+    if (conversationIsGenerating()) {
+      return {
+        messages: [],
+        rawMessageCount: 0,
+        stage: "generating",
+        officialHits: null,
+        waitMsApplied: 0
+      };
+    }
     const official = await collectOfficialStage(config, { wait: false });
     if (official.messages) {
       const messages = boundedSummaryRunnerMessages(official.messages);

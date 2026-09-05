@@ -29,8 +29,17 @@ function merge(messages) {
     const text = normalize(message?.text || "");
     if (!text) continue;
     const previous = out[out.length - 1];
-    if (previous?.role === role) previous.text = normalize(`${previous.text}\n\n${text}`);
-    else out.push({ role, text });
+    if (previous?.role === role) {
+      if (previous.text === text) continue;
+      const compactPrev = previous.text.replace(/\s+/g, "").toLowerCase();
+      const compactNext = text.replace(/\s+/g, "").toLowerCase();
+      if (compactPrev === compactNext || (compactNext.length >= 8 && compactPrev.includes(compactNext))) continue;
+      if (compactPrev.length >= 8 && compactNext.includes(compactPrev)) {
+        previous.text = text;
+        continue;
+      }
+      previous.text = normalize(`${previous.text}\n\n${text}`);
+    } else out.push({ role, text });
   }
   return out;
 }
@@ -176,6 +185,16 @@ async function execute(buttons) {
     copyButton("single-user", 0, "Copy message", "unpaired prompt", messageOwner("single-user-owner", "user"))
   ]);
   assert.deepEqual(singleRole.result, []);
+
+  const duplicateAnswer = await execute([
+    copyButton("dup-user", 0, "Copy message", "star wars prompt", messageOwner("dup-user-owner", "user")),
+    copyButton("dup-assistant", 1, "Copy message", "kagi answer body", messageOwner("dup-assistant-owner", "assistant")),
+    copyButton("dup-assistant-clone", 2, "Copy message", "kagi answer body", messageOwner("dup-assistant-clone-owner", "assistant"))
+  ]);
+  assert.deepEqual(duplicateAnswer.result, [
+    { role: "user", text: "star wars prompt" },
+    { role: "assistant", text: "kagi answer body" }
+  ]);
 
   console.log("Kagi Summary owner-based extraction acceptance passed.");
 })().catch((error) => {

@@ -68,14 +68,14 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "7e04ec4b7c1e5e40303d30ef7ac70a070806fb762a0674739b6a35c975bde4fd";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "b873a2370e8adf0f4e0a3a136caac4f5467511b93004eb12181838b1dd8d5e26";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "9c3a6aaf01f5ad28aa370ace60c40d0b50904d4aa8ecd013ba0aaa17342f3308";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.9c3a6aaf01f5ad28aa370ace60c40d0b50904d4aa8ecd013ba0aaa17342f3308";
-  var CONTENT_RUNTIME_SUMMARY_BRIDGE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-bridge.js", "entryPath": "content-src/content-summary-bridge.js", "sourceSha256": "70d06b2d223ed50c6b39b49f978d608874da6920dcd6eaa2a673a8793607ff27", "implementationSha256": "66a2a98f93fbf44917d4264741f5fac4a5ddf12fa822a67cc4cf52ee3ae46d8e", "implementationVersion": "2026.07.16.2+bundle.66a2a98f93fbf44917d4264741f5fac4a5ddf12fa822a67cc4cf52ee3ae46d8e" });
-  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "c94102760a935df831bab1a915dc81149793c918af440321c3c65b599dd81bd8", "implementationSha256": "00fb24ff92ed83e4c8ae4174ff66f268d3c9f7349fe680e722d558bbf25c1cd6", "implementationVersion": "2026.07.16.2+bundle.00fb24ff92ed83e4c8ae4174ff66f268d3c9f7349fe680e722d558bbf25c1cd6" });
-  var CONTENT_RUNTIME_SUMMARY_ISOLATED_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts.js", "entryPath": "content-src/summary-userscripts.js", "sourceSha256": "8f43e67ae6390a0de15c167427516661996917651ce1bba84e6d9c39b544f1e3", "implementationSha256": "a163048bdf201289ec08ecc6206e2cae41f2dc5def6bfb53d021a9fd09fab21a", "implementationVersion": "2026.07.16.2+bundle.a163048bdf201289ec08ecc6206e2cae41f2dc5def6bfb53d021a9fd09fab21a" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "a8302e940d2221a2bc32ce748029285b4b73093d38f3d74b73e60093ee0190fa";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.a8302e940d2221a2bc32ce748029285b4b73093d38f3d74b73e60093ee0190fa";
+  var CONTENT_RUNTIME_SUMMARY_BRIDGE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-bridge.js", "entryPath": "content-src/content-summary-bridge.js", "sourceSha256": "41aa644e6f2b733b29e82a4c0a280797f34620a90200ec6a4528bbcb0e0219e0", "implementationSha256": "737aac94a67baad521a5d29cdf97da9523e99dff05fee0d8f7c44a5330656df9", "implementationVersion": "2026.07.16.2+bundle.737aac94a67baad521a5d29cdf97da9523e99dff05fee0d8f7c44a5330656df9" });
+  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "260dbd9069bf4634ae2f1d377c9fc64c00aeed2592b4eddeb902b289683431c0", "implementationSha256": "44b11b9d5c4b4b0e0612eb86640227348b1bfb8b8a8e81690fbaf5b64352ebb3", "implementationVersion": "2026.07.16.2+bundle.44b11b9d5c4b4b0e0612eb86640227348b1bfb8b8a8e81690fbaf5b64352ebb3" });
+  var CONTENT_RUNTIME_SUMMARY_ISOLATED_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts.js", "entryPath": "content-src/summary-userscripts.js", "sourceSha256": "ff2ac89dfde2b3f166263b3cabe8c0431cdab734fbecd1a415e4b206a3979999", "implementationSha256": "631a85054a94c9e68d7be4c467845f71d783082758611771fa0b3d7e125abe04", "implementationVersion": "2026.07.16.2+bundle.631a85054a94c9e68d7be4c467845f71d783082758611771fa0b3d7e125abe04" });
 
   // shared/background-request-core.js
   var BACKGROUND_REQUEST_SOURCE = "chatclub";
@@ -467,6 +467,21 @@
     } catch {
     }
   }
+  function mergeSameRoleText(previous, next) {
+    const prev = normalize(previous);
+    const value = normalize(next);
+    if (!value) return prev;
+    if (!prev) return value;
+    if (prev === value) return prev;
+    const compactPrev = compareText(prev);
+    const compactNext = compareText(value);
+    if (compactPrev === compactNext) return prev.length >= value.length ? prev : value;
+    if (compactNext.length >= 8 && compactPrev.includes(compactNext)) return prev;
+    if (compactPrev.length >= 8 && compactNext.includes(compactPrev)) return value;
+    return normalize(`${prev}
+
+${value}`);
+  }
   function merge(messages) {
     const out = [];
     for (const message of messages || []) {
@@ -474,9 +489,7 @@
       const value = cleanCaptured(message?.text || message?.content || "");
       if (!value) continue;
       const previous = out[out.length - 1];
-      if (previous && previous.role === role) previous.text = normalize(`${previous.text}
-
-${value}`);
+      if (previous && previous.role === role) previous.text = mergeSameRoleText(previous.text, value);
       else out.push({ role, text: value });
     }
     return out;
@@ -495,6 +508,172 @@ ${value}`);
   }
   function cleanCaptured(value) {
     return normalize(String(value || "").replace(/Show more\s*Show less/gi, "").replace(/^\s*(Show more|Show less|显示更多|收起)\s*$/gim, ""));
+  }
+  function conversationTurnRole(el) {
+    const attr = String(el?.getAttribute?.("data-message-author-role") || "").toLowerCase();
+    if (attr === "user" || attr === "assistant") return attr;
+    const testid = String(el?.getAttribute?.("data-testid") || "").toLowerCase();
+    if (/\buser\b/.test(testid) && !/\bassistant\b/.test(testid)) return "user";
+    if (/\b(assistant|bot|model|ai)\b/.test(testid)) return "assistant";
+    const tag = String(el?.tagName || "").toLowerCase();
+    if (tag === "user-query") return "user";
+    if (tag === "model-response") return "assistant";
+    const cls = classText(el).toLowerCase();
+    if (/(?:^|[\s_-])user-query(?:$|[\s_-])|ds-user/.test(cls) && !/assistant|model-response|ds-assistant/.test(cls)) return "user";
+    if (/font-claude-response|model-response|ds-assistant/.test(cls)) return "assistant";
+    return userscriptRole(el) || "";
+  }
+  function conversationTurnNodes() {
+    const selectors = [
+      "[data-message-author-role]",
+      "[data-testid='user-message'], [data-testid='assistant-message'], .font-claude-response",
+      "[data-testid='conversation-turn'], article[data-testid*='conversation-turn']",
+      "user-query, model-response, .user-query, .model-response",
+      ".ds-message",
+      ".chat_bubble[role='article']",
+      "[data-testid='message']",
+      "article[data-testid*='conversation']"
+    ];
+    const nodes = [];
+    for (const selector of selectors) {
+      for (const node of qsa(selector).filter(visible)) {
+        if (internalTool(node)) continue;
+        if (nodes.some((existing) => existing === node || existing.contains?.(node) || node.contains?.(existing))) continue;
+        nodes.push(node);
+      }
+      if (nodes.length >= 2) break;
+    }
+    return nodes.sort(elementOrder);
+  }
+  function lastAssistantTurnNode() {
+    const turns = conversationTurnNodes();
+    for (let index = turns.length - 1; index >= 0; index -= 1) {
+      if (conversationTurnRole(turns[index]) === "assistant") return turns[index];
+    }
+    return null;
+  }
+  function controlLayoutVisible(el) {
+    if (!el?.getBoundingClientRect) return false;
+    const rect = el.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return false;
+    try {
+      const style = getComputedStyle(el);
+      return style.display !== "none" && style.visibility !== "hidden";
+    } catch {
+      return true;
+    }
+  }
+  function controlLooksLikeStopGenerating(el) {
+    if (!el) return false;
+    const testid = String(el.getAttribute?.("data-testid") || el.getAttribute?.("data-test-id") || "");
+    if (/(?:^|[\s_-])(?:stop-button|stop-generating|stop_generation|composer-stop|fruitjuice-stop-button)(?:$|[\s_-])/i.test(testid)) return true;
+    const aria = normalize(el.getAttribute?.("aria-label") || el.getAttribute?.("title") || "");
+    if (/\bstop(?:\s+(?:generating|streaming|response|ai(?:\s+message)?))?\b|\bcancel(?:\s+(?:generating|response|ai))?\b|停止(?:生成|回答|回复|AI)?/i.test(aria)) return true;
+    const value = normalize(el.innerText || el.textContent || "");
+    return Boolean(value && value.length <= 24 && /^(?:stop(?:\s+(?:generating|streaming|ai))?|停止(?:生成|AI)?)$/i.test(value));
+  }
+  function liveBusyStatusLine(value) {
+    const text2 = normalize(value).replace(/\s+/g, " ");
+    if (!text2 || text2.length > 180) return false;
+    if (/^loading web page:?/i.test(text2)) return true;
+    if (/^searching the web(?:\s*[.。…]*)?$/i.test(text2)) return true;
+    if (/^正在(?:读取|打开|加载|访问)(?:网页|页面|网站)?/i.test(text2)) return true;
+    if (/^(?:thinking|preparing|crafting|noodling|contemplating)(?:\s*[.。…>]*)?$/i.test(text2)) return true;
+    if (/^(?:思考中|准备中|正在思考|正在准备|正在撰写)(?:\s*[.。…>]*)?$/.test(text2)) return true;
+    return false;
+  }
+  function completedToolStatusLine(value) {
+    const text2 = normalize(value).replace(/\s+/g, " ");
+    if (!text2 || text2.length > 180) return false;
+    if (/^loaded web page:?/i.test(text2)) return true;
+    if (/^searched the web(?:\s*[.。…]*)?$/i.test(text2)) return true;
+    return false;
+  }
+  function conversationSampleRoot() {
+    return qs("#notion-app") || qs("main,[role=main]") || document.body;
+  }
+  function conversationLineSample() {
+    let raw = "";
+    try {
+      raw = String(conversationSampleRoot()?.textContent || "");
+    } catch {
+    }
+    if (raw.length > 96e3) raw = `${raw.slice(0, 12e3)}
+${raw.slice(-36e3)}`;
+    const lines = [];
+    for (const part of raw.split(/\n+/)) {
+      const line = normalize(part).replace(/\s+/g, " ");
+      if (line) lines.push(line);
+    }
+    return lines;
+  }
+  function conversationToolActivityFromLines(lines) {
+    let live = false;
+    for (const line of (Array.isArray(lines) ? lines : []).slice(-12)) {
+      if (completedToolStatusLine(line)) {
+        live = false;
+        continue;
+      }
+      if (liveBusyStatusLine(line)) live = true;
+    }
+    return live;
+  }
+  function conversationToolActivityIsActive() {
+    try {
+      return conversationToolActivityFromLines(conversationLineSample());
+    } catch {
+    }
+    return false;
+  }
+  function nodeLooksLikeStreamingTurn(el) {
+    if (!el) return false;
+    if (String(el.getAttribute?.("aria-busy") || "").toLowerCase() === "true") return true;
+    if (String(el.getAttribute?.("data-is-streaming") || "").toLowerCase() === "true") return true;
+    const bits = `${classText(el)} ${el.getAttribute?.("data-testid") || ""}`.toLowerCase();
+    return /\b(?:result-streaming|is-streaming)\b/.test(bits);
+  }
+  function conversationComposerIsGenerating() {
+    const selectors = [
+      "button[data-testid='stop-button']",
+      "button[data-testid='stop-generating']",
+      "button[data-testid='composer-stop-button']",
+      "button[data-testid='fruitjuice-stop-button']",
+      "button[data-testid*='stop-button' i]",
+      "button[aria-label*='stop' i]",
+      "button[title*='stop' i]",
+      "button[aria-label*='停止' i]",
+      "[role='button'][data-testid='stop-button']",
+      "[role='button'][aria-label*='stop' i]",
+      "[role='button'][aria-label*='停止' i]"
+    ].join(",");
+    try {
+      for (const el of qsa(selectors)) {
+        if (controlLayoutVisible(el) && controlLooksLikeStopGenerating(el)) return true;
+      }
+    } catch {
+    }
+    return false;
+  }
+  function lastAssistantTurnIsStreaming(turn) {
+    if (!turn) return false;
+    return nodeLooksLikeStreamingTurn(turn);
+  }
+  function conversationIsGenerating() {
+    if (conversationComposerIsGenerating()) return true;
+    if (conversationToolActivityIsActive()) return true;
+    return lastAssistantTurnIsStreaming(lastAssistantTurnNode());
+  }
+  function nodeBelongsToTurn(node, turn) {
+    if (!node || !turn) return false;
+    return node === turn || Boolean(turn.contains?.(node) || node.contains?.(turn));
+  }
+  function shouldRefuseLiveAssistantCopy(node) {
+    if (!conversationIsGenerating()) return false;
+    const last = lastAssistantTurnNode();
+    if (!last) return true;
+    if (nodeBelongsToTurn(node, last)) return true;
+    const article = closest(node, "article,[data-testid^='conversation-turn'],[data-testid*='conversation-turn']");
+    return Boolean(article && (article === last || article.contains?.(last) || last.contains?.(article)));
   }
   function copyLooksUseful(value) {
     const next = cleanCaptured(value);
@@ -785,6 +964,7 @@ ${value}`);
   }
   async function copy(button, options = {}) {
     if (!button) return "";
+    if (shouldRefuseLiveAssistantCopy(button)) return "";
     const copyTimeoutMs = Math.max(300, Math.min(1e4, Number(options.copyTimeoutMs || options.timeoutMs) || 2600));
     const copyPollMs = Math.max(20, Math.min(150, Number(options.copyPollMs) || 50));
     const copyCaptureGraceMs = Math.max(80, Math.min(800, Number(options.copyCaptureGraceMs) || 240));
@@ -928,6 +1108,7 @@ ${value}`);
     for (const turn of turns.sort(elementOrder)) {
       let role = userscriptRole(turn, options) || fallbackRole(roleIndex, options);
       if (role !== "user" && role !== "assistant") continue;
+      if (shouldRefuseLiveAssistantCopy(turn)) continue;
       reveal(turn);
       await sleep(80);
       const expected = text(turn);
@@ -961,6 +1142,7 @@ ${value}`);
     const accept = async (button, roleHint) => {
       const role = roleHint || userscriptRole(button, options) || fallbackRole(roleIndex, options);
       if (role !== "user" && role !== "assistant") return false;
+      if (shouldRefuseLiveAssistantCopy(button)) return false;
       const value = userscriptCopyAccepted(await copy(button, options), "", { ...options, matchMode: "anyUseful" });
       if (!value) return false;
       pushMessage(out, role, value, seen);
@@ -999,8 +1181,18 @@ ${value}`);
       return text(node);
     }
   }
+  function messageCopyLabel(el) {
+    const label = buttonText(el);
+    return /\bcopy\s+(?:response|answer|text|message|prompt)\b|复制(?:回复|回答|响应|文本|消息|提示词|问题)/i.test(label);
+  }
   function internalCopyScope(el) {
-    return Boolean(closest(el, "nav,header,footer,aside,form,input,textarea,select,[contenteditable=true],pre,code,table,kbd,samp,[data-language]"));
+    if (closest(el, "nav,header,footer,aside,form,input,textarea,select,[contenteditable=true],pre,code,kbd,samp,[data-language]")) return true;
+    if (!closest(el, "table")) return false;
+    if (messageCopyLabel(el) || isNativeCopyButton(el) || userscriptLooksLikeCopyIcon(el)) {
+      const meta = userscriptMeta(el);
+      return /(?:copy\s*(?:code|table|link)|copy[-_ ]?(?:code|table|link)|复制表格)/i.test(meta);
+    }
+    return true;
   }
   function copyButtonRole(button, options = {}) {
     const roleNode = closest(button, "[data-message-author-role]");
@@ -1154,6 +1346,7 @@ ${value}`);
     }).filter((node, index, list) => !list.slice(0, index).some((prev) => nativeCopyDedup(cachedText(prev), cachedText(node))));
   }
   async function extractHoverNativeCopyConversation(root = document.body) {
+    if (conversationIsGenerating()) return null;
     const options = {
       copyButtonSelector: "button,[role=button],[role=menuitem],[role=menuitemcheckbox],[role=menuitemradio],div[tabindex],span[role=button]",
       copyButtonPattern: "copy|copied|clipboard|复制|已复制|拷贝",
@@ -1175,6 +1368,7 @@ ${value}`);
       const role = hoverCopyAnchorRole(anchor, roleIndex);
       const expected = nodeTextForCopy(anchor);
       if (role !== "user" && role !== "assistant") continue;
+      if (shouldRefuseLiveAssistantCopy(anchor)) continue;
       reveal(anchor);
       await sleep(180);
       for (const button of hoverCopyCandidateButtons(anchor, options).slice(0, 14)) {
@@ -1194,6 +1388,7 @@ ${value}`);
     return hasUserAndAssistant(messages) ? messages : null;
   }
   async function extractNativeCopyConversation(root = document.body) {
+    if (conversationIsGenerating()) return null;
     let buttons = conversationCopyButtons(root || document.body);
     if (buttons.length < 2) {
       const hovered = await extractHoverNativeCopyConversation(root || document.body);
@@ -1587,6 +1782,7 @@ ${value}`);
       extractNativeCopyConversation: extractNativeCopyConversation2,
       extractTurns: extractTurns2,
       userscriptFindCopyButtons: userscriptFindCopyButtons2,
+      conversationIsGenerating: conversationIsGenerating2 = () => false,
       collectOfficialSummaryMessages: collectOfficialSummaryMessages2,
       inspectOfficialSummaryCollection: inspectOfficialSummaryCollection2,
       contentRuntimeBundleIdentityMatches: contentRuntimeBundleIdentityMatches2,
@@ -1694,7 +1890,8 @@ ${value}`);
         extractDeepSeekNativeCopyMessages: extractNativeCopyConversation2,
         extractGrokNativeCopyMessages: extractNativeCopyConversation2,
         extractTurns: extractTurns2,
-        findCopyButtons: userscriptFindCopyButtons2
+        findCopyButtons: userscriptFindCopyButtons2,
+        conversationIsGenerating: conversationIsGenerating2
       };
     }
     async function collectSummary(data) {
@@ -1711,7 +1908,17 @@ ${value}`);
           waitMsApplied: 0
         });
       }
-      const official = await collectOfficialStage(config, data, { wait: true });
+      if (conversationIsGenerating2()) {
+        return finishSummaryCollection(data, {
+          messages: [],
+          rawMessageCount: 0,
+          stage: "generating",
+          officialHits: null,
+          waitMsApplied: 0
+        });
+      }
+      const idleFullText = config.idleFullText === true;
+      const official = await collectOfficialStage(config, data, { wait: !idleFullText });
       if (official.messages) {
         return finishSummaryCollection(data, {
           messages: official.messages,
@@ -1727,7 +1934,7 @@ ${value}`);
       } catch {
       }
       const packagedRunner = registry[config.id] || registry[config.userscriptFile];
-      if (config.userscriptRunMode !== "serial") {
+      if (!idleFullText && config.userscriptRunMode !== "serial") {
         const pageResult = await pageSummaryRequest2(config);
         const pageMessages = merge2(Array.isArray(pageResult?.messages) ? pageResult.messages : []);
         if (hasUserAndAssistant2(pageMessages)) {
@@ -1983,6 +2190,7 @@ ${value}`);
       copyFirst,
       extractCopySequence,
       extractNativeCopyConversation,
+      conversationIsGenerating,
       extractTurns,
       hasUserAndAssistant,
       merge,

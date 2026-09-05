@@ -1,4 +1,4 @@
-import { workspaceSnapshotHasConversation } from "../shared/workspace-tab-memory.js";
+import { snapshotWithRetainedConversation, workspaceSnapshotIsRememberable } from "../shared/workspace-tab-memory.js";
 import {
   WORKSPACE_SESSION_BINDING_PREFIX,
   WORKSPACE_SESSION_CLEARED_BY_BROWSER,
@@ -111,15 +111,46 @@ export function workspaceIdForChatClubTab(api, tab) {
   return "";
 }
 
-export function liveTabState(api, tabs = []) {
+function resolvedLiveWorkspaceId(urlWorkspaceId, boundWorkspaceId, urlRecord) {
+  const urlId = normalizeWorkspaceSessionId(urlWorkspaceId);
+  const boundId = normalizeWorkspaceSessionId(boundWorkspaceId);
+  if (boundId && urlId && boundId !== urlId && urlRecord?.detach) return boundId;
+  return urlId || boundId || "";
+}
+
+export function reboundWorkspaceIdForStaleUrl({
+  urlWorkspaceId,
+  boundWorkspaceId,
+  urlRecord,
+  requestedWorkspaceId
+} = {}) {
+  const urlId = normalizeWorkspaceSessionId(urlWorkspaceId);
+  const boundId = normalizeWorkspaceSessionId(boundWorkspaceId);
+  const requested = normalizeWorkspaceSessionId(requestedWorkspaceId) || urlId;
+  if (!boundId || !urlId || boundId === urlId) return "";
+  if (!urlRecord?.detach) return "";
+  if (requested !== urlId && requested !== boundId) return "";
+  return boundId;
+}
+
+export function liveTabState(api, tabs = [], stored = null) {
   const records = Array.isArray(tabs) ? tabs : [];
+  const bindings = stored ? currentBindings(stored) : null;
+  const stableRecords = stored ? currentStableRecords(stored) : null;
   const workspaceIds = new Set();
   const workspaceByTabId = new Map();
   const tabsByWorkspaceId = new Map();
   for (const tab of records) {
     const tabId = positiveTabId(tab?.id);
-    const workspaceId = workspaceIdForChatClubTab(api, tab);
-    if (tabId === null || !workspaceId) continue;
+    if (tabId === null || !isChatClubWorkspaceTab(api, tab)) continue;
+    const urlId = workspaceIdForChatClubTab(api, tab);
+    const boundId = bindings?.get(tabId)?.workspaceId || "";
+    const workspaceId = resolvedLiveWorkspaceId(
+      urlId,
+      boundId,
+      urlId && stableRecords ? stableRecords.get(urlId) : null
+    );
+    if (!workspaceId) continue;
     workspaceIds.add(workspaceId);
     workspaceByTabId.set(tabId, workspaceId);
     const owners = tabsByWorkspaceId.get(workspaceId) || [];
@@ -170,8 +201,10 @@ export function detachedRememberedWorkspaceRecord(record, now, marker) {
 }
 
 export function rememberDisplacedWorkspaceWithoutRecovery(record) {
-  return workspaceSnapshotHasConversation(record?.snapshot);
+  return workspaceSnapshotIsRememberable(record?.snapshot);
 }
+
+export { snapshotWithRetainedConversation };
 
 function chatClubPageUrl(api) {
   try {

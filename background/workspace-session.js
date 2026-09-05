@@ -48,7 +48,9 @@ import {
   recoveryCandidate,
   recoveryRecord,
   rememberDisplacedWorkspaceWithoutRecovery,
+  reboundWorkspaceIdForStaleUrl,
   runtimeMarker,
+  snapshotWithRetainedConversation,
   scheduleRecoveryLeaseAlarm,
   sessionStorageArea,
   shouldDetachReplacedWorkspaceBinding,
@@ -137,9 +139,19 @@ export function registerWorkspaceSessionTab(api, tab = {}, options = {}) {
       typeof session?.get === "function" ? session.get(WORKSPACE_SESSION_RUNTIME_MARKER_KEY) : Promise.resolve({})
     ]);
     if (!Array.isArray(tabs)) throw new TypeError("Browser tabs query returned an invalid result");
-    const live = liveTabState(api, tabs);
+    const live = liveTabState(api, tabs, stored);
     const stableKey = workspaceSessionWorkspaceKey(workspaceId);
     const existing = stableWorkspaceRecord(stableKey, stored?.[stableKey]);
+    const currentBinding = bindingRecord(workspaceSessionBindingKey(meta.tabId), stored?.[workspaceSessionBindingKey(meta.tabId)]);
+    const reboundWorkspaceId = reboundWorkspaceIdForStaleUrl({
+      urlWorkspaceId: workspaceId,
+      boundWorkspaceId: currentBinding?.workspaceId,
+      urlRecord: existing,
+      requestedWorkspaceId: currentBinding?.workspaceId
+    });
+    if (reboundWorkspaceId) {
+      return { registered: false, workspaceId: reboundWorkspaceId, staleUrl: true };
+    }
     const otherOwnerIsLive = existing?.owner?.tabId != null
       && existing.owner.tabId !== meta.tabId
       && live.workspaceByTabId.get(existing.owner.tabId) === workspaceId;
@@ -188,9 +200,6 @@ export function persistWorkspaceSessionSnapshot(api, request = {}, sender = {}, 
       throw new Error("Workspace session persistence requires a ChatClub page");
     }
     const urlWorkspaceId = workspaceIdForChatClubTab(api, senderTab);
-    if (urlWorkspaceId && urlWorkspaceId !== workspaceId) {
-      throw new Error("Workspace session persistence does not match the page URL");
-    }
 
     const now = finiteTime(options.now, Date.now());
     const generation = await ensureGenerationInternal(storage);
@@ -201,16 +210,29 @@ export function persistWorkspaceSessionSnapshot(api, request = {}, sender = {}, 
       typeof session?.get === "function" ? session.get(WORKSPACE_SESSION_RUNTIME_MARKER_KEY) : Promise.resolve({})
     ]);
     if (!Array.isArray(tabs)) throw new TypeError("Browser tabs query returned an invalid result");
-    const live = liveTabState(api, tabs);
+    const live = liveTabState(api, tabs, stored);
+    const bindingKey = workspaceSessionBindingKey(meta.tabId);
+    const tabBinding = bindingRecord(bindingKey, stored?.[bindingKey]);
+    const urlRecord = urlWorkspaceId
+      ? stableWorkspaceRecord(workspaceSessionWorkspaceKey(urlWorkspaceId), stored?.[workspaceSessionWorkspaceKey(urlWorkspaceId)])
+      : null;
+    const reboundWorkspaceId = reboundWorkspaceIdForStaleUrl({
+      urlWorkspaceId,
+      boundWorkspaceId: tabBinding?.workspaceId,
+      urlRecord,
+      requestedWorkspaceId: workspaceId
+    });
+    if (urlWorkspaceId && urlWorkspaceId !== workspaceId && reboundWorkspaceId !== workspaceId) {
+      throw new Error("Workspace session persistence does not match the page URL");
+    }
     const liveWorkspaceId = live.workspaceByTabId.get(meta.tabId);
     if (
       liveWorkspaceId !== workspaceId
-      && !(live.workspaceByTabId.has(meta.tabId) && urlWorkspaceId === workspaceId)
+      && !(live.workspaceByTabId.has(meta.tabId) && (urlWorkspaceId === workspaceId || reboundWorkspaceId === workspaceId))
     ) {
       throw new Error("Workspace session persistence requires the exact live workspace tab");
     }
     const stableKey = workspaceSessionWorkspaceKey(workspaceId);
-    const bindingKey = workspaceSessionBindingKey(meta.tabId);
     const legacyKey = workspaceSessionMirrorKey(meta.tabId);
     const existing = stableWorkspaceRecord(stableKey, stored?.[stableKey]);
     const otherOwners = (live.tabsByWorkspaceId.get(workspaceId) || [])
@@ -240,7 +262,10 @@ export function persistWorkspaceSessionSnapshot(api, request = {}, sender = {}, 
 
     marker = markerWithAtRiskWorkspaces(marker, [workspaceId]);
 
-    const durableSnapshot = { ...snapshot, generation };
+    const durableSnapshot = {
+      ...snapshotWithRetainedConversation(existing?.snapshot, snapshot),
+      generation
+    };
     const updates = {};
     const removals = [legacyKey];
     const currentBinding = bindingRecord(bindingKey, stored?.[bindingKey]);
@@ -457,7 +482,7 @@ export function prepareWorkspaceSessionLifecycle(api, options = {}) {
       api.tabs.query({})
     ]);
     if (!Array.isArray(tabs)) throw new TypeError("Browser tabs query returned an invalid result");
-    const live = liveTabState(api, tabs);
+    const live = liveTabState(api, tabs, stored);
     const forceRecovery = options.forceRecovery === true;
     const restartRecovery = lifecycleRestart || forceRecovery;
     if (restartRecovery) marker = markerWithAtRiskWorkspaces(marker, live.workspaceIds);
@@ -699,8 +724,19 @@ export function claimWorkspaceSessionRecovery(api, request = {}, sender = {}, op
     const senderTab = { ...tab, url: sender?.url || tab?.url };
     if (!isChatClubWorkspaceTab(api, senderTab)) throw new Error("Workspace session claim requires a ChatClub page");
     const urlWorkspaceId = workspaceIdForChatClubTab(api, senderTab);
-    const requestedWorkspaceId = normalizeWorkspaceSessionId(request.workspaceId) || urlWorkspaceId;
-    if (urlWorkspaceId && requestedWorkspaceId && urlWorkspaceId !== requestedWorkspaceId) {
+    let requestedWorkspaceId = normalizeWorkspaceSessionId(request.workspaceId) || urlWorkspaceId;
+    const tabBinding = bindingRecord(workspaceSessionBindingKey(meta.tabId), stored?.[workspaceSessionBindingKey(meta.tabId)]);
+    const urlRecord = urlWorkspaceId
+      ? stableWorkspaceRecord(workspaceSessionWorkspaceKey(urlWorkspaceId), stored?.[workspaceSessionWorkspaceKey(urlWorkspaceId)])
+      : null;
+    const reboundWorkspaceId = reboundWorkspaceIdForStaleUrl({
+      urlWorkspaceId,
+      boundWorkspaceId: tabBinding?.workspaceId,
+      urlRecord,
+      requestedWorkspaceId
+    });
+    if (reboundWorkspaceId) requestedWorkspaceId = reboundWorkspaceId;
+    if (!reboundWorkspaceId && urlWorkspaceId && requestedWorkspaceId && urlWorkspaceId !== requestedWorkspaceId) {
       throw new Error("Workspace session claim does not match the page URL");
     }
     const rawOpeningClaimId = typeof request.openingClaimId === "string" ? request.openingClaimId.trim() : "";
@@ -718,7 +754,7 @@ export function claimWorkspaceSessionRecovery(api, request = {}, sender = {}, op
     let claimId = "";
     let recovery = recoveryRecord(stored?.[WORKSPACE_SESSION_RECOVERY_KEY], generation, now);
     if (!Array.isArray(tabs)) throw new TypeError("Browser tabs query returned an invalid result");
-    const live = liveTabState(api, tabs);
+    const live = liveTabState(api, tabs, stored);
     let forkedFrom = "";
     if (workspaceId) {
       const otherOwners = (live.tabsByWorkspaceId.get(workspaceId) || [])
@@ -902,6 +938,7 @@ export function claimWorkspaceSessionRecovery(api, request = {}, sender = {}, op
       claimed: true,
       recovered,
       forked: Boolean(forkedFrom),
+      reboundFromStaleUrl: Boolean(reboundWorkspaceId),
       workspaceId,
       claimId,
       workspaceSessionGeneration: generation,
@@ -926,19 +963,35 @@ export function commitWorkspaceSessionRecovery(api, request = {}, sender = {}, o
     }
     const senderTab = { ...tab, url: sender?.url || tab?.url };
     const urlWorkspaceId = workspaceIdForChatClubTab(api, senderTab);
-    if (urlWorkspaceId !== workspaceId) throw new Error("Workspace session commit does not match the page URL");
     const now = finiteTime(options.now, Date.now());
     const generation = await ensureGenerationInternal(storage);
     const bindingKey = workspaceSessionBindingKey(meta.tabId);
     const stableKey = workspaceSessionWorkspaceKey(workspaceId);
     const session = sessionStorageArea(api);
+    const lookupKeys = [bindingKey, stableKey, WORKSPACE_SESSION_RECOVERY_KEY];
+    if (urlWorkspaceId && urlWorkspaceId !== workspaceId) {
+      lookupKeys.push(workspaceSessionWorkspaceKey(urlWorkspaceId));
+    }
     const [stored, markerStored, tabs] = await Promise.all([
-      storage.get([bindingKey, stableKey, WORKSPACE_SESSION_RECOVERY_KEY]),
+      storage.get(lookupKeys),
       typeof session?.get === "function" ? session.get(WORKSPACE_SESSION_RUNTIME_MARKER_KEY) : Promise.resolve({}),
       api.tabs.query({})
     ]);
     if (!Array.isArray(tabs)) throw new TypeError("Browser tabs query returned an invalid result");
-    const live = liveTabState(api, tabs);
+    const tabBinding = bindingRecord(bindingKey, stored?.[bindingKey]);
+    const urlRecord = urlWorkspaceId
+      ? stableWorkspaceRecord(workspaceSessionWorkspaceKey(urlWorkspaceId), stored?.[workspaceSessionWorkspaceKey(urlWorkspaceId)])
+      : null;
+    const reboundWorkspaceId = reboundWorkspaceIdForStaleUrl({
+      urlWorkspaceId,
+      boundWorkspaceId: tabBinding?.workspaceId,
+      urlRecord,
+      requestedWorkspaceId: workspaceId
+    });
+    if (urlWorkspaceId !== workspaceId && reboundWorkspaceId !== workspaceId) {
+      throw new Error("Workspace session commit does not match the page URL");
+    }
+    const live = liveTabState(api, tabs, stored);
     if (
       live.workspaceByTabId.get(meta.tabId) !== workspaceId
       || (live.tabsByWorkspaceId.get(workspaceId) || []).length !== 1
@@ -1065,7 +1118,7 @@ export function dismissClearedWorkspaceTabs(api, request = {}, options = {}) {
       typeof session?.get === "function" ? session.get(WORKSPACE_SESSION_RUNTIME_MARKER_KEY) : Promise.resolve({})
     ]);
     if (!Array.isArray(tabs)) throw new TypeError("Browser tabs query returned an invalid result");
-    const live = liveTabState(api, tabs);
+    const live = liveTabState(api, tabs, stored);
     const recovery = recoveryRecord(stored?.[WORKSPACE_SESSION_RECOVERY_KEY], generation, now);
     if (!recovery) return { dismissed: 0, tabs: [] };
     const stableRecords = currentStableRecords(stored);

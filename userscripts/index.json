@@ -1,10 +1,10 @@
 {
-  "summarySiteConfigVersion": 83,
+  "summarySiteConfigVersion": 92,
   "configs": [
     {
       "id": "chatgpt",
       "name": "ChatGPT",
-      "configVersion": 55,
+      "configVersion": 56,
       "hosts": [
         "chatgpt.com",
         "*.chatgpt.com",
@@ -13,7 +13,7 @@
       ],
       "userscriptRunMode": "pageWorldFirst",
       "userscriptFile": "chatgpt.js",
-      "userscriptLength": 3193
+      "userscriptLength": 3484
     },
     {
       "id": "claude",
@@ -61,7 +61,7 @@
     {
       "id": "grok",
       "name": "Grok",
-      "configVersion": 65,
+      "configVersion": 67,
       "hosts": [
         "grok.com",
         "*.grok.com",
@@ -73,18 +73,18 @@
       "copyTimeoutMs": 3600,
       "userscriptFallbackDelayMs": 1000,
       "userscriptFile": "grok.js",
-      "userscriptLength": 13420
+      "userscriptLength": 13568
     },
     {
       "id": "grok-dairoot",
       "name": "Grok Mirror",
-      "configVersion": 71,
+      "configVersion": 73,
       "hosts": [
         "gk.dairoot.cn",
         "*.gk.dairoot.cn"
       ],
       "userscriptFile": "grok-dairoot.js",
-      "userscriptLength": 13420,
+      "userscriptLength": 13568,
       "userscriptRunMode": "pageWorldFirst",
       "userscriptTimeoutMs": 36000,
       "copyTimeoutMs": 3600,
@@ -93,19 +93,19 @@
     {
       "id": "kagi",
       "name": "Kagi Assistant",
-      "configVersion": 66,
+      "configVersion": 67,
       "hosts": [
         "assistant.kagi.com"
       ],
       "userscriptTimeoutMs": 32000,
       "copyTimeoutMs": 3600,
       "userscriptFile": "kagi.js",
-      "userscriptLength": 4231
+      "userscriptLength": 4343
     },
     {
       "id": "notion",
       "name": "Notion",
-      "configVersion": 65,
+      "configVersion": 73,
       "hosts": [
         "app.notion.com",
         "notion.so",
@@ -117,7 +117,7 @@
         "/ai"
       ],
       "userscriptFile": "notion.js",
-      "userscriptLength": 6091
+      "userscriptLength": 8827
     },
     {
       "id": "lobehub",

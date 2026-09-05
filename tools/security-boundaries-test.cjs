@@ -145,7 +145,8 @@ const dataModule = (source) => import(`data:text/javascript;base64,${Buffer.from
   );
   assert.doesNotMatch(main, /iframeForWindow\(event\.source\)/);
   assert.doesNotMatch(main, /contentReady/);
-  assert.match(main, /if \(!exactFrameTarget\.expectedFrameId\)[\s\S]*?contentWindow\?\.postMessage/);
+  assert.match(main, /const postParentFrameBinding = \(\) => \{[\s\S]*?contentWindow\?\.postMessage/);
+  assert.match(main, /if \(!exactFrameTarget\.expectedFrameId\)[\s\S]*?return postParentFrameBinding\(\)/);
   assert.doesNotMatch(workspace, /contentWindow\??\.postMessage/);
   assert.match(workspace, /sendToContentFrame\(\s*iframe,\s*"prepareNavigationFocusGuard"/);
   assert.match(workspace, /sendToContentFrame\(\s*iframe,\s*"adoptNavigationFocusGuard"/);

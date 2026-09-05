@@ -77,6 +77,7 @@ export function createWorkspaceTopicTitleController({
     const nextCustom = snapshot.topicTitleCustom === true;
     if (isCustom() && !nextCustom) return false;
     if (currentTitle() === nextTitle && isCustom() === nextCustom) return false;
+    if (currentTitle() && !nextTitle) generationToken += 1;
     state.topicTitle = nextTitle;
     state.topicTitleCustom = nextCustom;
     render();

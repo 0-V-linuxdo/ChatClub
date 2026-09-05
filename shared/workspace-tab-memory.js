@@ -1,4 +1,5 @@
 import { deleteConversationIdentityFromHref } from "./delete-completion.js";
+import { isGenericTopicTitle } from "./topic-title.js";
 import { WORKSPACE_SESSION_SCHEMA_VERSION } from "./workspace-session.js";
 
 const KNOWN_CHAT_HOSTS = Object.freeze([
@@ -73,6 +74,16 @@ export function conversationHrefFromLocation(value) {
   return normalizedPath(url) === "/" ? "" : url.href;
 }
 
+export function preferredWorkspaceTabHref(values = []) {
+  const hrefs = (Array.isArray(values) ? values : [])
+    .map((value) => httpUrl(value))
+    .filter(Boolean);
+  for (const href of hrefs) {
+    if (conversationHrefFromLocation(href)) return href;
+  }
+  return hrefs[0] || "";
+}
+
 export function workspaceSnapshotHasConversation(snapshot) {
   for (const group of Array.isArray(snapshot?.groups) ? snapshot.groups : []) {
     for (const tab of Array.isArray(group?.tabs) ? group.tabs : []) {
@@ -82,6 +93,71 @@ export function workspaceSnapshotHasConversation(snapshot) {
     }
   }
   return false;
+}
+
+export function workspaceSnapshotIsRememberable(snapshot) {
+  if (workspaceSnapshotHasConversation(snapshot)) return true;
+  const title = String(snapshot?.topicTitle || "").trim();
+  return Boolean(title) && !isGenericTopicTitle(title);
+}
+
+function tabConversationHref(tab) {
+  return httpUrl(tab?.currentHref || tab?.href || tab?.url || tab?.initialHref);
+}
+
+function mergePreferredConversationGroups(existingSnapshot, incomingSnapshot) {
+  const existingGroups = Array.isArray(existingSnapshot?.groups) ? existingSnapshot.groups : [];
+  const incomingGroups = Array.isArray(incomingSnapshot?.groups) ? incomingSnapshot.groups : [];
+  return incomingGroups.map((group, groupIndex) => {
+    const existingTabs = Array.isArray(existingGroups[groupIndex]?.tabs)
+      ? existingGroups[groupIndex].tabs.slice()
+      : [];
+    const used = new Set();
+    const tabs = (Array.isArray(group?.tabs) ? group.tabs : []).map((tab) => {
+      const incomingHref = tabConversationHref(tab);
+      if (conversationHrefFromLocation(incomingHref)) {
+        return { ...tab, currentHref: incomingHref };
+      }
+      const appId = text(tab?.appId);
+      const matchIndex = existingTabs.findIndex((candidate, index) => (
+        !used.has(index) && text(candidate?.appId) === appId
+      ));
+      if (matchIndex < 0) return incomingHref ? { ...tab, currentHref: incomingHref } : tab;
+      used.add(matchIndex);
+      const existingHref = tabConversationHref(existingTabs[matchIndex]);
+      const currentHref = conversationHrefFromLocation(existingHref) || incomingHref || existingHref;
+      return currentHref ? { ...tab, currentHref } : tab;
+    });
+    return { ...group, tabs };
+  });
+}
+
+export function snapshotWithRetainedConversation(existingSnapshot, incomingSnapshot) {
+  let incoming = null;
+  let existing = null;
+  try { incoming = plainObject(incomingSnapshot) ? JSON.parse(JSON.stringify(incomingSnapshot)) : null; }
+  catch { incoming = null; }
+  if (!plainObject(incoming)) {
+    try { existing = plainObject(existingSnapshot) ? JSON.parse(JSON.stringify(existingSnapshot)) : null; }
+    catch { existing = null; }
+    return plainObject(existing) ? existing : null;
+  }
+  try { existing = plainObject(existingSnapshot) ? JSON.parse(JSON.stringify(existingSnapshot)) : null; }
+  catch { existing = null; }
+  if (!workspaceSnapshotHasConversation(existing)) return incoming;
+  if (workspaceSnapshotHasConversation(incoming)) {
+    return {
+      ...incoming,
+      groups: mergePreferredConversationGroups(existing, incoming)
+    };
+  }
+  return {
+    ...incoming,
+    groups: existing.groups,
+    fullscreenGroupIndex: Object.prototype.hasOwnProperty.call(existing, "fullscreenGroupIndex")
+      ? existing.fullscreenGroupIndex
+      : incoming.fullscreenGroupIndex
+  };
 }
 
 function sanitizedTab(value) {

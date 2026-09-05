@@ -407,7 +407,7 @@ export function createTopicDeleteRuntime(dependencies = {}) {
     return run;
   }
 
-  async function pingContentBridge(iframe, timeoutMs = 900) {
+  async function pingContentBridge(iframe, timeoutMs = 1800) {
     try {
       const href = normalizeDeleteFrameHref(await sendToContentFrame(iframe, "getLocationHref", {}, timeoutMs));
       return href ? { ok: true, href } : { ok: false, href: "" };
@@ -439,8 +439,10 @@ export function createTopicDeleteRuntime(dependencies = {}) {
 
   async function prepareContentBridge(iframe, options = {}) {
     if (!options.forceEnsure) {
-      const existing = await pingContentBridge(iframe, 900);
+      const existing = await pingContentBridge(iframe, 1800);
       if (existing.ok) return existing;
+      const retry = await pingContentBridge(iframe, 2400);
+      if (retry.ok) return retry;
     }
     let registration;
     try {
@@ -458,7 +460,7 @@ export function createTopicDeleteRuntime(dependencies = {}) {
       return { ok: false, reason: "iframe content bridge recovery returned no authenticated document" };
     }
     await sleep(180);
-    const recovered = await pingContentBridge(iframe, 1400);
+    const recovered = await pingContentBridge(iframe, 1800);
     if (recovered.ok) return { ...recovered, registration };
     return {
       ok: false,

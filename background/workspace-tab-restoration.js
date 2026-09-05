@@ -54,7 +54,7 @@ async function prepareClearedWorkspaceTabOpen(api, workspaceId, eventId, options
     typeof session?.get === "function" ? session.get(WORKSPACE_SESSION_RUNTIME_MARKER_KEY) : Promise.resolve({})
   ]);
   if (!Array.isArray(tabs)) throw new TypeError("Browser tabs query returned an invalid result");
-  const live = liveTabState(api, tabs);
+  const live = liveTabState(api, tabs, stored);
   const recovery = recoveryRecord(stored?.[WORKSPACE_SESSION_RECOVERY_KEY], generation, now);
   const item = unclaimedBrowserCleared(recovery, live, currentStableRecords(stored)).find((candidate) => (
     candidate.workspaceId === workspaceId && candidate.eventId === eventId
@@ -90,7 +90,7 @@ async function prepareClearedWorkspaceTabOpen(api, workspaceId, eventId, options
     await storage.set({ [WORKSPACE_SESSION_RECOVERY_KEY]: recovery }).catch(() => {});
     throw error;
   }
-  const existingTab = (liveTabState(api, latestTabs).tabsByWorkspaceId.get(item.workspaceId) || [])[0] || null;
+  const existingTab = (liveTabState(api, latestTabs, stored).tabsByWorkspaceId.get(item.workspaceId) || [])[0] || null;
   if (existingTab) {
     rearmRecoveryCandidate(item);
     await storage.set({ [WORKSPACE_SESSION_RECOVERY_KEY]: recovery });
@@ -180,7 +180,7 @@ async function finalizeReservedWorkspaceTab(api, reservation, tab, options, queu
     const generation = await ensureGeneration(storage);
     const [stored, tabs] = await Promise.all([storage.get(null), api.tabs.query({})]);
     if (!Array.isArray(tabs)) throw new TypeError("Browser tabs query returned an invalid result");
-    const live = liveTabState(api, tabs);
+    const live = liveTabState(api, tabs, stored);
     const exactTabs = live.tabsByWorkspaceId.get(reservation.workspaceId) || [];
     const exactTab = exactTabs.find((item) => positiveTabId(item?.id) === openedTabId) || null;
     if (!exactTab || exactTabs.length !== 1) return null;

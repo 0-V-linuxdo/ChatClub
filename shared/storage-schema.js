@@ -53,6 +53,7 @@ import {
   normalizeAppPickerSectionOrder
 } from "./app-picker-order.js";
 import { normalizeNotionEffortPreferences } from "./notion-efforts.js";
+import { normalizeModelPreferenceValue, modelPreferenceIdentityKey } from "./model-preference-selection.js";
 import { SUMMARY_SITE_CONFIGS } from "./summary-sites.js";
 import {
   MESSAGE_NAVIGATOR_SITE_CONFIGS,
@@ -733,15 +734,18 @@ function normalizeModelPreferences(raw = {}) {
   const source = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
   const normalized = { ...DEFAULT_MODEL_PREFERENCES };
   for (const [appId, targets] of Object.entries(MODEL_PREFERENCE_TARGETS)) {
-    const value = text(source[appId]);
-    const allowed = new Set((targets || []).map((target) => target.id));
-    normalized[appId] = allowed.has(value) ? value : "";
+    normalized[appId] = normalizeModelPreferenceValue(source[appId], targets, {
+      allowCustom: appId === "NotionAI"
+    });
   }
   normalized[MODEL_PREFERENCE_SECONDARY_ENABLED_KEY] = source[MODEL_PREFERENCE_SECONDARY_ENABLED_KEY] === true;
   for (const [appId, key] of Object.entries(MODEL_PREFERENCE_SECONDARY_KEYS)) {
-    const value = text(source[key]);
-    const allowed = new Set((MODEL_PREFERENCE_TARGETS[appId] || []).map((target) => target.id));
-    normalized[key] = allowed.has(value) && value !== normalized[appId] ? value : "";
+    const value = normalizeModelPreferenceValue(source[key], MODEL_PREFERENCE_TARGETS[appId] || [], {
+      allowCustom: appId === "NotionAI"
+    });
+    normalized[key] = value && modelPreferenceIdentityKey(value) !== modelPreferenceIdentityKey(normalized[appId])
+      ? value
+      : "";
   }
   const thinkingLevel = text(source[GEMINI_THINKING_LEVEL_PREFERENCE_KEY], DEFAULT_GEMINI_THINKING_LEVEL);
   const allowedThinkingLevels = new Set(GEMINI_THINKING_LEVEL_TARGETS.map((target) => target.id));

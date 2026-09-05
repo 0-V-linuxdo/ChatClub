@@ -27,6 +27,10 @@
     "kind": "test-only",
     "reason": "Focused browser-document lifecycle tests execute this injected function in an isolated VM context."
   },
+  "background/content-registration.js#relayIsolatedWorldFrameBinding": {
+    "kind": "test-only",
+    "reason": "Isolated-world frame-binding relay regressions execute this injected function in a VM so Chrome callback sendMessage cannot be silently dropped."
+  },
   "background/content-script-registration.js#buildContentScriptRegistrations": {
     "kind": "test-only",
     "reason": "Registration inventory regressions inspect the deterministic builder without widening the runtime API."

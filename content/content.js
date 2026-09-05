@@ -409,12 +409,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "7e04ec4b7c1e5e40303d30ef7ac70a070806fb762a0674739b6a35c975bde4fd";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "b873a2370e8adf0f4e0a3a136caac4f5467511b93004eb12181838b1dd8d5e26";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "9c3a6aaf01f5ad28aa370ace60c40d0b50904d4aa8ecd013ba0aaa17342f3308";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.9c3a6aaf01f5ad28aa370ace60c40d0b50904d4aa8ecd013ba0aaa17342f3308";
-  var CONTENT_RUNTIME_CONTENT_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/content.js", "entryPath": "content-src/content.js", "sourceSha256": "42c7da5f6f6cb902fec03d024cf214510542fa27e44108810e4404207afb1667", "implementationSha256": "6981f61d4c184a37c4730fe2a4a366aefd58376dfdcfde7c433a7d1b41780dd9", "implementationVersion": "2026.07.16.2+bundle.6981f61d4c184a37c4730fe2a4a366aefd58376dfdcfde7c433a7d1b41780dd9" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "a8302e940d2221a2bc32ce748029285b4b73093d38f3d74b73e60093ee0190fa";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.a8302e940d2221a2bc32ce748029285b4b73093d38f3d74b73e60093ee0190fa";
+  var CONTENT_RUNTIME_CONTENT_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/content.js", "entryPath": "content-src/content.js", "sourceSha256": "5ea76613badbf6f5528e95876b7797c35530712d1339dcfe1a4f0a67474f9291", "implementationSha256": "2126b11d8d865fa42dfebc9b2a256d42b7f3569f0a01bb7ae98ec8e811ce6d22", "implementationVersion": "2026.07.16.2+bundle.2126b11d8d865fa42dfebc9b2a256d42b7f3569f0a01bb7ae98ec8e811ce6d22" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -691,6 +691,13 @@
       return [];
     }
   }
+  function qs(selector, root = document) {
+    try {
+      return root.querySelector(selector);
+    } catch {
+      return null;
+    }
+  }
   function closest(el, selector) {
     try {
       return el?.closest?.(selector) || null;
@@ -771,16 +778,6 @@
     if (/font-claude-response|model-response|ds-assistant/.test(cls)) return "assistant";
     return userscriptRole(el) || "";
   }
-  function conversationTurnText(el) {
-    if (!el) return "";
-    try {
-      const clone = el.cloneNode(true);
-      clone.querySelectorAll?.("button,svg,script,style,noscript,time,nav,header,footer,form,input,textarea,select,[contenteditable='true']").forEach((node) => node.remove());
-      return normalize(clone.innerText || clone.textContent || "").replace(/\s+/g, " ");
-    } catch {
-      return normalize(el.innerText || el.textContent || "").replace(/\s+/g, " ");
-    }
-  }
   function conversationTurnNodes() {
     const selectors = [
       "[data-message-author-role]",
@@ -803,32 +800,143 @@
     }
     return nodes.sort(elementOrder);
   }
+  function lastAssistantTurnNode() {
+    const turns = conversationTurnNodes();
+    for (let index = turns.length - 1; index >= 0; index -= 1) {
+      if (conversationTurnRole(turns[index]) === "assistant") return turns[index];
+    }
+    return null;
+  }
+  function controlLayoutVisible(el) {
+    if (!el?.getBoundingClientRect) return false;
+    const rect = el.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return false;
+    try {
+      const style = getComputedStyle(el);
+      return style.display !== "none" && style.visibility !== "hidden";
+    } catch {
+      return true;
+    }
+  }
+  function controlLooksLikeStopGenerating(el) {
+    if (!el) return false;
+    const testid = String(el.getAttribute?.("data-testid") || el.getAttribute?.("data-test-id") || "");
+    if (/(?:^|[\s_-])(?:stop-button|stop-generating|stop_generation|composer-stop|fruitjuice-stop-button)(?:$|[\s_-])/i.test(testid)) return true;
+    const aria = normalize(el.getAttribute?.("aria-label") || el.getAttribute?.("title") || "");
+    if (/\bstop(?:\s+(?:generating|streaming|response|ai(?:\s+message)?))?\b|\bcancel(?:\s+(?:generating|response|ai))?\b|停止(?:生成|回答|回复|AI)?/i.test(aria)) return true;
+    const value = normalize(el.innerText || el.textContent || "");
+    return Boolean(value && value.length <= 24 && /^(?:stop(?:\s+(?:generating|streaming|ai))?|停止(?:生成|AI)?)$/i.test(value));
+  }
+  function liveBusyStatusLine(value) {
+    const text = normalize(value).replace(/\s+/g, " ");
+    if (!text || text.length > 180) return false;
+    if (/^loading web page:?/i.test(text)) return true;
+    if (/^searching the web(?:\s*[.。…]*)?$/i.test(text)) return true;
+    if (/^正在(?:读取|打开|加载|访问)(?:网页|页面|网站)?/i.test(text)) return true;
+    if (/^(?:thinking|preparing|crafting|noodling|contemplating)(?:\s*[.。…>]*)?$/i.test(text)) return true;
+    if (/^(?:思考中|准备中|正在思考|正在准备|正在撰写)(?:\s*[.。…>]*)?$/.test(text)) return true;
+    return false;
+  }
+  function completedToolStatusLine(value) {
+    const text = normalize(value).replace(/\s+/g, " ");
+    if (!text || text.length > 180) return false;
+    if (/^loaded web page:?/i.test(text)) return true;
+    if (/^searched the web(?:\s*[.。…]*)?$/i.test(text)) return true;
+    return false;
+  }
+  function conversationSampleRoot() {
+    return qs("#notion-app") || qs("main,[role=main]") || document.body;
+  }
+  function conversationLineSample() {
+    let raw = "";
+    try {
+      raw = String(conversationSampleRoot()?.textContent || "");
+    } catch {
+    }
+    if (raw.length > 96e3) raw = `${raw.slice(0, 12e3)}
+${raw.slice(-36e3)}`;
+    const lines = [];
+    for (const part of raw.split(/\n+/)) {
+      const line = normalize(part).replace(/\s+/g, " ");
+      if (line) lines.push(line);
+    }
+    return lines;
+  }
+  function conversationToolActivityFromLines(lines) {
+    let live = false;
+    for (const line of (Array.isArray(lines) ? lines : []).slice(-12)) {
+      if (completedToolStatusLine(line)) {
+        live = false;
+        continue;
+      }
+      if (liveBusyStatusLine(line)) live = true;
+    }
+    return live;
+  }
+  function nodeLooksLikeStreamingTurn(el) {
+    if (!el) return false;
+    if (String(el.getAttribute?.("aria-busy") || "").toLowerCase() === "true") return true;
+    if (String(el.getAttribute?.("data-is-streaming") || "").toLowerCase() === "true") return true;
+    const bits = `${classText(el)} ${el.getAttribute?.("data-testid") || ""}`.toLowerCase();
+    return /\b(?:result-streaming|is-streaming)\b/.test(bits);
+  }
+  function conversationComposerIsGenerating() {
+    const selectors = [
+      "button[data-testid='stop-button']",
+      "button[data-testid='stop-generating']",
+      "button[data-testid='composer-stop-button']",
+      "button[data-testid='fruitjuice-stop-button']",
+      "button[data-testid*='stop-button' i]",
+      "button[aria-label*='stop' i]",
+      "button[title*='stop' i]",
+      "button[aria-label*='停止' i]",
+      "[role='button'][data-testid='stop-button']",
+      "[role='button'][aria-label*='stop' i]",
+      "[role='button'][aria-label*='停止' i]"
+    ].join(",");
+    try {
+      for (const el of qsa(selectors)) {
+        if (controlLayoutVisible(el) && controlLooksLikeStopGenerating(el)) return true;
+      }
+    } catch {
+    }
+    return false;
+  }
+  function lastAssistantTurnIsStreaming(turn) {
+    if (!turn) return false;
+    return nodeLooksLikeStreamingTurn(turn);
+  }
   function conversationFingerprint(documentId = "", data = {}) {
     const turns = conversationTurnNodes();
     const prompt = normalize(data?.prompt || "").replace(/\s+/g, " ");
+    const lines = conversationLineSample();
     let userChars = 0;
     let assistantChars = 0;
     let lastText = "";
     const haystackParts = [];
     for (const turn of turns) {
       const role = conversationTurnRole(turn);
-      const value = conversationTurnText(turn);
+      const value = normalize(turn?.textContent || turn?.innerText || "").replace(/\s+/g, " ");
       if (!value) continue;
       haystackParts.push(value);
       if (role === "user") userChars += value.length;
       else if (role === "assistant") assistantChars += value.length;
       lastText = value;
     }
+    const tail = lines.slice(-8).join("\n");
+    if (!lastText) lastText = tail;
+    if (!assistantChars) assistantChars = tail.length;
     const haystack = haystackParts.join(" ");
-    const promptHaystack = haystack || normalize(document.body?.innerText || "").replace(/\s+/g, " ");
+    const promptHaystack = haystack || [...lines.slice(0, 48), ...lines.slice(-80)].join(" ");
     return {
       href: conversationHref(),
       documentId: String(documentId || ""),
-      turnCount: turns.length,
+      turnCount: turns.length || Math.min(lines.length, 999),
       userChars,
       assistantChars,
       tailHash: fingerprintHash(lastText.slice(-500)),
-      containsPrompt: Boolean(prompt && promptHaystack.includes(prompt))
+      containsPrompt: Boolean(prompt && promptHaystack.includes(prompt)),
+      generating: conversationComposerIsGenerating() || conversationToolActivityFromLines(lines) || lastAssistantTurnIsStreaming(lastAssistantTurnNode())
     };
   }
   function elementOrder(a, b) {

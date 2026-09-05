@@ -62,7 +62,13 @@ function fixture({ local = {}, session = {}, tabs = [] } = {}) {
       move: async (tabIdOrIds, options) => {
         const tabIds = Array.isArray(tabIdOrIds) ? tabIdOrIds : [tabIdOrIds];
         tabMoves.push({ tabIds, options: { ...options } });
-        return tabIds.map((tabId) => liveTabs.find((tab) => tab.id === tabId)).filter(Boolean);
+        return tabIds.map((tabId) => {
+          const tab = liveTabs.find((item) => item.id === tabId);
+          if (!tab) return null;
+          if (Number.isInteger(options?.windowId)) tab.windowId = options.windowId;
+          if (Number.isInteger(options?.index) && options.index >= 0) tab.index = options.index;
+          return { ...tab };
+        }).filter(Boolean);
       },
       remove: async (tabId) => {
         const index = liveTabs.findIndex((tab) => tab.id === tabId);
@@ -3176,6 +3182,50 @@ function deferredPromise() {
     assert.equal(store.liveTabs.some((tab) => tab.id === 12), false);
     const afterLiveForget = await listLiveWorkspaceTabs(store.api, {}, { tab: { id: 12 } });
     assert.deepEqual(afterLiveForget.tabs, []);
+  }
+
+  {
+    const now = 9_050_500;
+    const otherWindowTab = {
+      id: 52,
+      windowId: 9,
+      index: 0,
+      title: "ChatClub",
+      url: `chrome-extension://chatclub/chatClub.html#workspace=${workspaceB}`
+    };
+    const store = fixture({
+      local: {
+        [WORKSPACE_SESSION_GENERATION_KEY]: generation,
+        [workspaceSessionWorkspaceKey(workspaceA)]: stable(
+          workspaceA,
+          "fun-desk",
+          { tabId: 51, windowId: 2, index: 0, pinned: false },
+          now
+        ),
+        [workspaceSessionWorkspaceKey(workspaceB)]: stable(
+          workspaceB,
+          "little-arc-desk",
+          { tabId: 52, windowId: 9, index: 0, pinned: false },
+          now,
+          null,
+          { snapshot: usedSnapshot("little-arc-desk") }
+        )
+      },
+      tabs: [
+        { id: 51, windowId: 2, index: 0, title: "ChatClub", url: `chrome-extension://chatclub/chatClub.html#workspace=${workspaceA}` },
+        otherWindowTab
+      ]
+    });
+    const focused = await focusWorkspaceTab(
+      store.api,
+      { tabId: 52 },
+      { tab: { id: 51, windowId: 2, index: 0 } }
+    );
+    assert.deepEqual(focused, { focused: true, tabId: 52, current: false });
+    assert.deepEqual(store.tabMoves, [{ tabIds: [52], options: { windowId: 2, index: 1 } }]);
+    assert.equal(store.liveTabs.find((tab) => tab.id === 52).windowId, 2);
+    assert.deepEqual(store.tabUpdates, [{ tabId: 52, options: { active: true } }]);
+    assert.deepEqual(store.windowUpdates, [{ windowId: 2, options: { focused: true } }]);
   }
 
   {
