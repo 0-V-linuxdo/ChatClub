@@ -721,6 +721,56 @@ function preferredModelStub() {
   assert.equal(fallbackStatus.getAttribute("tabindex"), null, "fallback ready state must remove focusability");
   assert.equal(fallbackLive.textContent, "", "fallback ready state must clear its announcement");
 
+  {
+    globalThis.document.body.replaceChildren();
+    globalThis.document.activeElement = null;
+    globalThis.document.documentElement.dataset.p = "1";
+    const state = createState();
+    const controller = createComposerController({
+      state,
+      workspace: {
+        closePopovers() {},
+        currentFrames: () => [],
+        frameApp: () => null
+      },
+      preferredModel: preferredModelStub(),
+      topbar: { closeSettingsMenu() {} },
+      framePort: { ensure: async () => null, request: async () => ({ sent: true }) },
+      keyboardPlatform: "mac",
+      activeShortcutProfile: () => ({ sendKeyMode: "enter" }),
+      inferAppName: () => "",
+      openPromptLibrary() {},
+      optimizePrompt() {},
+      recordFunctionalAnomaly() {},
+      savePromptSendHistory: async (next) => next,
+      toast() {},
+      createFrameToast: () => ({ dismiss() {}, remove() {}, update() {} })
+    });
+    const view = controller.render({ placeholder: "Ask not what your country can do for you" });
+    globalThis.document.body.append(view);
+    const input = view.querySelector(".prompt-input");
+    const shell = view.querySelector(".prompt-shell");
+    const preview = view.querySelector(".prompt-collapsed-preview");
+    assert.ok(input && shell && preview);
+    input.focus();
+    assert.equal(input.classList.contains("prompt-input-expanded"), false, "prompt-focus lock must not expand on programmatic focus");
+    const firstPointer = input.dispatch("pointerdown");
+    assert.equal(firstPointer.defaultPrevented, undefined, "the first empty collapsed click must keep the default caret");
+    assert.equal(firstPointer.propagationStopped, undefined, "the first empty collapsed click must reach the textarea");
+    assert.equal(input.classList.contains("prompt-input-expanded"), true, "the first empty collapsed click must expand Composer");
+    assert.equal(shell.classList.contains("prompt-shell-expanded"), true, "the first empty collapsed click must expand the prompt shell");
+    const firstClick = input.dispatch("click");
+    assert.equal(firstClick.defaultPrevented, undefined, "the first empty collapsed click must not swallow caret placement");
+    input.classList.remove("prompt-input-expanded");
+    shell.classList.remove("prompt-shell-expanded");
+    input.value = "saved draft";
+    state.promptText = "saved draft";
+    const draftPointer = input.dispatch("pointerdown");
+    assert.equal(draftPointer.defaultPrevented, true, "a collapsed draft click must keep the saved caret");
+    assert.equal(input.dataset.openedFromCollapsed, "1");
+    delete globalThis.document.documentElement.dataset.p;
+  }
+
   console.log("Composer model-state non-blocking input behavior: ok");
 })().catch((error) => {
   console.error(error?.stack || error);

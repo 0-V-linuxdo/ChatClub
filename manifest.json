@@ -5,8 +5,8 @@
   "short_name": "ChatClub",
   "description": "__MSG_extension_description__",
   "default_locale": "zh_CN",
-  "version": "2026.9.4.1",
-  "version_name": "「2026-09-04｜07:28:30」",
+  "version": "2026.9.5.3",
+  "version_name": "「2026-09-05｜08:07:11」",
   "homepage_url": "https://github.com/0-V-linuxdo/ChatClub",
   "action": {
     "default_title": "ChatClub",

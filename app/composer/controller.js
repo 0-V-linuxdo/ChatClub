@@ -995,19 +995,9 @@ export function createComposerController(dependencies = {}) {
   function handlePointerDown(event) {
     const inputNode = inputFromEvent(event);
     if (!inputNode || inputNode.classList.contains("prompt-input-expanded")) return;
-    event.preventDefault();
-    event.stopPropagation();
-    inputNode.dataset.openedFromCollapsed = "1";
+    if (inputNode.value) { event.preventDefault(); event.stopPropagation(); inputNode.dataset.openedFromCollapsed = "1"; }
     inputNode.focus({ preventScroll: true });
     expandInput(inputNode);
-  }
-
-  function handleOverlayClick(event) {
-    event.preventDefault();
-    event.stopPropagation();
-    const inputNode = inputFromEvent(event);
-    delete inputNode?.dataset.openedFromCollapsed;
-    if (inputNode) restoreSelectionSoon(inputNode);
   }
 
   function handleClick(event) {
@@ -1187,7 +1177,6 @@ export function createComposerController(dependencies = {}) {
         el("div", {
           class: `prompt-collapsed-preview ${collapsed.empty ? "prompt-collapsed-preview-empty" : ""}`.trim(),
           title: collapsed.title,
-          onclick: handleOverlayClick
         }, renderCollapsedContent(collapsed, state.promptImages)),
         el("div", { class: "prompt-image-preview-list", hidden: state.promptImages.length <= 0 },
           state.promptImages.map((image) => renderImagePreview(image))

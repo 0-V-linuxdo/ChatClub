@@ -4,6 +4,10 @@ function promptNode() {
   return document.querySelector(".prompt-input");
 }
 
+function isFrameTarget(target) {
+  return Boolean(target?.classList?.contains?.("chat-frame") || target?.nodeName === "IFRAME");
+}
+
 function focusPromptInput(focusInput) {
   try {
     if (typeof focusInput === "function") {
@@ -48,7 +52,7 @@ function createPromptFocusController({ isOptionsPage = false, focusInput } = {})
       return;
     }
     if (isPromptTarget(event.target)) {
-      if (event.type === "keydown" && ["Tab", "Escape"].includes(event.key)) release();
+      if (event.type === "pointerdown" || (event.type === "keydown" && ["Tab", "Escape"].includes(event.key))) release();
       return;
     }
     if (event.type === "pointerdown" || event.type === "keydown") release();
@@ -57,10 +61,11 @@ function createPromptFocusController({ isOptionsPage = false, focusInput } = {})
     if (!pending) return;
     const prompt = promptNode();
     if (!prompt?.isConnected || (!force && document.activeElement === prompt)) return;
+    if (!force && isFrameTarget(document.activeElement)) return;
     focusPromptInput(focusInput);
   };
   const onFocusChange = (event) => {
-    if (!pending || isPromptTarget(event?.target)) return;
+    if (!pending || isPromptTarget(event?.target) || isFrameTarget(event?.target)) return;
     if (event?.target === window) return restoreIfNeeded(true);
     scheduleTask(restoreIfNeeded);
   };

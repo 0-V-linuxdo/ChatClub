@@ -1487,6 +1487,7 @@ button { cursor: pointer; }
   text-overflow: ellipsis;
   cursor: text;
   user-select: none;
+  pointer-events: none;
 }
 
 .prompt-collapsed-preview-images {

@@ -26,10 +26,15 @@ assert.ok(
   "iframe construction must wait until the prompt focus controller is installed"
 );
 assert.match(composerSource, /onfocus:e=>!document\.documentElement\.dataset\.p&&expandInput\(e\.target\)/);
+assert.match(functionSource(composerSource, "handlePointerDown"), /if \(inputNode\.value\)/);
+assert.match(focusControllerSource, /event\.type === "pointerdown" \|\| \(event\.type === "keydown"/);
+assert.match(focusControllerSource, /isFrameTarget\(document\.activeElement\)/);
+assert.match(focusControllerSource, /isFrameTarget\(event\?\.target\)/);
 assert.match(frameController, /document\.documentElement\.dataset\.p/);
 assert.match(viewController, /inert: true/);
 assert.match(viewController, /tabindex: "-1"/);
 assert.match(chatclubCss, /\.prompt-input:not\(\.prompt-input-expanded\):focus\s*\{[\s\S]*caret-color: var\(--text\)/);
+assert.match(chatclubCss, /\.prompt-collapsed-preview\s*\{[\s\S]*?pointer-events:\s*none;/);
 assert.match(focusControllerSource, /\["focus", "focusin"\]/);
 
 const executableSource = focusControllerSource
@@ -99,7 +104,11 @@ assert.equal(focusCalls, 2, "an automatic iframe focus must be pulled back to th
 workspace.document.activeElement = iframe;
 workspace.listeners.get("focusin")({ target: iframe });
 workspace.timers.shift()?.();
-assert.equal(focusCalls, 3, "a focus event from an iframe must be pulled back immediately");
+assert.equal(focusCalls, 2, "iframe focusin must not steal a later copy or caret click");
+workspace.document.activeElement = iframe;
+workspace.listeners.get("load")({ target: iframe });
+workspace.timers.at(-1)?.();
+assert.equal(focusCalls, 3, "iframe load must still restore prompt focus");
 workspace.document.activeElement = workspace.prompt;
 assert.doesNotThrow(
   () => workspace.listeners.get("focus")({ target: workspace.window }),
@@ -109,11 +118,19 @@ workspace.timers.shift()?.();
 assert.equal(focusCalls, 4, "regaining the top-level window must restart prompt focus without waiting for an iframe event");
 
 workspace.listeners.get("pointerdown")({ isTrusted: true, type: "pointerdown", target: workspace.promptChild });
-assert.equal(workspace.document.documentElement.dataset.p, "1", "prompt descendants must retain the focus lock");
-workspace.listeners.get("pointerdown")({ isTrusted: true, type: "pointerdown", target: new MockNode() });
-assert.equal(workspace.document.documentElement.dataset.p, undefined, "trusted top-level interaction must release the lock");
+assert.equal(workspace.document.documentElement.dataset.p, undefined, "a prompt click must end the initial iframe focus lock");
+const afterPromptClick = focusCalls;
+workspace.document.activeElement = iframe;
+workspace.listeners.get("focusin")({ target: iframe });
+workspace.timers.shift()?.();
+assert.equal(focusCalls, afterPromptClick, "iframe focus after a prompt click must not steal the caret back");
 controller.focusInitialPromptInput();
-assert.equal(focusCalls, 4, "automatic focus restoration must stop after user interaction");
+assert.equal(focusCalls, afterPromptClick, "automatic focus restoration must stop after user interaction");
+
+const outsideRelease = makeContext();
+outsideRelease.context.createPromptFocusController({ focusInput() {} });
+outsideRelease.listeners.get("pointerdown")({ isTrusted: true, type: "pointerdown", target: new MockNode() });
+assert.equal(outsideRelease.document.documentElement.dataset.p, undefined, "trusted top-level interaction must release the lock");
 
 const iframeInteraction = makeContext();
 let iframeFocusCalls = 0;
