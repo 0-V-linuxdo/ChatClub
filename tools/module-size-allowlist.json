@@ -14,9 +14,9 @@
     "reason": "The send runtime keeps exact-once composer delivery, typed image hydration, site-specific submit preparation, and the send-owned navigation correlation needed to keep Grok conversation creation from restarting preferred-model selection after the message is delivered."
   },
   "app/composer/controller.js": {
-    "maxLines": 1298,
+    "maxLines": 1296,
     "target": 1200,
-    "maxBytes": 49227,
+    "maxBytes": 49053,
     "targetBytes": 45000,
     "reason": "The Composer controller owns immutable text-and-image draft revisions, revision-conditional clearing, history de-duplication, and the shared document-bound admission queue used by both ordinary Send and one-shot new-workspace prompt handoff so delivery uncertainty and preferred-model preparation cannot diverge; prompt-actions popover chrome now uses the shared overlay-surface contract with aria-haspopup/aria-expanded, a named linear menu, and Tab dismiss; empty collapsed placeholder clicks keep the native caret so the first load click is not swallowed."
   },

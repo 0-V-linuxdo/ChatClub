@@ -349,14 +349,12 @@ export function createComposerController(dependencies = {}) {
     if (claimTopmostPopoverEscape(event, ".prompt-actions-popover")) closeActionsMenu();
   }
 
-  function actionsMenuItem(label, iconName, onClick, tooltipId = "") {
+  function actionsMenuItem(label, iconName, onClick) {
     return el("button", {
-      class: "button button-secondary menu-button prompt-actions-menu-button tooltip-trigger",
+      class: "button button-secondary menu-button prompt-actions-menu-button",
       type: "button",
       role: "menuitem",
       "aria-label": label,
-      "data-tooltip": label,
-      "data-tooltip-id": tooltipId || null,
       onclick: (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -408,9 +406,9 @@ export function createComposerController(dependencies = {}) {
       onpointerdown: (menuEvent) => menuEvent.stopPropagation(),
       onclick: (menuEvent) => menuEvent.stopPropagation()
     },
-      actionsMenuItem(t("topbar.addPhotos"), "paperclip", openImagePicker, "topbar.addPhotos"),
-      actionsMenuItem(t("topbar.promptLibrary"), "library", openPromptLibrary, "topbar.promptLibrary"),
-      actionsMenuItem(t("topbar.optimizePrompt"), "sparkles", optimizePrompt, "topbar.optimizePrompt")
+      actionsMenuItem(t("topbar.addPhotos"), "paperclip", openImagePicker),
+      actionsMenuItem(t("topbar.promptLibrary"), "library", openPromptLibrary),
+      actionsMenuItem(t("topbar.optimizePrompt"), "sparkles", optimizePrompt)
     );
     document.body.append(backdrop, menu);
     bindLinearMenuKeyboard(menu, { dismiss: closeActionsMenu, trigger: anchor });

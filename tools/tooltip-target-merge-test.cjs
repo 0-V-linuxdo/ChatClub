@@ -161,10 +161,24 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
 
   const composerSource = read("app/composer/controller.js");
   assert.match(composerSource, /"data-tooltip-id": "topbar\.promptActions"/);
+  assert.match(composerSource, /function actionsMenuItem\(label, iconName, onClick\) \{/);
   assert.match(
     composerSource,
-    /actionsMenuItem\(t\("topbar\.addPhotos"\), "paperclip", openImagePicker, "topbar\.addPhotos"\)/
+    /class: "button button-secondary menu-button prompt-actions-menu-button"/
   );
+  assert.doesNotMatch(
+    composerSource,
+    /prompt-actions-menu-button tooltip-trigger/,
+    "labeled plus-menu items must not attach a redundant hover tooltip"
+  );
+  assert.doesNotMatch(
+    composerSource,
+    /actionsMenuItem\([^)]*tooltipId/,
+    "plus-menu items already show their label and must not take a tooltip id"
+  );
+  assert.match(composerSource, /actionsMenuItem\(t\("topbar\.addPhotos"\), "paperclip", openImagePicker\)/);
+  assert.match(composerSource, /actionsMenuItem\(t\("topbar\.promptLibrary"\), "library", openPromptLibrary\)/);
+  assert.match(composerSource, /actionsMenuItem\(t\("topbar\.optimizePrompt"\), "sparkles", optimizePrompt\)/);
   assert.match(shortcutSource, /"data-tooltip-id": "settings\.shortcuts\.help"/);
 
   const tooltipSource = read("ui/tooltip.js");
