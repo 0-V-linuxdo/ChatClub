@@ -1,6 +1,9 @@
 import { createBindOnceControllerPort } from "../controller-port.js";
 import { createFrameRequest } from "../frame-request.js";
 import { requireControllerContext, requireControllerFunction, validateControllerContract } from "../controller-contract.js";
+import { findSummarySiteConfig } from "../../shared/url-match.js";
+import { summaryConfigHasCollector } from "../../shared/summary-sites.js";
+import { conversationHrefFromLocation } from "../../shared/workspace-tab-memory.js";
 import { createWorkspaceDragController } from "./drag-controller.js";
 import { createWorkspaceFrameController } from "./frame-controller.js";
 import { createWorkspaceFrameRegistry } from "./frame-registry.js";
@@ -331,6 +334,20 @@ export function createWorkspaceController(ctx = {}) {
     return currentFrames().some((iframe) => frameController.topicDeleteCapabilityForFrame(iframe).available);
   }
 
+  function hasSummarizableActiveThreads() {
+    return currentFrames().some((iframe) => {
+      const app = frameApp(iframe);
+      const href = openableTabUrl(iframe?.dataset?.currentHref)
+        || openableTabUrl(iframe?.src || iframe?.getAttribute?.("src"))
+        || openableTabUrl(app?.url)
+        || "";
+      if (!conversationHrefFromLocation(href)) return false;
+      const config = findSummarySiteConfig(state.options?.summarySiteConfigs, href);
+      if (!config) return false;
+      return summaryConfigHasCollector(config) || config.fallbackMode === "allowPageText";
+    });
+  }
+
   return Object.freeze({
     renderWorkspace: viewController.renderWorkspace,
     syncWorkspaceIsland: viewController.syncWorkspaceIsland,
@@ -364,6 +381,7 @@ export function createWorkspaceController(ctx = {}) {
     ensureFrameAttributeContract: viewController.ensureFrameAttributeContract,
     topicDeleteCapabilityForFrame: frameController.topicDeleteCapabilityForFrame,
     hasDeletableActiveThreads,
+    hasSummarizableActiveThreads,
     openableTabUrl,
     openTabUrl,
     captureWorkspaceSession: sessionController.captureWorkspaceSession,

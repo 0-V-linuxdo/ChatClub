@@ -231,7 +231,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
     const config = findTopicDeleteSiteConfig(state.options?.topicDeleteSiteConfigs, payload);
     const customMode = config?.builtIn === false || config?.sourceMode === "custom";
     const missingCustomScript = Boolean(config && customMode && !String(config.customUserscript || "").trim());
-    const noConversationPage = Boolean(config && knownNoConversationPage(config, payload));
+    const noConversationPage = Boolean(config && !threadHrefFromLocation(payload.currentHref));
     const skipped = !config || config.enabled === false || missingCustomScript || noConversationPage;
     return { iframe, payload, config, skipped, available: !skipped };
   }

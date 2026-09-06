@@ -134,7 +134,7 @@ function appDomain(file) {
     assert.doesNotMatch(runtime, new RegExp(`from ["']${statePort.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["']`));
   }
   assert.ok(runtime.split(/\r?\n/).length < 2800, "App runtime must remain below the post-extraction consolidation ceiling");
-  for (const field of ["sync", "open", "toggleMaximized", "loadPanelSize"]) {
+  for (const field of ["sync", "open", "syncSummarizeState", "toggleMaximized", "loadPanelSize"]) {
     assert.match(summaryController, new RegExp(`^\\s{4}${field}:`, "m"), `Summary controller must expose ${field}`);
   }
   for (const field of ["sync", "open", "close", "toggleMaximized", "loadPanelSize"]) {

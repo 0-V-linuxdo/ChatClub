@@ -15,6 +15,7 @@ const topbar = read("app/topbar/controller.js");
 const topbarView = read("app/topbar/view.js");
 const viewController = read("app/workspace/view-controller.js");
 const tabContextMenu = read("app/workspace/tab-context-menu.js");
+const frameControllerSource = read("app/workspace/frame-controller.js");
 
 const APPS = {
   Grok: { id: "Grok", name: "Grok", url: "https://grok.com/" },
@@ -95,13 +96,24 @@ function noop() {}
     { appId: "NotionAI", currentHref: "https://www.notion.so/ai" }
   ];
   assert.equal(hasDeletable(emptyDesk), false, "Grok / Kagi / Notion home pages must not be deletable");
+  assert.equal(
+    hasDeletable([
+      { appId: "Grok", currentHref: "https://grok.com/chat" },
+      { appId: "Kagi", currentHref: "https://assistant.kagi.com/" },
+      { appId: "NotionAI", currentHref: "https://www.notion.so/ai" }
+    ]),
+    false,
+    "Grok /chat empty shells must not light batch delete"
+  );
   assert.equal(capability("Grok", "https://grok.com/").available, false);
+  assert.equal(capability("Grok", "https://grok.com/chat").available, false, "Grok /chat without an id is an empty shell, not a conversation");
   assert.equal(capability("Kagi", "https://assistant.kagi.com/").available, false);
   assert.equal(capability("NotionAI", "https://www.notion.so/ai").available, false);
   assert.equal(capability("NotionAI", "https://www.notion.so/chat").available, false);
   assert.equal(capability("ChatGPT", "https://chatgpt.com/").available, false);
 
   assert.equal(capability("Grok", "https://grok.com/c/conversation-id").available, true);
+  assert.equal(capability("Grok", "https://grok.com/chat/conversation-id").available, true);
   assert.equal(capability("Kagi", "https://assistant.kagi.com/chat/abc").available, true);
   assert.equal(capability("NotionAI", "https://www.notion.so/chat?t=thread").available, true);
   assert.equal(capability("ChatGPT", "https://chatgpt.com/c/conversation-id").available, true);
@@ -153,6 +165,11 @@ function noop() {}
     "topbar disable must stay aligned with the column-header trash"
   );
   assert.match(tabContextMenu, /const deleteThreadDisabled = !topicDeleteCapabilityForFrame\(activeFrame, activeFallback\)\.available/);
+  assert.match(
+    functionSource(frameControllerSource, "topicDeleteCapabilityForFrame"),
+    /!threadHrefFromLocation\(payload\.currentHref\)/,
+    "Delete availability must follow conversation identity, not only the narrow known-home path list"
+  );
 
   const deleteThreadOnFrames = functionSource(runtime, "deleteThreadOnFrames");
   assert.match(deleteThreadOnFrames, /hasDeletableActiveThreads\(\)/);

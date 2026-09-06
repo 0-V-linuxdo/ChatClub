@@ -56,7 +56,8 @@ export function createTopbarView(dependencies = {}) {
     "toggleWorkspaceTabsSidebar",
     "isWorkspaceTabsSidebarOpen",
     "openWorkspaceTabsSearch",
-    "canDeleteThread"
+    "canDeleteThread",
+    "canOpenSummary"
   ]);
   requireMethods(editLifecycle, "edit lifecycle", [
     "exit",
@@ -260,7 +261,9 @@ export function createTopbarView(dependencies = {}) {
       return button;
     }
     if (item.id === "summary") {
-      return actionButton(t("topbar.summary"), "summary", actions.openSummary, "secondary", actions.formatShortcutTooltip(t("topbar.summary"), "openSummaryPanel"), "", "topbar.summary");
+      const button = actionButton(t("topbar.summary"), "summary", actions.openSummary, "secondary", actions.formatShortcutTooltip(t("topbar.summary"), "openSummaryPanel"), "", "topbar.summary");
+      button.disabled = !actions.canOpenSummary();
+      return button;
     }
     if (item.id === "share") {
       return actionButton(t("topbar.share"), "share", actions.openShare, "secondary", actions.formatShortcutTooltip(t("topbar.share"), "openSharePanel"), "", "topbar.share");
@@ -522,7 +525,8 @@ export function createTopbarView(dependencies = {}) {
             actions.saveHistoryFromWorkspace(event);
           }
         : null;
-    const disabled = item.id === "deleteThread" && !actions.canDeleteThread();
+    const disabled = (item.id === "deleteThread" && !actions.canDeleteThread())
+      || (item.id === "summary" && !actions.canOpenSummary());
     const buttonNode = settingsMenuButton(label, topbarItemIcon(item, state.options), (event) => runItem(item, event), "secondary", disabled, dragItem, {
       className: editing && item.type === "item" ? "topbar-settings-menu-button" : "",
       tooltipId: tooltipIdForItem(item),
@@ -600,5 +604,12 @@ export function createTopbarView(dependencies = {}) {
     });
   }
 
-  return Object.freeze({ render, renderSettingsMenu, syncBrandState, syncDeleteThreadState });
+  function syncSummaryState() {
+    const disabled = !actions.canOpenSummary();
+    document.querySelectorAll('[data-tooltip-id="topbar.summary"]').forEach((buttonNode) => {
+      buttonNode.disabled = disabled;
+    });
+  }
+
+  return Object.freeze({ render, renderSettingsMenu, syncBrandState, syncDeleteThreadState, syncSummaryState });
 }

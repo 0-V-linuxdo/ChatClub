@@ -35,6 +35,7 @@ export function createTopbarController(dependencies = {}) {
     "closePopovers",
     "closePopoversAnchoredWithin",
     "hasDeletableActiveThreads",
+    "hasSummarizableActiveThreads",
     "openAppPicker",
     "openLayoutMenu"
   ]);
@@ -81,6 +82,7 @@ export function createTopbarController(dependencies = {}) {
     actions: {
       ...actions,
       canDeleteThread: () => workspace.hasDeletableActiveThreads(),
+      canOpenSummary: () => workspace.hasSummarizableActiveThreads(),
       openAppPicker: (anchor) => workspace.openAppPicker(anchor, { mode: "group" }),
       openLayoutMenu: (anchor) => workspace.openLayoutMenu(anchor),
       openSettingsMenu
@@ -152,6 +154,7 @@ export function createTopbarController(dependencies = {}) {
     }
     if (item.id === "summary") {
       closeSettingsMenu();
+      if (!workspace.hasSummarizableActiveThreads()) return;
       actions.openSummary();
       return;
     }
@@ -320,6 +323,7 @@ export function createTopbarController(dependencies = {}) {
     runShortcutAction,
     sync,
     syncDeleteThreadState: () => view.syncDeleteThreadState(),
+    syncSummaryState: () => view.syncSummaryState(),
     syncPlaceholder: (...args) => placeholderController.sync(...args)
   });
 }

@@ -5,6 +5,7 @@ import { normalizePocketIcon } from "../../shared/storage-schema.js";
 import { pocketChromeLabelKey } from "../../shared/topbar.js";
 import { findSummarySiteConfig } from "../../shared/url-match.js";
 import { summaryConfigHasCollector } from "../../shared/summary-sites.js";
+import { conversationHrefFromLocation } from "../../shared/workspace-tab-memory.js";
 import { createActionButton } from "../../ui/components.js";
 import { el, iconButton, textarea } from "../../ui/dom.js";
 import { optionalControllerFunction, optionalControllerObject, requireControllerContext, requireControllerFunction, validateControllerContract } from "../controller-contract.js";
@@ -113,7 +114,7 @@ export function createSummaryController(ctx) {
   function openSummaryPanel() {
     state.summaryOpen = true;
     syncSummaryPanel();
-    collectSummary();
+    if (hasSummarizableFrames()) collectSummary();
   }
 
   function summarySourceKey(source) {
@@ -392,7 +393,10 @@ export function createSummaryController(ctx) {
     }
     if (!state.summaryResult) {
       return el("div", { class: "summary-panel-result" },
-        renderSummaryStatus(t("summaryPanel.noSummaryTitle"), t("summaryPanel.noSummaryBody"))
+        renderSummaryStatus(
+          t("summaryPanel.noSummaryTitle"),
+          canRunSummary() ? t("summaryPanel.noSummaryBody") : t("summaryPanel.noMessages")
+        )
       );
     }
     return el("article", { class: "summary-panel-result" },
@@ -522,6 +526,7 @@ export function createSummaryController(ctx) {
   
   function renderSummaryPanel() {
     const hasQuestion = Boolean(state.summaryQuestion.trim());
+    const runnable = canRunSummary();
     const runFromInput = async () => {
       if (state.summaryQuestion.trim()) await askSummary();
       else await summarizeSummary();
@@ -563,8 +568,8 @@ export function createSummaryController(ctx) {
           el("div", { class: "summary-panel-actions" },
             summaryActionButton(t(pocketChromeLabelKey(state.options)), saveSummaryPreviewToPocket, "secondary", state.summaryBusy || !pocketEntriesFromSummaryPreview().length, "pocket", "summary.action.pocket"),
             summaryActionButton(t("summaryPanel.preview"), collectSummary, "secondary", state.summaryBusy, "preview", "summary.action.preview"),
-            summaryActionButton(t("summaryPanel.summarize"), summarizeSummary, "secondary", state.summaryBusy, "summary", "summary.action.summarize"),
-            summaryActionButton(t("summaryPanel.ask"), askSummary, "primary", state.summaryBusy || !hasQuestion, "send", "summary.action.ask")
+            summaryActionButton(t("summaryPanel.summarize"), summarizeSummary, "secondary", state.summaryBusy || !runnable, "summary", "summary.action.summarize"),
+            summaryActionButton(t("summaryPanel.ask"), askSummary, "primary", state.summaryBusy || !hasQuestion || !runnable, "send", "summary.action.ask")
           )
         ),
         renderSummaryTabs(),
@@ -582,6 +587,7 @@ export function createSummaryController(ctx) {
   }
   
   async function summarizeSummary() {
+    if (!canRunSummary()) return;
     state.summaryQuestion = "";
     state.summaryView = "summary";
     await askSummary();
@@ -716,7 +722,40 @@ export function createSummaryController(ctx) {
     }
     return "";
   }
-  
+
+  function summaryLiveHref(iframe, app) {
+    return String(iframe?.dataset?.currentHref || iframe?.getAttribute?.("src") || iframe?.src || app?.url || "");
+  }
+
+  function summaryHrefIsCollectable(href) {
+    if (!conversationHrefFromLocation(href)) return false;
+    const config = findSummarySiteConfig(state.options?.summarySiteConfigs, href);
+    if (!config) return false;
+    return summaryConfigHasCollector(config) || config.fallbackMode === "allowPageText";
+  }
+
+  function hasSummarizableFrames() {
+    return currentFrames().some((iframe) => summaryHrefIsCollectable(summaryLiveHref(iframe, frameApp(iframe))));
+  }
+
+  function canRunSummary() {
+    return hasSummarizableFrames() || Boolean((state.summaryContexts || []).length);
+  }
+
+  function syncSummarizeState() {
+    const panel = document.querySelector(".summary-panel");
+    if (!panel || !state.summaryOpen) return;
+    const runnable = canRunSummary();
+    const summarize = panel.querySelector(".summary-action-button-summary");
+    const ask = panel.querySelector(".summary-action-button-send");
+    if (summarize) summarize.disabled = state.summaryBusy || !runnable;
+    if (ask) ask.disabled = state.summaryBusy || !String(state.summaryQuestion || "").trim() || !runnable;
+    const emptyCopy = panel.querySelector(".summary-panel-result .summary-status-copy span");
+    if (emptyCopy && !state.summaryResult && !state.summaryBusy) {
+      emptyCopy.textContent = runnable ? t("summaryPanel.noSummaryBody") : t("summaryPanel.noMessages");
+    }
+  }
+
   function summaryFrameBase(iframe, app, order = 0) {
     const name = inferAppName(app);
     const instanceId = iframe.dataset.instanceId || "";
@@ -1075,6 +1114,7 @@ export function createSummaryController(ctx) {
   }
   
   async function askSummary() {
+    if (!canRunSummary()) return;
     state.summaryView = "summary";
     syncSummaryPreviewDerivedState();
     if (!state.summaryContexts.length) await collectSummary();
@@ -1159,6 +1199,7 @@ export function createSummaryController(ctx) {
   return {
     sync: syncSummaryPanel,
     open: openSummaryPanel,
+    syncSummarizeState: syncSummarizeState,
     toggleMaximized: toggleSummaryMaximized,
     loadPanelSize: loadSummaryPanelSize,
     scheduleIdleFullTextCapture,

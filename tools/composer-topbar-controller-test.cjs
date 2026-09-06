@@ -85,7 +85,7 @@ function responsiveBrandRules(kind) {
   assert.match(runtime, /topbarBinding\.bind\(topbarController\)/, "runtime must bind the stable topbar port once");
   assert.doesNotMatch(runtime, /workspace:\s*\(\)\s*=>\s*workspaceController/, "runtime must not expose an uninitialized workspace controller through a provider thunk");
   assert.doesNotMatch(runtime, /=>\s*preferredModelController\./, "runtime must not expose an uninitialized Preferred Model controller through provider thunks");
-  assert.ok(runtime.split(/\r?\n/).length <= 1426, "runtime must stay an assembly root after Composer/Topbar extraction");
+  assert.ok(runtime.split(/\r?\n/).length <= 1427, "runtime must stay an assembly root after Composer/Topbar extraction");
   assert.match(runtime, /scheduleIdleFullTextCapture\?\.\(text\)/, "send admission must schedule per-frame idle full-text capture");
   assert.match(runtime, /scheduleExistingIdleFullTextCapture/, "workspace restore must schedule idle capture of existing conversations");
   assert.doesNotMatch(runtime, /captureWorkspaceFullText/, "send admission must not collect full text immediately");
@@ -184,6 +184,11 @@ function responsiveBrandRules(kind) {
     topbar,
     /canDeleteThread:\s*\(\)\s*=>\s*workspace\.hasDeletableActiveThreads\(\)/,
     "Topbar must read delete availability from the bound workspace port instead of a runtime thunk"
+  );
+  assert.match(
+    topbar,
+    /canOpenSummary:\s*\(\)\s*=>\s*workspace\.hasSummarizableActiveThreads\(\)/,
+    "Topbar must read Summary availability from the bound workspace port instead of a runtime thunk"
   );
   assert.match(
     functionSource(topbarView, "renderItem"),

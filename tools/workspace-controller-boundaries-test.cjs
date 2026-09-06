@@ -56,6 +56,8 @@ const lineCount = (source) => source.split(/\r?\n/).length;
     /currentFrames\(\)\.some\(\(iframe\) => frameController\.topicDeleteCapabilityForFrame\(iframe\)\.available\)/,
     "Delete Topics availability must reuse the in-group capability already owned by the frame controller"
   );
+  assert.match(workspace, /function hasSummarizableActiveThreads\(\)/, "topbar Summary availability must assemble on the workspace facade");
+  assert.match(workspace, /conversationHrefFromLocation\(href\)/, "Summary availability must require a live conversation href");
   assert.doesNotMatch(workspace, /function handleTabPointerMove\(/);
   assert.doesNotMatch(workspace, /function closeMessageNavigatorMenuOnParentKeydown\(/);
   assert.doesNotMatch(workspace, /let messageNavigatorMenuIframe/);
