@@ -69,7 +69,8 @@ const SIDEBAR_WIDTH_MIN = 220;
 const SIDEBAR_WIDTH_MAX = 560;
 const SIDEBAR_WIDTH_DEFAULT = 320;
 const TAB_DRAG_START_DISTANCE = 6;
-const GENERIC_WORKSPACE_TAB_NAME = /^(?:chatclub(?:\s+\d+)?|prompt)$/i;
+// How a desk was produced, not what it holds: extension title, prompt-handoff layout, Pocket batch-restore layout (`pocket.restoreBatch`, every shipped locale).
+const GENERIC_WORKSPACE_TAB_NAME = /^(?:chatclub(?:\s+\d+)?|prompt|restore\s+group|一键恢复)$/i;
 const PAGE_CLOSING_ERROR = /message port closed|receiving end does not exist|no tab with id|tab was closed/i;
 
 function storageGet(storage, key) {

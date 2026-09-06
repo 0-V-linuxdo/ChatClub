@@ -19,15 +19,19 @@ const coreCapabilityOutputs = [
 ];
 const measuredOutputs = Object.keys(CONTENT_ENTRIES).sort();
 const byteBudgets = Object.freeze({
-  "content/content.js": 109_641,
+  // Exact base cost after the read-only getConversationOpening navigator probe
+  // joined the relayed Message Navigator command whitelist.
+  "content/content.js": 109_646,
   "content/send.js": 85_000,
-  "content/summary-bridge.js": 99_653,
+  // Bundles that embed the shared frame-command contract each carry the
+  // getConversationOpening spec entry (about a hundred bytes).
+  "content/summary-bridge.js": 99_759,
   // Shared Notion catalog plus exact custom picker-name apply stay inside the
   // preferred-model content boundary instead of a second selector dialect.
-  "content/preferred-model.js": 243_389,
+  "content/preferred-model.js": 243_495,
   // Exact post-generation cost of signed selector hints plus attempt/route-bound
   // confirmation ownership; keep destructive-action safety in one bundle.
-  "content/delete.js": 266_247,
+  "content/delete.js": 266_345,
   "content/grok-cookie-bridge.js": 50_000,
   "content/message-navigator.js": 140_000,
   "content/preload.js": 214_385,
@@ -35,11 +39,13 @@ const byteBudgets = Object.freeze({
   "content/summary-userscripts.js": 161_108
 });
 // Exact base-plus-capabilities closure after JSON-first official collection
-// joined the isolated Summary pipeline without packaged runner wrappers.
-const aggregateByteBudget = 798_441;
-// Exact all-bundle closure after workspace official-slot stubs
-// joined the generated Summary registries.
-const allBundlesByteBudget = 1_573_867;
+// joined the isolated Summary pipeline without packaged runner wrappers, plus
+// the read-only getConversationOpening frame-command spec in each bundle.
+const aggregateByteBudget = 798_997;
+// Exact all-bundle closure after workspace official-slot stubs joined the
+// generated Summary registries and the Message Navigator gained the read-only
+// conversationOpening probe for desk auto-naming.
+const allBundlesByteBudget = 1_576_110;
 
 const bundleIdentities = Object.fromEntries(Object.keys(CONTENT_ENTRIES).map((outputPath) => [
   outputPath,

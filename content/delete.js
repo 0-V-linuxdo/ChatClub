@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "b873a2370e8adf0f4e0a3a136caac4f5467511b93004eb12181838b1dd8d5e26";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "4b6514a3a2043ed202839001db84cf793ad9388b941bde892cdc70d32792d0bb";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "a8302e940d2221a2bc32ce748029285b4b73093d38f3d74b73e60093ee0190fa";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.a8302e940d2221a2bc32ce748029285b4b73093d38f3d74b73e60093ee0190fa";
-  var CONTENT_RUNTIME_DELETE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/delete.js", "entryPath": "content-src/content-delete.js", "sourceSha256": "c5b0fa58ede3c5a5987fc7602a0e9a1e82a872a212c1950c5b6ec44a0bb332a7", "implementationSha256": "8480f80e0196f35f942b62aebd70f8250df03359fbeea7af8fef47cea6e0f16e", "implementationVersion": "2026.07.16.2+bundle.8480f80e0196f35f942b62aebd70f8250df03359fbeea7af8fef47cea6e0f16e" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "0cd3895420858541ee5fd09ac828ce2a906b18596159c43fbecbe695f575fd4c";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.0cd3895420858541ee5fd09ac828ce2a906b18596159c43fbecbe695f575fd4c";
+  var CONTENT_RUNTIME_DELETE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/delete.js", "entryPath": "content-src/content-delete.js", "sourceSha256": "213d0992fb7139125621ae3dd2264483d9e2d58237e406470ea99214f5e06ad3", "implementationSha256": "b1001f365d3cc0bf705b498a2456842ae36adfd50c152b9da7a4f74b943b0e1d", "implementationVersion": "2026.07.16.2+bundle.b1001f365d3cc0bf705b498a2456842ae36adfd50c152b9da7a4f74b943b0e1d" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -725,7 +725,8 @@
     cancelPreferredModelApply: command({ timeoutMs: 2e3, mutating: true, features: Object.freeze(["preferred-model"]) }),
     setMessageNavigator: command({ timeoutMs: 6e3, mutating: true, features: Object.freeze(["message-navigator"]) }),
     hideMessageNavigatorMenu: command({ timeoutMs: 2e3, mutating: true, features: Object.freeze(["message-navigator"]) }),
-    getMessageNavigatorState: command({ timeoutMs: 2e3, features: Object.freeze(["message-navigator"]) })
+    getMessageNavigatorState: command({ timeoutMs: 2e3, features: Object.freeze(["message-navigator"]) }),
+    getConversationOpening: command({ timeoutMs: 2500, features: Object.freeze(["message-navigator"]) })
   });
 
   // content-src/shared/command-router.js

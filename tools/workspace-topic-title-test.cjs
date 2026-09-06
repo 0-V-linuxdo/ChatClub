@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 
 (async () => {
   const {
+    conversationTitleFromDocumentTitle,
     sanitizeTopicTitle,
     topicTitleFromPrompt
   } = await import("../shared/topic-title.js");
@@ -15,6 +16,38 @@ const assert = require("node:assert/strict");
   assert.equal(sanitizeTopicTitle("ChatClub"), "");
   assert.equal(topicTitleFromPrompt("   Help me plan a weekend in Kyoto   "), "Help me plan a weekend in Kyoto");
   assert.ok(sanitizeTopicTitle("A".repeat(80)).length <= 48);
+
+  // Site document titles: keep the conversation title, drop the brand and placeholders.
+  assert.equal(conversationTitleFromDocumentTitle("Kyoto trip - Claude"), "Kyoto trip");
+  assert.equal(conversationTitleFromDocumentTitle("Gemini | Kyoto trip"), "Kyoto trip");
+  assert.equal(conversationTitleFromDocumentTitle("Kyoto trip — ChatGPT"), "Kyoto trip");
+  assert.equal(conversationTitleFromDocumentTitle("Kyoto trip · Kagi Assistant"), "Kyoto trip");
+  assert.equal(conversationTitleFromDocumentTitle("Kyoto trip"), "Kyoto trip");
+  assert.equal(conversationTitleFromDocumentTitle("the rational male 系列 - Grok"), "the rational male 系列");
+  assert.equal(conversationTitleFromDocumentTitle("Grok"), "", "a bare brand is not a conversation title");
+  assert.equal(conversationTitleFromDocumentTitle("ChatGPT"), "");
+  assert.equal(conversationTitleFromDocumentTitle("Kagi Assistant"), "");
+  assert.equal(conversationTitleFromDocumentTitle("Notion AI"), "");
+  assert.equal(conversationTitleFromDocumentTitle("New chat - ChatGPT"), "", "placeholders never name a desk");
+  assert.equal(conversationTitleFromDocumentTitle("新对话 | DeepSeek"), "");
+  assert.equal(conversationTitleFromDocumentTitle("Just a moment..."), "");
+  assert.equal(conversationTitleFromDocumentTitle("Sign in - Manus"), "");
+  assert.equal(conversationTitleFromDocumentTitle(""), "");
+  assert.equal(conversationTitleFromDocumentTitle("Manus"), "", "known custom brands are stripped without context");
+  assert.equal(
+    conversationTitleFromDocumentTitle("Weekend plan - Acme Chat", { appName: "Acme Chat", hostname: "chat.acme.ai" }),
+    "Weekend plan",
+    "the caller's app name is a brand token"
+  );
+  assert.equal(conversationTitleFromDocumentTitle("Acme", { appName: "Acme Chat" }), "", "brand suffixes such as Chat/AI/App are ignored");
+  assert.equal(conversationTitleFromDocumentTitle("Weekend plan - acme", { hostname: "www.acme.io" }), "Weekend plan", "hostname labels are brand tokens");
+  assert.equal(conversationTitleFromDocumentTitle("Chat", { hostname: "chat.acme.io" }), "", "generic host labels never become titles");
+  assert.equal(conversationTitleFromDocumentTitle("Prompt - Claude"), "", "the ChatClub placeholder title stays generic");
+  assert.equal(conversationTitleFromDocumentTitle("Grok - Ask anything about Grok"), "Ask anything about Grok", "only whole brand segments are stripped");
+  assert.ok(conversationTitleFromDocumentTitle(`${"long ".repeat(30)}- Claude`).length <= 48);
+  assert.equal(conversationTitleFromDocumentTitle("Untitled conversation - Claude"), "");
+  assert.equal(conversationTitleFromDocumentTitle("加载中… | Kimi"), "");
+  assert.equal(conversationTitleFromDocumentTitle("Plan a trip | Kimi"), "Plan a trip");
 
   const previousFetch = globalThis.fetch;
   globalThis.fetch = async () => {
@@ -124,6 +157,74 @@ const assert = require("node:assert/strict");
     assert.equal(await api.maybeGenerateFromPrompt("Help me plan a weekend in Kyoto"), "Help me plan a weekend in Kyoto");
     assert.equal(state.topicTitle, "Help me plan a weekend in Kyoto");
     assert.equal(state.topicTitleCustom, false);
+  }
+
+  {
+    // Adopting a site-published title is final, never generated, and never overrides a custom or existing title.
+    const remembered = [];
+    const state = { options: {}, topicTitle: "", topicTitleCustom: false };
+    const api = createWorkspaceTopicTitleController({
+      state,
+      rememberWorkspaceSession: () => { remembered.push(state.topicTitle); },
+      render() {},
+      generateTopicTitle: async () => { throw new Error("adoption must not call the title API"); }
+    });
+    assert.equal(api.maybeAdoptTitle("   "), "");
+    assert.equal(api.maybeAdoptTitle("ChatClub"), "", "generic titles are rejected");
+    assert.equal(state.topicTitle, "");
+    assert.equal(api.maybeAdoptTitle("Kyoto trip"), "Kyoto trip");
+    assert.equal(state.topicTitle, "Kyoto trip");
+    assert.equal(state.topicTitleCustom, false);
+    assert.deepEqual(remembered, ["Kyoto trip"]);
+    assert.equal(api.maybeAdoptTitle("Something else"), "Kyoto trip", "an existing auto title is kept");
+    api.setCustomTitle("Mine");
+    assert.equal(api.maybeAdoptTitle("Kyoto trip"), "Mine", "a custom title always wins");
+    assert.equal(await api.maybeGenerateFromPrompt("first prompt"), "Mine");
+  }
+
+  {
+    // A late generation result is dropped when the desk it targeted moved on.
+    const state = { options: {}, topicTitle: "", topicTitleCustom: false };
+    let wanted = true;
+    let moveOnDuringGeneration = true;
+    const api = createWorkspaceTopicTitleController({
+      state,
+      rememberWorkspaceSession() {},
+      render() {},
+      generateTopicTitle: async () => {
+        if (moveOnDuringGeneration) wanted = false;
+        return "Stale desk title";
+      }
+    });
+    assert.equal(await api.maybeGenerateFromPrompt("first prompt", { stillWanted: () => wanted }), "");
+    assert.equal(state.topicTitle, "", "a result for a desk that moved on must not be applied");
+    wanted = true;
+    moveOnDuringGeneration = false;
+    assert.equal(await api.maybeGenerateFromPrompt("first prompt", { stillWanted: () => wanted }), "Stale desk title");
+  }
+
+  {
+    // Adoption while a generation is in flight supersedes that generation.
+    const state = { options: {}, topicTitle: "", topicTitleCustom: false };
+    let finishGenerate;
+    const generateDone = new Promise((resolve) => { finishGenerate = resolve; });
+    const api = createWorkspaceTopicTitleController({
+      state,
+      rememberWorkspaceSession() {},
+      render() {},
+      generateTopicTitle: async () => {
+        await generateDone;
+        return "Generated late";
+      }
+    });
+    assert.equal(api.isGenerating(), false);
+    const pending = api.maybeGenerateFromPrompt("first prompt");
+    assert.equal(api.isGenerating(), true, "a composer prompt reports an in-flight generation");
+    assert.equal(api.maybeAdoptTitle("Published title"), "Published title");
+    finishGenerate();
+    assert.equal(await pending, "Published title");
+    assert.equal(api.isGenerating(), false);
+    assert.equal(state.topicTitle, "Published title");
   }
 
   console.log("workspace topic title: ok");

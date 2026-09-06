@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "b873a2370e8adf0f4e0a3a136caac4f5467511b93004eb12181838b1dd8d5e26";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "4b6514a3a2043ed202839001db84cf793ad9388b941bde892cdc70d32792d0bb";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "a8302e940d2221a2bc32ce748029285b4b73093d38f3d74b73e60093ee0190fa";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.a8302e940d2221a2bc32ce748029285b4b73093d38f3d74b73e60093ee0190fa";
-  var CONTENT_RUNTIME_MESSAGE_NAVIGATOR_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/message-navigator.js", "entryPath": "content-src/message-navigator.js", "sourceSha256": "b0b57befdf5149fafc7e0c09bbe962df0645d2dedad104d7debb4c9373b48a08", "implementationSha256": "5536d772323dd05a757280d1e48f781aab9f07927ea7b4e447e9fb14d76f979f", "implementationVersion": "2026.07.16.2+bundle.5536d772323dd05a757280d1e48f781aab9f07927ea7b4e447e9fb14d76f979f" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "0cd3895420858541ee5fd09ac828ce2a906b18596159c43fbecbe695f575fd4c";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.0cd3895420858541ee5fd09ac828ce2a906b18596159c43fbecbe695f575fd4c";
+  var CONTENT_RUNTIME_MESSAGE_NAVIGATOR_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/message-navigator.js", "entryPath": "content-src/message-navigator.js", "sourceSha256": "3f8a46bc1fa45c7c1198b223df2a57519590997a9c167793b8a0c3a826c353c3", "implementationSha256": "bf6c9864ae6566861302eab21b70a00f315864b3b87539ac0ed59ee2154a80fc", "implementationVersion": "2026.07.16.2+bundle.bf6c9864ae6566861302eab21b70a00f315864b3b87539ac0ed59ee2154a80fc" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -200,7 +200,8 @@
     cancelPreferredModelApply: command({ timeoutMs: 2e3, mutating: true, features: Object.freeze(["preferred-model"]) }),
     setMessageNavigator: command({ timeoutMs: 6e3, mutating: true, features: Object.freeze(["message-navigator"]) }),
     hideMessageNavigatorMenu: command({ timeoutMs: 2e3, mutating: true, features: Object.freeze(["message-navigator"]) }),
-    getMessageNavigatorState: command({ timeoutMs: 2e3, features: Object.freeze(["message-navigator"]) })
+    getMessageNavigatorState: command({ timeoutMs: 2e3, features: Object.freeze(["message-navigator"]) }),
+    getConversationOpening: command({ timeoutMs: 2500, features: Object.freeze(["message-navigator"]) })
   });
 
   // content-src/shared/command-router.js
@@ -312,6 +313,12 @@
       state() {
         const api = runtime(false);
         return api && typeof api.state === "function" ? api.state() : { ok: false, enabled: false, messageCount: 0, error: "Message navigator runtime is unavailable" };
+      },
+      conversationOpening(data = {}) {
+        const api = runtime();
+        if (typeof api.conversationOpening !== "function") throw new Error("Message navigator runtime cannot probe conversations");
+        const config = data?.config && typeof data.config === "object" ? data.config : {};
+        return api.conversationOpening(config);
       }
     });
   }
@@ -2366,16 +2373,19 @@ ${normalize(item.text).toLowerCase().slice(0, 260)}`;
       }
       return this.enable(data.config || {}, data.options || {}, { openMenu: data.openMenu === true });
     }
-    enable(config = {}, options = {}, ui = {}) {
-      this.destroy();
-      this.enabled = true;
-      this.config = {
+    normalizedConfig(config = {}) {
+      return {
         ...config,
         adapter: String(config.adapter || "generic").trim() || "generic",
         messageSelector: String(config.messageSelector || "").trim(),
         textCleanupSelectors: Array.isArray(config.textCleanupSelectors) ? config.textCleanupSelectors : [],
         summaryMaxChars: Math.max(20, Math.min(180, Number(config.summaryMaxChars) || 60))
       };
+    }
+    enable(config = {}, options = {}, ui = {}) {
+      this.destroy();
+      this.enabled = true;
+      this.config = this.normalizedConfig(config);
       this.options = {
         effectMode: EFFECT_MODES.has(options.effectMode) ? options.effectMode : "border",
         primaryColor: /^#[0-9a-f]{6}$/i.test(String(options.primaryColor || "")) ? options.primaryColor : "#1f7a5f"
@@ -2471,13 +2481,16 @@ ${normalize(item.text).toLowerCase().slice(0, 260)}`;
       this.buildTimer = setTimeout(() => this.build(), delay);
     }
     collect() {
-      const adapter = this.adapters[this.config.adapter] || this.adapters.generic;
-      const officialRuleInScope = officialRuleConfigMatchesHref(this.config, String(location.href || ""));
-      const officialHints = this.config?.officialRuleHints;
-      const officialStrictRoles = officialRuleInScope && Number(this.config.officialRuleRevision) > 0;
+      return this.collectItems(this.config);
+    }
+    collectItems(config) {
+      const adapter = this.adapters[config.adapter] || this.adapters.generic;
+      const officialRuleInScope = officialRuleConfigMatchesHref(config, String(location.href || ""));
+      const officialHints = config?.officialRuleHints;
+      const officialStrictRoles = officialRuleInScope && Number(config.officialRuleRevision) > 0;
       const officialCollectorAvailable = officialRuleInScope && ["message", "userRole", "assistantRole", "composer"].every((slot) => Array.isArray(officialHints?.[slot]) && officialHints[slot].some((selector) => String(selector || "").trim()));
-      const officialItems = officialCollectorAvailable ? collectOfficialRuleItems(this.config) : [];
-      const fallbackConfig = officialStrictRoles ? { ...this.config, strictOfficialRoles: true } : this.config;
+      const officialItems = officialCollectorAvailable ? collectOfficialRuleItems(config) : [];
+      const fallbackConfig = officialStrictRoles ? { ...config, strictOfficialRoles: true } : config;
       const fallbackItems = adapter.collect?.(fallbackConfig) || this.adapters.generic.collect(fallbackConfig);
       const items = conversationLooksUseful(officialItems) ? officialItems : dedupeItems(fallbackItems);
       return items.map((item) => {
@@ -2486,7 +2499,7 @@ ${normalize(item.text).toLowerCase().slice(0, 260)}`;
         return {
           ...item,
           target,
-          effectTarget: resolveEffectTarget({ ...item, target, role }, this.config, adapter),
+          effectTarget: resolveEffectTarget({ ...item, target, role }, config, adapter),
           role
         };
       }).filter((item) => item.role && item.text && visible(item.target || item.element)).map((item, index) => ({
@@ -2494,6 +2507,26 @@ ${normalize(item.text).toLowerCase().slice(0, 260)}`;
         id: `message-${index + 1}`,
         role: item.role
       }));
+    }
+    /**
+     * Read-only conversation probe for desk auto-naming. It runs the same
+     * collection as the navigator against a caller-supplied site config but
+     * never injects UI, observers, or effects, and never touches `this.config`.
+     */
+    conversationOpening(config = {}) {
+      const normalized = this.normalizedConfig(config);
+      if (!normalized.messageSelector && !normalized.officialRuleHints) throw new Error("Message navigator selector is empty");
+      const items = this.collectItems(normalized);
+      const opening = items.find((item) => item.role === "user" && String(item.text || "").trim());
+      return {
+        ok: true,
+        href: String(location.href || ""),
+        title: String(document.title || "").replace(/\s+/g, " ").trim(),
+        messageCount: items.length,
+        userCount: items.filter((item) => item.role === "user").length,
+        assistantCount: items.filter((item) => item.role === "assistant").length,
+        openingText: String(opening?.text || "").trim()
+      };
     }
     messageListSignature(items = []) {
       return (Array.isArray(items) ? items : []).map((item) => `${item.role || ""}
@@ -2752,7 +2785,8 @@ ${item.text || ""}`).join("\n\n");
       handlers: {
         setMessageNavigator: (data) => port.setEnabled(data),
         hideMessageNavigatorMenu: () => port.hideMenu(),
-        getMessageNavigatorState: () => port.state()
+        getMessageNavigatorState: () => port.state(),
+        getConversationOpening: (data) => port.conversationOpening(data)
       }
     });
   }

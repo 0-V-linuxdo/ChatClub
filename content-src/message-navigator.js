@@ -56,7 +56,8 @@ function installMessageNavigator() {
     handlers: {
       setMessageNavigator: (data) => port.setEnabled(data),
       hideMessageNavigatorMenu: () => port.hideMenu(),
-      getMessageNavigatorState: () => port.state()
+      getMessageNavigatorState: () => port.state(),
+      getConversationOpening: (data) => port.conversationOpening(data)
     }
   });
 }

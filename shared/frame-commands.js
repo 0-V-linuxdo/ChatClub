@@ -127,7 +127,8 @@ export const FRAME_COMMAND_SPECS = Object.freeze({
   cancelPreferredModelApply: command({ timeoutMs: 2000, mutating: true, features: Object.freeze(["preferred-model"]) }),
   setMessageNavigator: command({ timeoutMs: 6000, mutating: true, features: Object.freeze(["message-navigator"]) }),
   hideMessageNavigatorMenu: command({ timeoutMs: 2000, mutating: true, features: Object.freeze(["message-navigator"]) }),
-  getMessageNavigatorState: command({ timeoutMs: 2000, features: Object.freeze(["message-navigator"]) })
+  getMessageNavigatorState: command({ timeoutMs: 2000, features: Object.freeze(["message-navigator"]) }),
+  getConversationOpening: command({ timeoutMs: 2500, features: Object.freeze(["message-navigator"]) })
 });
 
 export function frameCommandSpec(commandName) {

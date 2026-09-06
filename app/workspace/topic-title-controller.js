@@ -18,6 +18,7 @@ export function createWorkspaceTopicTitleController({
   }
 
   let generationToken = 0;
+  let generationsInFlight = 0;
   let storageUnsubscriber = null;
 
   function currentTitle() {
@@ -30,6 +31,11 @@ export function createWorkspaceTopicTitleController({
 
   function canAutoGenerate() {
     return !isCustom() && !currentTitle();
+  }
+
+  /** True while a composer or Pocket prompt is still being turned into a title. */
+  function isGenerating() {
+    return generationsInFlight > 0;
   }
 
   function applyTitle(title, custom) {
@@ -52,19 +58,40 @@ export function createWorkspaceTopicTitleController({
     return applyTitle(title, true);
   }
 
-  async function maybeGenerateFromPrompt(text) {
+  /**
+   * Adopt an already-final auto title, such as the conversation title a chat
+   * site publishes in its document title. Custom and existing titles win.
+   */
+  function maybeAdoptTitle(title) {
+    if (!canAutoGenerate()) return currentTitle();
+    const next = sanitizeTopicTitle(title);
+    if (!next) return "";
+    generationToken += 1;
+    return applyTitle(next, false) ? next : currentTitle();
+  }
+
+  /**
+   * Generate an auto title from conversation text. `stillWanted()` lets the
+   * caller drop a late result once the desk it was meant for has moved on,
+   * for example after New Chat rebound this page to a new workspace id.
+   */
+  async function maybeGenerateFromPrompt(text, { stillWanted = () => true } = {}) {
     const prompt = String(text || "").trim();
     if (!prompt) return "";
     if (!canAutoGenerate()) return currentTitle();
     const token = ++generationToken;
     const fallback = topicTitleFromPrompt(prompt);
     let title = "";
+    generationsInFlight += 1;
     try {
       title = await generateTopicTitle(state.options, prompt);
     } catch {
       title = fallback;
+    } finally {
+      generationsInFlight -= 1;
     }
     if (token !== generationToken || isCustom() || currentTitle()) return currentTitle();
+    if (!stillWanted()) return "";
     const next = sanitizeTopicTitle(title) || fallback;
     if (!next) return "";
     applyTitle(next, false);
@@ -112,7 +139,9 @@ export function createWorkspaceTopicTitleController({
 
   return Object.freeze({
     canAutoGenerate,
+    isGenerating,
     setCustomTitle,
+    maybeAdoptTitle,
     maybeGenerateFromPrompt,
     syncFromSnapshot,
     install,

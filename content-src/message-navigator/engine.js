@@ -78,16 +78,20 @@ export class MessageNavigator {
     return this.enable(data.config || {}, data.options || {}, { openMenu: data.openMenu === true });
   }
 
-  enable(config = {}, options = {}, ui = {}) {
-    this.destroy();
-    this.enabled = true;
-    this.config = {
+  normalizedConfig(config = {}) {
+    return {
       ...config,
       adapter: String(config.adapter || "generic").trim() || "generic",
       messageSelector: String(config.messageSelector || "").trim(),
       textCleanupSelectors: Array.isArray(config.textCleanupSelectors) ? config.textCleanupSelectors : [],
       summaryMaxChars: Math.max(20, Math.min(180, Number(config.summaryMaxChars) || 60))
     };
+  }
+
+  enable(config = {}, options = {}, ui = {}) {
+    this.destroy();
+    this.enabled = true;
+    this.config = this.normalizedConfig(config);
     this.options = {
       effectMode: EFFECT_MODES.has(options.effectMode) ? options.effectMode : "border",
       primaryColor: /^#[0-9a-f]{6}$/i.test(String(options.primaryColor || "")) ? options.primaryColor : "#1f7a5f"
@@ -192,16 +196,20 @@ export class MessageNavigator {
   }
 
   collect() {
-    const adapter = this.adapters[this.config.adapter] || this.adapters.generic;
-    const officialRuleInScope = officialRuleConfigMatchesHref(this.config, String(location.href || ""));
-    const officialHints = this.config?.officialRuleHints;
-    const officialStrictRoles = officialRuleInScope && Number(this.config.officialRuleRevision) > 0;
+    return this.collectItems(this.config);
+  }
+
+  collectItems(config) {
+    const adapter = this.adapters[config.adapter] || this.adapters.generic;
+    const officialRuleInScope = officialRuleConfigMatchesHref(config, String(location.href || ""));
+    const officialHints = config?.officialRuleHints;
+    const officialStrictRoles = officialRuleInScope && Number(config.officialRuleRevision) > 0;
     const officialCollectorAvailable = officialRuleInScope
       && ["message", "userRole", "assistantRole", "composer"].every((slot) => (
         Array.isArray(officialHints?.[slot]) && officialHints[slot].some((selector) => String(selector || "").trim())
       ));
-    const officialItems = officialCollectorAvailable ? collectOfficialRuleItems(this.config) : [];
-    const fallbackConfig = officialStrictRoles ? { ...this.config, strictOfficialRoles: true } : this.config;
+    const officialItems = officialCollectorAvailable ? collectOfficialRuleItems(config) : [];
+    const fallbackConfig = officialStrictRoles ? { ...config, strictOfficialRoles: true } : config;
     const fallbackItems = adapter.collect?.(fallbackConfig) || this.adapters.generic.collect(fallbackConfig);
     const items = conversationLooksUseful(officialItems) ? officialItems : dedupeItems(fallbackItems);
     return items
@@ -215,7 +223,7 @@ export class MessageNavigator {
         return {
           ...item,
           target,
-          effectTarget: resolveEffectTarget({ ...item, target, role }, this.config, adapter),
+          effectTarget: resolveEffectTarget({ ...item, target, role }, config, adapter),
           role
         };
       })
@@ -225,6 +233,27 @@ export class MessageNavigator {
         id: `message-${index + 1}`,
         role: item.role
       }));
+  }
+
+  /**
+   * Read-only conversation probe for desk auto-naming. It runs the same
+   * collection as the navigator against a caller-supplied site config but
+   * never injects UI, observers, or effects, and never touches `this.config`.
+   */
+  conversationOpening(config = {}) {
+    const normalized = this.normalizedConfig(config);
+    if (!normalized.messageSelector && !normalized.officialRuleHints) throw new Error("Message navigator selector is empty");
+    const items = this.collectItems(normalized);
+    const opening = items.find((item) => item.role === "user" && String(item.text || "").trim());
+    return {
+      ok: true,
+      href: String(location.href || ""),
+      title: String(document.title || "").replace(/\s+/g, " ").trim(),
+      messageCount: items.length,
+      userCount: items.filter((item) => item.role === "user").length,
+      assistantCount: items.filter((item) => item.role === "assistant").length,
+      openingText: String(opening?.text || "").trim()
+    };
   }
 
   messageListSignature(items = []) {

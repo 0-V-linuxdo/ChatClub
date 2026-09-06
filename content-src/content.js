@@ -386,7 +386,7 @@ function installContentBridge() {
     if (versionedDeleteRequest && message.action !== "deleteThread" && message.action !== "getDeleteConfirmState") return;
     if (versionedSendTextRequest && message.action !== "sendText") return;
     if (versionedPreferredModelRequest && !["applyPreferredModel", "cancelPreferredModelApply"].includes(message.action)) return;
-    if (versionedNavigatorRequest && !["setMessageNavigator", "hideMessageNavigatorMenu", "getMessageNavigatorState"].includes(message.action)) return;
+    if (versionedNavigatorRequest && !["setMessageNavigator", "hideMessageNavigatorMenu", "getMessageNavigatorState", "getConversationOpening"].includes(message.action)) return;
     if (versionedSummaryRequest && !["getLocationHref", "getPageMeta", "getPageText", "collectSummary"].includes(message.action)) return;
     const responseSource = versionedDeleteRequest
       ? DELETE_THREAD_POST_MESSAGE_SOURCE

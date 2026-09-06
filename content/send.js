@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "b873a2370e8adf0f4e0a3a136caac4f5467511b93004eb12181838b1dd8d5e26";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "4b6514a3a2043ed202839001db84cf793ad9388b941bde892cdc70d32792d0bb";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "a8302e940d2221a2bc32ce748029285b4b73093d38f3d74b73e60093ee0190fa";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.a8302e940d2221a2bc32ce748029285b4b73093d38f3d74b73e60093ee0190fa";
-  var CONTENT_RUNTIME_SEND_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/send.js", "entryPath": "content-src/content-send.js", "sourceSha256": "f3cf55231df8a12d2dfb73640097c24cfc7edba4a24b865767da50669e8f72c2", "implementationSha256": "3520ec41d92278cd140b7b6c0f8c198a36f1157a7449279a15e4a5f4f6aa74c2", "implementationVersion": "2026.07.16.2+bundle.3520ec41d92278cd140b7b6c0f8c198a36f1157a7449279a15e4a5f4f6aa74c2" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "0cd3895420858541ee5fd09ac828ce2a906b18596159c43fbecbe695f575fd4c";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.0cd3895420858541ee5fd09ac828ce2a906b18596159c43fbecbe695f575fd4c";
+  var CONTENT_RUNTIME_SEND_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/send.js", "entryPath": "content-src/content-send.js", "sourceSha256": "dad2695ece82f0a7edb391aad3a0503ce8d58de441adbc311fd6d9114294729d", "implementationSha256": "0f8354beb83cb5cc4f6b09264419044fb5ad121cffa848f187141967657e2563", "implementationVersion": "2026.07.16.2+bundle.0f8354beb83cb5cc4f6b09264419044fb5ad121cffa848f187141967657e2563" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -321,7 +321,8 @@
     cancelPreferredModelApply: command({ timeoutMs: 2e3, mutating: true, features: Object.freeze(["preferred-model"]) }),
     setMessageNavigator: command({ timeoutMs: 6e3, mutating: true, features: Object.freeze(["message-navigator"]) }),
     hideMessageNavigatorMenu: command({ timeoutMs: 2e3, mutating: true, features: Object.freeze(["message-navigator"]) }),
-    getMessageNavigatorState: command({ timeoutMs: 2e3, features: Object.freeze(["message-navigator"]) })
+    getMessageNavigatorState: command({ timeoutMs: 2e3, features: Object.freeze(["message-navigator"]) }),
+    getConversationOpening: command({ timeoutMs: 2500, features: Object.freeze(["message-navigator"]) })
   });
 
   // content-src/shared/command-router.js

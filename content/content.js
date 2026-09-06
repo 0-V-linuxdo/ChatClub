@@ -409,12 +409,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "b873a2370e8adf0f4e0a3a136caac4f5467511b93004eb12181838b1dd8d5e26";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "4b6514a3a2043ed202839001db84cf793ad9388b941bde892cdc70d32792d0bb";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "a8302e940d2221a2bc32ce748029285b4b73093d38f3d74b73e60093ee0190fa";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.a8302e940d2221a2bc32ce748029285b4b73093d38f3d74b73e60093ee0190fa";
-  var CONTENT_RUNTIME_CONTENT_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/content.js", "entryPath": "content-src/content.js", "sourceSha256": "5ea76613badbf6f5528e95876b7797c35530712d1339dcfe1a4f0a67474f9291", "implementationSha256": "2126b11d8d865fa42dfebc9b2a256d42b7f3569f0a01bb7ae98ec8e811ce6d22", "implementationVersion": "2026.07.16.2+bundle.2126b11d8d865fa42dfebc9b2a256d42b7f3569f0a01bb7ae98ec8e811ce6d22" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "0cd3895420858541ee5fd09ac828ce2a906b18596159c43fbecbe695f575fd4c";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.0cd3895420858541ee5fd09ac828ce2a906b18596159c43fbecbe695f575fd4c";
+  var CONTENT_RUNTIME_CONTENT_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/content.js", "entryPath": "content-src/content.js", "sourceSha256": "187fd0ca092ac8dd4c9da93a82544b095d435da243a63fb93886e3db37465a37", "implementationSha256": "912c6a71e350f30299669849b17a98420b6f7c74dba225d472b51907be77a134", "implementationVersion": "2026.07.16.2+bundle.912c6a71e350f30299669849b17a98420b6f7c74dba225d472b51907be77a134" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -1826,7 +1826,8 @@ ${raw.slice(-36e3)}`;
     cancelPreferredModelApply: command({ timeoutMs: 2e3, mutating: true, features: Object.freeze(["preferred-model"]) }),
     setMessageNavigator: command({ timeoutMs: 6e3, mutating: true, features: Object.freeze(["message-navigator"]) }),
     hideMessageNavigatorMenu: command({ timeoutMs: 2e3, mutating: true, features: Object.freeze(["message-navigator"]) }),
-    getMessageNavigatorState: command({ timeoutMs: 2e3, features: Object.freeze(["message-navigator"]) })
+    getMessageNavigatorState: command({ timeoutMs: 2e3, features: Object.freeze(["message-navigator"]) }),
+    getConversationOpening: command({ timeoutMs: 2500, features: Object.freeze(["message-navigator"]) })
   });
 
   // content-src/shared/command-router.js
@@ -2325,7 +2326,7 @@ ${raw.slice(-36e3)}`;
       if (versionedDeleteRequest && message.action !== "deleteThread" && message.action !== "getDeleteConfirmState") return;
       if (versionedSendTextRequest && message.action !== "sendText") return;
       if (versionedPreferredModelRequest && !["applyPreferredModel", "cancelPreferredModelApply"].includes(message.action)) return;
-      if (versionedNavigatorRequest && !["setMessageNavigator", "hideMessageNavigatorMenu", "getMessageNavigatorState"].includes(message.action)) return;
+      if (versionedNavigatorRequest && !["setMessageNavigator", "hideMessageNavigatorMenu", "getMessageNavigatorState", "getConversationOpening"].includes(message.action)) return;
       if (versionedSummaryRequest && !["getLocationHref", "getPageMeta", "getPageText", "collectSummary"].includes(message.action)) return;
       const responseSource = versionedDeleteRequest ? DELETE_THREAD_POST_MESSAGE_SOURCE2 : versionedSendTextRequest ? SEND_TEXT_POST_MESSAGE_SOURCE2 : versionedPreferredModelRequest ? PREFERRED_MODEL_POST_MESSAGE_SOURCE2 : versionedNavigatorRequest ? MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE2 : versionedSummaryRequest ? SUMMARY_POST_MESSAGE_SOURCE2 : SOURCE;
       try {

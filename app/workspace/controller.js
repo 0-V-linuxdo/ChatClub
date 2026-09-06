@@ -340,6 +340,7 @@ export function createWorkspaceController(ctx = {}) {
     openAppPicker: viewController.openAppPicker,
     openLayoutMenu: viewController.openLayoutMenu,
     reapplyMessageNavigatorForFrame: messageNavigatorController.reapplyMessageNavigatorForFrame,
+    messageNavigatorPayloadForFrame: messageNavigatorController.messageNavigatorPayloadForFrame,
     syncFullscreenLayout: frameController.syncFullscreenLayout,
     activeShortcutGroupId: frameController.activeShortcutGroupId,
     activeChatForGroup: frameController.activeChatForGroup,

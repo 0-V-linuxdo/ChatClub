@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "b873a2370e8adf0f4e0a3a136caac4f5467511b93004eb12181838b1dd8d5e26";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "4b6514a3a2043ed202839001db84cf793ad9388b941bde892cdc70d32792d0bb";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "a8302e940d2221a2bc32ce748029285b4b73093d38f3d74b73e60093ee0190fa";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.a8302e940d2221a2bc32ce748029285b4b73093d38f3d74b73e60093ee0190fa";
-  var CONTENT_RUNTIME_PREFERRED_MODEL_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preferred-model.js", "entryPath": "content-src/content-preferred-model.js", "sourceSha256": "b467b3051c99fb23f58ed020835321dddd575c1fa2d9cde6450d2856ac59d146", "implementationSha256": "2093624a2ac8c8dd44cee0072445aaec0aeb99a709f9b43ff145f87466d135be", "implementationVersion": "2026.07.16.2+bundle.2093624a2ac8c8dd44cee0072445aaec0aeb99a709f9b43ff145f87466d135be" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "0cd3895420858541ee5fd09ac828ce2a906b18596159c43fbecbe695f575fd4c";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.0cd3895420858541ee5fd09ac828ce2a906b18596159c43fbecbe695f575fd4c";
+  var CONTENT_RUNTIME_PREFERRED_MODEL_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preferred-model.js", "entryPath": "content-src/content-preferred-model.js", "sourceSha256": "9af1a533210070dd187ecf7c7beeade6c6c46b1cf7190c7a8c21dda1ccc43cbc", "implementationSha256": "a65aa70c9ae23ec23b543cf92d85763f1e7166dd2eaa8ba819342368f6f1dd72", "implementationVersion": "2026.07.16.2+bundle.a65aa70c9ae23ec23b543cf92d85763f1e7166dd2eaa8ba819342368f6f1dd72" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -339,7 +339,8 @@
     cancelPreferredModelApply: command({ timeoutMs: 2e3, mutating: true, features: Object.freeze(["preferred-model"]) }),
     setMessageNavigator: command({ timeoutMs: 6e3, mutating: true, features: Object.freeze(["message-navigator"]) }),
     hideMessageNavigatorMenu: command({ timeoutMs: 2e3, mutating: true, features: Object.freeze(["message-navigator"]) }),
-    getMessageNavigatorState: command({ timeoutMs: 2e3, features: Object.freeze(["message-navigator"]) })
+    getMessageNavigatorState: command({ timeoutMs: 2e3, features: Object.freeze(["message-navigator"]) }),
+    getConversationOpening: command({ timeoutMs: 2500, features: Object.freeze(["message-navigator"]) })
   });
 
   // content-src/shared/command-router.js

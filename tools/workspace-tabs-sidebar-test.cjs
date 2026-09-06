@@ -543,6 +543,28 @@ globalThis.document = {
       topicTitle: "Compare models",
       layoutName: "Restore group"
     }, 0), "Compare models");
+    assert.equal(fixture.api.itemLabel({
+      current: false,
+      live: false,
+      topicTitle: "",
+      layoutName: "Restore group",
+      appIds: ["Grok", "Notion AI"]
+    }, 1), "Grok · Notion AI", "a preserved desk must not be labelled after the Pocket batch-restore layout");
+    assert.equal(fixture.api.itemLabel({
+      current: false,
+      live: false,
+      topicTitle: "",
+      layoutName: "一键恢复",
+      appIds: ["Grok"]
+    }, 1), "Grok", "the localized Pocket batch-restore layout name is generic too");
+    assert.equal(fixture.api.itemLabel({
+      current: false,
+      live: false,
+      topicTitle: "",
+      layoutName: "Restore group",
+      appIds: [],
+      title: "ChatClub"
+    }, 1), "ChatClub 2");
     assert.equal(fixture.api.itemLabel({ layoutName: "", appIds: [], title: "ChatClub" }, 2), "ChatClub 3");
     assert.equal(fixture.api.itemLabel({
       topicTitle: "Compare models",

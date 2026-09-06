@@ -215,6 +215,37 @@ function fixtureElement(role, text, order) {
     globalThis.location.href = "https://chatgpt.com/new/thread";
     assert.equal(scopedEngine.collect()[0]?.officialStrict, true, "the exact signed HTTPS host and path may use official Message Navigator hints");
 
+    {
+      // Desk auto-naming probes the conversation without enabling the navigator.
+      const probeEngine = new engineModule.MessageNavigator({ version: "1", adapters });
+      globalThis.document.title = "  Kyoto   trip - ChatGPT ";
+      const opening = probeEngine.conversationOpening({ adapter: "generic", messageSelector: ".message" });
+      assert.deepEqual(opening, {
+        ok: true,
+        href: "https://chatgpt.com/new/thread",
+        title: "Kyoto trip - ChatGPT",
+        messageCount: 2,
+        userCount: 1,
+        assistantCount: 1,
+        openingText: "first prompt"
+      });
+      assert.equal(probeEngine.state().enabled, false, "a conversation probe must not enable the navigator");
+      assert.equal(probeEngine.config, null, "a conversation probe must not adopt the probe config");
+      assert.throws(() => probeEngine.conversationOpening({ adapter: "generic" }), /selector is empty/);
+      const answerOnly = new engineModule.MessageNavigator({
+        version: "1",
+        adapters: {
+          generic: {
+            collect() {
+              return [{ element: second, target: second, role: "assistant", text: "second answer" }];
+            }
+          }
+        }
+      });
+      assert.equal(answerOnly.conversationOpening({ adapter: "generic", messageSelector: ".message" }).openingText, "", "only a user turn may open a desk name");
+      delete globalThis.document.title;
+    }
+
     const entrySource = read("content-src/message-navigator.js");
     const adapterSource = read("content-src/message-navigator/adapters.js");
     const engineSource = read("content-src/message-navigator/engine.js");

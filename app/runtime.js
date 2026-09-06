@@ -47,6 +47,7 @@ import { PROMPT_HANDOFF_LAUNCH_REASON, createWorkspacePromptHandoffController } 
 import { attachWorkspaceTabsSidebarController } from "./workspace/tabs-sidebar-controller.js";
 import { loadWorkspaceTabFullTextStore, persistWorkspaceTabFullTextFromPreview } from "./workspace/tab-search.js";
 import { createWorkspaceTopicTitleController } from "./workspace/topic-title-controller.js";
+import { createWorkspaceAutoTitleController, openingPromptFromPocketEntries } from "./workspace/auto-title-controller.js";
 import { createWorkspaceSessionStore } from "./workspace/session-store.js";
 import {
   createFunctionalAnomalyController,
@@ -152,6 +153,7 @@ const sendToContentFrame = createFrameRequest(frameRuntimePort, "App runtime");
 const topicDeleteRuntime = createTopicDeleteRuntime({ framePort: frameRuntimePort });
 const executeTopicDelete = topicDeleteRuntime.executeTopicDelete;
 let workspaceTopicTitleController = null;
+let workspaceAutoTitleController = null;
 const composerController = createComposerController({
   state: composerState,
   workspace: workspaceBinding.port,
@@ -366,6 +368,14 @@ workspaceTopicTitleController = createWorkspaceTopicTitleController({
   state, rememberWorkspaceSession: () => workspaceController.rememberWorkspaceSession(), render, extensionApi,
   workspaceId: () => workspaceSessionStore.workspaceId()
 });
+// Desks whose conversations were opened inside the frames (site sidebar,
+// Pocket restore, History) never pass through the composer, so name them from
+// the site-published conversation title or the first user message instead.
+workspaceAutoTitleController = createWorkspaceAutoTitleController({
+  topicTitle: workspaceTopicTitleController, sendToContentFrame, frameApp: workspaceController.frameApp, inferAppName,
+  probeConfigForFrame: (iframe, href) => workspaceController.messageNavigatorPayloadForFrame(iframe, href)?.config || null,
+  workspaceId: () => workspaceSessionStore.workspaceId()
+});
 const workspaceTabsSidebarController = attachWorkspaceTabsSidebarController({
   requestBackground, toast, render, inferAppName, appById, extensionApi,
   currentWorkspace: () => ({ layoutName: state.temporaryLayoutPreset?.name || "", groups: state.groups, topicTitle: state.topicTitle }),
@@ -459,7 +469,12 @@ function ensurePocketController() {
           saveOptions: saveOptionsState,
           openableTabUrl: workspaceController.openableTabUrl,
           loadPocketEntryInFrame: workspaceController.loadPocketEntryInFrame,
-          restorePocketBatch: workspaceController.restorePocketBatch,
+          restorePocketBatch: async (entries) => {
+            const restored = await workspaceController.restorePocketBatch(entries);
+            // A restored batch replaces the desk with saved conversations; name an untitled desk after its question.
+            if (restored) void workspaceTopicTitleController?.maybeGenerateFromPrompt(openingPromptFromPocketEntries(entries));
+            return restored;
+          },
           setFramePointerBlockedForOverlay: workspaceController.setFramePointerBlockedForOverlay,
           effectiveFaviconUrl,
           compactIconButton,
@@ -833,6 +848,7 @@ function handleWorkspaceFrameLifecycleChange(change = {}) {
   handlePreferredModelFrameLifecycleChange(change);
   const isFrame = typeof HTMLIFrameElement !== "undefined" && change instanceof HTMLIFrameElement;
   const event = isFrame ? { type: "workspace-sync", iframe: change } : (change || {});
+  if (event.type === "location" || (event.type === "loading" && event.loading === false)) workspaceAutoTitleController?.observeFrame(event.iframe);
   if (event.type === "loading" && event.loading === false && event.iframe?.isConnected) {
     scheduleContentFrameRepair(event.iframe, 120);
     return;
