@@ -327,6 +327,10 @@ export function createWorkspaceController(ctx = {}) {
   });
   viewBinding.bind(viewController);
 
+  function hasDeletableActiveThreads() {
+    return currentFrames().some((iframe) => frameController.topicDeleteCapabilityForFrame(iframe).available);
+  }
+
   return Object.freeze({
     renderWorkspace: viewController.renderWorkspace,
     syncWorkspaceIsland: viewController.syncWorkspaceIsland,
@@ -359,6 +363,7 @@ export function createWorkspaceController(ctx = {}) {
     rememberFrameLocation: frameController.rememberFrameLocation,
     ensureFrameAttributeContract: viewController.ensureFrameAttributeContract,
     topicDeleteCapabilityForFrame: frameController.topicDeleteCapabilityForFrame,
+    hasDeletableActiveThreads,
     openableTabUrl,
     openTabUrl,
     captureWorkspaceSession: sessionController.captureWorkspaceSession,

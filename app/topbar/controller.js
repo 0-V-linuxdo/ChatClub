@@ -34,6 +34,7 @@ export function createTopbarController(dependencies = {}) {
   requireMethods(workspace, "workspace port", [
     "closePopovers",
     "closePopoversAnchoredWithin",
+    "hasDeletableActiveThreads",
     "openAppPicker",
     "openLayoutMenu"
   ]);
@@ -79,6 +80,7 @@ export function createTopbarController(dependencies = {}) {
     settingsSections,
     actions: {
       ...actions,
+      canDeleteThread: () => workspace.hasDeletableActiveThreads(),
       openAppPicker: (anchor) => workspace.openAppPicker(anchor, { mode: "group" }),
       openLayoutMenu: (anchor) => workspace.openLayoutMenu(anchor),
       openSettingsMenu
@@ -144,6 +146,7 @@ export function createTopbarController(dependencies = {}) {
     }
     if (item.id === "deleteThread") {
       closeSettingsMenu();
+      if (!workspace.hasDeletableActiveThreads()) return;
       actions.deleteThread();
       return;
     }
@@ -316,6 +319,7 @@ export function createTopbarController(dependencies = {}) {
     openSettingsMenu,
     runShortcutAction,
     sync,
+    syncDeleteThreadState: () => view.syncDeleteThreadState(),
     syncPlaceholder: (...args) => placeholderController.sync(...args)
   });
 }

@@ -90,6 +90,7 @@ const workspaceBinding = createBindOnceControllerPort("Workspace", [
   "closePopoversAnchoredWithin",
   "currentFrames",
   "frameApp",
+  "hasDeletableActiveThreads",
   "openAppPicker",
   "openLayoutMenu"
 ]);
@@ -848,6 +849,7 @@ function handleWorkspaceFrameLifecycleChange(change = {}) {
   handlePreferredModelFrameLifecycleChange(change);
   const isFrame = typeof HTMLIFrameElement !== "undefined" && change instanceof HTMLIFrameElement;
   const event = isFrame ? { type: "workspace-sync", iframe: change } : (change || {});
+  if (event.type === "location" || event.type === "workspace-sync") topbarController.syncDeleteThreadState();
   if (event.type === "location" || (event.type === "loading" && event.loading === false)) workspaceAutoTitleController?.observeFrame(event.iframe);
   if (event.type === "loading" && event.loading === false && event.iframe?.isConnected) {
     scheduleContentFrameRepair(event.iframe, 120);
@@ -905,12 +907,12 @@ function deleteThreadFailureSummary(failures = []) {
 }
 
 async function deleteThreadOnFrames() {
+  const frames = workspaceController.currentFrames();
+  if (!frames.length || !workspaceController.hasDeletableActiveThreads()) return;
   const permissionAttempt = requestFeatureUserScriptsPermission("topic-delete").catch((error) => {
     toast(error.message || String(error), "error");
     return false;
   });
-  const frames = workspaceController.currentFrames();
-  if (!frames.length) return;
   const targets = await Promise.all(frames.map(async (iframe) => {
     let href = "";
     try { href = await sendToContentFrame(iframe, "getLocationHref", {}, 1200); } catch {}
@@ -919,10 +921,7 @@ async function deleteThreadOnFrames() {
   }));
   const skippedCount = targets.filter((target) => target.skipped).length;
   const activeTargets = targets.filter((target) => !target.skipped);
-  if (!activeTargets.length) {
-    if (skippedCount) toast(t("toast.deleteThreadSkipped", { count: skippedCount, plural: skippedCount === 1 ? "" : "s" }), "info");
-    return;
-  }
+  if (!activeTargets.length) return;
   const count = activeTargets.length;
   closeTransientOverlays();
   openConfirmationAction({

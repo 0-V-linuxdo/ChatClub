@@ -50,6 +50,12 @@ const lineCount = (source) => source.split(/\r?\n/).length;
   assertPortCoversView("layout", "Workspace layout");
   assertPortCoversView("frame", "Workspace frame");
   assertPortCoversView("pocket", "Workspace Pocket");
+  assert.match(workspace, /function hasDeletableActiveThreads\(\)/, "topbar Delete Topics availability must assemble on the workspace facade");
+  assert.match(
+    workspace,
+    /currentFrames\(\)\.some\(\(iframe\) => frameController\.topicDeleteCapabilityForFrame\(iframe\)\.available\)/,
+    "Delete Topics availability must reuse the in-group capability already owned by the frame controller"
+  );
   assert.doesNotMatch(workspace, /function handleTabPointerMove\(/);
   assert.doesNotMatch(workspace, /function closeMessageNavigatorMenuOnParentKeydown\(/);
   assert.doesNotMatch(workspace, /let messageNavigatorMenuIframe/);

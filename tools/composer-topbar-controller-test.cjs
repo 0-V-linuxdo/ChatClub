@@ -85,7 +85,7 @@ function responsiveBrandRules(kind) {
   assert.match(runtime, /topbarBinding\.bind\(topbarController\)/, "runtime must bind the stable topbar port once");
   assert.doesNotMatch(runtime, /workspace:\s*\(\)\s*=>\s*workspaceController/, "runtime must not expose an uninitialized workspace controller through a provider thunk");
   assert.doesNotMatch(runtime, /=>\s*preferredModelController\./, "runtime must not expose an uninitialized Preferred Model controller through provider thunks");
-  assert.ok(runtime.split(/\r?\n/).length <= 1427, "runtime must stay an assembly root after Composer/Topbar extraction");
+  assert.ok(runtime.split(/\r?\n/).length <= 1426, "runtime must stay an assembly root after Composer/Topbar extraction");
   assert.match(runtime, /scheduleIdleFullTextCapture\?\.\(text\)/, "send admission must schedule per-frame idle full-text capture");
   assert.match(runtime, /scheduleExistingIdleFullTextCapture/, "workspace restore must schedule idle capture of existing conversations");
   assert.doesNotMatch(runtime, /captureWorkspaceFullText/, "send admission must not collect full text immediately");
@@ -180,6 +180,48 @@ function responsiveBrandRules(kind) {
   const foldedBrand = functionSource(topbarView, "renderFoldedMenuButton");
   assert.match(foldedBrand, /item\.id === "brand" \? brandActionLabel\(\)/, "the folded Logo menu must expose the same dynamic send/open label");
   assert.match(topbar, /composer\.subscribeDraftChanges\(\(\) => view\.syncBrandState\(\)\)/, "Topbar must update mounted Logo labels as the Composer draft changes");
+  assert.match(
+    topbar,
+    /canDeleteThread:\s*\(\)\s*=>\s*workspace\.hasDeletableActiveThreads\(\)/,
+    "Topbar must read delete availability from the bound workspace port instead of a runtime thunk"
+  );
+  assert.match(
+    functionSource(topbarView, "renderItem"),
+    /item\.id === "deleteThread"[\s\S]*button\.disabled = !actions\.canDeleteThread\(\)/,
+    "the visible Delete Topics control must disable when no active pane can delete"
+  );
+  assert.match(
+    foldedBrand,
+    /item\.id === "deleteThread" && !actions\.canDeleteThread\(\)/,
+    "the folded Delete Topics menu item must use the same availability as the visible control"
+  );
+  assert.match(
+    functionSource(topbarView, "syncDeleteThreadState"),
+    /\[data-tooltip-id="topbar\.deleteThread"\][\s\S]*buttonNode\.disabled = disabled/,
+    "location changes must refresh mounted Delete Topics disabled state without replacing the topbar"
+  );
+  assert.match(topbar, /syncDeleteThreadState:\s*\(\)\s*=>\s*view\.syncDeleteThreadState\(\)/, "Topbar must expose a light delete-state sync");
+  assert.match(
+    functionSource(runtime, "handleWorkspaceFrameLifecycleChange"),
+    /event\.type === "location" \|\| event\.type === "workspace-sync"[\s\S]*topbarController\.syncDeleteThreadState\(\)/,
+    "frame location and workspace membership must refresh the topbar Delete Topics control"
+  );
+  const deleteThreadOnFrames = functionSource(runtime, "deleteThreadOnFrames");
+  assert.match(
+    deleteThreadOnFrames,
+    /!frames\.length \|\| !workspaceController\.hasDeletableActiveThreads\(\)/,
+    "Delete All Topics must return before permission or confirmation when every active pane is undeletable"
+  );
+  assert.doesNotMatch(
+    deleteThreadOnFrames,
+    /toast\.deleteThreadSkipped/,
+    "an empty-home Delete All Topics click must not toast skipped chats"
+  );
+  assert.match(
+    functionSource(runtime, "finishDeleteThreadOnFrames"),
+    /toast\.deleteThreadSkipped/,
+    "a mixed Delete All Topics run must still report skipped undeletable panes after confirmation"
+  );
 
   const appShellCss = cssRuleBody(chatclubCss, /(?:^|\n)\.app-shell\s*\{/, "App shell");
   const topbarCss = cssRuleBody(chatclubCss, /(?:^|\n)\.topbar\s*\{/, "Topbar");

@@ -55,7 +55,8 @@ export function createTopbarView(dependencies = {}) {
     "openSummary",
     "toggleWorkspaceTabsSidebar",
     "isWorkspaceTabsSidebarOpen",
-    "openWorkspaceTabsSearch"
+    "openWorkspaceTabsSearch",
+    "canDeleteThread"
   ]);
   requireMethods(editLifecycle, "edit lifecycle", [
     "exit",
@@ -254,7 +255,9 @@ export function createTopbarView(dependencies = {}) {
       return actionButton(t("topbar.newChat"), "edit", actions.newChat, "secondary", actions.formatShortcutTooltip(t("topbar.newChatAllTooltip"), "newChatAll"), "", "topbar.newChat");
     }
     if (item.id === "deleteThread") {
-      return actionButton(t("topbar.deleteThread"), "trash", actions.deleteThread, "danger", actions.formatShortcutTooltip(t("topbar.deleteThread"), "deleteThread"), "", "topbar.deleteThread");
+      const button = actionButton(t("topbar.deleteThread"), "trash", actions.deleteThread, "danger", actions.formatShortcutTooltip(t("topbar.deleteThread"), "deleteThread"), "", "topbar.deleteThread");
+      button.disabled = !actions.canDeleteThread();
+      return button;
     }
     if (item.id === "summary") {
       return actionButton(t("topbar.summary"), "summary", actions.openSummary, "secondary", actions.formatShortcutTooltip(t("topbar.summary"), "openSummaryPanel"), "", "topbar.summary");
@@ -519,7 +522,8 @@ export function createTopbarView(dependencies = {}) {
             actions.saveHistoryFromWorkspace(event);
           }
         : null;
-    const buttonNode = settingsMenuButton(label, topbarItemIcon(item, state.options), (event) => runItem(item, event), "secondary", false, dragItem, {
+    const disabled = item.id === "deleteThread" && !actions.canDeleteThread();
+    const buttonNode = settingsMenuButton(label, topbarItemIcon(item, state.options), (event) => runItem(item, event), "secondary", disabled, dragItem, {
       className: editing && item.type === "item" ? "topbar-settings-menu-button" : "",
       tooltipId: tooltipIdForItem(item),
       dataset: item.id === "brand" ? { topbarBrandAction: "true" } : {},
@@ -589,5 +593,12 @@ export function createTopbarView(dependencies = {}) {
     });
   }
 
-  return Object.freeze({ render, renderSettingsMenu, syncBrandState });
+  function syncDeleteThreadState() {
+    const disabled = !actions.canDeleteThread();
+    document.querySelectorAll('[data-tooltip-id="topbar.deleteThread"]').forEach((buttonNode) => {
+      buttonNode.disabled = disabled;
+    });
+  }
+
+  return Object.freeze({ render, renderSettingsMenu, syncBrandState, syncDeleteThreadState });
 }
