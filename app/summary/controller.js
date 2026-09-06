@@ -1,4 +1,4 @@
-import { summarizeContexts } from "../../shared/api.js";
+import { apiProfileModel, resolveApiProfile, summarizeContexts } from "../../shared/api.js";
 import { t } from "../../shared/i18n.js";
 import { storageGet, storageSet } from "../../shared/storage-adapter.js";
 import { normalizePocketIcon } from "../../shared/storage-schema.js";
@@ -388,7 +388,9 @@ export function createSummaryController(ctx) {
   function renderSummaryResult() {
     if (state.summaryBusy && state.summaryView === "summary") {
       return el("div", { class: "summary-panel-result" },
-        renderSummaryStatus(state.summaryStatus || t("summaryPanel.generatingTitle"), t("summaryPanel.generatingBody"), true)
+        renderSummaryStatus(state.summaryStatus || t("summaryPanel.generatingTitle"), t("summaryPanel.generatingBodyWithModel", {
+          model: apiProfileModel(resolveApiProfile(state.options, "summary"))
+        }), true)
       );
     }
     if (!state.summaryResult) {
@@ -1126,12 +1128,13 @@ export function createSummaryController(ctx) {
     }
     state.summaryView = "summary";
     state.summaryBusy = true;
-    state.summaryStatus = t("summaryPanel.generatingTitle");
+    const model = apiProfileModel(resolveApiProfile(state.options, "summary"));
+    state.summaryStatus = t("summaryPanel.generatingTitleWithModel", { model });
     syncSummaryPanel();
     try {
       state.summaryResult = await summarizeContexts(state.options, state.summaryContexts, state.summaryQuestion);
     } catch (error) {
-      state.summaryResult = error.message || t("summaryPanel.summaryFailed");
+      state.summaryResult = error.message || t("summaryPanel.summaryFailedWithModel", { model });
       recordSummaryFailure("generate", {}, {}, error, state.summaryResult);
     } finally {
       state.summaryBusy = false;

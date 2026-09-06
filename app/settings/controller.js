@@ -420,7 +420,7 @@ export function createSettingsController(ctx) {
 
   const settingsSectionPanes = Object.freeze({
     appearance: (redraw) => appearanceSection.pane(redraw),
-    profiles: (redraw) => profilesSection.pane(redraw),
+    profiles: (redraw, goToSection) => profilesSection.pane(redraw, goToSection),
     apps: (redraw) => appsSection.pane(redraw),
     models: (redraw) => modelsSection.pane(redraw),
     summary: (redraw, goToSection) => summarySection.pane(redraw, goToSection),

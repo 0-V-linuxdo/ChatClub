@@ -6933,6 +6933,46 @@ body.settings-tab-context-menu-dragging iframe {
   grid-template-columns: var(--ui-reorder-cluster) minmax(170px, 1fr) minmax(160px, .9fr) minmax(220px, 1fr) minmax(176px, auto);
 }
 
+.model-inventory-group {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.model-inventory-heading-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.model-inventory-heading {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.model-inventory-list {
+  overflow-x: auto;
+}
+
+.model-inventory-outbound .settings-list-header,
+.model-inventory-outbound .model-inventory-row {
+  min-width: 560px;
+  grid-template-columns: minmax(108px, .8fr) minmax(140px, 1fr) minmax(140px, 1fr) minmax(140px, .9fr);
+}
+
+.model-inventory-iframe .settings-list-header,
+.model-inventory-iframe .model-inventory-row {
+  min-width: 480px;
+  grid-template-columns: minmax(108px, .8fr) minmax(160px, 1fr) minmax(140px, .9fr);
+}
+
+.model-inventory-row:hover {
+  background: transparent;
+}
+
 .built-in-config-list .settings-list-header,
 .built-in-config-row {
   min-width: 620px;
@@ -9245,6 +9285,18 @@ body.settings-tab-context-menu-dragging iframe {
     grid-template-columns: var(--ui-reorder-cluster) minmax(140px, 1fr) minmax(130px, .8fr) minmax(180px, 1fr) minmax(156px, auto);
   }
 
+  .model-inventory-outbound .settings-list-header,
+  .model-inventory-outbound .model-inventory-row {
+    min-width: 520px;
+    grid-template-columns: minmax(96px, .8fr) minmax(120px, 1fr) minmax(120px, 1fr) minmax(120px, .9fr);
+  }
+
+  .model-inventory-iframe .settings-list-header,
+  .model-inventory-iframe .model-inventory-row {
+    min-width: 440px;
+    grid-template-columns: minmax(96px, .8fr) minmax(140px, 1fr) minmax(120px, .9fr);
+  }
+
   .built-in-config-list .settings-list-header,
   .built-in-config-row {
     min-width: 580px;
@@ -9630,6 +9682,22 @@ body.settings-tab-context-menu-dragging iframe {
 
 .optimize-compare-status.failed {
   color: var(--danger);
+}
+
+.optimize-compare-model {
+  display: inline-flex;
+  align-items: center;
+  max-width: 180px;
+  min-height: var(--ui-accessory-height);
+  padding: 0 var(--space-2);
+  overflow: hidden;
+  color: var(--text);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: color-mix(in srgb, var(--muted) 16%, var(--panel-2));
+  border-radius: var(--ui-radius-pill);
 }
 
 .optimize-compare-retry {

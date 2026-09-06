@@ -1,5 +1,6 @@
 import { DEFAULT_OPTIONS } from "../../shared/constants.js";
 import { t } from "../../shared/i18n.js";
+import { apiProfileSelectLabel } from "../../shared/model-inventory.js";
 import { createId } from "../../shared/storage-schema.js";
 import { button, editorModal, el, field, input, openConfirmationAction, select, textarea, toast } from "../../ui/dom.js";
 import { cleanupSettingsDragRows, moveListItem, moveListItemByDelta } from "./kit.js";
@@ -35,7 +36,10 @@ export function createPromptTemplateSettings(ctx) {
   } = requireControllerContext(ctx, controllerName, "settingsKit");
 
   function profileOptions() {
-    return state.options.apiProfiles.map((profile) => ({ value: profile.id, label: profile.name || profile.id }));
+    return state.options.apiProfiles.map((profile) => ({
+      value: profile.id,
+      label: apiProfileSelectLabel(profile)
+    }));
   }
 
   const PROMPT_TEMPLATE_SETTINGS = {

@@ -1,4 +1,4 @@
-import { optimizePromptStream } from "../../shared/api.js";
+import { apiProfileModel, optimizePromptStream, resolveApiProfile } from "../../shared/api.js";
 import { t } from "../../shared/i18n.js";
 import { button, el, iconButton, taskModal, textarea, toast } from "../../ui/dom.js";
 import { validateControllerContract } from "../controller-contract.js";
@@ -21,12 +21,13 @@ export function createOptimizeController(ctx) {
     let controller = null;
     let requestId = 0;
     let comparison;
+    const resolvedModel = () => apiProfileModel(resolveApiProfile(state.options, "optimize"));
     const run = async () => {
       requestId += 1;
       const activeRequestId = requestId;
       controller?.abort();
       controller = new AbortController();
-      comparison.start();
+      comparison.start(resolvedModel());
       try {
         await optimizePromptStream(state.options, source, (chunk) => {
           if (activeRequestId === requestId) comparison.append(chunk);
@@ -45,6 +46,7 @@ export function createOptimizeController(ctx) {
     };
     comparison = openOptimizeCompareDialog(original, "", {
       loading: true,
+      model: resolvedModel(),
       onCancel: () => controller?.abort(),
       onRetry: () => run()
     });
@@ -60,6 +62,11 @@ export function createOptimizeController(ctx) {
     const optimizedStatus = el("span", {
       class: loading ? "optimize-compare-status streaming" : "optimize-compare-status"
     }, loading ? t("optimize.streaming") : t("optimize.ready"));
+    const modelBadge = el("span", {
+      class: "optimize-compare-model",
+      hidden: !attrs.model,
+      dataset: { optimizeModel: attrs.model || "" }
+    }, attrs.model || "");
     const errorMessage = el("p", { class: "optimize-compare-error", hidden: true });
     const applyButton = button(t("optimize.useOptimized"), apply, "primary");
     const retryButton = iconButton(t("optimize.retryOptimization"), svgIcon("reload"), () => attrs.onRetry?.(), "optimize-compare-retry", t("optimize.retryOptimization"), "", "optimize.retry");
@@ -107,7 +114,7 @@ export function createOptimizeController(ctx) {
       optimizedInput.scrollTop = optimizedInput.scrollHeight;
       updateStatus();
     }
-    function start() {
+    function start(model = attrs.model || "") {
       if (closed) return;
       loading = true;
       output = "";
@@ -115,6 +122,9 @@ export function createOptimizeController(ctx) {
       optimizedInput.placeholder = t("optimize.optimizedPlaceholder");
       errorMessage.hidden = true;
       errorMessage.textContent = "";
+      modelBadge.textContent = model;
+      modelBadge.hidden = !model;
+      modelBadge.dataset.optimizeModel = model;
       updateStatus();
     }
     function finish() {
@@ -149,7 +159,7 @@ export function createOptimizeController(ctx) {
         el("section", { class: "ui-card optimize-compare-panel optimize-compare-panel-result" },
           el("div", { class: "ui-card-header optimize-compare-panel-header" },
             el("h3", {}, t("optimize.optimized")),
-            el("div", { class: "optimize-compare-meta" }, optimizedStatus, optimizedCount, retryButton)
+            el("div", { class: "optimize-compare-meta" }, optimizedStatus, modelBadge, optimizedCount, retryButton)
           ),
           optimizedInput,
           errorMessage

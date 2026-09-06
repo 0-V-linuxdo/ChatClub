@@ -109,6 +109,19 @@ globalThis.document = { addEventListener() {} };
   ]);
   assert.deepEqual(stateKeys(topicSource), ["options", "topicDeleteSiteExpandedId"]);
   assert.deepEqual(stateKeys(profilesSource), ["options", "settingsProfileDragId"]);
+  assert.match(profilesSource, /inventoryBlock\(goToSection\)/);
+  assert.match(profilesSource, /listModelInventory\(state\.options\)/);
+  assert.match(profilesSource, /dataset: \{ modelInventoryId: row\.id, modelInventoryWorld: "outbound" \}/);
+  assert.match(profilesSource, /dataset: \{ modelInventoryId: row\.id, modelInventoryWorld: "iframe" \}/);
+  assert.match(profilesSource, /goToSection\("models"\)/);
+  assert.match(profilesSource, /apiProfileSelectLabel\(profile\)/);
+  assert.match(promptTemplatesSource, /apiProfileSelectLabel\(profile\)/);
+  assert.doesNotMatch(
+    promptTemplatesSource,
+    /label: profile\.name \|\| profile\.id/,
+    "Optimize and Summary profile selects must show the resolved model"
+  );
+  assert.match(controllerSource, /profiles:\s*\(redraw, goToSection\)\s*=>\s*profilesSection\.pane\(redraw, goToSection\)/);
   assert.deepEqual(stateKeys(appsSource), [
     "customConfig",
     "options",

@@ -1,5 +1,9 @@
 import { t } from "../../shared/i18n.js";
 import { API_PROFILE_MODEL_DEFAULT } from "../../shared/constants.js";
+import {
+  apiProfileSelectLabel,
+  listModelInventory
+} from "../../shared/model-inventory.js";
 import { createId } from "../../shared/storage-schema.js";
 import { button, editorModal, el, field, input, openConfirmationAction, select, toast } from "../../ui/dom.js";
 import {
@@ -34,6 +38,7 @@ export function createProfilesSettingsSection(ctx) {
   const saveOptionsPatch = requireControllerFunction(ctx, controllerName, "saveOptionsPatch");
   const openTabUrl = requireControllerFunction(ctx, controllerName, "openTabUrl");
   const {
+    settingsBlock,
     settingsReorderHandle,
     settingsEmptyRow,
     settingsIconAction,
@@ -43,20 +48,70 @@ export function createProfilesSettingsSection(ctx) {
     settingsPrimaryAction
   } = createSettingsKit({ svgIcon });
 
-  function pane(redraw) {
+  function pane(redraw, goToSection = () => {}) {
     const rows = state.options.apiProfiles.length
       ? state.options.apiProfiles.map((profile) => profileRow(profile, redraw))
       : settingsEmptyRow(t("profiles.noProfiles"));
     return el("div", { class: "settings-pane settings-manager-pane" },
+      inventoryBlock(goToSection),
       settingsPaneToolbar(t("profiles.manage"),
         settingsPrimaryAction(t("profiles.add"), "plus", () => openEditor(null, redraw))
       ),
       field(t("profiles.topicTitleApi"), select(
         state.options.topicTitleApiProfileId,
-        state.options.apiProfiles.map((profile) => ({ value: profile.id, label: profile.name || profile.id })),
+        state.options.apiProfiles.map((profile) => ({
+          value: profile.id,
+          label: apiProfileSelectLabel(profile)
+        })),
         { onchange: (event) => { void saveTopicTitleProfile(event.target.value, redraw); } }
       )),
       settingsList(["", t("profiles.provider"), t("profiles.model"), t("profiles.usage"), t("profiles.actions")], rows, "settings-manager-list api-profile-list")
+    );
+  }
+
+  function inventoryValue(value, emptyKey) {
+    return value || t(emptyKey);
+  }
+
+  function inventoryBlock(goToSection) {
+    const { outbound, iframe } = listModelInventory(state.options);
+    return settingsBlock(t("inventory.title"), t("inventory.desc"),
+      el("div", { class: "model-inventory-group", dataset: { modelInventoryWorld: "outbound" } },
+        el("p", { class: "model-inventory-heading" }, t("inventory.outbound")),
+        settingsList(
+          [t("inventory.feature"), t("inventory.profile"), t("inventory.model"), t("inventory.host")],
+          outbound.map((row) => el("div", {
+            class: "ui-list-row settings-list-row model-inventory-row",
+            dataset: { modelInventoryId: row.id, modelInventoryWorld: "outbound" }
+          },
+            el("strong", { class: "settings-main-cell" }, t(row.featureKey)),
+            el("span", { class: "settings-muted-cell" }, inventoryValue(row.profileName, "profiles.notAssigned")),
+            el("span", { class: "settings-main-cell" }, inventoryValue(row.model, "profiles.noModel")),
+            el("span", { class: "settings-muted-cell" }, inventoryValue(row.host, "inventory.none"))
+          )),
+          "model-inventory-list model-inventory-outbound"
+        )
+      ),
+      el("div", { class: "model-inventory-group", dataset: { modelInventoryWorld: "iframe" } },
+        el("div", { class: "model-inventory-heading-row" },
+          el("p", { class: "model-inventory-heading" }, t("inventory.iframe")),
+          button(t("inventory.openIframePreferences"), () => goToSection("models"))
+        ),
+        settingsList(
+          [t("inventory.platform"), t("inventory.preferred"), t("inventory.secondary")],
+          iframe.map((row) => el("div", {
+            class: "ui-list-row settings-list-row model-inventory-row",
+            dataset: { modelInventoryId: row.id, modelInventoryWorld: "iframe" }
+          },
+            el("strong", { class: "settings-main-cell" }, t(row.featureKey)),
+            el("span", { class: "settings-main-cell" }, inventoryValue(row.primary, "inventory.none")),
+            el("span", { class: "settings-muted-cell" }, row.secondaryEnabled
+              ? inventoryValue(row.secondary, "inventory.none")
+              : t("inventory.secondaryOff"))
+          )),
+          "model-inventory-list model-inventory-iframe"
+        )
+      )
     );
   }
 

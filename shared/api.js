@@ -1,22 +1,9 @@
-import { API_PROFILE_ENDPOINT_DEFAULT, API_PROFILE_MODEL_DEFAULT, TOPIC_TITLE_PROMPT_DEFAULT } from "./constants.js";
+import { API_PROFILE_ENDPOINT_DEFAULT, TOPIC_TITLE_PROMPT_DEFAULT } from "./constants.js";
 import { normalizeApiOptions } from "./api-options.js";
+import { apiProfileModel, resolveApiProfile } from "./model-inventory.js";
 import { sanitizeTopicTitle } from "./topic-title.js";
 
-function resolveApiProfile(options, purpose) {
-  const normalized = normalizeApiOptions(options || {});
-  const id = purpose === "summary"
-    ? normalized.summaryApiProfileId
-    : purpose === "topicTitle"
-      ? normalized.topicTitleApiProfileId
-      : normalized.optimizeApiProfileId;
-  return normalized.apiProfiles.find((profile) => profile.id === id) || normalized.apiProfiles[0] || {
-    id: "default",
-    name: "Default API",
-    endpoint: API_PROFILE_ENDPOINT_DEFAULT,
-    apiKey: "",
-    model: API_PROFILE_MODEL_DEFAULT
-  };
-}
+export { apiProfileModel, resolveApiProfile };
 
 function resolvePromptTemplate(options, purpose) {
   const normalized = normalizeApiOptions(options || {});
@@ -53,7 +40,7 @@ async function chatCompletion(profile, messages) {
       "authorization": `Bearer ${profile.apiKey}`
     },
     body: JSON.stringify({
-      model: profile.model || API_PROFILE_MODEL_DEFAULT,
+      model: apiProfileModel(profile),
       messages
     })
   });
@@ -93,7 +80,7 @@ async function chatCompletionStream(profile, messages, onDelta, attrs = {}) {
       "authorization": `Bearer ${profile.apiKey}`
     },
     body: JSON.stringify({
-      model: profile.model || API_PROFILE_MODEL_DEFAULT,
+      model: apiProfileModel(profile),
       messages,
       stream: true
     })
