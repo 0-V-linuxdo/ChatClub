@@ -18,6 +18,9 @@ assert.match(agents, /real topic title must stay in ChatClub Tabs/);
 assert.match(agents, /The rebound id must never receive the frozen conversation/);
 assert.match(agents, /markFrameNewChatPending/);
 assert.match(agents, /iframe\.dataset\.newChatPending/);
+assert.match(agents, /never read the page's current `#workspace=` hash from `MessageSender\.url`/);
+assert.match(agents, /senderWorkspaceContext/);
+assert.match(agents, /shouldDetachReplacedWorkspaceBinding/);
 
 (async () => {
   const { createWorkspaceSessionController } = await import(
@@ -821,6 +824,217 @@ assert.match(agents, /iframe\.dataset\.newChatPending/);
     const reopened = store.local.values[workspaceSessionWorkspaceKey(oldId)];
     assert.equal(reopened.snapshot.groups[0].tabs[0].currentHref, "https://chatgpt.com/c/remembered");
     globalThis.document = previousDocumentForE2E;
+  }
+
+  {
+    // Second New Chat with the real Chromium sender model. `MessageSender.url`
+    // is frozen at the URL the extension document was loaded with and never
+    // follows `history.replaceState`; `sender.tab.url` and `tabs.query` do, and
+    // `tabs.onUpdated` (registerWorkspaceSessionTab) observes the new hash
+    // before the page's first persist of the rebound id reaches the worker.
+    // The 2026-09-07 Arc failure: New Chat A->B, each iframe switched to another
+    // conversation on B, New Chat again. Every persist of B was rejected as a
+    // URL mismatch because the worker still read the frozen `#workspace=A`
+    // sender URL, so B never became durable and the second New Chat replaced
+    // it in place instead of preserving it.
+    const { clearFrameNewChatPending } = await import(
+      pathToFileURL(path.join(root, "app/workspace/frame-loading.js")).href
+    );
+    let now = 9_819_000;
+    const loadUrl = `chrome-extension://chatclub/chatClub.html#workspace=${oldId}`;
+    const pageTab = { id: 11, windowId: 2, index: 0, pinned: false, url: loadUrl };
+    const store = persistFixture({
+      local: {
+        [WORKSPACE_SESSION_GENERATION_KEY]: generation,
+        [workspaceSessionWorkspaceKey(oldId)]: stable(oldId, conversationSnapshot, now - 50),
+        [workspaceSessionBindingKey(11)]: binding(oldId, now - 50)
+      },
+      tabs: [pageTab]
+    });
+    const href = { value: loadUrl };
+    const registrations = [];
+    const browserTab = () => ({ ...pageTab, url: href.value });
+    const pageStorage = {
+      values: {},
+      getItem(key) { return Object.prototype.hasOwnProperty.call(this.values, key) ? this.values[key] : null; },
+      setItem(key, value) { this.values[key] = String(value); },
+      removeItem(key) { delete this.values[key]; }
+    };
+    const createPageStore = () => {
+      // The document's sender URL is fixed at load time for the whole document.
+      const senderUrl = href.value;
+      const sender = () => ({ url: senderUrl, tab: browserTab() });
+      return createWorkspaceSessionStore({
+        sessionStorage: pageStorage,
+        location: { get href() { return href.value; } },
+        history: {
+          replaceState(_state, _title, next) {
+            href.value = String(next);
+            store.liveTabs[0].url = href.value;
+            // Chromium dispatches tabs.onUpdated for the same-document URL change
+            // right away; the worker queue then runs it before the page's persist.
+            registrations.push(registerWorkspaceSessionTab(store.api, browserTab(), { now: ++now }));
+          }
+        },
+        currentTab: async () => browserTab(),
+        currentTabId: async () => 11,
+        claimWorkspaceSession: (request) => claimWorkspaceSessionRecovery(store.api, request, sender(), { now: ++now }),
+        persistWorkspaceSession: (request) => persistWorkspaceSessionSnapshot(store.api, request, sender(), { now: ++now }),
+        storageGet: async (key) => (await store.api.storage.local.get(key))[key]
+      });
+    };
+    const iframe = {
+      dataset: {
+        instanceId: "i1",
+        appId: "ChatGPT",
+        currentHref: "https://chatgpt.com/c/remembered",
+        currentThreadHref: "https://chatgpt.com/c/remembered"
+      },
+      src: "https://chatgpt.com/c/remembered",
+      getAttribute: (name) => (name === "src" ? iframe.src : "")
+    };
+    const previousDocumentForSecondNewChat = globalThis.document;
+    globalThis.document = { querySelectorAll: () => [iframe] };
+    const pageStore = createPageStore();
+    await pageStore.load();
+    assert.equal(pageStore.workspaceId(), oldId);
+    const { controller, state } = createController(pageStore, {
+      groups: [{ id: "g1", chatApps: [{ instanceId: "i1", appId: "ChatGPT" }] }]
+    });
+
+    async function newChat(expectedFromId) {
+      const preserved = await controller.preserveCurrentWorkspaceForNewChat([
+        { instanceId: "i1", href: iframe.dataset.currentHref }
+      ]);
+      assert.equal(preserved.preserved, true, `New Chat from ${expectedFromId} must preserve the current desk`);
+      assert.equal(preserved.fromWorkspaceId, expectedFromId);
+      const reboundId = preserved.workspaceId;
+      assert.notEqual(reboundId, expectedFromId, "New Chat must adopt a new workspace id instead of replacing in place");
+      assert.equal(pageStore.workspaceId(), reboundId);
+      assert.equal(href.value, `chrome-extension://chatclub/chatClub.html#workspace=${reboundId}`);
+      iframe.dataset.currentHref = "https://chatgpt.com/";
+      delete iframe.dataset.currentThreadHref;
+      controller.rememberWorkspaceSession();
+      assert.equal(await pageStore.flush(), true, `the rebound desk ${reboundId} must persist while the frame resets`);
+      iframe.src = "https://chatgpt.com/";
+      assert.equal(clearFrameNewChatPending(iframe), true);
+      controller.rememberWorkspaceSession();
+      assert.equal(await pageStore.flush(), true);
+      await Promise.all(registrations.splice(0));
+      return reboundId;
+    }
+
+    // First New Chat: A is frozen, B is the live New Tab.
+    const secondId = await newChat(oldId);
+    const frozenA = store.local.values[workspaceSessionWorkspaceKey(oldId)];
+    assert.equal(frozenA.snapshot.groups[0].tabs[0].currentHref, "https://chatgpt.com/c/remembered");
+    assert.ok(frozenA.detach, "tabs.onUpdated rebinding the tab must leave A as a detached remembered row");
+    assert.equal(frozenA.resolution, "");
+    assert.equal(store.local.values[workspaceSessionBindingKey(11)].workspaceId, secondId);
+    assert.equal(
+      store.local.values[workspaceSessionWorkspaceKey(secondId)].snapshot.groups[0].tabs[0].currentHref,
+      "https://chatgpt.com/",
+      "the frozen sender URL must not reject the first persist of the rebound New Tab"
+    );
+
+    // The user switches the iframe to another conversation while on B.
+    iframe.dataset.currentHref = "https://chatgpt.com/c/second";
+    iframe.dataset.currentThreadHref = "https://chatgpt.com/c/second";
+    iframe.src = "https://chatgpt.com/c/second";
+    state.topicTitle = "second thread";
+    state.topicTitleCustom = false;
+    controller.rememberWorkspaceSession();
+    assert.equal(await pageStore.flush(), true, "a conversation on the rebound desk must persist despite the frozen sender URL");
+    assert.equal(
+      store.local.values[workspaceSessionWorkspaceKey(secondId)].snapshot.groups[0].tabs[0].currentHref,
+      "https://chatgpt.com/c/second"
+    );
+
+    // Second New Chat: B must be preserved exactly like A was.
+    const thirdId = await newChat(secondId);
+    assert.notEqual(thirdId, oldId);
+    const frozenB = store.local.values[workspaceSessionWorkspaceKey(secondId)];
+    assert.equal(
+      frozenB.snapshot.groups[0].tabs[0].currentHref,
+      "https://chatgpt.com/c/second",
+      "the second New Chat must keep the previous New Chat's conversation instead of replacing it"
+    );
+    assert.equal(frozenB.snapshot.topicTitle, "second thread");
+    assert.ok(frozenB.detach, "the previous New Chat desk must become a detached remembered row");
+    assert.equal(store.local.values[workspaceSessionBindingKey(11)].workspaceId, thirdId);
+    assert.equal(
+      store.local.values[workspaceSessionWorkspaceKey(thirdId)].snapshot.groups[0].tabs[0].currentHref,
+      "https://chatgpt.com/"
+    );
+    assert.equal(WORKSPACE_SESSION_RECOVERY_KEY in store.local.values, false,
+      "rebinding through New Chat must never raise crash recovery for the remembered rows");
+    const listed = await listLiveWorkspaceTabs(store.api, {}, { tab: browserTab() });
+    assert.deepEqual(listed.tabs.map((item) => [item.workspaceId, item.live]), [
+      [thirdId, true],
+      [secondId, false],
+      [oldId, false]
+    ], "ChatClub Tabs must list the live New Tab plus both frozen conversations");
+
+    // Restart: C reloads as an empty desk; A and B stay reopenable.
+    for (const key of Object.keys(pageStorage.values)) delete pageStorage.values[key];
+    for (const key of Object.keys(store.session.values)) delete store.session.values[key];
+    await prepareWorkspaceSessionLifecycle(store.api, { now: ++now, forceRecovery: true, reason: "update" });
+    const restarted = createPageStore();
+    const restored = await restarted.load();
+    assert.equal(restarted.workspaceId(), thirdId);
+    assert.equal(restored?.groups?.[0]?.tabs?.[0]?.currentHref, "https://chatgpt.com/");
+    assert.equal(
+      store.local.values[workspaceSessionWorkspaceKey(secondId)].snapshot.groups[0].tabs[0].currentHref,
+      "https://chatgpt.com/c/second"
+    );
+    assert.equal(
+      store.local.values[workspaceSessionWorkspaceKey(oldId)].snapshot.groups[0].tabs[0].currentHref,
+      "https://chatgpt.com/c/remembered"
+    );
+    globalThis.document = previousDocumentForSecondNewChat;
+  }
+
+  {
+    // registerWorkspaceSessionTab on the New Chat rebind must detach the
+    // replaced binding as a remembered row even when no persist follows.
+    const now = 9_819_500;
+    const oldUrl = `chrome-extension://chatclub/chatClub.html#workspace=${oldId}`;
+    const newUrl = `chrome-extension://chatclub/chatClub.html#workspace=${newId}`;
+    const pageTab = { id: 11, windowId: 2, index: 0, pinned: false, url: newUrl };
+    const store = persistFixture({
+      local: {
+        [WORKSPACE_SESSION_GENERATION_KEY]: generation,
+        [workspaceSessionWorkspaceKey(oldId)]: stable(oldId, conversationSnapshot, now - 50),
+        [workspaceSessionBindingKey(11)]: binding(oldId, now - 50)
+      },
+      tabs: [pageTab]
+    });
+    const registered = await registerWorkspaceSessionTab(store.api, pageTab, { now });
+    assert.deepEqual(registered, {
+      registered: true,
+      workspaceId: newId,
+      duplicate: false,
+      detachedWorkspaceId: oldId
+    });
+    const remembered = store.local.values[workspaceSessionWorkspaceKey(oldId)];
+    assert.ok(remembered.detach, "the replaced binding's workspace must be detached as a remembered row");
+    assert.equal(remembered.resolution, "");
+    assert.equal(remembered.snapshot.groups[0].tabs[0].currentHref, "https://chatgpt.com/c/remembered");
+    assert.equal(store.local.values[workspaceSessionBindingKey(11)].workspaceId, newId);
+    assert.equal(WORKSPACE_SESSION_RECOVERY_KEY in store.local.values, false,
+      "a rememberable displaced desk must not become a crash-recovery candidate");
+    // The frozen sender URL (load-time A) must not block persisting B afterwards.
+    const persisted = await persistWorkspaceSessionSnapshot(store.api, {
+      workspaceId: newId,
+      snapshot: emptySnapshot
+    }, { url: oldUrl, tab: pageTab }, { now: now + 1 });
+    assert.equal(persisted.persisted, true, "a frozen load-time sender URL must not reject the rebound persist");
+    assert.equal(store.local.values[workspaceSessionWorkspaceKey(newId)].snapshot.groups[0].tabs[0].currentHref, "https://chatgpt.com/");
+    // Re-registering the same hash (a plain reload) must not detach anything.
+    const again = await registerWorkspaceSessionTab(store.api, pageTab, { now: now + 2 });
+    assert.deepEqual(again, { registered: true, workspaceId: newId, duplicate: false });
+    const listed = await listLiveWorkspaceTabs(store.api, {}, { tab: pageTab });
+    assert.deepEqual(listed.tabs.map((item) => [item.workspaceId, item.live]), [[newId, true], [oldId, false]]);
   }
 
   {

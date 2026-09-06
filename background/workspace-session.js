@@ -16,7 +16,6 @@ import {
   normalizeWorkspaceSessionClaimId,
   normalizeWorkspaceSessionGeneration,
   normalizeWorkspaceSessionId,
-  workspaceSessionOpeningClaimIdFromUrl,
   workspaceSessionBindingKey,
   workspaceSessionLegacyWorkspaceId,
   workspaceSessionMirrorKey,
@@ -33,7 +32,7 @@ import {
   createRuntimeMarker,
   currentBindings,
   currentStableRecords,
-  detachedRememberedWorkspaceRecord,
+  displacedBindingUpdates,
   finiteTime,
   isChatClubWorkspaceTab,
   legacyMirrorRecord,
@@ -47,13 +46,12 @@ import {
   rearmRecoveryCandidate,
   recoveryCandidate,
   recoveryRecord,
-  rememberDisplacedWorkspaceWithoutRecovery,
   reboundWorkspaceIdForStaleUrl,
   runtimeMarker,
   snapshotWithRetainedConversation,
   scheduleRecoveryLeaseAlarm,
+  senderWorkspaceContext,
   sessionStorageArea,
-  shouldDetachReplacedWorkspaceBinding,
   stableRecordForClaim,
   stableWorkspaceRecord,
   tabMetadata,
@@ -166,17 +164,42 @@ export function registerWorkspaceSessionTab(api, tab = {}, options = {}) {
       tab,
       now
     );
-    await storage.set({
-      [stableKey]: stable,
-      [workspaceSessionBindingKey(meta.tabId)]: bindingForClaim(workspaceId, generation, tab, now)
-    });
     const currentMarker = runtimeMarker(markerStored?.[WORKSPACE_SESSION_RUNTIME_MARKER_KEY])
       || createRuntimeMarker(now);
-    const marker = markerWithAtRiskWorkspaces(currentMarker, [workspaceId]);
+    let marker = markerWithAtRiskWorkspaces(currentMarker, [workspaceId]);
+    const updates = {
+      [stableKey]: stable,
+      [workspaceSessionBindingKey(meta.tabId)]: bindingForClaim(workspaceId, generation, tab, now)
+    };
+    // `tabs.onUpdated` usually observes the New Chat `replaceState` before the
+    // page's first persist of the rebound id reaches the worker, so rebinding
+    // here must leave the previous workspace behind as a remembered ChatClub
+    // Tabs row exactly like a binding-replacing persist does; otherwise the old
+    // record stays owned by this tab and the later persist sees nothing to detach.
+    const result = { registered: true, workspaceId, duplicate: false };
+    if (currentBinding && currentBinding.workspaceId !== workspaceId) {
+      if (markerHasAtRiskWorkspace(marker, currentBinding.workspaceId)) {
+        marker = markerWithAtRiskWorkspaces(marker, [workspaceId]);
+      }
+      const recovery = recoveryRecord(stored?.[WORKSPACE_SESSION_RECOVERY_KEY], generation, now);
+      const displaced = displacedBindingUpdates({
+        stored, previousWorkspaceId: currentBinding.workspaceId, tabId: meta.tabId, live,
+        senderWorkspaceId: workspaceId, nextWorkspaceId: workspaceId, marker, generation, now, recovery
+      });
+      if (displaced.detached) {
+        Object.assign(updates, displaced.updates);
+        result.detachedWorkspaceId = currentBinding.workspaceId;
+        if (displaced.recovery !== recovery) {
+          updates[WORKSPACE_SESSION_RECOVERY_KEY] = displaced.recovery;
+          await scheduleRecoveryLeaseAlarm(api, displaced.recovery, now).catch(() => {});
+        }
+      }
+    }
+    await storage.set(updates);
     if (typeof session?.set === "function") {
       await session.set({ [WORKSPACE_SESSION_RUNTIME_MARKER_KEY]: marker });
     }
-    return { registered: true, workspaceId, duplicate: false };
+    return result;
   });
 }
 
@@ -195,11 +218,9 @@ export function persistWorkspaceSessionSnapshot(api, request = {}, sender = {}, 
     if (meta.tabId === null || !workspaceId || (!clear && !snapshot)) {
       throw new Error("Workspace session persistence request is invalid");
     }
-    const senderTab = { ...tab, url: sender?.url || tab?.url };
-    if (!isChatClubWorkspaceTab(api, senderTab)) {
+    if (!senderWorkspaceContext(api, sender).chatClubPage) {
       throw new Error("Workspace session persistence requires a ChatClub page");
     }
-    const urlWorkspaceId = workspaceIdForChatClubTab(api, senderTab);
 
     const now = finiteTime(options.now, Date.now());
     const generation = await ensureGenerationInternal(storage);
@@ -210,6 +231,7 @@ export function persistWorkspaceSessionSnapshot(api, request = {}, sender = {}, 
       typeof session?.get === "function" ? session.get(WORKSPACE_SESSION_RUNTIME_MARKER_KEY) : Promise.resolve({})
     ]);
     if (!Array.isArray(tabs)) throw new TypeError("Browser tabs query returned an invalid result");
+    const { urlWorkspaceId } = senderWorkspaceContext(api, sender, { tabs, requestedWorkspaceId: workspaceId });
     const live = liveTabState(api, tabs, stored);
     const bindingKey = workspaceSessionBindingKey(meta.tabId);
     const tabBinding = bindingRecord(bindingKey, stored?.[bindingKey]);
@@ -294,22 +316,12 @@ export function persistWorkspaceSessionSnapshot(api, request = {}, sender = {}, 
         if (markerHasAtRiskWorkspace(marker, currentBinding.workspaceId)) {
           marker = markerWithAtRiskWorkspaces(marker, [workspaceId]);
         }
-      }
-      if (!adoptsProvisionalLegacy && shouldDetachReplacedWorkspaceBinding({
-        previousStable,
-        currentBindingWorkspaceId: currentBinding.workspaceId,
-        tabId: meta.tabId,
-        live,
-        senderWorkspaceId: urlWorkspaceId,
-        nextWorkspaceId: workspaceId
-      })) {
-        const displaced = detachedRememberedWorkspaceRecord(previousStable, now, marker);
-        updates[previousStableKey] = displaced;
-        if (!rememberDisplacedWorkspaceWithoutRecovery(previousStable)) {
-          recovery = createRecovery(marker, generation, now, "binding-replaced", recovery, [
-            recoveryCandidate(displaced, "stable", WORKSPACE_SESSION_CLEARED_BY_BROWSER)
-          ]);
-        }
+        const displaced = displacedBindingUpdates({
+          stored, previousWorkspaceId: currentBinding.workspaceId, tabId: meta.tabId, live,
+          senderWorkspaceId: urlWorkspaceId, nextWorkspaceId: workspaceId, marker, generation, now, recovery
+        });
+        Object.assign(updates, displaced.updates);
+        recovery = displaced.recovery;
       }
     }
     if (!adoptedLegacyWorkspaceId && recovery) {
@@ -721,9 +733,9 @@ export function claimWorkspaceSessionRecovery(api, request = {}, sender = {}, op
       typeof session?.get === "function" ? session.get(WORKSPACE_SESSION_RUNTIME_MARKER_KEY) : Promise.resolve({})
     ]);
     let marker = runtimeMarker(markerStored?.[WORKSPACE_SESSION_RUNTIME_MARKER_KEY]) || createRuntimeMarker(now);
-    const senderTab = { ...tab, url: sender?.url || tab?.url };
-    if (!isChatClubWorkspaceTab(api, senderTab)) throw new Error("Workspace session claim requires a ChatClub page");
-    const urlWorkspaceId = workspaceIdForChatClubTab(api, senderTab);
+    const senderContext = senderWorkspaceContext(api, sender, { tabs, requestedWorkspaceId: request.workspaceId });
+    if (!senderContext.chatClubPage) throw new Error("Workspace session claim requires a ChatClub page");
+    const urlWorkspaceId = senderContext.urlWorkspaceId;
     let requestedWorkspaceId = normalizeWorkspaceSessionId(request.workspaceId) || urlWorkspaceId;
     const tabBinding = bindingRecord(workspaceSessionBindingKey(meta.tabId), stored?.[workspaceSessionBindingKey(meta.tabId)]);
     const urlRecord = urlWorkspaceId
@@ -741,7 +753,7 @@ export function claimWorkspaceSessionRecovery(api, request = {}, sender = {}, op
     }
     const rawOpeningClaimId = typeof request.openingClaimId === "string" ? request.openingClaimId.trim() : "";
     const openingClaimId = normalizeWorkspaceSessionClaimId(rawOpeningClaimId);
-    const urlOpeningClaimId = workspaceSessionOpeningClaimIdFromUrl(senderTab.url);
+    const urlOpeningClaimId = senderContext.openingClaimId;
     if (rawOpeningClaimId && !openingClaimId) {
       throw new Error("Workspace session opening claim id is invalid");
     }
@@ -893,29 +905,17 @@ export function claimWorkspaceSessionRecovery(api, request = {}, sender = {}, op
 
     const currentBindingKey = workspaceSessionBindingKey(meta.tabId);
     const currentBinding = bindingRecord(currentBindingKey, stored?.[currentBindingKey]);
-    const displacedUpdates = {};
+    let displacedUpdates = {};
     if (currentBinding && currentBinding.workspaceId !== workspaceId) {
       if (markerHasAtRiskWorkspace(marker, currentBinding.workspaceId)) {
         marker = markerWithAtRiskWorkspaces(marker, [workspaceId]);
       }
-      const previousStableKey = workspaceSessionWorkspaceKey(currentBinding.workspaceId);
-      const previousStable = stableWorkspaceRecord(previousStableKey, stored?.[previousStableKey]);
-      if (previousStable?.owner.tabId === meta.tabId && shouldDetachReplacedWorkspaceBinding({
-        previousStable,
-        currentBindingWorkspaceId: currentBinding.workspaceId,
-        tabId: meta.tabId,
-        live,
-        senderWorkspaceId: urlWorkspaceId,
-        nextWorkspaceId: workspaceId
-      })) {
-        const displaced = detachedRememberedWorkspaceRecord(previousStable, now, marker);
-        displacedUpdates[previousStableKey] = displaced;
-        if (!rememberDisplacedWorkspaceWithoutRecovery(previousStable)) {
-          recovery = createRecovery(marker, generation, now, "binding-replaced", recovery, [
-            recoveryCandidate(displaced, "stable", WORKSPACE_SESSION_CLEARED_BY_BROWSER)
-          ]);
-        }
-      }
+      const displaced = displacedBindingUpdates({
+        stored, previousWorkspaceId: currentBinding.workspaceId, tabId: meta.tabId, live,
+        senderWorkspaceId: urlWorkspaceId, nextWorkspaceId: workspaceId, marker, generation, now, recovery
+      });
+      displacedUpdates = displaced.updates;
+      recovery = displaced.recovery;
     }
     if (previousOwnerTabId !== null && previousOwnerTabId !== meta.tabId) {
       removeKeys.push(workspaceSessionBindingKey(previousOwnerTabId));
@@ -961,23 +961,22 @@ export function commitWorkspaceSessionRecovery(api, request = {}, sender = {}, o
     if (meta.tabId === null || !workspaceId || !/^claim-[A-Za-z0-9_-]{12,192}$/.test(claimId)) {
       throw new Error("Workspace session commit is invalid");
     }
-    const senderTab = { ...tab, url: sender?.url || tab?.url };
-    const urlWorkspaceId = workspaceIdForChatClubTab(api, senderTab);
     const now = finiteTime(options.now, Date.now());
     const generation = await ensureGenerationInternal(storage);
     const bindingKey = workspaceSessionBindingKey(meta.tabId);
     const stableKey = workspaceSessionWorkspaceKey(workspaceId);
     const session = sessionStorageArea(api);
+    const tabs = await api.tabs.query({});
+    if (!Array.isArray(tabs)) throw new TypeError("Browser tabs query returned an invalid result");
+    const { urlWorkspaceId } = senderWorkspaceContext(api, sender, { tabs, requestedWorkspaceId: workspaceId });
     const lookupKeys = [bindingKey, stableKey, WORKSPACE_SESSION_RECOVERY_KEY];
     if (urlWorkspaceId && urlWorkspaceId !== workspaceId) {
       lookupKeys.push(workspaceSessionWorkspaceKey(urlWorkspaceId));
     }
-    const [stored, markerStored, tabs] = await Promise.all([
+    const [stored, markerStored] = await Promise.all([
       storage.get(lookupKeys),
-      typeof session?.get === "function" ? session.get(WORKSPACE_SESSION_RUNTIME_MARKER_KEY) : Promise.resolve({}),
-      api.tabs.query({})
+      typeof session?.get === "function" ? session.get(WORKSPACE_SESSION_RUNTIME_MARKER_KEY) : Promise.resolve({})
     ]);
-    if (!Array.isArray(tabs)) throw new TypeError("Browser tabs query returned an invalid result");
     const tabBinding = bindingRecord(bindingKey, stored?.[bindingKey]);
     const urlRecord = urlWorkspaceId
       ? stableWorkspaceRecord(workspaceSessionWorkspaceKey(urlWorkspaceId), stored?.[workspaceSessionWorkspaceKey(urlWorkspaceId)])

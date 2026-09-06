@@ -16,7 +16,9 @@ import {
   workspaceSessionBindingTabId,
   workspaceSessionIdFromUrl,
   workspaceSessionMirrorTabId,
-  workspaceSessionWorkspaceId
+  workspaceSessionOpeningClaimIdFromUrl,
+  workspaceSessionWorkspaceId,
+  workspaceSessionWorkspaceKey
 } from "../shared/workspace-session.js";
 
 function plainObject(value) {
@@ -111,6 +113,44 @@ export function workspaceIdForChatClubTab(api, tab) {
   return "";
 }
 
+// Chromium freezes `MessageSender.url` at the URL the extension document was
+// loaded with; `history.replaceState` from `installWorkspaceId` or the New
+// Chat adopt never refreshes it, so after the page rebinds from
+// `#workspace=A` to `#workspace=B` every later message still names A there.
+// The browser tab record (`sender.tab`, `tabs.query`) does follow
+// same-document navigations. Both URLs are browser-attested facts about this
+// tab (the dispatcher already proved both are extension-page URLs), so the
+// page's `#workspace=` hash is read from the tab record first and the
+// load-time sender URL stays only as a fallback candidate. The requested
+// workspace id is accepted when any attested URL names it, which keeps the
+// check engine-neutral even if one of those records lags the other.
+export function senderWorkspaceContext(api, sender = {}, { tabs = null, requestedWorkspaceId = "" } = {}) {
+  const tab = plainObject(sender?.tab) ? sender.tab : {};
+  const tabId = positiveTabId(tab.id);
+  const queried = tabId !== null && Array.isArray(tabs)
+    ? tabs.find((item) => positiveTabId(item?.id) === tabId) || null
+    : null;
+  const hrefs = [...new Set(
+    [tab.url, tab.pendingUrl, queried?.url, queried?.pendingUrl, sender?.url]
+      .map((value) => String(value || ""))
+      .filter(Boolean)
+  )];
+  const chatClubHrefs = hrefs.filter((href) => isChatClubWorkspaceHref(api, href));
+  const workspaceIds = [...new Set(chatClubHrefs.map((href) => workspaceSessionIdFromUrl(href)).filter(Boolean))];
+  const requested = normalizeWorkspaceSessionId(requestedWorkspaceId);
+  const urlWorkspaceId = requested && workspaceIds.includes(requested) ? requested : (workspaceIds[0] || "");
+  const openingClaimId = chatClubHrefs
+    .map((href) => workspaceSessionOpeningClaimIdFromUrl(href))
+    .find(Boolean) || "";
+  return {
+    chatClubPage: chatClubHrefs.length > 0,
+    url: chatClubHrefs[0] || hrefs[0] || "",
+    urlWorkspaceId,
+    workspaceIds,
+    openingClaimId
+  };
+}
+
 function resolvedLiveWorkspaceId(urlWorkspaceId, boundWorkspaceId, urlRecord) {
   const urlId = normalizeWorkspaceSessionId(urlWorkspaceId);
   const boundId = normalizeWorkspaceSessionId(boundWorkspaceId);
@@ -160,7 +200,7 @@ export function liveTabState(api, tabs = [], stored = null) {
   return { records, workspaceIds, workspaceByTabId, tabsByWorkspaceId };
 }
 
-export function shouldDetachReplacedWorkspaceBinding({
+function shouldDetachReplacedWorkspaceBinding({
   previousStable,
   currentBindingWorkspaceId,
   tabId,
@@ -179,7 +219,7 @@ export function shouldDetachReplacedWorkspaceBinding({
   return Boolean(senderWorkspaceId && senderWorkspaceId === nextWorkspaceId);
 }
 
-export function detachedRememberedWorkspaceRecord(record, now, marker) {
+function detachedRememberedWorkspaceRecord(record, now, marker) {
   if (!record) return null;
   const detach = {
     at: now,
@@ -200,7 +240,7 @@ export function detachedRememberedWorkspaceRecord(record, now, marker) {
   };
 }
 
-export function rememberDisplacedWorkspaceWithoutRecovery(record) {
+function rememberDisplacedWorkspaceWithoutRecovery(record) {
   return workspaceSnapshotIsRememberable(record?.snapshot);
 }
 
@@ -637,6 +677,47 @@ export function createRecovery(marker, generation, now, reason, existing = null,
     expiresAt: 0,
     candidates: mergeRecoveryCandidates(existing?.candidates, incoming)
   };
+}
+
+// A tab that moves from one workspace to another (New Chat adopt, claim of a
+// different id, or the tabs.onUpdated registration that observes that
+// replaceState) leaves the previous workspace behind as a remembered ChatClub
+// Tabs row. Only a desk that is not rememberable becomes a browser-cleared
+// recovery candidate. Returns the storage updates plus the recovery record to
+// persist; `detached` is false when nothing had to be displaced.
+export function displacedBindingUpdates({
+  stored,
+  previousWorkspaceId,
+  tabId,
+  live,
+  senderWorkspaceId,
+  nextWorkspaceId,
+  marker,
+  generation,
+  now,
+  recovery = null
+} = {}) {
+  const previousStableKey = workspaceSessionWorkspaceKey(previousWorkspaceId);
+  const previousStable = stableWorkspaceRecord(previousStableKey, stored?.[previousStableKey]);
+  if (!shouldDetachReplacedWorkspaceBinding({
+    previousStable,
+    currentBindingWorkspaceId: previousWorkspaceId,
+    tabId,
+    live,
+    senderWorkspaceId,
+    nextWorkspaceId
+  })) {
+    return { detached: false, previousStable, updates: {}, recovery };
+  }
+  const displaced = detachedRememberedWorkspaceRecord(previousStable, now, marker);
+  const updates = { [previousStableKey]: displaced };
+  let nextRecovery = recovery;
+  if (!rememberDisplacedWorkspaceWithoutRecovery(previousStable)) {
+    nextRecovery = createRecovery(marker, generation, now, "binding-replaced", recovery, [
+      recoveryCandidate(displaced, "stable", WORKSPACE_SESSION_CLEARED_BY_BROWSER)
+    ]);
+  }
+  return { detached: true, previousStable, updates, recovery: nextRecovery };
 }
 
 export function rearmRecoveryCandidate(candidate, clearedBy = WORKSPACE_SESSION_CLEARED_BY_BROWSER) {
