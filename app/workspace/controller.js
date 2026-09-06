@@ -330,22 +330,30 @@ export function createWorkspaceController(ctx = {}) {
   });
   viewBinding.bind(viewController);
 
+  function liveHrefForFrame(iframe) {
+    const app = frameApp(iframe);
+    return openableTabUrl(iframe?.dataset?.currentHref)
+      || openableTabUrl(iframe?.src || iframe?.getAttribute?.("src"))
+      || openableTabUrl(app?.url)
+      || "";
+  }
+
   function hasDeletableActiveThreads() {
     return currentFrames().some((iframe) => frameController.topicDeleteCapabilityForFrame(iframe).available);
   }
 
   function hasSummarizableActiveThreads() {
     return currentFrames().some((iframe) => {
-      const app = frameApp(iframe);
-      const href = openableTabUrl(iframe?.dataset?.currentHref)
-        || openableTabUrl(iframe?.src || iframe?.getAttribute?.("src"))
-        || openableTabUrl(app?.url)
-        || "";
+      const href = liveHrefForFrame(iframe);
       if (!conversationHrefFromLocation(href)) return false;
       const config = findSummarySiteConfig(state.options?.summarySiteConfigs, href);
       if (!config) return false;
       return summaryConfigHasCollector(config) || config.fallbackMode === "allowPageText";
     });
+  }
+
+  function hasShareableActiveThreads() {
+    return currentFrames().some((iframe) => Boolean(conversationHrefFromLocation(liveHrefForFrame(iframe))));
   }
 
   return Object.freeze({
@@ -382,6 +390,7 @@ export function createWorkspaceController(ctx = {}) {
     topicDeleteCapabilityForFrame: frameController.topicDeleteCapabilityForFrame,
     hasDeletableActiveThreads,
     hasSummarizableActiveThreads,
+    hasShareableActiveThreads,
     openableTabUrl,
     openTabUrl,
     captureWorkspaceSession: sessionController.captureWorkspaceSession,

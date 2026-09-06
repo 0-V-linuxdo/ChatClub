@@ -57,7 +57,8 @@ export function createTopbarView(dependencies = {}) {
     "isWorkspaceTabsSidebarOpen",
     "openWorkspaceTabsSearch",
     "canDeleteThread",
-    "canOpenSummary"
+    "canOpenSummary",
+    "canOpenShare"
   ]);
   requireMethods(editLifecycle, "edit lifecycle", [
     "exit",
@@ -266,7 +267,9 @@ export function createTopbarView(dependencies = {}) {
       return button;
     }
     if (item.id === "share") {
-      return actionButton(t("topbar.share"), "share", actions.openShare, "secondary", actions.formatShortcutTooltip(t("topbar.share"), "openSharePanel"), "", "topbar.share");
+      const button = actionButton(t("topbar.share"), "share", actions.openShare, "secondary", actions.formatShortcutTooltip(t("topbar.share"), "openSharePanel"), "", "topbar.share");
+      button.disabled = !actions.canOpenShare();
+      return button;
     }
     if (item.id === "pocket") {
       const pocketLabel = t(topbarItemLabelKey(item, state.options));
@@ -526,7 +529,8 @@ export function createTopbarView(dependencies = {}) {
           }
         : null;
     const disabled = (item.id === "deleteThread" && !actions.canDeleteThread())
-      || (item.id === "summary" && !actions.canOpenSummary());
+      || (item.id === "summary" && !actions.canOpenSummary())
+      || (item.id === "share" && !actions.canOpenShare());
     const buttonNode = settingsMenuButton(label, topbarItemIcon(item, state.options), (event) => runItem(item, event), "secondary", disabled, dragItem, {
       className: editing && item.type === "item" ? "topbar-settings-menu-button" : "",
       tooltipId: tooltipIdForItem(item),
@@ -611,5 +615,12 @@ export function createTopbarView(dependencies = {}) {
     });
   }
 
-  return Object.freeze({ render, renderSettingsMenu, syncBrandState, syncDeleteThreadState, syncSummaryState });
+  function syncShareState() {
+    const disabled = !actions.canOpenShare();
+    document.querySelectorAll('[data-tooltip-id="topbar.share"]').forEach((buttonNode) => {
+      buttonNode.disabled = disabled;
+    });
+  }
+
+  return Object.freeze({ render, renderSettingsMenu, syncBrandState, syncDeleteThreadState, syncSummaryState, syncShareState });
 }

@@ -57,6 +57,7 @@ const lineCount = (source) => source.split(/\r?\n/).length;
     "Delete Topics availability must reuse the in-group capability already owned by the frame controller"
   );
   assert.match(workspace, /function hasSummarizableActiveThreads\(\)/, "topbar Summary availability must assemble on the workspace facade");
+  assert.match(workspace, /function hasShareableActiveThreads\(\)/, "topbar Share availability must assemble on the workspace facade");
   assert.match(workspace, /conversationHrefFromLocation\(href\)/, "Summary availability must require a live conversation href");
   assert.doesNotMatch(workspace, /function handleTabPointerMove\(/);
   assert.doesNotMatch(workspace, /function closeMessageNavigatorMenuOnParentKeydown\(/);

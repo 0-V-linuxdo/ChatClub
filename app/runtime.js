@@ -90,7 +90,7 @@ const workspaceBinding = createBindOnceControllerPort("Workspace", [
   "closePopoversAnchoredWithin",
   "currentFrames",
   "frameApp",
-  "hasDeletableActiveThreads", "hasSummarizableActiveThreads",
+  "hasDeletableActiveThreads", "hasSummarizableActiveThreads", "hasShareableActiveThreads",
   "openAppPicker",
   "openLayoutMenu"
 ]);
@@ -849,7 +849,7 @@ function handleWorkspaceFrameLifecycleChange(change = {}) {
   handlePreferredModelFrameLifecycleChange(change);
   const isFrame = typeof HTMLIFrameElement !== "undefined" && change instanceof HTMLIFrameElement;
   const event = isFrame ? { type: "workspace-sync", iframe: change } : (change || {});
-  if (event.type === "location" || event.type === "workspace-sync") { topbarController.syncDeleteThreadState(); topbarController.syncSummaryState(); summaryController?.syncSummarizeState?.(); }
+  if (event.type === "location" || event.type === "workspace-sync") { topbarController.syncDeleteThreadState(); topbarController.syncSummaryState(); topbarController.syncShareState(); summaryController?.syncSummarizeState?.(); }
   if (event.type === "location" || (event.type === "loading" && event.loading === false)) workspaceAutoTitleController?.observeFrame(event.iframe);
   if (event.type === "loading" && event.loading === false && event.iframe?.isConnected) {
     scheduleContentFrameRepair(event.iframe, 120);
@@ -1049,6 +1049,7 @@ async function openSummaryPanel() {
 }
 
 async function openSharePanel() {
+  if (!workspaceController.hasShareableActiveThreads()) return;
   try {
     const controller = await ensureShareController();
     return controller.open();
