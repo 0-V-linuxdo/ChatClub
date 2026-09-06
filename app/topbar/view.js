@@ -58,7 +58,8 @@ export function createTopbarView(dependencies = {}) {
     "openWorkspaceTabsSearch",
     "canDeleteThread",
     "canOpenSummary",
-    "canOpenShare"
+    "canOpenShare",
+    "canStartNewChat"
   ]);
   requireMethods(editLifecycle, "edit lifecycle", [
     "exit",
@@ -254,7 +255,9 @@ export function createTopbarView(dependencies = {}) {
     }
     if (item.id === "composer") return composerNode;
     if (item.id === "newChat") {
-      return actionButton(t("topbar.newChat"), "edit", actions.newChat, "secondary", actions.formatShortcutTooltip(t("topbar.newChatAllTooltip"), "newChatAll"), "", "topbar.newChat");
+      const button = actionButton(t("topbar.newChat"), "edit", actions.newChat, "secondary", actions.formatShortcutTooltip(t("topbar.newChatAllTooltip"), "newChatAll"), "", "topbar.newChat");
+      button.disabled = !actions.canStartNewChat();
+      return button;
     }
     if (item.id === "deleteThread") {
       const button = actionButton(t("topbar.deleteThread"), "trash", actions.deleteThread, "danger", actions.formatShortcutTooltip(t("topbar.deleteThread"), "deleteThread"), "", "topbar.deleteThread");
@@ -530,7 +533,8 @@ export function createTopbarView(dependencies = {}) {
         : null;
     const disabled = (item.id === "deleteThread" && !actions.canDeleteThread())
       || (item.id === "summary" && !actions.canOpenSummary())
-      || (item.id === "share" && !actions.canOpenShare());
+      || (item.id === "share" && !actions.canOpenShare())
+      || (item.id === "newChat" && !actions.canStartNewChat());
     const buttonNode = settingsMenuButton(label, topbarItemIcon(item, state.options), (event) => runItem(item, event), "secondary", disabled, dragItem, {
       className: editing && item.type === "item" ? "topbar-settings-menu-button" : "",
       tooltipId: tooltipIdForItem(item),
@@ -622,5 +626,12 @@ export function createTopbarView(dependencies = {}) {
     });
   }
 
-  return Object.freeze({ render, renderSettingsMenu, syncBrandState, syncDeleteThreadState, syncSummaryState, syncShareState });
+  function syncNewChatState() {
+    const disabled = !actions.canStartNewChat();
+    document.querySelectorAll('[data-tooltip-id="topbar.newChat"]').forEach((buttonNode) => {
+      buttonNode.disabled = disabled;
+    });
+  }
+
+  return Object.freeze({ render, renderSettingsMenu, syncBrandState, syncDeleteThreadState, syncSummaryState, syncShareState, syncNewChatState });
 }

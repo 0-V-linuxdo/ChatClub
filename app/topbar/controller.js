@@ -37,6 +37,7 @@ export function createTopbarController(dependencies = {}) {
     "hasDeletableActiveThreads",
     "hasSummarizableActiveThreads",
     "hasShareableActiveThreads",
+    "hasNewChatActiveThreads",
     "openAppPicker",
     "openLayoutMenu"
   ]);
@@ -85,6 +86,7 @@ export function createTopbarController(dependencies = {}) {
       canDeleteThread: () => workspace.hasDeletableActiveThreads(),
       canOpenSummary: () => workspace.hasSummarizableActiveThreads(),
       canOpenShare: () => workspace.hasShareableActiveThreads(),
+      canStartNewChat: () => workspace.hasNewChatActiveThreads(),
       openAppPicker: (anchor) => workspace.openAppPicker(anchor, { mode: "group" }),
       openLayoutMenu: (anchor) => workspace.openLayoutMenu(anchor),
       openSettingsMenu
@@ -145,6 +147,7 @@ export function createTopbarController(dependencies = {}) {
     }
     if (item.id === "newChat") {
       closeSettingsMenu();
+      if (!workspace.hasNewChatActiveThreads()) return;
       actions.newChat();
       return;
     }
@@ -328,6 +331,7 @@ export function createTopbarController(dependencies = {}) {
     syncDeleteThreadState: () => view.syncDeleteThreadState(),
     syncSummaryState: () => view.syncSummaryState(),
     syncShareState: () => view.syncShareState(),
+    syncNewChatState: () => view.syncNewChatState(),
     syncPlaceholder: (...args) => placeholderController.sync(...args)
   });
 }

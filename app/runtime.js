@@ -90,7 +90,7 @@ const workspaceBinding = createBindOnceControllerPort("Workspace", [
   "closePopoversAnchoredWithin",
   "currentFrames",
   "frameApp",
-  "hasDeletableActiveThreads", "hasSummarizableActiveThreads", "hasShareableActiveThreads",
+  "hasDeletableActiveThreads", "hasSummarizableActiveThreads", "hasShareableActiveThreads", "hasNewChatActiveThreads",
   "openAppPicker",
   "openLayoutMenu"
 ]);
@@ -849,7 +849,7 @@ function handleWorkspaceFrameLifecycleChange(change = {}) {
   handlePreferredModelFrameLifecycleChange(change);
   const isFrame = typeof HTMLIFrameElement !== "undefined" && change instanceof HTMLIFrameElement;
   const event = isFrame ? { type: "workspace-sync", iframe: change } : (change || {});
-  if (event.type === "location" || event.type === "workspace-sync") { topbarController.syncDeleteThreadState(); topbarController.syncSummaryState(); topbarController.syncShareState(); summaryController?.syncSummarizeState?.(); }
+  if (event.type === "location" || event.type === "workspace-sync") { topbarController.syncDeleteThreadState(); topbarController.syncSummaryState(); topbarController.syncShareState(); topbarController.syncNewChatState(); summaryController?.syncSummarizeState?.(); }
   if (event.type === "location" || (event.type === "loading" && event.loading === false)) workspaceAutoTitleController?.observeFrame(event.iframe);
   if (event.type === "loading" && event.loading === false && event.iframe?.isConnected) {
     scheduleContentFrameRepair(event.iframe, 120);
@@ -872,6 +872,7 @@ async function openNewWorkspaceTab() {
 
 async function newChatOnFrames() {
   const frames = workspaceController.currentFrames();
+  if (!workspaceController.hasNewChatActiveThreads()) return;
   await workspaceController.preserveCurrentWorkspaceForNewChat(frames);
   const settled = await Promise.allSettled(frames.map((iframe) => workspaceController.startNewChatInFrame(iframe)));
   settled.forEach((result, index) => {

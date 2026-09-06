@@ -356,6 +356,10 @@ export function createWorkspaceController(ctx = {}) {
     return currentFrames().some((iframe) => Boolean(conversationHrefFromLocation(liveHrefForFrame(iframe))));
   }
 
+  function hasNewChatActiveThreads() {
+    return currentFrames().some((iframe) => Boolean(conversationHrefFromLocation(liveHrefForFrame(iframe))));
+  }
+
   return Object.freeze({
     renderWorkspace: viewController.renderWorkspace,
     syncWorkspaceIsland: viewController.syncWorkspaceIsland,
@@ -391,6 +395,7 @@ export function createWorkspaceController(ctx = {}) {
     hasDeletableActiveThreads,
     hasSummarizableActiveThreads,
     hasShareableActiveThreads,
+    hasNewChatActiveThreads,
     openableTabUrl,
     openTabUrl,
     captureWorkspaceSession: sessionController.captureWorkspaceSession,
