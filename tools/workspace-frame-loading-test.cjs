@@ -11,7 +11,12 @@ const { functionSource } = require("./function-source.cjs");
 const PARAM = "__chatclub_frame_load_nonce";
 
 (async () => {
-  const { frameLoadingKindForTarget } = await import("../app/workspace/frame-loading.js");
+  const {
+    clearFrameNewChatPending,
+    frameLoadingKindForTarget,
+    frameNewChatPending,
+    markFrameNewChatPending
+  } = await import("../app/workspace/frame-loading.js");
   const {
     navigableChatFrameHref,
     notionFrameLoadTarget,
@@ -279,6 +284,7 @@ const PARAM = "__chatclub_frame_load_nonce";
     const sessionContext = vm.createContext({
       appById: () => ({ id: "NotionAI", source: "builtin", url: "https://app.notion.com/ai" }),
       frameForInstance: () => iframe,
+      frameNewChatPending,
       openableTabUrl: (value) => String(value || ""),
       restorableChatFrameHref,
       preferredWorkspaceTabHref
@@ -294,6 +300,25 @@ const PARAM = "__chatclub_frame_load_nonce";
       sessionContext.currentHref({ instanceId: "notion-frame", appId: "NotionAI" }),
       "https://app.notion.com/ai",
       "an unsafe live Notion route must be healed before workspace capture"
+    );
+    iframe.dataset.currentHref = "https://app.notion.com/chat?t=frozen-thread";
+    iframe.dataset.currentThreadHref = "https://app.notion.com/chat?t=frozen-thread";
+    iframe.src = "https://app.notion.com/chat?t=frozen-thread";
+    assert.equal(
+      sessionContext.currentHref({ instanceId: "notion-frame", appId: "NotionAI" }),
+      "https://app.notion.com/chat?t=frozen-thread"
+    );
+    markFrameNewChatPending(iframe);
+    assert.equal(
+      sessionContext.currentHref({ instanceId: "notion-frame", appId: "NotionAI" }),
+      "https://app.notion.com/ai",
+      "a frame that New Chat is resetting must be captured at its app home even while src and thread cache still name the frozen conversation"
+    );
+    clearFrameNewChatPending(iframe);
+    assert.equal(
+      sessionContext.currentHref({ instanceId: "notion-frame", appId: "NotionAI" }),
+      "https://app.notion.com/chat?t=frozen-thread",
+      "clearing the release marker must restore ordinary conversation capture"
     );
   }
 
@@ -320,14 +345,17 @@ const PARAM = "__chatclub_frame_load_nonce";
   }
   let loading = false;
   let syncCalls = 0;
+  let rememberCalls = 0;
   const lifecycleContext = vm.createContext({
     HTMLIFrameElement: FakeIframe,
     appById: () => chatGpt,
+    clearFrameNewChatPending,
     frameApp: () => chatGpt,
     frameIsLoading: () => loading,
     frameNavigationTargets: new WeakMap(),
     frameLoadingKindForTarget,
     rememberBrowserFrameId() {},
+    rememberWorkspaceSession() { rememberCalls += 1; },
     setFrameLoading(_iframe, next) { loading = next; },
     syncHeaderForFrameInstance() { syncCalls += 1; }
   });
@@ -354,6 +382,29 @@ const PARAM = "__chatclub_frame_load_nonce";
   lifecycleContext.complete(iframe);
   assert.equal(loading, false);
   assert.equal(iframe.dataset.frameLoadingKind, undefined, "the target kind must remain transient");
+  assert.equal(rememberCalls, 0, "ordinary loads must not recapture the workspace snapshot");
+
+  // New Chat release marker lifecycle: the marker survives an unrelated load
+  // that completes while the old conversation document is still loading, is
+  // cleared by the home document load (with a recapture), and is cleared when
+  // another ChatClub navigation to a conversation supersedes the reset.
+  lifecycleContext.begin(iframe, "https://chatgpt.com/c/still-loading");
+  markFrameNewChatPending(iframe);
+  lifecycleContext.complete(iframe);
+  assert.equal(frameNewChatPending(iframe), true, "a late load of the outgoing conversation document must not clear the New Chat release marker");
+  assert.equal(rememberCalls, 0);
+  lifecycleContext.begin(iframe, chatGpt.url);
+  assert.equal(frameNewChatPending(iframe), true, "the home navigation itself must keep the release marker until its document loads");
+  lifecycleContext.complete(iframe);
+  assert.equal(frameNewChatPending(iframe), false, "the loaded home document must clear the release marker");
+  assert.equal(rememberCalls, 1, "clearing the release marker must recapture the workspace snapshot once");
+  lifecycleContext.complete(iframe);
+  assert.equal(rememberCalls, 1, "a later load without a marker must not recapture again");
+  markFrameNewChatPending(iframe);
+  lifecycleContext.begin(iframe, "https://chatgpt.com/c/superseding-thread");
+  assert.equal(frameNewChatPending(iframe), false, "a superseding conversation navigation must clear the release marker");
+  lifecycleContext.complete(iframe);
+  assert.equal(rememberCalls, 1);
 
   const viewController = read("app/workspace/view-controller.js");
   assert.match(

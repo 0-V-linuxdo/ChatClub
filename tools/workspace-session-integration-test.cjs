@@ -134,18 +134,48 @@ assert.match(
 );
 assert.match(
   workspace,
-  /preserveCurrentWorkspaceForNewChat: async \(hrefs\) => \{[\s\S]*?result\?\.preserved\) render\(\)/,
+  /preserveCurrentWorkspaceForNewChat: async \(leaving\) => \{[\s\S]*?result\?\.preserved\) render\(\)/,
   "a rebound New Chat workspace must refresh the page title after dropping topicTitle"
 );
 assert.match(
   frame,
-  /await preserveCurrentWorkspaceForNewChat\(\[\s*iframe\.dataset\.currentHref/,
-  "starting a new chat in the active tab must freeze the current workspace before navigation"
+  /await preserveCurrentWorkspaceForNewChat\(\[iframe\]\);\s*return startNewChatInFrame\(iframe, chat\);/,
+  "starting a new chat in the active tab must freeze the current workspace before navigation and hand over the leaving frame itself"
 );
 assert.match(
   runtime,
-  /await workspaceController\.preserveCurrentWorkspaceForNewChat\(\s*frames\.map\(/,
-  "new chat on every frame must freeze the current workspace once"
+  /await workspaceController\.preserveCurrentWorkspaceForNewChat\(frames\);/,
+  "new chat on every frame must freeze the current workspace once and hand over every leaving frame"
+);
+assert.match(
+  session,
+  /instanceId: String\(entry\.instanceId \|\| entry\.dataset\?\.instanceId \|\| ""\)/,
+  "preserve must accept iframe elements as leaving-frame entries so it can mark them by instance id"
+);
+assert.match(
+  session,
+  /workspaceSessionStore\.adopt\(createWorkspaceSessionId\(\)\)[\s\S]*?releaseLeavingFrames\(entries\);\s*try \{ await persistWorkspaceSession\(\); \}/,
+  "the rebound New Chat workspace must mark the leaving frames before its first persist so the frozen thread is not copied onto the new id"
+);
+assert.match(
+  session,
+  /if \(frameNewChatPending\(iframe\)\) return openableFrameUrl\(app\?\.url\);\s*return preferredWorkspaceTabHref\(/,
+  "capture must report a releasing frame at its app home instead of a stale src / thread cache"
+);
+assert.match(
+  frame,
+  /async function startNewChatInFrame\([\s\S]*?markFrameNewChatPending\(iframe\);\s*try \{\s*await sendToContentFrame\(iframe, "newChatPreprocess"/,
+  "startNewChatInFrame must release the conversation before its first await"
+);
+assert.match(
+  frame,
+  /if \(iframe\.dataset\.frameLoadingKind === "new-topic" && clearFrameNewChatPending\(iframe\)\) rememberWorkspaceSession\(\);/,
+  "the loaded New Chat home document must clear the release marker and recapture"
+);
+assert.match(
+  frame,
+  /if \(loadingKind !== "new-topic"\) clearFrameNewChatPending\(iframe\);/,
+  "a superseding conversation navigation must clear the release marker"
 );
 assert.match(
   frame,

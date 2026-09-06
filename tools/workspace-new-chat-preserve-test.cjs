@@ -15,6 +15,9 @@ assert.match(agents, /claim that binding instead of the lagged URL/);
 assert.match(agents, /registerWorkspaceSessionTab/);
 assert.match(agents, /failing closed as a URL mismatch/);
 assert.match(agents, /real topic title must stay in ChatClub Tabs/);
+assert.match(agents, /The rebound id must never receive the frozen conversation/);
+assert.match(agents, /markFrameNewChatPending/);
+assert.match(agents, /iframe\.dataset\.newChatPending/);
 
 (async () => {
   const { createWorkspaceSessionController } = await import(
@@ -135,9 +138,23 @@ assert.match(agents, /real topic title must stay in ChatClub Tabs/);
   }
 
   {
+    const iframe = {
+      dataset: {
+        instanceId: "i1",
+        currentHref: "https://chatgpt.com/c/thread-1",
+        currentThreadHref: "https://chatgpt.com/c/thread-1"
+      },
+      src: "https://chatgpt.com/c/thread-1",
+      getAttribute: (name) => (name === "src" ? "https://chatgpt.com/c/thread-1" : "")
+    };
+    globalThis.document = { querySelectorAll: () => [iframe] };
     const store = createStore("page-oldworkspace1");
-    const { controller, state } = createController(store);
-    const preserved = await controller.preserveCurrentWorkspaceForNewChat(["https://chatgpt.com/c/thread-1"]);
+    const { controller, state } = createController(store, {
+      groups: [{ id: "g1", chatApps: [{ instanceId: "i1", appId: "ChatGPT" }] }]
+    });
+    const preserved = await controller.preserveCurrentWorkspaceForNewChat([
+      { instanceId: "i1", href: "https://chatgpt.com/c/thread-1" }
+    ]);
     assert.equal(preserved.preserved, true);
     assert.equal(preserved.fromWorkspaceId, "page-oldworkspace1");
     assert.match(preserved.workspaceId, /^page-/);
@@ -146,11 +163,120 @@ assert.match(agents, /real topic title must stay in ChatClub Tabs/);
     assert.equal(store.workspaceId(), preserved.workspaceId);
     assert.equal(state.topicTitle, "");
     assert.equal(state.topicTitleCustom, false);
+    assert.equal(store.saved.length, 2);
     assert.equal(store.saved[0].topicTitle, "the rational male 系列");
     assert.equal(store.saved[0].topicTitleCustom, true);
+    assert.equal(store.saved[0].groups[0].tabs[0].currentHref, "https://chatgpt.com/c/thread-1");
     assert.equal(store.saved[1].topicTitle, "");
     assert.equal(store.saved[1].topicTitleCustom, false);
+    assert.equal(
+      store.saved[1].groups[0].tabs[0].currentHref,
+      "https://chatgpt.com/",
+      "the first snapshot persisted under the rebound id must leave the releasing frame at its app home, not copy the frozen thread"
+    );
+    assert.equal(iframe.dataset.newChatPending, "1", "preserve must mark the leaving frame before the rebound persist");
+    // startNewChatInFrame has not reassigned src yet: capture must still report home.
+    iframe.dataset.currentHref = "https://chatgpt.com/";
+    delete iframe.dataset.currentThreadHref;
+    assert.equal(
+      controller.captureWorkspaceSession().groups[0].tabs[0].currentHref,
+      "https://chatgpt.com/",
+      "a stale iframe src must not resurrect the frozen thread while the release marker is set"
+    );
+    delete iframe.dataset.newChatPending;
+    assert.equal(
+      controller.captureWorkspaceSession().groups[0].tabs[0].currentHref,
+      "https://chatgpt.com/c/thread-1",
+      "without the marker the stale src is still preferred (this is why the marker must outlive the src reassignment)"
+    );
+    globalThis.document = { querySelectorAll: () => [] };
+  }
+
+  {
+    // New Chat on every frame: both panes have conversations. After preserve,
+    // pane A finishes its reset while pane B is still awaiting preprocess; no
+    // intermediate capture may carry B's frozen thread onto the rebound id.
+    const frameA = {
+      dataset: { instanceId: "iA", currentHref: "https://chatgpt.com/c/a-thread", currentThreadHref: "https://chatgpt.com/c/a-thread" },
+      src: "https://chatgpt.com/c/a-thread",
+      getAttribute: () => "https://chatgpt.com/c/a-thread"
+    };
+    const frameB = {
+      dataset: { instanceId: "iB", currentHref: "https://grok.com/c/b-thread", currentThreadHref: "https://grok.com/c/b-thread" },
+      src: "https://grok.com/c/b-thread",
+      getAttribute: () => "https://grok.com/c/b-thread"
+    };
+    globalThis.document = { querySelectorAll: () => [frameA, frameB] };
+    const store = createStore("page-oldworkspace1");
+    const { controller } = createController(store, {
+      groups: [
+        { id: "g1", chatApps: [{ instanceId: "iA", appId: "ChatGPT" }] },
+        { id: "g2", chatApps: [{ instanceId: "iB", appId: "Grok" }] }
+      ],
+      activeTabs: { g1: "iA", g2: "iB" }
+    });
+    const preserved = await controller.preserveCurrentWorkspaceForNewChat([
+      { instanceId: "iA", href: frameA.dataset.currentHref },
+      { instanceId: "iB", href: frameB.dataset.currentHref }
+    ]);
+    assert.equal(preserved.preserved, true);
+    assert.deepEqual(
+      store.saved[0].groups.map((group) => group.tabs[0].currentHref),
+      ["https://chatgpt.com/c/a-thread", "https://grok.com/c/b-thread"]
+    );
+    assert.deepEqual(
+      store.saved[1].groups.map((group) => group.tabs[0].currentHref),
+      ["https://chatgpt.com/", "https://grok.com/"],
+      "every leaving frame must be at its app home in the rebound snapshot"
+    );
+    frameA.dataset.currentHref = "https://chatgpt.com/";
+    delete frameA.dataset.currentThreadHref;
+    const intermediate = controller.rememberWorkspaceSession();
+    assert.deepEqual(
+      intermediate.groups.map((group) => group.tabs[0].currentHref),
+      ["https://chatgpt.com/", "https://grok.com/"],
+      "pane A's reset capture must not carry pane B's still-live frozen thread"
+    );
+    globalThis.document = { querySelectorAll: () => [] };
+  }
+
+  {
+    // The real callers hand over the iframe elements themselves.
+    const iframe = {
+      dataset: { instanceId: "i1", currentHref: "https://chatgpt.com/c/thread-1" },
+      src: "https://chatgpt.com/c/thread-1",
+      getAttribute: () => "https://chatgpt.com/c/thread-1"
+    };
+    globalThis.document = { querySelectorAll: () => [iframe] };
+    const store = createStore("page-oldworkspace1");
+    const { controller } = createController(store, {
+      groups: [{ id: "g1", chatApps: [{ instanceId: "i1", appId: "ChatGPT" }] }]
+    });
+    const preserved = await controller.preserveCurrentWorkspaceForNewChat([iframe]);
+    assert.equal(preserved.preserved, true);
     assert.equal(store.saved[0].groups[0].tabs[0].currentHref, "https://chatgpt.com/c/thread-1");
+    assert.equal(store.saved[1].groups[0].tabs[0].currentHref, "https://chatgpt.com/");
+    assert.equal(iframe.dataset.newChatPending, "1");
+    globalThis.document = { querySelectorAll: () => [] };
+  }
+
+  {
+    // Legacy string entries still resolve the leaving frame by its conversation href.
+    const iframe = {
+      dataset: { instanceId: "i1", currentHref: "https://chatgpt.com/c/thread-1" },
+      src: "https://chatgpt.com/c/thread-1",
+      getAttribute: () => "https://chatgpt.com/c/thread-1"
+    };
+    globalThis.document = { querySelectorAll: () => [iframe] };
+    const store = createStore("page-oldworkspace1");
+    const { controller } = createController(store, {
+      groups: [{ id: "g1", chatApps: [{ instanceId: "i1", appId: "ChatGPT" }] }]
+    });
+    const preserved = await controller.preserveCurrentWorkspaceForNewChat(["https://chatgpt.com/c/thread-1"]);
+    assert.equal(preserved.preserved, true);
+    assert.equal(store.saved[1].groups[0].tabs[0].currentHref, "https://chatgpt.com/");
+    assert.equal(iframe.dataset.newChatPending, "1");
+    globalThis.document = { querySelectorAll: () => [] };
   }
 
   {
@@ -576,6 +702,125 @@ assert.match(agents, /real topic title must stay in ChatClub Tabs/);
     const loaded = await pageStore.load();
     assert.equal(pageStore.workspaceId(), newId);
     assert.equal(loaded?.topicTitle, "星球大战 小说推荐");
+  }
+
+  {
+    // End to end through the real page store and background: a restored
+    // conversation desk (iframe src still names the thread) gets New Chat. The
+    // 2026-09-07 regression persisted the still-live thread under the rebound
+    // id, and conversation retention then kept it there, so after a browser
+    // restart the "New Tab" row reopened the frozen conversation.
+    const { clearFrameNewChatPending } = await import(
+      pathToFileURL(path.join(root, "app/workspace/frame-loading.js")).href
+    );
+    let now = 9_818_000;
+    const oldUrl = `chrome-extension://chatclub/chatClub.html#workspace=${oldId}`;
+    const pageTab = { id: 11, windowId: 2, index: 0, pinned: false, url: oldUrl };
+    const store = persistFixture({
+      local: {
+        [WORKSPACE_SESSION_GENERATION_KEY]: generation,
+        [workspaceSessionWorkspaceKey(oldId)]: stable(oldId, conversationSnapshot, now - 50),
+        [workspaceSessionBindingKey(11)]: binding(oldId, now - 50)
+      },
+      tabs: [pageTab]
+    });
+    const href = { value: oldUrl };
+    const pageStorage = {
+      values: {},
+      getItem(key) { return Object.prototype.hasOwnProperty.call(this.values, key) ? this.values[key] : null; },
+      setItem(key, value) { this.values[key] = String(value); },
+      removeItem(key) { delete this.values[key]; }
+    };
+    const createPageStore = () => createWorkspaceSessionStore({
+      sessionStorage: pageStorage,
+      location: { get href() { return href.value; } },
+      history: { replaceState(_state, _title, next) { href.value = String(next); } },
+      currentTab: async () => ({ ...pageTab, url: href.value }),
+      currentTabId: async () => 11,
+      claimWorkspaceSession: (request) => claimWorkspaceSessionRecovery(
+        store.api,
+        request,
+        { url: href.value, tab: { ...pageTab, url: href.value } },
+        { now: ++now }
+      ),
+      persistWorkspaceSession: (request) => persistWorkspaceSessionSnapshot(
+        store.api,
+        request,
+        { url: href.value, tab: { ...pageTab, url: href.value } },
+        { now: ++now }
+      ),
+      storageGet: async (key) => (await store.api.storage.local.get(key))[key]
+    });
+    const iframe = {
+      dataset: {
+        instanceId: "i1",
+        appId: "ChatGPT",
+        currentHref: "https://chatgpt.com/c/remembered",
+        currentThreadHref: "https://chatgpt.com/c/remembered"
+      },
+      src: "https://chatgpt.com/c/remembered",
+      getAttribute: (name) => (name === "src" ? iframe.src : "")
+    };
+    const previousDocumentForE2E = globalThis.document;
+    globalThis.document = { querySelectorAll: () => [iframe] };
+    const pageStore = createPageStore();
+    const loaded = await pageStore.load();
+    assert.equal(loaded?.groups?.[0]?.tabs?.[0]?.currentHref, "https://chatgpt.com/c/remembered");
+    const { controller, state } = createController(pageStore, {
+      groups: [{ id: "g1", chatApps: [{ instanceId: "i1", appId: "ChatGPT" }] }]
+    });
+    const preserved = await controller.preserveCurrentWorkspaceForNewChat([
+      { instanceId: "i1", href: iframe.dataset.currentHref }
+    ]);
+    assert.equal(preserved.preserved, true);
+    const newId = preserved.workspaceId;
+    assert.notEqual(newId, oldId);
+    assert.equal(pageStore.workspaceId(), newId);
+    assert.equal(href.value, `chrome-extension://chatclub/chatClub.html#workspace=${newId}`);
+    assert.equal(state.topicTitle, "");
+    // startNewChatInFrame: metadata moves to home and the snapshot is remembered
+    // before assignFrameSrc has rewritten the iframe src attribute.
+    iframe.dataset.currentHref = "https://chatgpt.com/";
+    delete iframe.dataset.currentThreadHref;
+    controller.rememberWorkspaceSession();
+    assert.equal(await pageStore.flush(), true);
+    // The home document loads: src is now home, the marker clears, recapture.
+    iframe.src = "https://chatgpt.com/";
+    assert.equal(clearFrameNewChatPending(iframe), true);
+    controller.rememberWorkspaceSession();
+    assert.equal(await pageStore.flush(), true);
+    const frozen = store.local.values[workspaceSessionWorkspaceKey(oldId)];
+    assert.equal(frozen.snapshot.groups[0].tabs[0].currentHref, "https://chatgpt.com/c/remembered");
+    assert.equal(frozen.snapshot.topicTitle, "the rational male 系列");
+    assert.ok(frozen.detach, "the frozen conversation must be remembered as a detached Tabs row");
+    const rebound = store.local.values[workspaceSessionWorkspaceKey(newId)];
+    assert.equal(
+      rebound.snapshot.groups[0].tabs[0].currentHref,
+      "https://chatgpt.com/",
+      "the rebound New Chat desk must be stored at its app home, not the frozen conversation"
+    );
+    assert.equal(rebound.snapshot.topicTitle, "");
+    const listed = await listLiveWorkspaceTabs(store.api, {}, { tab: { id: 11, url: href.value } });
+    assert.deepEqual(listed.tabs.map((item) => [item.workspaceId, item.live, item.topicTitle]), [
+      [newId, true, ""],
+      [oldId, false, "the rational male 系列"]
+    ]);
+    // Browser + extension restart: the rebound tab reloads with its own hash and
+    // must restore an empty desk, while the frozen row stays reopenable.
+    for (const key of Object.keys(pageStorage.values)) delete pageStorage.values[key];
+    for (const key of Object.keys(store.session.values)) delete store.session.values[key];
+    await prepareWorkspaceSessionLifecycle(store.api, { now: ++now, forceRecovery: true, reason: "update" });
+    const restarted = createPageStore();
+    const restored = await restarted.load();
+    assert.equal(restarted.workspaceId(), newId);
+    assert.equal(
+      restored?.groups?.[0]?.tabs?.[0]?.currentHref,
+      "https://chatgpt.com/",
+      "after a restart the New Tab desk must load its app home instead of the frozen conversation"
+    );
+    const reopened = store.local.values[workspaceSessionWorkspaceKey(oldId)];
+    assert.equal(reopened.snapshot.groups[0].tabs[0].currentHref, "https://chatgpt.com/c/remembered");
+    globalThis.document = previousDocumentForE2E;
   }
 
   {

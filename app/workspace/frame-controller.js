@@ -10,7 +10,7 @@ import { t } from "../../shared/i18n.js";
 import { findTopicDeleteSiteConfig, topicDeleteTimeoutMs } from "../../shared/topic-delete-sites.js";
 import { conversationHrefFromLocation } from "../../shared/workspace-tab-memory.js";
 import { button, editorModal, el, field, input, openConfirmationAction } from "../../ui/dom.js";
-import { frameLoadingKindForTarget } from "./frame-loading.js";
+import { clearFrameNewChatPending, frameLoadingKindForTarget, markFrameNewChatPending } from "./frame-loading.js";
 import { removeChatFromGroup, removeGroupFromWorkspace } from "./model.js";
 import { createControllerMethodValidator, validateControllerContract } from "../controller-contract.js";
 
@@ -406,6 +406,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
     );
     frameNavigationTargets.set(iframe, String(targetHref || ""));
     iframe.dataset.frameLoadingKind = loadingKind;
+    if (loadingKind !== "new-topic") clearFrameNewChatPending(iframe);
     if (loadingKind === "new-topic") {
       iframe.dataset.frameLoadingMaskPhase = "opaque";
       syncFrameLoadingMask(iframe);
@@ -455,6 +456,8 @@ export function createWorkspaceFrameController(dependencies = {}) {
     }
     setFrameLoading(iframe, false);
     restorePromptInputFocus(iframe);
+    // The New Chat home document loaded; recapture without the release marker.
+    if (iframe.dataset.frameLoadingKind === "new-topic" && clearFrameNewChatPending(iframe)) rememberWorkspaceSession();
   }
 
   function beginFrameNavigationGeneration(iframe) {
@@ -950,27 +953,28 @@ export function createWorkspaceFrameController(dependencies = {}) {
 
   async function startNewChatInFrame(iframe, fallbackChat = null) {
     if (!(iframe instanceof HTMLIFrameElement)) return false;
+    // Release the thread before the first await; no capture may copy it onto the rebound desk.
+    markFrameNewChatPending(iframe);
     try {
       await sendToContentFrame(iframe, "newChatPreprocess", {}, 1500);
     } catch {}
     const app = frameApp(iframe) || appById(fallbackChat?.appId || iframe.dataset?.appId);
-    if (!app?.url) return false;
-    const href = openableFrameUrl(app.url);
-    if (!href) return false;
+    const href = openableFrameUrl(app?.url);
+    if (!href) { clearFrameNewChatPending(iframe); return false; }
     iframe.dataset.currentHref = href;
     delete iframe.dataset.currentThreadHref;
     delete iframe.dataset.currentTitle;
     rememberWorkspaceSession();
-    return assignFrameSrc(iframe, href, { force: true });
+    if (assignFrameSrc(iframe, href, { force: true })) return true;
+    clearFrameNewChatPending(iframe);
+    return false;
   }
 
   async function startNewChatInActiveTab(group) {
     const chat = activeChatForGroup(group);
     const iframe = activeIframe(chat);
     if (!chat || !iframe) return false;
-    await preserveCurrentWorkspaceForNewChat([
-      iframe.dataset.currentHref || iframe.src || iframe.getAttribute?.("src") || ""
-    ]);
+    await preserveCurrentWorkspaceForNewChat([iframe]);
     return startNewChatInFrame(iframe, chat);
   }
 

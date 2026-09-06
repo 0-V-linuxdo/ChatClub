@@ -363,8 +363,8 @@ export function createWorkspaceController(ctx = {}) {
     captureWorkspaceSession: sessionController.captureWorkspaceSession,
     rememberWorkspaceSession: sessionController.rememberWorkspaceSession,
     persistWorkspaceSession: sessionController.persistWorkspaceSession,
-    preserveCurrentWorkspaceForNewChat: async (hrefs) => {
-      const result = await sessionController.preserveCurrentWorkspaceForNewChat(hrefs);
+    preserveCurrentWorkspaceForNewChat: async (leaving) => {
+      const result = await sessionController.preserveCurrentWorkspaceForNewChat(leaving);
       if (result?.preserved) render();
       return result;
     },

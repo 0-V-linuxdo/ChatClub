@@ -854,7 +854,7 @@ async function openNewWorkspaceTab() {
 
 async function newChatOnFrames() {
   const frames = workspaceController.currentFrames();
-  await workspaceController.preserveCurrentWorkspaceForNewChat(frames.map((iframe) => iframe?.dataset?.currentHref || iframe?.src || ""));
+  await workspaceController.preserveCurrentWorkspaceForNewChat(frames);
   const settled = await Promise.allSettled(frames.map((iframe) => workspaceController.startNewChatInFrame(iframe)));
   settled.forEach((result, index) => {
     const error = settledOperationFailure(result, "New chat did not start");

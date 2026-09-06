@@ -1,5 +1,33 @@
 const FRAME_LOADING_KIND_NEW_TOPIC = "new-topic";
 const FRAME_LOADING_KIND_RESTORING = "restoring";
+const FRAME_NEW_CHAT_PENDING_KEY = "newChatPending";
+
+/**
+ * New Chat marker. While ChatClub resets a frame to its app home, the DOM
+ * still carries stale conversation signals: the iframe `src` attribute keeps
+ * the last assigned URL until the new navigation is committed, cached
+ * `currentThreadHref` may still name the old thread, and the outgoing document
+ * can still report its location. Workspace snapshot capture treats a marked
+ * frame as sitting at its app home so the rebound workspace never records, and
+ * conversation retention never resurrects, the thread that was frozen on the
+ * previous workspace id. The marker clears once the home document has loaded
+ * or another ChatClub navigation supersedes the reset.
+ */
+export function markFrameNewChatPending(iframe) {
+  if (!iframe?.dataset) return false;
+  iframe.dataset[FRAME_NEW_CHAT_PENDING_KEY] = "1";
+  return true;
+}
+
+export function clearFrameNewChatPending(iframe) {
+  if (!iframe?.dataset || iframe.dataset[FRAME_NEW_CHAT_PENDING_KEY] === undefined) return false;
+  delete iframe.dataset[FRAME_NEW_CHAT_PENDING_KEY];
+  return true;
+}
+
+export function frameNewChatPending(iframe) {
+  return iframe?.dataset?.[FRAME_NEW_CHAT_PENDING_KEY] === "1";
+}
 
 function parsedHttpUrl(value) {
   try {
