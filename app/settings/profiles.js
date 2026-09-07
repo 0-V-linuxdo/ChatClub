@@ -291,10 +291,14 @@ export function createProfilesSettingsSection(ctx) {
         },
           modelInput,
           multiple && isDefault
-            ? el("span", { class: "api-profile-model-default" }, t("profiles.defaultModel"))
+            ? el("span", {
+              class: "api-profile-model-default tooltip-trigger",
+              "data-tooltip": t("profiles.defaultModelHint"),
+              "data-tooltip-wrap": "true"
+            }, t("profiles.defaultModel"))
             : null,
           multiple && !isDefault
-            ? settingsIconAction(t("profiles.defaultModel"), "star", () => {
+            ? settingsIconAction(t("profiles.setDefaultModel"), "star", () => {
               const [selected] = values.splice(index, 1);
               values.unshift(selected);
               render();
@@ -309,23 +313,46 @@ export function createProfilesSettingsSection(ctx) {
         ));
       });
     };
+    const add = () => {
+      values.push("");
+      render();
+      list.querySelector(".api-profile-model-row:last-child .input")?.focus();
+    };
     render();
     return {
-      node: el("div", { class: "api-profile-models" },
-        list,
-        el("button", {
-          class: "api-profile-model-add",
-          type: "button",
-          onclick: () => {
-            values.push("");
-            render();
-            list.querySelector(".api-profile-model-row:last-child .input")?.focus();
-          }
-        }, svgIcon("plus"), el("span", {}, t("profiles.addModel")))
-      ),
+      node: el("div", { class: "api-profile-models" }, list),
+      add,
       read() {
         return values.map((value) => String(value || "").trim()).filter(Boolean);
       }
+    };
+  }
+
+  function createSecretInput(value) {
+    const keyInput = input(value, {
+      placeholder: t("profiles.apiKey"),
+      type: "password",
+      autocomplete: "off",
+      spellcheck: "false"
+    });
+    let visible = false;
+    const toggle = el("button", {
+      class: "icon-button tooltip-trigger api-profile-secret-toggle",
+      type: "button",
+      "aria-label": t("profiles.showApiKey"),
+      "data-tooltip": t("profiles.showApiKey"),
+      onclick: () => {
+        visible = !visible;
+        keyInput.type = visible ? "text" : "password";
+        const label = visible ? t("profiles.hideApiKey") : t("profiles.showApiKey");
+        toggle.setAttribute("aria-label", label);
+        toggle.setAttribute("data-tooltip", label);
+        toggle.replaceChildren(svgIcon(visible ? "eyeOff" : "eye"));
+      }
+    }, svgIcon("eye"));
+    return {
+      node: el("div", { class: "api-profile-secret" }, keyInput, toggle),
+      input: keyInput
     };
   }
 
@@ -341,8 +368,14 @@ export function createProfilesSettingsSection(ctx) {
     });
     const nameInput = input(draft.name, { placeholder: t("profiles.providerName") });
     const endpointInput = input(draft.endpoint, { placeholder: "https://api.openai.com/v1/chat/completions" });
-    const keyInput = input(draft.apiKey, { placeholder: t("profiles.apiKey"), type: "password" });
+    const secret = createSecretInput(draft.apiKey);
     const catalog = createModelCatalogEditor(apiProfileModels(draft));
+    const identityName = el("strong", { class: "api-profile-editor-identity-name" },
+      String(draft.name || "").trim() || t("profiles.providerName")
+    );
+    nameInput.addEventListener("input", () => {
+      identityName.textContent = nameInput.value.trim() || t("profiles.providerName");
+    });
     let dialog;
     const close = () => dialog.remove();
     const save = async () => {
@@ -351,7 +384,7 @@ export function createProfilesSettingsSection(ctx) {
         ...draft,
         name: nameInput.value.trim() || "API Profile",
         endpoint: endpointInput.value.trim(),
-        apiKey: keyInput.value,
+        apiKey: secret.input.value,
         model: models[0] || "",
         models
       };
@@ -367,12 +400,27 @@ export function createProfilesSettingsSection(ctx) {
     };
     dialog = editorModal(editing ? t("profiles.edit") : t("profiles.addTitle"),
       el("div", { class: "settings-editor-form" },
-        el("div", { class: "settings-dialog-grid" },
-          field(t("profiles.provider"), nameInput),
-          field(t("profiles.endpoint"), endpointInput),
-          field(t("profiles.apiKey"), keyInput)
+        el("div", { class: "api-profile-editor-identity" },
+          el("span", { class: "api-profile-editor-identity-label" }, t("profiles.provider")),
+          identityName
         ),
-        field(t("profiles.models"), catalog.node),
+        el("div", { class: "api-profile-editor-layout" },
+          el("div", { class: "api-profile-editor-credentials" },
+            field(t("profiles.provider"), nameInput),
+            field(t("profiles.endpoint"), endpointInput),
+            field(t("profiles.apiKey"), secret.node)
+          ),
+          el("div", { class: "field api-profile-models-field" },
+            el("span", {}, t("profiles.models")),
+            el("p", { class: "api-profile-models-hint" }, t("profiles.defaultModelHint")),
+            catalog.node,
+            el("button", {
+              class: "api-profile-model-add",
+              type: "button",
+              onclick: () => catalog.add()
+            }, svgIcon("plus"), el("span", {}, t("profiles.addModel")))
+          )
+        ),
         el("div", { class: "modal-footer" },
           button(t("common.cancel"), close),
           button(editing ? t("profiles.save") : t("profiles.add"), save, "primary")
@@ -382,7 +430,7 @@ export function createProfilesSettingsSection(ctx) {
       false,
       t("common.close")
     );
-    dialog.querySelector(".modal")?.classList.add("settings-editor-modal");
+    dialog.querySelector(".modal")?.classList.add("settings-editor-modal", "api-profile-editor-modal");
   }
 
   async function duplicate(profile, redraw) {

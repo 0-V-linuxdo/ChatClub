@@ -8602,6 +8602,10 @@ body.settings-tab-context-menu-dragging iframe {
   width: min(680px, calc(100vw - 40px));
 }
 
+.settings-editor-modal.api-profile-editor-modal {
+  width: min(920px, calc(100vw - 40px));
+}
+
 .settings-editor-modal .field > span {
   color: var(--text);
   font-size: var(--font-size-sm);
@@ -8634,6 +8638,78 @@ body.settings-tab-context-menu-dragging iframe {
 .settings-editor-form {
   display: grid;
   gap: var(--space-4);
+}
+
+.api-profile-editor-identity {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--line);
+}
+
+.api-profile-editor-identity-label {
+  flex: none;
+  color: var(--muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.api-profile-editor-identity-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: var(--font-size);
+  font-weight: var(--font-weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.api-profile-editor-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  .api-profile-editor-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.api-profile-editor-credentials {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.api-profile-secret {
+  position: relative;
+  display: grid;
+}
+
+.api-profile-secret .input {
+  padding-right: calc(var(--overlay-close-size) + var(--space-3));
+}
+
+.api-profile-secret-toggle {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+}
+
+.api-profile-models-field {
+  min-width: 0;
+}
+
+.api-profile-models-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight);
+  line-height: 1.4;
 }
 
 .api-profile-models {
@@ -8683,12 +8759,17 @@ body.settings-tab-context-menu-dragging iframe {
   border-radius: var(--ui-radius);
 }
 
+.api-profile-model-default.tooltip-trigger {
+  cursor: help;
+}
+
 .api-profile-model-add {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  width: 100%;
+  width: auto;
+  justify-self: start;
   min-height: var(--settings-control-height);
   padding: 0 var(--space-3);
   color: var(--muted);
