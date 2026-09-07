@@ -26,14 +26,43 @@ function normalizeApiProfileModels(profile = {}) {
   };
   push(fallback);
   for (const value of listed) push(value);
+  const catalog = models.length ? models : [API_PROFILE_MODEL_DEFAULT];
+  const favoriteModels = [];
+  const favoriteSeen = new Set();
+  const listedFavorites = Array.isArray(profile?.favoriteModels) ? profile.favoriteModels : [];
+  for (const item of listedFavorites) {
+    const value = text(item);
+    if (!value || !catalog.includes(value) || favoriteSeen.has(value)) continue;
+    favoriteSeen.add(value);
+    favoriteModels.push(value);
+  }
   return {
-    model: models[0] || API_PROFILE_MODEL_DEFAULT,
-    models: models.length ? models : [API_PROFILE_MODEL_DEFAULT]
+    model: catalog[0] || API_PROFILE_MODEL_DEFAULT,
+    models: catalog,
+    favoriteModels
   };
 }
 
 export function apiProfileModels(profile) {
   return normalizeApiProfileModels(profile).models;
+}
+
+export function apiProfileFavoriteModels(profile) {
+  return normalizeApiProfileModels(profile).favoriteModels;
+}
+
+export function apiProfileDropdownModels(profile) {
+  const models = apiProfileModels(profile);
+  const ordered = [];
+  const seen = new Set();
+  const push = (value) => {
+    if (!value || seen.has(value) || !models.includes(value)) return;
+    seen.add(value);
+    ordered.push(value);
+  };
+  for (const value of apiProfileFavoriteModels(profile)) push(value);
+  for (const value of models) push(value);
+  return ordered;
 }
 
 export function resolveApiSlotModel(profile, requested) {
@@ -51,7 +80,8 @@ function normalizeProfile(value = {}, index = 0) {
     endpoint: text(value.endpoint, API_PROFILE_ENDPOINT_DEFAULT),
     apiKey: String(value.apiKey || ""),
     model: modelsState.model,
-    models: modelsState.models
+    models: modelsState.models,
+    ...(modelsState.favoriteModels.length ? { favoriteModels: modelsState.favoriteModels } : {})
   };
 }
 

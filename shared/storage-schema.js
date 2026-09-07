@@ -584,9 +584,20 @@ function normalizeApiProfileModels(profile = {}) {
   };
   push(fallback);
   for (const value of listed) push(value);
+  const catalog = models.length ? models : [API_PROFILE_MODEL_DEFAULT];
+  const favoriteModels = [];
+  const favoriteSeen = new Set();
+  const listedFavorites = Array.isArray(profile?.favoriteModels) ? profile.favoriteModels : [];
+  for (const item of listedFavorites) {
+    const value = text(item);
+    if (!value || !catalog.includes(value) || favoriteSeen.has(value)) continue;
+    favoriteSeen.add(value);
+    favoriteModels.push(value);
+  }
   return {
-    model: models[0] || API_PROFILE_MODEL_DEFAULT,
-    models: models.length ? models : [API_PROFILE_MODEL_DEFAULT]
+    model: catalog[0] || API_PROFILE_MODEL_DEFAULT,
+    models: catalog,
+    favoriteModels
   };
 }
 
@@ -606,6 +617,7 @@ function normalizeProfile(profile, index) {
     apiKey: text(profile?.apiKey),
     model: modelsState.model,
     models: modelsState.models,
+    ...(modelsState.favoriteModels.length ? { favoriteModels: modelsState.favoriteModels } : {}),
     ...(registerUrl ? { registerUrl } : {}),
     ...(profile?.promotionChannel === true ? { promotionChannel: true } : {})
   };

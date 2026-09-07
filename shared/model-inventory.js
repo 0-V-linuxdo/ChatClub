@@ -1,6 +1,7 @@
 import {
   apiProfileModel,
   apiProfileModels,
+  apiProfileDropdownModels,
   normalizeApiOptions,
   resolveApiSlotModel
 } from "./api-options.js";
@@ -15,7 +16,7 @@ import {
 } from "./constants.js";
 import { isModelPreferenceLabel } from "./model-preference-selection.js";
 
-export { apiProfileModel, apiProfileModels } from "./api-options.js";
+export { apiProfileModel, apiProfileModels, apiProfileFavoriteModels } from "./api-options.js";
 
 export const OUTBOUND_INVENTORY_SLOTS = Object.freeze([
   Object.freeze({
@@ -136,9 +137,10 @@ export function listModelInventory(options = {}, worlds) {
   const outbound = include.outbound
     ? OUTBOUND_INVENTORY_SLOTS.map((slot) => {
       const profile = resolveApiProfile(source, slot.purpose);
-      const catalog = Array.isArray(profile.models) && profile.models.length
-        ? profile.models.filter((item, index, list) => item && list.indexOf(item) === index)
-        : apiProfileModels(profile);
+      const catalog = apiProfileDropdownModels({
+        models: profile.models,
+        favoriteModels: profile.favoriteModels
+      });
       return {
         world: "outbound",
         id: slot.id,

@@ -69,6 +69,20 @@ const assert = require("node:assert/strict");
   assert.equal(catalog.optimizeApiModel, "gpt-5.6-terra");
   assert.equal(catalog.summaryApiModel, "");
 
+  const { apiProfileDropdownModels } = await import("../shared/api-options.js");
+  const starred = normalizeOptions({
+    apiProfiles: [{
+      id: "zero",
+      name: "0.0",
+      endpoint: "https://api.0-0.pro/v1/chat/completions",
+      model: "gpt-5.6-luna",
+      models: ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-orbit"],
+      favoriteModels: ["gpt-5.6-terra", "missing", "gpt-5.6-luna"]
+    }]
+  }).apiProfiles[0];
+  assert.deepEqual(starred.favoriteModels, ["gpt-5.6-terra", "gpt-5.6-luna"]);
+  assert.deepEqual(apiProfileDropdownModels(starred), ["gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.6-orbit"]);
+
   console.log("API profile default model migration: ok");
 })().catch((error) => {
   console.error(error?.stack || error);

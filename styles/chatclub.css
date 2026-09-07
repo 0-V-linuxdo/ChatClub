@@ -6930,7 +6930,16 @@ body.settings-tab-context-menu-dragging iframe {
 
 .api-profile-list .settings-list-header,
 .api-profile-row {
-  grid-template-columns: var(--ui-reorder-cluster) minmax(170px, 1fr) minmax(160px, .9fr) minmax(220px, 1fr) minmax(176px, auto);
+  grid-template-columns: var(--ui-reorder-cluster) minmax(150px, .75fr) minmax(220px, 1.5fr) minmax(200px, 1fr) minmax(176px, auto);
+  align-items: center;
+}
+
+.api-profile-models-cell.is-multiple {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
 }
 
 .model-inventory-group {
@@ -8752,7 +8761,7 @@ body.settings-tab-context-menu-dragging iframe {
 
 .api-profile-model-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   gap: var(--space-2);
   align-items: center;
 }
@@ -8765,20 +8774,20 @@ body.settings-tab-context-menu-dragging iframe {
   min-width: 0;
 }
 
-.api-profile-model-default {
-  display: inline-flex;
-  align-items: center;
-  min-height: var(--ui-accessory-height);
-  padding: 0 var(--space-2);
+.api-profile-model-fallback {
+  display: inline-grid;
+  place-items: center;
+  width: var(--ui-action-size);
+  height: var(--ui-action-size);
   color: var(--muted);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-  border: 1px solid var(--line);
-  border-radius: var(--ui-radius);
 }
 
-.api-profile-model-default.tooltip-trigger {
-  cursor: help;
+.api-profile-model-fallback.is-active {
+  color: var(--text);
+}
+
+.api-profile-model-favorite.is-active {
+  color: var(--primary);
 }
 
 .api-profile-model-add {
@@ -9485,7 +9494,7 @@ body.settings-tab-context-menu-dragging iframe {
 
   .api-profile-list .settings-list-header,
   .api-profile-row {
-    grid-template-columns: var(--ui-reorder-cluster) minmax(140px, 1fr) minmax(130px, .8fr) minmax(180px, 1fr) minmax(156px, auto);
+    grid-template-columns: var(--ui-reorder-cluster) minmax(130px, .8fr) minmax(180px, 1.3fr) minmax(170px, 1fr) minmax(156px, auto);
   }
 
   .model-inventory-outbound .settings-list-header,

@@ -1,6 +1,7 @@
 import { t } from "../../shared/i18n.js";
 import { API_PROFILE_MODEL_DEFAULT } from "../../shared/constants.js";
 import {
+  apiProfileFavoriteModels,
   apiProfileModels,
   apiProfileNameLabel,
   listModelInventory,
@@ -150,11 +151,17 @@ export function createProfilesSettingsSection(ctx) {
     );
   }
 
-  function profileModelLabel(profile) {
+  function profileModelCell(profile) {
     const models = apiProfileModels(profile);
-    if (!models.length) return t("profiles.noModel");
-    if (models.length === 1) return models[0];
-    return t("profiles.modelCatalogCount", { model: models[0], count: models.length - 1 });
+    if (!models.length) {
+      return el("span", { class: "settings-muted-cell api-profile-models-cell is-empty" }, t("profiles.noModel"));
+    }
+    if (models.length === 1) {
+      return el("span", { class: "settings-muted-cell api-profile-models-cell is-solo" }, models[0]);
+    }
+    return el("div", { class: "api-profile-models-cell is-multiple" },
+      models.map((model) => el("span", { class: "settings-usage-chip" }, model))
+    );
   }
 
   function profileRow(profile, redraw) {
@@ -176,7 +183,7 @@ export function createProfilesSettingsSection(ctx) {
         }
       }),
       el("strong", { class: "settings-main-cell" }, profile.name || profile.id),
-      el("span", { class: "settings-muted-cell" }, profileModelLabel(profile)),
+      profileModelCell(profile),
       usageChips(profile),
       el("div", { class: "settings-row-action-group" },
         profile.registerUrl
@@ -273,45 +280,73 @@ export function createProfilesSettingsSection(ctx) {
     await saveOutboundSlot(purpose, { [slot.modelKey]: model }, redraw, slot.modelToastKey);
   }
 
-  function createModelCatalogEditor(models, onChange) {
+  function createModelCatalogEditor(models, favorites, onChange) {
     const values = models.length ? models.slice() : [API_PROFILE_MODEL_DEFAULT];
+    const favoriteModels = Array.isArray(favorites) ? favorites.slice() : [];
     const list = el("div", { class: "api-profile-model-list" });
     const notify = () => onChange?.();
+    const favoriteKey = (value) => String(value || "").trim();
+    const isFavorite = (value) => favoriteModels.some((item) => favoriteKey(item) === favoriteKey(value));
     const render = () => {
       list.replaceChildren();
       const multiple = values.length > 1;
       values.forEach((value, index) => {
-        const isDefault = index === 0;
+        const isFallback = index === 0;
+        const starred = isFavorite(value);
         const modelInput = input(value, {
           placeholder: t("profiles.model"),
-          "aria-label": multiple && isDefault ? t("profiles.defaultModel") : t("profiles.model"),
+          "aria-label": multiple && isFallback ? t("profiles.fallbackModel") : t("profiles.model"),
           oninput: (event) => {
-            values[index] = event.target.value;
+            const previous = values[index];
+            const next = event.target.value;
+            values[index] = next;
+            const favIndex = favoriteModels.findIndex((item) => favoriteKey(item) === favoriteKey(previous));
+            if (favIndex >= 0) favoriteModels[favIndex] = next;
             notify();
           }
         });
         list.append(el("div", {
-          class: `api-profile-model-row${multiple ? "" : " api-profile-model-row-solo"}${multiple && isDefault ? " api-profile-model-row-default" : ""}`.trim()
+          class: `api-profile-model-row${multiple ? "" : " api-profile-model-row-solo"}${multiple && isFallback ? " api-profile-model-row-fallback" : ""}`.trim()
         },
           modelInput,
-          multiple && isDefault
+          multiple && isFallback
             ? el("span", {
-              class: "api-profile-model-default tooltip-trigger",
+              class: "api-profile-model-fallback is-active tooltip-trigger",
+              "aria-label": t("profiles.fallbackModel"),
               "data-tooltip": t("profiles.defaultModelHint"),
               "data-tooltip-wrap": "true"
-            }, t("profiles.defaultModel"))
+            }, svgIcon("lifeBuoy"))
             : null,
-          multiple && !isDefault
-            ? settingsIconAction(t("profiles.setDefaultModel"), "star", () => {
+          multiple && !isFallback
+            ? settingsIconAction(t("profiles.setFallbackModel"), "lifeBuoy", () => {
               const [selected] = values.splice(index, 1);
               values.unshift(selected);
               render();
               notify();
-            })
+            }, "api-profile-model-fallback")
+            : null,
+          multiple
+            ? settingsIconAction(
+              starred ? t("profiles.removeFavoriteModel") : t("profiles.setFavoriteModel"),
+              starred ? "star" : "starOff",
+              () => {
+                const key = favoriteKey(values[index]);
+                if (!key) return;
+                const at = favoriteModels.findIndex((item) => favoriteKey(item) === key);
+                if (at >= 0) favoriteModels.splice(at, 1);
+                else favoriteModels.unshift(key);
+                render();
+                notify();
+              },
+              `api-profile-model-favorite${starred ? " is-active" : ""}`
+            )
             : null,
           multiple
             ? settingsIconAction(t("common.delete"), "trash", () => {
+              const key = favoriteKey(values[index]);
               values.splice(index, 1);
+              const at = favoriteModels.findIndex((item) => favoriteKey(item) === key);
+              if (at >= 0) favoriteModels.splice(at, 1);
               render();
               notify();
             }, "danger", false, "settings.action.delete")
@@ -331,6 +366,18 @@ export function createProfilesSettingsSection(ctx) {
       add,
       live() {
         return values.slice();
+      },
+      favorites() {
+        const catalog = new Set(values.map((value) => favoriteKey(value)).filter(Boolean));
+        const ordered = [];
+        const seen = new Set();
+        for (const item of favoriteModels) {
+          const key = favoriteKey(item);
+          if (!key || !catalog.has(key) || seen.has(key)) continue;
+          seen.add(key);
+          ordered.push(key);
+        }
+        return ordered;
       },
       read() {
         return values.map((value) => String(value || "").trim()).filter(Boolean);
@@ -380,7 +427,11 @@ export function createProfilesSettingsSection(ctx) {
     const endpointInput = input(draft.endpoint, { placeholder: "https://api.openai.com/v1/chat/completions" });
     const secret = createSecretInput(draft.apiKey);
     let syncSave = () => {};
-    const catalog = createModelCatalogEditor(apiProfileModels(draft), () => syncSave());
+    const catalog = createModelCatalogEditor(
+      apiProfileModels(draft),
+      apiProfileFavoriteModels(draft),
+      () => syncSave()
+    );
     const identityName = el("strong", { class: "api-profile-editor-identity-name" },
       String(draft.name || "").trim() || t("profiles.providerName")
     );
@@ -388,13 +439,15 @@ export function createProfilesSettingsSection(ctx) {
       name: String(draft.name || "").trim() || "API Profile",
       endpoint: String(draft.endpoint || "").trim(),
       apiKey: String(draft.apiKey || ""),
-      models: apiProfileModels(draft)
+      models: apiProfileModels(draft),
+      favoriteModels: apiProfileFavoriteModels(draft)
     });
     const formSnapshot = () => JSON.stringify({
       name: nameInput.value.trim() || "API Profile",
       endpoint: endpointInput.value.trim(),
       apiKey: secret.input.value,
-      models: catalog.live()
+      models: catalog.live(),
+      favoriteModels: catalog.favorites()
     });
     nameInput.addEventListener("input", () => {
       identityName.textContent = nameInput.value.trim() || t("profiles.providerName");
@@ -406,14 +459,17 @@ export function createProfilesSettingsSection(ctx) {
     const close = () => dialog.remove();
     const save = async () => {
       const models = catalog.read();
+      const favoriteModels = catalog.favorites();
       const nextProfile = {
         ...draft,
         name: nameInput.value.trim() || "API Profile",
         endpoint: endpointInput.value.trim(),
         apiKey: secret.input.value,
         model: models[0] || "",
-        models
+        models,
+        favoriteModels
       };
+      if (!favoriteModels.length) delete nextProfile.favoriteModels;
       if (!nextProfile.endpoint || !nextProfile.model) {
         toast(t("profiles.endpointModelRequired"), "error");
         return;
