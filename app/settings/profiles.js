@@ -92,7 +92,7 @@ export function createProfilesSettingsSection(ctx) {
       settingsPaneToolbar(t("profiles.manage"),
         settingsPrimaryAction(t("profiles.add"), "plus", () => openEditor(null, redraw))
       ),
-      settingsList(["", t("profiles.provider"), t("profiles.model"), t("profiles.usage"), t("profiles.actions")], rows, "settings-manager-list api-profile-list")
+      settingsList(["", t("profiles.provider"), t("profiles.models"), t("profiles.usage"), t("profiles.actions")], rows, "settings-manager-list api-profile-list")
     );
   }
 
