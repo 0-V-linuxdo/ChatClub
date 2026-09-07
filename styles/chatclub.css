@@ -8659,6 +8659,10 @@ body.settings-tab-context-menu-dragging iframe {
   border-top: 1px solid var(--line);
 }
 
+.api-profile-model-row-solo {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .api-profile-model-row:first-child {
   border-top: 0;
 }
@@ -8677,11 +8681,6 @@ body.settings-tab-context-menu-dragging iframe {
   font-weight: var(--font-weight-semibold);
   border: 1px solid var(--line);
   border-radius: var(--ui-radius);
-}
-
-.api-profile-model-row-spacer {
-  width: var(--ui-action-size);
-  height: var(--ui-action-size);
 }
 
 .api-profile-model-add {

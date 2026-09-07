@@ -124,6 +124,7 @@ globalThis.document = { addEventListener() {} };
   assert.match(profilesSource, /createModelCatalogEditor/);
   assert.match(profilesSource, /class: "api-profile-model-add"/);
   assert.match(profilesSource, /class: "api-profile-model-default"/);
+  assert.match(profilesSource, /api-profile-model-row-solo/);
   assert.match(stylesSource, /\.model-inventory-outbound \.settings-list-header span:last-child \{[^}]*text-align:\s*left;/s);
   assert.match(stylesSource, /\.api-profile-model-add \{[^}]*border:\s*1px dashed var\(--line\);/s);
   assert.doesNotMatch(profilesSource, /saveTopicTitleProfile/);

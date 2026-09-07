@@ -278,30 +278,34 @@ export function createProfilesSettingsSection(ctx) {
     const list = el("div", { class: "api-profile-model-list" });
     const render = () => {
       list.replaceChildren();
+      const multiple = values.length > 1;
       values.forEach((value, index) => {
         const isDefault = index === 0;
         const modelInput = input(value, {
           placeholder: t("profiles.model"),
-          "aria-label": isDefault ? t("profiles.defaultModel") : t("profiles.model"),
+          "aria-label": multiple && isDefault ? t("profiles.defaultModel") : t("profiles.model"),
           oninput: (event) => { values[index] = event.target.value; }
         });
         list.append(el("div", {
-          class: `api-profile-model-row${isDefault ? " api-profile-model-row-default" : ""}`.trim()
+          class: `api-profile-model-row${multiple ? "" : " api-profile-model-row-solo"}${multiple && isDefault ? " api-profile-model-row-default" : ""}`.trim()
         },
           modelInput,
-          isDefault
+          multiple && isDefault
             ? el("span", { class: "api-profile-model-default" }, t("profiles.defaultModel"))
-            : settingsIconAction(t("profiles.defaultModel"), "star", () => {
+            : null,
+          multiple && !isDefault
+            ? settingsIconAction(t("profiles.defaultModel"), "star", () => {
               const [selected] = values.splice(index, 1);
               values.unshift(selected);
               render();
-            }),
-          values.length > 1
+            })
+            : null,
+          multiple
             ? settingsIconAction(t("common.delete"), "trash", () => {
               values.splice(index, 1);
               render();
             }, "danger", false, "settings.action.delete")
-            : el("span", { class: "api-profile-model-row-spacer", "aria-hidden": "true" })
+            : null
         ));
       });
     };
