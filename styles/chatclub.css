@@ -8652,10 +8652,14 @@ body.settings-tab-context-menu-dragging iframe {
   gap: var(--space-3);
 }
 
+.api-profile-editor-modal .modal-header h2 {
+  flex: none;
+}
+
 .api-profile-editor-identity-label {
   flex: none;
   color: var(--muted);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-md);
   font-weight: var(--font-weight-semibold);
 }
 
@@ -8663,17 +8667,30 @@ body.settings-tab-context-menu-dragging iframe {
   min-width: 0;
   overflow: hidden;
   color: var(--text);
-  font-size: var(--font-size);
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-display);
+  font-weight: var(--font-weight-bold);
+  line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .api-profile-editor-layout {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  position: relative;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: var(--space-4);
-  align-items: start;
+  align-items: stretch;
+}
+
+.api-profile-editor-layout::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: var(--line);
+  pointer-events: none;
 }
 
 @media (max-width: 720px) {
@@ -8681,9 +8698,11 @@ body.settings-tab-context-menu-dragging iframe {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .api-profile-editor-layout::before {
+    display: none;
+  }
+
   .api-profile-models-field {
-    padding-left: 0;
-    border-left: 0;
     padding-top: var(--space-3);
     border-top: 1px solid var(--line);
   }
@@ -8712,8 +8731,6 @@ body.settings-tab-context-menu-dragging iframe {
 
 .api-profile-models-field {
   min-width: 0;
-  padding-left: var(--space-4);
-  border-left: 1px solid var(--line);
 }
 
 .api-profile-models-hint {
