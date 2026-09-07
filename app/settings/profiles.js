@@ -279,22 +279,29 @@ export function createProfilesSettingsSection(ctx) {
     const render = () => {
       list.replaceChildren();
       values.forEach((value, index) => {
+        const isDefault = index === 0;
         const modelInput = input(value, {
           placeholder: t("profiles.model"),
-          "aria-label": index === 0 ? t("profiles.defaultModel") : t("profiles.model"),
+          "aria-label": isDefault ? t("profiles.defaultModel") : t("profiles.model"),
           oninput: (event) => { values[index] = event.target.value; }
         });
         list.append(el("div", {
-          class: `api-profile-model-row${index === 0 ? " api-profile-model-row-default" : ""}`.trim()
+          class: `api-profile-model-row${isDefault ? " api-profile-model-row-default" : ""}`.trim()
         },
           modelInput,
-          index === 0 ? el("span", { class: "settings-usage-chip" }, t("profiles.defaultModel")) : null,
+          isDefault
+            ? el("span", { class: "api-profile-model-default" }, t("profiles.defaultModel"))
+            : settingsIconAction(t("profiles.defaultModel"), "star", () => {
+              const [selected] = values.splice(index, 1);
+              values.unshift(selected);
+              render();
+            }),
           values.length > 1
             ? settingsIconAction(t("common.delete"), "trash", () => {
               values.splice(index, 1);
               render();
             }, "danger", false, "settings.action.delete")
-            : null
+            : el("span", { class: "api-profile-model-row-spacer", "aria-hidden": "true" })
         ));
       });
     };
@@ -302,10 +309,15 @@ export function createProfilesSettingsSection(ctx) {
     return {
       node: el("div", { class: "api-profile-models" },
         list,
-        button(t("profiles.addModel"), () => {
-          values.push("");
-          render();
-        })
+        el("button", {
+          class: "api-profile-model-add",
+          type: "button",
+          onclick: () => {
+            values.push("");
+            render();
+            list.querySelector(".api-profile-model-row:last-child .input")?.focus();
+          }
+        }, svgIcon("plus"), el("span", {}, t("profiles.addModel")))
       ),
       read() {
         return values.map((value) => String(value || "").trim()).filter(Boolean);
