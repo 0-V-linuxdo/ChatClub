@@ -32,6 +32,8 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
   assert.match(summarySource, /summaryPanel\.generatingTitleWithModel/);
   assert.match(i18nSource, /"settings\.models\.title": "Iframe Preferred Models"/);
   assert.match(i18nSource, /"settings\.models\.title": "iframe 首选模型"/);
+  assert.match(i18nSource, /"settings\.profiles\.title": "API Provider"/);
+  assert.match(i18nSource, /"settings\.profiles\.title": "API 服务商"/);
   assert.match(i18nSource, /"inventory\.title": "Current models"/);
   assert.match(i18nSource, /"inventory\.title": "当前使用的模型"/);
 
@@ -96,6 +98,8 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
   assert.equal(custom.iframe[1].primary, "3.1 Pro");
   assert.equal(custom.iframe[1].secondary, "3.1 Flash-Lite");
   assert.equal(custom.iframe[1].secondaryEnabled, true);
+  assert.deepEqual(listModelInventory(custom, ["outbound"]).iframe, []);
+  assert.deepEqual(listModelInventory(custom, ["iframe"]).outbound, []);
 
   const missingModel = resolveApiProfile({
     apiProfiles: [{ id: "bare", name: "Bare", endpoint: "https://api.openai.com/v1/chat/completions" }],
@@ -121,13 +125,25 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
     }
   };
   const ports = settingsModule.createSettingsSectionStatePorts(rootState);
-  const fromPort = listModelInventory(ports.profiles.options);
+  const fromPort = listModelInventory(ports.profiles.options, ["outbound"]);
   assert.deepEqual(fromPort.outbound.map((row) => row.id), ["optimize", "summary", "topicTitle"]);
-  assert.equal(fromPort.iframe.find((row) => row.id === "Gemini")?.primary, "3.1 Pro");
+  assert.deepEqual(fromPort.iframe, []);
+  assert.throws(
+    () => { ports.profiles.options.modelPreferences; },
+    /settings\.profiles cannot read app state\.options\.modelPreferences/
+  );
   assert.throws(
     () => { ports.profiles.options.modelPreferences = { Gemini: "fast" }; },
     /settings\.profiles cannot mutate app state\.options\.modelPreferences/
   );
+  const fromModels = listModelInventory(ports.models.options);
+  assert.equal(fromModels.iframe.find((row) => row.id === "Gemini")?.primary, "3.1 Pro");
+
+  const profilesSource = read("app/settings/profiles.js");
+  assert.match(profilesSource, /listModelInventory\(state\.options, \["outbound"\]\)/);
+  assert.doesNotMatch(profilesSource, /modelInventoryWorld: "iframe"/);
+  assert.doesNotMatch(profilesSource, /goToSection\("models"\)/);
+  assert.match(profilesSource, /settingsInnerTabs/);
 
   console.log("model inventory: ok");
 })().catch((error) => {

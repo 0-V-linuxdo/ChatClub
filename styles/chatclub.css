@@ -6938,14 +6938,6 @@ body.settings-tab-context-menu-dragging iframe {
   gap: var(--space-2);
 }
 
-.model-inventory-heading-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  align-items: center;
-  justify-content: space-between;
-}
-
 .model-inventory-heading {
   margin: 0;
   color: var(--muted);
@@ -6961,12 +6953,6 @@ body.settings-tab-context-menu-dragging iframe {
 .model-inventory-outbound .model-inventory-row {
   min-width: 560px;
   grid-template-columns: minmax(108px, .8fr) minmax(140px, 1fr) minmax(140px, 1fr) minmax(140px, .9fr);
-}
-
-.model-inventory-iframe .settings-list-header,
-.model-inventory-iframe .model-inventory-row {
-  min-width: 480px;
-  grid-template-columns: minmax(108px, .8fr) minmax(160px, 1fr) minmax(140px, .9fr);
 }
 
 .model-inventory-row:hover {
@@ -9289,12 +9275,6 @@ body.settings-tab-context-menu-dragging iframe {
   .model-inventory-outbound .model-inventory-row {
     min-width: 520px;
     grid-template-columns: minmax(96px, .8fr) minmax(120px, 1fr) minmax(120px, 1fr) minmax(120px, .9fr);
-  }
-
-  .model-inventory-iframe .settings-list-header,
-  .model-inventory-iframe .model-inventory-row {
-    min-width: 440px;
-    grid-template-columns: minmax(96px, .8fr) minmax(140px, 1fr) minmax(120px, .9fr);
   }
 
   .built-in-config-list .settings-list-header,

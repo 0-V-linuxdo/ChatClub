@@ -17,7 +17,7 @@ export const SETTINGS_OPTION_CAPABILITIES = Object.freeze({
     "topbarPromptInputFontSize", "topbarPromptPlaceholderConfig"
   ]),
   profiles: optionCapability(
-    ["apiProfiles", "optimizeApiProfileId", "summaryApiProfileId", "topicTitleApiProfileId", "modelPreferenceOrder", "modelPreferences"],
+    ["apiProfiles", "optimizeApiProfileId", "summaryApiProfileId", "topicTitleApiProfileId"],
     ["apiProfiles", "optimizeApiProfileId", "summaryApiProfileId", "topicTitleApiProfileId"]
   ),
   apps: optionCapability(["builtinChatAppOrder", "builtinChatAppIframeConfigs", "iframePermissionsSource"]),
@@ -80,8 +80,8 @@ const SETTINGS_SECTION_STATE_ACCESS = Object.freeze({
     "settingsTopbarPromptPlaceholderDragIndex", "settingsTopbarPromptPlaceholderEditingIndex", "topbarEditLayoutDraft"
   ], { options: settingsOptionAccess("appearance") }),
   profiles: stateAccess(
-    ["options", "settingsProfileDragId"],
-    ["options", "settingsProfileDragId"],
+    ["options", "settingsProfileDragId", "settingsProfilesTab"],
+    ["options", "settingsProfileDragId", "settingsProfilesTab"],
     { options: settingsOptionAccess("profiles") }
   ),
   apps: stateAccess([

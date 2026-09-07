@@ -76,6 +76,7 @@ export function createAppState() {
     settingsPromptTemplateDragId: "",
     settingsPromptLibraryDragId: "",
     settingsProfileDragId: "",
+    settingsProfilesTab: "providers",
     settingsBuiltinAppDragId: "",
     settingsCustomAppDragId: "",
     settingsAppearancePrimaryColorDraft: "",

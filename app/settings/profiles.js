@@ -31,7 +31,7 @@ export function createProfilesSettingsSection(ctx) {
   const state = requireSettingsSectionStatePort(
     requireControllerContext(ctx, controllerName, "state"),
     controllerName,
-    ["options", "settingsProfileDragId"]
+    ["options", "settingsProfileDragId", "settingsProfilesTab"]
   );
   const svgIcon = requireControllerFunction(ctx, controllerName, "svgIcon");
   const notifyConfigReload = requireControllerFunction(ctx, controllerName, "notifyConfigReload");
@@ -39,6 +39,7 @@ export function createProfilesSettingsSection(ctx) {
   const openTabUrl = requireControllerFunction(ctx, controllerName, "openTabUrl");
   const {
     settingsBlock,
+    settingsInnerTabs,
     settingsReorderHandle,
     settingsEmptyRow,
     settingsIconAction,
@@ -48,12 +49,31 @@ export function createProfilesSettingsSection(ctx) {
     settingsPrimaryAction
   } = createSettingsKit({ svgIcon });
 
-  function pane(redraw, goToSection = () => {}) {
+  function pane(redraw) {
+    const activeTab = state.settingsProfilesTab === "inventory" ? "inventory" : "providers";
+    state.settingsProfilesTab = activeTab;
+    const tabs = [
+      ["providers", t("profiles.providersTab"), t("profiles.providersTabDesc")],
+      ["inventory", t("profiles.inventoryTab"), t("profiles.inventoryTabDesc")]
+    ];
+    const tabBar = settingsInnerTabs(tabs, activeTab, (id) => {
+      state.settingsProfilesTab = id;
+      redraw();
+    });
+    Array.from(tabBar.children).forEach((tab, index) => {
+      tab.dataset.profilesTabId = tabs[index]?.[0] || "";
+    });
+    return el("div", { class: "settings-pane settings-manager-pane" },
+      tabBar,
+      activeTab === "inventory" ? inventoryBlock() : providersBlock(redraw)
+    );
+  }
+
+  function providersBlock(redraw) {
     const rows = state.options.apiProfiles.length
       ? state.options.apiProfiles.map((profile) => profileRow(profile, redraw))
       : settingsEmptyRow(t("profiles.noProfiles"));
-    return el("div", { class: "settings-pane settings-manager-pane" },
-      inventoryBlock(goToSection),
+    return el("div", {},
       settingsPaneToolbar(t("profiles.manage"),
         settingsPrimaryAction(t("profiles.add"), "plus", () => openEditor(null, redraw))
       ),
@@ -73,8 +93,8 @@ export function createProfilesSettingsSection(ctx) {
     return value || t(emptyKey);
   }
 
-  function inventoryBlock(goToSection) {
-    const { outbound, iframe } = listModelInventory(state.options);
+  function inventoryBlock() {
+    const { outbound } = listModelInventory(state.options, ["outbound"]);
     return settingsBlock(t("inventory.title"), t("inventory.desc"),
       el("div", { class: "model-inventory-group", dataset: { modelInventoryWorld: "outbound" } },
         el("p", { class: "model-inventory-heading" }, t("inventory.outbound")),
@@ -90,26 +110,6 @@ export function createProfilesSettingsSection(ctx) {
             el("span", { class: "settings-muted-cell" }, inventoryValue(row.host, "inventory.none"))
           )),
           "model-inventory-list model-inventory-outbound"
-        )
-      ),
-      el("div", { class: "model-inventory-group", dataset: { modelInventoryWorld: "iframe" } },
-        el("div", { class: "model-inventory-heading-row" },
-          el("p", { class: "model-inventory-heading" }, t("inventory.iframe")),
-          button(t("inventory.openIframePreferences"), () => goToSection("models"))
-        ),
-        settingsList(
-          [t("inventory.platform"), t("inventory.preferred"), t("inventory.secondary")],
-          iframe.map((row) => el("div", {
-            class: "ui-list-row settings-list-row model-inventory-row",
-            dataset: { modelInventoryId: row.id, modelInventoryWorld: "iframe" }
-          },
-            el("strong", { class: "settings-main-cell" }, t(row.featureKey)),
-            el("span", { class: "settings-main-cell" }, inventoryValue(row.primary, "inventory.none")),
-            el("span", { class: "settings-muted-cell" }, row.secondaryEnabled
-              ? inventoryValue(row.secondary, "inventory.none")
-              : t("inventory.secondaryOff"))
-          )),
-          "model-inventory-list model-inventory-iframe"
         )
       )
     );

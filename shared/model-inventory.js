@@ -21,6 +21,15 @@ function readableOptions(options) {
   return { ...options };
 }
 
+function requestedWorlds(worlds) {
+  if (worlds == null) return { outbound: true, iframe: true };
+  const list = Array.isArray(worlds) ? worlds : [worlds];
+  return {
+    outbound: list.includes("outbound"),
+    iframe: list.includes("iframe")
+  };
+}
+
 export function apiProfileModel(profile) {
   return String(profile?.model || "").trim() || API_PROFILE_MODEL_DEFAULT;
 }
@@ -79,21 +88,25 @@ function iframePreferenceOrder(options = {}) {
   return ordered;
 }
 
-export function listModelInventory(options = {}) {
+export function listModelInventory(options = {}, worlds) {
+  const include = requestedWorlds(worlds);
   const source = readableOptions(options);
-  const outbound = OUTBOUND_INVENTORY_SLOTS.map((slot) => {
-    const profile = resolveApiProfile(source, slot.purpose);
-    return {
-      world: "outbound",
-      id: slot.id,
-      purpose: slot.purpose,
-      featureKey: slot.featureKey,
-      profileId: String(profile.id || ""),
-      profileName: String(profile.name || profile.id || ""),
-      model: apiProfileModel(profile),
-      host: apiEndpointHost(profile.endpoint || API_PROFILE_ENDPOINT_DEFAULT)
-    };
-  });
+  const outbound = include.outbound
+    ? OUTBOUND_INVENTORY_SLOTS.map((slot) => {
+      const profile = resolveApiProfile(source, slot.purpose);
+      return {
+        world: "outbound",
+        id: slot.id,
+        purpose: slot.purpose,
+        featureKey: slot.featureKey,
+        profileId: String(profile.id || ""),
+        profileName: String(profile.name || profile.id || ""),
+        model: apiProfileModel(profile),
+        host: apiEndpointHost(profile.endpoint || API_PROFILE_ENDPOINT_DEFAULT)
+      };
+    })
+    : [];
+  if (!include.iframe) return { outbound, iframe: [] };
   const preferences = {
     ...DEFAULT_MODEL_PREFERENCES,
     ...(source.modelPreferences || {})

@@ -108,12 +108,15 @@ globalThis.document = { addEventListener() {} };
     "options"
   ]);
   assert.deepEqual(stateKeys(topicSource), ["options", "topicDeleteSiteExpandedId"]);
-  assert.deepEqual(stateKeys(profilesSource), ["options", "settingsProfileDragId"]);
-  assert.match(profilesSource, /inventoryBlock\(goToSection\)/);
-  assert.match(profilesSource, /listModelInventory\(state\.options\)/);
+  assert.deepEqual(stateKeys(profilesSource), ["options", "settingsProfileDragId", "settingsProfilesTab"]);
+  assert.match(profilesSource, /settingsInnerTabs/);
+  assert.match(profilesSource, /state\.settingsProfilesTab = id/);
+  assert.match(profilesSource, /\["providers",\s*t\("profiles\.providersTab"\)/);
+  assert.match(profilesSource, /\["inventory",\s*t\("profiles\.inventoryTab"\)/);
+  assert.match(profilesSource, /listModelInventory\(state\.options, \["outbound"\]\)/);
   assert.match(profilesSource, /dataset: \{ modelInventoryId: row\.id, modelInventoryWorld: "outbound" \}/);
-  assert.match(profilesSource, /dataset: \{ modelInventoryId: row\.id, modelInventoryWorld: "iframe" \}/);
-  assert.match(profilesSource, /goToSection\("models"\)/);
+  assert.doesNotMatch(profilesSource, /modelInventoryWorld: "iframe"/);
+  assert.doesNotMatch(profilesSource, /goToSection\("models"\)/);
   assert.match(profilesSource, /apiProfileSelectLabel\(profile\)/);
   assert.match(promptTemplatesSource, /apiProfileSelectLabel\(profile\)/);
   assert.doesNotMatch(
@@ -292,6 +295,7 @@ globalThis.document = { addEventListener() {} };
   const functionalAnomaliesModule = await import(moduleUrl("app/settings/functional-anomalies.js"));
   const rootState = stateModule.createAppState();
   assert.equal(rootState.modelPreferenceSettingsTab, "preferred", "preferred models must be the default settings tab");
+  assert.equal(rootState.settingsProfilesTab, "providers", "API Provider must open on the providers tab");
   rootState.options = {
     apiProfiles: [{ id: "api-1", name: "API", endpoint: "https://example.test", model: "model" }],
     builtinChatAppOrder: [],
@@ -541,13 +545,13 @@ globalThis.document = { addEventListener() {} };
   );
   assert.deepEqual(
     settingsStateModule.SETTINGS_OPTION_CAPABILITIES.profiles.read,
-    ["apiProfiles", "optimizeApiProfileId", "summaryApiProfileId", "topicTitleApiProfileId", "modelPreferenceOrder", "modelPreferences"],
-    "API Profiles may read iframe preferences for the model inventory"
+    ["apiProfiles", "optimizeApiProfileId", "summaryApiProfileId", "topicTitleApiProfileId"],
+    "API Provider must not read iframe preferred models"
   );
   assert.deepEqual(
     settingsStateModule.SETTINGS_OPTION_CAPABILITIES.profiles.write,
     ["apiProfiles", "optimizeApiProfileId", "summaryApiProfileId", "topicTitleApiProfileId"],
-    "API Profiles must not persist iframe preferred models"
+    "API Provider must not persist iframe preferred models"
   );
   assert.deepEqual(
     settingsStateModule.SETTINGS_OPTION_CAPABILITIES.summary.write,
