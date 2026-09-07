@@ -110,7 +110,7 @@ export function createProfilesSettingsSection(ctx) {
       el("div", { class: "model-inventory-group", dataset: { modelInventoryWorld: "outbound" } },
         el("p", { class: "model-inventory-heading" }, t("inventory.outbound")),
         settingsList(
-          [t("inventory.feature"), t("inventory.profile"), t("inventory.model"), t("inventory.host")],
+          [t("inventory.feature"), t("inventory.profile"), t("inventory.model"), t("profiles.provider")],
           outbound.map((row) => el("div", {
             class: "ui-list-row settings-list-row model-inventory-row",
             dataset: { modelInventoryId: row.id, modelInventoryWorld: "outbound" }
@@ -126,7 +126,7 @@ export function createProfilesSettingsSection(ctx) {
               dataset: { outboundSlot: row.id, outboundField: "model" },
               onchange: (event) => { void saveOutboundModel(row.purpose, event.target.value, redraw); }
             }),
-            el("span", { class: "settings-muted-cell" }, inventoryValue(row.host, "inventory.none"))
+            el("span", { class: "settings-muted-cell" }, inventoryValue(row.profileName, "inventory.none"))
           )),
           "model-inventory-list model-inventory-outbound"
         )

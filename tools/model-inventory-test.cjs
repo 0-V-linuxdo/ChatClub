@@ -180,6 +180,8 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
   assert.match(profilesSource, /saveOutboundModel/);
   assert.match(profilesSource, /outboundField: "profile"/);
   assert.match(profilesSource, /outboundField: "model"/);
+  assert.match(profilesSource, /row\.profileName/);
+  assert.doesNotMatch(profilesSource, /inventory\.host/);
   assert.doesNotMatch(profilesSource, /modelInventoryWorld: "iframe"/);
   assert.doesNotMatch(profilesSource, /goToSection\("models"\)/);
   assert.match(profilesSource, /settingsInnerTabs/);
