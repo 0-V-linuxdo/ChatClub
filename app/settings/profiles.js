@@ -8,7 +8,8 @@ import {
   OUTBOUND_INVENTORY_SLOTS
 } from "../../shared/model-inventory.js";
 import { createId } from "../../shared/storage-schema.js";
-import { button, editorModal, el, field, input, openConfirmationAction, select, toast } from "../../ui/dom.js";
+import { button, bindLinearMenuKeyboard, claimTopmostPopoverEscape, editorModal, el, field, input, openConfirmationAction, select, toast } from "../../ui/dom.js";
+import { createMenuButton } from "../../ui/components.js";
 import {
   cleanupSettingsDragRows,
   createSettingsKit,
@@ -287,12 +288,112 @@ export function createProfilesSettingsSection(ctx) {
     const notify = () => onChange?.();
     const favoriteKey = (value) => String(value || "").trim();
     const isFavorite = (value) => favoriteModels.some((item) => favoriteKey(item) === favoriteKey(value));
+    let menuCleanup = () => {};
+    const closeModelMenu = () => {
+      menuCleanup();
+      menuCleanup = () => {};
+    };
+    const runMenuAction = (action) => {
+      closeModelMenu();
+      action();
+      render();
+      notify();
+    };
+    const openModelMenu = (event, index) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const anchor = event.currentTarget;
+      if (anchor.getAttribute("aria-expanded") === "true") {
+        closeModelMenu();
+        return;
+      }
+      closeModelMenu();
+      const isFallback = index === 0;
+      const starred = isFavorite(values[index]);
+      anchor.setAttribute("aria-expanded", "true");
+      const rect = anchor.getBoundingClientRect();
+      const menuWidth = 220;
+      const left = Math.max(8, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8));
+      const top = Math.min(rect.bottom + 6, window.innerHeight - 8);
+      const backdrop = el("div", {
+        class: "popover-backdrop api-profile-model-menu-backdrop",
+        onpointerdown: (pointerEvent) => {
+          pointerEvent.preventDefault();
+          closeModelMenu();
+        }
+      });
+      const menu = el("div", {
+        class: "popover-menu overlay-surface api-profile-model-menu",
+        role: "menu",
+        "aria-label": t("profiles.modelActions"),
+        style: { top: `${top}px`, left: `${left}px` },
+        onpointerdown: (pointerEvent) => pointerEvent.stopPropagation(),
+        onclick: (pointerEvent) => pointerEvent.stopPropagation()
+      },
+        createMenuButton({
+          label: isFallback ? t("profiles.fallbackModel") : t("profiles.setFallbackModel"),
+          icon: svgIcon("shield"),
+          disabled: isFallback,
+          onClick: () => {
+            if (isFallback) return;
+            runMenuAction(() => {
+              const [selected] = values.splice(index, 1);
+              values.unshift(selected);
+            });
+          }
+        }),
+        createMenuButton({
+          label: starred ? t("profiles.removeFavoriteModel") : t("profiles.setFavoriteModel"),
+          icon: svgIcon(starred ? "star" : "starOff"),
+          onClick: () => {
+            runMenuAction(() => {
+              const key = favoriteKey(values[index]);
+              if (!key) return;
+              const at = favoriteModels.findIndex((item) => favoriteKey(item) === key);
+              if (at >= 0) favoriteModels.splice(at, 1);
+              else favoriteModels.unshift(key);
+            });
+          }
+        }),
+        createMenuButton({
+          label: t("common.delete"),
+          icon: svgIcon("trash"),
+          variant: "danger",
+          onClick: () => {
+            runMenuAction(() => {
+              const key = favoriteKey(values[index]);
+              values.splice(index, 1);
+              const at = favoriteModels.findIndex((item) => favoriteKey(item) === key);
+              if (at >= 0) favoriteModels.splice(at, 1);
+            });
+          }
+        })
+      );
+      document.body.append(backdrop, menu);
+      bindLinearMenuKeyboard(menu, { dismiss: closeModelMenu, trigger: anchor });
+      const onKeydown = (keyEvent) => {
+        if (!claimTopmostPopoverEscape(keyEvent, ".api-profile-model-menu")) return;
+        closeModelMenu();
+      };
+      const onViewport = () => closeModelMenu();
+      document.addEventListener("keydown", onKeydown, true);
+      window.addEventListener("resize", onViewport, true);
+      window.addEventListener("scroll", onViewport, true);
+      menuCleanup = () => {
+        document.removeEventListener("keydown", onKeydown, true);
+        window.removeEventListener("resize", onViewport, true);
+        window.removeEventListener("scroll", onViewport, true);
+        backdrop.remove();
+        menu.remove();
+        anchor.setAttribute("aria-expanded", "false");
+      };
+    };
     const render = () => {
+      closeModelMenu();
       list.replaceChildren();
       const multiple = values.length > 1;
       values.forEach((value, index) => {
         const isFallback = index === 0;
-        const starred = isFavorite(value);
         const modelInput = input(value, {
           placeholder: t("profiles.model"),
           "aria-label": multiple && isFallback ? t("profiles.fallbackModel") : t("profiles.model"),
@@ -305,52 +406,18 @@ export function createProfilesSettingsSection(ctx) {
             notify();
           }
         });
+        const moreButton = multiple
+          ? settingsIconAction(t("profiles.modelActions"), "moreVertical", (event) => openModelMenu(event, index), "api-profile-model-more")
+          : null;
+        if (moreButton) {
+          moreButton.setAttribute("aria-haspopup", "menu");
+          moreButton.setAttribute("aria-expanded", "false");
+        }
         list.append(el("div", {
           class: `api-profile-model-row${multiple ? "" : " api-profile-model-row-solo"}${multiple && isFallback ? " api-profile-model-row-fallback" : ""}`.trim()
         },
           modelInput,
-          multiple && isFallback
-            ? el("span", {
-              class: "api-profile-model-fallback is-active tooltip-trigger",
-              "aria-label": t("profiles.fallbackModel"),
-              "data-tooltip": t("profiles.defaultModelHint"),
-              "data-tooltip-wrap": "true"
-            }, svgIcon("lifeBuoy"))
-            : null,
-          multiple && !isFallback
-            ? settingsIconAction(t("profiles.setFallbackModel"), "lifeBuoy", () => {
-              const [selected] = values.splice(index, 1);
-              values.unshift(selected);
-              render();
-              notify();
-            }, "api-profile-model-fallback")
-            : null,
-          multiple
-            ? settingsIconAction(
-              starred ? t("profiles.removeFavoriteModel") : t("profiles.setFavoriteModel"),
-              starred ? "star" : "starOff",
-              () => {
-                const key = favoriteKey(values[index]);
-                if (!key) return;
-                const at = favoriteModels.findIndex((item) => favoriteKey(item) === key);
-                if (at >= 0) favoriteModels.splice(at, 1);
-                else favoriteModels.unshift(key);
-                render();
-                notify();
-              },
-              `api-profile-model-favorite${starred ? " is-active" : ""}`
-            )
-            : null,
-          multiple
-            ? settingsIconAction(t("common.delete"), "trash", () => {
-              const key = favoriteKey(values[index]);
-              values.splice(index, 1);
-              const at = favoriteModels.findIndex((item) => favoriteKey(item) === key);
-              if (at >= 0) favoriteModels.splice(at, 1);
-              render();
-              notify();
-            }, "danger", false, "settings.action.delete")
-            : null
+          moreButton
         ));
       });
     };
@@ -364,6 +431,7 @@ export function createProfilesSettingsSection(ctx) {
     return {
       node: el("div", { class: "api-profile-models" }, list),
       add,
+      close: closeModelMenu,
       live() {
         return values.slice();
       },
@@ -456,7 +524,10 @@ export function createProfilesSettingsSection(ctx) {
     endpointInput.addEventListener("input", () => syncSave());
     secret.input.addEventListener("input", () => syncSave());
     let dialog;
-    const close = () => dialog.remove();
+    const close = () => {
+      catalog.close();
+      dialog.remove();
+    };
     const save = async () => {
       const models = catalog.read();
       const favoriteModels = catalog.favorites();

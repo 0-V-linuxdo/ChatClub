@@ -8761,7 +8761,7 @@ body.settings-tab-context-menu-dragging iframe {
 
 .api-profile-model-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--space-2);
   align-items: center;
 }
@@ -8772,22 +8772,6 @@ body.settings-tab-context-menu-dragging iframe {
 
 .api-profile-model-row .input {
   min-width: 0;
-}
-
-.api-profile-model-fallback {
-  display: inline-grid;
-  place-items: center;
-  width: var(--ui-action-size);
-  height: var(--ui-action-size);
-  color: var(--muted);
-}
-
-.api-profile-model-fallback.is-active {
-  color: var(--text);
-}
-
-.api-profile-model-favorite.is-active {
-  color: var(--primary);
 }
 
 .api-profile-model-add {
@@ -10970,6 +10954,10 @@ body:has(.chat-card:not(.fullscreen-hidden) .chat-frame.active + .frame-submit-t
 .popover-menu.prompt-actions-popover {
   min-width: 220px;
   padding: 7px;
+}
+
+.popover-menu.api-profile-model-menu {
+  min-width: 200px;
 }
 
 .prompt-actions-popover .prompt-actions-menu-button {
