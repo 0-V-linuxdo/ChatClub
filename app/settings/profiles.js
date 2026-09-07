@@ -400,10 +400,6 @@ export function createProfilesSettingsSection(ctx) {
     };
     dialog = editorModal(editing ? t("profiles.edit") : t("profiles.addTitle"),
       el("div", { class: "settings-editor-form" },
-        el("div", { class: "api-profile-editor-identity" },
-          el("span", { class: "api-profile-editor-identity-label" }, t("profiles.provider")),
-          identityName
-        ),
         el("div", { class: "api-profile-editor-layout" },
           el("div", { class: "api-profile-editor-credentials" },
             field(t("profiles.provider"), nameInput),
@@ -430,7 +426,14 @@ export function createProfilesSettingsSection(ctx) {
       false,
       t("common.close")
     );
-    dialog.querySelector(".modal")?.classList.add("settings-editor-modal", "api-profile-editor-modal");
+    const panel = dialog.querySelector(".modal");
+    panel?.classList.add("settings-editor-modal", "api-profile-editor-modal");
+    panel?.querySelector(".modal-header h2")?.after(
+      el("div", { class: "api-profile-editor-identity" },
+        el("span", { class: "api-profile-editor-identity-label" }, t("profiles.provider")),
+        identityName
+      )
+    );
   }
 
   async function duplicate(profile, redraw) {
