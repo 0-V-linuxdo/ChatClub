@@ -16,7 +16,10 @@ export const SETTINGS_OPTION_CAPABILITIES = Object.freeze({
     "themeMode", "tooltipDisabledIds",
     "topbarPromptInputFontSize", "topbarPromptPlaceholderConfig"
   ]),
-  profiles: optionCapability(["apiProfiles", "optimizeApiProfileId", "summaryApiProfileId", "topicTitleApiProfileId"]),
+  profiles: optionCapability(
+    ["apiProfiles", "optimizeApiProfileId", "summaryApiProfileId", "topicTitleApiProfileId", "modelPreferenceOrder", "modelPreferences"],
+    ["apiProfiles", "optimizeApiProfileId", "summaryApiProfileId", "topicTitleApiProfileId"]
+  ),
   apps: optionCapability(["builtinChatAppOrder", "builtinChatAppIframeConfigs", "iframePermissionsSource"]),
   models: optionCapability([
     "modelPreferenceFailureOverrides", "modelPreferenceFailurePolicy", "modelPreferenceOrder", "modelPreferences"

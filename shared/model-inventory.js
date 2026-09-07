@@ -16,6 +16,11 @@ const OUTBOUND_INVENTORY_SLOTS = Object.freeze([
   Object.freeze({ id: "topicTitle", purpose: "topicTitle", featureKey: "inventory.topicTitle" })
 ]);
 
+function readableOptions(options) {
+  if (!options || typeof options !== "object" || Array.isArray(options)) return {};
+  return { ...options };
+}
+
 export function apiProfileModel(profile) {
   return String(profile?.model || "").trim() || API_PROFILE_MODEL_DEFAULT;
 }
@@ -38,7 +43,7 @@ export function apiProfileSelectLabel(profile) {
 }
 
 export function resolveApiProfile(options, purpose) {
-  const normalized = normalizeApiOptions(options || {});
+  const normalized = normalizeApiOptions(readableOptions(options));
   const id = purpose === "summary"
     ? normalized.summaryApiProfileId
     : purpose === "topicTitle"
@@ -75,8 +80,9 @@ function iframePreferenceOrder(options = {}) {
 }
 
 export function listModelInventory(options = {}) {
+  const source = readableOptions(options);
   const outbound = OUTBOUND_INVENTORY_SLOTS.map((slot) => {
-    const profile = resolveApiProfile(options, slot.purpose);
+    const profile = resolveApiProfile(source, slot.purpose);
     return {
       world: "outbound",
       id: slot.id,
@@ -90,10 +96,10 @@ export function listModelInventory(options = {}) {
   });
   const preferences = {
     ...DEFAULT_MODEL_PREFERENCES,
-    ...(options.modelPreferences || {})
+    ...(source.modelPreferences || {})
   };
   const secondaryEnabled = preferences[MODEL_PREFERENCE_SECONDARY_ENABLED_KEY] === true;
-  const iframe = iframePreferenceOrder(options).map((appId) => {
+  const iframe = iframePreferenceOrder(source).map((appId) => {
     const secondaryKey = MODEL_PREFERENCE_SECONDARY_KEYS[appId];
     return {
       world: "iframe",

@@ -110,6 +110,25 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
     topicTitleApiProfileId: "bare"
   }).outbound[0].host, "api.openai.com");
 
+  const stateModule = await import("../app/state.js");
+  const settingsModule = await import("../app/settings/state-ports.js");
+  const rootState = stateModule.createAppState();
+  rootState.options = {
+    ...DEFAULT_OPTIONS,
+    modelPreferences: {
+      ...DEFAULT_OPTIONS.modelPreferences,
+      Gemini: "pro"
+    }
+  };
+  const ports = settingsModule.createSettingsSectionStatePorts(rootState);
+  const fromPort = listModelInventory(ports.profiles.options);
+  assert.deepEqual(fromPort.outbound.map((row) => row.id), ["optimize", "summary", "topicTitle"]);
+  assert.equal(fromPort.iframe.find((row) => row.id === "Gemini")?.primary, "3.1 Pro");
+  assert.throws(
+    () => { ports.profiles.options.modelPreferences = { Gemini: "fast" }; },
+    /settings\.profiles cannot mutate app state\.options\.modelPreferences/
+  );
+
   console.log("model inventory: ok");
 })().catch((error) => {
   console.error(error?.stack || error);

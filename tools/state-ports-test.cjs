@@ -83,6 +83,11 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   settingsSections.appearance.options.themeMode = "dark";
   assert.equal(rootState.options.themeMode, "dark");
   assert.throws(() => { settingsSections.appearance.options.recordFullText; }, /settings\.appearance cannot read/);
+  assert.equal(settingsSections.profiles.options.modelPreferences.Gemini, "pro");
+  assert.throws(
+    () => { settingsSections.profiles.options.modelPreferences = { Gemini: "flash" }; },
+    /settings\.profiles cannot mutate app state\.options\.modelPreferences/
+  );
   assert.equal(settingsSections.summary.options.recordFullText, false);
   settingsSections.summary.options.recordFullText = true;
   assert.equal(rootState.options.recordFullText, true);

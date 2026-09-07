@@ -540,6 +540,16 @@ globalThis.document = { addEventListener() {} };
     "a user who hid History must not get it reinserted"
   );
   assert.deepEqual(
+    settingsStateModule.SETTINGS_OPTION_CAPABILITIES.profiles.read,
+    ["apiProfiles", "optimizeApiProfileId", "summaryApiProfileId", "topicTitleApiProfileId", "modelPreferenceOrder", "modelPreferences"],
+    "API Profiles may read iframe preferences for the model inventory"
+  );
+  assert.deepEqual(
+    settingsStateModule.SETTINGS_OPTION_CAPABILITIES.profiles.write,
+    ["apiProfiles", "optimizeApiProfileId", "summaryApiProfileId", "topicTitleApiProfileId"],
+    "API Profiles must not persist iframe preferred models"
+  );
+  assert.deepEqual(
     settingsStateModule.SETTINGS_OPTION_CAPABILITIES.summary.write,
     ["recordFullText", "summaryApiProfileId", "summaryPromptTemplateId", "summaryPromptTemplates", "summarySiteConfigs"],
     "Summary settings must own full-text recording and collector/prompt config"
