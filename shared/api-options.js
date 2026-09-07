@@ -8,14 +8,50 @@ function text(value, fallback = "") {
   return String(value ?? fallback).trim();
 }
 
+export function apiProfileModel(profile) {
+  return text(profile?.model, API_PROFILE_MODEL_DEFAULT) || API_PROFILE_MODEL_DEFAULT;
+}
+
+function normalizeApiProfileModels(profile = {}) {
+  const listed = Array.isArray(profile?.models)
+    ? profile.models.map((item) => text(item)).filter(Boolean)
+    : [];
+  const fallback = text(profile?.model) || listed[0] || API_PROFILE_MODEL_DEFAULT;
+  const models = [];
+  const seen = new Set();
+  const push = (value) => {
+    if (!value || seen.has(value)) return;
+    seen.add(value);
+    models.push(value);
+  };
+  push(fallback);
+  for (const value of listed) push(value);
+  return {
+    model: models[0] || API_PROFILE_MODEL_DEFAULT,
+    models: models.length ? models : [API_PROFILE_MODEL_DEFAULT]
+  };
+}
+
+export function apiProfileModels(profile) {
+  return normalizeApiProfileModels(profile).models;
+}
+
+export function resolveApiSlotModel(profile, requested) {
+  const catalog = apiProfileModels(profile);
+  const model = text(requested);
+  return catalog.includes(model) ? model : "";
+}
+
 function normalizeProfile(value = {}, index = 0) {
+  const modelsState = normalizeApiProfileModels(value);
   return {
     ...value,
     id: text(value.id, `api-profile-${index + 1}`),
     name: text(value.name, `API ${index + 1}`),
     endpoint: text(value.endpoint, API_PROFILE_ENDPOINT_DEFAULT),
     apiKey: String(value.apiKey || ""),
-    model: text(value.model, API_PROFILE_MODEL_DEFAULT)
+    model: modelsState.model,
+    models: modelsState.models
   };
 }
 
@@ -27,6 +63,10 @@ function normalizeTemplate(value = {}, fallback = {}, index = 0) {
     title: text(value.title || value.name || fallback.title, `Template ${index + 1}`),
     prompt: String(value.prompt ?? value.content ?? fallback.prompt ?? "")
   };
+}
+
+function profileById(profiles, profileId) {
+  return profiles.find((item) => item.id === profileId) || profiles[0] || null;
 }
 
 export function normalizeApiOptions(value = {}) {
@@ -51,6 +91,9 @@ export function normalizeApiOptions(value = {}) {
     optimizeApiProfileId,
     summaryApiProfileId,
     topicTitleApiProfileId,
+    optimizeApiModel: resolveApiSlotModel(profileById(profiles, optimizeApiProfileId), source.optimizeApiModel),
+    summaryApiModel: resolveApiSlotModel(profileById(profiles, summaryApiProfileId), source.summaryApiModel),
+    topicTitleApiModel: resolveApiSlotModel(profileById(profiles, topicTitleApiProfileId), source.topicTitleApiModel),
     optimizePromptTemplates: optimizeTemplates,
     optimizePromptTemplateId: optimizeTemplates.some((item) => item.id === source.optimizePromptTemplateId)
       ? source.optimizePromptTemplateId : optimizeTemplates[0]?.id || "",

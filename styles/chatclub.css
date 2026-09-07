@@ -6951,8 +6951,13 @@ body.settings-tab-context-menu-dragging iframe {
 
 .model-inventory-outbound .settings-list-header,
 .model-inventory-outbound .model-inventory-row {
-  min-width: 560px;
-  grid-template-columns: minmax(108px, .8fr) minmax(140px, 1fr) minmax(140px, 1fr) minmax(140px, .9fr);
+  min-width: 620px;
+  grid-template-columns: minmax(108px, .8fr) minmax(160px, 1.1fr) minmax(160px, 1.1fr) minmax(140px, .9fr);
+}
+
+.model-inventory-row .select {
+  min-width: 0;
+  width: 100%;
 }
 
 .model-inventory-row:hover {
@@ -8592,6 +8597,23 @@ body.settings-tab-context-menu-dragging iframe {
   gap: var(--space-4);
 }
 
+.api-profile-models,
+.api-profile-model-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.api-profile-model-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.api-profile-model-row-default {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
 .settings-dialog-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -9273,8 +9295,8 @@ body.settings-tab-context-menu-dragging iframe {
 
   .model-inventory-outbound .settings-list-header,
   .model-inventory-outbound .model-inventory-row {
-    min-width: 520px;
-    grid-template-columns: minmax(96px, .8fr) minmax(120px, 1fr) minmax(120px, 1fr) minmax(120px, .9fr);
+    min-width: 560px;
+    grid-template-columns: minmax(96px, .8fr) minmax(132px, 1.1fr) minmax(132px, 1.1fr) minmax(120px, .9fr);
   }
 
   .built-in-config-list .settings-list-header,

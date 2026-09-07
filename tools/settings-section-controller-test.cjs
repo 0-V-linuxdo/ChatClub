@@ -117,7 +117,13 @@ globalThis.document = { addEventListener() {} };
   assert.match(profilesSource, /dataset: \{ modelInventoryId: row\.id, modelInventoryWorld: "outbound" \}/);
   assert.doesNotMatch(profilesSource, /modelInventoryWorld: "iframe"/);
   assert.doesNotMatch(profilesSource, /goToSection\("models"\)/);
-  assert.match(profilesSource, /apiProfileSelectLabel\(profile\)/);
+  assert.match(profilesSource, /saveOutboundProfile/);
+  assert.match(profilesSource, /saveOutboundModel/);
+  assert.match(profilesSource, /outboundField: "profile"/);
+  assert.match(profilesSource, /outboundField: "model"/);
+  assert.match(profilesSource, /createModelCatalogEditor/);
+  assert.doesNotMatch(profilesSource, /saveTopicTitleProfile/);
+  assert.doesNotMatch(profilesSource, /t\("profiles\.topicTitleApi"\)/);
   assert.match(promptTemplatesSource, /apiProfileSelectLabel\(profile\)/);
   assert.doesNotMatch(
     promptTemplatesSource,
@@ -545,12 +551,22 @@ globalThis.document = { addEventListener() {} };
   );
   assert.deepEqual(
     settingsStateModule.SETTINGS_OPTION_CAPABILITIES.profiles.read,
-    ["apiProfiles", "optimizeApiProfileId", "summaryApiProfileId", "topicTitleApiProfileId"],
+    [
+      "apiProfiles",
+      "optimizeApiProfileId", "optimizeApiModel",
+      "summaryApiProfileId", "summaryApiModel",
+      "topicTitleApiProfileId", "topicTitleApiModel"
+    ],
     "API Provider must not read iframe preferred models"
   );
   assert.deepEqual(
     settingsStateModule.SETTINGS_OPTION_CAPABILITIES.profiles.write,
-    ["apiProfiles", "optimizeApiProfileId", "summaryApiProfileId", "topicTitleApiProfileId"],
+    [
+      "apiProfiles",
+      "optimizeApiProfileId", "optimizeApiModel",
+      "summaryApiProfileId", "summaryApiModel",
+      "topicTitleApiProfileId", "topicTitleApiModel"
+    ],
     "API Provider must not persist iframe preferred models"
   );
   assert.deepEqual(

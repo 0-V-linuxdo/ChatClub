@@ -570,14 +570,42 @@ export function suggestCustomAppDraft(rawUrl, options = {}) {
   };
 }
 
+function normalizeApiProfileModels(profile = {}) {
+  const listed = Array.isArray(profile?.models)
+    ? profile.models.map((item) => text(item)).filter(Boolean)
+    : [];
+  const fallback = text(profile?.model) || listed[0] || API_PROFILE_MODEL_DEFAULT;
+  const models = [];
+  const seen = new Set();
+  const push = (value) => {
+    if (!value || seen.has(value)) return;
+    seen.add(value);
+    models.push(value);
+  };
+  push(fallback);
+  for (const value of listed) push(value);
+  return {
+    model: models[0] || API_PROFILE_MODEL_DEFAULT,
+    models: models.length ? models : [API_PROFILE_MODEL_DEFAULT]
+  };
+}
+
+function resolveApiSlotModel(profile, requested) {
+  const catalog = normalizeApiProfileModels(profile).models;
+  const model = text(requested);
+  return catalog.includes(model) ? model : "";
+}
+
 function normalizeProfile(profile, index) {
   const registerUrl = text(profile?.registerUrl || profile?.signupUrl || profile?.url);
+  const modelsState = normalizeApiProfileModels(profile);
   return {
     id: text(profile?.id) || createId("api"),
     name: text(profile?.name, `API Profile ${index + 1}`) || `API Profile ${index + 1}`,
     endpoint: text(profile?.endpoint, API_PROFILE_ENDPOINT_DEFAULT) || API_PROFILE_ENDPOINT_DEFAULT,
     apiKey: text(profile?.apiKey),
-    model: text(profile?.model, API_PROFILE_MODEL_DEFAULT) || API_PROFILE_MODEL_DEFAULT,
+    model: modelsState.model,
+    models: modelsState.models,
     ...(registerUrl ? { registerUrl } : {}),
     ...(profile?.promotionChannel === true ? { promotionChannel: true } : {})
   };
@@ -592,7 +620,7 @@ function migrateDefaultApiProfileModel(profile, migrationVersion) {
     || profile.apiKey
     || profile.model !== "gpt-3.5-turbo"
   ) return profile;
-  return { ...profile, model: API_PROFILE_MODEL_DEFAULT };
+  return { ...profile, model: API_PROFILE_MODEL_DEFAULT, models: [API_PROFILE_MODEL_DEFAULT] };
 }
 
 function sameApiHost(left, right) {
@@ -985,6 +1013,10 @@ export function normalizeOptions(raw = {}) {
   const topicTitleFallback = profileIds.has(base.topicTitleApiProfileId)
     ? base.topicTitleApiProfileId
     : fallbackProfileIds[0] || apiProfiles[0]?.id || optimizeFallback;
+  const optimizeApiProfileId = profileIds.has(raw.optimizeApiProfileId) ? raw.optimizeApiProfileId : optimizeFallback;
+  const summaryApiProfileId = profileIds.has(raw.summaryApiProfileId) ? raw.summaryApiProfileId : summaryFallback;
+  const topicTitleApiProfileId = profileIds.has(raw.topicTitleApiProfileId) ? raw.topicTitleApiProfileId : topicTitleFallback;
+  const profileFor = (profileId) => apiProfiles.find((profile) => profile.id === profileId) || apiProfiles[0];
 
   const optimizeDefault = base.optimizePromptTemplates[0];
   const summaryDefault = base.summaryPromptTemplates[0];
@@ -1052,9 +1084,12 @@ export function normalizeOptions(raw = {}) {
       API_PROFILE_DEFAULT_MODEL_MIGRATION_VERSION
     ),
     apiPromotionChannelsVersion: Math.max(Number(raw.apiPromotionChannelsVersion) || 0, API_PROMOTION_CHANNELS_VERSION),
-    optimizeApiProfileId: profileIds.has(raw.optimizeApiProfileId) ? raw.optimizeApiProfileId : optimizeFallback,
-    summaryApiProfileId: profileIds.has(raw.summaryApiProfileId) ? raw.summaryApiProfileId : summaryFallback,
-    topicTitleApiProfileId: profileIds.has(raw.topicTitleApiProfileId) ? raw.topicTitleApiProfileId : topicTitleFallback,
+    optimizeApiProfileId,
+    summaryApiProfileId,
+    topicTitleApiProfileId,
+    optimizeApiModel: resolveApiSlotModel(profileFor(optimizeApiProfileId), raw.optimizeApiModel),
+    summaryApiModel: resolveApiSlotModel(profileFor(summaryApiProfileId), raw.summaryApiModel),
+    topicTitleApiModel: resolveApiSlotModel(profileFor(topicTitleApiProfileId), raw.topicTitleApiModel),
     optimizePromptTemplates,
     optimizePromptTemplateId: optimizePromptTemplates.some((item) => item.id === raw.optimizePromptTemplateId)
       ? raw.optimizePromptTemplateId

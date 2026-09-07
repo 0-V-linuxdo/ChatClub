@@ -1,8 +1,10 @@
 import { t } from "../../shared/i18n.js";
 import { API_PROFILE_MODEL_DEFAULT } from "../../shared/constants.js";
 import {
-  apiProfileSelectLabel,
-  listModelInventory
+  apiProfileModels,
+  apiProfileNameLabel,
+  listModelInventory,
+  OUTBOUND_INVENTORY_SLOTS
 } from "../../shared/model-inventory.js";
 import { createId } from "../../shared/storage-schema.js";
 import { button, editorModal, el, field, input, openConfirmationAction, select, toast } from "../../ui/dom.js";
@@ -49,6 +51,17 @@ export function createProfilesSettingsSection(ctx) {
     settingsPrimaryAction
   } = createSettingsKit({ svgIcon });
 
+  function outboundSlot(purpose) {
+    return OUTBOUND_INVENTORY_SLOTS.find((slot) => slot.purpose === purpose) || OUTBOUND_INVENTORY_SLOTS[0];
+  }
+
+  function profileOptions() {
+    return state.options.apiProfiles.map((profile) => ({
+      value: profile.id,
+      label: apiProfileNameLabel(profile) || profile.id
+    }));
+  }
+
   function pane(redraw) {
     const activeTab = state.settingsProfilesTab === "inventory" ? "inventory" : "providers";
     state.settingsProfilesTab = activeTab;
@@ -65,7 +78,7 @@ export function createProfilesSettingsSection(ctx) {
     });
     return el("div", { class: "settings-pane settings-manager-pane" },
       tabBar,
-      activeTab === "inventory" ? inventoryBlock() : providersBlock(redraw)
+      activeTab === "inventory" ? inventoryBlock(redraw) : providersBlock(redraw)
     );
   }
 
@@ -77,14 +90,6 @@ export function createProfilesSettingsSection(ctx) {
       settingsPaneToolbar(t("profiles.manage"),
         settingsPrimaryAction(t("profiles.add"), "plus", () => openEditor(null, redraw))
       ),
-      field(t("profiles.topicTitleApi"), select(
-        state.options.topicTitleApiProfileId,
-        state.options.apiProfiles.map((profile) => ({
-          value: profile.id,
-          label: apiProfileSelectLabel(profile)
-        })),
-        { onchange: (event) => { void saveTopicTitleProfile(event.target.value, redraw); } }
-      )),
       settingsList(["", t("profiles.provider"), t("profiles.model"), t("profiles.usage"), t("profiles.actions")], rows, "settings-manager-list api-profile-list")
     );
   }
@@ -93,7 +98,11 @@ export function createProfilesSettingsSection(ctx) {
     return value || t(emptyKey);
   }
 
-  function inventoryBlock() {
+  function modelOptions(models) {
+    return (models || []).map((model) => ({ value: model, label: model }));
+  }
+
+  function inventoryBlock(redraw) {
     const { outbound } = listModelInventory(state.options, ["outbound"]);
     return settingsBlock(t("inventory.title"), t("inventory.desc"),
       el("div", { class: "model-inventory-group", dataset: { modelInventoryWorld: "outbound" } },
@@ -105,8 +114,16 @@ export function createProfilesSettingsSection(ctx) {
             dataset: { modelInventoryId: row.id, modelInventoryWorld: "outbound" }
           },
             el("strong", { class: "settings-main-cell" }, t(row.featureKey)),
-            el("span", { class: "settings-muted-cell" }, inventoryValue(row.profileName, "profiles.notAssigned")),
-            el("span", { class: "settings-main-cell" }, inventoryValue(row.model, "profiles.noModel")),
+            select(row.profileId, profileOptions(), {
+              "aria-label": `${t(row.featureKey)} ${t("inventory.profile")}`,
+              dataset: { outboundSlot: row.id, outboundField: "profile" },
+              onchange: (event) => { void saveOutboundProfile(row.purpose, event.target.value, redraw); }
+            }),
+            select(row.model, modelOptions(row.models), {
+              "aria-label": `${t(row.featureKey)} ${t("inventory.model")}`,
+              dataset: { outboundSlot: row.id, outboundField: "model" },
+              onchange: (event) => { void saveOutboundModel(row.purpose, event.target.value, redraw); }
+            }),
             el("span", { class: "settings-muted-cell" }, inventoryValue(row.host, "inventory.none"))
           )),
           "model-inventory-list model-inventory-outbound"
@@ -133,6 +150,13 @@ export function createProfilesSettingsSection(ctx) {
     );
   }
 
+  function profileModelLabel(profile) {
+    const models = apiProfileModels(profile);
+    if (!models.length) return t("profiles.noModel");
+    if (models.length === 1) return models[0];
+    return t("profiles.modelCatalogCount", { model: models[0], count: models.length - 1 });
+  }
+
   function profileRow(profile, redraw) {
     return el("div", {
       class: "ui-list-row settings-list-row settings-manager-row api-profile-row",
@@ -152,7 +176,7 @@ export function createProfilesSettingsSection(ctx) {
         }
       }),
       el("strong", { class: "settings-main-cell" }, profile.name || profile.id),
-      el("span", { class: "settings-muted-cell" }, profile.model || t("profiles.noModel")),
+      el("span", { class: "settings-muted-cell" }, profileModelLabel(profile)),
       usageChips(profile),
       el("div", { class: "settings-row-action-group" },
         profile.registerUrl
@@ -200,31 +224,93 @@ export function createProfilesSettingsSection(ctx) {
     await saveProfiles(apiProfiles, redraw, t("toast.apiProfileOrderSaved"), { reloadRuntime: false });
   }
 
-  async function saveProfiles(apiProfiles, redraw, message = t("toast.apiProfilesSaved"), options = {}) {
+  function slotModelPatch(apiProfiles) {
+    const byId = new Map(apiProfiles.map((profile) => [profile.id, profile]));
     const fallbackId = apiProfiles[0]?.id || "";
-    const profileIds = new Set(apiProfiles.map((profile) => profile.id));
+    const patch = {};
+    for (const slot of OUTBOUND_INVENTORY_SLOTS) {
+      const profileId = byId.has(state.options[slot.profileKey]) ? state.options[slot.profileKey] : fallbackId;
+      const profile = byId.get(profileId);
+      const catalog = apiProfileModels(profile);
+      const current = String(state.options[slot.modelKey] || "").trim();
+      patch[slot.profileKey] = profileId;
+      patch[slot.modelKey] = catalog.includes(current) ? current : "";
+    }
+    return patch;
+  }
+
+  async function saveProfiles(apiProfiles, redraw, message = t("toast.apiProfilesSaved"), options = {}) {
     state.options = await saveOptionsPatch({
       apiProfiles,
-      optimizeApiProfileId: profileIds.has(state.options.optimizeApiProfileId)
-        ? state.options.optimizeApiProfileId
-        : fallbackId,
-      summaryApiProfileId: profileIds.has(state.options.summaryApiProfileId)
-        ? state.options.summaryApiProfileId
-        : fallbackId,
-      topicTitleApiProfileId: profileIds.has(state.options.topicTitleApiProfileId)
-        ? state.options.topicTitleApiProfileId
-        : fallbackId
+      ...slotModelPatch(apiProfiles)
     });
     if (options.reloadRuntime !== false) await notifyConfigReload();
     redraw();
     if (message) toast(message, "success");
   }
 
-  async function saveTopicTitleProfile(profileId, redraw) {
-    state.options = await saveOptionsPatch({ topicTitleApiProfileId: profileId });
+  async function saveOutboundSlot(purpose, patch, redraw, toastKey) {
+    const slot = outboundSlot(purpose);
+    state.options = await saveOptionsPatch(patch);
     await notifyConfigReload();
     redraw();
-    toast(t("toast.topicTitleProfileSaved"), "success");
+    toast(t(toastKey || slot.profileToastKey), "success");
+  }
+
+  async function saveOutboundProfile(purpose, profileId, redraw) {
+    const slot = outboundSlot(purpose);
+    const profile = state.options.apiProfiles.find((item) => item.id === profileId);
+    const catalog = apiProfileModels(profile);
+    const current = String(state.options[slot.modelKey] || "").trim();
+    await saveOutboundSlot(purpose, {
+      [slot.profileKey]: profileId,
+      [slot.modelKey]: catalog.includes(current) ? current : ""
+    }, redraw, slot.profileToastKey);
+  }
+
+  async function saveOutboundModel(purpose, model, redraw) {
+    const slot = outboundSlot(purpose);
+    await saveOutboundSlot(purpose, { [slot.modelKey]: model }, redraw, slot.modelToastKey);
+  }
+
+  function createModelCatalogEditor(models) {
+    const values = models.length ? models.slice() : [API_PROFILE_MODEL_DEFAULT];
+    const list = el("div", { class: "api-profile-model-list" });
+    const render = () => {
+      list.replaceChildren();
+      values.forEach((value, index) => {
+        const modelInput = input(value, {
+          placeholder: t("profiles.model"),
+          "aria-label": index === 0 ? t("profiles.defaultModel") : t("profiles.model"),
+          oninput: (event) => { values[index] = event.target.value; }
+        });
+        list.append(el("div", {
+          class: `api-profile-model-row${index === 0 ? " api-profile-model-row-default" : ""}`.trim()
+        },
+          modelInput,
+          index === 0 ? el("span", { class: "settings-usage-chip" }, t("profiles.defaultModel")) : null,
+          values.length > 1
+            ? settingsIconAction(t("common.delete"), "trash", () => {
+              values.splice(index, 1);
+              render();
+            }, "danger", false, "settings.action.delete")
+            : null
+        ));
+      });
+    };
+    render();
+    return {
+      node: el("div", { class: "api-profile-models" },
+        list,
+        button(t("profiles.addModel"), () => {
+          values.push("");
+          render();
+        })
+      ),
+      read() {
+        return values.map((value) => String(value || "").trim()).filter(Boolean);
+      }
+    };
   }
 
   function openEditor(profile, redraw) {
@@ -234,21 +320,24 @@ export function createProfilesSettingsSection(ctx) {
       name: "New API",
       endpoint: "https://api.openai.com/v1/chat/completions",
       apiKey: "",
-      model: API_PROFILE_MODEL_DEFAULT
+      model: API_PROFILE_MODEL_DEFAULT,
+      models: [API_PROFILE_MODEL_DEFAULT]
     });
     const nameInput = input(draft.name, { placeholder: t("profiles.providerName") });
     const endpointInput = input(draft.endpoint, { placeholder: "https://api.openai.com/v1/chat/completions" });
     const keyInput = input(draft.apiKey, { placeholder: t("profiles.apiKey"), type: "password" });
-    const modelInput = input(draft.model, { placeholder: t("profiles.model") });
+    const catalog = createModelCatalogEditor(apiProfileModels(draft));
     let dialog;
     const close = () => dialog.remove();
     const save = async () => {
+      const models = catalog.read();
       const nextProfile = {
         ...draft,
         name: nameInput.value.trim() || "API Profile",
         endpoint: endpointInput.value.trim(),
         apiKey: keyInput.value,
-        model: modelInput.value.trim()
+        model: models[0] || "",
+        models
       };
       if (!nextProfile.endpoint || !nextProfile.model) {
         toast(t("profiles.endpointModelRequired"), "error");
@@ -264,10 +353,10 @@ export function createProfilesSettingsSection(ctx) {
       el("div", { class: "settings-editor-form" },
         el("div", { class: "settings-dialog-grid" },
           field(t("profiles.provider"), nameInput),
-          field(t("profiles.model"), modelInput),
           field(t("profiles.endpoint"), endpointInput),
           field(t("profiles.apiKey"), keyInput)
         ),
+        field(t("profiles.models"), catalog.node),
         el("div", { class: "modal-footer" },
           button(t("common.cancel"), close),
           button(editing ? t("profiles.save") : t("profiles.add"), save, "primary")

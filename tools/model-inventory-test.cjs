@@ -36,6 +36,9 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
   assert.match(i18nSource, /"settings\.profiles\.title": "API 服务商"/);
   assert.match(i18nSource, /"inventory\.title": "Current models"/);
   assert.match(i18nSource, /"inventory\.title": "当前使用的模型"/);
+  assert.match(i18nSource, /"toast\.outboundModelSaved": "Outbound model saved"/);
+  assert.match(i18nSource, /"toast\.outboundModelSaved": "出站模型已保存"/);
+  assert.doesNotMatch(i18nSource, /Read-only map/);
 
   const defaults = listModelInventory(DEFAULT_OPTIONS);
   assert.deepEqual(defaults.outbound.map((row) => row.id), ["optimize", "summary", "topicTitle"]);
@@ -46,6 +49,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
   assert.equal(defaults.outbound[1].profileName, "Default API");
   assert.equal(defaults.outbound[1].model, API_PROFILE_MODEL_DEFAULT);
   assert.equal(defaults.outbound[2].profileId, "default-openai");
+  assert.deepEqual(defaults.outbound[0].models, [API_PROFILE_MODEL_DEFAULT]);
   assert.equal(defaults.iframe[0].primary, "");
   assert.equal(defaults.iframe[0].secondaryEnabled, false);
 
@@ -114,6 +118,37 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
     topicTitleApiProfileId: "bare"
   }).outbound[0].host, "api.openai.com");
 
+  const sharedHost = listModelInventory({
+    apiProfiles: [{
+      id: "zero",
+      name: "0.0",
+      endpoint: "https://api.0-0.pro/v1/chat/completions",
+      model: "gpt-5.6-luna",
+      models: ["gpt-5.6-luna", "gpt-5.6-terra"]
+    }],
+    optimizeApiProfileId: "zero",
+    optimizeApiModel: "gpt-5.6-terra",
+    summaryApiProfileId: "zero",
+    summaryApiModel: "gpt-5.6-luna",
+    topicTitleApiProfileId: "zero",
+    topicTitleApiModel: "missing-model"
+  });
+  assert.equal(sharedHost.outbound[0].model, "gpt-5.6-terra");
+  assert.equal(sharedHost.outbound[1].model, "gpt-5.6-luna");
+  assert.equal(sharedHost.outbound[2].model, "gpt-5.6-luna");
+  assert.deepEqual(sharedHost.outbound[0].models, ["gpt-5.6-luna", "gpt-5.6-terra"]);
+  assert.equal(apiProfileModel(resolveApiProfile({
+    apiProfiles: [{
+      id: "zero",
+      name: "0.0",
+      endpoint: "https://api.0-0.pro/v1/chat/completions",
+      model: "gpt-5.6-luna",
+      models: ["gpt-5.6-luna", "gpt-5.6-terra"]
+    }],
+    optimizeApiProfileId: "zero",
+    optimizeApiModel: "gpt-5.6-terra"
+  }, "optimize")), "gpt-5.6-terra");
+
   const stateModule = await import("../app/state.js");
   const settingsModule = await import("../app/settings/state-ports.js");
   const rootState = stateModule.createAppState();
@@ -141,6 +176,10 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 
   const profilesSource = read("app/settings/profiles.js");
   assert.match(profilesSource, /listModelInventory\(state\.options, \["outbound"\]\)/);
+  assert.match(profilesSource, /saveOutboundProfile/);
+  assert.match(profilesSource, /saveOutboundModel/);
+  assert.match(profilesSource, /outboundField: "profile"/);
+  assert.match(profilesSource, /outboundField: "model"/);
   assert.doesNotMatch(profilesSource, /modelInventoryWorld: "iframe"/);
   assert.doesNotMatch(profilesSource, /goToSection\("models"\)/);
   assert.match(profilesSource, /settingsInnerTabs/);

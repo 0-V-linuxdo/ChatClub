@@ -11,7 +11,7 @@ import {
 import { NOTION_MODEL_PREFERENCE_TARGETS } from "./notion-models.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-09-07｜08:32:00」";
+export const APP_VERSION = "「2026-09-07｜09:16:11」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -50,6 +50,7 @@ export const DEFAULT_PROMOTION_API_PROFILES = [
     endpoint: API_PROFILE_ZERO_ZERO_ENDPOINT,
     apiKey: "",
     model: API_PROFILE_ZERO_ZERO_MODEL,
+    models: [API_PROFILE_ZERO_ZERO_MODEL],
     registerUrl: API_PROFILE_ZERO_ZERO_REGISTER_URL,
     promotionChannel: true
   }
@@ -442,7 +443,8 @@ export const DEFAULT_OPTIONS = {
       name: "Default API",
       endpoint: API_PROFILE_ENDPOINT_DEFAULT,
       apiKey: "",
-      model: API_PROFILE_MODEL_DEFAULT
+      model: API_PROFILE_MODEL_DEFAULT,
+      models: [API_PROFILE_MODEL_DEFAULT]
     },
     ...DEFAULT_PROMOTION_API_PROFILES
   ],
@@ -451,6 +453,9 @@ export const DEFAULT_OPTIONS = {
   optimizeApiProfileId: "default-openai",
   summaryApiProfileId: "default-openai",
   topicTitleApiProfileId: "default-openai",
+  optimizeApiModel: "",
+  summaryApiModel: "",
+  topicTitleApiModel: "",
   optimizePromptTemplateId: "optimize-default",
   optimizePromptTemplates: [
     {

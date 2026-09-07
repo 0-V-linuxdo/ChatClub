@@ -11,6 +11,8 @@ const assert = require("node:assert/strict");
 
   assert.equal(API_PROFILE_MODEL_DEFAULT, "GPT5.5");
   assert.equal(normalizeOptions({}).apiProfiles[0].model, API_PROFILE_MODEL_DEFAULT);
+  assert.deepEqual(normalizeOptions({}).apiProfiles[0].models, [API_PROFILE_MODEL_DEFAULT]);
+  assert.equal(normalizeOptions({}).optimizeApiModel, "");
 
   const migrated = normalizeOptions({
     apiProfiles: [{
@@ -49,6 +51,23 @@ const assert = require("node:assert/strict");
     }]
   });
   assert.equal(postMigrationChoice.apiProfiles[0].model, "gpt-3.5-turbo");
+
+  const catalog = normalizeOptions({
+    apiProfiles: [{
+      id: "zero",
+      name: "0.0",
+      endpoint: "https://api.0-0.pro/v1/chat/completions",
+      model: "gpt-5.6-luna",
+      models: ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-luna"]
+    }],
+    optimizeApiProfileId: "zero",
+    optimizeApiModel: "gpt-5.6-terra",
+    summaryApiProfileId: "zero",
+    summaryApiModel: "missing"
+  });
+  assert.deepEqual(catalog.apiProfiles[0].models, ["gpt-5.6-luna", "gpt-5.6-terra"]);
+  assert.equal(catalog.optimizeApiModel, "gpt-5.6-terra");
+  assert.equal(catalog.summaryApiModel, "");
 
   console.log("API profile default model migration: ok");
 })().catch((error) => {
