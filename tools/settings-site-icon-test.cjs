@@ -63,6 +63,72 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   assert.match(css, /\.settings-site-icon-button \{[^}]*width:\s*var\(--target-min\)/s);
   assert.equal(fs.existsSync(path.join(root, "icons/sites")), false, "v1 must not ship packaged site logos");
   assert.equal(budgets.lazyBoundaries["app/settings/controller.js"].maxFiles, 30);
+  const controller = read("app/settings/controller.js");
+  const runtime = read("app/runtime.js");
+  assert.match(controller, /faviconPort:\s*"object\?"/);
+  assert.match(apps, /faviconPort:\s*"object\?"/);
+  assert.match(controller, /faviconPort:\s*ctx\.faviconPort/);
+  assert.match(runtime, /faviconPort:\s*faviconService/);
+
+  const previousDocument = globalThis.document;
+  globalThis.document = { addEventListener() {} };
+  try {
+    const { createAppState } = await import(moduleUrl("app/state.js"));
+    const { createSettingsSectionStatePorts } = await import(moduleUrl("app/settings/state-ports.js"));
+    const { createSettingsController } = await import(moduleUrl("app/settings/controller.js"));
+    const rootState = createAppState();
+    const settingsSections = createSettingsSectionStatePorts(rootState);
+    const noop = () => {};
+    const asyncNoop = async () => {};
+    const settingsDeps = {
+      settingsSections,
+      officialRules: {},
+      importConfigPatch: asyncNoop,
+      resetConfig: asyncNoop,
+      reloadAfterConfigReset: noop,
+      saveCustomConfig: asyncNoop,
+      saveOptionsPatch: async (patch) => patch,
+      svgIcon: () => ({}),
+      syncPromptInputNode: noop,
+      notifyConfigReload: asyncNoop,
+      render: noop,
+      applyTheme: noop,
+      syncI18nLanguage: noop,
+      hydrateImportedLayoutIfNeeded: asyncNoop,
+      reconcileAppCatalog: asyncNoop,
+      enterTopbarEditMode: noop,
+      setPromptImages: noop,
+      syncTopbar: noop,
+      syncTopbarPromptPlaceholder: noop,
+      syncSummaryPanel: noop,
+      syncPreferredModelSelectionOverlays: noop,
+      syncWorkspaceDom: noop,
+      applyPreferredModels: asyncNoop,
+      openTabUrl: noop,
+      functionalAnomalyLog: {
+        record: asyncNoop,
+        refresh: async () => [],
+        remove: async () => [],
+        clear: async () => [],
+        snapshot: () => [],
+        subscribe: () => () => {},
+        exportText: () => ""
+      },
+      faviconPort: { encodeFile: async () => "", refresh: async () => "" }
+    };
+    assert.doesNotThrow(() => createSettingsController(settingsDeps));
+    assert.doesNotThrow(() => createSettingsController({
+      ...settingsDeps,
+      faviconPort: undefined
+    }));
+    assert.throws(
+      () => createSettingsController({ ...settingsDeps, combinedState: rootState }),
+      /Settings controller received extra dependencies field combinedState/
+    );
+  } finally {
+    if (previousDocument === undefined) delete globalThis.document;
+    else globalThis.document = previousDocument;
+  }
 
   console.log("settings site icon: ok");
 })().catch((error) => {

@@ -82,7 +82,8 @@ export function createSettingsController(ctx) {
     syncWorkspaceDom: "function",
     applyPreferredModels: "function",
     openTabUrl: "function",
-    functionalAnomalyLog: "object"
+    functionalAnomalyLog: "object",
+    faviconPort: "object?"
   });
   const settingsSections = requireControllerContext(ctx, controllerName, "settingsSections");
   const officialRules = requireControllerContext(ctx, controllerName, "officialRules");

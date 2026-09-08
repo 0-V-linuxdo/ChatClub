@@ -656,7 +656,8 @@ globalThis.document = { addEventListener() {} };
       },
       reconcileAppCatalog: async () => {},
       syncSummaryPanel() {},
-      syncWorkspaceDom() {}
+      syncWorkspaceDom() {},
+      faviconPort: { encodeFile: async () => "", refresh: async () => "" }
     }],
     [modelsModule.createModelsSettingsSection, ports.models, {
       ...sharedDependencies,
@@ -708,6 +709,19 @@ globalThis.document = { addEventListener() {} };
     () => messageModule.createMessageNavigationSettingsSection({
       state: ports.messageNavigation,
       ...sharedDependencies,
+      combinedState: rootState
+    }),
+    /received extra dependencies field combinedState/
+  );
+  assert.throws(
+    () => appsModule.createAppsSettingsSection({
+      state: ports.apps,
+      ...sharedDependencies,
+      saveCustomConfig: async () => {},
+      reconcileAppCatalog: async () => {},
+      syncSummaryPanel() {},
+      syncWorkspaceDom() {},
+      faviconPort: { encodeFile: async () => "", refresh: async () => "" },
       combinedState: rootState
     }),
     /received extra dependencies field combinedState/

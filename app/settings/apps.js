@@ -62,7 +62,7 @@ export function createAppsSettingsSection(ctx) {
     saveOptionsPatch: "function",
     reconcileAppCatalog: "function",
     syncSummaryPanel: "function",
-    syncWorkspaceDom: "function"
+    syncWorkspaceDom: "function", faviconPort: "object?"
   });
   const state = requireSettingsSectionStatePort(
     requireControllerContext(ctx, controllerName, "state"),
