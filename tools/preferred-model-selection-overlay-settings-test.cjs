@@ -265,6 +265,8 @@ function autosaveFixture(createAppearanceAutosave, initialOptions = {}, options 
   assert.match(appearanceSource, /createModelSelectionOverlayAppearanceControls\(\{/);
   assert.match(overlayControlsSource, /class: "appearance-toggle-control"/);
   assert.match(overlayControlsSource, /class: "appearance-toggle-copy"/);
+  assert.match(overlayControlsSource, /createAppearanceOverlayInfoButton\(/);
+  assert.match(overlayControlsSource, /"settings\.appearance\.modelSelectionOverlay"/);
   assert.match(overlayControlsSource, /role: "switch"[\s\S]*checked: enabled/);
   assert.match(overlayControlsSource, /disabled: !enabled/);
   assert.match(overlayControlsSource, /opacitySlider\.disabled = !nextEnabled/);

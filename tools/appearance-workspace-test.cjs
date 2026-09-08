@@ -71,6 +71,11 @@ const descendants = (node) => [node, ...node.children.flatMap(descendants)];
       toggleControl: token("model-overlay-toggle"),
       opacityControl: token("model-overlay-opacity")
     },
+    svgIcon: () => {
+      const node = new FakeNode("svg");
+      node.tagName = "SVG";
+      return node;
+    },
     themeMode: token("theme")
   };
   const settingsBlock = (title, description, ...children) => {

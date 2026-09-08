@@ -14,7 +14,7 @@ const LITERAL_TOOLTIP_ID = new RegExp(`(?:${[
   String.raw`tooltipId\s*:\s*"`
 ].join("|")})(${TOOLTIP_ID_PATTERN.source})"`, "g");
 const HELPER_LAST_ID = new RegExp(
-  String.raw`\b(?:iconButton|compactIconButton|menuButton|actionButton|topIconButton|shareActionButton|summaryActionButton|settingsIconAction|actionsMenuItem|createActionButton|createTopIconButton|createCompactIconButton|createMenuButton|createSettingsIconAction)\([\s\S]*?,\s*"(${TOOLTIP_ID_PATTERN.source})"\s*\)`,
+  String.raw`\b(?:iconButton|compactIconButton|menuButton|actionButton|topIconButton|shareActionButton|summaryActionButton|settingsIconAction|actionsMenuItem|createActionButton|createTopIconButton|createCompactIconButton|createMenuButton|createSettingsIconAction|createAppearanceOverlayInfoButton)\([\s\S]*?,\s*"(${TOOLTIP_ID_PATTERN.source})"\s*\)`,
   "g"
 );
 const DYNAMIC_TOOLTIP_VALUE = /(?:tooltipId|"data-tooltip-id")\s*:\s*([^,\n]+)/g;

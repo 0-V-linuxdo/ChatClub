@@ -3,17 +3,33 @@ import { normalizeModelPreferenceSelectionOverlayOpacity } from "../../shared/st
 import { el } from "../../ui/dom.js";
 
 const TOGGLE_HELP_ID = "appearance-model-selection-overlay-help";
+const TOGGLE_INPUT_ID = "appearance-model-selection-overlay-enabled";
 const OPACITY_HELP_ID = "appearance-model-selection-overlay-opacity-help";
+
+export function createAppearanceOverlayInfoButton(svgIcon, help, helpId, tooltipId) {
+  return el("button", {
+    id: helpId,
+    class: "icon-button appearance-overlay-info tooltip-trigger",
+    type: "button",
+    "aria-label": help,
+    "data-tooltip": help,
+    "data-tooltip-id": tooltipId,
+    "data-tooltip-placement": "top",
+    "data-tooltip-wrap": "true"
+  }, svgIcon("info"));
+}
 
 export function createModelSelectionOverlayAppearanceControls(dependencies = {}) {
   const {
     state,
     queueAppearanceAutoSave,
     syncPreferredModelSelectionOverlays,
-    redraw
+    redraw,
+    svgIcon
   } = dependencies;
   const enabled = state.options.modelPreferenceSelectionOverlayEnabled !== false;
   const toggle = el("input", {
+    id: TOGGLE_INPUT_ID,
     type: "checkbox",
     role: "switch",
     checked: enabled,
@@ -67,10 +83,17 @@ export function createModelSelectionOverlayAppearanceControls(dependencies = {})
   });
 
   return Object.freeze({
-    toggleControl: el("label", { class: "appearance-toggle-control" },
+    toggleControl: el("div", { class: "appearance-toggle-control" },
       el("span", { class: "appearance-toggle-copy" },
-        el("strong", {}, t("appearance.modelSelectionOverlay")),
-        el("small", { id: TOGGLE_HELP_ID }, t("appearance.modelSelectionOverlayHelp"))
+        el("label", { for: TOGGLE_INPUT_ID },
+          el("strong", {}, t("appearance.modelSelectionOverlay"))
+        ),
+        createAppearanceOverlayInfoButton(
+          svgIcon,
+          t("appearance.modelSelectionOverlayHelp"),
+          TOGGLE_HELP_ID,
+          "settings.appearance.modelSelectionOverlay"
+        )
       ),
       toggle
     ),

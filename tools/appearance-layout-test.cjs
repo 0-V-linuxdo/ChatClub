@@ -134,8 +134,8 @@ assert.match(
 );
 assert.match(
   workspaceSource,
-  /appearance-overlay-row[\s\S]*appearance-overlay-copy[\s\S]*appearance-range-help/,
-  "overlay range rows put title and help beside a compact slider"
+  /appearance-overlay-row[\s\S]*appearance-overlay-copy[\s\S]*createAppearanceOverlayInfoButton/,
+  "overlay range rows put title and a compact info trigger beside a compact slider"
 );
 assert.match(
   stylesheetSource,
@@ -147,10 +147,15 @@ assert.match(
   /\.appearance-workspace-subpane\.is-overlays \.appearance-range-control \{[\s\S]*?grid-template-columns: minmax\(0, 220px\) 48px;[\s\S]*?width:\s*max-content;/,
   "overlay sliders hug a compact track instead of filling the well"
 );
-assert.doesNotMatch(
+assert.match(
   stylesheetSource,
-  /\.appearance-workspace-subpane\.is-overlays \.appearance-range-help \{\s*grid-column: 1 \/ -1;/,
-  "overlay help must sit under the title, not under a full-bleed track"
+  /\.iframe-permission-help-trigger,\s*\n\.appearance-overlay-info \{[\s\S]*?border-radius:\s*var\(--ui-radius-pill\)/,
+  "overlay help uses the circular info trigger, not a second line of copy"
+);
+assert.doesNotMatch(
+  workspaceSource,
+  /class: "appearance-range-help"/,
+  "overlay help must not remain a visible range-help line"
 );
 assert.match(
   stylesheetSource,

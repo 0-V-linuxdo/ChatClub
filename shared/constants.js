@@ -11,7 +11,7 @@ import {
 import { NOTION_MODEL_PREFERENCE_TARGETS } from "./notion-models.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-09-09｜07:00:00」";
+export const APP_VERSION = "「2026-09-09｜07:20:00」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -348,7 +348,10 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
       Object.freeze({ id: "settings.apps.iframe.edit", labelKey: "apps.iframe.edit" }),
       Object.freeze({ id: "settings.apps.iframe.reset", labelKey: "apps.iframe.restoreDefault" }),
       Object.freeze({ id: "settings.apps.iframe.removeAttribute", labelKey: "apps.iframe.removeAttribute" }),
-      Object.freeze({ id: "settings.models.allSources", labelKey: "modelPreferences.allSources" })
+      Object.freeze({ id: "settings.models.allSources", labelKey: "modelPreferences.allSources" }),
+      Object.freeze({ id: "settings.appearance.loadingOverlay", labelKey: "appearance.loadingOverlay" }),
+      Object.freeze({ id: "settings.appearance.modelSelectionOverlay", labelKey: "appearance.modelSelectionOverlay" }),
+      Object.freeze({ id: "settings.appearance.modelSelectionOverlayOpacity", labelKey: "appearance.modelSelectionOverlayOpacity" })
     ])
   })
 ]);

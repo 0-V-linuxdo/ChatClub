@@ -1,5 +1,6 @@
 import { t } from "../../shared/i18n.js";
 import { el, field } from "../../ui/dom.js";
+import { createAppearanceOverlayInfoButton } from "./appearance-model-selection-overlay.js";
 
 export const APPEARANCE_WORKSPACE_TAB_IDS = Object.freeze(["general", "color", "overlays"]);
 const WORKSPACE_PANEL_ID = "appearance-workspace-panel";
@@ -19,15 +20,16 @@ export function createAppearanceWorkspacePane({
   selectionOverlayControls,
   settingsBlock,
   settingsInnerTabs,
+  svgIcon,
   themeMode
 }) {
   const appearanceRow = (node) => el("div", { class: "appearance-field-row" }, node);
   const generalCol = (...rows) => el("div", { class: "appearance-general-col" }, ...rows);
-  const overlayRangeRow = (title, help, helpId, control, extraClass = "") => appearanceRow(
-    el("label", { class: extraClass ? `appearance-overlay-row ${extraClass}` : "appearance-overlay-row" },
+  const overlayRangeRow = (title, info, control, extraClass = "") => appearanceRow(
+    el("div", { class: extraClass ? `appearance-overlay-row ${extraClass}` : "appearance-overlay-row" },
       el("span", { class: "appearance-overlay-copy" },
         el("strong", {}, title),
-        el("small", { id: helpId, class: "appearance-range-help" }, help)
+        info
       ),
       control
     )
@@ -60,16 +62,24 @@ export function createAppearanceWorkspacePane({
     el("div", { class: "appearance-field-list" },
       overlayRangeRow(
         t("appearance.loadingOverlay"),
-        t("appearance.loadingOverlayHelp"),
-        LOADING_OVERLAY_HELP_ID,
+        createAppearanceOverlayInfoButton(
+          svgIcon,
+          t("appearance.loadingOverlayHelp"),
+          LOADING_OVERLAY_HELP_ID,
+          "settings.appearance.loadingOverlay"
+        ),
         overlayOpacityControl
       ),
       el("div", { class: "appearance-overlays-model" },
         appearanceRow(selectionOverlayControls.toggleControl),
         overlayRangeRow(
           t("appearance.modelSelectionOverlayOpacity"),
-          t("appearance.modelSelectionOverlayOpacityHelp"),
-          MODEL_OVERLAY_OPACITY_HELP_ID,
+          createAppearanceOverlayInfoButton(
+            svgIcon,
+            t("appearance.modelSelectionOverlayOpacityHelp"),
+            MODEL_OVERLAY_OPACITY_HELP_ID,
+            "settings.appearance.modelSelectionOverlayOpacity"
+          ),
           selectionOverlayControls.opacityControl,
           "appearance-overlays-child"
         )

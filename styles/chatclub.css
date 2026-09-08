@@ -4051,8 +4051,9 @@ body.tab-gesture-active * {
 }
 
 .appearance-workspace-subpane.is-overlays .appearance-overlay-copy {
-  display: grid;
-  gap: 3px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   min-width: 0;
   max-width: 52ch;
 }
@@ -4062,10 +4063,14 @@ body.tab-gesture-active * {
   font-size: var(--font-size);
 }
 
-.appearance-workspace-subpane.is-overlays .appearance-overlay-copy small {
-  color: var(--muted);
-  font-size: var(--font-size-sm);
-  line-height: 1.4;
+.appearance-workspace-subpane.is-overlays .appearance-toggle-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.appearance-workspace-subpane.is-overlays .appearance-toggle-copy label {
+  min-width: 0;
 }
 
 .appearance-workspace-subpane.is-overlays .appearance-range-control {
@@ -7180,17 +7185,30 @@ body.settings-tab-context-menu-dragging iframe {
   gap: 5px;
 }
 
-.iframe-permission-help-trigger {
-  width: 24px;
-  min-width: 24px;
-  min-height: 24px;
-  height: 24px;
+.iframe-permission-help-trigger,
+.appearance-overlay-info {
+  width: var(--target-min);
+  min-width: var(--target-min);
+  min-height: var(--target-min);
+  height: var(--target-min);
+  padding: 0;
   border-radius: var(--ui-radius-pill);
 }
 
-.iframe-permission-help-trigger .svg-icon {
+.iframe-permission-help-trigger .svg-icon,
+.appearance-overlay-info .svg-icon {
   width: 15px;
   height: 15px;
+}
+
+.appearance-overlay-info {
+  color: var(--muted);
+  cursor: help;
+}
+
+.appearance-overlay-info:hover,
+.appearance-overlay-info:focus-visible {
+  color: var(--text);
 }
 
 .iframe-permission-group-header p {

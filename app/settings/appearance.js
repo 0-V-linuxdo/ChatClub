@@ -223,7 +223,7 @@ export function createAppearanceSettingsSection(ctx) {
     overlayOpacitySlider.addEventListener("input", syncOverlayOpacity);
     overlayOpacitySlider.addEventListener("change", syncOverlayOpacity);
     const selectionOverlayControls = createModelSelectionOverlayAppearanceControls({
-      state, queueAppearanceAutoSave, syncPreferredModelSelectionOverlays, redraw
+      state, queueAppearanceAutoSave, syncPreferredModelSelectionOverlays, redraw, svgIcon
     });
     const colorPicker = el("input", {
       class: "appearance-color-picker",
@@ -635,7 +635,10 @@ export function createAppearanceSettingsSection(ctx) {
       "settings.apps.iframe.edit": "edit",
       "settings.apps.iframe.reset": "reload",
       "settings.apps.iframe.removeAttribute": "trash",
-      "settings.models.allSources": "info"
+      "settings.models.allSources": "info",
+      "settings.appearance.loadingOverlay": "info",
+      "settings.appearance.modelSelectionOverlay": "info",
+      "settings.appearance.modelSelectionOverlayOpacity": "info"
     })[targetId] || "settings";
     const tooltipLabelKey = (target) => (
       target.id === "topbar.pocket" ? pocketChromeLabelKey(state.options) : target.labelKey
@@ -731,7 +734,7 @@ export function createAppearanceSettingsSection(ctx) {
       activeId: state.settingsAppearanceWorkspaceTab,
       clickReorderControl,
       colorControl, columnCount, language, overlayOpacityControl, pocketIconControl, selectionOverlayControls,
-      settingsBlock, settingsInnerTabs, themeMode,
+      settingsBlock, settingsInnerTabs, svgIcon, themeMode,
       onSelect: (id) => {
         state.settingsAppearanceWorkspaceTab = id;
         redraw();
