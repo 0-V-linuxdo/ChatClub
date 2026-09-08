@@ -113,8 +113,11 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   assert.match(runtime, /faviconPort:\s*faviconService/);
   assert.match(iconEditor, /export function settingsSiteMark/);
   assert.match(iconEditor, /skipCatalog \? \[\]/);
-  assert.match(read("app/favicon/service.js"), /replace\(\/\^\(api\|ai\|www\)\\\.\//);
+  assert.match(read("app/favicon/service.js"), /replace\(LOOKUP_HOST_PREFIX_RE/);
   assert.match(read("app/favicon/service.js"), /siteFaviconUrls/);
+  assert.match(read("app/favicon/service.js"), /favicon\.svg/);
+  assert.match(read("ui/favicon.js"), /LOOKUP_HOST_PREFIX_RE/);
+  assert.match(read("ui/favicon.js"), /isGenericNetworkFavicon/);
   assert.match(modelsSettings, /settingsSiteMark\(\{\s*appId\s*\},\s*faviconPort\)/);
   assert.match(summarySettings, /settingsSiteMark\(config,\s*faviconPort\)/);
   assert.match(messageSettings, /settingsSiteMark\(config,\s*faviconPort\)/);
@@ -302,6 +305,7 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
     assert.equal(custom.getAttribute("src") || custom.src, "https://cdn.example.com/relay.png");
     const missPort = {
       effective: () => "",
+      siteUrls: () => [],
       networkUrls: () => ["https://fail.example/icon.png"]
     };
     const missed = settingsSiteMark({

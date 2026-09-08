@@ -9,8 +9,12 @@ function faviconDeps(port = {}) {
     appFaviconUrl: port.app,
     effectiveFaviconUrl: port.effective,
     fallbackFaviconUrl: port.fallback,
-    browserFaviconUrl: port.browser,
+    browserFaviconUrl: port.browser || port.browserUrl,
+    siteFaviconUrls: port.siteUrls,
     networkFaviconUrls: port.networkUrls,
+    candidateFaviconUrls: typeof port.candidates === "function"
+      ? (href, logoUrl, options) => port.candidates(href, logoUrl, options)
+      : undefined,
     omitTitle: true,
     loading: "eager",
     keepVisibleOnMiss: true

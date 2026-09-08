@@ -2,6 +2,7 @@ import { el } from "./dom.js";
 
 const CHAT_FAVICON_STACK_MAX = 4;
 const EMPTY_FAVICON = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg"/>')}`;
+const LOOKUP_HOST_PREFIX_RE = /^(api|ai|www|chat)\./i;
 
 function networkLookupHosts(hostname) {
   const hosts = [];
@@ -11,8 +12,26 @@ function networkLookupHosts(hostname) {
   };
   const raw = String(hostname || "").trim().toLowerCase();
   push(raw);
-  push(raw.replace(/^(api|ai|www)\./i, ""));
+  push(raw.replace(LOOKUP_HOST_PREFIX_RE, ""));
   return hosts;
+}
+
+function fallbackSiteFaviconUrls(href) {
+  try {
+    const page = new URL(String(href || ""));
+    if (page.protocol !== "http:" && page.protocol !== "https:") return [];
+    const urls = [];
+    const push = (value) => {
+      if (value && !urls.includes(value)) urls.push(value);
+    };
+    for (const host of networkLookupHosts(page.hostname)) {
+      push(`${page.protocol}//${host}/favicon.ico`);
+      push(`${page.protocol}//${host}/favicon.svg`);
+    }
+    return urls;
+  } catch {
+    return [];
+  }
 }
 
 function fallbackNetworkFaviconUrls(href) {
@@ -24,8 +43,8 @@ function fallbackNetworkFaviconUrls(href) {
       if (value && !urls.includes(value)) urls.push(value);
     };
     for (const host of networkLookupHosts(page.hostname)) {
-      push(`https://icons.duckduckgo.com/ip3/${host}.ico`);
       push(`https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64`);
+      push(`https://icons.duckduckgo.com/ip3/${host}.ico`);
     }
     return urls;
   } catch {
@@ -39,11 +58,25 @@ function pushFaviconUrl(urls, value) {
   return urls;
 }
 
+function listedFaviconUrls(value) {
+  if (Array.isArray(value)) return value;
+  if (value) return [value];
+  return [];
+}
+
 function chatFaviconCandidates(source = {}, deps = {}) {
   const href = String(source.href || source.url || source.app?.url || "").trim();
   const logoUrl = String(source.logoUrl || "").trim();
   const app = source.app;
   const appId = source.appId || app?.id;
+  if (typeof deps.candidateFaviconUrls === "function") {
+    const listed = listedFaviconUrls(deps.candidateFaviconUrls(href, logoUrl, { appId }));
+    if (listed.length) {
+      const urls = [];
+      for (const url of listed) pushFaviconUrl(urls, url);
+      return urls;
+    }
+  }
   const urls = [];
   if (app && typeof deps.appFaviconUrl === "function") pushFaviconUrl(urls, deps.appFaviconUrl(app));
   if (typeof deps.effectiveFaviconUrl === "function") {
@@ -51,11 +84,40 @@ function chatFaviconCandidates(source = {}, deps = {}) {
   } else {
     pushFaviconUrl(urls, logoUrl);
   }
+  const site = typeof deps.siteFaviconUrls === "function"
+    ? listedFaviconUrls(deps.siteFaviconUrls(href))
+    : fallbackSiteFaviconUrls(href);
+  for (const url of site) pushFaviconUrl(urls, url);
   const extra = typeof deps.networkFaviconUrls === "function"
     ? deps.networkFaviconUrls(href)
     : fallbackNetworkFaviconUrls(href);
-  for (const url of Array.isArray(extra) ? extra : [extra]) pushFaviconUrl(urls, url);
+  for (const url of listedFaviconUrls(extra)) pushFaviconUrl(urls, url);
   return urls;
+}
+
+function isGenericNetworkFavicon(image) {
+  const src = String(image?.currentSrc || image?.src || "");
+  const width = Number(image?.naturalWidth || 0);
+  const height = Number(image?.naturalHeight || 0);
+  if (!src || width <= 0 || height <= 0) return false;
+  try {
+    const parsed = new URL(src);
+    if (parsed.hostname === "icons.duckduckgo.com" && parsed.pathname.startsWith("/ip3/")) {
+      return width === 48 && height === 48;
+    }
+    if (parsed.hostname === "www.google.com" && parsed.pathname.startsWith("/s2/favicons")) {
+      const requested = Number(parsed.searchParams.get("sz") || 16);
+      return requested >= 32 && width <= 16 && height <= 16;
+    }
+  } catch {}
+  return false;
+}
+
+function isDecodedFaviconMiss(image) {
+  if (isGenericNetworkFavicon(image)) return true;
+  const width = Number(image?.naturalWidth || 0);
+  const height = Number(image?.naturalHeight || 0);
+  return width === 1 && height === 1;
 }
 
 function markFaviconReady(image) {
@@ -75,6 +137,39 @@ function finishFaviconMiss(image, deps = {}) {
     return;
   }
   image.hidden = true;
+}
+
+function advanceFavicon(image, candidates, href, fallbackUrl, deps = {}) {
+  if (!image || image.dataset.faviconMiss === "1") return;
+  delete image.dataset.faviconReady;
+  let index = Number(image.dataset.faviconIndex || 0) + 1;
+  while (index < candidates.length) {
+    const next = candidates[index];
+    index += 1;
+    if (next && image.src !== next) {
+      image.dataset.faviconIndex = String(index - 1);
+      image.src = next;
+      return;
+    }
+  }
+  if (typeof deps.browserFaviconUrl === "function" && image.dataset.browserFallback !== "1") {
+    image.dataset.browserFallback = "1";
+    const browserUrl = String(deps.browserFaviconUrl(href) || "").trim();
+    if (browserUrl && image.src !== browserUrl) {
+      image.src = browserUrl;
+      return;
+    }
+  }
+  if (image.dataset.fallback === "1") {
+    finishFaviconMiss(image, deps);
+    return;
+  }
+  image.dataset.fallback = "1";
+  if (fallbackUrl && image.src !== fallbackUrl) {
+    image.src = fallbackUrl;
+    return;
+  }
+  finishFaviconMiss(image, deps);
 }
 
 export function uniqueChatFaviconSources(items = [], resolve) {
@@ -109,39 +204,15 @@ export function renderChatFavicon(source = {}, deps = {}) {
     decoding: "async",
     referrerpolicy: "no-referrer",
     dataset: { faviconIndex: "0" },
-    onload: (event) => markFaviconReady(event.currentTarget),
-    onerror: (event) => {
+    onload: (event) => {
       const image = event.currentTarget;
-      if (image.dataset.faviconMiss === "1") return;
-      let index = Number(image.dataset.faviconIndex || 0) + 1;
-      while (index < candidates.length) {
-        const next = candidates[index];
-        index += 1;
-        if (next && image.src !== next) {
-          image.dataset.faviconIndex = String(index - 1);
-          image.src = next;
-          return;
-        }
-      }
-      if (typeof deps.browserFaviconUrl === "function" && image.dataset.browserFallback !== "1") {
-        image.dataset.browserFallback = "1";
-        const browserUrl = String(deps.browserFaviconUrl(href) || "").trim();
-        if (browserUrl && image.src !== browserUrl) {
-          image.src = browserUrl;
-          return;
-        }
-      }
-      if (image.dataset.fallback === "1") {
-        finishFaviconMiss(image, deps);
+      if (isDecodedFaviconMiss(image)) {
+        advanceFavicon(image, candidates, href, fallbackUrl, deps);
         return;
       }
-      image.dataset.fallback = "1";
-      if (fallbackUrl && image.src !== fallbackUrl) {
-        image.src = fallbackUrl;
-        return;
-      }
-      finishFaviconMiss(image, deps);
+      markFaviconReady(image);
     },
+    onerror: (event) => advanceFavicon(event.currentTarget, candidates, href, fallbackUrl, deps),
     src: initial
   });
 }

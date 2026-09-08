@@ -86,28 +86,103 @@ globalThis.document = {
     { href: "https://chatgpt.com/", title: "ChatGPT" },
     { omitTitle: true }
   );
-  assert.match(auto.src, /icons\.duckduckgo\.com\/ip3\/chatgpt\.com\.ico$/);
+  assert.match(auto.src, /^https:\/\/chatgpt\.com\/favicon\.ico$/);
   assert.equal(auto.dataset.faviconReady, undefined);
   auto.listeners.load[0]({ currentTarget: auto });
   assert.equal(auto.dataset.faviconReady, "1");
   auto.listeners.error[0]({ currentTarget: auto });
-  assert.match(auto.src, /google\.com\/s2\/favicons/);
+  assert.match(auto.src, /^https:\/\/chatgpt\.com\/favicon\.svg$/);
+  auto.listeners.error[0]({ currentTarget: auto });
+  assert.match(auto.src, /google\.com\/s2\/favicons\?domain=chatgpt\.com/);
+  auto.listeners.error[0]({ currentTarget: auto });
+  assert.match(auto.src, /icons\.duckduckgo\.com\/ip3\/chatgpt\.com\.ico$/);
 
   const api = renderChatFavicon(
     { href: "https://api.0-0.pro/v1/chat/completions" },
     { omitTitle: true }
   );
-  assert.match(api.src, /icons\.duckduckgo\.com\/ip3\/api\.0-0\.pro\.ico$/);
+  assert.match(api.src, /^https:\/\/api\.0-0\.pro\/favicon\.ico$/);
+  api.listeners.error[0]({ currentTarget: api });
+  assert.match(api.src, /^https:\/\/api\.0-0\.pro\/favicon\.svg$/);
+  api.listeners.error[0]({ currentTarget: api });
+  assert.match(api.src, /^https:\/\/0-0\.pro\/favicon\.ico$/);
+  api.listeners.error[0]({ currentTarget: api });
+  assert.match(api.src, /^https:\/\/0-0\.pro\/favicon\.svg$/);
   api.listeners.error[0]({ currentTarget: api });
   assert.match(api.src, /google\.com\/s2\/favicons\?domain=api\.0-0\.pro/);
   api.listeners.error[0]({ currentTarget: api });
-  assert.match(api.src, /icons\.duckduckgo\.com\/ip3\/0-0\.pro\.ico$/);
+  assert.match(api.src, /icons\.duckduckgo\.com\/ip3\/api\.0-0\.pro\.ico$/);
   api.listeners.error[0]({ currentTarget: api });
   assert.match(api.src, /google\.com\/s2\/favicons\?domain=0-0\.pro/);
+  api.listeners.error[0]({ currentTarget: api });
+  assert.match(api.src, /icons\.duckduckgo\.com\/ip3\/0-0\.pro\.ico$/);
+
+  const deepseek = renderChatFavicon(
+    { href: "https://chat.deepseek.com/" },
+    { omitTitle: true }
+  );
+  assert.match(deepseek.src, /^https:\/\/chat\.deepseek\.com\/favicon\.ico$/);
+  deepseek.listeners.error[0]({ currentTarget: deepseek });
+  assert.match(deepseek.src, /^https:\/\/chat\.deepseek\.com\/favicon\.svg$/);
+  deepseek.listeners.error[0]({ currentTarget: deepseek });
+  assert.match(deepseek.src, /^https:\/\/deepseek\.com\/favicon\.ico$/);
+
+  const ddgDefault = renderChatFavicon(
+    { href: "https://gk.dairoot.cn/" },
+    {
+      omitTitle: true,
+      siteFaviconUrls: () => [],
+      networkFaviconUrls: () => [
+        "https://icons.duckduckgo.com/ip3/gk.dairoot.cn.ico",
+        "https://www.google.com/s2/favicons?domain=gk.dairoot.cn&sz=64"
+      ]
+    }
+  );
+  assert.match(ddgDefault.src, /icons\.duckduckgo\.com\/ip3\/gk\.dairoot\.cn\.ico$/);
+  ddgDefault.naturalWidth = 48;
+  ddgDefault.naturalHeight = 48;
+  ddgDefault.listeners.load[0]({ currentTarget: ddgDefault });
+  assert.notEqual(ddgDefault.dataset.faviconReady, "1");
+  assert.match(ddgDefault.src, /google\.com\/s2\/favicons\?domain=gk\.dairoot\.cn/);
+
+  const googleGeneric = renderChatFavicon(
+    { href: "https://example.test/" },
+    {
+      omitTitle: true,
+      siteFaviconUrls: () => [],
+      networkFaviconUrls: () => ["https://www.google.com/s2/favicons?domain=example.test&sz=64"]
+    }
+  );
+  googleGeneric.naturalWidth = 16;
+  googleGeneric.naturalHeight = 16;
+  googleGeneric.listeners.load[0]({ currentTarget: googleGeneric });
+  assert.notEqual(googleGeneric.dataset.faviconReady, "1");
+  assert.equal(googleGeneric.hidden, true);
+
+  const pixel = renderChatFavicon(
+    { href: "https://example.test/pixel" },
+    {
+      omitTitle: true,
+      siteFaviconUrls: () => [],
+      networkFaviconUrls: () => [
+        "https://cdn.example.test/spacer.gif",
+        "https://cdn.example.test/real.png"
+      ]
+    }
+  );
+  pixel.naturalWidth = 1;
+  pixel.naturalHeight = 1;
+  pixel.listeners.load[0]({ currentTarget: pixel });
+  assert.notEqual(pixel.dataset.faviconReady, "1");
+  assert.equal(pixel.src, "https://cdn.example.test/real.png");
 
   const hiddenMiss = renderChatFavicon(
     { href: "https://example.com/" },
-    { omitTitle: true, networkFaviconUrls: () => ["https://fail.example/icon.png"] }
+    {
+      omitTitle: true,
+      siteFaviconUrls: () => [],
+      networkFaviconUrls: () => ["https://fail.example/icon.png"]
+    }
   );
   hiddenMiss.listeners.error[0]({ currentTarget: hiddenMiss });
   assert.equal(hiddenMiss.hidden, true);
@@ -117,6 +192,7 @@ globalThis.document = {
     {
       omitTitle: true,
       keepVisibleOnMiss: true,
+      siteFaviconUrls: () => [],
       networkFaviconUrls: () => ["https://fail.example/icon.png"]
     }
   );

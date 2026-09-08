@@ -1,6 +1,6 @@
 import {
   currentExtensionTab, currentExtensionTabId, extensionApi, permissionsContains,
-  permissionsRequest, requestBackground, runtimeGetUrl, runtimeRequest, userScriptsAvailability
+  permissionsRequest, requestBackground, runtimeGetUrl, runtimeRequest, tabsQuery, userScriptsAvailability
 } from "../shared/extension-api.js";
 import { APP_VERSION } from "../shared/constants.js";
 import { FrameRuntimePort } from "../shared/frame-rpc.js";
@@ -281,6 +281,7 @@ const {
   browserUrl: browserFaviconUrl, discover: discoverDeclaredFaviconUrl, remember: rememberFaviconUrl,
   effective: effectiveFaviconUrl, app: appFaviconUrl, fallback: fallbackFaviconUrl
 } = faviconService;
+let tabFaviconRenderEnabled = false;
 
 const appContext = Object.freeze({
   state: featureState.optimize, svgIcon, syncPromptInputNode, recordFunctionalAnomaly
@@ -1317,6 +1318,11 @@ async function init() {
   const workspaceSessionSnapshot = await workspaceSessionSnapshotPromise;
   await refreshUserScriptsPermission();
   await faviconService.load();
+  const tabsApi = extensionApi()?.tabs;
+  void faviconService.observeTabs({
+    queryTabs: tabsQuery, onUpdated: tabsApi?.onUpdated, onRemoved: tabsApi?.onRemoved,
+    onChange: () => { if (tabFaviconRenderEnabled) render() }
+  });
   let contentScriptsRefreshed = false;
   let contentScriptsRefreshError = null;
   await Promise.race([
@@ -1374,7 +1380,7 @@ async function init() {
   frameBridgeController.install();
   installPreferredModelFrameCleanup();
   await promptFocusPromise;
-  render(); if (workspaceTabsSidebarController.isOpen()) await workspaceTabsSidebarController.refresh().then(() => workspaceTabsSidebarController.syncSidebar(ensureAppShell())).catch((error) => console.warn("[ChatClub] Live workspace tabs could not be listed", error));
+  render(); tabFaviconRenderEnabled = true; if (workspaceTabsSidebarController.isOpen()) await workspaceTabsSidebarController.refresh().then(() => workspaceTabsSidebarController.syncSidebar(ensureAppShell())).catch((error) => console.warn("[ChatClub] Live workspace tabs could not be listed", error));
   const promptHandoffAdmission = workspacePromptHandoffController.admitInitialLaunch(promptHandoffLaunch);
   const skippedPromptTargets = promptHandoffLaunch.diagnostics?.skipped?.length || 0, promptHandoffReason = promptHandoffLaunch.diagnostics?.reason;
   if (skippedPromptTargets) toast(t("toast.promptHandoffTargetsSkipped", { count: skippedPromptTargets }), "info");

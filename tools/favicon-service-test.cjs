@@ -198,21 +198,54 @@ function link(attributes = {}) {
   const apiHref = "https://api.0-0.pro/v1/chat/completions";
   const apiUrls = firefox.networkUrls(apiHref);
   assert.deepEqual(apiUrls, [
-    "https://icons.duckduckgo.com/ip3/api.0-0.pro.ico",
     "https://www.google.com/s2/favicons?domain=api.0-0.pro&sz=64",
-    "https://icons.duckduckgo.com/ip3/0-0.pro.ico",
-    "https://www.google.com/s2/favicons?domain=0-0.pro&sz=64"
+    "https://icons.duckduckgo.com/ip3/api.0-0.pro.ico",
+    "https://www.google.com/s2/favicons?domain=0-0.pro&sz=64",
+    "https://icons.duckduckgo.com/ip3/0-0.pro.ico"
   ]);
   const apiCandidates = firefox.candidates(apiHref);
   assert.equal(apiCandidates[0], "https://api.0-0.pro/favicon.ico");
+  assert.ok(apiCandidates.includes("https://api.0-0.pro/favicon.svg"));
   assert.ok(apiCandidates.includes("https://0-0.pro/favicon.ico"));
+  assert.ok(apiCandidates.includes("https://0-0.pro/favicon.svg"));
   assert.ok(!apiCandidates.some((url) => url.includes("/_favicon/")));
   assert.ok(apiCandidates.indexOf("https://api.0-0.pro/favicon.ico") < apiCandidates.indexOf(apiUrls[0]));
   assert.ok(apiCandidates.indexOf("https://www.google.com/s2/favicons?domain=0-0.pro&sz=64") > apiCandidates.indexOf(apiUrls[0]));
 
   const chromiumApi = chromium.candidates(apiHref);
   assert.ok(!chromiumApi.some((url) => url.includes("/_favicon/")), "API endpoints must not start with Chromium's default globe");
-  assert.ok(chromium.candidates("https://chatgpt.com/").some((url) => url.includes("/_favicon/")));
+  const chatCandidates = chromium.candidates("https://chatgpt.com/");
+  const browserIndex = chatCandidates.findIndex((url) => url.includes("/_favicon/"));
+  const googleIndex = chatCandidates.findIndex((url) => url.includes("google.com/s2/favicons"));
+  const ddgIndex = chatCandidates.findIndex((url) => url.includes("duckduckgo.com"));
+  assert.ok(browserIndex > 0);
+  assert.ok(browserIndex > googleIndex && browserIndex > ddgIndex, "Chromium generic _favicon_ must follow site and network lookups");
+  assert.ok(chatCandidates.includes("https://chatgpt.com/favicon.svg"));
+
+  const deepseek = firefox.candidates("https://chat.deepseek.com/");
+  assert.equal(deepseek[0], "https://chat.deepseek.com/favicon.ico");
+  assert.ok(deepseek.includes("https://chat.deepseek.com/favicon.svg"));
+  assert.ok(deepseek.includes("https://deepseek.com/favicon.ico"), "chat. must peel to the registrable parent");
+  assert.ok(deepseek.includes("https://deepseek.com/favicon.svg"));
+  assert.ok(deepseek.indexOf("https://deepseek.com/favicon.ico") < deepseek.findIndex((url) => url.includes("google.com/s2/favicons")));
+  assert.ok(!deepseek.some((url) => url.includes("/_favicon/")));
+
+  const notion = firefox.candidates("https://app.notion.com/ai");
+  assert.ok(notion.includes("https://app.notion.com/favicon.ico"));
+  assert.ok(!notion.includes("https://notion.com/favicon.ico"), "do not strip arbitrary product labels");
+
+  const lyingSvg = create({
+    protocol: "moz-extension:",
+    pageHtmlLinks: [
+      link({ rel: "icon", href: "/favicon.ico", type: "image/x-icon" }),
+      link({ rel: "icon", href: "https://fe-static.deepseek.com/chat/favicon.svg", type: "image/x-icon" })
+    ]
+  });
+  assert.equal(
+    await lyingSvg.discover("https://chat.deepseek.com/"),
+    "https://fe-static.deepseek.com/chat/favicon.svg",
+    "a .svg href must outrank a lying type=image/x-icon ICO"
+  );
 
   const fetched = [];
   const apiDiscover = createFaviconService({
@@ -250,6 +283,121 @@ function link(attributes = {}) {
     })]
   });
   assert.equal(await dataDeclared.discover("https://0-0.pro/"), "", "HTML data: placeholder icons must not be remembered");
+
+  function listenerHub() {
+    const listeners = [];
+    return {
+      addListener(fn) { listeners.push(fn); },
+      fire(...args) { for (const fn of listeners) fn(...args); }
+    };
+  }
+
+  const whale = "https://fe-static.deepseek.com/chat/favicon.svg";
+  const tabState = { faviconCache: {}, options: {} };
+  const tabService = createFaviconService({
+    state: tabState,
+    storageGet: async () => ({}),
+    storageSet: async () => {},
+    runtimeGetUrl: (value) => runtimeUrl("moz-extension:", value),
+    runtimeGetManifest: () => ({ permissions: [] }),
+    inferAppName: (app) => app?.name || "Example",
+    fetchPage: async () => ({ ok: true, text: async () => "<html></html>" }),
+    parseHtml: () => ({ querySelectorAll: () => [] })
+  });
+  const updated = listenerHub();
+  const removed = listenerHub();
+  let tabChanges = 0;
+  await tabService.observeTabs({
+    queryTabs: async () => [{
+      id: 7,
+      url: "https://chat.deepseek.com/a/chat/s/1",
+      favIconUrl: whale,
+      active: true
+    }],
+    onUpdated: updated,
+    onRemoved: removed,
+    onChange: () => { tabChanges += 1; }
+  });
+  await new Promise((resolve) => {
+    setTimeout(resolve, 250);
+  });
+  assert.equal(tabService.tabUrl("https://chat.deepseek.com/"), whale);
+  assert.equal(
+    tabService.effective("https://chat.deepseek.com/"),
+    whale,
+    "an open tab's favIconUrl must outrank guessed /favicon.ico"
+  );
+  assert.equal(
+    tabService.effective("https://www.deepseek.com/"),
+    whale,
+    "chat. / www. / apex hosts of the same site share the live tab icon"
+  );
+  assert.equal(tabState.faviconCache["https://chat.deepseek.com/a/chat/s/1"]?.url, whale);
+  assert.ok(tabChanges >= 1, "observing an open tab must notify once the icon is ingested");
+
+  const dataTabIcon = "data:image/png;base64,AAAA";
+  updated.fire(7, { favIconUrl: dataTabIcon }, {
+    id: 7,
+    url: "https://chat.deepseek.com/a/chat/s/1",
+    favIconUrl: dataTabIcon,
+    active: true
+  });
+  assert.equal(tabService.tabUrl("https://chat.deepseek.com/"), dataTabIcon);
+  assert.equal(tabService.effective("https://chat.deepseek.com/"), dataTabIcon);
+  assert.equal(
+    tabState.faviconCache["https://chat.deepseek.com/a/chat/s/1"]?.url,
+    whale,
+    "ephemeral data: tab icons must not replace a remembered HTTPS icon"
+  );
+
+  updated.fire(7, { favIconUrl: "chrome://favicon/size/16/https://chat.deepseek.com/" }, {
+    id: 7,
+    url: "https://chat.deepseek.com/",
+    favIconUrl: "chrome://favicon/size/16/https://chat.deepseek.com/"
+  });
+  assert.equal(
+    tabService.tabUrl("https://chat.deepseek.com/"),
+    "",
+    "chrome: tab favicons are not renderable in MV3 extension pages"
+  );
+
+  updated.fire(8, { favIconUrl: "https://www.notion.so/images/favicon.ico", url: "https://www.notion.so/" }, {
+    id: 8,
+    url: "https://www.notion.so/",
+    favIconUrl: "https://www.notion.so/images/favicon.ico",
+    active: true
+  });
+  assert.equal(
+    tabService.tabUrl("https://app.notion.com/ai"),
+    "",
+    "do not steal a parent-site tab icon for an unpeeled product host"
+  );
+
+  const overrideTab = create({
+    protocol: "moz-extension:",
+    options: { appIcons: { DeepSeek: { srcType: "url", value: overrideIcon } } }
+  });
+  await overrideTab.observeTabs({
+    queryTabs: async () => [{ id: 1, url: "https://chat.deepseek.com/", favIconUrl: whale, active: true }]
+  });
+  assert.equal(
+    overrideTab.effective("https://chat.deepseek.com/", "", { appId: "DeepSeek" }),
+    overrideIcon,
+    "a user override must still outrank a live tab favicon"
+  );
+  assert.equal(
+    overrideTab.effective("https://chat.deepseek.com/", "", { tabFaviconUrl: whale }),
+    whale,
+    "callers may pass an explicit tab favicon when they already have the Tab object"
+  );
+
+  removed.fire(7);
+  assert.equal(tabService.tabUrl("https://chat.deepseek.com/"), "");
+
+  const runtimeSource = fs.readFileSync(path.join(root, "app/runtime.js"), "utf8");
+  assert.match(runtimeSource, /faviconService\.observeTabs\(/);
+  assert.match(runtimeSource, /queryTabs:\s*tabsQuery/);
+  assert.match(runtimeSource, /onUpdated:\s*tabsApi\?\.onUpdated/);
 
   console.log("Favicon service browser-target and declared-icon checks passed.");
 })().catch((error) => {

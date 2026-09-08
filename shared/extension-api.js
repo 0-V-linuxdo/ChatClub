@@ -73,6 +73,13 @@ export function tabsGetCurrent() {
   return callPromise(["tabs", "getCurrent"]);
 }
 
+export function tabsQuery(queryInfo = {}) {
+  return callPromise(["tabs", "query"], [queryInfo]).then(
+    (list) => Array.isArray(list) ? list : [],
+    () => []
+  );
+}
+
 export async function currentExtensionTab() {
   try {
     const tab = await tabsGetCurrent();

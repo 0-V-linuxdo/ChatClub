@@ -533,7 +533,11 @@ export function createHistoryController(ctx) {
       effectiveFaviconUrl: faviconPort.effective,
       fallbackFaviconUrl: faviconPort.fallback,
       browserFaviconUrl: faviconPort.browserUrl || faviconPort.browser,
-      networkFaviconUrls: faviconPort.networkUrls
+      siteFaviconUrls: faviconPort.siteUrls,
+      networkFaviconUrls: faviconPort.networkUrls,
+      candidateFaviconUrls: typeof faviconPort.candidates === "function"
+        ? (href, logoUrl, options) => faviconPort.candidates(href, logoUrl, options)
+        : undefined
     };
   }
 

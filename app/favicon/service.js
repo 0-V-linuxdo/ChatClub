@@ -3,6 +3,7 @@ const FAVICON_CACHE_MAX_ENTRIES = 240;
 const APP_ICON_DATA_MAX_CHARS = 65536;
 const APP_ICON_RASTER_SIZE = 128;
 const APP_ICON_DATA_RE = /^data:image\/(?:png|jpeg|jpg|webp|svg\+xml|x-icon|vnd\.microsoft\.icon)[;,]/i;
+const LOOKUP_HOST_PREFIX_RE = /^(api|ai|www|chat)\./i;
 
 function networkLookupHosts(hostname) {
   const hosts = [];
@@ -12,7 +13,7 @@ function networkLookupHosts(hostname) {
   };
   const raw = String(hostname || "").trim().toLowerCase();
   push(raw);
-  push(raw.replace(/^(api|ai|www)\./i, ""));
+  push(raw.replace(LOOKUP_HOST_PREFIX_RE, ""));
   return hosts;
 }
 
@@ -31,7 +32,15 @@ function siteFaviconUrls(href) {
   try {
     const page = new URL(String(href || ""));
     if (page.protocol !== "http:" && page.protocol !== "https:") return [];
-    return networkLookupHosts(page.hostname).map((host) => `${page.protocol}//${host}/favicon.ico`);
+    const urls = [];
+    const push = (value) => {
+      if (value && !urls.includes(value)) urls.push(value);
+    };
+    for (const host of networkLookupHosts(page.hostname)) {
+      push(`${page.protocol}//${host}/favicon.ico`);
+      push(`${page.protocol}//${host}/favicon.svg`);
+    }
+    return urls;
   } catch {
     return [];
   }
@@ -46,8 +55,8 @@ function networkFaviconUrls(href) {
       if (value && !urls.includes(value)) urls.push(value);
     };
     for (const host of networkLookupHosts(page.hostname)) {
-      push(`https://icons.duckduckgo.com/ip3/${host}.ico`);
       push(`https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64`);
+      push(`https://icons.duckduckgo.com/ip3/${host}.ico`);
     }
     return urls;
   } catch {
@@ -63,6 +72,46 @@ function isNetworkFavicon(url) {
   } catch {
     return false;
   }
+}
+
+function acceptedTabFavicon(url) {
+  const raw = String(url || "").trim();
+  if (!raw) return "";
+  if (APP_ICON_DATA_RE.test(raw)) return raw.length <= APP_ICON_DATA_MAX_CHARS ? raw : "";
+  try {
+    const parsed = new URL(raw);
+    if (parsed.username || parsed.password) return "";
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return "";
+    if (isNetworkFavicon(parsed.href)) return "";
+    return parsed.href;
+  } catch {
+    return "";
+  }
+}
+
+function peeledHostCore(hostname) {
+  const hosts = networkLookupHosts(hostname);
+  return hosts[hosts.length - 1] || "";
+}
+
+function tabMatchScore(page, entry) {
+  if (!page || !entry) return -1;
+  try {
+    const tabPage = new URL(String(entry.href || ""));
+    if (tabPage.protocol !== "http:" && tabPage.protocol !== "https:") return -1;
+    if (tabPage.origin === page.origin) return 300;
+    if (tabPage.hostname === page.hostname) return 200;
+    const pageCore = peeledHostCore(page.hostname);
+    const tabCore = peeledHostCore(tabPage.hostname);
+    if (pageCore && pageCore === tabCore) return 100;
+    return -1;
+  } catch {
+    return -1;
+  }
+}
+function looksSvgIcon(url, type = "") {
+  const path = String(url || "").split(/[?#]/, 1)[0].toLowerCase();
+  return path.endsWith(".svg") || String(type || "").toLowerCase().includes("svg");
 }
 
 function bytesToDataUrl(type, bytes) {
@@ -84,7 +133,10 @@ export function createFaviconService(dependencies) {
     parseHtml = (html) => new DOMParser().parseFromString(html, "text/html")
   } = dependencies;
   const discoveryPromises = new Map();
+  const tabFavicons = new Map();
   let persistTimer = 0;
+  let tabChangeTimer = 0;
+  let tabChangeHandler = null;
 
   function pageUrl(value, base = globalThis.location?.href) {
     try {
@@ -175,7 +227,9 @@ export function createFaviconService(dependencies) {
         const type = String(link.getAttribute("type") || "").toLowerCase();
         const sizeScore = sizes.includes("32") ? 0 : sizes.includes("16") ? 1 : sizes.includes("180") ? 2 : 3;
         const relScore = rel.includes("shortcut icon") ? 0 : rel.includes("icon") ? 1 : rel.includes("apple-touch-icon") ? 3 : 4;
-        const typeScore = type.includes("png") || type.includes("x-icon") || type.includes("icon") ? 0 : 1;
+        const typeScore = looksSvgIcon(icon, type) || type.includes("png")
+          ? 0
+          : (type.includes("x-icon") || type.includes("icon") ? 1 : 2);
         return { url: icon, score: relScore * 100 + sizeScore * 10 + typeScore, index };
       })
       .filter(Boolean)
@@ -199,6 +253,95 @@ export function createFaviconService(dependencies) {
   function persistSoon() {
     clearTimeout(persistTimer);
     persistTimer = setTimeout(() => storageSet(FAVICON_CACHE_KEY, state.faviconCache).catch(() => {}), 300);
+  }
+
+  function notifyTabFaviconChange() {
+    if (typeof tabChangeHandler !== "function") return;
+    clearTimeout(tabChangeTimer);
+    tabChangeTimer = setTimeout(() => {
+      try { tabChangeHandler(); } catch {}
+    }, 200);
+  }
+
+  function forgetTab(tabId) {
+    const id = Number(tabId);
+    if (!Number.isInteger(id) || !tabFavicons.has(id)) return false;
+    tabFavicons.delete(id);
+    return true;
+  }
+
+  function ingestTab(tab = {}) {
+    const id = Number(tab?.id);
+    if (!Number.isInteger(id) || id < 0) return false;
+    const page = pageUrl(tab?.url);
+    const icon = acceptedTabFavicon(tab?.favIconUrl);
+    if (!page || !icon) return forgetTab(id);
+    const previous = tabFavicons.get(id);
+    const next = {
+      href: page.href,
+      origin: page.origin,
+      hostname: page.hostname,
+      favIconUrl: icon,
+      updatedAt: Date.now(),
+      active: tab.active === true
+    };
+    tabFavicons.set(id, next);
+    if (!APP_ICON_DATA_RE.test(icon)) remember(page.href, icon);
+    return !previous
+      || previous.favIconUrl !== next.favIconUrl
+      || previous.href !== next.href
+      || previous.active !== next.active;
+  }
+
+  function tabUrl(href) {
+    const page = pageUrl(href);
+    if (!page || !tabFavicons.size) return "";
+    let best = null;
+    let bestScore = -1;
+    for (const entry of tabFavicons.values()) {
+      const score = tabMatchScore(page, entry);
+      if (score < 0) continue;
+      if (
+        score > bestScore
+        || (score === bestScore && entry.active && !best.active)
+        || (score === bestScore && entry.active === best.active && entry.updatedAt > best.updatedAt)
+      ) {
+        best = entry;
+        bestScore = score;
+      }
+    }
+    return best?.favIconUrl || "";
+  }
+
+  async function observeTabs(bindings = {}) {
+    tabChangeHandler = typeof bindings.onChange === "function" ? bindings.onChange : null;
+    const queryTabs = bindings.queryTabs;
+    if (typeof queryTabs === "function") {
+      try {
+        const tabs = await queryTabs({});
+        let changed = false;
+        for (const tab of Array.isArray(tabs) ? tabs : []) {
+          if (ingestTab(tab)) changed = true;
+        }
+        if (changed) notifyTabFaviconChange();
+      } catch {}
+    }
+    const onUpdated = bindings.onUpdated;
+    if (typeof onUpdated?.addListener === "function") {
+      onUpdated.addListener((tabId, changeInfo, tab) => {
+        if (changeInfo?.favIconUrl == null && changeInfo?.url == null && changeInfo?.status !== "complete") return;
+        const next = { ...(tab || {}), id: tabId };
+        if (changeInfo?.favIconUrl != null) next.favIconUrl = changeInfo.favIconUrl;
+        if (changeInfo?.url) next.url = changeInfo.url;
+        if (ingestTab(next)) notifyTabFaviconChange();
+      });
+    }
+    const onRemoved = bindings.onRemoved;
+    if (typeof onRemoved?.addListener === "function") {
+      onRemoved.addListener((tabId) => {
+        if (forgetTab(tabId)) notifyTabFaviconChange();
+      });
+    }
   }
 
   function remember(href, logoUrl) {
@@ -293,14 +436,15 @@ export function createFaviconService(dependencies) {
       if (url && !urls.includes(url)) urls.push(url);
     };
     push(overrideUrl(options.appId));
+    push(acceptedTabFavicon(options.tabFaviconUrl) || tabUrl(href));
     const declared = String(declaredLogoUrl || "").trim();
     if (declared && APP_ICON_DATA_RE.test(declared)) push(declared);
     const declaredPage = declared ? pageUrl(declared, href) : null;
     if (declaredPage && siteIcon(href, declaredPage.href)) push(declaredPage.href);
     push(cached(href));
     for (const url of siteFaviconUrls(href)) push(url);
-    if (!isApiLookupHref(href)) push(browserUrl(href));
     for (const url of networkFaviconUrls(href)) push(url);
+    if (!isApiLookupHref(href)) push(browserUrl(href));
     return urls;
   }
 
@@ -366,6 +510,9 @@ export function createFaviconService(dependencies) {
     effective,
     candidates,
     overrideUrl,
+    tabUrl,
+    observeTabs,
+    siteUrls: siteFaviconUrls,
     networkUrls: networkFaviconUrls,
     encodeFile,
     app: (app) => effective(app?.url || "", "", { appId: app?.id }),
