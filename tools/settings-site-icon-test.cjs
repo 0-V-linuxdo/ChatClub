@@ -119,7 +119,7 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   assert.match(read("app/favicon/service.js"), /from "\.\.\/\.\.\/shared\/favicon-lookup\.js"/);
   assert.match(read("app/favicon/service.js"), /siteFaviconUrls/);
   assert.match(read("shared/favicon-lookup.js"), /favicon\.svg/);
-  assert.match(read("app/favicon/service.js"), /chatclub\.faviconCache\.v5/);
+  assert.match(read("app/favicon/service.js"), /chatclub\.faviconCache\.v6/);
   assert.match(read("app/favicon/service.js"), /rememberDecoded/);
   assert.match(read("ui/favicon.js"), /favicon-lookup\.js/);
   assert.match(read("ui/favicon.js"), /isGenericNetworkFavicon/);
@@ -323,6 +323,22 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
     assert.equal(missed.hidden, false);
     assert.equal(missed.dataset.faviconMiss, "1");
     assert.match(String(missed.className), /settings-site-icon-empty/);
+    let discovered = "";
+    settingsSiteMark({
+      href: "https://www.perplexity.ai/",
+      skipCatalog: true
+    }, {
+      discover: async (href) => {
+        discovered = href;
+        return "";
+      },
+      effective: () => "",
+      siteUrls: () => ["https://www.perplexity.ai/favicon.svg"],
+      networkUrls: () => []
+    });
+    await Promise.resolve();
+    assert.equal(discovered, "https://www.perplexity.ai/");
+    assert.match(iconEditor, /faviconPort\.discover/);
   } finally {
     if (previousNode === undefined) delete globalThis.Node;
     else globalThis.Node = previousNode;

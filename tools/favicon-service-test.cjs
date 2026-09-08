@@ -197,7 +197,17 @@ function link(attributes = {}) {
   const painted = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg"><circle cx="8" cy="8" r="7"/></svg>');
   await rememberer.rememberDecoded("https://0-0.pro/", painted);
   assert.equal(cacheState.faviconCache["blob:0-0.pro"]?.url, painted);
+  assert.equal(cacheState.faviconCache["blob:0-0.pro"]?.quality, "brand-svg");
   assert.equal(rememberer.candidates("https://0-0.pro/")[0], painted, "decoded blobs must outrank guessed site icons");
+  const letter = rememberer.fallback({ id: "0.0", url: "https://letter.example/", name: "0.0" });
+  await rememberer.rememberDecoded("https://letter.example/", letter);
+  assert.equal(
+    cacheState.faviconCache["blob:letter.example"],
+    undefined,
+    "letter fallback glyphs must never be remembered as brand-svg"
+  );
+  rememberer.remember("https://letter.example/", letter);
+  assert.equal(cacheState.faviconCache["https://letter.example/"], undefined);
 
   const svgFile = new File(["<svg xmlns='http://www.w3.org/2000/svg'></svg>"], "icon.svg", { type: "image/svg+xml" });
   const encoded = await rememberer.encodeFile(svgFile);
@@ -340,14 +350,40 @@ function link(attributes = {}) {
   }
 
   assert.equal(lookup.rasterPixelSize(icoWithPng(1024, 1024)).width, 1024);
-  assert.equal(lookup.isOversizedGuessedRaster("https://0-0.pro/favicon.ico", 1024, 1024), true);
+  assert.equal(lookup.isRejectedGuessedRaster("https://0-0.pro/favicon.ico", 1024, 1024), true);
+  assert.equal(lookup.isRejectedGuessedRaster("https://0-0.pro/favicon.ico", 16, 16), true);
+  assert.equal(lookup.isRejectedGuessedRaster("https://0-0.pro/favicon.ico", 256, 256), false);
   assert.equal(
-    lookup.isOversizedGuessedRaster("https://www.gstatic.com/lamda/images/gemini_sparkle_4g_512_lt.png", 512, 512),
+    lookup.rejectedRasterBytes("https://0-0.pro/favicon.ico", icoWithPng(1024, 1024)),
+    true,
+    "PNG-in-ICO IHDR 1024 must reject even when the ICO directory says 256"
+  );
+  assert.equal(
+    lookup.isRejectedGuessedRaster("https://www.gstatic.com/lamda/images/gemini_sparkle_4g_512_lt.png", 512, 512),
     false,
     "declared CDN PNGs must not be treated as guessed favicons"
   );
   assert.equal(lookup.acceptedDataIcon("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3C/svg%3E"), "");
   assert.equal(lookup.acceptedDataIcon(painted), painted);
+  assert.equal(lookup.isImmediateReadyFavicon(painted), true);
+  assert.equal(lookup.isImmediateReadyFavicon("data:image/png;base64,AAAA"), false);
+  const solid = new Uint8Array(4 * 32);
+  for (let index = 0; index < 32; index += 1) {
+    solid[index * 4] = 6;
+    solid[index * 4 + 1] = 6;
+    solid[index * 4 + 2] = 6;
+    solid[index * 4 + 3] = 255;
+  }
+  assert.equal(lookup.isNearSolidRgba(solid), true);
+  const twoTone = new Uint8Array(4 * 32);
+  for (let index = 0; index < 20; index += 1) twoTone[index * 4 + 3] = 255;
+  for (let index = 20; index < 32; index += 1) {
+    twoTone[index * 4] = 255;
+    twoTone[index * 4 + 1] = 255;
+    twoTone[index * 4 + 2] = 255;
+    twoTone[index * 4 + 3] = 255;
+  }
+  assert.equal(lookup.isNearSolidRgba(twoTone), false);
 
   const oversizedFetched = [];
   const oversized = createFaviconService({
@@ -404,9 +440,95 @@ function link(attributes = {}) {
   });
   await migrator.load();
   assert.equal(migratedState.faviconCache["https://chatgpt.com/"]?.url, cdnIcon);
-  assert.equal(migratedState.faviconCache["https://0-0.pro/"], undefined, "v4 guessed ico pointers must not become v5 blobs");
+  assert.equal(migratedState.faviconCache["https://0-0.pro/"], undefined, "v4 guessed ico pointers must not become v6 blobs");
   assert.equal(migratedState.faviconCache["https://chatgpt.com/ddg"], undefined);
-  assert.match(fs.readFileSync(path.join(root, "app/favicon/service.js"), "utf8"), /chatclub\.faviconCache\.v5/);
+  assert.match(fs.readFileSync(path.join(root, "app/favicon/service.js"), "utf8"), /chatclub\.faviconCache\.v6/);
+
+  const v5State = { faviconCache: {}, options: {} };
+  const boltPng = "data:image/png;base64,AAAA";
+  const v5Migrator = createFaviconService({
+    state: v5State,
+    storageGet: async (key) => {
+      if (key === "chatclub.faviconCache.v5") {
+        return {
+          "blob:0-0.pro": { url: boltPng, updatedAt: 1 },
+          "blob:perplexity.ai": { url: painted, updatedAt: 2 },
+          "https://chatgpt.com/": { url: cdnIcon, updatedAt: 3 },
+          "https://0-0.pro/": { url: "https://0-0.pro/favicon.ico", updatedAt: 4 }
+        };
+      }
+      return {};
+    },
+    storageSet: async () => {},
+    runtimeGetUrl: (value) => runtimeUrl("moz-extension:", value),
+    runtimeGetManifest: () => ({ permissions: [] }),
+    inferAppName: (app) => app?.name || "Example",
+    fetchPage: async () => ({ ok: true, text: async () => "<html></html>" }),
+    parseHtml: () => ({ querySelectorAll: () => [] })
+  });
+  await v5Migrator.load();
+  assert.equal(v5State.faviconCache["blob:0-0.pro"], undefined, "v5 guessed-path raster blobs must be discarded");
+  assert.equal(v5State.faviconCache["blob:perplexity.ai"]?.url, painted);
+  assert.equal(v5State.faviconCache["blob:perplexity.ai"]?.quality, "brand-svg");
+  assert.equal(v5State.faviconCache["https://chatgpt.com/"]?.url, cdnIcon);
+  assert.equal(v5State.faviconCache["https://0-0.pro/"], undefined);
+  assert.notEqual(v5Migrator.candidates("https://0-0.pro/")[0], boltPng);
+  assert.equal(v5Migrator.candidates("https://www.perplexity.ai/")[0], painted);
+
+  const previousMatchMedia = globalThis.matchMedia;
+  globalThis.matchMedia = (query) => ({ matches: String(query).includes("prefers-color-scheme: dark") });
+  try {
+    const kimi = create({
+      protocol: "moz-extension:",
+      pageHtmlLinks: [
+        link({ rel: "icon", href: "/favicon.ico", type: "image/x-icon" }),
+        link({ rel: "icon", href: "/favicon-light.ico", media: "(prefers-color-scheme: light)" }),
+        link({ rel: "icon", href: "/favicon-dark.ico", media: "(prefers-color-scheme: dark)" })
+      ]
+    });
+    assert.equal(
+      await kimi.discover("https://www.kimi.com/"),
+      "https://www.kimi.com/favicon-dark.ico",
+      "dark color-scheme must prefer declared favicon-dark.ico"
+    );
+    const perplexity = create({
+      protocol: "moz-extension:",
+      pageHtmlLinks: [
+        link({ rel: "icon", href: "/favicon.ico", type: "image/x-icon", sizes: "48x48" }),
+        link({ rel: "icon", href: "/favicon.svg", type: "image/svg+xml" })
+      ]
+    });
+    assert.equal(
+      await perplexity.discover("https://www.perplexity.ai/"),
+      "https://www.perplexity.ai/favicon.svg",
+      "declared SVG must beat a guessed 48px ICO"
+    );
+  } finally {
+    if (previousMatchMedia === undefined) delete globalThis.matchMedia;
+    else globalThis.matchMedia = previousMatchMedia;
+  }
+
+  const peeledFetched = [];
+  const peeled = createFaviconService({
+    state: { faviconCache: {}, options: {} },
+    storageGet: async () => ({}),
+    storageSet: async () => {},
+    runtimeGetUrl: (value) => runtimeUrl("moz-extension:", value),
+    runtimeGetManifest: () => ({ permissions: [] }),
+    inferAppName: (app) => app?.name || "Example",
+    fetchPage: async (url) => {
+      peeledFetched.push(String(url));
+      return { ok: true, headers: { get: () => "text/html" }, text: async () => "<html></html>" };
+    },
+    parseHtml: () => ({ querySelectorAll: () => [] })
+  });
+  await peeled.discover("https://api.0-0.pro/v1/chat/completions");
+  const afterFirst = peeledFetched.length;
+  await peeled.discover("https://0-0.pro/");
+  await peeled.discover("https://api.0-0.pro/v1/chat/completions");
+  assert.equal(afterFirst > 0, true);
+  assert.equal(peeledFetched.length, afterFirst, "discover must run once per peeled host");
+  assert.ok(!peeledFetched.some((url) => url.includes("/v1/chat/completions")));
 
   function listenerHub() {
     const listeners = [];

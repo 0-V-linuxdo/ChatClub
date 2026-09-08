@@ -1,7 +1,8 @@
 import { el } from "./dom.js";
 import {
-  acceptedDataIcon,
-  isOversizedGuessedRaster,
+  isImmediateReadyFavicon,
+  isGuessedFaviconPath,
+  isRejectedGuessedRaster,
   networkFaviconUrls as sharedNetworkFaviconUrls,
   siteFaviconUrls as sharedSiteFaviconUrls
 } from "../shared/favicon-lookup.js";
@@ -75,7 +76,7 @@ function isDecodedFaviconMiss(image) {
   const width = Number(image?.naturalWidth || 0);
   const height = Number(image?.naturalHeight || 0);
   if (width === 1 && height === 1) return true;
-  return isOversizedGuessedRaster(image?.currentSrc || image?.src, width, height);
+  return isRejectedGuessedRaster(image?.currentSrc || image?.src, width, height);
 }
 
 function markFaviconReady(image) {
@@ -130,6 +131,12 @@ function advanceFavicon(image, candidates, href, fallbackUrl, deps = {}) {
   finishFaviconMiss(image, deps);
 }
 
+function rememberDecodedSrc(image, href, deps = {}) {
+  if (image.dataset.faviconMiss === "1" || image.dataset.fallback === "1") return Promise.resolve("");
+  if (typeof deps.rememberDecodedFavicon !== "function" || !href) return Promise.resolve("");
+  return Promise.resolve(deps.rememberDecodedFavicon(href, image)).catch(() => "");
+}
+
 export function uniqueChatFaviconSources(items = [], resolve) {
   const seen = new Set();
   const sources = [];
@@ -153,8 +160,8 @@ export function renderChatFavicon(source = {}, deps = {}) {
   const candidates = chatFaviconCandidates(source, deps);
   const initial = candidates[0] || fallbackUrl;
   if (!initial) return null;
-  const readyNow = Boolean(acceptedDataIcon(initial));
   const usedFallback = !candidates[0] && Boolean(fallbackUrl);
+  const readyNow = usedFallback || isImmediateReadyFavicon(initial);
   return el("img", {
     class: deps.className || "chat-favicon",
     alt: "",
@@ -174,11 +181,19 @@ export function renderChatFavicon(source = {}, deps = {}) {
         advanceFavicon(image, candidates, href, fallbackUrl, deps);
         return;
       }
-      markFaviconReady(image);
-      if (image.dataset.faviconMiss === "1" || image.dataset.fallback === "1") return;
-      if (typeof deps.rememberDecodedFavicon === "function" && href) {
-        Promise.resolve(deps.rememberDecodedFavicon(href, image)).catch(() => {});
+      const src = String(image.currentSrc || image.src || "");
+      if (isGuessedFaviconPath(src) && typeof deps.rememberDecodedFavicon === "function") {
+        return rememberDecodedSrc(image, href, deps).then((accepted) => {
+          if (!accepted) {
+            advanceFavicon(image, candidates, href, fallbackUrl, deps);
+            return;
+          }
+          markFaviconReady(image);
+        });
       }
+      markFaviconReady(image);
+      if (usedFallback || image.dataset.fallback === "1") return;
+      rememberDecodedSrc(image, href, deps);
     },
     onerror: (event) => advanceFavicon(event.currentTarget, candidates, href, fallbackUrl, deps),
     src: initial

@@ -1,8 +1,15 @@
 const LOOKUP_HOST_PREFIX_RE = /^(api|ai|www|chat)\./i;
 export const APP_ICON_DATA_RE = /^data:image\/(?:png|jpeg|jpg|webp|svg\+xml|x-icon|vnd\.microsoft\.icon)[;,]/i;
 export const APP_ICON_DATA_MAX_CHARS = 65536;
+export const FAVICON_QUALITY_BRAND_SVG = "brand-svg";
+export const FAVICON_QUALITY_DECLARED_RASTER = "declared-raster";
+export const FAVICON_QUALITY_OK_RASTER = "ok-raster";
 const GUESSED_FAVICON_PATH_RE = /\/favicon\.(?:ico|svg)$/i;
 const SVG_PAINT_RE = /<(?:path|circle|rect|ellipse|polygon|polyline|line|text|use|g)\b/i;
+const LETTER_FALLBACK_VIEW_RE = /viewBox=["']0 0 32 32["']/i;
+const NEAR_SOLID_RGB_DIST = 28 * 28;
+const NEAR_SOLID_RATIO = 0.97;
+const NEAR_SOLID_MIN_OPAQUE = 16;
 
 export function networkLookupHosts(hostname) {
   const hosts = [];
@@ -109,6 +116,20 @@ export function acceptedDataIcon(value) {
   return raw;
 }
 
+export function isLetterFallbackIcon(url) {
+  const svg = decodeDataSvg(url);
+  if (!svg || !LETTER_FALLBACK_VIEW_RE.test(svg)) return false;
+  return /<rect\b/i.test(svg) && /<text\b/i.test(svg) && /font-family="system-ui/i.test(svg);
+}
+
+export function looksSvgFavicon(url, type = "") {
+  const raw = String(url || "");
+  const path = raw.split(/[?#]/, 1)[0].toLowerCase();
+  return path.endsWith(".svg")
+    || /image\/svg\+xml/i.test(raw)
+    || String(type || "").toLowerCase().includes("svg");
+}
+
 export function isGuessedFaviconPath(url) {
   try {
     const parsed = new URL(String(url || ""), "https://example.invalid");
@@ -154,10 +175,85 @@ export function rasterPixelSize(bytes) {
   return null;
 }
 
-export function isOversizedGuessedRaster(url, width, height) {
+export function isRejectedGuessedRaster(url, width, height) {
+  if (!isGuessedFaviconPath(url)) return false;
   const w = Number(width || 0);
   const h = Number(height || 0);
-  return (w >= 512 || h >= 512) && isGuessedFaviconPath(url);
+  if (!w && !h) return false;
+  const edge = Math.max(w, h);
+  return edge <= 16 || edge >= 512;
+}
+
+export function rejectedRasterBytes(url, bytes) {
+  const size = rasterPixelSize(bytes);
+  if (!size) return false;
+  return isRejectedGuessedRaster(url, size.width, size.height);
+}
+
+export function isNearSolidRgba(bytes) {
+  const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
+  if (view.length < 16 || view.length % 4 !== 0) return false;
+  let count = 0;
+  let rSum = 0;
+  let gSum = 0;
+  let bSum = 0;
+  for (let index = 0; index < view.length; index += 4) {
+    if (view[index + 3] < 16) continue;
+    count += 1;
+    rSum += view[index];
+    gSum += view[index + 1];
+    bSum += view[index + 2];
+  }
+  if (count < NEAR_SOLID_MIN_OPAQUE) return false;
+  const rMean = rSum / count;
+  const gMean = gSum / count;
+  const bMean = bSum / count;
+  let close = 0;
+  for (let index = 0; index < view.length; index += 4) {
+    if (view[index + 3] < 16) continue;
+    const dr = view[index] - rMean;
+    const dg = view[index + 1] - gMean;
+    const db = view[index + 2] - bMean;
+    if (dr * dr + dg * dg + db * db <= NEAR_SOLID_RGB_DIST) close += 1;
+  }
+  return close / count >= NEAR_SOLID_RATIO;
+}
+
+export function isFaviconQuality(value) {
+  return value === FAVICON_QUALITY_BRAND_SVG
+    || value === FAVICON_QUALITY_DECLARED_RASTER
+    || value === FAVICON_QUALITY_OK_RASTER;
+}
+
+export function isImmediateReadyQuality(quality) {
+  return quality === FAVICON_QUALITY_BRAND_SVG || quality === FAVICON_QUALITY_DECLARED_RASTER;
+}
+
+export function classifyFaviconQuality({ url = "", type = "", declared = false, dataUrl = "" } = {}) {
+  const raw = String(dataUrl || url || "").trim();
+  if (!raw || isNetworkFavicon(raw) || isLetterFallbackIcon(raw)) return "";
+  if (acceptedDataIcon(raw) && /image\/svg\+xml/i.test(raw)) return FAVICON_QUALITY_BRAND_SVG;
+  if (looksSvgFavicon(url || raw, type) && !APP_ICON_DATA_RE.test(raw)) return FAVICON_QUALITY_BRAND_SVG;
+  if (declared === true) return FAVICON_QUALITY_DECLARED_RASTER;
+  if (APP_ICON_DATA_RE.test(raw) && !/image\/svg\+xml/i.test(raw)) return FAVICON_QUALITY_OK_RASTER;
+  if (!isGuessedFaviconPath(url || raw)) return FAVICON_QUALITY_DECLARED_RASTER;
+  return FAVICON_QUALITY_OK_RASTER;
+}
+
+export function isImmediateReadyFavicon(url, quality = "") {
+  const raw = String(url || "").trim();
+  if (!raw) return false;
+  if (isLetterFallbackIcon(raw)) return true;
+  if (acceptedDataIcon(raw) && /image\/svg\+xml/i.test(raw)) return true;
+  return isImmediateReadyQuality(quality);
+}
+
+export function faviconColorScheme({ media = "", href = "" } = {}) {
+  const mediaText = String(media || "").toLowerCase();
+  const path = String(href || "").split(/[?#]/, 1)[0].toLowerCase();
+  if (/prefers-color-scheme:\s*dark/.test(mediaText) || /favicon-dark(?:\.[a-z0-9]+)?$/.test(path)) return "dark";
+  if (/prefers-color-scheme:\s*light/.test(mediaText) || /favicon-light(?:\.[a-z0-9]+)?$/.test(path)) return "light";
+  return "";
 }
 
 export function peeledHostCore(hostname) {
@@ -198,6 +294,15 @@ export function faviconBlobKey(href) {
     const page = new URL(String(href || ""));
     const host = peeledHostCore(page.hostname);
     return host ? `blob:${host}` : "";
+  } catch {
+    return "";
+  }
+}
+
+export function faviconDiscoveryKey(href) {
+  try {
+    const page = new URL(String(href || ""));
+    return peeledHostCore(page.hostname) || page.origin || "";
   } catch {
     return "";
   }

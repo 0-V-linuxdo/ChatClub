@@ -1,22 +1,35 @@
 import {
   APP_ICON_DATA_MAX_CHARS,
   APP_ICON_DATA_RE,
+  FAVICON_QUALITY_BRAND_SVG,
+  FAVICON_QUALITY_DECLARED_RASTER,
+  FAVICON_QUALITY_OK_RASTER,
   acceptedDataIcon,
+  classifyFaviconQuality,
   faviconBlobKey,
   faviconCacheKeys,
+  faviconColorScheme,
+  faviconDiscoveryKey,
   isApiLookupHref,
+  isFaviconQuality,
   isGuessedFaviconPath,
+  isImmediateReadyQuality,
+  isLetterFallbackIcon,
+  isNearSolidRgba,
   isNetworkFavicon,
-  isOversizedGuessedRaster,
   isPaintedSvgMarkup,
+  isRejectedGuessedRaster,
+  looksSvgFavicon,
   networkFaviconUrls,
   networkLookupHosts,
   peeledHostCore,
   rasterPixelSize,
+  rejectedRasterBytes,
   siteFaviconUrls
 } from "../../shared/favicon-lookup.js";
 
-const FAVICON_CACHE_KEY = "chatclub.faviconCache.v5";
+const FAVICON_CACHE_KEY = "chatclub.faviconCache.v6";
+const FAVICON_CACHE_V5_KEY = "chatclub.faviconCache.v5";
 const FAVICON_CACHE_V4_KEY = "chatclub.faviconCache.v4";
 const FAVICON_CACHE_MAX_ENTRIES = 240;
 const APP_ICON_RASTER_SIZE = 128;
@@ -52,11 +65,6 @@ function tabMatchScore(page, entry) {
   }
 }
 
-function looksSvgIcon(url, type = "") {
-  const path = String(url || "").split(/[?#]/, 1)[0].toLowerCase();
-  return path.endsWith(".svg") || String(type || "").toLowerCase().includes("svg");
-}
-
 function bytesToDataUrl(type, bytes) {
   const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
   let binary = "";
@@ -73,6 +81,24 @@ async function responseBytes(response) {
   }
 }
 
+function qualityEntry(url, extra = {}) {
+  const quality = isFaviconQuality(extra.quality) ? extra.quality : classifyFaviconQuality({
+    url,
+    type: extra.type,
+    declared: extra.declared === true,
+    dataUrl: extra.dataUrl || url
+  });
+  if (!quality) return null;
+  return {
+    url,
+    quality,
+    width: Number(extra.width || 0) || 0,
+    height: Number(extra.height || 0) || 0,
+    source: String(extra.source || "").trim(),
+    updatedAt: Number(extra.updatedAt || 0) || 0
+  };
+}
+
 export function createFaviconService(dependencies) {
   const {
     state,
@@ -85,6 +111,7 @@ export function createFaviconService(dependencies) {
     parseHtml = (html) => new DOMParser().parseFromString(html, "text/html")
   } = dependencies;
   const discoveryPromises = new Map();
+  const discoveredHosts = new Set();
   const tabFavicons = new Map();
   let persistTimer = 0;
   let tabChangeTimer = 0;
@@ -135,20 +162,49 @@ export function createFaviconService(dependencies) {
     return true;
   }
 
-  function normalizeCache(value, { migrate = false } = {}) {
+  function normalizeCache(value, { migrate = false, fromV5 = false } = {}) {
     if (!value || typeof value !== "object" || Array.isArray(value)) return {};
     const next = {};
     for (const [key, entry] of Object.entries(value)) {
       const url = typeof entry === "string" ? entry : entry?.url;
-      if (!url || isNetworkFavicon(url)) continue;
+      if (!url || isNetworkFavicon(url) || isLetterFallbackIcon(url)) continue;
       const data = acceptedDataIcon(url);
+      const updatedAt = Number(entry?.updatedAt || 0) || 0;
       if (String(key || "").startsWith("blob:")) {
+        if (fromV5) {
+          if (!data || !/image\/svg\+xml/i.test(data)) continue;
+          const stored = qualityEntry(data, {
+            quality: FAVICON_QUALITY_BRAND_SVG,
+            source: "v5",
+            updatedAt
+          });
+          if (stored) next[key] = stored;
+          continue;
+        }
         if (!data && !(APP_ICON_DATA_RE.test(url) && url.length <= APP_ICON_DATA_MAX_CHARS)) continue;
-        next[key] = { url: data || String(url), updatedAt: Number(entry?.updatedAt || 0) || 0 };
+        const stored = qualityEntry(data || String(url), {
+          quality: entry?.quality,
+          width: entry?.width,
+          height: entry?.height,
+          source: entry?.source,
+          declared: entry?.quality === FAVICON_QUALITY_DECLARED_RASTER,
+          dataUrl: data || url,
+          updatedAt
+        });
+        if (stored && isFaviconQuality(stored.quality)) next[key] = stored;
         continue;
       }
-      if (migrate && isGuessedFaviconPath(url) && !data) continue;
-      next[key] = { url: data || String(url), updatedAt: Number(entry?.updatedAt || 0) || 0 };
+      if ((migrate || fromV5) && isGuessedFaviconPath(url) && !data) continue;
+      const stored = qualityEntry(data || String(url), {
+        quality: fromV5 || migrate ? "" : entry?.quality,
+        width: entry?.width,
+        height: entry?.height,
+        source: fromV5 ? "v5" : entry?.source,
+        declared: !isGuessedFaviconPath(url),
+        dataUrl: data,
+        updatedAt
+      });
+      if (stored) next[key] = stored;
     }
     return next;
   }
@@ -167,9 +223,18 @@ export function createFaviconService(dependencies) {
     }
   }
 
+  function darkPreferred() {
+    try {
+      return globalThis.matchMedia?.("(prefers-color-scheme: dark)")?.matches === true;
+    } catch {
+      return false;
+    }
+  }
+
   function chooseDeclared(doc, href) {
     const page = pageUrl(href);
     if (!page) return "";
+    const dark = darkPreferred();
     return Array.from(doc.querySelectorAll("link[rel][href]"))
       .map((link, index) => {
         const rel = String(link.getAttribute("rel") || "").toLowerCase();
@@ -180,12 +245,19 @@ export function createFaviconService(dependencies) {
         if (!icon || (!dataIcon && !siteIcon(page.href, icon))) return null;
         const sizes = String(link.getAttribute("sizes") || "").toLowerCase();
         const type = String(link.getAttribute("type") || "").toLowerCase();
+        const scheme = faviconColorScheme({
+          media: link.getAttribute("media"),
+          href: icon
+        });
+        const mediaScore = dark
+          ? (scheme === "dark" ? 0 : scheme === "light" ? 2 : 1)
+          : (scheme === "light" ? 0 : scheme === "dark" ? 2 : 1);
         const sizeScore = sizes.includes("32") ? 0 : sizes.includes("16") ? 1 : sizes.includes("180") ? 2 : 3;
         const relScore = rel.includes("shortcut icon") ? 0 : rel.includes("icon") ? 1 : rel.includes("apple-touch-icon") ? 3 : 4;
-        const typeScore = looksSvgIcon(icon, type) || type.includes("png") || dataIcon
+        const typeScore = looksSvgFavicon(icon, type) || type.includes("png") || dataIcon
           ? 0
           : (type.includes("x-icon") || type.includes("icon") ? 1 : 2);
-        return { url: icon, score: relScore * 100 + sizeScore * 10 + typeScore, index };
+        return { url: icon, score: mediaScore * 1000 + relScore * 100 + sizeScore * 10 + typeScore, index };
       })
       .filter(Boolean)
       .sort((a, b) => a.score - b.score || a.index - b.index)[0]?.url || "";
@@ -197,10 +269,16 @@ export function createFaviconService(dependencies) {
       .slice(0, FAVICON_CACHE_MAX_ENTRIES));
   }
 
-  function cachedBlob(href) {
+  function blobRecord(href) {
     const key = faviconBlobKey(href);
-    const url = key && state.faviconCache?.[key]?.url;
-    if (!url) return "";
+    return key ? state.faviconCache?.[key] : null;
+  }
+
+  function cachedBlob(href, { immediate = false } = {}) {
+    const entry = blobRecord(href);
+    const url = entry?.url;
+    if (!url || isLetterFallbackIcon(url)) return "";
+    if (immediate && !isImmediateReadyQuality(entry.quality)) return "";
     return acceptedDataIcon(url)
       || (APP_ICON_DATA_RE.test(url) && url.length <= APP_ICON_DATA_MAX_CHARS ? url : "");
   }
@@ -208,8 +286,9 @@ export function createFaviconService(dependencies) {
   function cachedUrl(href) {
     for (const key of cacheKeys(href)) {
       if (String(key).startsWith("blob:")) continue;
-      const url = state.faviconCache?.[key]?.url;
-      if (!url || isNetworkFavicon(url)) continue;
+      const entry = state.faviconCache?.[key];
+      const url = entry?.url;
+      if (!url || isNetworkFavicon(url) || isLetterFallbackIcon(url)) continue;
       const data = acceptedDataIcon(url);
       if (data) return data;
       if (siteIcon(href, url)) return url;
@@ -218,7 +297,7 @@ export function createFaviconService(dependencies) {
   }
 
   function cached(href) {
-    return cachedBlob(href) || cachedUrl(href);
+    return cachedBlob(href, { immediate: true }) || cachedUrl(href);
   }
 
   function persistSoon() {
@@ -257,7 +336,7 @@ export function createFaviconService(dependencies) {
       active: tab.active === true
     };
     tabFavicons.set(id, next);
-    if (!APP_ICON_DATA_RE.test(icon)) remember(page.href, icon);
+    if (!APP_ICON_DATA_RE.test(icon)) remember(page.href, icon, { source: "tab", declared: true });
     return !previous
       || previous.favIconUrl !== next.favIconUrl
       || previous.href !== next.href
@@ -315,37 +394,75 @@ export function createFaviconService(dependencies) {
     }
   }
 
-  function rememberBlob(href, dataUrl) {
+  function rememberBlob(href, dataUrl, meta = {}) {
     const key = faviconBlobKey(href);
-    const url = acceptedDataIcon(dataUrl)
-      || (APP_ICON_DATA_RE.test(dataUrl) && String(dataUrl).length <= APP_ICON_DATA_MAX_CHARS ? String(dataUrl) : "");
-    if (!key || !url) return;
-    const updatedAt = Date.now();
-    state.faviconCache[key] = { url, updatedAt };
+    const raw = String(dataUrl || "").trim();
+    if (!key || !raw || isLetterFallbackIcon(raw)) return;
+    const url = acceptedDataIcon(raw)
+      || (!/image\/svg\+xml/i.test(raw) && APP_ICON_DATA_RE.test(raw) && raw.length <= APP_ICON_DATA_MAX_CHARS ? raw : "");
+    if (!url) return;
+    const stored = qualityEntry(url, {
+      ...meta,
+      dataUrl: url,
+      updatedAt: Date.now()
+    });
+    if (!stored) return;
+    state.faviconCache[key] = stored;
     state.faviconCache = prune(state.faviconCache);
     persistSoon();
   }
 
-  function remember(href, logoUrl) {
-    if (!String(logoUrl || "").trim() || isNetworkFavicon(logoUrl)) return;
+  function remember(href, logoUrl, meta = {}) {
+    if (!String(logoUrl || "").trim() || isNetworkFavicon(logoUrl) || isLetterFallbackIcon(logoUrl)) return;
     const data = acceptedDataIcon(logoUrl);
     if (data) {
-      rememberBlob(href, data);
+      rememberBlob(href, data, {
+        ...meta,
+        quality: meta.quality || classifyFaviconQuality({ url: logoUrl, dataUrl: data, declared: true }),
+        source: meta.source || "declared"
+      });
       return;
     }
     const icon = pageUrl(logoUrl, href);
     if (!icon || !siteIcon(href, icon.href)) return;
     const keys = cacheKeys(href);
     if (!keys.length) return;
-    const updatedAt = Date.now();
-    for (const key of keys) state.faviconCache[key] = { url: icon.href, updatedAt };
+    const stored = qualityEntry(icon.href, {
+      ...meta,
+      declared: meta.declared === true || !isGuessedFaviconPath(icon.href),
+      updatedAt: Date.now()
+    });
+    if (!stored) return;
+    for (const key of keys) state.faviconCache[key] = stored;
     state.faviconCache = prune(state.faviconCache);
     persistSoon();
   }
 
-  async function persistFetchedBlob(href, src) {
+  async function rasterLooksNearSolid(file) {
+    try {
+      if (typeof createImageBitmap !== "function") return false;
+      const bitmap = await createImageBitmap(file);
+      const width = Math.max(1, bitmap.width || 0);
+      const height = Math.max(1, bitmap.height || 0);
+      const canvas = typeof OffscreenCanvas === "function"
+        ? new OffscreenCanvas(width, height)
+        : Object.assign(document.createElement("canvas"), { width, height });
+      const context = canvas.getContext("2d");
+      if (!context?.getImageData) {
+        bitmap.close?.();
+        return false;
+      }
+      context.drawImage(bitmap, 0, 0);
+      bitmap.close?.();
+      return isNearSolidRgba(context.getImageData(0, 0, width, height).data);
+    } catch {
+      return false;
+    }
+  }
+
+  async function persistFetchedBlob(href, src, meta = {}) {
     const page = pageUrl(src) || pageUrl(src, href);
-    if (!page) return "";
+    if (!page || isNetworkFavicon(page.href)) return "";
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 2500);
     try {
@@ -354,23 +471,40 @@ export function createFaviconService(dependencies) {
       const type = String(response.headers?.get?.("content-type") || "").toLowerCase();
       const bytes = await responseBytes(response);
       if (!bytes || bytes.length < 16) return "";
+      if (rejectedRasterBytes(page.href, bytes)) return "";
       const size = rasterPixelSize(bytes);
-      if (size && isOversizedGuessedRaster(page.href, size.width, size.height)) return "";
+      if (size && isRejectedGuessedRaster(page.href, size.width, size.height)) return "";
       const asText = new TextDecoder().decode(bytes);
       if (isPaintedSvgMarkup(asText)) {
         const encodedSvg = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(asText)}`;
         if (encodedSvg.length <= APP_ICON_DATA_MAX_CHARS && acceptedDataIcon(encodedSvg)) {
-          rememberBlob(href, encodedSvg);
+          rememberBlob(href, encodedSvg, {
+            quality: FAVICON_QUALITY_BRAND_SVG,
+            source: meta.source || (isGuessedFaviconPath(page.href) ? "guessed-svg" : "declared"),
+            width: 0,
+            height: 0
+          });
           return encodedSvg;
         }
       }
-      if (looksSvgIcon(page.href, type) && !isPaintedSvgMarkup(asText)) return "";
+      if (looksSvgFavicon(page.href, type) && !isPaintedSvgMarkup(asText)) return "";
       const fileType = type.startsWith("image/") ? type.replace("image/jpg", "image/jpeg") : "image/png";
       const file = typeof File === "function" ? new File([bytes], "favicon", { type: fileType }) : new Blob([bytes], { type: fileType });
+      if (await rasterLooksNearSolid(file)) return "";
       const encoded = await encodeFile(file);
       if (!encoded) return "";
       if (/image\/svg\+xml/i.test(encoded) && !acceptedDataIcon(encoded)) return "";
-      rememberBlob(href, encoded);
+      if (isLetterFallbackIcon(encoded)) return "";
+      const declared = meta.declared === true || !isGuessedFaviconPath(page.href);
+      const quality = /image\/svg\+xml/i.test(encoded)
+        ? FAVICON_QUALITY_BRAND_SVG
+        : (declared ? FAVICON_QUALITY_DECLARED_RASTER : FAVICON_QUALITY_OK_RASTER);
+      rememberBlob(href, encoded, {
+        quality,
+        source: meta.source || (declared ? "declared" : "guessed"),
+        width: size?.width || 0,
+        height: size?.height || 0
+      });
       return encoded;
     } catch {
       return "";
@@ -380,23 +514,33 @@ export function createFaviconService(dependencies) {
   }
 
   async function rememberDecoded(href, image) {
-    if (cachedBlob(href)) return cachedBlob(href);
+    if (image?.dataset?.fallback === "1" || image?.dataset?.faviconMiss === "1") return "";
     const src = typeof image === "string"
       ? String(image || "").trim()
       : String(image?.currentSrc || image?.src || "").trim();
-    if (!src || image?.dataset?.fallback === "1" || image?.dataset?.faviconMiss === "1") return "";
+    if (!src || isNetworkFavicon(src) || isLetterFallbackIcon(src)) return "";
     const width = Number(image?.naturalWidth || 0);
     const height = Number(image?.naturalHeight || 0);
-    if ((width || height) && isOversizedGuessedRaster(src, width, height)) return "";
+    if ((width || height) && isRejectedGuessedRaster(src, width, height)) return "";
     const data = acceptedDataIcon(src);
     if (data) {
-      rememberBlob(href, data);
+      if (isLetterFallbackIcon(data)) return "";
+      if (/image\/svg\+xml/i.test(data)) {
+        rememberBlob(href, data, {
+          quality: FAVICON_QUALITY_BRAND_SVG,
+          source: "decoded"
+        });
+      }
       return data;
     }
-    if (isNetworkFavicon(src)) return persistFetchedBlob(href, src);
     if (!siteIcon(href, src)) return "";
-    if (!isGuessedFaviconPath(src)) remember(href, src);
-    return persistFetchedBlob(href, src);
+    const declared = !isGuessedFaviconPath(src);
+    if (declared) remember(href, src, { source: "decoded", declared: true });
+    return persistFetchedBlob(href, src, { declared, source: "decoded" });
+  }
+
+  function discoveryHost(href) {
+    return faviconDiscoveryKey(href);
   }
 
   async function discover(href) {
@@ -405,7 +549,10 @@ export function createFaviconService(dependencies) {
     const page = pageUrl(href);
     if (!page) return "";
     page.hash = "";
-    if (discoveryPromises.has(page.origin)) return discoveryPromises.get(page.origin);
+    const host = discoveryHost(page.href);
+    if (!host) return "";
+    if (discoveryPromises.has(host)) return discoveryPromises.get(host);
+    if (discoveredHosts.has(host)) return "";
     const promise = (async () => {
       try {
       const targets = [];
@@ -415,8 +562,8 @@ export function createFaviconService(dependencies) {
       };
       if (!isApiLookupHref(page.href)) pushTarget(page.href);
       pushTarget(`${page.origin}/`);
-      for (const host of networkLookupHosts(page.hostname)) {
-        pushTarget(`${page.protocol}//${host}/`);
+      for (const hostName of networkLookupHosts(page.hostname)) {
+        pushTarget(`${page.protocol}//${hostName}/`);
       }
       for (const target of targets) {
         const controller = new AbortController();
@@ -426,7 +573,7 @@ export function createFaviconService(dependencies) {
           if (!response.ok) continue;
           const logoUrl = chooseDeclared(parseHtml(await response.text()), target);
           if (logoUrl) {
-            remember(page.href, logoUrl);
+            remember(page.href, logoUrl, { source: "declared", declared: true });
             return logoUrl;
           }
         } catch {
@@ -445,11 +592,15 @@ export function createFaviconService(dependencies) {
           const bytes = await responseBytes(response);
           if (bytes) {
             if (bytes.length < 16) continue;
-            const size = rasterPixelSize(bytes);
-            if (size && isOversizedGuessedRaster(icon, size.width, size.height)) continue;
-            if (looksSvgIcon(icon, type) && !isPaintedSvgMarkup(new TextDecoder().decode(bytes))) continue;
+            if (rejectedRasterBytes(icon, bytes)) continue;
+            if (looksSvgFavicon(icon, type) && !isPaintedSvgMarkup(new TextDecoder().decode(bytes))) continue;
           } else if (!type.startsWith("image/")) continue;
-          remember(page.href, icon);
+          const declared = !isGuessedFaviconPath(icon);
+          remember(page.href, icon, {
+            source: declared ? "declared" : "guessed",
+            declared,
+            quality: classifyFaviconQuality({ url: icon, type, declared })
+          });
           return icon;
         } catch {
         } finally {
@@ -458,21 +609,25 @@ export function createFaviconService(dependencies) {
       }
       return "";
       } finally {
-        discoveryPromises.delete(page.origin);
+        discoveredHosts.add(host);
+        discoveryPromises.delete(host);
       }
     })();
-    discoveryPromises.set(page.origin, promise);
+    discoveryPromises.set(host, promise);
     return promise;
   }
 
   function forget(href) {
     const keys = cacheKeys(href);
     const blobKey = faviconBlobKey(href);
-    if (!keys.length && !blobKey) return;
+    const host = discoveryHost(href);
+    if (!keys.length && !blobKey && !host) return;
     for (const key of keys) delete state.faviconCache[key];
     if (blobKey) delete state.faviconCache[blobKey];
-    const page = pageUrl(href);
-    if (page) discoveryPromises.delete(page.origin);
+    if (host) {
+      discoveredHosts.delete(host);
+      discoveryPromises.delete(host);
+    }
     persistSoon();
   }
 
@@ -485,17 +640,17 @@ export function createFaviconService(dependencies) {
     const urls = [];
     const push = (value) => {
       const url = String(value || "").trim();
-      if (url && !urls.includes(url)) urls.push(url);
+      if (url && !urls.includes(url) && !isLetterFallbackIcon(url)) urls.push(url);
     };
     push(overrideUrl(options.appId));
     push(acceptedTabFavicon(options.tabFaviconUrl) || tabUrl(href));
     const declared = String(declaredLogoUrl || "").trim();
     const declaredData = acceptedDataIcon(declared);
     if (declaredData) push(declaredData);
-    else if (declared && APP_ICON_DATA_RE.test(declared)) push(declared);
+    else if (declared && APP_ICON_DATA_RE.test(declared) && !isLetterFallbackIcon(declared)) push(declared);
     const declaredPage = declared && !declaredData ? pageUrl(declared, href) : null;
     if (declaredPage && siteIcon(href, declaredPage.href)) push(declaredPage.href);
-    push(cachedBlob(href));
+    push(cachedBlob(href, { immediate: true }));
     push(cachedUrl(href));
     for (const url of siteFaviconUrls(href)) push(url);
     for (const url of networkFaviconUrls(href)) push(url);
@@ -554,6 +709,12 @@ export function createFaviconService(dependencies) {
     const stored = normalizeCache(await storageGet(FAVICON_CACHE_KEY));
     if (Object.keys(stored).length) {
       state.faviconCache = stored;
+      return state.faviconCache;
+    }
+    const migratedV5 = normalizeCache(await storageGet(FAVICON_CACHE_V5_KEY), { fromV5: true });
+    if (Object.keys(migratedV5).length) {
+      state.faviconCache = migratedV5;
+      persistSoon();
       return state.faviconCache;
     }
     const migrated = normalizeCache(await storageGet(FAVICON_CACHE_V4_KEY), { migrate: true });

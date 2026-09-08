@@ -79,6 +79,9 @@ export function settingsSiteMark(source = {}, faviconPort = {}) {
   }, { ...faviconDeps(faviconPort), className: "settings-site-icon" })
     || el("span", { class: "settings-site-icon settings-site-icon-empty", "aria-hidden": "true" });
   image.setAttribute?.("aria-hidden", "true");
+  if (href && typeof faviconPort.discover === "function") {
+    Promise.resolve(faviconPort.discover(href)).catch(() => {});
+  }
   return image;
 }
 

@@ -216,6 +216,43 @@ globalThis.document = {
   assert.notEqual(oversized.dataset.faviconReady, "1");
   assert.match(oversized.src, /icons\.duckduckgo\.com\/ip3\/0-0\.pro\.ico$/);
 
+  const tiny = renderChatFavicon(
+    { href: "https://www.kimi.com/" },
+    {
+      omitTitle: true,
+      siteFaviconUrls: () => ["https://www.kimi.com/favicon.ico", "https://www.kimi.com/favicon-dark.ico"],
+      networkFaviconUrls: () => []
+    }
+  );
+  tiny.naturalWidth = 16;
+  tiny.naturalHeight = 16;
+  tiny.listeners.load[0]({ currentTarget: tiny });
+  assert.notEqual(tiny.dataset.faviconReady, "1");
+  assert.equal(tiny.src, "https://www.kimi.com/favicon-dark.ico");
+
+  const lyingIco = renderChatFavicon(
+    { href: "https://0-0.pro/" },
+    {
+      omitTitle: true,
+      siteFaviconUrls: () => ["https://0-0.pro/favicon.ico", "https://0-0.pro/fallback.png"],
+      networkFaviconUrls: () => [],
+      rememberDecodedFavicon: async () => ""
+    }
+  );
+  lyingIco.naturalWidth = 256;
+  lyingIco.naturalHeight = 256;
+  await lyingIco.listeners.load[0]({ currentTarget: lyingIco });
+  assert.notEqual(lyingIco.dataset.faviconReady, "1");
+  assert.equal(lyingIco.src, "https://0-0.pro/fallback.png");
+
+  const boltBlob = "data:image/png;base64,AAAA";
+  const remount = renderChatFavicon(
+    { href: "https://0-0.pro/", logoUrl: boltBlob },
+    { omitTitle: true, siteFaviconUrls: () => ["https://0-0.pro/favicon.svg"], networkFaviconUrls: () => [] }
+  );
+  assert.equal(remount.src, boltBlob);
+  assert.notEqual(remount.dataset.faviconReady, "1", "v5 raster blobs must not paint immediately-ready");
+
   const declaredPng = "https://www.gstatic.com/lamda/images/gemini_sparkle_4g_512_lt.png";
   const gemini = renderChatFavicon(
     { href: "https://gemini.google.com/", logoUrl: declaredPng },
