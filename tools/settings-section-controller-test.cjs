@@ -661,16 +661,22 @@ globalThis.document = { addEventListener() {} };
     }],
     [modelsModule.createModelsSettingsSection, ports.models, {
       ...sharedDependencies,
-      applyPreferredModels: async () => {}
+      applyPreferredModels: async () => {},
+      faviconPort: { encodeFile: async () => "", refresh: async () => "" }
     }],
     [summaryModule.createSummarySettingsSection, ports.summary, {
       ...sharedDependencies,
-      ensureUserScriptsPermission: async () => true
+      ensureUserScriptsPermission: async () => true,
+      faviconPort: { encodeFile: async () => "", refresh: async () => "" }
     }],
-    [messageModule.createMessageNavigationSettingsSection, ports.messageNavigation, sharedDependencies],
+    [messageModule.createMessageNavigationSettingsSection, ports.messageNavigation, {
+      ...sharedDependencies,
+      faviconPort: { encodeFile: async () => "", refresh: async () => "" }
+    }],
     [topicModule.createTopicDeletionSettingsSection, ports.topicDeletion, {
       ...sharedDependencies,
-      ensureUserScriptsPermission: async () => true
+      ensureUserScriptsPermission: async () => true,
+      faviconPort: { encodeFile: async () => "", refresh: async () => "" }
     }],
     [optimizeModule.createOptimizeSettingsSection, ports.optimize, sharedDependencies],
     [historyModule.createPromptHistorySettingsSection, ports.history, {
@@ -721,6 +727,16 @@ globalThis.document = { addEventListener() {} };
       reconcileAppCatalog: async () => {},
       syncSummaryPanel() {},
       syncWorkspaceDom() {},
+      faviconPort: { encodeFile: async () => "", refresh: async () => "" },
+      combinedState: rootState
+    }),
+    /received extra dependencies field combinedState/
+  );
+  assert.throws(
+    () => modelsModule.createModelsSettingsSection({
+      state: ports.models,
+      ...sharedDependencies,
+      applyPreferredModels: async () => {},
       faviconPort: { encodeFile: async () => "", refresh: async () => "" },
       combinedState: rootState
     }),

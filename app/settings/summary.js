@@ -16,6 +16,7 @@ import {
 import { createSettingsKit, moveListItemByDelta } from "./kit.js";
 import { linesFromText, requireSettingsSectionStatePort } from "./section-contract.js";
 import { createPromptTemplateSettings } from "./prompt-templates.js";
+import { settingsSiteMark } from "./app-icon.js";
 import {
   requireControllerContext,
   requireControllerFunction,
@@ -31,7 +32,7 @@ export function createSummarySettingsSection(ctx) {
     saveOptionsPatch: "function",
     ensureUserScriptsPermission: "function",
     probeSummaryCollector: "function?",
-    userScriptsPermissionContains: "function?"
+    userScriptsPermissionContains: "function?", faviconPort: "object?"
   });
   const state = requireSettingsSectionStatePort(
     requireControllerContext(ctx, controllerName, "state"),
@@ -48,6 +49,7 @@ export function createSummarySettingsSection(ctx) {
   const svgIcon = requireControllerFunction(ctx, controllerName, "svgIcon");
   const notifyConfigReload = requireControllerFunction(ctx, controllerName, "notifyConfigReload");
   const saveOptionsPatch = requireControllerFunction(ctx, controllerName, "saveOptionsPatch");
+  const faviconPort = ctx.faviconPort;
   const ensureUserScriptsPermission = requireControllerFunction(ctx, controllerName, "ensureUserScriptsPermission");
   const probeSummaryCollector = typeof ctx.probeSummaryCollector === "function" ? ctx.probeSummaryCollector : null;
   const userScriptsPermissionContains = typeof ctx.userScriptsPermissionContains === "function"
@@ -608,6 +610,7 @@ export function createSummarySettingsSection(ctx) {
         }
       }),
       el("div", { class: "summary-collector-name" },
+        settingsSiteMark(config, faviconPort),
         el("strong", {}, config.name || config.id),
         builtIn ? el("span", { class: "summary-collector-star", title: t("summary.collector.builtIn"), "aria-label": t("summary.collector.builtIn") }, "★") : null
       ),

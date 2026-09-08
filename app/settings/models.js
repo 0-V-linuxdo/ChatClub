@@ -30,6 +30,7 @@ import {
   moveListItemByDelta
 } from "./kit.js";
 import { requireSettingsSectionStatePort } from "./section-contract.js";
+import { settingsSiteMark } from "./app-icon.js";
 import {
   MODEL_PREFERENCE_CUSTOM_KIND,
   MODEL_PREFERENCE_CUSTOM_SELECT_VALUE,
@@ -60,7 +61,7 @@ export function createModelsSettingsSection(ctx) {
     svgIcon: "function",
     notifyConfigReload: "function",
     saveOptionsPatch: "function",
-    applyPreferredModels: "function"
+    applyPreferredModels: "function", faviconPort: "object?"
   });
   const state = requireSettingsSectionStatePort(
     requireControllerContext(ctx, controllerName, "state"),
@@ -71,6 +72,7 @@ export function createModelsSettingsSection(ctx) {
   const notifyConfigReload = requireControllerFunction(ctx, controllerName, "notifyConfigReload");
   const saveOptionsPatch = requireControllerFunction(ctx, controllerName, "saveOptionsPatch");
   const applyPreferredModels = requireControllerFunction(ctx, controllerName, "applyPreferredModels");
+  const faviconPort = ctx.faviconPort;
   const {
     settingsActions,
     settingsBlock,
@@ -749,7 +751,10 @@ export function createModelsSettingsSection(ctx) {
           redraw();
         }
       }),
-      el("strong", { class: "settings-main-cell" }, platform),
+      el("div", { class: "settings-main-cell settings-name-cell" },
+        settingsSiteMark({ appId }, faviconPort),
+        el("strong", {}, platform)
+      ),
       modelFields(appId, platform, redraw),
       additionalPreferenceField(appId)
     );

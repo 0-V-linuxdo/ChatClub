@@ -23,6 +23,7 @@ import {
   validateControllerContract
 } from "../controller-contract.js";
 import { linesFromText, requireSettingsSectionStatePort } from "./section-contract.js";
+import { settingsSiteMark } from "./app-icon.js";
 
 export function createTopicDeletionSettingsSection(ctx) {
   const controllerName = "Topic deletion settings section";
@@ -32,7 +33,7 @@ export function createTopicDeletionSettingsSection(ctx) {
     notifyConfigReload: "function",
     saveOptionsPatch: "function",
     ensureUserScriptsPermission: "function",
-    userScriptsPermissionContains: "function?"
+    userScriptsPermissionContains: "function?", faviconPort: "object?"
   });
   const state = requireSettingsSectionStatePort(
     requireControllerContext(ctx, controllerName, "state"),
@@ -42,6 +43,7 @@ export function createTopicDeletionSettingsSection(ctx) {
   const svgIcon = requireControllerFunction(ctx, controllerName, "svgIcon");
   const notifyConfigReload = requireControllerFunction(ctx, controllerName, "notifyConfigReload");
   const saveOptionsPatch = requireControllerFunction(ctx, controllerName, "saveOptionsPatch");
+  const faviconPort = ctx.faviconPort;
   const ensureUserScriptsPermission = requireControllerFunction(ctx, controllerName, "ensureUserScriptsPermission");
   const userScriptsPermissionContains = typeof ctx.userScriptsPermissionContains === "function"
     ? ctx.userScriptsPermissionContains
@@ -372,6 +374,7 @@ export function createTopicDeletionSettingsSection(ctx) {
         }
       }),
       el("div", { class: "topic-delete-name" },
+        settingsSiteMark(config, faviconPort),
         el("strong", {}, config.name || config.id),
         builtIn ? el("span", { class: "summary-collector-star", title: t("topicDeletion.site.builtIn"), "aria-label": t("topicDeletion.site.builtIn") }, "★") : null
       ),

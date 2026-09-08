@@ -33,6 +33,7 @@ class FakeNode {
     this.listeners = new Map();
     this.value = "";
     this.checked = false;
+    this.src = "";
     this._classes = new Set();
     this.classList = {
       add: (...names) => names.forEach((name) => this._classes.add(name)),
@@ -93,6 +94,7 @@ class FakeNode {
   setAttribute(name, value) {
     this.attributes.set(name, String(value));
     if (name === "value") this.value = String(value);
+    if (name === "src") this.src = String(value);
     if (name === "checked") this.checked = true;
   }
 

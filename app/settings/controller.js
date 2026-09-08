@@ -219,7 +219,7 @@ export function createSettingsController(ctx) {
     svgIcon,
     notifyConfigReload,
     saveOptionsPatch: sectionOptionsPatch("Models settings section", SECTION_OPTION_KEYS.models),
-    applyPreferredModels
+    applyPreferredModels, faviconPort: ctx.faviconPort
   });
   const summarySection = createSummarySettingsSection({
     state: settingsSections.summary,
@@ -228,13 +228,13 @@ export function createSettingsController(ctx) {
     saveOptionsPatch: sectionOptionsPatch("Summary settings section", SECTION_OPTION_KEYS.summary),
     ensureUserScriptsPermission,
     ...(userScriptsPermissionContains ? { userScriptsPermissionContains } : {}),
-    ...(probeSummaryCollector ? { probeSummaryCollector } : {})
+    ...(probeSummaryCollector ? { probeSummaryCollector } : {}), faviconPort: ctx.faviconPort
   });
   const messageNavigationSection = createMessageNavigationSettingsSection({
     state: settingsSections.messageNavigation,
     svgIcon,
     notifyConfigReload,
-    saveOptionsPatch: sectionOptionsPatch("Message navigation settings section", SECTION_OPTION_KEYS.messageNavigation)
+    saveOptionsPatch: sectionOptionsPatch("Message navigation settings section", SECTION_OPTION_KEYS.messageNavigation), faviconPort: ctx.faviconPort
   });
   const topicDeletionSection = createTopicDeletionSettingsSection({
     state: settingsSections.topicDeletion,
@@ -242,7 +242,7 @@ export function createSettingsController(ctx) {
     notifyConfigReload,
     saveOptionsPatch: sectionOptionsPatch("Topic deletion settings section", SECTION_OPTION_KEYS.topicDeletion),
     ensureUserScriptsPermission,
-    ...(userScriptsPermissionContains ? { userScriptsPermissionContains } : {})
+    ...(userScriptsPermissionContains ? { userScriptsPermissionContains } : {}), faviconPort: ctx.faviconPort
   });
   const optimizeSection = createOptimizeSettingsSection({
     state: settingsSections.optimize,

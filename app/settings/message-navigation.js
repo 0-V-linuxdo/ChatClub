@@ -28,6 +28,7 @@ import {
   validateControllerContract
 } from "../controller-contract.js";
 import { linesFromText, requireSettingsSectionStatePort } from "./section-contract.js";
+import { settingsSiteMark } from "./app-icon.js";
 
 export function createMessageNavigationSettingsSection(ctx) {
   const controllerName = "Message navigation settings section";
@@ -35,7 +36,7 @@ export function createMessageNavigationSettingsSection(ctx) {
     state: "object",
     svgIcon: "function",
     notifyConfigReload: "function",
-    saveOptionsPatch: "function"
+    saveOptionsPatch: "function", faviconPort: "object?"
   });
   const state = requireSettingsSectionStatePort(
     requireControllerContext(ctx, controllerName, "state"),
@@ -45,6 +46,7 @@ export function createMessageNavigationSettingsSection(ctx) {
   const svgIcon = requireControllerFunction(ctx, controllerName, "svgIcon");
   const notifyConfigReload = requireControllerFunction(ctx, controllerName, "notifyConfigReload");
   const saveOptionsPatch = requireControllerFunction(ctx, controllerName, "saveOptionsPatch");
+  const faviconPort = ctx.faviconPort;
   const {
     settingsBlock,
     settingsReorderHandle,
@@ -380,6 +382,7 @@ export function createMessageNavigationSettingsSection(ctx) {
         }
       }),
       el("div", { class: "message-navigator-name" },
+        settingsSiteMark(config, faviconPort),
         el("strong", {}, config.name || config.id),
         builtIn ? el("span", { class: "summary-collector-star", title: t("messageNavigator.site.builtIn"), "aria-label": t("messageNavigator.site.builtIn") }, "★") : null
       ),

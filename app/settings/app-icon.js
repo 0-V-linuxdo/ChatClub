@@ -1,4 +1,5 @@
 import { t } from "../../shared/i18n.js";
+import { BUILTIN_CHAT_APPS } from "../../shared/constants.js";
 import { normalizeAppIcons } from "../../shared/storage-schema.js";
 import { button, editorModal, el, field, input, toast } from "../../ui/dom.js";
 import { renderChatFavicon } from "../../ui/favicon.js";
@@ -12,6 +13,53 @@ function faviconDeps(port = {}) {
     networkFaviconUrls: port.networkUrls,
     omitTitle: true
   };
+}
+
+function hostHref(value) {
+  const raw = String(value || "").trim().replace(/^\*\./, "");
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  return `https://${raw.split("/")[0]}/`;
+}
+
+function settingsSiteIdentity(config = {}, catalog = BUILTIN_CHAT_APPS) {
+  const apps = Array.isArray(catalog) ? catalog : [];
+  const ids = [config.appId, ...(Array.isArray(config.appIds) ? config.appIds : [])]
+    .map((id) => String(id || "").trim())
+    .filter(Boolean);
+  for (const id of ids) {
+    const app = apps.find((item) => item.id === id);
+    if (app) return { app, appId: app.id, href: app.url || "" };
+  }
+  const href = hostHref(config.href) || hostHref((config.hosts || [])[0]);
+  let host = "";
+  try { host = href ? new URL(href).hostname.toLowerCase() : ""; } catch {}
+  const app = host
+    ? apps.find((item) => (item.hosts || []).some((pattern) => {
+      const needle = String(pattern || "").replace(/^\*\./, "").toLowerCase();
+      return needle && (host === needle || host.endsWith(`.${needle}`));
+    }))
+    : null;
+  if (app) return { app, appId: app.id, href: app.url || href };
+  return { appId: ids[0] || "", href };
+}
+
+export function settingsSiteMark(source = {}, faviconPort = {}) {
+  const identity = source.app
+    ? { app: source.app, appId: source.appId || source.app.id, href: source.href || source.app.url || "" }
+    : settingsSiteIdentity(source);
+  const app = identity.app;
+  const appId = String(identity.appId || app?.id || "").trim();
+  const href = String(identity.href || app?.url || "").trim();
+  const image = renderChatFavicon({
+    app,
+    appId,
+    href,
+    title: ""
+  }, { ...faviconDeps(faviconPort), className: "settings-site-icon" })
+    || el("span", { class: "settings-site-icon settings-site-icon-empty", "aria-hidden": "true" });
+  image.setAttribute?.("aria-hidden", "true");
+  return image;
 }
 
 export function createAppIconControls({
@@ -31,9 +79,7 @@ export function createAppIconControls({
   }
 
   function mark(app) {
-    const image = iconImage(app, "settings-site-icon");
-    image.setAttribute?.("aria-hidden", "true");
-    return image;
+    return settingsSiteMark({ app }, faviconPort);
   }
 
   function nameCell(app, name, redraw) {
