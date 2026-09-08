@@ -46,10 +46,10 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
 
   setLanguage("en");
   assert.equal(t("appearance.clickReorderButtons"), "Always show Move up / Move down");
-  assert.match(t("appearance.clickReorderButtonsHelp"), /click alternative/i);
+  assert.equal(t("appearance.clickReorderButtonsHelp"), "When off, show after selecting a row.");
   setLanguage("zh_CN");
   assert.equal(t("appearance.clickReorderButtons"), "始终显示上移/下移按钮");
-  assert.match(t("appearance.clickReorderButtonsHelp"), /单击替代/);
+  assert.equal(t("appearance.clickReorderButtonsHelp"), "关闭后，选中一行再显示。");
 
   const kit = read("app/settings/kit.js");
   assert.match(kit, /function settingsReorderHandle/);
