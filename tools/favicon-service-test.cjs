@@ -41,10 +41,14 @@ function link(attributes = {}) {
     "",
     "Firefox must not synthesize Chromium's private /_favicon endpoint"
   );
-  assert.match(
+  assert.equal(
     firefox.effective("https://chatgpt.com/"),
-    /icons\.duckduckgo\.com\/ip3\/chatgpt\.com\.ico$/,
-    "Firefox auto-fetch must start at DuckDuckGo, not Chromium /_favicon_"
+    "https://chatgpt.com/favicon.ico",
+    "Firefox auto-fetch must start at the site favicon, not Chromium /_favicon_"
+  );
+  assert.ok(
+    firefox.candidates("https://chatgpt.com/").some((url) => /icons\.duckduckgo\.com\/ip3\/chatgpt\.com\.ico$/.test(url)),
+    "DuckDuckGo must stay a network candidate after the site favicon"
   );
   assert.ok(
     firefox.networkUrls("https://chatgpt.com/").includes("https://www.google.com/s2/favicons?domain=chatgpt.com&sz=64"),
@@ -189,6 +193,63 @@ function link(attributes = {}) {
   assert.equal(candidates[0], overrideIcon);
   assert.ok(candidates.some((url) => url.includes("duckduckgo.com")));
   assert.ok(candidates.some((url) => url.includes("google.com/s2/favicons")));
+  assert.ok(candidates.includes("https://chatgpt.com/favicon.ico"));
+
+  const apiHref = "https://api.0-0.pro/v1/chat/completions";
+  const apiUrls = firefox.networkUrls(apiHref);
+  assert.deepEqual(apiUrls, [
+    "https://icons.duckduckgo.com/ip3/api.0-0.pro.ico",
+    "https://www.google.com/s2/favicons?domain=api.0-0.pro&sz=64",
+    "https://icons.duckduckgo.com/ip3/0-0.pro.ico",
+    "https://www.google.com/s2/favicons?domain=0-0.pro&sz=64"
+  ]);
+  const apiCandidates = firefox.candidates(apiHref);
+  assert.equal(apiCandidates[0], "https://api.0-0.pro/favicon.ico");
+  assert.ok(apiCandidates.includes("https://0-0.pro/favicon.ico"));
+  assert.ok(!apiCandidates.some((url) => url.includes("/_favicon/")));
+  assert.ok(apiCandidates.indexOf("https://api.0-0.pro/favicon.ico") < apiCandidates.indexOf(apiUrls[0]));
+  assert.ok(apiCandidates.indexOf("https://www.google.com/s2/favicons?domain=0-0.pro&sz=64") > apiCandidates.indexOf(apiUrls[0]));
+
+  const chromiumApi = chromium.candidates(apiHref);
+  assert.ok(!chromiumApi.some((url) => url.includes("/_favicon/")), "API endpoints must not start with Chromium's default globe");
+  assert.ok(chromium.candidates("https://chatgpt.com/").some((url) => url.includes("/_favicon/")));
+
+  const fetched = [];
+  const apiDiscover = createFaviconService({
+    state: { faviconCache: {}, options: {} },
+    storageGet: async () => ({}),
+    storageSet: async () => {},
+    runtimeGetUrl: (value) => runtimeUrl("moz-extension:", value),
+    runtimeGetManifest: () => ({ permissions: [] }),
+    inferAppName: (app) => app?.name || "Example",
+    fetchPage: async (url) => {
+      fetched.push(String(url));
+      if (String(url).endsWith("/favicon.ico")) {
+        return { ok: true, headers: { get: () => "image/x-icon" }, text: async () => "" };
+      }
+      return { ok: true, headers: { get: () => "text/html" }, text: async () => "<html></html>" };
+    },
+    parseHtml: () => ({ querySelectorAll: () => [link({
+      rel: "icon",
+      href: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3C/svg%3E"
+    })] })
+  });
+  assert.equal(
+    await apiDiscover.refresh(apiHref),
+    "https://api.0-0.pro/favicon.ico",
+    "Refresh must discover origin /favicon.ico instead of a POST-only completions path"
+  );
+  assert.ok(!fetched.some((url) => url.includes("/v1/chat/completions")));
+  assert.ok(fetched.includes("https://api.0-0.pro/"));
+  assert.equal(apiDiscover.effective(apiHref), "https://api.0-0.pro/favicon.ico");
+  const dataDeclared = create({
+    protocol: "moz-extension:",
+    pageHtmlLinks: [link({
+      rel: "icon",
+      href: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3C/svg%3E"
+    })]
+  });
+  assert.equal(await dataDeclared.discover("https://0-0.pro/"), "", "HTML data: placeholder icons must not be remembered");
 
   console.log("Favicon service browser-target and declared-icon checks passed.");
 })().catch((error) => {

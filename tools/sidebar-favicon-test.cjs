@@ -90,6 +90,18 @@ globalThis.document = {
   auto.listeners.error[0]({ currentTarget: auto });
   assert.match(auto.src, /google\.com\/s2\/favicons/);
 
+  const api = renderChatFavicon(
+    { href: "https://api.0-0.pro/v1/chat/completions" },
+    { omitTitle: true }
+  );
+  assert.match(api.src, /icons\.duckduckgo\.com\/ip3\/api\.0-0\.pro\.ico$/);
+  api.listeners.error[0]({ currentTarget: api });
+  assert.match(api.src, /google\.com\/s2\/favicons\?domain=api\.0-0\.pro/);
+  api.listeners.error[0]({ currentTarget: api });
+  assert.match(api.src, /icons\.duckduckgo\.com\/ip3\/0-0\.pro\.ico$/);
+  api.listeners.error[0]({ currentTarget: api });
+  assert.match(api.src, /google\.com\/s2\/favicons\?domain=0-0\.pro/);
+
   console.log("sidebar favicons: ok");
 })().then(() => {
   if (previous.Node === undefined) delete globalThis.Node;

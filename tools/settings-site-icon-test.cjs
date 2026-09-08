@@ -113,6 +113,8 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   assert.match(runtime, /faviconPort:\s*faviconService/);
   assert.match(iconEditor, /export function settingsSiteMark/);
   assert.match(iconEditor, /skipCatalog \? \[\]/);
+  assert.match(read("app/favicon/service.js"), /replace\(\/\^\(api\|ai\|www\)\\\.\//);
+  assert.match(read("app/favicon/service.js"), /siteFaviconUrls/);
   assert.match(modelsSettings, /settingsSiteMark\(\{\s*appId\s*\},\s*faviconPort\)/);
   assert.match(summarySettings, /settingsSiteMark\(config,\s*faviconPort\)/);
   assert.match(messageSettings, /settingsSiteMark\(config,\s*faviconPort\)/);

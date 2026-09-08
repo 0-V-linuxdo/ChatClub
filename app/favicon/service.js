@@ -4,15 +4,52 @@ const APP_ICON_DATA_MAX_CHARS = 65536;
 const APP_ICON_RASTER_SIZE = 128;
 const APP_ICON_DATA_RE = /^data:image\/(?:png|jpeg|jpg|webp|svg\+xml|x-icon|vnd\.microsoft\.icon)[;,]/i;
 
+function networkLookupHosts(hostname) {
+  const hosts = [];
+  const push = (value) => {
+    const host = String(value || "").trim().toLowerCase().replace(/\.$/, "");
+    if (host && host.includes(".") && !hosts.includes(host)) hosts.push(host);
+  };
+  const raw = String(hostname || "").trim().toLowerCase();
+  push(raw);
+  push(raw.replace(/^(api|ai|www)\./i, ""));
+  return hosts;
+}
+
+function isApiLookupHref(href) {
+  try {
+    const page = new URL(String(href || ""));
+    if (page.protocol !== "http:" && page.protocol !== "https:") return false;
+    if (/^(api|ai)\./i.test(page.hostname)) return true;
+    return /(?:^|\/)(?:v\d+|chat\/completions|responses)(?:\/|$)/i.test(page.pathname);
+  } catch {
+    return false;
+  }
+}
+
+function siteFaviconUrls(href) {
+  try {
+    const page = new URL(String(href || ""));
+    if (page.protocol !== "http:" && page.protocol !== "https:") return [];
+    return networkLookupHosts(page.hostname).map((host) => `${page.protocol}//${host}/favicon.ico`);
+  } catch {
+    return [];
+  }
+}
+
 function networkFaviconUrls(href) {
   try {
     const page = new URL(String(href || ""));
     if (page.protocol !== "http:" && page.protocol !== "https:") return [];
-    const host = page.hostname;
-    return [
-      `https://icons.duckduckgo.com/ip3/${host}.ico`,
-      `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64`
-    ];
+    const urls = [];
+    const push = (value) => {
+      if (value && !urls.includes(value)) urls.push(value);
+    };
+    for (const host of networkLookupHosts(page.hostname)) {
+      push(`https://icons.duckduckgo.com/ip3/${host}.ico`);
+      push(`https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64`);
+    }
+    return urls;
   } catch {
     return [];
   }
@@ -184,18 +221,50 @@ export function createFaviconService(dependencies) {
     page.hash = "";
     if (discoveryPromises.has(page.origin)) return discoveryPromises.get(page.origin);
     const promise = (async () => {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 2500);
       try {
-        const response = await fetchPage(page.href, { cache: "force-cache", credentials: "omit", signal: controller.signal });
-        if (!response.ok) return "";
-        const logoUrl = chooseDeclared(parseHtml(await response.text()), page.href);
-        if (logoUrl) remember(page.href, logoUrl);
-        return logoUrl;
-      } catch {
-        return "";
+      const targets = [];
+      const pushTarget = (value) => {
+        const next = pageUrl(value);
+        if (next && !targets.includes(next.href)) targets.push(next.href);
+      };
+      if (!isApiLookupHref(page.href)) pushTarget(page.href);
+      pushTarget(`${page.origin}/`);
+      for (const host of networkLookupHosts(page.hostname)) {
+        pushTarget(`${page.protocol}//${host}/`);
+      }
+      for (const target of targets) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 2500);
+        try {
+          const response = await fetchPage(target, { cache: "force-cache", credentials: "omit", signal: controller.signal });
+          if (!response.ok) continue;
+          const logoUrl = chooseDeclared(parseHtml(await response.text()), target);
+          if (logoUrl) {
+            remember(page.href, logoUrl);
+            return logoUrl;
+          }
+        } catch {
+        } finally {
+          clearTimeout(timer);
+        }
+      }
+      for (const icon of siteFaviconUrls(page.href)) {
+        if (!siteIcon(page.href, icon)) continue;
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 2500);
+        try {
+          const response = await fetchPage(icon, { cache: "force-cache", credentials: "omit", signal: controller.signal });
+          const type = String(response?.headers?.get?.("content-type") || "").toLowerCase();
+          if (!response?.ok || !type.startsWith("image/")) continue;
+          remember(page.href, icon);
+          return icon;
+        } catch {
+        } finally {
+          clearTimeout(timer);
+        }
+      }
+      return "";
       } finally {
-        clearTimeout(timer);
         discoveryPromises.delete(page.origin);
       }
     })();
@@ -229,7 +298,8 @@ export function createFaviconService(dependencies) {
     const declaredPage = declared ? pageUrl(declared, href) : null;
     if (declaredPage && siteIcon(href, declaredPage.href)) push(declaredPage.href);
     push(cached(href));
-    push(browserUrl(href));
+    for (const url of siteFaviconUrls(href)) push(url);
+    if (!isApiLookupHref(href)) push(browserUrl(href));
     for (const url of networkFaviconUrls(href)) push(url);
     return urls;
   }
