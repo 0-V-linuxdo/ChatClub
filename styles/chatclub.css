@@ -8213,17 +8213,47 @@ html:not([data-settings-click-reorder="always"]) .settings-reorder:focus-within 
 
 .settings-icon-advanced > summary {
   cursor: pointer;
-  display: flex;
-  align-items: center;
+  display: list-item;
+  list-style-position: inside;
   min-height: var(--settings-control-height);
   color: var(--text);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
+  line-height: var(--settings-control-height);
 }
 
 .settings-icon-advanced > summary:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
+}
+
+.settings-icon-advanced-body {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--ui-radius);
+}
+
+.settings-icon-source-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  align-items: stretch;
+  min-width: 0;
+}
+
+.settings-icon-source-row input[type="file"] {
+  width: auto;
+  max-width: 16rem;
+}
+
+.settings-icon-advanced-body .settings-icon-help {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-size-sm);
 }
 
 .api-profile-icon-field {
@@ -8239,6 +8269,7 @@ html:not([data-settings-click-reorder="always"]) .settings-reorder:focus-within 
 .settings-icon-field-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--space-2);
   flex: 0 0 auto;
 }

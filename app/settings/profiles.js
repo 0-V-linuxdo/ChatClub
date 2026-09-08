@@ -525,9 +525,15 @@ export function createProfilesSettingsSection(ctx) {
     const logoInput = input(logoUrl.startsWith("data:") ? "" : logoUrl, {
       placeholder: t("apps.iconUrlPlaceholder"),
       autocomplete: "url",
-      spellcheck: "false"
+      spellcheck: "false",
+      "aria-label": t("apps.iconUrl")
     });
-    const fileInput = el("input", { class: "input", type: "file", accept: "image/png,image/jpeg,image/webp,image/svg+xml,image/x-icon,.ico" });
+    const fileInput = el("input", {
+      class: "input",
+      type: "file",
+      accept: "image/png,image/jpeg,image/webp,image/svg+xml,image/x-icon,.ico",
+      "aria-label": t("apps.iconUpload")
+    });
     const paintIcon = () => {
       identityMark.replaceChildren(profileMark({
         endpoint: endpointInput.value,
@@ -640,13 +646,17 @@ export function createProfilesSettingsSection(ctx) {
             el("div", { class: "settings-icon-field api-profile-icon-field" },
               el("details", { class: "settings-icon-advanced" },
                 el("summary", { class: "settings-icon-field-label" }, t("apps.icon")),
-                el("div", { class: "settings-icon-field-actions" },
-                  button(t("apps.iconRefresh"), () => { void refreshIcon(); }),
-                  button(t("apps.iconRestore"), restoreIcon)
-                ),
-                field(t("apps.iconUrl"), logoInput),
-                field(t("apps.iconUpload"), fileInput),
-                el("p", { class: "settings-icon-help" }, t("apps.iconHelp"))
+                el("div", { class: "settings-icon-advanced-body" },
+                  el("div", { class: "settings-icon-source-row" },
+                    logoInput,
+                    fileInput
+                  ),
+                  el("p", { class: "settings-icon-help" }, t("apps.iconHelp")),
+                  el("div", { class: "settings-icon-field-actions" },
+                    button(t("apps.iconRefresh"), () => { void refreshIcon(); }),
+                    button(t("apps.iconRestore"), restoreIcon)
+                  )
+                )
               )
             )
           ),
