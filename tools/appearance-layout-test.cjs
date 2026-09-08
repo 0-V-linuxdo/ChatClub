@@ -73,6 +73,21 @@ assert.match(
   "General fields must split into a left/right two-column track"
 );
 assert.match(
+  stylesheetSource,
+  /\.appearance-workspace-subpane\.is-general \.appearance-general-col \{[\s\S]*?grid-template-rows:\s*subgrid;[\s\S]*?grid-row:\s*1\s*\/\s*span\s*3;/,
+  "General columns must share Theme|Pocket, Language|click-reorder, Columns|_ rows"
+);
+assert.match(
+  stylesheetSource,
+  /\.appearance-workspace-subpane\.is-general \.appearance-toggle-control \{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\);[\s\S]*?gap:\s*6px;/,
+  "General click-reorder must stack like a field instead of stretching a far-right checkbox"
+);
+assert.match(
+  stylesheetSource,
+  /\.appearance-workspace-subpane\.is-general \.appearance-toggle-control input \{[\s\S]*?justify-self:\s*start;/,
+  "General click-reorder switch must sit under the title, aligned with left selects"
+);
+assert.match(
   workspaceSource,
   /class: "appearance-general-col"[\s\S]*generalCol\(\s*appearanceRow\(field\(t\("appearance\.themeMode"\)[\s\S]*appearance\.language[\s\S]*appearance\.maxColumns[\s\S]*generalCol\(\s*appearanceRow\(pocketIconControl\)[\s\S]*clickReorderControl/,
   "General left column owns theme/language/columns; right column owns Pocket and click-reorder"

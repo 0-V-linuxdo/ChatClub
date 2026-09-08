@@ -3970,25 +3970,47 @@ body.tab-gesture-active * {
 .appearance-workspace-subpane.is-general .appearance-field-list {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 18px 28px;
+  grid-template-rows: auto auto auto;
+  gap: 14px 28px;
   width: 100%;
-  align-items: start;
+  align-items: stretch;
 }
 
 .appearance-workspace-subpane.is-general .appearance-general-col {
   display: grid;
-  gap: 14px;
+  grid-template-rows: subgrid;
+  grid-row: 1 / span 3;
   min-width: 0;
 }
 
 .appearance-workspace-subpane.is-general .appearance-toggle-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
   width: 100%;
   max-width: none;
+  align-items: start;
+}
+
+.appearance-workspace-subpane.is-general .appearance-toggle-copy {
+  max-width: none;
+}
+
+.appearance-workspace-subpane.is-general .appearance-toggle-control input {
+  justify-self: start;
+  margin: 0;
 }
 
 @container (max-width: 560px) {
   .appearance-workspace-subpane.is-general .appearance-field-list {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+  }
+
+  .appearance-workspace-subpane.is-general .appearance-general-col {
+    grid-template-rows: none;
+    grid-row: auto;
+    gap: 14px;
   }
 }
 
