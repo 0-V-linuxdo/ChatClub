@@ -113,9 +113,15 @@ assert.equal(trailingClick.propagationStopped, true);
 assert.equal(operations.length, 9, "the trailing click must not replay the attention animation");
 
 const css = read("styles/chatclub.css");
-assert.match(css, /\.appearance-toggle-control\s*\{[^}]*display: flex;[^}]*cursor: pointer;/s);
-assert.match(css, /\.appearance-toggle-copy\s*\{[^}]*display: grid;/s);
+assert.match(css, /\.appearance-toggle-control\s*\{[^}]*display: grid;[^}]*cursor: pointer;/s);
+assert.match(css, /\.appearance-toggle-control\s*\{[^}]*width: fit-content;[^}]*cursor: pointer;/s);
+assert.match(css, /\.appearance-toggle-copy\s*\{[^}]*display: grid;[^}]*max-width: 52ch;/s);
 assert.match(css, /\.appearance-toggle-control input\s*\{[^}]*accent-color: var\(--primary\);/s);
+assert.doesNotMatch(
+  css,
+  /\.appearance-toggle-control\s*\{[^}]*justify-content: space-between;[^}]*border: 1px solid/s,
+  "appearance toggles must not sit in a stretched nested well"
+);
 const overlayCssStart = css.indexOf(".preferred-model-selection-overlay {");
 const overlayCssEnd = css.indexOf(".chat-frame {", overlayCssStart);
 assert.ok(overlayCssStart >= 0 && overlayCssEnd > overlayCssStart, "overlay styles must be present beside frame styles");

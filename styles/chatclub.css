@@ -3825,8 +3825,10 @@ body.tab-gesture-active * {
 }
 
 .appearance-pocket-icon-options {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(7.5rem, 1fr));
+  width: fit-content;
+  max-width: min(320px, 100%);
   min-width: 0;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--line) 84%, transparent);
@@ -3842,9 +3844,10 @@ body.tab-gesture-active * {
   gap: 6px;
   min-width: 0;
   min-height: var(--settings-control-height, 36px);
-  padding: 0 var(--space-2);
+  padding: 0 14px;
   color: var(--muted);
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .appearance-pocket-icon-option + .appearance-pocket-icon-option {
@@ -3900,15 +3903,16 @@ body.tab-gesture-active * {
 }
 
 .appearance-toggle-control {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
+  display: grid;
+  grid-template-columns: minmax(0, 52ch) auto;
+  align-items: start;
+  column-gap: var(--space-4);
+  width: fit-content;
+  max-width: 100%;
   min-width: 0;
-  padding: var(--space-3) 14px;
-  border: 1px solid color-mix(in srgb, var(--line) 84%, transparent);
-  border-radius: var(--settings-radius, 8px);
-  background: color-mix(in srgb, var(--panel-2) 58%, transparent);
+  padding: 0;
+  border: 0;
+  background: transparent;
   cursor: pointer;
 }
 
@@ -3916,6 +3920,7 @@ body.tab-gesture-active * {
   display: grid;
   gap: 3px;
   min-width: 0;
+  max-width: 52ch;
 }
 
 .appearance-toggle-copy strong {
@@ -3930,10 +3935,12 @@ body.tab-gesture-active * {
 }
 
 .appearance-toggle-control input {
-  flex: 0 0 auto;
   width: 19px;
   height: 19px;
-  margin: 0;
+  min-width: var(--target-min, 24px);
+  min-height: var(--target-min, 24px);
+  margin: 3px 0 0;
+  justify-self: end;
   accent-color: var(--primary);
 }
 

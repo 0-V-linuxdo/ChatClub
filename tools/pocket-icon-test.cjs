@@ -42,6 +42,16 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"), "utf8");
   assert.match(stylesheetSource, /\.appearance-pocket-icon-option \{[\s\S]*?min-height: var\(--settings-control-height, 36px\)/);
   assert.doesNotMatch(stylesheetSource, /\.appearance-pocket-icon-option \{[\s\S]*?min-height: 88px/);
+  assert.match(
+    stylesheetSource,
+    /\.appearance-pocket-icon-options \{[^}]*display: inline-grid;[^}]*width: fit-content;[^}]*max-width: min\(320px, 100%\);/s,
+    "Pocket icon segmented control must hug its labels instead of stretching the settings well"
+  );
+  assert.doesNotMatch(
+    stylesheetSource,
+    /\.appearance-pocket-icon-options \{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/s,
+    "Pocket icon segments must not use stretch 1fr tracks"
+  );
   assert.match(pocketSource, /pocket-group-favicons/);
   assert.match(pocketSource, /omitTitle:\s*true/);
   assert.match(

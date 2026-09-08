@@ -77,6 +77,16 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
     css,
     /html:not\(\[data-settings-click-reorder="always"\]\)[^{]*\.settings-list-row \.settings-reorder \.ui-reorder \{[^}]*position:\s*absolute/s
   );
+  assert.match(
+    css,
+    /\.appearance-toggle-control \{[^}]*display: grid;[^}]*grid-template-columns: minmax\(0, 52ch\) auto;[^}]*width: fit-content;/s,
+    "click-reorder switch must hug copy instead of stretching the General well"
+  );
+  assert.doesNotMatch(
+    css,
+    /\.appearance-toggle-control \{[^}]*justify-content: space-between;[^}]*border: 1px solid/s,
+    "click-reorder switch must not keep nested well chrome"
+  );
 
   console.log("settings click reorder: ok");
 })().catch((event) => {
