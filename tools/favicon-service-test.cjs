@@ -420,13 +420,13 @@ function link(attributes = {}) {
   }
 
   assert.equal(lookup.rasterPixelSize(icoWithPng(1024, 1024)).width, 1024);
-  assert.equal(lookup.isRejectedGuessedRaster("https://0-0.pro/favicon.ico", 1024, 1024), true);
+  assert.equal(lookup.isRejectedGuessedRaster("https://0-0.pro/favicon.ico", 1024, 1024), false, "filled high-res guessed PNGs must be kept and scaled");
   assert.equal(lookup.isRejectedGuessedRaster("https://0-0.pro/favicon.ico", 16, 16), true);
   assert.equal(lookup.isRejectedGuessedRaster("https://0-0.pro/favicon.ico", 256, 256), false);
   assert.equal(
     lookup.rejectedRasterBytes("https://0-0.pro/favicon.ico", icoWithPng(1024, 1024)),
-    true,
-    "PNG-in-ICO IHDR 1024 must reject even when the ICO directory says 256"
+    false,
+    "PNG-in-ICO IHDR 1024 must not be discarded as an oversized miss"
   );
   assert.equal(
     lookup.isRejectedGuessedRaster("https://www.gstatic.com/lamda/images/gemini_sparkle_4g_512_lt.png", 512, 512),
@@ -435,6 +435,9 @@ function link(attributes = {}) {
   );
   assert.equal(lookup.acceptedDataIcon("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3C/svg%3E"), "");
   assert.equal(lookup.acceptedDataIcon(painted), painted);
+  const zeroPlaceholder = "data:image/svg+xml," + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='4' fill='#0b0f14'/><path d='M4 8a4 4 0 0 1 8 0a4 4 0 0 1-8 0' fill='none' stroke='#f4efe7' stroke-width='1.4'/></svg>");
+  assert.equal(lookup.acceptedDataIcon(zeroPlaceholder), "", "0-0.pro 16px inline SVG tiles are placeholders, not brand marks");
+  assert.equal(lookup.isImmediateReadyFavicon(zeroPlaceholder), false);
   assert.equal(lookup.isImmediateReadyFavicon(painted), true);
   assert.equal(lookup.isImmediateReadyFavicon("data:image/png;base64,AAAA"), true);
   assert.equal(lookup.isImmediateReadyFavicon("https://0-0.pro/favicon.ico"), false);
@@ -494,12 +497,40 @@ function link(attributes = {}) {
     },
     parseHtml: () => ({ querySelectorAll: () => [] })
   });
-  assert.equal(
-    await oversized.discover("https://0-0.pro/"),
-    "",
-    "guessed /favicon.ico rasters at 512px or larger must not be remembered"
-  );
+  const oversizedFound = await oversized.discover("https://0-0.pro/");
+  assert.match(oversizedFound, /^data:image\//, "guessed high-res /favicon.ico must be materialized instead of discarded");
   assert.ok(oversizedFetched.includes("https://0-0.pro/favicon.ico"));
+
+  const placeholderHits = [];
+  const placeholderPage = createFaviconService({
+    state: { faviconCache: {}, options: {} },
+    storageGet: async () => ({}),
+    storageSet: async () => {},
+    runtimeGetUrl: (value) => runtimeUrl("moz-extension:", value),
+    runtimeGetManifest: () => ({ permissions: [] }),
+    inferAppName: (app) => app?.name || "Example",
+    fetchPage: async (url) => {
+      placeholderHits.push(String(url));
+      if (String(url).endsWith("/favicon.ico")) {
+        const body = pngBytes(64, 64);
+        return {
+          ok: true,
+          headers: { get: () => "image/png" },
+          arrayBuffer: async () => body,
+          text: async () => ""
+        };
+      }
+      if (String(url).endsWith("/favicon.svg")) {
+        return { ok: false, headers: { get: () => "text/html" }, text: async () => "" };
+      }
+      return { ok: true, headers: { get: () => "text/html" }, text: async () => "<html></html>" };
+    },
+    parseHtml: () => ({ querySelectorAll: () => [link({ rel: "icon", href: zeroPlaceholder })] })
+  });
+  const placeholderFound = await placeholderPage.discover("https://0-0.pro/");
+  assert.notEqual(placeholderFound, zeroPlaceholder, "inline 16px data: SVG must not win over the site favicon");
+  assert.match(placeholderFound, /^data:image\//);
+  assert.ok(placeholderHits.includes("https://0-0.pro/favicon.ico"));
 
   const migratedState = { faviconCache: {}, options: {} };
   const migrator = createFaviconService({
@@ -607,6 +638,29 @@ function link(attributes = {}) {
   assert.equal(v7State.faviconCache["blob:perplexity.ai"]?.url, painted);
   assert.equal(v7State.faviconCache["https://chatgpt.com/"], undefined, "v7 https pointers must not become v8 paint hits");
   assert.equal(v7Migrator.candidates("https://www.kimi.com/")[0], okRaster);
+
+  const placeholderCache = { faviconCache: {}, options: {} };
+  const placeholderMigrator = createFaviconService({
+    state: placeholderCache,
+    storageGet: async (key) => {
+      if (key === "chatclub.faviconCache.v8") {
+        return {
+          "blob:0-0.pro": { url: zeroPlaceholder, quality: "brand-svg", updatedAt: 1 },
+          "blob:perplexity.ai": { url: painted, quality: "brand-svg", updatedAt: 2 }
+        };
+      }
+      return {};
+    },
+    storageSet: async () => {},
+    runtimeGetUrl: (value) => runtimeUrl("moz-extension:", value),
+    runtimeGetManifest: () => ({ permissions: [] }),
+    inferAppName: (app) => app?.name || "Example",
+    fetchPage: async () => ({ ok: true, text: async () => "<html></html>" }),
+    parseHtml: () => ({ querySelectorAll: () => [] })
+  });
+  await placeholderMigrator.load();
+  assert.equal(placeholderCache.faviconCache["blob:0-0.pro"], undefined, "cached 16px placeholder SVGs must be dropped");
+  assert.equal(placeholderCache.faviconCache["blob:perplexity.ai"]?.url, painted);
 
   const pointerHits = [];
   const pointerOnly = createFaviconService({

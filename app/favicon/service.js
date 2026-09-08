@@ -185,6 +185,7 @@ export function createFaviconService(dependencies) {
           if (stored) next[key] = stored;
           continue;
         }
+        if (/image\/svg\+xml/i.test(url) && !data) continue;
         if (!data && !(APP_ICON_DATA_RE.test(url) && url.length <= APP_ICON_DATA_MAX_CHARS)) continue;
         const stored = qualityEntry(data || String(url), {
           quality: entry?.quality,
@@ -598,8 +599,7 @@ export function createFaviconService(dependencies) {
   }
 
   async function materializeIcon(href, logoUrl, meta = {}) {
-    const data = acceptedDataIcon(logoUrl)
-      || (APP_ICON_DATA_RE.test(logoUrl) && logoUrl.length <= APP_ICON_DATA_MAX_CHARS && !isLetterFallbackIcon(logoUrl) ? logoUrl : "");
+    const data = acceptedDataIcon(logoUrl);
     if (data) {
       rememberBlob(href, data, {
         ...meta,

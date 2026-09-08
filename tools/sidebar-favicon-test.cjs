@@ -213,8 +213,8 @@ globalThis.document = {
   oversized.naturalWidth = 1024;
   oversized.naturalHeight = 1024;
   oversized.listeners.load[0]({ currentTarget: oversized });
-  assert.notEqual(oversized.dataset.faviconReady, "1");
-  assert.match(oversized.src, /icons\.duckduckgo\.com\/ip3\/0-0\.pro\.ico$/);
+  assert.equal(oversized.dataset.faviconReady, "1", "filled high-res guessed PNGs must stay as the painted mark");
+  assert.match(oversized.src, /0-0\.pro\/favicon\.ico$/);
 
   const tiny = renderChatFavicon(
     { href: "https://www.kimi.com/" },

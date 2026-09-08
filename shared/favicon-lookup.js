@@ -109,9 +109,29 @@ export function isPaintedSvgMarkup(svg) {
   return Boolean(inner) && SVG_PAINT_RE.test(inner);
 }
 
+function svgViewBoxEdge(svg) {
+  const text = String(svg || "");
+  const box = text.match(/viewBox\s*=\s*["']\s*[-0-9.eE+]+\s+[-0-9.eE+]+\s+([0-9.eE+]+)\s+([0-9.eE+]+)/i);
+  if (box) return Math.max(Number(box[1]) || 0, Number(box[2]) || 0);
+  const width = Number(text.match(/\bwidth=["'](\d+)/i)?.[1] || 0);
+  const height = Number(text.match(/\bheight=["'](\d+)/i)?.[1] || 0);
+  return Math.max(width, height);
+}
+
+function isPlaceholderDataSvg(url) {
+  const raw = String(url || "").trim();
+  if (!APP_ICON_DATA_RE.test(raw) || !/image\/svg\+xml/i.test(raw)) return false;
+  const svg = decodeDataSvg(raw);
+  if (!svg) return true;
+  if (!isPaintedSvgMarkup(svg)) return true;
+  const edge = svgViewBoxEdge(svg);
+  return edge > 0 && edge <= 16;
+}
+
 export function acceptedDataIcon(value) {
   const raw = String(value || "").trim();
   if (!raw || raw.length > APP_ICON_DATA_MAX_CHARS || !APP_ICON_DATA_RE.test(raw)) return "";
+  if (/image\/svg\+xml/i.test(raw) && isPlaceholderDataSvg(raw)) return "";
   if (/image\/svg\+xml/i.test(raw) && !isPaintedSvgMarkup(decodeDataSvg(raw))) return "";
   return raw;
 }
@@ -181,7 +201,7 @@ export function isRejectedGuessedRaster(url, width, height) {
   const h = Number(height || 0);
   if (!w && !h) return false;
   const edge = Math.max(w, h);
-  return edge <= 16 || edge >= 512;
+  return edge <= 16;
 }
 
 export function rejectedRasterBytes(url, bytes) {
@@ -252,7 +272,10 @@ export function faviconColorScheme({ media = "", href = "" } = {}) {
 }
 
 export function faviconDeclaredSizeScore({ sizes = "", href = "", rel = "" } = {}) {
-  if (looksSvgFavicon(href)) return 0;
+  if (looksSvgFavicon(href)) {
+    if (isPlaceholderDataSvg(href)) return 6;
+    return 0;
+  }
   const nums = String(sizes || "").toLowerCase().match(/\d+/g)?.map(Number).filter((value) => value > 0) || [];
   let maxSize = nums.length ? Math.max(...nums) : 0;
   if (!maxSize) {
