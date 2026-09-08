@@ -817,7 +817,7 @@ function inferAppName(app) {
   document.documentElement.style.setProperty("--topbar-prompt-input-font-size", `${topbarPromptInputFontSize}px`);
   document.documentElement.dataset.frameToastX = String(frameToastPosition.x);
   document.documentElement.dataset.frameToastY = String(frameToastPosition.y);
-  document.documentElement.dataset.settingsClickReorder = state.options?.settingsClickReorderButtonsEnabled === true ? "always" : "compact";
+  document.documentElement.dataset.settingsClickReorder = state.options?.settingsClickReorderButtonsEnabled === true ? "always" : "hidden";
   setToastStay(state.options?.toastStay); document.dispatchEvent(new CustomEvent(FRAME_TOAST_POSITION_EVENT, { detail: frameToastPosition }));
 }
 

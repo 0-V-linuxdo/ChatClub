@@ -33,12 +33,11 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   );
   assert.doesNotMatch(css, /settings-list-row:focus-within \.settings-reorder \.ui-reorder/);
   assert.match(css, /html:not\(\[data-settings-click-reorder="always"\]\) \.settings-reorder \.ui-reorder \{[^}]*width:\s*0/s);
-  assert.match(css, /settings-reorder:focus-within \.ui-reorder/);
-  assert.match(css, /settings-reorder\.settings-reorder-click-path \.ui-reorder/);
-  assert.match(css, /settings-list:has\(\.settings-reorder:focus-within\)/);
-  assert.match(css, /settings-list:has\(\.settings-reorder-click-path\)/);
+  assert.doesNotMatch(css, /settings-reorder:focus-within \.ui-reorder/);
+  assert.doesNotMatch(css, /settings-reorder-click-path/);
+  assert.doesNotMatch(css, /settings-list:has\(\.settings-reorder:focus-within\)/);
 
-  assert.match(kit, /closest\?\.\("\.settings-reorder"\)/);
+  assert.doesNotMatch(kit, /bindSettingsClickReorderPath/);
   assert.doesNotMatch(kit, /closest\?\.\("\.settings-list-row"\)/);
 
   assert.match(apps, /appIcons\.identityCells\(app, displayAppName\(app\), redraw\)/);
@@ -55,6 +54,7 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   assert.match(agents, /never on whole-row `:focus-within`/);
   assert.match(agents, /`--settings-site-mark`/);
   assert.match(agents, /three leading tracks/);
+  assert.match(agents, /Hidden click-reorder is the default/);
 
   class FakeNode {
     constructor(tag = "div") {
@@ -98,16 +98,10 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
       if (!this.listeners[key]) this.listeners[key] = [];
       this.listeners[key].push(listener);
     }
-
-    closest(selector) {
-      if (selector === ".settings-reorder" && /\bsettings-reorder\b/.test(this.className)) return this;
-      return this.parent?.closest?.(selector) || null;
-    }
   }
 
   const previousDocument = globalThis.document;
   const previousNode = globalThis.Node;
-  const clickPathNodes = [];
   globalThis.Node = FakeNode;
   globalThis.document = {
     createElement: (tag) => new FakeNode(tag),
@@ -116,15 +110,8 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
       node.textContent = String(value);
       return node;
     },
-    addEventListener(name, listener) {
-      if (name === "pointerdown") this._pointerdown = listener;
-    },
-    querySelectorAll(selector) {
-      if (selector === ".settings-reorder-click-path") {
-        return clickPathNodes.filter((node) => /\bsettings-reorder-click-path\b/.test(node.className));
-      }
-      return [];
-    }
+    addEventListener() {},
+    querySelectorAll() { return []; }
   };
 
   try {
@@ -141,16 +128,8 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
       id: "b",
       onMove() {}
     });
-    clickPathNodes.push(cluster);
-    const grip = cluster.children[0];
-    const iconButton = new FakeNode("button");
-    iconButton.className = "settings-site-icon-button";
-
-    globalThis.document._pointerdown({ target: iconButton });
-    assert.doesNotMatch(cluster.className, /settings-reorder-click-path/, "favicon pointer must not arm click-path");
-
-    globalThis.document._pointerdown({ target: grip });
-    assert.match(cluster.className, /settings-reorder-click-path/, "grip pointer must arm the cluster");
+    assert.doesNotMatch(cluster.className, /settings-reorder-click-path/, "hidden mode must not arm a click-path");
+    assert.equal(globalThis.document._pointerdown, undefined, "hidden mode must not bind a click-path pointer listener");
   } finally {
     if (previousNode === undefined) delete globalThis.Node;
     else globalThis.Node = previousNode;

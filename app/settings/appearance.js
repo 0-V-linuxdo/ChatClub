@@ -712,7 +712,7 @@ export function createAppearanceSettingsSection(ctx) {
       queueAppearanceAutoSave({ settingsClickReorderButtonsEnabled: nextEnabled }, {
         optimistic: true,
         onPreview: () => {
-          document.documentElement.dataset.settingsClickReorder = nextEnabled ? "always" : "compact";
+          document.documentElement.dataset.settingsClickReorder = nextEnabled ? "always" : "hidden";
         },
         redrawOnError: redraw
       });

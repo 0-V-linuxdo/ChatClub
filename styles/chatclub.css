@@ -8012,11 +8012,6 @@ html:not([data-settings-click-reorder="always"]) {
   --ui-reorder-cluster: var(--settings-control-height);
 }
 
-html:not([data-settings-click-reorder="always"]) .settings-list:has(.settings-reorder:focus-within),
-html:not([data-settings-click-reorder="always"]) .settings-list:has(.settings-reorder-click-path) {
-  --ui-reorder-cluster: calc(var(--settings-control-height) + (var(--target-min) * 2) + 8px);
-}
-
 html:not([data-settings-click-reorder="always"]) .settings-reorder .ui-reorder {
   flex: 0 0 0;
   width: 0;
@@ -8024,16 +8019,6 @@ html:not([data-settings-click-reorder="always"]) .settings-reorder .ui-reorder {
   overflow: hidden;
   opacity: 0;
   pointer-events: none;
-}
-
-html:not([data-settings-click-reorder="always"]) .settings-reorder:focus-within .ui-reorder,
-html:not([data-settings-click-reorder="always"]) .settings-reorder.settings-reorder-click-path .ui-reorder {
-  flex: 0 0 auto;
-  width: auto;
-  min-width: 0;
-  overflow: visible;
-  opacity: 1;
-  pointer-events: auto;
 }
 
 .app-picker-item-row {

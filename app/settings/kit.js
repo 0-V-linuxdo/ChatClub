@@ -36,20 +36,6 @@ export function cleanupSettingsDragRows(selector) {
   });
 }
 
-let settingsClickReorderPathBound = false;
-
-function bindSettingsClickReorderPath() {
-  if (settingsClickReorderPathBound || typeof document === "undefined") return;
-  settingsClickReorderPathBound = true;
-  document.addEventListener("pointerdown", (event) => {
-    const cluster = event.target?.closest?.(".settings-reorder");
-    document.querySelectorAll(".settings-reorder-click-path").forEach((node) => {
-      if (node !== cluster) node.classList.remove("settings-reorder-click-path");
-    });
-    cluster?.classList.add("settings-reorder-click-path");
-  });
-}
-
 export function createSettingsKit({ svgIcon }) {
   function settingsBlock(title, description, ...children) {
     return el("section", { class: "ui-card settings-block" },
@@ -120,7 +106,6 @@ export function createSettingsKit({ svgIcon }) {
     const list = Array.isArray(ids) ? ids.map((value) => String(value || "")).filter(Boolean) : [];
     const key = String(id || "");
     const index = list.indexOf(key);
-    bindSettingsClickReorderPath();
     return el("div", { class: "settings-reorder" },
       settingsDragHandle(label),
       createReorderButtons({

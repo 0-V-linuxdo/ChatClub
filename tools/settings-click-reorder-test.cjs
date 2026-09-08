@@ -24,7 +24,7 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
     assert.equal(
       normalizeOptions({ settingsClickReorderButtonsEnabled: invalid }).settingsClickReorderButtonsEnabled,
       false,
-      `${String(invalid)} must stay compact`
+      `${String(invalid)} must stay hidden`
     );
   }
 
@@ -45,33 +45,33 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   assert.ok(settingsState.SETTINGS_OPTION_CAPABILITIES.appearance.read.includes("settingsClickReorderButtonsEnabled"));
 
   setLanguage("en");
-  assert.equal(t("appearance.clickReorderButtons"), "Always show Move up / Move down");
-  assert.equal(t("appearance.clickReorderButtonsHelp"), "Turn it off, and the buttons only appear after you click a row.");
+  assert.equal(t("appearance.clickReorderButtons"), "Show Move up / Move down");
+  assert.equal(t("appearance.clickReorderButtonsHelp"), "Off hides the buttons. Drag to reorder.");
   setLanguage("zh_CN");
-  assert.equal(t("appearance.clickReorderButtons"), "始终显示上移/下移按钮");
-  assert.equal(t("appearance.clickReorderButtonsHelp"), "关掉后，点一下那一行才会出现按钮。");
+  assert.equal(t("appearance.clickReorderButtons"), "显示上移 / 下移");
+  assert.equal(t("appearance.clickReorderButtonsHelp"), "关掉后按钮就没了，改用拖动。");
 
   const kit = read("app/settings/kit.js");
   assert.match(kit, /function settingsReorderHandle/);
   assert.match(kit, /createReorderButtons/);
-  assert.match(kit, /function bindSettingsClickReorderPath/);
-  assert.match(kit, /closest\?\.\("\.settings-reorder"\)/);
-  assert.doesNotMatch(kit, /closest\?\.\("\.settings-list-row"\)/);
+  assert.doesNotMatch(kit, /bindSettingsClickReorderPath/);
+  assert.doesNotMatch(kit, /settings-reorder-click-path/);
 
   const appearance = read("app/settings/appearance.js");
   assert.match(appearance, /settingsClickReorderButtonsEnabled: nextEnabled/);
-  assert.match(appearance, /dataset\.settingsClickReorder = nextEnabled \? "always" : "compact"/);
+  assert.match(appearance, /dataset\.settingsClickReorder = nextEnabled \? "always" : "hidden"/);
   assert.match(appearance, /clickReorderControl/);
 
   const runtime = read("app/runtime.js");
   assert.match(runtime, /dataset\.settingsClickReorder = state\.options\?\.settingsClickReorderButtonsEnabled === true/);
+  assert.match(runtime, /"always" : "hidden"/);
 
   const css = read("styles/chatclub.css");
   assert.match(css, /html:not\(\[data-settings-click-reorder="always"\]\) \{\s*--ui-reorder-cluster: var\(--settings-control-height\);/s);
-  assert.match(css, /settings-list:has\(\.settings-reorder:focus-within\)/);
-  assert.match(css, /settings-list:has\(\.settings-reorder-click-path\)/);
-  assert.match(css, /settings-reorder:focus-within \.ui-reorder/);
-  assert.match(css, /settings-reorder\.settings-reorder-click-path \.ui-reorder/);
+  assert.match(css, /html:not\(\[data-settings-click-reorder="always"\]\) \.settings-reorder \.ui-reorder \{[^}]*width:\s*0/s);
+  assert.doesNotMatch(css, /settings-list:has\(\.settings-reorder:focus-within\)/);
+  assert.doesNotMatch(css, /settings-reorder-click-path/);
+  assert.doesNotMatch(css, /settings-reorder:focus-within \.ui-reorder/);
   assert.doesNotMatch(css, /settings-list-row:focus-within \.settings-reorder \.ui-reorder/);
   assert.doesNotMatch(
     css,
