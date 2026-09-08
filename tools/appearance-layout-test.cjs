@@ -80,11 +80,26 @@ assert.match(
 assert.match(
   stylesheetSource,
   /\.appearance-toggle-control \{[^}]*grid-template-columns: minmax\(0, 52ch\) auto;[^}]*width: fit-content;/,
-  "click-reorder switch stays to the right of its copy and hugs that copy"
+  "overlay click-reorder switch stays to the right of its copy and hugs that copy"
+);
+assert.match(
+  stylesheetSource,
+  /\.appearance-workspace-subpane\.is-general \.appearance-toggle-control \{[\s\S]*?grid-template-rows:\s*auto var\(--settings-control-height\);[\s\S]*?row-gap:\s*6px;/,
+  "General help and checkbox share the 36px control row used by Language"
+);
+assert.match(
+  stylesheetSource,
+  /\.appearance-workspace-subpane\.is-general \.appearance-toggle-copy small \{[\s\S]*?height:\s*var\(--settings-control-height\);/,
+  "General help text is the same height as the left select"
+);
+assert.match(
+  stylesheetSource,
+  /\.appearance-workspace-subpane\.is-general \.appearance-toggle-control \{[\s\S]*?width:\s*max-content;/,
+  "General click-reorder hugs the help and checkbox instead of filling the well"
 );
 assert.doesNotMatch(
   stylesheetSource,
-  /\.appearance-workspace-subpane\.is-general \.appearance-toggle-control \{[\s\S]*?width:\s*100%/,
+  /\.appearance-workspace-subpane\.is-general \.appearance-toggle-control \{[^}]*(?<![-\w])width:\s*100%/,
   "General click-reorder must not stretch the checkbox to the far edge of the well"
 );
 assert.match(
