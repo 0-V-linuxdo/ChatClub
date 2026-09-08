@@ -818,15 +818,26 @@ globalThis.document = {
     /\.model-preference-row-field-label\s*\{[^}]*position:\s*static/s,
     "field labels must stay visible even when secondary models are off"
   );
-  assert.doesNotMatch(
+  assert.match(modelStyles, /@container model-preferences \(min-width:\s*700px\)/);
+  assert.match(
     modelStyles,
-    /@container model-preferences \(min-width:\s*700px\)/,
-    "platform cards must not split models and extras into two wide-only zones"
+    /@container[\s\S]*\.model-preference-row-body\s*\{[^}]*grid-template-columns:\s*minmax\(16rem,\s*1fr\)\s+minmax\(16rem,\s*1fr\)/,
+    "every wide platform card must use the same two-column models/options track"
+  );
+  assert.match(
+    modelStyles,
+    /@container[\s\S]*\.model-preference-row-models\s*\{[^}]*grid-column:\s*1/,
+    "Preferred and Secondary must stay on the left track even when a card has no extras"
+  );
+  assert.match(
+    modelStyles,
+    /@container[\s\S]*\.model-preference-additional-field\s*\{[^}]*grid-column:\s*2/,
+    "Thinking and All sources must occupy the right track without shrinking the model selects"
   );
   assert.doesNotMatch(
     modelStyles,
-    /\.model-preference-row-has-additional \.model-preference-row-body\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(0,\s*1fr\)/,
-    "Gemini and Notion cards must keep the same single-column body as Grok and DeepSeek"
+    /\.model-preference-row-has-additional \.model-preference-row-body/,
+    "the two-column split must not apply only to cards with extras"
   );
   assert.match(modelStyles, /@container model-preferences \(max-width:\s*700px\)/);
   assert.match(modelStyles, /@container[\s\S]*\.model-preference-failure-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
@@ -851,24 +862,10 @@ globalThis.document = {
   assert.match(modelStyles, /\.model-preference-segmented-option input:focus-visible \+ \.model-preference-segmented-option-label/);
   assert.match(
     modelStyles,
-    /\.model-preference-row-models\s*\{[^}]*max-width:\s*min\(36ch,\s*100%\)/s,
-    "Preferred and Secondary selects must share one 36ch measure on every platform"
+    /\.model-preference-model-select,\s*\.model-preference-custom-wrap,\s*\.model-preference-segmented-control\s*\{[^}]*width:\s*100%[^}]*max-width:\s*none/s,
+    "the model select and additional preference must fill their shared card tracks"
   );
-  assert.match(
-    modelStyles,
-    /\.model-preference-model-select,\s*\.model-preference-custom-wrap,\s*\.model-preference-effort-select\s*\{[^}]*max-width:\s*min\(36ch,\s*100%\)/s,
-    "model, custom-name, and effort controls must cap at the same 36ch measure"
-  );
-  assert.doesNotMatch(
-    modelStyles,
-    /\.model-preference-model-select[\s\S]{0,180}max-width:\s*none/,
-    "model selects must not fill leftover card width"
-  );
-  assert.match(
-    modelStyles,
-    /\.model-preference-segmented-control\s*\{[^}]*width:\s*fit-content;[^}]*max-width:\s*100%/s,
-    "Thinking and All sources must hug their segments instead of stretching to 36ch"
-  );
+  assert.doesNotMatch(modelStyles, /max-width:\s*min\(36ch,\s*100%\)/);
   assert.match(modelStyles, /\.model-preference-segmented-heading\s*\{[^}]*display:\s*inline-flex/s);
   assert.match(modelStyles, /\.model-preference-segmented-info\s*\{[^}]*border-radius:\s*var\(--ui-radius\)/s);
   assert.match(modelStyles, /\.model-preference-segmented-info:focus-visible\s*\{[^}]*box-shadow:/s);

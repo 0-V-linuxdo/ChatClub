@@ -1,15 +1,15 @@
 {
   "schemaVersion": 4,
-  "appVersion": "「2026-09-09｜05:00:00」",
-  "manifestVersion": "2026.9.9.6",
+  "appVersion": "「2026-09-09｜05:05:00」",
+  "manifestVersion": "2026.9.9.7",
   "payloads": {
     "chromium": {
-      "appVersion": "「2026-09-09｜05:00:00」",
-      "sha256": "0697a5fe069730ead303ad9d6d78429b3e0b80291ca3b9c253b1385134fd1600"
+      "appVersion": "「2026-09-09｜05:05:00」",
+      "sha256": "737a738f4f02e554a24c23ac789b644907b8c21c9f730d5e6dc0e4d6f24293bb"
     },
     "firefox": {
-      "appVersion": "「2026-09-09｜05:00:00」",
-      "sha256": "f0e8b194e5680d365f263df1beabf93e9e82c5baee726fa0886d5eb87e28f957"
+      "appVersion": "「2026-09-09｜05:05:00」",
+      "sha256": "41bd49abc0d660b0a8090953559c4d4874f56521df6d0c2a0e6b4c5d74efecb8"
     }
   },
   "contentRuntime": {
@@ -255,8 +255,8 @@
     }
   },
   "floors": {
-    "appVersion": "「2026-09-09｜05:00:00」",
-    "manifestVersion": "2026.9.9.6",
+    "appVersion": "「2026-09-09｜05:05:00」",
+    "manifestVersion": "2026.9.9.7",
     "summaryConfigVersion": 92,
     "summarySites": {
       "aiStudio": 1,

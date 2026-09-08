@@ -7647,9 +7647,6 @@ body.settings-tab-context-menu-dragging iframe {
   display: grid;
   gap: var(--space-2);
   min-width: 0;
-  width: 100%;
-  max-width: min(36ch, 100%);
-  justify-self: start;
 }
 
 .model-preference-row-field-label {
@@ -7668,10 +7665,10 @@ body.settings-tab-context-menu-dragging iframe {
 
 .model-preference-model-select,
 .model-preference-custom-wrap,
-.model-preference-effort-select {
+.model-preference-segmented-control {
   min-width: 0;
   width: 100%;
-  max-width: min(36ch, 100%);
+  max-width: none;
   justify-self: stretch;
 }
 
@@ -7688,10 +7685,6 @@ body.settings-tab-context-menu-dragging iframe {
 .model-preference-segmented-control {
   display: grid;
   gap: 5px;
-  min-width: min(280px, 100%);
-  width: fit-content;
-  max-width: 100%;
-  justify-self: start;
 }
 
 .model-preference-segmented-heading {
@@ -7814,6 +7807,23 @@ body.settings-tab-context-menu-dragging iframe {
   position: relative;
   z-index: 2;
   box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--primary) 76%, transparent);
+}
+
+@container model-preferences (min-width: 700px) {
+  .model-preference-row-body {
+    grid-template-columns: minmax(16rem, 1fr) minmax(16rem, 1fr);
+    align-items: start;
+    column-gap: var(--space-3);
+  }
+
+  .model-preference-row-models {
+    grid-column: 1;
+  }
+
+  .model-preference-additional-field {
+    grid-column: 2;
+    grid-row: 1;
+  }
 }
 
 @container model-preferences (max-width: 700px) {
