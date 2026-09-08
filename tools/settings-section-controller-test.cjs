@@ -284,9 +284,15 @@ globalThis.document = { addEventListener() {} };
   assert.doesNotMatch(modelPreferenceDrop, /await saveOptionsPatch/, "model-order saves must participate in the autosave drain");
   assert.match(
     modelAdditionalPreferenceField,
-    /model-preference-thinking-placeholder-field[\s\S]*"aria-hidden": "true"/,
-    "platforms without an additional preference must not expose a label without a control"
+    /return null;/,
+    "platforms without an additional preference must omit the options zone"
   );
+  assert.doesNotMatch(
+    modelAdditionalPreferenceField,
+    /placeholder/,
+    "platforms without extras must not render an empty placeholder column"
+  );
+  assert.match(modelPreferenceRow, /model-preference-row-body/);
   assert.match(modelPreferenceRow, /additionalPreferenceField\(appId\)/);
   assert.match(modelPreferenceSegmentedControl, /type: "radio"/);
   assert.match(modelPreferenceSegmentedControl, /role: "radiogroup"/);

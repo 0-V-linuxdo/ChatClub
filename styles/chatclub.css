@@ -7539,7 +7539,15 @@ body.settings-tab-context-menu-dragging iframe {
 }
 
 .model-preference-list {
+  display: grid;
+  gap: 10px;
   overflow: visible;
+  border: 0;
+  background: transparent;
+}
+
+.model-preference-list .settings-list-header {
+  display: none;
 }
 
 .model-preference-secondary-toggle {
@@ -7582,38 +7590,56 @@ body.settings-tab-context-menu-dragging iframe {
   accent-color: var(--primary);
 }
 
-.model-preference-list .settings-list-header,
 .model-preference-row {
+  grid-template-columns: var(--ui-reorder-cluster) minmax(0, 1fr);
+  grid-template-areas:
+    "drag platform"
+    "drag fields";
+  align-items: start;
+  gap: 10px var(--space-3);
   min-width: 0;
-  grid-template-columns: var(--ui-reorder-cluster) minmax(140px, 180px) repeat(2, minmax(220px, 1fr));
-}
-
-.settings-manager-list.model-preference-list .settings-list-header span:first-child {
-  padding: 0;
-}
-
-.settings-manager-list.model-preference-list .settings-list-header span:last-child {
-  text-align: left;
-  padding-left: 18px;
-  padding-right: 10px;
-}
-
-.model-preference-row {
+  min-height: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--settings-radius);
+  background: color-mix(in srgb, var(--panel) 86%, var(--panel-2));
   user-select: none;
 }
 
-.model-preference-row > :first-child {
-  justify-self: center;
+.model-preference-list .model-preference-row:first-of-type {
+  border-top: 1px solid var(--line);
+}
+
+.model-preference-row > * {
   margin: 0;
 }
 
+.model-preference-row > :first-child {
+  grid-area: drag;
+  align-self: start;
+  justify-self: center;
+  margin: 2px 0 0;
+}
+
 .model-preference-row .settings-main-cell {
+  grid-area: platform;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
   font-weight: var(--font-weight-bold);
+}
+
+.model-preference-row-body {
+  grid-area: fields;
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
 }
 
 .model-preference-row-field {
   display: grid;
-  align-items: center;
+  gap: 5px;
+  align-items: start;
   min-width: 0;
 }
 
@@ -7623,11 +7649,7 @@ body.settings-tab-context-menu-dragging iframe {
   min-width: 0;
 }
 
-.model-preference-row-secondary-enabled .model-preference-row-models .model-preference-row-field {
-  gap: 5px;
-}
-
-.model-preference-row-secondary-enabled .model-preference-row-models .model-preference-row-field-label {
+.model-preference-row-field-label {
   position: static;
   width: auto;
   height: auto;
@@ -7639,19 +7661,6 @@ body.settings-tab-context-menu-dragging iframe {
   color: var(--text);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
-}
-
-.model-preference-row-field-label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  clip-path: inset(50%);
-  white-space: nowrap;
-  border: 0;
 }
 
 .model-preference-model-select,
@@ -7800,108 +7809,17 @@ body.settings-tab-context-menu-dragging iframe {
   box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--primary) 76%, transparent);
 }
 
-.model-preference-additional-placeholder {
-  width: 100%;
-  min-height: var(--settings-control-height, 36px);
+@container model-preferences (min-width: 700px) {
+  .model-preference-row-has-additional .model-preference-row-body {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+    column-gap: var(--space-3);
+  }
 }
 
 @container model-preferences (max-width: 700px) {
   .model-preference-failure-grid {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .model-preference-list {
-    display: grid;
-    gap: 10px;
-    overflow: visible;
-    border: 0;
-    background: transparent;
-  }
-
-  .model-preference-list .settings-list-header {
-    display: none;
-  }
-
-  .model-preference-row {
-    grid-template-columns: var(--ui-reorder-cluster) minmax(0, 1fr);
-    grid-template-areas:
-      "drag platform"
-      "drag model";
-    align-items: start;
-    gap: 10px var(--space-3);
-    min-width: 0;
-    min-height: 0;
-    padding: 14px;
-    border: 1px solid var(--line);
-    border-radius: var(--settings-radius);
-    background: color-mix(in srgb, var(--panel) 86%, var(--panel-2));
-  }
-
-  .model-preference-list .model-preference-row:first-of-type {
-    border-top: 1px solid var(--line);
-  }
-
-  .model-preference-row-has-thinking,
-  .model-preference-row-has-additional {
-    grid-template-areas:
-      "drag platform"
-      "drag model"
-      "drag thinking";
-  }
-
-  .model-preference-row > * {
-    margin: 0;
-  }
-
-  .model-preference-row > :first-child {
-    grid-area: drag;
-    align-self: start;
-    margin-top: 2px;
-  }
-
-  .model-preference-row > .settings-main-cell {
-    grid-area: platform;
-    overflow: visible;
-    text-overflow: clip;
-    white-space: normal;
-  }
-
-  .model-preference-row-models {
-    grid-area: model;
-  }
-
-  .model-preference-thinking-field,
-  .model-preference-additional-field {
-    grid-area: thinking;
-  }
-
-  .model-preference-thinking-placeholder-field,
-  .model-preference-additional-placeholder-field {
-    display: none;
-  }
-
-  .model-preference-row-field {
-    gap: var(--space-2);
-  }
-
-  .model-preference-row-field-label {
-    position: static;
-    width: auto;
-    height: auto;
-    margin: 0;
-    overflow: visible;
-    clip: auto;
-    clip-path: none;
-    white-space: normal;
-    color: var(--text);
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-semibold);
-  }
-
-  .model-preference-model-select,
-  .model-preference-custom-wrap,
-  .model-preference-segmented-control {
-    max-width: none;
   }
 }
 

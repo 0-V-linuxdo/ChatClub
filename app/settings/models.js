@@ -534,10 +534,7 @@ export function createModelsSettingsSection(ctx) {
         class: "model-preference-row-field model-preference-additional-field model-preference-all-sources-field"
       }, notionAllSourcesSegmentedControl());
     }
-    return el("div", {
-      class: "model-preference-row-field model-preference-additional-field model-preference-thinking-field model-preference-additional-placeholder-field model-preference-thinking-placeholder-field",
-      "aria-hidden": "true"
-    }, el("span", { class: "model-preference-additional-placeholder" }));
+    return null;
   }
 
   function modelPreferenceRowField(label, control, className) {
@@ -755,8 +752,10 @@ export function createModelsSettingsSection(ctx) {
         settingsSiteMark({ appId }, faviconPort),
         el("strong", {}, platform)
       ),
-      modelFields(appId, platform, redraw),
-      additionalPreferenceField(appId)
+      el("div", { class: "model-preference-row-body" },
+        modelFields(appId, platform, redraw),
+        additionalPreferenceField(appId)
+      )
     );
   }
 
@@ -796,14 +795,7 @@ export function createModelsSettingsSection(ctx) {
     const block = settingsBlock(t("modelPreferences.title"), t("modelPreferences.desc"),
       secondaryModelToggle(redraw),
       settingsList(
-        [
-          "",
-          t("modelPreferences.platform"),
-          secondaryModelsEnabled()
-            ? t("modelPreferences.modelPriority")
-            : t("modelPreferences.preferredModel"),
-          t("modelPreferences.additionalOption")
-        ],
+        [],
         preferenceOrder().map((appId) => row(appId, redraw)),
         "settings-manager-list model-preference-list"
       ),

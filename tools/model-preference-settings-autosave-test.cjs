@@ -307,8 +307,8 @@ globalThis.document = {
     "the rendered Notion model select must expose every current model plus a custom-name option"
   );
   assert.ok(
-    modelRows.every((node) => node.children.length === 4),
-    "the model list must keep drag, platform, model, and additional-option columns"
+    modelRows.every((node) => node.children.length === 3),
+    "each platform card must keep drag, platform, and fields"
   );
   assert.ok(
     modelRows.every((node) => (
@@ -317,21 +317,37 @@ globalThis.document = {
     )),
     "every configurable model row must keep a leading drag handle with click reorder"
   );
-  assert.equal(modelHeader?.children.length, 4, "the model-list header must match the four row columns");
+  assert.equal(modelHeader, null, "the model list must not render a comparison-table header");
   assert.ok(
-    modelRows.filter((node) => !["Gemini", "NotionAI"].includes(node.dataset.modelPreferenceAppId))
-      .every((node) => node.children[3]?.getAttribute("aria-hidden") === "true"),
-    "platforms without an additional preference must hide the complete placeholder field"
+    modelRows.every((node) => node.children[2]?.classList?.contains("model-preference-row-body")),
+    "model and additional preferences must share one fields body"
   );
   assert.ok(
     modelRows.filter((node) => !["Gemini", "NotionAI"].includes(node.dataset.modelPreferenceAppId))
       .every((node) => !findNode(
-        node.children[3],
-        (child) => child.classList?.contains("model-preference-segmented-control")
+        node,
+        (child) => child.classList?.contains("model-preference-additional-field")
       )),
-    "platforms without an additional preference must not render a segmented control"
+    "platforms without extras must omit the options zone"
   );
-  assert.ok(thinkingLevelGroup, "Gemini must expose Thinking level in the fourth column");
+  assert.ok(
+    ["Gemini", "NotionAI"].every((appId) => {
+      const row = modelRows.find((node) => node.dataset.modelPreferenceAppId === appId);
+      return Boolean(findNode(
+        row?.children[2],
+        (child) => child.classList?.contains("model-preference-additional-field")
+      ));
+    }),
+    "Gemini and Notion AI must keep their options zone inside the card body"
+  );
+  assert.ok(
+    modelRows.every((node) => Boolean(findNode(
+      node,
+      (child) => child.classList?.contains("model-preference-row-field-label")
+    )?.textContent?.trim())),
+    "every platform card must show field labels"
+  );
+  assert.ok(thinkingLevelGroup, "Gemini must expose Thinking level in the options zone");
   assert.equal(thinkingLevelGroup.getAttribute("role"), "radiogroup", "Thinking level must expose a radio group");
   assert.ok(
     Boolean(thinkingLevelGroup.getAttribute("aria-label")?.trim()),
@@ -352,7 +368,7 @@ globalThis.document = {
     [true, false],
     "Thinking level must default to Standard"
   );
-  assert.ok(allSourcesGroup, "Notion AI must expose its All sources preference in the fourth column");
+  assert.ok(allSourcesGroup, "Notion AI must expose its All sources preference in the options zone");
   assert.equal(allSourcesGroup.getAttribute("role"), "radiogroup", "All sources must expose a radio group");
   assert.ok(
     Boolean(allSourcesGroup.getAttribute("aria-label")?.trim()),
@@ -774,23 +790,49 @@ globalThis.document = {
   assert.match(modelStyles, /\.model-preference-failure-grid\s*\{[^}]*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s);
   assert.match(
     modelStyles,
-    /\.model-preference-list \.settings-list-header,\s*\.model-preference-row\s*\{[^}]*grid-template-columns:\s*var\(--ui-reorder-cluster\)\s+minmax\(140px,\s*180px\)\s+repeat\(2,\s*minmax\(220px,\s*1fr\)\);/s,
-    "the wide model list must give the model and additional-option columns equal flexible tracks"
+    /\.model-preference-list\s*\{[^}]*display:\s*grid;[^}]*overflow:\s*visible/s,
+    "the preferred-model list must drop table chrome and stack platform cards"
+  );
+  assert.match(
+    modelStyles,
+    /\.model-preference-list \.settings-list-header\s*\{[^}]*display:\s*none/,
+    "the preferred-model list must hide the comparison-table header at every width"
+  );
+  assert.match(
+    modelStyles,
+    /\.model-preference-row\s*\{[^}]*grid-template-columns:\s*var\(--ui-reorder-cluster\)\s+minmax\(0,\s*1fr\)/,
+    "each platform card must keep the reorder cluster beside a single fields track"
+  );
+  assert.match(
+    modelStyles,
+    /\.model-preference-row\s*\{[^}]*"drag fields"/s,
+    "each platform card must place fields under the platform name"
+  );
+  assert.match(
+    modelStyles,
+    /\.model-preference-row-body\s*\{[^}]*grid-area:\s*fields/,
+    "model selects and extras must share one fields body"
+  );
+  assert.match(
+    modelStyles,
+    /\.model-preference-row-field-label\s*\{[^}]*position:\s*static/s,
+    "field labels must stay visible even when secondary models are off"
+  );
+  assert.match(modelStyles, /@container model-preferences \(min-width:\s*700px\)/);
+  assert.match(
+    modelStyles,
+    /@container[\s\S]*\.model-preference-row-has-additional \.model-preference-row-body\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(0,\s*1fr\)/,
+    "wide Gemini and Notion cards must split models and extras into two zones"
   );
   assert.match(modelStyles, /@container model-preferences \(max-width:\s*700px\)/);
   assert.match(modelStyles, /@container[\s\S]*\.model-preference-failure-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
-  assert.match(modelStyles, /@container[\s\S]*\.model-preference-list\s*\{[^}]*display:\s*grid[^}]*overflow:\s*visible/s);
-  assert.match(modelStyles, /@container[\s\S]*\.model-preference-row\s*\{[^}]*grid-template-columns:\s*var\(--ui-reorder-cluster\)\s+minmax\(0,\s*1fr\)/);
-  assert.match(
+  assert.doesNotMatch(
     modelStyles,
-    /@container[\s\S]*\.model-preference-row-has-thinking,\s*\.model-preference-row-has-additional\s*\{[^}]*"drag thinking"/s,
-    "compact Gemini and Notion rows must allocate the additional-option row"
+    /repeat\(2,\s*minmax\(220px,\s*1fr\)\)/,
+    "the preferred-model list must not keep the four-column comparison table"
   );
-  assert.match(
-    modelStyles,
-    /@container[\s\S]*\.model-preference-thinking-field,\s*\.model-preference-additional-field\s*\{[^}]*grid-area:\s*thinking/s,
-    "the additional preference must occupy its compact grid area"
-  );
+  assert.doesNotMatch(modelStyles, /"drag thinking"/);
+  assert.doesNotMatch(modelStyles, /model-preference-additional-placeholder/);
   assert.match(
     modelStyles,
     /\.model-preference-segmented-options-two\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s,
@@ -806,12 +848,7 @@ globalThis.document = {
   assert.match(
     modelStyles,
     /\.model-preference-model-select,\s*\.model-preference-custom-wrap,\s*\.model-preference-segmented-control\s*\{[^}]*width:\s*100%[^}]*max-width:\s*none/s,
-    "the model select and additional preference must fill their equal desktop columns"
-  );
-  assert.match(
-    modelStyles,
-    /@container[\s\S]*\.model-preference-model-select,\s*\.model-preference-custom-wrap,\s*\.model-preference-segmented-control\s*\{[^}]*max-width:\s*none/s,
-    "compact segmented controls must use the full available width"
+    "the model select and additional preference must fill their card zones"
   );
   assert.match(modelStyles, /\.model-preference-segmented-heading\s*\{[^}]*display:\s*inline-flex/s);
   assert.match(modelStyles, /\.model-preference-segmented-info\s*\{[^}]*border-radius:\s*var\(--ui-radius\)/s);
@@ -821,7 +858,7 @@ globalThis.document = {
   assert.doesNotMatch(modelStyles, /transform:\s*rotate\(-45deg\)/);
   assert.match(modelStyles, /\.model-preference-list\s*\{[^}]*overflow:\s*visible/s);
   assert.doesNotMatch(modelStyles, /\.model-preference-list\s*\{[^}]*overflow:\s*(?:auto|hidden|clip)/s);
-  assert.match(modelStyles, /\.model-preference-list \.settings-list-header,\s*\.model-preference-row\s*\{[^}]*min-width:\s*0/s);
+  assert.match(modelStyles, /\.model-preference-row\s*\{[^}]*min-width:\s*0/s);
   assert.doesNotMatch(modelStyles, /min-width:\s*(?:720|760)px/);
   assert.doesNotMatch(modelStyles, /@media\s*\(max-width:\s*700px\)/);
 
