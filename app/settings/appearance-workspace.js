@@ -72,6 +72,7 @@ export function createAppearanceWorkspacePane({
       appearanceRow(
         el("div", { class: "appearance-overlay-row appearance-overlays-model" },
           el("span", { class: "appearance-overlay-copy" },
+            selectionOverlayControls.toggleControl,
             el("label", { for: "appearance-model-selection-overlay-enabled" },
               el("strong", {}, t("appearance.modelSelectionOverlay"))
             ),
@@ -82,8 +83,7 @@ export function createAppearanceWorkspacePane({
               "settings.appearance.modelSelectionOverlay"
             )
           ),
-          selectionOverlayControls.opacityControl,
-          selectionOverlayControls.toggleControl
+          selectionOverlayControls.opacityControl
         )
       )
     )

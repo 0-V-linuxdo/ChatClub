@@ -4040,12 +4040,24 @@ body.tab-gesture-active * {
   grid-column: 1 / -1;
 }
 
+.appearance-workspace-subpane.is-overlays .appearance-field-list {
+  display: grid;
+  grid-template-columns: max-content max-content;
+  justify-content: start;
+  justify-items: start;
+  column-gap: var(--space-4);
+  row-gap: 14px;
+  width: max-content;
+  max-width: 100%;
+}
+
+.appearance-workspace-subpane.is-overlays .appearance-field-row,
 .appearance-workspace-subpane.is-overlays .appearance-overlay-row {
   display: grid;
-  grid-template-columns: minmax(0, max-content) auto;
-  column-gap: var(--space-4);
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
   align-items: center;
-  width: max-content;
+  width: auto;
   max-width: 100%;
   min-width: 0;
 }
@@ -4069,28 +4081,28 @@ body.tab-gesture-active * {
 
 .appearance-workspace-subpane.is-overlays .appearance-range-control {
   grid-template-columns: minmax(0, 220px) 48px;
+  justify-self: start;
   width: max-content;
   max-width: 100%;
 }
 
 .appearance-workspace-subpane.is-overlays .appearance-overlays-model {
-  grid-template-columns: minmax(0, max-content) auto auto;
   padding-top: 14px;
   border-top: 1px solid color-mix(in srgb, var(--line) 84%, transparent);
 }
 
-.appearance-workspace-subpane.is-overlays .appearance-overlays-model > .appearance-toggle-control {
+.appearance-workspace-subpane.is-overlays .appearance-overlay-copy > .appearance-toggle-control {
   display: inline-flex;
   align-items: center;
   width: max-content;
 }
 
-.appearance-workspace-subpane.is-overlays .appearance-overlays-model > .appearance-toggle-control input {
+.appearance-workspace-subpane.is-overlays .appearance-overlay-copy > .appearance-toggle-control input {
   margin: 0;
 }
 
 @container (max-width: 560px) {
-  .appearance-workspace-subpane.is-overlays .appearance-overlay-row {
+  .appearance-workspace-subpane.is-overlays .appearance-field-list {
     grid-template-columns: minmax(0, 1fr);
     width: 100%;
   }

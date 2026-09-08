@@ -42,7 +42,7 @@ assert.match(
 );
 assert.match(
   workspaceSource,
-  /const overlaysBlock[\s\S]*appearance\.loadingOverlay[\s\S]*appearance\.modelSelectionOverlay[\s\S]*selectionOverlayControls\.opacityControl[\s\S]*selectionOverlayControls\.toggleControl/,
+  /const overlaysBlock[\s\S]*appearance\.loadingOverlay[\s\S]*selectionOverlayControls\.toggleControl[\s\S]*appearance\.modelSelectionOverlay[\s\S]*selectionOverlayControls\.opacityControl/,
   "overlay workspace tab must own both loading and model-selection controls"
 );
 assert.doesNotMatch(controllerSource, /appearance-workspace-(?:layout|main|aside)/);
@@ -129,8 +129,8 @@ assert.match(
 );
 assert.match(
   workspaceSource,
-  /class: "appearance-overlay-row appearance-overlays-model"[\s\S]*appearance\.modelSelectionOverlay[\s\S]*selectionOverlayControls\.opacityControl[\s\S]*selectionOverlayControls\.toggleControl/,
-  "model auto-selection merges the toggle and opacity onto one hugging row"
+  /class: "appearance-overlay-row appearance-overlays-model"[\s\S]*selectionOverlayControls\.toggleControl[\s\S]*appearance\.modelSelectionOverlay[\s\S]*selectionOverlayControls\.opacityControl/,
+  "model auto-selection puts the switch left of the title on one hugging row"
 );
 assert.match(
   workspaceSource,
@@ -139,8 +139,13 @@ assert.match(
 );
 assert.match(
   stylesheetSource,
-  /\.appearance-workspace-subpane\.is-overlays \.appearance-overlay-row \{[\s\S]*?width:\s*max-content;/,
-  "overlay rows hug copy instead of pinning controls to the far edge"
+  /\.appearance-workspace-subpane\.is-overlays \.appearance-field-list \{[\s\S]*?grid-template-columns: max-content max-content;[\s\S]*?justify-content:\s*start;/,
+  "overlay sliders share a left-aligned compact column instead of staggering after titles"
+);
+assert.match(
+  stylesheetSource,
+  /\.appearance-workspace-subpane\.is-overlays \.appearance-field-row,\s*\n\.appearance-workspace-subpane\.is-overlays \.appearance-overlay-row \{[\s\S]*?grid-template-columns:\s*subgrid;/,
+  "overlay rows use subgrid so both slider tracks start on the same left edge"
 );
 assert.match(
   stylesheetSource,
@@ -161,11 +166,6 @@ assert.match(
   stylesheetSource,
   /\.appearance-workspace-subpane\.is-overlays \.appearance-overlays-model \{[\s\S]*?border-top:/,
   "Loading and Model groups share one hairline, not a second settingsBlock"
-);
-assert.match(
-  stylesheetSource,
-  /\.appearance-workspace-subpane\.is-overlays \.appearance-overlays-model \{[\s\S]*?grid-template-columns: minmax\(0, max-content\) auto auto;/,
-  "model auto-selection keeps title, slider, and switch on one hugging row"
 );
 assert.doesNotMatch(
   stylesheetSource,
