@@ -7,6 +7,7 @@ const workspaceTabId = (id) => `appearance-workspace-tab-${id}`;
 
 export function createAppearanceWorkspacePane({
   activeId,
+  clickReorderControl,
   colorControl,
   columnCount,
   language,
@@ -26,7 +27,8 @@ export function createAppearanceWorkspacePane({
       appearanceRow(field(t("appearance.themeMode"), themeMode)),
       appearanceRow(field(t("appearance.language"), language)),
       appearanceRow(field(t("appearance.maxColumns"), columnCount)),
-      appearanceRow(pocketIconControl)
+      appearanceRow(pocketIconControl),
+      clickReorderControl ? appearanceRow(clickReorderControl) : null
     )
   );
   const colorBlock = () => settingsBlock(

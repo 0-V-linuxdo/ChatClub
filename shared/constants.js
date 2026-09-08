@@ -11,7 +11,7 @@ import {
 import { NOTION_MODEL_PREFERENCE_TARGETS } from "./notion-models.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-09-07｜13:51:58」";
+export const APP_VERSION = "「2026-09-08｜13:54:15」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -406,6 +406,7 @@ export const DEFAULT_OPTIONS = {
   frameLoadingOverlayOpacity: 82,
   modelPreferenceSelectionOverlayEnabled: true,
   modelPreferenceSelectionOverlayOpacity: 70,
+  settingsClickReorderButtonsEnabled: false,
   frameToastPosition: DEFAULT_FRAME_TOAST_POSITION,
   toastStay: DEFAULT_TOAST_STAY,
   pocketCardSize: DEFAULT_POCKET_CARD_SIZE,

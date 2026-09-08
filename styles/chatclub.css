@@ -8037,6 +8037,33 @@ body.settings-tab-context-menu-dragging iframe {
   min-height: var(--target-min);
 }
 
+html:not([data-settings-click-reorder="always"]) {
+  --ui-reorder-cluster: var(--settings-control-height);
+}
+
+html:not([data-settings-click-reorder="always"]) .settings-list-row {
+  position: relative;
+}
+
+html:not([data-settings-click-reorder="always"]) .settings-list-row .settings-reorder .ui-reorder {
+  position: absolute;
+  left: var(--ui-reorder-cluster);
+  top: 50%;
+  margin-top: calc(var(--target-min) / -2);
+  z-index: 2;
+  opacity: 0;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--panel) 92%, var(--panel-2));
+  border-radius: var(--ui-radius);
+}
+
+html:not([data-settings-click-reorder="always"]) .settings-list-row:focus-within .settings-reorder .ui-reorder,
+html:not([data-settings-click-reorder="always"]) .settings-list-row.settings-reorder-click-path .settings-reorder .ui-reorder,
+html:not([data-settings-click-reorder="always"]) .settings-reorder:focus-within .ui-reorder {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 .app-picker-item-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

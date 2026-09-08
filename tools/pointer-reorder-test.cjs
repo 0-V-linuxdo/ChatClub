@@ -39,6 +39,8 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   const kit = read("app/settings/kit.js");
   assert.match(kit, /function settingsReorderHandle/);
   assert.match(kit, /export function moveListItemByDelta/);
+  assert.match(kit, /settings-reorder-click-path/);
+  assert.match(kit, /function bindSettingsClickReorderPath/);
 
   const tabsItem = read("app/workspace/tabs-sidebar-item.js");
   assert.match(tabsItem, /workspace-tabs-sidebar-item-move-up/);
@@ -80,10 +82,14 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   assert.match(css, /\.app-picker-item-row \{/);
   assert.match(css, /--ui-reorder-cluster:/);
   assert.match(css, /grid-template-columns:\s*var\(--ui-reorder-cluster\)/);
+  assert.match(css, /html:not\(\[data-settings-click-reorder="always"\]\)/);
+  assert.match(css, /settings-reorder-click-path/);
 
   const agents = read("AGENTS.md");
   assert.match(agents, /WCAG 2\.5\.7/);
   assert.match(agents, /Do not add those actions to `TABS_SIDEBAR_HOVER_BUTTONS`/);
+  assert.match(agents, /settingsClickReorderButtonsEnabled/);
+  assert.match(agents, /Compact click-reorder is the default/);
 
   console.log("pointer reorder: ok");
 })().catch((error) => {

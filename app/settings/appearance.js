@@ -697,8 +697,38 @@ export function createAppearanceSettingsSection(ctx) {
         ))
       )
     );
+    const clickReorderEnabled = state.options.settingsClickReorderButtonsEnabled === true;
+    const clickReorderToggle = el("input", {
+      type: "checkbox",
+      role: "switch",
+      checked: clickReorderEnabled,
+      "aria-label": t("appearance.clickReorderButtons"),
+      "aria-describedby": "appearance-click-reorder-help"
+    });
+    clickReorderToggle.checked = clickReorderEnabled;
+    clickReorderToggle.addEventListener("change", () => {
+      const nextEnabled = clickReorderToggle.checked;
+      queueAppearanceAutoSave({ settingsClickReorderButtonsEnabled: nextEnabled }, {
+        optimistic: true,
+        onPreview: () => {
+          document.documentElement.dataset.settingsClickReorder = nextEnabled ? "always" : "compact";
+        },
+        redrawOnError: redraw
+      });
+    });
+    const clickReorderControl = el("label", {
+      class: "appearance-toggle-control",
+      dataset: { token: "click-reorder" }
+    },
+      el("span", { class: "appearance-toggle-copy" },
+        el("strong", {}, t("appearance.clickReorderButtons")),
+        el("small", { id: "appearance-click-reorder-help" }, t("appearance.clickReorderButtonsHelp"))
+      ),
+      clickReorderToggle
+    );
     const workspaceBlock = () => createAppearanceWorkspacePane({
       activeId: state.settingsAppearanceWorkspaceTab,
+      clickReorderControl,
       colorControl, columnCount, language, overlayOpacityControl, pocketIconControl, selectionOverlayControls,
       settingsBlock, settingsInnerTabs, themeMode,
       onSelect: (id) => {

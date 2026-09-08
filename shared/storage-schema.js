@@ -1081,6 +1081,9 @@ export function normalizeOptions(raw = {}) {
     modelPreferenceSelectionOverlayEnabled: typeof raw.modelPreferenceSelectionOverlayEnabled === "boolean"
       ? raw.modelPreferenceSelectionOverlayEnabled
       : base.modelPreferenceSelectionOverlayEnabled,
+    settingsClickReorderButtonsEnabled: typeof raw.settingsClickReorderButtonsEnabled === "boolean"
+      ? raw.settingsClickReorderButtonsEnabled
+      : base.settingsClickReorderButtonsEnabled,
     recordFullText: typeof raw.recordFullText === "boolean"
       ? raw.recordFullText
       : base.recordFullText,

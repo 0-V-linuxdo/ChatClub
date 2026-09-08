@@ -11,6 +11,7 @@ export const SETTINGS_OPTION_CAPABILITIES = Object.freeze({
   appearance: optionCapability([
     "colMaxCount", "frameLoadingOverlayOpacity", "frameToastPosition", "toastStay", "language",
     "modelPreferenceSelectionOverlayEnabled", "modelPreferenceSelectionOverlayOpacity", "pocketIcon", "primaryColor", "primaryColorCustom",
+    "settingsClickReorderButtonsEnabled",
     "tabContextMenuHiddenIds", "tabContextMenuOrder", "tabGroupButtonOrder", "tabGroupButtonPlacement", "tabGroupButtonsMode",
     "tabsSidebarButtonOrder", "tabsSidebarButtonPlacement",
     "themeMode", "tooltipDisabledIds",

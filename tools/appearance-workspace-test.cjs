@@ -66,6 +66,7 @@ const descendants = (node) => [node, ...node.children.flatMap(descendants)];
     language: token("language"),
     overlayOpacityControl: token("loading-overlay"),
     pocketIconControl: token("pocket-icon"),
+    clickReorderControl: token("click-reorder"),
     selectionOverlayControls: {
       toggleControl: token("model-overlay-toggle"),
       opacityControl: token("model-overlay-opacity")
@@ -92,7 +93,7 @@ const descendants = (node) => [node, ...node.children.flatMap(descendants)];
     return tablist;
   };
   const expectedTokens = {
-    general: ["theme", "language", "columns", "pocket-icon"],
+    general: ["theme", "language", "columns", "pocket-icon", "click-reorder"],
     color: ["color"],
     overlays: ["loading-overlay", "model-overlay-toggle", "model-overlay-opacity"]
   };
