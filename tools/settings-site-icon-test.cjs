@@ -34,6 +34,38 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
     appIcons: { ChatGPT: { srcType: "url", value: "https://cdn.example.com/chatgpt.png" } }
   });
   assert.equal(persisted.appIcons.ChatGPT.value, "https://cdn.example.com/chatgpt.png");
+  const relay = normalizeOptions({
+    apiProfiles: [{
+      id: "relay",
+      name: "Relay",
+      endpoint: "https://api.deepseek.com/v1/chat/completions",
+      model: "x",
+      logoUrl: "https://cdn.example.com/relay.png"
+    }]
+  }).apiProfiles.find((profile) => profile.id === "relay");
+  assert.equal(relay.logoUrl, "https://cdn.example.com/relay.png");
+  const rejectedLogo = normalizeOptions({
+    apiProfiles: [{
+      id: "relay",
+      name: "Relay",
+      endpoint: "https://api.deepseek.com/v1/chat/completions",
+      model: "x",
+      logoUrl: "http://insecure.example/icon.png"
+    }]
+  }).apiProfiles.find((profile) => profile.id === "relay");
+  assert.equal(rejectedLogo.logoUrl, undefined);
+  assert.equal(
+    dehydrateOptions({
+      apiProfiles: [{
+        id: "relay",
+        name: "Relay",
+        endpoint: "https://api.deepseek.com/v1/chat/completions",
+        model: "x",
+        logoUrl: "https://cdn.example.com/relay.png"
+      }]
+    }).apiProfiles.find((profile) => profile.id === "relay").logoUrl,
+    "https://cdn.example.com/relay.png"
+  );
   assert.ok(settingsState.SETTINGS_OPTION_CAPABILITIES.apps.write.includes("appIcons"));
   assert.ok(settingsState.SETTINGS_OPTION_CAPABILITIES.apps.read.includes("appIcons"));
 
@@ -50,6 +82,7 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   const summarySettings = read("app/settings/summary.js");
   const messageSettings = read("app/settings/message-navigation.js");
   const topicSettings = read("app/settings/topic-deletion.js");
+  const profilesSettings = read("app/settings/profiles.js");
   const css = read("styles/chatclub.css");
   const budgets = JSON.parse(read("tools/native-entry-budgets.json"));
 
@@ -75,17 +108,23 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   assert.match(summarySettings, /faviconPort:\s*"object\?"/);
   assert.match(messageSettings, /faviconPort:\s*"object\?"/);
   assert.match(topicSettings, /faviconPort:\s*"object\?"/);
+  assert.match(profilesSettings, /faviconPort:\s*"object\?"/);
   assert.match(controller, /faviconPort:\s*ctx\.faviconPort/);
   assert.match(runtime, /faviconPort:\s*faviconService/);
   assert.match(iconEditor, /export function settingsSiteMark/);
+  assert.match(iconEditor, /skipCatalog \? \[\]/);
   assert.match(modelsSettings, /settingsSiteMark\(\{\s*appId\s*\},\s*faviconPort\)/);
   assert.match(summarySettings, /settingsSiteMark\(config,\s*faviconPort\)/);
   assert.match(messageSettings, /settingsSiteMark\(config,\s*faviconPort\)/);
   assert.match(topicSettings, /settingsSiteMark\(config,\s*faviconPort\)/);
+  assert.match(profilesSettings, /settingsSiteMark\(profileIconSource/);
+  assert.match(profilesSettings, /skipCatalog:\s*true/);
+  assert.match(profilesSettings, /logoUrl/);
   assert.doesNotMatch(modelsSettings, /settings-site-icon-button|apps\.changeIcon|openEditor/);
   assert.doesNotMatch(summarySettings, /settings-site-icon-button|apps\.changeIcon/);
   assert.doesNotMatch(messageSettings, /settings-site-icon-button|apps\.changeIcon/);
   assert.doesNotMatch(topicSettings, /settings-site-icon-button|apps\.changeIcon/);
+  assert.doesNotMatch(profilesSettings, /settings-site-icon-button/);
 
   const previousDocument = globalThis.document;
   globalThis.document = { addEventListener() {} };
@@ -145,6 +184,70 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   } finally {
     if (previousDocument === undefined) delete globalThis.document;
     else globalThis.document = previousDocument;
+  }
+
+  class FakeNode {
+    constructor(tag = "div") {
+      this.tagName = String(tag).toUpperCase();
+      this.children = [];
+      this.dataset = {};
+      this.attributes = new Map();
+      this.className = "";
+    }
+
+    setAttribute(name, value) {
+      this.attributes.set(name, String(value));
+      if (name === "src") this.src = String(value);
+    }
+
+    getAttribute(name) {
+      return this.attributes.get(name) ?? null;
+    }
+
+    append(...children) {
+      this.children.push(...children.filter(Boolean));
+    }
+
+    addEventListener() {}
+  }
+
+  const previousNode = globalThis.Node;
+  const previousMarkDocument = globalThis.document;
+  globalThis.Node = FakeNode;
+  globalThis.document = {
+    createElement: (tag) => new FakeNode(tag),
+    createTextNode: (value) => {
+      const node = new FakeNode("#text");
+      node.textContent = String(value);
+      return node;
+    }
+  };
+  try {
+    const { settingsSiteMark } = await import(moduleUrl("app/settings/app-icon.js"));
+    const port = {
+      app: (app) => (app?.id === "DeepSeek" ? "CHAT-APP-OVERRIDE" : ""),
+      effective: (_href, logoUrl) => String(logoUrl || ""),
+      networkUrls: (href) => [`https://icons.duckduckgo.com/ip3/${new URL(href).hostname}.ico`]
+    };
+    const skipped = settingsSiteMark({
+      href: "https://api.deepseek.com/v1/chat/completions",
+      skipCatalog: true
+    }, port);
+    assert.notEqual(skipped.getAttribute("src") || skipped.src, "CHAT-APP-OVERRIDE");
+    assert.match(skipped.getAttribute("src") || skipped.src || "", /deepseek\.com/);
+    const bound = settingsSiteMark({ href: "https://chat.deepseek.com/" }, port);
+    assert.equal(bound.getAttribute("src") || bound.src, "CHAT-APP-OVERRIDE");
+    const custom = settingsSiteMark({
+      href: "https://api.deepseek.com/v1/chat/completions",
+      logoUrl: "https://cdn.example.com/relay.png",
+      skipCatalog: true
+    }, port);
+    assert.equal(custom.getAttribute("src") || custom.src, "https://cdn.example.com/relay.png");
+  } finally {
+    if (previousNode === undefined) delete globalThis.Node;
+    else globalThis.Node = previousNode;
+    if (previousMarkDocument === undefined) delete globalThis.document;
+    else globalThis.document = previousMarkDocument;
   }
 
   console.log("settings site icon: ok");

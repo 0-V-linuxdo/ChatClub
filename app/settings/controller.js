@@ -201,7 +201,7 @@ export function createSettingsController(ctx) {
     svgIcon,
     notifyConfigReload,
     saveOptionsPatch: sectionOptionsPatch("Profiles settings section", SECTION_OPTION_KEYS.profiles),
-    openTabUrl
+    openTabUrl, faviconPort: ctx.faviconPort
   });
   const appsSection = createAppsSettingsSection({
     state: settingsSections.apps,

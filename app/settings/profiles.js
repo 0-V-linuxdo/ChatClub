@@ -17,6 +17,7 @@ import {
   moveListItemByDelta
 } from "./kit.js";
 import { requireSettingsSectionStatePort } from "./section-contract.js";
+import { settingsSiteMark } from "./app-icon.js";
 import {
   requireControllerContext,
   requireControllerFunction,
@@ -30,7 +31,7 @@ export function createProfilesSettingsSection(ctx) {
     svgIcon: "function",
     notifyConfigReload: "function",
     saveOptionsPatch: "function",
-    openTabUrl: "function"
+    openTabUrl: "function", faviconPort: "object?"
   });
   const state = requireSettingsSectionStatePort(
     requireControllerContext(ctx, controllerName, "state"),
@@ -41,6 +42,7 @@ export function createProfilesSettingsSection(ctx) {
   const notifyConfigReload = requireControllerFunction(ctx, controllerName, "notifyConfigReload");
   const saveOptionsPatch = requireControllerFunction(ctx, controllerName, "saveOptionsPatch");
   const openTabUrl = requireControllerFunction(ctx, controllerName, "openTabUrl");
+  const faviconPort = ctx.faviconPort;
   const {
     settingsBlock,
     settingsInnerTabs,
@@ -165,6 +167,18 @@ export function createProfilesSettingsSection(ctx) {
     );
   }
 
+  function profileIconSource(profile, logoUrl = profile?.logoUrl) {
+    return {
+      href: String(profile?.endpoint || profile?.registerUrl || "").trim(),
+      logoUrl: String(logoUrl || "").trim(),
+      skipCatalog: true
+    };
+  }
+
+  function profileMark(profile, logoUrl) {
+    return settingsSiteMark(profileIconSource(profile, logoUrl), faviconPort);
+  }
+
   function profileRow(profile, redraw) {
     return el("div", {
       class: "ui-list-row settings-list-row settings-manager-row api-profile-row",
@@ -183,7 +197,10 @@ export function createProfilesSettingsSection(ctx) {
           saveProfiles(moveListItemByDelta(state.options.apiProfiles, profile.id, delta), redraw, t("toast.apiProfileOrderSaved"), { reloadRuntime: false });
         }
       }),
-      el("strong", { class: "settings-main-cell" }, profile.name || profile.id),
+      el("div", { class: "settings-main-cell settings-name-cell" },
+        profileMark(profile),
+        el("strong", {}, profile.name || profile.id)
+      ),
       profileModelCell(profile),
       usageChips(profile),
       el("div", { class: "settings-row-action-group" },
@@ -503,10 +520,26 @@ export function createProfilesSettingsSection(ctx) {
     const identityName = el("strong", { class: "api-profile-editor-identity-name" },
       String(draft.name || "").trim() || t("profiles.providerName")
     );
+    let logoUrl = String(draft.logoUrl || "").trim();
+    const iconPreview = el("div", { class: "settings-icon-preview" });
+    const logoInput = input(logoUrl.startsWith("data:") ? "" : logoUrl, {
+      placeholder: t("apps.iconUrlPlaceholder"),
+      autocomplete: "url",
+      spellcheck: "false"
+    });
+    const fileInput = el("input", { class: "input", type: "file", accept: "image/png,image/jpeg,image/webp,image/svg+xml,image/x-icon,.ico" });
+    const paintIcon = () => {
+      iconPreview.replaceChildren(profileMark({
+        endpoint: endpointInput.value,
+        registerUrl: draft.registerUrl,
+        logoUrl
+      }, logoUrl));
+    };
     const initialSnapshot = JSON.stringify({
       name: String(draft.name || "").trim() || "API Profile",
       endpoint: String(draft.endpoint || "").trim(),
       apiKey: String(draft.apiKey || ""),
+      logoUrl,
       models: apiProfileModels(draft),
       favoriteModels: apiProfileFavoriteModels(draft)
     });
@@ -514,6 +547,7 @@ export function createProfilesSettingsSection(ctx) {
       name: nameInput.value.trim() || "API Profile",
       endpoint: endpointInput.value.trim(),
       apiKey: secret.input.value,
+      logoUrl,
       models: catalog.live(),
       favoriteModels: catalog.favorites()
     });
@@ -521,8 +555,43 @@ export function createProfilesSettingsSection(ctx) {
       identityName.textContent = nameInput.value.trim() || t("profiles.providerName");
       syncSave();
     });
-    endpointInput.addEventListener("input", () => syncSave());
+    endpointInput.addEventListener("input", () => {
+      paintIcon();
+      syncSave();
+    });
     secret.input.addEventListener("input", () => syncSave());
+    logoInput.addEventListener("input", () => {
+      logoUrl = logoInput.value.trim();
+      paintIcon();
+      syncSave();
+    });
+    fileInput.addEventListener("change", async () => {
+      const value = typeof faviconPort?.encodeFile === "function" ? await faviconPort.encodeFile(fileInput.files?.[0]) : "";
+      if (!value) {
+        toast(t("apps.iconInvalid"), "error");
+        return;
+      }
+      logoUrl = value;
+      logoInput.value = "";
+      paintIcon();
+      syncSave();
+    });
+    const restoreIcon = () => {
+      logoUrl = "";
+      logoInput.value = "";
+      fileInput.value = "";
+      paintIcon();
+      syncSave();
+    };
+    const refreshIcon = async () => {
+      try {
+        if (typeof faviconPort?.refresh === "function") await faviconPort.refresh(endpointInput.value.trim());
+        paintIcon();
+      } catch {
+        toast(t("toast.appIconRefreshFailed"), "error");
+      }
+    };
+    paintIcon();
     let dialog;
     const close = () => {
       catalog.close();
@@ -536,11 +605,13 @@ export function createProfilesSettingsSection(ctx) {
         name: nameInput.value.trim() || "API Profile",
         endpoint: endpointInput.value.trim(),
         apiKey: secret.input.value,
+        logoUrl,
         model: models[0] || "",
         models,
         favoriteModels
       };
       if (!favoriteModels.length) delete nextProfile.favoriteModels;
+      if (!logoUrl) delete nextProfile.logoUrl;
       if (!nextProfile.endpoint || !nextProfile.model) {
         toast(t("profiles.endpointModelRequired"), "error");
         return;
@@ -565,7 +636,18 @@ export function createProfilesSettingsSection(ctx) {
           el("div", { class: "api-profile-editor-credentials" },
             field(t("profiles.provider"), nameInput),
             field(t("profiles.endpoint"), endpointInput),
-            field(t("profiles.apiKey"), secret.node)
+            field(t("profiles.apiKey"), secret.node),
+            el("div", { class: "settings-icon-field" },
+              el("span", { class: "settings-icon-field-label" }, t("apps.icon")),
+              el("div", { class: "settings-icon-field-row" },
+                iconPreview,
+                button(t("apps.iconRefresh"), () => { void refreshIcon(); }),
+                button(t("apps.iconRestore"), restoreIcon)
+              )
+            ),
+            field(t("apps.iconUrl"), logoInput),
+            field(t("apps.iconUpload"), fileInput),
+            el("p", { class: "settings-icon-help" }, t("apps.iconHelp"))
           ),
           el("div", { class: "field api-profile-models-field" },
             el("span", {}, t("profiles.models")),

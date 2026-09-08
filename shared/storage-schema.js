@@ -610,6 +610,7 @@ function resolveApiSlotModel(profile, requested) {
 function normalizeProfile(profile, index) {
   const registerUrl = text(profile?.registerUrl || profile?.signupUrl || profile?.url);
   const modelsState = normalizeApiProfileModels(profile);
+  const logoUrl = normalizeProfileLogoUrl(profile?.logoUrl);
   return {
     id: text(profile?.id) || createId("api"),
     name: text(profile?.name, `API Profile ${index + 1}`) || `API Profile ${index + 1}`,
@@ -619,6 +620,7 @@ function normalizeProfile(profile, index) {
     models: modelsState.models,
     ...(modelsState.favoriteModels.length ? { favoriteModels: modelsState.favoriteModels } : {}),
     ...(registerUrl ? { registerUrl } : {}),
+    ...(logoUrl ? { logoUrl } : {}),
     ...(profile?.promotionChannel === true ? { promotionChannel: true } : {})
   };
 }
@@ -1339,6 +1341,17 @@ export function normalizeAppIcons(raw = {}) {
     } catch {}
   }
   return next;
+}
+
+function normalizeProfileLogoUrl(value) {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return normalizeAppIcons({ _: value })._?.value || "";
+  }
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  return normalizeAppIcons({
+    _: { srcType: APP_ICON_DATA_RE.test(raw) ? "data" : "url", value: raw }
+  })._?.value || "";
 }
 
 export function normalizePromptImagePasteStrategy(value, fallback = PROMPT_IMAGE_PASTE_STRATEGY_SEQUENTIAL) {

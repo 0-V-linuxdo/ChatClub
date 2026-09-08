@@ -45,16 +45,18 @@ function settingsSiteIdentity(config = {}, catalog = BUILTIN_CHAT_APPS) {
 }
 
 export function settingsSiteMark(source = {}, faviconPort = {}) {
-  const identity = source.app
+  const skipCatalog = source.skipCatalog === true;
+  const identity = !skipCatalog && source.app
     ? { app: source.app, appId: source.appId || source.app.id, href: source.href || source.app.url || "" }
-    : settingsSiteIdentity(source);
-  const app = identity.app;
-  const appId = String(identity.appId || app?.id || "").trim();
-  const href = String(identity.href || app?.url || "").trim();
+    : settingsSiteIdentity(source, skipCatalog ? [] : BUILTIN_CHAT_APPS);
+  const app = skipCatalog ? null : identity.app;
+  const appId = skipCatalog ? "" : String(identity.appId || app?.id || "").trim();
+  const href = String(identity.href || source.href || app?.url || "").trim();
   const image = renderChatFavicon({
     app,
     appId,
     href,
+    logoUrl: String(source.logoUrl || "").trim(),
     title: ""
   }, { ...faviconDeps(faviconPort), className: "settings-site-icon" })
     || el("span", { class: "settings-site-icon settings-site-icon-empty", "aria-hidden": "true" });

@@ -646,7 +646,8 @@ globalThis.document = { addEventListener() {} };
     }],
     [profilesModule.createProfilesSettingsSection, ports.profiles, {
       ...sharedDependencies,
-      openTabUrl() {}
+      openTabUrl() {},
+      faviconPort: { encodeFile: async () => "", refresh: async () => "" }
     }],
     [appsModule.createAppsSettingsSection, ports.apps, {
       ...sharedDependencies,
@@ -737,6 +738,16 @@ globalThis.document = { addEventListener() {} };
       state: ports.models,
       ...sharedDependencies,
       applyPreferredModels: async () => {},
+      faviconPort: { encodeFile: async () => "", refresh: async () => "" },
+      combinedState: rootState
+    }),
+    /received extra dependencies field combinedState/
+  );
+  assert.throws(
+    () => profilesModule.createProfilesSettingsSection({
+      state: ports.profiles,
+      ...sharedDependencies,
+      openTabUrl() {},
       faviconPort: { encodeFile: async () => "", refresh: async () => "" },
       combinedState: rootState
     }),
