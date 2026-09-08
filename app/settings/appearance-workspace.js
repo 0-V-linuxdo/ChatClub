@@ -19,18 +19,16 @@ export function createAppearanceWorkspacePane({
   settingsInnerTabs,
   themeMode
 }) {
-  const appearanceRow = (node, extraClass = "") => el("div", {
-    class: extraClass ? `appearance-field-row ${extraClass}` : "appearance-field-row"
-  }, node);
+  const appearanceRow = (node) => el("div", { class: "appearance-field-row" }, node);
   const generalBlock = () => settingsBlock(
     t("appearance.workspaceGeneral"),
     t("appearance.workspaceGeneralTabDesc"),
     el("div", { class: "appearance-field-list" },
       appearanceRow(field(t("appearance.themeMode"), themeMode)),
       appearanceRow(field(t("appearance.language"), language)),
-      appearanceRow(field(t("appearance.maxColumns"), columnCount), "is-rail-break"),
+      appearanceRow(field(t("appearance.maxColumns"), columnCount)),
       appearanceRow(pocketIconControl),
-      clickReorderControl ? appearanceRow(clickReorderControl, "is-rail-break") : null
+      clickReorderControl ? appearanceRow(clickReorderControl) : null
     )
   );
   const colorBlock = () => settingsBlock(

@@ -69,38 +69,23 @@ assert.match(
 );
 assert.match(
   stylesheetSource,
-  /\.appearance-workspace-subpane \.appearance-field-list \{[\s\S]*?width: min\(100%, 42rem\);/,
-  "workspace preference rows must cap the rail instead of filling the 820px well"
+  /\.appearance-workspace-subpane\.is-general \.appearance-field-list \{[\s\S]*?width: min\(100%, 32rem\);/,
+  "General fields must be a compact stacked column instead of stretching the 820px well"
 );
-assert.match(
+assert.doesNotMatch(
   stylesheetSource,
-  /\.appearance-workspace-subpane \.appearance-field-row > \.field,[\s\S]*?grid-template-columns: minmax\(10rem, 16rem\) minmax\(0, 1fr\);/,
-  "workspace fields must use a title|control preference-row rail"
+  /\.appearance-workspace-subpane[\s\S]{0,200}\.select \{[\s\S]*?max-width: 36ch/,
+  "General selects must not use the rejected 36ch right-rail cap"
 );
-assert.match(
-  stylesheetSource,
-  /\.appearance-workspace-subpane \.appearance-field-row \.select \{[\s\S]*?max-width: 36ch;[\s\S]*?justify-self: end;/,
-  "general selects must cap at 36ch on the control rail"
-);
-assert.match(
-  stylesheetSource,
-  /\.appearance-workspace-subpane\.is-general \.appearance-field-row\.is-rail-break \{[\s\S]*?border-top:/,
-  "general grouping uses a hairline, not extra settings blocks"
-);
-assert.match(
-  stylesheetSource,
-  /@container appearance-workspace \(max-width: 560px\)[\s\S]*?grid-template-columns: minmax\(0, 1fr\);/,
-  "narrow workspace wells must stack the preference-row rail"
-);
-assert.match(
+assert.doesNotMatch(
   workspaceSource,
-  /appearanceRow\(field\(t\("appearance\.maxColumns"\), columnCount\), "is-rail-break"\)/,
-  "columns opens the workspace-chrome group"
+  /is-rail-break/,
+  "General grouping must not use hairline rail-break rows"
 );
-assert.match(
-  workspaceSource,
-  /appearanceRow\(clickReorderControl, "is-rail-break"\)/,
-  "click-reorder opens the lists group"
+assert.doesNotMatch(
+  stylesheetSource,
+  /@container appearance-workspace/,
+  "General compact column must not depend on a container-query rail"
 );
 assert.match(
   stylesheetSource,

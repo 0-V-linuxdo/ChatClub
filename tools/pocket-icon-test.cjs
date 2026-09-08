@@ -52,11 +52,6 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
     /\.appearance-pocket-icon-options \{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/s,
     "Pocket icon segments must not use stretch 1fr tracks"
   );
-  assert.match(
-    stylesheetSource,
-    /\.appearance-workspace-subpane \.appearance-pocket-icon-options,[\s\S]*?justify-self: end;/,
-    "Pocket segmented control sits on the Workspace control rail"
-  );
   assert.match(pocketSource, /pocket-group-favicons/);
   assert.match(pocketSource, /omitTitle:\s*true/);
   assert.match(

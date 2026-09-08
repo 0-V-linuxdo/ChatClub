@@ -79,13 +79,8 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   );
   assert.match(
     css,
-    /\.appearance-toggle-control \{[^}]*display: grid;[^}]*grid-template-columns: minmax\(0, 1fr\) auto;[^}]*width: 100%;/s,
-    "click-reorder switch sits on the title|control rail instead of hugging copy"
-  );
-  assert.match(
-    css,
-    /\.appearance-workspace-subpane \.appearance-field-row > \.appearance-toggle-control \{[^}]*grid-template-columns: minmax\(10rem, 16rem\) minmax\(0, 1fr\);/s,
-    "General click-reorder shares the Workspace preference-row rail"
+    /\.appearance-toggle-control \{[^}]*display: grid;[^}]*grid-template-columns: minmax\(0, 52ch\) auto;[^}]*width: fit-content;/s,
+    "click-reorder switch must hug copy instead of stretching the General well"
   );
   assert.match(
     css,

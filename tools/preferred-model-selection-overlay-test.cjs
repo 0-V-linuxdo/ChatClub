@@ -114,7 +114,7 @@ assert.equal(operations.length, 9, "the trailing click must not replay the atten
 
 const css = read("styles/chatclub.css");
 assert.match(css, /\.appearance-toggle-control\s*\{[^}]*display: grid;[^}]*cursor: pointer;/s);
-assert.match(css, /\.appearance-toggle-control\s*\{[^}]*width: 100%;[^}]*max-width: 42rem;[^}]*cursor: pointer;/s);
+assert.match(css, /\.appearance-toggle-control\s*\{[^}]*width: fit-content;[^}]*cursor: pointer;/s);
 assert.match(css, /\.appearance-toggle-copy\s*\{[^}]*display: grid;[^}]*max-width: 52ch;/s);
 assert.match(css, /\.appearance-toggle-control input\s*\{[^}]*width: 19px;[^}]*height: 19px;[^}]*accent-color: var\(--primary\);/s);
 assert.doesNotMatch(
