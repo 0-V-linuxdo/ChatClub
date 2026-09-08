@@ -86,12 +86,12 @@ globalThis.document = {
     { href: "https://chatgpt.com/", title: "ChatGPT" },
     { omitTitle: true }
   );
-  assert.match(auto.src, /^https:\/\/chatgpt\.com\/favicon\.ico$/);
+  assert.match(auto.src, /^https:\/\/chatgpt\.com\/favicon\.svg$/);
   assert.equal(auto.dataset.faviconReady, undefined);
   auto.listeners.load[0]({ currentTarget: auto });
   assert.equal(auto.dataset.faviconReady, "1");
   auto.listeners.error[0]({ currentTarget: auto });
-  assert.match(auto.src, /^https:\/\/chatgpt\.com\/favicon\.svg$/);
+  assert.match(auto.src, /^https:\/\/chatgpt\.com\/favicon\.ico$/);
   auto.listeners.error[0]({ currentTarget: auto });
   assert.match(auto.src, /google\.com\/s2\/favicons\?domain=chatgpt\.com/);
   auto.listeners.error[0]({ currentTarget: auto });
@@ -101,13 +101,13 @@ globalThis.document = {
     { href: "https://api.0-0.pro/v1/chat/completions" },
     { omitTitle: true }
   );
-  assert.match(api.src, /^https:\/\/api\.0-0\.pro\/favicon\.ico$/);
-  api.listeners.error[0]({ currentTarget: api });
   assert.match(api.src, /^https:\/\/api\.0-0\.pro\/favicon\.svg$/);
   api.listeners.error[0]({ currentTarget: api });
-  assert.match(api.src, /^https:\/\/0-0\.pro\/favicon\.ico$/);
+  assert.match(api.src, /^https:\/\/api\.0-0\.pro\/favicon\.ico$/);
   api.listeners.error[0]({ currentTarget: api });
   assert.match(api.src, /^https:\/\/0-0\.pro\/favicon\.svg$/);
+  api.listeners.error[0]({ currentTarget: api });
+  assert.match(api.src, /^https:\/\/0-0\.pro\/favicon\.ico$/);
   api.listeners.error[0]({ currentTarget: api });
   assert.match(api.src, /google\.com\/s2\/favicons\?domain=api\.0-0\.pro/);
   api.listeners.error[0]({ currentTarget: api });
@@ -121,11 +121,11 @@ globalThis.document = {
     { href: "https://chat.deepseek.com/" },
     { omitTitle: true }
   );
-  assert.match(deepseek.src, /^https:\/\/chat\.deepseek\.com\/favicon\.ico$/);
-  deepseek.listeners.error[0]({ currentTarget: deepseek });
   assert.match(deepseek.src, /^https:\/\/chat\.deepseek\.com\/favicon\.svg$/);
   deepseek.listeners.error[0]({ currentTarget: deepseek });
-  assert.match(deepseek.src, /^https:\/\/deepseek\.com\/favicon\.ico$/);
+  assert.match(deepseek.src, /^https:\/\/chat\.deepseek\.com\/favicon\.ico$/);
+  deepseek.listeners.error[0]({ currentTarget: deepseek });
+  assert.match(deepseek.src, /^https:\/\/deepseek\.com\/favicon\.svg$/);
 
   const ddgDefault = renderChatFavicon(
     { href: "https://gk.dairoot.cn/" },
@@ -201,6 +201,39 @@ globalThis.document = {
   assert.equal(kept.dataset.faviconMiss, "1");
   assert.equal(kept.dataset.faviconReady, undefined);
   assert.match(String(kept.className), /settings-site-icon-empty/);
+
+  const oversized = renderChatFavicon(
+    { href: "https://0-0.pro/" },
+    {
+      omitTitle: true,
+      siteFaviconUrls: () => ["https://0-0.pro/favicon.ico", "https://icons.duckduckgo.com/ip3/0-0.pro.ico"],
+      networkFaviconUrls: () => []
+    }
+  );
+  oversized.naturalWidth = 1024;
+  oversized.naturalHeight = 1024;
+  oversized.listeners.load[0]({ currentTarget: oversized });
+  assert.notEqual(oversized.dataset.faviconReady, "1");
+  assert.match(oversized.src, /icons\.duckduckgo\.com\/ip3\/0-0\.pro\.ico$/);
+
+  const declaredPng = "https://www.gstatic.com/lamda/images/gemini_sparkle_4g_512_lt.png";
+  const gemini = renderChatFavicon(
+    { href: "https://gemini.google.com/", logoUrl: declaredPng },
+    { omitTitle: true, siteFaviconUrls: () => [], networkFaviconUrls: () => [] }
+  );
+  gemini.naturalWidth = 512;
+  gemini.naturalHeight = 512;
+  gemini.listeners.load[0]({ currentTarget: gemini });
+  assert.equal(gemini.src, declaredPng);
+  assert.equal(gemini.dataset.faviconReady, "1");
+
+  const painted = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg"><circle cx="8" cy="8" r="6"/></svg>');
+  const ring = renderChatFavicon(
+    { href: "https://0-0.pro/", logoUrl: painted },
+    { omitTitle: true, siteFaviconUrls: () => [], networkFaviconUrls: () => [] }
+  );
+  assert.equal(ring.src, painted);
+  assert.equal(ring.dataset.faviconReady, "1");
 
   console.log("sidebar favicons: ok");
 })().then(() => {

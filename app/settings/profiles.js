@@ -168,10 +168,14 @@ export function createProfilesSettingsSection(ctx) {
   }
 
   function profileIconSource(profile, logoUrl = profile?.logoUrl) {
+    const registerUrl = String(profile?.registerUrl || "").trim();
+    const endpoint = String(profile?.endpoint || "").trim();
     return {
-      href: String(profile?.endpoint || profile?.registerUrl || "").trim(),
+      href: registerUrl || endpoint,
       logoUrl: String(logoUrl || "").trim(),
-      skipCatalog: true
+      skipCatalog: true,
+      appId: String(profile?.id || "").trim(),
+      name: String(profile?.name || "").trim()
     };
   }
 

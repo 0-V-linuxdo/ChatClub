@@ -537,6 +537,9 @@ export function createHistoryController(ctx) {
       networkFaviconUrls: faviconPort.networkUrls,
       candidateFaviconUrls: typeof faviconPort.candidates === "function"
         ? (href, logoUrl, options) => faviconPort.candidates(href, logoUrl, options)
+        : undefined,
+      rememberDecodedFavicon: typeof faviconPort.rememberDecoded === "function"
+        ? (href, image) => faviconPort.rememberDecoded(href, image)
         : undefined
     };
   }

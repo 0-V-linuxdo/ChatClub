@@ -1,56 +1,13 @@
 import { el } from "./dom.js";
+import {
+  acceptedDataIcon,
+  isOversizedGuessedRaster,
+  networkFaviconUrls as sharedNetworkFaviconUrls,
+  siteFaviconUrls as sharedSiteFaviconUrls
+} from "../shared/favicon-lookup.js";
 
 const CHAT_FAVICON_STACK_MAX = 4;
 const EMPTY_FAVICON = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg"/>')}`;
-const LOOKUP_HOST_PREFIX_RE = /^(api|ai|www|chat)\./i;
-
-function networkLookupHosts(hostname) {
-  const hosts = [];
-  const push = (value) => {
-    const host = String(value || "").trim().toLowerCase().replace(/\.$/, "");
-    if (host && host.includes(".") && !hosts.includes(host)) hosts.push(host);
-  };
-  const raw = String(hostname || "").trim().toLowerCase();
-  push(raw);
-  push(raw.replace(LOOKUP_HOST_PREFIX_RE, ""));
-  return hosts;
-}
-
-function fallbackSiteFaviconUrls(href) {
-  try {
-    const page = new URL(String(href || ""));
-    if (page.protocol !== "http:" && page.protocol !== "https:") return [];
-    const urls = [];
-    const push = (value) => {
-      if (value && !urls.includes(value)) urls.push(value);
-    };
-    for (const host of networkLookupHosts(page.hostname)) {
-      push(`${page.protocol}//${host}/favicon.ico`);
-      push(`${page.protocol}//${host}/favicon.svg`);
-    }
-    return urls;
-  } catch {
-    return [];
-  }
-}
-
-function fallbackNetworkFaviconUrls(href) {
-  try {
-    const page = new URL(String(href || ""));
-    if (page.protocol !== "http:" && page.protocol !== "https:") return [];
-    const urls = [];
-    const push = (value) => {
-      if (value && !urls.includes(value)) urls.push(value);
-    };
-    for (const host of networkLookupHosts(page.hostname)) {
-      push(`https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64`);
-      push(`https://icons.duckduckgo.com/ip3/${host}.ico`);
-    }
-    return urls;
-  } catch {
-    return [];
-  }
-}
 
 function pushFaviconUrl(urls, value) {
   const url = String(value || "").trim();
@@ -86,11 +43,11 @@ function chatFaviconCandidates(source = {}, deps = {}) {
   }
   const site = typeof deps.siteFaviconUrls === "function"
     ? listedFaviconUrls(deps.siteFaviconUrls(href))
-    : fallbackSiteFaviconUrls(href);
+    : sharedSiteFaviconUrls(href);
   for (const url of site) pushFaviconUrl(urls, url);
   const extra = typeof deps.networkFaviconUrls === "function"
     ? deps.networkFaviconUrls(href)
-    : fallbackNetworkFaviconUrls(href);
+    : sharedNetworkFaviconUrls(href);
   for (const url of listedFaviconUrls(extra)) pushFaviconUrl(urls, url);
   return urls;
 }
@@ -117,7 +74,8 @@ function isDecodedFaviconMiss(image) {
   if (isGenericNetworkFavicon(image)) return true;
   const width = Number(image?.naturalWidth || 0);
   const height = Number(image?.naturalHeight || 0);
-  return width === 1 && height === 1;
+  if (width === 1 && height === 1) return true;
+  return isOversizedGuessedRaster(image?.currentSrc || image?.src, width, height);
 }
 
 function markFaviconReady(image) {
@@ -195,6 +153,8 @@ export function renderChatFavicon(source = {}, deps = {}) {
   const candidates = chatFaviconCandidates(source, deps);
   const initial = candidates[0] || fallbackUrl;
   if (!initial) return null;
+  const readyNow = Boolean(acceptedDataIcon(initial));
+  const usedFallback = !candidates[0] && Boolean(fallbackUrl);
   return el("img", {
     class: deps.className || "chat-favicon",
     alt: "",
@@ -203,7 +163,11 @@ export function renderChatFavicon(source = {}, deps = {}) {
     loading: deps.loading || "lazy",
     decoding: "async",
     referrerpolicy: "no-referrer",
-    dataset: { faviconIndex: "0" },
+    dataset: {
+      faviconIndex: "0",
+      ...(readyNow ? { faviconReady: "1" } : {}),
+      ...(usedFallback ? { fallback: "1" } : {})
+    },
     onload: (event) => {
       const image = event.currentTarget;
       if (isDecodedFaviconMiss(image)) {
@@ -211,6 +175,10 @@ export function renderChatFavicon(source = {}, deps = {}) {
         return;
       }
       markFaviconReady(image);
+      if (image.dataset.faviconMiss === "1" || image.dataset.fallback === "1") return;
+      if (typeof deps.rememberDecodedFavicon === "function" && href) {
+        Promise.resolve(deps.rememberDecodedFavicon(href, image)).catch(() => {});
+      }
     },
     onerror: (event) => advanceFavicon(event.currentTarget, candidates, href, fallbackUrl, deps),
     src: initial

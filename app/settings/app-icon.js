@@ -15,6 +15,9 @@ function faviconDeps(port = {}) {
     candidateFaviconUrls: typeof port.candidates === "function"
       ? (href, logoUrl, options) => port.candidates(href, logoUrl, options)
       : undefined,
+    rememberDecodedFavicon: typeof port.rememberDecoded === "function"
+      ? (href, image) => port.rememberDecoded(href, image)
+      : undefined,
     omitTitle: true,
     loading: "eager",
     keepVisibleOnMiss: true
@@ -55,11 +58,20 @@ export function settingsSiteMark(source = {}, faviconPort = {}) {
   const identity = !skipCatalog && source.app
     ? { app: source.app, appId: source.appId || source.app.id, href: source.href || source.app.url || "" }
     : settingsSiteIdentity(source, skipCatalog ? [] : BUILTIN_CHAT_APPS);
-  const app = skipCatalog ? null : identity.app;
-  const appId = skipCatalog ? "" : String(identity.appId || app?.id || "").trim();
-  const href = String(identity.href || source.href || app?.url || "").trim();
+  const catalogApp = skipCatalog ? null : identity.app;
+  const appId = skipCatalog
+    ? String(source.appId || "").trim()
+    : String(identity.appId || catalogApp?.id || "").trim();
+  const href = String(identity.href || source.href || catalogApp?.url || "").trim();
+  const fallbackApp = catalogApp || (skipCatalog && (href || appId)
+    ? {
+      id: appId || href,
+      url: href,
+      name: String(source.name || source.title || appId || "").trim() || "AI"
+    }
+    : null);
   const image = renderChatFavicon({
-    app,
+    app: fallbackApp,
     appId,
     href,
     logoUrl: String(source.logoUrl || "").trim(),

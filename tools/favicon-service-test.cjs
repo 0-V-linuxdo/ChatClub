@@ -24,6 +24,9 @@ function link(attributes = {}) {
   const { createFaviconService } = await import(
     `${pathToFileURL(path.join(root, "app/favicon/service.js")).href}?test=${Date.now()}`
   );
+  const lookup = await import(
+    `${pathToFileURL(path.join(root, "shared/favicon-lookup.js")).href}?test=${Date.now()}`
+  );
   const create = ({ protocol, permissions = [], pageHtmlLinks = [], options = {} }) => createFaviconService({
     state: { faviconCache: {}, options },
     storageGet: async () => ({}),
@@ -43,7 +46,7 @@ function link(attributes = {}) {
   );
   assert.equal(
     firefox.effective("https://chatgpt.com/"),
-    "https://chatgpt.com/favicon.ico",
+    "https://chatgpt.com/favicon.svg",
     "Firefox auto-fetch must start at the site favicon, not Chromium /_favicon_"
   );
   assert.ok(
@@ -168,6 +171,7 @@ function link(attributes = {}) {
   assert.equal(dataOverridden.overrideUrl("ChatGPT"), dataIcon);
 
   const cacheState = { faviconCache: {}, options: {} };
+  const apiHref = "https://api.0-0.pro/v1/chat/completions";
   const rememberer = createFaviconService({
     state: cacheState,
     storageGet: async () => ({}),
@@ -183,6 +187,17 @@ function link(attributes = {}) {
   assert.deepEqual(cacheState.faviconCache, {}, "Google and DuckDuckGo URLs must not be remembered");
   rememberer.remember("https://chatgpt.com/", cdnIcon);
   assert.equal(cacheState.faviconCache["https://chatgpt.com/"]?.url, cdnIcon);
+  rememberer.remember(apiHref, cdnIcon);
+  assert.equal(
+    cacheState.faviconCache[apiHref],
+    undefined,
+    "API completions paths must not become favicon cache keys"
+  );
+  assert.equal(cacheState.faviconCache["https://api.0-0.pro/"]?.url, cdnIcon);
+  const painted = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg"><circle cx="8" cy="8" r="7"/></svg>');
+  await rememberer.rememberDecoded("https://0-0.pro/", painted);
+  assert.equal(cacheState.faviconCache["blob:0-0.pro"]?.url, painted);
+  assert.equal(rememberer.candidates("https://0-0.pro/")[0], painted, "decoded blobs must outrank guessed site icons");
 
   const svgFile = new File(["<svg xmlns='http://www.w3.org/2000/svg'></svg>"], "icon.svg", { type: "image/svg+xml" });
   const encoded = await rememberer.encodeFile(svgFile);
@@ -195,7 +210,6 @@ function link(attributes = {}) {
   assert.ok(candidates.some((url) => url.includes("google.com/s2/favicons")));
   assert.ok(candidates.includes("https://chatgpt.com/favicon.ico"));
 
-  const apiHref = "https://api.0-0.pro/v1/chat/completions";
   const apiUrls = firefox.networkUrls(apiHref);
   assert.deepEqual(apiUrls, [
     "https://www.google.com/s2/favicons?domain=api.0-0.pro&sz=64",
@@ -204,11 +218,12 @@ function link(attributes = {}) {
     "https://icons.duckduckgo.com/ip3/0-0.pro.ico"
   ]);
   const apiCandidates = firefox.candidates(apiHref);
-  assert.equal(apiCandidates[0], "https://api.0-0.pro/favicon.ico");
-  assert.ok(apiCandidates.includes("https://api.0-0.pro/favicon.svg"));
+  assert.equal(apiCandidates[0], "https://api.0-0.pro/favicon.svg");
+  assert.ok(apiCandidates.includes("https://api.0-0.pro/favicon.ico"));
   assert.ok(apiCandidates.includes("https://0-0.pro/favicon.ico"));
   assert.ok(apiCandidates.includes("https://0-0.pro/favicon.svg"));
   assert.ok(!apiCandidates.some((url) => url.includes("/_favicon/")));
+  assert.ok(apiCandidates.indexOf("https://api.0-0.pro/favicon.svg") < apiCandidates.indexOf("https://api.0-0.pro/favicon.ico"));
   assert.ok(apiCandidates.indexOf("https://api.0-0.pro/favicon.ico") < apiCandidates.indexOf(apiUrls[0]));
   assert.ok(apiCandidates.indexOf("https://www.google.com/s2/favicons?domain=0-0.pro&sz=64") > apiCandidates.indexOf(apiUrls[0]));
 
@@ -223,10 +238,11 @@ function link(attributes = {}) {
   assert.ok(chatCandidates.includes("https://chatgpt.com/favicon.svg"));
 
   const deepseek = firefox.candidates("https://chat.deepseek.com/");
-  assert.equal(deepseek[0], "https://chat.deepseek.com/favicon.ico");
-  assert.ok(deepseek.includes("https://chat.deepseek.com/favicon.svg"));
+  assert.equal(deepseek[0], "https://chat.deepseek.com/favicon.svg");
+  assert.ok(deepseek.includes("https://chat.deepseek.com/favicon.ico"));
   assert.ok(deepseek.includes("https://deepseek.com/favicon.ico"), "chat. must peel to the registrable parent");
   assert.ok(deepseek.includes("https://deepseek.com/favicon.svg"));
+  assert.ok(deepseek.indexOf("https://chat.deepseek.com/favicon.svg") < deepseek.indexOf("https://chat.deepseek.com/favicon.ico"));
   assert.ok(deepseek.indexOf("https://deepseek.com/favicon.ico") < deepseek.findIndex((url) => url.includes("google.com/s2/favicons")));
   assert.ok(!deepseek.some((url) => url.includes("/_favicon/")));
 
@@ -283,6 +299,114 @@ function link(attributes = {}) {
     })]
   });
   assert.equal(await dataDeclared.discover("https://0-0.pro/"), "", "HTML data: placeholder icons must not be remembered");
+  const paintedDeclared = create({
+    protocol: "moz-extension:",
+    pageHtmlLinks: [link({
+      rel: "icon",
+      href: painted,
+      type: "image/svg+xml"
+    })]
+  });
+  assert.equal(
+    await paintedDeclared.discover("https://0-0.pro/register"),
+    painted,
+    "painted HTTPS-page data: SVG icons must be accepted"
+  );
+
+  function pngBytes(width, height) {
+    const bytes = new Uint8Array(24);
+    bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
+    bytes[16] = (width >>> 24) & 255;
+    bytes[17] = (width >>> 16) & 255;
+    bytes[18] = (width >>> 8) & 255;
+    bytes[19] = width & 255;
+    bytes[20] = (height >>> 24) & 255;
+    bytes[21] = (height >>> 16) & 255;
+    bytes[22] = (height >>> 8) & 255;
+    bytes[23] = height & 255;
+    return bytes;
+  }
+
+  function icoWithPng(width, height) {
+    const png = pngBytes(width, height);
+    const header = new Uint8Array(22);
+    header[2] = 1;
+    header[4] = 1;
+    header[18] = 22;
+    const out = new Uint8Array(22 + png.length);
+    out.set(header, 0);
+    out.set(png, 22);
+    return out;
+  }
+
+  assert.equal(lookup.rasterPixelSize(icoWithPng(1024, 1024)).width, 1024);
+  assert.equal(lookup.isOversizedGuessedRaster("https://0-0.pro/favicon.ico", 1024, 1024), true);
+  assert.equal(
+    lookup.isOversizedGuessedRaster("https://www.gstatic.com/lamda/images/gemini_sparkle_4g_512_lt.png", 512, 512),
+    false,
+    "declared CDN PNGs must not be treated as guessed favicons"
+  );
+  assert.equal(lookup.acceptedDataIcon("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3C/svg%3E"), "");
+  assert.equal(lookup.acceptedDataIcon(painted), painted);
+
+  const oversizedFetched = [];
+  const oversized = createFaviconService({
+    state: { faviconCache: {}, options: {} },
+    storageGet: async () => ({}),
+    storageSet: async () => {},
+    runtimeGetUrl: (value) => runtimeUrl("moz-extension:", value),
+    runtimeGetManifest: () => ({ permissions: [] }),
+    inferAppName: (app) => app?.name || "Example",
+    fetchPage: async (url) => {
+      oversizedFetched.push(String(url));
+      if (String(url).endsWith("/favicon.ico")) {
+        const body = icoWithPng(1024, 1024);
+        return {
+          ok: true,
+          headers: { get: () => "image/x-icon" },
+          arrayBuffer: async () => body,
+          text: async () => ""
+        };
+      }
+      if (String(url).endsWith("/favicon.svg")) {
+        return { ok: false, headers: { get: () => "text/html" }, text: async () => "" };
+      }
+      return { ok: true, headers: { get: () => "text/html" }, text: async () => "<html></html>" };
+    },
+    parseHtml: () => ({ querySelectorAll: () => [] })
+  });
+  assert.equal(
+    await oversized.discover("https://0-0.pro/"),
+    "",
+    "guessed /favicon.ico rasters at 512px or larger must not be remembered"
+  );
+  assert.ok(oversizedFetched.includes("https://0-0.pro/favicon.ico"));
+
+  const migratedState = { faviconCache: {}, options: {} };
+  const migrator = createFaviconService({
+    state: migratedState,
+    storageGet: async (key) => {
+      if (key === "chatclub.faviconCache.v4") {
+        return {
+          "https://chatgpt.com/": { url: cdnIcon, updatedAt: 1 },
+          "https://0-0.pro/": { url: "https://0-0.pro/favicon.ico", updatedAt: 2 },
+          "https://chatgpt.com/ddg": { url: "https://icons.duckduckgo.com/ip3/chatgpt.com.ico", updatedAt: 3 }
+        };
+      }
+      return {};
+    },
+    storageSet: async () => {},
+    runtimeGetUrl: (value) => runtimeUrl("moz-extension:", value),
+    runtimeGetManifest: () => ({ permissions: [] }),
+    inferAppName: (app) => app?.name || "Example",
+    fetchPage: async () => ({ ok: true, text: async () => "<html></html>" }),
+    parseHtml: () => ({ querySelectorAll: () => [] })
+  });
+  await migrator.load();
+  assert.equal(migratedState.faviconCache["https://chatgpt.com/"]?.url, cdnIcon);
+  assert.equal(migratedState.faviconCache["https://0-0.pro/"], undefined, "v4 guessed ico pointers must not become v5 blobs");
+  assert.equal(migratedState.faviconCache["https://chatgpt.com/ddg"], undefined);
+  assert.match(fs.readFileSync(path.join(root, "app/favicon/service.js"), "utf8"), /chatclub\.faviconCache\.v5/);
 
   function listenerHub() {
     const listeners = [];
