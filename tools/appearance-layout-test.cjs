@@ -79,13 +79,13 @@ assert.match(
 );
 assert.match(
   stylesheetSource,
-  /\.appearance-workspace-subpane\.is-general \.appearance-toggle-control \{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\);[\s\S]*?gap:\s*6px;/,
-  "General click-reorder must stack like a field instead of stretching a far-right checkbox"
+  /\.appearance-toggle-control \{[^}]*grid-template-columns: minmax\(0, 52ch\) auto;[^}]*width: fit-content;/,
+  "click-reorder switch stays to the right of its copy and hugs that copy"
 );
-assert.match(
+assert.doesNotMatch(
   stylesheetSource,
-  /\.appearance-workspace-subpane\.is-general \.appearance-toggle-control input \{[\s\S]*?justify-self:\s*start;/,
-  "General click-reorder switch must sit under the title, aligned with left selects"
+  /\.appearance-workspace-subpane\.is-general \.appearance-toggle-control \{[\s\S]*?width:\s*100%/,
+  "General click-reorder must not stretch the checkbox to the far edge of the well"
 );
 assert.match(
   workspaceSource,

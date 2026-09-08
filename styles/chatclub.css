@@ -3983,24 +3983,6 @@ body.tab-gesture-active * {
   min-width: 0;
 }
 
-.appearance-workspace-subpane.is-general .appearance-toggle-control {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 6px;
-  width: 100%;
-  max-width: none;
-  align-items: start;
-}
-
-.appearance-workspace-subpane.is-general .appearance-toggle-copy {
-  max-width: none;
-}
-
-.appearance-workspace-subpane.is-general .appearance-toggle-control input {
-  justify-self: start;
-  margin: 0;
-}
-
 @container (max-width: 560px) {
   .appearance-workspace-subpane.is-general .appearance-field-list {
     grid-template-columns: minmax(0, 1fr);
