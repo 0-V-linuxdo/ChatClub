@@ -8137,19 +8137,42 @@ html:not([data-settings-click-reorder="always"]) .settings-reorder:focus-within 
   object-fit: contain;
   flex: 0 0 auto;
   background: var(--panel-2);
-  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.settings-site-icon:not([data-favicon-ready]),
+.settings-site-icon-preview:not([data-favicon-ready]),
+.settings-site-icon[data-favicon-miss],
+.settings-site-icon-preview[data-favicon-miss],
+.settings-site-icon-empty {
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--primary) 12%, var(--panel-2));
+}
+
+.settings-site-icon:not([data-favicon-ready]),
+.settings-site-icon-preview:not([data-favicon-ready]) {
+  animation: settings-site-icon-pending 1.2s ease-in-out infinite;
 }
 
 .settings-site-icon[data-favicon-ready]:not([data-favicon-miss]),
 .settings-site-icon-preview[data-favicon-ready]:not([data-favicon-miss]) {
   background: transparent;
   box-shadow: none;
+  border-radius: var(--ui-radius-xs);
 }
 
 .settings-site-icon-empty {
   display: block;
-  background: var(--panel-2);
-  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+@keyframes settings-site-icon-pending {
+  50% { opacity: 0.62; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-site-icon:not([data-favicon-ready]),
+  .settings-site-icon-preview:not([data-favicon-ready]) {
+    animation: none;
+  }
 }
 
 .settings-icon-field,
