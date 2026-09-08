@@ -8185,10 +8185,14 @@ html:not([data-settings-click-reorder="always"]) .settings-reorder:focus-within 
   gap: var(--space-2);
   width: 100%;
   min-width: 0;
+  flex: 1 1 auto;
 }
 
 .settings-icon-advanced > summary {
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  min-height: var(--settings-control-height);
   color: var(--text);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
@@ -8197,6 +8201,23 @@ html:not([data-settings-click-reorder="always"]) .settings-reorder:focus-within 
 .settings-icon-advanced > summary:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
+}
+
+.api-profile-icon-field {
+  align-items: stretch;
+  width: 100%;
+}
+
+.api-profile-icon-field .settings-icon-field-row {
+  align-items: flex-start;
+  width: 100%;
+}
+
+.settings-icon-field-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 0 0 auto;
 }
 
 .settings-muted-cell {
@@ -8880,6 +8901,7 @@ html:not([data-settings-click-reorder="always"]) .settings-reorder:focus-within 
 
 .api-profile-models-field {
   min-width: 0;
+  align-content: start;
 }
 
 .api-profile-models-hint {

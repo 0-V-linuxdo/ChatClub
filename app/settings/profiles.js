@@ -637,16 +637,18 @@ export function createProfilesSettingsSection(ctx) {
             field(t("profiles.provider"), nameInput),
             field(t("profiles.endpoint"), endpointInput),
             field(t("profiles.apiKey"), secret.node),
-            el("div", { class: "settings-icon-field" },
+            el("div", { class: "settings-icon-field api-profile-icon-field" },
               el("div", { class: "settings-icon-field-row" },
-                button(t("apps.iconRefresh"), () => { void refreshIcon(); }),
-                button(t("apps.iconRestore"), restoreIcon)
-              ),
-              el("details", { class: "settings-icon-advanced" },
-                el("summary", { class: "settings-icon-field-label" }, t("apps.icon")),
-                field(t("apps.iconUrl"), logoInput),
-                field(t("apps.iconUpload"), fileInput),
-                el("p", { class: "settings-icon-help" }, t("apps.iconHelp"))
+                el("details", { class: "settings-icon-advanced" },
+                  el("summary", { class: "settings-icon-field-label" }, t("apps.icon")),
+                  field(t("apps.iconUrl"), logoInput),
+                  field(t("apps.iconUpload"), fileInput),
+                  el("p", { class: "settings-icon-help" }, t("apps.iconHelp"))
+                ),
+                el("div", { class: "settings-icon-field-actions" },
+                  button(t("apps.iconRefresh"), () => { void refreshIcon(); }),
+                  button(t("apps.iconRestore"), restoreIcon)
+                )
               )
             )
           ),

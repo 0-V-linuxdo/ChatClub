@@ -498,8 +498,8 @@ const en = {
 
   "profiles.manage": "Manage reusable API providers for Optimize, Summary, and topic titles.",
   "profiles.add": "Add Provider",
-  "profiles.edit": "Edit Provider",
-  "profiles.addTitle": "Add Provider",
+  "profiles.edit": "Edit Provider:",
+  "profiles.addTitle": "Add Provider:",
   "profiles.provider": "Provider",
   "profiles.providerName": "Provider name",
   "profiles.model": "Model",
@@ -1906,8 +1906,8 @@ const zh_CN = {
 
   "profiles.manage": "管理 Optimize、Summary 和话题标题可复用的 API 服务商。",
   "profiles.add": "添加服务商",
-  "profiles.edit": "编辑服务商",
-  "profiles.addTitle": "添加服务商",
+  "profiles.edit": "编辑服务商：",
+  "profiles.addTitle": "添加服务商：",
   "profiles.provider": "服务商",
   "profiles.providerName": "服务商名称",
   "profiles.model": "模型",
