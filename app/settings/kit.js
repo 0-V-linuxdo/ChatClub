@@ -42,11 +42,11 @@ function bindSettingsClickReorderPath() {
   if (settingsClickReorderPathBound || typeof document === "undefined") return;
   settingsClickReorderPathBound = true;
   document.addEventListener("pointerdown", (event) => {
-    const row = event.target?.closest?.(".settings-list-row");
+    const cluster = event.target?.closest?.(".settings-reorder");
     document.querySelectorAll(".settings-reorder-click-path").forEach((node) => {
-      if (node !== row) node.classList.remove("settings-reorder-click-path");
+      if (node !== cluster) node.classList.remove("settings-reorder-click-path");
     });
-    row?.classList.add("settings-reorder-click-path");
+    cluster?.classList.add("settings-reorder-click-path");
   });
 }
 

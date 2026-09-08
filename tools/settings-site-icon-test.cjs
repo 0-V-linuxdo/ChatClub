@@ -87,8 +87,10 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   const budgets = JSON.parse(read("tools/native-entry-budgets.json"));
 
   assert.match(apps, /createAppIconControls/);
-  assert.match(apps, /appIcons\.nameCell/);
+  assert.match(apps, /appIcons\.identityCells/);
   assert.match(apps, /appIcons\.editorField/);
+  assert.match(iconEditor, /function identityCells/);
+  assert.match(iconEditor, /function markCell/);
   assert.match(iconEditor, /editorModal/);
   assert.match(iconEditor, /faviconPort\.encodeFile/);
   assert.match(iconEditor, /faviconPort\.refresh/);

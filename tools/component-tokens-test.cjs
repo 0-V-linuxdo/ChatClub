@@ -50,6 +50,7 @@ const tokens = {
   "--ui-compact-height": "var(--settings-action-size)",
   "--ui-chrome-height": "34px",
   "--ui-reorder-cluster": "calc(var(--settings-control-height) + (var(--target-min) * 2) + 8px)",
+  "--settings-site-mark": "calc(var(--target-min) + var(--space-1))",
   "--ui-radius-xs": "4px",
   "--ui-radius-tab": "5px",
   "--ui-radius-nested": "6px",
@@ -173,6 +174,7 @@ assert.match(agents, /do not reintroduce 560–780 outliers/);
 assert.match(agents, /--ui-compact-height/);
 assert.match(agents, /--ui-chrome-height/);
 assert.match(agents, /--ui-reorder-cluster/);
+assert.match(agents, /--settings-site-mark/);
 assert.match(agents, /--font-size-display/);
 assert.match(agents, /WCAG 2\.5\.7/);
 assert.match(agents, /--control-selected/);

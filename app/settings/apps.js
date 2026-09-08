@@ -160,7 +160,7 @@ export function createAppsSettingsSection(ctx) {
     return el("div", { class: "settings-apps-tab-panel" },
       settingsPaneToolbar(t("apps.builtInManage")),
       settingsList([
-        "", t("apps.platformName"), t("apps.platformUrl"), t("apps.imagePasteStrategy"), t("apps.action")
+        "", "", t("apps.platformName"), t("apps.platformUrl"), t("apps.imagePasteStrategy"), t("apps.action")
       ], rows, "settings-manager-list built-in-config-list")
     );
   }
@@ -192,7 +192,7 @@ export function createAppsSettingsSection(ctx) {
           toast(t("toast.builtinAppOrderSaved"), "success");
         }
       }),
-      appIcons.nameCell(app, displayAppName(app), redraw),
+      ...appIcons.identityCells(app, displayAppName(app), redraw),
       el("a", { class: "settings-url-link", href: app.url, target: "_blank", rel: "noreferrer" }, app.url),
       el("span", { class: "settings-strategy-cell" }, builtInImagePasteStrategyLabel(app)),
       el("div", { class: "settings-row-action-group" },
@@ -940,7 +940,7 @@ export function createAppsSettingsSection(ctx) {
         settingsPrimaryAction(t("apps.add"), "plus", () => openCustomEditor(null, redraw))
       ),
       settingsList([
-        "", t("apps.platformName"), t("apps.platformUrl"), t("apps.imagePasteStrategy"), t("apps.action")
+        "", "", t("apps.platformName"), t("apps.platformUrl"), t("apps.imagePasteStrategy"), t("apps.action")
       ], rows, "settings-manager-list custom-config-list")
     );
   }
@@ -966,7 +966,7 @@ export function createAppsSettingsSection(ctx) {
           });
         }
       }),
-      appIcons.nameCell(app, displayAppName(app), redraw),
+      ...appIcons.identityCells(app, displayAppName(app), redraw),
       el("a", { class: "settings-url-link", href: app.url, target: "_blank", rel: "noreferrer" }, app.url),
       el("span", { class: "settings-strategy-cell" }, imagePasteStrategyLabel(app.imagePasteStrategy)),
       el("div", { class: "settings-row-action-group" },

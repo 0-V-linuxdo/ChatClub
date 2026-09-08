@@ -54,8 +54,9 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   const kit = read("app/settings/kit.js");
   assert.match(kit, /function settingsReorderHandle/);
   assert.match(kit, /createReorderButtons/);
-  assert.match(kit, /bindSettingsClickReorderPath/);
-  assert.match(kit, /settings-reorder-click-path/);
+  assert.match(kit, /function bindSettingsClickReorderPath/);
+  assert.match(kit, /closest\?\.\("\.settings-reorder"\)/);
+  assert.doesNotMatch(kit, /closest\?\.\("\.settings-list-row"\)/);
 
   const appearance = read("app/settings/appearance.js");
   assert.match(appearance, /settingsClickReorderButtonsEnabled: nextEnabled/);
@@ -67,8 +68,15 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
 
   const css = read("styles/chatclub.css");
   assert.match(css, /html:not\(\[data-settings-click-reorder="always"\]\) \{\s*--ui-reorder-cluster: var\(--settings-control-height\);/s);
-  assert.match(css, /settings-list-row:focus-within .settings-reorder .ui-reorder/);
-  assert.match(css, /settings-reorder-click-path .settings-reorder .ui-reorder/);
+  assert.match(css, /settings-list:has\(\.settings-reorder:focus-within\)/);
+  assert.match(css, /settings-list:has\(\.settings-reorder-click-path\)/);
+  assert.match(css, /settings-reorder:focus-within \.ui-reorder/);
+  assert.match(css, /settings-reorder\.settings-reorder-click-path \.ui-reorder/);
+  assert.doesNotMatch(css, /settings-list-row:focus-within \.settings-reorder \.ui-reorder/);
+  assert.doesNotMatch(
+    css,
+    /html:not\(\[data-settings-click-reorder="always"\]\)[^{]*\.settings-list-row \.settings-reorder \.ui-reorder \{[^}]*position:\s*absolute/s
+  );
 
   console.log("settings click reorder: ok");
 })().catch((event) => {

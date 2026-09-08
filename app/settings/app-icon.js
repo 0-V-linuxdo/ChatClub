@@ -90,25 +90,36 @@ export function createAppIconControls({
     return settingsSiteMark({ app }, faviconPort);
   }
 
-  function nameCell(app, name, redraw) {
+  function markButton(app, redraw) {
     const label = t("apps.changeIcon");
+    return el("button", {
+      class: "settings-site-icon-button",
+      type: "button",
+      "aria-label": label,
+      "data-tooltip": label,
+      "data-tooltip-id": "settings.apps.changeIcon",
+      draggable: "false",
+      onpointerdown: (event) => event.stopPropagation(),
+      onclick: (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openEditor(app, redraw);
+      }
+    }, iconImage(app));
+  }
+
+  function markCell(app, redraw) {
+    return el("div", { class: "settings-site-mark-cell" }, markButton(app, redraw));
+  }
+
+  function nameCell(_app, name) {
     return el("div", { class: "settings-main-cell settings-name-cell" },
-      el("button", {
-        class: "settings-site-icon-button",
-        type: "button",
-        "aria-label": label,
-        "data-tooltip": label,
-        "data-tooltip-id": "settings.apps.changeIcon",
-        draggable: "false",
-        onpointerdown: (event) => event.stopPropagation(),
-        onclick: (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          openEditor(app, redraw);
-        }
-      }, iconImage(app)),
       el("strong", {}, name)
     );
+  }
+
+  function identityCells(app, name, redraw) {
+    return [markCell(app, redraw), nameCell(app, name)];
   }
 
   function editorField(app, redraw) {
@@ -213,5 +224,5 @@ export function createAppIconControls({
     dialog.querySelector(".modal")?.classList.add("settings-editor-modal", "settings-icon-editor-modal");
   }
 
-  return Object.freeze({ mark, nameCell, editorField, openEditor });
+  return Object.freeze({ mark, markCell, nameCell, identityCells, editorField, openEditor });
 }
