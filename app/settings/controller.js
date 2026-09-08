@@ -210,7 +210,8 @@ export function createSettingsController(ctx) {
     saveOptionsPatch: sectionOptionsPatch("Apps settings section", SECTION_OPTION_KEYS.apps),
     reconcileAppCatalog,
     syncSummaryPanel,
-    syncWorkspaceDom
+    syncWorkspaceDom,
+    faviconPort: ctx.faviconPort
   });
   const modelsSection = createModelsSettingsSection({
     state: settingsSections.models,

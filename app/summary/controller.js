@@ -8,6 +8,7 @@ import { summaryConfigHasCollector } from "../../shared/summary-sites.js";
 import { conversationHrefFromLocation } from "../../shared/workspace-tab-memory.js";
 import { createActionButton } from "../../ui/components.js";
 import { el, iconButton, textarea } from "../../ui/dom.js";
+import { renderChatFavicon } from "../../ui/favicon.js";
 import { optionalControllerFunction, optionalControllerObject, requireControllerContext, requireControllerFunction, validateControllerContract } from "../controller-contract.js";
 import { createFrameRequest } from "../frame-request.js";
 import { renderMarkdown } from "./markdown.js";
@@ -171,56 +172,18 @@ export function createSummaryController(ctx) {
     return summarySourceMetaModel(source, { effectiveFaviconUrl });
   }
 
-  function googleFaviconUrl(href) {
-    try {
-      const pageUrl = new URL(String(href || ""), location.href);
-      if (pageUrl.protocol !== "http:" && pageUrl.protocol !== "https:") return "";
-      const iconUrl = new URL("https://www.google.com/s2/favicons");
-      iconUrl.searchParams.set("domain", pageUrl.hostname);
-      iconUrl.searchParams.set("sz", "64");
-      return iconUrl.href;
-    } catch {
-      return "";
-    }
-  }
-  
   function renderSummarySourceIcon(meta) {
     const icon = el("div", {
       class: `summary-source-icon summary-preview-source-logo summary-source-icon-${meta.id}`,
       title: `${meta.brand} icon`,
       "aria-label": `${meta.brand} icon`
     });
-    const initialLogoUrl = meta.logoUrl || browserFaviconUrl(meta.href) || googleFaviconUrl(meta.href);
-    if (initialLogoUrl) {
-      icon.append(el("img", {
-        class: "summary-source-favicon",
-        src: initialLogoUrl,
-        alt: "",
-        loading: "lazy",
-        decoding: "async",
-        referrerpolicy: "no-referrer",
-        onerror: (event) => {
-          const image = event.currentTarget;
-          if (image.dataset.browserFallback !== "1") {
-            const browserUrl = browserFaviconUrl(meta.href || meta.logoUrl);
-            image.dataset.browserFallback = "1";
-            if (browserUrl && image.src !== browserUrl) {
-              image.src = browserUrl;
-              return;
-            }
-          }
-          if (image.dataset.googleFallback !== "1") {
-            const googleUrl = googleFaviconUrl(meta.href || meta.logoUrl);
-            image.dataset.googleFallback = "1";
-            if (googleUrl && image.src !== googleUrl) {
-              image.src = googleUrl;
-              return;
-            }
-          }
-          image.hidden = true;
-        }
-      }));
-    }
+    const image = renderChatFavicon({
+      href: meta.href, logoUrl: meta.logoUrl, appId: meta.id, title: meta.brand
+    }, {
+      effectiveFaviconUrl, browserFaviconUrl, className: "summary-source-favicon", omitTitle: true
+    });
+    if (image) icon.append(image);
     return icon;
   }
   

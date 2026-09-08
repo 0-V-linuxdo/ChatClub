@@ -12,6 +12,7 @@ import {
 } from "../controller-contract.js";
 import {
   uniqueChatFaviconSources,
+  renderChatFavicon,
   renderChatFaviconStack
 } from "../../ui/favicon.js";
 import { renderMarkdown } from "../summary/markdown.js";
@@ -520,28 +521,20 @@ export function createHistoryController(ctx) {
     }
   }
 
-  function googleFaviconUrl(href = "") {
-    try {
-      const page = new URL(String(href || ""));
-      if (page.protocol !== "http:" && page.protocol !== "https:") return "";
-      const iconUrl = new URL("https://www.google.com/s2/favicons");
-      iconUrl.searchParams.set("domain", page.hostname);
-      iconUrl.searchParams.set("sz", "64");
-      return iconUrl.href;
-    } catch {
-      return "";
-    }
+  function historyLogoUrl(href = "", logoUrl = "", appId = "") {
+    const stored = String(logoUrl || "").trim();
+    if (stored.startsWith("data:image/")) return stored;
+    return String(faviconPort.effective?.(href, stored, { appId }) || stored);
   }
 
-  function historyLogoUrl(href = "", logoUrl = "") {
-    const stored = String(logoUrl || "").trim();
-    if (stored && !stored.includes("/_favicon/")) return stored;
-    const pageHref = String(href || "").trim();
-    const effective = typeof faviconPort.effective === "function"
-      ? String(faviconPort.effective(pageHref, stored) || "").trim()
-      : "";
-    if (effective && !effective.includes("/_favicon/")) return effective;
-    return googleFaviconUrl(pageHref) || effective || stored;
+  function historyFaviconDeps() {
+    return {
+      appFaviconUrl: faviconPort.app,
+      effectiveFaviconUrl: faviconPort.effective,
+      fallbackFaviconUrl: faviconPort.fallback,
+      browserFaviconUrl: faviconPort.browserUrl || faviconPort.browser,
+      networkFaviconUrls: faviconPort.networkUrls
+    };
   }
 
   function pageFaviconSources(pages = []) {
@@ -549,7 +542,7 @@ export function createHistoryController(ctx) {
       const href = page?.href || page?.url || "";
       return {
         href,
-        logoUrl: historyLogoUrl(href, page?.logoUrl || ""),
+        logoUrl: historyLogoUrl(href, page?.logoUrl || "", page?.appId || ""),
         appId: page?.appId || href,
         title: page?.siteName || page?.name || page?.title || ""
       };
@@ -558,7 +551,7 @@ export function createHistoryController(ctx) {
 
   function pageFavicons(pages = [], stackClass = "") {
     return renderChatFaviconStack(pageFaviconSources(pages), {
-      effectiveFaviconUrl: faviconPort.effective,
+      ...historyFaviconDeps(),
       omitTitle: true,
       stackClass
     });
@@ -677,31 +670,13 @@ export function createHistoryController(ctx) {
   }
 
   function historyEntryFavicon(entry = {}) {
-    const chatUrl = String(entry.chatUrl || "");
-    const resolved = historyLogoUrl(chatUrl, entry.logoUrl || "");
-    if (!resolved) return svgIcon("history");
-    return el("img", {
-      class: "pocket-entry-favicon",
-      src: resolved,
-      alt: "",
-      loading: "lazy",
-      decoding: "async",
-      referrerpolicy: "no-referrer",
-      onerror: (event) => {
-        const image = event.currentTarget;
-        if (image.dataset.google === "1") {
-          image.hidden = true;
-          return;
-        }
-        image.dataset.google = "1";
-        const googleUrl = googleFaviconUrl(chatUrl);
-        if (googleUrl && image.src !== googleUrl) {
-          image.src = googleUrl;
-          return;
-        }
-        image.hidden = true;
-      }
-    });
+    return renderChatFavicon({
+      href: entry.chatUrl || "",
+      logoUrl: entry.logoUrl || "",
+      appId: entry.appId || "",
+      title: ""
+    }, { ...historyFaviconDeps(), className: "pocket-entry-favicon", omitTitle: true })
+      || svgIcon("history");
   }
 
   function historyEntryRow(entry, options = {}) {

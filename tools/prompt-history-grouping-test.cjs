@@ -552,10 +552,11 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   assert.match(panelSource, /ui-card pocket-entry prompt-history-conversation/);
   assert.match(panelSource, /pocket-shared-user-message/);
   assert.match(panelSource, /pocket-entry-cluster-merged/);
-  assert.match(panelSource, /class: "pocket-entry-favicon"/);
+  assert.match(panelSource, /className:\s*"pocket-entry-favicon"/);
   assert.match(panelSource, /renderMarkdown/);
   assert.match(panelSource, /pocket-message-markdown summary-preview-text-markdown/);
-  assert.match(panelSource, /www\.google\.com\/s2\/favicons/);
+  assert.match(panelSource, /renderChatFavicon/);
+  assert.doesNotMatch(panelSource, /www\.google\.com\/s2\/favicons/);
   assert.doesNotMatch(panelSource, /faviconPort\.appById/);
   assert.match(panelSource, /pocket-message-copy/);
   assert.match(panelSource, /copyHistoryMessage/);

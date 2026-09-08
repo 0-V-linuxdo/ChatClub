@@ -49,6 +49,7 @@ globalThis.document = {
 (async () => {
   const {
     uniqueChatFaviconSources,
+    renderChatFavicon,
     renderChatFaviconStack
   } = await import(pathToFileURL(path.join(root, "ui/favicon.js")).href);
 
@@ -80,6 +81,14 @@ globalThis.document = {
     { effectiveFaviconUrl: (href) => href, omitTitle: true }
   );
   assert.equal(untitled.children[0].attributes.title, "");
+
+  const auto = renderChatFavicon(
+    { href: "https://chatgpt.com/", title: "ChatGPT" },
+    { omitTitle: true }
+  );
+  assert.match(auto.src, /icons\.duckduckgo\.com\/ip3\/chatgpt\.com\.ico$/);
+  auto.listeners.error[0]({ currentTarget: auto });
+  assert.match(auto.src, /google\.com\/s2\/favicons/);
 
   console.log("sidebar favicons: ok");
 })().then(() => {

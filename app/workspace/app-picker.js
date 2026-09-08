@@ -12,6 +12,7 @@ import {
 } from "../../shared/app-picker-order.js";
 import { createReorderButtons } from "../../ui/components.js";
 import { el } from "../../ui/dom.js";
+import { renderChatFavicon } from "../../ui/favicon.js";
 import { appPickerHostKeys } from "./app-hosts.js";
 
 const PICKER_DRAG_DISTANCE = 6;
@@ -110,31 +111,9 @@ export function renderAppPickerColumns({
   let activeDrag = null;
 
   function renderFavicon(app) {
-    const image = el("img", {
-      class: "app-picker-favicon",
-      src: appFaviconUrl(app) || fallbackFaviconUrl(app),
-      alt: "",
-      draggable: "false",
-      loading: "lazy",
-      decoding: "async",
-      referrerpolicy: "no-referrer",
-      onerror: (event) => {
-        const icon = event.currentTarget;
-        if (icon.dataset.browserFallback !== "1") {
-          const browserUrl = browserFaviconUrl(app.url);
-          icon.dataset.browserFallback = "1";
-          if (browserUrl && icon.src !== browserUrl) {
-            icon.src = browserUrl;
-            return;
-          }
-        }
-        if (icon.dataset.fallback === "1") return;
-        icon.dataset.fallback = "1";
-        icon.src = fallbackFaviconUrl(app);
-      }
+    return renderChatFavicon({ app, href: app?.url || "", title: inferAppName(app) }, {
+      appFaviconUrl, browserFaviconUrl, fallbackFaviconUrl, className: "app-picker-favicon"
     });
-    image.title = inferAppName(app);
-    return image;
   }
 
   async function selectApp(event, app) {

@@ -837,30 +837,28 @@ export function createWorkspaceFrameController(dependencies = {}) {
     if (!instanceId) return;
     const app = frameApp(iframe);
     let href = app.url;
-    let logoUrl = "";
+    let declared = "";
     try {
       const meta = await sendToContentFrame(iframe, "getPageMeta", {}, 1800);
       href = meta?.href || href;
+      declared = String(meta?.logoUrl || "");
       rememberFrameLocation(iframe, { href, title: meta?.title });
-      logoUrl = effectiveFaviconUrl(href, meta?.logoUrl) || "";
-    } catch {
-      logoUrl = effectiveFaviconUrl(href);
-    }
+    } catch {}
     const discoveredLogoUrl = await discoverDeclaredFaviconUrl(href);
-    if (discoveredLogoUrl) logoUrl = discoveredLogoUrl;
     // Favicon discovery can outlive a same-document SPA navigation. Never let
     // its captured href roll the frame location back to the pre-navigation URL.
     if (iframe.isConnected && (!iframe.dataset.currentHref || iframe.dataset.currentHref === href)) {
       rememberFrameLocation(iframe, { href });
     }
-    if (logoUrl) {
-      rememberFaviconUrl(href, logoUrl);
-      if (app.url && app.url !== href) rememberFaviconUrl(app.url, logoUrl);
+    for (const logo of [declared, discoveredLogoUrl]) {
+      if (!logo) continue;
+      rememberFaviconUrl(href, logo);
+      if (app.url && app.url !== href) rememberFaviconUrl(app.url, logo);
     }
+    const logoUrl = effectiveFaviconUrl(href, declared, { appId: app?.id }) || discoveredLogoUrl || "";
     const image = document.querySelector(`.tab[data-instance-id="${instanceId}"] .tab-favicon`);
     if (!image || !logoUrl) return;
-    image.dataset.browserFallback = "0";
-    image.dataset.fallback = "0";
+    image.dataset.browserFallback = image.dataset.fallback = image.dataset.faviconIndex = "0";
     image.hidden = false;
     image.src = logoUrl;
   }

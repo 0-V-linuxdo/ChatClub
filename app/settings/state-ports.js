@@ -31,7 +31,7 @@ export const SETTINGS_OPTION_CAPABILITIES = Object.freeze({
       "topicTitleApiProfileId", "topicTitleApiModel"
     ]
   ),
-  apps: optionCapability(["builtinChatAppOrder", "builtinChatAppIframeConfigs", "iframePermissionsSource"]),
+  apps: optionCapability(["builtinChatAppOrder", "builtinChatAppIframeConfigs", "iframePermissionsSource", "appIcons"]),
   models: optionCapability([
     "modelPreferenceFailureOverrides", "modelPreferenceFailurePolicy", "modelPreferenceOrder", "modelPreferences"
   ]),

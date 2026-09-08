@@ -622,6 +622,7 @@ export function createAppearanceSettingsSection(ctx) {
       "settings.modal.close": "x",
       "settings.profiles.promotion": "external",
       "settings.action.view": "preview",
+      "settings.apps.changeIcon": "edit",
       "settings.action.edit": "edit",
       "settings.action.duplicate": "copy",
       "settings.action.delete": "trash",

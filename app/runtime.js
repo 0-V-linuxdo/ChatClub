@@ -275,18 +275,12 @@ function syncI18nLanguage() {
 }
 
 const faviconService = createFaviconService({
-  state: featureState.favicon,
-  storageGet,
-  storageSet,
-  runtimeGetUrl,
-  inferAppName
+  state: featureState.favicon, storageGet, storageSet, runtimeGetUrl, inferAppName
 });
-const browserFaviconUrl = faviconService.browserUrl;
-const discoverDeclaredFaviconUrl = faviconService.discover;
-const rememberFaviconUrl = faviconService.remember;
-const effectiveFaviconUrl = faviconService.effective;
-const appFaviconUrl = faviconService.app;
-const fallbackFaviconUrl = faviconService.fallback;
+const {
+  browserUrl: browserFaviconUrl, discover: discoverDeclaredFaviconUrl, remember: rememberFaviconUrl,
+  effective: effectiveFaviconUrl, app: appFaviconUrl, fallback: fallbackFaviconUrl
+} = faviconService;
 
 const appContext = Object.freeze({
   state: featureState.optimize, svgIcon, syncPromptInputNode, recordFunctionalAnomaly
@@ -513,13 +507,7 @@ function ensureHistoryController() {
             loadFullText: () => loadWorkspaceTabFullTextStore(),
             collectLive: () => ensureSummaryController().then((summary) => summary.collectWorkspacePreviewItems())
           },
-          faviconPort: {
-            app: appFaviconUrl,
-            browser: browserFaviconUrl,
-            fallback: fallbackFaviconUrl,
-            effective: effectiveFaviconUrl,
-            appById
-          },
+          faviconPort: { ...faviconService, appById },
           workspacePort: {
             loadEntry: workspaceController.loadPocketEntryInFrame,
             setFramePointerBlocked: workspaceController.setFramePointerBlockedForOverlay
@@ -655,7 +643,7 @@ function ensureSettingsController() {
           functionalAnomalyLog: functionalAnomalyController,
           hydrateImportedLayoutIfNeeded: workspaceController.hydrateImportedLayoutIfNeeded,
           reconcileAppCatalog: workspaceController.reconcileAppCatalog,
-          enterTopbarEditMode,
+          enterTopbarEditMode, faviconPort: faviconService,
           openTabUrl: workspaceController.openTabUrl, persistWorkspaceSession: () => workspaceController.persistWorkspaceSession(),
           refreshWorkspaceTabs: () => workspaceTabsSidebarController.refresh(), requestBackground
         });

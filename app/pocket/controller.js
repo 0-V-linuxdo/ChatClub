@@ -7,6 +7,7 @@ import { requireControllerContext, requireControllerFunction, validateController
 import { renderMarkdown } from "../summary/markdown.js";
 import {
   uniqueChatFaviconSources,
+  renderChatFavicon,
   renderChatFaviconStack
 } from "../../ui/favicon.js";
 import {
@@ -526,30 +527,13 @@ export function createPocketController(ctx) {
   }
 
   function pocketEntryFavicon(entry) {
-    const logoUrl = entry.logoUrl || effectiveFaviconUrl(entry.chatUrl || "");
-    if (!logoUrl) return svgIcon(pocketDisplayIcon());
-    return el("img", {
-      class: "pocket-entry-favicon",
-      src: logoUrl,
-      alt: "",
-      loading: "lazy",
-      decoding: "async",
-      referrerpolicy: "no-referrer",
-      onerror: (event) => {
-        const image = event.currentTarget;
-        if (image.dataset.fallback === "1") {
-          image.hidden = true;
-          return;
-        }
-        image.dataset.fallback = "1";
-        const fallbackUrl = effectiveFaviconUrl(entry.chatUrl || "");
-        if (fallbackUrl && image.src !== fallbackUrl) {
-          image.src = fallbackUrl;
-          return;
-        }
-        image.hidden = true;
-      }
-    });
+    return renderChatFavicon({
+      href: entry.chatUrl || "",
+      logoUrl: entry.logoUrl || "",
+      appId: entry.appId || "",
+      title: ""
+    }, { effectiveFaviconUrl, className: "pocket-entry-favicon", omitTitle: true })
+      || svgIcon(pocketDisplayIcon());
   }
 
   function pocketMessageSection(role, text) {

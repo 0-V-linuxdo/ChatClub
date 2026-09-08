@@ -2,6 +2,7 @@ import { TAB_GROUP_HEADER_BUTTONS } from "../../shared/constants.js";
 import { t } from "../../shared/i18n.js";
 import { normalizeTabGroupButtonOrder, normalizeTabGroupButtonPlacement } from "../../shared/storage-schema.js";
 import { bindLinearMenuKeyboard, claimTopmostPopoverEscape, el, isChatFrameNode, scheduleFrameOwnedBlurDismissal } from "../../ui/dom.js";
+import { renderChatFavicon } from "../../ui/favicon.js";
 import { createReorderButtons } from "../../ui/components.js";
 import { buildAppPickerSections, renderAppPickerColumns } from "./app-picker.js";
 import { workspaceGridColumnCount } from "./model.js";
@@ -496,28 +497,8 @@ export function createWorkspaceViewController(dependencies = {}) {
         }
       }
     },
-      el("img", {
-        class: "tab-favicon",
-        src: appFaviconUrl(app) || fallbackFaviconUrl(app),
-        alt: "",
-        draggable: "false",
-        loading: "lazy",
-        decoding: "async",
-        referrerpolicy: "no-referrer",
-        onerror: (event) => {
-          const image = event.currentTarget;
-          if (image.dataset.browserFallback !== "1") {
-            const browserUrl = browserFaviconUrl(app.url);
-            image.dataset.browserFallback = "1";
-            if (browserUrl && image.src !== browserUrl) {
-              image.src = browserUrl;
-              return;
-            }
-          }
-          if (image.dataset.fallback === "1") return;
-          image.dataset.fallback = "1";
-          image.src = fallbackFaviconUrl(app);
-        }
+      renderChatFavicon({ app, href: app?.url || "", title: name }, {
+        appFaviconUrl, browserFaviconUrl, fallbackFaviconUrl, className: "tab-favicon", omitTitle: true
       }),
       el("span", { class: "tab-label" }, name),
       el("button", {

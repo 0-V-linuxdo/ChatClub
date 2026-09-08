@@ -1,5 +1,39 @@
 const FAVICON_CACHE_KEY = "chatclub.faviconCache.v4";
 const FAVICON_CACHE_MAX_ENTRIES = 240;
+const APP_ICON_DATA_MAX_CHARS = 65536;
+const APP_ICON_RASTER_SIZE = 128;
+const APP_ICON_DATA_RE = /^data:image\/(?:png|jpeg|jpg|webp|svg\+xml|x-icon|vnd\.microsoft\.icon)[;,]/i;
+
+function networkFaviconUrls(href) {
+  try {
+    const page = new URL(String(href || ""));
+    if (page.protocol !== "http:" && page.protocol !== "https:") return [];
+    const host = page.hostname;
+    return [
+      `https://icons.duckduckgo.com/ip3/${host}.ico`,
+      `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64`
+    ];
+  } catch {
+    return [];
+  }
+}
+
+function isNetworkFavicon(url) {
+  try {
+    const parsed = new URL(String(url || ""));
+    if (parsed.hostname === "icons.duckduckgo.com") return true;
+    return parsed.hostname === "www.google.com" && parsed.pathname.startsWith("/s2/favicons");
+  } catch {
+    return false;
+  }
+}
+
+function bytesToDataUrl(type, bytes) {
+  const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  let binary = "";
+  for (let index = 0; index < view.length; index += 1) binary += String.fromCharCode(view[index]);
+  return `data:${type};base64,${btoa(binary)}`;
+}
 
 export function createFaviconService(dependencies) {
   const {
@@ -61,7 +95,7 @@ export function createFaviconService(dependencies) {
     const next = {};
     for (const [key, entry] of Object.entries(value)) {
       const url = typeof entry === "string" ? entry : entry?.url;
-      if (!url) continue;
+      if (!url || isNetworkFavicon(url)) continue;
       next[key] = { url: String(url), updatedAt: Number(entry?.updatedAt || 0) || 0 };
     }
     return next;
@@ -73,7 +107,22 @@ export function createFaviconService(dependencies) {
     const icon = page && pageUrl(logoUrl, page.href);
     if (!page || !icon || icon.username || icon.password) return false;
     if (page.protocol === "https:" && icon.protocol !== "https:") return false;
+    if (isNetworkFavicon(icon.href)) return false;
     return true;
+  }
+
+  function overrideUrl(appId) {
+    const entry = state.options?.appIcons?.[String(appId || "").trim()];
+    const value = String(entry?.value || "").trim();
+    if (!value) return "";
+    if (entry?.srcType === "data") return APP_ICON_DATA_RE.test(value) ? value : "";
+    if (entry?.srcType !== "url") return "";
+    try {
+      const url = new URL(value);
+      return url.protocol === "https:" && !url.username && !url.password ? url.href : "";
+    } catch {
+      return "";
+    }
   }
 
   function chooseDeclared(doc, href) {
@@ -116,7 +165,7 @@ export function createFaviconService(dependencies) {
   }
 
   function remember(href, logoUrl) {
-    if (!String(logoUrl || "").trim()) return;
+    if (!String(logoUrl || "").trim() || isNetworkFavicon(logoUrl)) return;
     const icon = pageUrl(logoUrl, href);
     if (!icon || !siteIcon(href, icon.href)) return;
     const keys = cacheKeys(href);
@@ -154,10 +203,39 @@ export function createFaviconService(dependencies) {
     return promise;
   }
 
-  function effective(href, declaredLogoUrl = "") {
-    const declared = String(declaredLogoUrl || "").trim() ? pageUrl(declaredLogoUrl, href) : null;
-    if (declared && siteIcon(href, declared.href)) return declared.href;
-    return cached(href) || browserUrl(href);
+  function forget(href) {
+    const keys = cacheKeys(href);
+    if (!keys.length) return;
+    for (const key of keys) delete state.faviconCache[key];
+    const page = pageUrl(href);
+    if (page) discoveryPromises.delete(page.origin);
+    persistSoon();
+  }
+
+  async function refresh(href) {
+    forget(href);
+    return discover(href);
+  }
+
+  function candidates(href, declaredLogoUrl = "", options = {}) {
+    const urls = [];
+    const push = (value) => {
+      const url = String(value || "").trim();
+      if (url && !urls.includes(url)) urls.push(url);
+    };
+    push(overrideUrl(options.appId));
+    const declared = String(declaredLogoUrl || "").trim();
+    if (declared && APP_ICON_DATA_RE.test(declared)) push(declared);
+    const declaredPage = declared ? pageUrl(declared, href) : null;
+    if (declaredPage && siteIcon(href, declaredPage.href)) push(declaredPage.href);
+    push(cached(href));
+    push(browserUrl(href));
+    for (const url of networkFaviconUrls(href)) push(url);
+    return urls;
+  }
+
+  function effective(href, declaredLogoUrl = "", options = {}) {
+    return candidates(href, declaredLogoUrl, options)[0] || "";
   }
 
   function fallback(app) {
@@ -165,6 +243,42 @@ export function createFaviconService(dependencies) {
     const hue = Array.from(String(app?.id || app?.url || label)).reduce((sum, char) => sum + char.charCodeAt(0), 0) % 360;
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="hsl(${hue} 48% 36%)"/><text x="16" y="21" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" font-weight="800" fill="white">${label}</text></svg>`;
     return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+  }
+
+  async function encodeFile(file) {
+    if (!file) return "";
+    const type = String(file.type || "").toLowerCase().replace("image/jpg", "image/jpeg");
+    if (!/^image\/(?:png|jpeg|webp|svg\+xml|x-icon|vnd\.microsoft\.icon)$/.test(type)) return "";
+    const buffer = await file.arrayBuffer();
+    if (type === "image/svg+xml") {
+      const url = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(new TextDecoder().decode(buffer))}`;
+      return url.length <= APP_ICON_DATA_MAX_CHARS ? url : "";
+    }
+    try {
+      if (typeof createImageBitmap === "function") {
+        const bitmap = await createImageBitmap(file);
+        const size = APP_ICON_RASTER_SIZE;
+        const canvas = typeof OffscreenCanvas === "function"
+          ? new OffscreenCanvas(size, size)
+          : Object.assign(document.createElement("canvas"), { width: size, height: size });
+        const context = canvas.getContext("2d");
+        const scale = Math.min(size / Math.max(bitmap.width, 1), size / Math.max(bitmap.height, 1), 1);
+        const width = Math.max(1, Math.round(bitmap.width * scale));
+        const height = Math.max(1, Math.round(bitmap.height * scale));
+        context.clearRect(0, 0, size, size);
+        context.drawImage(bitmap, Math.floor((size - width) / 2), Math.floor((size - height) / 2), width, height);
+        bitmap.close?.();
+        const blob = canvas.convertToBlob
+          ? await canvas.convertToBlob({ type: "image/png" })
+          : await new Promise((resolve) => { canvas.toBlob(resolve, "image/png"); });
+        if (blob) {
+          const png = bytesToDataUrl("image/png", await blob.arrayBuffer());
+          if (png.length <= APP_ICON_DATA_MAX_CHARS) return png;
+        }
+      }
+    } catch {}
+    const raw = bytesToDataUrl(type, buffer);
+    return raw.length <= APP_ICON_DATA_MAX_CHARS ? raw : "";
   }
 
   async function load() {
@@ -177,8 +291,14 @@ export function createFaviconService(dependencies) {
     browserUrl,
     discover,
     remember,
+    refresh,
+    forget,
     effective,
-    app: (app) => effective(app?.url || ""),
+    candidates,
+    overrideUrl,
+    networkUrls: networkFaviconUrls,
+    encodeFile,
+    app: (app) => effective(app?.url || "", "", { appId: app?.id }),
     fallback
   });
 }

@@ -7120,6 +7120,12 @@ body.settings-tab-context-menu-dragging iframe {
   font-size: var(--font-size-sm);
 }
 
+.iframe-permission-hosts {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 .iframe-permission-editor-modal {
   width: min(1120px, calc(100vw - 40px));
 }
@@ -8090,6 +8096,75 @@ html:not([data-settings-click-reorder="always"]) .settings-reorder:focus-within 
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.settings-name-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.settings-name-cell > strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-site-icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: var(--target-min);
+  height: var(--target-min);
+  padding: 0;
+  border: 0;
+  border-radius: var(--ui-radius-xs);
+  background: transparent;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.settings-site-icon,
+.settings-site-icon-preview {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--ui-radius-xs);
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+
+.settings-site-icon-empty {
+  display: block;
+  background: var(--panel-2);
+}
+
+.settings-icon-field,
+.settings-icon-field-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.settings-icon-field {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.settings-icon-preview {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border: 1px solid var(--line);
+  border-radius: var(--ui-radius);
+  background: var(--panel);
+}
+
+.settings-icon-preview .settings-site-icon-preview {
+  width: 32px;
+  height: 32px;
 }
 
 .settings-muted-cell {

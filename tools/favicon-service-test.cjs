@@ -24,8 +24,8 @@ function link(attributes = {}) {
   const { createFaviconService } = await import(
     `${pathToFileURL(path.join(root, "app/favicon/service.js")).href}?test=${Date.now()}`
   );
-  const create = ({ protocol, permissions = [], pageHtmlLinks = [] }) => createFaviconService({
-    state: { faviconCache: {} },
+  const create = ({ protocol, permissions = [], pageHtmlLinks = [], options = {} }) => createFaviconService({
+    state: { faviconCache: {}, options },
     storageGet: async () => ({}),
     storageSet: async () => {},
     runtimeGetUrl: (value) => runtimeUrl(protocol, value),
@@ -41,7 +41,15 @@ function link(attributes = {}) {
     "",
     "Firefox must not synthesize Chromium's private /_favicon endpoint"
   );
-  assert.equal(firefox.effective("https://chatgpt.com/"), "");
+  assert.match(
+    firefox.effective("https://chatgpt.com/"),
+    /icons\.duckduckgo\.com\/ip3\/chatgpt\.com\.ico$/,
+    "Firefox auto-fetch must start at DuckDuckGo, not Chromium /_favicon_"
+  );
+  assert.ok(
+    firefox.networkUrls("https://chatgpt.com/").includes("https://www.google.com/s2/favicons?domain=chatgpt.com&sz=64"),
+    "Google s2 must stay a network candidate, never the only path"
+  );
 
   const chromium = create({ protocol: "chrome-extension:", permissions: ["favicon"] });
   const chromiumUrl = new URL(chromium.browserUrl("https://chatgpt.com/"));
@@ -66,12 +74,12 @@ function link(attributes = {}) {
     cdnIcon,
     "an HTTPS page must reject a downgraded declared icon"
   );
-  assert.equal(
+  assert.doesNotMatch(
     create({ protocol: "moz-extension:" }).effective(
       "https://chatgpt.com/",
       "https://user:secret@cdn.example.com/icon.png"
     ),
-    "",
+    /user:secret/,
     "credential-bearing icon URLs must fail closed"
   );
 
@@ -131,6 +139,57 @@ function link(attributes = {}) {
     "untouched",
     "workspace tabs must not restore a page-declared URL rejected by the favicon service"
   );
+  const overrideIcon = "https://cdn.example.com/custom-icon.png";
+  const overridden = create({
+    protocol: "moz-extension:",
+    options: { appIcons: { ChatGPT: { srcType: "url", value: overrideIcon } } }
+  });
+  assert.equal(
+    overridden.effective("https://chatgpt.com/", cdnIcon, { appId: "ChatGPT" }),
+    overrideIcon,
+    "a user override must outrank a declared HTTPS icon"
+  );
+  assert.equal(overridden.app({ id: "ChatGPT", url: "https://chatgpt.com/" }), overrideIcon);
+  assert.equal(
+    overridden.effective("https://chatgpt.com/", cdnIcon),
+    cdnIcon,
+    "effective() stays backward compatible when appId is omitted"
+  );
+
+  const dataIcon = "data:image/png;base64,AAAA";
+  const dataOverridden = create({
+    protocol: "moz-extension:",
+    options: { appIcons: { ChatGPT: { srcType: "data", value: dataIcon } } }
+  });
+  assert.equal(dataOverridden.overrideUrl("ChatGPT"), dataIcon);
+
+  const cacheState = { faviconCache: {}, options: {} };
+  const rememberer = createFaviconService({
+    state: cacheState,
+    storageGet: async () => ({}),
+    storageSet: async () => {},
+    runtimeGetUrl: (value) => runtimeUrl("moz-extension:", value),
+    runtimeGetManifest: () => ({ permissions: [] }),
+    inferAppName: (app) => app?.name || "Example",
+    fetchPage: async () => ({ ok: true, text: async () => "<html></html>" }),
+    parseHtml: () => ({ querySelectorAll: () => [] })
+  });
+  rememberer.remember("https://chatgpt.com/", rememberer.networkUrls("https://chatgpt.com/")[0]);
+  rememberer.remember("https://chatgpt.com/", "https://www.google.com/s2/favicons?domain=chatgpt.com&sz=64");
+  assert.deepEqual(cacheState.faviconCache, {}, "Google and DuckDuckGo URLs must not be remembered");
+  rememberer.remember("https://chatgpt.com/", cdnIcon);
+  assert.equal(cacheState.faviconCache["https://chatgpt.com/"]?.url, cdnIcon);
+
+  const svgFile = new File(["<svg xmlns='http://www.w3.org/2000/svg'></svg>"], "icon.svg", { type: "image/svg+xml" });
+  const encoded = await rememberer.encodeFile(svgFile);
+  assert.match(encoded, /^data:image\/svg\+xml/);
+  assert.equal(await rememberer.encodeFile(new File(["nope"], "icon.txt", { type: "text/plain" })), "");
+
+  const candidates = overridden.candidates("https://chatgpt.com/", "", { appId: "ChatGPT" });
+  assert.equal(candidates[0], overrideIcon);
+  assert.ok(candidates.some((url) => url.includes("duckduckgo.com")));
+  assert.ok(candidates.some((url) => url.includes("google.com/s2/favicons")));
+
   console.log("Favicon service browser-target and declared-icon checks passed.");
 })().catch((error) => {
   console.error(error);

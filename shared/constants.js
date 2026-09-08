@@ -11,7 +11,7 @@ import {
 import { NOTION_MODEL_PREFERENCE_TARGETS } from "./notion-models.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-09-08｜13:54:15」";
+export const APP_VERSION = "「2026-09-08｜15:21:42」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -335,6 +335,7 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
       Object.freeze({ id: "settings.modal.close", labelKey: "common.close" }),
       Object.freeze({ id: "settings.profiles.promotion", labelKey: "profiles.openPromotionChannel" }),
       Object.freeze({ id: "settings.action.view", labelKey: "apps.viewDetails" }),
+      Object.freeze({ id: "settings.apps.changeIcon", labelKey: "apps.changeIcon" }),
       Object.freeze({ id: "settings.action.edit", labelKey: "common.edit" }),
       Object.freeze({ id: "settings.action.duplicate", labelKey: "profiles.duplicate" }),
       Object.freeze({ id: "settings.action.delete", labelKey: "common.delete" }),
@@ -480,6 +481,7 @@ export const DEFAULT_OPTIONS = {
   modelPreferenceFailurePolicy: DEFAULT_MODEL_PREFERENCE_FAILURE_POLICY,
   modelPreferenceFailureOverrides: DEFAULT_MODEL_PREFERENCE_FAILURE_OVERRIDES,
   builtinChatAppIframeConfigs: {},
+  appIcons: {},
   iframePermissionsSource: "builtIn",
   messageNavigatorEffectMode: "border",
   recordFullText: false,

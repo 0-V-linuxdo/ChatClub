@@ -37,6 +37,7 @@ import {
   moveListItem,
   moveListItemByDelta
 } from "./kit.js";
+import { createAppIconControls } from "./app-icon.js";
 import { requireSettingsSectionStatePort } from "./section-contract.js";
 import {
   requireControllerContext,
@@ -85,6 +86,9 @@ export function createAppsSettingsSection(ctx) {
     settingsPaneToolbar,
     settingsPrimaryAction
   } = createSettingsKit({ svgIcon });
+  const appIcons = createAppIconControls({
+    state, saveOptionsPatch, syncWorkspaceDom, faviconPort: ctx.faviconPort
+  });
 
   function imagePasteStrategyOptions() {
     return [
@@ -188,7 +192,7 @@ export function createAppsSettingsSection(ctx) {
           toast(t("toast.builtinAppOrderSaved"), "success");
         }
       }),
-      el("strong", { class: "settings-main-cell" }, displayAppName(app)),
+      appIcons.nameCell(app, displayAppName(app), redraw),
       el("a", { class: "settings-url-link", href: app.url, target: "_blank", rel: "noreferrer" }, app.url),
       el("span", { class: "settings-strategy-cell" }, builtInImagePasteStrategyLabel(app)),
       el("div", { class: "settings-row-action-group" },
@@ -305,7 +309,7 @@ export function createAppsSettingsSection(ctx) {
           });
         }
       }),
-      el("span", { class: "iframe-permission-hosts", title: iframeAppHostsText(app, "\n") }, iframeAppHostsText(app)),
+      el("span", { class: "iframe-permission-hosts", title: iframeAppHostsText(app, "\n") }, appIcons.mark(app), iframeAppHostsText(app)),
       el("span", { class: "iframe-permission-summary", title: iframeAttributeSummary(app, source) }, iframeAttributeSummary(app, source)),
       el("span", { class: `iframe-permission-status ${overridden ? "is-overridden" : "is-default"}` },
         overridden ? t("apps.iframe.overridden") : t("apps.iframe.usingDefault")
@@ -863,6 +867,7 @@ export function createAppsSettingsSection(ctx) {
     dialog = viewerModal(t("apps.builtInDetailsTitle", { name: displayAppName(app) }),
       el("div", { class: "settings-editor-form built-in-detail-form" },
         el("div", { class: "settings-dialog-grid built-in-detail-grid" },
+          appIcons.editorField(app),
           detailField(t("apps.platformName"), detailValue(displayAppName(app))),
           detailField(t("apps.provider"), detailValue(app.provider || t("apps.default"))),
           detailField(t("apps.platformUrl"),
@@ -961,7 +966,7 @@ export function createAppsSettingsSection(ctx) {
           });
         }
       }),
-      el("strong", { class: "settings-main-cell" }, displayAppName(app)),
+      appIcons.nameCell(app, displayAppName(app), redraw),
       el("a", { class: "settings-url-link", href: app.url, target: "_blank", rel: "noreferrer" }, app.url),
       el("span", { class: "settings-strategy-cell" }, imagePasteStrategyLabel(app.imagePasteStrategy)),
       el("div", { class: "settings-row-action-group" },
@@ -1150,6 +1155,7 @@ export function createAppsSettingsSection(ctx) {
     dialog = editorModal(editing ? t("apps.editTitle") : t("apps.addTitle"),
       el("div", { class: "settings-editor-form" },
         el("div", { class: "settings-dialog-grid" },
+          appIcons.editorField(draft, redraw),
           field(t("apps.platformName"), nameInput),
           field(t("apps.provider"), providerInput),
           el("label", { class: "field" },

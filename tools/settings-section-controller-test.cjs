@@ -602,7 +602,7 @@ globalThis.document = { addEventListener() {} };
   );
   assert.deepEqual(
     settingsStateModule.SETTINGS_OPTION_CAPABILITIES.apps.write,
-    ["builtinChatAppOrder", "builtinChatAppIframeConfigs", "iframePermissionsSource"],
+    ["builtinChatAppOrder", "builtinChatAppIframeConfigs", "iframePermissionsSource", "appIcons"],
     "Apps state and persistence enforcement must share one option capability"
   );
   assert.deepEqual(

@@ -1118,6 +1118,7 @@ export function normalizeOptions(raw = {}) {
       raw.builtinChatAppIframeConfigs,
       BUILTIN_CHAT_APPS.map((app) => app.id)
     ),
+    appIcons: normalizeAppIcons(raw.appIcons),
     iframePermissionsSource: raw.iframePermissionsSource === "custom" ? "custom" : "builtIn",
     modelPreferences: normalizeModelPreferences(raw.modelPreferences),
     modelPreferenceOrder: normalizeModelPreferenceOrder(raw.modelPreferenceOrder),
@@ -1315,6 +1316,29 @@ export function normalizePocketHistory(raw = []) {
 
 export function normalizeShortcutConfig(raw = {}) {
   return normalizeShortcutShape(raw);
+}
+
+const APP_ICON_DATA_MAX_CHARS = 65536;
+const APP_ICON_DATA_RE = /^data:image\/(?:png|jpeg|jpg|webp|svg\+xml|x-icon|vnd\.microsoft\.icon)[;,]/i;
+
+export function normalizeAppIcons(raw = {}) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const next = {};
+  for (const [id, entry] of Object.entries(raw)) {
+    const appId = String(id || "").trim();
+    const value = String(entry?.value || "").trim();
+    if (!appId || !value) continue;
+    if (entry?.srcType === "data") {
+      if (APP_ICON_DATA_RE.test(value) && value.length <= APP_ICON_DATA_MAX_CHARS) next[appId] = { srcType: "data", value };
+      continue;
+    }
+    if (entry?.srcType !== "url") continue;
+    try {
+      const url = new URL(value);
+      if (url.protocol === "https:" && !url.username && !url.password) next[appId] = { srcType: "url", value: url.href };
+    } catch {}
+  }
+  return next;
 }
 
 export function normalizePromptImagePasteStrategy(value, fallback = PROMPT_IMAGE_PASTE_STRATEGY_SEQUENTIAL) {

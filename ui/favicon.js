@@ -2,19 +2,43 @@ import { el } from "./dom.js";
 
 const CHAT_FAVICON_STACK_MAX = 4;
 
-function chatFaviconSrc(source = {}, deps = {}) {
-  const href = String(source.href || source.url || "").trim();
+function fallbackNetworkFaviconUrls(href) {
+  try {
+    const page = new URL(String(href || ""));
+    if (page.protocol !== "http:" && page.protocol !== "https:") return [];
+    const host = page.hostname;
+    return [
+      `https://icons.duckduckgo.com/ip3/${host}.ico`,
+      `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64`
+    ];
+  } catch {
+    return [];
+  }
+}
+
+function pushFaviconUrl(urls, value) {
+  const url = String(value || "").trim();
+  if (url && !urls.includes(url)) urls.push(url);
+  return urls;
+}
+
+function chatFaviconCandidates(source = {}, deps = {}) {
+  const href = String(source.href || source.url || source.app?.url || "").trim();
   const logoUrl = String(source.logoUrl || "").trim();
   const app = source.app;
-  if (app && typeof deps.appFaviconUrl === "function") {
-    const url = String(deps.appFaviconUrl(app) || "").trim();
-    if (url) return url;
-  }
+  const appId = source.appId || app?.id;
+  const urls = [];
+  if (app && typeof deps.appFaviconUrl === "function") pushFaviconUrl(urls, deps.appFaviconUrl(app));
   if (typeof deps.effectiveFaviconUrl === "function") {
-    const url = String(deps.effectiveFaviconUrl(href, logoUrl) || "").trim();
-    if (url) return url;
+    pushFaviconUrl(urls, deps.effectiveFaviconUrl(href, logoUrl, { appId }));
+  } else {
+    pushFaviconUrl(urls, logoUrl);
   }
-  return logoUrl;
+  const extra = typeof deps.networkFaviconUrls === "function"
+    ? deps.networkFaviconUrls(href)
+    : fallbackNetworkFaviconUrls(href);
+  for (const url of Array.isArray(extra) ? extra : [extra]) pushFaviconUrl(urls, url);
+  return urls;
 }
 
 export function uniqueChatFaviconSources(items = [], resolve) {
@@ -31,13 +55,14 @@ export function uniqueChatFaviconSources(items = [], resolve) {
   return sources;
 }
 
-function renderChatFavicon(source = {}, deps = {}) {
+export function renderChatFavicon(source = {}, deps = {}) {
   const href = String(source.href || source.url || source.app?.url || "").trim();
   const app = source.app;
   const fallbackUrl = app && typeof deps.fallbackFaviconUrl === "function"
     ? String(deps.fallbackFaviconUrl(app) || "").trim()
     : "";
-  const initial = chatFaviconSrc(source, deps) || fallbackUrl;
+  const candidates = chatFaviconCandidates(source, deps);
+  const initial = candidates[0] || fallbackUrl;
   if (!initial) return null;
   return el("img", {
     class: deps.className || "chat-favicon",
@@ -48,13 +73,22 @@ function renderChatFavicon(source = {}, deps = {}) {
     loading: "lazy",
     decoding: "async",
     referrerpolicy: "no-referrer",
+    dataset: { faviconIndex: "0" },
     onerror: (event) => {
       const image = event.currentTarget;
-      if (image.dataset.browserFallback !== "1") {
+      let index = Number(image.dataset.faviconIndex || 0) + 1;
+      while (index < candidates.length) {
+        const next = candidates[index];
+        index += 1;
+        if (next && image.src !== next) {
+          image.dataset.faviconIndex = String(index - 1);
+          image.src = next;
+          return;
+        }
+      }
+      if (typeof deps.browserFaviconUrl === "function" && image.dataset.browserFallback !== "1") {
         image.dataset.browserFallback = "1";
-        const browserUrl = typeof deps.browserFaviconUrl === "function"
-          ? String(deps.browserFaviconUrl(href) || "").trim()
-          : "";
+        const browserUrl = String(deps.browserFaviconUrl(href) || "").trim();
         if (browserUrl && image.src !== browserUrl) {
           image.src = browserUrl;
           return;

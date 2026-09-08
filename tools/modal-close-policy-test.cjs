@@ -579,7 +579,7 @@ function event(type, properties = {}) {
     const allAppSource = appSources.join("\n");
     const wrapperNames = ["editorModal", "viewerModal", "taskModal", "confirmationModal", "openConfirmationAction"];
     const expectedInventory = new Map([
-      ["editorModal", 11],
+      ["editorModal", 12],
       ["viewerModal", 5],
       ["taskModal", 1],
       ["confirmationModal", 0],
@@ -599,8 +599,8 @@ function event(type, properties = {}) {
       wrapperNames.reduce((total, wrapperName) => (
         total + occurrences(allAppSource, new RegExp(`\\b${wrapperName}\\s*\\(`, "g"))
       ), 0),
-      32,
-      "all thirty-two app overlay call sites must use a typed wrapper or openConfirmationAction"
+      33,
+      "all thirty-three app overlay call sites must use a typed wrapper or openConfirmationAction"
     );
 
     for (let index = 0; index < appFiles.length; index += 1) {
@@ -621,6 +621,7 @@ function event(type, properties = {}) {
       ["app/settings/controller.js", "openSettings", "editorModal", "Settings"],
       ["app/settings/profiles.js", "openEditor", "editorModal", "API profile editor"],
       ["app/settings/apps.js", "openCustomEditor", "editorModal", "custom platform editor"],
+      ["app/settings/app-icon.js", "openEditor", "editorModal", "site icon editor"],
       ["app/settings/apps.js", "openIframePermissionEditor", "editorModal", "iframe permission editor"],
       ["app/settings/prompt-templates.js", "openPromptTemplateEditor", "editorModal", "prompt template editor"],
       ["app/settings/summary.js", "openSummaryCollectorEditor", "editorModal", "Summary collector editor"],

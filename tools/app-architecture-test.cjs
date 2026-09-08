@@ -163,7 +163,7 @@ function appDomain(file) {
     ["app/history/controller.js", "createHistoryController", [
       "insert", "remove", "headerSearch", "renderHistory", "saveItemToPocket", "sidebar",
       "refreshConversationSources", "conversationPages", "conversationTurn", "historyEntryFavicon",
-      "historyEntryRow", "historyEntryCluster", "historyLogoUrl", "googleFaviconUrl",
+      "historyEntryRow", "historyEntryCluster", "historyLogoUrl", "historyFaviconDeps",
       "applyWorkspacePreview", "syncHistoryModalHeader", "installHistoryPanelHeader", "historyHeaderActions",
       "attachHistoryPanelResize", "toggleHistoryPanelFullscreen", "toggleHistoryPanelFocusMode",
       "historySizeControls", "loadHistoryEntry", "copyHistoryMessage"
