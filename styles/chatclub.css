@@ -3964,10 +3964,32 @@ body.tab-gesture-active * {
 
 .appearance-workspace-subpane {
   min-width: 0;
+  container-type: inline-size;
 }
 
 .appearance-workspace-subpane.is-general .appearance-field-list {
-  width: min(100%, 32rem);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 18px 28px;
+  width: 100%;
+  align-items: start;
+}
+
+.appearance-workspace-subpane.is-general .appearance-general-col {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.appearance-workspace-subpane.is-general .appearance-toggle-control {
+  width: 100%;
+  max-width: none;
+}
+
+@container (max-width: 560px) {
+  .appearance-workspace-subpane.is-general .appearance-field-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .appearance-workspace-subpane.is-color .appearance-color-control {

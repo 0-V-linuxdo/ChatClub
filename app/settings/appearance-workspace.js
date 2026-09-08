@@ -20,15 +20,20 @@ export function createAppearanceWorkspacePane({
   themeMode
 }) {
   const appearanceRow = (node) => el("div", { class: "appearance-field-row" }, node);
+  const generalCol = (...rows) => el("div", { class: "appearance-general-col" }, ...rows);
   const generalBlock = () => settingsBlock(
     t("appearance.workspaceGeneral"),
     t("appearance.workspaceGeneralTabDesc"),
     el("div", { class: "appearance-field-list" },
-      appearanceRow(field(t("appearance.themeMode"), themeMode)),
-      appearanceRow(field(t("appearance.language"), language)),
-      appearanceRow(field(t("appearance.maxColumns"), columnCount)),
-      appearanceRow(pocketIconControl),
-      clickReorderControl ? appearanceRow(clickReorderControl) : null
+      generalCol(
+        appearanceRow(field(t("appearance.themeMode"), themeMode)),
+        appearanceRow(field(t("appearance.language"), language)),
+        appearanceRow(field(t("appearance.maxColumns"), columnCount))
+      ),
+      generalCol(
+        appearanceRow(pocketIconControl),
+        clickReorderControl ? appearanceRow(clickReorderControl) : null
+      )
     )
   );
   const colorBlock = () => settingsBlock(

@@ -69,8 +69,18 @@ assert.match(
 );
 assert.match(
   stylesheetSource,
-  /\.appearance-workspace-subpane\.is-general \.appearance-field-list \{[\s\S]*?width: min\(100%, 32rem\);/,
-  "General fields must be a compact stacked column instead of stretching the 820px well"
+  /\.appearance-workspace-subpane\.is-general \.appearance-field-list \{[\s\S]*?grid-template-columns: minmax\(0, 1fr\) minmax\(0, 1fr\);/,
+  "General fields must split into a left/right two-column track"
+);
+assert.match(
+  workspaceSource,
+  /class: "appearance-general-col"[\s\S]*generalCol\(\s*appearanceRow\(field\(t\("appearance\.themeMode"\)[\s\S]*appearance\.language[\s\S]*appearance\.maxColumns[\s\S]*generalCol\(\s*appearanceRow\(pocketIconControl\)[\s\S]*clickReorderControl/,
+  "General left column owns theme/language/columns; right column owns Pocket and click-reorder"
+);
+assert.doesNotMatch(
+  stylesheetSource,
+  /\.appearance-workspace-subpane\.is-general \.appearance-field-list \{[\s\S]*?width: min\(100%, 32rem\)/,
+  "General must not keep the rejected 32rem stacked column"
 );
 assert.doesNotMatch(
   stylesheetSource,
@@ -82,10 +92,10 @@ assert.doesNotMatch(
   /is-rail-break/,
   "General grouping must not use hairline rail-break rows"
 );
-assert.doesNotMatch(
+assert.match(
   stylesheetSource,
-  /@container appearance-workspace/,
-  "General compact column must not depend on a container-query rail"
+  /@container \(max-width: 560px\)[\s\S]*?\.appearance-workspace-subpane\.is-general \.appearance-field-list \{[\s\S]*?grid-template-columns: minmax\(0, 1fr\);/,
+  "narrow General wells must stack the two columns"
 );
 assert.match(
   stylesheetSource,
