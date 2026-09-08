@@ -54,6 +54,22 @@ function settingsSiteIdentity(config = {}, catalog = BUILTIN_CHAT_APPS) {
   return { appId: ids[0] || "", href };
 }
 
+function bindDiscoveredFavicon(image, href, source = {}, faviconPort = {}) {
+  if (!href || typeof faviconPort.discover !== "function") return;
+  const appId = String(source.appId || "").trim();
+  Promise.resolve(faviconPort.discover(href)).then((found) => {
+    if (!image || image.dataset?.faviconMiss === "1") return;
+    const resolved = acceptedDataIcon(found)
+      || (typeof faviconPort.effective === "function"
+        ? acceptedDataIcon(faviconPort.effective(href, source.logoUrl, { appId }))
+        : "");
+    if (!resolved) return;
+    if (image.src !== resolved) image.src = resolved;
+    image.dataset.faviconReady = "1";
+    delete image.dataset.faviconRemote;
+  }).catch(() => {});
+}
+
 export function settingsSiteMark(source = {}, faviconPort = {}) {
   const skipCatalog = source.skipCatalog === true;
   const identity = !skipCatalog && source.app
@@ -80,18 +96,7 @@ export function settingsSiteMark(source = {}, faviconPort = {}) {
   }, { ...faviconDeps(faviconPort), className: "settings-site-icon" })
     || el("span", { class: "settings-site-icon settings-site-icon-empty", "aria-hidden": "true" });
   image.setAttribute?.("aria-hidden", "true");
-  if (href && typeof faviconPort.discover === "function") {
-    Promise.resolve(faviconPort.discover(href)).then((found) => {
-      if (!image || image.dataset?.faviconMiss === "1") return;
-      const resolved = acceptedDataIcon(found)
-        || (typeof faviconPort.effective === "function"
-          ? acceptedDataIcon(faviconPort.effective(href, source.logoUrl, { appId }))
-          : "");
-      if (!resolved) return;
-      if (image.src !== resolved) image.src = resolved;
-      image.dataset.faviconReady = "1";
-    }).catch(() => {});
-  }
+  bindDiscoveredFavicon(image, href, { appId, logoUrl: source.logoUrl }, faviconPort);
   return image;
 }
 
@@ -102,13 +107,15 @@ export function createAppIconControls({
   faviconPort = {}
 } = {}) {
   function iconImage(app, className = "settings-site-icon") {
-    return renderChatFavicon({
+    const image = renderChatFavicon({
       app,
       appId: app?.id,
       href: app?.url || "",
       title: ""
     }, { ...faviconDeps(faviconPort), className })
       || el("span", { class: `${className} settings-site-icon-empty`, "aria-hidden": "true" });
+    bindDiscoveredFavicon(image, app?.url || "", { appId: app?.id }, faviconPort);
+    return image;
   }
 
   function mark(app) {

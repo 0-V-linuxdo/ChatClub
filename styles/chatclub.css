@@ -8161,8 +8161,8 @@ html:not([data-settings-click-reorder="always"]) .settings-reorder.settings-reor
   background: color-mix(in srgb, var(--primary) 12%, var(--panel-2));
 }
 
-.settings-site-icon:not([data-favicon-ready]),
-.settings-site-icon-preview:not([data-favicon-ready]) {
+.settings-site-icon:not([data-favicon-ready])[data-favicon-remote],
+.settings-site-icon-preview:not([data-favicon-ready])[data-favicon-remote] {
   animation: settings-site-icon-pending 1.2s ease-in-out infinite;
 }
 
@@ -8182,8 +8182,8 @@ html:not([data-settings-click-reorder="always"]) .settings-reorder.settings-reor
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .settings-site-icon:not([data-favicon-ready]),
-  .settings-site-icon-preview:not([data-favicon-ready]) {
+  .settings-site-icon:not([data-favicon-ready])[data-favicon-remote],
+  .settings-site-icon-preview:not([data-favicon-ready])[data-favicon-remote] {
     animation: none;
   }
 }

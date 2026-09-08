@@ -252,6 +252,7 @@ globalThis.document = {
   );
   assert.equal(remount.src, okRasterBlob);
   assert.equal(remount.dataset.faviconReady, "1", "accepted raster blobs must paint immediately-ready on remount");
+  assert.notEqual(remount.dataset.faviconRemote, "1");
 
   const emptySvg = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg"></svg>');
   const empty = renderChatFavicon(
@@ -265,11 +266,13 @@ globalThis.document = {
     { href: "https://gemini.google.com/", logoUrl: declaredPng },
     { omitTitle: true, siteFaviconUrls: () => [], networkFaviconUrls: () => [] }
   );
+  assert.equal(gemini.dataset.faviconRemote, "1");
   gemini.naturalWidth = 512;
   gemini.naturalHeight = 512;
   gemini.listeners.load[0]({ currentTarget: gemini });
   assert.equal(gemini.src, declaredPng);
   assert.equal(gemini.dataset.faviconReady, "1");
+  assert.notEqual(gemini.dataset.faviconRemote, "1");
 
   const painted = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg"><circle cx="8" cy="8" r="6"/></svg>');
   const ring = renderChatFavicon(

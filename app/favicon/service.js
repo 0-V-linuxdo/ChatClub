@@ -28,7 +28,8 @@ import {
   siteFaviconUrls
 } from "../../shared/favicon-lookup.js";
 
-const FAVICON_CACHE_KEY = "chatclub.faviconCache.v7";
+const FAVICON_CACHE_KEY = "chatclub.faviconCache.v8";
+const FAVICON_CACHE_V7_KEY = "chatclub.faviconCache.v7";
 const FAVICON_CACHE_V6_KEY = "chatclub.faviconCache.v6";
 const FAVICON_CACHE_V5_KEY = "chatclub.faviconCache.v5";
 const FAVICON_CACHE_V4_KEY = "chatclub.faviconCache.v4";
@@ -114,6 +115,7 @@ export function createFaviconService(dependencies) {
   const discoveryPromises = new Map();
   const discoveredHosts = new Set();
   const tabFavicons = new Map();
+  const hotBlobs = new Map();
   let persistTimer = 0;
   let tabChangeTimer = 0;
   let tabChangeHandler = null;
@@ -163,7 +165,7 @@ export function createFaviconService(dependencies) {
     return true;
   }
 
-  function normalizeCache(value, { migrate = false, dropRasterBlobs = false } = {}) {
+  function normalizeCache(value, { migrate = false, dropRasterBlobs = false, blobsOnly = false } = {}) {
     if (!value || typeof value !== "object" || Array.isArray(value)) return {};
     const next = {};
     for (const [key, entry] of Object.entries(value)) {
@@ -171,6 +173,7 @@ export function createFaviconService(dependencies) {
       if (!url || isNetworkFavicon(url) || isLetterFallbackIcon(url)) continue;
       const data = acceptedDataIcon(url);
       const updatedAt = Number(entry?.updatedAt || 0) || 0;
+      if (blobsOnly && !String(key || "").startsWith("blob:")) continue;
       if (String(key || "").startsWith("blob:")) {
         if (dropRasterBlobs) {
           if (!data || !/image\/svg\+xml/i.test(data)) continue;
@@ -289,8 +292,35 @@ export function createFaviconService(dependencies) {
     return key ? state.faviconCache?.[key] : null;
   }
 
+  function syncHotFromState() {
+    hotBlobs.clear();
+    for (const [key, entry] of Object.entries(state.faviconCache || {})) {
+      if (!String(key).startsWith("blob:")) continue;
+      const url = acceptedDataIcon(entry?.url)
+        || (APP_ICON_DATA_RE.test(entry?.url) && String(entry.url).length <= APP_ICON_DATA_MAX_CHARS ? entry.url : "");
+      if (!url || isLetterFallbackIcon(url) || !isFaviconQuality(entry?.quality)) continue;
+      hotBlobs.set(key.slice("blob:".length), {
+        url,
+        quality: entry.quality,
+        width: Number(entry.width || 0) || 0,
+        height: Number(entry.height || 0) || 0,
+        source: String(entry.source || "").trim(),
+        updatedAt: Number(entry.updatedAt || 0) || 0
+      });
+    }
+  }
+
+  function persistableBlobs(cache) {
+    return Object.fromEntries(Object.entries(cache || {}).filter(([key, entry]) => (
+      String(key).startsWith("blob:")
+      && acceptedDataIcon(entry?.url)
+      && isFaviconQuality(entry?.quality)
+    )));
+  }
+
   function cachedBlob(href, { immediate = false } = {}) {
-    const entry = blobRecord(href);
+    const host = faviconBlobKey(href).slice("blob:".length);
+    const entry = (host && hotBlobs.get(host)) || blobRecord(href);
     const url = entry?.url;
     if (!url || isLetterFallbackIcon(url)) return "";
     if (immediate && !isFaviconQuality(entry.quality)) return "";
@@ -311,14 +341,10 @@ export function createFaviconService(dependencies) {
     return "";
   }
 
-  function cached(href) {
-    return cachedBlob(href) || cachedUrl(href);
-  }
-
   function persistSoon() {
     clearTimeout(persistTimer);
     persistTimer = setTimeout(() => {
-      const snapshot = state.faviconCache;
+      const snapshot = persistableBlobs(state.faviconCache);
       storageSet(FAVICON_CACHE_KEY, snapshot).catch(() => {});
     }, 300);
   }
@@ -354,7 +380,12 @@ export function createFaviconService(dependencies) {
       active: tab.active === true
     };
     tabFavicons.set(id, next);
-    if (!APP_ICON_DATA_RE.test(icon)) remember(page.href, icon, { source: "tab", declared: true });
+    if (APP_ICON_DATA_RE.test(icon)) {
+      rememberBlob(page.href, icon, { source: "tab", declared: true });
+    } else {
+      remember(page.href, icon, { source: "tab", declared: true });
+      persistFetchedBlob(page.href, icon, { source: "tab", declared: true }).catch(() => {});
+    }
     return !previous
       || previous.favIconUrl !== next.favIconUrl
       || previous.href !== next.href
@@ -427,6 +458,7 @@ export function createFaviconService(dependencies) {
     if (!stored) return;
     state.faviconCache[key] = stored;
     state.faviconCache = prune(state.faviconCache);
+    syncHotFromState();
     persistSoon();
   }
 
@@ -566,15 +598,24 @@ export function createFaviconService(dependencies) {
   }
 
   async function materializeIcon(href, logoUrl, meta = {}) {
-    remember(href, logoUrl, meta);
     const data = acceptedDataIcon(logoUrl)
-      || (APP_ICON_DATA_RE.test(logoUrl) && logoUrl.length <= APP_ICON_DATA_MAX_CHARS ? logoUrl : "");
-    if (data) return data;
-    return (await persistFetchedBlob(href, logoUrl, meta)) || logoUrl;
+      || (APP_ICON_DATA_RE.test(logoUrl) && logoUrl.length <= APP_ICON_DATA_MAX_CHARS && !isLetterFallbackIcon(logoUrl) ? logoUrl : "");
+    if (data) {
+      rememberBlob(href, data, {
+        ...meta,
+        quality: meta.quality || classifyFaviconQuality({ url: logoUrl, dataUrl: data, declared: true }),
+        source: meta.source || "declared"
+      });
+      return data;
+    }
+    const encoded = await persistFetchedBlob(href, logoUrl, meta);
+    if (encoded) return encoded;
+    remember(href, logoUrl, meta);
+    return logoUrl;
   }
 
   async function discover(href) {
-    const hit = cached(href);
+    const hit = cachedBlob(href);
     if (hit) return hit;
     const page = pageUrl(href);
     if (!page) return "";
@@ -652,6 +693,8 @@ export function createFaviconService(dependencies) {
     if (!keys.length && !blobKey && !host) return;
     for (const key of keys) delete state.faviconCache[key];
     if (blobKey) delete state.faviconCache[blobKey];
+    const peeled = blobKey.startsWith("blob:") ? blobKey.slice("blob:".length) : "";
+    if (peeled) hotBlobs.delete(peeled);
     if (host) {
       discoveredHosts.delete(host);
       discoveryPromises.delete(host);
@@ -671,14 +714,14 @@ export function createFaviconService(dependencies) {
       if (url && !urls.includes(url) && !isLetterFallbackIcon(url)) urls.push(url);
     };
     push(overrideUrl(options.appId));
-    push(acceptedTabFavicon(options.tabFaviconUrl) || tabUrl(href));
+    push(cachedBlob(href));
     const declared = String(declaredLogoUrl || "").trim();
     const declaredData = acceptedDataIcon(declared);
     if (declaredData) push(declaredData);
     else if (declared && APP_ICON_DATA_RE.test(declared) && !isLetterFallbackIcon(declared)) push(declared);
     const declaredPage = declared && !declaredData ? pageUrl(declared, href) : null;
     if (declaredPage && siteIcon(href, declaredPage.href)) push(declaredPage.href);
-    push(cachedBlob(href));
+    push(acceptedTabFavicon(options.tabFaviconUrl) || tabUrl(href));
     push(cachedUrl(href));
     for (const url of siteFaviconUrls(href)) push(url);
     for (const url of networkFaviconUrls(href)) push(url);
@@ -734,25 +777,36 @@ export function createFaviconService(dependencies) {
   }
 
   async function load() {
-    const stored = normalizeCache(await storageGet(FAVICON_CACHE_KEY));
+    const stored = normalizeCache(await storageGet(FAVICON_CACHE_KEY), { blobsOnly: true });
     if (Object.keys(stored).length) {
       state.faviconCache = stored;
+      syncHotFromState();
       return state.faviconCache;
     }
-    const migratedV6 = normalizeCache(await storageGet(FAVICON_CACHE_V6_KEY), { dropRasterBlobs: true });
+    const migratedV7 = normalizeCache(await storageGet(FAVICON_CACHE_V7_KEY), { blobsOnly: true });
+    if (Object.keys(migratedV7).length) {
+      state.faviconCache = migratedV7;
+      syncHotFromState();
+      persistSoon();
+      return state.faviconCache;
+    }
+    const migratedV6 = normalizeCache(await storageGet(FAVICON_CACHE_V6_KEY), { dropRasterBlobs: true, blobsOnly: true });
     if (Object.keys(migratedV6).length) {
       state.faviconCache = migratedV6;
+      syncHotFromState();
       persistSoon();
       return state.faviconCache;
     }
     const migratedV5 = normalizeCache(await storageGet(FAVICON_CACHE_V5_KEY), { dropRasterBlobs: true });
     if (Object.keys(migratedV5).length) {
       state.faviconCache = migratedV5;
+      syncHotFromState();
       persistSoon();
       return state.faviconCache;
     }
     const migrated = normalizeCache(await storageGet(FAVICON_CACHE_V4_KEY), { migrate: true });
     state.faviconCache = migrated;
+    syncHotFromState();
     if (Object.keys(migrated).length) persistSoon();
     return state.faviconCache;
   }

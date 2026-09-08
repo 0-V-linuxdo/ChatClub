@@ -523,9 +523,9 @@ function link(attributes = {}) {
   });
   await migrator.load();
   assert.equal(migratedState.faviconCache["https://chatgpt.com/"]?.url, cdnIcon);
-  assert.equal(migratedState.faviconCache["https://0-0.pro/"], undefined, "v4 guessed ico pointers must not become v7 blobs");
+  assert.equal(migratedState.faviconCache["https://0-0.pro/"], undefined, "v4 guessed ico pointers must not become v8 blobs");
   assert.equal(migratedState.faviconCache["https://chatgpt.com/ddg"], undefined);
-  assert.match(fs.readFileSync(path.join(root, "app/favicon/service.js"), "utf8"), /chatclub\.faviconCache\.v7/);
+  assert.match(fs.readFileSync(path.join(root, "app/favicon/service.js"), "utf8"), /chatclub\.faviconCache\.v8/);
 
   const v5State = { faviconCache: {}, options: {} };
   const boltPng = "data:image/png;base64,AAAA";
@@ -581,6 +581,54 @@ function link(attributes = {}) {
   assert.equal(v6State.faviconCache["blob:kimi.com"], undefined, "v6 padded raster blobs must be discarded");
   assert.equal(v6State.faviconCache["blob:perplexity.ai"]?.url, painted);
   assert.notEqual(v6Migrator.candidates("https://www.kimi.com/")[0], boltPng);
+
+  const v7State = { faviconCache: {}, options: {} };
+  const v7Migrator = createFaviconService({
+    state: v7State,
+    storageGet: async (key) => {
+      if (key === "chatclub.faviconCache.v7") {
+        return {
+          "blob:kimi.com": { url: okRaster, quality: "ok-raster", width: 128, height: 128, updatedAt: 1 },
+          "blob:perplexity.ai": { url: painted, quality: "brand-svg", updatedAt: 2 },
+          "https://chatgpt.com/": { url: cdnIcon, updatedAt: 3 }
+        };
+      }
+      return {};
+    },
+    storageSet: async () => {},
+    runtimeGetUrl: (value) => runtimeUrl("moz-extension:", value),
+    runtimeGetManifest: () => ({ permissions: [] }),
+    inferAppName: (app) => app?.name || "Example",
+    fetchPage: async () => ({ ok: true, text: async () => "<html></html>" }),
+    parseHtml: () => ({ querySelectorAll: () => [] })
+  });
+  await v7Migrator.load();
+  assert.equal(v7State.faviconCache["blob:kimi.com"]?.url, okRaster, "v7 accepted rasters must migrate into v8");
+  assert.equal(v7State.faviconCache["blob:perplexity.ai"]?.url, painted);
+  assert.equal(v7State.faviconCache["https://chatgpt.com/"], undefined, "v7 https pointers must not become v8 paint hits");
+  assert.equal(v7Migrator.candidates("https://www.kimi.com/")[0], okRaster);
+
+  const pointerHits = [];
+  const pointerOnly = createFaviconService({
+    state: {
+      faviconCache: {
+        "https://www.kimi.com/": { url: "https://www.kimi.com/favicon.ico", quality: "declared-raster", updatedAt: 1 }
+      },
+      options: {}
+    },
+    storageGet: async () => ({}),
+    storageSet: async () => {},
+    runtimeGetUrl: (value) => runtimeUrl("moz-extension:", value),
+    runtimeGetManifest: () => ({ permissions: [] }),
+    inferAppName: (app) => app?.name || "Example",
+    fetchPage: async (url) => {
+      pointerHits.push(String(url));
+      return { ok: false };
+    },
+    parseHtml: () => ({ querySelectorAll: () => [] })
+  });
+  await pointerOnly.discover("https://www.kimi.com/");
+  assert.ok(pointerHits.length > 0, "https pointers must not short-circuit discover");
 
   const previousMatchMedia = globalThis.matchMedia;
   globalThis.matchMedia = (query) => ({ matches: String(query).includes("prefers-color-scheme: dark") });
@@ -700,6 +748,36 @@ function link(attributes = {}) {
   );
   assert.equal(tabState.faviconCache["https://chat.deepseek.com/a/chat/s/1"]?.url, whale);
   assert.ok(tabChanges >= 1, "observing an open tab must notify once the icon is ingested");
+
+  const blobOverTab = createFaviconService({
+    state: {
+      faviconCache: {
+        "blob:deepseek.com": { url: painted, quality: "brand-svg", updatedAt: 1 }
+      },
+      options: {}
+    },
+    storageGet: async () => ({}),
+    storageSet: async () => {},
+    runtimeGetUrl: (value) => runtimeUrl("moz-extension:", value),
+    runtimeGetManifest: () => ({ permissions: [] }),
+    inferAppName: (app) => app?.name || "Example",
+    fetchPage: async () => ({ ok: true, text: async () => "<html></html>" }),
+    parseHtml: () => ({ querySelectorAll: () => [] })
+  });
+  await blobOverTab.observeTabs({
+    queryTabs: async () => [{
+      id: 9,
+      url: "https://chat.deepseek.com/",
+      favIconUrl: whale,
+      active: true
+    }]
+  });
+  assert.equal(
+    blobOverTab.candidates("https://chat.deepseek.com/")[0],
+    painted,
+    "accepted peeled-host blobs must outrank live tab https"
+  );
+  assert.equal(blobOverTab.effective("https://www.deepseek.com/"), painted);
 
   const dataTabIcon = "data:image/png;base64,AAAA";
   updated.fire(7, { favIconUrl: dataTabIcon }, {

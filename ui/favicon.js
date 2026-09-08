@@ -79,9 +79,25 @@ function isDecodedFaviconMiss(image) {
   return isRejectedGuessedRaster(image?.currentSrc || image?.src, width, height);
 }
 
+function isRemoteFaviconSrc(url) {
+  try {
+    const parsed = new URL(String(url || ""));
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 function markFaviconReady(image) {
   if (!image || image.dataset.faviconMiss === "1") return;
   image.dataset.faviconReady = "1";
+  delete image.dataset.faviconRemote;
+}
+
+function syncFaviconRemote(image, src) {
+  if (!image) return;
+  if (isRemoteFaviconSrc(src)) image.dataset.faviconRemote = "1";
+  else delete image.dataset.faviconRemote;
 }
 
 function finishFaviconMiss(image, deps = {}) {
@@ -107,6 +123,7 @@ function advanceFavicon(image, candidates, href, fallbackUrl, deps = {}) {
     index += 1;
     if (next && image.src !== next) {
       image.dataset.faviconIndex = String(index - 1);
+      syncFaviconRemote(image, next);
       image.src = next;
       return;
     }
@@ -115,6 +132,7 @@ function advanceFavicon(image, candidates, href, fallbackUrl, deps = {}) {
     image.dataset.browserFallback = "1";
     const browserUrl = String(deps.browserFaviconUrl(href) || "").trim();
     if (browserUrl && image.src !== browserUrl) {
+      syncFaviconRemote(image, browserUrl);
       image.src = browserUrl;
       return;
     }
@@ -125,6 +143,7 @@ function advanceFavicon(image, candidates, href, fallbackUrl, deps = {}) {
   }
   image.dataset.fallback = "1";
   if (fallbackUrl && image.src !== fallbackUrl) {
+    syncFaviconRemote(image, fallbackUrl);
     image.src = fallbackUrl;
     return;
   }
@@ -162,6 +181,7 @@ export function renderChatFavicon(source = {}, deps = {}) {
   if (!initial) return null;
   const usedFallback = !candidates[0] && Boolean(fallbackUrl);
   const readyNow = usedFallback || isImmediateReadyFavicon(initial);
+  const remoteNow = !readyNow && isRemoteFaviconSrc(initial);
   return el("img", {
     class: deps.className || "chat-favicon",
     alt: "",
@@ -173,6 +193,7 @@ export function renderChatFavicon(source = {}, deps = {}) {
     dataset: {
       faviconIndex: "0",
       ...(readyNow ? { faviconReady: "1" } : {}),
+      ...(remoteNow ? { faviconRemote: "1" } : {}),
       ...(usedFallback ? { fallback: "1" } : {})
     },
     onload: (event) => {
