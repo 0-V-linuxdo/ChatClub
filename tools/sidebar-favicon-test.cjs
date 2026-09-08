@@ -87,6 +87,9 @@ globalThis.document = {
     { omitTitle: true }
   );
   assert.match(auto.src, /icons\.duckduckgo\.com\/ip3\/chatgpt\.com\.ico$/);
+  assert.equal(auto.dataset.faviconReady, undefined);
+  auto.listeners.load[0]({ currentTarget: auto });
+  assert.equal(auto.dataset.faviconReady, "1");
   auto.listeners.error[0]({ currentTarget: auto });
   assert.match(auto.src, /google\.com\/s2\/favicons/);
 
@@ -101,6 +104,27 @@ globalThis.document = {
   assert.match(api.src, /icons\.duckduckgo\.com\/ip3\/0-0\.pro\.ico$/);
   api.listeners.error[0]({ currentTarget: api });
   assert.match(api.src, /google\.com\/s2\/favicons\?domain=0-0\.pro/);
+
+  const hiddenMiss = renderChatFavicon(
+    { href: "https://example.com/" },
+    { omitTitle: true, networkFaviconUrls: () => ["https://fail.example/icon.png"] }
+  );
+  hiddenMiss.listeners.error[0]({ currentTarget: hiddenMiss });
+  assert.equal(hiddenMiss.hidden, true);
+
+  const kept = renderChatFavicon(
+    { href: "https://example.com/" },
+    {
+      omitTitle: true,
+      keepVisibleOnMiss: true,
+      networkFaviconUrls: () => ["https://fail.example/icon.png"]
+    }
+  );
+  kept.listeners.error[0]({ currentTarget: kept });
+  assert.equal(kept.hidden, false);
+  assert.equal(kept.dataset.faviconMiss, "1");
+  assert.equal(kept.dataset.faviconReady, undefined);
+  assert.match(String(kept.className), /settings-site-icon-empty/);
 
   console.log("sidebar favicons: ok");
 })().then(() => {

@@ -1,6 +1,7 @@
 import { el } from "./dom.js";
 
 const CHAT_FAVICON_STACK_MAX = 4;
+const EMPTY_FAVICON = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg"/>')}`;
 
 function networkLookupHosts(hostname) {
   const hosts = [];
@@ -57,6 +58,25 @@ function chatFaviconCandidates(source = {}, deps = {}) {
   return urls;
 }
 
+function markFaviconReady(image) {
+  if (!image || image.dataset.faviconMiss === "1") return;
+  image.dataset.faviconReady = "1";
+}
+
+function finishFaviconMiss(image, deps = {}) {
+  image.dataset.faviconMiss = "1";
+  delete image.dataset.faviconReady;
+  if (deps.keepVisibleOnMiss) {
+    const classes = String(image.className || "").split(/\s+/).filter(Boolean);
+    if (!classes.includes("settings-site-icon-empty")) {
+      image.className = [...classes, "settings-site-icon-empty"].join(" ");
+    }
+    image.src = EMPTY_FAVICON;
+    return;
+  }
+  image.hidden = true;
+}
+
 export function uniqueChatFaviconSources(items = [], resolve) {
   const seen = new Set();
   const sources = [];
@@ -82,16 +102,17 @@ export function renderChatFavicon(source = {}, deps = {}) {
   if (!initial) return null;
   return el("img", {
     class: deps.className || "chat-favicon",
-    src: initial,
     alt: "",
     title: deps.omitTitle ? "" : (source.title || ""),
     draggable: "false",
-    loading: "lazy",
+    loading: deps.loading || "lazy",
     decoding: "async",
     referrerpolicy: "no-referrer",
     dataset: { faviconIndex: "0" },
+    onload: (event) => markFaviconReady(event.currentTarget),
     onerror: (event) => {
       const image = event.currentTarget;
+      if (image.dataset.faviconMiss === "1") return;
       let index = Number(image.dataset.faviconIndex || 0) + 1;
       while (index < candidates.length) {
         const next = candidates[index];
@@ -111,7 +132,7 @@ export function renderChatFavicon(source = {}, deps = {}) {
         }
       }
       if (image.dataset.fallback === "1") {
-        image.hidden = true;
+        finishFaviconMiss(image, deps);
         return;
       }
       image.dataset.fallback = "1";
@@ -119,8 +140,9 @@ export function renderChatFavicon(source = {}, deps = {}) {
         image.src = fallbackUrl;
         return;
       }
-      image.hidden = true;
-    }
+      finishFaviconMiss(image, deps);
+    },
+    src: initial
   });
 }
 

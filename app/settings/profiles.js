@@ -521,7 +521,7 @@ export function createProfilesSettingsSection(ctx) {
       String(draft.name || "").trim() || t("profiles.providerName")
     );
     let logoUrl = String(draft.logoUrl || "").trim();
-    const iconPreview = el("div", { class: "settings-icon-preview" });
+    const identityMark = el("div", { class: "api-profile-editor-identity-mark" });
     const logoInput = input(logoUrl.startsWith("data:") ? "" : logoUrl, {
       placeholder: t("apps.iconUrlPlaceholder"),
       autocomplete: "url",
@@ -529,7 +529,7 @@ export function createProfilesSettingsSection(ctx) {
     });
     const fileInput = el("input", { class: "input", type: "file", accept: "image/png,image/jpeg,image/webp,image/svg+xml,image/x-icon,.ico" });
     const paintIcon = () => {
-      iconPreview.replaceChildren(profileMark({
+      identityMark.replaceChildren(profileMark({
         endpoint: endpointInput.value,
         registerUrl: draft.registerUrl,
         logoUrl
@@ -638,16 +638,17 @@ export function createProfilesSettingsSection(ctx) {
             field(t("profiles.endpoint"), endpointInput),
             field(t("profiles.apiKey"), secret.node),
             el("div", { class: "settings-icon-field" },
-              el("span", { class: "settings-icon-field-label" }, t("apps.icon")),
               el("div", { class: "settings-icon-field-row" },
-                iconPreview,
                 button(t("apps.iconRefresh"), () => { void refreshIcon(); }),
                 button(t("apps.iconRestore"), restoreIcon)
+              ),
+              el("details", { class: "settings-icon-advanced" },
+                el("summary", { class: "settings-icon-field-label" }, t("apps.icon")),
+                field(t("apps.iconUrl"), logoInput),
+                field(t("apps.iconUpload"), fileInput),
+                el("p", { class: "settings-icon-help" }, t("apps.iconHelp"))
               )
-            ),
-            field(t("apps.iconUrl"), logoInput),
-            field(t("apps.iconUpload"), fileInput),
-            el("p", { class: "settings-icon-help" }, t("apps.iconHelp"))
+            )
           ),
           el("div", { class: "field api-profile-models-field" },
             el("span", {}, t("profiles.models")),
@@ -672,7 +673,7 @@ export function createProfilesSettingsSection(ctx) {
     const panel = dialog.querySelector(".modal");
     panel?.classList.add("settings-editor-modal", "api-profile-editor-modal");
     panel?.querySelector(".modal-header h2")?.after(
-      el("div", { class: "api-profile-editor-identity" }, identityName)
+      el("div", { class: "api-profile-editor-identity" }, identityMark, identityName)
     );
   }
 

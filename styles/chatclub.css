@@ -2730,6 +2730,10 @@ button { cursor: pointer; }
   display: none;
 }
 
+img[data-favicon-index]:not([hidden]):not([data-favicon-ready]) {
+  background: var(--panel-2);
+}
+
 .chat-favicon-stack {
   display: flex;
   align-items: center;
@@ -8132,11 +8136,20 @@ html:not([data-settings-click-reorder="always"]) .settings-reorder:focus-within 
   border-radius: var(--ui-radius-xs);
   object-fit: contain;
   flex: 0 0 auto;
+  background: var(--panel-2);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.settings-site-icon[data-favicon-ready]:not([data-favicon-miss]),
+.settings-site-icon-preview[data-favicon-ready]:not([data-favicon-miss]) {
+  background: transparent;
+  box-shadow: none;
 }
 
 .settings-site-icon-empty {
   display: block;
   background: var(--panel-2);
+  box-shadow: inset 0 0 0 1px var(--line);
 }
 
 .settings-icon-field,
@@ -8165,6 +8178,25 @@ html:not([data-settings-click-reorder="always"]) .settings-reorder:focus-within 
 .settings-icon-preview .settings-site-icon-preview {
   width: 32px;
   height: 32px;
+}
+
+.settings-icon-advanced {
+  display: grid;
+  gap: var(--space-2);
+  width: 100%;
+  min-width: 0;
+}
+
+.settings-icon-advanced > summary {
+  cursor: pointer;
+  color: var(--text);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.settings-icon-advanced > summary:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .settings-muted-cell {
@@ -8754,8 +8786,15 @@ html:not([data-settings-click-reorder="always"]) .settings-reorder:focus-within 
 .api-profile-editor-identity {
   display: flex;
   align-items: center;
+  gap: var(--space-2);
   min-width: 0;
   flex: 1;
+}
+
+.api-profile-editor-identity-mark {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
 }
 
 .api-profile-editor-modal .modal-header {

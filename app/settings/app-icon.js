@@ -11,7 +11,9 @@ function faviconDeps(port = {}) {
     fallbackFaviconUrl: port.fallback,
     browserFaviconUrl: port.browser,
     networkFaviconUrls: port.networkUrls,
-    omitTitle: true
+    omitTitle: true,
+    loading: "eager",
+    keepVisibleOnMiss: true
   };
 }
 

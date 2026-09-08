@@ -122,6 +122,17 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   assert.match(profilesSettings, /settingsSiteMark\(profileIconSource/);
   assert.match(profilesSettings, /skipCatalog:\s*true/);
   assert.match(profilesSettings, /logoUrl/);
+  assert.match(profilesSettings, /api-profile-editor-identity-mark/);
+  assert.match(profilesSettings, /el\("details", \{\s*class: "settings-icon-advanced"/);
+  assert.match(profilesSettings, /el\("summary", \{\s*class: "settings-icon-field-label" \}, t\("apps\.icon"\)/);
+  assert.doesNotMatch(profilesSettings, /settings-icon-preview/);
+  assert.doesNotMatch(profilesSettings, /open:\s*true/);
+  assert.match(css, /data-favicon-ready/);
+  assert.match(css, /\.settings-icon-advanced \{/);
+  assert.match(iconEditor, /keepVisibleOnMiss:\s*true/);
+  assert.match(iconEditor, /loading:\s*"eager"/);
+  assert.match(read("ui/favicon.js"), /keepVisibleOnMiss/);
+  assert.match(read("ui/favicon.js"), /faviconReady/);
   assert.doesNotMatch(modelsSettings, /settings-site-icon-button|apps\.changeIcon|openEditor/);
   assert.doesNotMatch(summarySettings, /settings-site-icon-button|apps\.changeIcon/);
   assert.doesNotMatch(messageSettings, /settings-site-icon-button|apps\.changeIcon/);
@@ -195,11 +206,15 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
       this.dataset = {};
       this.attributes = new Map();
       this.className = "";
+      this.hidden = false;
+      this.src = "";
+      this.listeners = Object.create(null);
     }
 
     setAttribute(name, value) {
       this.attributes.set(name, String(value));
       if (name === "src") this.src = String(value);
+      if (name === "class") this.className = String(value);
     }
 
     getAttribute(name) {
@@ -210,7 +225,11 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
       this.children.push(...children.filter(Boolean));
     }
 
-    addEventListener() {}
+    addEventListener(name, listener) {
+      const key = String(name || "");
+      if (!this.listeners[key]) this.listeners[key] = [];
+      this.listeners[key].push(listener);
+    }
   }
 
   const previousNode = globalThis.Node;
@@ -237,6 +256,10 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
     }, port);
     assert.notEqual(skipped.getAttribute("src") || skipped.src, "CHAT-APP-OVERRIDE");
     assert.match(skipped.getAttribute("src") || skipped.src || "", /deepseek\.com/);
+    assert.equal(skipped.getAttribute("loading"), "eager");
+    assert.equal(skipped.dataset.faviconReady, undefined);
+    skipped.listeners.load[0]({ currentTarget: skipped });
+    assert.equal(skipped.dataset.faviconReady, "1");
     const bound = settingsSiteMark({ href: "https://chat.deepseek.com/" }, port);
     assert.equal(bound.getAttribute("src") || bound.src, "CHAT-APP-OVERRIDE");
     const custom = settingsSiteMark({
@@ -245,6 +268,18 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
       skipCatalog: true
     }, port);
     assert.equal(custom.getAttribute("src") || custom.src, "https://cdn.example.com/relay.png");
+    const missPort = {
+      effective: () => "",
+      networkUrls: () => ["https://fail.example/icon.png"]
+    };
+    const missed = settingsSiteMark({
+      href: "https://api.example.test/v1/chat/completions",
+      skipCatalog: true
+    }, missPort);
+    missed.listeners.error[0]({ currentTarget: missed });
+    assert.equal(missed.hidden, false);
+    assert.equal(missed.dataset.faviconMiss, "1");
+    assert.match(String(missed.className), /settings-site-icon-empty/);
   } finally {
     if (previousNode === undefined) delete globalThis.Node;
     else globalThis.Node = previousNode;
