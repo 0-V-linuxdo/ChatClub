@@ -7543,15 +7543,16 @@ body.settings-tab-context-menu-dragging iframe {
 }
 
 .model-preference-secondary-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
+  display: grid;
+  grid-template-columns: minmax(0, 52ch) auto;
+  align-items: start;
+  column-gap: var(--space-4);
+  width: fit-content;
+  max-width: 100%;
   min-width: 0;
-  padding: var(--space-3) 14px;
-  border: 1px solid color-mix(in srgb, var(--line) 84%, transparent);
-  border-radius: var(--settings-radius, 8px);
-  background: color-mix(in srgb, var(--panel-2) 58%, transparent);
+  padding: 0;
+  border: 0;
+  background: transparent;
   cursor: pointer;
 }
 
@@ -7559,6 +7560,7 @@ body.settings-tab-context-menu-dragging iframe {
   display: grid;
   gap: 3px;
   min-width: 0;
+  max-width: 52ch;
 }
 
 .model-preference-secondary-toggle-copy strong {
@@ -7573,10 +7575,10 @@ body.settings-tab-context-menu-dragging iframe {
 }
 
 .model-preference-secondary-toggle input {
-  flex: 0 0 auto;
   width: 19px;
   height: 19px;
-  margin: 0;
+  margin: 3px 0 0;
+  justify-self: end;
   accent-color: var(--primary);
 }
 

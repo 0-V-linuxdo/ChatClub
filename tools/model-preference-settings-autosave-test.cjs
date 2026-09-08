@@ -760,7 +760,16 @@ globalThis.document = {
   const modelStylesEnd = stylesSource.indexOf(".prompt-template-list", modelStylesStart);
   const modelStyles = stylesSource.slice(modelStylesStart, modelStylesEnd);
   assert.match(modelStyles, /container-name:\s*model-preferences/);
-  assert.match(modelStyles, /\.model-preference-secondary-toggle\s*\{[^}]*display:\s*flex/s);
+  assert.match(
+    modelStyles,
+    /\.model-preference-secondary-toggle\s*\{[^}]*display:\s*grid;[^}]*width:\s*fit-content;/s,
+    "secondary model switch must hug copy instead of stretching an island card"
+  );
+  assert.doesNotMatch(
+    modelStyles,
+    /\.model-preference-secondary-toggle\s*\{[^}]*justify-content:\s*space-between;[^}]*border:\s*1px solid/s,
+    "secondary model switch must not keep nested well chrome"
+  );
   assert.match(modelStyles, /\.model-preference-row-models\s*\{[^}]*display:\s*grid/s);
   assert.match(modelStyles, /\.model-preference-failure-grid\s*\{[^}]*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s);
   assert.match(

@@ -225,6 +225,7 @@ assert.match(css, /\.settings-check \{[^}]*min-height:\s*var\(--target-min\);/s)
 assert.match(css, /\.overlay-confirm-ack-box \{[^}]*min-height:\s*var\(--target-min\);/s);
 assert.match(css, /\.tooltip-toggle-switch \{[^}]*min-height:\s*var\(--target-min\);/s);
 assert.match(agents, /Settings-pane boolean glyphs/);
+assert.match(agents, /hug copy with no island well/);
 assert.match(css, /\.appearance-toggle-control input\s*\{[^}]*width:\s*19px;[^}]*height:\s*19px;/s);
 assert.doesNotMatch(
   css,
@@ -232,6 +233,16 @@ assert.doesNotMatch(
   "appearance toggle glyph must not inherit --target-min"
 );
 assert.match(css, /\.model-preference-secondary-toggle input\s*\{[^}]*width:\s*19px;[^}]*height:\s*19px;/s);
+assert.match(
+  css,
+  /\.model-preference-secondary-toggle\s*\{[^}]*width:\s*fit-content;/s,
+  "secondary toggle must hug copy"
+);
+assert.doesNotMatch(
+  css,
+  /\.model-preference-secondary-toggle\s*\{[^}]*border:\s*1px solid/s,
+  "secondary toggle must not keep island chrome"
+);
 assert.match(css, /\.settings-check input\s*\{[^}]*width:\s*19px;[^}]*height:\s*19px;/s);
 assert.match(css, /\.tooltip-toggle-switch input\s*\{[^}]*width:\s*19px;[^}]*height:\s*19px;/s);
 assert.doesNotMatch(

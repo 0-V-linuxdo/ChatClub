@@ -100,6 +100,11 @@ globalThis.document = { addEventListener() {} };
   assert.match(summarySource, /createPromptTemplateSettings\(\{/);
   assert.match(summarySource, /function recordFullTextBlock\(/);
   assert.match(summarySource, /t\("summary\.recordFullText"\)/);
+  const recordFullTextFn = summarySource.match(/function recordFullTextBlock\([\s\S]*?\n  function /)[0];
+  assert.match(recordFullTextFn, /class: "appearance-toggle-control"/);
+  assert.match(recordFullTextFn, /t\("summary\.recordFullTextHelp"\)/);
+  assert.doesNotMatch(recordFullTextFn, /settingsBlock\(/);
+  assert.doesNotMatch(recordFullTextFn, /common\.enabled/);
   assert.doesNotMatch(appearanceSource, /recordFullText/);
   assert.match(optimizeSource, /createPromptTemplateSettings\(\{/);
   assert.deepEqual(stateKeys(messageSource), [

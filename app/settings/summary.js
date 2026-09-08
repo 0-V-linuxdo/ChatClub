@@ -75,25 +75,24 @@ export function createSummarySettingsSection(ctx) {
 
   function recordFullTextBlock(redraw) {
     const enabled = state.options.recordFullText === true;
+    const helpId = "summary-record-full-text-help";
     const toggle = el("input", {
       type: "checkbox",
       role: "switch",
       checked: enabled,
-      "aria-label": t("summary.recordFullText")
+      "aria-label": t("summary.recordFullText"),
+      "aria-describedby": helpId
     });
     toggle.addEventListener("change", async () => {
       state.options = await saveOptionsPatch({ recordFullText: toggle.checked === true });
       redraw();
     });
-    return settingsBlock(
-      t("summary.recordFullText"),
-      t("summary.recordFullTextHelp"),
-      el("label", { class: "appearance-toggle-control" },
-        el("span", { class: "appearance-toggle-copy" },
-          el("strong", {}, t("common.enabled"))
-        ),
-        toggle
-      )
+    return el("label", { class: "appearance-toggle-control" },
+      el("span", { class: "appearance-toggle-copy" },
+        el("strong", {}, t("summary.recordFullText")),
+        el("small", { id: helpId }, t("summary.recordFullTextHelp"))
+      ),
+      toggle
     );
   }
 
