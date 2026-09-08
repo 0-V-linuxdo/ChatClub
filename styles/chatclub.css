@@ -3904,11 +3904,11 @@ body.tab-gesture-active * {
 
 .appearance-toggle-control {
   display: grid;
-  grid-template-columns: minmax(0, 52ch) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
   column-gap: var(--space-4);
-  width: fit-content;
-  max-width: 100%;
+  width: 100%;
+  max-width: 42rem;
   min-width: 0;
   padding: 0;
   border: 0;
@@ -3953,6 +3953,9 @@ body.tab-gesture-active * {
 
 .appearance-workspace-subpane {
   width: min(820px, 100%);
+  min-width: 0;
+  container-type: inline-size;
+  container-name: appearance-workspace;
 }
 
 .appearance-workspace-pane > .settings-inner-tabs {
@@ -3962,8 +3965,69 @@ body.tab-gesture-active * {
   justify-self: start;
 }
 
-.appearance-workspace-subpane {
-  min-width: 0;
+.appearance-workspace-subpane .appearance-field-list {
+  width: min(100%, 42rem);
+  gap: 12px;
+}
+
+.appearance-workspace-subpane .appearance-field-row > .field,
+.appearance-workspace-subpane .appearance-field-row > .appearance-toggle-control {
+  display: grid;
+  grid-template-columns: minmax(10rem, 16rem) minmax(0, 1fr);
+  align-items: start;
+  column-gap: var(--space-4);
+  width: 100%;
+  max-width: none;
+}
+
+.appearance-workspace-subpane .appearance-field-row > .field > span {
+  display: flex;
+  align-items: center;
+  min-height: var(--settings-control-height, 36px);
+  color: var(--text);
+}
+
+.appearance-workspace-subpane .appearance-field-row .select {
+  width: 100%;
+  max-width: 36ch;
+  justify-self: end;
+}
+
+.appearance-workspace-subpane .appearance-pocket-icon-options,
+.appearance-workspace-subpane .appearance-toggle-control input,
+.appearance-workspace-subpane.is-color .appearance-color-control,
+.appearance-workspace-subpane.is-overlays .appearance-range-control {
+  justify-self: end;
+}
+
+.appearance-workspace-subpane.is-color .appearance-color-control,
+.appearance-workspace-subpane.is-overlays .appearance-range-control {
+  width: 100%;
+  justify-self: stretch;
+}
+
+.appearance-workspace-subpane.is-general .appearance-field-row.is-rail-break {
+  margin-top: 4px;
+  padding-top: 14px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+}
+
+@container appearance-workspace (max-width: 560px) {
+  .appearance-field-row > .field,
+  .appearance-field-row > .appearance-toggle-control {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .appearance-field-row > .field > span {
+    min-height: 0;
+  }
+
+  .appearance-field-row .select,
+  .appearance-pocket-icon-options,
+  .appearance-toggle-control input {
+    justify-self: start;
+    max-width: 100%;
+  }
 }
 
 .appearance-workspace-subpane.is-color .appearance-color-control {

@@ -69,6 +69,41 @@ assert.match(
 );
 assert.match(
   stylesheetSource,
+  /\.appearance-workspace-subpane \.appearance-field-list \{[\s\S]*?width: min\(100%, 42rem\);/,
+  "workspace preference rows must cap the rail instead of filling the 820px well"
+);
+assert.match(
+  stylesheetSource,
+  /\.appearance-workspace-subpane \.appearance-field-row > \.field,[\s\S]*?grid-template-columns: minmax\(10rem, 16rem\) minmax\(0, 1fr\);/,
+  "workspace fields must use a title|control preference-row rail"
+);
+assert.match(
+  stylesheetSource,
+  /\.appearance-workspace-subpane \.appearance-field-row \.select \{[\s\S]*?max-width: 36ch;[\s\S]*?justify-self: end;/,
+  "general selects must cap at 36ch on the control rail"
+);
+assert.match(
+  stylesheetSource,
+  /\.appearance-workspace-subpane\.is-general \.appearance-field-row\.is-rail-break \{[\s\S]*?border-top:/,
+  "general grouping uses a hairline, not extra settings blocks"
+);
+assert.match(
+  stylesheetSource,
+  /@container appearance-workspace \(max-width: 560px\)[\s\S]*?grid-template-columns: minmax\(0, 1fr\);/,
+  "narrow workspace wells must stack the preference-row rail"
+);
+assert.match(
+  workspaceSource,
+  /appearanceRow\(field\(t\("appearance\.maxColumns"\), columnCount\), "is-rail-break"\)/,
+  "columns opens the workspace-chrome group"
+);
+assert.match(
+  workspaceSource,
+  /appearanceRow\(clickReorderControl, "is-rail-break"\)/,
+  "click-reorder opens the lists group"
+);
+assert.match(
+  stylesheetSource,
   /\.appearance-workspace-subpane\.is-overlays \.appearance-range-help \{\s*grid-column: 1 \/ -1;/,
   "overlay help must remain on its own row"
 );
