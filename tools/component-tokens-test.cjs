@@ -224,6 +224,21 @@ assert.match(css, /\.settings-block-header h4 \{[^}]*font-size:\s*var\(--font-si
 assert.match(css, /\.settings-check \{[^}]*min-height:\s*var\(--target-min\);/s);
 assert.match(css, /\.overlay-confirm-ack-box \{[^}]*min-height:\s*var\(--target-min\);/s);
 assert.match(css, /\.tooltip-toggle-switch \{[^}]*min-height:\s*var\(--target-min\);/s);
+assert.match(agents, /Settings-pane boolean glyphs/);
+assert.match(css, /\.appearance-toggle-control input\s*\{[^}]*width:\s*19px;[^}]*height:\s*19px;/s);
+assert.doesNotMatch(
+  css,
+  /\.appearance-toggle-control input\s*\{[^}]*min-width:\s*var\(--target-min/s,
+  "appearance toggle glyph must not inherit --target-min"
+);
+assert.match(css, /\.model-preference-secondary-toggle input\s*\{[^}]*width:\s*19px;[^}]*height:\s*19px;/s);
+assert.match(css, /\.settings-check input\s*\{[^}]*width:\s*19px;[^}]*height:\s*19px;/s);
+assert.match(css, /\.tooltip-toggle-switch input\s*\{[^}]*width:\s*19px;[^}]*height:\s*19px;/s);
+assert.doesNotMatch(
+  css,
+  /\.tooltip-toggle-switch input\s*\{[^}]*width:\s*18px;/s,
+  "tooltip switch glyph must match the 19px settings-pane token"
+);
 assert.match(officialRules, /\.official-rules-mode button\[aria-pressed="true"\] \{[^}]*background:\s*var\(--control-selected\);/s);
 assert.match(officialRules, /\.official-rules-site-summary:hover \{[^}]*background:\s*var\(--control-hover\);/s);
 

@@ -116,7 +116,12 @@ const css = read("styles/chatclub.css");
 assert.match(css, /\.appearance-toggle-control\s*\{[^}]*display: grid;[^}]*cursor: pointer;/s);
 assert.match(css, /\.appearance-toggle-control\s*\{[^}]*width: fit-content;[^}]*cursor: pointer;/s);
 assert.match(css, /\.appearance-toggle-copy\s*\{[^}]*display: grid;[^}]*max-width: 52ch;/s);
-assert.match(css, /\.appearance-toggle-control input\s*\{[^}]*accent-color: var\(--primary\);/s);
+assert.match(css, /\.appearance-toggle-control input\s*\{[^}]*width: 19px;[^}]*height: 19px;[^}]*accent-color: var\(--primary\);/s);
+assert.doesNotMatch(
+  css,
+  /\.appearance-toggle-control input\s*\{[^}]*min-width:\s*var\(--target-min/s,
+  "overlay appearance toggle must keep a 19px glyph, not the 24px hit token"
+);
 assert.doesNotMatch(
   css,
   /\.appearance-toggle-control\s*\{[^}]*justify-content: space-between;[^}]*border: 1px solid/s,

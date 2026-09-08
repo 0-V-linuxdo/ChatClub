@@ -82,6 +82,16 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
     /\.appearance-toggle-control \{[^}]*display: grid;[^}]*grid-template-columns: minmax\(0, 52ch\) auto;[^}]*width: fit-content;/s,
     "click-reorder switch must hug copy instead of stretching the General well"
   );
+  assert.match(
+    css,
+    /\.appearance-toggle-control input\s*\{[^}]*width: 19px;[^}]*height: 19px;/s,
+    "click-reorder switch glyph stays 19px"
+  );
+  assert.doesNotMatch(
+    css,
+    /\.appearance-toggle-control input\s*\{[^}]*min-width:\s*var\(--target-min/s,
+    "click-reorder switch must not paint the 24px hit token as the checkbox"
+  );
   assert.doesNotMatch(
     css,
     /\.appearance-toggle-control \{[^}]*justify-content: space-between;[^}]*border: 1px solid/s,
