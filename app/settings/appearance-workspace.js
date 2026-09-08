@@ -15,6 +15,7 @@ export function createAppearanceWorkspacePane({
   language,
   onSelect,
   overlayOpacityControl,
+  overlayToggleControl,
   pocketIconControl,
   selectionOverlayControls,
   settingsBlock,
@@ -24,10 +25,11 @@ export function createAppearanceWorkspacePane({
 }) {
   const appearanceRow = (node) => el("div", { class: "appearance-field-row" }, node);
   const generalCol = (...rows) => el("div", { class: "appearance-general-col" }, ...rows);
-  const overlayRangeRow = (title, info, control, extraClass = "") => appearanceRow(
+  const overlayRangeRow = (toggle, title, titleFor, info, control, extraClass = "") => appearanceRow(
     el("div", { class: extraClass ? `appearance-overlay-row ${extraClass}` : "appearance-overlay-row" },
+      toggle,
       el("span", { class: "appearance-overlay-copy" },
-        el("strong", {}, title),
+        el("label", { for: titleFor }, el("strong", {}, title)),
         info
       ),
       control
@@ -60,7 +62,9 @@ export function createAppearanceWorkspacePane({
     t("appearance.workspaceOverlaysTabDesc"),
     el("div", { class: "appearance-field-list" },
       overlayRangeRow(
+        overlayToggleControl,
         t("appearance.loadingOverlay"),
+        "appearance-loading-overlay-enabled",
         createAppearanceOverlayInfoButton(
           svgIcon,
           t("appearance.loadingOverlayHelp"),
@@ -69,22 +73,18 @@ export function createAppearanceWorkspacePane({
         ),
         overlayOpacityControl
       ),
-      appearanceRow(
-        el("div", { class: "appearance-overlay-row appearance-overlays-model" },
-          el("span", { class: "appearance-overlay-copy" },
-            selectionOverlayControls.toggleControl,
-            el("label", { for: "appearance-model-selection-overlay-enabled" },
-              el("strong", {}, t("appearance.modelSelectionOverlay"))
-            ),
-            createAppearanceOverlayInfoButton(
-              svgIcon,
-              `${t("appearance.modelSelectionOverlayHelp")} ${t("appearance.modelSelectionOverlayOpacityHelp")}`,
-              "appearance-model-selection-overlay-help",
-              "settings.appearance.modelSelectionOverlay"
-            )
-          ),
-          selectionOverlayControls.opacityControl
-        )
+      overlayRangeRow(
+        selectionOverlayControls.toggleControl,
+        t("appearance.modelSelectionOverlay"),
+        "appearance-model-selection-overlay-enabled",
+        createAppearanceOverlayInfoButton(
+          svgIcon,
+          `${t("appearance.modelSelectionOverlayHelp")} ${t("appearance.modelSelectionOverlayOpacityHelp")}`,
+          "appearance-model-selection-overlay-help",
+          "settings.appearance.modelSelectionOverlay"
+        ),
+        selectionOverlayControls.opacityControl,
+        "appearance-overlays-model"
       )
     )
   );

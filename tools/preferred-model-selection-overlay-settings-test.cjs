@@ -62,8 +62,11 @@ function autosaveFixture(createAppearanceAutosave, initialOptions = {}, options 
   const { createAppearanceAutosave } = await import(moduleUrl("app/settings/appearance-autosave.js"));
 
   assert.equal(DEFAULT_OPTIONS.modelPreferenceSelectionOverlayEnabled, true);
+  assert.equal(DEFAULT_OPTIONS.frameLoadingOverlayEnabled, true);
   assert.equal(DEFAULT_OPTIONS.modelPreferenceSelectionOverlayOpacity, 70);
   assert.equal(normalizeOptions({}).modelPreferenceSelectionOverlayEnabled, true);
+  assert.equal(normalizeOptions({}).frameLoadingOverlayEnabled, true);
+  assert.equal(normalizeOptions({ frameLoadingOverlayEnabled: false }).frameLoadingOverlayEnabled, false);
   assert.equal(normalizeOptions({}).modelPreferenceSelectionOverlayOpacity, 70);
 
   assert.equal(normalizeOptions({ modelPreferenceSelectionOverlayEnabled: false }).modelPreferenceSelectionOverlayEnabled, false);
@@ -283,6 +286,7 @@ function autosaveFixture(createAppearanceAutosave, initialOptions = {}, options 
     overlayControlsSource,
     /queueAppearanceAutoSave\(\{ modelPreferenceSelectionOverlayOpacity: nextOpacity \}, \{[\s\S]*?optimistic: true,[\s\S]*?--preferred-model-selection-overlay-opacity[\s\S]*?syncPreferredModelSelectionOverlays\(\)[\s\S]*?redrawOnError: redraw/
   );
+  assert.match(statePortsSource, /"frameLoadingOverlayEnabled", "frameLoadingOverlayOpacity"/);
   assert.match(statePortsSource, /"modelPreferenceSelectionOverlayEnabled", "modelPreferenceSelectionOverlayOpacity"/);
 
   console.log("preferred-model selection overlay settings: ok");

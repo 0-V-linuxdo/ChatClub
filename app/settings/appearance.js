@@ -202,7 +202,17 @@ export function createAppearanceSettingsSection(ctx) {
       return Math.max(0, Math.min(100, Math.round(Number.isFinite(number) ? number : fallback)));
     };
     const overlayOpacityDraft = normalizePercent(state.options.frameLoadingOverlayOpacity);
+    const overlayEnabled = state.options.frameLoadingOverlayEnabled !== false;
     const overlayOpacityValue = el("span", { class: "appearance-range-value" }, `${overlayOpacityDraft}%`);
+    const overlayEnabledToggle = el("input", {
+      id: "appearance-loading-overlay-enabled",
+      type: "checkbox",
+      role: "switch",
+      checked: overlayEnabled,
+      "aria-label": t("appearance.loadingOverlay"),
+      "aria-describedby": "appearance-loading-overlay-help"
+    });
+    overlayEnabledToggle.checked = overlayEnabled;
     const overlayOpacitySlider = el("input", {
       class: "appearance-range-slider",
       type: "range",
@@ -210,6 +220,7 @@ export function createAppearanceSettingsSection(ctx) {
       max: "100",
       step: "1",
       value: String(overlayOpacityDraft),
+      disabled: !overlayEnabled,
       "aria-label": t("appearance.loadingOverlay"),
       "aria-describedby": "appearance-loading-overlay-help"
     });
@@ -217,11 +228,23 @@ export function createAppearanceSettingsSection(ctx) {
       const nextOpacity = normalizePercent(overlayOpacitySlider.value, overlayOpacityDraft);
       overlayOpacitySlider.value = String(nextOpacity);
       overlayOpacityValue.textContent = `${nextOpacity}%`;
-      document.documentElement.style.setProperty("--frame-loading-overlay-opacity", String(nextOpacity / 100));
+      document.documentElement.style.setProperty(
+        "--frame-loading-overlay-opacity",
+        String((overlayEnabledToggle.checked ? nextOpacity : 0) / 100)
+      );
       queueAppearanceAutoSave({ frameLoadingOverlayOpacity: nextOpacity });
     };
     overlayOpacitySlider.addEventListener("input", syncOverlayOpacity);
     overlayOpacitySlider.addEventListener("change", syncOverlayOpacity);
+    overlayEnabledToggle.addEventListener("change", () => {
+      const nextEnabled = overlayEnabledToggle.checked;
+      overlayOpacitySlider.disabled = !nextEnabled;
+      document.documentElement.style.setProperty(
+        "--frame-loading-overlay-opacity",
+        String((nextEnabled ? normalizePercent(overlayOpacitySlider.value, overlayOpacityDraft) : 0) / 100)
+      );
+      queueAppearanceAutoSave({ frameLoadingOverlayEnabled: nextEnabled });
+    });
     const selectionOverlayControls = createModelSelectionOverlayAppearanceControls({
       state, queueAppearanceAutoSave, syncPreferredModelSelectionOverlays, redraw
     });
@@ -274,6 +297,7 @@ export function createAppearanceSettingsSection(ctx) {
       colorPreview,
       el("small", { class: "appearance-color-help" }, t("appearance.primaryColorHelp"))
     );
+    const overlayToggleControl = el("span", { class: "appearance-toggle-control" }, overlayEnabledToggle);
     const overlayOpacityControl = el("div", { class: "appearance-range-control" },
       overlayOpacitySlider,
       overlayOpacityValue
@@ -732,7 +756,7 @@ export function createAppearanceSettingsSection(ctx) {
     const workspaceBlock = () => createAppearanceWorkspacePane({
       activeId: state.settingsAppearanceWorkspaceTab,
       clickReorderControl,
-      colorControl, columnCount, language, overlayOpacityControl, pocketIconControl, selectionOverlayControls,
+      colorControl, columnCount, language, overlayOpacityControl, overlayToggleControl, pocketIconControl, selectionOverlayControls,
       settingsBlock, settingsInnerTabs, svgIcon, themeMode,
       onSelect: (id) => {
         state.settingsAppearanceWorkspaceTab = id;

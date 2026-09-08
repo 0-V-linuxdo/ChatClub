@@ -65,6 +65,7 @@ const descendants = (node) => [node, ...node.children.flatMap(descendants)];
     columnCount: token("columns"),
     language: token("language"),
     overlayOpacityControl: token("loading-overlay"),
+    overlayToggleControl: token("loading-overlay-toggle"),
     pocketIconControl: token("pocket-icon"),
     clickReorderControl: token("click-reorder"),
     selectionOverlayControls: {
@@ -100,7 +101,7 @@ const descendants = (node) => [node, ...node.children.flatMap(descendants)];
   const expectedTokens = {
     general: ["theme", "language", "columns", "pocket-icon", "click-reorder"],
     color: ["color"],
-    overlays: ["loading-overlay", "model-overlay-toggle", "model-overlay-opacity"]
+    overlays: ["loading-overlay-toggle", "loading-overlay", "model-overlay-toggle", "model-overlay-opacity"]
   };
 
   for (const activeId of Object.keys(expectedTokens)) {

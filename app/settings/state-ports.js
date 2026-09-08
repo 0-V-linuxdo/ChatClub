@@ -9,7 +9,7 @@ function optionCapability(read = [], write = read) {
 
 export const SETTINGS_OPTION_CAPABILITIES = Object.freeze({
   appearance: optionCapability([
-    "colMaxCount", "frameLoadingOverlayOpacity", "frameToastPosition", "toastStay", "language",
+    "colMaxCount", "frameLoadingOverlayEnabled", "frameLoadingOverlayOpacity", "frameToastPosition", "toastStay", "language",
     "modelPreferenceSelectionOverlayEnabled", "modelPreferenceSelectionOverlayOpacity", "pocketIcon", "primaryColor", "primaryColorCustom",
     "settingsClickReorderButtonsEnabled",
     "tabContextMenuHiddenIds", "tabContextMenuOrder", "tabGroupButtonOrder", "tabGroupButtonPlacement", "tabGroupButtonsMode",

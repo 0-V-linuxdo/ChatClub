@@ -1080,6 +1080,9 @@ export function normalizeOptions(raw = {}) {
     pocketCardSize: normalizePocketCardSize(raw.pocketCardSize),
     pocketIcon: normalizePocketIcon(raw.pocketIcon),
     frameLoadingOverlayOpacity: boundedNumber(raw.frameLoadingOverlayOpacity, base.frameLoadingOverlayOpacity, 0, 100),
+    frameLoadingOverlayEnabled: typeof raw.frameLoadingOverlayEnabled === "boolean"
+      ? raw.frameLoadingOverlayEnabled
+      : base.frameLoadingOverlayEnabled,
     modelPreferenceSelectionOverlayEnabled: typeof raw.modelPreferenceSelectionOverlayEnabled === "boolean"
       ? raw.modelPreferenceSelectionOverlayEnabled
       : base.modelPreferenceSelectionOverlayEnabled,

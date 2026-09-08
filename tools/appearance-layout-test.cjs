@@ -42,7 +42,7 @@ assert.match(
 );
 assert.match(
   workspaceSource,
-  /const overlaysBlock[\s\S]*appearance\.loadingOverlay[\s\S]*selectionOverlayControls\.toggleControl[\s\S]*appearance\.modelSelectionOverlay[\s\S]*selectionOverlayControls\.opacityControl/,
+  /const overlaysBlock[\s\S]*overlayToggleControl[\s\S]*appearance\.loadingOverlay[\s\S]*selectionOverlayControls\.toggleControl[\s\S]*appearance\.modelSelectionOverlay[\s\S]*selectionOverlayControls\.opacityControl/,
   "overlay workspace tab must own both loading and model-selection controls"
 );
 assert.doesNotMatch(controllerSource, /appearance-workspace-(?:layout|main|aside)/);
@@ -129,9 +129,16 @@ assert.match(
 );
 assert.match(
   workspaceSource,
-  /class: "appearance-overlay-row appearance-overlays-model"[\s\S]*selectionOverlayControls\.toggleControl[\s\S]*appearance\.modelSelectionOverlay[\s\S]*selectionOverlayControls\.opacityControl/,
+  /overlayRangeRow\([\s\S]*selectionOverlayControls\.toggleControl[\s\S]*appearance\.modelSelectionOverlay[\s\S]*selectionOverlayControls\.opacityControl[\s\S]*"appearance-overlays-model"/,
   "model auto-selection puts the switch left of the title on one hugging row"
 );
+assert.match(
+  workspaceSource,
+  /overlayRangeRow\([\s\S]*overlayToggleControl[\s\S]*appearance\.loadingOverlay[\s\S]*overlayOpacityControl/,
+  "loading overlay has the same switch | title | slider grammar as Model"
+);
+assert.match(controllerSource, /frameLoadingOverlayEnabled: nextEnabled/);
+assert.match(storageSource, /frameLoadingOverlayEnabled: typeof raw\.frameLoadingOverlayEnabled === "boolean"/);
 assert.match(
   workspaceSource,
   /appearance-overlay-row[\s\S]*appearance-overlay-copy[\s\S]*createAppearanceOverlayInfoButton/,
@@ -139,13 +146,13 @@ assert.match(
 );
 assert.match(
   stylesheetSource,
-  /\.appearance-workspace-subpane\.is-overlays \.appearance-field-list \{[\s\S]*?grid-template-columns: max-content max-content;[\s\S]*?justify-content:\s*start;/,
-  "overlay sliders share a left-aligned compact column instead of staggering after titles"
+  /\.appearance-workspace-subpane\.is-overlays \.appearance-field-list \{[\s\S]*?grid-template-columns: max-content max-content max-content;[\s\S]*?justify-content:\s*start;/,
+  "overlay switches, titles, and sliders share left-aligned compact columns"
 );
 assert.match(
   stylesheetSource,
   /\.appearance-workspace-subpane\.is-overlays \.appearance-field-row,\s*\n\.appearance-workspace-subpane\.is-overlays \.appearance-overlay-row \{[\s\S]*?grid-template-columns:\s*subgrid;/,
-  "overlay rows use subgrid so both slider tracks start on the same left edge"
+  "overlay rows use subgrid so both titles and slider tracks start on the same left edge"
 );
 assert.match(
   stylesheetSource,

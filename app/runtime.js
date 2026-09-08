@@ -805,7 +805,9 @@ function inferAppName(app) {
   const primaryColor = normalizePrimaryColor(state.options?.primaryColor);
   const isDark = mode === "dark" || (mode === "system" && window.matchMedia?.("(prefers-color-scheme: dark)")?.matches);
   const rawFrameLoadingOverlayOpacity = Number(state.options?.frameLoadingOverlayOpacity);
-  const frameLoadingOverlayOpacity = Math.max(0, Math.min(100, Math.round(Number.isFinite(rawFrameLoadingOverlayOpacity) ? rawFrameLoadingOverlayOpacity : 82))) / 100;
+  const frameLoadingOverlayOpacity = state.options?.frameLoadingOverlayEnabled === false
+    ? 0
+    : Math.max(0, Math.min(100, Math.round(Number.isFinite(rawFrameLoadingOverlayOpacity) ? rawFrameLoadingOverlayOpacity : 82))) / 100;
   const modelSelectionOverlayOpacity = normalizeModelPreferenceSelectionOverlayOpacity(state.options?.modelPreferenceSelectionOverlayOpacity) / 100;
   const frameToastPosition = normalizeFrameToastPosition(state.options?.frameToastPosition);
   const topbarPromptInputFontSize = normalizeTopbarPromptInputFontSize(state.options?.topbarPromptInputFontSize);
