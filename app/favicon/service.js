@@ -9,6 +9,7 @@ import {
   faviconBlobKey,
   faviconCacheKeys,
   faviconColorScheme,
+  faviconDeclaredSizeScore,
   faviconDiscoveryKey,
   isApiLookupHref,
   isFaviconQuality,
@@ -27,7 +28,8 @@ import {
   siteFaviconUrls
 } from "../../shared/favicon-lookup.js";
 
-const FAVICON_CACHE_KEY = "chatclub.faviconCache.v6";
+const FAVICON_CACHE_KEY = "chatclub.faviconCache.v7";
+const FAVICON_CACHE_V6_KEY = "chatclub.faviconCache.v6";
 const FAVICON_CACHE_V5_KEY = "chatclub.faviconCache.v5";
 const FAVICON_CACHE_V4_KEY = "chatclub.faviconCache.v4";
 const FAVICON_CACHE_MAX_ENTRIES = 240;
@@ -161,7 +163,7 @@ export function createFaviconService(dependencies) {
     return true;
   }
 
-  function normalizeCache(value, { migrate = false, fromV5 = false } = {}) {
+  function normalizeCache(value, { migrate = false, dropRasterBlobs = false } = {}) {
     if (!value || typeof value !== "object" || Array.isArray(value)) return {};
     const next = {};
     for (const [key, entry] of Object.entries(value)) {
@@ -170,11 +172,11 @@ export function createFaviconService(dependencies) {
       const data = acceptedDataIcon(url);
       const updatedAt = Number(entry?.updatedAt || 0) || 0;
       if (String(key || "").startsWith("blob:")) {
-        if (fromV5) {
+        if (dropRasterBlobs) {
           if (!data || !/image\/svg\+xml/i.test(data)) continue;
           const stored = qualityEntry(data, {
             quality: FAVICON_QUALITY_BRAND_SVG,
-            source: "v5",
+            source: "legacy",
             updatedAt
           });
           if (stored) next[key] = stored;
@@ -193,12 +195,12 @@ export function createFaviconService(dependencies) {
         if (stored && isFaviconQuality(stored.quality)) next[key] = stored;
         continue;
       }
-      if ((migrate || fromV5) && isGuessedFaviconPath(url) && !data) continue;
+      if ((migrate || dropRasterBlobs) && isGuessedFaviconPath(url) && !data) continue;
       const stored = qualityEntry(data || String(url), {
-        quality: fromV5 || migrate ? "" : entry?.quality,
+        quality: dropRasterBlobs || migrate ? "" : entry?.quality,
         width: entry?.width,
         height: entry?.height,
-        source: fromV5 ? "v5" : entry?.source,
+        source: dropRasterBlobs ? "legacy" : entry?.source,
         declared: !isGuessedFaviconPath(url),
         dataUrl: data,
         updatedAt
@@ -251,12 +253,14 @@ export function createFaviconService(dependencies) {
         const mediaScore = dark
           ? (scheme === "dark" ? 0 : scheme === "light" ? 2 : 1)
           : (scheme === "light" ? 0 : scheme === "dark" ? 2 : 1);
-        const sizeScore = sizes.includes("32") ? 0 : sizes.includes("16") ? 1 : sizes.includes("180") ? 2 : 3;
-        const relScore = rel.includes("shortcut icon") ? 0 : rel.includes("icon") ? 1 : rel.includes("apple-touch-icon") ? 3 : 4;
-        const typeScore = looksSvgFavicon(icon, type) || type.includes("png") || dataIcon
+        const sizeScore = faviconDeclaredSizeScore({ sizes, href: icon, rel });
+        const relScore = rel.includes("icon") && !rel.includes("apple-touch-icon") && !rel.includes("mask-icon")
+          ? (rel.includes("shortcut icon") ? 1 : 0)
+          : rel.includes("apple-touch-icon") ? 2 : 3;
+        const typeScore = looksSvgFavicon(icon, type) || dataIcon
           ? 0
-          : (type.includes("x-icon") || type.includes("icon") ? 1 : 2);
-        return { url: icon, score: mediaScore * 1000 + relScore * 100 + sizeScore * 10 + typeScore, index };
+          : (type.includes("png") ? 1 : 2);
+        return { url: icon, score: mediaScore * 100 + sizeScore * 10 + relScore + typeScore, index };
       })
       .filter(Boolean)
       .sort((a, b) => a.score - b.score || a.index - b.index)[0]?.url || "";
@@ -710,7 +714,7 @@ export function createFaviconService(dependencies) {
           ? new OffscreenCanvas(size, size)
           : Object.assign(document.createElement("canvas"), { width: size, height: size });
         const context = canvas.getContext("2d");
-        const scale = Math.min(size / Math.max(bitmap.width, 1), size / Math.max(bitmap.height, 1), 1);
+        const scale = Math.min(size / Math.max(bitmap.width, 1), size / Math.max(bitmap.height, 1));
         const width = Math.max(1, Math.round(bitmap.width * scale));
         const height = Math.max(1, Math.round(bitmap.height * scale));
         context.clearRect(0, 0, size, size);
@@ -735,7 +739,13 @@ export function createFaviconService(dependencies) {
       state.faviconCache = stored;
       return state.faviconCache;
     }
-    const migratedV5 = normalizeCache(await storageGet(FAVICON_CACHE_V5_KEY), { fromV5: true });
+    const migratedV6 = normalizeCache(await storageGet(FAVICON_CACHE_V6_KEY), { dropRasterBlobs: true });
+    if (Object.keys(migratedV6).length) {
+      state.faviconCache = migratedV6;
+      persistSoon();
+      return state.faviconCache;
+    }
+    const migratedV5 = normalizeCache(await storageGet(FAVICON_CACHE_V5_KEY), { dropRasterBlobs: true });
     if (Object.keys(migratedV5).length) {
       state.faviconCache = migratedV5;
       persistSoon();

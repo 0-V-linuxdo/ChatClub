@@ -119,7 +119,7 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   assert.match(read("app/favicon/service.js"), /from "\.\.\/\.\.\/shared\/favicon-lookup\.js"/);
   assert.match(read("app/favicon/service.js"), /siteFaviconUrls/);
   assert.match(read("shared/favicon-lookup.js"), /favicon\.svg/);
-  assert.match(read("app/favicon/service.js"), /chatclub\.faviconCache\.v6/);
+  assert.match(read("app/favicon/service.js"), /chatclub\.faviconCache\.v7/);
   assert.match(read("app/favicon/service.js"), /rememberDecoded/);
   assert.match(read("ui/favicon.js"), /favicon-lookup\.js/);
   assert.match(read("ui/favicon.js"), /isGenericNetworkFavicon/);

@@ -251,6 +251,24 @@ export function faviconColorScheme({ media = "", href = "" } = {}) {
   return "";
 }
 
+export function faviconDeclaredSizeScore({ sizes = "", href = "", rel = "" } = {}) {
+  if (looksSvgFavicon(href)) return 0;
+  const nums = String(sizes || "").toLowerCase().match(/\d+/g)?.map(Number).filter((value) => value > 0) || [];
+  let maxSize = nums.length ? Math.max(...nums) : 0;
+  if (!maxSize) {
+    const file = String(href || "").split(/[?#]/, 1)[0];
+    const named = file.match(/(\d{2,3})x\1/i) || file.match(/(?:^|[-_/])(\d{2,3})\.(?:png|ico|jpe?g|webp)$/i);
+    if (named) maxSize = Number(named[1]);
+  }
+  if (maxSize >= 128) return 0;
+  if (maxSize >= 64) return 1;
+  if (maxSize >= 48) return 2;
+  if (maxSize >= 32) return 3;
+  if (maxSize === 16) return 6;
+  if (/(^|\s)apple-touch-icon(\s|$)/i.test(rel)) return 1;
+  return 4;
+}
+
 export function peeledHostCore(hostname) {
   const hosts = networkLookupHosts(hostname);
   return hosts[hosts.length - 1] || "";

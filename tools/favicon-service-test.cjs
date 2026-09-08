@@ -438,6 +438,18 @@ function link(attributes = {}) {
   assert.equal(lookup.isImmediateReadyFavicon(painted), true);
   assert.equal(lookup.isImmediateReadyFavicon("data:image/png;base64,AAAA"), true);
   assert.equal(lookup.isImmediateReadyFavicon("https://0-0.pro/favicon.ico"), false);
+  assert.equal(lookup.faviconDeclaredSizeScore({ sizes: "32x32", href: "https://www.typingmind.com/favicon-32x32.png" }), 3);
+  assert.equal(lookup.faviconDeclaredSizeScore({ sizes: "192x192", href: "https://www.typingmind.com/android-icon-192x192.png" }), 0);
+  assert.equal(lookup.faviconDeclaredSizeScore({ sizes: "16x16", href: "https://www.typingmind.com/favicon-16x16.png" }), 6);
+  assert.equal(lookup.faviconDeclaredSizeScore({ href: "https://www.perplexity.ai/favicon.svg" }), 0);
+  assert.match(
+    fs.readFileSync(path.join(root, "app/favicon/service.js"), "utf8"),
+    /Math\.min\(size \/ Math\.max\(bitmap\.width, 1\), size \/ Math\.max\(bitmap\.height, 1\)\)/
+  );
+  assert.doesNotMatch(
+    fs.readFileSync(path.join(root, "app/favicon/service.js"), "utf8"),
+    /Math\.min\(size \/ Math\.max\(bitmap\.width, 1\), size \/ Math\.max\(bitmap\.height, 1\), 1\)/
+  );
   const solid = new Uint8Array(4 * 32);
   for (let index = 0; index < 32; index += 1) {
     solid[index * 4] = 6;
@@ -511,9 +523,9 @@ function link(attributes = {}) {
   });
   await migrator.load();
   assert.equal(migratedState.faviconCache["https://chatgpt.com/"]?.url, cdnIcon);
-  assert.equal(migratedState.faviconCache["https://0-0.pro/"], undefined, "v4 guessed ico pointers must not become v6 blobs");
+  assert.equal(migratedState.faviconCache["https://0-0.pro/"], undefined, "v4 guessed ico pointers must not become v7 blobs");
   assert.equal(migratedState.faviconCache["https://chatgpt.com/ddg"], undefined);
-  assert.match(fs.readFileSync(path.join(root, "app/favicon/service.js"), "utf8"), /chatclub\.faviconCache\.v6/);
+  assert.match(fs.readFileSync(path.join(root, "app/favicon/service.js"), "utf8"), /chatclub\.faviconCache\.v7/);
 
   const v5State = { faviconCache: {}, options: {} };
   const boltPng = "data:image/png;base64,AAAA";
@@ -546,6 +558,30 @@ function link(attributes = {}) {
   assert.notEqual(v5Migrator.candidates("https://0-0.pro/")[0], boltPng);
   assert.equal(v5Migrator.candidates("https://www.perplexity.ai/")[0], painted);
 
+  const v6State = { faviconCache: {}, options: {} };
+  const v6Migrator = createFaviconService({
+    state: v6State,
+    storageGet: async (key) => {
+      if (key === "chatclub.faviconCache.v6") {
+        return {
+          "blob:kimi.com": { url: boltPng, quality: "ok-raster", width: 128, height: 128, updatedAt: 1 },
+          "blob:perplexity.ai": { url: painted, quality: "brand-svg", updatedAt: 2 }
+        };
+      }
+      return {};
+    },
+    storageSet: async () => {},
+    runtimeGetUrl: (value) => runtimeUrl("moz-extension:", value),
+    runtimeGetManifest: () => ({ permissions: [] }),
+    inferAppName: (app) => app?.name || "Example",
+    fetchPage: async () => ({ ok: true, text: async () => "<html></html>" }),
+    parseHtml: () => ({ querySelectorAll: () => [] })
+  });
+  await v6Migrator.load();
+  assert.equal(v6State.faviconCache["blob:kimi.com"], undefined, "v6 padded raster blobs must be discarded");
+  assert.equal(v6State.faviconCache["blob:perplexity.ai"]?.url, painted);
+  assert.notEqual(v6Migrator.candidates("https://www.kimi.com/")[0], boltPng);
+
   const previousMatchMedia = globalThis.matchMedia;
   globalThis.matchMedia = (query) => ({ matches: String(query).includes("prefers-color-scheme: dark") });
   try {
@@ -573,6 +609,19 @@ function link(attributes = {}) {
       await perplexity.discover("https://www.perplexity.ai/"),
       "https://www.perplexity.ai/favicon.svg",
       "declared SVG must beat a guessed 48px ICO"
+    );
+    const typingmind = create({
+      protocol: "moz-extension:",
+      pageHtmlLinks: [
+        link({ rel: "icon", href: "/favicon-16x16.png", type: "image/png", sizes: "16x16" }),
+        link({ rel: "icon", href: "/favicon-32x32.png", type: "image/png", sizes: "32x32" }),
+        link({ rel: "icon", href: "/android-icon-192x192.png", type: "image/png", sizes: "192x192" })
+      ]
+    });
+    assert.equal(
+      await typingmind.discover("https://www.typingmind.com/"),
+      "https://www.typingmind.com/android-icon-192x192.png",
+      "declared 192px PNG must beat 32px and 16px icons"
     );
   } finally {
     if (previousMatchMedia === undefined) delete globalThis.matchMedia;
