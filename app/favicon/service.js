@@ -13,7 +13,6 @@ import {
   isApiLookupHref,
   isFaviconQuality,
   isGuessedFaviconPath,
-  isImmediateReadyQuality,
   isLetterFallbackIcon,
   isNearSolidRgba,
   isNetworkFavicon,
@@ -263,9 +262,21 @@ export function createFaviconService(dependencies) {
       .sort((a, b) => a.score - b.score || a.index - b.index)[0]?.url || "";
   }
 
+  function pruneKeepRank(key, entry) {
+    const url = String(entry?.url || "");
+    const blob = String(key || "").startsWith("blob:") || APP_ICON_DATA_RE.test(url);
+    if (blob) {
+      if (entry?.quality === FAVICON_QUALITY_BRAND_SVG) return 0;
+      if (entry?.quality === FAVICON_QUALITY_DECLARED_RASTER) return 1;
+      return 2;
+    }
+    return 3;
+  }
+
   function prune(cache) {
     return Object.fromEntries(Object.entries(cache)
-      .sort((a, b) => Number(b[1]?.updatedAt || 0) - Number(a[1]?.updatedAt || 0))
+      .sort((a, b) => pruneKeepRank(a[0], a[1]) - pruneKeepRank(b[0], b[1])
+        || Number(b[1]?.updatedAt || 0) - Number(a[1]?.updatedAt || 0))
       .slice(0, FAVICON_CACHE_MAX_ENTRIES));
   }
 
@@ -278,7 +289,7 @@ export function createFaviconService(dependencies) {
     const entry = blobRecord(href);
     const url = entry?.url;
     if (!url || isLetterFallbackIcon(url)) return "";
-    if (immediate && !isImmediateReadyQuality(entry.quality)) return "";
+    if (immediate && !isFaviconQuality(entry.quality)) return "";
     return acceptedDataIcon(url)
       || (APP_ICON_DATA_RE.test(url) && url.length <= APP_ICON_DATA_MAX_CHARS ? url : "");
   }
@@ -297,12 +308,15 @@ export function createFaviconService(dependencies) {
   }
 
   function cached(href) {
-    return cachedBlob(href, { immediate: true }) || cachedUrl(href);
+    return cachedBlob(href) || cachedUrl(href);
   }
 
   function persistSoon() {
     clearTimeout(persistTimer);
-    persistTimer = setTimeout(() => storageSet(FAVICON_CACHE_KEY, state.faviconCache).catch(() => {}), 300);
+    persistTimer = setTimeout(() => {
+      const snapshot = state.faviconCache;
+      storageSet(FAVICON_CACHE_KEY, snapshot).catch(() => {});
+    }, 300);
   }
 
   function notifyTabFaviconChange() {
@@ -525,12 +539,16 @@ export function createFaviconService(dependencies) {
     const data = acceptedDataIcon(src);
     if (data) {
       if (isLetterFallbackIcon(data)) return "";
-      if (/image\/svg\+xml/i.test(data)) {
-        rememberBlob(href, data, {
-          quality: FAVICON_QUALITY_BRAND_SVG,
-          source: "decoded"
-        });
-      }
+      rememberBlob(href, data, {
+        quality: /image\/svg\+xml/i.test(data)
+          ? FAVICON_QUALITY_BRAND_SVG
+          : classifyFaviconQuality({
+            url: src,
+            dataUrl: data,
+            declared: !isGuessedFaviconPath(src)
+          }),
+        source: "decoded"
+      });
       return data;
     }
     if (!siteIcon(href, src)) return "";
@@ -543,9 +561,17 @@ export function createFaviconService(dependencies) {
     return faviconDiscoveryKey(href);
   }
 
+  async function materializeIcon(href, logoUrl, meta = {}) {
+    remember(href, logoUrl, meta);
+    const data = acceptedDataIcon(logoUrl)
+      || (APP_ICON_DATA_RE.test(logoUrl) && logoUrl.length <= APP_ICON_DATA_MAX_CHARS ? logoUrl : "");
+    if (data) return data;
+    return (await persistFetchedBlob(href, logoUrl, meta)) || logoUrl;
+  }
+
   async function discover(href) {
-    const cachedUrl = cached(href);
-    if (cachedUrl) return cachedUrl;
+    const hit = cached(href);
+    if (hit) return hit;
     const page = pageUrl(href);
     if (!page) return "";
     page.hash = "";
@@ -573,8 +599,7 @@ export function createFaviconService(dependencies) {
           if (!response.ok) continue;
           const logoUrl = chooseDeclared(parseHtml(await response.text()), target);
           if (logoUrl) {
-            remember(page.href, logoUrl, { source: "declared", declared: true });
-            return logoUrl;
+            return materializeIcon(page.href, logoUrl, { source: "declared", declared: true });
           }
         } catch {
         } finally {
@@ -596,12 +621,11 @@ export function createFaviconService(dependencies) {
             if (looksSvgFavicon(icon, type) && !isPaintedSvgMarkup(new TextDecoder().decode(bytes))) continue;
           } else if (!type.startsWith("image/")) continue;
           const declared = !isGuessedFaviconPath(icon);
-          remember(page.href, icon, {
+          return materializeIcon(page.href, icon, {
             source: declared ? "declared" : "guessed",
             declared,
             quality: classifyFaviconQuality({ url: icon, type, declared })
           });
-          return icon;
         } catch {
         } finally {
           clearTimeout(timer);
@@ -650,7 +674,7 @@ export function createFaviconService(dependencies) {
     else if (declared && APP_ICON_DATA_RE.test(declared) && !isLetterFallbackIcon(declared)) push(declared);
     const declaredPage = declared && !declaredData ? pageUrl(declared, href) : null;
     if (declaredPage && siteIcon(href, declaredPage.href)) push(declaredPage.href);
-    push(cachedBlob(href, { immediate: true }));
+    push(cachedBlob(href));
     push(cachedUrl(href));
     for (const url of siteFaviconUrls(href)) push(url);
     for (const url of networkFaviconUrls(href)) push(url);

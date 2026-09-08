@@ -206,8 +206,78 @@ function link(attributes = {}) {
     undefined,
     "letter fallback glyphs must never be remembered as brand-svg"
   );
-  rememberer.remember("https://letter.example/", letter);
-  assert.equal(cacheState.faviconCache["https://letter.example/"], undefined);
+  const okRaster = "data:image/png;base64,AAAA";
+  cacheState.faviconCache["blob:poe.com"] = {
+    url: okRaster,
+    quality: "ok-raster",
+    width: 32,
+    height: 32,
+    source: "decoded",
+    updatedAt: 1
+  };
+  assert.equal(
+    rememberer.candidates("https://poe.com/")[0],
+    okRaster,
+    "ok-raster blobs must be first-paint candidates"
+  );
+  assert.equal(
+    rememberer.candidates("https://www.poe.com/")[0],
+    okRaster,
+    "Settings tabs must share the peeled-host blob"
+  );
+  assert.equal(
+    rememberer.candidates("https://0-0.pro/register")[0],
+    painted,
+    "Provider registerUrl must share Apps origin blob"
+  );
+  await rememberer.rememberDecoded("https://www.kimi.com/", okRaster);
+  assert.equal(cacheState.faviconCache["blob:kimi.com"]?.url, okRaster);
+  assert.ok(lookup.isFaviconQuality(cacheState.faviconCache["blob:kimi.com"]?.quality));
+
+  const quotaState = { faviconCache: {}, options: {} };
+  const quota = createFaviconService({
+    state: quotaState,
+    storageGet: async () => ({}),
+    storageSet: async () => {
+      throw new Error("QUOTA_BYTES");
+    },
+    runtimeGetUrl: (value) => runtimeUrl("moz-extension:", value),
+    runtimeGetManifest: () => ({ permissions: [] }),
+    inferAppName: (app) => app?.name || "Example",
+    fetchPage: async () => {
+      throw new Error("persist failure must not refetch");
+    },
+    parseHtml: () => ({ querySelectorAll: () => [] })
+  });
+  await quota.rememberDecoded("https://www.qwen.com/", painted);
+  assert.equal(quota.candidates("https://qwen.com/")[0], painted, "persist failure must not clear L1");
+
+  const remountHits = [];
+  const remounted = createFaviconService({
+    state: {
+      faviconCache: {
+        "blob:chatgpt.com": { url: painted, quality: "brand-svg", updatedAt: 1 }
+      },
+      options: {}
+    },
+    storageGet: async () => ({}),
+    storageSet: async () => {},
+    runtimeGetUrl: (value) => runtimeUrl("moz-extension:", value),
+    runtimeGetManifest: () => ({ permissions: [] }),
+    inferAppName: (app) => app?.name || "Example",
+    fetchPage: async (url) => {
+      remountHits.push(String(url));
+      return { ok: false };
+    },
+    parseHtml: () => ({ querySelectorAll: () => [] })
+  });
+  assert.equal(await remounted.discover("https://chatgpt.com/"), painted);
+  assert.equal(await remounted.discover("https://chatgpt.com/"), painted);
+  assert.equal(remounted.candidates("https://chatgpt.com/")[0], painted);
+  assert.equal(remountHits.length, 0, "same-session remount must not refetch a cached blob");
+  assert.ok(remounted.candidates("https://chatgpt.com/").some((url) => url.includes("duckduckgo.com")));
+  assert.ok(remounted.candidates("https://chatgpt.com/").some((url) => url.includes("google.com/s2/favicons")));
+  assert.ok(!Object.values(quotaState.faviconCache).some((entry) => lookup.isNetworkFavicon(entry?.url)));
 
   const svgFile = new File(["<svg xmlns='http://www.w3.org/2000/svg'></svg>"], "icon.svg", { type: "image/svg+xml" });
   const encoded = await rememberer.encodeFile(svgFile);
@@ -366,7 +436,8 @@ function link(attributes = {}) {
   assert.equal(lookup.acceptedDataIcon("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3C/svg%3E"), "");
   assert.equal(lookup.acceptedDataIcon(painted), painted);
   assert.equal(lookup.isImmediateReadyFavicon(painted), true);
-  assert.equal(lookup.isImmediateReadyFavicon("data:image/png;base64,AAAA"), false);
+  assert.equal(lookup.isImmediateReadyFavicon("data:image/png;base64,AAAA"), true);
+  assert.equal(lookup.isImmediateReadyFavicon("https://0-0.pro/favicon.ico"), false);
   const solid = new Uint8Array(4 * 32);
   for (let index = 0; index < 32; index += 1) {
     solid[index * 4] = 6;

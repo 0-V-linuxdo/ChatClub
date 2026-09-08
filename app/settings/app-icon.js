@@ -1,5 +1,6 @@
 import { t } from "../../shared/i18n.js";
 import { BUILTIN_CHAT_APPS } from "../../shared/constants.js";
+import { acceptedDataIcon } from "../../shared/favicon-lookup.js";
 import { normalizeAppIcons } from "../../shared/storage-schema.js";
 import { button, editorModal, el, field, input, toast } from "../../ui/dom.js";
 import { renderChatFavicon } from "../../ui/favicon.js";
@@ -80,7 +81,16 @@ export function settingsSiteMark(source = {}, faviconPort = {}) {
     || el("span", { class: "settings-site-icon settings-site-icon-empty", "aria-hidden": "true" });
   image.setAttribute?.("aria-hidden", "true");
   if (href && typeof faviconPort.discover === "function") {
-    Promise.resolve(faviconPort.discover(href)).catch(() => {});
+    Promise.resolve(faviconPort.discover(href)).then((found) => {
+      if (!image || image.dataset?.faviconMiss === "1") return;
+      const resolved = acceptedDataIcon(found)
+        || (typeof faviconPort.effective === "function"
+          ? acceptedDataIcon(faviconPort.effective(href, source.logoUrl, { appId }))
+          : "");
+      if (!resolved) return;
+      if (image.src !== resolved) image.src = resolved;
+      image.dataset.faviconReady = "1";
+    }).catch(() => {});
   }
   return image;
 }

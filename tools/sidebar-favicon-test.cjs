@@ -245,13 +245,20 @@ globalThis.document = {
   assert.notEqual(lyingIco.dataset.faviconReady, "1");
   assert.equal(lyingIco.src, "https://0-0.pro/fallback.png");
 
-  const boltBlob = "data:image/png;base64,AAAA";
+  const okRasterBlob = "data:image/png;base64,AAAA";
   const remount = renderChatFavicon(
-    { href: "https://0-0.pro/", logoUrl: boltBlob },
+    { href: "https://poe.com/", logoUrl: okRasterBlob },
+    { omitTitle: true, siteFaviconUrls: () => ["https://poe.com/favicon.svg"], networkFaviconUrls: () => [] }
+  );
+  assert.equal(remount.src, okRasterBlob);
+  assert.equal(remount.dataset.faviconReady, "1", "accepted raster blobs must paint immediately-ready on remount");
+
+  const emptySvg = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg"></svg>');
+  const empty = renderChatFavicon(
+    { href: "https://0-0.pro/", logoUrl: emptySvg },
     { omitTitle: true, siteFaviconUrls: () => ["https://0-0.pro/favicon.svg"], networkFaviconUrls: () => [] }
   );
-  assert.equal(remount.src, boltBlob);
-  assert.notEqual(remount.dataset.faviconReady, "1", "v5 raster blobs must not paint immediately-ready");
+  assert.notEqual(empty.dataset.faviconReady, "1", "empty SVG must not paint immediately-ready");
 
   const declaredPng = "https://www.gstatic.com/lamda/images/gemini_sparkle_4g_512_lt.png";
   const gemini = renderChatFavicon(

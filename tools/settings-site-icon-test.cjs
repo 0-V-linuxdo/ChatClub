@@ -339,6 +339,22 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
     await Promise.resolve();
     assert.equal(discovered, "https://www.perplexity.ai/");
     assert.match(iconEditor, /faviconPort\.discover/);
+    const painted = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg"><circle cx="8" cy="8" r="6"/></svg>');
+    const writeback = settingsSiteMark({
+      href: "https://chatgpt.com/",
+      skipCatalog: true
+    }, {
+      discover: async () => painted,
+      effective: () => "https://chatgpt.com/favicon.svg",
+      siteUrls: () => ["https://chatgpt.com/favicon.svg"],
+      networkUrls: () => []
+    });
+    assert.match(writeback.src, /chatgpt\.com\/favicon\.svg$/);
+    assert.equal(writeback.dataset.faviconReady, undefined);
+    await Promise.resolve();
+    await Promise.resolve();
+    assert.equal(writeback.src, painted);
+    assert.equal(writeback.dataset.faviconReady, "1");
   } finally {
     if (previousNode === undefined) delete globalThis.Node;
     else globalThis.Node = previousNode;

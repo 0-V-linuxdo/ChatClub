@@ -225,10 +225,6 @@ export function isFaviconQuality(value) {
     || value === FAVICON_QUALITY_OK_RASTER;
 }
 
-export function isImmediateReadyQuality(quality) {
-  return quality === FAVICON_QUALITY_BRAND_SVG || quality === FAVICON_QUALITY_DECLARED_RASTER;
-}
-
 export function classifyFaviconQuality({ url = "", type = "", declared = false, dataUrl = "" } = {}) {
   const raw = String(dataUrl || url || "").trim();
   if (!raw || isNetworkFavicon(raw) || isLetterFallbackIcon(raw)) return "";
@@ -240,12 +236,11 @@ export function classifyFaviconQuality({ url = "", type = "", declared = false, 
   return FAVICON_QUALITY_OK_RASTER;
 }
 
-export function isImmediateReadyFavicon(url, quality = "") {
+export function isImmediateReadyFavicon(url) {
   const raw = String(url || "").trim();
   if (!raw) return false;
   if (isLetterFallbackIcon(raw)) return true;
-  if (acceptedDataIcon(raw) && /image\/svg\+xml/i.test(raw)) return true;
-  return isImmediateReadyQuality(quality);
+  return Boolean(acceptedDataIcon(raw));
 }
 
 export function faviconColorScheme({ media = "", href = "" } = {}) {
