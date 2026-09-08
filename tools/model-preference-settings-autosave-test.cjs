@@ -867,8 +867,8 @@ globalThis.document = {
   );
   assert.doesNotMatch(modelStyles, /max-width:\s*min\(36ch,\s*100%\)/);
   assert.match(modelStyles, /\.model-preference-segmented-heading\s*\{[^}]*display:\s*inline-flex/s);
-  assert.match(modelStyles, /\.model-preference-segmented-info\s*\{[^}]*border-radius:\s*var\(--ui-radius\)/s);
-  assert.match(modelStyles, /\.model-preference-segmented-info:focus-visible\s*\{[^}]*box-shadow:/s);
+  assert.match(modelStyles, /\.model-preference-segmented-info(?:,\s*\.appearance-overlay-info)?\s*\{[^}]*border-radius:\s*var\(--ui-radius\)/s);
+  assert.match(modelStyles, /\.model-preference-segmented-info:focus-visible(?:,\s*\.appearance-overlay-info:focus-visible)?\s*\{[^}]*box-shadow:/s);
   assert.doesNotMatch(modelStyles, /model-thinking-toggle/);
   assert.doesNotMatch(modelStyles, /model-preference-all-sources-(?:control|heading|title|info|segments|option)/);
   assert.doesNotMatch(modelStyles, /transform:\s*rotate\(-45deg\)/);

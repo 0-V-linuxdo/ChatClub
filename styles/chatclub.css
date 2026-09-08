@@ -4063,13 +4063,7 @@ body.tab-gesture-active * {
   font-size: var(--font-size);
 }
 
-.appearance-workspace-subpane.is-overlays .appearance-toggle-copy {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.appearance-workspace-subpane.is-overlays .appearance-toggle-copy label {
+.appearance-workspace-subpane.is-overlays .appearance-overlay-copy label {
   min-width: 0;
 }
 
@@ -4080,14 +4074,19 @@ body.tab-gesture-active * {
 }
 
 .appearance-workspace-subpane.is-overlays .appearance-overlays-model {
-  display: grid;
-  gap: 14px;
+  grid-template-columns: minmax(0, max-content) auto auto;
   padding-top: 14px;
   border-top: 1px solid color-mix(in srgb, var(--line) 84%, transparent);
 }
 
-.appearance-workspace-subpane.is-overlays .appearance-overlays-child {
-  padding-inline-start: var(--space-4);
+.appearance-workspace-subpane.is-overlays .appearance-overlays-model > .appearance-toggle-control {
+  display: inline-flex;
+  align-items: center;
+  width: max-content;
+}
+
+.appearance-workspace-subpane.is-overlays .appearance-overlays-model > .appearance-toggle-control input {
+  margin: 0;
 }
 
 @container (max-width: 560px) {
@@ -7185,8 +7184,7 @@ body.settings-tab-context-menu-dragging iframe {
   gap: 5px;
 }
 
-.iframe-permission-help-trigger,
-.appearance-overlay-info {
+.iframe-permission-help-trigger {
   width: var(--target-min);
   min-width: var(--target-min);
   min-height: var(--target-min);
@@ -7195,20 +7193,9 @@ body.settings-tab-context-menu-dragging iframe {
   border-radius: var(--ui-radius-pill);
 }
 
-.iframe-permission-help-trigger .svg-icon,
-.appearance-overlay-info .svg-icon {
+.iframe-permission-help-trigger .svg-icon {
   width: 15px;
   height: 15px;
-}
-
-.appearance-overlay-info {
-  color: var(--muted);
-  cursor: help;
-}
-
-.appearance-overlay-info:hover,
-.appearance-overlay-info:focus-visible {
-  color: var(--text);
 }
 
 .iframe-permission-group-header p {
@@ -7835,7 +7822,8 @@ body.settings-tab-context-menu-dragging iframe {
   line-height: 1.25;
 }
 
-.model-preference-segmented-info {
+.model-preference-segmented-info,
+.appearance-overlay-info {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -7853,16 +7841,20 @@ body.settings-tab-context-menu-dragging iframe {
 }
 
 .model-preference-segmented-info:hover,
-.model-preference-segmented-info:focus-visible {
+.model-preference-segmented-info:focus-visible,
+.appearance-overlay-info:hover,
+.appearance-overlay-info:focus-visible {
   color: var(--text);
   background: color-mix(in srgb, var(--primary) 16%, transparent);
 }
 
-.model-preference-segmented-info:focus-visible {
+.model-preference-segmented-info:focus-visible,
+.appearance-overlay-info:focus-visible {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 20%, transparent);
 }
 
-.model-preference-segmented-info .svg-icon {
+.model-preference-segmented-info .svg-icon,
+.appearance-overlay-info .svg-icon {
   width: 14px;
   height: 14px;
 }

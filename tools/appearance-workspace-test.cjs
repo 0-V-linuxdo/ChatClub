@@ -100,7 +100,7 @@ const descendants = (node) => [node, ...node.children.flatMap(descendants)];
   const expectedTokens = {
     general: ["theme", "language", "columns", "pocket-icon", "click-reorder"],
     color: ["color"],
-    overlays: ["loading-overlay", "model-overlay-toggle", "model-overlay-opacity"]
+    overlays: ["loading-overlay", "model-overlay-opacity", "model-overlay-toggle"]
   };
 
   for (const activeId of Object.keys(expectedTokens)) {

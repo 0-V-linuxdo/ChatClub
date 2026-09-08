@@ -219,7 +219,7 @@ export async function appearanceWorkspaceSubtabsProbe({
   currentState().tabs[2]?.click();
   await waitForCondition(() => currentState().panel?.classList.contains("is-overlays"), 3000, "Overlays workspace subtab");
   const overlayToggle = document.querySelector('.appearance-toggle-control input[role="switch"]');
-  const overlaySlider = document.querySelector('[aria-describedby="appearance-model-selection-overlay-opacity-help"]');
+  const overlaySlider = document.querySelector('.appearance-overlays-model .appearance-range-slider');
   const describedText = (control) => {
     const node = document.getElementById(control?.getAttribute("aria-describedby") || "");
     return String(node?.getAttribute("aria-label") || node?.textContent || "").trim();

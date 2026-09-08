@@ -11,7 +11,7 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
 const controlsSource = read("app/settings/appearance-model-selection-overlay.js");
 
 assert.match(controlsSource, /"aria-describedby": TOGGLE_HELP_ID/);
-assert.match(controlsSource, /"aria-describedby": OPACITY_HELP_ID/);
+assert.doesNotMatch(controlsSource, /OPACITY_HELP_ID/);
 assert.match(controlsSource, /"aria-valuetext": `\$\{opacityDraft\}%`/);
 assert.match(controlsSource, /setAttribute\("aria-valuetext", `\$\{nextOpacity\}%`\)/);
 
@@ -261,12 +261,13 @@ function autosaveFixture(createAppearanceAutosave, initialOptions = {}, options 
 
   const appearanceSource = read("app/settings/appearance.js");
   const overlayControlsSource = read("app/settings/appearance-model-selection-overlay.js");
+  const workspaceSource = read("app/settings/appearance-workspace.js");
   const statePortsSource = read("app/settings/state-ports.js");
   assert.match(appearanceSource, /createModelSelectionOverlayAppearanceControls\(\{/);
   assert.match(overlayControlsSource, /class: "appearance-toggle-control"/);
-  assert.match(overlayControlsSource, /class: "appearance-toggle-copy"/);
-  assert.match(overlayControlsSource, /createAppearanceOverlayInfoButton\(/);
-  assert.match(overlayControlsSource, /"settings\.appearance\.modelSelectionOverlay"/);
+  assert.match(workspaceSource, /createAppearanceOverlayInfoButton\(/);
+  assert.match(workspaceSource, /"settings\.appearance\.modelSelectionOverlay"/);
+  assert.doesNotMatch(overlayControlsSource, /class: "appearance-toggle-copy"/);
   assert.match(overlayControlsSource, /role: "switch"[\s\S]*checked: enabled/);
   assert.match(overlayControlsSource, /disabled: !enabled/);
   assert.match(overlayControlsSource, /opacitySlider\.disabled = !nextEnabled/);

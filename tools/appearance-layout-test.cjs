@@ -42,7 +42,7 @@ assert.match(
 );
 assert.match(
   workspaceSource,
-  /const overlaysBlock[\s\S]*appearance\.loadingOverlay[\s\S]*selectionOverlayControls\.toggleControl[\s\S]*appearance\.modelSelectionOverlayOpacity/,
+  /const overlaysBlock[\s\S]*appearance\.loadingOverlay[\s\S]*appearance\.modelSelectionOverlay[\s\S]*selectionOverlayControls\.opacityControl[\s\S]*selectionOverlayControls\.toggleControl/,
   "overlay workspace tab must own both loading and model-selection controls"
 );
 assert.doesNotMatch(controllerSource, /appearance-workspace-(?:layout|main|aside)/);
@@ -129,8 +129,8 @@ assert.match(
 );
 assert.match(
   workspaceSource,
-  /class: "appearance-overlays-model"[\s\S]*selectionOverlayControls\.toggleControl[\s\S]*appearance\.modelSelectionOverlayOpacity/,
-  "model auto-selection groups the toggle with its child opacity row"
+  /class: "appearance-overlay-row appearance-overlays-model"[\s\S]*appearance\.modelSelectionOverlay[\s\S]*selectionOverlayControls\.opacityControl[\s\S]*selectionOverlayControls\.toggleControl/,
+  "model auto-selection merges the toggle and opacity onto one hugging row"
 );
 assert.match(
   workspaceSource,
@@ -149,8 +149,8 @@ assert.match(
 );
 assert.match(
   stylesheetSource,
-  /\.iframe-permission-help-trigger,\s*\n\.appearance-overlay-info \{[\s\S]*?border-radius:\s*var\(--ui-radius-pill\)/,
-  "overlay help uses the circular info trigger, not a second line of copy"
+  /\.model-preference-segmented-info,\s*\n\.appearance-overlay-info \{[\s\S]*?border:\s*0/,
+  "overlay help uses the ghost info trigger, not a ringed icon-button"
 );
 assert.doesNotMatch(
   workspaceSource,
@@ -164,8 +164,13 @@ assert.match(
 );
 assert.match(
   stylesheetSource,
-  /\.appearance-workspace-subpane\.is-overlays \.appearance-overlays-child \{[\s\S]*?padding-inline-start:/,
-  "model opacity is a child of the auto-selection toggle"
+  /\.appearance-workspace-subpane\.is-overlays \.appearance-overlays-model \{[\s\S]*?grid-template-columns: minmax\(0, max-content\) auto auto;/,
+  "model auto-selection keeps title, slider, and switch on one hugging row"
+);
+assert.doesNotMatch(
+  stylesheetSource,
+  /\.appearance-overlays-child/,
+  "model opacity is no longer a nested child row"
 );
 assert.match(
   stylesheetSource,

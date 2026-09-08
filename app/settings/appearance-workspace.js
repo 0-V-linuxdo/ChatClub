@@ -6,7 +6,6 @@ export const APPEARANCE_WORKSPACE_TAB_IDS = Object.freeze(["general", "color", "
 const WORKSPACE_PANEL_ID = "appearance-workspace-panel";
 const workspaceTabId = (id) => `appearance-workspace-tab-${id}`;
 const LOADING_OVERLAY_HELP_ID = "appearance-loading-overlay-help";
-const MODEL_OVERLAY_OPACITY_HELP_ID = "appearance-model-selection-overlay-opacity-help";
 
 export function createAppearanceWorkspacePane({
   activeId,
@@ -70,18 +69,21 @@ export function createAppearanceWorkspacePane({
         ),
         overlayOpacityControl
       ),
-      el("div", { class: "appearance-overlays-model" },
-        appearanceRow(selectionOverlayControls.toggleControl),
-        overlayRangeRow(
-          t("appearance.modelSelectionOverlayOpacity"),
-          createAppearanceOverlayInfoButton(
-            svgIcon,
-            t("appearance.modelSelectionOverlayOpacityHelp"),
-            MODEL_OVERLAY_OPACITY_HELP_ID,
-            "settings.appearance.modelSelectionOverlayOpacity"
+      appearanceRow(
+        el("div", { class: "appearance-overlay-row appearance-overlays-model" },
+          el("span", { class: "appearance-overlay-copy" },
+            el("label", { for: "appearance-model-selection-overlay-enabled" },
+              el("strong", {}, t("appearance.modelSelectionOverlay"))
+            ),
+            createAppearanceOverlayInfoButton(
+              svgIcon,
+              `${t("appearance.modelSelectionOverlayHelp")} ${t("appearance.modelSelectionOverlayOpacityHelp")}`,
+              "appearance-model-selection-overlay-help",
+              "settings.appearance.modelSelectionOverlay"
+            )
           ),
           selectionOverlayControls.opacityControl,
-          "appearance-overlays-child"
+          selectionOverlayControls.toggleControl
         )
       )
     )

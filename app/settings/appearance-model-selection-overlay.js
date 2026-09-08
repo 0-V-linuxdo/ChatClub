@@ -4,12 +4,11 @@ import { el } from "../../ui/dom.js";
 
 const TOGGLE_HELP_ID = "appearance-model-selection-overlay-help";
 const TOGGLE_INPUT_ID = "appearance-model-selection-overlay-enabled";
-const OPACITY_HELP_ID = "appearance-model-selection-overlay-opacity-help";
 
 export function createAppearanceOverlayInfoButton(svgIcon, help, helpId, tooltipId) {
   return el("button", {
     id: helpId,
-    class: "icon-button appearance-overlay-info tooltip-trigger",
+    class: "appearance-overlay-info tooltip-trigger",
     type: "button",
     "aria-label": help,
     "data-tooltip": help,
@@ -24,8 +23,7 @@ export function createModelSelectionOverlayAppearanceControls(dependencies = {})
     state,
     queueAppearanceAutoSave,
     syncPreferredModelSelectionOverlays,
-    redraw,
-    svgIcon
+    redraw
   } = dependencies;
   const enabled = state.options.modelPreferenceSelectionOverlayEnabled !== false;
   const toggle = el("input", {
@@ -50,7 +48,7 @@ export function createModelSelectionOverlayAppearanceControls(dependencies = {})
     value: String(opacityDraft),
     disabled: !enabled,
     "aria-label": t("appearance.modelSelectionOverlayOpacity"),
-    "aria-describedby": OPACITY_HELP_ID,
+    "aria-describedby": TOGGLE_HELP_ID,
     "aria-valuetext": `${opacityDraft}%`
   });
   const syncOpacity = () => {
@@ -83,20 +81,7 @@ export function createModelSelectionOverlayAppearanceControls(dependencies = {})
   });
 
   return Object.freeze({
-    toggleControl: el("div", { class: "appearance-toggle-control" },
-      el("span", { class: "appearance-toggle-copy" },
-        el("label", { for: TOGGLE_INPUT_ID },
-          el("strong", {}, t("appearance.modelSelectionOverlay"))
-        ),
-        createAppearanceOverlayInfoButton(
-          svgIcon,
-          t("appearance.modelSelectionOverlayHelp"),
-          TOGGLE_HELP_ID,
-          "settings.appearance.modelSelectionOverlay"
-        )
-      ),
-      toggle
-    ),
+    toggleControl: el("span", { class: "appearance-toggle-control" }, toggle),
     opacityControl: el("div", { class: "appearance-range-control" },
       opacitySlider,
       opacityValue

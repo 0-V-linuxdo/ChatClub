@@ -223,7 +223,7 @@ export function createAppearanceSettingsSection(ctx) {
     overlayOpacitySlider.addEventListener("input", syncOverlayOpacity);
     overlayOpacitySlider.addEventListener("change", syncOverlayOpacity);
     const selectionOverlayControls = createModelSelectionOverlayAppearanceControls({
-      state, queueAppearanceAutoSave, syncPreferredModelSelectionOverlays, redraw, svgIcon
+      state, queueAppearanceAutoSave, syncPreferredModelSelectionOverlays, redraw
     });
     const colorPicker = el("input", {
       class: "appearance-color-picker",
@@ -637,8 +637,7 @@ export function createAppearanceSettingsSection(ctx) {
       "settings.apps.iframe.removeAttribute": "trash",
       "settings.models.allSources": "info",
       "settings.appearance.loadingOverlay": "info",
-      "settings.appearance.modelSelectionOverlay": "info",
-      "settings.appearance.modelSelectionOverlayOpacity": "info"
+      "settings.appearance.modelSelectionOverlay": "info"
     })[targetId] || "settings";
     const tooltipLabelKey = (target) => (
       target.id === "topbar.pocket" ? pocketChromeLabelKey(state.options) : target.labelKey
