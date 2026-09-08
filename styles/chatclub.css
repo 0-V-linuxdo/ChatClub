@@ -8203,30 +8203,6 @@ html:not([data-settings-click-reorder="always"]) .settings-reorder:focus-within 
   height: 32px;
 }
 
-.settings-icon-advanced {
-  display: grid;
-  gap: var(--space-2);
-  width: 100%;
-  min-width: 0;
-  flex: 1 1 auto;
-}
-
-.settings-icon-advanced > summary {
-  cursor: pointer;
-  display: list-item;
-  list-style-position: inside;
-  min-height: var(--settings-control-height);
-  color: var(--text);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  line-height: var(--settings-control-height);
-}
-
-.settings-icon-advanced > summary:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-}
-
 .settings-icon-advanced-body {
   display: grid;
   gap: var(--space-2);
@@ -8254,16 +8230,6 @@ html:not([data-settings-click-reorder="always"]) .settings-reorder:focus-within 
   margin: 0;
   color: var(--muted);
   font-size: var(--font-size-sm);
-}
-
-.api-profile-icon-field {
-  align-items: stretch;
-  width: 100%;
-}
-
-.api-profile-icon-field .settings-icon-field-row {
-  align-items: flex-start;
-  width: 100%;
 }
 
 .settings-icon-field-actions {
@@ -8824,6 +8790,10 @@ html:not([data-settings-click-reorder="always"]) .settings-reorder:focus-within 
   width: min(920px, calc(100vw - 40px));
 }
 
+.settings-editor-modal.api-profile-icon-editor-modal {
+  width: min(var(--overlay-width), calc(100vw - 40px));
+}
+
 .settings-editor-modal .field > span {
   color: var(--text);
   font-size: var(--font-size-sm);
@@ -8869,7 +8839,25 @@ html:not([data-settings-click-reorder="always"]) .settings-reorder:focus-within 
 .api-profile-editor-identity-mark {
   display: inline-grid;
   place-items: center;
+  width: var(--target-min);
+  height: var(--target-min);
+  padding: 0;
+  border: 0;
+  border-radius: var(--ui-radius-xs);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
   flex: 0 0 auto;
+}
+
+.api-profile-editor-identity-mark:hover {
+  background: var(--control-hover);
+}
+
+.api-profile-editor-identity-mark:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .api-profile-editor-modal .modal-header {

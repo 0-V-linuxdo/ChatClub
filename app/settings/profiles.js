@@ -521,7 +521,13 @@ export function createProfilesSettingsSection(ctx) {
       String(draft.name || "").trim() || t("profiles.providerName")
     );
     let logoUrl = String(draft.logoUrl || "").trim();
-    const identityMark = el("div", { class: "api-profile-editor-identity-mark" });
+    let iconDialog;
+    const identityMark = el("button", {
+      class: "api-profile-editor-identity-mark",
+      type: "button",
+      "aria-haspopup": "dialog",
+      "aria-label": t("apps.icon")
+    });
     const logoInput = input(logoUrl.startsWith("data:") ? "" : logoUrl, {
       placeholder: t("apps.iconUrlPlaceholder"),
       autocomplete: "url",
@@ -597,10 +603,46 @@ export function createProfilesSettingsSection(ctx) {
         toast(t("toast.appIconRefreshFailed"), "error");
       }
     };
+    const closeIconEditor = (restoreFocus = true) => {
+      if (!iconDialog) return;
+      const pending = iconDialog;
+      iconDialog = null;
+      pending.remove();
+      if (restoreFocus) identityMark.focus();
+    };
+    const openIconEditor = () => {
+      if (iconDialog) return;
+      const closeNested = () => closeIconEditor(true);
+      iconDialog = editorModal(
+        t("apps.icon"),
+        el("div", { class: "settings-editor-form api-profile-icon-editor" },
+          el("div", { class: "settings-icon-advanced-body" },
+            el("div", { class: "settings-icon-source-row" },
+              logoInput,
+              fileInput
+            ),
+            el("p", { class: "settings-icon-help" }, t("apps.iconHelp")),
+            el("div", { class: "settings-icon-field-actions" },
+              button(t("apps.iconRefresh"), () => { void refreshIcon(); }),
+              button(t("apps.iconRestore"), restoreIcon)
+            )
+          ),
+          el("div", { class: "modal-footer" },
+            button(t("common.close"), closeNested)
+          )
+        ),
+        closeNested,
+        false,
+        t("common.close")
+      );
+      iconDialog.querySelector(".modal")?.classList.add("settings-editor-modal", "api-profile-icon-editor-modal");
+    };
+    identityMark.addEventListener("click", openIconEditor);
     paintIcon();
     let dialog;
     const close = () => {
       catalog.close();
+      closeIconEditor(false);
       dialog.remove();
     };
     const save = async () => {
@@ -642,23 +684,7 @@ export function createProfilesSettingsSection(ctx) {
           el("div", { class: "api-profile-editor-credentials" },
             field(t("profiles.provider"), nameInput),
             field(t("profiles.endpoint"), endpointInput),
-            field(t("profiles.apiKey"), secret.node),
-            el("div", { class: "settings-icon-field api-profile-icon-field" },
-              el("details", { class: "settings-icon-advanced" },
-                el("summary", { class: "settings-icon-field-label" }, t("apps.icon")),
-                el("div", { class: "settings-icon-advanced-body" },
-                  el("div", { class: "settings-icon-source-row" },
-                    logoInput,
-                    fileInput
-                  ),
-                  el("p", { class: "settings-icon-help" }, t("apps.iconHelp")),
-                  el("div", { class: "settings-icon-field-actions" },
-                    button(t("apps.iconRefresh"), () => { void refreshIcon(); }),
-                    button(t("apps.iconRestore"), restoreIcon)
-                  )
-                )
-              )
-            )
+            field(t("profiles.apiKey"), secret.node)
           ),
           el("div", { class: "field api-profile-models-field" },
             el("span", {}, t("profiles.models")),

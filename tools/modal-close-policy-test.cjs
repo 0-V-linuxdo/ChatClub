@@ -579,7 +579,7 @@ function event(type, properties = {}) {
     const allAppSource = appSources.join("\n");
     const wrapperNames = ["editorModal", "viewerModal", "taskModal", "confirmationModal", "openConfirmationAction"];
     const expectedInventory = new Map([
-      ["editorModal", 12],
+      ["editorModal", 13],
       ["viewerModal", 5],
       ["taskModal", 1],
       ["confirmationModal", 0],
@@ -599,8 +599,8 @@ function event(type, properties = {}) {
       wrapperNames.reduce((total, wrapperName) => (
         total + occurrences(allAppSource, new RegExp(`\\b${wrapperName}\\s*\\(`, "g"))
       ), 0),
-      33,
-      "all thirty-three app overlay call sites must use a typed wrapper or openConfirmationAction"
+      34,
+      "all thirty-four app overlay call sites must use a typed wrapper or openConfirmationAction"
     );
 
     for (let index = 0; index < appFiles.length; index += 1) {
@@ -619,7 +619,7 @@ function event(type, properties = {}) {
 
     const callSites = [
       ["app/settings/controller.js", "openSettings", "editorModal", "Settings"],
-      ["app/settings/profiles.js", "openEditor", "editorModal", "API profile editor"],
+      ["app/settings/profiles.js", "openEditor", "editorModal", "API profile editor", 2],
       ["app/settings/apps.js", "openCustomEditor", "editorModal", "custom platform editor"],
       ["app/settings/app-icon.js", "openEditor", "editorModal", "site icon editor"],
       ["app/settings/apps.js", "openIframePermissionEditor", "editorModal", "iframe permission editor"],
@@ -653,10 +653,10 @@ function event(type, properties = {}) {
       ["app/workspace/frame-controller.js", "deleteActiveThreadForGroup", "openConfirmationAction", "in-group delete-topic confirmation"]
     ];
 
-    for (const [relativeFile, functionName, expectedWrapper, label] of callSites) {
+    for (const [relativeFile, functionName, expectedWrapper, label, expectedCount = 1] of callSites) {
       const source = directFunctionSource(path.join(root, relativeFile), functionName);
       for (const wrapperName of ["modal", ...wrapperNames]) {
-        const expected = wrapperName === expectedWrapper ? 1 : 0;
+        const expected = wrapperName === expectedWrapper ? expectedCount : 0;
         assert.equal(
           occurrences(source, new RegExp(`\\b${wrapperName}\\s*\\(`, "g")),
           expected,
