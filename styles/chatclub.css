@@ -4036,13 +4036,66 @@ body.tab-gesture-active * {
   max-width: none;
 }
 
-.appearance-workspace-subpane.is-color .appearance-color-help,
-.appearance-workspace-subpane.is-overlays .appearance-range-help {
+.appearance-workspace-subpane.is-color .appearance-color-help {
   grid-column: 1 / -1;
 }
 
+.appearance-workspace-subpane.is-overlays .appearance-overlay-row {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) auto;
+  column-gap: var(--space-4);
+  align-items: center;
+  width: max-content;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.appearance-workspace-subpane.is-overlays .appearance-overlay-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  max-width: 52ch;
+}
+
+.appearance-workspace-subpane.is-overlays .appearance-overlay-copy strong {
+  color: var(--text);
+  font-size: var(--font-size);
+}
+
+.appearance-workspace-subpane.is-overlays .appearance-overlay-copy small {
+  color: var(--muted);
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+}
+
 .appearance-workspace-subpane.is-overlays .appearance-range-control {
-  grid-template-columns: minmax(0, 1fr) 48px;
+  grid-template-columns: minmax(0, 220px) 48px;
+  width: max-content;
+  max-width: 100%;
+}
+
+.appearance-workspace-subpane.is-overlays .appearance-overlays-model {
+  display: grid;
+  gap: 14px;
+  padding-top: 14px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 84%, transparent);
+}
+
+.appearance-workspace-subpane.is-overlays .appearance-overlays-child {
+  padding-inline-start: var(--space-4);
+}
+
+@container (max-width: 560px) {
+  .appearance-workspace-subpane.is-overlays .appearance-overlay-row {
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+  }
+
+  .appearance-workspace-subpane.is-overlays .appearance-range-control {
+    width: 100%;
+    max-width: 100%;
+    grid-template-columns: minmax(0, 1fr) 48px;
+  }
 }
 
 @media (max-width: 620px) {

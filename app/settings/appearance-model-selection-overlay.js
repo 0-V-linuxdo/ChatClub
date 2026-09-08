@@ -76,8 +76,7 @@ export function createModelSelectionOverlayAppearanceControls(dependencies = {})
     ),
     opacityControl: el("div", { class: "appearance-range-control" },
       opacitySlider,
-      opacityValue,
-      el("small", { id: OPACITY_HELP_ID, class: "appearance-range-help" }, t("appearance.modelSelectionOverlayOpacityHelp"))
+      opacityValue
     )
   });
 }

@@ -210,7 +210,8 @@ export function createAppearanceSettingsSection(ctx) {
       max: "100",
       step: "1",
       value: String(overlayOpacityDraft),
-      "aria-label": t("appearance.loadingOverlay")
+      "aria-label": t("appearance.loadingOverlay"),
+      "aria-describedby": "appearance-loading-overlay-help"
     });
     const syncOverlayOpacity = () => {
       const nextOpacity = normalizePercent(overlayOpacitySlider.value, overlayOpacityDraft);
@@ -275,8 +276,7 @@ export function createAppearanceSettingsSection(ctx) {
     );
     const overlayOpacityControl = el("div", { class: "appearance-range-control" },
       overlayOpacitySlider,
-      overlayOpacityValue,
-      el("small", { class: "appearance-range-help" }, t("appearance.loadingOverlayHelp"))
+      overlayOpacityValue
     );
     const frameToastPositionBlock = () => {
       let draft = normalizeFrameToastPosition(state.options.frameToastPosition);

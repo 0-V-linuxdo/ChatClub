@@ -4,6 +4,8 @@ import { el, field } from "../../ui/dom.js";
 export const APPEARANCE_WORKSPACE_TAB_IDS = Object.freeze(["general", "color", "overlays"]);
 const WORKSPACE_PANEL_ID = "appearance-workspace-panel";
 const workspaceTabId = (id) => `appearance-workspace-tab-${id}`;
+const LOADING_OVERLAY_HELP_ID = "appearance-loading-overlay-help";
+const MODEL_OVERLAY_OPACITY_HELP_ID = "appearance-model-selection-overlay-opacity-help";
 
 export function createAppearanceWorkspacePane({
   activeId,
@@ -21,6 +23,15 @@ export function createAppearanceWorkspacePane({
 }) {
   const appearanceRow = (node) => el("div", { class: "appearance-field-row" }, node);
   const generalCol = (...rows) => el("div", { class: "appearance-general-col" }, ...rows);
+  const overlayRangeRow = (title, help, helpId, control, extraClass = "") => appearanceRow(
+    el("label", { class: extraClass ? `appearance-overlay-row ${extraClass}` : "appearance-overlay-row" },
+      el("span", { class: "appearance-overlay-copy" },
+        el("strong", {}, title),
+        el("small", { id: helpId, class: "appearance-range-help" }, help)
+      ),
+      control
+    )
+  );
   const generalBlock = () => settingsBlock(
     t("appearance.workspaceGeneral"),
     t("appearance.workspaceGeneralTabDesc"),
@@ -47,9 +58,22 @@ export function createAppearanceWorkspacePane({
     t("appearance.workspaceOverlays"),
     t("appearance.workspaceOverlaysTabDesc"),
     el("div", { class: "appearance-field-list" },
-      appearanceRow(field(t("appearance.loadingOverlay"), overlayOpacityControl)),
-      appearanceRow(selectionOverlayControls.toggleControl),
-      appearanceRow(field(t("appearance.modelSelectionOverlayOpacity"), selectionOverlayControls.opacityControl))
+      overlayRangeRow(
+        t("appearance.loadingOverlay"),
+        t("appearance.loadingOverlayHelp"),
+        LOADING_OVERLAY_HELP_ID,
+        overlayOpacityControl
+      ),
+      el("div", { class: "appearance-overlays-model" },
+        appearanceRow(selectionOverlayControls.toggleControl),
+        overlayRangeRow(
+          t("appearance.modelSelectionOverlayOpacity"),
+          t("appearance.modelSelectionOverlayOpacityHelp"),
+          MODEL_OVERLAY_OPACITY_HELP_ID,
+          selectionOverlayControls.opacityControl,
+          "appearance-overlays-child"
+        )
+      )
     )
   );
   const activeBlock = activeId === "color"

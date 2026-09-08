@@ -128,9 +128,39 @@ assert.match(
   "narrow General wells must stack the two columns"
 );
 assert.match(
+  workspaceSource,
+  /class: "appearance-overlays-model"[\s\S]*selectionOverlayControls\.toggleControl[\s\S]*appearance\.modelSelectionOverlayOpacity/,
+  "model auto-selection groups the toggle with its child opacity row"
+);
+assert.match(
+  workspaceSource,
+  /appearance-overlay-row[\s\S]*appearance-overlay-copy[\s\S]*appearance-range-help/,
+  "overlay range rows put title and help beside a compact slider"
+);
+assert.match(
+  stylesheetSource,
+  /\.appearance-workspace-subpane\.is-overlays \.appearance-overlay-row \{[\s\S]*?width:\s*max-content;/,
+  "overlay rows hug copy instead of pinning controls to the far edge"
+);
+assert.match(
+  stylesheetSource,
+  /\.appearance-workspace-subpane\.is-overlays \.appearance-range-control \{[\s\S]*?grid-template-columns: minmax\(0, 220px\) 48px;[\s\S]*?width:\s*max-content;/,
+  "overlay sliders hug a compact track instead of filling the well"
+);
+assert.doesNotMatch(
   stylesheetSource,
   /\.appearance-workspace-subpane\.is-overlays \.appearance-range-help \{\s*grid-column: 1 \/ -1;/,
-  "overlay help must remain on its own row"
+  "overlay help must sit under the title, not under a full-bleed track"
+);
+assert.match(
+  stylesheetSource,
+  /\.appearance-workspace-subpane\.is-overlays \.appearance-overlays-model \{[\s\S]*?border-top:/,
+  "Loading and Model groups share one hairline, not a second settingsBlock"
+);
+assert.match(
+  stylesheetSource,
+  /\.appearance-workspace-subpane\.is-overlays \.appearance-overlays-child \{[\s\S]*?padding-inline-start:/,
+  "model opacity is a child of the auto-selection toggle"
 );
 assert.match(
   stylesheetSource,
