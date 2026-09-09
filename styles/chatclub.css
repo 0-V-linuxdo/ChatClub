@@ -8474,10 +8474,34 @@ html:not([data-settings-click-reorder="always"]) .settings-reorder .ui-reorder {
 }
 
 .settings-icon-editor-help {
-  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 var(--target-min);
+  width: var(--target-min);
+  height: var(--target-min);
+  padding: 0;
   color: var(--muted);
-  font-size: var(--font-size-sm);
-  line-height: 1.4;
+  border: 0;
+  border-radius: var(--ui-radius);
+  background: transparent;
+  cursor: help;
+  outline: none;
+}
+
+.settings-icon-editor-help:hover,
+.settings-icon-editor-help:focus-visible {
+  color: var(--text);
+  background: color-mix(in srgb, var(--primary) 16%, transparent);
+}
+
+.settings-icon-editor-help:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 20%, transparent);
+}
+
+.settings-icon-editor-help .svg-icon {
+  width: 14px;
+  height: 14px;
 }
 
 .settings-icon-editor-label {
@@ -8488,6 +8512,13 @@ html:not([data-settings-click-reorder="always"]) .settings-reorder .ui-reorder {
 
 .settings-icon-editor-url {
   display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.settings-icon-editor-url-head {
+  display: flex;
+  align-items: center;
   gap: var(--space-1);
   min-width: 0;
 }
@@ -8505,8 +8536,7 @@ html:not([data-settings-click-reorder="always"]) .settings-reorder .ui-reorder {
   min-width: 0;
 }
 
-.settings-icon-editor-upload .button,
-.settings-icon-editor-tools .button {
+.settings-icon-editor-upload .button {
   min-height: var(--settings-control-height);
   border-radius: var(--settings-radius);
   flex: 0 0 auto;
@@ -8531,6 +8561,24 @@ html:not([data-settings-click-reorder="always"]) .settings-reorder .ui-reorder {
   justify-content: flex-end;
   gap: var(--space-2);
   flex-wrap: wrap;
+}
+
+.settings-icon-editor-tool {
+  width: var(--target-min);
+  height: var(--target-min);
+  min-height: var(--target-min);
+  color: var(--muted);
+  border-radius: var(--settings-radius);
+}
+
+.settings-icon-editor-tool:hover,
+.settings-icon-editor-tool:focus-visible {
+  color: var(--text);
+}
+
+.settings-icon-editor-tool .svg-icon {
+  width: 16px;
+  height: 16px;
 }
 
 @media (max-width: 480px) {

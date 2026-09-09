@@ -24,15 +24,20 @@ assert.match(openEditor, /settings-editor-modal", "settings-icon-editor-modal"/)
 assert.match(openEditor, /class: "settings-icon-editor-layout"/);
 assert.match(openEditor, /class: "settings-icon-editor-preview"/);
 assert.match(openEditor, /class: "settings-icon-editor-sources"/);
-assert.match(openEditor, /class: "settings-icon-editor-help"/);
+assert.match(openEditor, /class: "settings-icon-editor-url-head"/);
+assert.match(openEditor, /class: "settings-icon-editor-help tooltip-trigger"/);
+assert.match(openEditor, /"data-tooltip-wrap": "true"/);
+assert.match(openEditor, /createSvgIcon\("help"\)/);
 assert.match(openEditor, /t\("apps\.iconHelp"\)/);
 assert.match(openEditor, /class: "settings-icon-editor-url"/);
 assert.match(openEditor, /t\("apps\.iconPreview"\)/);
 assert.match(openEditor, /t\("apps\.iconUrl"\)/);
 assert.match(openEditor, /class: "settings-icon-editor-upload"/);
 assert.match(openEditor, /class: "settings-icon-editor-tools"/);
-assert.match(openEditor, /t\("apps\.iconRefresh"\)/);
-assert.match(openEditor, /t\("apps\.iconRestore"\)/);
+assert.match(openEditor, /iconButton\(\s*t\("apps\.iconRefresh"/);
+assert.match(openEditor, /createSvgIcon\("reload"\)/);
+assert.match(openEditor, /iconButton\(\s*t\("apps\.iconRestore"/);
+assert.match(openEditor, /createSvgIcon\("reset"\)/);
 assert.match(openEditor, /t\("common\.cancel"\)/);
 assert.match(openEditor, /t\("common\.save"\)/);
 
@@ -52,6 +57,10 @@ assert.doesNotMatch(
   "Upload must not be a stacked field() row"
 );
 assert.doesNotMatch(openEditor, /class: "field"/);
+assert.doesNotMatch(openEditor, /el\("p", \{\s*class: "settings-icon-editor-help"/);
+assert.doesNotMatch(openEditor, /(?<!icon)button\(\s*t\("apps\.iconRefresh"/);
+assert.doesNotMatch(openEditor, /(?<!icon)button\(\s*t\("apps\.iconRestore"/);
+assert.doesNotMatch(openEditor, /appearance-overlay-info/);
 assert.doesNotMatch(openEditor, /settings-icon-help"/);
 assert.doesNotMatch(openEditor, /settings-icon-advanced-body/);
 assert.doesNotMatch(openEditor, /settings-icon-source-row/);
@@ -119,6 +128,9 @@ assert.match(
 );
 assert.match(stylesheet, /\.settings-icon-editor \.settings-icon-preview \{[^}]*width:\s*72px/s);
 assert.match(stylesheet, /\.settings-icon-editor-url \.input \{[^}]*max-width:\s*100%/s);
+assert.match(stylesheet, /\.settings-icon-editor-url-head \{[^}]*display:\s*flex/s);
+assert.match(stylesheet, /\.settings-icon-editor-help \{[^}]*cursor:\s*help/s);
+assert.match(stylesheet, /\.settings-icon-editor-tool \{[^}]*width:\s*var\(--target-min\)/s);
 assert.match(stylesheet, /\.settings-file-input \{[^}]*width:\s*1px !important/s);
 assert.doesNotMatch(
   stylesheet,
@@ -129,6 +141,12 @@ const editorCss = stylesheet.match(
   /\.settings-icon-editor-layout \{[\s\S]*?@media \(max-width: 480px\) \{[\s\S]*?\.settings-icon-editor-layout \{[\s\S]*?\}\s*\}/
 );
 assert.ok(editorCss, "site icon editor layout CSS must be co-located");
-assert.doesNotMatch(editorCss[0], /preference-row|model-preference-row|appearance-overlay-row|appearance-general-col|is-color|appearance-toast-stay-row|appearance-color-row|settings-icon-advanced-body|settings-icon-source-row/);
+assert.doesNotMatch(editorCss[0], /preference-row|model-preference-row|appearance-overlay-row|appearance-general-col|is-color|appearance-toast-stay-row|appearance-color-row|appearance-overlay-info|settings-icon-advanced-body|settings-icon-source-row/);
+
+const icons = read("ui/icons.js");
+assert.match(icons, /help:\s*\[/);
+assert.match(icons, /help:[\s\S]*cx: "12", cy: "12", r: "10"/);
+assert.match(iconEditor, /from "\.\.\/\.\.\/ui\/icons\.js"/);
+assert.match(iconEditor, /iconButton/);
 
 console.log("app icon editor layout: ok");

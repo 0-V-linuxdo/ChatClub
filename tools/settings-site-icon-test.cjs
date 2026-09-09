@@ -145,7 +145,7 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   assert.match(profilesSettings, /settings-icon-editor-sources/);
   assert.match(profilesSettings, /settings-icon-editor-tools/);
   assert.match(profilesSettings, /class: "settings-file-input"/);
-  assert.match(profilesSettings, /apps\.iconHelp[\s\S]*apps\.iconUrl[\s\S]*apps\.iconUpload[\s\S]*apps\.iconRefresh/);
+  assert.match(profilesSettings, /apps\.iconUrl[\s\S]*apps\.iconHelp[\s\S]*apps\.iconUpload[\s\S]*apps\.iconRefresh/);
   assert.doesNotMatch(profilesSettings, /el\("details"/);
   assert.doesNotMatch(profilesSettings, /settings-icon-advanced"/);
   assert.doesNotMatch(profilesSettings, /settings-icon-advanced-body/);

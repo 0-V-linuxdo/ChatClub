@@ -2,8 +2,9 @@ import { t } from "../../shared/i18n.js";
 import { BUILTIN_CHAT_APPS } from "../../shared/constants.js";
 import { acceptedDataIcon } from "../../shared/favicon-lookup.js";
 import { normalizeAppIcons } from "../../shared/storage-schema.js";
-import { button, editorModal, el, input, toast } from "../../ui/dom.js";
+import { button, editorModal, el, iconButton, input, toast } from "../../ui/dom.js";
 import { renderChatFavicon } from "../../ui/favicon.js";
+import { createSvgIcon } from "../../ui/icons.js";
 
 function faviconDeps(port = {}) {
   return {
@@ -251,9 +252,18 @@ export function createAppIconControls({
             preview
           ),
           el("div", { class: "settings-icon-editor-sources" },
-            el("p", { class: "settings-icon-editor-help" }, t("apps.iconHelp")),
             el("label", { class: "settings-icon-editor-url" },
-              el("span", { class: "settings-icon-editor-label" }, t("apps.iconUrl")),
+              el("div", { class: "settings-icon-editor-url-head" },
+                el("span", { class: "settings-icon-editor-label" }, t("apps.iconUrl")),
+                el("button", {
+                  class: "settings-icon-editor-help tooltip-trigger",
+                  type: "button",
+                  "aria-label": t("apps.iconHelp"),
+                  "data-tooltip": t("apps.iconHelp"),
+                  "data-tooltip-placement": "top",
+                  "data-tooltip-wrap": "true"
+                }, createSvgIcon("help"))
+              ),
               urlInput
             ),
             el("div", { class: "settings-icon-editor-upload" },
@@ -262,8 +272,8 @@ export function createAppIconControls({
               fileName
             ),
             el("div", { class: "settings-icon-editor-tools" },
-              button(t("apps.iconRefresh"), refresh),
-              button(t("apps.iconRestore"), restore)
+              iconButton(t("apps.iconRefresh"), createSvgIcon("reload"), refresh, "settings-icon-editor-tool"),
+              iconButton(t("apps.iconRestore"), createSvgIcon("reset"), restore, "settings-icon-editor-tool")
             )
           )
         ),

@@ -8,7 +8,7 @@ import {
   OUTBOUND_INVENTORY_SLOTS
 } from "../../shared/model-inventory.js";
 import { createId } from "../../shared/storage-schema.js";
-import { button, bindLinearMenuKeyboard, claimTopmostPopoverEscape, editorModal, el, field, input, openConfirmationAction, select, toast } from "../../ui/dom.js";
+import { button, bindLinearMenuKeyboard, claimTopmostPopoverEscape, editorModal, el, field, iconButton, input, openConfirmationAction, select, toast } from "../../ui/dom.js";
 import { createMenuButton } from "../../ui/components.js";
 import {
   cleanupSettingsDragRows,
@@ -627,9 +627,18 @@ export function createProfilesSettingsSection(ctx) {
               iconPreview
             ),
             el("div", { class: "settings-icon-editor-sources" },
-              el("p", { class: "settings-icon-editor-help" }, t("apps.iconHelp")),
               el("label", { class: "settings-icon-editor-url" },
-                el("span", { class: "settings-icon-editor-label" }, t("apps.iconUrl")),
+                el("div", { class: "settings-icon-editor-url-head" },
+                  el("span", { class: "settings-icon-editor-label" }, t("apps.iconUrl")),
+                  el("button", {
+                    class: "settings-icon-editor-help tooltip-trigger",
+                    type: "button",
+                    "aria-label": t("apps.iconHelp"),
+                    "data-tooltip": t("apps.iconHelp"),
+                    "data-tooltip-placement": "top",
+                    "data-tooltip-wrap": "true"
+                  }, svgIcon("help"))
+                ),
                 logoInput
               ),
               el("div", { class: "settings-icon-editor-upload" },
@@ -638,8 +647,8 @@ export function createProfilesSettingsSection(ctx) {
                 fileName
               ),
               el("div", { class: "settings-icon-editor-tools" },
-                button(t("apps.iconRefresh"), () => { void refreshIcon(); }),
-                button(t("apps.iconRestore"), restoreIcon)
+                iconButton(t("apps.iconRefresh"), svgIcon("reload"), () => { void refreshIcon(); }, "settings-icon-editor-tool"),
+                iconButton(t("apps.iconRestore"), svgIcon("reset"), restoreIcon, "settings-icon-editor-tool")
               )
             )
           ),
