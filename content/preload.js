@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "d95027321721e7568e3e7ab6d8af71283c48e1d6a8f42097bda3131bf0a30eb0";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "e282f4c660762e60dca4ae4bfe7f8696825fcaf46d4a69e7587ccf459017e00e";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "65c1575f318e8b4a653dac3c4cdbfe96f858ea88c5e2f1c00f542d4ae19e6daf";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.65c1575f318e8b4a653dac3c4cdbfe96f858ea88c5e2f1c00f542d4ae19e6daf";
-  var CONTENT_RUNTIME_PRELOAD_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preload.js", "entryPath": "content-src/preload.js", "sourceSha256": "2cc08cccc835610fa44c656a240fca9a1ba12e401f5575bf089955aed6b411fa", "implementationSha256": "b0dfd318aefd94cbc7ac2ba42a0f3a92d39c2d17ea351dbf2be54647be53dc9e", "implementationVersion": "2026.07.16.2+bundle.b0dfd318aefd94cbc7ac2ba42a0f3a92d39c2d17ea351dbf2be54647be53dc9e" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "ca8e7a5bcdbbded3e9343f903da1ea6d2686d8f72ec1c087bc573ef8518a4687";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.ca8e7a5bcdbbded3e9343f903da1ea6d2686d8f72ec1c087bc573ef8518a4687";
+  var CONTENT_RUNTIME_PRELOAD_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preload.js", "entryPath": "content-src/preload.js", "sourceSha256": "478f024edd2f356e594204553512e2d00839a6d881cc08a61dcac6a2a60df455", "implementationSha256": "4c6a95254c968d18587ed73de9f68353a66ee5142870c41d64cb349c9c9b3113", "implementationVersion": "2026.07.16.2+bundle.4c6a95254c968d18587ed73de9f68353a66ee5142870c41d64cb349c9c9b3113" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -4237,22 +4237,23 @@ ${node.nodeValue}`;
       };
     }
     function consumePageCaretBootstrap() {
+      try {
+        const href = String(location?.href || "");
+        if (href === "about:blank" || href.startsWith("about:")) return { expiresAt: 0, guardToken: "" };
+      } catch {
+      }
       let expiresAt = 0;
       let guardToken = "";
       try {
         const rawName = String(window.name || "");
         const guard = rawName.match(/(?:^|&)chatclub_focus_guard_until=\d+(?:&chatclub_focus_guard_token=[^&]+)?$/);
         const base = guard ? rawName.slice(0, guard.index) : rawName;
-        const suffix = guard ? rawName.slice(guard.index) : "";
         const params = new URLSearchParams(base);
         const until = params.get(PAGE_CARET_NAME_UNTIL);
         const token = params.get(PAGE_CARET_NAME_TOKEN);
         if (until || token) {
           expiresAt = Math.max(expiresAt, Number(until) || 0);
           guardToken = String(token || guardToken);
-          params.delete(PAGE_CARET_NAME_UNTIL);
-          params.delete(PAGE_CARET_NAME_TOKEN);
-          window.name = `${params.toString()}${suffix}`;
         }
       } catch {
       }
@@ -4267,7 +4268,6 @@ ${node.nodeValue}`;
         } catch {
           expiresAt = Math.max(expiresAt, Number(stored) || 0);
         }
-        sessionStorage.removeItem(PAGE_CARET_STORAGE_KEY);
       } catch {
       }
       const now = Date.now();
@@ -4533,6 +4533,7 @@ ${node.nodeValue}`;
           }
         } catch {
         }
+        evictPageCaretFocus();
         return pageCaretExpiresAt;
       };
       const releasePageCaret = (guardToken = "") => {
@@ -4559,18 +4560,40 @@ ${node.nodeValue}`;
           pageCaretAllowDepth -= 1;
         }
       };
-      const onPageCaretFocusIn = (event) => {
-        if (!pageCaretLeaseActive()) return;
-        const target = event?.target;
-        if (!target || target === document.body || target === document.documentElement) return;
-        try {
-          target.blur?.();
-        } catch {
-        }
+      const pageCaretEditable = (node) => {
+        if (!node || node === document.body || node === document.documentElement) return false;
+        const tag = String(node.tagName || "").toLowerCase();
+        if (tag === "textarea" || tag === "input") return true;
+        const editable = String(node.getAttribute?.("contenteditable") || "").toLowerCase();
+        if (editable === "true" || editable === "plaintext-only") return true;
+        return String(node.getAttribute?.("role") || "").toLowerCase() === "textbox";
+      };
+      const notifyPageCaretStolen = () => {
         try {
           window.parent?.postMessage({ source: PAGE_CARET_MESSAGE_SOURCE, action: "stolen" }, "*");
         } catch {
         }
+      };
+      const evictPageCaretFocus = () => {
+        if (!pageCaretLeaseActive()) return;
+        const active = document.activeElement;
+        if (pageCaretEditable(active)) {
+          try {
+            active.blur?.();
+          } catch {
+          }
+        }
+        notifyPageCaretStolen();
+      };
+      const onPageCaretFocusIn = (event) => {
+        if (!pageCaretLeaseActive()) return;
+        const target = event?.target;
+        const blurTarget = target && target !== window && target !== document ? target : document.activeElement;
+        try {
+          blurTarget?.blur?.();
+        } catch {
+        }
+        notifyPageCaretStolen();
       };
       const markPageCaretTrustedPointer = (event) => {
         if (event?.isTrusted !== true || event?.type !== "pointerdown") return;
@@ -4658,6 +4681,7 @@ ${node.nodeValue}`;
       window.addEventListener("keydown", releaseBootstrapForTrustedIntent, true);
       window.addEventListener("focusin", onPageCaretFocusIn, true);
       window.addEventListener("pointerdown", markPageCaretTrustedPointer, true);
+      if (pageCaretExpiresAt > Date.now()) evictPageCaretFocus();
       window[registryKey] = {
         version: PREFERRED_MODEL_FOCUS_SHIELD_VERSION,
         documentToken: globalThis.crypto?.randomUUID?.() || `focus-shield-document-${Date.now()}-${Math.random().toString(36).slice(2)}`,

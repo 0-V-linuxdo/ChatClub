@@ -354,6 +354,12 @@ export function pinOverlaySearchCaret(followRemaining = OVERLAY_CARET_PIN_FOLLOW
     return false;
   }
   if (active !== field && !overlaySearchCaretStolen(active, field, panel, owner)) return false;
+  try { window.focus?.(); } catch {}
+  try {
+    for (const frame of document.querySelectorAll("iframe.chat-frame")) {
+      try { frame.blur?.(); } catch {}
+    }
+  } catch {}
   if (overlayCaretIsFrame(active)) {
     try { active.blur?.(); } catch {}
   }
@@ -420,6 +426,7 @@ export function claimOverlaySearchCaret(field, options = {}) {
   ensureOverlaySearchCaretListeners();
   if (overlaySearchCaret.mode === "page") notifyOverlayCaretLease("adopt");
   else if (previous?.mode === "page") notifyOverlayCaretLease("release");
+  pinOverlaySearchCaret();
 }
 
 export function releaseOverlaySearchCaret(field) {

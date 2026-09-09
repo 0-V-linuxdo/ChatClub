@@ -190,6 +190,16 @@ const PARAM = "__chatclub_frame_load_nonce";
   assert.match(completeFrameLoading, /pinOverlaySearchCaret\(\)/);
   assert.match(completeFrameLoading, /adoptPageCaretLease\(iframe\)/);
   assert.match(beginFrameLoading, /pageCaret\.adopt\(iframe\)/, "iframe src assignment must prepare the page-caret lease on the outgoing document");
+  assert.match(assignFrameSrc, /pageCaret\.adopt\(iframe\)/, "assignFrameSrc must await the page-caret prepare ACK");
+  assert.ok(
+    assignFrameSrc.indexOf("pageCaret.adopt") < assignFrameSrc.indexOf("iframe.src = navigationUrl"),
+    "assignFrameSrc must await page-caret prepare before assigning src"
+  );
+  assert.match(setFrameSrcAfterPrepare, /pageCaret\.adopt\(iframe\)/, "setFrameSrcAfterPrepare must await the page-caret prepare ACK");
+  assert.ok(
+    setFrameSrcAfterPrepare.indexOf("pageCaret.adopt") < setFrameSrcAfterPrepare.indexOf("iframe.setAttribute(\"src\""),
+    "setFrameSrcAfterPrepare must await page-caret prepare before assigning src"
+  );
   assert.match(frameController, /pageCaret\.writeNameParams\(params\)/);
   assert.match(frameController, /pageCaret\.refresh\(iframe\)/);
   assert.match(frameController, /setOverlayCaretLeaseHandler/);

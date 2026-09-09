@@ -34,7 +34,7 @@ const byteBudgets = Object.freeze({
   "content/delete.js": 266_697,
   "content/grok-cookie-bridge.js": 50_000,
   "content/message-navigator.js": 140_000,
-  "content/preload.js": 223_256,
+  "content/preload.js": 224_215,
   "content/summary-userscripts-main.js": 230_894,
   "content/summary-userscripts.js": 161_108
 });
@@ -43,7 +43,7 @@ const byteBudgets = Object.freeze({
 const aggregateByteBudget = 801_706;
 // Exact all-bundle closure after MAIN-world page-caret document_start
 // bootstrap plus the isolated command-contract growth.
-const allBundlesByteBudget = 1_589_005;
+const allBundlesByteBudget = 1_589_964;
 
 const bundleIdentities = Object.fromEntries(Object.keys(CONTENT_ENTRIES).map((outputPath) => [
   outputPath,

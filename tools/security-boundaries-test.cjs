@@ -162,6 +162,7 @@ const dataModule = (source) => import(`data:text/javascript;base64,${Buffer.from
   assert.match(workspace, /sendToContentFrame\(\s*iframe,\s*"adoptNavigationFocusGuard"/);
   assert.match(workspace, /sendToContentFrame\(frame, command, data, timeoutMs\)/);
   assert.match(workspace, /send\("preparePageCaretLease"/);
+  assert.match(workspace, /sendToContentFrame\(\s*frame,\s*"preparePageCaretLease"/);
   assert.match(workspace, /sendToContentFrame\(\s*iframe,\s*"adoptPageCaretLease"/);
   assert.match(workspace, /send\("releasePageCaretLease"/);
   assert.match(preloadEntry, /runtimes\.register\(NAVIGATION_FOCUS_GUARD_RUNTIME/);

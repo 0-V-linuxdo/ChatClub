@@ -54,7 +54,46 @@ assert.match(lease, /setInterval\(\(\) => \{ if \(!tick\(\)\) stop\(\); \}, PAGE
 assert.match(lease, /send\("preparePageCaretLease"/);
 assert.match(lease, /"adoptPageCaretLease"/);
 assert.match(lease, /"releasePageCaretLease"/);
-assert.match(lease, /if \(overlaySearchCaretMode\(\) !== "page"\) \{\s*params\.delete\(PAGE_CARET_NAME_UNTIL\)/);
+assert.match(lease, /overlaySearchCaretMode\(\) === "overlay"/);
+assert.match(lease, /params\.delete\(PAGE_CARET_NAME_UNTIL\)/);
+assert.match(lease, /contentWindow/);
+assert.match(lease, /onAdopted/);
+assert.match(lease, /settlePromise/);
+assert.match(lease, /sendToContentFrame\(\s*frame,\s*"preparePageCaretLease"/);
+
+const consumeSource = preload.slice(
+  preload.indexOf("function consumePageCaretBootstrap"),
+  preload.indexOf("function writePageCaretBootstrap")
+);
+assert.match(consumeSource, /about:blank/);
+assert.match(consumeSource, /href\.startsWith\("about:"\)/);
+assert.doesNotMatch(
+  consumeSource,
+  /params\.delete\(PAGE_CARET_NAME_UNTIL\)/,
+  "consume must keep window.name seeds until release"
+);
+assert.doesNotMatch(
+  consumeSource,
+  /sessionStorage\.removeItem\(PAGE_CARET_STORAGE_KEY\)/,
+  "consume must keep sessionStorage seeds until release"
+);
+assert.match(preload, /const releasePageCaret = \(message = \{\}\) =>/);
+assert.match(
+  preload.slice(preload.indexOf("const releasePageCaret = (message"), preload.indexOf("runtimes.register(NAVIGATION_FOCUS_GUARD_RUNTIME")),
+  /params\.delete\(PAGE_CARET_NAME_UNTIL\)/,
+  "release must strip window.name page-caret seeds"
+);
+assert.match(preload, /evictPageCaretFocus/);
+const focusInSource = preload.slice(
+  preload.indexOf("const onPageCaretFocusIn"),
+  preload.indexOf("const markPageCaretTrustedPointer")
+);
+assert.doesNotMatch(
+  focusInSource,
+  /target === document\.body \|\| target === document\.documentElement/,
+  "body/html/window focusin must count as stolen under a page-caret lease"
+);
+assert.match(focusInSource, /notifyPageCaretStolen/);
 
 assert.match(frameCommands, /preparePageCaretLease: command\(\{ timeoutMs: 1200, mutating: true, transport: "main-world", capability: "base" \}\)/);
 assert.match(frameCommands, /adoptPageCaretLease: command\(\{ timeoutMs: 1200, mutating: true, transport: "main-world", capability: "base" \}\)/);
@@ -78,6 +117,9 @@ assert.ok(
   frame.indexOf("pageCaret.adopt(iframe)") < frame.indexOf("iframe.src = navigationUrl"),
   "page-caret prepare/stamp must run before the iframe src assignment"
 );
+assert.match(frame, /function assignFrameSrc[\s\S]*pageCaret\.adopt\(iframe\)[\s\S]*iframe\.src = navigationUrl/);
+assert.match(frame, /function setFrameSrcAfterPrepare[\s\S]*pageCaret\.adopt\(iframe\)[\s\S]*iframe\.setAttribute\("src"/);
+assert.match(frame, /onAdopted\(\) \{/);
 
 assert.match(composer, /mode: "page"/);
 assert.match(composer, /claimPromptCaret\(e\.target\)/);
@@ -93,6 +135,7 @@ assert.match(overlayCaret, /pin must not report success when focus does not land
 assert.match(overlayCaret, /a page claim must adopt the child-document caret lease/);
 assert.match(overlayCaret, /pin must not report success when document.hasFocus\(\) is false/);
 assert.match(overlayCaret, /a child stolen message must re-pin the prompt/);
+assert.match(overlayCaret, /pin uses window.focus/);
 
 (async () => {
   const { createPageCaretLease } = await import(pathToFileURL(path.join(root, "app/workspace/page-caret-lease.js")).href);
@@ -112,6 +155,9 @@ assert.match(overlayCaret, /a child stolen message must re-pin the prompt/);
   assert.match(String(params.get("chatclub_page_caret_token") || ""), /./);
   assert.equal(params.get("chatclub_webview"), "");
   assert.equal(params.get("chatclub_focus_guard_until"), null);
+  mode = "";
+  leaseApi.writeNameParams(params);
+  assert.ok(params.get("chatclub_page_caret_until"), "an armed lease must keep stamping even when caret mode is empty");
   mode = "overlay";
   leaseApi.writeNameParams(params);
   assert.equal(params.get("chatclub_page_caret_until"), null, "overlay mode must strip page-caret name params");
@@ -119,6 +165,51 @@ assert.match(overlayCaret, /a child stolen message must re-pin the prompt/);
   sent.length = 0;
   leaseApi.adopt({ isConnected: false });
   assert.equal(sent.length, 0, "overlay mode must not prepare a page-caret lease");
+
+  class HTMLIFrameElement {}
+  globalThis.HTMLIFrameElement = HTMLIFrameElement;
+  const frame = new HTMLIFrameElement();
+  frame.isConnected = true;
+  frame.name = "";
+  frame.getAttribute = () => frame.name;
+  frame.setAttribute = (_key, value) => { frame.name = value; };
+  Object.defineProperty(frame, "contentWindow", { value: { name: "" }, configurable: true });
+  let resolvePrepare;
+  let adopted = 0;
+  const pending = [];
+  mode = "page";
+  const waiting = createPageCaretLease({
+    sendToContentFrame(_frame, command, data) {
+      pending.push({ command, data });
+      if (command === "preparePageCaretLease") {
+        return new Promise((resolve) => {
+          resolvePrepare = () => {
+            resolve({ ok: true, documentToken: "doc-1" });
+          };
+        });
+      }
+      return { ok: true, documentToken: "doc-1" };
+    },
+    overlaySearchCaretMode: () => mode,
+    timeoutMs: 80,
+    onAdopted() { adopted += 1; }
+  });
+  let adoptSettled = false;
+  const adoptResult = waiting.adopt(frame).then((result) => {
+    adoptSettled = true;
+    return result;
+  });
+  await new Promise((resolve) => {
+    setTimeout(resolve, 5);
+  });
+  assert.equal(adoptSettled, false, "adopt must await preparePageCaretLease before resolving");
+  assert.equal(pending[0]?.command, "preparePageCaretLease");
+  resolvePrepare();
+  const result = await adoptResult;
+  assert.equal(result.ok, true);
+  assert.equal(adopted, 1, "a successful adopt ACK must re-pin through onAdopted");
+  assert.match(String(frame.name), /chatclub_page_caret_until=/);
+  assert.match(String(frame.contentWindow.name), /chatclub_page_caret_token=/);
   console.log("page caret lease tests passed");
 })().catch((error) => {
   console.error(error?.stack || error);

@@ -84,7 +84,10 @@ export function createWorkspaceFrameController(dependencies = {}) {
   const pageCaret = createPageCaretLease({
     sendToContentFrame,
     overlaySearchCaretMode,
-    timeoutMs: NAVIGATION_FOCUS_GUARD_TIMEOUT_MS
+    timeoutMs: NAVIGATION_FOCUS_GUARD_TIMEOUT_MS,
+    onAdopted() {
+      if (!document.querySelector(".modal") && overlaySearchCaretMode() === "page") pinOverlaySearchCaret();
+    }
   });
   setOverlayCaretLeaseHandler({ adopt: pageCaret.adopt, release: pageCaret.release });
   const openableFrameUrl = (value) => openableTabUrl(stripNotionFrameLoadNonce(value));
@@ -633,24 +636,28 @@ export function createWorkspaceFrameController(dependencies = {}) {
     }
     const generation = beginFrameNavigationGeneration(iframe);
     beginFrameLoading(iframe, plan.logicalUrl);
-    const assign = (navigationUrl, preflight = {}) => {
-      if (!frameNavigationIsCurrent(iframe, generation)) return;
-      const expiresAt = Date.now() + NAVIGATION_FOCUS_GUARD_LEASE_MS;
-      if (guard && (document.activeElement === document.querySelector(".prompt-input") || document.documentElement.dataset.p)) {
-        maintainFrameNavigationFocusGuard(iframe, generation, expiresAt, preflight);
-      }
-      armPromptFocusRestore(iframe, generation);
-      iframe.src = navigationUrl;
-    };
     let guard = null;
     const assignWithFocusGuard = (navigationUrl) => {
       if (!frameNavigationIsCurrent(iframe, generation)) return;
       guard = prepareFrameNavigationFocusGuard(iframe, generation);
-      if (guard) guard.then(
-        (preflight) => assign(navigationUrl, preflight),
-        () => assign(navigationUrl)
-      );
-      else assign(navigationUrl);
+      const caret = Promise.resolve(pageCaret.adopt(iframe)).catch(() => ({}));
+      const assignSrc = (preflight = {}) => {
+        if (!frameNavigationIsCurrent(iframe, generation)) return;
+        const expiresAt = Date.now() + NAVIGATION_FOCUS_GUARD_LEASE_MS;
+        if (guard && (document.activeElement === document.querySelector(".prompt-input") || document.documentElement.dataset.p)) {
+          maintainFrameNavigationFocusGuard(iframe, generation, expiresAt, preflight);
+        }
+        armPromptFocusRestore(iframe, generation);
+        iframe.src = navigationUrl;
+      };
+      if (guard) {
+        Promise.all([Promise.resolve(guard).catch(() => ({})), caret]).then(
+          ([preflight]) => assignSrc(preflight),
+          () => assignSrc()
+        );
+      } else {
+        caret.then(() => assignSrc(), () => assignSrc());
+      }
     };
     if (plan.notionPreflight) {
       preparePlannedFrameLoad(plan)
@@ -691,6 +698,8 @@ export function createWorkspaceFrameController(dependencies = {}) {
           return;
         }
         assigned = true;
+        const guard = prepareFrameNavigationFocusGuard(iframe, generation);
+        const caret = Promise.resolve(pageCaret.adopt(iframe)).catch(() => ({}));
         const setSrc = (preflight = {}) => {
           if (!frameNavigationIsCurrent(iframe, generation)) return;
           rememberBrowserFrameId(iframe);
@@ -702,9 +711,11 @@ export function createWorkspaceFrameController(dependencies = {}) {
           armPromptFocusRestore(iframe, generation);
           iframe.setAttribute("src", navigationUrl);
         };
-        const guard = prepareFrameNavigationFocusGuard(iframe, generation);
-        if (guard) guard.then(setSrc, setSrc);
-        else setSrc();
+        if (guard) {
+          Promise.all([Promise.resolve(guard).catch(() => ({})), caret]).then(setSrc, setSrc);
+        } else {
+          caret.then(setSrc, setSrc);
+        }
       });
     };
     const fallback = plan.grokPreflight ? setTimeout(() => {

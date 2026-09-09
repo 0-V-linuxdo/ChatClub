@@ -15,11 +15,53 @@ function splitFrameName(raw) {
   };
 }
 
-function chatFrames(iframe) {
-  return iframe instanceof HTMLIFrameElement ? [iframe] : [...document.querySelectorAll("iframe.chat-frame")];
+function isHtmlIframe(node) {
+  const Ctor = globalThis.HTMLIFrameElement;
+  return typeof Ctor === "function" && node instanceof Ctor;
 }
 
-export function createPageCaretLease({ sendToContentFrame, overlaySearchCaretMode, timeoutMs = 1200 }) {
+function chatFrames(iframe) {
+  if (isHtmlIframe(iframe)) return [iframe];
+  try { return [...document.querySelectorAll("iframe.chat-frame")]; } catch { return []; }
+}
+
+function composeName(raw, page, expiresAt, token) {
+  const split = splitFrameName(raw);
+  let params;
+  try { params = new URLSearchParams(split.base); } catch { params = new URLSearchParams(); }
+  if (page && token) {
+    params.set(PAGE_CARET_NAME_UNTIL, String(expiresAt));
+    params.set(PAGE_CARET_NAME_TOKEN, token);
+  } else {
+    params.delete(PAGE_CARET_NAME_UNTIL);
+    params.delete(PAGE_CARET_NAME_TOKEN);
+  }
+  return `${params.toString()}${split.suffix}`;
+}
+
+function settlePromise(promise, timeoutMs) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+    const timer = setTimeout(() => finish({ ok: false, timedOut: true }), Math.max(1, Number(timeoutMs) || 1200));
+    Promise.resolve(promise).then(
+      (value) => {
+        clearTimeout(timer);
+        finish(value);
+      },
+      () => {
+        clearTimeout(timer);
+        finish({ ok: false });
+      }
+    );
+  });
+}
+
+export function createPageCaretLease({ sendToContentFrame, overlaySearchCaretMode, timeoutMs = 1200, onAdopted }) {
   let token = "";
   let expiresAt = 0;
   const running = new Set();
@@ -34,8 +76,12 @@ export function createPageCaretLease({ sendToContentFrame, overlaySearchCaretMod
     return { token, expiresAt };
   }
 
+  function pageArmed() {
+    return Boolean(token) && overlaySearchCaretMode() !== "overlay";
+  }
+
   function writeNameParams(params) {
-    if (overlaySearchCaretMode() !== "page") {
+    if (overlaySearchCaretMode() === "overlay" || (overlaySearchCaretMode() !== "page" && !token)) {
       params.delete(PAGE_CARET_NAME_UNTIL);
       params.delete(PAGE_CARET_NAME_TOKEN);
       return;
@@ -46,33 +92,33 @@ export function createPageCaretLease({ sendToContentFrame, overlaySearchCaretMod
   }
 
   function applyName(frame, page) {
-    if (!(frame instanceof HTMLIFrameElement) || !frame.isConnected) return;
-    const split = splitFrameName(frame.getAttribute("name") || frame.name || "");
-    let params;
-    try { params = new URLSearchParams(split.base); } catch { params = new URLSearchParams(); }
-    if (page) {
-      params.set(PAGE_CARET_NAME_UNTIL, String(expiresAt));
-      params.set(PAGE_CARET_NAME_TOKEN, token);
-    } else {
-      params.delete(PAGE_CARET_NAME_UNTIL);
-      params.delete(PAGE_CARET_NAME_TOKEN);
-    }
-    const next = `${params.toString()}${split.suffix}`;
+    if (!isHtmlIframe(frame) || !frame.isConnected) return;
+    const next = composeName(frame.getAttribute("name") || frame.name || "", page, expiresAt, token);
     try {
       frame.name = next;
       frame.setAttribute("name", next);
     } catch {}
+    try {
+      const win = frame.contentWindow;
+      if (win) win.name = next;
+    } catch {
+      /* cross-origin documents cannot take a parent window.name write */
+    }
   }
 
   function stampName(iframe) {
-    const page = overlaySearchCaretMode() === "page";
+    const page = overlaySearchCaretMode() === "page" || pageArmed();
     if (page) ensureSeed();
     for (const frame of chatFrames(iframe)) applyName(frame, page);
   }
 
+  function notifyAdopted() {
+    try { onAdopted?.(); } catch {}
+  }
+
   function send(command, iframe, data) {
     for (const frame of chatFrames(iframe)) {
-      if (!(frame instanceof HTMLIFrameElement) || !frame.isConnected) continue;
+      if (!isHtmlIframe(frame) || !frame.isConnected) continue;
       Promise.resolve(sendToContentFrame(frame, command, data, timeoutMs)).catch(() => {});
     }
   }
@@ -81,16 +127,35 @@ export function createPageCaretLease({ sendToContentFrame, overlaySearchCaretMod
     for (const stop of [...running]) stop();
   }
 
+  function prepareFrame(frame, seed) {
+    applyName(frame, true);
+    return settlePromise(
+      sendToContentFrame(
+        frame,
+        "preparePageCaretLease",
+        { guardToken: seed.token, expiresAt: seed.expiresAt },
+        timeoutMs
+      ),
+      timeoutMs
+    ).then((result) => {
+      if (result?.ok === true || result?.documentToken) notifyAdopted();
+      return result;
+    });
+  }
+
   function adopt(iframe) {
-    if (overlaySearchCaretMode() !== "page") return;
+    if (overlaySearchCaretMode() !== "page") return Promise.resolve({ ok: false });
     const seed = ensureSeed();
     stampName(iframe);
-    send("preparePageCaretLease", iframe, { guardToken: seed.token, expiresAt: seed.expiresAt });
+    const frames = chatFrames(iframe).filter((frame) => isHtmlIframe(frame) && frame.isConnected);
+    if (!frames.length) return Promise.resolve({ ok: false });
+    return Promise.all(frames.map((frame) => prepareFrame(frame, seed).catch(() => ({ ok: false }))))
+      .then((results) => results.find((result) => result?.ok === true) || results[0] || { ok: false });
   }
 
   function refresh(iframe) {
     if (overlaySearchCaretMode() !== "page") return;
-    if (!(iframe instanceof HTMLIFrameElement) || !iframe.isConnected) {
+    if (!isHtmlIframe(iframe) || !iframe.isConnected) {
       adopt(iframe);
       return;
     }
@@ -123,6 +188,7 @@ export function createPageCaretLease({ sendToContentFrame, overlaySearchCaretMod
         timeoutMs
       )).then((result) => {
         if (stopped) return;
+        if (result?.ok === true || result?.documentToken) notifyAdopted();
         const documentToken = String(result?.documentToken || "");
         if (documentToken && documentToken !== lastDocumentToken) {
           lastDocumentToken = documentToken;

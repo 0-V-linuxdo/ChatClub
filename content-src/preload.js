@@ -170,22 +170,22 @@ function installPreload() {
   }
 
   function consumePageCaretBootstrap() {
+    try {
+      const href = String(location?.href || "");
+      if (href === "about:blank" || href.startsWith("about:")) return { expiresAt: 0, guardToken: "" };
+    } catch {}
     let expiresAt = 0;
     let guardToken = "";
     try {
       const rawName = String(window.name || "");
       const guard = rawName.match(/(?:^|&)chatclub_focus_guard_until=\d+(?:&chatclub_focus_guard_token=[^&]+)?$/);
       const base = guard ? rawName.slice(0, guard.index) : rawName;
-      const suffix = guard ? rawName.slice(guard.index) : "";
       const params = new URLSearchParams(base);
       const until = params.get(PAGE_CARET_NAME_UNTIL);
       const token = params.get(PAGE_CARET_NAME_TOKEN);
       if (until || token) {
         expiresAt = Math.max(expiresAt, Number(until) || 0);
         guardToken = String(token || guardToken);
-        params.delete(PAGE_CARET_NAME_UNTIL);
-        params.delete(PAGE_CARET_NAME_TOKEN);
-        window.name = `${params.toString()}${suffix}`;
       }
     } catch {}
     try {
@@ -199,7 +199,6 @@ function installPreload() {
       } catch {
         expiresAt = Math.max(expiresAt, Number(stored) || 0);
       }
-      sessionStorage.removeItem(PAGE_CARET_STORAGE_KEY);
     } catch {}
     const now = Date.now();
     if (!Number.isFinite(expiresAt) || expiresAt <= now) return { expiresAt: 0, guardToken: "" };
@@ -444,6 +443,7 @@ function installPreload() {
           window[registryKey].pageCaretToken = pageCaretToken;
         }
       } catch {}
+      evictPageCaretFocus();
       return pageCaretExpiresAt;
     };
     const releasePageCaret = (guardToken = "") => {
@@ -466,14 +466,35 @@ function installPreload() {
       try { return typeof callback === "function" ? callback() : undefined; }
       finally { pageCaretAllowDepth -= 1; }
     };
-    const onPageCaretFocusIn = (event) => {
-      if (!pageCaretLeaseActive()) return;
-      const target = event?.target;
-      if (!target || target === document.body || target === document.documentElement) return;
-      try { target.blur?.(); } catch {}
+    const pageCaretEditable = (node) => {
+      if (!node || node === document.body || node === document.documentElement) return false;
+      const tag = String(node.tagName || "").toLowerCase();
+      if (tag === "textarea" || tag === "input") return true;
+      const editable = String(node.getAttribute?.("contenteditable") || "").toLowerCase();
+      if (editable === "true" || editable === "plaintext-only") return true;
+      return String(node.getAttribute?.("role") || "").toLowerCase() === "textbox";
+    };
+    const notifyPageCaretStolen = () => {
       try {
         window.parent?.postMessage({ source: PAGE_CARET_MESSAGE_SOURCE, action: "stolen" }, "*");
       } catch {}
+    };
+    const evictPageCaretFocus = () => {
+      if (!pageCaretLeaseActive()) return;
+      const active = document.activeElement;
+      if (pageCaretEditable(active)) {
+        try { active.blur?.(); } catch {}
+      }
+      notifyPageCaretStolen();
+    };
+    const onPageCaretFocusIn = (event) => {
+      if (!pageCaretLeaseActive()) return;
+      const target = event?.target;
+      const blurTarget = target && target !== window && target !== document
+        ? target
+        : document.activeElement;
+      try { blurTarget?.blur?.(); } catch {}
+      notifyPageCaretStolen();
     };
     const markPageCaretTrustedPointer = (event) => {
       if (event?.isTrusted !== true || event?.type !== "pointerdown") return;
@@ -552,6 +573,7 @@ function installPreload() {
     window.addEventListener("keydown", releaseBootstrapForTrustedIntent, true);
     window.addEventListener("focusin", onPageCaretFocusIn, true);
     window.addEventListener("pointerdown", markPageCaretTrustedPointer, true);
+    if (pageCaretExpiresAt > Date.now()) evictPageCaretFocus();
 
     window[registryKey] = {
       version: PREFERRED_MODEL_FOCUS_SHIELD_VERSION,

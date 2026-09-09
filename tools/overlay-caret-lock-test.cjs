@@ -123,11 +123,17 @@ function createWorld() {
         if (String(selector).includes(".modal")) return panel;
         if (String(selector).includes("prompt-input")) return prompt;
         return null;
+      },
+      querySelectorAll(selector) {
+        if (String(selector).includes("iframe.chat-frame")) return [iframe];
+        return [];
       }
     }
   };
   world.documentHasFocus = true;
   const windowTarget = {
+    focusCalls: 0,
+    focus() { this.focusCalls += 1; },
     addEventListener(type, handler, capture) {
       listeners.push({ type, handler, capture, target: "window" });
     },
@@ -486,6 +492,16 @@ function claimPrompt(world, extras = {}) {
   world.document.activeElement = world.iframe;
   stolen.handler({ data: { source: "chatclub-page-caret", action: "stolen" } });
   assert.equal(world.document.activeElement, world.promptField, "a child stolen message must re-pin the prompt");
+}
+
+{
+  const world = createPageWorld();
+  claimPrompt(world);
+  world.document.activeElement = world.iframe;
+  const before = world.window.focusCalls;
+  assert.equal(world.pin(), true, "page pin must restore the parent browsing context");
+  assert.ok(world.window.focusCalls > before, "pin uses window.focus");
+  assert.equal(world.document.activeElement, world.promptField);
 }
 
 console.log("overlay caret lock tests passed");
