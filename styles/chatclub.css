@@ -7107,53 +7107,55 @@ body.settings-tab-context-menu-dragging iframe {
   min-width: 0;
 }
 
+.model-inventory-block > .settings-block-header h4 {
+  display: none;
+  margin: 0;
+}
+
 .model-inventory-group {
   display: grid;
-  gap: var(--space-2);
-}
-
-.model-inventory-heading {
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-}
-
-.model-inventory-list {
-  overflow-x: auto;
-}
-
-.model-inventory-outbound .settings-list-header,
-.model-inventory-outbound .model-inventory-row {
-  min-width: 640px;
-  grid-template-columns: minmax(120px, .7fr) minmax(180px, 1.2fr) minmax(180px, 1.2fr) minmax(160px, .9fr);
-}
-
-.model-inventory-outbound .settings-list-header span {
-  text-align: left;
-}
-
-.model-inventory-outbound .settings-list-header span:last-child {
-  text-align: left;
-}
-
-.model-inventory-outbound .model-inventory-row > * {
-  margin: 0;
-  padding: 0 var(--ui-cell-pad-x);
-}
-
-.model-inventory-row .select {
-  min-width: 0;
-  width: 100%;
+  grid-template-columns: minmax(0, max-content) max-content;
+  justify-content: start;
+  justify-items: start;
+  column-gap: var(--space-4);
+  row-gap: 14px;
+  width: max-content;
   max-width: 100%;
 }
 
-.model-inventory-row .settings-muted-cell {
-  color: var(--muted);
+.model-inventory-row {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  align-items: center;
+  width: auto;
+  max-width: 100%;
+  min-width: 0;
 }
 
-.model-inventory-row:hover {
-  background: transparent;
+.model-inventory-feature {
+  min-width: 0;
+  color: var(--text);
+  font-size: var(--font-size-md);
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-inventory-cluster {
+  display: grid;
+  grid-template-columns: minmax(11ch, 22ch) minmax(11ch, 22ch);
+  gap: var(--space-3);
+  width: max-content;
+  max-width: 100%;
+  justify-self: start;
+}
+
+.model-inventory-cluster .select {
+  min-width: 0;
+  width: 100%;
+  max-width: 28ch;
 }
 
 .built-in-config-list .settings-list-header,
@@ -9824,12 +9826,6 @@ html:not([data-settings-click-reorder="always"]) .settings-reorder .ui-reorder {
   .api-profile-list .settings-list-header,
   .api-profile-row {
     grid-template-columns: var(--ui-reorder-cluster) minmax(130px, .8fr) minmax(180px, 1.3fr) minmax(170px, 1fr) minmax(156px, auto);
-  }
-
-  .model-inventory-outbound .settings-list-header,
-  .model-inventory-outbound .model-inventory-row {
-    min-width: 560px;
-    grid-template-columns: minmax(104px, .7fr) minmax(148px, 1.2fr) minmax(148px, 1.2fr) minmax(128px, .9fr);
   }
 
   .built-in-config-list .settings-list-header,

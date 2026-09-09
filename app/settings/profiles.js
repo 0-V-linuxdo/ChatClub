@@ -98,28 +98,22 @@ export function createProfilesSettingsSection(ctx) {
     );
   }
 
-  function inventoryValue(value, emptyKey) {
-    return value || t(emptyKey);
-  }
-
   function modelOptions(models) {
     return (models || []).map((model) => ({ value: model, label: model }));
   }
 
   function inventoryBlock(redraw) {
     const { outbound } = listModelInventory(state.options, ["outbound"]);
-    return settingsBlock(t("inventory.title"), t("inventory.desc"),
-      el("div", { class: "model-inventory-group", dataset: { modelInventoryWorld: "outbound" } },
-        el("p", { class: "model-inventory-heading" }, t("inventory.outbound")),
-        settingsList(
-          [t("inventory.feature"), t("inventory.profile"), t("inventory.model"), t("profiles.provider")],
-          outbound.map((row) => el("div", {
-            class: "ui-list-row settings-list-row model-inventory-row",
-            dataset: { modelInventoryId: row.id, modelInventoryWorld: "outbound" }
-          },
-            el("strong", { class: "settings-main-cell" }, t(row.featureKey)),
+    const block = settingsBlock("", t("inventory.desc"),
+      el("div", { class: "model-inventory-group model-inventory-outbound", dataset: { modelInventoryWorld: "outbound" } },
+        outbound.map((row) => el("div", {
+          class: "model-inventory-row",
+          dataset: { modelInventoryId: row.id, modelInventoryWorld: "outbound" }
+        },
+          el("strong", { class: "model-inventory-feature" }, t(row.featureKey)),
+          el("div", { class: "model-inventory-cluster" },
             select(row.profileId, profileOptions(), {
-              "aria-label": `${t(row.featureKey)} ${t("inventory.profile")}`,
+              "aria-label": `${t(row.featureKey)} ${t("profiles.provider")}`,
               dataset: { outboundSlot: row.id, outboundField: "profile" },
               onchange: (event) => { void saveOutboundProfile(row.purpose, event.target.value, redraw); }
             }),
@@ -127,13 +121,13 @@ export function createProfilesSettingsSection(ctx) {
               "aria-label": `${t(row.featureKey)} ${t("inventory.model")}`,
               dataset: { outboundSlot: row.id, outboundField: "model" },
               onchange: (event) => { void saveOutboundModel(row.purpose, event.target.value, redraw); }
-            }),
-            el("span", { class: "settings-muted-cell" }, inventoryValue(row.profileName, "inventory.none"))
-          )),
-          "model-inventory-list model-inventory-outbound"
-        )
+            })
+          )
+        ))
       )
     );
+    block.classList.add("model-inventory-block");
+    return block;
   }
 
   function reset() {
