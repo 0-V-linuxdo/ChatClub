@@ -1,3 +1,13 @@
+import {
+  fullTextContentMetricsFromFingerprint,
+  fullTextContentMetricsFromMessages,
+  fullTextContentSignature,
+  fullTextContentSignatureFromFingerprint,
+  fullTextExistingIsCovered,
+  fullTextExistingNeedsCollect,
+  workspaceTabFullTextFrameIdentityKey
+} from "../../shared/workspace-tab-fulltext.js";
+
 export const IDLE_FULLTEXT_CAPTURE_DEFAULTS = Object.freeze({
   idleMs: 30_000,
   pollMs: 2_500,
@@ -10,16 +20,7 @@ export const IDLE_FULLTEXT_CAPTURE_DEFAULTS = Object.freeze({
 });
 
 export function conversationFingerprintSignature(fingerprint) {
-  if (!fingerprint || typeof fingerprint !== "object") return "";
-  return [
-    String(fingerprint.documentId || ""),
-    String(fingerprint.href || ""),
-    String(fingerprint.turnCount ?? ""),
-    String(fingerprint.userChars ?? ""),
-    String(fingerprint.assistantChars ?? ""),
-    String(fingerprint.tailHash || ""),
-    fingerprint.generating === true ? "1" : "0"
-  ].join("\n");
+  return fullTextContentSignatureFromFingerprint(fingerprint);
 }
 
 function fingerprintIsGenerating(fingerprint) {
@@ -33,6 +34,37 @@ function positiveInteger(value, fallback) {
 
 function frameCaptureKey(frame) {
   return String(frame?.key || frame?.instanceId || "").trim();
+}
+
+function captureKeys(frame, fingerprint) {
+  const keys = [];
+  const instanceId = frameCaptureKey(frame);
+  if (instanceId) {
+    keys.push(instanceId);
+    if (!instanceId.startsWith("id:") && !instanceId.startsWith("href:")) keys.push(`id:${instanceId}`);
+  }
+  const href = String(fingerprint?.href || frame?.href || "").trim();
+  if (href) {
+    const identity = workspaceTabFullTextFrameIdentityKey({
+      href,
+      instanceId: String(frame?.instanceId || frame?.key || "").trim()
+    });
+    if (identity) keys.push(identity);
+  }
+  return [...new Set(keys.filter(Boolean))];
+}
+
+function snapshotFromMetrics(metrics, prompt = "", hasPair = false) {
+  const next = {
+    turnCount: Number(metrics?.turnCount) || 0,
+    userChars: Number(metrics?.userChars) || 0,
+    assistantChars: Number(metrics?.assistantChars) || 0,
+    tailHash: String(metrics?.tailHash || ""),
+    hasPair: hasPair === true,
+    prompt: String(prompt || "")
+  };
+  next.signature = fullTextContentSignature(next);
+  return next.signature ? next : null;
 }
 
 export function createIdleFullTextCaptureScheduler(options = {}) {
@@ -57,6 +89,9 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
     : () => false;
   const isEnabled = typeof options.isEnabled === "function" ? options.isEnabled : () => true;
   const frameExists = typeof options.frameExists === "function" ? options.frameExists : () => true;
+  const loadStoredSnapshots = typeof options.loadStoredSnapshots === "function"
+    ? options.loadStoredSnapshots
+    : async () => [];
   const savedSignatures = new Map();
 
   let generation = 0;
@@ -71,42 +106,112 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
     return activeKind === "send" || activeKind === "existing";
   }
 
-  function savedRecordFor(frame) {
-    const key = frameCaptureKey(frame);
-    if (!key) return null;
-    const record = savedSignatures.get(key);
-    if (!record) return null;
-    if (typeof record === "string") return { signature: record, prompt: "" };
-    return {
-      signature: String(record.signature || ""),
-      prompt: String(record.prompt || "")
-    };
-  }
-
-  function savedSignatureFor(frame) {
-    return String(savedRecordFor(frame)?.signature || "");
-  }
-
-  function savedPromptFor(frame) {
-    return String(savedRecordFor(frame)?.prompt || "");
-  }
-
-  function alreadySavedIdleSnapshot(frame, prompt, signature) {
-    if (!signature || signature !== savedSignatureFor(frame)) return false;
-    const text = String(prompt || "");
-    return !text || savedPromptFor(frame) === text;
-  }
-
-  async function rememberSavedSignature(frame, prompt, fallback = "") {
-    const key = frameCaptureKey(frame);
-    if (!key) return;
-    let signature = String(fallback || "");
-    try {
-      signature = conversationFingerprintSignature(await getFingerprint(frame, prompt)) || signature;
-    } catch {
-      /* keep fallback */
+  function savedRecordFor(frame, fingerprint) {
+    for (const key of captureKeys(frame, fingerprint)) {
+      const record = savedSignatures.get(key);
+      if (!record) continue;
+      if (typeof record === "string") {
+        return { signature: record, prompt: "", hasPair: true };
+      }
+      return {
+        signature: String(record.signature || ""),
+        prompt: String(record.prompt || ""),
+        hasPair: record.hasPair === true,
+        turnCount: Number(record.turnCount) || 0,
+        userChars: Number(record.userChars) || 0,
+        assistantChars: Number(record.assistantChars) || 0,
+        tailHash: String(record.tailHash || "")
+      };
     }
-    if (signature) savedSignatures.set(key, { signature, prompt: String(prompt || "") });
+    return null;
+  }
+
+  function savedSignatureFor(frame, fingerprint) {
+    return String(savedRecordFor(frame, fingerprint)?.signature || "");
+  }
+
+  function savedPromptFor(frame, fingerprint) {
+    return String(savedRecordFor(frame, fingerprint)?.prompt || "");
+  }
+
+  function alreadySavedIdleSnapshot(frame, prompt, signature, fingerprint) {
+    if (!signature || signature !== savedSignatureFor(frame, fingerprint)) return false;
+    const text = String(prompt || "");
+    return !text || savedPromptFor(frame, fingerprint) === text;
+  }
+
+  function rememberSnapshot(frame, snapshot, fingerprint) {
+    if (!snapshot?.signature) return;
+    for (const key of captureKeys(frame, fingerprint)) {
+      savedSignatures.set(key, snapshot);
+    }
+  }
+
+  function rememberFromFingerprint(frame, prompt, fingerprint, hasPair = false) {
+    const snapshot = snapshotFromMetrics(
+      fullTextContentMetricsFromFingerprint(fingerprint),
+      prompt,
+      hasPair
+    );
+    if (snapshot) rememberSnapshot(frame, snapshot, fingerprint);
+    return snapshot;
+  }
+
+  async function rememberSavedSignature(frame, prompt, fallback = "", extra = {}) {
+    const fingerprint = extra.fingerprint && typeof extra.fingerprint === "object" ? extra.fingerprint : null;
+    let snapshot = fingerprint
+      ? snapshotFromMetrics(fullTextContentMetricsFromFingerprint(fingerprint), prompt, extra.hasPair === true)
+      : null;
+    if (!snapshot?.signature && Array.isArray(extra.messages)) {
+      snapshot = snapshotFromMetrics(
+        fullTextContentMetricsFromMessages(extra.messages),
+        prompt,
+        extra.hasPair === true
+      );
+    }
+    if (!snapshot?.signature) {
+      try {
+        const probed = await getFingerprint(frame, prompt);
+        snapshot = snapshotFromMetrics(
+          fullTextContentMetricsFromFingerprint(probed),
+          prompt,
+          extra.hasPair === true
+        );
+        if (snapshot) rememberSnapshot(frame, snapshot, probed);
+        return;
+      } catch {
+        if (fallback) {
+          rememberSnapshot(frame, {
+            signature: String(fallback),
+            prompt: String(prompt || ""),
+            hasPair: extra.hasPair === true
+          }, fingerprint);
+        }
+        return;
+      }
+    }
+    if (snapshot?.signature) rememberSnapshot(frame, snapshot, fingerprint);
+  }
+
+  async function hydrateFromStore() {
+    let snapshots = [];
+    try {
+      snapshots = await loadStoredSnapshots();
+    } catch {
+      return;
+    }
+    for (const snap of Array.isArray(snapshots) ? snapshots : []) {
+      const keys = Array.isArray(snap?.keys) ? snap.keys : [];
+      const snapshot = snapshotFromMetrics(snap, "", snap?.hasPair !== false);
+      if (!snapshot) continue;
+      if (snap?.signature) snapshot.signature = String(snap.signature);
+      snapshot.hasPair = snap?.hasPair !== false;
+      for (const key of keys) {
+        const nextKey = String(key || "").trim();
+        if (!nextKey || savedSignatures.has(nextKey)) continue;
+        savedSignatures.set(nextKey, snapshot);
+      }
+    }
   }
 
   async function listCaptureFrames() {
@@ -126,6 +231,7 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
     const kind = existing ? "existing" : "send";
     activeKind = kind;
     try {
+      if (existing) await hydrateFromStore();
       const list = await listCaptureFrames();
       await Promise.all(list.map((frame) => captureFrame({
         frame,
@@ -157,11 +263,12 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
       return { status: "persist-error", attempts };
     }
     if (runId !== generation) return { status: "cancelled", attempts };
-    return { status: "saved", attempts };
+    return { status: "saved", attempts, item };
   }
 
   async function captureFrame({ frame, prompt, runId, startedAt, existing = false }) {
     let lastSignature = "";
+    let lastFingerprint = null;
     let idleSince = startedAt;
     let attempts = 0;
     let sawFingerprint = false;
@@ -192,13 +299,18 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
         ? lastKnownGenerating !== false
         : fingerprintIsGenerating(fingerprint);
       if (!probeFailed) lastKnownGenerating = generating;
+      const stored = savedRecordFor(frame, fingerprint);
+      const liveMetrics = fingerprint ? fullTextContentMetricsFromFingerprint(fingerprint) : null;
+      const existingCovered = existing && fullTextExistingIsCovered(liveMetrics, stored);
+      if (existingCovered) {
+        rememberFromFingerprint(frame, prompt, fingerprint, true);
+        return { status: "unchanged", attempts };
+      }
       if (signature) {
-        if (existing && !generating && signature === savedSignatureFor(frame)) {
-          return { status: "unchanged", attempts };
-        }
         if (sawFingerprint && signature !== lastSignature) sawChange = true;
         if (!sawFingerprint || signature !== lastSignature || generating) idleSince = now();
         lastSignature = signature;
+        lastFingerprint = fingerprint;
         sawFingerprint = true;
       } else if (probeFailed && lastKnownGenerating !== false) {
         idleSince = now();
@@ -209,16 +321,33 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
       const wallHit = !generatingCapHit && !waitingForReply && elapsed >= wallMs;
       const canCollect = existing ? sawFingerprint : (sawPrompt || sawChange);
       const idle = !generating && canCollect && sawFingerprint && (now() - idleSince >= idleMs);
+      const storedPair = stored?.hasPair === true;
+      const needsCollect = existing
+        ? fullTextExistingNeedsCollect(liveMetrics, stored)
+        : true;
       if (generating && generatingCapHit) {
         return { status: "expired", attempts };
       }
+      if (existing && wallHit && storedPair && !needsCollect) {
+        return { status: "unchanged", attempts };
+      }
+      if (existing && wallHit && storedPair && (Number(liveMetrics?.turnCount) || 0) <= 0) {
+        return { status: "expired", attempts };
+      }
       if (!generating && (idle || wallHit) && attempts < maxAttempts) {
-        if (alreadySavedIdleSnapshot(frame, prompt, lastSignature || signature)) {
+        if (existing && storedPair && !needsCollect) {
+          return { status: "unchanged", attempts };
+        }
+        if (alreadySavedIdleSnapshot(frame, prompt, lastSignature || signature, fingerprint)) {
           return { status: "unchanged", attempts };
         }
         const result = await collectOnce({ frame, prompt, runId, attempts: attempts + 1 });
         if (result.status === "saved") {
-          await rememberSavedSignature(frame, prompt, lastSignature);
+          await rememberSavedSignature(frame, prompt, lastSignature, {
+            fingerprint: lastFingerprint,
+            messages: result.item?.page?.messages,
+            hasPair: true
+          });
           return { ...result, attempts: attempts + 1 };
         }
         if (result.status === "cancelled") return result;
@@ -240,14 +369,21 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
       const remaining = ((generating || waitingForReply) ? generatingWallMs : wallMs) - (now() - startedAt);
       if (remaining <= 0) {
         if (generating) return { status: "expired", attempts };
+        if (existing && storedPair && !needsCollect) {
+          return { status: "unchanged", attempts };
+        }
         if (attempts < maxAttempts) {
-          if (alreadySavedIdleSnapshot(frame, prompt, lastSignature || signature)) {
+          if (alreadySavedIdleSnapshot(frame, prompt, lastSignature || signature, fingerprint)) {
             return { status: "unchanged", attempts };
           }
           attempts += 1;
           const result = await collectOnce({ frame, prompt, runId, attempts });
           if (result.status === "saved") {
-            await rememberSavedSignature(frame, prompt, lastSignature);
+            await rememberSavedSignature(frame, prompt, lastSignature, {
+              fingerprint: lastFingerprint,
+              messages: result.item?.page?.messages,
+              hasPair: true
+            });
             return result;
           }
           if (result.status === "cancelled") return result;

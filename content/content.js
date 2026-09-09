@@ -409,12 +409,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "4b6514a3a2043ed202839001db84cf793ad9388b941bde892cdc70d32792d0bb";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "63515787b24c0ea62348827d316640aa65e13b094486a20b040954081cf21dcf";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "0cd3895420858541ee5fd09ac828ce2a906b18596159c43fbecbe695f575fd4c";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.0cd3895420858541ee5fd09ac828ce2a906b18596159c43fbecbe695f575fd4c";
-  var CONTENT_RUNTIME_CONTENT_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/content.js", "entryPath": "content-src/content.js", "sourceSha256": "187fd0ca092ac8dd4c9da93a82544b095d435da243a63fb93886e3db37465a37", "implementationSha256": "912c6a71e350f30299669849b17a98420b6f7c74dba225d472b51907be77a134", "implementationVersion": "2026.07.16.2+bundle.912c6a71e350f30299669849b17a98420b6f7c74dba225d472b51907be77a134" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "6e06c3a8416390186a9637834a3a0271e66967d999c9aafab47c3a0b0fda5b84";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.6e06c3a8416390186a9637834a3a0271e66967d999c9aafab47c3a0b0fda5b84";
+  var CONTENT_RUNTIME_CONTENT_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/content.js", "entryPath": "content-src/content.js", "sourceSha256": "8352aa4040b800c144f656109bca3d7781c1036223bef7675a20068522286571", "implementationSha256": "cf7130ab7f1c7f74b725eb210c5064607beb2523758f54ab5a320f182cb3062b", "implementationVersion": "2026.07.16.2+bundle.cf7130ab7f1c7f74b725eb210c5064607beb2523758f54ab5a320f182cb3062b" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -906,6 +906,34 @@ ${raw.slice(-36e3)}`;
     if (!turn) return false;
     return nodeLooksLikeStreamingTurn(turn);
   }
+  function conversationTurnFingerprintText(turn) {
+    if (!turn) return "";
+    let source = turn;
+    try {
+      const clone = turn.cloneNode(true);
+      for (const node of clone.querySelectorAll([
+        "button",
+        "[role='button']",
+        "[role='toolbar']",
+        "[role='menu']",
+        "[role='menuitem']",
+        "[aria-label*='copy' i]",
+        "[title*='copy' i]",
+        "[data-testid*='copy' i]",
+        ".code-buttons"
+      ].join(","))) {
+        node.remove();
+      }
+      source = clone;
+    } catch {
+    }
+    const raw = normalize(source?.textContent || source?.innerText || "").replace(/\s+/g, " ");
+    try {
+      return raw.normalize("NFKC").replace(/\s+/g, " ").trim();
+    } catch {
+      return raw.trim();
+    }
+  }
   function conversationFingerprint(documentId = "", data = {}) {
     const turns = conversationTurnNodes();
     const prompt = normalize(data?.prompt || "").replace(/\s+/g, " ");
@@ -913,28 +941,32 @@ ${raw.slice(-36e3)}`;
     let userChars = 0;
     let assistantChars = 0;
     let lastText = "";
+    let classified = 0;
     const haystackParts = [];
     for (const turn of turns) {
       const role = conversationTurnRole(turn);
-      const value = normalize(turn?.textContent || turn?.innerText || "").replace(/\s+/g, " ");
+      const value = conversationTurnFingerprintText(turn);
       if (!value) continue;
       haystackParts.push(value);
-      if (role === "user") userChars += value.length;
-      else if (role === "assistant") assistantChars += value.length;
-      lastText = value;
+      if (role === "user") {
+        userChars += value.length;
+        classified += 1;
+        lastText = value;
+      } else if (role === "assistant") {
+        assistantChars += value.length;
+        classified += 1;
+        lastText = value;
+      }
     }
-    const tail = lines.slice(-8).join("\n");
-    if (!lastText) lastText = tail;
-    if (!assistantChars) assistantChars = tail.length;
     const haystack = haystackParts.join(" ");
     const promptHaystack = haystack || [...lines.slice(0, 48), ...lines.slice(-80)].join(" ");
     return {
       href: conversationHref(),
       documentId: String(documentId || ""),
-      turnCount: turns.length || Math.min(lines.length, 999),
+      turnCount: classified,
       userChars,
       assistantChars,
-      tailHash: fingerprintHash(lastText.slice(-500)),
+      tailHash: lastText ? fingerprintHash(lastText.slice(-500)) : "",
       containsPrompt: Boolean(prompt && promptHaystack.includes(prompt)),
       generating: conversationComposerIsGenerating() || conversationToolActivityFromLines(lines) || lastAssistantTurnIsStreaming(lastAssistantTurnNode())
     };

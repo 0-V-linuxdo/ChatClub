@@ -24,7 +24,12 @@ const root = path.resolve(__dirname, "..");
     leftoverWorkspaceTabFullTextHits,
     upsertWorkspaceTabFullText,
     workspaceIdsMatchingFullText,
-    workspaceTabFullTextFramesEqual
+    workspaceTabFullTextFrameIdentityKey,
+    workspaceTabFullTextFramesEqual,
+    fullTextContentSignature,
+    fullTextContentMetricsFromMessages,
+    fullTextExistingNeedsCollect,
+    fullTextExistingIsCovered
   } = await import(pathToFileURL(path.join(root, "shared/workspace-tab-fulltext.js")).href);
 
   const workspaceId = "page-abcdefghijkl";
@@ -285,6 +290,41 @@ const root = path.resolve(__dirname, "..");
     0,
     "user-only full-text must not appear as a leftover tab"
   );
+
+  assert.equal(
+    workspaceTabFullTextFrameIdentityKey({
+      href: "https://chatgpt.com/c/1",
+      instanceId: "chatgpt-1"
+    }),
+    "href:https://chatgpt.com/c/1"
+  );
+  assert.equal(
+    workspaceTabFullTextFrameIdentityKey({ instanceId: "chatgpt-1" }),
+    "id:chatgpt-1"
+  );
+
+  const contentMessages = [
+    { role: "user", text: "Hello there" },
+    { role: "assistant", text: "General Kenobi" },
+    { role: "page", text: "ignored chrome" }
+  ];
+  const contentMetrics = fullTextContentMetricsFromMessages(contentMessages);
+  assert.equal(contentMetrics.turnCount, 2);
+  assert.equal(contentMetrics.userChars, "Hello there".length);
+  assert.equal(contentMetrics.assistantChars, "General Kenobi".length);
+  assert.match(contentMetrics.tailHash, /^[0-9a-f]{8}$/);
+  assert.equal(
+    fullTextContentSignature(contentMetrics),
+    `${contentMetrics.turnCount}\n${contentMetrics.userChars}\n${contentMetrics.assistantChars}\n${contentMetrics.tailHash}`
+  );
+  assert.equal(fullTextExistingNeedsCollect(contentMetrics, { ...contentMetrics, hasPair: true }), false);
+  assert.equal(fullTextExistingIsCovered(contentMetrics, { ...contentMetrics, hasPair: true }), true);
+  assert.equal(fullTextExistingNeedsCollect({ ...contentMetrics, turnCount: 4 }, { ...contentMetrics, hasPair: true }), true);
+  assert.equal(fullTextExistingNeedsCollect({ ...contentMetrics, tailHash: "deadbeef" }, { ...contentMetrics, hasPair: true }), true);
+  assert.equal(fullTextExistingNeedsCollect({ turnCount: 0 }, { ...contentMetrics, hasPair: true }), false);
+  assert.equal(fullTextExistingIsCovered({ turnCount: 0 }, { ...contentMetrics, hasPair: true }), false);
+  assert.equal(fullTextExistingNeedsCollect(contentMetrics, { hasPair: false }), true);
+  assert.equal(fullTextExistingIsCovered(contentMetrics, { hasPair: false }), false);
 
   console.log("workspace tab full text: ok");
 })().catch((error) => {

@@ -100,6 +100,84 @@ function frameIdentityKey(frame = {}) {
   return fallbackHref ? `href:${fallbackHref}` : "";
 }
 
+export function workspaceTabFullTextFrameIdentityKey(frame = {}) {
+  return frameIdentityKey(frame);
+}
+
+function fullTextFingerprintHash(value) {
+  const text = String(value || "");
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+export function fullTextContentSignature(metrics = {}) {
+  return [
+    String(metrics.turnCount ?? ""),
+    String(metrics.userChars ?? ""),
+    String(metrics.assistantChars ?? ""),
+    String(metrics.tailHash || "")
+  ].join("\n");
+}
+
+export function fullTextContentMetricsFromMessages(messages = []) {
+  const turns = (Array.isArray(messages) ? messages : [])
+    .map((message) => normalizeFullTextMessage(message))
+    .filter(Boolean);
+  let userChars = 0;
+  let assistantChars = 0;
+  let lastText = "";
+  for (const turn of turns) {
+    const value = normalizeFullTextMatchText(turn.text);
+    if (!value) continue;
+    if (turn.role === "user") userChars += value.length;
+    else if (turn.role === "assistant") assistantChars += value.length;
+    lastText = value;
+  }
+  return {
+    turnCount: turns.length,
+    userChars,
+    assistantChars,
+    tailHash: lastText ? fullTextFingerprintHash(lastText.slice(-500)) : ""
+  };
+}
+
+export function fullTextContentMetricsFromFingerprint(fingerprint = {}) {
+  return {
+    turnCount: Number(fingerprint?.turnCount) || 0,
+    userChars: Number(fingerprint?.userChars) || 0,
+    assistantChars: Number(fingerprint?.assistantChars) || 0,
+    tailHash: String(fingerprint?.tailHash || "")
+  };
+}
+
+export function fullTextContentSignatureFromFingerprint(fingerprint) {
+  if (!fingerprint || typeof fingerprint !== "object") return "";
+  return fullTextContentSignature(fullTextContentMetricsFromFingerprint(fingerprint));
+}
+
+export function fullTextExistingNeedsCollect(live, stored) {
+  if (!stored?.hasPair) return true;
+  const liveTurns = Number(live?.turnCount) || 0;
+  if (liveTurns <= 0) return false;
+  const storedTurns = Number(stored.turnCount) || 0;
+  if (liveTurns > storedTurns) return true;
+  const liveHash = String(live?.tailHash || "");
+  const storedHash = String(stored.tailHash || "");
+  if (liveHash && storedHash && liveHash !== storedHash) return true;
+  return false;
+}
+
+export function fullTextExistingIsCovered(live, stored) {
+  if (!stored?.hasPair) return false;
+  const liveTurns = Number(live?.turnCount) || 0;
+  if (liveTurns <= 0) return false;
+  return !fullTextExistingNeedsCollect(live, stored);
+}
+
 function pairsOverlap(left, right) {
   return fullTextTextsOverlap(left?.userMessage, right?.userMessage);
 }

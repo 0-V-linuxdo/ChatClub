@@ -123,7 +123,7 @@ function previewItem(instanceId, prompt, assistant) {
     createIdleFullTextCaptureScheduler,
     IDLE_FULLTEXT_CAPTURE_DEFAULTS
   } = idleModule;
-  const { fullTextMessagesHavePair, fullTextMessagesMatchPrompt } = fullTextModule;
+  const { fullTextMessagesHavePair, fullTextMessagesMatchPrompt, fullTextContentMetricsFromMessages, fullTextContentSignature } = fullTextModule;
 
   assert.equal(IDLE_FULLTEXT_CAPTURE_DEFAULTS.idleMs, 30_000);
   assert.equal(IDLE_FULLTEXT_CAPTURE_DEFAULTS.maxAttempts, 3);
@@ -161,10 +161,28 @@ function previewItem(instanceId, prompt, assistant) {
       tailHash: "ab",
       now: 99,
       childCount: 88,
-      textLength: 240
+      textLength: 240,
+      generating: true
     }),
-    "d\nhttps://x\n4\n12\n9\nab\n0",
-    "idle signatures must ignore clocks, chrome counts, and other extra fields, but include generating"
+    "4\n12\n9\nab",
+    "idle signatures must be content-only: turnCount, userChars, assistantChars, tailHash"
+  );
+  assert.equal(
+    conversationFingerprintSignature({
+      turnCount: 4,
+      userChars: 12,
+      assistantChars: 9,
+      tailHash: "ab",
+      generating: false
+    }),
+    conversationFingerprintSignature({
+      turnCount: 4,
+      userChars: 12,
+      assistantChars: 9,
+      tailHash: "ab",
+      generating: true
+    }),
+    "generating must not change the idle content signature"
   );
 
   const prompt = "Explain ChatClub idle capture";
@@ -558,6 +576,242 @@ function previewItem(instanceId, prompt, assistant) {
     assert.deepEqual(collects, ["existing", prompt], "a send must still wait for idle and collect after a saved existing snapshot");
   }
 
+  function storedSnapshot(frame, messages) {
+    const metrics = fullTextContentMetricsFromMessages(messages);
+    const keys = [];
+    const instanceId = String(frame.key || frame.instanceId || "").trim();
+    if (instanceId) {
+      keys.push(instanceId);
+      keys.push(`id:${instanceId}`);
+    }
+    if (frame.href) keys.push(`href:${frame.href}`);
+    return {
+      keys,
+      signature: fullTextContentSignature(metrics),
+      hasPair: true,
+      ...metrics
+    };
+  }
+
+  const coveredMessages = [
+    { role: "user", text: "older question" },
+    { role: "assistant", text: "older answer" }
+  ];
+  const coveredMetrics = fullTextContentMetricsFromMessages(coveredMessages);
+  const coveredFrame = { key: "one", instanceId: "one", href: "https://chatgpt.com/c/1" };
+  const coveredFingerprint = () => fingerprintOf({
+    href: coveredFrame.href,
+    turnCount: coveredMetrics.turnCount,
+    userChars: coveredMetrics.userChars,
+    assistantChars: coveredMetrics.assistantChars,
+    tailHash: coveredMetrics.tailHash,
+    containsPrompt: false
+  });
+
+  {
+    const clock = createFakeClock();
+    const collects = [];
+    const scheduler = createIdleFullTextCaptureScheduler({
+      now: clock.now,
+      sleep: clock.sleep,
+      idleMs: 5_000,
+      pollMs: 1_000,
+      maxAttempts: 3,
+      wallMs: 60_000,
+      listFrames: () => [coveredFrame],
+      loadStoredSnapshots: async () => [storedSnapshot(coveredFrame, coveredMessages)],
+      getFingerprint: async () => coveredFingerprint(),
+      collectFrame: async () => {
+        collects.push(clock.now());
+        return previewItem("one", "older question", "older answer");
+      },
+      itemMatchesPrompt: existingMatcher,
+      persistItem: async () => {}
+    });
+    const first = scheduler.schedule("", { existing: true });
+    await settleCapture(clock, first);
+    assert.equal(collects.length, 0, "hydrated existing capture must skip Copy when the store already covers the live conversation");
+    const second = scheduler.schedule("", { existing: true });
+    await settleCapture(clock, second);
+    assert.equal(collects.length, 0, "a later visibility existing scan must still skip Copy when the conversation is unchanged");
+  }
+
+  {
+    const clock = createFakeClock();
+    const collects = [];
+    let probe = 0;
+    const scheduler = createIdleFullTextCaptureScheduler({
+      now: clock.now,
+      sleep: clock.sleep,
+      idleMs: 5_000,
+      pollMs: 1_000,
+      maxAttempts: 3,
+      wallMs: 60_000,
+      listFrames: () => [coveredFrame],
+      loadStoredSnapshots: async () => [storedSnapshot(coveredFrame, coveredMessages)],
+      getFingerprint: async () => fingerprintOf({
+        ...coveredFingerprint(),
+        generating: probe++ % 2 === 0
+      }),
+      collectFrame: async () => {
+        collects.push(clock.now());
+        return previewItem("one", "older question", "older answer");
+      },
+      itemMatchesPrompt: existingMatcher,
+      persistItem: async () => {}
+    });
+    const done = scheduler.schedule("", { existing: true });
+    await settleCapture(clock, done);
+    assert.equal(collects.length, 0, "generating flicker must not collect when stored content already covers the conversation");
+  }
+
+  {
+    const clock = createFakeClock();
+    const collects = [];
+    const grownMessages = [
+      ...coveredMessages,
+      { role: "user", text: "follow up" },
+      { role: "assistant", text: "new reply" }
+    ];
+    const grownMetrics = fullTextContentMetricsFromMessages(grownMessages);
+    let live = { ...grownMetrics };
+    const scheduler = createIdleFullTextCaptureScheduler({
+      now: clock.now,
+      sleep: clock.sleep,
+      idleMs: 5_000,
+      pollMs: 1_000,
+      maxAttempts: 3,
+      wallMs: 60_000,
+      listFrames: () => [coveredFrame],
+      loadStoredSnapshots: async () => [storedSnapshot(coveredFrame, coveredMessages)],
+      getFingerprint: async () => fingerprintOf({
+        href: coveredFrame.href,
+        turnCount: live.turnCount,
+        userChars: live.userChars,
+        assistantChars: live.assistantChars,
+        tailHash: live.tailHash,
+        containsPrompt: false
+      }),
+      collectFrame: async () => {
+        collects.push(clock.now());
+        return {
+          status: "ok",
+          instanceId: "one",
+          page: { instanceId: "one", messages: grownMessages }
+        };
+      },
+      itemMatchesPrompt: existingMatcher,
+      persistItem: async () => {}
+    });
+    const first = scheduler.schedule("", { existing: true });
+    await waitForSleep(clock);
+    await settleCapture(clock, first);
+    assert.equal(collects.length, 1, "turn growth against a stored pair must collect once");
+    const second = scheduler.schedule("", { existing: true });
+    await settleCapture(clock, second);
+    assert.equal(collects.length, 1, "after a growth collect, an unchanged existing scan must skip Copy");
+  }
+
+  {
+    const clock = createFakeClock();
+    const collects = [];
+    const rewritten = { ...coveredMetrics, tailHash: "deadbeef" };
+    let live = { ...rewritten };
+    const scheduler = createIdleFullTextCaptureScheduler({
+      now: clock.now,
+      sleep: clock.sleep,
+      idleMs: 5_000,
+      pollMs: 1_000,
+      maxAttempts: 3,
+      wallMs: 60_000,
+      listFrames: () => [coveredFrame],
+      loadStoredSnapshots: async () => [storedSnapshot(coveredFrame, coveredMessages)],
+      getFingerprint: async () => fingerprintOf({
+        href: coveredFrame.href,
+        turnCount: live.turnCount,
+        userChars: live.userChars,
+        assistantChars: live.assistantChars,
+        tailHash: live.tailHash,
+        containsPrompt: false
+      }),
+      collectFrame: async () => {
+        collects.push(clock.now());
+        return previewItem("one", "older question", "rewritten answer");
+      },
+      itemMatchesPrompt: existingMatcher,
+      persistItem: async () => {}
+    });
+    const first = scheduler.schedule("", { existing: true });
+    await waitForSleep(clock);
+    await settleCapture(clock, first);
+    assert.equal(collects.length, 1, "a tail-hash change against a stored pair must collect once");
+    const second = scheduler.schedule("", { existing: true });
+    await settleCapture(clock, second);
+    assert.equal(collects.length, 1, "after a hash-change collect, an unchanged existing scan must skip Copy");
+  }
+
+  {
+    const clock = createFakeClock();
+    const collects = [];
+    const scheduler = createIdleFullTextCaptureScheduler({
+      now: clock.now,
+      sleep: clock.sleep,
+      idleMs: 30_000,
+      pollMs: 1_000,
+      maxAttempts: 3,
+      wallMs: 8_000,
+      listFrames: () => [coveredFrame],
+      loadStoredSnapshots: async () => [storedSnapshot(coveredFrame, coveredMessages)],
+      getFingerprint: async () => fingerprintOf({
+        href: coveredFrame.href,
+        turnCount: 0,
+        userChars: 0,
+        assistantChars: 0,
+        tailHash: "",
+        containsPrompt: false
+      }),
+      collectFrame: async () => {
+        collects.push(clock.now());
+        return previewItem("one", "older question", "older answer");
+      },
+      itemMatchesPrompt: existingMatcher,
+      persistItem: async () => {}
+    });
+    const done = scheduler.schedule("", { existing: true });
+    await waitForSleep(clock);
+    await settleCapture(clock, done);
+    assert.equal(collects.length, 0, "wallHit with a stored pair and no live growth must not Copy");
+  }
+
+  {
+    const clock = createFakeClock();
+    const collects = [];
+    const scheduler = createIdleFullTextCaptureScheduler({
+      now: clock.now,
+      sleep: clock.sleep,
+      idleMs: 5_000,
+      pollMs: 1_000,
+      maxAttempts: 3,
+      wallMs: 60_000,
+      listFrames: () => [coveredFrame],
+      loadStoredSnapshots: async () => [storedSnapshot(coveredFrame, coveredMessages)],
+      getFingerprint: async () => fingerprintOf({
+        ...coveredFingerprint(),
+        containsPrompt: true
+      }),
+      collectFrame: async (_frame, text) => {
+        collects.push(text || "existing");
+        return previewItem("one", text || prompt, "reply");
+      },
+      itemMatchesPrompt: (item, text) => fullTextMessagesMatchPrompt(item?.page?.messages, text),
+      persistItem: async () => {}
+    });
+    const done = scheduler.schedule(prompt);
+    await waitForSleep(clock);
+    await settleCapture(clock, done);
+    assert.deepEqual(collects, [prompt], "send capture must still collect even when the store already covers the conversation");
+  }
+
   {
     const clock = createFakeClock();
     let generating = true;
@@ -773,13 +1027,25 @@ function previewItem(instanceId, prompt, assistant) {
   assert.match(idleSource, /savedSignatures/);
   assert.match(idleSource, /alreadySavedIdleSnapshot/);
   assert.match(idleSource, /lastKnownGenerating/);
+  assert.match(idleSource, /hydrateFromStore/);
+  assert.match(idleSource, /loadStoredSnapshots/);
+  assert.match(idleSource, /fullTextExistingNeedsCollect/);
+  assert.match(idleSource, /fullTextExistingIsCovered/);
   assert.match(runtime, /result\?\.saved && result\.unchanged !== true/);
   assert.match(runtime, /historyController\?\.notifyFullTextChanged/);
+  assert.match(runtime, /loadWorkspaceTabFullText:\s*loadWorkspaceTabFullTextStore/);
+  assert.match(summary, /loadStoredSnapshots/);
+  assert.match(summary, /fullTextContentMetricsFromMessages/);
+  assert.match(summary, /workspaceTabFullTextFrameIdentityKey/);
   const tabSearch = read("app/workspace/tab-search.js");
   assert.match(tabSearch, /workspaceTabFullTextFramesEqual/);
   assert.match(tabSearch, /unchanged:\s*true/);
   const summaryRuntime = read("content-src/shared/summary-runtime.js");
-  assert.match(summaryRuntime, /turnCount:\s*turns\.length/);
+  assert.match(summaryRuntime, /function conversationTurnFingerprintText/);
+  assert.match(summaryRuntime, /turnCount:\s*classified/);
+  assert.doesNotMatch(summaryRuntime, /turns\.length \|\| Math\.min\(lines\.length/);
+  assert.doesNotMatch(summaryRuntime, /if \(!lastText\) lastText = tail/);
+  assert.doesNotMatch(summaryRuntime, /if \(!assistantChars\) assistantChars = tail\.length/);
   assert.match(summaryRuntime, /function conversationHref/);
   assert.match(summaryRuntime, /function conversationTurnNodes/);
   assert.match(summaryRuntime, /generating:\s*conversationComposerIsGenerating\(\)/);

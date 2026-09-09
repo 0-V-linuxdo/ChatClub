@@ -554,6 +554,7 @@ function ensureSummaryController() {
           if (result?.saved && result.unchanged !== true) historyController?.notifyFullTextChanged?.();
           return result;
         },
+        loadWorkspaceTabFullText: loadWorkspaceTabFullTextStore,
         pocketPort: {
           save: (...args) => ensurePocketController().then((pocket) => pocket.saveSummaryPreviewToPocket(...args)),
           entries: (...args) => pocketController?.pocketEntriesFromSummaryPreview(...args) || []

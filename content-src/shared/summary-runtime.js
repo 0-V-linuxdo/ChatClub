@@ -328,6 +328,36 @@ function shouldRefuseLiveAssistantCopy(node) {
   return Boolean(article && (article === last || article.contains?.(last) || last.contains?.(article)));
 }
 
+function conversationTurnFingerprintText(turn) {
+  if (!turn) return "";
+  let source = turn;
+  try {
+    const clone = turn.cloneNode(true);
+    for (const node of clone.querySelectorAll([
+      "button",
+      "[role='button']",
+      "[role='toolbar']",
+      "[role='menu']",
+      "[role='menuitem']",
+      "[aria-label*='copy' i]",
+      "[title*='copy' i]",
+      "[data-testid*='copy' i]",
+      ".code-buttons"
+    ].join(","))) {
+      node.remove();
+    }
+    source = clone;
+  } catch {
+    /* keep the live node */
+  }
+  const raw = normalize(source?.textContent || source?.innerText || "").replace(/\s+/g, " ");
+  try {
+    return raw.normalize("NFKC").replace(/\s+/g, " ").trim();
+  } catch {
+    return raw.trim();
+  }
+}
+
 function conversationFingerprint(documentId = "", data = {}) {
   const turns = conversationTurnNodes();
   const prompt = normalize(data?.prompt || "").replace(/\s+/g, " ");
@@ -335,28 +365,32 @@ function conversationFingerprint(documentId = "", data = {}) {
   let userChars = 0;
   let assistantChars = 0;
   let lastText = "";
+  let classified = 0;
   const haystackParts = [];
   for (const turn of turns) {
     const role = conversationTurnRole(turn);
-    const value = normalize(turn?.textContent || turn?.innerText || "").replace(/\s+/g, " ");
+    const value = conversationTurnFingerprintText(turn);
     if (!value) continue;
     haystackParts.push(value);
-    if (role === "user") userChars += value.length;
-    else if (role === "assistant") assistantChars += value.length;
-    lastText = value;
+    if (role === "user") {
+      userChars += value.length;
+      classified += 1;
+      lastText = value;
+    } else if (role === "assistant") {
+      assistantChars += value.length;
+      classified += 1;
+      lastText = value;
+    }
   }
-  const tail = lines.slice(-8).join("\n");
-  if (!lastText) lastText = tail;
-  if (!assistantChars) assistantChars = tail.length;
   const haystack = haystackParts.join(" ");
   const promptHaystack = haystack || [...lines.slice(0, 48), ...lines.slice(-80)].join(" ");
   return {
     href: conversationHref(),
     documentId: String(documentId || ""),
-    turnCount: turns.length || Math.min(lines.length, 999),
+    turnCount: classified,
     userChars,
     assistantChars,
-    tailHash: fingerprintHash(lastText.slice(-500)),
+    tailHash: lastText ? fingerprintHash(lastText.slice(-500)) : "",
     containsPrompt: Boolean(prompt && promptHaystack.includes(prompt)),
     generating: conversationComposerIsGenerating()
       || conversationToolActivityFromLines(lines)

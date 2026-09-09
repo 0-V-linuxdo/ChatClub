@@ -13,7 +13,13 @@ import { optionalControllerFunction, optionalControllerObject, requireController
 import { createFrameRequest } from "../frame-request.js";
 import { renderMarkdown } from "./markdown.js";
 import { workspaceSessionIdFromUrl } from "../../shared/workspace-session.js";
-import { fullTextMessagesHavePair, fullTextMessagesMatchPrompt } from "../../shared/workspace-tab-fulltext.js";
+import {
+  fullTextContentMetricsFromMessages,
+  fullTextContentSignature,
+  fullTextMessagesHavePair,
+  fullTextMessagesMatchPrompt,
+  workspaceTabFullTextFrameIdentityKey
+} from "../../shared/workspace-tab-fulltext.js";
 import { createIdleFullTextCaptureScheduler, IDLE_FULLTEXT_CAPTURE_DEFAULTS } from "./idle-capture.js";
 import {
   buildSummaryPreviewItem,
@@ -65,7 +71,7 @@ export function createSummaryController(ctx) {
     findFrameForSummarySource: "function", highlightFrameForSummarySource: "function?", inferAppName: "function",
     effectiveFaviconUrl: "function", discoverDeclaredFaviconUrl: "function", rememberFaviconUrl: "function",
     browserFaviconUrl: "function", formatShortcut: "function?", pocketPort: "object?", framePort: "object",
-    recordFunctionalAnomaly: "function", persistWorkspaceTabFullText: "function?"
+    recordFunctionalAnomaly: "function", persistWorkspaceTabFullText: "function?", loadWorkspaceTabFullText: "function?"
   });
   const state = requireControllerContext(ctx, controllerName, "state");
   const svgIcon = requireControllerFunction(ctx, controllerName, "svgIcon");
@@ -89,6 +95,7 @@ export function createSummaryController(ctx) {
   const saveSummaryPreviewToPocket = typeof pocketPort.save === "function" ? pocketPort.save : async () => {};
   const pocketEntriesFromSummaryPreview = typeof pocketPort.entries === "function" ? pocketPort.entries : () => [];
   const persistWorkspaceTabFullText = optionalControllerFunction(ctx, "persistWorkspaceTabFullText", async () => ({ saved: false }));
+  const loadWorkspaceTabFullText = optionalControllerFunction(ctx, "loadWorkspaceTabFullText", async () => ({}));
   let summaryCollectionQueue = Promise.resolve();
   const pocketDisplayIcon = () => normalizePocketIcon(state.options?.pocketIcon);
 
@@ -960,6 +967,8 @@ export function createSummaryController(ctx) {
     isEnabled: () => state.options?.recordFullText === true,
     listFrames: () => currentFrames().map((iframe) => ({
       key: String(iframe.dataset.instanceId || ""),
+      instanceId: String(iframe.dataset.instanceId || ""),
+      href: String(iframe.getAttribute?.("src") || iframe.src || ""),
       iframe
     })),
     frameExists: (frame) => Boolean(resolveIdleCaptureFrame(frame)),
@@ -988,7 +997,36 @@ export function createSummaryController(ctx) {
         ? fullTextMessagesMatchPrompt(item?.page?.messages, prompt)
         : fullTextMessagesHavePair(item?.page?.messages)
     ),
-    persistItem: async (item) => persistRecordedFullText([item])
+    persistItem: async (item) => persistRecordedFullText([item]),
+    loadStoredSnapshots: async () => {
+      const workspaceId = workspaceSessionIdFromUrl(globalThis.location?.href || "");
+      if (!workspaceId) return [];
+      let store = {};
+      try {
+        store = await loadWorkspaceTabFullText() || {};
+      } catch {
+        return [];
+      }
+      const frames = Array.isArray(store[workspaceId]?.frames) ? store[workspaceId].frames : [];
+      return frames.flatMap((frame) => {
+        if (!fullTextMessagesHavePair(frame?.messages)) return [];
+        const metrics = fullTextContentMetricsFromMessages(frame.messages);
+        const keys = [];
+        const instanceId = String(frame.instanceId || "").trim();
+        if (instanceId) {
+          keys.push(instanceId);
+          keys.push(`id:${instanceId}`);
+        }
+        const identity = workspaceTabFullTextFrameIdentityKey(frame);
+        if (identity) keys.push(identity);
+        return [{
+          keys,
+          signature: fullTextContentSignature(metrics),
+          hasPair: true,
+          ...metrics
+        }];
+      });
+    }
   });
 
   function scheduleIdleFullTextCapture(prompt) {
