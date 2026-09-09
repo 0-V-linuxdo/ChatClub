@@ -136,6 +136,17 @@ export function createTabSearchController(ctx) {
     });
   }
 
+  function restoreSearchFieldAfterFrameLoad(event) {
+    if (!event?.target?.classList?.contains?.("chat-frame")) return;
+    if (!document.querySelector(".workspace-tabs-search-modal")) return;
+    if (!(searchFocused || String(searchQuery || "").trim())) return;
+    const field = document.querySelector(".workspace-tabs-search-modal .workspace-tabs-search-input");
+    if (!field) return;
+    try { field.focus({ preventScroll: true }); } catch {
+      try { field.focus(); } catch {}
+    }
+  }
+
   function searchPlaceholder() {
     return recordFullTextEnabled
       ? t("workspace.tabs.searchPlaceholderFullText")
@@ -450,7 +461,15 @@ export function createTabSearchController(ctx) {
     field.addEventListener("focus", () => { searchFocused = true; });
     field.addEventListener("blur", (event) => {
       if (event.target?.isConnected === false) return;
-      searchFocused = false;
+      const release = () => {
+        const active = document.activeElement;
+        if (active === field) return;
+        if (active?.classList?.contains?.("chat-frame") || active?.nodeName === "IFRAME") return;
+        if (active === document.body || active === document.documentElement) return;
+        searchFocused = false;
+      };
+      if (typeof requestAnimationFrame === "function") requestAnimationFrame(release);
+      else setTimeout(release, 0);
     });
     return el("div", {
       class: "shortcut-search workspace-tabs-search-field",
@@ -659,6 +678,8 @@ export function createTabSearchController(ctx) {
     restoreSearchField();
     return dialog;
   }
+
+  window.addEventListener("load", restoreSearchFieldAfterFrameLoad, true);
 
   return Object.freeze({
     openSearchPanel,

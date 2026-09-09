@@ -313,6 +313,17 @@ export function createHistoryController(ctx) {
     });
   }
 
+  function restoreSearchFieldAfterFrameLoad(event) {
+    if (!event?.target?.classList?.contains?.("chat-frame")) return;
+    if (!document.querySelector(".prompt-history-modal")) return;
+    if (!(searchFocused || String(searchQuery || "").trim())) return;
+    const field = document.querySelector(".prompt-history-modal .prompt-history-panel-search-input");
+    if (!field) return;
+    try { field.focus({ preventScroll: true }); } catch {
+      try { field.focus(); } catch {}
+    }
+  }
+
   function syncHistorySearchChrome(root) {
     const query = searchQuery;
     const placeholder = t("promptHistory.searchPlaceholder");
@@ -380,7 +391,15 @@ export function createHistoryController(ctx) {
     field.addEventListener("focus", () => { searchFocused = true; });
     field.addEventListener("blur", (event) => {
       if (event.target?.isConnected === false) return;
-      searchFocused = false;
+      const release = () => {
+        const active = document.activeElement;
+        if (active === field) return;
+        if (active?.classList?.contains?.("chat-frame") || active?.nodeName === "IFRAME") return;
+        if (active === document.body || active === document.documentElement) return;
+        searchFocused = false;
+      };
+      if (typeof requestAnimationFrame === "function") requestAnimationFrame(release);
+      else setTimeout(release, 0);
     });
     return el("div", {
       class: "shortcut-search prompt-history-search prompt-history-panel-search",
@@ -1071,6 +1090,8 @@ export function createHistoryController(ctx) {
     workspacePreviewPinned = true;
     return openHistoryPanel();
   }
+
+  window.addEventListener("load", restoreSearchFieldAfterFrameLoad, true);
 
   return {
     openHistoryPanel,

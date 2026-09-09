@@ -252,6 +252,7 @@ assert.doesNotMatch(read("ui/viewer-window.js"), /pocket-panel-resize-handle/);
 assert.match(read("app/summary/controller.js"), /overlay-panel-resize-handle overlay-panel-resize-handle-left/);
 assert.match(read("app/share/controller.js"), /overlay-panel-resize-handle overlay-panel-resize-handle-left/);
 assert.match(agents, /History and Tabs search detail content may reuse Pocket/);
+assert.match(agents, /iframe load and frame restore must not move focus back to `\.prompt-input`/);
 assert.match(agents, /Prompt Library is a composer-anchored/);
 assert.match(agents, /Linear action menus may use `role="menu"`/);
 assert.match(agents, /bindLinearMenuKeyboard/);

@@ -109,7 +109,7 @@ function createPromptFocusController({ isOptionsPage = false, focusInput } = {})
     if (lastFramePointerDownAt && Date.now() - lastFramePointerDownAt < 1000) return;
     const schedule = typeof requestAnimationFrame === "function" ? requestAnimationFrame : setTimeout;
     schedule(() => {
-      if (!pending) return;
+      if (!pending || document.querySelector(".modal")) return;
       const prompt = promptNode();
       const activeElement = document.activeElement;
       if (prompt?.isConnected && (activeElement === event.target || activeElement === document.body || activeElement === document.documentElement)) {

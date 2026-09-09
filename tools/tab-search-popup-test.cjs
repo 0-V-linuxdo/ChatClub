@@ -42,6 +42,9 @@ assert.doesNotMatch(controller, /clear\(titlebar\)/);
 assert.match(controller, /querySelector\("\.workspace-tabs-search-field"\)/);
 assert.match(controller, /clearButton\.hidden/);
 assert.match(controller, /event\.target\?\.isConnected === false/);
+assert.match(controller, /addEventListener\("load", restoreSearchFieldAfterFrameLoad, true\)/);
+assert.match(controller, /searchFocused \|\| String\(searchQuery/);
+assert.match(controller, /classList\?\.contains\?\.\("chat-frame"\)/);
 assert.match(controller, /workspace\.tabs\.searchOpenTab/);
 assert.doesNotMatch(controller, /from "\.\.\/history\/model\.js"/);
 assert.doesNotMatch(controller, /from "\.\.\/summary\/markdown\.js"/);
@@ -65,6 +68,8 @@ assert.match(i18n, /"workspace\.tabs\.searchClear"/);
 assert.match(i18n, /"workspace\.tabs\.searchSidebar"/);
 assert.match(agents, /Topbar Search opens a lazy `viewerModal` Tabs search viewer/);
 assert.match(agents, /titlebar search inputs stay mounted across query redraws/);
+assert.match(agents, /iframe load and frame restore must not move focus back to `\.prompt-input`/);
+assert.match(agents, /restore the titlebar field after a chat-frame load/);
 assert.equal(budgets.lazyBoundaries["app/workspace/tab-search-controller.js"]?.owner, "app/runtime.js");
 
 class FakeNode {

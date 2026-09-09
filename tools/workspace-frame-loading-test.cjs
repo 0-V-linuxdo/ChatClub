@@ -155,11 +155,17 @@ const PARAM = "__chatclub_frame_load_nonce";
   assert.match(assignFrameSrc, /armPromptFocusRestore\(iframe, generation\)/, "direct frame navigation must remember an active prompt before assigning src");
   assert.match(setFrameSrcAfterPrepare, /armPromptFocusRestore\(iframe, generation\)/, "prepared frame navigation must remember an active prompt before assigning src");
   assert.match(armPromptFocusRestore, /document\.activeElement !== prompt/);
+  assert.match(armPromptFocusRestore, /document\.querySelector\("\.modal"\)/, "armed prompt restore must not start while a typed modal is open");
   assert.match(restorePromptInputFocus, /prompt\.focus\(\{ preventScroll: true \}\)/);
   assert.match(
     restorePromptInputFocus,
     /workspace-popover-menu/,
     "prompt restore must not steal focus while a workspace popover is open"
+  );
+  assert.match(
+    restorePromptInputFocus,
+    /\.modal, \.workspace-popover-menu/,
+    "prompt restore must not steal focus while a typed modal is open"
   );
   assert.match(completeFrameLoading, /restorePromptInputFocus\(iframe\)/, "the real iframe load must restore focus to the prompt when it was active before navigation");
   assert.match(setFrameSrcAfterPrepare, /const frameReplaced = ensureFrameAttributeContract/);
@@ -591,6 +597,69 @@ const PARAM = "__chatclub_frame_load_nonce";
     /pointer-events: auto/,
     "the resting overlay must not intercept pointer events after loading ends"
   );
+
+  {
+    const runRestore = ({ modal = false, generation = "1" } = {}) => {
+      const prompt = {
+        isConnected: true,
+        focusCalls: 0,
+        focus() { this.focusCalls += 1; }
+      };
+      const iframeEl = {
+        isConnected: true,
+        dataset: generation ? { promptFocusRestoreGeneration: String(generation) } : {}
+      };
+      const document = {
+        body: {},
+        documentElement: { dataset: {} },
+        activeElement: iframeEl,
+        querySelector(selector) {
+          if (selector === ".prompt-input") return prompt;
+          if (String(selector).includes(".modal")) return modal ? { className: "modal" } : null;
+          return null;
+        }
+      };
+      const context = vm.createContext({
+        document,
+        iframe: iframeEl,
+        requestAnimationFrame(callback) { callback(); return 1; }
+      });
+      vm.runInContext(`${restorePromptInputFocus}\nrestorePromptInputFocus(iframe);`, context);
+      return { prompt, iframe: iframeEl };
+    };
+    const stolen = runRestore({ modal: true });
+    assert.equal(stolen.prompt.focusCalls, 0, "iframe load must not restore the prompt while a typed modal is open");
+    assert.equal(stolen.iframe.dataset.promptFocusRestoreGeneration, undefined);
+    const restored = runRestore({ modal: false });
+    assert.ok(restored.prompt.focusCalls > 0, "iframe load must still restore the prompt when no modal is open");
+
+    const runArm = ({ modal = false, datasetP = false } = {}) => {
+      const prompt = { isConnected: true };
+      const iframeEl = { isConnected: true, dataset: {} };
+      const document = {
+        documentElement: { dataset: datasetP ? { p: "1" } : {} },
+        activeElement: iframeEl,
+        querySelector(selector) {
+          if (selector === ".prompt-input") return prompt;
+          if (selector === ".modal" || String(selector).includes(".modal")) return modal ? { className: "modal" } : null;
+          return null;
+        }
+      };
+      const context = vm.createContext({
+        document,
+        iframe: iframeEl,
+        armed: false
+      });
+      vm.runInContext(`${armPromptFocusRestore}\narmed = armPromptFocusRestore(iframe, 7);`, context);
+      return { armed: context.armed, iframe: iframeEl };
+    };
+    const blocked = runArm({ modal: true, datasetP: true });
+    assert.equal(blocked.armed, false, "prompt restore must not arm while a typed modal is open");
+    assert.equal(blocked.iframe.dataset.promptFocusRestoreGeneration, undefined);
+    const armed = runArm({ modal: false, datasetP: true });
+    assert.equal(armed.armed, true, "prompt restore may still arm when no modal is open");
+    assert.equal(armed.iframe.dataset.promptFocusRestoreGeneration, "7");
+  }
 
   console.log("workspace frame loading status: ok");
 })().catch((error) => {

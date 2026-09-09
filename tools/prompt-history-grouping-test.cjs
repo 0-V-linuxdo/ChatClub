@@ -517,6 +517,9 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   assert.match(panelSource, /syncHistorySearchChrome/);
   assert.match(panelSource, /clearButton\.hidden/);
   assert.match(panelSource, /event\.target\?\.isConnected === false/);
+  assert.match(panelSource, /addEventListener\("load", restoreSearchFieldAfterFrameLoad, true\)/);
+  assert.match(panelSource, /searchFocused \|\| String\(searchQuery/);
+  assert.match(panelSource, /classList\?\.contains\?\.\("chat-frame"\)/);
   assert.doesNotMatch(panelSource, /headerSearch\(host/);
   assert.doesNotMatch(panelSource, /prompt-history-panel-toolbar/);
   assert.doesNotMatch(panelSource, /prompt-history-detail-header/);

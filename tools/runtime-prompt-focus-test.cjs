@@ -32,6 +32,7 @@ assert.match(focusControllerSource, /isOverlayTarget\(document\.activeElement\)/
 assert.match(focusControllerSource, /isOverlayTarget\(event\?\.target\)/);
 assert.match(focusControllerSource, /contains\?\.\("modal"\)/);
 assert.match(focusControllerSource, /workspace-tabs-sidebar-search-input/);
+assert.match(focusControllerSource, /document\.querySelector\("\.modal"\)/);
 assert.match(frameController, /document\.documentElement\.dataset\.p/);
 assert.match(viewController, /inert: true/);
 assert.match(viewController, /tabindex: "-1"/);
@@ -64,7 +65,10 @@ function makeContext({ options = false } = {}) {
     activeElement: body,
     body,
     documentElement,
-    querySelector() { return prompt; }
+    querySelector(selector) {
+      if (!selector || selector === ".prompt-input") return prompt;
+      return null;
+    }
   };
   const window = {
     addEventListener(type, listener) { listeners.set(type, listener); }
@@ -118,6 +122,33 @@ workspace.document.activeElement = iframe;
 workspace.listeners.get("load")({ target: iframe });
 workspace.timers.at(-1)?.();
 assert.equal(focusCalls, 3, "iframe load must still restore prompt focus");
+{
+  const modalLoad = makeContext();
+  let modalFocusCalls = 0;
+  const modalNode = Object.assign(new MockNode(), {
+    classList: { contains(name) { return name === "modal"; } }
+  });
+  modalLoad.document.querySelector = (selector) => {
+    if (!selector || selector === ".prompt-input") return modalLoad.prompt;
+    if (String(selector).includes(".modal")) return modalNode;
+    return null;
+  };
+  const modalController = modalLoad.context.createPromptFocusController({
+    focusInput() {
+      modalFocusCalls += 1;
+      modalLoad.document.activeElement = modalLoad.prompt;
+    }
+  });
+  modalController.focusInitialPromptInput();
+  const afterModalInit = modalFocusCalls;
+  const modalFrame = Object.assign(new MockNode(), {
+    classList: { contains(name) { return name === "chat-frame"; } }
+  });
+  modalLoad.document.activeElement = modalFrame;
+  modalLoad.listeners.get("load")({ target: modalFrame });
+  modalLoad.timers.at(-1)?.();
+  assert.equal(modalFocusCalls, afterModalInit, "iframe load must not restore prompt focus while a typed modal is open");
+}
 workspace.document.activeElement = workspace.prompt;
 assert.doesNotThrow(
   () => workspace.listeners.get("focus")({ target: workspace.window }),

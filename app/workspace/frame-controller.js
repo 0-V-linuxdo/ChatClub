@@ -478,7 +478,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
 
   function armPromptFocusRestore(iframe, generation) {
     const prompt = document.querySelector(".prompt-input");
-    if (!prompt?.isConnected || (document.activeElement !== prompt && !document.documentElement.dataset.p)) {
+    if (!prompt?.isConnected || document.querySelector(".modal") || (document.activeElement !== prompt && !document.documentElement.dataset.p)) {
       delete iframe.dataset.promptFocusRestoreGeneration;
       return false;
     }
@@ -489,7 +489,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
   function restorePromptInputFocus(iframe) {
     const generation = String(iframe?.dataset?.promptFocusRestoreGeneration || "");
     if (!generation) return;
-    if (document.querySelector(".workspace-popover-menu, .popover-menu")) { delete iframe.dataset.promptFocusRestoreGeneration; return; }
+    if (document.querySelector(".modal, .workspace-popover-menu, .popover-menu")) { delete iframe.dataset.promptFocusRestoreGeneration; return; }
     let attempts = 0;
     const restore = () => {
       if (!iframe?.isConnected || String(iframe.dataset.promptFocusRestoreGeneration || "") !== generation) return;
