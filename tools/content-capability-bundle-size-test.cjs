@@ -19,30 +19,31 @@ const coreCapabilityOutputs = [
 ];
 const measuredOutputs = Object.keys(CONTENT_ENTRIES).sort();
 const byteBudgets = Object.freeze({
-  // Exact base cost after idle fingerprint href keeps Notion chat ?t=.
-  "content/content.js": 110_595,
+  // Exact base cost after the page-caret lease FRAME_COMMAND_SPECS joined
+  // the isolated content contract (adoptPageCaretLease / releasePageCaretLease).
+  "content/content.js": 110_829,
   "content/send.js": 85_000,
   // Bundles that embed the shared frame-command contract each carry the
-  // getConversationOpening spec entry (about a hundred bytes).
-  "content/summary-bridge.js": 99_759,
+  // page-caret lease spec entries (about two hundred bytes).
+  "content/summary-bridge.js": 99_993,
   // Shared Notion catalog plus exact custom picker-name apply stay inside the
   // preferred-model content boundary instead of a second selector dialect.
-  "content/preferred-model.js": 243_495,
+  "content/preferred-model.js": 243_729,
   // Exact post-generation cost of signed selector hints plus attempt/route-bound
   // confirmation ownership; keep destructive-action safety in one bundle.
-  "content/delete.js": 266_345,
+  "content/delete.js": 266_579,
   "content/grok-cookie-bridge.js": 50_000,
   "content/message-navigator.js": 140_000,
-  "content/preload.js": 214_385,
+  "content/preload.js": 218_994,
   "content/summary-userscripts-main.js": 230_894,
   "content/summary-userscripts.js": 161_108
 });
-// Exact base-plus-capabilities closure after chrome-stripped conversation
-// fingerprints joined the isolated Summary pipeline without page-line fallback.
-const aggregateByteBudget = 799_946;
-// Exact all-bundle closure after classified-turn fingerprints replaced
-// generating-chrome identity for idle Record Full Text.
-const allBundlesByteBudget = 1_578_008;
+// Exact base-plus-capabilities closure after the page-caret lease commands
+// joined the isolated content contract.
+const aggregateByteBudget = 801_116;
+// Exact all-bundle closure after MAIN-world page-caret lease plus the
+// isolated command-contract growth.
+const allBundlesByteBudget = 1_584_035;
 
 const bundleIdentities = Object.fromEntries(Object.keys(CONTENT_ENTRIES).map((outputPath) => [
   outputPath,

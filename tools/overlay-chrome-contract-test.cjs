@@ -262,6 +262,9 @@ assert.match(agents, /iframe load and frame restore must not move focus back to 
 assert.match(agents, /must not clear that frame's `inert`/);
 assert.match(agents, /the titlebar search is the unique caret owner/);
 assert.match(agents, /a focused `\.prompt-input` is the page caret owner/);
+assert.match(agents, /page-caret lease/);
+assert.match(dom, /export function overlaySearchCaretMode/);
+assert.match(dom, /export function setOverlayCaretLeaseHandler/);
 assert.match(agents, /Prompt Library is a composer-anchored/);
 assert.match(agents, /Linear action menus may use `role="menu"`/);
 assert.match(agents, /bindLinearMenuKeyboard/);

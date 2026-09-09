@@ -213,10 +213,13 @@ const sendMessageToRegisteredFrame = (context, message) => sendRegisteredFrameMe
   verifiedRegisteredFrameFallbackTarget
 );
 
+const MAIN_WORLD_FRAME_COMMANDS = Object.freeze({
+  prepareNavigationFocusGuard: Object.freeze({ method: "prepare", phase: "prepare" }), adoptNavigationFocusGuard: Object.freeze({ method: "prepare", phase: "adopt" }),
+  adoptPageCaretLease: Object.freeze({ method: "adoptPageCaret", phase: "adopt" }), releasePageCaretLease: Object.freeze({ method: "releasePageCaret", phase: "release" })
+});
 async function executeMainWorldFrameCommand(context, command, data = {}) {
-  if (!new Set(["prepareNavigationFocusGuard", "adoptNavigationFocusGuard"]).has(command)) {
-    throw frameRouteError("REMOTE_ERROR", `Unknown MAIN-world frame command: ${command}`, false);
-  }
+  const spec = MAIN_WORLD_FRAME_COMMANDS[command];
+  if (!spec) throw frameRouteError("REMOTE_ERROR", `Unknown MAIN-world frame command: ${command}`, false);
   const execute = (injectionTarget) => chrome.scripting.executeScript({
     target: injectionTarget,
     world: "MAIN",
@@ -227,11 +230,8 @@ async function executeMainWorldFrameCommand(context, command, data = {}) {
       CONTENT_RUNTIME_IMPLEMENTATION_VERSION,
       NAVIGATION_FOCUS_GUARD_RUNTIME,
       NAVIGATION_FOCUS_GUARD_RUNTIME_VERSION,
-      "prepare",
-      {
-        ...data,
-        phase: command === "adoptNavigationFocusGuard" ? "adopt" : "prepare"
-      }
+      spec.method,
+      { ...data, phase: spec.phase }
     ]
   });
   let results;
@@ -256,7 +256,7 @@ async function executeMainWorldFrameCommand(context, command, data = {}) {
     throw frameRouteError("REMOTE_ERROR", String(result.error?.message || result.error), true, result.error);
   }
   if (!result || result.result === undefined) {
-    throw frameRouteError("REMOTE_ERROR", "Navigation focus guard returned no result", true);
+    throw frameRouteError("REMOTE_ERROR", "MAIN-world command returned no result", true);
   }
   return result.result;
 }

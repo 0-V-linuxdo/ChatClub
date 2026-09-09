@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "81de757455b459086681b0d9756c2f1fe87e0618a6c099ed3d818465070ecb21";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "54b50407f4c449ebc532a5656af5beb2cc89fffaf2078f3b12ec570084bd875a";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "1ec86426d7aadcfc5b18cdf5e1dbf94b2b13e1f1fcbee524219717b3f185e033";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.1ec86426d7aadcfc5b18cdf5e1dbf94b2b13e1f1fcbee524219717b3f185e033";
-  var CONTENT_RUNTIME_DELETE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/delete.js", "entryPath": "content-src/content-delete.js", "sourceSha256": "6fe17a4278dcfda1deffe21b66826acd83cf2f88993d91183e0d6dc3f4050caf", "implementationSha256": "9263df3a1e532be7b7d541d2cd13f4877c618fb0c408fd3f914b94168071ff72", "implementationVersion": "2026.07.16.2+bundle.9263df3a1e532be7b7d541d2cd13f4877c618fb0c408fd3f914b94168071ff72" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "7f2e2eae35b3a59626d41ec5786a9a372931a4cd6364f20d891acfa0e2b7e4e4";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.7f2e2eae35b3a59626d41ec5786a9a372931a4cd6364f20d891acfa0e2b7e4e4";
+  var CONTENT_RUNTIME_DELETE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/delete.js", "entryPath": "content-src/content-delete.js", "sourceSha256": "5632cddbf2832671079753737fc916987ab7f949ad02caf66a263abaeff13203", "implementationSha256": "0cc367601b1e41ff29503cf459e7d2478985429766bae7b5d4f53217d651d572", "implementationVersion": "2026.07.16.2+bundle.0cc367601b1e41ff29503cf459e7d2478985429766bae7b5d4f53217d651d572" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -719,6 +719,8 @@
     newChatPreprocess: command({ timeoutMs: 1500, mutating: true, features: Object.freeze(["send"]) }),
     prepareNavigationFocusGuard: command({ timeoutMs: 1200, mutating: true, transport: "main-world", features: Object.freeze(["preferred-model"]) }),
     adoptNavigationFocusGuard: command({ timeoutMs: 1200, mutating: true, transport: "main-world", features: Object.freeze(["preferred-model"]) }),
+    adoptPageCaretLease: command({ timeoutMs: 1200, mutating: true, transport: "main-world", capability: "base" }),
+    releasePageCaretLease: command({ timeoutMs: 1200, mutating: true, transport: "main-world", capability: "base" }),
     deleteThread: command({ timeoutMs: 37e3, mutating: true, features: Object.freeze(["delete"]) }),
     getDeleteConfirmState: command({ timeoutMs: 2400, features: Object.freeze(["delete"]) }),
     applyPreferredModel: command({ timeoutMs: 5e4, mutating: true, features: Object.freeze(["preferred-model"]) }),

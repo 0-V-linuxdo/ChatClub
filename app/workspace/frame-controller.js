@@ -9,7 +9,7 @@ import {
 import { t } from "../../shared/i18n.js";
 import { findTopicDeleteSiteConfig, topicDeleteTimeoutMs } from "../../shared/topic-delete-sites.js";
 import { conversationHrefFromLocation } from "../../shared/workspace-tab-memory.js";
-import { button, editorModal, el, field, input, openConfirmationAction, pinOverlaySearchCaret } from "../../ui/dom.js";
+import { button, editorModal, el, field, input, openConfirmationAction, overlaySearchCaretMode, pinOverlaySearchCaret, setOverlayCaretLeaseHandler } from "../../ui/dom.js";
 import { clearFrameNewChatPending, frameLoadingKindForTarget, markFrameNewChatPending } from "./frame-loading.js";
 import { removeChatFromGroup, removeGroupFromWorkspace } from "./model.js";
 import { createControllerMethodValidator, validateControllerContract } from "../controller-contract.js";
@@ -19,6 +19,7 @@ const NAVIGATION_FOCUS_GUARD_POST_NAV_RETRY_MS = 150;
 const NAVIGATION_FOCUS_GUARD_POST_NAV_SETTLE_MS = 10000;
 const NAVIGATION_FOCUS_GUARD_POST_NAV_MAX_MS = 45000;
 const NAVIGATION_FOCUS_GUARD_LEASE_MS = 180000;
+const PAGE_CARET_LEASE_MS = 180000;
 const NOTION_FRAME_PREFLIGHT_DEADLINE_MS = 8_000;
 const requireMethods = createControllerMethodValidator("Workspace frame", "port");
 
@@ -80,6 +81,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
   let frameLifecycleCallbackActive = false;
   const frameNavigationGenerations = new WeakMap();
   const frameNavigationTargets = new WeakMap();
+  let pageCaretLeaseToken = "";
   const openableFrameUrl = (value) => openableTabUrl(stripNotionFrameLoadNonce(value));
   const navigableFrameUrl = (app, value) => openableTabUrl(navigableChatFrameHref(app, value));
   const restorableFrameUrl = (app, value) => openableTabUrl(restorableChatFrameHref(app, value));
@@ -407,13 +409,9 @@ export function createWorkspaceFrameController(dependencies = {}) {
     frameNavigationTargets.set(iframe, String(targetHref || ""));
     iframe.dataset.frameLoadingKind = loadingKind;
     if (loadingKind !== "new-topic") clearFrameNewChatPending(iframe);
-    if (loadingKind === "new-topic") {
-      iframe.dataset.frameLoadingMaskPhase = "opaque";
-      syncFrameLoadingMask(iframe);
-    } else {
-      delete iframe.dataset.frameLoadingMaskPhase;
-      syncFrameLoadingMask(iframe);
-    }
+    if (loadingKind === "new-topic") iframe.dataset.frameLoadingMaskPhase = "opaque";
+    else delete iframe.dataset.frameLoadingMaskPhase;
+    syncFrameLoadingMask(iframe);
     if (pending) iframe.dataset.frameLoadPending = "1";
     else delete iframe.dataset.frameLoadPending;
     const alreadyLoading = frameIsLoading(iframe.dataset.instanceId);
@@ -441,21 +439,51 @@ export function createWorkspaceFrameController(dependencies = {}) {
     return frameId;
   }
 
+  function pageCaretLeaseFrames(iframe) {
+    return iframe instanceof HTMLIFrameElement ? [iframe] : [...document.querySelectorAll("iframe.chat-frame")];
+  }
+
+  function adoptPageCaretLease(iframe) {
+    if (overlaySearchCaretMode() !== "page") return;
+    if (!pageCaretLeaseToken) pageCaretLeaseToken = globalThis.crypto?.randomUUID?.() || `page-caret-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const data = { guardToken: pageCaretLeaseToken, expiresAt: Date.now() + PAGE_CARET_LEASE_MS };
+    for (const frame of pageCaretLeaseFrames(iframe)) {
+      if (frame instanceof HTMLIFrameElement && frame.isConnected) {
+        Promise.resolve(sendToContentFrame(frame, "adoptPageCaretLease", data, NAVIGATION_FOCUS_GUARD_TIMEOUT_MS)).catch(() => {});
+      }
+    }
+  }
+
+  function releasePageCaretLease() {
+    const guardToken = pageCaretLeaseToken;
+    pageCaretLeaseToken = "";
+    if (!guardToken) return;
+    for (const frame of pageCaretLeaseFrames()) {
+      if (frame instanceof HTMLIFrameElement && frame.isConnected) {
+        Promise.resolve(sendToContentFrame(frame, "releasePageCaretLease", { guardToken }, NAVIGATION_FOCUS_GUARD_TIMEOUT_MS)).catch(() => {});
+      }
+    }
+  }
+
+  setOverlayCaretLeaseHandler({ adopt: adoptPageCaretLease, release: releasePageCaretLease });
+
   function completeFrameLoading(iframe) {
     if (!(iframe instanceof HTMLIFrameElement)) return;
     rememberBrowserFrameId(iframe);
     if (iframe.dataset.frameLoadPending === "1") return;
     iframe.inert = Boolean(document.querySelector(".modal"));
-    if (iframe.dataset.frameLoadingKind === "new-topic") {
-      iframe.dataset.frameLoadingMaskPhase = "fade";
-      syncFrameLoadingMask(iframe);
-    } else {
+    if (iframe.dataset.frameLoadingKind === "new-topic") iframe.dataset.frameLoadingMaskPhase = "fade";
+    else {
       delete iframe.dataset.frameLoadingKind;
       delete iframe.dataset.frameLoadingMaskPhase;
-      syncFrameLoadingMask(iframe);
     }
+    syncFrameLoadingMask(iframe);
     setFrameLoading(iframe, false);
     restorePromptInputFocus(iframe);
+    if (!document.querySelector(".modal") && overlaySearchCaretMode() === "page") {
+      pinOverlaySearchCaret();
+      adoptPageCaretLease(iframe);
+    }
     // The New Chat home document loaded; recapture without the release marker.
     if (iframe.dataset.frameLoadingKind === "new-topic" && clearFrameNewChatPending(iframe)) rememberWorkspaceSession();
   }

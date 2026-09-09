@@ -186,6 +186,12 @@ const PARAM = "__chatclub_frame_load_nonce";
     "in-flight prompt restore retries must re-check the typed modal"
   );
   assert.match(completeFrameLoading, /restorePromptInputFocus\(iframe\)/, "the real iframe load must restore focus to the prompt when it was active before navigation");
+  assert.match(completeFrameLoading, /overlaySearchCaretMode\(\) === "page"/, "iframe load must pin a claimed page caret owner without an armed restore generation");
+  assert.match(completeFrameLoading, /pinOverlaySearchCaret\(\)/);
+  assert.match(completeFrameLoading, /adoptPageCaretLease\(iframe\)/);
+  assert.match(frameController, /setOverlayCaretLeaseHandler/);
+  assert.match(frameController, /"adoptPageCaretLease"/);
+  assert.match(frameController, /"releasePageCaretLease"/);
   assert.match(setFrameSrcAfterPrepare, /const frameReplaced = ensureFrameAttributeContract/);
   assert.match(
     setFrameSrcAfterPrepare,
@@ -381,6 +387,9 @@ const PARAM = "__chatclub_frame_load_nonce";
     rememberBrowserFrameId() {},
     rememberWorkspaceSession() { rememberCalls += 1; },
     document: { querySelector() { return null; } },
+    overlaySearchCaretMode() { return ""; },
+    pinOverlaySearchCaret() { return false; },
+    adoptPageCaretLease() {},
     setFrameLoading(_iframe, next) { loading = next; },
     syncHeaderForFrameInstance() { syncCalls += 1; }
   });
@@ -736,6 +745,9 @@ const PARAM = "__chatclub_frame_load_nonce";
       },
       rememberBrowserFrameId() {},
       restorePromptInputFocus() {},
+      overlaySearchCaretMode() { return ""; },
+      pinOverlaySearchCaret() { return false; },
+      adoptPageCaretLease() {},
       setFrameLoading() {},
       syncFrameLoadingMask() {},
       clearFrameNewChatPending() { return false; },
@@ -749,6 +761,34 @@ const PARAM = "__chatclub_frame_load_nonce";
     frame.inert = true;
     ctx.complete(frame);
     assert.equal(frame.inert, false, "completing a load with no modal must un-inert the iframe");
+  }
+
+  {
+    class PageIframe {
+      constructor() {
+        this.dataset = { instanceId: "frame-page" };
+        this.inert = true;
+      }
+    }
+    let pins = 0;
+    let adopts = 0;
+    const ctx = vm.createContext({
+      HTMLIFrameElement: PageIframe,
+      document: { querySelector() { return null; } },
+      rememberBrowserFrameId() {},
+      restorePromptInputFocus() {},
+      overlaySearchCaretMode() { return "page"; },
+      pinOverlaySearchCaret() { pins += 1; return false; },
+      adoptPageCaretLease() { adopts += 1; },
+      setFrameLoading() {},
+      syncFrameLoadingMask() {},
+      clearFrameNewChatPending() { return false; },
+      rememberWorkspaceSession() {}
+    });
+    vm.runInContext(`${completeFrameLoading}\nglobalThis.complete = completeFrameLoading;`, ctx);
+    ctx.complete(new PageIframe());
+    assert.equal(pins, 1, "iframe load must pin a claimed page caret owner without an armed restore generation");
+    assert.equal(adopts, 1, "iframe load must re-adopt the page caret lease on the new document");
   }
 
   console.log("workspace frame loading status: ok");

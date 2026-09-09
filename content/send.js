@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "81de757455b459086681b0d9756c2f1fe87e0618a6c099ed3d818465070ecb21";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "54b50407f4c449ebc532a5656af5beb2cc89fffaf2078f3b12ec570084bd875a";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "1ec86426d7aadcfc5b18cdf5e1dbf94b2b13e1f1fcbee524219717b3f185e033";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.1ec86426d7aadcfc5b18cdf5e1dbf94b2b13e1f1fcbee524219717b3f185e033";
-  var CONTENT_RUNTIME_SEND_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/send.js", "entryPath": "content-src/content-send.js", "sourceSha256": "80a1c4ac47e9a3d80bb28a4088a8d070942689dda26dca0f34cb24d4a9ad477e", "implementationSha256": "0e4397422b057b7213323d2afc352399fcdfa6c76ac427bbd327b4d7aaec1ef2", "implementationVersion": "2026.07.16.2+bundle.0e4397422b057b7213323d2afc352399fcdfa6c76ac427bbd327b4d7aaec1ef2" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "7f2e2eae35b3a59626d41ec5786a9a372931a4cd6364f20d891acfa0e2b7e4e4";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.7f2e2eae35b3a59626d41ec5786a9a372931a4cd6364f20d891acfa0e2b7e4e4";
+  var CONTENT_RUNTIME_SEND_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/send.js", "entryPath": "content-src/content-send.js", "sourceSha256": "18894428eacda52d99b57e7781e1a88d4e4869a4925231312bc312a519e11438", "implementationSha256": "21722d8f28c463454d7ddceca947ea69327c437d60614ea487c2ec613fb3ceac", "implementationVersion": "2026.07.16.2+bundle.21722d8f28c463454d7ddceca947ea69327c437d60614ea487c2ec613fb3ceac" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -315,6 +315,8 @@
     newChatPreprocess: command({ timeoutMs: 1500, mutating: true, features: Object.freeze(["send"]) }),
     prepareNavigationFocusGuard: command({ timeoutMs: 1200, mutating: true, transport: "main-world", features: Object.freeze(["preferred-model"]) }),
     adoptNavigationFocusGuard: command({ timeoutMs: 1200, mutating: true, transport: "main-world", features: Object.freeze(["preferred-model"]) }),
+    adoptPageCaretLease: command({ timeoutMs: 1200, mutating: true, transport: "main-world", capability: "base" }),
+    releasePageCaretLease: command({ timeoutMs: 1200, mutating: true, transport: "main-world", capability: "base" }),
     deleteThread: command({ timeoutMs: 37e3, mutating: true, features: Object.freeze(["delete"]) }),
     getDeleteConfirmState: command({ timeoutMs: 2400, features: Object.freeze(["delete"]) }),
     applyPreferredModel: command({ timeoutMs: 5e4, mutating: true, features: Object.freeze(["preferred-model"]) }),

@@ -121,6 +121,8 @@ export const FRAME_COMMAND_SPECS = Object.freeze({
   newChatPreprocess: command({ timeoutMs: 1500, mutating: true, features: Object.freeze(["send"]) }),
   prepareNavigationFocusGuard: command({ timeoutMs: 1200, mutating: true, transport: "main-world", features: Object.freeze(["preferred-model"]) }),
   adoptNavigationFocusGuard: command({ timeoutMs: 1200, mutating: true, transport: "main-world", features: Object.freeze(["preferred-model"]) }),
+  adoptPageCaretLease: command({ timeoutMs: 1200, mutating: true, transport: "main-world", capability: "base" }),
+  releasePageCaretLease: command({ timeoutMs: 1200, mutating: true, transport: "main-world", capability: "base" }),
   deleteThread: command({ timeoutMs: 37000, mutating: true, features: Object.freeze(["delete"]) }),
   getDeleteConfirmState: command({ timeoutMs: 2400, features: Object.freeze(["delete"]) }),
   applyPreferredModel: command({ timeoutMs: 50000, mutating: true, features: Object.freeze(["preferred-model"]) }),

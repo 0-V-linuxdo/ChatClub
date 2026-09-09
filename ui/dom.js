@@ -214,7 +214,10 @@ const openModals = [];
 let overlaySearchCaret = null;
 let overlaySearchCaretListening = false;
 let overlayCaretFramePointerAt = 0;
+let overlayCaretLeaseHandler = null;
+let overlayCaretPinFollow = 0;
 const OVERLAY_CARET_FRAME_POINTER_MS = 1000;
+const OVERLAY_CARET_PIN_FOLLOW_MAX = 3;
 
 function overlaySearchCaretPanel(field) {
   return field?.closest?.(".modal") || openModals[openModals.length - 1]?.panel || null;
@@ -256,35 +259,50 @@ function overlaySearchCaretShouldLeave(active, field, panel, owner) {
   return false;
 }
 
-export function pinOverlaySearchCaret() {
+function cancelOverlayCaretPinFollow() {
+  if (!overlayCaretPinFollow) return;
+  try {
+    if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(overlayCaretPinFollow);
+  } catch {}
+  overlayCaretPinFollow = 0;
+}
+
+function scheduleOverlayCaretPinFollow(remaining) {
+  if (remaining <= 0) return;
+  const schedule = typeof requestAnimationFrame === "function"
+    ? requestAnimationFrame
+    : (typeof setTimeout === "function" ? (callback) => setTimeout(callback, 0) : null);
+  if (typeof schedule !== "function") return;
+  overlayCaretPinFollow = schedule(() => {
+    overlayCaretPinFollow = 0;
+    if (!overlaySearchCaret) return;
+    pinOverlaySearchCaret(remaining);
+  });
+}
+
+function notifyOverlayCaretLease(kind, iframe) {
+  const handler = overlayCaretLeaseHandler;
+  if (!handler) return;
+  try {
+    if (kind === "adopt") handler.adopt?.(iframe);
+    else handler.release?.();
+  } catch {
+    /* lease RPC is best-effort against a still-loading frame */
+  }
+}
+
+function clearOverlaySearchCaret(invokeLeave = true) {
+  cancelOverlayCaretPinFollow();
   const owner = overlaySearchCaret;
-  const field = owner?.field;
-  if (!field?.isConnected) {
-    overlaySearchCaret = null;
-    return false;
+  overlaySearchCaret = null;
+  if (!owner) return;
+  if (invokeLeave) {
+    try { owner.onLeave?.(); } catch {}
   }
-  const modal = typeof document.querySelector === "function" ? document.querySelector(".modal") : null;
-  if (modal && field.closest?.(".modal") !== modal && !modal.contains?.(field)) {
-    owner.onLeave?.();
-    overlaySearchCaret = null;
-    return false;
-  }
-  const active = document.activeElement;
-  if (active === field) return true;
-  if (owner.composing?.()) return false;
-  const panel = owner.panel || overlaySearchCaretPanel(field);
-  if (overlaySearchCaretShouldLeave(active, field, panel, owner)) {
-    owner.onLeave?.();
-    overlaySearchCaret = null;
-    return false;
-  }
-  if (!overlaySearchCaretStolen(active, field, panel, owner)) return false;
-  if (overlayCaretIsFrame(active)) {
-    try { active.blur?.(); } catch {}
-  }
-  try { field.focus({ preventScroll: true }); } catch {
-    try { field.focus(); } catch {}
-  }
+  if (owner.mode === "page") notifyOverlayCaretLease("release");
+}
+
+function restoreOverlaySearchCaretSelection(field, owner) {
   try {
     const selection = owner.getSelection?.() || {};
     const start = Number(selection.start);
@@ -296,7 +314,47 @@ export function pinOverlaySearchCaret() {
   } catch {
     /* selection restoration is best-effort after a stolen caret */
   }
-  return true;
+}
+
+export function overlaySearchCaretMode() {
+  return overlaySearchCaret?.mode || "";
+}
+
+export function setOverlayCaretLeaseHandler(handler) {
+  overlayCaretLeaseHandler = handler && typeof handler === "object" ? handler : null;
+}
+
+export function pinOverlaySearchCaret(followRemaining = OVERLAY_CARET_PIN_FOLLOW_MAX) {
+  const owner = overlaySearchCaret;
+  const field = owner?.field;
+  if (!field?.isConnected) {
+    clearOverlaySearchCaret(false);
+    return false;
+  }
+  const modal = typeof document.querySelector === "function" ? document.querySelector(".modal") : null;
+  if (modal && field.closest?.(".modal") !== modal && !modal.contains?.(field)) {
+    clearOverlaySearchCaret(true);
+    return false;
+  }
+  const active = document.activeElement;
+  if (active === field) return true;
+  if (owner.composing?.()) return false;
+  const panel = owner.panel || overlaySearchCaretPanel(field);
+  if (overlaySearchCaretShouldLeave(active, field, panel, owner)) {
+    clearOverlaySearchCaret(true);
+    return false;
+  }
+  if (!overlaySearchCaretStolen(active, field, panel, owner)) return false;
+  if (overlayCaretIsFrame(active)) {
+    try { active.blur?.(); } catch {}
+  }
+  try { field.focus({ preventScroll: true }); } catch {
+    try { field.focus(); } catch {}
+  }
+  restoreOverlaySearchCaretSelection(field, owner);
+  if (document.activeElement === field) return true;
+  scheduleOverlayCaretPinFollow(Number(followRemaining) > 0 ? Number(followRemaining) - 1 : 0);
+  return false;
 }
 
 function onOverlaySearchCaretFocusIn(event) {
@@ -321,6 +379,8 @@ function ensureOverlaySearchCaretListeners() {
 
 export function claimOverlaySearchCaret(field, options = {}) {
   if (!field) return;
+  const previous = overlaySearchCaret;
+  cancelOverlayCaretPinFollow();
   overlaySearchCaret = {
     field,
     panel: options.panel || overlaySearchCaretPanel(field),
@@ -331,11 +391,13 @@ export function claimOverlaySearchCaret(field, options = {}) {
     stolen: typeof options.stolen === "function" ? options.stolen : null
   };
   ensureOverlaySearchCaretListeners();
+  if (overlaySearchCaret.mode === "page") notifyOverlayCaretLease("adopt");
+  else if (previous?.mode === "page") notifyOverlayCaretLease("release");
 }
 
 export function releaseOverlaySearchCaret(field) {
   if (field && overlaySearchCaret?.field !== field) return;
-  overlaySearchCaret = null;
+  clearOverlaySearchCaret(false);
 }
 
 function modalFocusables(root) {
@@ -446,7 +508,7 @@ function registerOpenModal(backdrop, panel, focusNode = panel) {
     try {
       if (!openModals.length) {
         document.removeEventListener?.("keydown", trapOpenModalKeydown, true);
-        overlaySearchCaret = null;
+        clearOverlaySearchCaret(false);
       }
       syncModalScrollLock();
     } catch {

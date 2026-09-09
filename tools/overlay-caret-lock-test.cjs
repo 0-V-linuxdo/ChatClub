@@ -18,6 +18,9 @@ const agents = read("AGENTS.md");
 assert.match(dom, /export function claimOverlaySearchCaret/);
 assert.match(dom, /export function pinOverlaySearchCaret/);
 assert.match(dom, /export function releaseOverlaySearchCaret/);
+assert.match(dom, /export function overlaySearchCaretMode/);
+assert.match(dom, /export function setOverlayCaretLeaseHandler/);
+assert.match(dom, /scheduleOverlayCaretPinFollow/);
 assert.match(dom, /document\.addEventListener\("focusin", onOverlaySearchCaretFocusIn, true\)/);
 assert.match(tabSearch, /claimOverlaySearchCaret\(field, searchCaretOptions\(\)\)/);
 assert.match(tabSearch, /pinOverlaySearchCaret\(\)/);
@@ -34,6 +37,9 @@ assert.match(composer, /oncompositionend/);
 assert.match(agents, /the titlebar search is the unique caret owner/);
 assert.match(agents, /a focused `\.prompt-input` is the page caret owner/);
 assert.match(frame, /function restorePromptInputFocus/);
+assert.match(frame, /setOverlayCaretLeaseHandler/);
+assert.match(frame, /adoptPageCaretLease/);
+assert.match(frame, /overlaySearchCaretMode\(\) === "page"/);
 
 const caretStart = dom.indexOf("let overlaySearchCaret = null;");
 const caretEnd = dom.indexOf("function modalFocusables");
@@ -115,25 +121,40 @@ function createWorld() {
       }
     }
   };
+  const rafQueue = [];
+  world.rafQueue = rafQueue;
+  world.flushRaf = () => {
+    const pending = rafQueue.splice(0);
+    for (const callback of pending) callback();
+  };
   const context = vm.createContext({
     document: world.document,
     Boolean,
     Number,
     String,
     Date,
-    console
+    console,
+    requestAnimationFrame(callback) {
+      rafQueue.push(callback);
+      return rafQueue.length;
+    },
+    cancelAnimationFrame() {}
   });
   vm.runInContext(
     `const openModals = [];
 ${caretSource}
 globalThis.claimOverlaySearchCaret = claimOverlaySearchCaret;
 globalThis.pinOverlaySearchCaret = pinOverlaySearchCaret;
-globalThis.releaseOverlaySearchCaret = releaseOverlaySearchCaret;`,
+globalThis.releaseOverlaySearchCaret = releaseOverlaySearchCaret;
+globalThis.overlaySearchCaretMode = overlaySearchCaretMode;
+globalThis.setOverlayCaretLeaseHandler = setOverlayCaretLeaseHandler;`,
     context
   );
   world.claim = context.claimOverlaySearchCaret;
   world.pin = context.pinOverlaySearchCaret;
   world.release = context.releaseOverlaySearchCaret;
+  world.mode = context.overlaySearchCaretMode;
+  world.setLeaseHandler = context.setOverlayCaretLeaseHandler;
   return world;
 }
 
@@ -369,4 +390,52 @@ function claimPrompt(world, extras = {}) {
   assert.equal(world.document.activeElement, world.promptField);
 }
 
+{
+  const world = createPageWorld();
+  claimPrompt(world);
+  world.document.activeElement = world.iframe;
+  let focusCalls = 0;
+  world.promptField.focus = function () {
+    focusCalls += 1;
+    this.focusCalls += 1;
+    if (focusCalls >= 2) world.document.activeElement = this;
+  };
+  assert.equal(world.pin(), false, "pin must not report success when focus does not land");
+  assert.equal(world.document.activeElement, world.iframe);
+  assert.equal(world.mode(), "page", "a failed pin must keep the page caret owner claimed");
+  world.flushRaf();
+  assert.equal(world.document.activeElement, world.promptField, "pin follow-through must retry until the prompt holds focus");
+  assert.ok(focusCalls >= 2);
+}
+
+{
+  const world = createPageWorld();
+  let adopts = 0;
+  let releases = 0;
+  world.setLeaseHandler({
+    adopt() { adopts += 1; },
+    release() { releases += 1; }
+  });
+  claimPrompt(world);
+  assert.equal(adopts, 1, "a page claim must adopt the child-document caret lease");
+  assert.equal(releases, 0);
+  world.document.activeElement = world.topbarButton;
+  assert.equal(world.pin(), false);
+  assert.equal(releases, 1, "leaving the page caret owner must release the child-document lease");
+  assert.equal(world.mode(), "");
+}
+
+{
+  const world = createWorld();
+  let adopts = 0;
+  world.setLeaseHandler({
+    adopt() { adopts += 1; },
+    release() {}
+  });
+  claimField(world);
+  assert.equal(adopts, 0, "overlay search must not adopt the page caret lease");
+  assert.equal(world.mode(), "overlay");
+}
+
 console.log("overlay caret lock tests passed");
+

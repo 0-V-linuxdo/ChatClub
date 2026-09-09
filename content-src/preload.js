@@ -25,6 +25,7 @@ function installPreload() {
   const NAVIGATION_FOCUS_GUARD_BRIDGE_VERSION = PROTOCOL.NAVIGATION_FOCUS_GUARD_RUNTIME_VERSION;
   const NAVIGATION_FOCUS_GUARD_STORAGE_KEY = "chatclub_preferred_model_focus_guard_until";
   const NAVIGATION_FOCUS_GUARD_LEASE_MS = 180000;
+  const PAGE_CARET_LEASE_MS = 180000;
   const MAIN_WORLD_LOCATION_BRIDGE_VERSION = PRELOAD_IMPLEMENTATION_VERSION;
   const MAIN_WORLD_LOCATION_SOURCE = PROTOCOL.MAIN_WORLD_LOCATION_SOURCE;
   const DEEPSEEK_DELETE_SOURCE = PROTOCOL.DEEPSEEK_DELETE_SOURCE;
@@ -199,9 +200,34 @@ function installPreload() {
         documentToken: window.__CHATCLUB_PREFERRED_MODEL_FOCUS_SHIELD__?.documentToken || ""
       };
     };
+    const adoptPageCaret = (message = {}) => {
+      const now = Date.now();
+      const guardToken = String(message.guardToken || "");
+      if (!guardToken) return { ok: false, reason: "page caret token is missing" };
+      const requestedExpiresAt = Number(message.expiresAt);
+      const expiresAt = Number.isFinite(requestedExpiresAt) && requestedExpiresAt > now
+        ? Math.min(requestedExpiresAt, now + PAGE_CARET_LEASE_MS)
+        : now + PAGE_CARET_LEASE_MS;
+      let stored = false;
+      try {
+        const adopt = window.__CHATCLUB_PREFERRED_MODEL_FOCUS_SHIELD__?.adoptPageCaret;
+        stored = typeof adopt === "function" && Number(adopt(expiresAt, guardToken)) > now;
+      } catch {}
+      return {
+        ok: stored,
+        guardToken,
+        expiresAt,
+        documentToken: window.__CHATCLUB_PREFERRED_MODEL_FOCUS_SHIELD__?.documentToken || ""
+      };
+    };
+    const releasePageCaret = (message = {}) => {
+      const guardToken = String(message.guardToken || "");
+      try { window.__CHATCLUB_PREFERRED_MODEL_FOCUS_SHIELD__?.releasePageCaret?.(guardToken); } catch {}
+      return { ok: true, guardToken };
+    };
     runtimes.register(NAVIGATION_FOCUS_GUARD_RUNTIME, {
       version: NAVIGATION_FOCUS_GUARD_BRIDGE_VERSION,
-      api: Object.freeze({ prepare }),
+      api: Object.freeze({ prepare, adoptPageCaret, releasePageCaret }),
       dispose() {}
     });
   }
@@ -237,6 +263,13 @@ function installPreload() {
     const releasedBootstrapGuardTokens = previous?.releasedBootstrapGuardTokens instanceof Set
       ? previous.releasedBootstrapGuardTokens
       : new Set();
+    let pageCaretExpiresAt = Math.max(0, Number(previous?.pageCaretExpiresAt) || 0);
+    let pageCaretToken = String(previous?.pageCaretToken || "");
+    let pageCaretAllowDepth = 0;
+    let pageCaretTrustedAt = 0;
+    const releasedPageCaretTokens = previous?.releasedPageCaretTokens instanceof Set
+      ? previous.releasedPageCaretTokens
+      : new Set();
     try { previous?.dispose?.(); } catch {}
 
     let elementFocusDescriptor = null;
@@ -255,12 +288,22 @@ function installPreload() {
       }
       return true;
     };
+    const pageCaretLeaseActive = () => {
+      if (pageCaretAllowDepth > 0) return false;
+      if (pageCaretTrustedAt && Date.now() - pageCaretTrustedAt < 1000) return false;
+      if (pageCaretExpiresAt <= Date.now()) {
+        pageCaretExpiresAt = 0;
+        return false;
+      }
+      return true;
+    };
+    const focusBlocked = () => preferredModelRunActive() || pageCaretLeaseActive();
     const guardedElementFocus = function (...args) {
-      if (preferredModelRunActive()) return;
+      if (focusBlocked()) return;
       return Reflect.apply(nativeElementFocus, this, args);
     };
     const guardedWindowFocus = function (...args) {
-      if (preferredModelRunActive()) return;
+      if (focusBlocked()) return;
       return Reflect.apply(nativeWindowFocus, this, args);
     };
     const releaseBootstrapForTrustedIntent = (event) => {
@@ -297,6 +340,52 @@ function installPreload() {
         }
       } catch {}
       return bootstrapExpiresAt;
+    };
+    const adoptPageCaret = (expiresAt, guardToken = "") => {
+      const token = String(guardToken || "");
+      if (!token || releasedPageCaretTokens.has(token)) return 0;
+      const next = Number(expiresAt);
+      const now = Date.now();
+      if (!Number.isFinite(next) || next <= now) return pageCaretExpiresAt;
+      pageCaretToken = token;
+      pageCaretExpiresAt = Math.max(pageCaretExpiresAt, Math.min(next, now + PAGE_CARET_LEASE_MS));
+      try {
+        if (window[registryKey]?.guardedElementFocus === guardedElementFocus) {
+          window[registryKey].pageCaretExpiresAt = pageCaretExpiresAt;
+          window[registryKey].pageCaretToken = pageCaretToken;
+        }
+      } catch {}
+      return pageCaretExpiresAt;
+    };
+    const releasePageCaret = (guardToken = "") => {
+      const token = String(guardToken || "");
+      if (token) releasedPageCaretTokens.add(token);
+      if (!token || token === pageCaretToken) {
+        pageCaretExpiresAt = 0;
+        pageCaretToken = "";
+      }
+      try {
+        if (window[registryKey]?.guardedElementFocus === guardedElementFocus) {
+          window[registryKey].pageCaretExpiresAt = pageCaretExpiresAt;
+          window[registryKey].pageCaretToken = pageCaretToken;
+        }
+      } catch {}
+      return 0;
+    };
+    const allowPageCaretFocus = (callback) => {
+      pageCaretAllowDepth += 1;
+      try { return typeof callback === "function" ? callback() : undefined; }
+      finally { pageCaretAllowDepth -= 1; }
+    };
+    const onPageCaretFocusIn = (event) => {
+      if (!pageCaretLeaseActive()) return;
+      const target = event?.target;
+      if (!target || target === document.body || target === document.documentElement) return;
+      try { target.blur?.(); } catch {}
+    };
+    const markPageCaretTrustedPointer = (event) => {
+      if (event?.isTrusted !== true || event?.type !== "pointerdown") return;
+      pageCaretTrustedAt = Date.now();
     };
     try { guardedElementFocus.toString = () => nativeElementFocus.toString(); } catch {}
     try { guardedWindowFocus.toString = () => nativeWindowFocus.toString(); } catch {}
@@ -369,6 +458,8 @@ function installPreload() {
     }
     window.addEventListener("pointerdown", releaseBootstrapForTrustedIntent, true);
     window.addEventListener("keydown", releaseBootstrapForTrustedIntent, true);
+    window.addEventListener("focusin", onPageCaretFocusIn, true);
+    window.addEventListener("pointerdown", markPageCaretTrustedPointer, true);
 
     window[registryKey] = {
       version: PREFERRED_MODEL_FOCUS_SHIELD_VERSION,
@@ -379,13 +470,21 @@ function installPreload() {
       bootstrapExpiresAt,
       activeBootstrapGuardToken,
       releasedBootstrapGuardTokens,
+      pageCaretExpiresAt,
+      pageCaretToken,
+      releasedPageCaretTokens,
       elementInstalled,
       windowInstalled,
       refreshLease,
       adoptBootstrapExpiresAt,
+      adoptPageCaret,
+      releasePageCaret,
+      allowPageCaretFocus,
       dispose() {
         window.removeEventListener("pointerdown", releaseBootstrapForTrustedIntent, true);
         window.removeEventListener("keydown", releaseBootstrapForTrustedIntent, true);
+        window.removeEventListener("focusin", onPageCaretFocusIn, true);
+        window.removeEventListener("pointerdown", markPageCaretTrustedPointer, true);
         try { leaseObserver?.disconnect?.(); } catch {}
         try { rootObserver?.disconnect?.(); } catch {}
         if (expiryTimer) clearTimeout(expiryTimer);
