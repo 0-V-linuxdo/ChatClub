@@ -19,31 +19,31 @@ const coreCapabilityOutputs = [
 ];
 const measuredOutputs = Object.keys(CONTENT_ENTRIES).sort();
 const byteBudgets = Object.freeze({
-  // Exact base cost after the page-caret lease FRAME_COMMAND_SPECS joined
-  // the isolated content contract (adoptPageCaretLease / releasePageCaretLease).
-  "content/content.js": 110_829,
+  // Exact base cost after preparePageCaretLease joined the isolated
+  // content contract with adoptPageCaretLease / releasePageCaretLease.
+  "content/content.js": 110_947,
   "content/send.js": 85_000,
   // Bundles that embed the shared frame-command contract each carry the
-  // page-caret lease spec entries (about two hundred bytes).
-  "content/summary-bridge.js": 99_993,
+  // page-caret lease spec entries (about one hundred bytes more).
+  "content/summary-bridge.js": 100_111,
   // Shared Notion catalog plus exact custom picker-name apply stay inside the
   // preferred-model content boundary instead of a second selector dialect.
-  "content/preferred-model.js": 243_729,
+  "content/preferred-model.js": 243_847,
   // Exact post-generation cost of signed selector hints plus attempt/route-bound
   // confirmation ownership; keep destructive-action safety in one bundle.
-  "content/delete.js": 266_579,
+  "content/delete.js": 266_697,
   "content/grok-cookie-bridge.js": 50_000,
   "content/message-navigator.js": 140_000,
-  "content/preload.js": 218_994,
+  "content/preload.js": 223_256,
   "content/summary-userscripts-main.js": 230_894,
   "content/summary-userscripts.js": 161_108
 });
-// Exact base-plus-capabilities closure after the page-caret lease commands
-// joined the isolated content contract.
-const aggregateByteBudget = 801_116;
-// Exact all-bundle closure after MAIN-world page-caret lease plus the
-// isolated command-contract growth.
-const allBundlesByteBudget = 1_584_035;
+// Exact base-plus-capabilities closure after preparePageCaretLease joined
+// the isolated content contract.
+const aggregateByteBudget = 801_706;
+// Exact all-bundle closure after MAIN-world page-caret document_start
+// bootstrap plus the isolated command-contract growth.
+const allBundlesByteBudget = 1_589_005;
 
 const bundleIdentities = Object.fromEntries(Object.keys(CONTENT_ENTRIES).map((outputPath) => [
   outputPath,

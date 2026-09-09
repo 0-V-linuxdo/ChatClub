@@ -11,6 +11,7 @@ import { findTopicDeleteSiteConfig, topicDeleteTimeoutMs } from "../../shared/to
 import { conversationHrefFromLocation } from "../../shared/workspace-tab-memory.js";
 import { button, editorModal, el, field, input, openConfirmationAction, overlaySearchCaretMode, pinOverlaySearchCaret, setOverlayCaretLeaseHandler } from "../../ui/dom.js";
 import { clearFrameNewChatPending, frameLoadingKindForTarget, markFrameNewChatPending } from "./frame-loading.js";
+import { createPageCaretLease } from "./page-caret-lease.js";
 import { removeChatFromGroup, removeGroupFromWorkspace } from "./model.js";
 import { createControllerMethodValidator, validateControllerContract } from "../controller-contract.js";
 
@@ -19,7 +20,6 @@ const NAVIGATION_FOCUS_GUARD_POST_NAV_RETRY_MS = 150;
 const NAVIGATION_FOCUS_GUARD_POST_NAV_SETTLE_MS = 10000;
 const NAVIGATION_FOCUS_GUARD_POST_NAV_MAX_MS = 45000;
 const NAVIGATION_FOCUS_GUARD_LEASE_MS = 180000;
-const PAGE_CARET_LEASE_MS = 180000;
 const NOTION_FRAME_PREFLIGHT_DEADLINE_MS = 8_000;
 const requireMethods = createControllerMethodValidator("Workspace frame", "port");
 
@@ -81,7 +81,12 @@ export function createWorkspaceFrameController(dependencies = {}) {
   let frameLifecycleCallbackActive = false;
   const frameNavigationGenerations = new WeakMap();
   const frameNavigationTargets = new WeakMap();
-  let pageCaretLeaseToken = "";
+  const pageCaret = createPageCaretLease({
+    sendToContentFrame,
+    overlaySearchCaretMode,
+    timeoutMs: NAVIGATION_FOCUS_GUARD_TIMEOUT_MS
+  });
+  setOverlayCaretLeaseHandler({ adopt: pageCaret.adopt, release: pageCaret.release });
   const openableFrameUrl = (value) => openableTabUrl(stripNotionFrameLoadNonce(value));
   const navigableFrameUrl = (app, value) => openableTabUrl(navigableChatFrameHref(app, value));
   const restorableFrameUrl = (app, value) => openableTabUrl(restorableChatFrameHref(app, value));
@@ -260,6 +265,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
     params.set("ssc", "1");
     if (app?.id) params.set("app", app.id);
     if (frameBindingId) params.set("chatclub_frame_binding", frameBindingId);
+    pageCaret.writeNameParams(params);
     return params.toString();
   }
 
@@ -425,6 +431,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
     ) {
       syncHeaderForFrameInstance(iframe.dataset.instanceId);
     }
+    pageCaret.adopt(iframe);
     return true;
   }
 
@@ -439,33 +446,9 @@ export function createWorkspaceFrameController(dependencies = {}) {
     return frameId;
   }
 
-  function pageCaretLeaseFrames(iframe) {
-    return iframe instanceof HTMLIFrameElement ? [iframe] : [...document.querySelectorAll("iframe.chat-frame")];
-  }
-
   function adoptPageCaretLease(iframe) {
-    if (overlaySearchCaretMode() !== "page") return;
-    if (!pageCaretLeaseToken) pageCaretLeaseToken = globalThis.crypto?.randomUUID?.() || `page-caret-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const data = { guardToken: pageCaretLeaseToken, expiresAt: Date.now() + PAGE_CARET_LEASE_MS };
-    for (const frame of pageCaretLeaseFrames(iframe)) {
-      if (frame instanceof HTMLIFrameElement && frame.isConnected) {
-        Promise.resolve(sendToContentFrame(frame, "adoptPageCaretLease", data, NAVIGATION_FOCUS_GUARD_TIMEOUT_MS)).catch(() => {});
-      }
-    }
+    pageCaret.refresh(iframe);
   }
-
-  function releasePageCaretLease() {
-    const guardToken = pageCaretLeaseToken;
-    pageCaretLeaseToken = "";
-    if (!guardToken) return;
-    for (const frame of pageCaretLeaseFrames()) {
-      if (frame instanceof HTMLIFrameElement && frame.isConnected) {
-        Promise.resolve(sendToContentFrame(frame, "releasePageCaretLease", { guardToken }, NAVIGATION_FOCUS_GUARD_TIMEOUT_MS)).catch(() => {});
-      }
-    }
-  }
-
-  setOverlayCaretLeaseHandler({ adopt: adoptPageCaretLease, release: releasePageCaretLease });
 
   function completeFrameLoading(iframe) {
     if (!(iframe instanceof HTMLIFrameElement)) return;

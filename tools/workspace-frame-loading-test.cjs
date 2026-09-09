@@ -189,9 +189,13 @@ const PARAM = "__chatclub_frame_load_nonce";
   assert.match(completeFrameLoading, /overlaySearchCaretMode\(\) === "page"/, "iframe load must pin a claimed page caret owner without an armed restore generation");
   assert.match(completeFrameLoading, /pinOverlaySearchCaret\(\)/);
   assert.match(completeFrameLoading, /adoptPageCaretLease\(iframe\)/);
+  assert.match(beginFrameLoading, /pageCaret\.adopt\(iframe\)/, "iframe src assignment must prepare the page-caret lease on the outgoing document");
+  assert.match(frameController, /pageCaret\.writeNameParams\(params\)/);
+  assert.match(frameController, /pageCaret\.refresh\(iframe\)/);
   assert.match(frameController, /setOverlayCaretLeaseHandler/);
-  assert.match(frameController, /"adoptPageCaretLease"/);
-  assert.match(frameController, /"releasePageCaretLease"/);
+  assert.match(read("app/workspace/page-caret-lease.js"), /"preparePageCaretLease"/);
+  assert.match(read("app/workspace/page-caret-lease.js"), /"adoptPageCaretLease"/);
+  assert.match(read("app/workspace/page-caret-lease.js"), /"releasePageCaretLease"/);
   assert.match(setFrameSrcAfterPrepare, /const frameReplaced = ensureFrameAttributeContract/);
   assert.match(
     setFrameSrcAfterPrepare,
@@ -390,6 +394,7 @@ const PARAM = "__chatclub_frame_load_nonce";
     overlaySearchCaretMode() { return ""; },
     pinOverlaySearchCaret() { return false; },
     adoptPageCaretLease() {},
+    pageCaret: { adopt() {}, refresh() {}, release() {} },
     setFrameLoading(_iframe, next) { loading = next; },
     syncHeaderForFrameInstance() { syncCalls += 1; }
   });

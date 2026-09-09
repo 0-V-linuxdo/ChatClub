@@ -215,7 +215,7 @@ const sendMessageToRegisteredFrame = (context, message) => sendRegisteredFrameMe
 
 const MAIN_WORLD_FRAME_COMMANDS = Object.freeze({
   prepareNavigationFocusGuard: Object.freeze({ method: "prepare", phase: "prepare" }), adoptNavigationFocusGuard: Object.freeze({ method: "prepare", phase: "adopt" }),
-  adoptPageCaretLease: Object.freeze({ method: "adoptPageCaret", phase: "adopt" }), releasePageCaretLease: Object.freeze({ method: "releasePageCaret", phase: "release" })
+  adoptPageCaretLease: Object.freeze({ method: "adoptPageCaret", phase: "adopt" }), preparePageCaretLease: Object.freeze({ method: "preparePageCaret", phase: "prepare" }), releasePageCaretLease: Object.freeze({ method: "releasePageCaret", phase: "release" })
 });
 async function executeMainWorldFrameCommand(context, command, data = {}) {
   const spec = MAIN_WORLD_FRAME_COMMANDS[command];

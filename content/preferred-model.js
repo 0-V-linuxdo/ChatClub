@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "54b50407f4c449ebc532a5656af5beb2cc89fffaf2078f3b12ec570084bd875a";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "d95027321721e7568e3e7ab6d8af71283c48e1d6a8f42097bda3131bf0a30eb0";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "7f2e2eae35b3a59626d41ec5786a9a372931a4cd6364f20d891acfa0e2b7e4e4";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.7f2e2eae35b3a59626d41ec5786a9a372931a4cd6364f20d891acfa0e2b7e4e4";
-  var CONTENT_RUNTIME_PREFERRED_MODEL_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preferred-model.js", "entryPath": "content-src/content-preferred-model.js", "sourceSha256": "36e7caa3bca2e4cf6ee4e7ed7b5ae3bbb8e13ec670a2bbcbcdda840bb680f4e7", "implementationSha256": "e2b6202df72afd6dee72e6898dd6ae993b8ff076d305f2ea2753cc5c3d923dd8", "implementationVersion": "2026.07.16.2+bundle.e2b6202df72afd6dee72e6898dd6ae993b8ff076d305f2ea2753cc5c3d923dd8" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "65c1575f318e8b4a653dac3c4cdbfe96f858ea88c5e2f1c00f542d4ae19e6daf";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.65c1575f318e8b4a653dac3c4cdbfe96f858ea88c5e2f1c00f542d4ae19e6daf";
+  var CONTENT_RUNTIME_PREFERRED_MODEL_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preferred-model.js", "entryPath": "content-src/content-preferred-model.js", "sourceSha256": "5cb4b0b3b3015b28ccf42499fa8c8974221424ecb2a3007ffdb8694bff2b3dde", "implementationSha256": "bdde22842a88ccfc123d6cdedd6039cf051c8a2b702e0134836d184fef77fd6a", "implementationVersion": "2026.07.16.2+bundle.bdde22842a88ccfc123d6cdedd6039cf051c8a2b702e0134836d184fef77fd6a" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -333,6 +333,7 @@
     newChatPreprocess: command({ timeoutMs: 1500, mutating: true, features: Object.freeze(["send"]) }),
     prepareNavigationFocusGuard: command({ timeoutMs: 1200, mutating: true, transport: "main-world", features: Object.freeze(["preferred-model"]) }),
     adoptNavigationFocusGuard: command({ timeoutMs: 1200, mutating: true, transport: "main-world", features: Object.freeze(["preferred-model"]) }),
+    preparePageCaretLease: command({ timeoutMs: 1200, mutating: true, transport: "main-world", capability: "base" }),
     adoptPageCaretLease: command({ timeoutMs: 1200, mutating: true, transport: "main-world", capability: "base" }),
     releasePageCaretLease: command({ timeoutMs: 1200, mutating: true, transport: "main-world", capability: "base" }),
     deleteThread: command({ timeoutMs: 37e3, mutating: true, features: Object.freeze(["delete"]) }),

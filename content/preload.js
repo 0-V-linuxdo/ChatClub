@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "54b50407f4c449ebc532a5656af5beb2cc89fffaf2078f3b12ec570084bd875a";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "d95027321721e7568e3e7ab6d8af71283c48e1d6a8f42097bda3131bf0a30eb0";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "7f2e2eae35b3a59626d41ec5786a9a372931a4cd6364f20d891acfa0e2b7e4e4";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.7f2e2eae35b3a59626d41ec5786a9a372931a4cd6364f20d891acfa0e2b7e4e4";
-  var CONTENT_RUNTIME_PRELOAD_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preload.js", "entryPath": "content-src/preload.js", "sourceSha256": "47fdca56e7a6711b3281773526e732081737738242fc2d5c7733100674ad19b8", "implementationSha256": "43eade65cd10aa4039f499859631d6f45163ab00e625bdc044ce0af5d0abc047", "implementationVersion": "2026.07.16.2+bundle.43eade65cd10aa4039f499859631d6f45163ab00e625bdc044ce0af5d0abc047" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "65c1575f318e8b4a653dac3c4cdbfe96f858ea88c5e2f1c00f542d4ae19e6daf";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.65c1575f318e8b4a653dac3c4cdbfe96f858ea88c5e2f1c00f542d4ae19e6daf";
+  var CONTENT_RUNTIME_PRELOAD_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preload.js", "entryPath": "content-src/preload.js", "sourceSha256": "2cc08cccc835610fa44c656a240fca9a1ba12e401f5575bf089955aed6b411fa", "implementationSha256": "b0dfd318aefd94cbc7ac2ba42a0f3a92d39c2d17ea351dbf2be54647be53dc9e", "implementationVersion": "2026.07.16.2+bundle.b0dfd318aefd94cbc7ac2ba42a0f3a92d39c2d17ea351dbf2be54647be53dc9e" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -4088,6 +4088,10 @@ ${node.nodeValue}`;
     const NAVIGATION_FOCUS_GUARD_STORAGE_KEY = "chatclub_preferred_model_focus_guard_until";
     const NAVIGATION_FOCUS_GUARD_LEASE_MS = 18e4;
     const PAGE_CARET_LEASE_MS = 18e4;
+    const PAGE_CARET_STORAGE_KEY = "chatclub_page_caret_until";
+    const PAGE_CARET_NAME_UNTIL = "chatclub_page_caret_until";
+    const PAGE_CARET_NAME_TOKEN = "chatclub_page_caret_token";
+    const PAGE_CARET_MESSAGE_SOURCE = "chatclub-page-caret";
     const MAIN_WORLD_LOCATION_BRIDGE_VERSION = PRELOAD_IMPLEMENTATION_VERSION;
     const MAIN_WORLD_LOCATION_SOURCE2 = PROTOCOL.MAIN_WORLD_LOCATION_SOURCE;
     const DEEPSEEK_DELETE_SOURCE2 = PROTOCOL.DEEPSEEK_DELETE_SOURCE;
@@ -4232,6 +4236,64 @@ ${node.nodeValue}`;
         guardToken
       };
     }
+    function consumePageCaretBootstrap() {
+      let expiresAt = 0;
+      let guardToken = "";
+      try {
+        const rawName = String(window.name || "");
+        const guard = rawName.match(/(?:^|&)chatclub_focus_guard_until=\d+(?:&chatclub_focus_guard_token=[^&]+)?$/);
+        const base = guard ? rawName.slice(0, guard.index) : rawName;
+        const suffix = guard ? rawName.slice(guard.index) : "";
+        const params = new URLSearchParams(base);
+        const until = params.get(PAGE_CARET_NAME_UNTIL);
+        const token = params.get(PAGE_CARET_NAME_TOKEN);
+        if (until || token) {
+          expiresAt = Math.max(expiresAt, Number(until) || 0);
+          guardToken = String(token || guardToken);
+          params.delete(PAGE_CARET_NAME_UNTIL);
+          params.delete(PAGE_CARET_NAME_TOKEN);
+          window.name = `${params.toString()}${suffix}`;
+        }
+      } catch {
+      }
+      try {
+        const stored = String(sessionStorage.getItem(PAGE_CARET_STORAGE_KEY) || "");
+        try {
+          const parsed = JSON.parse(stored);
+          if (Number(parsed?.expiresAt) > expiresAt) {
+            expiresAt = Number(parsed.expiresAt);
+            guardToken = String(parsed.guardToken || guardToken);
+          }
+        } catch {
+          expiresAt = Math.max(expiresAt, Number(stored) || 0);
+        }
+        sessionStorage.removeItem(PAGE_CARET_STORAGE_KEY);
+      } catch {
+      }
+      const now = Date.now();
+      if (!Number.isFinite(expiresAt) || expiresAt <= now) return { expiresAt: 0, guardToken: "" };
+      return {
+        expiresAt: Math.min(expiresAt, now + PAGE_CARET_LEASE_MS),
+        guardToken
+      };
+    }
+    function writePageCaretBootstrap(expiresAt, guardToken) {
+      try {
+        sessionStorage.setItem(PAGE_CARET_STORAGE_KEY, JSON.stringify({ expiresAt, guardToken }));
+      } catch {
+      }
+      try {
+        const rawName = String(window.name || "");
+        const guard = rawName.match(/(?:^|&)chatclub_focus_guard_until=\d+(?:&chatclub_focus_guard_token=[^&]+)?$/);
+        const base = guard ? rawName.slice(0, guard.index) : rawName;
+        const suffix = guard ? rawName.slice(guard.index) : "";
+        const params = new URLSearchParams(base);
+        params.set(PAGE_CARET_NAME_UNTIL, String(expiresAt));
+        params.set(PAGE_CARET_NAME_TOKEN, guardToken);
+        window.name = `${params.toString()}${suffix}`;
+      } catch {
+      }
+    }
     function installPreferredModelNavigationFocusGuardBridge() {
       const prepare = (message = {}) => {
         const now = Date.now();
@@ -4285,17 +4347,42 @@ ${node.nodeValue}`;
           documentToken: window.__CHATCLUB_PREFERRED_MODEL_FOCUS_SHIELD__?.documentToken || ""
         };
       };
+      const preparePageCaret = (message = {}) => {
+        const result = adoptPageCaret(message);
+        if (result.ok && message.phase !== "adopt") {
+          try {
+            writePageCaretBootstrap(result.expiresAt, result.guardToken);
+          } catch {
+          }
+        }
+        return result;
+      };
       const releasePageCaret = (message = {}) => {
         const guardToken = String(message.guardToken || "");
         try {
           window.__CHATCLUB_PREFERRED_MODEL_FOCUS_SHIELD__?.releasePageCaret?.(guardToken);
         } catch {
         }
+        try {
+          sessionStorage.removeItem(PAGE_CARET_STORAGE_KEY);
+        } catch {
+        }
+        try {
+          const rawName = String(window.name || "");
+          const guard = rawName.match(/(?:^|&)chatclub_focus_guard_until=\d+(?:&chatclub_focus_guard_token=[^&]+)?$/);
+          const base = guard ? rawName.slice(0, guard.index) : rawName;
+          const suffix = guard ? rawName.slice(guard.index) : "";
+          const params = new URLSearchParams(base);
+          params.delete(PAGE_CARET_NAME_UNTIL);
+          params.delete(PAGE_CARET_NAME_TOKEN);
+          window.name = `${params.toString()}${suffix}`;
+        } catch {
+        }
         return { ok: true, guardToken };
       };
       runtimes.register(NAVIGATION_FOCUS_GUARD_RUNTIME2, {
         version: NAVIGATION_FOCUS_GUARD_BRIDGE_VERSION,
-        api: Object.freeze({ prepare, adoptPageCaret, releasePageCaret }),
+        api: Object.freeze({ prepare, preparePageCaret, adoptPageCaret, releasePageCaret }),
         dispose() {
         }
       });
@@ -4320,6 +4407,13 @@ ${node.nodeValue}`;
           previous.refreshLease?.();
         } catch {
         }
+        try {
+          const consumedPageCaret2 = consumePageCaretBootstrap();
+          if (consumedPageCaret2.expiresAt > Date.now()) {
+            previous.adoptPageCaret?.(consumedPageCaret2.expiresAt, consumedPageCaret2.guardToken);
+          }
+        } catch {
+        }
         return;
       }
       const consumedBootstrap = previous ? { expiresAt: 0, guardToken: "" } : consumePreferredModelBootstrapFocusShield();
@@ -4331,8 +4425,13 @@ ${node.nodeValue}`;
         consumedBootstrap.guardToken || previous?.activeBootstrapGuardToken || ""
       );
       const releasedBootstrapGuardTokens = previous?.releasedBootstrapGuardTokens instanceof Set ? previous.releasedBootstrapGuardTokens : /* @__PURE__ */ new Set();
-      let pageCaretExpiresAt = Math.max(0, Number(previous?.pageCaretExpiresAt) || 0);
-      let pageCaretToken = String(previous?.pageCaretToken || "");
+      const consumedPageCaret = consumePageCaretBootstrap();
+      let pageCaretExpiresAt = Math.max(
+        0,
+        Number(consumedPageCaret.expiresAt) || 0,
+        Number(previous?.pageCaretExpiresAt) || 0
+      );
+      let pageCaretToken = String(consumedPageCaret.guardToken || previous?.pageCaretToken || "");
       let pageCaretAllowDepth = 0;
       let pageCaretTrustedAt = 0;
       const releasedPageCaretTokens = previous?.releasedPageCaretTokens instanceof Set ? previous.releasedPageCaretTokens : /* @__PURE__ */ new Set();
@@ -4466,6 +4565,10 @@ ${node.nodeValue}`;
         if (!target || target === document.body || target === document.documentElement) return;
         try {
           target.blur?.();
+        } catch {
+        }
+        try {
+          window.parent?.postMessage({ source: PAGE_CARET_MESSAGE_SOURCE, action: "stolen" }, "*");
         } catch {
         }
       };

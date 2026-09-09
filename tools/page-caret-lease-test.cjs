@@ -3,6 +3,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const { pathToFileURL } = require("node:url");
 
 const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
@@ -11,12 +12,20 @@ const preload = read("content-src/preload.js");
 const frameCommands = read("shared/frame-commands.js");
 const background = read("background/runtime.js");
 const frame = read("app/workspace/frame-controller.js");
+const lease = read("app/workspace/page-caret-lease.js");
 const composer = read("app/composer/controller.js");
 const sendRuntime = read("content-src/capabilities/send-runtime.js");
 const agents = read("AGENTS.md");
 const overlayCaret = read("tools/overlay-caret-lock-test.cjs");
 
 assert.match(preload, /const PAGE_CARET_LEASE_MS = 180000/);
+assert.match(preload, /const PAGE_CARET_STORAGE_KEY = "chatclub_page_caret_until"/);
+assert.match(preload, /const PAGE_CARET_NAME_UNTIL = "chatclub_page_caret_until"/);
+assert.match(preload, /const PAGE_CARET_NAME_TOKEN = "chatclub_page_caret_token"/);
+assert.match(preload, /const PAGE_CARET_MESSAGE_SOURCE = "chatclub-page-caret"/);
+assert.match(preload, /function consumePageCaretBootstrap\(\)/);
+assert.match(preload, /function writePageCaretBootstrap\(/);
+assert.match(preload, /const consumedPageCaret = consumePageCaretBootstrap\(\)/);
 assert.match(preload, /const pageCaretLeaseActive = \(\) =>/);
 assert.match(preload, /preferredModelRunActive\(\) \|\| pageCaretLeaseActive\(\)/);
 assert.match(preload, /const adoptPageCaret = \(expiresAt, guardToken = ""\)/);
@@ -24,26 +33,51 @@ assert.match(preload, /const releasePageCaret = \(guardToken = ""\)/);
 assert.match(preload, /const allowPageCaretFocus = \(callback\)/);
 assert.match(preload, /addEventListener\("focusin", onPageCaretFocusIn, true\)/);
 assert.match(preload, /markPageCaretTrustedPointer/);
-assert.match(preload, /api: Object\.freeze\(\{ prepare, adoptPageCaret, releasePageCaret \}\)/);
+assert.match(preload, /api: Object\.freeze\(\{ prepare, preparePageCaret, adoptPageCaret, releasePageCaret \}\)/);
+assert.match(
+  preload,
+  /postMessage\(\{ source: PAGE_CARET_MESSAGE_SOURCE, action: "stolen" \}/,
+  "child autofocus blur must tell the parent to re-pin the prompt browsing context"
+);
 assert.doesNotMatch(
   preload,
   /data-chatclub-preferred-model-focus-shield[\s\S]{0,80}pageCaretExpiresAt/,
   "page caret lease must not share the preferred-model attribute slot"
 );
+assert.match(lease, /const PAGE_CARET_NAME_UNTIL = "chatclub_page_caret_until"/);
+assert.match(lease, /const PAGE_CARET_NAME_TOKEN = "chatclub_page_caret_token"/);
+assert.match(lease, /FOCUS_GUARD_NAME_SUFFIX/);
+assert.match(lease, /const PAGE_CARET_REFRESH_RETRY_MS = 150/);
+assert.match(lease, /const PAGE_CARET_REFRESH_SETTLE_MS = 2500/);
+assert.match(lease, /const PAGE_CARET_REFRESH_MAX_MS = 8000/);
+assert.match(lease, /setInterval\(\(\) => \{ if \(!tick\(\)\) stop\(\); \}, PAGE_CARET_REFRESH_RETRY_MS\)/);
+assert.match(lease, /send\("preparePageCaretLease"/);
+assert.match(lease, /"adoptPageCaretLease"/);
+assert.match(lease, /"releasePageCaretLease"/);
+assert.match(lease, /if \(overlaySearchCaretMode\(\) !== "page"\) \{\s*params\.delete\(PAGE_CARET_NAME_UNTIL\)/);
 
+assert.match(frameCommands, /preparePageCaretLease: command\(\{ timeoutMs: 1200, mutating: true, transport: "main-world", capability: "base" \}\)/);
 assert.match(frameCommands, /adoptPageCaretLease: command\(\{ timeoutMs: 1200, mutating: true, transport: "main-world", capability: "base" \}\)/);
 assert.match(frameCommands, /releasePageCaretLease: command\(\{ timeoutMs: 1200, mutating: true, transport: "main-world", capability: "base" \}\)/);
 
+assert.match(background, /preparePageCaretLease: Object\.freeze\(\{ method: "preparePageCaret", phase: "prepare" \}\)/);
 assert.match(background, /adoptPageCaretLease: Object\.freeze\(\{ method: "adoptPageCaret", phase: "adopt" \}\)/);
 assert.match(background, /releasePageCaretLease: Object\.freeze\(\{ method: "releasePageCaret", phase: "release" \}\)/);
 assert.match(background, /spec\.method/);
 
+assert.match(frame, /createPageCaretLease/);
 assert.match(frame, /setOverlayCaretLeaseHandler/);
 assert.match(frame, /overlaySearchCaretMode\(\) === "page"/);
-assert.match(frame, /sendToContentFrame\(frame, "adoptPageCaretLease"/);
-assert.match(frame, /sendToContentFrame\(frame, "releasePageCaretLease"/);
+assert.match(frame, /pageCaret\.writeNameParams\(params\)/);
+assert.match(frame, /pageCaret\.adopt\(iframe\)/);
+assert.match(frame, /pageCaret\.refresh\(iframe\)/);
 assert.match(frame, /pinOverlaySearchCaret\(\)/);
 assert.doesNotMatch(frame, /FRAME_LOAD_SEARCH_FOCUS|setInterval\(.*150/);
+assert.match(frame, /function beginFrameLoading[\s\S]*pageCaret\.adopt\(iframe\)/);
+assert.ok(
+  frame.indexOf("pageCaret.adopt(iframe)") < frame.indexOf("iframe.src = navigationUrl"),
+  "page-caret prepare/stamp must run before the iframe src assignment"
+);
 
 assert.match(composer, /mode: "page"/);
 assert.match(composer, /claimPromptCaret\(e\.target\)/);
@@ -52,7 +86,41 @@ assert.match(sendRuntime, /target\.focus\?\.\(\)/, "isolated send-runtime must k
 
 assert.match(agents, /page-caret lease/);
 assert.match(agents, /without waiting for an armed restore generation/);
+assert.match(agents, /chatclub_page_caret_until/);
+assert.match(agents, /document_start/);
+assert.match(agents, /chatclub-page-caret/);
 assert.match(overlayCaret, /pin must not report success when focus does not land/);
 assert.match(overlayCaret, /a page claim must adopt the child-document caret lease/);
+assert.match(overlayCaret, /pin must not report success when document.hasFocus\(\) is false/);
+assert.match(overlayCaret, /a child stolen message must re-pin the prompt/);
 
-console.log("page caret lease tests passed");
+(async () => {
+  const { createPageCaretLease } = await import(pathToFileURL(path.join(root, "app/workspace/page-caret-lease.js")).href);
+  let mode = "page";
+  const sent = [];
+  const leaseApi = createPageCaretLease({
+    sendToContentFrame(_frame, command, data) {
+      sent.push({ command, data });
+      return { ok: true, documentToken: "doc-1" };
+    },
+    overlaySearchCaretMode: () => mode,
+    timeoutMs: 20
+  });
+  const params = new URLSearchParams("chatclub_webview=&app=ChatGPT");
+  leaseApi.writeNameParams(params);
+  assert.ok(Number(params.get("chatclub_page_caret_until")) > Date.now(), "page mode must stamp a future page-caret until");
+  assert.match(String(params.get("chatclub_page_caret_token") || ""), /./);
+  assert.equal(params.get("chatclub_webview"), "");
+  assert.equal(params.get("chatclub_focus_guard_until"), null);
+  mode = "overlay";
+  leaseApi.writeNameParams(params);
+  assert.equal(params.get("chatclub_page_caret_until"), null, "overlay mode must strip page-caret name params");
+  assert.equal(params.get("chatclub_page_caret_token"), null);
+  sent.length = 0;
+  leaseApi.adopt({ isConnected: false });
+  assert.equal(sent.length, 0, "overlay mode must not prepare a page-caret lease");
+  console.log("page caret lease tests passed");
+})().catch((error) => {
+  console.error(error?.stack || error);
+  process.exitCode = 1;
+});

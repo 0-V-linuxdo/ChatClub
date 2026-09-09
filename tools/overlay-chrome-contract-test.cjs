@@ -263,6 +263,8 @@ assert.match(agents, /must not clear that frame's `inert`/);
 assert.match(agents, /the titlebar search is the unique caret owner/);
 assert.match(agents, /a focused `\.prompt-input` is the page caret owner/);
 assert.match(agents, /page-caret lease/);
+assert.match(agents, /chatclub_page_caret_until/);
+assert.match(agents, /document_start/);
 assert.match(dom, /export function overlaySearchCaretMode/);
 assert.match(dom, /export function setOverlayCaretLeaseHandler/);
 assert.match(agents, /Prompt Library is a composer-anchored/);

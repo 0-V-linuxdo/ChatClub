@@ -68,7 +68,7 @@ const dataModule = (source) => import(`data:text/javascript;base64,${Buffer.from
     "app/runtime.js",
     "app/frame-bridge/controller.js"
   ].map(read).join("\n");
-  const workspace = `${read("app/workspace/controller.js")}\n${read("app/workspace/frame-controller.js")}`;
+  const workspace = `${read("app/workspace/controller.js")}\n${read("app/workspace/frame-controller.js")}\n${read("app/workspace/page-caret-lease.js")}`;
   const summary = read("app/summary/controller.js");
   const topicDelete = read("app/topic-delete/runtime.js");
   const contentEntry = read("content-src/content.js");
@@ -105,13 +105,16 @@ const dataModule = (source) => import(`data:text/javascript;base64,${Buffer.from
   assert.ok(frameCommands.FRAME_COMMAND_SPECS.getSummaryRuntimeState);
   assert.equal(frameCommands.FRAME_COMMAND_SPECS.prepareNavigationFocusGuard.transport, "main-world");
   assert.equal(frameCommands.FRAME_COMMAND_SPECS.adoptNavigationFocusGuard.transport, "main-world");
+  assert.equal(frameCommands.FRAME_COMMAND_SPECS.preparePageCaretLease.transport, "main-world");
   assert.equal(frameCommands.FRAME_COMMAND_SPECS.adoptPageCaretLease.transport, "main-world");
   assert.equal(frameCommands.FRAME_COMMAND_SPECS.releasePageCaretLease.transport, "main-world");
+  assert.equal(frameCommands.FRAME_COMMAND_SPECS.preparePageCaretLease.capability, "base");
   assert.equal(frameCommands.FRAME_COMMAND_SPECS.adoptPageCaretLease.capability, "base");
   assert.equal(frameCommands.FRAME_COMMAND_SPECS.releasePageCaretLease.capability, "base");
   assert.match(background, /new Set\(Object\.keys\(FRAME_COMMAND_SPECS\)\)/);
   assert.match(background, /executeMainWorldFrameCommand/);
   assert.match(background, /MAIN_WORLD_FRAME_COMMANDS/);
+  assert.match(background, /method: "preparePageCaret"/);
   assert.match(background, /method: "adoptPageCaret"/);
   assert.match(background, /spec\.method/);
   assert.match(background, /world: "MAIN"/);
@@ -157,13 +160,17 @@ const dataModule = (source) => import(`data:text/javascript;base64,${Buffer.from
   assert.doesNotMatch(workspace, /contentWindow\??\.postMessage/);
   assert.match(workspace, /sendToContentFrame\(\s*iframe,\s*"prepareNavigationFocusGuard"/);
   assert.match(workspace, /sendToContentFrame\(\s*iframe,\s*"adoptNavigationFocusGuard"/);
-  assert.match(workspace, /sendToContentFrame\(frame, "adoptPageCaretLease"/);
-  assert.match(workspace, /sendToContentFrame\(frame, "releasePageCaretLease"/);
+  assert.match(workspace, /sendToContentFrame\(frame, command, data, timeoutMs\)/);
+  assert.match(workspace, /send\("preparePageCaretLease"/);
+  assert.match(workspace, /sendToContentFrame\(\s*iframe,\s*"adoptPageCaretLease"/);
+  assert.match(workspace, /send\("releasePageCaretLease"/);
   assert.match(preloadEntry, /runtimes\.register\(NAVIGATION_FOCUS_GUARD_RUNTIME/);
   assert.doesNotMatch(preloadEntry, /window\[NAVIGATION_FOCUS_GUARD_RUNTIME\]/);
   assert.match(preloadEntry, /const prepare = \(message = \{\}\) =>/);
+  assert.match(preloadEntry, /const preparePageCaret = \(message = \{\}\) =>/);
   assert.match(preloadEntry, /const adoptPageCaret = \(message = \{\}\) =>/);
   assert.match(preloadEntry, /const releasePageCaret = \(message = \{\}\) =>/);
+  assert.match(preloadEntry, /consumePageCaretBootstrap/);
   assert.match(preloadEntry, /pageCaretLeaseActive/);
   assert.match(preloadEntry, /addEventListener\("focusin", onPageCaretFocusIn, true\)/);
   assert.match(summary, /delete runtimeConfig\.userscript/);

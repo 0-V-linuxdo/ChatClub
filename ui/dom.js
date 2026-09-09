@@ -218,6 +218,7 @@ let overlayCaretLeaseHandler = null;
 let overlayCaretPinFollow = 0;
 const OVERLAY_CARET_FRAME_POINTER_MS = 1000;
 const OVERLAY_CARET_PIN_FOLLOW_MAX = 3;
+const PAGE_CARET_MESSAGE_SOURCE = "chatclub-page-caret";
 
 function overlaySearchCaretPanel(field) {
   return field?.closest?.(".modal") || openModals[openModals.length - 1]?.panel || null;
@@ -316,6 +317,14 @@ function restoreOverlaySearchCaretSelection(field, owner) {
   }
 }
 
+function overlayCaretDocumentHasFocus() {
+  return typeof document.hasFocus !== "function" || document.hasFocus();
+}
+
+function overlayCaretPinHolds(field) {
+  return document.activeElement === field && overlayCaretDocumentHasFocus();
+}
+
 export function overlaySearchCaretMode() {
   return overlaySearchCaret?.mode || "";
 }
@@ -337,14 +346,14 @@ export function pinOverlaySearchCaret(followRemaining = OVERLAY_CARET_PIN_FOLLOW
     return false;
   }
   const active = document.activeElement;
-  if (active === field) return true;
+  if (overlayCaretPinHolds(field)) return true;
   if (owner.composing?.()) return false;
   const panel = owner.panel || overlaySearchCaretPanel(field);
   if (overlaySearchCaretShouldLeave(active, field, panel, owner)) {
     clearOverlaySearchCaret(true);
     return false;
   }
-  if (!overlaySearchCaretStolen(active, field, panel, owner)) return false;
+  if (active !== field && !overlaySearchCaretStolen(active, field, panel, owner)) return false;
   if (overlayCaretIsFrame(active)) {
     try { active.blur?.(); } catch {}
   }
@@ -352,7 +361,7 @@ export function pinOverlaySearchCaret(followRemaining = OVERLAY_CARET_PIN_FOLLOW
     try { field.focus(); } catch {}
   }
   restoreOverlaySearchCaretSelection(field, owner);
-  if (document.activeElement === field) return true;
+  if (overlayCaretPinHolds(field)) return true;
   scheduleOverlayCaretPinFollow(Number(followRemaining) > 0 ? Number(followRemaining) - 1 : 0);
   return false;
 }
@@ -365,6 +374,20 @@ function onOverlaySearchCaretFocusIn(event) {
   pinOverlaySearchCaret();
 }
 
+function onOverlaySearchCaretFocusOut(event) {
+  if (!overlaySearchCaret) return;
+  const field = overlaySearchCaret.field;
+  if (event?.target !== field && !field?.contains?.(event?.target)) return;
+  if (overlayCaretIsFrame(event.relatedTarget)) pinOverlaySearchCaret();
+}
+
+function onOverlayPageCaretStolen(event) {
+  const data = event?.data;
+  if (!data || data.source !== PAGE_CARET_MESSAGE_SOURCE || data.action !== "stolen") return;
+  if (overlaySearchCaretMode() !== "page") return;
+  pinOverlaySearchCaret();
+}
+
 function onOverlayCaretPointerDown(event) {
   if (event?.isTrusted !== true) return;
   if (overlayCaretIsFrame(event.target)) overlayCaretFramePointerAt = Date.now();
@@ -374,7 +397,11 @@ function ensureOverlaySearchCaretListeners() {
   if (overlaySearchCaretListening || typeof document.addEventListener !== "function") return;
   overlaySearchCaretListening = true;
   document.addEventListener("focusin", onOverlaySearchCaretFocusIn, true);
+  document.addEventListener("focusout", onOverlaySearchCaretFocusOut, true);
   document.addEventListener("pointerdown", onOverlayCaretPointerDown, true);
+  if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+    window.addEventListener("message", onOverlayPageCaretStolen);
+  }
 }
 
 export function claimOverlaySearchCaret(field, options = {}) {

@@ -22,6 +22,8 @@ assert.match(dom, /export function overlaySearchCaretMode/);
 assert.match(dom, /export function setOverlayCaretLeaseHandler/);
 assert.match(dom, /scheduleOverlayCaretPinFollow/);
 assert.match(dom, /document\.addEventListener\("focusin", onOverlaySearchCaretFocusIn, true\)/);
+assert.match(dom, /document\.addEventListener\("focusout", onOverlaySearchCaretFocusOut, true\)/);
+assert.match(dom, /window\.addEventListener\("message", onOverlayPageCaretStolen\)/);
 assert.match(tabSearch, /claimOverlaySearchCaret\(field, searchCaretOptions\(\)\)/);
 assert.match(tabSearch, /pinOverlaySearchCaret\(\)/);
 assert.match(history, /claimOverlaySearchCaret\(field, searchCaretOptions\(\)\)/);
@@ -110,6 +112,9 @@ function createWorld() {
       body,
       documentElement: html,
       activeElement: field,
+      hasFocus() {
+        return world.documentHasFocus !== false;
+      },
       addEventListener(type, handler, capture) {
         listeners.push({ type, handler, capture });
       },
@@ -121,6 +126,14 @@ function createWorld() {
       }
     }
   };
+  world.documentHasFocus = true;
+  const windowTarget = {
+    addEventListener(type, handler, capture) {
+      listeners.push({ type, handler, capture, target: "window" });
+    },
+    removeEventListener() {}
+  };
+  world.window = windowTarget;
   const rafQueue = [];
   world.rafQueue = rafQueue;
   world.flushRaf = () => {
@@ -129,6 +142,7 @@ function createWorld() {
   };
   const context = vm.createContext({
     document: world.document,
+    window: windowTarget,
     Boolean,
     Number,
     String,
@@ -435,6 +449,43 @@ function claimPrompt(world, extras = {}) {
   claimField(world);
   assert.equal(adopts, 0, "overlay search must not adopt the page caret lease");
   assert.equal(world.mode(), "overlay");
+  const stolen = world.listeners.find((entry) => entry.type === "message");
+  assert.ok(stolen, "overlay claim still installs the page-caret stolen listener");
+  world.document.activeElement = world.iframe;
+  const before = world.field.focusCalls;
+  stolen.handler({ data: { source: "chatclub-page-caret", action: "stolen" } });
+  assert.equal(world.field.focusCalls, before, "overlay mode must not re-pin from a page-caret stolen message");
+}
+
+{
+  const world = createPageWorld();
+  claimPrompt(world);
+  world.documentHasFocus = false;
+  world.document.activeElement = world.promptField;
+  const before = world.promptField.focusCalls;
+  assert.equal(world.pin(), false, "pin must not report success when document.hasFocus() is false");
+  assert.ok(world.promptField.focusCalls > before, "lost parent browsing context must still call field.focus");
+  assert.equal(world.mode(), "page", "a hasFocus miss must keep the page caret owner claimed");
+}
+
+{
+  const world = createPageWorld();
+  claimPrompt(world);
+  const focusout = world.listeners.find((entry) => entry.type === "focusout" && entry.capture === true);
+  assert.ok(focusout, "claiming must install a capturing focusout listener");
+  world.document.activeElement = world.iframe;
+  focusout.handler({ target: world.promptField, relatedTarget: world.iframe });
+  assert.equal(world.document.activeElement, world.promptField, "focusout onto an iframe must re-pin the prompt");
+}
+
+{
+  const world = createPageWorld();
+  claimPrompt(world);
+  const stolen = world.listeners.find((entry) => entry.type === "message");
+  assert.ok(stolen, "page claim must listen for child page-caret stolen messages");
+  world.document.activeElement = world.iframe;
+  stolen.handler({ data: { source: "chatclub-page-caret", action: "stolen" } });
+  assert.equal(world.document.activeElement, world.promptField, "a child stolen message must re-pin the prompt");
 }
 
 console.log("overlay caret lock tests passed");

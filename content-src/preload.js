@@ -26,6 +26,10 @@ function installPreload() {
   const NAVIGATION_FOCUS_GUARD_STORAGE_KEY = "chatclub_preferred_model_focus_guard_until";
   const NAVIGATION_FOCUS_GUARD_LEASE_MS = 180000;
   const PAGE_CARET_LEASE_MS = 180000;
+  const PAGE_CARET_STORAGE_KEY = "chatclub_page_caret_until";
+  const PAGE_CARET_NAME_UNTIL = "chatclub_page_caret_until";
+  const PAGE_CARET_NAME_TOKEN = "chatclub_page_caret_token";
+  const PAGE_CARET_MESSAGE_SOURCE = "chatclub-page-caret";
   const MAIN_WORLD_LOCATION_BRIDGE_VERSION = PRELOAD_IMPLEMENTATION_VERSION;
   const MAIN_WORLD_LOCATION_SOURCE = PROTOCOL.MAIN_WORLD_LOCATION_SOURCE;
   const DEEPSEEK_DELETE_SOURCE = PROTOCOL.DEEPSEEK_DELETE_SOURCE;
@@ -165,6 +169,62 @@ function installPreload() {
     };
   }
 
+  function consumePageCaretBootstrap() {
+    let expiresAt = 0;
+    let guardToken = "";
+    try {
+      const rawName = String(window.name || "");
+      const guard = rawName.match(/(?:^|&)chatclub_focus_guard_until=\d+(?:&chatclub_focus_guard_token=[^&]+)?$/);
+      const base = guard ? rawName.slice(0, guard.index) : rawName;
+      const suffix = guard ? rawName.slice(guard.index) : "";
+      const params = new URLSearchParams(base);
+      const until = params.get(PAGE_CARET_NAME_UNTIL);
+      const token = params.get(PAGE_CARET_NAME_TOKEN);
+      if (until || token) {
+        expiresAt = Math.max(expiresAt, Number(until) || 0);
+        guardToken = String(token || guardToken);
+        params.delete(PAGE_CARET_NAME_UNTIL);
+        params.delete(PAGE_CARET_NAME_TOKEN);
+        window.name = `${params.toString()}${suffix}`;
+      }
+    } catch {}
+    try {
+      const stored = String(sessionStorage.getItem(PAGE_CARET_STORAGE_KEY) || "");
+      try {
+        const parsed = JSON.parse(stored);
+        if (Number(parsed?.expiresAt) > expiresAt) {
+          expiresAt = Number(parsed.expiresAt);
+          guardToken = String(parsed.guardToken || guardToken);
+        }
+      } catch {
+        expiresAt = Math.max(expiresAt, Number(stored) || 0);
+      }
+      sessionStorage.removeItem(PAGE_CARET_STORAGE_KEY);
+    } catch {}
+    const now = Date.now();
+    if (!Number.isFinite(expiresAt) || expiresAt <= now) return { expiresAt: 0, guardToken: "" };
+    return {
+      expiresAt: Math.min(expiresAt, now + PAGE_CARET_LEASE_MS),
+      guardToken
+    };
+  }
+
+  function writePageCaretBootstrap(expiresAt, guardToken) {
+    try {
+      sessionStorage.setItem(PAGE_CARET_STORAGE_KEY, JSON.stringify({ expiresAt, guardToken }));
+    } catch {}
+    try {
+      const rawName = String(window.name || "");
+      const guard = rawName.match(/(?:^|&)chatclub_focus_guard_until=\d+(?:&chatclub_focus_guard_token=[^&]+)?$/);
+      const base = guard ? rawName.slice(0, guard.index) : rawName;
+      const suffix = guard ? rawName.slice(guard.index) : "";
+      const params = new URLSearchParams(base);
+      params.set(PAGE_CARET_NAME_UNTIL, String(expiresAt));
+      params.set(PAGE_CARET_NAME_TOKEN, guardToken);
+      window.name = `${params.toString()}${suffix}`;
+    } catch {}
+  }
+
   function installPreferredModelNavigationFocusGuardBridge() {
     const prepare = (message = {}) => {
       const now = Date.now();
@@ -220,14 +280,32 @@ function installPreload() {
         documentToken: window.__CHATCLUB_PREFERRED_MODEL_FOCUS_SHIELD__?.documentToken || ""
       };
     };
+    const preparePageCaret = (message = {}) => {
+      const result = adoptPageCaret(message);
+      if (result.ok && message.phase !== "adopt") {
+        try { writePageCaretBootstrap(result.expiresAt, result.guardToken); } catch {}
+      }
+      return result;
+    };
     const releasePageCaret = (message = {}) => {
       const guardToken = String(message.guardToken || "");
       try { window.__CHATCLUB_PREFERRED_MODEL_FOCUS_SHIELD__?.releasePageCaret?.(guardToken); } catch {}
+      try { sessionStorage.removeItem(PAGE_CARET_STORAGE_KEY); } catch {}
+      try {
+        const rawName = String(window.name || "");
+        const guard = rawName.match(/(?:^|&)chatclub_focus_guard_until=\d+(?:&chatclub_focus_guard_token=[^&]+)?$/);
+        const base = guard ? rawName.slice(0, guard.index) : rawName;
+        const suffix = guard ? rawName.slice(guard.index) : "";
+        const params = new URLSearchParams(base);
+        params.delete(PAGE_CARET_NAME_UNTIL);
+        params.delete(PAGE_CARET_NAME_TOKEN);
+        window.name = `${params.toString()}${suffix}`;
+      } catch {}
       return { ok: true, guardToken };
     };
     runtimes.register(NAVIGATION_FOCUS_GUARD_RUNTIME, {
       version: NAVIGATION_FOCUS_GUARD_BRIDGE_VERSION,
-      api: Object.freeze({ prepare, adoptPageCaret, releasePageCaret }),
+      api: Object.freeze({ prepare, preparePageCaret, adoptPageCaret, releasePageCaret }),
       dispose() {}
     });
   }
@@ -246,6 +324,12 @@ function installPreload() {
       && currentWindowFocus === previous.guardedWindowFocus
     ) {
       try { previous.refreshLease?.(); } catch {}
+      try {
+        const consumedPageCaret = consumePageCaretBootstrap();
+        if (consumedPageCaret.expiresAt > Date.now()) {
+          previous.adoptPageCaret?.(consumedPageCaret.expiresAt, consumedPageCaret.guardToken);
+        }
+      } catch {}
       return;
     }
     const consumedBootstrap = previous
@@ -263,8 +347,13 @@ function installPreload() {
     const releasedBootstrapGuardTokens = previous?.releasedBootstrapGuardTokens instanceof Set
       ? previous.releasedBootstrapGuardTokens
       : new Set();
-    let pageCaretExpiresAt = Math.max(0, Number(previous?.pageCaretExpiresAt) || 0);
-    let pageCaretToken = String(previous?.pageCaretToken || "");
+    const consumedPageCaret = consumePageCaretBootstrap();
+    let pageCaretExpiresAt = Math.max(
+      0,
+      Number(consumedPageCaret.expiresAt) || 0,
+      Number(previous?.pageCaretExpiresAt) || 0
+    );
+    let pageCaretToken = String(consumedPageCaret.guardToken || previous?.pageCaretToken || "");
     let pageCaretAllowDepth = 0;
     let pageCaretTrustedAt = 0;
     const releasedPageCaretTokens = previous?.releasedPageCaretTokens instanceof Set
@@ -382,6 +471,9 @@ function installPreload() {
       const target = event?.target;
       if (!target || target === document.body || target === document.documentElement) return;
       try { target.blur?.(); } catch {}
+      try {
+        window.parent?.postMessage({ source: PAGE_CARET_MESSAGE_SOURCE, action: "stolen" }, "*");
+      } catch {}
     };
     const markPageCaretTrustedPointer = (event) => {
       if (event?.isTrusted !== true || event?.type !== "pointerdown") return;
