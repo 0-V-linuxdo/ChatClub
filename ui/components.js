@@ -23,6 +23,9 @@ export function createCompactIconButton({ label, icon, onClick, className = "", 
 }
 
 export function createMenuButton({ label, icon, onClick, variant = "secondary", disabled = false, tooltipLabel = label, tooltipPlacement = "", tooltipId = "" }) {
+  void tooltipLabel;
+  void tooltipPlacement;
+  void tooltipId;
   let pointerHandled = false;
   const runCommand = (event) => {
     if (event.currentTarget?.disabled) return;
@@ -31,13 +34,10 @@ export function createMenuButton({ label, icon, onClick, variant = "secondary", 
     onClick?.(event);
   };
   return el("button", {
-    class: `button button-${variant} menu-button tooltip-trigger`,
+    class: `button button-${variant} menu-button`,
     type: "button",
     role: "menuitem",
     "aria-label": label,
-    "data-tooltip": tooltipLabel,
-    "data-tooltip-placement": tooltipPlacement || null,
-    "data-tooltip-id": tooltipId || null,
     disabled,
     onpointerdown: (event) => {
       if (event.button !== 0) return;
