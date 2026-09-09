@@ -211,6 +211,7 @@ const appSources = [
   "app/settings/controller.js",
   "app/pocket/controller.js",
   "app/history/controller.js",
+  "app/workspace/tab-search-controller.js",
   "app/summary/controller.js",
   "app/share/controller.js",
   "app/workspace/view-controller.js",
@@ -224,7 +225,9 @@ for (const [file, source] of appSources) {
 }
 
 assert.match(read("app/history/controller.js"), /viewerModal\(/);
+assert.match(read("app/workspace/tab-search-controller.js"), /viewerModal\(/);
 assert.doesNotMatch(read("app/history/controller.js"), /\bmodal\s*\(/);
+assert.doesNotMatch(read("app/workspace/tab-search-controller.js"), /\bmodal\s*\(/);
 assert.match(read("app/summary/controller.js"), /summary-panel overlay-surface/);
 assert.match(read("app/share/controller.js"), /share-panel overlay-surface/);
 assert.match(read("app/summary/controller.js"), /summary-window-button overlay-window-button/);
@@ -233,7 +236,11 @@ assert.match(read("app/settings/controller.js"), /settings-window-button overlay
 assert.match(read("app/pocket/controller.js"), /pocket-window-button overlay-window-button/);
 assert.match(read("app/pocket/controller.js"), /createViewerWindowChrome/);
 assert.match(read("app/history/controller.js"), /createViewerWindowChrome/);
+assert.match(read("app/workspace/tab-search-controller.js"), /createViewerWindowChrome/);
 assert.match(read("app/history/controller.js"), /from "\.\.\/\.\.\/ui\/viewer-window\.js"/);
+assert.match(read("app/workspace/tab-search-controller.js"), /from "\.\.\/\.\.\/ui\/viewer-window\.js"/);
+assert.match(read("app/workspace/tab-search-controller.js"), /workspace-tabs-search-window-button overlay-window-button/);
+assert.match(css, /\.modal\.workspace-tabs-search-modal \{[\s\S]*width:\s*var\(--overlay-width-workspace\)/);
 assert.doesNotMatch(read("app/settings/controller.js"), /viewer-window/);
 assert.match(read("app/settings/controller.js"), /classList\.toggle\("overlay-surface-fullscreen"\)/);
 assert.doesNotMatch(read("app/settings/controller.js"), /localStorage\.setItem\("chatclub\./);
@@ -244,7 +251,7 @@ assert.match(read("ui/viewer-window.js"), /overlay-viewer-resize-handle/);
 assert.doesNotMatch(read("ui/viewer-window.js"), /pocket-panel-resize-handle/);
 assert.match(read("app/summary/controller.js"), /overlay-panel-resize-handle overlay-panel-resize-handle-left/);
 assert.match(read("app/share/controller.js"), /overlay-panel-resize-handle overlay-panel-resize-handle-left/);
-assert.match(agents, /History detail content may reuse Pocket/);
+assert.match(agents, /History and Tabs search detail content may reuse Pocket/);
 assert.match(agents, /Prompt Library is a composer-anchored/);
 assert.match(agents, /Linear action menus may use `role="menu"`/);
 assert.match(agents, /bindLinearMenuKeyboard/);

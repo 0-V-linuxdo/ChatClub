@@ -191,7 +191,7 @@ const nativeBudgetReason = "Native entry closures are held to their exact curren
 const lazyBudgetReason = "The lazy controller remains outside the initial graph and its exact incremental static footprint is ratcheted.";
 const nativeBudgetFiles = {
   "app/main.js": 'import "./runtime.js";\nimport { value } from "../shared/value.js";\nglobalThis.__fixtureAppValue = value;\n',
-  "app/runtime.js": 'void import("./official-rules/service.js");\nvoid import("./history/controller.js");\nvoid import("./pocket/controller.js");\nvoid import("./prompt-focus/controller.js");\nvoid import("./settings/controller.js");\nvoid import("./share/controller.js");\nvoid import("./summary/controller.js");\n',
+  "app/runtime.js": 'void import("./official-rules/service.js");\nvoid import("./history/controller.js");\nvoid import("./pocket/controller.js");\nvoid import("./prompt-focus/controller.js");\nvoid import("./settings/controller.js");\nvoid import("./share/controller.js");\nvoid import("./summary/controller.js");\nvoid import("./workspace/tab-search-controller.js");\n',
   "app/lazy-common.js": "export const lazyCommon = true;\n",
   "app/official-rules/service.js": 'import { lazyCommon } from "../lazy-common.js";\nglobalThis.__fixtureOfficialRules = lazyCommon;\n',
   "app/history/controller.js": 'import { lazyCommon } from "../lazy-common.js";\nglobalThis.__fixtureHistory = lazyCommon;\n',
@@ -199,7 +199,8 @@ const nativeBudgetFiles = {
   "app/prompt-focus/controller.js": 'import { lazyCommon } from "../lazy-common.js";\nglobalThis.__fixturePromptFocus = lazyCommon;\n',
   "app/settings/controller.js": 'import { lazyCommon } from "../lazy-common.js";\nglobalThis.__fixtureSettings = lazyCommon;\n',
   "app/share/controller.js": 'import { lazyCommon } from "../lazy-common.js";\nglobalThis.__fixtureShare = lazyCommon;\n',
-  "app/summary/controller.js": 'import { lazyCommon } from "../lazy-common.js";\nglobalThis.__fixtureSummary = lazyCommon;\n'
+  "app/summary/controller.js": 'import { lazyCommon } from "../lazy-common.js";\nglobalThis.__fixtureSummary = lazyCommon;\n',
+  "app/workspace/tab-search-controller.js": 'import { lazyCommon } from "../lazy-common.js";\nglobalThis.__fixtureTabSearch = lazyCommon;\n'
 };
 const nativeBudgetSources = { ...baseFiles(), ...nativeBudgetFiles };
 const byteSum = (...files) => files.reduce(
@@ -244,7 +245,8 @@ const exactNativeEntryBudgets = {
     "app/prompt-focus/controller.js",
     "app/settings/controller.js",
     "app/share/controller.js",
-    "app/summary/controller.js"
+    "app/summary/controller.js",
+    "app/workspace/tab-search-controller.js"
   ].map((target) => [target, {
     owner: "app/runtime.js",
     maxFiles: 2,
@@ -260,7 +262,7 @@ const nativeBudgetResult = assertFixturePasses("native-entry-budget-exact", {
   verifyNativeEntryBudgets: true,
   nativeEntryBudgets: exactNativeEntryBudgets
 });
-assert.match(nativeBudgetResult.output, /3 initial-static entry closures and 7 lazy-boundary increments ratcheted/);
+assert.match(nativeBudgetResult.output, /3 initial-static entry closures and 8 lazy-boundary increments ratcheted/);
 
 const singleFileOfficialRulesSource = "globalThis.__fixtureOfficialRules = true;\n";
 const singleFileOfficialRulesBytes = Buffer.byteLength(singleFileOfficialRulesSource);

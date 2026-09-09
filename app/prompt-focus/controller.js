@@ -8,6 +8,23 @@ function isFrameTarget(target) {
   return Boolean(target?.classList?.contains?.("chat-frame") || target?.nodeName === "IFRAME");
 }
 
+function isOverlayTarget(target) {
+  let node = target;
+  while (node) {
+    const classes = node.classList;
+    if (
+      classes?.contains?.("modal")
+      || classes?.contains?.("modal-backdrop")
+      || classes?.contains?.("workspace-tabs-sidebar-search")
+      || classes?.contains?.("workspace-tabs-sidebar-search-input")
+    ) {
+      return true;
+    }
+    node = node.parentNode;
+  }
+  return false;
+}
+
 function focusPromptInput(focusInput) {
   try {
     if (typeof focusInput === "function") {
@@ -62,10 +79,11 @@ function createPromptFocusController({ isOptionsPage = false, focusInput } = {})
     const prompt = promptNode();
     if (!prompt?.isConnected || (!force && document.activeElement === prompt)) return;
     if (!force && isFrameTarget(document.activeElement)) return;
+    if (!force && isOverlayTarget(document.activeElement)) return;
     focusPromptInput(focusInput);
   };
   const onFocusChange = (event) => {
-    if (!pending || isPromptTarget(event?.target) || isFrameTarget(event?.target)) return;
+    if (!pending || isPromptTarget(event?.target) || isFrameTarget(event?.target) || isOverlayTarget(event?.target)) return;
     if (event?.target === window) return restoreIfNeeded(true);
     scheduleTask(restoreIfNeeded);
   };

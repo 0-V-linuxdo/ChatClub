@@ -1,16 +1,16 @@
+import { groupByDate, timestamp } from "../../shared/date-groups.js";
 import { STORAGE_KEYS } from "../../shared/constants.js";
 import { t } from "../../shared/i18n.js";
 import {
   framesFromSummaryPreviewItems,
   fullTextMessagesHavePair,
-  leftoverWorkspaceTabFullTextHits,
   matchesFullTextQuery,
   mergeWorkspaceTabFullTextFrames,
   normalizeWorkspaceTabFullTextStore,
   pruneWorkspaceTabFullTextStore,
   removeWorkspaceTabFullText,
-  uniqueWorkspaceTabFullTextHits,
   upsertWorkspaceTabFullText,
+  workspaceIdsMatchingFullText,
   workspaceTabFullTextFramesEqual
 } from "../../shared/workspace-tab-fulltext.js";
 import { isStorageQuotaError } from "../../shared/storage-schema.js";
@@ -18,7 +18,7 @@ import { storageGet, storageSet } from "../../shared/storage-adapter.js";
 import { el, input } from "../../ui/dom.js";
 import { createSvgIcon } from "../../ui/icons.js";
 
-export { workspaceIdsMatchingFullText } from "../../shared/workspace-tab-fulltext.js";
+export { workspaceIdsMatchingFullText };
 
 export async function loadRecordFullTextEnabled() {
   const options = await storageGet(STORAGE_KEYS.options);
@@ -125,7 +125,7 @@ export function renderWorkspaceTabSearchField({ query, fullTextEnabled, onInput,
   );
 }
 
-function highlightQuery(text, query) {
+export function highlightQuery(text, query) {
   const value = String(text || "");
   const needle = String(query || "").trim();
   if (!needle) return [value];
@@ -144,43 +144,81 @@ function highlightQuery(text, query) {
   return nodes.length ? nodes : [value];
 }
 
-function searchHitCard(hit, query, onActivate) {
-  const sources = Array.isArray(hit.appNames) ? hit.appNames.filter(Boolean) : [];
-  return el("article", {
-    class: "ui-card pocket-entry workspace-tabs-search-hit",
-    onclick: () => onActivate?.(hit)
-  },
-    el("header", { class: "pocket-entry-header" },
-      el("div", { class: "pocket-entry-titleblock" },
-        el("div", { class: "pocket-entry-title" },
-          el("strong", {}, ...highlightQuery(hit.title || hit.appName || t("workspace.tabs.untitled", { index: 1 }), query))
-        )
-      ),
-      sources.length ? el("div", { class: "pocket-entry-meta" },
-        el("span", { class: "pocket-entry-source" }, sources.join(" · "))
-      ) : null
-    )
-  );
+function workspaceIdOf(value) {
+  return String(value?.workspaceId || "").trim();
 }
 
-export function renderWorkspaceTabSearchHits({ query, store, items, fullTextEnabled, onActivate }) {
+export function workspaceSearchRecordTime(record = {}) {
+  return timestamp(record.viewedAt)
+    ?? timestamp(record.updatedAt)
+    ?? timestamp(record.createdAt)
+    ?? timestamp(record.detachedAt);
+}
+
+export function collectWorkspaceSearchRecords({
+  items = [],
+  store = {},
+  query = "",
+  fullTextEnabled = false,
+  labelOf
+} = {}) {
   const needle = String(query || "").trim();
-  if (!needle) return null;
-  if (!fullTextEnabled) {
-    return el("div", { class: "workspace-tabs-search-hint" }, t("workspace.tabs.fullTextDisabled"));
+  const fullTextIds = needle && fullTextEnabled
+    ? new Set(workspaceIdsMatchingFullText(store, needle))
+    : new Set();
+  const records = [];
+  const seen = new Set();
+  const titleOf = (item, index) => {
+    if (typeof labelOf === "function") {
+      try { return String(labelOf(item, index) || "").trim(); } catch { /* use stored titles */ }
+    }
+    return String(item?.topicTitle || item?.title || "").trim();
+  };
+  (Array.isArray(items) ? items : []).forEach((item, index) => {
+    const id = workspaceIdOf(item);
+    if (!id || seen.has(id)) return;
+    const title = titleOf(item, index);
+    const titleMatch = !needle || itemMatchesTitleQuery(item, needle, title);
+    if (needle && !titleMatch && !fullTextIds.has(id)) return;
+    seen.add(id);
+    const stored = store?.[id];
+    records.push({
+      workspaceId: id,
+      title: title || String(stored?.topicTitle || "").trim(),
+      live: item.live === true,
+      current: item.current === true,
+      tabId: item.tabId ?? null,
+      appIds: Array.isArray(item.appIds) ? item.appIds.filter(Boolean) : [],
+      viewedAt: item.viewedAt,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt || stored?.updatedAt,
+      detachedAt: item.detachedAt,
+      fromTab: true
+    });
+  });
+  if (fullTextEnabled) {
+    for (const stored of Object.values(normalizeWorkspaceTabFullTextStore(store))) {
+      const id = workspaceIdOf(stored);
+      if (!id || seen.has(id)) continue;
+      const title = String(stored.topicTitle || "").trim();
+      const titleMatch = !needle || matchesFullTextQuery(needle, [title]);
+      if (needle && !titleMatch && !fullTextIds.has(id)) continue;
+      seen.add(id);
+      records.push({
+        workspaceId: id,
+        title,
+        live: false,
+        current: false,
+        tabId: null,
+        appIds: (stored.frames || []).map((frame) => frame.appId).filter(Boolean),
+        updatedAt: stored.updatedAt,
+        fromTab: false
+      });
+    }
   }
-  const leftover = leftoverWorkspaceTabFullTextHits(store, needle, items);
-  if (!leftover.length) {
-    return uniqueWorkspaceTabFullTextHits(store, needle, items).length
-      ? null
-      : el("div", { class: "workspace-tabs-search-hint" }, t("workspace.tabs.fullTextEmpty"));
-  }
-  return el("section", { class: "workspace-tabs-search-hits", "aria-label": t("workspace.tabs.fullTextHits") },
-    el("div", { class: "workspace-tabs-sidebar-divider", role: "separator" },
-      el("span", { class: "workspace-tabs-sidebar-divider-label" }, t("workspace.tabs.fullTextHits"))
-    ),
-    el("div", { class: "workspace-tabs-search-hit-list" },
-      leftover.map((hit) => searchHitCard(hit, needle, onActivate))
-    )
-  );
+  return records.sort((left, right) => (workspaceSearchRecordTime(right) || 0) - (workspaceSearchRecordTime(left) || 0));
+}
+
+export function groupWorkspaceSearchRecords(records = [], now = Date.now()) {
+  return groupByDate(records, workspaceSearchRecordTime, now, "workspace.tabs");
 }

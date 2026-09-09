@@ -256,7 +256,7 @@ globalThis.document = {
   assert.match(source, /WORKSPACE_TABS_SIDEBAR_PINNED_KEY/, "pinned tabs must persist independently of live order");
   assert.match(source, /Boolean\(item\.pinned\) !== Boolean\(target\.pinned\)/, "pinned and unpinned tabs must not mix while dragging");
   assert.match(source, /workspace-tabs-sidebar-search/, "ChatClub Tabs must expose a search field");
-  assert.match(source, /function openSearch\(/, "the topbar Search control must open and focus the sidebar search field");
+  assert.match(source, /function openSearch\(/, "the sidebar Search field can still be focused locally");
   assert.match(source, /setSearchQuery/, "title search must filter the sidebar list");
   assert.match(source, /forgetWorkspaceTabFullText/, "deleting a tab must drop its recorded full text");
   assert.match(css, /\.workspace-tabs-sidebar-search-input/, "the search field must be styled in the sidebar");
@@ -272,12 +272,9 @@ globalThis.document = {
   assert.match(tabSearch, /keyCode === 229/, "IME keydown must mark composition before the first composing input");
   assert.match(source, /searchComposing/, "sidebar rebuilds must wait until IME composition ends");
   assert.doesNotMatch(tabSearch, /class: "input workspace-tabs-sidebar-search-input"/);
-  assert.match(css, /\.workspace-tabs-search-hit/, "full-text hits must reuse Pocket card chrome");
-  assert.match(tabSearch, /leftoverWorkspaceTabFullTextHits/, "Full text leftover must group by workspaceId");
-  assert.match(tabSearch, /uniqueWorkspaceTabFullTextHits/);
-  assert.doesNotMatch(tabSearch, /pocket-message-grid/, "search hit cards must not repeat pair bodies");
-  assert.match(source, /openWorkspaceHistory/, "search activation must open the existing History viewer");
-  assert.match(source, /function previewSearchWorkspace/);
+  assert.doesNotMatch(source, /function previewSearchWorkspace/, "topbar Search must not bounce sidebar rows into History");
+  assert.doesNotMatch(source, /renderWorkspaceTabSearchHits/, "leftover Full text cards must leave the sidebar");
+  assert.doesNotMatch(source, /openWorkspaceHistory/, "the sidebar must not open History from local find-in-list");
   assert.match(icons, /search:\s*\[/, "the sidebar search field must use the Lucide search glyph");
   const { createWorkspaceTabsSidebarController } = await import("../app/workspace/tabs-sidebar-controller.js");
   const memory = new Map();
@@ -1212,10 +1209,7 @@ globalThis.document = {
   }
 
   {
-    const previews = [];
-    const fixture = controller({
-      openWorkspaceHistory: (payload) => { previews.push(payload); }
-    });
+    const fixture = controller();
     await fixture.api.refresh();
     fixture.api.setOpen(true);
     fixture.api.setSearchQuery("Closed");
@@ -1224,13 +1218,10 @@ globalThis.document = {
     assert.ok(row, "filtered search results must keep an activatable tab row");
     row.click();
     assert.equal(
-      fixture.calls.filter((call) => call.action === "focusWorkspaceTab" || call.action === "openWorkspaceTab").length,
-      0,
-      "clicking a search result must not activate the live tab"
+      fixture.calls.filter((call) => call.action === "openWorkspaceTab").length,
+      1,
+      "clicking a sidebar find-in-list result must open that tab"
     );
-    assert.equal(previews.length, 1, "clicking a search result must pin History to that workspace");
-    assert.equal(previews[0].workspaceId, "page-cccccccccccc");
-    assert.equal(previews[0].topicTitle, "Closed research");
   }
 
   {
@@ -1270,7 +1261,7 @@ globalThis.document = {
     fixture.api.setOpen(false);
     assert.equal(fixture.api.isOpen(), false);
     fixture.api.openSearch();
-    assert.equal(fixture.api.isOpen(), true, "Search must open the ChatClub Tabs sidebar");
+    assert.equal(fixture.api.isOpen(), true, "sidebar openSearch must still open ChatClub Tabs locally");
   }
 
   {

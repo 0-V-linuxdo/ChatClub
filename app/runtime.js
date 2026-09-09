@@ -289,11 +289,13 @@ const appContext = Object.freeze({
 const optimizeController = createOptimizeController(appContext);
 let pocketController = null;
 let historyController = null;
+let tabSearchController = null;
 let summaryController = null;
 let shareController = null;
 let settingsController = null;
 let pocketControllerPromise = null;
 let historyControllerPromise = null;
+let tabSearchControllerPromise = null;
 let summaryControllerPromise = null;
 let shareControllerPromise = null;
 let settingsControllerPromise = null;
@@ -383,7 +385,7 @@ const workspaceTabsSidebarController = attachWorkspaceTabsSidebarController({
   fallbackFaviconUrl,
   effectiveFaviconUrl,
   savePagesToPocket: (...args) => ensurePocketController().then((pocket) => pocket.savePagesToPocket(...args)),
-  collectLivePreview: () => ensureSummaryController().then((summary) => summary.collectWorkspacePreviewItems()), openWorkspaceHistory: (payload) => ensureHistoryController().then((history) => history?.openWorkspaceConversation?.(payload)).catch(() => {})
+  collectLivePreview: () => ensureSummaryController().then((summary) => summary.collectWorkspacePreviewItems())
 });
 const {
   renderRuntimeBootstrapFailure,
@@ -397,7 +399,9 @@ const {
 });
 function toggleWorkspaceTabsSidebar() { workspaceTabsSidebarController.toggle(); }
 function isWorkspaceTabsSidebarOpen() { return workspaceTabsSidebarController.isOpen(); }
-function openWorkspaceTabsSearch() { workspaceTabsSidebarController.openSearch(); }
+function openWorkspaceTabsSearch() {
+  ensureTabSearchController().then((search) => search?.openSearchPanel?.()).catch((error) => lazyControllerError("Search", error));
+}
 const workspacePromptHandoffController = createWorkspacePromptHandoffController({
   api: extensionApi(), requestBackground, composer: composerController, workspace: workspaceController,
   appCatalog: allApps, workspaceGeneration: workspaceSessionStore.generation,
@@ -524,6 +528,32 @@ function ensureHistoryController() {
   return historyControllerPromise;
 }
 
+function ensureTabSearchController() {
+  if (tabSearchController) return Promise.resolve(tabSearchController);
+  if (!tabSearchControllerPromise) {
+    tabSearchControllerPromise = import("./workspace/tab-search-controller.js")
+      .then(({ createTabSearchController }) => {
+        tabSearchController = createTabSearchController({
+          requestBackground,
+          toast,
+          svgIcon,
+          compactIconButton,
+          setFramePointerBlockedForOverlay: workspaceController.setFramePointerBlockedForOverlay,
+          faviconPort: { ...faviconService, appById },
+          inferAppName,
+          appById,
+          currentWorkspace: () => ({ layoutName: state.temporaryLayoutPreset?.name || "", groups: state.groups, topicTitle: state.topicTitle })
+        });
+        return tabSearchController;
+      })
+      .catch((error) => {
+        tabSearchControllerPromise = null;
+        throw error;
+      });
+  }
+  return tabSearchControllerPromise;
+}
+
 function ensureSummaryController() {
   if (summaryController) return Promise.resolve(summaryController);
   if (!summaryControllerPromise) {
@@ -551,7 +581,10 @@ function ensureSummaryController() {
         recordFunctionalAnomaly,
         persistWorkspaceTabFullText: async (payload) => {
           const result = await persistWorkspaceTabFullTextFromPreview(payload);
-          if (result?.saved && result.unchanged !== true) historyController?.notifyFullTextChanged?.();
+          if (result?.saved && result.unchanged !== true) {
+            historyController?.notifyFullTextChanged?.();
+            tabSearchController?.notifyFullTextChanged?.();
+          }
           return result;
         },
         loadWorkspaceTabFullText: loadWorkspaceTabFullTextStore,

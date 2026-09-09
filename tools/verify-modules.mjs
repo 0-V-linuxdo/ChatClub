@@ -36,7 +36,8 @@ const REQUIRED_APP_LAZY_BOUNDARIES = Object.freeze([
   "app/prompt-focus/controller.js",
   "app/settings/controller.js",
   "app/share/controller.js",
-  "app/summary/controller.js"
+  "app/summary/controller.js",
+  "app/workspace/tab-search-controller.js"
 ]);
 const DEFAULT_AUTHOR_ESM_MAX_BYTES = 64 * 1024;
 const generatedArtifactFileSet = new Set(GENERATED_ARTIFACT_FILES);

@@ -7,6 +7,14 @@
     "kind": "test-only",
     "reason": "Pair-grain full-text search remains the engine under unique workspace grouping, and regressions assert it still matches every overlapping turn."
   },
+  "shared/workspace-tab-fulltext.js#uniqueWorkspaceTabFullTextHits": {
+    "kind": "test-only",
+    "reason": "Workspace-id grouping regressions keep unique Full text hits as a named seam now that the Tabs search popup owns leftover recency rows."
+  },
+  "shared/workspace-tab-fulltext.js#leftoverWorkspaceTabFullTextHits": {
+    "kind": "test-only",
+    "reason": "Full-text leftover regressions still assert forgotten workspace rows after the sidebar dropped its leftover card section."
+  },
   "app/workspace/tabs-sidebar-controller.js#createWorkspaceTabsSidebarController": {
     "kind": "test-only",
     "reason": "Remembered ChatClub-tab sidebar regressions inject storage, catalog, overlay-dismissal, and delete-confirmation seams without going through the runtime attach helper."

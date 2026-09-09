@@ -22,7 +22,6 @@ import {
   loadRecordFullTextEnabled,
   loadWorkspaceTabFullTextStore,
   renderWorkspaceTabSearchField,
-  renderWorkspaceTabSearchHits,
   workspaceIdsMatchingFullText
 } from "./tab-search.js";
 import {
@@ -194,8 +193,7 @@ export function createWorkspaceTabsSidebarController({
   collectLivePreview,
   document: ownerDocument = globalThis.document,
   openConfirmationAction = defaultOpenConfirmationAction,
-  createIcon = createSvgIcon,
-  openWorkspaceHistory
+  createIcon = createSvgIcon
 } = {}) {
   if (typeof requestBackground !== "function") {
     throw new TypeError("Workspace tabs sidebar requires requestBackground().");
@@ -514,16 +512,6 @@ export function createWorkspaceTabsSidebarController({
     setItems(response?.tabs);
     refreshSearchContext().catch(() => {});
     return currentItems();
-  }
-
-  function previewSearchWorkspace(item = {}) {
-    const workspaceId = workspaceIdValue(item.workspaceId);
-    if (!searchQuery.trim() || !workspaceId || typeof openWorkspaceHistory !== "function") return false;
-    openWorkspaceHistory({
-      workspaceId,
-      topicTitle: String(item.topicTitle || "").trim() || itemDisplayLabel(item)
-    });
-    return true;
   }
 
   async function requestSidebarBackground(action, payload = {}, retries = 1) {
@@ -1320,7 +1308,7 @@ export function createWorkspaceTabsSidebarController({
         suppressActivate = false;
         return true;
       },
-      activateTab: (item) => previewSearchWorkspace(item) ? Promise.resolve() : activateTab(item),
+      activateTab,
       bindItemDrag,
       actionCount,
       actionNodes,
@@ -1415,20 +1403,6 @@ export function createWorkspaceTabsSidebarController({
 
   function renderSidebar() {
     if (!open) return null;
-    const query = searchQuery.trim();
-    const hits = query
-      ? renderWorkspaceTabSearchHits({
-        query,
-        store: fullTextStore,
-        items,
-        fullTextEnabled: recordFullTextEnabled,
-        onActivate: (hit) => {
-          if (previewSearchWorkspace(hit)) return;
-          const item = items.find((entry) => workspaceIdValue(entry.workspaceId) === workspaceIdValue(hit.workspaceId));
-          if (item) activateTab(item).catch(() => {});
-        }
-      })
-      : null;
     return el("aside", {
       id: WORKSPACE_TABS_SIDEBAR_ID,
       class: "workspace-tabs-sidebar",
@@ -1437,10 +1411,9 @@ export function createWorkspaceTabsSidebarController({
     },
     renderSidebarHeader(),
     renderSearchBar(),
-    items.length || query || folders.length
+    items.length || searchQuery.trim() || folders.length
       ? renderSidebarList()
       : el("div", { class: "workspace-tabs-sidebar-empty" }, t("workspace.tabs.empty")),
-    hits,
     el("div", {
       class: "workspace-tabs-sidebar-resize",
       role: "separator",

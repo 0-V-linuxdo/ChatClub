@@ -580,7 +580,7 @@ function event(type, properties = {}) {
     const wrapperNames = ["editorModal", "viewerModal", "taskModal", "confirmationModal", "openConfirmationAction"];
     const expectedInventory = new Map([
       ["editorModal", 13],
-      ["viewerModal", 5],
+      ["viewerModal", 6],
       ["taskModal", 1],
       ["confirmationModal", 0],
       ["openConfirmationAction", 15]
@@ -599,8 +599,8 @@ function event(type, properties = {}) {
       wrapperNames.reduce((total, wrapperName) => (
         total + occurrences(allAppSource, new RegExp(`\\b${wrapperName}\\s*\\(`, "g"))
       ), 0),
-      34,
-      "all thirty-four app overlay call sites must use a typed wrapper or openConfirmationAction"
+      35,
+      "all thirty-five app overlay call sites must use a typed wrapper or openConfirmationAction"
     );
 
     for (let index = 0; index < appFiles.length; index += 1) {
@@ -635,6 +635,7 @@ function event(type, properties = {}) {
       ["app/prompt-library/controller.js", "openPromptLibraryDialog", "viewerModal", "Prompt Library manager"],
       ["app/pocket/controller.js", "openPocketPanel", "viewerModal", "Pocket history viewer"],
       ["app/history/controller.js", "openHistoryPanel", "viewerModal", "Prompt History viewer"],
+      ["app/workspace/tab-search-controller.js", "openSearchPanel", "viewerModal", "Tabs search viewer"],
       ["app/optimize/controller.js", "openOptimizeCompareDialog", "taskModal", "prompt optimization task"],
       ["app/settings/import-export.js", "openFullResetDialog", "openConfirmationAction", "full reset confirmation"],
       ["app/settings/import-export.js", "openImportConfirmDialog", "editorModal", "import confirmation"],

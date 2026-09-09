@@ -28,8 +28,10 @@ assert.ok(
 assert.match(composerSource, /onfocus:e=>!document\.documentElement\.dataset\.p&&expandInput\(e\.target\)/);
 assert.match(functionSource(composerSource, "handlePointerDown"), /if \(inputNode\.value\)/);
 assert.match(focusControllerSource, /event\.type === "pointerdown" \|\| \(event\.type === "keydown"/);
-assert.match(focusControllerSource, /isFrameTarget\(document\.activeElement\)/);
-assert.match(focusControllerSource, /isFrameTarget\(event\?\.target\)/);
+assert.match(focusControllerSource, /isOverlayTarget\(document\.activeElement\)/);
+assert.match(focusControllerSource, /isOverlayTarget\(event\?\.target\)/);
+assert.match(focusControllerSource, /contains\?\.\("modal"\)/);
+assert.match(focusControllerSource, /workspace-tabs-sidebar-search-input/);
 assert.match(frameController, /document\.documentElement\.dataset\.p/);
 assert.match(viewController, /inert: true/);
 assert.match(viewController, /tabindex: "-1"/);
@@ -105,6 +107,13 @@ workspace.document.activeElement = iframe;
 workspace.listeners.get("focusin")({ target: iframe });
 workspace.timers.shift()?.();
 assert.equal(focusCalls, 2, "iframe focusin must not steal a later copy or caret click");
+const modalInput = Object.assign(new MockNode(), {
+  classList: { contains(name) { return name === "modal"; } }
+});
+workspace.document.activeElement = modalInput;
+workspace.listeners.get("focusin")({ target: modalInput });
+workspace.timers.shift()?.();
+assert.equal(focusCalls, 2, "typed modal focus must not be pulled back to the prompt");
 workspace.document.activeElement = iframe;
 workspace.listeners.get("load")({ target: iframe });
 workspace.timers.at(-1)?.();

@@ -530,8 +530,8 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   assert.match(modelSource, /export function workspacePreviewHistoryItem/);
   assert.match(modelSource, /export function promptHistoryItemMatchesWorkspace/);
   assert.match(modelSource, /export function workspaceConversationPages/);
-  assert.match(runtimeSource, /openWorkspaceConversation/);
-  assert.match(runtimeSource, /openWorkspaceHistory:/);
+  assert.match(panelSource, /function openWorkspaceConversation/);
+  assert.doesNotMatch(runtimeSource, /openWorkspaceHistory:/);
   assert.match(panelSource, /workspacePreviewPinned/);
   assert.match(panelSource, /refreshOpenHistory\(\{ retryLive: !pinned \}\)/);
   assert.match(panelSource, /if \(!pinned\) \{\s*activeItemId = ""/);
