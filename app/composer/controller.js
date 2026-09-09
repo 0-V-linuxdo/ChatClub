@@ -11,6 +11,7 @@ import {
   claimOverlaySearchCaret,
   claimTopmostPopoverEscape,
   el,
+  pageCaretHoldActive,
   pinOverlaySearchCaret,
   releaseOverlaySearchCaret,
   scheduleFrameOwnedBlurDismissal,
@@ -988,13 +989,14 @@ export function createComposerController(dependencies = {}) {
     const inputNode = event.currentTarget;
     if (event.target?.isConnected === false) {
       releaseOverlaySearchCaret(inputNode);
-      collapseInput(inputNode);
+      if (pageCaretHoldActive()) pinOverlaySearchCaret();
+      else collapseInput(inputNode);
       return;
     }
     const shell = inputNode?.closest?.(".prompt-shell");
     if (focusRemainsInPromptShell(shell, event.relatedTarget)) return;
     const settle = () => {
-      if (pinOverlaySearchCaret() || promptComposing) return;
+      if (pinOverlaySearchCaret() || promptComposing || pageCaretHoldActive()) return;
       collapseInput(inputNode);
     };
     if (typeof requestAnimationFrame === "function") requestAnimationFrame(settle);
@@ -1006,7 +1008,7 @@ export function createComposerController(dependencies = {}) {
     if (focusRemainsInPromptShell(shell, event.relatedTarget)) return;
     const inputNode = shell?.querySelector?.(".prompt-input");
     const settle = () => {
-      if (pinOverlaySearchCaret() || promptComposing) return;
+      if (pinOverlaySearchCaret() || promptComposing || pageCaretHoldActive()) return;
       if (inputNode?.classList?.contains("prompt-input-expanded")) collapseInput(inputNode);
     };
     if (typeof requestAnimationFrame === "function") requestAnimationFrame(settle);

@@ -19,6 +19,7 @@ assert.match(dom, /export function claimOverlaySearchCaret/);
 assert.match(dom, /export function pinOverlaySearchCaret/);
 assert.match(dom, /export function releaseOverlaySearchCaret/);
 assert.match(dom, /export function overlaySearchCaretMode/);
+assert.match(dom, /export function pageCaretHoldActive/);
 assert.match(dom, /export function setOverlayCaretLeaseHandler/);
 assert.match(dom, /scheduleOverlayCaretPinFollow/);
 assert.match(dom, /document\.addEventListener\("focusin", onOverlaySearchCaretFocusIn, true\)/);
@@ -33,11 +34,13 @@ assert.doesNotMatch(history, /restoreSearchFieldAfterFrameLoad|FRAME_LOAD_SEARCH
 assert.match(frame, /prepareFrameNavigationFocusGuard[\s\S]*document\.querySelector\("\.modal"\)/);
 assert.match(composer, /claimOverlaySearchCaret/);
 assert.match(composer, /mode: "page"/);
+assert.match(composer, /pageCaretHoldActive\(\)/);
 assert.match(composer, /claimPromptCaret\(e\.target\)/);
 assert.match(composer, /oncompositionstart/);
 assert.match(composer, /oncompositionend/);
 assert.match(agents, /the titlebar search is the unique caret owner/);
 assert.match(agents, /a focused `\.prompt-input` is the page caret owner/);
+assert.match(agents, /page input session hold/);
 assert.match(frame, /function restorePromptInputFocus/);
 assert.match(frame, /setOverlayCaretLeaseHandler/);
 assert.match(frame, /adoptPageCaretLease/);
@@ -198,6 +201,7 @@ globalThis.claimOverlaySearchCaret = claimOverlaySearchCaret;
 globalThis.pinOverlaySearchCaret = pinOverlaySearchCaret;
 globalThis.releaseOverlaySearchCaret = releaseOverlaySearchCaret;
 globalThis.overlaySearchCaretMode = overlaySearchCaretMode;
+globalThis.pageCaretHoldActive = pageCaretHoldActive;
 globalThis.setOverlayCaretLeaseHandler = setOverlayCaretLeaseHandler;`,
     context
   );
@@ -205,6 +209,7 @@ globalThis.setOverlayCaretLeaseHandler = setOverlayCaretLeaseHandler;`,
   world.pin = context.pinOverlaySearchCaret;
   world.release = context.releaseOverlaySearchCaret;
   world.mode = context.overlaySearchCaretMode;
+  world.hold = context.pageCaretHoldActive;
   world.setLeaseHandler = context.setOverlayCaretLeaseHandler;
   return world;
 }
@@ -332,11 +337,21 @@ function createPageWorld() {
   };
   const shell = {
     className: "prompt-shell",
+    classList: { contains(name) { return name === "prompt-shell"; } },
     contains(node) { return node === world.promptField || node === world.send; }
   };
   world.shell = shell;
-  world.send = { nodeName: "BUTTON", className: "prompt-send-button" };
-  world.topbarButton = { nodeName: "BUTTON", className: "icon-button", _inPanel: false };
+  world.send = {
+    nodeName: "BUTTON",
+    className: "prompt-send-button",
+    closest(selector) { return selector === ".prompt-shell" ? shell : null; }
+  };
+  world.topbarButton = {
+    nodeName: "BUTTON",
+    className: "icon-button",
+    _inPanel: false,
+    closest() { return null; }
+  };
   world.promptField = {
     isConnected: true,
     value: "hello",
@@ -396,9 +411,11 @@ function claimPrompt(world, extras = {}) {
   let left = false;
   claimPrompt(world, { onLeave: () => { left = true; } });
   world.document.activeElement = world.topbarButton;
-  assert.equal(world.pin(), false, "a topbar control must leave the page caret owner");
-  assert.equal(left, true);
-  assert.notEqual(world.document.activeElement, world.promptField);
+  assert.equal(world.pin(), true, "load-driven focus on a topbar control must steal, not leave, while the page hold is on");
+  assert.equal(left, false);
+  assert.equal(world.document.activeElement, world.promptField);
+  assert.equal(world.hold(), true, "a page hold must survive a load-driven chrome steal");
+  assert.equal(world.iframe.inert, true, "a load-driven chrome steal must keep chat-frames inert");
 }
 
 {
@@ -471,8 +488,12 @@ function claimPrompt(world, extras = {}) {
   assert.equal(adopts, 1, "a page claim must adopt the child-document caret lease");
   assert.equal(releases, 0);
   world.document.activeElement = world.topbarButton;
-  assert.equal(world.pin(), false);
-  assert.equal(releases, 1, "leaving the page caret owner must release the child-document lease");
+  assert.equal(world.pin(), true, "load-driven chrome focus must not release the page-caret lease");
+  assert.equal(releases, 0);
+  assert.equal(world.mode(), "page");
+  const pointer = world.listeners.find((entry) => entry.type === "pointerdown" && entry.capture === true);
+  pointer.handler({ isTrusted: true, target: world.wrap });
+  assert.equal(releases, 1, "a trusted wrap pointer must release the child-document lease");
   assert.equal(world.mode(), "");
 }
 
@@ -510,6 +531,15 @@ function claimPrompt(world, extras = {}) {
   claimPrompt(world);
   const focusout = world.listeners.find((entry) => entry.type === "focusout" && entry.capture === true);
   assert.ok(focusout, "claiming must install a capturing focusout listener");
+  world.document.activeElement = world.body;
+  focusout.handler({ target: world.promptField, relatedTarget: world.body });
+  assert.equal(world.document.activeElement, world.promptField, "focusout onto body must re-pin the prompt while the page hold is on");
+}
+
+{
+  const world = createPageWorld();
+  claimPrompt(world);
+  const focusout = world.listeners.find((entry) => entry.type === "focusout" && entry.capture === true);
   world.document.activeElement = world.iframe;
   focusout.handler({ target: world.promptField, relatedTarget: world.iframe });
   assert.equal(world.document.activeElement, world.promptField, "focusout onto an iframe must re-pin the prompt");
@@ -539,9 +569,54 @@ function claimPrompt(world, extras = {}) {
   const world = createPageWorld();
   claimPrompt(world);
   assert.equal(world.iframe.inert, true, "a page claim must keep chat-frames inert");
+  assert.equal(world.hold(), true, "a page claim must arm the page caret hold");
+  world.release();
+  assert.equal(world.mode(), "");
+  assert.equal(world.hold(), true, "releasing the live claim must keep the page caret hold");
+  assert.equal(world.iframe.inert, true, "releasing the live claim must keep chat-frames inert");
+  world.document.activeElement = world.body;
+  assert.equal(world.pin(), true, "pin must re-claim the live prompt while the page hold is on");
+  assert.equal(world.document.activeElement, world.promptField);
+  assert.equal(world.mode(), "page");
+}
+
+{
+  const world = createPageWorld();
+  claimPrompt(world);
+  world.promptField.isConnected = false;
+  world.document.activeElement = world.body;
+  const live = world.promptField;
+  world.document.querySelector = (selector) => {
+    if (String(selector).includes("prompt-input")) {
+      live.isConnected = true;
+      return live;
+    }
+    return null;
+  };
+  assert.equal(world.pin(), true, "a remounted prompt must be re-claimed while the page hold is on");
+  assert.equal(world.document.activeElement, live);
+  assert.equal(world.iframe.inert, true, "a remounted prompt must keep chat-frames inert");
+}
+
+{
+  const world = createPageWorld();
+  let left = false;
+  claimPrompt(world, { onLeave: () => { left = true; } });
+  assert.equal(world.iframe.inert, true, "a page claim must keep chat-frames inert");
+  const pointer = world.listeners.find((entry) => entry.type === "pointerdown" && entry.capture === true);
+  pointer.handler({ isTrusted: true, target: world.topbarButton });
+  assert.equal(left, true, "a trusted pointer on other parent chrome must leave the page hold");
+  assert.equal(world.hold(), false);
+  assert.equal(world.iframe.inert, false, "a trusted pointer on other parent chrome must un-inert chat-frames");
+}
+
+{
+  const world = createPageWorld();
+  claimPrompt(world);
+  assert.equal(world.iframe.inert, true, "a page claim must keep chat-frames inert");
   world.document.activeElement = world.topbarButton;
-  assert.equal(world.pin(), false);
-  assert.equal(world.iframe.inert, false, "leaving the page caret owner must un-inert chat-frames");
+  assert.equal(world.pin(), true);
+  assert.equal(world.iframe.inert, true, "leaving the live claim without a trusted pointer must not un-inert chat-frames");
 }
 
 {

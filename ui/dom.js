@@ -214,9 +214,12 @@ const openModals = [];
 let overlaySearchCaret = null;
 let overlaySearchCaretListening = false;
 let overlayCaretFramePointerAt = 0;
+let overlayCaretUserPointerAt = 0;
 let overlayCaretLeaseHandler = null;
 let overlayCaretPinFollow = 0;
+let pageCaretHold = null;
 const OVERLAY_CARET_FRAME_POINTER_MS = 1000;
+const OVERLAY_CARET_USER_POINTER_MS = 1000;
 const OVERLAY_CARET_PIN_FOLLOW_MAX = 3;
 const PAGE_CARET_MESSAGE_SOURCE = "chatclub-page-caret";
 
@@ -258,6 +261,39 @@ function overlayCaretFrameIsLoading(frame) {
     || Boolean(frame?.closest?.(".chat-card")?.classList?.contains?.("frame-loading"));
 }
 
+function overlayCaretIsPromptChrome(node, field, panel) {
+  if (!node) return false;
+  if (node === field || field?.contains?.(node)) return true;
+  const shell = panel?.classList?.contains?.("prompt-shell")
+    ? panel
+    : field?.closest?.(".prompt-shell");
+  if (shell && (node === shell || shell.contains?.(node))) return true;
+  try {
+    if (node.closest?.(".prompt-shell")) return true;
+  } catch {}
+  return false;
+}
+
+function pageCaretOwnsInert() {
+  return Boolean(pageCaretHold) || overlaySearchCaret?.mode === "page";
+}
+
+export function pageCaretHoldActive() {
+  return Boolean(pageCaretHold);
+}
+
+function armPageCaretHold(owner) {
+  if (!owner || owner.mode !== "page") return;
+  pageCaretHold = {
+    field: owner.field,
+    panel: owner.panel,
+    getSelection: owner.getSelection,
+    composing: owner.composing,
+    onLeave: owner.onLeave,
+    stolen: owner.stolen
+  };
+}
+
 function setOverlayCaretFrameInert(frame, value) {
   if (!frame) return;
   const inert = Boolean(value);
@@ -271,12 +307,12 @@ function setOverlayCaretFrameInert(frame, value) {
 
 function syncOverlayCaretFrameInert() {
   const modalOpen = Boolean(typeof document.querySelector === "function" && document.querySelector(".modal"));
-  const pageClaimed = overlaySearchCaret?.mode === "page";
+  const pageHold = pageCaretOwnsInert();
   let frames = [];
   try { frames = [...(document.querySelectorAll?.("iframe.chat-frame") || [])]; } catch {}
   for (const frame of frames) {
-    if (!modalOpen && !pageClaimed && overlayCaretFrameIsLoading(frame)) continue;
-    setOverlayCaretFrameInert(frame, modalOpen || pageClaimed);
+    if (!modalOpen && !pageHold && overlayCaretFrameIsLoading(frame)) continue;
+    setOverlayCaretFrameInert(frame, modalOpen || pageHold);
   }
 }
 
@@ -285,10 +321,17 @@ function overlayCaretRecentFramePointer() {
   return Boolean(overlayCaretFramePointerAt && Date.now() - overlayCaretFramePointerAt < OVERLAY_CARET_FRAME_POINTER_MS);
 }
 
+function overlayCaretRecentUserPointer() {
+  return Boolean(overlayCaretUserPointerAt && Date.now() - overlayCaretUserPointerAt < OVERLAY_CARET_USER_POINTER_MS);
+}
+
 function overlaySearchCaretPageStolen(active) {
   if (!active) return true;
   if (active === document.body || active === document.documentElement) return true;
-  if (overlayCaretIsFrame(active)) return !overlayCaretRecentFramePointer();
+  if (overlayCaretIsFrame(active) || overlayCaretIsFrameWrap(active)) {
+    return !overlayCaretRecentFramePointer();
+  }
+  if (pageCaretHold && !overlayCaretRecentUserPointer()) return true;
   return false;
 }
 
@@ -325,7 +368,7 @@ function scheduleOverlayCaretPinFollow(remaining) {
   if (typeof schedule !== "function") return;
   overlayCaretPinFollow = schedule(() => {
     overlayCaretPinFollow = 0;
-    if (!overlaySearchCaret) return;
+    if (!overlaySearchCaret && !pageCaretHold) return;
     pinOverlaySearchCaret(remaining);
   });
 }
@@ -345,12 +388,57 @@ function clearOverlaySearchCaret(invokeLeave = true) {
   cancelOverlayCaretPinFollow();
   const owner = overlaySearchCaret;
   overlaySearchCaret = null;
-  if (!owner) return;
+  if (!owner) {
+    syncOverlayCaretFrameInert();
+    return;
+  }
   if (invokeLeave) {
     try { owner.onLeave?.(); } catch {}
   }
-  if (owner.mode === "page") notifyOverlayCaretLease("release");
+  if (owner.mode === "page" && !pageCaretHold) notifyOverlayCaretLease("release");
   syncOverlayCaretFrameInert();
+}
+
+function releasePageCaretHold(invokeLeave = true) {
+  pageCaretHold = null;
+  clearOverlaySearchCaret(invokeLeave);
+}
+
+function bindOverlaySearchCaret(field, options = {}) {
+  const previous = overlaySearchCaret;
+  overlaySearchCaret = {
+    field,
+    panel: options.panel || overlaySearchCaretPanel(field),
+    mode: options.mode === "page" ? "page" : "overlay",
+    getSelection: typeof options.getSelection === "function" ? options.getSelection : null,
+    composing: typeof options.composing === "function" ? options.composing : null,
+    onLeave: typeof options.onLeave === "function" ? options.onLeave : null,
+    stolen: typeof options.stolen === "function" ? options.stolen : null
+  };
+  ensureOverlaySearchCaretListeners();
+  if (overlaySearchCaret.mode === "page") {
+    armPageCaretHold(overlaySearchCaret);
+    notifyOverlayCaretLease("adopt");
+  } else if (previous?.mode === "page" && !pageCaretHold) {
+    notifyOverlayCaretLease("release");
+  }
+}
+
+function rebindPageCaretHold() {
+  if (!pageCaretHold) return null;
+  const live = pageCaretHold.field?.isConnected
+    ? pageCaretHold.field
+    : (typeof document.querySelector === "function" ? document.querySelector(".prompt-input") : null);
+  if (!live?.isConnected) return null;
+  bindOverlaySearchCaret(live, {
+    panel: live.closest?.(".prompt-shell") || pageCaretHold.panel,
+    mode: "page",
+    getSelection: pageCaretHold.getSelection,
+    composing: pageCaretHold.composing,
+    onLeave: pageCaretHold.onLeave,
+    stolen: pageCaretHold.stolen
+  });
+  return overlaySearchCaret;
 }
 
 function restoreOverlaySearchCaretSelection(field, owner) {
@@ -384,7 +472,15 @@ export function setOverlayCaretLeaseHandler(handler) {
 }
 
 export function pinOverlaySearchCaret(followRemaining = OVERLAY_CARET_PIN_FOLLOW_MAX) {
-  const owner = overlaySearchCaret;
+  let owner = overlaySearchCaret;
+  if (!owner?.field?.isConnected && pageCaretHold) {
+    const modalEarly = typeof document.querySelector === "function" ? document.querySelector(".modal") : null;
+    if (modalEarly) {
+      clearOverlaySearchCaret(true);
+      return false;
+    }
+    owner = rebindPageCaretHold();
+  }
   const field = owner?.field;
   if (!field?.isConnected) {
     clearOverlaySearchCaret(false);
@@ -400,6 +496,10 @@ export function pinOverlaySearchCaret(followRemaining = OVERLAY_CARET_PIN_FOLLOW
   if (owner.composing?.()) return false;
   const panel = owner.panel || overlaySearchCaretPanel(field);
   if (overlaySearchCaretShouldLeave(active, field, panel, owner)) {
+    if (pageCaretHold && owner.mode === "page" && overlayCaretRecentUserPointer()) {
+      releasePageCaretHold(true);
+      return false;
+    }
     clearOverlaySearchCaret(true);
     return false;
   }
@@ -423,35 +523,43 @@ export function pinOverlaySearchCaret(followRemaining = OVERLAY_CARET_PIN_FOLLOW
 }
 
 function onOverlaySearchCaretFocusIn(event) {
-  if (!overlaySearchCaret) return;
-  const field = overlaySearchCaret.field;
+  if (!overlaySearchCaret && !pageCaretHold) return;
+  const field = overlaySearchCaret?.field || pageCaretHold?.field;
   const target = event?.target;
   if (target === field || field?.contains?.(target)) return;
   pinOverlaySearchCaret();
 }
 
 function onOverlaySearchCaretFocusOut(event) {
-  if (!overlaySearchCaret) return;
-  const field = overlaySearchCaret.field;
+  if (!overlaySearchCaret && !pageCaretHold) return;
+  const field = overlaySearchCaret?.field || pageCaretHold?.field;
   if (event?.target !== field && !field?.contains?.(event?.target)) return;
-  if (overlayCaretIsFrame(event.relatedTarget)) pinOverlaySearchCaret();
+  pinOverlaySearchCaret();
 }
 
 function onOverlayPageCaretStolen(event) {
   const data = event?.data;
   if (!data || data.source !== PAGE_CARET_MESSAGE_SOURCE || data.action !== "stolen") return;
-  if (overlaySearchCaretMode() !== "page") return;
+  if (overlaySearchCaretMode() !== "page" && !pageCaretHold) return;
   pinOverlaySearchCaret();
 }
 
 function onOverlayCaretPointerDown(event) {
   if (event?.isTrusted !== true) return;
   const frame = overlayCaretFrameFromTarget(event.target);
-  if (!frame) return;
-  overlayCaretFramePointerAt = Date.now();
-  if (overlaySearchCaretMode() !== "page") return;
-  clearOverlaySearchCaret(true);
-  try { frame.focus?.(); } catch {}
+  if (frame) {
+    overlayCaretFramePointerAt = Date.now();
+    if (!pageCaretHold && overlaySearchCaretMode() !== "page") return;
+    releasePageCaretHold(true);
+    try { frame.focus?.(); } catch {}
+    return;
+  }
+  if (!pageCaretHold && overlaySearchCaretMode() !== "page") return;
+  const field = overlaySearchCaret?.field || pageCaretHold?.field;
+  const panel = overlaySearchCaret?.panel || pageCaretHold?.panel;
+  if (overlayCaretIsPromptChrome(event.target, field, panel)) return;
+  overlayCaretUserPointerAt = Date.now();
+  releasePageCaretHold(true);
 }
 
 function ensureOverlaySearchCaretListeners() {
@@ -467,20 +575,8 @@ function ensureOverlaySearchCaretListeners() {
 
 export function claimOverlaySearchCaret(field, options = {}) {
   if (!field) return;
-  const previous = overlaySearchCaret;
   cancelOverlayCaretPinFollow();
-  overlaySearchCaret = {
-    field,
-    panel: options.panel || overlaySearchCaretPanel(field),
-    mode: options.mode === "page" ? "page" : "overlay",
-    getSelection: typeof options.getSelection === "function" ? options.getSelection : null,
-    composing: typeof options.composing === "function" ? options.composing : null,
-    onLeave: typeof options.onLeave === "function" ? options.onLeave : null,
-    stolen: typeof options.stolen === "function" ? options.stolen : null
-  };
-  ensureOverlaySearchCaretListeners();
-  if (overlaySearchCaret.mode === "page") notifyOverlayCaretLease("adopt");
-  else if (previous?.mode === "page") notifyOverlayCaretLease("release");
+  bindOverlaySearchCaret(field, options);
   pinOverlaySearchCaret();
   syncOverlayCaretFrameInert();
 }
@@ -521,18 +617,18 @@ function isModalInertExempt(node, liveBackdrop) {
 function syncChatFrameModalInert(active) {
   const frames = document.querySelectorAll?.("iframe.chat-frame");
   if (!frames?.length) return;
-  const pageClaimed = overlaySearchCaretMode() === "page";
+  const pageHold = pageCaretHoldActive();
   for (const frame of frames) {
     if (active) delete frame.dataset?.promptFocusRestoreGeneration;
     if (
       !active
-      && !pageClaimed
+      && !pageHold
       && (
         frame.dataset?.frameLoadPending === "1"
         || frame.closest?.(".chat-card")?.classList?.contains?.("frame-loading")
       )
     ) continue;
-    setNodeInert(frame, active || pageClaimed);
+    setNodeInert(frame, active || pageHold);
   }
 }
 
