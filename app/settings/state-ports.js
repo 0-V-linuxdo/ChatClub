@@ -15,7 +15,7 @@ export const SETTINGS_OPTION_CAPABILITIES = Object.freeze({
     "tabContextMenuHiddenIds", "tabContextMenuOrder", "tabGroupButtonOrder", "tabGroupButtonPlacement", "tabGroupButtonsMode",
     "tabsSidebarButtonOrder", "tabsSidebarButtonPlacement",
     "themeMode", "tooltipDisabledIds",
-    "topbarPromptInputFontSize", "topbarPromptPlaceholderConfig"
+    "topbarPromptInputFontSize", "composerPlacement", "topbarPromptPlaceholderConfig"
   ]),
   profiles: optionCapability(
     [

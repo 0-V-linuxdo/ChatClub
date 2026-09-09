@@ -63,7 +63,14 @@ function createPromptFocusController({ isOptionsPage = false, focusInput } = {})
   };
   const onUserInteraction = (event) => {
     if (!pending || event?.isTrusted !== true) return;
-    if (event.type === "pointerdown" && event.target?.classList?.contains?.("chat-frame")) {
+    if (
+      event.type === "pointerdown"
+      && (
+        event.target?.classList?.contains?.("chat-frame")
+        || event.target?.classList?.contains?.("chat-frame-wrap")
+        || event.target?.closest?.(".chat-frame-wrap")
+      )
+    ) {
       lastFramePointerDownAt = Date.now();
       release();
       return;
@@ -78,12 +85,22 @@ function createPromptFocusController({ isOptionsPage = false, focusInput } = {})
     if (!pending) return;
     const prompt = promptNode();
     if (!prompt?.isConnected || (!force && document.activeElement === prompt)) return;
-    if (!force && isFrameTarget(document.activeElement)) return;
+    if (
+      !force
+      && isFrameTarget(document.activeElement)
+      && lastFramePointerDownAt
+      && Date.now() - lastFramePointerDownAt < 1000
+    ) return;
     if (!force && isOverlayTarget(document.activeElement)) return;
     focusPromptInput(focusInput);
   };
   const onFocusChange = (event) => {
-    if (!pending || isPromptTarget(event?.target) || isFrameTarget(event?.target) || isOverlayTarget(event?.target)) return;
+    if (!pending || isPromptTarget(event?.target) || isOverlayTarget(event?.target)) return;
+    if (
+      isFrameTarget(event?.target)
+      && lastFramePointerDownAt
+      && Date.now() - lastFramePointerDownAt < 1000
+    ) return;
     if (event?.target === window) return restoreIfNeeded(true);
     scheduleTask(restoreIfNeeded);
   };
