@@ -217,6 +217,7 @@ let overlayCaretFramePointerAt = 0;
 let overlayCaretLeaseHandler = null;
 let overlayCaretPinFollow = 0;
 let composerCaretIntent = false;
+let composerCaretClaimOptions = null;
 const OVERLAY_CARET_FRAME_POINTER_MS = 1000;
 const OVERLAY_CARET_PIN_FOLLOW_MAX = 3;
 const PAGE_CARET_MESSAGE_SOURCE = "chatclub-page-caret";
@@ -270,6 +271,30 @@ function setOverlayCaretFrameInert(frame, value) {
   if (typeof frame.removeAttribute === "function") frame.removeAttribute("inert");
 }
 
+function overlayCaretExemptComposerIsland(node) {
+  if (!node) return true;
+  try {
+    if (node.id === "composer-center-host" || node.getAttribute?.("id") === "composer-center-host") return true;
+    if (
+      node.classList?.contains?.("app-shell")
+      || node.classList?.contains?.("prompt-shell")
+      || node.classList?.contains?.("topbar")
+    ) return true;
+  } catch {}
+  return false;
+}
+
+function syncComposerWorkspaceIslandInert() {
+  const modalOpen = Boolean(typeof document.querySelector === "function" && document.querySelector(".modal"));
+  const islandInert = Boolean(overlaySearchCaretComposer() && !modalOpen);
+  let nodes = [];
+  try { nodes = [...(document.querySelectorAll?.(".main-grid, .chat-card") || [])]; } catch {}
+  for (const node of nodes) {
+    if (overlayCaretExemptComposerIsland(node)) continue;
+    setOverlayCaretFrameInert(node, islandInert);
+  }
+}
+
 function syncOverlayCaretFrameInert() {
   const modalOpen = Boolean(typeof document.querySelector === "function" && document.querySelector(".modal"));
   const pageClaimed = overlaySearchCaret?.mode === "page";
@@ -280,6 +305,7 @@ function syncOverlayCaretFrameInert() {
     if (!modalOpen && !pageClaimed && !composerClaimed && overlayCaretFrameIsLoading(frame)) continue;
     setOverlayCaretFrameInert(frame, modalOpen || pageClaimed || composerClaimed);
   }
+  syncComposerWorkspaceIslandInert();
 }
 
 
@@ -328,7 +354,7 @@ function scheduleOverlayCaretPinFollow(remaining) {
   if (typeof schedule !== "function") return;
   overlayCaretPinFollow = schedule(() => {
     overlayCaretPinFollow = 0;
-    if (!overlaySearchCaret) return;
+    if (!overlaySearchCaret && !composerCaretIntent) return;
     pinOverlaySearchCaret(remaining);
   });
 }
@@ -344,19 +370,67 @@ function notifyOverlayCaretLease(kind, iframe) {
   }
 }
 
+function rememberComposerCaretOptions(owner) {
+  if (!owner?.composer) return;
+  composerCaretClaimOptions = {
+    getSelection: owner.getSelection,
+    composing: owner.composing,
+    onLeave: owner.onLeave,
+    stolen: owner.stolen,
+    shouldLeave: owner.shouldLeave
+  };
+}
+
+function bindComposerCaretOwner() {
+  if (overlaySearchCaret) {
+    const field = overlaySearchCaret.field;
+    if (field?.isConnected) return overlaySearchCaret;
+    if (!(overlaySearchCaret.composer || composerCaretIntent)) return overlaySearchCaret;
+    composerCaretIntent = true;
+    let next = null;
+    try { next = document.querySelector?.(".prompt-input"); } catch {}
+    if (next?.isConnected && next !== field) {
+      overlaySearchCaret.field = next;
+      try { overlaySearchCaret.panel = next.closest?.(".prompt-shell") || overlaySearchCaret.panel; } catch {}
+    }
+    return overlaySearchCaret;
+  }
+  if (!composerCaretIntent) return null;
+  let field = null;
+  try { field = document.querySelector?.(".prompt-input"); } catch {}
+  if (!field?.isConnected) return null;
+  overlaySearchCaret = {
+    field,
+    panel: field.closest?.(".prompt-shell") || null,
+    mode: "overlay",
+    composer: true,
+    getSelection: composerCaretClaimOptions?.getSelection || null,
+    composing: composerCaretClaimOptions?.composing || null,
+    onLeave: composerCaretClaimOptions?.onLeave || null,
+    stolen: composerCaretClaimOptions?.stolen || null,
+    shouldLeave: composerCaretClaimOptions?.shouldLeave || null
+  };
+  ensureOverlaySearchCaretListeners();
+  return overlaySearchCaret;
+}
+
 function clearOverlaySearchCaret(invokeLeave = true) {
   cancelOverlayCaretPinFollow();
   const owner = overlaySearchCaret;
   if (!owner && !composerCaretIntent) return;
-  overlaySearchCaret = null;
   const wasLease = owner?.mode === "page" || owner?.composer === true || composerCaretIntent;
   if (invokeLeave) {
+    overlaySearchCaret = null;
+    composerCaretClaimOptions = null;
     try { owner?.onLeave?.(); } catch {}
     composerCaretIntent = false;
     if (wasLease) notifyOverlayCaretLease("release");
-  } else if (owner?.composer) {
+  } else if (owner?.composer || composerCaretIntent) {
     composerCaretIntent = true;
+    if (owner?.composer) rememberComposerCaretOptions(owner);
+    else overlaySearchCaret = null;
   } else {
+    overlaySearchCaret = null;
     composerCaretIntent = false;
   }
   syncOverlayCaretFrameInert();
@@ -397,25 +471,16 @@ export function setOverlayCaretLeaseHandler(handler) {
 }
 
 export function pinOverlaySearchCaret(followRemaining = OVERLAY_CARET_PIN_FOLLOW_MAX) {
-  const owner = overlaySearchCaret;
+  const owner = bindComposerCaretOwner() || overlaySearchCaret;
   if (!owner) return false;
   let field = owner.field;
   if (!field?.isConnected) {
     if (owner.composer || composerCaretIntent) {
       composerCaretIntent = true;
-      let next = null;
-      try { next = document.querySelector?.(".prompt-input"); } catch {}
-      if (next?.isConnected && next !== field) {
-        owner.field = next;
-        try { owner.panel = next.closest?.(".prompt-shell") || owner.panel; } catch {}
-        field = next;
-      } else {
-        return false;
-      }
-    } else {
-      clearOverlaySearchCaret(false);
       return false;
     }
+    clearOverlaySearchCaret(false);
+    return false;
   }
   const modal = typeof document.querySelector === "function" ? document.querySelector(".modal") : null;
   if (modal && field.closest?.(".modal") !== modal && !modal.contains?.(field)) {
@@ -450,16 +515,20 @@ export function pinOverlaySearchCaret(followRemaining = OVERLAY_CARET_PIN_FOLLOW
 }
 
 function onOverlaySearchCaretFocusIn(event) {
-  if (!overlaySearchCaret) return;
-  const field = overlaySearchCaret.field;
+  if (!overlaySearchCaret && !composerCaretIntent) return;
+  const field = (bindComposerCaretOwner() || overlaySearchCaret)?.field;
   const target = event?.target;
   if (target === field || field?.contains?.(target)) return;
   pinOverlaySearchCaret();
 }
 
 function onOverlaySearchCaretFocusOut(event) {
-  if (!overlaySearchCaret) return;
-  const field = overlaySearchCaret.field;
+  if (!overlaySearchCaret && !composerCaretIntent) return;
+  const field = (bindComposerCaretOwner() || overlaySearchCaret)?.field;
+  if (!field) {
+    pinOverlaySearchCaret();
+    return;
+  }
   if (event?.target !== field && !field?.contains?.(event?.target)) return;
   if (!event?.relatedTarget || overlayCaretIsFrame(event.relatedTarget)) pinOverlaySearchCaret();
 }
@@ -509,6 +578,7 @@ export function claimOverlaySearchCaret(field, options = {}) {
     shouldLeave: typeof options.shouldLeave === "function" ? options.shouldLeave : null
   };
   composerCaretIntent = overlaySearchCaret.composer === true;
+  if (overlaySearchCaret.composer) rememberComposerCaretOptions(overlaySearchCaret);
   ensureOverlaySearchCaretListeners();
   const nextLease = overlaySearchCaret.mode === "page" || overlaySearchCaret.composer;
   if (nextLease) notifyOverlayCaretLease("adopt");
@@ -580,6 +650,7 @@ function syncModalBackgroundInert() {
     setNodeInert(child, active && !isModalInertExempt(child, liveBackdrop));
   }
   syncChatFrameModalInert(active);
+  syncComposerWorkspaceIslandInert();
 }
 
 function syncModalScrollLock() {

@@ -86,6 +86,11 @@ assert.match(
   "release must strip window.name page-caret seeds"
 );
 assert.match(preload, /evictPageCaretFocus/);
+assert.match(
+  preload,
+  /querySelectorAll\("\[autofocus\]"\)/,
+  "child document_start shield must evict native [autofocus] while the page-caret lease is active"
+);
 const focusInSource = preload.slice(
   preload.indexOf("const onPageCaretFocusIn"),
   preload.indexOf("const markPageCaretTrustedPointer")

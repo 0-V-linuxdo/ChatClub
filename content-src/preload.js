@@ -481,6 +481,11 @@ function installPreload() {
     };
     const evictPageCaretFocus = () => {
       if (!pageCaretLeaseActive()) return;
+      try {
+        for (const node of document.querySelectorAll("[autofocus]")) {
+          try { node.removeAttribute("autofocus"); } catch {}
+        }
+      } catch {}
       const active = document.activeElement;
       if (pageCaretEditable(active)) {
         try { active.blur?.(); } catch {}

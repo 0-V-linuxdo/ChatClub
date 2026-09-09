@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "e282f4c660762e60dca4ae4bfe7f8696825fcaf46d4a69e7587ccf459017e00e";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "a266692262f877c64045a3a58be5fa03cc9533b94063adc2fc07a45bfbdb4ed0";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "ca8e7a5bcdbbded3e9343f903da1ea6d2686d8f72ec1c087bc573ef8518a4687";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.ca8e7a5bcdbbded3e9343f903da1ea6d2686d8f72ec1c087bc573ef8518a4687";
-  var CONTENT_RUNTIME_PRELOAD_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preload.js", "entryPath": "content-src/preload.js", "sourceSha256": "478f024edd2f356e594204553512e2d00839a6d881cc08a61dcac6a2a60df455", "implementationSha256": "4c6a95254c968d18587ed73de9f68353a66ee5142870c41d64cb349c9c9b3113", "implementationVersion": "2026.07.16.2+bundle.4c6a95254c968d18587ed73de9f68353a66ee5142870c41d64cb349c9c9b3113" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "5171c9cd90643aa6b804056aee088e9597712f080ad9afab55e86ab9d634e795";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.5171c9cd90643aa6b804056aee088e9597712f080ad9afab55e86ab9d634e795";
+  var CONTENT_RUNTIME_PRELOAD_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preload.js", "entryPath": "content-src/preload.js", "sourceSha256": "6c5eea57e8226df6ec45759aca8e825e0dcfa659e9767ec91411b70a9c35ce5f", "implementationSha256": "361ccf6b3ba72a7abea2b0a32dde1bbda6abe1cca5c197d71e4dbaae3784af5d", "implementationVersion": "2026.07.16.2+bundle.361ccf6b3ba72a7abea2b0a32dde1bbda6abe1cca5c197d71e4dbaae3784af5d" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -4576,6 +4576,15 @@ ${node.nodeValue}`;
       };
       const evictPageCaretFocus = () => {
         if (!pageCaretLeaseActive()) return;
+        try {
+          for (const node of document.querySelectorAll("[autofocus]")) {
+            try {
+              node.removeAttribute("autofocus");
+            } catch {
+            }
+          }
+        } catch {
+        }
         const active = document.activeElement;
         if (pageCaretEditable(active)) {
           try {

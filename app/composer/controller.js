@@ -62,7 +62,8 @@ function requirePort(port, label, methodNames) {
 }
 
 function composerCaretStolen(active, field) {
-  if (!active || active === field) return false;
+  if (active === field) return false;
+  if (!active) return true;
   if (active === document.body || active === document.documentElement) return true;
   if (active.classList?.contains?.("chat-frame") || active.nodeName === "IFRAME") return true;
   try {

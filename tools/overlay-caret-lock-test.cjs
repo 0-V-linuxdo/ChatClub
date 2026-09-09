@@ -43,6 +43,8 @@ assert.match(composer, /oncompositionstart/);
 assert.match(composer, /oncompositionend/);
 assert.match(agents, /the titlebar search is the unique caret owner/);
 assert.match(agents, /a focused `\.prompt-input` is the overlay-grade composer caret owner/);
+assert.match(agents, /workspace island/);
+assert.match(agents, /`\[autofocus\]`/);
 assert.match(frame, /function restorePromptInputFocus/);
 assert.match(frame, /setOverlayCaretLeaseHandler/);
 assert.match(frame, /adoptPageCaretLease/);
@@ -107,7 +109,37 @@ function createWorld() {
     },
     closest(selector) {
       if (selector === ".chat-frame-wrap") return wrap;
+      if (selector === ".chat-card") return card;
       return null;
+    }
+  };
+  const card = {
+    className: "chat-card",
+    nodeName: "DIV",
+    classList: { contains(name) { return name === "chat-card"; } },
+    inert: false,
+    contains(node) { return node === iframe || node === wrap; },
+    setAttribute(name) {
+      if (name === "inert") this.inert = true;
+    },
+    removeAttribute(name) {
+      if (name === "inert") this.inert = false;
+    },
+    closest(selector) {
+      return selector === ".chat-card" ? this : null;
+    }
+  };
+  const grid = {
+    className: "main-grid",
+    nodeName: "MAIN",
+    classList: { contains(name) { return name === "main-grid"; } },
+    inert: false,
+    contains(node) { return node === card || node === iframe || node === wrap; },
+    setAttribute(name) {
+      if (name === "inert") this.inert = true;
+    },
+    removeAttribute(name) {
+      if (name === "inert") this.inert = false;
     }
   };
   const wrap = {
@@ -120,7 +152,9 @@ function createWorld() {
       return null;
     },
     closest(selector) {
-      return selector === ".chat-frame-wrap" ? this : null;
+      if (selector === ".chat-frame-wrap") return this;
+      if (selector === ".chat-card") return card;
+      return null;
     }
   };
   const prompt = {
@@ -138,6 +172,8 @@ function createWorld() {
     field,
     iframe,
     wrap,
+    card,
+    grid,
     prompt,
     panel,
     row,
@@ -161,7 +197,9 @@ function createWorld() {
         return null;
       },
       querySelectorAll(selector) {
-        if (String(selector).includes("iframe.chat-frame")) return [iframe];
+        const text = String(selector);
+        if (text.includes("iframe.chat-frame")) return [iframe];
+        if (text.includes(".main-grid") || text.includes(".chat-card")) return [grid, card];
         return [];
       }
     }
@@ -583,7 +621,8 @@ function claimComposer(world, extras = {}) {
     composing: () => Boolean(extras.composing?.()),
     stolen(active, field) {
       if (typeof extras.stolen === "function") return extras.stolen(active, field);
-      if (active === world.iframe || active === world.body || active === world.html || active === world.wrap) return true;
+      if (!active) return true;
+      if (active === world.iframe || active === world.body || active === world.html || active === world.wrap || active === world.card) return true;
       return false;
     },
     shouldLeave(active, field) {
@@ -737,6 +776,36 @@ function claimComposer(world, extras = {}) {
   world.release(world.promptField);
   assert.equal(world.composerClaimed(), true, "release without leave keeps composer intent");
   assert.equal(world.iframe.inert, true, "composerInert survives clear(false) while intent holds");
+  assert.equal(world.card.inert, true, "workspace island stays inert while composer intent holds after release");
+  world.document.activeElement = world.iframe;
+  assert.equal(world.pin(), true, "intent-only pin rebinds the live .prompt-input");
+  assert.equal(world.document.activeElement, world.promptField);
+}
+
+{
+  const world = createPageWorld();
+  claimComposer(world);
+  assert.equal(world.card.inert, true, "composer claim must inert the workspace island .chat-card");
+  assert.equal(world.grid.inert, true, "composer claim must inert the workspace island .main-grid");
+  assert.equal(world.iframe.inert, true);
+  const pointer = world.listeners.find((entry) => entry.type === "pointerdown" && entry.capture === true);
+  pointer.handler({ isTrusted: true, target: world.wrap });
+  assert.equal(world.card.inert, false, "a trusted wrap click must clear island inert");
+  assert.equal(world.grid.inert, false, "a trusted wrap click must clear .main-grid inert");
+}
+
+{
+  const world = createPageWorld();
+  claimComposer(world);
+  world.document.activeElement = null;
+  assert.equal(world.pin(), true, "composer overlay must pin after a null activeElement steal");
+  assert.equal(world.document.activeElement, world.promptField);
+}
+
+{
+  const world = createWorld();
+  claimField(world);
+  assert.equal(world.card.inert, false, "typed overlay search must not inert the workspace island (modal sibling inert owns that)");
 }
 
 console.log("overlay caret lock tests passed");
