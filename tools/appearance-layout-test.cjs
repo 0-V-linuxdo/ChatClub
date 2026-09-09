@@ -281,18 +281,43 @@ assert.match(
 );
 assert.match(
   stylesheetSource,
-  /\.frame-toast-position-editor \{[\s\S]*?align-items: start;/,
-  "desktop details must align toward the top of the preview"
+  /\.frame-toast-position-editor \{[\s\S]*?grid-template-areas:\s*"preview stay"\s*"preview details";/,
+  "desktop Site Toast must keep the preview left of duration and position copy"
 );
 assert.match(
   stylesheetSource,
+  /\.frame-toast-position-editor \{[\s\S]*?align-items: start;/,
+  "desktop details must align toward the top of the preview"
+);
+assert.doesNotMatch(
+  stylesheetSource,
   /\.frame-toast-position-details \{[\s\S]*?padding-top: 40px;/,
-  "desktop details must keep a small top offset"
+  "desktop details must not keep the old 40px top offset"
+);
+assert.match(
+  stylesheetSource,
+  /\.frame-toast-position-details \{[\s\S]*?align-content: start;[\s\S]*?padding-top: var\(--space-3\);/,
+  "details must top-align with a compact hairline gap"
 );
 assert.match(
   controllerSource,
-  /settingsBlock\("", "",[\s\S]*class: "frame-toast-position-preview-column" \},\s*preview\s*\),\s*el\("div", \{ class: "frame-toast-position-details" \}/,
-  "the toast block must omit its top header and render all copy beside the preview"
+  /return el\("div", \{ class: "appearance-frame-toast-pane" \},\s*settingsBlock\("", "",/,
+  "Site Toast must use one untitled settingsBlock"
+);
+assert.doesNotMatch(
+  controllerSource,
+  /settingsBlock\(t\("appearance\.toastStay"\), t\("appearance\.toastStayDesc"\), toastStay\)/,
+  "duration must not be a separate stretched settingsBlock"
+);
+assert.match(
+  controllerSource,
+  /class: "appearance-toast-stay-row"[\s\S]*t\("appearance\.toastStay"\)[\s\S]*t\("appearance\.toastStayDesc"\)[\s\S]*toastStay/,
+  "duration hug row must keep title, help, and the native select"
+);
+assert.match(
+  controllerSource,
+  /class: "frame-toast-position-editor"[\s\S]*class: "appearance-toast-stay-row"[\s\S]*class: "frame-toast-position-preview-column"[\s\S]*class: "frame-toast-position-details"/,
+  "duration, preview, and position copy must be siblings in the editor grid"
 );
 assert.match(
   controllerSource,
@@ -300,9 +325,14 @@ assert.match(
   "the title and description must render above the coordinate help in the right column"
 );
 assert.match(
-  controllerSource,
-  /appearance\.toastStayShort[\s\S]*t\("appearance\.toastStay"\), t\("appearance\.toastStayDesc"\)/,
-  "Site Toast pane must expose duration before the position editor"
+  stylesheetSource,
+  /\.appearance-toast-stay-row > \.select \{[\s\S]*?width: max-content;[\s\S]*?max-width: 22ch;/,
+  "duration select must hug instead of stretching 1fr"
+);
+assert.doesNotMatch(
+  stylesheetSource.match(/\.appearance-toast-stay-row > \.select \{[\s\S]*?\n\}/)?.[0] || "",
+  /width:\s*100%/,
+  "duration select must not inherit the full-bleed select width"
 );
 assert.match(
   settingsKitSource,
@@ -311,13 +341,8 @@ assert.match(
 );
 assert.match(
   stylesheetSource,
-  /@media \(max-width: 900px\)[\s\S]*?\.frame-toast-position-editor \{\s*grid-template-columns: minmax\(0, 300px\);/,
-  "narrow layouts must stack the help below the preview"
-);
-assert.match(
-  stylesheetSource,
-  /@media \(max-width: 900px\)[\s\S]*?\.frame-toast-position-details \{[\s\S]*?padding-top: 0;/,
-  "stacked details must not retain the desktop top offset"
+  /@media \(max-width: 900px\)[\s\S]*?\.frame-toast-position-editor \{\s*grid-template-columns: minmax\(0, 300px\);\s*grid-template-areas:\s*"stay"\s*"preview"\s*"details";/,
+  "narrow layouts must paint duration first, then preview, then position copy"
 );
 
 const storageContext = vm.createContext({ DEFAULT_FRAME_TOAST_POSITION: { x: 100, y: 100 } });

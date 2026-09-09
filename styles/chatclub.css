@@ -4167,13 +4167,57 @@ body.tab-gesture-active * {
 .frame-toast-position-editor {
   display: grid;
   grid-template-columns: minmax(0, 300px) minmax(240px, 360px);
+  grid-template-areas:
+    "preview stay"
+    "preview details";
   justify-content: center;
-  gap: clamp(28px, 5vw, 64px);
+  column-gap: clamp(28px, 5vw, 64px);
+  row-gap: var(--space-3);
   width: 100%;
   align-items: start;
 }
 
+.appearance-toast-stay-row {
+  grid-area: stay;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: start;
+  column-gap: var(--space-4);
+  width: 100%;
+  max-width: 360px;
+  min-width: 0;
+}
+
+.appearance-toast-stay-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.appearance-toast-stay-copy strong {
+  color: var(--text);
+  font-size: var(--font-size);
+}
+
+.appearance-toast-stay-copy label {
+  min-width: 0;
+}
+
+.appearance-toast-stay-help {
+  color: var(--muted);
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+}
+
+.appearance-toast-stay-row > .select {
+  width: max-content;
+  max-width: 22ch;
+  min-width: 0;
+  justify-self: start;
+}
+
 .frame-toast-position-preview-column {
+  grid-area: preview;
   min-width: 0;
   display: grid;
   align-content: start;
@@ -4326,13 +4370,15 @@ body.tab-gesture-active * {
 }
 
 .frame-toast-position-details {
+  grid-area: details;
   min-width: 0;
   display: grid;
-  align-content: center;
-  gap: 28px;
+  align-content: start;
+  gap: var(--space-3);
   width: 100%;
   max-width: 360px;
-  padding-top: 40px;
+  padding-top: var(--space-3);
+  border-top: 1px solid color-mix(in srgb, var(--line) 84%, transparent);
 }
 
 .frame-toast-position-copy {
@@ -4744,9 +4790,14 @@ body.settings-tab-context-menu-dragging iframe {
 @media (max-width: 900px) {
   .frame-toast-position-editor {
     grid-template-columns: minmax(0, 300px);
+    grid-template-areas:
+      "stay"
+      "preview"
+      "details";
     gap: 14px;
   }
 
+  .appearance-toast-stay-row,
   .frame-toast-position-readout {
     justify-self: center;
     max-width: 300px;
@@ -4754,9 +4805,8 @@ body.settings-tab-context-menu-dragging iframe {
 
   .frame-toast-position-details {
     justify-self: center;
-    gap: 18px;
+    gap: var(--space-3);
     max-width: 300px;
-    padding-top: 0;
   }
 
   .tab-group-button-placement-list {

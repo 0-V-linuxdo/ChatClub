@@ -506,14 +506,22 @@ export function createAppearanceSettingsSection(ctx) {
         { value: "default", label: t("appearance.toastStayDefault") },
         { value: "long", label: t("appearance.toastStayLong") }
       ], {
+        id: "appearance-toast-stay",
+        "aria-describedby": "appearance-toast-stay-help",
         onchange: () => {
           queueAppearanceAutoSave({ toastStay: normalizeToastStay(toastStay.value) });
         }
       });
       return el("div", { class: "appearance-frame-toast-pane" },
-        settingsBlock(t("appearance.toastStay"), t("appearance.toastStayDesc"), toastStay),
         settingsBlock("", "",
           el("div", { class: "frame-toast-position-editor" },
+            el("div", { class: "appearance-toast-stay-row" },
+              el("span", { class: "appearance-toast-stay-copy" },
+                el("label", { for: "appearance-toast-stay" }, el("strong", {}, t("appearance.toastStay"))),
+                el("small", { class: "appearance-toast-stay-help", id: "appearance-toast-stay-help" }, t("appearance.toastStayDesc"))
+              ),
+              toastStay
+            ),
             el("div", { class: "frame-toast-position-preview-column" },
               preview
             ),
