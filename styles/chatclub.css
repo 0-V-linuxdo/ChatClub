@@ -7107,11 +7107,6 @@ body.settings-tab-context-menu-dragging iframe {
   min-width: 0;
 }
 
-.model-inventory-block > .settings-block-header h4 {
-  display: none;
-  margin: 0;
-}
-
 .model-inventory-group {
   display: grid;
   grid-template-columns: minmax(0, max-content) max-content;

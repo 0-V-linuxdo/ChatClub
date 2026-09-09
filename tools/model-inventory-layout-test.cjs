@@ -15,10 +15,9 @@ const inventoryBlock = functionSource(profilesSource, "inventoryBlock");
 assert.match(inventoryBlock, /listModelInventory\(state\.options, \["outbound"\]\)/);
 assert.match(
   inventoryBlock,
-  /settingsBlock\(\s*"",\s*t\("inventory\.desc"\)/,
-  "Current models keeps inventory.desc and drops the duplicate Current models h4"
+  /settingsBlock\(\s*t\("inventory\.title"\),\s*t\("inventory\.desc"\)/,
+  "Current models keeps the card title bar and inventory.desc help"
 );
-assert.doesNotMatch(inventoryBlock, /t\("inventory\.title"\)/);
 assert.doesNotMatch(inventoryBlock, /t\("inventory\.outbound"\)/);
 assert.doesNotMatch(inventoryBlock, /t\("inventory\.feature"\)/);
 assert.doesNotMatch(inventoryBlock, /t\("inventory\.profile"\)/);
@@ -34,7 +33,7 @@ assert.match(inventoryBlock, /class: "model-inventory-group model-inventory-outb
 assert.match(inventoryBlock, /class: "model-inventory-row"/);
 assert.match(inventoryBlock, /class: "model-inventory-feature"/);
 assert.match(inventoryBlock, /class: "model-inventory-cluster"/);
-assert.match(inventoryBlock, /block\.classList\.add\("model-inventory-block"\)/);
+assert.doesNotMatch(inventoryBlock, /model-inventory-block/);
 assert.match(inventoryBlock, /t\("profiles\.provider"\)/);
 assert.match(inventoryBlock, /t\("inventory\.model"\)/);
 assert.match(inventoryBlock, /outboundField: "profile"/);
@@ -85,13 +84,9 @@ assert.match(
   /\.model-inventory-cluster \.select \{[\s\S]*?max-width:\s*28ch;/,
   "selects keep a ch cap instead of filling the well"
 );
-assert.match(
-  stylesheetSource,
-  /\.model-inventory-block > \.settings-block-header h4 \{[\s\S]*?display:\s*none;/,
-  "duplicate Current models heading stays hidden"
-);
+assert.doesNotMatch(stylesheetSource, /\.model-inventory-block/);
 
-const inventoryCss = stylesheetSource.match(/\.model-inventory-block[\s\S]*?\.model-inventory-cluster \.select \{[\s\S]*?\}/);
+const inventoryCss = stylesheetSource.match(/\.model-inventory-group \{[\s\S]*?\.model-inventory-cluster \.select \{[\s\S]*?\}/);
 assert.ok(inventoryCss, "inventory layout CSS must be co-located");
 assert.doesNotMatch(inventoryCss[0], /preference-row|model-preference-row|appearance-overlay-row|appearance-general-col|is-color/);
 

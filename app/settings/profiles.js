@@ -104,7 +104,7 @@ export function createProfilesSettingsSection(ctx) {
 
   function inventoryBlock(redraw) {
     const { outbound } = listModelInventory(state.options, ["outbound"]);
-    const block = settingsBlock("", t("inventory.desc"),
+    return settingsBlock(t("inventory.title"), t("inventory.desc"),
       el("div", { class: "model-inventory-group model-inventory-outbound", dataset: { modelInventoryWorld: "outbound" } },
         outbound.map((row) => el("div", {
           class: "model-inventory-row",
@@ -126,8 +126,6 @@ export function createProfilesSettingsSection(ctx) {
         ))
       )
     );
-    block.classList.add("model-inventory-block");
-    return block;
   }
 
   function reset() {
