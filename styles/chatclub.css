@@ -65,6 +65,7 @@
   --ui-accessory-height: 28px;
   --ui-reorder-cluster: calc(var(--settings-control-height) + (var(--target-min) * 2) + 8px);
   --settings-site-mark: calc(var(--target-min) + var(--space-1));
+  --settings-image-strategy-track: 120px;
   --ui-row-height: var(--settings-row-height);
   --ui-cell-pad-x: var(--settings-cell-pad-x);
   --ui-header-height: var(--settings-header-height);
@@ -7229,13 +7230,13 @@ body.settings-tab-context-menu-dragging iframe {
 .built-in-config-list .settings-list-header,
 .built-in-config-row {
   min-width: 648px;
-  grid-template-columns: var(--ui-reorder-cluster) var(--settings-site-mark) minmax(136px, .9fr) minmax(220px, 1.36fr) max-content 78px;
+  grid-template-columns: var(--ui-reorder-cluster) var(--settings-site-mark) minmax(136px, .9fr) minmax(220px, 1.36fr) var(--settings-image-strategy-track) 78px;
 }
 
 .custom-config-list .settings-list-header,
 .custom-config-row {
   min-width: 668px;
-  grid-template-columns: var(--ui-reorder-cluster) var(--settings-site-mark) minmax(136px, .9fr) minmax(220px, 1.36fr) max-content 88px;
+  grid-template-columns: var(--ui-reorder-cluster) var(--settings-site-mark) minmax(136px, .9fr) minmax(220px, 1.36fr) var(--settings-image-strategy-track) 88px;
 }
 
 .settings-apps-tab-panel {
@@ -7690,7 +7691,11 @@ body.settings-tab-context-menu-dragging iframe {
 .built-in-config-list .settings-list-header span:nth-child(5),
 .custom-config-list .settings-list-header span:nth-child(5) {
   text-align: center;
-  white-space: nowrap;
+  white-space: normal;
+  overflow: visible;
+  text-wrap: balance;
+  line-height: 1.15;
+  padding: 0 var(--space-1);
 }
 
 .built-in-config-list .settings-strategy-cell.settings-image-strategy-mark,
@@ -9943,6 +9948,7 @@ html:not([data-settings-click-reorder="always"]) .settings-reorder .ui-reorder {
 @media (max-width: 1040px) {
   .settings-modal {
     --settings-sidebar-width: 220px;
+    --settings-image-strategy-track: 104px;
   }
 
   .settings-modal-titlebar {
@@ -10023,13 +10029,13 @@ html:not([data-settings-click-reorder="always"]) .settings-reorder .ui-reorder {
   .built-in-config-list .settings-list-header,
   .built-in-config-row {
     min-width: 608px;
-    grid-template-columns: var(--ui-reorder-cluster) var(--settings-site-mark) minmax(118px, .86fr) minmax(176px, 1.22fr) max-content 74px;
+    grid-template-columns: var(--ui-reorder-cluster) var(--settings-site-mark) minmax(118px, .86fr) minmax(176px, 1.22fr) var(--settings-image-strategy-track) 74px;
   }
 
   .custom-config-list .settings-list-header,
   .custom-config-row {
     min-width: 628px;
-    grid-template-columns: var(--ui-reorder-cluster) var(--settings-site-mark) minmax(118px, .86fr) minmax(176px, 1.22fr) max-content 80px;
+    grid-template-columns: var(--ui-reorder-cluster) var(--settings-site-mark) minmax(118px, .86fr) minmax(176px, 1.22fr) var(--settings-image-strategy-track) 80px;
   }
 
   .prompt-template-list .settings-list-header,

@@ -78,34 +78,46 @@ const { functionSource } = require("./function-source.cjs");
 
   assert.match(
     css,
-    /\.built-in-config-row \{[^}]*grid-template-columns:\s*var\(--ui-reorder-cluster\)\s+var\(--settings-site-mark\)\s+minmax\(136px, \.9fr\)\s+minmax\(220px, 1\.36fr\)\s+max-content\s+78px/s
+    /--settings-image-strategy-track:\s*120px/
   );
   assert.match(
     css,
-    /\.custom-config-row \{[^}]*grid-template-columns:\s*var\(--ui-reorder-cluster\)\s+var\(--settings-site-mark\)\s+minmax\(136px, \.9fr\)\s+minmax\(220px, 1\.36fr\)\s+max-content\s+88px/s
+    /@media \(max-width: 1040px\) \{[\s\S]*--settings-image-strategy-track:\s*104px/
   );
   assert.match(
     css,
-    /\.built-in-config-row \{[^}]*grid-template-columns:\s*var\(--ui-reorder-cluster\)\s+var\(--settings-site-mark\)\s+minmax\(118px, \.86fr\)\s+minmax\(176px, 1\.22fr\)\s+max-content\s+74px/s
+    /\.built-in-config-row \{[^}]*min-width:\s*648px;[^}]*grid-template-columns:\s*var\(--ui-reorder-cluster\)\s+var\(--settings-site-mark\)\s+minmax\(136px, \.9fr\)\s+minmax\(220px, 1\.36fr\)\s+var\(--settings-image-strategy-track\)\s+78px/s
   );
   assert.match(
     css,
-    /\.custom-config-row \{[^}]*grid-template-columns:\s*var\(--ui-reorder-cluster\)\s+var\(--settings-site-mark\)\s+minmax\(118px, \.86fr\)\s+minmax\(176px, 1\.22fr\)\s+max-content\s+80px/s
+    /\.custom-config-row \{[^}]*min-width:\s*668px;[^}]*grid-template-columns:\s*var\(--ui-reorder-cluster\)\s+var\(--settings-site-mark\)\s+minmax\(136px, \.9fr\)\s+minmax\(220px, 1\.36fr\)\s+var\(--settings-image-strategy-track\)\s+88px/s
   );
-  assert.doesNotMatch(css, /minmax\(128px, \.68fr\)/);
-  assert.doesNotMatch(css, /minmax\(104px, \.62fr\)/);
+  assert.match(
+    css,
+    /\.built-in-config-row \{[^}]*min-width:\s*608px;[^}]*grid-template-columns:\s*var\(--ui-reorder-cluster\)\s+var\(--settings-site-mark\)\s+minmax\(118px, \.86fr\)\s+minmax\(176px, 1\.22fr\)\s+var\(--settings-image-strategy-track\)\s+74px/s
+  );
+  assert.match(
+    css,
+    /\.custom-config-row \{[^}]*min-width:\s*628px;[^}]*grid-template-columns:\s*var\(--ui-reorder-cluster\)\s+var\(--settings-site-mark\)\s+minmax\(118px, \.86fr\)\s+minmax\(176px, 1\.22fr\)\s+var\(--settings-image-strategy-track\)\s+80px/s
+  );
   assert.doesNotMatch(
     css,
-    /\.built-in-config-row \{[^}]*grid-template-columns:[^;}]*\s52px\s/s
+    /\.built-in-config-row \{[^}]*grid-template-columns:[^;}]*max-content/s
   );
   assert.doesNotMatch(
     css,
-    /\.built-in-config-row \{[^}]*grid-template-columns:[^;}]*\s48px\s/s
+    /\.custom-config-row \{[^}]*grid-template-columns:[^;}]*max-content/s
   );
-  assert.match(
-    css,
-    /\.built-in-config-list \.settings-list-header span:nth-child\(5\),[\s\S]*?white-space:\s*nowrap/
+  const headerStrategy = css.match(
+    /\.built-in-config-list \.settings-list-header span:nth-child\(5\),\s*\n\.custom-config-list \.settings-list-header span:nth-child\(5\) \{([^}]+)\}/
   );
+  assert.ok(headerStrategy, "platform lists must share the Image Paste Strategy header rule");
+  assert.match(headerStrategy[1], /text-align:\s*center/);
+  assert.match(headerStrategy[1], /white-space:\s*normal/);
+  assert.match(headerStrategy[1], /text-wrap:\s*balance/);
+  assert.match(headerStrategy[1], /line-height:\s*1\.15/);
+  assert.match(headerStrategy[1], /padding:\s*0 var\(--space-1\)/);
+  assert.doesNotMatch(headerStrategy[1], /white-space:\s*nowrap/);
   assert.match(css, /\.settings-image-strategy-mark \.svg-icon \{[^}]*width:\s*16px/s);
   assert.match(
     css,
