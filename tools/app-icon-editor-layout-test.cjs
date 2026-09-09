@@ -32,14 +32,21 @@ assert.match(openEditor, /t\("apps\.iconHelp"\)/);
 assert.match(openEditor, /class: "settings-icon-editor-url"/);
 assert.match(openEditor, /t\("apps\.iconPreview"\)/);
 assert.match(openEditor, /t\("apps\.iconUrl"\)/);
+assert.match(openEditor, /class: "settings-icon-editor-actions"/);
 assert.match(openEditor, /class: "settings-icon-editor-upload"/);
 assert.match(openEditor, /class: "settings-icon-editor-tools"/);
-assert.match(openEditor, /iconButton\(\s*t\("apps\.iconRefresh"/);
+assert.match(openEditor, /createSvgIcon\("upload"\)/);
+assert.match(openEditor, /t\("apps\.iconUpload"\)/);
 assert.match(openEditor, /createSvgIcon\("refreshCw"\)/);
-assert.match(openEditor, /iconButton\(\s*t\("apps\.iconRestore"/);
+assert.match(openEditor, /t\("apps\.iconRefresh"\)/);
 assert.match(openEditor, /createSvgIcon\("undo2"\)/);
+assert.match(openEditor, /t\("apps\.iconRestore"\)/);
+assert.doesNotMatch(openEditor, /iconButton\(/);
 assert.doesNotMatch(openEditor, /createSvgIcon\("reload"\)/);
 assert.doesNotMatch(openEditor, /createSvgIcon\("reset"\)/);
+assert.doesNotMatch(openEditor, /button\(\s*t\("apps\.iconUpload"/);
+assert.doesNotMatch(openEditor, /button\(\s*t\("apps\.iconRefresh"/);
+assert.doesNotMatch(openEditor, /button\(\s*t\("apps\.iconRestore"/);
 assert.match(openEditor, /t\("common\.cancel"\)/);
 assert.match(openEditor, /t\("common\.save"\)/);
 
@@ -60,8 +67,6 @@ assert.doesNotMatch(
 );
 assert.doesNotMatch(openEditor, /class: "field"/);
 assert.doesNotMatch(openEditor, /el\("p", \{\s*class: "settings-icon-editor-help"/);
-assert.doesNotMatch(openEditor, /(?<!icon)button\(\s*t\("apps\.iconRefresh"/);
-assert.doesNotMatch(openEditor, /(?<!icon)button\(\s*t\("apps\.iconRestore"/);
 assert.doesNotMatch(openEditor, /appearance-overlay-info/);
 assert.doesNotMatch(openEditor, /settings-icon-help"/);
 assert.doesNotMatch(openEditor, /settings-icon-advanced-body/);
@@ -132,7 +137,11 @@ assert.match(stylesheet, /\.settings-icon-editor \.settings-icon-preview \{[^}]*
 assert.match(stylesheet, /\.settings-icon-editor-url \.input \{[^}]*max-width:\s*100%/s);
 assert.match(stylesheet, /\.settings-icon-editor-url-head \{[^}]*display:\s*flex/s);
 assert.match(stylesheet, /\.settings-icon-editor-help \{[^}]*cursor:\s*help/s);
-assert.match(stylesheet, /\.settings-icon-editor-tool \{[^}]*width:\s*var\(--target-min\)/s);
+assert.match(stylesheet, /\.settings-icon-editor-actions \{[^}]*display:\s*flex/s);
+assert.match(stylesheet, /\.settings-icon-editor-tools \{[^}]*display:\s*flex/s);
+assert.doesNotMatch(stylesheet, /\.settings-icon-editor-tools \{[^}]*justify-content:\s*flex-end/);
+assert.doesNotMatch(stylesheet, /\.settings-icon-editor-tool \{/);
+assert.match(stylesheet, /\.settings-icon-editor-action \{[^}]*display:\s*inline-flex/s);
 assert.match(stylesheet, /\.settings-file-input \{[^}]*width:\s*1px !important/s);
 assert.doesNotMatch(
   stylesheet,
@@ -150,9 +159,10 @@ assert.match(icons, /help:\s*\[/);
 assert.match(icons, /help:[\s\S]*cx: "12", cy: "12", r: "10"/);
 assert.match(icons, /refreshCw:\s*\[/);
 assert.match(icons, /undo2:\s*\[/);
+assert.match(icons, /upload:\s*\[/);
 assert.match(icons, /reload:\s*\{/);
 assert.match(icons, /reset:\s*\{/);
 assert.match(iconEditor, /from "\.\.\/\.\.\/ui\/icons\.js"/);
-assert.match(iconEditor, /iconButton/);
+assert.doesNotMatch(iconEditor, /iconButton/);
 
 console.log("app icon editor layout: ok");

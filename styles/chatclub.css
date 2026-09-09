@@ -8528,6 +8528,14 @@ html:not([data-settings-click-reorder="always"]) .settings-reorder .ui-reorder {
   max-width: 100%;
 }
 
+.settings-icon-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
 .settings-icon-editor-upload {
   position: relative;
   display: flex;
@@ -8558,25 +8566,21 @@ html:not([data-settings-click-reorder="always"]) .settings-reorder .ui-reorder {
 .settings-icon-editor-tools {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
   gap: var(--space-2);
   flex-wrap: wrap;
 }
 
-.settings-icon-editor-tool {
-  width: var(--target-min);
-  height: var(--target-min);
-  min-height: var(--target-min);
-  color: var(--muted);
+.settings-icon-editor-action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--settings-control-height);
+  padding: 0 var(--space-3);
   border-radius: var(--settings-radius);
+  flex: 0 0 auto;
 }
 
-.settings-icon-editor-tool:hover,
-.settings-icon-editor-tool:focus-visible {
-  color: var(--text);
-}
-
-.settings-icon-editor-tool .svg-icon {
+.settings-icon-editor-action .svg-icon {
   width: 16px;
   height: 16px;
 }

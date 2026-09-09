@@ -8,7 +8,7 @@ import {
   OUTBOUND_INVENTORY_SLOTS
 } from "../../shared/model-inventory.js";
 import { createId } from "../../shared/storage-schema.js";
-import { button, bindLinearMenuKeyboard, claimTopmostPopoverEscape, editorModal, el, field, iconButton, input, openConfirmationAction, select, toast } from "../../ui/dom.js";
+import { button, bindLinearMenuKeyboard, claimTopmostPopoverEscape, editorModal, el, field, input, openConfirmationAction, select, toast } from "../../ui/dom.js";
 import { createMenuButton } from "../../ui/components.js";
 import {
   cleanupSettingsDragRows,
@@ -641,14 +641,28 @@ export function createProfilesSettingsSection(ctx) {
                 ),
                 logoInput
               ),
-              el("div", { class: "settings-icon-editor-upload" },
-                fileInput,
-                button(t("apps.iconUpload"), () => fileInput.click()),
-                fileName
-              ),
-              el("div", { class: "settings-icon-editor-tools" },
-                iconButton(t("apps.iconRefresh"), svgIcon("refreshCw"), () => { void refreshIcon(); }, "settings-icon-editor-tool"),
-                iconButton(t("apps.iconRestore"), svgIcon("undo2"), restoreIcon, "settings-icon-editor-tool")
+              el("div", { class: "settings-icon-editor-actions" },
+                el("div", { class: "settings-icon-editor-upload" },
+                  fileInput,
+                  el("button", {
+                    class: "button settings-icon-editor-action",
+                    type: "button",
+                    onclick: () => fileInput.click()
+                  }, svgIcon("upload"), el("span", {}, t("apps.iconUpload"))),
+                  fileName
+                ),
+                el("div", { class: "settings-icon-editor-tools" },
+                  el("button", {
+                    class: "button settings-icon-editor-action",
+                    type: "button",
+                    onclick: () => { void refreshIcon(); }
+                  }, svgIcon("refreshCw"), el("span", {}, t("apps.iconRefresh"))),
+                  el("button", {
+                    class: "button settings-icon-editor-action",
+                    type: "button",
+                    onclick: restoreIcon
+                  }, svgIcon("undo2"), el("span", {}, t("apps.iconRestore")))
+                )
               )
             )
           ),

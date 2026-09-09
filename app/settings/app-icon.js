@@ -2,7 +2,7 @@ import { t } from "../../shared/i18n.js";
 import { BUILTIN_CHAT_APPS } from "../../shared/constants.js";
 import { acceptedDataIcon } from "../../shared/favicon-lookup.js";
 import { normalizeAppIcons } from "../../shared/storage-schema.js";
-import { button, editorModal, el, iconButton, input, toast } from "../../ui/dom.js";
+import { button, editorModal, el, input, toast } from "../../ui/dom.js";
 import { renderChatFavicon } from "../../ui/favicon.js";
 import { createSvgIcon } from "../../ui/icons.js";
 
@@ -266,14 +266,28 @@ export function createAppIconControls({
               ),
               urlInput
             ),
-            el("div", { class: "settings-icon-editor-upload" },
-              fileInput,
-              button(t("apps.iconUpload"), () => fileInput.click()),
-              fileName
-            ),
-            el("div", { class: "settings-icon-editor-tools" },
-              iconButton(t("apps.iconRefresh"), createSvgIcon("refreshCw"), refresh, "settings-icon-editor-tool"),
-              iconButton(t("apps.iconRestore"), createSvgIcon("undo2"), restore, "settings-icon-editor-tool")
+            el("div", { class: "settings-icon-editor-actions" },
+              el("div", { class: "settings-icon-editor-upload" },
+                fileInput,
+                el("button", {
+                  class: "button settings-icon-editor-action",
+                  type: "button",
+                  onclick: () => fileInput.click()
+                }, createSvgIcon("upload"), el("span", {}, t("apps.iconUpload"))),
+                fileName
+              ),
+              el("div", { class: "settings-icon-editor-tools" },
+                el("button", {
+                  class: "button settings-icon-editor-action",
+                  type: "button",
+                  onclick: refresh
+                }, createSvgIcon("refreshCw"), el("span", {}, t("apps.iconRefresh"))),
+                el("button", {
+                  class: "button settings-icon-editor-action",
+                  type: "button",
+                  onclick: restore
+                }, createSvgIcon("undo2"), el("span", {}, t("apps.iconRestore")))
+              )
             )
           )
         ),
