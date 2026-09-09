@@ -839,7 +839,7 @@ const PARAM = "__chatclub_frame_load_nonce";
     ctx.complete(composerFrame);
     assert.equal(composerFrame.inert, true, "completing a load while composerInert is claimed must keep the iframe inert");
     assert.equal(pins, 1, "iframe load must pin a claimed composer caret owner without an armed restore generation");
-    assert.equal(adopts, 0, "composer overlay must not re-adopt the page caret lease");
+    assert.equal(adopts, 1, "iframe load must re-adopt the page caret lease while composer overlay is claimed");
   }
 
   console.log("workspace frame loading status: ok");

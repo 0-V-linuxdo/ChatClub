@@ -600,7 +600,7 @@ function claimComposer(world, extras = {}) {
 {
   const world = createPageWorld();
   claimComposer(world);
-  assert.equal(world.mode(), "overlay", "composer claims overlay mode so page-caret tokens are not stamped");
+  assert.equal(world.mode(), "overlay", "composer claims overlay mode so it is not a leftover page caret owner");
   assert.equal(world.composerClaimed(), true);
   world.document.activeElement = world.iframe;
   assert.equal(world.pin(), true, "composer overlay must pin after an iframe steal");
@@ -647,13 +647,96 @@ function claimComposer(world, extras = {}) {
 {
   const world = createPageWorld();
   let adopts = 0;
+  let releases = 0;
   world.setLeaseHandler({
     adopt() { adopts += 1; },
-    release() {}
+    release() { releases += 1; }
   });
   claimComposer(world);
-  assert.equal(adopts, 0, "composer overlay must not adopt the page caret lease");
+  assert.equal(adopts, 1, "composer overlay must adopt the page caret lease");
+  assert.equal(releases, 0);
   assert.equal(world.iframe.inert, true, "composerInert must keep chat-frames inert without a typed modal");
+  world.document.activeElement = world.topbarButton;
+  assert.equal(world.pin(), false);
+  assert.equal(releases, 1, "leaving the composer caret owner must release the child-document lease");
+  assert.equal(world.composerClaimed(), false);
+}
+
+{
+  const world = createPageWorld();
+  claimComposer(world);
+  const stolen = world.listeners.find((entry) => entry.type === "message");
+  assert.ok(stolen, "composer overlay must listen for child page-caret stolen messages");
+  world.document.activeElement = world.iframe;
+  stolen.handler({ data: { source: "chatclub-page-caret", action: "stolen" } });
+  assert.equal(world.document.activeElement, world.promptField, "a child stolen message must re-pin the composer");
+}
+
+{
+  const world = createPageWorld();
+  claimComposer(world);
+  const focusout = world.listeners.find((entry) => entry.type === "focusout" && entry.capture === true);
+  assert.ok(focusout, "composer overlay must install a capturing focusout listener");
+  world.document.activeElement = world.iframe;
+  focusout.handler({ target: world.promptField, relatedTarget: null });
+  assert.equal(world.document.activeElement, world.promptField, "cross-origin iframe focusout must re-pin the composer");
+}
+
+{
+  const world = createPageWorld();
+  claimComposer(world);
+  world.promptField.isConnected = false;
+  world.document.activeElement = world.iframe;
+  assert.equal(world.pin(), false, "a disconnected composer field must keep intent without pin");
+  assert.equal(world.composerClaimed(), true);
+  assert.equal(world.iframe.inert, true, "composerInert survives textarea remount");
+  world.promptField.isConnected = true;
+  assert.equal(world.pin(), true, "composer pin rebinds the live .prompt-input");
+  assert.equal(world.document.activeElement, world.promptField);
+}
+
+{
+  const world = createPageWorld();
+  claimComposer(world);
+  const stale = world.promptField;
+  stale.isConnected = false;
+  const next = {
+    isConnected: true,
+    value: "hello",
+    nodeName: "TEXTAREA",
+    className: "textarea prompt-input",
+    focusCalls: 0,
+    selectionStart: 5,
+    selectionEnd: 5,
+    closest(selector) {
+      return selector === ".prompt-shell" ? world.shell : null;
+    },
+    contains() { return false; },
+    focus() {
+      this.focusCalls += 1;
+      world.document.activeElement = this;
+    },
+    setSelectionRange(start, end) {
+      this.selectionStart = start;
+      this.selectionEnd = end;
+    }
+  };
+  world.document.querySelector = (selector) => {
+    if (String(selector).includes("prompt-input")) return next;
+    return null;
+  };
+  world.document.activeElement = world.iframe;
+  assert.equal(world.pin(), true, "composer pin must rebind a remounted .prompt-input");
+  assert.equal(world.document.activeElement, next);
+  assert.ok(next.focusCalls >= 1);
+}
+
+{
+  const world = createPageWorld();
+  claimComposer(world);
+  world.release(world.promptField);
+  assert.equal(world.composerClaimed(), true, "release without leave keeps composer intent");
+  assert.equal(world.iframe.inert, true, "composerInert survives clear(false) while intent holds");
 }
 
 console.log("overlay caret lock tests passed");

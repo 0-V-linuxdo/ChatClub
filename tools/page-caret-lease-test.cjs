@@ -55,6 +55,8 @@ assert.match(lease, /send\("preparePageCaretLease"/);
 assert.match(lease, /"adoptPageCaretLease"/);
 assert.match(lease, /"releasePageCaretLease"/);
 assert.match(lease, /overlaySearchCaretMode\(\) === "overlay"/);
+assert.match(lease, /overlaySearchCaretComposer/);
+assert.match(lease, /function leaseArmed/);
 assert.match(lease, /params\.delete\(PAGE_CARET_NAME_UNTIL\)/);
 assert.match(lease, /contentWindow/);
 assert.match(lease, /onAdopted/);
@@ -171,6 +173,25 @@ assert.match(agents, /chat-frame-wrap/);
   leaseApi.adopt({ isConnected: false });
   assert.equal(sent.length, 0, "overlay mode must not prepare a page-caret lease");
 
+  let composer = false;
+  const composerLease = createPageCaretLease({
+    sendToContentFrame(_frame, command, data) {
+      sent.push({ command, data });
+      return { ok: true, documentToken: "doc-composer" };
+    },
+    overlaySearchCaretMode: () => "overlay",
+    overlaySearchCaretComposer: () => composer,
+    timeoutMs: 20
+  });
+  const composerParams = new URLSearchParams("chatclub_webview=&app=ChatGPT");
+  composer = false;
+  composerLease.writeNameParams(composerParams);
+  assert.equal(composerParams.get("chatclub_page_caret_until"), null, "overlay search without composer must still strip page-caret name params");
+  composer = true;
+  composerLease.writeNameParams(composerParams);
+  assert.ok(Number(composerParams.get("chatclub_page_caret_until")) > Date.now(), "composer overlay must stamp a future page-caret until");
+  assert.match(String(composerParams.get("chatclub_page_caret_token") || ""), /./);
+
   class HTMLIFrameElement {}
   globalThis.HTMLIFrameElement = HTMLIFrameElement;
   const frame = new HTMLIFrameElement();
@@ -179,6 +200,11 @@ assert.match(agents, /chat-frame-wrap/);
   frame.getAttribute = () => frame.name;
   frame.setAttribute = (_key, value) => { frame.name = value; };
   Object.defineProperty(frame, "contentWindow", { value: { name: "" }, configurable: true });
+  sent.length = 0;
+  const composerAdopt = await composerLease.adopt(frame);
+  assert.equal(composerAdopt.ok, true, "composer overlay must prepare a page-caret lease");
+  assert.equal(sent[0]?.command, "preparePageCaretLease");
+  assert.match(String(frame.name), /chatclub_page_caret_until=/);
   let resolvePrepare;
   let adopted = 0;
   const pending = [];

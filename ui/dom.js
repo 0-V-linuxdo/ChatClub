@@ -216,6 +216,7 @@ let overlaySearchCaretListening = false;
 let overlayCaretFramePointerAt = 0;
 let overlayCaretLeaseHandler = null;
 let overlayCaretPinFollow = 0;
+let composerCaretIntent = false;
 const OVERLAY_CARET_FRAME_POINTER_MS = 1000;
 const OVERLAY_CARET_PIN_FOLLOW_MAX = 3;
 const PAGE_CARET_MESSAGE_SOURCE = "chatclub-page-caret";
@@ -272,7 +273,7 @@ function setOverlayCaretFrameInert(frame, value) {
 function syncOverlayCaretFrameInert() {
   const modalOpen = Boolean(typeof document.querySelector === "function" && document.querySelector(".modal"));
   const pageClaimed = overlaySearchCaret?.mode === "page";
-  const composerClaimed = overlaySearchCaret?.composer === true;
+  const composerClaimed = overlaySearchCaretComposer();
   let frames = [];
   try { frames = [...(document.querySelectorAll?.("iframe.chat-frame") || [])]; } catch {}
   for (const frame of frames) {
@@ -346,12 +347,18 @@ function notifyOverlayCaretLease(kind, iframe) {
 function clearOverlaySearchCaret(invokeLeave = true) {
   cancelOverlayCaretPinFollow();
   const owner = overlaySearchCaret;
+  if (!owner && !composerCaretIntent) return;
   overlaySearchCaret = null;
-  if (!owner) return;
+  const wasLease = owner?.mode === "page" || owner?.composer === true || composerCaretIntent;
   if (invokeLeave) {
-    try { owner.onLeave?.(); } catch {}
+    try { owner?.onLeave?.(); } catch {}
+    composerCaretIntent = false;
+    if (wasLease) notifyOverlayCaretLease("release");
+  } else if (owner?.composer) {
+    composerCaretIntent = true;
+  } else {
+    composerCaretIntent = false;
   }
-  if (owner.mode === "page") notifyOverlayCaretLease("release");
   syncOverlayCaretFrameInert();
 }
 
@@ -382,7 +389,7 @@ export function overlaySearchCaretMode() {
 }
 
 export function overlaySearchCaretComposer() {
-  return overlaySearchCaret?.composer === true;
+  return overlaySearchCaret?.composer === true || composerCaretIntent;
 }
 
 export function setOverlayCaretLeaseHandler(handler) {
@@ -391,10 +398,24 @@ export function setOverlayCaretLeaseHandler(handler) {
 
 export function pinOverlaySearchCaret(followRemaining = OVERLAY_CARET_PIN_FOLLOW_MAX) {
   const owner = overlaySearchCaret;
-  const field = owner?.field;
+  if (!owner) return false;
+  let field = owner.field;
   if (!field?.isConnected) {
-    clearOverlaySearchCaret(false);
-    return false;
+    if (owner.composer || composerCaretIntent) {
+      composerCaretIntent = true;
+      let next = null;
+      try { next = document.querySelector?.(".prompt-input"); } catch {}
+      if (next?.isConnected && next !== field) {
+        owner.field = next;
+        try { owner.panel = next.closest?.(".prompt-shell") || owner.panel; } catch {}
+        field = next;
+      } else {
+        return false;
+      }
+    } else {
+      clearOverlaySearchCaret(false);
+      return false;
+    }
   }
   const modal = typeof document.querySelector === "function" ? document.querySelector(".modal") : null;
   if (modal && field.closest?.(".modal") !== modal && !modal.contains?.(field)) {
@@ -440,13 +461,13 @@ function onOverlaySearchCaretFocusOut(event) {
   if (!overlaySearchCaret) return;
   const field = overlaySearchCaret.field;
   if (event?.target !== field && !field?.contains?.(event?.target)) return;
-  if (overlayCaretIsFrame(event.relatedTarget)) pinOverlaySearchCaret();
+  if (!event?.relatedTarget || overlayCaretIsFrame(event.relatedTarget)) pinOverlaySearchCaret();
 }
 
 function onOverlayPageCaretStolen(event) {
   const data = event?.data;
   if (!data || data.source !== PAGE_CARET_MESSAGE_SOURCE || data.action !== "stolen") return;
-  if (overlaySearchCaretMode() !== "page") return;
+  if (overlaySearchCaretMode() !== "page" && !overlaySearchCaretComposer()) return;
   pinOverlaySearchCaret();
 }
 
@@ -474,6 +495,7 @@ function ensureOverlaySearchCaretListeners() {
 export function claimOverlaySearchCaret(field, options = {}) {
   if (!field) return;
   const previous = overlaySearchCaret;
+  const previousLease = previous?.mode === "page" || previous?.composer === true || composerCaretIntent;
   cancelOverlayCaretPinFollow();
   overlaySearchCaret = {
     field,
@@ -486,9 +508,11 @@ export function claimOverlaySearchCaret(field, options = {}) {
     stolen: typeof options.stolen === "function" ? options.stolen : null,
     shouldLeave: typeof options.shouldLeave === "function" ? options.shouldLeave : null
   };
+  composerCaretIntent = overlaySearchCaret.composer === true;
   ensureOverlaySearchCaretListeners();
-  if (overlaySearchCaret.mode === "page") notifyOverlayCaretLease("adopt");
-  else if (previous?.mode === "page") notifyOverlayCaretLease("release");
+  const nextLease = overlaySearchCaret.mode === "page" || overlaySearchCaret.composer;
+  if (nextLease) notifyOverlayCaretLease("adopt");
+  else if (previousLease) notifyOverlayCaretLease("release");
   pinOverlaySearchCaret();
   syncOverlayCaretFrameInert();
 }

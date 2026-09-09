@@ -12,7 +12,7 @@ import {
   claimTopmostPopoverEscape,
   el,
   pinOverlaySearchCaret,
-  releaseOverlaySearchCaret,
+  overlaySearchCaretComposer,
   scheduleFrameOwnedBlurDismissal,
   textarea,
   toast as defaultToast
@@ -77,6 +77,10 @@ function composerCaretShouldLeave(active, field) {
   if (!active || active === field) return false;
   const shell = field?.closest?.(".prompt-shell");
   if (shell && (active === shell || shell.contains?.(active))) return false;
+  if (active === document.body || active === document.documentElement) return false;
+  if (active.classList?.contains?.("chat-frame") || active.nodeName === "IFRAME") return false;
+  if (active.classList?.contains?.("chat-frame-wrap") || active.closest?.(".chat-frame-wrap")) return false;
+  if (active.classList?.contains?.("chat-card") || active.closest?.(".chat-card")) return false;
   if (
     active.closest?.(".modal")
     || active.closest?.(".popover-menu")
@@ -1020,7 +1024,6 @@ export function createComposerController(dependencies = {}) {
   function handleInputBlur(event) {
     const inputNode = event.currentTarget;
     if (event.target?.isConnected === false) {
-      releaseOverlaySearchCaret(inputNode);
       collapseInput(inputNode);
       return;
     }
@@ -1174,11 +1177,16 @@ export function createComposerController(dependencies = {}) {
     if(!n)return
     if(n.value!==state.promptText)n.value=state.promptText
     syncCollapsedPreview(n)
-    if(focus){
+    const reclaim = overlaySearchCaretComposer() && !document.querySelector(".modal");
+    if(focus || reclaim){
       claimPromptCaret(n)
-      n.focus({preventScroll:true})
-      if(expand)expandInput(n);else collapseInput(n)
-      restoreSelectionSoon(n)
+      if(focus){
+        n.focus({preventScroll:true})
+        if(expand)expandInput(n);else collapseInput(n)
+        restoreSelectionSoon(n)
+      } else {
+        pinOverlaySearchCaret()
+      }
     }
     return n
   }

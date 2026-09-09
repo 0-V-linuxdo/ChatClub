@@ -84,6 +84,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
   const pageCaret = createPageCaretLease({
     sendToContentFrame,
     overlaySearchCaretMode,
+    overlaySearchCaretComposer,
     timeoutMs: NAVIGATION_FOCUS_GUARD_TIMEOUT_MS,
     onAdopted() {
       if (!document.querySelector(".modal") && (overlaySearchCaretMode() === "page" || overlaySearchCaretComposer())) pinOverlaySearchCaret();
@@ -468,7 +469,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
     restorePromptInputFocus(iframe);
     if (!document.querySelector(".modal") && (overlaySearchCaretMode() === "page" || overlaySearchCaretComposer())) {
       pinOverlaySearchCaret();
-      if (overlaySearchCaretMode() === "page") adoptPageCaretLease(iframe);
+      adoptPageCaretLease(iframe);
     }
     // The New Chat home document loaded; recapture without the release marker.
     if (iframe.dataset.frameLoadingKind === "new-topic" && clearFrameNewChatPending(iframe)) rememberWorkspaceSession();

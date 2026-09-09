@@ -41,7 +41,8 @@ assert.match(dom, /composer: options\.composer === true/);
 assert.match(dom, /shouldLeave: typeof options\.shouldLeave === "function"/);
 assert.match(dom, /overlaySearchCaretMode\(\) !== "page" && !overlaySearchCaretComposer\(\)/);
 assert.match(frame, /overlaySearchCaretComposer\(\)/);
-assert.match(frame, /if \(overlaySearchCaretMode\(\) === "page"\) adoptPageCaretLease/);
+assert.match(frame, /adoptPageCaretLease\(iframe\)/);
+assert.match(frame, /overlaySearchCaretMode\(\) === "page" \|\| overlaySearchCaretComposer\(\)/);
 assert.match(topbarView, /composer\.applyPlacement\(\)/);
 assert.match(topbar, /composer\.applyPlacement\(\)/);
 assert.match(appearanceTopbar, /topbar-prompt-input-placement/);
@@ -63,6 +64,7 @@ assert.match(i18n, /"topbar\.input\.placementCenter": "居中"/);
 assert.match(functionSource(composer, "composerCaretStolen"), /chat-frame-wrap/);
 assert.match(functionSource(composer, "composerCaretShouldLeave"), /popover-menu/);
 assert.match(functionSource(composer, "composerCaretShouldLeave"), /preferred-model-selection-overlay/);
+assert.match(functionSource(composer, "composerCaretShouldLeave"), /chat-frame-wrap/);
 assert.doesNotMatch(functionSource(composer, "applyPlacement"), /cloneNode|innerHTML/);
 
 (async () => {
