@@ -9,7 +9,7 @@ import {
 import { t } from "../../shared/i18n.js";
 import { findTopicDeleteSiteConfig, topicDeleteTimeoutMs } from "../../shared/topic-delete-sites.js";
 import { conversationHrefFromLocation } from "../../shared/workspace-tab-memory.js";
-import { button, editorModal, el, field, input, openConfirmationAction, overlaySearchCaretMode, pageCaretHoldActive, pinOverlaySearchCaret, setOverlayCaretLeaseHandler } from "../../ui/dom.js";
+import { button, editorModal, el, field, input, openConfirmationAction, overlaySearchCaretMode, pinOverlaySearchCaret, setOverlayCaretLeaseHandler } from "../../ui/dom.js";
 import { clearFrameNewChatPending, frameLoadingKindForTarget, markFrameNewChatPending } from "./frame-loading.js";
 import { createPageCaretLease } from "./page-caret-lease.js";
 import { removeChatFromGroup, removeGroupFromWorkspace } from "./model.js";
@@ -83,10 +83,10 @@ export function createWorkspaceFrameController(dependencies = {}) {
   const frameNavigationTargets = new WeakMap();
   const pageCaret = createPageCaretLease({
     sendToContentFrame,
-    overlaySearchCaretMode, pageCaretHoldActive,
+    overlaySearchCaretMode,
     timeoutMs: NAVIGATION_FOCUS_GUARD_TIMEOUT_MS,
     onAdopted() {
-      if (!document.querySelector(".modal") && (overlaySearchCaretMode() === "page" || pageCaretHoldActive())) pinOverlaySearchCaret();
+      if (!document.querySelector(".modal") && overlaySearchCaretMode() === "page") pinOverlaySearchCaret();
     }
   });
   setOverlayCaretLeaseHandler({ adopt: pageCaret.adopt, release: pageCaret.release });
@@ -457,7 +457,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
     if (!(iframe instanceof HTMLIFrameElement)) return;
     rememberBrowserFrameId(iframe);
     if (iframe.dataset.frameLoadPending === "1") return;
-    iframe.inert = Boolean(document.querySelector(".modal") || overlaySearchCaretMode() === "page" || pageCaretHoldActive());
+    iframe.inert = Boolean(document.querySelector(".modal") || overlaySearchCaretMode() === "page");
     if (iframe.dataset.frameLoadingKind === "new-topic") iframe.dataset.frameLoadingMaskPhase = "fade";
     else {
       delete iframe.dataset.frameLoadingKind;
@@ -466,7 +466,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
     syncFrameLoadingMask(iframe);
     setFrameLoading(iframe, false);
     restorePromptInputFocus(iframe);
-    if (!document.querySelector(".modal") && (overlaySearchCaretMode() === "page" || pageCaretHoldActive())) {
+    if (!document.querySelector(".modal") && overlaySearchCaretMode() === "page") {
       pinOverlaySearchCaret();
       adoptPageCaretLease(iframe);
     }

@@ -115,7 +115,7 @@ const PARAM = "__chatclub_frame_load_nonce";
   const maintainFrameNavigationFocusGuard = functionSource(frameController, "maintainFrameNavigationFocusGuard");
   const activeHref = functionSource(frameController, "activeHref");
   assert.match(beginFrameLoading, /iframe\.inert = true/);
-  assert.match(completeFrameLoading, /iframe\.inert = Boolean\(document\.querySelector\("\.modal"\) \|\| overlaySearchCaretMode\(\) === "page" \|\| pageCaretHoldActive\(\)\)/);
+  assert.match(completeFrameLoading, /iframe\.inert = Boolean\(document\.querySelector\("\.modal"\) \|\| overlaySearchCaretMode\(\) === "page"\)/);
   assert.match(beginFrameLoading, /const loadingKind = frameLoadingKindForTarget/);
   assert.match(beginFrameLoading, /iframe\.dataset\.frameLoadingKind = loadingKind/);
   assert.match(beginFrameLoading, /frameLoadingMaskPhase = "opaque"/);
@@ -187,7 +187,6 @@ const PARAM = "__chatclub_frame_load_nonce";
   );
   assert.match(completeFrameLoading, /restorePromptInputFocus\(iframe\)/, "the real iframe load must restore focus to the prompt when it was active before navigation");
   assert.match(completeFrameLoading, /overlaySearchCaretMode\(\) === "page"/, "iframe load must pin a claimed page caret owner without an armed restore generation");
-  assert.match(completeFrameLoading, /pageCaretHoldActive\(\)/, "iframe load must pin while the page caret hold is on even if the live claim is empty");
   assert.match(completeFrameLoading, /pinOverlaySearchCaret\(\)/);
   assert.match(completeFrameLoading, /adoptPageCaretLease\(iframe\)/);
   assert.match(beginFrameLoading, /pageCaret\.adopt\(iframe\)/, "iframe src assignment must prepare the page-caret lease on the outgoing document");
@@ -403,7 +402,6 @@ const PARAM = "__chatclub_frame_load_nonce";
     rememberWorkspaceSession() { rememberCalls += 1; },
     document: { querySelector() { return null; } },
     overlaySearchCaretMode() { return ""; },
-    pageCaretHoldActive() { return false; },
     pinOverlaySearchCaret() { return false; },
     adoptPageCaretLease() {},
     pageCaret: { adopt() {}, refresh() {}, release() {} },
@@ -763,7 +761,6 @@ const PARAM = "__chatclub_frame_load_nonce";
       rememberBrowserFrameId() {},
       restorePromptInputFocus() {},
       overlaySearchCaretMode() { return ""; },
-      pageCaretHoldActive() { return false; },
       pinOverlaySearchCaret() { return false; },
       adoptPageCaretLease() {},
       setFrameLoading() {},
@@ -796,7 +793,6 @@ const PARAM = "__chatclub_frame_load_nonce";
       rememberBrowserFrameId() {},
       restorePromptInputFocus() {},
       overlaySearchCaretMode() { return "page"; },
-      pageCaretHoldActive() { return false; },
       pinOverlaySearchCaret() { pins += 1; return false; },
       adoptPageCaretLease() { adopts += 1; },
       setFrameLoading() {},
@@ -810,37 +806,6 @@ const PARAM = "__chatclub_frame_load_nonce";
     assert.equal(pageFrame.inert, true, "completing a load while the page caret owner is claimed must keep the iframe inert");
     assert.equal(pins, 1, "iframe load must pin a claimed page caret owner without an armed restore generation");
     assert.equal(adopts, 1, "iframe load must re-adopt the page caret lease on the new document");
-  }
-
-  {
-    class HoldIframe {
-      constructor() {
-        this.dataset = { instanceId: "frame-hold" };
-        this.inert = true;
-      }
-    }
-    let pins = 0;
-    let adopts = 0;
-    const ctx = vm.createContext({
-      HTMLIFrameElement: HoldIframe,
-      document: { querySelector() { return null; } },
-      rememberBrowserFrameId() {},
-      restorePromptInputFocus() {},
-      overlaySearchCaretMode() { return ""; },
-      pageCaretHoldActive() { return true; },
-      pinOverlaySearchCaret() { pins += 1; return false; },
-      adoptPageCaretLease() { adopts += 1; },
-      setFrameLoading() {},
-      syncFrameLoadingMask() {},
-      clearFrameNewChatPending() { return false; },
-      rememberWorkspaceSession() {}
-    });
-    vm.runInContext(`${completeFrameLoading}\nglobalThis.complete = completeFrameLoading;`, ctx);
-    const holdFrame = new HoldIframe();
-    ctx.complete(holdFrame);
-    assert.equal(holdFrame.inert, true, "completing a load while the page caret hold is on must keep the iframe inert");
-    assert.equal(pins, 1, "iframe load must pin while the page caret hold is on even if the live claim is empty");
-    assert.equal(adopts, 1, "iframe load must re-adopt the page caret lease while the page hold is on");
   }
 
   console.log("workspace frame loading status: ok");

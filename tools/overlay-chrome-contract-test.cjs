@@ -266,7 +266,6 @@ assert.match(agents, /page-caret lease/);
 assert.match(agents, /chatclub_page_caret_until/);
 assert.match(agents, /document_start/);
 assert.match(dom, /export function overlaySearchCaretMode/);
-assert.match(dom, /export function pageCaretHoldActive/);
 assert.match(dom, /export function setOverlayCaretLeaseHandler/);
 assert.match(agents, /Prompt Library is a composer-anchored/);
 assert.match(agents, /Linear action menus may use `role="menu"`/);

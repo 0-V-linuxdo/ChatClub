@@ -61,14 +61,10 @@ function settlePromise(promise, timeoutMs) {
   });
 }
 
-export function createPageCaretLease({ sendToContentFrame, overlaySearchCaretMode, pageCaretHoldActive, timeoutMs = 1200, onAdopted }) {
+export function createPageCaretLease({ sendToContentFrame, overlaySearchCaretMode, timeoutMs = 1200, onAdopted }) {
   let token = "";
   let expiresAt = 0;
   const running = new Set();
-
-  function pageSession() {
-    return overlaySearchCaretMode() === "page" || Boolean(pageCaretHoldActive?.());
-  }
 
   function ensureSeed() {
     if (!token) {
@@ -85,7 +81,7 @@ export function createPageCaretLease({ sendToContentFrame, overlaySearchCaretMod
   }
 
   function writeNameParams(params) {
-    if (overlaySearchCaretMode() === "overlay" || (!pageSession() && !token)) {
+    if (overlaySearchCaretMode() === "overlay" || (overlaySearchCaretMode() !== "page" && !token)) {
       params.delete(PAGE_CARET_NAME_UNTIL);
       params.delete(PAGE_CARET_NAME_TOKEN);
       return;
@@ -111,7 +107,7 @@ export function createPageCaretLease({ sendToContentFrame, overlaySearchCaretMod
   }
 
   function stampName(iframe) {
-    const page = pageSession() || pageArmed();
+    const page = overlaySearchCaretMode() === "page" || pageArmed();
     if (page) ensureSeed();
     for (const frame of chatFrames(iframe)) applyName(frame, page);
   }
@@ -148,7 +144,7 @@ export function createPageCaretLease({ sendToContentFrame, overlaySearchCaretMod
   }
 
   function adopt(iframe) {
-    if (!pageSession()) return Promise.resolve({ ok: false });
+    if (overlaySearchCaretMode() !== "page") return Promise.resolve({ ok: false });
     const seed = ensureSeed();
     stampName(iframe);
     const frames = chatFrames(iframe).filter((frame) => isHtmlIframe(frame) && frame.isConnected);
@@ -158,7 +154,7 @@ export function createPageCaretLease({ sendToContentFrame, overlaySearchCaretMod
   }
 
   function refresh(iframe) {
-    if (!pageSession()) return;
+    if (overlaySearchCaretMode() !== "page") return;
     if (!isHtmlIframe(iframe) || !iframe.isConnected) {
       adopt(iframe);
       return;
@@ -180,7 +176,7 @@ export function createPageCaretLease({ sendToContentFrame, overlaySearchCaretMod
       running.delete(stop);
     };
     const tick = () => {
-      if (stopped || !pageSession() || !iframe.isConnected) return false;
+      if (stopped || overlaySearchCaretMode() !== "page" || !iframe.isConnected) return false;
       if (Date.now() - startedAt > PAGE_CARET_REFRESH_MAX_MS) return false;
       if (lastAckAt && Date.now() - lastAckAt >= PAGE_CARET_REFRESH_SETTLE_MS) return false;
       if (inFlight) return true;

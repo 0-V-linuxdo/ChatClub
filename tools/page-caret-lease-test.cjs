@@ -138,9 +138,6 @@ assert.match(overlayCaret, /a child stolen message must re-pin the prompt/);
 assert.match(overlayCaret, /pin uses window.focus/);
 assert.match(overlayCaret, /a page claim must keep chat-frames inert/);
 assert.match(overlayCaret, /a trusted pointer on the frame wrap must leave and un-inert/);
-assert.match(overlayCaret, /load-driven focus on a topbar control must steal, not leave, while the page hold is on/);
-assert.match(overlayCaret, /releasing the live claim must keep the page caret hold/);
-assert.match(overlayCaret, /focusout onto body must re-pin the prompt while the page hold is on/);
 assert.match(agents, /chat-frame-wrap/);
 
 (async () => {

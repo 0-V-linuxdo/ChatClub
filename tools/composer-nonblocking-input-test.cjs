@@ -216,7 +216,6 @@ const previousGlobals = {
 };
 
 globalThis.Node = FakeNode;
-const documentListeners = [];
 globalThis.document = {
   activeElement: null,
   body: new FakeNode("body"),
@@ -228,9 +227,7 @@ globalThis.document = {
     node.textContent = String(value);
     return node;
   },
-  addEventListener(type, handler, capture) {
-    documentListeners.push({ type, handler, capture });
-  },
+  addEventListener() {},
   removeEventListener() {},
   querySelector(selector) { return this.body.querySelector(selector); },
   querySelectorAll(selector) { return this.body.querySelectorAll(selector); }
@@ -241,12 +238,6 @@ globalThis.window = {
   addEventListener() {},
   removeEventListener() {}
 };
-
-function dispatchTrustedPointer(target) {
-  for (const entry of documentListeners) {
-    if (entry.type === "pointerdown") entry.handler({ isTrusted: true, type: "pointerdown", target });
-  }
-}
 globalThis.requestAnimationFrame = (callback) => { callback(); return 1; };
 globalThis.cancelAnimationFrame = () => {};
 globalThis.FileReader = class {
@@ -387,7 +378,6 @@ function preferredModelStub() {
     );
     const outside = new FakeNode("button");
     globalThis.document.body.append(outside);
-    dispatchTrustedPointer(outside);
     shell.dispatch("focusout", { target: status, relatedTarget: outside });
     assert.equal(
       shell.classList.contains("prompt-shell-expanded"),
@@ -600,7 +590,6 @@ function preferredModelStub() {
     input.selectionStart = input.selectionEnd = input.value.length;
     input.dispatch("input");
     assert.ok(preview.querySelector(".prompt-collapsed-preview-images"), "an image draft must render collapsed thumbs before send");
-    dispatchTrustedPointer(outside);
     shell.dispatch("focusout", { target: input, relatedTarget: outside });
     assert.equal(shell.classList.contains("prompt-shell-expanded"), false, "the image draft must collapse before send");
     assert.ok(preview.querySelector(".prompt-collapsed-preview-images"), "collapsed send must still show the attached image");
@@ -609,7 +598,6 @@ function preferredModelStub() {
     assert.equal(state.promptText, "", "an admitted send must clear the draft text");
     assert.deepEqual(state.promptImages, [], "an admitted send must clear the draft images");
     assert.equal(input.value, "", "an admitted send must clear the visible textarea");
-    dispatchTrustedPointer(outside);
     shell.dispatch("focusout", { target: input, relatedTarget: outside });
     assert.equal(shell.classList.contains("prompt-shell-expanded"), false, "leaving Composer after send must collapse the empty input");
     assert.equal(

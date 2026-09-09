@@ -14,16 +14,16 @@
     "reason": "The send runtime keeps exact-once composer delivery, typed image hydration, site-specific submit preparation, and the send-owned navigation correlation needed to keep Grok conversation creation from restarting preferred-model selection after the message is delivered."
   },
   "app/composer/controller.js": {
-    "maxLines": 1330,
+    "maxLines": 1328,
     "target": 1200,
-    "maxBytes": 50420,
+    "maxBytes": 50284,
     "targetBytes": 45000,
     "reason": "The Composer controller owns immutable text-and-image draft revisions, revision-conditional clearing, history de-duplication, and the shared document-bound admission queue used by both ordinary Send and one-shot new-workspace prompt handoff so delivery uncertainty and preferred-model preparation cannot diverge; prompt-actions popover chrome now uses the shared overlay-surface contract with aria-haspopup/aria-expanded, a named linear menu, and Tab dismiss; empty collapsed placeholder clicks keep the native caret so the first load click is not swallowed; prompt expand skips while a typed modal owns the caret; a focused `.prompt-input` claims the page caret owner so iframe autofocus cannot collapse the field mid-keystroke."
   },
   "app/workspace/frame-controller.js": {
     "maxLines": 1300,
     "target": 1200,
-    "maxBytes": 51461,
+    "maxBytes": 51340,
     "targetBytes": 45000,
     "reason": "The workspace frame controller keeps navigation-generation isolation, frame-load preparation, authenticated frame lifecycle reporting, target-correlated loading masks, prompt-focus restoration, and one post-layout navigation frame together so a delayed iframe load cannot publish stale state, size an embedded responsive page against a pre-layout viewport, or steal an input focus that was active before navigation. Typed modals now block that prompt restore the same way workspace popovers already did, keep the iframe inert when a load finishes while a modal is open, skip the navigation focus guard while a modal is open, and re-check `.modal` on every restore retry so a still-loading iframe cannot yank the caret out of Tabs search or History. Armed prompt restore yields to `pinOverlaySearchCaret` when the page caret owner already holds `.prompt-input`. Completing a chat-frame load pins a claimed page caret owner without an armed restore generation and stamps a child-document page-caret lease onto `iframe.name` before src so MAIN-world autofocus cannot steal the top prompt; name stamping, prepare, and post-load refresh live in `app/workspace/page-caret-lease.js`. The Cookie preflight host list includes the exact Manus origin alongside Grok and Grok Mirror. New Chat now freezes the current conversation workspace before in-place navigation so the original tab remains reopenable, marks the resetting frame as having released its conversation before the first await, and clears that marker only when the new-topic home document loads or another ChatClub navigation supersedes it, so the rebound desk never records the frozen thread from a stale iframe src. In-group topic deletion now opens the themed confirmationModal via openConfirmationAction instead of window.confirm so popovers cannot cover the alertdialog, and that confirm now requires acknowledgement plus applying busy copy. Tab favicons resolve through effective(..., { appId }) so user overrides outrank discovered logos, and Google/DuckDuckGo URLs are never remembered."
   },
