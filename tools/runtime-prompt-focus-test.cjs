@@ -26,7 +26,9 @@ assert.ok(
   "iframe construction must wait until the prompt focus controller is installed"
 );
 assert.match(composerSource, /claimPromptCaret\(e\.target\)/);
-assert.match(composerSource, /mode: "page"/);
+assert.match(composerSource, /composer: true/);
+assert.match(composerSource, /mode: "overlay"/);
+assert.doesNotMatch(composerSource, /mode: "page"/);
 assert.match(composerSource, /claimOverlaySearchCaret/);
 assert.match(functionSource(composerSource, "handlePointerDown"), /if \(inputNode\.value\)/);
 assert.match(focusControllerSource, /event\.type === "pointerdown" \|\| \(event\.type === "keydown"/);
@@ -112,18 +114,18 @@ assert.equal(focusCalls, 2, "an automatic iframe focus must be pulled back to th
 workspace.document.activeElement = iframe;
 workspace.listeners.get("focusin")({ target: iframe });
 workspace.timers.shift()?.();
-assert.equal(focusCalls, 2, "iframe focusin must not steal a later copy or caret click");
+assert.equal(focusCalls, 3, "untrusted iframe focusin must return the caret to the prompt");
 const modalInput = Object.assign(new MockNode(), {
   classList: { contains(name) { return name === "modal"; } }
 });
 workspace.document.activeElement = modalInput;
 workspace.listeners.get("focusin")({ target: modalInput });
 workspace.timers.shift()?.();
-assert.equal(focusCalls, 2, "typed modal focus must not be pulled back to the prompt");
+assert.equal(focusCalls, 3, "typed modal focus must not be pulled back to the prompt");
 workspace.document.activeElement = iframe;
 workspace.listeners.get("load")({ target: iframe });
 workspace.timers.at(-1)?.();
-assert.equal(focusCalls, 3, "iframe load must still restore prompt focus");
+assert.equal(focusCalls, 4, "iframe load must still restore prompt focus");
 {
   const modalLoad = makeContext();
   let modalFocusCalls = 0;
@@ -157,7 +159,7 @@ assert.doesNotThrow(
   "a non-Node Window focus target must not be passed to Node.contains"
 );
 workspace.timers.shift()?.();
-assert.equal(focusCalls, 4, "regaining the top-level window must restart prompt focus without waiting for an iframe event");
+assert.equal(focusCalls, 5, "regaining the top-level window must restart prompt focus without waiting for an iframe event");
 
 workspace.listeners.get("pointerdown")({ isTrusted: true, type: "pointerdown", target: workspace.promptChild });
 assert.equal(workspace.document.documentElement.dataset.p, undefined, "a prompt click must end the initial iframe focus lock");

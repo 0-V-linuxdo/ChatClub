@@ -205,6 +205,10 @@ export function normalizeTopbarPromptPlaceholderText(value = "") {
     .slice(0, TOPBAR_PROMPT_PLACEHOLDER_MAX_LEN);
 }
 
+export function normalizeComposerPlacement(value, fallback = DEFAULT_OPTIONS.composerPlacement) {
+  return value === "center" || value === "topbar" ? value : fallback;
+}
+
 export function normalizeTopbarPromptInputFontSize(
   value,
   fallback = DEFAULT_OPTIONS.topbarPromptInputFontSize
@@ -1058,6 +1062,7 @@ export function normalizeOptions(raw = {}) {
     activeLayoutPresetId,
     tabGroupButtonsMode,
     topbarPromptInputFontSize: normalizeTopbarPromptInputFontSize(raw.topbarPromptInputFontSize),
+    composerPlacement: normalizeComposerPlacement(raw.composerPlacement),
     topbarPromptPlaceholderConfig: normalizeTopbarPromptPlaceholderConfig(raw.topbarPromptPlaceholderConfig),
     tabGroupButtonPlacement: normalizeTabGroupButtonPlacement(raw.tabGroupButtonPlacement, tabGroupButtonsMode),
     tabGroupButtonOrder: normalizeTabGroupButtonOrder(raw.tabGroupButtonOrder),

@@ -121,7 +121,9 @@ assert.match(frame, /function assignFrameSrc[\s\S]*pageCaret\.adopt\(iframe\)[\s
 assert.match(frame, /function setFrameSrcAfterPrepare[\s\S]*pageCaret\.adopt\(iframe\)[\s\S]*iframe\.setAttribute\("src"/);
 assert.match(frame, /onAdopted\(\) \{/);
 
-assert.match(composer, /mode: "page"/);
+assert.match(composer, /composer: true/);
+assert.match(composer, /mode: "overlay"/);
+assert.doesNotMatch(composer, /mode: "page"/);
 assert.match(composer, /claimPromptCaret\(e\.target\)/);
 
 assert.match(sendRuntime, /target\.focus\?\.\(\)/, "isolated send-runtime must keep native focus; MAIN-world lease does not wrap it");

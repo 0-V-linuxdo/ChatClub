@@ -272,11 +272,12 @@ function setOverlayCaretFrameInert(frame, value) {
 function syncOverlayCaretFrameInert() {
   const modalOpen = Boolean(typeof document.querySelector === "function" && document.querySelector(".modal"));
   const pageClaimed = overlaySearchCaret?.mode === "page";
+  const composerClaimed = overlaySearchCaret?.composer === true;
   let frames = [];
   try { frames = [...(document.querySelectorAll?.("iframe.chat-frame") || [])]; } catch {}
   for (const frame of frames) {
-    if (!modalOpen && !pageClaimed && overlayCaretFrameIsLoading(frame)) continue;
-    setOverlayCaretFrameInert(frame, modalOpen || pageClaimed);
+    if (!modalOpen && !pageClaimed && !composerClaimed && overlayCaretFrameIsLoading(frame)) continue;
+    setOverlayCaretFrameInert(frame, modalOpen || pageClaimed || composerClaimed);
   }
 }
 
@@ -302,6 +303,7 @@ function overlaySearchCaretStolen(active, field, panel, owner) {
 
 function overlaySearchCaretShouldLeave(active, field, panel, owner) {
   if (!active || active === field) return false;
+  if (typeof owner?.shouldLeave === "function") return owner.shouldLeave(active, field);
   if (overlaySearchCaretInsidePanel(active, field, panel)) return true;
   if (typeof owner?.stolen === "function" || owner?.mode === "page") {
     return !overlaySearchCaretStolen(active, field, panel, owner);
@@ -379,6 +381,10 @@ export function overlaySearchCaretMode() {
   return overlaySearchCaret?.mode || "";
 }
 
+export function overlaySearchCaretComposer() {
+  return overlaySearchCaret?.composer === true;
+}
+
 export function setOverlayCaretLeaseHandler(handler) {
   overlayCaretLeaseHandler = handler && typeof handler === "object" ? handler : null;
 }
@@ -449,7 +455,7 @@ function onOverlayCaretPointerDown(event) {
   const frame = overlayCaretFrameFromTarget(event.target);
   if (!frame) return;
   overlayCaretFramePointerAt = Date.now();
-  if (overlaySearchCaretMode() !== "page") return;
+  if (overlaySearchCaretMode() !== "page" && !overlaySearchCaretComposer()) return;
   clearOverlaySearchCaret(true);
   try { frame.focus?.(); } catch {}
 }
@@ -473,10 +479,12 @@ export function claimOverlaySearchCaret(field, options = {}) {
     field,
     panel: options.panel || overlaySearchCaretPanel(field),
     mode: options.mode === "page" ? "page" : "overlay",
+    composer: options.composer === true,
     getSelection: typeof options.getSelection === "function" ? options.getSelection : null,
     composing: typeof options.composing === "function" ? options.composing : null,
     onLeave: typeof options.onLeave === "function" ? options.onLeave : null,
-    stolen: typeof options.stolen === "function" ? options.stolen : null
+    stolen: typeof options.stolen === "function" ? options.stolen : null,
+    shouldLeave: typeof options.shouldLeave === "function" ? options.shouldLeave : null
   };
   ensureOverlaySearchCaretListeners();
   if (overlaySearchCaret.mode === "page") notifyOverlayCaretLease("adopt");
@@ -522,17 +530,19 @@ function syncChatFrameModalInert(active) {
   const frames = document.querySelectorAll?.("iframe.chat-frame");
   if (!frames?.length) return;
   const pageClaimed = overlaySearchCaretMode() === "page";
+  const composerClaimed = overlaySearchCaretComposer();
   for (const frame of frames) {
     if (active) delete frame.dataset?.promptFocusRestoreGeneration;
     if (
       !active
       && !pageClaimed
+      && !composerClaimed
       && (
         frame.dataset?.frameLoadPending === "1"
         || frame.closest?.(".chat-card")?.classList?.contains?.("frame-loading")
       )
     ) continue;
-    setNodeInert(frame, active || pageClaimed);
+    setNodeInert(frame, active || pageClaimed || composerClaimed);
   }
 }
 

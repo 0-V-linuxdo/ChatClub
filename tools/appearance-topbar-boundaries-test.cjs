@@ -16,7 +16,7 @@ const appearanceSource = read("app/settings/appearance.js");
 const topbarSource = read("app/settings/appearance-topbar.js");
 
 assert.ok(lineCount(appearanceSource) < 950, `Appearance section must remain below 950 lines; found ${lineCount(appearanceSource)}`);
-assert.ok(lineCount(topbarSource) > 250 && lineCount(topbarSource) < 400, "Topbar settings must remain a substantive bounded controller");
+assert.ok(lineCount(topbarSource) > 250 && lineCount(topbarSource) < 460, "Topbar settings must remain a substantive bounded controller");
 assert.match(appearanceSource, /import \{ createAppearanceTopbarController \} from "\.\/appearance-topbar\.js";/);
 assert.match(appearanceSource, /const appearanceTopbar = createAppearanceTopbarController\(\{[\s\S]*?closeSettingsDialog\s*\}\);/);
 assert.match(
@@ -283,6 +283,11 @@ globalThis.window = { confirm: () => true };
   fontSizeSlider.listeners.get("input")[0]();
   assert.deepEqual(autosavePatches, [{ topbarPromptInputFontSize: 18 }]);
   assert.equal(fontSizeValue.textContent, "18px");
+  const placementSelect = firstByClass(inputPane, "topbar-prompt-input-placement");
+  assert.ok(placementSelect, "Input tab must render the placement select");
+  placementSelect.value = "center";
+  placementSelect.listeners.get("change")[0]();
+  assert.deepEqual(autosavePatches[1], { composerPlacement: "center" });
 
   state.settingsAppearanceTopbarTab = "layout";
   const layoutPane = controller.pane(() => {});

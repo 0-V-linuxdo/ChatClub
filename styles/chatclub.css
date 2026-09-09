@@ -1451,6 +1451,45 @@ button { cursor: pointer; }
   container-type: inline-size;
 }
 
+.composer.composer-center-slot {
+  flex: 0 0 auto;
+  width: var(--ui-compact-height);
+  min-width: var(--ui-compact-height);
+  max-width: var(--ui-compact-height);
+  height: var(--ui-compact-height);
+}
+
+.composer-center-mark {
+  display: none;
+  width: var(--ui-compact-height);
+  height: var(--ui-compact-height);
+}
+
+.composer.composer-center-slot .composer-center-mark {
+  display: inline-flex;
+}
+
+.composer-center-host {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: var(--overlay-z-panel);
+  width: min(760px, calc(100vw - var(--overlay-gutter-panel)));
+  min-width: min(420px, calc(100vw - var(--overlay-gutter-panel)));
+  height: auto;
+  padding: var(--space-2);
+  box-sizing: border-box;
+}
+
+.composer-center-host[hidden] {
+  display: none;
+}
+
+.composer-center-host .prompt-shell {
+  z-index: 0;
+}
+
 .prompt-shell {
   --prompt-model-gate-width: clamp(132px, 32cqi, 240px);
   --prompt-model-gate-reserve: calc(var(--prompt-model-gate-width) + 8px);

@@ -19,6 +19,9 @@ assert.match(dom, /export function claimOverlaySearchCaret/);
 assert.match(dom, /export function pinOverlaySearchCaret/);
 assert.match(dom, /export function releaseOverlaySearchCaret/);
 assert.match(dom, /export function overlaySearchCaretMode/);
+assert.match(dom, /export function overlaySearchCaretComposer/);
+assert.match(dom, /shouldLeave: typeof options\.shouldLeave === "function"/);
+assert.match(frame, /overlaySearchCaretComposer\(\)/);
 assert.match(dom, /export function setOverlayCaretLeaseHandler/);
 assert.match(dom, /scheduleOverlayCaretPinFollow/);
 assert.match(dom, /document\.addEventListener\("focusin", onOverlaySearchCaretFocusIn, true\)/);
@@ -32,12 +35,14 @@ assert.doesNotMatch(tabSearch, /restoreSearchFieldAfterFrameLoad|FRAME_LOAD_SEAR
 assert.doesNotMatch(history, /restoreSearchFieldAfterFrameLoad|FRAME_LOAD_SEARCH_FOCUS|addEventListener\("load"/);
 assert.match(frame, /prepareFrameNavigationFocusGuard[\s\S]*document\.querySelector\("\.modal"\)/);
 assert.match(composer, /claimOverlaySearchCaret/);
-assert.match(composer, /mode: "page"/);
+assert.match(composer, /composer: true/);
+assert.match(composer, /mode: "overlay"/);
+assert.doesNotMatch(composer, /mode: "page"/);
 assert.match(composer, /claimPromptCaret\(e\.target\)/);
 assert.match(composer, /oncompositionstart/);
 assert.match(composer, /oncompositionend/);
 assert.match(agents, /the titlebar search is the unique caret owner/);
-assert.match(agents, /a focused `\.prompt-input` is the page caret owner/);
+assert.match(agents, /a focused `\.prompt-input` is the overlay-grade composer caret owner/);
 assert.match(frame, /function restorePromptInputFocus/);
 assert.match(frame, /setOverlayCaretLeaseHandler/);
 assert.match(frame, /adoptPageCaretLease/);
@@ -198,6 +203,7 @@ globalThis.claimOverlaySearchCaret = claimOverlaySearchCaret;
 globalThis.pinOverlaySearchCaret = pinOverlaySearchCaret;
 globalThis.releaseOverlaySearchCaret = releaseOverlaySearchCaret;
 globalThis.overlaySearchCaretMode = overlaySearchCaretMode;
+globalThis.overlaySearchCaretComposer = overlaySearchCaretComposer;
 globalThis.setOverlayCaretLeaseHandler = setOverlayCaretLeaseHandler;`,
     context
   );
@@ -205,6 +211,7 @@ globalThis.setOverlayCaretLeaseHandler = setOverlayCaretLeaseHandler;`,
   world.pin = context.pinOverlaySearchCaret;
   world.release = context.releaseOverlaySearchCaret;
   world.mode = context.overlaySearchCaretMode;
+  world.composerClaimed = context.overlaySearchCaretComposer;
   world.setLeaseHandler = context.setOverlayCaretLeaseHandler;
   return world;
 }
@@ -564,6 +571,89 @@ function claimPrompt(world, extras = {}) {
   world.document.activeElement = world.row;
   world.pin();
   assert.equal(world.iframe.inert, true, "leaving overlay search while a modal is open must keep chat-frames inert");
+}
+
+function claimComposer(world, extras = {}) {
+  let left = false;
+  world.claim(world.promptField, {
+    panel: world.shell,
+    mode: "overlay",
+    composer: true,
+    getSelection: () => ({ start: Number(world.promptField.selectionStart) || 0, end: Number(world.promptField.selectionEnd) || 0 }),
+    composing: () => Boolean(extras.composing?.()),
+    stolen(active, field) {
+      if (typeof extras.stolen === "function") return extras.stolen(active, field);
+      if (active === world.iframe || active === world.body || active === world.html || active === world.wrap) return true;
+      return false;
+    },
+    shouldLeave(active, field) {
+      if (typeof extras.shouldLeave === "function") return extras.shouldLeave(active, field);
+      if (active === world.send) return false;
+      if (active === world.topbarButton || active === world.panel) return true;
+      return false;
+    },
+    onLeave: () => { left = true; extras.onLeave?.(); }
+  });
+  return { get left() { return left; } };
+}
+
+{
+  const world = createPageWorld();
+  claimComposer(world);
+  assert.equal(world.mode(), "overlay", "composer claims overlay mode so page-caret tokens are not stamped");
+  assert.equal(world.composerClaimed(), true);
+  world.document.activeElement = world.iframe;
+  assert.equal(world.pin(), true, "composer overlay must pin after an iframe steal");
+  assert.equal(world.document.activeElement, world.promptField);
+}
+
+{
+  const world = createPageWorld();
+  claimComposer(world);
+  world.document.activeElement = world.body;
+  assert.equal(world.pin(), true, "composer overlay must pin after a body steal");
+}
+
+{
+  const world = createPageWorld();
+  const claim = claimComposer(world);
+  world.document.activeElement = world.send;
+  assert.equal(world.pin(), false, "in-shell send must hold without pin");
+  assert.equal(claim.left, false);
+  assert.equal(world.composerClaimed(), true);
+  assert.equal(world.iframe.inert, true, "a composer hold must keep chat-frames inert");
+}
+
+{
+  const world = createPageWorld();
+  let left = false;
+  claimComposer(world, { onLeave: () => { left = true; } });
+  world.document.activeElement = world.topbarButton;
+  assert.equal(world.pin(), false, "a topbar control must leave the composer caret owner");
+  assert.equal(left, true);
+}
+
+{
+  const world = createPageWorld();
+  let left = false;
+  claimComposer(world, { onLeave: () => { left = true; } });
+  const pointer = world.listeners.find((entry) => entry.type === "pointerdown" && entry.capture === true);
+  pointer.handler({ isTrusted: true, target: world.wrap });
+  assert.equal(left, true, "a trusted pointer on the frame wrap must leave composer overlay");
+  assert.equal(world.composerClaimed(), false);
+  assert.equal(world.iframe.inert, false);
+}
+
+{
+  const world = createPageWorld();
+  let adopts = 0;
+  world.setLeaseHandler({
+    adopt() { adopts += 1; },
+    release() {}
+  });
+  claimComposer(world);
+  assert.equal(adopts, 0, "composer overlay must not adopt the page caret lease");
+  assert.equal(world.iframe.inert, true, "composerInert must keep chat-frames inert without a typed modal");
 }
 
 console.log("overlay caret lock tests passed");

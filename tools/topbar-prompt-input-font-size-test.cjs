@@ -84,6 +84,7 @@ function innermostBlockAt(blocks, index) {
   } = await import("../shared/storage-schema.js");
 
   assert.equal(DEFAULT_OPTIONS.topbarPromptInputFontSize, 15);
+  assert.equal(DEFAULT_OPTIONS.composerPlacement, "topbar");
   assert.equal(TOPBAR_PROMPT_INPUT_FONT_SIZE_MIN_PX, 13);
   assert.equal(TOPBAR_PROMPT_INPUT_FONT_SIZE_MAX_PX, 18);
 

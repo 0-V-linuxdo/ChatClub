@@ -236,6 +236,11 @@ assert.match(
   "topbar input font-size uses the hug-row title + ghost info | compact slider grammar"
 );
 assert.match(
+  topbarSource,
+  /topbar-prompt-input-placement[\s\S]*queueAppearanceAutoSave\(\{ composerPlacement:/,
+  "topbar input placement is a native select in the Input tab"
+);
+assert.match(
   stylesheetSource,
   /\.topbar-prompt-input-settings \{[\s\S]*?grid-template-columns: max-content max-content;[\s\S]*?justify-content:\s*start;/,
   "topbar input font-size title and slider share left-aligned compact columns"

@@ -28,6 +28,7 @@ export function createTopbarController(dependencies = {}) {
     "focusInput",
     "hasDraft",
     "render",
+    "applyPlacement",
     "subscribeDraftChanges",
     "syncInputNode"
   ]);
@@ -261,6 +262,7 @@ export function createTopbarController(dependencies = {}) {
     if (node?.isConnected) node.replaceWith(nextNode);
     else targetShell.prepend(nextNode);
     node = nextNode;
+    composer.applyPlacement();
     composer.syncInputNode();
     preferredModel.syncPreferredModelInputGate();
     if (restorePersistentSettingsMenu) {

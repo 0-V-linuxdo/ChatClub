@@ -8,6 +8,7 @@ import {
 } from "../../shared/constants.js";
 import { t } from "../../shared/i18n.js";
 import {
+  normalizeComposerPlacement,
   normalizeTopbarPromptInputFontSize,
   normalizeTopbarPromptPlaceholderConfig,
   normalizeTopbarPromptPlaceholderText
@@ -325,6 +326,7 @@ export function createAppearanceTopbarController(dependencies = {}) {
 
   function topbarPromptInputBlock() {
     const initialFontSize = normalizeTopbarPromptInputFontSize(state.options.topbarPromptInputFontSize);
+    const placement = normalizeComposerPlacement(state.options.composerPlacement);
     const fontSizeValue = el("span", { class: "appearance-range-value" }, `${initialFontSize}px`);
     const fontSizeSlider = el("input", {
       class: "appearance-range-slider topbar-prompt-input-font-size-slider",
@@ -342,8 +344,24 @@ export function createAppearanceTopbarController(dependencies = {}) {
       fontSizeValue.textContent = `${nextFontSize}px`;
       queueAppearanceAutoSave({ topbarPromptInputFontSize: nextFontSize });
     });
+    const placementSelect = select(placement, [
+      { value: "topbar", label: t("topbar.input.placementTopbar") },
+      { value: "center", label: t("topbar.input.placementCenter") }
+    ], {
+      class: "select topbar-prompt-input-placement",
+      "aria-label": t("topbar.input.placement"),
+      "aria-describedby": "appearance-topbar-input-placement-help",
+      onchange: () => queueAppearanceAutoSave({ composerPlacement: normalizeComposerPlacement(placementSelect.value) })
+    });
     return settingsBlock(t("topbar.input.title"), t("topbar.input.desc"),
       el("div", { class: "appearance-field-list topbar-prompt-input-settings" },
+        el("div", { class: "appearance-overlay-row" },
+          el("span", { class: "appearance-overlay-copy" },
+            el("strong", {}, t("topbar.input.placement")),
+            createAppearanceOverlayInfoButton(svgIcon, t("topbar.input.placementHelp"), "appearance-topbar-input-placement-help", "settings.appearance.topbarInputPlacement")
+          ),
+          placementSelect
+        ),
         el("div", { class: "appearance-overlay-row" },
           el("span", { class: "appearance-overlay-copy" },
             el("strong", {}, t("topbar.input.fontSize")),

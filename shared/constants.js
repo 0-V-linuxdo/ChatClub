@@ -11,7 +11,7 @@ import {
 import { NOTION_MODEL_PREFERENCE_TARGETS } from "./notion-models.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-09-10｜02:24:00」";
+export const APP_VERSION = "「2026-09-10｜03:36:38」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -200,6 +200,7 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
       Object.freeze({ id: "topbar.search", labelKey: "topbar.search" }),
       Object.freeze({ id: "topbar.promptActions", labelKey: "topbar.promptActions" }),
       Object.freeze({ id: "topbar.promptLibrary", labelKey: "topbar.promptLibrary" }),
+      Object.freeze({ id: "topbar.input.centerMark", labelKey: "topbar.input.centerMark" }),
       Object.freeze({ id: "topbar.addPhotos", labelKey: "topbar.addPhotos" }),
       Object.freeze({ id: "topbar.clearPrompt", labelKey: "topbar.clearPrompt" }),
       Object.freeze({ id: "topbar.removeImage", labelKey: "topbar.removeImage" }),
@@ -351,7 +352,8 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
       Object.freeze({ id: "settings.models.allSources", labelKey: "modelPreferences.allSources" }),
       Object.freeze({ id: "settings.appearance.loadingOverlay", labelKey: "appearance.loadingOverlay" }),
       Object.freeze({ id: "settings.appearance.modelSelectionOverlay", labelKey: "appearance.modelSelectionOverlay" }),
-      Object.freeze({ id: "settings.appearance.topbarInputFontSize", labelKey: "topbar.input.fontSize" })
+      Object.freeze({ id: "settings.appearance.topbarInputFontSize", labelKey: "topbar.input.fontSize" }),
+      Object.freeze({ id: "settings.appearance.topbarInputPlacement", labelKey: "topbar.input.placement" })
     ])
   })
 ]);
@@ -418,6 +420,7 @@ export const DEFAULT_OPTIONS = {
   pocketIcon: DEFAULT_POCKET_ICON,
   tooltipDisabledIds: [],
   topbarPromptInputFontSize: 15,
+  composerPlacement: "topbar",
   topbarPromptPlaceholderConfig: {
     items: [],
     mode: "refresh",

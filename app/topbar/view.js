@@ -27,7 +27,7 @@ export function createTopbarView(dependencies = {}) {
       editLifecycle: "object"
     }
   );
-  requireMethods(composer, "composer", ["render", "focusInput", "hasDraft"]);
+  requireMethods(composer, "composer", ["render", "applyPlacement", "focusInput", "hasDraft"]);
   requireMethods(editor, "editor", [
     "activeTopbarEditLayout",
     "consumePaletteClickSuppression",
@@ -422,27 +422,32 @@ export function createTopbarView(dependencies = {}) {
 
   function render({ placeholder = "" } = {}) {
     const composerNode = composer.render({ placeholder, gate: gateSnapshot() });
+    let node;
     if (!state.topbarEditMode) {
       const layout = editor.visibleTopbarLayoutItems(normalizeTopbarLayout(state.options?.topbarLayout));
-      return el("header", { class: "topbar" }, renderSidebarToggle(), layout.map((item) => renderItem(item, composerNode)));
+      node = el("header", { class: "topbar" }, renderSidebarToggle(), layout.map((item) => renderItem(item, composerNode)));
+    } else {
+      const layout = editor.visibleTopbarLayoutItems(editor.activeTopbarEditLayout());
+      node = el("div", { class: "topbar-customize-mode" },
+        el("header", { class: "topbar topbar-editing" },
+          renderSidebarToggle(),
+          el("div", { class: "topbar-editing-livebar" },
+            el("div", {
+              class: "topbar-editing-livebar-items",
+              role: "list",
+              "aria-label": t("topbar.customize.workbench"),
+              ondragstart: editor.preventNativeDrag,
+              ondragover: editor.preventNativeDrag,
+              ondrop: editor.preventNativeDrag
+            }, layout.map((item) => renderEditSlot(item, composerNode)))
+          )
+        ),
+        renderPalette()
+      );
     }
-    const layout = editor.visibleTopbarLayoutItems(editor.activeTopbarEditLayout());
-    return el("div", { class: "topbar-customize-mode" },
-      el("header", { class: "topbar topbar-editing" },
-        renderSidebarToggle(),
-        el("div", { class: "topbar-editing-livebar" },
-          el("div", {
-            class: "topbar-editing-livebar-items",
-            role: "list",
-            "aria-label": t("topbar.customize.workbench"),
-            ondragstart: editor.preventNativeDrag,
-            ondragover: editor.preventNativeDrag,
-            ondrop: editor.preventNativeDrag
-          }, layout.map((item) => renderEditSlot(item, composerNode)))
-        )
-      ),
-      renderPalette()
-    );
+    if (typeof queueMicrotask === "function") queueMicrotask(() => composer.applyPlacement());
+    else setTimeout(() => composer.applyPlacement(), 0);
+    return node;
   }
 
   function settingsMenuButton(label, iconName, onClick, variant = "secondary", disabled = false, dragItem = null, options = {}) {

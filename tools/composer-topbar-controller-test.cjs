@@ -161,7 +161,11 @@ function responsiveBrandRules(kind) {
   const brandMenuAction = functionSource(topbar, "runMenuItem");
   assert.match(brandMenuAction, /item\.id === "brand"[\s\S]*actions\.openNewWorkspaceTab\(\)/, "a folded Logo item must open a fresh ChatClub tab");
   assert.doesNotMatch(brandMenuAction, /item\.id === "brand"[\s\S]{0,160}openSettings\("about"\)/, "a folded Logo item must no longer open About");
-  assert.match(topbarView, /function render\(/, "Topbar view must own normal and edit-mode rendering");
+  assert.match(topbarView, /composer\.applyPlacement\(\)/, "Topbar view must apply composer placement after render");
+  assert.match(topbar, /composer\.applyPlacement\(\)/, "Topbar sync must reparent the live prompt shell after attach");
+  assert.match(composer, /function applyPlacement\(/);
+  assert.doesNotMatch(composer, /viewerModal|editorModal|confirmationModal/);
+  assert.doesNotMatch(composer, /class: [`'"]modal/);
   assert.match(topbarView, /function renderSettingsMenu\(/, "Topbar view must own Settings menu rendering");
   assert.doesNotMatch(topbarView, /addEventListener\("keydown"/, "the view must not own dismissal listeners");
   const brandLabel = functionSource(topbarView, "brandActionLabel");

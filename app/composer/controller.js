@@ -61,6 +61,36 @@ function requirePort(port, label, methodNames) {
   return port;
 }
 
+function composerCaretStolen(active, field) {
+  if (!active || active === field) return false;
+  if (active === document.body || active === document.documentElement) return true;
+  if (active.classList?.contains?.("chat-frame") || active.nodeName === "IFRAME") return true;
+  try {
+    if (active.closest?.(".preferred-model-selection-overlay") || active.closest?.(".frame-toast")) return false;
+  } catch {}
+  if (active.classList?.contains?.("chat-frame-wrap") || active.closest?.(".chat-frame-wrap")) return true;
+  if (active.classList?.contains?.("chat-card") || active.closest?.(".chat-card")) return true;
+  return false;
+}
+
+function composerCaretShouldLeave(active, field) {
+  if (!active || active === field) return false;
+  const shell = field?.closest?.(".prompt-shell");
+  if (shell && (active === shell || shell.contains?.(active))) return false;
+  if (
+    active.closest?.(".modal")
+    || active.closest?.(".popover-menu")
+    || active.closest?.(".prompt-actions-popover")
+    || active.closest?.(".preferred-model-selection-overlay")
+  ) return true;
+  if (active.closest?.(".topbar") && !active.closest?.(".prompt-shell") && !active.closest?.(".composer-center-mark")) {
+    return true;
+  }
+  return false;
+}
+
+const COMPOSER_CENTER_HOST_ID = "composer-center-host";
+
 export function createComposerController(dependencies = {}) {
   const {
     state,
@@ -978,9 +1008,12 @@ export function createComposerController(dependencies = {}) {
     if (!field || document.querySelector(".modal")) return;
     claimOverlaySearchCaret(field, {
       panel: field.closest?.(".prompt-shell"),
-      mode: "page",
+      mode: "overlay",
+      composer: true,
       getSelection: () => state.promptSelection,
-      composing: () => promptComposing
+      composing: () => promptComposing,
+      stolen: composerCaretStolen,
+      shouldLeave: composerCaretShouldLeave
     });
   }
 
@@ -1152,6 +1185,50 @@ export function createComposerController(dependencies = {}) {
 
   function focusInput(expand=true){syncInputNode({focus:true,expand})}
 
+  function composerPlacementValue() {
+    return state.options?.composerPlacement === "center" && !state.topbarEditMode ? "center" : "topbar";
+  }
+
+  function ensureComposerCenterHost() {
+    let host = document.getElementById(COMPOSER_CENTER_HOST_ID);
+    if (host) return host;
+    host = el("div", {
+      id: COMPOSER_CENTER_HOST_ID,
+      class: "overlay-surface composer-center-host",
+      role: "region",
+      "aria-label": t("topbar.input.centerHost")
+    });
+    document.body.append(host);
+    return host;
+  }
+
+  function applyPlacement() {
+    const composerNode = document.querySelector(".composer.topbar-item-composer");
+    if (!composerNode) return;
+    const host = document.getElementById(COMPOSER_CENTER_HOST_ID);
+    const liveShell = host?.querySelector?.(".prompt-shell") || composerNode.querySelector(".prompt-shell");
+    if (!liveShell) return;
+    if (composerPlacementValue() === "center") {
+      const centerHost = ensureComposerCenterHost();
+      const duplicate = composerNode.querySelector(".prompt-shell");
+      if (liveShell.parentNode !== centerHost) centerHost.appendChild(liveShell);
+      if (duplicate && duplicate !== liveShell) duplicate.remove();
+      composerNode.classList.add("composer-center-slot");
+      centerHost.hidden = false;
+      return;
+    }
+    const duplicate = composerNode.querySelector(".prompt-shell");
+    if (liveShell.parentNode !== composerNode) {
+      if (duplicate && duplicate !== liveShell) duplicate.remove();
+      composerNode.appendChild(liveShell);
+    }
+    composerNode.classList.remove("composer-center-slot");
+    if (host) {
+      host.hidden = true;
+      if (!host.querySelector(".prompt-shell")) host.remove();
+    }
+  }
+
   function modelGateStatusIcon(applying) {
     if (applying) return el("span", { class: "prompt-model-gate-spinner", "aria-hidden": "true" });
     const icon = createSvgIcon("alert");
@@ -1186,6 +1263,19 @@ export function createComposerController(dependencies = {}) {
     });
     const collapsed = promptCollapsedPreview(state.promptText, currentPlaceholder);
     return el("div", { class: "composer topbar-item topbar-item-composer" },
+      el("button", {
+        class: "composer-center-mark compact-icon tooltip-trigger",
+        type: "button",
+        "aria-label": t("topbar.input.centerMark"),
+        "data-tooltip": t("topbar.input.centerMark"),
+        "data-tooltip-id": "topbar.input.centerMark",
+        onclick: (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          focusInput(true);
+        },
+        onpointerdown: (event) => event.stopPropagation()
+      }, createSvgIcon("library")),
       el("div", {
         class: `prompt-shell ${state.promptImages.length ? "prompt-shell-has-images" : ""} ${gateApplying ? "prompt-shell-model-gate-applying" : ""} ${gateFailed ? "prompt-shell-model-gate-failed" : ""}`.trim(),
         dataset: {
@@ -1315,6 +1405,7 @@ export function createComposerController(dependencies = {}) {
     captureDraftSnapshot,
     clearDraftIfSnapshotCurrent,
     render,
+    applyPlacement,
     syncInputNode,
     focusInput,
     hasDraft,

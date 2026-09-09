@@ -67,7 +67,9 @@ export function createPromptLibraryController(ctx) {
     if (!dialog) return;
     const promptRect = document.querySelector(".prompt-shell")?.getBoundingClientRect();
     const topbarRect = document.querySelector(".topbar")?.getBoundingClientRect();
-    const top = Math.max(8, Math.round(promptRect?.bottom || topbarRect?.bottom || 52));
+    const viewportHeight = Number(window.innerHeight) || 0;
+    const raw = Math.round(promptRect?.bottom || topbarRect?.bottom || 52);
+    const top = Math.max(8, Math.min(raw, Math.max(8, viewportHeight - 96)));
     dialog.style.setProperty("--prompt-library-top", `${top}px`);
   }
 
