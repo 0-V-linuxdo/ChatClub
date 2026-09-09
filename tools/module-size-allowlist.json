@@ -91,10 +91,10 @@
     "reason": "The Summary controller now hydrates existing idle full-text capture from persisted workspaceTabFullText frames, keys snapshots by instanceId and conversation href, and still owns per-frame Last-N Copy collection plus the send-kind idle path."
   },
   "content-src/shared/summary-runtime.js": {
-    "maxLines": 1224,
+    "maxLines": 1232,
     "target": 1200,
-    "maxBytes": 49116,
+    "maxBytes": 49374,
     "targetBytes": 45000,
-    "reason": "Conversation fingerprints now hash classified user and assistant turn text after stripping copy, toolbar, and button chrome, with no page-line fallback for turnCount or tailHash, so idle existing scans do not treat generating chrome as content growth."
+    "reason": "Conversation fingerprints keep Notion chat ?t= on href so idle existing scans match stored conversation identity, and still hash classified user and assistant turn text after stripping copy, toolbar, and button chrome."
   }
 }

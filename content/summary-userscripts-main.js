@@ -74,12 +74,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "63515787b24c0ea62348827d316640aa65e13b094486a20b040954081cf21dcf";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "81de757455b459086681b0d9756c2f1fe87e0618a6c099ed3d818465070ecb21";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "6e06c3a8416390186a9637834a3a0271e66967d999c9aafab47c3a0b0fda5b84";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.6e06c3a8416390186a9637834a3a0271e66967d999c9aafab47c3a0b0fda5b84";
-  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "6a96180b58d7efca8a4771e3115addedd0c73a561fe7e8d5f6fc19a3327d6262", "implementationSha256": "e41a7dd8520cf6693713e59ebba2216cd2d39479b4304349f461ab0a5e7de359", "implementationVersion": "2026.07.16.2+bundle.e41a7dd8520cf6693713e59ebba2216cd2d39479b4304349f461ab0a5e7de359" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "1ec86426d7aadcfc5b18cdf5e1dbf94b2b13e1f1fcbee524219717b3f185e033";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.1ec86426d7aadcfc5b18cdf5e1dbf94b2b13e1f1fcbee524219717b3f185e033";
+  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "8a868747c0e99158cd9604a1910ffc0a1d84095649e47daaa2615440aa458c7c", "implementationSha256": "11bdaa51077abb356781a2dcf0e65f3c314b31790d005257d038f2e3a2c767c9", "implementationVersion": "2026.07.16.2+bundle.11bdaa51077abb356781a2dcf0e65f3c314b31790d005257d038f2e3a2c767c9" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -2944,7 +2944,7 @@
       return [];
     };
     scripts["qianwen.js"] = scripts["qianwen"];
-    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.6e06c3a8416390186a9637834a3a0271e66967d999c9aafab47c3a0b0fda5b84" });
+    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.1ec86426d7aadcfc5b18cdf5e1dbf94b2b13e1f1fcbee524219717b3f185e033" });
     return scripts;
   }
 
@@ -3330,6 +3330,10 @@ ${value}`);
     try {
       const url = new URL(location.href);
       const path = `${url.origin}${url.pathname}`;
+      const host = url.hostname.toLowerCase();
+      if ((host === "app.notion.com" || host === "notion.so" || host.endsWith(".notion.so")) && /^\/chat\/?$/i.test(url.pathname) && url.searchParams.get("t")) {
+        return url.href;
+      }
       const hash = String(url.hash || "").replace(/^#/, "");
       if (hash && !/[=&]/.test(hash) && hash.length >= 8 && hash.length <= 120) {
         return `${path}#${hash}`;

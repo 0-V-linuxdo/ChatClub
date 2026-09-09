@@ -409,12 +409,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "63515787b24c0ea62348827d316640aa65e13b094486a20b040954081cf21dcf";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "81de757455b459086681b0d9756c2f1fe87e0618a6c099ed3d818465070ecb21";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "6e06c3a8416390186a9637834a3a0271e66967d999c9aafab47c3a0b0fda5b84";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.6e06c3a8416390186a9637834a3a0271e66967d999c9aafab47c3a0b0fda5b84";
-  var CONTENT_RUNTIME_CONTENT_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/content.js", "entryPath": "content-src/content.js", "sourceSha256": "8352aa4040b800c144f656109bca3d7781c1036223bef7675a20068522286571", "implementationSha256": "cf7130ab7f1c7f74b725eb210c5064607beb2523758f54ab5a320f182cb3062b", "implementationVersion": "2026.07.16.2+bundle.cf7130ab7f1c7f74b725eb210c5064607beb2523758f54ab5a320f182cb3062b" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "1ec86426d7aadcfc5b18cdf5e1dbf94b2b13e1f1fcbee524219717b3f185e033";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.1ec86426d7aadcfc5b18cdf5e1dbf94b2b13e1f1fcbee524219717b3f185e033";
+  var CONTENT_RUNTIME_CONTENT_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/content.js", "entryPath": "content-src/content.js", "sourceSha256": "fa41164eefb0809fe15abdfaed11eebb4246856c308fdd5ef6e1f5390cb9d61b", "implementationSha256": "b499484d06a0798359d2cab1adfbea7a3dfa64d86a2fc1c5ecaaea01193b6457", "implementationVersion": "2026.07.16.2+bundle.b499484d06a0798359d2cab1adfbea7a3dfa64d86a2fc1c5ecaaea01193b6457" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -755,6 +755,10 @@
     try {
       const url = new URL(location.href);
       const path = `${url.origin}${url.pathname}`;
+      const host = url.hostname.toLowerCase();
+      if ((host === "app.notion.com" || host === "notion.so" || host.endsWith(".notion.so")) && /^\/chat\/?$/i.test(url.pathname) && url.searchParams.get("t")) {
+        return url.href;
+      }
       const hash = String(url.hash || "").replace(/^#/, "");
       if (hash && !/[=&]/.test(hash) && hash.length >= 8 && hash.length <= 120) {
         return `${path}#${hash}`;

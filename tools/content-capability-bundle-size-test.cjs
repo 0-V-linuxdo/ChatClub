@@ -19,9 +19,8 @@ const coreCapabilityOutputs = [
 ];
 const measuredOutputs = Object.keys(CONTENT_ENTRIES).sort();
 const byteBudgets = Object.freeze({
-  // Exact base cost after conversation fingerprints hashed classified turns
-  // with copy/toolbar chrome stripped, without a page-line fallback.
-  "content/content.js": 110_353,
+  // Exact base cost after idle fingerprint href keeps Notion chat ?t=.
+  "content/content.js": 110_595,
   "content/send.js": 85_000,
   // Bundles that embed the shared frame-command contract each carry the
   // getConversationOpening spec entry (about a hundred bytes).
@@ -35,15 +34,15 @@ const byteBudgets = Object.freeze({
   "content/grok-cookie-bridge.js": 50_000,
   "content/message-navigator.js": 140_000,
   "content/preload.js": 214_385,
-  "content/summary-userscripts-main.js": 230_652,
+  "content/summary-userscripts-main.js": 230_894,
   "content/summary-userscripts.js": 161_108
 });
 // Exact base-plus-capabilities closure after chrome-stripped conversation
 // fingerprints joined the isolated Summary pipeline without page-line fallback.
-const aggregateByteBudget = 799_704;
+const aggregateByteBudget = 799_946;
 // Exact all-bundle closure after classified-turn fingerprints replaced
 // generating-chrome identity for idle Record Full Text.
-const allBundlesByteBudget = 1_577_524;
+const allBundlesByteBudget = 1_578_008;
 
 const bundleIdentities = Object.fromEntries(Object.keys(CONTENT_ENTRIES).map((outputPath) => [
   outputPath,

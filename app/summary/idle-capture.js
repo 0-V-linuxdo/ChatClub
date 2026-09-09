@@ -3,6 +3,7 @@ import {
   fullTextContentMetricsFromMessages,
   fullTextContentSignature,
   fullTextContentSignatureFromFingerprint,
+  fullTextConversationHrefIsStable,
   fullTextExistingIsCovered,
   fullTextExistingNeedsCollect,
   workspaceTabFullTextFrameIdentityKey
@@ -43,13 +44,11 @@ function captureKeys(frame, fingerprint) {
     keys.push(instanceId);
     if (!instanceId.startsWith("id:") && !instanceId.startsWith("href:")) keys.push(`id:${instanceId}`);
   }
-  const href = String(fingerprint?.href || frame?.href || "").trim();
-  if (href) {
-    const identity = workspaceTabFullTextFrameIdentityKey({
-      href,
-      instanceId: String(frame?.instanceId || frame?.key || "").trim()
-    });
-    if (identity) keys.push(identity);
+  for (const href of [fingerprint?.href, frame?.href]) {
+    const text = String(href || "").trim();
+    if (!fullTextConversationHrefIsStable(text)) continue;
+    const identity = workspaceTabFullTextFrameIdentityKey({ href: text, instanceId: "" });
+    if (identity.startsWith("href:")) keys.push(identity);
   }
   return [...new Set(keys.filter(Boolean))];
 }
@@ -61,7 +60,11 @@ function snapshotFromMetrics(metrics, prompt = "", hasPair = false) {
     assistantChars: Number(metrics?.assistantChars) || 0,
     tailHash: String(metrics?.tailHash || ""),
     hasPair: hasPair === true,
-    prompt: String(prompt || "")
+    prompt: String(prompt || ""),
+    representation: metrics?.representation === "live" ? "live" : "store",
+    lastUserMessage: String(metrics?.lastUserMessage || ""),
+    lastAssistantMessage: String(metrics?.lastAssistantMessage || ""),
+    href: String(metrics?.href || "")
   };
   next.signature = fullTextContentSignature(next);
   return next.signature ? next : null;
@@ -93,6 +96,7 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
     ? options.loadStoredSnapshots
     : async () => [];
   const savedSignatures = new Map();
+  let workspaceHasStoredPair = false;
 
   let generation = 0;
   let activeKind = "";
@@ -120,7 +124,11 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
         turnCount: Number(record.turnCount) || 0,
         userChars: Number(record.userChars) || 0,
         assistantChars: Number(record.assistantChars) || 0,
-        tailHash: String(record.tailHash || "")
+        tailHash: String(record.tailHash || ""),
+        representation: record.representation === "live" ? "live" : "store",
+        lastUserMessage: String(record.lastUserMessage || ""),
+        lastAssistantMessage: String(record.lastAssistantMessage || ""),
+        href: String(record.href || "")
       };
     }
     return null;
@@ -149,7 +157,10 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
 
   function rememberFromFingerprint(frame, prompt, fingerprint, hasPair = false) {
     const snapshot = snapshotFromMetrics(
-      fullTextContentMetricsFromFingerprint(fingerprint),
+      {
+        ...fullTextContentMetricsFromFingerprint(fingerprint),
+        representation: "live"
+      },
       prompt,
       hasPair
     );
@@ -160,11 +171,17 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
   async function rememberSavedSignature(frame, prompt, fallback = "", extra = {}) {
     const fingerprint = extra.fingerprint && typeof extra.fingerprint === "object" ? extra.fingerprint : null;
     let snapshot = fingerprint
-      ? snapshotFromMetrics(fullTextContentMetricsFromFingerprint(fingerprint), prompt, extra.hasPair === true)
+      ? snapshotFromMetrics({
+        ...fullTextContentMetricsFromFingerprint(fingerprint),
+        representation: "live"
+      }, prompt, extra.hasPair === true)
       : null;
     if (!snapshot?.signature && Array.isArray(extra.messages)) {
       snapshot = snapshotFromMetrics(
-        fullTextContentMetricsFromMessages(extra.messages),
+        {
+          ...fullTextContentMetricsFromMessages(extra.messages),
+          representation: "store"
+        },
         prompt,
         extra.hasPair === true
       );
@@ -173,7 +190,10 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
       try {
         const probed = await getFingerprint(frame, prompt);
         snapshot = snapshotFromMetrics(
-          fullTextContentMetricsFromFingerprint(probed),
+          {
+            ...fullTextContentMetricsFromFingerprint(probed),
+            representation: "live"
+          },
           prompt,
           extra.hasPair === true
         );
@@ -194,6 +214,7 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
   }
 
   async function hydrateFromStore() {
+    workspaceHasStoredPair = false;
     let snapshots = [];
     try {
       snapshots = await loadStoredSnapshots();
@@ -206,6 +227,10 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
       if (!snapshot) continue;
       if (snap?.signature) snapshot.signature = String(snap.signature);
       snapshot.hasPair = snap?.hasPair !== false;
+      snapshot.representation = snap?.representation === "live" ? "live" : "store";
+      snapshot.lastUserMessage = String(snap?.lastUserMessage || snapshot.lastUserMessage || "");
+      snapshot.lastAssistantMessage = String(snap?.lastAssistantMessage || snapshot.lastAssistantMessage || "");
+      if (snapshot.hasPair) workspaceHasStoredPair = true;
       for (const key of keys) {
         const nextKey = String(key || "").trim();
         if (!nextKey || savedSignatures.has(nextKey)) continue;
@@ -301,7 +326,9 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
       if (!probeFailed) lastKnownGenerating = generating;
       const stored = savedRecordFor(frame, fingerprint);
       const liveMetrics = fingerprint ? fullTextContentMetricsFromFingerprint(fingerprint) : null;
-      const existingCovered = existing && fullTextExistingIsCovered(liveMetrics, stored);
+      const liveIsHome = !fullTextConversationHrefIsStable(liveMetrics?.href);
+      const homeCovered = existing && liveIsHome && (stored?.hasPair === true || workspaceHasStoredPair);
+      const existingCovered = existing && !homeCovered && fullTextExistingIsCovered(liveMetrics, stored);
       if (existingCovered) {
         rememberFromFingerprint(frame, prompt, fingerprint, true);
         return { status: "unchanged", attempts };
@@ -321,12 +348,18 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
       const wallHit = !generatingCapHit && !waitingForReply && elapsed >= wallMs;
       const canCollect = existing ? sawFingerprint : (sawPrompt || sawChange);
       const idle = !generating && canCollect && sawFingerprint && (now() - idleSince >= idleMs);
-      const storedPair = stored?.hasPair === true;
+      const storedPair = stored?.hasPair === true || homeCovered;
       const needsCollect = existing
-        ? fullTextExistingNeedsCollect(liveMetrics, stored)
+        ? (homeCovered ? false : fullTextExistingNeedsCollect(liveMetrics, stored))
         : true;
       if (generating && generatingCapHit) {
         return { status: "expired", attempts };
+      }
+      if (homeCovered) {
+        const remainingHome = wallMs - (now() - startedAt);
+        if (remainingHome <= 0 || wallHit) return { status: "unchanged", attempts };
+        await sleep(Math.min(pollMs, remainingHome));
+        continue;
       }
       if (existing && wallHit && storedPair && !needsCollect) {
         return { status: "unchanged", attempts };

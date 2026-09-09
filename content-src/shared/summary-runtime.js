@@ -135,6 +135,14 @@ function conversationHref() {
   try {
     const url = new URL(location.href);
     const path = `${url.origin}${url.pathname}`;
+    const host = url.hostname.toLowerCase();
+    if (
+      (host === "app.notion.com" || host === "notion.so" || host.endsWith(".notion.so"))
+      && /^\/chat\/?$/i.test(url.pathname)
+      && url.searchParams.get("t")
+    ) {
+      return url.href;
+    }
     const hash = String(url.hash || "").replace(/^#/, "");
     if (hash && !/[=&]/.test(hash) && hash.length >= 8 && hash.length <= 120) {
       return `${path}#${hash}`;

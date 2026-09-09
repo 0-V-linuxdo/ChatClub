@@ -145,24 +145,45 @@ export function fullTextContentMetricsFromMessages(messages = []) {
   };
 }
 
+export function fullTextConversationHrefIsStable(value) {
+  return Boolean(stableConversationHref(value));
+}
+
 export function fullTextContentMetricsFromFingerprint(fingerprint = {}) {
   return {
     turnCount: Number(fingerprint?.turnCount) || 0,
     userChars: Number(fingerprint?.userChars) || 0,
     assistantChars: Number(fingerprint?.assistantChars) || 0,
-    tailHash: String(fingerprint?.tailHash || "")
+    tailHash: String(fingerprint?.tailHash || ""),
+    href: String(fingerprint?.href || ""),
+    lastUserMessage: String(fingerprint?.lastUserMessage || ""),
+    lastAssistantMessage: String(fingerprint?.lastAssistantMessage || "")
   };
 }
 
-export function fullTextContentSignatureFromFingerprint(fingerprint) {
-  if (!fingerprint || typeof fingerprint !== "object") return "";
-  return fullTextContentSignature(fullTextContentMetricsFromFingerprint(fingerprint));
+function lastPairOverlaps(live, stored) {
+  const liveUser = String(live?.lastUserMessage || "");
+  const storedUser = String(stored?.lastUserMessage || "");
+  if (!liveUser || !storedUser || !fullTextTextsOverlap(liveUser, storedUser)) return false;
+  const liveAsst = String(live?.lastAssistantMessage || "");
+  const storedAsst = String(stored?.lastAssistantMessage || "");
+  if (!liveAsst || !storedAsst) return true;
+  return fullTextTextsOverlap(liveAsst, storedAsst);
 }
 
 export function fullTextExistingNeedsCollect(live, stored) {
   if (!stored?.hasPair) return true;
   const liveTurns = Number(live?.turnCount) || 0;
   if (liveTurns <= 0) return false;
+  if (!fullTextConversationHrefIsStable(live?.href)) return false;
+  if (lastPairOverlaps(live, stored)) return false;
+  if (stored.representation !== "live") return false;
+  const storedUser = String(stored.lastUserMessage || "");
+  const liveUser = String(live?.lastUserMessage || "");
+  if (storedUser && liveUser && !fullTextTextsOverlap(liveUser, storedUser)) return true;
+  const storedAsst = String(stored.lastAssistantMessage || "");
+  const liveAsst = String(live?.lastAssistantMessage || "");
+  if (storedAsst && liveAsst && !fullTextTextsOverlap(liveAsst, storedAsst)) return true;
   const storedTurns = Number(stored.turnCount) || 0;
   if (liveTurns > storedTurns) return true;
   const liveHash = String(live?.tailHash || "");
@@ -173,9 +194,15 @@ export function fullTextExistingNeedsCollect(live, stored) {
 
 export function fullTextExistingIsCovered(live, stored) {
   if (!stored?.hasPair) return false;
+  if (!fullTextConversationHrefIsStable(live?.href)) return false;
   const liveTurns = Number(live?.turnCount) || 0;
   if (liveTurns <= 0) return false;
   return !fullTextExistingNeedsCollect(live, stored);
+}
+
+export function fullTextContentSignatureFromFingerprint(fingerprint) {
+  if (!fingerprint || typeof fingerprint !== "object") return "";
+  return fullTextContentSignature(fullTextContentMetricsFromFingerprint(fingerprint));
 }
 
 function pairsOverlap(left, right) {

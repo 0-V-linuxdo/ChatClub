@@ -28,6 +28,7 @@ const root = path.resolve(__dirname, "..");
     workspaceTabFullTextFramesEqual,
     fullTextContentSignature,
     fullTextContentMetricsFromMessages,
+    fullTextConversationHrefIsStable,
     fullTextExistingNeedsCollect,
     fullTextExistingIsCovered
   } = await import(pathToFileURL(path.join(root, "shared/workspace-tab-fulltext.js")).href);
@@ -317,14 +318,69 @@ const root = path.resolve(__dirname, "..");
     fullTextContentSignature(contentMetrics),
     `${contentMetrics.turnCount}\n${contentMetrics.userChars}\n${contentMetrics.assistantChars}\n${contentMetrics.tailHash}`
   );
-  assert.equal(fullTextExistingNeedsCollect(contentMetrics, { ...contentMetrics, hasPair: true }), false);
-  assert.equal(fullTextExistingIsCovered(contentMetrics, { ...contentMetrics, hasPair: true }), true);
-  assert.equal(fullTextExistingNeedsCollect({ ...contentMetrics, turnCount: 4 }, { ...contentMetrics, hasPair: true }), true);
-  assert.equal(fullTextExistingNeedsCollect({ ...contentMetrics, tailHash: "deadbeef" }, { ...contentMetrics, hasPair: true }), true);
-  assert.equal(fullTextExistingNeedsCollect({ turnCount: 0 }, { ...contentMetrics, hasPair: true }), false);
-  assert.equal(fullTextExistingIsCovered({ turnCount: 0 }, { ...contentMetrics, hasPair: true }), false);
-  assert.equal(fullTextExistingNeedsCollect(contentMetrics, { hasPair: false }), true);
-  assert.equal(fullTextExistingIsCovered(contentMetrics, { hasPair: false }), false);
+  const storedPair = { ...contentMetrics, hasPair: true };
+  const liveCovered = { ...contentMetrics, href: "https://chatgpt.com/c/1" };
+  assert.equal(fullTextExistingNeedsCollect(liveCovered, storedPair), false);
+  assert.equal(fullTextExistingIsCovered(liveCovered, storedPair), true);
+  assert.equal(
+    fullTextExistingNeedsCollect({ ...liveCovered, turnCount: 4 }, storedPair),
+    false,
+    "DOM turnCount above a stored Last-N pair is not growth"
+  );
+  assert.equal(
+    fullTextExistingNeedsCollect({ ...liveCovered, tailHash: "deadbeef" }, storedPair),
+    false,
+    "DOM tailHash vs Copy-text tailHash is not growth"
+  );
+  assert.equal(fullTextExistingNeedsCollect({ turnCount: 0, href: "https://chatgpt.com/c/1" }, storedPair), false);
+  assert.equal(fullTextExistingIsCovered({ turnCount: 0, href: "https://chatgpt.com/c/1" }, storedPair), false);
+  assert.equal(fullTextExistingNeedsCollect(liveCovered, { hasPair: false }), true);
+  assert.equal(fullTextExistingIsCovered(liveCovered, { hasPair: false }), false);
+  assert.equal(
+    fullTextExistingNeedsCollect({ ...liveCovered, turnCount: 4 }, { ...storedPair, representation: "live" }),
+    true,
+    "same-representation live turn growth must collect"
+  );
+  assert.equal(
+    fullTextExistingNeedsCollect({ ...liveCovered, tailHash: "deadbeef" }, { ...storedPair, representation: "live" }),
+    true,
+    "same-representation live tailHash change must collect"
+  );
+  assert.equal(
+    fullTextExistingNeedsCollect(
+      { ...liveCovered, lastUserMessage: "Hello there", lastAssistantMessage: "General Kenobi" },
+      { ...storedPair, lastUserMessage: "Hello there", lastAssistantMessage: "General Kenobi" }
+    ),
+    false
+  );
+  assert.equal(
+    fullTextExistingNeedsCollect(
+      { ...liveCovered, lastUserMessage: "new question", lastAssistantMessage: "new answer" },
+      {
+        ...storedPair,
+        representation: "live",
+        lastUserMessage: "Hello there",
+        lastAssistantMessage: "General Kenobi"
+      }
+    ),
+    true,
+    "same-representation last-pair mismatch must collect"
+  );
+  assert.equal(
+    fullTextExistingNeedsCollect({ ...liveCovered, href: "https://app.notion.com/chat" }, storedPair),
+    false
+  );
+  assert.equal(
+    fullTextExistingIsCovered({ ...liveCovered, href: "https://app.notion.com/chat" }, storedPair),
+    false,
+    "a home href is not covered until the conversation identity is stable"
+  );
+  assert.equal(fullTextConversationHrefIsStable("https://chatgpt.com/c/1"), true);
+  assert.equal(fullTextConversationHrefIsStable("https://chatgpt.com/"), false);
+  assert.equal(fullTextConversationHrefIsStable("https://app.notion.com/chat?t=topic-1"), true);
+  assert.equal(fullTextConversationHrefIsStable("https://app.notion.com/chat"), false);
+  assert.equal(fullTextConversationHrefIsStable("https://www.notion.so/chat?t=topic-1"), true);
+  assert.equal(fullTextConversationHrefIsStable(""), false);
 
   console.log("workspace tab full text: ok");
 })().catch((error) => {
