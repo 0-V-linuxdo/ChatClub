@@ -12,6 +12,7 @@ const dom = read("ui/dom.js");
 const tabSearch = read("app/workspace/tab-search-controller.js");
 const history = read("app/history/controller.js");
 const frame = read("app/workspace/frame-controller.js");
+const view = read("app/workspace/view-controller.js");
 const composer = read("app/composer/controller.js");
 const agents = read("AGENTS.md");
 
@@ -23,6 +24,14 @@ assert.match(dom, /export function overlaySearchCaretComposer/);
 assert.match(dom, /shouldLeave: typeof options\.shouldLeave === "function"/);
 assert.match(frame, /overlaySearchCaretComposer\(\)/);
 assert.match(dom, /export function setOverlayCaretLeaseHandler/);
+assert.match(dom, /export function syncComposerWorkspaceIslandInert/);
+assert.match(dom, /export function armComposerLoadPin/);
+assert.match(dom, /OVERLAY_CARET_LOAD_PIN_MS/);
+assert.match(dom, /composerLoadPinOpen/);
+assert.match(frame, /armComposerLoadPin\(\)/);
+assert.match(frame, /syncComposerWorkspaceIslandInert\(\)/);
+assert.match(view, /syncComposerWorkspaceIslandInert\(\)/);
+assert.match(view, /appendChatGroup[\s\S]*syncComposerWorkspaceIslandInert/);
 assert.match(dom, /scheduleOverlayCaretPinFollow/);
 assert.match(dom, /document\.addEventListener\("focusin", onOverlaySearchCaretFocusIn, true\)/);
 assert.match(dom, /document\.addEventListener\("focusout", onOverlaySearchCaretFocusOut, true\)/);
@@ -45,6 +54,8 @@ assert.match(agents, /the titlebar search is the unique caret owner/);
 assert.match(agents, /a focused `\.prompt-input` is the overlay-grade composer caret owner/);
 assert.match(agents, /workspace island/);
 assert.match(agents, /`\[autofocus\]`/);
+assert.match(agents, /three-frame follow cap/);
+assert.match(agents, /post-load pin settle/);
 assert.match(frame, /function restorePromptInputFocus/);
 assert.match(frame, /setOverlayCaretLeaseHandler/);
 assert.match(frame, /adoptPageCaretLease/);
@@ -242,7 +253,9 @@ globalThis.pinOverlaySearchCaret = pinOverlaySearchCaret;
 globalThis.releaseOverlaySearchCaret = releaseOverlaySearchCaret;
 globalThis.overlaySearchCaretMode = overlaySearchCaretMode;
 globalThis.overlaySearchCaretComposer = overlaySearchCaretComposer;
-globalThis.setOverlayCaretLeaseHandler = setOverlayCaretLeaseHandler;`,
+globalThis.setOverlayCaretLeaseHandler = setOverlayCaretLeaseHandler;
+globalThis.syncComposerWorkspaceIslandInert = syncComposerWorkspaceIslandInert;
+globalThis.armComposerLoadPin = armComposerLoadPin;`,
     context
   );
   world.claim = context.claimOverlaySearchCaret;
@@ -251,6 +264,8 @@ globalThis.setOverlayCaretLeaseHandler = setOverlayCaretLeaseHandler;`,
   world.mode = context.overlaySearchCaretMode;
   world.composerClaimed = context.overlaySearchCaretComposer;
   world.setLeaseHandler = context.setOverlayCaretLeaseHandler;
+  world.syncIsland = context.syncComposerWorkspaceIslandInert;
+  world.armLoadPin = context.armComposerLoadPin;
   return world;
 }
 
@@ -806,6 +821,80 @@ function claimComposer(world, extras = {}) {
   const world = createWorld();
   claimField(world);
   assert.equal(world.card.inert, false, "typed overlay search must not inert the workspace island (modal sibling inert owns that)");
+}
+
+{
+  const world = createPageWorld();
+  claimComposer(world);
+  world.documentHasFocus = false;
+  world.iframe.dataset.frameLoadPending = "1";
+  world.document.activeElement = world.iframe;
+  const before = world.promptField.focusCalls;
+  assert.equal(world.pin(), false, "composer load pin must not report success while the iframe owns hasFocus");
+  assert.ok(world.promptField.focusCalls > before, "load pin must still call field.focus");
+  assert.equal(world.composerClaimed(), true);
+  for (let i = 0; i < 5; i += 1) world.flushRaf();
+  assert.ok(
+    world.promptField.focusCalls >= before + 6,
+    "composer load pin retries past the three-frame follow cap"
+  );
+  assert.equal(world.composerClaimed(), true);
+  assert.equal(world.document.activeElement, world.promptField);
+}
+
+{
+  const world = createPageWorld();
+  claimComposer(world);
+  world.documentHasFocus = false;
+  world.document.activeElement = world.iframe;
+  assert.equal(world.armLoadPin(), true, "composer claim must arm the post-load pin settle");
+  const before = world.promptField.focusCalls;
+  world.pin();
+  for (let i = 0; i < 4; i += 1) world.flushRaf();
+  assert.ok(world.promptField.focusCalls > before + 3, "post-load settle pin retries past three frames");
+  assert.equal(world.composerClaimed(), true);
+}
+
+{
+  const world = createPageWorld();
+  claimComposer(world);
+  const late = {
+    className: "chat-card",
+    nodeName: "DIV",
+    classList: { contains(name) { return name === "chat-card"; } },
+    inert: false,
+    setAttribute(name) {
+      if (name === "inert") this.inert = true;
+    },
+    removeAttribute(name) {
+      if (name === "inert") this.inert = false;
+    }
+  };
+  const originalAll = world.document.querySelectorAll;
+  world.document.querySelectorAll = (selector) => {
+    const text = String(selector);
+    if (text.includes(".main-grid") || text.includes(".chat-card")) return [world.grid, world.card, late];
+    return originalAll(selector);
+  };
+  world.syncIsland();
+  assert.equal(late.inert, true, "late-mounted .chat-card becomes inert while composer intent holds");
+  assert.equal(world.card.inert, true);
+}
+
+{
+  const world = createWorld();
+  claimField(world);
+  world.documentHasFocus = false;
+  world.iframe.dataset.frameLoadPending = "1";
+  world.document.activeElement = world.iframe;
+  const before = world.field.focusCalls;
+  world.pin();
+  world.flushRaf();
+  world.flushRaf();
+  world.flushRaf();
+  world.flushRaf();
+  assert.equal(world.mode(), "overlay");
+  assert.ok(world.field.focusCalls - before <= 4, "overlay search must not use the composer load-window pin");
 }
 
 console.log("overlay caret lock tests passed");

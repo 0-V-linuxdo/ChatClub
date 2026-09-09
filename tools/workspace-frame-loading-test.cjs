@@ -115,7 +115,10 @@ const PARAM = "__chatclub_frame_load_nonce";
   const maintainFrameNavigationFocusGuard = functionSource(frameController, "maintainFrameNavigationFocusGuard");
   const activeHref = functionSource(frameController, "activeHref");
   assert.match(beginFrameLoading, /iframe\.inert = true/);
+  assert.match(beginFrameLoading, /syncComposerWorkspaceIslandInert\(\)/);
   assert.match(completeFrameLoading, /iframe\.inert = Boolean\(document\.querySelector\("\.modal"\) \|\| overlaySearchCaretMode\(\) === "page" \|\| overlaySearchCaretComposer\(\)\)/);
+  assert.match(completeFrameLoading, /armComposerLoadPin\(\)/);
+  assert.match(completeFrameLoading, /syncComposerWorkspaceIslandInert\(\)/);
   assert.match(beginFrameLoading, /const loadingKind = frameLoadingKindForTarget/);
   assert.match(beginFrameLoading, /iframe\.dataset\.frameLoadingKind = loadingKind/);
   assert.match(beginFrameLoading, /frameLoadingMaskPhase = "opaque"/);
@@ -404,6 +407,8 @@ const PARAM = "__chatclub_frame_load_nonce";
     overlaySearchCaretMode() { return ""; },
     overlaySearchCaretComposer() { return false; },
     pinOverlaySearchCaret() { return false; },
+    armComposerLoadPin() { return false; },
+    syncComposerWorkspaceIslandInert() {},
     adoptPageCaretLease() {},
     pageCaret: { adopt() {}, refresh() {}, release() {} },
     setFrameLoading(_iframe, next) { loading = next; },
@@ -764,6 +769,8 @@ const PARAM = "__chatclub_frame_load_nonce";
       overlaySearchCaretMode() { return ""; },
       overlaySearchCaretComposer() { return false; },
       pinOverlaySearchCaret() { return false; },
+      armComposerLoadPin() { return false; },
+      syncComposerWorkspaceIslandInert() {},
       adoptPageCaretLease() {},
       setFrameLoading() {},
       syncFrameLoadingMask() {},
@@ -797,6 +804,8 @@ const PARAM = "__chatclub_frame_load_nonce";
       overlaySearchCaretMode() { return "page"; },
       overlaySearchCaretComposer() { return false; },
       pinOverlaySearchCaret() { pins += 1; return false; },
+      armComposerLoadPin() { return false; },
+      syncComposerWorkspaceIslandInert() {},
       adoptPageCaretLease() { adopts += 1; },
       setFrameLoading() {},
       syncFrameLoadingMask() {},
@@ -820,6 +829,8 @@ const PARAM = "__chatclub_frame_load_nonce";
     }
     let pins = 0;
     let adopts = 0;
+    let loadPins = 0;
+    let islandSyncs = 0;
     const ctx = vm.createContext({
       HTMLIFrameElement: ComposerIframe,
       document: { querySelector() { return null; } },
@@ -828,6 +839,8 @@ const PARAM = "__chatclub_frame_load_nonce";
       overlaySearchCaretMode() { return "overlay"; },
       overlaySearchCaretComposer() { return true; },
       pinOverlaySearchCaret() { pins += 1; return false; },
+      armComposerLoadPin() { loadPins += 1; return true; },
+      syncComposerWorkspaceIslandInert() { islandSyncs += 1; },
       adoptPageCaretLease() { adopts += 1; },
       setFrameLoading() {},
       syncFrameLoadingMask() {},
@@ -839,6 +852,8 @@ const PARAM = "__chatclub_frame_load_nonce";
     ctx.complete(composerFrame);
     assert.equal(composerFrame.inert, true, "completing a load while composerInert is claimed must keep the iframe inert");
     assert.equal(pins, 1, "iframe load must pin a claimed composer caret owner without an armed restore generation");
+    assert.equal(loadPins, 1, "iframe load must arm the composer load-window pin settle");
+    assert.equal(islandSyncs, 1, "iframe load must re-arm workspace island inert");
     assert.equal(adopts, 1, "iframe load must re-adopt the page caret lease while composer overlay is claimed");
   }
 

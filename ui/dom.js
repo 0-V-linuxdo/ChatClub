@@ -218,8 +218,10 @@ let overlayCaretLeaseHandler = null;
 let overlayCaretPinFollow = 0;
 let composerCaretIntent = false;
 let composerCaretClaimOptions = null;
+let overlayCaretLoadPinUntil = 0;
 const OVERLAY_CARET_FRAME_POINTER_MS = 1000;
 const OVERLAY_CARET_PIN_FOLLOW_MAX = 3;
+const OVERLAY_CARET_LOAD_PIN_MS = 2500;
 const PAGE_CARET_MESSAGE_SOURCE = "chatclub-page-caret";
 
 function overlaySearchCaretPanel(field) {
@@ -284,7 +286,7 @@ function overlayCaretExemptComposerIsland(node) {
   return false;
 }
 
-function syncComposerWorkspaceIslandInert() {
+export function syncComposerWorkspaceIslandInert() {
   const modalOpen = Boolean(typeof document.querySelector === "function" && document.querySelector(".modal"));
   const islandInert = Boolean(overlaySearchCaretComposer() && !modalOpen);
   let nodes = [];
@@ -338,6 +340,25 @@ function overlaySearchCaretShouldLeave(active, field, panel, owner) {
   return false;
 }
 
+function composerLoadPinOpen() {
+  if (!overlaySearchCaretComposer()) return false;
+  if (overlayCaretLoadPinUntil && Date.now() < overlayCaretLoadPinUntil) return true;
+  try {
+    for (const frame of document.querySelectorAll?.("iframe.chat-frame") || []) {
+      if (overlayCaretFrameIsLoading(frame)) return true;
+    }
+  } catch {}
+  return false;
+}
+
+export function armComposerLoadPin(durationMs = OVERLAY_CARET_LOAD_PIN_MS) {
+  if (!overlaySearchCaretComposer()) return false;
+  const duration = Number(durationMs);
+  const ms = Number.isFinite(duration) && duration > 0 ? duration : OVERLAY_CARET_LOAD_PIN_MS;
+  overlayCaretLoadPinUntil = Math.max(overlayCaretLoadPinUntil, Date.now() + ms);
+  return true;
+}
+
 function cancelOverlayCaretPinFollow() {
   if (!overlayCaretPinFollow) return;
   try {
@@ -347,7 +368,7 @@ function cancelOverlayCaretPinFollow() {
 }
 
 function scheduleOverlayCaretPinFollow(remaining) {
-  if (remaining <= 0) return;
+  if (remaining <= 0 && !composerLoadPinOpen()) return;
   const schedule = typeof requestAnimationFrame === "function"
     ? requestAnimationFrame
     : (typeof setTimeout === "function" ? (callback) => setTimeout(callback, 0) : null);
@@ -355,7 +376,7 @@ function scheduleOverlayCaretPinFollow(remaining) {
   overlayCaretPinFollow = schedule(() => {
     overlayCaretPinFollow = 0;
     if (!overlaySearchCaret && !composerCaretIntent) return;
-    pinOverlaySearchCaret(remaining);
+    pinOverlaySearchCaret(composerLoadPinOpen() ? OVERLAY_CARET_PIN_FOLLOW_MAX : remaining);
   });
 }
 
@@ -422,6 +443,7 @@ function clearOverlaySearchCaret(invokeLeave = true) {
   if (invokeLeave) {
     overlaySearchCaret = null;
     composerCaretClaimOptions = null;
+    overlayCaretLoadPinUntil = 0;
     try { owner?.onLeave?.(); } catch {}
     composerCaretIntent = false;
     if (wasLease) notifyOverlayCaretLease("release");
@@ -454,8 +476,11 @@ function overlayCaretDocumentHasFocus() {
   return typeof document.hasFocus !== "function" || document.hasFocus();
 }
 
-function overlayCaretPinHolds(field) {
-  return document.activeElement === field && overlayCaretDocumentHasFocus();
+function overlayCaretPinHolds(field, owner) {
+  if (document.activeElement !== field) return false;
+  if (overlayCaretDocumentHasFocus()) return true;
+  if ((owner?.composer || composerCaretIntent) && composerLoadPinOpen()) return false;
+  return false;
 }
 
 export function overlaySearchCaretMode() {
@@ -488,7 +513,7 @@ export function pinOverlaySearchCaret(followRemaining = OVERLAY_CARET_PIN_FOLLOW
     return false;
   }
   const active = document.activeElement;
-  if (overlayCaretPinHolds(field)) return true;
+  if (overlayCaretPinHolds(field, owner)) return true;
   if (owner.composing?.()) return false;
   const panel = owner.panel || overlaySearchCaretPanel(field);
   if (overlaySearchCaretShouldLeave(active, field, panel, owner)) {
@@ -509,8 +534,11 @@ export function pinOverlaySearchCaret(followRemaining = OVERLAY_CARET_PIN_FOLLOW
     try { field.focus(); } catch {}
   }
   restoreOverlaySearchCaretSelection(field, owner);
-  if (overlayCaretPinHolds(field)) return true;
-  scheduleOverlayCaretPinFollow(Number(followRemaining) > 0 ? Number(followRemaining) - 1 : 0);
+  if (overlayCaretPinHolds(field, owner)) return true;
+  const nextFollow = composerLoadPinOpen()
+    ? OVERLAY_CARET_PIN_FOLLOW_MAX
+    : (Number(followRemaining) > 0 ? Number(followRemaining) - 1 : 0);
+  scheduleOverlayCaretPinFollow(nextFollow);
   return false;
 }
 
@@ -537,6 +565,7 @@ function onOverlayPageCaretStolen(event) {
   const data = event?.data;
   if (!data || data.source !== PAGE_CARET_MESSAGE_SOURCE || data.action !== "stolen") return;
   if (overlaySearchCaretMode() !== "page" && !overlaySearchCaretComposer()) return;
+  if (overlaySearchCaretComposer()) armComposerLoadPin();
   pinOverlaySearchCaret();
 }
 

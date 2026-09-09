@@ -9,7 +9,7 @@ import {
 import { t } from "../../shared/i18n.js";
 import { findTopicDeleteSiteConfig, topicDeleteTimeoutMs } from "../../shared/topic-delete-sites.js";
 import { conversationHrefFromLocation } from "../../shared/workspace-tab-memory.js";
-import { button, editorModal, el, field, input, openConfirmationAction, overlaySearchCaretComposer, overlaySearchCaretMode, pinOverlaySearchCaret, setOverlayCaretLeaseHandler } from "../../ui/dom.js";
+import { button, editorModal, el, field, input, openConfirmationAction, armComposerLoadPin, overlaySearchCaretComposer, overlaySearchCaretMode, pinOverlaySearchCaret, setOverlayCaretLeaseHandler, syncComposerWorkspaceIslandInert } from "../../ui/dom.js";
 import { clearFrameNewChatPending, frameLoadingKindForTarget, markFrameNewChatPending } from "./frame-loading.js";
 import { createPageCaretLease } from "./page-caret-lease.js";
 import { removeChatFromGroup, removeGroupFromWorkspace } from "./model.js";
@@ -436,6 +436,8 @@ export function createWorkspaceFrameController(dependencies = {}) {
       syncHeaderForFrameInstance(iframe.dataset.instanceId);
     }
     pageCaret.adopt(iframe);
+    syncComposerWorkspaceIslandInert();
+    if (!document.querySelector(".modal") && overlaySearchCaretComposer()) pinOverlaySearchCaret();
     return true;
   }
 
@@ -468,9 +470,11 @@ export function createWorkspaceFrameController(dependencies = {}) {
     setFrameLoading(iframe, false);
     restorePromptInputFocus(iframe);
     if (!document.querySelector(".modal") && (overlaySearchCaretMode() === "page" || overlaySearchCaretComposer())) {
+      if (overlaySearchCaretComposer()) armComposerLoadPin();
       pinOverlaySearchCaret();
       adoptPageCaretLease(iframe);
     }
+    syncComposerWorkspaceIslandInert();
     // The New Chat home document loaded; recapture without the release marker.
     if (iframe.dataset.frameLoadingKind === "new-topic" && clearFrameNewChatPending(iframe)) rememberWorkspaceSession();
   }
