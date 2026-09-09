@@ -8461,7 +8461,8 @@ html:not([data-settings-click-reorder="always"]) .settings-reorder .ui-reorder {
   height: 72px;
 }
 
-.settings-icon-editor .settings-icon-preview .settings-site-icon-preview {
+.settings-icon-editor .settings-icon-preview .settings-site-icon-preview,
+.settings-icon-editor .settings-icon-preview .settings-site-icon {
   width: 48px;
   height: 48px;
 }
@@ -8536,43 +8537,6 @@ html:not([data-settings-click-reorder="always"]) .settings-reorder .ui-reorder {
   .settings-icon-editor-layout {
     grid-template-columns: minmax(0, 1fr);
   }
-}
-
-.settings-icon-advanced-body {
-  display: grid;
-  gap: var(--space-2);
-  min-width: 0;
-  padding: var(--space-3);
-  background: var(--panel-2);
-  border: 1px solid var(--line);
-  border-radius: var(--ui-radius);
-}
-
-.settings-icon-source-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-2);
-  align-items: stretch;
-  min-width: 0;
-}
-
-.settings-icon-source-row input[type="file"] {
-  width: auto;
-  max-width: 16rem;
-}
-
-.settings-icon-advanced-body .settings-icon-help {
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--font-size-sm);
-}
-
-.settings-icon-field-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--space-2);
-  flex: 0 0 auto;
 }
 
 .settings-muted-cell {
@@ -9126,7 +9090,7 @@ html:not([data-settings-click-reorder="always"]) .settings-reorder .ui-reorder {
 }
 
 .settings-editor-modal.api-profile-icon-editor-modal {
-  width: min(var(--overlay-width), calc(100vw - 40px));
+  width: min(480px, calc(100vw - var(--overlay-gutter)));
 }
 
 .settings-editor-modal.settings-icon-editor-modal {

@@ -534,17 +534,21 @@ export function createProfilesSettingsSection(ctx) {
       "aria-label": t("apps.iconUrl")
     });
     const fileInput = el("input", {
-      class: "input",
+      class: "settings-file-input",
       type: "file",
       accept: "image/png,image/jpeg,image/webp,image/svg+xml,image/x-icon,.ico",
       "aria-label": t("apps.iconUpload")
     });
+    const fileName = el("span", { class: "settings-icon-editor-file-name" });
+    const iconPreview = el("div", { class: "settings-icon-preview" });
     const paintIcon = () => {
-      identityMark.replaceChildren(profileMark({
+      const source = {
         endpoint: endpointInput.value,
         registerUrl: draft.registerUrl,
         logoUrl
-      }, logoUrl));
+      };
+      identityMark.replaceChildren(profileMark(source, logoUrl));
+      iconPreview.replaceChildren(profileMark(source, logoUrl));
     };
     const initialSnapshot = JSON.stringify({
       name: String(draft.name || "").trim() || "API Profile",
@@ -577,6 +581,7 @@ export function createProfilesSettingsSection(ctx) {
       syncSave();
     });
     fileInput.addEventListener("change", async () => {
+      fileName.textContent = fileInput.files?.[0]?.name || "";
       const value = typeof faviconPort?.encodeFile === "function" ? await faviconPort.encodeFile(fileInput.files?.[0]) : "";
       if (!value) {
         toast(t("apps.iconInvalid"), "error");
@@ -591,6 +596,7 @@ export function createProfilesSettingsSection(ctx) {
       logoUrl = "";
       logoInput.value = "";
       fileInput.value = "";
+      fileName.textContent = "";
       paintIcon();
       syncSave();
     };
@@ -614,16 +620,27 @@ export function createProfilesSettingsSection(ctx) {
       const closeNested = () => closeIconEditor(true);
       iconDialog = editorModal(
         t("apps.icon"),
-        el("div", { class: "settings-editor-form api-profile-icon-editor" },
-          el("div", { class: "settings-icon-advanced-body" },
-            el("div", { class: "settings-icon-source-row" },
-              logoInput,
-              fileInput
+        el("div", { class: "settings-editor-form settings-icon-editor api-profile-icon-editor" },
+          el("div", { class: "settings-icon-editor-layout" },
+            el("div", { class: "settings-icon-editor-preview" },
+              el("span", { class: "settings-icon-editor-label" }, t("apps.iconPreview")),
+              iconPreview
             ),
-            el("p", { class: "settings-icon-help" }, t("apps.iconHelp")),
-            el("div", { class: "settings-icon-field-actions" },
-              button(t("apps.iconRefresh"), () => { void refreshIcon(); }),
-              button(t("apps.iconRestore"), restoreIcon)
+            el("div", { class: "settings-icon-editor-sources" },
+              el("p", { class: "settings-icon-editor-help" }, t("apps.iconHelp")),
+              el("label", { class: "settings-icon-editor-url" },
+                el("span", { class: "settings-icon-editor-label" }, t("apps.iconUrl")),
+                logoInput
+              ),
+              el("div", { class: "settings-icon-editor-upload" },
+                fileInput,
+                button(t("apps.iconUpload"), () => fileInput.click()),
+                fileName
+              ),
+              el("div", { class: "settings-icon-editor-tools" },
+                button(t("apps.iconRefresh"), () => { void refreshIcon(); }),
+                button(t("apps.iconRestore"), restoreIcon)
+              )
             )
           ),
           el("div", { class: "modal-footer" },
