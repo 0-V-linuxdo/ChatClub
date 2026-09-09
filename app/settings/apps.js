@@ -98,28 +98,28 @@ export function createAppsSettingsSection(ctx) {
   }
 
   function imagePasteStrategyLabel(strategy) {
-    return normalizePromptImagePasteStrategy(strategy) === PROMPT_IMAGE_PASTE_STRATEGY_BATCH
-      ? t("apps.imageStrategyBatch")
-      : t("apps.imageStrategySequential");
+    return t(normalizePromptImagePasteStrategy(strategy) === PROMPT_IMAGE_PASTE_STRATEGY_BATCH ? "apps.imageStrategyBatch" : "apps.imageStrategySequential");
   }
 
   function builtInAppIsNotion(app = {}) {
-    const id = String(app?.id || "").trim().toLowerCase();
-    const name = String(app?.name || "").trim().toLowerCase();
     let host = "";
     try { host = new URL(String(app?.url || "")).hostname.toLowerCase(); } catch {}
-    return id === "notionai"
-      || /\bnotion\b/.test(name)
-      || host === "app.notion.com"
-      || host === "notion.so"
-      || host === "www.notion.so"
-      || host.endsWith(".notion.so");
+    return String(app?.id || "").trim().toLowerCase() === "notionai" || /\bnotion\b/.test(String(app?.name || "").trim().toLowerCase())
+      || host === "app.notion.com" || host === "notion.so" || host === "www.notion.so" || host.endsWith(".notion.so");
   }
 
   function builtInImagePasteStrategyLabel(app) {
-    return builtInAppIsNotion(app)
-      ? t("apps.imageStrategyNotionBridge")
-      : imagePasteStrategyLabel(app?.imagePasteStrategy);
+    return builtInAppIsNotion(app) ? t("apps.imageStrategyNotionBridge") : imagePasteStrategyLabel(app?.imagePasteStrategy);
+  }
+
+  function strategyMark(app, notion) {
+    const kind = notion && builtInAppIsNotion(app) ? "notion-bridge" : normalizePromptImagePasteStrategy(app?.imagePasteStrategy) === PROMPT_IMAGE_PASTE_STRATEGY_BATCH ? "batch" : "sequential";
+    const label = kind === "notion-bridge" ? t("apps.imageStrategyNotionBridge") : imagePasteStrategyLabel(app?.imagePasteStrategy);
+    const icon = kind === "notion-bridge" ? "cable" : kind === "batch" ? "images" : "listOrdered";
+    return el("span", {
+      class: "settings-strategy-cell tooltip-trigger settings-image-strategy-mark",
+      role: "img", title: label, "aria-label": label, "data-tooltip": label, dataset: { strategy: kind }
+    }, svgIcon(icon));
   }
 
   function pane(redraw) {
@@ -194,7 +194,7 @@ export function createAppsSettingsSection(ctx) {
       }),
       ...appIcons.identityCells(app, displayAppName(app), redraw),
       el("a", { class: "settings-url-link", href: app.url, target: "_blank", rel: "noreferrer" }, app.url),
-      el("span", { class: "settings-strategy-cell" }, builtInImagePasteStrategyLabel(app)),
+      strategyMark(app, true),
       el("div", { class: "settings-row-action-group" },
         settingsIconAction(t("apps.viewDetails"), "preview", () => openBuiltInDetails(app), "", false, "settings.action.view")
       )
@@ -968,7 +968,7 @@ export function createAppsSettingsSection(ctx) {
       }),
       ...appIcons.identityCells(app, displayAppName(app), redraw),
       el("a", { class: "settings-url-link", href: app.url, target: "_blank", rel: "noreferrer" }, app.url),
-      el("span", { class: "settings-strategy-cell" }, imagePasteStrategyLabel(app.imagePasteStrategy)),
+      strategyMark(app),
       el("div", { class: "settings-row-action-group" },
         settingsIconAction(t("common.edit"), "edit", () => openCustomEditor(app, redraw), "", false, "settings.action.edit"),
         settingsIconAction(t("common.delete"), "trash", () => removeCustom(app, redraw), "danger", false, "settings.action.delete")
