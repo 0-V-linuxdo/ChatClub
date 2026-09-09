@@ -36,6 +36,12 @@ assert.match(dom, /scheduleOverlayCaretPinFollow/);
 assert.match(dom, /document\.addEventListener\("focusin", onOverlaySearchCaretFocusIn, true\)/);
 assert.match(dom, /document\.addEventListener\("focusout", onOverlaySearchCaretFocusOut, true\)/);
 assert.match(dom, /window\.addEventListener\("message", onOverlayPageCaretStolen\)/);
+assert.match(dom, /window\.addEventListener\("blur", onOverlayCaretWindowBlur\)/);
+assert.match(dom, /function overlayCaretFieldHasFrameFocus/);
+assert.match(dom, /field\.matches\(":focus"\)/);
+assert.match(dom, /overlayCaretReacquiring = true;\s*try \{ window\.focus\?\.\(\); \} catch \{\} finally \{ overlayCaretReacquiring = false; \}/);
+assert.match(agents, /`:focus` stops matching/);
+assert.match(agents, /`window\.focus\(\)`/);
 assert.match(tabSearch, /claimOverlaySearchCaret\(field, searchCaretOptions\(\)\)/);
 assert.match(tabSearch, /pinOverlaySearchCaret\(\)/);
 assert.match(history, /claimOverlaySearchCaret\(field, searchCaretOptions\(\)\)/);
@@ -94,6 +100,10 @@ function createWorld() {
     focus() {
       this.focusCalls += 1;
       world.document.activeElement = this;
+    },
+    // Chromium: `:focus` only matches while this frame is the browser's focused frame.
+    matches(selector) {
+      return selector === ":focus" && world.document.activeElement === this && world.frameFocused !== false;
     },
     setSelectionRange(start, end) {
       this.selectionStart = start;
@@ -216,9 +226,15 @@ function createWorld() {
     }
   };
   world.documentHasFocus = true;
+  world.frameFocused = true;
   const windowTarget = {
     focusCalls: 0,
-    focus() { this.focusCalls += 1; },
+    // Chromium: window.focus() moves the focused frame back to this document; field.focus() alone
+    // is a no-op while the field is already this document's focused element.
+    focus() {
+      this.focusCalls += 1;
+      world.frameFocused = true;
+    },
     addEventListener(type, handler, capture) {
       listeners.push({ type, handler, capture, target: "window" });
     },
@@ -413,6 +429,9 @@ function createPageWorld() {
     focus() {
       this.focusCalls += 1;
       world.document.activeElement = this;
+    },
+    matches(selector) {
+      return selector === ":focus" && world.document.activeElement === this && world.frameFocused !== false;
     },
     setSelectionRange(start, end) {
       this.selectionStart = start;
@@ -895,6 +914,98 @@ function claimComposer(world, extras = {}) {
   world.flushRaf();
   assert.equal(world.mode(), "overlay");
   assert.ok(world.field.focusCalls - before <= 4, "overlay search must not use the composer load-window pin");
+}
+
+// Phantom hold: a site-isolated chat-frame took the browser's focused frame while this document
+// still reports the field as activeElement and hasFocus() stays true. Keystrokes go to the child.
+function findWindowBlur(world) {
+  const blur = world.listeners.find((entry) => entry.type === "blur" && entry.target === "window");
+  assert.ok(blur, "claiming a caret owner must listen for the parent window blur");
+  return blur;
+}
+
+{
+  const world = createPageWorld();
+  claimComposer(world);
+  world.frameFocused = false;
+  assert.equal(world.document.activeElement, world.promptField);
+  assert.equal(world.document.hasFocus(), true);
+  const windowFocusBefore = world.window.focusCalls;
+  assert.equal(world.pin(), true, "a phantom hold must re-acquire the focused frame instead of reporting success");
+  assert.ok(world.window.focusCalls > windowFocusBefore, "re-acquiring the focused frame must go through window.focus()");
+  assert.equal(world.frameFocused, true);
+  assert.equal(world.document.activeElement, world.promptField);
+  assert.equal(world.composerClaimed(), true);
+}
+
+{
+  const world = createWorld();
+  claimField(world);
+  world.frameFocused = false;
+  const windowFocusBefore = world.window.focusCalls;
+  assert.equal(world.pin(), true, "the titlebar search owner must re-acquire the focused frame from a phantom hold");
+  assert.ok(world.window.focusCalls > windowFocusBefore);
+  assert.equal(world.frameFocused, true);
+}
+
+{
+  const world = createPageWorld();
+  claimComposer(world);
+  const blur = findWindowBlur(world);
+  world.frameFocused = false;
+  const before = world.window.focusCalls;
+  blur.handler({});
+  assert.equal(world.window.focusCalls, before, "window blur must defer the re-pin until Chromium finished switching frames");
+  world.flushRaf();
+  assert.ok(world.window.focusCalls > before, "the deferred re-pin must call window.focus()");
+  assert.equal(world.frameFocused, true);
+  assert.equal(world.document.activeElement, world.promptField);
+}
+
+{
+  const world = createPageWorld();
+  claimComposer(world);
+  const blur = findWindowBlur(world);
+  world.documentHasFocus = false;
+  world.frameFocused = false;
+  const before = world.window.focusCalls;
+  blur.handler({});
+  world.flushRaf();
+  world.flushRaf();
+  assert.equal(world.window.focusCalls, before, "a browser-window blur (hasFocus false) must not fight the OS");
+}
+
+{
+  const world = createPageWorld();
+  claimComposer(world);
+  world.frameFocused = false;
+  let nested = 0;
+  world.window.focus = function () {
+    this.focusCalls += 1;
+    nested += 1;
+    if (nested > 3) throw new Error("window.focus() recursion");
+    // Chromium re-dispatches `focus` on the field before the frame switch completes and the
+    // composer onfocus handler re-claims the caret from inside that event.
+    claimComposer(world);
+    world.frameFocused = true;
+  };
+  assert.equal(world.pin(), true);
+  assert.equal(nested, 1, "a re-claim from the re-dispatched focus event must not recurse into window.focus()");
+}
+
+{
+  const world = createPageWorld();
+  claimComposer(world);
+  const blur = findWindowBlur(world);
+  let pins = 0;
+  for (let i = 0; i < 12; i += 1) {
+    world.frameFocused = false;
+    const before = world.window.focusCalls;
+    blur.handler({});
+    world.flushRaf();
+    if (world.window.focusCalls > before) pins += 1;
+  }
+  assert.equal(pins, 8, "window-blur re-pins are capped so a self-refocusing site cannot ping-pong every frame");
 }
 
 console.log("overlay caret lock tests passed");

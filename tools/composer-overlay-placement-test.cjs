@@ -68,8 +68,11 @@ assert.match(i18n, /"topbar\.input\.placementCenter": "Center"/);
 assert.match(i18n, /"topbar\.input\.placementCenter": "居中"/);
 
 assert.match(functionSource(composer, "composerCaretStolen"), /chat-frame-wrap/);
+// Frame chrome inside .chat-frame-wrap only receives focus programmatically (selection-overlay
+// focus guard); for the composer that is a steal to reclaim, never a leave or a parking spot.
+assert.doesNotMatch(functionSource(composer, "composerCaretStolen"), /preferred-model-selection-overlay|frame-toast/);
 assert.match(functionSource(composer, "composerCaretShouldLeave"), /popover-menu/);
-assert.match(functionSource(composer, "composerCaretShouldLeave"), /preferred-model-selection-overlay/);
+assert.doesNotMatch(functionSource(composer, "composerCaretShouldLeave"), /preferred-model-selection-overlay/);
 assert.match(functionSource(composer, "composerCaretShouldLeave"), /chat-frame-wrap/);
 assert.doesNotMatch(functionSource(composer, "applyPlacement"), /cloneNode|innerHTML/);
 

@@ -219,9 +219,13 @@ let overlayCaretPinFollow = 0;
 let composerCaretIntent = false;
 let composerCaretClaimOptions = null;
 let overlayCaretLoadPinUntil = 0;
+let overlayCaretFrameBlurPins = [];
+let overlayCaretReacquiring = false;
 const OVERLAY_CARET_FRAME_POINTER_MS = 1000;
 const OVERLAY_CARET_PIN_FOLLOW_MAX = 3;
 const OVERLAY_CARET_LOAD_PIN_MS = 2500;
+const OVERLAY_CARET_FRAME_BLUR_WINDOW_MS = 1000;
+const OVERLAY_CARET_FRAME_BLUR_MAX = 8;
 const PAGE_CARET_MESSAGE_SOURCE = "chatclub-page-caret";
 
 function overlaySearchCaretPanel(field) {
@@ -476,11 +480,17 @@ function overlayCaretDocumentHasFocus() {
   return typeof document.hasFocus !== "function" || document.hasFocus();
 }
 
-function overlayCaretPinHolds(field, owner) {
+// A site-isolated child frame can own the browser's focused frame while this document still reports
+// the field as activeElement and hasFocus() stays true; `:focus` stops matching in that phantom hold,
+// field.focus() is then a no-op, and only window.focus() moves the focused frame back.
+function overlayCaretFieldHasFrameFocus(field) {
+  if (typeof field?.matches !== "function") return true;
+  try { return field.matches(":focus"); } catch { return true; }
+}
+
+function overlayCaretPinHolds(field) {
   if (document.activeElement !== field) return false;
-  if (overlayCaretDocumentHasFocus()) return true;
-  if ((owner?.composer || composerCaretIntent) && composerLoadPinOpen()) return false;
-  return false;
+  return overlayCaretDocumentHasFocus() && overlayCaretFieldHasFrameFocus(field);
 }
 
 export function overlaySearchCaretMode() {
@@ -496,6 +506,9 @@ export function setOverlayCaretLeaseHandler(handler) {
 }
 
 export function pinOverlaySearchCaret(followRemaining = OVERLAY_CARET_PIN_FOLLOW_MAX) {
+  // window.focus() re-dispatches `focus` on the field before Chromium finishes moving the focused
+  // frame back; a field focus handler that re-claims must not recurse into another window.focus().
+  if (overlayCaretReacquiring) return true;
   const owner = bindComposerCaretOwner() || overlaySearchCaret;
   if (!owner) return false;
   let field = owner.field;
@@ -513,7 +526,7 @@ export function pinOverlaySearchCaret(followRemaining = OVERLAY_CARET_PIN_FOLLOW
     return false;
   }
   const active = document.activeElement;
-  if (overlayCaretPinHolds(field, owner)) return true;
+  if (overlayCaretPinHolds(field)) return true;
   if (owner.composing?.()) return false;
   const panel = owner.panel || overlaySearchCaretPanel(field);
   if (overlaySearchCaretShouldLeave(active, field, panel, owner)) {
@@ -521,7 +534,8 @@ export function pinOverlaySearchCaret(followRemaining = OVERLAY_CARET_PIN_FOLLOW
     return false;
   }
   if (active !== field && !overlaySearchCaretStolen(active, field, panel, owner)) return false;
-  try { window.focus?.(); } catch {}
+  overlayCaretReacquiring = true;
+  try { window.focus?.(); } catch {} finally { overlayCaretReacquiring = false; }
   try {
     for (const frame of document.querySelectorAll("iframe.chat-frame")) {
       try { frame.blur?.(); } catch {}
@@ -534,7 +548,7 @@ export function pinOverlaySearchCaret(followRemaining = OVERLAY_CARET_PIN_FOLLOW
     try { field.focus(); } catch {}
   }
   restoreOverlaySearchCaretSelection(field, owner);
-  if (overlayCaretPinHolds(field, owner)) return true;
+  if (overlayCaretPinHolds(field)) return true;
   const nextFollow = composerLoadPinOpen()
     ? OVERLAY_CARET_PIN_FOLLOW_MAX
     : (Number(followRemaining) > 0 ? Number(followRemaining) - 1 : 0);
@@ -579,6 +593,23 @@ function onOverlayCaretPointerDown(event) {
   try { frame.focus?.(); } catch {}
 }
 
+// The parent window blurs when a child frame becomes the focused frame. hasFocus() false means the
+// browser window lost focus (do not fight the OS); true means a chat-frame took the caret, so re-pin
+// on the next frame: Chromium is still switching frames inside this event and ignores window.focus().
+function onOverlayCaretWindowBlur() {
+  if (!overlaySearchCaret && !composerCaretIntent) return;
+  if (!overlayCaretDocumentHasFocus()) return;
+  if (overlayCaretRecentFramePointer()) return;
+  const now = Date.now();
+  overlayCaretFrameBlurPins = overlayCaretFrameBlurPins.filter((at) => now - at < OVERLAY_CARET_FRAME_BLUR_WINDOW_MS);
+  // A site that refocuses itself on every blur would otherwise ping-pong with the owner each frame.
+  if (overlayCaretFrameBlurPins.length >= OVERLAY_CARET_FRAME_BLUR_MAX) return;
+  overlayCaretFrameBlurPins.push(now);
+  if (overlaySearchCaretComposer()) armComposerLoadPin();
+  cancelOverlayCaretPinFollow();
+  scheduleOverlayCaretPinFollow(OVERLAY_CARET_PIN_FOLLOW_MAX);
+}
+
 function ensureOverlaySearchCaretListeners() {
   if (overlaySearchCaretListening || typeof document.addEventListener !== "function") return;
   overlaySearchCaretListening = true;
@@ -587,6 +618,7 @@ function ensureOverlaySearchCaretListeners() {
   document.addEventListener("pointerdown", onOverlayCaretPointerDown, true);
   if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
     window.addEventListener("message", onOverlayPageCaretStolen);
+    window.addEventListener("blur", onOverlayCaretWindowBlur);
   }
 }
 

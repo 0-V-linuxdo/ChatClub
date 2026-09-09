@@ -61,14 +61,13 @@ function requirePort(port, label, methodNames) {
   return port;
 }
 
+// Frame chrome in .chat-frame-wrap (selection overlay, frame toasts) is only focused programmatically;
+// for the composer that is a steal to reclaim, never a leave.
 function composerCaretStolen(active, field) {
   if (active === field) return false;
   if (!active) return true;
   if (active === document.body || active === document.documentElement) return true;
   if (active.classList?.contains?.("chat-frame") || active.nodeName === "IFRAME") return true;
-  try {
-    if (active.closest?.(".preferred-model-selection-overlay") || active.closest?.(".frame-toast")) return false;
-  } catch {}
   if (active.classList?.contains?.("chat-frame-wrap") || active.closest?.(".chat-frame-wrap")) return true;
   if (active.classList?.contains?.("chat-card") || active.closest?.(".chat-card")) return true;
   return false;
@@ -86,7 +85,6 @@ function composerCaretShouldLeave(active, field) {
     active.closest?.(".modal")
     || active.closest?.(".popover-menu")
     || active.closest?.(".prompt-actions-popover")
-    || active.closest?.(".preferred-model-selection-overlay")
   ) return true;
   if (active.closest?.(".topbar") && !active.closest?.(".prompt-shell") && !active.closest?.(".composer-center-mark")) {
     return true;
