@@ -1301,86 +1301,87 @@ export function createComposerController(dependencies = {}) {
         onpaste: handlePaste,
         onfocusout: handlePromptShellFocusOut
       },
-        prompt,
-        el("div", {
-          class: `prompt-collapsed-preview ${collapsed.empty ? "prompt-collapsed-preview-empty" : ""}`.trim(),
-          title: collapsed.title,
-        }, renderCollapsedContent(collapsed, state.promptImages)),
-        el("div", { class: "prompt-image-preview-list", hidden: state.promptImages.length <= 0 },
-          state.promptImages.map((image) => renderImagePreview(image))
-        ),
-        el("button", {
-          class: "prompt-actions-button compact-icon tooltip-trigger",
-          type: "button",
-          "aria-label": t("topbar.promptActions"),
-          "aria-haspopup": "menu",
-          "aria-expanded": "false",
-          "data-tooltip": t("topbar.promptActions"),
-          "data-tooltip-id": "topbar.promptActions",
-          onclick: openActionsMenu,
-          onpointerdown: (event) => {
-            event.preventDefault();
-            event.stopPropagation();
+        el("div", { class: "prompt-input-row" },
+          prompt,
+          el("div", {
+            class: `prompt-collapsed-preview ${collapsed.empty ? "prompt-collapsed-preview-empty" : ""}`.trim(),
+            title: collapsed.title,
+          }, renderCollapsedContent(collapsed, state.promptImages)),
+          el("div", { class: "prompt-image-preview-list", hidden: state.promptImages.length <= 0 },
+            state.promptImages.map((image) => renderImagePreview(image))
+          ),
+          el("button", {
+            class: "prompt-actions-button compact-icon tooltip-trigger",
+            type: "button",
+            "aria-label": t("topbar.promptActions"),
+            "aria-haspopup": "menu",
+            "aria-expanded": "false",
+            "data-tooltip": t("topbar.promptActions"),
+            "data-tooltip-id": "topbar.promptActions",
+            onclick: openActionsMenu,
+            onpointerdown: (event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            },
+            onkeydown: (event) => event.stopPropagation()
+          }, createSvgIcon("plus")),
+          el("input", {
+            class: "prompt-image-file-input",
+            type: "file",
+            accept: "image/*",
+            multiple: true,
+            tabindex: "-1",
+            onchange: handleImageFileChange
+          }),
+          el("button", {
+            class: "prompt-clear-button compact-icon tooltip-trigger",
+            type: "button",
+            hidden: !hasContent(state.promptText, state.promptImages),
+            "aria-label": t("topbar.clearPrompt"),
+            "data-tooltip": t("topbar.clearPrompt"),
+            "data-tooltip-id": "topbar.clearPrompt",
+            onclick: clearInput,
+            onpointerdown: (event) => event.stopPropagation(),
+            onkeydown: (event) => event.stopPropagation()
+          }, createSvgIcon("x")),
+          el("button", {
+            class: "prompt-send-button tooltip-trigger",
+            type: "button",
+            disabled: !hasContent(state.promptText, state.promptImages),
+            "aria-label": t("topbar.send"),
+            "data-tooltip": t("topbar.sendTooltip"),
+            "data-tooltip-id": "topbar.send",
+            onclick: (event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              submit(event);
+            },
+            onpointerdown: (event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            },
+            onkeydown: (event) => event.stopPropagation()
           },
-          onkeydown: (event) => event.stopPropagation()
-        }, createSvgIcon("plus")),
-        el("input", {
-          class: "prompt-image-file-input",
-          type: "file",
-          accept: "image/*",
-          multiple: true,
-          tabindex: "-1",
-          onchange: handleImageFileChange
-        }),
-        el("button", {
-          class: "prompt-clear-button compact-icon tooltip-trigger",
-          type: "button",
-          hidden: !hasContent(state.promptText, state.promptImages),
-          "aria-label": t("topbar.clearPrompt"),
-          "data-tooltip": t("topbar.clearPrompt"),
-          "data-tooltip-id": "topbar.clearPrompt",
-          onclick: clearInput,
-          onpointerdown: (event) => event.stopPropagation(),
-          onkeydown: (event) => event.stopPropagation()
-        }, createSvgIcon("x")),
-        el("button", {
-          class: "prompt-send-button tooltip-trigger",
-          type: "button",
-          disabled: !hasContent(state.promptText, state.promptImages),
-          "aria-label": t("topbar.send"),
-          "data-tooltip": t("topbar.sendTooltip"),
-          "data-tooltip-id": "topbar.send",
-          onclick: (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            submit(event);
-          },
-          onpointerdown: (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-          },
-          onkeydown: (event) => event.stopPropagation()
-        },
-          createSvgIcon("send"),
-          el("span", {
-            class: "prompt-send-queue-badge",
+            createSvgIcon("send"),
+            el("span", {
+              class: "prompt-send-queue-badge",
+              hidden: !(Number(state.promptQueuedTargetCount) > 0),
+              "aria-hidden": "true"
+            }, Number(state.promptQueuedTargetCount) > 99 ? "99+" : String(Math.max(0, Number(state.promptQueuedTargetCount) || 0)))
+          ),
+          el("div", {
+            class: "prompt-send-queue-status",
             hidden: !(Number(state.promptQueuedTargetCount) > 0),
-            "aria-hidden": "true"
-          }, Number(state.promptQueuedTargetCount) > 99 ? "99+" : String(Math.max(0, Number(state.promptQueuedTargetCount) || 0)))
+            "aria-live": "polite",
+            "aria-atomic": "true"
+          }, Number(state.promptQueuedTargetCount) > 0
+            ? t("topbar.promptQueuedTargets", { count: Number(state.promptQueuedTargetCount) })
+            : "")
         ),
-        el("div", {
-          class: "prompt-send-queue-status",
-          hidden: !(Number(state.promptQueuedTargetCount) > 0),
-          "aria-live": "polite",
-          "aria-atomic": "true"
-        }, Number(state.promptQueuedTargetCount) > 0
-          ? t("topbar.promptQueuedTargets", { count: Number(state.promptQueuedTargetCount) })
-          : ""),
         el("div", {
           class: "prompt-model-gate-status tooltip-trigger",
           hidden: !(gateApplying || gateFailed),
           role: "note",
-          tabindex: (gateApplying || gateFailed) ? "0" : null,
           "aria-label": (gateApplying || gateFailed) ? gateStatusText : null,
           "data-tooltip": (gateApplying || gateFailed) ? gateStatusText : null,
           "data-tooltip-id": "topbar.modelGateStatus",
@@ -1392,8 +1393,7 @@ export function createComposerController(dependencies = {}) {
               : ""
           },
           onpointerdown: (event) => event.stopPropagation(),
-          onclick: (event) => event.stopPropagation(),
-          onkeydown: (event) => event.stopPropagation()
+          onclick: (event) => event.stopPropagation()
         },
           (gateApplying || gateFailed) ? modelGateStatusIcon(gateApplying) : null,
           (gateApplying || gateFailed) ? el("span", { class: "prompt-model-gate-status-text" }, gateStatusText) : null

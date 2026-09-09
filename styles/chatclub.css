@@ -256,6 +256,10 @@ button { cursor: pointer; }
   container: chatclub-topbar / inline-size;
 }
 
+.app-shell:has(.topbar .prompt-shell:is(.prompt-shell-model-gate-applying, .prompt-shell-model-gate-failed)) {
+  --topbar-height: calc(51px + var(--ui-accessory-height) + var(--space-1));
+}
+
 .app-shell.fullscreen-mode {
   grid-template-rows: minmax(0, 1fr);
 }
@@ -1451,6 +1455,10 @@ button { cursor: pointer; }
   container-type: inline-size;
 }
 
+.composer:has(.prompt-shell:is(.prompt-shell-model-gate-applying, .prompt-shell-model-gate-failed)) {
+  height: auto;
+}
+
 .composer.composer-center-slot {
   flex: 0 0 auto;
   width: var(--ui-compact-height);
@@ -1492,8 +1500,10 @@ button { cursor: pointer; }
 
 .prompt-shell {
   --prompt-model-gate-width: clamp(132px, 32cqi, 240px);
-  --prompt-model-gate-reserve: calc(var(--prompt-model-gate-width) + 8px);
-  --prompt-model-gate-control-right: 76px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
   position: relative;
   z-index: 30;
   width: 100%;
@@ -1502,7 +1512,25 @@ button { cursor: pointer; }
   overflow: visible;
 }
 
+.prompt-input-row {
+  position: relative;
+  z-index: 0;
+  width: 100%;
+  height: 38px;
+  min-height: 38px;
+  min-width: 0;
+}
+
+.prompt-shell:is(.prompt-shell-model-gate-applying, .prompt-shell-model-gate-failed) {
+  height: auto;
+  gap: var(--space-1);
+}
+
 .prompt-shell.prompt-shell-expanded.prompt-shell-has-images {
+  height: auto;
+}
+
+.prompt-shell.prompt-shell-expanded.prompt-shell-has-images .prompt-input-row {
   height: 180px;
   min-height: 180px;
   max-height: 360px;
@@ -1951,39 +1979,19 @@ button { cursor: pointer; }
   border-color: color-mix(in srgb, var(--danger) 40%, var(--line));
 }
 
-.prompt-shell:is(.prompt-shell-model-gate-applying, .prompt-shell-model-gate-failed):has(.prompt-clear-button[hidden]) {
-  --prompt-model-gate-control-right: 40px;
-}
-
-.prompt-shell.prompt-shell-expanded.prompt-shell-has-images:is(.prompt-shell-model-gate-applying, .prompt-shell-model-gate-failed) {
-  --prompt-model-gate-control-right: 48px;
-}
-
-.prompt-shell:is(.prompt-shell-model-gate-applying, .prompt-shell-model-gate-failed):not(.prompt-shell-has-images) .textarea.prompt-input,
-.prompt-shell:is(.prompt-shell-model-gate-applying, .prompt-shell-model-gate-failed) .prompt-collapsed-preview {
-  padding-right: calc(var(--prompt-model-gate-control-right) + var(--prompt-model-gate-reserve));
-}
-
-.prompt-shell.prompt-shell-expanded.prompt-shell-has-images:is(.prompt-shell-model-gate-applying, .prompt-shell-model-gate-failed) .prompt-image-preview-list {
-  right: calc(var(--prompt-model-gate-control-right) + var(--prompt-model-gate-reserve));
-  max-width: calc(100% - 10px - var(--prompt-model-gate-control-right) - var(--prompt-model-gate-reserve));
-}
-
 .prompt-model-gate-status.tooltip-trigger {
-  position: absolute;
-  top: 5px;
-  right: var(--prompt-model-gate-control-right);
-  left: auto;
-  bottom: auto;
-  z-index: 73;
+  position: static;
+  z-index: 0;
   display: inline-flex;
   align-items: center;
+  align-self: flex-end;
   gap: var(--space-2);
   box-sizing: border-box;
   width: var(--prompt-model-gate-width);
   max-width: var(--prompt-model-gate-width);
   min-height: var(--ui-accessory-height);
   height: var(--ui-accessory-height);
+  margin-right: var(--space-1);
   padding: var(--space-1) var(--space-2);
   color: var(--muted);
   background: color-mix(in srgb, var(--panel) 88%, var(--soft) 12%);
@@ -1996,13 +2004,6 @@ button { cursor: pointer; }
   cursor: help;
   pointer-events: auto;
   white-space: nowrap;
-}
-
-.prompt-shell-expanded.prompt-shell-has-images .prompt-model-gate-status {
-  top: 12px;
-  right: var(--prompt-model-gate-control-right);
-  left: auto;
-  bottom: auto;
 }
 
 .prompt-model-gate-status-text {
@@ -2025,11 +2026,6 @@ button { cursor: pointer; }
 .prompt-shell-model-gate-failed .prompt-model-gate-status {
   color: var(--danger);
   border-color: color-mix(in srgb, var(--danger) 44%, var(--line));
-}
-
-.prompt-model-gate-status:focus-visible {
-  outline: 2px solid color-mix(in srgb, currentColor 48%, transparent);
-  outline-offset: 2px;
 }
 
 .prompt-model-gate-spinner {

@@ -1,8 +1,8 @@
 {
   "app/preferred-model/controller.js": {
-    "maxLines": 1568,
+    "maxLines": 1567,
     "target": 1200,
-    "maxBytes": 64847,
+    "maxBytes": 64801,
     "targetBytes": 50000,
     "reason": "The preferred-model controller keeps one document-bound apply record across an explicitly unavailable primary or typed closed-menu Notion settlement failure and its optional secondary attempt, including fresh run correlation, navigation-generation bridge recovery, delivery-aware retry safety, queued-send readiness, failure policy handoff, per-attempt Gemini and Notion desired state, per-frame overlay and progress-Toast suppression synchronization, same-conversation Grok and Notion response URL changes, submission-owned Grok conversation creation routing, session-scoped five-minute secondary fallback memory, pre-record overlay target resolution, and a bootstrap gate that defers lifecycle-triggered applies until restored frames settle."
   },
@@ -16,7 +16,7 @@
   "app/composer/controller.js": {
     "maxLines": 1427,
     "target": 1200,
-    "maxBytes": 54433,
+    "maxBytes": 54522,
     "targetBytes": 45000,
     "reason": "The Composer controller owns immutable text-and-image draft revisions, revision-conditional clearing, history de-duplication, and the shared document-bound admission queue used by both ordinary Send and one-shot new-workspace prompt handoff so delivery uncertainty and preferred-model preparation cannot diverge; prompt-actions popover chrome now uses the shared overlay-surface contract with aria-haspopup/aria-expanded, a named linear menu, and Tab dismiss; empty collapsed placeholder clicks keep the native caret so the first load click is not swallowed; prompt expand skips while a typed modal owns the caret; a focused `.prompt-input` claims the overlay-grade composer caret owner (`composer: true`, `mode: overlay`, `composerInert`) so iframe autofocus cannot collapse the field mid-keystroke; center placement reparents the same `.prompt-shell` onto `#composer-center-host.overlay-surface` without a fifth overlay family."
   },

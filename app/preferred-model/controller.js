@@ -489,7 +489,6 @@ export function createPreferredModelController(dependencies = {}) {
       return;
     }
 
-    statusNode.setAttribute("tabindex", "0");
     statusNode.setAttribute("aria-label", statusText);
     statusNode.setAttribute("data-tooltip", statusText);
     statusNode.setAttribute("data-tooltip-id", "topbar.modelGateStatus");

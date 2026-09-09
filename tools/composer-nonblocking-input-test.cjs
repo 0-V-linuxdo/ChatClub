@@ -322,11 +322,15 @@ function preferredModelStub() {
     assert.equal(view.querySelectorAll(".prompt-model-gate-status").length, 1, `${gateState}: visual status must be unique`);
     assert.equal(view.querySelectorAll(".prompt-model-gate-live").length, 1, `${gateState}: model live region must be unique`);
     assert.equal(status.parentElement, shell, `${gateState}: visual status must stay inside the prompt shell`);
+    const inputRow = shell.querySelector(".prompt-input-row");
+    assert.ok(inputRow, `${gateState}: Composer must wrap field chrome in prompt-input-row`);
+    assert.equal(input.parentElement, inputRow, `${gateState}: textarea must live in the input row`);
+    assert.notEqual(status.parentElement, inputRow, `${gateState}: visual status must not overlay the textarea`);
     assert.equal(status.hidden, false, `${gateState}: visual status must be visible while unsettled`);
     assert.equal(status.getAttribute("aria-live"), null, `${gateState}: visual status must not duplicate announcements`);
     assert.equal(status.getAttribute("aria-atomic"), null, `${gateState}: visual status must not own live semantics`);
-    assert.equal(status.getAttribute("role"), "note", `${gateState}: the focusable visual must expose non-live status semantics`);
-    assert.equal(status.getAttribute("tabindex"), "0", `${gateState}: visual status must support keyboard focus`);
+    assert.equal(status.getAttribute("role"), "note", `${gateState}: the visual must expose non-live status semantics`);
+    assert.equal(status.getAttribute("tabindex"), null, `${gateState}: visual status must not steal Composer keyboard focus`);
     assert.equal(status.getAttribute("aria-label"), nodeText(statusText), `${gateState}: visual status must expose its full label`);
     assert.equal(status.getAttribute("data-tooltip"), nodeText(statusText), `${gateState}: tooltip must retain the full status text`);
     assert.equal(status.getAttribute("data-tooltip-placement"), "left");

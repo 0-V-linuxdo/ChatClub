@@ -348,9 +348,10 @@ function responsiveBrandRules(kind) {
   );
   const gateVisualSource = functionSource(preferredModel, "syncPreferredModelGateVisual");
   assert.match(gateVisualSource, /removeAttribute\("aria-live"\)/, "the visual model badge must not duplicate live announcements");
-  assert.match(gateVisualSource, /setAttribute\("role", "note"\)/, "the focusable visual badge must expose named non-live semantics");
+  assert.match(gateVisualSource, /setAttribute\("role", "note"\)/, "the visual badge must expose named non-live semantics");
   assert.match(gateVisualSource, /document\.activeElement === statusNode[\s\S]*prompt-input[\s\S]*preventScroll: true/, "hiding a focused badge must return focus to Composer before it can collapse");
-  assert.match(gateVisualSource, /data-tooltip[\s\S]*data-tooltip-wrap[\s\S]*tabindex/, "the full model status must be available on hover and focus");
+  assert.match(gateVisualSource, /data-tooltip[\s\S]*data-tooltip-wrap/, "the full model status must be available on hover");
+  assert.doesNotMatch(gateVisualSource, /setAttribute\("tabindex"/, "the model status note must not take keyboard focus away from Composer");
   assert.match(gateVisualSource, /preferredModelGateStatusIcon\(applying\)/, "the visual badge must retain an icon in every unsettled state");
   const gateLiveSource = functionSource(preferredModel, "syncPreferredModelGateLive");
   assert.match(gateLiveSource, /hidden = false/, "the model live region must remain mounted and exposed to assistive technology");
@@ -376,17 +377,20 @@ function responsiveBrandRules(kind) {
   );
   assert.match(
     chatclubCss,
-    /padding-right:\s*calc\(var\(--prompt-model-gate-control-right\) \+ var\(--prompt-model-gate-reserve\)\);/,
-    "textarea and collapsed preview content must reserve the model badge width"
+    /\.prompt-input-row\s*\{[\s\S]*?position:\s*relative;[\s\S]*?height:\s*38px;/,
+    "textarea chrome must live in a dedicated input row so the model status cannot overlay glyphs"
   );
   assert.match(
     chatclubCss,
-    /prompt-image-preview-list\s*\{[\s\S]*?right:\s*calc\(var\(--prompt-model-gate-control-right\) \+ var\(--prompt-model-gate-reserve\)\);/,
-    "expanded image previews must reserve the model badge width"
+    /\.prompt-model-gate-status\.tooltip-trigger\s*\{[\s\S]*?position:\s*static;[\s\S]*?pointer-events:\s*auto;/,
+    "the visual model status must sit in-flow outside the textarea and remain interactive"
   );
-  assert.match(chatclubCss, /\.prompt-model-gate-status\.tooltip-trigger\s*\{[\s\S]*?top:\s*5px;[\s\S]*?pointer-events:\s*auto;/, "the visual model status must stay in the top control row and remain interactive");
-  assert.match(chatclubCss, /prompt-shell-expanded\.prompt-shell-has-images \.prompt-model-gate-status\s*\{[\s\S]*?top:\s*12px;/, "image mode must keep the model status in its top control row");
-  assert.match(chatclubCss, /\.prompt-shell\.prompt-shell-expanded\.prompt-shell-has-images\s*\{[\s\S]*?max-height:\s*360px;/, "image mode must allow the prompt shell to grow with multiline text");
+  assert.match(
+    chatclubCss,
+    /\.app-shell:has\(\.topbar \.prompt-shell:is\(\.prompt-shell-model-gate-applying, \.prompt-shell-model-gate-failed\)\)\s*\{[\s\S]*?--topbar-height:\s*calc\(51px \+ var\(--ui-accessory-height\) \+ var\(--space-1\)\);/,
+    "a visible model status in the topbar slot must grow the topbar instead of hanging over the workspace iframe"
+  );
+  assert.match(chatclubCss, /\.prompt-shell\.prompt-shell-expanded\.prompt-shell-has-images\s*\{[\s\S]*?height:\s*auto;/, "image mode must allow the prompt shell to grow with multiline text");
   assert.match(chatclubCss, /\.prompt-shell-has-images \.textarea\.prompt-input-expanded\s*\{[\s\S]*?max-height:\s*360px;[\s\S]*?overflow-y:\s*auto;/, "image mode must allow a capped textarea to scroll instead of clipping text");
   assert.match(chatclubCss, /\.prompt-collapsed-preview\s*\{[\s\S]*?pointer-events:\s*none;/, "the collapsed preview must be visual-only so the first click reaches the textarea");
   assert.doesNotMatch(chatclubCss, /\.prompt-shell-has-images \.textarea\.prompt-input-expanded\s*\{[^}]*!important/, "image mode height must remain overridable by measured inline sizing");
