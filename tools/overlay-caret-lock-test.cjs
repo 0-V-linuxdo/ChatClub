@@ -26,8 +26,13 @@ assert.match(history, /pinOverlaySearchCaret\(\)/);
 assert.doesNotMatch(tabSearch, /restoreSearchFieldAfterFrameLoad|FRAME_LOAD_SEARCH_FOCUS|addEventListener\("load"/);
 assert.doesNotMatch(history, /restoreSearchFieldAfterFrameLoad|FRAME_LOAD_SEARCH_FOCUS|addEventListener\("load"/);
 assert.match(frame, /prepareFrameNavigationFocusGuard[\s\S]*document\.querySelector\("\.modal"\)/);
-assert.match(composer, /onfocus:e=>!document\.documentElement\.dataset\.p&&!document\.querySelector\("\.modal"\)&&expandInput\(e\.target\)/);
+assert.match(composer, /claimOverlaySearchCaret/);
+assert.match(composer, /mode: "page"/);
+assert.match(composer, /claimPromptCaret\(e\.target\)/);
+assert.match(composer, /oncompositionstart/);
+assert.match(composer, /oncompositionend/);
 assert.match(agents, /the titlebar search is the unique caret owner/);
+assert.match(agents, /a focused `\.prompt-input` is the page caret owner/);
 assert.match(frame, /function restorePromptInputFocus/);
 
 const caretStart = dom.indexOf("let overlaySearchCaret = null;");
@@ -115,6 +120,7 @@ function createWorld() {
     Boolean,
     Number,
     String,
+    Date,
     console
   });
   vm.runInContext(
@@ -244,6 +250,123 @@ function claimField(world, extras = {}) {
   world.field.isConnected = true;
   world.document.activeElement = world.iframe;
   assert.equal(world.pin(), false, "pin after disconnect must not resurrect the owner");
+}
+
+function createPageWorld() {
+  const world = createWorld();
+  world.document.querySelector = (selector) => {
+    if (String(selector).includes("prompt-input")) return world.promptField;
+    return null;
+  };
+  const shell = {
+    className: "prompt-shell",
+    contains(node) { return node === world.promptField || node === world.send; }
+  };
+  world.shell = shell;
+  world.send = { nodeName: "BUTTON", className: "prompt-send-button" };
+  world.topbarButton = { nodeName: "BUTTON", className: "icon-button", _inPanel: false };
+  world.promptField = {
+    isConnected: true,
+    value: "hello",
+    nodeName: "TEXTAREA",
+    className: "textarea prompt-input",
+    focusCalls: 0,
+    selectionStart: 5,
+    selectionEnd: 5,
+    closest(selector) {
+      if (selector === ".prompt-shell") return shell;
+      return null;
+    },
+    contains() { return false; },
+    focus() {
+      this.focusCalls += 1;
+      world.document.activeElement = this;
+    },
+    setSelectionRange(start, end) {
+      this.selectionStart = start;
+      this.selectionEnd = end;
+    }
+  };
+  world.document.activeElement = world.promptField;
+  return world;
+}
+
+function claimPrompt(world, extras = {}) {
+  let left = false;
+  world.claim(world.promptField, {
+    panel: world.shell,
+    mode: "page",
+    getSelection: () => ({ start: Number(world.promptField.selectionStart) || 0, end: Number(world.promptField.selectionEnd) || 0 }),
+    composing: () => Boolean(extras.composing?.()),
+    onLeave: () => { left = true; extras.onLeave?.(); }
+  });
+  return { get left() { return left; } };
+}
+
+{
+  const world = createPageWorld();
+  claimPrompt(world);
+  world.document.activeElement = world.iframe;
+  assert.equal(world.pin(), true, "page mode must pin the prompt after an iframe steal");
+  assert.equal(world.document.activeElement, world.promptField);
+}
+
+{
+  const world = createPageWorld();
+  claimPrompt(world);
+  world.document.activeElement = world.body;
+  assert.equal(world.pin(), true, "page mode must pin the prompt after a body steal");
+  assert.equal(world.document.activeElement, world.promptField);
+}
+
+{
+  const world = createPageWorld();
+  let left = false;
+  claimPrompt(world, { onLeave: () => { left = true; } });
+  world.document.activeElement = world.topbarButton;
+  assert.equal(world.pin(), false, "a topbar control must leave the page caret owner");
+  assert.equal(left, true);
+  assert.notEqual(world.document.activeElement, world.promptField);
+}
+
+{
+  const world = createPageWorld();
+  let left = false;
+  claimPrompt(world, { onLeave: () => { left = true; } });
+  const pointer = world.listeners.find((entry) => entry.type === "pointerdown" && entry.capture === true);
+  assert.ok(pointer, "page claim must install a capturing pointerdown listener");
+  pointer.handler({ isTrusted: true, target: world.iframe });
+  world.document.activeElement = world.iframe;
+  assert.equal(world.pin(), false, "a trusted pointer on the chat-frame must leave, not pin");
+  assert.equal(left, true);
+}
+
+{
+  const world = createPageWorld();
+  let left = false;
+  claimPrompt(world, { onLeave: () => { left = true; } });
+  world.document.querySelector = (selector) => {
+    if (String(selector) === ".modal") return world.panel;
+    return null;
+  };
+  world.document.activeElement = world.panel;
+  assert.equal(world.pin(), false, "an open typed modal must yield the page caret owner");
+  assert.equal(left, true);
+}
+
+{
+  const world = createPageWorld();
+  claimPrompt(world);
+  let composing = true;
+  world.release();
+  claimPrompt(world, { composing: () => composing });
+  world.document.activeElement = world.iframe;
+  const before = world.promptField.focusCalls;
+  assert.equal(world.pin(), false, "page mode must skip pin during IME");
+  assert.equal(world.promptField.focusCalls, before);
+  composing = false;
+  assert.equal(world.pin(), true, "page mode must pin after IME ends");
+  assert.equal(world.document.activeElement, world.promptField);
 }
 
 console.log("overlay caret lock tests passed");

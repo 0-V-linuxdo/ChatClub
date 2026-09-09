@@ -261,6 +261,7 @@ assert.match(agents, /History and Tabs search detail content may reuse Pocket/);
 assert.match(agents, /iframe load and frame restore must not move focus back to `\.prompt-input`/);
 assert.match(agents, /must not clear that frame's `inert`/);
 assert.match(agents, /the titlebar search is the unique caret owner/);
+assert.match(agents, /a focused `\.prompt-input` is the page caret owner/);
 assert.match(agents, /Prompt Library is a composer-anchored/);
 assert.match(agents, /Linear action menus may use `role="menu"`/);
 assert.match(agents, /bindLinearMenuKeyboard/);

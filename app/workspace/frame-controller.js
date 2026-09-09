@@ -9,7 +9,7 @@ import {
 import { t } from "../../shared/i18n.js";
 import { findTopicDeleteSiteConfig, topicDeleteTimeoutMs } from "../../shared/topic-delete-sites.js";
 import { conversationHrefFromLocation } from "../../shared/workspace-tab-memory.js";
-import { button, editorModal, el, field, input, openConfirmationAction } from "../../ui/dom.js";
+import { button, editorModal, el, field, input, openConfirmationAction, pinOverlaySearchCaret } from "../../ui/dom.js";
 import { clearFrameNewChatPending, frameLoadingKindForTarget, markFrameNewChatPending } from "./frame-loading.js";
 import { removeChatFromGroup, removeGroupFromWorkspace } from "./model.js";
 import { createControllerMethodValidator, validateControllerContract } from "../controller-contract.js";
@@ -508,7 +508,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
         return;
       }
       if (activeElement !== prompt) {
-        try { prompt.focus({ preventScroll: true }); } catch {
+        try { if (typeof pinOverlaySearchCaret !== "function" || !pinOverlaySearchCaret()) prompt.focus({ preventScroll: true }); } catch {
           try { prompt.focus(); } catch {}
         }
       }

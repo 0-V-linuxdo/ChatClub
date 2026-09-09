@@ -8,8 +8,11 @@ import {
 import { savePromptSendHistory as defaultSavePromptSendHistory } from "../../shared/storage-adapter.js";
 import {
   bindLinearMenuKeyboard,
+  claimOverlaySearchCaret,
   claimTopmostPopoverEscape,
   el,
+  pinOverlaySearchCaret,
+  releaseOverlaySearchCaret,
   scheduleFrameOwnedBlurDismissal,
   textarea,
   toast as defaultToast
@@ -110,6 +113,7 @@ export function createComposerController(dependencies = {}) {
   const imageModel = createPromptImageModel({ createId });
   const contentChangeListeners = new Set();
   let currentPlaceholder = "";
+  let promptComposing = false;
   let draftRevision = 0;
   let observedDraftText = String(state.promptText || "");
   let observedDraftImages = canonicalDraftImages().map((image) => ({ ...image }));
@@ -970,18 +974,43 @@ export function createComposerController(dependencies = {}) {
     return Boolean(shell && nextTarget?.closest?.(".prompt-shell") === shell);
   }
 
+  function claimPromptCaret(field) {
+    if (!field || document.querySelector(".modal")) return;
+    claimOverlaySearchCaret(field, {
+      panel: field.closest?.(".prompt-shell"),
+      mode: "page",
+      getSelection: () => state.promptSelection,
+      composing: () => promptComposing
+    });
+  }
+
   function handleInputBlur(event) {
     const inputNode = event.currentTarget;
+    if (event.target?.isConnected === false) {
+      releaseOverlaySearchCaret(inputNode);
+      collapseInput(inputNode);
+      return;
+    }
     const shell = inputNode?.closest?.(".prompt-shell");
     if (focusRemainsInPromptShell(shell, event.relatedTarget)) return;
-    collapseInput(inputNode);
+    const settle = () => {
+      if (pinOverlaySearchCaret() || promptComposing) return;
+      collapseInput(inputNode);
+    };
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(settle);
+    else setTimeout(settle, 0);
   }
 
   function handlePromptShellFocusOut(event) {
     const shell = event.currentTarget;
     if (focusRemainsInPromptShell(shell, event.relatedTarget)) return;
     const inputNode = shell?.querySelector?.(".prompt-input");
-    if (inputNode?.classList?.contains("prompt-input-expanded")) collapseInput(inputNode);
+    const settle = () => {
+      if (pinOverlaySearchCaret() || promptComposing) return;
+      if (inputNode?.classList?.contains("prompt-input-expanded")) collapseInput(inputNode);
+    };
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(settle);
+    else setTimeout(settle, 0);
   }
 
   function inputFromEvent(event) {
@@ -1113,6 +1142,7 @@ export function createComposerController(dependencies = {}) {
     if(n.value!==state.promptText)n.value=state.promptText
     syncCollapsedPreview(n)
     if(focus){
+      claimPromptCaret(n)
       n.focus({preventScroll:true})
       if(expand)expandInput(n);else collapseInput(n)
       restoreSelectionSoon(n)
@@ -1143,8 +1173,10 @@ export function createComposerController(dependencies = {}) {
       placeholder: currentPlaceholder,
       dataset: { modelGateState: gateState },
       onpointerdown: handlePointerDown,
-      onfocus:e=>!document.documentElement.dataset.p&&!document.querySelector(".modal")&&expandInput(e.target),
+      onfocus:e=>{claimPromptCaret(e.target);!document.documentElement.dataset.p&&!document.querySelector(".modal")&&expandInput(e.target)},
       onblur: handleInputBlur,
+      oncompositionstart:()=>{promptComposing=true},
+      oncompositionend:e=>{promptComposing=false;rememberSelection(e.target);pinOverlaySearchCaret()},
       onclick: handleClick,
       onpaste: handlePaste,
       onkeyup: (event) => rememberSelection(event.target),

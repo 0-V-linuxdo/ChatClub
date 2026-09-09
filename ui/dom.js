@@ -213,6 +213,8 @@ let modalDescSeq = 0;
 const openModals = [];
 let overlaySearchCaret = null;
 let overlaySearchCaretListening = false;
+let overlayCaretFramePointerAt = 0;
+const OVERLAY_CARET_FRAME_POINTER_MS = 1000;
 
 function overlaySearchCaretPanel(field) {
   return field?.closest?.(".modal") || openModals[openModals.length - 1]?.panel || null;
@@ -222,10 +224,36 @@ function overlaySearchCaretInsidePanel(active, field, panel) {
   return Boolean(panel && active && active !== field && active !== panel && panel.contains?.(active));
 }
 
-function overlaySearchCaretStolen(active, field, panel) {
+function overlayCaretIsFrame(node) {
+  return Boolean(node?.classList?.contains?.("chat-frame") || node?.nodeName === "IFRAME");
+}
+
+function overlayCaretRecentFramePointer() {
+  return Boolean(overlayCaretFramePointerAt && Date.now() - overlayCaretFramePointerAt < OVERLAY_CARET_FRAME_POINTER_MS);
+}
+
+function overlaySearchCaretPageStolen(active) {
+  if (!active) return true;
+  if (active === document.body || active === document.documentElement) return true;
+  if (overlayCaretIsFrame(active)) return !overlayCaretRecentFramePointer();
+  return false;
+}
+
+function overlaySearchCaretStolen(active, field, panel, owner) {
   if (active === field) return false;
+  if (typeof owner?.stolen === "function") return owner.stolen(active, field);
+  if (owner?.mode === "page") return overlaySearchCaretPageStolen(active);
   if (overlaySearchCaretInsidePanel(active, field, panel)) return false;
   return true;
+}
+
+function overlaySearchCaretShouldLeave(active, field, panel, owner) {
+  if (!active || active === field) return false;
+  if (overlaySearchCaretInsidePanel(active, field, panel)) return true;
+  if (typeof owner?.stolen === "function" || owner?.mode === "page") {
+    return !overlaySearchCaretStolen(active, field, panel, owner);
+  }
+  return false;
 }
 
 export function pinOverlaySearchCaret() {
@@ -235,17 +263,23 @@ export function pinOverlaySearchCaret() {
     overlaySearchCaret = null;
     return false;
   }
-  const active = document.activeElement;
-  if (active === field) return true;
-  if (owner.composing?.()) return false;
-  const panel = owner.panel || overlaySearchCaretPanel(field);
-  if (overlaySearchCaretInsidePanel(active, field, panel)) {
+  const modal = typeof document.querySelector === "function" ? document.querySelector(".modal") : null;
+  if (modal && field.closest?.(".modal") !== modal && !modal.contains?.(field)) {
     owner.onLeave?.();
     overlaySearchCaret = null;
     return false;
   }
-  if (!overlaySearchCaretStolen(active, field, panel)) return false;
-  if (active?.classList?.contains?.("chat-frame") || active?.nodeName === "IFRAME") {
+  const active = document.activeElement;
+  if (active === field) return true;
+  if (owner.composing?.()) return false;
+  const panel = owner.panel || overlaySearchCaretPanel(field);
+  if (overlaySearchCaretShouldLeave(active, field, panel, owner)) {
+    owner.onLeave?.();
+    overlaySearchCaret = null;
+    return false;
+  }
+  if (!overlaySearchCaretStolen(active, field, panel, owner)) return false;
+  if (overlayCaretIsFrame(active)) {
     try { active.blur?.(); } catch {}
   }
   try { field.focus({ preventScroll: true }); } catch {
@@ -273,10 +307,16 @@ function onOverlaySearchCaretFocusIn(event) {
   pinOverlaySearchCaret();
 }
 
+function onOverlayCaretPointerDown(event) {
+  if (event?.isTrusted !== true) return;
+  if (overlayCaretIsFrame(event.target)) overlayCaretFramePointerAt = Date.now();
+}
+
 function ensureOverlaySearchCaretListeners() {
   if (overlaySearchCaretListening || typeof document.addEventListener !== "function") return;
   overlaySearchCaretListening = true;
   document.addEventListener("focusin", onOverlaySearchCaretFocusIn, true);
+  document.addEventListener("pointerdown", onOverlayCaretPointerDown, true);
 }
 
 export function claimOverlaySearchCaret(field, options = {}) {
@@ -284,9 +324,11 @@ export function claimOverlaySearchCaret(field, options = {}) {
   overlaySearchCaret = {
     field,
     panel: options.panel || overlaySearchCaretPanel(field),
+    mode: options.mode === "page" ? "page" : "overlay",
     getSelection: typeof options.getSelection === "function" ? options.getSelection : null,
     composing: typeof options.composing === "function" ? options.composing : null,
-    onLeave: typeof options.onLeave === "function" ? options.onLeave : null
+    onLeave: typeof options.onLeave === "function" ? options.onLeave : null,
+    stolen: typeof options.stolen === "function" ? options.stolen : null
   };
   ensureOverlaySearchCaretListeners();
 }

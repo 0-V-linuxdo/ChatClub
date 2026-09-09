@@ -25,7 +25,9 @@ assert.ok(
   init.indexOf("await promptFocusPromise;") < init.indexOf("render();"),
   "iframe construction must wait until the prompt focus controller is installed"
 );
-assert.match(composerSource, /onfocus:e=>!document\.documentElement\.dataset\.p&&!document\.querySelector\("\.modal"\)&&expandInput\(e\.target\)/);
+assert.match(composerSource, /claimPromptCaret\(e\.target\)/);
+assert.match(composerSource, /mode: "page"/);
+assert.match(composerSource, /claimOverlaySearchCaret/);
 assert.match(functionSource(composerSource, "handlePointerDown"), /if \(inputNode\.value\)/);
 assert.match(focusControllerSource, /event\.type === "pointerdown" \|\| \(event\.type === "keydown"/);
 assert.match(focusControllerSource, /isOverlayTarget\(document\.activeElement\)/);

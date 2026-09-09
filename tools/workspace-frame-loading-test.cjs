@@ -169,6 +169,7 @@ const PARAM = "__chatclub_frame_load_nonce";
     "in-flight navigation focus guard must stop sending while a typed modal is open"
   );
   assert.match(restorePromptInputFocus, /prompt\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(restorePromptInputFocus, /pinOverlaySearchCaret/, "armed prompt restore must yield to the live caret owner");
   assert.match(
     restorePromptInputFocus,
     /workspace-popover-menu/,
