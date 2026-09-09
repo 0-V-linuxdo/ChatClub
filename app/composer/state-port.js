@@ -2,7 +2,8 @@ import { createScopedStatePort, stateAccess } from "../state/port.js";
 
 const COMPOSER_STATE_ACCESS = stateAccess([
   "options", "promptHistoryCursor", "promptHistoryDraft", "promptImages", "promptLibrary", "promptSelection",
-  "promptQueuedTargetCount", "promptSendingTargetCount", "promptSendHistory", "promptText", "shortcutConfig"
+  "promptQueuedTargetCount", "promptSendingTargetCount", "promptSendHistory", "promptText", "shortcutConfig",
+  "topbarEditMode"
 ], [
   "promptHistoryCursor", "promptHistoryDraft", "promptImages", "promptSelection", "promptSendHistory",
   "promptQueuedTargetCount", "promptSendingTargetCount", "promptText"
