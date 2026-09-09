@@ -272,8 +272,8 @@ export function createAppIconControls({
               fileName
             ),
             el("div", { class: "settings-icon-editor-tools" },
-              iconButton(t("apps.iconRefresh"), createSvgIcon("reload"), refresh, "settings-icon-editor-tool"),
-              iconButton(t("apps.iconRestore"), createSvgIcon("reset"), restore, "settings-icon-editor-tool")
+              iconButton(t("apps.iconRefresh"), createSvgIcon("refreshCw"), refresh, "settings-icon-editor-tool"),
+              iconButton(t("apps.iconRestore"), createSvgIcon("undo2"), restore, "settings-icon-editor-tool")
             )
           )
         ),

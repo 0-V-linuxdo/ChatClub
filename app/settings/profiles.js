@@ -647,8 +647,8 @@ export function createProfilesSettingsSection(ctx) {
                 fileName
               ),
               el("div", { class: "settings-icon-editor-tools" },
-                iconButton(t("apps.iconRefresh"), svgIcon("reload"), () => { void refreshIcon(); }, "settings-icon-editor-tool"),
-                iconButton(t("apps.iconRestore"), svgIcon("reset"), restoreIcon, "settings-icon-editor-tool")
+                iconButton(t("apps.iconRefresh"), svgIcon("refreshCw"), () => { void refreshIcon(); }, "settings-icon-editor-tool"),
+                iconButton(t("apps.iconRestore"), svgIcon("undo2"), restoreIcon, "settings-icon-editor-tool")
               )
             )
           ),

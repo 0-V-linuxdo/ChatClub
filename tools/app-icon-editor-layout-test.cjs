@@ -35,9 +35,11 @@ assert.match(openEditor, /t\("apps\.iconUrl"\)/);
 assert.match(openEditor, /class: "settings-icon-editor-upload"/);
 assert.match(openEditor, /class: "settings-icon-editor-tools"/);
 assert.match(openEditor, /iconButton\(\s*t\("apps\.iconRefresh"/);
-assert.match(openEditor, /createSvgIcon\("reload"\)/);
+assert.match(openEditor, /createSvgIcon\("refreshCw"\)/);
 assert.match(openEditor, /iconButton\(\s*t\("apps\.iconRestore"/);
-assert.match(openEditor, /createSvgIcon\("reset"\)/);
+assert.match(openEditor, /createSvgIcon\("undo2"\)/);
+assert.doesNotMatch(openEditor, /createSvgIcon\("reload"\)/);
+assert.doesNotMatch(openEditor, /createSvgIcon\("reset"\)/);
 assert.match(openEditor, /t\("common\.cancel"\)/);
 assert.match(openEditor, /t\("common\.save"\)/);
 
@@ -146,6 +148,10 @@ assert.doesNotMatch(editorCss[0], /preference-row|model-preference-row|appearanc
 const icons = read("ui/icons.js");
 assert.match(icons, /help:\s*\[/);
 assert.match(icons, /help:[\s\S]*cx: "12", cy: "12", r: "10"/);
+assert.match(icons, /refreshCw:\s*\[/);
+assert.match(icons, /undo2:\s*\[/);
+assert.match(icons, /reload:\s*\{/);
+assert.match(icons, /reset:\s*\{/);
 assert.match(iconEditor, /from "\.\.\/\.\.\/ui\/icons\.js"/);
 assert.match(iconEditor, /iconButton/);
 
