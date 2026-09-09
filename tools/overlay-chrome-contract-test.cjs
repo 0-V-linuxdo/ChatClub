@@ -199,6 +199,9 @@ assert.match(dom, /"aria-labelledby": titleId/);
 assert.match(dom, /bindModalDescription\(panel, body, modalType\)/);
 assert.match(dom, /hoistModalFooter\(panel, body\)/);
 assert.match(dom, /syncModalBackgroundInert/);
+assert.match(dom, /syncChatFrameModalInert/);
+assert.match(dom, /iframe\.chat-frame/);
+assert.match(dom, /promptFocusRestoreGeneration/);
 assert.match(dom, /setNodeInert/);
 assert.match(dom, /toast-live-polite/);
 assert.match(dom, /toast-live-assertive/);
@@ -253,6 +256,8 @@ assert.match(read("app/summary/controller.js"), /overlay-panel-resize-handle ove
 assert.match(read("app/share/controller.js"), /overlay-panel-resize-handle overlay-panel-resize-handle-left/);
 assert.match(agents, /History and Tabs search detail content may reuse Pocket/);
 assert.match(agents, /iframe load and frame restore must not move focus back to `\.prompt-input`/);
+assert.match(agents, /must not clear that frame's `inert`/);
+assert.match(agents, /short retry window after a chat-frame load/);
 assert.match(agents, /Prompt Library is a composer-anchored/);
 assert.match(agents, /Linear action menus may use `role="menu"`/);
 assert.match(agents, /bindLinearMenuKeyboard/);

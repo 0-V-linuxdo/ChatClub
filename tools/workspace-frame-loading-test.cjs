@@ -113,7 +113,7 @@ const PARAM = "__chatclub_frame_load_nonce";
   const restorePromptInputFocus = functionSource(frameController, "restorePromptInputFocus");
   const activeHref = functionSource(frameController, "activeHref");
   assert.match(beginFrameLoading, /iframe\.inert = true/);
-  assert.match(completeFrameLoading, /iframe\.inert = false/);
+  assert.match(completeFrameLoading, /iframe\.inert = Boolean\(document\.querySelector\("\.modal"\)\)/);
   assert.match(beginFrameLoading, /const loadingKind = frameLoadingKindForTarget/);
   assert.match(beginFrameLoading, /iframe\.dataset\.frameLoadingKind = loadingKind/);
   assert.match(beginFrameLoading, /frameLoadingMaskPhase = "opaque"/);
@@ -166,6 +166,11 @@ const PARAM = "__chatclub_frame_load_nonce";
     restorePromptInputFocus,
     /\.modal, \.workspace-popover-menu/,
     "prompt restore must not steal focus while a typed modal is open"
+  );
+  assert.match(
+    restorePromptInputFocus,
+    /const restore = \(\) => \{\s*if \(document\.querySelector\("\.modal, \.workspace-popover-menu/,
+    "in-flight prompt restore retries must re-check the typed modal"
   );
   assert.match(completeFrameLoading, /restorePromptInputFocus\(iframe\)/, "the real iframe load must restore focus to the prompt when it was active before navigation");
   assert.match(setFrameSrcAfterPrepare, /const frameReplaced = ensureFrameAttributeContract/);
@@ -362,6 +367,7 @@ const PARAM = "__chatclub_frame_load_nonce";
     frameLoadingKindForTarget,
     rememberBrowserFrameId() {},
     rememberWorkspaceSession() { rememberCalls += 1; },
+    document: { querySelector() { return null; } },
     setFrameLoading(_iframe, next) { loading = next; },
     syncHeaderForFrameInstance() { syncCalls += 1; }
   });
@@ -659,6 +665,77 @@ const PARAM = "__chatclub_frame_load_nonce";
     const armed = runArm({ modal: false, datasetP: true });
     assert.equal(armed.armed, true, "prompt restore may still arm when no modal is open");
     assert.equal(armed.iframe.dataset.promptFocusRestoreGeneration, "7");
+
+    const runQueuedRestore = () => {
+      const prompt = {
+        isConnected: true,
+        focusCalls: 0,
+        focus() { this.focusCalls += 1; }
+      };
+      const iframeEl = {
+        isConnected: true,
+        dataset: { promptFocusRestoreGeneration: "1" }
+      };
+      let modal = false;
+      const queued = [];
+      const document = {
+        body: {},
+        documentElement: { dataset: {} },
+        activeElement: iframeEl,
+        querySelector(selector) {
+          if (selector === ".prompt-input") return prompt;
+          if (String(selector).includes(".modal")) return modal ? { className: "modal" } : null;
+          return null;
+        }
+      };
+      vm.runInContext(
+        `${restorePromptInputFocus}\nrestorePromptInputFocus(iframe);`,
+        vm.createContext({
+          document,
+          iframe: iframeEl,
+          requestAnimationFrame(callback) { queued.push(callback); return 1; }
+        })
+      );
+      const afterFirst = prompt.focusCalls;
+      assert.ok(afterFirst > 0, "the first restore attempt still runs before a later modal opens");
+      modal = true;
+      while (queued.length) queued.shift()();
+      assert.equal(prompt.focusCalls, afterFirst, "in-flight restore retries must stop after a typed modal opens");
+      assert.equal(iframeEl.dataset.promptFocusRestoreGeneration, undefined);
+    };
+    runQueuedRestore();
+  }
+
+  {
+    class ModalIframe {
+      constructor() {
+        this.dataset = { instanceId: "frame-modal" };
+        this.inert = true;
+      }
+    }
+    let modalOpen = true;
+    const ctx = vm.createContext({
+      HTMLIFrameElement: ModalIframe,
+      document: {
+        querySelector(selector) {
+          return String(selector).includes(".modal") && modalOpen ? { className: "modal" } : null;
+        }
+      },
+      rememberBrowserFrameId() {},
+      restorePromptInputFocus() {},
+      setFrameLoading() {},
+      syncFrameLoadingMask() {},
+      clearFrameNewChatPending() { return false; },
+      rememberWorkspaceSession() {}
+    });
+    vm.runInContext(`${completeFrameLoading}\nglobalThis.complete = completeFrameLoading;`, ctx);
+    const frame = new ModalIframe();
+    ctx.complete(frame);
+    assert.equal(frame.inert, true, "completing a load while a typed modal is open must keep the iframe inert");
+    modalOpen = false;
+    frame.inert = true;
+    ctx.complete(frame);
+    assert.equal(frame.inert, false, "completing a load with no modal must un-inert the iframe");
   }
 
   console.log("workspace frame loading status: ok");

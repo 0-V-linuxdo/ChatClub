@@ -3,7 +3,9 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const vm = require("node:vm");
 const { pathToFileURL } = require("node:url");
+const { functionSource } = require("./function-source.cjs");
 
 const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
@@ -44,6 +46,10 @@ assert.match(controller, /clearButton\.hidden/);
 assert.match(controller, /event\.target\?\.isConnected === false/);
 assert.match(controller, /addEventListener\("load", restoreSearchFieldAfterFrameLoad, true\)/);
 assert.match(controller, /searchFocused \|\| String\(searchQuery/);
+assert.match(controller, /FRAME_LOAD_SEARCH_FOCUS_RETRY_MS = 150/);
+assert.match(controller, /FRAME_LOAD_SEARCH_FOCUS_SETTLE_MS = 1000/);
+assert.match(controller, /setTimeout\(restore, FRAME_LOAD_SEARCH_FOCUS_RETRY_MS\)/);
+assert.match(controller, /!searchComposing/);
 assert.match(controller, /classList\?\.contains\?\.\("chat-frame"\)/);
 assert.match(controller, /workspace\.tabs\.searchOpenTab/);
 assert.doesNotMatch(controller, /from "\.\.\/history\/model\.js"/);
@@ -69,7 +75,7 @@ assert.match(i18n, /"workspace\.tabs\.searchSidebar"/);
 assert.match(agents, /Topbar Search opens a lazy `viewerModal` Tabs search viewer/);
 assert.match(agents, /titlebar search inputs stay mounted across query redraws/);
 assert.match(agents, /iframe load and frame restore must not move focus back to `\.prompt-input`/);
-assert.match(agents, /restore the titlebar field after a chat-frame load/);
+assert.match(agents, /short retry window after a chat-frame load/);
 assert.equal(budgets.lazyBoundaries["app/workspace/tab-search-controller.js"]?.owner, "app/runtime.js");
 
 class FakeNode {
@@ -177,6 +183,57 @@ globalThis.document = {
     const groups = groupWorkspaceSearchRecords(recents, now);
     assert.deepEqual(groups.map((group) => group.id), ["today", "pastWeek", "pastMonth"]);
     assert.equal(groups[0].items[0].workspaceId, "page-livexxxxxxxx");
+
+    {
+      const restoreSource = functionSource(controller, "restoreSearchFieldAfterFrameLoad");
+      const field = {
+        focusCalls: 0,
+        value: "rati",
+        focus() { this.focusCalls += 1; document.activeElement = this; },
+        setSelectionRange() {}
+      };
+      const iframeEl = {
+        classList: { contains(name) { return name === "chat-frame"; } },
+        nodeName: "IFRAME"
+      };
+      const document = {
+        body: {},
+        documentElement: {},
+        activeElement: iframeEl,
+        querySelector(selector) {
+          if (String(selector).includes("workspace-tabs-search-input")) return field;
+          if (selector === ".workspace-tabs-search-modal") return { className: "modal" };
+          return null;
+        }
+      };
+      let now = 0;
+      const timeouts = [];
+      vm.runInContext(
+        `${restoreSource}\nrestoreSearchFieldAfterFrameLoad({ target: iframe });`,
+        vm.createContext({
+          document,
+          iframe: iframeEl,
+          searchFocused: true,
+          searchQuery: "rati",
+          searchComposing: false,
+          searchSelection: { start: 4, end: 4 },
+          FRAME_LOAD_SEARCH_FOCUS_RETRY_MS: 150,
+          FRAME_LOAD_SEARCH_FOCUS_SETTLE_MS: 1000,
+          Date: { now() { return now; } },
+          setTimeout(callback, ms) {
+            timeouts.push({ callback, at: now + Number(ms || 0) });
+            return 1;
+          }
+        })
+      );
+      assert.ok(field.focusCalls >= 1, "chat-frame load must restore the titlebar search field immediately");
+      document.activeElement = iframeEl;
+      now = 150;
+      const delayed = timeouts.shift();
+      assert.ok(delayed, "search restore must keep a short retry window after load");
+      delayed.callback();
+      assert.ok(field.focusCalls >= 2, "a delayed iframe autofocus after load must not keep the titlebar caret");
+    }
 
     console.log("tab search popup tests passed");
   } finally {

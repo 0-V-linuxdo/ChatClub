@@ -519,6 +519,10 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   assert.match(panelSource, /event\.target\?\.isConnected === false/);
   assert.match(panelSource, /addEventListener\("load", restoreSearchFieldAfterFrameLoad, true\)/);
   assert.match(panelSource, /searchFocused \|\| String\(searchQuery/);
+  assert.match(panelSource, /FRAME_LOAD_SEARCH_FOCUS_RETRY_MS = 150/);
+  assert.match(panelSource, /FRAME_LOAD_SEARCH_FOCUS_SETTLE_MS = 1000/);
+  assert.match(panelSource, /setTimeout\(restore, FRAME_LOAD_SEARCH_FOCUS_RETRY_MS\)/);
+  assert.match(panelSource, /!searchComposing/);
   assert.match(panelSource, /classList\?\.contains\?\.\("chat-frame"\)/);
   assert.doesNotMatch(panelSource, /headerSearch\(host/);
   assert.doesNotMatch(panelSource, /prompt-history-panel-toolbar/);

@@ -445,7 +445,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
     if (!(iframe instanceof HTMLIFrameElement)) return;
     rememberBrowserFrameId(iframe);
     if (iframe.dataset.frameLoadPending === "1") return;
-    iframe.inert = false;
+    iframe.inert = Boolean(document.querySelector(".modal"));
     if (iframe.dataset.frameLoadingKind === "new-topic") {
       iframe.dataset.frameLoadingMaskPhase = "fade";
       syncFrameLoadingMask(iframe);
@@ -492,6 +492,10 @@ export function createWorkspaceFrameController(dependencies = {}) {
     if (document.querySelector(".modal, .workspace-popover-menu, .popover-menu")) { delete iframe.dataset.promptFocusRestoreGeneration; return; }
     let attempts = 0;
     const restore = () => {
+      if (document.querySelector(".modal, .workspace-popover-menu, .popover-menu")) {
+        delete iframe.dataset.promptFocusRestoreGeneration;
+        return;
+      }
       if (!iframe?.isConnected || String(iframe.dataset.promptFocusRestoreGeneration || "") !== generation) return;
       const prompt = document.querySelector(".prompt-input");
       if (!prompt?.isConnected) {

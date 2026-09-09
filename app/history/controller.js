@@ -43,6 +43,8 @@ const HISTORY_PANEL_MIN_HEIGHT = 420;
 const HISTORY_PANEL_FULLSCREEN_CLASS = "prompt-history-modal-fullscreen";
 const HISTORY_PANEL_FOCUS_CLASS = "prompt-history-modal-focus";
 const HISTORY_CARD_GAP = 12;
+const FRAME_LOAD_SEARCH_FOCUS_RETRY_MS = 150;
+const FRAME_LOAD_SEARCH_FOCUS_SETTLE_MS = 1000;
 const HISTORY_CARD_SIZE_LIMITS = Object.freeze({
   width: Object.freeze({ min: 360, max: 760, step: 20 }),
   height: Object.freeze({ min: 420, max: 820, step: 20 })
@@ -317,11 +319,42 @@ export function createHistoryController(ctx) {
     if (!event?.target?.classList?.contains?.("chat-frame")) return;
     if (!document.querySelector(".prompt-history-modal")) return;
     if (!(searchFocused || String(searchQuery || "").trim())) return;
-    const field = document.querySelector(".prompt-history-modal .prompt-history-panel-search-input");
-    if (!field) return;
-    try { field.focus({ preventScroll: true }); } catch {
-      try { field.focus(); } catch {}
-    }
+    const startedAt = Date.now();
+    const restore = () => {
+      if (!document.querySelector(".prompt-history-modal")) return;
+      if (!(searchFocused || String(searchQuery || "").trim())) return;
+      const field = document.querySelector(".prompt-history-modal .prompt-history-panel-search-input");
+      const active = document.activeElement;
+      if (
+        field
+        && !searchComposing
+        && active !== field
+        && (
+          !active
+          || active === document.body
+          || active === document.documentElement
+          || active?.classList?.contains?.("chat-frame")
+          || active?.nodeName === "IFRAME"
+        )
+      ) {
+        try { field.focus({ preventScroll: true }); } catch {
+          try { field.focus(); } catch {}
+        }
+        try {
+          const start = Number(searchSelection.start);
+          const end = Number(searchSelection.end);
+          field.setSelectionRange(
+            Number.isFinite(start) ? start : field.value.length,
+            Number.isFinite(end) ? end : field.value.length
+          );
+        } catch {
+          /* selection restoration is best-effort after a stolen caret */
+        }
+      }
+      if (Date.now() - startedAt >= FRAME_LOAD_SEARCH_FOCUS_SETTLE_MS) return;
+      setTimeout(restore, FRAME_LOAD_SEARCH_FOCUS_RETRY_MS);
+    };
+    restore();
   }
 
   function syncHistorySearchChrome(root) {

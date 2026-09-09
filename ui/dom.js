@@ -240,6 +240,22 @@ function isModalInertExempt(node, liveBackdrop) {
   return node.id === "chatclub-global-tooltip" || node.getAttribute?.("id") === "chatclub-global-tooltip";
 }
 
+function syncChatFrameModalInert(active) {
+  const frames = document.querySelectorAll?.("iframe.chat-frame");
+  if (!frames?.length) return;
+  for (const frame of frames) {
+    if (active) delete frame.dataset?.promptFocusRestoreGeneration;
+    if (
+      !active
+      && (
+        frame.dataset?.frameLoadPending === "1"
+        || frame.closest?.(".chat-card")?.classList?.contains?.("frame-loading")
+      )
+    ) continue;
+    setNodeInert(frame, active);
+  }
+}
+
 function syncModalBackgroundInert() {
   const body = document.body;
   const children = body?.children;
@@ -249,6 +265,7 @@ function syncModalBackgroundInert() {
   for (const child of children) {
     setNodeInert(child, active && !isModalInertExempt(child, liveBackdrop));
   }
+  syncChatFrameModalInert(active);
 }
 
 function syncModalScrollLock() {

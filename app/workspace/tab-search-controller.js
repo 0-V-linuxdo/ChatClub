@@ -27,6 +27,8 @@ const SEARCH_PANEL_MIN_WIDTH = 720;
 const SEARCH_PANEL_MIN_HEIGHT = 420;
 const SEARCH_PANEL_FULLSCREEN_CLASS = "workspace-tabs-search-modal-fullscreen";
 const SEARCH_CARD_GAP = 12;
+const FRAME_LOAD_SEARCH_FOCUS_RETRY_MS = 150;
+const FRAME_LOAD_SEARCH_FOCUS_SETTLE_MS = 1000;
 
 export function createTabSearchController(ctx) {
   const controllerName = "Tabs search controller";
@@ -140,11 +142,42 @@ export function createTabSearchController(ctx) {
     if (!event?.target?.classList?.contains?.("chat-frame")) return;
     if (!document.querySelector(".workspace-tabs-search-modal")) return;
     if (!(searchFocused || String(searchQuery || "").trim())) return;
-    const field = document.querySelector(".workspace-tabs-search-modal .workspace-tabs-search-input");
-    if (!field) return;
-    try { field.focus({ preventScroll: true }); } catch {
-      try { field.focus(); } catch {}
-    }
+    const startedAt = Date.now();
+    const restore = () => {
+      if (!document.querySelector(".workspace-tabs-search-modal")) return;
+      if (!(searchFocused || String(searchQuery || "").trim())) return;
+      const field = document.querySelector(".workspace-tabs-search-modal .workspace-tabs-search-input");
+      const active = document.activeElement;
+      if (
+        field
+        && !searchComposing
+        && active !== field
+        && (
+          !active
+          || active === document.body
+          || active === document.documentElement
+          || active?.classList?.contains?.("chat-frame")
+          || active?.nodeName === "IFRAME"
+        )
+      ) {
+        try { field.focus({ preventScroll: true }); } catch {
+          try { field.focus(); } catch {}
+        }
+        try {
+          const start = Number(searchSelection.start);
+          const end = Number(searchSelection.end);
+          field.setSelectionRange(
+            Number.isFinite(start) ? start : field.value.length,
+            Number.isFinite(end) ? end : field.value.length
+          );
+        } catch {
+          /* selection restoration is best-effort after a stolen caret */
+        }
+      }
+      if (Date.now() - startedAt >= FRAME_LOAD_SEARCH_FOCUS_SETTLE_MS) return;
+      setTimeout(restore, FRAME_LOAD_SEARCH_FOCUS_RETRY_MS);
+    };
+    restore();
   }
 
   function searchPlaceholder() {
