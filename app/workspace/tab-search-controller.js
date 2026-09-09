@@ -136,6 +136,25 @@ export function createTabSearchController(ctx) {
     });
   }
 
+  function searchPlaceholder() {
+    return recordFullTextEnabled
+      ? t("workspace.tabs.searchPlaceholderFullText")
+      : t("workspace.tabs.searchPlaceholder");
+  }
+
+  function syncSearchChrome(root) {
+    const query = searchQuery;
+    const placeholder = searchPlaceholder();
+    const field = root?.querySelector?.(".workspace-tabs-search-input");
+    const clearButton = root?.querySelector?.(".shortcut-search-clear");
+    if (field) {
+      if (field.value !== query) field.value = query;
+      field.placeholder = placeholder;
+      field.setAttribute("aria-label", placeholder);
+    }
+    if (clearButton) clearButton.hidden = !String(query || "").trim();
+  }
+
   function applySearchQuery(value, { composing = false, redraw } = {}) {
     searchQuery = String(value || "");
     const field = document.querySelector(".workspace-tabs-search-modal .workspace-tabs-search-input");
@@ -151,6 +170,8 @@ export function createTabSearchController(ctx) {
     searchQuery = "";
     searchSelection = { start: 0, end: 0 };
     searchFocused = true;
+    const field = document.querySelector(".workspace-tabs-search-modal .workspace-tabs-search-input");
+    if (field) field.value = "";
     redraw();
   }
 
@@ -378,12 +399,8 @@ export function createTabSearchController(ctx) {
   }
 
   function headerSearch(redraw, close) {
-    const placeholder = recordFullTextEnabled
-      ? t("workspace.tabs.searchPlaceholderFullText")
-      : t("workspace.tabs.searchPlaceholder");
-    const query = searchQuery;
-    const searching = Boolean(String(query || "").trim());
-    const field = input(query, {
+    const placeholder = searchPlaceholder();
+    const field = input(searchQuery, {
       class: "shortcut-search-input workspace-tabs-search-input",
       type: "search",
       size: "1",
@@ -392,11 +409,10 @@ export function createTabSearchController(ctx) {
       autocomplete: "off",
       spellcheck: "false"
     });
-    field.value = query;
-    restoreSearchField();
+    field.value = searchQuery;
     field.addEventListener("keydown", (event) => {
       if (event.isComposing || event.keyCode === 229) return;
-      if (event.key === "Escape" && query) {
+      if (event.key === "Escape" && searchQuery) {
         event.preventDefault();
         event.stopPropagation();
         clearSearch(redraw);
@@ -432,7 +448,10 @@ export function createTabSearchController(ctx) {
       });
     });
     field.addEventListener("focus", () => { searchFocused = true; });
-    field.addEventListener("blur", () => { searchFocused = false; });
+    field.addEventListener("blur", (event) => {
+      if (event.target?.isConnected === false) return;
+      searchFocused = false;
+    });
     return el("div", {
       class: "shortcut-search workspace-tabs-search-field",
       onclick: (event) => {
@@ -442,22 +461,21 @@ export function createTabSearchController(ctx) {
     },
       svgIcon("search"),
       field,
-      searching
-        ? el("button", {
-          class: "shortcut-search-clear",
-          type: "button",
-          "aria-label": t("workspace.tabs.searchClear"),
-          onpointerdown: (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-          },
-          onclick: (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            clearSearch(redraw);
-          }
-        }, svgIcon("x"))
-        : null
+      el("button", {
+        class: "shortcut-search-clear",
+        type: "button",
+        hidden: !String(searchQuery || "").trim(),
+        "aria-label": t("workspace.tabs.searchClear"),
+        onpointerdown: (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+        },
+        onclick: (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          clearSearch(redraw);
+        }
+      }, svgIcon("x"))
     );
   }
 
@@ -544,14 +562,16 @@ export function createTabSearchController(ctx) {
     const titlebar = panel?.querySelector(".workspace-tabs-search-header-titlebar");
     if (!titlebar) return;
     const active = activeRecord();
-    clear(titlebar);
-    titlebar.append(
-      headerSearch(redraw, close),
-      el("div", { class: "workspace-tabs-search-header-actions" },
-        button(t("workspace.tabs.searchOpenTab"), () => openActiveTab(close), "secondary")
-      )
-    );
-    const openButton = titlebar.querySelector(".button");
+    if (!titlebar.querySelector(".workspace-tabs-search-field")) {
+      titlebar.append(
+        headerSearch(redraw, close),
+        el("div", { class: "workspace-tabs-search-header-actions" },
+          button(t("workspace.tabs.searchOpenTab"), () => openActiveTab(close), "secondary")
+        )
+      );
+    }
+    syncSearchChrome(titlebar);
+    const openButton = titlebar.querySelector(".workspace-tabs-search-header-actions .button");
     if (openButton) openButton.disabled = !active || opening;
   }
 
@@ -636,6 +656,7 @@ export function createTabSearchController(ctx) {
     viewerWindow.attachResize(panel);
     refresh(redraw).catch(() => redraw());
     redraw();
+    restoreSearchField();
     return dialog;
   }
 

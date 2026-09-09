@@ -3688,6 +3688,10 @@ body.tab-gesture-active * {
   box-shadow: none;
 }
 
+.shortcut-search-clear[hidden] {
+  display: none;
+}
+
 .shortcut-search-clear:hover {
   color: var(--text);
   background: color-mix(in srgb, var(--panel) 72%, transparent);

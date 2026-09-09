@@ -513,6 +513,10 @@ const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"),
   assert.match(panelSource, /class: "prompt-history-header-sidebar"/);
   assert.match(panelSource, /class: "prompt-history-header-titlebar"/);
   assert.match(panelSource, /headerSearch\(redraw\)/);
+  assert.match(panelSource, /titlebar\.querySelector\("\.prompt-history-panel-search"\)/);
+  assert.match(panelSource, /syncHistorySearchChrome/);
+  assert.match(panelSource, /clearButton\.hidden/);
+  assert.match(panelSource, /event\.target\?\.isConnected === false/);
   assert.doesNotMatch(panelSource, /headerSearch\(host/);
   assert.doesNotMatch(panelSource, /prompt-history-panel-toolbar/);
   assert.doesNotMatch(panelSource, /prompt-history-detail-header/);

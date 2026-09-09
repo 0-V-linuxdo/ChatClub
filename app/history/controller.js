@@ -313,6 +313,17 @@ export function createHistoryController(ctx) {
     });
   }
 
+  function syncHistorySearchChrome(root) {
+    const query = searchQuery;
+    const placeholder = t("promptHistory.searchPlaceholder");
+    const field = root?.querySelector?.(".prompt-history-panel-search-input");
+    const sizer = root?.querySelector?.(".shortcut-search-sizer");
+    const clearButton = root?.querySelector?.(".shortcut-search-clear");
+    if (field && field.value !== query) field.value = query;
+    if (sizer) sizer.textContent = query || placeholder;
+    if (clearButton) clearButton.hidden = !String(query || "").trim();
+  }
+
   function applySearchQuery(value, { composing = false, redraw } = {}) {
     searchQuery = String(value || "");
     const field = document.querySelector(".prompt-history-modal .prompt-history-panel-search-input");
@@ -328,7 +339,10 @@ export function createHistoryController(ctx) {
     searchQuery = "";
     searchSelection = { start: 0, end: 0 };
     searchFocused = true;
+    const field = document.querySelector(".prompt-history-modal .prompt-history-panel-search-input");
+    if (field) field.value = "";
     redraw();
+    restoreSearchField();
   }
 
   function headerSearch(redraw) {
@@ -345,10 +359,9 @@ export function createHistoryController(ctx) {
       spellcheck: "false"
     });
     field.value = query;
-    restoreSearchField();
     field.addEventListener("keydown", (event) => {
       if (event.isComposing || event.keyCode === 229) return;
-      if (event.key !== "Escape" || !query) return;
+      if (event.key !== "Escape" || !searchQuery) return;
       event.preventDefault();
       event.stopPropagation();
       clearSearch(redraw);
@@ -365,7 +378,10 @@ export function createHistoryController(ctx) {
       });
     });
     field.addEventListener("focus", () => { searchFocused = true; });
-    field.addEventListener("blur", () => { searchFocused = false; });
+    field.addEventListener("blur", (event) => {
+      if (event.target?.isConnected === false) return;
+      searchFocused = false;
+    });
     return el("div", {
       class: "shortcut-search prompt-history-search prompt-history-panel-search",
       onclick: (event) => {
@@ -376,22 +392,21 @@ export function createHistoryController(ctx) {
       svgIcon("search"),
       el("span", { class: "shortcut-search-sizer", "aria-hidden": "true" }, query || placeholder),
       field,
-      searching
-        ? el("button", {
-          class: "shortcut-search-clear",
-          type: "button",
-          "aria-label": t("promptHistory.searchClear"),
-          onpointerdown: (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-          },
-          onclick: (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            clearSearch(redraw);
-          }
-        }, svgIcon("x"))
-        : null
+      el("button", {
+        class: "shortcut-search-clear",
+        type: "button",
+        hidden: !searching,
+        "aria-label": t("promptHistory.searchClear"),
+        onpointerdown: (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+        },
+        onclick: (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          clearSearch(redraw);
+        }
+      }, svgIcon("x"))
     );
   }
 
@@ -955,15 +970,26 @@ export function createHistoryController(ctx) {
     const preview = promptHistoryPreview(activeItem?.text, 72);
     const titleText = preview || t("promptHistory.title");
     const fullText = preview ? String(activeItem?.text || "").replace(/\s+/g, " ").trim() : titleText;
-    clear(titlebar);
-    titlebar.append(
-      el("div", { class: "prompt-history-header-title" },
+    if (!titlebar.querySelector(".prompt-history-panel-search")) {
+      titlebar.append(
+        el("div", { class: "prompt-history-header-title" }),
+        headerSearch(redraw),
+        el("div", { class: "prompt-history-header-actions" })
+      );
+    }
+    const titleHost = titlebar.querySelector(".prompt-history-header-title");
+    if (titleHost) {
+      clear(titleHost);
+      titleHost.append(
         el("strong", { title: fullText }, titleText),
         activeItem?.createdAt ? el("span", {}, promptHistoryTimeLabel(activeItem.createdAt)) : null
-      ),
-      headerSearch(redraw),
-      historyHeaderActions(activeItem, redraw, close)
-    );
+      );
+    }
+    syncHistorySearchChrome(titlebar);
+    const actionsHost = titlebar.querySelector(".prompt-history-header-actions");
+    const nextActions = historyHeaderActions(activeItem, redraw, close);
+    if (actionsHost) actionsHost.replaceWith(nextActions);
+    else titlebar.append(nextActions);
   }
 
   function openHistoryPanel() {
