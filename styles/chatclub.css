@@ -8436,6 +8436,103 @@ html:not([data-settings-click-reorder="always"]) .settings-reorder .ui-reorder {
   height: 32px;
 }
 
+.settings-icon-editor-layout {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+  min-width: 0;
+}
+
+.settings-icon-editor-preview {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+  min-width: 0;
+}
+
+.settings-icon-editor .settings-icon-preview {
+  width: 72px;
+  height: 72px;
+}
+
+.settings-icon-editor .settings-icon-preview .settings-site-icon-preview {
+  width: 48px;
+  height: 48px;
+}
+
+.settings-icon-editor-sources {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.settings-icon-editor-help {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+}
+
+.settings-icon-editor-label {
+  color: var(--text);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.settings-icon-editor-url {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.settings-icon-editor-url .input {
+  width: 100%;
+  max-width: 100%;
+}
+
+.settings-icon-editor-upload {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.settings-icon-editor-upload .button,
+.settings-icon-editor-tools .button {
+  min-height: var(--settings-control-height);
+  border-radius: var(--settings-radius);
+  flex: 0 0 auto;
+}
+
+.settings-icon-editor-file-name {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--font-size-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.settings-icon-editor-file-name:empty {
+  display: none;
+}
+
+.settings-icon-editor-tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+@media (max-width: 480px) {
+  .settings-icon-editor-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .settings-icon-advanced-body {
   display: grid;
   gap: var(--space-2);
@@ -9025,6 +9122,10 @@ html:not([data-settings-click-reorder="always"]) .settings-reorder .ui-reorder {
 
 .settings-editor-modal.api-profile-icon-editor-modal {
   width: min(var(--overlay-width), calc(100vw - 40px));
+}
+
+.settings-editor-modal.settings-icon-editor-modal {
+  width: min(480px, calc(100vw - var(--overlay-gutter)));
 }
 
 .settings-editor-modal .field > span {

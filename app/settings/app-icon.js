@@ -2,7 +2,7 @@ import { t } from "../../shared/i18n.js";
 import { BUILTIN_CHAT_APPS } from "../../shared/constants.js";
 import { acceptedDataIcon } from "../../shared/favicon-lookup.js";
 import { normalizeAppIcons } from "../../shared/storage-schema.js";
-import { button, editorModal, el, field, input, toast } from "../../ui/dom.js";
+import { button, editorModal, el, input, toast } from "../../ui/dom.js";
 import { renderChatFavicon } from "../../ui/favicon.js";
 
 function faviconDeps(port = {}) {
@@ -183,9 +183,19 @@ export function createAppIconControls({
     const urlInput = input(state.options?.appIcons?.[appId]?.srcType === "url" ? state.options.appIcons[appId].value : "", {
       placeholder: t("apps.iconUrlPlaceholder"),
       autocomplete: "url",
-      spellcheck: "false"
+      spellcheck: "false",
+      "aria-label": t("apps.iconUrl")
     });
-    const fileInput = el("input", { class: "input", type: "file", accept: "image/png,image/jpeg,image/webp,image/svg+xml,image/x-icon,.ico" });
+    const fileInput = el("input", {
+      class: "settings-file-input",
+      type: "file",
+      accept: "image/png,image/jpeg,image/webp,image/svg+xml,image/x-icon,.ico",
+      "aria-label": t("apps.iconUpload")
+    });
+    const fileName = el("span", { class: "settings-icon-editor-file-name" });
+    fileInput.addEventListener("change", () => {
+      fileName.textContent = fileInput.files?.[0]?.name || "";
+    });
     const refreshPreview = (nextApp = app) => {
       preview.replaceChildren(iconImage(nextApp, "settings-site-icon-preview"));
     };
@@ -235,13 +245,29 @@ export function createAppIconControls({
     };
     dialog = editorModal(t("apps.iconEditorTitle", { name: app?.name || appId }),
       el("div", { class: "settings-editor-form settings-icon-editor" },
-        el("p", { class: "settings-icon-help" }, t("apps.iconHelp")),
-        field(t("apps.iconPreview"), preview),
-        field(t("apps.iconUrl"), urlInput),
-        field(t("apps.iconUpload"), fileInput),
+        el("div", { class: "settings-icon-editor-layout" },
+          el("div", { class: "settings-icon-editor-preview" },
+            el("span", { class: "settings-icon-editor-label" }, t("apps.iconPreview")),
+            preview
+          ),
+          el("div", { class: "settings-icon-editor-sources" },
+            el("p", { class: "settings-icon-editor-help" }, t("apps.iconHelp")),
+            el("label", { class: "settings-icon-editor-url" },
+              el("span", { class: "settings-icon-editor-label" }, t("apps.iconUrl")),
+              urlInput
+            ),
+            el("div", { class: "settings-icon-editor-upload" },
+              fileInput,
+              button(t("apps.iconUpload"), () => fileInput.click()),
+              fileName
+            ),
+            el("div", { class: "settings-icon-editor-tools" },
+              button(t("apps.iconRefresh"), refresh),
+              button(t("apps.iconRestore"), restore)
+            )
+          )
+        ),
         el("div", { class: "modal-footer" },
-          button(t("apps.iconRefresh"), refresh),
-          button(t("apps.iconRestore"), restore),
           button(t("common.cancel"), close),
           button(t("common.save"), async () => {
             if (fileInput.files?.[0]) await saveUpload();
