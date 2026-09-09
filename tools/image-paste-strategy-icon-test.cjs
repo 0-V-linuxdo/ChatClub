@@ -78,22 +78,34 @@ const { functionSource } = require("./function-source.cjs");
 
   assert.match(
     css,
-    /\.built-in-config-row \{[^}]*grid-template-columns:\s*var\(--ui-reorder-cluster\)\s+var\(--settings-site-mark\)\s+minmax\(136px, \.9fr\)\s+minmax\(220px, 1\.36fr\)\s+52px\s+78px/s
+    /\.built-in-config-row \{[^}]*grid-template-columns:\s*var\(--ui-reorder-cluster\)\s+var\(--settings-site-mark\)\s+minmax\(136px, \.9fr\)\s+minmax\(220px, 1\.36fr\)\s+max-content\s+78px/s
   );
   assert.match(
     css,
-    /\.custom-config-row \{[^}]*grid-template-columns:\s*var\(--ui-reorder-cluster\)\s+var\(--settings-site-mark\)\s+minmax\(136px, \.9fr\)\s+minmax\(220px, 1\.36fr\)\s+52px\s+88px/s
+    /\.custom-config-row \{[^}]*grid-template-columns:\s*var\(--ui-reorder-cluster\)\s+var\(--settings-site-mark\)\s+minmax\(136px, \.9fr\)\s+minmax\(220px, 1\.36fr\)\s+max-content\s+88px/s
   );
   assert.match(
     css,
-    /\.built-in-config-row \{[^}]*grid-template-columns:\s*var\(--ui-reorder-cluster\)\s+var\(--settings-site-mark\)\s+minmax\(118px, \.86fr\)\s+minmax\(176px, 1\.22fr\)\s+48px\s+74px/s
+    /\.built-in-config-row \{[^}]*grid-template-columns:\s*var\(--ui-reorder-cluster\)\s+var\(--settings-site-mark\)\s+minmax\(118px, \.86fr\)\s+minmax\(176px, 1\.22fr\)\s+max-content\s+74px/s
   );
   assert.match(
     css,
-    /\.custom-config-row \{[^}]*grid-template-columns:\s*var\(--ui-reorder-cluster\)\s+var\(--settings-site-mark\)\s+minmax\(118px, \.86fr\)\s+minmax\(176px, 1\.22fr\)\s+48px\s+80px/s
+    /\.custom-config-row \{[^}]*grid-template-columns:\s*var\(--ui-reorder-cluster\)\s+var\(--settings-site-mark\)\s+minmax\(118px, \.86fr\)\s+minmax\(176px, 1\.22fr\)\s+max-content\s+80px/s
   );
   assert.doesNotMatch(css, /minmax\(128px, \.68fr\)/);
   assert.doesNotMatch(css, /minmax\(104px, \.62fr\)/);
+  assert.doesNotMatch(
+    css,
+    /\.built-in-config-row \{[^}]*grid-template-columns:[^;}]*\s52px\s/s
+  );
+  assert.doesNotMatch(
+    css,
+    /\.built-in-config-row \{[^}]*grid-template-columns:[^;}]*\s48px\s/s
+  );
+  assert.match(
+    css,
+    /\.built-in-config-list \.settings-list-header span:nth-child\(5\),[\s\S]*?white-space:\s*nowrap/
+  );
   assert.match(css, /\.settings-image-strategy-mark \.svg-icon \{[^}]*width:\s*16px/s);
   assert.match(
     css,

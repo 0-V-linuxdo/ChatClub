@@ -7228,14 +7228,14 @@ body.settings-tab-context-menu-dragging iframe {
 
 .built-in-config-list .settings-list-header,
 .built-in-config-row {
-  min-width: 572px;
-  grid-template-columns: var(--ui-reorder-cluster) var(--settings-site-mark) minmax(136px, .9fr) minmax(220px, 1.36fr) 52px 78px;
+  min-width: 648px;
+  grid-template-columns: var(--ui-reorder-cluster) var(--settings-site-mark) minmax(136px, .9fr) minmax(220px, 1.36fr) max-content 78px;
 }
 
 .custom-config-list .settings-list-header,
 .custom-config-row {
-  min-width: 592px;
-  grid-template-columns: var(--ui-reorder-cluster) var(--settings-site-mark) minmax(136px, .9fr) minmax(220px, 1.36fr) 52px 88px;
+  min-width: 668px;
+  grid-template-columns: var(--ui-reorder-cluster) var(--settings-site-mark) minmax(136px, .9fr) minmax(220px, 1.36fr) max-content 88px;
 }
 
 .settings-apps-tab-panel {
@@ -7690,6 +7690,7 @@ body.settings-tab-context-menu-dragging iframe {
 .built-in-config-list .settings-list-header span:nth-child(5),
 .custom-config-list .settings-list-header span:nth-child(5) {
   text-align: center;
+  white-space: nowrap;
 }
 
 .built-in-config-list .settings-strategy-cell.settings-image-strategy-mark,
@@ -9920,14 +9921,14 @@ html:not([data-settings-click-reorder="always"]) .settings-reorder .ui-reorder {
 
   .built-in-config-list .settings-list-header,
   .built-in-config-row {
-    min-width: 532px;
-    grid-template-columns: var(--ui-reorder-cluster) var(--settings-site-mark) minmax(118px, .86fr) minmax(176px, 1.22fr) 48px 74px;
+    min-width: 608px;
+    grid-template-columns: var(--ui-reorder-cluster) var(--settings-site-mark) minmax(118px, .86fr) minmax(176px, 1.22fr) max-content 74px;
   }
 
   .custom-config-list .settings-list-header,
   .custom-config-row {
-    min-width: 552px;
-    grid-template-columns: var(--ui-reorder-cluster) var(--settings-site-mark) minmax(118px, .86fr) minmax(176px, 1.22fr) 48px 80px;
+    min-width: 628px;
+    grid-template-columns: var(--ui-reorder-cluster) var(--settings-site-mark) minmax(118px, .86fr) minmax(176px, 1.22fr) max-content 80px;
   }
 
   .prompt-template-list .settings-list-header,
