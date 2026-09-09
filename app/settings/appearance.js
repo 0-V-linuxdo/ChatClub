@@ -253,19 +253,17 @@ export function createAppearanceSettingsSection(ctx) {
       type: "color",
       value: primaryColorDraft,
       title: t("appearance.primaryColor"),
-      "aria-label": t("appearance.primaryColor")
+      "aria-label": t("appearance.primaryColor"),
+      "aria-describedby": "appearance-primary-color-help"
     });
     const colorText = input(primaryColorDraft, {
+      id: "appearance-primary-color",
       class: "input appearance-color-text",
       spellcheck: "false",
       inputmode: "text",
       maxlength: "7",
-      "aria-label": t("appearance.primaryColor")
-    });
-    const colorPreview = el("span", {
-      class: "appearance-color-preview",
-      style: { "--appearance-color": primaryColorDraft },
-      "aria-hidden": "true"
+      "aria-label": t("appearance.primaryColor"),
+      "aria-describedby": "appearance-primary-color-help"
     });
     const syncColorDraft = (value, fromPicker = false) => {
       const raw = String(value || "").trim();
@@ -274,7 +272,6 @@ export function createAppearanceSettingsSection(ctx) {
         state.settingsAppearancePrimaryColorDraft = primaryColorDraft = normalized;
         colorPicker.value = normalized;
         colorText.value = normalized;
-        colorPreview.style.setProperty("--appearance-color", normalized);
         queueAppearanceColorSave(normalized);
       } else {
         colorText.value = raw;
@@ -283,7 +280,6 @@ export function createAppearanceSettingsSection(ctx) {
     const restoreColorDraft = () => {
       colorPicker.value = primaryColorDraft;
       colorText.value = primaryColorDraft;
-      colorPreview.style.setProperty("--appearance-color", primaryColorDraft);
     };
     colorPicker.addEventListener("input", () => syncColorDraft(colorPicker.value, true));
     colorPicker.addEventListener("change", () => syncColorDraft(colorPicker.value, true));
@@ -293,9 +289,7 @@ export function createAppearanceSettingsSection(ctx) {
     });
     const colorControl = el("div", { class: "appearance-color-control" },
       colorPicker,
-      colorText,
-      colorPreview,
-      el("small", { class: "appearance-color-help" }, t("appearance.primaryColorHelp"))
+      colorText
     );
     const overlayToggleControl = el("span", { class: "appearance-toggle-control" }, overlayEnabledToggle);
     const overlayOpacityControl = el("div", { class: "appearance-range-control" },

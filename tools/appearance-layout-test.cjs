@@ -38,8 +38,58 @@ assert.match(
 );
 assert.match(
   workspaceSource,
-  /const colorBlock[\s\S]*appearance\.primaryColor[\s\S]*const overlaysBlock/,
+  /const colorBlock[\s\S]*appearance\.primaryColor[\s\S]*appearance\.primaryColorHelp[\s\S]*const overlaysBlock/,
   "color workspace tab must own the primary color control"
+);
+assert.match(
+  workspaceSource,
+  /const colorBlock = \(\) => settingsBlock\(\s*t\("appearance\.workspaceColor"\),\s*""/,
+  "Color settingsBlock drops the duplicate Accent color subtitle"
+);
+assert.match(
+  workspaceSource,
+  /appearance-color-copy[\s\S]*appearance\.primaryColor[\s\S]*appearance-color-help[\s\S]*appearance\.primaryColorHelp/,
+  "Color help sits under the Primary Color title, not under the hex field"
+);
+assert.doesNotMatch(
+  workspaceSource,
+  /const colorBlock[\s\S]*appearance-overlay-row[\s\S]*const overlaysBlock/,
+  "Color must not reuse the overlay switch|title|slider row"
+);
+assert.doesNotMatch(
+  controllerSource,
+  /appearance-color-preview/,
+  "Color pane must not keep a duplicate far-right preview orb"
+);
+assert.doesNotMatch(
+  stylesheetSource,
+  /appearance-color-preview/,
+  "Color preview orb CSS must be removed"
+);
+assert.doesNotMatch(
+  stylesheetSource,
+  /\.appearance-workspace-subpane\.is-color \.appearance-color-control \{[^}]*minmax\(0,\s*1fr\)/,
+  "Color hex must not stretch as 1fr across the well"
+);
+assert.doesNotMatch(
+  stylesheetSource,
+  /\.appearance-workspace-subpane\.is-color \.appearance-color-help \{[^}]*grid-column:\s*1\s*\/\s*-1/,
+  "Color help must not span under the stretched control"
+);
+assert.doesNotMatch(
+  stylesheetSource,
+  /\.appearance-workspace-subpane\.is-color \.appearance-color-text \{[^}]*max-width:\s*none/,
+  "Color hex must keep its hug cap"
+);
+assert.match(
+  stylesheetSource,
+  /\.appearance-color-control \{[\s\S]*?grid-template-columns: var\(--settings-control-height\) minmax\(0, 220px\);[\s\S]*?width:\s*max-content;/,
+  "Color cluster hugs picker + capped hex"
+);
+assert.match(
+  stylesheetSource,
+  /\.appearance-workspace-subpane\.is-color \.appearance-field-list \{[\s\S]*?grid-template-columns: minmax\(0, max-content\) max-content;[\s\S]*?justify-content:\s*start;/,
+  "Color title and cluster share left-aligned hugging columns"
 );
 assert.match(
   workspaceSource,

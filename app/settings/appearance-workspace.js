@@ -6,6 +6,8 @@ export const APPEARANCE_WORKSPACE_TAB_IDS = Object.freeze(["general", "color", "
 const WORKSPACE_PANEL_ID = "appearance-workspace-panel";
 const workspaceTabId = (id) => `appearance-workspace-tab-${id}`;
 const LOADING_OVERLAY_HELP_ID = "appearance-loading-overlay-help";
+const PRIMARY_COLOR_ID = "appearance-primary-color";
+const PRIMARY_COLOR_HELP_ID = "appearance-primary-color-help";
 
 export function createAppearanceWorkspacePane({
   activeId,
@@ -52,9 +54,17 @@ export function createAppearanceWorkspacePane({
   );
   const colorBlock = () => settingsBlock(
     t("appearance.workspaceColor"),
-    t("appearance.workspaceColorTabDesc"),
+    "",
     el("div", { class: "appearance-field-list" },
-      appearanceRow(field(t("appearance.primaryColor"), colorControl))
+      appearanceRow(
+        el("div", { class: "appearance-color-row" },
+          el("span", { class: "appearance-color-copy" },
+            el("label", { for: PRIMARY_COLOR_ID }, el("strong", {}, t("appearance.primaryColor"))),
+            el("small", { class: "appearance-color-help", id: PRIMARY_COLOR_HELP_ID }, t("appearance.primaryColorHelp"))
+          ),
+          colorControl
+        )
+      )
     )
   );
   const overlaysBlock = () => settingsBlock(
