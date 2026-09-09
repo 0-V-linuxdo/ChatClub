@@ -211,6 +211,90 @@ function stampClass(node, className, on) {
 let modalTitleSeq = 0;
 let modalDescSeq = 0;
 const openModals = [];
+let overlaySearchCaret = null;
+let overlaySearchCaretListening = false;
+
+function overlaySearchCaretPanel(field) {
+  return field?.closest?.(".modal") || openModals[openModals.length - 1]?.panel || null;
+}
+
+function overlaySearchCaretInsidePanel(active, field, panel) {
+  return Boolean(panel && active && active !== field && active !== panel && panel.contains?.(active));
+}
+
+function overlaySearchCaretStolen(active, field, panel) {
+  if (active === field) return false;
+  if (overlaySearchCaretInsidePanel(active, field, panel)) return false;
+  return true;
+}
+
+export function pinOverlaySearchCaret() {
+  const owner = overlaySearchCaret;
+  const field = owner?.field;
+  if (!field?.isConnected) {
+    overlaySearchCaret = null;
+    return false;
+  }
+  const active = document.activeElement;
+  if (active === field) return true;
+  if (owner.composing?.()) return false;
+  const panel = owner.panel || overlaySearchCaretPanel(field);
+  if (overlaySearchCaretInsidePanel(active, field, panel)) {
+    owner.onLeave?.();
+    overlaySearchCaret = null;
+    return false;
+  }
+  if (!overlaySearchCaretStolen(active, field, panel)) return false;
+  if (active?.classList?.contains?.("chat-frame") || active?.nodeName === "IFRAME") {
+    try { active.blur?.(); } catch {}
+  }
+  try { field.focus({ preventScroll: true }); } catch {
+    try { field.focus(); } catch {}
+  }
+  try {
+    const selection = owner.getSelection?.() || {};
+    const start = Number(selection.start);
+    const end = Number(selection.end);
+    field.setSelectionRange(
+      Number.isFinite(start) ? start : field.value.length,
+      Number.isFinite(end) ? end : field.value.length
+    );
+  } catch {
+    /* selection restoration is best-effort after a stolen caret */
+  }
+  return true;
+}
+
+function onOverlaySearchCaretFocusIn(event) {
+  if (!overlaySearchCaret) return;
+  const field = overlaySearchCaret.field;
+  const target = event?.target;
+  if (target === field || field?.contains?.(target)) return;
+  pinOverlaySearchCaret();
+}
+
+function ensureOverlaySearchCaretListeners() {
+  if (overlaySearchCaretListening || typeof document.addEventListener !== "function") return;
+  overlaySearchCaretListening = true;
+  document.addEventListener("focusin", onOverlaySearchCaretFocusIn, true);
+}
+
+export function claimOverlaySearchCaret(field, options = {}) {
+  if (!field) return;
+  overlaySearchCaret = {
+    field,
+    panel: options.panel || overlaySearchCaretPanel(field),
+    getSelection: typeof options.getSelection === "function" ? options.getSelection : null,
+    composing: typeof options.composing === "function" ? options.composing : null,
+    onLeave: typeof options.onLeave === "function" ? options.onLeave : null
+  };
+  ensureOverlaySearchCaretListeners();
+}
+
+export function releaseOverlaySearchCaret(field) {
+  if (field && overlaySearchCaret?.field !== field) return;
+  overlaySearchCaret = null;
+}
 
 function modalFocusables(root) {
   if (!root?.querySelectorAll) return [];
@@ -318,7 +402,10 @@ function registerOpenModal(backdrop, panel, focusNode = panel) {
     const index = openModals.indexOf(record);
     if (index >= 0) openModals.splice(index, 1);
     try {
-      if (!openModals.length) document.removeEventListener?.("keydown", trapOpenModalKeydown, true);
+      if (!openModals.length) {
+        document.removeEventListener?.("keydown", trapOpenModalKeydown, true);
+        overlaySearchCaret = null;
+      }
       syncModalScrollLock();
     } catch {
       /* page may already be unloading */

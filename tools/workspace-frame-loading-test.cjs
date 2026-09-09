@@ -111,6 +111,8 @@ const PARAM = "__chatclub_frame_load_nonce";
   const preparePlannedFrameLoad = functionSource(frameController, "preparePlannedFrameLoad");
   const armPromptFocusRestore = functionSource(frameController, "armPromptFocusRestore");
   const restorePromptInputFocus = functionSource(frameController, "restorePromptInputFocus");
+  const prepareFrameNavigationFocusGuard = functionSource(frameController, "prepareFrameNavigationFocusGuard");
+  const maintainFrameNavigationFocusGuard = functionSource(frameController, "maintainFrameNavigationFocusGuard");
   const activeHref = functionSource(frameController, "activeHref");
   assert.match(beginFrameLoading, /iframe\.inert = true/);
   assert.match(completeFrameLoading, /iframe\.inert = Boolean\(document\.querySelector\("\.modal"\)\)/);
@@ -156,6 +158,16 @@ const PARAM = "__chatclub_frame_load_nonce";
   assert.match(setFrameSrcAfterPrepare, /armPromptFocusRestore\(iframe, generation\)/, "prepared frame navigation must remember an active prompt before assigning src");
   assert.match(armPromptFocusRestore, /document\.activeElement !== prompt/);
   assert.match(armPromptFocusRestore, /document\.querySelector\("\.modal"\)/, "armed prompt restore must not start while a typed modal is open");
+  assert.match(
+    prepareFrameNavigationFocusGuard,
+    /document\.querySelector\("\.modal"\)/,
+    "navigation focus guard must not arm while a typed modal is open"
+  );
+  assert.match(
+    maintainFrameNavigationFocusGuard,
+    /document\.querySelector\("\.modal"\)/,
+    "in-flight navigation focus guard must stop sending while a typed modal is open"
+  );
   assert.match(restorePromptInputFocus, /prompt\.focus\(\{ preventScroll: true \}\)/);
   assert.match(
     restorePromptInputFocus,

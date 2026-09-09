@@ -549,7 +549,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
     const send = () => {
       if (
         !frameNavigationIsCurrent(iframe, generation)
-        || Date.now() - startedAt > NAVIGATION_FOCUS_GUARD_POST_NAV_MAX_MS
+        || Date.now() - startedAt > NAVIGATION_FOCUS_GUARD_POST_NAV_MAX_MS || document.querySelector(".modal")
       ) return false;
       if (loadObserved && lastDocumentAckAt && Date.now() - lastDocumentAckAt >= NAVIGATION_FOCUS_GUARD_POST_NAV_SETTLE_MS) {
         return false;
@@ -583,7 +583,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
       !(iframe instanceof HTMLIFrameElement)
       || !prompt?.isConnected
       || (document.activeElement !== prompt && !document.documentElement.dataset.p)
-      || !iframe.contentWindow
+      || !iframe.contentWindow || document.querySelector(".modal")
     ) return null;
 
     const guardToken = globalThis.crypto?.randomUUID?.()

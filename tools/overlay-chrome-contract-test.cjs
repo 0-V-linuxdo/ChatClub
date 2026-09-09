@@ -202,6 +202,9 @@ assert.match(dom, /syncModalBackgroundInert/);
 assert.match(dom, /syncChatFrameModalInert/);
 assert.match(dom, /iframe\.chat-frame/);
 assert.match(dom, /promptFocusRestoreGeneration/);
+assert.match(dom, /export function claimOverlaySearchCaret/);
+assert.match(dom, /export function pinOverlaySearchCaret/);
+assert.match(dom, /export function releaseOverlaySearchCaret/);
 assert.match(dom, /setNodeInert/);
 assert.match(dom, /toast-live-polite/);
 assert.match(dom, /toast-live-assertive/);
@@ -257,7 +260,7 @@ assert.match(read("app/share/controller.js"), /overlay-panel-resize-handle overl
 assert.match(agents, /History and Tabs search detail content may reuse Pocket/);
 assert.match(agents, /iframe load and frame restore must not move focus back to `\.prompt-input`/);
 assert.match(agents, /must not clear that frame's `inert`/);
-assert.match(agents, /short retry window after a chat-frame load/);
+assert.match(agents, /the titlebar search is the unique caret owner/);
 assert.match(agents, /Prompt Library is a composer-anchored/);
 assert.match(agents, /Linear action menus may use `role="menu"`/);
 assert.match(agents, /bindLinearMenuKeyboard/);

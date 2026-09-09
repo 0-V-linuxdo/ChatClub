@@ -4,7 +4,7 @@ import {
   pocketPagesFromWorkspaceFullText,
   pocketPairsFromMessages
 } from "../../shared/workspace-tab-fulltext.js";
-import { button, clear, el, input, viewerModal } from "../../ui/dom.js";
+import { button, claimOverlaySearchCaret, clear, el, input, pinOverlaySearchCaret, releaseOverlaySearchCaret, viewerModal } from "../../ui/dom.js";
 import { createViewerWindowChrome } from "../../ui/viewer-window.js";
 import { renderChatFavicon, renderChatFaviconStack, uniqueChatFaviconSources } from "../../ui/favicon.js";
 import {
@@ -27,8 +27,6 @@ const SEARCH_PANEL_MIN_WIDTH = 720;
 const SEARCH_PANEL_MIN_HEIGHT = 420;
 const SEARCH_PANEL_FULLSCREEN_CLASS = "workspace-tabs-search-modal-fullscreen";
 const SEARCH_CARD_GAP = 12;
-const FRAME_LOAD_SEARCH_FOCUS_RETRY_MS = 150;
-const FRAME_LOAD_SEARCH_FOCUS_SETTLE_MS = 1000;
 
 export function createTabSearchController(ctx) {
   const controllerName = "Tabs search controller";
@@ -120,11 +118,22 @@ export function createTabSearchController(ctx) {
     return records[0] || null;
   }
 
+  function searchCaretOptions() {
+    return {
+      getSelection: () => searchSelection,
+      composing: () => searchComposing,
+      onLeave: () => { searchFocused = false; }
+    };
+  }
+
   function restoreSearchField() {
     requestAnimationFrame(() => {
       const field = document.querySelector(".workspace-tabs-search-modal .workspace-tabs-search-input");
       if (!field) return;
-      if (searchFocused) field.focus();
+      if (searchFocused) {
+        claimOverlaySearchCaret(field, searchCaretOptions());
+        field.focus();
+      }
       try {
         const start = Number(searchSelection.start);
         const end = Number(searchSelection.end);
@@ -136,48 +145,6 @@ export function createTabSearchController(ctx) {
         /* selection restoration is best-effort after redraw */
       }
     });
-  }
-
-  function restoreSearchFieldAfterFrameLoad(event) {
-    if (!event?.target?.classList?.contains?.("chat-frame")) return;
-    if (!document.querySelector(".workspace-tabs-search-modal")) return;
-    if (!(searchFocused || String(searchQuery || "").trim())) return;
-    const startedAt = Date.now();
-    const restore = () => {
-      if (!document.querySelector(".workspace-tabs-search-modal")) return;
-      if (!(searchFocused || String(searchQuery || "").trim())) return;
-      const field = document.querySelector(".workspace-tabs-search-modal .workspace-tabs-search-input");
-      const active = document.activeElement;
-      if (
-        field
-        && !searchComposing
-        && active !== field
-        && (
-          !active
-          || active === document.body
-          || active === document.documentElement
-          || active?.classList?.contains?.("chat-frame")
-          || active?.nodeName === "IFRAME"
-        )
-      ) {
-        try { field.focus({ preventScroll: true }); } catch {
-          try { field.focus(); } catch {}
-        }
-        try {
-          const start = Number(searchSelection.start);
-          const end = Number(searchSelection.end);
-          field.setSelectionRange(
-            Number.isFinite(start) ? start : field.value.length,
-            Number.isFinite(end) ? end : field.value.length
-          );
-        } catch {
-          /* selection restoration is best-effort after a stolen caret */
-        }
-      }
-      if (Date.now() - startedAt >= FRAME_LOAD_SEARCH_FOCUS_SETTLE_MS) return;
-      setTimeout(restore, FRAME_LOAD_SEARCH_FOCUS_RETRY_MS);
-    };
-    restore();
   }
 
   function searchPlaceholder() {
@@ -484,6 +451,7 @@ export function createTabSearchController(ctx) {
     field.addEventListener("compositionend", (event) => {
       searchComposing = false;
       applySearchQuery(String(event?.target?.value || ""), { redraw });
+      pinOverlaySearchCaret();
     });
     field.addEventListener("input", (event) => {
       applySearchQuery(String(event?.target?.value || ""), {
@@ -491,18 +459,18 @@ export function createTabSearchController(ctx) {
         redraw
       });
     });
-    field.addEventListener("focus", () => { searchFocused = true; });
+    field.addEventListener("focus", () => {
+      searchFocused = true;
+      claimOverlaySearchCaret(field, searchCaretOptions());
+    });
     field.addEventListener("blur", (event) => {
-      if (event.target?.isConnected === false) return;
-      const release = () => {
-        const active = document.activeElement;
-        if (active === field) return;
-        if (active?.classList?.contains?.("chat-frame") || active?.nodeName === "IFRAME") return;
-        if (active === document.body || active === document.documentElement) return;
-        searchFocused = false;
-      };
-      if (typeof requestAnimationFrame === "function") requestAnimationFrame(release);
-      else setTimeout(release, 0);
+      if (event.target?.isConnected === false) {
+        releaseOverlaySearchCaret(field);
+        return;
+      }
+      const pin = () => pinOverlaySearchCaret();
+      if (typeof requestAnimationFrame === "function") requestAnimationFrame(pin);
+      else setTimeout(pin, 0);
     });
     return el("div", {
       class: "shortcut-search workspace-tabs-search-field",
@@ -696,6 +664,7 @@ export function createTabSearchController(ctx) {
     let dialog;
     const close = () => {
       if (currentRedraw === redraw) currentRedraw = null;
+      releaseOverlaySearchCaret(document.querySelector(".workspace-tabs-search-modal .workspace-tabs-search-input"));
       dialog?.remove();
     };
     const redraw = () => renderSearch(host, redraw, close);
@@ -711,8 +680,6 @@ export function createTabSearchController(ctx) {
     restoreSearchField();
     return dialog;
   }
-
-  window.addEventListener("load", restoreSearchFieldAfterFrameLoad, true);
 
   return Object.freeze({
     openSearchPanel,

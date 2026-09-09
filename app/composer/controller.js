@@ -1143,7 +1143,7 @@ export function createComposerController(dependencies = {}) {
       placeholder: currentPlaceholder,
       dataset: { modelGateState: gateState },
       onpointerdown: handlePointerDown,
-      onfocus:e=>!document.documentElement.dataset.p&&expandInput(e.target),
+      onfocus:e=>!document.documentElement.dataset.p&&!document.querySelector(".modal")&&expandInput(e.target),
       onblur: handleInputBlur,
       onclick: handleClick,
       onpaste: handlePaste,

@@ -2,7 +2,7 @@ import { t } from "../../shared/i18n.js";
 import { savePromptSendHistory } from "../../shared/storage-adapter.js";
 import { normalizePocketCardSize, normalizePocketIcon } from "../../shared/storage-schema.js";
 import { createSettingsIconAction } from "../../ui/components.js";
-import { clear, el, input, toast, viewerModal } from "../../ui/dom.js";
+import { claimOverlaySearchCaret, clear, el, input, pinOverlaySearchCaret, releaseOverlaySearchCaret, toast, viewerModal } from "../../ui/dom.js";
 import { createViewerWindowChrome } from "../../ui/viewer-window.js";
 import {
   optionalControllerObject,
@@ -43,8 +43,6 @@ const HISTORY_PANEL_MIN_HEIGHT = 420;
 const HISTORY_PANEL_FULLSCREEN_CLASS = "prompt-history-modal-fullscreen";
 const HISTORY_PANEL_FOCUS_CLASS = "prompt-history-modal-focus";
 const HISTORY_CARD_GAP = 12;
-const FRAME_LOAD_SEARCH_FOCUS_RETRY_MS = 150;
-const FRAME_LOAD_SEARCH_FOCUS_SETTLE_MS = 1000;
 const HISTORY_CARD_SIZE_LIMITS = Object.freeze({
   width: Object.freeze({ min: 360, max: 760, step: 20 }),
   height: Object.freeze({ min: 420, max: 820, step: 20 })
@@ -297,11 +295,22 @@ export function createHistoryController(ctx) {
     }
   }
 
+  function searchCaretOptions() {
+    return {
+      getSelection: () => searchSelection,
+      composing: () => searchComposing,
+      onLeave: () => { searchFocused = false; }
+    };
+  }
+
   function restoreSearchField() {
     requestAnimationFrame(() => {
       const field = document.querySelector(".prompt-history-modal .prompt-history-panel-search-input");
       if (!field) return;
-      if (searchFocused) field.focus();
+      if (searchFocused) {
+        claimOverlaySearchCaret(field, searchCaretOptions());
+        field.focus();
+      }
       try {
         const start = Number(searchSelection.start);
         const end = Number(searchSelection.end);
@@ -313,48 +322,6 @@ export function createHistoryController(ctx) {
         /* selection restoration is best-effort after redraw */
       }
     });
-  }
-
-  function restoreSearchFieldAfterFrameLoad(event) {
-    if (!event?.target?.classList?.contains?.("chat-frame")) return;
-    if (!document.querySelector(".prompt-history-modal")) return;
-    if (!(searchFocused || String(searchQuery || "").trim())) return;
-    const startedAt = Date.now();
-    const restore = () => {
-      if (!document.querySelector(".prompt-history-modal")) return;
-      if (!(searchFocused || String(searchQuery || "").trim())) return;
-      const field = document.querySelector(".prompt-history-modal .prompt-history-panel-search-input");
-      const active = document.activeElement;
-      if (
-        field
-        && !searchComposing
-        && active !== field
-        && (
-          !active
-          || active === document.body
-          || active === document.documentElement
-          || active?.classList?.contains?.("chat-frame")
-          || active?.nodeName === "IFRAME"
-        )
-      ) {
-        try { field.focus({ preventScroll: true }); } catch {
-          try { field.focus(); } catch {}
-        }
-        try {
-          const start = Number(searchSelection.start);
-          const end = Number(searchSelection.end);
-          field.setSelectionRange(
-            Number.isFinite(start) ? start : field.value.length,
-            Number.isFinite(end) ? end : field.value.length
-          );
-        } catch {
-          /* selection restoration is best-effort after a stolen caret */
-        }
-      }
-      if (Date.now() - startedAt >= FRAME_LOAD_SEARCH_FOCUS_SETTLE_MS) return;
-      setTimeout(restore, FRAME_LOAD_SEARCH_FOCUS_RETRY_MS);
-    };
-    restore();
   }
 
   function syncHistorySearchChrome(root) {
@@ -414,6 +381,7 @@ export function createHistoryController(ctx) {
     field.addEventListener("compositionend", (event) => {
       searchComposing = false;
       applySearchQuery(String(event?.target?.value || ""), { redraw });
+      pinOverlaySearchCaret();
     });
     field.addEventListener("input", (event) => {
       applySearchQuery(String(event?.target?.value || ""), {
@@ -421,18 +389,18 @@ export function createHistoryController(ctx) {
         redraw
       });
     });
-    field.addEventListener("focus", () => { searchFocused = true; });
+    field.addEventListener("focus", () => {
+      searchFocused = true;
+      claimOverlaySearchCaret(field, searchCaretOptions());
+    });
     field.addEventListener("blur", (event) => {
-      if (event.target?.isConnected === false) return;
-      const release = () => {
-        const active = document.activeElement;
-        if (active === field) return;
-        if (active?.classList?.contains?.("chat-frame") || active?.nodeName === "IFRAME") return;
-        if (active === document.body || active === document.documentElement) return;
-        searchFocused = false;
-      };
-      if (typeof requestAnimationFrame === "function") requestAnimationFrame(release);
-      else setTimeout(release, 0);
+      if (event.target?.isConnected === false) {
+        releaseOverlaySearchCaret(field);
+        return;
+      }
+      const pin = () => pinOverlaySearchCaret();
+      if (typeof requestAnimationFrame === "function") requestAnimationFrame(pin);
+      else setTimeout(pin, 0);
     });
     return el("div", {
       class: "shortcut-search prompt-history-search prompt-history-panel-search",
@@ -1066,6 +1034,7 @@ export function createHistoryController(ctx) {
       pinnedWorkspaceId = "";
       pinnedTopicTitle = "";
       if (historyCurrentRedraw === redraw) historyCurrentRedraw = null;
+      releaseOverlaySearchCaret(document.querySelector(".prompt-history-modal .prompt-history-panel-search-input"));
       dialog?.remove();
     };
     const redraw = () => renderHistory(host, redraw, close);
@@ -1123,8 +1092,6 @@ export function createHistoryController(ctx) {
     workspacePreviewPinned = true;
     return openHistoryPanel();
   }
-
-  window.addEventListener("load", restoreSearchFieldAfterFrameLoad, true);
 
   return {
     openHistoryPanel,
