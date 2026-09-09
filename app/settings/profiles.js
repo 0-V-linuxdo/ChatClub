@@ -106,23 +106,26 @@ export function createProfilesSettingsSection(ctx) {
     const { outbound } = listModelInventory(state.options, ["outbound"]);
     return settingsBlock(t("inventory.title"), t("inventory.desc"),
       el("div", { class: "model-inventory-group model-inventory-outbound", dataset: { modelInventoryWorld: "outbound" } },
+        el("div", { class: "model-inventory-header", "aria-hidden": "true" },
+          el("span", {}, t("inventory.feature")),
+          el("span", {}, t("profiles.provider")),
+          el("span", {}, t("inventory.model"))
+        ),
         outbound.map((row) => el("div", {
           class: "model-inventory-row",
           dataset: { modelInventoryId: row.id, modelInventoryWorld: "outbound" }
         },
           el("strong", { class: "model-inventory-feature" }, t(row.featureKey)),
-          el("div", { class: "model-inventory-cluster" },
-            select(row.profileId, profileOptions(), {
-              "aria-label": `${t(row.featureKey)} ${t("profiles.provider")}`,
-              dataset: { outboundSlot: row.id, outboundField: "profile" },
-              onchange: (event) => { void saveOutboundProfile(row.purpose, event.target.value, redraw); }
-            }),
-            select(row.model, modelOptions(row.models), {
-              "aria-label": `${t(row.featureKey)} ${t("inventory.model")}`,
-              dataset: { outboundSlot: row.id, outboundField: "model" },
-              onchange: (event) => { void saveOutboundModel(row.purpose, event.target.value, redraw); }
-            })
-          )
+          select(row.profileId, profileOptions(), {
+            "aria-label": `${t(row.featureKey)} ${t("profiles.provider")}`,
+            dataset: { outboundSlot: row.id, outboundField: "profile" },
+            onchange: (event) => { void saveOutboundProfile(row.purpose, event.target.value, redraw); }
+          }),
+          select(row.model, modelOptions(row.models), {
+            "aria-label": `${t(row.featureKey)} ${t("inventory.model")}`,
+            dataset: { outboundSlot: row.id, outboundField: "model" },
+            onchange: (event) => { void saveOutboundModel(row.purpose, event.target.value, redraw); }
+          })
         ))
       )
     );

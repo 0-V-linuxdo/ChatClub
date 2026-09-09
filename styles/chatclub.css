@@ -7109,27 +7109,57 @@ body.settings-tab-context-menu-dragging iframe {
 
 .model-inventory-group {
   display: grid;
-  grid-template-columns: minmax(0, max-content) max-content;
-  justify-content: start;
-  justify-items: start;
-  column-gap: var(--space-4);
-  row-gap: 14px;
-  width: max-content;
+  grid-template-columns: minmax(7.5rem, max-content) minmax(12rem, 1fr) minmax(14rem, 1.2fr);
+  justify-content: stretch;
+  justify-items: stretch;
+  width: 100%;
   max-width: 100%;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--ui-radius);
+  background: color-mix(in srgb, var(--panel) 86%, var(--panel-2));
 }
 
+.model-inventory-header,
 .model-inventory-row {
   display: grid;
   grid-template-columns: subgrid;
   grid-column: 1 / -1;
   align-items: center;
-  width: auto;
-  max-width: 100%;
   min-width: 0;
+}
+
+.model-inventory-header {
+  min-height: var(--ui-header-height);
+  color: var(--text);
+  font-size: var(--font-size);
+  font-weight: var(--font-weight-bold);
+  background: color-mix(in srgb, var(--panel-2) 72%, #111 8%);
+  border-bottom: 1px solid var(--line);
+}
+
+.model-inventory-header span {
+  min-width: 0;
+  padding: 0 var(--ui-cell-pad-x);
+  border-left: 1px solid var(--line);
+}
+
+.model-inventory-header span:first-child {
+  border-left: 0;
+}
+
+.model-inventory-row {
+  min-height: calc(var(--ui-control-height) + 16px);
+  border-top: 1px solid var(--line);
+}
+
+.model-inventory-header + .model-inventory-row {
+  border-top: 0;
 }
 
 .model-inventory-feature {
   min-width: 0;
+  padding: 0 var(--ui-cell-pad-x);
   color: var(--text);
   font-size: var(--font-size-md);
   line-height: 1.25;
@@ -7138,19 +7168,12 @@ body.settings-tab-context-menu-dragging iframe {
   white-space: nowrap;
 }
 
-.model-inventory-cluster {
-  display: grid;
-  grid-template-columns: minmax(11ch, 22ch) minmax(11ch, 22ch);
-  gap: var(--space-3);
-  width: max-content;
-  max-width: 100%;
-  justify-self: start;
-}
-
-.model-inventory-cluster .select {
+.model-inventory-row .select {
   min-width: 0;
-  width: 100%;
+  width: calc(100% - (var(--ui-cell-pad-x) * 2));
   max-width: 28ch;
+  margin: 0 var(--ui-cell-pad-x);
+  justify-self: start;
 }
 
 .built-in-config-list .settings-list-header,
