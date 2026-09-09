@@ -142,6 +142,13 @@ function innermostBlockAt(blocks, index) {
     );
   }
 
+  const topbarSource = fs.readFileSync(path.join(root, "app/settings/appearance-topbar.js"), "utf8");
+  assert.match(
+    topbarSource,
+    /createAppearanceOverlayInfoButton\([\s\S]*"settings\.appearance\.topbarInputFontSize"/
+  );
+  assert.doesNotMatch(topbarSource, /appearance-range-help/);
+
   console.log("topbar prompt input font-size normalization, persistence, and CSS isolation: ok");
 })().catch((error) => {
   console.error(error?.stack || error);

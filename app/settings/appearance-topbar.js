@@ -15,6 +15,7 @@ import {
 import { button, el, field, input, select, toast } from "../../ui/dom.js";
 import { validateControllerContract } from "../controller-contract.js";
 import { cleanupSettingsDragRows, createSettingsKit } from "./kit.js";
+import { createAppearanceOverlayInfoButton } from "./appearance-model-selection-overlay.js";
 import {
   moveTopbarPromptPlaceholderItems,
   topbarPromptPlaceholderPreview,
@@ -332,7 +333,8 @@ export function createAppearanceTopbarController(dependencies = {}) {
       max: String(TOPBAR_PROMPT_INPUT_FONT_SIZE_MAX_PX),
       step: "1",
       value: String(initialFontSize),
-      "aria-label": t("topbar.input.fontSize")
+      "aria-label": t("topbar.input.fontSize"),
+      "aria-describedby": "appearance-topbar-input-font-size-help"
     });
     fontSizeSlider.addEventListener("input", () => {
       const nextFontSize = normalizeTopbarPromptInputFontSize(fontSizeSlider.value);
@@ -342,11 +344,14 @@ export function createAppearanceTopbarController(dependencies = {}) {
     });
     return settingsBlock(t("topbar.input.title"), t("topbar.input.desc"),
       el("div", { class: "appearance-field-list topbar-prompt-input-settings" },
-        field(t("topbar.input.fontSize"),
+        el("div", { class: "appearance-overlay-row" },
+          el("span", { class: "appearance-overlay-copy" },
+            el("strong", {}, t("topbar.input.fontSize")),
+            createAppearanceOverlayInfoButton(svgIcon, t("topbar.input.fontSizeHelp"), "appearance-topbar-input-font-size-help", "settings.appearance.topbarInputFontSize")
+          ),
           el("div", { class: "appearance-range-control topbar-prompt-input-font-size-control" },
             fontSizeSlider,
-            fontSizeValue,
-            el("small", { class: "appearance-range-help" }, t("topbar.input.fontSizeHelp"))
+            fontSizeValue
           )
         )
       )

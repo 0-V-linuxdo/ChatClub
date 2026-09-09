@@ -4081,10 +4081,7 @@ body.tab-gesture-active * {
 }
 
 .appearance-workspace-subpane.is-overlays .appearance-range-control {
-  grid-template-columns: minmax(0, 220px) 48px;
   justify-self: start;
-  width: max-content;
-  max-width: 100%;
 }
 
 .appearance-workspace-subpane.is-overlays .appearance-overlays-model {
@@ -4696,9 +4693,11 @@ body.settings-tab-context-menu-dragging iframe {
 
 .appearance-range-control {
   display: grid;
-  grid-template-columns: minmax(0, 220px) 48px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 220px) 48px;
   gap: var(--space-2);
   align-items: center;
+  width: max-content;
+  max-width: 100%;
 }
 
 .appearance-range-slider {
@@ -4710,13 +4709,6 @@ body.settings-tab-context-menu-dragging iframe {
   color: var(--text);
   font-variant-numeric: tabular-nums;
   text-align: right;
-}
-
-.appearance-range-help {
-  min-width: 0;
-  color: var(--muted);
-  font-size: var(--font-size-sm);
-  line-height: 1.35;
 }
 
 @media (max-width: 900px) {
@@ -7981,6 +7973,53 @@ body.settings-tab-context-menu-dragging iframe {
   display: flex;
   flex-direction: column;
   gap: 18px;
+  container-type: inline-size;
+}
+
+.topbar-prompt-input-settings {
+  display: grid;
+  grid-template-columns: max-content max-content;
+  justify-content: start;
+  justify-items: start;
+  column-gap: var(--space-4);
+  width: max-content;
+  max-width: 100%;
+}
+
+.topbar-prompt-input-settings .appearance-overlay-row {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  align-items: center;
+  width: auto;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.topbar-prompt-input-settings .appearance-overlay-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 5px;
+  min-width: 0;
+}
+
+.topbar-prompt-input-settings .appearance-overlay-copy strong {
+  color: var(--text);
+  font-size: var(--font-size);
+}
+
+@container (max-width: 560px) {
+  .topbar-prompt-input-settings {
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+  }
+
+  .topbar-prompt-input-settings .appearance-range-control {
+    width: 100%;
+    max-width: 100%;
+    grid-template-columns: minmax(0, 1fr) 48px;
+  }
 }
 
 .topbar-placeholder-editor {

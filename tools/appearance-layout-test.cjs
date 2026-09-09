@@ -12,6 +12,7 @@ const settingsKitSource = fs.readFileSync(path.join(root, "app/settings/kit.js")
 const stylesheetSource = fs.readFileSync(path.join(root, "styles/chatclub.css"), "utf8");
 const i18nSource = fs.readFileSync(path.join(root, "shared/i18n.js"), "utf8");
 const storageSource = fs.readFileSync(path.join(root, "shared/storage-schema.js"), "utf8");
+const topbarSource = fs.readFileSync(path.join(root, "app/settings/appearance-topbar.js"), "utf8");
 
 const { functionSource } = require("./function-source.cjs");
 
@@ -156,8 +157,13 @@ assert.match(
 );
 assert.match(
   stylesheetSource,
-  /\.appearance-workspace-subpane\.is-overlays \.appearance-range-control \{[\s\S]*?grid-template-columns: minmax\(0, 220px\) 48px;[\s\S]*?width:\s*max-content;/,
-  "overlay sliders hug a compact track instead of filling the well"
+  /\.appearance-range-control \{[\s\S]*?grid-template-columns: minmax\(0, 220px\) 48px;[\s\S]*?width:\s*max-content;/,
+  "settings range controls hug a compact track instead of filling the well"
+);
+assert.match(
+  stylesheetSource,
+  /\.appearance-workspace-subpane\.is-overlays \.appearance-range-control \{[\s\S]*?justify-self:\s*start;/,
+  "overlay sliders stay left-aligned on the shared compact track"
 );
 assert.match(
   stylesheetSource,
@@ -168,6 +174,26 @@ assert.doesNotMatch(
   workspaceSource,
   /class: "appearance-range-help"/,
   "overlay help must not remain a visible range-help line"
+);
+assert.doesNotMatch(
+  topbarSource,
+  /class: "appearance-range-help"|field\(t\("topbar\.input\.fontSize"\)/,
+  "topbar input font-size must not stack field() copy or a visible range-help line"
+);
+assert.match(
+  topbarSource,
+  /appearance-overlay-row[\s\S]*appearance-overlay-copy[\s\S]*createAppearanceOverlayInfoButton\([\s\S]*"settings\.appearance\.topbarInputFontSize"/,
+  "topbar input font-size uses the hug-row title + ghost info | compact slider grammar"
+);
+assert.match(
+  stylesheetSource,
+  /\.topbar-prompt-input-settings \{[\s\S]*?grid-template-columns: max-content max-content;[\s\S]*?justify-content:\s*start;/,
+  "topbar input font-size title and slider share left-aligned compact columns"
+);
+assert.doesNotMatch(
+  stylesheetSource,
+  /\.appearance-range-help/,
+  "the discarded range-help column must not remain in CSS"
 );
 assert.match(
   stylesheetSource,

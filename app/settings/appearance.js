@@ -661,7 +661,8 @@ export function createAppearanceSettingsSection(ctx) {
       "settings.apps.iframe.removeAttribute": "trash",
       "settings.models.allSources": "info",
       "settings.appearance.loadingOverlay": "info",
-      "settings.appearance.modelSelectionOverlay": "info"
+      "settings.appearance.modelSelectionOverlay": "info",
+      "settings.appearance.topbarInputFontSize": "info"
     })[targetId] || "settings";
     const tooltipLabelKey = (target) => (
       target.id === "topbar.pocket" ? pocketChromeLabelKey(state.options) : target.labelKey

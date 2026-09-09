@@ -11,7 +11,7 @@ import {
 import { NOTION_MODEL_PREFERENCE_TARGETS } from "./notion-models.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-09-09｜07:52:00」";
+export const APP_VERSION = "「2026-09-09｜08:05:00」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -350,7 +350,8 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
       Object.freeze({ id: "settings.apps.iframe.removeAttribute", labelKey: "apps.iframe.removeAttribute" }),
       Object.freeze({ id: "settings.models.allSources", labelKey: "modelPreferences.allSources" }),
       Object.freeze({ id: "settings.appearance.loadingOverlay", labelKey: "appearance.loadingOverlay" }),
-      Object.freeze({ id: "settings.appearance.modelSelectionOverlay", labelKey: "appearance.modelSelectionOverlay" })
+      Object.freeze({ id: "settings.appearance.modelSelectionOverlay", labelKey: "appearance.modelSelectionOverlay" }),
+      Object.freeze({ id: "settings.appearance.topbarInputFontSize", labelKey: "topbar.input.fontSize" })
     ])
   })
 ]);
