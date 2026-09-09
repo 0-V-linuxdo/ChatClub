@@ -115,7 +115,7 @@ const PARAM = "__chatclub_frame_load_nonce";
   const maintainFrameNavigationFocusGuard = functionSource(frameController, "maintainFrameNavigationFocusGuard");
   const activeHref = functionSource(frameController, "activeHref");
   assert.match(beginFrameLoading, /iframe\.inert = true/);
-  assert.match(completeFrameLoading, /iframe\.inert = Boolean\(document\.querySelector\("\.modal"\)\)/);
+  assert.match(completeFrameLoading, /iframe\.inert = Boolean\(document\.querySelector\("\.modal"\) \|\| overlaySearchCaretMode\(\) === "page"\)/);
   assert.match(beginFrameLoading, /const loadingKind = frameLoadingKindForTarget/);
   assert.match(beginFrameLoading, /iframe\.dataset\.frameLoadingKind = loadingKind/);
   assert.match(beginFrameLoading, /frameLoadingMaskPhase = "opaque"/);
@@ -801,7 +801,9 @@ const PARAM = "__chatclub_frame_load_nonce";
       rememberWorkspaceSession() {}
     });
     vm.runInContext(`${completeFrameLoading}\nglobalThis.complete = completeFrameLoading;`, ctx);
-    ctx.complete(new PageIframe());
+    const pageFrame = new PageIframe();
+    ctx.complete(pageFrame);
+    assert.equal(pageFrame.inert, true, "completing a load while the page caret owner is claimed must keep the iframe inert");
     assert.equal(pins, 1, "iframe load must pin a claimed page caret owner without an armed restore generation");
     assert.equal(adopts, 1, "iframe load must re-adopt the page caret lease on the new document");
   }

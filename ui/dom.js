@@ -232,6 +232,55 @@ function overlayCaretIsFrame(node) {
   return Boolean(node?.classList?.contains?.("chat-frame") || node?.nodeName === "IFRAME");
 }
 
+function overlayCaretIsFrameWrap(node) {
+  return Boolean(node?.classList?.contains?.("chat-frame-wrap"));
+}
+
+function overlayCaretFrameFromTarget(node) {
+  if (!node) return null;
+  if (overlayCaretIsFrame(node)) return node;
+  try {
+    if (node.closest?.(".preferred-model-selection-overlay") || node.closest?.(".frame-toast")) return null;
+  } catch {}
+  const wrap = overlayCaretIsFrameWrap(node) ? node : node.closest?.(".chat-frame-wrap");
+  if (!wrap) return null;
+  try {
+    return wrap.querySelector?.("iframe.chat-frame.active")
+      || wrap.querySelector?.("iframe.chat-frame")
+      || wrap.querySelector?.(".chat-frame");
+  } catch {
+    return null;
+  }
+}
+
+function overlayCaretFrameIsLoading(frame) {
+  return frame?.dataset?.frameLoadPending === "1"
+    || Boolean(frame?.closest?.(".chat-card")?.classList?.contains?.("frame-loading"));
+}
+
+function setOverlayCaretFrameInert(frame, value) {
+  if (!frame) return;
+  const inert = Boolean(value);
+  try { frame.inert = inert; } catch {}
+  if (inert) {
+    frame.setAttribute?.("inert", "");
+    return;
+  }
+  if (typeof frame.removeAttribute === "function") frame.removeAttribute("inert");
+}
+
+function syncOverlayCaretFrameInert() {
+  const modalOpen = Boolean(typeof document.querySelector === "function" && document.querySelector(".modal"));
+  const pageClaimed = overlaySearchCaret?.mode === "page";
+  let frames = [];
+  try { frames = [...(document.querySelectorAll?.("iframe.chat-frame") || [])]; } catch {}
+  for (const frame of frames) {
+    if (!modalOpen && !pageClaimed && overlayCaretFrameIsLoading(frame)) continue;
+    setOverlayCaretFrameInert(frame, modalOpen || pageClaimed);
+  }
+}
+
+
 function overlayCaretRecentFramePointer() {
   return Boolean(overlayCaretFramePointerAt && Date.now() - overlayCaretFramePointerAt < OVERLAY_CARET_FRAME_POINTER_MS);
 }
@@ -301,6 +350,7 @@ function clearOverlaySearchCaret(invokeLeave = true) {
     try { owner.onLeave?.(); } catch {}
   }
   if (owner.mode === "page") notifyOverlayCaretLease("release");
+  syncOverlayCaretFrameInert();
 }
 
 function restoreOverlaySearchCaretSelection(field, owner) {
@@ -396,7 +446,12 @@ function onOverlayPageCaretStolen(event) {
 
 function onOverlayCaretPointerDown(event) {
   if (event?.isTrusted !== true) return;
-  if (overlayCaretIsFrame(event.target)) overlayCaretFramePointerAt = Date.now();
+  const frame = overlayCaretFrameFromTarget(event.target);
+  if (!frame) return;
+  overlayCaretFramePointerAt = Date.now();
+  if (overlaySearchCaretMode() !== "page") return;
+  clearOverlaySearchCaret(true);
+  try { frame.focus?.(); } catch {}
 }
 
 function ensureOverlaySearchCaretListeners() {
@@ -427,6 +482,7 @@ export function claimOverlaySearchCaret(field, options = {}) {
   if (overlaySearchCaret.mode === "page") notifyOverlayCaretLease("adopt");
   else if (previous?.mode === "page") notifyOverlayCaretLease("release");
   pinOverlaySearchCaret();
+  syncOverlayCaretFrameInert();
 }
 
 export function releaseOverlaySearchCaret(field) {
@@ -465,16 +521,18 @@ function isModalInertExempt(node, liveBackdrop) {
 function syncChatFrameModalInert(active) {
   const frames = document.querySelectorAll?.("iframe.chat-frame");
   if (!frames?.length) return;
+  const pageClaimed = overlaySearchCaretMode() === "page";
   for (const frame of frames) {
     if (active) delete frame.dataset?.promptFocusRestoreGeneration;
     if (
       !active
+      && !pageClaimed
       && (
         frame.dataset?.frameLoadPending === "1"
         || frame.closest?.(".chat-card")?.classList?.contains?.("frame-loading")
       )
     ) continue;
-    setNodeInert(frame, active);
+    setNodeInert(frame, active || pageClaimed);
   }
 }
 

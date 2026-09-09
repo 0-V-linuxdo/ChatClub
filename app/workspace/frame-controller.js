@@ -457,7 +457,7 @@ export function createWorkspaceFrameController(dependencies = {}) {
     if (!(iframe instanceof HTMLIFrameElement)) return;
     rememberBrowserFrameId(iframe);
     if (iframe.dataset.frameLoadPending === "1") return;
-    iframe.inert = Boolean(document.querySelector(".modal"));
+    iframe.inert = Boolean(document.querySelector(".modal") || overlaySearchCaretMode() === "page");
     if (iframe.dataset.frameLoadingKind === "new-topic") iframe.dataset.frameLoadingMaskPhase = "fade";
     else {
       delete iframe.dataset.frameLoadingKind;

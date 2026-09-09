@@ -85,8 +85,38 @@ function createWorld() {
   const iframe = {
     classList: { contains(name) { return name === "chat-frame"; } },
     nodeName: "IFRAME",
+    inert: false,
+    dataset: {},
     blurCalls: 0,
-    blur() { this.blurCalls += 1; }
+    focusCalls: 0,
+    blur() { this.blurCalls += 1; },
+    focus() {
+      this.focusCalls += 1;
+      world.document.activeElement = this;
+    },
+    setAttribute(name) {
+      if (name === "inert") this.inert = true;
+    },
+    removeAttribute(name) {
+      if (name === "inert") this.inert = false;
+    },
+    closest(selector) {
+      if (selector === ".chat-frame-wrap") return wrap;
+      return null;
+    }
+  };
+  const wrap = {
+    className: "chat-frame-wrap",
+    nodeName: "DIV",
+    classList: { contains(name) { return name === "chat-frame-wrap"; } },
+    contains(node) { return node === iframe; },
+    querySelector(selector) {
+      if (String(selector).includes("chat-frame")) return iframe;
+      return null;
+    },
+    closest(selector) {
+      return selector === ".chat-frame-wrap" ? this : null;
+    }
   };
   const prompt = {
     classList: { contains(name) { return name === "prompt-input"; } },
@@ -102,6 +132,7 @@ function createWorld() {
   const world = {
     field,
     iframe,
+    wrap,
     prompt,
     panel,
     row,
@@ -502,6 +533,37 @@ function claimPrompt(world, extras = {}) {
   assert.equal(world.pin(), true, "page pin must restore the parent browsing context");
   assert.ok(world.window.focusCalls > before, "pin uses window.focus");
   assert.equal(world.document.activeElement, world.promptField);
+}
+
+{
+  const world = createPageWorld();
+  claimPrompt(world);
+  assert.equal(world.iframe.inert, true, "a page claim must keep chat-frames inert");
+  world.document.activeElement = world.topbarButton;
+  assert.equal(world.pin(), false);
+  assert.equal(world.iframe.inert, false, "leaving the page caret owner must un-inert chat-frames");
+}
+
+{
+  const world = createPageWorld();
+  let left = false;
+  claimPrompt(world, { onLeave: () => { left = true; } });
+  assert.equal(world.iframe.inert, true, "a page claim must keep chat-frames inert before a wrap click");
+  const pointer = world.listeners.find((entry) => entry.type === "pointerdown" && entry.capture === true);
+  pointer.handler({ isTrusted: true, target: world.wrap });
+  assert.equal(left, true, "a trusted pointer on the frame wrap must leave");
+  assert.equal(world.mode(), "");
+  assert.equal(world.iframe.inert, false, "a trusted pointer on the frame wrap must leave and un-inert");
+  assert.ok(world.iframe.focusCalls >= 1, "leaving through the wrap must focus the chat-frame so the click can enter");
+}
+
+{
+  const world = createWorld();
+  claimField(world);
+  assert.equal(world.iframe.inert, true, "overlay search with a typed modal must keep chat-frames inert");
+  world.document.activeElement = world.row;
+  world.pin();
+  assert.equal(world.iframe.inert, true, "leaving overlay search while a modal is open must keep chat-frames inert");
 }
 
 console.log("overlay caret lock tests passed");

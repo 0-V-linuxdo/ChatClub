@@ -136,6 +136,9 @@ assert.match(overlayCaret, /a page claim must adopt the child-document caret lea
 assert.match(overlayCaret, /pin must not report success when document.hasFocus\(\) is false/);
 assert.match(overlayCaret, /a child stolen message must re-pin the prompt/);
 assert.match(overlayCaret, /pin uses window.focus/);
+assert.match(overlayCaret, /a page claim must keep chat-frames inert/);
+assert.match(overlayCaret, /a trusted pointer on the frame wrap must leave and un-inert/);
+assert.match(agents, /chat-frame-wrap/);
 
 (async () => {
   const { createPageCaretLease } = await import(pathToFileURL(path.join(root, "app/workspace/page-caret-lease.js")).href);
