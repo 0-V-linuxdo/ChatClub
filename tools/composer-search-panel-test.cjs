@@ -38,7 +38,7 @@ assert.match(css, /\.prompt-send-button \{[\s\S]*?border-radius:\s*var\(--ui-rad
 assert.doesNotMatch(css, /\.prompt-send-button \{[^}]*border-radius:\s*var\(--ui-radius-pill\)/, "send is a rounded square, not a pill");
 assert.match(css, /\.prompt-input-row\s*\{[\s\S]*?height:\s*var\(--prompt-collapsed-height\);/);
 assert.match(css, /--prompt-collapsed-height:\s*40px;/);
-assert.match(css, /\.topbar \.composer:not\(\.composer-center-slot\)\s*\{[\s\S]*?--prompt-collapsed-height:\s*56px/);
+assert.match(css, /\.topbar \.composer:not\(\.composer-center-slot\)\s*\{[\s\S]*?--prompt-collapsed-height:\s*38px/);
 assert.match(css, /--prompt-shell-radius:\s*calc\(var\(--ui-radius\) \+ var\(--space-1\)\)/);
 assert.match(css, /--prompt-search-radius:\s*var\(--prompt-shell-radius\)/);
 assert.match(css, /\.prompt-input-row\s*\{[\s\S]*?display:\s*grid/);
@@ -116,9 +116,16 @@ assert.doesNotMatch(panelSource, /prompt-search-toggle/);
 assert.match(runtime, /renderComposerSearchFavicons/);
 assert.match(runtime, /renderFavicons: renderComposerSearchFavicons/);
 assert.match(runtime, /stackClass: "prompt-search-option-favicons"/);
-assert.doesNotMatch(panelSource, /createSvgIcon/);
-assert.doesNotMatch(panelSource, /data-tooltip-id/);
-assert.doesNotMatch(panelSource, /tooltip-trigger/);
+assert.doesNotMatch(panelSource, /createSvgIcon/, "the search panel must render chip icons through the caller's renderIcon port");
+assert.doesNotMatch(panelSource, /ui\/icons\.js/);
+assert.match(panelSource, /options\.renderIcon/);
+assert.match(composer, /renderIcon: \(name\) => createSvgIcon\(name\)/);
+assert.match(panelSource, /"data-tooltip-id": "composer\.mode\.compose"/);
+assert.match(panelSource, /"data-tooltip-id": "composer\.mode\.search"/);
+assert.match(panelSource, /prompt-mode-chip prompt-mode-chip-compose tooltip-trigger/);
+assert.match(panelSource, /prompt-mode-chip prompt-mode-chip-search tooltip-trigger/);
+assert.match(css, /\.prompt-mode-chip\s*\{[\s\S]*?width:\s*var\(--ui-accessory-height\)/);
+assert.match(css, /\.prompt-mode-chip \.svg-icon\s*\{[\s\S]*?width:\s*16px/);
 assert.doesNotMatch(functionSource(composer, "enterSearchMode"), /expandInput\(/);
 assert.doesNotMatch(functionSource(composer, "collapseInput"), /searchPanel\.exit/);
 assert.match(composer, /onStashField\(field\)/);
@@ -303,6 +310,12 @@ globalThis.document = {
     let panel;
     panel = createComposerSearchPanel({
       onEnter() { panel.enter(); },
+      renderIcon: (name) => {
+        const icon = new FakeNode("svg");
+        icon.className = "svg-icon";
+        icon.setAttribute("data-icon", name);
+        return icon;
+      },
       workspaceSearch: {
         listRecords: async (query) => {
           const needle = String(query || "").trim().toLowerCase();
@@ -341,8 +354,15 @@ globalThis.document = {
     assert.equal(Boolean(composeChip && searchChip), true, "compose and search chips are labeled controls");
     assert.equal(composeChip.getAttribute("tabindex"), "-1");
     assert.equal(searchChip.getAttribute("tabindex"), "-1");
-    assert.equal(composeChip.getAttribute("data-tooltip-id"), null);
-    assert.equal(searchChip.getAttribute("data-tooltip-id"), null);
+    assert.equal(composeChip.getAttribute("data-tooltip-id"), "composer.mode.compose");
+    assert.equal(searchChip.getAttribute("data-tooltip-id"), "composer.mode.search");
+    assert.equal(composeChip.getAttribute("aria-label"), "Compose", "icon-only compose chip must keep its accessible name");
+    assert.equal(searchChip.getAttribute("aria-label"), "Search", "icon-only search chip must keep its accessible name");
+    assert.equal(composeChip.getAttribute("data-tooltip"), "Compose");
+    assert.equal(searchChip.getAttribute("data-tooltip"), "Search");
+    assert.equal(composeChip.querySelector(".svg-icon")?.getAttribute("data-icon"), "edit", "compose chip renders the edit glyph through the icon port");
+    assert.equal(searchChip.querySelector(".svg-icon")?.getAttribute("data-icon"), "search", "search chip renders the search glyph through the icon port");
+    assert.equal(composeChip.querySelector(".svg-icon")?.getAttribute("aria-hidden"), "true", "chip glyphs are decorative");
     assert.equal(composeChip.getAttribute("aria-pressed"), "true");
     assert.equal(searchChip.getAttribute("aria-pressed"), "false");
     assert.equal(field.placeholder, "Press Tab to search chats");

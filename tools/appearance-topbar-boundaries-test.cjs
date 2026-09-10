@@ -275,7 +275,7 @@ globalThis.window = { confirm: () => true };
   assert.ok(!firstByClass(inputPane, "appearance-range-help"));
   assert.equal(fontSizeSlider.attributes["aria-describedby"], "appearance-topbar-input-font-size-help");
   assert.equal(fontSizeSlider.attributes.min, "13");
-  assert.equal(fontSizeSlider.attributes.max, "18");
+  assert.equal(fontSizeSlider.attributes.max, "20");
   assert.equal(fontSizeSlider.attributes.step, "1");
   assert.equal(fontSizeSlider.value, "15");
   assert.equal(nodeText(fontSizeValue), "15px");

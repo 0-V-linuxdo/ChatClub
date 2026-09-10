@@ -115,6 +115,16 @@ assert.doesNotMatch(agents, /composer-center-launcher/);
 assert.match(css, /\.prompt-pin-button\s*\{[\s\S]*?grid-column:\s*6/);
 assert.match(css, /\.prompt-pin-button\s*\{[\s\S]*?display:\s*none/);
 assert.match(css, /\.composer-center-host \.prompt-pin-button\s*\{[\s\S]*?display:\s*inline-grid/);
+{
+  // The pin carries the shared .compact-icon utility, whose display: inline-grid
+  // sits later in the cascade than .prompt-pin-button { display: none } and
+  // therefore re-showed the pin inside the topbar pill. A two-class hide must
+  // outrank that utility, and the center-host show must still come after it.
+  const hidden = css.search(/\.prompt-pin-button\.compact-icon\s*\{[^}]*display:\s*none/);
+  const shown = css.search(/\.composer-center-host \.prompt-pin-button\s*\{[^}]*display:\s*inline-grid/);
+  assert.ok(hidden >= 0, "the topbar-slot pin must stay hidden even with the .compact-icon utility applied");
+  assert.ok(shown > hidden, "the center-host pin rule must follow the compact-icon hide so the popup still shows the pin");
+}
 assert.match(css, /\.composer-center-host \.prompt-pin-button\.is-pinned[\s\S]*?background:\s*var\(--primary\)/);
 assert.match(css, /\.composer-center-mark\s*\{[\s\S]*?width:\s*var\(--ui-chrome-height\)/);
 assert.match(css, /\.composer-center-mark\s*\{[^}]*border-radius:\s*var\(--ui-radius\)/);
@@ -129,18 +139,25 @@ assert.doesNotMatch(css, /--composer-center-top:\s*calc\(var\(--topbar-height\) 
 assert.doesNotMatch(css, /--composer-center-top:\s*calc\(var\(--topbar-height\) \+ var\(--overlay-gutter\) \* 2\)/);
 assert.doesNotMatch(css, /\.composer-center-host \{[^}]*translate\(-50%, -50%\)/);
 assert.match(css, /--prompt-collapsed-height:\s*40px;/);
-assert.match(css, /--topbar-height:\s*69px;/);
+// The topbar is 6px padding + 38px pill + 6px padding + 1px border = 51px, the
+// same bar the 34px icon actions were sized for. The 2026-09-10 composer
+// restyle grew the pill to 56px and pushed the bar to 69px; that was the
+// "stretched header" regression, so a taller pill must never lift the bar.
+assert.match(css, /--topbar-height:\s*51px;/);
+assert.doesNotMatch(css, /--topbar-height:\s*(?:6\d|7\d)px;/, "the topbar must not grow past 51px to fit a taller composer pill");
 assert.match(css, /^\.topbar \{[^}]*height:\s*var\(--topbar-height\)/m);
 assert.match(css, /^\.topbar \{[^}]*padding:\s*6px var\(--space-2\)/m);
-assert.match(css, /\.topbar \.composer:not\(\.composer-center-slot\)\s*\{[\s\S]*?--prompt-collapsed-height:\s*56px/);
-assert.match(css, /\.topbar \.composer:not\(\.composer-center-slot\) \.prompt-shell\s*\{[\s\S]*?--prompt-collapsed-height:\s*56px/);
+assert.match(css, /\.topbar \.composer:not\(\.composer-center-slot\)\s*\{[\s\S]*?--prompt-collapsed-height:\s*38px/);
+assert.match(css, /\.topbar \.composer:not\(\.composer-center-slot\) \.prompt-shell\s*\{[\s\S]*?--prompt-collapsed-height:\s*38px/);
+assert.doesNotMatch(css, /\.topbar \.composer:not\(\.composer-center-slot\)[^{]*\{[^}]*--prompt-collapsed-height:\s*56px/, "the topbar slot pill must not return to the 56px height that stretched the bar");
+assert.match(css, /\.prompt-send-button \{[\s\S]*?height:\s*var\(--ui-accessory-height\)/, "the send control must fit the 38px pill like the other 28px accessories");
 assert.match(css, /\.composer-center-host \{[\s\S]*?--prompt-collapsed-height:\s*40px/);
 assert.match(css, /^\.prompt-shell \{[^}]*--prompt-collapsed-height:\s*40px/m);
 assert.doesNotMatch(css, /^\.prompt-shell \{[^}]*--prompt-collapsed-height:\s*56px/m);
 assert.match(css, /^\.composer \{[^}]*height:\s*var\(--prompt-collapsed-height\)/m);
 assert.doesNotMatch(css, /^\.composer \{[^}]*height:\s*56px/m);
 assert.match(functionSource(composer, "resizeInput"), /promptCollapsedHeightFor\(inputNode\)/);
-assert.match(agents, /topbar slot uses 56px/);
+assert.match(agents, /topbar slot uses 38px/);
 assert.match(css, /\.composer-center-host \.prompt-shell-search \.prompt-input-row\s*\{[\s\S]*?max-height:\s*none/);
 assert.match(functionSource(composer, "resizeInput"), /closest\?\.\("#composer-center-host"\)/);
 assert.match(functionSource(composer, "enterSearchMode"), /resizeInput\(field, true\)/);

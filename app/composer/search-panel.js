@@ -399,36 +399,53 @@ export function createComposerSearchPanel(options = {}) {
     if (active) exit({ restoreField: true });
   }
 
+  // Icon-only chips render through the caller's icon port; without one the
+  // chip falls back to its text label so the control never renders empty.
+  function modeChipContent(iconName, label) {
+    const icon = typeof options.renderIcon === "function" ? options.renderIcon(iconName) : null;
+    if (!icon) return label;
+    if (typeof icon.setAttribute === "function") icon.setAttribute("aria-hidden", "true");
+    return icon;
+  }
+
   function attach(nextShell) {
     shell = nextShell;
     if (!shell) return;
     const row = shell.querySelector(".prompt-input-row");
     const existingSwitch = row?.querySelector?.(".prompt-mode-switch");
     if (row && !existingSwitch) {
+      const composeLabel = t("composer.mode.compose");
+      const searchLabel = t("composer.mode.search");
       composeChip = el("button", {
-        class: "prompt-mode-chip prompt-mode-chip-compose",
+        class: "prompt-mode-chip prompt-mode-chip-compose tooltip-trigger",
         type: "button",
         tabindex: "-1",
         "aria-pressed": active ? "false" : "true",
+        "aria-label": composeLabel,
+        "data-tooltip": composeLabel,
+        "data-tooltip-id": "composer.mode.compose",
         onclick: exitFromChip,
         onpointerdown: (event) => {
           event.preventDefault();
           event.stopPropagation();
         },
         onkeydown: (event) => event.stopPropagation()
-      }, t("composer.mode.compose"));
+      }, modeChipContent("edit", composeLabel));
       searchChip = el("button", {
-        class: "prompt-mode-chip prompt-mode-chip-search",
+        class: "prompt-mode-chip prompt-mode-chip-search tooltip-trigger",
         type: "button",
         tabindex: "-1",
         "aria-pressed": active ? "true" : "false",
+        "aria-label": searchLabel,
+        "data-tooltip": searchLabel,
+        "data-tooltip-id": "composer.mode.search",
         onclick: enterFromChip,
         onpointerdown: (event) => {
           event.preventDefault();
           event.stopPropagation();
         },
         onkeydown: (event) => event.stopPropagation()
-      }, t("composer.mode.search"));
+      }, modeChipContent("search", searchLabel));
       switchNode = el("div", {
         class: "prompt-mode-switch",
         role: "group"

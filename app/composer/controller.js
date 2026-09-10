@@ -163,6 +163,7 @@ export function createComposerController(dependencies = {}) {
   });
   const searchPanel = createComposerSearchPanel({
     workspaceSearch,
+    renderIcon: (name) => createSvgIcon(name),
     composePlaceholder: () => currentPlaceholder,
     onStashField(field) {
       if (!field) return;
@@ -908,7 +909,6 @@ export function createComposerController(dependencies = {}) {
   }
 
   function resizeInput(inputNode, expanded = inputNode.classList.contains("prompt-input-expanded")) {
-    const hasImages = state.promptImages.length > 0;
     const shell = inputNode.closest?.(".prompt-shell");
     const centerHost = inputNode.closest?.("#composer-center-host");
     const grow = expanded || Boolean(centerHost);
@@ -920,7 +920,6 @@ export function createComposerController(dependencies = {}) {
       inputNode.style.overflowY = "hidden";
     }
     const sizing = promptInputHeight(inputNode.scrollHeight, window.innerHeight, grow, {
-      hasImages,
       collapsedHeight: promptCollapsedHeightFor(inputNode)
     });
     inputNode.style.height = `${sizing.height}px`;

@@ -408,11 +408,16 @@ function responsiveBrandRules(kind) {
   );
   assert.match(
     chatclubCss,
-    /\.app-shell:has\(\.topbar \.prompt-shell:is\(\.prompt-shell-model-gate-applying, \.prompt-shell-model-gate-failed\)\)\s*\{[\s\S]*?--topbar-height:\s*calc\(69px \+ var\(--ui-accessory-height\) \+ var\(--space-1\)\);/,
+    /\.app-shell:has\(\.topbar \.prompt-shell:is\(\.prompt-shell-model-gate-applying, \.prompt-shell-model-gate-failed\)\)\s*\{[\s\S]*?--topbar-height:\s*calc\(51px \+ var\(--ui-accessory-height\) \+ var\(--space-1\)\);/,
     "a visible model status in the topbar slot must grow the topbar instead of hanging over the workspace iframe"
   );
   assert.match(chatclubCss, /\.prompt-shell\.prompt-shell-expanded\.prompt-shell-has-images\s*\{[\s\S]*?height:\s*auto;/, "image mode must allow the prompt shell to grow with multiline text");
-  assert.match(chatclubCss, /\.prompt-shell-has-images \.textarea\.prompt-input-expanded\s*\{[\s\S]*?max-height:\s*360px;[\s\S]*?overflow-y:\s*auto;/, "image mode must allow a capped textarea to scroll instead of clipping text");
+  assert.match(chatclubCss, /\.prompt-shell-has-images \.textarea\.prompt-input-expanded\s*\{[\s\S]*?max-height:\s*none;[\s\S]*?overflow-y:\s*auto;/, "image mode must allow a capped textarea to scroll instead of clipping text");
+  assert.doesNotMatch(chatclubCss, /\.prompt-shell-has-images \.textarea\.prompt-input-expanded\s*\{[^}]*padding:/, "image mode must not reserve overlay padding inside the textarea; the image strip is its own grid row");
+  assert.match(chatclubCss, /\.prompt-image-preview-list\s*\{[\s\S]*?position:\s*static;[\s\S]*?grid-row:\s*1;[\s\S]*?grid-column:\s*1 \/ -1;/, "attached images must render as an in-flow strip spanning the input row");
+  assert.match(chatclubCss, /\.prompt-shell\.prompt-shell-expanded\.prompt-shell-has-images \.prompt-input-row\s*\{[\s\S]*?grid-template-rows:\s*auto minmax\(var\(--prompt-collapsed-height\), auto\);/, "image mode must stack the strip above the input line");
+  assert.match(chatclubCss, /\.prompt-shell\.prompt-shell-expanded\.prompt-shell-has-images \.prompt-input-row > :not\(\.prompt-image-preview-list\)\s*\{[\s\S]*?grid-row:\s*2;/, "every control must move below the image strip");
+  assert.doesNotMatch(chatclubCss, /\.prompt-shell-expanded\.prompt-shell-has-images \.prompt-(?:actions|clear|send)-button\.tooltip-trigger\s*\{[^}]*position:\s*absolute/, "image mode must not float the composer buttons over the textarea");
   assert.match(chatclubCss, /\.prompt-collapsed-preview\s*\{[\s\S]*?pointer-events:\s*none;/, "the collapsed preview must be visual-only so the first click reaches the textarea");
   assert.doesNotMatch(chatclubCss, /\.prompt-shell-has-images \.textarea\.prompt-input-expanded\s*\{[^}]*!important/, "image mode height must remain overridable by measured inline sizing");
   assert.doesNotMatch(chatclubCss, /\.prompt-model-gate-status[^\{]*\{[^}]*top:\s*calc\(100%/, "the model status must never float below Composer over an iframe");

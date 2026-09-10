@@ -74,7 +74,9 @@ function innermostBlockAt(blocks, index) {
 (async () => {
   const {
     DEFAULT_OPTIONS,
+    TOPBAR_PROMPT_INPUT_FONT_SIZE_LEGACY_DEFAULT_PX,
     TOPBAR_PROMPT_INPUT_FONT_SIZE_MAX_PX,
+    TOPBAR_PROMPT_INPUT_FONT_SIZE_MIGRATION_VERSION,
     TOPBAR_PROMPT_INPUT_FONT_SIZE_MIN_PX
   } = await import("../shared/constants.js");
   const {
@@ -83,15 +85,19 @@ function innermostBlockAt(blocks, index) {
     normalizeTopbarPromptInputFontSize
   } = await import("../shared/storage-schema.js");
 
-  assert.equal(DEFAULT_OPTIONS.topbarPromptInputFontSize, 15);
+  assert.equal(TOPBAR_PROMPT_INPUT_FONT_SIZE_LEGACY_DEFAULT_PX, 15);
+  assert.equal(TOPBAR_PROMPT_INPUT_FONT_SIZE_MIGRATION_VERSION, 1);
+  assert.equal(DEFAULT_OPTIONS.topbarPromptInputFontSize, 16);
+  assert.equal(DEFAULT_OPTIONS.topbarPromptInputFontSizeMigrationVersion, 1);
   assert.equal(DEFAULT_OPTIONS.composerPlacement, "topbar");
   assert.equal(TOPBAR_PROMPT_INPUT_FONT_SIZE_MIN_PX, 13);
-  assert.equal(TOPBAR_PROMPT_INPUT_FONT_SIZE_MAX_PX, 18);
+  assert.equal(TOPBAR_PROMPT_INPUT_FONT_SIZE_MAX_PX, 20);
+  assert.match(stylesheetSource, /--topbar-prompt-input-font-size:\s*16px;/, "the stylesheet fallback must match the option default");
 
   for (const invalid of [undefined, null, true, false, "", "invalid", NaN, Infinity, {}, []]) {
     assert.equal(
       normalizeTopbarPromptInputFontSize(invalid),
-      15,
+      16,
       `${String(invalid)} must fall back to the default input font size`
     );
   }
@@ -102,18 +108,43 @@ function innermostBlockAt(blocks, index) {
   assert.equal(normalizeTopbarPromptInputFontSize(14.5), 15);
   assert.equal(normalizeTopbarPromptInputFontSize(17.6), 18);
   assert.equal(normalizeTopbarPromptInputFontSize(18), 18);
-  assert.equal(normalizeTopbarPromptInputFontSize(19), 18);
+  assert.equal(normalizeTopbarPromptInputFontSize(19), 19);
+  assert.equal(normalizeTopbarPromptInputFontSize(20), 20);
+  assert.equal(normalizeTopbarPromptInputFontSize(21), 20);
 
-  assert.equal(normalizeOptions({}).topbarPromptInputFontSize, 15);
-  assert.equal(normalizeOptions({ topbarPromptInputFontSize: null }).topbarPromptInputFontSize, 15);
+  assert.equal(normalizeOptions({}).topbarPromptInputFontSize, 16);
+  assert.equal(normalizeOptions({ topbarPromptInputFontSize: null }).topbarPromptInputFontSize, 16);
   assert.equal(normalizeOptions({ topbarPromptInputFontSize: 12.6 }).topbarPromptInputFontSize, 13);
   assert.equal(normalizeOptions({ topbarPromptInputFontSize: 17.6 }).topbarPromptInputFontSize, 18);
+  assert.equal(normalizeOptions({ topbarPromptInputFontSize: 22 }).topbarPromptInputFontSize, 20);
+
+  // Versioned one-time migration (module-local in storage-schema, exercised
+  // through normalizeOptions): a stored untouched 15px default lifts to 16px
+  // exactly once; every other stored size, and any 15px chosen after the
+  // marker is written, is preserved.
+  assert.equal(normalizeOptions({ topbarPromptInputFontSize: "15" }).topbarPromptInputFontSize, 16);
+  assert.equal(normalizeOptions({ topbarPromptInputFontSize: 17 }).topbarPromptInputFontSize, 17);
+  assert.equal(normalizeOptions({ topbarPromptInputFontSize: undefined, topbarPromptInputFontSizeMigrationVersion: 0 }).topbarPromptInputFontSize, 16);
+  const legacyStored = normalizeOptions({ topbarPromptInputFontSize: 15 });
+  assert.equal(legacyStored.topbarPromptInputFontSize, 16, "an unmigrated stored 15px default must lift to the new default");
+  assert.equal(legacyStored.topbarPromptInputFontSizeMigrationVersion, 1, "the migration marker must be written");
+  const legacyCustom = normalizeOptions({ topbarPromptInputFontSize: 14 });
+  assert.equal(legacyCustom.topbarPromptInputFontSize, 14, "a customized size must survive the migration");
+  assert.equal(legacyCustom.topbarPromptInputFontSizeMigrationVersion, 1);
+  const postMigrationChoice = normalizeOptions({ topbarPromptInputFontSize: 15, topbarPromptInputFontSizeMigrationVersion: 1 });
+  assert.equal(postMigrationChoice.topbarPromptInputFontSize, 15, "a deliberate 15px after the marker must not be reinterpreted");
+  const remigrated = normalizeOptions(JSON.parse(JSON.stringify(dehydrateOptions(legacyStored))));
+  assert.equal(remigrated.topbarPromptInputFontSize, 16);
+  assert.equal(remigrated.topbarPromptInputFontSizeMigrationVersion, 1);
+  const futureMarker = normalizeOptions({ topbarPromptInputFontSize: 15, topbarPromptInputFontSizeMigrationVersion: 7 });
+  assert.equal(futureMarker.topbarPromptInputFontSize, 15);
+  assert.equal(futureMarker.topbarPromptInputFontSizeMigrationVersion, 7, "a newer marker must never move backwards");
 
   const persisted = dehydrateOptions({ topbarPromptInputFontSize: 16.4 });
   assert.equal(persisted.topbarPromptInputFontSize, 16);
   const restored = normalizeOptions(JSON.parse(JSON.stringify(persisted)));
   assert.equal(restored.topbarPromptInputFontSize, 16);
-  assert.equal(dehydrateOptions({ topbarPromptInputFontSize: false }).topbarPromptInputFontSize, 15);
+  assert.equal(dehydrateOptions({ topbarPromptInputFontSize: false }).topbarPromptInputFontSize, 16);
 
   const variableConsumer = "var(--topbar-prompt-input-font-size)";
   const blocks = cssBlocks(stylesheetSource);

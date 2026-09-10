@@ -114,8 +114,8 @@
   --summary-frame-highlight: var(--warning-fill);
   --frame-loading-overlay-opacity: 0.82;
   --preferred-model-selection-overlay-opacity: 0.7;
-  --topbar-prompt-input-font-size: 15px;
-  --topbar-height: 69px;
+  --topbar-prompt-input-font-size: 16px;
+  --topbar-height: 51px;
   --prompt-collapsed-height: 40px;
   --workspace-tabs-sidebar-width: 320px;
   --workspace-z-sidebar: 15;
@@ -258,7 +258,7 @@ button { cursor: pointer; }
 }
 
 .app-shell:has(.topbar .prompt-shell:is(.prompt-shell-model-gate-applying, .prompt-shell-model-gate-failed)) {
-  --topbar-height: calc(69px + var(--ui-accessory-height) + var(--space-1));
+  --topbar-height: calc(51px + var(--ui-accessory-height) + var(--space-1));
 }
 
 .app-shell.fullscreen-mode {
@@ -1456,12 +1456,15 @@ button { cursor: pointer; }
   container-type: inline-size;
 }
 
+/* The topbar slot pill is 38px so 6px padding + pill + 1px border fill the
+   51px --topbar-height, the same bar the 34px icon actions were sized for.
+   Size the pill to the bar; never grow --topbar-height to fit a taller pill. */
 .topbar .composer:not(.composer-center-slot) {
-  --prompt-collapsed-height: 56px;
+  --prompt-collapsed-height: 38px;
 }
 
 .topbar .composer:not(.composer-center-slot) .prompt-shell {
-  --prompt-collapsed-height: 56px;
+  --prompt-collapsed-height: 38px;
 }
 
 .composer:has(.prompt-shell:is(.prompt-shell-model-gate-applying, .prompt-shell-model-gate-failed)) {
@@ -1552,19 +1555,6 @@ button { cursor: pointer; }
   height: auto;
 }
 
-.composer-center-host .prompt-shell-has-images .textarea.prompt-input-expanded {
-  height: auto;
-  min-height: var(--prompt-collapsed-height);
-  padding: calc((var(--prompt-collapsed-height) - var(--prompt-collapsed-line)) / 2) 0;
-  max-height: none;
-}
-
-.composer-center-host .prompt-shell.prompt-shell-expanded.prompt-shell-has-images .prompt-input-row {
-  height: auto;
-  min-height: var(--prompt-collapsed-height);
-  max-height: none;
-}
-
 .composer-center-host .prompt-search-results {
   max-height: min(
     calc(var(--prompt-search-row) * 6 + var(--space-3) * 2),
@@ -1577,7 +1567,7 @@ button { cursor: pointer; }
   --prompt-collapsed-height: 40px;
   --prompt-collapsed-line: var(--topbar-prompt-input-font-size);
   --prompt-accessory-top: calc((var(--prompt-collapsed-height) - var(--ui-accessory-height)) / 2);
-  --prompt-send-top: calc((var(--prompt-collapsed-height) - var(--ui-compact-height)) / 2);
+  --prompt-send-top: calc((var(--prompt-collapsed-height) - var(--ui-accessory-height)) / 2);
   --prompt-shell-radius: calc(var(--ui-radius) + var(--space-1));
   --prompt-search-radius: var(--prompt-shell-radius);
   --prompt-search-row: calc(var(--ui-control-height) + var(--space-4));
@@ -1626,6 +1616,10 @@ button { cursor: pointer; }
   grid-template-columns: auto auto minmax(0, 1fr) auto auto auto;
   grid-template-rows: var(--prompt-collapsed-height);
   align-items: center;
+  /* The collapsed row is border-box --prompt-collapsed-height with a 1px
+     border, so the single track overflows the content box by 2px; center it
+     so that overflow splits 1px/1px instead of pushing every control 1px low. */
+  align-content: center;
   column-gap: var(--space-2);
   position: relative;
   z-index: 0;
@@ -1647,10 +1641,18 @@ button { cursor: pointer; }
   height: auto;
 }
 
+/* Image mode stacks the attachment strip above the input line: row 1 is the
+   in-flow image list spanning every column, row 2 keeps the normal
+   switch | plus | textarea | clear | send | pin grid. Nothing is overlaid. */
 .prompt-shell.prompt-shell-expanded.prompt-shell-has-images .prompt-input-row {
-  height: 180px;
-  min-height: 180px;
-  max-height: 360px;
+  height: auto;
+  min-height: var(--prompt-collapsed-height);
+  max-height: none;
+  grid-template-rows: auto minmax(var(--prompt-collapsed-height), auto);
+}
+
+.prompt-shell.prompt-shell-expanded.prompt-shell-has-images .prompt-input-row > :not(.prompt-image-preview-list) {
+  grid-row: 2;
 }
 
 .prompt-collapsed-preview {
@@ -1776,9 +1778,9 @@ button { cursor: pointer; }
   left: auto;
   bottom: auto;
   z-index: 70;
-  width: var(--ui-compact-height);
-  min-width: var(--ui-compact-height);
-  height: var(--ui-compact-height);
+  width: var(--ui-accessory-height);
+  min-width: var(--ui-accessory-height);
+  height: var(--ui-accessory-height);
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -1819,6 +1821,13 @@ button { cursor: pointer; }
   border-radius: var(--ui-radius);
   box-shadow: none;
   cursor: pointer;
+}
+
+/* The shared .compact-icon utility sets display: inline-grid later in the
+   cascade and was re-showing the pin inside the topbar pill; the pin exists
+   only inside #composer-center-host. */
+.prompt-pin-button.compact-icon {
+  display: none;
 }
 
 .composer-center-host .prompt-pin-button {
@@ -1974,20 +1983,23 @@ button { cursor: pointer; }
 }
 
 .prompt-image-preview-list {
-  position: absolute;
-  top: var(--prompt-accessory-top);
-  left: 10px;
-  right: 82px;
-  z-index: 72;
+  position: static;
+  grid-row: 1;
+  grid-column: 1 / -1;
+  top: auto;
+  left: auto;
+  right: auto;
+  z-index: 1;
   display: none;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-2);
   min-width: 0;
-  height: 82px;
-  max-width: calc(100% - 92px);
-  overflow: hidden;
+  height: auto;
+  max-width: none;
+  overflow-x: auto;
+  overflow-y: hidden;
   scrollbar-width: none;
-  padding: 2px 6px 6px 0;
+  padding: var(--space-2) 0 0;
 }
 
 .prompt-image-preview-list::-webkit-scrollbar {
@@ -3487,47 +3499,12 @@ body.tab-gesture-active * {
 }
 
 .prompt-shell-has-images .textarea.prompt-input-expanded {
-  height: 180px;
-  min-height: 180px;
-  padding: 102px 58px 52px var(--space-4);
-  max-height: 360px;
+  max-height: none;
   overflow-y: auto;
 }
 
 .prompt-shell-has-images .textarea.prompt-input-expanded::-webkit-scrollbar {
   width: 8px;
-}
-
-.prompt-shell-expanded.prompt-shell-has-images .prompt-actions-button.tooltip-trigger {
-  position: absolute;
-  top: auto;
-  bottom: 12px;
-  left: 12px;
-  right: auto;
-}
-
-.prompt-shell-expanded.prompt-shell-has-images .prompt-clear-button.tooltip-trigger {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  bottom: auto;
-  left: auto;
-}
-
-.prompt-shell-expanded.prompt-shell-has-images .prompt-send-button.tooltip-trigger {
-  position: absolute;
-  top: auto;
-  right: 12px;
-  bottom: 12px;
-  left: auto;
-  width: var(--ui-compact-height);
-  min-width: var(--ui-compact-height);
-  height: var(--ui-compact-height);
-}
-
-.prompt-shell-expanded.prompt-shell-has-images .prompt-send-button.tooltip-trigger .svg-icon {
-  width: 16px;
-  height: 16px;
 }
 
 .prompt-input:not(.prompt-input-expanded) {
@@ -3605,8 +3582,9 @@ body.tab-gesture-active * {
 .prompt-mode-chip {
   height: 100%;
   min-height: 0;
-  min-width: var(--target-min);
-  padding: 0 var(--space-2);
+  width: var(--ui-accessory-height);
+  min-width: var(--ui-accessory-height);
+  padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3621,6 +3599,11 @@ body.tab-gesture-active * {
   white-space: nowrap;
   cursor: pointer;
   transition: background-color 0.14s ease, color 0.14s ease;
+}
+
+.prompt-mode-chip .svg-icon {
+  width: 16px;
+  height: 16px;
 }
 
 .prompt-mode-chip:hover {

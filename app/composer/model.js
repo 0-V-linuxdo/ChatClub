@@ -1,7 +1,5 @@
 export const PROMPT_COLLAPSED_HEIGHT = 40;
 const PROMPT_TEXT_EXPANDED_MAX_HEIGHT = 180;
-const PROMPT_IMAGE_EXPANDED_MIN_HEIGHT = 180;
-const PROMPT_IMAGE_EXPANDED_MAX_HEIGHT = 360;
 
 function promptPreviewText(value = "") {
   return String(value || "").replace(/\s+/g, " ").trim();
@@ -27,16 +25,12 @@ export function promptCollapsedHeightFor(node) {
   return PROMPT_COLLAPSED_HEIGHT;
 }
 
-function promptExpandedMaxHeight(viewportHeight = 0, hasImages = false) {
-  if (hasImages) {
-    return Math.min(
-      PROMPT_IMAGE_EXPANDED_MAX_HEIGHT,
-      Math.max(PROMPT_IMAGE_EXPANDED_MIN_HEIGHT, Math.round(Number(viewportHeight || 0) * 0.55))
-    );
-  }
+function promptExpandedMaxHeight(viewportHeight = 0) {
   return Math.min(PROMPT_TEXT_EXPANDED_MAX_HEIGHT, Math.max(88, Math.round(Number(viewportHeight || 0) * 0.36)));
 }
 
+// Attached images render as their own in-flow strip above the input line, so
+// the textarea itself sizes from its text alone in every mode.
 export function promptInputHeight(scrollHeight, viewportHeight, expanded, options = {}) {
   const collapsedHeight = Number(options.collapsedHeight) > 0
     ? Number(options.collapsedHeight)
@@ -47,9 +41,8 @@ export function promptInputHeight(scrollHeight, viewportHeight, expanded, option
       overflowY: "hidden"
     };
   }
-  const hasImages = Boolean(options?.hasImages);
-  const minHeight = hasImages ? PROMPT_IMAGE_EXPANDED_MIN_HEIGHT : collapsedHeight;
-  const maxHeight = promptExpandedMaxHeight(viewportHeight, hasImages);
+  const minHeight = collapsedHeight;
+  const maxHeight = promptExpandedMaxHeight(viewportHeight);
   const naturalHeight = Math.max(0, Number(scrollHeight || 0));
   const height = Math.max(minHeight, Math.min(naturalHeight, maxHeight));
   return {

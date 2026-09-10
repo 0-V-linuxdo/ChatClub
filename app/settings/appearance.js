@@ -554,6 +554,8 @@ export function createAppearanceSettingsSection(ctx) {
       "topbar.settings": "settings",
       "topbar.search": "search",
       "topbar.promptActions": "plus",
+      "composer.mode.compose": "edit",
+      "composer.mode.search": "search",
       "topbar.promptLibrary": "library",
       "composer.pin": "pin",
       "composer.open": "keyboard",

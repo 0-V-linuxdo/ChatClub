@@ -479,21 +479,21 @@ function preferredModelStub() {
       }
     ], { focus: true });
     assert.equal(state.promptImages.length, 2, `${gateState}: sizing fixture must contain two images`);
-    assert.equal(input.style.height, "180px", `${gateState}: two images must keep the expanded image height`);
+    assert.equal(input.style.height, expandedShortHeight, `${gateState}: images live in their own strip, so the textarea keeps its short-text height`);
     input.value = "截图说明第一行\n截图说明第二行\n截图说明第三行";
-    input.naturalScrollHeight = 224;
+    input.naturalScrollHeight = 124;
     input.dispatch("input");
-    assert.equal(input.style.height, "224px", `${gateState}: image plus multiline text must grow beyond the image minimum`);
-    assert.equal(shell.style.height, "224px", `${gateState}: prompt shell must follow the expanded textarea height`);
+    assert.equal(input.style.height, "124px", `${gateState}: image plus multiline text must grow to the text's natural height`);
+    assert.equal(shell.style.height, "124px", `${gateState}: prompt shell must follow the expanded textarea height`);
     assert.equal(input.style.overflowY, "hidden", `${gateState}: image text below the cap must not scroll prematurely`);
     input.naturalScrollHeight = 420;
     input.dispatch("input");
-    assert.equal(input.style.height, "360px", `${gateState}: long image text must use the viewport-safe image cap`);
+    assert.equal(input.style.height, "180px", `${gateState}: long image text must use the same viewport-safe text cap`);
     assert.equal(input.style.overflowY, "auto", `${gateState}: capped image text must remain scrollable`);
     input.naturalScrollHeight = 42;
     view.querySelector(".prompt-image-remove").dispatch("click");
     assert.equal(state.promptImages.length, 1, `${gateState}: removing one of two images must preserve the other`);
-    assert.equal(input.style.height, "180px", `${gateState}: one remaining image must keep the 180px image layout`);
+    assert.equal(input.style.height, expandedShortHeight, `${gateState}: one remaining image must not force a taller textarea`);
 
     input.naturalScrollHeight = 96;
     input.animatedScrollHeight = 178;

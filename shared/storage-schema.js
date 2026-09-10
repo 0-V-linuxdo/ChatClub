@@ -41,7 +41,9 @@ import {
   TABS_SIDEBAR_HOVER_BUTTONS,
   TAB_CONTEXT_MENU_ITEMS,
   TOOLTIP_TARGET_IDS,
+  TOPBAR_PROMPT_INPUT_FONT_SIZE_LEGACY_DEFAULT_PX,
   TOPBAR_PROMPT_INPUT_FONT_SIZE_MAX_PX,
+  TOPBAR_PROMPT_INPUT_FONT_SIZE_MIGRATION_VERSION,
   TOPBAR_PROMPT_INPUT_FONT_SIZE_MIN_PX,
   TOPBAR_PROMPT_PLACEHOLDER_INTERVAL_MAX_SEC,
   TOPBAR_PROMPT_PLACEHOLDER_INTERVAL_MIN_SEC,
@@ -223,6 +225,22 @@ export function normalizeTopbarPromptInputFontSize(
     TOPBAR_PROMPT_INPUT_FONT_SIZE_MIN_PX,
     TOPBAR_PROMPT_INPUT_FONT_SIZE_MAX_PX
   );
+}
+
+// One-time, versioned migration: a stored value equal to the historical 15px
+// default is treated as untouched and lifted to the current default. Any other
+// stored size is a deliberate choice and is preserved. The marker keeps a later
+// deliberate 15px from being reinterpreted.
+function migrateTopbarPromptInputFontSize(value, migrationVersion = 0) {
+  const normalized = normalizeTopbarPromptInputFontSize(value);
+  if (Number(migrationVersion) >= TOPBAR_PROMPT_INPUT_FONT_SIZE_MIGRATION_VERSION) return normalized;
+  if (
+    (typeof value !== "number" && typeof value !== "string")
+    || (typeof value === "string" && !value.trim())
+  ) return normalized;
+  return normalized === TOPBAR_PROMPT_INPUT_FONT_SIZE_LEGACY_DEFAULT_PX
+    ? DEFAULT_OPTIONS.topbarPromptInputFontSize
+    : normalized;
 }
 
 function normalizeTopbarPromptPlaceholderState(value = {}, itemCount = 0) {
@@ -1053,6 +1071,10 @@ export function normalizeOptions(raw = {}) {
   const storedTabGroupButtonOrderMigrationVersion = Number.isFinite(rawTabGroupButtonOrderMigrationVersion)
     ? Math.max(0, Math.floor(rawTabGroupButtonOrderMigrationVersion))
     : 0;
+  const rawTopbarPromptInputFontSizeMigrationVersion = Number(raw.topbarPromptInputFontSizeMigrationVersion);
+  const storedTopbarPromptInputFontSizeMigrationVersion = Number.isFinite(rawTopbarPromptInputFontSizeMigrationVersion)
+    ? Math.max(0, Math.floor(rawTopbarPromptInputFontSizeMigrationVersion))
+    : 0;
 
   return {
     ...base,
@@ -1061,7 +1083,14 @@ export function normalizeOptions(raw = {}) {
     layoutPresets,
     activeLayoutPresetId,
     tabGroupButtonsMode,
-    topbarPromptInputFontSize: normalizeTopbarPromptInputFontSize(raw.topbarPromptInputFontSize),
+    topbarPromptInputFontSize: migrateTopbarPromptInputFontSize(
+      raw.topbarPromptInputFontSize,
+      storedTopbarPromptInputFontSizeMigrationVersion
+    ),
+    topbarPromptInputFontSizeMigrationVersion: Math.max(
+      storedTopbarPromptInputFontSizeMigrationVersion,
+      TOPBAR_PROMPT_INPUT_FONT_SIZE_MIGRATION_VERSION
+    ),
     composerPlacement: normalizeComposerPlacement(raw.composerPlacement),
     topbarPromptPlaceholderConfig: normalizeTopbarPromptPlaceholderConfig(raw.topbarPromptPlaceholderConfig),
     tabGroupButtonPlacement: normalizeTabGroupButtonPlacement(raw.tabGroupButtonPlacement, tabGroupButtonsMode),
