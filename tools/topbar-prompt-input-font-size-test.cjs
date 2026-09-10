@@ -156,18 +156,28 @@ function innermostBlockAt(blocks, index) {
   const consumerHeaders = consumerIndexes.map((index) => innermostBlockAt(blocks, index)?.header);
   assert.deepEqual(
     [...consumerHeaders].sort(),
-    [".prompt-input-expanded", ".prompt-shell"],
-    "collapsed line-height and expanded font-size must share the input font-size variable"
+    [".prompt-input,\n.prompt-input::placeholder", ".prompt-shell"],
+    "placeholder, search, and typed input must share the input font-size variable"
   );
-  const expandedBlock = innermostBlockAt(
+  const fieldBlock = innermostBlockAt(
     blocks,
-    consumerIndexes.find((index) => innermostBlockAt(blocks, index)?.header === ".prompt-input-expanded")
+    consumerIndexes.find((index) => String(innermostBlockAt(blocks, index)?.header || "").includes(".prompt-input::placeholder"))
   );
-  assert.ok(expandedBlock, "the expanded prompt must consume the custom font-size variable");
+  assert.ok(fieldBlock, "the prompt field and its placeholder must consume the custom font-size variable");
   assert.match(
-    expandedBlock.body,
+    fieldBlock.header,
+    /\.prompt-input(?:\s*,\s*\n\s*)\.prompt-input::placeholder/,
+    "typed input and placeholder must share one font-size rule"
+  );
+  assert.match(
+    fieldBlock.body,
     /(?:^|;)\s*font-size\s*:\s*var\(--topbar-prompt-input-font-size\)\s*;/,
-    "the expanded prompt textarea must consume the custom font-size variable"
+    "the prompt textarea and placeholder must consume the custom font-size variable"
+  );
+  assert.equal(
+    consumerHeaders.some((header) => header === ".prompt-input-expanded"),
+    false,
+    "search mode is not expanded, so font-size must live on the field itself"
   );
   const shellBlock = innermostBlockAt(
     blocks,
@@ -179,6 +189,19 @@ function innermostBlockAt(blocks, index) {
     /(?:^|;)\s*--prompt-collapsed-line\s*:\s*var\(--topbar-prompt-input-font-size\)\s*;/,
     "collapsed single-line height must follow the input font-size variable"
   );
+
+  const searchInputBlocks = blocks.filter((block) => (
+    block.header.split(",").map((selector) => selector.trim()).some((selector) => (
+      selector.includes(".prompt-shell-search") && selector.includes(".prompt-input")
+    ))
+  ));
+  for (const block of searchInputBlocks) {
+    assert.doesNotMatch(
+      block.body,
+      /font-size\s*:/,
+      "search-mode input must inherit the shared prompt font-size instead of setting a second size"
+    );
+  }
 
   const collapsedPreviewBlocks = blocks.filter((block) => (
     block.header.split(",").map((selector) => selector.trim()).includes(".prompt-collapsed-preview-text")

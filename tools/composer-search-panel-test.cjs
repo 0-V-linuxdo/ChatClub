@@ -87,6 +87,16 @@ assert.match(css, /\.prompt-search-option \{[\s\S]*?justify-content:\s*flex-star
 assert.match(css, /\.prompt-search-option \{[\s\S]*?min-height:\s*var\(--prompt-search-row\)/);
 assert.match(css, /\.prompt-search-option-favicons[\s\S]{0,500}border-radius:\s*50%/);
 assert.match(css, /\.prompt-input:not\(\.prompt-input-expanded\):focus::placeholder/);
+assert.match(
+  css,
+  /\.prompt-input,\s*\n\.prompt-input::placeholder \{\s*\n\s*font-size: var\(--topbar-prompt-input-font-size\);/,
+  "search query and placeholder must use the same font-size as typed input"
+);
+assert.doesNotMatch(
+  css,
+  /\.prompt-input-expanded \{[^}]*font-size:/,
+  "search stays unexpanded, so font-size must not live only on the expanded compose field"
+);
 assert.match(css, /\.prompt-send-button:disabled \{[\s\S]*?background:\s*transparent/);
 assert.match(css, /\.prompt-shell\.prompt-shell-search[\s\S]{0,400}box-shadow:\s*none/);
 assert.match(css, /\.prompt-shell-search \.prompt-input-row\s*\{[\s\S]*?box-shadow:\s*var\(--overlay-shadow\)/);

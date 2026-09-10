@@ -2138,6 +2138,11 @@ button { cursor: pointer; }
   transition: height 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease, background-color 0.16s ease;
 }
 
+.prompt-input,
+.prompt-input::placeholder {
+  font-size: var(--topbar-prompt-input-font-size);
+}
+
 .prompt-input::-webkit-resizer {
   display: none;
 }
@@ -3549,7 +3554,6 @@ body.tab-gesture-active * {
 
 .prompt-input-expanded {
   z-index: 60;
-  font-size: var(--topbar-prompt-input-font-size);
   overflow-y: auto;
   box-shadow: none;
 }
