@@ -15,6 +15,7 @@ const composer = read("app/composer/controller.js");
 const runtime = read("app/runtime.js");
 const css = read("styles/chatclub.css");
 const agents = read("AGENTS.md");
+const i18n = read("shared/i18n.js");
 
 assert.doesNotMatch(panelSource, /from "\.\.\/workspace\//, "composer search must not import workspace-domain modules");
 assert.doesNotMatch(panelSource, /viewerModal|editorModal|confirmationModal|taskModal/);
@@ -28,6 +29,7 @@ assert.match(panelSource, /event\.key === "Escape"/);
 assert.match(panelSource, /event\.key === "Enter"/);
 assert.match(composer, /searchPanel\.handleInput/);
 assert.match(composer, /searchPanel\.handleKeydown/);
+assert.match(composer, /searchPanel\.handleTab/);
 assert.match(composer, /searchPanel\.exit\(\{ restoreField: true \}\)/);
 assert.match(runtime, /composerController\.enterSearchMode\(\)/);
 assert.match(runtime, /listComposerSearchRecords/);
@@ -35,21 +37,39 @@ assert.match(css, /\.prompt-search-results \{[\s\S]*?overlay-surface|z-index:\s*
 assert.match(css, /\.prompt-send-button \{[\s\S]*?border-radius:\s*var\(--ui-radius-pill\)/);
 assert.match(css, /\.prompt-input-row\s*\{[\s\S]*?height:\s*var\(--prompt-collapsed-height\);/);
 assert.match(css, /--prompt-collapsed-height:\s*56px;/);
+assert.match(css, /--prompt-mode-inline:\s*128px;/);
 assert.match(css, /\.prompt-collapsed-preview\s*\{[\s\S]*?border-radius:\s*var\(--ui-radius-pill\)/);
 assert.match(css, /line-height:\s*var\(--prompt-collapsed-line\)/);
 assert.match(css, /:focus \+ \.prompt-collapsed-preview/);
-assert.match(css, /\.prompt-search-toggle/);
+assert.match(css, /\.prompt-mode-switch/);
+assert.match(css, /\.prompt-mode-chip\[aria-pressed="true"\]\s*\{[\s\S]*?background:\s*var\(--control-selected\)/);
+assert.doesNotMatch(css, /\.prompt-mode-chip[^{]*\{[^}]*transform:/);
+assert.match(css, /\.prompt-shell-expanded:not\(\.prompt-shell-search\) \.prompt-mode-switch/);
+assert.match(css, /\.prompt-shell-expanded:not\(\.prompt-shell-search\) \.textarea\.prompt-input/);
 assert.match(css, /\.prompt-shell-search:has\(\.prompt-search-results:not\(\[hidden\]\)\)/);
-assert.match(panelSource, /prompt-search-toggle/);
-assert.match(panelSource, /createSvgIcon\("search"\)/);
+assert.match(panelSource, /prompt-mode-switch/);
+assert.match(panelSource, /prompt-mode-chip-compose/);
+assert.match(panelSource, /prompt-mode-chip-search/);
+assert.match(panelSource, /tabindex: "-1"/);
+assert.match(panelSource, /function handleTab\(/);
+assert.doesNotMatch(panelSource, /prompt-search-toggle/);
+assert.doesNotMatch(panelSource, /createSvgIcon/);
+assert.doesNotMatch(panelSource, /data-tooltip-id/);
+assert.doesNotMatch(panelSource, /tooltip-trigger/);
 assert.doesNotMatch(functionSource(composer, "enterSearchMode"), /expandInput\(/);
 assert.doesNotMatch(functionSource(composer, "collapseInput"), /searchPanel\.exit/);
 assert.match(functionSource(composer, "enterSearchMode"), /collapseInput\(/);
+assert.match(functionSource(composer, "handleInputKeydown"), /searchPanel\.handleTab/);
 assert.match(agents, /Search mode stays single-line/);
-assert.match(agents, /visible `\.prompt-search-toggle`/);
+assert.match(agents, /visible `\.prompt-mode-switch`/);
+assert.match(agents, /Tab while `\.prompt-input` owns the caret toggles compose and search/);
 assert.doesNotMatch(css, /\.prompt-search-results \{[^}]*transform:/);
 assert.match(agents, /Do not wrap `\.prompt-shell` in `viewerModal`/);
 assert.match(agents, /Topbar Search enters composer search mode/);
+assert.match(i18n, /"composer\.mode\.tabToSearch": "Press Tab to search chats"/);
+assert.match(i18n, /"composer\.mode\.tabToCompose": "Press Tab to compose"/);
+assert.match(i18n, /"composer\.mode\.tabToSearch": "按下 Tab 搜索对话"/);
+assert.match(i18n, /"composer\.mode\.tabToCompose": "按下 Tab 返回发送"/);
 
 class FakeNode {
   constructor(tagName = "div") {
@@ -201,7 +221,9 @@ globalThis.document = {
     ];
     const opened = [];
     const viewers = [];
-    const panel = createComposerSearchPanel({
+    let panel;
+    panel = createComposerSearchPanel({
+      onEnter() { panel.enter(); },
       workspaceSearch: {
         listRecords: async (query) => {
           const needle = String(query || "").trim().toLowerCase();
@@ -218,6 +240,7 @@ globalThis.document = {
     row.className = "prompt-input-row";
     const field = new FakeNode("textarea");
     field.className = "prompt-input";
+    field.placeholder = "Message all active chats";
     const send = new FakeNode("button");
     send.className = "prompt-send-button";
     const clear = new FakeNode("button");
@@ -227,11 +250,70 @@ globalThis.document = {
     globalThis.document.body.append(shell);
     panel.attach(shell);
     assert.equal(panel.isActive(), false);
-    assert.equal(Boolean(shell.querySelector(".prompt-search-toggle")), true, "search toggle is visible at rest");
+    const modeSwitch = shell.querySelector(".prompt-mode-switch");
+    const composeChip = shell.querySelector(".prompt-mode-chip-compose");
+    const searchChip = shell.querySelector(".prompt-mode-chip-search");
+    assert.equal(Boolean(modeSwitch), true, "mode switch is visible at rest");
+    assert.equal(Boolean(composeChip && searchChip), true, "compose and search chips are labeled controls");
+    assert.equal(composeChip.getAttribute("tabindex"), "-1");
+    assert.equal(searchChip.getAttribute("tabindex"), "-1");
+    assert.equal(composeChip.getAttribute("data-tooltip-id"), null);
+    assert.equal(searchChip.getAttribute("data-tooltip-id"), null);
+    assert.equal(composeChip.getAttribute("aria-pressed"), "true");
+    assert.equal(searchChip.getAttribute("aria-pressed"), "false");
+    assert.equal(field.placeholder, "Press Tab to search chats");
+    assert.equal(field.getAttribute("aria-label"), "Message all active chats");
+    const tabEvent = () => ({
+      key: "Tab",
+      altKey: false,
+      ctrlKey: false,
+      metaKey: false,
+      isComposing: false,
+      keyCode: 9,
+      preventDefault() { this.defaultPrevented = true; },
+      stopPropagation() { this.propagationStopped = true; }
+    });
+    const tab = tabEvent();
+    assert.equal(panel.handleTab(tab), true);
+    assert.equal(tab.defaultPrevented, true);
+    assert.equal(panel.isActive(), true);
+    assert.equal(shell.classList.contains("prompt-shell-search"), true);
+    assert.equal(searchChip.getAttribute("aria-pressed"), "true");
+    assert.equal(composeChip.getAttribute("aria-pressed"), "false");
+    assert.equal(field.placeholder, "Press Tab to compose");
+    assert.equal(field.getAttribute("aria-label"), "Search chats");
+    const shiftTab = tabEvent();
+    shiftTab.shiftKey = true;
+    assert.equal(panel.handleTab(shiftTab), true);
+    assert.equal(panel.isActive(), false, "Shift+Tab leaves search");
+    assert.equal(panel.handleTab({
+      key: "Tab",
+      altKey: false,
+      ctrlKey: false,
+      metaKey: false,
+      isComposing: true,
+      keyCode: 229,
+      preventDefault() { this.defaultPrevented = true; },
+      stopPropagation() {}
+    }), false, "IME Tab must not toggle");
+    assert.equal(panel.isActive(), false);
+    assert.equal(panel.handleTab({
+      key: "Tab",
+      altKey: false,
+      ctrlKey: true,
+      metaKey: false,
+      isComposing: false,
+      preventDefault() {},
+      stopPropagation() {}
+    }), false, "modified Tab must not toggle");
+    searchChip.listeners.get("click")[0]({ preventDefault() {}, stopPropagation() {} });
+    assert.equal(panel.isActive(), true, "search chip click enters search");
+    composeChip.listeners.get("click")[0]({ preventDefault() {}, stopPropagation() {} });
+    assert.equal(panel.isActive(), false, "compose chip click exits search");
     panel.enter();
     assert.equal(panel.isActive(), true);
     assert.equal(shell.classList.contains("prompt-shell-search"), true);
-    assert.equal(shell.querySelector(".prompt-search-toggle")?.classList.contains("is-active"), true);
+    assert.equal(searchChip.getAttribute("aria-pressed"), "true");
     await new Promise((resolve) => { setImmediate(resolve); });
     const options = shell.querySelectorAll(".prompt-search-option");
     assert.equal(options.length, 2, "empty query lists recency rows");
@@ -264,11 +346,34 @@ globalThis.document = {
     assert.equal(panel.query(), "");
     panel.handleKeydown(escape);
     assert.equal(panel.isActive(), false, "empty Escape leaves search");
+    assert.equal(field.placeholder, "Press Tab to search chats", "leaving search restores the Tab compose hint");
     panel.enter();
     const footer = shell.querySelector(".prompt-search-viewer-button");
     footer.listeners.get("click")[0]({ preventDefault() {}, stopPropagation() {} });
     assert.equal(viewers.length, 1);
     assert.equal(typeof viewers[0].query, "string");
+
+    const customField = new FakeNode("textarea");
+    customField.className = "prompt-input";
+    customField.placeholder = "Type";
+    const customRow = new FakeNode("div");
+    customRow.className = "prompt-input-row";
+    customRow.append(customField);
+    const customShell = new FakeNode("div");
+    customShell.className = "prompt-shell";
+    customShell.append(customRow);
+    globalThis.document.body.append(customShell);
+    const customPanel = createComposerSearchPanel({
+      composePlaceholder: () => "Type"
+    });
+    customPanel.attach(customShell);
+    assert.equal(customField.placeholder, "Type", "custom placeholders must not be replaced by the Tab hint");
+    assert.equal(customField.getAttribute("aria-label"), "Type");
+    customPanel.enter();
+    assert.equal(customField.placeholder, "Press Tab to compose");
+    assert.equal(customField.getAttribute("aria-label"), "Search chats");
+    customPanel.exit({ restoreField: false });
+    assert.equal(customField.placeholder, "Type", "exiting search must restore a custom compose placeholder");
   } finally {
     globalThis.Node = previous.Node;
     globalThis.document = previous.document;

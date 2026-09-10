@@ -161,6 +161,7 @@ export function createComposerController(dependencies = {}) {
   });
   const searchPanel = createComposerSearchPanel({
     workspaceSearch,
+    composePlaceholder: () => currentPlaceholder,
     onRestoreField(field) {
       if (!field) return;
       if (field.value !== state.promptText) field.value = state.promptText;
@@ -1162,6 +1163,7 @@ export function createComposerController(dependencies = {}) {
   }
 
   function handleInputKeydown(event) {
+    if (searchPanel.handleTab(event)) return;
     const inputNode = event.currentTarget;
     if (searchPanel.isActive()) {
       if (searchPanel.handleKeydown(event)) return;
@@ -1213,6 +1215,7 @@ export function createComposerController(dependencies = {}) {
     if(!n)return
     if (searchPanel.isActive()) searchPanel.syncField(n);
     else if(n.value!==state.promptText)n.value=state.promptText
+    if(!searchPanel.isActive())searchPanel.syncField(n)
     syncCollapsedPreview(n)
     const reclaim = overlaySearchCaretComposer() && !document.querySelector(".modal");
     if(focus || reclaim){

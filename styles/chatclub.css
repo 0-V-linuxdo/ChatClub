@@ -1504,6 +1504,7 @@ button { cursor: pointer; }
   --prompt-collapsed-line: var(--topbar-prompt-input-font-size);
   --prompt-accessory-top: calc((var(--prompt-collapsed-height) - var(--ui-accessory-height)) / 2);
   --prompt-send-top: calc((var(--prompt-collapsed-height) - var(--ui-compact-height)) / 2);
+  --prompt-mode-inline: 128px;
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -1548,7 +1549,7 @@ button { cursor: pointer; }
   height: var(--prompt-collapsed-height);
   border: 1px solid var(--line);
   border-radius: var(--ui-radius-pill);
-  padding: calc((var(--prompt-collapsed-height) - 2px - var(--prompt-collapsed-line)) / 2) 88px calc((var(--prompt-collapsed-height) - 2px - var(--prompt-collapsed-line)) / 2) 48px;
+  padding: calc((var(--prompt-collapsed-height) - 2px - var(--prompt-collapsed-line)) / 2) 88px calc((var(--prompt-collapsed-height) - 2px - var(--prompt-collapsed-line)) / 2) var(--prompt-mode-inline);
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -1770,7 +1771,7 @@ button { cursor: pointer; }
 }
 
 .topbar-edit-slot-composer .prompt-collapsed-preview {
-  padding: calc((var(--prompt-collapsed-height) - 2px - var(--prompt-collapsed-line)) / 2) 88px calc((var(--prompt-collapsed-height) - 2px - var(--prompt-collapsed-line)) / 2) 48px;
+  padding: calc((var(--prompt-collapsed-height) - 2px - var(--prompt-collapsed-line)) / 2) 88px calc((var(--prompt-collapsed-height) - 2px - var(--prompt-collapsed-line)) / 2) var(--prompt-mode-inline);
 }
 
 .topbar-edit-slot-composer .prompt-actions-button {
@@ -3302,7 +3303,7 @@ body.tab-gesture-active * {
   min-height: var(--prompt-collapsed-height);
   height: var(--prompt-collapsed-height);
   max-height: 180px;
-  padding: calc((var(--prompt-collapsed-height) - 2px - var(--prompt-collapsed-line)) / 2) 88px calc((var(--prompt-collapsed-height) - 2px - var(--prompt-collapsed-line)) / 2) 48px;
+  padding: calc((var(--prompt-collapsed-height) - 2px - var(--prompt-collapsed-line)) / 2) 88px calc((var(--prompt-collapsed-height) - 2px - var(--prompt-collapsed-line)) / 2) var(--prompt-mode-inline);
   resize: none;
 }
 
@@ -3394,19 +3395,33 @@ body.tab-gesture-active * {
   display: none;
 }
 
-.prompt-search-toggle {
+.prompt-mode-switch {
   position: absolute;
-  top: var(--prompt-accessory-top);
-  left: 10px;
+  top: calc((var(--prompt-collapsed-height) - var(--target-min)) / 2);
+  left: var(--space-2);
   right: auto;
   z-index: 70;
-  width: var(--ui-accessory-height);
-  height: var(--ui-accessory-height);
-  min-height: var(--ui-accessory-height);
+  height: var(--target-min);
+  min-height: var(--target-min);
+  padding: 2px;
+  display: inline-flex;
+  align-items: stretch;
+  gap: 0;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--line) 42%, var(--panel));
+  border: 0;
+  border-radius: var(--ui-radius-pill);
+  box-shadow: none;
+}
+
+.prompt-mode-chip {
+  height: 100%;
+  min-height: 0;
   min-width: var(--target-min);
-  padding: 0;
-  display: inline-grid;
-  place-items: center;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: var(--muted);
   background: transparent;
   border: 0;
@@ -3415,20 +3430,21 @@ body.tab-gesture-active * {
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
   line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
 }
 
-.prompt-search-toggle:hover {
+.prompt-mode-chip:hover {
   color: var(--text);
-  background: color-mix(in srgb, var(--primary) 14%, var(--panel));
+  background: var(--control-hover);
 }
 
-.prompt-search-toggle.is-active,
-.prompt-search-toggle[aria-pressed="true"] {
-  color: var(--primary);
-  background: color-mix(in srgb, var(--primary) 12%, var(--panel));
+.prompt-mode-chip[aria-pressed="true"] {
+  color: var(--text);
+  background: var(--control-selected);
 }
 
-.prompt-search-toggle:focus-visible {
+.prompt-mode-chip:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
@@ -3437,8 +3453,13 @@ body.tab-gesture-active * {
   display: none;
 }
 
-.prompt-shell-expanded:not(.prompt-shell-search) .prompt-search-toggle {
+.prompt-shell-expanded:not(.prompt-shell-search) .prompt-mode-switch {
   display: none;
+}
+
+.prompt-shell-expanded:not(.prompt-shell-search) .textarea.prompt-input,
+.prompt-shell-expanded:not(.prompt-shell-search) .prompt-collapsed-preview {
+  padding-left: 48px;
 }
 
 .prompt-shell-search .prompt-collapsed-preview,

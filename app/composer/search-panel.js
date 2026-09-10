@@ -1,6 +1,5 @@
 import { t } from "../../shared/i18n.js";
 import { el } from "../../ui/dom.js";
-import { createSvgIcon } from "../../ui/icons.js";
 
 const SEARCH_RESULTS_LIMIT = 12;
 
@@ -32,6 +31,12 @@ function recordTitle(record, index) {
   return names.join(" · ") || t("workspace.tabs.untitled", { index: index + 1 });
 }
 
+function composeEmptyHint(placeholder) {
+  const value = String(placeholder || "");
+  if (!value || value === t("topbar.promptPlaceholder")) return t("composer.mode.tabToSearch");
+  return value;
+}
+
 export function createComposerSearchPanel(options = {}) {
   const workspaceSearch = options.workspaceSearch && typeof options.workspaceSearch === "object"
     ? options.workspaceSearch
@@ -60,7 +65,9 @@ export function createComposerSearchPanel(options = {}) {
   let listNode = null;
   let hintNode = null;
   let emptyNode = null;
-  let toggleNode = null;
+  let switchNode = null;
+  let composeChip = null;
+  let searchChip = null;
 
   function liveShell() {
     return shell?.isConnected ? shell : document.querySelector(".prompt-shell");
@@ -70,14 +77,36 @@ export function createComposerSearchPanel(options = {}) {
     return liveShell()?.querySelector?.(".prompt-input") || document.querySelector(".prompt-input");
   }
 
+  function composeSource(inputNode) {
+    if (typeof options.composePlaceholder === "function") return String(options.composePlaceholder() || "");
+    const value = String(inputNode?.placeholder || "");
+    if (
+      !value
+      || value === t("topbar.promptPlaceholder")
+      || value === t("composer.mode.tabToSearch")
+      || value === t("composer.mode.tabToCompose")
+      || value === t("composer.search.placeholder")
+    ) return "";
+    return value;
+  }
+
   function searchPlaceholder() {
-    return t("composer.search.placeholder");
+    return t("composer.mode.tabToCompose");
   }
 
   function syncToggle() {
-    if (!toggleNode) return;
-    toggleNode.setAttribute("aria-pressed", active ? "true" : "false");
-    toggleNode.classList.toggle("is-active", active);
+    if (composeChip) composeChip.setAttribute("aria-pressed", active ? "false" : "true");
+    if (searchChip) searchChip.setAttribute("aria-pressed", active ? "true" : "false");
+  }
+
+  function syncEmptyPreview(inputNode) {
+    if (active || inputNode?.value) return;
+    const preview = liveShell()?.querySelector?.(".prompt-collapsed-preview");
+    const text = preview?.querySelector?.(".prompt-collapsed-preview-text");
+    if (!text) return;
+    if (text.textContent !== inputNode.placeholder) text.textContent = inputNode.placeholder;
+    preview.title = inputNode.placeholder;
+    preview.classList.add("prompt-collapsed-preview-empty");
   }
 
   function syncShell() {
@@ -92,10 +121,12 @@ export function createComposerSearchPanel(options = {}) {
 
   function syncField(inputNode = liveField()) {
     if (!inputNode) return;
+    const canMark = typeof inputNode.setAttribute === "function";
     if (active) {
       if (inputNode.value !== query) inputNode.value = query;
       inputNode.placeholder = searchPlaceholder();
-      inputNode.setAttribute("aria-label", searchPlaceholder());
+      if (!canMark) return;
+      inputNode.setAttribute("aria-label", t("composer.search.placeholder"));
       inputNode.setAttribute("role", "combobox");
       inputNode.setAttribute("aria-expanded", records.length ? "true" : "false");
       inputNode.setAttribute("aria-autocomplete", "list");
@@ -105,11 +136,16 @@ export function createComposerSearchPanel(options = {}) {
       else inputNode.removeAttribute("aria-activedescendant");
       return;
     }
+    const original = composeSource(inputNode);
+    inputNode.placeholder = composeEmptyHint(original);
+    if (!canMark) return;
+    inputNode.setAttribute("aria-label", original || t("topbar.promptPlaceholder"));
     inputNode.removeAttribute("role");
     inputNode.removeAttribute("aria-expanded");
     inputNode.removeAttribute("aria-autocomplete");
     inputNode.removeAttribute("aria-controls");
     inputNode.removeAttribute("aria-activedescendant");
+    syncEmptyPreview(inputNode);
   }
 
   function syncClearButton() {
@@ -293,6 +329,17 @@ export function createComposerSearchPanel(options = {}) {
     return false;
   }
 
+  function handleTab(event) {
+    if (event?.key !== "Tab") return false;
+    if (event.altKey || event.ctrlKey || event.metaKey) return false;
+    if (event.isComposing || event.keyCode === 229) return false;
+    event.preventDefault();
+    event.stopPropagation();
+    if (active) exit({ restoreField: true });
+    else options.onEnter?.();
+    return true;
+  }
+
   function openViewerFromResults(event) {
     event?.preventDefault?.();
     event?.stopPropagation?.();
@@ -303,35 +350,59 @@ export function createComposerSearchPanel(options = {}) {
     });
   }
 
-  function toggleSearch(event) {
+  function enterFromChip(event) {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    if (!active) options.onEnter?.();
+  }
+
+  function exitFromChip(event) {
     event?.preventDefault?.();
     event?.stopPropagation?.();
     if (active) exit({ restoreField: true });
-    else options.onEnter?.();
   }
 
   function attach(nextShell) {
     shell = nextShell;
     if (!shell) return;
     const row = shell.querySelector(".prompt-input-row");
-    const existingToggle = row?.querySelector?.(".prompt-search-toggle");
-    if (row && !existingToggle) {
-      toggleNode = el("button", {
-        class: "prompt-search-toggle compact-icon tooltip-trigger",
+    const existingSwitch = row?.querySelector?.(".prompt-mode-switch");
+    if (row && !existingSwitch) {
+      composeChip = el("button", {
+        class: "prompt-mode-chip prompt-mode-chip-compose",
         type: "button",
-        "aria-pressed": active ? "true" : "false",
-        "aria-label": t("composer.mode.search"),
-        "data-tooltip": t("composer.mode.search"),
-        "data-tooltip-id": "composer.mode.search",
-        onclick: toggleSearch,
-        onpointerdown: (event) => event.stopPropagation(),
+        tabindex: "-1",
+        "aria-pressed": active ? "false" : "true",
+        onclick: exitFromChip,
+        onpointerdown: (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+        },
         onkeydown: (event) => event.stopPropagation()
-      }, createSvgIcon("search"));
+      }, t("composer.mode.compose"));
+      searchChip = el("button", {
+        class: "prompt-mode-chip prompt-mode-chip-search",
+        type: "button",
+        tabindex: "-1",
+        "aria-pressed": active ? "true" : "false",
+        onclick: enterFromChip,
+        onpointerdown: (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+        },
+        onkeydown: (event) => event.stopPropagation()
+      }, t("composer.mode.search"));
+      switchNode = el("div", {
+        class: "prompt-mode-switch",
+        role: "group"
+      }, composeChip, searchChip);
       const field = row.querySelector(".prompt-input");
-      if (typeof field?.before === "function") field.before(toggleNode);
-      else row.append(toggleNode);
+      if (typeof field?.before === "function") field.before(switchNode);
+      else row.append(switchNode);
     } else {
-      toggleNode = existingToggle || toggleNode;
+      switchNode = existingSwitch || switchNode;
+      composeChip = switchNode?.querySelector?.(".prompt-mode-chip-compose") || composeChip;
+      searchChip = switchNode?.querySelector?.(".prompt-mode-chip-search") || searchChip;
     }
     if (!shell.querySelector(".prompt-search-results")) {
       listNode = el("div", {
@@ -373,6 +444,7 @@ export function createComposerSearchPanel(options = {}) {
     isActive: () => active,
     handleInput,
     handleKeydown,
+    handleTab,
     syncField,
     clearQuery,
     query: () => query,
