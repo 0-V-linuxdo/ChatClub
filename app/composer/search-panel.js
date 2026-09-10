@@ -259,10 +259,12 @@ export function createComposerSearchPanel(options = {}) {
       refresh();
       return;
     }
+    const field = liveField();
+    if (field) options.onStashField?.(field);
     active = true;
-    query = "";
     selectedIndex = 0;
     records = [];
+    loading = true;
     syncShell();
     syncField();
     paintResults();
@@ -272,7 +274,6 @@ export function createComposerSearchPanel(options = {}) {
   function exit({ restoreField = true } = {}) {
     if (!active) return;
     active = false;
-    query = "";
     selectedIndex = 0;
     records = [];
     requestSerial += 1;

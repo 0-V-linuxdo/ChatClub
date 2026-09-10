@@ -162,9 +162,16 @@ export function createComposerController(dependencies = {}) {
   const searchPanel = createComposerSearchPanel({
     workspaceSearch,
     composePlaceholder: () => currentPlaceholder,
+    onStashField(field) {
+      if (!field) return;
+      state.promptText = field.value;
+      rememberSelection(field);
+      reconcileDraftContent();
+    },
     onRestoreField(field) {
       if (!field) return;
       if (field.value !== state.promptText) field.value = state.promptText;
+      restoreSelectionSoon(field);
       field.placeholder = currentPlaceholder;
       field.setAttribute("aria-label", currentPlaceholder || t("topbar.promptPlaceholder"));
       searchPanel.syncField(field);

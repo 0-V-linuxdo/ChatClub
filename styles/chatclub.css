@@ -1521,18 +1521,21 @@ button { cursor: pointer; }
   overflow: visible;
 }
 
-.prompt-shell:not(.prompt-shell-search):not(.prompt-shell-expanded) {
+.prompt-shell:not(.prompt-shell-search) {
   overflow: visible;
   background: transparent;
   border: 0;
   box-shadow: none;
 }
 
-.prompt-shell:not(.prompt-shell-search):not(.prompt-shell-expanded) .prompt-input-row {
+.prompt-shell:not(.prompt-shell-search) .prompt-input-row {
   overflow: hidden;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--ui-radius-pill);
+}
+
+.prompt-shell:not(.prompt-shell-search):not(.prompt-shell-expanded) .prompt-input-row {
   max-height: var(--prompt-collapsed-height);
   grid-auto-rows: 0;
 }
@@ -3430,7 +3433,7 @@ body.tab-gesture-active * {
   z-index: 60;
   font-size: var(--topbar-prompt-input-font-size);
   overflow-y: auto;
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+  box-shadow: none;
 }
 
 .prompt-input-expanded + .prompt-collapsed-preview {
@@ -3512,7 +3515,11 @@ body.tab-gesture-active * {
 .prompt-shell-expanded:not(.prompt-shell-search) .prompt-input-row {
   height: auto;
   min-height: var(--prompt-collapsed-height);
+  max-height: none;
   grid-template-rows: minmax(var(--prompt-collapsed-height), auto);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--ui-radius-pill);
 }
 
 .prompt-shell-expanded:not(.prompt-shell-search) .textarea.prompt-input,
@@ -3742,6 +3749,11 @@ body.tab-gesture-active * {
 .prompt-search-empty.ui-empty-state {
   min-height: var(--prompt-search-row);
   padding: var(--space-3);
+}
+
+.ui-empty-state[hidden],
+.prompt-search-empty[hidden] {
+  display: none !important;
 }
 
 .prompt-search-footer {

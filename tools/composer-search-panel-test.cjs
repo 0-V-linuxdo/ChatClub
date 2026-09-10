@@ -39,7 +39,13 @@ assert.match(css, /\.prompt-input-row\s*\{[\s\S]*?height:\s*var\(--prompt-collap
 assert.match(css, /--prompt-collapsed-height:\s*56px;/);
 assert.match(css, /--prompt-search-radius:\s*var\(--ui-compact-height\)/);
 assert.match(css, /\.prompt-input-row\s*\{[\s\S]*?display:\s*grid/);
-assert.match(css, /\.prompt-shell:not\(\.prompt-shell-search\):not\(\.prompt-shell-expanded\) \.prompt-input-row\s*\{[\s\S]*?border-radius:\s*var\(--ui-radius-pill\)/);
+assert.match(css, /\.prompt-shell:not\(\.prompt-shell-search\) \.prompt-input-row\s*\{[\s\S]*?background:\s*var\(--panel\)/);
+assert.match(css, /\.prompt-shell:not\(\.prompt-shell-search\) \.prompt-input-row\s*\{[\s\S]*?border-radius:\s*var\(--ui-radius-pill\)/);
+assert.match(css, /\.prompt-shell:not\(\.prompt-shell-search\):not\(\.prompt-shell-expanded\) \.prompt-input-row\s*\{[\s\S]*?max-height:\s*var\(--prompt-collapsed-height\)/);
+assert.match(css, /\.prompt-shell-expanded:not\(\.prompt-shell-search\) \.prompt-input-row\s*\{[\s\S]*?background:\s*var\(--panel\)/);
+assert.match(css, /\.prompt-shell-expanded:not\(\.prompt-shell-search\) \.prompt-input-row\s*\{[\s\S]*?border-radius:\s*var\(--ui-radius-pill\)/);
+assert.match(css, /\.prompt-input-expanded\s*\{[\s\S]*?box-shadow:\s*none/);
+assert.doesNotMatch(css, /\.prompt-input-expanded\s*\{[^}]*box-shadow:\s*0 12px 28px/);
 assert.match(css, /\.prompt-send-button\.tooltip-trigger \{[\s\S]*?position:\s*static/);
 assert.match(css, /\.textarea\.prompt-input \{[\s\S]*?min-height:\s*0 !important/);
 assert.match(css, /line-height:\s*var\(--prompt-collapsed-line\)/);
@@ -69,6 +75,8 @@ assert.match(css, /\.prompt-search-list::-webkit-scrollbar\s*\{[\s\S]*?width:\s*
 assert.match(css, /\.prompt-search-list::-webkit-scrollbar-track[\s\S]*?background:\s*transparent[\s\S]*?border:\s*0/);
 assert.match(css, /\.prompt-search-list::-webkit-scrollbar-thumb\s*\{[\s\S]*?border:\s*0/);
 assert.doesNotMatch(css, /\.prompt-search-list[\s\S]{0,280}scrollbar-gutter/);
+assert.match(css, /\.ui-empty-state\[hidden\][\s\S]{0,160}display:\s*none\s*!important/);
+assert.match(css, /\.prompt-search-empty\[hidden\][\s\S]{0,80}display:\s*none\s*!important/);
 assert.match(css, /\.prompt-input \{[\s\S]*?position:\s*relative;/);
 assert.doesNotMatch(css, /\.prompt-input \{[^}]*position:\s*absolute;/);
 assert.match(panelSource, /prompt-mode-switch/);
@@ -89,7 +97,12 @@ assert.doesNotMatch(panelSource, /data-tooltip-id/);
 assert.doesNotMatch(panelSource, /tooltip-trigger/);
 assert.doesNotMatch(functionSource(composer, "enterSearchMode"), /expandInput\(/);
 assert.doesNotMatch(functionSource(composer, "collapseInput"), /searchPanel\.exit/);
+assert.match(composer, /onStashField\(field\)/);
+assert.match(composer, /restoreSelectionSoon\(field\)/);
 assert.match(functionSource(composer, "enterSearchMode"), /collapseInput\(/);
+assert.match(panelSource, /options\.onStashField\?\.\(field\)/);
+assert.doesNotMatch(functionSource(panelSource, "enter"), /query = ""/);
+assert.doesNotMatch(functionSource(panelSource, "exit"), /query = ""/);
 assert.match(functionSource(composer, "handleInputKeydown"), /searchPanel\.handleTab/);
 assert.match(agents, /Search mode stays single-line/);
 assert.match(agents, /visible `\.prompt-mode-switch`/);
@@ -98,8 +111,11 @@ assert.doesNotMatch(css, /\.prompt-search-results \{[^}]*transform:/);
 assert.match(agents, /Do not wrap `\.prompt-shell` in `viewerModal`/);
 assert.match(agents, /Topbar Search enters composer search mode/);
 assert.match(agents, /card chrome lives on the input row/);
+assert.match(agents, /expanded compose keeps that same row chrome/);
 assert.match(agents, /renderFavicons/);
 assert.match(agents, /must not paint `workspace\.tabs\.empty`/);
+assert.match(agents, /`\.ui-empty-state\[hidden\]`/);
+assert.match(agents, /compose draft and search query are independent buffers/);
 assert.match(i18n, /"composer\.mode\.tabToSearch": "Press Tab to search chats"/);
 assert.match(i18n, /"composer\.mode\.tabToCompose": "Press Tab to compose"/);
 assert.match(i18n, /"composer\.mode\.tabToSearch": "按下 Tab 搜索对话"/);
@@ -350,7 +366,6 @@ globalThis.document = {
     composeChip.listeners.get("click")[0]({ preventDefault() {}, stopPropagation() {} });
     assert.equal(panel.isActive(), false, "compose chip click exits search");
     panel.enter();
-    assert.equal(panel.isActive(), true);
     assert.equal(shell.classList.contains("prompt-shell-search"), true);
     assert.equal(searchChip.getAttribute("aria-pressed"), "true");
     const emptyNode = shell.querySelector(".prompt-search-empty");
@@ -425,6 +440,41 @@ globalThis.document = {
     assert.equal(customField.getAttribute("aria-label"), "Search chats");
     customPanel.exit({ restoreField: false });
     assert.equal(customField.placeholder, "Type", "exiting search must restore a custom compose placeholder");
+
+    let stashedDraft = "";
+    const draftField = new FakeNode("textarea");
+    draftField.className = "prompt-input";
+    draftField.value = "It always seems impossible until it is done.";
+    const draftRow = new FakeNode("div");
+    draftRow.className = "prompt-input-row";
+    draftRow.append(draftField);
+    const draftShell = new FakeNode("div");
+    draftShell.className = "prompt-shell";
+    draftShell.append(draftRow);
+    globalThis.document.body.append(draftShell);
+    let draftPanel;
+    draftPanel = createComposerSearchPanel({
+      onEnter() { draftPanel.enter(); },
+      onStashField(nextField) { stashedDraft = String(nextField?.value || ""); },
+      onRestoreField(nextField) {
+        if (!nextField) return;
+        nextField.value = stashedDraft;
+      }
+    });
+    draftPanel.attach(draftShell);
+    assert.equal(draftPanel.handleTab(tabEvent()), true);
+    assert.equal(draftPanel.isActive(), true);
+    assert.equal(stashedDraft, "It always seems impossible until it is done.");
+    assert.equal(draftField.value, "", "search mode must not show the compose draft");
+    draftField.value = "rational male";
+    draftPanel.handleInput({ target: draftField });
+    assert.equal(draftPanel.query(), "rational male");
+    assert.equal(draftPanel.handleTab(tabEvent()), true);
+    assert.equal(draftPanel.isActive(), false);
+    assert.equal(draftField.value, "It always seems impossible until it is done.", "Tab back must restore the compose draft");
+    assert.equal(draftPanel.query(), "rational male", "search query must survive the compose restore");
+    assert.equal(draftPanel.handleTab(tabEvent()), true);
+    assert.equal(draftField.value, "rational male", "Tab into search must restore the last query");
   } finally {
     globalThis.Node = previous.Node;
     globalThis.document = previous.document;
