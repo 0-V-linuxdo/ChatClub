@@ -1461,24 +1461,55 @@ button { cursor: pointer; }
 
 .composer.composer-center-slot {
   flex: 0 0 auto;
-  width: var(--ui-compact-height);
+  width: auto;
   min-width: var(--ui-compact-height);
-  max-width: var(--ui-compact-height);
+  max-width: none;
   height: var(--ui-compact-height);
 }
 
 .composer-center-mark {
   display: none;
-  width: var(--ui-compact-height);
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
   height: var(--ui-compact-height);
+  min-width: var(--ui-compact-height);
+  padding: 0 var(--space-3);
+  box-sizing: border-box;
+  background: var(--panel);
+  border: var(--overlay-border);
+  border-radius: var(--ui-radius-pill);
+  color: var(--text);
+  font: inherit;
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
 }
 
 .composer.composer-center-slot .composer-center-mark {
   display: inline-flex;
 }
 
+.composer-center-mark:hover {
+  background: color-mix(in srgb, var(--primary) 12%, var(--panel));
+}
+
+.composer-center-mark:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.composer-center-mark .svg-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--primary);
+}
+
+.composer-center-mark-label {
+  white-space: nowrap;
+}
+
 .composer-center-host {
-  --composer-center-top: calc(var(--topbar-height) + var(--space-2));
+  --composer-center-top: calc(var(--topbar-height) + var(--overlay-gutter) * 2);
   position: fixed;
   left: 50%;
   top: var(--composer-center-top);
@@ -1497,55 +1528,6 @@ button { cursor: pointer; }
 
 .composer-center-host[hidden] {
   display: none;
-}
-
-.composer-center-launcher {
-  --composer-center-top: calc(var(--topbar-height) + var(--space-2));
-  position: fixed;
-  left: 50%;
-  top: var(--composer-center-top);
-  transform: translateX(-50%);
-  z-index: var(--overlay-z-panel);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  min-width: var(--ui-compact-height);
-  min-height: var(--ui-compact-height);
-  height: var(--ui-compact-height);
-  padding: 0 var(--space-3);
-  box-sizing: border-box;
-  background: var(--panel);
-  border: var(--overlay-border);
-  border-radius: var(--ui-radius-pill);
-  box-shadow: var(--overlay-shadow);
-  color: var(--text);
-  font: inherit;
-  font-weight: var(--font-weight-medium);
-  cursor: pointer;
-}
-
-.composer-center-launcher[hidden] {
-  display: none !important;
-}
-
-.composer-center-launcher:hover {
-  background: color-mix(in srgb, var(--primary) 12%, var(--panel));
-}
-
-.composer-center-launcher:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-}
-
-.composer-center-launcher .svg-icon {
-  width: 16px;
-  height: 16px;
-  color: var(--primary);
-}
-
-.composer-center-launcher-label {
-  white-space: nowrap;
 }
 
 .composer-center-host .prompt-shell {

@@ -38,21 +38,24 @@ assert.match(composer, /COMPOSER_CENTER_HOST_ID/);
 assert.match(composer, /overlay-surface composer-center-host/);
 assert.match(composer, /composer-center-slot/);
 assert.match(composer, /composer-center-mark/);
-assert.match(composer, /composer-center-launcher/);
-assert.match(composer, /COMPOSER_CENTER_LAUNCHER_ID/);
+assert.match(composer, /class: "composer-center-mark tooltip-trigger"/);
+assert.match(composer, /"data-tooltip-id": "composer.open"/);
+assert.match(composer, /composer-center-mark-label/);
+assert.doesNotMatch(composer, /composer-center-launcher/);
+assert.doesNotMatch(composer, /COMPOSER_CENTER_LAUNCHER_ID/);
 assert.match(composer, /prompt-pin-button/);
 assert.match(composer, /let centerPinned = false/);
 assert.match(composer, /function showCenterHost\(/);
 assert.match(composer, /function hideCenterHost\(/);
-assert.match(composer, /function syncCenterLauncher\(/);
+assert.doesNotMatch(composer, /function syncCenterLauncher\(/);
 assert.match(composer, /CHAT_FRAME_POINTER_EVENT/);
 assert.match(composer, /host\.hidden = true/);
 assert.match(functionSource(composer, "focusInput"), /showCenterHost\(/);
 assert.match(functionSource(composer, "enterSearchMode"), /showCenterHost\(/);
-assert.match(functionSource(composer, "showCenterHost"), /syncCenterLauncher\(/);
-assert.match(functionSource(composer, "hideCenterHost"), /syncCenterLauncher\(/);
+assert.doesNotMatch(functionSource(composer, "showCenterHost"), /syncCenterLauncher/);
+assert.doesNotMatch(functionSource(composer, "hideCenterHost"), /syncCenterLauncher/);
 assert.match(functionSource(composer, "applyPlacement"), /if \(centerPinned\) centerHost\.hidden = false/);
-assert.match(functionSource(composer, "applyPlacement"), /syncCenterLauncher\(/);
+assert.doesNotMatch(functionSource(composer, "applyPlacement"), /syncCenterLauncher/);
 assert.match(composer, /state\.topbarEditMode/);
 assert.match(dom, /export function overlaySearchCaretComposer/);
 assert.match(dom, /composer: options\.composer === true/);
@@ -92,25 +95,24 @@ assert.match(i18n, /"composer\.open": "Open composer"/);
 assert.match(i18n, /"composer\.open": "打开输入框"/);
 assert.match(agents, /host starts hidden unless pinned/);
 assert.match(agents, /`\.prompt-pin-button`/);
-assert.match(agents, /composer-center-launcher/);
+assert.match(agents, /`\.composer-center-mark`/);
+assert.doesNotMatch(agents, /composer-center-launcher/);
 assert.match(css, /\.prompt-pin-button\s*\{[\s\S]*?grid-column:\s*6/);
 assert.match(css, /\.composer-center-host \.prompt-pin-button\s*\{[\s\S]*?display:\s*inline-grid/);
-assert.match(css, /\.composer-center-launcher\s*\{[\s\S]*?z-index:\s*var\(--overlay-z-panel\)/);
-assert.match(css, /\.composer-center-host \{[\s\S]*?--composer-center-top:\s*calc\(var\(--topbar-height\) \+ var\(--space-2\)\)/);
+assert.match(css, /\.composer-center-mark\s*\{[\s\S]*?border-radius:\s*var\(--ui-radius-pill\)/);
+assert.doesNotMatch(css, /composer-center-launcher/);
+assert.match(css, /\.composer-center-host \{[\s\S]*?--composer-center-top:\s*calc\(var\(--topbar-height\) \+ var\(--overlay-gutter\) \* 2\)/);
 assert.match(css, /\.composer-center-host \{[\s\S]*?top:\s*var\(--composer-center-top\)/);
 assert.match(css, /\.composer-center-host \{[\s\S]*?transform:\s*translateX\(-50%\)/);
-assert.match(css, /\.composer-center-launcher \{[\s\S]*?--composer-center-top:\s*calc\(var\(--topbar-height\) \+ var\(--space-2\)\)/);
-assert.match(css, /\.composer-center-launcher \{[\s\S]*?top:\s*var\(--composer-center-top\)/);
-assert.match(css, /\.composer-center-launcher \{[\s\S]*?transform:\s*translateX\(-50%\)/);
 assert.doesNotMatch(css, /--composer-center-top:\s*calc\(50vh - 28px\)/);
+assert.doesNotMatch(css, /--composer-center-top:\s*calc\(var\(--topbar-height\) \+ var\(--space-2\)\)/);
 assert.doesNotMatch(css, /\.composer-center-host \{[^}]*translate\(-50%, -50%\)/);
-assert.doesNotMatch(css, /\.composer-center-launcher \{[^}]*translate\(-50%, -50%\)/);
 assert.match(css, /\.composer-center-host \.prompt-shell-search \.prompt-input-row\s*\{[\s\S]*?max-height:\s*none/);
 assert.match(functionSource(composer, "resizeInput"), /closest\?\.\("#composer-center-host"\)/);
 assert.match(functionSource(composer, "enterSearchMode"), /resizeInput\(field, true\)/);
 assert.match(functionSource(composer, "handleInput"), /resizeInput\(event\.target, true\)/);
 assert.match(agents, /--composer-center-top/);
-assert.match(agents, /var\(--topbar-height\) \+ var\(--space-2\)/);
+assert.match(agents, /var\(--topbar-height\) \+ var\(--overlay-gutter\) \* 2/);
 assert.match(agents, /grow with `scrollHeight` downward/);
 
 assert.match(functionSource(composer, "composerCaretStolen"), /chat-frame-wrap/);
@@ -244,7 +246,6 @@ assert.doesNotMatch(functionSource(composer, "applyPlacement"), /cloneNode|inner
     const COMPOSER_CENTER_HOST_ID = "composer-center-host";
     let centerPinned = false;
     function syncPinButton() {}
-    function syncCenterLauncher() {}
     ${functionSource(composer, "composerPlacementValue")}
     ${functionSource(composer, "ensureComposerCenterHost")}
     ${functionSource(composer, "applyPlacement")}

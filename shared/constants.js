@@ -11,7 +11,7 @@ import {
 import { NOTION_MODEL_PREFERENCE_TARGETS } from "./notion-models.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-09-10｜18:15:00」";
+export const APP_VERSION = "「2026-09-10｜18:24:00」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -200,7 +200,6 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
       Object.freeze({ id: "topbar.search", labelKey: "topbar.search" }),
       Object.freeze({ id: "topbar.promptActions", labelKey: "topbar.promptActions" }),
       Object.freeze({ id: "topbar.promptLibrary", labelKey: "topbar.promptLibrary" }),
-      Object.freeze({ id: "topbar.input.centerMark", labelKey: "topbar.input.centerMark" }),
       Object.freeze({ id: "composer.pin", labelKey: "composer.pin" }),
       Object.freeze({ id: "composer.open", labelKey: "composer.open" }),
       Object.freeze({ id: "topbar.addPhotos", labelKey: "topbar.addPhotos" }),
